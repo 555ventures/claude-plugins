@@ -15,13 +15,35 @@ The pipeline is process; the repo supplies grounding. Two host files, both creat
 - **`.claude/spec.config.json`** — machine-readable knobs: `gateCommand`, `testCommand`,
   `setupCommand`, `patternsScript`, optional `driftScript`, optional `design` block
   (component-catalog stage — see § Design Stage), `layerGroups`, `agentMap` (+ optional
-  `routing` hints), `pipelineRules`.
+  `routing` hints), `pipelineRules`, plus the `contractHash`/`generatedBy` drift stamps
+  (§ Grounding Drift).
 - **The pipeline rules file** (path in `pipelineRules`, conventionally
   `.claude/rules/spec-pipeline.md`) — prose grounding by section: `Risk Tiers`, `Planning`,
   `Build`, `Worker Rules`, `Test Rules`, `Review Checks`.
 
 Every command reads both at start. Repo differences live there — never as forks inside the
 plugin's files. If either is missing, STOP and tell the user to run `/spec:init`.
+
+## Grounding Drift
+
+The grounding layer goes stale two ways; **detection is mechanical, response is judgment.**
+
+- **Plugin updated.** The contract itself is a file — the plugin's grounding-contract doc
+  (`spec-paths contract`: required config keys, required rules sections, the canonical
+  Worker Contract text). `/spec:init` stamps its hash (`spec-paths contract-hash`) into the
+  config as `contractHash`, plus `generatedBy: "spec@<version>"` for provenance. The
+  state-gate hook recomputes the hash on every pipeline command and injects a one-line
+  warning on mismatch — a warning, never a block; stale grounding usually still runs. No
+  bookkeeping: editing the contract file is what changes the hash, so detection is
+  automatic by construction.
+- **Codebase drifted.** Stale cited paths, commands, or conventions surface at build time as
+  worker `blocked {kind: "stale-assumption"}` returns; `/spec:doctor` catches them earlier
+  with a read-only sweep (config integrity, agent roster, contract-text match, cited-path
+  existence, script execution).
+
+`/spec:doctor` diagnoses and recommends — targeted user-approved patches, or a full
+`/spec:init` refresh when drift is structural. Regeneration always belongs to `/spec:init`;
+the doctor never rewrites the grounding layer wholesale.
 
 ## Pipeline Entry
 
@@ -82,7 +104,9 @@ The stage is tool-agnostic; the host config's `design` block declares the catalo
 "design": {
   "tool": "storybook",            // "storybook" (web) | "widgetbook" (Flutter) | any catalog
   "command": "bun storybook",     // launches the catalog for the user's iteration loop
-  "storyFormat": "CSF3 stories"   // what stories-kind workers author — e.g. "Widgetbook @UseCase builders"
+  "storyFormat": "CSF3 stories",  // what stories-kind workers author — e.g. "Widgetbook @UseCase builders"
+  "doctrine": "docs/design/doctrine.md",   // the design doctrine doc (see below)
+  "screenshot": "bun storybook:screenshot" // OPTIONAL: renders entries to images → designer self-review
 }
 ```
 
@@ -95,6 +119,25 @@ the user's eyes gate UI rendering; TDD gates logic. Skipping design on a `design
 is the user's call, not the model's. Hosts without a catalog never set the flag; the stage
 simply never runs.
 
+**Design canon (cross-spec consistency).** Design consistency rides the same rails as code
+consistency — a repo artifact with a read-first / reconcile-after lifecycle, never any one
+session's context. Three layers, strongest enforcement first:
+
+1. **Token/theme files in code** — the design language itself, lint/gate-enforced where the
+   host's tooling allows. Sessions extend the scale; they never fork it.
+2. **The design doctrine doc** (`design.doctrine`, one page, bootstrapped by `/spec:init`
+   § Design foundation) — taste rulings tokens can't encode (dialog-vs-page habits,
+   empty-state tone, density philosophy). Binding like a locked Decision; `/spec:design`
+   reads it at preflight and promotes generalizable rulings into it at reconcile.
+   `/spec:plan` respects it when speccing UI sections.
+3. **The living showcase catalog entry** (path named in the doctrine) — composes real
+   surfaces from every landed spec; each design run extends it. Drift is visible to the
+   user's eyes with zero tooling.
+
+A note that contradicts the doctrine is a fork, not a tweak: the user rules **local
+exception** (spec Decisions) or **doctrine change** (doc updated, older surfaces recorded as
+a known gap) — never a silent override.
+
 **Legacy keys:** host configs may still say `storybook: true` + `storybookCommand`, and older
 specs may carry the `storybook:` frontmatter flag. Read these as
 `design: {tool: "storybook", command: <storybookCommand>, storyFormat: "CSF3 stories"}` and
@@ -106,12 +149,16 @@ specs may carry the `storybook:` frontmatter flag. Read these as
 
 | Model | Role |
 |---|---|
-| Fable | Spec authoring, design forks, build-time surprise consultation (the retainer), T3 checkpoints |
-| Opus | Build/design orchestration, gate triage |
-| Sonnet | Implementation, tests, stories, plan refuters, reviewers, finding refuters |
+| Fable | Spec authoring, the `/spec:design` designer session, design forks, build-time surprise consultation (the retainer), T3 checkpoints |
+| Opus | Build orchestration, gate triage |
+| Sonnet | Implementation, tests, plan refuters, reviewers, finding refuters, design-stage plumbing (foundation files, catalog entries, spec reconcile) |
 | Haiku | Lookups, searches, narrow reads |
 
 - Every `Agent` call sets `model:` explicitly. Never inherit.
+- **Design-stage exception:** in `/spec:design`, taste IS the work, so the work model is
+  Fable — the designer session reads and writes component files itself, in coherence groups
+  rather than maximal fan-out. Everywhere else, Sonnet works and orchestrators never hold
+  file contents.
 - **Reviews are never the planning model.** Cross-model independence beats capability — a
   same-model reviewer shares the blind spots that produced the bugs.
 - **Fable retainer pattern:** spawn once on first surprise (`Agent {model: "fable"}` with the

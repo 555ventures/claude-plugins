@@ -17,8 +17,17 @@ case "${1:-root}" in
   shared)      echo "$ROOT/commands/shared.md" ;;
   template)    echo "$ROOT/templates/spec.md" ;;
   templates)   echo "$ROOT/templates" ;;
+  version)     jq -r '.version // empty' "$ROOT/.claude-plugin/plugin.json" ;;
+  contract)    echo "$ROOT/templates/grounding-contract.md" ;;
+  contract-hash)
+    if command -v sha256sum >/dev/null 2>&1; then
+      sha256sum "$ROOT/templates/grounding-contract.md" | cut -c1-12
+    else
+      shasum -a 256 "$ROOT/templates/grounding-contract.md" | cut -c1-12
+    fi
+    ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-spec-build|wf-spec-review|shared|template|templates]" >&2
+    echo "usage: spec-paths [root|workflows|wf-spec-build|wf-spec-review|shared|template|templates|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

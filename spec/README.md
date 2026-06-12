@@ -13,17 +13,24 @@ generates `.claude/spec.config.json`, `.claude/rules/spec-pipeline.md`, project-
 implementer agents, and `scripts/spec-patterns.sh`. The pipeline commands refuse to run
 without them.
 
+Drift detection is automatic: the grounding-layer contract lives in one plugin file
+(`templates/grounding-contract.md`), init stamps its hash into the config (`contractHash`),
+and the hook recomputes the hash on every pipeline command — any plugin update that touches
+the contract warns on the next command, with zero version bookkeeping. Run **`/spec:doctor`**
+for a cheap read-only drift check (plugin contracts + codebase reality vs the generated
+files) — it recommends targeted patches, or re-running `/spec:init` when drift is structural.
+
 ## The Flow
 
 ```
 ┌───────────┐    ┌─────────────┐    ┌────────────┐    ┌─────────────┐
 │ spec:plan │ →  │ spec:design │ →  │ spec:build │ →  │ spec:review │
 │ Fable:    │    │ optional:   │    │ Opus +     │    │ independent │
-│ explore → │    │ components  │    │ workflow:  │    │ gate;       │
-│ spike →   │    │ + stories,  │    │ TDD →      │    │ refutation  │
-│ draft →   │    │ iterate in  │    │ batches →  │    │ filter;     │
-│ refute →  │    │ the catalog │    │ integrate  │    │ flips done  │
-│ lock      │    │ with user   │    │ → gate     │    │             │
+│ explore → │    │ Fable       │    │ workflow:  │    │ gate;       │
+│ spike →   │    │ designs,    │    │ TDD →      │    │ refutation  │
+│ draft →   │    │ user        │    │ batches →  │    │ filter;     │
+│ refute →  │    │ iterates in │    │ integrate  │    │ flips done  │
+│ lock      │    │ the catalog │    │ → gate     │    │             │
 └───────────┘    └─────────────┘    └────────────┘    └─────────────┘
  draft→hardened   sets designed:     →implementing      →done
 ```
@@ -45,10 +52,10 @@ Shared invariants (risk tiers, model placement, escalation contract, MCP policy)
 
 | Ships in the plugin | Generated per repo by `/spec:init` |
 |---|---|
-| Commands `/spec:plan` `design` `build` `review` `init` | `.claude/spec.config.json` (gate/test/setup commands, layerGroups, agentMap, optional driftScript) |
+| Commands `/spec:plan` `design` `build` `review` `init` `doctor` | `.claude/spec.config.json` (gate/test/setup commands, layerGroups, agentMap, `contractHash` drift stamp, optional driftScript) |
 | `wf-spec-build.js`, `wf-spec-review.js` workflows | `.claude/rules/spec-pipeline.md` (T3 triggers, planning checklist, build duties, worker/test rules, review checks) |
 | Generic read-only `spec-reviewer` agent | Implementer agents in `.claude/agents/` (one per batch kind) |
-| State-gate hook, spec template | `scripts/spec-patterns.sh` (mechanical sweep) |
+| State-gate hook, spec template, grounding-contract file | `scripts/spec-patterns.sh` (mechanical sweep) |
 
 Repo differences are configuration, never forks: the build workflow takes the agent roster
 via `args.agentMap`, the gate via `args.gate.command`, and worker/test rules as strings the
@@ -80,17 +87,21 @@ gets a spec file.
 /spec:plan "portfolio breakdown panel"
   → plan embeds registry/library references in the spec's UI section; design: true
 /spec:design specs/YYYYMMDD/01-portfolio-panel.md
-  → foundation files → stateless components + catalog entries (stories / use-cases)
+  → foundation files → Fable designs the stateless components inside the repo's design
+    canon (tokens + doctrine doc) → catalog entries (stories / use-cases)
   → you: run the catalog (Storybook, Widgetbook, …) — iterate as many rounds as you want
-    (notes → fresh workers)
-  → approve → spec reconciled to the design → designed: YYYY-MM-DD
+  → approve → spec reconciled, reusable taste rulings promoted into the doctrine
+    → designed: YYYY-MM-DD
 /spec:build …   # skips approved components; TDD covers logic, not pixels
 /spec:review …
 ```
 
-The design stage's doctrine: the catalog + your eyes gate UI rendering; TDD gates behavior.
+The design stage's bet: the catalog + your eyes gate UI rendering; TDD gates behavior.
 Components built in design are real and kept — build wires them, it doesn't rebuild them.
-The catalog tool is host config, not plugin code: Storybook hosts declare
+Cross-spec consistency lives in repo artifacts, not session memory: design tokens in code,
+a one-page doctrine doc (read at preflight, promoted into at reconcile), and a living
+showcase catalog entry where every spec's surfaces sit side by side — drift is visible, not
+inferred. The catalog tool is host config, not plugin code: Storybook hosts declare
 `{"tool": "storybook", "command": "bun storybook", "storyFormat": "CSF3 stories"}`; Flutter
 hosts declare Widgetbook with `@UseCase` builders as the story format.
 
@@ -108,6 +119,12 @@ return from the journal cache; only affected batches re-run.
 - **Design is a stage, not a checkpoint inside build.** Active design iteration changes the
   spec; doing it before build means build implements against settled truth, and the
   (potentially long, multi-session) visual loop never bloats the build orchestrator's context.
+- **In design, taste is the work — so Fable does it.** The pipeline's one exception to
+  "Sonnet works": a Fable designer session writes the components itself, in coherence groups
+  rather than maximal fan-out, because visual coherence is a system property no parallel
+  per-cluster dispatch can produce. It earns the cost back in fewer human iteration rounds —
+  and where the host provides a `design.screenshot` command, the designer critiques its own
+  renders once before asking for yours.
 - **Build is a deterministic workflow** (`wf-spec-build.js`): batching, TDD-red enforcement,
   gate + repair caps live in code; judgment (blocked items, scope changes) escalates to the
   main loop → Fable retainer → user.

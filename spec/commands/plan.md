@@ -42,6 +42,10 @@ user to run `/spec:init` first.
   searches, Context7 for every third-party API the spec will rely on). Workers return digests;
   the excerpts that matter get embedded into the spec's UI/Contracts sections. Downstream
   workers never query MCPs.
+- UI-bearing spec in a design-capable host: read the design doctrine doc (config
+  `design.doctrine` — shared invariants § Design Stage) before writing the UI section; the
+  component inventory must fit the canon, and reusing existing catalog components beats
+  speccing new ones.
 - Then interview the user via `AskUserQuestion` with informed options — never ask in a vacuum,
   never ask what the codebase can answer. Batch questions.
 

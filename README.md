@@ -33,6 +33,11 @@ Repos with a component catalog (Storybook for web, Widgetbook for Flutter) get a
 `/spec:design` stage between plan and build, where you approve the UI visually before any
 logic is written.
 
+If the plugin updates or the codebase moves on, the generated files can go stale — the
+pipeline warns you automatically when the plugin's contracts changed (a contract hash checked
+by a hook on every command), and `/spec:doctor` runs a cheap read-only check of everything
+else, telling you whether a targeted patch or a full `/spec:init` re-run is warranted.
+
 ## Why bother?
 
 Letting one agent session "just build the feature" works — until the work gets big. Then it
@@ -71,10 +76,13 @@ decisions table workers must follow verbatim, explicit assumptions with fallback
 acceptance criteria written as `WHEN x THE SYSTEM SHALL y` with literal input → output
 examples, so a test author can't misread them.
 
-**Design** (optional, repos with a component catalog — Storybook, Widgetbook) — build the
-stateless components and catalog entries first, iterate visually with the human until
-approved, then reconcile the spec to the approved design. Build treats those components as
-finished inputs: your eyes gate pixels, tests gate behavior.
+**Design** (optional, repos with a component catalog — Storybook, Widgetbook) — the one
+stage where the top-tier model does the typing, because here taste *is* the work. A Fable
+designer session builds the stateless components inside the repo's design canon (design
+tokens plus a one-page doctrine doc, bootstrapped by init), you iterate visually until
+approved, then the spec is reconciled to the approved design and reusable taste rulings are
+promoted into the doctrine for future specs. Build treats those components as finished
+inputs: your eyes gate pixels, tests gate behavior.
 
 **Build** — a deterministic workflow script takes over. Test authors write failing tests
 from the spec alone (never from the implementation), a red-check confirms the tests actually
@@ -101,10 +109,14 @@ Every agent call names its model explicitly; nothing inherits. The rule of thumb
 
 | Model | Role |
 |---|---|
-| Fable | Planning sessions, design forks, build-time consultant, mandatory checkpoints on risky surfaces (money, auth, migrations) |
-| Opus | Build/design orchestration, gate triage |
-| Sonnet | Implementation, tests, stories, refuters, reviewers |
+| Fable | Planning sessions, the UI design stage, design forks, build-time consultant, mandatory checkpoints on risky surfaces (money, auth, migrations) |
+| Opus | Build orchestration, gate triage |
+| Sonnet | Implementation, tests, refuters, reviewers, design-stage plumbing (foundation files, catalog entries) |
 | Haiku | Lookups, searches, narrow file reads |
+
+The one exception to "Sonnet works" is the optional design stage: visual taste is the
+product there, so the expensive model writes the components itself — and earns it back in
+fewer human iteration rounds.
 
 No Fable access? Put your strongest model in the judgment seats. The structure — judge ≠
 conductor ≠ worker, reviewer never the planning model — matters more than the tier names.

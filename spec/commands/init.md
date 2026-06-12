@@ -21,7 +21,9 @@ understand what the process layer expects from the grounding layer.
 2. `.claude/rules/spec-pipeline.md` — prose grounding, six sections
 3. `.claude/agents/*.md` — project-grounded implementer agents (one per batch kind)
 4. `scripts/spec-patterns.sh` — mechanical shortcut sweep adapted to this repo
-5. A short report: what was generated, what was verified, what needs the user's eyes
+5. Design-capable hosts only: the **design foundation** — token files verified/landed, a
+   one-page design doctrine doc, the living showcase catalog entry (Phase 6)
+6. A short report: what was generated, what was verified, what needs the user's eyes
 
 ## Phase 1 — Profile the repo
 
@@ -33,7 +35,10 @@ Launch parallel Explore agents (`model: sonnet`) and read key files yourself:
   bun test:run`? `uv run pytest`?).
 - **Component catalog:** present? Storybook (web: `.storybook/` config, `storybook` script)
   or Widgetbook (Flutter: `widgetbook` in `pubspec.yaml`, a widgetbook entrypoint/sub-package).
-  This decides the config `design` block and whether `/spec:design` ever runs here.
+  This decides the config `design` block and whether `/spec:design` ever runs here. If
+  design-capable, also profile the **design language**: existing theme/token files, a base
+  design system in the dependencies (shadcn/Radix, MUI, Material 3, Cupertino, …), and how
+  consistently real screens follow it — input to Phase 6.
 - **Architecture:** how is code organized (features? domains? modules?), what are the layer
   boundaries, which surfaces are generated/managed (codegen outputs, lockfile-like catalogs,
   translation files), what CI enforces (import linters, purity checks).
@@ -52,6 +57,13 @@ All keys consumed by the plugin's commands/workflows:
 
 ```jsonc
 {
+  // Drift stamps — both computed at init time, never hand-picked.
+  // generatedBy: "spec@" + `spec-paths version` (human-readable provenance).
+  // contractHash: `spec-paths contract-hash` — hash of the plugin's grounding-contract
+  // file. The state-gate hook recomputes and compares it on every pipeline command and
+  // warns on mismatch; any plugin contract change fires it automatically.
+  "generatedBy": "spec@1.0.0",
+  "contractHash": "<output of spec-paths contract-hash>",
   // Deterministic gate. {testDirs}/{scopeDirs} placeholders are substituted by
   // /spec:build and /spec:review from the spec's File Plan dirs (omit if not needed).
   "gateCommand": "bun typecheck && bun lint && bun test:run {testDirs}",
@@ -70,7 +82,12 @@ All keys consumed by the plugin's commands/workflows:
   "design": {
     "tool": "storybook",
     "command": "bun storybook",
-    "storyFormat": "CSF3 stories"
+    "storyFormat": "CSF3 stories",
+    // Written by Phase 6 — binding canon for /spec:design.
+    "doctrine": "docs/design/doctrine.md",
+    // OPTIONAL: renders catalog entries to image files — enables the designer's visual
+    // self-review round. Omit if the host has no such command; never invent one.
+    "screenshot": "bun storybook:screenshot"
   },
   // Ordered File Plan layer groups; layers inside one inner array run in parallel
   // (their file sets must be disjoint by construction of the repo's structure).
@@ -176,27 +193,11 @@ Body skeleton — this is the structure both source ecosystems converged on; fol
    > spec-pipeline worker you never query MCPs — `/spec:plan` embeds the needed references
    > into the spec's UI/Contracts sections.
 6. **`## Worker Contract (spec pipeline)`** — byte-identical across ALL generated agents.
-   Use exactly this text, substituting only the parenthesized self-verify examples with this
-   repo's scoped commands (from `gateCommand`/`testCommand`), the same way in every agent:
-
-```markdown
-## Worker Contract (spec pipeline)
-
-When dispatched as a batch worker by the `wf-spec-build` workflow:
-
-- The spec's **Decisions** table is authoritative — apply it verbatim. An unlocked design fork or stale spec assumption is a `blocked` return (kind, detail, options, recommendation), never a guess.
-- Do NOT query MCP servers — the spec's UI and Contracts sections embed the references you need. If an embedded reference is wrong against the installed version, return blocked `{kind: "stale-assumption"}`.
-- Edit only files in your assigned batch. Return receipts — files touched + one-line summaries — not narration.
-- NEVER run git commands (checkout/stash/restore/reset/clean/add/commit). Bash is for scoped self-verification only (`bun lint`, `bun test:run <your files>`, `bunx tsc --noEmit`). The orchestrator owns git; a repo-wide git op destroys sibling workers' uncommitted edits.
-```
-
-   The `tests`-kind agent additionally appends (after the contract bullets, still identical
-   wording wherever it appears):
-
-```markdown
-- As a TDD red-phase author: derive tests ONLY from the spec's Acceptance Criteria and Behavior sections, never from implementation code. Reference the AC-ID per this repo's convention.
-- Every new test must FAIL on current code. If a test would already pass, the spec is wrong — return blocked `{kind: "stale-assumption"}`. Write NO implementation code; never weaken assertions to make tests pass.
-```
+   The canonical text lives in the plugin's grounding-contract file: Read
+   `$(spec-paths contract)` and use its § Worker Contract block exactly, substituting only
+   the parenthesized self-verify examples with this repo's scoped commands (from
+   `gateCommand`/`testCommand`), the same way in every agent. The `tests`-kind agent
+   additionally appends the contract file's § Tests-kind addendum, verbatim.
 
 Examples of well-grounded agents to emulate (structure, not content): a frontend repo's
 `data-layer` agent citing `src/features/catalog/queries.ts` as canonical and a naming table
@@ -241,13 +242,49 @@ End with a generated-surface section when the repo has one: `git diff --name-onl
 "${DIFF_BASE:-main}" -- <generated paths>` with a note naming the sanctioned tools.
 `chmod +x` the result and run it once to confirm it executes cleanly.
 
-## Phase 6 — Verify & report
+## Phase 6 — Design foundation (design-capable hosts only)
+
+Skip unless Phase 2 wrote a `design` block. Goal: a **design foundation, not a design
+system** — the binding canon `/spec:design` reads (tokens + doctrine). The system itself
+grows later by extraction through specs; do not invent components or tokens no planned
+surface needs yet.
+
+**Brownfield (the repo has real UI):** extract, don't invent. Locate the theme/token files;
+read representative screens; write the doctrine doc as a description of what is **already
+true** — type scale, spacing rhythm, color roles, density, dialog-vs-page habits,
+empty-state tone. List the inconsistencies you found; do not resolve them.
+
+**Greenfield (no real UI yet):** `AskUserQuestion` first — **adopt** a base design system
+(recommended; offer the real candidates for this stack, e.g. shadcn/Radix or Material on
+web, Material 3 / Cupertino on Flutter) or **craft** a custom direction.
+
+- *Adopt:* doctrine = "«base system» defaults except …" plus the deviation list (brand
+  palette, radius, density); land the matching minimal theme/token overrides.
+- *Craft:* author 2–3 distinct directions, each as a north-star composition rendered as a
+  catalog entry (type scale, color temperature, density, motion feel); the user picks with
+  their eyes; land the chosen direction's token skeleton, delete the losers. Crafting is
+  Fable work — taste is the product here.
+
+Both modes also:
+
+- Create the **living showcase** catalog entry (composes real surfaces; every later design
+  run extends it — the visible cross-spec drift detector) and name its path in the doctrine
+  doc, along with the token-file paths.
+- Add the mechanical guardrail where the host's linter supports it (ban raw colors / magic
+  values in UI files); where it doesn't, record the rule in pipeline rules § Review Checks
+  instead — gate-checked prose beats unenforced prose.
+- Keep the doctrine doc to **one page**; record its path as `design.doctrine` in the config.
+
+## Phase 7 — Verify & report
 
 1. Re-read every generated file; spot-check 10 cited paths/exports at random against the repo.
 2. Confirm `agentMap` names exactly match the generated agent filenames' `name:` fields.
 3. Run `scripts/spec-patterns.sh` once; confirm exit 0 and sane output.
-4. Report: files written, agents generated (kind → name), config summary, T3 triggers chosen,
-   anything you could not verify and flagged for the user.
+4. Confirm the config's `generatedBy` equals `spec@$(spec-paths version)` and its
+   `contractHash` equals `$(spec-paths contract-hash)`.
+5. Report: files written, agents generated (kind → name), config summary, T3 triggers chosen,
+   design foundation landed (mode: extracted / adopted / crafted, doctrine path), anything
+   you could not verify and flagged for the user.
 
 ## Rules
 
@@ -258,5 +295,7 @@ End with a generated-surface section when the repo has one: `git diff --name-onl
   substitution of the self-verify command examples).
 - Re-running `/spec:init` refreshes the grounding layer: diff against existing files and
   preserve user hand-edits where they don't contradict fresh findings — surface conflicts,
-  don't overwrite silently.
+  don't overwrite silently. A refresh always re-stamps `generatedBy` and `contractHash`.
+  (To check for drift without regenerating, the user runs `/spec:doctor` — read-only, much
+  cheaper.)
 - `AskUserQuestion` dismissed → STOP.

@@ -1,0 +1,79 @@
+---
+description: Read-only drift check of the grounding layer — verifies config, agents, rules, and cited references against the installed plugin and the current codebase; recommends targeted patches or a /spec:init refresh
+argument-hint: [focus area, optional — e.g. "agents" or "design"]
+---
+
+# Spec Doctor: Grounding-Layer Drift Check
+
+The grounding layer (`/spec:init`'s output) goes stale two ways: the **plugin updated**
+(grounding-layer contracts changed under it) or the **codebase drifted** (cited paths,
+commands, and conventions moved on). This command detects both — cheaply, without the deep
+re-profile `/spec:init` runs. It is a **diagnosis, not a treatment**: report first; apply
+only targeted patches the user approves; recommend a full `/spec:init` refresh for
+structural drift. Never regenerate wholesale, and never touch files outside the grounding
+layer.
+
+**Intended model: Sonnet.** Run `spec-paths shared` and Read that file first. If
+`.claude/spec.config.json` is missing entirely, STOP — the repo was never initialized;
+the answer is `/spec:init`, not a drift report.
+
+## Checks — deterministic first
+
+Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
+
+1. **Config integrity** — `.claude/spec.config.json` parses; required keys present per the
+   contract file's § Required config keys; legacy keys (`storybook: true`,
+   `storybookCommand`) flagged for migration to the `design` block.
+2. **Contract stamp** — config `contractHash` equals `$(spec-paths contract-hash)`. A
+   mismatch is a lead, not a verdict — checks 3–6 below test the *current* contract (Read
+   `$(spec-paths contract)`) directly and decide whether the drift is real.
+3. **Agent roster** — every non-`default` `agentMap` value has a matching
+   `.claude/agents/*.md` whose frontmatter `name:` is exactly that value; no orphan agents
+   claiming pipeline kinds.
+4. **Worker Contract text** — each generated agent's `## Worker Contract (spec pipeline)`
+   section is byte-identical across agents (allowing only the sanctioned self-verify command
+   substitution) and matches the contract file's § Worker Contract block; the `tests`-kind
+   agent carries the § Tests-kind addendum.
+5. **Pipeline rules shape** — the file at `pipelineRules` exists and has all six sections
+   the contract file requires.
+6. **Scripts & commands** — `patternsScript` exists, is executable, exits 0; `driftScript`
+   (if declared) exists; each command referenced by `gateCommand` / `testCommand` /
+   `setupCommand` / `design.command` resolves (script names exist in `package.json` /
+   `Makefile` / `pyproject.toml` — verify the *names*, don't run the gate).
+7. **Cited references** — extract repo paths cited in the pipeline rules file and in each
+   generated agent (Reference Material, exemplars, naming-table examples); verify each
+   exists. Stale citations are the most common drift and are individually patchable.
+8. **Design foundation** (only if the config has a `design` block) — `design.doctrine`
+   exists and is ~one page; token files and the living-showcase entry it names exist.
+
+## Semantic spot-check — small, bounded
+
+For 2–3 agents (prioritize any with stale citations), read one cited exemplar each and
+judge whether the conventions the agent describes (naming tables, layer constraints) still
+match the real code. This is the only judgment call in the run; everything above is
+mechanical. Do not expand into a full re-profile.
+
+## Report & recommendation
+
+Group findings as **clean / stale (with evidence) / broken**, then close with exactly one
+recommendation:
+
+- **Clean** — no action. If only check 2 failed (stamp trails the plugin but the current
+  contract checks all pass), offer to re-stamp `contractHash` (+ `generatedBy`) — with
+  `AskUserQuestion`, since it silences the hook's warning.
+- **Targeted patches** — an enumerated list of small fixes (stale citation → current path,
+  legacy design keys → `design` block, contract-text resync, re-stamp). Apply only after
+  the user approves the list; re-run the affected checks after.
+- **Structural drift** — architecture reorganized, layers changed, toolchain swapped, or
+  the semantic spot-check failed: recommend `/spec:init` and say which findings drove the
+  call. Do not attempt the refresh yourself.
+
+## Rules
+
+- Read-only by default; every edit is user-approved, targeted, and inside the grounding
+  layer (`spec.config.json`, pipeline rules, generated agents, `scripts/spec-patterns.sh`).
+- Never run the host's `gateCommand`/`testCommand`/`setupCommand` — verify they resolve.
+- Re-stamp `contractHash`/`generatedBy` only when every current-contract check passes (or
+  after approved patches make them pass) — the stamp asserts "grounding matches this
+  plugin's contract".
+- `AskUserQuestion` dismissed → STOP.

@@ -4,7 +4,7 @@ description: Shared invariants of the spec pipeline — reference document read 
 
 # Spec Pipeline: Shared Invariants
 
-Pipeline: `/spec:plan` (Fable) → `/spec:design` (optional, UI specs in Storybook hosts) →
+Pipeline: `/spec:plan` (Fable) → `/spec:design` (optional, UI specs in design-capable hosts) →
 `/spec:build` (Opus + `wf-spec-build` workflow) → `/spec:review` (independent gate).
 
 ## Host Grounding
@@ -13,8 +13,9 @@ The pipeline is process; the repo supplies grounding. Two host files, both creat
 `/spec:init` (run it once per repo before first use):
 
 - **`.claude/spec.config.json`** — machine-readable knobs: `gateCommand`, `testCommand`,
-  `setupCommand`, `patternsScript`, optional `driftScript`, `storybook` (+ optional
-  `storybookCommand`), `layerGroups`, `agentMap` (+ optional `routing` hints), `pipelineRules`.
+  `setupCommand`, `patternsScript`, optional `driftScript`, optional `design` block
+  (component-catalog stage — see § Design Stage), `layerGroups`, `agentMap` (+ optional
+  `routing` hints), `pipelineRules`.
 - **The pipeline rules file** (path in `pipelineRules`, conventionally
   `.claude/rules/spec-pipeline.md`) — prose grounding by section: `Risk Tiers`, `Planning`,
   `Build`, `Worker Rules`, `Test Rules`, `Review Checks`.
@@ -73,15 +74,31 @@ Enforced by the plugin's `spec-state-gate.sh` (UserPromptSubmit) — invoking `/
 `/spec:build`, or `/spec:review` against a spec in the wrong state is blocked before the model
 sees it.
 
-## Design Stage (Storybook hosts only)
+## Design Stage (hosts with a component catalog)
 
-When the host config sets `storybook: true`, specs with a UI section default to
-`storybook: true` frontmatter (set at plan time), which routes the spec through `/spec:design`
-between plan and build: foundation files + stateless components + stories, the user actively
-iterates in Storybook, and the spec is reconciled to the approved design before build starts.
-Build then treats the approved components as done inputs — Storybook + the user's eyes gate UI
-rendering; TDD gates logic. Skipping design on a `storybook: true` spec is the user's call,
-not the model's. Hosts without Storybook never set the flag; the stage simply never runs.
+The stage is tool-agnostic; the host config's `design` block declares the catalog:
+
+```jsonc
+"design": {
+  "tool": "storybook",            // "storybook" (web) | "widgetbook" (Flutter) | any catalog
+  "command": "bun storybook",     // launches the catalog for the user's iteration loop
+  "storyFormat": "CSF3 stories"   // what stories-kind workers author — e.g. "Widgetbook @UseCase builders"
+}
+```
+
+When the host config declares a `design` block, specs with a UI section default to
+`design: true` frontmatter (set at plan time), which routes the spec through `/spec:design`
+between plan and build: foundation files + stateless components + catalog entries, the user
+actively iterates in the running catalog, and the spec is reconciled to the approved design
+before build starts. Build then treats the approved components as done inputs — the catalog +
+the user's eyes gate UI rendering; TDD gates logic. Skipping design on a `design: true` spec
+is the user's call, not the model's. Hosts without a catalog never set the flag; the stage
+simply never runs.
+
+**Legacy keys:** host configs may still say `storybook: true` + `storybookCommand`, and older
+specs may carry the `storybook:` frontmatter flag. Read these as
+`design: {tool: "storybook", command: <storybookCommand>, storyFormat: "CSF3 stories"}` and
+`design: true` respectively — same semantics, no behavioral difference.
 
 ## Model Placement
 

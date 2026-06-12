@@ -3,12 +3,12 @@ date: { YYYY-MM-DD }
 status: draft            # draft → hardened → implementing → done (hook-enforced)
 risk: T2                 # T2 | T3 per tier rubric (plugin shared invariants + host pipeline rules). T1 work gets no spec.
 area: { area-name }      # primary feature/domain/module; "cross-cutting" if none
-storybook: false         # Storybook hosts only: true → /spec:design gates before /spec:build
+design: false            # design-capable hosts only (config design block): true → /spec:design gates before /spec:build
 breaking: false
 depends_on: []
 depended_on_by: []
 # spiked: YYYY-MM-DD     # only if a spike ran during /spec:plan
-# designed: YYYY-MM-DD   # set by /spec:design on user approval (Storybook hosts)
+# designed: YYYY-MM-DD   # set by /spec:design on user approval (design-capable hosts)
 # The host's pipeline rules may declare extra flags (e.g. migration: true) — include them when they apply.
 # While drafting: never guess — write [NEEDS CLARIFICATION: question] inline where information
 # is missing. Lock requires zero markers; the state gate blocks downstream commands on any survivor.
@@ -48,7 +48,7 @@ depended_on_by: []
 { Screens, components, dialogs; their props and states (empty / loading / error / edge).
   Embed Component API References here — registry + library excerpts gathered at plan time.
   /spec:design and /spec:build workers build from THIS section and never query MCPs.
-  Omit section if no UI changes (then storybook: false). }
+  Omit section if no UI changes (then design: false). }
 
 ## Data Model
 
@@ -65,8 +65,8 @@ depended_on_by: []
 <!-- Every AC maps to a test. Reference the AC-ID per the host's convention (test name,
      comment, or docstring — pipeline rules § Test Rules). Hosts with a driftScript get it
      checked mechanically; hosts without get /spec:review's mechanical grep matrix (an AC-ID
-     with no test hit is a hard finding). In Storybook hosts, pure-UI rendering is exempt from
-     TDD (Storybook covers it) — ACs here are behavior, not pixels.
+     with no test hit is a hard finding). In design-capable hosts, pure-UI rendering is exempt
+     from TDD (the component catalog covers it) — ACs here are behavior, not pixels.
      Shape: WHEN {trigger/state} THE SYSTEM SHALL {observable response}. Wherever a term can
      be read two ways (rounding mode, ordering, inclusive/exclusive bounds, timezone, null vs
      empty), pin it with a literal input → output example — test authors derive tests from

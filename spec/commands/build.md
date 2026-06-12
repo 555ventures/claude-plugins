@@ -25,8 +25,9 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
 
 1. **Frontmatter gate** (the `spec-state-gate` hook also enforces this): `status: hardened` →
    proceed; `implementing` → this is a resume (workflow caching makes it cheap — reuse the prior
-   `runId` if known); anything else → STOP with the required command. In Storybook hosts:
-   `storybook: true` without `designed:` → ask the user whether to run `/spec:design` first or
+   `runId` if known); anything else → STOP with the required command. In design-capable hosts
+   (config `design` block, or legacy `storybook: true` — shared invariants § Design Stage):
+   `design: true` without `designed:` → ask the user whether to run `/spec:design` first or
    skip it deliberately.
 2. **Workspace.** `AskUserQuestion`: isolated worktree (recommended for parallel work) or in
    place. If worktree: `EnterWorktree`, then the host's `setupCommand` (from config) once at
@@ -38,7 +39,7 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
      if they are not, serialize). `tests` rows become test-author batches (Phase 1 of the
      workflow, before implementation). `other` rows and shared-by-definition files (the
      registration/wiring files pipeline rules § Build names) go in a final serial group.
-   - **`designed:` set** (Storybook hosts) → UI-layer rows whose files already exist on disk
+   - **`designed:` set** (design-capable hosts) → UI-layer rows whose files already exist on disk
      are approved inputs: drop them from batches entirely; any wiring edits to those
      components belong to the final serial group.
    - `agentType` per batch: assign each File Plan row a batch kind using the host config's
@@ -53,8 +54,9 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
      the doctrine in the batch prompt and dispatches on `general-purpose`; plugin/built-in
      names need no doctrine entry and dispatch natively.
    - Decisions table, Assumptions, host-specific frontmatter flags the pipeline rules § Build
-     declares (e.g. `migration:`), AC list (TDD enabled iff ACs exist). In Storybook hosts,
-     pure-UI rendering gets no TDD tests — Storybook covers it; ACs are behavior.
+     declares (e.g. `migration:`), AC list (TDD enabled iff ACs exist). In design-capable
+     hosts, pure-UI rendering gets no TDD tests — the component catalog covers it; ACs are
+     behavior.
 4. **Resolve the gate.** Take `gateCommand` and `testCommand` from config; substitute
    `{testDirs}`/`{scopeDirs}` placeholders from the spec's File Plan dirs. Read the pipeline
    rules file and extract § Worker Rules and § Test Rules verbatim (empty strings if absent) —

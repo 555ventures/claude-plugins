@@ -29,8 +29,9 @@ And for each piece of work:
 /spec:review specs/20260612/01-tick-size.md           # independent check; flips the spec to done
 ```
 
-Repos with Storybook get an optional `/spec:design` stage between plan and build, where you
-approve the UI visually before any logic is written.
+Repos with a component catalog (Storybook for web, Widgetbook for Flutter) get an optional
+`/spec:design` stage between plan and build, where you approve the UI visually before any
+logic is written.
 
 ## Why bother?
 
@@ -70,10 +71,10 @@ decisions table workers must follow verbatim, explicit assumptions with fallback
 acceptance criteria written as `WHEN x THE SYSTEM SHALL y` with literal input → output
 examples, so a test author can't misread them.
 
-**Design** (optional, Storybook repos only) — build the stateless components and stories
-first, iterate visually with the human until approved, then reconcile the spec to the
-approved design. Build treats those components as finished inputs: your eyes gate pixels,
-tests gate behavior.
+**Design** (optional, repos with a component catalog — Storybook, Widgetbook) — build the
+stateless components and catalog entries first, iterate visually with the human until
+approved, then reconcile the spec to the approved design. Build treats those components as
+finished inputs: your eyes gate pixels, tests gate behavior.
 
 **Build** — a deterministic workflow script takes over. Test authors write failing tests
 from the spec alone (never from the implementation), a red-check confirms the tests actually

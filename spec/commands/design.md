@@ -1,27 +1,29 @@
 ---
-description: Optional UI design stage — stateless components + stories, user iterates in Storybook, spec reconciled to the approved design
+description: Optional UI design stage — stateless components + catalog entries, user iterates in the host's component catalog (Storybook, Widgetbook, …), spec reconciled to the approved design
 argument-hint: <spec path>
 ---
 
-# Spec Design: Storybook Iteration
+# Spec Design: Component-Catalog Iteration
 
-For UI-bearing specs (`storybook: true`) in hosts whose `.claude/spec.config.json` declares
-`storybook: true`. Sits between `/spec:plan` and `/spec:build`: builds the foundation files
-and **real, kept** stateless components + stories, lets the user actively iterate on the
-design in Storybook, then reconciles the spec to the approved design and sets
+For UI-bearing specs (`design: true`) in hosts whose `.claude/spec.config.json` declares a
+`design` block — a component catalog such as Storybook (web) or Widgetbook (Flutter); see
+shared invariants § Design Stage for the block's shape and the legacy-key mapping. Sits
+between `/spec:plan` and `/spec:build`: builds the foundation files and **real, kept**
+stateless components + catalog entries, lets the user actively iterate on the design in the
+running catalog, then reconciles the spec to the approved design and sets
 `designed: YYYY-MM-DD`. Build later treats these components as done inputs — UI rendering is
-gated here by Storybook + the user's eyes, not by TDD.
+gated here by the catalog + the user's eyes, not by TDD.
 
 **Orchestrator: Opus (Sonnet acceptable for small specs). Workers: Sonnet.** This command is
 interactive by design — the user drives the iteration loop.
 
 **Setup:** run `spec-paths shared` and Read that file (shared invariants). Read the host's
-`.claude/spec.config.json` and its pipeline rules file. If the host config does not declare
-`storybook: true`, STOP — this stage does not apply to this repo.
+`.claude/spec.config.json` and its pipeline rules file. If the host config declares no
+`design` block (nor legacy `storybook: true`), STOP — this stage does not apply to this repo.
 
 ## Input
 
-`$ARGUMENTS` — path to a spec with `status: hardened` (hook-enforced). If `storybook: false`,
+`$ARGUMENTS` — path to a spec with `status: hardened` (hook-enforced). If `design: false`,
 confirm intent before proceeding.
 
 **Re-entrant:** all state lives on disk (foundation files, components, stories, the spec). A
@@ -50,10 +52,13 @@ defines). Checkpoint-commit when green.
 
 - One worker per component cluster from the spec's UI section, routed via the host's
   `agentMap` (e.g. `forms` for form dialogs, `tables` for tables, `components` for the rest);
-  `stories`-kind workers write CSF3 stories per cluster (same dispatch message where
-  independent). All `model: sonnet`, spec excerpts inlined.
-- **Stateless discipline:** props + mock data only — no data-layer imports, no store imports,
-  no router hooks. Wiring is `/spec:build`'s job. Stories must render every state the spec lists.
+  `stories`-kind workers write catalog entries per cluster in the host's story format
+  (config `design.storyFormat` — e.g. CSF3 stories for Storybook, `@UseCase` builders for
+  Widgetbook; same dispatch message where independent). All `model: sonnet`, spec excerpts
+  inlined.
+- **Stateless discipline:** props + mock data only — no data-layer imports, no
+  state-management/store imports, no router/navigation access. Wiring is `/spec:build`'s job.
+  Catalog entries must render every state the spec lists.
 - Workers inherit the pipeline hard rules (read-only surfaces, git ban, blocked protocol —
   shared invariants + pipeline rules § Worker Rules). New third-party UI primitives are added
   by the **orchestrator** via the host's sanctioned tool (pipeline rules § Worker Rules),
@@ -62,8 +67,8 @@ defines). Checkpoint-commit when green.
 
 ## Phase 3 — Iteration loop (user-driven)
 
-1. Tell the user: run the host's Storybook command (`storybookCommand` in config), and list
-   the story paths to review.
+1. Tell the user: run the host's catalog command (`design.command` in config), and list the
+   catalog entry paths (stories / use-cases) to review.
 2. `AskUserQuestion`: **Approve** / **Iterate** (notes via Other). Dismissed → STOP — state is
    safely on disk; re-invoke to continue.
 3. **Iterate:** translate the notes into per-cluster change lists; dispatch fresh Sonnet

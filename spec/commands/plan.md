@@ -49,8 +49,9 @@ user to run `/spec:init` first.
 
 Run for brownfield changes where blast radius is genuinely unclear, gnarly integration
 surfaces, complex migrations, or unfamiliar code. Skip for greenfield and well-understood
-changes. In Storybook hosts, if the unknown is **visual** (layout, interaction feel), don't
-spike — set `storybook: true` and let `/spec:design` iterate on real components instead.
+changes. In design-capable hosts (config `design` block), if the unknown is **visual**
+(layout, interaction feel), don't spike — set `design: true` and let `/spec:design` iterate
+on real components in the catalog instead.
 
 - One `Agent`: `subagent_type: general-purpose`, `model: sonnet`, `isolation: worktree`
   (REQUIRED — without it the spike pollutes the working tree).
@@ -75,10 +76,11 @@ While drafting:
   not a bigger spec: split into `##-` siblings in the same date dir, sliced by **landing
   unit** (each spec leaves the system green and shippable on its own), never by layer. Wire
   `depends_on`/`depended_on_by` and harden each; one planning session may produce the whole series.
-- **Set `storybook:`** — only in hosts whose config declares `storybook: true`. There: `true`
-  for any spec with a UI section whose look/feel the user should approve before build; `false`
-  for logic-only or trivially-styled changes; confirm with the user when borderline. In hosts
-  without Storybook, never set the flag (omit it or leave `false`).
+- **Set `design:`** — only in hosts whose config declares a `design` block (component
+  catalog — shared invariants § Design Stage). There: `true` for any spec with a UI section
+  whose look/feel the user should approve before build; `false` for logic-only or
+  trivially-styled changes; confirm with the user when borderline. In hosts without a
+  catalog, never set the flag (omit it or leave `false`).
 - **Never guess — mark it.** Where the draft needs information you don't have (an unconfirmed
   behavior, an unknown constraint, a fork you haven't put to the user yet), write
   `[NEEDS CLARIFICATION: <the question>]` inline at that spot instead of writing something
@@ -133,9 +135,9 @@ Never silently drop a finding.
    re-grep. Lock requires zero hits; the state-gate hook enforces the same check downstream.
 2. Confirm: zero open forks, **Rationale** and **Canonical Delta** written, ACs mapped to test files.
 3. Flip frontmatter `status: draft → hardened`.
-4. Report: spec path, tier, `storybook:` value (Storybook hosts), decision count, assumption
+4. Report: spec path, tier, `design:` value (design-capable hosts), decision count, assumption
    count, spike run or skipped, refuter findings fixed/rejected. Next: `/spec:design {path}`
-   if `storybook: true`, else `/spec:build {path}`.
+   if `design: true`, else `/spec:build {path}`.
 
 ## Rules
 

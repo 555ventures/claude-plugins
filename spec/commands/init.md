@@ -31,8 +31,9 @@ Launch parallel Explore agents (`model: sonnet`) and read key files yourself:
   typechecker, codegen tools. Extract the real commands from `package.json` scripts /
   `Makefile` / `pyproject.toml` — never guess (`make check`? `bun typecheck && bun lint &&
   bun test:run`? `uv run pytest`?).
-- **Storybook:** present? (config files, `storybook` script). This decides the config
-  `storybook` flag and whether `/spec:design` ever runs here.
+- **Component catalog:** present? Storybook (web: `.storybook/` config, `storybook` script)
+  or Widgetbook (Flutter: `widgetbook` in `pubspec.yaml`, a widgetbook entrypoint/sub-package).
+  This decides the config `design` block and whether `/spec:design` ever runs here.
 - **Architecture:** how is code organized (features? domains? modules?), what are the layer
   boundaries, which surfaces are generated/managed (codegen outputs, lockfile-like catalogs,
   translation files), what CI enforces (import linters, purity checks).
@@ -63,9 +64,14 @@ All keys consumed by the plugin's commands/workflows:
   // OPTIONAL: AC-drift checker; spec path appended. Omit entirely if the repo has none —
   // then the reviewer's AC ↔ test coverage check is the drift gate.
   "driftScript": "uv run python scripts/spec_drift.py --spec",
-  // Storybook design stage available in this repo?
-  "storybook": true,
-  "storybookCommand": "bun storybook",
+  // OPTIONAL: component-catalog design stage (/spec:design). Omit entirely if the repo has
+  // no catalog. tool: "storybook" (web) | "widgetbook" (Flutter) | any catalog; command
+  // launches it; storyFormat is what stories-kind workers author.
+  "design": {
+    "tool": "storybook",
+    "command": "bun storybook",
+    "storyFormat": "CSF3 stories"
+  },
   // Ordered File Plan layer groups; layers inside one inner array run in parallel
   // (their file sets must be disjoint by construction of the repo's structure).
   "layerGroups": [["foundation"], ["ui", "data", "logic"], ["wiring"]],
@@ -94,10 +100,13 @@ All keys consumed by the plugin's commands/workflows:
 
 (Backend-flavored example: `"gateCommand": "make check"`, `"testCommand": "uv run pytest -q
 --no-header --tb=line"`, `"setupCommand": "unset VIRTUAL_ENV && uv sync --frozen --extra
-dev"`, `"storybook": false`, `"layerGroups": [["foundation"], ["persistence"], ["logic"],
+dev"`, no `design` block, `"layerGroups": [["foundation"], ["persistence"], ["logic"],
 ["orchestration"]]`, `"agentMap": {"tests": "domain-tests", "models": "domain-models",
 "contracts": "domain-contracts", "persistence": "domain-persistence", "handlers":
-"domain-handlers", "default": "general-purpose"}`.)
+"domain-handlers", "default": "general-purpose"}`. Flutter-flavored `design` block:
+`{"tool": "widgetbook", "command": "flutter run -d chrome -t widgetbook/lib/main.dart",
+"storyFormat": "Widgetbook @UseCase builders"}` — extract the real entrypoint path and run
+target from the repo, never guess.)
 
 ## Phase 3 — Write `.claude/rules/spec-pipeline.md`
 
@@ -123,7 +132,7 @@ Six sections, all grounded in Phase 1 findings. This file is read by every pipel
   discipline, import-boundary rules, the scoped self-verify commands workers may run.
 - **`## Test Rules`** — this repo's test conventions: file placement, naming, AC-ID reference
   style (docstring? test name? comment?), fixture rules, what is exempt from TDD (e.g. pure-UI
-  rendering in Storybook repos).
+  rendering in repos with a design-stage catalog).
 - **`## Review Checks`** — repo-specific severity calibrations for the reviewer (the plugin's
   generic `spec-reviewer` reads this repo's `.claude/rules/` — this section is where checks
   like "runtime import from a feature barrel in `stores.ts` or `*.test.ts` is **hard**",

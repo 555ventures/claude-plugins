@@ -22,7 +22,7 @@ without them.
 │ explore → │    │ components  │    │ workflow:  │    │ gate;       │
 │ spike →   │    │ + stories,  │    │ TDD →      │    │ refutation  │
 │ draft →   │    │ iterate in  │    │ batches →  │    │ filter;     │
-│ refute →  │    │ Storybook   │    │ integrate  │    │ flips done  │
+│ refute →  │    │ the catalog │    │ integrate  │    │ flips done  │
 │ lock      │    │ with user   │    │ → gate     │    │             │
 └───────────┘    └─────────────┘    └────────────┘    └─────────────┘
  draft→hardened   sets designed:     →implementing      →done
@@ -32,7 +32,8 @@ State machine `draft → hardened → implementing → done` is enforced by the 
 `spec-state-gate.sh` (UserPromptSubmit hook) before the model even sees a wrong-state
 invocation; the same hook blocks any spec still carrying `[NEEDS CLARIFICATION]` markers —
 planning writes them inline instead of guessing, and lock requires zero. `/spec:design` never moves `status` — it sets the `designed:` date field — and
-only exists in repos whose config declares Storybook.
+only exists in repos whose config declares a component catalog (`design` block — e.g.
+Storybook for web, Widgetbook for Flutter).
 
 Shared invariants (risk tiers, model placement, escalation contract, MCP policy):
 `commands/shared.md` (run `spec-paths shared` for its absolute path). Spec template:
@@ -73,21 +74,25 @@ gets a spec file.
   → deterministic gates + reviewer panel + refutation filter + drift gate; flips done
 ```
 
-### UI-bearing change (Storybook hosts, storybook: true)
+### UI-bearing change (design-capable hosts, design: true)
 
 ```
 /spec:plan "portfolio breakdown panel"
-  → plan embeds registry/library references in the spec's UI section; storybook: true
+  → plan embeds registry/library references in the spec's UI section; design: true
 /spec:design specs/YYYYMMDD/01-portfolio-panel.md
-  → foundation files → stateless components + stories
-  → you: run Storybook — iterate as many rounds as you want (notes → fresh workers)
+  → foundation files → stateless components + catalog entries (stories / use-cases)
+  → you: run the catalog (Storybook, Widgetbook, …) — iterate as many rounds as you want
+    (notes → fresh workers)
   → approve → spec reconciled to the design → designed: YYYY-MM-DD
 /spec:build …   # skips approved components; TDD covers logic, not pixels
 /spec:review …
 ```
 
-The design stage's doctrine: Storybook + your eyes gate UI rendering; TDD gates behavior.
+The design stage's doctrine: the catalog + your eyes gate UI rendering; TDD gates behavior.
 Components built in design are real and kept — build wires them, it doesn't rebuild them.
+The catalog tool is host config, not plugin code: Storybook hosts declare
+`{"tool": "storybook", "command": "bun storybook", "storyFormat": "CSF3 stories"}`; Flutter
+hosts declare Widgetbook with `@UseCase` builders as the story format.
 
 ### Mid-build requirement change
 

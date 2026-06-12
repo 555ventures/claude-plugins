@@ -8,6 +8,13 @@ export const meta = {
   ],
 }
 
+// The harness delivers `args` JSON-encoded on scriptPath invocations — normalize before any use.
+if (typeof args === 'string') args = JSON.parse(args)
+if (!args || typeof args.specPath !== 'string') {
+  throw new Error('wf-spec-review: malformed args (expected the object documented below, got ' +
+    (args === undefined ? 'undefined' : typeof args) + ') — pass the full args object to the Workflow call')
+}
+
 // args: {
 //   specPath: string,
 //   tier: 'T2' | 'T3',

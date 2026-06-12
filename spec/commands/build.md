@@ -46,6 +46,12 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
      `agentType = agentMap[kind]`. Rows with no matching kind get `agentMap.default`
      (falling back to `general-purpose`). Never invent agent names — only the host's
      `agentMap` values are valid.
+   - **Doctrines.** The workflow's agent registry resolves only built-in and plugin agent
+     types — host `.claude/agents/*.md` are invisible to it. For every `agentMap` value that
+     is a host-local agent, read its `.claude/agents/<name>.md` and collect
+     `doctrines: {<name>: <system-prompt body, frontmatter stripped>}`. The workflow embeds
+     the doctrine in the batch prompt and dispatches on `general-purpose`; plugin/built-in
+     names need no doctrine entry and dispatch natively.
    - Decisions table, Assumptions, host-specific frontmatter flags the pipeline rules § Build
      declares (e.g. `migration:`), AC list (TDD enabled iff ACs exist). In Storybook hosts,
      pure-UI rendering gets no TDD tests — Storybook covers it; ACs are behavior.
@@ -58,8 +64,9 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
 ## Phase 1 — Run the workflow
 
 Invoke `Workflow {scriptPath: <spec-paths wf-spec-build output>, args: {specPath, tier, tdd,
-testBatches, groups, resolutions: {}, agentMap, gate: {command, testCommand}, workerRules,
-testRules}}`.
+testBatches, groups, resolutions: {}, agentMap, doctrines, gate: {command, testCommand},
+workerRules, testRules}}`. Pass `args` as a real JSON object (the script tolerates the
+harness's stringified delivery, but never double-encode it yourself).
 
 Test-author separation is enforced by construction: test batches are authored in the workflow's
 first phase by `agentMap.tests` workers that derive only from the spec; implementation workers

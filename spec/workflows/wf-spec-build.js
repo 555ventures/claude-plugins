@@ -10,6 +10,13 @@ export const meta = {
   ],
 }
 
+// The harness delivers `args` JSON-encoded on scriptPath invocations — normalize before any use.
+if (typeof args === 'string') args = JSON.parse(args)
+if (!args || !Array.isArray(args.groups)) {
+  throw new Error('wf-spec-build: malformed args (expected the object documented below, got ' +
+    (args === undefined ? 'undefined' : typeof args) + ') — pass the full args object to the Workflow call')
+}
+
 // args: {
 //   specPath: string,
 //   tier: 'T2' | 'T3',
@@ -21,6 +28,10 @@ export const meta = {
 //                                     // and 'default' are the fallback agent types here —
 //                                     // per-batch agentType (assigned by the orchestrator
 //                                     // from the same map) always wins
+//   doctrines: {agentName: string},   // system-prompt body of each HOST .claude/agents/*.md named
+//                                     // in agentMap — the workflow agent registry resolves only
+//                                     // built-in and plugin agents, so host roles travel as
+//                                     // doctrine text and dispatch on general-purpose
 //   gate: {
 //     command: string,      // fully resolved deterministic gate command (host gateCommand
 //                           // with {testDirs}/{scopeDirs} placeholders already substituted)
@@ -116,6 +127,30 @@ const TEST_RULES = [
 const AGENT_MAP = args.agentMap || {}
 const DEFAULT_AGENT = AGENT_MAP.default || 'general-purpose'
 
+// Host .claude/agents/*.md types are invisible to the workflow agent registry (built-in and
+// plugin agents only). A host role with a doctrine entry runs on general-purpose with its
+// doctrine embedded in the prompt; anything else that fails to resolve falls back with a log.
+const DOCTRINES = args.doctrines || {}
+function resolveType(t) {
+  const name = t || DEFAULT_AGENT
+  return DOCTRINES[name] ? 'general-purpose' : name
+}
+function doctrineBlock(t) {
+  const d = DOCTRINES[t || DEFAULT_AGENT]
+  return d ? `## Role\n${d}` : ''
+}
+async function dispatch(prompt, opts) {
+  try {
+    return await agent(prompt, opts)
+  } catch (e) {
+    if (opts.agentType !== 'general-purpose' && String(e).includes('not found')) {
+      log(`agentType '${opts.agentType}' not in the workflow registry — retrying on general-purpose`)
+      return agent(prompt, { ...opts, agentType: 'general-purpose' })
+    }
+    throw e
+  }
+}
+
 function fileList(b) {
   return b.files.map(f => `- ${f.action} ${f.path} — ${f.summary}`).join('\n')
 }
@@ -124,6 +159,7 @@ function batchPrompt(b) {
   const resolution = (args.resolutions || {})[b.id]
   return [
     `You are implementing one batch of files for a hardened spec.`,
+    doctrineBlock(b.agentType),
     `First, Read the spec at ${args.specPath}. The "Decisions" table is authoritative — apply it verbatim. The "Assumptions" section lists known fallbacks for surprises. Any embedded references (UI / Contracts sections) are the library and API shapes you build against.`,
     resolution ? `## Orchestrator ruling for this batch (locked — apply exactly)\n${resolution}` : '',
     `## Files in this batch\n${fileList(b)}`,
@@ -136,6 +172,7 @@ function testPrompt(b) {
   const resolution = (args.resolutions || {})[b.id]
   return [
     `You are writing FAILING tests for a hardened spec — tests come before implementation.`,
+    doctrineBlock(b.agentType || AGENT_MAP.tests),
     `First, Read the spec at ${args.specPath}. Derive tests ONLY from the spec's Acceptance Criteria and Behavior sections — never from implementation code (it may not exist yet, and tests must not share its blind spots).`,
     resolution ? `## Orchestrator ruling for this batch (locked — apply exactly)\n${resolution}` : '',
     `## Test files in this batch\n${fileList(b)}`,
@@ -176,9 +213,9 @@ function collectBlocked(batches, results) {
 if (args.tdd && (args.testBatches || []).length) {
   phase('TestAuthors')
   const out = await parallel(args.testBatches.map(b => () =>
-    agent(testPrompt(b), {
+    dispatch(testPrompt(b), {
       label: `tests:${b.id}`, phase: 'TestAuthors', schema: RECEIPT,
-      agentType: b.agentType || AGENT_MAP.tests || DEFAULT_AGENT, model: 'sonnet',
+      agentType: resolveType(b.agentType || AGENT_MAP.tests), model: 'sonnet',
     })))
   const { blocked, missing } = collectBlocked(args.testBatches, out)
   if (blocked.length || missing.length) {
@@ -203,9 +240,9 @@ phase('Implement')
 for (const group of args.groups) {
   log(`Implementing group: ${group.map(b => b.id).join(', ')}`)
   const out = await parallel(group.map(b => () =>
-    agent(batchPrompt(b), {
+    dispatch(batchPrompt(b), {
       label: `impl:${b.id}`, phase: 'Implement', schema: RECEIPT,
-      agentType: b.agentType || DEFAULT_AGENT, model: 'sonnet',
+      agentType: resolveType(b.agentType), model: 'sonnet',
     })))
   const { blocked, missing } = collectBlocked(group, out)
   if (blocked.length || missing.length) {
@@ -241,14 +278,14 @@ for (let round = 0; round <= 2; round++) {
 
   log(`Gate round ${round} failed — repairing batches: ${Object.keys(byBatch).join(', ')}`)
   await parallel(Object.entries(byBatch).map(([bid, fails]) => () =>
-    agent(
+    dispatch(
       batchPrompt(batchById[bid]) +
       `\n\n## Repair (round ${round + 1})\nYour batch's previous output produced these gate failures. ` +
       `Fix them without changing unrelated code:\n` +
       fails.map(f => `- ${f.file} — ${f.summary}`).join('\n'),
       {
         label: `repair:${bid}:r${round + 1}`, phase: 'Gate', schema: RECEIPT,
-        agentType: batchById[bid].agentType || DEFAULT_AGENT, model: 'sonnet',
+        agentType: resolveType(batchById[bid].agentType), model: 'sonnet',
       })))
 }
 

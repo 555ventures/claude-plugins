@@ -15,7 +15,7 @@ independence from the planning author is the gate's value; capability is not.
 
 **Setup:** run `spec-paths shared` and Read that file (shared invariants). Read the host's
 `.claude/spec.config.json` and its pipeline rules file. If either is missing, STOP: tell the
-user to run `/spec:init` first. Also run `spec-paths spec-review` once and keep the printed
+user to run `/spec:init` first. Also run `spec-paths wf-spec-review` once and keep the printed
 absolute path — it is the `scriptPath` for the Workflow call below.
 
 ## Input
@@ -36,7 +36,7 @@ absolute path — it is the `scriptPath` for the Workflow call below.
 
 ## Phase 1 — Review workflow
 
-Invoke `Workflow {scriptPath: <spec-paths spec-review output>, args: {specPath, tier, base,
+Invoke `Workflow {scriptPath: <spec-paths wf-spec-review output>, args: {specPath, tier, base,
 patterns: <sweep output>, hasDriftScript: <config declares driftScript>}}`.
 
 What the script does (shape lives in the script, not here):

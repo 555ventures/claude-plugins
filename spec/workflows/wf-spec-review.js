@@ -1,5 +1,5 @@
 export const meta = {
-  name: 'spec-review',
+  name: 'wf-spec-review',
   description: 'Independent shape+correctness review of a spec implementation with a refutation filter',
   whenToUse: 'Invoked by /spec:review after /spec:build completes',
   phases: [

@@ -173,7 +173,7 @@ Body skeleton — this is the structure both source ecosystems converged on; fol
 ```markdown
 ## Worker Contract (spec pipeline)
 
-When dispatched as a batch worker by the `spec-build` workflow:
+When dispatched as a batch worker by the `wf-spec-build` workflow:
 
 - The spec's **Decisions** table is authoritative — apply it verbatim. An unlocked design fork or stale spec assumption is a `blocked` return (kind, detail, options, recommendation), never a guess.
 - Do NOT query MCP servers — the spec's UI and Contracts sections embed the references you need. If an embedded reference is wrong against the installed version, return blocked `{kind: "stale-assumption"}`.

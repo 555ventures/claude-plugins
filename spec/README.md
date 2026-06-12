@@ -35,8 +35,8 @@ only exists in repos whose config declares Storybook.
 
 Shared invariants (risk tiers, model placement, escalation contract, MCP policy):
 `commands/shared.md` (run `spec-paths shared` for its absolute path). Spec template:
-`templates/spec.md`. Deterministic orchestration: `workflows/spec-build.js`,
-`workflows/spec-review.js` — commands locate them via the bundled `spec-paths` helper, since
+`templates/spec.md`. Deterministic orchestration: `workflows/wf-spec-build.js`,
+`workflows/wf-spec-review.js` — commands locate them via the bundled `spec-paths` helper, since
 `${CLAUDE_PLUGIN_ROOT}` is not substituted inside command bodies.
 
 ## Process layer vs grounding layer
@@ -44,7 +44,7 @@ Shared invariants (risk tiers, model placement, escalation contract, MCP policy)
 | Ships in the plugin | Generated per repo by `/spec:init` |
 |---|---|
 | Commands `/spec:plan` `design` `build` `review` `init` | `.claude/spec.config.json` (gate/test/setup commands, layerGroups, agentMap, optional driftScript) |
-| `spec-build.js`, `spec-review.js` workflows | `.claude/rules/spec-pipeline.md` (T3 triggers, planning checklist, build duties, worker/test rules, review checks) |
+| `wf-spec-build.js`, `wf-spec-review.js` workflows | `.claude/rules/spec-pipeline.md` (T3 triggers, planning checklist, build duties, worker/test rules, review checks) |
 | Generic read-only `spec-reviewer` agent | Implementer agents in `.claude/agents/` (one per batch kind) |
 | State-gate hook, spec template | `scripts/spec-patterns.sh` (mechanical sweep) |
 
@@ -102,10 +102,10 @@ return from the journal cache; only affected batches re-run.
 - **Design is a stage, not a checkpoint inside build.** Active design iteration changes the
   spec; doing it before build means build implements against settled truth, and the
   (potentially long, multi-session) visual loop never bloats the build orchestrator's context.
-- **Build is a deterministic workflow** (`spec-build.js`): batching, TDD-red enforcement,
+- **Build is a deterministic workflow** (`wf-spec-build.js`): batching, TDD-red enforcement,
   gate + repair caps live in code; judgment (blocked items, scope changes) escalates to the
   main loop → Fable retainer → user.
-- **Review is independent and refutation-filtered** (`spec-review.js`): Sonnet reviewers run
+- **Review is independent and refutation-filtered** (`wf-spec-review.js`): Sonnet reviewers run
   as the plugin's read-only `spec:spec-reviewer` agent (never the planning model), claim-only
   refuters, hard findings die only on unanimous refutation. Killed findings are reported,
   never silently dropped.

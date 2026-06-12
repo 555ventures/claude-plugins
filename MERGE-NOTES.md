@@ -174,6 +174,19 @@ Your Expertise → Reference Material (verified paths) → Critical Constraints 
 | FE frontmatter omits `tools:`; BE declares explicit tool lists | Genuine-ish (BE stricter) | init.md doesn't mandate `tools:` for implementers (they need edit tools anyway); both sources' `permissionMode: acceptEdits` + `memory: project` are mandated (allowed at repo level, unlike plugin agents). |
 | Worker Contract text varies per BE agent (e.g. `domain-models` drops the Bash sentence detail, `domain-tests` reorders TDD bullets); FE's is uniform and richest (includes MCP bullet + scoped self-verify) | **Drift** (BE copies decayed) | FE `data-layer.md`'s contract is canonical, embedded verbatim in init.md with exactly one sanctioned substitution: the parenthesized self-verify example commands, replaced once per repo, identical across that repo's agents. TDD addendum (from FE `testing.md`) appended for the tests-kind agent only. |
 
+## 14. Upstream rename sync (2026-06-12, post-initial-commit)
+
+The source repos renamed their workflows `spec-build`/`spec-review` → **`wf-spec-build`/
+`wf-spec-review`** (filenames + `meta.name` + all references, including the agents' Worker
+Contract lines) and renumbered their command files (`spec.plan.md` → `spec.01-plan.md`,
+`spec.design.md` → `spec.02-design.md`, `spec.build.md` → `spec.03-build.md`,
+`spec.review.md` → `spec.04-review.md`).
+
+| Change | Classification | Decision |
+|---|---|---|
+| Workflow names → `wf-*` | **Adopted** | Plugin files renamed to `workflows/wf-spec-build.js` / `wf-spec-review.js`, `meta.name` updated, `spec-paths` keys now `wf-spec-build`/`wf-spec-review`, all command/agent/README/init references updated — including the verbatim Worker Contract block in init.md ("by the `wf-spec-build` workflow"), matching the updated source agents. Plugin invocation still goes through `Workflow {scriptPath}`, so the name only affects the registry/display — but staying in sync keeps generated host agents and plugin prompts speaking the same name. |
+| Command file numbering (`spec.01-plan.md` …) | **Not adopted** | The numbers exist to order flat command files in the repos' `.claude/commands/` listings and yield invocations like `/spec.03-build`. Plugin commands are namespace-invoked (`/spec:plan`, `/spec:build`, …) — numbering them would change every user-facing command name (`/spec:03-build`), the state-gate matcher, and all cross-references for no ordering benefit. Flag for review if the numbering was meant to be user-facing in the plugin too. |
+
 ## Open questions (deferred, not guessed)
 
 1. **Legacy `/spec.X` spellings in the gate hook** — the plugin hook only matches `/spec:X`.

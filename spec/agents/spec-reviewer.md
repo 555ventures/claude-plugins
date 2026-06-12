@@ -1,6 +1,6 @@
 ---
 name: spec-reviewer
-description: "Read-only spec-implementation reviewer. Checks diffs against the spec and the host repo's rule surfaces and reports findings by severity. Used as the reviewer agentType by the spec-review workflow."
+description: "Read-only spec-implementation reviewer. Checks diffs against the spec and the host repo's rule surfaces and reports findings by severity. Used as the reviewer agentType by the wf-spec-review workflow."
 model: sonnet
 tools:
   - Read

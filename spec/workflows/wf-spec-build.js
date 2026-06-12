@@ -1,5 +1,5 @@
 export const meta = {
-  name: 'spec-build',
+  name: 'wf-spec-build',
   description: 'Implement a hardened spec: test authors, layered batches, deterministic gate + repair loop',
   whenToUse: 'Invoked by /spec:build with batches parsed from the spec File Plan',
   phases: [

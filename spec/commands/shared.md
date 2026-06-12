@@ -5,7 +5,7 @@ description: Shared invariants of the spec pipeline — reference document read 
 # Spec Pipeline: Shared Invariants
 
 Pipeline: `/spec:plan` (Fable) → `/spec:design` (optional, UI specs in Storybook hosts) →
-`/spec:build` (Opus + `spec-build` workflow) → `/spec:review` (independent gate).
+`/spec:build` (Opus + `wf-spec-build` workflow) → `/spec:review` (independent gate).
 
 ## Host Grounding
 
@@ -123,7 +123,7 @@ never override. An unlocked fork is a `blocked` return, not a guess. A dismissed
 
 ## Workflows Encode Shape, Not Judgment
 
-The plugin's `spec-build.js` and `spec-review.js` own ordering, schemas, retry caps, and
+The plugin's `wf-spec-build.js` and `wf-spec-review.js` own ordering, schemas, retry caps, and
 kill rules — deterministic control flow. Judgment (what's blocked, what's waived, what
 escalates, what a finding means) stays in the main loop. Never add JS branches that decide
 design questions, and never prompt-engineer findings into existence (no "empty output = you

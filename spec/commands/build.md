@@ -1,12 +1,12 @@
 ---
-description: Implement a hardened spec via the spec-build workflow — Sonnet workers, Fable consultant on surprises
+description: Implement a hardened spec via the wf-spec-build workflow — Sonnet workers, Fable consultant on surprises
 argument-hint: <spec path>
 ---
 
 # Spec Build: Orchestrated Implementation
 
 Implement a hardened spec. The orchestrator parses the File Plan into batches, invokes the
-bundled `spec-build` workflow (Sonnet workers, deterministic control flow), resolves surprises
+bundled `wf-spec-build` workflow (Sonnet workers, deterministic control flow), resolves surprises
 via the Fable consultant + user, and resumes until green.
 
 **Intended orchestrator model: Opus** (Sonnet acceptable for small T2 builds). Workers: Sonnet.
@@ -14,7 +14,7 @@ Lookups: Haiku. Surprises and T3 checkpoints: Fable subagent.
 
 **Setup:** run `spec-paths shared` and Read that file (shared invariants). Read the host's
 `.claude/spec.config.json` and its pipeline rules file (`pipelineRules`). If either is
-missing, STOP: tell the user to run `/spec:init` first. Also run `spec-paths spec-build` once
+missing, STOP: tell the user to run `/spec:init` first. Also run `spec-paths wf-spec-build` once
 and keep the printed absolute path — it is the `scriptPath` for the Workflow call below.
 
 ## Input
@@ -57,7 +57,7 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
 
 ## Phase 1 — Run the workflow
 
-Invoke `Workflow {scriptPath: <spec-paths spec-build output>, args: {specPath, tier, tdd,
+Invoke `Workflow {scriptPath: <spec-paths wf-spec-build output>, args: {specPath, tier, tdd,
 testBatches, groups, resolutions: {}, agentMap, gate: {command, testCommand}, workerRules,
 testRules}}`.
 

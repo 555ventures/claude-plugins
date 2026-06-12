@@ -12,13 +12,13 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 case "${1:-root}" in
   root)        echo "$ROOT" ;;
   workflows)   echo "$ROOT/workflows" ;;
-  spec-build)  echo "$ROOT/workflows/spec-build.js" ;;
-  spec-review) echo "$ROOT/workflows/spec-review.js" ;;
+  wf-spec-build)  echo "$ROOT/workflows/wf-spec-build.js" ;;
+  wf-spec-review) echo "$ROOT/workflows/wf-spec-review.js" ;;
   shared)      echo "$ROOT/commands/shared.md" ;;
   template)    echo "$ROOT/templates/spec.md" ;;
   templates)   echo "$ROOT/templates" ;;
   *)
-    echo "usage: spec-paths [root|workflows|spec-build|spec-review|shared|template|templates]" >&2
+    echo "usage: spec-paths [root|workflows|wf-spec-build|wf-spec-review|shared|template|templates]" >&2
     exit 1
     ;;
 esac

@@ -127,10 +127,6 @@ refuters, reviewers, and checkpoints to what the change can actually break.
 - **Plan mode / TODO-list agents** — a plan only its author reviewed is a draft. Here plans
   are attacked before they lock, and execution is a script with caps and caching, not the
   same model freestyling through a checklist.
-- **Spec-document generators (Spec Kit, Kiro, OpenSpec, BMAD)** — they produce documents;
-  execution is still one agent walking a task list. Here the spec is *executable*: the file
-  plan parses into parallel batches, acceptance criteria become failing tests before any
-  implementation exists, and the spec doubles as resume state and review contract.
 - **Autonomous loops ("run until done")** — a green gate is necessary, not sufficient; loops
   happily bend code to a wrong test. This pipeline bounds the iteration (repair caps,
   escalation triggers) and adds the gates a loop lacks: red-check, independent review,
@@ -138,6 +134,26 @@ refuters, reviewers, and checkpoints to what the change can actually break.
 - **Ad-hoc multi-agent fan-out** — without deterministic control flow, the orchestration is
   re-improvised every run: batching drifts, failures restart from zero, agents collide.
   Here ordering, caps, and retries live in a versioned script, and workers can't touch git.
+
+### Against the named SDD frameworks
+
+The prominent spec-driven frameworks share one structural trait: they are *spec-document
+generators*. They get you excellent documents, then execution is still one agent walking a
+task list — no enforced test-first, no adversarial check on the plan or the diff, no resume.
+This pipeline's bet is that the document is the easy half; the borrowable ideas they do have,
+we took (EARS-style acceptance criteria from Kiro, clarification markers from Spec Kit's
+`/clarify`).
+
+| Framework | What it is | Its edge over this pipeline | This pipeline's edge over it |
+|---|---|---|---|
+| [GitHub Spec Kit](https://github.com/github/spec-kit) | CLI + slash commands (constitution → specify → clarify → plan → tasks) for Copilot, Claude Code, Cursor, Gemini | Runs on many agents and tools; biggest community; the constitution idea | Executable specs (file plan → parallel batches, resume from cache); refuters attack the plan; independent review; tiers keep small work out entirely |
+| [Kiro](https://kiro.dev/) (AWS) | Agentic IDE: prompt → requirements.md (EARS) / design.md / tasks.md | Integrated IDE, zero setup, EARS rigor end-to-end | Everything past document generation: enforced TDD-red, deterministic orchestration, refutation-filtered review |
+| [OpenSpec](https://github.com/Fission-AI/OpenSpec) | Lightweight spec layer: living specs + delta change proposals (propose → apply → archive) | Simplicity; clean brownfield change-tracking via deltas | Enforcement — the state machine is a hook, not a convention; TDD; model economics; review independence |
+| [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) | Role-playing agent team (PM, Architect, Dev, QA) over an agile cycle | Rich role library; covers non-code planning; tool-portable | Deterministic control flow instead of improvised agent handoffs; its QA agent shares the author's blind spots — review here is cross-model |
+
+Pick them when you need portability across tools or a team-readable methodology with low
+ceremony. Pick this when the failure modes you care about live in *execution* — wrong tests
+going green, plans nobody attacked, builds that can't resume.
 
 The honest caveat: this is heavier than all of the above, and tightly coupled to Claude
 Code. If the work doesn't need delegation, durability, or gates — don't use it.

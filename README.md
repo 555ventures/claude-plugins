@@ -75,8 +75,22 @@ faces claim-only refuters and dies only on unanimous refutation. Killed findings
 reported, never silently dropped. Review owns the flip to `done`.
 
 The state machine `draft → hardened → implementing → done` is enforced by a hook before the
-model even sees a wrong-state command. Model placement is fixed and explicit: the top tier
-judges, a mid tier conducts, cheap workers implement, the cheapest looks things up.
+model even sees a wrong-state command.
+
+**Model placement** is fixed and explicit — every agent call names its model, nothing
+inherits. The rule of thumb: **Fable judges; Opus conducts; Sonnet works; Haiku looks up.**
+
+| Model | Role in the pipeline |
+|---|---|
+| Fable | `/spec:plan` sessions, design forks, the build-time "retainer" consultant, mandatory T3 checkpoints (money, auth, migrations) |
+| Opus | Build/design orchestration, gate triage |
+| Sonnet | Implementation batches, test authors, stories, plan refuters, reviewers, finding refuters |
+| Haiku | Lookups, searches, narrow file reads |
+
+If you don't have Fable access, substitute your strongest available model for the judgment
+seats — the structure (judge ≠ conductor ≠ worker, reviewer never the planning model) matters
+more than the specific tier names. Sonnet is acceptable as the orchestrator for small T2
+builds.
 
 **Process vs grounding.** The plugin ships only the process layer. Each repo runs
 `/spec:init` once, which profiles the codebase and generates the grounding layer: gate/test

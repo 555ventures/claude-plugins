@@ -79,6 +79,17 @@ While drafting:
   for any spec with a UI section whose look/feel the user should approve before build; `false`
   for logic-only or trivially-styled changes; confirm with the user when borderline. In hosts
   without Storybook, never set the flag (omit it or leave `false`).
+- **Never guess — mark it.** Where the draft needs information you don't have (an unconfirmed
+  behavior, an unknown constraint, a fork you haven't put to the user yet), write
+  `[NEEDS CLARIFICATION: <the question>]` inline at that spot instead of writing something
+  plausible. Markers are resolved in Phase 4 via `AskUserQuestion` or further exploration;
+  the state-gate hook blocks `/spec:design`, `/spec:build`, and `/spec:review` while any
+  marker survives in the file.
+- **AC shape:** write every AC as `WHEN {trigger/state} THE SYSTEM SHALL {observable
+  response}`, and pin every ambiguity-prone term (rounding mode, ordering,
+  inclusive/exclusive bounds, timezone, null vs empty) with a literal input → output example.
+  T3 ACs always carry at least one literal example. Test authors derive tests from the spec
+  alone — a concrete pair is the only wording they cannot misread.
 - Run your own pre-mortem (plausible failure modes worked backwards) and over-engineering check
   (counterfactual test + broken-vs-ugly test) — these are part of drafting, not separate passes.
 - Every genuine design fork → `AskUserQuestion` **now**, with options grounded in exploration.
@@ -104,21 +115,25 @@ Dispatch N independent refuters (T2: 1, T3: 2) in a single message, blind to eac
 
 - `subagent_type: general-purpose`, `model: sonnet`
 - Prompt: the spec content inlined cold (the document only — no drafting rationale beyond what
-  it contains), plus: *"Try to break this spec against the live codebase: stale file/symbol
-  references, wrong types/signatures or nullability vs the actual code and generated contracts,
-  missed call sites, architectural-boundary violations, persisted-state or migration
-  coexistence problems, stale embedded library references vs installed versions, edge cases at
-  boundaries. Read the code; cite file:line. Report only what you find — an empty list is a
-  valid outcome. ≤20 findings."*
+  it contains) and the path to the host's pipeline rules file, plus: *"Try to break this spec
+  against the live codebase: stale file/symbol references, wrong types/signatures or
+  nullability vs the actual code and generated contracts, missed call sites,
+  architectural-boundary violations, persisted-state or migration coexistence problems, stale
+  embedded library references vs installed versions, edge cases at boundaries, and conflicts
+  with the host's pipeline rules (Read the rules file; cite the section). Read the code; cite
+  file:line. Report only what you find — an empty list is a valid outcome. ≤20 findings."*
 
 Fix each finding in the spec, or explicitly reject it with the reason recorded in **Rationale**.
 Never silently drop a finding.
 
 ## Phase 4 — Lock
 
-1. Confirm: zero open forks, **Rationale** and **Canonical Delta** written, ACs mapped to test files.
-2. Flip frontmatter `status: draft → hardened`.
-3. Report: spec path, tier, `storybook:` value (Storybook hosts), decision count, assumption
+1. **Marker sweep (mechanical):** `grep -n "NEEDS CLARIFICATION" {spec path}`. Each hit is an
+   unresolved gap — resolve it (`AskUserQuestion` or targeted exploration), edit the spec,
+   re-grep. Lock requires zero hits; the state-gate hook enforces the same check downstream.
+2. Confirm: zero open forks, **Rationale** and **Canonical Delta** written, ACs mapped to test files.
+3. Flip frontmatter `status: draft → hardened`.
+4. Report: spec path, tier, `storybook:` value (Storybook hosts), decision count, assumption
    count, spike run or skipped, refuter findings fixed/rejected. Next: `/spec:design {path}`
    if `storybook: true`, else `/spec:build {path}`.
 

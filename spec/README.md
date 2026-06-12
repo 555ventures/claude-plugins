@@ -30,7 +30,8 @@ without them.
 
 State machine `draft → hardened → implementing → done` is enforced by the plugin's
 `spec-state-gate.sh` (UserPromptSubmit hook) before the model even sees a wrong-state
-invocation. `/spec:design` never moves `status` — it sets the `designed:` date field — and
+invocation; the same hook blocks any spec still carrying `[NEEDS CLARIFICATION]` markers —
+planning writes them inline instead of guessing, and lock requires zero. `/spec:design` never moves `status` — it sets the `designed:` date field — and
 only exists in repos whose config declares Storybook.
 
 Shared invariants (risk tiers, model placement, escalation contract, MCP policy):
@@ -110,5 +111,6 @@ return from the journal cache; only affected batches re-run.
   refuters, hard findings die only on unanimous refutation. Killed findings are reported,
   never silently dropped.
 - **Drift is config-decided.** Repos with an AC-drift script declare it (`driftScript`) and
-  review runs it; repos without rely on the reviewer's AC ↔ test coverage check, where a
-  missing test is a hard finding. There is no separate drift command.
+  review runs it; repos without get a mechanical grep matrix at review — every AC-ID must hit
+  at least one File Plan test file or it's an automatic hard finding — with the reviewer's
+  coverage check as the semantic backstop. There is no separate drift command.

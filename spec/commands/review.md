@@ -33,6 +33,10 @@ absolute path — it is the `scriptPath` for the Workflow call below.
    - **if config declares `driftScript`**: `{driftScript} {spec path}` — the host's AC-drift
      checker
 3. Read the spec once; extract File Plan dirs, AC list, tier, area.
+4. **No `driftScript` only — AC coverage matrix (mechanical):** for each AC-ID in the spec,
+   grep the File Plan's test paths for it. Any AC-ID with zero hits is an **uncovered AC** —
+   an automatic `hard` finding that skips the refutation filter (it is a deterministic fact,
+   not a reviewer claim). Computed before the reviewer panel runs.
 
 ## Phase 1 — Review workflow
 
@@ -57,9 +61,11 @@ Two modes, decided by host config:
   spec, no test): add the missing tests (via `/spec:build` resume if the spec is mid-pipeline).
   For **orphaned ACs** (in test, no spec): the AC may have been removed — update the test
   docstring/name or remove the test. Re-run the script to verify.
-- **No `driftScript`** — the reviewer's AC ↔ test coverage check IS the drift gate; treat a
-  missing-test finding as `hard`. (The workflow's reviewer prompt already calibrates this via
-  `hasDriftScript`.)
+- **No `driftScript`** — the Phase 0 grep matrix IS the drift gate: an AC-ID with zero test
+  hits is an automatic `hard` finding, no refutation. The reviewer's AC ↔ test coverage check
+  remains as the semantic backstop — a test that *names* an AC-ID but doesn't actually test
+  the behavior is still a `hard` finding. (The workflow's reviewer prompt already calibrates
+  this via `hasDriftScript`.)
 
 ## Phase 2 — Verdict
 

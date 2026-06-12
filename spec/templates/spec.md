@@ -10,6 +10,8 @@ depended_on_by: []
 # spiked: YYYY-MM-DD     # only if a spike ran during /spec:plan
 # designed: YYYY-MM-DD   # set by /spec:design on user approval (Storybook hosts)
 # The host's pipeline rules may declare extra flags (e.g. migration: true) — include them when they apply.
+# While drafting: never guess — write [NEEDS CLARIFICATION: question] inline where information
+# is missing. Lock requires zero markers; the state gate blocks downstream commands on any survivor.
 ---
 
 # { Title }
@@ -62,11 +64,17 @@ depended_on_by: []
 
 <!-- Every AC maps to a test. Reference the AC-ID per the host's convention (test name,
      comment, or docstring — pipeline rules § Test Rules). Hosts with a driftScript get it
-     checked mechanically; hosts without rely on /spec:review's coverage check (a missing
-     test is a hard finding). In Storybook hosts, pure-UI rendering is exempt from TDD
-     (Storybook covers it) — ACs here are behavior, not pixels. -->
+     checked mechanically; hosts without get /spec:review's mechanical grep matrix (an AC-ID
+     with no test hit is a hard finding). In Storybook hosts, pure-UI rendering is exempt from
+     TDD (Storybook covers it) — ACs here are behavior, not pixels.
+     Shape: WHEN {trigger/state} THE SYSTEM SHALL {observable response}. Wherever a term can
+     be read two ways (rounding mode, ordering, inclusive/exclusive bounds, timezone, null vs
+     empty), pin it with a literal input → output example — test authors derive tests from
+     this spec alone, and a concrete pair is the only wording they cannot misread. T3 ACs
+     always carry at least one literal example. -->
 
-- **AC-1**: { observable behavior } → { test reference } in { test file }
+- **AC-1**: WHEN { trigger/state } THE SYSTEM SHALL { observable response }
+  (e.g. `{ literal input }` → `{ literal output }`) → { test reference } in { test file }
 - **AC-2**: …
 
 ## Assumptions (escalation triggers)

@@ -3,6 +3,7 @@
 #   /spec:design requires status: hardened
 #   /spec:build  requires status: hardened (or implementing, for a resume)
 #   /spec:review requires status: implementing (or done, for a re-run)
+#   all three    require zero [NEEDS CLARIFICATION] markers in the spec
 # Exit 2 blocks the prompt and shows stderr to the user. Exit 0 allows.
 set -u
 
@@ -23,6 +24,11 @@ ROOT="${CLAUDE_PROJECT_DIR:-.}"
 FILE="$SPEC"
 [ -f "$FILE" ] || FILE="$ROOT/$SPEC"
 [ -f "$FILE" ] || exit 0   # nonexistent path — command will surface that itself
+
+if grep -q 'NEEDS CLARIFICATION' "$FILE"; then
+  echo "Spec state gate: $SPEC contains unresolved [NEEDS CLARIFICATION] markers — resolve them via /spec:plan before proceeding." >&2
+  exit 2
+fi
 
 STATUS=$(awk '/^---[[:space:]]*$/{f++; next} f==1 && /^status:/{print $2; exit}' "$FILE")
 

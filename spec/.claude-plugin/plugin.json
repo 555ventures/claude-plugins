@@ -1,0 +1,8 @@
+{
+  "name": "spec",
+  "description": "Spec pipeline: plan → design → build → review with deterministic workflows, a hook-enforced state machine, and per-repo grounding bootstrapped by /spec:init",
+  "author": {
+    "name": "JJ",
+    "email": "jj@555.ventures"
+  }
+}

@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Print absolute paths to assets bundled in the spec plugin.
+#
+# Command markdown bodies cannot use ${CLAUDE_PLUGIN_ROOT} (it is only substituted
+# in hooks.json, MCP/LSP configs, and frontmatter). This script is on $PATH during
+# sessions because it lives in the plugin's bin/ — commands run `spec-paths <key>`
+# once and use the absolute path it prints (e.g. for Workflow({scriptPath})).
+set -u
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
+
+case "${1:-root}" in
+  root)        echo "$ROOT" ;;
+  workflows)   echo "$ROOT/workflows" ;;
+  spec-build)  echo "$ROOT/workflows/spec-build.js" ;;
+  spec-review) echo "$ROOT/workflows/spec-review.js" ;;
+  shared)      echo "$ROOT/commands/shared.md" ;;
+  template)    echo "$ROOT/templates/spec.md" ;;
+  templates)   echo "$ROOT/templates" ;;
+  *)
+    echo "usage: spec-paths [root|workflows|spec-build|spec-review|shared|template|templates]" >&2
+    exit 1
+    ;;
+esac

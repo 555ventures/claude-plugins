@@ -1,0 +1,131 @@
+---
+description: Author and harden a spec in one Fable session — explore, draft, adversarial check, lock
+argument-hint: <feature description | spec path> [--spike]
+---
+
+# Spec Plan: Author + Harden (Fable)
+
+One session: explore → draft → adversarial check → lock. Produces a hardened spec at
+`specs/YYYYMMDD/##-{name}.md`.
+
+**Intended model: Fable.** This is the pipeline's judgment concentration point; spec quality
+determines all downstream spend. Execution and review never use Fable as the primary model.
+
+**Setup (before Phase 0):** run `spec-paths shared` and Read that file — the shared invariants
+(tier rubric, state machine, MCP policy). Then read the host's `.claude/spec.config.json` and
+the pipeline rules file it points to (`pipelineRules`). If either is missing, STOP: tell the
+user to run `/spec:init` first.
+
+## Input
+
+`$ARGUMENTS` — a feature description, or a path to an existing draft spec to re-open.
+`--spike` forces the worktree spike in Phase 1.5.
+
+## Phase 0 — Context check & tier
+
+1. **Harvest or discover.** If this conversation already contains a design discussion of the
+   target: summarize what has converged (scope, key decisions, open questions), confirm the
+   summary with the user, and skip to Phase 1.5/2. If invoked cold: run Phase 1 discovery.
+2. **Apply the tier rubric** (shared invariants § Risk Tiers; concrete T3 triggers in the
+   host's pipeline rules § Risk Tiers).
+   - **T1** → STOP: "This is T1-shaped — no spec needed. Just ask me to do it; the host's
+     gate command gates it and the change diffs against the host's standards docs." Do not
+     write a spec file.
+   - **T2/T3** → state the tier and the one-line rubric justification, proceed.
+
+## Phase 1 — Discovery (cold start only)
+
+- Launch parallel `Explore` agents (`model: haiku`, `sonnet` for multi-file reasoning) over the
+  affected areas and `docs/canonical/{area}.md` if present. Ground every claim in current code —
+  including any generated contract surfaces the host's pipeline rules name.
+- Run the pre-emptive lookups the host's pipeline rules § Planning declares (UI registry
+  searches, Context7 for every third-party API the spec will rely on). Workers return digests;
+  the excerpts that matter get embedded into the spec's UI/Contracts sections. Downstream
+  workers never query MCPs.
+- Then interview the user via `AskUserQuestion` with informed options — never ask in a vacuum,
+  never ask what the codebase can answer. Batch questions.
+
+## Phase 1.5 — Spike (when `--spike`, or judged necessary)
+
+Run for brownfield changes where blast radius is genuinely unclear, gnarly integration
+surfaces, complex migrations, or unfamiliar code. Skip for greenfield and well-understood
+changes. In Storybook hosts, if the unknown is **visual** (layout, interaction feel), don't
+spike — set `storybook: true` and let `/spec:design` iterate on real components instead.
+
+- One `Agent`: `subagent_type: general-purpose`, `model: sonnet`, `isolation: worktree`
+  (REQUIRED — without it the spike pollutes the working tree).
+- Prompt: throwaway happy-path implementation of the core change. No tests, no polish. First
+  action: the host's `setupCommand` (from config). Report back: files touched, unexpected
+  discoveries, design forks hit, cross-area impact, state/data migration needed,
+  typecheck/lint output — plus any report items the host's pipeline rules § Planning adds.
+  Never merge, never push; the worktree is discarded.
+- Fold findings into the spec's **Assumptions**, **Decisions**, and **Acceptance Criteria**
+  sections. Set `spiked: YYYY-MM-DD` in frontmatter.
+
+## Phase 2 — Draft
+
+Write the spec per the plugin template (run `spec-paths template` and Read it) at
+`specs/{YYYYMMDD}/{##}-{kebab-name}.md` (today's date dir, next free `##`; create the dir if
+needed). `status: draft`.
+
+While drafting:
+
+- **Decomposition gate:** a spec must fit one `/spec:build` run — roughly ≤15 File Plan rows,
+  one primary area, plus any host-declared caps (pipeline rules § Planning). Bigger work is
+  not a bigger spec: split into `##-` siblings in the same date dir, sliced by **landing
+  unit** (each spec leaves the system green and shippable on its own), never by layer. Wire
+  `depends_on`/`depended_on_by` and harden each; one planning session may produce the whole series.
+- **Set `storybook:`** — only in hosts whose config declares `storybook: true`. There: `true`
+  for any spec with a UI section whose look/feel the user should approve before build; `false`
+  for logic-only or trivially-styled changes; confirm with the user when borderline. In hosts
+  without Storybook, never set the flag (omit it or leave `false`).
+- Run your own pre-mortem (plausible failure modes worked backwards) and over-engineering check
+  (counterfactual test + broken-vs-ugly test) — these are part of drafting, not separate passes.
+- Every genuine design fork → `AskUserQuestion` **now**, with options grounded in exploration.
+  Record the outcome in the **Decisions** table. The spec must leave this session with zero
+  open forks.
+- Fill **Assumptions** with every load-bearing assumption paired with its `if false →` fallback.
+  This section is the consultant's cold-start map during `/spec:build` — it is the cheapest
+  place to buy execution robustness.
+- File Plan `Layer` values: the host's `layerGroups` (flattened, in order) plus `tests` and
+  `other`.
+
+### New product surfaces
+
+A new feature/domain/module is a normal spec — usually a decomposed `depends_on` series —
+with no separate pipeline. The planning session must additionally run the host's new-surface
+checklist (pipeline rules § Planning): requirements interview, data-shape design, cross-area
+contract mapping, UI inventory where applicable, and the registration/wiring rows the host's
+structure demands in the File Plan.
+
+## Phase 3 — Adversarial check
+
+Dispatch N independent refuters (T2: 1, T3: 2) in a single message, blind to each other:
+
+- `subagent_type: general-purpose`, `model: sonnet`
+- Prompt: the spec content inlined cold (the document only — no drafting rationale beyond what
+  it contains), plus: *"Try to break this spec against the live codebase: stale file/symbol
+  references, wrong types/signatures or nullability vs the actual code and generated contracts,
+  missed call sites, architectural-boundary violations, persisted-state or migration
+  coexistence problems, stale embedded library references vs installed versions, edge cases at
+  boundaries. Read the code; cite file:line. Report only what you find — an empty list is a
+  valid outcome. ≤20 findings."*
+
+Fix each finding in the spec, or explicitly reject it with the reason recorded in **Rationale**.
+Never silently drop a finding.
+
+## Phase 4 — Lock
+
+1. Confirm: zero open forks, **Rationale** and **Canonical Delta** written, ACs mapped to test files.
+2. Flip frontmatter `status: draft → hardened`.
+3. Report: spec path, tier, `storybook:` value (Storybook hosts), decision count, assumption
+   count, spike run or skipped, refuter findings fixed/rejected. Next: `/spec:design {path}`
+   if `storybook: true`, else `/spec:build {path}`.
+
+## Rules
+
+- Genuine forks go to the user — never silently decided, at any phase.
+- The spec must be executable by an orchestrator that was not in this conversation. If a
+  section relies on unstated context, write it down (that's what Rationale is for).
+- T1 work never gets a spec file.
+- `AskUserQuestion` dismissed → STOP the run; never invent the answer.

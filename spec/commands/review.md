@@ -100,32 +100,54 @@ Then proceed directly into Phase 4 — the user does not re-invoke anything.
 Merges the working branch into the originating branch recorded by `/spec:build`. Skip with a
 one-line note if the review ran directly on the originating branch — nothing to merge.
 
-1. **Inspect (parallel, one message):** `git status` (working tree must be clean — if dirty,
-   STOP and report), `git log --oneline {target}..{source}` (commits going in),
-   `git diff --stat {target}...{source}` (files touched), `git merge-base {target} {source}`.
-   Show the user a short summary — N commits, M files, touched paths. No full diffs.
-2. **Strategy — `AskUserQuestion`, always** (strategy is a real fork): merge commit
-   (`--no-ff`) / fast-forward only / squash / rebase then FF. Put the recommended option
-   first, by commit count: 1 commit → fast-forward; 2–5 feature commits → merge commit;
-   many small WIP commits → squash.
-3. **Worktree sequence** (if the session is in a `/spec:build` worktree): call
-   `ExitWorktree(action="keep")` **first** — it restores the session CWD to the main repo
-   root without an unmerged-commit check; the target branch is already checked out there.
-   Then merge from the root. Never `ExitWorktree(action="remove")` after merging — the
-   harness still sees the branch as unmerged at that point. If the session was not entered
-   via `EnterWorktree`, skip this and run git from the main repo root via `git -C`.
-4. **Merge.** On conflicts: enumerate with `git status` + `git diff --diff-filter=U`; read
-   **both sides** of every conflicted file and resolve on intent — never a blind
-   `--ours`/`--theirs`, never a silent `merge --abort`. Non-trivial conflicts (logic on both
-   sides, structural disagreement, deleted-vs-modified) get an `AskUserQuestion`: keep
-   target / keep source / combine (describe the proposed combination). After resolving,
-   `git add` each file, show a concise `git diff --cached` summary, then
-   `git commit --no-edit` (or `-m` for squash).
-5. **Cleanup & verify:** if a worktree was used, `git worktree remove {path}` and
-   `git branch -d {source}` from the root (if the path is already gone, cleanup is done —
-   confirm with `git worktree list`). Then `git log --oneline -3` + `git status` to confirm
-   the merge landed on a clean tree.
-6. **Never push.** Pushing remains an explicit user action.
+Run `spec-paths merge-back` once and keep the printed path — it is `{mergeBack}`, a
+deterministic helper for the git mechanics.
+
+`{root}` is the absolute path to the **project root** — the repo's main working tree, e.g.
+`/Users/you/Projects/app`. It is **NOT** your home directory (`$HOME`, `~`) and **NOT** the
+filesystem root (`/`). Get the exact value, don't guess it: run
+`{mergeBack} root --worktree {worktree}` (or just `{mergeBack} root` from inside the worktree)
+and use the absolute path it prints verbatim. `{target}` is the originating branch; `{source}`
+the build branch; `{worktree}` the worktree path (omit `--worktree` if no worktree was used).
+
+1. **Inspect:** `{mergeBack} inspect --root {root} --target {target} --source {source}`. It
+   STOPs (exit 2) if the root tree is dirty. Show the user its summary — N commits, M files,
+   its `RECOMMEND` line. No full diffs.
+2. **Strategy — `AskUserQuestion`, always** (strategy is a real fork): merge-commit /
+   ff-only / squash / rebase-ff. Put the `inspect` `RECOMMEND` option first.
+3. **Relocate to root FIRST — this is the fix for the session landing in `$HOME`.** A
+   subprocess cannot move the session CWD; only these can, so do one of them *before* any
+   worktree removal:
+   - If **this session** entered the worktree via `EnterWorktree`: call
+     `ExitWorktree(action="keep")` — restores session CWD to {root}, leaves worktree + branch
+     intact, no unmerged-commit check. Never `ExitWorktree(action="remove")` after merging —
+     the harness still sees the branch as unmerged then.
+   - Otherwise (worktree predates this session — `ExitWorktree` would be a no-op): `cd` in the
+     **main** session to the **absolute `{root}` path** printed by `{mergeBack} root`. It
+     persists, and unlike a no-op `ExitWorktree` it actually moves the session out of the
+     worktree. Use the full path — **never a bare `cd`** (that goes to `$HOME` and *is* the
+     `~/` bug), never `cd ~`, never `cd /`. Do **not** narrate this as "exiting the worktree" —
+     you are relocating the session to the project root, not unwinding harness state.
+   The merge itself runs via `git -C {root}` regardless, but the relocate is what stops
+   `cleanup` from deleting the directory you are standing in.
+4. **Merge:** `{mergeBack} merge --root {root} --target {target} --source {source} --strategy {choice} [--worktree {worktree}]`.
+   - exit 0 → merged.
+   - exit 3 → **conflicts** (merge, or a rebase-ff rebase). Resolve by intent: read **both
+     sides** of every conflicted file — never a blind `--ours`/`--theirs`, never a silent
+     `merge --abort`. Non-trivial conflicts (logic on both sides, structural disagreement,
+     deleted-vs-modified) get an `AskUserQuestion`: keep target / keep source / combine
+     (describe it). Then `git -C {root} add` each, show a concise `git -C {root} diff --cached`
+     summary, and `git -C {root} commit --no-edit`. (For a rebase-ff rebase, resolve in
+     `{worktree}`, `git -C {worktree} rebase --continue`, then re-run the `merge` step.)
+   - exit 2 → precondition failure (e.g. ff-only on diverged branches); report and re-ask
+     strategy.
+5. **Cleanup:** `{mergeBack} cleanup --root {root} --source {source} [--worktree {worktree}]`.
+   It removes the worktree and deletes `{source}` from {root}. **exit 4 means you skipped the
+   relocate in step 3** — the session is still inside the worktree; do step 3, then re-run
+   cleanup. (Already-gone worktree path → it prunes and treats cleanup as done.)
+6. **Verify:** `{mergeBack} verify --root {root}` — confirms the merge landed on a clean tree
+   with the worktree gone.
+7. **Never push.** Pushing remains an explicit user action.
 
 ## Rules
 
@@ -138,3 +160,6 @@ one-line note if the review ran directly on the originating branch — nothing t
 - Merge-back is part of CLEAN, not an extra ask — but strategy choice and non-trivial
   conflict resolutions always go through `AskUserQuestion`. Never `--no-verify`, never
   force-push, never push at all.
+- Relocate the session to {root} (Phase 4 step 3) **before** cleanup — always. The
+  `merge-back.sh cleanup` exit 4 is a hard backstop, not a substitute: a worktree removed
+  while the session sits inside it strands the session in `$HOME`.

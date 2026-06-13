@@ -146,6 +146,15 @@ specs may carry the `storybook:` frontmatter flag. Read these as
 
 ## Model Placement
 
+> ⚠️ **Fable→Opus auto-fallback (Fable suspended 2026-06).**
+> Fable access is paused ([Mythos access change](https://www.anthropic.com/news/fable-mythos-access)).
+> Wherever this doctrine assigns **Fable** as an `Agent {model: …}`, **try `"fable"` first; if
+> it returns unavailable/suspended, fall back to `"opus"`** and continue. The literal strings
+> stay `"fable"`, so this self-heals — when Fable is restored it is used again with **no edit**.
+> Session-intent commands (`/spec:plan`, `/spec:design`, `/spec:init`) can't auto-fallback a
+> model *you* pick at launch: while Fable is suspended, run those sessions on **Opus**. Remove
+> this callout once Fable is reliably back.
+
 **Fable judges; Opus conducts; Sonnet works; Haiku looks up.**
 
 | Model | Role |
@@ -162,9 +171,10 @@ specs may carry the `storybook:` frontmatter flag. Read these as
   file contents.
 - **Reviews are never the planning model.** Cross-model independence beats capability — a
   same-model reviewer shares the blind spots that produced the bugs.
-- **Fable retainer pattern:** spawn once on first surprise (`Agent {model: "fable"}` with the
-  spec's Rationale + Assumptions), continue via `SendMessage` thereafter — it accumulates this
-  run's context across consultations.
+- **Fable retainer pattern:** spawn once on first surprise (`Agent {model: "fable"}`, falling
+  back to `"opus"` if Fable is unavailable — see callout, with the spec's Rationale +
+  Assumptions), continue via `SendMessage` thereafter — it accumulates this run's context
+  across consultations.
 
 ## Escalation Contract (build)
 

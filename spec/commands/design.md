@@ -14,7 +14,7 @@ running catalog, then reconciles the spec to the approved design and sets
 `designed: YYYY-MM-DD`. Build later treats these components as done inputs — UI rendering is
 gated here by the catalog + the user's eyes, not by TDD.
 
-**Intended model: Fable.** This is the pipeline's stated exception to "Sonnet works" (shared
+**Intended model: Fable** (Opus while Fable is suspended — see shared § Model Placement)**.** This is the pipeline's stated exception to "Sonnet works" (shared
 invariants § Model Placement): in this stage taste IS the work, so the designer session reads
 and writes component files itself — the build-stage rule that the orchestrator never holds
 file contents does not apply here. Sonnet is dispatched only for plumbing: foundation files,

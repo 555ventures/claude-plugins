@@ -89,7 +89,8 @@ never write tests for code they implement.
 | `gate-exhausted` | Repair loop hit its cap. Consult the Fable retainer with the failure output before escalating to the user. |
 | `complete` | Proceed to Phase 3. |
 
-**Fable retainer:** on the first surprise, spawn `Agent {model: "fable"}` with the spec's
+**Fable retainer:** on the first surprise, spawn `Agent {model: "fable"}` (fall back to
+`{model: "opus"}` if Fable is unavailable — see shared § Model Placement callout) with the spec's
 Rationale + Assumptions sections and the divergence; on later surprises, continue the SAME agent
 via `SendMessage` — it accumulates context of this run's weirdness. Mandatory consult triggers:
 worker blocked on a stale assumption, gate failed twice on the same batch, out-of-scope file,

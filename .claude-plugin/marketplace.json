@@ -9,6 +9,11 @@
       "name": "spec",
       "source": "./spec",
       "description": "Spec pipeline: plan → design → build → review with deterministic workflows, a hook-enforced state machine, and per-repo grounding bootstrapped by /spec:init"
+    },
+    {
+      "name": "git",
+      "source": "./git",
+      "description": "Git helpers: a fast add-all-and-commit flow (/git:commit) and a guided merge with conflict repair and worktree cleanup (/git:merge)"
     }
   ]
 }

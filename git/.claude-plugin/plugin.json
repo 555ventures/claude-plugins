@@ -1,0 +1,9 @@
+{
+  "name": "git",
+  "version": "1.0.0",
+  "description": "Git helpers: a fast add-all-and-commit flow and a guided merge with conflict repair and worktree cleanup",
+  "author": {
+    "name": "JJ",
+    "email": "jj@555.ventures"
+  }
+}

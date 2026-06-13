@@ -223,6 +223,24 @@ for (const b of args.testBatches || []) {
   for (const f of b.files) fileToBatch[f.path] = b.id
 }
 
+// The gate agent is asked for File Plan paths, but it reads them out of gate-command output —
+// which routinely prints absolute or ./-prefixed paths. Match the reported path against the
+// File Plan scope keys tolerantly so an in-scope failure isn't misclassified out-of-scope and
+// bounced to the orchestrator instead of through the repair loop. Exact match first, then a
+// path-boundary suffix match in either direction (absolute→relative or basename→full).
+const normPath = p => String(p).replace(/^\.\//, '').replace(/^\/+/, '')
+const scopePaths = Object.keys(fileToBatch)
+function resolveBatch(file) {
+  if (fileToBatch[file]) return fileToBatch[file]
+  const f = normPath(file)
+  if (fileToBatch[f]) return fileToBatch[f]
+  const hit = scopePaths.find(s => {
+    const sn = normPath(s)
+    return f === sn || f.endsWith('/' + sn) || sn.endsWith('/' + f)
+  })
+  return hit ? fileToBatch[hit] : null
+}
+
 const receipts = []
 
 function collectBlocked(batches, results) {
@@ -294,7 +312,7 @@ for (let round = 0; round <= 2; round++) {
   const byBatch = {}
   const outOfScope = []
   for (const f of gate.failures) {
-    const bid = fileToBatch[f.file]
+    const bid = resolveBatch(f.file)
     if (!bid) { outOfScope.push(f); continue }
     if (!byBatch[bid]) byBatch[bid] = []
     byBatch[bid].push(f)

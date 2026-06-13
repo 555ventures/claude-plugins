@@ -78,7 +78,8 @@ gets a spec file.
 /spec:build specs/YYYYMMDD/01-tick-size.md
   → TDD → layered batches → host integration → gate; status: implementing
 /spec:review specs/YYYYMMDD/01-tick-size.md
-  → deterministic gates + reviewer panel + refutation filter + drift gate; flips done
+  → deterministic gates + reviewer panel + refutation filter + drift gate; flips done,
+    commits, merges the build branch back (strategy asked, conflicts repaired, no push)
 ```
 
 ### UI-bearing change (design-capable hosts, design: true)
@@ -131,7 +132,9 @@ return from the journal cache; only affected batches re-run.
 - **Review is independent and refutation-filtered** (`wf-spec-review.js`): Sonnet reviewers run
   as the plugin's read-only `spec:spec-reviewer` agent (never the planning model), claim-only
   refuters, hard findings die only on unanimous refutation. Killed findings are reported,
-  never silently dropped.
+  never silently dropped. On CLEAN, review closes the loop: commit, then merge the build
+  branch back into its originating branch (strategy via one ask; conflict repair reads both
+  sides; worktree cleaned up; never pushed).
 - **Drift is config-decided.** Repos with an AC-drift script declare it (`driftScript`) and
   review runs it; repos without get a mechanical grep matrix at review — every AC-ID must hit
   at least one File Plan test file or it's an automatic hard finding — with the reviewer's

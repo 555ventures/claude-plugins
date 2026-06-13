@@ -118,7 +118,9 @@ Report: files (C/M/D), gate table, decisions applied vs escalated mid-run, consu
 consultations (count + topics), workflow `runId` (for any later resume). Status stays
 `implementing` — only `/spec:review` flips `done`.
 
-If in a worktree: `AskUserQuestion` merge-back / keep / discard, then `ExitWorktree` accordingly.
+If in a worktree: **stay in it** — `/spec:review` runs there and merges back to the
+originating branch on CLEAN (its Phase 4). Only `AskUserQuestion` (keep / discard +
+`ExitWorktree`) if the user is abandoning the spec instead of proceeding to review.
 
 Next: `/spec:review $ARGUMENTS`
 

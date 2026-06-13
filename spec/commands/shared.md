@@ -5,7 +5,8 @@ description: Shared invariants of the spec pipeline — reference document read 
 # Spec Pipeline: Shared Invariants
 
 Pipeline: `/spec:plan` (Fable) → `/spec:design` (optional, UI specs in design-capable hosts) →
-`/spec:build` (Opus + `wf-spec-build` workflow) → `/spec:review` (independent gate).
+`/spec:build` (Opus + `wf-spec-build` workflow) → `/spec:review` (independent gate; on CLEAN
+commits the close and merges the build branch back into its originating branch).
 
 ## Host Grounding
 

@@ -1,5 +1,5 @@
 ---
-description: Independent refutation-filtered review gate — flips spec to done and updates canonical docs
+description: Independent refutation-filtered review gate — flips spec to done, updates canonical docs, commits and merges back
 argument-hint: <spec path>
 ---
 
@@ -7,8 +7,9 @@ argument-hint: <spec path>
 
 Deterministic gates + one independent, refutation-filtered review covering **shape** (shortcuts,
 shims, rule-bending) and **correctness** (matches spec, ACs covered, wiring complete) in a
-single pass. On CLEAN: flips `status → done` and applies the spec's Canonical Delta. This is
-the only command that flips `done`.
+single pass. On CLEAN: flips `status → done`, applies the spec's Canonical Delta, commits,
+and merges the build branch back into its originating branch (Phase 4). This is the only
+command that flips `done`.
 
 **Orchestrator: Opus or Sonnet. Reviewers and refuters: Sonnet — never Fable.** Cross-model
 independence from the planning author is the gate's value; capability is not.
@@ -84,8 +85,44 @@ finding group:
 1. Flip frontmatter `status: implementing → done`.
 2. Apply the spec's **Canonical Delta** to `docs/canonical/{area}.md` (create the file from
    the delta if it doesn't exist yet).
-3. Report: gate table, findings (survived / killed / waived with reasons), drift result,
+3. **Close commit:** commit everything still uncommitted on the working branch — status flip,
+   canonical docs, any review-fix dispatches. The orchestrator owns git; never `--no-verify`.
+4. Report: gate table, findings (survived / killed / waived with reasons), drift result,
    canonical files updated.
+
+Then proceed directly into Phase 4 — the user does not re-invoke anything.
+
+## Phase 4 — Merge-back (on CLEAN, after the close commit)
+
+Merges the working branch into the originating branch recorded by `/spec:build`. Skip with a
+one-line note if the review ran directly on the originating branch — nothing to merge.
+
+1. **Inspect (parallel, one message):** `git status` (working tree must be clean — if dirty,
+   STOP and report), `git log --oneline {target}..{source}` (commits going in),
+   `git diff --stat {target}...{source}` (files touched), `git merge-base {target} {source}`.
+   Show the user a short summary — N commits, M files, touched paths. No full diffs.
+2. **Strategy — `AskUserQuestion`, always** (strategy is a real fork): merge commit
+   (`--no-ff`) / fast-forward only / squash / rebase then FF. Put the recommended option
+   first, by commit count: 1 commit → fast-forward; 2–5 feature commits → merge commit;
+   many small WIP commits → squash.
+3. **Worktree sequence** (if the session is in a `/spec:build` worktree): call
+   `ExitWorktree(action="keep")` **first** — it restores the session CWD to the main repo
+   root without an unmerged-commit check; the target branch is already checked out there.
+   Then merge from the root. Never `ExitWorktree(action="remove")` after merging — the
+   harness still sees the branch as unmerged at that point. If the session was not entered
+   via `EnterWorktree`, skip this and run git from the main repo root via `git -C`.
+4. **Merge.** On conflicts: enumerate with `git status` + `git diff --diff-filter=U`; read
+   **both sides** of every conflicted file and resolve on intent — never a blind
+   `--ours`/`--theirs`, never a silent `merge --abort`. Non-trivial conflicts (logic on both
+   sides, structural disagreement, deleted-vs-modified) get an `AskUserQuestion`: keep
+   target / keep source / combine (describe the proposed combination). After resolving,
+   `git add` each file, show a concise `git diff --cached` summary, then
+   `git commit --no-edit` (or `-m` for squash).
+5. **Cleanup & verify:** if a worktree was used, `git worktree remove {path}` and
+   `git branch -d {source}` from the root (if the path is already gone, cleanup is done —
+   confirm with `git worktree list`). Then `git log --oneline -3` + `git status` to confirm
+   the merge landed on a clean tree.
+6. **Never push.** Pushing remains an explicit user action.
 
 ## Rules
 
@@ -95,3 +132,6 @@ finding group:
 - Killed findings appear in the report. Silent drops void the filter's audit value.
 - Deterministic gate failures are fixed before review findings are litigated — don't review a
   red build.
+- Merge-back is part of CLEAN, not an extra ask — but strategy choice and non-trivial
+  conflict resolutions always go through `AskUserQuestion`. Never `--no-verify`, never
+  force-push, never push at all.

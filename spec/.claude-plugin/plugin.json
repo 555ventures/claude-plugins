@@ -1,6 +1,6 @@
 {
   "name": "spec",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Spec pipeline: plan → design → build → review with deterministic workflows, a hook-enforced state machine, and per-repo grounding bootstrapped by /spec:init",
   "author": {
     "name": "JJ",

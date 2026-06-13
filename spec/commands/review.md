@@ -28,8 +28,11 @@ absolute path — it is the `scriptPath` for the Workflow call below.
 1. Determine the diff base: the originating branch if a `/spec:build` worktree is live,
    otherwise `main`.
 2. Launch in parallel (background bash):
-   - `DIFF_BASE={base} bash {patternsScript} {dirs from the spec's File Plan}` — the host's
-     mechanical shortcut sweep (`patternsScript` from config)
+   - `DIFF_BASE={base} bash {patternsScript} {dirs from the spec's File Plan} > {patternsPath}`
+     — the host's mechanical shortcut sweep (`patternsScript` from config), redirected to a
+     temp file (`patternsPath` = a fresh `mktemp` path); keep the absolute path for the
+     workflow call. The reviewers read it rather than receiving the output inline, which keeps
+     `args` a small control channel.
    - the host's `gateCommand` — the deterministic gate
    - **if config declares `driftScript`**: `{driftScript} {spec path}` — the host's AC-drift
      checker
@@ -42,7 +45,7 @@ absolute path — it is the `scriptPath` for the Workflow call below.
 ## Phase 1 — Review workflow
 
 Invoke `Workflow {scriptPath: <spec-paths wf-spec-review output>, args: {specPath, tier, base,
-patterns: <sweep output>, hasDriftScript: <config declares driftScript>}}`.
+patternsPath: <temp file from Phase 0>, hasDriftScript: <config declares driftScript>}}`.
 
 What the script does (shape lives in the script, not here):
 - **Reviewers:** T2 → 1, T3 → 2 (blind to each other, different emphases), running as the

@@ -42,7 +42,8 @@ if (!args || typeof args !== 'object' || typeof args.specPath !== 'string') {
 //   specPath: string,
 //   tier: 'T2' | 'T3',
 //   base: string,            // git diff base (originating branch or main)
-//   patterns: string,        // output of the host's pattern-sweep script (config patternsScript)
+//   patternsPath: string,    // path to a file holding the host pattern-sweep output (config
+//                            // patternsScript); reviewers READ it (args is a control channel)
 //   hasDriftScript: boolean, // host config declares driftScript? when false, the reviewer's
 //                            // AC ↔ test coverage check IS the drift gate (missing test = hard)
 // }
@@ -103,7 +104,7 @@ Method:
 4. Cross-check the mechanical pattern sweep below — confirm or dismiss each non-zero row.
 
 ## Mechanical pattern sweep (pre-computed)
-${args.patterns}
+Read ${args.patternsPath} — the host's mechanical shortcut-sweep output. Confirm or dismiss each non-zero row against the actual diff.
 
 Report only what you find — an empty findings list is a valid outcome for a clean implementation.
 Every finding needs a file:line you actually verified and a self-contained "claim" paragraph that

@@ -47,28 +47,33 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
      `agentType = agentMap[kind]`. Rows with no matching kind get `agentMap.default`
      (falling back to `general-purpose`). Never invent agent names — only the host's
      `agentMap` values are valid.
-   - **Doctrines.** The workflow's agent registry resolves only built-in and plugin agent
+   - **Doctrine paths.** The workflow's agent registry resolves only built-in and plugin agent
      types — host `.claude/agents/*.md` are invisible to it. For every `agentMap` value that
-     is a host-local agent, read its `.claude/agents/<name>.md` and collect
-     `doctrines: {<name>: <system-prompt body, frontmatter stripped>}`. The workflow embeds
-     the doctrine in the batch prompt and dispatches on `general-purpose`; plugin/built-in
-     names need no doctrine entry and dispatch natively.
+     is a host-local agent, collect its file path into
+     `doctrinePaths: {<name>: ".claude/agents/<name>.md"}`. The workflow dispatches that role on
+     `general-purpose` and the worker READS the file for its doctrine — bodies travel as paths,
+     not inline text (the `args` channel coordinates; the agents do the file I/O). Plugin/built-in
+     names need no entry and dispatch natively.
    - Decisions table, Assumptions, host-specific frontmatter flags the pipeline rules § Build
      declares (e.g. `migration:`), AC list (TDD enabled iff ACs exist). In design-capable
      hosts, pure-UI rendering gets no TDD tests — the component catalog covers it; ACs are
      behavior.
 4. **Resolve the gate.** Take `gateCommand` and `testCommand` from config; substitute
-   `{testDirs}`/`{scopeDirs}` placeholders from the spec's File Plan dirs. Read the pipeline
-   rules file and extract § Worker Rules and § Test Rules verbatim (empty strings if absent) —
-   the workflow has no filesystem access, so everything host-specific travels through `args`.
+   `{testDirs}`/`{scopeDirs}` placeholders from the spec's File Plan dirs. Pass the
+   `pipelineRules` path (config value) as `pipelineRulesPath` — workers read its
+   `## Worker Rules` / `## Test Rules` sections themselves. The workflow *script* has no
+   filesystem access, but the agents it spawns do, so host rules and doctrines travel as PATHS
+   the workers read, never as inline blobs — this keeps `args` well under the harness's
+   delivery-size cap.
 5. Flip `status: hardened → implementing`.
 
 ## Phase 1 — Run the workflow
 
 Invoke `Workflow {scriptPath: <spec-paths wf-spec-build output>, args: {specPath, tier, tdd,
-testBatches, groups, resolutions: {}, agentMap, doctrines, gate: {command, testCommand},
-workerRules, testRules}}`. Pass `args` as a real JSON object (the script tolerates the
-harness's stringified delivery, but never double-encode it yourself).
+testBatches, groups, resolutions: {}, agentMap, doctrinePaths, gate: {command, testCommand},
+pipelineRulesPath}}`. Pass `args` as a real JSON object (the script tolerates the harness's
+stringified delivery, but never double-encode it yourself). Keep `args` small — paths, ids,
+and flags only; large bodies (doctrines, rules) travel as paths the workers read, never inline.
 
 Test-author separation is enforced by construction: test batches are authored in the workflow's
 first phase by `agentMap.tests` workers that derive only from the spec; implementation workers

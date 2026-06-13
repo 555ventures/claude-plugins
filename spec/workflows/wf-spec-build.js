@@ -52,17 +52,19 @@ if (!args || typeof args !== 'object' || !Array.isArray(args.groups)) {
 //                                     // and 'default' are the fallback agent types here —
 //                                     // per-batch agentType (assigned by the orchestrator
 //                                     // from the same map) always wins
-//   doctrines: {agentName: string},   // system-prompt body of each HOST .claude/agents/*.md named
-//                                     // in agentMap — the workflow agent registry resolves only
-//                                     // built-in and plugin agents, so host roles travel as
-//                                     // doctrine text and dispatch on general-purpose
+//   doctrinePaths: {agentName: string},  // path to each HOST .claude/agents/<name>.md named in
+//                                     // agentMap — the workflow agent registry resolves only
+//                                     // built-in and plugin agents, so host roles dispatch on
+//                                     // general-purpose and the worker READS this file for its
+//                                     // doctrine. args is a control channel, not a data bus:
+//                                     // bodies travel as paths, the agents do the file I/O.
 //   gate: {
 //     command: string,      // fully resolved deterministic gate command (host gateCommand
 //                           // with {testDirs}/{scopeDirs} placeholders already substituted)
 //     testCommand: string,  // host test-runner prefix for the red check; file paths appended
 //   },
-//   workerRules: string,    // host-specific worker hard rules (pipeline rules § Worker Rules); '' if none
-//   testRules: string,      // host-specific test conventions (pipeline rules § Test Rules); '' if none
+//   pipelineRulesPath: string,  // path to the host pipeline rules file; workers read its
+//                               // '## Worker Rules' / '## Test Rules' sections. '' if none.
 // }
 
 const RECEIPT = {
@@ -124,6 +126,8 @@ const GATE = {
   required: ['pass', 'failures', 'summary'],
 }
 
+const RULES_PATH = args.pipelineRulesPath || ''
+
 const HARD_RULES = [
   `## Hard rules
 - NEVER run any git command (checkout/stash/restore/reset/clean/add/commit/push). The orchestrator owns git.
@@ -136,7 +140,7 @@ const HARD_RULES = [
   against the actual code: STOP editing and return blocked {kind, detail, options, recommendation}.
   Never guess, never pick "the simplest option".
 - You may run scoped read-only checks to self-verify (lint/typecheck/tests on your own files only).`,
-  args.workerRules ? `## Host rules\n${args.workerRules}` : '',
+  RULES_PATH ? `## Host rules\nRead ${RULES_PATH} and follow its "## Worker Rules" section verbatim — host-specific hard rules (e.g. read-only/managed surfaces). Ignore the file's other sections; they are for the orchestrator, not you.` : '',
 ].filter(Boolean).join('\n\n')
 
 const TEST_RULES = [
@@ -145,23 +149,23 @@ const TEST_RULES = [
 - Every test must FAIL on current code. If a test would already pass, the spec is wrong — return blocked {kind: "stale-assumption", detail: "<which test and why>"}.
 - Test behavior, not implementation. Do not import internal helpers or assert on intermediate state.
 - Write NO implementation code.`,
-  args.testRules ? `## Host test conventions\n${args.testRules}` : '',
+  RULES_PATH ? `## Host test conventions\nRead ${RULES_PATH} and follow its "## Test Rules" section verbatim (file placement, naming, AC-ID reference convention). Ignore the file's other sections.` : '',
 ].filter(Boolean).join('\n\n')
 
 const AGENT_MAP = args.agentMap || {}
 const DEFAULT_AGENT = AGENT_MAP.default || 'general-purpose'
 
 // Host .claude/agents/*.md types are invisible to the workflow agent registry (built-in and
-// plugin agents only). A host role with a doctrine entry runs on general-purpose with its
-// doctrine embedded in the prompt; anything else that fails to resolve falls back with a log.
-const DOCTRINES = args.doctrines || {}
+// plugin agents only). A host role with a doctrinePath runs on general-purpose and the worker
+// READS that file for its doctrine; anything else that fails to resolve falls back with a log.
+const DOCTRINE_PATHS = args.doctrinePaths || {}
 function resolveType(t) {
   const name = t || DEFAULT_AGENT
-  return DOCTRINES[name] ? 'general-purpose' : name
+  return DOCTRINE_PATHS[name] ? 'general-purpose' : name
 }
 function doctrineBlock(t) {
-  const d = DOCTRINES[t || DEFAULT_AGENT]
-  return d ? `## Role\n${d}` : ''
+  const p = DOCTRINE_PATHS[t || DEFAULT_AGENT]
+  return p ? `## Your role\nBefore anything else, Read ${p} — that file is your role definition. Operate as that agent: the markdown after any frontmatter is your operating doctrine, subordinate only to the hard rules below.` : ''
 }
 async function dispatch(prompt, opts) {
   try {

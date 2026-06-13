@@ -10,11 +10,35 @@ export const meta = {
   ],
 }
 
-// The harness delivers `args` JSON-encoded on scriptPath invocations — normalize before any use.
-if (typeof args === 'string') args = JSON.parse(args)
-if (!args || !Array.isArray(args.groups)) {
-  throw new Error('wf-spec-build: malformed args (expected the object documented below, got ' +
-    (args === undefined ? 'undefined' : typeof args) + ') — pass the full args object to the Workflow call')
+// Normalize `args` before any use. The harness convention has varied: some versions deliver the
+// object verbatim, others JSON-encode it as a string on the scriptPath channel. We accept both,
+// tolerate accidental double-encoding, and on failure throw a message that shows what actually
+// arrived (length + preview) instead of a bare "Unable to parse JSON string" at the call site.
+function normalizeArgs(raw) {
+  let v = raw
+  // Unwrap up to 2 layers of JSON-string encoding (single = older harness; double = caller bug).
+  for (let i = 0; i < 2 && typeof v === 'string'; i++) {
+    const s = v.trim()
+    if (s === '[object Object]') {
+      throw new Error('wf-spec-build: args arrived String()-coerced to "[object Object]" — the ' +
+        'caller stringified the object with String()/template interpolation instead of passing a ' +
+        'real JSON object (or JSON.stringify). Pass `args` as a plain object in the Workflow call.')
+    }
+    try {
+      v = JSON.parse(s)
+    } catch (e) {
+      throw new Error('wf-spec-build: args was a string but not valid JSON (' + s.length +
+        ' chars). This is usually truncation at a delivery size cap or a coercion bug. ' +
+        'First 160 chars: ' + JSON.stringify(s.slice(0, 160)) + ' — parse error: ' + e.message)
+    }
+  }
+  return v
+}
+args = normalizeArgs(args)
+if (!args || typeof args !== 'object' || !Array.isArray(args.groups)) {
+  throw new Error('wf-spec-build: malformed args (expected the object documented below with a ' +
+    '`groups` array, got ' + (args === undefined ? 'undefined' : typeof args) +
+    ') — pass the full args object to the Workflow call')
 }
 
 // args: {

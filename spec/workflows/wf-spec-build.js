@@ -28,8 +28,10 @@ function normalizeArgs(raw) {
       v = JSON.parse(s)
     } catch (e) {
       throw new Error('wf-spec-build: args was a string but not valid JSON (' + s.length +
-        ' chars). This is usually truncation at a delivery size cap or a coercion bug. ' +
-        'First 160 chars: ' + JSON.stringify(s.slice(0, 160)) + ' — parse error: ' + e.message)
+        ' chars). This is structural corruption — free text / a non-scalar reached `args`, which ' +
+        'must carry only paths, ids, enums, booleans, and the gate command; prose belongs in the ' +
+        'spec the agents Read. First 160 chars: ' + JSON.stringify(s.slice(0, 160)) +
+        ' — parse error: ' + e.message)
     }
   }
   return v
@@ -41,13 +43,19 @@ if (!args || typeof args !== 'object' || !Array.isArray(args.groups)) {
     ') — pass the full args object to the Workflow call')
 }
 
-// args: {
+// args carries ONLY paths, ids, enums, booleans, and the host's gate command — no free text.
+// Any human/spec prose (per-file intent, batch notes, orchestrator rulings) is Read from the
+// spec on disk by the agent that needs it. Free text in args corrupts the JSON (quotes/
+// backslashes) against the harness's version-inconsistent string-vs-object encoding — see the
+// normalizer above. args: {
 //   specPath: string,
-//   tier: 'T2' | 'T3',
 //   tdd: boolean,
-//   testBatches: [{id, agentType, files: [{path, action, summary}], acIds: [string]}],
-//   groups: [[{id, agentType, files: [{path, action, summary}], notes?}]],  // ordered; parallel within
-//   resolutions: {batchId: string},   // orchestrator rulings; also the resume cache salt
+//   testBatches: [{id, agentType, files: [{path, action}], acIds: [string]}],
+//   groups: [[{id, agentType, files: [{path, action}]}]],  // ordered; parallel within
+//   resolutions: {batchId: token},    // ruling token per blocked batch — its VALUE is an opaque
+//                                     // cache-bust salt (a hash/counter, NOT prose); the ruling
+//                                     // itself lives in the spec's Decisions table the worker
+//                                     // re-reads. Cumulative across resumes.
 //   agentMap: {kind: agentName},      // host .claude/spec.config.json agentMap; keys 'tests'
 //                                     // and 'default' are the fallback agent types here —
 //                                     // per-batch agentType (assigned by the orchestrator
@@ -180,7 +188,7 @@ async function dispatch(prompt, opts) {
 }
 
 function fileList(b) {
-  return b.files.map(f => `- ${f.action} ${f.path} — ${f.summary}`).join('\n')
+  return b.files.map(f => `- ${f.action} ${f.path}`).join('\n')
 }
 
 function batchPrompt(b) {
@@ -189,9 +197,8 @@ function batchPrompt(b) {
     `You are implementing one batch of files for a hardened spec.`,
     doctrineBlock(b.agentType),
     `First, Read the spec at ${args.specPath}. The "Decisions" table is authoritative — apply it verbatim. The "Assumptions" section lists known fallbacks for surprises. Any embedded references (UI / Contracts sections) are the library and API shapes you build against.`,
-    resolution ? `## Orchestrator ruling for this batch (locked — apply exactly)\n${resolution}` : '',
+    resolution ? `## Orchestrator ruling (revision ${resolution})\nA ruling for this batch is recorded in the spec's Decisions table — Read it there and apply it exactly.` : '',
     `## Files in this batch\n${fileList(b)}`,
-    b.notes ? `## Notes\n${b.notes}` : '',
     HARD_RULES,
   ].filter(Boolean).join('\n\n')
 }
@@ -202,7 +209,7 @@ function testPrompt(b) {
     `You are writing FAILING tests for a hardened spec — tests come before implementation.`,
     doctrineBlock(b.agentType || AGENT_MAP.tests),
     `First, Read the spec at ${args.specPath}. Derive tests ONLY from the spec's Acceptance Criteria and Behavior sections — never from implementation code (it may not exist yet, and tests must not share its blind spots).`,
-    resolution ? `## Orchestrator ruling for this batch (locked — apply exactly)\n${resolution}` : '',
+    resolution ? `## Orchestrator ruling (revision ${resolution})\nA ruling for this batch is recorded in the spec's Decisions table — Read it there and apply it exactly.` : '',
     `## Test files in this batch\n${fileList(b)}`,
     `## Acceptance criteria to cover\n${(b.acIds || []).map(id => `- ${id}`).join('\n')}`,
     TEST_RULES,

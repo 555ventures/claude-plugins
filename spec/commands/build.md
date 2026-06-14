@@ -39,6 +39,10 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
      if they are not, serialize). `tests` rows become test-author batches (Phase 1 of the
      workflow, before implementation). `other` rows and shared-by-definition files (the
      registration/wiring files pipeline rules § Build names) go in a final serial group.
+     Each file in a batch is `{path, action}` **only** — never attach the File Plan `Summary`
+     prose or batch `notes`. Planning stays the orchestrator's job (full conversation context);
+     only the *payload* is lean. Workers recover per-file intent by reading the spec's File Plan
+     Summary column themselves. Free text in `args` corrupts its JSON — prose lives in the spec.
    - **`designed:` set** (design-capable hosts) → UI-layer rows whose files already exist on disk
      are approved inputs: drop them from batches entirely; any wiring edits to those
      components belong to the final serial group.
@@ -63,17 +67,24 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
    `pipelineRules` path (config value) as `pipelineRulesPath` — workers read its
    `## Worker Rules` / `## Test Rules` sections themselves. The workflow *script* has no
    filesystem access, but the agents it spawns do, so host rules and doctrines travel as PATHS
-   the workers read, never as inline blobs — this keeps `args` well under the harness's
-   delivery-size cap.
+   the workers read, never as inline blobs — `args` is a control channel of paths/ids/enums,
+   not a data bus, so no prose ever enters it to corrupt its JSON.
 5. Flip `status: hardened → implementing`.
 
 ## Phase 1 — Run the workflow
 
-Invoke `Workflow {scriptPath: <spec-paths wf-spec-build output>, args: {specPath, tier, tdd,
+Invoke `Workflow {scriptPath: <spec-paths wf-spec-build output>, args: {specPath, tdd,
 testBatches, groups, resolutions: {}, agentMap, doctrinePaths, gate: {command, testCommand},
 pipelineRulesPath}}`. Pass `args` as a real JSON object (the script tolerates the harness's
-stringified delivery, but never double-encode it yourself). Keep `args` small — paths, ids,
-and flags only; large bodies (doctrines, rules) travel as paths the workers read, never inline.
+stringified delivery, but never double-encode it yourself).
+
+**Invariant — no free text in `args`.** `args` carries only paths, ids, enums, booleans, and
+the host's gate command. Any prose — per-file intent, batch notes, orchestrator rulings — is
+Read from the spec on disk by the agent that needs it, never inlined. Free text (quotes,
+backslashes) corrupts the args JSON against the harness's version-inconsistent string-vs-object
+encoding; that is the closed-alphabet guarantee that keeps the channel from breaking, not a size
+budget. (`resolutions` is `{}` on first run; on resume each value is a ruling *token*, not the
+ruling text — see Phase 2.)
 
 Test-author separation is enforced by construction: test batches are authored in the workflow's
 first phase by `agentMap.tests` workers that derive only from the spec; implementation workers
@@ -83,7 +94,7 @@ never write tests for code they implement.
 
 | Return stage | Action |
 |---|---|
-| `blocked` | Per item: if resolvable within the spec's stated intent → consult the **Fable retainer**; if a genuine fork or scope change → `AskUserQuestion`. Write the outcome into the spec's Decisions table, add it to `args.resolutions[batchId]` (this busts the journal cache for that batch only), resume with `resumeFromRunId`. |
+| `blocked` | Per item: if resolvable within the spec's stated intent → consult the **Fable retainer**; if a genuine fork or scope change → `AskUserQuestion`. Write the ruling **prose into the spec's Decisions table** (that is where the worker reads it). Then set `args.resolutions[batchId]` to a short **token** — a hash of the ruling text or a monotonic counter, **never the ruling prose itself** — which busts the journal cache for that batch only. Keep `resolutions` **cumulative** across resumes: dropping an entry reverts that batch's prompt and silently un-applies its ruling. Resume with `resumeFromRunId`. |
 | `tdd-red-check` | Newly written tests pass before implementation — the spec is wrong somewhere. Surface the passing tests, fix spec or tests with the user, resume. |
 | `out-of-scope-failure` | A gate failure implicates a file outside the File Plan. `AskUserQuestion`: add to scope (mini-batch) / file as a separate fix / pause the spec. Per Blast Radius Discipline — never silently widen. |
 | `gate-exhausted` | Repair loop hit its cap. Consult the Fable retainer with the failure output before escalating to the user. |

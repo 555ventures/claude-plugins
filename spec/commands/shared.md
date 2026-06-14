@@ -204,6 +204,12 @@ escalates, what a finding means) stays in the main loop. Never add JS branches t
 design questions, and never prompt-engineer findings into existence (no "empty output = you
 missed something" framings — an empty findings list is always a valid outcome).
 
+**No free text in `args`.** A workflow's `args` is a control channel — paths, ids, enums,
+booleans, and the host gate command only. Never inline human/spec prose (per-file summaries,
+batch notes, orchestrator rulings); its quotes and backslashes corrupt the args JSON against
+the harness's version-inconsistent string-vs-object encoding. Prose lives in the spec on disk;
+the agent that needs it Reads it there.
+
 ## Worker Git Ban
 
 Implementation workers never run git commands — no checkout/stash/restore/reset/clean/add/

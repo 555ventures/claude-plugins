@@ -12,7 +12,25 @@ only when the contract genuinely changes, and never edit it for wording alone.
 `generatedBy`, `contractHash`, `gateCommand`, `testCommand`, `setupCommand`,
 `patternsScript`, `layerGroups`, `agentMap` (must include `tests` and `default`),
 `pipelineRules`. Optional: `driftScript`, `routing`, `design`
-(`tool`/`command`/`storyFormat`/`doctrine`, optional `screenshot`).
+(`tool`/`command`/`storyFormat`/`doctrine`, optional `screenshot`, optional `rulesManifest`),
+and the foundation-handoff keys `foundationStackDescriptor` and `designRulesHash` (see
+§ Foundation handoff).
+
+## Foundation handoff (optional — present when the `foundation` plugin seeded the repo)
+
+When `/foundation:architect` + `/foundation:design` ran first, `/spec:init` consumes their
+on-disk artifacts instead of re-deciding:
+
+- `foundationStackDescriptor` — path to `foundation/stack-descriptor.json` (archetype, stack,
+  `designCatalog`, resolved `gateCommand`). Optional; absent in repos not seeded by foundation.
+- `design.rulesManifest` — path to `foundation/design-rules.json`.
+- `designRulesHash` — hash of the rules manifest, stamped by `/spec:init`; `/spec:doctor`
+  recomputes it and warns when the design rules changed but enforcement was not regenerated.
+
+**Decide vs implement.** The manifest's rules carry a `targetCategory` **enum only** —
+`color | i18n | structure | a11y | density` — never a tool name. `/spec:init` owns the single
+category→tool mapping per detected stack and is the sole enforcement generator. A category with
+no mechanical enforcer on the stack becomes a Review-Check prose rule — never silently dropped.
 
 ## Required pipeline-rules sections (file at `pipelineRules`)
 

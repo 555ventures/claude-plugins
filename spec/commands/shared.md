@@ -127,10 +127,12 @@ session's context. Three layers, strongest enforcement first:
 1. **Token/theme files in code** — the design language itself, lint/gate-enforced where the
    host's tooling allows. Sessions extend the scale; they never fork it.
 2. **The design doctrine doc** (`design.doctrine`, one page, bootstrapped by `/spec:init`
-   § Design foundation) — taste rulings tokens can't encode (dialog-vs-page habits,
-   empty-state tone, density philosophy). Binding like a locked Decision; `/spec:design`
-   reads it at preflight and promotes generalizable rulings into it at reconcile.
-   `/spec:plan` respects it when speccing UI sections.
+   § Design foundation — or, for greenfield repos seeded by the `foundation` plugin, authored
+   by `/foundation:design` and merely extracted by `/spec:init`; the design rules it records
+   in `foundation/design-rules.json` become gate-wired enforcement at init time) — taste
+   rulings tokens can't encode (dialog-vs-page habits, empty-state tone, density philosophy).
+   Binding like a locked Decision; `/spec:design` reads it at preflight and promotes
+   generalizable rulings into it at reconcile. `/spec:plan` respects it when speccing UI sections.
 3. **The living showcase catalog entry** (path named in the doctrine) — composes real
    surfaces from every landed spec; each design run extends it. Drift is visible to the
    user's eyes with zero tooling.

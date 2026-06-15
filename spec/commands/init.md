@@ -249,12 +249,45 @@ system** — the binding canon `/spec:design` reads (tokens + doctrine). The sys
 grows later by extraction through specs; do not invent components or tokens no planned
 surface needs yet.
 
+**Precedence — check for a foundation canon first.** If `foundation/status.json` exists
+(the `foundation` plugin seeded this repo), branch three ways on its `design` value:
+
+- `rules-locked` or `skipped` → **consume, never re-prompt.** The canon already exists:
+  `/foundation:design` authored the doctrine + token files and `foundation/design-rules.json`.
+  Do NOT run the adopt/craft `AskUserQuestion` below — extract from what's there (treat it like
+  brownfield), record `foundationStackDescriptor` + `design.rulesManifest` in the config, and
+  generate enforcement from the manifest (see **Generate enforcement** below). On `skipped`
+  (headless archetype) write no `design` block at all. Report mode `foundation` in Phase 7.
+- `doctrine-drafted` / `tokens-landed` → **partial canon: STOP.** Tell the user to finish
+  `/foundation:design` (lock its rules) first; the state gate also blocks this. Do not
+  half-adopt.
+- (no `foundation/` at all) → the greenfield adopt/craft path below.
+
+**Generate enforcement from `design-rules.json` (foundation-seeded repos).** This is the
+**single enforcement brain** — the manifest carries a `targetCategory` enum only; you own the
+mapping to actual tooling on THIS stack. For each rule, emit the mechanical enforcer and wire it
+into the gate (or, where none exists, a Review-Check prose rule — never drop it):
+
+| `targetCategory` | JS/TS | Python / server-rendered |
+|---|---|---|
+| `color` | eslint `no-restricted-syntax`/color-token rule | pylint/custom checker, else Review Check |
+| `i18n` | `eslint-plugin-i18n` (keys present) | pylint checker, else Review Check |
+| `structure` | `dependency-cruiser` / `eslint-plugin-boundaries` | `import-linter` contracts |
+| `a11y` | `eslint-plugin-jsx-a11y` | Review-Check prose (no AST enforcer) |
+| `density` | custom `no-restricted-imports` | Review-Check prose |
+
+Notes: for ESLint v10 flat config, emit a `FlatCompat` shim for any plugin lacking a native
+flat-config export, or the rule silently won't load. Default polyglot hook orchestrator:
+**lefthook** (single YAML, parallel, glob-scoped, no Node runtime); the `pre-commit` framework
+is fine for Python-only repos. Stamp `designRulesHash` (hash of `design-rules.json`) into the
+config so `/spec:doctor` catches "rules changed, enforcement not regenerated".
+
 **Brownfield (the repo has real UI):** extract, don't invent. Locate the theme/token files;
 read representative screens; write the doctrine doc as a description of what is **already
 true** — type scale, spacing rhythm, color roles, density, dialog-vs-page habits,
 empty-state tone. List the inconsistencies you found; do not resolve them.
 
-**Greenfield (no real UI yet):** `AskUserQuestion` first — **adopt** a base design system
+**Greenfield (no foundation canon, no real UI yet):** `AskUserQuestion` first — **adopt** a base design system
 (recommended; offer the real candidates for this stack, e.g. shadcn/Radix or Material on
 web, Material 3 / Cupertino on Flutter) or **craft** a custom direction.
 
@@ -283,8 +316,10 @@ Both modes also:
 4. Confirm the config's `generatedBy` equals `spec@$(spec-paths version)` and its
    `contractHash` equals `$(spec-paths contract-hash)`.
 5. Report: files written, agents generated (kind → name), config summary, T3 triggers chosen,
-   design foundation landed (mode: extracted / adopted / crafted, doctrine path), anything
-   you could not verify and flagged for the user.
+   design foundation landed (mode: foundation / extracted / adopted / crafted, doctrine path);
+   for `foundation` mode, the design-rules categories found and the enforcer emitted for each
+   (or the Review-Check fallback), plus the stamped `designRulesHash`; anything you could not
+   verify and flagged for the user.
 
 ## Rules
 

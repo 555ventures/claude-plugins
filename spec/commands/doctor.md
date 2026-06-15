@@ -45,6 +45,20 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
    exists. Stale citations are the most common drift and are individually patchable.
 8. **Design foundation** (only if the config has a `design` block) — `design.doctrine`
    exists and is ~one page; token files and the living-showcase entry it names exist.
+9. **Foundation handoff** (only if `foundation/status.json` exists) — verify the consume-side
+   contract is intact:
+   - **Rules-manifest drift** — recompute the hash of `foundation/design-rules.json`; warn if
+     it differs from the config's `designRulesHash` ("design rules changed but enforcement was
+     not regenerated — re-run `/spec:init` Phase 6").
+   - **Category enum** — every rule's `targetCategory` is one of the reserved set
+     (`color | i18n | structure | a11y | density`); an unknown category is broken.
+   - **Stack/category mismatch** — for each rule category, the mapped enforcer for the current
+     `stack-descriptor`/stack actually exists in the repo (the eslint plugin / `dependency-cruiser`
+     / `import-linter` config is present), OR the category is recorded as a Review-Check prose
+     rule. A category with neither is the early-detection warning the foundation handoff exists
+     to surface.
+   - **Dissents presence** — each `docs/adr/*.md` and the design doctrine contains a
+     `## Dissents` section (a grep — presence only, never judge its content).
 
 ## Semantic spot-check — small, bounded
 

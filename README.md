@@ -1,9 +1,11 @@
 # 555-tools
 
-A Claude Code plugin marketplace. It currently ships one plugin: **spec** — a spec-driven
-development pipeline for Claude Code.
+A Claude Code plugin marketplace. It ships three plugins: **spec** — a spec-driven development
+pipeline; **foundation** — a greenfield genesis layer that picks your stack and design
+direction *before* the pipeline starts (see [below](#starting-from-scratch-the-foundation-layer));
+and **git** — a fast add-all-and-commit flow and a guided merge.
 
-The short version: you write a plan once with the strongest model, other agents attack the
+The short version of the pipeline: you write a plan once with the strongest model, other agents attack the
 plan to find holes, cheap models do the typing, and an independent review has to sign off
 before the work counts as done. The steps in between run as a script, not as model
 improvisation — so a crashed build resumes instead of restarting.
@@ -13,9 +15,18 @@ improvisation — so a crashed build resumes instead of restarting.
 ```
 /plugin marketplace add 555ventures/claude-plugins
 /plugin install spec@555-tools
+/plugin install foundation@555-tools     # optional — only for brand-new projects
 ```
 
-Then, once per repo:
+Starting a **brand-new project**? Run the genesis layer first (see
+[the foundation layer](#starting-from-scratch-the-foundation-layer)):
+
+```
+/foundation:architect "a trading simulator for retail traders in Japan"   # picks stack + scaffolds
+/foundation:design "..."                                                   # picks the design direction
+```
+
+Then, once per repo (this is the only required step for an existing repo):
 
 ```
 /spec:init          # profiles the repo, generates config + rules; everything else refuses to run without it
@@ -37,6 +48,49 @@ If the plugin updates or the codebase moves on, the generated files can go stale
 pipeline warns you automatically when the plugin's contracts changed (a contract hash checked
 by a hook on every command), and `/spec:doctor` runs a cheap read-only check of everything
 else, telling you whether a targeted patch or a full `/spec:init` re-run is warranted.
+
+## Starting from scratch: the foundation layer
+
+The spec pipeline assumes a repo that already exists and already made its big choices —
+`/spec:init` *profiles* a stack, it doesn't *pick* one. The **foundation** plugin is the part
+that picks. It runs two interactive genesis sessions before the pipeline, for a brand-new
+project, and hands a real, scaffolded, design-grounded repo to `/spec:init`:
+
+```
+/foundation:architect → /foundation:design → /spec:init → (the pipeline below)
+```
+
+**`/foundation:architect`** decides the stack, structure, and project shape, then scaffolds it.
+**`/foundation:design`** decides the UX and visual direction and writes the design canon
+(doctrine + tokens + enforceable design rules). Both work the same way, and it's deliberately
+not "ask one model and hope":
+
+- **It researches first.** Parallel web-enabled agents study current best practice for *your*
+  case — the latest framework combos, what to include vs deliberately leave out, and UI/UX norms
+  that shift with the audience (a global app and a Japan-only app differ in typography, cultural
+  color meaning, and density, not just translated strings).
+- **Then a panel proposes, blind.** Three independent proposers (cheap models, distinct roles)
+  take positions without seeing each other — no debate round, because debate makes models
+  converge toward agreement instead of toward correct. A top-tier aggregator merges them into a
+  decision matrix, a list of the genuinely hard-to-reverse forks, and the *minority* positions
+  it would otherwise have buried.
+- **You decide the forks.** Every hard-to-reverse choice (persistence, rendering, auth,
+  component library, …) comes back to you as a question with the conflicting positions verbatim
+  and a recommendation first — never silently averaged away. The losing-but-reasonable option is
+  recorded in the decision record, so the *why* survives.
+- **It's archetype-aware.** Web app, mobile app, AI bot, backend service, trading sim, CLI,
+  data pipeline — the archetype drives which stacks are candidates, which research runs, and
+  whether there's a visual design stage at all (a headless bot gets conversation/persona
+  guidelines, not a component catalog).
+
+The handoff is all on disk, and the division of labor is sharp: foundation **decides** the
+design rules (as plain categories — "no raw color", "i18n keys required", "respect feature
+boundaries"); `/spec:init` **implements** them as actual lint rules and pre-commit hooks wired
+to your gate, picking the right tool for whatever stack foundation chose. One enforcement brain,
+no rules stranded as prose nobody runs.
+
+Like the pipeline, this is heavy machinery — it's for the start of a real project, not a
+weekend spike. Existing repos skip it entirely and go straight to `/spec:init`.
 
 ## Why bother?
 

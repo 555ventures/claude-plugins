@@ -232,14 +232,22 @@ change, mid-build requirement change), and the design decisions behind each stag
 
 ## Notes for plugin authors
 
-Workflow scripts in this repo guard against two Claude Code harness behaviors (verified
-2026-06-12):
+Workflow scripts in this repo guard against two Claude Code harness behaviors:
 
-- `Workflow` `args` arrive in the script **JSON-encoded as a string** on both the `name:`
-  and `scriptPath:` channels — every script starts with
-  `if (typeof args === 'string') args = JSON.parse(args)` plus shape validation.
-- Workflow `agent()` resolves only **built-in and plugin** agent types; host
-  `.claude/agents/*.md` are invisible to it. Host role doctrine travels through
-  `args.doctrines` and dispatches on `general-purpose`.
+- **`args` is a control channel, not a data bus.** Pass only paths, ids, enums, booleans, and
+  the gate command — never free text. Prose (spec/batch notes, role doctrine, project briefs)
+  lives in files the agents Read. Free text corrupts the `args` JSON — its quotes and
+  backslashes break against the harness's **version-inconsistent** encoding, which sometimes
+  delivers the object verbatim and sometimes JSON-encoded as a string. The naive
+  `if (typeof args === 'string') args = JSON.parse(args)` crashes cryptically when reality
+  differs from the version you tested, so every script starts with the shared `normalizeArgs()`
+  helper instead — it passes an object through, JSON-parses a string and unwraps up to two
+  layers of accidental double-encoding, and throws a named diagnostic on `"[object Object]"`
+  coercion or a parse failure — followed by shape validation. Copy it from
+  `spec/workflows/wf-spec-build.js` or `foundation/workflows/wf-foundation.js`.
+- **Workflow `agent()` resolves only built-in and plugin agent types** — host
+  `.claude/agents/*.md` are invisible to it. Host role doctrine and other prose travel as a
+  **path** (`args.doctrinePaths`, `args.briefPath`, …) that the worker Reads, dispatching on
+  `general-purpose`.
 
 New workflow scripts need the same prologue and dispatch pattern.

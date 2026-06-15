@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "architect": "pending",
+  "design": "pending",
+  "archetype": null,
+  "localeScope": null,
+  "stackDescriptorPath": "foundation/stack-descriptor.json",
+  "designManifestPath": "foundation/design-rules.json",
+  "gateCommand": null,
+  "lastUpdated": null
+}

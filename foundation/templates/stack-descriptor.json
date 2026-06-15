@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "archetype": "web-app",
+  "localeScope": { "kind": "single-country", "primaryLocale": "ja-JP", "locales": ["ja-JP"], "rtl": false },
+  "language": "typescript",
+  "framework": "next",
+  "packageManager": "bun",
+  "testRunner": "bun test",
+  "linter": "eslint",
+  "typechecker": "tsc",
+  "componentLibrary": "shadcn",
+  "designCatalog": "storybook",
+  "enforceEngines": ["eslint"],
+  "gateCommand": "bun typecheck && bun lint && bun test",
+  "scaffoldCommand": "bunx create-next-app@latest . --typescript --app",
+  "decisionRecords": ["docs/adr/0001-stack-selection.md"]
+}

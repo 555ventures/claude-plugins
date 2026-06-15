@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "archetype": "web-app",
+  "designCatalog": "storybook",
+  "rules": [
+    {
+      "id": "no-raw-color",
+      "intent": "Color must come from theme tokens — no raw hex/rgb/hsl literals in UI files.",
+      "targetCategory": "color",
+      "appliesTo": ["src/**/*.{ts,tsx,css}"],
+      "exemptGlobs": ["**/tokens/**", "**/*.stories.*"],
+      "severity": "error",
+      "rationale": "Single source of truth for theme; enables dark mode and audience-specific theming."
+    },
+    {
+      "id": "i18n-keys-present",
+      "intent": "User-facing strings must be i18n keys, not string literals.",
+      "targetCategory": "i18n",
+      "appliesTo": ["src/**/*.{ts,tsx}"],
+      "exemptGlobs": ["**/*.test.*", "**/*.stories.*"],
+      "severity": "error",
+      "rationale": "Locale audience requires every user-facing string to be translatable."
+    },
+    {
+      "id": "feature-boundary",
+      "intent": "Features may not import another feature's internals — only its public barrel.",
+      "targetCategory": "structure",
+      "appliesTo": ["src/features/**"],
+      "exemptGlobs": [],
+      "severity": "error",
+      "rationale": "Keeps feature modules independently evolvable."
+    }
+  ]
+}

@@ -10,8 +10,18 @@ Fable session. The plugin ships the **process layer**; each repo supplies its ow
 From the `555-tools` marketplace: add the marketplace, then install the `spec` plugin. Then,
 in each repo that will use the pipeline, run **`/spec:init`** once — it profiles the repo and
 generates `.claude/spec.config.json`, `.claude/rules/spec-pipeline.md`, project-grounded
-implementer agents, and `scripts/spec-patterns.sh`. The pipeline commands refuse to run
-without them.
+implementer agents, and `scripts/spec-patterns.sh`, then ends by invoking **`/spec:enforce`**
+(below). The pipeline commands refuse to run without them.
+
+**`/spec:enforce`** mechanizes the repo's rules into deterministic checks wired to the gate
+command. It classifies each rule into a stable, language-neutral category (`module-boundary`,
+`naming`, `forbidden-symbol`, `structural-pattern`, `datetime`, `schema-validation`, `format`),
+then for each `(stack × category)` cell **discovers** an enforcer against live sources (with
+citations, never training memory) and **verifies** it installs and runs against the repo before
+adopting it — so no plugin file ever names a specific linter or arch-tool. It records its choices
+in `.claude/rules/enforcement.json` (stamped by `rulesEnforcementHash`) and is independently
+re-runnable whenever rules or tooling drift. The only rule-check left to an LLM is `/spec:plan`
+reading a draft spec; everything a tool can check, a tool checks.
 
 Drift detection is automatic: the grounding-layer contract lives in one plugin file
 (`templates/grounding-contract.md`), init stamps its hash into the config (`contractHash`),
@@ -50,12 +60,12 @@ Shared invariants (risk tiers, model placement, escalation contract, MCP policy)
 
 ## Process layer vs grounding layer
 
-| Ships in the plugin | Generated per repo by `/spec:init` |
+| Ships in the plugin | Generated per repo by `/spec:init` + `/spec:enforce` |
 |---|---|
-| Commands `/spec:plan` `design` `build` `review` `init` `doctor` | `.claude/spec.config.json` (gate/test/setup commands, layerGroups, agentMap, `contractHash` drift stamp, optional driftScript) |
-| `wf-spec-build.js`, `wf-spec-review.js` workflows | `.claude/rules/spec-pipeline.md` (T3 triggers, planning checklist, build duties, worker/test rules, review checks) |
+| Commands `/spec:plan` `design` `build` `review` `init` `enforce` `doctor` | `.claude/spec.config.json` (gate/test/setup commands, layerGroups, agentMap, `contractHash` drift stamp, optional driftScript, optional `enforcementManifest`/`rulesEnforcementHash`) |
+| `wf-spec-build.js`, `wf-spec-review.js`, `wf-spec-enforce.js` workflows | `.claude/rules/spec-pipeline.md` (T3 triggers, planning checklist, build duties, worker/test rules, review checks) |
 | Generic read-only `spec-reviewer` agent | Implementer agents in `.claude/agents/` (one per batch kind) |
-| State-gate hook, spec template, grounding-contract file | `scripts/spec-patterns.sh` (mechanical sweep) |
+| State-gate hook, spec template, grounding-contract file | `scripts/spec-patterns.sh` (mechanical sweep) + `.claude/rules/enforcement.json` (enforcer provenance) + generated enforcer configs/contracts wired to the gate |
 
 Repo differences are configuration, never forks: the build workflow takes the agent roster
 via `args.agentMap`, the gate via `args.gate.command`, and worker/test rules as strings the

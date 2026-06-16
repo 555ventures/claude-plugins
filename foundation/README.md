@@ -32,7 +32,8 @@ Key design choices (see `commands/shared.md` for the full contract):
   the workflow's `args` carries only paths, enum keys, and booleans (the spec pipeline's
   "no free text in args" lesson).
 - **Decide vs implement.** `/foundation:design` *decides* design rules (category-only enum);
-  `/spec:init` *implements* them as stack-specific lint/hooks. One enforcement brain.
+  `/spec:enforce` *implements* them as stack-specific enforcement, chosen at runtime per stack.
+  One enforcement brain, downstream in the spec pipeline.
 - **MAINTAINED DISSENT.** Minority panel positions are recorded verbatim in a required `Dissents`
   section, checked mechanically — a correct minority view is never silently averaged away.
 - **Selective panel.** When you've already fixed the hard-to-reverse choices, the proposer round

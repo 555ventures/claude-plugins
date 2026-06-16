@@ -1,5 +1,5 @@
 ---
-description: Greenfield design genesis — research+panel-driven UX/visual/voice canon for the project's archetype and audience, authored as the design doctrine + tokens + category-only enforcement rules that /spec:init implements
+description: Greenfield design genesis — research+panel-driven UX/visual/voice canon for the project's archetype and audience, authored as the design doctrine + tokens + category-only enforcement rules that /spec:enforce later mechanizes
 argument-hint: <project idea — same as architect>
 ---
 
@@ -8,7 +8,7 @@ argument-hint: <project idea — same as architect>
 The second greenfield stage. Given the scaffolded project's archetype and audience, runs a
 research-backed MoA panel over the design direction, then **authors the design canon** — the
 one-page doctrine, the theme tokens, and `design-rules.json` (category-only enforcement intent
-that `/spec:init` turns into actual lint/hooks). This IS the relocated, heavier greenfield branch
+that `/spec:enforce` turns into actual lint/contracts). This IS the relocated, heavier greenfield branch
 of `/spec:init`'s design foundation — **one canon, not two**. Same interactive shape as architect:
 the session owns `AskUserQuestion` and writes; `wf-foundation` does research + panel.
 
@@ -74,20 +74,21 @@ Author directly (taste exception — not delegated to Sonnet):
 3. **Design rules** — write `foundation/design-rules.json` (template in `templates/`): each rule
    carries a `targetCategory` **enum only** (`color | i18n | structure | a11y | density`),
    `appliesTo`/`exemptGlobs`, `severity`, `rationale` — **never a tool name** (shared § Enforcement
-   Handoff). `/spec:init` owns the category→tool mapping.
+   Handoff). `/spec:enforce` owns the category→enforcer selection, chosen at runtime per stack.
 4. Commit. Set `status.design: rules-locked`.
 
 ## Phase 5 — Report & hand off
 
 Report: design direction chosen, dissents recorded, doctrine + token paths, design-rules count by
 category, `designCatalog` for `/spec:init`'s `design` block (or `none`). **Next:** `/spec:init` —
-it grounds the repo and generates the enforcement machinery from `design-rules.json`.
+it grounds the repo and ends by invoking `/spec:enforce`, which generates the enforcement
+machinery from `design-rules.json` (plus the rest of the rule set).
 
 ## Rules
 
 - One canon: this supersedes `/spec:init`'s greenfield design sketch; init reads this, never
   re-prompts adopt/craft when `design: rules-locked`.
-- Design rules are category-only; tool selection is `/spec:init`'s job.
+- Design rules are category-only; tool selection is `/spec:enforce`'s job (runtime, per stack).
 - Doctrine stays one page — promote generalizable taste, keep one-offs in the spec layer later.
 - `AskUserQuestion` dismissed → STOP. Hard-to-reverse forks always go to the user.
 - Explicit `model:` everywhere (Opus session/aggregator/doctrine, Sonnet research/proposers).

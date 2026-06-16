@@ -13,8 +13,9 @@ only when the contract genuinely changes, and never edit it for wording alone.
 `patternsScript`, `layerGroups`, `agentMap` (must include `tests` and `default`),
 `pipelineRules`. Optional: `driftScript`, `routing`, `design`
 (`tool`/`command`/`storyFormat`/`doctrine`, optional `screenshot`, optional `rulesManifest`),
-and the foundation-handoff keys `foundationStackDescriptor` and `designRulesHash` (see
-§ Foundation handoff).
+the rule-enforcement keys `enforcementManifest` and `rulesEnforcementHash` (see § Rule
+enforcement), and the foundation-handoff keys `foundationStackDescriptor` and `designRulesHash`
+(see § Foundation handoff).
 
 ## Foundation handoff (optional — present when the `foundation` plugin seeded the repo)
 
@@ -27,10 +28,29 @@ on-disk artifacts instead of re-deciding:
 - `designRulesHash` — hash of the rules manifest, stamped by `/spec:init`; `/spec:doctor`
   recomputes it and warns when the design rules changed but enforcement was not regenerated.
 
-**Decide vs implement.** The manifest's rules carry a `targetCategory` **enum only** —
-`color | i18n | structure | a11y | density` — never a tool name. `/spec:init` owns the single
-category→tool mapping per detected stack and is the sole enforcement generator. A category with
-no mechanical enforcer on the stack becomes a Review-Check prose rule — never silently dropped.
+**Decide vs implement.** The manifest's rules carry a `targetCategory` **enum only** — a category,
+never a tool name. `/spec:enforce` owns the single category→enforcer selection per detected stack
+and is the sole enforcement generator (`/spec:init` ends by invoking it). The design enum
+(`color | i18n | structure | a11y | density`) folds into the enforcement category taxonomy as a
+pre-classified input. A category with no mechanical enforcer on the stack becomes a Review-Check
+prose rule — never silently dropped.
+
+## Rule enforcement (optional — present after `/spec:enforce` has run)
+
+`/spec:enforce` mechanizes the host's full rule set into deterministic checks wired to the
+`gateCommand`, and records its choices in a manifest. The contract:
+
+- `enforcementManifest` — path to `.claude/rules/enforcement.json`: one entry per
+  `(stack × category)` cell carrying the chosen enforcer (or fallback), the discovery citation,
+  the verified run command, and the gate wiring. Provenance — never plugin prose.
+- `rulesEnforcementHash` — hash of that manifest, stamped by `/spec:enforce`; `/spec:doctor`
+  recomputes it and warns when rules changed but enforcement was not regenerated.
+- The reserved, language-neutral category taxonomy is `module-boundary | naming | forbidden-symbol
+  | structural-pattern | datetime | schema-validation | format`. Tool selection is **two-stage and
+  runtime**: DISCOVER against live sources with citations (never training memory), then VERIFY the
+  tool installs and runs against the repo before adoption. **No plugin file names a specific
+  linter/formatter/arch-tool/hook-runner** — a named tool anchors the agent and goes stale faster
+  than the rules.
 
 ## Required pipeline-rules sections (file at `pipelineRules`)
 

@@ -10,44 +10,98 @@ plan to find holes, cheap models do the typing, and an independent review has to
 before the work counts as done. The steps in between run as a script, not as model
 improvisation — so a crashed build resumes instead of restarting.
 
-## Quick start
+## How it fits together
+
+There are only two things to learn: you **set a repo up once**, then run a **short loop for
+every feature**. Everything else is optional or automatic.
+
+```
+  SET UP ONCE (per repo)                 PER FEATURE (repeat for each change)
+  ──────────────────────                 ────────────────────────────────────
+  foundation:architect ┐                 spec:plan ─▶ spec:design ─▶ spec:build ─▶ spec:review
+  foundation:design     ├─▶ spec:init      write      (optional UI)   implement      sign off
+   (new projects only) ┘        └─▶ spec:enforce
+
+  Anytime:  spec:doctor  — read-only health check  ·  a hook auto-warns when generated files go stale
+```
+
+1. **Set up the repo once.** Run `/spec:init` — it studies your repo, writes its config + rules,
+   and then runs `/spec:enforce` to turn those rules into real checks in your gate command. After
+   this, the pipeline is ready. (Brand-new project with no code yet? Run the **foundation** layer
+   *first* — it picks your stack and design direction and scaffolds the repo. See
+   [the foundation layer](#starting-from-scratch-the-foundation-layer). Existing repos skip it.)
+2. **Build each feature with the loop.** `plan → build → review` (with an optional `design` step
+   for UI). This is the part you run over and over.
+3. **Forget the rest until you need it.** `/spec:enforce` is re-runnable when your rules or
+   tooling change; `/spec:doctor` is a read-only health check when something feels stale; a hook
+   warns you automatically if a plugin update makes your generated files outdated.
+
+## Install
 
 ```
 /plugin marketplace add 555ventures/claude-plugins
 /plugin install spec@555-tools
 /plugin install foundation@555-tools     # optional — only for brand-new projects
+/plugin install git@555-tools            # optional — fast commit + guided merge
 ```
 
-Starting a **brand-new project**? Run the genesis layer first (see
-[the foundation layer](#starting-from-scratch-the-foundation-layer)):
+## 1. Set up the repo (once)
+
+**Existing repo** — the only required step:
+
+```
+/spec:init          # profiles the repo, writes config + rules, then runs /spec:enforce for you
+```
+
+**Brand-new project** (no code yet) — run the genesis layer first, then init:
 
 ```
 /foundation:architect "a trading simulator for retail traders in Japan"   # picks stack + scaffolds
 /foundation:design "..."                                                   # picks the design direction
+/spec:init                                                                 # grounds the now-real repo
 ```
 
-Then, once per repo (this is the only required step for an existing repo):
+Until `/spec:init` has run, every other `spec` command refuses to start.
+
+## 2. Build a feature (the loop you repeat)
 
 ```
-/spec:init          # profiles the repo, generates config + rules; everything else refuses to run without it
+/spec:plan "move tickSize from symbol to dataset"     # write + harden the spec (asks you the hard questions)
+/spec:design specs/20260612/01-tick-size.md           # OPTIONAL: approve the UI visually (catalog repos only)
+/spec:build  specs/20260612/01-tick-size.md           # implement it, test-first, in parallel batches
+/spec:review specs/20260612/01-tick-size.md           # independent check; flips the spec to "done"
 ```
 
-And for each piece of work:
+`plan` prints the spec's path — paste it into the commands that follow. `design` only appears in
+repos with a component catalog (Storybook for web, Widgetbook for Flutter); skip it everywhere
+else. Small, low-risk changes don't need the pipeline at all — `plan` will tell you when a change
+is too small to bother and to just ask for it directly.
 
-```
-/spec:plan "move tickSize from symbol to dataset"     # writes and hardens the spec
-/spec:build specs/20260612/01-tick-size.md            # implements it, test-first, in parallel batches
-/spec:review specs/20260612/01-tick-size.md           # independent check; flips the spec to done
-```
+## 3. Keep it healthy (occasional)
 
-Repos with a component catalog (Storybook for web, Widgetbook for Flutter) get an optional
-`/spec:design` stage between plan and build, where you approve the UI visually before any
-logic is written.
+- **`/spec:enforce`** — re-run when you add/change rules or your linters/tooling move; it
+  re-discovers and re-wires the deterministic checks. (You don't run it the first time — `init`
+  does.)
+- **`/spec:doctor`** — a cheap, read-only check that your generated files still match the plugin
+  and the codebase. It recommends a targeted patch, a full `/spec:init` refresh, or a
+  `/spec:enforce` re-run — it never changes things on its own.
+- **Automatic drift warning** — a hook compares a contract hash on every command and warns you
+  the moment a plugin update makes your grounding files stale. No bookkeeping on your part.
 
-If the plugin updates or the codebase moves on, the generated files can go stale — the
-pipeline warns you automatically when the plugin's contracts changed (a contract hash checked
-by a hook on every command), and `/spec:doctor` runs a cheap read-only check of everything
-else, telling you whether a targeted patch or a full `/spec:init` re-run is warranted.
+## Command reference
+
+| Command | What it does | How often |
+|---|---|---|
+| `/foundation:architect` | Picks stack + structure for a brand-new project and scaffolds it | Once, new projects only |
+| `/foundation:design` | Picks the UX/visual direction and writes the design canon | Once, new projects only |
+| `/spec:init` | Profiles the repo, generates config + rules + agents, then runs `/spec:enforce` | Once per repo (re-run to refresh) |
+| `/spec:enforce` | Turns the repo's rules into deterministic checks wired to the gate | On rule/tooling drift |
+| `/spec:plan` | Writes and hardens one spec — explores, drafts, lets refuters attack it | Per feature |
+| `/spec:design` | Approve the UI visually before logic is written (catalog repos) | Per UI feature (optional) |
+| `/spec:build` | Implements the spec test-first, in parallel, resumably | Per feature |
+| `/spec:review` | Independent review; flips the spec to `done` | Per feature |
+| `/spec:doctor` | Read-only drift check of the generated files | When something feels stale |
+| `/git:commit`, `/git:merge` | Fast add-all-commit; guided branch merge | Anytime |
 
 ## Starting from scratch: the foundation layer
 
@@ -85,8 +139,9 @@ not "ask one model and hope":
 
 The handoff is all on disk, and the division of labor is sharp: foundation **decides** the
 design rules (as plain categories — "no raw color", "i18n keys required", "respect feature
-boundaries"); `/spec:init` **implements** them as actual lint rules and pre-commit hooks wired
-to your gate, picking the right tool for whatever stack foundation chose. One enforcement brain,
+boundaries"); `/spec:enforce` **implements** them — and the rest of the repo's rule set — as
+deterministic checks wired to your gate, discovering and verifying the right tool at runtime for
+whatever stack foundation chose (no tool is ever hardcoded in the plugin). One enforcement brain,
 no rules stranded as prose nobody runs.
 
 Like the pipeline, this is heavy machinery — it's for the start of a real project, not a

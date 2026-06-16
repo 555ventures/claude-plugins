@@ -7,8 +7,9 @@ description: Shared invariants of the foundation genesis pipeline — reference 
 Two greenfield genesis stages that run **before** the spec pipeline, for a brand-new project:
 
 `/foundation:architect` (stack + structure + scaffold) → `/foundation:design` (UX/visual/voice
-canon + design rules) → `/spec:init` (grounds the now-real repo: config, rules, agents, and the
-**enforcement** machinery generated from the design rules) → normal `/spec:plan` loop.
+canon + design rules) → `/spec:init` (grounds the now-real repo: config, rules, agents; it ends by
+invoking `/spec:enforce`, which mechanizes the design rules + the rest of the rule set into
+gate-wired enforcement) → normal `/spec:plan` loop.
 
 The foundation pipeline decides **what to build with and how it should look**; the spec pipeline
 builds features inside those decisions. v1 is **greenfield-only**: pointed at a non-empty repo,
@@ -135,20 +136,22 @@ or `skipped`, and is merely warned when design is still `pending`. **Re-entry ve
 artifacts physically exist — never trust the phase enum alone** (a phase can be set while a
 side-effect was rolled back).
 
-## Enforcement Handoff to /spec:init
+## Enforcement Handoff to the spec pipeline
 
 The split is **decide vs implement**: `/foundation:design` *decides* and records design rules;
-`/spec:init` *implements* them as actual lint/hooks/sweeps wired to the gate. One enforcement
-brain. The contract:
+the spec pipeline *implements* them as actual lint/contracts/sweeps wired to the gate. One
+enforcement brain, and it lives downstream — `/spec:enforce` (which `/spec:init` invokes at the
+end of bootstrap). The contract:
 
 - `design-rules.json` rules carry a `targetCategory` **enum only** — `color | i18n | structure |
-  a11y | density` — **never a tool name**. `/spec:init` owns the single category→tool mapping per
-  detected stack (e.g. `color`→eslint or pylint checker; `structure`→dependency-cruiser or
-  import-linter; `a11y`→eslint-plugin-jsx-a11y or, where no AST enforcer exists, a Review-Check
-  prose rule — never silently dropped). Ruff has no plugin system, so pre-tagging an engine would
-  break on a Python/swapped stack; category-only is robust to stack change.
-- `/spec:doctor` warns when a manifest category has **no enforcer** on the current
-  stack-descriptor (the early-detection benefit without leaking tool names upward).
+  a11y | density` — **never a tool name.** `/spec:enforce` folds these into its language-neutral
+  enforcement taxonomy and owns the single category→enforcer selection per detected stack, chosen
+  at runtime (discover-against-live-sources then verify-it-runs), never from a hardcoded mapping.
+  Where no mechanical enforcer fits the stack, the category becomes a Review-Check prose rule —
+  never silently dropped. Category-only tagging is what keeps the handoff robust to a stack swap:
+  an engine pre-tagged here would break the moment the stack changed.
+- `/spec:doctor` warns when a design-rules category has **no enforcer** on the current stack (the
+  early-detection benefit), and recommends `/spec:enforce` — without any plugin file naming a tool.
 
 ## Model Placement
 

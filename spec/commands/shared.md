@@ -16,7 +16,8 @@ The pipeline is process; the repo supplies grounding. Two host files, both creat
 - **`.claude/spec.config.json`** — machine-readable knobs: `gateCommand`, `testCommand`,
   `setupCommand`, `patternsScript`, optional `driftScript`, optional `design` block
   (component-catalog stage — see § Design Stage), `layerGroups`, `agentMap` (+ optional
-  `routing` hints), `pipelineRules`, plus the `contractHash`/`generatedBy` drift stamps
+  `routing` hints), `pipelineRules`, the optional `enforcementManifest`/`rulesEnforcementHash`
+  enforcement stamps (§ Rule Enforcement), plus the `contractHash`/`generatedBy` drift stamps
   (§ Grounding Drift).
 - **The pipeline rules file** (path in `pipelineRules`, conventionally
   `.claude/rules/spec-pipeline.md`) — prose grounding by section: `Risk Tiers`, `Planning`,
@@ -24,6 +25,10 @@ The pipeline is process; the repo supplies grounding. Two host files, both creat
 
 Every command reads both at start. Repo differences live there — never as forks inside the
 plugin's files. If either is missing, STOP and tell the user to run `/spec:init`.
+
+`/spec:init` bootstraps these two files; `/spec:enforce` adds the deterministic rule-enforcement
+layer (§ Rule Enforcement); `/spec:doctor` is the read-only drift check over both. The feature
+pipeline (plan → design → build → review) runs on top of them.
 
 ## Grounding Drift
 
@@ -42,9 +47,36 @@ The grounding layer goes stale two ways; **detection is mechanical, response is 
   with a read-only sweep (config integrity, agent roster, contract-text match, cited-path
   existence, script execution).
 
-`/spec:doctor` diagnoses and recommends — targeted user-approved patches, or a full
-`/spec:init` refresh when drift is structural. Regeneration always belongs to `/spec:init`;
-the doctor never rewrites the grounding layer wholesale.
+`/spec:doctor` diagnoses and recommends — targeted user-approved patches, a full `/spec:init`
+refresh when drift is structural, or a `/spec:enforce` re-run when the enforcement layer drifted.
+Regeneration of the grounding layer belongs to `/spec:init`; regeneration of enforcement belongs
+to `/spec:enforce`; the doctor never rewrites either wholesale.
+
+## Rule Enforcement
+
+A host's rules are enforced **deterministically**, in its `gateCommand` — not by an LLM at
+runtime. The principle is stable and does not rot: *consistency requires determinism.* For any
+rule a linter, arch-tool, or text/structural matcher CAN check, a runtime LLM check is a strict
+downgrade — non-reproducible, brittle, false-confidence coverage. The only sanctioned runtime LLM
+rule-check is `/spec:plan` reading a draft spec (prose has no CI, so reading is the only check).
+The plugin neither depends on nor replicates a host's `/comply`.
+
+`/spec:enforce` owns this. It classifies the host's rules into a **stable, language-neutral
+category taxonomy** — `module-boundary | naming | forbidden-symbol | structural-pattern | datetime
+| schema-validation | format` — and mechanizes each. **No plugin file ever names a specific
+linter/formatter/arch-tool/hook-runner**: a named tool anchors the executing agent and goes stale
+faster than the rules. Tool selection is **two-stage and runtime**: DISCOVER against live sources
+with citations (never training memory), then VERIFY the tool installs and runs against THIS repo
+before adopting it. Fallbacks, in order: the host's pattern-sweep harness (`patternsScript`) for
+structural/textual clauses; a pipeline rules § Review Checks prose rule ONLY for genuine-judgment
+clauses — never a silent drop.
+
+The **judgment residue** is the small set that resists a deterministic check and stays with the
+reviewer, layered OVER (never duplicating) the mechanical coverage: data-flow ordering, semantic
+intent of parameters, naming tense, sentinel usage in control flow, cross-file N+1/batch reasoning,
+"is this a sanctioned carve-out," and pure-process rules (review neutrality, model-routing) that
+are not about source code at all. `/spec:enforce` records its choices + provenance in
+`.claude/rules/enforcement.json` and stamps `rulesEnforcementHash`; `/spec:doctor` recomputes it.
 
 ## Pipeline Entry
 
@@ -129,7 +161,7 @@ session's context. Three layers, strongest enforcement first:
 2. **The design doctrine doc** (`design.doctrine`, one page, bootstrapped by `/spec:init`
    § Design foundation — or, for greenfield repos seeded by the `foundation` plugin, authored
    by `/foundation:design` and merely extracted by `/spec:init`; the design rules it records
-   in `foundation/design-rules.json` become gate-wired enforcement at init time) — taste
+   in `foundation/design-rules.json` become gate-wired enforcement via `/spec:enforce`) — taste
    rulings tokens can't encode (dialog-vs-page habits, empty-state tone, density philosophy).
    Binding like a locked Decision; `/spec:design` reads it at preflight and promotes
    generalizable rulings into it at reconcile. `/spec:plan` respects it when speccing UI sections.

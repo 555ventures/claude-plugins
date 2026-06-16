@@ -47,18 +47,28 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
    exists and is ~one page; token files and the living-showcase entry it names exist.
 9. **Foundation handoff** (only if `foundation/status.json` exists) — verify the consume-side
    contract is intact:
-   - **Rules-manifest drift** — recompute the hash of `foundation/design-rules.json`; warn if
-     it differs from the config's `designRulesHash` ("design rules changed but enforcement was
-     not regenerated — re-run `/spec:init` Phase 6").
-   - **Category enum** — every rule's `targetCategory` is one of the reserved set
+   - **Design-rules drift** — recompute the hash of `foundation/design-rules.json`; warn if it
+     differs from the config's `designRulesHash` ("design rules changed but enforcement was not
+     regenerated — re-run `/spec:enforce`").
+   - **Category enum** — every design rule's `targetCategory` is one of the reserved design set
      (`color | i18n | structure | a11y | density`); an unknown category is broken.
-   - **Stack/category mismatch** — for each rule category, the mapped enforcer for the current
-     `stack-descriptor`/stack actually exists in the repo (the eslint plugin / `dependency-cruiser`
-     / `import-linter` config is present), OR the category is recorded as a Review-Check prose
-     rule. A category with neither is the early-detection warning the foundation handoff exists
-     to surface.
    - **Dissents presence** — each `docs/adr/*.md` and the design doctrine contains a
      `## Dissents` section (a grep — presence only, never judge its content).
+
+10. **Rule enforcement** (only if the config has an `enforcementManifest`) — verify the
+    deterministic enforcement `/spec:enforce` generated is still live:
+    - **Enforcement drift** — recompute the hash of `.claude/rules/enforcement.json`; warn if it
+      differs from the config's `rulesEnforcementHash` ("enforcement manifest changed but the
+      stamp is stale — re-run `/spec:enforce`").
+    - **Category enum** — every manifest entry's `category` is one of the reserved taxonomy
+      (`module-boundary | naming | forbidden-symbol | structural-pattern | datetime |
+      schema-validation | format`); an unknown category is broken.
+    - **Wiring resolves** — for each entry, the recorded enforcer's config/contract/checker path
+      exists and the `gateCommand` (or the host hook orchestrator) still invokes it, OR the entry
+      records a `sweep`/`review-check` fallback. An entry whose wiring no longer resolves is the
+      early-detection signal — recommend re-running `/spec:enforce` (do **not** try to re-derive
+      the enforcer here; tool selection is enforce's job, and naming a tool in the doctor would
+      anchor it the same way the plugin prose deliberately avoids).
 
 ## Semantic spot-check — small, bounded
 
@@ -78,6 +88,10 @@ recommendation:
 - **Targeted patches** — an enumerated list of small fixes (stale citation → current path,
   legacy design keys → `design` block, contract-text resync, re-stamp). Apply only after
   the user approves the list; re-run the affected checks after.
+- **Enforcement drift** — checks 9–10 found design-rules/enforcement-manifest hash drift, an
+  enforcer whose wiring no longer resolves, or a rule category with no enforcer: recommend
+  `/spec:enforce` (not `/spec:init` — enforcement is its own command). Doctor never re-derives an
+  enforcer itself.
 - **Structural drift** — architecture reorganized, layers changed, toolchain swapped, or
   the semantic spot-check failed: recommend `/spec:init` and say which findings drove the
   call. Do not attempt the refresh yourself.

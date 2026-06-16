@@ -32,12 +32,27 @@ suspended).
    write no `design` block. For `conversational-bot`/`cli-devtool` the canon is *voice/persona* or
    *TUI* guidelines (no visual token files); adapt Phase 4 accordingly.
 
-## Phase 1 — Intake (interactive)
+## Phase 1 — Discovery interview (interactive)
 
-`AskUserQuestion`, batched: design-specific goals, brand/taste direction, and a **research
-assumption** check — "has real user research been done?" If no, the doctrine records a
-*hypothesized* user model with explicit TODO stubs (no research gate for solo/MVP). Append to
-`foundation/brief.md`.
+Same discovery posture as architect (shared § Discovery Interview), narrowed to design: reflect
+back the design intent first, then batch broad → narrow, every batch lens-tagged and escape-hatched,
+each marked **cold** or **research-backed**.
+
+1. **[Brand lens] — research-backed.** taste / voice direction — run the **research-woven loop**
+   (shared § Discovery Interview) on the visual-trend dimension: `wf-interview-research` with
+   `{stage: "design", dimensionKeys: ["visual-trend", ...], briefPath, contextPaths:
+   ["foundation/stack-descriptor.json", <prior interview-research/*.json>], verifyKeys: []}` (taste
+   is not version-bearing → no Haiku pass). Present the current aesthetic/voice directions for this
+   archetype + audience as the options, recommended-first, recency-stamped; the user picks the
+   feeling, references in vs. out.
+2. **[User lens] — cold.** a **research-assumption** check — "has real user research been done?" If
+   no, the doctrine records a *hypothesized* user model with explicit TODO stubs (no research gate
+   for solo/MVP).
+3. **[Scope lens] — cold.** design non-goals — surfaces or states deliberately out of scope for v1.
+
+Probe a thin taste answer with one pre-laddered follow-up (which reference / which feeling). Write
+each menu to `foundation/interview-research/{dimension}.json` (stamp `fetchedAt`) and record the
+pick + `sources` to the brief. Read back the design intent for sign-off, then finalize the brief.
 
 ## Phase 2 — Derive the research plan (Opus pass)
 

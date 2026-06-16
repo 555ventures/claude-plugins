@@ -17,13 +17,24 @@ to ground.
 ## How it works
 
 Both commands are **highly interactive** sessions (Opus) that own every `AskUserQuestion` and
-every file write. The heavy lifting — parallel, web-enabled research and a **Mixture-of-Agents
-panel** (3 blind Sonnet proposers → Opus aggregator) — runs in the `wf-foundation` workflow,
-which the command calls as a subroutine *between* question rounds. The session and workflow
-**interleave**; nothing human-facing happens inside the workflow.
+every file write. The heavy lifting runs in two workflows the command calls as subroutines
+*between* question rounds: `wf-interview-research` (the light one — live, web-enabled research that
+turns the user's last answer into recency-stamped option menus *during* the interview) and
+`wf-foundation` (the heavy one — a **Mixture-of-Agents panel**, 3 blind Sonnet proposers → Opus
+aggregator, that adjudicates the hard-to-reverse forks). The session and workflows **interleave**;
+nothing human-facing happens inside a workflow.
 
 Key design choices (see `commands/shared.md` for the full contract):
 
+- **Research-backed discovery interview.** Phase 1 is a structured discovery interview (funnel-shaped,
+  four lenses — Product/User/Scope/Architect — reflect-back open + read-back sign-off), not a form.
+  Crucially it is **not** "you provide everything, the tool summarizes": researchable batches
+  (stack, framework, visual trend) are **options-first** — the `wf-interview-research` workflow
+  researches your last answer live (current trend / best practice / standard, recency-stamped, with
+  sources) and those findings *become* the `AskUserQuestion` choices. Sonnet builds the menu, Haiku
+  verifies currency on version-bearing dimensions, Opus curates and presents. A picked dimension is
+  marked `constrained` so it skips the heavier panel. Product/user/business/legal only; never
+  staffing (Claude is always the implementer). See `commands/shared.md` § Discovery Interview.
 - **Archetype-aware.** Web app, mobile app, AI bot, backend, trading sim, CLI, data/ML, desktop —
   the archetype drives stack candidates, research angles, panel roles, and whether a design stage
   runs at all. Audience/locale composes on top (a Japanese app triggers JP typography + cultural
@@ -46,9 +57,10 @@ v1 is **greenfield-only**: pointed at a populated repo, `/foundation:architect` 
 
 | Path | Role |
 |---|---|
-| `commands/shared.md` | Invariants: archetype registry, panel doctrine, handoff contract, state machine |
+| `commands/shared.md` | Invariants: discovery-interview posture, archetype registry, panel doctrine, handoff contract, state machine |
 | `commands/architect.md` | Stage 1: decide stack/structure, scaffold |
 | `commands/design.md` | Stage 2: author the design canon |
-| `workflows/wf-foundation.js` | Research fan-out → MoA panel → decision package |
+| `workflows/wf-interview-research.js` | Light: live option-menu research per opened dimension (Sonnet menu + Haiku currency check) |
+| `workflows/wf-foundation.js` | Heavy: research fan-out → MoA panel → decision package |
 | `scripts/foundation-state-gate.sh` | UserPromptSubmit hook: enforces the state machine |
 | `templates/` | `status.json`, `stack-descriptor.json`, `design-rules.json`, `adr.md` skeletons |

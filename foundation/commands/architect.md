@@ -29,23 +29,69 @@ If `foundation/status.json` exists, read it and **verify the named artifacts phy
 (stack-descriptor, ADRs, scaffold dir, gate) — never trust the phase enum alone. Resume from the
 last *verified* phase; report what was found and what is being resumed.
 
-## Phase 1 — Intake (interactive)
+## Phase 1 — Discovery interview (interactive)
 
-`AskUserQuestion`, batched, with informed options — establish what only the user can answer:
+Run intake as a **structured discovery interview**, not a form (shared § Discovery Interview):
+funnel-shaped (broad vision → narrow constraints), every `AskUserQuestion` batch lens-tagged,
+neutrally worded, and carrying an **"Other / not sure"** escape hatch (your one open lane).
 
-1. **Archetype** (shared § Archetype Registry) — web-app / mobile-app / conversational-bot /
-   backend-api / realtime-trading / cli-devtool / data-ml / desktop-app. For `web-app`, also the
-   FE/BE/fullstack split.
-2. **Audience / locale scope** — global / region / single-country (+ primary locale). This drives
-   the locale research bundle and theme taste downstream.
-3. **Goals & hard constraints** — non-negotiables (existing team skills, must-use services,
-   compliance, performance targets, budget).
-4. **Pre-decided pieces** — anything the user already fixed (a known framework, language, host).
+0. **Reflect back first.** Restate `$ARGUMENTS` in your words — what you think is being built, for
+   whom, the core job it does — and run one `AskUserQuestion` to confirm/correct *before* any
+   elicitation. The confirmed restatement seeds the verbatim goal (anti-drift).
 
-Write `foundation/brief.md`: the goal (verbatim, for anti-drift), the intake answers, and the
-three machine-keyed sections — `## Research Angles`, `## Panel Roles`, `## Open Dimensions` —
-populated in Phase 2. Initialize `foundation/status.json` (`architect: pending`, archetype,
-localeScope) from `templates/status.json`.
+Then batch, broad → narrow — each batch tagged **cold** (user-contextual; the options are yours to
+author) or **research-backed** (options built live by `wf-interview-research`):
+
+1. **[Product lens] — cold.** the job & success — the problem solved, and what success looks like in
+   ~6 months as an **outcome** (a named behavior change, not a feature). Never embed a metric or
+   solution in an option.
+2. **[User lens] — cold.** audience & locale scope — global / region / single-country (+ primary
+   locale), and the primary user's core need. Sets the locale research context for later batches.
+3. **[Scope lens] — cold.** non-goals — present plausible adjacent features; the user marks each
+   **In / Later / Won't-this-time**. Recorded exclusions are a focusing device, not a parking lot.
+4. **[Architect lens] — archetype cold, the stack research-backed.** First settle the archetype
+   (shared § Archetype Registry — web-app / mobile-app / conversational-bot / backend-api /
+   realtime-trading / cli-devtool / data-ml / desktop-app; for `web-app` the FE/BE/fullstack split),
+   hard constraints (must-use services, compliance, performance/budget targets — **never staffing**),
+   and any pre-decided pieces — all structural and user-owned. Then run the **research-woven loop**
+   over every still-open stack dimension the archetype opens (framework, persistence, component
+   library, hosting, …): the options are the current menu, not your prior.
+
+**Research-woven loop** (shared § Discovery Interview — the woven loop). For each open dimension a
+prior answer opens:
+
+1. Call `wf-interview-research` (`Workflow` tool, `name: "wf-interview-research"`) with `args` =
+   `{stage: "architect", dimensionKeys: [...], briefPath: "foundation/brief.md", contextPaths:
+   [<prior interview-research/*.json>], verifyKeys: [<the version-bearing subset>]}` —
+   paths/keys/booleans only. Batch all dimensions one answer opens into a single call.
+2. On return, write each menu to `foundation/interview-research/{dimension}.json`, **stamping
+   `fetchedAt`** yourself (the workflow can't — read the date via Bash `date`).
+3. Present an `AskUserQuestion` built from the menu: 2–4 options recommended-first by `rank`, each
+   option's `tradeoff` + recency in its description ("current as of `<fetchedAt>`"), neutral
+   phrasing, the **"Other / not sure"** escape hatch. **Drop or demote** any option the Haiku pass
+   marked `still_current: false`.
+4. Record the pick **and its `sources`** to the brief, and mark that dimension **constrained** — it
+   then skips the Phase-3 panel (shared § Discovery Interview — Discovery↔Panel bridge).
+
+**Probe once.** When a batch returns "Other / not sure" or an answer is too thin to drive research,
+fire **one** focused follow-up batch whose options are the pre-laddered "why does that matter /
+which specifically" rungs for that pick. One probe round, never a recursion. If a research call
+returns nothing in good time, fall back to a model-knowledge menu stamped `unverified` — never block
+the interview.
+
+**Read back for sign-off.** Assemble the answers into a short discovery brief and run a final
+confirm `AskUserQuestion` (the read-back gate) before the Phase-3 panel runs. Write
+`foundation/brief.md` incrementally as the interview proceeds and finalize it here: the goal
+(verbatim from the confirmed restatement, for anti-drift), the intake answers, the recorded
+non-goals, **each research-backed pick with its `sources` and `fetchedAt`**, and the three
+machine-keyed sections — `## Research Angles`, `## Panel Roles`, `## Open Dimensions` — populated in
+Phase 2. Initialize `foundation/status.json` (`architect: pending`, archetype, localeScope) from
+`templates/status.json`.
+
+**Discovery is product / user / business / legal only.** Team skill, headcount, ownership, ops
+staffing are never asked — Claude is always the implementer, so "team skill" collapses to a silent
+default (favor boring, typed, testable stacks Claude implements reliably; a Phase-2 tiebreaker, not
+a question).
 
 ## Phase 2 — Derive the research plan (Opus pass)
 
@@ -57,9 +103,14 @@ From the archetype registry + audience scope:
 - Select **3 proposer role keys** relevant to the archetype; write their personas under
   `## Panel Roles`.
 - List the **hard-to-reverse dimensions** (shared list) under `## Open Dimensions`, each marked
-  *constrained* (user pre-decided in Phase 1) or *open*, and flagged hard-to-reverse.
+  *constrained* (user pre-decided **or settled in the Phase-1 research-woven loop**) or *open*, and
+  flagged hard-to-reverse. A dimension the user picked from a research-backed menu is constrained —
+  the panel may add a `minority_position` to its ADR but never reopens it as a `hard_fork`.
+- Pass the Phase-1 `foundation/interview-research/*.json` files to `wf-foundation` via
+  `contextPaths` so the panel's research agents build on them instead of re-fetching.
 - **Selective panel:** if every hard-to-reverse dimension is constrained and there are no
-  hesitation signals, set `runProposers: false` (research still runs).
+  hesitation signals, set `runProposers: false` (research still runs). A well-researched interview
+  makes this the common case.
 
 ## Phase 3 — Research + panel loop (session ↔ workflow)
 

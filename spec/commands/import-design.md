@@ -95,6 +95,21 @@ any token conflicts and how they were ruled, anything a11y-flagged. Note that th
 **normal design foundation** — a later `/spec:init` extracts it as ordinary brownfield canon, and
 `/spec:design` + `/spec:build` consume the same tokens / doctrine / components.
 
+## Re-running for new screens
+
+When a designer adds more files to the same Claude Design project, re-invoke with the same
+project URL. Phase 1 re-derives the token map against the now-extended repo canon — existing
+tokens match and pass through, new ones extend the scale, conflicts prompt. Phase 3 skips
+surfaces whose component files already exist on disk. Only new `.dc.html` files get the full
+translation treatment. No manifest, no state — the filesystem is the record.
+
+To re-import a *revised* screen (designer changed an existing file), use `?file=<name>` to
+target it explicitly. This is intentional: silent re-translation would overwrite improvements
+made after the first import (accessibility fixes, edge-case handling, etc.).
+
+For ongoing design iteration with reconciliation, review gates, and spec discipline, graduate
+to `/spec:design`.
+
 ## Rules
 
 - **Spec-free:** writes no spec, no `status`, touches no state gate; fully re-runnable.

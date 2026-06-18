@@ -47,7 +47,7 @@ if (!args || typeof args !== 'object' || !Array.isArray(args.dimensionKeys) || !
 // wall-clock fetchedAt on each returned option set (Date.now()/new Date() are unavailable here).
 // args: {
 //   stage: "architect" | "design",
-//   dimensionKeys: [string],   // dimensions THIS answer opened (menu in shared.md); batched parallel
+//   dimensionKeys: [string],   // dimensions THIS answer opened (menu in genesis.md); batched parallel
 //   briefPath: string,         // .claude/genesis/brief.md — goal + intake + Research Angles focus; Read
 //   contextPaths: [string],    // prior interview-research/*.json + descriptors to Read; []
 //   verifyKeys: [string],      // subset of dimensionKeys that are version-bearing → Haiku check; []

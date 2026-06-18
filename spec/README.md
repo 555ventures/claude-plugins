@@ -25,7 +25,8 @@ Mixture-of-Agents panel, 3 blind Sonnet proposers → Opus aggregator, that adju
 hard-to-reverse forks). Every cross-stage handoff is a file in `.claude/genesis/` or `docs/adr/`;
 the workflow `args` carry only paths, enum keys, and booleans. Genesis is **greenfield-only**:
 pointed at a populated repo, `/spec:genesis-architect` defers to `/spec:init`. Full contract in
-`commands/shared.md` § Genesis.
+`doctrine/genesis.md` (the genesis-stage supplement the two genesis commands read alongside
+`doctrine/shared.md`).
 
 ## Install
 
@@ -81,7 +82,8 @@ but the edit landed on `main`" pollution). It is topology-based and fail-open �
 single-checkout work, and silent outside a worktree or on any git error.
 
 Shared invariants (risk tiers, model placement, escalation contract, MCP policy):
-`commands/shared.md` (run `spec-paths shared` for its absolute path). Spec template:
+`doctrine/shared.md` (run `spec-paths shared` for its absolute path); the genesis-only supplement
+is `doctrine/genesis.md` (`spec-paths shared-genesis`). Spec template:
 `templates/spec.md`. Deterministic orchestration: `workflows/wf-build.js`,
 `workflows/wf-review.js` — commands locate them via the bundled `spec-paths` helper, since
 `${CLAUDE_PLUGIN_ROOT}` is not substituted inside command bodies.

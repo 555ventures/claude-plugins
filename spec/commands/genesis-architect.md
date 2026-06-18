@@ -9,13 +9,14 @@ The first greenfield stage. Establishes the project **archetype** and **audience
 research-backed MoA panel over the hard-to-reverse architecture decisions, records them as ADRs,
 and scaffolds a compiling skeleton with a runnable gate — so `/spec:init` has a real repo to
 ground. Heavily interactive: the session owns every `AskUserQuestion` and every file write; the
-`wf-panel` workflow does the parallel research + panel (see shared § Genesis: Session ↔ Workflow Loop).
+`wf-panel` workflow does the parallel research + panel (see genesis.md § Genesis: Session ↔ Workflow Loop).
 
 **Intended model: Opus** (the genesis judgment concentration point).
 
-**Setup:** run `spec-paths shared` and Read that file (the shared invariants — the § Genesis
-sections cover the archetype registry, panel doctrine, on-disk handoff, state machine). Also run
-`spec-paths wf-panel` and `spec-paths wf-research` once and keep the printed absolute paths — they
+**Setup:** run `spec-paths shared` and Read that file (the shared invariants), then run
+`spec-paths shared-genesis` and Read that too — the genesis-stage supplement covers the archetype
+registry, panel doctrine, discovery interview, the genesis state machine and on-disk handoff. Also
+run `spec-paths wf-panel` and `spec-paths wf-research` once and keep the printed absolute paths — they
 are the `scriptPath` for the `Workflow` calls below. v1 is **greenfield-only**: if the target
 directory already has a real codebase (source files beyond config/scaffold), STOP and tell the user
 to run `/spec:init` directly — genesis is for new projects.
@@ -33,7 +34,7 @@ from the last *verified* phase; report what was found and what is being resumed.
 
 ## Phase 1 — Discovery interview (interactive)
 
-Run intake as a **structured discovery interview**, not a form (shared § Genesis: Discovery
+Run intake as a **structured discovery interview**, not a form (genesis.md § Genesis: Discovery
 Interview): funnel-shaped (broad vision → narrow constraints), every `AskUserQuestion` batch
 lens-tagged, neutrally worded, and carrying an **"Other / not sure"** escape hatch (your one open
 lane).
@@ -53,14 +54,14 @@ author) or **research-backed** (options built live by `wf-research`):
 3. **[Scope lens] — cold.** non-goals — present plausible adjacent features; the user marks each
    **In / Later / Won't-this-time**. Recorded exclusions are a focusing device, not a parking lot.
 4. **[Architect lens] — archetype cold, the stack research-backed.** First settle the archetype
-   (shared § Genesis: Archetype Registry — web-app / mobile-app / conversational-bot / backend-api /
+   (genesis.md § Genesis: Archetype Registry — web-app / mobile-app / conversational-bot / backend-api /
    realtime-trading / cli-devtool / data-ml / desktop-app; for `web-app` the FE/BE/fullstack split),
    hard constraints (must-use services, compliance, performance/budget targets — **never staffing**),
    and any pre-decided pieces — all structural and user-owned. Then run the **research-woven loop**
    over every still-open stack dimension the archetype opens (framework, persistence, component
    library, hosting, …): the options are the current menu, not your prior.
 
-**Research-woven loop** (shared § Genesis: Discovery Interview — the woven loop). For each open
+**Research-woven loop** (genesis.md § Genesis: Discovery Interview — the woven loop). For each open
 dimension a prior answer opens:
 
 1. Call `wf-research` (`Workflow {scriptPath: <spec-paths wf-research output>}`) with `args` =
@@ -74,7 +75,7 @@ dimension a prior answer opens:
    phrasing, the **"Other / not sure"** escape hatch. **Drop or demote** any option the Haiku pass
    marked `still_current: false`.
 4. Record the pick **and its `sources`** to the brief, and mark that dimension **constrained** — it
-   then skips the Phase-3 panel (shared § Genesis: Discovery Interview — Discovery↔Panel bridge).
+   then skips the Phase-3 panel (genesis.md § Genesis: Discovery Interview — Discovery↔Panel bridge).
 
 **Probe once.** When a batch returns "Other / not sure" or an answer is too thin to drive research,
 fire **one** focused follow-up batch whose options are the pre-laddered "why does that matter /

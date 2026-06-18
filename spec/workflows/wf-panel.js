@@ -51,7 +51,7 @@ if (!args || typeof args !== 'object' || !Array.isArray(args.researchKeys)) {
 //   stage: "architect" | "design",
 //   briefPath: string,            // .claude/genesis/brief.md — goal + intake + Research Angles +
 //                                 //   Panel Roles + Open Dimensions sections; agents Read it
-//   researchKeys: [string],       // enum keys for THIS round's research angles (menu in shared.md)
+//   researchKeys: [string],       // enum keys for THIS round's research angles (menu in genesis.md)
 //   roleKeys: [string],           // enum keys for the 3 proposer role personas
 //   runProposers: boolean,        // false → selective skip (all hard-to-reverse dims constrained)
 //   contextPaths: [string],       // prior round outputs + stack-descriptor (design stage) to Read; []

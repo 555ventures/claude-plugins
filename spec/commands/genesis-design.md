@@ -15,7 +15,9 @@ the session owns `AskUserQuestion` and writes; `wf-panel` does research + panel.
 **Intended model: Opus** (taste IS the work — the design-stage exception; Fable→Opus while
 suspended).
 
-**Setup:** run `spec-paths shared` and Read that file. Also run `spec-paths wf-panel` and
+**Setup:** run `spec-paths shared` and Read that file, then run `spec-paths shared-genesis` and
+Read that too (the genesis-stage supplement — discovery interview, panel doctrine, enforcement
+handoff). Also run `spec-paths wf-panel` and
 `spec-paths wf-research` once and keep the printed absolute paths — they are the `scriptPath` for
 the `Workflow` calls below. The state gate blocks this command until `architect: scaffold-complete`;
 also verify `.claude/genesis/stack-descriptor.json` exists.
@@ -36,12 +38,12 @@ also verify `.claude/genesis/stack-descriptor.json` exists.
 
 ## Phase 1 — Discovery interview (interactive)
 
-Same discovery posture as architect (shared § Genesis: Discovery Interview), narrowed to design:
+Same discovery posture as architect (genesis.md § Genesis: Discovery Interview), narrowed to design:
 reflect back the design intent first, then batch broad → narrow, every batch lens-tagged and
 escape-hatched, each marked **cold** or **research-backed**.
 
 1. **[Brand lens] — research-backed.** taste / voice direction — run the **research-woven loop**
-   (shared § Genesis: Discovery Interview) on the visual-trend dimension: `wf-research` with
+   (genesis.md § Genesis: Discovery Interview) on the visual-trend dimension: `wf-research` with
    `{stage: "design", dimensionKeys: ["visual-trend", ...], briefPath, contextPaths:
    [".claude/genesis/stack-descriptor.json", <prior interview-research/*.json>], verifyKeys: []}`
    (taste is not version-bearing → no Haiku pass). Present the current aesthetic/voice directions for
@@ -90,10 +92,10 @@ Author directly (taste exception — not delegated to Sonnet):
    tokens (validated contrast pairs, a focus-ring token, min target size). Name the token + doctrine
    paths so `/spec:init` and `/spec:design` can find them. Set `status.design: tokens-landed`.
 3. **Design rules** — write `.claude/genesis/design-rules.json` (template via `spec-paths templates`):
-   each rule carries a `targetCategory` **enum only** (`color | i18n | structure | a11y | density`),
-   `appliesTo`/`exemptGlobs`, `severity`, `rationale` — **never a tool name** (shared § Genesis:
-   Enforcement Handoff). `/spec:enforce` owns the category→enforcer selection, chosen at runtime per
-   stack.
+   each rule carries a `targetCategory` **enum only** (the design category set defined in
+   genesis.md § Genesis: Enforcement Handoff), `appliesTo`/`exemptGlobs`, `severity`, `rationale` —
+   **never a tool name** (same section). `/spec:enforce` owns the category→enforcer selection, chosen
+   at runtime per stack.
 4. Commit. Set `status.design: rules-locked`.
 
 ## Phase 5 — Report & hand off

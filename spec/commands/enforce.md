@@ -35,6 +35,10 @@ Classify every mechanizable clause into ONE language-neutral category. These are
 `module-boundary` · `naming` · `forbidden-symbol` · `structural-pattern` · `datetime` ·
 `schema-validation` · `format`.
 
+This is the operational copy of the canonical taxonomy in the grounding contract (`spec-paths
+contract`); they must stay in sync — the contract is the single source of truth, this file is the
+executor's working list.
+
 Genesis-seeded repos also carry `.claude/genesis/design-rules.json` whose rules use a design enum
 (`color | i18n | structure | a11y | density`). Fold these in as **pre-classified inputs**:
 `structure → module-boundary`; `color | i18n | density → forbidden-symbol` or

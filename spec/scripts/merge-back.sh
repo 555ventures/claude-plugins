@@ -14,6 +14,15 @@
 #   the model: `merge` exits 3 on conflicts for the model to resolve, then commit.
 #
 # Subcommands:
+#   create   --source S [--root R] [--base REF] [--name N]
+#                             -> deterministically `git worktree add` the build tree under
+#                                .claude/worktrees/, then print its ABSOLUTE path as the LAST
+#                                stdout line. The caller passes that path to EnterWorktree
+#                                {path:} and VERIFIES entry. This is the front half of the
+#                                lifecycle: it fails LOUDLY (branch/path exists, bad base,
+#                                run-from-worktree) so /spec:build never silently lands on the
+#                                root branch when isolation was requested. Defaults: base=HEAD,
+#                                name=S with '/'->'-'. Must run from the MAIN working tree.
 #   root     [--worktree W]   -> prints the absolute PROJECT root (the main worktree), so the
 #                                caller cd's to a verified path and never guesses "root".
 #                                Project root != $HOME. Run from inside the worktree if no W.
@@ -32,7 +41,7 @@ set -u
 die()  { echo "merge-back: $*" >&2; exit 2; }
 note() { echo "$*"; }
 
-ROOT=""; TARGET=""; SOURCE=""; STRATEGY=""; WORKTREE=""
+ROOT=""; TARGET=""; SOURCE=""; STRATEGY=""; WORKTREE=""; BASE=""; NAME=""
 SUB="${1:-}"; shift || true
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -41,13 +50,50 @@ while [ $# -gt 0 ]; do
     --source)   SOURCE="${2:-}"; shift 2 ;;
     --strategy) STRATEGY="${2:-}"; shift 2 ;;
     --worktree) WORKTREE="${2:-}"; shift 2 ;;
+    --base)     BASE="${2:-}"; shift 2 ;;
+    --name)     NAME="${2:-}"; shift 2 ;;
     *) die "unknown arg: $1" ;;
   esac
 done
 
+# realpath that tolerates non-existent / odd paths (also used by the early `create` case)
+rp() { (cd "$1" 2>/dev/null && pwd -P) || printf '%s' "$1"; }
+
 case "$SUB" in
   ""|-h|--help|help)
     grep -E '^#( |$)' "$0" | sed 's/^# \{0,1\}//'
+    exit 0 ;;
+  create)
+    # Front half of the worktree lifecycle. `git worktree add` is deterministic and
+    # debuggable; EnterWorktree {name:} is a single opaque step that can fail to enter
+    # (base-ref fetch, name collision) and leave the build running on the root branch.
+    # So: create here, loudly; the caller then EnterWorktree {path:} into this exact path
+    # and VERIFIES the session actually moved. All diagnostics go to stderr; the LAST
+    # stdout line is the absolute worktree path for the caller to capture.
+    [ -n "$SOURCE" ] || die "create needs --source (the new build branch name)"
+    CROOT="${ROOT:-$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null)}"
+    [ -n "$CROOT" ] || die "create: not inside a git repo and no --root given"
+    git -C "$CROOT" rev-parse --git-dir >/dev/null 2>&1 || die "create: '$CROOT' is not a git repo"
+    CROOT="$(rp "$CROOT")"   # canonicalize so the registered path == the printed path == what the verify gate compares
+    MAIN="$(git -C "$CROOT" worktree list --porcelain 2>/dev/null | awk 'NR==1 && $1=="worktree"{print $2}')"
+    [ "$(rp "$CROOT")" = "$(rp "$MAIN")" ] || die "create: run from the main working tree ($MAIN), not a worktree ($CROOT)"
+    git -C "$CROOT" rev-parse -q --verify HEAD >/dev/null 2>&1 || \
+      die "create: repository has no commits yet — 'git worktree add' cannot branch from an unborn HEAD. Make an initial commit first (a greenfield repo straight from 'git init' hits this)."
+    NAME="${NAME:-$(printf '%s' "$SOURCE" | tr '/' '-')}"
+    WT="$CROOT/.claude/worktrees/$NAME"
+    # The worktree lives inside the repo; if its path isn't gitignored it shows as untracked
+    # and the root tree reads dirty, which trips assert_clean_root at merge time. Catch it now
+    # (not after the build) and don't auto-edit .gitignore — that would itself dirty the root.
+    git -C "$CROOT" check-ignore -q ".claude/worktrees/$NAME" || \
+      die "create: '.claude/worktrees/' is not gitignored — the worktree would dirty the root tree and break merge-back's clean-root gate. Add '.claude/worktrees/' to .gitignore and commit it once, then retry."
+    git -C "$CROOT" rev-parse --verify -q "refs/heads/$SOURCE" >/dev/null 2>&1 && \
+      die "create: branch '$SOURCE' already exists — pick a new spec branch name or finish/clean up the prior build"
+    [ -e "$WT" ] && die "create: worktree path already exists ($WT) — remove it or pass a different --name"
+    BASE="${BASE:-HEAD}"
+    git -C "$CROOT" rev-parse --verify -q "$BASE" >/dev/null 2>&1 || die "create: base ref '$BASE' not found"
+    git -C "$CROOT" worktree add -b "$SOURCE" "$WT" "$BASE" >&2 || die "create: 'git worktree add' failed"
+    echo "merge-back: created worktree '$NAME' (branch '$SOURCE', base '$BASE') at $WT" >&2
+    rp "$WT"            # absolute path — the LAST stdout line, for EnterWorktree {path:} and --worktree
     exit 0 ;;
   root)
     # Authoritative project root = the FIRST entry of `git worktree list` (the main
@@ -62,9 +108,6 @@ esac
 
 [ -n "$ROOT" ] || die "--root is required"
 git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1 || die "--root '$ROOT' is not a git repo"
-
-# realpath that tolerates non-existent / odd paths
-rp() { (cd "$1" 2>/dev/null && pwd -P) || printf '%s' "$1"; }
 
 assert_clean_root() {
   [ -z "$(git -C "$ROOT" status --porcelain 2>/dev/null)" ] || \

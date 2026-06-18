@@ -51,6 +51,12 @@ Launch parallel Explore agents (`model: sonnet`) and read key files yourself:
 Interview the user via `AskUserQuestion` only for what the code cannot answer (e.g. "which
 surfaces do you consider T3?", with informed options).
 
+**Ensure `.claude/worktrees/` is gitignored** (idempotent): `/spec:build`'s worktree workspace
+and the harness's own `EnterWorktree` both create trees there, and an un-ignored worktree path
+makes the root tree read dirty — which trips `/spec:review`'s clean-root merge gate and makes
+`merge-back.sh create` refuse. If `git check-ignore -q .claude/worktrees` fails, append
+`.claude/worktrees/` to the repo's `.gitignore` and tell the user to commit it.
+
 ## Phase 2 — Write `.claude/spec.config.json`
 
 All keys consumed by the plugin's commands/workflows:
@@ -71,6 +77,10 @@ All keys consumed by the plugin's commands/workflows:
   "testCommand": "bun test:run",
   // Workspace bootstrap for worktrees/spikes.
   "setupCommand": "bun install",
+  // OPTIONAL: default workspace for /spec:build ∈ "worktree" | "in-place" | "ask".
+  // Omit (or "ask") to keep the per-run prompt. Set "worktree" for repos that always want
+  // isolation (e.g. foundation-seeded greenfield), "in-place" for repos that never do.
+  "build": { "workspace": "ask" },
   // Mechanical sweep script (generated in Phase 5); dirs appended, DIFF_BASE env honored.
   "patternsScript": "scripts/spec-patterns.sh",
   // OPTIONAL: AC-drift checker; spec path appended. Omit entirely if the repo has none —

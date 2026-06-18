@@ -52,6 +52,12 @@ planning writes them inline instead of guessing, and lock requires zero. `/spec:
 only exists in repos whose config declares a component catalog (`design` block — e.g.
 Storybook for web, Widgetbook for Flutter).
 
+A second, always-on guard `block-cross-worktree-writes.sh` (PreToolUse on `Write|Edit|NotebookEdit`)
+mechanically backs `/spec:build`'s worktree isolation: it blocks any write whose absolute path
+escapes the current worktree into another working tree of the same repo (the "isolated worktree,
+but the edit landed on `main`" pollution). It is topology-based and fail-open — inert for ordinary
+single-checkout work, and silent outside a worktree or on any git error.
+
 Shared invariants (risk tiers, model placement, escalation contract, MCP policy):
 `commands/shared.md` (run `spec-paths shared` for its absolute path). Spec template:
 `templates/spec.md`. Deterministic orchestration: `workflows/wf-spec-build.js`,

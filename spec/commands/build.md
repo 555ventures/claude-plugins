@@ -15,7 +15,9 @@ Lookups: Haiku. Surprises and T3 checkpoints: Fable subagent.
 **Setup:** run `spec-paths shared` and Read that file (shared invariants). Read the host's
 `.claude/spec.config.json` and its pipeline rules file (`pipelineRules`). If either is
 missing, STOP: tell the user to run `/spec:init` first. Also run `spec-paths wf-spec-build` once
-and keep the printed absolute path — it is the `scriptPath` for the Workflow call below.
+and keep the printed absolute path — it is the `scriptPath` for the Workflow call below. If you
+will offer the worktree workspace, run `spec-paths merge-back` too and keep that path as
+`{mergeBack}` (its `create` subcommand builds the worktree; `/spec:review` reuses it to merge back).
 
 ## Input
 
@@ -29,9 +31,51 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
    (config `design` block, or legacy `storybook: true` — shared invariants § Design Stage):
    `design: true` without `designed:` → ask the user whether to run `/spec:design` first or
    skip it deliberately.
-2. **Workspace.** `AskUserQuestion`: isolated worktree (recommended for parallel work) or in
-   place. If worktree: `EnterWorktree`, then the host's `setupCommand` (from config) once at
-   the root. Record the originating branch for merge-back.
+2. **Workspace.** Slug and branch are deterministic in both paths below: `{source} =
+   spec/<slug from the spec filename>`, and the worktree is always
+   `{worktree} = <root>/.claude/worktrees/<name>` where `<name>` is `{source}` with `/`→`-`
+   (e.g. `spec/checkout` → `.claude/worktrees/spec-checkout`) — the exact rule
+   `{mergeBack} create` uses. So a resume can reconstruct the path without any saved state.
+
+   - **Resume** (`status: implementing` from step 1): a worktree likely already exists from the
+     prior run — do **not** ask, and do **not** `create` again (it would die on the existing
+     branch). Reconstruct `{worktree}`, then:
+     - `git rev-parse --show-toplevel` already equals `{worktree}` → you are in it; go to step 3.
+     - else `{worktree}` appears in `git worktree list` → `EnterWorktree {path: {worktree}}`,
+       run the VERIFY gate below, then go to step 3 (skip create + setup; setup ran last time).
+     - else (no worktree — the prior run built in place, or it was cleaned up) → continue **in
+       place**; never spin up a worktree mid-spec. Go to step 3.
+
+   - **Fresh build** (`status: hardened`): choose the workspace from the optional config key
+     `build.workspace` ∈ `worktree | in-place | ask` (default **`ask`** when the key is absent —
+     preserves the prompt). `in-place` → step 3, no prompt. `worktree` → take the Worktree path
+     below, no prompt. `ask` → `AskUserQuestion` (isolated worktree, recommended for parallel
+     work, vs in place) and branch on the answer. In all cases the user can still redirect.
+     **In place** → step 3. **Worktree** → entry is
+     deterministic and *verified*; it never silently degrades to building on the current branch.
+     A separate `git worktree add` (loud, fixable failures) plus one `EnterWorktree {path:}` is
+     more reliable than `EnterWorktree {name:}`, whose create-and-enter can be rejected when a
+     worktree session is already active and leave the build on the root branch:
+     - **Record the originating branch** (`git rev-parse --abbrev-ref HEAD`) — this is `{target}`
+       for merge-back.
+     - **Create:** `{mergeBack} create --source {source}`. Capture its **last stdout line** as
+       `{worktree}` (the absolute path). Non-zero exit (branch/path exists, unborn HEAD, run from
+       a worktree, `.claude/worktrees/` not gitignored) → **STOP** and show the user its stderr;
+       do not fall back to in-place.
+     - **Enter:** `EnterWorktree {path: {worktree}}`.
+     - **Setup:** after the VERIFY gate passes, run the host's `setupCommand` once inside
+       `{worktree}`.
+
+   - **VERIFY entry — the hard gate** (both paths that call `EnterWorktree`): run
+     `git rev-parse --show-toplevel` (Bash). It equals `{worktree}` → entered. It does **not**
+     → the session is still on the root branch: **STOP immediately, run no workers, write
+     nothing.** The user asked for isolation — building in place is the one thing you must never
+     do here. In the STOP report, echo the `EnterWorktree` tool result verbatim plus
+     `git worktree list` so the cause is visible (entry into a registered `{path:}` is
+     deterministic — a failure is structural, not transient, so do not loop-retry; surface it).
+     Only build in place if the user *explicitly* redirects. (This is the failure the
+     cross-worktree write guard can't catch — if you never entered, there is no worktree to
+     escape from.)
 3. **Parse the spec** (read it once):
    - File Plan table → batches: group rows by **Layer** (and by area where the host's
      pipeline rules § Build says so); order groups per the host's `layerGroups` — layers

@@ -146,6 +146,22 @@ inferred. The catalog tool is host config, not plugin code: Storybook hosts decl
 `{"tool": "storybook", "command": "bun storybook", "storyFormat": "CSF3 stories"}`; Flutter
 hosts declare Widgetbook with `@UseCase` builders as the story format.
 
+### Import a Claude Design mockup (spec-free)
+
+```
+/spec:import-design https://claude.ai/design/p/<id>?file=<Name>.dc.html
+  → fetch the .dc.html (read-only) → extract :root into token files → translate <x-dc>
+    surfaces into real components + catalog entries → write/extend the doctrine
+```
+
+Standalone and one-shot: no spec, no `status`, no state gate, no reconcile. Greenfield repos get
+the full design foundation bootstrapped from the mockup; repos that already have tokens/doctrine
+get them *extended* (a same-role/different-value conflict prompts, never overwrites). What it lands
+is ordinary repo canon — a later `/spec:init` extracts it as brownfield design, and `/spec:design`
++ `/spec:build` consume the same tokens and components. Re-invoke with the same URL to add screens;
+it skips components already on disk. For ongoing UI work with reconciliation and review gates,
+graduate to `/spec:design`; to pick a direction with no mockup yet, use `/spec:genesis-design`.
+
 ### Mid-build requirement change
 
 No separate cascade command. Update the spec's Decisions table, add the ruling to

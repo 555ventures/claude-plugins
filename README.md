@@ -101,6 +101,7 @@ is too small to bother and to just ask for it directly.
 | `/spec:build` | Implements the spec test-first, in parallel, resumably | Per feature |
 | `/spec:review` | Independent review; flips the spec to `done` | Per feature |
 | `/spec:doctor` | Read-only drift check of the generated files | When something feels stale |
+| `/spec:import-design` | Pulls a finished Claude Design mockup into the repo as real tokens + components (no spec) | Anytime you have a mockup |
 | `/git:commit`, `/git:merge` | Fast add-all-commit; guided branch merge | Anytime |
 
 ## Starting from scratch: the genesis stage
@@ -146,6 +147,33 @@ no rules stranded as prose nobody runs.
 
 Like the pipeline, this is heavy machinery — it's for the start of a real project, not a
 weekend spike. Existing repos skip it entirely and go straight to `/spec:init`.
+
+## Importing a Claude Design mockup (no spec)
+
+Designed something in [Claude Design](https://claude.ai/design) and just want it in the repo?
+**`/spec:import-design`** is the spec-free shortcut — no `plan`, no `build`, no state machine.
+Paste the mockup URL and it translates the `.dc.html` into real code in *this* repo: design
+tokens, base components in your framework, and a one-page design doctrine.
+
+```
+/spec:import-design https://claude.ai/design/p/<id>?file=<Name>.dc.html
+```
+
+- **Read-only on Claude Design** — it only fetches the mockup; it never writes back.
+- **Greenfield or brownfield.** Empty repo → it bootstraps the whole design foundation from the
+  mockup. Existing tokens/doctrine → it *extends* them, never overwrites; a real conflict (same
+  token role, different value) stops and asks you to rule on it.
+- **No `/spec:init` required.** It runs in a bare repo, and what it writes is ordinary repo canon
+  — a later `/spec:init` picks it up as normal brownfield design, and `/spec:design` + `/spec:build`
+  consume the same tokens and components.
+- **Re-runnable.** Add screens to the same Claude Design project and re-invoke with the same URL;
+  it skips components already on disk and only translates the new `.dc.html` files. Pass
+  `?file=<name>` to re-import a *revised* screen on purpose.
+
+It needs the Claude Design connector enabled (run `/design-login` if the fetch fails). This is the
+one-shot "I have a mockup, put it in the repo" path; for ongoing UI work with review gates and spec
+discipline, use `/spec:design` instead. To pick a visual *direction* from scratch with no mockup yet,
+that's `/spec:genesis-design`.
 
 ## Why bother?
 

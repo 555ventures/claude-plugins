@@ -1,9 +1,10 @@
 # 555-tools
 
-A Claude Code plugin marketplace. It ships three plugins: **spec** — a spec-driven development
-pipeline; **foundation** — a greenfield genesis layer that picks your stack and design
-direction *before* the pipeline starts (see [below](#starting-from-scratch-the-foundation-layer));
-and **git** — a fast add-all-and-commit flow and a guided merge.
+A Claude Code plugin marketplace. It ships two plugins: **spec** — the full project lifecycle,
+from an optional greenfield **genesis** stage that picks your stack and design direction *before*
+the pipeline starts (see [below](#starting-from-scratch-the-genesis-stage)) through the spec-driven
+plan → design → build → review pipeline; and **git** — a fast add-all-and-commit flow and a guided
+merge.
 
 The short version of the pipeline: you write a plan once with the strongest model, other agents attack the
 plan to find holes, cheap models do the typing, and an independent review has to sign off
@@ -18,18 +19,18 @@ every feature**. Everything else is optional or automatic.
 ```
   SET UP ONCE (per repo)                 PER FEATURE (repeat for each change)
   ──────────────────────                 ────────────────────────────────────
-  foundation:architect ┐                 spec:plan ─▶ spec:design ─▶ spec:build ─▶ spec:review
-  foundation:design     ├─▶ spec:init      write      (optional UI)   implement      sign off
-   (new projects only) ┘        └─▶ spec:enforce
+  spec:genesis-architect ┐               spec:plan ─▶ spec:design ─▶ spec:build ─▶ spec:review
+  spec:genesis-design     ├─▶ spec:init    write      (optional UI)   implement      sign off
+    (new projects only) ┘       └─▶ spec:enforce
 
   Anytime:  spec:doctor  — read-only health check  ·  a hook auto-warns when generated files go stale
 ```
 
 1. **Set up the repo once.** Run `/spec:init` — it studies your repo, writes its config + rules,
    and then runs `/spec:enforce` to turn those rules into real checks in your gate command. After
-   this, the pipeline is ready. (Brand-new project with no code yet? Run the **foundation** layer
+   this, the pipeline is ready. (Brand-new project with no code yet? Run the **genesis** stage
    *first* — it picks your stack and design direction and scaffolds the repo. See
-   [the foundation layer](#starting-from-scratch-the-foundation-layer). Existing repos skip it.)
+   [the genesis stage](#starting-from-scratch-the-genesis-stage). Existing repos skip it.)
 2. **Build each feature with the loop.** `plan → build → review` (with an optional `design` step
    for UI). This is the part you run over and over.
 3. **Forget the rest until you need it.** `/spec:enforce` is re-runnable when your rules or
@@ -40,8 +41,7 @@ every feature**. Everything else is optional or automatic.
 
 ```
 /plugin marketplace add 555ventures/claude-plugins
-/plugin install spec@555-tools
-/plugin install foundation@555-tools     # optional — only for brand-new projects
+/plugin install spec@555-tools           # the full lifecycle — genesis + the pipeline
 /plugin install git@555-tools            # optional — fast commit + guided merge
 ```
 
@@ -56,8 +56,8 @@ every feature**. Everything else is optional or automatic.
 **Brand-new project** (no code yet) — run the genesis layer first, then init:
 
 ```
-/foundation:architect "a trading simulator for retail traders in Japan"   # picks stack + scaffolds
-/foundation:design "..."                                                   # picks the design direction
+/spec:genesis-architect "a trading simulator for retail traders in Japan"  # picks stack + scaffolds
+/spec:genesis-design "..."                                                 # picks the design direction
 /spec:init                                                                 # grounds the now-real repo
 ```
 
@@ -92,8 +92,8 @@ is too small to bother and to just ask for it directly.
 
 | Command | What it does | How often |
 |---|---|---|
-| `/foundation:architect` | Picks stack + structure for a brand-new project and scaffolds it | Once, new projects only |
-| `/foundation:design` | Picks the UX/visual direction and writes the design canon | Once, new projects only |
+| `/spec:genesis-architect` | Picks stack + structure for a brand-new project and scaffolds it | Once, new projects only |
+| `/spec:genesis-design` | Picks the UX/visual direction and writes the design canon | Once, new projects only |
 | `/spec:init` | Profiles the repo, generates config + rules + agents, then runs `/spec:enforce` | Once per repo (re-run to refresh) |
 | `/spec:enforce` | Turns the repo's rules into deterministic checks wired to the gate | On rule/tooling drift |
 | `/spec:plan` | Writes and hardens one spec — explores, drafts, lets refuters attack it | Per feature |
@@ -103,19 +103,19 @@ is too small to bother and to just ask for it directly.
 | `/spec:doctor` | Read-only drift check of the generated files | When something feels stale |
 | `/git:commit`, `/git:merge` | Fast add-all-commit; guided branch merge | Anytime |
 
-## Starting from scratch: the foundation layer
+## Starting from scratch: the genesis stage
 
 The spec pipeline assumes a repo that already exists and already made its big choices —
-`/spec:init` *profiles* a stack, it doesn't *pick* one. The **foundation** plugin is the part
-that picks. It runs two interactive genesis sessions before the pipeline, for a brand-new
+`/spec:init` *profiles* a stack, it doesn't *pick* one. The **genesis** stage of `spec` is the
+part that picks. It runs two interactive sessions before the pipeline, for a brand-new
 project, and hands a real, scaffolded, design-grounded repo to `/spec:init`:
 
 ```
-/foundation:architect → /foundation:design → /spec:init → (the pipeline below)
+/spec:genesis-architect → /spec:genesis-design → /spec:init → (the pipeline below)
 ```
 
-**`/foundation:architect`** decides the stack, structure, and project shape, then scaffolds it.
-**`/foundation:design`** decides the UX and visual direction and writes the design canon
+**`/spec:genesis-architect`** decides the stack, structure, and project shape, then scaffolds it.
+**`/spec:genesis-design`** decides the UX and visual direction and writes the design canon
 (doctrine + tokens + enforceable design rules). Both work the same way, and it's deliberately
 not "ask one model and hope":
 
@@ -137,11 +137,11 @@ not "ask one model and hope":
   whether there's a visual design stage at all (a headless bot gets conversation/persona
   guidelines, not a component catalog).
 
-The handoff is all on disk, and the division of labor is sharp: foundation **decides** the
+The handoff is all on disk, and the division of labor is sharp: genesis **decides** the
 design rules (as plain categories — "no raw color", "i18n keys required", "respect feature
 boundaries"); `/spec:enforce` **implements** them — and the rest of the repo's rule set — as
 deterministic checks wired to your gate, discovering and verifying the right tool at runtime for
-whatever stack foundation chose (no tool is ever hardcoded in the plugin). One enforcement brain,
+whatever stack genesis chose (no tool is ever hardcoded in the plugin). One enforcement brain,
 no rules stranded as prose nobody runs.
 
 Like the pipeline, this is heavy machinery — it's for the start of a real project, not a
@@ -299,7 +299,7 @@ Workflow scripts in this repo guard against two Claude Code harness behaviors:
   helper instead — it passes an object through, JSON-parses a string and unwraps up to two
   layers of accidental double-encoding, and throws a named diagnostic on `"[object Object]"`
   coercion or a parse failure — followed by shape validation. Copy it from
-  `spec/workflows/wf-spec-build.js` or `foundation/workflows/wf-foundation.js`.
+  `spec/workflows/wf-build.js` or `spec/workflows/wf-panel.js`.
 - **Workflow `agent()` resolves only built-in and plugin agent types** — host
   `.claude/agents/*.md` are invisible to it. Host role doctrine and other prose travel as a
   **path** (`args.doctrinePaths`, `args.briefPath`, …) that the worker Reads, dispatching on

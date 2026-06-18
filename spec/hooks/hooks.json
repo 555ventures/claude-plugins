@@ -8,6 +8,14 @@
             "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/spec-state-gate.sh"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/genesis-state-gate.sh"
+          }
+        ]
       }
     ],
     "PreToolUse": [

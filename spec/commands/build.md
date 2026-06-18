@@ -1,12 +1,12 @@
 ---
-description: Implement a hardened spec via the wf-spec-build workflow — Sonnet workers, Fable consultant on surprises
+description: Implement a hardened spec via the wf-build workflow — Sonnet workers, Fable consultant on surprises
 argument-hint: <spec path>
 ---
 
 # Spec Build: Orchestrated Implementation
 
 Implement a hardened spec. The orchestrator parses the File Plan into batches, invokes the
-bundled `wf-spec-build` workflow (Sonnet workers, deterministic control flow), resolves surprises
+bundled `wf-build` workflow (Sonnet workers, deterministic control flow), resolves surprises
 via the Fable consultant + user, and resumes until green.
 
 **Intended orchestrator model: Opus** (Sonnet acceptable for small T2 builds). Workers: Sonnet.
@@ -14,7 +14,7 @@ Lookups: Haiku. Surprises and T3 checkpoints: Fable subagent.
 
 **Setup:** run `spec-paths shared` and Read that file (shared invariants). Read the host's
 `.claude/spec.config.json` and its pipeline rules file (`pipelineRules`). If either is
-missing, STOP: tell the user to run `/spec:init` first. Also run `spec-paths wf-spec-build` once
+missing, STOP: tell the user to run `/spec:init` first. Also run `spec-paths wf-build` once
 and keep the printed absolute path — it is the `scriptPath` for the Workflow call below. If you
 will offer the worktree workspace, run `spec-paths merge-back` too and keep that path as
 `{mergeBack}` (its `create` subcommand builds the worktree; `/spec:review` reuses it to merge back).
@@ -117,7 +117,7 @@ will offer the worktree workspace, run `spec-paths merge-back` too and keep that
 
 ## Phase 1 — Run the workflow
 
-Invoke `Workflow {scriptPath: <spec-paths wf-spec-build output>, args: {specPath, tdd,
+Invoke `Workflow {scriptPath: <spec-paths wf-build output>, args: {specPath, tdd,
 testBatches, groups, resolutions: {}, agentMap, doctrinePaths, gate: {command, testCommand},
 pipelineRulesPath}}`. Pass `args` as a real JSON object (the script tolerates the harness's
 stringified delivery, but never double-encode it yourself).

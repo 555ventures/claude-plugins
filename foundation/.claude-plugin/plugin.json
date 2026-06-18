@@ -1,9 +1,0 @@
-{
-  "name": "foundation",
-  "version": "0.1.0",
-  "description": "Greenfield genesis: /foundation:architect and /foundation:design — research+panel-driven stack, structure, and design-canon decisions that scaffold a new project and hand off to /spec:init",
-  "author": {
-    "name": "JJ",
-    "email": "jj@555.ventures"
-  }
-}

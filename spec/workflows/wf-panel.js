@@ -1,7 +1,7 @@
 export const meta = {
-  name: 'wf-foundation',
-  description: 'Foundation genesis research + MoA panel: parallel research fan-out → blind Sonnet proposers → Opus aggregator returning a decision matrix, hard-fork list, and minority positions',
-  whenToUse: 'Invoked between AskUserQuestion rounds by /foundation:architect and /foundation:design',
+  name: 'wf-panel',
+  description: 'Genesis research + MoA panel: parallel research fan-out → blind Sonnet proposers → Opus aggregator returning a decision matrix, hard-fork list, and minority positions',
+  whenToUse: 'Invoked between AskUserQuestion rounds by /spec:genesis-architect and /spec:genesis-design',
   phases: [
     { title: 'Research', detail: 'parallel web research, one agent per selected angle' },
     { title: 'Propose', detail: '3 blind Sonnet proposers fed the research (skipped when constrained)' },
@@ -18,14 +18,14 @@ function normalizeArgs(raw) {
   for (let i = 0; i < 2 && typeof v === 'string'; i++) {
     const s = v.trim()
     if (s === '[object Object]') {
-      throw new Error('wf-foundation: args arrived String()-coerced to "[object Object]" — the ' +
+      throw new Error('wf-panel: args arrived String()-coerced to "[object Object]" — the ' +
         'caller stringified the object with String()/template interpolation instead of passing a ' +
         'real JSON object (or JSON.stringify). Pass `args` as a plain object in the Workflow call.')
     }
     try {
       v = JSON.parse(s)
     } catch (e) {
-      throw new Error('wf-foundation: args was a string but not valid JSON (' + s.length +
+      throw new Error('wf-panel: args was a string but not valid JSON (' + s.length +
         ' chars). This is structural corruption — free text / a non-scalar reached `args`, which ' +
         'must carry only paths, ids, enums, and booleans; all prose lives in the brief on disk the ' +
         'agents Read. First 160 chars: ' + JSON.stringify(s.slice(0, 160)) +
@@ -36,7 +36,7 @@ function normalizeArgs(raw) {
 }
 args = normalizeArgs(args)
 if (!args || typeof args !== 'object' || !Array.isArray(args.researchKeys)) {
-  throw new Error('wf-foundation: malformed args (expected the object documented below with a ' +
+  throw new Error('wf-panel: malformed args (expected the object documented below with a ' +
     '`researchKeys` array, got ' + (args === undefined ? 'undefined' : typeof args) + ')')
 }
 
@@ -49,7 +49,7 @@ if (!args || typeof args !== 'object' || !Array.isArray(args.researchKeys)) {
 // changed brief would cache-stale under resume — fresh-call-per-round sidesteps that entirely.)
 // args: {
 //   stage: "architect" | "design",
-//   briefPath: string,            // foundation/brief.md — goal + intake + Research Angles +
+//   briefPath: string,            // .claude/genesis/brief.md — goal + intake + Research Angles +
 //                                 //   Panel Roles + Open Dimensions sections; agents Read it
 //   researchKeys: [string],       // enum keys for THIS round's research angles (menu in shared.md)
 //   roleKeys: [string],           // enum keys for the 3 proposer role personas
@@ -129,7 +129,7 @@ const AGGREGATE_SCHEMA = {
       properties: { dimension: { type: 'string' }, position: { type: 'string' }, rationale: { type: 'string' } },
     } },
     consensus_summary: { type: 'string' },
-    research_gaps: { type: 'array', items: { type: 'string' }, description: 'angles that warrant a follow-up round (drive the next wf-foundation call)' },
+    research_gaps: { type: 'array', items: { type: 'string' }, description: 'angles that warrant a follow-up round (drive the next wf-panel call)' },
   },
 }
 
@@ -153,7 +153,7 @@ if (args.runProposers) {
   phase('Propose')
   proposals = (await parallel(args.roleKeys.map(role => () =>
     agent(
-      'You are the "' + role + '" proposer on a foundation design panel (' + args.stage + ' stage). ' +
+      'You are the "' + role + '" proposer on a genesis design panel (' + args.stage + ' stage). ' +
       'Read the brief at ' + briefPath + ' — adopt the persona described for your role under its ' +
       '"## Panel Roles" section, and take a clear position on EVERY dimension listed under its ' +
       '"## Open Dimensions" section, through your role\'s lens. ' + ctxLine + ' Ground your positions ' +
@@ -172,7 +172,7 @@ const proposalBlock = args.runProposers
 
 phase('Aggregate')
 const result = await agent(
-  'You are the Opus aggregator for a foundation ' + args.stage + ' panel. Read the brief at ' + briefPath +
+  'You are the Opus aggregator for a genesis ' + args.stage + ' panel. Read the brief at ' + briefPath +
   '. ' + ctxLine + ' Integrate the research and proposer positions below into one decision package.\n' +
   '- original_goal: restate the goal from the brief VERBATIM (anti-drift).\n' +
   '- decision_matrix: one row per open dimension with options seen and a recommended default.\n' +

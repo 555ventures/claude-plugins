@@ -1,5 +1,5 @@
 export const meta = {
-  name: 'wf-spec-build',
+  name: 'wf-build',
   description: 'Implement a hardened spec: test authors, layered batches, deterministic gate + repair loop',
   whenToUse: 'Invoked by /spec:build with batches parsed from the spec File Plan',
   phases: [
@@ -20,14 +20,14 @@ function normalizeArgs(raw) {
   for (let i = 0; i < 2 && typeof v === 'string'; i++) {
     const s = v.trim()
     if (s === '[object Object]') {
-      throw new Error('wf-spec-build: args arrived String()-coerced to "[object Object]" — the ' +
+      throw new Error('wf-build: args arrived String()-coerced to "[object Object]" — the ' +
         'caller stringified the object with String()/template interpolation instead of passing a ' +
         'real JSON object (or JSON.stringify). Pass `args` as a plain object in the Workflow call.')
     }
     try {
       v = JSON.parse(s)
     } catch (e) {
-      throw new Error('wf-spec-build: args was a string but not valid JSON (' + s.length +
+      throw new Error('wf-build: args was a string but not valid JSON (' + s.length +
         ' chars). This is structural corruption — free text / a non-scalar reached `args`, which ' +
         'must carry only paths, ids, enums, booleans, and the gate command; prose belongs in the ' +
         'spec the agents Read. First 160 chars: ' + JSON.stringify(s.slice(0, 160)) +
@@ -38,7 +38,7 @@ function normalizeArgs(raw) {
 }
 args = normalizeArgs(args)
 if (!args || typeof args !== 'object' || !Array.isArray(args.groups)) {
-  throw new Error('wf-spec-build: malformed args (expected the object documented below with a ' +
+  throw new Error('wf-build: malformed args (expected the object documented below with a ' +
     '`groups` array, got ' + (args === undefined ? 'undefined' : typeof args) +
     ') — pass the full args object to the Workflow call')
 }

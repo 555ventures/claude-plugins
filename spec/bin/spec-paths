@@ -12,9 +12,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 case "${1:-root}" in
   root)        echo "$ROOT" ;;
   workflows)   echo "$ROOT/workflows" ;;
-  wf-spec-build)  echo "$ROOT/workflows/wf-spec-build.js" ;;
-  wf-spec-review) echo "$ROOT/workflows/wf-spec-review.js" ;;
-  wf-spec-enforce) echo "$ROOT/workflows/wf-spec-enforce.js" ;;
+  wf-build)    echo "$ROOT/workflows/wf-build.js" ;;
+  wf-review)   echo "$ROOT/workflows/wf-review.js" ;;
+  wf-enforce)  echo "$ROOT/workflows/wf-enforce.js" ;;
+  wf-panel)    echo "$ROOT/workflows/wf-panel.js" ;;
+  wf-research) echo "$ROOT/workflows/wf-research.js" ;;
   merge-back)  echo "$ROOT/scripts/merge-back.sh" ;;
   shared)      echo "$ROOT/commands/shared.md" ;;
   template)    echo "$ROOT/templates/spec.md" ;;
@@ -29,7 +31,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-spec-build|wf-spec-review|wf-spec-enforce|merge-back|shared|template|templates|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-build|wf-review|wf-enforce|wf-panel|wf-research|merge-back|shared|template|templates|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

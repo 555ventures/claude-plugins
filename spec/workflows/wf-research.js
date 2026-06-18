@@ -1,7 +1,7 @@
 export const meta = {
-  name: 'wf-interview-research',
-  description: 'Live option-menu research for the discovery interview: parallel Sonnet web agents build a ranked, recency-stamped option set per opened dimension; an optional Haiku pass verifies currency on version-bearing dimensions. No proposers, no panel — the light sibling of wf-foundation.',
-  whenToUse: 'Invoked between AskUserQuestion rounds by /foundation:architect and /foundation:design to turn the user\'s last answer into research-backed option menus',
+  name: 'wf-research',
+  description: 'Live option-menu research for the discovery interview: parallel Sonnet web agents build a ranked, recency-stamped option set per opened dimension; an optional Haiku pass verifies currency on version-bearing dimensions. No proposers, no panel — the light sibling of wf-panel.',
+  whenToUse: 'Invoked between AskUserQuestion rounds by /spec:genesis-architect and /spec:genesis-design to turn the user\'s last answer into research-backed option menus',
   phases: [
     { title: 'Research', detail: 'one Sonnet web agent per opened dimension → ranked option menu' },
     { title: 'Verify', detail: 'Haiku currency check on version-bearing dimensions only (skipped otherwise)' },
@@ -17,14 +17,14 @@ function normalizeArgs(raw) {
   for (let i = 0; i < 2 && typeof v === 'string'; i++) {
     const s = v.trim()
     if (s === '[object Object]') {
-      throw new Error('wf-interview-research: args arrived String()-coerced to "[object Object]" — ' +
+      throw new Error('wf-research: args arrived String()-coerced to "[object Object]" — ' +
         'the caller stringified the object instead of passing a real JSON object. Pass `args` as a ' +
         'plain object in the Workflow call.')
     }
     try {
       v = JSON.parse(s)
     } catch (e) {
-      throw new Error('wf-interview-research: args was a string but not valid JSON (' + s.length +
+      throw new Error('wf-research: args was a string but not valid JSON (' + s.length +
         ' chars). This is structural corruption — free text / a non-scalar reached `args`, which ' +
         'must carry only paths, ids, enums, and booleans; all prose lives in the brief on disk the ' +
         'agents Read. First 160 chars: ' + JSON.stringify(s.slice(0, 160)) +
@@ -35,7 +35,7 @@ function normalizeArgs(raw) {
 }
 args = normalizeArgs(args)
 if (!args || typeof args !== 'object' || !Array.isArray(args.dimensionKeys) || !args.dimensionKeys.length) {
-  throw new Error('wf-interview-research: malformed args (expected the object documented below with a ' +
+  throw new Error('wf-research: malformed args (expected the object documented below with a ' +
     'non-empty `dimensionKeys` array, got ' + (args === undefined ? 'undefined' : typeof args) + ')')
 }
 
@@ -48,7 +48,7 @@ if (!args || typeof args !== 'object' || !Array.isArray(args.dimensionKeys) || !
 // args: {
 //   stage: "architect" | "design",
 //   dimensionKeys: [string],   // dimensions THIS answer opened (menu in shared.md); batched parallel
-//   briefPath: string,         // foundation/brief.md — goal + intake + Research Angles focus; Read
+//   briefPath: string,         // .claude/genesis/brief.md — goal + intake + Research Angles focus; Read
 //   contextPaths: [string],    // prior interview-research/*.json + descriptors to Read; []
 //   verifyKeys: [string],      // subset of dimensionKeys that are version-bearing → Haiku check; []
 // }

@@ -1,5 +1,5 @@
 export const meta = {
-  name: 'wf-spec-review',
+  name: 'wf-review',
   description: 'Independent shape+correctness review of a spec implementation with a refutation filter',
   whenToUse: 'Invoked by /spec:review after /spec:build completes',
   phases: [
@@ -17,14 +17,14 @@ function normalizeArgs(raw) {
   for (let i = 0; i < 2 && typeof v === 'string'; i++) {
     const s = v.trim()
     if (s === '[object Object]') {
-      throw new Error('wf-spec-review: args arrived String()-coerced to "[object Object]" — the ' +
+      throw new Error('wf-review: args arrived String()-coerced to "[object Object]" — the ' +
         'caller stringified the object with String()/template interpolation instead of passing a ' +
         'real JSON object (or JSON.stringify). Pass `args` as a plain object in the Workflow call.')
     }
     try {
       v = JSON.parse(s)
     } catch (e) {
-      throw new Error('wf-spec-review: args was a string but not valid JSON (' + s.length +
+      throw new Error('wf-review: args was a string but not valid JSON (' + s.length +
         ' chars). This is usually truncation at a delivery size cap or a coercion bug. ' +
         'First 160 chars: ' + JSON.stringify(s.slice(0, 160)) + ' — parse error: ' + e.message)
     }
@@ -33,7 +33,7 @@ function normalizeArgs(raw) {
 }
 args = normalizeArgs(args)
 if (!args || typeof args !== 'object' || typeof args.specPath !== 'string') {
-  throw new Error('wf-spec-review: malformed args (expected the object documented below with a ' +
+  throw new Error('wf-review: malformed args (expected the object documented below with a ' +
     'string `specPath`, got ' + (args === undefined ? 'undefined' : typeof args) +
     ') — pass the full args object to the Workflow call')
 }
@@ -141,7 +141,7 @@ const n = args.tier === 'T3' ? 2 : 1
 const panels = await parallel(Array.from({ length: n }, (_, i) => () =>
   agent(reviewerPrompt(i), {
     label: `review:${i + 1}`, phase: 'Review', schema: FINDINGS, model: 'sonnet',
-    agentType: 'spec:spec-reviewer',
+    agentType: 'spec:reviewer',
   })))
 
 const seen = new Set()

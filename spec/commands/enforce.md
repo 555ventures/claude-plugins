@@ -19,7 +19,7 @@ change (frequent), not when the repo is re-profiled (rare), and the work is expe
 **Intended model: Opus.** **Setup:** run `spec-paths shared` and Read that file (shared
 invariants). Read the host's `.claude/spec.config.json` and its pipeline rules file
 (`pipelineRules`). If either is missing, STOP: tell the user to run `/spec:init` first. Also run
-`spec-paths wf-spec-enforce` once and keep the printed absolute path — it is the `scriptPath` for
+`spec-paths wf-enforce` once and keep the printed absolute path — it is the `scriptPath` for
 the research workflow below.
 
 ## Input
@@ -35,7 +35,7 @@ Classify every mechanizable clause into ONE language-neutral category. These are
 `module-boundary` · `naming` · `forbidden-symbol` · `structural-pattern` · `datetime` ·
 `schema-validation` · `format`.
 
-Foundation-seeded repos also carry `foundation/design-rules.json` whose rules use a design enum
+Genesis-seeded repos also carry `.claude/genesis/design-rules.json` whose rules use a design enum
 (`color | i18n | structure | a11y | density`). Fold these in as **pre-classified inputs**:
 `structure → module-boundary`; `color | i18n | density → forbidden-symbol` or
 `structural-pattern`; `a11y → structural-pattern` (or judgment residue if no AST check fits).
@@ -54,7 +54,7 @@ anti-pattern this command exists to kill.
 ## Phase 1 — Classify (interactive command, not the workflow)
 
 Read the host's full rule surface — `pipelineRules`, everything under `.claude/rules/` and
-`docs/rules|standards/`, `AGENTS.md` / `CLAUDE.md`, and `foundation/design-rules.json` if present.
+`docs/rules|standards/`, `AGENTS.md` / `CLAUDE.md`, and `.claude/genesis/design-rules.json` if present.
 For each clause decide one of:
 
 - **mechanizable** → assign a category + the detected stack(s) it applies to, and the rule-doc
@@ -74,20 +74,20 @@ when N is small.
 
 ## Phase 2 — Research the enforcer per cell (DISCOVER — the workflow)
 
-Invoke `Workflow {scriptPath: <spec-paths wf-spec-enforce output>, args: {configPath,
+Invoke `Workflow {scriptPath: <spec-paths wf-enforce output>, args: {configPath,
 pipelineRulesPath, stackDescriptorPath, enforcementManifestPath, cells}}`. Pass `args` as a real
 JSON object (the script tolerates the harness's stringified delivery; never double-encode it).
 
 **Invariant — no free text in `args`.** `args` carries only paths, ids, enums, booleans. The
 clause text travels as `ruleRefs` paths the research agents Read; `stackDescriptorPath` is `''`
-for brownfield repos with no foundation, `enforcementManifestPath` is `''` on first run.
+for brownfield repos with no genesis stage, `enforcementManifestPath` is `''` on first run.
 
 The workflow fans out one web-enabled agent per cell that DISCOVERS a deterministic enforcer
 against **live sources** (web search/fetch, the stack's package registry, library-docs MCP) **with
 citations** — never from training memory — and returns ranked candidates with `installCmd` /
 `runCmd` / `citations`, or an empty list + a recommended fallback (`sweep` / `review-check`). The
-foundation `stack-descriptor` is passed only as a stack-identity **hint**; the workflow still
-researches (this is why enforce works on brownfield repos foundation never touched).
+genesis `stack-descriptor` is passed only as a stack-identity **hint**; the workflow still
+researches (this is why enforce works on brownfield repos the genesis stage never touched).
 
 (If Phase 1's list was tiny, do this discovery inline with the same discipline: live citation
 required, no tool from memory.)

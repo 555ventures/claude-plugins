@@ -14,17 +14,17 @@ only when the contract genuinely changes, and never edit it for wording alone.
 `pipelineRules`. Optional: `driftScript`, `routing`, `design`
 (`tool`/`command`/`storyFormat`/`doctrine`, optional `screenshot`, optional `rulesManifest`),
 the rule-enforcement keys `enforcementManifest` and `rulesEnforcementHash` (see § Rule
-enforcement), and the foundation-handoff keys `foundationStackDescriptor` and `designRulesHash`
-(see § Foundation handoff).
+enforcement), and the genesis-handoff keys `genesisStackDescriptor` and `designRulesHash`
+(see § Genesis handoff).
 
-## Foundation handoff (optional — present when the `foundation` plugin seeded the repo)
+## Genesis handoff (optional — present when the genesis stage seeded the repo)
 
-When `/foundation:architect` + `/foundation:design` ran first, `/spec:init` consumes their
+When `/spec:genesis-architect` + `/spec:genesis-design` ran first, `/spec:init` consumes their
 on-disk artifacts instead of re-deciding:
 
-- `foundationStackDescriptor` — path to `foundation/stack-descriptor.json` (archetype, stack,
-  `designCatalog`, resolved `gateCommand`). Optional; absent in repos not seeded by foundation.
-- `design.rulesManifest` — path to `foundation/design-rules.json`.
+- `genesisStackDescriptor` — path to `.claude/genesis/stack-descriptor.json` (archetype, stack,
+  `designCatalog`, resolved `gateCommand`). Optional; absent in repos not seeded by the genesis stage.
+- `design.rulesManifest` — path to `.claude/genesis/design-rules.json`.
 - `designRulesHash` — hash of the rules manifest, stamped by `/spec:init`; `/spec:doctor`
   recomputes it and warns when the design rules changed but enforcement was not regenerated.
 
@@ -64,7 +64,7 @@ the same way in every agent:
 ```markdown
 ## Worker Contract (spec pipeline)
 
-When dispatched as a batch worker by the `wf-spec-build` workflow:
+When dispatched as a batch worker by the `wf-build` workflow:
 
 - The spec's **Decisions** table is authoritative — apply it verbatim. An unlocked design fork or stale spec assumption is a `blocked` return (kind, detail, options, recommendation), never a guess.
 - Do NOT query MCP servers — the spec's UI and Contracts sections embed the references you need. If an embedded reference is wrong against the installed version, return blocked `{kind: "stale-assumption"}`.

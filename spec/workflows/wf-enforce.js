@@ -1,5 +1,5 @@
 export const meta = {
-  name: 'wf-spec-enforce',
+  name: 'wf-enforce',
   description: 'Discover a deterministic enforcer per (stack x rule category) against live sources, with citations',
   whenToUse: 'Invoked by /spec:enforce for the read-only research fan-out over a runtime-classified (stack x category) work list',
   phases: [
@@ -11,20 +11,20 @@ export const meta = {
 // object verbatim, others JSON-encode it as a string on the scriptPath channel. We accept both,
 // tolerate accidental double-encoding, and on failure throw a message that shows what actually
 // arrived (length + preview) instead of a bare "Unable to parse JSON string" at the call site.
-// (Same normalizer doctrine as wf-spec-build — see CLAUDE.md "Workflow tool quirks".)
+// (Same normalizer doctrine as wf-build — see CLAUDE.md "Workflow tool quirks".)
 function normalizeArgs(raw) {
   let v = raw
   for (let i = 0; i < 2 && typeof v === 'string'; i++) {
     const s = v.trim()
     if (s === '[object Object]') {
-      throw new Error('wf-spec-enforce: args arrived String()-coerced to "[object Object]" — the ' +
+      throw new Error('wf-enforce: args arrived String()-coerced to "[object Object]" — the ' +
         'caller stringified the object with String()/template interpolation instead of passing a ' +
         'real JSON object (or JSON.stringify). Pass `args` as a plain object in the Workflow call.')
     }
     try {
       v = JSON.parse(s)
     } catch (e) {
-      throw new Error('wf-spec-enforce: args was a string but not valid JSON (' + s.length +
+      throw new Error('wf-enforce: args was a string but not valid JSON (' + s.length +
         ' chars). This is structural corruption — free text / a non-scalar reached `args`, which ' +
         'must carry only paths, ids, enums, booleans; rule prose belongs in the host rule docs the ' +
         'agents Read. First 160 chars: ' + JSON.stringify(s.slice(0, 160)) +
@@ -35,7 +35,7 @@ function normalizeArgs(raw) {
 }
 args = normalizeArgs(args)
 if (!args || typeof args !== 'object' || !Array.isArray(args.cells)) {
-  throw new Error('wf-spec-enforce: malformed args (expected the object documented below with a ' +
+  throw new Error('wf-enforce: malformed args (expected the object documented below with a ' +
     '`cells` array, got ' + (args === undefined ? 'undefined' : typeof args) +
     ') — pass the full args object to the Workflow call')
 }
@@ -46,7 +46,7 @@ if (!args || typeof args !== 'object' || !Array.isArray(args.cells)) {
 // string-vs-object encoding — see the normalizer above. args: {
 //   configPath: string,             // host .claude/spec.config.json — agent reads stack/gate from it
 //   pipelineRulesPath: string,      // host pipeline rules file ('' if none)
-//   stackDescriptorPath: string,    // foundation/stack-descriptor.json, or '' (brownfield / no foundation)
+//   stackDescriptorPath: string,    // .claude/genesis/stack-descriptor.json, or '' (brownfield / no genesis stage)
 //   enforcementManifestPath: string,// existing .claude/rules/enforcement.json to reconcile against, or ''
 //   cells: [{                       // the (stack x category) work list — classified by the COMMAND
 //     id: string,                   // stable cell id, e.g. "python:module-boundary"
@@ -111,7 +111,7 @@ function researchPrompt(cell) {
   const refs = (cell.ruleRefs || []).map(r => `- ${r}`).join('\n') || '- (none — infer the clause set from the pipeline rules file)'
   const stackDesc = args.stackDescriptorPath
     ? `Read ${args.stackDescriptorPath} for the chosen stack/toolchain (a HINT — verify it against the repo, do not assume it covers this category).`
-    : `There is no foundation stack descriptor (brownfield repo) — confirm the stack from ${args.configPath} and the repo's manifest files.`
+    : `There is no genesis stack descriptor (brownfield repo) — confirm the stack from ${args.configPath} and the repo's manifest files.`
   return [
     `You are researching ONE deterministic enforcer cell: stack=${cell.stack}, category=${cell.category}.`,
     `Goal: find a DETERMINISTIC mechanism (linter / arch-tool / structural matcher / schema validator) that can check this rule category on THIS repo's stack — so the check runs in CI, not as a runtime LLM judgment.`,

@@ -5,6 +5,28 @@ A new product surface is a normal spec (usually a `depends_on` series), planned 
 Fable session. The plugin ships the **process layer**; each repo supplies its own
 **grounding layer**, bootstrapped once by `/spec:init`.
 
+## Greenfield genesis (the optional first stage)
+
+Brand-new project with no code yet? The two **genesis** commands run *before* `/spec:init` and
+decide *what to build with and how it should look*, then scaffold a real repo for `/spec:init` to
+ground:
+
+```
+/spec:genesis-architect   stack + structure decisions (ADRs) → scaffold the project
+/spec:genesis-design      UX/visual/voice canon: doctrine + tokens + category-only design rules
+        ↓
+/spec:init → /spec:plan → /spec:design → /spec:build → /spec:review   (the pipeline below)
+```
+
+Both are highly interactive Opus sessions that own every `AskUserQuestion` and every file write;
+the heavy lifting runs in two workflows they call between question rounds — `wf-research` (live,
+web-enabled option-menu research *during* the discovery interview) and `wf-panel` (a
+Mixture-of-Agents panel, 3 blind Sonnet proposers → Opus aggregator, that adjudicates the
+hard-to-reverse forks). Every cross-stage handoff is a file in `.claude/genesis/` or `docs/adr/`;
+the workflow `args` carry only paths, enum keys, and booleans. Genesis is **greenfield-only**:
+pointed at a populated repo, `/spec:genesis-architect` defers to `/spec:init`. Full contract in
+`commands/shared.md` § Genesis.
+
 ## Install
 
 From the `555-tools` marketplace: add the marketplace, then install the `spec` plugin. Then,
@@ -60,8 +82,8 @@ single-checkout work, and silent outside a worktree or on any git error.
 
 Shared invariants (risk tiers, model placement, escalation contract, MCP policy):
 `commands/shared.md` (run `spec-paths shared` for its absolute path). Spec template:
-`templates/spec.md`. Deterministic orchestration: `workflows/wf-spec-build.js`,
-`workflows/wf-spec-review.js` — commands locate them via the bundled `spec-paths` helper, since
+`templates/spec.md`. Deterministic orchestration: `workflows/wf-build.js`,
+`workflows/wf-review.js` — commands locate them via the bundled `spec-paths` helper, since
 `${CLAUDE_PLUGIN_ROOT}` is not substituted inside command bodies.
 
 ## Process layer vs grounding layer
@@ -69,8 +91,8 @@ Shared invariants (risk tiers, model placement, escalation contract, MCP policy)
 | Ships in the plugin | Generated per repo by `/spec:init` + `/spec:enforce` |
 |---|---|
 | Commands `/spec:plan` `design` `build` `review` `init` `enforce` `doctor` | `.claude/spec.config.json` (gate/test/setup commands, layerGroups, agentMap, `contractHash` drift stamp, optional driftScript, optional `enforcementManifest`/`rulesEnforcementHash`) |
-| `wf-spec-build.js`, `wf-spec-review.js`, `wf-spec-enforce.js` workflows | `.claude/rules/spec-pipeline.md` (T3 triggers, planning checklist, build duties, worker/test rules, review checks) |
-| Generic read-only `spec-reviewer` agent | Implementer agents in `.claude/agents/` (one per batch kind) |
+| `wf-build.js`, `wf-review.js`, `wf-enforce.js` workflows (+ genesis `wf-panel.js`, `wf-research.js`) | `.claude/rules/spec-pipeline.md` (T3 triggers, planning checklist, build duties, worker/test rules, review checks) |
+| Generic read-only `reviewer` agent | Implementer agents in `.claude/agents/` (one per batch kind) |
 | State-gate hook, spec template, grounding-contract file | `scripts/spec-patterns.sh` (mechanical sweep) + `.claude/rules/enforcement.json` (enforcer provenance) + generated enforcer configs/contracts wired to the gate |
 
 Repo differences are configuration, never forks: the build workflow takes the agent roster
@@ -142,11 +164,11 @@ return from the journal cache; only affected batches re-run.
   per-cluster dispatch can produce. It earns the cost back in fewer human iteration rounds —
   and where the host provides a `design.screenshot` command, the designer critiques its own
   renders once before asking for yours.
-- **Build is a deterministic workflow** (`wf-spec-build.js`): batching, TDD-red enforcement,
+- **Build is a deterministic workflow** (`wf-build.js`): batching, TDD-red enforcement,
   gate + repair caps live in code; judgment (blocked items, scope changes) escalates to the
   main loop → Fable retainer → user.
-- **Review is independent and refutation-filtered** (`wf-spec-review.js`): Sonnet reviewers run
-  as the plugin's read-only `spec:spec-reviewer` agent (never the planning model), claim-only
+- **Review is independent and refutation-filtered** (`wf-review.js`): Sonnet reviewers run
+  as the plugin's read-only `spec:reviewer` agent (never the planning model), claim-only
   refuters, hard findings die only on unanimous refutation. Killed findings are reported,
   never silently dropped. On CLEAN, review closes the loop: commit, then merge the build
   branch back into its originating branch (strategy via one ask; conflict repair reads both

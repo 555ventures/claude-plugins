@@ -4,8 +4,8 @@
   "design": "pending",
   "archetype": null,
   "localeScope": null,
-  "stackDescriptorPath": "foundation/stack-descriptor.json",
-  "designManifestPath": "foundation/design-rules.json",
+  "stackDescriptorPath": ".claude/genesis/stack-descriptor.json",
+  "designManifestPath": ".claude/genesis/design-rules.json",
   "gateCommand": null,
   "lastUpdated": null
 }

@@ -3,7 +3,7 @@
 - Status: {proposed | accepted | superseded by ADR-{NNNN}}
 - Date: {YYYY-MM-DD}
 - Archetype: {archetype} · Audience: {localeScope}
-- Deciders: {user} + foundation panel
+- Deciders: {user} + genesis panel
 
 ## Context
 
@@ -29,5 +29,5 @@ decision is needed now and what is irreversible-ish about it.}
 {REQUIRED — must be non-empty, or the literal line: "None: all proposers agreed on {dimension}."
 Record any minority position the panel surfaced — verbatim option + its core rationale — even
 though it was not chosen, so the ADR preserves the option space and reasoning available at
-decision time, not just the winner. The foundation state gate and /spec:doctor check that this
+decision time, not just the winner. The genesis state gate and /spec:doctor check that this
 section is present.}

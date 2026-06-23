@@ -48,8 +48,12 @@ depended_on_by: []
 
 { Screens, components, dialogs; their props and states (empty / loading / error / edge).
   Embed Component API References here — registry + library excerpts gathered at plan time.
-  /spec:design and /spec:build workers build from THIS section and never query MCPs.
-  Omit section if no UI changes (then design: false). }
+  /spec:design enriches this section before build into the authoring plan: per surface a
+  prop-type table, per-surface token assignments (role names; new roles flagged), the states to
+  render, and one-line interaction/voice notes. Sonnet workers (and /spec:build) build from THIS
+  enriched section and never query MCPs. (On the mockup path — design_source set — the design
+  digest is the plan instead; this section is reconciled to match.) Omit section if no UI
+  changes (then design: false). }
 
 ## Data Model
 

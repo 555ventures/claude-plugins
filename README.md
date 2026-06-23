@@ -97,7 +97,7 @@ is too small to bother and to just ask for it directly.
 | `/spec:init` | Profiles the repo, generates config + rules + agents, then runs `/spec:enforce` | Once per repo (re-run to refresh) |
 | `/spec:enforce` | Turns the repo's rules into deterministic checks wired to the gate | On rule/tooling drift |
 | `/spec:plan` | Writes and hardens one spec — explores, drafts, lets refuters attack it | Per feature |
-| `/spec:design` | Approve the UI visually before logic is written (catalog repos); optionally seeded read-first by a Claude Design mockup (`design_source`) | Per UI feature (optional) |
+| `/spec:design` | Approve the UI visually before logic is written (catalog repos); the expensive model plans + reviews, Sonnet implements every component; optionally seeded read-first by a Claude Design mockup (`design_source`) | Per UI feature (optional) |
 | `/spec:build` | Implements the spec test-first, in parallel, resumably | Per feature |
 | `/spec:review` | Independent review; flips the spec to `done` | Per feature |
 | `/spec:doctor` | Read-only drift check of the generated files | When something feels stale |

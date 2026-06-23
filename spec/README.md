@@ -85,8 +85,8 @@ Shared invariants (risk tiers, model placement, escalation contract, MCP policy)
 `doctrine/shared.md` (run `spec-paths shared` for its absolute path); the genesis-only supplement
 is `doctrine/genesis.md` (`spec-paths shared-genesis`). Spec template:
 `templates/spec.md`. Deterministic orchestration: `workflows/wf-build.js`,
-`workflows/wf-design.js` (design-stage plumbing), `workflows/wf-review.js` — commands locate
-them via the bundled `spec-paths` helper, since
+`workflows/wf-design.js` (design-stage authoring: comprehend | foundation | implement | stories |
+reconcile), `workflows/wf-review.js` — commands locate them via the bundled `spec-paths` helper, since
 `${CLAUDE_PLUGIN_ROOT}` is not substituted inside command bodies.
 
 ## Process layer vs grounding layer
@@ -129,12 +129,14 @@ gets a spec file.
 /spec:plan "portfolio breakdown panel"
   → plan embeds registry/library references in the spec's UI section; design: true
 /spec:design specs/YYYYMMDD/01-portfolio-panel.md [optional claude.ai/design URL]
-  → if the spec set design_source (or you pass a mockup URL), the mockup is fetched
-    read-only and read FIRST — it is binding canon above tokens/doctrine, and components
-    become a faithful translation of it, never invented from the spec and reconciled later
-  → foundation files → Fable designs the stateless components inside the repo's design
-    canon (tokens + doctrine doc) → catalog entries (stories / use-cases)
+  → if the spec set design_source (or you pass a mockup URL), it is fetched read-only and
+    distilled into an on-disk design digest FIRST (the verifiable read-first invariant) —
+    binding canon above tokens/doctrine; components become a faithful translation of it
+  → foundation files → Fable PLANS (adjudicates digest forks, or authors the spec UI plan)
+    → Sonnet IMPLEMENTS every component via wf-design (Fable writes no component code)
+    → catalog entries → mandatory visual review (Fable reads renders, issues notes)
   → you: run the catalog (Storybook, Widgetbook, …) — iterate as many rounds as you want
+    (Fable judges each note; Sonnet applies the edit)
   → approve → spec reconciled, reusable taste rulings promoted into the doctrine
     → designed: YYYY-MM-DD
 /spec:build …   # skips approved components; TDD covers logic, not pixels
@@ -145,6 +147,11 @@ Seeding from a Claude Design mockup is **strictly opt-in**: only a spec that set
 (recorded by `/spec:plan`, or passed as the second arg on the first `/spec:design` run and then
 persisted to frontmatter) engages it. With no `design_source` nothing is fetched and the stage is
 byte-for-byte unchanged — same three-layer canon (tokens + doctrine + showcase) as before.
+
+The design stage's model split: the expensive model (Fable→Opus) is confined to *judgment* — the
+plan, fork adjudication, the iteration loop, and the mandatory visual review (it issues notes, it
+writes no component code); **Sonnet implements 100% of components** via `wf-design`. A green
+implement gate is structural only — the visual review is the gate that clears it before you see it.
 
 The design stage's bet: the catalog + your eyes gate UI rendering; TDD gates behavior.
 Components built in design are real and kept — build wires them, it doesn't rebuild them.

@@ -22,8 +22,11 @@ mockup), the **iteration loop's judgment**, the **mandatory visual review** (rea
 the showcase and issuing correction **notes**), and **doctrine promotion**. It **writes no
 component code and edits no files during iteration** — it issues notes; Sonnet applies them.
 **Sonnet implements 100% of component files**, plus foundation, catalog entries, comprehension,
-and reconcile — all through the **`wf-design`** workflow (gate + repair loops, like
-`/spec:build`'s `wf-build`). Coherence beats parallelism: Sonnet authors per **coherence group**
+and reconcile — all through the **`wf-design`** workflow. Its gate is deliberately **lighter than
+`wf-build`'s**: design's job is to get the catalog to **render** so a human can judge it, not to
+prove shippability. `/spec:build` re-runs typecheck/lint when it wires these components, and a
+human reviews every round here — so the gate is a bounded **compile-to-render** loop, not build's
+failure-handling apparatus. Coherence beats parallelism: Sonnet authors per **coherence group**
 (serial within a group, parallel across), pinned to the on-disk plan.
 
 **Setup:** run `spec-paths shared` and Read that file (shared invariants). Read the host's
@@ -153,32 +156,27 @@ rules § Worker Rules) before this runs, never by workers editing managed surfac
 - `args`: `stage`, `specPath`, `planPath`, `digestPath` (`''` if no mockup), the coherence
   `groups`, `tokenPaths`, `designDoctrinePath`, `agentMap`, `doctrinePaths`, `gate.command` (host
   typecheck + lint), `pipelineRulesPath`.
-- **Handling non-`complete` returns.** `wf-design` returns the same family as `wf-build`
-  (`blocked`, `out-of-scope-failure`, `gate-exhausted`, plus the stage-specific
-  `reconcile-unverified`). This is the design session's own judgment loop — keep it short and
-  defer the trigger list to **shared § Escalation Contract** rather than restating it.
-  - `blocked` (a `design-fork` the plan didn't pin, or a `stale-assumption` wrong against the
-    code) → surface it. If resolvable within the plan's intent, the designer **rules and writes
-    the resolution to the on-disk plan** — the digest's fork-resolution / a token file / the
-    spec's Decisions, depending on what the fork touches. A genuine fork or a data-shape change
-    goes to `AskUserQuestion`. Then re-invoke `wf-design` (`resumeFromRunId`). **No `resolutions`
-    salt is needed** (this differs from build): wf-design has no `resolutions` arg — its workers
-    re-read the plan / digest / spec / token files from disk every run, so writing the ruling to
-    disk and resuming naturally re-runs only the affected batch.
-  - `out-of-scope-failure` / `gate-exhausted` → resolve per shared § Escalation Contract
-    (out-of-scope → `AskUserQuestion` to add-to-scope / separate fix / pause; gate-exhausted →
-    consult before escalating), then re-invoke.
-  - `reconcile-unverified` → the structural verify gate still found gaps after its cap (2). Read
-    the reported `failures`, fix the spec on disk yourself or with the user, then re-invoke. A
-    `*-failed` return (the worker produced nothing) is an infrastructure problem — investigate and
-    re-invoke, don't paper over it.
-  - `comprehend` always returns `complete` (the digest is a **sequencing**, not a fidelity,
-    guarantee — Phase 2.5 visual review is the fidelity gate). If its single light verify pass
-    found gaps, it does one re-extract and proceeds, returning `residualGaps` — note them and let
-    the Phase 2a fork pass / Phase 2.5 visual review absorb them; do not loop comprehend.
-- The return is labeled **"structural gate only — NOT visually approved."** Typecheck + lint prove
-  structure, not that it looks right. The mandatory visual review (Phase 2.5) is the gate that
-  clears it; do not show the user un-reviewed output.
+- **Handling non-`complete` returns.** A human reviews every round of this stage, so the
+  orchestrator does **not** carry build's escalation taxonomy. `wf-design`'s bounded repair loop
+  has already tried; any return other than `complete` collapses to one of **two** actions:
+  - **A `blocked` fork or data-shape question** (a `design-fork` the plan didn't pin, or a
+    `stale-assumption` wrong against the code) — the only return that needs a *decision*.
+    Resolvable within the plan's intent → the designer **rules and writes the resolution to the
+    on-disk plan** (the digest's fork-resolution / a token file / the spec's Decisions, per what
+    the fork touches). A genuine fork or a data-shape change → `AskUserQuestion`. Then re-invoke
+    `wf-design` (`resumeFromRunId`); workers re-read the plan / digest / spec / token files from
+    disk every run, so the ruling on disk naturally re-runs only the affected batch (no
+    `resolutions` salt — wf-design has no such arg).
+  - **Anything else** (`gate-exhausted`, `out-of-scope-failure`, `reconcile-unverified`, or a
+    `*-failed` worker) — the automated loop couldn't close it, which in a human-supervised stage
+    just means the human enters early. Read the reported `failures`, fix on disk yourself or with
+    the user, re-invoke. No per-code branching — the action is the same.
+- `comprehend` always returns `complete` (the digest is a **sequencing**, not a fidelity,
+  guarantee). If its light verify pass found gaps it does one re-extract and proceeds, returning
+  `residualGaps` — note them and let the Phase 2a fork pass / Phase 2.5 visual review absorb them.
+- A green `implement` is labeled **"structural gate only — NOT visually approved."** Typecheck +
+  lint prove structure, not that it looks right; the mandatory Phase 2.5 visual review is the gate
+  that clears it. Do not show the user un-reviewed output.
 
 ### 2c — Catalog entries
 

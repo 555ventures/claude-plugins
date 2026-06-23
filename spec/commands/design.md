@@ -83,17 +83,20 @@ Run **`wf-design`** with `stage: "comprehend"` — Sonnet distills the fetched `
 structured on-disk **design digest** at `specs/YYYYMMDD/##-name.design-digest.json` (sidecar to
 the spec): a token map (each `:root` role tagged `matches-canon` / `new-role` / `fork` against the
 current token files), a `<x-dc>` surface inventory (component / props / states / tokensUsed),
-interaction notes, a11y flags, and the source sha256. Below ~40 KiB one worker writes the whole
-digest; above, four concern workers (tokens / surfaces / interactions / a11y) write disjoint
-partials a merge worker assembles. A structural verify gate confirms the digest covers the markup.
+interaction notes, a11y flags, and the source sha256. One worker reads the whole markup (capped at
+256 KiB by the fetch, well within a single context) and writes the digest in one pass — the mockup
+is a single coherent artifact, never split per-concern. A structural verify gate (repair cap 2)
+confirms the digest covers every `<x-dc>` and every `:root` property.
 
-- `args`: `stage`, `specPath`, `rawSourcePath` (the temp markup file), `digestPath`, `rawBytes`,
+- `args`: `stage`, `specPath`, `rawSourcePath` (the temp markup file), `digestPath`,
   `tokenPaths`, `designDoctrinePath`, `agentMap`, `doctrinePaths`, `pipelineRulesPath`. Paths/ids
   only — the markup travels as a path, never inline. After it returns, **delete the temp
   `.raw.html`**; only the compact digest persists.
 - The digest **is the plan** on the mockup path. Everything downstream reads the digest, never the
-  raw markup. This is the verifiable anti-grovel invariant: a digest on disk (sha256 matching the
-  source) proves the mockup was comprehended before any authoring.
+  raw markup. This is the anti-grovel invariant — a **sequencing** guarantee: the digest exists on
+  disk before any component is authored, so extraction provably runs first. (It does not certify
+  the extraction is visually faithful; the structural gate checks coverage, and the mandatory
+  Phase 2.5 visual review is the fidelity gate.)
 - `comprehend` only **detects** token forks (tags them `fork`); it never adjudicates or edits
   token files. You resolve the forks in Phase 2.
 
@@ -212,9 +215,11 @@ the floor they start from. Checkpoint-commit when green.
 
 ## Rules
 
-- **Read-first canon (verifiable anti-grovel invariant):** when `design_source` is set, the
+- **Read-first canon (anti-grovel sequencing invariant):** when `design_source` is set, the
   **design digest must exist on disk** (sha256 matching the fetched markup) before any component,
-  token, or catalog entry is authored — authoring reads the digest, never the raw markup.
+  token, or catalog entry is authored — extraction provably runs before authoring, and authoring
+  reads the digest, never the raw markup. (Sequencing, not fidelity: visual faithfulness is the
+  Phase 2.5 visual review's job, not the digest's.)
   `DesignSync` unavailable / over the 256 KiB cap / unreachable → **STOP** (suggest `/design-login`),
   never build from the spec alone and reconcile later. **No `design_source` → none of this engages;
   nothing is fetched, no digest exists, behavior is byte-for-byte the no-mockup path.**

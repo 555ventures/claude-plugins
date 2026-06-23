@@ -3,7 +3,7 @@ export const meta = {
   description: 'Design-stage plumbing AND planned component authoring: comprehend a mockup into a digest, foundation files, implement components from the plan, catalog entries, reconcile. Sonnet workers behind deterministic gates. Taste — the plan itself, fork adjudication, the iteration loop, the visual review — stays in the Fable session, never here.',
   whenToUse: 'Invoked by /spec:design for the gate-verifiable phases (stage = comprehend | foundation | implement | stories | reconcile). The expensive model plans/adjudicates/reviews inline and never writes component code; this workflow holds no taste.',
   phases: [
-    { title: 'Comprehend', detail: 'distill the fetched .dc.html into the on-disk design digest; concern fan-out + structural verify' },
+    { title: 'Comprehend', detail: 'distill the fetched .dc.html into the on-disk design digest; one worker + structural verify' },
     { title: 'Foundation', detail: 'types → schemas ∥ mocks, parallel within a layer group' },
     { title: 'Implement', detail: 'Sonnet authors all components from the plan/digest, coherence groups, typecheck+lint gate' },
     { title: 'Stories', detail: 'catalog entries per state in the host story format' },
@@ -58,7 +58,6 @@ if (!args || typeof args !== 'object' || !STAGES.includes(STAGE)) {
 //   tokenPaths: [string],        // token/theme file paths — binding canon, extended never forked
 //   rawSourcePath: string,       // comprehend only: the fetched .dc.html on disk (the session wrote it)
 //   digestPath: string,          // comprehend (output) + implement (plan, if a mockup); '' if no mockup
-//   rawBytes: number,            // comprehend only: size of rawSourcePath → inline (<40 KiB) vs fan-out
 //   planPath: string,            // implement only: the on-disk plan workers cite — the digest (mockup)
 //                                //   or the spec (no-mockup; its enriched UI section is the plan)
 //   groups: [[{id, agentType, files: [{path, action}]}]],  // foundation | implement | stories: ordered,
@@ -181,14 +180,17 @@ function fileList(b) {
 
 // ---- Stage: comprehend (distill the already-fetched .dc.html into the on-disk design digest) ----
 // The session fetched the mockup read-only in Phase 0 and wrote the raw markup to rawSourcePath —
-// this workflow never touches DesignSync. Below ~40 KiB one worker writes the whole digest; above,
-// four concern workers write disjoint partials (tokens/surfaces/interactions/a11y) that a merge
-// worker assembles. A structural verify gate confirms the digest covers the markup. comprehend
-// only DETECTS token forks (tags them) — it never adjudicates or edits token files.
+// this workflow never touches DesignSync. One worker reads the whole markup (capped at 256 KiB by
+// the session's fetch, well within a single Sonnet context) and writes the complete digest; a
+// structural verify gate then confirms the digest covers every <x-dc> and :root property. The
+// digest's existence-before-authoring is the anti-grovel guarantee (a SEQUENCING property — it
+// proves extraction ran first, not that the extraction is semantically perfect; Phase 2.5 visual
+// review is the fidelity gate). The mockup is a single coherent artifact, so it is comprehended in
+// one worker — never split per-concern, mirroring import-design's author-in-one-session rule.
+// comprehend only DETECTS token forks (tags them) — it never adjudicates or edits token files.
 if (STAGE === 'comprehend') {
   const rawPath = args.rawSourcePath
   const digestPath = args.digestPath
-  const rawBytes = args.rawBytes || 0
   if (!rawPath || !digestPath) {
     throw new Error('wf-design comprehend: requires rawSourcePath (the fetched .dc.html on disk) and digestPath')
   }
@@ -218,46 +220,15 @@ if (STAGE === 'comprehend') {
   ].filter(Boolean).join('\n\n')
 
   const comprehendType = resolveType(AGENT_MAP.comprehend)
-  const fanOut = rawBytes >= 40960
-  const extractTasks = !fanOut
-    ? [{ concern: 'all', out: digestPath,
-        body: `Read the fetched Claude Design markup at ${rawPath} and WRITE the COMPLETE design digest to ` +
-          `${digestPath}. ${SCHEMA_NOTE}\n\n${CANON_NOTE}` }]
-    : [
-        { concern: 'tokens', out: `${digestPath}.tokens.part.json`,
-          body: `Extract ONLY the token map from ${rawPath}: every :root / [data-accent] custom property → ` +
-            `{role, value, tag, canonToken, canonValue}. ${CANON_NOTE} WRITE a JSON array to ${digestPath}.tokens.part.json.` },
-        { concern: 'surfaces', out: `${digestPath}.surfaces.part.json`,
-          body: `Extract ONLY the surface inventory from ${rawPath}: every <x-dc> block → ` +
-            `{id, dcBlock, props:[{name, type, required}], states, tokensUsed (token role names)}. ` +
-            `WRITE a JSON array to ${digestPath}.surfaces.part.json.` },
-        { concern: 'interactions', out: `${digestPath}.interactions.part.json`,
-          body: `Extract ONLY interaction notes from ${rawPath}: per surface, one-line behaviour notes (what ` +
-            `responds to click/hover/keyboard, never porting support.js). WRITE a JSON array of {surface, note} ` +
-            `to ${digestPath}.interactions.part.json.` },
-        { concern: 'a11y', out: `${digestPath}.a11y.part.json`,
-          body: `Extract ONLY a11y flags from ${rawPath}: contrast / focus-ring / target-size issues per surface ` +
-            `→ {surface, flag, detail, severity}. WRITE a JSON array to ${digestPath}.a11y.part.json.` },
-      ]
-
-  const parts = await parallel(extractTasks.map(t => () =>
-    dispatch(
-      `You extract structured design data from a static mockup for a design digest.\n\n${t.body}\n\n${DATA_NOTE}\n\n` +
-      `Write ONLY the file named. Author no components, edit no token files, touch nothing else.\n\n${COMPREHEND_RULES}`,
-      { label: `comprehend:${t.concern}`, phase: 'Comprehend', schema: RECEIPT, agentType: comprehendType, model: 'sonnet' })))
-  if (parts.some(r => !r)) return { stage: 'comprehend-failed', summary: 'an extraction worker returned nothing' }
-  const blockedPart = parts.find(r => r && r.blocked)
-  if (blockedPart) return { stage: 'blocked', blocked: [{ batch: 'comprehend', ...blockedPart.blocked }], completed: [] }
-
-  if (fanOut) {
-    const merge = await dispatch(
-      `Assemble a design digest. Read these partial JSON files and combine them into one digest object:\n` +
-      extractTasks.map(t => `- ${t.out} → the "${t.concern === 'tokens' ? 'tokenMap' : t.concern}" key`).join('\n') +
-      `\n\nAlso Read ${rawPath} to fill source {projectId, file, sha256, bytes} and set schemaVersion 1. ` +
-      `${SCHEMA_NOTE}\nWRITE the merged digest to ${digestPath}, then DELETE the .part.json files.`,
-      { label: 'comprehend:merge', phase: 'Comprehend', schema: RECEIPT, agentType: comprehendType, model: 'sonnet' })
-    if (!merge) return { stage: 'comprehend-failed', summary: 'merge worker returned nothing' }
-  }
+  const extract = await dispatch(
+    `You extract structured design data from a static mockup into a design digest.\n\n` +
+    `Read the fetched Claude Design markup at ${rawPath} and WRITE the COMPLETE design digest to ` +
+    `${digestPath} — every <x-dc> surface, every :root / [data-accent] token, interaction notes, and ` +
+    `a11y flags, in one pass. ${SCHEMA_NOTE}\n\n${CANON_NOTE}\n\n${DATA_NOTE}\n\n` +
+    `Write ONLY ${digestPath}. Author no components, edit no token files, touch nothing else.\n\n${COMPREHEND_RULES}`,
+    { label: 'comprehend:digest', phase: 'Comprehend', schema: RECEIPT, agentType: comprehendType, model: 'sonnet' })
+  if (!extract) return { stage: 'comprehend-failed', summary: 'the extraction worker returned nothing' }
+  if (extract.blocked) return { stage: 'blocked', blocked: [{ batch: 'comprehend', ...extract.blocked }], completed: [] }
 
   phase('Gate')
   for (let round = 0; round <= 2; round++) {

@@ -211,12 +211,16 @@ Fetch → Digest → Translate recipe — defined once here so neither command r
   sidecar `…design-digest.json`) *before* any authoring — a token map (each `:root` / `[data-accent]`
   role tagged `matches-canon` / `new-role` / `fork` against the current token files), a `<x-dc>`
   surface inventory (component / props / states / tokensUsed), interaction notes, a11y flags, and
-  the source sha256. Below ~40 KiB one pass; above, a concern-partitioned fan-out (tokens / surfaces
-  / interactions / a11y — disjoint keys) merged and structurally verified. **Authoring reads the
-  compact digest, never the raw markup.** The digest *is* the plan, and it makes the read-first
-  anti-grovel invariant verifiable: a digest on disk (sha256 matching the source) proves the mockup
-  was comprehended first, and a resumed session reads only the digest — not the markup, not
-  conversation context. Forks are **detected** here (tagged), **adjudicated** later by the session.
+  the source sha256. **One worker** writes the whole digest in a single pass — the fetch caps the
+  markup at 256 KiB, well within one context, and the mockup is a single coherent artifact (splitting
+  comprehension per-concern would sever the surface↔token↔a11y references, the same coherence
+  import-design protects by authoring in one session). A structural verify gate confirms coverage of
+  every `<x-dc>` and `:root` property. **Authoring reads the compact digest, never the raw markup.**
+  The digest *is* the plan, and it makes the read-first anti-grovel invariant a verifiable
+  **sequencing** guarantee: a digest exists on disk before any authoring, so extraction provably runs
+  first, and a resumed session reads only the digest — not the markup, not conversation context. (It
+  certifies order and coverage, not visual fidelity — that is the visual review's job.) Forks are
+  **detected** here (tagged), **adjudicated** later by the session.
 - **Translate.** From the digest: `tokenMap` → the **token system** (extend the existing canon:
   `matches-canon` → reuse; `new-role` → add; `fork` → `AskUserQuestion` local-exception-vs-token-
   change, never overwrite); `surfaces` → real stateless components (props + mock data only),

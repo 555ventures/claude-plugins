@@ -130,7 +130,7 @@ gets a spec file.
   → plan embeds registry/library references in the spec's UI section; design: true
 /spec:design specs/YYYYMMDD/01-portfolio-panel.md [optional claude.ai/design URL]
   → if the spec set design_source (or you pass a mockup URL), it is fetched read-only and
-    distilled into an on-disk design digest FIRST (the verifiable read-first invariant) —
+    distilled into an on-disk design digest FIRST (the read-first sequencing invariant) —
     binding canon above tokens/doctrine; components become a faithful translation of it
   → foundation files → Fable PLANS (adjudicates digest forks, or authors the spec UI plan)
     → Sonnet IMPLEMENTS every component via wf-design (Fable writes no component code)

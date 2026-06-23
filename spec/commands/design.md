@@ -61,10 +61,12 @@ approved round; re-invoking inventories what exists and continues.
      instructions**, errors **STOP** (never translate a truncated or unreachable mockup; never
      silently fall back to spec-only authoring). `DesignSync` unavailable here is an error
      **because this spec asked for a mockup** → STOP (suggest `/design-login`). **Write the
-     fetched markup to a temporary file** (e.g. the digest path with a `.raw.html` suffix) and
-     keep its path — Phase 0.5 (`wf-design comprehend`) reads it off disk and distills it into the
-     digest; you never hold the raw 256 KiB in this session. This mockup sits **above**
-     tokens/doctrine in precedence.
+     fetched markup to the session scratchpad** (a path outside the repo — never under `specs/`;
+     it is a transient, not a durable handoff, per shared § On-disk Handoff) and keep its path —
+     Phase 0.5 (`wf-design comprehend`) reads it off disk and distills it into the digest; you
+     never hold the raw 256 KiB in this session. Keeping it out of the tracked spec dir means a
+     skipped cleanup leaks nothing trackable. This mockup sits **above** tokens/doctrine in
+     precedence.
    - **Token/theme files** (paths named in the doctrine doc) — the design language as code.
    - **The design doctrine doc** (config `design.doctrine`) — taste rulings tokens can't
      encode. Binding like a locked Decision. Missing (pre-doctrine host)? Bootstrap it now
@@ -85,13 +87,17 @@ the spec): a token map (each `:root` role tagged `matches-canon` / `new-role` / 
 current token files), a `<x-dc>` surface inventory (component / props / states / tokensUsed),
 interaction notes, a11y flags, and the source sha256. One worker reads the whole markup (capped at
 256 KiB by the fetch, well within a single context) and writes the digest in one pass — the mockup
-is a single coherent artifact, never split per-concern. A structural verify gate (repair cap 2)
-confirms the digest covers every `<x-dc>` and every `:root` property.
+is a single coherent artifact, never split per-concern. A **single light Haiku verify pass** then
+checks coverage (every `<x-dc>` + every `:root` property) and the source sha256; on a gap it does
+**at most one re-extract** and proceeds, surfacing any residual gap to the designer rather than
+auto-looping — the digest is a sequencing guarantee, and Phase 2.5 visual review is the fidelity gate.
 
-- `args`: `stage`, `specPath`, `rawSourcePath` (the temp markup file), `digestPath`,
+- `args`: `stage`, `specPath`, `rawSourcePath` (the scratchpad markup file), `digestPath`,
   `tokenPaths`, `designDoctrinePath`, `agentMap`, `doctrinePaths`, `pipelineRulesPath`. Paths/ids
-  only — the markup travels as a path, never inline. After it returns, **delete the temp
-  `.raw.html`**; only the compact digest persists.
+  only — the markup travels as a path, never inline. After it returns you may delete the
+  scratchpad markup, but this is **belt-and-suspenders**, not the leak guarantee: the file already
+  lives outside the repo, so an unrun cleanup leaks nothing tracked. Only the compact digest
+  persists into `specs/` (and it is deleted in Phase 4).
 - The digest **is the plan** on the mockup path. Everything downstream reads the digest, never the
   raw markup. This is the anti-grovel invariant — a **sequencing** guarantee: the digest exists on
   disk before any component is authored, so extraction provably runs first. (It does not certify
@@ -147,8 +153,29 @@ rules § Worker Rules) before this runs, never by workers editing managed surfac
 - `args`: `stage`, `specPath`, `planPath`, `digestPath` (`''` if no mockup), the coherence
   `groups`, `tokenPaths`, `designDoctrinePath`, `agentMap`, `doctrinePaths`, `gate.command` (host
   typecheck + lint), `pipelineRulesPath`.
-- A worker that hits a **fork** the plan didn't pin, or a plan assumption wrong against the code,
-  returns `blocked` — surface it, resolve with the user, re-invoke.
+- **Handling non-`complete` returns.** `wf-design` returns the same family as `wf-build`
+  (`blocked`, `out-of-scope-failure`, `gate-exhausted`, plus the stage-specific
+  `reconcile-unverified`). This is the design session's own judgment loop — keep it short and
+  defer the trigger list to **shared § Escalation Contract** rather than restating it.
+  - `blocked` (a `design-fork` the plan didn't pin, or a `stale-assumption` wrong against the
+    code) → surface it. If resolvable within the plan's intent, the designer **rules and writes
+    the resolution to the on-disk plan** — the digest's fork-resolution / a token file / the
+    spec's Decisions, depending on what the fork touches. A genuine fork or a data-shape change
+    goes to `AskUserQuestion`. Then re-invoke `wf-design` (`resumeFromRunId`). **No `resolutions`
+    salt is needed** (this differs from build): wf-design has no `resolutions` arg — its workers
+    re-read the plan / digest / spec / token files from disk every run, so writing the ruling to
+    disk and resuming naturally re-runs only the affected batch.
+  - `out-of-scope-failure` / `gate-exhausted` → resolve per shared § Escalation Contract
+    (out-of-scope → `AskUserQuestion` to add-to-scope / separate fix / pause; gate-exhausted →
+    consult before escalating), then re-invoke.
+  - `reconcile-unverified` → the structural verify gate still found gaps after its cap (2). Read
+    the reported `failures`, fix the spec on disk yourself or with the user, then re-invoke. A
+    `*-failed` return (the worker produced nothing) is an infrastructure problem — investigate and
+    re-invoke, don't paper over it.
+  - `comprehend` always returns `complete` (the digest is a **sequencing**, not a fidelity,
+    guarantee — Phase 2.5 visual review is the fidelity gate). If its single light verify pass
+    found gaps, it does one re-extract and proceeds, returning `residualGaps` — note them and let
+    the Phase 2a fork pass / Phase 2.5 visual review absorb them; do not loop comprehend.
 - The return is labeled **"structural gate only — NOT visually approved."** Typecheck + lint prove
   structure, not that it looks right. The mandatory visual review (Phase 2.5) is the gate that
   clears it; do not show the user un-reviewed output.
@@ -205,13 +232,22 @@ the floor they start from. Checkpoint-commit when green.
    on disk and skip), **Contracts** for any shape changes, with new **Decisions** rows for rulings
    made in Phase 3. The stage's gate is a **structural re-read**: a verifier re-reads the updated
    spec against the landed files and repairs any divergence (cap 2) before returning.
-2. **Promote:** the designer writes generalizable outcomes upward — new tokens stay in the
+2. **Delete the transients (deterministic — one fixed seam):** `reconcile` has just folded the
+   digest's content into the spec, so the digest is now redundant. **After** `reconcile` returns
+   `complete` and **before** the final checkpoint-commit, the session runs `rm -f` on the digest
+   (`specs/YYYYMMDD/##-name.design-digest.json`) and any stray `.raw.html` sidecar. The session
+   owns this `rm` — workflows can't `Bash`, and the reconcile worker is barred from non-assigned
+   files; tying it to the green `reconcile` return (not scattered orchestrator prose) is the
+   reliability win, so a completed run leaves only the spec `.md` in `specs/YYYYMMDD/`. The digest
+   must survive until here — it is the live plan and the within-run resume-skip cache; deleting it
+   earlier would break mid-run resume.
+3. **Promote:** the designer writes generalizable outcomes upward — new tokens stay in the
    token files; taste rulings future specs should inherit go into the doctrine doc. Local
    one-offs stay in the spec's Decisions. The doctrine stays one page — prune as you promote.
-3. Set `designed: YYYY-MM-DD` in frontmatter. `status` stays `hardened`.
-4. Final checkpoint-commit. Report: components/entries landed (paths), reuse-gate hits,
+4. Set `designed: YYYY-MM-DD` in frontmatter. `status` stays `hardened`.
+5. Final checkpoint-commit. Report: components/entries landed (paths), reuse-gate hits,
    fork rulings, visual-review + iteration rounds, spec deltas, decisions added, doctrine
-   promotions. Next: `/spec:build $ARGUMENTS`.
+   promotions. Next: `/spec:build <spec path>`.
 
 ## Rules
 

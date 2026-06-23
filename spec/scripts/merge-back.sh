@@ -214,5 +214,5 @@ case "$SUB" in
     git -C "$ROOT" worktree list
     ;;
 
-  *) die "unknown subcommand '$SUB' (inspect|merge|cleanup|verify)" ;;
+  *) die "unknown subcommand '$SUB' (create|root|inspect|merge|cleanup|verify)" ;;
 esac

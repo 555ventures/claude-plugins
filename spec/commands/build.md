@@ -37,6 +37,14 @@ will offer the worktree workspace, run `spec-paths merge-back` too and keep that
    (e.g. `spec/checkout` → `.claude/worktrees/spec-checkout`) — the exact rule
    `{mergeBack} create` uses. So a resume can reconstruct the path without any saved state.
 
+   **Record the originating branch first — all paths, before any `EnterWorktree`.** Capture
+   `git rev-parse --abbrev-ref HEAD` **now**, while still on the originating branch — this is
+   `{target}` for merge-back. Do it for the in-place, fresh-worktree, and resume paths alike, not
+   only the worktree path: once a worktree is entered, `HEAD` is the build branch, so the
+   originating branch is no longer recoverable from the session. Step 5 persists it to disk
+   (`build_base:`) so a fresh `/spec:review` session can recover the merge-back target with no
+   conversation context.
+
    - **Resume** (`status: implementing` from step 1): a worktree likely already exists from the
      prior run — do **not** ask, and do **not** `create` again (it would die on the existing
      branch). Reconstruct `{worktree}`, then:
@@ -56,8 +64,8 @@ will offer the worktree workspace, run `spec-paths merge-back` too and keep that
      A separate `git worktree add` (loud, fixable failures) plus one `EnterWorktree {path:}` is
      more reliable than `EnterWorktree {name:}`, whose create-and-enter can be rejected when a
      worktree session is already active and leave the build on the root branch:
-     - **Record the originating branch** (`git rev-parse --abbrev-ref HEAD`) — this is `{target}`
-       for merge-back.
+     - `{target}` (the originating branch) was already captured at the top of step 2 — do **not**
+       re-read `HEAD` here; the worktree create below does not change it yet.
      - **Create:** `{mergeBack} create --source {source}`. Capture its **last stdout line** as
        `{worktree}` (the absolute path). Non-zero exit (branch/path exists, unborn HEAD, run from
        a worktree, `.claude/worktrees/` not gitignored) → **STOP** and show the user its stderr;
@@ -113,7 +121,11 @@ will offer the worktree workspace, run `spec-paths merge-back` too and keep that
    filesystem access, but the agents it spawns do, so host rules and doctrines travel as PATHS
    the workers read, never as inline blobs — `args` is a control channel of paths/ids/enums,
    not a data bus, so no prose ever enters it to corrupt its JSON.
-5. Flip `status: hardened → implementing`.
+5. Flip `status: hardened → implementing`. In the **same** frontmatter edit, write
+   `build_base: {target}` (the originating branch captured in step 2) so `/spec:review` can
+   recover the merge-back target from disk in a fresh session. On a **resume** (`status:
+   implementing` already, so no flip happens): leave an existing `build_base` untouched — only
+   backfill it if the field is missing (a spec built before this field existed).
 
 ## Phase 1 — Run the workflow
 

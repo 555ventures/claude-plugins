@@ -335,6 +335,12 @@ only. For the per-feature pipeline that file is the **spec** (Decisions, File Pl
 genesis stage follows the same spine with its own artifact roster (`.claude/genesis/*` +
 `docs/adr/`) — `genesis.md` § Genesis: On-disk Handoff.
 
+**Transients vs durable handoffs.** Only *durable* handoffs live in the tracked spec dir
+(`specs/`). Non-durable artifacts — fetched mockup markup, scratch intermediates a single
+invocation consumes — go to the **session scratchpad** (a path outside the repo), never under
+`specs/`. Location, not a remembered cleanup, is the leak guarantee: a transient written outside
+the repo cannot clutter the tracked dir even if its delete is skipped on an error path.
+
 ## Worker Git Ban
 
 Implementation workers never run git commands — no checkout/stash/restore/reset/clean/add/

@@ -230,24 +230,32 @@ if (STAGE === 'comprehend') {
   if (!extract) return { stage: 'comprehend-failed', summary: 'the extraction worker returned nothing' }
   if (extract.blocked) return { stage: 'blocked', blocked: [{ batch: 'comprehend', ...extract.blocked }], completed: [] }
 
+  // The digest is a SEQUENCING guarantee, not a fidelity one (Phase 2.5 visual review is the
+  // fidelity gate — design.md says so). So the verify ceremony here is deliberately light: a
+  // single cheap Haiku coverage+integrity pass, at most one re-extract to close gaps, then
+  // PROCEED — surfacing any residual gap to the designer (who owns Phase 2a/2.5) rather than
+  // auto-looping a sequencing artifact through expensive rounds. Net: comprehend is 2–3 serial
+  // agents (extract + verify [+ one re-extract]), down from ≤5. The sha256 check stays — it is
+  // the resume-skip key (Phase 0 matches it against the fetched markup to skip a done comprehend).
   phase('Gate')
-  for (let round = 0; round <= 2; round++) {
-    const verify = await agent(
-      `Verify a design digest faithfully covers its source. Read ${digestPath} and ${rawPath}. Confirm: ` +
-      `(a) every <x-dc> block in the markup appears in surfaces[]; (b) every :root / [data-accent] custom ` +
-      `property appears in tokenMap[] tagged matches-canon|new-role|fork; (c) source.sha256 matches the bytes ` +
-      `of ${rawPath}. pass=false with one failure per gap (file = ${digestPath}). Do not edit any file.`,
-      { label: `comprehend-verify:r${round}`, phase: 'Gate', schema: GATE, model: 'sonnet' })
-    if (!verify || verify.pass) {
-      return { stage: 'complete', digestPath, completed: [{ batch: 'comprehend', files: [{ path: digestPath, action: 'CREATE', summary: 'design digest' }] }] }
-    }
-    if (round === 2) return { stage: 'comprehend-unverified', failures: verify.failures, digestPath }
-    log(`Comprehend verify round ${round} found gaps — re-extracting`)
-    await dispatch(
-      `Re-extract the COMPLETE design digest from ${rawPath} and overwrite ${digestPath}, closing these gaps:\n` +
-      verify.failures.map(f => `- ${f.summary}`).join('\n') + `\n\n${SCHEMA_NOTE}\n\n${CANON_NOTE}\n\n${DATA_NOTE}`,
-      { label: `comprehend-repair:r${round}`, phase: 'Gate', schema: RECEIPT, agentType: comprehendType, model: 'sonnet' })
+  const completed = [{ batch: 'comprehend', files: [{ path: digestPath, action: 'CREATE', summary: 'design digest' }] }]
+  const verify = await agent(
+    `Verify a design digest faithfully covers its source. Read ${digestPath} and ${rawPath}. Confirm: ` +
+    `(a) every <x-dc> block in the markup appears in surfaces[]; (b) every :root / [data-accent] custom ` +
+    `property appears in tokenMap[] tagged matches-canon|new-role|fork; (c) source.sha256 matches the bytes ` +
+    `of ${rawPath}. pass=false with one failure per gap (file = ${digestPath}). Do not edit any file.`,
+    { label: 'comprehend-verify', phase: 'Gate', schema: GATE, model: 'haiku' })
+  if (!verify || verify.pass) {
+    return { stage: 'complete', digestPath, completed }
   }
+  log('Comprehend verify found gaps — one re-extract, then proceeding (residual gaps surfaced to the designer)')
+  await dispatch(
+    `Re-extract the COMPLETE design digest from ${rawPath} and overwrite ${digestPath}, closing these gaps:\n` +
+    verify.failures.map(f => `- ${f.summary}`).join('\n') + `\n\n${SCHEMA_NOTE}\n\n${CANON_NOTE}\n\n${DATA_NOTE}`,
+    { label: 'comprehend-repair', phase: 'Gate', schema: RECEIPT, agentType: comprehendType, model: 'sonnet' })
+  // Proceed regardless: the digest exists (the anti-grovel sequencing invariant holds), and the
+  // designer's Phase 2a fork pass + the mandatory Phase 2.5 visual review are the fidelity gates.
+  return { stage: 'complete', digestPath, completed, residualGaps: verify.failures }
 }
 
 // ---- Stage: reconcile (single worker, gate = structural re-read) ----
@@ -285,7 +293,7 @@ if (STAGE === 'reconcile') {
       `every landed component/entry appears in the File Plan, and the component APIs in the UI section ` +
       `match the real props/states. Report pass=false with one failure per divergence (file = the spec ` +
       `path, summary = what disagrees). Do not edit any file.`,
-      { label: `reconcile-verify:r${round}`, phase: 'Gate', schema: GATE, model: 'sonnet' })
+      { label: `reconcile-verify:r${round}`, phase: 'Gate', schema: GATE, model: 'haiku' })
     if (!verify || verify.pass) {
       return { stage: 'complete', completed: [{ batch: 'reconcile', files: receipt.files }] }
     }
@@ -389,7 +397,7 @@ for (let round = 0; round <= 2; round++) {
     `Run these checks and report results. Do not edit any file.\n\n${gateCmd}\n\n` +
     `For each failure, identify the single file that most likely needs the fix and summarize the ` +
     `failure in one line including the check name. pass=true only if every check is green.`,
-    { label: `gate:round-${round}`, phase: 'Gate', schema: GATE, model: 'sonnet' })
+    { label: `gate:round-${round}`, phase: 'Gate', schema: GATE, model: 'haiku' })
   if (!gate || gate.pass) break
 
   const byBatch = {}

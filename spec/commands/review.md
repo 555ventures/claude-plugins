@@ -25,8 +25,14 @@ absolute path — it is the `scriptPath` for the Workflow call below.
 
 ## Phase 0 — Preflight (parallel)
 
-1. Determine the diff base: the originating branch if a `/spec:build` worktree is live,
-   otherwise `main`.
+1. Determine the diff base `{target}` (the originating branch the build started from) by
+   reading `build_base:` from the spec frontmatter — `/spec:build` wrote it there so a fresh
+   review session recovers it from disk, never from conversation context. If `build_base` is
+   absent (the spec was built before this field existed), fall back to
+   `git -C {root} rev-parse --abbrev-ref HEAD` (the root working tree's current branch). The
+   fallback is safe and self-checking: `{mergeBack} inspect` and `assert_target_checked_out`
+   require `{target}` to equal root HEAD, so a wrong guess fails loudly at merge-back rather
+   than diffing/merging silently against the wrong branch.
 2. Launch in parallel (background bash):
    - `DIFF_BASE={base} bash {patternsScript} {dirs from the spec's File Plan} > {patternsPath}`
      — the host's mechanical shortcut sweep (`patternsScript` from config), redirected to a
@@ -107,7 +113,8 @@ deterministic helper for the git mechanics.
 `/Users/you/Projects/app`. It is **NOT** your home directory (`$HOME`, `~`) and **NOT** the
 filesystem root (`/`). Get the exact value, don't guess it: run
 `{mergeBack} root --worktree {worktree}` (or just `{mergeBack} root` from inside the worktree)
-and use the absolute path it prints verbatim. `{target}` is the originating branch; `{source}`
+and use the absolute path it prints verbatim. `{target}` is the originating branch recovered in
+Phase 0 step 1 (`build_base` from the spec, else root HEAD) — not an in-session given; `{source}`
 the build branch; `{worktree}` the worktree path (omit `--worktree` if no worktree was used).
 
 1. **Inspect:** `{mergeBack} inspect --root {root} --target {target} --source {source}`. It

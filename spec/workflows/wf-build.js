@@ -313,7 +313,7 @@ for (let round = 0; round <= 2; round++) {
     `For each failure, identify the single file that most likely needs the fix (source file for ` +
     `implementation bugs, test file for bad tests) and summarize the failure in one line including ` +
     `the test/check name. pass=true only if every check is green.`,
-    { label: `gate:round-${round}`, phase: 'Gate', schema: GATE, model: 'sonnet' })
+    { label: `gate:round-${round}`, phase: 'Gate', schema: GATE, model: 'haiku' })
   if (!gate || gate.pass) break
 
   const byBatch = {}

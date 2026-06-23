@@ -57,6 +57,13 @@ makes the root tree read dirty — which trips `/spec:review`'s clean-root merge
 `merge-back.sh create` refuse. If `git check-ignore -q .claude/worktrees` fails, append
 `.claude/worktrees/` to the repo's `.gitignore` and tell the user to commit it.
 
+**Also gitignore the design-stage digest sidecars** (idempotent, same routine): `/spec:design`
+writes a `*.design-digest.json` (and, defensively, `*.design-digest.raw.html`) sidecar in
+`specs/YYYYMMDD/` that is a within-run plan + resume cache, deleted at Phase 4 — but a mid-run
+checkpoint-commit must not carry it. If `git check-ignore -q` misses them, append
+`*.design-digest.json` and `*.design-digest.raw.html` to `.gitignore`. This does not break resume
+(resume reads the working-tree file); the Phase 4 `rm` is what clears the working tree.
+
 ## Phase 2 — Write `.claude/spec.config.json`
 
 All keys consumed by the plugin's commands/workflows:

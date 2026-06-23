@@ -85,7 +85,8 @@ Shared invariants (risk tiers, model placement, escalation contract, MCP policy)
 `doctrine/shared.md` (run `spec-paths shared` for its absolute path); the genesis-only supplement
 is `doctrine/genesis.md` (`spec-paths shared-genesis`). Spec template:
 `templates/spec.md`. Deterministic orchestration: `workflows/wf-build.js`,
-`workflows/wf-review.js` — commands locate them via the bundled `spec-paths` helper, since
+`workflows/wf-design.js` (design-stage plumbing), `workflows/wf-review.js` — commands locate
+them via the bundled `spec-paths` helper, since
 `${CLAUDE_PLUGIN_ROOT}` is not substituted inside command bodies.
 
 ## Process layer vs grounding layer
@@ -93,7 +94,7 @@ is `doctrine/genesis.md` (`spec-paths shared-genesis`). Spec template:
 | Ships in the plugin | Generated per repo by `/spec:init` + `/spec:enforce` |
 |---|---|
 | Commands `/spec:plan` `design` `build` `review` `init` `enforce` `doctor` | `.claude/spec.config.json` (gate/test/setup commands, layerGroups, agentMap, `contractHash` drift stamp, optional driftScript, optional `enforcementManifest`/`rulesEnforcementHash`) |
-| `wf-build.js`, `wf-review.js`, `wf-enforce.js` workflows (+ genesis `wf-panel.js`, `wf-research.js`) | `.claude/rules/spec-pipeline.md` (T3 triggers, planning checklist, build duties, worker/test rules, review checks) |
+| `wf-build.js`, `wf-design.js`, `wf-review.js`, `wf-enforce.js` workflows (+ genesis `wf-panel.js`, `wf-research.js`) | `.claude/rules/spec-pipeline.md` (T3 triggers, planning checklist, build duties, worker/test rules, review checks) |
 | Generic read-only `reviewer` agent | Implementer agents in `.claude/agents/` (one per batch kind) |
 | State-gate hook, spec template, grounding-contract file | `scripts/spec-patterns.sh` (mechanical sweep) + `.claude/rules/enforcement.json` (enforcer provenance) + generated enforcer configs/contracts wired to the gate |
 

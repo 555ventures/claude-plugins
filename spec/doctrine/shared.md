@@ -289,9 +289,12 @@ never override. An unlocked fork is a `blocked` return, not a guess. A dismissed
 
 ## Workflows Encode Shape, Not Judgment
 
-The plugin's `wf-build.js` and `wf-review.js` (and the genesis `wf-panel.js` / `wf-research.js`)
-own ordering, schemas, retry caps, and kill rules — deterministic control flow. Judgment (what's
-blocked, what's waived, what escalates, what a finding means) stays in the main loop. Never add JS
+The plugin's `wf-build.js`, `wf-design.js`, and `wf-review.js` (and the genesis `wf-panel.js` /
+`wf-research.js`) own ordering, schemas, retry caps, and kill rules — deterministic control flow.
+Judgment (what's blocked, what's waived, what escalates, what a finding means) stays in the main
+loop — including, in the design stage, all **taste**: `wf-design.js` runs only the gate-verifiable
+plumbing (foundation, catalog entries, reconcile); component authoring and the user iteration loop
+stay in the `/spec:design` session and never enter the workflow. Never add JS
 branches that decide design questions, and never prompt-engineer findings into existence (no "empty
 output = you missed something" framings — an empty findings list is always a valid outcome).
 

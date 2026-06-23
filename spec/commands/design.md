@@ -17,9 +17,12 @@ gated here by the catalog + the user's eyes, not by TDD.
 **Intended model: Fable** (Opus while Fable is suspended — see shared § Model Placement)**.** This is the pipeline's stated exception to "Sonnet works" (shared
 invariants § Model Placement): in this stage taste IS the work, so the designer session reads
 and writes component files itself — the build-stage rule that the orchestrator never holds
-file contents does not apply here. Sonnet is dispatched only for plumbing: foundation files,
-catalog entries, the Phase 4 spec reconcile. Coherence beats parallelism: components are
-authored in groups that share visual context, never maximally fanned out.
+file contents does not apply here. Sonnet is dispatched only for the **gate-verifiable
+plumbing**, run through the **`wf-design`** workflow (foundation files, catalog entries, the
+Phase 4 spec reconcile — each a gate + repair loop, like `/spec:build`'s `wf-build`). The
+**taste-bearing work never enters the workflow**: component authoring (Phase 2) and the
+interactive iteration loop (Phase 3) stay in this session. Coherence beats parallelism:
+components are authored in groups that share visual context, never maximally fanned out.
 
 **Setup:** run `spec-paths shared` and Read that file (shared invariants). Read the host's
 `.claude/spec.config.json` and its pipeline rules file. If the host config declares no
@@ -72,15 +75,27 @@ re-invoking inventories what exists and continues.
 
 ## Phase 1 — Foundation (only missing files)
 
-Dispatch Sonnet workers in dependency order, parallel where independent — types/constants →
-schemas ∥ mock data — using the host's `agentMap` kinds (e.g. `types`, `forms`, `mocks`).
-Mock data must cover **every UI state the spec lists** — empty, loading, error, and edge
-content (long strings, extreme values in the host's domain types). Tokens a planned surface
-needs are added to the token files by the **designer** (not a worker) — extend the scale,
-never fork it.
+Run the **`wf-design`** workflow with `stage: "foundation"` (the way `/spec:build` invokes
+`wf-build`): it dispatches Sonnet workers in dependency order, parallel where independent —
+types/constants → schemas ∥ mock data — using the host's `agentMap` kinds (e.g. `types`,
+`forms`, `mocks`), then runs the host's typecheck behind a gate + repair loop (cap 2) and
+returns receipts. Mock data must cover **every UI state the spec lists** — empty, loading,
+error, and edge content (long strings, extreme values in the host's domain types). Tokens a
+planned surface needs are added to the token files by the **designer** (not a worker) — extend
+the scale, never fork it.
+
+- `args` carries **only paths/ids/enums + the gate command** (the no-free-text args invariant —
+  shared invariants § Workflows Encode Shape, Not Judgment): `specPath`, `designDoctrinePath`,
+  `tokenPaths`, the ordered
+  `groups` of foundation batches, `agentMap`, the host-role `doctrinePaths`, the resolved
+  `gate.command` (host typecheck), and `pipelineRulesPath`. No prose — workers Read the spec and
+  doctrine off disk.
+- A worker that hits a **fork** (token-value conflict or a doctrine contradiction) returns
+  `blocked` — the workflow surfaces it; resolve it with the user (Phase 3 step 4 rules) before
+  re-invoking. Resume parity: same script + args → 100% journal cache hit (`resumeFromRunId`).
 
 Gate: the host's typecheck (first segment of `gateCommand`, or as pipeline rules § Build
-defines). Checkpoint-commit when green.
+defines), run **inside the workflow**. Checkpoint-commit when it returns green.
 
 ## Phase 2 — Design
 
@@ -99,16 +114,21 @@ components together) with the doctrine + relevant tokens + spec excerpts inlined
 
 - **Stateless discipline:** props + mock data only — no data-layer imports, no
   state-management/store imports, no router/navigation access. Wiring is `/spec:build`'s job.
-- **Catalog entries:** Sonnet `stories`-kind workers write entries in the host's story format
-  (config `design.storyFormat`), rendering every state the spec lists. Also extend the
-  **living showcase entry** (path named in the doctrine doc) so the new surfaces sit next to
-  existing ones — it is the cross-spec drift detector, reviewed first in Phase 3.
+- **Component authoring stays in this session** — taste is global and not gate-verifiable, so it
+  is never fanned out to the workflow. Author directly or in coherence groups, as above.
+- **Catalog entries:** once components exist on disk, run **`wf-design`** with `stage: "stories"`
+  — Sonnet `stories`-kind workers write entries in the host's story format (config
+  `design.storyFormat`), rendering every state the spec lists, behind a typecheck + lint gate +
+  repair loop. Also extend the **living showcase entry** (path named in the doctrine doc) so the
+  new surfaces sit next to existing ones — it is the cross-spec drift detector, reviewed first in
+  Phase 3. Same args discipline as Phase 1 (`stage: "stories"`, the entry `groups`, `gate.command`
+  = host typecheck + lint).
 - New third-party UI primitives are added by the **designer** via the host's sanctioned tool
   (pipeline rules § Worker Rules), never by workers editing managed surfaces.
 - Workers inherit the pipeline hard rules (read-only surfaces, git ban, blocked protocol —
-  shared invariants + pipeline rules § Worker Rules).
+  shared invariants + pipeline rules § Worker Rules), enforced by `wf-design`'s hard-rule block.
 
-Gate: host typecheck + lint. Checkpoint-commit when green.
+Gate: host typecheck + lint, run inside `wf-design`. Checkpoint-commit when it returns green.
 
 ## Phase 2.5 — Self-review (only if `design.screenshot` is configured)
 
@@ -137,10 +157,13 @@ this only raises the floor they start from. No `screenshot` key → skip silentl
 
 ## Phase 4 — Reconcile & promote
 
-1. One Sonnet worker updates the spec to match approved reality: **UI** section (final
-   component APIs and states), **File Plan** (actual component/entry files; CREATE rows that
-   landed here stay listed — build will see them on disk and skip), **Contracts** for any
-   shape changes, with new **Decisions** rows for rulings made in Phase 3.
+1. Run **`wf-design`** with `stage: "reconcile"` (`specPath` + `landedFiles` = the
+   component/entry paths that landed this run, paths only): one Sonnet worker updates the spec to
+   match approved reality — **UI** section (final component APIs and states), **File Plan**
+   (actual component/entry files; CREATE rows that landed here stay listed — build will see them
+   on disk and skip), **Contracts** for any shape changes, with new **Decisions** rows for rulings
+   made in Phase 3. The stage's gate is a **structural re-read**: a verifier re-reads the updated
+   spec against the landed files and repairs any divergence (cap 2) before returning.
 2. **Promote:** the designer writes generalizable outcomes upward — new tokens stay in the
    token files; taste rulings future specs should inherit go into the doctrine doc. Local
    one-offs stay in the spec's Decisions. The doctrine stays one page — prune as you promote.

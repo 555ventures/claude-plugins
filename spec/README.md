@@ -127,7 +127,10 @@ gets a spec file.
 ```
 /spec:plan "portfolio breakdown panel"
   → plan embeds registry/library references in the spec's UI section; design: true
-/spec:design specs/YYYYMMDD/01-portfolio-panel.md
+/spec:design specs/YYYYMMDD/01-portfolio-panel.md [optional claude.ai/design URL]
+  → if the spec set design_source (or you pass a mockup URL), the mockup is fetched
+    read-only and read FIRST — it is binding canon above tokens/doctrine, and components
+    become a faithful translation of it, never invented from the spec and reconciled later
   → foundation files → Fable designs the stateless components inside the repo's design
     canon (tokens + doctrine doc) → catalog entries (stories / use-cases)
   → you: run the catalog (Storybook, Widgetbook, …) — iterate as many rounds as you want
@@ -136,6 +139,11 @@ gets a spec file.
 /spec:build …   # skips approved components; TDD covers logic, not pixels
 /spec:review …
 ```
+
+Seeding from a Claude Design mockup is **strictly opt-in**: only a spec that sets `design_source`
+(recorded by `/spec:plan`, or passed as the second arg on the first `/spec:design` run and then
+persisted to frontmatter) engages it. With no `design_source` nothing is fetched and the stage is
+byte-for-byte unchanged — same three-layer canon (tokens + doctrine + showcase) as before.
 
 The design stage's bet: the catalog + your eyes gate UI rendering; TDD gates behavior.
 Components built in design are real and kept — build wires them, it doesn't rebuild them.

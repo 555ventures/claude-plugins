@@ -25,7 +25,9 @@ user to run `/spec:init` first.
 
 1. **Harvest or discover.** If this conversation already contains a design discussion of the
    target: summarize what has converged (scope, key decisions, open questions), confirm the
-   summary with the user, and skip to Phase 1.5/2. If invoked cold: run Phase 1 discovery.
+   summary with the user, and skip to Phase 1.5/2. If invoked cold: run Phase 1 discovery. If a
+   `claude.ai/design` mockup URL surfaces here (or anywhere in planning), note it — it is
+   recorded into the spec's `design_source:` frontmatter at the Set-`design:` step below.
 2. **Apply the tier rubric** (shared invariants § Risk Tiers; concrete T3 triggers in the
    host's pipeline rules § Risk Tiers).
    - **T1** → STOP: "This is T1-shaped — no spec needed. Just ask me to do it; the host's
@@ -84,7 +86,10 @@ While drafting:
   catalog — shared invariants § Design Stage). There: `true` for any spec with a UI section
   whose look/feel the user should approve before build; `false` for logic-only or
   trivially-styled changes; confirm with the user when borderline. In hosts without a
-  catalog, never set the flag (omit it or leave `false`).
+  catalog, never set the flag (omit it or leave `false`). **If the planning conversation
+  surfaced a `claude.ai/design` mockup URL** for this spec, also record it into frontmatter as
+  `design_source: <url>` alongside `design: true` — plan only records the pointer (it never
+  fetches); `/spec:design` makes it read-first canon (shared § "Claude Design as a source").
 - **Never guess — mark it.** Where the draft needs information you don't have (an unconfirmed
   behavior, an unknown constraint, a fork you haven't put to the user yet), write
   `[NEEDS CLARIFICATION: <the question>]` inline at that spot instead of writing something
@@ -139,9 +144,9 @@ Never silently drop a finding.
    re-grep. Lock requires zero hits; the state-gate hook enforces the same check downstream.
 2. Confirm: zero open forks, **Rationale** and **Canonical Delta** written, ACs mapped to test files.
 3. Flip frontmatter `status: draft → hardened`.
-4. Report: spec path, tier, `design:` value (design-capable hosts), decision count, assumption
-   count, spike run or skipped, refuter findings fixed/rejected. Next: `/spec:design {path}`
-   if `design: true`, else `/spec:build {path}`.
+4. Report: spec path, tier, `design:` value (design-capable hosts), `design_source` if recorded,
+   decision count, assumption count, spike run or skipped, refuter findings fixed/rejected. Next:
+   `/spec:design {path}` if `design: true`, else `/spec:build {path}`.
 
 ## Rules
 

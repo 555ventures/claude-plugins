@@ -13,7 +13,8 @@ when you designed something in Claude Design (claude.ai/design) and just want it
 Reach for the right design command:
 - **`/spec:import-design`** (this) — *I have a finished mockup; put it in the repo now.*
 - **`/spec:genesis-design`** — *greenfield, no mockup yet; decide a direction with research + a panel.*
-- **`/spec:design`** — *build a hardened spec's UI inside an existing doctrine (spec-coupled).*
+- **`/spec:design`** — *build a hardened spec's UI inside an existing doctrine (spec-coupled),
+  optionally seeded by a Claude Design mockup (`design_source`) made read-first canon for that spec.*
 
 **Intended model: Fable** (Opus while Fable is suspended — shared § Model Placement)**.** The
 design-stage taste exception applies: translating a mockup *with fidelity* is taste work, so a
@@ -23,7 +24,9 @@ mockup is already coherent — preserve that coherence across the translation bo
 in one session, never parallel per-surface.
 
 **Setup:** run `spec-paths shared` and Read it (shared invariants § Design Stage — the three-layer
-canon: tokens → doctrine → showcase). Load the `DesignSync` tool (ToolSearch `select:DesignSync`).
+canon: tokens → doctrine → showcase, **and § "Claude Design as a source"**, which defines the
+read-only fetch + translate rules this command follows; Phase 0–3 below are its spec-free
+application, not a separate ruleset). Load the `DesignSync` tool (ToolSearch `select:DesignSync`).
 If `.claude/spec.config.json` exists, read its `design` block for the token/doctrine/catalog
 paths; it is **not** required — this command runs in repos that never ran `/spec:init`.
 

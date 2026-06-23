@@ -31,7 +31,7 @@ on-disk artifacts instead of re-deciding:
 **Decide vs implement.** The manifest's rules carry a `targetCategory` **enum only** — a category,
 never a tool name. `/spec:enforce` owns the single category→enforcer selection per detected stack
 and is the sole enforcement generator (`/spec:init` ends by invoking it). The design enum
-(`color | i18n | structure | a11y | density`) folds into the enforcement category taxonomy as a
+(`color | typography | i18n | structure | a11y | density`) folds into the enforcement category taxonomy as a
 pre-classified input. A category with no mechanical enforcer on the stack becomes a Review-Check
 prose rule — never silently dropped.
 

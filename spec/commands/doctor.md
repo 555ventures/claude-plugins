@@ -51,7 +51,16 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
      differs from the config's `designRulesHash` ("design rules changed but enforcement was not
      regenerated — re-run `/spec:enforce`").
    - **Category enum** — every design rule's `targetCategory` is one of the reserved design set
-     (`color | i18n | structure | a11y | density`); an unknown category is broken.
+     (`color | typography | i18n | structure | a11y | density`); an unknown category is broken.
+   - **Encodable-dimension closure** (visual archetypes) — each baseline encodable dimension
+     (color roles, type scale, spacing rhythm, radii/elevation, focus ring, min target size) is
+     either materialized in the `tokensConsumed` surface as named roles **or** recorded
+     DEFERRED-with-reason in the doctrine `## Dissents`. A dimension that is prose-only or absent
+     from both — values described in doctrine with no backing token, or a baseline family simply
+     missing — is the type-scale failure signature (the genesis canon that shipped without a
+     `--text-*` scale); flag it and recommend the gap be tokenized (a `/spec:design` foundation
+     spec, or a token + `/spec:enforce` pass). This is the backstop genesis couldn't run — it has
+     the rendered tree genesis lacked.
    - **Dissents presence** — each `docs/adr/*.md` and the design doctrine contains a
      `## Dissents` section (a grep — presence only, never judge its content).
 

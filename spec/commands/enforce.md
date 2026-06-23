@@ -40,9 +40,9 @@ contract`); they must stay in sync — the contract is the single source of trut
 executor's working list.
 
 Genesis-seeded repos also carry `.claude/genesis/design-rules.json` whose rules use a design enum
-(`color | i18n | structure | a11y | density`). Fold these in as **pre-classified inputs**:
-`structure → module-boundary`; `color | i18n | density → forbidden-symbol` or
-`structural-pattern`; `a11y → structural-pattern` (or judgment residue if no AST check fits).
+(`color | typography | i18n | structure | a11y | density`). Fold these in as **pre-classified
+inputs**: `structure → module-boundary`; `color | typography | i18n | density → forbidden-symbol`
+or `structural-pattern`; `a11y → structural-pattern` (or judgment residue if no AST check fits).
 
 ## The judgment residue (do NOT mechanize — compose over, don't duplicate)
 

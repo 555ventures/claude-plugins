@@ -13,6 +13,15 @@
       "rationale": "Single source of truth for theme; enables dark mode and audience-specific theming."
     },
     {
+      "id": "no-off-scale-text",
+      "intent": "Font size must come from the type-scale roles — no off-scale text utilities or size literals (e.g. text-sm, text-[0.8125rem]) in UI files.",
+      "targetCategory": "typography",
+      "appliesTo": ["src/**/*.{ts,tsx,css}"],
+      "exemptGlobs": ["**/tokens/**", "**/*.stories.*"],
+      "severity": "error",
+      "rationale": "The typographic mirror of no-raw-color: one shared role set consumed by name keeps the scale the single source and the vertical rhythm uniform."
+    },
+    {
       "id": "i18n-keys-present",
       "intent": "User-facing strings must be i18n keys, not string literals.",
       "targetCategory": "i18n",

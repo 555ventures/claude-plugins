@@ -170,8 +170,8 @@ the spec pipeline *implements* them as actual lint/contracts/sweeps wired to the
 enforcement brain, and it lives downstream — `/spec:enforce` (which `/spec:init` invokes at the
 end of bootstrap). The contract:
 
-- `design-rules.json` rules carry a `targetCategory` **enum only** — `color | i18n | structure |
-  a11y | density` — **never a tool name.** `/spec:enforce` folds these into its language-neutral
+- `design-rules.json` rules carry a `targetCategory` **enum only** — `color | typography | i18n |
+  structure | a11y | density` — **never a tool name.** `/spec:enforce` folds these into its language-neutral
   enforcement taxonomy and owns the single category→enforcer selection per detected stack, chosen
   at runtime (discover-against-live-sources then verify-it-runs), never from a hardcoded mapping.
   Where no mechanical enforcer fits the stack, the category becomes a Review-Check prose rule —

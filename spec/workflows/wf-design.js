@@ -4,7 +4,7 @@ export const meta = {
   whenToUse: 'Invoked by /spec:design for the gate-verifiable phases (stage = comprehend | author | reconcile). The expensive model plans/adjudicates/reviews inline and never writes component code; this workflow holds no taste.',
   phases: [
     { title: 'Comprehend', detail: 'distill the fetched .dc.html into the on-disk design digest; one worker + structural verify' },
-    { title: 'Author', detail: 'one ordered run: foundation (types → schemas ∥ mocks) → shared atoms → components → stories, parallel within a group' },
+    { title: 'Author', detail: 'one gated run, coherence-group granular: foundation (one batch) first, then one warm worker per coherence group authoring its components AND their catalog entries, parallel across groups; the living showcase entry its own final batch' },
     { title: 'Reconcile', detail: 'one worker updates the spec to approved reality' },
     { title: 'Gate', detail: 'host gate / structural re-read; repair loop (author cap 2, reconcile cap 1)' },
   ],
@@ -58,10 +58,14 @@ if (!args || typeof args !== 'object' || !STAGES.includes(STAGE)) {
 //   digestPath: string,          // comprehend (output) + author (plan, if a mockup); '' if no mockup
 //   planPath: string,            // author only: the on-disk plan implement-/stories-kind batches cite — the
 //                                //   digest (mockup) or the spec (no-mockup; its enriched UI section is the plan)
-//   groups: [[{id, agentType, kind, files: [{path, action}]}]],  // author: ONE ordered groups list spanning
-//                                //   all kinds — types → schemas ∥ mocks → shared atoms → component groups →
-//                                //   stories. Parallel within a group. kind ∈ {'foundation','implement','stories'}
-//                                //   selects the worker intent; for implement-kind each inner array is a COHERENCE GROUP.
+//   groups: [[{id, agentType, kind, files: [{path, action}]}]],  // author: array of WAVES; each wave is an
+//                                //   array of BATCHES run in parallel; waves run in order. kind ∈
+//                                //   {'foundation','implement','stories'} selects the worker intent. Wave 1 =
+//                                //   foundation (one batch: types + schemas + mocks) [+ a shared-atom batch only
+//                                //   if a real usedBy≥2 atom exists]; next wave = one 'implement' batch PER
+//                                //   COHERENCE GROUP (each lists its components AND their catalog-entry files —
+//                                //   one warm worker authors both), independent groups sharing the wave; final
+//                                //   wave = the living showcase entry as its own 'stories' batch.
 //   landedFiles: [string],       // reconcile only: component/entry paths that landed in this run
 //   agentMap: {kind: agentName}, // host agentMap; key 'default' is the fallback; per-batch agentType wins
 //   doctrinePaths: {agentName: string},  // path to each HOST .claude/agents/<name>.md — the workflow agent
@@ -324,12 +328,16 @@ if (STAGE === 'reconcile') {
   }
 }
 
-// ---- Stage: author (unified foundation + components + stories — one ordered run, one gate) ----
-// One ordered `groups` list spans every kind: types → schemas ∥ mocks → shared atoms → component
-// groups → stories. Each batch carries a `kind` ∈ {'foundation','implement','stories'} that selects
-// the worker intent; the gate (host typecheck + lint) runs ONCE over the whole pass, and a single
-// repair loop (cap 2) routes each failure to its owning batch regardless of kind. Foundation groups
-// come first so later groups journal-cache on resume after a foundation-file repair.
+// ---- Stage: author (foundation + components + catalog — one gated run, coherence-group granular) ----
+// `groups` is an array of WAVES; each wave is an array of BATCHES run in parallel; waves run in order.
+// The unit of authoring is the COHERENCE GROUP = one batch = one warm worker: an 'implement' batch
+// lists every component in a group AND its catalog entries, and one Sonnet worker authors all of them
+// in one warm context (canon read once). Independent coherence groups share a single wave. Foundation
+// is one batch in wave 1 (so a later repair journal-caches it on resume); the living showcase entry is
+// its own 'stories' batch in the final wave (a cross-spec file — its own batch avoids a write-race).
+// The gate (host typecheck + lint) runs ONCE over the whole pass, and a single repair loop (cap 2)
+// routes each failure to its owning batch regardless of kind — now at most one cold re-dispatch per
+// coherence group, not per component. Each batch carries a `kind` ∈ {'foundation','implement','stories'}.
 const groups = args.groups || []
 const PLAN_PATH = args.planPath || args.specPath
 
@@ -356,10 +364,11 @@ function workerPrompt(b) {
   const intent = b.kind === 'foundation'
     ? `You are building one batch of **foundation** files (types / schemas / mock data) for a hardened spec's design stage. Mock data must cover **every UI state the plan lists** — empty, loading, error, and edge content (long strings, extreme values in the host's domain types).`
     : b.kind === 'implement'
-    ? `You author the stateless **components** for one coherence group, as a faithful translation of an on-disk PLAN — never an invention beyond it. The plan is ${PLAN_PATH}: if it is a \`.json\` design digest, read surfaces[] ({id, props, states, tokensUsed, visualSpec, sourceRef, shared, usedBy}) for what to build and tokenMap[] for the exact token roles; if it is the spec, read its UI section (per-surface prop tables, token assignments, states, interaction/voice notes). Build every state the plan lists. props + mock data only.\n\n` +
+    ? `You author one whole **coherence group** in one warm pass: the stateless **components** AND their **catalog entries**, as a faithful translation of an on-disk PLAN — never an invention beyond it. The plan is ${PLAN_PATH}: if it is a \`.json\` design digest, read surfaces[] ({id, props, states, tokensUsed, visualSpec, sourceRef, shared, usedBy}) for what to build and tokenMap[] for the exact token roles; if it is the spec, read its UI section (per-surface prop tables, token assignments, states, interaction/voice notes). Build every state the plan lists. props + mock data only.\n\n` +
       `**Match the mock (split authority).** On the digest path, for EACH surface you build, Read its \`sourceRef.sliceFile\` from the digest — that file is the actual Claude Design markup for the surface; reproduce its STRUCTURE and visual TREATMENT closely (an outlined pill stays an outlined pill, a filled chip stays filled — see \`visualSpec\`). But VALUES resolve through canon, never the slice: \`tokenMap\` + \`visualSpec\` are **binding** — map every value to a token role, and NEVER copy a literal (hex, px, radius) out of the slice. A value with no canon role is a \`new-role\`/\`fork\` → return \`blocked\`, do not invent it.\n\n` +
-      `**Shared atoms first.** A surface tagged \`shared\` (\`usedBy\` ≥2) is an atom authored once, in an earlier coherence group; if a surface you build consumes a shared atom, IMPORT it — never reimplement or fork it.`
-    : `You are writing **catalog entries** for components the designer already authored. Render every state the plan lists (empty / loading / error / edge) in the host's story format. The component files exist on disk — Read them for their real props; entries import and compose them, they do not reimplement them.`
+      `**Shared atoms first.** A surface tagged \`shared\` (\`usedBy\` ≥2) is an atom authored once, in an earlier coherence group; if a surface you build consumes a shared atom, IMPORT it — never reimplement or fork it.\n\n` +
+      `**Then write this group's catalog entries in the SAME pass.** The batch \`files\` list below includes the catalog-entry (story) paths for the surfaces you just authored. Write each in the host's story format (Read an existing entry first for the exact format), rendering every state the plan lists (empty / loading / error / edge). COMPOSE the components you just wrote — import them, do not reimplement them. Authoring components and their entries together (you already hold the real props in context) is the point of the coherence-group batch.`
+    : `You are writing the **living showcase entry** — the single cross-spec catalog file (path in the batch files below) that sits the new surfaces next to existing ones; it is the cross-spec drift detector. The components and their per-group entries already exist on disk (the implement-kind workers wrote them this pass) — Read the components for their real props and COMPOSE them; do not reimplement them. Render the new surfaces in the host's story format (Read the existing showcase entry first for its format), covering the states the plan lists.`
   return [
     intent,
     doctrineBlock(b.agentType),

@@ -13,7 +13,7 @@
     {
       "name": "git",
       "source": "./git",
-      "description": "Git helpers: a fast add-all-and-commit flow (/git:commit) and a guided merge with conflict repair and worktree cleanup (/git:merge)"
+      "description": "Git helpers: a fast add-all-and-commit flow (/git:commit), a guided merge with conflict repair and worktree cleanup (/git:merge), and an idempotent per-spec worktree entry (/git:enter-worktree)"
     }
   ]
 }

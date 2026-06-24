@@ -15,9 +15,7 @@ Lookups: Haiku. Surprises and T3 checkpoints: Fable subagent.
 **Setup:** run `spec-paths shared` and Read that file (shared invariants). Read the host's
 `.claude/spec.config.json` and its pipeline rules file (`pipelineRules`). If either is
 missing, STOP: tell the user to run `/spec:init` first. Also run `spec-paths wf-build` once
-and keep the printed absolute path — it is the `scriptPath` for the Workflow call below. If you
-will offer the worktree workspace, run `spec-paths merge-back` too and keep that path as
-`{mergeBack}` (its `create` subcommand builds the worktree; `/spec:review` reuses it to merge back).
+and keep the printed absolute path — it is the `scriptPath` for the Workflow call below.
 
 ## Input
 
@@ -31,60 +29,13 @@ will offer the worktree workspace, run `spec-paths merge-back` too and keep that
    (config `design` block, or legacy `storybook: true` — shared invariants § Design Stage):
    `design: true` without `designed:` → ask the user whether to run `/spec:design` first or
    skip it deliberately.
-2. **Workspace.** Slug and branch are deterministic in both paths below: `{source} =
-   spec/<slug from the spec filename>`, and the worktree is always
-   `{worktree} = <root>/.claude/worktrees/<name>` where `<name>` is `{source}` with `/`→`-`
-   (e.g. `spec/checkout` → `.claude/worktrees/spec-checkout`) — the exact rule
-   `{mergeBack} create` uses. So a resume can reconstruct the path without any saved state.
 
-   **Record the originating branch first — all paths, before any `EnterWorktree`.** Capture
-   `git rev-parse --abbrev-ref HEAD` **now**, while still on the originating branch — this is
-   `{target}` for merge-back. Do it for the in-place, fresh-worktree, and resume paths alike, not
-   only the worktree path: once a worktree is entered, `HEAD` is the build branch, so the
-   originating branch is no longer recoverable from the session. Step 5 persists it to disk
-   (`build_base:`) so a fresh `/spec:review` session can recover the merge-back target with no
-   conversation context.
-
-   - **Resume** (`status: implementing` from step 1): a worktree likely already exists from the
-     prior run — do **not** ask, and do **not** `create` again (it would die on the existing
-     branch). Reconstruct `{worktree}`, then:
-     - `git rev-parse --show-toplevel` already equals `{worktree}` → you are in it; go to step 3.
-     - else `{worktree}` appears in `git worktree list` → `EnterWorktree {path: {worktree}}`,
-       run the VERIFY gate below, then go to step 3 (skip create + setup; setup ran last time).
-     - else (no worktree — the prior run built in place, or it was cleaned up) → continue **in
-       place**; never spin up a worktree mid-spec. Go to step 3.
-
-   - **Fresh build** (`status: hardened`): choose the workspace from the optional config key
-     `build.workspace` ∈ `worktree | in-place | ask` (default **`ask`** when the key is absent —
-     preserves the prompt). `in-place` → step 3, no prompt. `worktree` → take the Worktree path
-     below, no prompt. `ask` → `AskUserQuestion` (isolated worktree, recommended for parallel
-     work, vs in place) and branch on the answer. In all cases the user can still redirect.
-     **In place** → step 3. **Worktree** → entry is
-     deterministic and *verified*; it never silently degrades to building on the current branch.
-     A separate `git worktree add` (loud, fixable failures) plus one `EnterWorktree {path:}` is
-     more reliable than `EnterWorktree {name:}`, whose create-and-enter can be rejected when a
-     worktree session is already active and leave the build on the root branch:
-     - `{target}` (the originating branch) was already captured at the top of step 2 — do **not**
-       re-read `HEAD` here; the worktree create below does not change it yet.
-     - **Create:** `{mergeBack} create --source {source}`. Capture its **last stdout line** as
-       `{worktree}` (the absolute path). Non-zero exit (branch/path exists, unborn HEAD, run from
-       a worktree, `.claude/worktrees/` not gitignored) → **STOP** and show the user its stderr;
-       do not fall back to in-place.
-     - **Enter:** `EnterWorktree {path: {worktree}}`.
-     - **Setup:** after the VERIFY gate passes, run the host's `setupCommand` once inside
-       `{worktree}`.
-
-   - **VERIFY entry — the hard gate** (both paths that call `EnterWorktree`): run
-     `git rev-parse --show-toplevel` (Bash). It equals `{worktree}` → entered. It does **not**
-     → the session is still on the root branch: **STOP immediately, run no workers, write
-     nothing.** The user asked for isolation — building in place is the one thing you must never
-     do here. In the STOP report, echo the `EnterWorktree` tool result verbatim plus
-     `git worktree list` so the cause is visible (entry into a registered `{path:}` is
-     deterministic — a failure is structural, not transient, so do not loop-retry; surface it).
-     Only build in place if the user *explicitly* redirects. (This is the failure the
-     cross-worktree write guard can't catch — if you never entered, there is no worktree to
-     escape from.)
-3. **Parse the spec** (read it once):
+   **Worktree isolation is not build's concern.** Build runs the workflow in whatever cwd it is
+   in. If the user ran `/git:enter-worktree <spec>` first, that cwd is the worktree; if not, it
+   is the working tree (in place). Build neither creates, enters, nor re-enters a worktree, and
+   never captures or writes `build_base`. To build in isolation, run `/git:enter-worktree`
+   before this command (it is idempotent, so it is also the fresh-process re-entry mechanism).
+2. **Parse the spec** (read it once):
    - File Plan table → batches: group rows by **Layer** (and by area where the host's
      pipeline rules § Build says so); order groups per the host's `layerGroups` — layers
      listed together in one group run as ONE parallel group (their file sets must be disjoint;
@@ -114,18 +65,17 @@ will offer the worktree workspace, run `spec-paths merge-back` too and keep that
      declares (e.g. `migration:`), AC list (TDD enabled iff ACs exist). In design-capable
      hosts, pure-UI rendering gets no TDD tests — the component catalog covers it; ACs are
      behavior.
-4. **Resolve the gate.** Take `gateCommand` and `testCommand` from config; substitute
+3. **Resolve the gate.** Take `gateCommand` and `testCommand` from config; substitute
    `{testDirs}`/`{scopeDirs}` placeholders from the spec's File Plan dirs. Pass the
    `pipelineRules` path (config value) as `pipelineRulesPath` — workers read its
    `## Worker Rules` / `## Test Rules` sections themselves. The workflow *script* has no
    filesystem access, but the agents it spawns do, so host rules and doctrines travel as PATHS
    the workers read, never as inline blobs — `args` is a control channel of paths/ids/enums,
    not a data bus, so no prose ever enters it to corrupt its JSON.
-5. Flip `status: hardened → implementing`. In the **same** frontmatter edit, write
-   `build_base: {target}` (the originating branch captured in step 2) so `/spec:review` can
-   recover the merge-back target from disk in a fresh session. On a **resume** (`status:
-   implementing` already, so no flip happens): leave an existing `build_base` untouched — only
-   backfill it if the field is missing (a spec built before this field existed).
+4. Flip `status: hardened → implementing`. Build never writes `build_base` — that field is owned
+   solely by `/git:enter-worktree`, which captures the originating branch before entering the
+   worktree. If the build is in place, `build_base` is simply absent and `/spec:review`'s
+   merge-back no-ops.
 
 ## Phase 1 — Run the workflow
 

@@ -85,8 +85,8 @@ Shared invariants (risk tiers, model placement, escalation contract, MCP policy)
 `doctrine/shared.md` (run `spec-paths shared` for its absolute path); the genesis-only supplement
 is `doctrine/genesis.md` (`spec-paths shared-genesis`). Spec template:
 `templates/spec.md`. Deterministic orchestration: `workflows/wf-build.js`,
-`workflows/wf-design.js` (design-stage authoring: comprehend | foundation | implement | stories |
-reconcile), `workflows/wf-review.js` — commands locate them via the bundled `spec-paths` helper, since
+`workflows/wf-design.js` (design-stage authoring: comprehend | author | reconcile),
+`workflows/wf-review.js` — commands locate them via the bundled `spec-paths` helper, since
 `${CLAUDE_PLUGIN_ROOT}` is not substituted inside command bodies.
 
 ## Process layer vs grounding layer

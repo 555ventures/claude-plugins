@@ -103,6 +103,7 @@ is too small to bother and to just ask for it directly.
 | `/spec:doctor` | Read-only drift check of the generated files | When something feels stale |
 | `/spec:import-design` | Pulls a finished Claude Design mockup into the repo as real tokens + components (no spec) | Anytime you have a mockup |
 | `/git:commit`, `/git:merge` | Fast add-all-commit; guided branch merge | Anytime |
+| `/git:enter-worktree` | Enter (or re-enter) the isolated worktree for a spec — idempotent, owns `build_base` | Before `/spec:build` (or `/spec:design`) for isolation |
 
 ## Starting from scratch: the genesis stage
 

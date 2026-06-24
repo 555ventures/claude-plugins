@@ -62,8 +62,11 @@ Distill the fetched markup into a **design digest** (shared § "Claude Design as
 Digest step) at a plain repo path (e.g. `.claude/design-digests/<projectId>-<file>.json`, outside
 `.claude/genesis/`) — the `:root` (and `[data-accent]`) CSS custom properties are the **token
 system** (colors, spacing, radii, type, motion); the `<x-dc>` blocks / sections are the **surface +
-state inventory**; plus interaction notes, a11y flags, and the source sha256. Authoring (Phase 3)
-reads the compact digest, never the raw markup. Inventory the repo's current canon too: existing
+state inventory** (with the per-surface `visualSpec` + `sourceRef` the recipe defines); plus
+interaction notes, a11y flags, and the source sha256. Authoring (Phase 3) reads the digest **and**,
+for visual fidelity, each surface's markup under split authority — structure + treatment from the
+markup, values through the digest's token roles, never a literal copied from the markup. Inventory
+the repo's current canon too: existing
 token files + doctrine (from the `design` block, or conventional paths by detected stack) and
 whether a component catalog (Storybook / Widgetbook) exists — the digest's token-map tags
 (`matches-canon` / `new-role` / `fork`) are computed against it. A re-run whose `source.sha256`

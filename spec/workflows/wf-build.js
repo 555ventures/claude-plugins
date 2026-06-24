@@ -306,14 +306,26 @@ for (const group of args.groups) {
 // ---- Phase: deterministic gate + repair loop ----
 phase('Gate')
 const gateCmd = args.gate.command
+// The gate's truth is the command's EXIT CODE, never the model's reading of stdout. We append a
+// sentinel echo that only fires on a 0-exit chain and key pass off that exact string — closing the
+// false-green hole where a Haiku read a typecheck as clean while it exited non-zero.
+const GATE_SENTINEL = '__GATE_PASS__'
 let gate = null
 for (let round = 0; round <= 2; round++) {
   gate = await agent(
-    `Run these checks and report results. Do not edit any file.\n\n${gateCmd}\n\n` +
+    `Run this command exactly as written and report results. Do not edit any file.\n\n${gateCmd} && echo ${GATE_SENTINEL}\n\n` +
+    `The trailing \`&& echo ${GATE_SENTINEL}\` prints the exact sentinel ${GATE_SENTINEL} ONLY when every check in the ` +
+    `chain exits 0; any non-zero exit short-circuits the chain and the sentinel never prints. Set pass=true ONLY if the ` +
+    `exact string ${GATE_SENTINEL} appears in the command output — if it is absent, the gate failed, set pass=false. ` +
+    `Put the raw exit code (or "non-zero, no ${GATE_SENTINEL}") and the error/failure count in summary. ` +
     `For each failure, identify the single file that most likely needs the fix (source file for ` +
     `implementation bugs, test file for bad tests) and summarize the failure in one line including ` +
-    `the test/check name. pass=true only if every check is green.`,
+    `the test/check name.`,
     { label: `gate:round-${round}`, phase: 'Gate', schema: GATE, model: 'haiku' })
+  // Self-contradiction guard: a model may still report pass=true while listing failures (the
+  // false-green this guard exists to kill). The workflow, not the model, decides — pass with any
+  // failure listed is a fail. Enforced regardless of model behavior.
+  if (gate && gate.pass && gate.failures && gate.failures.length > 0) gate.pass = false
   if (!gate || gate.pass) break
 
   const byBatch = {}

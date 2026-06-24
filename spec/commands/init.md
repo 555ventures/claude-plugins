@@ -291,7 +291,11 @@ enforcement brain on its own cadence (rules/tooling drift, not repo re-profiling
 **Brownfield (the repo has real UI):** extract, don't invent. Locate the theme/token files;
 read representative screens; write the doctrine doc as a description of what is **already
 true** — type scale, spacing rhythm, color roles, density, dialog-vs-page habits,
-empty-state tone. List the inconsistencies you found; do not resolve them.
+empty-state tone. List the inconsistencies you found; do not resolve them. **Detect an existing
+base dir / barrel** (a directory of overlay shells — Sheet/Dialog/Popover/Drawer — behind an
+`index.*`); if one exists, **name it and the import-only rule in the doctrine** (the cross-session
+memory `/spec:design` imports from). If none exists, **record the gap** — do not scaffold one here;
+the set is seeded by genesis or grows by extraction through specs.
 
 **Greenfield (no genesis canon, no real UI yet):** `AskUserQuestion` first — **adopt** a base design system
 (recommended; offer the real candidates for this stack, e.g. shadcn/Radix or Material on

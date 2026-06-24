@@ -90,13 +90,23 @@ approved round; re-invoking inventories what exists and continues.
    whether an existing component (or a variant) serves — the **reuse gate**, preferring extending
    over creating — plus an **on-disk inventory** of what already exists (foundation files,
    components, entries, and any digest at the sidecar path whose `source.sha256` matches the fetched
-   markup, which means Phase 0.5 is already done). The Haiku only reports; it edits nothing. A reuse
+   markup, which means Phase 0.5 is already done). **It also reads the base barrel** (the
+   doctrine-named base dir's `index.*`) and reports, for each overlay shell a planned surface needs
+   (Sheet/Dialog/Popover/Drawer), whether the base primitive **exists to import** or is a
+   **missing-foundation-gap** — `/spec:design` imports base primitives and never creates them, so an
+   absent one is a blocker for Phase 1, not work to schedule. The Haiku only reports; it edits nothing. A reuse
    that changes the spec's component inventory is reconciled in Phase 4. Use the summary to skip done
    work in the phases below. **The Haiku's summary is authoritative for the reuse gate; do NOT
    re-read the inventoried source into this session.** If the Phase 1 plan needs a specific
    component's API, dispatch a **targeted Haiku** for that one API rather than reading every file.
 
 ## Phase 0.5 — Comprehend the mockup (only when `design_source` is set)
+
+**Skip the comprehend boot when Phase 0 reported it done.** The Phase 0 Haiku inventory matches any
+existing digest's `source.sha256` against the fetched markup; on a match, comprehend already ran —
+do **not** boot `wf-design comprehend` again. The pipeline is re-entrant and a sha256-matched digest
+**is** the done signal; re-booting only pays the cold-start tax to re-derive an identical digest.
+Proceed straight to Phase 1 with the existing digest + slices. Otherwise:
 
 Run **`wf-design`** with `stage: "comprehend"`: the Sonnet worker distills the fetched `.dc.html`
 into the on-disk **design digest** (`specs/YYYYMMDD/##-name.design-digest.json`) plus durable
@@ -135,6 +145,15 @@ The expensive model produces the **plan** — the on-disk artifact Sonnet author
   surface: a **prop-type table**, per-surface **token assignments** (role names; new roles flagged),
   the **states** to render, and one-line **interaction/voice notes**. This is taste invented from
   doctrine + tokens + spec; it cannot be delegated. It stays in the spec (the single on-disk handoff).
+
+**Base primitives are import-only (both paths).** Overlay shells (Sheet/Dialog/Popover/Drawer —
+`containment`-tagged in the digest) are **system foundation**, not feature work: they live once in
+the doctrine-named base dir behind its barrel and are imported everywhere. The designer **consumes
+the Phase 0 base-barrel report**: a needed primitive that exists → planned as an import; a needed
+primitive that is **missing** → a **blocker** (a foundation gap surfaced to the user), **never**
+scheduled as primitive creation by this feature wave. `/spec:design` imports base primitives and
+never authors them — a missing one is resolved by foundation work outside this stage, not improvised
+by the walled component workers.
 
 The designer writes **no component files** in this phase — only fork rulings (token files + spec
 Decisions) or the enriched spec UI section.

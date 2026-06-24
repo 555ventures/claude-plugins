@@ -208,13 +208,20 @@ if (STAGE === 'comprehend') {
     `tokenMap [{role, value, tag: "matches-canon"|"new-role"|"fork", canonToken, canonValue}]; ` +
     `surfaces [{id, dcBlock, props:[{name, type, required}], states:[string], tokensUsed:[role], ` +
     `visualSpec:{fill: role|"none", border:{width: role|"none", color: role, radius: role}, elevation: role, shape: "pill"|"rounded"|"square"}, ` +
-    `sourceRef:{sliceFile, dcBlock}, shared: boolean, usedBy:[surfaceId]}]; ` +
+    `sourceRef:{sliceFile, dcBlock}, shared: boolean, usedBy:[surfaceId], containment: boolean}]; ` +
     `interactions [{surface, note}]; a11y [{surface, flag, detail, severity}]. ` +
     `visualSpec records the structural visual TREATMENT in token-ROLE terms (never literals): an ` +
     `outlined pill is {fill:"none", border:{width:<role>, color:<role>, radius:<pill-role>}, shape:"pill"}, ` +
     `a filled chip is {fill:<role>, border:{width:"none", ...}, shape:"rounded"} — this is what distinguishes ` +
     `the two. An unmappable value gets the same "new-role"/"fork" tagging tokenMap uses — never a literal. ` +
     `shared=true / usedBy lists atoms referenced by ≥2 surfaces. ` +
+    `containment=true marks an overlay SHELL — a surface whose markup is a backdrop + focus-trap + ` +
+    `dismiss wrapper around otherwise-distinct content (Sheet / Dialog / Popover / Drawer), identifiable ` +
+    `from the markup SHAPE the same way visualSpec is derived. A containment shell is a BASE PRIMITIVE: ` +
+    `it is extracted ONCE into the doctrine-named base dir behind its barrel and imported by every surface ` +
+    `that needs it — never reimplemented per surface. (A shell's usedBy is structurally ≤1 because each ` +
+    `wraps a DISTINCT surface, so the usedBy≥2 'shared' count can never tag it — containment is the field ` +
+    `that does.) Set containment=false for ordinary content surfaces. ` +
     `Values are scalars and bounded strings — never prose paragraphs, never taste rulings.`
   const SLICE_NOTE = `In the SAME pass, write each surface's <x-dc> block VERBATIM to its own durable ` +
     `slice file at ${slicePrefix}.slice-<surfaceId>.html (one per surfaces[] entry, sibling to the digest ` +
@@ -263,8 +270,9 @@ if (STAGE === 'comprehend') {
     `(a) every <x-dc> block in the markup appears in surfaces[]; (b) every :root / [data-accent] custom ` +
     `property appears in tokenMap[] tagged matches-canon|new-role|fork; (c) source.sha256 matches the bytes ` +
     `of ${rawPath}; (d) every surface has a visualSpec stated in token ROLES (no raw literals — hex/px) and a ` +
-    `sourceRef.sliceFile that exists and is readable on disk. pass=false with one failure per gap (file = ` +
-    `${digestPath}). Do not edit any file.`,
+    `sourceRef.sliceFile that exists and is readable on disk; (e) every surface carries a containment boolean, ` +
+    `set true for any overlay shell (backdrop + focus-trap + dismiss wrapper) and false otherwise. pass=false ` +
+    `with one failure per gap (file = ${digestPath}). Do not edit any file.`,
     { label: 'comprehend-verify', phase: 'Gate', schema: GATE, model: 'haiku' })
   if (!verify || verify.pass) {
     return { stage: 'complete', digestPath, completed }
@@ -367,6 +375,7 @@ function workerPrompt(b) {
     ? `You author one whole **coherence group** in one warm pass: the stateless **components** AND their **catalog entries**, as a faithful translation of an on-disk PLAN — never an invention beyond it. The plan is ${PLAN_PATH}: if it is a \`.json\` design digest, read surfaces[] ({id, props, states, tokensUsed, visualSpec, sourceRef, shared, usedBy}) for what to build and tokenMap[] for the exact token roles; if it is the spec, read its UI section (per-surface prop tables, token assignments, states, interaction/voice notes). Build every state the plan lists. props + mock data only.\n\n` +
       `**Match the mock (split authority).** On the digest path, for EACH surface you build, Read its \`sourceRef.sliceFile\` from the digest — that file is the actual Claude Design markup for the surface; reproduce its STRUCTURE and visual TREATMENT closely (an outlined pill stays an outlined pill, a filled chip stays filled — see \`visualSpec\`). But VALUES resolve through canon, never the slice: \`tokenMap\` + \`visualSpec\` are **binding** — map every value to a token role, and NEVER copy a literal (hex, px, radius) out of the slice. A value with no canon role is a \`new-role\`/\`fork\` → return \`blocked\`, do not invent it.\n\n` +
       `**Shared atoms first.** A surface tagged \`shared\` (\`usedBy\` ≥2) is an atom authored once, in an earlier coherence group; if a surface you build consumes a shared atom, IMPORT it — never reimplement or fork it.\n\n` +
+      `**Base primitives are import-only — never re-author one.** A surface tagged \`containment\` in the digest is an overlay SHELL (Sheet / Dialog / Popover / Drawer): a BASE PRIMITIVE that lives ONCE in the doctrine-named base dir behind its barrel${DOCTRINE_DOC ? ` (Read ${DOCTRINE_DOC} for that path)` : ' (named in the design doctrine doc)'}. IMPORT it from the barrel; never hand-roll an overlay shell in a feature file. If the primitive you need is ABSENT from the base dir / barrel, that is a foundation gap you do NOT fill here — return \`blocked {kind: "stale-assumption", detail: "missing base primitive <name>"}\`, do not reimplement. The slice gives the shell's STRUCTURE + visual treatment, but its behavioral/a11y contract (focus-trap, dismiss, portal) is authored to canon by the foundation, never copied out of the static markup.\n\n` +
       `**Then write this group's catalog entries in the SAME pass.** The batch \`files\` list below includes the catalog-entry (story) paths for the surfaces you just authored. Write each in the host's story format (Read an existing entry first for the exact format), rendering every state the plan lists (empty / loading / error / edge). COMPOSE the components you just wrote — import them, do not reimplement them. Authoring components and their entries together (you already hold the real props in context) is the point of the coherence-group batch.`
     : `You are writing the **living showcase entry** — the single cross-spec catalog file (path in the batch files below) that sits the new surfaces next to existing ones; it is the cross-spec drift detector. The components and their per-group entries already exist on disk (the implement-kind workers wrote them this pass) — Read the components for their real props and COMPOSE them; do not reimplement them. Render the new surfaces in the host's story format (Read the existing showcase entry first for its format), covering the states the plan lists.`
   return [
@@ -410,6 +419,10 @@ for (const group of groups) {
 // ---- Deterministic gate + repair loop (cap 2) ----
 phase('Gate')
 const gateCmd = args.gate && args.gate.command
+// The gate's truth is the command's EXIT CODE, never the model's reading of stdout. We append a
+// sentinel echo that only fires on a 0-exit chain and key pass off that exact string — closing the
+// false-green hole where a Haiku read a typecheck as clean while it exited non-zero.
+const GATE_SENTINEL = '__GATE_PASS__'
 
 // The gate agent reads paths out of gate-command output — which routinely prints absolute or
 // ./-prefixed paths. Match tolerantly so an in-scope failure isn't misclassified out-of-scope.
@@ -444,10 +457,18 @@ if (!gateCmd) {
 let gate = null
 for (let round = 0; round <= 2; round++) {
   gate = await agent(
-    `Run these checks and report results. Do not edit any file.\n\n${gateCmd}\n\n` +
+    `Run this command exactly as written and report results. Do not edit any file.\n\n${gateCmd} && echo ${GATE_SENTINEL}\n\n` +
+    `The trailing \`&& echo ${GATE_SENTINEL}\` prints the exact sentinel ${GATE_SENTINEL} ONLY when every check in the ` +
+    `chain exits 0; any non-zero exit short-circuits the chain and the sentinel never prints. Set pass=true ONLY if the ` +
+    `exact string ${GATE_SENTINEL} appears in the command output — if it is absent, the gate failed, set pass=false. ` +
+    `Put the raw exit code (or "non-zero, no ${GATE_SENTINEL}") and the error/failure count in summary. ` +
     `For each failure, identify the single file that most likely needs the fix and summarize the ` +
-    `failure in one line including the check name. pass=true only if every check is green.`,
+    `failure in one line including the check name.`,
     { label: `gate:round-${round}`, phase: 'Gate', schema: GATE, model: 'haiku' })
+  // Self-contradiction guard: a model may still report pass=true while listing failures (the
+  // false-green this guard exists to kill). The workflow, not the model, decides — pass with any
+  // failure listed is a fail. Enforced regardless of model behavior.
+  if (gate && gate.pass && gate.failures && gate.failures.length > 0) gate.pass = false
   if (!gate || gate.pass) break
 
   const byBatch = {}

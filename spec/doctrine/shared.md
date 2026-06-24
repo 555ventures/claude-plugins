@@ -193,6 +193,17 @@ A note that contradicts the doctrine is a fork, not a tweak: the user rules **lo
 exception** (spec Decisions) or **doctrine change** (doc updated, older surfaces recorded as
 a known gap) — never a silent override.
 
+**Base primitives (structural foundation).** Overlay shells — backdrop + focus-trap + dismiss
+wrappers (Sheet/Dialog/Popover/Drawer) — are **system foundation, the structural analog of tokens**:
+created once and imported everywhere, never re-implemented per surface. They live in the
+**doctrine-named base dir behind its barrel** (`base/index.*`), and the barrel **is** the cross-session
+memory — there is no registry. `/spec:design` is **import-only** for them: a surface that needs a base
+primitive imports it; a needed-but-absent primitive is a **foundation gap (a blocker)**, never authored
+by the feature wave. The comprehend digest's **`containment` tag** is what drives extraction (a
+containment shell's `usedBy` is structurally ≤1, so the `usedBy≥2` "shared" count can never tag it).
+`/spec:enforce` mechanizes the `base-primitive-containment` rule (category `structure`) so a hand-rolled
+overlay outside the base dir is a build error regardless of how it was born.
+
 **Claude Design as a source (read-only).** A finished **Claude Design** (`claude.ai/design`)
 mockup can *seed* the canon above. Both `/spec:import-design` (spec-free) and `/spec:design`
 (spec-coupled, when a spec sets `design_source`) consume it through the **same**

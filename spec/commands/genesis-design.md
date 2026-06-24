@@ -90,7 +90,7 @@ Author directly (taste exception — not delegated to Sonnet):
    color semantics) and a `## Dissents` section (required). **Doctrine never carries values.** Any
    sentence that names a size, step, ratio, weight, tracking, duration, or specific color is
    describing an **encodable** dimension and MUST be materialized as a token (Phase 4.2) + an
-   enforcement rule (Phase 4.3) — doctrine may narrate the *why*, never be the value's only home. A
+   enforcement rule (Phase 4.4) — doctrine may narrate the *why*, never be the value's only home. A
    value living only in prose is the defect this command guards against. (Corollary: "hierarchy from
    weight and space, not size jumps" is a *posture* — the size roles still ship; weight-led hierarchy
    is expressed *through* a restrained size/weight pairing, not by omitting the scale.) For non-visual
@@ -115,7 +115,17 @@ Author directly (taste exception — not delegated to Sonnet):
    an undelivered token — its enforcement rule will have nothing to bind to. Name the token +
    consumed + doctrine paths so `/spec:init` and `/spec:design` can find them. Set
    `status.design: tokens-landed`.
-3. **Design rules** — write `.claude/genesis/design-rules.json` (template via `spec-paths templates`):
+3. **Base primitives — seed the standard overlay set (visual archetypes only).** Scaffold a bounded
+   standard set of overlay shells — **Sheet, Dialog, Popover, Drawer** — plus a **barrel** (`index.*`)
+   into the project's **base dir** (e.g. `src/components/base/`). Each carries the backdrop +
+   focus-trap + dismiss + portal contract authored to the doctrine and consuming token roles by name —
+   no feature content. **Name the base dir, its barrel, and the import-only rule in the doctrine doc**
+   (the same way token/consumed paths are named). This is the no-mockup analog of the mockup path's
+   `containment`-driven extraction: base primitives are system foundation (the structural analog of
+   tokens), seeded **once** here so the first overlay-bearing `/spec:design` **imports** rather than
+   re-implements. The `base-primitive-containment` rule (Phase 4.4, from the template, category
+   `structure`) makes import-only a build error. Headless/non-visual archetypes skip this item.
+4. **Design rules** — write `.claude/genesis/design-rules.json` (template via `spec-paths templates`):
    each rule carries a `targetCategory` **enum only** (the design category set defined in
    genesis.md § Genesis: Enforcement Handoff), `appliesTo`/`exemptGlobs`, `severity`, `rationale` —
    **never a tool name** (same section). `/spec:enforce` owns the category→enforcer selection, chosen
@@ -124,7 +134,7 @@ Author directly (taste exception — not delegated to Sonnet):
    (`color`), `type scale → no-off-scale-text` (`typography`), spacing → off-scale-spacing, etc. A
    DECIDED family with no consume-by-name rule is an authoring error: encodable ⇒ token **and**
    category, always.
-4. Commit. Set `status.design: rules-locked`.
+5. Commit. Set `status.design: rules-locked`.
 
 ## Phase 5 — Report & hand off
 

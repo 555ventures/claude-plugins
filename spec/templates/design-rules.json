@@ -38,6 +38,15 @@
       "exemptGlobs": [],
       "severity": "error",
       "rationale": "Keeps feature modules independently evolvable."
+    },
+    {
+      "id": "base-primitive-containment",
+      "intent": "Overlay shells (backdrop + focus-trap + dismiss — Sheet/Dialog/Popover/Drawer) live in the base dir and are imported from its barrel; none are hand-rolled outside it.",
+      "targetCategory": "structure",
+      "appliesTo": ["src/**/*.{ts,tsx}"],
+      "exemptGlobs": ["src/components/base/**", "**/*.stories.*"],
+      "severity": "error",
+      "rationale": "Base primitives are system foundation, created once and imported everywhere; re-implementing an overlay shell in a feature file forks the focus-trap/dismiss/portal contract and drifts the design."
     }
   ]
 }

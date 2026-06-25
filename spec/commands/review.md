@@ -158,6 +158,11 @@ the build branch; `{worktree}` the worktree path (omit `--worktree` if no worktr
 
 ## Rules
 
+- **Never Read `wf-review.js`.** The complete `args` contract is in Phase 1 (`{specPath, tier,
+  base, patternsPath, hasDriftScript}`) and the return shape is `{survivors, killed}`. The
+  reviewer/refuter fan-out, the refutation filter, and all control flow are the workflow's
+  concern — its shape lives in the script, not in orchestrator context. Invoke it (by
+  `scriptPath`) and act on its return.
 - Reviewers and refuters are **read-only** — fixes are always separate dispatches.
 - Refuters see the claim only. The asymmetry is the filter; don't leak reviewer reasoning.
 - Waivers come from the user only, recorded in the spec — never invented, never implied.

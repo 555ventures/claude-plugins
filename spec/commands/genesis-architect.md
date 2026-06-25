@@ -159,6 +159,10 @@ is `/spec:init`.
 
 ## Rules
 
+- **Never Read `wf-panel.js` or `wf-research.js`.** Both `args` contracts are in the phases that
+  invoke them — `wf-research` `{stage, dimensionKeys, briefPath, contextPaths, verifyKeys}` and
+  `wf-panel` `{stage, briefPath, researchKeys, roleKeys, runProposers, contextPaths}`. Invoke each
+  by `scriptPath` and act on its return; their sources are never orchestrator context.
 - Greenfield-only (v1): a populated repo → STOP, point to `/spec:init`.
 - `AskUserQuestion` dismissed → STOP; never invent the declined answer.
 - Hard-to-reverse forks always go to the user; never synthesized away.

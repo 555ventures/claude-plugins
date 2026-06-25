@@ -149,6 +149,13 @@ Next: `/spec:review $ARGUMENTS`
 
 ## Rules
 
+- **Never Read `wf-build.js`.** The complete `args` contract is specified in Phase 1
+  (`{specPath, tdd, testBatches, groups, resolutions, agentMap, doctrinePaths, gate,
+  pipelineRulesPath}`); the return stages are enumerated in Phase 2. The workflow's internals —
+  batch execution, gate, repair loop, journal cache, resume — are the workflow's concern, not
+  the orchestrator's. Invoke it (by `scriptPath`) and act on its returns; its source is never
+  orchestrator context. "Read the workflow to understand the args contract" is the anti-pattern —
+  the contract lives here, not there.
 - **Workers never run git.** Any git command in a worker prompt response is a defect. The
   orchestrator owns all git and checkpoint-commits after green phases. (Hard-learned: a
   worker's repo-wide `git checkout .` once destroyed sibling workers' uncommitted edits.)

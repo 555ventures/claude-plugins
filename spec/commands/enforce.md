@@ -181,6 +181,10 @@ the real violations they just caught).
 
 ## Rules
 
+- **Never Read `wf-enforce.js`.** The complete `args` contract is in Phase 1 (`{configPath,
+  pipelineRulesPath, stackDescriptorPath, enforcementManifestPath, cells}`) and the
+  discovery-fan-out behavior + return shape are described there. Invoke it (by `scriptPath`) and
+  act on its return — its source is never orchestrator context.
 - **Never name a specific linter/formatter/arch-tool/hook-runner in any plugin file.** Encode the
   method + category here; discover the tool at runtime. A named tool anchors the agent and goes
   stale faster than the rules do.

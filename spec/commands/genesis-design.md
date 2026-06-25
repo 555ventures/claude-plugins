@@ -147,6 +147,10 @@ machinery from `design-rules.json` (plus the rest of the rule set).
 
 ## Rules
 
+- **Never Read `wf-panel.js` or `wf-research.js`.** The `args` are `stage: "design"` variants of
+  the contracts documented in `/spec:genesis-architect` (Phase 3 `wf-research`, Phase 4
+  `wf-panel`) — this command reuses them ("Same loop as architect"). Invoke each by `scriptPath`
+  and act on its return; their sources are never orchestrator context.
 - One canon: this supersedes `/spec:init`'s greenfield design sketch; init reads this, never
   re-prompts adopt/craft when `design: rules-locked`.
 - Design rules are category-only; tool selection is `/spec:enforce`'s job (runtime, per stack).

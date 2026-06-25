@@ -6,7 +6,7 @@ export const meta = {
     { title: 'Comprehend', detail: 'distill the fetched .dc.html into the on-disk design digest; one worker + structural verify' },
     { title: 'Author', detail: 'one gated run, coherence-group granular: foundation (one batch) first, then one warm worker per coherence group authoring its components AND their catalog entries, parallel across groups; the living showcase entry its own final batch' },
     { title: 'Reconcile', detail: 'one worker updates the spec to approved reality' },
-    { title: 'Gate', detail: 'host gate / structural re-read; repair loop (author cap 2, reconcile cap 1)' },
+    { title: 'Gate', detail: 'host gate / structural re-read; author repair loop stops on no-progress (unchanged failure set) or hard ceiling; reconcile cap 1' },
   ],
 }
 
@@ -343,8 +343,8 @@ if (STAGE === 'reconcile') {
 // in one warm context (canon read once). Independent coherence groups share a single wave. Foundation
 // is one batch in wave 1 (so a later repair journal-caches it on resume); the living showcase entry is
 // its own 'stories' batch in the final wave (a cross-spec file — its own batch avoids a write-race).
-// The gate (host typecheck + lint) runs ONCE over the whole pass, and a single repair loop (cap 2)
-// routes each failure to its owning batch regardless of kind — now at most one cold re-dispatch per
+// The gate (host typecheck + lint) runs ONCE over the whole pass, and a single repair loop (stops on
+// no-progress or a hard ceiling) routes each failure to its owning batch regardless of kind — at most one cold re-dispatch per
 // coherence group, not per component. Each batch carries a `kind` ∈ {'foundation','implement','stories'}.
 const groups = args.groups || []
 const PLAN_PATH = args.planPath || args.specPath
@@ -416,7 +416,7 @@ for (const group of groups) {
   }
 }
 
-// ---- Deterministic gate + repair loop (cap 2) ----
+// ---- Deterministic gate + repair loop (progress-based termination + hard ceiling) ----
 phase('Gate')
 const gateCmd = args.gate && args.gate.command
 // The gate's truth is the command's EXIT CODE, never the model's reading of stdout. We append a
@@ -455,7 +455,14 @@ if (!gateCmd) {
 }
 
 let gate = null
-for (let round = 0; round <= 2; round++) {
+// Repair loop terminates on PROGRESS, not a blind counter (mirrors wf-build). After each failing
+// round we compare the failing file-SET (comparable across rounds because GATE requires `file` on
+// every failure) to the prior round's: an unchanged set means the repair waves are grinding the same
+// files with nothing to show — escalate now instead of burning another wave. The hard ceiling below
+// stays load-bearing: it catches OSCILLATION (fix A → break B → fix B → break A forever), which a
+// no-progress check on an ever-changing set never terminates.
+let prevFailKey = null
+for (let round = 0; round <= 3; round++) {
   gate = await agent(
     `Run this command exactly as written and report results. Do not edit any file.\n\n${gateCmd} && echo ${GATE_SENTINEL}\n\n` +
     `The trailing \`&& echo ${GATE_SENTINEL}\` prints the exact sentinel ${GATE_SENTINEL} ONLY when every check in the ` +
@@ -482,7 +489,12 @@ for (let round = 0; round <= 2; round++) {
   if (outOfScope.length) {
     return { stage: 'out-of-scope-failure', failures: outOfScope, gate, completed: receipts }
   }
-  if (round === 2) break
+  // No-progress escalation: identical failing file-set to last round → stop (routes to the
+  // gate-exhausted return below; no new exit path).
+  const failKey = gate.failures.map(f => f.file).sort().join('\n')
+  if (failKey === prevFailKey) break
+  prevFailKey = failKey
+  if (round === 3) break
 
   log(`Gate round ${round} failed — repairing batches: ${Object.keys(byBatch).join(', ')}`)
   await parallel(Object.entries(byBatch).map(([bid, fails]) => () =>

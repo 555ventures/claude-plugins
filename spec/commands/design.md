@@ -17,13 +17,10 @@ gated here by the catalog + the user's eyes, not by TDD.
 **Model split — the expensive model plans; Sonnet implements.** Intended model: **Fable** (Opus
 while Fable is suspended — see shared § Model Placement). This stage is the pipeline's taste
 concentration point, but taste lives in *judgment*, not in *typing component files*. So the
-expensive model is confined to: the **plan** (the no-mockup UI section, or fork adjudication on a
-mockup), the **iteration loop's judgment**, the **screenshot visual review when one is configured**
-(reading rendered images and issuing correction **notes** — there is no blind no-screenshot review),
-and **doctrine promotion**. It **writes no
-component code and edits no files during iteration** — it issues notes; Sonnet applies them.
-**Sonnet implements 100% of component files**, plus foundation, catalog entries, comprehension,
-and reconcile — all through the **`wf-design`** workflow. Its gate is deliberately **lighter than
+expensive model **writes no component code and edits no files during iteration** — it plans, judges,
+reviews, and promotes doctrine, issuing **notes** that Sonnet applies (the full division of labor is
+the Rules invariant below). **Sonnet implements 100% of component files**, plus foundation, catalog
+entries, comprehension, and reconcile — all through the **`wf-design`** workflow. Its gate is deliberately **lighter than
 `wf-build`'s**: design's job is to get the catalog to **render** so a human can judge it, not to
 prove shippability. `/spec:build` re-runs typecheck/lint when it wires these components, and a
 human reviews every round here — so the gate is a bounded **compile-to-render** loop, not build's
@@ -155,14 +152,14 @@ scheduled as primitive creation by this feature wave. `/spec:design` imports bas
 never authors them — a missing one is resolved by foundation work outside this stage, not improvised
 by the walled component workers.
 
-The designer writes **no component files** in this phase — only fork rulings (token files + spec
-Decisions) or the enriched spec UI section.
+The designer's only Phase 1 output is fork rulings (token files + spec Decisions) or the enriched
+spec UI section.
 
 ## Phase 2 — Author (foundation + components + catalog in one gated run)
 
 Run **`wf-design`** with `stage: "author"`: a **single gated run** builds the foundation files, every
 stateless component, and the catalog entries, behind **one** typecheck + lint gate and one repair
-loop (cap 2). The `groups` arg is an array of **waves**; each wave is an array of **batches** that run
+loop (stops on no-progress — an unchanged failure set — or a hard ceiling). The `groups` arg is an array of **waves**; each wave is an array of **batches** that run
 in parallel; independent waves run in order. The unit of authoring is the **coherence group = one
 batch = one warm Sonnet worker** — *not* per-component. The shape (12-component / 3-coherence-group
 mockup spec):
@@ -173,7 +170,7 @@ wave 1 (parallel):  [ foundation ]                 1 agent  (types + schemas + m
 wave 2 (parallel):  [ grpA ] [ grpB ] [ grpC ]     3 agents (each authors its components AND their
                                                              catalog entries in one warm context)
 wave 3:             [ living showcase entry ]       1 agent  (single cross-spec file; write-race → own batch)
-gate:               1 Haiku typecheck + lint over the whole pass; repair cap 2, routed per batch
+gate:               1 Haiku typecheck + lint over the whole pass; repair stops on no-progress or ceiling, routed per batch
 ```
 
 Each batch carries a **`kind` ∈ {`foundation`, `implement`, `stories`}** that selects the worker
@@ -210,10 +207,13 @@ not the sum of per-kind waves.
     goes in its own batch in an earlier wave (the shared-atom group) and later groups **import** it
     rather than reimplement — one component, no write-race. **Absent a real `usedBy ≥2` atom,
     everything after foundation is one parallel wave** — do not invent a shared wave.
-  - **Context-ceiling valve.** If a coherence group exceeds **~5 components**, or its combined slice
-    files are large, split it into **two parallel batches in the same wave** so "by coherence group"
-    doesn't degenerate into "all in one agent" on a large spec. The Phase 0 Haiku inventory already
-    has file sizes — have it flag oversized groups so the split is data-driven.
+  - **Context-ceiling valve.** The real signal is **combined slice-file size**: that is what creates
+    one-worker context pressure, and the Phase 0 Haiku inventory already reports per-file sizes — have
+    it flag groups whose combined slice files are large so the split is data-driven. Component count
+    (**~5**) is only a cheap first-pass hint that a group *might* be oversized, not the trigger. When a
+    group's combined slices are large, split it into **two parallel batches in the same wave** so "by
+    coherence group" doesn't degenerate into "all in one agent" on a large spec. The split decision
+    stays here with the Phase 1 designer/planner — the workflow holds no taste and never decides it.
 - **Stories = the living showcase entry only** (`kind: stories`), a single dedicated batch in the
   **final wave**. Per-group catalog entries now ride in their group's `implement` batch; only the
   cross-spec showcase entry (path named in the doctrine doc) stays separate — it composes every new

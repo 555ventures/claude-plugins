@@ -26,7 +26,7 @@ absolute path — it is the `scriptPath` for the Workflow call below.
 ## Phase 0 — Preflight (parallel)
 
 1. Determine the diff base `{target}` (the originating branch the build started from) by
-   reading `build_base:` from the spec frontmatter — `/spec:build` wrote it there so a fresh
+   reading `build_base:` from the spec frontmatter — `/git:enter-worktree` wrote it there so a fresh
    review session recovers it from disk, never from conversation context. If `build_base` is
    absent (the spec was built before this field existed), fall back to
    `git -C {root} rev-parse --abbrev-ref HEAD` (the root working tree's current branch). The

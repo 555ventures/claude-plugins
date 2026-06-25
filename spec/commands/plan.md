@@ -132,7 +132,8 @@ Dispatch N independent refuters (T2: 1, T3: 2) in a single message, blind to eac
   architectural-boundary violations, persisted-state or migration coexistence problems, stale
   embedded library references vs installed versions, edge cases at boundaries, and conflicts
   with the host's pipeline rules (Read the rules file; cite the section). Read the code; cite
-  file:line. Report only what you find — an empty list is a valid outcome. ≤20 findings."*
+  file:line. Report every genuine defect, ordered by severity. Do not pad with style or
+  speculative nits — an empty list is a valid outcome."*
 
 Fix each finding in the spec, or explicitly reject it with the reason recorded in **Rationale**.
 Never silently drop a finding.

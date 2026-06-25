@@ -6,7 +6,7 @@ export const meta = {
     { title: 'TestAuthors', detail: 'failing tests derived from spec only' },
     { title: 'RedCheck', detail: 'confirm new tests fail before implementation' },
     { title: 'Implement', detail: 'layered batches, parallel within a layer group' },
-    { title: 'Gate', detail: 'host gate command, repair loop (cap 2)' },
+    { title: 'Gate', detail: 'host gate command, repair loop: stop on no-progress (unchanged failure set) or hard ceiling' },
   ],
 }
 
@@ -311,7 +311,14 @@ const gateCmd = args.gate.command
 // false-green hole where a Haiku read a typecheck as clean while it exited non-zero.
 const GATE_SENTINEL = '__GATE_PASS__'
 let gate = null
-for (let round = 0; round <= 2; round++) {
+// Repair loop terminates on PROGRESS, not a blind counter. After each failing round we compare the
+// failing file-SET (comparable across rounds because GATE requires `file` on every failure) to the
+// prior round's: an unchanged set means the repair waves are grinding the same files with nothing to
+// show — escalate now instead of burning another wave. The hard ceiling below stays load-bearing: it
+// catches OSCILLATION (fix A → break B → fix B → break A forever), which a no-progress check on an
+// ever-changing set never terminates.
+let prevFailKey = null
+for (let round = 0; round <= 3; round++) {
   gate = await agent(
     `Run this command exactly as written and report results. Do not edit any file.\n\n${gateCmd} && echo ${GATE_SENTINEL}\n\n` +
     `The trailing \`&& echo ${GATE_SENTINEL}\` prints the exact sentinel ${GATE_SENTINEL} ONLY when every check in the ` +
@@ -339,7 +346,12 @@ for (let round = 0; round <= 2; round++) {
   if (outOfScope.length) {
     return { stage: 'out-of-scope-failure', failures: outOfScope, gate, completed: receipts }
   }
-  if (round === 2) break
+  // No-progress escalation: identical failing file-set to last round → stop (routes to the
+  // gate-exhausted return below; no new exit path).
+  const failKey = gate.failures.map(f => f.file).sort().join('\n')
+  if (failKey === prevFailKey) break
+  prevFailKey = failKey
+  if (round === 3) break
 
   log(`Gate round ${round} failed — repairing batches: ${Object.keys(byBatch).join(', ')}`)
   await parallel(Object.entries(byBatch).map(([bid, fails]) => () =>

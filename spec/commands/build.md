@@ -127,8 +127,9 @@ T3 checkpoint (e.g. migration review), the Fable retainer reviews before the ste
 ## Phase 4 — Final gate
 
 Run the resolved `gateCommand`. On failure: repair via Sonnet dispatches mapped to the owning
-batch, max 3 rounds (detect → repair → verify), then consult the retainer, then escalate to
-the user.
+batch, max 3 rounds (detect → repair → verify); if a round leaves the failure set unchanged from
+the prior round, consult the retainer immediately rather than dispatching another repair round.
+After the ceiling or a stalled round, consult the retainer, then escalate to the user.
 
 **T3 checkpoint (mandatory):** any diff touching the host's declared high-risk surfaces
 (pipeline rules § Risk Tiers / § Build) gets a Fable retainer review before reporting.

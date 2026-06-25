@@ -31,6 +31,8 @@ once; independent groups run in **one parallel wave**, pinned to the on-disk pla
 **Setup:** run `spec-paths shared` and Read that file (shared invariants). Read the host's
 `.claude/spec.config.json` and its pipeline rules file. If the host config declares no
 `design` block (nor legacy `storybook: true`), STOP — this stage does not apply to this repo.
+Also run `spec-paths wf-design` once and keep the printed absolute path — it is the `scriptPath`
+for every `Workflow` call below (the same path serves comprehend, author, and reconcile).
 
 ## Input
 
@@ -105,7 +107,7 @@ do **not** boot `wf-design comprehend` again. The pipeline is re-entrant and a s
 **is** the done signal; re-booting only pays the cold-start tax to re-derive an identical digest.
 Proceed straight to Phase 1 with the existing digest + slices. Otherwise:
 
-Run **`wf-design`** with `stage: "comprehend"`: the Sonnet worker distills the fetched `.dc.html`
+Invoke `Workflow {scriptPath: <spec-paths wf-design output>, args: {stage: "comprehend", …}}`: the Sonnet worker distills the fetched `.dc.html`
 into the on-disk **design digest** (`specs/YYYYMMDD/##-name.design-digest.json`) plus durable
 per-surface slices (`…slice-<surfaceId>.html`). The orchestrator does **not** author the digest —
 the worker owns its schema (token map, surface inventory, `visualSpec`, `sourceRef`, slices); see
@@ -157,7 +159,7 @@ spec UI section.
 
 ## Phase 2 — Author (foundation + components + catalog in one gated run)
 
-Run **`wf-design`** with `stage: "author"`: a **single gated run** builds the foundation files, every
+Invoke `Workflow {scriptPath: <spec-paths wf-design output>, args: {stage: "author", …}}`: a **single gated run** builds the foundation files, every
 stateless component, and the catalog entries, behind **one** typecheck + lint gate and one repair
 loop (stops on no-progress — an unchanged failure set — or a hard ceiling). The `groups` arg is an array of **waves**; each wave is an array of **batches** that run
 in parallel; independent waves run in order. The unit of authoring is the **coherence group = one
@@ -240,8 +242,8 @@ any return other than `complete` collapses to one of **two** actions:
   `stale-assumption` wrong against the code) — the only return that needs a *decision*. Resolvable
   within the plan's intent → the designer **rules and writes the resolution to the on-disk plan**
   (the digest's fork-resolution / a token file / the spec's Decisions, per what the fork touches). A
-  genuine fork or a data-shape change → `AskUserQuestion`. Then re-invoke `wf-design`
-  (`resumeFromRunId`); workers re-read the plan / digest / spec / token files from disk every run, so
+  genuine fork or a data-shape change → `AskUserQuestion`. Then re-invoke the same
+  `Workflow {scriptPath …}` with `resumeFromRunId`; workers re-read the plan / digest / spec / token files from disk every run, so
   the ruling on disk naturally re-runs only the affected batch (no `resolutions` salt — wf-design has
   no such arg).
 - **Anything else** (`gate-exhausted`, `out-of-scope-failure`, `reconcile-unverified`, or a
@@ -301,7 +303,7 @@ Two branches:
 
 ## Phase 4 — Reconcile & promote
 
-1. Run **`wf-design`** with `stage: "reconcile"` (`specPath` + `landedFiles` = the
+1. Invoke `Workflow {scriptPath: <spec-paths wf-design output>, args: {stage: "reconcile", …}}` (`specPath` + `landedFiles` = the
    component/entry paths that landed this run, paths only): one Sonnet worker updates the spec to
    match approved reality — **UI** section (final component APIs and states), **File Plan**
    (actual component/entry files; CREATE rows that landed here stay listed — build will see them
@@ -353,7 +355,7 @@ Two branches:
   fork — adjudicated up front (Phase 1) or in Phase 3 step 4, never a silent override.
 - Design changes propagate **forward into the spec now** — never left for build to discover.
 - **Never Read `wf-design.js`.** The `args` for every stage are listed in the phase that invokes
-  it (Phase 0.5, Phase 2, Phase 4); the workflow is invoked **by name**, its source is never
-  orchestrator context.
+  it (Phase 0.5, Phase 2, Phase 4); the workflow is invoked **by `scriptPath`** (`spec-paths
+  wf-design`, resolved once in Setup), its source is never orchestrator context.
 - Workers never run git — the session owns checkpoint-commits after each green round.
 - `AskUserQuestion` dismissed → STOP.

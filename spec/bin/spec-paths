@@ -13,6 +13,7 @@ case "${1:-root}" in
   root)        echo "$ROOT" ;;
   workflows)   echo "$ROOT/workflows" ;;
   wf-build)    echo "$ROOT/workflows/wf-build.js" ;;
+  wf-design)   echo "$ROOT/workflows/wf-design.js" ;;
   wf-review)   echo "$ROOT/workflows/wf-review.js" ;;
   wf-enforce)  echo "$ROOT/workflows/wf-enforce.js" ;;
   wf-panel)    echo "$ROOT/workflows/wf-panel.js" ;;
@@ -32,7 +33,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-build|wf-review|wf-enforce|wf-panel|wf-research|merge-back|shared|shared-genesis|template|templates|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-build|wf-design|wf-review|wf-enforce|wf-panel|wf-research|merge-back|shared|shared-genesis|template|templates|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

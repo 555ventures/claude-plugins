@@ -128,7 +128,11 @@ Claim (severity: ${f.severity}, cited rule: ${f.rule}):
 Location: ${f.file}:${f.line}
 
 ${REFUTER_LENSES[i % REFUTER_LENSES.length]}
-Also read the spec at ${args.specPath} where relevant.
+The claim cites "${f.rule}". In the spec at ${args.specPath}, read that cited section plus the
+"Decisions" table (the host's sanctioned exceptions and the choices /spec:design approved are
+recorded there) — that is normally all you need to judge it. If the cited section is missing,
+ambiguous, or points elsewhere, widen your read until you can judge — never return a verdict on a
+section you have not read.
 
 Return refuted=true ONLY if you can demonstrate with concrete evidence (file:line, rule §, spec §)
 that the claim is incorrect, misread, or sanctioned. If the claim stands or you are uncertain,

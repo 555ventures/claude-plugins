@@ -428,7 +428,7 @@ function workerPrompt(b) {
   return [
     intent,
     doctrineBlock(b.agentType),
-    `First, Read the spec at ${args.specPath}. The "Decisions" table is authoritative — apply it verbatim. The "UI" section is the component inventory + the states to cover. The "Assumptions" section lists known fallbacks for surprises.`,
+    `First, Read the spec at ${args.specPath}. You do not need the whole document — read these sections in full and you may skip the narrative prose (Rationale, Goals, Background): the "Decisions" table is authoritative — apply it verbatim; the "UI" section is the component inventory + the states to cover; the "Assumptions" section lists known fallbacks for surprises. If anything you read points into a section not listed here, read that section too — never act on a reference you have not read.`,
     b.kind === 'implement' && PLAN_PATH !== args.specPath ? `Also Read the design digest at ${PLAN_PATH} — it is the authoritative plan for the surfaces, tokens, and states; the spec UI section and digest agree (the digest seeded the spec).` : '',
     `## Files in this batch\n${fileList(b)}`,
     HARD_RULES,

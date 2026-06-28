@@ -246,9 +246,31 @@ function batchPrompt(b) {
   return [
     `You are implementing one batch of files for a hardened spec.`,
     doctrineBlock(b.agentType),
-    `First, Read the spec at ${args.specPath}. The "Decisions" table is authoritative — apply it verbatim. The "Assumptions" section lists known fallbacks for surprises. Any embedded references (UI / Contracts sections) are the library and API shapes you build against.`,
+    `First, Read the spec at ${args.specPath}. You do not need the whole document — read these sections in full and you may skip the narrative prose (Rationale, Goals, Background): the "Decisions" table is authoritative — apply it verbatim; the "Assumptions" section lists known fallbacks for surprises; the "Contracts" and "UI" sections are the library and API shapes you build against; your rows in the "File Plan" table carry each file's intent. If anything you read points into a section not listed here, read that section too — never act on a reference you have not read.`,
     resolution ? `## Orchestrator ruling (revision ${resolution})\nA ruling for this batch is recorded in the spec's Decisions table — Read it there and apply it exactly.` : '',
     `## Files in this batch\n${fileList(b)}`,
+    HARD_RULES,
+  ].filter(Boolean).join('\n\n')
+}
+
+// Repair prompt is deliberately LEANER than batchPrompt: the worker already authored these files,
+// so its working set is on disk, not in the original intent prose. We drop the full author intent
+// and instead point at (a) the files to Read, (b) the spec sections a fix must honor — Decisions
+// (authoritative) + the Contracts/UI for the failing files — and (c) the full HARD_RULES safety
+// floor (no git, no out-of-scope edits, read-only/managed surfaces, blocked-on-fork). The
+// self-correcting "if a failure points elsewhere, read that too" clause is what keeps the narrowed
+// read from silently starving the fix of a contract it never saw — a green gate that violates an
+// unread contract is a defect, not a repair. Tests authored independently from the spec are the
+// backstop that makes this lean read safe here (build only); design's repair stays full-grounding.
+function repairPrompt(b, fails, round) {
+  const resolution = (args.resolutions || {})[b.id]
+  return [
+    `You are repairing files you already authored for a hardened spec — the deterministic gate failed on them. Fix ONLY what the failures below name; do not re-author from scratch and do not touch unrelated code.`,
+    doctrineBlock(b.agentType),
+    `These files are already on disk — Read each one before editing it:\n${fileList(b)}`,
+    `You do not need the whole spec. In the spec at ${args.specPath}, read the "Decisions" table (authoritative — apply it verbatim) and the "Contracts" / "UI" entries for the files above (the API and library shapes your fix must satisfy). If a failure or a referenced contract points into another section, read that section too — a green gate that violates a contract you did not read is a defect, not a fix.`,
+    resolution ? `## Orchestrator ruling (revision ${resolution})\nA ruling for this batch is recorded in the spec's Decisions table — apply it exactly.` : '',
+    `## Gate failures to fix (repair round ${round})\n${fails.map(f => `- ${f.file} — ${f.summary}`).join('\n')}`,
     HARD_RULES,
   ].filter(Boolean).join('\n\n')
 }
@@ -406,10 +428,7 @@ for (let round = 0; round <= 3; round++) {
   log(`Gate round ${round} failed — repairing batches: ${Object.keys(byBatch).join(', ')}`)
   await parallel(Object.entries(byBatch).map(([bid, fails]) => () =>
     dispatch(
-      batchPrompt(batchById[bid]) +
-      `\n\n## Repair (round ${round + 1})\nYour batch's previous output produced these gate failures. ` +
-      `Fix them without changing unrelated code:\n` +
-      fails.map(f => `- ${f.file} — ${f.summary}`).join('\n'),
+      repairPrompt(batchById[bid], fails, round + 1),
       {
         label: `repair:${bid}:r${round + 1}`, phase: 'Gate', schema: RECEIPT,
         agentType: resolveType(batchById[bid].agentType), model: 'sonnet',

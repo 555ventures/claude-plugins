@@ -10,6 +10,7 @@
       "appliesTo": ["src/**/*.{ts,tsx,css}"],
       "exemptGlobs": ["**/tokens/**", "**/*.stories.*"],
       "severity": "error",
+      "grounding": "grounded",
       "rationale": "Single source of truth for theme; enables dark mode and audience-specific theming."
     },
     {
@@ -19,6 +20,7 @@
       "appliesTo": ["src/**/*.{ts,tsx,css}"],
       "exemptGlobs": ["**/tokens/**", "**/*.stories.*"],
       "severity": "error",
+      "grounding": "grounded",
       "rationale": "The typographic mirror of no-raw-color: one shared role set consumed by name keeps the scale the single source and the vertical rhythm uniform."
     },
     {
@@ -28,6 +30,7 @@
       "appliesTo": ["src/**/*.{ts,tsx}"],
       "exemptGlobs": ["**/*.test.*", "**/*.stories.*"],
       "severity": "error",
+      "grounding": "grounded",
       "rationale": "Locale audience requires every user-facing string to be translatable."
     },
     {
@@ -37,6 +40,7 @@
       "appliesTo": ["src/features/**"],
       "exemptGlobs": [],
       "severity": "error",
+      "grounding": "grounded",
       "rationale": "Keeps feature modules independently evolvable."
     },
     {
@@ -46,6 +50,7 @@
       "appliesTo": ["src/**/*.{ts,tsx}"],
       "exemptGlobs": ["src/components/base/**", "**/*.stories.*"],
       "severity": "error",
+      "grounding": "grounded",
       "rationale": "Base primitives are system foundation, created once and imported everywhere; re-implementing an overlay shell in a feature file forks the focus-trap/dismiss/portal contract and drifts the design."
     }
   ]

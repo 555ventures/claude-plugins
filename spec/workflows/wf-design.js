@@ -36,6 +36,48 @@ function normalizeArgs(raw) {
   }
   return v
 }
+
+// keep IDENTICAL to wf-build.js — manual copy (no require() in the sandbox); this banner is so
+// drift surfaces in review. WHY this exists: guard depth must equal iteration depth. `groups` has
+// the contract [[{id,agentType,files}]] — an array of WAVES, each wave an array of BATCHES — and a
+// *model* hand-builds it from prose in the command .md, so it is an UNTRUSTED request body with NO
+// StructuredOutput schema behind it. A top-level Array.isArray check creates false confidence about
+// the nested iteration: the model sometimes emits an array-of-batch-objects ([{…}]) or a stray {},
+// and the inner `for (const b of group)` then throws a cryptic "{} is not iterable" at ~6ms with 0
+// work done. So ASSERT the full nested structure here, ONCE, before first use, with an indexed,
+// actionable message — and never COERCE: auto-wrapping would silently mask the producer bug and
+// can't safely infer serial(more waves)-vs-parallel(fatter wave) intent. Failing loud at the trust
+// boundary IS the feedback loop that fixes the fallible producer; a re-invoke is near-free. Any
+// future [[…]]-or-deeper model-authored arg needs its own validateGroups-style sibling.
+function isBatch(b) {
+  return b !== null && typeof b === 'object' && !Array.isArray(b) &&
+    typeof b.id === 'string' && Array.isArray(b.files)
+}
+function typeOfArg(v) {
+  return v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v
+}
+function validateGroups(groups, wfName) {
+  if (!Array.isArray(groups)) {
+    throw new Error(wfName + ': `groups` is not an array (got ' + typeOfArg(groups) + ') — shape ' +
+      'is [[{id,agentType,files}]]: an array of waves, each wave an array of batches')
+  }
+  groups.forEach((wave, i) => {
+    if (!Array.isArray(wave)) {
+      throw new Error(wfName + ': groups[' + i + '] is not a wave (got ' + typeOfArg(wave) + '); ' +
+        'shape is [[{id,agentType,files}]] — even one batch is [[{…}]], never [{…}], never {id,…}')
+    }
+    wave.forEach((b, j) => {
+      if (!isBatch(b)) {
+        const p = JSON.stringify(b)
+        throw new Error(wfName + ': groups[' + i + '][' + j + '] is not a batch (need an object ' +
+          'with a string `id` and an array `files`, got ' +
+          (p && p.length > 160 ? p.slice(0, 160) + '…' : p) + ') — shape is [[{id,agentType,files}]]')
+      }
+    })
+  })
+  return groups
+}
+
 args = normalizeArgs(args)
 const STAGE = args && args.stage
 const STAGES = ['comprehend', 'author', 'reconcile']
@@ -346,7 +388,12 @@ if (STAGE === 'reconcile') {
 // The gate (host typecheck + lint) runs ONCE over the whole pass, and a single repair loop (stops on
 // no-progress or a hard ceiling) routes each failure to its owning batch regardless of kind — at most one cold re-dispatch per
 // coherence group, not per component. Each batch carries a `kind` ∈ {'foundation','implement','stories'}.
-const groups = args.groups || []
+// Only the `author` stage iterates groups; comprehend/reconcile legitimately carry none. Require
+// them for author (a missing/malformed array is a producer bug, not a silent no-op), and validate
+// the nested shape at the trust boundary before any loop reads it. Empty stays valid elsewhere.
+const groups = STAGE === 'author'
+  ? validateGroups(args.groups, 'wf-design')
+  : (args.groups || [])
 const PLAN_PATH = args.planPath || args.specPath
 
 const fileToBatch = {}

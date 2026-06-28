@@ -92,6 +92,14 @@ encoding; that is the closed-alphabet guarantee that keeps the channel from brea
 budget. (`resolutions` is `{}` on first run; on resume each value is a ruling *token*, not the
 ruling text — see Phase 2.)
 
+**Shape of `groups`.** `groups` is an array of **waves**; each wave is an array of **batches**.
+Even a single batch is double-bracketed (`[[{id,…}]]`) — never `[{…}]`, never `{id,…}`. Waves run
+in order; batches in a wave run in parallel. When unsure, resolve toward **more waves** (serial),
+never a fatter wave (parallel) — over-serializing only costs speed; over-parallelizing can violate
+wave ordering. The workflow asserts this shape at init and fails loud with an indexed message
+(`groups[i][j] …`) if it arrives malformed, so a misbuilt arg costs a cheap re-invoke, not a
+silent crash.
+
 Test-author separation is enforced by construction: test batches are authored in the workflow's
 first phase by `agentMap.tests` workers that derive only from the spec; implementation workers
 never write tests for code they implement.

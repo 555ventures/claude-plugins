@@ -94,7 +94,12 @@ Author directly (taste exception — not delegated to Sonnet):
    value living only in prose is the defect this command guards against. (Corollary: "hierarchy from
    weight and space, not size jumps" is a *posture* — the size roles still ship; weight-led hierarchy
    is expressed *through* a restrained size/weight pairing, not by omitting the scale.) For non-visual
-   archetypes this is voice/persona or TUI doctrine instead.
+   archetypes this is voice/persona or TUI doctrine instead. **Tag every ruling's grounding** (shared
+   § Grounded vs taste): `grounded` (externally-anchored — contrast/a11y, legal/brand,
+   destructive-action safety; binds even against an explicit mockup) or `taste` (aesthetic preference;
+   yields to an explicit mockup). The tag is **authored here, not judged later** — it is what lets a
+   mockup-driven `/spec:design` honor the mock without a doctrine-over-weighting reader silently
+   overriding it. Default a ruling to `taste` unless it names an external anchor.
 2. **Tokens — materialize every encodable dimension (visual archetypes only).** First walk the
    **dimension ledger** and record each row DECIDED (with token roles) or DEFERRED-with-reason (the
    reason recorded in doctrine `## Dissents`). Baseline ledger for a visual web archetype:
@@ -127,8 +132,9 @@ Author directly (taste exception — not delegated to Sonnet):
    `structure`) makes import-only a build error. Headless/non-visual archetypes skip this item.
 4. **Design rules** — write `.claude/genesis/design-rules.json` (template via `spec-paths templates`):
    each rule carries a `targetCategory` **enum only** (the design category set defined in
-   genesis.md § Genesis: Enforcement Handoff), `appliesTo`/`exemptGlobs`, `severity`, `rationale` —
-   **never a tool name** (same section). `/spec:enforce` owns the category→enforcer selection, chosen
+   genesis.md § Genesis: Enforcement Handoff), `appliesTo`/`exemptGlobs`, `severity`, `rationale`,
+   and `grounding` (`grounded` | `taste`, per shared § Grounded vs taste — mechanizable closure rules
+   like `no-raw-color` are `grounded`) — **never a tool name** (same section). `/spec:enforce` owns the category→enforcer selection, chosen
    at runtime per stack. **Closure check (binding):** every DECIDED token family from Phase 4.2 gets
    its matching "consume the role by name — no off-token literal" rule — `color → no-raw-color`
    (`color`), `type scale → no-off-scale-text` (`typography`), spacing → off-scale-spacing, etc. A

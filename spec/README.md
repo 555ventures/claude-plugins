@@ -102,6 +102,22 @@ Repo differences are configuration, never forks: the build workflow takes the ag
 via `args.agentMap`, the gate via `args.gate.command`, and worker/test rules as strings the
 orchestrator reads from the host's pipeline rules file.
 
+## Doctrine hygiene (authoring this plugin)
+
+The command + doctrine docs are read by LLM agents as binding instructions, so their cost is paid
+on every run — which makes accretion the standing failure mode (each past fix tended to add *a
+paragraph and a named tag*). Two rules keep density essential rather than accretive:
+
+1. **State a fact once.** A rule lives in its highest common ancestor doc (`doctrine/shared.md`);
+   every other site **points** (`shared § Name`), never restates. If you find the same constraint
+   in two files, the second copy is accidental complexity — and a drift hazard, since copies diverge.
+   `commands/import-design.md` is the model (it cites `shared §` and stays lean); a command doc keeps
+   only its *procedural specifics*, not the shared rule it executes.
+2. **Don't name a derived case.** Before adding a tag / enum / `kind`, prove no existing field
+   already determines it. If you add a field (e.g. a rule's `grounding`), do **not** also add tags
+   that are functions of that field — the resolver switches on the field. Name only what carries
+   information the field doesn't (e.g. *which* rule a tension touches), never the field re-projected.
+
 ## When to use the pipeline at all
 
 The default is direct work gated by the host's `gateCommand`. Enter the pipeline only for

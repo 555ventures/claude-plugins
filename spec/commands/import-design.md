@@ -82,10 +82,13 @@ matches an existing digest may skip re-extraction and translate from the cached 
   foundation," sourced from the mockup instead of crafted by hand.
 - **Existing canon (tokens + doctrine present, including a genesis `rules-locked` repo):**
   **EXTEND, never overwrite.** Match each mockup property to an existing token by role + value:
-  value matches → reuse it; new role → add to the scale; **same role, different value = a fork**,
-  not a tweak → `AskUserQuestion` for the ruling (**local exception**, recorded as a deviation /
-  **token change**, with older surfaces flagged as a known gap — never a silent overwrite). The
-  doctrine is not rewritten. Dismissed → STOP.
+  value matches → reuse it (after the near-match dedup check); new role → add to the scale; **same
+  role, different value = a fork**, not a tweak → `AskUserQuestion` for the ruling (**local
+  exception**, recorded as a deviation / **token change**, with older surfaces flagged as a known
+  gap — never a silent overwrite). For **doctrine** tensions the **mock is the authority** (shared §
+  Grounded vs taste): a `taste` ruling **yields to the mock silently** (the import wins; the doctrine
+  doc itself is not rewritten here), a `grounded` ruling **binds** (honor the mock's intent, snap the
+  value to what the constraint permits; `AskUserQuestion` only when irreconcilable). Dismissed → STOP.
 
 Write the canon to **plain repo paths, outside `.claude/genesis/`** — this is *not* a genesis run;
 writing into that namespace would falsely signal a half-finished genesis and trip the genesis gate

@@ -177,7 +177,10 @@ consistency — a repo artifact with a read-first / reconcile-after lifecycle, n
 session's context. Three layers, strongest enforcement first:
 
 1. **Token/theme files in code** — the design language itself, lint/gate-enforced where the
-   host's tooling allows. Sessions extend the scale; they never fork it.
+   host's tooling allows. Sessions extend the scale; they never fork it. **Extend means add a
+   genuinely new role:** before minting one, a session checks the existing scale for a role whose
+   rendered value is within tolerance and **reuses it** (a near-match is `matches-canon`, not a new
+   token) — this is what keeps mock-driven extension from sprawling the scale.
 2. **The design doctrine doc** (`design.doctrine`, one page, bootstrapped by `/spec:init`
    § Design foundation — or, for greenfield repos seeded by the genesis stage, authored
    by `/spec:genesis-design` and merely extracted by `/spec:init`; the design rules it records
@@ -189,17 +192,35 @@ session's context. Three layers, strongest enforcement first:
    surfaces from every landed spec; each design run extends it. Drift is visible to the
    user's eyes with zero tooling.
 
-A note that contradicts the doctrine is a fork, not a tweak: the user rules **local
-exception** (spec Decisions) or **doctrine change** (doc updated, older surfaces recorded as
-a known gap) — never a silent override.
+**Grounded vs taste (mock supremacy).** Each doctrine ruling carries its **grounding**:
+`grounded` — externally-anchored (contrast/a11y, legal/brand, destructive-action safety) — or
+`taste` — aesthetic preference (decorative-color habits, dialog-vs-page, chip-color conventions).
+The distinction is **authored into the rule, not judged per conflict**, so a reader that tends to
+over-weight doctrine cannot relabel a taste rule as binding. An **untagged** ruling (a legacy doctrine
+doc predating this field) defaults to `taste` — it must **name an external anchor** to bind against a
+mock — so mock-supremacy holds on un-migrated hosts, with a11y/contrast still backstopped by the
+`grounded` design-rules and the visual review. **When a mockup is the canon**
+(`design_source` set) it is the **design authority**: a `taste` ruling **yields to the mock
+silently** (honor the mock; record the yield as a one-line doctrine note at reconcile), and only a
+`grounded` ruling **binds** — and even then it binds the *value*, not the *intent*: honor the
+mock's intent and snap values to what the constraint permits (a mock color that fails contrast
+keeps its semantic distinctness but moves to a passing value). The user is asked **only** when a
+`grounded` constraint and the mock's intent genuinely cannot be reconciled. **With no mockup**,
+doctrine is the canon and a note that contradicts it is a fork, not a tweak: the user rules
+**local exception** (spec Decisions) or **doctrine change** (doc updated, older surfaces recorded
+as a known gap) — never a silent override.
 
 **Base primitives (structural foundation).** Overlay shells — backdrop + focus-trap + dismiss
 wrappers (Sheet/Dialog/Popover/Drawer) — are **system foundation, the structural analog of tokens**:
 created once and imported everywhere, never re-implemented per surface. They live in the
 **doctrine-named base dir behind its barrel** (`base/index.*`), and the barrel **is** the cross-session
-memory — there is no registry. `/spec:design` is **import-only** for them: a surface that needs a base
-primitive imports it; a needed-but-absent primitive is a **foundation gap (a blocker)**, never authored
-by the feature wave. The comprehend digest's **`containment` tag** is what drives extraction (a
+memory — there is no registry. Component workers **never improvise** one. But a surface whose mock needs
+an **absent** primitive is not a dead-end and is **never silently swapped** for a different shell (a
+Sheet for a Dialog): the session surfaces it with the **nearest existing primitive and its coverage**
+(`AskUserQuestion`: author the missing primitive now as foundation / reuse the near-match),
+**default-authoring when no near-match exists** — a mock that uses a Dialog is the user already deciding
+the foundation should exist. The primitive is still authored **once, in the base dir behind its barrel**
+(never per-surface); only the *trigger* moves from "blocked" to "author-as-foundation". The comprehend digest's **`containment` tag** is what drives extraction (a
 containment shell's `usedBy` is structurally ≤1, so the `usedBy≥2` "shared" count can never tag it).
 `/spec:enforce` mechanizes the `base-primitive-containment` rule (category `structure`) so a hand-rolled
 overlay outside the base dir is a build error regardless of how it was born.
@@ -225,7 +246,8 @@ Fetch → Digest → Translate recipe — defined once here so neither command r
   therefore a structural property of the delegated fetch, not an aspiration.
 - **Digest.** Distill the fetched markup into a structured on-disk JSON **design digest** (a
   sidecar `…design-digest.json`) *before* any authoring — a token map (each `:root` / `[data-accent]`
-  role tagged `matches-canon` / `new-role` / `fork` against the current token files), a `<x-dc>`
+  role tagged `matches-canon` / `new-role` / `fork` against the current token files — `new-role`
+  only after the near-match dedup check, else `matches-canon`), a `<x-dc>`
   surface inventory (component / props / states / tokensUsed), plus per surface a **`visualSpec`**
   (the structural visual *treatment* — `fill` / `border` / `elevation` / `shape` — in token-**role**
   terms, which distinguishes an outlined pill from a filled chip) and a **`sourceRef {sliceFile,
@@ -245,9 +267,16 @@ Fetch → Digest → Translate recipe — defined once here so neither command r
   here (tagged), **adjudicated** later by the session.
 - **Translate.** From the digest: `tokenMap` → the **token system** (extend the existing canon:
   `matches-canon` → reuse; `new-role` → add; `fork` → `AskUserQuestion` local-exception-vs-token-
-  change, never overwrite); `surfaces` → real stateless components (props + mock data only),
-  authored by **Sonnet** (in `/spec:design`, the `wf-design stage:"author"` pass; in
-  `/spec:import-design`, the session's Sonnet plumbing).
+  change, never overwrite); each **doctrine tension** (a surface treatment that contradicts a
+  ruling — the **designer's** judgment in `/spec:design` Phase 1, not a digest tag) → switch on that
+  ruling's `grounding` (`taste` → the mock wins silently, recorded as a doctrine note at reconcile;
+  `grounded` → honor the mock's intent but snap the value to what the constraint permits,
+  `AskUserQuestion` only when irreconcilable); `surfaces` → real
+  stateless components (props + mock data only). **A mock value is never discarded as "decorative":**
+  it maps to a token role, and an unmappable value is a `new-role` minted at that value (after the
+  dedup check), not a dropped literal — what's forbidden is leaving a value **un-tokenized** in
+  component code, not the mock's value itself. Authored by **Sonnet** (in `/spec:design`, the
+  `wf-design stage:"author"` pass; in `/spec:import-design`, the session's Sonnet plumbing).
 
 Claude Design is **strictly opt-in**: `/spec:design` engages this path **only** when a spec sets
 `design_source`, and `DesignSync` being unavailable is an error **only** then. With no

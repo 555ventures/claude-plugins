@@ -18,6 +18,8 @@ case "${1:-root}" in
   wf-enforce)  echo "$ROOT/workflows/wf-enforce.js" ;;
   wf-panel)    echo "$ROOT/workflows/wf-panel.js" ;;
   wf-research) echo "$ROOT/workflows/wf-research.js" ;;
+  dc-extract)  echo "$ROOT/scripts/dc-extract.js" ;;
+  skeletons-check) echo "$ROOT/scripts/skeletons-check.js" ;;
   merge-back)  echo "$ROOT/scripts/merge-back.sh" ;;
   shared)         echo "$ROOT/doctrine/shared.md" ;;
   shared-genesis) echo "$ROOT/doctrine/genesis.md" ;;
@@ -33,7 +35,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-build|wf-design|wf-review|wf-enforce|wf-panel|wf-research|merge-back|shared|shared-genesis|template|templates|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-build|wf-design|wf-review|wf-enforce|wf-panel|wf-research|dc-extract|skeletons-check|merge-back|shared|shared-genesis|template|templates|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

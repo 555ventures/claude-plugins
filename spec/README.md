@@ -221,7 +221,7 @@ cache; only the salted batches re-run.
   critiques the renders once before asking for your eyes.
 - **Build is a deterministic workflow** (`wf-build.js`): batching, TDD-red enforcement,
   gate + repair caps live in code; judgment (blocked items, scope changes) escalates to the
-  main loop → Fable retainer → user.
+  main loop → Opus retainer (in the plan-author's seat) → user.
 - **Review is independent and refutation-filtered** (`wf-review.js`): Sonnet reviewers run
   as the plugin's read-only `spec:reviewer` agent (never the planning model), claim-only
   refuters, hard findings die only on unanimous refutation. Killed findings are reported,

@@ -1,5 +1,5 @@
 ---
-description: Implement a hardened spec via the wf-build workflow — Sonnet workers, Fable consultant on surprises
+description: Implement a hardened spec via the wf-build workflow — Sonnet workers, Opus retainer on surprises and T3 checkpoints
 argument-hint: <spec path>
 ---
 
@@ -7,10 +7,12 @@ argument-hint: <spec path>
 
 Implement a hardened spec. The orchestrator parses the File Plan into batches, invokes the
 bundled `wf-build` workflow (Sonnet workers, deterministic control flow), resolves surprises
-via the Fable consultant + user, and resumes until green.
+via the retainer + user, and resumes until green.
 
 **Intended orchestrator model: Opus** (Sonnet acceptable for small T2 builds). Workers: Sonnet.
-Lookups: Haiku. Surprises and T3 checkpoints: Fable subagent.
+Lookups: Haiku. Surprises and T3 checkpoints: the Opus retainer subagent (below). Fable never
+runs at build time — its judgment was spent at plan; the retainer *represents* it via the role
+brief.
 
 **Setup:** run `spec-paths shared-for build` and read its output (the shared invariants scoped to this command). Read the host's
 `.claude/spec.config.json` and its pipeline rules file (`pipelineRules`). If either is
@@ -108,19 +110,34 @@ never write tests for code they implement.
 
 | Return stage | Action |
 |---|---|
-| `blocked` | Per item: if resolvable within the spec's stated intent → consult the **Fable retainer**; if a genuine fork or scope change → `AskUserQuestion`. Write the ruling **prose into the spec's Decisions table** (that is where the worker reads it). Then set `args.resolutions[batchId]` to a short **token** — a hash of the ruling text or a monotonic counter, **never the ruling prose itself** — which busts the journal cache for that batch only. Keep `resolutions` **cumulative** across resumes: dropping an entry reverts that batch's prompt and silently un-applies its ruling. Resume with `resumeFromRunId`. |
+| `blocked` | Per item: if resolvable within the spec's stated intent → consult the **retainer**; if a genuine fork or scope change → `AskUserQuestion`. Write the ruling **prose into the spec's Decisions table** (that is where the worker reads it). Then set `args.resolutions[batchId]` to a short **token** — a hash of the ruling text or a monotonic counter, **never the ruling prose itself** — which busts the journal cache for that batch only. Keep `resolutions` **cumulative** across resumes: dropping an entry reverts that batch's prompt and silently un-applies its ruling. Resume with `resumeFromRunId`. |
 | `tdd-red-check` | Newly written tests pass before implementation — the spec is wrong somewhere. Surface the passing tests, fix spec or tests with the user, resume. |
 | `out-of-scope-failure` | A gate failure implicates a file outside the File Plan. `AskUserQuestion`: add to scope (mini-batch) / file as a separate fix / pause the spec. Per Blast Radius Discipline — never silently widen. |
-| `gate-exhausted` | Repair loop hit its cap. Consult the Fable retainer with the failure output before escalating to the user. |
+| `gate-exhausted` | Repair loop hit its cap. Consult the retainer with the failure output before escalating to the user. |
 | `complete` | Proceed to Phase 3. |
 
-**Fable retainer:** on the first surprise, spawn `Agent {model: "fable"}` (fall back to
-`{model: "opus"}` if Fable is unavailable — see shared § Model Placement callout) with the spec's
-Rationale + Assumptions sections and the divergence; on later surprises, continue the SAME agent
-via `SendMessage` — it accumulates context of this run's weirdness. Mandatory consult triggers:
-worker blocked on a stale assumption, gate failed twice on the same batch, out-of-scope file,
-a change contradicting the approved design or a locked Decision, plus any host-declared
-triggers (pipeline rules § Build).
+**Retainer (Opus, seated as the plan author):** on the first surprise, spawn
+`Agent {model: "opus"}` with the spec's Rationale + Assumptions sections, its Decisions table,
+the divergence — and this role brief **verbatim** (it is what makes Opus fill the seat Fable
+occupied at plan time):
+
+> You are the retainer for this build: the spec author's proxy, not a second implementer and
+> not a reviewer. Every ruling derives from the spec's stated Rationale, Assumptions, and
+> locked Decisions — never from implementation convenience; the cheapest diff is not an
+> argument. Prefer the reading that preserves the spec's invariants and Blast Radius over the
+> one that unblocks fastest. Rulings are short, declarative, and written to be pasted into the
+> Decisions table verbatim. If the spec's intent is genuinely ambiguous, or any ruling would
+> widen scope or contradict a locked Decision, reply `ESCALATE:` with the two branches of the
+> fork stated neutrally — never guess the author's intent, and never soften an escalation into
+> a provisional ruling. For T3 checkpoint diffs: verify the diff against the spec's intent and
+> the host's declared high-risk invariants; verdict `PASS` or `BLOCK: <reason>` — a checkpoint
+> is a gate, not a critique.
+
+On later surprises and T3 checkpoints, continue the SAME agent via `SendMessage` — it
+accumulates context of this run's weirdness. Mandatory consult triggers: worker blocked on a
+stale assumption, gate failed twice on the same batch, out-of-scope file, a change
+contradicting the approved design or a locked Decision, plus any host-declared triggers
+(pipeline rules § Build).
 
 Completed batches return from the workflow journal cache on resume — only changed work re-runs.
 
@@ -130,7 +147,7 @@ Execute the orchestrator duties the host's pipeline rules § Build declares — 
 regeneration, translation-catalog fills, migration generation and review, boot checks, public
 surface/barrel verification. These are deliberately outside the workflow: they touch shared
 or generated surfaces that parallel workers must never own. Where § Build marks a step as a
-T3 checkpoint (e.g. migration review), the Fable retainer reviews before the step executes.
+T3 checkpoint (e.g. migration review), the retainer reviews before the step executes.
 
 ## Phase 4 — Final gate
 
@@ -140,7 +157,8 @@ the prior round, consult the retainer immediately rather than dispatching anothe
 After the ceiling or a stalled round, consult the retainer, then escalate to the user.
 
 **T3 checkpoint (mandatory):** any diff touching the host's declared high-risk surfaces
-(pipeline rules § Risk Tiers / § Build) gets a Fable retainer review before reporting.
+(pipeline rules § Risk Tiers / § Build) gets a retainer review (`PASS`/`BLOCK`) before
+reporting. If the retainer hasn't been spawned yet, the checkpoint spawns it.
 
 Checkpoint-commit after the gate is green (and after each earlier green phase if the run is long).
 

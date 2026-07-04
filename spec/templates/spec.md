@@ -85,7 +85,7 @@ depended_on_by: []
 ## Assumptions (escalation triggers)
 
 <!-- Load-bearing assumptions. If one proves false mid-build, the worker returns
-     blocked and the Fable consultant starts HERE. Pair every assumption with its fallback. -->
+     blocked and the retainer starts HERE. Pair every assumption with its fallback. -->
 
 - A1: { assumption } — **if false:** { pre-thought fallback, or "STOP, ask the user" }
 

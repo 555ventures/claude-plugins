@@ -12,8 +12,7 @@ that `/spec:enforce` turns into actual lint/contracts). This IS the relocated, h
 of `/spec:init`'s design foundation — **one canon, not two**. Same interactive shape as architect:
 the session owns `AskUserQuestion` and writes; `wf-panel` does research + panel.
 
-**Intended model: Opus** (taste IS the work — the design-stage exception; Fable→Opus while
-suspended).
+**Intended model: Fable or Opus** (taste IS the work — the design-stage exception; Opus is the fallback if Fable is unavailable).
 
 **Setup:** run `spec-paths shared` and Read that file, then run `spec-paths shared-genesis` and
 Read that too (the genesis-stage supplement — discovery interview, panel doctrine, enforcement
@@ -65,7 +64,8 @@ Select UX research-angle keys from the archetype + audience (e.g. `ui-ux-categor
 `locale-typography`, `locale-formatting` — for non-global audiences). Pick **3 design role keys**
 (UX-researcher / Visual-brand / Accessibility-advocate / FE-implementation-pragmatist /
 Target-audience-persona). List the design hard-to-reverse dimensions (component library, token
-tier count, accessibility baseline, doctrine adjectives) under `## Open Dimensions`, marked
+tier count, accessibility baseline, doctrine adjectives, navigation shell, layout system,
+color schemes — genesis.md § Hard-to-Reverse Dimensions) under `## Open Dimensions`, marked
 constrained/open. Selective: `runProposers: false` only if all are constrained.
 
 ## Phase 3 — Research + panel loop (session ↔ workflow)
@@ -104,12 +104,29 @@ Author directly (taste exception — not delegated to Sonnet):
    **dimension ledger** and record each row DECIDED (with token roles) or DEFERRED-with-reason (the
    reason recorded in doctrine `## Dissents`). Baseline ledger for a visual web archetype:
    - **color roles** — semantic consumer roles (not just palette primitives) + validated contrast pairs
+   - **color schemes** — light / dark / system: decide now (token structure is hard to retrofit);
+     DEFERRED is legal but must name the migration cost in its reason
    - **type scale** — named font-size roles, each pairing size + weight + tracking + line-height
      (e.g. `display/heading/body/label/eyebrow`); a restrained scale is still a scale, never an omission
    - **spacing rhythm** — the named spacing-scale steps
+   - **layout system** — breakpoints, grid, container-width roles (the encodable half of the
+     navigation-shell decision; the shell itself lands as a base primitive below)
    - **radii / elevation**
    - **focus ring** + **min target size**
-   - **motion** — duration/easing roles (only if a motion system is in v1 scope)
+   - **motion** — duration/easing roles (only if a motion system is in v1 scope; pair with a
+     `prefers-reduced-motion` posture in doctrine when DECIDED)
+
+   **Behavioral ledger (same DECIDED/DEFERRED discipline — these are what separate nice-looking
+   from nice-to-use, and they are decided-once-or-drift-forever):**
+   - **navigation shell** — sidebar / top-nav / tabs, routing hierarchy, page composition (lands
+     as the `AppShell` base primitive + a doctrine posture, not as tokens)
+   - **feedback patterns** — loading strategy (skeleton vs spinner), toast-vs-inline errors,
+     optimistic-vs-pessimistic updates (doctrine postures + the `Toast` host primitive)
+   - **form conventions** — validation timing (blur/submit), error placement, required-field
+     marking (doctrine posture; encodable parts become structural rules)
+   - **destructive-action pattern** — undo-window vs confirm-dialog, and when each applies
+   - **iconography** — the icon set and sizing roles (a first spec picking one ad hoc is the
+     same drift as a raw hex color)
 
    Write W3C-format token files covering every DECIDED row. **Also author the framework-native
    consumption surface** — the file components actually read (named in `tokensConsumed`; e.g. a
@@ -120,9 +137,11 @@ Author directly (taste exception — not delegated to Sonnet):
    an undelivered token — its enforcement rule will have nothing to bind to. Name the token +
    consumed + doctrine paths so `/spec:init` and `/spec:design` can find them. Set
    `status.design: tokens-landed`.
-3. **Base primitives — seed the standard overlay set (visual archetypes only).** Scaffold a bounded
-   standard set of overlay shells — **Sheet, Dialog, Popover, Drawer** — plus a **barrel** (`index.*`)
-   into the project's **base dir** (e.g. `src/components/base/`). Each carries the backdrop +
+3. **Base primitives — seed the standard structural set (visual archetypes only).** Scaffold a
+   bounded standard set — the overlay shells **Sheet, Dialog, Popover, Drawer**, plus **AppShell**
+   (the decided navigation shell: nav slots + content region, no feature content) and **Toast**
+   (the feedback host the feedback-pattern ruling names) — plus a **barrel** (`index.*`)
+   into the project's **base dir** (e.g. `src/components/base/`). Each overlay carries the backdrop +
    focus-trap + dismiss + portal contract authored to the doctrine and consuming token roles by name —
    no feature content. **Name the base dir, its barrel, and the import-only rule in the doctrine doc**
    (the same way token/consumed paths are named). This is the no-mockup analog of the mockup path's
@@ -137,7 +156,9 @@ Author directly (taste exception — not delegated to Sonnet):
    like `no-raw-color` are `grounded`) — **never a tool name** (same section). `/spec:enforce` owns the category→enforcer selection, chosen
    at runtime per stack. **Closure check (binding):** every DECIDED token family from Phase 4.2 gets
    its matching "consume the role by name — no off-token literal" rule — `color → no-raw-color`
-   (`color`), `type scale → no-off-scale-text` (`typography`), spacing → off-scale-spacing, etc. A
+   (`color`), `type scale → no-off-scale-text` (`typography`), spacing → off-scale-spacing,
+   `layout → no-off-scale-breakpoint` (`layout` — no raw media-query widths outside the
+   breakpoint roles), etc. A
    DECIDED family with no consume-by-name rule is an authoring error: encodable ⇒ token **and**
    category, always.
 5. Commit. Set `status.design: rules-locked`.

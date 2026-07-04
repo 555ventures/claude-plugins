@@ -32,7 +32,8 @@ set -uo pipefail
 input="$(cat)"
 
 cwd="$(printf '%s' "$input" | jq -r '.cwd // empty')"
-file_path="$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty')"
+# Write/Edit send file_path; NotebookEdit sends notebook_path — guard both.
+file_path="$(printf '%s' "$input" | jq -r '.tool_input.file_path // .tool_input.notebook_path // empty')"
 
 [ -n "$file_path" ] || exit 0
 [ -n "$cwd" ] || cwd="$PWD"

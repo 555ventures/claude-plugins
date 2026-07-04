@@ -93,14 +93,15 @@ is `doctrine/genesis.md` (`spec-paths shared-genesis`). Spec template:
 
 | Ships in the plugin | Generated per repo by `/spec:init` + `/spec:enforce` |
 |---|---|
-| Commands `/spec:plan` `design` `build` `review` `init` `enforce` `doctor` | `.claude/spec.config.json` (gate/test/setup commands, layerGroups, agentMap, `contractHash` drift stamp, optional driftScript, optional `enforcementManifest`/`rulesEnforcementHash`) |
+| Commands `/spec:genesis-architect` `genesis-design` `plan` `design` `build` `review` `init` `enforce` `doctor` `import-design` | `.claude/spec.config.json` (gate/test/setup commands, layerGroups, agentMap, `contractHash` drift stamp, optional driftScript, optional `enforcementManifest`/`rulesEnforcementHash`) |
 | `wf-build.js`, `wf-design.js`, `wf-review.js`, `wf-enforce.js` workflows (+ genesis `wf-panel.js`, `wf-research.js`) | `.claude/rules/spec-pipeline.md` (T3 triggers, planning checklist, build duties, worker/test rules, review checks) |
 | Generic read-only `reviewer` agent | Implementer agents in `.claude/agents/` (one per batch kind) |
 | State-gate hook, spec template, grounding-contract file | `scripts/spec-patterns.sh` (mechanical sweep) + `.claude/rules/enforcement.json` (enforcer provenance) + generated enforcer configs/contracts wired to the gate |
 
 Repo differences are configuration, never forks: the build workflow takes the agent roster
-via `args.agentMap`, the gate via `args.gate.command`, and worker/test rules as strings the
-orchestrator reads from the host's pipeline rules file.
+via `args.agentMap`, the gate via `args.gate.command`, and the host's worker/test rules as a
+**path** (`pipelineRulesPath`) each worker Reads itself — `args` is a control channel of
+paths/ids/enums, never a data bus of prose (the no-free-text invariant).
 
 ## Doctrine hygiene (authoring this plugin)
 
@@ -146,13 +147,14 @@ gets a spec file.
   → plan embeds registry/library references in the spec's UI section; design: true
 /spec:design specs/YYYYMMDD/01-portfolio-panel.md [optional claude.ai/design URL]
   → if the spec set design_source (or you pass a mockup URL), it is fetched read-only and
-    distilled into an on-disk design digest FIRST (the read-first sequencing invariant) —
-    binding canon above tokens/doctrine; components become a faithful translation of it
-  → foundation files → Fable PLANS (adjudicates digest forks, or authors the spec UI plan)
-    → Sonnet IMPLEMENTS every component via wf-design (Fable writes no component code)
-    → catalog entries → mandatory visual review (Fable reads renders, issues notes)
+    extracted FIRST by the deterministic dc-extract script — extract.json + per-surface
+    slices on disk before any authoring (the read-first sequencing invariant)
+  → the expensive model authors skeletons.json (per-surface tree, token-ROLE bindings,
+    states, bind-vs-author) and adjudicates token forks — it writes no framework code
+  → Sonnet EXPANDS the skeletons via wf-design: foundation + components + catalog entries
+    in one gated run → screenshot visual review when configured (notes, never edits)
   → you: run the catalog (Storybook, Widgetbook, …) — iterate as many rounds as you want
-    (Fable judges each note; Sonnet applies the edit)
+    (the designer judges each note; Sonnet applies the edit)
   → approve → spec reconciled, reusable taste rulings promoted into the doctrine
     → designed: YYYY-MM-DD
 /spec:build …   # skips approved components; TDD covers logic, not pixels
@@ -164,10 +166,11 @@ Seeding from a Claude Design mockup is **strictly opt-in**: only a spec that set
 persisted to frontmatter) engages it. With no `design_source` nothing is fetched and the stage is
 byte-for-byte unchanged — same three-layer canon (tokens + doctrine + showcase) as before.
 
-The design stage's model split: the expensive model (Fable→Opus) is confined to *judgment* — the
-plan, fork adjudication, the iteration loop, and the mandatory visual review (it issues notes, it
-writes no component code); **Sonnet implements 100% of components** via `wf-design`. A green
-implement gate is structural only — the visual review is the gate that clears it before you see it.
+The design stage's model split: the expensive model is confined to *judgment* — the skeletons,
+fork adjudication, the iteration loop, and the screenshot visual review when one is configured
+(it issues notes, it writes no component code); **Sonnet expands 100% of components** via
+`wf-design`. A green author gate is structural only — the screenshot review (if configured) or
+your catalog loop is the visual gate that clears it.
 
 The design stage's bet: the catalog + your eyes gate UI rendering; TDD gates behavior.
 Components built in design are real and kept — build wires them, it doesn't rebuild them.
@@ -196,9 +199,10 @@ graduate to `/spec:design`; to pick a direction with no mockup yet, use `/spec:g
 
 ### Mid-build requirement change
 
-No separate cascade command. Update the spec's Decisions table, add the ruling to
-`resolutions[batchId]`, resume the build workflow (`resumeFromRunId`) — finished batches
-return from the journal cache; only affected batches re-run.
+No separate cascade command. Write the ruling into the spec's Decisions table (the worker
+reads it there), set `resolutions[batchId]` to a fresh opaque token — never the ruling prose —
+and resume the build workflow (`resumeFromRunId`): finished batches return from the journal
+cache; only the salted batches re-run.
 
 ## Key design decisions
 
@@ -208,12 +212,13 @@ return from the journal cache; only affected batches re-run.
 - **Design is a stage, not a checkpoint inside build.** Active design iteration changes the
   spec; doing it before build means build implements against settled truth, and the
   (potentially long, multi-session) visual loop never bloats the build orchestrator's context.
-- **In design, taste is the work — so Fable does it.** The pipeline's one exception to
-  "Sonnet works": a Fable designer session writes the components itself, in coherence groups
-  rather than maximal fan-out, because visual coherence is a system property no parallel
-  per-cluster dispatch can produce. It earns the cost back in fewer human iteration rounds —
-  and where the host provides a `design.screenshot` command, the designer critiques its own
-  renders once before asking for yours.
+- **In design, taste is judgment, not typing — the expensive model authors skeletons, never
+  components.** Warm on the mockup extract and the canon, it authors `skeletons.json` (the
+  per-surface structural authority: tree, token-role bindings, states, bind-vs-author) and
+  adjudicates every fork; Sonnet expands 100% of the components, in coherence groups rather
+  than maximal fan-out, because visual coherence is a system property no per-component
+  dispatch can produce. Where the host provides a `design.screenshot` command, the designer
+  critiques the renders once before asking for your eyes.
 - **Build is a deterministic workflow** (`wf-build.js`): batching, TDD-red enforcement,
   gate + repair caps live in code; judgment (blocked items, scope changes) escalates to the
   main loop → Fable retainer → user.

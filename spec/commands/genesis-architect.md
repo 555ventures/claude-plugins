@@ -48,7 +48,10 @@ author) or **research-backed** (options built live by `wf-research`):
 
 1. **[Product lens] — cold.** the job & success — the problem solved, and what success looks like in
    ~6 months as an **outcome** (a named behavior change, not a feature). Never embed a metric or
-   solution in an option.
+   solution in an option. **Close the measurement loop:** once the outcome is named, one follow-up
+   option set — how will we know? (product analytics / a manual proxy / "not measured in v1") — the
+   answer is a recorded decision either way; an unmeasured outcome must be chosen, not defaulted
+   into. A measured pick becomes an ops-conventions row in Phase A.
 2. **[User lens] — cold.** audience & locale scope — global / region / single-country (+ primary
    locale), and the primary user's core need. Sets the locale research context for later batches.
 3. **[Scope lens] — cold.** non-goals — present plausible adjacent features; the user marks each
@@ -136,18 +139,39 @@ Repeat until no open hard forks remain:
 1. Write `docs/adr/NNNN-*.md` per `$(spec-paths templates)/adr.md` for each hard-to-reverse
    decision — one reason per decision, `## Dissents` **required** (non-empty or the explicit "None"
    line).
-2. Write `.claude/genesis/stack-descriptor.json` (template via `spec-paths templates`): archetype,
+2. **Write the ops-conventions ADR** (`docs/adr/NNNN-operational-conventions.md`, one ADR, one
+   table). Robust software is mostly conventions-under-load, and in a greenfield repo nobody else
+   ever decides them — `/spec:init` can only extract what exists. Rows: **error taxonomy** (the
+   error shape/base classes and user-facing vs internal split), **logging** (structured or not,
+   shape, what is never logged), **env/config management** (file layout, secrets never in git,
+   the sanctioned secret store), **CI** (the gate runs on every push — wired in Phase B),
+   **background/async work** (in-process, queue, or none-in-v1), and **success-metric
+   instrumentation** (the Phase 1 measurement pick — the analytics seam, or "not measured in v1").
+   These are boring-default rows the aggregator fills from the research; `AskUserQuestion` only on
+   a genuine fork (e.g. a paid observability vendor). Each row is DECIDED or
+   DEFERRED-with-reason — same ledger discipline as the design canon.
+3. Write `.claude/genesis/stack-descriptor.json` (template via `spec-paths templates`): archetype,
    localeScope, language, framework, packageManager, testRunner, linter, typechecker,
    componentLibrary, designCatalog, `enforceEngines`, the resolved **`gateCommand`**, the
    `scaffoldCommand`, and `decisionRecords`.
-3. Commit (the session owns git). Set `status.architect: decisions-recorded`, stamp `lastUpdated`.
+4. Commit (the session owns git). Set `status.architect: decisions-recorded`, stamp `lastUpdated`.
 
 ## Phase B — Scaffold & gate (irreversible, idempotent)
 
 1. Run the `scaffoldCommand` (the chosen `create-*` tool) into the project root.
-2. Run the **zero-day gate** — the descriptor's `gateCommand` (typecheck + lint, lint at
-   `--max-warnings 0` where supported). Fix scaffold-level issues only; do not start feature work.
-3. On green, commit. Set `status.architect: scaffold-complete`, write `gateCommand` into
+2. **Land the test + CI skeleton** — the enforcement half of the ops ADR, day zero:
+   - one **example test per declared layer** (trivial but real — it exercises the runner and
+     shows the convention the `tests`-kind agent will follow), and the **e2e harness stub** when
+     the archetype warrants one (web/mobile/desktop): installed, one smoke test, wired into a
+     script — so `/spec:build`'s TDD never meets a repo where the harness itself is missing;
+   - a **CI workflow** for the repo's forge (detect from the remote; no remote → write the
+     GitHub Actions file anyway and note it activates on first push) that runs `setupCommand`
+     then `gateCommand` on every push/PR. An enforcement rule that only runs on a developer's
+     machine is advisory, not enforced.
+3. Run the **zero-day gate** — the descriptor's `gateCommand` (typecheck + lint + the example
+   tests, lint at `--max-warnings 0` where supported). Fix scaffold-level issues only; do not
+   start feature work.
+4. On green, commit. Set `status.architect: scaffold-complete`, write `gateCommand` into
    `status.json`. A failed Phase B re-runs Phase B only, against the committed decisions.
 
 ## Phase C — Report & hand off

@@ -8,10 +8,10 @@ argument-hint: <feature description | spec path> [--spike]
 One session: explore → draft → adversarial check → lock. Produces a hardened spec at
 `specs/YYYYMMDD/##-{name}.md`.
 
-**Intended model: Fable** (Opus while Fable is suspended — see shared § Model Placement). This is the pipeline's judgment concentration point; spec quality
+**Intended model: Fable** (Opus fallback if unavailable — see shared § Model Placement). This is the pipeline's judgment concentration point; spec quality
 determines all downstream spend. Execution and review never use Fable as the primary model.
 
-**Setup (before Phase 0):** run `spec-paths shared` and Read that file — the shared invariants
+**Setup (before Phase 0):** run `spec-paths shared-for plan` and read its output — the shared invariants scoped to this command
 (tier rubric, state machine, MCP policy). Then read the host's `.claude/spec.config.json` and
 the pipeline rules file it points to (`pipelineRules`). If either is missing, STOP: tell the
 user to run `/spec:init` first.

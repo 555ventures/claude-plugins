@@ -16,14 +16,14 @@ Reach for the right design command:
 - **`/spec:design`** — *build a hardened spec's UI inside an existing doctrine (spec-coupled),
   optionally seeded by a Claude Design mockup (`design_source`) made read-first canon for that spec.*
 
-**Intended model: Fable** (Opus while Fable is suspended — shared § Model Placement)**.** The
+**Intended model: Fable** (Opus fallback if unavailable — shared § Model Placement)**.** The
 design-stage taste exception applies: translating a mockup *with fidelity* is taste work, so a
 single session reads the `.dc.html` and authors the components in **coherence groups**; Sonnet is
 dispatched only for plumbing (token files once the map is fixed, catalog entries, mock data). The
 mockup is already coherent — preserve that coherence across the translation boundary by authoring
 in one session, never parallel per-surface.
 
-**Setup:** run `spec-paths shared` and Read it (shared invariants § Design Stage — the three-layer
+**Setup:** run `spec-paths shared-for import-design` and read its output (shared invariants § Design Stage — the three-layer
 canon: tokens → doctrine → showcase, **and § "Claude Design as a source"**, which defines the
 read-only **Fetch → Digest → Translate** rules this command follows; Phase 0–3 below are its
 spec-free application, not a separate ruleset). Load the `DesignSync` tool (ToolSearch `select:DesignSync`).

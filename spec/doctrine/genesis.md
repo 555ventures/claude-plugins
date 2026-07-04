@@ -53,8 +53,9 @@ research-backed round:
    blank field; the pick seeds the next round.
 
 **Model placement in the loop:** **Sonnet** builds the menu (research + option synthesis);
-**Haiku** verifies currency *only* on version-bearing dimensions (`verifyKeys` — stacks, libraries,
-runtimes — where a stale stamp corrupts the choice), never on taste/UX; **Opus** (the session)
+**Haiku** verifies currency on version-bearing dimensions — those the command flags (`verifyKeys`:
+stacks, libraries, runtimes, where a stale stamp corrupts the choice) plus any the researcher
+itself marks `version_bearing` — never on taste/UX; **Opus** (the session)
 curates which 2–4 options ship, orders them, enforces neutral phrasing, and owns the write. This
 holds the pipeline doctrine: Sonnet research, Haiku narrow lookup, Opus session/curation.
 
@@ -125,7 +126,9 @@ recommended first), never synthesized away. Constrained ones (user already chose
 - **architect:** persistence model · rendering strategy · monorepo topology · primary
   language/runtime · auth approach · component library · deployment target.
 - **design:** component library · token tier count · accessibility baseline · doctrine
-  adjective conflicts (the core taste direction).
+  adjective conflicts (the core taste direction) · **navigation shell** (sidebar / top-nav /
+  tabs — the app's structural skeleton) · **layout system** (breakpoints, grid, container
+  widths) · **color schemes** (light / dark / system — token structure is hard to retrofit).
 
 ## Genesis: Archetype Registry (the master variable)
 

@@ -12,7 +12,7 @@ via the Fable consultant + user, and resumes until green.
 **Intended orchestrator model: Opus** (Sonnet acceptable for small T2 builds). Workers: Sonnet.
 Lookups: Haiku. Surprises and T3 checkpoints: Fable subagent.
 
-**Setup:** run `spec-paths shared` and Read that file (shared invariants). Read the host's
+**Setup:** run `spec-paths shared-for build` and read its output (the shared invariants scoped to this command). Read the host's
 `.claude/spec.config.json` and its pipeline rules file (`pipelineRules`). If either is
 missing, STOP: tell the user to run `/spec:init` first. Also run `spec-paths wf-build` once
 and keep the printed absolute path — it is the `scriptPath` for the Workflow call below.
@@ -147,7 +147,9 @@ Checkpoint-commit after the gate is green (and after each earlier green phase if
 ## Phase 5 — Report & handoff
 
 Report: files (C/M/D), gate table, decisions applied vs escalated mid-run, consultant
-consultations (count + topics), workflow `runId` (for any later resume). Status stays
+consultations (count + topics), workflow `runId` (for any later resume), and token spend (every
+workflow return carries `tokens` = output-token spend; report it per invocation — spend visibility
+is how the pipeline's cost gets tuned instead of guessed). Status stays
 `implementing` — only `/spec:review` flips `done`.
 
 If in a worktree: **stay in it** — `/spec:review` runs there and merges back to the

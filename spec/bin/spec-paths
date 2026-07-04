@@ -19,10 +19,36 @@ case "${1:-root}" in
   wf-panel)    echo "$ROOT/workflows/wf-panel.js" ;;
   wf-research) echo "$ROOT/workflows/wf-research.js" ;;
   dc-extract)  echo "$ROOT/scripts/dc-extract.js" ;;
+  design-driver) echo "$ROOT/scripts/spec-design-driver.js" ;;
   skeletons-check) echo "$ROOT/scripts/skeletons-check.js" ;;
   merge-back)  echo "$ROOT/scripts/merge-back.sh" ;;
   shared)         echo "$ROOT/doctrine/shared.md" ;;
   shared-genesis) echo "$ROOT/doctrine/genesis.md" ;;
+  shared-for)
+    # Print the shared-invariants CONTENT scoped to one command — only the `## ` sections that
+    # command consumes, so a session never pays for doctrine it cannot act on. `spec-paths shared`
+    # (the full-doc path) stays for init/genesis and for humans. Section names must match shared.md
+    # headings exactly; an unknown command falls back to the full document (fail-open, never less
+    # doctrine than intended).
+    CMD="${2:-}"
+    DOC="$ROOT/doctrine/shared.md"
+    case "$CMD" in
+      plan)    SECTIONS="Host Grounding|Pipeline Entry|Risk Tiers|Decomposition|State Machine|Design Stage|Model Placement|Decisions|MCP Policy|Canonical Docs Loop" ;;
+      design)  SECTIONS="Host Grounding|State Machine|Design Stage|Model Placement|Decisions|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|MCP Policy" ;;
+      build)   SECTIONS="Host Grounding|Risk Tiers|State Machine|Model Placement|Escalation Contract|Decisions|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|MCP Policy" ;;
+      review)  SECTIONS="Host Grounding|Risk Tiers|State Machine|Model Placement|Decisions|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|Canonical Docs Loop" ;;
+      enforce) SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Model Placement|Workflows Encode Shape, Not Judgment" ;;
+      import-design) SECTIONS="Host Grounding|Design Stage|Model Placement|Decisions" ;;
+      *) cat "$DOC"; exit 0 ;;
+    esac
+    echo "<!-- shared invariants scoped to /spec:${CMD} — full doctrine: $DOC -->"
+    # Prefix match on the heading (some headings carry a parenthetical suffix).
+    awk -v re="^## (${SECTIONS})" '
+      /^## / { keep = ($0 ~ re) }
+      NR <= 4 { print; next }   # frontmatter + title context
+      keep { print }
+    ' "$DOC"
+    ;;
   template)    echo "$ROOT/templates/spec.md" ;;
   templates)   echo "$ROOT/templates" ;;
   version)     jq -r '.version // empty' "$ROOT/.claude-plugin/plugin.json" ;;
@@ -35,7 +61,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-build|wf-design|wf-review|wf-enforce|wf-panel|wf-research|dc-extract|skeletons-check|merge-back|shared|shared-genesis|template|templates|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-build|wf-design|wf-review|wf-enforce|wf-panel|wf-research|dc-extract|skeletons-check|merge-back|shared|shared-for <command>|shared-genesis|template|templates|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

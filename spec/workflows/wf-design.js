@@ -27,9 +27,9 @@ function normalizeArgs(raw) {
     } catch (e) {
       throw new Error('wf-design: args was a string but not valid JSON (' + s.length +
         ' chars). This is structural corruption — free text / a non-scalar reached `args`, which ' +
-        'must carry only paths, ids, enums, booleans, and the gate command; prose belongs in the ' +
-        'spec / digest the agents Read. First 160 chars: ' + JSON.stringify(s.slice(0, 160)) +
-        ' — parse error: ' + e.message)
+        'must carry only paths, ids, enums, booleans, and command strings; prose lives on disk in ' +
+        'the artifact the agents Read (spec / brief / rule docs). First 160 chars: ' +
+        JSON.stringify(s.slice(0, 160)) + ' — parse error: ' + e.message)
     }
   }
   return v
@@ -273,7 +273,7 @@ function workerPrompt(b) {
     intent,
     doctrineBlock(b.agentType),
     `First, Read the spec at ${args.specPath}. You do not need the whole document — read these sections in full and you may skip the narrative prose (Rationale, Goals, Background): the "Decisions" table is authoritative — apply it verbatim; the "UI" section is the component inventory + the states to cover; the "Assumptions" section lists known fallbacks for surprises. If anything you read points into a section not listed here, read that section too — never act on a reference you have not read.`,
-    (b.kind === 'implement' || b.kind === 'stories') && PLAN_PATH !== args.specPath ? `Also Read the skeletons plan at ${PLAN_PATH} — the binding per-surface design authority (tree with per-node style, props, states, mockRef, decision). You EXPAND it; never re-derive what it already decided. The spec UI section and the skeletons agree (the skeletons seeded the spec at reconcile).` : '',
+    (b.kind === 'implement' || b.kind === 'stories') && PLAN_PATH !== args.specPath ? `Also read YOUR entries from the skeletons plan at ${PLAN_PATH} — the binding per-surface design authority (tree with per-node style, props, states, mockRef, decision). The file covers every surface in the spec; you only need the entries whose componentPath/storyPath appear in your batch files, so on a large plan extract just those (e.g. \`jq '[.skeletons[] | select(...)]'\`) instead of reading the whole document — plus the top-level tokenForks. You EXPAND it; never re-derive what it already decided. The spec UI section and the skeletons agree (the skeletons seeded the spec at reconcile).` : '',
     `## Files in this batch\n${fileList(b)}`,
     HARD_RULES,
   ].filter(Boolean).join('\n\n')
@@ -296,14 +296,16 @@ for (const group of groups) {
   const gp = groupPhase(group)
   phase(gp)
   log(`${gp}: ${group.map(b => b.id).join(', ')}`)
+  // Expansion is transcription of a decided plan, not fresh design work — low effort is the
+  // point of the skeleton contract (the taste already happened in the session).
   const out = await parallel(group.map(b => () =>
     dispatch(workerPrompt(b), {
       label: `${STAGE}:${b.id}`, phase: gp, schema: RECEIPT,
-      agentType: resolveType(b.agentType), model: 'sonnet',
+      agentType: resolveType(b.agentType), model: 'sonnet', effort: 'low',
     })))
   const { blocked, missing } = collectBlocked(group, out)
   if (blocked.length || missing.length) {
-    return { stage: 'blocked', blocked, missing, completed: receipts }
+    return { stage: 'blocked', blocked, missing, completed: receipts, tokens: budget.spent() }
   }
 }
 
@@ -342,7 +344,7 @@ const implementNote = hasImplement
 
 if (!gateCmd) {
   // No host gate configured for this stage — nothing deterministic to run; return what landed.
-  return { stage: 'complete', completed: receipts, ...implementNote, note: implementNote.note || 'no gate command — designer self-gates' }
+  return { stage: 'complete', completed: receipts, ...implementNote, note: implementNote.note || 'no gate command — designer self-gates', tokens: budget.spent() }
 }
 
 let gate = null
@@ -355,19 +357,22 @@ let gate = null
 let prevFailKey = null
 for (let round = 0; round <= 3; round++) {
   gate = await agent(
-    `Run this command exactly as written and report results. Do not edit any file.\n\n${gateCmd} && echo ${GATE_SENTINEL}\n\n` +
-    `The trailing \`&& echo ${GATE_SENTINEL}\` prints the exact sentinel ${GATE_SENTINEL} ONLY when every check in the ` +
-    `chain exits 0; any non-zero exit short-circuits the chain and the sentinel never prints. Set pass=true ONLY if the ` +
+    `Run this command exactly as written and report results. Do not edit any file.\n\n( ${gateCmd} ) && echo ${GATE_SENTINEL}\n\n` +
+    `The subshell wrapper makes the trailing \`&& echo ${GATE_SENTINEL}\` fire ONLY when the WHOLE gate command exits 0 ` +
+    `(even if it contains \`;\`); any non-zero exit means the sentinel never prints. Set pass=true ONLY if the ` +
     `exact string ${GATE_SENTINEL} appears in the command output — if it is absent, the gate failed, set pass=false. ` +
     `Put the raw exit code (or "non-zero, no ${GATE_SENTINEL}") and the error/failure count in summary. ` +
     `For each failure, identify the single file that most likely needs the fix and summarize the ` +
     `failure in one line including the check name.`,
-    { label: `gate:round-${round}`, phase: 'Gate', schema: GATE, model: 'haiku' })
+    { label: `gate:round-${round}`, phase: 'Gate', schema: GATE, model: 'haiku', effort: 'low' })
   // Self-contradiction guard: a model may still report pass=true while listing failures (the
   // false-green this guard exists to kill). The workflow, not the model, decides — pass with any
   // failure listed is a fail. Enforced regardless of model behavior.
   if (gate && gate.pass && gate.failures && gate.failures.length > 0) gate.pass = false
   if (!gate || gate.pass) break
+  // A failed gate with NO per-file failures gives the repair loop nothing to route — an empty
+  // repair wave would burn a round and then trip no-progress anyway. Escalate immediately.
+  if (!gate.failures || !gate.failures.length) break
 
   const byBatch = {}
   const outOfScope = []
@@ -378,7 +383,7 @@ for (let round = 0; round <= 3; round++) {
     byBatch[bid].push(f)
   }
   if (outOfScope.length) {
-    return { stage: 'out-of-scope-failure', failures: outOfScope, gate, completed: receipts }
+    return { stage: 'out-of-scope-failure', failures: outOfScope, gate, completed: receipts, tokens: budget.spent() }
   }
   // No-progress escalation: identical failing file-set to last round → stop (routes to the
   // gate-exhausted return below; no new exit path).
@@ -388,7 +393,10 @@ for (let round = 0; round <= 3; round++) {
   if (round === 3) break
 
   log(`Gate round ${round} failed — repairing batches: ${Object.keys(byBatch).join(', ')}`)
-  await parallel(Object.entries(byBatch).map(([bid, fails]) => () =>
+  const repairEntries = Object.entries(byBatch)
+  // Repair rounds run at default effort (unlike first-pass expansion): the cheap transcription
+  // already failed once here, so the retry gets full reasoning headroom.
+  const repairOut = await parallel(repairEntries.map(([bid, fails]) => () =>
     dispatch(
       workerPrompt(batchById[bid]) +
       `\n\n## Repair (round ${round + 1})\nYour batch's previous output produced these gate failures. ` +
@@ -398,6 +406,14 @@ for (let round = 0; round <= 3; round++) {
         label: `repair:${bid}:r${round + 1}`, phase: 'Gate', schema: RECEIPT,
         agentType: resolveType(batchById[bid].agentType), model: 'sonnet',
       })))
+  // A repair worker can hit a design fork / stale assumption exactly like an author worker —
+  // HARD_RULES instructs it to return blocked; honor that instead of discarding the receipt and
+  // exiting as an opaque gate-exhausted. (Null repair results are not fatal: the next gate round
+  // re-measures what actually landed.)
+  const repairStatus = collectBlocked(repairEntries.map(([bid]) => batchById[bid]), repairOut)
+  if (repairStatus.blocked.length) {
+    return { stage: 'blocked', blocked: repairStatus.blocked, missing: repairStatus.missing, gate, completed: receipts, tokens: budget.spent() }
+  }
 }
 
 return {
@@ -405,4 +421,5 @@ return {
   gate,
   completed: receipts,
   ...implementNote,
+  tokens: budget.spent(),
 }

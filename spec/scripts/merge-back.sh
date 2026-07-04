@@ -44,16 +44,25 @@ note() { echo "$*"; }
 ROOT=""; TARGET=""; SOURCE=""; STRATEGY=""; WORKTREE=""; BASE=""; NAME=""
 SUB="${1:-}"; shift || true
 while [ $# -gt 0 ]; do
+  # Every flag REQUIRES a value; a trailing/valueless flag dies loudly. (The old `shift 2` on a
+  # 1-arg tail shifted nothing and spun this loop forever.)
   case "$1" in
-    --root)     ROOT="${2:-}"; shift 2 ;;
-    --target)   TARGET="${2:-}"; shift 2 ;;
-    --source)   SOURCE="${2:-}"; shift 2 ;;
-    --strategy) STRATEGY="${2:-}"; shift 2 ;;
-    --worktree) WORKTREE="${2:-}"; shift 2 ;;
-    --base)     BASE="${2:-}"; shift 2 ;;
-    --name)     NAME="${2:-}"; shift 2 ;;
+    --root|--target|--source|--strategy|--worktree|--base|--name)
+      [ $# -ge 2 ] || die "flag $1 requires a value"
+      case "$2" in --*) die "flag $1 requires a value (got flag '$2')" ;; esac
+      ;;
     *) die "unknown arg: $1" ;;
   esac
+  case "$1" in
+    --root)     ROOT="$2" ;;
+    --target)   TARGET="$2" ;;
+    --source)   SOURCE="$2" ;;
+    --strategy) STRATEGY="$2" ;;
+    --worktree) WORKTREE="$2" ;;
+    --base)     BASE="$2" ;;
+    --name)     NAME="$2" ;;
+  esac
+  shift 2
 done
 
 # realpath that tolerates non-existent / odd paths (also used by the early `create` case)
@@ -75,7 +84,8 @@ case "$SUB" in
     [ -n "$CROOT" ] || die "create: not inside a git repo and no --root given"
     git -C "$CROOT" rev-parse --git-dir >/dev/null 2>&1 || die "create: '$CROOT' is not a git repo"
     CROOT="$(rp "$CROOT")"   # canonicalize so the registered path == the printed path == what the verify gate compares
-    MAIN="$(git -C "$CROOT" worktree list --porcelain 2>/dev/null | awk 'NR==1 && $1=="worktree"{print $2}')"
+    # First porcelain line is `worktree <path>`; strip the prefix (never awk $2 — paths can contain spaces).
+    MAIN="$(git -C "$CROOT" worktree list --porcelain 2>/dev/null | head -1 | sed -n 's/^worktree //p')"
     [ "$(rp "$CROOT")" = "$(rp "$MAIN")" ] || die "create: run from the main working tree ($MAIN), not a worktree ($CROOT)"
     git -C "$CROOT" rev-parse -q --verify HEAD >/dev/null 2>&1 || \
       die "create: repository has no commits yet — 'git worktree add' cannot branch from an unborn HEAD. Make an initial commit first (a greenfield repo straight from 'git init' hits this)."
@@ -100,9 +110,12 @@ case "$SUB" in
     # worktree). Self-discovers from --worktree or $PWD; never requires --root. This is
     # the path the caller must `cd` to — NOT $HOME, NOT `~`, NOT a bare `cd`.
     INSIDE="${WORKTREE:-$PWD}"
-    git -C "$INSIDE" worktree list --porcelain 2>/dev/null \
-      | awk 'NR==1 && $1=="worktree"{print $2; f=1} END{exit !f}' \
-      || { echo "merge-back: could not determine project root from '$INSIDE'" >&2; exit 2; }
+    # First porcelain line is `worktree <path>`; strip the prefix (never awk $2 — paths can contain spaces).
+    MAIN_LINE="$(git -C "$INSIDE" worktree list --porcelain 2>/dev/null | head -1)"
+    case "$MAIN_LINE" in
+      "worktree "*) printf '%s\n' "${MAIN_LINE#worktree }" ;;
+      *) echo "merge-back: could not determine project root from '$INSIDE'" >&2; exit 2 ;;
+    esac
     exit 0 ;;
 esac
 
@@ -156,6 +169,9 @@ case "$SUB" in
         ;;
       squash)
         if git -C "$ROOT" merge --squash "$SOURCE"; then
+          if git -C "$ROOT" diff --cached --quiet; then
+            note "nothing to squash — $SOURCE adds no changes beyond $TARGET"; exit 0
+          fi
           git -C "$ROOT" commit -m "merge: squash $SOURCE into $TARGET" && { note "squash-merged $SOURCE into $TARGET"; exit 0; }
         fi
         ;;

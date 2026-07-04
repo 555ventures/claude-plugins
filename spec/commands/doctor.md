@@ -29,7 +29,9 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
    `$(spec-paths contract)`) directly and decide whether the drift is real.
 3. **Agent roster** — every non-`default` `agentMap` value has a matching
    `.claude/agents/*.md` whose frontmatter `name:` is exactly that value; no orphan agents
-   claiming pipeline kinds.
+   claiming pipeline kinds. **Routing coverage:** every layer in `layerGroups` (plus `tests`
+   and `other`) resolves to a batch kind via `routing`/`agentMap` or falls to `default` — a
+   layer no kind claims is the drift that breaks `/spec:build` batch dispatch.
 4. **Worker Contract text** — each generated agent's `## Worker Contract (spec pipeline)`
    section is byte-identical across agents (allowing only the sanctioned self-verify command
    substitution) and matches the contract file's § Worker Contract block; the `tests`-kind
@@ -38,20 +40,21 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
    the contract file requires.
 6. **Scripts & commands** — `patternsScript` exists, is executable, exits 0; `driftScript`
    (if declared) exists; each command referenced by `gateCommand` / `testCommand` /
-   `setupCommand` / `design.command` resolves (script names exist in `package.json` /
-   `Makefile` / `pyproject.toml` — verify the *names*, don't run the gate).
+   `setupCommand` / `design.command` / `design.screenshot` resolves (script names exist in
+   `package.json` / `Makefile` / `pyproject.toml` — verify the *names*, don't run the gate).
 7. **Cited references** — extract repo paths cited in the pipeline rules file and in each
    generated agent (Reference Material, exemplars, naming-table examples); verify each
    exists. Stale citations are the most common drift and are individually patchable.
 8. **Design foundation** (only if the config has a `design` block) — `design.doctrine`
    exists and is ~one page; token files and the living-showcase entry it names exist.
 9. **Genesis handoff** (only if `.claude/genesis/status.json` exists) — verify the consume-side
-   contract is intact:
+   contract is intact. If the config records `genesisStackDescriptor`, that path must exist and
+   parse as JSON (a recorded pointer to a missing descriptor is broken, not stale). Then:
    - **Design-rules drift** — recompute the hash of `.claude/genesis/design-rules.json`; warn if it
      differs from the config's `designRulesHash` ("design rules changed but enforcement was not
      regenerated — re-run `/spec:enforce`").
    - **Category enum** — every design rule's `targetCategory` is one of the reserved design set
-     (`color | typography | i18n | structure | a11y | density`); an unknown category is broken.
+     (`color | typography | i18n | structure | a11y | density | layout`); an unknown category is broken.
    - **Encodable-dimension closure** (visual archetypes) — each baseline encodable dimension
      (color roles, type scale, spacing rhythm, radii/elevation, focus ring, min target size) is
      either materialized in the `tokensConsumed` surface as named roles **or** recorded
@@ -78,6 +81,16 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
       early-detection signal — recommend re-running `/spec:enforce` (do **not** try to re-derive
       the enforcer here; tool selection is enforce's job, and naming a tool in the doctor would
       anchor it the same way the plugin prose deliberately avoids).
+
+11. **Spec-dir hygiene** — sweep `specs/**`:
+    - frontmatter `status` of every spec is one of `draft | hardened | implementing | done`;
+    - an `implementing` spec whose `build_base:` branch no longer exists in the repo is stale
+      (the build branch was merged or deleted without `/spec:review` closing the spec);
+    - a `hardened`/`implementing`/`done` spec containing a live `[NEEDS CLARIFICATION` marker
+      is broken (it should have been impossible to lock);
+    - an orphaned design sidecar (`specs/**/*.design/` with no sibling spec mid-design — spec
+      already `done`, or `designed:` set) is leftover transient state `/spec:design` Phase 4
+      should have deleted; recommend removing it.
 
 ## Semantic spot-check — small, bounded
 

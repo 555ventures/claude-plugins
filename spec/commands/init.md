@@ -57,12 +57,13 @@ makes the root tree read dirty — which trips `/spec:review`'s clean-root merge
 `merge-back.sh create` refuse. If `git check-ignore -q .claude/worktrees` fails, append
 `.claude/worktrees/` to the repo's `.gitignore` and tell the user to commit it.
 
-**Also gitignore the design-stage digest sidecars** (idempotent, same routine): `/spec:design`
-writes a `*.design-digest.json` (and, defensively, `*.design-digest.raw.html`) sidecar in
-`specs/YYYYMMDD/` that is a within-run plan + resume cache, deleted at Phase 4 — but a mid-run
-checkpoint-commit must not carry it. If `git check-ignore -q` misses them, append
-`*.design-digest.json` and `*.design-digest.raw.html` to `.gitignore`. This does not break resume
-(resume reads the working-tree file); the Phase 4 `rm` is what clears the working tree.
+**Also gitignore the design-stage sidecar dirs** (idempotent, same routine): `/spec:design`
+writes a per-spec sidecar dir `specs/YYYYMMDD/##-name.design/` (`extract.json`, `slice-*.html`,
+`skeletons.json`) that is the within-run plan + resume cache, deleted at Phase 4 reconcile — but a
+mid-run checkpoint-commit must not carry it. If `git check-ignore -q specs/00000000/00-x.design/x`
+fails, append `specs/**/*.design/` to `.gitignore`. (Also clean up the retired digest-era patterns
+`*.design-digest.json` / `*.design-digest.raw.html` if a prior init added them.) This does not
+break resume (resume reads the working-tree files); the Phase 4 `rm` is what clears the tree.
 
 ## Phase 2 — Write `.claude/spec.config.json`
 

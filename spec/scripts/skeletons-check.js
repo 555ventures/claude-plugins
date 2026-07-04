@@ -42,11 +42,24 @@ const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v)
 
 // A token role is a non-empty string that is NOT a raw value. We reject anything that reads as a
 // literal — that is the altitude-fix contract: styling on a node is a ROLE the canon resolves, not a
-// baked value copied off the slice.
-const LITERAL = /^#[0-9a-fA-F]{3,8}$|^\d|\bpx\b|^rgb|^hsl|^var\(/
+// baked value copied off the slice. Shapes rejected:
+//   hex (#fff), anything leading with a digit or dot (12px, .5rem, 0.5rem, 50%, 1em, -2px),
+//   functional values (rgb()/hsl()/oklch()/var()/calc()/clamp()...), unit-suffixed numbers,
+//   and bare CSS color keywords ('red' is a value; a semantic role never names a raw color).
+// A role that merely CONTAINS a unit word ('spacing-px') is a role, not a literal.
+const CSS_COLOR_KEYWORDS = new Set([
+  'black', 'white', 'red', 'green', 'blue', 'yellow', 'orange', 'purple', 'pink',
+  'gray', 'grey', 'brown', 'cyan', 'magenta', 'transparent', 'currentcolor', 'inherit',
+])
 function roleProblem(v) {
   if (typeof v !== 'string' || v.length === 0) return 'not a string'
-  if (LITERAL.test(v.trim())) return 'looks like a literal (' + JSON.stringify(v) + ') — style values must be token ROLES, never baked values'
+  const s = v.trim()
+  const literal =
+    /^#[0-9a-fA-F]{3,8}$/.test(s) ||
+    /^-?[.\d]/.test(s) ||
+    /^(rgb|rgba|hsl|hsla|oklch|oklab|lab|lch|color|var|calc|clamp|min|max|url)\(/i.test(s) ||
+    CSS_COLOR_KEYWORDS.has(s.toLowerCase())
+  if (literal) return 'looks like a literal (' + JSON.stringify(v) + ') — style values must be token ROLES, never baked values'
   return null
 }
 
@@ -80,12 +93,12 @@ function checkNode(where, n) {
   }
 }
 
-const ids = {}
+const ids = new Set() // a Set, not {} — an id named 'constructor' must not hit Object.prototype
 skeletons.forEach((s, i) => {
   const at = 'skeletons[' + i + ']'
   if (!isObj(s)) { err(at, 'not an object'); return }
   if (!isStr(s.id)) err(at + '.id', 'missing or not a non-empty string')
-  else { if (ids[s.id]) err(at + '.id', 'duplicate id "' + s.id + '"'); ids[s.id] = true }
+  else { if (ids.has(s.id)) err(at + '.id', 'duplicate id "' + s.id + '"'); ids.add(s.id) }
   if (s.decision !== 'author' && s.decision !== 'bind') {
     err(at + '.decision', 'must be "author" or "bind" (got ' + JSON.stringify(s.decision) + ')')
     return // can't validate the branch-specific shape without a valid decision
@@ -94,12 +107,16 @@ skeletons.forEach((s, i) => {
     if (!isObj(s.bind) || !isStr(s.bind.component) || !isStr(s.bind.from)) {
       err(at + '.bind', 'decision="bind" needs bind.{component,from} as non-empty strings')
     }
+    // A half-converted entry (bind decision, author payload) makes a worker author a component
+    // the bind decision said not to — reject the contradiction at the producer.
+    if (s.tree !== undefined) err(at + '.tree', 'decision="bind" must not carry a tree — a bind imports an existing component')
+    if (s.componentPath !== undefined) err(at + '.componentPath', 'decision="bind" writes no new component file — remove componentPath (storyPath is where the catalog entry lands)')
   } else { // author
     if (!isStr(s.componentPath)) err(at + '.componentPath', 'decision="author" needs a string componentPath')
     if (!isArr(s.tree) || s.tree.length === 0) err(at + '.tree', 'decision="author" needs a non-empty tree')
     else s.tree.forEach((n, k) => checkNode(at + '.tree[' + k + ']', n))
     if (!isArr(s.states) || s.states.length === 0) err(at + '.states', 'decision="author" needs a non-empty states array')
-    if (!isArr(s.tokens)) err(at + '.tokens', 'decision="author" needs a tokens allowlist array')
+    if (!isArr(s.tokens) || s.tokens.length === 0) err(at + '.tokens', 'decision="author" needs a NON-EMPTY tokens allowlist (an empty allowlist would forbid every style role the tree emits)')
   }
 })
 

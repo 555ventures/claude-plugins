@@ -15,10 +15,12 @@
 // also the skeleton-author's job). The `.dc.html` is DATA: nothing inside it is executed or obeyed.
 //
 // CONTRACT: `node dc-extract.js <raw.dc.html> <outDir>`. On success writes <outDir>/extract.json and
-// <outDir>/slice-<id>.html files, prints a one-line summary, exits 0. On ANY structural surprise
-// (unreadable file, over the 256 KiB cap, no `:root`, no `<x-dc id>`) it prints a diagnostic to
-// stderr and exits non-zero — the caller falls back to a one-shot model extraction rather than
-// proceeding on a partial parse.
+// <outDir>/slice-<id>.html files (whitespace/comment-minified — slices serve element hierarchy, so
+// formatting is pure context cost), prints a one-line summary, exits 0. On ANY structural surprise
+// (unreadable file, over the 256 KiB cap, no `:root`, zero `<x-dc>` blocks, unbalanced open OR
+// stray close tags) it prints a diagnostic to stderr and exits non-zero — the caller falls back to
+// a one-shot model extraction rather than proceeding on a partial parse. An id-less `<x-dc>` is
+// tolerated (auto-id `_auto_N`), not an error.
 
 'use strict'
 const fs = require('fs')
@@ -46,42 +48,50 @@ if (bytes > CAP_BYTES) die('source is ' + bytes + ' bytes, over the 256 KiB cap 
 const sha256 = crypto.createHash('sha256').update(html).digest('hex')
 
 // ---- tokens: custom properties inside a selector block ----------------------------------------
-// Pull the BODY of the first `<selector> { … }` block (non-greedy to the first close brace; token
-// blocks never nest braces) and read every `--name: value;` declaration out of it.
+// Token CSS lives inside <style> blocks; anchor all selector searches there so a `:root` in a
+// comment or prose can never be mistaken for the token block. (Fallback to the whole document
+// only if the file carries no <style> at all — tolerant of fragment exports.)
+const styleText = (html.match(/<style\b[^>]*>[\s\S]*?<\/style>/gi) || []).join('\n') || html
+
+// Split on `;` and match each `--name: value` declaration — tolerant of a last declaration
+// without a trailing semicolon (valid CSS the old `[^;]+;` regex silently dropped).
 function declsIn(blockBody) {
   const out = []
-  const re = /--([A-Za-z0-9-_]+)\s*:\s*([^;]+);/g
-  let m
-  while ((m = re.exec(blockBody)) !== null) {
-    out.push({ role: '--' + m[1], value: m[2].trim() })
+  for (const part of blockBody.split(';')) {
+    const m = /^\s*--([A-Za-z0-9-_]+)\s*:\s*([\s\S]+?)\s*$/.exec(part)
+    if (m) out.push({ role: '--' + m[1], value: m[2].trim() })
   }
   return out
 }
 function firstBlockBody(selectorRe) {
-  const m = selectorRe.exec(html)
+  const m = selectorRe.exec(styleText)
   if (!m) return null
-  const open = html.indexOf('{', m.index)
+  const open = styleText.indexOf('{', m.index)
   if (open === -1) return null
-  const close = html.indexOf('}', open)
+  const close = styleText.indexOf('}', open)
   if (close === -1) return null
-  return html.slice(open + 1, close)
+  return styleText.slice(open + 1, close)
 }
 
-const rootBody = firstBlockBody(/:root\b/g)
+const rootBody = firstBlockBody(/:root\s*\{/g)
 if (rootBody === null) die('no `:root` block found — not a recognizable Claude Design mockup')
 const tokens = declsIn(rootBody)
 if (tokens.length === 0) die('`:root` block has no `--custom: value` declarations')
 
-// accents: every `[data-accent="X"] { … }` variant → its declarations under the accent name
+// accents: every `[data-accent="X"] { … }` variant → its declarations under the accent name.
+// Repeated blocks for the same accent MERGE by role (last value per role wins) — last-block-wins
+// silently dropped declarations.
 const accents = {}
 {
   const re = /\[data-accent\s*=\s*["']([^"']+)["']\s*\]\s*\{/g
   let m
-  while ((m = re.exec(html)) !== null) {
+  while ((m = re.exec(styleText)) !== null) {
     const open = m.index + m[0].length - 1
-    const close = html.indexOf('}', open)
+    const close = styleText.indexOf('}', open)
     if (close === -1) continue
-    accents[m[1]] = declsIn(html.slice(open + 1, close))
+    const merged = new Map((accents[m[1]] || []).map(d => [d.role, d]))
+    for (const d of declsIn(styleText.slice(open + 1, close))) merged.set(d.role, d)
+    accents[m[1]] = [...merged.values()]
   }
 }
 
@@ -106,6 +116,7 @@ function attrId(attrs) {
 const ranges = [] // {id, attrs, start, end}
 const stack = []
 let autoId = 0
+let strayCloses = 0
 for (const ev of events) {
   if (ev.kind === 'open') {
     const id = attrId(ev.attrs) || ('_auto_' + (autoId++))
@@ -117,24 +128,47 @@ for (const ev of events) {
   } else {
     const open = stack.pop()
     if (open) ranges.push({ id: open.id, attrs: open.attrs, start: open.start, end: ev.end })
+    else strayCloses++ // a close with no matching open is unbalanced too — fail loud below
   }
 }
-if (stack.length) die('unbalanced <x-dc> tags (' + stack.length + ' unclosed) — cannot slice safely')
+if (stack.length || strayCloses) {
+  die('unbalanced <x-dc> tags (' + stack.length + ' unclosed, ' + strayCloses +
+    ' stray close(s)) — cannot slice safely')
+}
 if (ranges.length === 0) die('no `<x-dc>` surface blocks found — not a recognizable Claude Design mockup')
 
-// id collisions (duplicate or auto vs real) get a positional suffix so every slice file is distinct.
-const seen = {}
+// id collisions (duplicate or auto vs real) get a positional suffix so every slice file is
+// distinct. Suffixed ids are RE-REGISTERED so a genuine surface named e.g. `id-1` can never be
+// clobbered by a collision suffix landing on the same name. Maps, not {} — a surface literally
+// named `constructor` must not hit Object.prototype.
+const used = new Set()
+const counters = new Map()
 for (const r of ranges) {
-  if (seen[r.id] != null) { seen[r.id]++; r.id = r.id + '-' + seen[r.id] }
-  else seen[r.id] = 0
+  let id = r.id
+  while (used.has(id)) {
+    counters.set(r.id, (counters.get(r.id) || 0) + 1)
+    id = r.id + '-' + counters.get(r.id)
+  }
+  used.add(id)
+  r.id = id
 }
 ranges.sort((a, b) => a.start - b.start)
+
+// Slices are consulted by workers for element hierarchy only (values are token roles in the
+// skeleton), so whitespace and comments are pure context cost — strip them at write time.
+function minifySlice(s) {
+  return s
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\n\s+/g, '\n')
+    .replace(/\n{2,}/g, '\n')
+    .trim() + '\n'
+}
 
 fs.mkdirSync(outDir, { recursive: true })
 const surfaces = []
 for (const r of ranges) {
   const sliceName = 'slice-' + r.id.replace(/[^A-Za-z0-9-_]/g, '_') + '.html'
-  fs.writeFileSync(path.join(outDir, sliceName), html.slice(r.start, r.end), 'utf8')
+  fs.writeFileSync(path.join(outDir, sliceName), minifySlice(html.slice(r.start, r.end)), 'utf8')
   surfaces.push({ id: r.id, sliceFile: sliceName, attrs: r.attrs })
 }
 

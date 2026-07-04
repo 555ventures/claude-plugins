@@ -44,6 +44,16 @@
       "rationale": "Keeps feature modules independently evolvable."
     },
     {
+      "id": "no-off-scale-breakpoint",
+      "intent": "Responsive behavior must use the named breakpoint/container roles — no raw media-query widths or arbitrary breakpoint values in UI files.",
+      "targetCategory": "layout",
+      "appliesTo": ["src/**/*.{ts,tsx,css}"],
+      "exemptGlobs": ["**/tokens/**"],
+      "severity": "error",
+      "grounding": "grounded",
+      "rationale": "The layout-system mirror of no-raw-color: one breakpoint scale consumed by name keeps responsive behavior uniform across surfaces."
+    },
+    {
       "id": "base-primitive-containment",
       "intent": "Overlay shells (backdrop + focus-trap + dismiss — Sheet/Dialog/Popover/Drawer) live in the base dir and are imported from its barrel; none are hand-rolled outside it.",
       "targetCategory": "structure",

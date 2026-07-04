@@ -49,12 +49,11 @@ depended_on_by: []
 
 { Screens, components, dialogs; their props and states (empty / loading / error / edge).
   Embed Component API References here — registry + library excerpts gathered at plan time.
-  /spec:design enriches this section before build into the authoring plan: per surface a
-  prop-type table, per-surface token assignments (role names; new roles flagged), the states to
-  render, and one-line interaction/voice notes. Sonnet workers (and /spec:build) build from THIS
-  enriched section and never query MCPs. (On the mockup path — design_source set — the design
-  digest is the plan instead; this section is reconciled to match.) Omit section if no UI
-  changes (then design: false). }
+  In /spec:design this section is the component inventory the skeleton-author reads; the
+  authoring plan itself is ALWAYS the on-disk skeletons.json (mockup path and no-mockup path
+  alike), and Phase 4 reconciles this section to the approved design (final APIs + states).
+  Sonnet workers (and /spec:build) build from the spec + skeletons and never query MCPs.
+  Omit section if no UI changes (then design: false). }
 
 ## Data Model
 

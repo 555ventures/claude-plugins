@@ -14,6 +14,7 @@ export const meta = {
 // arrived (length + preview) instead of a bare "Unable to parse JSON string" at the call site.
 function normalizeArgs(raw) {
   let v = raw
+  // Unwrap up to 2 layers of JSON-string encoding (single = older harness; double = caller bug).
   for (let i = 0; i < 2 && typeof v === 'string'; i++) {
     const s = v.trim()
     if (s === '[object Object]') {
@@ -25,8 +26,10 @@ function normalizeArgs(raw) {
       v = JSON.parse(s)
     } catch (e) {
       throw new Error('wf-review: args was a string but not valid JSON (' + s.length +
-        ' chars). This is usually truncation at a delivery size cap or a coercion bug. ' +
-        'First 160 chars: ' + JSON.stringify(s.slice(0, 160)) + ' — parse error: ' + e.message)
+        ' chars). This is structural corruption — free text / a non-scalar reached `args`, which ' +
+        'must carry only paths, ids, enums, booleans, and command strings; prose lives on disk in ' +
+        'the artifact the agents Read (spec / brief / rule docs). First 160 chars: ' +
+        JSON.stringify(s.slice(0, 160)) + ' — parse error: ' + e.message)
     }
   }
   return v
@@ -148,11 +151,24 @@ const panels = await parallel(Array.from({ length: n }, (_, i) => () =>
     agentType: 'spec:reviewer',
   })))
 
+// FAIL CLOSED: a reviewer that died (null result) is NOT a clean review. Without this, a
+// crashed sole T2 reviewer filters to zero findings and the run returns CLEAN — the exact
+// false-green this gate exists to prevent. The orchestrator re-invokes (journal-cached).
+const failedReviewers = panels.filter(p => !p).length
+if (failedReviewers) {
+  return {
+    verdict: 'REVIEWER_FAILED', failedReviewers, reviewerCount: n,
+    survivors: [], killed: [], tokens: budget.spent(),
+  }
+}
+
 const seen = new Set()
 const findings = []
-for (const p of panels.filter(Boolean)) {
+for (const p of panels) {
   for (const f of p.findings) {
-    const key = `${f.file}:${f.line}:${f.severity}`
+    // Claim is part of the identity: two reviewers flagging the same line for DIFFERENT
+    // defects are two findings, not a duplicate.
+    const key = `${f.file}:${f.line}:${f.severity}:${f.claim}`
     if (seen.has(key)) continue
     seen.add(key)
     findings.push(f)
@@ -161,7 +177,7 @@ for (const p of panels.filter(Boolean)) {
 log(`${findings.length} unique findings from ${n} reviewer(s)`)
 
 if (!findings.length) {
-  return { verdict: 'CLEAN', survivors: [], killed: [], reviewerCount: n }
+  return { verdict: 'CLEAN', survivors: [], killed: [], reviewerCount: n, tokens: budget.spent() }
 }
 
 // ---- Phase: refutation filter (claim-only, severity-calibrated kill rules) ----
@@ -174,10 +190,11 @@ const judged = await parallel(findings.map(f => () => {
       phase: 'Refute', schema: VERDICT, model: 'sonnet',
     })))
     .then(votes => {
-      const valid = votes.filter(Boolean)
-      const refutes = valid.filter(v => v.refuted)
-      // Kill rule: ALL refuters must refute (hard: 2/2, medium/soft: 1/1).
-      const killed = valid.length > 0 && refutes.length === valid.length
+      const refutes = votes.filter(Boolean).filter(v => v.refuted)
+      // Kill rule: ALL DISPATCHED refuters must refute (hard: 2/2, medium/soft: 1/1). A refuter
+      // that died is a missing vote, never an implicit refute — the finding survives it. (The old
+      // valid.length comparison let a hard finding die 1/1 when its second refuter crashed.)
+      const killed = refutes.length === k
       return { ...f, killed, refuteReasons: refutes.map(v => v.reason) }
     })
 }))
@@ -192,4 +209,5 @@ return {
   survivors,
   killed,
   reviewerCount: n,
+  tokens: budget.spent(),
 }

@@ -14,7 +14,7 @@ command that flips `done`.
 **Orchestrator: Opus or Sonnet. Reviewers and refuters: Sonnet — never Fable.** Cross-model
 independence from the planning author is the gate's value; capability is not.
 
-**Setup:** run `spec-paths shared` and Read that file (shared invariants). Read the host's
+**Setup:** run `spec-paths shared-for review` and read its output (the shared invariants scoped to this command). Read the host's
 `.claude/spec.config.json` and its pipeline rules file. If either is missing, STOP: tell the
 user to run `/spec:init` first. Also run `spec-paths wf-review` once and keep the printed
 absolute path — it is the `scriptPath` for the Workflow call below.
@@ -60,8 +60,13 @@ What the script does (shape lives in the script, not here):
   Neutral framing — an empty findings list is a valid outcome; nothing in the prompt
   manufactures findings.
 - **Refutation filter:** per finding, refuters see the **claim only** (never the reviewer's
-  reasoning). `hard` findings get 2 refuters and die only on 2/2 refutes; `medium`/`soft` get 1.
-- Returns `{survivors, killed}`. Killed findings are reported, never silently dropped.
+  reasoning). `hard` findings get 2 refuters and die only on 2/2 refutes of the **dispatched**
+  refuters (a crashed refuter is a missing vote — the finding survives it); `medium`/`soft` get 1.
+- Returns `{verdict, survivors, killed, reviewerCount, tokens}`. Killed findings are reported,
+  never silently dropped. **`verdict: "REVIEWER_FAILED"` means a reviewer agent died — that is a
+  failed RUN, never a CLEAN: re-invoke the workflow (journal cache makes it cheap) before any
+  verdict is read.** `tokens` is the workflow's output-token spend — carry it into the Phase 3
+  report.
 
 ## Drift gate
 

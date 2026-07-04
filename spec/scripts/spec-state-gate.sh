@@ -44,7 +44,8 @@ FILE="$SPEC"
 [ -f "$FILE" ] || FILE="$ROOT/$SPEC"
 [ -f "$FILE" ] || exit 0   # nonexistent path — command will surface that itself
 
-if grep -q 'NEEDS CLARIFICATION' "$FILE"; then
+# Match only the live bracketed marker — prose that merely MENTIONS the phrase must not block.
+if grep -q '\[NEEDS CLARIFICATION' "$FILE"; then
   echo "Spec state gate: $SPEC contains unresolved [NEEDS CLARIFICATION] markers — resolve them via /spec:plan before proceeding." >&2
   exit 2
 fi

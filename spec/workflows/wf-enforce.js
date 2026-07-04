@@ -14,6 +14,7 @@ export const meta = {
 // (Same normalizer doctrine as wf-build — see CLAUDE.md "Workflow tool quirks".)
 function normalizeArgs(raw) {
   let v = raw
+  // Unwrap up to 2 layers of JSON-string encoding (single = older harness; double = caller bug).
   for (let i = 0; i < 2 && typeof v === 'string'; i++) {
     const s = v.trim()
     if (s === '[object Object]') {
@@ -26,9 +27,9 @@ function normalizeArgs(raw) {
     } catch (e) {
       throw new Error('wf-enforce: args was a string but not valid JSON (' + s.length +
         ' chars). This is structural corruption — free text / a non-scalar reached `args`, which ' +
-        'must carry only paths, ids, enums, booleans; rule prose belongs in the host rule docs the ' +
-        'agents Read. First 160 chars: ' + JSON.stringify(s.slice(0, 160)) +
-        ' — parse error: ' + e.message)
+        'must carry only paths, ids, enums, booleans, and command strings; prose lives on disk in ' +
+        'the artifact the agents Read (spec / brief / rule docs). First 160 chars: ' +
+        JSON.stringify(s.slice(0, 160)) + ' — parse error: ' + e.message)
     }
   }
   return v
@@ -131,9 +132,13 @@ function researchPrompt(cell) {
 }
 
 phase('Research')
+// Never silently drop a cell: every cell the command sent is accounted for in the return — either
+// researched, or listed in `skipped` with a reason the command can reconcile against its work list.
+const skipped = []
 const cells = args.cells.filter(c => {
   if (!CATEGORIES.includes(c.category)) {
     log(`skipping cell ${c.id || '?'}: unknown category '${c.category}' (not in the reserved set)`)
+    skipped.push({ id: c.id || '?', category: c.category, reason: 'unknown-category' })
     return false
   }
   return true
@@ -143,9 +148,13 @@ const results = await parallel(cells.map(cell => () =>
   agent(researchPrompt(cell), {
     label: `research:${cell.id}`, phase: 'Research', schema: CANDIDATE, model: 'sonnet',
   })))
+cells.forEach((c, i) => {
+  if (!results[i]) skipped.push({ id: c.id, category: c.category, reason: 'agent-failed' })
+})
 
 return {
   stage: 'researched',
   cells: results.filter(Boolean),
-  skipped: cells.length - results.filter(Boolean).length,
+  skipped,
+  tokens: budget.spent(),
 }

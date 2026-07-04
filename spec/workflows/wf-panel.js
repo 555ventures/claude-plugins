@@ -15,6 +15,7 @@ export const meta = {
 // arrived (length + preview) instead of a bare "Unable to parse JSON string" at the call site.
 function normalizeArgs(raw) {
   let v = raw
+  // Unwrap up to 2 layers of JSON-string encoding (single = older harness; double = caller bug).
   for (let i = 0; i < 2 && typeof v === 'string'; i++) {
     const s = v.trim()
     if (s === '[object Object]') {
@@ -27,9 +28,9 @@ function normalizeArgs(raw) {
     } catch (e) {
       throw new Error('wf-panel: args was a string but not valid JSON (' + s.length +
         ' chars). This is structural corruption — free text / a non-scalar reached `args`, which ' +
-        'must carry only paths, ids, enums, and booleans; all prose lives in the brief on disk the ' +
-        'agents Read. First 160 chars: ' + JSON.stringify(s.slice(0, 160)) +
-        ' — parse error: ' + e.message)
+        'must carry only paths, ids, enums, booleans, and command strings; prose lives on disk in ' +
+        'the artifact the agents Read (spec / brief / rule docs). First 160 chars: ' +
+        JSON.stringify(s.slice(0, 160)) + ' — parse error: ' + e.message)
     }
   }
   return v
@@ -38,6 +39,13 @@ args = normalizeArgs(args)
 if (!args || typeof args !== 'object' || !Array.isArray(args.researchKeys)) {
   throw new Error('wf-panel: malformed args (expected the object documented below with a ' +
     '`researchKeys` array, got ' + (args === undefined ? 'undefined' : typeof args) + ')')
+}
+// Panel doctrine (genesis.md § The MoA Panel): exactly 3 proposers — fewer loses the minority-view
+// texture the aggregator needs, more dilutes it. Enforce at the trust boundary, not by convention.
+if (args.runProposers && (!Array.isArray(args.roleKeys) || args.roleKeys.length !== 3)) {
+  throw new Error('wf-panel: runProposers=true requires exactly 3 roleKeys (got ' +
+    (Array.isArray(args.roleKeys) ? args.roleKeys.length : typeof args.roleKeys) + ') — the MoA ' +
+    'panel is 3 blind proposers by doctrine')
 }
 
 // args carries ONLY paths, enum keys, and booleans — never free text. The project description,
@@ -146,7 +154,9 @@ const research = (await parallel(args.researchKeys.map(key => () =>
   )
 ))).filter(Boolean)
 
-const researchBlock = 'THIS ROUND\'S RESEARCH (structured):\n' + JSON.stringify(research, null, 2)
+// Compact JSON: this block is inlined into 3 proposer prompts + the aggregator (4x), so the
+// pretty-print whitespace alone was a ~30% pure-overhead multiplier on the largest prompt block.
+const researchBlock = 'THIS ROUND\'S RESEARCH (structured JSON):\n' + JSON.stringify(research)
 
 let proposals = []
 if (args.runProposers) {
@@ -165,7 +175,7 @@ if (args.runProposers) {
 }
 
 const proposalBlock = args.runProposers
-  ? 'PROPOSER POSITIONS (independent, blind to each other):\n' + JSON.stringify(proposals, null, 2)
+  ? 'PROPOSER POSITIONS (independent, blind to each other; structured JSON):\n' + JSON.stringify(proposals)
   : 'Proposers were SKIPPED this round (all hard-to-reverse dimensions were user-constrained). ' +
     'Synthesize directly from the brief and research; the decision matrix is your validation of the ' +
     'user\'s constrained choices plus recommended defaults for any remaining open detail.'
@@ -185,4 +195,8 @@ const result = await agent(
   { label: 'aggregate', phase: 'Aggregate', model: 'opus', agentType: 'general-purpose', schema: AGGREGATE_SCHEMA }
 )
 
-return result
+if (!result) {
+  // FAIL CLOSED: a dead aggregator must not read as an empty decision package.
+  throw new Error('wf-panel: aggregator agent returned no result — re-invoke this round')
+}
+return { ...result, tokens: budget.spent() }

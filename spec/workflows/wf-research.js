@@ -14,21 +14,22 @@ export const meta = {
 // arrived (length + preview) instead of a bare "Unable to parse JSON string" at the call site.
 function normalizeArgs(raw) {
   let v = raw
+  // Unwrap up to 2 layers of JSON-string encoding (single = older harness; double = caller bug).
   for (let i = 0; i < 2 && typeof v === 'string'; i++) {
     const s = v.trim()
     if (s === '[object Object]') {
-      throw new Error('wf-research: args arrived String()-coerced to "[object Object]" — ' +
-        'the caller stringified the object instead of passing a real JSON object. Pass `args` as a ' +
-        'plain object in the Workflow call.')
+      throw new Error('wf-research: args arrived String()-coerced to "[object Object]" — the ' +
+        'caller stringified the object with String()/template interpolation instead of passing a ' +
+        'real JSON object (or JSON.stringify). Pass `args` as a plain object in the Workflow call.')
     }
     try {
       v = JSON.parse(s)
     } catch (e) {
       throw new Error('wf-research: args was a string but not valid JSON (' + s.length +
         ' chars). This is structural corruption — free text / a non-scalar reached `args`, which ' +
-        'must carry only paths, ids, enums, and booleans; all prose lives in the brief on disk the ' +
-        'agents Read. First 160 chars: ' + JSON.stringify(s.slice(0, 160)) +
-        ' — parse error: ' + e.message)
+        'must carry only paths, ids, enums, booleans, and command strings; prose lives on disk in ' +
+        'the artifact the agents Read (spec / brief / rule docs). First 160 chars: ' +
+        JSON.stringify(s.slice(0, 160)) + ' — parse error: ' + e.message)
     }
   }
   return v
@@ -110,7 +111,11 @@ const RECENCY_VERDICT_SCHEMA = {
 }
 
 phase('Research')
-let menus = (await parallel(args.dimensionKeys.map(key => () =>
+// Keys are carried BY INDEX from here on: the parallel() result is index-aligned with
+// dimensionKeys, and `dimension` is overwritten with the key — never trusted from the agent's
+// echo. Joining on agent-authored free text (the old behavior) silently skipped verification
+// whenever the model paraphrased the key.
+const menusRaw = await parallel(args.dimensionKeys.map(key => () =>
   agent(
     'You are the option-research agent for the "' + key + '" dimension of a ' + args.stage +
     ' discovery interview. Read the brief at ' + briefPath + ' for this project\'s goal, archetype, ' +
@@ -125,34 +130,38 @@ let menus = (await parallel(args.dimensionKeys.map(key => () =>
     'carries a library/framework/runtime version whose staleness would corrupt the choice.',
     { label: 'menu:' + key, phase: 'Research', model: 'sonnet', agentType: 'general-purpose', schema: OPTION_SET_SCHEMA }
   )
-))).filter(Boolean)
+))
+let menus = menusRaw
+  .map((m, i) => (m ? { ...m, dimension: args.dimensionKeys[i] } : null))
+  .filter(Boolean)
 
-// Haiku currency check — ONLY for version-bearing dimensions the command flagged. A narrow lookup:
-// is each option still current as of now, or has it been superseded? Stale options are annotated so
-// the command can demote/drop them before they reach the user. Taste/UX dimensions skip this.
-const toVerify = menus.filter(m => verifyKeys.includes(m.dimension) && m.version_bearing)
+// Haiku currency check for version-bearing dimensions. Triggered by the UNION of the command's
+// verifyKeys flag and the researcher's own version_bearing discovery — the command knows which
+// dimensions are stacks/libraries up front, but a researcher can legitimately surface versioned
+// options on a dimension the command didn't anticipate; either signal alone suffices.
+const toVerify = menus.filter(m => verifyKeys.includes(m.dimension) || m.version_bearing)
 if (toVerify.length) {
   phase('Verify')
-  const verdicts = (await parallel(toVerify.map(m => () =>
+  const verdicts = await parallel(toVerify.map(m => () =>
     agent(
       'Narrow currency check. For the "' + m.dimension + '" dimension, verify whether each option below ' +
       'is STILL CURRENT or has been superseded/deprecated. Use WebSearch/WebFetch for latest stable ' +
       'versions and maintenance status; do not re-rank or editorialize — only report still_current and a ' +
-      'terse note where it changed.\n\nOPTIONS:\n' +
-      JSON.stringify(m.options.map(o => ({ label: o.label, recency: o.recency })), null, 2),
-      { label: 'verify:' + m.dimension, phase: 'Verify', model: 'haiku', agentType: 'general-purpose', schema: RECENCY_VERDICT_SCHEMA }
+      'terse note where it changed. Keep each verdict\'s `label` EXACTLY as given, in the SAME order.\n\nOPTIONS:\n' +
+      JSON.stringify(m.options.map(o => ({ label: o.label, recency: o.recency }))),
+      { label: 'verify:' + m.dimension, phase: 'Verify', model: 'haiku', agentType: 'general-purpose', schema: RECENCY_VERDICT_SCHEMA, effort: 'low' }
     )
-  ))).filter(Boolean)
-
-  const byDim = {}
-  for (const v of verdicts) byDim[v.dimension] = v.verdicts
+  ))
+  // Merge BY INDEX (toVerify[i] ↔ verdicts[i]); within a menu, match options by exact label echo
+  // with a positional fallback so a paraphrased label degrades to positional, never to silence.
+  const verdictFor = new Map(toVerify.map((m, i) => [m, verdicts[i]]))
   menus = menus.map(m => {
-    const vs = byDim[m.dimension]
-    if (!vs) return m
-    const options = m.options.map(o => {
-      const v = vs.find(x => x.label === o.label)
-      if (!v) return o
-      return { ...o, still_current: v.still_current, verify_note: v.note || '' }
+    const v = verdictFor.get(m)
+    if (!v) return m
+    const options = m.options.map((o, oi) => {
+      const vd = v.verdicts.find(x => x.label === o.label) || v.verdicts[oi]
+      if (!vd) return o
+      return { ...o, still_current: vd.still_current, verify_note: vd.note || '' }
     })
     return { ...m, options, verified: true }
   })
@@ -161,4 +170,4 @@ if (toVerify.length) {
 // One option set per opened dimension. The command writes each to interview-research/{dimension}.json
 // (stamping fetchedAt), curates 2–4 into a recommended-first AskUserQuestion, and records the pick +
 // sources to the brief. Stale options (still_current === false) should be demoted or dropped there.
-return { stage: args.stage, menus }
+return { stage: args.stage, menus, tokens: budget.spent() }

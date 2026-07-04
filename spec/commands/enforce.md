@@ -16,7 +16,7 @@ This is a different cadence from `/spec:init`: enforcement regenerates when **ru
 change (frequent), not when the repo is re-profiled (rare), and the work is expensive and flaky
 (live research + install-and-verify). So it is its own command, independently re-runnable.
 
-**Intended model: Opus.** **Setup:** run `spec-paths shared` and Read that file (shared
+**Intended model: Opus.** **Setup:** run `spec-paths shared-for enforce` and read its output (shared
 invariants). Read the host's `.claude/spec.config.json` and its pipeline rules file
 (`pipelineRules`). If either is missing, STOP: tell the user to run `/spec:init` first. Also run
 `spec-paths wf-enforce` once and keep the printed absolute path — it is the `scriptPath` for
@@ -40,8 +40,8 @@ contract`); they must stay in sync — the contract is the single source of trut
 executor's working list.
 
 Genesis-seeded repos also carry `.claude/genesis/design-rules.json` whose rules use a design enum
-(`color | typography | i18n | structure | a11y | density`). Fold these in as **pre-classified
-inputs**: `structure → module-boundary`; `color | typography | i18n | density → forbidden-symbol`
+(`color | typography | i18n | structure | a11y | density | layout`). Fold these in as **pre-classified
+inputs**: `structure → module-boundary`; `color | typography | i18n | density | layout → forbidden-symbol`
 or `structural-pattern`; `a11y → structural-pattern` (or judgment residue if no AST check fits).
 
 ## The judgment residue (do NOT mechanize — compose over, don't duplicate)
@@ -92,6 +92,11 @@ citations** — never from training memory — and returns ranked candidates wit
 `runCmd` / `citations`, or an empty list + a recommended fallback (`sweep` / `review-check`). The
 genesis `stack-descriptor` is passed only as a stack-identity **hint**; the workflow still
 researches (this is why enforce works on brownfield repos the genesis stage never touched).
+
+**Return shape:** `{stage: "researched", cells: [...], skipped: [{id, category, reason}],
+tokens}`. `skipped` accounts for every cell that was NOT researched (`unknown-category` or
+`agent-failed`) — reconcile it against the Phase 1 work list and re-research those cells (inline
+for a handful) before Phase 3; a skipped cell is unfinished work, never a silent drop.
 
 (If Phase 1's list was tiny, do this discovery inline with the same discipline: live citation
 required, no tool from memory.)
@@ -181,10 +186,10 @@ the real violations they just caught).
 
 ## Rules
 
-- **Never Read `wf-enforce.js`.** The complete `args` contract is in Phase 1 (`{configPath,
-  pipelineRulesPath, stackDescriptorPath, enforcementManifestPath, cells}`) and the
-  discovery-fan-out behavior + return shape are described there. Invoke it (by `scriptPath`) and
-  act on its return — its source is never orchestrator context.
+- **Never Read `wf-enforce.js`.** The complete `args` contract and the return shape are in
+  Phase 2 (`{configPath, pipelineRulesPath, stackDescriptorPath, enforcementManifestPath, cells}`
+  → `{stage, cells, skipped, tokens}`). Invoke it (by `scriptPath`) and act on its return — its
+  source is never orchestrator context.
 - **Never name a specific linter/formatter/arch-tool/hook-runner in any plugin file.** Encode the
   method + category here; discover the tool at runtime. A named tool anchors the agent and goes
   stale faster than the rules do.

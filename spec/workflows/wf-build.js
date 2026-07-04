@@ -29,9 +29,9 @@ function normalizeArgs(raw) {
     } catch (e) {
       throw new Error('wf-build: args was a string but not valid JSON (' + s.length +
         ' chars). This is structural corruption — free text / a non-scalar reached `args`, which ' +
-        'must carry only paths, ids, enums, booleans, and the gate command; prose belongs in the ' +
-        'spec the agents Read. First 160 chars: ' + JSON.stringify(s.slice(0, 160)) +
-        ' — parse error: ' + e.message)
+        'must carry only paths, ids, enums, booleans, and command strings; prose lives on disk in ' +
+        'the artifact the agents Read (spec / brief / rule docs). First 160 chars: ' +
+        JSON.stringify(s.slice(0, 160)) + ' — parse error: ' + e.message)
     }
   }
   return v
@@ -271,6 +271,10 @@ function repairPrompt(b, fails, round) {
     `You do not need the whole spec. In the spec at ${args.specPath}, read the "Decisions" table (authoritative — apply it verbatim) and the "Contracts" / "UI" entries for the files above (the API and library shapes your fix must satisfy). If a failure or a referenced contract points into another section, read that section too — a green gate that violates a contract you did not read is a defect, not a fix.`,
     resolution ? `## Orchestrator ruling (revision ${resolution})\nA ruling for this batch is recorded in the spec's Decisions table — apply it exactly.` : '',
     `## Gate failures to fix (repair round ${round})\n${fails.map(f => `- ${f.file} — ${f.summary}`).join('\n')}`,
+    // A test batch (it carries acIds) repairs under the SAME test discipline it was authored
+    // under — without this, a repair could quietly turn a spec-derived test into an
+    // implementation-shaped one.
+    b.acIds ? TEST_RULES : '',
     HARD_RULES,
   ].filter(Boolean).join('\n\n')
 }
@@ -344,7 +348,7 @@ if (args.tdd && (args.testBatches || []).length) {
     })))
   const { blocked, missing } = collectBlocked(args.testBatches, out)
   if (blocked.length || missing.length) {
-    return { stage: 'blocked', blocked, missing, completed: receipts }
+    return { stage: 'blocked', blocked, missing, completed: receipts, tokens: budget.spent() }
   }
 
   phase('RedCheck')
@@ -354,9 +358,16 @@ if (args.tdd && (args.testBatches || []).length) {
     `These tests were just written for a spec whose implementation does not exist yet, so every ` +
     `newly written test MUST fail. Report allRed=true only if all of them fail; list any that pass ` +
     `in unexpectedlyPassing. Do not edit any file.`,
-    { label: 'red-check', phase: 'RedCheck', schema: RED, model: 'sonnet' })
-  if (red && !red.allRed) {
-    return { stage: 'tdd-red-check', passing: red.unexpectedlyPassing, summary: red.summary, completed: receipts }
+    { label: 'red-check', phase: 'RedCheck', schema: RED, model: 'sonnet', effort: 'low' })
+  // FAIL CLOSED: a null red-check (agent died) is an UNVERIFIED red state, not an all-red one —
+  // proceeding would build on tests nobody confirmed fail. Surface it like a red-check failure.
+  if (!red || !red.allRed) {
+    return {
+      stage: 'tdd-red-check',
+      passing: red ? red.unexpectedlyPassing : [],
+      summary: red ? red.summary : 'red-check agent returned no result — TDD state unverified; re-run',
+      completed: receipts, tokens: budget.spent(),
+    }
   }
 }
 
@@ -371,7 +382,7 @@ for (const group of args.groups) {
     })))
   const { blocked, missing } = collectBlocked(group, out)
   if (blocked.length || missing.length) {
-    return { stage: 'blocked', blocked, missing, completed: receipts }
+    return { stage: 'blocked', blocked, missing, completed: receipts, tokens: budget.spent() }
   }
 }
 
@@ -392,20 +403,23 @@ let gate = null
 let prevFailKey = null
 for (let round = 0; round <= 3; round++) {
   gate = await agent(
-    `Run this command exactly as written and report results. Do not edit any file.\n\n${gateCmd} && echo ${GATE_SENTINEL}\n\n` +
-    `The trailing \`&& echo ${GATE_SENTINEL}\` prints the exact sentinel ${GATE_SENTINEL} ONLY when every check in the ` +
-    `chain exits 0; any non-zero exit short-circuits the chain and the sentinel never prints. Set pass=true ONLY if the ` +
+    `Run this command exactly as written and report results. Do not edit any file.\n\n( ${gateCmd} ) && echo ${GATE_SENTINEL}\n\n` +
+    `The subshell wrapper makes the trailing \`&& echo ${GATE_SENTINEL}\` fire ONLY when the WHOLE gate command exits 0 ` +
+    `(even if it contains \`;\`); any non-zero exit means the sentinel never prints. Set pass=true ONLY if the ` +
     `exact string ${GATE_SENTINEL} appears in the command output — if it is absent, the gate failed, set pass=false. ` +
     `Put the raw exit code (or "non-zero, no ${GATE_SENTINEL}") and the error/failure count in summary. ` +
     `For each failure, identify the single file that most likely needs the fix (source file for ` +
     `implementation bugs, test file for bad tests) and summarize the failure in one line including ` +
     `the test/check name.`,
-    { label: `gate:round-${round}`, phase: 'Gate', schema: GATE, model: 'haiku' })
+    { label: `gate:round-${round}`, phase: 'Gate', schema: GATE, model: 'haiku', effort: 'low' })
   // Self-contradiction guard: a model may still report pass=true while listing failures (the
   // false-green this guard exists to kill). The workflow, not the model, decides — pass with any
   // failure listed is a fail. Enforced regardless of model behavior.
   if (gate && gate.pass && gate.failures && gate.failures.length > 0) gate.pass = false
   if (!gate || gate.pass) break
+  // A failed gate with NO per-file failures gives the repair loop nothing to route — an empty
+  // repair wave would burn a round and then trip no-progress anyway. Escalate immediately.
+  if (!gate.failures || !gate.failures.length) break
 
   const byBatch = {}
   const outOfScope = []
@@ -416,7 +430,7 @@ for (let round = 0; round <= 3; round++) {
     byBatch[bid].push(f)
   }
   if (outOfScope.length) {
-    return { stage: 'out-of-scope-failure', failures: outOfScope, gate, completed: receipts }
+    return { stage: 'out-of-scope-failure', failures: outOfScope, gate, completed: receipts, tokens: budget.spent() }
   }
   // No-progress escalation: identical failing file-set to last round → stop (routes to the
   // gate-exhausted return below; no new exit path).
@@ -426,17 +440,26 @@ for (let round = 0; round <= 3; round++) {
   if (round === 3) break
 
   log(`Gate round ${round} failed — repairing batches: ${Object.keys(byBatch).join(', ')}`)
-  await parallel(Object.entries(byBatch).map(([bid, fails]) => () =>
+  const repairEntries = Object.entries(byBatch)
+  const repairOut = await parallel(repairEntries.map(([bid, fails]) => () =>
     dispatch(
       repairPrompt(batchById[bid], fails, round + 1),
       {
         label: `repair:${bid}:r${round + 1}`, phase: 'Gate', schema: RECEIPT,
         agentType: resolveType(batchById[bid].agentType), model: 'sonnet',
       })))
+  // A repair worker may hit the same fork/stale-assumption the author path surfaces — HARD_RULES
+  // instructs it to return blocked, so honor that here instead of discarding it and exiting as an
+  // opaque gate-exhausted. (A null repair result is not fatal: the next gate round re-measures.)
+  const repairStatus = collectBlocked(repairEntries.map(([bid]) => batchById[bid]), repairOut)
+  if (repairStatus.blocked.length) {
+    return { stage: 'blocked', blocked: repairStatus.blocked, missing: repairStatus.missing, gate, completed: receipts, tokens: budget.spent() }
+  }
 }
 
 return {
   stage: gate && gate.pass ? 'complete' : 'gate-exhausted',
   gate,
   completed: receipts,
+  tokens: budget.spent(),
 }

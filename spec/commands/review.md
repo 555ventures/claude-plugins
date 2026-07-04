@@ -87,6 +87,17 @@ Two modes, decided by host config:
 **CLEAN ⇔** the host's `gateCommand` green **AND** zero surviving `hard` findings **AND**
 drift clean (whichever mode applies).
 
+**Run ledger (every review run, any verdict):** append exactly ONE line to
+`.claude/spec-runs.jsonl` (repo root; create on first append):
+
+```
+{"ts":"<YYYY-MM-DD>","spec":"<repo-relative spec path>","stage":"review","tier":"<T1|T2|T3>","verdict":"<CLEAN|SURVIVORS|REVIEWER_FAILED>","iteration":<n>,"tokens":{"workflow":<n>},"findings":{"survived":<n>,"killed":<n>,"reviewerCount":<n>}}
+```
+
+Fixed shape, counts/enums only — never finding text or prose (dispositions land in the spec's
+Rationale). One line per Phase-1 invocation, so fix→re-review iterations each leave a row —
+that history is what tunes the refutation filter over time.
+
 If survivors exist, present them with the pattern-sweep context, then `AskUserQuestion` per
 finding group:
 - **Fix** — dispatch Sonnet workers (routed via the host's `agentMap`, matching the build

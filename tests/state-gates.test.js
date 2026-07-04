@@ -47,6 +47,12 @@ test('prose MENTIONING the marker phrase does not block', () => {
   assert.strictEqual(res.status, 0, res.stderr)
 })
 
+test('narration quoting the BRACKETED form (no colon) does not block', () => {
+  const res = gate('/spec:build', SPEC_MD('hardened',
+    'All three original [NEEDS CLARIFICATION] markers are resolved below (D6, D7, D8).'))
+  assert.strictEqual(res.status, 0, res.stderr)
+})
+
 test('non-spec prompts and missing paths pass through', () => {
   assert.strictEqual(gate('hello world', null).status, 0)
   assert.strictEqual(gate('/spec:build specs/20260101/99-none.md', null).status, 0)

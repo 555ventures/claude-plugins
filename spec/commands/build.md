@@ -164,6 +164,18 @@ Checkpoint-commit after the gate is green (and after each earlier green phase if
 
 ## Phase 5 — Report & handoff
 
+**Run ledger (before the chat report):** append exactly ONE line to `.claude/spec-runs.jsonl`
+(repo root; create on first append) — the repo-wide, committed, append-only run history:
+
+```
+{"ts":"<YYYY-MM-DD>","spec":"<repo-relative spec path>","stage":"build","tier":"<T1|T2|T3>","runId":"<wf_…>","tokens":{"workflow":<n>,"phase4Repairs":[<n>,…]},"gate":{"phase4Rounds":<n>,"failureSetShrankEachRound":<bool>},"retainer":{"consults":<n>,"checkpoints":["PASS"|"BLOCK",…]}}
+```
+
+Fixed shape, counts/enums/paths only — **never prose, rulings, or pasted gate output** (those
+live in the spec's Decisions table); a fat line is a bug. Append via
+`printf '%s\n' '<json>' >> .claude/spec-runs.jsonl`. The next checkpoint/close commit picks it
+up — never gitignore it; durable cost + verdict history is its whole point.
+
 Report: files (C/M/D), gate table, decisions applied vs escalated mid-run, consultant
 consultations (count + topics), workflow `runId` (for any later resume), and token spend (every
 workflow return carries `tokens` = output-token spend; report it per invocation — spend visibility

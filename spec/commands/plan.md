@@ -140,9 +140,12 @@ Never silently drop a finding.
 
 ## Phase 4 — Lock
 
-1. **Marker sweep (mechanical):** `grep -n "NEEDS CLARIFICATION" {spec path}`. Each hit is an
-   unresolved gap — resolve it (`AskUserQuestion` or targeted exploration), edit the spec,
-   re-grep. Lock requires zero hits; the state-gate hook enforces the same check downstream.
+1. **Marker sweep (mechanical):** `grep -n "NEEDS CLARIFICATION" {spec path}`. Each hit is
+   either an unresolved gap — resolve it (`AskUserQuestion` or targeted exploration), edit the
+   spec, re-grep — or prose narrating history, which is fine. Resolving a marker means
+   **deleting it** and recording the ruling in Decisions; never quote the full
+   `[NEEDS CLARIFICATION: …]` colon form in prose — that exact syntax is the open-marker
+   sentinel the downstream state-gate hook greps for.
 2. Confirm: zero open forks, **Rationale** and **Canonical Delta** written, ACs mapped to test files.
 3. Flip frontmatter `status: draft → hardened`.
 4. Report: spec path, tier, `design:` value (design-capable hosts), `design_source` if recorded,

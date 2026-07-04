@@ -86,11 +86,20 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
     - frontmatter `status` of every spec is one of `draft | hardened | implementing | done`;
     - an `implementing` spec whose `build_base:` branch no longer exists in the repo is stale
       (the build branch was merged or deleted without `/spec:review` closing the spec);
-    - a `hardened`/`implementing`/`done` spec containing a live `[NEEDS CLARIFICATION` marker
+    - a `hardened`/`implementing`/`done` spec containing a live `[NEEDS CLARIFICATION:` marker
+      (colon form — the open-marker sentinel; bracketed narration without the colon is fine)
       is broken (it should have been impossible to lock);
     - an orphaned design sidecar (`specs/**/*.design/` with no sibling spec mid-design — spec
       already `done`, or `designed:` set) is leftover transient state `/spec:design` Phase 4
       should have deleted; recommend removing it.
+
+12. **Run ledger hygiene** (only if `.claude/spec-runs.jsonl` exists) — every line parses as
+    JSON with a `stage` of `build | review`; any line over ~600 chars is a prose leak
+    (the ledger holds counts/enums/paths only — build.md/review.md define the shape); the
+    file is tracked by git (an ignored or untracked-and-stale ledger defeats its purpose).
+    All checks are script passes (`jq`/`awk`) — never read the ledger into context. If the
+    file somehow exceeds ~2 MB, that is years of entries or a leak: report it and suggest
+    archiving whole years to `.claude/spec-runs-<year>.jsonl` (same shape, still committed).
 
 ## Semantic spot-check — small, bounded
 

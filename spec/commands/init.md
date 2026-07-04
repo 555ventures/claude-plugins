@@ -65,6 +65,13 @@ fails, append `specs/**/*.design/` to `.gitignore`. (Also clean up the retired d
 `*.design-digest.json` / `*.design-digest.raw.html` if a prior init added them.) This does not
 break resume (resume reads the working-tree files); the Phase 4 `rm` is what clears the tree.
 
+**Set the union merge driver for the run ledger** (idempotent): `.claude/spec-runs.jsonl` is
+append-only, and two specs building in parallel worktrees both append at EOF — a default merge
+conflicts there on merge-back, when the only correct resolution is "keep both lines." If
+`git check-attr merge -- .claude/spec-runs.jsonl` doesn't report `union`, append
+`.claude/spec-runs.jsonl merge=union` to the repo's `.gitattributes` (create it if missing) and
+commit it with the other init changes. Never gitignore the ledger itself.
+
 ## Phase 2 — Write `.claude/spec.config.json`
 
 All keys consumed by the plugin's commands/workflows:

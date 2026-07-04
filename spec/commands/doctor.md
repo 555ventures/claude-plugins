@@ -96,7 +96,10 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
 12. **Run ledger hygiene** (only if `.claude/spec-runs.jsonl` exists) — every line parses as
     JSON with a `stage` of `build | review`; any line over ~600 chars is a prose leak
     (the ledger holds counts/enums/paths only — build.md/review.md define the shape); the
-    file is tracked by git (an ignored or untracked-and-stale ledger defeats its purpose).
+    file is tracked by git (an ignored or untracked-and-stale ledger defeats its purpose);
+    `git check-attr merge -- .claude/spec-runs.jsonl` reports `union` (without it, parallel
+    worktree builds conflict at merge-back on EOF appends — init sets the `.gitattributes`
+    entry; recommend re-running `/spec:init` or adding it directly).
     All checks are script passes (`jq`/`awk`) — never read the ledger into context. If the
     file somehow exceeds ~2 MB, that is years of entries or a leak: report it and suggest
     archiving whole years to `.claude/spec-runs-<year>.jsonl` (same shape, still committed).

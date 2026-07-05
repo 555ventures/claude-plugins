@@ -18,21 +18,49 @@ test('build.md and review.md both append to the single repo-wide ledger', () => 
     const text = read(f)
     assert.match(text, new RegExp(LEDGER.replace(/[./]/g, '\\$&')), `${f} references ${LEDGER}`)
     assert.match(text, /exactly ONE line/, `${f} enforces one-line appends`)
-    assert.match(text, /never (prose|finding text)/i, `${f} bans prose in entries`)
+    assert.match(text, /never\s+(prose|finding text)/i, `${f} bans prose in entries`)
   }
 })
 
 test('ledger schemas carry the fields the 3.1.0 design consumes', () => {
   const build = read('commands/build.md')
-  for (const field of ['"ts"', '"spec"', '"stage":"build"', '"tokens"', 'phase4Repairs',
-    'failureSetShrankEachRound', '"retainer"', 'checkpoints']) {
+  for (const field of ['"ts"', '"spec"', '"stage":"build"', '"diff"', '"tokens"',
+    'phase4Repairs', 'failureSetShrankEachRound', '"retainer"', 'checkpoints']) {
     assert.ok(build.includes(field), `build schema has ${field}`)
   }
   const review = read('commands/review.md')
-  for (const field of ['"ts"', '"stage":"review"', '"verdict"', '"iteration"',
-    '"survived"', '"killed"', '"reviewerCount"']) {
+  for (const field of ['"ts"', '"stage":"review"', '"runId"', '"verdict"', '"iteration"', '"survived"',
+    '"killed"', '"waived"', '"rejected"', '"fixDispatched"', '"reviewerCount"']) {
     assert.ok(review.includes(field), `review schema has ${field}`)
   }
+  // dispositions must be knowable when the row is written
+  assert.match(review, /\*\*after\*\* the survivor\s+dispositions/)
+})
+
+test('escape rows: /spec:escape records defects that got past review', () => {
+  const esc = read('commands/escape.md')
+  assert.match(esc, new RegExp(LEDGER.replace(/[./]/g, '\\$&')), 'escape appends to the one ledger')
+  assert.match(esc, /exactly ONE line/)
+  assert.match(esc, /never prose or finding text/i)
+  for (const field of ['"stage":"escape"', '"reviewRunId"', '"foundBy"', 'later-spec',
+    '"killedMatch"', '"severity"', '"file"']) {
+    assert.ok(esc.includes(field), `escape schema has ${field}`)
+  }
+  // unknown is null, never a guessed false — killedMatch is the signal that tunes the filter
+  assert.match(esc, /never a guessed/i)
+  // escapes record, never fix — the command must not become a repair entry point
+  assert.match(esc, /fixes nothing|not a fix/i)
+  // review rows must carry the runId that escape rows point back at
+  assert.match(read('commands/review.md'), /"runId":"<wf_/)
+})
+
+test('doctor aggregates escapes: contradicted CLEANs and killedMatch flags', () => {
+  const doctor = read('commands/doctor.md')
+  assert.match(doctor, /build \| review \| escape/, 'ledger stage enum includes escape')
+  assert.match(doctor, /killedMatch/)
+  assert.match(doctor, /contradicted CLEAN/i)
+  // zero escapes is only evidence when escapes are being recorded at all
+  assert.match(doctor, /zero escape rows exist/i)
 })
 
 test('no per-spec ledger files: nothing instructs writing runs files under specs/', () => {

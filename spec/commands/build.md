@@ -168,11 +168,15 @@ Checkpoint-commit after the gate is green (and after each earlier green phase if
 (repo root; create on first append) — the repo-wide, committed, append-only run history:
 
 ```
-{"ts":"<YYYY-MM-DD>","spec":"<repo-relative spec path>","stage":"build","tier":"<T1|T2|T3>","runId":"<wf_…>","tokens":{"workflow":<n>,"phase4Repairs":[<n>,…]},"gate":{"phase4Rounds":<n>,"failureSetShrankEachRound":<bool>},"retainer":{"consults":<n>,"checkpoints":["PASS"|"BLOCK",…]}}
+{"ts":"<YYYY-MM-DD>","spec":"<repo-relative spec path>","stage":"build","tier":"<T1|T2|T3>","runId":"<wf_…>","diff":{"files":<n>,"loc":<n>},"tokens":{"workflow":<n>,"phase4Repairs":[<n>,…]},"gate":{"phase4Rounds":<n>,"failureSetShrankEachRound":<bool>},"retainer":{"consults":<n>,"checkpoints":["PASS"|"BLOCK",…]}}
 ```
 
-Fixed shape, counts/enums/paths only — **never prose, rulings, or pasted gate output** (those
-live in the spec's Decisions table); a fat line is a bug. Append via
+`diff` comes from `git diff --shortstat <build_base>..HEAD` (files changed, insertions +
+deletions summed as `loc`) — it's what makes token costs comparable across specs of different
+sizes. `phase4Repairs` entries are each repair agent's actual output-token count as the
+harness reports it; if a count isn't visible, write `null` — **never `0`** (a zero reads as
+"free repair" and silently poisons averages; a null is an honest, detectable gap). Fixed shape, counts/enums/paths only — **never prose, rulings, or pasted gate output**
+(those live in the spec's Decisions table); a fat line is a bug. Append via
 `printf '%s\n' '<json>' >> .claude/spec-runs.jsonl`. The next checkpoint/close commit picks it
 up — never gitignore it; durable cost + verdict history is its whole point.
 

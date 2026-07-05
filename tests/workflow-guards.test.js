@@ -79,6 +79,36 @@ test('wf-review: dedup key includes the claim, not just file:line:severity', () 
   assert.match(src, /f\.claim/, 'dedup key must incorporate the claim text')
 })
 
+test('wf-review: kill audit — execution can overturn a refutation vote', () => {
+  const src = read('spec/workflows/wf-review.js')
+  // Every non-soft kill gets an execution auditor; DEMONSTRATED overturns the kill.
+  for (const s of ['DEMONSTRATED', 'NOT_DEMONSTRABLE', 'NOT_EXECUTABLE',
+    'overturnedKill: true', 'reproEvidence', 'MAX_KILL_AUDITS']) {
+    assert.ok(src.includes(s), `wf-review kill audit must include ${s}`)
+  }
+  // Soft kills are not audited; the audit runs on the killed set, after refutation.
+  assert.match(src, /killed\.filter\(f => f\.severity !== 'soft'\)/)
+  assert.ok(src.indexOf('MAX_KILL_AUDITS') > src.indexOf('refutes.length === k'),
+    'audit stage must come after the refutation kill rule')
+  // Crashed auditor: kill stands, visibly counted — never resurrect, never silent.
+  assert.match(src, /audit\.failed\+\+/)
+  // Overturned kills rejoin survivors; the verdict is computed from the merged set.
+  assert.match(src, /\[\.\.\.survivors, \.\.\.overturned\]/)
+  // No silent cap: skipped audits are logged and counted.
+  assert.match(src, /capSkipped/)
+})
+
+test('wf-review: audit counts flow into the return and the review.md contract matches', () => {
+  const src = read('spec/workflows/wf-review.js')
+  assert.match(src, /audit,\n\s*reviewerCount/, 'return must carry the audit block')
+  const doc = read('spec/commands/review.md')
+  assert.match(doc, /survivors, killed, audit, reviewerCount, tokens/,
+    'review.md must document the audit field in the return shape')
+  assert.match(doc, /overturnedKill/, 'review.md Phase 2 must handle overturned kills')
+  assert.match(doc, /"audit":\{"audited":<n>,"overturned":<n>\}/,
+    'ledger schema must record audit counts')
+})
+
 test('wf-build: null red-check fails closed', () => {
   const src = read('spec/workflows/wf-build.js')
   assert.ok(!/if \(red && !red\.allRed\)/.test(src),

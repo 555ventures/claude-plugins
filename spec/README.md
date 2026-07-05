@@ -52,6 +52,9 @@ and the hook recomputes the hash on every pipeline command — any plugin update
 the contract warns on the next command, with zero version bookkeeping. Run **`/spec:doctor`**
 for a cheap read-only drift check (plugin contracts + codebase reality vs the generated
 files) — it recommends targeted patches, or re-running `/spec:init` when drift is structural.
+When a defect surfaces later in spec-built code, record it with **`/spec:escape`** — one run-ledger
+row pointing back at the review that passed it. Those rows are the pipeline's ground truth:
+doctor aggregates them into contradicted-CLEAN and refuter-killed-a-real-bug signals.
 
 ## The Flow
 

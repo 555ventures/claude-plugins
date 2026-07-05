@@ -51,7 +51,10 @@ absolute path — it is the `scriptPath` for the Workflow call below.
 ## Phase 1 — Review workflow
 
 Invoke `Workflow {scriptPath: <spec-paths wf-review output>, args: {specPath, tier, base,
-patternsPath: <temp file from Phase 0>, hasDriftScript: <config declares driftScript>}}`.
+patternsPath: <temp file from Phase 0>, hasDriftScript: <config declares driftScript>,
+reproCommand: <config testCommand, or "">}}`. (`testCommand` is the host's test-runner
+prefix — the kill-audit agents append their repro file path to it; when absent, pass `""`
+and they discover the runner themselves.)
 
 What the script does (shape lives in the script, not here):
 - **Reviewers:** T2 → 1, T3 → 2 (blind to each other, different emphases), running as the
@@ -62,11 +65,19 @@ What the script does (shape lives in the script, not here):
 - **Refutation filter:** per finding, refuters see the **claim only** (never the reviewer's
   reasoning). `hard` findings get 2 refuters and die only on 2/2 refutes of the **dispatched**
   refuters (a crashed refuter is a missing vote — the finding survives it); `medium`/`soft` get 1.
-- Returns `{verdict, survivors, killed, reviewerCount, tokens}`. Killed findings are reported,
-  never silently dropped. **`verdict: "REVIEWER_FAILED"` means a reviewer agent died — that is a
-  failed RUN, never a CLEAN: re-invoke the workflow (journal cache makes it cheap) before any
-  verdict is read.** `tokens` is the workflow's output-token spend — carry it into the Phase 3
-  report.
+- **Kill audit (execution):** every non-soft killed finding gets one Sonnet auditor that
+  tries to *demonstrate* the claimed defect by running code (minimal repro, mandatory
+  cleanup). `DEMONSTRATED` overturns the kill — the finding returns to the survivors with
+  `overturnedKill: true` and its `reproEvidence`. A crashed auditor leaves the kill standing
+  but counted in `audit.failed`; capped at 6 audits per run (`audit.capSkipped` reports any
+  skipped).
+- Returns `{verdict, survivors, killed, audit, reviewerCount, tokens}` where `audit =
+  {audited, overturned, confirmed, notExecutable, failed, capSkipped}`. Killed findings are
+  reported, never silently dropped. **`verdict: "REVIEWER_FAILED"` means a reviewer agent died
+  — that is a failed RUN, never a CLEAN: re-invoke the workflow (journal cache makes it cheap)
+  before any verdict is read.** `tokens` is the workflow's output-token spend — carry it into
+  the Phase 3 report. If `audit.failed` or `audit.capSkipped` is non-zero, say so in the
+  verdict presentation — those kills stand unverified.
 
 ## Drift gate
 
@@ -88,17 +99,27 @@ Two modes, decided by host config:
 drift clean (whichever mode applies).
 
 **Run ledger (every review run, any verdict):** append exactly ONE line to
-`.claude/spec-runs.jsonl` (repo root; create on first append):
+`.claude/spec-runs.jsonl` (repo root; create on first append) — **after** the survivor
+dispositions below are resolved, so the row records how each finding actually ended (a
+`SURVIVORS` row whose survivors were then all waived is otherwise indistinguishable from an
+unresolved one):
 
 ```
-{"ts":"<YYYY-MM-DD>","spec":"<repo-relative spec path>","stage":"review","tier":"<T1|T2|T3>","verdict":"<CLEAN|SURVIVORS|REVIEWER_FAILED>","iteration":<n>,"tokens":{"workflow":<n>},"findings":{"survived":<n>,"killed":<n>,"reviewerCount":<n>}}
+{"ts":"<YYYY-MM-DD>","spec":"<repo-relative spec path>","stage":"review","tier":"<T1|T2|T3>","runId":"<wf_…>","verdict":"<CLEAN|SURVIVORS|REVIEWER_FAILED>","iteration":<n>,"tokens":{"workflow":<n>},"findings":{"survived":<n>,"killed":<n>,"waived":<n>,"rejected":<n>,"fixDispatched":<n>,"reviewerCount":<n>},"audit":{"audited":<n>,"overturned":<n>}}
 ```
 
-Fixed shape, counts/enums only — never finding text or prose (dispositions land in the spec's
-Rationale). One line per Phase-1 invocation, so fix→re-review iterations each leave a row —
-that history is what tunes the refutation filter over time.
+`verdict` is the workflow's verdict (pre-disposition); `waived`/`rejected`/`fixDispatched`
+record what the user then did with the survivors. Fixed shape, counts/enums only — never
+finding text or prose (disposition *reasons* land in the spec's Rationale). One line per
+Phase-1 invocation, so fix→re-review iterations each leave a row — that history is what tunes
+the refutation filter over time. `runId` is the Workflow invocation's run id: when a defect
+later surfaces in code this review passed, `/spec:escape` records a row pointing back at it —
+the ground truth behind every CLEAN.
 
-If survivors exist, present them with the pattern-sweep context, then `AskUserQuestion` per
+If survivors exist, present them with the pattern-sweep context — flag any with
+`overturnedKill: true` distinctly: refuters voted to kill these but an auditor *demonstrated
+the defect by execution* (show the `reproEvidence`); they are the strongest Fix candidates in
+the list, and rejecting one means overriding a reproduced failure. Then `AskUserQuestion` per
 finding group:
 - **Fix** — dispatch Sonnet workers (routed via the host's `agentMap`, matching the build
   routing), then re-run Phase 1. Max 2 fix→re-review iterations; beyond that, escalate.

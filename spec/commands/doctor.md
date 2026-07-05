@@ -94,7 +94,7 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
       should have deleted; recommend removing it.
 
 12. **Run ledger hygiene** (only if `.claude/spec-runs.jsonl` exists) — every line parses as
-    JSON with a `stage` of `build | review`; any line over ~600 chars is a prose leak
+    JSON with a `stage` of `build | review | escape`; any line over ~600 chars is a prose leak
     (the ledger holds counts/enums/paths only — build.md/review.md define the shape); the
     file is tracked by git (an ignored or untracked-and-stale ledger defeats its purpose);
     `git check-attr merge -- .claude/spec-runs.jsonl` reports `union` (without it, parallel
@@ -103,6 +103,21 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
     All checks are script passes (`jq`/`awk`) — never read the ledger into context. If the
     file somehow exceeds ~2 MB, that is years of entries or a leak: report it and suggest
     archiving whole years to `.claude/spec-runs-<year>.jsonl` (same shape, still committed).
+    **Tier distribution:** with ≥5 build rows, if ≥90% share one tier, flag it — a tier
+    system that always answers T3 (or always T2) has stopped discriminating; recommend
+    auditing the pipeline rules § Risk Tiers triggers against what the specs actually touch
+    (measured 2026-07: one host ran 100% T3 across 10 specs — 2 reviewers + checkpoints on
+    everything — while a sibling host tiered normally).
+    **Escapes** (`stage:"escape"` rows, recorded by `/spec:escape`) — jq correlations, flag
+    loudly:
+    - an escape whose `reviewRunId` matches a review row with `verdict:"CLEAN"` is a
+      **contradicted CLEAN** — the review passed a real defect; report per-spec;
+    - any `killedMatch:true` row means the refutation filter killed a real bug — the single
+      strongest re-tuning signal the ledger can hold;
+    - conversely, with ≥10 CLEAN review rows and zero escape rows behind any of them, report
+      that too — it is the evidence that gates any future cut to review spend (staged
+      review). Absence of escapes is only meaningful if escapes are actually being recorded;
+      note when zero escape rows exist at all.
 
 ## Semantic spot-check — small, bounded
 

@@ -5,6 +5,7 @@ export const meta = {
   phases: [
     { title: 'Review', detail: 'blind reviewers: shape + correctness vs spec' },
     { title: 'Refute', detail: 'claim-only refuters; hard findings die only on 2/2 refutes' },
+    { title: 'Audit', detail: 'execution audit of kills — a demonstrated defect overturns the vote' },
   ],
 }
 
@@ -49,6 +50,9 @@ if (!args || typeof args !== 'object' || typeof args.specPath !== 'string') {
 //                            // patternsScript); reviewers READ it (args is a control channel)
 //   hasDriftScript: boolean, // host config declares driftScript? when false, the reviewer's
 //                            // AC ↔ test coverage check IS the drift gate (missing test = hard)
+//   reproCommand: string,    // host's test-runner prefix (config testCommand — repro file
+//                            // path is appended); '' = audit agents discover the runner
+//                            // from package.json / CLAUDE.md
 // }
 
 const FINDINGS = {
@@ -81,6 +85,15 @@ const VERDICT = {
     reason: { type: 'string', description: 'concrete evidence (file:line, rule §, spec §) for the verdict' },
   },
   required: ['refuted', 'reason'],
+}
+
+const AUDIT = {
+  type: 'object',
+  properties: {
+    result: { type: 'string', enum: ['DEMONSTRATED', 'NOT_DEMONSTRABLE', 'NOT_EXECUTABLE'] },
+    evidence: { type: 'string', description: 'the command run and the 1-3 observed output lines that justify the verdict (or why the claim is not executable)' },
+  },
+  required: ['result', 'evidence'],
 }
 
 const DRIFT_NOTE = args.hasDriftScript
@@ -140,6 +153,34 @@ section you have not read.
 Return refuted=true ONLY if you can demonstrate with concrete evidence (file:line, rule §, spec §)
 that the claim is incorrect, misread, or sanctioned. If the claim stands or you are uncertain,
 return refuted=false. You are read-only: never edit any file.`
+}
+
+function auditPrompt(f) {
+  return `A review finding was killed by unanimous claim-only refutation. You are the execution
+audit: the refuters argued from READING; you decide by RUNNING code. Your job is to try to
+demonstrate the claimed defect — a successful repro overturns the kill, because ground truth
+beats a vote.
+
+Claim (severity: ${f.severity}, cited rule: ${f.rule}):
+"${f.claim}"
+Location: ${f.file}:${f.line}
+Spec: ${args.specPath} (read the cited section + Decisions table for context; a behavior the
+Decisions table explicitly sanctions is NOT a defect even if you can reproduce it).
+
+Method:
+1. If the claim cannot in principle be demonstrated by running code (naming conventions,
+   layering/boundary rules, style) → result="NOT_EXECUTABLE". Do not force it.
+2. Otherwise write a MINIMAL repro — one new test file or script inside the repo, nothing
+   else — and run it. Host test command: ${args.reproCommand
+    ? args.reproCommand + ' <path to your repro file>'
+    : '(none declared — discover the single-file runner from package.json / CLAUDE.md)'}
+3. result="DEMONSTRATED" if the run exhibits the claimed defect as described.
+   result="NOT_DEMONSTRABLE" if your best good-faith repro fails to exhibit it.
+4. Cleanup is MANDATORY and unconditional: delete every file you created and verify with
+   git status --porcelain that no path you introduced remains, before returning.
+
+evidence = the exact command you ran plus the 1-3 observed output lines that justify the
+verdict. Never edit existing files; never run git commands other than status.`
 }
 
 // ---- Phase: blind review panel ----
@@ -203,11 +244,55 @@ const survivors = judged.filter(Boolean).filter(f => !f.killed)
 const killed = judged.filter(Boolean).filter(f => f.killed)
 log(`${survivors.length} findings survived, ${killed.length} killed by refutation`)
 
+// ---- Phase: execution audit of kills ----
+// Measured (2026-07 ledgers, two hosts): 42% of findings die in refutation, with no ground
+// truth behind any kill. A killed-and-real finding is the worst outcome this gate can produce
+// — a reviewer found a defect and the process un-found it, under a CLEAN stamp. So every
+// non-soft kill gets one execution auditor that tries to DEMONSTRATE the claim; a successful
+// repro overturns the vote. A crashed auditor leaves the kill standing but visibly counted in
+// `audit.failed` (resurrect-on-crash would convert flaky sandboxes into survivor noise).
+const MAX_KILL_AUDITS = 6
+const auditableAll = killed.filter(f => f.severity !== 'soft')
+const auditable = auditableAll.slice(0, MAX_KILL_AUDITS)
+const cappedOut = auditableAll.slice(MAX_KILL_AUDITS)
+const softKills = killed.filter(f => f.severity === 'soft')
+let overturned = []
+const stillKilled = [...softKills, ...cappedOut]
+const audit = { audited: 0, overturned: 0, confirmed: 0, notExecutable: 0, failed: 0, capSkipped: cappedOut.length }
+if (auditable.length) {
+  phase('Audit')
+  if (cappedOut.length) log(`kill audit capped at ${MAX_KILL_AUDITS} — ${cappedOut.length} non-soft kill(s) NOT audited`)
+  const verdicts = await parallel(auditable.map(f => () =>
+    agent(auditPrompt(f), {
+      label: `audit:${f.file.split('/').pop()}:${f.line}`,
+      phase: 'Audit', schema: AUDIT, model: 'sonnet',
+    })))
+  auditable.forEach((f, i) => {
+    const a = verdicts[i]
+    if (!a) { audit.failed++; stillKilled.push(f); return }
+    audit.audited++
+    if (a.result === 'DEMONSTRATED') {
+      audit.overturned++
+      overturned.push({ ...f, killed: false, overturnedKill: true, reproEvidence: a.evidence })
+    } else if (a.result === 'NOT_EXECUTABLE') {
+      audit.notExecutable++
+      stillKilled.push(f)
+    } else {
+      audit.confirmed++
+      stillKilled.push({ ...f, executionConfirmed: true, auditEvidence: a.evidence })
+    }
+  })
+  log(`${audit.overturned} kill(s) overturned by execution, ${audit.confirmed} confirmed, ${audit.notExecutable} not executable, ${audit.failed} audit failure(s)`)
+}
+
+const finalSurvivors = [...survivors, ...overturned]
+
 return {
-  verdict: survivors.some(f => f.severity === 'hard') ? 'HARD_FINDINGS'
-    : survivors.length ? 'FINDINGS' : 'CLEAN',
-  survivors,
-  killed,
+  verdict: finalSurvivors.some(f => f.severity === 'hard') ? 'HARD_FINDINGS'
+    : finalSurvivors.length ? 'FINDINGS' : 'CLEAN',
+  survivors: finalSurvivors,
+  killed: stillKilled,
+  audit,
   reviewerCount: n,
   tokens: budget.spent(),
 }

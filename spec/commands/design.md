@@ -1,6 +1,6 @@
 ---
 description: Optional UI design stage, driver-stepped — the expensive model authors skeletons and judges; Sonnet expands them via wf-design; the user iterates in the catalog; spec reconciled to the approved design
-argument-hint: <spec path> [claude.ai/design URL]
+argument-hint: <spec path> [claude.ai/design URL | local mockup file/dir]
 ---
 
 # Spec Design: Driver-Stepped Plan + Implement + Catalog Iteration
@@ -23,10 +23,13 @@ run `spec-paths design-driver` once and keep the printed path — it is `{driver
 ## Input
 
 `$ARGUMENTS` — path to a spec with `status: hardened` (hook-enforced), plus an optional second
-arg: a `claude.ai/design` mockup URL. On the first invocation, if a URL is passed and frontmatter
-has no `design_source`, persist it into frontmatter, then proceed — thereafter frontmatter is
+arg: a **design source** — either a `claude.ai/design` mockup URL, or a **local path** (a single
+exported HTML file, or a handoff-bundle directory of HTML screens + optional per-screen
+`*.prompt.md` notes). On the first invocation, if a source is passed and frontmatter has no
+`design_source`, persist it into frontmatter, then proceed — thereafter frontmatter is
 authoritative. No `design_source` anywhere → the mockup path never engages (byte-for-byte the
-no-mockup flow).
+no-mockup flow). A local source is extracted directly by `dc-extract --bundle` (no DesignSync
+fetch); a URL is fetched read-only via DesignSync as before.
 
 ## Protocol — the driver owns the state machine
 
@@ -55,6 +58,14 @@ at the catalog.
 - **Gate-green ≠ visually right.** A green author is structural (skeleton-expanded) only; the
   screenshot review (when configured) or the human catalog loop is the visual gate. Never show
   the user output you have not at least gated.
+- **With a mock bound, the mock is a contract, not an influence.** The slice files are the binding
+  authority for structure, copy, element order, and layout; skeletons carry judgment only (a
+  binding map: token mapping, props, states, forks — no tree). The driver greps the authored code
+  against the mock's extracted strings/order/layout **fail-closed** at `author-green` and
+  `round-green`; a refused mark lists the divergences. The ONLY sanctioned divergence is an
+  evidence-gated `deltas.json` row (verbatim slice quote, verified mechanically, plus an
+  impossibility proof) — a taste rationale is never valid evidence; taste yields to the mock
+  (shared § mock supremacy). Fold delta rows into spec Decisions at reconcile.
 - Tokens and the design doctrine are **binding canon** — extending is normal, contradicting is a
   fork, adjudicated via the driver's steps, never silently overridden.
 - Components built here are **real and kept**; `/spec:build` wires them, never rebuilds them.

@@ -70,10 +70,32 @@ const stateFile = inSidecar('design-state.json')
 let marks = {}
 try { marks = JSON.parse(fs.readFileSync(stateFile, 'utf8')) } catch { marks = {} }
 
+// A design_source that is not a URL is a LOCAL handoff source: a single HTML file or a directory
+// of exported screens (+ optional per-screen *.prompt.md notes), resolved against the repo root.
+const localSource = designSource && !/^https?:\/\//i.test(designSource)
+  ? path.resolve(repoRoot, designSource) : null
+if (localSource && !fs.existsSync(localSource)) {
+  die('design_source is a local path but ' + localSource + ' does not exist — fix the frontmatter or restore the handoff bundle')
+}
+
 // ---- record a mark (validated against the artifacts, then fall through to print next step) ------
 if (MARK) {
   const valid = ['author-green', 'visual-done', 'round-green', 'approved']
   if (!valid.includes(MARK)) die('unknown mark "' + MARK + '" (' + valid.join(' | ') + ')')
+  // The mock fidelity gate is FAIL-CLOSED on the marks that assert "this round's code is right":
+  // when a mock is bound (extract.json has fidelity data), strings/order/layout are verified
+  // against the authored files before the mark is accepted. Divergence needs an evidence-gated
+  // deltas.json row — the check itself validates the evidence, so the refusal is mechanical.
+  if ((MARK === 'author-green' || MARK === 'round-green') && exists('extract.json')) {
+    const r = spawnSync(process.execPath,
+      [path.join(PLUGIN, 'scripts/fidelity-check.js'), sidecar, '--repo-root', repoRoot], { encoding: 'utf8' })
+    if (r.status === 1) {
+      die('mock fidelity gate FAILED — mark "' + MARK + '" refused:\n' + (r.stdout + r.stderr).trim() +
+        '\nFix the divergences (dispatch Sonnet with the list above), or record a verified delta in ' +
+        inSidecar('deltas.json') + ', then re-run this mark.')
+    }
+    if (r.status > 1) die('fidelity-check could not run: ' + (r.stdout + r.stderr).trim())
+  }
   fs.mkdirSync(sidecar, { recursive: true })
   if (MARK === 'round-green') {
     marks.rounds = (marks.rounds || 0) + 1
@@ -114,13 +136,46 @@ const wfDesign = path.join(PLUGIN, 'workflows/wf-design.js')
 const dcExtract = path.join(PLUGIN, 'scripts/dc-extract.js')
 const skCheck = path.join(PLUGIN, 'scripts/skeletons-check.js')
 const logPath = inSidecar('design-log.md')
-const mockLine = designSource ? 'design_source: ' + designSource : 'no design_source — the no-mockup path (skeletons from doctrine + tokens + the spec ## UI section)'
+const mockLine = designSource
+  ? 'design_source: ' + designSource + (localSource ? ' (local handoff source)' : '')
+  : 'no design_source — the no-mockup path (skeletons from doctrine + tokens + the spec ## UI section)'
+
+// Mock path vs no-mock path: with a mock bound, the SLICE is the binding authority for structure,
+// copy, order, and layout, and the skeleton shrinks to a BINDING MAP (no tree — a tree would be a
+// paraphrase of the slice, the exact fidelity hole + token cost this contract removes). With no
+// mock there is no external truth: the skeleton IS the design and carries the full tree.
+const SKELETON_SHAPE_MOCK = `4. Write ${sidecar}/skeletons.json — per surface a BINDING MAP (judgment only; NO tree): { id,
+   decision: author|bind, componentPath, storyPath, bind{component,from,propBindings},
+   sliceRef (REQUIRED on author entries — the slice file is the binding authority for structure,
+   element order, copy, and layout; never restate or paraphrase those here),
+   tokenMap{<mock literal or --mock-var>: <repo token ROLE>} covering every styling value the
+   slice uses, imports[], props[], states[], mockRef{state:fixture}, tokens[closed allowlist],
+   shared, usedBy, containment, coherenceGroup, waveOrder } plus top-level {schemaVersion,
+   source:{sha256}, tokenForks[]}. Every tokenMap value is a ROLE, never a literal.
+   extract.json's per-surface strings/layout are the mock's fidelity contract — the driver greps
+   the authored code against it FAIL-CLOSED at author-green/round-green. A deliberate divergence
+   needs a ${sidecar}/deltas.json row {surfaceId, kind: string|order|layout, target, sliceQuote,
+   proof} whose sliceQuote is verified verbatim against the slice and whose proof names a
+   mechanical impossibility (failing build output, absent token/primitive, a grounded rule id) —
+   taste is NOT a valid proof; with a mock bound, taste yields to the mock (shared § mock supremacy).`
+const SKELETON_SHAPE_NOMOCK = `4. Write ${sidecar}/skeletons.json — per surface: { id, decision: author|bind, componentPath,
+   storyPath, bind{component,from,propBindings}, imports[], tree[{el,slot,children,bind,
+   style:{property: tokenROLE}}], props[], states[], mockRef{state:fixture}, tokens[closed
+   allowlist], shared, usedBy, containment, coherenceGroup, waveOrder } plus top-level
+   {schemaVersion, source:{sha256}, tokenForks[]}. Every style value is a ROLE, never a literal.`
 
 const STEPS = {
   BLOCKED: () => `Spec status is "${status || '<missing>'}" — /spec:design requires status: hardened.
 ${designed ? 'designed: is already set — a re-design; confirm with the user before deleting it.' : 'Run /spec:plan first.'}`,
 
-  FETCH_EXTRACT: () => `## Step: fetch the mockup + deterministic extract
+  FETCH_EXTRACT: () => localSource ? `## Step: deterministic extract of the local design source (no fetch — it is already on disk)
+${mockLine}
+
+1. Run: node ${dcExtract} --bundle ${localSource} ${sidecar}/
+   (one surface per HTML file; <x-dc> blocks slice as usual; *.prompt.md / *.md files are indexed
+   as notes for the skeleton step. Non-zero exit → STOP with the stderr; never author from a
+   partial extract.)
+2. Re-run this driver.` : `## Step: fetch the mockup + deterministic extract
 ${mockLine}
 
 1. Parse projectId (segment after /p/) and file (?file=<name>, URL-decoded) from design_source.
@@ -141,7 +196,7 @@ ${mockLine}
    (spec ## UI) × catalog/source roots → a match-map (bind: existing component + import path +
    prop-bindings | net-new), an on-disk inventory (skip done work), per-slice file sizes, and
    the base-barrel report (which overlay primitives exist to import; nearest-match for absent ones).
-2. Warm inputs to read yourself: ${designSource ? sidecar + '/extract.json + each slice-*.html, ' : ''}token files +
+2. Warm inputs to read yourself: ${designSource ? sidecar + '/extract.json (tokens + per-surface fidelity + notes[] — read each note file), each slice-*.html, ' : ''}token files +
    the design doctrine${doctrinePath ? ' (' + doctrinePath + ')' : ''}, the spec ## UI section, the match-map.
 3. Resolve BEFORE emitting skeletons (batch, never mid-authoring): token forks alias-first
    (new-role → extend after the near-match dedup check; same role/different value = fork →
@@ -149,11 +204,7 @@ ${mockLine}
    (taste → mock wins silently; grounded → snap value to constraint, ask only if irreconcilable);
    confirm each match-map bind against its slice. Absent base primitive → AskUserQuestion
    author-as-foundation vs near-match reuse (default-author when no near-match).
-4. Write ${sidecar}/skeletons.json — per surface: { id, decision: author|bind, componentPath,
-   storyPath, bind{component,from,propBindings}, imports[], tree[{el,slot,children,bind,
-   style:{property: tokenROLE}}], props[], states[], mockRef{state:fixture}, tokens[closed
-   allowlist], sliceRef, shared, usedBy, containment, coherenceGroup, waveOrder } plus top-level
-   {schemaVersion, source:{sha256}, tokenForks[]}. Every style value is a ROLE, never a literal.
+${designSource ? SKELETON_SHAPE_MOCK : SKELETON_SHAPE_NOMOCK}
    coherenceGroup/waveOrder are session-side scratch for building the workflow groups arg.
 5. Validate: node ${skCheck} ${sidecar}/skeletons.json — fix and re-run until clean.
 6. Re-run this driver. You write NO framework code in this step.`,
@@ -180,7 +231,7 @@ Invoke Workflow {scriptPath: "${wfDesign}", args: {stage: "author",
 args = real JSON object; paths/ids/enums only — no prose.
 
 Returns: complete → checkpoint-commit, then run:  spec-design-driver ${specPath} --mark author-green --run-id <runId>
-blocked → resolve within the skeleton's intent (write the ruling to the on-disk plan: the
+${designSource ? '(the mark runs the mock fidelity gate — strings/order/layout vs extract.json — FAIL-CLOSED;\na refusal lists the divergences to fix or delta with evidence)\n' : ''}blocked → resolve within the skeleton's intent (write the ruling to the on-disk plan: the
 skeleton entry / tokenForks / token file / spec Decisions) or AskUserQuestion for a genuine
 fork; then re-invoke the same Workflow with resumeFromRunId. Anything else (gate-exhausted /
 out-of-scope) → read the failures, fix on disk (dispatch Sonnet), re-invoke. A green author is
@@ -208,8 +259,11 @@ Iterate round protocol:
   not a tweak: AskUserQuestion (doctrine: local exception recorded in spec Decisions, or
   doctrine change with older surfaces recorded as a known gap). Apply the ruling to the plan
   (skeleton entry / tokenForks / token file / Decisions) and re-expand affected surfaces.
+- Dependent sweep before closing the round: for every user-visible string or prop changed this
+  round, grep the OLD value across stories/tests/the showcase and fix stale references — a copy
+  fix that leaves a play-function regex or test matcher behind kills that story/test silently.
 - Gate (${gateCmd || 'host gate'}) + checkpoint-commit per round; every round ends green, then:
-  spec-design-driver ${specPath} --mark round-green
+  spec-design-driver ${specPath} --mark round-green${designSource ? '\n  (the mark re-runs the mock fidelity gate FAIL-CLOSED — a regression this round refuses the mark)' : ''}
 On Approve:  spec-design-driver ${specPath} --mark approved`,
 
   RECONCILE: () => `## Step: reconcile & promote (inline dispatches — no workflow boot)
@@ -221,7 +275,7 @@ On Approve:  spec-design-driver ${specPath} --mark approved`,
    surface to the user and STOP (cap 1).
 3. Promote: generalizable taste rulings → the doctrine doc (keep it one page; prune as you
    promote); tokens stay in token files; one-offs stay in spec Decisions. Read ${logPath} for
-   the rounds' rulings.
+   the rounds' rulings.${designSource ? ' Fold every ' + inSidecar('deltas.json') + ' row into a spec\n   Decisions row (target + sliceQuote + proof) — the sanctioned divergences must survive the\n   sidecar deletion below.' : ''}
 4. AFTER the re-read verifies clean and BEFORE the final commit: rm -rf ${sidecar}/ and any
    leftover scratchpad .dc.html (the session owns this rm; reconcile folded the plan into the spec).
 5. Set designed: <today> in frontmatter (status stays hardened). Final checkpoint-commit.

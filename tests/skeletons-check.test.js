@@ -80,3 +80,22 @@ test('invalid decision and malformed nodes are reported with paths', () => {
   assert.match(res.stderr, /skeletons\[0\]\.decision/)
   assert.match(res.stderr, /skeletons\[1\]\.tree\[0\]/)
 })
+
+test('mock-bound author (sliceRef, no tree, tokenMap of roles) passes; a tree there is rejected', () => {
+  const MOCK = (over = {}) => ({
+    id: 'm1', decision: 'author', componentPath: 'src/M1.tsx', sliceRef: 'slice-m1.html',
+    tokenMap: { '#3b82f6': 'accent-primary', '12px': 'space-3' },
+    states: ['default', 'empty'], tokens: ['accent-primary', 'space-3'], ...over,
+  })
+  assert.strictEqual(check({ skeletons: [MOCK()] }).status, 0)
+  // the paraphrase hop the binding-map contract forbids
+  const res = check({ skeletons: [MOCK({ tree: [{ el: 'div' }] })] })
+  assert.notStrictEqual(res.status, 0)
+  assert.match(res.stderr, /must not carry a tree/)
+  // tokenMap values are ROLES, never literals
+  const res2 = check({ skeletons: [MOCK({ tokenMap: { '#3b82f6': '#3b82f6' } })] })
+  assert.notStrictEqual(res2.status, 0)
+  assert.match(res2.stderr, /tokenMap/)
+  // tokenMap is optional, but when present must be an object
+  assert.notStrictEqual(check({ skeletons: [MOCK({ tokenMap: ['x'] })] }).status, 0)
+})

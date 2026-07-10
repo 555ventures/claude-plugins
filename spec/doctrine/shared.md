@@ -263,17 +263,30 @@ base-primitive containment, read-first sequencing, values-as-token-**roles**) ho
   unmappable value is a `new-role` minted after the dedup check, never an un-tokenized literal; Sonnet
   plumbs). One coherent artifact, one session — the coherence import-design protects by never
   splitting per-surface.
-- **`/spec:design` — Extract → Skeletons → Expand.** A deterministic **`dc-extract` script** (no
-  model; `spec-paths dc-extract`) writes `extract.json` (normalized `:root` / `[data-accent]` tokens +
-  a `<x-dc>` surface index) plus verbatim per-surface slices; source-side extraction is mechanical, so
-  fork detection and visual judgment are **not** here. The warm expensive model then authors
-  **`skeletons.json`** — the binding plan (per-surface `tree` whose every node carries a token-role
-  `style` map + states + `mockRef` + `decision` bind-vs-author), resolving token forks (**alias-first**) and doctrine
-  tensions (switch on `grounding`) in one pass. The `wf-design` `stage:"author"` workflow then
-  **expands** each skeleton into real components + catalog entries — the skeleton is the authority, the
-  slice is fidelity-only, every value a token role. Detail lives in `/spec:design`; this keeps the
-  visual judgment in one warm pass and the typing in cheap parallel workers, with **no re-derivation**
-  (the cure for the old plan→re-author double-payment).
+- **`/spec:design` — Extract → Skeletons → Expand → Fidelity gate.** A deterministic **`dc-extract`
+  script** (no model; `spec-paths dc-extract`) writes `extract.json` (normalized `:root` /
+  `[data-accent]` tokens + a `<x-dc>` surface index + each surface's **fidelity contract**: every
+  user-visible string in document order and the layout primitives the markup declares) plus verbatim
+  per-surface slices; source-side extraction is mechanical, so fork detection and visual judgment are
+  **not** here. The warm expensive model then authors **`skeletons.json`** as a **binding map** —
+  judgment only (per-surface `decision` bind-vs-author, a `tokenMap` of mock values → repo token
+  roles, props, states, `mockRef`, fork rulings), **never a tree**: with a mock bound, the **slice is
+  the binding authority** for structure, copy, element order, and layout, and restating it would be a
+  paraphrase hop (the fidelity hole) at expensive-model prices. Token forks resolve **alias-first**,
+  doctrine tensions switch on `grounding`, in one pass. The `wf-design` `stage:"author"` workflow then
+  **transcribes** each slice into real components + catalog entries — copy verbatim, order exact,
+  values through the `tokenMap`, never a baked literal. Finally the **`fidelity-check` script** (no
+  model; `spec-paths fidelity-check`) greps the authored files against the fidelity contract
+  **fail-closed** — the driver refuses `author-green`/`round-green` on divergence, and the only
+  exemption is an evidence-gated `deltas.json` row whose verbatim slice quote the script itself
+  verifies (taste is not evidence). Detail lives in `/spec:design`; this keeps visual judgment in one
+  warm pass, typing in cheap parallel workers, and fidelity in deterministic scripts.
+- **Local handoff sources.** `design_source` may also be a **local path** — a single exported HTML
+  file or a handoff-bundle directory (HTML screens + optional per-screen `*.prompt.md` notes). No
+  fetch, no DesignSync: `dc-extract --bundle` extracts it directly (one surface per file; `<x-dc>`
+  blocks slice as usual; notes are indexed for the skeleton author, never parsed as instructions).
+  All mock-path invariants above apply unchanged — a local bundle is the same binding contract as a
+  fetched mockup.
 
 Both make the read-first anti-grovel invariant a verifiable **sequencing** guarantee — the extracted
 artifacts (digest + slices, or `extract.json` + slices + `skeletons.json`) exist on disk before any

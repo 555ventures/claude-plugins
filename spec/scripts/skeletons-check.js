@@ -12,8 +12,11 @@
 // N parallel Sonnet workers improvise or return `blocked` at Sonnet cost.
 //
 // It checks STRUCTURE only (shape a worker would choke on) and the one contract the altitude fix added:
-// every `tree` node `style` VALUE must be a token role, never a literal (#hex / 12px / rgb(...)) — a
-// literal there is exactly the re-derivation the skeleton exists to prevent. It does NOT judge taste,
+// every `tree` node `style` VALUE (and every `tokenMap` value on the mock path) must be a token role,
+// never a literal (#hex / 12px / rgb(...)) — a literal there is exactly the re-derivation the skeleton
+// exists to prevent. Author entries come in two shapes: mock-bound (`sliceRef` set — the slice is the
+// structural/copy authority, NO tree allowed, optional `tokenMap`) and no-mock (`tree` required — the
+// skeleton IS the design). It does NOT judge taste,
 // token correctness, or visual fidelity. It reports EVERY problem (like a linter), then exits non-zero.
 //
 // CONTRACT: `node skeletons-check.js <skeletons.json>`. Clean → prints a one-line summary, exits 0.
@@ -111,12 +114,26 @@ skeletons.forEach((s, i) => {
     // the bind decision said not to — reject the contradiction at the producer.
     if (s.tree !== undefined) err(at + '.tree', 'decision="bind" must not carry a tree — a bind imports an existing component')
     if (s.componentPath !== undefined) err(at + '.componentPath', 'decision="bind" writes no new component file — remove componentPath (storyPath is where the catalog entry lands)')
-  } else { // author
+  } else { // author — two shapes, split by sliceRef (mock-bound vs no-mock)
     if (!isStr(s.componentPath)) err(at + '.componentPath', 'decision="author" needs a string componentPath')
-    if (!isArr(s.tree) || s.tree.length === 0) err(at + '.tree', 'decision="author" needs a non-empty tree')
-    else s.tree.forEach((n, k) => checkNode(at + '.tree[' + k + ']', n))
+    if (isStr(s.sliceRef)) {
+      // Mock-bound: the SLICE is the binding authority for structure/copy/order/layout; the
+      // skeleton carries only judgment (token mapping, props, states). A tree here is exactly
+      // the paraphrase hop the binding-map contract exists to kill — reject it at the producer.
+      if (s.tree !== undefined) err(at + '.tree', 'a mock-bound author entry (sliceRef set) must not carry a tree — the slice is the structural authority; a tree is a paraphrase of it')
+      if (s.tokenMap !== undefined) {
+        if (!isObj(s.tokenMap)) err(at + '.tokenMap', 'present but not a { mockValue: tokenRole } object')
+        else for (const [mockVal, role] of Object.entries(s.tokenMap)) {
+          const p = roleProblem(role)
+          if (p) err(at + '.tokenMap[' + JSON.stringify(mockVal) + ']', p)
+        }
+      }
+    } else {
+      if (!isArr(s.tree) || s.tree.length === 0) err(at + '.tree', 'decision="author" without a sliceRef needs a non-empty tree (no-mock path: the skeleton IS the design)')
+      else s.tree.forEach((n, k) => checkNode(at + '.tree[' + k + ']', n))
+    }
     if (!isArr(s.states) || s.states.length === 0) err(at + '.states', 'decision="author" needs a non-empty states array')
-    if (!isArr(s.tokens) || s.tokens.length === 0) err(at + '.tokens', 'decision="author" needs a NON-EMPTY tokens allowlist (an empty allowlist would forbid every style role the tree emits)')
+    if (!isArr(s.tokens) || s.tokens.length === 0) err(at + '.tokens', 'decision="author" needs a NON-EMPTY tokens allowlist (an empty allowlist would forbid every style role the surface emits)')
   }
 })
 

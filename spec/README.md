@@ -148,14 +148,21 @@ gets a spec file.
 ```
 /spec:plan "portfolio breakdown panel"
   → plan embeds registry/library references in the spec's UI section; design: true
-/spec:design specs/YYYYMMDD/01-portfolio-panel.md [optional claude.ai/design URL]
-  → if the spec set design_source (or you pass a mockup URL), it is fetched read-only and
-    extracted FIRST by the deterministic dc-extract script — extract.json + per-surface
+/spec:design specs/YYYYMMDD/01-portfolio-panel.md [claude.ai/design URL | local mockup file/dir]
+  → if the spec set design_source (or you pass a mockup URL / local handoff bundle), it is
+    extracted FIRST by the deterministic dc-extract script — extract.json (tokens + each
+    surface's fidelity contract: visible strings, layout primitives) + verbatim per-surface
     slices on disk before any authoring (the read-first sequencing invariant)
-  → the expensive model authors skeletons.json (per-surface tree, token-ROLE bindings,
-    states, bind-vs-author) and adjudicates token forks — it writes no framework code
+  → the expensive model authors skeletons.json and adjudicates token forks — it writes no
+    framework code. Mock bound: a BINDING MAP per surface (tokenMap, props, states,
+    bind-vs-author; the slice is the authority for structure/copy/order/layout — no tree).
+    No mock: per-surface tree with token-ROLE bindings (the skeleton IS the design)
   → Sonnet EXPANDS the skeletons via wf-design: foundation + components + catalog entries
     in one gated run → screenshot visual review when configured (notes, never edits)
+  → mock bound: the driver greps code against the mock's strings/order/layout FAIL-CLOSED
+    at author-green and every round-green; divergences need an evidence-gated deltas.json
+    row (verbatim slice quote, mechanically verified + impossibility proof) — taste yields
+    to the mock
   → you: run the catalog (Storybook, Widgetbook, …) — iterate as many rounds as you want
     (the designer judges each note; Sonnet applies the edit)
   → approve → spec reconciled, reusable taste rulings promoted into the doctrine

@@ -107,3 +107,55 @@ test('marks are recorded in the sidecar state file and bad marks die', () => {
   assert.strictEqual(state.runId, 'wf_x1')
   assert.strictEqual(run(root, spec, '--mark', 'nonsense').status, 2)
 })
+
+test('local design_source: bundle extract step, no DesignSync; missing local path dies', () => {
+  const { root, spec } = fixture({ designSource: './handoff' })
+  // path missing → fail loud before any step
+  const dead = run(root, spec)
+  assert.strictEqual(dead.status, 2)
+  assert.match(dead.stderr, /does not exist/)
+
+  fs.mkdirSync(path.join(root, 'handoff'))
+  fs.writeFileSync(path.join(root, 'handoff/screen.html'), '<body><h1>Hi</h1></body>')
+  assert.strictEqual(stateOf(root, spec), 'FETCH_EXTRACT')
+  const out = run(root, spec).stdout
+  assert.match(out, /--bundle/)
+  assert.doesNotMatch(out, /DesignSync/)
+})
+
+test('fidelity gate: author-green/round-green are refused while the code diverges from the mock', () => {
+  const { root, spec, sidecar } = fixture({ designSource: './handoff' })
+  fs.mkdirSync(path.join(root, 'handoff'))
+  fs.writeFileSync(path.join(root, 'handoff/screen.html'), '<body><button>Send invite</button></body>')
+  fs.mkdirSync(sidecar, { recursive: true })
+  const { spawnSync } = require('node:child_process')
+  const dcx = spawnSync(process.execPath, [path.join(SPEC, 'scripts/dc-extract.js'),
+    '--bundle', path.join(root, 'handoff'), sidecar], { encoding: 'utf8' })
+  assert.strictEqual(dcx.status, 0, dcx.stderr)
+
+  fs.writeFileSync(path.join(sidecar, 'skeletons.json'), JSON.stringify({
+    skeletons: [{ id: 'screen', decision: 'author', componentPath: 'src/Screen.tsx',
+      sliceRef: 'slice-screen.html', states: ['default'], tokens: ['surface'] }],
+  }))
+  assert.strictEqual(stateOf(root, spec), 'AUTHOR')
+
+  // divergent code ("Send" ≠ "Send invite") → the mark is refused and NOT recorded
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+  fs.writeFileSync(path.join(root, 'src/Screen.tsx'), '<button>Send</button>')
+  const refused = run(root, spec, '--mark', 'author-green')
+  assert.strictEqual(refused.status, 2)
+  assert.match(refused.stderr, /fidelity gate FAILED/)
+  assert.match(refused.stderr, /Send invite/)
+  assert.strictEqual(stateOf(root, spec), 'AUTHOR', 'mark must not be recorded on a red gate')
+
+  // faithful code → the mark lands
+  fs.writeFileSync(path.join(root, 'src/Screen.tsx'), '<button>Send invite</button>')
+  run(root, spec, '--mark', 'author-green')
+  assert.strictEqual(stateOf(root, spec), 'ITERATE')
+
+  // a round that regresses the copy cannot go round-green
+  fs.writeFileSync(path.join(root, 'src/Screen.tsx'), '<button>Send</button>')
+  const rr = run(root, spec, '--mark', 'round-green')
+  assert.strictEqual(rr.status, 2)
+  assert.match(rr.stderr, /fidelity gate FAILED/)
+})

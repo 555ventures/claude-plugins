@@ -159,9 +159,16 @@ The stage is tool-agnostic; the host config's `design` block declares the catalo
   "command": "bun storybook",     // launches the catalog for the user's iteration loop
   "storyFormat": "CSF3 stories",  // what stories-kind workers author — e.g. "Widgetbook @UseCase builders"
   "doctrine": "docs/design/doctrine.md",   // the design doctrine doc (see below)
-  "screenshot": "bun storybook:screenshot" // OPTIONAL: renders entries to images → designer self-review
+  "screenshot": "bun storybook:screenshot", // OPTIONAL: renders entries to images → designer self-review
+  "copyCatalogs": ["app/messages/en.json"] // OPTIONAL: i18n message catalogs — the fidelity gate
+                                           // accepts mock copy as catalog VALUES (i18n lint forbids
+                                           // literals in components; the catalog is copy's home)
 }
 ```
+
+A host that routes copy through an i18n stack (Paraglide/inlang, i18next, react-intl, …) MUST
+declare `copyCatalogs` before binding a mock — `/spec:init` detects the stack and writes it; the
+design driver's feasibility report warns when the stack is present and the key is not.
 
 When the host config declares a `design` block, specs with a UI section default to
 `design: true` frontmatter (set at plan time), which routes the spec through `/spec:design`
@@ -264,23 +271,40 @@ base-primitive containment, read-first sequencing, values-as-token-**roles**) ho
   plumbs). One coherent artifact, one session — the coherence import-design protects by never
   splitting per-surface.
 - **`/spec:design` — Extract → Skeletons → Expand → Fidelity gate.** A deterministic **`dc-extract`
-  script** (no model; `spec-paths dc-extract`) writes `extract.json` (normalized `:root` /
-  `[data-accent]` tokens + a `<x-dc>` surface index + each surface's **fidelity contract**: every
-  user-visible string in document order and the layout primitives the markup declares) plus verbatim
-  per-surface slices; source-side extraction is mechanical, so fork detection and visual judgment are
-  **not** here. The warm expensive model then authors **`skeletons.json`** as a **binding map** —
-  judgment only (per-surface `decision` bind-vs-author, a `tokenMap` of mock values → repo token
-  roles, props, states, `mockRef`, fork rulings), **never a tree**: with a mock bound, the **slice is
-  the binding authority** for structure, copy, element order, and layout, and restating it would be a
-  paraphrase hop (the fidelity hole) at expensive-model prices. Token forks resolve **alias-first**,
-  doctrine tensions switch on `grounding`, in one pass. The `wf-design` `stage:"author"` workflow then
-  **transcribes** each slice into real components + catalog entries — copy verbatim, order exact,
-  values through the `tokenMap`, never a baked literal. Finally the **`fidelity-check` script** (no
-  model; `spec-paths fidelity-check`) greps the authored files against the fidelity contract
-  **fail-closed** — the driver refuses `author-green`/`round-green` on divergence, and the only
-  exemption is an evidence-gated `deltas.json` row whose verbatim slice quote the script itself
-  verifies (taste is not evidence). Detail lives in `/spec:design`; this keeps visual judgment in one
-  warm pass, typing in cheap parallel workers, and fidelity in deterministic scripts.
+  script** (no model; `spec-paths dc-extract`) writes `extract.json`: a **region graph** per surface
+  (a canvas export is one whole screen; its own `data-screen-label` elements and comment-labeled
+  siblings subdivide it — regions nest, and each gets its own slice down to depth 2), each
+  user-visible string **classed by the format's own semantics** (`copy` = the verbatim contract;
+  `{{ expr }}` mustaches = `binding`, renders from a prop; mixed text = `template`, static segments
+  survive; `<sc-for>` rows = `sample`, story-fixture material), the layout primitives per region, a
+  **literal harvest** (inline color/font values + frequencies — canvas exports carry no `:root`
+  block; the harvest is the palette the `tokenMap` must cover), `data-props` prop schemas, and
+  **variant proposals** (heavy copy overlap = the same screen re-themed or re-laid-out). Source-side
+  extraction is mechanical, so fork detection and visual judgment are **not** here. The driver then
+  prints a **bind-feasibility report** (regions + counts, variant proposals, coverage-ledger claims,
+  copy-catalog posture) *before* any warm tokens are spent. The warm expensive model authors
+  **`skeletons.json`** as a **binding map** — judgment only (per-region `regionRef`
+  `"<surface>#<region>"` binding ONLY what this spec builds, `decision` bind-vs-author, a `tokenMap`
+  of harvest literals → repo token roles, props, states, `mockRef`, fork rulings, variant
+  confirmations — a theme/breakpoint variant becomes a token-pair/responsive obligation, never a
+  second string contract), **never a tree**: with a mock bound, the **region's slice is the binding
+  authority** for structure, copy, element order, and layout, and restating it would be a paraphrase
+  hop (the fidelity hole) at expensive-model prices. The `wf-design` `stage:"author"` workflow then
+  **transcribes** each bound region into real components + catalog entries — copy verbatim (routed
+  through the declared copy catalog when the host has one), order exact, values through the
+  `tokenMap`, mustaches from props, sample rows into story fixtures, never a baked literal. Finally
+  the **`fidelity-check` script** (no model; `spec-paths fidelity-check`) checks each **bound
+  region fail-closed, by string class** — copy passes verbatim in code files **or as a catalog
+  value** (catalog key order never fails the order check); the driver refuses
+  `author-green`/`round-green` on divergence, and the only exemption is an evidence-gated
+  `deltas.json` row whose verbatim slice quote the script itself verifies (taste is not evidence).
+  Unbound regions are notes, recorded in the repo-level **coverage ledger**
+  (`.claude/design-coverage.json`, written at `--mark approved`) so later briefs inherit the
+  remainder of the screen instead of re-deriving scope. With a screenshot capability, the visual
+  round is a **rendered comparison** — canvas exports are browser-renderable (`support.js`), so the
+  review is mock-region crops vs story renders side by side, judging only what grep cannot see.
+  Detail lives in `/spec:design`; this keeps visual judgment in one warm pass, typing in cheap
+  parallel workers, and fidelity in deterministic scripts.
 - **Local handoff sources.** `design_source` may also be a **local path** — a single exported HTML
   file or a handoff-bundle directory (HTML screens + optional per-screen `*.prompt.md` notes). No
   fetch, no DesignSync: `dc-extract --bundle` extracts it directly (one surface per file; `<x-dc>`
@@ -293,6 +317,15 @@ artifacts (digest + slices, or `extract.json` + slices + `skeletons.json`) exist
 authoring, so extraction provably runs first and a resumed session reads only files, never
 conversation context. Forks are **detected** mechanically and **adjudicated** by the session, never
 silently overwritten.
+
+**Seed Claude Design upstream (fidelity by construction).** Claude Code's `/design-sync` can
+**pull the repo's design system INTO a Claude Design project** — tokens and real components — so
+mocks are *designed with* the repo's vocabulary instead of reverse-engineered into it afterwards.
+Recommend it whenever a project will produce `design_source` mocks: a synced source's literal
+harvest matches repo token values (extraction detects this — the `tokenMap` becomes mostly
+`matches-canon`), and most reconciliation work disappears. The push direction (implemented code →
+canvas) exists but is **not** part of this pipeline — the iteration loop stays
+catalog + human eyes; element-id stability across round-trips is unconfirmed.
 
 Claude Design is **strictly opt-in**: `/spec:design` engages this path **only** when a spec sets
 `design_source`, and `DesignSync` being unavailable is an error **only** then. With no

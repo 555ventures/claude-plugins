@@ -99,3 +99,27 @@ test('mock-bound author (sliceRef, no tree, tokenMap of roles) passes; a tree th
   // tokenMap is optional, but when present must be an object
   assert.notStrictEqual(check({ skeletons: [MOCK({ tokenMap: ['x'] })] }).status, 0)
 })
+
+test('region-bound author (regionRef, no tree) passes; malformed refs and a tree are rejected', () => {
+  const REGION = (over = {}) => ({
+    id: 'r1', decision: 'author', componentPath: 'src/R1.tsx', regionRef: 'app#sidebar',
+    tokenMap: { '#3b82f6': 'accent-primary' },
+    states: ['default'], tokens: ['accent-primary'], ...over,
+  })
+  assert.strictEqual(check({ skeletons: [REGION()] }).status, 0)
+  // a bare surface ref binds the root region — legal
+  assert.strictEqual(check({ skeletons: [REGION({ regionRef: 'app' })] }).status, 0)
+  // regionRefs[] for a component spanning several regions
+  assert.strictEqual(check({ skeletons: [REGION({ regionRef: undefined, regionRefs: ['app#sidebar', 'app#thread'] })] }).status, 0)
+  // malformed shapes fail at the producer, before any worker sees them
+  for (const bad of ['app#side#bar', 'app #sidebar', '', 42]) {
+    const res = check({ skeletons: [REGION({ regionRef: bad })] })
+    assert.notStrictEqual(res.status, 0, 'accepted malformed regionRef: ' + JSON.stringify(bad))
+    assert.match(res.stderr, /regionRef/)
+  }
+  assert.notStrictEqual(check({ skeletons: [REGION({ regionRef: undefined, regionRefs: [] })] }).status, 0)
+  // a region-bound entry carrying a tree is the same paraphrase hop sliceRef forbids
+  const res = check({ skeletons: [REGION({ tree: [{ el: 'div' }] })] })
+  assert.notStrictEqual(res.status, 0)
+  assert.match(res.stderr, /must not carry a tree/)
+})

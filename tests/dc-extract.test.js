@@ -22,6 +22,9 @@ function extract(html) {
 const BASE = (body, css = '--color-bg: #fff; --space-1: 4px;') =>
   `<html><head><style>:root { ${css} }</style></head><body>${body}</body></html>`
 
+// v3 schema convenience: a surface's copy strings in document order
+const copyOf = (s) => s.entries.filter(e => e.kind === 'copy').map(e => e.value)
+
 test('happy path: tokens, accents, surfaces', () => {
   const { res, manifest } = extract(
     `<html><head><style>
@@ -32,6 +35,7 @@ test('happy path: tokens, accents, surfaces', () => {
       <x-dc id="list"><ul></ul></x-dc>
     </body></html>`)
   assert.strictEqual(res.status, 0, res.stderr)
+  assert.strictEqual(manifest.schemaVersion, 3)
   assert.strictEqual(manifest.tokens.length, 2)
   assert.deepStrictEqual(Object.keys(manifest.accents), ['warm'])
   assert.deepStrictEqual(manifest.surfaces.map(s => s.id), ['card', 'list'])
@@ -103,26 +107,128 @@ test('nested surfaces each get their own slice', () => {
   assert.deepStrictEqual(manifest.surfaces.map(s => s.id).sort(), ['inner', 'outer'])
 })
 
-test('fidelity: user-visible strings extracted in document order, attrs and entities included', () => {
+test('fidelity: user-visible copy extracted in document order, attrs and entities included', () => {
   const { res, manifest } = extract(BASE(
     '<x-dc id="form"><style>.x { color: red; }</style>' +
     '<label>Email address</label><input placeholder="you@example.com">' +
     '<button aria-label="Send the invite">Send&nbsp;invite</button><button>Cancel</button></x-dc>'))
   assert.strictEqual(res.status, 0, res.stderr)
-  assert.deepStrictEqual(manifest.surfaces[0].strings,
+  assert.deepStrictEqual(copyOf(manifest.surfaces[0]),
     ['Email address', 'you@example.com', 'Send the invite', 'Send invite', 'Cancel'])
+  // attr provenance is recorded (diagnostics), style text never leaks into copy
+  const attrs = manifest.surfaces[0].entries.filter(e => e.attr).map(e => e.attr)
+  assert.deepStrictEqual(attrs, ['placeholder', 'aria-label'])
 })
 
-test('fidelity: layout primitives from inline styles and style blocks, deduped', () => {
+test('fidelity: layout primitives from inline styles and style blocks, region-tagged, deduped', () => {
   const { res, manifest } = extract(BASE(
     '<x-dc id="row"><style>.row { grid-template-columns: 1fr auto; }</style>' +
     '<div style="grid-template-columns: 1fr auto; color: #fff"><div style="flex-direction: column">x</div></div></x-dc>'))
   assert.strictEqual(res.status, 0, res.stderr)
   assert.deepStrictEqual(manifest.surfaces[0].layout, [
-    { property: 'grid-template-columns', value: '1fr auto' },
-    { property: 'flex-direction', value: 'column' },
+    { region: 'root', property: 'grid-template-columns', value: '1fr auto' },
+    { region: 'root', property: 'flex-direction', value: 'column' },
   ])
 })
+
+// ---- v2 region + string-class mechanics (schemaVersion 3) --------------------------------------
+
+test('regions: data-screen-label elements and comment-labeled siblings, nested via parent', () => {
+  const { res, manifest, out } = extract(BASE(
+    '<x-dc id="app"><div>' +
+    '<div data-screen-label="Sidebar"><!-- workspace switcher --><div><b>Acme</b></div><span>New chat</span></div>' +
+    '<!-- ============ MAIN THREAD ============ --><div><p>Hello there</p></div>' +
+    '</div></x-dc>'))
+  assert.strictEqual(res.status, 0, res.stderr)
+  const s = manifest.surfaces[0]
+  const byId = Object.fromEntries(s.regions.map(r => [r.id, r]))
+  assert.ok(byId.root && byId.sidebar && byId['main-thread'] && byId['workspace-switcher'],
+    'expected root/sidebar/main-thread/workspace-switcher, got ' + s.regions.map(r => r.id))
+  assert.strictEqual(byId.sidebar.source, 'screen-label')
+  assert.strictEqual(byId['main-thread'].source, 'comment')
+  assert.strictEqual(byId['workspace-switcher'].parent, 'sidebar', 'comment region nests under the enclosing label region')
+  assert.strictEqual(byId.sidebar.parent, 'root')
+  // strings land in their SMALLEST enclosing region
+  const at = (v) => s.entries.find(e => e.value === v).region
+  assert.strictEqual(at('Acme'), 'workspace-switcher')
+  assert.strictEqual(at('New chat'), 'sidebar')
+  assert.strictEqual(at('Hello there'), 'main-thread')
+  // per-region slices exist and carry only their subtree
+  for (const rid of ['sidebar', 'main-thread', 'workspace-switcher']) {
+    assert.ok(byId[rid].sliceFile, rid + ' should have a slice file')
+    assert.ok(fs.existsSync(path.join(out, byId[rid].sliceFile)))
+  }
+  const sidebarSlice = fs.readFileSync(path.join(out, byId.sidebar.sliceFile), 'utf8')
+  assert.ok(sidebarSlice.includes('New chat') && !sidebarSlice.includes('Hello there'))
+})
+
+test('regions: an all-decoration comment is not a label; deep comment regions get no slice file', () => {
+  const { res, manifest } = extract(BASE(
+    '<x-dc id="app"><!-- ==================== --><div>' +
+    '<div data-screen-label="A"><div><!-- lvl2 --><div><!-- lvl3 --><div>deep</div></div></div></div>' +
+    '</div></x-dc>'))
+  assert.strictEqual(res.status, 0, res.stderr)
+  const s = manifest.surfaces[0]
+  const ids = s.regions.map(r => r.id)
+  assert.ok(!ids.includes('region'), 'decoration-only comment must not create a region: ' + ids)
+  const lvl3 = s.regions.find(r => r.id === 'lvl3')
+  assert.ok(lvl3, 'deep comment still anchors a region')
+  assert.strictEqual(lvl3.sliceFile, undefined, 'depth>2 comment regions are anchors, not files')
+  const a = s.regions.find(r => r.id === 'a')
+  assert.ok(a.sliceFile, 'screen-label regions always get a slice')
+})
+
+test('string classes: mustache-only text is a binding, mixed text a template, sc-for content sample data', () => {
+  const { res, manifest } = extract(BASE(
+    '<x-dc id="s"><span>{{ b.name }}</span><span>Invited {{ c.date }}</span>' +
+    '<sc-for list="{{ chats }}" as="c" hint-placeholder-count="2"><span>Weekly Investor Update</span><i>{{ c.badge }}</i></sc-for>' +
+    '<button>Send invite</button></x-dc>'))
+  assert.strictEqual(res.status, 0, res.stderr)
+  const s = manifest.surfaces[0]
+  const kinds = (k) => s.entries.filter(e => e.kind === k)
+  assert.deepStrictEqual(kinds('binding').map(e => e.value), ['b.name', 'c.badge'])
+  assert.deepStrictEqual(kinds('template').map(e => e.segments), [['Invited', '']])
+  assert.deepStrictEqual(kinds('sample').map(e => e.value), ['Weekly Investor Update'])
+  assert.deepStrictEqual(kinds('copy').map(e => e.value), ['Send invite'],
+    'mustaches and sc-for sample rows must NOT pollute the verbatim copy contract')
+})
+
+test('data-props: read from the <x-dc> root or from a sibling data-dc-script element', () => {
+  const onRoot = extract(BASE(
+    `<x-dc id="s" data-props="{&quot;open&quot;:{&quot;tsType&quot;:&quot;boolean&quot;}}"><p>hi</p></x-dc>`))
+  assert.strictEqual(onRoot.res.status, 0, onRoot.res.stderr)
+  assert.deepStrictEqual(onRoot.manifest.surfaces[0].props, { open: { tsType: 'boolean' } })
+
+  const onScript = extract(BASE(
+    '<x-dc id="s"><p>hi</p></x-dc>' +
+    `<script type="text/x-dc" data-dc-script data-props="{&quot;panelOpen&quot;:{&quot;default&quot;:true}}"></script>`))
+  assert.strictEqual(onScript.res.status, 0, onScript.res.stderr)
+  assert.deepStrictEqual(onScript.manifest.surfaces[0].props, { panelOpen: { default: true } },
+    'canvas exports park data-props on a sibling script AFTER </x-dc> — it must still reach the surface')
+})
+
+test('literal harvest: inline colors and fonts counted by frequency (the palette tokenMap must cover)', () => {
+  const { res, manifest } = extract(BASE(
+    '<x-dc id="s"><div style="background:#FAFAF8;color:#1A1A18"><span style="color:#1A1A18;font-family:\'Inter\',sans-serif">x</span></div>' +
+    '<style>.a { border: 1px solid #1A1A18; }</style></x-dc>'))
+  assert.strictEqual(res.status, 0, res.stderr)
+  const colors = Object.fromEntries(manifest.surfaces[0].literals.colors.map(c => [c.value, c.count]))
+  assert.strictEqual(colors['#1A1A18'], 3)
+  assert.strictEqual(colors['#FAFAF8'], 1)
+  assert.deepStrictEqual(manifest.surfaces[0].literals.fonts.map(f => f.value), ["'Inter',sans-serif"])
+})
+
+test('variant proposals: heavy copy overlap flags the smaller surface as a variant of the larger', () => {
+  const words = Array.from({ length: 12 }, (_, i) => 'Copy line number ' + i)
+  const light = words.map(w => '<p>' + w + '</p>').join('') + '<p>Extra light-only row</p>'
+  const dark = words.map(w => '<p>' + w + '</p>').join('')
+  const { res, manifest } = extract(BASE(
+    '<x-dc id="light">' + light + '</x-dc><x-dc id="dark">' + dark + '</x-dc><x-dc id="other"><p>Unrelated</p></x-dc>'))
+  assert.strictEqual(res.status, 0, res.stderr)
+  assert.deepStrictEqual(manifest.variantProposals, [{ surface: 'dark', of: 'light', overlap: 1 }])
+})
+
+// ---- bundle mode --------------------------------------------------------------------------------
 
 test('bundle mode: dir of plain HTML screens + prompt.md notes; zero tokens is legal', () => {
   const dir = tmpdir('bundle')
@@ -138,7 +244,7 @@ test('bundle mode: dir of plain HTML screens + prompt.md notes; zero tokens is l
   assert.deepStrictEqual(manifest.tokens, [])
   assert.deepStrictEqual(manifest.surfaces.map(s => s.id).sort(), ['billing', 'settings-members'])
   const members = manifest.surfaces.find(s => s.id === 'settings-members')
-  assert.deepStrictEqual(members.strings, ['Members', 'Send invite'])
+  assert.deepStrictEqual(copyOf(members), ['Members', 'Send invite'])
   // <body> subtree only — the <html> wrapper is not part of the surface
   const slice = fs.readFileSync(path.join(out, members.sliceFile), 'utf8')
   assert.ok(!slice.includes('<html>'), 'slice must be the body subtree')
@@ -235,10 +341,10 @@ test('bundle mode: whole-file surface prepends head <style> — class layout rea
   const s = manifest.surfaces[0]
   // a body-only slice would strand `class="form-grid"` with no definition and hide this layout
   assert.deepStrictEqual(s.layout, [
-    { property: 'grid-template-columns', value: '1fr auto' },
-    { property: 'flex-direction', value: 'column' },
+    { region: 'root', property: 'grid-template-columns', value: '1fr auto' },
+    { region: 'root', property: 'flex-direction', value: 'column' },
   ])
-  assert.deepStrictEqual(s.strings, ['Email address', 'Send invite'], 'style text must not leak into strings')
+  assert.deepStrictEqual(copyOf(s), ['Email address', 'Send invite'], 'style text must not leak into copy')
   const slice = fs.readFileSync(path.join(out, s.sliceFile), 'utf8')
   assert.ok(slice.includes('.form-grid{display:grid'), 'head style block travels with the slice')
   assert.ok(slice.includes('class="form-grid"'))

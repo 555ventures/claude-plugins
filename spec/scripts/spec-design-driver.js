@@ -78,6 +78,47 @@ if (localSource && !fs.existsSync(localSource)) {
   die('design_source is a local path but ' + localSource + ' does not exist — fix the frontmatter or restore the handoff bundle')
 }
 
+// ---- coverage ledger -----------------------------------------------------------------------------
+// A design source outlives any one spec: briefs bind REGIONS of its screens, and later briefs
+// inherit the remainder. The ledger records which regions each spec claimed — the industry
+// status-matrix pattern — at <repoRoot>/.claude/design-coverage.json, keyed by design_source.
+// It survives the sidecar deletion at reconcile (that is the point).
+const ledgerPath = path.join(repoRoot, '.claude/design-coverage.json')
+function readLedger() {
+  try { return JSON.parse(fs.readFileSync(ledgerPath, 'utf8')) } catch { return { sources: {} } }
+}
+// Every region a skeleton binds: regionRef/regionRefs ("<surface>#<region>", bare = root) plus
+// the legacy whole-surface bindings (sliceRef → that surface's root).
+function boundRegionRefs(skDoc, extractDoc) {
+  const refs = new Set()
+  const surfaces = (extractDoc && extractDoc.surfaces) || []
+  for (const sk of (skDoc && skDoc.skeletons) || []) {
+    for (const r of [sk.regionRef, ...(Array.isArray(sk.regionRefs) ? sk.regionRefs : [])]) {
+      if (typeof r === 'string' && r) refs.add(r.includes('#') ? r : r + '#root')
+    }
+    if (typeof sk.sliceRef === 'string' && sk.sliceRef) {
+      const surf = surfaces.find(s => sk.sliceRef === s.sliceFile || sk.sliceRef.endsWith('/' + s.sliceFile))
+      if (surf) refs.add(surf.id + '#root')
+    }
+  }
+  return [...refs].sort()
+}
+function recordCoverage() {
+  if (!designSource) return
+  const skDoc = (() => { try { return JSON.parse(fs.readFileSync(inSidecar('skeletons.json'), 'utf8')) } catch { return null } })()
+  const extractDoc = (() => { try { return JSON.parse(fs.readFileSync(inSidecar('extract.json'), 'utf8')) } catch { return null } })()
+  const refs = boundRegionRefs(skDoc, extractDoc)
+  if (!refs.length) return
+  const ledger = readLedger()
+  if (!ledger.sources || typeof ledger.sources !== 'object') ledger.sources = {}
+  const entry = ledger.sources[designSource] || (ledger.sources[designSource] = { regions: {} })
+  const specRel = path.relative(repoRoot, path.resolve(specPath))
+  for (const r of refs) entry.regions[r] = { spec: specRel, at: new Date().toISOString().slice(0, 10) }
+  fs.mkdirSync(path.dirname(ledgerPath), { recursive: true })
+  fs.writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2) + '\n')
+  process.stdout.write('[spec-design-driver] coverage ledger: recorded ' + refs.length + ' bound region(s) → ' + ledgerPath + '\n')
+}
+
 // ---- record a mark (validated against the artifacts, then fall through to print next step) ------
 if (MARK) {
   const valid = ['author-green', 'visual-done', 'round-green', 'approved']
@@ -104,6 +145,9 @@ if (MARK) {
     if (MARK === 'author-green' && RUN_ID) marks.runId = RUN_ID
   }
   fs.writeFileSync(stateFile, JSON.stringify(marks, null, 2) + '\n')
+  // approval is when the bound regions become durable fact — the sidecar dies at reconcile,
+  // the ledger is what later briefs read to inherit the remainder of the design source
+  if (MARK === 'approved') recordCoverage()
 }
 
 // ---- derive the current state (artifact-verified, never trust marks alone) ----------------------
@@ -140,24 +184,90 @@ const mockLine = designSource
   ? 'design_source: ' + designSource + (localSource ? ' (local handoff source)' : '')
   : 'no design_source — the no-mockup path (skeletons from doctrine + tokens + the spec ## UI section)'
 
+// ---- bind-feasibility report ---------------------------------------------------------------------
+// Everything that can refuse a bad binding is printed HERE, at extract time — before a warm
+// expensive session authors skeletons against an infeasible contract (whole-screen granularity,
+// copy locked in i18n catalogs the gate can't see, duplicate variant contracts). Mechanical read
+// of extract.json + the coverage ledger + the host config; no model judgment.
+function feasibilityReport() {
+  let extractDoc
+  try { extractDoc = JSON.parse(fs.readFileSync(inSidecar('extract.json'), 'utf8')) } catch { return '' }
+  const surfs = extractDoc.surfaces || []
+  if (!surfs.length || !surfs.some(s => Array.isArray(s.regions))) return ''
+  const claimed = (readLedger().sources || {})[designSource]
+  const claimedBy = (ref) => claimed && claimed.regions && claimed.regions[ref] ? claimed.regions[ref].spec : null
+  const lines = ['## Bind feasibility (mechanical, from extract.json — read BEFORE authoring skeletons)']
+  for (const s of surfs) {
+    const counts = { copy: 0, template: 0, binding: 0, sample: 0 }
+    for (const e of s.entries || []) counts[e.kind] = (counts[e.kind] || 0) + 1
+    lines.push('surface ' + s.id + ': ' + counts.copy + ' copy / ' + counts.template + ' template / ' +
+      counts.binding + ' binding / ' + counts.sample + ' sample; ' +
+      ((s.literals && s.literals.colors) || []).length + ' palette literal(s)')
+    const regions = s.regions || []
+    const parentOf = new Map(regions.map(r => [r.id, r.parent]))
+    const depthOf = (id) => { let d = 0, c = parentOf.get(id); while (c) { d++; c = parentOf.get(c) } return d }
+    const subtreeCopy = (id) => (s.entries || []).filter(e => {
+      if (e.kind !== 'copy') return false
+      let c = e.region
+      while (c !== undefined && c !== null) { if (c === id) return true; c = parentOf.get(c) ?? null }
+      return false
+    }).length
+    for (const r of regions) {
+      if (r.id === 'root') continue
+      const d = depthOf(r.id)
+      if (d > 2) continue // deep annotation anchors — bindable, but noise in a summary
+      const ref = s.id + '#' + r.id
+      const claim = claimedBy(ref)
+      lines.push('  ' + '  '.repeat(d - 1) + ref + ' [' + r.source + '] ' + subtreeCopy(r.id) + ' copy' +
+        (claim ? '  ⛔ CLAIMED by ' + claim : ''))
+    }
+  }
+  for (const v of extractDoc.variantProposals || []) {
+    lines.push('variant proposal: ' + v.surface + ' ≈ ' + v.of + ' (' + Math.round(v.overlap * 100) +
+      '% copy overlap) — confirm as a theme/breakpoint contract, do NOT bind it as a second string contract')
+  }
+  const catalogs = (config.design && config.design.copyCatalogs) || []
+  if (catalogs.length) {
+    lines.push('copy catalogs: ' + catalogs.join(', ') + ' — mock copy passes the gate as catalog VALUES')
+  } else {
+    const g = spawnSync('git', ['grep', '-l', '--untracked', '-E', 'paraglide|inlang|i18next|react-intl|next-intl|lingui',
+      '--', 'package.json', '**/package.json'], { encoding: 'utf8', cwd: repoRoot })
+    if (g.status === 0 && g.stdout.trim()) {
+      lines.push('⚠ i18n stack detected (' + g.stdout.trim().split('\n')[0] + ') but design.copyCatalogs is NOT declared — ' +
+        'the fidelity gate would demand literals the host lint forbids. Declare design.copyCatalogs ' +
+        '(e.g. ["app/messages/en.json"]) in .claude/spec.config.json BEFORE binding regions.')
+    }
+  }
+  return lines.join('\n') + '\n\n'
+}
+
 // Mock path vs no-mock path: with a mock bound, the SLICE is the binding authority for structure,
 // copy, order, and layout, and the skeleton shrinks to a BINDING MAP (no tree — a tree would be a
 // paraphrase of the slice, the exact fidelity hole + token cost this contract removes). With no
 // mock there is no external truth: the skeleton IS the design and carries the full tree.
-const SKELETON_SHAPE_MOCK = `4. Write ${sidecar}/skeletons.json — per surface a BINDING MAP (judgment only; NO tree): { id,
+const SKELETON_SHAPE_MOCK = `4. Write ${sidecar}/skeletons.json — per bound REGION a BINDING MAP (judgment only; NO tree): { id,
    decision: author|bind, componentPath, storyPath, bind{component,from,propBindings},
-   sliceRef (REQUIRED on author entries — the slice file is the binding authority for structure,
-   element order, copy, and layout; never restate or paraphrase those here),
-   tokenMap{<mock literal or --mock-var>: <repo token ROLE>} covering every styling value the
-   slice uses, imports[], props[], states[], mockRef{state:fixture}, tokens[closed allowlist],
-   shared, usedBy, containment, coherenceGroup, waveOrder } plus top-level {schemaVersion,
-   source:{sha256}, tokenForks[]}. Every tokenMap value is a ROLE, never a literal.
-   extract.json's per-surface strings/layout are the mock's fidelity contract — the driver greps
-   the authored code against it FAIL-CLOSED at author-green/round-green. A deliberate divergence
-   needs a ${sidecar}/deltas.json row {surfaceId, kind: string|order|layout, target, sliceQuote,
-   proof} whose sliceQuote is verified verbatim against the slice and whose proof names a
-   mechanical impossibility (failing build output, absent token/primitive, a grounded rule id) —
-   taste is NOT a valid proof; with a mock bound, taste yields to the mock (shared § mock supremacy).`
+   regionRef: "<surfaceId>#<regionId>" (REQUIRED on author entries — bind ONLY the regions this
+   spec builds, from the feasibility list above; binding a region covers its subtree; regionRefs[]
+   when one component spans several. The region's slice file is the binding authority for
+   structure, element order, copy, and layout — never restate or paraphrase those here),
+   tokenMap{<mock literal>: <repo token ROLE>} covering the region's styling values (the
+   extract's per-surface literal harvest is the palette to cover), imports[], props[], states[],
+   mockRef{state:fixture}, tokens[closed allowlist], shared, usedBy, containment, coherenceGroup,
+   waveOrder } plus top-level {schemaVersion, source:{sha256}, tokenForks[]}. Every tokenMap
+   value is a ROLE, never a literal.
+   The driver checks each bound region FAIL-CLOSED at author-green/round-green, by string CLASS:
+   copy = verbatim in your files OR as a VALUE in a declared copy catalog (design.copyCatalogs —
+   the i18n home; catalog key order never matters); template = its static segments survive;
+   sample (sc-for rows) = present in the pass (story fixtures are the home); binding ({{ expr }})
+   = renders from a prop, never grepped. Unbound regions are notes, tracked by the coverage
+   ledger for later briefs. Confirm each variantProposal: a theme/breakpoint variant becomes a
+   token-pair / responsive obligation on the SAME skeletons, never a second string contract.
+   A deliberate divergence needs a ${sidecar}/deltas.json row {surfaceId, kind: string|order|layout,
+   target, sliceQuote, proof} whose sliceQuote is verified verbatim against the slice and whose
+   proof names a mechanical impossibility (failing build output, absent token/primitive, a
+   grounded rule id) — taste is NOT a valid proof; with a mock bound, taste yields to the mock
+   (shared § mock supremacy).`
 const SKELETON_SHAPE_NOMOCK = `4. Write ${sidecar}/skeletons.json — per surface: { id, decision: author|bind, componentPath,
    storyPath, bind{component,from,propBindings}, imports[], tree[{el,slot,children,bind,
    style:{property: tokenROLE}}], props[], states[], mockRef{state:fixture}, tokens[closed
@@ -189,14 +299,14 @@ ${mockLine}
    slice-*.html by hand; if that fails too, STOP with the stderr. Never author from a partial extract.
 4. Re-run this driver.`,
 
-  SKELETONS: () => `## Step: author skeletons.json (the taste concentration — expensive model, warm)
+  SKELETONS: () => `${designSource ? feasibilityReport() : ''}## Step: author skeletons.json (the taste concentration — expensive model, warm)
 ${mockLine}
 
 1. Dispatch a Haiku match-first pass (Agent {model:"haiku"}, report-only): planned surfaces
    (spec ## UI) × catalog/source roots → a match-map (bind: existing component + import path +
    prop-bindings | net-new), an on-disk inventory (skip done work), per-slice file sizes, and
    the base-barrel report (which overlay primitives exist to import; nearest-match for absent ones).
-2. Warm inputs to read yourself: ${designSource ? sidecar + '/extract.json (tokens + per-surface fidelity + notes[] — read each note file), each slice-*.html, ' : ''}token files +
+2. Warm inputs to read yourself: ${designSource ? sidecar + '/extract.json (regions + classed entries + literal harvest + props + variantProposals + notes[] — read each note file), the slice files of the regions you plan to bind (region slices, not whole screens), ' : ''}token files +
    the design doctrine${doctrinePath ? ' (' + doctrinePath + ')' : ''}, the spec ## UI section, the match-map.
 3. Resolve BEFORE emitting skeletons (batch, never mid-authoring): token forks alias-first
    (new-role → extend after the near-match dedup check; same role/different value = fork →
@@ -237,13 +347,25 @@ fork; then re-invoke the same Workflow with resumeFromRunId. Anything else (gate
 out-of-scope) → read the failures, fix on disk (dispatch Sonnet), re-invoke. A green author is
 "structural (skeleton-expanded) — NOT visually approved."`,
 
-  VISUAL: () => `## Step: screenshot visual review (one round — raises the floor)
+  VISUAL: () => `## Step: rendered visual review (one round — raises the floor)
 Run the host screenshot command: ${design.screenshot}
 Scope: first pass renders everything this spec landed; any re-render covers ONLY changed
-entries + the showcase. Read the images and critique for real — alignment, contrast, spacing
-rhythm, empty/error/long-string states, showcase coherence. Issue correction notes and
-dispatch Sonnet to apply them (you edit nothing), re-run the gate (${gateCmd || 'host gate'}),
-checkpoint-commit when green. Then:  spec-design-driver ${specPath} --mark visual-done`,
+entries + the showcase.
+${designSource && exists('extract.json') ? `The design source is the ground truth and it RENDERS (canvas exports ship support.js):
+this review is the design-QA seat — MOCK vs STORY, side by side, never the story alone.
+1. Render each bound surface's source file in a browser (a one-shot Sonnet Agent with the
+   Chrome/screenshot tooling, or the host's own tooling) and screenshot each BOUND region
+   (extract.json regions carry the region tree; region slices name the subtrees).
+2. Pair each region crop with the matching story screenshot at the SAME viewport width.
+3. Review each pair against this checklist — judge only what the deterministic gate cannot see
+   (copy/order/layout are already verified): structure & element order, spacing rhythm, size
+   hierarchy, color-ROLE usage (the tokenMap applied, incl. dark/mobile variant obligations),
+   alignment, empty/error/long-string states, showcase coherence.
+If the mock cannot be rendered in this environment, fall back to reviewing the story
+screenshots against the region SLICES (markup) — say so in the log.` : `Read the images and critique for real — alignment, contrast, spacing
+rhythm, empty/error/long-string states, showcase coherence.`}
+Issue correction notes and dispatch Sonnet to apply them (you edit nothing), re-run the gate
+(${gateCmd || 'host gate'}), checkpoint-commit when green. Then:  spec-design-driver ${specPath} --mark visual-done`,
 
   ITERATE: () => `## Step: human catalog loop (round ${(marks.rounds || 0) + 1}; cold between rounds by design)
 Tell the user: run \`${design.command}\`, review the catalog entries (showcase first).

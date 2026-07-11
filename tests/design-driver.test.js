@@ -77,6 +77,8 @@ test('mockup path requires extract before skeletons; screenshot config inserts V
   fs.writeFileSync(path.join(sidecar, 'skeletons.json'), VALID_SKELETONS)
   run(root, spec, '--mark', 'author-green')
   assert.strictEqual(stateOf(root, spec), 'VISUAL')
+  // with a mock bound, the visual round is the design-QA seat: mock vs story, never story alone
+  assert.match(run(root, spec).stdout, /MOCK vs STORY/)
   run(root, spec, '--mark', 'visual-done')
   assert.strictEqual(stateOf(root, spec), 'ITERATE')
 })
@@ -158,4 +160,73 @@ test('fidelity gate: author-green/round-green are refused while the code diverge
   const rr = run(root, spec, '--mark', 'round-green')
   assert.strictEqual(rr.status, 2)
   assert.match(rr.stderr, /fidelity gate FAILED/)
+})
+
+// A realistic canvas-export screen: labeled + comment regions, enough shared copy across two
+// screens to fire a variant proposal.
+function regionHandoff(root) {
+  const rows = Array.from({ length: 10 }, (_, i) => '<p>Shared copy row ' + i + '</p>').join('')
+  fs.mkdirSync(path.join(root, 'handoff'), { recursive: true })
+  fs.writeFileSync(path.join(root, 'handoff/app.dc.html'),
+    '<body><x-dc><div>' +
+    '<div data-screen-label="Sidebar"><button>New chat</button>' + rows + '</div>' +
+    '<!-- main thread --><div><p>Hello there</p></div>' +
+    '</div></x-dc></body>')
+  fs.writeFileSync(path.join(root, 'handoff/app-dark.dc.html'),
+    '<body><x-dc><div data-screen-label="Sidebar Dark"><button>New chat</button>' + rows + '</div></x-dc></body>')
+}
+
+test('SKELETONS prints the bind-feasibility report: regions, variant proposals, i18n warning, ledger claims', () => {
+  const { root, spec, sidecar } = fixture({ designSource: './handoff' })
+  regionHandoff(root)
+  // an i18n stack with NO design.copyCatalogs declared → the report must warn before binding
+  fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ dependencies: { '@inlang/paraglide-js': '^2' } }))
+  fs.mkdirSync(sidecar, { recursive: true })
+  const dcx = spawnSync(process.execPath, [path.join(SPEC, 'scripts/dc-extract.js'),
+    '--bundle', path.join(root, 'handoff'), sidecar], { encoding: 'utf8' })
+  assert.strictEqual(dcx.status, 0, dcx.stderr)
+
+  const out = run(root, spec).stdout
+  assert.match(out, /Bind feasibility/)
+  assert.match(out, /app#sidebar \[screen-label\] \d+ copy/)
+  assert.match(out, /app#main-thread \[comment\]/)
+  assert.match(out, /variant proposal: app-dark ≈ app/)
+  assert.match(out, /i18n stack detected .*copyCatalogs is NOT declared/)
+  assert.match(out, /regionRef/, 'the skeleton shape must ask for regionRef, not sliceRef')
+
+  // a claimed region from ANOTHER spec shows up as a claim
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude/design-coverage.json'), JSON.stringify({
+    sources: { './handoff': { regions: { 'app#sidebar': { spec: 'specs/20260701/02-other.md', at: '2026-07-01' } } } },
+  }))
+  assert.match(run(root, spec).stdout, /app#sidebar.*CLAIMED by specs\/20260701\/02-other\.md/)
+})
+
+test('--mark approved records the bound regions in the repo-level coverage ledger', () => {
+  const { root, spec, sidecar } = fixture({ designSource: './handoff' })
+  regionHandoff(root)
+  fs.mkdirSync(sidecar, { recursive: true })
+  spawnSync(process.execPath, [path.join(SPEC, 'scripts/dc-extract.js'),
+    '--bundle', path.join(root, 'handoff'), sidecar], { encoding: 'utf8' })
+  fs.writeFileSync(path.join(sidecar, 'skeletons.json'), JSON.stringify({
+    skeletons: [
+      { id: 'sidebar', decision: 'author', componentPath: 'src/Sidebar.tsx',
+        regionRef: 'app#sidebar', states: ['default'], tokens: ['surface'] },
+      { id: 'legacy', decision: 'author', componentPath: 'src/Dark.tsx',
+        sliceRef: 'slice-app-dark.html', states: ['default'], tokens: ['surface'] },
+    ],
+  }))
+  // sidebar copy verbatim + legacy dark surface copy → fidelity green for author-green
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+  const rows = Array.from({ length: 10 }, (_, i) => '"Shared copy row ' + i + '",').join('')
+  fs.writeFileSync(path.join(root, 'src/Sidebar.tsx'), '<button>New chat</button>' + rows)
+  fs.writeFileSync(path.join(root, 'src/Dark.tsx'), '<button>New chat</button>' + rows)
+  run(root, spec, '--mark', 'author-green')
+  run(root, spec, '--mark', 'approved')
+
+  const ledger = JSON.parse(fs.readFileSync(path.join(root, '.claude/design-coverage.json'), 'utf8'))
+  const regions = ledger.sources['./handoff'].regions
+  assert.ok(regions['app#sidebar'], 'regionRef binding must be recorded')
+  assert.ok(regions['app-dark#root'], 'legacy sliceRef binding must be recorded as the root region')
+  assert.match(regions['app#sidebar'].spec, /01-x\.md$/)
 })

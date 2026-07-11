@@ -2,28 +2,32 @@
 // Deterministic mock↔code fidelity gate for /spec:design's mockup path.
 //
 // WHY this exists: the design stage's acceptance criterion — "the code reproduces the mock" — was
-// the one thing no gate checked. Typecheck/lint prove structure; the human catalog loop was the
-// only fidelity instrument, so copy drift ("Send invite" → "Send"), reordered actions, and
-// collapsed layouts surfaced only when a person caught them. Every one of those divergence classes
-// is mechanically checkable against the fidelity contract `dc-extract` already writes, so this
+// the one thing no gate checked. Copy drift ("Send invite" → "Send"), reordered actions, and
+// collapsed layouts are mechanically checkable against the contract `dc-extract` writes, so this
 // script checks them — zero model tokens, fail-closed. The driver runs it before accepting
 // `--mark author-green` and `--mark round-green`; a red check refuses the mark.
 //
-// What it checks, per extract.json surface, against the files its skeletons own:
-//   - strings: every user-visible mock string appears VERBATIM (whitespace/quote-normalized) in
-//     the surface's componentPath/storyPath files — or anywhere in the pass's file set (copy
-//     legitimately lives in fixtures); missing = FAIL. Composite strings mixing copy with
-//     INSTANCE data ("Remove Jamie Chen") also pass when a code interpolation template matches
-//     them (`Remove ${member.name}` / JSX `Invited {date}`) — static segments must align in
-//     order, anchored, with ≥1 meaningful segment; a pure-hole template ({label}) excuses
-//     nothing. Bare instance strings ("Jamie Chen") have no static part, so they must appear
-//     verbatim SOMEWHERE in the pass — story fixtures are the natural home, and carrying the
-//     mock's sample data there is what keeps the catalog render comparable to the mock.
-//   - order: within each file, mock strings that are unique (in the mock and the file) must appear
-//     in the mock's document order; a swap = FAIL (catches Send-then-Cancel → Cancel-then-Send).
-//   - layout: each mock layout primitive (grid-template-columns …) must appear in the surface's
-//     files — raw CSS, camelCase style-object, or Tailwind (arbitrary `[1fr_auto]` and semantic
-//     `flex-col`/`order-N`) forms all count; absent = FAIL.
+// v2 — the contract is REGION-SCOPED and expressed in REPO-NATIVE obligations:
+//   - A skeleton binds a REGION (`regionRef: "<surfaceId>#<regionId>"`), not a whole screen.
+//     The gate fails closed ONLY inside bound regions (binding a region covers its subtree);
+//     unbound regions are a note — a spec legitimately covers a slice of a screen, and later
+//     briefs inherit the remainder (the driver's coverage ledger tracks that). Legacy `sliceRef`
+//     (or a skeleton id matching the surface id) binds the surface's root region — everything.
+//   - COPY may live in the code files OR as a VALUE in a declared i18n catalog
+//     (spec.config.json design.copyCatalogs) — i18n stacks FORBID literals in components, so the
+//     catalog is copy's first-class home. Catalog values with `{holes}` template-match composite
+//     mock strings. Order is checked only within code files; catalog key order is arbitrary.
+//   - String CLASSES check differently: `copy` = verbatim presence + order; `template`
+//     ("Invited {{ date }}") = each static segment present; `sample` (sc-for rows) = present
+//     anywhere in the pass (story fixtures are the natural home — that keeps the catalog render
+//     comparable to the mock), exempt from order; `binding` ({{ b.name }}) = renders from a
+//     prop, checked NOWHERE (v1 emitted these as literal contract rows — garbage obligations).
+//   - Composite copy mixing INSTANCE data ("Remove Jamie Chen") also passes via a code
+//     interpolation template (`Remove ${member.name}` / JSX `Invited {date}`) — static segments
+//     align in order, anchored, ≥1 meaningful segment; a pure-hole template ({label}) excuses
+//     nothing.
+//   - layout: each bound region's primitives (grid-template-*, flex-direction, order) must
+//     appear in the region's files — raw CSS, camelCase style-object, or Tailwind forms count.
 //
 // The ONLY exemption is an evidence-gated delta row in <sidecar>/deltas.json:
 //   { deltas: [{ surfaceId, kind: "string"|"order"|"layout", target, sliceQuote, proof }] }
@@ -31,11 +35,12 @@
 // verbatim quote THIS SCRIPT VERIFIES against the surface's slice file, and `proof` names the
 // mechanical impossibility (failing build output, absent token/primitive, a grounded rule id).
 // A delta whose quote does not occur in the slice is itself a failure — taste can't forge evidence.
-// A surface in the mock with no skeleton is a NOTE, not a failure (a spec may cover a subset).
 //
 // CONTRACT: `node fidelity-check.js <sidecarDir> [--repo-root <dir>]`. Exit 0 = clean (or no
-// fidelity data — a schemaVersion-1 extract predating the contract); 1 = unexcused findings,
-// each printed linter-style; 2 = unusable inputs (no skeletons.json to map surfaces to files).
+// fidelity data); 1 = unexcused findings, each printed linter-style; 2 = unusable inputs (no
+// skeletons.json to map regions to files). Reads <repoRoot>/.claude/spec.config.json for
+// design.copyCatalogs. schemaVersion-2 extracts (flat per-surface strings) still check, as one
+// root region.
 
 'use strict'
 const fs = require('fs')
@@ -55,12 +60,6 @@ function readJson(p) {
 
 const extract = readJson(path.join(sidecar, 'extract.json'))
 if (!extract) { process.stdout.write('fidelity-check: no extract.json — no mock bound; nothing to check\n'); process.exit(0) }
-const surfaces = (extract.surfaces || []).filter(s => (s.strings && s.strings.length) || (s.layout && s.layout.length))
-if (!surfaces.length) { process.stdout.write('fidelity-check: extract.json carries no fidelity data (pre-contract extract) — nothing to check\n'); process.exit(0) }
-
-const skDoc = readJson(path.join(sidecar, 'skeletons.json'))
-if (!skDoc || !Array.isArray(skDoc.skeletons)) die('no valid skeletons.json in ' + sidecar + ' — cannot map surfaces to files; run the check after the skeleton step')
-const skeletons = skDoc.skeletons
 
 // ---- normalization -------------------------------------------------------------------------------
 // Both needles and haystacks are compared whitespace-collapsed with typographic quotes and the
@@ -68,7 +67,7 @@ const skeletons = skDoc.skeletons
 // “smart-quoted” variants all count as the same copy.
 function norm(s) {
   return String(s)
-    .replace(/&nbsp;| /g, ' ')
+    .replace(/&nbsp;| /g, ' ')
     .replace(/&amp;/g, '&').replace(/&(apos|#39);/g, "'").replace(/&quot;/g, '"')
     .replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
     .replace(/\s+/g, ' ')
@@ -77,11 +76,78 @@ function norm(s) {
 const compact = s => norm(s).toLowerCase().replace(/\s+/g, '')
 const compactNoQuotes = s => compact(s).replace(/["']/g, '')
 
-// ---- surface → files mapping ---------------------------------------------------------------------
-// A mock surface may be split across several skeletons (one screen → N components): the surface's
-// file set is the union of every skeleton whose sliceRef names its slice (or whose id matches).
+// ---- surface model (v3 regions/entries; v2 flat strings become one root region) -------------------
+function surfaceModel(surf) {
+  if (Array.isArray(surf.regions) && Array.isArray(surf.entries)) {
+    return { regions: surf.regions, entries: surf.entries, layout: surf.layout || [] }
+  }
+  return {
+    regions: [{ id: 'root', parent: null, source: 'root' }],
+    entries: (surf.strings || []).map(v => ({ region: 'root', kind: 'copy', value: v })),
+    layout: (surf.layout || []).map(l => ({ region: 'root', property: l.property, value: l.value })),
+  }
+}
+const surfaces = (extract.surfaces || [])
+  .map(s => ({ raw: s, ...surfaceModel(s) }))
+  .filter(s => s.entries.length || s.layout.length)
+if (!surfaces.length) { process.stdout.write('fidelity-check: extract.json carries no fidelity data — nothing to check\n'); process.exit(0) }
+
+const skDoc = readJson(path.join(sidecar, 'skeletons.json'))
+if (!skDoc || !Array.isArray(skDoc.skeletons)) die('no valid skeletons.json in ' + sidecar + ' — cannot map regions to files; run the check after the skeleton step')
+const skeletons = skDoc.skeletons
+
+const failures = []
+const notes = []
+const excused = []
+
+// ---- copy catalogs (the i18n home for mock copy) --------------------------------------------------
+// design.copyCatalogs in the host config names the message catalog files (e.g. app/messages/en.json).
+// A mock copy string passes when it appears as a catalog VALUE — verbatim, or via a {hole} template
+// ("Hello {name}" matches "Hello Jamie"). Order never applies to catalogs: key order is arbitrary.
+const config = readJson(path.join(repoRoot, '.claude/spec.config.json')) || {}
+const catalogPaths = (config.design && Array.isArray(config.design.copyCatalogs)) ? config.design.copyCatalogs : []
+const catalogs = [] // {rel, values: Set<norm>, templates: [segs[]], text: norm(content)|null}
+for (const rel of catalogPaths) {
+  let content
+  try { content = fs.readFileSync(path.resolve(repoRoot, rel), 'utf8') }
+  catch { failures.push('copy catalog ' + rel + ' (spec.config.json design.copyCatalogs) is not readable — fix the config or restore the file'); continue }
+  const cat = { rel, values: new Set(), templates: [], text: null }
+  let doc = null
+  try { doc = JSON.parse(content) } catch { cat.text = norm(content) } // non-JSON catalog: raw text haystack
+  if (doc !== null) {
+    const collect = (v) => {
+      if (typeof v === 'string') {
+        const n = norm(v)
+        if (!n) return
+        if (/\{[^{}]*\}/.test(n)) cat.templates.push(n.split(/\{[^{}]*\}/))
+        else cat.values.add(n)
+      } else if (Array.isArray(v)) v.forEach(collect)
+      else if (v && typeof v === 'object') Object.values(v).forEach(collect)
+    }
+    collect(doc)
+  }
+  catalogs.push(cat)
+}
+function catalogHit(needle) {
+  for (const cat of catalogs) {
+    if (cat.values.has(needle)) return cat.rel
+    if (cat.templates.some(segs => matchesTemplate(segs, needle))) return cat.rel
+    if (cat.text !== null && cat.text.includes(needle)) return cat.rel
+  }
+  return null
+}
+
+// ---- skeleton → region binding ---------------------------------------------------------------------
+// regionRef / regionRefs: "<surfaceId>#<regionId>" (or "<surfaceId>" = the root region).
+// Legacy sliceRef (slice file name) and skeleton-id-matches-surface-id bind the root region.
 function filesOf(sk) {
   return [sk.componentPath, sk.storyPath].filter(v => typeof v === 'string' && v.length > 0)
+}
+function refsOf(sk) {
+  const raw = []
+  if (typeof sk.regionRef === 'string') raw.push(sk.regionRef)
+  if (Array.isArray(sk.regionRefs)) for (const r of sk.regionRefs) if (typeof r === 'string') raw.push(r)
+  return raw
 }
 const allFiles = [...new Set(skeletons.flatMap(filesOf))]
 const contentCache = new Map()
@@ -96,10 +162,6 @@ function contentOf(rel) {
 // ---- deltas (the evidence-gated exemption list) --------------------------------------------------
 const deltaDoc = readJson(path.join(sidecar, 'deltas.json'))
 const deltas = (deltaDoc && Array.isArray(deltaDoc.deltas)) ? deltaDoc.deltas : []
-const failures = []
-const notes = []
-const excused = []
-
 const validDeltas = []
 for (const [i, d] of deltas.entries()) {
   const at = 'deltas[' + i + ']'
@@ -112,7 +174,7 @@ for (const [i, d] of deltas.entries()) {
     failures.push(at + ' (' + d.target + '): empty proof — a delta must name the mechanical impossibility; taste is not a proof')
     continue
   }
-  const surf = surfaces.find(s => s.id === d.surfaceId) || (extract.surfaces || []).find(s => s.id === d.surfaceId)
+  const surf = (extract.surfaces || []).find(s => s.id === d.surfaceId)
   const slice = surf ? fs.existsSync(path.join(sidecar, surf.sliceFile)) && fs.readFileSync(path.join(sidecar, surf.sliceFile), 'utf8') : null
   if (!slice || typeof d.sliceQuote !== 'string' || !d.sliceQuote.trim() || !norm(slice).includes(norm(d.sliceQuote))) {
     failures.push(at + ' (' + d.target + '): sliceQuote not found verbatim in the surface\'s slice — a delta must quote the mock line it diverges from')
@@ -149,6 +211,7 @@ function templatesOf(content) {
 }
 function matchesTemplate(segs, needle) {
   // whitespace-only edge segments count as holes for anchoring — norm() collapses them anyway
+  if (!segs.some(seg => norm(seg).length >= 3)) return false // a pure/near-pure-hole template excuses nothing
   const leadAnchor = norm(segs[0]) !== ''
   const tailAnchor = norm(segs[segs.length - 1]) !== ''
   let pos = 0
@@ -204,27 +267,112 @@ function layoutFound(files, property, value) {
 // ---- the checks ----------------------------------------------------------------------------------
 let checkedStrings = 0
 let interpolated = 0
+let catalogHits = 0
+let bindingsSkipped = 0
 for (const surf of surfaces) {
-  const owners = skeletons.filter(sk =>
-    (typeof sk.sliceRef === 'string' && (sk.sliceRef === surf.sliceFile || sk.sliceRef.endsWith('/' + surf.sliceFile))) ||
-    sk.id === surf.id)
-  if (!owners.length) {
-    notes.push('surface "' + surf.id + '" has no skeleton — not planned by this spec; skipped')
+  const id = surf.raw.id
+  const regionIds = new Set(surf.regions.map(r => r.id))
+  const parentOf = new Map(surf.regions.map(r => [r.id, r.parent]))
+  const coveredBy = (regionId, boundId) => { // is boundId an ancestor-or-self of regionId?
+    let cur = regionId
+    while (cur !== undefined && cur !== null) {
+      if (cur === boundId) return true
+      cur = parentOf.get(cur) ?? null
+    }
+    return false
+  }
+
+  // which regions did this spec bind, and with which files?
+  const bound = new Map() // regionId → Set(files)
+  const bindTo = (regionId, sk) => {
+    if (!bound.has(regionId)) bound.set(regionId, new Set())
+    for (const f of filesOf(sk)) bound.get(regionId).add(f)
+  }
+  for (const sk of skeletons) {
+    for (const ref of refsOf(sk)) {
+      const hash = ref.indexOf('#')
+      const surfId = hash === -1 ? ref : ref.slice(0, hash)
+      const regionId = hash === -1 ? 'root' : ref.slice(hash + 1)
+      if (surfId !== id) continue
+      if (!regionIds.has(regionId)) {
+        failures.push(id + ': skeleton "' + (sk.id || '?') + '" binds unknown region "' + regionId +
+          '" — extract.json knows: ' + [...regionIds].join(', '))
+        continue
+      }
+      bindTo(regionId, sk)
+    }
+    // legacy whole-surface binding: sliceRef names the surface slice, or the ids match
+    if ((typeof sk.sliceRef === 'string' && (sk.sliceRef === surf.raw.sliceFile || sk.sliceRef.endsWith('/' + surf.raw.sliceFile))) ||
+        sk.id === id) {
+      bindTo('root', sk)
+    }
+  }
+  if (!bound.size) {
+    notes.push('surface "' + id + '" has no bound region — not planned by this spec; skipped')
     continue
   }
-  const files = [...new Set(owners.flatMap(filesOf))]
-  const missingFiles = files.filter(f => contentOf(f) === null)
-  for (const f of missingFiles) failures.push(surf.id + ': mapped file ' + f + ' does not exist on disk — cannot verify fidelity')
-  const readable = files.filter(f => contentOf(f) !== null)
 
-  // strings: verbatim presence (surface files first, then the whole pass's file set)
-  const strings = surf.strings || []
+  // per-entry owner files = files of every bound region whose subtree contains the entry
+  const ownersFor = (regionId) => {
+    const files = new Set()
+    for (const [bId, fset] of bound) if (coveredBy(regionId, bId)) for (const f of fset) files.add(f)
+    return files
+  }
+  const unboundWithCopy = [...regionIds].filter(rid =>
+    !ownersFor(rid).size && surf.entries.some(e => e.region === rid && e.kind === 'copy'))
+  if (unboundWithCopy.length) {
+    notes.push(id + ': unbound region(s) ' + unboundWithCopy.join(', ') + ' — not claimed by this spec; their strings are not checked (the coverage ledger tracks the remainder)')
+  }
+
+  const missingChecked = new Set()
+  const requireFiles = (files) => {
+    const readable = []
+    for (const f of files) {
+      if (contentOf(f) === null) {
+        if (!missingChecked.has(f)) { missingChecked.add(f); failures.push(id + ': mapped file ' + f + ' does not exist on disk — cannot verify fidelity') }
+      } else readable.push(f)
+    }
+    return readable
+  }
+
+  // strings, by class
+  const covered = surf.entries.filter(e => ownersFor(e.region).size)
+  const copyEntries = covered.filter(e => e.kind === 'copy')
   const mockCount = new Map()
-  for (const s of strings) mockCount.set(norm(s), (mockCount.get(norm(s)) || 0) + 1)
+  for (const e of copyEntries) mockCount.set(norm(e.value), (mockCount.get(norm(e.value)) || 0) + 1)
   const foundAt = new Map() // norm(string) → {file, index} for the order check
-  for (const s of strings) {
+
+  for (const e of covered) {
+    if (e.kind === 'binding') { bindingsSkipped++; continue } // renders from a prop — no verbatim obligation
+    const readable = requireFiles(ownersFor(e.region))
+    if (e.kind === 'template') {
+      checkedStrings++
+      // the mock's own template: every meaningful STATIC segment must survive somewhere
+      const segs = (e.segments || []).map(norm).filter(s => s.length >= 3)
+      const missing = segs.filter(seg =>
+        !readable.some(f => norm(contentOf(f)).includes(seg)) &&
+        !allFiles.some(f => contentOf(f) !== null && norm(contentOf(f)).includes(seg)) &&
+        !catalogHit(seg) &&
+        !catalogs.some(c => c.templates.some(t => t.map(norm).includes(seg)) ||
+          [...c.values].some(v => v.includes(seg)) || (c.text !== null && c.text.includes(seg))))
+      if (missing.length && !excuse(id, 'string', e.value)) {
+        failures.push(id + ' [' + e.region + ']: template "' + e.value + '" — static segment(s) ' +
+          missing.map(s => '"' + s + '"').join(', ') + ' missing from the pass and the copy catalogs')
+      }
+      continue
+    }
     checkedStrings++
-    const needle = norm(s)
+    const needle = norm(e.value)
+    // sample data: instance rows the story fixture carries — anywhere in the pass, order-exempt
+    if (e.kind === 'sample') {
+      const hit = allFiles.some(f => contentOf(f) !== null && norm(contentOf(f)).includes(needle)) ||
+        templateHit(allFiles, needle)
+      if (!hit && !excuse(id, 'string', e.value)) {
+        failures.push(id + ' [' + e.region + ']: sample "' + e.value + '" missing — mock instance data must appear in the pass (story fixtures are the natural home)')
+      }
+      continue
+    }
+    // copy: verbatim in the region's own files → order candidate
     let where = null
     for (const f of readable) {
       const idx = norm(contentOf(f)).indexOf(needle)
@@ -234,21 +382,25 @@ for (const surf of surfaces) {
       // composite copy+instance-data strings pass via a code interpolation template; template
       // hits stay OUT of the order check — N sample rows match ONE template at one position
       if (templateHit(readable, needle)) { interpolated++; continue }
-      const elsewhere = allFiles.find(f => !files.includes(f) && contentOf(f) !== null && norm(contentOf(f)).includes(needle))
-      if (elsewhere) { notes.push(surf.id + ': "' + s + '" found in ' + elsewhere + ' (outside the surface\'s own files)'); continue }
-      if (!excuse(surf.id, 'string', s)) {
-        failures.push(surf.id + ': string "' + s + '" missing — the mock copy does not appear in ' +
-          (readable.length ? readable.join(', ') : '(no readable files)') + ' nor anywhere in the pass (verbatim or via an interpolation template)')
+      const inCatalog = catalogHit(needle)
+      if (inCatalog) { catalogHits++; continue } // catalog value = copy's i18n home; order N/A
+      const elsewhere = allFiles.find(f => !readable.includes(f) && contentOf(f) !== null && norm(contentOf(f)).includes(needle))
+      if (elsewhere) { notes.push(id + ': "' + e.value + '" found in ' + elsewhere + ' (outside the region\'s own files)'); continue }
+      if (!excuse(id, 'string', e.value)) {
+        failures.push(id + ' [' + e.region + ']: copy "' + e.value + '" missing — not in ' +
+          (readable.length ? readable.join(', ') : '(no readable files)') +
+          ', the pass, an interpolation template' + (catalogs.length ? ', or the copy catalogs' : '') +
+          (catalogs.length ? '' : ' (no design.copyCatalogs declared — if this repo routes copy through i18n catalogs, declare them in spec.config.json)'))
       }
       continue
     }
     if (!foundAt.has(needle)) foundAt.set(needle, where)
   }
 
-  // order: unique-in-mock strings found in the SAME file must be in mock document order
+  // order: unique-in-mock copy found in the SAME code file must be in mock document order
   const byFile = new Map()
-  for (const s of strings) {
-    const needle = norm(s)
+  for (const e of copyEntries) {
+    const needle = norm(e.value)
     if (mockCount.get(needle) !== 1) continue
     const hit = foundAt.get(needle)
     if (!hit) continue
@@ -256,24 +408,27 @@ for (const surf of surfaces) {
     // unique in the file too — a repeated occurrence makes first-index ordering meaningless
     if (hay.indexOf(needle) !== hay.lastIndexOf(needle)) continue
     if (!byFile.has(hit.file)) byFile.set(hit.file, [])
-    byFile.get(hit.file).push({ s, index: hit.index })
+    byFile.get(hit.file).push({ s: e.value, index: hit.index })
   }
   for (const [file, hits] of byFile) {
     for (let i = 1; i < hits.length; i++) {
       if (hits[i].index < hits[i - 1].index) {
-        if (!excuse(surf.id, 'order', hits[i].s) && !excuse(surf.id, 'order', hits[i - 1].s)) {
-          failures.push(surf.id + ': order — "' + hits[i].s + '" appears BEFORE "' + hits[i - 1].s +
+        if (!excuse(id, 'order', hits[i].s) && !excuse(id, 'order', hits[i - 1].s)) {
+          failures.push(id + ': order — "' + hits[i].s + '" appears BEFORE "' + hits[i - 1].s +
             '" in ' + file + ' but AFTER it in the mock')
         }
       }
     }
   }
 
-  // layout primitives
-  for (const { property, value } of surf.layout || []) {
-    if (!layoutFound(readable, property, value)) {
-      if (!excuse(surf.id, 'layout', property + ': ' + value)) {
-        failures.push(surf.id + ': layout — `' + property + ': ' + value + '` from the mock not found in ' +
+  // layout primitives, per bound region
+  for (const l of surf.layout) {
+    const owners = ownersFor(l.region)
+    if (!owners.size) continue
+    const readable = requireFiles(owners)
+    if (!layoutFound(readable, l.property, l.value)) {
+      if (!excuse(id, 'layout', l.property + ': ' + l.value)) {
+        failures.push(id + ' [' + l.region + ']: layout — `' + l.property + ': ' + l.value + '` from the mock not found in ' +
           (readable.length ? readable.join(', ') : '(no readable files)') + ' (raw CSS, camelCase, or Tailwind forms all count)')
       }
     }
@@ -291,4 +446,6 @@ if (failures.length) {
 }
 process.stdout.write('fidelity-check: ' + surfaces.length + ' surface(s), ' + checkedStrings +
   ' string(s) verified' + (interpolated ? ' (' + interpolated + ' via interpolation template)' : '') +
+  (catalogHits ? ' (' + catalogHits + ' via copy catalog)' : '') +
+  (bindingsSkipped ? ', ' + bindingsSkipped + ' prop binding(s) skipped' : '') +
   (excused.length ? ', ' + excused.length + ' excused by delta' : '') + ' — clean\n')

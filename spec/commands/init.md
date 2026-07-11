@@ -112,7 +112,13 @@ All keys consumed by the plugin's commands/workflows:
     "doctrine": "docs/design/doctrine.md",
     // OPTIONAL: renders catalog entries to image files — enables the designer's visual
     // self-review round. Omit if the host has no such command; never invent one.
-    "screenshot": "bun storybook:screenshot"
+    "screenshot": "bun storybook:screenshot",
+    // REQUIRED when the repo routes copy through an i18n stack (Paraglide/inlang, i18next,
+    // react-intl, next-intl, lingui, …): the source-language message catalog(s). The
+    // /spec:design fidelity gate accepts mock copy as catalog VALUES — without this key the
+    // gate would demand literals the host's i18n lint forbids. Detect the stack from the
+    // dependency tree and point at the real catalog files; omit only when there is no i18n.
+    "copyCatalogs": ["app/messages/en.json"]
   },
   // Ordered File Plan layer groups; layers inside one inner array run in parallel
   // (their file sets must be disjoint by construction of the repo's structure).

@@ -67,11 +67,18 @@ test('wf-review: a null reviewer result must not produce CLEAN', () => {
     'the failed-reviewer check must run before findings are filtered')
 })
 
-test('wf-review: hard findings die only on 2/2 of DISPATCHED refuters, not surviving ones', () => {
+test('wf-review: no finding dies by argument — kills are grounded or they do not happen', () => {
   const src = read('spec/workflows/wf-review.js')
-  assert.ok(!/refutes\.length === valid\.length/.test(src),
-    'kill rule must compare against the dispatched refuter count k, not the null-filtered count')
-  assert.match(src, /refutes\.length === k/, 'kill rule should be refutes.length === k (all dispatched refuters)')
+  // The v4 refutation layer is gone: no refuters, no vote-counting kill rule.
+  assert.ok(!src.includes('refuterPrompt'), 'the claim-only refuter layer is retired in v5')
+  assert.ok(!/refutes\.length/.test(src), 'no vote-counting kill rule may survive')
+  // The only kill paths are the three grounded verdicts.
+  for (const s of ["'SANCTIONED'", "'MISCITED'", "'NOT_DEMONSTRABLE'"]) {
+    assert.ok(src.includes(s), `grounded kill verdict ${s} must exist`)
+  }
+  assert.match(src, /killedBy: 'execution'/)
+  assert.match(src, /killedBy: 'sanction'/)
+  assert.match(src, /killedBy: 'miscitation'/)
 })
 
 test('wf-review: dedup key includes the claim, not just file:line:severity', () => {
@@ -79,40 +86,48 @@ test('wf-review: dedup key includes the claim, not just file:line:severity', () 
   assert.match(src, /f\.claim/, 'dedup key must incorporate the claim text')
 })
 
-test('wf-review: kill audit — execution can overturn a refutation vote', () => {
+test('wf-review: verification fails closed — crashes, caps, and unverifiables all survive', () => {
   const src = read('spec/workflows/wf-review.js')
-  // Every non-soft kill gets an execution auditor; DEMONSTRATED overturns the kill.
-  for (const s of ['DEMONSTRATED', 'NOT_DEMONSTRABLE', 'NOT_EXECUTABLE',
-    'overturnedKill: true', 'reproEvidence', 'MAX_KILL_AUDITS']) {
-    assert.ok(src.includes(s), `wf-review kill audit must include ${s}`)
+  for (const s of ['DEMONSTRATED', 'NOT_DEMONSTRABLE', 'NOT_EXECUTABLE', 'MAX_VERIFIES']) {
+    assert.ok(src.includes(s), `wf-review verification must include ${s}`)
   }
-  // Soft kills are not audited; the audit runs on the killed set, after refutation.
-  assert.match(src, /killed\.filter\(f => f\.severity !== 'soft'\)/)
-  assert.ok(src.indexOf('MAX_KILL_AUDITS') > src.indexOf('refutes.length === k'),
-    'audit stage must come after the refutation kill rule')
-  // Crashed auditor: kill stands, visibly counted — never resurrect, never silent.
-  assert.match(src, /audit\.failed\+\+/)
-  // Overturned kills rejoin survivors; the verdict is computed from the merged set.
-  assert.match(src, /\[\.\.\.survivors, \.\.\.overturned\]/)
-  // No silent cap: skipped audits are logged and counted.
+  // Soft findings skip verification and pass through flagged advisory.
+  assert.match(src, /findings\.filter\(f => f\.severity !== 'soft'\)/)
+  assert.match(src, /verification: 'advisory'/)
+  // A crashed verifier is a missing verdict — the finding SURVIVES flagged, never dies silently.
+  assert.match(src, /verify\.failed\+\+/)
+  assert.match(src, /verification: 'verifier-failed'/)
+  // A demonstrated defect survives with its repro evidence; unverifiable survives for the session.
+  assert.match(src, /verification: 'demonstrated'/)
+  assert.match(src, /verification: 'unverifiable'/)
+  // No silent cap: findings past MAX_VERIFIES survive visibly flagged.
+  assert.match(src, /verification: 'cap-skipped'/)
   assert.match(src, /capSkipped/)
 })
 
-test('wf-review: audit counts flow into the return and the review.md contract matches', () => {
+test('wf-review: verify counts flow into the return and the review.md contract matches', () => {
   const src = read('spec/workflows/wf-review.js')
-  assert.match(src, /audit,\n\s*reviewerCount/, 'return must carry the audit block')
+  assert.match(src, /verify,\n\s*reviewerCount/, 'return must carry the verify block')
   const doc = read('spec/commands/review.md')
-  assert.match(doc, /survivors, killed, audit, reviewerCount, tokens/,
-    'review.md must document the audit field in the return shape')
-  assert.match(doc, /overturnedKill/, 'review.md Phase 2 must handle overturned kills')
-  assert.match(doc, /"audit":\{"audited":<n>,"overturned":<n>\}/,
-    'ledger schema must record audit counts')
+  assert.match(doc, /verdict, survivors, killed, verify, reviewerCount, scope, tokens/,
+    'review.md must document the v5 return shape')
+  assert.match(doc, /scope: "fix-delta"/, 'review.md Phase 2 must use incremental re-review')
+  assert.match(doc, /"verify":\{"verified":<n>/, 'ledger schema must record verify counts')
 })
 
 test('wf-build: null red-check fails closed', () => {
   const src = read('spec/workflows/wf-build.js')
   assert.ok(!/if \(red && !red\.allRed\)/.test(src),
     'a null red-check result must be treated as a failed red check, not as all-red')
+})
+
+test('workflow codegen: committed wf-*.js files match their fragments + bodies', () => {
+  const { spawnSync } = require('node:child_process')
+  const out = spawnSync('node', ['spec/scripts/build-workflows.js', '--check'],
+    { cwd: require('node:path').join(__dirname, '..'), encoding: 'utf8' })
+  assert.strictEqual(out.status, 0,
+    'wf-*.js drifted from workflows/src + workflows/fragments — run `npm run build:workflows`\n' +
+    out.stdout + out.stderr)
 })
 
 test('gate sentinel: gate command is subshell-wrapped so `;` cannot false-green', () => {

@@ -54,7 +54,8 @@ prose rule — never silently dropped.
 
 ## Required pipeline-rules sections (file at `pipelineRules`)
 
-`Risk Tiers` · `Planning` · `Build` · `Worker Rules` · `Test Rules` · `Review Checks`
+`Risk Tiers` · `Planning` · `Build` · `Worker Rules` · `Test Rules` · `Review Checks` ·
+`Gotchas`
 
 ## Worker Contract (byte-identical across all generated agents)
 
@@ -67,6 +68,7 @@ the same way in every agent:
 When dispatched as a batch worker by the `wf-build` workflow:
 
 - The spec's **Decisions** table is authoritative — apply it verbatim. An unlocked design fork or stale spec assumption is a `blocked` return (kind, detail, options, recommendation), never a guess.
+- The rules file's `## Gotchas` section is hard context, not a suggestion — it is distilled from this repo's real failures.
 - Do NOT query MCP servers — the spec's UI and Contracts sections embed the references you need. If an embedded reference is wrong against the installed version, return blocked `{kind: "stale-assumption"}`.
 - Edit only files in your assigned batch. Return receipts — files touched + one-line summaries — not narration.
 - NEVER run git commands (checkout/stash/restore/reset/clean/add/commit). Bash is for scoped self-verification only (`bun lint`, `bun test:run <your files>`, `bunx tsc --noEmit`). The orchestrator owns git; a repo-wide git op destroys sibling workers' uncommitted edits.

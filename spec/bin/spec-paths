@@ -25,6 +25,7 @@ case "${1:-root}" in
   merge-back)  echo "$ROOT/scripts/merge-back.sh" ;;
   shared)         echo "$ROOT/doctrine/shared.md" ;;
   shared-genesis) echo "$ROOT/doctrine/genesis.md" ;;
+  scaffold-ledger) echo "$ROOT/doctrine/scaffold-ledger.md" ;;
   shared-for)
     # Print the shared-invariants CONTENT scoped to one command — only the `## ` sections that
     # command consumes, so a session never pays for doctrine it cannot act on. `spec-paths shared`
@@ -62,7 +63,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-build|wf-design|wf-review|wf-enforce|wf-panel|wf-research|dc-extract|skeletons-check|fidelity-check|merge-back|shared|shared-for <command>|shared-genesis|template|templates|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-build|wf-design|wf-review|wf-enforce|wf-panel|wf-research|dc-extract|skeletons-check|fidelity-check|merge-back|shared|shared-for <command>|shared-genesis|scaffold-ledger|template|templates|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

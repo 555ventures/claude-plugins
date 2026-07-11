@@ -7,17 +7,22 @@ const { SPEC } = require('./helpers')
 
 const read = (p) => fs.readFileSync(path.join(SPEC, p), 'utf8')
 
-// Model policy: Fable drafts and judges at plan/design only. Build-time adjudication
-// (the retainer) and T3 checkpoints are Opus seats, with the role brief transferring
-// the plan-author's frame. Pinned here so a future doctrine edit can't drift Fable
-// back into the build loop.
+// Model policy (v5): the expensive model authors the contract; cheap models execute it
+// behind deterministic gates; the expensive model is consulted, not resident. Build runs on
+// a Sonnet orchestrator with a Fable retainer (Opus fallback) consulted on surprises only —
+// the mandatory T3 checkpoint ritual is retired (ledger: 100% PASS across every measured
+// run; see doctrine/scaffold-ledger.md). Reviewers and verifiers stay cross-model from the
+// planning author: Sonnet, never Fable. Pinned here so a doctrine edit can't silently
+// reintroduce a resident expensive model or a same-model reviewer.
 
-test('build.md: retainer and T3 checkpoints are Opus, never Fable', () => {
+test('build.md: Sonnet orchestrates; retainer is Fable with Opus fallback, consult-on-surprise', () => {
   const build = read('commands/build.md')
-  assert.match(build, /Agent \{model: "opus"\}/)
-  assert.doesNotMatch(build, /Agent \{model: "fable"\}/)
-  assert.doesNotMatch(build, /Fable retainer/)
-  assert.doesNotMatch(build, /Fable checkpoints?/i)
+  assert.match(build, /orchestrator model: Sonnet/i)
+  assert.match(build, /Agent \{model: "fable"\}/)
+  assert.match(build, /\{model: "opus"\}/, 'Opus fallback for an unavailable Fable must stay documented')
+  assert.doesNotMatch(build, /T3 checkpoint \(mandatory\)/,
+    'mandatory T3 checkpoints are retired in v5 — consults are surprise-driven only')
+  assert.match(build, /surprise-driven only/i)
 })
 
 test('build.md: retainer role brief present with its binding clauses', () => {
@@ -25,31 +30,29 @@ test('build.md: retainer role brief present with its binding clauses', () => {
   assert.match(build, /spec author's proxy/)
   assert.match(build, /never from implementation convenience/)
   assert.match(build, /ESCALATE:/)
-  assert.match(build, /PASS/)
-  assert.match(build, /BLOCK/)
+  assert.doesNotMatch(build, /a checkpoint\s+is a gate, not a critique/,
+    'the checkpoint clause must be gone from the role brief')
 })
 
-test('shared.md: Fable row excludes build time; Opus row owns retainer + T3', () => {
+test('shared.md: unified placement rule; Fable retainer sanctioned; reviewers never Fable', () => {
   const shared = read('doctrine/shared.md')
-  const fableRow = shared.split('\n').find(l => l.startsWith('| Fable |'))
-  const opusRow = shared.split('\n').find(l => l.startsWith('| Opus |'))
-  assert.ok(fableRow && opusRow, 'Model Placement table rows exist')
-  assert.match(fableRow, /Never at build time/)
-  assert.doesNotMatch(fableRow, /retainer|T3/i)
-  assert.match(opusRow, /retainer/)
-  assert.match(opusRow, /T3 checkpoints/)
-  assert.doesNotMatch(shared, /mandatory Fable checkpoints/)
+  assert.match(shared, /expensive model authors the contract/)
+  assert.match(shared, /consulted, not resident/)
+  assert.match(shared, /Reviewers and verifiers are Sonnet, never Fable/)
+  assert.match(shared, /retainer\*?\*? is Fable/i)
+  assert.match(shared, /falls back to\s+`\{model: "opus"\}`/, 'Fable→Opus fallback contract stays')
+  assert.doesNotMatch(shared, /Never at build time/,
+    'the v4 Fable-banned-from-build rule is retired — the retainer seat is Fable now')
+  assert.match(shared, /no separate mandatory-checkpoint trigger|no additional mandatory checkpoint/i,
+    'the checkpoint retirement must be stated, not just omitted')
+  assert.doesNotMatch(shared, /T3 checkpoints apply/,
+    'the v4 checkpoint-activation rule may not survive')
 })
 
-test('no stray Fable-retainer references anywhere in the plugin', () => {
-  const roots = ['commands', 'doctrine', 'templates']
-  for (const dir of roots) {
-    for (const f of fs.readdirSync(path.join(SPEC, dir))) {
-      if (!f.endsWith('.md')) continue
-      const text = read(path.join(dir, f))
-      assert.doesNotMatch(text, /Fable (retainer|consultant)/,
-        `${dir}/${f} still references the Fable retainer/consultant`)
-    }
-  }
-  assert.doesNotMatch(read('README.md'), /Fable (retainer|consultant)/)
+test('review surfaces: reviewers/verifiers are cross-model — never Fable', () => {
+  const review = read('commands/review.md')
+  assert.match(review, /Orchestrator: Sonnet/)
+  assert.match(review, /never Fable/)
+  const wf = read('workflows/wf-review.js')
+  assert.doesNotMatch(wf, /model: 'fable'/, 'no workflow review agent may run on the planning model')
 })

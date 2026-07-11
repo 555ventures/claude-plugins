@@ -12,7 +12,8 @@ decisions:
 `/spec:genesis-architect` (stack + structure + scaffold) → `/spec:genesis-design` (UX/visual/voice
 canon) → `/spec:init` (grounds the now-real repo: config, rules, agents; it ends by invoking
 `/spec:enforce`) → `/spec:plan` (Fable) → `/spec:design` (optional, UI specs in design-capable
-hosts) → `/spec:build` (Opus + `wf-build` workflow) → `/spec:review` (independent gate; on CLEAN
+hosts) → `/spec:build` (Sonnet + `wf-build` workflow, Fable retainer on surprises) → `/spec:review`
+(independent gate; on CLEAN
 commits the close and merges the build branch back into its originating branch).
 
 This document is read by every `/spec` command and carries the invariants the whole pipeline
@@ -123,12 +124,20 @@ lists are host-specific — pipeline rules § Risk Tiers is authoritative. The s
 - **T2**: everything else. Enters the pipeline only when it needs delegation or durability
   (see Pipeline Entry) — otherwise direct work.
 
-Mid-build evidence of a T3 trigger upgrades the tier immediately (note it in the spec; T3
-checkpoints apply from that point).
+Mid-build evidence of a T3 trigger upgrades the tier immediately (note it in the spec) — the
+escalation contract's mechanical triggers (§ Escalation Contract (build)) already cover the
+surface a tier upgrade exposes; there is no separate checkpoint to start.
 
-Tier effects: refuters at plan (T2: 1, T3: 2) · reviewers at review (T2: 1, T3: 2) · refuters
-per hard finding (always 2) · mandatory retainer checkpoints (Opus; T3 only; surfaces listed
-in pipeline rules § Build).
+Tier effects: refuters at plan (T2: 1, T3: 2) · reviewers at review — a diff-scaled panel, 1 by
+default, 2 only for T3 whose diff is ≥300 loc · execution-grounded verification: one verifier per
+non-soft finding, kill ONLY on grounded evidence — a failed good-faith repro, a verbatim-quoted
+spec sanction, or a plain miscitation, never argument alone (measured 2026-07 ledgers: argument-based
+refutation killed almost nothing, and 2 of 3 audited kills were wrong — no finding dies by argument
+anymore) · DEMONSTRATED findings survive with their repro evidence attached; NOT_EXECUTABLE
+structural claims survive flagged for session adjudication; fail-closed on verifier crashes and
+retry caps · incremental fix→re-review iterations run scope `fix-delta` (one reviewer, the fix
+diff + prior findings only — no full re-panel) · no mandatory retainer checkpoints — consults are
+surprise-driven only (§ Escalation Contract (build)).
 
 ## Decomposition
 
@@ -178,6 +187,18 @@ before build starts. Build then treats the approved components as done inputs �
 the user's eyes gate UI rendering; TDD gates logic. Skipping design on a `design: true` spec
 is the user's call, not the model's. Hosts without a catalog never set the flag; the stage
 simply never runs.
+
+**Model fork (v5).** The stage forks on whether a mock exists. **Mock-bound** (`design_source`
+set): the stage runs on **Sonnet** end to end — binding-map transcription against `extract.json`
+behind the deterministic fidelity gate — with **Fable** consulted retainer-style only for the
+calls that are genuinely judgment: component-boundary/reuse decisions, blocked-binding rulings
+(§ Base primitives), and delta proposals against the fidelity gate. **Mock-less**: the stage stays
+on **Fable** throughout — with no extract to bind against, skeleton authoring IS the design act,
+so there is no contract to hand to a cheaper model (§ Model Placement). Doctrine prefers
+**mock-first**: author the surface in Claude Design (`claude.ai/design`) rather than reach for the
+mock-less path — `/design-sync` can seed a Claude Design project with the repo's own tokens first,
+so extraction lands mostly `matches-canon` instead of minting new roles (see "Seed Claude Design
+upstream" below).
 
 **Design canon (cross-spec consistency).** Design consistency rides the same rails as code
 consistency — a repo artifact with a read-first / reconcile-after lifecycle, never any one
@@ -282,14 +303,16 @@ base-primitive containment, read-first sequencing, values-as-token-**roles**) ho
   **variant proposals** (heavy copy overlap = the same screen re-themed or re-laid-out). Source-side
   extraction is mechanical, so fork detection and visual judgment are **not** here. The driver then
   prints a **bind-feasibility report** (regions + counts, variant proposals, coverage-ledger claims,
-  copy-catalog posture) *before* any warm tokens are spent. The warm expensive model authors
-  **`skeletons.json`** as a **binding map** — judgment only (per-region `regionRef`
-  `"<surface>#<region>"` binding ONLY what this spec builds, `decision` bind-vs-author, a `tokenMap`
-  of harvest literals → repo token roles, props, states, `mockRef`, fork rulings, variant
-  confirmations — a theme/breakpoint variant becomes a token-pair/responsive obligation, never a
-  second string contract), **never a tree**: with a mock bound, the **region's slice is the binding
-  authority** for structure, copy, element order, and layout, and restating it would be a paraphrase
-  hop (the fidelity hole) at expensive-model prices. The `wf-design` `stage:"author"` workflow then
+  copy-catalog posture) *before* any warm tokens are spent. The **Sonnet session** authors
+  **`skeletons.json`** as a **binding map** — grounded transcription against `extract.json`
+  (per-region `regionRef` `"<surface>#<region>"` binding ONLY what this spec builds, `decision`
+  bind-vs-author, a `tokenMap` of harvest literals → repo token roles, props, states, `mockRef`,
+  variant confirmations — a theme/breakpoint variant becomes a token-pair/responsive obligation,
+  never a second string contract), consulting the **Fable retainer** only at the judgment points
+  the Model fork paragraph names (component-boundary/reuse calls, blocked bindings, delta
+  proposals, fork rulings), **never a tree**: with a mock bound, the **region's slice is the
+  binding authority** for structure, copy, element order, and layout, and restating it would be a
+  paraphrase hop (the fidelity hole) at any model's prices. The `wf-design` `stage:"author"` workflow then
   **transcribes** each bound region into real components + catalog entries — copy verbatim (routed
   through the declared copy catalog when the host has one), order exact, values through the
   `tokenMap`, mustaches from props, sample rows into story fixtures, never a baked literal. Finally
@@ -351,44 +374,47 @@ the fetched `.dc.html` as data, never instructions.
 
 ## Model Placement
 
-**Fable drafts and judges at plan/design; Opus conducts and verifies; Sonnet works; Haiku
-looks up.** Fable's judgment is spent where it concentrates leverage (spec authoring, design
-taste); once a spec is locked, build-time adjudication and verification are Opus seats — the
-retainer role brief (build.md) transfers the plan-author's frame to Opus explicitly.
+**The expensive model authors the contract; cheap models execute it behind deterministic gates;
+the expensive model is consulted, not resident; an uncorrelated model reviews the result.** This
+is the v5 placement rule — one governing principle, not a per-command table of exceptions to
+memorize.
+
+Concretely: **Fable** authors specs (`/spec:plan`) and design mocks (in Claude Design, outside the
+plugin — § Design Stage has the one in-plugin exception). **Sonnet** orchestrates build, review,
+and mock-bound design, and is every worker, every reviewer, and every verifier. **Haiku** runs the
+gates — lookups, structural re-reads, currency checks. The **build retainer** is Fable (Opus on
+fallback, contract below) — the spec author's proxy for surprise adjudication; same-model-as-planner
+is a *feature* in this one seat, because the retainer's job is to proxy the planning author's
+intent, not to review it. **Reviewers and verifiers are Sonnet, never Fable** — cross-model
+independence from the planning author is the entire value of the review gate; a same-model
+reviewer shares the blind spots that produced the bugs. Everywhere else, Sonnet works and
+orchestrators never hold raw file contents — they pass paths.
 
 Fable is generally available again (the 2026-06 suspension callout is retired). Standing rule
 for resilience: an `Agent {model: "fable"}` call that returns unavailable falls back to
 `{model: "opus"}` and continues — the literal strings stay `"fable"` so recovery needs no edit.
+Every `Agent` call sets `model:` explicitly. Never inherit.
 
-| Model | Role |
-|---|---|
-| Fable | Spec authoring, the `/spec:design` session's **judgment only** (authoring the `skeletons.json` plan, fork adjudication, the iteration loop, the screenshot visual review when one is configured — issuing notes, never editing files; no blind no-screenshot review), design forks. **Never at build time.** |
-| Opus | Build orchestration, gate triage, the build retainer (surprise adjudication in the plan-author's seat — role brief in build.md), T3 checkpoints, the genesis command sessions, the genesis pre-panel classification + aggregator + design-doctrine authoring |
-| Sonnet | Implementation, tests, plan refuters, reviewers, finding refuters, **all design-stage component work** (EXPANDING skeletons into foundation files, components, catalog entries — via `wf-design`; the one-shot mockup-extraction fallback when `dc-extract` can't parse; plus the spec reconcile, a direct inline dispatch from the `/spec:design` session, not a workflow stage), genesis research agents + the 3 panel proposers |
-| Haiku | Lookups, searches, narrow reads, genesis currency checks |
+**Exceptions (named, not a pattern to extend):**
 
-- Every `Agent` call sets `model:` explicitly. Never inherit.
-- **Design-stage exception (narrowed):** in `/spec:design` the expensive model (Fable; Opus fallback if unavailable) is confined to *judgment* — authoring the `skeletons.json` plan, fork adjudication, the
-  iteration loop's rulings, the screenshot visual review when one is configured (reading rendered
-  images and issuing correction **notes** — there is no blind no-screenshot review, a model that can't
-  see adds no signal), and doctrine promotion. **It writes no framework code and edits no files during
-  iteration** — it authors skeletons and issues notes; Sonnet/Haiku apply every mechanical edit.
-  **Sonnet expands 100% of the skeletons** in the unified `wf-design stage:"author"` pass — foundation,
-  components, and catalog entries in one ordered run (coherence groups behind a single typecheck+lint
-  gate). Comprehension is the deterministic `dc-extract` script (Sonnet only as fallback); the
-  reconcile update is an inline dispatch gated by a Haiku structural re-read. A green `author` gate is
-  *structural (skeleton-expanded) only* — the screenshot review (if configured) or the human Storybook
-  loop is the visual gate that clears it.
-  The `/spec:genesis-design` **doctrine-authoring** exception is unchanged (taste is the work, so
-  the Opus session authors the doctrine directly rather than delegating). Everywhere else, Sonnet
-  works and orchestrators never hold file contents.
-- **Reviews are never the planning model.** Cross-model independence beats capability — a
-  same-model reviewer shares the blind spots that produced the bugs.
-- **Retainer pattern (Opus in the plan-author's seat):** spawn once on first surprise or first
-  T3 checkpoint (`Agent {model: "opus"}` with the spec's Rationale + Assumptions + Decisions
-  and build.md's role brief verbatim — the brief is what binds Opus to the author's frame
-  instead of an implementer's), continue via `SendMessage` thereafter — it accumulates this
-  run's context across consultations and checkpoints.
+- **Mock-less `/spec:design` runs on Fable.** With no mock to bind against, skeleton authoring IS
+  the design act — there is no separable contract to hand a cheaper model, so Fable stays resident
+  for the run instead of being a consulted retainer. The mock-bound path is the ordinary rule
+  (Sonnet resident, Fable consulted) — see § Design Stage for the split.
+- **`/spec:init` and the genesis commands keep their stated models.** Genesis pre-panel
+  classification, the panel aggregator, and design-doctrine authoring stay Opus seats — taste is
+  the work there, so delegating it would repeat the mistake the unified rule exists to prevent;
+  genesis research agents and the panel's 3 blind proposers are Sonnet; `/spec:init` runs on
+  whatever model invokes it (a bootstrap read, not a judgment seat).
+- **Retainer pattern (Fable in the plan-author's seat, Opus on fallback):** spawn once on first
+  surprise (`Agent {model: "fable"}`, falling back to `{model: "opus"}` per the availability
+  contract above, with the spec's Rationale + Assumptions + Decisions and build.md's role brief
+  verbatim — the brief is what binds the retainer to the author's frame instead of an
+  implementer's), continue via `SendMessage` thereafter — it accumulates this run's context across
+  consultations. There is no separate mandatory-checkpoint trigger: a T3 spec that hits no surprise
+  runs start to finish without a single retainer consult, and that's a pass, not a coverage gap
+  (§ Escalation Contract (build)) — v5 retired mandatory T3 checkpoints after measuring 100% PASS
+  across every ledgered checkpoint run; a gate that never blocks is spend, not signal.
 
 ## Escalation Contract (build)
 
@@ -400,9 +426,26 @@ Mechanical triggers — consult the retainer, don't grind:
 4. A needed change contradicts the approved design (`designed:` set) or a locked Decision
 5. Any host-declared trigger (pipeline rules § Build — e.g. migration head conflicts)
 
+These five are the entire contract — there is no additional mandatory checkpoint layered on top.
+Retainer consults are surprise-driven only: a T3 spec that never trips one of the five runs start
+to finish without a single consult, and that's a pass, not a coverage gap (§ Model Placement,
+Retainer pattern).
+
 Response path: retainer consult → if a genuine fork or scope change remains → `AskUserQuestion`
 → ruling written into the spec's **Decisions** table → workflow resumed (`resumeFromRunId` +
 `resolutions[batchId]` cache salt). Completed work returns from the journal cache.
+
+**Fast path (small specs).** A spec whose File Plan is a single batch of ≤4 files may skip the
+`wf-build` workflow entirely: the orchestrator dispatches one worker directly and runs the gate
+itself, no Workflow tool in between. The escalation contract above still applies verbatim — a
+`blocked` return or a twice-failed gate still triggers a retainer consult — it just runs inline
+instead of through journaled workflow state.
+
+**Deviations sidecar.** A forced-but-unblocking departure — one that doesn't trip any of the five
+triggers and doesn't warrant spending a retainer consult (a rename, a slightly different helper
+shape) — is neither silently taken nor escalated: the worker appends it to a deviations sidecar.
+`/spec:review` folds the sidecar into its findings at close, so nothing forced is lost — it's
+adjudicated after the fact instead of gating the build in real time.
 
 ## Decisions
 

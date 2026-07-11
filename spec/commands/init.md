@@ -18,12 +18,14 @@ understand what the process layer expects from the grounding layer.
 ## Deliverables (all in the host repo)
 
 1. `.claude/spec.config.json` — machine-readable knobs
-2. `.claude/rules/spec-pipeline.md` — prose grounding, six sections
+2. `.claude/rules/spec-pipeline.md` — prose grounding, seven sections
 3. `.claude/agents/*.md` — project-grounded implementer agents (one per batch kind)
 4. `scripts/spec-patterns.sh` — mechanical shortcut sweep adapted to this repo
 5. Design-capable hosts only: the **design foundation** — token files verified/landed, a
    one-page design doctrine doc, the living showcase catalog entry (Phase 6)
-6. A short report: what was generated, what was verified, what needs the user's eyes
+6. `.claude/skills/spec-verify/SKILL.md` — the per-host **verify skill**: how to launch, seed,
+   and observe this app, derived from Phase 1's profiling
+7. A short report: what was generated, what was verified, what needs the user's eyes
 
 ## Phase 1 — Profile the repo
 
@@ -47,6 +49,12 @@ Launch parallel Explore agents (`model: sonnet`) and read key files yourself:
   `docs/standards/`, `docs/rules/`, `AGENTS.md`, `CLAUDE.md`).
 - **High-risk surfaces:** money paths, auth, migrations, cross-area contracts — what here
   would be T3?
+- **Runtime & observability:** how to launch the app locally — dev command, ports, required
+  env vars/secrets stubs; how to seed a testable state — test user/credentials, fixtures, seed
+  script, db reset; how to observe behavior once it's running — URLs/routes, CLI invocations,
+  log locations, and whether the observable surface is browser, API, or both. Derive every
+  answer from `package.json` scripts, the README, `docker-compose.yml`, Playwright/Cypress
+  config, seed scripts — never guess. This is the profiling input to the verify skill below.
 
 Interview the user via `AskUserQuestion` only for what the code cannot answer (e.g. "which
 surfaces do you consider T3?", with informed options).
@@ -71,6 +79,21 @@ conflicts there on merge-back, when the only correct resolution is "keep both li
 `git check-attr merge -- .claude/spec-runs.jsonl` doesn't report `union`, append
 `.claude/spec-runs.jsonl merge=union` to the repo's `.gitattributes` (create it if missing) and
 commit it with the other init changes. Never gitignore the ledger itself.
+
+**Write `.claude/skills/spec-verify/SKILL.md`** from the runtime & observability findings above —
+this is a generated deliverable, not incidental notes. Frontmatter: `name: spec-verify`,
+`description` written as a trigger condition (e.g. "Use when exercising a spec-pipeline finding
+or an acceptance criterion against the running app instead of just reading code — launching it,
+seeding a test state, and observing real behavior"). Body: how to launch the app locally (dev
+command, ports, env), how to seed a testable state (test user, fixtures, db reset — whatever
+this repo reveals), and how to observe behavior (URLs/routes, CLI invocations, log locations,
+browser vs API surfaces). Every instruction must trace to a real file in this repo —
+`package.json` scripts, the README, `docker-compose.yml`, Playwright/Cypress config, a seed
+script; where the repo is silent, write `[NEEDS CLARIFICATION: <question>]` rather than guess.
+State its consumers in the body: `/spec:review`'s verifiers use it to exercise findings; T3
+builds may use it for advisory behavioral checks of acceptance criteria — advisory only, it
+gates nothing until the run ledger (`.claude/spec-runs.jsonl`) shows its verdicts track real
+escapes.
 
 ## Phase 2 — Write `.claude/spec.config.json`
 
@@ -158,7 +181,7 @@ target from the repo, never guess.)
 
 ## Phase 3 — Write `.claude/rules/spec-pipeline.md`
 
-Six sections, all grounded in Phase 1 findings. This file is read by every pipeline command;
+Seven sections, all grounded in Phase 1 findings. This file is read by every pipeline command;
 § Worker Rules and § Test Rules are inlined verbatim into worker prompts by `/spec:build`.
 
 - **`## Risk Tiers`** — the concrete T3 trigger list for THIS repo (e.g. "order/position/trade
@@ -187,6 +210,13 @@ Six sections, all grounded in Phase 1 findings. This file is read by every pipel
   "raw `parseFloat` on prices is **hard**", "user-facing strings not wrapped in i18n macros",
   or "imports from `other_domain.logic` targeting anything but `types.py` is **hard**" live,
   each with file:line-verifiable phrasing).
+- **`## Gotchas (evidence-cited)`** — write this section EMPTY, carrying nothing but a
+  one-line header comment stating its contract: one line per entry, and every entry must cite
+  either a ledger row (spec path + runId) or a dated incident. Nothing else populates it at
+  init time. `/spec:review`'s close (deviation fold-in) and `/spec:escape` are the only writers
+  that append to it; `/spec:doctor` prunes entries whose citation no longer resolves. Workers
+  and reviewers pick this up for free as part of the rules file they already inherit — no new
+  loading mechanism.
 
 ## Phase 4 — Generate implementer agents
 

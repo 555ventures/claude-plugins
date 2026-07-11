@@ -11,10 +11,23 @@ foundation + real, **kept** stateless components + catalog entries by **expandin
 skeletons**, lets the user iterate in the running catalog, then reconciles the spec and sets
 `designed: YYYY-MM-DD`. Build treats these components as done inputs.
 
-**Intended model: Fable or Opus** (Opus is the cost-rational default — the taste seat is the
-skeleton-authoring step, not the whole session). Model split: the expensive model authors
-`skeletons.json`, adjudicates forks, runs the visual review and iteration rulings — and **writes
-no framework code**; Sonnet expands 100% of components via `wf-design`.
+**Intended model: forks on mock presence.**
+- **Mock-bound** (a `design_source` — a bound mock — exists): **Sonnet session.** Against a
+  bound region, skeleton authoring is grounded transcription, not taste — the taste was already
+  spent upstream in Claude Design. Consult the **Fable retainer** (`Agent {model:"fable"}`, Opus
+  fallback; continue the SAME agent via SendMessage across the session rather than re-spawning)
+  ONLY at judgment points: component-boundary/reuse decisions against the existing component
+  catalog, blocked or ambiguous bindings, and any `deltas.json` proposal.
+- **Mock-less** (no `design_source` anywhere): **Fable or Opus** (Opus is the cost-rational
+  default) — unchanged. Skeleton authoring IS the design act here; there is no upstream mock to
+  transcribe.
+
+Either way the expensive seat **writes no framework code**; Sonnet expands 100% of components
+via `wf-design`.
+
+**Doctrine: mock-first is the preferred flow.** If a surface is worth designing, author it in
+Claude Design first (`/design-sync` can seed that project with the repo's tokens) — the
+mock-less path is the fallback for surfaces with no mock, not a peer default.
 
 **Setup:** run `spec-paths shared-for design` and read its output (the shared invariants scoped
 to this command). Read the host's `.claude/spec.config.json` and its pipeline rules file. Then

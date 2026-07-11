@@ -14,70 +14,9 @@ export const meta = {
 // object verbatim, others JSON-encode it as a string on the scriptPath channel. We accept both,
 // tolerate accidental double-encoding, and on failure throw a message that shows what actually
 // arrived (length + preview) instead of a bare "Unable to parse JSON string" at the call site.
-function normalizeArgs(raw) {
-  let v = raw
-  // Unwrap up to 2 layers of JSON-string encoding (single = older harness; double = caller bug).
-  for (let i = 0; i < 2 && typeof v === 'string'; i++) {
-    const s = v.trim()
-    if (s === '[object Object]') {
-      throw new Error('wf-build: args arrived String()-coerced to "[object Object]" — the ' +
-        'caller stringified the object with String()/template interpolation instead of passing a ' +
-        'real JSON object (or JSON.stringify). Pass `args` as a plain object in the Workflow call.')
-    }
-    try {
-      v = JSON.parse(s)
-    } catch (e) {
-      throw new Error('wf-build: args was a string but not valid JSON (' + s.length +
-        ' chars). This is structural corruption — free text / a non-scalar reached `args`, which ' +
-        'must carry only paths, ids, enums, booleans, and command strings; prose lives on disk in ' +
-        'the artifact the agents Read (spec / brief / rule docs). First 160 chars: ' +
-        JSON.stringify(s.slice(0, 160)) + ' — parse error: ' + e.message)
-    }
-  }
-  return v
-}
+// @fragment:normalize-args
 
-// generated from fragments/validate-groups.js.frag — edit the fragment, then `npm run build:workflows`
-// (there is still no require() in the Workflow sandbox; codegen replaces manual copying, not the
-// need for one shared source). WHY this exists: guard depth must equal iteration depth. `groups` has
-// the contract [[{id,agentType,files}]] — an array of WAVES, each wave an array of BATCHES — and a
-// *model* hand-builds it from prose in the command .md, so it is an UNTRUSTED request body with NO
-// StructuredOutput schema behind it. A top-level Array.isArray check creates false confidence about
-// the nested iteration: the model sometimes emits an array-of-batch-objects ([{…}]) or a stray {},
-// and the inner `for (const b of group)` then throws a cryptic "{} is not iterable" at ~6ms with 0
-// work done. So ASSERT the full nested structure here, ONCE, before first use, with an indexed,
-// actionable message — and never COERCE: auto-wrapping would silently mask the producer bug and
-// can't safely infer serial(more waves)-vs-parallel(fatter wave) intent. Failing loud at the trust
-// boundary IS the feedback loop that fixes the fallible producer; a re-invoke is near-free. Any
-// future [[…]]-or-deeper model-authored arg needs its own validateGroups-style sibling.
-function isBatch(b) {
-  return b !== null && typeof b === 'object' && !Array.isArray(b) &&
-    typeof b.id === 'string' && Array.isArray(b.files)
-}
-function typeOfArg(v) {
-  return v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v
-}
-function validateGroups(groups, wfName) {
-  if (!Array.isArray(groups)) {
-    throw new Error(wfName + ': `groups` is not an array (got ' + typeOfArg(groups) + ') — shape ' +
-      'is [[{id,agentType,files}]]: an array of waves, each wave an array of batches')
-  }
-  groups.forEach((wave, i) => {
-    if (!Array.isArray(wave)) {
-      throw new Error(wfName + ': groups[' + i + '] is not a wave (got ' + typeOfArg(wave) + '); ' +
-        'shape is [[{id,agentType,files}]] — even one batch is [[{…}]], never [{…}], never {id,…}')
-    }
-    wave.forEach((b, j) => {
-      if (!isBatch(b)) {
-        const p = JSON.stringify(b)
-        throw new Error(wfName + ': groups[' + i + '][' + j + '] is not a batch (need an object ' +
-          'with a string `id` and an array `files`, got ' +
-          (p && p.length > 160 ? p.slice(0, 160) + '…' : p) + ') — shape is [[{id,agentType,files}]]')
-      }
-    })
-  })
-  return groups
-}
+// @fragment:validate-groups
 
 args = normalizeArgs(args)
 if (!args || typeof args !== 'object' || !Array.isArray(args.groups)) {
@@ -218,32 +157,7 @@ const TEST_RULES = [
   RULES_PATH ? `## Host test conventions\nRead ${RULES_PATH} and follow its "## Test Rules" section verbatim (file placement, naming, AC-ID reference convention). Ignore the file's other sections.` : '',
 ].filter(Boolean).join('\n\n')
 
-const AGENT_MAP = args.agentMap || {}
-const DEFAULT_AGENT = AGENT_MAP.default || 'general-purpose'
-
-// Host .claude/agents/*.md types are invisible to the workflow agent registry (built-in and
-// plugin agents only). A host role with a doctrinePath runs on general-purpose and the worker
-// READS that file for its doctrine; anything else that fails to resolve falls back with a log.
-const DOCTRINE_PATHS = args.doctrinePaths || {}
-function resolveType(t) {
-  const name = t || DEFAULT_AGENT
-  return DOCTRINE_PATHS[name] ? 'general-purpose' : name
-}
-function doctrineBlock(t) {
-  const p = DOCTRINE_PATHS[t || DEFAULT_AGENT]
-  return p ? `## Your role\nBefore anything else, Read ${p} — that file is your role definition. Operate as that agent: the markdown after any frontmatter is your operating doctrine, subordinate only to the hard rules below.` : ''
-}
-async function dispatch(prompt, opts) {
-  try {
-    return await agent(prompt, opts)
-  } catch (e) {
-    if (opts.agentType !== 'general-purpose' && String(e).includes('not found')) {
-      log(`agentType '${opts.agentType}' not in the workflow registry — retrying on general-purpose`)
-      return agent(prompt, { ...opts, agentType: 'general-purpose' })
-    }
-    throw e
-  }
-}
+// @fragment:dispatch
 
 function fileList(b) {
   return b.files.map(f => `- ${f.action} ${f.path}`).join('\n')

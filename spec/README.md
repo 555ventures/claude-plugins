@@ -32,9 +32,12 @@ pointed at a populated repo, `/spec:genesis-architect` defers to `/spec:init`. F
 
 From the `555-tools` marketplace: add the marketplace, then install the `spec` plugin. Then,
 in each repo that will use the pipeline, run **`/spec:init`** once — it profiles the repo and
-generates `.claude/spec.config.json`, `.claude/rules/spec-pipeline.md`, project-grounded
-implementer agents, and `scripts/spec-patterns.sh`, then ends by invoking **`/spec:enforce`**
-(below). The pipeline commands refuse to run without them.
+generates `.claude/spec.config.json`, `.claude/rules/spec-pipeline.md` (including an
+initially-empty, evidence-cited **Gotchas** section later spec runs fold real deviations into),
+project-grounded implementer agents, `scripts/spec-patterns.sh`, and a per-host
+`.claude/skills/spec-verify/SKILL.md` (how to launch, seed, and observe this app, derived from
+init's own profiling), then ends by invoking **`/spec:enforce`** (below). The pipeline commands
+refuse to run without them.
 
 **`/spec:enforce`** mechanizes the repo's rules into deterministic checks wired to the gate
 command. It classifies each rule into a stable, language-neutral category (`module-boundary`,
@@ -52,19 +55,25 @@ and the hook recomputes the hash on every pipeline command — any plugin update
 the contract warns on the next command, with zero version bookkeeping. Run **`/spec:doctor`**
 for a cheap read-only drift check (plugin contracts + codebase reality vs the generated
 files) — it recommends targeted patches, or re-running `/spec:init` when drift is structural.
-When a defect surfaces later in spec-built code, record it with **`/spec:escape`** — one run-ledger
-row pointing back at the review that passed it. Those rows are the pipeline's ground truth:
-doctor aggregates them into contradicted-CLEAN and refuter-killed-a-real-bug signals.
+Doctor's check 13 audits the pipeline's own distrust mechanisms against
+`doctrine/scaffold-ledger.md` — the registry of every gate/advisory/structural guard, each row
+naming the incident or measurement that justified it, the model generation it was earned under,
+and the condition that promotes or retires it; a live mechanism missing from the ledger, or a
+ledger-marked-retired one still gating, is a finding. When a defect surfaces later in spec-built
+code, record it with **`/spec:escape`** — one run-ledger row pointing back at the review that
+passed it (`/git:commit` offers to capture one automatically on a fix-shaped commit when the
+ledger exists). Those rows are the pipeline's ground truth: doctor aggregates them into
+contradicted-CLEAN and verifier-killed-a-finding-that-later-escaped signals.
 
 ## The Flow
 
 ```
 ┌───────────┐    ┌─────────────┐    ┌────────────┐    ┌─────────────┐
 │ spec:plan │ →  │ spec:design │ →  │ spec:build │ →  │ spec:review │
-│ Fable:    │    │ optional:   │    │ Opus +     │    │ independent │
+│ Fable:    │    │ optional:   │    │ Sonnet +   │    │ independent │
 │ explore → │    │ Fable       │    │ workflow:  │    │ gate;       │
-│ spike →   │    │ designs,    │    │ TDD →      │    │ refutation  │
-│ draft →   │    │ user        │    │ batches →  │    │ filter;     │
+│ spike →   │    │ designs,    │    │ TDD →      │    │ verified    │
+│ draft →   │    │ user        │    │ batches →  │    │ panel;      │
 │ refute →  │    │ iterates in │    │ integrate  │    │ flips done  │
 │ lock      │    │ the catalog │    │ → gate     │    │             │
 └───────────┘    └─────────────┘    └────────────┘    └─────────────┘
@@ -90,7 +99,11 @@ is `doctrine/genesis.md` (`spec-paths shared-genesis`). Spec template:
 `templates/spec.md`. Deterministic orchestration: `workflows/wf-build.js`,
 `workflows/wf-design.js` (design-stage authoring: the `author` stage only — comprehend is the `dc-extract` script, reconcile is inlined by `/spec:design`),
 `workflows/wf-review.js` — commands locate them via the bundled `spec-paths` helper, since
-`${CLAUDE_PLUGIN_ROOT}` is not substituted inside command bodies.
+`${CLAUDE_PLUGIN_ROOT}` is not substituted inside command bodies. The committed `wf-*.js` files
+are **generated, not hand-edited**: each is assembled from a `workflows/src/*.body.js` phase
+body plus shared `workflows/fragments/*.frag` (arg normalization, group validation, dispatch) by
+`npm run build:workflows`; change the source or a fragment and rebuild, never patch the
+generated file directly.
 
 ## Process layer vs grounding layer
 
@@ -139,8 +152,9 @@ gets a spec file.
 /spec:build specs/YYYYMMDD/01-tick-size.md
   → TDD → layered batches → host integration → gate; status: implementing
 /spec:review specs/YYYYMMDD/01-tick-size.md
-  → deterministic gates + reviewer panel + refutation filter + drift gate; flips done,
-    commits, merges the build branch back (strategy asked, conflicts repaired, no push)
+  → deterministic gates + diff-scaled reviewer panel + execution-grounded verification +
+    drift gate; flips done, commits, merges the build branch back (strategy asked, conflicts
+    repaired, no push)
 ```
 
 ### UI-bearing change (design-capable hosts, design: true)
@@ -163,6 +177,9 @@ gets a spec file.
     at author-green and every round-green; divergences need an evidence-gated deltas.json
     row (verbatim slice quote, mechanically verified + impossibility proof) — taste yields
     to the mock
+  → mock bound, before each round: advisory vision review — one vision-capable consult
+    (Fable, Opus fallback) compares a render screenshot against the bound mock slice,
+    region by region; notes only, it never fail-closes a mark
   → you: run the catalog (Storybook, Widgetbook, …) — iterate as many rounds as you want
     (the designer judges each note; Sonnet applies the edit)
   → approve → spec reconciled, reusable taste rulings promoted into the doctrine
@@ -229,15 +246,26 @@ cache; only the salted batches re-run.
   than maximal fan-out, because visual coherence is a system property no per-component
   dispatch can produce. Where the host provides a `design.screenshot` command, the designer
   critiques the renders once before asking for your eyes.
-- **Build is a deterministic workflow** (`wf-build.js`): batching, TDD-red enforcement,
-  gate + repair caps live in code; judgment (blocked items, scope changes) escalates to the
-  main loop → Opus retainer (in the plan-author's seat) → user.
-- **Review is independent and refutation-filtered** (`wf-review.js`): Sonnet reviewers run
-  as the plugin's read-only `spec:reviewer` agent (never the planning model), claim-only
-  refuters, hard findings die only on unanimous refutation. Killed findings are reported,
-  never silently dropped. On CLEAN, review closes the loop: commit, then merge the build
-  branch back into its originating branch (strategy via one ask; conflict repair reads both
-  sides; worktree cleaned up; never pushed).
+- **Build is a Sonnet-orchestrated deterministic workflow** (`wf-build.js`), all tiers: batching,
+  TDD-red enforcement, gate + repair caps live in code; judgment (blocked items, scope changes)
+  escalates to the main loop → **Fable retainer** (Opus fallback), consulted only on genuine
+  surprises — there is no mandatory checkpoint ritual — → user. A single-batch, ≤4-file spec
+  skips the workflow entirely via a fast path (one test-author dispatch, one implementation
+  dispatch, the gate run in-session). Forced-but-unblocking departures workers can't resolve
+  land in a `<spec>.deviations.md` sidecar; review's close folds recurring ones into the host
+  rules' Gotchas section, then deletes the sidecar.
+- **Review is independent and execution-verified** (`wf-review.js`): a diff-scaled reviewer
+  panel — one `spec:reviewer` agent by default, two only for a T3 spec with a ≥300-loc diff
+  (blind to each other) — never the planning model. Every non-soft finding then gets one
+  execution-grounded Sonnet verifier; a finding dies only on a failed repro, a quoted spec
+  sanction, or a plain miscitation — never by argument (the claim-only refutation filter and
+  kill-by-unanimous-refutation are retired: a 2026-07 ledger measurement found refuters killed
+  almost nothing, and 2 of the 3 audited kills were wrong). Killed findings are reported, never
+  silently dropped. Fix→re-review iterations re-invoke the workflow at `fix-delta` scope: one
+  reviewer reads only the fix diff and the prior findings, never the whole codebase again. On
+  CLEAN, review closes the loop: commit, then merge the build branch back into its originating
+  branch (strategy via one ask; conflict repair reads both sides; worktree cleaned up; never
+  pushed).
 - **Drift is config-decided.** Repos with an AC-drift script declare it (`driftScript`) and
   review runs it; repos without get a mechanical grep matrix at review — every AC-ID must hit
   at least one File Plan test file or it's an automatic hard finding — with the reviewer's

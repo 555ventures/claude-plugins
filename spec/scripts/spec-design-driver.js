@@ -17,7 +17,8 @@
 // CONTRACT:
 //   spec-design-driver <spec.md>                 -> print current state + step instructions
 //   spec-design-driver <spec.md> --mark <mark>   -> record progress, then print the next step
-//     marks: author-green [--run-id <wf id>] | visual-done | round-green | approved
+//     marks: author-green [--run-id <wf id>] | visual-done | round-green | approved |
+//            vision-reviewed (advisory only — never gates a state transition)
 //   spec-design-driver <spec.md> --state         -> print the state name only (scripting)
 // Exit codes: 0 = step printed; 2 = precondition failure (wrong status, no design block, bad args).
 // State lives in <spec>.design/design-state.json + the artifacts themselves. Deleting the
@@ -121,7 +122,7 @@ function recordCoverage() {
 
 // ---- record a mark (validated against the artifacts, then fall through to print next step) ------
 if (MARK) {
-  const valid = ['author-green', 'visual-done', 'round-green', 'approved']
+  const valid = ['author-green', 'visual-done', 'round-green', 'approved', 'vision-reviewed']
   if (!valid.includes(MARK)) die('unknown mark "' + MARK + '" (' + valid.join(' | ') + ')')
   // The mock fidelity gate is FAIL-CLOSED on the marks that assert "this round's code is right":
   // when a mock is bound (extract.json has fidelity data), strings/order/layout are verified
@@ -267,12 +268,38 @@ const SKELETON_SHAPE_MOCK = `4. Write ${sidecar}/skeletons.json — per bound RE
    target, sliceQuote, proof} whose sliceQuote is verified verbatim against the slice and whose
    proof names a mechanical impossibility (failing build output, absent token/primitive, a
    grounded rule id) — taste is NOT a valid proof; with a mock bound, taste yields to the mock
-   (shared § mock supremacy).`
+   (shared § mock supremacy). Route every proposed row through the Fable retainer (same agent,
+   SendMessage) before writing it — the retainer adjudicates the proof, this session records it.`
 const SKELETON_SHAPE_NOMOCK = `4. Write ${sidecar}/skeletons.json — per surface: { id, decision: author|bind, componentPath,
    storyPath, bind{component,from,propBindings}, imports[], tree[{el,slot,children,bind,
    style:{property: tokenROLE}}], props[], states[], mockRef{state:fixture}, tokens[closed
    allowlist], shared, usedBy, containment, coherenceGroup, waveOrder } plus top-level
    {schemaVersion, source:{sha256}, tokenForks[]}. Every style value is a ROLE, never a literal.`
+
+// ---- vision review (advisory only — never gates a mark) -----------------------------------------
+// fidelity-check verifies STRINGS (copy, order, layout skeleton) — it cannot see whether the
+// rendered component actually LOOKS like the mock. That is a judgment call, so unlike author-green
+// / round-green it is never wired to a mark that blocks anything: it is a report folded into the
+// human catalog loop the same way a round's notes are. Fires only when a mock is bound (nothing to
+// compare against otherwise) and the host has a runnable catalog; the --mark just silences the
+// reminder on rerun, it does not gate ITERATE, round-green, or approved.
+function visionReviewBlock() {
+  if (!designSource || marks['vision-reviewed'] || !design.command) return ''
+  return `## Advisory: vision review (render vs mock, region by region — never fail-closes)
+1. Run ${design.command} and open the expanded component's catalog entry; screenshot it.
+2. Open/screenshot the bound mock slice(s) for the same region(s): ${sidecar}/slice-*.html.
+3. Dispatch ONE vision-capable consult (Agent {model:"fable"}, Opus fallback) with both images:
+   compare render vs mock REGION BY REGION and return a divergence list keyed by regionRef.
+4. Present the divergence list to the user in this iteration round as a note, not a verdict — this
+   consult is advisory only: it never fail-closes a mark and never writes ${sidecar}/deltas.json
+   itself. An accepted divergence still goes through the normal round protocol (a ruling, then a
+   fix or an evidence-gated deltas.json row) — the consult's opinion alone is never sufficient
+   evidence (shared § mock supremacy — taste is never valid evidence, and this consult is taste).
+Skip this block entirely when the host has no runnable catalog. Done (silences on rerun):
+  spec-design-driver ${specPath} --mark vision-reviewed
+
+`
+}
 
 const STEPS = {
   BLOCKED: () => `Spec status is "${status || '<missing>'}" — /spec:design requires status: hardened.
@@ -299,7 +326,9 @@ ${mockLine}
    slice-*.html by hand; if that fails too, STOP with the stderr. Never author from a partial extract.
 4. Re-run this driver.`,
 
-  SKELETONS: () => `${designSource ? feasibilityReport() : ''}## Step: author skeletons.json (the taste concentration — expensive model, warm)
+  SKELETONS: () => `${designSource ? feasibilityReport() : ''}## Step: author skeletons.json (${designSource
+    ? 'grounded transcription — Sonnet session; Fable retainer at judgment points only'
+    : 'the taste concentration — expensive model, warm'})
 ${mockLine}
 
 1. Dispatch a Haiku match-first pass (Agent {model:"haiku"}, report-only): planned surfaces
@@ -308,11 +337,13 @@ ${mockLine}
    the base-barrel report (which overlay primitives exist to import; nearest-match for absent ones).
 2. Warm inputs to read yourself: ${designSource ? sidecar + '/extract.json (regions + classed entries + literal harvest + props + variantProposals + notes[] — read each note file), the slice files of the regions you plan to bind (region slices, not whole screens), ' : ''}token files +
    the design doctrine${doctrinePath ? ' (' + doctrinePath + ')' : ''}, the spec ## UI section, the match-map.
-3. Resolve BEFORE emitting skeletons (batch, never mid-authoring): token forks alias-first
+3. Resolve BEFORE emitting skeletons (batch, never mid-authoring)${designSource
+    ? ' — these are the Fable-retainer judgment points (Agent {model:"fable"}, Opus fallback; SendMessage the SAME agent rather than re-spawning), not decided inline by the transcribing session'
+    : ''}: token forks alias-first
    (new-role → extend after the near-match dedup check; same role/different value = fork →
    AskUserQuestion local-exception vs token-change); doctrine tensions by the ruling's grounding
    (taste → mock wins silently; grounded → snap value to constraint, ask only if irreconcilable);
-   confirm each match-map bind against its slice. Absent base primitive → AskUserQuestion
+   confirm each match-map bind against its slice${designSource ? ' — component-boundary/reuse calls against the existing catalog, and any blocked/ambiguous binding, are exactly these judgment points' : ''}. Absent base primitive → AskUserQuestion
    author-as-foundation vs near-match reuse (default-author when no near-match).
 ${designSource ? SKELETON_SHAPE_MOCK : SKELETON_SHAPE_NOMOCK}
    coherenceGroup/waveOrder are session-side scratch for building the workflow groups arg.
@@ -367,7 +398,7 @@ rhythm, empty/error/long-string states, showcase coherence.`}
 Issue correction notes and dispatch Sonnet to apply them (you edit nothing), re-run the gate
 (${gateCmd || 'host gate'}), checkpoint-commit when green. Then:  spec-design-driver ${specPath} --mark visual-done`,
 
-  ITERATE: () => `## Step: human catalog loop (round ${(marks.rounds || 0) + 1}; cold between rounds by design)
+  ITERATE: () => `${visionReviewBlock()}## Step: human catalog loop (round ${(marks.rounds || 0) + 1}; cold between rounds by design)
 Tell the user: run \`${design.command}\`, review the catalog entries (showcase first).
 AskUserQuestion: Approve / Iterate (notes via Other). Dismissed → STOP (state is on disk).
 

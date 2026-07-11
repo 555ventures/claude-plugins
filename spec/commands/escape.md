@@ -13,6 +13,11 @@ verdict contradicted by an escape is a miscalibrated filter. This command record
 ONE ledger row and fixes nothing — the fix goes through the normal flow (direct work, or a
 new spec).
 
+Commit-time capture already covers the common case: `/git:commit` offers an escape row
+whenever a fix-shaped commit touches spec-landed lines. This command remains the path for
+everything that offer misses — escapes found by inspection, a later spec, or production,
+with no commit in the loop to trigger the offer.
+
 **Intended model: Sonnet or Haiku.** Mechanical: locate, correlate, classify, append.
 
 ## Input
@@ -46,11 +51,13 @@ short description of the defect. The description is used only to locate and clas
 5. **Append exactly ONE line** to `.claude/spec-runs.jsonl` (repo root; `printf '%s\n' '<json>' >>`):
 
    ```
-   {"ts":"<YYYY-MM-DD>","stage":"escape","spec":"<repo-relative spec path>","file":"<repo-relative defect file>","reviewRunId":"<wf_…>"|null,"foundBy":"<user|later-spec|production>","severity":"<hard|soft>","killedMatch":true|false|null}
+   {"ts":"<YYYY-MM-DD>","stage":"escape","spec":"<repo-relative spec path>","file":"<repo-relative defect file>","reviewRunId":"<wf_…>"|null,"foundBy":"<user|later-spec|production>","severity":"<hard|soft>","killedMatch":true|false|null,"via":"commit|manual"}
    ```
 
    Fixed shape — paths/enums/booleans only, **never prose or finding text** (the defect
-   description belongs in whatever fixes it, not in the ledger).
+   description belongs in whatever fixes it, not in the ledger). `via` is optional: omit
+   it or set `"manual"` when this command was invoked directly; `/git:commit`'s escape
+   check sets `"commit"` when it drove the append.
 6. **Report the context, not a fix:** how many escape rows now point at this spec; whether
    the correlated review's verdict was `CLEAN` (a contradicted CLEAN is the miscalibration
    signal `/spec:doctor` aggregates); and if `killedMatch: true`, say explicitly that the

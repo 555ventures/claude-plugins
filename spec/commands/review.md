@@ -1,18 +1,21 @@
 ---
-description: Independent refutation-filtered review gate — flips spec to done, updates canonical docs, commits and merges back
+description: Independent execution-verified review gate — flips spec to done, updates canonical docs, commits and merges back
 argument-hint: <spec path>
 ---
 
 # Spec Review: Independent Gate
 
-Deterministic gates + one independent, refutation-filtered review covering **shape** (shortcuts,
+Deterministic gates + one independent, execution-verified review covering **shape** (shortcuts,
 shims, rule-bending) and **correctness** (matches spec, ACs covered, wiring complete) in a
 single pass. On CLEAN: flips `status → done`, applies the spec's Canonical Delta, commits,
 and merges the build branch back into its originating branch (Phase 4). This is the only
 command that flips `done`.
 
-**Orchestrator: Opus or Sonnet. Reviewers and refuters: Sonnet — never Fable.** Cross-model
-independence from the planning author is the gate's value; capability is not.
+**Orchestrator: Sonnet. Reviewers and verifiers: Sonnet — never Fable.** Cross-model
+independence from the planning author is the gate's value; capability is not. Judgment on
+survivors (fix / waive / reject) happens in this session with the user — the workflow never
+adjudicates, and no finding is ever killed by argument (kills require a failed repro, a quoted
+spec sanction, or a plain miscitation — the workflow enforces that grounding).
 
 **Setup:** run `spec-paths shared-for review` and read its output (the shared invariants scoped to this command). Read the host's
 `.claude/spec.config.json` and its pipeline rules file. If either is missing, STOP: tell the
@@ -42,7 +45,9 @@ absolute path — it is the `scriptPath` for the Workflow call below.
    - the host's `gateCommand` — the deterministic gate
    - **if config declares `driftScript`**: `{driftScript} {spec path}` — the host's AC-drift
      checker
-3. Read the spec once; extract File Plan dirs, AC list, tier, area.
+3. Read the spec once; extract File Plan dirs, AC list, tier, area. Compute `{diffLoc}` =
+   insertions + deletions from `git diff --shortstat {base}` — it scales the reviewer panel
+   (a small diff never pays a 2-reviewer panel, whatever the tier).
 4. **No `driftScript` only — AC coverage matrix (mechanical):** for each AC-ID in the spec,
    grep the File Plan's test paths for it. Any AC-ID with zero hits is an **uncovered AC** —
    an automatic `hard` finding that skips the refutation filter (it is a deterministic fact,
@@ -51,33 +56,35 @@ absolute path — it is the `scriptPath` for the Workflow call below.
 ## Phase 1 — Review workflow
 
 Invoke `Workflow {scriptPath: <spec-paths wf-review output>, args: {specPath, tier, base,
+scope: "full", prevFindingsPath: "", diffLoc: <from Phase 0>,
 patternsPath: <temp file from Phase 0>, hasDriftScript: <config declares driftScript>,
 reproCommand: <config testCommand, or "">}}`. (`testCommand` is the host's test-runner
-prefix — the kill-audit agents append their repro file path to it; when absent, pass `""`
+prefix — the verifier agents append their repro file path to it; when absent, pass `""`
 and they discover the runner themselves.)
 
 What the script does (shape lives in the script, not here):
-- **Reviewers:** T2 → 1, T3 → 2 (blind to each other, different emphases), running as the
-  plugin's read-only `spec:reviewer` agent. Each reads the spec, diffs against `base`,
-  checks shape + correctness against the host's rule surfaces, returns structured findings.
-  Neutral framing — an empty findings list is a valid outcome; nothing in the prompt
-  manufactures findings.
-- **Refutation filter:** per finding, refuters see the **claim only** (never the reviewer's
-  reasoning). `hard` findings get 2 refuters and die only on 2/2 refutes of the **dispatched**
-  refuters (a crashed refuter is a missing vote — the finding survives it); `medium`/`soft` get 1.
-- **Kill audit (execution):** every non-soft killed finding gets one Sonnet auditor that
-  tries to *demonstrate* the claimed defect by running code (minimal repro, mandatory
-  cleanup). `DEMONSTRATED` overturns the kill — the finding returns to the survivors with
-  `overturnedKill: true` and its `reproEvidence`. A crashed auditor leaves the kill standing
-  but counted in `audit.failed`; capped at 6 audits per run (`audit.capSkipped` reports any
-  skipped).
-- Returns `{verdict, survivors, killed, audit, reviewerCount, tokens}` where `audit =
-  {audited, overturned, confirmed, notExecutable, failed, capSkipped}`. Killed findings are
-  reported, never silently dropped. **`verdict: "REVIEWER_FAILED"` means a reviewer agent died
-  — that is a failed RUN, never a CLEAN: re-invoke the workflow (journal cache makes it cheap)
-  before any verdict is read.** `tokens` is the workflow's output-token spend — carry it into
-  the Phase 3 report. If `audit.failed` or `audit.capSkipped` is non-zero, say so in the
-  verdict presentation — those kills stand unverified.
+- **Reviewers:** 1 by default; 2 only for T3 with `diffLoc ≥ 300` (blind to each other,
+  different emphases), running as the plugin's read-only `spec:reviewer` agent. Each reads
+  the spec, diffs against `base`, checks shape + correctness against the host's rule
+  surfaces, returns structured findings. Neutral framing — an empty findings list is a valid
+  outcome; nothing in the prompt manufactures findings.
+- **Verification (execution-grounded):** every non-soft finding gets one Sonnet verifier.
+  A finding dies ONLY on grounded evidence: `NOT_DEMONSTRABLE` (a good-faith minimal repro
+  fails to exhibit an executable claim), `SANCTIONED` (a spec Decision/design approval quoted
+  verbatim), or `MISCITED` (the cited location plainly doesn't say what the claim asserts —
+  actual content quoted). `DEMONSTRATED` findings survive with repro evidence — the strongest
+  fix candidates. `NOT_EXECUTABLE` claims (naming, layering, structure) survive flagged
+  `unverifiable` for THIS session to adjudicate. A crashed verifier or a cap-skipped finding
+  survives visibly flagged — fail-closed, never a silent kill or a silent confirm. `soft`
+  findings skip verification and pass through as `advisory`.
+- Returns `{verdict, survivors, killed, verify, reviewerCount, scope, tokens}` where `verify =
+  {verified, demonstrated, killedByExecution, sanctioned, miscited, unverifiable, failed,
+  capSkipped}`. Killed findings are reported with their evidence, never silently dropped.
+  **`verdict: "REVIEWER_FAILED"` means a reviewer agent died — that is a failed RUN, never a
+  CLEAN: re-invoke the workflow (journal cache makes it cheap) before any verdict is read.**
+  `tokens` is the workflow's output-token spend — carry it into the Phase 3 report. If
+  `verify.failed` or `verify.capSkipped` is non-zero, those survivors stand unverified — say
+  so in the verdict presentation.
 
 ## Drift gate
 
@@ -105,32 +112,45 @@ dispositions below are resolved, so the row records how each finding actually en
 unresolved one):
 
 ```
-{"ts":"<YYYY-MM-DD>","spec":"<repo-relative spec path>","stage":"review","tier":"<T1|T2|T3>","runId":"<wf_…>","verdict":"<CLEAN|SURVIVORS|REVIEWER_FAILED>","iteration":<n>,"tokens":{"workflow":<n>},"findings":{"survived":<n>,"killed":<n>,"waived":<n>,"rejected":<n>,"fixDispatched":<n>,"reviewerCount":<n>},"audit":{"audited":<n>,"overturned":<n>}}
+{"ts":"<YYYY-MM-DD>","spec":"<repo-relative spec path>","stage":"review","tier":"<T1|T2|T3>","runId":"<wf_…>","verdict":"<CLEAN|SURVIVORS|REVIEWER_FAILED>","scope":"<full|fix-delta>","iteration":<n>,"diff":{"loc":<n>},"tokens":{"workflow":<n>},"findings":{"survived":<n>,"killed":<n>,"waived":<n>,"rejected":<n>,"fixDispatched":<n>,"reviewerCount":<n>},"verify":{"verified":<n>,"demonstrated":<n>,"killedByExecution":<n>,"sanctioned":<n>,"miscited":<n>,"unverifiable":<n>,"failed":<n>,"capSkipped":<n>}}
 ```
 
-`verdict` is the workflow's verdict (pre-disposition); `waived`/`rejected`/`fixDispatched`
-record what the user then did with the survivors. Fixed shape, counts/enums only — never
-finding text or prose (disposition *reasons* land in the spec's Rationale). One line per
-Phase-1 invocation, so fix→re-review iterations each leave a row — that history is what tunes
-the refutation filter over time. `runId` is the Workflow invocation's run id: when a defect
-later surfaces in code this review passed, `/spec:escape` records a row pointing back at it —
-the ground truth behind every CLEAN.
+`verdict` is the workflow's verdict (pre-disposition) — **never write `CLEAN` on a row whose
+`survived` is non-zero**; `waived`/`rejected`/`fixDispatched` record what the user then did
+with the survivors. Fixed shape, counts/enums only — never finding text or prose (disposition
+*reasons* land in the spec's Rationale). One line per Phase-1 invocation, so fix→re-review
+iterations each leave a row — that history is what calibrates the verification layer over
+time. `runId` is the Workflow invocation's run id: when a defect later surfaces in code this
+review passed, `/spec:escape` records a row pointing back at it — the ground truth behind
+every CLEAN.
 
-If survivors exist, present them with the pattern-sweep context — flag any with
-`overturnedKill: true` distinctly: refuters voted to kill these but an auditor *demonstrated
-the defect by execution* (show the `reproEvidence`); they are the strongest Fix candidates in
-the list, and rejecting one means overriding a reproduced failure. Then `AskUserQuestion` per
-finding group:
+If survivors exist, present them with the pattern-sweep context, grouped by verification
+status: `demonstrated` first (a verifier *reproduced the defect by execution* — show the
+`evidence`; rejecting one means overriding a reproduced failure), then `unverifiable`
+(structural claims no repro can decide — this session adjudicates them on the cited rule),
+then `advisory` (soft), then any `verifier-failed`/`cap-skipped` (unverified — say so). Then
+`AskUserQuestion` per finding group:
 - **Fix** — dispatch Sonnet workers (routed via the host's `agentMap`, matching the build
-  routing), then re-run Phase 1. Max 2 fix→re-review iterations; beyond that, escalate.
+  routing). Then re-review **incrementally**: write the surviving findings to a temp JSON
+  file, and re-invoke the workflow with `scope: "fix-delta"`, `prevFindingsPath: <that file>`,
+  and `base: <the commit the just-reviewed diff ended at>` — one reviewer reads only the fix
+  diff and the prior findings, never the whole codebase again. Pay a `scope: "full"` re-review
+  only if the fixes touched files outside the prior finding set. Max 2 fix→re-review
+  iterations; beyond that, escalate.
 - **Waive** — record in the spec's Rationale section with date + reason. Only the user waives.
-- **Reject** — the refuters missed; record the rejection reason the same way.
+- **Reject** — the finding is wrong anyway; record the rejection reason the same way.
 
 ## Phase 3 — Close (on CLEAN)
 
 1. Flip frontmatter `status: implementing → done`.
 2. Apply the spec's **Canonical Delta** to `docs/canonical/{area}.md` (create the file from
    the delta if it doesn't exist yet).
+   **Deviation fold-in:** if a `<spec>.deviations.md` sidecar exists (build workers log forced
+   departures from the plan there), read it now. A deviation that will recur on future specs
+   (a wrong assumption about the codebase, a convention the spec template didn't know) becomes
+   a one-line entry in the host rules' **Gotchas** section, citing this spec — that is the
+   territory correcting the map. One-off deviations just get absorbed into the spec's
+   Rationale. Delete the sidecar after folding.
 3. **Close commit:** commit everything still uncommitted on the working branch — status flip,
    canonical docs, any review-fix dispatches. The orchestrator owns git; never `--no-verify`.
 4. Report: gate table, findings (survived / killed / waived with reasons), drift result,
@@ -196,14 +216,19 @@ the build branch; `{worktree}` the worktree path (omit `--worktree` if no worktr
 ## Rules
 
 - **Never Read `wf-review.js`.** The complete `args` contract is in Phase 1 (`{specPath, tier,
-  base, patternsPath, hasDriftScript}`) and the return shape is `{survivors, killed}`. The
-  reviewer/refuter fan-out, the refutation filter, and all control flow are the workflow's
-  concern — its shape lives in the script, not in orchestrator context. Invoke it (by
-  `scriptPath`) and act on its return.
-- Reviewers and refuters are **read-only** — fixes are always separate dispatches.
-- Refuters see the claim only. The asymmetry is the filter; don't leak reviewer reasoning.
+  base, scope, prevFindingsPath, diffLoc, patternsPath, hasDriftScript, reproCommand}`) and
+  the return shape is `{verdict, survivors, killed, verify, reviewerCount, scope, tokens}`.
+  The reviewer/verifier fan-out and all control flow are the workflow's concern — its shape
+  lives in the script, not in orchestrator context. Invoke it (by `scriptPath`) and act on
+  its return.
+- Reviewers are **read-only**; verifiers create only their own repro file and delete it —
+  fixes are always separate dispatches.
+- **No finding dies by argument.** Kills carry grounded evidence (failed repro / quoted
+  sanction / quoted miscitation) — that grounding is the workflow's contract; never litigate
+  a survivor away in-session without the same standard.
 - Waivers come from the user only, recorded in the spec — never invented, never implied.
-- Killed findings appear in the report. Silent drops void the filter's audit value.
+- Killed findings appear in the report with their evidence. Silent drops void the gate's
+  audit value.
 - Deterministic gate failures are fixed before review findings are litigated — don't review a
   red build.
 - Merge-back is part of CLEAN, not an extra ask — but strategy choice and non-trivial

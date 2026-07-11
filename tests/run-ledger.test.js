@@ -22,17 +22,22 @@ test('build.md and review.md both append to the single repo-wide ledger', () => 
   }
 })
 
-test('ledger schemas carry the fields the 3.1.0 design consumes', () => {
+test('ledger schemas carry the fields the v5 design consumes', () => {
   const build = read('commands/build.md')
   for (const field of ['"ts"', '"spec"', '"stage":"build"', '"diff"', '"tokens"',
-    'phase4Repairs', 'failureSetShrankEachRound', '"retainer"', 'checkpoints']) {
+    'phase4Repairs', 'failureSetShrankEachRound', '"retainer"', '"fastPath"', '"deviations"']) {
     assert.ok(build.includes(field), `build schema has ${field}`)
   }
+  assert.ok(!build.includes('"checkpoints"'),
+    'build schema must not carry the retired checkpoints field')
   const review = read('commands/review.md')
-  for (const field of ['"ts"', '"stage":"review"', '"runId"', '"verdict"', '"iteration"', '"survived"',
-    '"killed"', '"waived"', '"rejected"', '"fixDispatched"', '"reviewerCount"']) {
+  for (const field of ['"ts"', '"stage":"review"', '"runId"', '"verdict"', '"scope"', '"iteration"',
+    '"survived"', '"killed"', '"waived"', '"rejected"', '"fixDispatched"', '"reviewerCount"',
+    '"verify"', '"demonstrated"', '"capSkipped"']) {
     assert.ok(review.includes(field), `review schema has ${field}`)
   }
+  assert.match(review, /never write `CLEAN` on a row whose\s*\n?`survived` is non-zero/,
+    'the CLEAN-with-survivors schema hole must stay closed')
   // dispositions must be knowable when the row is written
   assert.match(review, /\*\*after\*\* the survivor\s+dispositions/)
 })

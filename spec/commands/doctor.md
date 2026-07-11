@@ -119,6 +119,37 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
       review). Absence of escapes is only meaningful if escapes are actually being recorded;
       note when zero escape rows exist at all.
 
+13. **Scaffold audit** — Read the plugin's distrust/guard registry:
+    `spec-paths scaffold-ledger 2>/dev/null || echo "$(spec-paths root)/doctrine/scaffold-ledger.md"`
+    (a dedicated `spec-paths` key wins if the plugin ever adds one; today resolve it relative
+    to the plugin root). The ledger itself stays out of model context beyond this — only the
+    specific rows a finding below names get quoted back in the report.
+    - **Stale earned-under generations** — for each row, extract the family + version from
+      `Earned under` (rows tagged `structural` / `harness-level, model-independent` have no
+      generation to compare — skip them); flag any row **2+ major versions behind** the model
+      family running this doctor session **AND** whose `Promote/retire condition` has never
+      been evaluated against the host's `.claude/spec-runs.jsonl` (no prior doctor note or
+      ledger query addressing that mechanism by name — treat "never evaluated" as the default
+      unless the user points to one). Recommend running that row's named measurement now that
+      a newer generation is current — never re-derive the verdict here.
+    - **Ripe advisories** — for each `advisory` row, check whether `.claude/spec-runs.jsonl`
+      has had time to accumulate the data its promote condition names, and hand the user the
+      exact query rather than judging the correlation. Example, for the behavioral-evaluator
+      row ("PROMOTE to gate when ledger shows its verdicts track escapes"):
+      ```
+      jq -s '[.[] | select(.stage=="escape")] | length' .claude/spec-runs.jsonl
+      ```
+      Report the count (and how it pairs with whatever verify-skill verdicts are recorded
+      elsewhere) and quote the row's own promote condition as the acceptance bar — doctor
+      names the measurement, it does not compute the promotion call.
+    - **Ungoverned mechanisms** — grep the host's generated agents (`.claude/agents/*.md`),
+      the pipeline rules file, and `spec.config.json` for known distrust-mechanism markers
+      (the gate sentinel string, fail-closed-reviewer language, worker-git-ban text, no-free-
+      text args framing) that have **no** corresponding scaffold-ledger row; flag each as a
+      mechanism shipped with no named promote/retire condition.
+    Output is recommendations only — this check never edits the ledger, the host's generated
+    files, or the run ledger.
+
 ## Semantic spot-check — small, bounded
 
 For 2–3 agents (prioritize any with stale citations), read one cited exemplar each and

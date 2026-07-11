@@ -49,25 +49,33 @@ user to run `/spec:init` first.
   component inventory must fit the canon, and reusing existing catalog components beats
   speccing new ones.
 - Then interview the user via `AskUserQuestion` with informed options — never ask in a vacuum,
-  never ask what the codebase can answer. Batch questions.
+  never ask what the codebase can answer. Batch questions, and weight them toward whatever
+  would reshape the architecture — data models, type interfaces, UX flows — over what only
+  tunes a detail: an unasked detail costs a small edit later, an unasked architecture question
+  costs a rebuild.
 
 ## Phase 1.5 — Spike (when `--spike`, or judged necessary)
 
-Run for brownfield changes where blast radius is genuinely unclear, gnarly integration
-surfaces, complex migrations, or unfamiliar code. Skip for greenfield and well-understood
-changes. In design-capable hosts (config `design` block), if the unknown is **visual**
-(layout, interaction feel), don't spike — set `design: true` and let `/spec:design` iterate
-on real components in the catalog instead.
+Run whenever the interview or drafting surfaces a genuinely high-unknown area — an unfamiliar
+API, an unclear data model, a risky integration surface, blast radius that's genuinely unclear
+in brownfield code, or a complex migration. Skip for greenfield and well-understood changes.
+Reason: a throwaway prototype is the cheapest way to find out what you didn't know, before it
+gets expensive — cheap now, versus a wrong assumption baked into a locked spec, versus a
+surprise mid-build. In design-capable hosts (config `design` block), if the unknown is
+**visual** (layout, interaction feel), don't spike — set `design: true` and let `/spec:design`
+iterate on real components in the catalog instead.
 
 - One `Agent`: `subagent_type: general-purpose`, `model: sonnet`, `isolation: worktree`
   (REQUIRED — without it the spike pollutes the working tree).
-- Prompt: throwaway happy-path implementation of the core change. No tests, no polish. First
-  action: the host's `setupCommand` (from config). Report back: files touched, unexpected
-  discoveries, design forks hit, cross-area impact, state/data migration needed,
-  typecheck/lint output — plus any report items the host's pipeline rules § Planning adds.
-  Never merge, never push; the worktree is discarded.
+- Prompt: a throwaway implementation scoped to the specific unknown question — answer it
+  empirically, don't build the feature. No tests, no polish. First action: the host's
+  `setupCommand` (from config). Report back: files touched, unexpected discoveries, design
+  forks hit, cross-area impact, state/data migration needed, typecheck/lint output — plus any
+  report items the host's pipeline rules § Planning adds. Never merge, never push; the
+  worktree is discarded — only the findings survive.
 - Fold findings into the spec's **Assumptions**, **Decisions**, and **Acceptance Criteria**
-  sections. Set `spiked: YYYY-MM-DD` in frontmatter.
+  sections as evidence (what was actually observed, not just a conclusion). Set
+  `spiked: YYYY-MM-DD` in frontmatter.
 
 ## Phase 2 — Draft
 
@@ -77,6 +85,12 @@ needed). `status: draft`.
 
 While drafting:
 
+- **Blind-spot pass:** somewhere before lock, deliberately hunt the territory the spec's
+  current framing doesn't cover — codebase conventions, runtime constraints, adjacent call
+  sites or surfaces it hasn't mentioned. This is not the Phase 3 adversarial check, which
+  attacks what's already written; this hunts what isn't written yet. A single `Explore`
+  dispatch framed as "what does this spec's current scope miss?", or a focused self-pass over
+  the affected areas, is cheap — far cheaper than the surprise that shows up mid-build.
 - **Decomposition gate:** a spec must fit one `/spec:build` run — roughly ≤15 File Plan rows,
   one primary area, plus any host-declared caps (pipeline rules § Planning). Bigger work is
   not a bigger spec: split into `##-` siblings in the same date dir, sliced by **landing

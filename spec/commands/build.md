@@ -1,5 +1,5 @@
 ---
-description: Implement a hardened spec via the wf-build workflow — Sonnet workers, Opus retainer on surprises and T3 checkpoints
+description: Implement a hardened spec — Sonnet orchestrator and workers, Fable retainer consulted on surprises; small specs skip the workflow entirely
 argument-hint: <spec path>
 ---
 
@@ -9,10 +9,13 @@ Implement a hardened spec. The orchestrator parses the File Plan into batches, i
 bundled `wf-build` workflow (Sonnet workers, deterministic control flow), resolves surprises
 via the retainer + user, and resumes until green.
 
-**Intended orchestrator model: Opus** (Sonnet acceptable for small T2 builds). Workers: Sonnet.
-Lookups: Haiku. Surprises and T3 checkpoints: the Opus retainer subagent (below). Fable never
-runs at build time — its judgment was spent at plan; the retainer *represents* it via the role
-brief.
+**Intended orchestrator model: Sonnet — all tiers.** Workers: Sonnet. Lookups: Haiku.
+Surprises: the **Fable retainer** subagent (below; Opus fallback per the shared invariants'
+model-fallback contract). The build needs no resident expensive model: the spec is the
+contract, the gate is deterministic, and the only judgment that enters a build is the rare
+surprise — which is exactly when the retainer is consulted. The retainer is the spec author's
+proxy, so running it on the planning model is a feature (it proxies the author's intent; it
+reviews nothing).
 
 **Setup:** run `spec-paths shared-for build` and read its output (the shared invariants scoped to this command). Read the host's
 `.claude/spec.config.json` and its pipeline rules file (`pipelineRules`). If either is
@@ -79,12 +82,34 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
    worktree. If the build is in place, `build_base` is simply absent and `/spec:review`'s
    merge-back no-ops.
 
-## Phase 1 — Run the workflow
+## Phase 1 — Run the build
 
-Invoke `Workflow {scriptPath: <spec-paths wf-build output>, args: {specPath, tdd,
-testBatches, groups, resolutions: {}, agentMap, doctrinePaths, gate: {command, testCommand},
-pipelineRulesPath}}`. Pass `args` as a real JSON object (the script tolerates the harness's
-stringified delivery, but never double-encode it yourself).
+**Fast path (no workflow).** If the File Plan parses to a **single implementation batch of
+≤ 4 files** (plus at most one test batch), skip the Workflow tool entirely — multi-agent
+fan-out is overhead a one-batch spec never repays:
+
+1. TDD (if ACs exist): dispatch the test-author as one `Agent {subagent_type: <agentMap.tests>,
+   model: "sonnet"}` (host agents resolve natively in-session — the doctrine-paths workaround
+   is a workflow-registry problem, not yours), then run `{testCommand} <test files>` yourself
+   and confirm every new test fails. A passing new test = the spec is wrong → `tdd-red-check`
+   handling per Phase 2.
+2. Dispatch the implementation batch as one `Agent {subagent_type: <agentMap kind>,
+   model: "sonnet"}` — same grounding as any worker: Read the spec's Decisions / Contracts /
+   UI / File Plan rows, pipeline rules § Worker Rules, blocked-on-fork, deviations sidecar
+   (Phase 2), no git.
+3. Run the resolved `gateCommand` yourself (Bash). On failure: max 2 repair dispatches to the
+   same agent kind, then retainer, then user — same escalation ladder as Phase 2.
+4. Ledger row (Phase 5) gets `"fastPath":true` and no `runId`.
+
+Blocked returns, retainer consults, and everything else behave exactly as Phase 2 describes —
+the fast path changes the execution vehicle, not the contract.
+
+**Workflow path (everything else).** Invoke `Workflow {scriptPath: <spec-paths wf-build
+output>, args: {specPath, tdd, testBatches, groups, resolutions: {}, agentMap, doctrinePaths,
+deviationsPath, gate: {command, testCommand}, pipelineRulesPath}}`. Pass `args` as a real JSON
+object (the script tolerates the harness's stringified delivery, but never double-encode it
+yourself). `deviationsPath` is `<spec path minus .md>.deviations.md` — the sidecar workers
+append forced-but-unblocking departures to (Phase 2).
 
 **Invariant — no free text in `args`.** `args` carries only paths, ids, enums, booleans, and
 the host's gate command. Any prose — per-file intent, batch notes, orchestrator rulings — is
@@ -116,10 +141,10 @@ never write tests for code they implement.
 | `gate-exhausted` | Repair loop hit its cap. Consult the retainer with the failure output before escalating to the user. |
 | `complete` | Proceed to Phase 3. |
 
-**Retainer (Opus, seated as the plan author):** on the first surprise, spawn
-`Agent {model: "opus"}` with the spec's Rationale + Assumptions sections, its Decisions table,
-the divergence — and this role brief **verbatim** (it is what makes Opus fill the seat Fable
-occupied at plan time):
+**Retainer (Fable, seated as the plan author):** on the first surprise, spawn
+`Agent {model: "fable"}` (if it returns unavailable, respawn `{model: "opus"}` — the shared
+invariants' fallback contract) with the spec's Rationale + Assumptions sections, its
+Decisions table, the divergence — and this role brief **verbatim**:
 
 > You are the retainer for this build: the spec author's proxy, not a second implementer and
 > not a reviewer. Every ruling derives from the spec's stated Rationale, Assumptions, and
@@ -129,15 +154,15 @@ occupied at plan time):
 > Decisions table verbatim. If the spec's intent is genuinely ambiguous, or any ruling would
 > widen scope or contradict a locked Decision, reply `ESCALATE:` with the two branches of the
 > fork stated neutrally — never guess the author's intent, and never soften an escalation into
-> a provisional ruling. For T3 checkpoint diffs: verify the diff against the spec's intent and
-> the host's declared high-risk invariants; verdict `PASS` or `BLOCK: <reason>` — a checkpoint
-> is a gate, not a critique.
+> a provisional ruling.
 
-On later surprises and T3 checkpoints, continue the SAME agent via `SendMessage` — it
-accumulates context of this run's weirdness. Mandatory consult triggers: worker blocked on a
-stale assumption, gate failed twice on the same batch, out-of-scope file, a change
-contradicting the approved design or a locked Decision, plus any host-declared triggers
-(pipeline rules § Build).
+On later surprises, continue the SAME agent via `SendMessage` — it accumulates context of
+this run's weirdness, and its prompt cache makes follow-up consults cheap. Consults are
+**surprise-driven only** — there is no mandatory checkpoint ritual (the v4 T3 diff checkpoint
+returned PASS on 100% of measured runs: a gate that never blocks is spend, not signal; see
+the scaffold ledger). Consult triggers: worker blocked on a stale assumption, gate failed
+twice on the same batch, out-of-scope file, a change contradicting the approved design or a
+locked Decision, plus any host-declared triggers (pipeline rules § Build).
 
 Completed batches return from the workflow journal cache on resume — only changed work re-runs.
 
@@ -146,8 +171,9 @@ Completed batches return from the workflow journal cache on resume — only chan
 Execute the orchestrator duties the host's pipeline rules § Build declares — e.g. codegen
 regeneration, translation-catalog fills, migration generation and review, boot checks, public
 surface/barrel verification. These are deliberately outside the workflow: they touch shared
-or generated surfaces that parallel workers must never own. Where § Build marks a step as a
-T3 checkpoint (e.g. migration review), the retainer reviews before the step executes.
+or generated surfaces that parallel workers must never own. Where § Build marks a step as
+high-risk (e.g. migration review), consult the retainer before the step executes — that is a
+host-declared surprise trigger, not a checkpoint ritual.
 
 ## Phase 4 — Final gate
 
@@ -155,10 +181,6 @@ Run the resolved `gateCommand`. On failure: repair via Sonnet dispatches mapped 
 batch, max 3 rounds (detect → repair → verify); if a round leaves the failure set unchanged from
 the prior round, consult the retainer immediately rather than dispatching another repair round.
 After the ceiling or a stalled round, consult the retainer, then escalate to the user.
-
-**T3 checkpoint (mandatory):** any diff touching the host's declared high-risk surfaces
-(pipeline rules § Risk Tiers / § Build) gets a retainer review (`PASS`/`BLOCK`) before
-reporting. If the retainer hasn't been spawned yet, the checkpoint spawns it.
 
 Checkpoint-commit after the gate is green (and after each earlier green phase if the run is long).
 
@@ -168,12 +190,13 @@ Checkpoint-commit after the gate is green (and after each earlier green phase if
 (repo root; create on first append) — the repo-wide, committed, append-only run history:
 
 ```
-{"ts":"<YYYY-MM-DD>","spec":"<repo-relative spec path>","stage":"build","tier":"<T1|T2|T3>","runId":"<wf_…>","diff":{"files":<n>,"loc":<n>},"tokens":{"workflow":<n>,"phase4Repairs":[<n>,…]},"gate":{"phase4Rounds":<n>,"failureSetShrankEachRound":<bool>},"retainer":{"consults":<n>,"checkpoints":["PASS"|"BLOCK",…]}}
+{"ts":"<YYYY-MM-DD>","spec":"<repo-relative spec path>","stage":"build","tier":"<T1|T2|T3>","runId":"<wf_…>","fastPath":<bool>,"diff":{"files":<n>,"loc":<n>},"tokens":{"workflow":<n>,"phase4Repairs":[<n>,…]},"gate":{"phase4Rounds":<n>,"failureSetShrankEachRound":<bool>},"retainer":{"consults":<n>},"deviations":<n>}
 ```
 
 `diff` comes from `git diff --shortstat <build_base>..HEAD` (files changed, insertions +
 deletions summed as `loc`) — it's what makes token costs comparable across specs of different
-sizes. `phase4Repairs` entries are each repair agent's actual output-token count as the
+sizes. `fastPath` marks a no-workflow build (`runId` omitted). `deviations` = line count of
+the deviations sidecar (0 if absent) — `/spec:review` folds the sidecar's content at close. `phase4Repairs` entries are each repair agent's actual output-token count as the
 harness reports it; if a count isn't visible, write `null` — **never `0`** (a zero reads as
 "free repair" and silently poisons averages; a null is an honest, detectable gap). Fixed shape, counts/enums/paths only — **never prose, rulings, or pasted gate output**
 (those live in the spec's Decisions table); a fat line is a bug. Append via
@@ -195,8 +218,8 @@ Next: `/spec:review $ARGUMENTS`
 ## Rules
 
 - **Never Read `wf-build.js`.** The complete `args` contract is specified in Phase 1
-  (`{specPath, tdd, testBatches, groups, resolutions, agentMap, doctrinePaths, gate,
-  pipelineRulesPath}`); the return stages are enumerated in Phase 2. The workflow's internals —
+  (`{specPath, tdd, testBatches, groups, resolutions, agentMap, doctrinePaths, deviationsPath,
+  gate, pipelineRulesPath}`); the return stages are enumerated in Phase 2. The workflow's internals —
   batch execution, gate, repair loop, journal cache, resume — are the workflow's concern, not
   the orchestrator's. Invoke it (by `scriptPath`) and act on its returns; its source is never
   orchestrator context. "Read the workflow to understand the args contract" is the anti-pattern —

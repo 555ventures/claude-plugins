@@ -1,6 +1,6 @@
 {
   "name": "git",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Git helpers: a fast add-all-and-commit flow, a guided merge with conflict repair and worktree cleanup, and idempotent per-spec worktree entry",
   "author": {
     "name": "JJ",

@@ -32,11 +32,26 @@ EOF
 )"
 ```
 
+## Step 3: Escape Check (fix commits only, skippable)
+
+Runs only when the commit is plausibly a defect fix (user said so, or the drafted
+message is fix-shaped: `fix`/`bug`/`regression`/`hotfix`) **and**
+`.claude/spec-runs.jsonl` exists at repo root — otherwise skip with zero output.
+
+1. `git blame -L` the fixed lines (or `git log --oneline -3 -- <touched files>`) — did a
+   spec merge/close commit referencing a `specs/...` path land them? No → skip silently.
+2. Yes → `jq` the ledger for a matching `stage:"review"` row on that spec path. No match
+   → skip silently.
+3. Match → offer once, via `AskUserQuestion` (skippable, never blocking the commit):
+   record a `/spec:escape` row correlating this defect to that review's `runId`?
+4. Yes → run `/spec:escape <spec path>` (it owns the row schema). No → proceed silently.
+
 ## NON-NEGOTIABLE RULES
 
 1. **`git add -A` is MANDATORY** — add ALL changes regardless of relevance to previous work
-2. **Only 2 approval prompts** — parallel info-gathering, then commit
+2. **Only 2 approval prompts for the commit itself** — parallel info-gathering, then commit; Step 3's `AskUserQuestion` is additional, skippable, and only fires on fix-shaped commits
 3. **Never selectively stage** unless user explicitly requests it
 4. **No post-commit status check** — reduces unnecessary approval
 5. **Warn about sensitive files** (.env, credentials) but still stage them
 6. **Never touch worktrees** — do not unstage, reset, rm, or modify anything under `.claude/worktrees/`
+7. **Escape check never slows non-fix commits** — gated on fix-shaped message AND ledger presence; both absent means zero cost

@@ -29,8 +29,10 @@ simulator", "a Japanese-market mobile app", "an AI support bot"); intake fills t
 ## Phase 0 — Re-entry
 
 If `.claude/genesis/status.json` exists, read it and **verify the named artifacts physically
-exist** (stack-descriptor, ADRs, scaffold dir, gate) — never trust the phase enum alone. Resume
-from the last *verified* phase; report what was found and what is being resumed.
+exist** (stack-descriptor, ADRs, scaffold dir, gate, `docs/roadmap/00-overview.md`) — never trust
+the phase enum alone. Resume from the last *verified* phase; report what was found and what is
+being resumed. The roadmap has no status enum of its own: `architect: scaffold-complete` with no
+`docs/roadmap/00-overview.md` means resume at Phase C.
 
 ## Phase 1 — Discovery interview (interactive)
 
@@ -174,12 +176,48 @@ Repeat until no open hard forks remain:
 4. On green, commit. Set `status.architect: scaffold-complete`, write `gateCommand` into
    `status.json`. A failed Phase B re-runs Phase B only, against the committed decisions.
 
-## Phase C — Report & hand off
+## Phase C — Roadmap: decompose into planning briefs
+
+Runs immediately after the zero-day gate is green, **while the interview, panel, and ADR context
+is still hot** — this decomposition is half-formed in the session already; a later session would
+pay full price to reconstruct it worse. The roadmap is what makes the pipeline invocable after
+setup: without it, genesis ends and the user has no unit to hand `/spec:plan`.
+
+The two format contracts are templates: `$(spec-paths templates)/roadmap-overview.md` and
+`$(spec-paths templates)/roadmap-brief.md` — Read both first. The governing principle: **briefs
+are stable intent; specs are perishable execution detail.** Briefs cite ADRs (also stable) and
+are hydrated into specs lazily, one `/spec:plan` session at a time, when "Current state" can be
+written against real code. Never pre-plan the whole roadmap into specs.
+
+1. **Decompose.** Slice the confirmed goal + ADRs into ordered briefs, each sized to one
+   planning session (1–4 specs; a brief whose Scope can't be told in ~1 page splits). Slice by
+   **landing unit** (each brief leaves the system green and demonstrable), never by layer.
+   Wire `depends_on` as a DAG; assign phases (P0 = walking skeleton → first milestone → …);
+   derive milestone gates from the Phase-1 success outcome (observable states, not feature
+   lists). Design column: `yes` only for user-facing briefs in archetypes whose design stage
+   isn't `none`. Seed the **ops track** with external clocks (OAuth registrations, hosting
+   provisioning, partner asks) and the **parking lot** with the Phase-1 "Later / Won't-this-time"
+   answers — recorded so they stop leaking into briefs; promotion out requires a delta.
+2. **Confirm the sequence.** One `AskUserQuestion` round presenting the proposed sequence table
+   (brief names, phases, dependencies, milestone gates) before writing files. Dismissed → STOP.
+3. **Write** `docs/roadmap/00-overview.md` + one `NN-{kebab}.md` per brief, and create
+   `docs/roadmap/deltas/` (empty, with a one-line README: post-genesis product-shape decisions
+   land here as dated amendments naming the briefs they bind). **Never write a status column** —
+   per-brief status is derived from specs' `brief:` frontmatter by `/spec:doctor`, not tracked.
+4. **Self-check (checklist, not a workflow):** no `depends_on` cycles; every ADR is carried by
+   ≥1 brief's Grounding or is genuinely cross-cutting (note which); no two briefs claim the same
+   scope; each milestone gate is satisfiable by the briefs sequenced before it; brief 01 depends
+   on nothing and is plannable immediately after `/spec:init` + `/spec:enforce`.
+5. Commit.
+
+## Phase D — Report & hand off
 
 Report: archetype + audience, decisions made (with ADR paths), dissents recorded, the resolved
-gate command, scaffold result. **Next:** `/spec:genesis-design <same idea>` — or, for an archetype
-whose design stage is `none` (backend-api, data-ml), note that design is skipped and the next step
-is `/spec:init`.
+gate command, scaffold result, roadmap (brief count, milestone gates). **Next:**
+`/spec:genesis-design <same idea>` — or, for an archetype whose design stage is `none`
+(backend-api, data-ml), note that design is skipped and the next step is `/spec:init`. Print the
+full remaining chain so initiation is never a mystery: genesis-design (if any) → `/spec:init` →
+`/spec:enforce` → `/spec:plan docs/roadmap/01-*.md`.
 
 ## Rules
 

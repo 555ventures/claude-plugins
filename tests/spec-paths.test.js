@@ -37,7 +37,7 @@ test('shared-for: every mapped section name still exists as a shared.md heading'
 
 test('shared-for: scoped output carries its sections and is smaller than the full doc', () => {
   const full = run('shared-for', 'no-such-command')
-  for (const cmd of ['plan', 'design', 'build', 'review', 'enforce', 'import-design']) {
+  for (const cmd of ['plan', 'design', 'build', 'review', 'enforce', 'import-design', 'design-brief']) {
     const out = run('shared-for', cmd)
     assert.ok(out.length < full.length, cmd + ' output should be a strict subset')
     assert.match(out, /## Host Grounding/, cmd + ' must keep Host Grounding')

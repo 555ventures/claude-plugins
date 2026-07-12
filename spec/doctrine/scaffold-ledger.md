@@ -28,6 +28,7 @@ condition: "retire never," stated, with its reason).
 | Vision design review | advisory | Introduced v5; catches render-vs-mock divergence no deterministic check can. | Fable 5-era | Promote/retire on catalog-loop hit rate. |
 | Driver-stepped design session | structural | Resumed sessions unreliably reconstructed phase state from conversation; state moved to disk (v3). | Opus 4-era | Keep while zero-token; re-evaluate only if the driver itself becomes a maintenance hotspot. |
 | Diff-scaled review panel | gate-sizing | 2026-07 ledgers: a 197-loc diff drew a 308K-token review; 61% of review spend returned CLEAN. | Fable 5-era | Re-tune thresholds each quarter from ledger loc-vs-findings data. |
+| Roadmap as genesis phase (no standalone /spec:roadmap command) | structural | UpWell (2026-07): the genesis chain ended with no plannable unit — the user hand-authored docs/roadmap/ to make /spec:plan invocable. The artifact was proven needed; a separate command would re-pay for context genesis already holds hot, and an optional command is skippable-by-default (the exact observed failure). | Fable 5-era | PROMOTE to a /spec:roadmap command when a brownfield (non-genesis) project needs a roadmap and the template-only path (roadmap-overview.md + roadmap-brief.md, hand-invoked) proves insufficient in practice. RETIRE the phase if two genesis projects discard or ignore their generated roadmaps. |
 
 ## Adding a row
 

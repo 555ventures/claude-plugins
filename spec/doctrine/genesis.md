@@ -194,6 +194,11 @@ boundary.
 - `architect`: `pending → decisions-recorded → scaffold-complete`
 - `design`: `pending → doctrine-drafted → tokens-landed → rules-locked` (or `skipped`)
 
+The roadmap (architect Phase C) deliberately has **no enum value**: nothing downstream gates on
+it (design and init don't depend on it), so it is verified by artifact existence only —
+`architect: scaffold-complete` with no `docs/roadmap/00-overview.md` means the architect command
+resumes at its roadmap phase.
+
 `/spec:genesis-design` is blocked until `architect: scaffold-complete`. `/spec:init` is blocked
 when the design canon is **partial** (`doctrine-drafted`/`tokens-landed`); it proceeds on
 `rules-locked` or `skipped`, and is merely warned when design is still `pending`. **Re-entry
@@ -218,6 +223,14 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
   (written by the command from the workflow return value, **before** the AskUserQuestion round).
 - **`.claude/genesis/interview-research/{dimension}.json`** — the woven-loop option menus.
 - **`docs/adr/NNNN-*.md`** — architecture/design decision records (template via `spec-paths templates`).
+- **`docs/roadmap/`** (durable) — the decomposition that makes the pipeline invocable after
+  setup: `00-overview.md` (sequence table, milestone gates, ops track, parking lot) plus one
+  `NN-*.md` planning brief per `/spec:plan` unit, and `deltas/` for post-genesis amendments
+  (templates: `roadmap-overview.md`, `roadmap-brief.md` via `spec-paths templates`). Briefs are
+  **stable intent** hydrated into specs lazily; per-brief status is never written here — it is
+  derived from specs' `brief:` frontmatter (`/spec:doctor` check 14). Brownfield repos (no
+  genesis) hand-author from the same templates; a dedicated command exists only if evidence
+  demands one (scaffold-ledger row "Roadmap as genesis phase").
 
 ## Genesis: Dismissed Questions
 

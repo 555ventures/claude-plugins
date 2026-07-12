@@ -7,6 +7,7 @@ design: false            # design-capable hosts only (config design block): true
 breaking: false
 depends_on: []
 depended_on_by: []
+# brief: NN              # roadmap-planned specs only: the docs/roadmap/NN-*.md brief this spec hydrates; /spec:doctor derives roadmap status from this stamp
 # spiked: YYYY-MM-DD     # only if a spike ran during /spec:plan
 # designed: YYYY-MM-DD   # set by /spec:design on user approval (design-capable hosts)
 # design_source: https://claude.ai/design/p/<id>?file=<Name>.dc.html  # optional: Claude Design mockup, made read-first binding canon by /spec:design

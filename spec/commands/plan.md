@@ -1,6 +1,6 @@
 ---
 description: Author and harden a spec in one Fable session — explore, draft, adversarial check, lock
-argument-hint: <feature description | spec path> [--spike]
+argument-hint: <feature description | spec path | roadmap brief path> [--spike]
 ---
 
 # Spec Plan: Author + Harden (Fable)
@@ -18,11 +18,23 @@ user to run `/spec:init` first.
 
 ## Input
 
-`$ARGUMENTS` — a feature description, or a path to an existing draft spec to re-open.
-`--spike` forces the worktree spike in Phase 1.5.
+`$ARGUMENTS` — a feature description, a path to an existing draft spec to re-open, or a path
+to a **roadmap planning brief** (`docs/roadmap/NN-*.md`). `--spike` forces the worktree spike
+in Phase 1.5.
 
 ## Phase 0 — Context check & tier
 
+0. **Roadmap brief intake** (when `$ARGUMENTS` is a roadmap brief). Read the brief, then
+   `docs/roadmap/00-overview.md` (conventions + milestone context), then every delta the brief
+   or its open-questions section cites. **Dependency check:** for each brief in the header's
+   `Depends on`, grep `specs/**` frontmatter for `brief: <NN>` — if a dependency has no spec at
+   `implementing`/`done`, warn the user and confirm before proceeding (warn, don't block — they
+   may know the needed surface already landed). The brief's Scope seeds the draft, its
+   Grounding section is the required reading list, and its Open questions seed the Phase 1
+   interview; its "Current state" is a snapshot — re-verify against live code, never trust it.
+   **Every spec this session produces gets `brief: NN` in frontmatter** — that stamp is how
+   roadmap status is derived (nothing tracks it by hand). The brief's Out of scope section is
+   binding: work it fences off goes to its owning brief, not into these specs.
 1. **Harvest or discover.** If this conversation already contains a design discussion of the
    target: summarize what has converged (scope, key decisions, open questions), confirm the
    summary with the user, and skip to Phase 1.5/2. If invoked cold: run Phase 1 discovery. If a
@@ -164,7 +176,10 @@ Never silently drop a finding.
 3. Flip frontmatter `status: draft → hardened`.
 4. Report: spec path, tier, `design:` value (design-capable hosts), `design_source` if recorded,
    decision count, assumption count, spike run or skipped, refuter findings fixed/rejected. Next:
-   `/spec:design {path}` if `design: true`, else `/spec:build {path}`.
+   `/spec:design {path}` if `design: true`, else `/spec:build {path}`. If `design: true` with
+   **no** `design_source`, recommend the mock-first detour first: `/spec:design-brief {path}`
+   compiles the paste-ready Claude Design prompt; the resulting mock URL comes back as
+   `/spec:design`'s second arg (shared § Design Stage).
 
 ## Rules
 

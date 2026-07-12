@@ -350,6 +350,20 @@ harvest matches repo token values (extraction detects this — the `tokenMap` be
 canvas) exists but is **not** part of this pipeline — the iteration loop stays
 catalog + human eyes; element-id stability across round-trips is unconfirmed.
 
+**Spec → Claude Design prompts (`/spec:design-brief`).** The other reverse direction — intent
+into Claude Design — goes through **prompt text, never canvas writes**: `/spec:design-brief`
+compiles paste-ready Claude Design prompts from a spec, replacing the hand-written translation
+mock-first doctrine otherwise demands on every `design: true` spec. Brief mode emits one brief
+per UI surface with no mock — intent + BINDING constraints traceable to spec clauses; token
+*roles* and component names, never values (the reader is Fable 5: constraints, not
+prescriptions); a coordination footer fixes the `.dc.html` file name and `data-screen-label`
+region labels so `dc-extract`'s regions line up with the `regionRef`s the spec later binds.
+Drift mode reads the **recorded** drift — spec Decisions rows folded from `deltas.json` at
+reconcile, fork rulings, iteration rulings — and emits fix-at-source prompts per drifted mock
+file, so the mock is re-aligned upstream instead of rotting as stale canon. State-free (writes
+only a `.briefs.md` sidecar), Claude Design strictly read-only; the user's paste is the only
+write path.
+
 Claude Design is **strictly opt-in**: `/spec:design` engages this path **only** when a spec sets
 `design_source`, and `DesignSync` being unavailable is an error **only** then. With no
 `design_source`, nothing is loaded or fetched and the design stage is byte-for-byte unchanged.

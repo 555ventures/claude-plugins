@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # UserPromptSubmit hook: enforce the spec state machine at the command boundary.
+#   /spec:design-brief requires status: hardened, implementing, or done
 #   /spec:design requires status: hardened
 #   /spec:build  requires status: hardened (or implementing, for a resume)
 #   /spec:review requires status: implementing (or done, for a re-run)
@@ -53,6 +54,14 @@ fi
 STATUS=$(awk '/^---[[:space:]]*$/{f++; next} f==1 && /^status:/{print $2; exit}' "$FILE")
 
 case "$PROMPT" in
+  /spec:design-brief*)
+    # Brief mode runs right after plan-lock; drift mode runs on shipped (done) specs.
+    case "$STATUS" in
+      hardened|implementing|done) exit 0 ;;
+    esac
+    echo "Spec state gate: /spec:design-brief requires status: hardened, implementing, or done — $SPEC has status: ${STATUS:-<missing>}. Run /spec:plan first." >&2
+    exit 2
+    ;;
   /spec:design*)
     case "$STATUS" in
       hardened) exit 0 ;;

@@ -26,8 +26,10 @@ Either way the expensive seat **writes no framework code**; Sonnet expands 100% 
 via `wf-design`.
 
 **Doctrine: mock-first is the preferred flow.** If a surface is worth designing, author it in
-Claude Design first (`/design-sync` can seed that project with the repo's tokens) — the
-mock-less path is the fallback for surfaces with no mock, not a peer default.
+Claude Design first (`/design-sync` can seed that project with the repo's tokens; and
+`/spec:design-brief <spec>` compiles the paste-ready Claude Design prompt from the spec, so the
+mock starts from the spec's intent instead of a hand-written translation) — the mock-less path
+is the fallback for surfaces with no mock, not a peer default.
 
 **Setup:** run `spec-paths shared-for design` and read its output (the shared invariants scoped
 to this command). Read the host's `.claude/spec.config.json` and its pipeline rules file. Then

@@ -36,6 +36,15 @@ test('state machine: right status passes, wrong status blocks', () => {
   assert.strictEqual(gate('/spec:plan', SPEC_MD('draft')).status, 0)
 })
 
+test('design-brief: hardened/implementing/done pass, draft blocks — never swallowed by the design glob', () => {
+  assert.strictEqual(gate('/spec:design-brief', SPEC_MD('hardened')).status, 0)
+  assert.strictEqual(gate('/spec:design-brief', SPEC_MD('implementing')).status, 0)
+  assert.strictEqual(gate('/spec:design-brief', SPEC_MD('done')).status, 0, 'drift mode runs on shipped specs')
+  const res = gate('/spec:design-brief', SPEC_MD('draft'))
+  assert.strictEqual(res.status, 2)
+  assert.match(res.stderr, /design-brief/, 'the block must name design-brief, not fall through to /spec:design')
+})
+
 test('unresolved bracketed markers block', () => {
   const res = gate('/spec:build', SPEC_MD('hardened', 'x [NEEDS CLARIFICATION: which tz?] y'))
   assert.strictEqual(res.status, 2)

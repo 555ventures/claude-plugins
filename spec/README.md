@@ -12,11 +12,18 @@ decide *what to build with and how it should look*, then scaffold a real repo fo
 ground:
 
 ```
-/spec:genesis-architect   stack + structure decisions (ADRs) → scaffold the project
+/spec:genesis-architect   stack + structure decisions (ADRs) → scaffold → docs/roadmap/ briefs
 /spec:genesis-design      UX/visual/voice canon: doctrine + tokens + category-only design rules
         ↓
-/spec:init → /spec:plan → /spec:design → /spec:build → /spec:review   (the pipeline below)
+/spec:init → /spec:plan docs/roadmap/01-*.md → /spec:design → /spec:build → /spec:review
 ```
+
+Genesis-architect ends by decomposing the project into a **roadmap** — `docs/roadmap/00-overview.md`
+(sequence table, milestone gates, ops track, parking lot) plus one numbered planning brief per
+`/spec:plan` invocation — so setup never ends without a next command. Briefs are stable intent
+hydrated into specs lazily; per-brief status is derived from specs' `brief:` frontmatter by
+`/spec:doctor`, never hand-tracked. Brownfield repos hand-author the same shape from
+`templates/roadmap-overview.md` + `templates/roadmap-brief.md`.
 
 Both are highly interactive Opus sessions that own every `AskUserQuestion` and every file write;
 the heavy lifting runs in two workflows they call between question rounds — `wf-research` (live,
@@ -109,7 +116,7 @@ generated file directly.
 
 | Ships in the plugin | Generated per repo by `/spec:init` + `/spec:enforce` |
 |---|---|
-| Commands `/spec:genesis-architect` `genesis-design` `plan` `design` `build` `review` `init` `enforce` `doctor` `import-design` | `.claude/spec.config.json` (gate/test/setup commands, layerGroups, agentMap, `contractHash` drift stamp, optional driftScript, optional `enforcementManifest`/`rulesEnforcementHash`) |
+| Commands `/spec:genesis-architect` `genesis-design` `plan` `design-brief` `design` `build` `review` `init` `enforce` `doctor` `import-design` | `.claude/spec.config.json` (gate/test/setup commands, layerGroups, agentMap, `contractHash` drift stamp, optional driftScript, optional `enforcementManifest`/`rulesEnforcementHash`) |
 | `wf-build.js`, `wf-design.js`, `wf-review.js`, `wf-enforce.js` workflows (+ genesis `wf-panel.js`, `wf-research.js`) | `.claude/rules/spec-pipeline.md` (T3 triggers, planning checklist, build duties, worker/test rules, review checks) |
 | Generic read-only `reviewer` agent | Implementer agents in `.claude/agents/` (one per batch kind) |
 | State-gate hook, spec template, grounding-contract file | `scripts/spec-patterns.sh` (mechanical sweep) + `.claude/rules/enforcement.json` (enforcer provenance) + generated enforcer configs/contracts wired to the gate |
@@ -223,6 +230,28 @@ is ordinary repo canon — a later `/spec:init` extracts it as brownfield design
 + `/spec:build` consume the same tokens and components. Re-invoke with the same URL to add screens;
 it skips components already on disk. For ongoing UI work with reconciliation and review gates,
 graduate to `/spec:design`; to pick a direction with no mockup yet, use `/spec:genesis-design`.
+
+### Compile the Claude Design prompt from a spec (the reverse direction)
+
+```
+/spec:design-brief specs/YYYYMMDD/01-portfolio-panel.md
+  → one paste-ready brief per UI surface with no mock: intent + BINDING constraints quoted
+    from the spec, token roles/component names (never values), a coordination footer that
+    pins the .dc.html file name + data-screen-label region labels so dc-extract's regions
+    line up with the regionRefs /spec:design will bind
+/spec:design-brief specs/YYYYMMDD/01-portfolio-panel.md --drift
+  → fix-at-source prompts from the RECORDED drift (Decisions rows folded from deltas.json
+    at reconcile, fork + iteration rulings) so the mock is re-aligned in Claude Design
+    instead of rotting as stale canon
+```
+
+Mock-first doctrine says every surface worth designing starts in Claude Design — this command
+kills the manual translation that doctrine used to cost: it compiles the prompt from the spec
+instead of you re-extracting the design-relevant intent by hand. State-free (writes only a
+`<spec>.briefs.md` sidecar), session-model (no expensive seat — taste is spent by Claude
+Design's Fable on the other side of the paste), Claude Design strictly read-only. Round trip:
+`/spec:plan` → `/spec:design-brief` → paste, iterate in Claude Design → `/spec:design <spec>
+<mock URL>`.
 
 ### Mid-build requirement change
 

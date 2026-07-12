@@ -15,6 +15,8 @@ Reach for the right design command:
 - **`/spec:genesis-design`** — *greenfield, no mockup yet; decide a direction with research + a panel.*
 - **`/spec:design`** — *build a hardened spec's UI inside an existing doctrine (spec-coupled),
   optionally seeded by a Claude Design mockup (`design_source`) made read-first canon for that spec.*
+- **`/spec:design-brief`** — *the reverse of this command: I have a spec but no mockup (or the
+  mock drifted from what shipped); compile the paste-ready Claude Design prompt from the spec.*
 
 **Intended model: Fable** (Opus fallback if unavailable — shared § Model Placement)**.** The
 design-stage taste exception applies: translating a mockup *with fidelity* is taste work, so a

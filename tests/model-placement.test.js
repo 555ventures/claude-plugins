@@ -56,3 +56,17 @@ test('review surfaces: reviewers/verifiers are cross-model — never Fable', () 
   const wf = read('workflows/wf-review.js')
   assert.doesNotMatch(wf, /model: 'fable'/, 'no workflow review agent may run on the planning model')
 })
+
+test('design-brief.md: courier placement — session model, no invented intent, read-only Claude Design', () => {
+  const brief = read('commands/design-brief.md')
+  assert.match(brief, /the session model — no expensive seat required/i,
+    'brief authoring is grounded extraction; taste is spent in Claude Design, not here')
+  assert.match(brief, /Every BINDING line is traceable/,
+    'an untraceable constraint is invented design intent and belongs in /spec:plan')
+  assert.match(brief, /no hex values, px\/spacing numbers/,
+    'the Fable-5-reader contract: intent and constraints, never pixel prescriptions')
+  assert.match(brief, /never `write_files` \/ `finalize_plan`/,
+    'Claude Design stays read-only — the paste is the only write path')
+  assert.match(brief, /data-screen-label/,
+    'the coordination footer must pin region labels so dc-extract regionRefs line up')
+})

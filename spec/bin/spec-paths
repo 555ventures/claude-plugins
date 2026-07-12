@@ -41,6 +41,7 @@ case "${1:-root}" in
       review)  SECTIONS="Host Grounding|Risk Tiers|State Machine|Model Placement|Decisions|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|Canonical Docs Loop" ;;
       enforce) SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Model Placement|Workflows Encode Shape, Not Judgment" ;;
       import-design) SECTIONS="Host Grounding|Design Stage|Model Placement|Decisions" ;;
+      design-brief)  SECTIONS="Host Grounding|State Machine|Design Stage|Model Placement|Decisions" ;;
       *) cat "$DOC"; exit 0 ;;
     esac
     echo "<!-- shared invariants scoped to /spec:${CMD} — full doctrine: $DOC -->"

@@ -128,7 +128,9 @@ what to build with and how it should look:
 /spec:genesis-design      ratifies the pick: the winner's tokens.css verbatim as canon,
                           plus design doctrine and enforceable design rules
         ↓
-/spec:init → /spec:plan docs/roadmap/01-*.md → /spec:design → /spec:build → /spec:review
+/spec:init → /spec:sketch docs/roadmap/01-*.md → /spec:plan docs/roadmap/01-*.md
+           → /spec:design → /spec:build → /spec:review
+             (sketch is optional — plan warns on an unratified UI brief, never blocks)
         ↓ (per milestone)
 /spec:release             deploy to staging → executed checks against the deployed
                           product → journey walks → confirmation-gated production promote
@@ -175,37 +177,79 @@ as you like; on approval the spec is reconciled, reusable taste rulings are prom
 into the doctrine, and build later *wires* the approved components — it never rebuilds
 them.
 
-Two escape hatches for Claude Design (claude.ai/design), both strictly opt-in:
-
-- **`/spec:import-design <URL>`** — spec-free, one-shot: translate a mockup into real
-  tokens, components, and doctrine in this repo. Re-invoke with the same URL to add
-  screens; it skips what's already on disk.
-- **`/spec:design-brief <spec>`** — the reverse courier: compile paste-ready Claude
-  Design prompts from a spec (and, with `--drift`, fix-at-source prompts from recorded
-  drift, so the mock gets re-aligned instead of rotting).
+One escape hatch, strictly opt-in: a surface you prefer to design at Claude Design
+(claude.ai/design) comes back as the spec's `design_source` URL — `/spec:design` fetches
+it read-only and runs the same extract → skeletons → fidelity path as a local mock.
 
 And for the whole-product view at any time, **`/spec:atlas`** renders every mock at
 device size, arranged as a journey graph from your roadmap, with gap cards for declared
-but unmocked surfaces — zero tokens, deterministic. `atlas sweep` fills every gap with
-an honest sketch-tier mock so the whole picture always exists.
+but unmocked surfaces — zero tokens, deterministic. It's a viewer, never a pipeline
+stage: no command requires it, and it regenerates itself from scratch on every run, so
+there's nothing to keep updated. When it finds gaps it offers the sketch sweep itself
+(`atlas sweep` skips the question), filling every gap with an honest sketch-tier mock
+so the whole picture always exists.
 
-## Command cheat sheet
+The atlas is the map; **`/spec:sketch <brief>`** is the workbench. Point it at one roadmap
+brief (or a mock file, or a bare surface label — it resolves the owner) *before* you plan
+that brief: it mocks only that brief's surfaces, then you brainstorm on them — add a
+feature, remove a screen, change direction — and every change is triaged into its binding
+home in the same round: pixels to the mock, structure to the brief's `surfaces` block,
+scope to the brief's Scope, and anything architecture-shaped (new persistence, endpoint,
+auth surface) flagged into the brief's open questions or an ADR delta rather than smuggled
+past planning. Sessions are fully resumable from disk — iterate across as many fresh
+windows as you like. It ends with a surface-by-surface coherence readout; your confirmation
+stamps the mocks `ratified`, and `/spec:plan` on that brief then reads mocks and brief that
+already agree (it warns if you skipped this, but never blocks).
+
+## All commands, in order
+
+The full lifecycle. Greenfield starts at step 0; an existing repo starts at step 1.
+
+```
+0. GREENFIELD ONLY (once, before init — skip these on an existing repo)
+   /spec:genesis-architect        stack + structure → ADRs, scaffold, roadmap briefs
+   /spec:genesis-explore          rendered design candidates → you pick a direction
+   /spec:genesis-design           ratify the pick → tokens, doctrine, design rules
+
+1. SETUP (once per repo)
+   /spec:init                     profile the repo, generate the grounding layer
+                                  (finishes by running /spec:enforce for you)
+
+2. EACH UNIT OF WORK (repeat per roadmap brief / feature / fix)
+   /spec:sketch  <brief>          optional, UI briefs: mock + brainstorm, ratify
+   /spec:plan    <brief|"ask">    write + harden the spec        draft → hardened
+   /spec:design  <spec>           UI specs only: mock → components → your approval
+   /spec:build   <spec>           implement, TDD, worktree       → implementing
+   /spec:review  <spec>           executed verification, merge   → done
+
+3. PER MILESTONE (a few briefs shipped)
+   /spec:release                  staging deploy → executed checks → promote
+
+ANYTIME (no order, no prerequisites beyond init)
+   /spec:atlas                    browse/annotate the whole product's design
+   /spec:doctor [--fix]           drift check — run after plugin updates
+   /spec:escape <spec>            record a defect that slipped past a review
+   /spec:enforce                  re-mechanize rules when they or tooling change
+```
+
+Each pipeline stage refuses to run out of order — a hook checks the spec's `status`
+before the model even sees your prompt — so the worst a wrong command costs you is an
+error message telling you which command to run instead.
 
 | Command | What it does | When |
 |---|---|---|
+| `/spec:genesis-architect` / `-explore` / `-design` | Stack, taste funnel, design canon | Greenfield only, before init |
 | `/spec:init` | Bootstrap the grounding layer | Once per repo |
-| `/spec:enforce` | Mechanize your rules into deterministic checks | Init runs it; re-run when rules/tooling change |
+| `/spec:sketch` | Mock + brainstorm ONE roadmap brief; ratify mock↔brief agreement | Before planning a UI-bearing brief |
 | `/spec:plan` | Author + adversarially harden a spec | Start of every spec'd change |
 | `/spec:design` | Mock → components → your catalog approval | UI-bearing specs, design-capable repos |
 | `/spec:build` | TDD implementation via gated Sonnet workflow | After a spec is `hardened` |
 | `/spec:review` | Independent executed verification; flips `done`, commits, merges | After build |
 | `/spec:release` | Staging deploy → executed checks → confirmed promote | Per milestone |
+| `/spec:atlas` | Whole-product design picture + annotation loop | Never required — when you want to see/change the design; once after genesis-design |
 | `/spec:doctor` | Drift check (`--fix` to repair) | Whenever things feel off, or after plugin updates |
 | `/spec:escape` | Record a defect that slipped past review | The moment you find one |
-| `/spec:atlas` | Whole-product design picture + annotation loop | Any time |
-| `/spec:genesis-architect` / `-explore` / `-design` | Stack, taste funnel, design canon | Greenfield only, before init |
-| `/spec:import-design` | One-shot Claude Design import, no spec | Have a mockup URL, want real code |
-| `/spec:design-brief` | Compile Claude Design prompts from a spec | Designing that surface remotely |
+| `/spec:enforce` | Mechanize your rules into deterministic checks | Init runs it; re-run when rules/tooling change |
 
 ## How it keeps itself honest
 
@@ -259,7 +303,7 @@ keep density essential:
 1. **State a fact once.** A rule lives in its highest common ancestor
    (`doctrine/shared.md`); every other site *points* (`shared § Name`), never restates.
    Two copies of one constraint is accidental complexity and a drift hazard.
-   `commands/import-design.md` is the model: it cites and stays lean.
+   `commands/atlas.md` is the model: it cites and stays lean.
 2. **Don't name a derived case.** Before adding a tag / enum / `kind`, prove no existing
    field already determines it. Name only what carries information the field doesn't —
    never the field re-projected.

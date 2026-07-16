@@ -30,7 +30,10 @@ time this is mostly "nothing — scaffold only"; keep it honest and re-verify at
 <!-- UI-bearing briefs only (Design stage: yes) — delete the section otherwise. The design
      atlas parses this fenced block (shared § Design Atlas): one line per surface label, one
      per journey edge. NAMES AND ARROWS ONLY — the roadmap owns structure, mocks own pixels.
-     Labels are permanent once a mock ships (they are data-screen-label / regionRef anchors). -->
+     Labels are permanent once a mock ships (they are data-screen-label / regionRef anchors).
+     To design this brief before planning it, run /spec:sketch on this file — it mocks these
+     surfaces, evolves this brief with the mocks (Scope, surfaces, Open questions), and ends
+     by ratifying the pair. /spec:plan warns if that never happened, but doesn't block. -->
 
 ```surfaces
 { label }

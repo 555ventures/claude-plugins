@@ -35,6 +35,14 @@ in Phase 1.5.
    **Every spec this session produces gets `brief: NN` in frontmatter** — that stamp is how
    roadmap status is derived (nothing tracks it by hand). The brief's Out of scope section is
    binding: work it fences off goes to its owning brief, not into these specs.
+   **Mock intake (UI-bearing briefs — a `surfaces` block exists):** Read `design/mocks/<label>.html`
+   for each declared surface alongside the brief — the mocks carry the field-level design the
+   brief deliberately doesn't. If any surface is a gap or its mock is still `data-status="sketch"`
+   (not `ratified`+), warn: the brief hasn't been design-ratified — offer `/spec:sketch <brief>`
+   first (warn, don't block). Any **mock↔brief mismatch** (the mock shows a capability Scope
+   doesn't name, or vice versa) is never resolved silently — it becomes a Phase 1 interview
+   question ("the mock shows an export button; the brief doesn't mention export — which is
+   right?"), and the losing home gets corrected before drafting.
 1. **Harvest or discover.** If this conversation already contains a design discussion of the
    target: summarize what has converged (scope, key decisions, open questions), confirm the
    summary with the user, and skip to Phase 1.5/2. If invoked cold: run Phase 1 discovery. If a
@@ -204,10 +212,9 @@ Never silently drop a finding.
    decision count, assumption count, spike run or skipped, refuter findings fixed/rejected. Next:
    `/spec:design {path}` if `design: true`, else `/spec:build {path}`. If `design: true` with
    **no** `design_source`, note that `/spec:design` will author the mock first (its
-   mock-authoring preamble — shared § Design Stage); a sketch already swept into
-   `design/mocks/` by `/spec:atlas` becomes the `design_source` starting point. The Claude
-   Design escape hatch (`/spec:design-brief {path}` → paste → mock URL as `/spec:design`'s
-   second arg) remains available for surfaces the user prefers to design there.
+   mock-authoring preamble — shared § Design Stage); a mock already in `design/mocks/`
+   (ratified by `/spec:sketch`, or swept by `/spec:atlas`) becomes the `design_source`
+   starting point — record its path into the frontmatter now.
 
 ## Rules
 

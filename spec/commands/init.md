@@ -477,11 +477,6 @@ Both modes also:
   fit, they fall to pipeline rules § Review Checks — `/spec:enforce` owns that decision, not init.
 - Keep the doctrine doc to **one page**; record its path as `design.doctrine` in the config.
 
-(A repo whose design foundation was seeded by `/spec:import-design` — a translated Claude Design
-mockup — is indistinguishable from any brownfield repo with real UI: it writes plain tokens +
-doctrine + components outside `.claude/genesis/`, so the extract path above handles it; do not
-special-case it.)
-
 ## Phase 7 — Verify, prove activation, then stamp
 
 1. Re-read every generated file; spot-check 10 cited paths/exports at random against the repo.

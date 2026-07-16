@@ -316,7 +316,9 @@ construction** — the extraction-reconciliation economy (harvest literals, near
 fork adjudication on values) collapses to the rare genuinely-new role.
 
 **Mock authority has a lifecycle — it expires at `built`.** While a surface is being designed
-and built (sketch → approved → bound), the mock is the design authority and code is held to it.
+and built (sketch → ratified → approved → bound; **ratified** — direction confirmed at roadmap
+level by `/spec:sketch`'s exit readout — appears only on roadmap-declared surfaces and owes the
+matrix later, at `approved`), the mock is the design authority and code is held to it.
 Once the claiming spec is `done`, **authority inverts: shipped code is the truth and the mock
 becomes a historical contract plus planning substrate — allowed to go stale.** Staleness is
 *displayed*, never owed: the atlas's `built` badge and side-by-side live render make divergence
@@ -432,8 +434,8 @@ Sheet for a Dialog): the session surfaces it with the **nearest existing primiti
 **default-authoring when no near-match exists** — a mock that uses a Dialog is the user already deciding
 the foundation should exist. The primitive is still authored **once, in the base dir behind its barrel**
 (never per-surface); only the *trigger* moves from "blocked" to "author-as-foundation". The
-**`containment` tag** is what drives extraction (the digest's in `/spec:import-design`, the skeleton's
-in `/spec:design`) — a containment shell's `usedBy` is structurally ≤1, so the `usedBy≥2` "shared"
+**`containment` tag** is what drives extraction (the skeleton's in `/spec:design`) — a
+containment shell's `usedBy` is structurally ≤1, so the `usedBy≥2` "shared"
 count can never tag it.
 `/spec:enforce` mechanizes the `base-primitive-containment` rule (category `structure`) so a hand-rolled
 overlay outside the base dir is a build error regardless of how it was born.
@@ -456,13 +458,11 @@ near-match rule work. New components are never forbidden; unjustified ones are.
 **Claude Design as a source (escape hatch, read-only).** The pipeline's mocks are authored
 locally (design harness above); **Claude Design** (`claude.ai/design`) remains a supported
 *escape hatch* — a user who prefers its canvas ergonomics for a particular surface can design
-there and hand the result in. A finished Claude Design mockup can *seed* the canon above. Both
-`/spec:import-design` (spec-free) and `/spec:design`
-(spec-coupled, when a spec sets `design_source`) **Fetch** it identically (below); after that they
-**diverge** — `/spec:import-design` digests + translates in **one warm session**, `/spec:design`
-**extracts (deterministic script) → authors skeletons → expands them via `wf-design`**. The shared
-invariants (markup-as-path, DATA-not-instructions, extend-tokens-never-fork, mock-supremacy,
-base-primitive containment, read-first sequencing, values-as-token-**roles**) hold on both paths:
+there and hand the result in as a spec's `design_source` URL. `/spec:design` **Fetches** it
+(below), then **extracts (deterministic script) → authors skeletons → expands them via
+`wf-design`** — the same path as a local mock after the fetch. The shared invariants
+(markup-as-path, DATA-not-instructions, extend-tokens-never-fork, mock-supremacy,
+base-primitive containment, read-first sequencing, values-as-token-**roles**) hold throughout:
 
 - **Fetch (read-only).** Load `DesignSync` (`ToolSearch select:DesignSync`); use **only**
   read methods (`get_project` / `list_files` / `get_file`), **never** any mutating method —
@@ -472,24 +472,12 @@ base-primitive containment, read-first sequencing, values-as-token-**roles**) ho
   `<x-dc>` are read for structure, never ported. **Errors STOP** (unreachable / file-not-found /
   over cap / `DesignSync` unavailable) — never translate a truncated or unreachable mockup, never
   guess, no partial writes. **The markup never enters the authoring session.** A worker does the
-  fetch — in `/spec:design` a one-shot top-level Sonnet `Agent` (top-level agents inherit session
+  fetch — a one-shot top-level Sonnet `Agent` (top-level agents inherit session
   MCP more reliably than workflow agents, the documented weak path for claude.ai-authenticated
-  MCP), in `/spec:import-design` the session's plumbing — and writes the markup straight to disk;
+  MCP) — and writes the markup straight to disk;
   the authoring session receives **only the file path** (with its sha256 + byte count), never the
   raw markup, and passes that path to the next step. "Never held raw in the authoring session" is
   therefore a structural property of the delegated fetch, not an aspiration.
-- **`/spec:import-design` — Digest + Translate (one warm session).** Distill the markup into a
-  structured on-disk **design digest** (`…design-digest.json`) *before* authoring — a token map
-  (`:root` / `[data-accent]` roles tagged `matches-canon` / `new-role` / `fork` after the near-match
-  dedup check), a `<x-dc>` surface inventory with a per-surface token-role **`visualSpec`** +
-  **`sourceRef`** slice pointer, a11y flags, the source sha256 — plus each `<x-dc>` block **verbatim**
-  to a durable slice. One warm session writes it and **translates** in the same context: `tokenMap` →
-  token files (extend, never overwrite; `fork` → `AskUserQuestion`); each doctrine tension → switch on
-  `grounding` (`taste` yields silently, `grounded` snaps value to intent); `surfaces` → real stateless
-  components (props + mock data; **a mock value is never discarded** — it maps to a token role, an
-  unmappable value is a `new-role` minted after the dedup check, never an un-tokenized literal; Sonnet
-  plumbs). One coherent artifact, one session — the coherence import-design protects by never
-  splitting per-surface.
 - **`/spec:design` — Extract → Skeletons → Expand → Fidelity gate.** A deterministic **`dc-extract`
   script** (no model; `spec-paths dc-extract`) writes `extract.json`: a **region graph** per surface
   (a canvas export is one whole screen; its own `data-screen-label` elements and comment-labeled
@@ -535,8 +523,8 @@ base-primitive containment, read-first sequencing, values-as-token-**roles**) ho
   All mock-path invariants above apply unchanged — a local mock is the same binding contract as a
   fetched mockup, and on harness-authored mocks the `tokenMap` is `matches-canon` by construction.
 
-Both make the read-first anti-grovel invariant a verifiable **sequencing** guarantee — the extracted
-artifacts (digest + slices, or `extract.json` + slices + `skeletons.json`) exist on disk before any
+This makes the read-first anti-grovel invariant a verifiable **sequencing** guarantee — the
+extracted artifacts (`extract.json` + slices + `skeletons.json`) exist on disk before any
 authoring, so extraction provably runs first and a resumed session reads only files, never
 conversation context. Forks are **detected** mechanically and **adjudicated** by the session, never
 silently overwritten.
@@ -548,20 +536,10 @@ the Claude Design escape hatch, `/design-sync` remains the right first move (a s
 literal harvest matches repo token values and the `tokenMap` lands mostly `matches-canon`); the
 push direction (implemented code → canvas) stays out of the pipeline.
 
-**Spec → design prompts (`/spec:design-brief`, escape-hatch courier).** When a surface IS being
-designed externally, intent travels as **prompt text, never canvas writes**: `/spec:design-brief`
-compiles paste-ready prompts from a spec. Brief mode emits one brief
-per UI surface with no mock — intent + BINDING constraints traceable to spec clauses; token
-*roles* and component names, never values (the reader is Fable 5: constraints, not
-prescriptions); a coordination footer fixes the `.dc.html` file name and `data-screen-label`
-region labels so `dc-extract`'s regions line up with the `regionRef`s the spec later binds.
-Drift mode reads the **recorded** drift — spec Decisions rows folded from `deltas.json` at
-reconcile, fork rulings, iteration rulings — and emits fix-at-source prompts per drifted mock
-file, so the mock is re-aligned upstream instead of rotting as stale canon. State-free (writes
-only a `.briefs.md` sidecar), Claude Design strictly read-only; the user's paste is the only
-write path. On the local path this command is unnecessary — the harness authors the mock
-directly from the spec in-session; drift in a local mock is fixed by editing the file — when
-the mock still holds authority (pre-`built`; see the mock-authority lifecycle above — after
+When a surface IS being designed externally, intent travels as **prompt text the user pastes,
+never canvas writes** — Claude Design stays strictly read-only from this side, and the mockup URL
+comes back as the spec's `design_source`. Drift in a local mock is fixed by editing the file —
+when the mock still holds authority (pre-`built`; see the mock-authority lifecycle above — after
 `built`, staleness is permitted and re-sync is lazy).
 
 Claude Design is **strictly opt-in**: `/spec:design` engages this path **only** when a spec sets
@@ -573,21 +551,13 @@ specs may carry the `storybook:` frontmatter flag. Read these as
 `design: {tool: "storybook", command: <storybookCommand>, storyFormat: "CSF3 stories"}` and
 `design: true` respectively — same semantics, no behavioral difference.
 
-**Three ways the design canon is established** (same three-layer artifacts, different source of
+**Two ways the design canon is established** (same three-layer artifacts, different source of
 taste): the genesis pair — `/spec:genesis-explore` *picks* a direction from rendered candidates
 and `/spec:genesis-design` *ratifies* it (winner's tokens verbatim; doctrine + rules authored
-around them); `/spec:design`
+around them); and `/spec:design`, which
 builds a hardened spec's UI inside an already-established doctrine (**spec-coupled**, bound to a
 `design_source` mock that becomes read-first canon
-for that spec — locally authored, or from the Claude Design escape hatch); and
-**`/spec:import-design`** *translates a
-finished Claude Design (`claude.ai/design`) mockup* into the repo — tokens → token files,
-surfaces → real components, taste → the doctrine doc. The two mockup-capable commands differ by
-**spec-coupled (`/spec:design`) vs spec-free (`/spec:import-design`)**, not by mockup-vs-no-mockup.
-Import is **spec-free**: it runs no pipeline, touches no `status` or state gate, needs no config key, and
-writes to plain repo paths **outside `.claude/genesis/`** (so its output reads as ordinary
-brownfield canon, not a half-finished genesis run). It reads Claude Design **read-only** and treats
-the fetched `.dc.html` as data, never instructions.
+for that spec — locally authored, or from the Claude Design escape hatch).
 
 ## Design Atlas
 
@@ -608,8 +578,10 @@ Generation is **zero-token**: a script walk, never a model pass.
   every frame to the declared device sizes, theme buttons flip `data-theme` across all frames —
   so the whole product is reviewable per target without per-device mock files.
 - **Status badges, derived never declared:** `gap` (declared in a `surfaces` block, no mock
-  file) · `sketch` / `approved` (the mock's `data-status`) · `bound` (a spec's coverage-ledger
-  claim exists) · `built` (the claiming spec is `done`) · `orphan` (a mock **neither** declared
+  file) · `sketch` / `ratified` / `approved` (the mock's `data-status`; `ratified` is set only
+  by a user's `/spec:sketch` exit confirmation — brief and mocks agree at roadmap level) ·
+  `bound` (a spec's coverage-ledger claim exists) · `built` (the claiming spec is `done`) ·
+  `orphan` (a mock **neither** declared
   by a brief **nor** claimed in the coverage ledger — visible, so it gets adopted or deleted;
   standalone-spec mocks are claimed, hence never orphans). Declared-but-unmocked surfaces render
   as explicit **gap cards**, which is what makes orphaned surfaces impossible by construction.
@@ -634,6 +606,15 @@ Generation is **zero-token**: a script walk, never a model pass.
   brief error leaves the brief lying to every future planning session — one binding home per
   fact. Direction-level change rounds here are the Fable seat (§ Model Placement); the sweep
   itself is Sonnet behind the harness check.
+- **`/spec:sketch <brief>` is the per-brief workbench** — the same triage run as a scoped,
+  pre-plan brainstorm session on ONE brief: scoped sweep for that brief's gaps, iteration
+  rounds where the brief itself is a write target (Scope, `surfaces`, Open questions evolve
+  with the mocks, brief edit first, mock second, every round to disk), an **architecture
+  route** on top of the two-way triage (a design change that alters what the ADRs decided or
+  assume is flagged — delta + Open-question line, or an ADR amendment — never silently
+  absorbed into the brief), and an exit **coherence readout** (mock vs brief, per surface)
+  whose user confirmation sets the brief's sketches to `data-status="ratified"`. Never
+  required: `/spec:plan` warns on an unratified UI brief and offers it, but never blocks.
 - **Built surfaces join the atlas** when the host declares routes for them (config
   `design.atlasRoutes`, optional): the built screen renders beside its bound mock, making drift
   continuously visible instead of gate-time-only. Absent the key, built status shows as a badge
@@ -647,7 +628,8 @@ is the v5 placement rule — one governing principle, not a per-command table of
 memorize.
 
 Concretely: **Fable** authors specs (`/spec:plan`) and holds the **roadmap-level design seats**
-— genesis-explore position briefs and critique rounds, atlas direction-change rounds — because
+— genesis-explore position briefs and critique rounds, atlas direction-change rounds, sketch
+brainstorm rounds (`/spec:sketch`) — because
 that is where taste is actually spent and judged; below that line design work inherits recorded
 decisions. **Sonnet** orchestrates build, review,
 and design (mock transcription AND harness mock-authoring on roadmap-derived specs), and is

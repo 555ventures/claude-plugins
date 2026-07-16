@@ -5,18 +5,22 @@ argument-hint: <pasted Claude Design prompt or URL>
 
 # Spec Import Design: Claude Design → repo (no spec)
 
-Standalone and one-shot. Pulls a finished **Claude Design** mockup into *this* repo as real
+Standalone and one-shot — the deep end of the **Claude Design escape hatch** (shared § Design
+Stage; the main path authors mocks locally). Pulls a finished **Claude Design** mockup into
+*this* repo as real
 code — token files, base components, and the design doctrine — with **no spec**: no
 `/spec:plan`/`design`/`build`, no spec file, no `status`, no state gate, no reconcile. Use it
 when you designed something in Claude Design (claude.ai/design) and just want it in the repo.
 
 Reach for the right design command:
-- **`/spec:import-design`** (this) — *I have a finished mockup; put it in the repo now.*
-- **`/spec:genesis-design`** — *greenfield, no mockup yet; decide a direction with research + a panel.*
-- **`/spec:design`** — *build a hardened spec's UI inside an existing doctrine (spec-coupled),
-  optionally seeded by a Claude Design mockup (`design_source`) made read-first canon for that spec.*
-- **`/spec:design-brief`** — *the reverse of this command: I have a spec but no mockup (or the
-  mock drifted from what shipped); compile the paste-ready Claude Design prompt from the spec.*
+- **`/spec:import-design`** (this) — *I have a finished Claude Design mockup; put it in the repo now.*
+- **`/spec:genesis-explore` → `/spec:genesis-design`** — *greenfield, no direction yet; research,
+  render candidates locally, pick, ratify.*
+- **`/spec:design`** — *build a hardened spec's UI inside an existing doctrine (spec-coupled);
+  authors a local mock first when none exists, or binds a supplied `design_source`.*
+- **`/spec:atlas`** — *see and change the whole product's design picture.*
+- **`/spec:design-brief`** — *escape-hatch courier: compile the paste-ready Claude Design prompt
+  from a spec, for surfaces being designed externally.*
 
 **Intended model: Fable** (Opus fallback if unavailable — shared § Model Placement)**.** The
 design-stage taste exception applies: translating a mockup *with fidelity* is taste work, so a

@@ -1,301 +1,265 @@
-# Spec Pipeline Plugin
+# Spec Pipeline
 
-One pipeline for all spec'd work — features, migrations, bugfixes, cross-cutting changes.
-A new product surface is a normal spec (usually a `depends_on` series), planned in the same
-Fable session. The plugin ships the **process layer**; each repo supplies its own
-**grounding layer**, bootstrapped once by `/spec:init`.
+**Plan it once, build it hands-off, trust the review.**
 
-## Greenfield genesis (the optional first stage)
+You know the failure mode: you ask an agent for a big change, it confidently produces
+2,000 lines, and now *you're* the reviewer for work you never scoped. This plugin flips
+that. An expensive model does the thinking up front and writes a hardened spec; cheap
+fast models do the typing behind deterministic gates; an independent reviewer that
+actually *executes* the code decides whether it's done. You spend your attention where
+it matters — deciding what to build and approving what shipped.
 
-Brand-new project with no code yet? The two **genesis** commands run *before* `/spec:init` and
-decide *what to build with and how it should look*, then scaffold a real repo for `/spec:init` to
-ground:
+One pipeline covers all spec'd work: features, migrations, bugfixes, cross-cutting
+changes, whole new product surfaces. And when a project doesn't exist yet, the genesis
+commands will interview you, research the options live, argue about the stack in front
+of you, and scaffold the repo — before the first spec is ever written.
+
+## The 30-second version
 
 ```
-/spec:genesis-architect   stack + structure decisions (ADRs) → scaffold → docs/roadmap/ briefs
-/spec:genesis-design      UX/visual/voice canon: doctrine + tokens + category-only design rules
-        ↓
-/spec:init → /spec:plan docs/roadmap/01-*.md → /spec:design → /spec:build → /spec:review
+/spec:plan "move tickSize from symbol to dataset"     ← think (expensive model, one session)
+/spec:build specs/20260716/01-tick-size.md            ← type (Sonnet workers, TDD, gated)
+/spec:review specs/20260716/01-tick-size.md           ← verify (independent, execution-grounded)
 ```
 
-Genesis-architect ends by decomposing the project into a **roadmap** — `docs/roadmap/00-overview.md`
-(sequence table, milestone gates, ops track, parking lot) plus one numbered planning brief per
-`/spec:plan` invocation — so setup never ends without a next command. Briefs are stable intent
-hydrated into specs lazily; per-brief status is derived from specs' `brief:` frontmatter by
-`/spec:doctor`, never hand-tracked. Brownfield repos hand-author the same shape from
-`templates/roadmap-overview.md` + `templates/roadmap-brief.md`.
+That's the whole loop. Plan writes and adversarially hardens a spec. Build implements
+it test-first in an isolated worktree. Review runs the gates, boots the app, verifies
+every finding by *executing* it, then commits and merges. Each stage refuses to run
+until the previous one signed off — a hook enforces the state machine before the model
+even sees your prompt.
 
-Both are highly interactive Opus sessions that own every `AskUserQuestion` and every file write;
-the heavy lifting runs in two workflows they call between question rounds — `wf-research` (live,
-web-enabled option-menu research *during* the discovery interview) and `wf-panel` (a
-Mixture-of-Agents panel, 3 blind Sonnet proposers → Opus aggregator, that adjudicates the
-hard-to-reverse forks). Every cross-stage handoff is a file in `.claude/genesis/` or `docs/adr/`;
-the workflow `args` carry only paths, enum keys, and booleans. Genesis is **greenfield-only**:
-pointed at a populated repo, `/spec:genesis-architect` defers to `/spec:init`. Full contract in
-`doctrine/genesis.md` (the genesis-stage supplement the two genesis commands read alongside
-`doctrine/shared.md`).
+## When to use it (and when not to)
+
+Honest answer: **most changes don't need a spec.** Just do the work and run the gate
+command. Reach for the pipeline when you'd gain one of three things:
+
+| Reach for it when… | Because… |
+|---|---|
+| **The change is big enough to delegate** | Sonnet workers implement in parallel batches while you do something else |
+| **The work spans sessions** | The spec is durable intent; any future session can pick it up cold |
+| **The blast radius is scary** (T3 risk) | You want executed verification, not "looks good to me" |
+
+A one-file fix in an established pattern never gets a spec file. The plugin will tell
+you the same thing if you try.
 
 ## Install
 
-From the `555-tools` marketplace: add the marketplace, then install the `spec` plugin. Then,
-in each repo that will use the pipeline, run **`/spec:init`** once — it profiles the repo and
-generates `.claude/spec.config.json`, `.claude/rules/spec-pipeline.md` (including an
-initially-empty, evidence-cited **Gotchas** section later spec runs fold real deviations into),
-project-grounded implementer agents, `scripts/spec-patterns.sh`, and a per-host
-`.claude/skills/spec-verify/SKILL.md` (how to launch, seed, and observe this app, derived from
-init's own profiling), then ends by invoking **`/spec:enforce`** (below). The pipeline commands
-refuse to run without them.
+1. Add the `555-tools` marketplace and install the `spec` plugin.
+2. In each repo that will use it, run **`/spec:init`** once.
 
-**`/spec:enforce`** mechanizes the repo's rules into deterministic checks wired to the gate
-command. It classifies each rule into a stable, language-neutral category (`module-boundary`,
-`naming`, `forbidden-symbol`, `structural-pattern`, `datetime`, `schema-validation`, `format`),
-then for each `(stack × category)` cell **discovers** an enforcer against live sources (with
-citations, never training memory) and **verifies** it installs and runs against the repo before
-adopting it — so no plugin file ever names a specific linter or arch-tool. It records its choices
-in `.claude/rules/enforcement.json` (stamped by `rulesEnforcementHash`) and is independently
-re-runnable whenever rules or tooling drift. The only rule-check left to an LLM is `/spec:plan`
-reading a draft spec; everything a tool can check, a tool checks.
+Init profiles your repo and generates the **grounding layer** — the plugin ships the
+*process*, your repo supplies the *ground truth*:
 
-Drift detection is automatic: the grounding-layer contract lives in one plugin file
-(`templates/grounding-contract.md`), init stamps its hash into the config (`contractHash`),
-and the hook recomputes the hash on every pipeline command — any plugin update that touches
-the contract warns on the next command, with zero version bookkeeping. Run **`/spec:doctor`**
-for a cheap read-only drift check (plugin contracts + codebase reality vs the generated
-files) — it recommends targeted patches, or re-running `/spec:init` when drift is structural.
-Doctor's check 13 audits the pipeline's own distrust mechanisms against
-`doctrine/scaffold-ledger.md` — the registry of every gate/advisory/structural guard, each row
-naming the incident or measurement that justified it, the model generation it was earned under,
-and the condition that promotes or retires it; a live mechanism missing from the ledger, or a
-ledger-marked-retired one still gating, is a finding. When a defect surfaces later in spec-built
-code, record it with **`/spec:escape`** — one run-ledger row pointing back at the review that
-passed it (`/git:commit` offers to capture one automatically on a fix-shaped commit when the
-ledger exists). Those rows are the pipeline's ground truth: doctor aggregates them into
-contradicted-CLEAN and verifier-killed-a-finding-that-later-escaped signals.
+- `.claude/spec.config.json` — gate/test commands, how to boot the app, layer groups
+- `.claude/rules/spec-pipeline.md` — your repo's rules, plus an evidence-cited
+  **Gotchas** section that real runs fold deviations into
+- Implementer agents grounded in *your* patterns, a mechanical pattern sweep, and a
+  `spec-verify` skill (how to launch, seed, and observe this specific app)
 
-## The Flow
+Init won't stamp itself complete until `scripts/manifest-check.sh` proves every
+generated file exists **and activates** — authored ≠ activated. It finishes by invoking
+**`/spec:enforce`**, which turns your written rules into deterministic checks: each rule
+is classified into a language-neutral category (`module-boundary`, `naming`,
+`forbidden-symbol`, `structural-pattern`, `datetime`, `schema-validation`, `format`),
+and for each (stack × category) cell it *discovers* a real enforcer from live sources —
+with citations, never training memory — and verifies it runs against your repo before
+adopting it. Everything a tool can check, a tool checks; the only rule-check left to an
+LLM is `/spec:plan` reading a draft.
+
+Later, if the plugin updates or your repo drifts, **`/spec:doctor`** catches it — the
+grounding contract is hash-stamped into your config and rechecked on every pipeline
+command, so drift warns you instead of silently rotting. `doctor --fix` applies
+evidence-cited repairs with per-patch approval.
+
+## The everyday flow
 
 ```
 ┌───────────┐    ┌─────────────┐    ┌────────────┐    ┌─────────────┐
 │ spec:plan │ →  │ spec:design │ →  │ spec:build │ →  │ spec:review │
-│ Fable:    │    │ optional:   │    │ Sonnet +   │    │ independent │
-│ explore → │    │ Fable       │    │ workflow:  │    │ gate;       │
-│ spike →   │    │ designs,    │    │ TDD →      │    │ verified    │
-│ draft →   │    │ user        │    │ batches →  │    │ panel;      │
-│ refute →  │    │ iterates in │    │ integrate  │    │ flips done  │
-│ lock      │    │ the catalog │    │ → gate     │    │             │
+│ think     │    │ (optional,  │    │ type       │    │ verify      │
+│ explore → │    │ UI repos)   │    │ TDD →      │    │ gates +     │
+│ spike →   │    │ mock →      │    │ batches →  │    │ executed    │
+│ draft →   │    │ components →│    │ integrate  │    │ checks;     │
+│ refute →  │    │ your eyes   │    │ → gate     │    │ flips done  │
+│ lock      │    │             │    │            │    │             │
 └───────────┘    └─────────────┘    └────────────┘    └─────────────┘
  draft→hardened   sets designed:     →implementing      →done
 ```
 
-State machine `draft → hardened → implementing → done` is enforced by the plugin's
-`spec-state-gate.sh` (UserPromptSubmit hook) before the model even sees a wrong-state
-invocation; the same hook blocks any spec still carrying `[NEEDS CLARIFICATION]` markers —
-planning writes them inline instead of guessing, and lock requires zero. `/spec:design` never moves `status` — it sets the `designed:` date field — and
-only exists in repos whose config declares a component catalog (`design` block — e.g.
-Storybook for web, Widgetbook for Flutter).
+**`/spec:plan`** is one expensive-model session, because spec quality concentrates all
+downstream spend. It explores the codebase, spikes anything brownfield-unclear, drafts,
+then turns adversarial refuters loose on its own draft and fixes what they find before
+locking. Anything genuinely unknown becomes an inline `[NEEDS CLARIFICATION]` marker —
+and the state gate refuses to let a spec with markers proceed, so planning never papers
+over a guess.
 
-A second, always-on guard `block-cross-worktree-writes.sh` (PreToolUse on `Write|Edit|NotebookEdit`)
-mechanically backs `/spec:build`'s worktree isolation: it blocks any write whose absolute path
-escapes the current worktree into another working tree of the same repo (the "isolated worktree,
-but the edit landed on `main`" pollution). It is topology-based and fail-open — inert for ordinary
-single-checkout work, and silent outside a worktree or on any git error.
+**`/spec:build`** is a Sonnet-orchestrated deterministic workflow: test authors write
+failing tests first, workers implement in layered batches, and a gate + repair loop
+holds the line. A Fable retainer is consulted only on genuine surprises — no checkpoint
+rituals. Small specs (single batch, ≤4 files) skip the workflow entirely via a fast
+path. Builds run in an isolated worktree, and an always-on hook mechanically blocks any
+write that escapes it into another checkout — no more "isolated build, but the edit
+landed on `main`."
 
-Shared invariants (risk tiers, model placement, escalation contract, MCP policy):
-`doctrine/shared.md` (run `spec-paths shared` for its absolute path); the genesis-only supplement
-is `doctrine/genesis.md` (`spec-paths shared-genesis`). Spec template:
-`templates/spec.md`. Deterministic orchestration: `workflows/wf-build.js`,
-`workflows/wf-design.js` (design-stage authoring: the `author` stage only — comprehend is the `dc-extract` script, reconcile is inlined by `/spec:design`),
-`workflows/wf-review.js` — commands locate them via the bundled `spec-paths` helper, since
-`${CLAUDE_PLUGIN_ROOT}` is not substituted inside command bodies. The committed `wf-*.js` files
-are **generated, not hand-edited**: each is assembled from a `workflows/src/*.body.js` phase
-body plus shared `workflows/fragments/*.frag` (arg normalization, group validation, dispatch) by
-`npm run build:workflows`; change the source or a fragment and rebuild, never patch the
-generated file directly.
+**`/spec:review`** is independent and execution-verified — never the model that wrote
+the plan. A diff-scaled reviewer panel files findings; every non-soft finding then gets
+an execution-grounded verifier, and a finding dies only on a failed repro, a quoted spec
+sanction, or a plain miscitation — never by argument. **No verdict rests on static
+analysis alone**: CLEAN requires an observed boot (`scripts/smoke.sh` runs your config's
+`runtime` contract), and the AC↔test matrix counts *executed* tests — a skipped test is
+a hard finding unless the AC declares its environment gate. On CLEAN, review commits,
+merges the build branch back (strategy asked, conflicts repaired, never pushed), and
+flips the spec to `done`.
 
-## Process layer vs grounding layer
+**Requirement changed mid-build?** No cascade command. Write the ruling into the spec's
+Decisions table, salt the affected batch's `resolutions` token, and resume the workflow
+— finished batches return from cache, only the salted ones re-run.
 
-| Ships in the plugin | Generated per repo by `/spec:init` + `/spec:enforce` |
-|---|---|
-| Commands `/spec:genesis-architect` `genesis-design` `plan` `design-brief` `design` `build` `review` `init` `enforce` `doctor` `import-design` | `.claude/spec.config.json` (gate/test/setup commands, layerGroups, agentMap, `contractHash` drift stamp, optional driftScript, optional `enforcementManifest`/`rulesEnforcementHash`) |
-| `wf-build.js`, `wf-design.js`, `wf-review.js`, `wf-enforce.js` workflows (+ genesis `wf-panel.js`, `wf-research.js`) | `.claude/rules/spec-pipeline.md` (T3 triggers, planning checklist, build duties, worker/test rules, review checks) |
-| Generic read-only `reviewer` agent | Implementer agents in `.claude/agents/` (one per batch kind) |
-| State-gate hook, spec template, grounding-contract file | `scripts/spec-patterns.sh` (mechanical sweep) + `.claude/rules/enforcement.json` (enforcer provenance) + generated enforcer configs/contracts wired to the gate |
+## Starting from nothing: genesis
 
-Repo differences are configuration, never forks: the build workflow takes the agent roster
-via `args.agentMap`, the gate via `args.gate.command`, and the host's worker/test rules as a
-**path** (`pipelineRulesPath`) each worker Reads itself — `args` is a control channel of
-paths/ids/enums, never a data bus of prose (the no-free-text invariant).
-
-## Doctrine hygiene (authoring this plugin)
-
-The command + doctrine docs are read by LLM agents as binding instructions, so their cost is paid
-on every run — which makes accretion the standing failure mode (each past fix tended to add *a
-paragraph and a named tag*). Two rules keep density essential rather than accretive:
-
-1. **State a fact once.** A rule lives in its highest common ancestor doc (`doctrine/shared.md`);
-   every other site **points** (`shared § Name`), never restates. If you find the same constraint
-   in two files, the second copy is accidental complexity — and a drift hazard, since copies diverge.
-   `commands/import-design.md` is the model (it cites `shared §` and stays lean); a command doc keeps
-   only its *procedural specifics*, not the shared rule it executes.
-2. **Don't name a derived case.** Before adding a tag / enum / `kind`, prove no existing field
-   already determines it. If you add a field (e.g. a rule's `grounding`), do **not** also add tags
-   that are functions of that field — the resolver switches on the field. Name only what carries
-   information the field doesn't (e.g. *which* rule a tension touches), never the field re-projected.
-
-## When to use the pipeline at all
-
-The default is direct work gated by the host's `gateCommand`. Enter the pipeline only for
-**delegation** (big enough for Sonnet workers), **durability** (spans sessions), or **gates**
-(T3 risk). T1 work — single area, established pattern, no cross-area contract change — never
-gets a spec file.
-
-## Recipes
-
-### Standard change
+Brand-new project, empty directory? Three commands run *before* `/spec:init` and decide
+what to build with and how it should look:
 
 ```
-/spec:plan "move tickSize from symbol to dataset"
-  → tier applied; spike if brownfield-unclear; draft; refuters; locked hardened
-/spec:build specs/YYYYMMDD/01-tick-size.md
-  → TDD → layered batches → host integration → gate; status: implementing
-/spec:review specs/YYYYMMDD/01-tick-size.md
-  → deterministic gates + diff-scaled reviewer panel + execution-grounded verification +
-    drift gate; flips done, commits, merges the build branch back (strategy asked, conflicts
-    repaired, no push)
+/spec:genesis-architect   stack + structure decisions, recorded as ADRs → scaffolded repo
+                          → docs/roadmap/ briefs (so setup never ends without a next command)
+/spec:genesis-explore     fresh UX research → 6–8 rendered style tiles you judge in a
+                          browser → cull to 2 interactive prototypes → your design PICK
+/spec:genesis-design      ratifies the pick: the winner's tokens.css verbatim as canon,
+                          plus design doctrine and enforceable design rules
+        ↓
+/spec:init → /spec:plan docs/roadmap/01-*.md → /spec:design → /spec:build → /spec:review
+        ↓ (per milestone)
+/spec:release             deploy to staging → executed checks against the deployed
+                          product → journey walks → confirmation-gated production promote
 ```
 
-### UI-bearing change (design-capable hosts, design: true)
+These are deliberately the fun, interactive sessions: between your answers, live
+web-research agents build ranked option menus (`wf-research`), and the hard-to-reverse
+forks go to a Mixture-of-Agents panel — three blind Sonnet proposers, an Opus aggregator
+— that returns a decision matrix with recorded minority positions (`wf-panel`). Every
+handoff between stages is a file in `.claude/genesis/` or `docs/adr/`, so nothing lives
+only in a chat transcript.
 
-```
-/spec:plan "portfolio breakdown panel"
-  → plan embeds registry/library references in the spec's UI section; design: true
-/spec:design specs/YYYYMMDD/01-portfolio-panel.md [claude.ai/design URL | local mockup file/dir]
-  → if the spec set design_source (or you pass a mockup URL / local handoff bundle), it is
-    extracted FIRST by the deterministic dc-extract script — extract.json (tokens + each
-    surface's fidelity contract: visible strings, layout primitives) + verbatim per-surface
-    slices on disk before any authoring (the read-first sequencing invariant)
-  → the expensive model authors skeletons.json and adjudicates token forks — it writes no
-    framework code. Mock bound: a BINDING MAP per surface (tokenMap, props, states,
-    bind-vs-author; the slice is the authority for structure/copy/order/layout — no tree).
-    No mock: per-surface tree with token-ROLE bindings (the skeleton IS the design)
-  → Sonnet EXPANDS the skeletons via wf-design: foundation + components + catalog entries
-    in one gated run → screenshot visual review when configured (notes, never edits)
-  → mock bound: the driver greps code against the mock's strings/order/layout FAIL-CLOSED
-    at author-green and every round-green; divergences need an evidence-gated deltas.json
-    row (verbatim slice quote, mechanically verified + impossibility proof) — taste yields
-    to the mock
-  → mock bound, before each round: advisory vision review — one vision-capable consult
-    (Fable, Opus fallback) compares a render screenshot against the bound mock slice,
-    region by region; notes only, it never fail-closes a mark
-  → you: run the catalog (Storybook, Widgetbook, …) — iterate as many rounds as you want
-    (the designer judges each note; Sonnet applies the edit)
-  → approve → spec reconciled, reusable taste rulings promoted into the doctrine
-    → designed: YYYY-MM-DD
-/spec:build …   # skips approved components; TDD covers logic, not pixels
-/spec:review …
-```
+Design taste is decided **before it is locked**: each explore candidate is born with its
+own `tokens.css` (tokens-as-code from birth), persona-walkthrough agents file friction
+findings against the finalists, and genesis-design adopts the winner's tokens verbatim —
+no extraction step to drift. Rejected directions become recorded Dissents, not lost
+arguments.
 
-Seeding from a Claude Design mockup is **strictly opt-in**: only a spec that sets `design_source`
-(recorded by `/spec:plan`, or passed as the second arg on the first `/spec:design` run and then
-persisted to frontmatter) engages it. With no `design_source` nothing is fetched and the stage is
-byte-for-byte unchanged — same three-layer canon (tokens + doctrine + showcase) as before.
+Genesis is greenfield-only: point it at a populated repo and it politely defers to
+`/spec:init`. Brownfield repos hand-author the same roadmap shape from the bundled
+templates.
 
-The design stage's model split: the expensive model is confined to *judgment* — the skeletons,
-fork adjudication, the iteration loop, and the screenshot visual review when one is configured
-(it issues notes, it writes no component code); **Sonnet expands 100% of components** via
-`wf-design`. A green author gate is structural only — the screenshot review (if configured) or
-your catalog loop is the visual gate that clears it.
+## UI work: the design stage
 
-The design stage's bet: the catalog + your eyes gate UI rendering; TDD gates behavior.
-Components built in design are real and kept — build wires them, it doesn't rebuild them.
-Cross-spec consistency lives in repo artifacts, not session memory: design tokens in code,
-a one-page doctrine doc (read at preflight, promoted into at reconcile), and a living
-showcase catalog entry where every spec's surfaces sit side by side — drift is visible, not
-inferred. The catalog tool is host config, not plugin code: Storybook hosts declare
-`{"tool": "storybook", "command": "bun storybook", "storyFormat": "CSF3 stories"}`; Flutter
-hosts declare Widgetbook with `@UseCase` builders as the story format.
+`/spec:design` only exists in repos whose config declares a component catalog
+(Storybook, Widgetbook, …). It's a separate stage — *before* build — because active
+design iteration changes the spec, and the visual loop shouldn't bloat a build
+orchestrator's context.
 
-### Import a Claude Design mockup (spec-free)
+The stage is **mock-first**: the taste artifact is a local HTML mock — cheap to iterate,
+never framework code. One responsive file covers your declared matrix (themes ×
+viewports from `design/targets.json`); you iterate direction on the cheapest framing,
+and the full matrix is expanded mechanically only after you approve — rejected
+directions never pay the matrix bill.
 
-```
-/spec:import-design https://claude.ai/design/p/<id>?file=<Name>.dc.html
-  → fetch the .dc.html (read-only) → extract :root into token files → translate <x-dc>
-    surfaces into real components + catalog entries → write/extend the doctrine
-```
+The model split is the plugin's core bet, applied to pixels: **taste is judgment, not
+typing.** The expensive model extracts the mock deterministically, authors per-surface
+*skeletons* (structure, token bindings, states) and adjudicates forks — it writes no
+component code. Sonnet expands 100% of the components in one gated run. Then the mock
+becomes a fail-closed contract: the driver greps the built code against the mock's
+strings, order, and layout at every green, and any divergence needs an evidence-backed
+delta row — taste yields to the mock. You iterate in your own catalog for as many rounds
+as you like; on approval the spec is reconciled, reusable taste rulings are promoted
+into the doctrine, and build later *wires* the approved components — it never rebuilds
+them.
 
-Standalone and one-shot: no spec, no `status`, no state gate, no reconcile. Greenfield repos get
-the full design foundation bootstrapped from the mockup; repos that already have tokens/doctrine
-get them *extended* (a same-role/different-value conflict prompts, never overwrites). What it lands
-is ordinary repo canon — a later `/spec:init` extracts it as brownfield design, and `/spec:design`
-+ `/spec:build` consume the same tokens and components. Re-invoke with the same URL to add screens;
-it skips components already on disk. For ongoing UI work with reconciliation and review gates,
-graduate to `/spec:design`; to pick a direction with no mockup yet, use `/spec:genesis-design`.
+Two escape hatches for Claude Design (claude.ai/design), both strictly opt-in:
 
-### Compile the Claude Design prompt from a spec (the reverse direction)
+- **`/spec:import-design <URL>`** — spec-free, one-shot: translate a mockup into real
+  tokens, components, and doctrine in this repo. Re-invoke with the same URL to add
+  screens; it skips what's already on disk.
+- **`/spec:design-brief <spec>`** — the reverse courier: compile paste-ready Claude
+  Design prompts from a spec (and, with `--drift`, fix-at-source prompts from recorded
+  drift, so the mock gets re-aligned instead of rotting).
 
-```
-/spec:design-brief specs/YYYYMMDD/01-portfolio-panel.md
-  → one paste-ready brief per UI surface with no mock: intent + BINDING constraints quoted
-    from the spec, token roles/component names (never values), a coordination footer that
-    pins the .dc.html file name + data-screen-label region labels so dc-extract's regions
-    line up with the regionRefs /spec:design will bind
-/spec:design-brief specs/YYYYMMDD/01-portfolio-panel.md --drift
-  → fix-at-source prompts from the RECORDED drift (Decisions rows folded from deltas.json
-    at reconcile, fork + iteration rulings) so the mock is re-aligned in Claude Design
-    instead of rotting as stale canon
-```
+And for the whole-product view at any time, **`/spec:atlas`** renders every mock at
+device size, arranged as a journey graph from your roadmap, with gap cards for declared
+but unmocked surfaces — zero tokens, deterministic. `atlas sweep` fills every gap with
+an honest sketch-tier mock so the whole picture always exists.
 
-Mock-first doctrine says every surface worth designing starts in Claude Design — this command
-kills the manual translation that doctrine used to cost: it compiles the prompt from the spec
-instead of you re-extracting the design-relevant intent by hand. State-free (writes only a
-`<spec>.briefs.md` sidecar), session-model (no expensive seat — taste is spent by Claude
-Design's Fable on the other side of the paste), Claude Design strictly read-only. Round trip:
-`/spec:plan` → `/spec:design-brief` → paste, iterate in Claude Design → `/spec:design <spec>
-<mock URL>`.
+## Command cheat sheet
 
-### Mid-build requirement change
+| Command | What it does | When |
+|---|---|---|
+| `/spec:init` | Bootstrap the grounding layer | Once per repo |
+| `/spec:enforce` | Mechanize your rules into deterministic checks | Init runs it; re-run when rules/tooling change |
+| `/spec:plan` | Author + adversarially harden a spec | Start of every spec'd change |
+| `/spec:design` | Mock → components → your catalog approval | UI-bearing specs, design-capable repos |
+| `/spec:build` | TDD implementation via gated Sonnet workflow | After a spec is `hardened` |
+| `/spec:review` | Independent executed verification; flips `done`, commits, merges | After build |
+| `/spec:release` | Staging deploy → executed checks → confirmed promote | Per milestone |
+| `/spec:doctor` | Drift check (`--fix` to repair) | Whenever things feel off, or after plugin updates |
+| `/spec:escape` | Record a defect that slipped past review | The moment you find one |
+| `/spec:atlas` | Whole-product design picture + annotation loop | Any time |
+| `/spec:genesis-architect` / `-explore` / `-design` | Stack, taste funnel, design canon | Greenfield only, before init |
+| `/spec:import-design` | One-shot Claude Design import, no spec | Have a mockup URL, want real code |
+| `/spec:design-brief` | Compile Claude Design prompts from a spec | Designing that surface remotely |
 
-No separate cascade command. Write the ruling into the spec's Decisions table (the worker
-reads it there), set `resolutions[batchId]` to a fresh opaque token — never the ruling prose —
-and resume the build workflow (`resumeFromRunId`): finished batches return from the journal
-cache; only the salted batches re-run.
+## How it keeps itself honest
 
-## Key design decisions
+Most pipelines claim quality; this one keeps receipts.
 
-- **Plan is one Fable session.** Spec quality concentrates all downstream spend, so judgment
-  concentrates there too; refuters run inside the same session and findings are fixed before
-  lock.
-- **Design is a stage, not a checkpoint inside build.** Active design iteration changes the
-  spec; doing it before build means build implements against settled truth, and the
-  (potentially long, multi-session) visual loop never bloats the build orchestrator's context.
-- **In design, taste is judgment, not typing — the expensive model authors skeletons, never
-  components.** Warm on the mockup extract and the canon, it authors `skeletons.json` (the
-  per-surface structural authority: tree, token-role bindings, states, bind-vs-author) and
-  adjudicates every fork; Sonnet expands 100% of the components, in coherence groups rather
-  than maximal fan-out, because visual coherence is a system property no per-component
-  dispatch can produce. Where the host provides a `design.screenshot` command, the designer
-  critiques the renders once before asking for your eyes.
-- **Build is a Sonnet-orchestrated deterministic workflow** (`wf-build.js`), all tiers: batching,
-  TDD-red enforcement, gate + repair caps live in code; judgment (blocked items, scope changes)
-  escalates to the main loop → **Fable retainer** (Opus fallback), consulted only on genuine
-  surprises — there is no mandatory checkpoint ritual — → user. A single-batch, ≤4-file spec
-  skips the workflow entirely via a fast path (one test-author dispatch, one implementation
-  dispatch, the gate run in-session). Forced-but-unblocking departures workers can't resolve
-  land in a `<spec>.deviations.md` sidecar; review's close folds recurring ones into the host
-  rules' Gotchas section, then deletes the sidecar.
-- **Review is independent and execution-verified** (`wf-review.js`): a diff-scaled reviewer
-  panel — one `spec:reviewer` agent by default, two only for a T3 spec with a ≥300-loc diff
-  (blind to each other) — never the planning model. Every non-soft finding then gets one
-  execution-grounded Sonnet verifier; a finding dies only on a failed repro, a quoted spec
-  sanction, or a plain miscitation — never by argument (the claim-only refutation filter and
-  kill-by-unanimous-refutation are retired: a 2026-07 ledger measurement found refuters killed
-  almost nothing, and 2 of the 3 audited kills were wrong). Killed findings are reported, never
-  silently dropped. Fix→re-review iterations re-invoke the workflow at `fix-delta` scope: one
-  reviewer reads only the fix diff and the prior findings, never the whole codebase again. On
-  CLEAN, review closes the loop: commit, then merge the build branch back into its originating
-  branch (strategy via one ask; conflict repair reads both sides; worktree cleaned up; never
-  pushed).
-- **Drift is config-decided.** Repos with an AC-drift script declare it (`driftScript`) and
-  review runs it; repos without get a mechanical grep matrix at review — every AC-ID must hit
-  at least one File Plan test file or it's an automatic hard finding — with the reviewer's
-  coverage check as the semantic backstop. There is no separate drift command.
+- **`/spec:escape`** records any defect that slipped past a review — one ledger row
+  pointing at the review run that passed it (`/git:commit` offers to capture one
+  automatically when a fix-shaped commit touches spec-landed lines). Escape rows make
+  CLEAN verdicts *falsifiable*: doctor aggregates them into contradicted-CLEAN signals.
+- **The scaffold ledger** (`doctrine/scaffold-ledger.md`) registers every gate and guard
+  with the incident that justified it and the condition that retires it. Doctor audits
+  live mechanisms against it — an unregistered gate, or a retired one still gating, is a
+  finding. Guards have actually died this way: the review stage's refutation filter was
+  retired when ledger measurement showed it killed almost nothing, and got 2 of 3
+  audited kills wrong.
+- **The feedback loop** runs on evidence, not memory: run ledgers, `[plugin]`-tagged
+  Gotchas, and escape rows accumulate in each host as side effects of normal runs;
+  `/spec:release` (or doctor) flushes them into a dated feedback brief. On the plugin
+  side, `/intake` re-executes each finding's evidence in the host repo before accepting
+  it — and *an accepted finding is a failing test first*. The ledger ships with the
+  plugin, so a host's doctor can name the workarounds it gets to retire by upgrading.
+
+## Under the hood
+
+For the curious, and for anyone editing this plugin:
+
+- **Process layer vs grounding layer.** The plugin ships commands, workflows, the
+  reviewer agent, the state-gate hook, and templates. Everything repo-specific — config,
+  rules, implementer agents, enforcer provenance — is generated per repo. Repo
+  differences are configuration, never forks: the build workflow takes the agent roster
+  and gate command via `args`, and workers `Read` the host's rules from a path. `args`
+  is a control channel of paths/ids/enums, never a data bus of prose (the no-free-text
+  invariant).
+- **State machine** `draft → hardened → implementing → done`, enforced by
+  `spec-state-gate.sh` (a UserPromptSubmit hook) before the model sees a wrong-state
+  invocation. `/spec:design` never moves `status`; it sets the `designed:` date.
+- **Workflows are generated, not hand-edited.** Each committed `workflows/wf-*.js` is
+  assembled from a `workflows/src/*.body.js` phase body plus shared fragments by
+  `npm run build:workflows`. Change the source and rebuild; never patch the output.
+  Commands locate them via the bundled `spec-paths` helper.
+- **Shared invariants** (risk tiers, model placement, escalation contract, MCP policy)
+  live in `doctrine/shared.md` (`spec-paths shared`); the genesis supplement is
+  `doctrine/genesis.md`. Spec template: `templates/spec.md`.
+
+### Doctrine hygiene (authoring this plugin)
+
+The command and doctrine docs are read by LLM agents as binding instructions, so their
+cost is paid on every run — which makes accretion the standing failure mode. Two rules
+keep density essential:
+
+1. **State a fact once.** A rule lives in its highest common ancestor
+   (`doctrine/shared.md`); every other site *points* (`shared § Name`), never restates.
+   Two copies of one constraint is accidental complexity and a drift hazard.
+   `commands/import-design.md` is the model: it cites and stays lean.
+2. **Don't name a derived case.** Before adding a tag / enum / `kind`, prove no existing
+   field already determines it. Name only what carries information the field doesn't —
+   never the field re-projected.

@@ -11,25 +11,47 @@ foundation + real, **kept** stateless components + catalog entries by **expandin
 skeletons**, lets the user iterate in the running catalog, then reconciles the spec and sets
 `designed: YYYY-MM-DD`. Build treats these components as done inputs.
 
-**Intended model: forks on mock presence.**
-- **Mock-bound** (a `design_source` — a bound mock — exists): **Sonnet session.** Against a
+**Intended model: mock-always (v6) — the fork is where the mock comes from, not whether one
+exists.**
+- **Mock-bound** (a `design_source` — a bound mock — exists, usually under `design/mocks/`):
+  **Sonnet session.** Against a
   bound region, skeleton authoring is grounded transcription, not taste — the taste was already
-  spent upstream in Claude Design. Consult the **Fable retainer** (`Agent {model:"fable"}`, Opus
+  spent upstream, in the mock. Consult the **Fable retainer** (`Agent {model:"fable"}`, Opus
   fallback; continue the SAME agent via SendMessage across the session rather than re-spawning)
   ONLY at judgment points: component-boundary/reuse decisions against the existing component
   catalog, blocked or ambiguous bindings, and any `deltas.json` proposal.
-- **Mock-less** (no `design_source` anywhere): **Fable or Opus** (Opus is the cost-rational
-  default) — unchanged. Skeleton authoring IS the design act here; there is no upstream mock to
-  transcribe.
+- **No mock yet:** author it first — the **mock-authoring preamble** below — then proceed
+  mock-bound. On roadmap-derived specs the preamble runs on **Sonnet + the Fable retainer**
+  (direction-level questions escalate to the atlas, where roadmap taste lives); on standalone
+  no-roadmap specs it runs on the **session model** — the user picked the seat at invocation
+  (Opus default, Fable when the surface warrants it; shared § Model Placement).
 
 Either way the expensive seat **writes no framework code**; Sonnet expands 100% of components
 via `wf-design`.
 
-**Doctrine: mock-first is the preferred flow.** If a surface is worth designing, author it in
-Claude Design first (`/design-sync` can seed that project with the repo's tokens; and
-`/spec:design-brief <spec>` compiles the paste-ready Claude Design prompt from the spec, so the
-mock starts from the spec's intent instead of a hand-written translation) — the mock-less path
-is the fallback for surfaces with no mock, not a peer default.
+**Mock-authoring preamble (no `design_source` anywhere).** Author `design/mocks/<label>.html`
+for each of the spec's UI surfaces under the **design harness** (shared § Design Stage): plain
+HTML consuming `design/tokens.css` by role, root `data-screen-label` per surface, real copy in
+its final register (it becomes the fidelity contract), grounded in the spec's UI section +
+doctrine + `docs/design/research-brief.md` (when present). If `design/targets.json` is missing,
+create it first (archetype-derived defaults from the `design-targets.json` template, one confirm
+with the user). Then the staged loop — **matrix-at-approval** (shared § Design Stage), which is
+what keeps iteration cheap: (1) draft the mock on the **draft framing** — the most-constrained
+declared viewport, light theme — run the deterministic check (`spec-paths design-atlas` →
+`node <atlas> check design/mocks/<label>.html`) and the render→screenshot→critique loop, then
+the **rule-checklist pass** (a Sonnet checker walks the research-brief's admitted rules against
+the screen, citing rule IDs — shared § Design Stage), and iterate with the user to direction
+approval; (2) once the direction is approved, run the **matrix expansion pass** — media queries
++ viewport meta, dark via the tokens.css theme block, one responsive file, never per-device
+variants — gated by `check --matrix`, with matrix screenshots (each viewport, both themes on
+the draft framing) shown to the user for the **fast matrix confirm**; (3) only then set
+`data-status="approved"` (approval is two-step by doctrine, and the check enforces the matrix
+on approved mocks, so the stamp can't precede either half). Direction review happens by serving the file or pointing at
+the atlas; after the stamp, persist the path as `design_source:` frontmatter — then the
+ordinary mock-bound flow below takes over. Taste is
+spent here, in a file cheap to iterate — never directly in framework code. (The Claude Design
+escape hatch — designing the surface at `claude.ai/design` and passing its URL — remains
+supported and follows the identical mock-bound flow after fetch.)
 
 **Setup:** run `spec-paths shared-for design` and read its output (the shared invariants scoped
 to this command). Read the host's `.claude/spec.config.json` and its pipeline rules file. Then
@@ -42,14 +64,10 @@ arg: a **design source** — either a `claude.ai/design` mockup URL, or a **loca
 exported HTML file, or a handoff-bundle directory of HTML screens + optional per-screen
 `*.prompt.md` notes). On the first invocation, if a source is passed and frontmatter has no
 `design_source`, persist it into frontmatter, then proceed — thereafter frontmatter is
-authoritative. No `design_source` anywhere → the mockup path never engages (byte-for-byte the
-no-mockup flow). A local source is extracted directly by `dc-extract --bundle` (no DesignSync
-fetch); a URL is fetched read-only via DesignSync as before.
-
-**Upstream seeding (recommend once per project):** if the user produces mocks in Claude Design,
-recommend pulling the repo's design system into that project first (`/design-sync` — shared
-§ "Seed Claude Design upstream"). A synced mock arrives speaking the repo's tokens/components;
-its literal harvest matches canon and the `tokenMap` becomes mostly `matches-canon`.
+authoritative. No `design_source` anywhere → run the mock-authoring preamble first (above),
+which produces one. A local source is extracted directly by `dc-extract --bundle` (no DesignSync
+fetch); a URL is fetched read-only via DesignSync (the escape hatch — recommend `/design-sync`
+seeding once per project on that path, so the mock arrives speaking the repo's tokens).
 
 ## Protocol — the driver owns the state machine
 
@@ -98,7 +116,29 @@ at the catalog.
 - Tokens and the design doctrine are **binding canon** — extending is normal, contradicting is a
   fork, adjudicated via the driver's steps, never silently overridden.
 - Components built here are **real and kept**; `/spec:build` wires them, never rebuilds them.
+- **Component manifest discipline (shared § Design Stage).** Read `design/components.json` at
+  preflight, before any bind-vs-author decision. Every `author` decision records the nearest
+  existing manifest entry and one line on why it fails — a missing justification is a gate
+  failure; the review panel verifies its content against the manifest. At reconcile, extend the
+  manifest with every component this run created or newly bound (`name`, `purpose`, `props`,
+  `mockRefs`). Creating must cost more than reusing — that gradient is the anti-duplication
+  mechanism, not anyone's memory.
+- **A `built` surface re-entering design re-syncs its mock first** (mock authority expired at
+  `built` — shared § mock-authority lifecycle): refresh the mock to current shipped reality
+  (screenshot the live screen, update the file), then design the change on top. Never design
+  against a stale contract, and never treat post-`built` staleness discovered here as a defect —
+  it was permitted.
 - Design changes propagate **forward into the spec at reconcile** — never left for build to discover.
+- **Affordance ↔ contract reconcile (blocking, at reconcile).** Before `designed:` is set,
+  build the matrix: every interactive affordance of every approved component (each event
+  prop × each visual state it renders in) maps to a server-accepted transition in the spec's
+  Contracts/Behavior sections. An affordance the server would reject is a **fork**, not a
+  styling choice — `AskUserQuestion` (change the component / change the contract via a spec
+  Decision), never pass it through to build (measured: UpWell spec 03 — a designed card
+  rendered a re-confirm affordance on declined items through the same handler as proposed
+  ones; the server throws `VALIDATION` on that transition; build wired it as-is *because the
+  component's shape said to*). Design output enters build with a spec's authority; this
+  matrix is where it earns a spec's scrutiny.
 - Workers never run git; the session owns every checkpoint-commit. The coverage ledger
   (`.claude/design-coverage.json`, written by the driver at `--mark approved`) is durable repo
   state — include it in that checkpoint-commit; it must survive the sidecar deletion.

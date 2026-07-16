@@ -59,6 +59,35 @@ test('escape rows: /spec:escape records defects that got past review', () => {
   assert.match(read('commands/review.md'), /"runId":"<wf_/)
 })
 
+test('release rows: /spec:release appends one prose-free row and never promotes autonomously', () => {
+  const rel = read('commands/release.md')
+  assert.match(rel, new RegExp(LEDGER.replace(/[./]/g, '\\$&')), 'release appends to the one ledger')
+  assert.match(rel, /exactly ONE line/)
+  assert.match(rel, /never prose/i)
+  for (const field of ['"stage":"release"', '"briefs"', '"staging"', '"e2e"', '"journeys"',
+    '"substrate"', '"production"']) {
+    assert.ok(rel.includes(field), `release schema has ${field}`)
+  }
+  assert.match(rel, /never push/i)
+  assert.match(rel, /never autonomous/i, 'production promotion stays behind per-run confirmation')
+  assert.match(rel, /Never promote over a red staging/i)
+})
+
+test('escape rows carry the prevention delta — the loop-closing field', () => {
+  const esc = read('commands/escape.md')
+  assert.ok(esc.includes('"preventedBy"'), 'escape schema has preventedBy')
+  assert.match(esc, /doctrine\|enforcer\|review-check\|runtime-leg\|none/)
+  assert.match(esc, /`none` is a real answer, never a\s+default/i)
+})
+
+test('review rows carry the executed-leg fields: smoke verdict and skip count', () => {
+  const review = read('commands/review.md')
+  assert.ok(review.includes('"smoke"'), 'review schema has smoke')
+  assert.ok(review.includes('"testsSkipped"'), 'review schema has testsSkipped')
+  assert.match(review, /a skip is not a pass/i)
+  assert.match(review, /boot smoke leg green/i, 'CLEAN requires the smoke leg')
+})
+
 test('doctor aggregates escapes: contradicted CLEANs and killedMatch flags', () => {
   const doctor = read('commands/doctor.md')
   assert.match(doctor, /build \| review \| escape/, 'ledger stage enum includes escape')

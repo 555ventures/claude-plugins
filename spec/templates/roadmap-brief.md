@@ -25,6 +25,18 @@ time this is mostly "nothing — scaffold only"; keep it honest and re-verify at
 1. **{ Unit }** — { what it delivers, with the ADR constraint(s) it must honor inline }.
 2. **{ Unit }** — { … }
 
+## Surfaces
+
+<!-- UI-bearing briefs only (Design stage: yes) — delete the section otherwise. The design
+     atlas parses this fenced block (shared § Design Atlas): one line per surface label, one
+     per journey edge. NAMES AND ARROWS ONLY — the roadmap owns structure, mocks own pixels.
+     Labels are permanent once a mock ships (they are data-screen-label / regionRef anchors). -->
+
+```surfaces
+{ label }
+{ label } -> { label }
+```
+
 ## Out of scope
 
 { Adjacent work this brief explicitly does NOT cover, with the brief number that owns it —

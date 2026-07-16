@@ -11,8 +11,8 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-build', 'wf-design', 'wf-review', 'wf-enforce',
-    'wf-panel', 'wf-research', 'dc-extract', 'skeletons-check', 'merge-back', 'shared',
-    'shared-genesis', 'template', 'templates', 'contract']) {
+    'wf-panel', 'wf-research', 'dc-extract', 'design-atlas', 'skeletons-check', 'merge-back',
+    'smoke', 'manifest-check', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }
@@ -37,12 +37,18 @@ test('shared-for: every mapped section name still exists as a shared.md heading'
 
 test('shared-for: scoped output carries its sections and is smaller than the full doc', () => {
   const full = run('shared-for', 'no-such-command')
-  for (const cmd of ['plan', 'design', 'build', 'review', 'enforce', 'import-design', 'design-brief']) {
+  for (const cmd of ['plan', 'design', 'build', 'review', 'release', 'enforce', 'import-design', 'design-brief', 'atlas']) {
     const out = run('shared-for', cmd)
     assert.ok(out.length < full.length, cmd + ' output should be a strict subset')
     assert.match(out, /## Host Grounding/, cmd + ' must keep Host Grounding')
   }
   assert.match(run('shared-for', 'design'), /## Design Stage/)
+  assert.match(run('shared-for', 'design'), /## Design Atlas/)
+  assert.match(run('shared-for', 'atlas'), /## Design Atlas/)
   assert.match(run('shared-for', 'build'), /## Escalation Contract/)
   assert.ok(!/## Design Stage/.test(run('shared-for', 'review')), 'review must not pay for Design Stage')
+  assert.match(run('shared-for', 'review'), /## Runtime Verification/,
+    'review pays for the boot-leg doctrine — CLEAN requires it')
+  assert.match(run('shared-for', 'release'), /## Release Stage/)
+  assert.match(run('shared-for', 'release'), /## Runtime Verification/)
 })

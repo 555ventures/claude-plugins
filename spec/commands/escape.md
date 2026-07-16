@@ -48,24 +48,43 @@ short description of the defect. The description is used only to locate and clas
      `null`. If `killed` was 0, `killedMatch` is `null` without asking. **Unknown is `null`,
      never a guessed `false`** — a wrong `false` poisons the one signal that tunes the
      refutation filter.
+   - `preventedBy` — the **prevention delta**: what change would have caught this defect
+     before it escaped? `doctrine` (a Gotchas/rules line) | `enforcer` (a mechanical check —
+     `/spec:enforce` territory) | `review-check` (a § Review Checks severity row) |
+     `runtime-leg` (the smoke/skip/release class of executed check) | `none` (state
+     explicitly that no plausible mechanism exists). **`none` is a real answer, never a
+     default** — an escape recorded without naming its prevention delta is a confession
+     booth, not a feedback loop.
 5. **Append exactly ONE line** to `.claude/spec-runs.jsonl` (repo root; `printf '%s\n' '<json>' >>`):
 
    ```
-   {"ts":"<YYYY-MM-DD>","stage":"escape","spec":"<repo-relative spec path>","file":"<repo-relative defect file>","reviewRunId":"<wf_…>"|null,"foundBy":"<user|later-spec|production>","severity":"<hard|soft>","killedMatch":true|false|null,"via":"commit|manual"}
+   {"ts":"<YYYY-MM-DD>","stage":"escape","spec":"<repo-relative spec path>","file":"<repo-relative defect file>","reviewRunId":"<wf_…>"|null,"foundBy":"<user|later-spec|production>","severity":"<hard|soft>","killedMatch":true|false|null,"preventedBy":"<doctrine|enforcer|review-check|runtime-leg|none>","via":"commit|manual"}
    ```
 
    Fixed shape — paths/enums/booleans only, **never prose or finding text** (the defect
    description belongs in whatever fixes it, not in the ledger). `via` is optional: omit
    it or set `"manual"` when this command was invoked directly; `/git:commit`'s escape
    check sets `"commit"` when it drove the append.
-6. **Report the context, not a fix:** how many escape rows now point at this spec; whether
+6. **Close the loop on the prevention delta** (the one write beyond the ledger row, and the
+   only one): by `preventedBy` value —
+   - `doctrine` → offer to append the one-line Gotchas entry NOW (pipeline rules § Gotchas;
+     cite this escape row; tag `[host]` or `[plugin]` by where the wrong assumption came
+     from). Accepted → append it; declined → the row stands and `/spec:doctor` lists it as an
+     open repair.
+   - `enforcer` → recommend `/spec:enforce` (name the rule category the defect implies).
+   - `review-check` → offer the one-line § Review Checks severity row, same Gotchas
+     discipline.
+   - `runtime-leg` / `none` → nothing to write; the ledger row itself is the signal.
+7. **Report the context, not a fix:** how many escape rows now point at this spec; whether
    the correlated review's verdict was `CLEAN` (a contradicted CLEAN is the miscalibration
-   signal `/spec:doctor` aggregates); and if `killedMatch: true`, say explicitly that the
+   signal `/spec:doctor` aggregates); if `killedMatch: true`, say explicitly that the
    refutation filter killed a real bug — the strongest re-tuning evidence the ledger can
-   hold. Then stop. Fixing is a separate, normal-flow decision.
+   hold; and the prevention delta's disposition (landed / declined / recommended command).
+   Then stop. Fixing the defect is a separate, normal-flow decision.
 
 ## Rules
 
-- Read-only except the single ledger append. Never edits code, specs, or dispositions.
+- Read-only except the single ledger append and the user-approved one-line prevention-delta
+  entry (step 6). Never edits code, specs, or dispositions.
 - One row per defect. Step 2's duplicate check runs before every append.
 - `AskUserQuestion` dismissed → STOP, append nothing.

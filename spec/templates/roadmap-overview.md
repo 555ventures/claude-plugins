@@ -37,6 +37,15 @@ Milestone gates:
 - **After NN**: { the observable, user-verifiable state — from the genesis brief's success
   outcome, not a feature list }.
 
+## Journey map
+
+<!-- Derived view, never authored here: each UI-bearing brief declares its surfaces + journey
+     edges in its own `surfaces` block (roadmap-brief.md template); `/spec:atlas` composes
+     them into the whole-product journey graph at design/atlas/index.html. Delete this section
+     for non-visual archetypes. -->
+
+Run `/spec:atlas` to see every declared surface, its mock, and the journey graph.
+
 ## Ops track (external clocks — no code, start immediately, not specs)
 
 <!-- Work with external lead times that must start now: API/OAuth registrations, hosting

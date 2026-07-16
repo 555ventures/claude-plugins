@@ -1,6 +1,6 @@
 ---
-description: Read-only drift check of the grounding layer — verifies config, agents, rules, and cited references against the installed plugin and the current codebase; recommends targeted patches or a /spec:init refresh
-argument-hint: [focus area, optional — e.g. "agents" or "design"]
+description: Drift check of the grounding layer — verifies config, agents, rules, activation, and cited references against the installed plugin and the current codebase; recommends targeted patches or a /spec:init refresh. --fix applies evidence-cited line-item repairs with per-patch approval
+argument-hint: [focus area, optional — e.g. "agents" or "design"] [--fix]
 ---
 
 # Spec Doctor: Grounding-Layer Drift Check
@@ -11,7 +11,8 @@ commands, and conventions moved on). This command detects both — cheaply, with
 re-profile `/spec:init` runs. It is a **diagnosis, not a treatment**: report first; apply
 only targeted patches the user approves; recommend a full `/spec:init` refresh for
 structural drift. Never regenerate wholesale, and never touch files outside the grounding
-layer.
+layer. With `--fix`, the targeted-patch path extends to **doctrine repair** (below) — still
+evidence-cited, still per-patch approved, never structural.
 
 **Intended model: Sonnet.** Run `spec-paths shared` and Read that file first. If
 `.claude/spec.config.json` is missing entirely, STOP — the repo was never initialized;
@@ -42,6 +43,21 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
    (if declared) exists; each command referenced by `gateCommand` / `testCommand` /
    `setupCommand` / `design.command` / `design.screenshot` resolves (script names exist in
    `package.json` / `Makefile` / `pyproject.toml` — verify the *names*, don't run the gate).
+
+6b. **Activation (authored ⇒ activated)** — verification infrastructure must demonstrably
+   execute, not merely exist (shared invariants § Runtime Verification):
+   - `.claude/spec-manifest.json` exists and `bash $(spec-paths manifest-check)` exits 0 — a
+     missing manifest means init predates the activation contract (recommend `/spec:init`
+     refresh); a failing one lists exactly which authored protections are inert.
+   - config declares a `runtime` block (`bootCommand`+`readyCheck`, or explicit `inert` with
+     reason); a config without one makes every review's smoke leg a hard finding — broken.
+   - if the repo carries CI config: `git remote -v` is non-empty OR the manifest has an
+     `inert` row declaring CI local-only. CI authored + no remote + no declaration = the
+     highest-leverage silent absence on record (UpWell: zero CI executions in 10 days,
+     unnoticed).
+   - every env var that gates a test suite (`skipIf`-shaped) has a provisioning path named in
+     pipeline rules § Test Rules — an unsatisfiable gate variable means those suites have
+     never run anywhere; flag loudly with the affected suite count.
 7. **Cited references** — extract repo paths cited in the pipeline rules file and in each
    generated agent (Reference Material, exemplars, naming-table examples); verify each
    exists. Stale citations are the most common drift and are individually patchable.
@@ -94,7 +110,7 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
       should have deleted; recommend removing it.
 
 12. **Run ledger hygiene** (only if `.claude/spec-runs.jsonl` exists) — every line parses as
-    JSON with a `stage` of `build | review | escape`; any line over ~600 chars is a prose leak
+    JSON with a `stage` of `build | review | escape | release`; any line over ~600 chars is a prose leak
     (the ledger holds counts/enums/paths only — build.md/review.md define the shape); the
     file is tracked by git (an ignored or untracked-and-stale ledger defeats its purpose);
     `git check-attr merge -- .claude/spec-runs.jsonl` reports `union` (without it, parallel
@@ -117,7 +133,18 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
     - conversely, with ≥10 CLEAN review rows and zero escape rows behind any of them, report
       that too — it is the evidence that gates any future cut to review spend (staged
       review). Absence of escapes is only meaningful if escapes are actually being recorded;
-      note when zero escape rows exist at all.
+      note when zero escape rows exist at all;
+    - any escape row with `"preventedBy":"doctrine"` whose named change has not landed (the
+      Gotchas/rules line it implies is absent) is an **open repair** — list it as `--fix`
+      input; a `preventedBy:"enforcer"` row with no matching enforcement-manifest entry means
+      `/spec:enforce` is due.
+    **Plugin-defect roll-up:** collect `[plugin]`-tagged entries from pipeline rules
+    § Gotchas into one "upstream bug report" block (entry + citation, verbatim) — these are
+    the spec plugin's own defects living as host folklore; instead of every host re-paying
+    the discovery, offer to write them as a feedback brief NOW
+    (`docs/spec-feedback/<YYYYMMDD>-brief.md` from `spec-paths feedback-template`, installed
+    version stamped — same artifact `/spec:release`'s flush writes; shared invariants
+    § Feedback Loop). Skip entries already covered by a prior brief's `intake:`-stamped row.
 
 13. **Scaffold audit** — Read the plugin's distrust/guard registry:
     `spec-paths scaffold-ledger 2>/dev/null || echo "$(spec-paths root)/doctrine/scaffold-ledger.md"`
@@ -165,12 +192,55 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
       `depends_on` includes an *unplanned* brief: the roadmap was executed out of its own
       declared order; the user may know why.
 
+15. **Upstream fixes (return half of the feedback loop)** — the plugin ships its intake
+    ledger (`spec-paths intake`: host findings → pinning test → `Fixed in` version). Compare
+    the config's `generatedBy` version against `spec-paths version` (`sort -V`); when the
+    grounding predates the installed plugin:
+    - list intake rows whose `Fixed in` is newer than `generatedBy` — these are defects this
+      host may still be working around;
+    - cross-match them against the host's own `[plugin]` Gotchas entries and per-spec
+      override Decisions (grep `specs/**` Decisions tables for rows citing generated
+      doctrine files) — each match is a **retirable workaround**: report it by name with the
+      fixing version ("fixed upstream in spec@X — retire the override / drop the gotcha
+      line, then re-stamp via the targeted-patch flow or a `/spec:init` refresh");
+    - a match whose host is ALREADY on a version ≥ its `Fixed in` is a **regression signal**,
+      not a stale workaround — flag it loudly and recommend the finding be re-reported in a
+      new feedback brief (never edit the old one).
+    Read the ledger with grep/awk against the table rows — never load the whole file into
+    context.
+
 ## Semantic spot-check — small, bounded
 
 For 2–3 agents (prioritize any with stale citations), read one cited exemplar each and
 judge whether the conventions the agent describes (naming tables, layer constraints) still
 match the real code. This is the only judgment call in the run; everything above is
 mechanical. Do not expand into a full re-profile.
+
+## Repair mode (`--fix`) — targeted doctrine repair at the pipeline's evidence bar
+
+Without `--fix`, doctor stays read-only (targeted patches still require explicit user
+approval per the recommendation flow below). With `--fix`, doctor may additionally repair
+**factually wrong doctrine** — the failure mode where a generated grounding entry teaches a
+verified bug (measured: UpWell's `agents/jobs.md` + `spec-pipeline.md` carried a queue-name
+convention the pinned dependency rejects at process start; the only sanctioned rewriter was a
+full `/spec:init` re-run, so every future jobs spec was *instructed to reintroduce the crash*
+and the host patched around it with per-spec override Decisions, forever).
+
+The bar, per patch — all three, no exceptions:
+
+1. **Evidence at the pipeline's own standard:** a reproducing command or file:line citation
+   proving the current doctrine text wrong (an escape-ledger row pointing at it qualifies;
+   "seems outdated" does not). For dependency-adjudicated claims, run the one falsifying line
+   now — same discipline plan's refuters use.
+2. **Per-patch `AskUserQuestion` approval** showing exact before → after text and the
+   evidence. Never batch-approve.
+3. **Scope: line-item only, inside the grounding layer** (pipeline rules file, generated
+   agents, config values, `scripts/spec-patterns.sh`). Structural drift (layers reorganized,
+   toolchain swapped) is still `/spec:init`'s job — `--fix` refuses it and says why.
+
+After patching: re-run the affected checks, re-stamp `contractHash`/`generatedBy`, and append
+the correction as a Gotchas entry citing the evidence (tagged `[host]` or `[plugin]` by where
+the wrong text came from) — the repair itself becomes territory-corrects-map history.
 
 ## Report & recommendation
 
@@ -195,7 +265,11 @@ recommendation:
 
 - Read-only by default; every edit is user-approved, targeted, and inside the grounding
   layer (`spec.config.json`, pipeline rules, generated agents, `scripts/spec-patterns.sh`).
+  `--fix` widens what may be patched (doctrine content, not just stale citations), never who
+  approves or where.
 - Never run the host's `gateCommand`/`testCommand`/`setupCommand` — verify they resolve.
+  (Exceptions, both deterministic and cheap: `manifest-check` in the activation check, and a
+  single falsifying line when `--fix` evidence demands execution.)
 - Re-stamp `contractHash`/`generatedBy` only when every current-contract check passes (or
   after approved patches make them pass) — the stamp asserts "grounding matches this
   plugin's contract".

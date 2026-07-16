@@ -11,11 +11,47 @@ only when the contract genuinely changes, and never edit it for wording alone.
 
 `generatedBy`, `contractHash`, `gateCommand`, `testCommand`, `setupCommand`,
 `patternsScript`, `layerGroups`, `agentMap` (must include `tests` and `default`),
-`pipelineRules`. Optional: `driftScript`, `routing`, `design`
+`pipelineRules`, `runtime` (see § Runtime verification). Optional: `driftScript`, `routing`,
+`design`
 (`tool`/`command`/`storyFormat`/`doctrine`, optional `screenshot`, optional `rulesManifest`),
-the rule-enforcement keys `enforcementManifest` and `rulesEnforcementHash` (see § Rule
-enforcement), and the genesis-handoff keys `genesisStackDescriptor` and `designRulesHash`
-(see § Genesis handoff).
+`release` (see § Release), the rule-enforcement keys `enforcementManifest` and
+`rulesEnforcementHash` (see § Rule enforcement), and the genesis-handoff keys
+`genesisStackDescriptor` and `designRulesHash` (see § Genesis handoff).
+
+## Runtime verification (required)
+
+Every verification claim the pipeline makes must be backed by an executed observation — a
+verification stack composed entirely of static legs can pass a program that cannot start
+(UpWell, 2026-07: 8/8 gate tasks green while `GET /` returned 500 on every commit). The
+`runtime` config block is the contract for the executed leg:
+
+- `runtime.bootCommand` — starts the app locally (e.g. the dev command).
+- `runtime.readyCheck` — a command that exits 0 once the app observably serves (e.g.
+  `curl -sf localhost:3000/api/health`).
+- Optional: `runtime.seedCommand` (seeds an observable state), `runtime.readyTimeout`
+  (seconds, default 120), `runtime.stopSignal` (default SIGTERM).
+- Hosts with no bootable process (libraries, pure CLIs) declare
+  `runtime: {"inert": "<reason>"}` — an explicit exemption, never a silent omission.
+
+The plugin's `smoke.sh` (`spec-paths smoke`) executes this contract deterministically;
+`/spec:review` runs it as a verdict leg (CLEAN requires it), and `/spec:init` proves it once
+via the deliverable manifest before stamping.
+
+## Deliverable manifest (required)
+
+`/spec:init` writes `.claude/spec-manifest.json` — one entry per deliverable, each carrying
+the activation it claims (`file` exists / `exec` runs / `smoke` boots / `remote` resolves /
+`inert` with a stated reason). The plugin's `manifest-check.sh` (`spec-paths manifest-check`)
+verifies every claim by existence or execution, fail-closed. **Init may not stamp
+`generatedBy`/`contractHash` until it exits 0** — authored artifacts count only once their
+activation is demonstrated. `/spec:doctor` re-runs it as the activation drift check.
+
+## Release (optional — present when the host deploys)
+
+`release` — the milestone release gate's grounding (`/spec:release`): `deployCommand`
+(staging), `stagingUrl`, `e2eCommand` (takes the target URL via `BASE_URL`), optional
+`promoteCommand` + `productionUrl` + `healthPath`. All host-declared at init/first-release
+time — the plugin never invents deploy mechanics.
 
 ## Genesis handoff (optional — present when the genesis stage seeded the repo)
 

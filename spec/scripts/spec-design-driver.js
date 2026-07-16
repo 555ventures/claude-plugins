@@ -45,7 +45,7 @@ const STATE_ONLY = argv.includes('--state')
 const spec = fs.readFileSync(specPath, 'utf8')
 const fmMatch = /^---\n([\s\S]*?)\n---/.exec(spec)
 const fm = fmMatch ? fmMatch[1] : ''
-const fmVal = (k) => { const m = new RegExp('^' + k + ':\\s*(.+)$', 'm').exec(fm); return m ? m[1].trim() : '' }
+const fmVal = (k) => { const m = new RegExp('^' + k + ':\\s*(.+)$', 'm').exec(fm); if (!m) return ''; const v = m[1].trim(); const q = /^(["'])([\s\S]*)\1$/.exec(v); return q ? q[2] : v }
 
 const status = fmVal('status')
 const designFlag = fmVal('design')

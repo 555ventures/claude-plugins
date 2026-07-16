@@ -66,11 +66,25 @@ in Phase 1.5.
   tunes a detail: an unasked detail costs a small edit later, an unasked architecture question
   costs a rebuild.
 
-## Phase 1.5 — Spike (when `--spike`, or judged necessary)
+## Phase 1.5 — Spike (when `--spike`, judged necessary, or shape-triggered)
 
-Run whenever the interview or drafting surfaces a genuinely high-unknown area — an unfamiliar
-API, an unclear data model, a risky integration surface, blast radius that's genuinely unclear
-in brownfield code, or a complex migration. Skip for greenfield and well-understood changes.
+**Shape-triggered micro-spike (mandatory, not judgment):** any claim the draft will lock
+whose truth a **third-party dependency adjudicates** — queue/topic/identifier name
+constraints, cron/schedule strings, config keys, DSL fragments, version-specific API
+shapes — is falsifiable in one executed line, and that line MUST run before the claim enters
+a Decision, Contract, or AC. A scratch file against the installed dependency (run, observe,
+delete; `git status --porcelain` clean after) suffices — this is far lighter than a full
+spike. The trigger is the claim's *shape*, never felt uncertainty: the deadliest wrong
+assumptions feel settled precisely because an ADR or doctrine line already asserts them
+(measured: UpWell's `domain:action` queue convention — ADR-bound, never flagged as unknown,
+rejected by the exact-pinned dependency's own validation at first `createQueue`; one executed
+line at plan or genesis time falsifies it for free). Record the executed check + observed
+output in **Assumptions** as evidence.
+
+**Full spike:** run whenever the interview or drafting surfaces a genuinely high-unknown
+area — an unfamiliar API, an unclear data model, a risky integration surface, blast radius
+that's genuinely unclear in brownfield code, or a complex migration. Skip for greenfield and
+well-understood changes.
 Reason: a throwaway prototype is the cheapest way to find out what you didn't know, before it
 gets expensive — cheap now, versus a wrong assumption baked into a locked spec, versus a
 surprise mid-build. In design-capable hosts (config `design` block), if the unknown is
@@ -123,7 +137,11 @@ While drafting:
   the state-gate hook blocks `/spec:design`, `/spec:build`, and `/spec:review` while any
   marker survives in the file.
 - **AC shape:** write every AC as `WHEN {trigger/state} THE SYSTEM SHALL {observable
-  response}`, and pin every ambiguity-prone term (rounding mode, ordering,
+  response}`, with **namespaced IDs** (`AC-{YYYYMMDD-NN}-1` — the spec's date dir + number;
+  un-namespaced `AC-1` collides in the review grep matrix when two specs touch one test
+  file), an explicit `[env: VAR]` tag on any AC whose test is environment-gated (an
+  undeclared env dependency reads as a hard finding when the test skips), and pin every
+  ambiguity-prone term (rounding mode, ordering,
   inclusive/exclusive bounds, timezone, null vs empty) with a literal input → output example.
   T3 ACs always carry at least one literal example. Test authors derive tests from the spec
   alone — a concrete pair is the only wording they cannot misread.
@@ -158,7 +176,11 @@ Dispatch N independent refuters (T2: 1, T3: 2) in a single message, blind to eac
   architectural-boundary violations, persisted-state or migration coexistence problems, stale
   embedded library references vs installed versions, edge cases at boundaries, and conflicts
   with the host's pipeline rules (Read the rules file; cite the section). Read the code; cite
-  file:line. Report every genuine defect, ordered by severity. Do not pad with style or
+  file:line. For any claim a third-party dependency adjudicates (name/format constraints,
+  cron strings, config keys, DSL fragments, version-specific API shapes): do NOT argue from
+  reading — EXECUTE the one line that falsifies it in a scratch file against the installed
+  dependency, report the observed output, and delete the file (git status clean before
+  returning). Report every genuine defect, ordered by severity. Do not pad with style or
   speculative nits — an empty list is a valid outcome."*
 
 Fix each finding in the spec, or explicitly reject it with the reason recorded in **Rationale**.
@@ -169,17 +191,23 @@ Never silently drop a finding.
 1. **Marker sweep (mechanical):** `grep -n "NEEDS CLARIFICATION" {spec path}`. Each hit is
    either an unresolved gap — resolve it (`AskUserQuestion` or targeted exploration), edit the
    spec, re-grep — or prose narrating history, which is fine. Resolving a marker means
-   **deleting it** and recording the ruling in Decisions; never quote the full
-   `[NEEDS CLARIFICATION: …]` colon form in prose — that exact syntax is the open-marker
-   sentinel the downstream state-gate hook greps for.
-2. Confirm: zero open forks, **Rationale** and **Canonical Delta** written, ACs mapped to test files.
+   **deleting it** and recording the ruling in Decisions. Then **write the adjudicated count
+   into frontmatter as `open_markers: N`** (0 to lock — the count of LIVE markers only;
+   quoted narration doesn't count). The state gate reads this field as authoritative, so
+   Rationale may quote the marker syntax freely; the gate's prose grep is only the fallback
+   for specs predating the field. Lock requires `open_markers: 0`.
+2. Confirm: zero open forks, **Rationale** and **Canonical Delta** written, ACs mapped to test
+   files, every shape-triggered micro-spike (Phase 1.5) executed with its evidence recorded in
+   Assumptions.
 3. Flip frontmatter `status: draft → hardened`.
 4. Report: spec path, tier, `design:` value (design-capable hosts), `design_source` if recorded,
    decision count, assumption count, spike run or skipped, refuter findings fixed/rejected. Next:
    `/spec:design {path}` if `design: true`, else `/spec:build {path}`. If `design: true` with
-   **no** `design_source`, recommend the mock-first detour first: `/spec:design-brief {path}`
-   compiles the paste-ready Claude Design prompt; the resulting mock URL comes back as
-   `/spec:design`'s second arg (shared § Design Stage).
+   **no** `design_source`, note that `/spec:design` will author the mock first (its
+   mock-authoring preamble — shared § Design Stage); a sketch already swept into
+   `design/mocks/` by `/spec:atlas` becomes the `design_source` starting point. The Claude
+   Design escape hatch (`/spec:design-brief {path}` → paste → mock URL as `/spec:design`'s
+   second arg) remains available for surfaces the user prefers to design there.
 
 ## Rules
 

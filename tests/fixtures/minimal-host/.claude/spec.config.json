@@ -1,0 +1,12 @@
+{
+  "generatedBy": "spec@5.0.0",
+  "contractHash": "000000000000",
+  "gateCommand": "true",
+  "testCommand": "true",
+  "setupCommand": "true",
+  "patternsScript": "scripts/spec-patterns.sh",
+  "layerGroups": { "app": ["src/**"] },
+  "agentMap": { "tests": "tests", "default": "default" },
+  "pipelineRules": ".claude/rules/spec-pipeline.md",
+  "runtime": { "inert": "synthetic fixture host — nothing to boot" }
+}

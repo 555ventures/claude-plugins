@@ -19,10 +19,13 @@ case "${1:-root}" in
   wf-panel)    echo "$ROOT/workflows/wf-panel.js" ;;
   wf-research) echo "$ROOT/workflows/wf-research.js" ;;
   dc-extract)  echo "$ROOT/scripts/dc-extract.js" ;;
+  design-atlas) echo "$ROOT/scripts/design-atlas.js" ;;
   design-driver) echo "$ROOT/scripts/spec-design-driver.js" ;;
   skeletons-check) echo "$ROOT/scripts/skeletons-check.js" ;;
   fidelity-check) echo "$ROOT/scripts/fidelity-check.js" ;;
   merge-back)  echo "$ROOT/scripts/merge-back.sh" ;;
+  smoke)       echo "$ROOT/scripts/smoke.sh" ;;
+  manifest-check) echo "$ROOT/scripts/manifest-check.sh" ;;
   shared)         echo "$ROOT/doctrine/shared.md" ;;
   shared-genesis) echo "$ROOT/doctrine/genesis.md" ;;
   scaffold-ledger) echo "$ROOT/doctrine/scaffold-ledger.md" ;;
@@ -36,9 +39,11 @@ case "${1:-root}" in
     DOC="$ROOT/doctrine/shared.md"
     case "$CMD" in
       plan)    SECTIONS="Host Grounding|Pipeline Entry|Risk Tiers|Decomposition|State Machine|Design Stage|Model Placement|Decisions|MCP Policy|Canonical Docs Loop" ;;
-      design)  SECTIONS="Host Grounding|State Machine|Design Stage|Model Placement|Decisions|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|MCP Policy" ;;
+      design)  SECTIONS="Host Grounding|State Machine|Design Stage|Design Atlas|Model Placement|Decisions|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|MCP Policy" ;;
+      atlas)   SECTIONS="Host Grounding|Design Stage|Design Atlas|Model Placement|Decisions" ;;
       build)   SECTIONS="Host Grounding|Risk Tiers|State Machine|Model Placement|Escalation Contract|Decisions|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|MCP Policy" ;;
-      review)  SECTIONS="Host Grounding|Risk Tiers|State Machine|Model Placement|Decisions|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|Canonical Docs Loop" ;;
+      review)  SECTIONS="Host Grounding|Risk Tiers|State Machine|Runtime Verification|Model Placement|Decisions|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|Canonical Docs Loop" ;;
+      release) SECTIONS="Host Grounding|Runtime Verification|Release Stage|Feedback Loop|Model Placement|Decisions|Canonical Docs Loop" ;;
       enforce) SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Model Placement|Workflows Encode Shape, Not Judgment" ;;
       import-design) SECTIONS="Host Grounding|Design Stage|Model Placement|Decisions" ;;
       design-brief)  SECTIONS="Host Grounding|State Machine|Design Stage|Model Placement|Decisions" ;;
@@ -53,6 +58,8 @@ case "${1:-root}" in
     ' "$DOC"
     ;;
   template)    echo "$ROOT/templates/spec.md" ;;
+  feedback-template) echo "$ROOT/templates/feedback-brief.md" ;;
+  intake)      echo "$ROOT/INTAKE.md" ;;
   templates)   echo "$ROOT/templates" ;;
   version)     jq -r '.version // empty' "$ROOT/.claude-plugin/plugin.json" ;;
   contract)    echo "$ROOT/templates/grounding-contract.md" ;;
@@ -64,7 +71,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-build|wf-design|wf-review|wf-enforce|wf-panel|wf-research|dc-extract|skeletons-check|fidelity-check|merge-back|shared|shared-for <command>|shared-genesis|scaffold-ledger|template|templates|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-build|wf-design|wf-review|wf-enforce|wf-panel|wf-research|dc-extract|design-atlas|skeletons-check|fidelity-check|merge-back|smoke|manifest-check|shared|shared-for <command>|shared-genesis|scaffold-ledger|template|templates|feedback-template|intake|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

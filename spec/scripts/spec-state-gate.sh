@@ -45,8 +45,21 @@ FILE="$SPEC"
 [ -f "$FILE" ] || FILE="$ROOT/$SPEC"
 [ -f "$FILE" ] || exit 0   # nonexistent path — command will surface that itself
 
-# Match only the live bracketed marker — prose that merely MENTIONS the phrase must not block.
-if grep -q '\[NEEDS CLARIFICATION:' "$FILE"; then
+# Marker gate. Authoritative source: the frontmatter `open_markers:` counter, written
+# mechanically at lock by /spec:plan (the count of LIVE markers after adjudication — quoted
+# narration doesn't count). A prose grep is trippable by DESCRIBING the marker syntax in
+# Rationale, so when the counter is present the grep is not consulted. Specs predating the
+# counter fall back to the grep (live bracketed colon form only).
+OPEN_MARKERS=$(awk '/^---[[:space:]]*$/{f++; next} f==1 && /^open_markers:/{print $2; exit}' "$FILE")
+if [ -n "$OPEN_MARKERS" ]; then
+  case "$OPEN_MARKERS" in
+    0) ;;
+    *)
+      echo "Spec state gate: $SPEC declares open_markers: $OPEN_MARKERS — unresolved [NEEDS CLARIFICATION] markers; resolve them via /spec:plan (which re-counts and rewrites the field) before proceeding." >&2
+      exit 2
+      ;;
+  esac
+elif grep -q '\[NEEDS CLARIFICATION:' "$FILE"; then
   echo "Spec state gate: $SPEC contains unresolved [NEEDS CLARIFICATION] markers — resolve them via /spec:plan before proceeding." >&2
   exit 2
 fi

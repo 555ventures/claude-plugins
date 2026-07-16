@@ -70,3 +70,31 @@ test('design-brief.md: courier placement — session model, no invented intent, 
   assert.match(brief, /data-screen-label/,
     'the coordination footer must pin region labels so dc-extract regionRefs line up')
 })
+
+// v6 additions: taste is spent at the roadmap level (explore/atlas — Fable seats); /spec:design
+// is mock-always with Sonnet resident on roadmap-derived specs; the mock-less Fable-resident
+// path is retired. Pinned so a doctrine edit can't silently resurrect it.
+
+test('shared.md v6: roadmap-level design seats are Fable; standalone spec:design is session-model', () => {
+  const shared = read('doctrine/shared.md')
+  assert.match(shared, /roadmap-level design seats/)
+  assert.match(shared, /Standalone `\/spec:design` \(no roadmap\) runs on the session model/)
+  assert.doesNotMatch(shared, /Mock-less `\/spec:design` runs on Fable/,
+    'the v5 Fable-resident mock-less path is retired — mock-always authors the mock first')
+})
+
+test('design.md v6: mock-always — the fork is where the mock comes from, not whether one exists', () => {
+  const design = read('commands/design.md')
+  assert.match(design, /mock-always/i)
+  assert.match(design, /Mock-authoring preamble/)
+  assert.match(design, /render→screenshot→critique/i)
+  assert.doesNotMatch(design, /Mock-less.*Fable or Opus/s)
+})
+
+test('genesis-explore.md: session authors position briefs, Sonnet builds, deterministic gate first', () => {
+  const explore = read('commands/genesis-explore.md')
+  assert.match(explore, /The session writes no candidate HTML/)
+  assert.match(explore, /model: "sonnet"/)
+  assert.match(explore, /design-atlas\.js check/)
+  assert.match(explore, /Fresh research every project/)
+})

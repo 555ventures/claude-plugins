@@ -25,7 +25,14 @@ understand what the process layer expects from the grounding layer.
    one-page design doctrine doc, the living showcase catalog entry (Phase 6)
 6. `.claude/skills/spec-verify/SKILL.md` — the per-host **verify skill**: how to launch, seed,
    and observe this app, derived from Phase 1's profiling
-7. A short report: what was generated, what was verified, what needs the user's eyes
+7. The **runtime substrate** where the repo lacks it (Phase 1.5): health endpoint, seed entry
+   point, local DB provisioning, quickstart — the things the verify skill and the smoke leg
+   presuppose
+8. `.claude/spec-manifest.json` — the **deliverable manifest**: every deliverable above plus
+   the activation each claims, verified by `manifest-check.sh` **before** the config is
+   stamped (Phase 7). Init is the one LLM in the pipeline whose output would otherwise ship
+   unverified — this closes that recursion.
+9. A short report: what was generated, what was verified, what needs the user's eyes
 
 ## Phase 1 — Profile the repo
 
@@ -95,6 +102,31 @@ builds may use it for advisory behavioral checks of acceptance criteria — advi
 gates nothing until the run ledger (`.claude/spec-runs.jsonl`) shows its verdicts track real
 escapes.
 
+## Phase 1.5 — Runtime substrate (generate what verification presupposes)
+
+The verify skill, the smoke leg, and any DB-gated test suite all presuppose a runnable
+substrate. Where Phase 1's profiling found gaps, **create the substrate — don't just record
+the gap** (measured cost of not doing this: UpWell shipped 10 days with no seed, no health
+endpoint, no DB provisioning, no remote — "can I run this?" took a full investigation and the
+answer was no). Each item is small, and each is skippable only by an explicit `inert`
+manifest row with a reason:
+
+- **Health endpoint** — if the app serves HTTP and has no cheap liveness route, add one
+  (e.g. `/api/health` returning 200 + version). It is the `runtime.readyCheck` target, the
+  deploy healthcheck, and the e2e webServer wait, all in one ~10-line file.
+- **Local DB/service provisioning** — if `.env.example` points at databases nothing creates,
+  add the missing compose file or provisioning script so `TEST_DATABASE_URL`-style gates can
+  actually be satisfied locally. An env-gated test suite whose env costs "hand-provision two
+  databases" never runs — and a skip is not a pass.
+- **Seed entry point** — a script that produces an observable post-signup state (test
+  tenant/user, minimal fixtures). Without it, "launch, seed, observe" fails at step two.
+- **Quickstart** — a root README section (or file) answering "how do I run this?" in five
+  lines, citing the real commands.
+- **Git remote / CI activation** — check `git remote -v`. If empty, ask the user
+  (`AskUserQuestion`): connect a remote now, or explicitly declare CI inert. Generated CI
+  config with no remote executes zero times; the manifest records whichever the user chooses —
+  never an undeclared limbo.
+
 ## Phase 2 — Write `.claude/spec.config.json`
 
 All keys consumed by the plugin's commands/workflows:
@@ -115,6 +147,17 @@ All keys consumed by the plugin's commands/workflows:
   "testCommand": "bun test:run",
   // Workspace bootstrap for worktrees/spikes.
   "setupCommand": "bun install",
+  // REQUIRED: the executed-boot contract (shared invariants § Runtime Verification), from
+  // Phase 1's runtime profiling. bootCommand starts the app; readyCheck exits 0 once it
+  // observably serves. /spec:review's smoke leg runs this on every review — a config without
+  // it makes every review's boot leg a hard finding. Hosts with nothing to boot (libraries,
+  // pure CLIs) declare {"inert": "<reason>"} instead — explicit, never omitted.
+  "runtime": {
+    "bootCommand": "bun dev",
+    "readyCheck": "curl -sf http://localhost:3000/api/health",
+    "seedCommand": "bun db:seed",     // OPTIONAL: seeds an observable state
+    "readyTimeout": 120               // OPTIONAL: seconds (default 120)
+  },
   // OPTIONAL: default workspace for /spec:build ∈ "worktree" | "in-place" | "ask".
   // Omit (or "ask") to keep the per-run prompt. Set "worktree" for repos that always want
   // isolation (e.g. genesis-seeded greenfield), "in-place" for repos that never do.
@@ -187,7 +230,10 @@ Seven sections, all grounded in Phase 1 findings. This file is read by every pip
 - **`## Risk Tiers`** — the concrete T3 trigger list for THIS repo (e.g. "order/position/trade
   mutation paths or money math (`src/lib/decimal.ts` call sites)"; "anything touching the
   `billing` or `identity` domain's write paths; migrations beyond pure-additive"), and what
-  T1-shaped work looks like here.
+  T1-shaped work looks like here. **Always include the process-boundary trigger with this
+  repo's concrete boot-path files named** (entry point, plugin/process registration, env
+  schema, signal handling) — shared invariants § Risk Tiers makes it universal; this section
+  grounds it in real paths.
 - **`## Planning`** — discovery surfaces (generated contract files to ground against),
   pre-emptive MCP/registry lookups to run at plan time (e.g. Shadcn registry for new UI
   surfaces, Context7 for the libraries this repo leans on), decomposition caps beyond the
@@ -203,7 +249,14 @@ Seven sections, all grounded in Phase 1 findings. This file is read by every pip
   discipline, import-boundary rules, the scoped self-verify commands workers may run.
 - **`## Test Rules`** — this repo's test conventions: file placement, naming, AC-ID reference
   style (docstring? test name? comment?), fixture rules, what is exempt from TDD (e.g. pure-UI
-  rendering in repos with a design-stage catalog).
+  rendering in repos with a design-stage catalog). **Workspace monorepos (a
+  `pnpm-workspace.yaml`/equivalent exists): record the test runner's path-filtering semantics
+  unconditionally** — e.g. whether paths filter against the workspace root or the package dir,
+  and what the wrong form does (vitest exits 1 "No test files found") — this is knowable at
+  init time from the workspace manifest and is otherwise re-discovered by every worker.
+  **Environment-gated suites** (`skipIf(!ENV_VAR)` shapes): name each gating variable and the
+  provisioning command that satisfies it (Phase 1.5) — review treats a skipped AC-mapped test
+  as a hard finding, so a suite that can't run locally is a defect, not a convention.
 - **`## Review Checks`** — repo-specific severity calibrations for the reviewer (the plugin's
   generic `reviewer` reads this repo's `.claude/rules/` — this section is where checks
   like "runtime import from a feature barrel in `stores.ts` or `*.test.ts` is **hard**",
@@ -211,10 +264,14 @@ Seven sections, all grounded in Phase 1 findings. This file is read by every pip
   or "imports from `other_domain.logic` targeting anything but `types.py` is **hard**" live,
   each with file:line-verifiable phrasing).
 - **`## Gotchas (evidence-cited)`** — write this section EMPTY, carrying nothing but a
-  one-line header comment stating its contract: one line per entry, and every entry must cite
-  either a ledger row (spec path + runId) or a dated incident. Nothing else populates it at
-  init time. `/spec:review`'s close (deviation fold-in) and `/spec:escape` are the only writers
-  that append to it; `/spec:doctor` prunes entries whose citation no longer resolves. Workers
+  one-line header comment stating its contract: one line per entry; every entry must cite
+  either a ledger row (spec path + runId) or a dated incident; and every entry carries a
+  **provenance tag** — `[host]` (a lesson about this repo/stack) or `[plugin]` (the failure
+  traces to a spec-plugin template, command, or generated artifact). Nothing else populates it
+  at init time. `/spec:review`'s close (deviation fold-in) and `/spec:escape` are the only
+  writers that append to it; `/spec:doctor` prunes entries whose citation no longer resolves
+  and **rolls `[plugin]`-tagged entries up as an upstream bug list** — a plugin defect living
+  as host folklore is an unfiled bug report every other host pays for independently. Workers
   and reviewers pick this up for free as part of the rules file they already inherit — no new
   loading mechanism.
 
@@ -367,17 +424,27 @@ mockup — is indistinguishable from any brownfield repo with real UI: it writes
 doctrine + components outside `.claude/genesis/`, so the extract path above handles it; do not
 special-case it.)
 
-## Phase 7 — Verify & report
+## Phase 7 — Verify, prove activation, then stamp
 
 1. Re-read every generated file; spot-check 10 cited paths/exports at random against the repo.
 2. Confirm `agentMap` names exactly match the generated agent filenames' `name:` fields.
-3. Run `scripts/spec-patterns.sh` once; confirm exit 0 and sane output.
-4. Confirm the config's `generatedBy` equals `spec@$(spec-paths version)` and its
-   `contractHash` equals `$(spec-paths contract-hash)`.
+3. **Write `.claude/spec-manifest.json`** — one `{claim, kind, target}` entry per deliverable
+   and activation claim (contract file § Deliverable manifest). Minimum rows: config parses
+   (`file`), pipeline rules exist (`file`), each generated agent (`file`), patterns script
+   executes (`exec`), verify skill written (`file`), the boot smoke (`smoke`), the git remote /
+   CI activation (`remote` — or `inert` with the user's declared reason from Phase 1.5), plus
+   `file` rows for any substrate Phase 1.5 landed (seed script, provisioning, health route).
+   Every skip is an `inert` row with a reason — never an omitted row.
+4. **Run `bash $(spec-paths manifest-check)` and require exit 0.** Failures mean the grounding
+   layer is authored but not activated — fix and re-run. **Only after it passes**, stamp the
+   config: `generatedBy` = `spec@$(spec-paths version)`, `contractHash` =
+   `$(spec-paths contract-hash)`. The stamp asserts "mechanically verified," not "generated."
 5. Report: files written, agents generated (kind → name), config summary, T3 triggers chosen,
-   design foundation landed (mode: genesis / extracted / adopted / crafted, doctrine path);
-   for `genesis` mode, the design-rules categories found and the stamped `designRulesHash`;
-   anything you could not verify and flagged for the user.
+   runtime contract (boot/ready commands, or declared inert + reason), substrate created vs
+   found (Phase 1.5), manifest-check result table, design foundation landed (mode: genesis /
+   extracted / adopted / crafted, doctrine path); for `genesis` mode, the design-rules
+   categories found and the stamped `designRulesHash`; anything you could not verify and
+   flagged for the user.
 
 ## Phase 8 — Generate enforcement (invoke `/spec:enforce`)
 

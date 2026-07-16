@@ -62,6 +62,23 @@ test('narration quoting the BRACKETED form (no colon) does not block', () => {
   assert.strictEqual(res.status, 0, res.stderr)
 })
 
+test('open_markers counter is authoritative: 0 passes even when prose quotes the colon form', () => {
+  const spec = `---\nstatus: hardened\nopen_markers: 0\n---\n# Spec\nRationale: we resolved [NEEDS CLARIFICATION: which tz?] by picking UTC (D4).\n`
+  const res = gate('/spec:build', spec)
+  assert.strictEqual(res.status, 0, res.stderr)
+})
+
+test('open_markers > 0 blocks regardless of body content', () => {
+  const res = gate('/spec:build', `---\nstatus: hardened\nopen_markers: 2\n---\n# Spec\nclean body\n`)
+  assert.strictEqual(res.status, 2)
+  assert.match(res.stderr, /open_markers: 2/)
+})
+
+test('no counter falls back to the prose grep (legacy specs)', () => {
+  const res = gate('/spec:build', SPEC_MD('hardened', 'x [NEEDS CLARIFICATION: which tz?] y'))
+  assert.strictEqual(res.status, 2)
+})
+
 test('non-spec prompts and missing paths pass through', () => {
   assert.strictEqual(gate('hello world', null).status, 0)
   assert.strictEqual(gate('/spec:build specs/20260101/99-none.md', null).status, 0)

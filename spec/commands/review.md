@@ -42,7 +42,14 @@ absolute path — it is the `scriptPath` for the Workflow call below.
      temp file (`patternsPath` = a fresh `mktemp` path); keep the absolute path for the
      workflow call. The reviewers read it rather than receiving the output inline, which keeps
      `args` a small control channel.
-   - the host's `gateCommand` — the deterministic gate
+   - the host's `gateCommand` — the deterministic gate. **Capture the runner's skip/todo
+     counts** from its output (every mainstream runner prints them) — they feed the
+     skipped-test reconciliation in step 4.
+   - `bash $(spec-paths smoke)` — the **boot smoke leg** (shared invariants § Runtime
+     Verification). Exit 0 = boot observed ready; exit 4 = runtime declared inert (sanctioned,
+     note it in the verdict); any other exit is an automatic **hard finding** — including
+     exit 3, "the host gives review no way to boot," which is a grounding-layer defect, not a
+     skippable check. This leg is deterministic; no reviewer adjudicates it.
    - **if config declares `driftScript`**: `{driftScript} {spec path}` — the host's AC-drift
      checker
 3. Read the spec once; extract File Plan dirs, AC list, tier, area. Compute `{diffLoc}` =
@@ -52,6 +59,16 @@ absolute path — it is the `scriptPath` for the Workflow call below.
    grep the File Plan's test paths for it. Any AC-ID with zero hits is an **uncovered AC** —
    an automatic `hard` finding that skips the refutation filter (it is a deterministic fact,
    not a reviewer claim). Computed before the reviewer panel runs.
+5. **Skipped-test reconciliation (mechanical, both drift modes):** the matrix counts
+   **executed** tests, never collected ones — a skip is not a pass. If the gate run reported
+   skipped/todo tests, map each skipped test back to its AC-IDs (grep the skipped file/test
+   names). An AC whose mapped test **skipped** is an automatic `hard` finding — identical in
+   standing to an uncovered AC — **unless** the AC carries an explicit environment-gating
+   declaration in the spec (`[env: VAR_NAME]` on the AC line). A declared env-gated AC that
+   skipped is reported as a **warning naming the un-run environment** in the verdict — never
+   silent green. (Ground truth: UpWell 2026-07 — a test holding a defect real pg-boss rejects
+   with a throw sat `describe.skipIf`-skipped through two CLEAN verdicts because the matrix
+   reconciled against collected tests.)
 
 ## Phase 1 — Review workflow
 
@@ -86,6 +103,22 @@ What the script does (shape lives in the script, not here):
   `verify.failed` or `verify.capSkipped` is non-zero, those survivors stand unverified — say
   so in the verdict presentation.
 
+## Design-compliance legs (UI-bearing specs only)
+
+When the spec has `design: true` or a `design_source`, the panel carries two additional checks
+(shared § Design Stage — both exist because authoring sessions don't remember; checkers with
+lists do):
+
+- **Rule-checklist leg:** one reviewer walks `docs/design/research-brief.md`'s admitted rules
+  (falsifiable by construction) against the spec's built screens/bound mocks, citing rule IDs —
+  "UX-7: max one primary CTA; this screen has three" is a finding; "feels off" is not.
+- **Component-manifest leg:** every `author` decision in the run's binding maps is verified
+  against `design/components.json` — a missing nearest-entry justification is a `hard` finding;
+  a justification whose named nearest entry actually covers the need, or a new entry that
+  near-duplicates an existing one (name/purpose comparison), is a finding with the reuse named.
+
+Both legs skip silently on specs with no UI surface — never nag a backend diff about design.
+
 ## Drift gate
 
 Two modes, decided by host config:
@@ -102,8 +135,10 @@ Two modes, decided by host config:
 
 ## Phase 2 — Verdict
 
-**CLEAN ⇔** the host's `gateCommand` green **AND** zero surviving `hard` findings **AND**
-drift clean (whichever mode applies).
+**CLEAN ⇔** the host's `gateCommand` green **AND** the boot smoke leg green (or declared
+inert) **AND** zero surviving `hard` findings (including the mechanical ones: uncovered ACs,
+non-declared skipped-test ACs, a failed or impossible smoke) **AND** drift clean (whichever
+mode applies).
 
 **Run ledger (every review run, any verdict):** append exactly ONE line to
 `.claude/spec-runs.jsonl` (repo root; create on first append) — **after** the survivor
@@ -112,7 +147,7 @@ dispositions below are resolved, so the row records how each finding actually en
 unresolved one):
 
 ```
-{"ts":"<YYYY-MM-DD>","spec":"<repo-relative spec path>","stage":"review","tier":"<T1|T2|T3>","runId":"<wf_…>","verdict":"<CLEAN|SURVIVORS|REVIEWER_FAILED>","scope":"<full|fix-delta>","iteration":<n>,"diff":{"loc":<n>},"tokens":{"workflow":<n>},"findings":{"survived":<n>,"killed":<n>,"waived":<n>,"rejected":<n>,"fixDispatched":<n>,"reviewerCount":<n>},"verify":{"verified":<n>,"demonstrated":<n>,"killedByExecution":<n>,"sanctioned":<n>,"miscited":<n>,"unverifiable":<n>,"failed":<n>,"capSkipped":<n>}}
+{"ts":"<YYYY-MM-DD>","spec":"<repo-relative spec path>","stage":"review","tier":"<T1|T2|T3>","runId":"<wf_…>","verdict":"<CLEAN|SURVIVORS|REVIEWER_FAILED>","scope":"<full|fix-delta>","iteration":<n>,"diff":{"loc":<n>},"smoke":"<pass|fail|inert>","testsSkipped":<n>,"tokens":{"workflow":<n>},"findings":{"survived":<n>,"killed":<n>,"waived":<n>,"rejected":<n>,"fixDispatched":<n>,"reviewerCount":<n>},"verify":{"verified":<n>,"demonstrated":<n>,"killedByExecution":<n>,"sanctioned":<n>,"miscited":<n>,"unverifiable":<n>,"failed":<n>,"capSkipped":<n>}}
 ```
 
 `verdict` is the workflow's verdict (pre-disposition) — **never write `CLEAN` on a row whose
@@ -148,9 +183,11 @@ then `advisory` (soft), then any `verifier-failed`/`cap-skipped` (unverified —
    **Deviation fold-in:** if a `<spec>.deviations.md` sidecar exists (build workers log forced
    departures from the plan there), read it now. A deviation that will recur on future specs
    (a wrong assumption about the codebase, a convention the spec template didn't know) becomes
-   a one-line entry in the host rules' **Gotchas** section, citing this spec — that is the
-   territory correcting the map. One-off deviations just get absorbed into the spec's
-   Rationale. Delete the sidecar after folding.
+   a one-line entry in the host rules' **Gotchas** section, citing this spec and tagged
+   `[host]` or `[plugin]` by provenance (a plugin-template gap is `[plugin]` — `/spec:doctor`
+   rolls those up as the upstream bug list) — that is the territory correcting the map.
+   One-off deviations just get absorbed into the spec's Rationale. Delete the sidecar after
+   folding.
 3. **Close commit:** commit everything still uncommitted on the working branch — status flip,
    canonical docs, any review-fix dispatches. The orchestrator owns git; never `--no-verify`.
 4. Report: gate table, findings (survived / killed / waived with reasons), drift result,

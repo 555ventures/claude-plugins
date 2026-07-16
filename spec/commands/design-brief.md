@@ -5,11 +5,11 @@ argument-hint: <spec path> [surface name …] [--drift]
 
 # Spec Design Brief: spec → Claude Design prompt
 
-The pipeline's missing reverse direction. `/spec:design` and `/spec:import-design` pull finished
-mocks *out of* Claude Design; until now, getting a spec's intent *into* Claude Design was manual —
-the user re-read the spec, extracted the design-relevant decisions, and hand-compressed them into
-a prompt. This command compiles that prompt. Two modes, both producing **paste-ready prompt
-text** for a Claude Design (claude.ai/design) session:
+The courier for the **Claude Design escape hatch** (shared § Design Stage). The main path
+authors mocks locally — `/spec:design`'s mock-authoring preamble needs no prompt courier because
+the harness reads the spec directly. When a surface IS being designed externally in Claude
+Design (`claude.ai/design`), this command compiles the spec's intent into the prompt the user
+pastes there. Two modes, both producing **paste-ready prompt text** for a Claude Design session:
 
 - **Brief mode** (default) — the spec needs a screen or component that has no mock: emit one
   brief per missing surface, carrying the spec's binding intent.
@@ -20,9 +20,8 @@ text** for a Claude Design (claude.ai/design) session:
 
 **Intended model: the session model — no expensive seat required.** The brief never *invents*
 design intent: it selects, quotes, and compresses what the spec, doctrine, and Decisions already
-record. Taste is spent on the other side of the paste, by Claude Design (shared § Model
-Placement: Fable authors design mocks *in Claude Design, outside the plugin* — this command is
-the courier for that seat, not a competitor to it). A BINDING line with no spec/doctrine anchor
+record. Taste is spent on the other side of the paste, by Claude Design — this command is
+the courier for that escape-hatch seat, not a competitor to it. A BINDING line with no spec/doctrine anchor
 is a new design decision and belongs in `/spec:plan`, not here.
 
 **Setup:** run `spec-paths shared-for design-brief` and read its output. Read the host's

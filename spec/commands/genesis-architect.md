@@ -166,10 +166,17 @@ Repeat until no open hard forks remain:
      shows the convention the `tests`-kind agent will follow), and the **e2e harness stub** when
      the archetype warrants one (web/mobile/desktop): installed, one smoke test, wired into a
      script — so `/spec:build`'s TDD never meets a repo where the harness itself is missing;
-   - a **CI workflow** for the repo's forge (detect from the remote; no remote → write the
-     GitHub Actions file anyway and note it activates on first push) that runs `setupCommand`
-     then `gateCommand` on every push/PR. An enforcement rule that only runs on a developer's
-     machine is advisory, not enforced.
+   - a **CI workflow** for the repo's forge (detect from the remote; **no remote → ask the
+     user now**: connect one, or explicitly record CI-inert in the descriptor — a written
+     workflow with no remote executes zero times, and "authored but never activated" is the
+     failure class this stage must not seed; `/spec:init`'s manifest check verifies whichever
+     was chosen) that runs `setupCommand` then `gateCommand` on every push/PR. An enforcement
+     rule that only runs on a developer's machine is advisory, not enforced;
+   - the **runtime substrate the archetype implies** — a health/liveness route (bootable
+     archetypes), a seed entry point stub, and local service provisioning (compose file or
+     script) wherever the scaffold's `.env.example` references services nothing creates. These
+     are what `/spec:init`'s runtime block, verify skill, and smoke leg will bind to — cheaper
+     to land here, while the scaffold tool's conventions are hot, than to retrofit at init.
 3. Run the **zero-day gate** — the descriptor's `gateCommand` (typecheck + lint + the example
    tests, lint at `--max-warnings 0` where supported). Fix scaffold-level issues only; do not
    start feature work.
@@ -195,7 +202,9 @@ written against real code. Never pre-plan the whole roadmap into specs.
    Wire `depends_on` as a DAG; assign phases (P0 = walking skeleton → first milestone → …);
    derive milestone gates from the Phase-1 success outcome (observable states, not feature
    lists). Design column: `yes` only for user-facing briefs in archetypes whose design stage
-   isn't `none`. Seed the **ops track** with external clocks (OAuth registrations, hosting
+   isn't `none` — and every `yes` brief carries a `## Surfaces` fenced block (screen labels +
+   journey edges, names and arrows only; the template documents the grammar) so the design
+   atlas can render the whole-product journey and its gaps. Seed the **ops track** with external clocks (OAuth registrations, hosting
    provisioning, partner asks) and the **parking lot** with the Phase-1 "Later / Won't-this-time"
    answers — recorded so they stop leaking into briefs; promotion out requires a delta.
 2. **Confirm the sequence.** One `AskUserQuestion` round presenting the proposed sequence table
@@ -214,10 +223,13 @@ written against real code. Never pre-plan the whole roadmap into specs.
 
 Report: archetype + audience, decisions made (with ADR paths), dissents recorded, the resolved
 gate command, scaffold result, roadmap (brief count, milestone gates). **Next:**
-`/spec:genesis-design <same idea>` — or, for an archetype whose design stage is `none`
-(backend-api, data-ml), note that design is skipped and the next step is `/spec:init`. Print the
-full remaining chain so initiation is never a mystery: genesis-design (if any) → `/spec:init` →
-`/spec:enforce` → `/spec:plan docs/roadmap/01-*.md`.
+`/spec:genesis-explore <same idea>` — or, for an archetype whose design stage is `none`
+(backend-api, data-ml), note that explore + design are skipped and the next step is `/spec:init`.
+Print the
+full remaining chain so initiation is never a mystery: genesis-explore → genesis-design (if any)
+→ **`/spec:atlas sweep` + the user's holistic atlas review** (design-capable archetypes only —
+the named stage where the whole product's sketches are audited before any UI brief is planned;
+shared § Design Atlas) → `/spec:init` → `/spec:enforce` → `/spec:plan docs/roadmap/01-*.md`.
 
 ## Rules
 

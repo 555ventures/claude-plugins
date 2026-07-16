@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "themes": ["light", "dark"],
+  "viewports": [
+    { "name": "mobile", "width": 390, "height": 844 },
+    { "name": "tablet", "width": 834, "height": 1112 },
+    { "name": "desktop", "width": 1280, "height": 800 }
+  ]
+}

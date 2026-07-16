@@ -1,0 +1,3 @@
+{"ts":"2026-07-01","stage":"build","spec":"specs/20260101/01-fixture.md","tier":"T2","batches":3,"gates":{"passed":3,"failed":0}}
+{"ts":"2026-07-02","stage":"review","spec":"specs/20260101/01-fixture.md","runId":"wf_fixture01","verdict":"CLEAN","findings":{"survived":0,"killed":0},"tests":{"passed":12,"failed":0,"skipped":4}}
+{"ts":"2026-07-10","stage":"escape","spec":"specs/20260101/01-fixture.md","file":"src/app.js","reviewRunId":"wf_fixture01","foundBy":"user","severity":"hard","killedMatch":null,"preventedBy":"runtime-leg","via":"manual"}

@@ -15,6 +15,10 @@ depended_on_by: []
 # The host's pipeline rules may declare extra flags (e.g. migration: true) — include them when they apply.
 # While drafting: never guess — write [NEEDS CLARIFICATION: question] inline where information
 # is missing. Lock requires zero markers; the state gate blocks downstream commands on any survivor.
+# open_markers: 0          # written at lock by /spec:plan — the count of LIVE markers after
+#                          # adjudication (quoted narration doesn't count). When present, the
+#                          # state gate reads THIS, not a prose grep — so describing the marker
+#                          # syntax in Rationale can't false-trip the gate.
 ---
 
 # { Title }
@@ -38,7 +42,7 @@ depended_on_by: []
 | Path | Action | Layer | Summary |
 |------|--------|-------|---------|
 | { path } | MODIFY | foundation | { what } |
-| { test path } | CREATE | tests | AC-1, AC-2 |
+| { test path } | CREATE | tests | AC-{YYYYMMDD-NN}-1, AC-{YYYYMMDD-NN}-2 |
 
 ## Contracts
 
@@ -68,20 +72,27 @@ depended_on_by: []
 
 ## Acceptance Criteria
 
-<!-- Every AC maps to a test. Reference the AC-ID per the host's convention (test name,
-     comment, or docstring — pipeline rules § Test Rules). Hosts with a driftScript get it
-     checked mechanically; hosts without get /spec:review's mechanical grep matrix (an AC-ID
-     with no test hit is a hard finding). In design-capable hosts, pure-UI rendering is exempt
-     from TDD (the component catalog covers it) — ACs here are behavior, not pixels.
+<!-- Every AC maps to a test. AC-IDs are NAMESPACED with the spec id — AC-{YYYYMMDD-NN}-1
+     where YYYYMMDD is the date dir and NN the spec number — so the review grep matrix never
+     collides across two specs touching one test file. Reference the AC-ID per the host's
+     convention (test name, comment, or docstring — pipeline rules § Test Rules). Hosts with
+     a driftScript get it checked mechanically; hosts without get /spec:review's mechanical
+     grep matrix (an AC-ID with no test hit is a hard finding — and the matrix counts
+     EXECUTED tests: a skipped test is a hard finding too, unless the AC carries an explicit
+     env gate). An AC whose test legitimately needs an environment declares it inline:
+     `[env: TEST_DATABASE_URL]` — then a skip reports as a warning naming that environment
+     instead of a hard finding; never leave an env dependency undeclared. In design-capable
+     hosts, pure-UI rendering is exempt from TDD (the component catalog covers it) — ACs here
+     are behavior, not pixels.
      Shape: WHEN {trigger/state} THE SYSTEM SHALL {observable response}. Wherever a term can
      be read two ways (rounding mode, ordering, inclusive/exclusive bounds, timezone, null vs
      empty), pin it with a literal input → output example — test authors derive tests from
      this spec alone, and a concrete pair is the only wording they cannot misread. T3 ACs
      always carry at least one literal example. -->
 
-- **AC-1**: WHEN { trigger/state } THE SYSTEM SHALL { observable response }
+- **AC-{YYYYMMDD-NN}-1**: WHEN { trigger/state } THE SYSTEM SHALL { observable response }
   (e.g. `{ literal input }` → `{ literal output }`) → { test reference } in { test file }
-- **AC-2**: …
+- **AC-{YYYYMMDD-NN}-2** `[env: { VAR }]` (only when the test is environment-gated): …
 
 ## Assumptions (escalation triggers)
 

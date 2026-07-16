@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "winner": "design/explore/r1-{position}",
+  "pickedAt": "YYYY-MM-DD",
+  "grafts": [
+    { "from": "design/explore/r1-{other-position}", "what": "{the specific element/behavior carried over, in the user's words}" }
+  ],
+  "rejected": [
+    { "candidate": "design/explore/r1-{position}", "reason": "{the user's rejection reason, verbatim where given}", "salvage": "{anything worth keeping from it, or null}" }
+  ],
+  "walkthroughFindings": {
+    "winner": 0,
+    "notes": "{path to the winner's walkthrough.md, or null}"
+  }
+}

@@ -3,13 +3,17 @@ description: Greenfield design genesis — research+panel-driven UX/visual/voice
 argument-hint: <project idea — same as architect>
 ---
 
-# Genesis Design: Author the Design Canon
+# Genesis Design: Ratify the Pick, Author the Canon
 
-The second greenfield stage. Given the scaffolded project's archetype and audience, runs a
-research-backed MoA panel over the design direction, then **authors the design canon** — the
-one-page doctrine, the theme tokens, and `design-rules.json` (category-only enforcement intent
-that `/spec:enforce` turns into actual lint/contracts). This IS the relocated, heavier greenfield branch
-of `/spec:init`'s design foundation — **one canon, not two**. Same interactive shape as architect:
+The third greenfield stage. **Ratification mode (the v6 main path):** when `/spec:genesis-explore`
+has recorded a pick (`.claude/genesis/design-pick.json`), the direction is already chosen and
+judged on rendered candidates — this command **ratifies the winner's `tokens.css` verbatim as
+canon** (no extraction, no re-authoring of values) and authors only what a mock cannot carry:
+the one-page doctrine, the scheme mirror, the framework-native consumption surface, base
+primitives, and `design-rules.json` (category-only enforcement intent that `/spec:enforce` turns
+into actual lint/contracts). **Legacy mode:** with no pick on disk (a pre-explore genesis, or a
+legacy `status.json` without the `explore` field), it runs the original direction interview +
+MoA panel below. Either way — **one canon, not two**. Same interactive shape as architect:
 the session owns `AskUserQuestion` and writes; `wf-panel` does research + panel.
 
 **Intended model: Fable or Opus** (taste IS the work — the design-stage exception; Opus is the fallback if Fable is unavailable).
@@ -18,15 +22,16 @@ the session owns `AskUserQuestion` and writes; `wf-panel` does research + panel.
 Read that too (the genesis-stage supplement — discovery interview, panel doctrine, enforcement
 handoff). Also run `spec-paths wf-panel` and
 `spec-paths wf-research` once and keep the printed absolute paths — they are the `scriptPath` for
-the `Workflow` calls below. The state gate blocks this command until `architect: scaffold-complete`;
-also verify `.claude/genesis/stack-descriptor.json` exists.
+the `Workflow` calls below. The state gate blocks this command until `architect: scaffold-complete`
+AND `explore: picked`/`skipped` (legacy status files without an `explore` field pass with a
+warning); also verify `.claude/genesis/stack-descriptor.json` exists.
 
 ## Input
 
 `$ARGUMENTS` — the same project idea. The archetype, audience, and stack come from
 `stack-descriptor.json`, not re-asked.
 
-## Phase 0 — Re-entry & archetype check
+## Phase 0 — Re-entry, archetype check & mode resolution
 
 1. Read `.claude/genesis/status.json` and `stack-descriptor.json`. Verify artifacts physically
    exist; resume from the last verified design phase.
@@ -34,6 +39,12 @@ also verify `.claude/genesis/stack-descriptor.json` exists.
    `data-ml`), confirm with the user, set `status.design: skipped`, and STOP — `/spec:init` will
    write no `design` block. For `conversational-bot`/`cli-devtool` the canon is *voice/persona* or
    *TUI* guidelines (no visual token files); adapt Phase 4 accordingly.
+3. **Mode resolution:** if `.claude/genesis/design-pick.json` exists AND the winner's candidate
+   dir + `tokens.css` physically exist → **ratification mode**: skip Phases 1–3 entirely (the
+   direction was researched, rendered, walked through, and picked in `/spec:genesis-explore`;
+   re-interviewing it would re-litigate a made decision) and run Phase 4 in its ratification
+   variant. Read the pick, the winner's files, and `docs/design/research-brief.md` first.
+   Otherwise → **legacy mode**: Phases 1–4 as written.
 
 ## Phase 1 — Discovery interview (interactive)
 
@@ -80,6 +91,28 @@ so proposers stay within the chosen framework/component library:
 3. Fresh round on remaining `research_gaps` / newly-opened dimensions.
 
 ## Phase 4 — Author the canon (Opus)
+
+**Ratification variant (pick on disk):** the winner already answers the taste questions —
+Phase 4 changes shape at three points, everything else below applies unchanged:
+
+- **Tokens are ratified, not authored.** Copy the winner's `tokens.css` verbatim to
+  `design/tokens.css` (grafts already applied by explore). Walk the dimension ledger (4.2)
+  *against that file*: a dimension the winner's tokens already answer is DECIDED with those
+  roles; a dimension the candidate never exercised (e.g. the scheme mirror, motion roles) is
+  decided now — authored as an *extension* of the winner's file, in its vocabulary, never a
+  re-theme. The ratified file must satisfy every theme `design/targets.json` declares: a winner
+  somehow missing its dark block gets one authored the same way (extension, harness-checked)
+  before the lock — never a re-opened pick. The framework-native consumption surface (4.2's second half) is generated FROM
+  `design/tokens.css` and must stay value-identical to it — name both paths in the doctrine.
+- **Doctrine is distilled, not invented.** Source material: the winner's position brief
+  (`design/explore/positions.md`), the pick's grafts/rejections, the research brief's admitted
+  rules, and walkthrough findings. `## Dissents` MUST carry every `rejected[]` row from
+  `design-pick.json` (candidate, reason, salvage) — a rejected direction is a recorded minority
+  position.
+- **Prune after lock.** Once `rules-locked` is committed, delete the non-winning
+  `design/explore/r*-*/` dirs (salvage noted in the pick record survives in Dissents); keep
+  `positions.md`, the winner's dir having been promoted into `design/tokens.css` +
+  `design/mocks/` (move its signature screens there, `data-status="approved"`).
 
 Author directly (taste exception — not delegated to Sonnet):
 
@@ -148,7 +181,10 @@ Author directly (taste exception — not delegated to Sonnet):
    `containment`-driven extraction: base primitives are system foundation (the structural analog of
    tokens), seeded **once** here so the first overlay-bearing `/spec:design` **imports** rather than
    re-implements. The `base-primitive-containment` rule (Phase 4.4, from the template, category
-   `structure`) makes import-only a build error. Headless/non-visual archetypes skip this item.
+   `structure`) makes import-only a build error. Seed **`design/components.json`** (shared §
+   Design Stage, component manifest) with the base primitives landed here — `name`, `purpose`,
+   `props`, `mockRefs` — so the first `/spec:design` run starts its bind-vs-author decisions
+   against a non-empty manifest. Headless/non-visual archetypes skip this item.
 4. **Design rules** — write `.claude/genesis/design-rules.json` (template via `spec-paths templates`):
    each rule carries a `targetCategory` **enum only** (the design category set defined in
    genesis.md § Genesis: Enforcement Handoff), `appliesTo`/`exemptGlobs`, `severity`, `rationale`,
@@ -180,6 +216,8 @@ machinery from `design-rules.json` (plus the rest of the rule set).
   and act on its return; their sources are never orchestrator context.
 - One canon: this supersedes `/spec:init`'s greenfield design sketch; init reads this, never
   re-prompts adopt/craft when `design: rules-locked`.
+- **Ratification never re-opens the pick.** A direction-level regret at this stage goes back to
+  `/spec:genesis-explore` (a fresh round), never a silent re-theme of the winner's tokens.
 - Design rules are category-only; tool selection is `/spec:enforce`'s job (runtime, per stack).
 - **Encodable dimensions are closed:** every dimension that names values produces a token family
   AND a consume-by-name rule; doctrine carries posture, never values. A value in doctrine with no

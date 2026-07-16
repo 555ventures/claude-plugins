@@ -260,8 +260,7 @@ keeps the final handover uneventful.
 | `/spec:atlas` | Whole-product design view: journey graph, gap sweep, annotation loop | Anytime |
 | `/spec:escape` | Records a defect that surfaced after review passed it | When one surfaces |
 | `/spec:doctor` | Drift + ledger + scaffold-evidence check; `--fix` repairs with approval | When something feels stale |
-| `/spec:import-design` | Pulls a finished Claude Design mockup into the repo as real tokens + components (no spec) | Escape hatch, anytime |
-| `/spec:design-brief` | Compiles paste-ready Claude Design prompts from a spec (new surfaces, or `--drift` fix-at-source) | Escape hatch, per surface |
+| `/spec:sketch` | Mock + brainstorm one roadmap brief before planning; ratifies mock↔brief agreement | Before planning a UI-bearing brief |
 | `/git:commit`, `/git:merge` | Fast add-all-commit (with escape capture on fix-shaped commits); guided branch merge | Anytime |
 | `/git:enter-worktree` | Enter (or re-enter) the isolated worktree for a spec — idempotent, owns `build_base` | Before `/spec:build` (or `/spec:design`) for isolation |
 
@@ -330,18 +329,18 @@ harness that covers your declared theme × viewport matrix (`design/targets.json
 them in your own browser — via `/spec:design`'s catalog loop or `/spec:atlas`'s whole-product
 page. No external canvas in the loop.
 
-When you *do* want Claude Design (claude.ai/design), two strictly opt-in commands bridge it:
+The atlas is the map; **`/spec:sketch <brief>`** is the workbench. Point it at one roadmap brief
+(or a mock file, or a bare surface label) *before* you plan that brief: it mocks only that
+brief's surfaces, then you brainstorm on them, and every change is triaged into its binding
+home in the same round — pixels to the mock, structure to the brief's `surfaces` block, scope to
+the brief's Scope, anything architecture-shaped to an open question or ADR delta. Sessions are
+fully resumable from disk. It ends with a coherence readout; your confirmation ratifies the
+mocks, and `/spec:plan` on that brief then reads mocks and brief that already agree (it's
+optional — plan warns if you skipped it, but never blocks).
 
-- **`/spec:import-design <URL>`** — spec-free, one-shot: paste a mockup URL and it translates
-  the `.dc.html` into real code in *this* repo — design tokens, base components in your
-  framework, a one-page doctrine. Read-only on Claude Design; greenfield or brownfield (extends
-  existing canon, never overwrites — real conflicts stop and ask); re-runnable (skips screens
-  already on disk). Needs the Claude Design connector (`/design-login` if the fetch fails).
-- **`/spec:design-brief <spec>`** — the reverse courier: compiles paste-ready Claude Design
-  prompts from a spec — new-surface briefs for screens with no mock, and (`--drift`)
-  fix-at-source prompts when a bound mock has drifted from what shipped, so the mock gets
-  re-aligned instead of rotting as stale canon. It never invents design intent — it quotes and
-  compresses what the spec and doctrine already record.
+One escape hatch, strictly opt-in: a surface you prefer to design at Claude Design
+(claude.ai/design) comes back as the spec's `design_source` URL — `/spec:design` fetches it
+read-only and runs the same extract → skeletons → fidelity path as a local mock.
 
 ## Why bother?
 

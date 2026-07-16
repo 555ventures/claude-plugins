@@ -46,6 +46,28 @@ verifies every claim by existence or execution, fail-closed. **Init may not stam
 `generatedBy`/`contractHash` until it exits 0** — authored artifacts count only once their
 activation is demonstrated. `/spec:doctor` re-runs it as the activation drift check.
 
+## Session grounding (required)
+
+Three deliverables serve **every** Claude session in the host — interactive or pipeline — not
+only spec commands (adopted 2026-07 from the mid-2026 Claude Code baseline: path-scoped rules,
+checked-in permissions, generated project skills):
+
+- **Path-scoped rules.** The pipeline-rules file opens with `paths:` frontmatter scoping its
+  ambient load to `specs/**` and `.claude/**` — pipeline commands Read it explicitly, so
+  nothing changes for them; ordinary sessions stop paying its context cost. Layer conventions
+  additionally live as small per-kind rule files in `.claude/rules/conventions/`, each with
+  `paths:` globs derived from the same evidence as the config `routing` — a rule loads only
+  when a session touches a matching file. A `paths:` glob matching zero tracked files is
+  drift (`/spec:doctor` flags it: that rule silently never loads).
+- **Permissions.** `.claude/settings.json` carries a generated `permissions` block: allow
+  entries for the exact toolchain commands the config declares (gate / test / setup / boot /
+  patterns), deny entries for destructive ops and secrets reads (`.env*`). Init merges into
+  an existing block — never clobbers user entries, never emits a broad `Bash(*)` allow.
+- **Run skill.** `.claude/skills/run/SKILL.md` — launch + observe for interactive sessions,
+  generated from the same runtime profiling as `spec-verify`. Generated skills declare
+  `allowed-tools` pre-authorizing exactly the commands their body instructs; any generated
+  skill with side effects beyond local launch/seed declares `disable-model-invocation: true`.
+
 ## Release (optional — present when the host deploys)
 
 `release` — the milestone release gate's grounding (`/spec:release`): `deployCommand`

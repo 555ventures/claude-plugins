@@ -18,21 +18,29 @@ understand what the process layer expects from the grounding layer.
 ## Deliverables (all in the host repo)
 
 1. `.claude/spec.config.json` — machine-readable knobs
-2. `.claude/rules/spec-pipeline.md` — prose grounding, seven sections
-3. `.claude/agents/*.md` — project-grounded implementer agents (one per batch kind)
-4. `scripts/spec-patterns.sh` — mechanical shortcut sweep adapted to this repo
-5. Design-capable hosts only: the **design foundation** — token files verified/landed, a
+2. `.claude/rules/spec-pipeline.md` — prose grounding, seven sections, `paths:`-scoped so it
+   ambient-loads only for spec/pipeline work (commands Read it explicitly regardless)
+3. `.claude/rules/conventions/*.md` — per-layer **path-scoped convention rules**: small rule
+   files whose `paths:` globs mirror `routing`, so any session touching a matching file gets
+   that layer's hard rules without pipeline machinery (Phase 3)
+4. `.claude/agents/*.md` — project-grounded implementer agents (one per batch kind)
+5. `scripts/spec-patterns.sh` — mechanical shortcut sweep adapted to this repo
+6. `.claude/settings.json` `permissions` block — allow entries for the exact toolchain
+   commands the config declares, deny entries for destructive ops and secrets reads; merged
+   into any existing block, never clobbered (Phase 2.5)
+7. Design-capable hosts only: the **design foundation** — token files verified/landed, a
    one-page design doctrine doc, the living showcase catalog entry (Phase 6)
-6. `.claude/skills/spec-verify/SKILL.md` — the per-host **verify skill**: how to launch, seed,
-   and observe this app, derived from Phase 1's profiling
-7. The **runtime substrate** where the repo lacks it (Phase 1.5): health endpoint, seed entry
+8. `.claude/skills/spec-verify/SKILL.md` and `.claude/skills/run/SKILL.md` — the per-host
+   **verify** and **run** skills: how to launch, seed, and observe this app, both derived
+   from Phase 1's profiling, both with `allowed-tools` frontmatter
+9. The **runtime substrate** where the repo lacks it (Phase 1.5): health endpoint, seed entry
    point, local DB provisioning, quickstart — the things the verify skill and the smoke leg
    presuppose
-8. `.claude/spec-manifest.json` — the **deliverable manifest**: every deliverable above plus
-   the activation each claims, verified by `manifest-check.sh` **before** the config is
-   stamped (Phase 7). Init is the one LLM in the pipeline whose output would otherwise ship
-   unverified — this closes that recursion.
-9. A short report: what was generated, what was verified, what needs the user's eyes
+10. `.claude/spec-manifest.json` — the **deliverable manifest**: every deliverable above plus
+    the activation each claims, verified by `manifest-check.sh` **before** the config is
+    stamped (Phase 7). Init is the one LLM in the pipeline whose output would otherwise ship
+    unverified — this closes that recursion.
+11. A short report: what was generated, what was verified, what needs the user's eyes
 
 ## Phase 1 — Profile the repo
 
@@ -87,20 +95,36 @@ conflicts there on merge-back, when the only correct resolution is "keep both li
 `.claude/spec-runs.jsonl merge=union` to the repo's `.gitattributes` (create it if missing) and
 commit it with the other init changes. Never gitignore the ledger itself.
 
-**Write `.claude/skills/spec-verify/SKILL.md`** from the runtime & observability findings above —
-this is a generated deliverable, not incidental notes. Frontmatter: `name: spec-verify`,
-`description` written as a trigger condition (e.g. "Use when exercising a spec-pipeline finding
-or an acceptance criterion against the running app instead of just reading code — launching it,
-seeding a test state, and observing real behavior"). Body: how to launch the app locally (dev
-command, ports, env), how to seed a testable state (test user, fixtures, db reset — whatever
-this repo reveals), and how to observe behavior (URLs/routes, CLI invocations, log locations,
-browser vs API surfaces). Every instruction must trace to a real file in this repo —
-`package.json` scripts, the README, `docker-compose.yml`, Playwright/Cypress config, a seed
-script; where the repo is silent, write `[NEEDS CLARIFICATION: <question>]` rather than guess.
-State its consumers in the body: `/spec:review`'s verifiers use it to exercise findings; T3
-builds may use it for advisory behavioral checks of acceptance criteria — advisory only, it
-gates nothing until the run ledger (`.claude/spec-runs.jsonl`) shows its verdicts track real
-escapes.
+**Write the generated skills** from the runtime & observability findings above — deliverables,
+not incidental notes. Two skills, one profiling pass:
+
+- **`.claude/skills/spec-verify/SKILL.md`** — frontmatter: `name: spec-verify`, `description`
+  written as a trigger condition (e.g. "Use when exercising a spec-pipeline finding or an
+  acceptance criterion against the running app instead of just reading code — launching it,
+  seeding a test state, and observing real behavior"). Body: how to launch the app locally
+  (dev command, ports, env), how to seed a testable state (test user, fixtures, db reset —
+  whatever this repo reveals), and how to observe behavior (URLs/routes, CLI invocations, log
+  locations, browser vs API surfaces). Every instruction must trace to a real file in this
+  repo — `package.json` scripts, the README, `docker-compose.yml`, Playwright/Cypress config,
+  a seed script; where the repo is silent, write `[NEEDS CLARIFICATION: <question>]` rather
+  than guess. State its consumers in the body: `/spec:review`'s verifiers use it to exercise
+  findings; T3 builds may use it for advisory behavioral checks of acceptance criteria —
+  advisory only, it gates nothing until the run ledger (`.claude/spec-runs.jsonl`) shows its
+  verdicts track real escapes.
+- **`.claude/skills/run/SKILL.md`** — the session-facing sibling: frontmatter `name: run`,
+  `description` as a trigger ("Use when launching this app locally to see it working — dev
+  server, ports, env, seed, and where to look once it serves"). Body: the launch command,
+  ready check, seed entry point, and observation URLs — a distilled subset of the same
+  profiling, ≤30 lines, pointing at `spec-verify` for the deeper seeding/observability
+  detail rather than duplicating it. This is the file the harness's built-in `/run` and
+  `/verify` behaviors discover, so it pays off outside the pipeline too.
+
+**Frontmatter hardening (both skills):** declare `allowed-tools` pre-authorizing exactly the
+Bash commands the body instructs (boot, ready check, seed) so invoking the skill doesn't burn
+permission prompts on its own documented commands. Any generated skill whose body carries side
+effects beyond local launch/seed (deploys, remote writes, messaging) must declare
+`disable-model-invocation: true` — user-invoked only; launch/seed skills normally don't
+qualify.
 
 ## Phase 1.5 — Runtime substrate (generate what verification presupposes)
 
@@ -222,10 +246,33 @@ dev"`, no `design` block, `"layerGroups": [["foundation"], ["persistence"], ["lo
 "storyFormat": "Widgetbook @UseCase builders"}` — extract the real entrypoint path and run
 target from the repo, never guess.)
 
+## Phase 2.5 — Generate `.claude/settings.json` permissions
+
+A checked-in team artifact derived from the toolchain Phase 1 discovered — it makes every
+autonomous loop in this repo (pipeline or interactive) faster *and* safer than the
+flip-to-permissive alternative:
+
+- **Allow** — one exact entry per command the config declares: `gateCommand`, `testCommand`,
+  `setupCommand`, `patternsScript`, `runtime.bootCommand`/`readyCheck`/`seedCommand`, plus the
+  package manager's read-only ops. Derive each entry from the real command string (e.g.
+  `Bash(bun test:run *)`, `Bash(bash scripts/spec-patterns.sh *)`) — never a broad `Bash(*)`
+  and never a command you didn't verify resolves.
+- **Deny** — destructive ops (`Bash(rm -rf:*)`) and secrets reads (`Read(.env*)`, plus
+  whatever secret-file shapes this repo actually has — key files, credential dirs).
+- **Merge discipline** — if `.claude/settings.json` exists, merge into its `permissions`
+  block preserving every user entry; where an existing deny covers a command you would allow,
+  keep the deny and surface the conflict in the report — never silently override.
+  `.claude/settings.local.json` is user territory: never touch it.
+
 ## Phase 3 — Write `.claude/rules/spec-pipeline.md`
 
 Seven sections, all grounded in Phase 1 findings. This file is read by every pipeline command;
 § Worker Rules and § Test Rules are inlined verbatim into worker prompts by `/spec:build`.
+
+**Open the file with `paths:` frontmatter** scoping its ambient load to `specs/**` and
+`.claude/**`: pipeline commands Read it explicitly (via the config's `pipelineRules` key), so
+they lose nothing — but ordinary sessions in the host stop paying its full context cost on
+every turn, which is what keeps its rules followed rather than skimmed.
 
 - **`## Risk Tiers`** — the concrete T3 trigger list for THIS repo (e.g. "order/position/trade
   mutation paths or money math (`src/lib/decimal.ts` call sites)"; "anything touching the
@@ -274,6 +321,17 @@ Seven sections, all grounded in Phase 1 findings. This file is read by every pip
   as host folklore is an unfiled bug report every other host pays for independently. Workers
   and reviewers pick this up for free as part of the rules file they already inherit — no new
   loading mechanism.
+
+**Also write `.claude/rules/conventions/*.md`** — one small path-scoped rule file per routing
+kind that has hard conventions worth ambient enforcement (queries, types, components — skip
+kinds with nothing beyond generic style). Frontmatter: `paths:` globs derived from the same
+evidence as the config `routing`, each verified to match ≥1 tracked file — a zero-match glob
+is a rule that silently never loads (`/spec:doctor` flags it). Body: that layer's
+would-be-caught-by-review hard rules as imperative one-liners with the sanctioned alternative,
+≤15 lines, citing the matching generated agent and one exemplar file rather than duplicating
+its tables. These serve every session in the host — a stray interactive edit to a data-layer
+file gets the queries rules with zero pipeline machinery; pipeline workers still get the full
+doctrine via inlined § Worker Rules plus their agent, as before.
 
 ## Phase 4 — Generate implementer agents
 
@@ -430,18 +488,23 @@ special-case it.)
 2. Confirm `agentMap` names exactly match the generated agent filenames' `name:` fields.
 3. **Write `.claude/spec-manifest.json`** — one `{claim, kind, target}` entry per deliverable
    and activation claim (contract file § Deliverable manifest). Minimum rows: config parses
-   (`file`), pipeline rules exist (`file`), each generated agent (`file`), patterns script
-   executes (`exec`), verify skill written (`file`), the boot smoke (`smoke`), the git remote /
-   CI activation (`remote` — or `inert` with the user's declared reason from Phase 1.5), plus
-   `file` rows for any substrate Phase 1.5 landed (seed script, provisioning, health route).
-   Every skip is an `inert` row with a reason — never an omitted row.
+   (`file`), pipeline rules exist (`file`), each convention rule file (`file` — or one `inert`
+   row when no kind earned one), each generated agent (`file`), patterns script executes
+   (`exec`), verify skill written (`file`), run skill written (`file`), settings permissions
+   block parses (`exec` — `jq -e '.permissions' .claude/settings.json`), the boot smoke
+   (`smoke`), the git remote / CI activation (`remote` — or `inert` with the user's declared
+   reason from Phase 1.5), plus `file` rows for any substrate Phase 1.5 landed (seed script,
+   provisioning, health route). Every skip is an `inert` row with a reason — never an omitted
+   row.
 4. **Run `bash $(spec-paths manifest-check)` and require exit 0.** Failures mean the grounding
    layer is authored but not activated — fix and re-run. **Only after it passes**, stamp the
    config: `generatedBy` = `spec@$(spec-paths version)`, `contractHash` =
    `$(spec-paths contract-hash)`. The stamp asserts "mechanically verified," not "generated."
 5. Report: files written, agents generated (kind → name), config summary, T3 triggers chosen,
    runtime contract (boot/ready commands, or declared inert + reason), substrate created vs
-   found (Phase 1.5), manifest-check result table, design foundation landed (mode: genesis /
+   found (Phase 1.5), convention rules written (kind → globs), permissions summary
+   (allow/deny entry counts + any merge conflicts surfaced in Phase 2.5), skills generated
+   (spec-verify, run), manifest-check result table, design foundation landed (mode: genesis /
    extracted / adopted / crafted, doctrine path); for `genesis` mode, the design-rules
    categories found and the stamped `designRulesHash`; anything you could not verify and
    flagged for the user.

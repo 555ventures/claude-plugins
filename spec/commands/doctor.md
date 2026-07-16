@@ -37,12 +37,23 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
    section is byte-identical across agents (allowing only the sanctioned self-verify command
    substitution) and matches the contract file's § Worker Contract block; the `tests`-kind
    agent carries the § Tests-kind addendum.
-5. **Pipeline rules shape** — the file at `pipelineRules` exists and has all six sections
-   the contract file requires.
+5. **Pipeline rules shape & scoping** — the file at `pipelineRules` exists and has all seven
+   sections the contract file requires, and opens with the `paths:` frontmatter the contract's
+   § Session grounding requires. Then sweep every `.claude/rules/**/*.md` carrying `paths:`
+   frontmatter (the conventions files included): each glob must match ≥1 tracked file — a
+   zero-match glob is a rule that silently never loads, the quietest drift in the layer. A
+   grounding with no `.claude/rules/conventions/` at all and no `inert` manifest row for it
+   predates the session-grounding contract — fold into the refresh recommendation.
 6. **Scripts & commands** — `patternsScript` exists, is executable, exits 0; `driftScript`
    (if declared) exists; each command referenced by `gateCommand` / `testCommand` /
    `setupCommand` / `design.command` / `design.screenshot` resolves (script names exist in
    `package.json` / `Makefile` / `pyproject.toml` — verify the *names*, don't run the gate).
+   Session grounding: `.claude/settings.json` parses and its `permissions` allow entries
+   reference commands that still resolve the same way (a stale allow entry is harmless noise;
+   a *missing* deny on `.env*` reads when the repo has env files is a flag);
+   `.claude/skills/run/SKILL.md` exists and its launch/ready commands agree with the config
+   `runtime` block — a run skill teaching a dead boot command is the drift interactive users
+   hit first.
 
 6b. **Activation (authored ⇒ activated)** — verification infrastructure must demonstrably
    execute, not merely exist (shared invariants § Runtime Verification):
@@ -58,9 +69,10 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
    - every env var that gates a test suite (`skipIf`-shaped) has a provisioning path named in
      pipeline rules § Test Rules — an unsatisfiable gate variable means those suites have
      never run anywhere; flag loudly with the affected suite count.
-7. **Cited references** — extract repo paths cited in the pipeline rules file and in each
-   generated agent (Reference Material, exemplars, naming-table examples); verify each
-   exists. Stale citations are the most common drift and are individually patchable.
+7. **Cited references** — extract repo paths cited in the pipeline rules file, the
+   convention rule files, and each generated agent (Reference Material, exemplars,
+   naming-table examples); verify each exists. Stale citations are the most common drift and
+   are individually patchable.
 8. **Design foundation** (only if the config has a `design` block) — `design.doctrine`
    exists and is ~one page; token files and the living-showcase entry it names exist.
 9. **Genesis handoff** (only if `.claude/genesis/status.json` exists) — verify the consume-side
@@ -234,8 +246,9 @@ The bar, per patch — all three, no exceptions:
    now — same discipline plan's refuters use.
 2. **Per-patch `AskUserQuestion` approval** showing exact before → after text and the
    evidence. Never batch-approve.
-3. **Scope: line-item only, inside the grounding layer** (pipeline rules file, generated
-   agents, config values, `scripts/spec-patterns.sh`). Structural drift (layers reorganized,
+3. **Scope: line-item only, inside the grounding layer** (pipeline rules file, convention
+   rule files, generated agents, generated skills, the settings `permissions` block, config
+   values, `scripts/spec-patterns.sh`). Structural drift (layers reorganized,
    toolchain swapped) is still `/spec:init`'s job — `--fix` refuses it and says why.
 
 After patching: re-run the affected checks, re-stamp `contractHash`/`generatedBy`, and append
@@ -264,7 +277,8 @@ recommendation:
 ## Rules
 
 - Read-only by default; every edit is user-approved, targeted, and inside the grounding
-  layer (`spec.config.json`, pipeline rules, generated agents, `scripts/spec-patterns.sh`).
+  layer (`spec.config.json`, pipeline rules, convention rules, generated agents, generated
+  skills, the settings `permissions` block, `scripts/spec-patterns.sh`).
   `--fix` widens what may be patched (doctrine content, not just stale citations), never who
   approves or where.
 - Never run the host's `gateCommand`/`testCommand`/`setupCommand` — verify they resolve.

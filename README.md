@@ -111,6 +111,33 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
 | `/git:commit`, `/git:merge` | Add-all-commit (with escape capture); guided merge | Anytime |
 | `/git:enter-worktree` | Enter the isolated worktree for a spec | Before build/design isolation |
 
+## What makes it different
+
+This is not another specify → plan → implement template — that skeleton is commodity now
+([GitHub Spec Kit](https://github.com/github/spec-kit), [OpenSpec](https://github.com/Fission-AI/OpenSpec),
+Kiro, BMAD, and several Claude Code plugins all have one). This plugin was built around a
+different question: **how do you trust work you didn't watch happen?** Its answers don't exist
+elsewhere:
+
+- **The review must execute, not read.** Elsewhere "review" is a model reading a diff; here the
+  reviewer runs the tests and boots the app before a verdict counts. Independent testing of Spec
+  Kit found exactly this gap — good planning artifacts, code that drifts from spec intent.
+- **The review layer is falsifiable.** `/spec:escape` records defects that slipped past a CLEAN
+  verdict, and guards that don't earn their keep on ledger evidence get retired. No other tool
+  keeps score on its own review process.
+- **Model economics are encoded.** Expensive model authors and judges, cheap models type behind
+  deterministic gates, an uncorrelated model reviews. Others are single-model or model-agnostic.
+- **Genesis argues in front of you.** Live-researched, blind-proposer stack and design panels
+  with hard forks surfaced as questions — not a template questionnaire.
+- **It's shaped by daily production use.** 555 Ventures LLC runs this pipeline internally every
+  day across multiple projects. Features here were promoted or retired on evidence from real
+  builds — the scaffold ledger records why each guard exists and what would remove it.
+
+Honest trade-off: this buys rigor with ceremony and maintenance surface (generated workflows,
+grounding layers, doctor checks). If you want a lightweight spec loop, Spec Kit or OpenSpec is
+less to carry. This is for when the failure you fear is *plausible-looking work that was never
+actually verified*.
+
 ## When *not* to use it
 
 This is heavy machinery. Use the pipeline only when the work needs **delegation** (big enough

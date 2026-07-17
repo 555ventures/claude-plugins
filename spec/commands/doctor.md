@@ -221,6 +221,15 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
     Read the ledger with grep/awk against the table rows — never load the whole file into
     context.
 
+16. **Representation parity** (only if an ops-conventions ADR with a per-surface casing
+    ownership row exists) — re-run `node $(spec-paths parity-check) <files>` once per surface
+    named in that row, over the surface's files as they exist *now* (the ops ADR joins the
+    wire surface's invocation). Genesis ran this at scaffold time, but contradictions accrete
+    as contracts land per-spec — the incident class this catches (the same seam identifier
+    spelled `runId` in contract files and `run_id` in the ADR's own rows) only becomes
+    visible after builds. Non-zero exit is a finding citing both sides; the fix routes to
+    whichever side the ADR's ownership boundary says is wrong.
+
 ## Semantic spot-check — small, bounded
 
 For 2–3 agents (prioritize any with stale citations), read one cited exemplar each and

@@ -190,7 +190,14 @@ Repeat until no open hard forks remain:
 3. Run the **zero-day gate** — the descriptor's `gateCommand` (typecheck + lint + the example
    tests, lint at `--max-warnings 0` where supported). Fix scaffold-level issues only; do not
    start feature work.
-4. On green, commit. Set `status.architect: scaffold-complete`, write `gateCommand` into
+4. **Run the parity lint** (`node $(spec-paths parity-check) <files>`) — once per surface
+   named in the ops ADR's per-surface casing ownership row, passing that surface's files as
+   they exist now (the ops ADR itself joins the wire surface's invocation, so its wire rows
+   are checked against any seam artifacts the scaffold landed). The lint is fail-closed:
+   a non-zero exit blocks the commit — the same identifier spelled two ways inside one
+   plane, or mixed wire timestamp forms, is a contradiction being byte-locked, not a style
+   nit. A surface with fewer than two artifacts is trivially coherent; skip it.
+5. On green, commit. Set `status.architect: scaffold-complete`, write `gateCommand` into
    `status.json`. A failed Phase B re-runs Phase B only, against the committed decisions.
 
 ## Phase C — Roadmap: decompose into planning briefs

@@ -26,6 +26,7 @@ case "${1:-root}" in
   merge-back)  echo "$ROOT/scripts/merge-back.sh" ;;
   smoke)       echo "$ROOT/scripts/smoke.sh" ;;
   manifest-check) echo "$ROOT/scripts/manifest-check.sh" ;;
+  parity-check)   echo "$ROOT/scripts/parity-check.js" ;;
   shared)         echo "$ROOT/doctrine/shared.md" ;;
   shared-genesis) echo "$ROOT/doctrine/genesis.md" ;;
   scaffold-ledger) echo "$ROOT/doctrine/scaffold-ledger.md" ;;
@@ -70,7 +71,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-build|wf-design|wf-review|wf-enforce|wf-panel|wf-research|dc-extract|design-atlas|skeletons-check|fidelity-check|merge-back|smoke|manifest-check|shared|shared-for <command>|shared-genesis|scaffold-ledger|template|templates|feedback-template|intake|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-build|wf-design|wf-review|wf-enforce|wf-panel|wf-research|dc-extract|design-atlas|skeletons-check|fidelity-check|merge-back|smoke|manifest-check|parity-check|shared|shared-for <command>|shared-genesis|scaffold-ledger|template|templates|feedback-template|intake|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

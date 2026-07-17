@@ -44,6 +44,22 @@ test('ops-conventions dictation includes a wire-representations row', () => {
     'representation decisions belong to the contracts seam, or the row contradicts it later')
 })
 
+// 2026-07-17 follow-through: floor-not-ceiling licenses executors to exceed the list but
+// gives them no way to do it reliably — prax exceeded it exactly once, by luck. The step
+// must state the GENERATING QUESTION the rows are samples of, and run an advisory
+// derive-then-check pass against it, with the same-model correlation caveat stated (the
+// coverage checker shares the deriver's blind spots — that is why it advises, never blocks).
+test('the row list states its generating question with an advisory derivation pass', () => {
+  assert.match(step, /generating question/i,
+    'no generating question: executors can only exceed the sampled rows by luck')
+  assert.match(step, /derive/i,
+    'the generating question must be exercised — a derivation pass, not a motto')
+  assert.match(step, /blind spot|correlat/i,
+    'the coverage check shares the deriver blind spots; the caveat must be stated')
+  assert.match(step, /advisor/i,
+    'derive-then-check is advisory — same-model coverage cannot gate')
+})
+
 test('the row list is a floor and DECIDED rows must be checker-enforceable', () => {
   assert.match(step, /floor, not a ceiling|floor — not a ceiling/i,
     'prax exceeded the closed list once by luck; nothing licenses executors to add rows')

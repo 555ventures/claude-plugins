@@ -161,7 +161,15 @@ Repeat until no open hard forks remain:
    DECIDED row in a category `/spec:enforce` can mechanize is stated **checker-enforceable** — no
    taste clauses ("strict plural", never "plural where natural reads better"); the rejected taste
    variant goes in Dissents. Each row is DECIDED or DEFERRED-with-reason — same ledger
-   discipline as the design canon.
+   discipline as the design canon. The rows above are samples of one **generating question**
+   — *"what will two context-free executors, weeks apart, decide differently unless a row
+   decides it now: every value class crossing a surface boundary, every name a second writer
+   will mint, every operational behavior a spec will assume but never state?"* After filling
+   the dictated rows, run one **derive pass** against that question (walk the research and
+   the archetype's surfaces; propose rows the floor missed), then a coverage check of the
+   result. Both passes are **advisory** — the coverage checker shares the deriver's blind
+   spots (same-model correlation, the reason review doctrine forbids same-context
+   verification), so derivation can add rows but its silence never certifies completeness.
 3. Write `.claude/genesis/stack-descriptor.json` (template via `spec-paths templates`): archetype,
    localeScope, language, framework, packageManager, testRunner, linter, typechecker,
    componentLibrary, designCatalog, `enforceEngines`, the resolved **`gateCommand`**, the

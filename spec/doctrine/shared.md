@@ -770,6 +770,12 @@ specifying surfaces that rely on them. Results are **embedded into the spec** (U
 sections) — `/spec:build` workers never query MCPs; they work from the spec and return
 `blocked` if an embedded reference proves wrong against the installed version.
 
+The worker prohibition is role-scoped, not phase-scoped. When an embedded reference
+falsifies mid-build, the plan-time verification this policy relies on is void — the build
+**orchestrator must** re-run the declared lookup itself and record the corrected reference
+before consulting the retainer or amending a Decision. A vendor-behavior consult without a
+fresh docs citation is a defect, not a sanctioned escalation.
+
 ## Canonical Docs Loop
 
 `/spec:plan` reads `docs/canonical/{area}.md` during discovery; `/spec:review` applies the

@@ -68,7 +68,8 @@ if (!extract) { process.stdout.write('fidelity-check: no extract.json — no moc
 function norm(s) {
   return String(s)
     .replace(/&nbsp;| /g, ' ')
-    .replace(/&amp;/g, '&').replace(/&(apos|#39);/g, "'").replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&').replace(/&(apos|#39|rsquo|lsquo);/g, "'").replace(/&(quot|rdquo|ldquo);/g, '"')
+    .replace(/&mdash;/g, '—').replace(/&hellip;/g, '…')
     .replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
     .replace(/\s+/g, ' ')
     .trim()

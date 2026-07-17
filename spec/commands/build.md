@@ -233,6 +233,14 @@ Next: `/spec:review $ARGUMENTS`
   files change only via their declared tools.
 - **Workers never query MCPs** — they build from the spec's embedded references and return
   `blocked` if one proves wrong against the installed version.
+- **Falsified embedded reference → orchestrator refreshes it first.** When a `blocked` return
+  (or a gate failure) shows an embedded reference wrong against the installed version, the
+  orchestrator re-runs the plan-time lookup the pipeline rules § Planning declares (e.g.
+  Context7) and records the corrected reference in the Decisions table **before** any retainer
+  consult. The no-MCP rule binds workers; its premise — references verified at plan time — is
+  void the moment one falsifies. A retainer consult about vendor behavior without a fresh docs
+  citation is a defect: it manufactures remedies by inference that thirty seconds of docs
+  would refute.
 - **Host integration steps are orchestrator-only** — never delegated into the workflow.
 - **Resume over restart.** Blocked batches re-run via the `resolutions` salt; everything
   finished returns from cache. Never restart a run from scratch when a `runId` exists.

@@ -135,10 +135,10 @@ never write tests for code they implement.
 
 | Return stage | Action |
 |---|---|
-| `blocked` | Per item: if resolvable within the spec's stated intent → consult the **retainer**; if a genuine fork or scope change → `AskUserQuestion`. Write the ruling **prose into the spec's Decisions table** (that is where the worker reads it). Then set `args.resolutions[batchId]` to a short **token** — a hash of the ruling text or a monotonic counter, **never the ruling prose itself** — which busts the journal cache for that batch only. Keep `resolutions` **cumulative** across resumes: dropping an entry reverts that batch's prompt and silently un-applies its ruling. Resume with `resumeFromRunId`. |
-| `tdd-red-check` | Newly written tests pass before implementation — the spec is wrong somewhere. Surface the passing tests, fix spec or tests with the user, resume. |
-| `out-of-scope-failure` | A gate failure implicates a file outside the File Plan. `AskUserQuestion`: add to scope (mini-batch) / file as a separate fix / pause the spec. Per Blast Radius Discipline — never silently widen. |
-| `gate-exhausted` | Repair loop hit its cap. Consult the retainer with the failure output before escalating to the user. |
+| `blocked` | Per item: if resolvable within the spec's stated intent → consult the **retainer**; if a genuine fork or scope change → retainer **decision brief** first (contract below), then `AskUserQuestion` authored from it. Write the ruling **prose into the spec's Decisions table** (that is where the worker reads it). Then set `args.resolutions[batchId]` to a short **token** — a hash of the ruling text or a monotonic counter, **never the ruling prose itself** — which busts the journal cache for that batch only. Keep `resolutions` **cumulative** across resumes: dropping an entry reverts that batch's prompt and silently un-applies its ruling. Resume with `resumeFromRunId`. |
+| `tdd-red-check` | Newly written tests pass before implementation — the spec is wrong somewhere, and *where* is the interpretive question. Consult the retainer for a diagnosis first: stale spec assumption, test targeting the wrong contract, or behavior that already exists — each claim cited `path:line`. Then confirm the fix (spec or tests) with the user and resume. |
+| `out-of-scope-failure` | A gate failure implicates a file outside the File Plan. If the repair loop localized a mechanical cause (a stray import, a missed re-export), go straight to `AskUserQuestion`; if the cause is not localized, get a retainer decision brief first — a File Plan that missed a real coupling is a plan-authorship question. Options: add to scope (mini-batch) / file as a separate fix / pause the spec. Per Blast Radius Discipline — never silently widen. |
+| `gate-exhausted` | Repair loop hit its cap. Consult the retainer with the failure output before escalating to the user; if a fork remains after the consult, escalate with a decision brief. |
 | `complete` | Proceed to Phase 3. |
 
 **Retainer (Fable, seated as the plan author):** on the first surprise, spawn
@@ -152,17 +152,38 @@ Decisions table, the divergence — and this role brief **verbatim**:
 > argument. Prefer the reading that preserves the spec's invariants and Blast Radius over the
 > one that unblocks fastest. Rulings are short, declarative, and written to be pasted into the
 > Decisions table verbatim. If the spec's intent is genuinely ambiguous, or any ruling would
-> widen scope or contradict a locked Decision, reply `ESCALATE:` with the two branches of the
-> fork stated neutrally — never guess the author's intent, and never soften an escalation into
-> a provisional ruling.
+> widen scope or contradict a locked Decision, reply `ESCALATE:` followed by a decision brief:
+> the tension in one short paragraph; each branch stated symmetrically with what it costs and
+> what it buys against the spec's stated Rationale and Assumptions; a `path:line` citation for
+> every factual claim; and one closing line naming what you could not verify. Never guess the
+> author's intent, and never soften an escalation into a provisional ruling.
 
 On later surprises, continue the SAME agent via `SendMessage` — it accumulates context of
 this run's weirdness, and its prompt cache makes follow-up consults cheap. Consults are
 **surprise-driven only** — there is no mandatory checkpoint ritual (the v4 T3 diff checkpoint
 returned PASS on 100% of measured runs: a gate that never blocks is spend, not signal; see
 the scaffold ledger). Consult triggers: worker blocked on a stale assumption, gate failed
-twice on the same batch, out-of-scope file, a change contradicting the approved design or a
+twice on the same batch, out-of-scope file, newly authored tests passing before
+implementation (`tdd-red-check`), a change contradicting the approved design or a
 locked Decision, plus any host-declared triggers (pipeline rules § Build).
+
+**Decision briefs (fork-bound consults).** Every exception row that ends at
+`AskUserQuestion` passes through the retainer first, and the retainer's output is a
+**decision brief, never a decision** — the user keeps the fork; the brief exists to make
+their confirm/deny fast, not to pre-make it. The brief's shape is in the role brief above:
+symmetric options with costs and buys, `path:line` citations for every factual claim, an
+explicit could-not-verify line. A brief without citations is rejected and re-requested —
+an uncited brief is exactly the confident-anchor failure mode this format exists to
+prevent. The `AskUserQuestion` is then authored *from* the brief per the shared doctrine's
+Question Style: the brief's options become the question's options with their consequences,
+and a supported pick may be marked "(Recommended)" — but the decision is the user's.
+
+**Consult context (pass the delta, not the world).** The spawn already carries the spec's
+Rationale + Assumptions + Decisions and the role brief; every follow-up `SendMessage`
+carries only the delta: the trigger name, the failure output trimmed to the failing lines,
+and file **paths, not contents** — the retainer Reads what it needs itself. Pasting file
+bodies into the consult burns the prompt-cache continuity the persistent seat exists to
+exploit, and stale pastes are how a retainer rules on code that no longer says that.
 
 Completed batches return from the workflow journal cache on resume — only changed work re-runs.
 

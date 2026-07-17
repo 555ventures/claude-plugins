@@ -91,3 +91,5 @@ briefs from plugin versions ≥2 minors behind current, note which hosts should 
   a stale column lies to every host at once.
 - `AskUserQuestion` dismissed → STOP (dispositions are cheap to resume; a guessed one
   poisons the ledger).
+- Question style: plain language, self-contained, consequences per option, recommended
+  pick first.

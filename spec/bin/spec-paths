@@ -39,7 +39,7 @@ case "${1:-root}" in
     CMD="${2:-}"
     DOC="$ROOT/doctrine/shared.md"
     case "$CMD" in
-      plan)    SECTIONS="Host Grounding|Pipeline Entry|Risk Tiers|Decomposition|State Machine|Design Stage|Model Placement|Decisions|MCP Policy|Canonical Docs Loop" ;;
+      plan)    SECTIONS="Host Grounding|Pipeline Entry|Risk Tiers|Decomposition|State Machine|Model Placement|Decisions|MCP Policy|Canonical Docs Loop" ;;
       design)  SECTIONS="Host Grounding|State Machine|Design Stage|Design Atlas|Model Placement|Decisions|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|MCP Policy" ;;
       atlas)   SECTIONS="Host Grounding|Design Stage|Design Atlas|Model Placement|Decisions" ;;
       sketch)  SECTIONS="Host Grounding|State Machine|Design Stage|Design Atlas|Model Placement|Decisions" ;;

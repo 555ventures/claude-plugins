@@ -14,8 +14,7 @@ command that flips `done`.
 **Orchestrator: Sonnet. Reviewers and verifiers: Sonnet — never Fable.** Cross-model
 independence from the planning author is the gate's value; capability is not. Judgment on
 survivors (fix / waive / reject) happens in this session with the user — the workflow never
-adjudicates, and no finding is ever killed by argument (kills require a failed repro, a quoted
-spec sanction, or a plain miscitation — the workflow enforces that grounding).
+adjudicates (the kill-grounding standard lives in Rules).
 
 **Setup:** run `spec-paths shared-for review` and read its output (the shared invariants scoped to this command). Read the host's
 `.claude/spec.config.json` and its pipeline rules file. If either is missing, STOP: tell the
@@ -96,7 +95,7 @@ What the script does (shape lives in the script, not here):
   findings skip verification and pass through as `advisory`.
 - Returns `{verdict, survivors, killed, verify, reviewerCount, scope, tokens}` where `verify =
   {verified, demonstrated, killedByExecution, sanctioned, miscited, unverifiable, failed,
-  capSkipped}`. Killed findings are reported with their evidence, never silently dropped.
+  capSkipped}`.
   **`verdict: "REVIEWER_FAILED"` means a reviewer agent died — that is a failed RUN, never a
   CLEAN: re-invoke the workflow (journal cache makes it cheap) before any verdict is read.**
   `tokens` is the workflow's output-token spend — carry it into the Phase 3 report. If
@@ -106,8 +105,8 @@ What the script does (shape lives in the script, not here):
 ## Design-compliance legs (UI-bearing specs only)
 
 When the spec has `design: true` or a `design_source`, the panel carries two additional checks
-(shared § Design Stage — both exist because authoring sessions don't remember; checkers with
-lists do):
+(both exist because authoring sessions don't remember; checkers with lists do — full doctrine
+in shared.md § Design Stage, deliberately outside this command's scoped read):
 
 - **Rule-checklist leg:** one reviewer walks `docs/design/research-brief.md`'s admitted rules
   (falsifiable by construction) against the spec's built screens/bound mocks, citing rule IDs —
@@ -172,7 +171,8 @@ then `advisory` (soft), then any `verifier-failed`/`cap-skipped` (unverified —
   diff and the prior findings, never the whole codebase again. Pay a `scope: "full"` re-review
   only if the fixes touched files outside the prior finding set. Max 2 fix→re-review
   iterations; beyond that, escalate.
-- **Waive** — record in the spec's Rationale section with date + reason. Only the user waives.
+- **Waive** — record in the spec's Rationale section with date + reason. Only the user
+  waives — never invented, never implied.
 - **Reject** — the finding is wrong anyway; record the rejection reason the same way.
 
 ## Phase 3 — Close (on CLEAN)
@@ -248,7 +248,7 @@ the build branch; `{worktree}` the worktree path (omit `--worktree` if no worktr
    cleanup. (Already-gone worktree path → it prunes and treats cleanup as done.)
 6. **Verify:** `{mergeBack} verify --root {root}` — confirms the merge landed on a clean tree
    with the worktree gone.
-7. **Never push.** Pushing remains an explicit user action.
+7. **Never push, never force-push.** Pushing remains an explicit user action.
 
 ## Rules
 
@@ -263,14 +263,10 @@ the build branch; `{worktree}` the worktree path (omit `--worktree` if no worktr
 - **No finding dies by argument.** Kills carry grounded evidence (failed repro / quoted
   sanction / quoted miscitation) — that grounding is the workflow's contract; never litigate
   a survivor away in-session without the same standard.
-- Waivers come from the user only, recorded in the spec — never invented, never implied.
 - Killed findings appear in the report with their evidence. Silent drops void the gate's
   audit value.
 - Deterministic gate failures are fixed before review findings are litigated — don't review a
   red build.
 - Merge-back is part of CLEAN, not an extra ask — but strategy choice and non-trivial
-  conflict resolutions always go through `AskUserQuestion`. Never `--no-verify`, never
-  force-push, never push at all.
-- Relocate the session to {root} (Phase 4 step 3) **before** cleanup — always. The
-  `merge-back.sh cleanup` exit 4 is a hard backstop, not a substitute: a worktree removed
-  while the session sits inside it strands the session in `$HOME`.
+  conflict resolutions always go through `AskUserQuestion` (git discipline — never push,
+  never `--no-verify`, relocate before cleanup — lives in the Phase 3/4 steps).

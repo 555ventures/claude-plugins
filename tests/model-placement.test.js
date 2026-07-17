@@ -49,6 +49,30 @@ test('shared.md: unified placement rule; Fable retainer sanctioned; reviewers ne
     'the v4 checkpoint-activation rule may not survive')
 })
 
+// v6.11: fork-bound consults produce decision briefs — the retainer frames the fork, the
+// user decides it. Pinned so a doctrine edit can't quietly let the retainer absorb forks
+// (scope drift by another name) or drop the anchoring guards (citations, could-not-verify).
+
+test('build.md: fork-bound consults yield decision briefs, never decisions', () => {
+  const build = read('commands/build.md')
+  assert.match(build, /decision brief, never a decision/)
+  assert.match(build, /`path:line` citations for every factual claim/,
+    'the citation requirement is the anchoring guard — it may not be dropped')
+  assert.match(build, /naming what you could not verify/)
+  assert.match(build, /the decision is the user's/)
+  assert.match(build, /paths, not contents/,
+    'follow-up consults pass the delta and paths; pasted file bodies break cache + go stale')
+})
+
+test('shared.md: escalation contract has six triggers incl. tdd-red-check; brief rule stated', () => {
+  const shared = read('doctrine/shared.md')
+  assert.match(shared, /These six are the entire contract/)
+  assert.match(shared, /tests pass before implementation \(`tdd-red-check`\)/)
+  assert.match(shared, /decision brief, never a decision/)
+  assert.match(shared, /never absorbs them/,
+    'the retainer frames forks; architecture/scope changes stay user-visible decisions')
+})
+
 test('review surfaces: reviewers/verifiers are cross-model — never Fable', () => {
   const review = read('commands/review.md')
   assert.match(review, /Orchestrator: Sonnet/)

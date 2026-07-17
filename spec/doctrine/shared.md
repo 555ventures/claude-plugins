@@ -675,18 +675,30 @@ Mechanical triggers — consult the retainer, don't grind:
 
 1. Worker returns `blocked` (stale assumption or unlocked design fork)
 2. Deterministic gate failed twice on the same batch
-3. A failure implicates a file outside the spec's File Plan
+3. A failure implicates a file outside the spec's File Plan (when the repair loop could not
+   localize a mechanical cause — a localized stray-import goes straight to the user)
 4. A needed change contradicts the approved design (`designed:` set) or a locked Decision
-5. Any host-declared trigger (pipeline rules § Build — e.g. migration head conflicts)
+5. Newly authored tests pass before implementation (`tdd-red-check`) — the spec is wrong
+   somewhere, and *where* is a plan-authorship diagnosis, not a worker guess
+6. Any host-declared trigger (pipeline rules § Build — e.g. migration head conflicts)
 
-These five are the entire contract — there is no additional mandatory checkpoint layered on top.
-Retainer consults are surprise-driven only: a T3 spec that never trips one of the five runs start
+These six are the entire contract — there is no additional mandatory checkpoint layered on top.
+Retainer consults are surprise-driven only: a T3 spec that never trips one of the six runs start
 to finish without a single consult, and that's a pass, not a coverage gap (§ Model Placement,
 Retainer pattern).
 
-Response path: retainer consult → if a genuine fork or scope change remains → `AskUserQuestion`
-→ ruling written into the spec's **Decisions** table → workflow resumed (`resumeFromRunId` +
-`resolutions[batchId]` cache salt). Completed work returns from the journal cache.
+Response path: retainer consult → if a genuine fork or scope change remains → retainer
+**decision brief** → `AskUserQuestion` authored from it → ruling written into the spec's
+**Decisions** table → workflow resumed (`resumeFromRunId` + `resolutions[batchId]` cache
+salt). Completed work returns from the journal cache.
+
+The brief is a **decision brief, never a decision**: symmetric options with what each costs
+and buys against the spec's stated Rationale, `path:line` citations for every factual claim
+(an uncited brief is rejected — a confident uncited brief is an anchor, not evidence), and
+an explicit line naming what the retainer could not verify. The retainer frames forks; it
+never absorbs them — architecture and scope changes stay user-visible decisions (build.md
+holds the brief format and the consult-context rule: follow-ups pass the delta and file
+paths, never pasted file contents).
 
 **Fast path (small specs).** A spec whose File Plan is a single batch of ≤4 files may skip the
 `wf-build` workflow entirely: the orchestrator dispatches one worker directly and runs the gate
@@ -694,7 +706,7 @@ itself, no Workflow tool in between. The escalation contract above still applies
 `blocked` return or a twice-failed gate still triggers a retainer consult — it just runs inline
 instead of through journaled workflow state.
 
-**Deviations sidecar.** A forced-but-unblocking departure — one that doesn't trip any of the five
+**Deviations sidecar.** A forced-but-unblocking departure — one that doesn't trip any of the six
 triggers and doesn't warrant spending a retainer consult (a rename, a slightly different helper
 shape) — is neither silently taken nor escalated: the worker appends it to a deviations sidecar.
 `/spec:review` folds the sidecar into its findings at close, so nothing forced is lost — it's
@@ -705,6 +717,43 @@ adjudicated after the fact instead of gating the build in real time.
 The spec's Decisions table is authoritative. Workers apply it verbatim, never invent entries,
 never override. An unlocked fork is a `blocked` return, not a guess. A dismissed
 `AskUserQuestion` STOPS the run — never invent the answer the user declined to give.
+
+## Question Style (every `AskUserQuestion`, every stage)
+
+The person answering is busy and holds no implementation context — they will not remember
+function names, file paths, ledger fields, or plugin internals between sessions. Author every
+question for that reader:
+
+- **Plain language.** Name behaviors and outcomes, not identifiers: "the check that boots the
+  app before a release", not `runtime-leg`. An internal identifier may follow in parentheses
+  only when the answer must be written back to a keyed field.
+- **Self-contained.** The question carries everything needed to answer it cold — what happened,
+  why it needs a ruling now, what each answer commits to downstream. Never assume the user
+  watched the run or remembers the spec.
+- **Ask the real decision.** When several technical choices collapse into one underlying
+  trade-off, ask that trade-off once ("lock the simpler storage now vs. keep the migration
+  path open") instead of the N surface questions it generates.
+- **Options carry consequences.** Each option's description states what picking it costs or
+  buys, in a phrase. When the evidence supports a pick, put it first, labeled "(Recommended)".
+- **Derive before asking.** Everything the session, disk, or ledger can answer is derived and
+  presented for confirmation, never asked open-ended; only genuinely underivable facts become
+  questions (`/spec:escape` is the template). This section governs how the questions that
+  survive derivation are *phrased*, not how many there are.
+
+## Console Output Style (progress narration and end-of-run reports)
+
+What a command prints to the screen during a run — progress updates and the final report —
+is read once, live, by a busy reader. It is NOT an artifact: specs, briefs, docs, and ledger
+rows keep their rigorous, machine-parseable style; this section governs only the console.
+
+- **Outcome first.** Open with what happened and what it means ("✅ review CLEAN — merged"),
+  then only the detail that changes what the user does next.
+- **Meaning over dumps.** Reframe raw results into their takeaway; the written artifact holds
+  the full detail — print its path, don't inline it.
+- **Emoji as anchors.** ✅ / ⚠️ / 🚫 / 📦 as scannable status markers, for clarity, never
+  decoration. One per line at most.
+- **Cut, don't compress.** Low-value detail is omitted entirely, not squeezed into dense
+  fragments or jargon the reader must decode.
 
 ## Workflows Encode Shape, Not Judgment
 

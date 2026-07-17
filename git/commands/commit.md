@@ -44,6 +44,8 @@ message is fix-shaped: `fix`/`bug`/`regression`/`hotfix`) **and**
    → skip silently.
 3. Match → offer once, via `AskUserQuestion` (skippable, never blocking the commit):
    record a `/spec:escape` row correlating this defect to that review's `runId`?
+   Question style: plain language, self-contained, consequences per option, recommended
+   pick first.
 4. Yes → run `/spec:escape <spec path>` (it owns the row schema; tell it the invocation is
    commit-driven so the row carries `via:"commit"`). No → proceed silently.
 

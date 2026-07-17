@@ -29,29 +29,34 @@ exists.**
 Either way the expensive seat **writes no framework code**; Sonnet expands 100% of components
 via `wf-design`.
 
-**Mock-authoring preamble (no `design_source` anywhere).** Author `design/mocks/<label>.html`
-for each of the spec's UI surfaces under the **design harness** (shared § Design Stage): plain
+**Mock-authoring preamble (no `design_source` anywhere).** Taste is spent here, in a file
+cheap to iterate — never directly in framework code. Author `design/mocks/<label>.html` for
+each of the spec's UI surfaces under the **design harness** (shared § Design Stage): plain
 HTML consuming `design/tokens.css` by role, root `data-screen-label` per surface, real copy in
 its final register (it becomes the fidelity contract), grounded in the spec's UI section +
 doctrine + `docs/design/research-brief.md` (when present). If `design/targets.json` is missing,
-create it first (archetype-derived defaults from the `design-targets.json` template, one confirm
-with the user). Then the staged loop — **matrix-at-approval** (shared § Design Stage), which is
-what keeps iteration cheap: (1) draft the mock on the **draft framing** — the most-constrained
-declared viewport, light theme — run the deterministic check (`spec-paths design-atlas` →
-`node <atlas> check design/mocks/<label>.html`) and the render→screenshot→critique loop, then
-the **rule-checklist pass** (a Sonnet checker walks the research-brief's admitted rules against
-the screen, citing rule IDs — shared § Design Stage), and iterate with the user to direction
-approval; (2) once the direction is approved, run the **matrix expansion pass** — media queries
-+ viewport meta, dark via the tokens.css theme block, one responsive file, never per-device
-variants — gated by `check --matrix`, with matrix screenshots (each viewport, both themes on
-the draft framing) shown to the user for the **fast matrix confirm**; (3) only then set
-`data-status="approved"` (approval is two-step by doctrine, and the check enforces the matrix
-on approved mocks, so the stamp can't precede either half). Direction review happens by serving the file or pointing at
-the atlas; after the stamp, persist the path as `design_source:` frontmatter — then the
-ordinary mock-bound flow below takes over. Taste is
-spent here, in a file cheap to iterate — never directly in framework code. (The Claude Design
-escape hatch — designing the surface at `claude.ai/design` and passing its URL — remains
-supported and follows the identical mock-bound flow after fetch.)
+create it first (archetype-derived defaults from the `design-targets.json` template, one
+confirm with the user). Then the staged loop — **matrix-at-approval** (shared § Design Stage),
+which is what keeps iteration cheap:
+
+1. **Draft to direction approval.** Draft the mock on the **draft framing** — the
+   most-constrained declared viewport, light theme. Run the deterministic check
+   (`spec-paths design-atlas` → `node <atlas> check design/mocks/<label>.html`) and the
+   render→screenshot→critique loop, then the **rule-checklist pass** (a Sonnet checker walks
+   the research-brief's admitted rules against the screen, citing rule IDs — shared § Design
+   Stage). Iterate with the user — serve the file or point at the atlas — to direction
+   approval.
+2. **Matrix expansion pass** (only once the direction is approved). Media queries + viewport
+   meta, dark via the tokens.css theme block, one responsive file, never per-device variants —
+   gated by `check --matrix`, with matrix screenshots (each viewport, both themes on the draft
+   framing) shown to the user for the **fast matrix confirm**.
+3. **Stamp and bind.** Only then set `data-status="approved"` (approval is two-step by
+   doctrine, and the check enforces the matrix on approved mocks, so the stamp can't precede
+   either half), persist the path as `design_source:` frontmatter, and hand over to the
+   ordinary mock-bound flow below.
+
+(The Claude Design escape hatch — designing the surface at `claude.ai/design` and passing its
+URL — remains supported and follows the identical mock-bound flow after fetch.)
 
 **Setup:** run `spec-paths shared-for design` and read its output (the shared invariants scoped
 to this command). Read the host's `.claude/spec.config.json` and its pipeline rules file. Then

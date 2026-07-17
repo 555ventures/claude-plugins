@@ -221,14 +221,18 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
     Read the ledger with grep/awk against the table rows — never load the whole file into
     context.
 
-16. **Representation parity** (only if an ops-conventions ADR with a per-surface casing
-    ownership row exists) — re-run `node $(spec-paths parity-check) <files>` once per surface
-    named in that row, over the surface's files as they exist *now* (the ops ADR joins the
-    wire surface's invocation). Genesis ran this at scaffold time, but contradictions accrete
+16. **Representation parity** (only if `docs/adr/` greps for the locked row label
+    `per-surface casing ownership` — genesis Phase A writes it verbatim; an ops-conventions
+    ADR present *without* that label is itself a finding — pre-6.7 grounding, recommend the
+    targeted-patch flow — never a silent skip) — re-run `node $(spec-paths parity-check)
+    <files>` once per surface in that row, passing the row's recorded globs as they match
+    *now* plus one temp file of the surface's decided spelling exemplars copied verbatim
+    from its row. Never pass the whole ADR (other surfaces' rows legitimately differ; one
+    invocation = one plane). Genesis ran this at scaffold time, but contradictions accrete
     as contracts land per-spec — the incident class this catches (the same seam identifier
-    spelled `runId` in contract files and `run_id` in the ADR's own rows) only becomes
-    visible after builds. Non-zero exit is a finding citing both sides; the fix routes to
-    whichever side the ADR's ownership boundary says is wrong.
+    spelled `runId` in contract files while the ADR's wire exemplars say `run_id`) only
+    becomes visible after builds. Non-zero exit is a finding citing both sides; the fix
+    routes to whichever side the ADR's ownership boundary says is wrong.
 
 ## Semantic spot-check — small, bounded
 

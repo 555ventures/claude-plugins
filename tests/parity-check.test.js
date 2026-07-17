@@ -12,7 +12,9 @@ const { SPEC, read, tmpdir, runNode } = require('./helpers')
 // UTC-`Z` codebase. All of it is string-level detectable — no judgment, no model. The lint
 // treats the files it is given as ONE representational plane (per-surface casing across
 // planes is legitimate; contradiction within a plane is not), so callers invoke it once per
-// plane. Fail-closed at genesis exit: incident-earned, deterministic, cheap.
+// plane (the ownership row records each surface's globs + spelling exemplars; the ADR is
+// never passed whole). Fail-closed at genesis Phase B step 4, re-run as doctor check 16:
+// incident-earned, deterministic, cheap.
 
 const SCRIPT = 'scripts/parity-check.js'
 
@@ -50,10 +52,19 @@ test('clean plane exits 0 and legitimate cross-file consistency passes', () => {
   assert.strictEqual(r.status, 0, `clean plane must pass, got: ${r.stdout} ${r.stderr}`)
 })
 
-test('genesis-architect wires the lint at ops-conventions exit, fail-closed', () => {
+test('genesis-architect wires the lint in Phase B, fail-closed, never whole-ADR', () => {
   const architect = read('spec/commands/genesis-architect.md')
   assert.match(architect, /parity-check/,
-    'genesis must run the lint over the seam-plane artifacts before Phase A closes')
+    'genesis must run the lint over each ADR-named surface before the scaffold commit')
+  assert.match(architect, /[Nn]ever pass the whole ADR/,
+    'the ADR legitimately spells identifiers per-surface; whole-ADR input deadlocks the gate')
+})
+
+test('doctor re-runs the lint with a locked trigger label', () => {
+  const doctor = read('spec/commands/doctor.md')
+  assert.match(doctor, /parity-check/, 'contradictions accrete post-genesis; doctor re-runs')
+  assert.match(doctor, /per-surface casing ownership/,
+    'trigger greps a verbatim label — a prose-drifted conditional self-disables silently')
 })
 
 test('the lint is registered in the scaffold ledger', () => {

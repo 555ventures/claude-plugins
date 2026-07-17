@@ -58,9 +58,9 @@ refutation-filter retirements are measured evidence against speculative gates. P
 bump-blocking requires what the ledger row names: a panel finding that, left unfixed, shows
 up as a host incident (i.e., the panel demonstrably predicts intake rows).
 
-Record the outcome either way: findings fixed pre-bump, findings waived (with why), or
-clean. That record IS the promote/retire measurement — an unrecorded advisory run can never
-earn promotion.
+Record the outcome either way — **in the body of the commit that ships (or fixes) the
+reviewed diff**: findings fixed pre-bump, findings waived (with why), or clean. That record
+IS the promote/retire measurement — an unrecorded advisory run can never earn promotion.
 
 ## Rules
 

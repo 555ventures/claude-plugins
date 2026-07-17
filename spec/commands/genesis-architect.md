@@ -149,7 +149,10 @@ Repeat until no open hard forks remain:
    never logged), **naming & identifiers** (casing and plurality for tables/columns/indexes/
    constraints; primary-key strategy AND id-minting — one generator module + prefix registry;
    per-surface casing ownership — DB vs wire vs logs vs analytics tags — with the boundary
-   stated), **wire representations** (decided once at the contracts seam: non-JSON-native types
+   stated; this sub-row is labeled **per-surface casing ownership** verbatim — doctor greps
+   for it — and records, per surface, the file globs that constitute it and its decided
+   spelling exemplars, the exact inputs every parity invocation replays),
+   **wire representations** (decided once at the contracts seam: non-JSON-native types
    such as bigint/decimal money, timestamp form on the wire — UTC-only vs offsets tolerated —
    and the discriminator field name), **env/config management** (file layout, secrets never in
    git, the sanctioned secret store), **CI** (the gate runs on every push — wired in Phase B),
@@ -165,9 +168,14 @@ Repeat until no open hard forks remain:
    — *"what will two context-free executors, weeks apart, decide differently unless a row
    decides it now: every value class crossing a surface boundary, every name a second writer
    will mint, every operational behavior a spec will assume but never state?"* After filling
-   the dictated rows, run one **derive pass** against that question (walk the research and
-   the archetype's surfaces; propose rows the floor missed), then a coverage check of the
-   result. Both passes are **advisory** — the coverage checker shares the deriver's blind
+   the dictated rows, run one **derive pass** against that question — walk the research and
+   the archetype's value-crossing boundaries (its API seams, storage, logs, external
+   integrations: the same axis the casing-ownership row enumerates) and propose rows the
+   floor missed; derived rows follow the same fill discipline as dictated ones (boring
+   defaults, `AskUserQuestion` only on a genuine fork). Then the **coverage check**: a
+   second same-session read of the finished table against the generating question, whose
+   only outputs are added rows or nothing — it writes no certification and asks nothing
+   new. Both passes are **advisory** — the coverage checker shares the deriver's blind
    spots (same-model correlation, the reason review doctrine forbids same-context
    verification), so derivation can add rows but its silence never certifies completeness.
 3. Write `.claude/genesis/stack-descriptor.json` (template via `spec-paths templates`): archetype,
@@ -199,12 +207,17 @@ Repeat until no open hard forks remain:
    tests, lint at `--max-warnings 0` where supported). Fix scaffold-level issues only; do not
    start feature work.
 4. **Run the parity lint** (`node $(spec-paths parity-check) <files>`) — once per surface
-   named in the ops ADR's per-surface casing ownership row, passing that surface's files as
-   they exist now (the ops ADR itself joins the wire surface's invocation, so its wire rows
-   are checked against any seam artifacts the scaffold landed). The lint is fail-closed:
-   a non-zero exit blocks the commit — the same identifier spelled two ways inside one
-   plane, or mixed wire timestamp forms, is a contradiction being byte-locked, not a style
-   nit. A surface with fewer than two artifacts is trivially coherent; skip it.
+   named in the ops ADR's per-surface casing ownership row, passing exactly that row's
+   recorded globs as they match now, plus one temp file holding the surface's decided
+   spelling exemplars copied verbatim from its row. **Never pass the whole ADR**: other
+   surfaces' rows legitimately spell the same identifier differently (that is what the
+   ownership row is for), and the lint treats everything in one invocation as one plane.
+   The lint is fail-closed: a non-zero exit blocks the commit — the same identifier spelled
+   two ways inside one plane, or mixed wire timestamp forms, is a contradiction being
+   byte-locked, not a style nit. A finding the ADR deliberately allows is resolved by
+   narrowing that surface's globs or splitting the plane in the ownership row itself,
+   recorded as a Dissent — never by editing generated code to appease the lint. A surface
+   with fewer than two artifacts is trivially coherent; skip it.
 5. On green, commit. Set `status.architect: scaffold-complete`, write `gateCommand` into
    `status.json`. A failed Phase B re-runs Phase B only, against the committed decisions.
 

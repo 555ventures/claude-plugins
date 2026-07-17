@@ -135,6 +135,9 @@ Every finding needs a file:line you actually verified and a self-contained "clai
 someone can verify without your reasoning. Do not report scope/over-engineering opinions (the
 user's call), do not report things the spec explicitly decided (Decisions table), and do not
 report visual/styling choices on components approved via /spec:design (designed: in frontmatter).
+Do not report review-stage-owned artifacts as missing: the spec's Canonical Delta (applied to
+docs/canonical/) and the frontmatter status flip are applied by /spec:review AFTER your verdict —
+their absence from the diff is the expected precondition, never a finding.
 You are read-only: never edit any file.`
 }
 

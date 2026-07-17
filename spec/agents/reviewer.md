@@ -54,6 +54,11 @@ Before reporting, check a suspected violation against sanctioned exceptions: the
 them), and exceptions listed in the rule files themselves. Do not report
 scope/over-engineering opinions — that is the user's call.
 
+**Stage ownership:** the spec describes deliverables owned by stages that run *after* your
+verdict. The **Canonical Delta** (applied to `docs/canonical/{area}.md`) and the frontmatter
+`status` flip are applied by `/spec:review` on CLEAN — their absence from the diff is the
+expected precondition of your review, never a finding.
+
 ## Cross-Cutting Checks (every repo)
 
 - Hand-edits to generated/managed surfaces (the host's rules name them) are **hard** — they

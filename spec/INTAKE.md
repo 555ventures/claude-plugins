@@ -33,6 +33,7 @@ Statuses: `open` (accepted, test failing, fix not landed) · `fixed@<version>` �
 | UPWELL-20260716-10 | UpWell brief 3.7 (designed affordance entered build with spec authority and no spec scrutiny) | workflow-defect | design | `pre-contract` — scaffold-ledger "Affordance ↔ contract reconcile" row | 5.3.0 |
 | UPWELL-20260716-11 | UpWell brief Part 3 (per-spec CLEAN verdicts don't compose; no executed milestone gate) | missing-substrate | release | `pre-contract` — commands/release.md + scaffold-ledger "Release stage executed checks" row | 5.3.0 |
 | UPWELL-20260716-12 | UpWell genesis run (chain ended with no plannable unit; roadmap hand-authored) | missing-substrate | genesis | `pre-contract` — scaffold-ledger "Roadmap as genesis phase" row | 5.2.0 |
+| PRAX-20260717-01 | Prax widened audit (ops-conventions ADR dictation omits naming/identifiers and wire-representations rows; produced the run_id/runId contradiction inside ADR-0012's own output, three divergent id spellings in byte-locked artifacts, a +00:00 timestamp defect, and an unrepresentable bigint — executor exceeded the list once by luck, never reliably) | checklist-gap | genesis | `tests/ops-conventions-rows.test.js` | 6.4.2 |
 
 ## Adding a row
 

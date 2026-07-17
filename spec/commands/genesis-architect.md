@@ -143,15 +143,25 @@ Repeat until no open hard forks remain:
    line).
 2. **Write the ops-conventions ADR** (`docs/adr/NNNN-operational-conventions.md`, one ADR, one
    table). Robust software is mostly conventions-under-load, and in a greenfield repo nobody else
-   ever decides them — `/spec:init` can only extract what exists. Rows: **error taxonomy** (the
-   error shape/base classes and user-facing vs internal split), **logging** (structured or not,
-   shape, what is never logged), **env/config management** (file layout, secrets never in git,
-   the sanctioned secret store), **CI** (the gate runs on every push — wired in Phase B),
+   ever decides them — `/spec:init` can only extract what exists. Rows (a floor, not a ceiling —
+   add any convention-under-load the research surfaces): **error taxonomy** (the error shape/base
+   classes and user-facing vs internal split), **logging** (structured or not, shape, what is
+   never logged), **naming & identifiers** (casing and plurality for tables/columns/indexes/
+   constraints; primary-key strategy AND id-minting — one generator module + prefix registry;
+   per-surface casing ownership — DB vs wire vs logs vs analytics tags — with the boundary
+   stated), **wire representations** (decided once at the contracts seam: non-JSON-native types
+   such as bigint/decimal money, timestamp form on the wire — UTC-only vs offsets tolerated —
+   and the discriminator field name), **env/config management** (file layout, secrets never in
+   git, the sanctioned secret store), **CI** (the gate runs on every push — wired in Phase B),
    **background/async work** (in-process, queue, or none-in-v1), and **success-metric
    instrumentation** (the Phase 1 measurement pick — the analytics seam, or "not measured in v1").
    These are boring-default rows the aggregator fills from the research; `AskUserQuestion` only on
-   a genuine fork (e.g. a paid observability vendor). Each row is DECIDED or
-   DEFERRED-with-reason — same ledger discipline as the design canon.
+   a genuine fork (e.g. a paid observability vendor, or the concrete id scheme — ULID vs nanoid
+   and the prefix table are a product-owner pick; that one generator module exists is not). A
+   DECIDED row in a category `/spec:enforce` can mechanize is stated **checker-enforceable** — no
+   taste clauses ("strict plural", never "plural where natural reads better"); the rejected taste
+   variant goes in Dissents. Each row is DECIDED or DEFERRED-with-reason — same ledger
+   discipline as the design canon.
 3. Write `.claude/genesis/stack-descriptor.json` (template via `spec-paths templates`): archetype,
    localeScope, language, framework, packageManager, testRunner, linter, typechecker,
    componentLibrary, designCatalog, `enforceEngines`, the resolved **`gateCommand`**, the

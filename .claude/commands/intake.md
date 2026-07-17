@@ -31,6 +31,17 @@ Target `$ARGUMENTS` if a path was given, else every git repo under `~/Projects/*
 4. **Anomaly queries** (cross-host rollup, per stage): review rows with `skipped > 0`,
    contradicted CLEANs (escape rows pointing at CLEAN review runs), tier distribution
    skew — the per-stage table is how "how should /spec:build improve" becomes a query.
+5. **Failure-density mining** (cross-host, per stage × per doctrine surface): aggregate with
+   `jq` over every host's `.claude/spec-runs.jsonl` (blocked returns, deviations, review
+   findings, verify outcomes, escape rows) plus brief findings rows, attributing each failure
+   to the doctrine surface that generated the behavior (the command, generated rule file, or
+   ADR row the failing agent was executing — from the row's `stage` + cited artifact; count
+   unattributable rows in an explicit `unattributed` bucket, never silently dropped). Report
+   the density table, then terminate it in one line: **"next hardening target: `<surface>`"**
+   — the highest-density surface is the next conversion/fix candidate, replacing armchair
+   priority. Where a surface hosts a scaffold-ledger mechanism, report its hit/miss counts
+   against that row's promote/retire condition — this query is how advisory mechanisms earn
+   promotion and gates earn retirement.
 
 ## Phase 2 — Verify in place (the step that makes the loop trustworthy)
 

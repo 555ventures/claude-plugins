@@ -733,12 +733,21 @@ question for that reader:
 - **Ask the real decision.** When several technical choices collapse into one underlying
   trade-off, ask that trade-off once ("lock the simpler storage now vs. keep the migration
   path open") instead of the N surface questions it generates.
-- **Options carry consequences.** Each option's description states what picking it costs or
-  buys, in a phrase. When the evidence supports a pick, put it first, labeled "(Recommended)".
+- **Options carry consequences, in the `description` field.** Every description answers
+  "what happens to me if I pick this" — the failure mode it accepts, the cost it pays, the
+  future change it makes cheap or expensive. Recommended pick first, labeled "(Recommended)",
+  its description saying *why*. Previews are for visuals (mockups, diagram variants) — never
+  a code snippet standing in for an explanation of consequences.
 - **Derive before asking.** Everything the session, disk, or ledger can answer is derived and
   presented for confirmation, never asked open-ended; only genuinely underivable facts become
   questions (`/spec:escape` is the template). This section governs how the questions that
   survive derivation are *phrased*, not how many there are.
+
+The structural floor is enforced mechanically: a PreToolUse hook
+(`scripts/question-style-gate.js`) rejects any `AskUserQuestion` whose options lack
+consequence-bearing descriptions, whose recommendation states no reason, or whose question
+text leans on code identifiers — with the rewrite rule in the rejection. Doctrine carries
+the taste; the hook guarantees the floor.
 
 ## Console Output Style (progress narration and end-of-run reports)
 

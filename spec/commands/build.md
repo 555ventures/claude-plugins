@@ -224,11 +224,14 @@ harness reports it; if a count isn't visible, write `null` — **never `0`** (a 
 `printf '%s\n' '<json>' >> .claude/spec-runs.jsonl`. The next checkpoint/close commit picks it
 up — never gitignore it; durable cost + verdict history is its whole point.
 
-Report: files (C/M/D), gate table, decisions applied vs escalated mid-run, consultant
-consultations (count + topics), workflow `runId` (for any later resume), and token spend (every
-workflow return carries `tokens` = output-token spend; report it per invocation — spend visibility
-is how the pipeline's cost gets tuned instead of guessed). Status stays
-`implementing` — only `/spec:review` flips `done`.
+Report — console style (§ Console Output Style): open with one outcome line
+(`✅ build green — N files, gate passed, ready for /spec:review` or `⚠️ …` with what needs
+the user), then only lines that change what the user does next: escalations/consults that
+happened (count + one-phrase topics), anything ⚠️ unresolved, and the next command. Close
+with one 📦 housekeeping line: workflow `runId` (for any later resume) + token spend (every
+workflow return carries `tokens`; spend visibility is how the pipeline's cost gets tuned
+instead of guessed). File lists and full gate tables stay out of the console — the diff and
+ledger hold them. Status stays `implementing` — only `/spec:review` flips `done`.
 
 If in a worktree: **stay in it** — `/spec:review` runs there and merges back to the
 originating branch on CLEAN (its Phase 4). Only `AskUserQuestion` (keep / discard +

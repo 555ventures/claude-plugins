@@ -91,8 +91,10 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    **Ratified** = direction approved at roadmap level, brief and mocks agree; the matrix and
    polish are still owed later at `/spec:design` promotion. On no — state is on disk; re-invoke
    to continue. `AskUserQuestion` dismissed → STOP.
-7. **Report:** brief path, surfaces ratified/still-sketch, brief sections edited, deltas/open
-   questions written, and the next command: `/spec:plan <brief>`.
+7. **Report** — console style (§ Console Output Style): one outcome line
+   (`✅ ratified N of M surfaces — <brief>`), then one line per thing that still needs the
+   user (⚠️ un-ratified surfaces, open questions written), and the next command:
+   `/spec:plan <brief>`. Edited-section inventories stay in the brief — print its path.
 
 ## Rules
 

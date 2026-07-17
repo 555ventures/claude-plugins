@@ -162,7 +162,11 @@ If survivors exist, present them with the pattern-sweep context, grouped by veri
 status: `demonstrated` first (a verifier *reproduced the defect by execution* — show the
 `evidence`; rejecting one means overriding a reproduced failure), then `unverifiable`
 (structural claims no repro can decide — this session adjudicates them on the cited rule),
-then `advisory` (soft), then any `verifier-failed`/`cap-skipped` (unverified — say so). Then
+then `advisory` (soft), then any `verifier-failed`/`cap-skipped` (unverified — say so). With
+each survivor, **quote the spec lines its disposition hinges on** — the Decision, Assumption,
+or AC text the finding claims was violated (already in hand from Phase 0; quote verbatim,
+recommend nothing). The recurring disposition call is "over-strict spec text vs. actual code
+defect," and it must be made against the author's recorded intent, not recalled intent. Then
 `AskUserQuestion` per finding group:
 - **Fix** — dispatch Sonnet workers (routed via the host's `agentMap`, matching the build
   routing). Then re-review **incrementally**: write the surviving findings to a temp JSON
@@ -190,8 +194,11 @@ then `advisory` (soft), then any `verifier-failed`/`cap-skipped` (unverified —
    folding.
 3. **Close commit:** commit everything still uncommitted on the working branch — status flip,
    canonical docs, any review-fix dispatches. The orchestrator owns git; never `--no-verify`.
-4. Report: gate table, findings (survived / killed / waived with reasons), drift result,
-   canonical files updated.
+4. Report — console style (§ Console Output Style): one verdict line first
+   (`✅ CLEAN — merged` / `🚫 N hard findings — build must fix`), then each surviving
+   finding as one plain-language line (what breaks, where), then anything ⚠️ waived with
+   its one-phrase reason. Kill lists, full gate tables, and drift detail go to the ledger
+   row, not the console — print paths.
 
 Then proceed directly into Phase 4 — the user does not re-invoke anything.
 

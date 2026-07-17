@@ -208,8 +208,11 @@ Never silently drop a finding.
    files, every shape-triggered micro-spike (Phase 1.5) executed with its evidence recorded in
    Assumptions.
 3. Flip frontmatter `status: draft → hardened`.
-4. Report: spec path, tier, `design:` value (design-capable hosts), `design_source` if recorded,
-   decision count, assumption count, spike run or skipped, refuter findings fixed/rejected. Next:
+4. Report — console style (§ Console Output Style): one outcome line
+   (`✅ spec hardened & locked — <path>`), then only what the user decided or should know:
+   the decisions made this session in plain language (one line each), anything ⚠️ notable a
+   refuter or spike surfaced, and the next command. Counts and field inventories stay in the
+   spec file. Next:
    `/spec:design {path}` if `design: true`, else `/spec:build {path}`. If `design: true` with
    **no** `design_source`, note that `/spec:design` will author the mock first (its
    mock-authoring preamble — shared § Design Stage); a mock already in `design/mocks/`

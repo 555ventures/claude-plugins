@@ -270,8 +270,11 @@ the wrong text came from) — the repair itself becomes territory-corrects-map h
 
 ## Report & recommendation
 
-Group findings as **clean / stale (with evidence) / broken**, then close with exactly one
-recommendation:
+Console style (§ Console Output Style): open with one health line
+(`✅ grounding healthy` / `⚠️ N stale` / `🚫 broken — <what>`); per finding, one
+plain-language line stating what's wrong and what it affects — evidence detail on demand,
+not inlined. Group findings as **clean / stale (with evidence) / broken**, then close with
+exactly one recommendation:
 
 - **Clean** — no action. If only check 2 failed (stamp trails the plugin but the current
   contract checks all pass), offer to re-stamp `contractHash` (+ `generatedBy`) — with

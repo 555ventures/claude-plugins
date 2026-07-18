@@ -55,8 +55,22 @@ state gate blocks this command until `architect: scaffold-complete`; also verify
    anti-slop negations. The session curates; research content comes from the workflow return,
    cited. Any user-supplied seed principles enter as hypotheses to re-verify, never as
    pre-admitted rules.
-3. Read the brief back to the user for sign-off (the funnel binds to it). Set
-   `explore: research-done`. Commit.
+3. Read the brief back for sign-off (the funnel binds to it) — presented as what it is: a
+   **constraints floor, not a taste commitment**. The user has seen no visuals yet and cannot
+   know what they want; the sign-off must never read as if it were asking for that. Mandatory
+   framing for the AskUserQuestion:
+   - **Lead with what happens next**: 6–8 rendered style tiles the user culls in a browser —
+     the look-and-feel choosing happens there, not here. This gate only confirms the evidence
+     rules all candidates will obey regardless of style.
+   - **Present a digest, not the document**: rule counts by evidence tier, the 3–5 most
+     behavior-shaping rules in plain language, and the ethics/legal floor — full text linked
+     for the reader who wants it. A skim is a legitimate basis for approving; a wrong rule
+     will also be visible in the tiles.
+   - **State the real revision cost**: the brief stays editable at the tile cull, and an edit
+     invalidates only candidates whose position leaned on a changed rule — never the whole
+     round. Do not present sign-off as a point of no return.
+
+   Set `explore: research-done`. Commit.
 
 ## Phase 2 — Round 0: style tiles
 
@@ -79,7 +93,9 @@ state gate blocks this command until `architect: scaffold-complete`; also verify
 4. Build the comparison gallery: `node <design-atlas> gallery design/explore --out
    design/explore/gallery.html`, tell the user to open it (or serve it), and run the cull:
    `AskUserQuestion` (multiSelect) — **pick 2 finalists**. Record the cull + one-line reasons in
-   `positions.md`. Set `explore: tiles-culled`. Commit.
+   `positions.md`. If seeing the tiles surfaced a research-brief correction, apply it now with
+   **scoped invalidation**: rebuild only candidates whose position brief cites a changed rule
+   (the two finalists, if affected), never the whole round. Set `explore: tiles-culled`. Commit.
 
 ## Phase 3 — Round 1: interactive prototypes
 

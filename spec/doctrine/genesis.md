@@ -212,7 +212,12 @@ review, citing rule IDs. The falsifiable phrasing above is what makes that check
 `/spec:genesis-explore` sits between architect and design **because the pick must precede the
 lock**: `/spec:genesis-design` ratifies tokens and canon, and taste judged after the lock is
 re-work. The stage exists so the user judges *rendered candidates*, never prose descriptions of
-a direction — and so divergence is explored while it is still cheap. Before the funnel starts,
+a direction — and so divergence is explored while it is still cheap. That principle governs the
+research-brief sign-off too: the brief is a **constraints floor** (evidence rules plus the
+ethics/legal floor), not a direction, and its gate must be framed that way — the user is
+confirming constraints they can skim, not committing taste they haven't seen; direction is
+judged only on rendered tiles, and a brief edit at the cull invalidates only candidates that
+leaned on the changed rule. Before the funnel starts,
 explore declares the **target matrix** (`design/targets.json`, shared § Design Stage): which
 themes (light/dark) and viewports (mobile/tablet/desktop) this product owes, derived from the
 archetype and confirmed with the user. The whole funnel then runs **matrix-at-approval**

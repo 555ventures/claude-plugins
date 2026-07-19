@@ -750,7 +750,10 @@ question for that reader:
   stakes in those units; never in human implementation effort or calendar time.
 - **The two lenses are a filter.** A question that can't honestly state a product consequence
   or a delivery consequence in those units isn't worth the user's attention — take the
-  conservative option, log it (deviations/decision log), and don't ask.
+  conservative option, log it (deviations/decision log), and don't ask. **Conservative = the
+  option cheapest to reverse later** — the one that locks in the least (no schema commitment,
+  no published surface, no deleted artifact). If no option is clearly cheaper to reverse, the
+  question survives the filter: reversibility ambiguity is itself a reason to ask.
 - **Self-contained.** The question carries everything needed to answer it cold — what happened,
   why it needs a ruling now, what each answer commits to downstream. Never assume the user
   watched the run or remembers the spec.

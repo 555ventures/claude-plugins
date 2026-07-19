@@ -260,7 +260,9 @@ written against real code. Never pre-plan the whole roadmap into specs.
 
 ## Phase D — Report & hand off
 
-Report: archetype + audience, decisions made (with ADR paths), dissents recorded, the resolved
+Open with one outcome line (`✅ architected — scaffold green, N ADRs, roadmap of M briefs` or
+`⚠️ …` with what needs the user), then only what changes the user's next step (§ Console
+Output Style). Report: archetype + audience, decisions made (with ADR paths), dissents recorded, the resolved
 gate command, scaffold result, roadmap (brief count, milestone gates). **Next:**
 `/spec:genesis-explore <same idea>` — or, for an archetype whose design stage is `none`
 (backend-api, data-ml), note that explore + design are skipped and the next step is `/spec:init`.

@@ -134,7 +134,9 @@ state gate blocks this command until `architect: scaffold-complete`; also verify
 
 ## Phase 4 — Report & hand off
 
-Report: research-brief path and rule counts by evidence tier, positions explored, the cull, the
+Open with one outcome line (`✅ picked — <position> wins, N grafts applied, matrix confirmed`),
+then only what changes the user's next step (§ Console Output Style). Report: research-brief
+path and rule counts by evidence tier, positions explored, the cull, the
 pick + grafts, walkthrough finding counts. **Next:** `/spec:genesis-design` — it ratifies the
 winner's `tokens.css` as canon and authors doctrine/rules around it; rejected candidates land in
 its `## Dissents`.

@@ -495,7 +495,9 @@ Both modes also:
    layer is authored but not activated — fix and re-run. **Only after it passes**, stamp the
    config: `generatedBy` = `spec@$(spec-paths version)`, `contractHash` =
    `$(spec-paths contract-hash)`. The stamp asserts "mechanically verified," not "generated."
-5. Report: files written, agents generated (kind → name), config summary, T3 triggers chosen,
+5. Report — open with one outcome line (`✅ initialized — N files, gate verified, stamped` or
+   `⚠️ …` with what needs the user), then only what changes the user's next step (§ Console
+   Output Style): files written, agents generated (kind → name), config summary, T3 triggers chosen,
    runtime contract (boot/ready commands, or declared inert + reason), substrate created vs
    found (Phase 1.5), convention rules written (kind → globs), permissions summary
    (allow/deny entry counts + any merge conflicts surfaced in Phase 2.5), skills generated

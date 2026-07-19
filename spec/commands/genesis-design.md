@@ -202,7 +202,9 @@ Author directly (taste exception — not delegated to Sonnet):
 
 ## Phase 5 — Report & hand off
 
-Report: design direction chosen, dissents recorded, doctrine + token + consumed-surface paths, the
+Open with one outcome line (`✅ canon locked — direction ratified, N rules across M categories`
+or `⚠️ …` with what needs the user), then only what changes the user's next step (§ Console
+Output Style). Report: design direction chosen, dissents recorded, doctrine + token + consumed-surface paths, the
 **dimension ledger** (DECIDED vs DEFERRED-with-reason, and the token-family↔rule pairing for each
 DECIDED row), design-rules count by category, `designCatalog` for `/spec:init`'s `design` block (or
 `none`). **Next:** `/spec:init` —

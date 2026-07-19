@@ -116,7 +116,9 @@ defective file — that is the only unrecoverable input.
    - `review-check` → draft the one-line § Review Checks severity row the same way, same
      Gotchas discipline, same severable approval ask.
    - `runtime-leg` / `none` → nothing to write; the ledger row itself is the signal.
-7. **Report the context, not a fix:** how many escape rows now point at this spec; whether
+7. **Report the context, not a fix** — open with one outcome line (`📦 escape logged —
+   <preventedBy> row appended` plus the prevention delta's disposition), then only what
+   changes the user's next step (§ Console Output Style): how many escape rows now point at this spec; whether
    the correlated review's verdict was `CLEAN` (a contradicted CLEAN is the miscalibration
    signal `/spec:doctor` aggregates); if `killedMatch: true`, say explicitly that the
    refutation filter killed a real bug — the strongest re-tuning evidence the ledger can

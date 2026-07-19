@@ -95,6 +95,10 @@ conversation. The iteration loop is deliberately **cold between rounds** — the
 `design-log.md` carries each round's rulings, so no expensive session idles while the user looks
 at the catalog.
 
+When the driver prints `DONE`, report — open with one outcome line (`✅ designed — N components
+kept, manifest extended, spec reconciled; next /spec:build`), then only what changes the user's
+next step (§ Console Output Style).
+
 ## Rules (session-binding — the driver cannot enforce these)
 
 - **The expensive model writes no framework code.** It authors `skeletons.json`, adjudicates

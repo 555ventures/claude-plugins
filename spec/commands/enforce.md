@@ -178,7 +178,9 @@ when rules changed but enforcement was not regenerated — the early-detection s
 
 ## Phase 7 — Report
 
-Report: stacks detected; per category — the enforcer chosen (or the fallback) with its citation,
+Open with one outcome line (`✅ enforcement wired — N categories mechanized, M as Review-Check
+prose` or `⚠️ …` with what needs the user), then only what changes the user's next step
+(§ Console Output Style). Report: stacks detected; per category — the enforcer chosen (or the fallback) with its citation,
 verify result, and gate wiring; what was already-covered vs newly added; rules proposed and which
 the user accepted; the stamped `rulesEnforcementHash`; anything that fell to a Review-Check and
 why. Next: re-run the host's gate once to confirm the new checks pass on a clean tree (or surface

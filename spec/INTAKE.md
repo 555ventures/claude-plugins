@@ -34,6 +34,29 @@ Statuses: `open` (accepted, test failing, fix not landed) · `fixed@<version>` �
 | UPWELL-20260716-11 | UpWell brief Part 3 (per-spec CLEAN verdicts don't compose; no executed milestone gate) | missing-substrate | release | `pre-contract` — commands/release.md + scaffold-ledger "Release stage executed checks" row | 5.3.0 |
 | UPWELL-20260716-12 | UpWell genesis run (chain ended with no plannable unit; roadmap hand-authored) | missing-substrate | genesis | `pre-contract` — scaffold-ledger "Roadmap as genesis phase" row | 5.2.0 |
 | PRAX-20260717-01 | Prax widened audit (ops-conventions ADR dictation omits naming/identifiers and wire-representations rows; produced the run_id/runId contradiction inside ADR-0012's own output, three divergent id spellings in byte-locked artifacts, a +00:00 timestamp defect, and an unrepresentable bigint — executor exceeded the list once by luck, never reliably) | checklist-gap | genesis | `tests/ops-conventions-rows.test.js` | 6.4.2 |
+| PRAX-20260717-02 | Prax brief 2026-07-17 (worktrees live INSIDE the parent repo at `.claude/worktrees/`, so a build worker whose toolchain resolves upward for a project root ran `pnpm gate` against the live parent checkout — another session's uncommitted work — and turbo's shared cache replayed a main-checkout log as a worktree hit; no wf-build prompt pins gate/red-check/self-verify CWD) | workflow-defect | build | `tests/worktree-cwd.test.js` | open |
+| UPWELL-20260718-01 | UpWell `[plugin]` gotcha (wf-build tdd-red-check joins repo-root-relative File Plan paths onto a workspace-filtered `pnpm --filter app test`; vitest resolves them inside the workspace, collects zero files, red-check returns conservatively, and every TDD build falls back to direct dispatch — reproduced at `spec/workflows/src/wf-build.body.js` RedCheck phase, which appends `testFiles` verbatim) | workflow-defect | build | `tests/redcheck-workspace-paths.test.js` | open |
+| PRAX-20260719-01 | Prax `[plugin]` gotcha (spec 20260713/03-auth D17: a requirement satisfied by a library DEFAULT got an AC pinning the library mechanism that passed before any implementation existed, leaving the shipped config's engagement unobserved — `rateLimit: {enabled: false}` would disarm production abuse gating with every AC green; plan.md's AC-shape guidance has no library-default split rule) | checklist-gap | plan | `tests/ac-split-library-default.test.js` | open |
+| PRAX-20260719-02 | Prax `[plugin]` gotcha (falsified plan-time vendor reference must re-open orchestrator-level MCP lookup; an orchestrator enforcing the worker no-MCP rule on itself burned a retainer cycle authoring a remedy the vendor docs contradicted — reported at spec@6.7.1, already fixed upstream) | doctrine-rot | build | `pre-contract` — build.md § "Falsified embedded reference → orchestrator refreshes it first" | 6.9.0 |
+
+## Rejected findings
+
+Dedupe stamps for gotcha/escape-sourced findings dispositioned `rejected` — the next sweep
+matches on the ID/signature here and skips them. Corroboration from a second host reopens.
+
+- **ZUBU-20260716-01** (zubu-menu escape 2026-07-17, `preventedBy: review-check`): batch
+  existence-check in `publishAllCore.ts` treated "not in this batch" as "does not exist"
+  for refs legitimately outside the batch; escaped a CLEAN fix-delta review
+  (`wf_e717bc0b-a06`), found by a later spec. Rejected 2026-07-19: the defect is host-domain
+  reference semantics no mechanical review check reproduces; the ledger shows the fix-delta
+  review structurally sound (smoke pass, 0 skips). Retained as density signal on the review
+  surface; a second-host escape through a fix-delta CLEAN reopens.
+- **ZUBU-20260717-01** (zubu-menu escape 2026-07-17, `preventedBy: runtime-leg`): hard
+  defect in `migration/src/strip-orderrank.ts` after review `wf_3f0cf1f0-06d`. Rejected
+  2026-07-19: that review returned SURVIVORS (1 survived, 1 waived, 0 fixes dispatched) —
+  consistent with an unactioned survivor — and one-off migration scripts sit outside the
+  boot-smoke runtime leg's declared scope; no reproducible plugin mechanism identified.
+  Retained as density signal; corroboration reopens.
 
 ## Adding a row
 

@@ -730,6 +730,21 @@ question for that reader:
 - **Plain language.** Name behaviors and outcomes, not identifiers: "the check that boots the
   app before a release", not `runtime-leg`. An internal identifier may follow in parentheses
   only when the answer must be written back to a keyed field.
+- **Product-behavior lens.** Brief the user the way you'd brief a product manager: the question
+  and every option state how the *final product's* behavior changes under that answer — what
+  the app does, shows, or stops doing once the choice lands. Implementation mechanics appear
+  only when they are themselves the product behavior at stake. Prefer a concrete scenario over
+  an abstract description: "when a shopper enters an expired card, the app retries silently vs.
+  shows an error immediately" beats "improves payment error handling".
+- **Delivery costs are AI-economics.** All code here is AI-written — "more work to implement"
+  is never a real cost and never a trade-off worth asking about. When a choice has no product
+  consequence, its honest stakes are: the user's attention (extra review or decision cycles),
+  correctness risk (a defect class this choice makes more likely to escape), and rework scope
+  (what gets re-specced, re-built, re-reviewed if the choice proves wrong). Frame delivery
+  stakes in those units; never in human implementation effort or calendar time.
+- **The two lenses are a filter.** A question that can't honestly state a product consequence
+  or a delivery consequence in those units isn't worth the user's attention — take the
+  conservative option, log it (deviations/decision log), and don't ask.
 - **Self-contained.** The question carries everything needed to answer it cold — what happened,
   why it needs a ruling now, what each answer commits to downstream. Never assume the user
   watched the run or remembers the spec.

@@ -187,7 +187,12 @@ const UI_SCRIPT = '<script>\n' +
   'var h=__measure(f)||+f.dataset.h||844;f.style.height=h+"px";' +
   'var sc=Math.min(1,cw/w);f.style.transform="scale("+sc+")";f.style.margin=sc<1?"0":"0 auto";' +
   's.style.height=Math.round(h*sc)+"px"}\n' +
-  'function __fitAll(){document.querySelectorAll("iframe.frame").forEach(__fit)}\n' +
+  'function __fitAll(){document.querySelectorAll("iframe.frame").forEach(function(f){__still(f);__fit(f)})}\n' +
+  // Grid mocks pause every CSS animation (infinite pulse/shimmer loops across ~20 iframes burn
+  // 25%+ renderer CPU at idle); the lightbox iframe is separate and stays live.
+  'function __still(f){try{var d=f.contentDocument;if(!d||!d.head||d.__stilled)return;d.__stilled=1;' +
+  'var st=d.createElement("style");st.textContent="*,*::before,*::after{animation-play-state:paused!important}";' +
+  'd.head.appendChild(st)}catch(e){}}\n' +
   'var __lbList=[],__lbIx=0;\n' +
   'function __lbShow(i){var fr=document.getElementById("lbframe");if(!fr||!__lbList.length)return;' +
   'if(i<0)i=__lbList.length-1;if(i>=__lbList.length)i=0;__lbIx=i;var f=__lbList[i];' +
@@ -204,7 +209,7 @@ const UI_SCRIPT = '<script>\n' +
   'document.addEventListener("keydown",function(e){var lb=document.getElementById("lb");' +
   'if(!lb||!lb.classList.contains("on"))return;if(e.key==="Escape")__lbClose();' +
   'if(e.key==="ArrowRight")__lbShow(__lbIx+1);if(e.key==="ArrowLeft")__lbShow(__lbIx-1)});\n' +
-  'window.addEventListener("resize",__fitAll);\n' +
+  'var __rzT;window.addEventListener("resize",function(){clearTimeout(__rzT);__rzT=setTimeout(__fitAll,150)});\n' +
   'window.addEventListener("DOMContentLoaded",function(){\n' +
   '  document.querySelectorAll("iframe.frame").forEach(function(f){\n' +
   '    var s=document.createElement("div");s.className="shot";f.parentNode.insertBefore(s,f);s.appendChild(f);\n' +
@@ -212,7 +217,7 @@ const UI_SCRIPT = '<script>\n' +
   '    if(h3&&!h3.querySelector(".vp"))h3.insertAdjacentHTML("beforeend",' +
   '"<span class=\\"vp\\">"+(+f.dataset.w||390)+"\\u00d7"+(+f.dataset.h||844)+"</span> ' +
   '<a class=\\"open\\" href=\\""+f.getAttribute("src")+"\\" target=\\"_blank\\">open \\u2197</a>");\n' +
-  '    f.addEventListener("load",function(){__fit(f);setTimeout(function(){__fit(f)},250)});\n' +
+  '    f.addEventListener("load",function(){__still(f);__fit(f);setTimeout(function(){__fit(f)},250)});\n' +
   '    s.addEventListener("click",function(){__lbOpen(f)});\n' +
   '  });\n' +
   '  var lb=document.getElementById("lb");if(lb)lb.addEventListener("click",function(e){if(e.target===lb)__lbClose()});\n' +

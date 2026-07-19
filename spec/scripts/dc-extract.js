@@ -463,11 +463,27 @@ function regionDepth(regions, id) {
   return d
 }
 
+// A region id is a full label slug (used verbatim as the JSON regionRef), so it can be far longer
+// than a filesystem name allows (255 bytes on most systems). Clamp the on-disk slice basename to a
+// safe length, appending a short hash of the full name when truncation happens so distinct long
+// labels never collide onto the same file. The region graph keeps the full `reg.id` untouched.
+const MAX_SLICE_BASENAME = 180
+function sliceFileName(base) {
+  const name = 'slice-' + base + '.html'
+  if (Buffer.byteLength(name, 'utf8') <= MAX_SLICE_BASENAME) return name
+  const h = crypto.createHash('sha256').update(base).digest('hex').slice(0, 8)
+  // reserve room for the 'slice-' prefix, '-<8hash>' suffix, and '.html' extension
+  const room = MAX_SLICE_BASENAME - 'slice-'.length - 9 - '.html'.length
+  let head = base
+  while (Buffer.byteLength(head, 'utf8') > room) head = head.slice(0, -1)
+  return 'slice-' + head.replace(/-+$/, '') + '-' + h + '.html'
+}
+
 function writeSurfaces(ranges, htmlOf) {
   const surfaces = []
   for (const r of ranges) {
     const safe = r.id.replace(/[^A-Za-z0-9-_]/g, '_')
-    const sliceName = 'slice-' + safe + '.html'
+    const sliceName = sliceFileName(safe)
     const raw = htmlOf(r)
     const a = analyzeSurface(raw)
     fs.writeFileSync(path.join(outDir, sliceName), minifySlice(raw), 'utf8')
@@ -478,7 +494,7 @@ function writeSurfaces(ranges, htmlOf) {
       const depth = regionDepth(a.regions, reg.id)
       if (reg.source === 'screen-label' || depth <= 2) {
         const range = a.regionRanges.get(reg.id)
-        reg.sliceFile = 'slice-' + safe + '__' + reg.id + '.html'
+        reg.sliceFile = sliceFileName(safe + '__' + reg.id)
         fs.writeFileSync(path.join(outDir, reg.sliceFile), minifySlice(raw.slice(range.start, range.end)), 'utf8')
       }
     }

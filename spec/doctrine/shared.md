@@ -415,7 +415,10 @@ mock — so mock-supremacy holds on un-migrated hosts, with a11y/contrast still 
 silently** (honor the mock; record the yield as a one-line doctrine note at reconcile), and only a
 `grounded` ruling **binds** — and even then it binds the *value*, not the *intent*: honor the
 mock's intent and snap values to what the constraint permits (a mock color that fails contrast
-keeps its semantic distinctness but moves to a passing value). The user is asked **only** when a
+keeps its semantic distinctness but moves to a passing value). A mock's **omission** is not
+evidence against a `grounded` ruling: furniture a grounded ruling requires (a legal disclaimer,
+an a11y affordance) renders even where one mock of a family lacks it, or the conflict goes to
+the user — silence in a mock can override taste, never grounding. The user is asked **only** when a
 `grounded` constraint and the mock's intent genuinely cannot be reconciled. **With no mockup**,
 doctrine is the canon and a note that contradicts it is a fork, not a tweak: the user rules
 **local exception** (spec Decisions) or **doctrine change** (doc updated, older surfaces recorded

@@ -19,7 +19,9 @@ exists.**
   spent upstream, in the mock. Consult the **Fable retainer** (`Agent {model:"fable"}`, Opus
   fallback; continue the SAME agent via SendMessage across the session rather than re-spawning)
   ONLY at judgment points: component-boundary/reuse decisions against the existing component
-  catalog, blocked or ambiguous bindings, and any `deltas.json` proposal.
+  catalog, blocked or ambiguous bindings, any `deltas.json` proposal, and family furniture
+  asymmetry (a shell-level element present in some sibling mocks and absent in others — see the
+  sibling-grounding rule below).
 - **No mock yet:** author it first — the **mock-authoring preamble** below — then proceed
   mock-bound. On roadmap-derived specs the preamble runs on **Sonnet + the Fable retainer**
   (direction-level questions escalate to the atlas, where roadmap taste lives); on standalone
@@ -115,6 +117,20 @@ at the catalog.
   slice quote, verified mechanically, plus an impossibility proof) — a taste rationale is never
   valid evidence; taste yields to the mock (shared § mock supremacy). Fold delta rows into spec
   Decisions at reconcile.
+- **Sibling mocks ground asymmetry detection — never transcription.** When the bound surface
+  belongs to a mock family (other mocks of the same route group or shared entry frame), the
+  session seat reads the siblings' **extract inventories** (region labels + furniture from the
+  dc-extract slices — never raw sibling mock HTML; detection needs "signup has a disclaimer bar
+  region, signin doesn't", not markup) before authoring skeletons. **Furniture** here is
+  shell-level chrome — legal/disclaimer bars, header marks, footer cross-links — not content.
+  Furniture present in some siblings and absent in others is a **judgment point, never a silent
+  transcription**: if the divergent furniture carries `grounded`-category copy (legal, a11y,
+  destructive-action safety), consult the retainer and surface the question — a mock's
+  *omission* is not evidence against a grounded ruling (shared § mock supremacy); otherwise
+  honor each mock and record the asymmetry as a one-line doctrine note at reconcile. Siblings
+  ground **questions**, never **bindings**: workers never see sibling material, and copy,
+  structure, and order still bind only to the surface's own region — this rule creates asks,
+  never unification.
 - **A variant screen is not a second contract.** The extract's `variantProposals` (heavy copy
   overlap = same screen re-themed / re-laid-out) resolve to token-pair (theme) or responsive
   (breakpoint) obligations on the SAME skeletons — never a duplicate string binding.

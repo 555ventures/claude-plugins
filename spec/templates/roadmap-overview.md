@@ -6,7 +6,8 @@
      Briefs are stable intent; specs are perishable execution detail — briefs are hydrated
      into specs lazily, one at a time, when "Current state" can be written against real code.
      NEVER write per-brief status into this file: status is derived from specs' `brief:`
-     frontmatter (/spec:doctor check 14). -->
+     frontmatter — run /spec:status to see it (/spec:doctor check 14 audits the same
+     derivation). -->
 
 Status of the pipeline: { what genesis/init/enforce have produced; what code exists — usually
 "scaffold only, no product code" at authoring time }.

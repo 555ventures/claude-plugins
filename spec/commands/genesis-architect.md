@@ -251,7 +251,7 @@ written against real code. Never pre-plan the whole roadmap into specs.
 3. **Write** `docs/roadmap/00-overview.md` + one `NN-{kebab}.md` per brief, and create
    `docs/roadmap/deltas/` (empty, with a one-line README: post-genesis product-shape decisions
    land here as dated amendments naming the briefs they bind). **Never write a status column** —
-   per-brief status is derived from specs' `brief:` frontmatter by `/spec:doctor`, not tracked.
+   per-brief status is derived from specs' `brief:` frontmatter (`/spec:status`), not tracked.
 4. **Self-check (checklist, not a workflow):** no `depends_on` cycles; every ADR is carried by
    ≥1 brief's Grounding or is genuinely cross-cutting (note which); no two briefs claim the same
    scope; each milestone gate is satisfiable by the briefs sequenced before it; brief 01 depends

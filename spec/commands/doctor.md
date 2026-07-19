@@ -190,19 +190,20 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
     files, or the run ledger.
 
 14. **Roadmap derivation** (only if `docs/roadmap/00-overview.md` exists) — roadmap status is
-    never tracked by hand; this check derives it and catches the two drift modes:
-    - **Derive per-brief status** from spec frontmatter: grep `specs/**` for `brief: <NN>` per
-      `docs/roadmap/NN-*.md` — no specs → *unplanned*; any matching spec not `done` →
-      *in-flight*; all matching specs `done` → *done*. Report the derived table (brief,
-      derived status, spec paths).
-    - **Orphan stamps** — a spec whose `brief:` value matches no `docs/roadmap/NN-*.md` file
-      is broken (the brief was renamed/deleted without re-stamping, or the stamp is a typo).
-    - **Hand-tracked status** — a status-like column (`planned`, `done`, `in progress`, ✅/✔)
-      inside the overview's Sequence table is drift: statuses live only in this derivation;
-      recommend stripping the column.
-    - **Dependency order** (info, not a flag) — note any *in-flight/done* brief whose
-      `depends_on` includes an *unplanned* brief: the roadmap was executed out of its own
-      declared order; the user may know why.
+    never tracked by hand; run the derivation script (one source of truth, shared with
+    `/spec:status` and `/spec:plan`'s preflight):
+    ```
+    node "$(spec-paths spec-status)" --root . --json
+    ```
+    Report its derived table (brief, derived status, spec paths) and surface every `anomalies`
+    entry as a finding: `orphan-stamp` (a spec's `brief:` matches no `docs/roadmap/NN-*.md` —
+    brief renamed/deleted without re-stamping, or a typo), `hand-tracked-status` (a status-like
+    column in the overview's Sequence table — statuses live only in the derivation; recommend
+    stripping it), `skipped-spec` (a done spec whose `depends_on` spec isn't done). Treat
+    `skipped-brief`/`out-of-order`/`unknown-dependency` as info, not flags — surface them
+    prominently (they are `/spec:status`'s headline signal, and accidental skips are the
+    incident class the mechanism exists for), but the roadmap may have been deliberately
+    reordered; the user may know why.
 
 15. **Upstream fixes (return half of the feedback loop)** — the plugin ships its intake
     ledger (`spec-paths intake`: host findings → pinning test → `Fixed in` version). Compare

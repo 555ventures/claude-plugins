@@ -368,7 +368,8 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
   `NN-*.md` planning brief per `/spec:plan` unit, and `deltas/` for post-genesis amendments
   (templates: `roadmap-overview.md`, `roadmap-brief.md` via `spec-paths templates`). Briefs are
   **stable intent** hydrated into specs lazily; per-brief status is never written here — it is
-  derived from specs' `brief:` frontmatter (`/spec:doctor` check 14). Brownfield repos (no
+  derived from specs' `brief:` frontmatter (`/spec:status`, or `/spec:doctor` check 14 for
+  the audited version). Brownfield repos (no
   genesis) hand-author from the same templates; a dedicated command exists only if evidence
   demands one (scaffold-ledger row "Roadmap as genesis phase").
 

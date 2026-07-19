@@ -26,10 +26,12 @@ in Phase 1.5.
 
 0. **Roadmap brief intake** (when `$ARGUMENTS` is a roadmap brief). Read the brief, then
    `docs/roadmap/00-overview.md` (conventions + milestone context), then every delta the brief
-   or its open-questions section cites. **Dependency check:** for each brief in the header's
-   `Depends on`, grep `specs/**` frontmatter for `brief: <NN>` — if a dependency has no spec at
-   `implementing`/`done`, warn the user and confirm before proceeding (warn, don't block — they
-   may know the needed surface already landed). The brief's Scope seeds the draft, its
+   or its open-questions section cites. **Dependency check:** run
+   `node "$(spec-paths spec-status)" --root . --brief NN` (NN = the brief filename's number;
+   the shared derivation behind /spec:status and /spec:doctor check 14). Exit 1 means a
+   `Depends on` brief has no spec at `implementing`/`done`: warn the user with the script's
+   line and confirm before proceeding (warn, don't block — they may know the needed surface
+   already landed). Exit 2 means the brief file itself wasn't found — re-check the path. The brief's Scope seeds the draft, its
    Grounding section is the required reading list, and its Open questions seed the Phase 1
    interview; its "Current state" is a snapshot — re-verify against live code, never trust it.
    **Every spec this session produces gets `brief: NN` in frontmatter** — that stamp is how

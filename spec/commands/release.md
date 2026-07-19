@@ -36,8 +36,9 @@ Recorded in the release manifest and tag; never parsed for behavior.
    write the block. A host that deploys through CI-on-tag records that as its
    `promoteCommand` shape (e.g. a tag push) rather than a direct deploy.
 2. **Derive what shipped** since the last `stage:"release"` ledger row (or since genesis, on
-   the first release): `done` specs by close date, grouped by `brief:` stamp — the same
-   derivation `/spec:doctor` check 14 uses. Present the shipped-brief list; this scopes the
+   the first release): `done` specs by close date, grouped by `brief:` stamp — start from
+   `node "$(spec-paths spec-status)" --root . --json` (the shared derivation) and apply the
+   close-date window. Present the shipped-brief list; this scopes the
    journey walks.
 3. **Substrate delta:** diff the shipped specs' File Plans for new env vars, new third-party
    integrations, and new migrations since the last release — each becomes a checklist row in

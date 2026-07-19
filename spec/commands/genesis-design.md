@@ -18,7 +18,8 @@ the session owns `AskUserQuestion` and writes; `wf-panel` does research + panel.
 
 **Intended model: Fable or Opus** (taste IS the work — the design-stage exception; Opus is the fallback if Fable is unavailable).
 
-**Setup:** run `spec-paths shared` and Read that file, then run `spec-paths shared-genesis` and
+**Setup:** run `spec-paths shared-for genesis-design` and read its output (the shared
+invariants scoped to this command), then run `spec-paths shared-genesis` and
 Read that too (the genesis-stage supplement — discovery interview, panel doctrine, enforcement
 handoff). Also run `spec-paths wf-panel` and
 `spec-paths wf-research` once and keep the printed absolute paths — they are the `scriptPath` for

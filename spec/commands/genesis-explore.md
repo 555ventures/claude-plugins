@@ -17,7 +17,8 @@ before genesis-design.
 **Sonnet agents build every tile and prototype**; deterministic checks gate before any human
 look.
 
-**Setup:** run `spec-paths shared` and Read it; run `spec-paths shared-genesis` and Read it too.
+**Setup:** run `spec-paths shared-for genesis-explore` and read its output (the shared
+invariants scoped to this command); run `spec-paths shared-genesis` and Read it too.
 Run `spec-paths wf-research` and `spec-paths design-atlas` once and keep the printed paths. The
 state gate blocks this command until `architect: scaffold-complete`; also verify
 `.claude/genesis/stack-descriptor.json` exists.

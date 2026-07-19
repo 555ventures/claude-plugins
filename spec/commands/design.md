@@ -140,9 +140,11 @@ at the catalog.
 - **Component manifest discipline (shared § Design Stage).** Read `design/components.json` at
   preflight, before any bind-vs-author decision. Every `author` decision records the nearest
   existing manifest entry and one line on why it fails — a missing justification is a gate
-  failure; the review panel verifies its content against the manifest. At reconcile, extend the
-  manifest with every component this run created or newly bound (`name`, `purpose`, `props`,
-  `mockRefs`). Creating must cost more than reusing — that gradient is the anti-duplication
+  failure; `/spec:review`'s component-manifest check verifies its content against the manifest.
+  At reconcile, extend the manifest with every component this run created or newly bound
+  (`name`, `purpose`, `props`, `mockRefs`, and — for `author` decisions — `authorJustification`,
+  copied verbatim from the binding map: the sidecar is deleted at reconcile, so the manifest is
+  where the justification survives for review). Creating must cost more than reusing — that gradient is the anti-duplication
   mechanism, not anyone's memory.
 - **A `built` surface re-entering design re-syncs its mock first** (mock authority expired at
   `built` — shared § mock-authority lifecycle): refresh the mock to current shipped reality

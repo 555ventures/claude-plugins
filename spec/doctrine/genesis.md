@@ -299,7 +299,7 @@ enforcement brain, and it lives downstream — `/spec:enforce` (which `/spec:ini
 end of bootstrap). The contract:
 
 - `design-rules.json` rules carry a `targetCategory` **enum only** — `color | typography | i18n |
-  structure | a11y | density` — **never a tool name** — plus a `grounding` (`grounded` | `taste`, shared
+  structure | a11y | density | layout` — **never a tool name** — plus a `grounding` (`grounded` | `taste`, shared
   § Grounded vs taste; mechanizable closure rules are `grounded`), which records whether the rule binds
   against an explicit mockup or yields to it. `/spec:enforce` folds these into its language-neutral
   enforcement taxonomy and owns the single category→enforcer selection per detected stack, chosen

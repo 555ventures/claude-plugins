@@ -448,12 +448,15 @@ overlay outside the base dir is a build error regardless of how it was born.
 variant "slightly different" — so prose ("check the catalog first") is not an enforcement
 mechanism. Two mechanisms above the prompt line: (1) **`design/components.json`** — a durable,
 machine-readable manifest (per component: `name`, `purpose`, `props`, `mockRefs` — which mock
-regions use it), written/extended by `/spec:design` at reconcile from its binding maps, read at
+regions use it — plus, for components born of an `author` decision, `authorJustification`),
+written/extended by `/spec:design` at reconcile from its binding maps, read at
 preflight before any bind-vs-author decision. (2) Every **`author` decision** (new component
 where binding an existing one was conceivable) must record, in the binding map, the **nearest
 existing manifest entry and one line on why it fails** — absence of that field is a gate
-failure, and its *content* is verified by the review panel against the manifest as an
-execution-grounded finding (including "new entry near-duplicates an existing entry", a
+failure. At reconcile that justification is copied verbatim into the manifest entry's
+`authorJustification` — the binding maps die with the design sidecar, so the manifest is the
+durable carrier — and its *content* is verified by `/spec:review`'s component-manifest check as
+an execution-grounded finding (including "new entry near-duplicates an existing entry", a
 name/purpose comparison a cheap model does reliably). The point is the gradient: creating a
 component must cost strictly more than reusing one — the same inversion that makes the token
 near-match rule work. New components are never forbidden; unjustified ones are.
@@ -657,6 +660,9 @@ Every `Agent` call sets `model:` explicitly. Never inherit.
   picks the seat at invocation — Opus is the cost-rational default, Fable when the surface
   warrants it. Roadmap-derived specs stay the ordinary rule (Sonnet resident, Fable consulted;
   direction-level questions escalate to the atlas) — see § Design Stage for the split.
+- **`/spec:enforce` runs on Opus.** Classifying a host's rule surfaces into the enforcement
+  taxonomy and choosing category→enforcer mappings against a live stack is judgment-adjacent
+  work sitting outside the build/review loop; its workers and sweeps stay Sonnet/Haiku.
 - **`/spec:init` and the genesis commands keep their stated models.** Genesis pre-panel
   classification, the panel aggregator, and design-doctrine authoring stay Opus seats — taste is
   the work there, so delegating it would repeat the mistake the unified rule exists to prevent;
@@ -784,8 +790,8 @@ rows keep their rigorous, machine-parseable style; this section governs only the
 
 ## Workflows Encode Shape, Not Judgment
 
-The plugin's `wf-build.js`, `wf-design.js`, and `wf-review.js` (and the genesis `wf-panel.js` /
-`wf-research.js`) own ordering, schemas, retry caps, and kill rules — deterministic control flow.
+The plugin's `wf-build.js`, `wf-design.js`, `wf-review.js`, and `wf-enforce.js` (and the genesis
+`wf-panel.js` / `wf-research.js`) own ordering, schemas, retry caps, and kill rules — deterministic control flow.
 Judgment (what's blocked, what's waived, what escalates, what a finding means) stays in the main
 loop. In the design stage `wf-design.js` runs one gate-verifiable **workflow** pass — the unified
 **author** pass (foundation + components + catalog entries in one ordered run behind a single

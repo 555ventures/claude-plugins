@@ -33,20 +33,24 @@ case "${1:-root}" in
   shared-for)
     # Print the shared-invariants CONTENT scoped to one command — only the `## ` sections that
     # command consumes, so a session never pays for doctrine it cannot act on. `spec-paths shared`
-    # (the full-doc path) stays for init/genesis and for humans. Section names must match shared.md
+    # (the full-doc path) stays for init/doctor and for humans. Section names must match shared.md
     # headings exactly; an unknown command falls back to the full document (fail-open, never less
-    # doctrine than intended).
+    # doctrine than intended). Question Style + Console Output Style ride on every list: every
+    # command asks questions and reports.
     CMD="${2:-}"
     DOC="$ROOT/doctrine/shared.md"
     case "$CMD" in
-      plan)    SECTIONS="Host Grounding|Pipeline Entry|Risk Tiers|Decomposition|State Machine|Model Placement|Decisions|MCP Policy|Canonical Docs Loop" ;;
-      design)  SECTIONS="Host Grounding|State Machine|Design Stage|Design Atlas|Model Placement|Decisions|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|MCP Policy" ;;
-      atlas)   SECTIONS="Host Grounding|Design Stage|Design Atlas|Model Placement|Decisions" ;;
-      sketch)  SECTIONS="Host Grounding|State Machine|Design Stage|Design Atlas|Model Placement|Decisions" ;;
-      build)   SECTIONS="Host Grounding|Risk Tiers|State Machine|Model Placement|Escalation Contract|Decisions|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|MCP Policy" ;;
-      review)  SECTIONS="Host Grounding|Risk Tiers|State Machine|Runtime Verification|Model Placement|Decisions|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|Canonical Docs Loop" ;;
-      release) SECTIONS="Host Grounding|Runtime Verification|Release Stage|Feedback Loop|Model Placement|Decisions|Canonical Docs Loop" ;;
-      enforce) SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Model Placement|Workflows Encode Shape, Not Judgment" ;;
+      plan)    SECTIONS="Host Grounding|Pipeline Entry|Risk Tiers|Decomposition|State Machine|Model Placement|Decisions|Question Style|Console Output Style|MCP Policy|Canonical Docs Loop" ;;
+      design)  SECTIONS="Host Grounding|State Machine|Design Stage|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|MCP Policy" ;;
+      atlas)   SECTIONS="Host Grounding|Design Stage|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style" ;;
+      sketch)  SECTIONS="Host Grounding|State Machine|Design Stage|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style" ;;
+      build)   SECTIONS="Host Grounding|Risk Tiers|State Machine|Model Placement|Escalation Contract|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|MCP Policy" ;;
+      review)  SECTIONS="Host Grounding|Risk Tiers|State Machine|Runtime Verification|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|Canonical Docs Loop" ;;
+      release) SECTIONS="Host Grounding|Runtime Verification|Release Stage|Feedback Loop|Model Placement|Decisions|Question Style|Console Output Style|Canonical Docs Loop" ;;
+      enforce) SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Model Placement|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment" ;;
+      genesis-architect) SECTIONS="Host Grounding|Pipeline Entry|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban|MCP Policy" ;;
+      genesis-explore)   SECTIONS="Design Stage|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban" ;;
+      genesis-design)    SECTIONS="Design Stage|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment" ;;
       *) cat "$DOC"; exit 0 ;;
     esac
     echo "<!-- shared invariants scoped to /spec:${CMD} — full doctrine: $DOC -->"

@@ -30,7 +30,7 @@ absolute path — it is the `scriptPath` for the Workflow call below.
 1. Determine the diff base `{target}` (the originating branch the build started from) by
    reading `build_base:` from the spec frontmatter — `/git:enter-worktree` wrote it there so a fresh
    review session recovers it from disk, never from conversation context. If `build_base` is
-   absent (the spec was built before this field existed), fall back to
+   absent (an in-place build — or a spec built before this field existed), fall back to
    `git -C {root} rev-parse --abbrev-ref HEAD` (the root working tree's current branch). The
    fallback is safe and self-checking: `{mergeBack} inspect` and `assert_target_checked_out`
    require `{target}` to equal root HEAD, so a wrong guess fails loudly at merge-back rather
@@ -104,19 +104,26 @@ What the script does (shape lives in the script, not here):
 
 ## Design-compliance legs (UI-bearing specs only)
 
-When the spec has `design: true` or a `design_source`, the panel carries two additional checks
-(both exist because authoring sessions don't remember; checkers with lists do — full doctrine
-in shared.md § Design Stage, deliberately outside this command's scoped read):
+When the spec has `design: true` or a `design_source`, the session dispatches two additional
+checks — **two parallel Sonnet `Agent` calls, sent in the same message as (or right after) the
+Phase 1 workflow invocation**; they are in-session checks, not `wf-review` legs, because they
+audit design artifacts the workflow's args contract deliberately doesn't carry. (Both exist
+because authoring sessions don't remember; checkers with lists do — full doctrine in shared.md
+§ Design Stage, deliberately outside this command's scoped read.)
 
-- **Rule-checklist leg:** one reviewer walks `docs/design/research-brief.md`'s admitted rules
+- **Rule-checklist leg:** one agent walks `docs/design/research-brief.md`'s admitted rules
   (falsifiable by construction) against the spec's built screens/bound mocks, citing rule IDs —
-  "UX-7: max one primary CTA; this screen has three" is a finding; "feels off" is not.
-- **Component-manifest leg:** every `author` decision in the run's binding maps is verified
-  against `design/components.json` — a missing nearest-entry justification is a `hard` finding;
-  a justification whose named nearest entry actually covers the need, or a new entry that
-  near-duplicates an existing one (name/purpose comparison), is a finding with the reuse named.
+  "UX-7: max one primary CTA; this screen has three" is a finding; "feels off" is not. Skip
+  (and say so in the report) if no research brief exists.
+- **Component-manifest leg:** one agent verifies every `authorJustification` in
+  `design/components.json` (the durable carrier — the run's binding maps died with the design
+  sidecar at reconcile). A component born of an `author` decision with no `authorJustification`
+  is a `hard` finding; a justification whose named nearest entry actually covers the need, or a
+  new entry that near-duplicates an existing one (name/purpose comparison), is a finding with
+  the reuse named.
 
-Both legs skip silently on specs with no UI surface — never nag a backend diff about design.
+Their findings enter Phase 2 as ordinary findings at the stated severities. Both legs skip
+silently on specs with no UI surface — never nag a backend diff about design.
 
 ## Drift gate
 

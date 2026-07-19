@@ -160,8 +160,8 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
 
 13. **Scaffold audit** — Read the plugin's distrust/guard registry:
     `spec-paths scaffold-ledger 2>/dev/null || echo "$(spec-paths root)/doctrine/scaffold-ledger.md"`
-    (a dedicated `spec-paths` key wins if the plugin ever adds one; today resolve it relative
-    to the plugin root). The ledger itself stays out of model context beyond this — only the
+    (the `scaffold-ledger` key exists; the fallback covers installed plugin versions that
+    predate it). The ledger itself stays out of model context beyond this — only the
     specific rows a finding below names get quoted back in the report.
     - **Stale earned-under generations** — for each row, extract the family + version from
       `Earned under` (rows tagged `structural` / `harness-level, model-independent` have no

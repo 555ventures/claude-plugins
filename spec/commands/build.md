@@ -80,7 +80,8 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
 4. Flip `status: hardened → implementing`. Build never writes `build_base` — that field is owned
    solely by `/git:enter-worktree`, which captures the originating branch before entering the
    worktree. If the build is in place, `build_base` is simply absent and `/spec:review`'s
-   merge-back no-ops.
+   merge-back no-ops — but the ledger's `diff` still needs a base, so record
+   `git rev-parse HEAD` now (before any build edit) as this run's diff base for Phase 5.
 
 ## Phase 1 — Run the build
 
@@ -215,8 +216,10 @@ Checkpoint-commit after the gate is green (and after each earlier green phase if
 ```
 
 `diff` comes from `git diff --shortstat <build_base>..HEAD` (files changed, insertions +
-deletions summed as `loc`) — it's what makes token costs comparable across specs of different
-sizes. `fastPath` marks a no-workflow build (`runId` omitted). `deviations` = line count of
+deletions summed as `loc`); on an in-place build (`build_base` absent) the base is the
+pre-build HEAD recorded at the Phase 0 status flip. It's what makes token costs comparable
+across specs of different sizes. `fastPath` marks a no-workflow build (`runId` omitted,
+`tokens.workflow` written as `null` — same honesty rule as `phase4Repairs`, never `0`). `deviations` = line count of
 the deviations sidecar (0 if absent) — `/spec:review` folds the sidecar's content at close. `phase4Repairs` entries are each repair agent's actual output-token count as the
 harness reports it; if a count isn't visible, write `null` — **never `0`** (a zero reads as
 "free repair" and silently poisons averages; a null is an honest, detectable gap). Fixed shape, counts/enums/paths only — **never prose, rulings, or pasted gate output**

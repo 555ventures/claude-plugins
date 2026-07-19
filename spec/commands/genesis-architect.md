@@ -13,7 +13,8 @@ ground. Heavily interactive: the session owns every `AskUserQuestion` and every 
 
 **Intended model: Opus** (the genesis judgment concentration point).
 
-**Setup:** run `spec-paths shared` and Read that file (the shared invariants), then run
+**Setup:** run `spec-paths shared-for genesis-architect` and read its output (the shared
+invariants scoped to this command), then run
 `spec-paths shared-genesis` and Read that too — the genesis-stage supplement covers the archetype
 registry, panel doctrine, discovery interview, the genesis state machine and on-disk handoff. Also
 run `spec-paths wf-panel` and `spec-paths wf-research` once and keep the printed absolute paths — they

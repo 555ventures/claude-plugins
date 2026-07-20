@@ -208,7 +208,11 @@ Never silently drop a finding.
    for specs predating the field. Lock requires `open_markers: 0`.
 2. Confirm: zero open forks, **Rationale** and **Canonical Delta** written, ACs mapped to test
    files, every shape-triggered micro-spike (Phase 1.5) executed with its evidence recorded in
-   Assumptions.
+   Assumptions, and every promise in the **Goal** traced to a Decision that delivers it plus
+   an AC that goes red in that Decision's absence — a promise with no mechanism, or a
+   mechanism no AC can catch missing, blocks lock (add the Decision/AC or strike the promise).
+   This is an in-session check, not an emitted table: ACs are written from Decisions, so a
+   Goal promise no Decision covers stays green through every downstream gate.
 3. Flip frontmatter `status: draft → hardened`.
 4. Report — console style (§ Console Output Style): one outcome line
    (`✅ spec hardened & locked — <path>`), then only what the user decided or should know:

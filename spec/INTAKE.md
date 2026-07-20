@@ -38,6 +38,7 @@ Statuses: `open` (accepted, test failing, fix not landed) · `fixed@<version>` �
 | UPWELL-20260718-01 | UpWell `[plugin]` gotcha (wf-build tdd-red-check joins repo-root-relative File Plan paths onto a workspace-filtered `pnpm --filter app test`; vitest resolves them inside the workspace, collects zero files, red-check returns conservatively, and every TDD build falls back to direct dispatch — reproduced at `spec/workflows/src/wf-build.body.js` RedCheck phase, which appends `testFiles` verbatim) | workflow-defect | build | `tests/redcheck-workspace-paths.test.js` | open |
 | PRAX-20260719-01 | Prax `[plugin]` gotcha (spec 20260713/03-auth D17: a requirement satisfied by a library DEFAULT got an AC pinning the library mechanism that passed before any implementation existed, leaving the shipped config's engagement unobserved — `rateLimit: {enabled: false}` would disarm production abuse gating with every AC green; plan.md's AC-shape guidance has no library-default split rule) | checklist-gap | plan | `tests/ac-split-library-default.test.js` | open |
 | PRAX-20260719-02 | Prax `[plugin]` gotcha (falsified plan-time vendor reference must re-open orchestrator-level MCP lookup; an orchestrator enforcing the worker no-MCP rule on itself burned a retainer cycle authoring a remedy the vendor docs contradicted — reported at spec@6.7.1, already fixed upstream) | doctrine-rot | build | `pre-contract` — build.md § "Falsified embedded reference → orchestrator refreshes it first" | 6.9.0 |
+| JJ-20260720-01 | Fable hardening-review brief 2026-07-20 (Sonnet-planned spec promised an outcome in its Goal with no delivering Decision; ACs written from Decisions stayed green in the mechanism's absence; Phase 3 refuters verify claims the spec makes, not promises made without a mechanism, and build/review check diff-against-spec, never spec-against-goal — the class survives the whole pipeline; user-attested, source spec not re-executed) | checklist-gap | plan | `tests/goal-mechanism-audit.test.js` | 6.15.2 |
 
 ## Rejected findings
 
@@ -51,6 +52,19 @@ matches on the ID/signature here and skips them. Corroboration from a second hos
   reference semantics no mechanical review check reproduces; the ledger shows the fix-delta
   review structurally sound (smoke pass, 0 skips). Retained as density signal on the review
   surface; a second-host escape through a fix-delta CLEAN reopens.
+- **JJ-20260720-02/03/04** (same Fable hardening-review brief as JJ-20260720-01): the
+  brief's three heavier companion proposals, rejected 2026-07-20. (02) per-spec
+  escape-ledger worklist — the planner instantiating every recorded failure shape per run
+  charges every future plan O(ledger) forever and decays into rubber-stamp "why it can't
+  apply" prose (the failure mode that retired the refutation filter); the intent already
+  ships as escape `preventedBy` deterministic checks. (03) runtime-behavior spike trigger —
+  no observed escape in the class; the existing Phase 1.5 shape trigger covers
+  dependency-adjudicated claims, and "load-bearing runtime assumption" is felt-uncertainty
+  wording the trigger doctrine explicitly forbids; reopens when a runtime-behavior escape
+  lands. (04) optional Fable T3 mechanism-audit pass — an expensive-model dispatch designed
+  to converge on finding nothing is the retired mandatory-T3-checkpoint shape; redundant
+  whenever the planner was already Fable/Opus. Corroboration from a recorded escape reopens
+  any of the three.
 - **ZUBU-20260717-01** (zubu-menu escape 2026-07-17, `preventedBy: runtime-leg`): hard
   defect in `migration/src/strip-orderrank.ts` after review `wf_3f0cf1f0-06d`. Rejected
   2026-07-19: that review returned SURVIVORS (1 survived, 1 waived, 0 fixes dispatched) —

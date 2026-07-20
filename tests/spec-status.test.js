@@ -113,6 +113,33 @@ test('a wrapped Depends on list does not silently drop dependencies', () => {
   assert.match(r.stdout, /02/, 'names the dependency that wrapped')
 })
 
+test('lettered ad-hoc briefs (04b between 04 and 05) are first-class brief ids', () => {
+  const dir = host({
+    briefs: {
+      '01-auth.md': BRIEFS['01-auth.md'],
+      '01b-sso.md': '# 01b — SSO\n\nPhase: P0 · Depends on: 01 · Primary workspaces: api\n',
+      '02-billing.md': '# 02 — Billing\n\nPhase: P0 · Depends on: 01b · Primary workspaces: api\n',
+    },
+    specs: {
+      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
+      '20260705/01-sso.md': 'date: 2026-07-05\nstatus: done\nbrief: 1B-sso',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--json'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const out = JSON.parse(r.stdout)
+  const by = Object.fromEntries(out.briefs.map(b => [b.num, b.status]))
+  assert.deepStrictEqual(by, { '01': 'done', '01b': 'done', '02': 'unplanned' },
+    'the lettered brief registers and any brief: spelling (1B-sso) normalizes onto it')
+  assert.strictEqual(out.anomalies.filter(a => a.kind === 'orphan-stamp').length, 0,
+    'a spec stamped with a lettered brief must not be reported as an orphan stamp')
+  assert.strictEqual(out.anomalies.filter(a => a.kind === 'out-of-order').length, 0,
+    '01b sits between 01 and 02, not after the moved briefs — ordering must handle the letter')
+
+  const pre = runNode(SCRIPT, ['--root', dir, '--brief', '2'])
+  assert.strictEqual(pre.status, 0, 'brief 02 depends on lettered 01b, which is done: ' + pre.stdout)
+})
+
 test('open specs carry the [design] marker so the renderer can route to /spec:design', () => {
   const dir = host({
     briefs: {},

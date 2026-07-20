@@ -15,6 +15,18 @@
 const fs = require('fs')
 const path = require('path')
 
+// Brief ids are NN plus an optional letter suffix — ad-hoc briefs slot between neighbors
+// as 04a, 04b, … Normalize any spelling (4b, 04B, 04b-auth) to the canonical zero-padded
+// lowercase id; briefOrd maps ids to a sortable number where 04 < 04a < 04b < 05.
+function normBrief(v) {
+  const m = String(v).trim().match(/^(\d+)([A-Za-z]?)(?:-.*)?$/)
+  return m ? m[1].padStart(2, '0') + m[2].toLowerCase() : String(v).trim()
+}
+function briefOrd(num) {
+  const m = num.match(/^(\d+)([a-z]?)$/)
+  return m ? Number(m[1]) + (m[2] ? (m[2].charCodeAt(0) - 96) / 100 : 0) : NaN
+}
+
 let root = '.'
 let json = false
 let briefFilter = null
@@ -22,7 +34,7 @@ const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--root') root = argv[++i]
   else if (argv[i] === '--json') json = true
-  else if (argv[i] === '--brief') briefFilter = String(argv[++i]).padStart(2, '0')
+  else if (argv[i] === '--brief') briefFilter = normBrief(argv[++i])
   else {
     console.error('usage: spec-status.js [--root <dir>] [--json] [--brief NN]')
     process.exit(2)
@@ -66,7 +78,7 @@ for (const file of walkMd(path.join(root, 'specs'))) {
   specs.push({
     path: path.relative(root, file),
     status: fm.status,
-    brief: fm.brief ? fm.brief.padStart(2, '0') : null,
+    brief: fm.brief ? normBrief(fm.brief) : null,
     area: fm.area || null,
     date: fm.date || null,
     design: fm.design === 'true',
@@ -80,7 +92,7 @@ const roadmapDir = path.join(root, 'docs/roadmap')
 const briefs = []
 if (fs.existsSync(roadmapDir)) {
   for (const f of fs.readdirSync(roadmapDir).sort()) {
-    const m = f.match(/^(\d+)-(.+)\.md$/)
+    const m = f.match(/^(\d+[A-Za-z]?)-(.+)\.md$/)
     if (!m || f === '00-overview.md') continue
     const text = fs.readFileSync(path.join(roadmapDir, f), 'utf8')
     // Header fields ride `·`-separated lines under the H1 and may wrap mid-list, so flatten
@@ -90,11 +102,11 @@ if (fs.existsSync(roadmapDir)) {
     const dep = head.match(/Depends on:\s*([^·]*?)\s*(?:·|$)/)
     const phase = head.match(/Phase:\s*(P\d+)/)
     briefs.push({
-      num: m[1].padStart(2, '0'),
+      num: normBrief(m[1]),
       file: path.join('docs/roadmap', f),
       name: m[2],
       phase: phase ? phase[1] : null,
-      depends_on: dep ? (dep[1].match(/\d+/g) || []).map(n => n.padStart(2, '0')) : [],
+      depends_on: dep ? (dep[1].match(/\d+[A-Za-z]?/g) || []).map(normBrief) : [],
     })
   }
 }
@@ -132,9 +144,9 @@ for (const b of briefs) {
 // Sequence-order skip: an earlier unplanned brief sitting below any later brief that moved.
 const moved = briefs.filter(b => b.status !== 'unplanned')
 if (moved.length) {
-  const maxMoved = moved.reduce((m, b) => Number(b.num) > Number(m.num) ? b : m).num
+  const maxMoved = moved.reduce((m, b) => briefOrd(b.num) > briefOrd(m.num) ? b : m).num
   for (const b of briefs) {
-    if (b.status === 'unplanned' && Number(b.num) < Number(maxMoved) && !anomalies.some(a => a.detail.includes(`dependency ${b.num} `))) {
+    if (b.status === 'unplanned' && briefOrd(b.num) < briefOrd(maxMoved) && !anomalies.some(a => a.detail.includes(`dependency ${b.num} `))) {
       anomalies.push({ kind: 'out-of-order', detail: `brief ${b.num} (${b.name}) is unplanned while later brief ${maxMoved} has moved — deliberate reordering or a skip; if it still matters: /spec:plan ${b.file}` })
     }
   }
@@ -156,7 +168,7 @@ for (const s of specs) {
 // Whole-cell match only: a brief legitimately NAMED "mark-as-done flow" is not drift.
 const overview = path.join(roadmapDir, '00-overview.md')
 if (fs.existsSync(overview)) {
-  const rows = fs.readFileSync(overview, 'utf8').split('\n').filter(l => /^\|\s*\d+\s*\|/.test(l))
+  const rows = fs.readFileSync(overview, 'utf8').split('\n').filter(l => /^\|\s*\d+[A-Za-z]?\s*\|/.test(l))
   const STATUSY = /^(?:[✅✔❌🟢🟠]\s*)?(planned|unplanned|done|in.?progress|in.?flight|shipped|completed?|wip|todo)[.!]?$|^[✅✔❌🟢🟠]$/i
   const cells = rows.flatMap(l => l.split('|').map(c => c.trim())).filter(c => STATUSY.test(c))
   if (cells.length) {

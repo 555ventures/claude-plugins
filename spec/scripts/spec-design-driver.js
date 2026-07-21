@@ -59,7 +59,7 @@ const repoRoot = (() => {
 const configPath = path.join(repoRoot, '.claude/spec.config.json')
 let config = {}
 try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')) } catch (e) { die('cannot read ' + configPath + ' — run /spec:init first (' + e.message + ')') }
-// Legacy key mapping (shared § Design Stage)
+// Legacy key mapping (shared § Design Canon)
 const design = config.design || (config.storybook ? { tool: 'storybook', command: config.storybookCommand, storyFormat: 'CSF3 stories' } : null)
 if (!design) die('host config declares no design block (nor legacy storybook keys) — the design stage does not apply to this repo; STOP')
 

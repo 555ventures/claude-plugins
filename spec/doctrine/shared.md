@@ -11,7 +11,7 @@ builds features inside those decisions:
 
 `/spec:genesis-architect` (stack + structure + scaffold + roadmap) → `/spec:genesis-explore`
 (fresh UX research → rendered candidate funnel → the user picks the design direction — § Design
-Stage, genesis.md § Genesis: Explore Stage) → `/spec:genesis-design` (ratifies the winner's
+Canon, genesis.md § Genesis: Explore Stage) → `/spec:genesis-design` (ratifies the winner's
 tokens as canon; authors doctrine + category-only rules) → `/spec:init` (grounds the now-real
 repo: config, rules, agents; it ends by invoking `/spec:enforce`) → `/spec:plan` (Fable) →
 `/spec:design` (optional, UI specs in design-capable hosts) → `/spec:build` (Sonnet + `wf-build`
@@ -36,7 +36,7 @@ The pipeline is process; the repo supplies grounding. Two host files, both creat
 
 - **`.claude/spec.config.json`** — machine-readable knobs: `gateCommand`, `testCommand`,
   `setupCommand`, `patternsScript`, optional `driftScript`, optional `design` block
-  (component-catalog stage — see § Design Stage), `layerGroups`, `agentMap` (+ optional
+  (component-catalog stage — see § Design Canon), `layerGroups`, `agentMap` (+ optional
   `routing` hints), `pipelineRules`, the optional `enforcementManifest`/`rulesEnforcementHash`
   enforcement stamps (§ Rule Enforcement), plus the `contractHash`/`generatedBy` drift stamps
   (§ Grounding Drift).
@@ -242,9 +242,10 @@ Enforced by the plugin's `spec-state-gate.sh` (UserPromptSubmit) — invoking `/
 `/spec:build`, or `/spec:review` against a spec in the wrong state is blocked before the model
 sees it.
 
-## Design Stage (hosts with a component catalog)
+## Design Canon (mocks, tokens, harness)
 
-The stage is tool-agnostic; the host config's `design` block declares the catalog:
+The design stage runs only on hosts with a component catalog. The stage is tool-agnostic; the
+host config's `design` block declares the catalog:
 
 ```jsonc
 "design": {
@@ -271,6 +272,11 @@ before build starts. Build then treats the approved components as done inputs �
 the user's eyes gate UI rendering; TDD gates logic. Skipping design on a `design: true` spec
 is the user's call, not the model's. Hosts without a catalog never set the flag; the stage
 simply never runs.
+
+**Legacy keys:** host configs may still say `storybook: true` + `storybookCommand`, and older
+specs may carry the `storybook:` frontmatter flag. Read these as
+`design: {tool: "storybook", command: <storybookCommand>, storyFormat: "CSF3 stories"}` and
+`design: true` respectively — same semantics, no behavioral difference.
 
 **Local mock canon (the `design/` dir).** Mocks are **repo files** — plain HTML on the repo's
 own tokens — not exports from an external tool. The dir contract (created by
@@ -314,6 +320,13 @@ own tokens — not exports from an external tool. The dir contract (created by
 Because mock and repo share token files byte-for-byte, `matches-canon` is true **by
 construction** — the extraction-reconciliation economy (harvest literals, near-match dedup,
 fork adjudication on values) collapses to the rare genuinely-new role.
+
+**Coverage ledger (definition).** `.claude/design-coverage.json` is the repo-level record of
+which mock regions specs have **bound** — written by `/spec:design` when a design is marked
+approved, read by the atlas and `/spec:sketch` to legitimize mocks and to tell later briefs
+what part of a screen remains unbound. Claims are per-region `"<surface>#<region>"` refs
+recorded under the claiming spec's id — never whole-screen. Mechanics live in § Design
+Binding Pipeline.
 
 **Mock authority has a lifecycle — it expires at `built`.** While a surface is being designed
 and built (sketch → ratified → approved → bound; **ratified** — direction confirmed at roadmap
@@ -361,22 +374,12 @@ against the screen — the rules were authored falsifiable with numeric ALWAYS/N
 precisely so a checker who wasn't in the room can verify them — and files violations citing rule
 IDs ("UX-7: max one primary CTA; this screen has three"). Doctrine taste that never became a
 checkable rule, token, or lint is advisory by definition; relying on an authoring session to
-*remember* psychology is not an enforcement mechanism. Copy in mocks is
+*remember* psychology is not an enforcement mechanism. Any mock-authoring or mock-editing
+pass, in any command, also applies § Design Authoring Contracts' grounded-vs-taste rules at
+authoring time: a `grounded` doctrine ruling (a11y/contrast, legal/brand, destructive-action
+safety) binds the mock's values; a `taste` contradiction is recorded, never silently ratified.
+Copy in mocks is
 authored as the contract it will become: verbatim strings the fidelity gate later holds code to.
-
-**Model placement (v6 — mock-always).** The stage no longer forks on mock presence; it forks on
-**where the mock comes from**. **Mock-bound** (a `design_source` exists — usually
-`design/mocks/`): **Sonnet** end to end — binding-map transcription against `extract.json`
-behind the deterministic fidelity gate — with **Fable** consulted retainer-style only for the
-calls that are genuinely judgment: component-boundary/reuse decisions, blocked-binding rulings
-(§ Base primitives), and delta proposals against the fidelity gate. **No mock yet**: the session
-**authors the mock first** under the design harness (sketch tier, promoted on approval), records
-it as `design_source`, and proceeds mock-bound — the taste spend is the mock, small and cheap to
-iterate, never framework code. On roadmap-derived specs the mock-authoring seat is Sonnet with
-the Fable retainer (direction-level questions escalate to the atlas, where roadmap-level taste
-lives); on standalone no-roadmap specs the seat is the **session model** — the user picks it at
-invocation (Opus default; Fable when the surface warrants it). § Model Placement carries the
-placement rule.
 
 **Design canon (cross-spec consistency).** Design consistency rides the same rails as code
 consistency — a repo artifact with a read-first / reconcile-after lifecycle, never any one
@@ -402,6 +405,13 @@ session's context. Three layers, strongest enforcement first:
 3. **The living showcase catalog entry** (path named in the doctrine) — composes real
    surfaces from every landed spec; each design run extends it. Drift is visible to the
    user's eyes with zero tooling.
+
+## Design Authoring Contracts
+
+The contracts any design-authoring session honors — what binds, what yields, and what a new
+component must cost. Consumed by `/spec:design` and `/spec:genesis-design` (and read
+agent-side by `/spec:review`'s component-manifest checker); the canon they author against is
+§ Design Canon.
 
 **Grounded vs taste (mock supremacy).** Each doctrine ruling carries its **grounding**:
 `grounded` — externally-anchored (contrast/a11y, legal/brand, destructive-action safety) — or
@@ -453,13 +463,35 @@ written/extended by `/spec:design` at reconcile from its binding maps, read at
 preflight before any bind-vs-author decision. (2) Every **`author` decision** (new component
 where binding an existing one was conceivable) must record, in the binding map, the **nearest
 existing manifest entry and one line on why it fails** — absence of that field is a gate
-failure. At reconcile that justification is copied verbatim into the manifest entry's
+failure. (Binding maps exist only inside `/spec:design` — § Design Binding Pipeline;
+`/spec:genesis-design` seeds manifest entries directly — `name`, `purpose`, `props`,
+`mockRefs` — with no author-justification owed for the base primitives it lands.) At reconcile that justification is copied verbatim into the manifest entry's
 `authorJustification` — the binding maps die with the design sidecar, so the manifest is the
 durable carrier — and its *content* is verified by `/spec:review`'s component-manifest check as
 an execution-grounded finding (including "new entry near-duplicates an existing entry", a
 name/purpose comparison a cheap model does reliably). The point is the gradient: creating a
 component must cost strictly more than reusing one — the same inversion that makes the token
 near-match rule work. New components are never forbidden; unjustified ones are.
+
+## Design Binding Pipeline (/spec:design)
+
+How `/spec:design` turns a mock into components: model placement, source fetch/extraction,
+skeleton binding maps, the wf-design expansion, and the deterministic fidelity gate. Only
+`/spec:design` acts on this section.
+
+**Model placement (v6 — mock-always).** The stage no longer forks on mock presence; it forks on
+**where the mock comes from**. **Mock-bound** (a `design_source` exists — usually
+`design/mocks/`): **Sonnet** end to end — binding-map transcription against `extract.json`
+behind the deterministic fidelity gate — with **Fable** consulted retainer-style only for the
+calls that are genuinely judgment: component-boundary/reuse decisions, blocked-binding rulings
+(§ Base primitives), and delta proposals against the fidelity gate. **No mock yet**: the session
+**authors the mock first** under the design harness (sketch tier, promoted on approval), records
+it as `design_source`, and proceeds mock-bound — the taste spend is the mock, small and cheap to
+iterate, never framework code. On roadmap-derived specs the mock-authoring seat is Sonnet with
+the Fable retainer (direction-level questions escalate to the atlas, where roadmap-level taste
+lives); on standalone no-roadmap specs the seat is the **session model** — the user picks it at
+invocation (Opus default; Fable when the surface warrants it). § Model Placement carries the
+placement rule.
 
 **Claude Design as a source (escape hatch, read-only).** The pipeline's mocks are authored
 locally (design harness above); **Claude Design** (`claude.ai/design`) remains a supported
@@ -551,19 +583,6 @@ when the mock still holds authority (pre-`built`; see the mock-authority lifecyc
 Claude Design is **strictly opt-in**: `/spec:design` engages this path **only** when a spec sets
 `design_source`, and `DesignSync` being unavailable is an error **only** then. With no
 `design_source`, nothing is loaded or fetched and the design stage is byte-for-byte unchanged.
-
-**Legacy keys:** host configs may still say `storybook: true` + `storybookCommand`, and older
-specs may carry the `storybook:` frontmatter flag. Read these as
-`design: {tool: "storybook", command: <storybookCommand>, storyFormat: "CSF3 stories"}` and
-`design: true` respectively — same semantics, no behavioral difference.
-
-**Two ways the design canon is established** (same three-layer artifacts, different source of
-taste): the genesis pair — `/spec:genesis-explore` *picks* a direction from rendered candidates
-and `/spec:genesis-design` *ratifies* it (winner's tokens verbatim; doctrine + rules authored
-around them); and `/spec:design`, which
-builds a hardened spec's UI inside an already-established doctrine (**spec-coupled**, bound to a
-`design_source` mock that becomes read-first canon
-for that spec — locally authored, or from the Claude Design escape hatch).
 
 ## Design Atlas
 
@@ -659,7 +678,8 @@ Every `Agent` call sets `model:` explicitly. Never inherit.
   roadmap brief behind it there is no atlas seat where direction was already judged, so the user
   picks the seat at invocation — Opus is the cost-rational default, Fable when the surface
   warrants it. Roadmap-derived specs stay the ordinary rule (Sonnet resident, Fable consulted;
-  direction-level questions escalate to the atlas) — see § Design Stage for the split.
+  direction-level questions escalate to the atlas) — the split in full lives in § Design
+  Binding Pipeline, loaded only by `/spec:design`; this bullet is the self-contained rule.
 - **`/spec:enforce` runs on Opus.** Classifying a host's rule surfaces into the enforcement
   taxonomy and choosing category→enforcer mappings against a live stack is judgment-adjacent
   work sitting outside the build/review loop; its workers and sweeps stay Sonnet/Haiku.

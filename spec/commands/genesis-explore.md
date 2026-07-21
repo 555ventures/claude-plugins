@@ -39,7 +39,7 @@ state gate blocks this command until `architect: scaffold-complete`; also verify
    desktop tool → desktop+tablet), confirm themes + viewports with the user in one
    `AskUserQuestion`, and write it from the `design-targets.json` template — viewports ordered
    **most-constrained first** (the first entry is the draft framing). The funnel runs
-   **matrix-at-approval** (shared § Design Stage): every candidate is built and judged on the
+   **matrix-at-approval** (shared § Design Canon): every candidate is built and judged on the
    draft framing; only the picked winner pays the matrix bill.
 
 ## Phase 1 — Fresh UX research
@@ -84,7 +84,7 @@ state gate blocks this command until `architect: scaffold-complete`; also verify
    together; `model: "sonnet"` explicit). Each builds `design/explore/r0-<position>/` —
    `tokens.css` (its own, tokens-as-code from birth) + `tile.html` (root
    `data-screen-label`, links `./tokens.css`) — under the design harness (shared § Design
-   Stage): author → `design-atlas.js check` → render/screenshot/critique when a browser is
+   Canon): author → `design-atlas.js check` → render/screenshot/critique when a browser is
    available. Tiles target the **draft framing only** — the most-constrained declared viewport,
    light theme (cheap by design; the matrix bill lands on the winner alone, after the pick). Agents receive **paths** (research brief, positions.md, stack descriptor), never
    inlined prose.
@@ -109,7 +109,7 @@ state gate blocks this command until `architect: scaffold-complete`; also verify
    screenshot** of the signature screen, surfaced beside the gallery — dark can invalidate a
    palette, and at n=2 the insurance is nearly free (genesis.md § Explore Stage). Harness loop
    mandatory; session critiques each round (this is the Fable seat earning its keep). Before
-   each finalist reaches the user, run the **rule-checklist pass** (shared § Design Stage): a
+   each finalist reaches the user, run the **rule-checklist pass** (shared § Design Canon): a
    Sonnet checker walks the research-brief's admitted rules against each screen, citing rule
    IDs; violations go back to the builder.
 2. **Persona walkthroughs:** for each finalist, spawn walkthrough agents primed with the
@@ -127,7 +127,7 @@ state gate blocks this command until `architect: scaffold-complete`; also verify
    `tokens.css` — gated by `node <design-atlas> check --matrix design/explore/r1-<winner>`;
    matrix screenshots (each viewport, both themes on the draft framing) critiqued by the
    session, then shown to the user for the **fast matrix confirm** (approval is two-step —
-   shared § Design Stage; the user approved a direction, not sight-unseen adaptations of it).
+   shared § Design Canon; the user approved a direction, not sight-unseen adaptations of it).
    Mechanical fidelity work: it changes how the winner adapts, never what it is — a direction
    question surfacing here goes back to the user, not into the expansion. Set
    `explore: picked`. Commit.

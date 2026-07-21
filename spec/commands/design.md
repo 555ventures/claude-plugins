@@ -6,7 +6,7 @@ argument-hint: <spec path> [claude.ai/design URL | local mockup file/dir]
 # Spec Design: Driver-Stepped Plan + Implement + Catalog Iteration
 
 For UI-bearing specs (`design: true`) in hosts whose config declares a `design` block (component
-catalog — shared § Design Stage). Sits between `/spec:plan` and `/spec:build`: authors the
+catalog — shared § Design Canon). Sits between `/spec:plan` and `/spec:build`: authors the
 foundation + real, **kept** stateless components + catalog entries by **expanding pre-authored
 skeletons**, lets the user iterate in the running catalog, then reconciles the spec and sets
 `designed: YYYY-MM-DD`. Build treats these components as done inputs.
@@ -33,12 +33,12 @@ via `wf-design`.
 
 **Mock-authoring preamble (no `design_source` anywhere).** Taste is spent here, in a file
 cheap to iterate — never directly in framework code. Author `design/mocks/<label>.html` for
-each of the spec's UI surfaces under the **design harness** (shared § Design Stage): plain
+each of the spec's UI surfaces under the **design harness** (shared § Design Canon): plain
 HTML consuming `design/tokens.css` by role, root `data-screen-label` per surface, real copy in
 its final register (it becomes the fidelity contract), grounded in the spec's UI section +
 doctrine + `docs/design/research-brief.md` (when present). If `design/targets.json` is missing,
 create it first (archetype-derived defaults from the `design-targets.json` template, one
-confirm with the user). Then the staged loop — **matrix-at-approval** (shared § Design Stage),
+confirm with the user). Then the staged loop — **matrix-at-approval** (shared § Design Canon),
 which is what keeps iteration cheap:
 
 1. **Draft to direction approval.** Draft the mock on the **draft framing** — the
@@ -46,7 +46,7 @@ which is what keeps iteration cheap:
    (`spec-paths design-atlas` → `node <atlas> check design/mocks/<label>.html`) and the
    render→screenshot→critique loop, then the **rule-checklist pass** (a Sonnet checker walks
    the research-brief's admitted rules against the screen, citing rule IDs — shared § Design
-   Stage). Iterate with the user — serve the file or point at the atlas — to direction
+   Canon). Iterate with the user — serve the file or point at the atlas — to direction
    approval.
 2. **Matrix expansion pass** (only once the direction is approved). Media queries + viewport
    meta, dark via the tokens.css theme block, one responsive file, never per-device variants —
@@ -141,7 +141,7 @@ next step (§ Console Output Style).
 - Tokens and the design doctrine are **binding canon** — extending is normal, contradicting is a
   fork, adjudicated via the driver's steps, never silently overridden.
 - Components built here are **real and kept**; `/spec:build` wires them, never rebuilds them.
-- **Component manifest discipline (shared § Design Stage).** Read `design/components.json` at
+- **Component manifest discipline (shared § Design Authoring Contracts).** Read `design/components.json` at
   preflight, before any bind-vs-author decision. Every `author` decision records the nearest
   existing manifest entry and one line on why it fails — a missing justification is a gate
   failure; `/spec:review`'s component-manifest check verifies its content against the manifest.

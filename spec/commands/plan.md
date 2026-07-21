@@ -67,7 +67,7 @@ in Phase 1.5.
   the excerpts that matter get embedded into the spec's UI/Contracts sections. Downstream
   workers never query MCPs.
 - UI-bearing spec in a design-capable host: read the design doctrine doc (config
-  `design.doctrine` — shared invariants § Design Stage) before writing the UI section; the
+  `design.doctrine` — shared invariants § Design Canon) before writing the UI section; the
   component inventory must fit the canon, and reusing existing catalog components beats
   speccing new ones.
 - Then interview the user via `AskUserQuestion` with informed options — never ask in a vacuum,
@@ -136,7 +136,7 @@ While drafting:
   enqueue helper, analytics client) with no consuming call site in the same spec or its
   `depends_on` series is mis-sliced — fold it into the consumer's spec.
 - **Set `design:`** — only in hosts whose config declares a `design` block (component
-  catalog — shared invariants § Design Stage). There: `true` for any spec with a UI section
+  catalog — shared invariants § Design Canon). There: `true` for any spec with a UI section
   whose look/feel the user should approve before build; `false` for logic-only or
   trivially-styled changes; confirm with the user when borderline. In hosts without a
   catalog, never set the flag (omit it or leave `false`). **If the planning conversation
@@ -224,7 +224,7 @@ Never silently drop a finding.
    spec file. Next:
    `/spec:design {path}` if `design: true`, else `/spec:build {path}`. If `design: true` with
    **no** `design_source`, note that `/spec:design` will author the mock first (its
-   mock-authoring preamble — shared § Design Stage); a mock already in `design/mocks/`
+   mock-authoring preamble — shared § Design Binding Pipeline); a mock already in `design/mocks/`
    (ratified by `/spec:sketch`, or swept by `/spec:atlas`) becomes the `design_source`
    starting point — record its path into the frontmatter now.
 

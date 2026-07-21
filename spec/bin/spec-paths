@@ -42,16 +42,16 @@ case "${1:-root}" in
     DOC="$ROOT/doctrine/shared.md"
     case "$CMD" in
       plan)    SECTIONS="Host Grounding|Pipeline Entry|Risk Tiers|Decomposition|State Machine|Model Placement|Decisions|Question Style|Console Output Style|MCP Policy|Canonical Docs Loop" ;;
-      design)  SECTIONS="Host Grounding|State Machine|Design Stage|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|MCP Policy" ;;
-      atlas)   SECTIONS="Host Grounding|Design Stage|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style" ;;
-      sketch)  SECTIONS="Host Grounding|State Machine|Design Stage|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style" ;;
+      design)  SECTIONS="Host Grounding|State Machine|Design Canon|Design Authoring Contracts|Design Binding Pipeline|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|MCP Policy" ;;
+      atlas)   SECTIONS="Host Grounding|Design Canon|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style" ;;
+      sketch)  SECTIONS="Host Grounding|State Machine|Design Canon|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style" ;;
       build)   SECTIONS="Host Grounding|Risk Tiers|State Machine|Model Placement|Escalation Contract|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|MCP Policy" ;;
       review)  SECTIONS="Host Grounding|Risk Tiers|State Machine|Runtime Verification|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|Canonical Docs Loop" ;;
       release) SECTIONS="Host Grounding|Runtime Verification|Release Stage|Feedback Loop|Model Placement|Decisions|Question Style|Console Output Style|Canonical Docs Loop" ;;
       enforce) SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Model Placement|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment" ;;
       genesis-architect) SECTIONS="Host Grounding|Pipeline Entry|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban|MCP Policy" ;;
-      genesis-explore)   SECTIONS="Design Stage|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban" ;;
-      genesis-design)    SECTIONS="Design Stage|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment" ;;
+      genesis-explore)   SECTIONS="Design Canon|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban" ;;
+      genesis-design)    SECTIONS="Design Canon|Design Authoring Contracts|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment" ;;
       status)  SECTIONS="Host Grounding|State Machine|Question Style|Console Output Style" ;;
       escape)  SECTIONS="Host Grounding|Feedback Loop|Question Style|Console Output Style" ;;
       doctor)  SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Runtime Verification|Feedback Loop|Risk Tiers|State Machine|Question Style|Console Output Style" ;;

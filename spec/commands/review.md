@@ -109,7 +109,8 @@ checks — **two parallel Sonnet `Agent` calls, sent in the same message as (or 
 Phase 1 workflow invocation**; they are in-session checks, not `wf-review` legs, because they
 audit design artifacts the workflow's args contract deliberately doesn't carry. (Both exist
 because authoring sessions don't remember; checkers with lists do — full doctrine in shared.md
-§ Design Stage, deliberately outside this command's scoped read.)
+§ Design Canon (rule checklist) + § Design Authoring Contracts (component manifest),
+deliberately outside this command's scoped read.)
 
 - **Rule-checklist leg:** one agent walks `docs/design/research-brief.md`'s admitted rules
   (falsifiable by construction) against the spec's built screens/bound mocks, citing rule IDs —

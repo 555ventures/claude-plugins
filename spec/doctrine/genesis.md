@@ -204,7 +204,7 @@ The output is `docs/design/research-brief.md` (template: `ux-research-brief.md` 
 Mechanizable rules flow into `design-rules.json` categories at `/spec:genesis-design`; the rest
 bind the explore candidates, the persona walkthroughs, and every later mock-authoring session —
 not by being read and remembered, but through the **rule-checklist pass** (shared § Design
-Stage): a checker walks the admitted rules against every mock before direction approval and at
+Canon): a checker walks the admitted rules against every mock before direction approval and at
 review, citing rule IDs. The falsifiable phrasing above is what makes that checker possible.
 
 ## Genesis: Explore Stage (the taste funnel)
@@ -218,10 +218,10 @@ ethics/legal floor), not a direction, and its gate must be framed that way — t
 confirming constraints they can skim, not committing taste they haven't seen; direction is
 judged only on rendered tiles, and a brief edit at the cull invalidates only candidates that
 leaned on the changed rule. Before the funnel starts,
-explore declares the **target matrix** (`design/targets.json`, shared § Design Stage): which
+explore declares the **target matrix** (`design/targets.json`, shared § Design Canon): which
 themes (light/dark) and viewports (mobile/tablet/desktop) this product owes, derived from the
 archetype and confirmed with the user. The whole funnel then runs **matrix-at-approval**
-(shared § Design Stage): every candidate is built and judged on the **draft framing** — the
+(shared § Design Canon): every candidate is built and judged on the **draft framing** — the
 most-constrained declared viewport, light theme — and the matrix is expanded onto the **winner
 alone, after the pick**. Drafting under constraint is what makes the expansion mechanical;
 drafting on desktop and compressing later is how a pick gets invalidated. Two rounds, a funnel:
@@ -230,7 +230,7 @@ drafting on desktop and compressing later is how a pick gets invalidated. Two ro
   to a genuinely different position (instrument vs. guide vs. ambient vs. dense-professional …).
   The session (Fable seat — taste authors the contract) writes one **position brief** per tile:
   the psychological stance, its research-brief rules, its anti-defaults. Parallel **Sonnet**
-  agents build the tiles under the design harness (shared § Design Harness); each candidate is
+  agents build the tiles under the design harness (shared § Design Canon); each candidate is
   self-contained in `design/explore/r0-<position>/` with its **own `tokens.css`** — tokens-as-code
   from birth, so the eventual winner's tokens ARE the canon (ratified, never extracted). Tiles
   are auto-gated (`design-atlas.js check`, deterministic) before the user sees anything, then
@@ -241,7 +241,7 @@ drafting on desktop and compressing later is how a pick gets invalidated. Two ro
   prototypes of the signature set (core loop, highest-consequence moment, first-run) in
   `design/explore/r1-<position>/` — interactive because motion, streaming, and latency-feel are
   half of what is being judged and a static board cannot show them. Finalists still render the
-  **draft framing only** (matrix-at-approval, shared § Design Stage) — the pick judges
+  **draft framing only** (matrix-at-approval, shared § Design Canon) — the pick judges
   direction, and only the winner pays the matrix bill — with one exception: **each finalist gets
   a single dark render** (a minimal dark block in its `tokens.css`, one screenshot) before the
   pick. Dark is the one framing that can invalidate a *palette* rather than a layout
@@ -254,7 +254,7 @@ drafting on desktop and compressing later is how a pick gets invalidated. Two ro
   expansion pass** (responsive across every declared viewport, full dark block in `tokens.css` —
   mechanical Sonnet work, `design-atlas.js check --matrix` gated, matrix screenshots critiqued,
   then shown to the user for the **fast matrix confirm** — approval is two-step, shared § Design
-  Stage) are applied to the winner only. The pick is recorded to
+  Canon) are applied to the winner only. The pick is recorded to
   `.claude/genesis/design-pick.json` (template via `spec-paths templates`): `winner`,
   `grafts: [{from, what}]`, `rejected: [{candidate, reason, salvage}]`. Rejections feed
   `/spec:genesis-design`'s `## Dissents` — a rejected direction is a recorded minority position,
@@ -353,11 +353,12 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
 - **`docs/design/research-brief.md`** (durable) — explore's fresh UX research brief
   (§ Genesis: Fresh UX Research); read again at `/spec:design` preflight and by the atlas sweep.
 - **`design/targets.json`** (durable) — explore's declared theme × viewport matrix (shared §
-  Design Stage; viewports most-constrained-first — the first entry is the draft framing).
+  Design Canon; viewports most-constrained-first — the first entry is the draft framing).
 - **`design/explore/`** (durable until design locks) — the candidate dirs, each self-contained
   with its own `tokens.css` (§ Genesis: Explore Stage).
 - **`design/components.json`** (durable) — the component manifest, seeded by genesis-design
-  with the base primitives, extended by every `/spec:design` reconcile (shared § Design Stage).
+  with the base primitives, extended by every `/spec:design` reconcile (shared § Design
+  Authoring Contracts, component manifest).
 - **`.claude/genesis/design-rules.json`** — design's output: category-only enforcement rules.
 - **`.claude/genesis/panel-results-{stage}.json`** — the aggregator's last decision package
   (written by the command from the workflow return value, **before** the AskUserQuestion round).

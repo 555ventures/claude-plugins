@@ -183,7 +183,7 @@ Author directly (taste exception — not delegated to Sonnet):
    tokens), seeded **once** here so the first overlay-bearing `/spec:design` **imports** rather than
    re-implements. The `base-primitive-containment` rule (Phase 4.4, from the template, category
    `structure`) makes import-only a build error. Seed **`design/components.json`** (shared §
-   Design Stage, component manifest) with the base primitives landed here — `name`, `purpose`,
+   Design Authoring Contracts, component manifest) with the base primitives landed here — `name`, `purpose`,
    `props`, `mockRefs` — so the first `/spec:design` run starts its bind-vs-author decisions
    against a non-empty manifest. Headless/non-visual archetypes skip this item.
 4. **Design rules** — write `.claude/genesis/design-rules.json` (template via `spec-paths templates`):

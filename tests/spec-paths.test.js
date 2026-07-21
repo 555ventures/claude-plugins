@@ -42,19 +42,31 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
     assert.ok(out.length < full.length, cmd + ' output should be a strict subset')
     assert.match(out, /## Host Grounding/, cmd + ' must keep Host Grounding')
   }
-  assert.match(run('shared-for', 'design'), /## Design Stage/)
+  assert.match(run('shared-for', 'design'), /## Design Canon/)
+  assert.match(run('shared-for', 'design'), /## Design Authoring Contracts/)
+  assert.match(run('shared-for', 'design'), /## Design Binding Pipeline/)
   assert.match(run('shared-for', 'design'), /## Design Atlas/)
   assert.match(run('shared-for', 'atlas'), /## Design Atlas/)
+  assert.match(run('shared-for', 'atlas'), /## Design Canon/,
+    'atlas consumes bound/approved semantics — the ledger definition lives in Design Canon')
+  assert.ok(!/## Design Binding Pipeline/.test(run('shared-for', 'atlas')),
+    'atlas must not pay for the binding pipeline — design-only doctrine')
+  assert.ok(!/## Design (Binding Pipeline|Authoring Contracts)/.test(run('shared-for', 'genesis-explore')),
+    'genesis-explore loads only Design Canon of the design sections')
+  assert.match(run('shared-for', 'genesis-design'), /## Design Authoring Contracts/)
+  assert.ok(!/## Design Binding Pipeline/.test(run('shared-for', 'genesis-design')),
+    'genesis-design authors canon, never binds specs')
   assert.match(run('shared-for', 'build'), /## Escalation Contract/)
-  assert.ok(!/## Design Stage/.test(run('shared-for', 'review')), 'review must not pay for Design Stage')
+  assert.ok(!/## Design (Canon|Authoring Contracts|Binding Pipeline)/.test(run('shared-for', 'review')),
+    'review must not pay for design doctrine')
   assert.match(run('shared-for', 'review'), /## Runtime Verification/,
     'review pays for the boot-leg doctrine — CLEAN requires it')
   assert.match(run('shared-for', 'release'), /## Release Stage/)
   assert.match(run('shared-for', 'release'), /## Runtime Verification/)
   assert.match(run('shared-for', 'escape'), /## Feedback Loop/,
     'escape IS the Emit leg — it writes preventedBy rows and Gotchas tags')
-  assert.ok(!/## Design Stage/.test(run('shared-for', 'doctor')),
-    'doctor must not pay for Design Stage — check 8 only verifies design files exist')
+  assert.ok(!/## Design (Canon|Authoring Contracts|Binding Pipeline)/.test(run('shared-for', 'doctor')),
+    'doctor must not pay for design doctrine — check 8 only verifies design files exist')
   assert.match(run('shared-for', 'doctor'), /## Grounding Drift/)
   assert.match(run('shared-for', 'doctor'), /## Rule Enforcement/)
 })

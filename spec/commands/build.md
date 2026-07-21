@@ -31,7 +31,7 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
 1. **Frontmatter gate** (the `spec-state-gate` hook also enforces this): `status: hardened` →
    proceed; `implementing` → this is a resume (workflow caching makes it cheap — reuse the prior
    `runId` if known); anything else → STOP with the required command. In design-capable hosts
-   (config `design` block, or legacy `storybook: true` — shared invariants § Design Stage):
+   (config `design` block, or legacy `storybook: true` — shared invariants § Design Canon):
    `design: true` without `designed:` → ask the user whether to run `/spec:design` first or
    skip it deliberately.
 

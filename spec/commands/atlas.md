@@ -43,11 +43,14 @@ user's input; `sweep` as an argument only skips the gap confirmation.
 2. **Gaps in the report → offer the sweep** ("N declared surfaces have no mock — fill them at
    sketch tier?"). Yes → run the sweep below. Invoked as `/spec:atlas sweep`, skip the question
    and run it directly.
-3. Serve it: `python3 -m http.server` (or the host's equivalent) from the repo root in the
-   background, and give the user `http://localhost:<port>/design/atlas/index.html`. Serving
-   (not `file://`) is what lets a local annotation MCP anchor to it — and what lets the page's
-   matrix toolbar (present when `design/targets.json` exists) flip every frame across the
-   declared viewports and themes; point the user at it for per-device / dark-mode review.
+3. Report the output path (`design/atlas/index.html`) — the user opens the file themselves
+   (e.g. from VS Code); do **not** start a server or open a browser unprompted. Serve
+   (`python3 -m http.server` or the host's equivalent, backgrounded from the repo root) only
+   when the user asks or when a local annotation MCP will anchor to the page — serving (not
+   `file://`) is what enables MCP anchoring, same-origin frame measurement, and the theme
+   buttons of the matrix toolbar (present when `design/targets.json` exists — on `file://` it
+   degrades gracefully to viewport-only); point the user at it for per-device / dark-mode
+   review.
 4. **Annotation loop (when the user leaves notes):** if a local annotation MCP is connected
    (e.g. Vibe Annotations / Agentation — discover via ToolSearch, never assume), poll/receive
    its anchored notes; otherwise take changes in chat against screen labels. When several notes

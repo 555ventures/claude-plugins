@@ -619,7 +619,9 @@ Generation is **zero-token**: a script walk, never a model pass.
   will drift before build and get re-touched at promotion; that is the accepted price of early
   whole-product reviewability (the declarations and review rulings survive even where pixels
   don't).
-- **`/spec:atlas`** is the human loop around the script: regenerate, serve locally, run the
+- **`/spec:atlas`** is the human loop around the script: regenerate, report the file path
+  (serving is opt-in — only on request or for annotation-MCP anchoring; never auto-open a
+  browser), run the
   **sketch-tier gap sweep** (cheap harness-authored sketches for gap cards, so the whole picture
   always exists), and process **annotations** — the user pins notes on the served atlas via a
   local annotation MCP (e.g. Vibe Annotations / Agentation; anchored JSON in, harness edits the
@@ -832,7 +834,9 @@ rows keep their rigorous, machine-parseable style; this section governs only the
 - **Close the loop.** A report never ends with a bare diagnosis, a symmetric options list,
   or an open "what next?" — it closes with exactly **one** recommended next action (usually
   a command), with a one-phrase why. Diagnosis whose next step isn't named is an unfinished
-  report.
+  report. The recommendation is derived, never inferred: before naming a command, read the
+  target's on-disk state (`status:` frontmatter, or `/spec:status`) and name the command
+  that state admits — adjacency (the dependent spec, the next-numbered brief) is not state.
 
 ## Workflows Encode Shape, Not Judgment
 

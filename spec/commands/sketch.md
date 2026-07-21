@@ -59,8 +59,11 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    to the atlas sweep (shared § Design Atlas: sketch `data-status`, real copy register, token
    roles, grounded in the brief + research brief + doctrine + tokens; parallel dispatch, paths
    not prose). Existing mocks are never re-authored.
-4. **Serve.** `node {atlas} build`, then serve from the repo root and give the user the atlas
-   URL — the map shows everything, but this session's iteration scope stays the one brief.
+4. **Build & report.** `node {atlas} build`, then report the output path
+   (`design/atlas/index.html`) — the user opens the file themselves (e.g. from VS Code); do
+   **not** start a server or open a browser. Serve from the repo root only if the user asks or
+   a local annotation MCP needs same-origin anchoring. The map shows everything, but this
+   session's iteration scope stays the one brief.
 5. **The loop.** Take changes in chat against screen labels, or via a local annotation MCP
    (discover via ToolSearch, never assume). Group notes by surface, present the plan, then
    **triage every change by root cause before touching anything** — the shared triage (shared

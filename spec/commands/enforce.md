@@ -143,6 +143,13 @@ exists, or a rule with no enforceable clause — `AskUserQuestion` PROPOSING can
 appropriate rule doc. Never auto-author rules; a dismissed question leaves the gap recorded, not
 filled.
 
+One gap class to hunt explicitly: **fail-silent reference-resolution layers** — any layer where
+an invalid string reference degrades silently instead of erroring (an open-vocabulary
+style-utility compiler, a styling variable with a silent fallback, a message-catalog key, a
+dynamic asset lookup). These pass typecheck, lint, and string-fidelity gates while rendering
+wrong output; for each such layer the stack has, propose a rule that every static reference must
+resolve, so Phases 2–4 discover a resolution check for it.
+
 ## Phase 6 — Record provenance + stamp
 
 Write `.claude/rules/enforcement.json` — the enforcement manifest (one entry per cell):

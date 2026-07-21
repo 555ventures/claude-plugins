@@ -37,7 +37,7 @@ test('shared-for: every mapped section name still exists as a shared.md heading'
 
 test('shared-for: scoped output carries its sections and is smaller than the full doc', () => {
   const full = run('shared-for', 'no-such-command')
-  for (const cmd of ['plan', 'design', 'build', 'review', 'release', 'enforce', 'atlas', 'sketch']) {
+  for (const cmd of ['plan', 'design', 'build', 'review', 'release', 'enforce', 'atlas', 'sketch', 'escape', 'doctor']) {
     const out = run('shared-for', cmd)
     assert.ok(out.length < full.length, cmd + ' output should be a strict subset')
     assert.match(out, /## Host Grounding/, cmd + ' must keep Host Grounding')
@@ -51,4 +51,10 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
     'review pays for the boot-leg doctrine — CLEAN requires it')
   assert.match(run('shared-for', 'release'), /## Release Stage/)
   assert.match(run('shared-for', 'release'), /## Runtime Verification/)
+  assert.match(run('shared-for', 'escape'), /## Feedback Loop/,
+    'escape IS the Emit leg — it writes preventedBy rows and Gotchas tags')
+  assert.ok(!/## Design Stage/.test(run('shared-for', 'doctor')),
+    'doctor must not pay for Design Stage — check 8 only verifies design files exist')
+  assert.match(run('shared-for', 'doctor'), /## Grounding Drift/)
+  assert.match(run('shared-for', 'doctor'), /## Rule Enforcement/)
 })

@@ -14,7 +14,9 @@ structural drift. Never regenerate wholesale, and never touch files outside the 
 layer. With `--fix`, the targeted-patch path extends to **doctrine repair** (below) — still
 evidence-cited, still per-patch approved, never structural.
 
-**Intended model: Sonnet.** Run `spec-paths shared` and Read that file first. If
+**Intended model: Sonnet.** Run `spec-paths shared-for doctor` and read its output (the
+shared invariants scoped to this command — doctor's checks are enumerated and mechanical;
+they never consume the design-stage process doctrine). If
 `.claude/spec.config.json` is missing entirely, STOP — the repo was never initialized;
 the answer is `/spec:init`, not a drift report.
 

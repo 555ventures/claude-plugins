@@ -34,7 +34,7 @@ case "${1:-root}" in
   shared-for)
     # Print the shared-invariants CONTENT scoped to one command — only the `## ` sections that
     # command consumes, so a session never pays for doctrine it cannot act on. `spec-paths shared`
-    # (the full-doc path) stays for init/doctor and for humans. Section names must match shared.md
+    # (the full-doc path) stays for init (it generates what the whole doctrine consumes) and for humans. Section names must match shared.md
     # headings exactly; an unknown command falls back to the full document (fail-open, never less
     # doctrine than intended). Question Style + Console Output Style ride on every list: every
     # command asks questions and reports.
@@ -53,6 +53,8 @@ case "${1:-root}" in
       genesis-explore)   SECTIONS="Design Stage|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban" ;;
       genesis-design)    SECTIONS="Design Stage|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment" ;;
       status)  SECTIONS="Host Grounding|State Machine|Question Style|Console Output Style" ;;
+      escape)  SECTIONS="Host Grounding|Feedback Loop|Question Style|Console Output Style" ;;
+      doctor)  SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Runtime Verification|Feedback Loop|Risk Tiers|State Machine|Question Style|Console Output Style" ;;
       *) cat "$DOC"; exit 0 ;;
     esac
     echo "<!-- shared invariants scoped to /spec:${CMD} — full doctrine: $DOC -->"

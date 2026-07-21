@@ -775,6 +775,14 @@ question for that reader:
   option cheapest to reverse later** — the one that locks in the least (no schema commitment,
   no published surface, no deleted artifact). If no option is clearly cheaper to reverse, the
   question survives the filter: reversibility ambiguity is itself a reason to ask.
+- **The ten-second cold test.** Before asking, apply: could a product owner — engineering
+  background, but zero context on this repo — answer correctly, in ten seconds, from the
+  question text alone? The bar is context load, not vocabulary: a genuinely technical
+  decision (a protocol, a data guarantee, a public API shape) may be asked in technical
+  terms, but a question fails when answering requires reconstructing this repo's internals
+  or holding mechanisms in mind (loading paths, allowlists, per-package runners, CI parity)
+  where an outcome framing of the same decision exists. Rewrite around what the user gains
+  or loses, or derive the answer and don't ask.
 - **Self-contained.** The question carries everything needed to answer it cold — what happened,
   why it needs a ruling now, what each answer commits to downstream. Never assume the user
   watched the run or remembers the spec.
@@ -790,12 +798,22 @@ question for that reader:
   presented for confirmation, never asked open-ended; only genuinely underivable facts become
   questions (`/spec:escape` is the template). This section governs how the questions that
   survive derivation are *phrased*, not how many there are.
+- **Derived picks are loud, never silent.** Tightening the ask-bar shifts the failure mode
+  from "asked too much" to "silently picked wrong" — the second is worse because it surfaces
+  weeks later as an escape. So every derived decision prints one console line at decision
+  time — `📌 Auto-picked <choice> — <one-line reason it was derivable> (veto anytime)` — and
+  lands in the deviations/decision log. A wrong derivation must cost the user a five-second
+  veto, not an archaeology dig.
 
-The structural floor is enforced mechanically: a PreToolUse hook
-(`scripts/question-style-gate.js`) rejects any `AskUserQuestion` whose options lack
-consequence-bearing descriptions, whose recommendation states no reason, or whose question
-text leans on code identifiers — with the rewrite rule in the rejection. Doctrine carries
-the taste; the hook guarantees the floor.
+The floor is enforced mechanically by a PreToolUse hook (`scripts/question-style-gate.js`)
+in two tiers. Tier 1 (deterministic, free): rejects options lacking consequence-bearing
+descriptions, recommendations with no stated reason, and identifier-dense question text.
+Tier 2 (judge): questions passing tier 1 are reviewed by a fast model (Haiku) against the
+ten-second cold test — verdict `rewrite` bounces mechanism-framed questions with the reason;
+verdict `derive` bounces questions the codebase/session/ledger can answer, pointing at the
+derive-and-announce path above. The judge fails open on every error path (no CLI, timeout,
+unparseable output) and is disabled with `SPEC_QUESTION_JUDGE=off`. Doctrine carries the
+taste; tier 1 guarantees the floor; tier 2 measures the concept load no regex can.
 
 ## Console Output Style (progress narration and end-of-run reports)
 
@@ -811,6 +829,10 @@ rows keep their rigorous, machine-parseable style; this section governs only the
   decoration. One per line at most.
 - **Cut, don't compress.** Low-value detail is omitted entirely, not squeezed into dense
   fragments or jargon the reader must decode.
+- **Close the loop.** A report never ends with a bare diagnosis, a symmetric options list,
+  or an open "what next?" — it closes with exactly **one** recommended next action (usually
+  a command), with a one-phrase why. Diagnosis whose next step isn't named is an unfinished
+  report.
 
 ## Workflows Encode Shape, Not Judgment
 

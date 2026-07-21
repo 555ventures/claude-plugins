@@ -366,8 +366,11 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
 - **`docs/adr/NNNN-*.md`** — architecture/design decision records (template via `spec-paths templates`).
 - **`docs/roadmap/`** (durable) — the decomposition that makes the pipeline invocable after
   setup: `00-overview.md` (sequence table, milestone gates, ops track, parking lot) plus one
-  `NN-*.md` planning brief per `/spec:plan` unit, and `deltas/` for post-genesis amendments
-  (templates: `roadmap-overview.md`, `roadmap-brief.md` via `spec-paths templates`). Briefs are
+  `NN-*.md` planning brief per `/spec:plan` unit
+  (templates: `roadmap-overview.md`, `roadmap-brief.md` via `spec-paths templates`).
+  Post-genesis amendments are ADRs with an `Applies to` list, their effects edited into the
+  named briefs at decision time (consumed briefs get a letter-suffixed successor) — no
+  side-channel amendment files; the numbered sequence is the only work queue. Briefs are
   **stable intent** hydrated into specs lazily; per-brief status is never written here — it is
   derived from specs' `brief:` frontmatter (`/spec:status`, or `/spec:doctor` check 14 for
   the audited version). Brownfield repos (no

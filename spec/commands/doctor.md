@@ -245,6 +245,20 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
     becomes visible after builds. Non-zero exit is a finding citing both sides; the fix
     routes to whichever side the ADR's ownership boundary says is wrong.
 
+17. **Roadmap amendment integrity** (only if `docs/adr/` and `docs/roadmap/` both exist) —
+    the amendment contract (adr.md template § Applies to) is bidirectional and greppable:
+    - every brief named in a post-genesis ADR's `Applies to` section carries a matching
+      `Amended by ADR-NNNN` line — a miss means a decision was recorded but never propagated,
+      the silent class that shipped an unread OAuth account-linking rule set past plan;
+    - every `Amended by ADR-NNNN` line in a brief cites an ADR whose `Applies to` names the
+      brief back — a miss is a hand edit wearing an ADR's authority;
+    - an `Applies to` row naming a brief whose specs are all `done` (check 14's derivation)
+      with no letter-suffixed successor brief in the Sequence table is surfaced as a finding:
+      the amendment has no plannable home and will never be picked up.
+    Legacy migration: a non-empty `docs/roadmap/deltas/` dir predates spec@6.18.0 — flag
+    every file in it ("fold into an amendment ADR + brief edits per the overview's rule,
+    then delete the dir"); deltas are invisible to plan and must not persist.
+
 ## Semantic spot-check — small, bounded
 
 For 2–3 agents (prioritize any with stale citations), read one cited exemplar each and

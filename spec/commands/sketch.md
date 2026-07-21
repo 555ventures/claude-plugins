@@ -48,8 +48,8 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
 
 ## The run
 
-1. **Ground.** Read the owning brief, `docs/roadmap/00-overview.md`, every delta the brief
-   cites, the design doctrine, and `design/tokens.css`. Scan `design/mocks/` for the brief's
+1. **Ground.** Read the owning brief, `docs/roadmap/00-overview.md`, every ADR its Grounding
+   cites (including `Amended by ADR-NNNN` lines), the design doctrine, and `design/tokens.css`. Scan `design/mocks/` for the brief's
    declared surfaces; derive gaps and statuses.
 2. **Bound check.** Surfaces already `bound`/`built` (coverage ledger claim) are contracts —
    changes to them route through `/spec:design`'s drift handling, never through this command.
@@ -70,15 +70,15 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    - **Structure** (surface added/removed, journey edge changed) → the brief's `surfaces` block
      FIRST, then the mock follows (create/delete/edit as implied).
    - **Intent/scope** (a capability added or dropped — "users can favorite items") → the brief's
-     Scope / Out of scope, or a `docs/roadmap/deltas/` row for amendments that cross briefs;
-     then the mock.
+     Scope / Out of scope; a change that crosses briefs is an amendment ADR (`Applies to` every
+     touched brief, effects edited into each in this session — adr.md template); then the mock.
    - **Architecture-impacting** — before applying any scope/structure change, ask: *does this
      alter what the ADRs decided or assume* (new persistence, endpoint shape, auth surface,
      real-time requirement)? If yes, never silently absorb it: name the affected or missing
-     ADR; small → write a delta and a line in the brief's **Open questions for planning** so
-     the plan interview must resolve it; contradicts an accepted ADR → recommend the ADR
-     amendment happen before this brief is planned. The brief never smuggles an unratified
-     architecture decision past `/spec:plan`.
+     ADR; small → write the amendment ADR (this brief in its `Applies to`) and a line in the
+     brief's **Open questions for planning** so the plan interview must resolve it;
+     contradicts an accepted ADR → recommend the ADR amendment happen before this brief is
+     planned. The brief never smuggles an unratified architecture decision past `/spec:plan`.
 
    Every applied round hits disk immediately — brief edit first, mock second — so stopping
    mid-session (or losing the window) loses nothing. This detection is judgment, not a grep:

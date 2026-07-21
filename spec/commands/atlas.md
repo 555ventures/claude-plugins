@@ -54,8 +54,9 @@ user's input; `sweep` as an argument only skips the gap confirmation.
    arrive together, group them by surface and present the plan before applying anything.
    **Triage every note by root cause first** (shared § Design Atlas): **mock-detail** (spacing,
    copy, emphasis) → edit the mock file; **product-understanding** (wrong surface set, missing
-   journey edge, a flow that shouldn't exist) → fix the owning brief's `surfaces` block or a
-   delta FIRST, then the mock follows — a pixel edit over a brief error leaves the brief lying
+   journey edge, a flow that shouldn't exist) → fix the owning brief's `surfaces` block FIRST
+   (cross-brief scope changes via an amendment ADR — adr.md template § Applies to), then the
+   mock follows — a pixel edit over a brief error leaves the brief lying
    to every future planning session. If a note contradicts the doctrine or a bound region
    (coverage ledger claim), that is a **fork**: `AskUserQuestion` — mock-and-spec both change
    (route through `/spec:design`'s drift handling for bound regions) or the note is withdrawn;

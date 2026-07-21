@@ -261,12 +261,14 @@ written against real code. Never pre-plan the whole roadmap into specs.
    journey edges, names and arrows only; the template documents the grammar) so the design
    atlas can render the whole-product journey and its gaps. Seed the **ops track** with external clocks (OAuth registrations, hosting
    provisioning, partner asks) and the **parking lot** with the Phase-1 "Later / Won't-this-time"
-   answers — recorded so they stop leaking into briefs; promotion out requires a delta.
+   answers — recorded so they stop leaking into briefs; promotion out requires an amendment
+   ADR applying to the receiving brief.
 2. **Confirm the sequence.** One `AskUserQuestion` round presenting the proposed sequence table
    (brief names, phases, dependencies, milestone gates) before writing files. Dismissed → STOP.
-3. **Write** `docs/roadmap/00-overview.md` + one `NN-{kebab}.md` per brief, and create
-   `docs/roadmap/deltas/` (empty, with a one-line README: post-genesis product-shape decisions
-   land here as dated amendments naming the briefs they bind). **Never write a status column** —
+3. **Write** `docs/roadmap/00-overview.md` + one `NN-{kebab}.md` per brief. Post-genesis
+   product-shape decisions are amendment ADRs whose effects are edited into the briefs they
+   name at decision time (the overview states the rule; adr.md template § Applies to) — no
+   side-channel amendment dir exists. **Never write a status column** —
    per-brief status is derived from specs' `brief:` frontmatter (`/spec:status`), not tracked.
 4. **Self-check (checklist, not a workflow):** no `depends_on` cycles; every ADR is carried by
    ≥1 brief's Grounding or is genuinely cross-cutting (note which); no two briefs claim the same

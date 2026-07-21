@@ -627,7 +627,8 @@ Generation is **zero-token**: a script walk, never a model pass.
   **Every annotation is triaged by root cause before anything is edited:** **mock-detail**
   (wrong spacing, copy, emphasis — edit the mock file) vs **product-understanding** (wrong
   surface set, missing journey edge, a flow that shouldn't exist — fix the owning brief's
-  `surfaces` block or a delta FIRST, then the mock follows). A pixel edit that papers over a
+  `surfaces` block FIRST, cross-brief scope changes via an amendment ADR, then the mock
+  follows). A pixel edit that papers over a
   brief error leaves the brief lying to every future planning session — one binding home per
   fact. Direction-level change rounds here are the Fable seat (§ Model Placement); the sweep
   itself is Sonnet behind the harness check.
@@ -636,7 +637,7 @@ Generation is **zero-token**: a script walk, never a model pass.
   rounds where the brief itself is a write target (Scope, `surfaces`, Open questions evolve
   with the mocks, brief edit first, mock second, every round to disk), an **architecture
   route** on top of the two-way triage (a design change that alters what the ADRs decided or
-  assume is flagged — delta + Open-question line, or an ADR amendment — never silently
+  assume is flagged — an amendment ADR + Open-question line — never silently
   absorbed into the brief), and an exit **coherence readout** (mock vs brief, per surface)
   whose user confirmation sets the brief's sketches to `data-status="ratified"`. Never
   required: `/spec:plan` warns on an unratified UI brief and offers it, but never blocks.

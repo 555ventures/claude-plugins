@@ -19,9 +19,13 @@ Invoke a brief as:
 ```
 
 Briefs are ordered; don't plan a brief before its `depends_on` briefs are done (or at least
-implementing with the needed surface merged). Post-genesis product-shape decisions land only
-as deltas in `deltas/` — each names the briefs it binds; read the bound delta(s) alongside a
-brief at plan time.
+implementing with the needed surface merged). **This sequence is the only to-do list** — no
+amendment may live outside it. A post-genesis product-shape decision is recorded as an ADR
+(`docs/adr/`) whose `Applies to` section names every brief it amends, and its effects are
+edited into those briefs in the same session (adr.md template § Applies to): an unplanned
+brief is edited in place and gains an `Amended by ADR-NNNN` line in Grounding; a brief whose
+specs are planned or shipped gets a letter-suffixed successor brief (`NNa-*`, depends_on NN)
+added to the Sequence table below, re-entering the numbered order.
 
 ## Sequence
 
@@ -57,7 +61,8 @@ Run `/spec:atlas` to see every declared surface, its mock, and the journey graph
 ## Parking lot (deferred ideas — not scope, not backlog)
 
 <!-- Ideas acknowledged and explicitly deferred so they stop leaking into briefs. Promotion
-     out of this list requires a delta in deltas/, not a planning-session judgment call. -->
+     out of this list requires an amendment ADR applying to the receiving brief, not a
+     planning-session judgment call. -->
 
 - { idea — one line on why it's parked }
 

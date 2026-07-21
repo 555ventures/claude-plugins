@@ -24,6 +24,19 @@ decision is needed now and what is irreversible-ish about it.}
 - {What this makes easier}
 - {What this makes harder / what we explicitly accept}
 
+## Applies to
+
+{Post-genesis amendment ADRs only — genesis-time ADRs write the literal line "None: genesis
+decision, carried by briefs' Grounding at authoring time." One row per roadmap brief this
+decision amends: `NN-{name} — {one line: what changes there}`. The propagation contract:
+the effects are edited into every listed brief **in the same session that writes this ADR**
+— never left as a pointer for later. An unplanned brief is edited in place (Scope /
+Out of scope / Open questions), gets an `Amended by ADR-{NNNN} — {one line}` line in its
+Grounding, and superseded lines are ~~struck~~ `(superseded by ADR-{NNNN})`, not deleted. A
+brief whose specs are already planned or shipped is never edited: mint a letter-suffixed
+successor brief (`NNa-{name}.md`, `Depends on: NN`) carrying the change, and list the
+successor here. /spec:doctor audits both link directions.}
+
 ## Dissents
 
 {REQUIRED — must be non-empty, or the literal line: "None: all proposers agreed on {dimension}."

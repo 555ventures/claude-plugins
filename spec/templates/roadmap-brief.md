@@ -47,10 +47,13 @@ the anti-scope-creep fence for the planning session. }
 
 ## Grounding
 
-{ The ADRs, genesis-brief sections, and deltas that bind this brief — cited by ID/path so
-the planning session Reads them. Every hard constraint in Scope should trace to one. }
+{ The ADRs and genesis-brief sections that bind this brief — cited by ID/path so the
+planning session Reads them. Every hard constraint in Scope should trace to one.
+Post-authoring amendments land here as `Amended by ADR-NNNN — { one line }`, written by the
+same session that writes the ADR (adr.md template § Applies to) — this brief stays
+self-contained; the ADR holds the why. }
 
 ## Open questions for planning
 
 - { A genuine fork or unknown the planning session must resolve — via AskUserQuestion,
-  exploration, or a spike. If a delta in deltas/ binds this brief, point at it here. }
+  exploration, or a spike. }

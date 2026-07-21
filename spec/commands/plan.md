@@ -25,8 +25,13 @@ in Phase 1.5.
 ## Phase 0 — Context check & tier
 
 0. **Roadmap brief intake** (when `$ARGUMENTS` is a roadmap brief). Read the brief, then
-   `docs/roadmap/00-overview.md` (conventions + milestone context), then every delta the brief
-   or its open-questions section cites. **Dependency check:** run
+   `docs/roadmap/00-overview.md` (conventions + milestone context), then every ADR the brief's
+   Grounding cites — including each `Amended by ADR-NNNN` line (amendments are edited into the
+   brief when the ADR is written, so the brief is self-contained; the ADR supplies the why).
+   **Unpropagated-amendment net:** grep `docs/adr/*.md` `Applies to` sections for this brief's
+   number; an ADR that names this brief with no matching `Amended by` line in the brief means
+   a decision was recorded but never propagated — fold it into the brief (with the user)
+   before drafting; never plan past it. **Dependency check:** run
    `node "$(spec-paths spec-status)" --root . --brief NN` (NN = the brief filename's number;
    the shared derivation behind /spec:status and /spec:doctor check 14). Exit 1 means a
    `Depends on` brief has no spec at `implementing`/`done`: warn the user with the script's

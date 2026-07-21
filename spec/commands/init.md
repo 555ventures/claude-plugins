@@ -309,7 +309,11 @@ every turn, which is what keeps its rules followed rather than skimmed.
   like "runtime import from a feature barrel in `stores.ts` or `*.test.ts` is **hard**",
   "raw `parseFloat` on prices is **hard**", "user-facing strings not wrapped in i18n macros",
   or "imports from `other_domain.logic` targeting anything but `types.py` is **hard**" live,
-  each with file:line-verifiable phrasing).
+  each with file:line-verifiable phrasing). **Always include the duplication calibration:**
+  three or more near-identical blocks in one diff is a finding naming the extraction —
+  batch-scoped workers never see the third repetition, so the reviewer is the first eye
+  that can (measured 3-for-3 across audited hosts: 5× copy-pasted auth-submit, 4× clone
+  provider handlers, 4× hand-rolled loggers, all through CLEAN reviews).
 - **`## Gotchas (evidence-cited)`** — write this section EMPTY, carrying nothing but a
   one-line header comment stating its contract: one line per entry; every entry must cite
   either a ledger row (spec path + runId) or a dated incident; and every entry carries a

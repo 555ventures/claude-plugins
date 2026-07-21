@@ -69,6 +69,14 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
    - every env var that gates a test suite (`skipIf`-shaped) has a provisioning path named in
      pipeline rules § Test Rules — an unsatisfiable gate variable means those suites have
      never run anywhere; flag loudly with the affected suite count.
+   - **enforcement claims in host docs resolve** — grep `docs/adr/` and `docs/canonical/`
+     for enforcement-claim phrases (`CI-verified`, `enforced by`, `gated by`, `checked in
+     CI`); each claim must map to a check that actually resolves in the `gateCommand`, the
+     CI config, or the enforcement manifest. A claim whose check doesn't exist is flagged
+     loudly with the doc line quoted: an asserted-but-unwired enforcement misleads every
+     reviewer and refuter that cites it (measured: a host ADR claimed its error-taxonomy
+     mapping was "CI-verified" — neither the mapping nor the CI step existed). Presence
+     grep only — never judge whether the check is *good*, only that it is real.
 7. **Cited references** — extract repo paths cited in the pipeline rules file, the
    convention rule files, and each generated agent (Reference Material, exemplars,
    naming-table examples); verify each exists. Stale citations are the most common drift and

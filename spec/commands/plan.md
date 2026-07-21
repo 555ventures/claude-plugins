@@ -132,6 +132,9 @@ While drafting:
   not a bigger spec: split into `##-` siblings in the same date dir, sliced by **landing
   unit** (each spec leaves the system green and shippable on its own), never by layer. Wire
   `depends_on`/`depended_on_by` and harden each; one planning session may produce the whole series.
+  **Facades follow their first consumer:** a spec that lands a wrapper/seam (queue facade,
+  enqueue helper, analytics client) with no consuming call site in the same spec or its
+  `depends_on` series is mis-sliced — fold it into the consumer's spec.
 - **Set `design:`** — only in hosts whose config declares a `design` block (component
   catalog — shared invariants § Design Stage). There: `true` for any spec with a UI section
   whose look/feel the user should approve before build; `false` for logic-only or

@@ -146,8 +146,14 @@ Repeat until no open hard forks remain:
    table). Robust software is mostly conventions-under-load, and in a greenfield repo nobody else
    ever decides them — `/spec:init` can only extract what exists. Rows (a floor, not a ceiling —
    add any convention-under-load the research surfaces): **error taxonomy** (the error shape/base
-   classes and user-facing vs internal split), **logging** (structured or not, shape, what is
-   never logged), **naming & identifiers** (casing and plurality for tables/columns/indexes/
+   classes and user-facing vs internal split — binding for **every process entrypoint** (workers,
+   queue handlers, seeds, scheduled/sync tasks), never only the serving path, and exception text
+   persisted anywhere — DB columns, event payloads, stdout — goes through the taxonomy, never a
+   raw exception string; measured 3-for-3 across audited hosts: the request path got the
+   discipline, every background path hand-rolled its own), **logging** (structured or not, shape,
+   what is never logged — same every-entrypoint scope: a worker or seed script rolling its own
+   logger without the redaction list violates this row, it is not a local style choice),
+   **naming & identifiers** (casing and plurality for tables/columns/indexes/
    constraints; primary-key strategy AND id-minting — one generator module + prefix registry;
    per-surface casing ownership — DB vs wire vs logs vs analytics tags — with the boundary
    stated; this sub-row is labeled **per-surface casing ownership** verbatim — doctor greps
@@ -155,7 +161,12 @@ Repeat until no open hard forks remain:
    spelling exemplars, the exact inputs every parity invocation replays),
    **wire representations** (decided once at the contracts seam: non-JSON-native types
    such as bigint/decimal money, timestamp form on the wire — UTC-only vs offsets tolerated —
-   and the discriminator field name), **env/config management** (file layout, secrets never in
+   and the discriminator field name), **cross-plane constants** (any literal referenced on
+   both sides of a language/process seam — env var names, header and auth-scheme names,
+   queue/topic names, redaction key lists — lives in the generated contracts surface or
+   carries a parity check; a value mirrored by hand and "kept in sync by comment" is a
+   silent-outage class, banned; checker-enforceable — the same seam the wire row decides,
+   applied to identifiers instead of types), **env/config management** (file layout, secrets never in
    git, the sanctioned secret store), **CI** (the gate runs on every push — wired in Phase B),
    **background/async work** (in-process, queue, or none-in-v1), and **success-metric
    instrumentation** (the Phase 1 measurement pick — the analytics seam, or "not measured in v1").
@@ -238,6 +249,11 @@ written against real code. Never pre-plan the whole roadmap into specs.
 1. **Decompose.** Slice the confirmed goal + ADRs into ordered briefs, each sized to one
    planning session (1–4 specs; a brief whose Scope can't be told in ~1 page splits). Slice by
    **landing unit** (each brief leaves the system green and demonstrable), never by layer.
+   **An ops-conventions row records a choice, never scaffolds its mechanism:** the
+   facade/runtime an ops decision implies (queue wrapper, enqueue helper, analytics seam)
+   lands in the same brief as its **first consumer** — never as a standalone infrastructure
+   brief, and never wired into boot for an empty registry (measured: two audited hosts each
+   carried a well-tested dead queue facade every review re-flagged).
    Wire `depends_on` as a DAG; assign phases (P0 = walking skeleton → first milestone → …);
    derive milestone gates from the Phase-1 success outcome (observable states, not feature
    lists). Design column: `yes` only for user-facing briefs in archetypes whose design stage

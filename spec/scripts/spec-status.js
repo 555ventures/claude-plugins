@@ -36,6 +36,9 @@ function normBrief(v) {
   const m = String(v).trim().match(/^(\d+)([A-Za-z]?)(?:-.*)?$/)
   return m ? m[1].padStart(2, '0') + m[2].toLowerCase() : String(v).trim()
 }
+// `brief: n/a` (also none/-/—) is the sanctioned "ad-hoc spec, no roadmap brief" spelling —
+// deliberately briefless, NOT a dangling pointer, so it never earns an orphan-stamp anomaly.
+const BRIEFLESS = /^(n\/a|none|-|—)$/i
 function briefOrd(num) {
   const m = num.match(/^(\d+)([a-z]?)$/)
   return m ? Number(m[1]) + (m[2] ? (m[2].charCodeAt(0) - 96) / 100 : 0) : NaN
@@ -104,7 +107,7 @@ for (const file of walkMd(path.join(root, 'specs'))) {
   specs.push({
     path: path.relative(root, file),
     status: fm.status,
-    brief: fm.brief ? normBrief(fm.brief) : null,
+    brief: fm.brief && !BRIEFLESS.test(fm.brief.trim()) ? normBrief(fm.brief) : null,
     area: fm.area || null,
     date: fm.date || null,
     design: fm.design === 'true',
@@ -393,6 +396,16 @@ if (pretty) {
 
   out.push('', '🎯 Next')
   const entries = deriveNext()
+  // An anomaly about a spec that already has a Next line folds onto that line as a ⚠️ tag —
+  // no bottom section repeating the path. Only anomalies with no line of their own (done
+  // specs, brief-level drift, hand-tracked cells) keep a section entry.
+  const inlineKinds = new Map()
+  const standalone = []
+  for (const a of anomalies) {
+    const hit = entries.find(e => a.detail.includes(e.path))
+    if (hit) inlineKinds.set(hit.path, [...new Set([...(inlineKinds.get(hit.path) || []), a.kind])])
+    else standalone.push(a)
+  }
   if (!entries.length) {
     out.push(`   ✨ ${nothingNextLine()}`)
   } else {
@@ -405,7 +418,8 @@ if (pretty) {
     }
     const aw = Math.max(...entries.map(e => e.action.length))
     const nw = Math.max(...entries.map(e => nameOf(e.path).length))
-    const fmtEntry = (e, tail) => `${ACTION_ICON[e.action] || '▪️'} ${e.action.padEnd(aw)} ${(nameOf(e.path)).padEnd(nw)}  ${tail}`.trimEnd()
+    const fmtEntry = (e, tail) => (`${ACTION_ICON[e.action] || '▪️'} ${e.action.padEnd(aw)} ${(nameOf(e.path)).padEnd(nw)}  ${tail}`
+      + (inlineKinds.has(e.path) ? `  ⚠️ ${inlineKinds.get(e.path).join(', ')}` : '')).trimEnd()
     const shortBlockers = e => e.blockers.map(b => b.replace(/^\S*\//, '').replace(/\s*\([^)]*\)$/, '')).join(', ')
     const unblocked = entries.filter(e => !e.blockers.length)
     const blocked = entries.filter(e => e.blockers.length)
@@ -430,12 +444,15 @@ if (pretty) {
   }
 
   out.push('')
+  const folded = anomalies.length - standalone.length
   if (!anomalies.length) {
     out.push('✅ No anomalies — nothing skipped, no drift')
+  } else if (!standalone.length) {
+    out.push(`⚠️ ${anomalies.length} anomal${anomalies.length === 1 ? 'y' : 'ies'} — each tagged ⚠️ on its 🎯 Next line`)
   } else {
     const ANOM_ICON = { 'orphan-stamp': '🏷️', 'skipped-brief': '⏭️', 'out-of-order': '🔀', 'unknown-dependency': '❓', 'skipped-spec': '🕳️', 'hand-tracked-status': '✍️' }
-    out.push(`⚠️ Anomalies (${anomalies.length})`)
-    for (const a of anomalies) out.push(`   ${ANOM_ICON[a.kind] || '⚠️'} [${a.kind}] ${a.detail}`)
+    out.push(`⚠️ Anomalies (${standalone.length}${folded ? ` here · ${folded} tagged ⚠️ above` : ''})`)
+    for (const a of standalone) out.push(`   ${ANOM_ICON[a.kind] || '⚠️'} [${a.kind}] ${a.detail}`)
   }
 
   console.log(out.join('\n'))

@@ -55,7 +55,10 @@ thing the script can't: narration.
    means that stage already ran and the spec goes straight to `/spec:build`; `⛓ serial`
    runner-ups must wait for the main lane (the script names why), `⚡` lanes are safe to run
    concurrently in separate worktrees via `/git:enter-worktree`.
-2. **Anomalies** — each `[kind]` line reframed in plain language with its one-step remedy:
+2. **Anomalies** — the dashboard folds any anomaly about a spec that already has a 🎯 Next
+   line onto that line as a trailing `⚠️ kind` tag; only the rest get bottom-section lines.
+   Narrate the ⚠️-tagged lines and each remaining `[kind]` line in plain language with its
+   one-step remedy:
    - `skipped-brief` / `out-of-order` — the script's line already embeds the `/spec:plan`
      command to run.
    - `orphan-stamp` / `unknown-dependency` — advise correcting the `brief:` stamp or the

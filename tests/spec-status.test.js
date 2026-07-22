@@ -347,6 +347,45 @@ test('--pretty draws unblocked parallel-ok runner-ups as lanes and sinks serial/
   assert.doesNotMatch(r.stdout, /specs\/20260710/, 'no full spec paths in the dashboard — they wrap narrow terminals; the plain --next keeps them')
 })
 
+// brief: n/a (2026-07-22): JJ's ad-hoc specs — work the roadmap missed — carried `brief: n/a`
+// and each one earned a bogus orphan-stamp ("no docs/roadmap/n/a-*.md exists"). The spelling
+// is now sanctioned: explicitly briefless, identical to omitting the field, never a pointer.
+
+test('brief: n/a (and none/-) is deliberately briefless — no orphan-stamp, brief null', () => {
+  const dir = host({
+    briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
+    specs: {
+      '20260701/01-adhoc.md': 'date: 2026-07-01\nstatus: done\nbrief: n/a',
+      '20260701/02-adhoc.md': 'date: 2026-07-01\nstatus: hardened\nbrief: none',
+      '20260701/03-adhoc.md': 'date: 2026-07-01\nstatus: hardened\nbrief: -',
+      '20260701/04-typo.md': 'date: 2026-07-01\nstatus: done\nbrief: 07',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--json'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const out = JSON.parse(r.stdout)
+  for (const s of out.specs.filter(x => x.path.includes('adhoc'))) {
+    assert.strictEqual(s.brief, null, `${s.path} must parse as briefless`)
+  }
+  const orphans = out.anomalies.filter(a => a.kind === 'orphan-stamp')
+  assert.strictEqual(orphans.length, 1, 'only the genuine dangling stamp (brief: 07) remains')
+  assert.match(orphans[0].detail, /04-typo\.md/)
+})
+
+test('--pretty folds spec-scoped anomalies onto their Next lines instead of a bottom section', () => {
+  const dir = host({
+    briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
+    specs: { '20260701/01-x.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 07' },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--pretty'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout, /\/spec:build 01-x\.md\s+hardened \(brief 07\)\s+⚠️ orphan-stamp/,
+    'the orphan-stamp rides the spec\'s own Next line as a ⚠️ tag')
+  assert.match(r.stdout, /⚠️ 1 anomaly — each tagged ⚠️ on its 🎯 Next line/,
+    'all anomalies folded → one summary line, no section repeating the paths')
+  assert.doesNotMatch(r.stdout, /\[orphan-stamp\]/, 'no bottom-section line for a folded anomaly')
+})
+
 test('--pretty stands alone: rejects --json, --brief, and --next combinations', () => {
   const dir = host({ briefs: {}, specs: {} })
   for (const extra of [['--json'], ['--brief', '01'], ['--next']]) {

@@ -40,7 +40,11 @@ in Phase 1.5.
    Grounding section is the required reading list, and its Open questions seed the Phase 1
    interview; its "Current state" is a snapshot — re-verify against live code, never trust it.
    **Every spec this session produces gets `brief: NN` in frontmatter** — that stamp is how
-   roadmap status is derived (nothing tracks it by hand). The brief's Out of scope section is
+   roadmap status is derived (nothing tracks it by hand). An ad-hoc spec the roadmap missed
+   (no brief exists and none is warranted) gets the explicit `brief: n/a` — the derivation
+   treats it as deliberately briefless, never as a dangling pointer; leaving the field off
+   entirely means the same thing, but the explicit spelling records that the omission was a
+   decision, not a forgotten stamp. The brief's Out of scope section is
    binding: work it fences off goes to its owning brief, not into these specs.
    **Mock intake (UI-bearing briefs — a `surfaces` block exists):** Read `design/mocks/<label>.html`
    for each declared surface alongside the brief — the mocks carry the field-level design the

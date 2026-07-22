@@ -102,6 +102,23 @@ case "$SUB" in
     BASE="${BASE:-HEAD}"
     git -C "$CROOT" rev-parse --verify -q "$BASE" >/dev/null 2>&1 || die "create: base ref '$BASE' not found"
     git -C "$CROOT" worktree add -b "$SOURCE" "$WT" "$BASE" >&2 || die "create: 'git worktree add' failed"
+    # `git worktree add` materializes only TRACKED files, so gitignored runtime config
+    # (.env*, local overrides) never arrives and worktree builds boot env-less. Honor
+    # .worktreeinclude (Claude Code's native manifest: gitignore-syntax patterns at the
+    # repo root) with the same semantics the harness applies to worktrees IT creates —
+    # copy files that are BOTH gitignored AND manifest-matched. Claude Code never
+    # processes the manifest for externally created worktrees like this one, hence here.
+    if [ -f "$CROOT/.worktreeinclude" ]; then
+      INCLUDES="$(cd "$CROOT" && git ls-files -oi --exclude-from=.worktreeinclude \
+        | grep -v '^\.claude/worktrees/' | git check-ignore --stdin 2>/dev/null)"
+      if [ -n "$INCLUDES" ]; then
+        if (cd "$CROOT" && printf '%s\n' "$INCLUDES" | tar -cf - -T - 2>/dev/null | tar -xf - -C "$WT"); then
+          echo "merge-back: copied $(printf '%s\n' "$INCLUDES" | wc -l | tr -d ' ') .worktreeinclude-matched file(s) into the worktree" >&2
+        else
+          echo "merge-back: WARNING — .worktreeinclude copy failed; the worktree may be missing env/config files" >&2
+        fi
+      fi
+    fi
     echo "merge-back: created worktree '$NAME' (branch '$SOURCE', base '$BASE') at $WT" >&2
     rp "$WT"            # absolute path — the LAST stdout line, for EnterWorktree {path:} and --worktree
     exit 0 ;;

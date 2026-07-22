@@ -144,6 +144,11 @@ manifest row with a reason:
   databases" never runs — and a skip is not a pass.
 - **Seed entry point** — a script that produces an observable post-signup state (test
   tenant/user, minimal fixtures). Without it, "launch, seed, observe" fails at step two.
+- **Worktree env manifest** — if gitignored runtime config exists (`.env*`, local override
+  files), write `.worktreeinclude` at the repo root listing those patterns (gitignore
+  syntax; Claude Code's native format). `merge-back.sh create` copies matching gitignored
+  files into every build worktree — without it, worktree builds boot env-less and the
+  smoke leg fails on a config artifact, not the code under review.
 - **Quickstart** — a root README section (or file) answering "how do I run this?" in five
   lines, citing the real commands.
 - **Git remote / CI activation** — check `git remote -v`. If empty, ask the user

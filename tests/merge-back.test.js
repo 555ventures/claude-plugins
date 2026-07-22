@@ -72,6 +72,40 @@ test('squash of an already-merged source reports nothing-to-squash, not a generi
   assert.match(res.stdout, /nothing to squash/i)
 })
 
+test('create honors .worktreeinclude: copies gitignored matches, skips unmatched ignored files', () => {
+  const dir = tmpdir('mbwi')
+  const g = gitRepo(dir)
+  fs.appendFileSync(path.join(dir, '.gitignore'), '.env\nconfig/local.json\nsecret.txt\n')
+  fs.writeFileSync(path.join(dir, '.worktreeinclude'), '.env\nconfig/local.json\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'manifest')
+  fs.writeFileSync(path.join(dir, '.env'), 'KEY=1\n')                    // ignored + matched -> copied
+  fs.mkdirSync(path.join(dir, 'config'))
+  fs.writeFileSync(path.join(dir, 'config', 'local.json'), '{}\n')      // nested ignored + matched -> copied
+  fs.writeFileSync(path.join(dir, 'secret.txt'), 's\n')                 // ignored, NOT in manifest -> stays behind
+
+  const created = runBash(SCRIPT, ['create', '--source', 'spec/wi', '--root', dir])
+  assert.strictEqual(created.status, 0, created.stderr)
+  const wt = created.stdout.trim().split('\n').pop()
+  assert.strictEqual(fs.readFileSync(path.join(wt, '.env'), 'utf8'), 'KEY=1\n')
+  assert.strictEqual(fs.readFileSync(path.join(wt, 'config', 'local.json'), 'utf8'), '{}\n')
+  assert.ok(!fs.existsSync(path.join(wt, 'secret.txt')), 'unmatched gitignored file must not be copied')
+  assert.match(created.stderr, /copied 2 \.worktreeinclude-matched file/)
+})
+
+test('create with a manifest matching nothing (or tracked files only) copies nothing and stays quiet', () => {
+  const dir = tmpdir('mbwi0')
+  const g = gitRepo(dir)
+  // a.txt is TRACKED; listing it in the manifest must not trigger a copy (checkout owns it)
+  fs.writeFileSync(path.join(dir, '.worktreeinclude'), 'a.txt\n.env\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'manifest only')
+
+  const created = runBash(SCRIPT, ['create', '--source', 'spec/wi0', '--root', dir])
+  assert.strictEqual(created.status, 0, created.stderr)
+  const wt = created.stdout.trim().split('\n').pop()
+  assert.ok(fs.existsSync(path.join(wt, 'a.txt')), 'tracked file arrives via checkout')
+  assert.ok(!created.stderr.includes('copied'), 'no copy message when nothing qualifies')
+})
+
 test('create refuses on an un-gitignored worktree dir and an unborn HEAD', () => {
   const dirty = tmpdir('mbng')
   const g = gitRepo(dirty)

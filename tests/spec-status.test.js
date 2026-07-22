@@ -237,6 +237,70 @@ test('--next with nothing actionable says so instead of inventing work', () => {
   assert.match(r.stdout, /nothing next — all specs done, no unplanned briefs/)
 })
 
+// --next parallel annotation (2026-07-22): among UNBLOCKED entries a spec-level depends_on
+// can never link two of them (a non-done dep already sinks an entry to Blocked), so whether
+// runner-ups can run alongside the top pick is a brief-level question: shared brief = same
+// declared surfaces, a transitive brief dependency path = declared order. Briefless specs
+// get no claim — silence over a guessed parallel-ok.
+
+test('--next marks runner-ups from unrelated briefs parallel-ok with the top pick', () => {
+  const dir = host({
+    briefs: {
+      '01-auth.md': BRIEFS['01-auth.md'],
+      '02-billing.md': '# 02 — Billing\n\nPhase: P0 · Depends on: 01 · Primary workspaces: api\n',
+      '03-reports.md': '# 03 — Reports\n\nPhase: P1 · Depends on: 01 · Primary workspaces: web\n',
+    },
+    specs: {
+      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
+      '20260710/01-billing.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
+      '20260710/02-reports.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 03',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--next'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout, /Then: \/spec:build specs\/20260710\/02-reports\.md.*parallel-ok with Next/,
+    'briefs 02 and 03 both depend only on done 01 — no path between them, safe to fan out')
+  const j = JSON.parse(runNode(SCRIPT, ['--root', dir, '--next', '--json']).stdout)
+  assert.strictEqual(j.next[0].parallel, null, 'the top pick carries no claim about itself')
+  assert.strictEqual(j.next[1].parallel, true)
+})
+
+test('--next marks a runner-up serial on a shared brief or a brief dependency path', () => {
+  const dir = host({
+    briefs: {
+      '01-auth.md': BRIEFS['01-auth.md'],
+      '02-billing.md': BRIEFS['02-billing.md'],
+      '03-reports.md': BRIEFS['03-reports.md'], // depends on 01, 02
+    },
+    specs: {
+      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
+      '20260710/01-billing-a.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
+      '20260710/02-billing-b.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
+      '20260710/03-reports.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 03',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--next'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout, /02-billing-b\.md.*serial after Next — shared brief 02/,
+    'two specs on one brief touch the same declared surfaces')
+  assert.match(r.stdout, /03-reports\.md.*serial after Next — brief 03 depends on 02/,
+    'a declared brief dependency path forces order even though both specs are unblocked')
+})
+
+test('--next makes no parallel claim when a spec has no brief stamp', () => {
+  const dir = host({
+    briefs: {},
+    specs: {
+      '20260701/01-a.md': 'date: 2026-07-01\nstatus: hardened',
+      '20260701/02-b.md': 'date: 2026-07-01\nstatus: hardened',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--next'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.doesNotMatch(r.stdout, /parallel-ok|serial after/,
+    'no brief = no declared surfaces to compare — silence beats a guessed parallel-ok')
+})
+
 test('consumers are wired to the one derivation', () => {
   assert.match(read('spec/bin/spec-paths'), /spec-status\)\s+echo "\$ROOT\/scripts\/spec-status\.js"/,
     'spec-paths must expose the script')

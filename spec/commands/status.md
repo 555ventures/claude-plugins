@@ -55,7 +55,9 @@ skipped"** or **"🟠 brief 02 looks skipped — 03 is in flight on top of it"**
    `Blocked:` sinking, and the all-done fall-through live in the script — never re-derive,
    reorder, or embellish its lines. One tag worth knowing when narrating: `[design]` routes
    through `/spec:design` first; `[designed]` means that stage already ran and the spec
-   goes straight to `/spec:build`.
+   goes straight to `/spec:build`. Runner-up lines may carry `parallel-ok with Next`
+   (independent briefs — safe to fan out in separate worktrees via `/git:enter-worktree`)
+   or `serial after Next — <reason>`; the script derives this, don't second-guess it.
 3. **Anomalies** — each `[kind]` line reframed in plain language with its one-step remedy:
    - `skipped-brief` / `out-of-order` — the script's line already embeds the `/spec:plan`
      command to run.

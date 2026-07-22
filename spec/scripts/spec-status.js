@@ -17,6 +17,11 @@
 // /spec:build (`designed:` set means the design stage already ran — never route back to
 // /spec:design); implementing → /spec:review. Closest-to-done first, blocked entries last,
 // and when every spec is done the next ready unplanned brief becomes the /spec:plan pick.
+// Unblocked runner-up entries are annotated parallel-ok/serial relative to the top pick:
+// spec-level depends_on can never link two unblocked entries (a non-done dep is a blocker),
+// so the check is brief-level — shared brief or a transitive brief dependency path in either
+// direction → serial; distinct unrelated briefs → parallel-ok (separate worktrees); either
+// side briefless → no claim.
 //
 // Exit codes: 0 derived (anomalies are report lines, not failures); with --brief NN,
 // 1 = that brief has an unmet dependency (no spec at implementing/done); 2 = usage.
@@ -198,6 +203,21 @@ function specDep(ref) {
   return specByTail.get(path.basename(ref)) || specs.find(x => x.path === ref || x.path.endsWith('/' + ref))
 }
 
+// Does brief a transitively depend on brief b (via roadmap `Depends on:` headers)?
+function briefDepPath(a, b) {
+  const seen = new Set()
+  const stack = [...((briefByNum.get(a) || { depends_on: [] }).depends_on)]
+  while (stack.length) {
+    const d = stack.pop()
+    if (d === b) return true
+    if (seen.has(d)) continue
+    seen.add(d)
+    const dep = briefByNum.get(d)
+    if (dep) stack.push(...dep.depends_on)
+  }
+  return false
+}
+
 if (nextMode) {
   const entries = []
   for (const s of specs) {
@@ -247,8 +267,21 @@ if (nextMode) {
     entries.unshift({ action: '/spec:plan', path: b.file, status: 'unplanned', brief: b.num, blockers: [], note: `brief ${b.num} (${b.name}) unplanned, dependencies met`, rank: -1 })
   }
 
+  // Parallel annotation: each unblocked runner-up vs the top pick. Both need a brief to
+  // make a claim; shared brief = same surfaces, a brief dependency path = declared order.
+  const top = entries[0]
+  if (top && !top.blockers.length) {
+    for (const e of entries.slice(1)) {
+      if (e.blockers.length || !e.brief || !top.brief) continue
+      if (e.brief === top.brief) { e.parallel = false; e.parallelReason = `shared brief ${e.brief}` }
+      else if (briefDepPath(e.brief, top.brief)) { e.parallel = false; e.parallelReason = `brief ${e.brief} depends on ${top.brief}` }
+      else if (briefDepPath(top.brief, e.brief)) { e.parallel = false; e.parallelReason = `brief ${top.brief} depends on ${e.brief}` }
+      else e.parallel = true
+    }
+  }
+
   if (json) {
-    console.log(JSON.stringify({ next: entries.map(({ rank, ...e }) => e) }, null, 2))
+    console.log(JSON.stringify({ next: entries.map(({ rank, parallelReason, ...e }) => ({ ...e, parallel: e.parallel === undefined ? null : e.parallel, parallel_reason: parallelReason || null })) }, null, 2))
   } else if (!entries.length) {
     const unplanned = briefs.filter(b => b.status === 'unplanned').length
     console.log(specs.length === 0 && !unplanned ? 'nothing next — no specs or briefs found'
@@ -257,7 +290,9 @@ if (nextMode) {
   } else {
     entries.forEach((e, i) => {
       const label = e.blockers.length ? 'Blocked:' : i === 0 ? 'Next:' : 'Then:'
-      const tail = e.blockers.length ? ` — ${e.note}; waiting on ${e.blockers.join(', ')}` : ` — ${e.note}`
+      const par = e.parallel === true ? '; parallel-ok with Next'
+        : e.parallel === false ? `; serial after Next — ${e.parallelReason}` : ''
+      const tail = e.blockers.length ? ` — ${e.note}; waiting on ${e.blockers.join(', ')}` : ` — ${e.note}${par}`
       console.log(`${label} ${e.action} ${e.path}${tail}`)
     })
   }

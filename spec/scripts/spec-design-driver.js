@@ -73,6 +73,10 @@ try { marks = JSON.parse(fs.readFileSync(stateFile, 'utf8')) } catch { marks = {
 
 // A design_source that is not a URL is a LOCAL handoff source: a single HTML file or a directory
 // of exported screens (+ optional per-screen *.prompt.md notes), resolved against the repo root.
+if (designSource && !/^https?:\/\//i.test(designSource) && designSource.includes(',')) {
+  die('design_source must be a SINGLE path — point it at the bundle directory (e.g. design/mocks). ' +
+    'Which surfaces/regions a spec uses is declared by its skeleton bindings (regionRef), not the source pointer.')
+}
 const localSource = designSource && !/^https?:\/\//i.test(designSource)
   ? path.resolve(repoRoot, designSource) : null
 if (localSource && !fs.existsSync(localSource)) {

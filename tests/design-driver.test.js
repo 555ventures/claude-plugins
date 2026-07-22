@@ -110,6 +110,14 @@ test('marks are recorded in the sidecar state file and bad marks die', () => {
   assert.strictEqual(run(root, spec, '--mark', 'nonsense').status, 2)
 })
 
+test('comma-list design_source dies with the single-path teaching message', () => {
+  const { root, spec } = fixture({ designSource: 'design/mocks/a.html, design/mocks/b.html' })
+  const dead = run(root, spec)
+  assert.strictEqual(dead.status, 2)
+  assert.match(dead.stderr, /SINGLE path/)
+  assert.match(dead.stderr, /regionRef/)
+})
+
 test('local design_source: bundle extract step, no DesignSync; missing local path dies', () => {
   const { root, spec } = fixture({ designSource: './handoff' })
   // path missing → fail loud before any step

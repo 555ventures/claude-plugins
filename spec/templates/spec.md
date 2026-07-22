@@ -10,7 +10,7 @@ depended_on_by: []
 # brief: NN              # roadmap-planned specs only: the docs/roadmap/NN-*.md brief this spec hydrates; /spec:status (and /spec:doctor check 14) derive roadmap status from this stamp
 # spiked: YYYY-MM-DD     # only if a spike ran during /spec:plan
 # designed: YYYY-MM-DD   # set by /spec:design on user approval (design-capable hosts)
-# design_source: https://claude.ai/design/p/<id>?file=<Name>.dc.html  # optional: Claude Design mockup, made read-first binding canon by /spec:design
+# design_source: https://claude.ai/design/p/<id>?file=<Name>.dc.html  # optional, single path/URL: Claude Design mockup or local bundle dir, made read-first binding canon by /spec:design
 # build_base: <branch>   # set by /git:enter-worktree; read by /spec:review as the merge-back target
 # The host's pipeline rules may declare extra flags (e.g. migration: true) — include them when they apply.
 # While drafting: never guess — write [NEEDS CLARIFICATION: question] inline where information

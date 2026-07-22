@@ -21,52 +21,49 @@ judgment happens here — the script derives, you render.
 
 ## Run
 
+One run — `--pretty` is the whole dashboard (verdict line, roadmap with progress bars, the
+next-action lanes, anomalies); it embeds the `--next` derivation, so there is no second run:
+
 ```
-node "$(spec-paths spec-status)" --root .
+node "$(spec-paths spec-status)" --root . --pretty
 ```
 
 With a brief number in `$ARGUMENTS` (e.g. `/spec:status 04`), run the single-brief preflight
-instead and report **only** that brief's dependency readiness — no `--next` run, no full
-Render (the script rejects `--brief` + `--next` combined):
+instead and report **only** that brief's dependency readiness — no dashboard (the script
+rejects `--brief` combined with `--next` or `--pretty`):
 
 ```
 node "$(spec-paths spec-status)" --root . --brief NN
 ```
 
-In the full (no-argument) form, also run the next-action derivation — its output is the
-Render step's section 2, verbatim:
+If the run errors, print the error and stop — never reconstruct statuses or a next
+suggestion by hand; an absent answer is correct, a hand-derived one never is. (The plain
+`--next` mode still exists for other consumers — `/spec:review`'s close-out pointer — and
+prints the same entries without the dressing.)
 
-```
-node "$(spec-paths spec-status)" --root . --next
-```
+## Render (Console Output Style — the script output IS the render)
 
-If either run errors, print the error and stop — never reconstruct statuses or a next
-suggestion by hand; an absent answer is correct, a hand-derived one never is.
+Print the `--pretty` output **verbatim, as a fenced code block** so its alignment and lane
+connectors survive — every visual judgment (emoji, bars, lane grouping, ordering, the
+`Blocked` sinking, the all-done fall-through) lives in the script; never re-derive, reorder,
+restyle, or embellish its lines, and never rebuild it as a markdown table. Then add the one
+thing the script can't: narration.
 
-## Render (Console Output Style — outcome first, then the table)
-
-Open with the one-line verdict, not the table: **"🟢 3 briefs done, 1 in flight, nothing
-skipped"** or **"🟠 brief 02 looks skipped — 03 is in flight on top of it"**. Then:
-
-1. **Roadmap table** as the script prints it (brief, phase, derived status, specs). Skip the
-   section entirely when the host has no roadmap.
-2. **Next actions** — print the `--next` output **verbatim**; it supersedes the base run's
-   `open specs:` listing (don't print both). The status→command mapping, the ordering, the
-   `Blocked:` sinking, and the all-done fall-through live in the script — never re-derive,
-   reorder, or embellish its lines. One tag worth knowing when narrating: `[design]` routes
-   through `/spec:design` first; `[designed]` means that stage already ran and the spec
-   goes straight to `/spec:build`. Runner-up lines may carry `parallel-ok with Next`
-   (independent briefs — safe to fan out in separate worktrees via `/git:enter-worktree`)
-   or `serial after Next — <reason>`; the script derives this, don't second-guess it.
-3. **Anomalies** — each `[kind]` line reframed in plain language with its one-step remedy:
+1. **After the block, narrate in one or two sentences** what the dashboard means for the
+   user's next hour — lead with the main lane, name the fan-out option when parallel lanes
+   exist. Tags worth knowing: `[design]` routes through `/spec:design` first; `[designed]`
+   means that stage already ran and the spec goes straight to `/spec:build`; `⛓ serial`
+   runner-ups must wait for the main lane (the script names why), `⚡` lanes are safe to run
+   concurrently in separate worktrees via `/git:enter-worktree`.
+2. **Anomalies** — each `[kind]` line reframed in plain language with its one-step remedy:
    - `skipped-brief` / `out-of-order` — the script's line already embeds the `/spec:plan`
      command to run.
    - `orphan-stamp` / `unknown-dependency` — advise correcting the `brief:` stamp or the
      brief's `Depends on` list to the surviving file name (advice about a *pointer*, offered
      to the user — not a status change, and not an edit this command performs).
    - `skipped-spec` — the unfinished dependency is the work item: point at its line in
-     section 2 (the `--next` output already carries its command — usually `/spec:review`),
-     never re-derive it here.
+     the dashboard's 🎯 Next section (its entry already carries the command — usually
+     `/spec:review`), never re-derive it here.
    - `hand-tracked-status` — see below.
 
    An empty anomaly list is worth saying out loud: it's the "you didn't forget anything"

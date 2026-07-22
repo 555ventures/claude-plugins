@@ -301,6 +301,59 @@ test('--next makes no parallel claim when a spec has no brief stamp', () => {
     'no brief = no declared surfaces to compare — silence beats a guessed parallel-ok')
 })
 
+// --pretty (2026-07-22): the /spec:status dashboard — the same derivation rendered once,
+// deterministically, in the script (verdict line, progress-bar roadmap, parallel lanes,
+// anomalies). Exists so the renderer prints verbatim instead of restyling by hand — the
+// styling-drift sibling of the freehand-Next incident.
+
+test('--pretty renders verdict, progress-bar roadmap, and collapses unplanned runs', () => {
+  const dir = host({
+    briefs: BRIEFS,
+    specs: {
+      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
+      '20260701/02-auth-ui.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 01',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--pretty'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout.split('\n')[0], /^🟢 /, 'opens with the verdict line — no anomalies here')
+  assert.match(r.stdout, /🔨 01 auth.*▓{5}░{5} 1\/2/, 'in-flight brief gets a half-full bar')
+  assert.match(r.stdout, /⬜ 02–03.*unplanned \(2 briefs\)/, 'consecutive unplanned briefs collapse to one row')
+  assert.match(r.stdout, /🎯 Next/, 'embeds the next derivation — no second run needed')
+})
+
+test('--pretty draws unblocked parallel-ok runner-ups as lanes and sinks serial/blocked', () => {
+  const dir = host({
+    briefs: {
+      '01-auth.md': BRIEFS['01-auth.md'],
+      '02-billing.md': '# 02 — Billing\n\nPhase: P0 · Depends on: 01 · Primary workspaces: api\n',
+      '03-reports.md': '# 03 — Reports\n\nPhase: P1 · Depends on: 01 · Primary workspaces: web\n',
+    },
+    specs: {
+      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
+      '20260710/01-billing.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
+      '20260710/02-billing-b.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
+      '20260710/03-reports.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 03',
+      '20260710/04-blocked.md': 'date: 2026-07-10\nstatus: hardened\ndepends_on: [specs/20260710/01-billing.md]',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--pretty'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout, /⚡ 2 parallel lanes/, 'top pick + parallel-ok runner-up form the lane group')
+  assert.match(r.stdout, /┌─ 🔨 \/spec:build specs\/20260710\/01-billing\.md.*◀ main lane/, 'the top pick is marked as the main lane')
+  assert.match(r.stdout, /└─ 🔨 \/spec:build specs\/20260710\/03-reports\.md/, 'the parallel-ok runner-up is the second lane')
+  assert.match(r.stdout, /02-billing-b\.md.*⛓ serial — shared brief 02/, 'serial runner-up sinks below the lanes with its reason')
+  assert.match(r.stdout, /⛔ blocked:\n.*04-blocked\.md.*⏳ waiting on specs\/20260710\/01-billing\.md \(hardened\)/, 'blocked entries close the section with their blockers named')
+})
+
+test('--pretty stands alone: rejects --json, --brief, and --next combinations', () => {
+  const dir = host({ briefs: {}, specs: {} })
+  for (const extra of [['--json'], ['--brief', '01'], ['--next']]) {
+    const r = runNode(SCRIPT, ['--root', dir, '--pretty', ...extra])
+    assert.strictEqual(r.status, 2, `--pretty ${extra[0]} must be rejected`)
+  }
+})
+
 test('consumers are wired to the one derivation', () => {
   assert.match(read('spec/bin/spec-paths'), /spec-status\)\s+echo "\$ROOT\/scripts\/spec-status\.js"/,
     'spec-paths must expose the script')
@@ -312,6 +365,8 @@ test('consumers are wired to the one derivation', () => {
     'plan Phase 0 dependency preflight must use --brief mode')
   assert.match(read('spec/commands/status.md'), /spec-status.*--next/s,
     '/spec:status section 2 must print --next verbatim, not re-derive the mapping in prose')
+  assert.match(read('spec/commands/status.md'), /--pretty/,
+    '/spec:status must render via the deterministic --pretty dashboard, not restyle by hand')
   assert.match(read('spec/commands/review.md'), /spec-status.*--next/s,
     'review close must print --next verbatim — the freehand Next line is the incident this mode kills')
 })

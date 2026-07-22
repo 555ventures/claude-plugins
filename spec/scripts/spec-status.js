@@ -45,19 +45,25 @@ let root = '.'
 let json = false
 let briefFilter = null
 let nextMode = false
+let pretty = false
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--root') root = argv[++i]
   else if (argv[i] === '--json') json = true
   else if (argv[i] === '--brief') briefFilter = normBrief(argv[++i])
   else if (argv[i] === '--next') nextMode = true
+  else if (argv[i] === '--pretty') pretty = true
   else {
-    console.error('usage: spec-status.js [--root <dir>] [--json] [--brief NN | --next]')
+    console.error('usage: spec-status.js [--root <dir>] [--json] [--brief NN | --next | --pretty]')
     process.exit(2)
   }
 }
 if (nextMode && briefFilter) {
   console.error('--next and --brief are mutually exclusive')
+  process.exit(2)
+}
+if (pretty && (json || briefFilter || nextMode)) {
+  console.error('--pretty stands alone (it already embeds the --next derivation)')
   process.exit(2)
 }
 
@@ -218,7 +224,9 @@ function briefDepPath(a, b) {
   return false
 }
 
-if (nextMode) {
+// Shared by --next (plain, consumed verbatim by /spec:review close-out) and --pretty (the
+// /spec:status dashboard) — one derivation, two renders.
+function deriveNext() {
   const entries = []
   for (const s of specs) {
     if (DONE(s.status)) continue
@@ -279,14 +287,23 @@ if (nextMode) {
       else e.parallel = true
     }
   }
+  return entries
+}
 
+// Message when the next-derivation has nothing actionable — shared by both renders.
+function nothingNextLine() {
+  const unplanned = briefs.filter(b => b.status === 'unplanned').length
+  return specs.length === 0 && !unplanned ? 'nothing next — no specs or briefs found'
+    : unplanned ? `nothing actionable — all specs done; ${unplanned} unplanned brief(s) blocked on unmet dependencies`
+    : 'nothing next — all specs done, no unplanned briefs'
+}
+
+if (nextMode) {
+  const entries = deriveNext()
   if (json) {
     console.log(JSON.stringify({ next: entries.map(({ rank, parallelReason, ...e }) => ({ ...e, parallel: e.parallel === undefined ? null : e.parallel, parallel_reason: parallelReason || null })) }, null, 2))
   } else if (!entries.length) {
-    const unplanned = briefs.filter(b => b.status === 'unplanned').length
-    console.log(specs.length === 0 && !unplanned ? 'nothing next — no specs or briefs found'
-      : unplanned ? `nothing actionable — all specs done; ${unplanned} unplanned brief(s) blocked on unmet dependencies`
-      : 'nothing next — all specs done, no unplanned briefs')
+    console.log(nothingNextLine())
   } else {
     entries.forEach((e, i) => {
       const label = e.blockers.length ? 'Blocked:' : i === 0 ? 'Next:' : 'Then:'
@@ -323,6 +340,95 @@ if (briefFilter) {
   else if (report.ready) console.log(`brief ${b.num} (${b.name}): all ${b.depends_on.length || 'zero'} dependencies met`)
   else console.log(`brief ${b.num} (${b.name}): UNMET dependencies — ${unmet.map(d => `${d} (${(briefByNum.get(d) || { status: 'missing' }).status})`).join(', ')}`)
   process.exit(unmet.length ? 1 : 0)
+}
+
+// ---- --pretty: the /spec:status dashboard ---------------------------------------------------
+// Deterministic emoji render of the same derivation: verdict line, roadmap with per-brief
+// progress bars (consecutive unplanned briefs collapse to one row), the next-action lanes
+// (parallel-ok runner-ups drawn as fan-out lanes under the top pick), anomalies. Purely a
+// view — same data as the plain report + --next, styled here so no renderer re-derives it.
+
+if (pretty) {
+  const out = []
+  const ACTION_ICON = { '/spec:plan': '📝', '/spec:design': '🎨', '/spec:build': '🔨', '/spec:review': '🔍' }
+  const BRIEF_ICON = { done: '✅', 'in-flight': '🔨', unplanned: '⬜' }
+
+  const doneB = briefs.filter(b => b.status === 'done').length
+  const flightB = briefs.filter(b => b.status === 'in-flight').length
+  const unplB = briefs.filter(b => b.status === 'unplanned').length
+  const doneS = specs.filter(s => DONE(s.status)).length
+  const scope = briefs.length
+    ? [`${doneB} brief${doneB === 1 ? '' : 's'} done`, flightB && `${flightB} in flight`, unplB && `${unplB} unplanned`].filter(Boolean).join(' · ')
+    : specs.length ? `${doneS}/${specs.length} specs done` : 'no specs or briefs found'
+  out.push(`${anomalies.length ? '🟠' : '🟢'} ${scope} · ${anomalies.length ? `⚠️ ${anomalies.length} anomal${anomalies.length === 1 ? 'y' : 'ies'}` : 'no anomalies'}`)
+
+  if (briefs.length) {
+    out.push('', '🗺️ Roadmap')
+    const rows = []
+    for (let i = 0; i < briefs.length; i++) {
+      const b = briefs[i]
+      let j = i
+      while (b.status === 'unplanned' && j + 1 < briefs.length && briefs[j + 1].status === 'unplanned') j++
+      if (j > i) {
+        const run = briefs.slice(i, j + 1)
+        const phases = [...new Set(run.map(x => x.phase).filter(Boolean))]
+        const phase = phases.length > 1 ? `${phases[0]}–${phases[phases.length - 1]}` : phases[0] || '—'
+        rows.push({ icon: '⬜', label: `${b.num}–${briefs[j].num}`, phase, tail: `unplanned (${run.length} briefs)` })
+        i = j
+        continue
+      }
+      const total = b.specs.length
+      const nDone = b.specs.filter(s => DONE(s.status)).length
+      const bar = total
+        ? '▓'.repeat(nDone === total ? 10 : Math.min(9, Math.floor(nDone / total * 10))).padEnd(10, '░') + ` ${nDone}/${total}`
+        : 'unplanned'
+      const openBits = b.specs.filter(s => !DONE(s.status)).map(s => `${path.basename(s.path)} ${s.status}`)
+      rows.push({ icon: BRIEF_ICON[b.status], label: `${b.num} ${b.name}`, phase: b.phase || '—', tail: bar + (openBits.length ? `  ⏳ ${openBits.join(', ')}` : '') })
+    }
+    const lw = Math.max(...rows.map(r => r.label.length))
+    const pw = Math.max(...rows.map(r => r.phase.length))
+    for (const r of rows) out.push(`   ${r.icon} ${r.label.padEnd(lw)}  ${r.phase.padEnd(pw)}  ${r.tail}`)
+  }
+
+  out.push('', '🎯 Next')
+  const entries = deriveNext()
+  const fmtEntry = e => `${ACTION_ICON[e.action] || '▪️'} ${e.action} ${e.path} — ${e.note}`
+  if (!entries.length) {
+    out.push(`   ✨ ${nothingNextLine()}`)
+  } else {
+    const unblocked = entries.filter(e => !e.blockers.length)
+    const blocked = entries.filter(e => e.blockers.length)
+    if (unblocked.length) {
+      const lanes = [unblocked[0], ...unblocked.slice(1).filter(e => e.parallel === true)]
+      if (lanes.length > 1) {
+        out.push(`   ⚡ ${lanes.length} parallel lanes — fan out via /git:enter-worktree, one each:`)
+        lanes.forEach((e, i) => out.push(`   ${i === 0 ? '┌─' : i === lanes.length - 1 ? '└─' : '├─'} ${fmtEntry(e)}${i === 0 ? '  ◀ main lane' : ''}`))
+      } else {
+        out.push(`   ▶ ${fmtEntry(unblocked[0])}`)
+      }
+      const later = unblocked.slice(1).filter(e => e.parallel !== true)
+      if (later.length) {
+        out.push('   🕓 after that:')
+        later.forEach((e, i) => out.push(`   ${i === later.length - 1 ? '└─' : '├─'} ${fmtEntry(e)}${e.parallel === false ? `  ⛓ serial — ${e.parallelReason}` : ''}`))
+      }
+    }
+    if (blocked.length) {
+      out.push('   ⛔ blocked:')
+      blocked.forEach((e, i) => out.push(`   ${i === blocked.length - 1 ? '└─' : '├─'} ${fmtEntry(e)}  ⏳ waiting on ${e.blockers.join(', ')}`))
+    }
+  }
+
+  out.push('')
+  if (!anomalies.length) {
+    out.push('✅ No anomalies — nothing skipped, no drift')
+  } else {
+    const ANOM_ICON = { 'orphan-stamp': '🏷️', 'skipped-brief': '⏭️', 'out-of-order': '🔀', 'unknown-dependency': '❓', 'skipped-spec': '🕳️', 'hand-tracked-status': '✍️' }
+    out.push(`⚠️ Anomalies (${anomalies.length})`)
+    for (const a of anomalies) out.push(`   ${ANOM_ICON[a.kind] || '⚠️'} [${a.kind}] ${a.detail}`)
+  }
+
+  console.log(out.join('\n'))
+  process.exit(0)
 }
 
 // ---- report ---------------------------------------------------------------------------------

@@ -1,1 +1,13 @@
-{}
+{
+  "skillOverrides": {
+    "workers-best-practices": "off",
+    "web-perf": "off",
+    "turnstile-spin": "off",
+    "sandbox-sdk": "off",
+    "use-railway": "off",
+    "wrangler": "off",
+    "cloudflare": "off",
+    "cloudflare-email-service": "off",
+    "agents-sdk": "off"
+  }
+}

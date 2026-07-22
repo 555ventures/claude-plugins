@@ -340,10 +340,11 @@ test('--pretty draws unblocked parallel-ok runner-ups as lanes and sinks serial/
   const r = runNode(SCRIPT, ['--root', dir, '--pretty'])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.match(r.stdout, /⚡ 2 parallel lanes/, 'top pick + parallel-ok runner-up form the lane group')
-  assert.match(r.stdout, /┌─ 🔨 \/spec:build specs\/20260710\/01-billing\.md.*◀ main lane/, 'the top pick is marked as the main lane')
-  assert.match(r.stdout, /└─ 🔨 \/spec:build specs\/20260710\/03-reports\.md/, 'the parallel-ok runner-up is the second lane')
-  assert.match(r.stdout, /02-billing-b\.md.*⛓ serial — shared brief 02/, 'serial runner-up sinks below the lanes with its reason')
-  assert.match(r.stdout, /⛔ blocked:\n.*04-blocked\.md.*⏳ waiting on specs\/20260710\/01-billing\.md \(hardened\)/, 'blocked entries close the section with their blockers named')
+  assert.match(r.stdout, /┌─ 🔨 \/spec:build 01-billing\.md.*◀ main/, 'the top pick is marked as the main lane, path shortened to basename for narrow terminals')
+  assert.match(r.stdout, /└─ 🔨 \/spec:build 03-reports\.md/, 'the parallel-ok runner-up is the second lane')
+  assert.match(r.stdout, /02-billing-b\.md.*⛓ shared brief 02/, 'serial runner-up sinks below the lanes with its reason')
+  assert.match(r.stdout, /⛔ blocked:\n.*04-blocked\.md\s+⏳ 01-billing\.md/, 'blocked entries close the section, blockers shortened to basenames')
+  assert.doesNotMatch(r.stdout, /specs\/20260710/, 'no full spec paths in the dashboard — they wrap narrow terminals; the plain --next keeps them')
 })
 
 test('--pretty stands alone: rejects --json, --brief, and --next combinations', () => {

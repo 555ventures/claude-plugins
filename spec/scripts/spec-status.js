@@ -379,11 +379,12 @@ if (pretty) {
       }
       const total = b.specs.length
       const nDone = b.specs.filter(s => DONE(s.status)).length
+      // Open specs are deliberately NOT listed here — the 🎯 Next section owns them; a per-row
+      // list wraps hard on narrow terminals and duplicates what's below.
       const bar = total
         ? '▓'.repeat(nDone === total ? 10 : Math.min(9, Math.floor(nDone / total * 10))).padEnd(10, '░') + ` ${nDone}/${total}`
         : 'unplanned'
-      const openBits = b.specs.filter(s => !DONE(s.status)).map(s => `${path.basename(s.path)} ${s.status}`)
-      rows.push({ icon: BRIEF_ICON[b.status], label: `${b.num} ${b.name}`, phase: b.phase || '—', tail: bar + (openBits.length ? `  ⏳ ${openBits.join(', ')}` : '') })
+      rows.push({ icon: BRIEF_ICON[b.status], label: `${b.num} ${b.name}`, phase: b.phase || '—', tail: bar })
     }
     const lw = Math.max(...rows.map(r => r.label.length))
     const pw = Math.max(...rows.map(r => r.phase.length))
@@ -392,29 +393,39 @@ if (pretty) {
 
   out.push('', '🎯 Next')
   const entries = deriveNext()
-  const fmtEntry = e => `${ACTION_ICON[e.action] || '▪️'} ${e.action} ${e.path} — ${e.note}`
   if (!entries.length) {
     out.push(`   ✨ ${nothingNextLine()}`)
   } else {
+    // Narrow-terminal budget: basenames instead of full paths (full paths live in the plain
+    // --next output and the spec files themselves), aligned action/file columns, blockers
+    // shortened to basenames — a wrapped lane connector is worse than a shortened path.
+    const nameOf = p => {
+      const base = path.basename(p)
+      return entries.filter(x => path.basename(x.path) === base).length > 1 ? p : base
+    }
+    const aw = Math.max(...entries.map(e => e.action.length))
+    const nw = Math.max(...entries.map(e => nameOf(e.path).length))
+    const fmtEntry = (e, tail) => `${ACTION_ICON[e.action] || '▪️'} ${e.action.padEnd(aw)} ${(nameOf(e.path)).padEnd(nw)}  ${tail}`.trimEnd()
+    const shortBlockers = e => e.blockers.map(b => b.replace(/^\S*\//, '').replace(/\s*\([^)]*\)$/, '')).join(', ')
     const unblocked = entries.filter(e => !e.blockers.length)
     const blocked = entries.filter(e => e.blockers.length)
     if (unblocked.length) {
       const lanes = [unblocked[0], ...unblocked.slice(1).filter(e => e.parallel === true)]
       if (lanes.length > 1) {
-        out.push(`   ⚡ ${lanes.length} parallel lanes — fan out via /git:enter-worktree, one each:`)
-        lanes.forEach((e, i) => out.push(`   ${i === 0 ? '┌─' : i === lanes.length - 1 ? '└─' : '├─'} ${fmtEntry(e)}${i === 0 ? '  ◀ main lane' : ''}`))
+        out.push(`   ⚡ ${lanes.length} parallel lanes — one worktree each (/git:enter-worktree):`)
+        lanes.forEach((e, i) => out.push(`   ${i === 0 ? '┌─' : i === lanes.length - 1 ? '└─' : '├─'} ${fmtEntry(e, `${e.note}${i === 0 ? '  ◀ main' : ''}`)}`))
       } else {
-        out.push(`   ▶ ${fmtEntry(unblocked[0])}`)
+        out.push(`   ▶  ${fmtEntry(unblocked[0], unblocked[0].note)}`)
       }
       const later = unblocked.slice(1).filter(e => e.parallel !== true)
       if (later.length) {
         out.push('   🕓 after that:')
-        later.forEach((e, i) => out.push(`   ${i === later.length - 1 ? '└─' : '├─'} ${fmtEntry(e)}${e.parallel === false ? `  ⛓ serial — ${e.parallelReason}` : ''}`))
+        later.forEach((e, i) => out.push(`   ${i === later.length - 1 ? '└─' : '├─'} ${fmtEntry(e, `${e.note}${e.parallel === false ? `  ⛓ ${e.parallelReason}` : ''}`)}`))
       }
     }
     if (blocked.length) {
       out.push('   ⛔ blocked:')
-      blocked.forEach((e, i) => out.push(`   ${i === blocked.length - 1 ? '└─' : '├─'} ${fmtEntry(e)}  ⏳ waiting on ${e.blockers.join(', ')}`))
+      blocked.forEach((e, i) => out.push(`   ${i === blocked.length - 1 ? '└─' : '├─'} ${fmtEntry(e, `⏳ ${shortBlockers(e)}`)}`))
     }
   }
 

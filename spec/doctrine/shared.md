@@ -835,13 +835,10 @@ rows keep their rigorous, machine-parseable style; this section governs only the
   or an open "what next?" — it closes with exactly **one** recommended next action (usually
   a command), with a one-phrase why. Diagnosis whose next step isn't named is an unfinished
   report. The recommendation is derived, never inferred — adjacency (the dependent spec,
-  the next-numbered brief) is not state. When the question is "which spec/brief next", the
-  answer is `node "$(spec-paths spec-status)" --next` printed verbatim — never a mapping
-  re-applied from frontmatter by hand (that prose path is how `designed:`-stamped specs got
-  re-routed to `/spec:design`). Same-spec chains a stage owns (`/spec:build {path}` after
-  its own design pass, `/spec:review $ARGUMENTS` after build) stay literal. If the script
-  errors, print the error and no recommendation — an absent suggestion is recoverable, a
-  hand-derived one is the incident.
+  the next-numbered brief) is not state. "Which spec/brief next" is answered by
+  `node "$(spec-paths spec-status)" --next` printed verbatim, never by a hand-applied
+  mapping; same-spec chains a stage owns (`/spec:build {path}`, `/spec:review $ARGUMENTS`)
+  stay literal. Script error ⇒ print the error and no recommendation.
 
 ## Workflows Encode Shape, Not Judgment
 

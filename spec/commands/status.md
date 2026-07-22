@@ -50,15 +50,12 @@ skipped"** or **"🟠 brief 02 looks skipped — 03 is in flight on top of it"**
 
 1. **Roadmap table** as the script prints it (brief, phase, derived status, specs). Skip the
    section entirely when the host has no roadmap.
-2. **Next actions** — print the `--next` output **verbatim**. It supersedes the base run's
-   `open specs:` listing — do not print that block too. The mapping lives in the script,
-   not here: it already routes `draft` → `/spec:plan`, `hardened` → `/spec:build` (via
-   `/spec:design` first only while the spec is tagged `[design]`; the tag flips to
-   `[designed]` once the `designed:` stamp is set, meaning the design stage already ran —
-   re-suggesting `/spec:design` for a `[designed]` spec is the drift this mode exists to
-   kill), `implementing` → `/spec:review`, sinks `Blocked:` entries to the bottom with
-   their blockers named, and falls through to planning the next ready unplanned brief when
-   every spec is done. Never re-derive or reorder these lines.
+2. **Next actions** — print the `--next` output **verbatim**; it supersedes the base run's
+   `open specs:` listing (don't print both). The status→command mapping, the ordering, the
+   `Blocked:` sinking, and the all-done fall-through live in the script — never re-derive,
+   reorder, or embellish its lines. One tag worth knowing when narrating: `[design]` routes
+   through `/spec:design` first; `[designed]` means that stage already ran and the spec
+   goes straight to `/spec:build`.
 3. **Anomalies** — each `[kind]` line reframed in plain language with its one-step remedy:
    - `skipped-brief` / `out-of-order` — the script's line already embeds the `/spec:plan`
      command to run.

@@ -228,8 +228,7 @@ Never silently drop a finding.
    refuter or spike surfaced, and the next command. Counts and field inventories stay in the
    spec file. Next:
    `/spec:design {path}` if `design: true` with no `designed:` stamp, else `/spec:build
-   {path}` (a `designed:` date means the design stage already ran — a re-hardened spec
-   never gets routed back to `/spec:design`). If `design: true` with
+   {path}` (`designed:` set = the design stage already ran). If `design: true` with
    **no** `design_source`, note that `/spec:design` will author the mock first (its
    mock-authoring preamble — shared § Design Binding Pipeline); a mock already in `design/mocks/`
    (ratified by `/spec:sketch`, or swept by `/spec:atlas`) becomes the `design_source`

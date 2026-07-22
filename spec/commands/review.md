@@ -267,23 +267,18 @@ the build branch; `{worktree}` the worktree path (omit `--worktree` if no worktr
 
 ## Next pointer (every CLEAN close — merge-back run or skipped)
 
-The last lines of the session's closing output, printed after the Phase 4 verify result —
-or, when Phase 4 was skipped (review ran directly on the originating branch), immediately
-after the skip note:
+Close the session's output — after the Phase 4 verify result, or straight after the skip
+note when Phase 4 didn't run — with the **verbatim** output of:
 
 ```
 node "$(spec-paths spec-status)" --root {root} --next
 ```
 
-`{root}` is the project root: the `{mergeBack} root` output when Phase 4 ran, else the
-repo root of the spec path (`git rev-parse --show-toplevel`). Print the script's output
-**verbatim**. It is the only source of the "what now" suggestion — never derive the next
-spec, brief, or dependency state from conversation memory (stale context is how a
-`designed:`/already-done spec gets re-suggested). If the script's pick surprises you, say
-so — but its lines still print unaltered. If the run errors, print the error and no Next
-line at all — an absent suggestion is correct, a hand-derived one never is. Non-CLEAN
-closes get no Next pointer: the verdict line already names the next step (build must fix),
-and any other suggestion there would be freehand by construction.
+`{root}`: the `{mergeBack} root` output when Phase 4 ran, else `git rev-parse
+--show-toplevel` on the spec path. The script is the only source of the "what now"
+suggestion; if its pick surprises you, say so — its lines still print unaltered. If the
+run errors, print the error and no Next line (absent beats hand-derived). Non-CLEAN closes
+get no Next pointer — the verdict line already names the fix step.
 
 ## Rules
 

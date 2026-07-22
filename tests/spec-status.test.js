@@ -170,6 +170,73 @@ test('roadmap-less host still reports open specs, no crash', () => {
   assert.match(r.stdout, /01-a\.md — hardened/, 'open specs listed without a roadmap')
 })
 
+// --next (2026-07-22): the end-of-run "Next:" line used to be freehand improvisation — no
+// doctrine produced it, so it contradicted /spec:status (incident: a spec with `designed:`
+// set kept being routed back to /spec:design). The mapping now lives in the script; command
+// epilogues print its output verbatim.
+
+test('--next routes hardened+design to /spec:design only until designed: is stamped', () => {
+  const dir = host({
+    briefs: {},
+    specs: {
+      '20260719/04-ui.md': 'date: 2026-07-19\nstatus: hardened\ndesign: true',
+      '20260719/05-ui.md': 'date: 2026-07-19\nstatus: hardened\ndesign: true\ndesigned: 2026-07-21',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--next'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout, /\/spec:design specs\/20260719\/04-ui\.md — hardened \[design\]/, 'no designed: stamp → design stage first, tagged with the same [design] marker as the listing')
+  assert.match(r.stdout, /\/spec:build specs\/20260719\/05-ui\.md/, 'designed: set → design already ran, go to build')
+  assert.doesNotMatch(r.stdout, /\/spec:design specs\/20260719\/05-ui\.md/, 'the incident: a designed spec must never be routed back to /spec:design')
+  const listing = runNode(SCRIPT, ['--root', dir])
+  assert.match(listing.stdout, /05-ui\.md — hardened \[designed\]/, 'the open-specs listing distinguishes designed from design-pending')
+})
+
+test('--next orders closest-to-done first and sinks blocked specs with blockers named', () => {
+  const dir = host({
+    briefs: {},
+    specs: {
+      '20260701/01-draft.md': 'date: 2026-07-01\nstatus: draft',
+      '20260701/02-ready.md': 'date: 2026-07-01\nstatus: hardened',
+      '20260701/03-inflight.md': 'date: 2026-07-01\nstatus: implementing',
+      '20260701/04-blocked.md': 'date: 2026-07-01\nstatus: hardened\ndepends_on: [specs/20260701/03-inflight.md]',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--next'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const out = r.stdout.trim().split('\n')
+  assert.match(out[0], /^Next: \/spec:review specs\/20260701\/03-inflight\.md/, 'implementing is closest to done — top pick')
+  assert.match(out[1], /^Then: \/spec:build specs\/20260701\/02-ready\.md/)
+  assert.match(out[2], /^Then: \/spec:plan specs\/20260701\/01-draft\.md/)
+  assert.match(out[3], /^Blocked: \/spec:build specs\/20260701\/04-blocked\.md.*waiting on specs\/20260701\/03-inflight\.md \(implementing\)/)
+})
+
+test('--next falls through to planning the next ready unplanned brief when all specs are done', () => {
+  const dir = host({
+    briefs: BRIEFS,
+    specs: {
+      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
+      '20260705/01-billing.md': 'date: 2026-07-05\nstatus: done\nbrief: 02',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--next'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout, /^Next: \/spec:plan docs\/roadmap\/03-reports\.md/, 'briefs 01+02 done → 03 is ready to plan')
+  const j = JSON.parse(runNode(SCRIPT, ['--root', dir, '--next', '--json']).stdout)
+  assert.strictEqual(j.next[0].action, '/spec:plan')
+  assert.strictEqual(j.next[0].brief, '03')
+})
+
+test('--next with nothing actionable says so instead of inventing work', () => {
+  const dir = host({
+    briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
+    specs: { '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01' },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--next'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout, /nothing next — all specs done, no unplanned briefs/)
+})
+
 test('consumers are wired to the one derivation', () => {
   assert.match(read('spec/bin/spec-paths'), /spec-status\)\s+echo "\$ROOT\/scripts\/spec-status\.js"/,
     'spec-paths must expose the script')
@@ -179,4 +246,8 @@ test('consumers are wired to the one derivation', () => {
     'doctor check 14 must run the script, not re-describe the greps')
   assert.match(read('spec/commands/plan.md'), /spec-paths spec-status.*--brief/,
     'plan Phase 0 dependency preflight must use --brief mode')
+  assert.match(read('spec/commands/status.md'), /spec-status.*--next/s,
+    '/spec:status section 2 must print --next verbatim, not re-derive the mapping in prose')
+  assert.match(read('spec/commands/review.md'), /spec-status.*--next/s,
+    'review close must print --next verbatim — the freehand Next line is the incident this mode kills')
 })

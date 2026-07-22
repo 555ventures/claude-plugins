@@ -834,9 +834,14 @@ rows keep their rigorous, machine-parseable style; this section governs only the
 - **Close the loop.** A report never ends with a bare diagnosis, a symmetric options list,
   or an open "what next?" — it closes with exactly **one** recommended next action (usually
   a command), with a one-phrase why. Diagnosis whose next step isn't named is an unfinished
-  report. The recommendation is derived, never inferred: before naming a command, read the
-  target's on-disk state (`status:` frontmatter, or `/spec:status`) and name the command
-  that state admits — adjacency (the dependent spec, the next-numbered brief) is not state.
+  report. The recommendation is derived, never inferred — adjacency (the dependent spec,
+  the next-numbered brief) is not state. When the question is "which spec/brief next", the
+  answer is `node "$(spec-paths spec-status)" --next` printed verbatim — never a mapping
+  re-applied from frontmatter by hand (that prose path is how `designed:`-stamped specs got
+  re-routed to `/spec:design`). Same-spec chains a stage owns (`/spec:build {path}` after
+  its own design pass, `/spec:review $ARGUMENTS` after build) stay literal. If the script
+  errors, print the error and no recommendation — an absent suggestion is recoverable, a
+  hand-derived one is the incident.
 
 ## Workflows Encode Shape, Not Judgment
 

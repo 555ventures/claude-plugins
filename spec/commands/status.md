@@ -26,11 +26,22 @@ node "$(spec-paths spec-status)" --root .
 ```
 
 With a brief number in `$ARGUMENTS` (e.g. `/spec:status 04`), run the single-brief preflight
-instead and report just that brief's dependency readiness:
+instead and report **only** that brief's dependency readiness — no `--next` run, no full
+Render (the script rejects `--brief` + `--next` combined):
 
 ```
 node "$(spec-paths spec-status)" --root . --brief NN
 ```
+
+In the full (no-argument) form, also run the next-action derivation — its output is the
+Render step's section 2, verbatim:
+
+```
+node "$(spec-paths spec-status)" --root . --next
+```
+
+If either run errors, print the error and stop — never reconstruct statuses or a next
+suggestion by hand; an absent answer is correct, a hand-derived one never is.
 
 ## Render (Console Output Style — outcome first, then the table)
 
@@ -39,18 +50,24 @@ skipped"** or **"🟠 brief 02 looks skipped — 03 is in flight on top of it"**
 
 1. **Roadmap table** as the script prints it (brief, phase, derived status, specs). Skip the
    section entirely when the host has no roadmap.
-2. **Open specs** — every non-`done` spec with its status; for each, name the natural next
-   command: `draft` → `/spec:plan <path>` to finish hardening; `hardened` → `/spec:build
-   <path>`, or `/spec:design <path>` first when the script marks it `[design]`;
-   `implementing` → `/spec:review <path>`.
+2. **Next actions** — print the `--next` output **verbatim**. It supersedes the base run's
+   `open specs:` listing — do not print that block too. The mapping lives in the script,
+   not here: it already routes `draft` → `/spec:plan`, `hardened` → `/spec:build` (via
+   `/spec:design` first only while the spec is tagged `[design]`; the tag flips to
+   `[designed]` once the `designed:` stamp is set, meaning the design stage already ran —
+   re-suggesting `/spec:design` for a `[designed]` spec is the drift this mode exists to
+   kill), `implementing` → `/spec:review`, sinks `Blocked:` entries to the bottom with
+   their blockers named, and falls through to planning the next ready unplanned brief when
+   every spec is done. Never re-derive or reorder these lines.
 3. **Anomalies** — each `[kind]` line reframed in plain language with its one-step remedy:
    - `skipped-brief` / `out-of-order` — the script's line already embeds the `/spec:plan`
      command to run.
    - `orphan-stamp` / `unknown-dependency` — advise correcting the `brief:` stamp or the
      brief's `Depends on` list to the surviving file name (advice about a *pointer*, offered
      to the user — not a status change, and not an edit this command performs).
-   - `skipped-spec` — the unfinished dependency is the work item: name its own next command
-     per its status (usually `/spec:review`).
+   - `skipped-spec` — the unfinished dependency is the work item: point at its line in
+     section 2 (the `--next` output already carries its command — usually `/spec:review`),
+     never re-derive it here.
    - `hand-tracked-status` — see below.
 
    An empty anomaly list is worth saying out loud: it's the "you didn't forget anything"

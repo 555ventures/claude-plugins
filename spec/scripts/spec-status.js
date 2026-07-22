@@ -1,13 +1,22 @@
 #!/usr/bin/env node
 'use strict'
-// spec-status.js [--root <dir>] [--json] [--brief NN] — derive pipeline status, never store it.
+// spec-status.js [--root <dir>] [--json] [--brief NN] [--next] — derive pipeline status,
+// never store it.
 //
 // The single source of truth for "where is the work": specs/** frontmatter (`status:`,
-// `brief:`, `depends_on:`) and docs/roadmap/NN-*.md headers (`Depends on:`). Roadmap brief
-// status is DERIVED per /spec:doctor check 14 — no specs stamped `brief: NN` → unplanned;
-// any matching spec not done → in-flight; all matching specs done → done. Nothing here
-// writes; this is a viewer. Consumers: /spec:status (render), /spec:doctor check 14
-// (drift report), /spec:plan Phase 0 (--brief dependency preflight).
+// `brief:`, `depends_on:`, `design:`, `designed:`) and docs/roadmap/NN-*.md headers
+// (`Depends on:`). Roadmap brief status is DERIVED per /spec:doctor check 14 — no specs
+// stamped `brief: NN` → unplanned; any matching spec not done → in-flight; all matching
+// specs done → done. Nothing here writes; this is a viewer. Consumers: /spec:status
+// (render + --next section 2), /spec:doctor check 14 (drift report), /spec:plan Phase 0
+// (--brief dependency preflight), and the /spec:review close-out Next pointer (--next).
+//
+// --next derives the recommended next command per open spec — the mapping that used to
+// live as renderer prose (and, worse, as end-of-run improvisation): draft → /spec:plan;
+// hardened + design: true without a `designed:` stamp → /spec:design; hardened otherwise →
+// /spec:build (`designed:` set means the design stage already ran — never route back to
+// /spec:design); implementing → /spec:review. Closest-to-done first, blocked entries last,
+// and when every spec is done the next ready unplanned brief becomes the /spec:plan pick.
 //
 // Exit codes: 0 derived (anomalies are report lines, not failures); with --brief NN,
 // 1 = that brief has an unmet dependency (no spec at implementing/done); 2 = usage.
@@ -30,15 +39,21 @@ function briefOrd(num) {
 let root = '.'
 let json = false
 let briefFilter = null
+let nextMode = false
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--root') root = argv[++i]
   else if (argv[i] === '--json') json = true
   else if (argv[i] === '--brief') briefFilter = normBrief(argv[++i])
+  else if (argv[i] === '--next') nextMode = true
   else {
-    console.error('usage: spec-status.js [--root <dir>] [--json] [--brief NN]')
+    console.error('usage: spec-status.js [--root <dir>] [--json] [--brief NN | --next]')
     process.exit(2)
   }
+}
+if (nextMode && briefFilter) {
+  console.error('--next and --brief are mutually exclusive')
+  process.exit(2)
 }
 
 // ---- specs/** frontmatter -------------------------------------------------------------------
@@ -82,6 +97,7 @@ for (const file of walkMd(path.join(root, 'specs'))) {
     area: fm.area || null,
     date: fm.date || null,
     design: fm.design === 'true',
+    designed: fm.designed || null,
     depends_on: parseList(fm.depends_on),
   })
 }
@@ -176,6 +192,78 @@ if (fs.existsSync(overview)) {
   }
 }
 
+// ---- --next: recommended next command --------------------------------------------------------
+
+function specDep(ref) {
+  return specByTail.get(path.basename(ref)) || specs.find(x => x.path === ref || x.path.endsWith('/' + ref))
+}
+
+if (nextMode) {
+  const entries = []
+  for (const s of specs) {
+    if (DONE(s.status)) continue
+    // designed: set = the design stage already ran for this spec — never route back to design.
+    const action =
+      s.status === 'draft' ? '/spec:plan'
+      : s.status === 'implementing' ? '/spec:review'
+      : s.design && !s.designed ? '/spec:design'
+      : '/spec:build'
+    const blockers = []
+    for (const d of s.depends_on) {
+      const dep = specDep(d)
+      if (dep && !DONE(dep.status)) blockers.push(`${dep.path} (${dep.status})`)
+    }
+    if (s.status === 'draft' && s.brief && briefByNum.has(s.brief)) {
+      for (const d of briefByNum.get(s.brief).depends_on) {
+        const dep = briefByNum.get(d)
+        if (!dep || !dep.specs.some(x => LANDED(x.status))) blockers.push(`brief ${d} (${dep ? dep.status : 'missing'})`)
+      }
+    }
+    const rank = s.status === 'implementing' ? 0 : s.status === 'hardened' ? 1 : 2
+    entries.push({
+      action, path: s.path, status: s.status, brief: s.brief, blockers,
+      note: s.status + (s.design ? (s.designed ? ' [designed]' : ' [design]') : '')
+        + (s.brief ? ` (brief ${s.brief})` : ''),
+      rank,
+    })
+  }
+  // Closest-to-done first (review > build/design > plan), blocked entries last, then brief
+  // order, then path — the first line is THE recommendation.
+  entries.sort((a, b) =>
+    (a.blockers.length ? 1 : 0) - (b.blockers.length ? 1 : 0)
+    || a.rank - b.rank
+    || (a.brief ? briefOrd(a.brief) : Infinity) - (b.brief ? briefOrd(b.brief) : Infinity)
+    || a.path.localeCompare(b.path))
+
+  // Every spec done (or only blocked ones left): the next ready unplanned brief is the pick.
+  const readyBriefs = briefs
+    .filter(b => b.status === 'unplanned' && b.depends_on.every(d => {
+      const dep = briefByNum.get(d)
+      return dep && dep.specs.some(x => LANDED(x.status))
+    }))
+    .sort((a, b) => briefOrd(a.num) - briefOrd(b.num))
+  if (readyBriefs.length && !entries.some(e => !e.blockers.length)) {
+    const b = readyBriefs[0]
+    entries.unshift({ action: '/spec:plan', path: b.file, status: 'unplanned', brief: b.num, blockers: [], note: `brief ${b.num} (${b.name}) unplanned, dependencies met`, rank: -1 })
+  }
+
+  if (json) {
+    console.log(JSON.stringify({ next: entries.map(({ rank, ...e }) => e) }, null, 2))
+  } else if (!entries.length) {
+    const unplanned = briefs.filter(b => b.status === 'unplanned').length
+    console.log(specs.length === 0 && !unplanned ? 'nothing next — no specs or briefs found'
+      : unplanned ? `nothing actionable — all specs done; ${unplanned} unplanned brief(s) blocked on unmet dependencies`
+      : 'nothing next — all specs done, no unplanned briefs')
+  } else {
+    entries.forEach((e, i) => {
+      const label = e.blockers.length ? 'Blocked:' : i === 0 ? 'Next:' : 'Then:'
+      const tail = e.blockers.length ? ` — ${e.note}; waiting on ${e.blockers.join(', ')}` : ` — ${e.note}`
+      console.log(`${label} ${e.action} ${e.path}${tail}`)
+    })
+  }
+  process.exit(0)
+}
+
 // ---- --brief NN preflight -------------------------------------------------------------------
 
 if (briefFilter) {
@@ -227,7 +315,7 @@ if (specs.length === 0) lines.push('no specs found under specs/')
 else if (open.length === 0) lines.push(`all ${specs.length} specs done`)
 else {
   lines.push('open specs:')
-  for (const s of open) lines.push(`  ${s.path} — ${s.status}${s.design ? ' [design]' : ''}${s.brief ? ` (brief ${s.brief})` : ''}`)
+  for (const s of open) lines.push(`  ${s.path} — ${s.status}${s.design ? (s.designed ? ' [designed]' : ' [design]') : ''}${s.brief ? ` (brief ${s.brief})` : ''}`)
 }
 
 if (anomalies.length) {

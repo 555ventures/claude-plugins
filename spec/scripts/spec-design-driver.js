@@ -290,7 +290,7 @@ const SKELETON_SHAPE_NOMOCK = `4. Write ${sidecar}/skeletons.json — per surfac
 function visionReviewBlock() {
   if (!designSource || marks['vision-reviewed'] || !design.command) return ''
   return `## Advisory: vision review (render vs mock, region by region — never fail-closes)
-1. Run ${design.command} and open the expanded component's catalog entry; screenshot it.
+1. Screenshot the expanded component's catalog entry${design.screenshot ? ' via the host screenshot command: ' + design.screenshot : ' from a catalog instance the USER runs (ask them; the catalog command is theirs, never yours)'}.
 2. Open/screenshot the bound mock slice(s) for the same region(s): ${sidecar}/slice-*.html.
 3. Dispatch ONE vision-capable consult (Agent {model:"fable"}, Opus fallback) with both images:
    compare render vs mock REGION BY REGION and return a divergence list keyed by regionRef.
@@ -403,7 +403,10 @@ Issue correction notes and dispatch Sonnet to apply them (you edit nothing), re-
 (${gateCmd || 'host gate'}), checkpoint-commit when green. Then:  spec-design-driver ${specPath} --mark visual-done`,
 
   ITERATE: () => `${visionReviewBlock()}## Step: human catalog loop (round ${(marks.rounds || 0) + 1}; cold between rounds by design)
-Tell the user: run \`${design.command}\`, review the catalog entries (showcase first).
+Hand off with exactly this block (real values; the user runs the command — never launch it):
+  🎨 **ready for review** — run: \`${design.command}\` (showcase first)
+  🆕 <components added/changed this round>
+  👀 <one line per component: what to look for>
 AskUserQuestion: Approve / Iterate (notes via Other). Dismissed → STOP (state is on disk).
 
 Iterate round protocol:

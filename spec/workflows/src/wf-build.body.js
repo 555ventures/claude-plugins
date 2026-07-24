@@ -278,7 +278,10 @@ if (args.tdd && (args.testBatches || []).length) {
   const red = await agent(
     `Run: ${args.gate.testCommand} ${testFiles}\n` +
     `These tests were just written for a spec whose implementation does not exist yet, so every ` +
-    `newly written test MUST fail. Report allRed=true only if all of them fail; list any that pass ` +
+    `newly written test MUST fail — EXCEPT tests for regression-pin ACs (the AC text contains ` +
+    `"SHALL CONTINUE TO"): those pin existing behavior and are expected to PASS against ` +
+    `pre-change code; a FAILING pin test is the defect to report, not red-state success. ` +
+    `Report allRed=true only if all non-pin tests fail; list any non-pin test that passes ` +
     `in unexpectedlyPassing. Do not edit any file.`,
     { label: 'red-check', phase: 'RedCheck', schema: RED, model: 'sonnet', effort: 'low' })
   // FAIL CLOSED: a null red-check (agent died) is an UNVERIFIED red state, not an all-red one —

@@ -166,7 +166,16 @@ While drafting:
   ambiguity-prone term (rounding mode, ordering,
   inclusive/exclusive bounds, timezone, null vs empty) with a literal input → output example.
   T3 ACs always carry at least one literal example. Test authors derive tests from the spec
-  alone — a concrete pair is the only wording they cannot misread.
+  alone — a concrete pair is the only wording they cannot misread. When the spec fixes a
+  defect or deliberately changes existing behavior (bugfix briefs, escape-driven specs,
+  declared refactors — judged at plan time, recorded either way), write a **regression
+  pin** per behavior that must survive the change, not one per spec: `WHEN {trigger} THE
+  SYSTEM SHALL CONTINUE TO {existing observable behavior}`. The literal words `SHALL
+  CONTINUE TO` are the pin's machine-visible marker — never paraphrase them. A pin's test
+  verifies behavior that already works: prefer tagging the existing covering test with the
+  AC-ID (that test file becomes a File Plan row) over writing a duplicate, and either way
+  the test is expected **green against pre-change code** — pins are the sanctioned
+  exception to red-first test authoring (the build red-check knows this).
 - Run your own pre-mortem (plausible failure modes worked backwards) and over-engineering check
   (counterfactual test + broken-vs-ugly test) — these are part of drafting, not separate passes.
 - Every genuine design fork → `AskUserQuestion` **now**, with options grounded in exploration.
@@ -220,7 +229,10 @@ Never silently drop a finding.
    for specs predating the field. Lock requires `open_markers: 0`.
 2. Confirm: zero open forks, **Rationale** and **Canonical Delta** written, ACs mapped to test
    files, every shape-triggered micro-spike (Phase 1.5) executed with its evidence recorded in
-   Assumptions, and every promise in the **Goal** traced to a Decision that delivers it plus
+   Assumptions, for a defect-fix/behavior-change spec at least one regression pin
+   (`SHALL CONTINUE TO`) or a Rationale line saying why no neighbor needs pinning — lock
+   owns this check; review never lints for pin presence — and every promise in the **Goal**
+   traced to a Decision that delivers it plus
    an AC that goes red in that Decision's absence — a promise with no mechanism, or a
    mechanism no AC can catch missing, blocks lock (add the Decision/AC or strike the promise).
    This is an in-session check, not an emitted table: ACs are written from Decisions, so a

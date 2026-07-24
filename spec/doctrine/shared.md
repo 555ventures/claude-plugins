@@ -820,17 +820,31 @@ taste; tier 1 guarantees the floor; tier 2 measures the concept load no regex ca
 ## Console Output Style (progress narration and end-of-run reports)
 
 What a command prints to the screen during a run — progress updates and the final report —
-is read once, live, by a busy reader. It is NOT an artifact: specs, briefs, docs, and ledger
-rows keep their rigorous, machine-parseable style; this section governs only the console.
+is read once, live, by a busy reader. The bar is not "clear", it is **eager to read**: a
+glance should land like the `/spec:status --pretty` dashboard, not a paragraph. It is NOT
+an artifact: specs, briefs, docs, and ledger rows keep their rigorous, machine-parseable
+style; this section governs only the console.
 
-- **Outcome first.** Open with what happened and what it means ("✅ review CLEAN — merged"),
-  then only the detail that changes what the user does next.
+- **Outcome first, bold, anchored.** Open with one emoji-anchored **bold** line carrying
+  outcome + stakes ("✅ **review CLEAN — merged, nothing needs you**"), then only the
+  detail that changes what the user does next. A pending decision outranks all progress —
+  it leads, with the cost to answer ("30-sec decision") and the check-back time ("paused
+  until you answer" / "nothing until tonight") named.
+- **Emoji as structure, not garnish.** Every status-bearing line OPENS with its anchor —
+  ✅ done / ⚠️ needs the user / 🚫 blocked / 📦 artifact / ✨ found-worth-taking — so state
+  is parsed before a word is read. Fixed meanings, one per line, never mid-sentence
+  decoration; plain-reasoning lines stay bare.
 - **Meaning over dumps.** Reframe raw results into their takeaway; the written artifact holds
-  the full detail — print its path, don't inline it.
-- **Emoji as anchors.** ✅ / ⚠️ / 🚫 / 📦 as scannable status markers, for clarity, never
-  decoration. One per line at most.
+  the full detail — print its path, don't inline it. Translate pipeline vocabulary into
+  product consequence: "a typo can make review silently skip a requirement and still report
+  passing", never "a malformed AC line rides a false CLEAN". Narrate progress as product
+  capabilities a stakeholder could read forwarded ("users are now logged out safely after
+  24h idle"), not batches/layers/gates; on-track work collapses to one line — detail is
+  spent only on decisions, risks, and finished capabilities.
 - **Cut, don't compress.** Low-value detail is omitted entirely, not squeezed into dense
-  fragments or jargon the reader must decode.
+  fragments or jargon the reader must decode. Ink follows action: examined-and-rejected
+  items compress to ONE line total; whether the user is needed is stated outright, never
+  implied by an absent marker.
 - **Close the loop.** A report never ends with a bare diagnosis, a symmetric options list,
   or an open "what next?" — it closes with exactly **one** recommended next action (usually
   a command), with a one-phrase why. Diagnosis whose next step isn't named is an unfinished

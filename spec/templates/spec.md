@@ -88,7 +88,11 @@ depended_on_by: []
      be read two ways (rounding mode, ordering, inclusive/exclusive bounds, timezone, null vs
      empty), pin it with a literal input → output example — test authors derive tests from
      this spec alone, and a concrete pair is the only wording they cannot misread. T3 ACs
-     always carry at least one literal example. -->
+     always carry at least one literal example. Defect-fix/behavior-change specs carry a
+     regression pin per behavior that must survive: WHEN {trigger} THE SYSTEM SHALL
+     CONTINUE TO {existing behavior} — literal marker, never paraphrased. Pin tests are
+     expected GREEN against pre-change code (the sanctioned exception to red-first);
+     prefer tagging the existing covering test with the AC-ID over duplicating it. -->
 
 - **AC-{YYYYMMDD-NN}-1**: WHEN { trigger/state } THE SYSTEM SHALL { observable response }
   (e.g. `{ literal input }` → `{ literal output }`) → { test reference } in { test file }

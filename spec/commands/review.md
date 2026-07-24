@@ -54,10 +54,18 @@ absolute path — it is the `scriptPath` for the Workflow call below.
 3. Read the spec once; extract File Plan dirs, AC list, tier, area. Compute `{diffLoc}` =
    insertions + deletions from `git diff --shortstat {base}` — it scales the reviewer panel
    (a small diff never pays a 2-reviewer panel, whatever the tier).
-4. **No `driftScript` only — AC coverage matrix (mechanical):** for each AC-ID in the spec,
-   grep the File Plan's test paths for it. Any AC-ID with zero hits is an **uncovered AC** —
-   an automatic `hard` finding that skips the refutation filter (it is a deterministic fact,
-   not a reviewer claim). Computed before the reviewer panel runs.
+4. **AC hygiene + coverage (mechanical):** first, in **both drift modes**, lint AC-line
+   shape: strip HTML comments and walk only the top-level `- ` bullets of the spec's
+   `## Acceptance Criteria` section — nothing outside that section is linted. A bullet whose
+   leading bold token is not a full anchored match of `AC-\d{8}-\d{2}-\d+` is a **malformed
+   AC**, an automatic `hard` finding (a malformed ID is invisible to every AC-ID grep —
+   this matrix's, step 5's, and a host `driftScript`'s — so without the lint the AC would
+   silently drop out of coverage and ride to CLEAN). Then, **no `driftScript` only**, the
+   AC coverage matrix: for each well-formed AC-ID, grep the File Plan's test paths for it.
+   Any AC-ID with zero hits is an **uncovered AC** — an automatic `hard` finding that skips
+   the refutation filter (it is a deterministic fact, not a reviewer claim). Computed before
+   the reviewer panel runs. (Pin presence — `SHALL CONTINUE TO` on defect-fix specs — is
+   plan lock's check, never review's.)
 5. **Skipped-test reconciliation (mechanical, both drift modes):** the matrix counts
    **executed** tests, never collected ones — a skip is not a pass. If the gate run reported
    skipped/todo tests, map each skipped test back to its AC-IDs (grep the skipped file/test

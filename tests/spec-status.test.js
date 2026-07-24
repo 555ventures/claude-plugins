@@ -340,11 +340,10 @@ test('--pretty draws unblocked parallel-ok runner-ups as lanes and sinks serial/
   const r = runNode(SCRIPT, ['--root', dir, '--pretty'])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.match(r.stdout, /⚡ 2 parallel lanes/, 'top pick + parallel-ok runner-up form the lane group')
-  assert.match(r.stdout, /┌─ 🔨 \/spec:build 01-billing\.md.*◀ main/, 'the top pick is marked as the main lane, path shortened to basename for narrow terminals')
-  assert.match(r.stdout, /└─ 🔨 \/spec:build 03-reports\.md/, 'the parallel-ok runner-up is the second lane')
-  assert.match(r.stdout, /02-billing-b\.md.*⛓ shared brief 02/, 'serial runner-up sinks below the lanes with its reason')
-  assert.match(r.stdout, /⛔ blocked:\n.*04-blocked\.md\s+⏳ 01-billing\.md/, 'blocked entries close the section, blockers shortened to basenames')
-  assert.doesNotMatch(r.stdout, /specs\/20260710/, 'no full spec paths in the dashboard — they wrap narrow terminals; the plain --next keeps them')
+  assert.match(r.stdout, /lanes[^\n]*\n\/spec:build @specs\/20260710\/01-billing\.md\n\/spec:build @specs\/20260710\/03-reports\.md/,
+    'lane lines are bare flush-left commands — top pick first, parallel-ok runner-up second')
+  assert.match(r.stdout, /🕓 after that:\n\/spec:build @specs\/20260710\/02-billing-b\.md/, 'serial runner-up sinks below the lanes')
+  assert.match(r.stdout, /⛔ blocked:\n\/spec:build @specs\/20260710\/04-blocked\.md\n\s+└─ ⏳ 01-billing/, 'blocked entries close the section, each blocker a tree branch under its command')
 })
 
 // brief: n/a (2026-07-22): JJ's ad-hoc specs — work the roadmap missed — carried `brief: n/a`
@@ -379,7 +378,7 @@ test('--pretty folds spec-scoped anomalies onto their Next lines instead of a bo
   })
   const r = runNode(SCRIPT, ['--root', dir, '--pretty'])
   assert.strictEqual(r.status, 0, r.stderr)
-  assert.match(r.stdout, /\/spec:build 01-x\.md\s+hardened \(brief 07\)\s+⚠️ orphan-stamp/,
+  assert.match(r.stdout, /\/spec:build @specs\/20260701\/01-x\.md\s+⚠️ orphan-stamp/,
     'the orphan-stamp rides the spec\'s own Next line as a ⚠️ tag')
   assert.match(r.stdout, /⚠️ 1 anomaly — each tagged ⚠️ on its 🎯 Next line/,
     'all anomalies folded → one summary line, no section repeating the paths')

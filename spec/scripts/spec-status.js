@@ -353,7 +353,6 @@ if (briefFilter) {
 
 if (pretty) {
   const out = []
-  const ACTION_ICON = { '/spec:plan': '📝', '/spec:design': '🎨', '/spec:build': '🔨', '/spec:review': '🔍' }
   const BRIEF_ICON = { done: '✅', 'in-flight': '🔨', unplanned: '⬜' }
 
   const doneB = briefs.filter(b => b.status === 'done').length
@@ -409,37 +408,37 @@ if (pretty) {
   if (!entries.length) {
     out.push(`   ✨ ${nothingNextLine()}`)
   } else {
-    // Narrow-terminal budget: basenames instead of full paths (full paths live in the plain
-    // --next output and the spec files themselves), aligned action/file columns, blockers
-    // shortened to basenames — a wrapped lane connector is worse than a shortened path.
-    const nameOf = p => {
-      const base = path.basename(p)
-      return entries.filter(x => path.basename(x.path) === base).length > 1 ? p : base
-    }
-    const aw = Math.max(...entries.map(e => e.action.length))
-    const nw = Math.max(...entries.map(e => nameOf(e.path).length))
-    const fmtEntry = (e, tail) => (`${ACTION_ICON[e.action] || '▪️'} ${e.action.padEnd(aw)} ${(nameOf(e.path)).padEnd(nw)}  ${tail}`
-      + (inlineKinds.has(e.path) ? `  ⚠️ ${inlineKinds.get(e.path).join(', ')}` : '')).trimEnd()
-    const shortBlockers = e => e.blockers.map(b => b.replace(/^\S*\//, '').replace(/\s*\([^)]*\)$/, '')).join(', ')
+    // Operator-first: every runnable line IS exactly what you paste into Claude Code —
+    // flush-left "action @path", no icons, indent, padding, or status words around it
+    // (any of those poison a triple-click paste or slash-command detection). Status is
+    // already encoded one-to-one in the action itself. Context rides only on headers and
+    // on lines never pasted as-is: blocked ⏳ reasons and anomaly ⚠️ tags trail the line.
+    const warn = e => inlineKinds.has(e.path) ? `  ⚠️ ${inlineKinds.get(e.path).join(', ')}` : ''
+    const cmd = e => `${e.action} @${e.path}${warn(e)}`
+    const shortBlocker = b => b.replace(/^\S*\//, '').replace(/\s*\([^)]*\)$/, '').replace(/\.md$/, '')
     const unblocked = entries.filter(e => !e.blockers.length)
     const blocked = entries.filter(e => e.blockers.length)
     if (unblocked.length) {
       const lanes = [unblocked[0], ...unblocked.slice(1).filter(e => e.parallel === true)]
       if (lanes.length > 1) {
-        out.push(`   ⚡ ${lanes.length} parallel lanes — one worktree each (/git:enter-worktree):`)
-        lanes.forEach((e, i) => out.push(`   ${i === 0 ? '┌─' : i === lanes.length - 1 ? '└─' : '├─'} ${fmtEntry(e, `${e.note}${i === 0 ? '  ◀ main' : ''}`)}`))
+        out.push(`⚡ ${lanes.length} parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):`)
+        lanes.forEach(e => out.push(cmd(e)))
       } else {
-        out.push(`   ▶  ${fmtEntry(unblocked[0], unblocked[0].note)}`)
+        out.push(cmd(unblocked[0]))
       }
       const later = unblocked.slice(1).filter(e => e.parallel !== true)
       if (later.length) {
-        out.push('   🕓 after that:')
-        later.forEach((e, i) => out.push(`   ${i === later.length - 1 ? '└─' : '├─'} ${fmtEntry(e, `${e.note}${e.parallel === false ? `  ⛓ ${e.parallelReason}` : ''}`)}`))
+        out.push('', '🕓 after that:')
+        later.forEach(e => out.push(cmd(e)))
       }
     }
     if (blocked.length) {
-      out.push('   ⛔ blocked:')
-      blocked.forEach((e, i) => out.push(`   ${i === blocked.length - 1 ? '└─' : '├─'} ${fmtEntry(e, `⏳ ${shortBlockers(e)}`)}`))
+      out.push('', '⛔ blocked:')
+      blocked.forEach(e => {
+        out.push(cmd(e))
+        e.blockers.forEach((b, i) =>
+          out.push(`   ${i === e.blockers.length - 1 ? '└─' : '├─'} ⏳ ${shortBlocker(b)}`))
+      })
     }
   }
 

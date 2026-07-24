@@ -184,14 +184,21 @@ function batchPrompt(b) {
 // read from silently starving the fix of a contract it never saw — a green gate that violates an
 // unread contract is a defect, not a repair. Tests authored independently from the spec are the
 // backstop that makes this lean read safe here (build only); design's repair stays full-grounding.
-function repairPrompt(b, fails, round) {
+function repairPrompt(b, fails, round, history) {
   const resolution = (args.resolutions || {})[b.id]
+  // Prior-round failures are shown so a late-round worker can detect oscillation (its "fix" is a
+  // re-proposal of an approach an earlier round already tried and the gate already rejected) —
+  // without this, each wave is blind to the circle it may be walking. Files on disk carry the
+  // prior fixes' STATE, but only this block carries their OUTCOME.
+  const prior = (history || []).map(h =>
+    `Round ${h.round}:\n${h.fails.map(f => `- ${f.file} — ${f.summary}`).join('\n')}`).join('\n')
   return [
     `You are repairing files you already authored for a hardened spec — the deterministic gate failed on them. Fix ONLY what the failures below name; do not re-author from scratch and do not touch unrelated code.`,
     doctrineBlock(b.agentType),
     `These files are already on disk — Read each one before editing it:\n${fileList(b)}`,
     `You do not need the whole spec. In the spec at ${args.specPath}, read the "Decisions" table (authoritative — apply it verbatim) and the "Contracts" / "UI" entries for the files above (the API and library shapes your fix must satisfy). If a failure or a referenced contract points into another section, read that section too — a green gate that violates a contract you did not read is a defect, not a fix.`,
     resolution ? `## Orchestrator ruling (revision ${resolution})\nA ruling for this batch is recorded in the spec's Decisions table — apply it exactly.` : '',
+    prior ? `## Already attempted (earlier repair rounds)\nThese failures were repaired in earlier rounds and the gate re-ran afterward:\n${prior}\nIf a failure below matches one of these, the earlier approach was wrong or caused a regression elsewhere — do NOT repeat it; take a different approach. If your fix would undo an earlier round's fix, reconcile both instead of trading one failure for the other.` : '',
     `## Gate failures to fix (repair round ${round})\n${fails.map(f => `- ${f.file} — ${f.summary}`).join('\n')}`,
     // A test batch (it carries acIds) repairs under the SAME test discipline it was authored
     // under — without this, a repair could quietly turn a spec-derived test into an
@@ -326,6 +333,10 @@ let gate = null
 // catches OSCILLATION (fix A → break B → fix B → break A forever), which a no-progress check on an
 // ever-changing set never terminates.
 let prevFailKey = null
+// Per-batch failure history across repair rounds (bid -> [{round, fails}]). Fed into repairPrompt
+// so late-round workers see what earlier rounds already tried — the anti-oscillation counterpart
+// to prevFailKey, which only TERMINATES on repetition and never warns the repairer.
+const repairHistory = {}
 for (let round = 0; round <= 3; round++) {
   gate = await agent(
     `Run this command exactly as written and report results. Do not edit any file.\n\n( ${gateCmd} ) && echo ${GATE_SENTINEL}\n\n` +
@@ -366,9 +377,17 @@ for (let round = 0; round <= 3; round++) {
 
   log(`Gate round ${round} failed — repairing batches: ${Object.keys(byBatch).join(', ')}`)
   const repairEntries = Object.entries(byBatch)
+  // Snapshot each batch's PRIOR-round history for the prompt before recording this round —
+  // the current failures belong in "to fix", not "already attempted".
+  const historySnapshot = {}
+  for (const [bid, fails] of repairEntries) {
+    historySnapshot[bid] = (repairHistory[bid] || []).slice()
+    if (!repairHistory[bid]) repairHistory[bid] = []
+    repairHistory[bid].push({ round: round + 1, fails })
+  }
   const repairOut = await parallel(repairEntries.map(([bid, fails]) => () =>
     dispatch(
-      repairPrompt(batchById[bid], fails, round + 1),
+      repairPrompt(batchById[bid], fails, round + 1, historySnapshot[bid]),
       {
         label: `repair:${bid}:r${round + 1}`, phase: 'Gate', schema: RECEIPT,
         agentType: resolveType(batchById[bid].agentType), model: 'sonnet',

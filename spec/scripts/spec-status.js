@@ -454,6 +454,10 @@ if (pretty) {
     for (const a of standalone) out.push(`   ${ANOM_ICON[a.kind] || '⚠️'} [${a.kind}] ${a.detail}`)
   }
 
+  // Redraw from the top of the viewport (not a scrollback wipe) so re-invoking the dashboard
+  // never leaves it stranded wherever the cursor last scrolled to — only when stdout is a TTY,
+  // so piped/redirected output stays clean of escape codes.
+  if (process.stdout.isTTY) process.stdout.write('\x1Bc')
   console.log(out.join('\n'))
   process.exit(0)
 }

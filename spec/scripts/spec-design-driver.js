@@ -251,7 +251,7 @@ function feasibilityReport() {
 // paraphrase of the slice, the exact fidelity hole + token cost this contract removes). With no
 // mock there is no external truth: the skeleton IS the design and carries the full tree.
 const SKELETON_SHAPE_MOCK = `4. Write ${sidecar}/skeletons.json — per bound REGION a BINDING MAP (judgment only; NO tree): { id,
-   decision: author|bind, componentPath, storyPath, bind{component,from,propBindings},
+   decision: author|bind, componentPath, catalogEntryPath, bind{component,from,propBindings},
    regionRef: "<surfaceId>#<regionId>" (REQUIRED on author entries — bind ONLY the regions this
    spec builds, from the feasibility list above; binding a region covers its subtree; regionRefs[]
    when one component spans several. The region's slice file is the binding authority for
@@ -264,7 +264,7 @@ const SKELETON_SHAPE_MOCK = `4. Write ${sidecar}/skeletons.json — per bound RE
    The driver checks each bound region FAIL-CLOSED at author-green/round-green, by string CLASS:
    copy = verbatim in your files OR as a VALUE in a declared copy catalog (design.copyCatalogs —
    the i18n home; catalog key order never matters); template = its static segments survive;
-   sample (sc-for rows) = present in the pass (story fixtures are the home); binding ({{ expr }})
+   sample (sc-for rows) = present in the pass (catalog-entry fixtures are the home); binding ({{ expr }})
    = renders from a prop, never grepped. Unbound regions are notes, tracked by the coverage
    ledger for later briefs. Confirm each variantProposal: a theme/breakpoint variant becomes a
    token-pair / responsive obligation on the SAME skeletons, never a second string contract.
@@ -275,7 +275,7 @@ const SKELETON_SHAPE_MOCK = `4. Write ${sidecar}/skeletons.json — per bound RE
    (shared § mock supremacy). Route every proposed row through the Fable retainer (same agent,
    SendMessage) before writing it — the retainer adjudicates the proof, this session records it.`
 const SKELETON_SHAPE_NOMOCK = `4. Write ${sidecar}/skeletons.json — per surface: { id, decision: author|bind, componentPath,
-   storyPath, bind{component,from,propBindings}, imports[], tree[{el,slot,children,bind,
+   catalogEntryPath, bind{component,from,propBindings}, imports[], tree[{el,slot,children,bind,
    style:{property: tokenROLE}}], props[], states[], mockRef{state:fixture}, tokens[closed
    allowlist], shared, usedBy, containment, coherenceGroup, waveOrder } plus top-level
    {schemaVersion, source:{sha256}, tokenForks[]}. Every style value is a ROLE, never a literal.`

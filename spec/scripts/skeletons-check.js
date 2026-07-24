@@ -113,7 +113,7 @@ skeletons.forEach((s, i) => {
     // A half-converted entry (bind decision, author payload) makes a worker author a component
     // the bind decision said not to — reject the contradiction at the producer.
     if (s.tree !== undefined) err(at + '.tree', 'decision="bind" must not carry a tree — a bind imports an existing component')
-    if (s.componentPath !== undefined) err(at + '.componentPath', 'decision="bind" writes no new component file — remove componentPath (storyPath is where the catalog entry lands)')
+    if (s.componentPath !== undefined) err(at + '.componentPath', 'decision="bind" writes no new component file — remove componentPath (catalogEntryPath is where the catalog entry lands)')
   } else { // author — two shapes, split by region/slice binding (mock-bound vs no-mock)
     if (!isStr(s.componentPath)) err(at + '.componentPath', 'decision="author" needs a string componentPath')
     // Mock-bound = regionRef ("<surfaceId>#<regionId>", bare surface = root) or regionRefs[],

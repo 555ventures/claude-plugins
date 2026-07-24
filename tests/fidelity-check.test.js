@@ -172,11 +172,11 @@ test('a mock surface with no bound region is a note, not a failure (spec covers 
 // gate must accept `Remove ${member.name}` for "Remove Jamie Chen" without opening a hole for
 // shortened static copy.
 
-test('composite string passes via a template-literal hole; bare instance data via story fixture', () => {
+test('composite string passes via a template-literal hole; bare instance data via catalog-entry fixture', () => {
   const f = fixture({
     strings: ['Remove Jamie Chen', 'Jamie Chen', 'Remove'],
     skeletons: { skeletons: [{ id: 's1', decision: 'author', componentPath: 'src/S1.tsx',
-      storyPath: 'src/S1.stories.tsx', sliceRef: 'slice-s1.html', states: ['default'], tokens: ['surface'] }] },
+      catalogEntryPath: 'src/S1.stories.tsx', sliceRef: 'slice-s1.html', states: ['default'], tokens: ['surface'] }] },
     files: {
       'src/S1.tsx': 'const a = `Remove ${member.name}`; <Button aria-label={a}>Remove</Button>',
       'src/S1.stories.tsx': 'export const Default = { args: { member: { name: "Jamie Chen" } } }',
@@ -252,7 +252,7 @@ const V3_SURFACE = {
 }
 const sidebarSkeleton = (files = {}) => ({
   skeletons: [{ id: 'sidebar-comp', decision: 'author', componentPath: 'src/Sidebar.tsx',
-    storyPath: 'src/Sidebar.stories.tsx', regionRef: 'app#sidebar', states: ['default'], tokens: ['surface'], ...files }],
+    catalogEntryPath: 'src/Sidebar.stories.tsx', regionRef: 'app#sidebar', states: ['default'], tokens: ['surface'], ...files }],
 })
 
 test('regionRef: bound region checked fail-closed; unbound region skipped with a note', () => {
@@ -327,7 +327,7 @@ test('regionRefs array binds several regions; layout is checked per bound region
   const f = fixture({
     surfaces: [V3_SURFACE],
     skeletons: { skeletons: [{ id: 'shell', decision: 'author', componentPath: 'src/Shell.tsx',
-      storyPath: 'src/Shell.stories.tsx',
+      catalogEntryPath: 'src/Shell.stories.tsx',
       regionRefs: ['app#sidebar', 'app#thread'], states: ['default'], tokens: ['x'] }] },
     files: {
       'src/Shell.tsx': '<div className="grid grid-cols-[1fr_auto]"><aside style={{flexDirection:"column"}}>' +

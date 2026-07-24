@@ -270,7 +270,7 @@ function commentLabel(text) {
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'region'
 
 // Classify one visible string into contract entries. Inside <sc-for>, copy demotes to SAMPLE
-// (instance data the story fixture carries); mustache-only text is a BINDING (renders from a
+// (instance data the catalog-entry fixture carries); mustache-only text is a BINDING (renders from a
 // prop — it must never become a verbatim contract row); mixed text is a TEMPLATE whose static
 // segments are the contract and whose holes are data.
 function classifyText(text, inFor) {

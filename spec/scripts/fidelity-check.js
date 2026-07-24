@@ -19,7 +19,7 @@
 //     mock strings. Order is checked only within code files; catalog key order is arbitrary.
 //   - String CLASSES check differently: `copy` = verbatim presence + order; `template`
 //     ("Invited {{ date }}") = each static segment present; `sample` (sc-for rows) = present
-//     anywhere in the pass (story fixtures are the natural home — that keeps the catalog render
+//     anywhere in the pass (catalog-entry fixtures are the natural home — that keeps the catalog render
 //     comparable to the mock), exempt from order; `binding` ({{ b.name }}) = renders from a
 //     prop, checked NOWHERE (v1 emitted these as literal contract rows — garbage obligations).
 //   - Composite copy mixing INSTANCE data ("Remove Jamie Chen") also passes via a code
@@ -142,7 +142,7 @@ function catalogHit(needle) {
 // regionRef / regionRefs: "<surfaceId>#<regionId>" (or "<surfaceId>" = the root region).
 // Legacy sliceRef (slice file name) and skeleton-id-matches-surface-id bind the root region.
 function filesOf(sk) {
-  return [sk.componentPath, sk.storyPath].filter(v => typeof v === 'string' && v.length > 0)
+  return [sk.componentPath, sk.catalogEntryPath].filter(v => typeof v === 'string' && v.length > 0)
 }
 function refsOf(sk) {
   const raw = []
@@ -364,12 +364,12 @@ for (const surf of surfaces) {
     }
     checkedStrings++
     const needle = norm(e.value)
-    // sample data: instance rows the story fixture carries — anywhere in the pass, order-exempt
+    // sample data: instance rows the catalog-entry fixture carries — anywhere in the pass, order-exempt
     if (e.kind === 'sample') {
       const hit = allFiles.some(f => contentOf(f) !== null && norm(contentOf(f)).includes(needle)) ||
         templateHit(allFiles, needle)
       if (!hit && !excuse(id, 'string', e.value)) {
-        failures.push(id + ' [' + e.region + ']: sample "' + e.value + '" missing — mock instance data must appear in the pass (story fixtures are the natural home)')
+        failures.push(id + ' [' + e.region + ']: sample "' + e.value + '" missing — mock instance data must appear in the pass (catalog-entry fixtures are the natural home)')
       }
       continue
     }

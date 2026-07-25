@@ -385,12 +385,52 @@ test('--pretty folds spec-scoped anomalies onto their Next lines instead of a bo
   assert.doesNotMatch(r.stdout, /\[orphan-stamp\]/, 'no bottom-section line for a folded anomaly')
 })
 
-test('--pretty stands alone: rejects --json, --brief, and --next combinations', () => {
+test('--pretty rejects --json and --brief; --next is the one sanctioned combo', () => {
   const dir = host({ briefs: {}, specs: {} })
-  for (const extra of [['--json'], ['--brief', '01'], ['--next']]) {
+  for (const extra of [['--json'], ['--brief', '01']]) {
     const r = runNode(SCRIPT, ['--root', dir, '--pretty', ...extra])
     assert.strictEqual(r.status, 2, `--pretty ${extra[0]} must be rejected`)
   }
+  const r = runNode(SCRIPT, ['--root', dir, '--pretty', '--next'])
+  assert.strictEqual(r.status, 0, r.stderr)
+})
+
+test('--next --pretty prints only the header and the top pick, @-prefixed', () => {
+  const dir = host({
+    briefs: {},
+    specs: {
+      '20260701/01-draft.md': 'date: 2026-07-01\nstatus: draft',
+      '20260701/02-ready.md': 'date: 2026-07-01\nstatus: hardened',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--next', '--pretty'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.strictEqual(r.stdout.trim(), '🎯 Next\n/spec:build @specs/20260701/02-ready.md',
+    'lean view is exactly the header plus the top-pick line — no Then/Blocked, no notes')
+})
+
+test('--next --pretty on an all-blocked set still shows the top entry, with its blocker named', () => {
+  const dir = host({
+    briefs: {},
+    specs: {
+      '20260701/01-inflight.md': 'date: 2026-07-01\nstatus: implementing',
+      '20260701/02-blocked.md': 'date: 2026-07-01\nstatus: hardened\ndepends_on: [specs/20260701/01-inflight.md]',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--next', '--pretty'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout, /^🎯 Next\n\/spec:review @specs\/20260701\/01-inflight\.md$/m,
+    'the unblocked implementing spec still wins the top slot over the blocked one')
+})
+
+test('--next --pretty with nothing actionable prints the header and the same message as plain --next', () => {
+  const dir = host({
+    briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
+    specs: { '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01' },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--next', '--pretty'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.strictEqual(r.stdout.trim(), '🎯 Next\n✨ nothing next — all specs done, no unplanned briefs')
 })
 
 test('consumers are wired to the one derivation', () => {

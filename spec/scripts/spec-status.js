@@ -57,7 +57,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (argv[i] === '--next') nextMode = true
   else if (argv[i] === '--pretty') pretty = true
   else {
-    console.error('usage: spec-status.js [--root <dir>] [--json] [--brief NN | --next | --pretty]')
+    console.error('usage: spec-status.js [--root <dir>] [--json] [--brief NN | --next [--pretty] | --pretty]')
     process.exit(2)
   }
 }
@@ -65,8 +65,8 @@ if (nextMode && briefFilter) {
   console.error('--next and --brief are mutually exclusive')
   process.exit(2)
 }
-if (pretty && (json || briefFilter || nextMode)) {
-  console.error('--pretty stands alone (it already embeds the --next derivation)')
+if (pretty && (json || briefFilter)) {
+  console.error('--pretty only combines with --next (lean top-pick view); not with --json/--brief')
   process.exit(2)
 }
 
@@ -299,6 +299,23 @@ function nothingNextLine() {
   return specs.length === 0 && !unplanned ? 'nothing next — no specs or briefs found'
     : unplanned ? `nothing actionable — all specs done; ${unplanned} unplanned brief(s) blocked on unmet dependencies`
     : 'nothing next — all specs done, no unplanned briefs'
+}
+
+// --next --pretty: the lean terminal view — just the top pick, @-prefixed so it triple-click
+// pastes straight into Claude Code, with none of the full dashboard's other sections.
+if (nextMode && pretty) {
+  const entries = deriveNext()
+  const out = ['🎯 Next']
+  if (!entries.length) {
+    out.push(`✨ ${nothingNextLine()}`)
+  } else {
+    const top = entries[0]
+    out.push(`${top.action} @${top.path}`)
+    top.blockers.forEach((b, i) =>
+      out.push(`   ${i === top.blockers.length - 1 ? '└─' : '├─'} ⏳ ${b}`))
+  }
+  console.log(out.join('\n'))
+  process.exit(0)
 }
 
 if (nextMode) {

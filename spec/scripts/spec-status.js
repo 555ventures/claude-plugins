@@ -3,6 +3,11 @@
 // spec-status.js [--root <dir>] [--json] [--brief NN] [--next] — derive pipeline status,
 // never store it.
 //
+// Human output is ALWAYS the pretty render: bare invocation → the emoji dashboard;
+// --next → the lean 🎯 top-pick line (@-prefixed so it pastes straight into Claude Code).
+// --json is the only machine format (doctor check 14, release). --pretty is accepted as a
+// no-op for old call sites; there is no plain human render anymore.
+//
 // The single source of truth for "where is the work": specs/** frontmatter (`status:`,
 // `brief:`, `depends_on:`, `design:`, `designed:`) and docs/roadmap/NN-*.md headers
 // (`Depends on:`). Roadmap brief status is DERIVED per /spec:doctor check 14 — no specs
@@ -48,25 +53,20 @@ let root = '.'
 let json = false
 let briefFilter = null
 let nextMode = false
-let pretty = false
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--root') root = argv[++i]
   else if (argv[i] === '--json') json = true
   else if (argv[i] === '--brief') briefFilter = normBrief(argv[++i])
   else if (argv[i] === '--next') nextMode = true
-  else if (argv[i] === '--pretty') pretty = true
+  else if (argv[i] === '--pretty') { /* no-op: pretty is the default human render */ }
   else {
-    console.error('usage: spec-status.js [--root <dir>] [--json] [--brief NN | --next [--pretty] | --pretty]')
+    console.error('usage: spec-status.js [--root <dir>] [--json] [--brief NN | --next]')
     process.exit(2)
   }
 }
 if (nextMode && briefFilter) {
   console.error('--next and --brief are mutually exclusive')
-  process.exit(2)
-}
-if (pretty && (json || briefFilter)) {
-  console.error('--pretty only combines with --next (lean top-pick view); not with --json/--brief')
   process.exit(2)
 }
 
@@ -227,8 +227,8 @@ function briefDepPath(a, b) {
   return false
 }
 
-// Shared by --next (plain, consumed verbatim by /spec:review close-out) and --pretty (the
-// /spec:status dashboard) — one derivation, two renders.
+// Shared by --next (the lean top-pick line, consumed verbatim by /spec:review close-out)
+// and the dashboard — one derivation, two renders.
 function deriveNext() {
   const entries = []
   for (const s of specs) {
@@ -301,10 +301,15 @@ function nothingNextLine() {
     : 'nothing next — all specs done, no unplanned briefs'
 }
 
-// --next --pretty: the lean terminal view — just the top pick, @-prefixed so it triple-click
-// pastes straight into Claude Code, with none of the full dashboard's other sections.
-if (nextMode && pretty) {
+// --next: the lean terminal view — just the top pick, @-prefixed so it triple-click pastes
+// straight into Claude Code, with none of the full dashboard's other sections. --json gets
+// the full entry list instead.
+if (nextMode) {
   const entries = deriveNext()
+  if (json) {
+    console.log(JSON.stringify({ next: entries.map(({ rank, parallelReason, ...e }) => ({ ...e, parallel: e.parallel === undefined ? null : e.parallel, parallel_reason: parallelReason || null })) }, null, 2))
+    process.exit(0)
+  }
   const out = ['🎯 Next']
   if (!entries.length) {
     out.push(`✨ ${nothingNextLine()}`)
@@ -315,24 +320,6 @@ if (nextMode && pretty) {
       out.push(`   ${i === top.blockers.length - 1 ? '└─' : '├─'} ⏳ ${b}`))
   }
   console.log(out.join('\n'))
-  process.exit(0)
-}
-
-if (nextMode) {
-  const entries = deriveNext()
-  if (json) {
-    console.log(JSON.stringify({ next: entries.map(({ rank, parallelReason, ...e }) => ({ ...e, parallel: e.parallel === undefined ? null : e.parallel, parallel_reason: parallelReason || null })) }, null, 2))
-  } else if (!entries.length) {
-    console.log(nothingNextLine())
-  } else {
-    entries.forEach((e, i) => {
-      const label = e.blockers.length ? 'Blocked:' : i === 0 ? 'Next:' : 'Then:'
-      const par = e.parallel === true ? '; parallel-ok with Next'
-        : e.parallel === false ? `; serial after Next — ${e.parallelReason}` : ''
-      const tail = e.blockers.length ? ` — ${e.note}; waiting on ${e.blockers.join(', ')}` : ` — ${e.note}${par}`
-      console.log(`${label} ${e.action} ${e.path}${tail}`)
-    })
-  }
   process.exit(0)
 }
 
@@ -362,13 +349,18 @@ if (briefFilter) {
   process.exit(unmet.length ? 1 : 0)
 }
 
-// ---- --pretty: the /spec:status dashboard ---------------------------------------------------
+// ---- the /spec:status dashboard (default render) --------------------------------------------
 // Deterministic emoji render of the same derivation: verdict line, roadmap with per-brief
 // progress bars (consecutive unplanned briefs collapse to one row), the next-action lanes
 // (parallel-ok runner-ups drawn as fan-out lanes under the top pick), anomalies. Purely a
-// view — same data as the plain report + --next, styled here so no renderer re-derives it.
+// view — same data as --json, styled here so no renderer re-derives it.
 
-if (pretty) {
+if (json) {
+  console.log(JSON.stringify({ briefs: briefs.map(({ specs: ss, ...b }) => ({ ...b, specs: ss.map(s => ({ path: s.path, status: s.status })) })), specs, anomalies }, null, 2))
+  process.exit(0)
+}
+
+{
   const out = []
   const BRIEF_ICON = { done: '✅', 'in-flight': '🔨', unplanned: '⬜' }
 
@@ -476,41 +468,4 @@ if (pretty) {
   // so piped/redirected output stays clean of escape codes.
   if (process.stdout.isTTY) process.stdout.write('\x1Bc')
   console.log(out.join('\n'))
-  process.exit(0)
 }
-
-// ---- report ---------------------------------------------------------------------------------
-
-if (json) {
-  console.log(JSON.stringify({ briefs: briefs.map(({ specs: ss, ...b }) => ({ ...b, specs: ss.map(s => ({ path: s.path, status: s.status })) })), specs, anomalies }, null, 2))
-  process.exit(0)
-}
-
-const lines = []
-if (briefs.length) {
-  lines.push('| Brief | Phase | Status | Specs |')
-  lines.push('|-------|-------|--------|-------|')
-  for (const b of briefs) {
-    const detail = b.specs.length ? b.specs.map(s => `${path.basename(s.path)}:${s.status}`).join(', ') : '—'
-    lines.push(`| ${b.num} ${b.name} | ${b.phase || '—'} | ${b.status} | ${detail} |`)
-  }
-} else {
-  lines.push('no docs/roadmap/NN-*.md briefs found' + (fs.existsSync(roadmapDir) ? '' : ' (no docs/roadmap/)'))
-}
-
-const open = specs.filter(s => !DONE(s.status))
-lines.push('')
-if (specs.length === 0) lines.push('no specs found under specs/')
-else if (open.length === 0) lines.push(`all ${specs.length} specs done`)
-else {
-  lines.push('open specs:')
-  for (const s of open) lines.push(`  ${s.path} — ${s.status}${s.design ? (s.designed ? ' [designed]' : ' [design]') : ''}${s.brief ? ` (brief ${s.brief})` : ''}`)
-}
-
-if (anomalies.length) {
-  lines.push('')
-  lines.push('anomalies:')
-  for (const a of anomalies) lines.push(`  [${a.kind}] ${a.detail}`)
-}
-
-console.log(lines.join('\n'))

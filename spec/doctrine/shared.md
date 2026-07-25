@@ -821,7 +821,7 @@ taste; tier 1 guarantees the floor; tier 2 measures the concept load no regex ca
 
 What a command prints to the screen during a run — progress updates and the final report —
 is read once, live, by a busy reader. The bar is not "clear", it is **eager to read**: a
-glance should land like the `/spec:status --pretty` dashboard, not a paragraph. It is NOT
+glance should land like the `/spec:status` dashboard, not a paragraph. It is NOT
 an artifact: specs, briefs, docs, and ledger rows keep their rigorous, machine-parseable
 style; this section governs only the console.
 

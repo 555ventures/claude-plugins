@@ -21,29 +21,30 @@ judgment happens here — the script derives, you render.
 
 ## Run
 
-One run — `--pretty` is the whole dashboard (verdict line, roadmap with progress bars, the
-next-action lanes, anomalies); it embeds the `--next` derivation, so there is no second run:
+One bare run IS the whole dashboard (verdict line, roadmap with progress bars, the
+next-action lanes, anomalies); it embeds the `--next` derivation, so there is no second run
+(`--pretty` is accepted as a no-op — pretty is the only human render):
 
 ```
-node "$(spec-paths spec-status)" --root . --pretty
+node "$(spec-paths spec-status)" --root .
 ```
 
 With a brief number in `$ARGUMENTS` (e.g. `/spec:status 04`), run the single-brief preflight
 instead and report **only** that brief's dependency readiness — no dashboard (the script
-rejects `--brief` combined with `--next` or `--pretty`):
+rejects `--brief` combined with `--next`):
 
 ```
 node "$(spec-paths spec-status)" --root . --brief NN
 ```
 
 If the run errors, print the error and stop — never reconstruct statuses or a next
-suggestion by hand; an absent answer is correct, a hand-derived one never is. (The plain
-`--next` mode still exists for other consumers — `/spec:review`'s close-out pointer — and
-prints the same entries without the dressing.)
+suggestion by hand; an absent answer is correct, a hand-derived one never is. (The `--next`
+mode still exists for other consumers — `/spec:review`'s close-out pointer — and prints just
+the 🎯 top pick.)
 
 ## Render (Console Output Style — the script output IS the render)
 
-Print the `--pretty` output **verbatim, as a fenced code block** so its alignment and lane
+Print the dashboard output **verbatim, as a fenced code block** so its alignment and lane
 connectors survive — every visual judgment (emoji, bars, lane grouping, ordering, the
 `Blocked` sinking, the all-done fall-through) lives in the script; never re-derive, reorder,
 restyle, or embellish its lines, and never rebuild it as a markdown table. Then add the one

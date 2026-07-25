@@ -930,3 +930,12 @@ fresh docs citation is a defect, not a sanctioned escalation.
 spec's Canonical Delta on `done` (creating the file if needed). Every landed spec makes more
 future work T1-shaped — this loop is what shrinks pipeline spend over time. Don't skip the
 delta to save a minute.
+
+## Doctrine Authoring
+
+One binding home per rule. When editing any plugin doctrine/command file, prose that restates
+canon living elsewhere (a shared-invariants section, genesis.md, a checker's own header, the
+dispatching workflow's prompt, or the same file's own body) shrinks to a pointer at its
+canonical home — never grows another full copy. Exception: guards a test deliberately pins on
+multiple surfaces (e.g. the reviewer stage-ownership carve-out) stay redundant; the pinning
+test is the marker.

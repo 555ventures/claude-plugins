@@ -93,9 +93,9 @@ const EMPHASES = [
 ]
 
 function reviewerPrompt(i) {
-  return `You are independently reviewing a spec implementation. Severity calibration:
-"hard" = violates an explicit project rule (CLAUDE.md / .claude/rules / the host's standards docs) or contradicts the spec;
-"medium" = bends a rule's intent without breaking it; "soft" = hygiene only.
+  return `You are independently reviewing a spec implementation. Your agent doctrine (system
+prompt) carries the severity calibration, finding requirements, and sanctioned-exception
+checks — apply them as written.
 
 ${EMPHASES[i]}
 Cover BOTH shape and correctness regardless of emphasis.
@@ -109,11 +109,6 @@ Method:
 ## Mechanical pattern sweep (pre-computed)
 Read ${args.patternsPath} — the host's mechanical shortcut-sweep output. Confirm or dismiss each non-zero row against the actual diff.
 
-Report only what you find — an empty findings list is a valid outcome for a clean implementation.
-Every finding needs a file:line you actually verified and a self-contained "claim" paragraph that
-someone can verify without your reasoning. Do not report scope/over-engineering opinions (the
-user's call), do not report things the spec explicitly decided (Decisions table), and do not
-report visual/styling choices on components approved via /spec:design (designed: in frontmatter).
 Do not report review-stage-owned artifacts as missing: the spec's Canonical Delta (applied to
 docs/canonical/) and the frontmatter status flip are applied by /spec:review AFTER your verdict —
 their absence from the diff is the expected precondition, never a finding.
@@ -133,14 +128,12 @@ Method:
 3. For each prior finding: verify the fix actually resolves the claim (read the changed code,
    not the commit message). An unresolved or partially resolved finding goes back into your
    findings output unchanged (same file/line/severity/claim/rule).
-4. Review the changed lines themselves for NEW defects the fixes introduced — same severity
-   calibration as any review ("hard" = violates an explicit project rule or contradicts the
-   spec at ${args.specPath}; "medium" = bends a rule's intent; "soft" = hygiene).
+4. Review the changed lines themselves for NEW defects the fixes introduced — the spec is at
+   ${args.specPath}; your agent doctrine (system prompt) carries the severity calibration,
+   finding requirements, and sanctioned-exception checks, same as any review.
 
 Do NOT re-review unchanged code — this pass is scoped to the fix diff and the prior findings.
-Report only what you find; an empty findings list is a valid outcome. Every finding needs a
-file:line you actually verified and a self-contained "claim" paragraph. You are read-only:
-never edit any file.`
+You are read-only: never edit any file.`
 }
 
 // One verifier per non-soft finding. Kills are GROUNDED or they don't happen: a kill requires

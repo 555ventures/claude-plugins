@@ -242,13 +242,13 @@ Never silently drop a finding.
    (`✅ spec hardened & locked — <path>`), then only what the user decided or should know:
    the decisions made this session in plain language (one line each), anything ⚠️ notable a
    refuter or spike surfaced, and the next command. Counts and field inventories stay in the
-   spec file. Next:
-   `/spec:design {path}` if `design: true` with no `designed:` stamp, else `/spec:build
-   {path}` (`designed:` set = the design stage already ran). If `design: true` with
-   **no** `design_source`, note that `/spec:design` will author the mock first (its
-   mock-authoring preamble — shared § Design Binding Pipeline); a mock already in `design/mocks/`
-   (ratified by `/spec:sketch`, or swept by `/spec:atlas`) becomes the `design_source`
-   starting point — record its path into the frontmatter now.
+   spec file. Next: run `node "$(spec-paths spec-status)" --root . --next` and print this
+   spec's line verbatim — the script is the sole derivation of `Next:` suggestions; never
+   hand-derive the design-vs-build routing here. Before reporting: if `design: true` with
+   **no** `design_source`, a mock already in `design/mocks/` (ratified by `/spec:sketch`,
+   or swept by `/spec:atlas`) becomes the `design_source` starting point — record its path
+   into the frontmatter now (with none, `/spec:design` authors the mock first — shared
+   § Design Binding Pipeline).
 
 ## Rules
 

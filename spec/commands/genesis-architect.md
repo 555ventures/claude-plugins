@@ -278,17 +278,25 @@ written against real code. Never pre-plan the whole roadmap into specs.
 
 ## Phase D — Report & hand off
 
-Open with one outcome line (`✅ architected — scaffold green, N ADRs, roadmap of M briefs` or
-`⚠️ …` with what needs the user), then only what changes the user's next step (§ Console
-Output Style). Report: archetype + audience, decisions made (with ADR paths), dissents recorded, the resolved
-gate command, scaffold result, roadmap (brief count, milestone gates). **Next:**
-`/spec:genesis-explore <same idea>` — or, for an archetype whose design stage is `none`
-(backend-api, data-ml), note that explore + design are skipped and the next step is `/spec:init`.
-Print the
-full remaining chain so initiation is never a mystery: genesis-explore → genesis-design (if any)
-→ **`/spec:atlas sweep` + the user's holistic atlas review** (design-capable archetypes only —
-the named stage where the whole product's sketches are audited before any UI brief is planned;
-shared § Design Atlas) → `/spec:init` → `/spec:enforce` → `/spec:plan docs/roadmap/01-*.md`.
+Print exactly this shape (rationale: shared § Console Output Style); fill the slots, drop
+any line whose slot is empty, add nothing else:
+
+```
+✅ **architected — scaffold green, {N} ADRs, roadmap of {M} briefs**
+   (or: ⚠️ **{what needs the user}**)
+- {archetype} for {audience}; gate: {resolved gate command}
+- {decision made — ADR path, one line each}
+⚠️ dissent recorded: {one-phrase summary, one line each}
+
+Next: /spec:genesis-explore {same idea}
+Chain: genesis-explore → genesis-design → /spec:atlas sweep + your holistic atlas review → /spec:init → /spec:enforce → /spec:plan docs/roadmap/01-*.md
+```
+
+For an archetype whose design stage is `none` (backend-api, data-ml): Next is `/spec:init`,
+with a note that explore + design are skipped, and the chain shrinks accordingly. The atlas
+review step (design-capable archetypes only) is where the whole product's sketches are
+audited before any UI brief is planned — shared § Design Atlas. The chain is always printed
+in full so initiation is never a mystery.
 
 ## Rules
 

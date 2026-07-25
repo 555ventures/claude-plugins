@@ -238,10 +238,18 @@ Never silently drop a finding.
    This is an in-session check, not an emitted table: ACs are written from Decisions, so a
    Goal promise no Decision covers stays green through every downstream gate.
 3. Flip frontmatter `status: draft → hardened`.
-4. Report — console style (§ Console Output Style): one outcome line
-   (`✅ spec hardened & locked — <path>`), then only what the user decided or should know:
-   the decisions made this session in plain language (one line each), anything ⚠️ notable a
-   refuter or spike surfaced, and the next command. Counts and field inventories stay in the
+4. Report — print exactly this shape (rationale: shared § Console Output Style); fill the
+   slots, drop any line whose slot is empty, add nothing else:
+
+   ```
+   ✅ **spec hardened & locked — {path}**
+   - {decision made this session, plain language — one line each}
+   ⚠️ {notable refuter/spike finding — only if any}
+
+   {spec-status --next output, verbatim}
+   ```
+
+   Counts and field inventories stay in the
    spec file. Next: run `node "$(spec-paths spec-status)" --root . --next` and print its
    output verbatim — the script is the sole derivation of the Next suggestion (it prints the
    🎯 top pick); never hand-derive the design-vs-build routing here. Before reporting: if `design: true` with

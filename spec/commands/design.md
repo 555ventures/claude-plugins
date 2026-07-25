@@ -95,9 +95,15 @@ conversation. The iteration loop is deliberately **cold between rounds** — the
 `design-log.md` carries each round's rulings, so no expensive session idles while the user looks
 at the catalog.
 
-When the driver prints `DONE`, report — open with one outcome line (`✅ designed — N components
-kept, manifest extended, spec reconciled; next /spec:build`), then only what changes the user's
-next step (§ Console Output Style).
+When the driver prints `DONE`, report — print exactly this shape (rationale: shared
+§ Console Output Style); fill the slots, drop any line whose slot is empty, add nothing else:
+
+```
+✅ **designed — {N} components kept, manifest extended, spec reconciled**
+⚠️ {anything that changes the user's next step}
+
+Next: /spec:build {specPath}
+```
 
 ## Rules (session-binding — the driver cannot enforce these)
 

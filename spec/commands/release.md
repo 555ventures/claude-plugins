@@ -111,13 +111,20 @@ later-spec`, `preventedBy: runtime-leg`). Never promote over a red staging.
    verbatim from the source material. No qualifying items → no brief (never write an empty
    one). Briefs are append-only: never edit a prior brief; a row the plugin repo's intake
    already stamped (`intake:` present) is never re-reported.
-4. **Release report** — open with one outcome line (`✅ milestone green — N specs composed,
-   staging + e2e passed, promoted` or `🚫 …` with what blocked promotion; § Console Output
-   Style): what shipped (briefs + specs), every executed observation (deploy,
-   ready, e2e counts, journeys walked with outcomes), substrate rows checked / inert-declared,
-   production verification, and anything that remains the user's or client's to do (the
-   `inert` rows, verbatim). Every line traces to an executed command — the report is the
-   client-facing artifact, so no claim may outrun its observation.
+4. **Release report** — print exactly this shape (rationale: shared § Console Output
+   Style); fill the slots, drop any line whose slot is empty, add nothing else:
+
+   ```
+   ✅ **milestone green — {N} specs composed, staging + e2e passed, promoted**
+      (or: 🚫 **{what blocked promotion}**)
+   - shipped: {briefs + specs}
+   - observed: {deploy, ready, e2e counts, journeys walked with outcomes — one line each}
+   - substrate: {rows checked / inert-declared} · production: {verification result}
+   ⚠️ yours / the client's to do: {inert rows, verbatim — one line each}
+   ```
+
+   Every line traces to an executed command — the report is the client-facing artifact, so
+   no claim may outrun its observation.
 
 ## Rules
 

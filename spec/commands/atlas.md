@@ -35,11 +35,16 @@ once and keep the path — `{atlas}` below. Read `.claude/spec.config.json` if p
 There are no modes to choose. Bare invocation detects everything from the build report and the
 user's input; `sweep` as an argument only skips the gap confirmation.
 
-1. `node {atlas} build` (add `--root` if not at repo root). Report — open with one outcome
-   line (`✅ atlas rebuilt — N surfaces (M bound, K gaps)`; § Console Output Style) — the
-   summary (counts by status) plus every `orphan` (mock no brief declares — offer: declare it in the owning
-   brief's `surfaces` block, or delete it) and any `bound`-but-drifted suspicion the user
-   raises.
+1. `node {atlas} build` (add `--root` if not at repo root). Report — print exactly this
+   shape (rationale: shared § Console Output Style); fill the slots, drop any line whose
+   slot is empty, add nothing else:
+
+   ```
+   ✅ **atlas rebuilt — {N} surfaces ({M} bound, {K} gaps)**
+   - orphan: {mock path} — declare in {owning brief} or delete
+   ⚠️ {bound-but-drifted suspicion the user raised}
+   📦 design/atlas/index.html
+   ```
 2. **Gaps in the report → offer the sweep** ("N declared surfaces have no mock — fill them at
    sketch tier?"). Yes → run the sweep below. Invoked as `/spec:atlas sweep`, skip the question
    and run it directly.

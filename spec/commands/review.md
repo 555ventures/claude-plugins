@@ -210,10 +210,17 @@ defect," and it must be made against the author's recorded intent, not recalled 
    folding.
 3. **Close commit:** commit everything still uncommitted on the working branch — status flip,
    canonical docs, any review-fix dispatches. The orchestrator owns git; never `--no-verify`.
-4. Report — console style (§ Console Output Style): one verdict line first
-   (`✅ CLEAN — merged` / `🚫 N hard findings — build must fix`), then each surviving
-   finding as one plain-language line (what breaks, where), then anything ⚠️ waived with
-   its one-phrase reason. Kill lists, full gate tables, and drift detail go to the ledger
+4. Report — print exactly this shape (rationale: shared § Console Output Style); fill the
+   slots, drop any line whose slot is empty, add nothing else:
+
+   ```
+   ✅ **CLEAN — merged**          (or: 🚫 **{N} hard findings — build must fix**)
+   - {surviving finding: what breaks, where — one plain-language line each}
+   ⚠️ waived: {finding — one-phrase reason}
+   📦 ledger: {ledger row path}
+   ```
+
+   Kill lists, full gate tables, and drift detail go to the ledger
    row, not the console — print paths.
 
 Then proceed directly into Phase 4 — the user does not re-invoke anything.

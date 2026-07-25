@@ -134,12 +134,16 @@ state gate blocks this command until `architect: scaffold-complete`; also verify
 
 ## Phase 4 — Report & hand off
 
-Open with one outcome line (`✅ picked — <position> wins, N grafts applied, matrix confirmed`),
-then only what changes the user's next step (§ Console Output Style). Report: research-brief
-path and rule counts by evidence tier, positions explored, the cull, the
-pick + grafts, walkthrough finding counts. **Next:** `/spec:genesis-design` — it ratifies the
-winner's `tokens.css` as canon and authors doctrine/rules around it; rejected candidates land in
-its `## Dissents`.
+Print exactly this shape (rationale: shared § Console Output Style); fill the slots, drop
+any line whose slot is empty, add nothing else:
+
+```
+✅ **picked — {position} wins, {N} grafts applied, matrix confirmed**
+- explored {positions}; culled {culled}; walkthrough: {finding counts}
+📦 {research-brief path} — {rule counts by evidence tier}
+
+Next: /spec:genesis-design — ratifies the winner's tokens.css as canon; rejected candidates land in its ## Dissents
+```
 
 ## Rules
 

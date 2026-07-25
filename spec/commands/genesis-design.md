@@ -202,14 +202,19 @@ Author directly (taste exception — not delegated to Sonnet):
 
 ## Phase 5 — Report & hand off
 
-Open with one outcome line (`✅ canon locked — direction ratified, N rules across M categories`
-or `⚠️ …` with what needs the user), then only what changes the user's next step (§ Console
-Output Style). Report: design direction chosen, dissents recorded, doctrine + token + consumed-surface paths, the
-**dimension ledger** (DECIDED vs DEFERRED-with-reason, and the token-family↔rule pairing for each
-DECIDED row), design-rules count by category, `designCatalog` for `/spec:init`'s `design` block (or
-`none`). **Next:** `/spec:init` —
-it grounds the repo and ends by invoking `/spec:enforce`, which generates the enforcement
-machinery from `design-rules.json` (plus the rest of the rule set).
+Print exactly this shape (rationale: shared § Console Output Style); fill the slots, drop
+any line whose slot is empty, add nothing else:
+
+```
+✅ **canon locked — {direction} ratified, {N} rules across {M} categories**
+   (or: ⚠️ **{what needs the user}**)
+- dimensions: {D} DECIDED (each token-family ↔ rule paired) · {K} DEFERRED — {one-phrase reasons}
+- designCatalog for /spec:init: {value, or none}
+⚠️ dissent recorded: {one-phrase summary, one line each}
+📦 {doctrine path} · {tokens path} · {consumed-surface path}
+
+Next: /spec:init — grounds the repo, then invokes /spec:enforce to generate enforcement from design-rules.json
+```
 
 ## Rules
 

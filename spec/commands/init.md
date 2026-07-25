@@ -504,16 +504,20 @@ Both modes also:
    layer is authored but not activated — fix and re-run. **Only after it passes**, stamp the
    config: `generatedBy` = `spec@$(spec-paths version)`, `contractHash` =
    `$(spec-paths contract-hash)`. The stamp asserts "mechanically verified," not "generated."
-5. Report — open with one outcome line (`✅ initialized — N files, gate verified, stamped` or
-   `⚠️ …` with what needs the user), then only what changes the user's next step (§ Console
-   Output Style): files written, agents generated (kind → name), config summary, T3 triggers chosen,
-   runtime contract (boot/ready commands, or declared inert + reason), substrate created vs
-   found (Phase 1.5), convention rules written (kind → globs), permissions summary
-   (allow/deny entry counts + any merge conflicts surfaced in Phase 2.5), skills generated
-   (spec-verify, run), manifest-check result table, design foundation landed (mode: genesis /
-   extracted / adopted / crafted, doctrine path); for `genesis` mode, the design-rules
-   categories found and the stamped `designRulesHash`; anything you could not verify and
-   flagged for the user.
+5. Report — print exactly this shape (rationale: shared § Console Output Style); fill the
+   slots, drop any line whose slot is empty, add nothing else:
+
+   ```
+   ✅ **initialized — {N} files, gate verified, stamped**    (or: ⚠️ **{what needs the user}**)
+   - agents: {kind → name, …} · skills: spec-verify, run · conventions: {kind → globs, …}
+   - runtime: {boot/ready commands, or inert — one-phrase reason} · substrate: {created / found}
+   - T3 triggers: {chosen} · permissions: {allow}/{deny} entries
+   - design foundation: {genesis / extracted / adopted / crafted} — {doctrine path}{; for genesis: rules categories + designRulesHash}
+   ⚠️ {merge conflict surfaced in Phase 2.5 / manifest-check failure / anything not verified — one line each}
+   ```
+
+   The manifest-check result stays a pass/fail mention — its full table lives in the run
+   output, not the console.
 
 ## Phase 8 — Generate enforcement (invoke `/spec:enforce`)
 

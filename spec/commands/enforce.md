@@ -185,13 +185,22 @@ when rules changed but enforcement was not regenerated — the early-detection s
 
 ## Phase 7 — Report
 
-Open with one outcome line (`✅ enforcement wired — N categories mechanized, M as Review-Check
-prose` or `⚠️ …` with what needs the user), then only what changes the user's next step
-(§ Console Output Style). Report: stacks detected; per category — the enforcer chosen (or the fallback) with its citation,
-verify result, and gate wiring; what was already-covered vs newly added; rules proposed and which
-the user accepted; the stamped `rulesEnforcementHash`; anything that fell to a Review-Check and
-why. Next: re-run the host's gate once to confirm the new checks pass on a clean tree (or surface
-the real violations they just caught).
+Print exactly this shape (rationale: shared § Console Output Style); fill the slots, drop
+any line whose slot is empty, add nothing else:
+
+```
+✅ **enforcement wired — {N} categories mechanized, {M} as Review-Check prose**
+   (or: ⚠️ **{what needs the user}**)
+- {category}: {enforcer chosen, or fallback} — {verify result}, {newly added / already covered}
+⚠️ Review-Check fallback: {category} — {one-phrase why}
+📦 rulesEnforcementHash {hash}
+
+Next: re-run the host gate once — confirms the new checks pass on a clean tree (or surfaces
+the real violations they just caught)
+```
+
+Rules proposed vs accepted were already settled interactively in their own phase — don't
+re-inventory them here.
 
 ## Rules
 

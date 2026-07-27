@@ -70,8 +70,26 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
      declares (e.g. `migration:`), AC list (TDD enabled iff ACs exist). In design-capable
      hosts, pure-UI rendering gets no TDD tests — the component catalog covers it; ACs are
      behavior.
+   - **Red/green expectations.** Classify every test-batch file `expect: "red" | "green"`
+     from the spec's own AC vocabulary — deterministic, no judgment call at probe time. A file
+     is `green` iff every AC it carries is a **sanctioned-green carrier**: a `SHALL CONTINUE
+     TO` regression pin, a negative-invariant/absence AC (asserts a construct is ABSENT from a
+     file the spec locks untouched), a tag-only AC (the AC-ID attaches to an existing test —
+     the file's File Plan action is *edit*, not *create* — with no assertion change), or a
+     test against a component the design stage pre-landed (per the component manifest). All
+     other files are `red`. The workflow verifies each file *matches* its expectation and
+     skips the probe entirely when nothing expects red — a spec whose carriers are all
+     sanctioned-green proceeds; it is not a red-check failure and never a reason for fastPath.
+     A pin's falsifiability is verified by hand when in doubt (mutate the target, watch it
+     redden, revert) — never by weakening or deleting the carrier.
 3. **Resolve the gate.** Take `gateCommand` and `testCommand` from config; substitute
-   `{testDirs}`/`{scopeDirs}` placeholders from the spec's File Plan dirs. Pass the
+   `{testDirs}`/`{scopeDirs}` placeholders from the spec's File Plan dirs. Also resolve
+   `typecheckCommand`: the host's standalone typecheck leg when config or the gate exposes one
+   (e.g. a `typecheck` script the gateCommand composes); `''` when the host has none. The
+   red-check treats a file as red if it fails **either** leg — a test red only under typecheck
+   (optional-property additions, new union members, assert-absence tests) is genuinely red
+   under the gate that will later judge the implementation, and a runtime-only probe cannot
+   see it. Pass the
    `pipelineRules` path (config value) as `pipelineRulesPath` — workers read its
    `## Worker Rules` / `## Test Rules` sections themselves. The workflow *script* has no
    filesystem access, but the agents it spawns do, so host rules and doctrines travel as PATHS
@@ -91,9 +109,12 @@ fan-out is overhead a one-batch spec never repays:
 
 1. TDD (if ACs exist): dispatch the test-author as one `Agent {subagent_type: <agentMap.tests>,
    model: "sonnet"}` (host agents resolve natively in-session — the doctrine-paths workaround
-   is a workflow-registry problem, not yours), then run `{testCommand} <test files>` yourself
-   and confirm every new test fails. A passing new test = the spec is wrong → `tdd-red-check`
-   handling per Phase 2.
+   is a workflow-registry problem, not yours), then run `{testCommand} <test files>` plus the
+   `typecheckCommand` leg yourself and check each file against its Phase 0 expectation: every
+   red-expected file fails (either leg), every green-expected carrier passes. A passing
+   red-expected test = the spec is wrong → `tdd-red-check` handling per Phase 2; a failing
+   green-expected carrier is a broken pin — a defect to diagnose, never red-state success.
+   All carriers green-expected → skip the probe and proceed.
 2. Dispatch the implementation batch as one `Agent {subagent_type: <agentMap kind>,
    model: "sonnet"}` — same grounding as any worker: Read the spec's Decisions / Contracts /
    UI / File Plan rows, pipeline rules § Worker Rules, blocked-on-fork, deviations sidecar
@@ -107,7 +128,8 @@ the fast path changes the execution vehicle, not the contract.
 
 **Workflow path (everything else).** Invoke `Workflow {scriptPath: <spec-paths wf-build
 output>, args: {specPath, tdd, testBatches, groups, resolutions: {}, agentMap, doctrinePaths,
-deviationsPath, gate: {command, testCommand}, pipelineRulesPath}}`. Pass `args` as a real JSON
+deviationsPath, gate: {command, testCommand, typecheckCommand}, pipelineRulesPath}}` — with
+each test-batch file carrying its Phase 0 `expect` value. Pass `args` as a real JSON
 object (the script tolerates the harness's stringified delivery, but never double-encode it
 yourself). `deviationsPath` is `<spec path minus .md>.deviations.md` — the sidecar workers
 append forced-but-unblocking departures to (Phase 2).
@@ -137,7 +159,7 @@ never write tests for code they implement.
 | Return stage | Action |
 |---|---|
 | `blocked` | Per item: if resolvable within the spec's stated intent → consult the **retainer**; if a genuine fork or scope change → retainer **decision brief** first (contract below), then `AskUserQuestion` authored from it. Write the ruling **prose into the spec's Decisions table** (that is where the worker reads it). Then set `args.resolutions[batchId]` to a short **token** — a hash of the ruling text or a monotonic counter, **never the ruling prose itself** — which busts the journal cache for that batch only. Keep `resolutions` **cumulative** across resumes: dropping an entry reverts that batch's prompt and silently un-applies its ruling. Resume with `resumeFromRunId`. |
-| `tdd-red-check` | Newly written tests pass before implementation — the spec is wrong somewhere, and *where* is the interpretive question. Consult the retainer for a diagnosis first: stale spec assumption, test targeting the wrong contract, or behavior that already exists — each claim cited `path:line`. Then confirm the fix (spec or tests) with the user and resume. |
+| `tdd-red-check` | A test file mismatched its expectation (the return's `mismatches` list names each file, its expected/observed state, and the deciding leg). A **red-expected file that passes** = the spec is wrong somewhere, and *where* is the interpretive question — consult the retainer for a diagnosis first: stale spec assumption, test targeting the wrong contract, behavior that already exists, or a carrier Phase 0 should have classified green — each claim cited `path:line`. A **green-expected carrier that fails** = a broken pin: the behavior it pins has drifted; diagnose the drift, never weaken the carrier. Then confirm the fix (spec, tests, or classification) with the user and resume. |
 | `out-of-scope-failure` | A gate failure implicates a file outside the File Plan. If the repair loop localized a mechanical cause (a stray import, a missed re-export), go straight to `AskUserQuestion`; if the cause is not localized, get a retainer decision brief first — a File Plan that missed a real coupling is a plan-authorship question. Options: add to scope (mini-batch) / file as a separate fix / pause the spec. Per Blast Radius Discipline — never silently widen. |
 | `gate-exhausted` | Repair loop hit its cap. Consult the retainer with the failure output before escalating to the user; if a fork remains after the consult, escalate with a decision brief. |
 | `complete` | Proceed to Phase 3. |

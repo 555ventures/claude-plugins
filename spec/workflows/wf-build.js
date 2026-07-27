@@ -101,7 +101,10 @@ args.groups = validateGroups(args.groups, 'wf-build')
 // normalizer above. args: {
 //   specPath: string,
 //   tdd: boolean,
-//   testBatches: [{id, agentType, files: [{path, action}], acIds: [string]}],
+//   testBatches: [{id, agentType, files: [{path, action, expect}], acIds: [string]}],
+//                                     // expect: 'red' | 'green' — the orchestrator classifies
+//                                     // each test file from the spec's AC vocabulary (see
+//                                     // build.md Phase 0); absent = 'red' (pre-6.29.0 callers)
 //   groups: [[{id, agentType, files: [{path, action}]}]],  // ordered; parallel within
 //   resolutions: {batchId: token},    // ruling token per blocked batch — its VALUE is an opaque
 //                                     // cache-bust salt (a hash/counter, NOT prose); the ruling
@@ -121,6 +124,9 @@ args.groups = validateGroups(args.groups, 'wf-build')
 //     command: string,      // fully resolved deterministic gate command (host gateCommand
 //                           // with {testDirs}/{scopeDirs} placeholders already substituted)
 //     testCommand: string,  // host test-runner prefix for the red check; file paths appended
+//     typecheckCommand: string,  // host typecheck leg for the red check ('' if the host has
+//                           // none) — red = fails EITHER leg; a test red only under
+//                           // typecheck is genuinely red (HEARWELL-20260721-01)
 //   },
 //   pipelineRulesPath: string,  // path to the host pipeline rules file; workers read its
 //                               // '## Worker Rules' / '## Test Rules' sections. '' if none.
@@ -160,11 +166,24 @@ const RECEIPT = {
 const RED = {
   type: 'object',
   properties: {
-    allRed: { type: 'boolean' },
-    unexpectedlyPassing: { type: 'array', items: { type: 'string' } },
+    allMatch: { type: 'boolean' },
+    mismatches: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          path: { type: 'string' },
+          expected: { type: 'string', enum: ['red', 'green'] },
+          observed: { type: 'string', enum: ['red', 'green', 'not-collected'] },
+          leg: { type: 'string', enum: ['runtime', 'typecheck', 'none'] },
+          detail: { type: 'string' },
+        },
+        required: ['path', 'expected', 'observed', 'detail'],
+      },
+    },
     summary: { type: 'string' },
   },
-  required: ['allRed', 'unexpectedlyPassing', 'summary'],
+  required: ['allMatch', 'mismatches', 'summary'],
 }
 
 const GATE = {
@@ -367,22 +386,55 @@ if (args.tdd && (args.testBatches || []).length) {
   }
 
   phase('RedCheck')
-  const testFiles = args.testBatches.flatMap(b => b.files.map(f => f.path)).join(' ')
-  const red = await agent(
-    `Run: ${args.gate.testCommand} ${testFiles}\n` +
-    `These tests were just written for a spec whose implementation does not exist yet, so every ` +
-    `newly written test MUST fail — EXCEPT tests for regression-pin ACs (the AC text contains ` +
-    `"SHALL CONTINUE TO"): those pin existing behavior and are expected to PASS against ` +
-    `pre-change code; a FAILING pin test is the defect to report, not red-state success. ` +
-    `Report allRed=true only if all non-pin tests fail; list any non-pin test that passes ` +
-    `in unexpectedlyPassing. Do not edit any file.`,
-    { label: 'red-check', phase: 'RedCheck', schema: RED, model: 'sonnet', effort: 'low' })
-  // FAIL CLOSED: a null red-check (agent died) is an UNVERIFIED red state, not an all-red one —
+  // Verdict = per-file expectation × gate-equivalent observation (intake HEARWELL-20260721-01,
+  // PRAX-20260726-01, UPWELL-20260718-01). Expectations arrive as DATA, classified by the
+  // orchestrator from the spec's own AC vocabulary: sanctioned-green carriers — a
+  // SHALL CONTINUE TO regression pin, a negative-invariant/absence pin, a tag-only AC
+  // re-tagging an existing passing test, or a test against a component pre-landed at the
+  // design stage — expect 'green'; everything else expects 'red'. This workflow never
+  // re-derives the classification; it verifies each file matches its expectation.
+  const expectations = args.testBatches.flatMap(b =>
+    b.files.map(f => ({ path: f.path, expect: f.expect === 'green' ? 'green' : 'red' })))
+  const redExpected = expectations.filter(f => f.expect === 'red')
+  const greenExpected = expectations.filter(f => f.expect === 'green')
+  let red = { allMatch: true, mismatches: [], summary: 'all carriers sanctioned-green; probe skipped' }
+  if (redExpected.length === 0) {
+    // Every carrier is sanctioned-green: there is no red-first state to verify, and under the
+    // old allRed contract this exact spec shape looped the build into fastPath abandonment.
+    log('RedCheck: every test file is a sanctioned-green carrier — probe skipped, proceeding')
+  } else {
+    red = await agent(
+      `Verify the TDD state of newly authored test files against the same gate that will later ` +
+      `judge the implementation. Run every command from the current working directory of this ` +
+      `dispatch — never cd out of it, and never let a tool resolve upward to a parent checkout.\n` +
+      `Expected RED (implementation does not exist yet — these MUST fail):\n` +
+      redExpected.map(f => `- ${f.path}`).join('\n') + '\n' +
+      (greenExpected.length
+        ? `Expected GREEN (sanctioned carriers pinning existing behavior — these MUST pass; a ` +
+          `failing one is a broken pin to report as a mismatch, never red-state success):\n` +
+          greenExpected.map(f => `- ${f.path}`).join('\n') + '\n'
+        : '') +
+      `Observe with BOTH legs — a file is red if EITHER fails on it:\n` +
+      `1. Runtime: ${args.gate.testCommand} <paths>\n` +
+      (args.gate.typecheckCommand
+        ? `2. Typecheck: ${args.gate.typecheckCommand} — a test red only under the typecheck ` +
+          `leg (e.g. asserting a property the schema does not declare yet) is genuinely red; ` +
+          `attribute typecheck failures to the test file that triggers them.\n`
+        : `2. Typecheck: this host declares no standalone typecheck leg; runtime is the only leg.\n`) +
+      `If the runner collects zero test files, that observation is INVALID, not green: the ` +
+      `test command is likely workspace-filtered while the paths are repo-root-relative — ` +
+      `rewrite the paths relative to the command's workspace and re-run before concluding; ` +
+      `report observed "not-collected" only if no rewrite makes the runner collect them.\n` +
+      `Report allMatch=true only when every file matches its expectation; list every mismatch ` +
+      `with the leg that decided it. Do not edit any file.`,
+      { label: 'red-check', phase: 'RedCheck', schema: RED, model: 'sonnet', effort: 'low' })
+  }
+  // FAIL CLOSED: a null red-check (agent died) is an UNVERIFIED red state, not a match —
   // proceeding would build on tests nobody confirmed fail. Surface it like a red-check failure.
-  if (!red || !red.allRed) {
+  if (!red || !red.allMatch) {
     return {
       stage: 'tdd-red-check',
-      passing: red ? red.unexpectedlyPassing : [],
+      mismatches: red ? red.mismatches : [],
       summary: red ? red.summary : 'red-check agent returned no result — TDD state unverified; re-run',
       completed: receipts, tokens: budget.spent(),
     }

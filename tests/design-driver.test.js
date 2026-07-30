@@ -51,6 +51,9 @@ test('full state walk: no-mockup path', () => {
   run(root, spec, '--mark', 'author-green', '--run-id', 'wf_abc123')
   // no screenshot command configured → straight to the human loop
   assert.strictEqual(stateOf(root, spec), 'ITERATE')
+  // the handoff block must demand WHERE to look (🔗 navigation per touched story), not just what —
+  // a mega-catalog host with six bare component names sends the reviewer hunting
+  assert.match(run(root, spec).stdout, /🔗 <one navigation line per story\/entry touched/)
 
   run(root, spec, '--mark', 'round-green')
   run(root, spec, '--mark', 'round-green')

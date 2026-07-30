@@ -113,6 +113,32 @@ test('a delta with a verified slice quote excuses a divergence; a forged quote d
   assert.match(fres.stderr, /sliceQuote not found/)
 })
 
+test('a delta addressing a region label instead of a surface id gets the addressing error, not a quote error', () => {
+  const f = fixture({
+    strings: ['Send invite'],
+    files: { 'src/S1.tsx': '<Button>Send</Button>' },
+    deltas: { deltas: [{ surfaceId: 's1.handoff.provenance', kind: 'string', target: 'Send invite',
+      sliceQuote: 'Send invite', proof: 'gate output: Button label max 6 chars' }] },
+  })
+  const res = run(f)
+  assert.strictEqual(res.status, 1)
+  assert.match(res.stderr, /unknown surfaceId "s1\.handoff\.provenance"/)
+  assert.match(res.stderr, /known: s1/) // lists the real ids so the fix is one glance away
+  assert.doesNotMatch(res.stderr, /sliceQuote not found/) // never blame the evidence for an addressing error
+})
+
+test('a verbatim carrier comment wrapped across // lines still matches contiguously', () => {
+  const f = fixture({
+    strings: ['We could not verify this claim against the primary source'],
+    files: { 'src/S1.tsx':
+      '// mock authority: "We could not verify this\n' +
+      '// claim against the primary source"\n' +
+      '<Note>{copy.unverified}</Note>' },
+  })
+  const res = run(f)
+  assert.strictEqual(res.status, 0, res.stderr)
+})
+
 test('a delta with an empty proof is itself a failure', () => {
   const f = fixture({
     strings: ['Send invite'],

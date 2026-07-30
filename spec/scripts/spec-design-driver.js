@@ -405,6 +405,11 @@ Issue correction notes and dispatch Sonnet to apply them (you edit nothing), re-
   ITERATE: () => `${visionReviewBlock()}## Step: human catalog loop (round ${(marks.rounds || 0) + 1}; cold between rounds by design)
 Hand off with exactly this block (real values; the user runs the command — never launch it):
   🎨 **ready for review** — run: \`${design.command}\` (showcase first)
+  🔗 <one navigation line per story/entry touched this round: WHERE to look, not just what.
+     When the catalog supports deep links they are mechanically derivable — derive them, never
+     omit (Storybook: /?path=/story/<title-slug>--<export-slug> from the story title + export
+     name). No deep links → the path within the catalog. A component landing inside an existing
+     entry names its row/section.>
   🆕 <components added/changed this round>
   👀 <one line per component: what to look for>
 AskUserQuestion: Approve / Iterate (notes via Other). Dismissed → STOP (state is on disk).

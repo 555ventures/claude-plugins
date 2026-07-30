@@ -159,6 +159,27 @@ function contentOf(rel) {
   }
   return contentCache.get(rel)
 }
+// A sanctioned verbatim-comment carrier (e.g. a mock-authority comment) wrapped across `//` lines
+// would silently fail the contiguous match: norm() collapses the newline but the continuation
+// line's own `//` marker interleaves into the collapsed text. Join consecutive full-line `//`
+// comments before matching — code-file haystacks only, never catalogs or template extraction.
+function joinLineComments(content) {
+  const lines = content.split('\n'); const out = []
+  for (const line of lines) {
+    const m = line.match(/^\s*\/\/ ?(.*)$/)
+    if (m && out.length && /^\s*\/\//.test(out[out.length - 1])) out[out.length - 1] += ' ' + m[1]
+    else out.push(line)
+  }
+  return out.join('\n')
+}
+const hayCache = new Map()
+function hayOf(rel) { // norm'd code-file haystack for copy/template-segment matching
+  if (!hayCache.has(rel)) {
+    const c = contentOf(rel)
+    hayCache.set(rel, c === null ? null : norm(joinLineComments(c)))
+  }
+  return hayCache.get(rel)
+}
 
 // ---- deltas (the evidence-gated exemption list) --------------------------------------------------
 const deltaDoc = readJson(path.join(sidecar, 'deltas.json'))
@@ -176,8 +197,18 @@ for (const [i, d] of deltas.entries()) {
     continue
   }
   const surf = (extract.surfaces || []).find(s => s.id === d.surfaceId)
-  const slice = surf ? fs.existsSync(path.join(sidecar, surf.sliceFile)) && fs.readFileSync(path.join(sidecar, surf.sliceFile), 'utf8') : null
-  if (!slice || typeof d.sliceQuote !== 'string' || !d.sliceQuote.trim() || !norm(slice).includes(norm(d.sliceQuote))) {
+  if (!surf) {
+    failures.push(at + ' (' + d.target + '): unknown surfaceId "' + d.surfaceId + '" — not a surface in extract.json (known: ' +
+      ((extract.surfaces || []).map(s => s.id).join(', ') || 'none') + '); a region label is not a surface id')
+    continue
+  }
+  const slicePath = path.join(sidecar, surf.sliceFile)
+  const slice = fs.existsSync(slicePath) ? fs.readFileSync(slicePath, 'utf8') : null
+  if (slice === null) {
+    failures.push(at + ' (' + d.target + '): slice file ' + surf.sliceFile + ' missing from the sidecar — cannot verify the quote')
+    continue
+  }
+  if (typeof d.sliceQuote !== 'string' || !d.sliceQuote.trim() || !norm(slice).includes(norm(d.sliceQuote))) {
     failures.push(at + ' (' + d.target + '): sliceQuote not found verbatim in the surface\'s slice — a delta must quote the mock line it diverges from')
     continue
   }
@@ -351,8 +382,8 @@ for (const surf of surfaces) {
       // the mock's own template: every meaningful STATIC segment must survive somewhere
       const segs = (e.segments || []).map(norm).filter(s => s.length >= 3)
       const missing = segs.filter(seg =>
-        !readable.some(f => norm(contentOf(f)).includes(seg)) &&
-        !allFiles.some(f => contentOf(f) !== null && norm(contentOf(f)).includes(seg)) &&
+        !readable.some(f => hayOf(f).includes(seg)) &&
+        !allFiles.some(f => hayOf(f) !== null && hayOf(f).includes(seg)) &&
         !catalogHit(seg) &&
         !catalogs.some(c => c.templates.some(t => t.map(norm).includes(seg)) ||
           [...c.values].some(v => v.includes(seg)) || (c.text !== null && c.text.includes(seg))))
@@ -366,7 +397,7 @@ for (const surf of surfaces) {
     const needle = norm(e.value)
     // sample data: instance rows the catalog-entry fixture carries — anywhere in the pass, order-exempt
     if (e.kind === 'sample') {
-      const hit = allFiles.some(f => contentOf(f) !== null && norm(contentOf(f)).includes(needle)) ||
+      const hit = allFiles.some(f => hayOf(f) !== null && hayOf(f).includes(needle)) ||
         templateHit(allFiles, needle)
       if (!hit && !excuse(id, 'string', e.value)) {
         failures.push(id + ' [' + e.region + ']: sample "' + e.value + '" missing — mock instance data must appear in the pass (catalog-entry fixtures are the natural home)')
@@ -376,7 +407,7 @@ for (const surf of surfaces) {
     // copy: verbatim in the region's own files → order candidate
     let where = null
     for (const f of readable) {
-      const idx = norm(contentOf(f)).indexOf(needle)
+      const idx = hayOf(f).indexOf(needle)
       if (idx > -1) { where = { file: f, index: idx }; break }
     }
     if (!where) {
@@ -385,7 +416,7 @@ for (const surf of surfaces) {
       if (templateHit(readable, needle)) { interpolated++; continue }
       const inCatalog = catalogHit(needle)
       if (inCatalog) { catalogHits++; continue } // catalog value = copy's i18n home; order N/A
-      const elsewhere = allFiles.find(f => !readable.includes(f) && contentOf(f) !== null && norm(contentOf(f)).includes(needle))
+      const elsewhere = allFiles.find(f => !readable.includes(f) && hayOf(f) !== null && hayOf(f).includes(needle))
       if (elsewhere) { notes.push(id + ': "' + e.value + '" found in ' + elsewhere + ' (outside the region\'s own files)'); continue }
       if (!excuse(id, 'string', e.value)) {
         failures.push(id + ' [' + e.region + ']: copy "' + e.value + '" missing — not in ' +
@@ -405,7 +436,7 @@ for (const surf of surfaces) {
     if (mockCount.get(needle) !== 1) continue
     const hit = foundAt.get(needle)
     if (!hit) continue
-    const hay = norm(contentOf(hit.file))
+    const hay = hayOf(hit.file)
     // unique in the file too — a repeated occurrence makes first-index ordering meaningless
     if (hay.indexOf(needle) !== hay.lastIndexOf(needle)) continue
     if (!byFile.has(hit.file)) byFile.set(hit.file, [])

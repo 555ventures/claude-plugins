@@ -141,8 +141,30 @@ function catalogHit(needle) {
 // ---- skeleton → region binding ---------------------------------------------------------------------
 // regionRef / regionRefs: "<surfaceId>#<regionId>" (or "<surfaceId>" = the root region).
 // Legacy sliceRef (slice file name) and skeleton-id-matches-surface-id bind the root region.
+// A family's `*.fixtures.*` sitting beside the component IS a resolved file, not an unchecked
+// renderer. The design doctrine's one-home rule splits bound strings by KIND — user-read copy
+// homes in the i18n catalog, sample data standing in for user content (titles, versions, counts,
+// meta lines) homes in the family's fixtures — and states outright that "the mock-fidelity gate
+// greps the fixtures home". Resolving only [componentPath, catalogEntryPath] left that half of
+// the rule unenforced: a spec whose sample data was correctly homed reported every such string
+// as missing, which pushes authors to move sample values into a renderer — the exact duplication
+// the one-home rule exists to prevent. This STRENGTHENS the check (those strings go from
+// unchecked to verified); it never excuses a string that is absent everywhere.
+// Measured: spec 20260727/07-verdict-ui, 80 correctly-homed strings reported missing.
+const FIXTURES_RE = /\.fixtures\.[cm]?[jt]sx?$/
+function isFixturesFile(rel) { return typeof rel === 'string' && FIXTURES_RE.test(rel) }
+function fixturesBeside(rel) {
+  if (typeof rel !== 'string' || !rel) return []
+  try {
+    const dir = path.dirname(path.resolve(repoRoot, rel))
+    return fs.readdirSync(dir)
+      .filter(f => FIXTURES_RE.test(f))
+      .map(f => path.relative(repoRoot, path.join(dir, f)))
+  } catch { return [] }
+}
 function filesOf(sk) {
-  return [sk.componentPath, sk.catalogEntryPath].filter(v => typeof v === 'string' && v.length > 0)
+  const declared = [sk.componentPath, sk.catalogEntryPath].filter(v => typeof v === 'string' && v.length > 0)
+  return [...new Set([...declared, ...declared.flatMap(fixturesBeside)])]
 }
 function refsOf(sk) {
   const raw = []
@@ -214,6 +236,37 @@ for (const [i, d] of deltas.entries()) {
   }
   validDeltas.push(d)
 }
+
+// ---- delta CONTRACT: a recorded divergence must actually have been performed --------------------
+// A delta says "the mock says X; we render Y instead". Until now a delta only EXEMPTED X from the
+// missing-string check, so a build that transcribed X verbatim passed silently — the file read as a
+// divergence contract while verifying nothing, and recording a delta made the gate QUIETER, which is
+// backwards: writing down a divergence should tighten the check, not loosen it.
+// Measured on spec 20260727/07-verdict-ui: six of nine string deltas were recorded and none
+// implemented, shipping a fabricated regime measurement ("close to one and a half macro regimes") and
+// a dead affordance promise ("TAP A TRADE TO JUMP TO ITS CANDLE") to the product's honesty screen
+// with every gate green. So: for every kind:"string" delta, X must be ABSENT from the pass.
+// Comments are stripped first — a code comment quoting the mock line it removed is documentation,
+// not a render (measured: the same false-positive class as the order check's comment hits).
+const COMMENTS_RE = /\/\*[\s\S]*?\*\/|(?:^|\s)\/\/[^\n]*/g
+function bodyOf(rel) {
+  const c = contentOf(rel)
+  if (c === null) return null
+  return rel.endsWith('.json') ? norm(c) : norm(c.replace(COMMENTS_RE, ' '))
+}
+for (const d of validDeltas) {
+  if (d.kind !== 'string') continue
+  const needle = norm(d.target)
+  if (!needle) continue
+  const rendered = [...new Set([...allFiles, ...catalogPaths])]
+    .filter(f => { const b = bodyOf(f); return b !== null && b.includes(needle) })
+  if (rendered.length) {
+    failures.push('delta "' + d.target.slice(0, 70) + '" — the mock string STILL RENDERS in ' +
+      rendered.join(', ') + '. A delta records what the code renders INSTEAD; this row says it renders: ' +
+      (typeof d.renders === 'string' && d.renders.trim() ? d.renders.trim() : '(no "renders" field — add one)'))
+  }
+}
+
 function excuse(surfaceId, kind, target) {
   const d = validDeltas.find(v => v.surfaceId === surfaceId && v.kind === kind && norm(v.target) === norm(target))
   if (d) excused.push(surfaceId + ' ' + kind + ' "' + target + '" — excused (proof: ' + d.proof.trim() + ')')
@@ -426,7 +479,13 @@ for (const surf of surfaces) {
       }
       continue
     }
-    if (!foundAt.has(needle)) foundAt.set(needle, where)
+    // A fixtures file is a DATA home, not a renderer: its declaration order is arbitrary and
+    // carries no document order, so a hit there counts for PRESENCE but never as an order
+    // candidate — the same "order N/A" treatment the copy catalog gets above. (Without this the
+    // fixtures resolution added above reports inversions purely from key order; measured on spec
+    // 20260727/07-verdict-ui: 13 phantom order failures, e.g. a flips row's value declared before
+    // its group label.) Order remains fully enforced inside real renderers.
+    if (!foundAt.has(needle) && !isFixturesFile(where.file)) foundAt.set(needle, where)
   }
 
   // order: unique-in-mock copy found in the SAME code file must be in mock document order

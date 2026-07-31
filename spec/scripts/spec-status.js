@@ -26,7 +26,11 @@
 // spec-level depends_on can never link two unblocked entries (a non-done dep is a blocker),
 // so the check is brief-level — shared brief or a transitive brief dependency path in either
 // direction → serial; distinct unrelated briefs → parallel-ok (separate worktrees); either
-// side briefless → no claim.
+// side briefless → no claim. The dashboard's ⚡ lanes claim MUTUAL parallelism, so admission
+// is pairwise-greedy: a parallel-ok runner-up joins only if also unrelated to every lane
+// already admitted (vs-top alone would let two mutually-ordered briefs share the fan-out).
+// Everything else lands under 🕓 with a ⛓️/🤷 branch line giving the derived reason (or the
+// no-claim) — never an unexplained bucket.
 //
 // Exit codes: 0 derived (anomalies are report lines, not failures); with --brief NN,
 // 1 = that brief has an unmet dependency (no spec at implementing/done); 2 = usage.
@@ -82,8 +86,7 @@ function walkMd(dir, out = []) {
   return out
 }
 
-function frontmatter(file) {
-  const text = fs.readFileSync(file, 'utf8')
+function frontmatter(text) {
   const m = text.match(/^---\n([\s\S]*?)\n---/)
   if (!m) return null
   const fm = {}
@@ -95,6 +98,45 @@ function frontmatter(file) {
   return fm
 }
 
+// File Plan tables live in the spec BODY, not frontmatter — the merge-conflict heads-up (⚡
+// lanes annotation below) needs to know which files two parallel specs both intend to touch.
+// Zero rows parsed is the sanctioned no-op, never an error: a missing/malformed section just
+// means "nothing to cross-check" for that spec. Grammar pinned by a 333-spec corpus audit
+// (2026-07-31): every real File Plan is a `## File Plan` table with the path in column 1; the
+// only observed variance is compound cells (`a + b`, comma lists, `{a,b}.ext` braces, trailing
+// `(generated)` annotations) at ~1% — split those, and add nothing speculative beyond them.
+function splitPlanCell(cell) {
+  cell = cell.replace(/\s*\([^)]*\)\s*$/, '').trim()
+  const brace = cell.match(/^(.*)\{([^}]+)\}(.*)$/)
+  if (brace) return brace[2].split(',').map(x => (brace[1] + x.trim() + brace[3]).trim())
+  return cell.split(/\s*\+\s*|,\s*/).map(x => x.trim()).filter(Boolean)
+}
+function parseFilePlan(text) {
+  const lines = text.split('\n')
+  let start = -1, level = 0
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^(#{2,3}) File Plan/i)
+    if (m) { start = i + 1; level = m[1].length; break }
+  }
+  if (start === -1) return []
+  let end = lines.length
+  for (let i = start; i < lines.length; i++) {
+    const hm = lines[i].match(/^(#{1,6})\s/)
+    if (hm && hm[1].length <= level) { end = i; break }
+  }
+  const paths = new Set()
+  for (let i = start; i < end; i++) {
+    const line = lines[i].trim()
+    if (!line.startsWith('|')) continue
+    const cell = (line.replace(/^\|/, '').split('|')[0] || '').replace(/`/g, '').trim()
+    if (!cell || /^:?-{2,}:?$/.test(cell) || /^(file|path)s?$/i.test(cell)) continue
+    for (const p of splitPlanCell(cell)) {
+      if (p.includes('/') || /\.[A-Za-z0-9]+$/.test(p)) paths.add(p)
+    }
+  }
+  return [...paths]
+}
+
 function parseList(v) {
   if (!v) return []
   return v.replace(/^\[|\]$/g, '').split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean)
@@ -102,7 +144,8 @@ function parseList(v) {
 
 const specs = []
 for (const file of walkMd(path.join(root, 'specs'))) {
-  const fm = frontmatter(file)
+  const text = fs.readFileSync(file, 'utf8')
+  const fm = frontmatter(text)
   if (!fm || !fm.status) continue
   specs.push({
     path: path.relative(root, file),
@@ -113,6 +156,7 @@ for (const file of walkMd(path.join(root, 'specs'))) {
     design: fm.design === 'true',
     designed: fm.designed || null,
     depends_on: parseList(fm.depends_on),
+    filePlan: parseFilePlan(text),
   })
 }
 
@@ -212,6 +256,16 @@ function specDep(ref) {
   return specByTail.get(path.basename(ref)) || specs.find(x => x.path === ref || x.path.endsWith('/' + ref))
 }
 
+// Brief-level serial verdict between two briefed entries: the reason string when the pair is
+// provably serial, null when the roadmap declares them unrelated (= parallel-ok). One helper
+// for both the vs-top annotation and pairwise lane admission — the two must never disagree.
+function briefSerialReason(a, b) {
+  if (a === b) return `shared brief ${a}`
+  if (briefDepPath(a, b)) return `brief ${a} depends on ${b}`
+  if (briefDepPath(b, a)) return `brief ${b} depends on ${a}`
+  return null
+}
+
 // Does brief a transitively depend on brief b (via roadmap `Depends on:` headers)?
 function briefDepPath(a, b) {
   const seen = new Set()
@@ -284,9 +338,8 @@ function deriveNext() {
   if (top && !top.blockers.length) {
     for (const e of entries.slice(1)) {
       if (e.blockers.length || !e.brief || !top.brief) continue
-      if (e.brief === top.brief) { e.parallel = false; e.parallelReason = `shared brief ${e.brief}` }
-      else if (briefDepPath(e.brief, top.brief)) { e.parallel = false; e.parallelReason = `brief ${e.brief} depends on ${top.brief}` }
-      else if (briefDepPath(top.brief, e.brief)) { e.parallel = false; e.parallelReason = `brief ${top.brief} depends on ${e.brief}` }
+      const reason = briefSerialReason(e.brief, top.brief)
+      if (reason) { e.parallel = false; e.parallelReason = reason }
       else e.parallel = true
     }
   }
@@ -352,8 +405,9 @@ if (briefFilter) {
 // ---- the /spec:status dashboard (default render) --------------------------------------------
 // Deterministic emoji render of the same derivation: verdict line, roadmap with per-brief
 // progress bars (consecutive unplanned briefs collapse to one row), the next-action lanes
-// (parallel-ok runner-ups drawn as fan-out lanes under the top pick), anomalies. Purely a
-// view — same data as --json, styled here so no renderer re-derives it.
+// (parallel-ok runner-ups drawn as fan-out lanes under the top pick, a 🔶 branch line when
+// two lanes' File Plan tables share a path), anomalies. Purely a view — same data as --json,
+// styled here so no renderer re-derives it.
 
 if (json) {
   console.log(JSON.stringify({ briefs: briefs.map(({ specs: ss, ...b }) => ({ ...b, specs: ss.map(s => ({ path: s.path, status: s.status })) })), specs, anomalies }, null, 2))
@@ -421,24 +475,72 @@ if (json) {
     // flush-left "action @path", no icons, indent, padding, or status words around it
     // (any of those poison a triple-click paste or slash-command detection). Status is
     // already encoded one-to-one in the action itself. Context rides only on headers and
-    // on lines never pasted as-is: blocked ⏳ reasons and anomaly ⚠️ tags trail the line.
+    // on lines never pasted as-is: blocked ⏳ reasons and 🕓 parallel-verdict branches get
+    // their own indented line (narrow terminals wrap trailing text); only the compact
+    // anomaly ⚠️ tag trails the command.
     const warn = e => inlineKinds.has(e.path) ? `  ⚠️ ${inlineKinds.get(e.path).join(', ')}` : ''
     const cmd = e => `${e.action} @${e.path}${warn(e)}`
     const shortBlocker = b => b.replace(/^\S*\//, '').replace(/\s*\([^)]*\)$/, '').replace(/\.md$/, '')
     const unblocked = entries.filter(e => !e.blockers.length)
     const blocked = entries.filter(e => e.blockers.length)
     if (unblocked.length) {
-      const lanes = [unblocked[0], ...unblocked.slice(1).filter(e => e.parallel === true)]
+      // Lane admission is pairwise, not vs-top-only: `parallel === true` proves safety against
+      // the top pick, but two runner-ups can still be ordered against EACH OTHER (03 and 04
+      // both unrelated to the pick, 04 depends on 03). Greedy in sort order: a candidate joins
+      // only if the roadmap declares it unrelated to every lane already admitted — the ⚡
+      // header claims mutual parallelism, so mutual is what gets checked.
+      const lanes = [unblocked[0]]
+      const laneClash = new Map()
+      for (const e of unblocked.slice(1)) {
+        if (e.parallel !== true) continue
+        const clash = lanes.slice(1).find(l => briefSerialReason(e.brief, l.brief))
+        if (clash) laneClash.set(e, briefSerialReason(e.brief, clash.brief))
+        else lanes.push(e)
+      }
+      const later = unblocked.slice(1).filter(e => !lanes.includes(e))
       if (lanes.length > 1) {
         out.push(`⚡ ${lanes.length} parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):`)
         lanes.forEach(e => out.push(cmd(e)))
+        // Merge-conflict heads-up: annotation only, never a verdict change — the corpus audit
+        // showed File Plan overlap can't DECIDE parallelism (51% of unrelated-brief pairs
+        // overlap; strict demotion would serialize half of everything) but it can PREDICT
+        // where two lanes will collide at merge-back. One branch line per overlapping lane
+        // pair; with 3+ lanes each line names its two specs so it stays unambiguous.
+        const bySpecPath = new Map(specs.map(s => [s.path, s]))
+        const overlaps = []
+        for (let i = 0; i < lanes.length; i++) {
+          for (let j = i + 1; j < lanes.length; j++) {
+            const a = bySpecPath.get(lanes[i].path), b = bySpecPath.get(lanes[j].path)
+            const shared = a && b ? a.filePlan.filter(f => b.filePlan.includes(f)) : []
+            if (shared.length) overlaps.push({ a: lanes[i], b: lanes[j], shared })
+          }
+        }
+        overlaps.forEach((o, i) => {
+          const shown = o.shared.slice(0, 2).join(', ') + (o.shared.length > 2 ? ` (+${o.shared.length - 2} more)` : '')
+          const pair = lanes.length > 2 ? `${path.basename(o.a.path)} × ${path.basename(o.b.path)}: ` : ''
+          out.push(`   ${i === overlaps.length - 1 ? '└─' : '├─'} 🔶 ${pair}both plans touch ${shown} — expect merge-back conflicts there`)
+        })
       } else {
         out.push(cmd(unblocked[0]))
+        // "Is this parallelable?" must never be answered by the ABSENCE of the ⚡ header —
+        // when other open work exists, the solo pick states it out loud.
+        if (later.length || blocked.length) out.push('   └─ 🚦 solo — nothing else can run alongside this right now')
       }
-      const later = unblocked.slice(1).filter(e => e.parallel !== true)
+      // Every "after that" entry says WHY it isn't a lane, on its own ⏳-style branch line
+      // (trailing tags wrap badly on narrow terminals): provably-serial entries carry the
+      // derived reason in plain words. No-claim entries: among unblocked specs, spec-level
+      // depends_on carries no signal (a non-done dep = blocked, a done dep = no ordering),
+      // so briefs are the only declared-surfaces source — briefless means unknowable, and
+      // the line explains that instead of masquerading as serial. Commands stay bare.
       if (later.length) {
         out.push('', '🕓 after that:')
-        later.forEach(e => out.push(cmd(e)))
+        for (const e of later) {
+          out.push(cmd(e))
+          out.push(`   └─ ${
+            e.parallel === false ? `⛓️ ${e.parallelReason} — run after the pick above`
+            : laneClash.has(e) ? `⛓️ ${laneClash.get(e)} — ordered against another lane, run after it`
+            : '🤷 no roadmap brief, so nothing declares what it touches — can\'t promote to a lane'}`)
+        }
       }
     }
     if (blocked.length) {

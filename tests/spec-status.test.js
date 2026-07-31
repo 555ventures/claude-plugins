@@ -22,10 +22,14 @@ function host({ briefs = {}, specs = {}, overviewRow = null } = {}) {
   for (const [file, header] of Object.entries(briefs)) {
     fs.writeFileSync(path.join(dir, 'docs/roadmap', file), header)
   }
-  for (const [file, fm] of Object.entries(specs)) {
+  for (const [file, val] of Object.entries(specs)) {
     const p = path.join(dir, 'specs', file)
     fs.mkdirSync(path.dirname(p), { recursive: true })
-    fs.writeFileSync(p, '---\n' + fm + '\n---\n\n# spec\n')
+    // val is either the plain frontmatter string (existing call sites) or { fm, body } when a
+    // test needs body content (e.g. a File Plan table) below the frontmatter.
+    const fm = typeof val === 'string' ? val : val.fm
+    const body = typeof val === 'string' ? '# spec\n' : (val.body || '# spec\n')
+    fs.writeFileSync(p, '---\n' + fm + '\n---\n\n' + body)
   }
   return dir
 }
@@ -328,6 +332,7 @@ test('dashboard draws unblocked parallel-ok runner-ups as lanes and sinks serial
       '20260710/02-billing-b.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
       '20260710/03-reports.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 03',
       '20260710/04-blocked.md': 'date: 2026-07-10\nstatus: hardened\ndepends_on: [specs/20260710/01-billing.md]',
+      '20260710/05-adhoc.md': 'date: 2026-07-10\nstatus: hardened\nbrief: n/a',
     },
   })
   const r = runNode(SCRIPT, ['--root', dir])
@@ -335,8 +340,168 @@ test('dashboard draws unblocked parallel-ok runner-ups as lanes and sinks serial
   assert.match(r.stdout, /⚡ 2 parallel lanes/, 'top pick + parallel-ok runner-up form the lane group')
   assert.match(r.stdout, /lanes[^\n]*\n\/spec:build @specs\/20260710\/01-billing\.md\n\/spec:build @specs\/20260710\/03-reports\.md/,
     'lane lines are bare flush-left commands — top pick first, parallel-ok runner-up second')
-  assert.match(r.stdout, /🕓 after that:\n\/spec:build @specs\/20260710\/02-billing-b\.md/, 'serial runner-up sinks below the lanes')
+  assert.match(r.stdout, /🕓 after that:\n\/spec:build @specs\/20260710\/02-billing-b\.md\n\s+└─ ⛓️ shared brief 02 — run after the pick above/,
+    'serial runner-up sinks below the lanes with its reason on a branch line, command line bare')
+  assert.match(r.stdout, /\/spec:build @specs\/20260710\/05-adhoc\.md\n\s+└─ 🤷 no roadmap brief/,
+    'briefless runner-up gets a no-claim branch, not silently lumped in with the serial ones')
   assert.match(r.stdout, /⛔ blocked:\n\/spec:build @specs\/20260710\/04-blocked\.md\n\s+└─ ⏳ 01-billing/, 'blocked entries close the section, each blocker a tree branch under its command')
+})
+
+// merge-conflict heads-up (2026-07-31): parallel lanes are independently safe by brief, but
+// two lanes can still declare the same file in their File Plan tables. The 333-spec corpus
+// audit showed overlap can't DECIDE parallelism (51% of unrelated-brief pairs overlap), so
+// this is a branch-line annotation under the lane list — never a change to the verdict.
+
+const PARALLEL_BRIEFS = {
+  '01-auth.md': '# 01 — Auth\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',
+  '02-billing.md': '# 02 — Billing\n\nPhase: P0 · Depends on: 01 · Primary workspaces: api\n',
+  '03-reports.md': '# 03 — Reports\n\nPhase: P1 · Depends on: 01 · Primary workspaces: web\n',
+}
+const planBody = rows => '# spec\n\n## File Plan\n\n| File | Notes |\n|---|---|\n'
+  + rows.map(r => `| \`${r}\` | — |\n`).join('')
+
+test('dashboard flags a merge-conflict heads-up when two parallel lanes share a File Plan path', () => {
+  const dir = host({
+    briefs: PARALLEL_BRIEFS,
+    specs: {
+      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
+      '20260710/01-billing.md': {
+        fm: 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
+        body: planBody(['spec/shared/util.js', 'spec/billing/pay.js']),
+      },
+      '20260710/02-reports.md': {
+        fm: 'date: 2026-07-10\nstatus: hardened\nbrief: 03',
+        body: planBody(['spec/shared/util.js', 'spec/reports/view.js']),
+      },
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout, /⚡ 2 parallel lanes/, 'shared File Plan path must NOT demote the verdict')
+  assert.match(r.stdout,
+    /\/spec:build @specs\/20260710\/01-billing\.md\n\/spec:build @specs\/20260710\/02-reports\.md\n\s+└─ 🔶 both plans touch spec\/shared\/util\.js — expect merge-back conflicts there/,
+    'the branch line sits under the lane commands and names the shared file')
+})
+
+test('dashboard adds no heads-up when parallel lanes\' File Plans are disjoint', () => {
+  const dir = host({
+    briefs: PARALLEL_BRIEFS,
+    specs: {
+      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
+      '20260710/01-billing.md': {
+        fm: 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
+        body: planBody(['spec/billing/pay.js']),
+      },
+      '20260710/02-reports.md': {
+        fm: 'date: 2026-07-10\nstatus: hardened\nbrief: 03',
+        body: planBody(['spec/reports/view.js']),
+      },
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout, /⚡ 2 parallel lanes/)
+  assert.doesNotMatch(r.stdout, /🔶/, 'disjoint File Plans must never earn a heads-up line')
+})
+
+test('dashboard is silent, not broken, when a parallel lane has no File Plan section', () => {
+  const dir = host({
+    briefs: PARALLEL_BRIEFS,
+    specs: {
+      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
+      '20260710/01-billing.md': {
+        fm: 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
+        body: '# Billing\n\nno File Plan here at all.\n',
+      },
+      '20260710/02-reports.md': {
+        fm: 'date: 2026-07-10\nstatus: hardened\nbrief: 03',
+        body: planBody(['spec/reports/view.js']),
+      },
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout, /⚡ 2 parallel lanes/)
+  assert.doesNotMatch(r.stdout, /🔶/, 'zero rows parsed from a missing File Plan is a silent no-op')
+})
+
+test('File Plan compound cells (a + b, comma lists, braces, trailing annotations) split into real paths', () => {
+  // The only format variance the corpus audit counted (~1% of cells) — pinned here so the
+  // splitter never regresses into treating a compound cell as one bogus path.
+  const dir = host({
+    briefs: PARALLEL_BRIEFS,
+    specs: {
+      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
+      '20260710/01-billing.md': {
+        fm: 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
+        body: planBody(['app/package.json + worker/package.json', 'app/drizzle/ (generated migration)']),
+      },
+      '20260710/02-reports.md': {
+        fm: 'date: 2026-07-10\nstatus: hardened\nbrief: 03',
+        body: planBody(['contracts/{run_request,trade_record}.json', 'worker/package.json']),
+      },
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout, /└─ 🔶 both plans touch worker\/package\.json — expect merge-back conflicts there/,
+    'worker/package.json hides inside a "a + b" compound cell — the splitter must surface it')
+})
+
+test('lane admission is pairwise — a runner-up parallel with the pick but ordered against another lane is demoted', () => {
+  // 03 and 04 are both unrelated to the pick's brief 02, but 04 depends on 03 — vs-top-only
+  // checking would draw three "parallel" lanes with a declared ordering inside the fan-out.
+  const dir = host({
+    briefs: {
+      '01-auth.md': BRIEFS['01-auth.md'],
+      '02-billing.md': '# 02 — Billing\n\nPhase: P0 · Depends on: 01 · Primary workspaces: api\n',
+      '03-reports.md': '# 03 — Reports\n\nPhase: P1 · Depends on: 01 · Primary workspaces: web\n',
+      '04-exports.md': '# 04 — Exports\n\nPhase: P1 · Depends on: 03 · Primary workspaces: web\n',
+    },
+    specs: {
+      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
+      '20260701/02-reports-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 03',
+      '20260710/01-billing.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
+      '20260710/02-reports-ui.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 03',
+      '20260710/03-exports.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 04',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout, /⚡ 2 parallel lanes/, 'only the mutually-unrelated pair fans out')
+  assert.match(r.stdout, /lanes[^\n]*\n\/spec:build @specs\/20260710\/01-billing\.md\n\/spec:build @specs\/20260710\/02-reports-ui\.md/,
+    'pick + first admissible runner-up form the lanes')
+  assert.match(r.stdout, /🕓 after that:\n\/spec:build @specs\/20260710\/03-exports\.md\n\s+└─ ⛓️ brief 04 depends on 03 — ordered against another lane/,
+    'the vs-top-parallel entry ordered against lane 03 is demoted with the pairwise reason')
+})
+
+test('dashboard states solo out loud when the pick has no parallel lane but other work exists', () => {
+  const dir = host({
+    briefs: {
+      '01-auth.md': BRIEFS['01-auth.md'],
+      '02-billing.md': '# 02 — Billing\n\nPhase: P0 · Depends on: 01 · Primary workspaces: api\n',
+    },
+    specs: {
+      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
+      '20260710/01-billing.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
+      '20260710/02-billing-b.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.doesNotMatch(r.stdout, /⚡/, 'one lane is not a fan-out')
+  assert.match(r.stdout, /\/spec:build @specs\/20260710\/01-billing\.md\n\s+└─ 🚦 solo — nothing else can run alongside/,
+    'the solo pick says it is not parallelable instead of relying on the missing ⚡ header')
+})
+
+test('dashboard omits the solo branch when the pick is the only open work', () => {
+  const dir = host({
+    briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
+    specs: { '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 01' },
+  })
+  const r = runNode(SCRIPT, ['--root', dir])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.doesNotMatch(r.stdout, /🚦/, 'nothing else exists to be parallel WITH — the branch would be noise')
 })
 
 // brief: n/a (2026-07-22): JJ's ad-hoc specs — work the roadmap missed — carried `brief: n/a`

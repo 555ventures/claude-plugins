@@ -139,6 +139,31 @@ test('a verbatim carrier comment wrapped across // lines still matches contiguou
   assert.strictEqual(res.status, 0, res.stderr)
 })
 
+test('an UNMARKED comment quoting the mock does not satisfy copy — narration is not a render', () => {
+  // The live escape: a fixtures-file aside quoting "All 24 markets ›" passed a bound copy
+  // obligation for a link the code deliberately omits. Only `mock authority:` carriers count.
+  const f = fixture({
+    strings: ['All 24 markets'],
+    files: { 'src/S1.tsx': '// (BTC-P survived) behind an "All 24 markets" link\n<List rows={markets} />' },
+  })
+  const res = run(f)
+  assert.strictEqual(res.status, 1)
+  assert.match(res.stderr, /All 24 markets/)
+})
+
+test('a delta row that excuses nothing is itself a failure — no dead exemptions', () => {
+  const f = fixture({
+    strings: ['Send invite'],
+    slice: '<div><span>Send invite</span><span>Old line the mock dropped</span></div>',
+    files: { 'src/S1.tsx': '<Button>Send invite</Button>' },
+    deltas: { deltas: [{ surfaceId: 's1', kind: 'string', target: 'Old line the mock dropped',
+      sliceQuote: 'Old line the mock dropped', proof: 'gate output: line removed in round 2' }] },
+  })
+  const res = run(f)
+  assert.strictEqual(res.status, 1)
+  assert.match(res.stderr, /excused nothing/)
+})
+
 test('a delta with an empty proof is itself a failure', () => {
   const f = fixture({
     strings: ['Send invite'],

@@ -125,8 +125,13 @@ Next: /spec:build {specPath}
   coverage ledger (written at `approved`) hands them to later briefs. A refused mark lists the
   divergences. The ONLY sanctioned divergence is an evidence-gated `deltas.json` row (verbatim
   slice quote, verified mechanically, plus an impossibility proof) — a taste rationale is never
-  valid evidence; taste yields to the mock (shared § mock supremacy). Fold delta rows into spec
-  Decisions at reconcile.
+  valid evidence; taste yields to the mock (shared § mock supremacy). A delta is a two-sided
+  contract the gate holds both ways: the mock string must be ABSENT from the pass (a row over a
+  string that still renders fails) and the row must have excused a real failing obligation (a row
+  that excuses nothing is a dead exemption and fails). Comments never satisfy copy — the one
+  exception is a `mock authority:`-marked carrier comment beside an indirected render; unmarked
+  comments quoting the mock are stripped from the haystack as narration. Fold delta rows into
+  spec Decisions at reconcile.
 - **Sibling mocks ground asymmetry detection — never transcription.** When the bound surface
   belongs to a mock family (other mocks of the same route group or shared entry frame), the
   session seat reads the siblings' **extract inventories** (region labels + furniture from the

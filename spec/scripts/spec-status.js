@@ -518,13 +518,13 @@ if (json) {
         overlaps.forEach((o, i) => {
           const shown = o.shared.slice(0, 2).join(', ') + (o.shared.length > 2 ? ` (+${o.shared.length - 2} more)` : '')
           const pair = lanes.length > 2 ? `${path.basename(o.a.path)} × ${path.basename(o.b.path)}: ` : ''
-          out.push(`   ${i === overlaps.length - 1 ? '└─' : '├─'} 🔶 ${pair}both plans touch ${shown} — expect merge-back conflicts there`)
+          out.push(`   ${i === overlaps.length - 1 ? '└─' : '├─'} 🔶 ${pair}merge-conflict risk: ${shown}`)
         })
       } else {
         out.push(cmd(unblocked[0]))
         // "Is this parallelable?" must never be answered by the ABSENCE of the ⚡ header —
         // when other open work exists, the solo pick states it out loud.
-        if (later.length || blocked.length) out.push('   └─ 🚦 solo — nothing else can run alongside this right now')
+        if (later.length || blocked.length) out.push('   └─ 🚦 solo')
       }
       // Every "after that" entry says WHY it isn't a lane, on its own ⏳-style branch line
       // (trailing tags wrap badly on narrow terminals): provably-serial entries carry the
@@ -537,9 +537,9 @@ if (json) {
         for (const e of later) {
           out.push(cmd(e))
           out.push(`   └─ ${
-            e.parallel === false ? `⛓️ ${e.parallelReason} — run after the pick above`
-            : laneClash.has(e) ? `⛓️ ${laneClash.get(e)} — ordered against another lane, run after it`
-            : '🤷 no roadmap brief, so nothing declares what it touches — can\'t promote to a lane'}`)
+            e.parallel === false ? `⛓️ ${e.parallelReason}`
+            : laneClash.has(e) ? `⛓️ ${laneClash.get(e)}`
+            : '🤷 no brief — parallelism unknown'}`)
         }
       }
     }

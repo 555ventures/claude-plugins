@@ -340,9 +340,9 @@ test('dashboard draws unblocked parallel-ok runner-ups as lanes and sinks serial
   assert.match(r.stdout, /⚡ 2 parallel lanes/, 'top pick + parallel-ok runner-up form the lane group')
   assert.match(r.stdout, /lanes[^\n]*\n\/spec:build @specs\/20260710\/01-billing\.md\n\/spec:build @specs\/20260710\/03-reports\.md/,
     'lane lines are bare flush-left commands — top pick first, parallel-ok runner-up second')
-  assert.match(r.stdout, /🕓 after that:\n\/spec:build @specs\/20260710\/02-billing-b\.md\n\s+└─ ⛓️ shared brief 02 — run after the pick above/,
+  assert.match(r.stdout, /🕓 after that:\n\/spec:build @specs\/20260710\/02-billing-b\.md\n\s+└─ ⛓️ shared brief 02/,
     'serial runner-up sinks below the lanes with its reason on a branch line, command line bare')
-  assert.match(r.stdout, /\/spec:build @specs\/20260710\/05-adhoc\.md\n\s+└─ 🤷 no roadmap brief/,
+  assert.match(r.stdout, /\/spec:build @specs\/20260710\/05-adhoc\.md\n\s+└─ 🤷 no brief — parallelism unknown/,
     'briefless runner-up gets a no-claim branch, not silently lumped in with the serial ones')
   assert.match(r.stdout, /⛔ blocked:\n\/spec:build @specs\/20260710\/04-blocked\.md\n\s+└─ ⏳ 01-billing/, 'blocked entries close the section, each blocker a tree branch under its command')
 })
@@ -379,7 +379,7 @@ test('dashboard flags a merge-conflict heads-up when two parallel lanes share a 
   assert.strictEqual(r.status, 0, r.stderr)
   assert.match(r.stdout, /⚡ 2 parallel lanes/, 'shared File Plan path must NOT demote the verdict')
   assert.match(r.stdout,
-    /\/spec:build @specs\/20260710\/01-billing\.md\n\/spec:build @specs\/20260710\/02-reports\.md\n\s+└─ 🔶 both plans touch spec\/shared\/util\.js — expect merge-back conflicts there/,
+    /\/spec:build @specs\/20260710\/01-billing\.md\n\/spec:build @specs\/20260710\/02-reports\.md\n\s+└─ 🔶 merge-conflict risk: spec\/shared\/util\.js/,
     'the branch line sits under the lane commands and names the shared file')
 })
 
@@ -444,7 +444,7 @@ test('File Plan compound cells (a + b, comma lists, braces, trailing annotations
   })
   const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, r.stderr)
-  assert.match(r.stdout, /└─ 🔶 both plans touch worker\/package\.json — expect merge-back conflicts there/,
+  assert.match(r.stdout, /└─ 🔶 merge-conflict risk: worker\/package\.json/,
     'worker/package.json hides inside a "a + b" compound cell — the splitter must surface it')
 })
 
@@ -471,7 +471,7 @@ test('lane admission is pairwise — a runner-up parallel with the pick but orde
   assert.match(r.stdout, /⚡ 2 parallel lanes/, 'only the mutually-unrelated pair fans out')
   assert.match(r.stdout, /lanes[^\n]*\n\/spec:build @specs\/20260710\/01-billing\.md\n\/spec:build @specs\/20260710\/02-reports-ui\.md/,
     'pick + first admissible runner-up form the lanes')
-  assert.match(r.stdout, /🕓 after that:\n\/spec:build @specs\/20260710\/03-exports\.md\n\s+└─ ⛓️ brief 04 depends on 03 — ordered against another lane/,
+  assert.match(r.stdout, /🕓 after that:\n\/spec:build @specs\/20260710\/03-exports\.md\n\s+└─ ⛓️ brief 04 depends on 03/,
     'the vs-top-parallel entry ordered against lane 03 is demoted with the pairwise reason')
 })
 
@@ -490,7 +490,7 @@ test('dashboard states solo out loud when the pick has no parallel lane but othe
   const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.doesNotMatch(r.stdout, /⚡/, 'one lane is not a fan-out')
-  assert.match(r.stdout, /\/spec:build @specs\/20260710\/01-billing\.md\n\s+└─ 🚦 solo — nothing else can run alongside/,
+  assert.match(r.stdout, /\/spec:build @specs\/20260710\/01-billing\.md\n\s+└─ 🚦 solo/,
     'the solo pick says it is not parallelable instead of relying on the missing ⚡ header')
 })
 

@@ -1,6 +1,6 @@
 ---
 date: 2026-08-01
-status: implementing
+status: done
 risk: T3
 open_markers: 0
 area: autopilot
@@ -162,6 +162,29 @@ if spec-status ever derives a sketch action); BRIEF #9's approve/redo buttons ar
 ordinary in-session question relay (D11) — no dedicated AC, verified at the live smoke. The
 in-process DI test mode these ACs need is sanctioned by the § Test Rules amendment riding in
 spec 02's File Plan.
+
+**Build deviations, absorbed (2026-08-01).** The Contracts block listed only `startSurfaces`
+for checkpoint.js while Behavior/D12 required an optional-screenshot-then-`sendPhoto` flow owned
+by the same module; the build derived `screenshotIfConfigured({screenshotCommand, url, project,
+adapter, cwd, log})` as the conservative Behavior-grounded shape — a Contracts-block gap, not a
+design change. AC-2's checkpoint assertion originally used a microtask `flush()`, which cannot
+observe a real child-process spawn; fixed in the TEST with a bounded `waitFor` poll (the pattern
+AC-9 already used), with `runCheckpoint` still fully awaiting `startSurfaces` per D4 — no
+assertion weakened, and the general lesson is now a host Gotcha. AC-2 vs AC-12 then exposed a
+real cadence conflict: the "bypass `pollSeconds` until idle" wake chain was armed by both the
+brief checkpoint and the halt ask, so a static oracle re-ran the same pick after `▶ Start`. The
+chain is now armed by the halt path only — `➡ Next spec` means the operator asked the lane to
+move on, so completions chain until idle (AC-12); `▶ Start` releases only the stage it gates and
+ordinary cadence resumes (AC-1/AC-2).
+
+**Review findings, fixed (2026-08-01).** Five demonstrated findings, all spec clauses the ACs
+did not pin: the initial `runStage` call for a `/spec:plan` pick ignored Behavior line 93's
+`model:"fable"`; D9's `▶` start narration was never posted; the checkpoint gate implemented one
+of D4's three triggers; `autopilotd`'s exit 1 (second signal during shutdown) was undocumented in
+its header; and `config.js` dropped the `autopilotd: ` prefix AC-8 pins literally. All four
+previously-unpinned clauses now carry tests. The pattern worth carrying forward: every one of
+these lived in prose (a Decisions row or a Behavior line) that no AC restated — AC coverage was
+13/13 and green while four locked decisions sat unimplemented.
 
 ## Canonical Delta
 

@@ -134,6 +134,13 @@ T1-shaped work: doctrine prose edits pinned by existing tests, new sweeps in
   needs an explicit `await new Promise(r => setImmediate(r))` per iteration — harmless against
   the real API, which blocks server-side. (specs/20260801/01-telegram-adapter.md — the
   `getUpdates` long-poll loop hit this during build.)
+- `[host]` A `flush()`-style microtask/`setImmediate` drain cannot observe anything gated on a
+  **real child process**: spawning `node`/a shell and waiting on its stdout costs ~40–80ms of OS
+  time no matter how the code is written, so an AC asserting on output that follows a spawn must
+  use a bounded real-time `waitFor(predicate, 2000)` poll instead. Writing the assertion against
+  `flush()` alone reads as an implementation defect and invites "fixing" correct code — the order
+  under test (fully await the spawn, then post) is the only correct one.
+  (specs/20260801/03-lane-engine.md — AC-2's checkpoint-ask assertion; fixed in the test.)
 - `[plugin]` The gate's `{testDirs}` placeholder invites a directory, but `node --test <dir>`
   fails on Node 26 in this repo — with or without a trailing slash it reports
   `test at tests/autopilot:1:1 ✖` and `MODULE_NOT_FOUND`. Only the glob form

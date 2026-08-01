@@ -48,6 +48,36 @@ actually flip state?) is never parsed from the transcript — the caller re-deri
   backoff is the second layer) · `aborted`. The lane engine branches on exactly these.
 - Every session gets `env.AUTOPILOT_SESSION='1'` as a recursion guard.
 
+## Lane engine & daemon
+
+- The daemon (`autopilot/bin/autopilotd`) runs **one lane per project**, configured from
+  `~/.config/autopilot/config.json` (overridable `--config`). Stages within a repo run
+  serially; cross-repo parallelism is the only parallelism. No worktrees, no `build_base`,
+  no merge mutex — the lane is its repo's only writer.
+- Lane states: `idle` · `checkpoint` · `running` · `asking` · `backoff` · `halted`.
+- **The oracle is `spec-status.js --next --json`, never re-derived.** The lane picks the
+  first `next[]` entry with no blockers that isn't in its skip set; choosing among the
+  oracle's own admissible entries is selection, not derivation. A `/spec:plan` pick runs its
+  initial session on `model:"fable"`; every other action takes the default model.
+- **Halt policy:** a `failed` stage gets exactly one Fable repair pass, then the lane parks
+  and asks — it never auto-advances. `➡ Next spec` adds the path to an in-memory skip set
+  (cleared by restart; a restart is the operator's reset lever) and arms a wake chain that
+  bypasses `pollSeconds` until the lane settles into idle. `retryable` backs off 30s ×2 to a
+  15min cap, forever.
+- **Brief checkpoints** start the dev server + tunnel as detached process groups and pause
+  for a phone tap before the brief's first stage. Triggered when the pick's brief differs
+  from the last completed one, when the pick's path is a roadmap brief, or on an
+  `n/a`→different-path-prefix transition. Tunnel URL is captured from the command's stdout
+  **or stderr** (cloudflared prints to stderr), 60s timeout → `null`, which never blocks.
+- **Narration** is one topic message per stage transition — start (`▶ <action> <path>`),
+  done (first report line + cost), halt/idle — never streamed transcripts.
+- The daemon **never runs git and never pushes**: review stages run unmodified
+  `/spec:review`, which owns its own local merge-back. Merge-strategy forks and every other
+  in-session question arrive through the ordinary relay; nothing is special-cased.
+- **Lane-state files are advisory.** On restart a lane restores only `lastBrief` and
+  re-derives everything else from `spec-status`. A question pending at crash re-materializes
+  because the stage re-runs and asks again — repeated, never defaulted.
+
 ## Conventions
 
 - Zero dependencies: global `fetch`/`FormData`/`Blob`/`AbortController` and Node built-ins only.

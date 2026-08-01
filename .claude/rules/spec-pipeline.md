@@ -134,6 +134,12 @@ T1-shaped work: doctrine prose edits pinned by existing tests, new sweeps in
   needs an explicit `await new Promise(r => setImmediate(r))` per iteration — harmless against
   the real API, which blocks server-side. (specs/20260801/01-telegram-adapter.md — the
   `getUpdates` long-poll loop hit this during build.)
+- `[plugin]` The gate's `{testDirs}` placeholder invites a directory, but `node --test <dir>`
+  fails on Node 26 in this repo — with or without a trailing slash it reports
+  `test at tests/autopilot:1:1 ✖` and `MODULE_NOT_FOUND`. Only the glob form
+  `node --test 'tests/<scope>/*.test.js'` actually runs the files. Resolve `{testDirs}` to the
+  glob on every scoped gate run. (specs/20260801/02-session-runner.md — the build hit this
+  resolving its own gate command.)
 <!-- One line per entry; every entry cites a ledger row (spec path + runId) or a dated
 incident, and carries a provenance tag: [host] (this repo/stack) or [plugin] (traces to a
 spec-plugin template/command/generated artifact). Writers: /spec:review close and

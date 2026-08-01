@@ -1,6 +1,6 @@
 ---
 date: 2026-08-01
-status: implementing
+status: done
 risk: T3
 open_markers: 0
 area: autopilot
@@ -139,6 +139,23 @@ is layer two), D10 exists because the zero-dep enforcement text would otherwise 
 this spec's own File Plan, and D11 pins the ESM-only `require()` Node floor. Fragile: A2 is the one unexecuted
 load-bearing claim — it's flagged for a live smoke before spec 03's daemon loops unattended. `resultText`
 defaults to `""` when a session dies pre-result — callers never branch on its absence.
+
+**Review dispositions (2026-08-01).** One finding rejected: a reviewer demonstrated that
+`git diff` reports `.claude/agents/gate-scripts.md` as `new file mode 100644` and concluded the
+File Plan's MODIFY action and D10a's premise were false. Rejected — git reports "new file" for a
+file that was never *tracked*, not one that did not exist. The file is registered as a
+`/spec:init` deliverable in `.claude/spec-manifest.json` (written 10:48, before this build), its
+three sibling agent files from the same init run remain untracked today with identical heading
+skeletons, and the change is the same one-sentence append applied to `spec-pipeline.md`. Birth
+time does not witness creation either: the definitively pre-existing, git-tracked
+`spec-pipeline.md` also reports a birth time inside the build window, so the edit tooling resets
+it. MODIFY is accurate against the working tree, which is what a File Plan describes.
+
+Build deviations folded: the fixture's model-unavailable error string is not locked by D9, so
+`isModelUnavailableError` matches a substring family rather than one literal; and the streaming
+prompt's SDKUserMessage envelope (`{type:'user', message:{role:'user', content}, parent_tool_use_id:null}`)
+is unverified against the live SDK because the fakes ignore `prompt` entirely — it rides with A2
+to the live smoke owed before spec 03 loops unattended.
 
 ## Canonical Delta
 

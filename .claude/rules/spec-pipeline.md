@@ -66,6 +66,9 @@ T1-shaped work: doctrine prose edits pinned by existing tests, new sweeps in
   `npm run build:workflows`.
 - **Zero dependencies**: scripts and tests use only Node built-ins (`fs`, `path`,
   `child_process`, `os`, `assert`, `node:test`) and `jq` in bash. Never add a package.
+  `autopilot/**` may import ONLY `@anthropic-ai/claude-agent-sdk`, and only from
+  `autopilot/daemon/sdk.js`; any other non-builtin import anywhere, or an SDK import
+  elsewhere, stays a hard finding.
 - Bash scripts open `#!/usr/bin/env bash` + `set -u` (never `set -e` — failures are explicit
   and carry remedies). JS scripts open `#!/usr/bin/env node` + `'use strict'`.
 - Every script starts with a header comment: usage line, why it exists (dated incident),
@@ -87,9 +90,11 @@ T1-shaped work: doctrine prose edits pinned by existing tests, new sweeps in
 - Plugin tests reference incident ids / dated escapes in a header comment (this repo's
   analogue of AC-IDs). Pipeline-authored tests for new specs reference AC-IDs in the test
   name per the spec template (`AC-{YYYYMMDD-NN}-1`).
-- Three sanctioned modes: (1) exec-a-script against a synthetic host in `tmpdir()` via
+- Four sanctioned modes: (1) exec-a-script against a synthetic host in `tmpdir()` via
   `runNode`/`runBash`, asserting on status + output; (2) doctrine regex pins over `read()`
-  file content; (3) source-shape pins on workflow bodies via `extractFn`/`evalFns`.
+  file content; (3) source-shape pins on workflow bodies via `extractFn`/`evalFns`; (4)
+  in-process DI unit tests for `autopilot/daemon/*` lib modules — injected fakes
+  (`queryImpl`, transports), `node:test` mock timers, zero real SDK/network calls.
   Fixtures (`tests/fixtures/`) only when the input must be a realistic multi-file artifact.
 - Nothing here is exempt from TDD; there is no env-gated suite (no external services).
 - **Red-pin baseline**: the full suite deliberately carries failing INTAKE pins (11 as of
@@ -107,7 +112,9 @@ T1-shaped work: doctrine prose edits pinned by existing tests, new sweeps in
 - A new mechanism/gate without a `spec/doctrine/scaffold-ledger.md` row carrying a
   promote/retire condition is **hard**.
 - A doctrine/behavior change without a plugin.json version bump is **hard**.
-- A script or test importing a non-builtin package is **hard**.
+- A script or test importing a non-builtin package is **hard**. `autopilot/**` may import
+  ONLY `@anthropic-ai/claude-agent-sdk`, and only from `autopilot/daemon/sdk.js`; any other
+  non-builtin import anywhere, or an SDK import elsewhere, stays a hard finding.
 - An error path that doesn't name its remedy command, or a new exit code not documented in
   the script's header, is **hard**.
 - A `§ Section Name` citation that doesn't match a `## ` heading in the cited doctrine file

@@ -1,0 +1,12 @@
+{
+  "name": "autopilot-daemon",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Scoped dependency boundary for the autopilot daemon's SDK session runner (spec 02) — the only place in this repo that installs a non-builtin package; spec/ scripts and tests/ stay zero-dep.",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.220"
+  }
+}

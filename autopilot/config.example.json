@@ -1,0 +1,24 @@
+{
+  "_comment": "autopilot host config — copy to ~/.config/autopilot/config.json (or pass --config <path>). Host-level fields (botToken, supergroupId, allowedUserIds, specPluginRoot, pluginPaths) apply once; each entry in lanes is one project, one lane, serial stages within it (spec 03 D1/D3).",
+
+  "botToken": "123456:ABC-DEF-your-telegram-bot-token",
+  "supergroupId": -1001234567890,
+  "allowedUserIds": [111111111],
+  "specPluginRoot": "/abs/path/claude-plugins/spec",
+  "pluginPaths": [
+    "/abs/path/claude-plugins/spec",
+    "/abs/path/claude-plugins/git"
+  ],
+
+  "lanes": [
+    {
+      "project": "prax",
+      "root": "/abs/path/prax",
+      "topicId": 7,
+      "devServerCommand": "npm run dev",
+      "tunnelCommand": "cloudflared tunnel --url http://localhost:3000",
+      "pollSeconds": 300,
+      "screenshotCommand": "node cap.js {url} {out}"
+    }
+  ]
+}

@@ -1,0 +1,179 @@
+#!/usr/bin/env node
+'use strict'
+// autopilotd [--config <path>] — the autopilot daemon entry point
+// (specs/20260801/03-lane-engine.md D8). Boots one lane per project from the host config
+// (D3), wires the real Telegram adapter (spec 01) and SDK session runner (spec 02) into each
+// lane (spec 03), and starts every lane's poll-the-oracle loop. The oracle each lane polls is
+// a thin shell to `node <specPluginRoot>/scripts/spec-status.js --root <lane.root> --next
+// --json` (D2) — this file's only "routing" logic is building that one child-process call;
+// the lane itself picks the first admissible entry.
+//
+// Boot order matters (AC-20260801-03-10): the recursion guard and the Node-version floor are
+// checked BEFORE the config file is even read, so a misconfigured/missing config never masks
+// either precondition. Both are fatal — printed to stderr with the remedy, exit 2 — because a
+// daemon that started anyway would either spawn a session inside a session (unbounded
+// recursion, spec 02 D6) or `ERR_REQUIRE_ESM` when session.js lazily requires ./sdk.js for the
+// first real stage.
+//
+// Deliberately does NOT: retry a broken config (loadConfig's Error already names the field and
+// the remedy — this file only renders it and exits), re-derive what any lane should run next
+// (that's the injected oracle + lane.js, per the v6.20.0 sole-derivation rule), or exit
+// non-zero because a lane failed/halted — halt/backoff are steady states a lane lives in
+// forever; only a signal or a boot precondition ends this process.
+//
+// Exit codes: 0 clean shutdown on SIGTERM/SIGINT (every lane stopped, state persisted,
+// adapter stopped); 2 usage/precondition failure (recursion guard, Node version floor, bad
+// --config flag, or an invalid config file — message always names the remedy).
+
+const fs = require('fs')
+const os = require('os')
+const path = require('path')
+const { execFile } = require('child_process')
+
+const { loadConfig } = require('../daemon/config')
+const { createLane } = require('../daemon/lane')
+const { runStage } = require('../daemon/session')
+const { createTelegramAdapter } = require('../daemon/telegram')
+
+const NODE_FLOOR = { major: 20, minor: 19 }
+
+function fail(message) {
+  console.error(message)
+  process.exit(2)
+}
+
+// D8: refuses before config is even read — a session spawning a session recurses unbounded
+// (spec 02 D6's recursion guard, checked from this side).
+function assertNoRecursion() {
+  if (process.env.AUTOPILOT_SESSION === '1') {
+    fail(
+      'autopilotd: refusing to start — AUTOPILOT_SESSION=1 is set, meaning this process is ' +
+      'itself running inside a spec-pipeline session (recursion guard, spec 02 D6 / spec 03 ' +
+      'D8); autopilot never launches a nested daemon from a session'
+    )
+  }
+}
+
+// spec 02 D11: the SDK is ESM-only; require() of ESM needs Node >=20.19.0 or session.js's
+// lazy require('./sdk') throws ERR_REQUIRE_ESM on the very first real stage.
+function assertNodeVersion() {
+  const [major, minor] = process.versions.node.split('.').map(Number)
+  const meetsFloor = major > NODE_FLOOR.major || (major === NODE_FLOOR.major && minor >= NODE_FLOOR.minor)
+  if (!meetsFloor) {
+    fail(
+      `autopilotd: requires Node >=${NODE_FLOOR.major}.${NODE_FLOOR.minor}.0 (spec 02 D11 — ` +
+      `the Claude Agent SDK is ESM-only), found ${process.versions.node} — upgrade Node`
+    )
+  }
+}
+
+// Hand-rolled --flag parsing (repo convention — no arg library). Only --config is recognized;
+// anything else is left for loadConfig's own default.
+function parseArgs(argv) {
+  let configPath
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] !== '--config') continue
+    configPath = argv[i + 1]
+    if (!configPath) fail('autopilotd: --config needs a path — usage: autopilotd [--config <path>]')
+    i++
+  }
+  return configPath
+}
+
+// D2: the oracle is a thin shell to spec-status.js --next --json for one lane's root; a
+// non-zero exit or unparseable stdout rejects, which lane.js's mainLoop treats as `backoff`
+// (never a crash) and narrates 🚫 once (AC-20260801-03-13).
+function buildOracle(specPluginRoot, root) {
+  const scriptPath = path.join(specPluginRoot, 'scripts', 'spec-status.js')
+  return function oracle() {
+    return new Promise((resolve, reject) => {
+      execFile(
+        process.execPath,
+        [scriptPath, '--root', root, '--next', '--json'],
+        { maxBuffer: 10 * 1024 * 1024 },
+        (err, stdout, stderr) => {
+          if (err) {
+            reject(new Error(`spec-status.js exited non-zero for ${root} — ${(stderr || err.message).trim()}`))
+            return
+          }
+          try {
+            resolve(JSON.parse(stdout))
+          } catch (parseErr) {
+            reject(new Error(`spec-status.js printed unparseable JSON for ${root} — ${parseErr.message}`))
+          }
+        }
+      )
+    })
+  }
+}
+
+function makeLog(project) {
+  return (message) => console.error(`autopilotd[${project}]: ${message}`)
+}
+
+// D8: SIGTERM/SIGINT stop every lane (which aborts its in-flight session, cancels any pending
+// topic ask, kills dev-server/tunnel process groups, and persists lane state — all inside
+// lane.stop()), then stop the adapter's poll loop, then exit 0. A second signal during
+// shutdown forces an immediate exit rather than waiting out a stuck lane.
+function installSignalHandlers(adapter, lanes) {
+  let shuttingDown = false
+  async function shutdown(signal) {
+    if (shuttingDown) {
+      console.error(`autopilotd: second ${signal} received — forcing exit`)
+      process.exit(1)
+    }
+    shuttingDown = true
+    console.error(`autopilotd: ${signal} received — stopping lanes`)
+    await Promise.all(lanes.map((lane) => lane.stop()))
+    await adapter.stop()
+    process.exit(0)
+  }
+  process.on('SIGTERM', () => shutdown('SIGTERM'))
+  process.on('SIGINT', () => shutdown('SIGINT'))
+}
+
+function main() {
+  assertNoRecursion()
+  assertNodeVersion()
+
+  const configPath = parseArgs(process.argv.slice(2))
+  let cfg
+  try {
+    cfg = loadConfig(configPath ? { configPath } : {})
+  } catch (err) {
+    fail(err.message)
+    return
+  }
+
+  const topicMap = {}
+  for (const lane of cfg.lanes) topicMap[lane.project] = lane.topicId
+
+  const adapter = createTelegramAdapter({
+    botToken: cfg.botToken,
+    supergroupId: cfg.supergroupId,
+    topicMap,
+    allowedUserIds: cfg.allowedUserIds,
+  })
+
+  const stateDir = path.join(os.homedir(), '.config', 'autopilot', 'state')
+  fs.mkdirSync(stateDir, { recursive: true })
+
+  const lanes = cfg.lanes.map((laneCfg) =>
+    createLane({
+      // pluginPaths is host-level config (D3); lane.js reads it off its own `cfg` (Contracts),
+      // so it's merged onto the per-lane row here rather than threaded as a separate param.
+      cfg: { ...laneCfg, pluginPaths: cfg.pluginPaths },
+      adapter,
+      runStage,
+      oracle: buildOracle(cfg.specPluginRoot, laneCfg.root),
+      stateDir,
+      log: makeLog(laneCfg.project),
+    })
+  )
+
+  adapter.start()
+  for (const lane of lanes) lane.start()
+  installSignalHandlers(adapter, lanes)
+}
+
+main()

@@ -1,0 +1,9 @@
+{
+  "name": "autopilot",
+  "version": "0.1.0",
+  "description": "Remote-controlled spec pipeline daemon: a platform-neutral messaging adapter seam (Telegram v1) that renders fork questions as inline keyboards and routes answers back to pending asks",
+  "author": {
+    "name": "JJ",
+    "email": "jj@555.ventures"
+  }
+}

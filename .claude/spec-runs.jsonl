@@ -1,0 +1,1 @@
+{"ts":"2026-08-01","spec":"specs/20260801/01-telegram-adapter.md","stage":"build","tier":"T2","runId":"wf_2ac683bd-f72","fastPath":false,"diff":{"files":7,"loc":863},"tokens":{"workflow":70041,"phase4Repairs":[]},"gate":{"phase4Rounds":1,"failureSetShrankEachRound":true},"retainer":{"consults":0},"deviations":18}

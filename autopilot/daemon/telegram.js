@@ -138,7 +138,9 @@ function createTelegramAdapter(opts) {
       }
       if (res.status === 429) {
         const data = await safeJson(res)
-        const retryAfter = (data && data.parameters && data.parameters.retry_after) || 1
+        // ?? not || — Telegram's retry_after is a real number and 0 is a valid "retry now";
+        // a || fallback would silently reshape it into a 1s wait.
+        const retryAfter = data?.parameters?.retry_after ?? 1
         await delay(retryAfter * 1000)
         continue
       }

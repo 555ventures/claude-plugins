@@ -1,6 +1,6 @@
 ---
 date: 2026-08-01
-status: implementing
+status: done
 risk: T2
 open_markers: 0
 area: autopilot
@@ -140,6 +140,22 @@ pending-ask flag forever, and the conventions-rule row exists because
 (whether autopilot guards need rows there) was considered: the ledger governs spec-pipeline
 guards; autopilot's guards are product behavior pinned by ACs, so no ledger row — revisit if
 review disagrees.
+
+Build deviations absorbed (2026-08-01, sidecar folded at review): the Contracts method list
+omitted `editMessageText`, so the "Other…" tap clears the keyboard via
+`editMessageReplyMarkup` instead of rewriting the question text — the prompt to reply in the
+topic is carried by the disappearing keyboard, not new copy. Behavior never said whether
+multiSelect questions also get an "Other…" row; they do not (toggle rows + "✔ Done" only),
+since there is no live-keyboard way to render the free-text prompt. D7 reads as though the
+daemon matches free text to the pending ask, but only the adapter holds the ask's resolve
+closures, so the adapter consumes an "Other…"-awaiting reply itself and forwards to `onText`
+only when nothing awaits free text — the daemon never double-handles a message. The
+poll-loop starvation deviation was the one with legs beyond this spec and is now a
+`[host]` Gotcha in the pipeline rules.
+
+Review (2026-08-01, run `wf_5f41f46f-3ec`): CLEAN — no hard findings. One soft advisory (the
+429 handler's `|| 1` would have swallowed a legitimate `retry_after: 0`) was fixed in place
+rather than waived; `??` now carries the fallback.
 
 ## Canonical Delta
 

@@ -47,6 +47,8 @@ test('AC-20260801-03-8: loadConfig throws naming the missing field and the confi
         'the error must name the exact missing field or an operator cannot find the misconfiguration')
       assert.ok(err.message.includes(configPath),
         'the error must name the config path (the remedy target) or the operator does not know which file to edit')
+      assert.match(err.message, /^autopilotd: config missing "botToken"/,
+        'AC-20260801-03-8: the error must carry the literal "autopilotd: " prefix before "config missing" or the daemon\'s own error-naming convention silently drops, leaving an operator unable to tell which process emitted the failure')
       return true
     },
     'loadConfig must fail loud on a missing required field (AC-8) or a misconfigured daemon starts silently broken',

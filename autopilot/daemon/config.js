@@ -34,30 +34,30 @@ function readConfigFile(configPath) {
   try {
     raw = fs.readFileSync(configPath, 'utf8')
   } catch {
-    throw new Error(`config not found at ${configPath} — create it (see autopilot/config.example.json)`)
+    throw new Error(`autopilotd: config not found at ${configPath} — create it (see autopilot/config.example.json)`)
   }
   try {
     return JSON.parse(raw)
   } catch (err) {
-    throw new Error(`config at ${configPath} is not valid JSON — ${err.message}`)
+    throw new Error(`autopilotd: config at ${configPath} is not valid JSON — ${err.message}`)
   }
 }
 
 function assertHostFields(cfg, configPath) {
   for (const field of HOST_REQUIRED_FIELDS) {
     if (cfg[field] === undefined) {
-      throw new Error(`config missing "${field}" — edit ${configPath}`)
+      throw new Error(`autopilotd: config missing "${field}" — edit ${configPath}`)
     }
   }
   if (!Array.isArray(cfg.lanes) || cfg.lanes.length === 0) {
-    throw new Error(`config missing "lanes" — edit ${configPath}`)
+    throw new Error(`autopilotd: config missing "lanes" — edit ${configPath}`)
   }
 }
 
 function assertLaneFields(lane, index, configPath) {
   for (const field of LANE_REQUIRED_FIELDS) {
     if (lane[field] === undefined) {
-      throw new Error(`config lane ${index} missing "${field}" — edit ${configPath}`)
+      throw new Error(`autopilotd: config lane ${index} missing "${field}" — edit ${configPath}`)
     }
   }
 }
@@ -75,7 +75,7 @@ function assertNoDuplicateField(lanes, field, configPath) {
     }
     const first = seen.get(key)
     throw new Error(
-      `config lanes "${first}" and "${lane.project}" share ${field} "${key}" — edit ${configPath}`
+      `autopilotd: config lanes "${first}" and "${lane.project}" share ${field} "${key}" — edit ${configPath}`
     )
   }
 }

@@ -211,6 +211,9 @@ function createLane({ cfg, adapter, runStage, oracle, stateDir, log }) {
   }
 
   async function runStageFor(pick, { model, promptSuffix } = {}) {
+    // D9: one topic message per stage transition, including a repair pass (also a
+    // transition) — start, done, halt/idle. Same text regardless of promptSuffix/model.
+    await narrate(`▶ ${pick.action} ${pick.path}`)
     setState('running')
     currentAbortController = new AbortController()
     const prompt = promptSuffix ? `${pick.action} ${pick.path} ${promptSuffix}` : `${pick.action} ${pick.path}`
@@ -230,6 +233,22 @@ function createLane({ cfg, adapter, runStage, oracle, stateDir, log }) {
 
   function pickFrom(list) {
     return list.find((entry) => entry.blockers.length === 0 && !skipSet.has(entry.path))
+  }
+
+  // D4 / Behavior § "Checkpoint detail": fires when the pick's brief differs from the lane's
+  // last-completed brief, OR (brief is "n/a"/absent — not comparable on its own) the pick's
+  // path prefix differs from the previous pick's, OR the pick's path is a roadmap brief
+  // (`/spec:plan @docs/roadmap/…`, optional leading "@" tolerated).
+  function pathPrefix(p) {
+    return p ? path.dirname(p) : p
+  }
+  function isRoadmapBriefPath(p) {
+    return /^@?docs\/roadmap\//.test(p || '')
+  }
+  function needsCheckpoint(pick, previousPick) {
+    if (isRoadmapBriefPath(pick.path)) return true
+    if (pick.brief && pick.brief !== 'n/a') return pick.brief !== lastBrief
+    return !previousPick || pathPrefix(previousPick.path) !== pathPrefix(pick.path)
   }
 
   async function mainLoop() {
@@ -267,14 +286,15 @@ function createLane({ cfg, adapter, runStage, oracle, stateDir, log }) {
       }
 
       lastIdleHash = null
+      const previousPick = lastPick
       lastPick = pick
 
-      if (pick.brief && pick.brief !== lastBrief) {
+      if (needsCheckpoint(pick, previousPick)) {
         await runCheckpoint(pick)
       }
       if (stopped) break
 
-      const result = await runStageFor(pick)
+      const result = await runStageFor(pick, { model: pick.action === '/spec:plan' ? 'fable' : undefined })
 
       if (result.outcome === 'aborted') return
 

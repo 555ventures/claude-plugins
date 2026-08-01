@@ -120,6 +120,100 @@ test('AC-20260801-03-2: a pick whose brief differs from lastBrief posts a checkp
   await lane.stop()
 })
 
+test('Behavior line 93: the INITIAL runStage call for a /spec:plan pick carries model:"fable", distinct from the D5 repair-pass model:"fable" call', async () => {
+  const stateDir = tmpdir('lane-plan-model')
+  writeState(stateDir, 'prax', '03')
+  const planPick = Object.assign({}, PICK_A, { action: '/spec:plan', path: '@docs/roadmap/prax.md', brief: '03' })
+  const oracle = async () => ({ next: [planPick] })
+  const { runStage, calls: runCalls } = makeFakeRunStage(async () => ({ outcome: 'done', resultText: 'ok', costUsd: 0 }))
+  const adapter = makeFakeAdapter()
+  const cfg = makeCfg({
+    devServerCommand: 'true',
+    tunnelCommand: 'node -e "console.log(\'https://abc.trycloudflare.com\')"',
+  })
+  const lane = createLane({ cfg, adapter, runStage, oracle, stateDir, log: () => {} })
+  lane.start()
+  await waitFor(() => adapter.calls.askButtons.length > 0)
+  const ask = adapter.calls.askButtons[0].ask
+  const startOption = ask.questions[0].options.find((o) => /Start/.test(o.label))
+  assert.ok(startOption, 'test fixture bug: a roadmap-brief pick must still offer a Start option through the ordinary checkpoint path (D4)')
+  adapter.calls.askButtons[0].resolve({ answers: { [ask.questions[0].question]: startOption.label } })
+  await flush()
+  assert.strictEqual(runCalls.length, 1,
+    'the initial stage attempt for a /spec:plan pick must actually run past the checkpoint or the model contract can never be observed')
+  assert.strictEqual(runCalls[0].model, 'fable',
+    'Behavior line 93: an INITIAL /spec:plan runStage call must carry model:"fable" (`model: action==="/spec:plan" ? "fable" : undefined`) or roadmap planning silently runs on the default model')
+  await lane.stop()
+})
+
+test('Behavior line 93: the INITIAL runStage call for a non-/spec:plan pick carries no model, so a future "always fable" regression cannot pass this pin', async () => {
+  const stateDir = tmpdir('lane-nonplan-model')
+  writeState(stateDir, 'prax', '03')
+  const oracle = async () => ({ next: [PICK_A] })
+  const { runStage, calls: runCalls } = makeFakeRunStage(async () => ({ outcome: 'done', resultText: 'ok', costUsd: 0 }))
+  const adapter = makeFakeAdapter()
+  const lane = createLane({ cfg: makeCfg(), adapter, runStage, oracle, stateDir, log: () => {} })
+  lane.start()
+  await flush()
+  assert.strictEqual(runCalls.length, 1,
+    'the initial stage attempt for a /spec:build pick must actually run or the model contract can never be observed')
+  assert.strictEqual(runCalls[0].model, undefined,
+    'Behavior line 93: a non-/spec:plan pick\'s initial runStage call must carry no model (`: undefined` branch) or a future "always fable" regression silently ships')
+  await lane.stop()
+})
+
+test('D9: the lane posts a "▶ <action> <path>" start narration before runStage resolves, not retroactively after the stage finishes', async () => {
+  const stateDir = tmpdir('lane-start-narration')
+  writeState(stateDir, 'prax', '03')
+  const oracle = async () => ({ next: [PICK_A] })
+  const adapter = makeFakeAdapter()
+  let sawStartBeforeResolve = false
+  const { runStage, calls: runCalls } = makeFakeRunStage(async () => {
+    sawStartBeforeResolve = adapter.calls.send.some((c) => /▶/.test(c.text))
+    return { outcome: 'done', resultText: 'ok', costUsd: 0 }
+  })
+  const lane = createLane({ cfg: makeCfg(), adapter, runStage, oracle, stateDir, log: () => {} })
+  lane.start()
+  await flush()
+  assert.strictEqual(runCalls.length, 1,
+    'test fixture bug: the stage must actually run before the start-narration ordering can be checked')
+  assert.strictEqual(sawStartBeforeResolve, true,
+    'D9: the "▶" start narration must be posted before runStage resolves — a start, not a retroactive done-time message — or the phone learns about a stage transition only after the fact')
+  const startMsg = adapter.calls.send.find((c) => /▶/.test(c.text))
+  assert.ok(startMsg, 'D9: a "▶ <action> <path>" start narration must be posted for a stage transition or the phone has no visibility into what began')
+  assert.match(startMsg.text, /▶\s*\/spec:build\s+specs\/20260801\/05-x\.md/,
+    'D9: the start narration must follow the "▶ <action> <path>" shape (e.g. "▶ /spec:build specs/…") or the message does not identify which stage began')
+  await lane.stop()
+})
+
+test('D4: a roadmap-brief pick triggers the checkpoint even when its brief equals the lane\'s lastBrief, because the roadmap-path clause is an unconditional OR', async () => {
+  const stateDir = tmpdir('lane-d4-roadmap')
+  writeState(stateDir, 'prax', '03')
+  const roadmapPick = Object.assign({}, PICK_A, { action: '/spec:plan', path: '@docs/roadmap/prax.md', brief: '03' })
+  const oracle = async () => ({ next: [roadmapPick] })
+  const { runStage, calls: runCalls } = makeFakeRunStage(async () => ({ outcome: 'done', resultText: 'ok', costUsd: 0 }))
+  const adapter = makeFakeAdapter()
+  const cfg = makeCfg({
+    devServerCommand: 'true',
+    tunnelCommand: 'node -e "console.log(\'https://abc.trycloudflare.com\')"',
+  })
+  const lane = createLane({ cfg, adapter, runStage, oracle, stateDir, log: () => {} })
+  lane.start()
+  await waitFor(() => adapter.calls.askButtons.length > 0)
+  assert.strictEqual(runCalls.length, 0,
+    'D4: runStage must not run before the checkpoint is answered even though the pick\'s brief equals lastBrief, because the roadmap-path clause fires regardless of brief equality')
+  assert.strictEqual(adapter.calls.askButtons.length, 1,
+    'D4: a roadmap-brief pick must post exactly one checkpoint ask even with brief === lastBrief or the unconditional-OR clause is not honored')
+  const ask = adapter.calls.askButtons[0].ask
+  const startOption = ask.questions[0].options.find((o) => /Start/.test(o.label))
+  assert.ok(startOption, 'test fixture bug: the checkpoint must carry a Start-labeled option')
+  adapter.calls.askButtons[0].resolve({ answers: { [ask.questions[0].question]: startOption.label } })
+  await flush()
+  assert.strictEqual(runCalls.length, 1,
+    'D4: answering Start must release exactly one runStage call for the roadmap-brief pick or the checkpoint never actually starts the stage')
+  await lane.stop()
+})
+
 test('AC-20260801-03-3: a failed stage triggers exactly one fable repair runStage, and a second failure halts the lane and offers Next spec / Stay parked without further unanswered runStage calls', async () => {
   const stateDir = tmpdir('lane-ac3')
   writeState(stateDir, 'prax', '03')

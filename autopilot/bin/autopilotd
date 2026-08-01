@@ -22,8 +22,10 @@
 // forever; only a signal or a boot precondition ends this process.
 //
 // Exit codes: 0 clean shutdown on SIGTERM/SIGINT (every lane stopped, state persisted,
-// adapter stopped); 2 usage/precondition failure (recursion guard, Node version floor, bad
-// --config flag, or an invalid config file — message always names the remedy).
+// adapter stopped); 1 forced exit on a second SIGTERM/SIGINT received while a shutdown is
+// already in progress (D8's double-kill pattern — a stuck lane never wedges the process);
+// 2 usage/precondition failure (recursion guard, Node version floor, bad --config flag, or an
+// invalid config file — message always names the remedy).
 
 const fs = require('fs')
 const os = require('os')

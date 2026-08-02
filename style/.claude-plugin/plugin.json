@@ -1,7 +1,7 @@
 {
   "name": "style",
-  "version": "1.0.0",
-  "description": "JJ's cross-machine communication style: injects outcome-first, emoji-anchored, plain-English response rules into every session via a SessionStart hook — no per-machine CLAUDE.md edits",
+  "version": "1.1.0",
+  "description": "JJ's cross-machine communication style: injects outcome-first, emoji-anchored, plain-English response rules into every session via a SessionStart hook \u2014 no per-machine CLAUDE.md edits",
   "author": {
     "name": "JJ",
     "email": "jj@555.ventures"

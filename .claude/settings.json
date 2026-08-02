@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run build:workflows:*)",
+      "Bash(node --test:*)",
+      "Bash(node spec/scripts/build-workflows.js:*)",
+      "Bash(node spec/scripts/spec-status.js:*)",
+      "Bash(bash scripts/spec-patterns.sh:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm view:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Read(.env*)",
+      "Read(**/*.pem)",
+      "Read(**/id_rsa*)"
+    ]
+  }
+}

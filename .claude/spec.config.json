@@ -1,0 +1,26 @@
+{
+  "generatedBy": "spec@6.35.0",
+  "contractHash": "be68352bb957",
+  "gateCommand": "node spec/scripts/build-workflows.js --check && node --test {testDirs}",
+  "testCommand": "node --test",
+  "setupCommand": "npm install",
+  "runtime": {
+    "inert": "plugin-source repo — plugins execute inside Claude Code sessions; there is no app process to boot. The executed verification leg is the test suite plus the workflow codegen drift check."
+  },
+  "patternsScript": "scripts/spec-patterns.sh",
+  "layerGroups": [["doctrine"], ["scripts", "workflows"]],
+  "agentMap": {
+    "tests": "plugin-tests",
+    "doctrine": "doctrine-author",
+    "scripts": "gate-scripts",
+    "workflows": "workflow-author",
+    "default": "general-purpose"
+  },
+  "routing": {
+    "tests": "tests/*.test.js rows",
+    "doctrine": "spec/commands/*.md, spec/doctrine/*.md, spec/agents/*.md, spec/templates/*, git/commands/*.md, spec/hooks/hooks.json, plugin manifests",
+    "scripts": "spec/scripts/*.js|*.sh, spec/bin/*, scripts/*, autopilot daemon source (routes here until it earns its own kind)",
+    "workflows": "spec/workflows/src/*.body.js, spec/workflows/fragments/*.frag — generated wf-*.js is NEVER a File Plan row"
+  },
+  "pipelineRules": ".claude/rules/spec-pipeline.md"
+}

@@ -16,6 +16,11 @@
       "description": "Git helpers: a fast add-all-and-commit flow (/git:commit), a guided merge with conflict repair and worktree cleanup (/git:merge), and an idempotent per-spec worktree entry (/git:enter-worktree)"
     },
     {
+      "name": "style",
+      "source": "./style",
+      "description": "JJ's cross-machine communication style — a SessionStart hook injects outcome-first, emoji-anchored response rules into every session, replacing per-machine CLAUDE.md edits"
+    },
+    {
       "name": "autopilot",
       "source": "./autopilot",
       "description": "Remote-controlled spec pipeline daemon: a platform-neutral messaging adapter seam (Telegram v1) that renders fork questions as inline keyboards and routes answers back to pending asks"

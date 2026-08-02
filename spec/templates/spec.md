@@ -1,6 +1,6 @@
 ---
 date: { YYYY-MM-DD }
-status: draft            # draft → hardened → implementing → done (hook-enforced)
+status: draft            # draft → hardened → implementing → done (hook-enforced); to retire a preserved spec: superseded (terminal — drops out of /spec:status silently; optional superseded_by: <what replaced it> is free-form provenance)
 risk: T2                 # T2 | T3 per tier rubric (plugin shared invariants + host pipeline rules). T1 work gets no spec.
 area: { area-name }      # primary feature/domain/module; "cross-cutting" if none
 design: false            # design-capable hosts only (config design block): true → /spec:design gates before /spec:build

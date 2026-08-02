@@ -610,3 +610,85 @@ test('consumers are wired to the one derivation', () => {
   assert.match(read('spec/commands/review.md'), /spec-status.*--next/s,
     'review close must print --next verbatim — the freehand Next line is the incident this mode kills')
 })
+
+// Fail-closed statuses + sanctioned retirement (2026-08-01): a spec hand-edited to a word
+// outside the lifecycle fell through deriveNext's else-branch to a /spec:build recommendation
+// with zero anomalies. Unknown statuses must be flagged and never routed to an action. The
+// sanctioned retirement spelling — `status: superseded` — must be SILENT (no anomaly, no Next
+// entry, no brief membership): a retired spec left in the repo indefinitely must never
+// accumulate report lines. Silence is UNCONDITIONAL. The first cut of this fix required
+// `superseded_by:` to resolve to another spec and nagged daily at a spec correctly superseded
+// by an ADR — an errand with no possible completion. Never make retirement conditional again.
+test('unknown status fails closed: anomaly flagged, spec excluded from --next', () => {
+  const dir = host({
+    briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
+    specs: { '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: wip\nbrief: 01' },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--json'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const out = JSON.parse(r.stdout)
+  const unk = out.anomalies.filter(a => a.kind === 'unknown-status')
+  assert.strictEqual(unk.length, 1, 'wip is not in the spec status vocabulary — must be flagged')
+  assert.match(unk[0].detail, /wip/, 'names the offending status')
+  assert.match(unk[0].detail, /01-auth-core\.md/, 'names the offending spec')
+  const next = runNode(SCRIPT, ['--root', dir, '--next'])
+  assert.strictEqual(next.status, 0, next.stderr)
+  assert.doesNotMatch(next.stdout, /@specs\/20260701\/01-auth-core\.md/,
+    'a spec in an unrecognized state must never be recommended for any action')
+})
+
+test('valid retirement is silent: no anomaly, no Next entry, brief derives from live specs', () => {
+  const dir = host({
+    briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
+    specs: {
+      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: superseded\nbrief: 01\nsuperseded_by: specs/20260715/01-auth-core-v2.md',
+      '20260715/01-auth-core-v2.md': 'date: 2026-07-15\nstatus: done\nbrief: 01',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--json'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.deepStrictEqual(out.anomalies, [], 'a clean retirement never nags — not today, not after a year')
+  assert.strictEqual(out.briefs.find(b => b.num === '01').status, 'done',
+    'the retired spec must not hold its brief hostage in in-flight')
+  assert.deepStrictEqual(out.superseded, [{ path: 'specs/20260701/01-auth-core.md', superseded_by: 'specs/20260715/01-auth-core-v2.md' }],
+    'retirement is still visible to machines via the superseded list')
+  const next = runNode(SCRIPT, ['--root', dir, '--next'])
+  assert.doesNotMatch(next.stdout, /01-auth-core\.md/, 'retired spec never appears in Next')
+})
+
+test('retirement is silent whatever superseded_by says — no pointer, an ADR, or free text', () => {
+  const dir = host({
+    briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
+    specs: {
+      '20260701/01-no-ptr.md': 'date: 2026-07-01\nstatus: superseded\nbrief: 01',
+      '20260701/01-adr-ptr.md': 'date: 2026-07-01\nstatus: superseded\nbrief: 01\nsuperseded_by: docs/adr/0017-global-client-base.md',
+      '20260701/01-prose-ptr.md': 'date: 2026-07-01\nstatus: superseded\nbrief: 01\nsuperseded_by: dropped, requirement went away',
+      '20260715/01-live.md': 'date: 2026-07-15\nstatus: done\nbrief: 01',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--json'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.deepStrictEqual(out.anomalies, [],
+    'a retirement pointing outside specs/ (or nowhere) is finished work, not an unfinished edit')
+  assert.strictEqual(out.superseded.length, 3, 'all three stay machine-visible in --json')
+  const next = runNode(SCRIPT, ['--root', dir, '--next'])
+  assert.doesNotMatch(next.stdout, /-ptr\.md/, 'no retired spec is ever routed to an action')
+})
+
+test('a dependency on a retired spec blocks nothing and reports nothing', () => {
+  const dir = host({
+    briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
+    specs: {
+      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: superseded\nbrief: 01\nsuperseded_by: specs/20260715/01-auth-core-v2.md',
+      '20260715/01-auth-core-v2.md': 'date: 2026-07-15\nstatus: done\nbrief: 01',
+      '20260720/01-auth-ui.md': 'date: 2026-07-20\nstatus: done\nbrief: 01\ndepends_on: [specs/20260701/01-auth-core.md]',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--json'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.deepStrictEqual(out.anomalies, [],
+    'a dependency retired out from under a done spec is not a skipped-spec finding')
+})

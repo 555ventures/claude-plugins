@@ -142,12 +142,12 @@ function parseList(v) {
   return v.replace(/^\[|\]$/g, '').split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean)
 }
 
-const specs = []
+const allSpecs = []
 for (const file of walkMd(path.join(root, 'specs'))) {
   const text = fs.readFileSync(file, 'utf8')
   const fm = frontmatter(text)
   if (!fm || !fm.status) continue
-  specs.push({
+  allSpecs.push({
     path: path.relative(root, file),
     status: fm.status,
     brief: fm.brief && !BRIEFLESS.test(fm.brief.trim()) ? normBrief(fm.brief) : null,
@@ -156,9 +156,23 @@ for (const file of walkMd(path.join(root, 'specs'))) {
     design: fm.design === 'true',
     designed: fm.designed || null,
     depends_on: parseList(fm.depends_on),
+    superseded_by: fm.superseded_by || null,
     filePlan: parseFilePlan(text),
   })
 }
+
+// ---- retirement: status: superseded -----------------------------------------------------------
+// `status: superseded` retires a preserved spec. It is terminal and UNCONDITIONAL: the spec
+// leaves the derivation entirely — no brief membership, no Next entry, no anomaly, ever.
+// Silence is the whole point. A retired spec sitting in the repo for a year must never
+// accumulate report lines, and this derivation must never invent an errand to earn that
+// silence — an earlier cut demanded `superseded_by:` resolve to another SPEC and nagged daily
+// at a spec correctly superseded by an ADR, for which no fix existed (2026-08-01).
+// `superseded_by:` is optional provenance: free-form (spec path, ADR path, prose), carried into
+// --json for whoever wants the trail, never validated and never a gate.
+const isRetired = s => s.status === 'superseded'
+const retired = allSpecs.filter(isRetired)
+const specs = allSpecs.filter(s => !isRetired(s))
 
 // ---- docs/roadmap/NN-*.md headers -----------------------------------------------------------
 
@@ -189,6 +203,9 @@ if (fs.existsSync(roadmapDir)) {
 
 const DONE = s => s === 'done'
 const LANDED = s => s === 'done' || s === 'implementing'
+// The hook-enforced spec lifecycle (spec/templates/spec.md). Anything else is a hand edit
+// this derivation can't reason about — fail closed: flag it, never route it to an action.
+const KNOWN_STATUS = new Set(['draft', 'hardened', 'implementing', 'done'])
 
 for (const b of briefs) {
   b.specs = specs.filter(s => s.brief === b.num)
@@ -197,6 +214,15 @@ for (const b of briefs) {
 const briefByNum = new Map(briefs.map(b => [b.num, b]))
 
 const anomalies = []
+
+// Unknown status: frontmatter carries a word outside the lifecycle. Without this, deriveNext's
+// else-branch would recommend /spec:build for it. `superseded` never reaches here — retirement
+// filtered it out above — so every hit is a typo or a hand-invented word, which has a real fix.
+for (const s of specs) {
+  if (!KNOWN_STATUS.has(s.status)) {
+    anomalies.push({ kind: 'unknown-status', detail: `${s.path} has status: ${s.status} — not in the spec lifecycle (${[...KNOWN_STATUS].join(' → ')}); fix the frontmatter (to retire a preserved spec: status: superseded)` })
+  }
+}
 
 // Orphan stamps: spec points at a brief file that doesn't exist.
 for (const s of specs) {
@@ -231,7 +257,7 @@ const specByTail = new Map(specs.map(s => [path.basename(s.path), s]))
 for (const s of specs) {
   if (!DONE(s.status)) continue
   for (const d of s.depends_on) {
-    const dep = specByTail.get(path.basename(d)) || specs.find(x => x.path === d || x.path.endsWith('/' + d))
+    const dep = specDep(d)
     if (dep && !DONE(dep.status)) {
       anomalies.push({ kind: 'skipped-spec', detail: `${s.path} is done but its dependency ${dep.path} is still ${dep.status}` })
     }
@@ -252,6 +278,9 @@ if (fs.existsSync(overview)) {
 
 // ---- --next: recommended next command --------------------------------------------------------
 
+// Resolve a depends_on ref against the LIVE specs. A ref naming a retired spec resolves to
+// nothing, and both callers read nothing as non-blocking — which is the intent: you don't get
+// held up by, or scolded about, a dependency that was retired out from under you.
 function specDep(ref) {
   return specByTail.get(path.basename(ref)) || specs.find(x => x.path === ref || x.path.endsWith('/' + ref))
 }
@@ -286,7 +315,7 @@ function briefDepPath(a, b) {
 function deriveNext() {
   const entries = []
   for (const s of specs) {
-    if (DONE(s.status)) continue
+    if (DONE(s.status) || !KNOWN_STATUS.has(s.status)) continue
     // designed: set = the design stage already ran for this spec — never route back to design.
     const action =
       s.status === 'draft' ? '/spec:plan'
@@ -410,7 +439,7 @@ if (briefFilter) {
 // styled here so no renderer re-derives it.
 
 if (json) {
-  console.log(JSON.stringify({ briefs: briefs.map(({ specs: ss, ...b }) => ({ ...b, specs: ss.map(s => ({ path: s.path, status: s.status })) })), specs, anomalies }, null, 2))
+  console.log(JSON.stringify({ briefs: briefs.map(({ specs: ss, ...b }) => ({ ...b, specs: ss.map(s => ({ path: s.path, status: s.status })) })), specs, superseded: retired.map(s => ({ path: s.path, superseded_by: s.superseded_by })), anomalies }, null, 2))
   process.exit(0)
 }
 
@@ -425,7 +454,7 @@ if (json) {
   const scope = briefs.length
     ? [`${doneB} brief${doneB === 1 ? '' : 's'} done`, flightB && `${flightB} in flight`, unplB && `${unplB} unplanned`].filter(Boolean).join(' · ')
     : specs.length ? `${doneS}/${specs.length} specs done` : 'no specs or briefs found'
-  out.push(`${anomalies.length ? '🟠' : '🟢'} ${scope} · ${anomalies.length ? `⚠️ ${anomalies.length} anomal${anomalies.length === 1 ? 'y' : 'ies'}` : 'no anomalies'}`)
+  out.push(`${anomalies.length ? '🟠' : '🟢'} ${scope}${retired.length ? ` · ${retired.length} superseded` : ''} · ${anomalies.length ? `⚠️ ${anomalies.length} anomal${anomalies.length === 1 ? 'y' : 'ies'}` : 'no anomalies'}`)
 
   if (briefs.length) {
     out.push('', '🗺️ Roadmap')
@@ -560,7 +589,7 @@ if (json) {
   } else if (!standalone.length) {
     out.push(`⚠️ ${anomalies.length} anomal${anomalies.length === 1 ? 'y' : 'ies'} — each tagged ⚠️ on its 🎯 Next line`)
   } else {
-    const ANOM_ICON = { 'orphan-stamp': '🏷️', 'skipped-brief': '⏭️', 'out-of-order': '🔀', 'unknown-dependency': '❓', 'skipped-spec': '🕳️', 'hand-tracked-status': '✍️' }
+    const ANOM_ICON = { 'orphan-stamp': '🏷️', 'skipped-brief': '⏭️', 'out-of-order': '🔀', 'unknown-dependency': '❓', 'skipped-spec': '🕳️', 'hand-tracked-status': '✍️', 'unknown-status': '🚧' }
     out.push(`⚠️ Anomalies (${standalone.length}${folded ? ` here · ${folded} tagged ⚠️ above` : ''})`)
     for (const a of standalone) out.push(`   ${ANOM_ICON[a.kind] || '⚠️'} [${a.kind}] ${a.detail}`)
   }

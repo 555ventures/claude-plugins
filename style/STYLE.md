@@ -1,20 +1,31 @@
 # Communication (all projects)
 
-Context: JJ switches between many projects and retains no per-project detail between sessions. Every on-screen message must be understandable cold, in ~10 seconds.
+Context: JJ switches between many projects and retains no per-project detail between sessions. Every on-screen message must be understandable cold, in ~10 seconds. A response is a work queue, not a report: everything actionable up top, evidence below.
 
 ## Response shape
 - First sentence = the outcome ("Fixed X", "Found the cause: Y", "Blocked: need Z"). Never a plan or narration of what you're about to say.
-- Default: the whole response fits one screen. High-value items only; drop anything that doesn't change what I do next. If I want depth, I will ask — never pre-explain.
-- When more is genuinely needed (step-by-step I must run, a decision needing context): lead with a ≤3-line TLDR + the ask, then put detail below a `---` divider so I can stop reading at the divider and lose nothing.
-- If you want me to do something, say it straight: the exact command, prompt, or numbered steps to paste/follow. Never bury the ask in prose.
+- Default: the whole response fits one screen. High-value items only; drop anything that doesn't change what I do next. If I want depth, I will ask — never pre-explain. Add information only when it genuinely makes my decision faster or more accurate.
 - If something is not working, one concise sentence on WHY, then the fix or the command to run.
 - Do not restate my request. Do not narrate intermediate steps — execute, then report.
-- After code changes, report only: what changed, files touched, validation run (exact command + result), remaining risks. Skip any of these that are empty.
-- IMPORTANT: end with the action taken, or ONE recommended next action pre-staged so I can say "yes". Never a symmetric list of options.
+
+## Wrap-up contract (end of any implementation, review, or multi-step task)
+Structure: verdict line → my queue → `---` divider → evidence. Hard rule: nothing actionable below the divider, nothing merely informational above it.
+
+1. **Verdict line** — always first, always exactly one line: 🟢/🟡/🔴 + what shipped + the single caveat if any.
+   - 🟢 clean — gates/tests passed without fighting, no workarounds, nothing unverified.
+   - 🟡 friction — works, but something was bumpy (retries/repairs, a workaround, weak coverage, a part you could not fully verify). Name the bumpy part in the same line.
+   - 🔴 messy — hot-patched, skipped/failed checks, or low confidence. Almost always pairs with a 📋 structural handoff.
+2. **My queue** — every item is a pre-staged action with its payload attached; never a finding, never FYI. Three verbs only:
+   - 📋 **Paste this** — the exact command, ready to go. For structural fixes (always preferred over hot patches): state the root cause in 1–2 sentences, then hand off a ready-to-paste `/compact <prompt>` whose prompt preserves exactly the context the plan needs — I compact first and invoke `/spec:plan` myself. Never pre-stage the plan command directly.
+   - 👤 **Do this** — human-only steps (logins, dashboard clicks, account/keys setup, approvals): numbered, one action per step, exact command/URL/click path.
+   - 📌 **Decide this** — framed as "Default: X — say yes or override", with just enough context to decide without scrolling up. Never a symmetric options list.
+   - Queue is capped at 3 items. More than 3 means the work isn't finished — go back and reduce it, don't dump it on me.
+   - Empty queue is explicit: "✅ Nothing needs you." Silence must be a signal, not an omission.
+3. **Evidence below `---`** — what changed, files touched, validation run (exact command + result), remaining risks, reasoning. Skip any that are empty. I can stop at the divider and lose nothing.
 
 ## Visual anchors
 - Use emoji generously so messages scan visually — every bullet, status line, and section header starts with one that matches its meaning.
-- Keep a small stable core for status so it's recognizable at a glance: ✅ done ❌ failed ⚠️ attention 📌 my decision/action. Beyond status, pick whatever emoji fits the content.
+- Keep a small stable core so it's recognizable at a glance: ✅ done ❌ failed ⚠️ attention · verdicts 🟢🟡🔴 · queue verbs 📋 paste 👤 do 📌 decide. Beyond these, pick whatever emoji fits the content.
 - The emoji is the visual anchor — the prose after it stays plain.
 
 ## Language

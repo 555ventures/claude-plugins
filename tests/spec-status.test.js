@@ -117,6 +117,44 @@ test('a wrapped Depends on list does not silently drop dependencies', () => {
   assert.match(r.stdout, /02/, 'names the dependency that wrapped')
 })
 
+// Phantom-blocker incident (2026-08-04): a spec reference on the Depends on: line
+// (`Depends on: spec 20260804/02 at done`) was digit-harvested into brief deps 20260804
+// (can never exist → permanent exit 1) and 02 (binds to an unrelated real brief). The
+// --brief preflight feeds /spec:plan Phase 0's warn-and-confirm, so a false blocker
+// trains click-through on real ones. Deps now parse item-wise: exact brief tokens only.
+test('a spec reference on the Depends on line is not harvested into phantom brief deps', () => {
+  const dir = host({
+    briefs: {
+      '01-auth.md': BRIEFS['01-auth.md'],
+      '02-billing.md': BRIEFS['02-billing.md'],
+      '18-foo.md': '# 18 — Foo\n\nPhase: P1 · Depends on: spec 20260804/02 at done · Primary workspaces: api\n',
+    },
+    specs: { '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01' },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--brief', '18'])
+  assert.strictEqual(r.status, 0, 'a spec id in prose must not become an unmet brief dependency (phantom blocker): ' + r.stdout)
+  assert.doesNotMatch(r.stdout, /20260804/, 'the spec date fragment must not register as a dependency')
+  assert.doesNotMatch(r.stdout, /UNMET/, 'the 02 fragment must not bind to the real (unplanned) brief 02')
+
+  const full = runNode(SCRIPT, ['--root', dir, '--json'])
+  const rej = JSON.parse(full.stdout).anomalies.filter(a => a.kind === 'unparsed-dependency')
+  assert.strictEqual(rej.length, 1, 'the ignored prose item must surface as an anomaly, not vanish silently')
+  assert.match(rej[0].detail, /spec 20260804\/02 at done/, 'the anomaly names the item so a typo\'d brief id stays findable')
+})
+
+test('a typo\'d brief id in Depends on surfaces as an anomaly instead of silently dropping', () => {
+  const dir = host({
+    briefs: {
+      '01-auth.md': BRIEFS['01-auth.md'],
+      '02-billing.md': '# 02 — Billing\n\nPhase: P0 · Depends on: 0 1 · Primary workspaces: api\n',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--json'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const rej = JSON.parse(r.stdout).anomalies.filter(a => a.kind === 'unparsed-dependency')
+  assert.strictEqual(rej.length, 1, 'a mistyped brief id must stay visible in the dependency graph report')
+})
+
 test('lettered ad-hoc briefs (04b between 04 and 05) are first-class brief ids', () => {
   const dir = host({
     briefs: {

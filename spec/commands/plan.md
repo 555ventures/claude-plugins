@@ -241,6 +241,10 @@ Never silently drop a finding.
    mechanism no AC can catch missing, blocks lock (add the Decision/AC or strike the promise).
    This is an in-session check, not an emitted table: ACs are written from Decisions, so a
    Goal promise no Decision covers stays green through every downstream gate.
+   Finally: work this session discovered that needs its own spec → write the roadmap brief
+   now (`docs/roadmap/NN-*.md`, planned later via `/spec:plan <brief>`), or record in the
+   lock report why not. Discovered follow-ups are the only planning output with no durable
+   artifact otherwise — "plan it after this lands" said in conversation dies with the session.
 3. Flip frontmatter `status: draft → hardened`.
 4. Report — print exactly this shape (rationale: shared § Console Output Style); fill the
    slots, drop any line whose slot is empty, add nothing else:

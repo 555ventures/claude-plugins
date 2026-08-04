@@ -189,12 +189,25 @@ if (fs.existsSync(roadmapDir)) {
     const head = text.split(/\n## /)[0].replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ')
     const dep = head.match(/Depends on:\s*([^·]*?)\s*(?:·|$)/)
     const phase = head.match(/Phase:\s*(P\d+)/)
+    // Parse the dependency value item-wise: split on commas, accept an item only if it is
+    // exactly a brief id (NN/NNa, optional "brief" prefix or name suffix) or a sanctioned
+    // "none" spelling. Harvesting digits from the whole line turned a spec reference
+    // (`Depends on: spec 20260804/02 at done`) into permanent phantom brief dependencies —
+    // 20260804 can never exist, and the 02 fragment binds to an unrelated real brief.
+    // Items that parse as neither are kept aside and surfaced as anomalies, never as deps.
+    const deps = [], depRejects = []
+    for (const item of (dep ? dep[1].split(',') : []).map(s => s.trim()).filter(Boolean)) {
+      if (BRIEFLESS.test(item)) continue
+      if (/^(?:brief\s+)?\d{1,2}[A-Za-z]?(?:-[\w-]+)?$/.test(item)) deps.push(normBrief(item.replace(/^brief\s+/, '')))
+      else depRejects.push(item)
+    }
     briefs.push({
       num: normBrief(m[1]),
       file: path.join('docs/roadmap', f),
       name: m[2],
       phase: phase ? phase[1] : null,
-      depends_on: dep ? (dep[1].match(/\d+[A-Za-z]?/g) || []).map(normBrief) : [],
+      depends_on: deps,
+      dep_rejects: depRejects,
     })
   }
 }
@@ -228,6 +241,15 @@ for (const s of specs) {
 for (const s of specs) {
   if (s.brief && !briefByNum.has(s.brief)) {
     anomalies.push({ kind: 'orphan-stamp', detail: `${s.path} stamps brief: ${s.brief} but no docs/roadmap/${s.brief}-*.md exists (brief renamed/deleted, or typo)` })
+  }
+}
+
+// Unparseable dependency item: prose in the `Depends on:` header (a spec reference, a typo).
+// Ignored for derivation — a spec-level gate belongs in the brief body, not this header —
+// but surfaced so a mistyped brief id doesn't silently vanish from the dependency graph.
+for (const b of briefs) {
+  for (const r of b.dep_rejects) {
+    anomalies.push({ kind: 'unparsed-dependency', detail: `${b.file} Depends on: item "${r}" is not a brief id (NN or NNa) — ignored; if it names a spec-level gate, move it into the brief body` })
   }
 }
 

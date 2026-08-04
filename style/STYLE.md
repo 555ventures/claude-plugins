@@ -22,7 +22,6 @@ Structure: verdict line → my queue → `---` divider → evidence. Hard rule: 
    - Queue is capped at 3 items. More than 3 means the work isn't finished — go back and reduce it, don't dump it on me.
    - Empty queue is explicit: "✅ Nothing needs you." Silence must be a signal, not an omission.
 3. **Evidence below `---`** — what changed, files touched, validation run (exact command + result), remaining risks, reasoning. Skip any that are empty. I can stop at the divider and lose nothing.
-4. **Phone relay** — after writing the wrap-up, call the PushNotification tool with a one-line condensation of it: the verdict line, plus the queue in shorthand if any ("🟡 spec 03 built, telegram webhook unverified · 1 paste, 1 decide"). Under 200 chars, no markdown. This applies to wrap-up-contract tasks only (implementation, review, design, multi-step) — never for quick Q&A turns. A "not sent" result is fine (means I'm at the terminal); don't retry or mention it.
 
 ## Visual anchors
 - Use emoji generously so messages scan visually — every bullet, status line, and section header starts with one that matches its meaning.

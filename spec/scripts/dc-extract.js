@@ -261,6 +261,47 @@ const MUSTACHE_RE = /\{\{[^{}]*\}\}/g
 
 const normText = (s) => decodeEntities(s).replace(/\s+/g, ' ').trim()
 
+// Purely-inline formatting elements: text split across these inside one leaf block is ONE
+// sentence to a reader, not several catalog entries. `a` and `br` are NOT here — a link boundary
+// or line break is a real split point, same as any block element. (PRAX-20260801-01)
+const INLINE_JOIN_TAGS = new Set(['b', 'i', 'em', 'strong', 'span', 'code', 'u', 's', 'small', 'mark', 'sub', 'sup'])
+
+// An element can be dissolved into its surrounding text run only if doing so loses nothing: no
+// region marker, no typed-prop carrier, no fidelity-attr string (placeholder/aria-label/alt/title)
+// that would otherwise get its own entry.
+function isJoinableInline(n) {
+  if (n.type !== 'el' || !INLINE_JOIN_TAGS.has(n.tag)) return false
+  if (n.attrs.has('data-screen-label') || n.attrs.has('data-props')) return false
+  for (const a of FIDELITY_ATTRS) if (typeof n.attrs.get(a) === 'string' && n.attrs.get(a).trim()) return false
+  return true
+}
+
+// Flatten a joinable inline element's text content, recursively. Returns null (bail — this
+// element and its subtree are NOT joinable) the moment anything non-text/non-joinable/raw shows
+// up inside it, so a stray <a> or block element nested in a <span> still forces a real split.
+function flattenInlineText(n) {
+  if (n.type === 'text') return n.raw ? null : n.text
+  if (n.type === 'comment') return ''
+  if (!isJoinableInline(n)) return null
+  let out = ''
+  for (const c of n.children) {
+    const t = flattenInlineText(c)
+    if (t === null) return null
+    out += t
+  }
+  return out
+}
+
+// A joinable inline element consumed into a text run still needs its own `style` attr (and any
+// nested joinable element's `style`) harvested for layout/literals — joining the TEXT must not
+// silently drop the layout harvest.
+function harvestInlineStyles(n, region, layout, layoutSeen, colorCount, fontCount) {
+  if (n.type !== 'el') return
+  const inline = n.attrs.get('style')
+  if (inline) { harvestLayout(inline, region, layout, layoutSeen); harvestLiterals(inline, colorCount, fontCount) }
+  for (const c of n.children) harvestInlineStyles(c, region, layout, layoutSeen, colorCount, fontCount)
+}
+
 // A comment names the next element sibling. Decoration (`====`, `──`, `══`) is stripped; an
 // all-decoration comment is not a label.
 function commentLabel(text) {
@@ -350,19 +391,43 @@ function analyzeSurface(raw) {
 
   const walk = (children, region, inFor) => {
     let pending = null // {label} from a comment awaiting its element sibling
-    for (const n of children) {
+    let idx = 0
+    while (idx < children.length) {
+      const n = children[idx]
       if (n.type === 'comment') {
         const label = commentLabel(n.text)
         if (label) pending = label
+        idx++
         continue
       }
-      if (n.type === 'text') {
-        if (n.raw) continue // style/script bodies are handled by their element
+      if (n.type === 'text' && !n.raw) {
+        // Join this text node with every consecutive sibling that is either more text or a
+        // purely-inline formatting element whose whole subtree flattens cleanly — one leaf
+        // sentence, split by <b>/<i>/etc, becomes ONE catalog entry (PRAX-20260801-01). The run
+        // stops the moment a sibling doesn't flatten (an <a>, a block element, a region marker).
+        let buf = n.text
+        let j = idx + 1
+        while (j < children.length) {
+          const sib = children[j]
+          if (sib.type === 'text' && !sib.raw) { buf += sib.text; j++; continue }
+          if (sib.type === 'el') {
+            const t = flattenInlineText(sib)
+            if (t === null) break
+            buf += t
+            harvestInlineStyles(sib, region, layout, layoutSeen, colorCount, fontCount)
+            j++
+            continue
+          }
+          if (sib.type === 'comment') { buf += ''; j++; continue } // a comment mid-sentence is inert
+          break
+        }
         const before = entries.length
-        entries.push(...classifyText(n.text, inFor).map(e => ({ region, ...e })))
+        entries.push(...classifyText(buf, inFor).map(e => ({ region, ...e })))
         if (entries.length > before) pending = null // real content consumed the comment
+        idx = j
         continue
       }
+      if (n.type === 'text') { idx++; continue } // raw text (style/script bodies) handled by their element
       // element
       // the typed prop schema rides on whatever element carries data-props (the <x-dc> root in
       // some exports, a <script type="text/x-dc" data-dc-script> in canvas exports) — first wins
@@ -380,6 +445,7 @@ function analyzeSurface(raw) {
           harvestLayout(body, rid, layout, layoutSeen)
           harvestLiterals(body, colorCount, fontCount)
         }
+        idx++
         continue
       }
       for (const a of FIDELITY_ATTRS) {
@@ -394,6 +460,7 @@ function analyzeSurface(raw) {
         harvestLiterals(inline, colorCount, fontCount)
       }
       walk(n.children, rid, inFor || n.tag === 'sc-for')
+      idx++
     }
   }
   walk(nodes, 'root', false)

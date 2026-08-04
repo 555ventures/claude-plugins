@@ -156,6 +156,15 @@ Work through these in order and return the FIRST result that applies:
    plainly does not contain what the claim asserts about it, return result="MISCITED" with the
    actual content at that location quoted verbatim as evidence. This is a fact check, not a
    judgment call — when the code is there and merely arguable, move on.
+   A wrong line number alone is never a miscitation: before ruling MISCITED, grep the WHOLE file
+   for the claimed content, not just the cited line. If it exists elsewhere in the file, treat the
+   citation as a line typo, use the real location, and move on to the next step.
+   If your ruling would rest on a file or directory not existing, first prove your working tree is
+   the review's actual target — run \`git log -1\` from the repo root and sanity-check it against
+   the diff under review. Agent CWDs can land in a stale .claude/worktrees checkout instead of the
+   review target, and a nonexistence kill from an unverified (possibly stale) worktree is invalid.
+   Self-consistency is mandatory: if the evidence you quote confirms the claim's substance, MISCITED is forbidden — your structured result must agree with your own evidence, and
+   uncertainty resolves toward the finding standing.
 2. SANCTIONED — In the spec at ${args.specPath}, read the section the claim cites plus the
    "Decisions" table (sanctioned exceptions and /spec:design-approved choices are recorded
    there). If an explicit Decision or approval sanctions exactly this behavior, return

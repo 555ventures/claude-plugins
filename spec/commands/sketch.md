@@ -58,7 +58,10 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    `design/mocks/<label>.html` at sketch tier under the harness check — the identical contract
    to the atlas sweep (shared § Design Atlas: sketch `data-status`, real copy register, token
    roles, grounded in the brief + research brief + doctrine + tokens; parallel dispatch, paths
-   not prose). Existing mocks are never re-authored.
+   not prose). Existing mocks are never re-authored. When a surface carries capability an
+   out-of-scope brief owns, give that capability its own region rather than folding it into a
+   region the current brief must bind — an unbound region is inherited for free, while
+   future-brief content entangled inside a bound region costs an evidence-gated delta row.
 4. **Build & report.** `node {atlas} build`, then report the output path
    (`design/atlas/index.html`) — the user opens the file themselves (e.g. from VS Code); do
    **not** start a server or open a browser. Serve from the repo root only if the user asks or

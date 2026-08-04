@@ -51,6 +51,14 @@ Statuses: `open` (accepted, test failing, fix not landed) · `fixed@<version>` �
 | UPWELL-20260730-01 | UpWell brief 2026-07-30 (ITERATE handoff names components but never WHERE they live; against a single mega-showcase catalog — 5,400-line stories file, 12 exports, specs appending at the bottom — "run storybook, six component names" sends the reviewer hunting, degrading with every spec; Storybook deep links are mechanically derivable from title+export slugs, so omission is inexcusable) | template-bug | design | `tests/design-driver.test.js` (ITERATE 🔗 navigation-line pin) | 6.30.0 |
 | UPWELL-20260730-02 | UpWell brief 2026-07-30 (deltas.json addressed with a region label — `investigation-unpack.handoff.provenance` — where the checker wants the surface id; unknown surfaceId fell through to "sliceQuote not found verbatim", blaming grep-verified evidence for an addressing error and burning a debugging cycle) | workflow-defect | design | `tests/fidelity-check.test.js` (region-label addressing error) | 6.30.0 |
 | UPWELL-20260730-03 | UpWell brief 2026-07-30 (the sanctioned verbatim-carrier-comment fix for merged copy strings silently fails when the `//` comment wraps: norm() collapses the newline but the continuation line's own `//` marker interleaves into the collapsed haystack, breaking the contiguous match) | workflow-defect | design | `tests/fidelity-check.test.js` (wrapped `//` carrier comment) | 6.30.0 |
+| PRAX-20260804-01 | prax user message 2026-08-04, corroborated by escape `wf_82cfbb56-a7b` (a T3 spec written to eliminate unfalsifiable checks shipped two of its own: `ENABLE ROW LEVEL SECURITY` without `FORCE` leaves `relforcerowsecurity` false so the mutation reddened nothing, and drizzle's migrator never re-applies a recorded migration so the restore AC asserted the opposite of reality; every positive dependency-adjudicated claim was executed per Phase 1.5, the negative ones weren't — all the trigger's example shapes are positive) | checklist-gap | plan | `tests/negative-claim-microspike.test.js` | 6.37.0 |
+| CROSS-20260804-01 | hearwell gotchas ×2 (spec 20260731/06 — sole finding killed MISCITED over a line-number typo whose content the verifier's own evidence confirmed, CLEAN with zero survivors; spec 20260801/05 — real finding killed on "does not exist" from a stale `.claude/worktrees/agent-*` checkout) + prax gotcha (spec 20260731/07 — structured MISCITED result contradicting its own evidence prose, only the structured field feeds `verdict`): three uncovered false-kill paths in one shared verifyPrompt | workflow-defect | review | `tests/verifier-kill-integrity.test.js` | 6.37.0 |
+| HEARWELL-20260804-01 | hearwell gotcha (spec 20260801/07 build `wf_32360253-a2c` — the gate agent enumerates failures from stdout, so a passing file's deliberate `mockRejectedValueOnce` log line ("metering db unreachable") became a phantom failure entry every round; being outside the File Plan it hard-returned `out-of-scope-failure` on round 0, masking the real TS2493/TS2339 failure underneath) | workflow-defect | build | `tests/gate-phantom-failures.test.js` | 6.37.0 |
+| HEARWELL-20260804-02 | hearwell gotcha (spec 20260801/05 — a spec that creates its own workspace package leaves red-check structurally blind: turbo/spec-test.sh cannot collect tests for an unregistered package, every red-expected file returns `not-collected`, and the build loops tdd-red-check; not-collected-because-the-spec-creates-the-home is strictly redder than red) | workflow-defect | build | `tests/redcheck-new-package.test.js` | 6.37.0 |
+| PRAX-20260801-01 | prax brief 2026-08-01 finding 01 (dc-extract on a static local bundle classes all 1854 strings `copy` — no `{{ }}`/`sc-for` syntax to class on; classification pressure absorbed by templates + 6.32–6.34 matching fixes; accepted residual: inline markup splits one translatable sentence into 3 catalog fragments — extraction-side adjacent-text join is the cleaner home than 6.33.0's matching-side fix) | workflow-defect | design | `tests/dc-extract-inline-join.test.js` | 6.37.0 |
+| PRAX-20260801-02 | prax brief 2026-08-01 finding 02 (future-brief capability entangled inside a region the current brief must bind costs an evidence-gated delta row where a separate region would be inherited free via the coverage ledger; measured on verdict-standing's standing-object region — two hand-proven delta rows; retainer-drafted sketch.md line, ratified 2026-08-04) | checklist-gap | sketch | `tests/sketch-region-granularity.test.js` | 6.37.0 |
+| PRAX-20260801-03 | prax brief 2026-08-01 finding 03 (fidelity-check compares normalized text only — a mock `<a>` rendered as an inert `<div>` passes, and the reverse would too; measured: 15 raw anchors shipped where the route family requires typed Links, caught by diff-reading not the gate; the reconcile affordance↔contract matrix covers it in doctrine, the gap is mechanization) | missing-substrate | design | `tests/fidelity-element-semantics.test.js` | open |
+| PRAX-20260804-02 | prax gotcha (spec 20260731/04 design — a skeleton named exactly as the surface id claims every region of the mock including the fake iOS status bar, and the fidelity refusal names the `09:44` clock copy rather than the naming collision, reading as a transcription miss) | checklist-gap | design | `tests/skeleton-subset-binding.test.js` | 6.37.0 |
 
 ## Rejected findings
 
@@ -79,6 +87,20 @@ matches on the ID/signature here and skips them. Corroboration from a second hos
   to converge on finding nothing is the retired mandatory-T3-checkpoint shape; redundant
   whenever the planner was already Fable/Opus. Corroboration from a recorded escape reopens
   any of the three.
+- **PRAX-20260804-R1** (same 2026-08-04 prax user message, second issue): retainer rulings
+  that prescribe a command with an expected observation arrive dense with `path:line`
+  citations, so the unexecuted prediction reads as pre-verified. Rejected 2026-08-04: no
+  wrong-prescription incident is recorded on any host; the role brief already mandates an
+  explicit could-not-verify closing line, which covers an honest retainer. Same precedent as
+  JJ-20260720-03 (no observed escape in the class). The first retainer command-prescription
+  that escapes wrong reopens this as an accepted row.
+- **HEARWELL-20260804-R1** (hearwell gotcha, spec 20260731/02 review): `review:1` (the
+  design-integrity emphasis) died twice on the StructuredOutput retry cap while
+  schema-probing, re-invoke could not recover the slot (an errored agent leaves no journal
+  cache entry), and the leg never ran. Rejected 2026-08-04: `REVIEWER_FAILED` fails closed —
+  integrity holds, the defect is availability on a single host's single run; a documented
+  recovery path (re-dispatch the dead emphasis with a model/effort change) is the fix shape
+  when it recurs. A second host, or a second run on any host, reopens.
 - **ZUBU-20260717-01** (zubu-menu escape 2026-07-17, `preventedBy: runtime-leg`): hard
   defect in `migration/src/strip-orderrank.ts` after review `wf_3f0cf1f0-06d`. Rejected
   2026-07-19: that review returned SURVIVORS (1 survived, 1 waived, 0 fixes dispatched) —

@@ -398,7 +398,10 @@ for (let round = 0; round <= 3; round++) {
     `Put the raw exit code (or "non-zero, no ${GATE_SENTINEL}") and the error/failure count in summary. ` +
     `For each failure, identify the single file that most likely needs the fix (source file for ` +
     `implementation bugs, test file for bad tests) and summarize the failure in one line including ` +
-    `the test/check name.`,
+    `the test/check name. Enumerate a failure only where the runner itself attributes one (a ` +
+    `failing test block, a compiler/lint error line). Error-shaped strings logged by passing tests ` +
+    `(mocked-rejection messages, expected-error output) are never failures — cross-check the ` +
+    `runner's own per-file pass/fail summary before listing a file.`,
     { label: `gate:round-${round}`, phase: 'Gate', schema: GATE, model: 'haiku', effort: 'low' })
   // Self-contradiction guard: a model may still report pass=true while listing failures (the
   // false-green this guard exists to kill). The workflow, not the model, decides — pass with any

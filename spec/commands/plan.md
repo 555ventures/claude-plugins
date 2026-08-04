@@ -98,7 +98,11 @@ assumptions feel settled precisely because an ADR or doctrine line already asser
 (measured: UpWell's `domain:action` queue convention — ADR-bound, never flagged as unknown,
 rejected by the exact-pinned dependency's own validation at first `createQueue`; one executed
 line at plan or genesis time falsifies it for free). Record the executed check + observed
-output in **Assumptions** as evidence.
+output in **Assumptions** as evidence. The shape includes **negative claims**: an assertion
+that a specific mutation, fault, or misconfiguration will make a named check fail (or that a
+dependency will repair a named state) is dependency-adjudicated identically — execute it and
+observe the red (or the repair) before it enters a Decision, Contract, AC, or falsifiability
+plan. A proof-of-falsifiability that has never itself failed is unverified.
 
 **Full spike:** run whenever the interview or drafting surfaces a genuinely high-unknown
 area — an unfamiliar API, an unclear data model, a risky integration surface, blast radius

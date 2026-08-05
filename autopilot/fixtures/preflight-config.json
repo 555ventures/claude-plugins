@@ -1,0 +1,8 @@
+{
+  "botToken": "000000000:preflight-fixture-token-not-a-real-credential",
+  "supergroupId": -1000000000000,
+  "allowedUserIds": [1],
+  "specPluginRoot": "spec",
+  "pluginPaths": ["spec", "git"],
+  "lanes": [{ "project": "preflight", "root": ".", "topicId": 1 }]
+}

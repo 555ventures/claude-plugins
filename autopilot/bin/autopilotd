@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 'use strict'
-// autopilotd [--config <path>] — the autopilot daemon entry point
-// (specs/20260801/03-lane-engine.md D8). Boots one lane per project from the host config
+// autopilotd [--config <path>] [--state-dir <path>] [--check] [--hold] [--ready-file <path>]
+// — the autopilot daemon entry point (specs/20260801/03-lane-engine.md D8,
+// specs/20260801/04-live-smoke.md D2/D3/D5). Boots one lane per project from the host config
 // (D3), wires the real Telegram adapter (spec 01) and SDK session runner (spec 02) into each
 // lane (spec 03), and starts every lane's poll-the-oracle loop. The oracle each lane polls is
 // a thin shell to `node <specPluginRoot>/scripts/spec-status.js --root <lane.root> --next
@@ -15,17 +16,30 @@
 // recursion, spec 02 D6) or `ERR_REQUIRE_ESM` when session.js lazily requires ./sdk.js for the
 // first real stage.
 //
+// --check runs an offline preflight instead of starting lanes (spec 04 D2): validate config,
+// force-resolve `../daemon/sdk` (session.js otherwise loads it lazily, so a bare boot proves
+// nothing about a missing `autopilot/node_modules`), assert the oracle script exists under
+// `specPluginRoot`, construct the adapter and every lane (construction alone performs no I/O),
+// then PASS — without polling Telegram, spawning a session, or touching --state-dir. --hold
+// turns a passing preflight into a resident process that writes --ready-file and blocks until
+// SIGTERM/SIGINT (spec 04 D3) — this, not bare --check, is what the repo's boot leg runs,
+// because a one-shot preflight as smoke.sh's bootCommand would red-gate every review.
+//
 // Deliberately does NOT: retry a broken config (loadConfig's Error already names the field and
 // the remedy — this file only renders it and exits), re-derive what any lane should run next
-// (that's the injected oracle + lane.js, per the v6.20.0 sole-derivation rule), or exit
-// non-zero because a lane failed/halted — halt/backoff are steady states a lane lives in
-// forever; only a signal or a boot precondition ends this process.
+// (that's the injected oracle + lane.js, per the v6.20.0 sole-derivation rule), exit non-zero
+// because a lane failed/halted (halt/backoff are steady states a lane lives in forever; only a
+// signal or a boot precondition ends this process), or create --state-dir during --check (the
+// unconditional mkdirSync stays exclusive to the normal start path).
 //
-// Exit codes: 0 clean shutdown on SIGTERM/SIGINT (every lane stopped, state persisted,
-// adapter stopped); 1 forced exit on a second SIGTERM/SIGINT received while a shutdown is
-// already in progress (D8's double-kill pattern — a stuck lane never wedges the process);
-// 2 usage/precondition failure (recursion guard, Node version floor, bad --config flag, or an
-// invalid config file — message always names the remedy).
+// Exit codes:
+//   0  preflight passed (without --hold), or normal shutdown on SIGTERM/SIGINT (every lane
+//      stopped, state persisted, adapter stopped) — --hold's teardown on signal also exits 0
+//   1  forced exit — second SIGTERM/SIGINT received while a shutdown is already in progress
+//      (D8's double-kill pattern — a stuck lane never wedges the process)
+//   2  usage / precondition failure — recursion guard, Node version floor, bad flag, invalid
+//      config file, unresolvable SDK, or missing oracle script (message always names the
+//      remedy)
 
 const fs = require('fs')
 const os = require('os')
@@ -38,6 +52,8 @@ const { runStage } = require('../daemon/session')
 const { createTelegramAdapter } = require('../daemon/telegram')
 
 const NODE_FLOOR = { major: 20, minor: 19 }
+const DEFAULT_STATE_DIR = path.join(os.homedir(), '.config', 'autopilot', 'state')
+const USAGE = 'usage: autopilotd [--config <path>] [--state-dir <path>] [--check] [--hold] [--ready-file <path>]'
 
 function fail(message) {
   console.error(message)
@@ -69,17 +85,35 @@ function assertNodeVersion() {
   }
 }
 
-// Hand-rolled --flag parsing (repo convention — no arg library). Only --config is recognized;
-// anything else is left for loadConfig's own default.
+// Hand-rolled --flag parsing (repo convention — no arg library). --check/--hold are boolean;
+// --config/--state-dir/--ready-file each require a value. --hold requires --ready-file (spec 04
+// D3's Contracts) — checked here, at parse time, before any config/SDK work happens.
 function parseArgs(argv) {
-  let configPath
+  const args = { configPath: undefined, stateDir: DEFAULT_STATE_DIR, check: false, hold: false, readyFile: undefined }
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] !== '--config') continue
-    configPath = argv[i + 1]
-    if (!configPath) fail('autopilotd: --config needs a path — usage: autopilotd [--config <path>]')
-    i++
+    const arg = argv[i]
+    if (arg === '--config') {
+      args.configPath = argv[i + 1]
+      if (!args.configPath) fail(`autopilotd: --config needs a path — ${USAGE}`)
+      i++
+    } else if (arg === '--state-dir') {
+      args.stateDir = argv[i + 1]
+      if (!args.stateDir) fail(`autopilotd: --state-dir needs a path — ${USAGE}`)
+      i++
+    } else if (arg === '--ready-file') {
+      args.readyFile = argv[i + 1]
+      if (!args.readyFile) fail(`autopilotd: --ready-file needs a path — ${USAGE}`)
+      i++
+    } else if (arg === '--check') {
+      args.check = true
+    } else if (arg === '--hold') {
+      args.hold = true
+    }
   }
-  return configPath
+  if (args.hold && !args.readyFile) {
+    fail(`autopilotd: --hold needs --ready-file <path> — ${USAGE}`)
+  }
+  return args
 }
 
 // D2: the oracle is a thin shell to spec-status.js --next --json for one lane's root; a
@@ -113,6 +147,89 @@ function makeLog(project) {
   return (message) => console.error(`autopilotd[${project}]: ${message}`)
 }
 
+// Shared by both --check's lane construction and the normal start path (D2's Preflight order:
+// load+validate config → require sdk → assert oracle script → construct adapter → construct
+// every lane). Construction alone performs no I/O — only adapter.start()/lane.start() do.
+function buildAdapterAndLanes(cfg, stateDir) {
+  const topicMap = {}
+  for (const lane of cfg.lanes) topicMap[lane.project] = lane.topicId
+
+  const adapter = createTelegramAdapter({
+    botToken: cfg.botToken,
+    supergroupId: cfg.supergroupId,
+    topicMap,
+    allowedUserIds: cfg.allowedUserIds,
+  })
+
+  const lanes = cfg.lanes.map((laneCfg) =>
+    createLane({
+      // pluginPaths is host-level config (D3); lane.js reads it off its own `cfg` (Contracts),
+      // so it's merged onto the per-lane row here rather than threaded as a separate param.
+      cfg: { ...laneCfg, pluginPaths: cfg.pluginPaths },
+      adapter,
+      runStage,
+      oracle: buildOracle(cfg.specPluginRoot, laneCfg.root),
+      stateDir,
+      log: makeLog(laneCfg.project),
+    })
+  )
+
+  return { adapter, lanes }
+}
+
+// D2/D3: the offline preflight. Forces the real SDK require, asserts the oracle script exists,
+// constructs the adapter and every lane, then PASSes — never polling Telegram, spawning a
+// session, or writing under --state-dir. --hold (validated at parse time to carry
+// --ready-file) turns a PASS into a resident process for smoke.sh's boot leg instead of
+// exiting, so a killed hold never leaves state behind either.
+function runPreflight(cfg, args) {
+  try {
+    require('../daemon/sdk')
+  } catch (err) {
+    fail(`autopilotd: cannot resolve the Claude Agent SDK (${err.message}) — run: cd autopilot && npm install`)
+    return
+  }
+
+  const scriptPath = path.join(cfg.specPluginRoot, 'scripts', 'spec-status.js')
+  if (!fs.existsSync(scriptPath)) {
+    fail(
+      `autopilotd: no oracle script at ${scriptPath} — check specPluginRoot ` +
+      `"${cfg.specPluginRoot}" in ${cfg.configPath}`
+    )
+    return
+  }
+
+  const { lanes } = buildAdapterAndLanes(cfg, args.stateDir)
+
+  console.error(`autopilotd: preflight OK — ${lanes.length} lane${lanes.length === 1 ? '' : 's'}, SDK resolved`)
+
+  if (!args.hold) {
+    process.exit(0)
+    return
+  }
+
+  fs.writeFileSync(args.readyFile, '')
+  // A bare SIGTERM/SIGINT listener does not keep the event loop alive on its own (nothing else
+  // is running once preflight construction finishes) — an unref'd-never interval is the
+  // standing keep-alive handle; teardown clears it before exiting.
+  const keepAlive = setInterval(() => {}, 1 << 30)
+  let tearingDown = false
+  function teardown(signal) {
+    if (tearingDown) return
+    tearingDown = true
+    console.error(`autopilotd: ${signal} received — ending preflight hold`)
+    clearInterval(keepAlive)
+    try {
+      fs.unlinkSync(args.readyFile)
+    } catch {
+      // already gone — nothing left to clean up
+    }
+    process.exit(0)
+  }
+  process.on('SIGTERM', () => teardown('SIGTERM'))
+  process.on('SIGINT', () => teardown('SIGINT'))
+}
+
 // D8: SIGTERM/SIGINT stop every lane (which aborts its in-flight session, cancels any pending
 // topic ask, kills dev-server/tunnel process groups, and persists lane state — all inside
 // lane.stop()), then stop the adapter's poll loop, then exit 0. A second signal during
@@ -138,40 +255,24 @@ function main() {
   assertNoRecursion()
   assertNodeVersion()
 
-  const configPath = parseArgs(process.argv.slice(2))
+  const args = parseArgs(process.argv.slice(2))
+
   let cfg
   try {
-    cfg = loadConfig(configPath ? { configPath } : {})
+    cfg = loadConfig(args.configPath ? { configPath: args.configPath } : {})
   } catch (err) {
     fail(err.message)
     return
   }
 
-  const topicMap = {}
-  for (const lane of cfg.lanes) topicMap[lane.project] = lane.topicId
+  if (args.check) {
+    runPreflight(cfg, args)
+    return
+  }
 
-  const adapter = createTelegramAdapter({
-    botToken: cfg.botToken,
-    supergroupId: cfg.supergroupId,
-    topicMap,
-    allowedUserIds: cfg.allowedUserIds,
-  })
+  fs.mkdirSync(args.stateDir, { recursive: true })
 
-  const stateDir = path.join(os.homedir(), '.config', 'autopilot', 'state')
-  fs.mkdirSync(stateDir, { recursive: true })
-
-  const lanes = cfg.lanes.map((laneCfg) =>
-    createLane({
-      // pluginPaths is host-level config (D3); lane.js reads it off its own `cfg` (Contracts),
-      // so it's merged onto the per-lane row here rather than threaded as a separate param.
-      cfg: { ...laneCfg, pluginPaths: cfg.pluginPaths },
-      adapter,
-      runStage,
-      oracle: buildOracle(cfg.specPluginRoot, laneCfg.root),
-      stateDir,
-      log: makeLog(laneCfg.project),
-    })
-  )
+  const { adapter, lanes } = buildAdapterAndLanes(cfg, args.stateDir)
 
   adapter.start()
   for (const lane of lanes) lane.start()

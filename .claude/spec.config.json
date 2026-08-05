@@ -5,7 +5,10 @@
   "testCommand": "node --test",
   "setupCommand": "npm install",
   "runtime": {
-    "inert": "plugin-source repo — plugins execute inside Claude Code sessions; there is no app process to boot. The executed verification leg is the test suite plus the workflow codegen drift check."
+    "bootCommand": "rm -f /tmp/autopilot-preflight.ready && node autopilot/bin/autopilotd --check --hold --ready-file /tmp/autopilot-preflight.ready --config autopilot/fixtures/preflight-config.json --state-dir /tmp/autopilot-preflight-state",
+    "readyCheck": "test -f /tmp/autopilot-preflight.ready",
+    "readyTimeout": 60,
+    "stopSignal": "SIGTERM"
   },
   "patternsScript": "scripts/spec-patterns.sh",
   "layerGroups": [["doctrine"], ["scripts", "workflows"]],

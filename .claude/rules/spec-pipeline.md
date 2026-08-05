@@ -96,7 +96,11 @@ T1-shaped work: doctrine prose edits pinned by existing tests, new sweeps in
   in-process DI unit tests for `autopilot/daemon/*` lib modules — injected fakes
   (`queryImpl`, transports), `node:test` mock timers, zero real SDK/network calls.
   Fixtures (`tests/fixtures/`) only when the input must be a realistic multi-file artifact.
-- Nothing here is exempt from TDD; there is no env-gated suite (no external services).
+- Nothing here is exempt from TDD. One sanctioned env-gated suite exists:
+  `tests/autopilot/live.test.js` posts real questions to a real Telegram topic and waits for a
+  real tap — it activates only when `AUTOPILOT_LIVE=1` is set in addition to the
+  `AUTOPILOT_LIVE_TOKEN`/`_SUPERGROUP`/`_TOPIC`/`_USER` credentials, and skips by declaration
+  otherwise (specs/20260801/04-live-smoke.md D6).
 - **Red-pin baseline**: the full suite deliberately carries failing INTAKE pins (11 as of
   2026-08-01) — `npm test` exiting 1 on untouched code is the sanctioned state, not a
   regression. The pipeline gate is therefore scoped via `{testDirs}`; pipeline-authored

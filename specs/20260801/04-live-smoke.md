@@ -1,6 +1,6 @@
 ---
 date: 2026-08-01
-status: hardened
+status: implementing
 risk: T3
 open_markers: 0
 area: autopilot

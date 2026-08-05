@@ -92,6 +92,29 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
 - **`/spec:atlas`** — whole-product design view: every mock at device size, arranged by journey,
   gap cards for unmocked surfaces. Zero tokens, never required.
 
+## Autopilot (optional daemon)
+
+`autopilot/` runs the spec pipeline unattended from a Telegram supergroup — the daemon relays
+checkpoint questions to a topic, waits for a tap, and drives `/spec:plan` (and later stages) on
+your behalf. It ships no README of its own; this section is the whole runbook.
+
+1. **Install dependencies**: `cd autopilot && npm install` (the daemon needs the Claude Agent
+   SDK, which this repo does not vendor at the root).
+2. **Ground the target repo**: run `/spec:init` on the repo you want the daemon to drive — an
+   ungrounded repo is a no-op, so a throwaway repo needs this before any lane can touch it.
+3. **Create a config file** at `~/.config/autopilot/config.json` (or pass `--config <path>`)
+   naming the bot token, the forum-enabled supergroup, its per-project topic ids, and the
+   allowed user ids.
+4. **Start the daemon**: `autopilot/bin/autopilotd`. Use `--check` for an offline preflight
+   (validates config, resolves the SDK, asserts the oracle script exists — no network, no
+   state written) before trusting a real run.
+5. **Stop the daemon**: send `SIGTERM` (or `SIGINT`) — it tears down in place.
+
+Only one process may long-poll a given bot token at a time (Telegram allows a single
+`getUpdates` consumer per token) — never run the daemon and the opt-in live test suite
+(`tests/autopilot/live.test.js`, gated on `AUTOPILOT_LIVE=1`) against the same token
+concurrently.
+
 ## Command reference
 
 | Command | What it does | When |

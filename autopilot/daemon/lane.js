@@ -289,47 +289,65 @@ function createLane({ cfg, adapter, runStage, oracle, stateDir, log }) {
       const previousPick = lastPick
       lastPick = pick
 
-      if (needsCheckpoint(pick, previousPick)) {
-        await runCheckpoint(pick)
-      }
-      if (stopped) break
+      // Checkpoint/stage/repair all narrate over the adapter (Telegram) — a non-retryable
+      // transport error here (e.g. an invalid bot token) must not reject mainLoop's promise
+      // and take the whole daemon process down with it, same discipline as the oracle catch
+      // above.
+      try {
+        if (needsCheckpoint(pick, previousPick)) {
+          await runCheckpoint(pick)
+        }
+        if (stopped) break
 
-      const result = await runStageFor(pick, { model: pick.action === '/spec:plan' ? 'fable' : undefined })
+        const result = await runStageFor(pick, { model: pick.action === '/spec:plan' ? 'fable' : undefined })
 
-      if (result.outcome === 'aborted') return
+        if (result.outcome === 'aborted') return
 
-      if (result.outcome === 'retryable') {
+        if (result.outcome === 'retryable') {
+          stageBackoffAttempt++
+          setState('backoff')
+          await sleep(backoffMs(stageBackoffAttempt))
+          continue
+        }
+
+        stageBackoffAttempt = 0
+
+        if (result.outcome === 'done') {
+          lastBrief = pick.brief
+          await narrate(`✅ ${(result.resultText || '').split('\n')[0]} 💰 $${(result.costUsd || 0).toFixed(2)}`)
+          if (fastPoll) await yieldTick()
+          else await sleep(pollMs)
+          continue
+        }
+
+        // failed: one Fable repair pass, then park-and-ask (D5) — never call runStage again
+        // unanswered.
+        const repair = await runStageFor(pick, { model: 'fable', promptSuffix: `— repair: ${result.detail}` })
+        if (repair.outcome === 'aborted') return
+        if (repair.outcome === 'done') {
+          lastBrief = pick.brief
+          await narrate(`✅ ${(repair.resultText || '').split('\n')[0]} 💰 $${(repair.costUsd || 0).toFixed(2)}`)
+          if (fastPoll) await yieldTick()
+          else await sleep(pollMs)
+          continue
+        }
+        // runHalt returns only when the operator chose "➡ Next spec" ("⏸ Stay parked" re-posts
+        // the ask forever), so reaching here always means "move on" — arm the wake chain.
+        await runHalt(pick, repair.detail || result.detail)
+        fastPoll = true
+      } catch (err) {
+        // stop()'s own AbortError-style rejections (currentAbortController.abort(),
+        // cancelPendingAsk) land here too — a stopped lane settles by exiting the loop, never
+        // by backing off and retrying.
+        if (stopped) break
         stageBackoffAttempt++
         setState('backoff')
+        // logFn, not narrate: narrate is exactly what can be failing (e.g. Telegram
+        // "Unauthorized"), so the error report must not itself be able to re-throw.
+        logFn(`lane: stage failed — ${err && err.message ? err.message : String(err)}`)
         await sleep(backoffMs(stageBackoffAttempt))
         continue
       }
-
-      stageBackoffAttempt = 0
-
-      if (result.outcome === 'done') {
-        lastBrief = pick.brief
-        await narrate(`✅ ${(result.resultText || '').split('\n')[0]} 💰 $${(result.costUsd || 0).toFixed(2)}`)
-        if (fastPoll) await yieldTick()
-        else await sleep(pollMs)
-        continue
-      }
-
-      // failed: one Fable repair pass, then park-and-ask (D5) — never call runStage again
-      // unanswered.
-      const repair = await runStageFor(pick, { model: 'fable', promptSuffix: `— repair: ${result.detail}` })
-      if (repair.outcome === 'aborted') return
-      if (repair.outcome === 'done') {
-        lastBrief = pick.brief
-        await narrate(`✅ ${(repair.resultText || '').split('\n')[0]} 💰 $${(repair.costUsd || 0).toFixed(2)}`)
-        if (fastPoll) await yieldTick()
-        else await sleep(pollMs)
-        continue
-      }
-      // runHalt returns only when the operator chose "➡ Next spec" ("⏸ Stay parked" re-posts
-      // the ask forever), so reaching here always means "move on" — arm the wake chain.
-      await runHalt(pick, repair.detail || result.detail)
-      fastPoll = true
     }
   }
 

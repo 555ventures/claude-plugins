@@ -1,6 +1,6 @@
 ---
 date: 2026-08-01
-status: implementing
+status: done
 risk: T3
 open_markers: 0
 area: autopilot
@@ -198,6 +198,18 @@ finding on `.claude/rules/spec-pipeline.md` having no pinning test is fixed by A
 Fragile: A6 (one poller per token) will bite during the live run if a daemon is left running,
 and AC-9 depends on local plugin loading headless (02's A3), typings-verified only. If AC-9
 fails, suspect plugin loading before suspecting the answer relay.
+
+**Review dispositions (2026-08-05, 3 iterations to CLEAN).** Build deviations folded on close:
+(1) the live suite's AC-9 requires a fifth env var, `AUTOPILOT_LIVE_REPO` (operator-prepared
+throwaway repo path) — Contracts/D6 name only four; user disposition: fold here, don't amend
+Contracts. (2) D8's INTAKE row landed with a `pre-contract` citation to this spec's Rationale,
+since INTAKE's authoring contract demands a `Pinned by` and this batch ships no class-level test
+(now a `[plugin]` gotcha in pipeline rules). (3) Review iteration 1 demonstrated the AC-12 test
+flaking (~1-in-4): `lane.js`'s post-oracle narrate path was uncaught, so a Telegram Unauthorized
+on the fixture token crashed the daemon before SIGTERM — root-fixed cross-spec in
+`autopilot/daemon/lane.js` (catch-log-backoff-continue; autopilot 0.4.0 → 0.4.1), the test's 5x
+retry shim removed. Iteration 2 caught the missing version bump + missing deviation record for
+that cross-spec edit; both fixed, iteration 3 CLEAN.
 
 Deliberately out of scope, named not absorbed (D7): remote `/spec:sketch`, which BRIEF #1 scopes
 into v1 and spec 03 deferred. Autopilot v1 is not complete until that is planned or the brief is

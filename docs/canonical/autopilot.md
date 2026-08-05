@@ -90,3 +90,33 @@ actually flip state?) is never parsed from the transcript — the caller re-deri
 - Tests live under `tests/autopilot/` and inject transports — no network, no SDK imports. The
   scoped location matters: the repo's full suite carries deliberate failing INTAKE pins, so
   pipeline gate runs are scoped to `tests/<scope>/`.
+
+**Operational proof.** `autopilotd --check` is an offline preflight — it validates config, forces
+the real SDK require (which the daemon otherwise loads lazily), asserts the oracle script exists,
+constructs the adapter and every lane, and reports without touching the network, spawning a
+process, or writing state. With `--hold --ready-file <path>` it stays resident after a passing
+preflight so it can serve as a boot leg: `.claude/spec.config.json` declares it as `bootCommand`
+with `readyCheck: test -f <path>`, and the repo no longer declares itself `inert`. The reason the
+hold mode exists is worth remembering — `smoke.sh` treats a boot process that exits before
+`readyCheck` passes as a crash, so a one-shot preflight would red-gate every review. `--state-dir`
+overrides the lane-state location and preflight writes nothing there.
+
+**The exemption lesson.** An `inert` runtime declaration is an exemption with an expiry, and this
+one expired silently the moment a bootable entry point landed, voiding executed verification for
+three consecutive specs. Re-read the declared reason whenever a repo gains a process.
+
+**Live verification.** Real-world behavior is pinned by a deliberately interactive suite
+(`tests/autopilot/live.test.js`) that posts real questions to a real Telegram topic and waits for
+a real tap. It activates only under `AUTOPILOT_LIVE=1` plus credentials — credential presence
+alone is not enough, so a stray exported token cannot turn `npm test` into a hang. Telegram permits
+one `getUpdates` consumer per bot token, so the live tests and a running daemon must never share
+one. Operator setup — install, grounding a throwaway repo, config location, start, stop — lives in
+the root `README.md`; autopilot ships no README of its own.
+
+**Lane failure semantics (0.4.1).** `mainLoop`'s post-oracle body (checkpoint, stage, repair,
+halt — everything that narrates through the adapter) is covered by the same catch-log-backoff
+discipline as the oracle call: a non-retryable transport error (e.g. Telegram Unauthorized) logs
+via the lane logger — never via `narrate`, which is exactly what may be throwing — backs off, and
+continues; it must never reject `mainLoop`'s promise and take the daemon down. stop()-driven
+rejections still exit the loop. Found when review demonstrated the AC-12 boot test crashing on
+this path (specs/20260801/04-live-smoke.md, 2026-08-05).

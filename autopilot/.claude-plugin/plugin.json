@@ -1,6 +1,6 @@
 {
   "name": "autopilot",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Remote-controlled spec pipeline daemon: a platform-neutral messaging adapter seam (Telegram v1) that renders fork questions as inline keyboards and routes answers back to pending asks, an SDK session runner that spawns one fresh Claude Agent SDK session per pipeline stage and relays questions/permissions to the adapter, plus a lane engine (autopilotd) that drives one serial lane per project through spec-status's oracle with brief checkpoints, a halt-then-repair ladder, and exponential backoff",
   "author": {
     "name": "JJ",

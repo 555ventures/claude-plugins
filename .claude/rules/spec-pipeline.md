@@ -156,3 +156,8 @@ incident, and carries a provenance tag: [host] (this repo/stack) or [plugin] (tr
 spec-plugin template/command/generated artifact). Writers: /spec:review close and
 /spec:escape only. /spec:doctor prunes dead citations and rolls [plugin] entries up as an
 upstream bug list. -->
+- `[plugin]` A spec Decision that records a class-level item "in spec/INTAKE.md, doctrine-only"
+  collides with INTAKE.md's authoring contract: every row's `Pinned by` must name a failing test
+  or a `pre-contract` artifact. Plan the citation (or the failing test) with the Decision, or the
+  build worker is forced to invent one. (specs/20260801/04-live-smoke.md D8 — landed as a
+  `pre-contract` citation to the spec's own Rationale.)

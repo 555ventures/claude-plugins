@@ -119,13 +119,17 @@ test('AC-20260801-04-5: autopilotd --check exits 2 naming both the missing oracl
     `the error must name the offending specPluginRoot value verbatim so the operator knows which config field to fix; got stderr=${res.stderr}`)
 })
 
-// One attempt: spawn a real (non---check) daemon, wait for the adapter's first getUpdates
-// round-trip to prove it's constructed and polling, then signal it and observe the exit.
-// Against a real network with a deliberately-invalid fixture token, the lane's own first
-// oracle cycle independently races to post a narration on the same bad token and can crash
-// the process (an unhandled rejection) at any point after start — a pre-existing behavior
-// this AC does not own or need to fix. The retry wrapper below absorbs that race so the
-// invariant under test (signal handling) isn't flaky-failed by an unrelated crash race.
+// Reviewed 2026-08-05 against specs/20260801/04-live-smoke.md (execution-grounded review
+// finding): this test used to wrap the spawn below in a 5x best-effort retry loop, because a
+// real (non---check) daemon on a fake Telegram token races its own first oracle cycle's
+// narration attempt against api.telegram.org, and used to crash with an unhandled rejection
+// on the "Unauthorized" reply before SIGTERM ever landed — a genuine 1-in-4 flake. That crash
+// vector is now fixed: autopilot/daemon/lane.js catches every post-oracle error (including
+// narrate/Telegram failures), logs, backs off, and continues instead of exiting. Surviving
+// until SIGTERM regardless of network outcome (offline, or a real 401 from Telegram) is now
+// part of what this test pins, so a single spawn + SIGTERM must deterministically exit 0 —
+// a resurfaced retry loop here would hide that guarantee regressing, not absorb a sanctioned
+// race.
 async function attemptAc12(cfgPath) {
   const home = tmpdir('ac12-home')
   const child = spawn(process.execPath, [AUTOPILOTD, '--config', cfgPath], {
@@ -149,18 +153,14 @@ async function attemptAc12(cfgPath) {
   return { ok: exited && exitCode === 0, stderr, exitCode, sawEvidence: true }
 }
 
-test('AC-20260801-04-12: autopilotd started without --check continues to load config, construct lanes, start the adapter long-poll, and install SIGTERM/SIGINT handlers exactly as before', async () => {
+test('AC-20260801-04-12: autopilotd started without --check continues to load config, construct lanes, start the adapter long-poll, and install SIGTERM/SIGINT handlers exactly as before, surviving a real Telegram round-trip on a bad token until SIGTERM', async () => {
   const cfgDir = tmpdir('ac12-cfg')
   const cfgPath = writeConfig(cfgDir, validConfig())
-  let last
-  for (let attempt = 1; attempt <= 5; attempt++) {
-    last = await attemptAc12(cfgPath)
-    if (last.ok) break
-  }
-  assert.ok(last.sawEvidence,
-    `a normal (non---check) start must construct the adapter and begin its getUpdates long-poll, or adding --check support gated that off by default; observed stderr=${last.stderr}`)
-  assert.strictEqual(last.exitCode, 0,
-    `the installed SIGTERM handler must still stop every lane, stop the adapter, and exit 0 on a normal start after --check lands — adding the flag must not change default-mode shutdown; got ${last.exitCode} after 5 attempts, stderr=${last.stderr}`)
+  const result = await attemptAc12(cfgPath)
+  assert.ok(result.sawEvidence,
+    `a normal (non---check) start must construct the adapter and begin its getUpdates long-poll, or adding --check support gated that off by default; observed stderr=${result.stderr}`)
+  assert.strictEqual(result.exitCode, 0,
+    `the installed SIGTERM handler must still stop every lane, stop the adapter, and exit 0 on a single deterministic attempt (no retry) — a bad-token Telegram round-trip racing shutdown must no longer crash the daemon with an unhandled rejection, per the lane.js post-oracle error catch; got ${result.exitCode}, stderr=${result.stderr}`)
 })
 
 test('AC-20260801-04-13: autopilotd exits 2 with the recursion-guard message before reading config when AUTOPILOT_SESSION=1 is set, with or without --check', () => {

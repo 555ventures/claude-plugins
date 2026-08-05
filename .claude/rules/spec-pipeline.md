@@ -27,6 +27,10 @@ T3 triggers for THIS repo:
   splice bug corrupts all six generated workflows at once.
 - **`spec/scripts/spec-status.js`** — the sole source of "what's next" across all hosts
   (v6.20.0 rule); never a second derivation of roadmap state anywhere.
+- **`spec/scripts/scope-reconcile.js`** — the sole derivation of changed-set-vs-File-Plan
+  reconciliation behind `/spec:review`'s scope gate and `/spec:build`'s Final-gate advisory;
+  never a second derivation of the changed-file/File-Plan diff anywhere (2026-08 spec:
+  review-scope-reconciliation).
 - **`spec/bin/spec-paths`** — every command resolves scripts through it; a wrong key breaks
   commands silently.
 

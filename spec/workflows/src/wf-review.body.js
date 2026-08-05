@@ -38,6 +38,10 @@ if (!args || typeof args !== 'object' || typeof args.specPath !== 'string') {
 //                             // 0/absent = unknown → fall back to the tier rule.
 //   patternsPath: string,     // path to a file holding the host pattern-sweep output (config
 //                             // patternsScript); reviewers READ it (args is a control channel)
+//   reconcilePath: string,    // path to scope-reconcile.js --json output (Phase 0); '' when
+//                             // scope==='fix-delta' — the diff IS the fix, no File Plan to
+//                             // reconcile against. Full scope: out-of-plan files are already a
+//                             // mechanical finding, reviewers only judge their CONTENT.
 //   hasDriftScript: boolean,  // host config declares driftScript? when false, the reviewer's
 //                             // AC ↔ test coverage check IS the drift gate (missing test = hard)
 //   reproCommand: string,     // host's test-runner prefix (config testCommand — repro file
@@ -102,9 +106,14 @@ Cover BOTH shape and correctness regardless of emphasis.
 
 Method:
 1. Read the spec at ${args.specPath} (File Plan, Contracts, UI, Decisions, Acceptance Criteria).
-2. Run: git diff ${args.base} -- <directories from the spec's File Plan>. Read any new files the diff adds.
+2. Run: git diff ${args.base}. This is the WHOLE change, unscoped from the File Plan — read any
+   new files the diff adds, including any outside the plan's directories.
 3. Check the implementation against the spec and against the project rules you inherit via CLAUDE.md and .claude/rules/.
 4. Cross-check the mechanical pattern sweep below — confirm or dismiss each non-zero row.
+5. Read ${args.reconcilePath} — the scope reconciliation (out-of-plan / unrealized / renamed
+   files vs the File Plan). Its \`outOfPlan\` entries are ALREADY a mechanical hard finding —
+   do not re-report their mere existence. Instead review THEIR CONTENT against spec intent and
+   repo rules, same as any planned file, and report only substantive defects you find in them.
 
 ## Mechanical pattern sweep (pre-computed)
 Read ${args.patternsPath} — the host's mechanical shortcut-sweep output. Confirm or dismiss each non-zero row against the actual diff.

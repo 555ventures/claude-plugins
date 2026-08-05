@@ -1,0 +1,54 @@
+#!/usr/bin/env node
+'use strict'
+// lib/file-plan.js — the sole parser for a spec's `## File Plan` table (v6.20.0 rule
+// generalized, 2026-08-05). Extracted verbatim from spec-status.js (D2,
+// specs/20260805/01-review-scope-reconciliation.md) so spec-status.js and
+// scope-reconcile.js share one derivation instead of drifting apart. This module has no CLI
+// of its own — it exports parseFilePlan/splitPlanCell for both consumers.
+//
+// What it deliberately does NOT do: validate Action/annotation columns, resolve globs, or
+// diff against a changed-file set — callers own that.
+//
+// Exit codes: n/a (library, not an entrypoint).
+
+// File Plan tables live in the spec BODY, not frontmatter — the merge-conflict heads-up (⚡
+// lanes annotation in spec-status.js) needs to know which files two parallel specs both intend
+// to touch. Zero rows parsed is the sanctioned no-op, never an error: a missing/malformed
+// section just means "nothing to cross-check" for that spec. Grammar pinned by a 333-spec
+// corpus audit (2026-07-31): every real File Plan is a `## File Plan` table with the path in
+// column 1; the only observed variance is compound cells (`a + b`, comma lists, `{a,b}.ext`
+// braces, trailing `(generated)` annotations) at ~1% — split those, and add nothing
+// speculative beyond them.
+function splitPlanCell(cell) {
+  cell = cell.replace(/\s*\([^)]*\)\s*$/, '').trim()
+  const brace = cell.match(/^(.*)\{([^}]+)\}(.*)$/)
+  if (brace) return brace[2].split(',').map(x => (brace[1] + x.trim() + brace[3]).trim())
+  return cell.split(/\s*\+\s*|,\s*/).map(x => x.trim()).filter(Boolean)
+}
+function parseFilePlan(text) {
+  const lines = text.split('\n')
+  let start = -1, level = 0
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^(#{2,3}) File Plan/i)
+    if (m) { start = i + 1; level = m[1].length; break }
+  }
+  if (start === -1) return []
+  let end = lines.length
+  for (let i = start; i < lines.length; i++) {
+    const hm = lines[i].match(/^(#{1,6})\s/)
+    if (hm && hm[1].length <= level) { end = i; break }
+  }
+  const paths = new Set()
+  for (let i = start; i < end; i++) {
+    const line = lines[i].trim()
+    if (!line.startsWith('|')) continue
+    const cell = (line.replace(/^\|/, '').split('|')[0] || '').replace(/`/g, '').trim()
+    if (!cell || /^:?-{2,}:?$/.test(cell) || /^(file|path)s?$/i.test(cell)) continue
+    for (const p of splitPlanCell(cell)) {
+      if (p.includes('/') || /\.[A-Za-z0-9]+$/.test(p)) paths.add(p)
+    }
+  }
+  return [...paths]
+}
+
+module.exports = { parseFilePlan, splitPlanCell }

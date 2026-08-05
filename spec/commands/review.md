@@ -35,15 +35,23 @@ absolute path — it is the `scriptPath` for the Workflow call below.
    fallback is safe and self-checking: `{mergeBack} inspect` and `assert_target_checked_out`
    require `{target}` to equal root HEAD, so a wrong guess fails loudly at merge-back rather
    than diffing/merging silently against the wrong branch.
-2. Launch in parallel (background bash):
-   - `DIFF_BASE={base} bash {patternsScript} {dirs from the spec's File Plan} > {patternsPath}`
+2. **Scope reconciliation (mechanical, first — sub-second):** `scope-reconcile.js`
+   (resolved via `spec-paths scope-reconcile`) computes changed-set-vs-File-Plan: run
+   `node "$(spec-paths scope-reconcile)" --root {root} --base {base} --spec {spec path} --json > {reconcilePath}`
+   (`{reconcilePath}` = fresh `mktemp` path), then the same invocation with `--dirs` in place of
+   `--json` — its output feeds step 3's sweep, replacing File-Plan dirs (D8: one derivation of
+   the changed set, never a second). Exit 2 (unreadable spec/no File Plan) STOPs the run; exit 3
+   (`outOfPlan` non-empty) doesn't — it feeds step 7. Skip on `scope: "fix-delta"` (Phase 2's
+   Fix step sets `reconcilePath: ''` — the fix diff is by definition a response to findings).
+3. Launch in parallel (background bash):
+   - `DIFF_BASE={base} bash {patternsScript} {dirs from step 2's --dirs output} > {patternsPath}`
      — the host's mechanical shortcut sweep (`patternsScript` from config), redirected to a
      temp file (`patternsPath` = a fresh `mktemp` path); keep the absolute path for the
      workflow call. The reviewers read it rather than receiving the output inline, which keeps
      `args` a small control channel.
    - the host's `gateCommand` — the deterministic gate. **Capture the runner's skip/todo
      counts** from its output (every mainstream runner prints them) — they feed the
-     skipped-test reconciliation in step 4.
+     skipped-test reconciliation in step 6.
    - `bash $(spec-paths smoke)` — the **boot smoke leg** (shared invariants § Runtime
      Verification). Exit 0 = boot observed ready; exit 4 = runtime declared inert (sanctioned,
      note it in the verdict); any other exit is an automatic **hard finding** — including
@@ -51,10 +59,10 @@ absolute path — it is the `scriptPath` for the Workflow call below.
      skippable check. This leg is deterministic; no reviewer adjudicates it.
    - **if config declares `driftScript`**: `{driftScript} {spec path}` — the host's AC-drift
      checker
-3. Read the spec once; extract File Plan dirs, AC list, tier, area. Compute `{diffLoc}` =
+4. Read the spec once; extract AC list, tier, area. Compute `{diffLoc}` =
    insertions + deletions from `git diff --shortstat {base}` — it scales the reviewer panel
    (a small diff never pays a 2-reviewer panel, whatever the tier).
-4. **AC hygiene + coverage (mechanical):** first, in **both drift modes**, lint AC-line
+5. **AC hygiene + coverage (mechanical):** first, in **both drift modes**, lint AC-line
    shape: strip HTML comments and walk only the top-level `- ` bullets of the spec's
    `## Acceptance Criteria` section — nothing outside that section is linted. A bullet whose
    leading bold token is not a full anchored match of `AC-\d{8}-\d{2}-\d+` is a **malformed
@@ -66,7 +74,7 @@ absolute path — it is the `scriptPath` for the Workflow call below.
    the refutation filter (it is a deterministic fact, not a reviewer claim). Computed before
    the reviewer panel runs. (Pin presence — `SHALL CONTINUE TO` on defect-fix specs — is
    plan lock's check, never review's.)
-5. **Skipped-test reconciliation (mechanical, both drift modes):** the matrix counts
+6. **Skipped-test reconciliation (mechanical, both drift modes):** the matrix counts
    **executed** tests, never collected ones — a skip is not a pass. If the gate run reported
    skipped/todo tests, map each skipped test back to its AC-IDs (grep the skipped file/test
    names). An AC whose mapped test **skipped** is an automatic `hard` finding — identical in
@@ -76,11 +84,17 @@ absolute path — it is the `scriptPath` for the Workflow call below.
    silent green. (Ground truth: UpWell 2026-07 — a test holding a defect real pg-boss rejects
    with a throw sat `describe.skipIf`-skipped through two CLEAN verdicts because the matrix
    reconciled against collected tests.)
+7. **Scope reconciliation findings (mechanical, D7):** step 2's exit 3 yields ONE mechanical
+   **hard** finding: "out-of-plan changes: {list}" with each file's diffstat. A non-empty
+   `unrealized` yields ONE mechanical **soft** finding: "planned but untouched: {list}". Both
+   enter Phase 2 dispositions like any AC finding. `excluded`/`renamed` carry no finding — they
+   print in the Phase 2 verdict presentation (visibility, never a disposition).
 
 ## Phase 1 — Review workflow
 
 Invoke `Workflow {scriptPath: <spec-paths wf-review output>, args: {specPath, tier, base,
-scope: "full", prevFindingsPath: "", diffLoc: <from Phase 0>,
+scope: "full", prevFindingsPath: "", diffLoc: <from Phase 0>, reconcilePath: <temp file from
+Phase 0 step 2, or '' on fix-delta scope>,
 patternsPath: <temp file from Phase 0>, hasDriftScript: <config declares driftScript>,
 reproCommand: <config testCommand, or "">}}`. (`testCommand` is the host's test-runner
 prefix — the verifier agents append their repro file path to it; when absent, pass `""`
@@ -152,8 +166,8 @@ Two modes, decided by host config:
 
 **CLEAN ⇔** the host's `gateCommand` green **AND** the boot smoke leg green (or declared
 inert) **AND** zero surviving `hard` findings (including the mechanical ones: uncovered ACs,
-non-declared skipped-test ACs, a failed or impossible smoke) **AND** drift clean (whichever
-mode applies).
+non-declared skipped-test ACs, out-of-plan changes, a failed or impossible smoke) **AND**
+drift clean (whichever mode applies).
 
 **Run ledger (every review run, any verdict):** append exactly ONE line to
 `.claude/spec-runs.jsonl` (repo root; create on first append) — **after** the survivor
@@ -174,6 +188,9 @@ time. `runId` is the Workflow invocation's run id: when a defect later surfaces 
 review passed, `/spec:escape` records a row pointing back at it — the ground truth behind
 every CLEAN.
 
+Regardless of survivors, print step 2's `excluded` matches (pipeline-owned, one line) and each
+`renamed` pair (`↷ old → new`, one line) — visibility without a finding.
+
 If survivors exist, present them with the pattern-sweep context, grouped by verification
 status: `demonstrated` first (a verifier *reproduced the defect by execution* — show the
 `evidence`; rejecting one means overriding a reproduced failure), then `unverifiable`
@@ -187,9 +204,11 @@ defect," and it must be made against the author's recorded intent, not recalled 
 - **Fix** — dispatch Sonnet workers (routed via the host's `agentMap`, matching the build
   routing). Then re-review **incrementally**: write the surviving findings to a temp JSON
   file, and re-invoke the workflow with `scope: "fix-delta"`, `prevFindingsPath: <that file>`,
-  and `base: <the commit the just-reviewed diff ended at>` — one reviewer reads only the fix
-  diff and the prior findings, never the whole codebase again. Pay a `scope: "full"` re-review
-  only if the fixes touched files outside the prior finding set. Max 2 fix→re-review
+  `reconcilePath: ''` (the fix diff is by definition responding to findings, not new scope to
+  reconcile), and `base: <the commit the just-reviewed diff ended at>` — one reviewer reads
+  only the fix diff and the prior findings, never the whole codebase again. Pay a
+  `scope: "full"` re-review (with reconciliation) only if the fixes touched files outside the
+  prior finding set. Max 2 fix→re-review
   iterations; beyond that, escalate.
 - **Waive** — record in the spec's Rationale section with date + reason. Only the user
   waives — never invented, never implied.
@@ -298,8 +317,9 @@ get no Next pointer — the verdict line already names the fix step.
 ## Rules
 
 - **Never Read `wf-review.js`.** The complete `args` contract is in Phase 1 (`{specPath, tier,
-  base, scope, prevFindingsPath, diffLoc, patternsPath, hasDriftScript, reproCommand}`) and
-  the return shape is `{verdict, survivors, killed, verify, reviewerCount, scope, tokens}`.
+  base, scope, prevFindingsPath, diffLoc, patternsPath, hasDriftScript, reproCommand,
+  reconcilePath}`) and the return shape is `{verdict, survivors, killed, verify, reviewerCount,
+  scope, tokens}`.
   The reviewer/verifier fan-out and all control flow are the workflow's concern — its shape
   lives in the script, not in orchestrator context. Invoke it (by `scriptPath`) and act on
   its return.

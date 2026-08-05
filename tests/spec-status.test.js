@@ -40,6 +40,9 @@ const BRIEFS = {
   '03-reports.md': '# 03 — Reports\n\nPhase: P1 · Depends on: 01, 02 ·\nPrimary workspaces: web\n',
 }
 
+// AC-20260805-01-7 (sanctioned pin exception, green pre-change): --json output must stay
+// byte-identical after parseFilePlan/splitPlanCell move into spec/scripts/lib/file-plan.js —
+// the lib extraction is invisible at the CLI.
 test('derives unplanned / in-flight / done per doctor check 14', () => {
   const dir = host({
     briefs: BRIEFS,
@@ -69,6 +72,8 @@ test('flags a skipped brief: in-flight work on top of an unplanned dependency', 
   assert.match(r.stdout, /02-billing\.md/, 'the remedy names the brief to plan')
 })
 
+// AC-20260805-01-7 (sanctioned pin exception, green pre-change): --brief output must stay
+// byte-identical after the lib extraction (D2).
 test('--brief preflight: exit 1 with unmet dependencies, 0 when met', () => {
   const dir = host({
     briefs: BRIEFS,
@@ -594,6 +599,8 @@ test('--pretty is a no-op — pretty is the default render, old call sites keep 
   assert.strictEqual(next.stdout, runNode(SCRIPT, ['--root', dir, '--next']).stdout)
 })
 
+// AC-20260805-01-7 (sanctioned pin exception, green pre-change): --next output must stay
+// byte-identical after the lib extraction (D2).
 test('--next prints only the header and the top pick, @-prefixed', () => {
   const dir = host({
     briefs: {},

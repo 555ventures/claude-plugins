@@ -226,6 +226,12 @@ batch, max 3 rounds (detect → repair → verify); if a round leaves the failur
 the prior round, consult the retainer immediately rather than dispatching another repair round.
 After the ceiling or a stalled round, consult the retainer, then escalate to the user.
 
+**Advisory scope check (D9, report-only — never blocks, no new fork):** run
+`node "$(spec-paths scope-reconcile)" --root {root} --base {build_base or pre-build HEAD}
+--spec {spec path} --json`. A non-empty `outOfPlan` prints one line — `⚠️ out-of-plan: {list}`
+— pointing at the `out-of-scope-failure` fork row above; it surfaces drift before the
+checkpoint-commit instead of leaving it for review to catch retroactively.
+
 Checkpoint-commit after the gate is green (and after each earlier green phase if the run is long).
 
 ## Phase 5 — Report & handoff

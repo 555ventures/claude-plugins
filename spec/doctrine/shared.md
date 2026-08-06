@@ -164,9 +164,12 @@ CLEAN reviews). The pipeline therefore treats *an observed boot* as a first-clas
 - The host config's required `runtime` block (`bootCommand` + `readyCheck`, or an explicit
   `{"inert": "<reason>"}` for hosts with nothing to boot) is the contract; the plugin's
   deterministic `smoke.sh` (`spec-paths smoke`) executes it — no model narrates pass/fail.
-- `/spec:review` runs the smoke leg in its preflight alongside the `gateCommand`; **CLEAN
-  requires it**. A host that gives review no way to boot (missing runtime block) is itself a
-  hard finding, not a skipped check. A declared-inert runtime is sanctioned and reported.
+- `/spec:review` runs the smoke leg in its preflight alongside the `gateCommand`, appending its
+  result to the per-iteration evidence manifest — `smoke` is one of `verdict.js`'s required,
+  blocking legs, so **CLEAN is unreachable without it** (the manifest→derivation contract is
+  the enforcement; this sentence names the requirement, never asserts CLEAN independently of
+  it). A host that gives review no way to boot (missing runtime block) is itself a hard
+  finding, not a skipped check. A declared-inert runtime is sanctioned and reported.
 - `/spec:init` proves the runtime contract once, via the deliverable manifest
   (`manifest-check.sh`), before it may stamp the grounding layer complete.
 - **Skipped tests are not passes.** The review's AC ↔ test reconciliation counts *executed*

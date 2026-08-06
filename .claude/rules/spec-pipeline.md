@@ -31,6 +31,10 @@ T3 triggers for THIS repo:
   reconciliation behind `/spec:review`'s scope gate and `/spec:build`'s Final-gate advisory;
   never a second derivation of the changed-file/File-Plan diff anywhere (2026-08 spec:
   review-scope-reconciliation).
+- **`spec/scripts/verdict.js`** — the sole derivation of the review/release verdict word
+  (evidence manifest + workflow return + disposition counts → one word, `--ledger` row); a
+  splice bug here corrupts every review and release verdict at once. Never a second place that
+  computes or asserts CLEAN (2026-08 spec: review-evidence-manifest).
 - **`spec/bin/spec-paths`** — every command resolves scripts through it; a wrong key breaks
   commands silently.
 

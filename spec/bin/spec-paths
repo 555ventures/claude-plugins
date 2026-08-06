@@ -29,6 +29,8 @@ case "${1:-root}" in
   parity-check)   echo "$ROOT/scripts/parity-check.js" ;;
   spec-status)    echo "$ROOT/scripts/spec-status.js" ;;
   scope-reconcile) echo "$ROOT/scripts/scope-reconcile.js" ;;
+  verdict)        echo "$ROOT/scripts/verdict.js" ;;
+  ci-query)       echo "$ROOT/scripts/ci-query.js" ;;
   shared)         echo "$ROOT/doctrine/shared.md" ;;
   shared-genesis) echo "$ROOT/doctrine/genesis.md" ;;
   scaffold-ledger) echo "$ROOT/doctrine/scaffold-ledger.md" ;;
@@ -80,7 +82,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-build|wf-design|wf-review|wf-enforce|wf-panel|wf-research|dc-extract|design-atlas|skeletons-check|fidelity-check|merge-back|smoke|manifest-check|parity-check|spec-status|scope-reconcile|shared|shared-for <command>|shared-genesis|scaffold-ledger|template|templates|feedback-template|intake|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-build|wf-design|wf-review|wf-enforce|wf-panel|wf-research|dc-extract|design-atlas|skeletons-check|fidelity-check|merge-back|smoke|manifest-check|parity-check|spec-status|scope-reconcile|verdict|ci-query|shared|shared-for <command>|shared-genesis|scaffold-ledger|template|templates|feedback-template|intake|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

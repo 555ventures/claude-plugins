@@ -27,6 +27,12 @@ absolute path — it is the `scriptPath` for the Workflow call below.
 
 ## Phase 0 — Preflight (parallel)
 
+Before step 1, create `{manifestPath}` — a fresh `mktemp` file, created alongside
+`{patternsPath}` below (never reused across iterations: this per-iteration freshness is what
+makes stale evidence structurally unrepresentable — the fix-delta hole where a re-review could
+ride pre-fix leg rows). Every leg named below appends one JSONL row on completion:
+`{"leg":"<name>","exit":<code>,"observed":"<≤120-char counts/enums, never a command string>"}`.
+
 1. Determine the diff base `{target}` (the originating branch the build started from) by
    reading `build_base:` from the spec frontmatter — `/git:enter-worktree` wrote it there so a fresh
    review session recovers it from disk, never from conversation context. If `build_base` is
@@ -41,24 +47,35 @@ absolute path — it is the `scriptPath` for the Workflow call below.
    (`{reconcilePath}` = fresh `mktemp` path), then the same invocation with `--dirs` in place of
    `--json` — its output feeds step 3's sweep, replacing File-Plan dirs (D8: one derivation of
    the changed set, never a second). Exit 2 (unreadable spec/no File Plan) STOPs the run; exit 3
-   (`outOfPlan` non-empty) doesn't — it feeds step 7. Skip on `scope: "fix-delta"` (Phase 2's
-   Fix step sets `reconcilePath: ''` — the fix diff is by definition a response to findings).
-3. Launch in parallel (background bash):
+   (`outOfPlan` non-empty) doesn't — it feeds step 7. Leg `reconcile`,
+   `observed:"outOfPlan=<N>"`. Skip entirely, including the manifest row (`reconcile` is not
+   required on this scope per D3), on `scope: "fix-delta"` (Phase 2's Fix step sets
+   `reconcilePath: ''` — the fix diff is by definition a response to findings).
+3. Launch in parallel (background bash) — each appends its row (leg name, exit, `observed`)
+   to `{manifestPath}` on completion:
    - `DIFF_BASE={base} bash {patternsScript} {dirs from step 2's --dirs output} > {patternsPath}`
      — the host's mechanical shortcut sweep (`patternsScript` from config), redirected to a
      temp file (`patternsPath` = a fresh `mktemp` path); keep the absolute path for the
      workflow call. The reviewers read it rather than receiving the output inline, which keeps
-     `args` a small control channel.
+     `args` a small control channel. Leg `patterns`, `observed:"matches=<N>"` — always
+     recorded (D1), though not a required leg.
    - the host's `gateCommand` — the deterministic gate. **Capture the runner's skip/todo
      counts** from its output (every mainstream runner prints them) — they feed the
-     skipped-test reconciliation in step 6.
+     skipped-test reconciliation in step 6. Leg `gate`, `observed:"skips=<N> todos=<M>"`.
    - `bash $(spec-paths smoke)` — the **boot smoke leg** (shared invariants § Runtime
      Verification). Exit 0 = boot observed ready; exit 4 = runtime declared inert (sanctioned,
      note it in the verdict); any other exit is an automatic **hard finding** — including
      exit 3, "the host gives review no way to boot," which is a grounding-layer defect, not a
-     skippable check. This leg is deterministic; no reviewer adjudicates it.
+     skippable check. This leg is deterministic; no reviewer adjudicates it. Leg `smoke`,
+     `observed:"pass"`/`"inert"`/`"fail"` — this row is what makes **the boot smoke leg
+     green** (or declared inert) a derivation input rather than a claim.
+   - `node "$(spec-paths ci-query)" --branch <the branch under review — git -C {root}
+     rev-parse --abbrev-ref HEAD> --root {root}` — the **ci leg** (D4). A red `conclusion`
+     (`failure`/`timed_out`/`cancelled`) maps to `exit:1` (hard-stops pre-panel below, "fix CI
+     first"); `available:false` or an in-progress run map to `exit:0`. Leg `ci`,
+     `observed:"unavailable"`/`"unavailable-transient"`/`"in-progress"`/`"conclusion=<value>"`.
    - **if config declares `driftScript`**: `{driftScript} {spec path}` — the host's AC-drift
-     checker
+     checker. Leg `drift`, when this leg ran.
 4. Read the spec once; extract AC list, tier, area. Compute `{diffLoc}` =
    insertions + deletions from `git diff --shortstat {base}` — it scales the reviewer panel
    (a small diff never pays a 2-reviewer panel, whatever the tier).
@@ -73,7 +90,9 @@ absolute path — it is the `scriptPath` for the Workflow call below.
    Any AC-ID with zero hits is an **uncovered AC** — an automatic `hard` finding that skips
    the refutation filter (it is a deterministic fact, not a reviewer claim). Computed before
    the reviewer panel runs. (Pin presence — `SHALL CONTINUE TO` on defect-fix specs — is
-   plan lock's check, never review's.)
+   plan lock's check, never review's.) Leg `ac-matrix`, `observed:"uncovered=<N>"` — its
+   non-zero exit means findings were emitted, not that the leg failed to execute; those
+   findings ride the normal Phase 2 disposition flow.
 6. **Skipped-test reconciliation (mechanical, both drift modes):** the matrix counts
    **executed** tests, never collected ones — a skip is not a pass. If the gate run reported
    skipped/todo tests, map each skipped test back to its AC-IDs (grep the skipped file/test
@@ -83,12 +102,24 @@ absolute path — it is the `scriptPath` for the Workflow call below.
    skipped is reported as a **warning naming the un-run environment** in the verdict — never
    silent green. (Ground truth: UpWell 2026-07 — a test holding a defect real pg-boss rejects
    with a throw sat `describe.skipIf`-skipped through two CLEAN verdicts because the matrix
-   reconciled against collected tests.)
+   reconciled against collected tests.) Leg `skip-reconcile`, `observed:"skipped=<N>"` — like
+   `ac-matrix`, its non-zero exit means findings, not non-execution.
 7. **Scope reconciliation findings (mechanical, D7):** step 2's exit 3 yields ONE mechanical
    **hard** finding: "out-of-plan changes: {list}" with each file's diffstat. A non-empty
    `unrealized` yields ONE mechanical **soft** finding: "planned but untouched: {list}". Both
    enter Phase 2 dispositions like any AC finding. `excluded`/`renamed` carry no finding — they
    print in the Phase 2 verdict presentation (visibility, never a disposition).
+8. **Hard stop on red blocking legs (before Phase 1):** read `{manifestPath}`. If the `gate`,
+   `smoke`, or `ci` row is red (non-zero exit; smoke exit 4 counts green-inert), hard-stop
+   **before** invoking the Phase 1 `wf-review` panel below — panel spend must not be incurred
+   on a red substrate. The stopped attempt still runs
+   `node "$(spec-paths verdict)" --manifest {manifestPath} --ledger --spec {spec path} --tier
+   {tier} --diff-loc {diffLoc} --iteration <n>` (no `--workflow` — none exists yet; the
+   derivation reaches `GATE_RED` from the manifest alone before it would need one) and appends
+   the printed row **verbatim** to `.claude/spec-runs.jsonl` — a stopped attempt is never
+   invisible to doctor's correlations or the observation derivation. Report the named red leg
+   and its remedy; do not proceed to Phase 1. Findings-producing legs (`reconcile`,
+   `ac-matrix`, `skip-reconcile`) never trigger this stop — their findings enter Phase 2.
 
 ## Phase 1 — Review workflow
 
@@ -164,29 +195,48 @@ Two modes, decided by host config:
 
 ## Phase 2 — Verdict
 
-**CLEAN ⇔** the host's `gateCommand` green **AND** the boot smoke leg green (or declared
-inert) **AND** zero surviving `hard` findings (including the mechanical ones: uncovered ACs,
-non-declared skipped-test ACs, out-of-plan changes, a failed or impossible smoke) **AND**
-drift clean (whichever mode applies).
+**The verdict word is derived by `verdict.js`, never asserted in prose here.** Compute it
+twice per iteration:
 
-**Run ledger (every review run, any verdict):** append exactly ONE line to
-`.claude/spec-runs.jsonl` (repo root; create on first append) — **after** the survivor
-dispositions below are resolved, so the row records how each finding actually ended (a
-`SURVIVORS` row whose survivors were then all waived is otherwise indistinguishable from an
-unresolved one):
+1. **Right after Phase 1 returns** (skipped when Phase 0 step 8 already hard-stopped): write
+   the Phase 1 return to a temp file and run `node "$(spec-paths verdict)" --manifest
+   {manifestPath} --workflow <that temp file> --waived 0 --rejected 0 --fixDispatched 0`. This
+   first pass only decides whether survivors below need presenting — its word is not what gets
+   printed or ledgered.
+2. **After the dispositions below are resolved** (or immediately, on a Phase 0 step 8 hard
+   stop): re-run with the real `--waived/--rejected/--fixDispatched` counts, plus `--ledger
+   --spec {spec path} --tier {tier} --diff-loc {diffLoc} --iteration <n>`. This run is
+   authoritative — print line 1 (the verdict word) **verbatim**, and append line 2 (the ledger
+   row) **verbatim** to `.claude/spec-runs.jsonl` (repo root; create on first append) —
+   **after** the survivor dispositions are resolved, so the row records how each finding
+   actually ended (a row whose survivors were then all waived is otherwise indistinguishable
+   from an unresolved one). `verdict.js` exit 0 gates and is required for entry into the Phase 3
+   close — every other derived word (`UNVERIFIED`, `GATE_RED`, `FINDINGS`, `HARD_FINDINGS`,
+   `REVIEWER_FAILED`) exits 1, and a contradictory disposition count exits 2 printing no word
+   at all, so either way Phase 3 is mechanically unreachable.
+
+CLEAN is therefore a residual of the derivation, never computed here: every required leg
+(`gate`, `smoke`, `reconcile`, `ac-matrix`, `skip-reconcile`, `ci` — `reconcile` exempt on
+`scope: "fix-delta"`) present in `{manifestPath}`, including the **boot smoke leg green** (or
+declared inert), `gate`/`smoke`/`ci` all non-red, and zero undispositioned survivors. Nothing
+in this command reconstructs that definition independently — read `verdict.js`'s printed word
+and exit code.
+
+Ledger row shape (the exact JSON `verdict.js --ledger` prints on line 2 — append exactly ONE line,
+verbatim, never hand-assembled, never prose or finding text):
 
 ```
-{"ts":"<YYYY-MM-DD>","spec":"<repo-relative spec path>","stage":"review","tier":"<T1|T2|T3>","runId":"<wf_…>","verdict":"<CLEAN|SURVIVORS|REVIEWER_FAILED>","scope":"<full|fix-delta>","iteration":<n>,"diff":{"loc":<n>},"smoke":"<pass|fail|inert>","testsSkipped":<n>,"tokens":{"workflow":<n>},"findings":{"survived":<n>,"killed":<n>,"waived":<n>,"rejected":<n>,"fixDispatched":<n>,"reviewerCount":<n>},"verify":{"verified":<n>,"demonstrated":<n>,"killedByExecution":<n>,"sanctioned":<n>,"miscited":<n>,"unverifiable":<n>,"failed":<n>,"capSkipped":<n>}}
+{"ts":"<YYYY-MM-DD>","spec":"<repo-relative spec path>","stage":"review","tier":"<T1|T2|T3>","runId":"<wf_…>","verdict":"<CLEAN|FINDINGS|HARD_FINDINGS|REVIEWER_FAILED|UNVERIFIED|GATE_RED>","scope":"<full|fix-delta>","iteration":<n>,"diff":{"loc":<n>},"smoke":"<pass|fail|inert>","testsSkipped":<n>,"tokens":{"workflow":<n>},"legs":[{"leg":"gate","exit":0},…],"findings":{"survived":<n>,"killed":<n>,"waived":<n>,"rejected":<n>,"fixDispatched":<n>,"reviewerCount":<n>},"verify":{"verified":<n>,"demonstrated":<n>,"killedByExecution":<n>,"sanctioned":<n>,"miscited":<n>,"unverifiable":<n>,"failed":<n>,"capSkipped":<n>}}
 ```
 
-`verdict` is the workflow's verdict (pre-disposition) — **never write `CLEAN` on a row whose
+`verdict` is the D5 derived-verdict enum — **never write `CLEAN` on a row whose
 `survived` is non-zero**; `waived`/`rejected`/`fixDispatched` record what the user then did
-with the survivors. Fixed shape, counts/enums only — never finding text or prose (disposition
-*reasons* land in the spec's Rationale). One line per Phase-1 invocation, so fix→re-review
-iterations each leave a row — that history is what calibrates the verification layer over
-time. `runId` is the Workflow invocation's run id: when a defect later surfaces in code this
-review passed, `/spec:escape` records a row pointing back at it — the ground truth behind
-every CLEAN.
+with the survivors, and `legs` mirrors `{manifestPath}`'s name+exit pairs. Fixed shape,
+counts/enums only — never finding text or prose (disposition *reasons* land in the spec's
+Rationale). One line per Phase-1 invocation, so fix→re-review iterations each leave a row —
+that history is what calibrates the verification layer over time. `runId` is the Workflow
+invocation's run id: when a defect later surfaces in code this review passed, `/spec:escape`
+records a row pointing back at it — the ground truth behind every CLEAN.
 
 Regardless of survivors, print step 2's `excluded` matches (pipeline-owned, one line) and each
 `renamed` pair (`↷ old → new`, one line) — visibility without a finding.
@@ -202,13 +252,18 @@ recommend nothing). The recurring disposition call is "over-strict spec text vs.
 defect," and it must be made against the author's recorded intent, not recalled intent. Then
 `AskUserQuestion` per finding group:
 - **Fix** — dispatch Sonnet workers (routed via the host's `agentMap`, matching the build
-  routing). Then re-review **incrementally**: write the surviving findings to a temp JSON
-  file, and re-invoke the workflow with `scope: "fix-delta"`, `prevFindingsPath: <that file>`,
-  `reconcilePath: ''` (the fix diff is by definition responding to findings, not new scope to
-  reconcile), and `base: <the commit the just-reviewed diff ended at>` — one reviewer reads
-  only the fix diff and the prior findings, never the whole codebase again. Pay a
+  routing). Then re-review **incrementally**: create a fresh `{manifestPath}` (a new `mktemp`
+  path, never the prior iteration's — stale rows cannot leak into the new derivation), and
+  **re-run the `gate`, `smoke`, `ac-matrix`, `skip-reconcile`, and `ci` legs into it** (the
+  existing fix-delta full-gate-reassertion rule, made mechanical — `reconcile` stays exempt,
+  matching Phase 0 step 2's `scope: "fix-delta"` skip). Write the surviving findings to a temp
+  JSON file, and re-invoke the workflow with `scope: "fix-delta"`, `prevFindingsPath: <that
+  file>`, `reconcilePath: ''` (the fix diff is by definition responding to findings, not new
+  scope to reconcile), and `base: <the commit the just-reviewed diff ended at>` — one reviewer
+  reads only the fix diff and the prior findings, never the whole codebase again. Pay a
   `scope: "full"` re-review (with reconciliation) only if the fixes touched files outside the
-  prior finding set. Max 2 fix→re-review
+  prior finding set. Then derive this iteration's verdict the same two-pass way (Phase 2 above)
+  against the fresh manifest. Max 2 fix→re-review
   iterations; beyond that, escalate.
 - **Waive** — record in the spec's Rationale section with date + reason. Only the user
   waives — never invented, never implied.

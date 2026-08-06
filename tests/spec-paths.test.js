@@ -16,8 +16,8 @@ test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-build', 'wf-design', 'wf-review', 'wf-enforce',
     'wf-panel', 'wf-research', 'dc-extract', 'design-atlas', 'skeletons-check', 'merge-back',
-    'smoke', 'manifest-check', 'spec-status', 'scope-reconcile', 'shared', 'shared-genesis',
-    'template', 'templates', 'contract']) {
+    'smoke', 'manifest-check', 'spec-status', 'scope-reconcile', 'verdict', 'ci-query',
+    'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }

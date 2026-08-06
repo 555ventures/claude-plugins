@@ -105,6 +105,23 @@ test('no per-spec ledger files: nothing instructs writing runs files under specs
   }
 })
 
+test('AC-20260805-02-8: review ledger rows carry the D5 derived-verdict enum and a legs array, retiring the SURVIVORS mapping', () => {
+  // specs/20260805/02-review-evidence-manifest.md D5: the ledger verdict enum becomes the
+  // derived set CLEAN|FINDINGS|HARD_FINDINGS|REVIEWER_FAILED|UNVERIFIED|GATE_RED, and the row
+  // gains a "legs" array mirroring the evidence manifest — both sourced from verdict.js
+  // --ledger, never asserted independently. The undocumented SURVIVORS mapping is retired.
+  const review = read('commands/review.md')
+  assert.doesNotMatch(review, /"verdict":"<CLEAN\|SURVIVORS\|REVIEWER_FAILED>"/,
+    'the old CLEAN|SURVIVORS|REVIEWER_FAILED enum documentation must be gone — SURVIVORS was an ' +
+    'undocumented mapping this spec retires (D5)')
+  assert.match(review, /CLEAN\|FINDINGS\|HARD_FINDINGS\|REVIEWER_FAILED\|UNVERIFIED\|GATE_RED/,
+    'the review ledger schema must document the new derived-verdict enum verbatim — a consumer ' +
+    'matching against the old enum would silently drop every new-word row')
+  assert.ok(review.includes('"legs":['),
+    'the review ledger row schema must document a "legs" array field (mirroring the evidence ' +
+    'manifest\'s leg+exit pairs) — without it the ledger can\'t show which legs backed the verdict')
+})
+
 test('doctor covers ledger hygiene', () => {
   const doctor = read('commands/doctor.md')
   assert.match(doctor, /spec-runs\.jsonl/)

@@ -44,6 +44,12 @@ Recorded in the release manifest and tag; never parsed for behavior.
    integrations, and new migrations since the last release — each becomes a checklist row in
    Phase 1 (only the delta is re-checked on later runs; the first run checks everything).
 
+Create `{manifestPath}` now — a fresh `mktemp` file, one per run — that every leg below
+appends a JSONL row to (`{"leg":"<name>","exit":<code>,"observed":"<≤120-char counts/enums>"}`,
+matching review's evidence-manifest shape (D1/D7)). This run's **required legs** are `deploy`,
+`ready`, `e2e`, `journeys`, `substrate`, `production` — `verdict.js --profile release` derives
+the milestone word from them.
+
 ## Phase 1 — Release manifest (first run heavy, later runs delta-only)
 
 Maintain `.claude/release-manifest.json` — same shape and same checker as init's deliverable
@@ -56,44 +62,66 @@ reason where no mechanical check exists), domain/TLS (`exec`: a curl against
 `productionUrl`). First release: build the full manifest with the user. Later releases:
 re-check only Phase 0's substrate delta plus rows whose targets changed. The manifest is
 committed — it doubles as the handover document: a list of verified observations, not claims.
+Append `{"leg":"substrate","exit":<0 if manifest-check exits 0 else 1>,"observed":"checked=<N> inert=<M>"}`
+to `{manifestPath}`.
 
 ## Phase 2 — Stage and observe (all executed, fail-closed)
 
-1. **Deploy to staging:** run `deployCommand`. Failure → STOP, report.
+1. **Deploy to staging:** run `deployCommand`. Append `{"leg":"deploy","exit":<exit>,"observed":"<pass|fail>"}`
+   to `{manifestPath}`. Failure → STOP (see below), report.
 2. **Ready check against the deployed URL:** the config `runtime.readyCheck` pattern applied
    to `stagingUrl` + `healthPath` (or a plain curl). The boot-leg discipline, applied to real
-   infra.
+   infra. Append `{"leg":"ready","exit":<exit>,"observed":"<pass|fail>"}` to `{manifestPath}`.
 3. **e2e against the deployment:** `BASE_URL={stagingUrl} {e2eCommand}`. Capture pass / fail
    / skip counts — **a skipped e2e is reported by name, never silently green** (same rule as
-   review's skip reconciliation).
+   review's skip reconciliation). Append
+   `{"leg":"e2e","exit":<0 if zero failed else 1>,"observed":"passed=<N> failed=<M> skipped=<K>"}`
+   to `{manifestPath}`.
 4. **Journey walks:** for each brief shipped this milestone, walk its primary journey against
    staging (the brief's milestone-gate observable, via the host's spec-verify skill, browser
    automation, or scripted API calls — whatever the skill declares), plus **one standing
    whole-product journey** (sign-up → core loop → the product's reason to exist) every
    release regardless of what shipped. Record each as observed-pass / observed-fail with the
    command or interaction trace. A journey that cannot be walked (no seed path, no access) is
-   a **blocking finding**, not a skip.
+   a **blocking finding**, not a skip. Append
+   `{"leg":"journeys","exit":<0 if zero failed else 1>,"observed":"walked=<N> failed=<M>"}` to
+   `{manifestPath}`.
 
-Any failure here: STOP, report what was observed, and route the defect to the normal flow
-(direct fix or a spec; if it escaped a CLEAN review, offer `/spec:escape` — `foundBy:
-later-spec`, `preventedBy: runtime-leg`). Never promote over a red staging.
+Any failure here (a red `deploy`/`ready`/`e2e`/`journeys` row): **STOP** — report what was
+observed, and route the defect to the normal flow (direct fix or a spec; if it escaped a CLEAN
+review, offer `/spec:escape` — `foundBy: later-spec`, `preventedBy: runtime-leg`). Never promote over a red staging.
+
+The stop still runs `node "$(spec-paths verdict)" --profile release --manifest {manifestPath}
+--ledger` and quotes, verbatim, its output as the report — its `GATE_RED` word and row are the
+verdict origin, appended to `.claude/spec-runs.jsonl` the same as a successful run's. In short:
+`verdict.js --profile release --ledger` is what the STOP path quotes here (D7: a Phase 2/3
+STOP is never a second, independent verdict origin — the same call runs again in Phase 4
+below).
 
 ## Phase 3 — Promote (explicitly confirmed, never autonomous)
 
 1. `AskUserQuestion`: promote this build to production? (Include the Phase 2 observation
    summary in the question context.) Dismissed or declined → STOP; staging stands, nothing
-   promoted, ledger row records `production: skipped`.
+   promoted; append `{"leg":"production","exit":0,"observed":"skipped"}` to `{manifestPath}`
+   (D7: a user-declined promote is exit 0, `observed:"skipped"` — it is not a failure).
 2. On yes: run `promoteCommand` (or instruct the user through their CI-on-tag flow when
    promotion is tag-driven and the tag push is theirs to make — **never push for them**).
 3. **Verify production serves:** ready check against `productionUrl` + `healthPath`, and
    confirm the deployed version/build id is the one staged (the health endpoint's version
    field, or the platform's deployment id). A promote that cannot be verified serving is a
-   failure, not a success with a caveat.
+   failure, not a success with a caveat. Append
+   `{"leg":"production","exit":<0 if verified else 1>,"observed":"<verified|failed>"}` to
+   `{manifestPath}`. A red `production` row here is a Phase 3 failure — STOP per the same
+   rule as Phase 2 above, quoting `verdict.js --profile release --ledger`'s `GATE_RED` output.
 
 ## Phase 4 — Record & report
 
-1. **Ledger row** — append exactly ONE line to `.claude/spec-runs.jsonl` (counts/enums/paths
-   only, never prose):
+1. **Verdict + ledger row** — run `node "$(spec-paths verdict)" --profile release --manifest
+   {manifestPath} --ledger` (the same call the Phase 2/3 STOP path above would have quoted, had
+   one fired: `verdict.js --profile release --ledger` is one derivation with one origin on
+   every path). Print line 1 (the word — `CLEAN`, `GATE_RED`, or `UNVERIFIED`) verbatim, and
+   append exactly ONE line to `.claude/spec-runs.jsonl` — line 2, the ledger row, verbatim,
+   counts/enums/paths only, never prose:
 
    ```
    {"ts":"<YYYY-MM-DD>","stage":"release","milestone":"<tag or briefs range>","briefs":[<NN>,…],"staging":"<pass|fail>","e2e":{"passed":<n>,"failed":<n>,"skipped":<n>},"journeys":{"walked":<n>,"failed":<n>},"substrate":{"checked":<n>,"failed":<n>,"inert":<n>},"production":"<verified|skipped|failed>"}

@@ -164,6 +164,198 @@ test('AC-20260805-02-5: --ledger prints a row whose verdict matches line 1 and w
     'ledger record diverges from the evidence that actually produced the verdict: ' + JSON.stringify(row.legs))
 })
 
+// 2026-08-06 review-fix findings (prev-findings.json): verdict.js's --ledger row was missing
+// runId/smoke/testsSkipped entirely and flattened the disposition counts, contradicting D2's
+// "smoke and testsSkipped are derived FROM manifest rows" and review.md:229's documented
+// runId/findings-nested shape; the release profile's row carried only {ts,stage,verdict,legs},
+// contradicting release.md:127's milestone/briefs/staging/e2e/journeys/substrate/production
+// template. These tests pin the corrected contract by execution so a future regression fails
+// npm test instead of shipping silently behind doctrine-text-only pins (as run-ledger.test.js's
+// existing checks did here).
+
+test('AC-20260805-02-5: --ledger carries row.runId only when --run-id is passed, and omits the key entirely otherwise', () => {
+  const dir = tmpdir('verdict')
+  const manifest = writeManifest(dir, SIX_GREEN)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const withFlag = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger',
+    '--spec', 'x.md', '--tier', 'T2', '--diff-loc', '1', '--iteration', '1', '--run-id', 'wf_abc123'])
+  const rowWith = JSON.parse(withFlag.stdout.trim().split('\n')[1])
+  assert.strictEqual(rowWith.runId, 'wf_abc123',
+    'orchestrator passes --run-id so /spec:escape can later point reviewRunId back at this exact review ' +
+    'invocation (review.md: "runId is the Workflow invocation\'s run id") — a mismatch or missing value ' +
+    'breaks that backlink: ' + JSON.stringify(rowWith))
+  const withoutFlag = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger',
+    '--spec', 'x.md', '--tier', 'T2', '--diff-loc', '1', '--iteration', '1'])
+  const rowWithout = JSON.parse(withoutFlag.stdout.trim().split('\n')[1])
+  assert.ok(!('runId' in rowWithout),
+    'when the orchestrator omits --run-id the row must omit the key entirely rather than writing null or ' +
+    'an empty string — a present-but-empty runId would look like a real (if blank) backlink to a consumer: ' +
+    JSON.stringify(rowWithout))
+})
+
+test('AC-20260805-02-5: --ledger derives row.smoke from the manifest smoke row exit code, never from prose', () => {
+  const dir = tmpdir('verdict')
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+
+  const passRows = SIX_GREEN.map(r => (r.leg === 'smoke' ? { leg: 'smoke', exit: 0, observed: 'pass' } : r))
+  const passManifest = writeManifest(dir, passRows)
+  const passRun = runNode(SCRIPT, ['--manifest', passManifest, '--workflow', workflow, '--ledger'])
+  const passRow = JSON.parse(passRun.stdout.trim().split('\n')[1])
+  assert.strictEqual(passRow.smoke, 'pass',
+    'a smoke row with exit 0 and observed "pass" must derive row.smoke "pass" — D2 requires smoke be ' +
+    'derived FROM the manifest row, not hardcoded: ' + JSON.stringify(passRow))
+
+  const inertManifest = writeManifest(dir, SIX_GREEN) // smoke row: exit 4, observed "inert"
+  const inertRun = runNode(SCRIPT, ['--manifest', inertManifest, '--workflow', workflow, '--ledger'])
+  const inertRow = JSON.parse(inertRun.stdout.trim().split('\n')[1])
+  assert.strictEqual(inertRow.smoke, 'inert',
+    'a smoke row with exit 4 (the sanctioned inert-green case) must derive row.smoke "inert" regardless of ' +
+    'its observed text — exit 4 is the authority, per D3\'s "exit 4 = inert counts green": ' +
+    JSON.stringify(inertRow))
+
+  const failRows = SIX_GREEN.map(r => (r.leg === 'smoke' ? { leg: 'smoke', exit: 2, observed: 'boot-crash' } : r))
+  const failManifest = writeManifest(dir, failRows)
+  const failRun = runNode(SCRIPT, ['--manifest', failManifest, '--workflow', workflow, '--ledger'])
+  const failRow = JSON.parse(failRun.stdout.trim().split('\n')[1])
+  assert.strictEqual(failRow.smoke, 'fail',
+    'a smoke row with a non-0, non-4 exit must derive row.smoke "fail" — the row must still print (GATE_RED ' +
+    'is a non-CLEAN word, not a reason to withhold the ledger row) so the failure is visible in the ledger ' +
+    'history, not just on stderr: ' + JSON.stringify(failRow))
+})
+
+test('AC-20260805-02-5: --ledger derives row.testsSkipped as skips+todos from the gate row\'s pinned "skips=N todos=M" observed format', () => {
+  const dir = tmpdir('verdict')
+  const rows = SIX_GREEN.map(r => (r.leg === 'gate' ? { leg: 'gate', exit: 0, observed: 'skips=2 todos=1' } : r))
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger'])
+  const row = JSON.parse(r.stdout.trim().split('\n')[1])
+  assert.strictEqual(row.testsSkipped, 3,
+    'D2 pins the gate leg\'s observed format as "skips=N todos=M" specifically so testsSkipped can be summed ' +
+    'from it (a skip is not a pass) — skips=2 todos=1 must derive testsSkipped 3, not 2 or 1 alone: ' +
+    JSON.stringify(row))
+})
+
+test('AC-20260805-02-8: the review ledger row nests survived/killed/waived/rejected/fixDispatched/reviewerCount under findings and carries none of them flat at the top level', () => {
+  const dir = tmpdir('verdict')
+  const manifest = writeManifest(dir, SIX_GREEN)
+  const workflow = writeWorkflow(dir, cleanWorkflow([{ severity: 'soft', id: 'AC-a' }]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--waived', '1'])
+  const row = JSON.parse(r.stdout.trim().split('\n')[1])
+  assert.ok(row.findings && typeof row.findings === 'object',
+    'the disposition counts must be nested under a findings object per review.md\'s documented ledger-row ' +
+    'template — a flat row is a schema shape a consumer reading row.findings.killed cannot parse: ' +
+    JSON.stringify(row))
+  assert.deepStrictEqual(row.findings, {
+    survived: 1, killed: 0, waived: 1, rejected: 0, fixDispatched: 0, reviewerCount: 1,
+  }, 'row.findings must carry exactly the six disposition counts with their derived values — a mismatch ' +
+    'means escape.md\'s "findings.killed" backlink reads the wrong number: ' + JSON.stringify(row.findings))
+  for (const flatKey of ['survived', 'killed', 'waived', 'rejected', 'fixDispatched', 'reviewerCount']) {
+    assert.ok(!(flatKey in row),
+      `row.${flatKey} must not also exist flat at the top level once nested under findings — carrying both ` +
+      'shapes at once is not what "additive" (Contracts: "ledger row (additive)") means, and a consumer ' +
+      'reading the old flat field would silently see stale/duplicate data: ' + JSON.stringify(row))
+  }
+})
+
+// 2026-08-06 review-fix: real wf-review returns workflow.killed as an ARRAY of killed-finding
+// objects (not the plain count cleanWorkflow()'s stub used above) and workflow.tokens as a
+// plain number — two shapes verdict.js's --ledger row was passing through unnormalized instead
+// of converting to the documented review.md:229 template (findings.killed = a count,
+// tokens = {"workflow":<n>}). This test pins the corrected normalization by execution.
+test('AC-20260805-02-8: --ledger normalizes an array-shaped workflow.killed to its length and a numeric workflow.tokens to {workflow:<n>}', () => {
+  const dir = tmpdir('verdict')
+  const manifest = writeManifest(dir, SIX_GREEN)
+  const workflowObj = cleanWorkflow([{ severity: 'soft', id: 'AC-a' }])
+  workflowObj.killed = [{ file: 'x' }, { file: 'y' }]
+  workflowObj.tokens = 777
+  const workflow = writeWorkflow(dir, workflowObj)
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--waived', '1'])
+  const row = JSON.parse(r.stdout.trim().split('\n')[1])
+  assert.strictEqual(row.findings.killed, 2,
+    'workflow.killed arriving as an array of killed-finding objects must be normalized to its LENGTH under ' +
+    'row.findings.killed, not passed through as an array — an array here breaks escape.md\'s ' +
+    '"findings.killed>0" correlation and doctor\'s jq numeric comparison against this field: ' +
+    JSON.stringify(row.findings))
+  assert.deepStrictEqual(row.tokens, { workflow: 777 },
+    'workflow.tokens arriving as a plain number must be normalized to the documented {"workflow":<n>} object ' +
+    'shape, not passed through as a bare number — a bare number here makes the ledger\'s tokens accounting ' +
+    'unparseable against review.md:229\'s schema: ' + JSON.stringify(row))
+})
+
+test('AC-20260805-02-8: --profile release --ledger with --milestone/--briefs and six green legs derives milestone/briefs/staging/e2e/journeys/substrate/production matching release.md\'s template', () => {
+  const dir = tmpdir('verdict')
+  const manifest = writeManifest(dir, [
+    { leg: 'deploy', exit: 0, observed: 'ok' },
+    { leg: 'ready', exit: 0, observed: 'ok' },
+    { leg: 'e2e', exit: 0, observed: 'passed=10 failed=0 skipped=2' },
+    { leg: 'journeys', exit: 0, observed: 'walked=5 failed=0' },
+    { leg: 'substrate', exit: 0, observed: 'checked=8 failed=0 inert=1' },
+    { leg: 'production', exit: 0, observed: 'verified' },
+  ])
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--profile', 'release', '--ledger',
+    '--milestone', 'v1.2.3', '--briefs', '12,13'])
+  const lines = r.stdout.trim().split('\n')
+  assert.strictEqual(lines[0], 'CLEAN',
+    'six green release legs must derive CLEAN — a wrong word here means the row assertions below are ' +
+    'exercising a path release.md never actually reaches: ' + r.stdout + ' / ' + r.stderr)
+  const row = JSON.parse(lines[1])
+  assert.strictEqual(row.milestone, 'v1.2.3',
+    'row.milestone must carry the --milestone flag verbatim — release.md\'s template documents it as the ' +
+    'tag/briefs-range identity of the release: ' + JSON.stringify(row))
+  assert.deepStrictEqual(row.briefs, [12, 13],
+    'row.briefs must parse the comma-int --briefs flag into a numeric array, matching release.md\'s ' +
+    '"briefs":[<NN>,…] template: ' + JSON.stringify(row))
+  assert.strictEqual(row.staging, 'pass',
+    'row.staging must be "pass" when both deploy and ready legs are exit 0 — release.md gates promotion on ' +
+    'this derived value: ' + JSON.stringify(row))
+  assert.deepStrictEqual(row.e2e, { passed: 10, failed: 0, skipped: 2 },
+    'row.e2e must parse the e2e leg\'s "passed=N failed=N skipped=N" observed string into the documented ' +
+    'object shape: ' + JSON.stringify(row))
+  assert.deepStrictEqual(row.journeys, { walked: 5, failed: 0 },
+    'row.journeys must parse the journeys leg\'s "walked=N failed=N" observed string: ' + JSON.stringify(row))
+  assert.deepStrictEqual(row.substrate, { checked: 8, failed: 0, inert: 1 },
+    'row.substrate must parse the substrate leg\'s "checked=N failed=N inert=N" observed string: ' +
+    JSON.stringify(row))
+  assert.strictEqual(row.production, 'verified',
+    'row.production must read the production leg\'s observed enum value directly when it is one of ' +
+    'verified|skipped|failed: ' + JSON.stringify(row))
+})
+
+test('AC-20260805-02-8: a partial release manifest (STOP path) still prints a ledger row, omitting missing or unparseable leg keys instead of failing', () => {
+  const dir = tmpdir('verdict')
+  const manifest = writeManifest(dir, [
+    { leg: 'deploy', exit: 0, observed: 'ok' },
+    { leg: 'ready', exit: 0, observed: 'ok' },
+    { leg: 'e2e', exit: 0, observed: 'not-the-pinned-format' }, // present but unparseable
+    // journeys/substrate/production never ran — the STOP fired before them
+  ])
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--profile', 'release', '--ledger',
+    '--milestone', 'v1.2.3', '--briefs', '7'])
+  const lines = r.stdout.trim().split('\n')
+  assert.notStrictEqual(lines[0], 'CLEAN',
+    'a release manifest missing required legs (journeys/substrate/production never executed) must never ' +
+    'derive CLEAN — that would ledger a promotion as clean evidence it never gathered: ' + r.stdout)
+  let row
+  assert.doesNotThrow(() => { row = JSON.parse(lines[1]) },
+    'even on a STOP path (D7: "the STOP path appends the red row") the row must still print as parseable ' +
+    'JSON on line 2 — a STOP that fails to ledger is invisible to doctor\'s correlations: ' + r.stdout)
+  assert.strictEqual(row.milestone, 'v1.2.3', 'identity flags must survive onto a STOP-path row too: ' + JSON.stringify(row))
+  assert.deepStrictEqual(row.briefs, [7], 'identity flags must survive onto a STOP-path row too: ' + JSON.stringify(row))
+  assert.strictEqual(row.staging, 'pass',
+    'staging is derivable from the deploy+ready rows that DID execute, so it must still be present even ' +
+    'though later legs did not run: ' + JSON.stringify(row))
+  assert.ok(!('e2e' in row),
+    'the e2e leg\'s observed string does not match the pinned "passed=N failed=N skipped=N" format — the ' +
+    'row must omit row.e2e rather than print nulls/NaNs that a consumer would read as real zero counts: ' +
+    JSON.stringify(row))
+  for (const missingKey of ['journeys', 'substrate', 'production']) {
+    assert.ok(!(missingKey in row),
+      `the ${missingKey} leg never ran on this STOP path, so row.${missingKey} must be omitted entirely — ` +
+      'a fabricated value would misreport a leg that was never executed: ' + JSON.stringify(row))
+  }
+})
+
 test('AC-20260805-02-9: dispositions exceeding the workflow file\'s survivor count exit 2 without printing a verdict word', () => {
   const dir = tmpdir('verdict')
   const manifest = writeManifest(dir, SIX_GREEN)

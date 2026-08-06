@@ -205,7 +205,8 @@ twice per iteration:
    printed or ledgered.
 2. **After the dispositions below are resolved** (or immediately, on a Phase 0 step 8 hard
    stop): re-run with the real `--waived/--rejected/--fixDispatched` counts, plus `--ledger
-   --spec {spec path} --tier {tier} --diff-loc {diffLoc} --iteration <n>`. This run is
+   --spec {spec path} --tier {tier} --diff-loc {diffLoc} --iteration <n> --run-id {the
+   wf-review Workflow invocation's run id}`. This run is
    authoritative — print line 1 (the verdict word) **verbatim**, and append line 2 (the ledger
    row) **verbatim** to `.claude/spec-runs.jsonl` (repo root; create on first append) —
    **after** the survivor dispositions are resolved, so the row records how each finding

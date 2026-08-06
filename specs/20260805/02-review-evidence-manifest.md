@@ -1,6 +1,6 @@
 ---
 date: 2026-08-05
-status: implementing
+status: done
 open_markers: 0
 risk: T3
 area: review
@@ -205,6 +205,27 @@ are the sanctioned depth, and the claims-registry brief owns the general problem
 SCOPE, recorded: the autopilot daemon narrates any review result with a ✅ prefix regardless
 of verdict word (session.js classifies by SDK subtype, not text) — an autopilot-plugin
 defect this spec makes more visible but does not own; it needs its own intake row.
+
+Review dispositions (2026-08-06): the 2-reviewer panel returned 5 demonstrated hard
+findings collapsing to two defects — (A) the review `--ledger` row omitted
+`runId`/`smoke`/`testsSkipped` and left disposition counts flat instead of nested under
+`findings`, breaking escape.md's `reviewRunId`/`findings.killed` correlation; (B) the
+release-profile row carried none of the milestone/briefs/staging/e2e/journeys/substrate/
+production fields release.md documents. Both FIXED (verdict.js `--run-id`/`--milestone`/
+`--briefs` flags + manifest-derived fields; release.md observed formats pinned;
+7 exec-test pins added; bump 6.40.1); fix-delta re-review CLEAN. A post-CLEAN dogfood run
+of `verdict.js --ledger` against the real wf-review return caught two residual
+off-template shapes — `findings.killed` as array, `tokens` flat — normalized in the same
+close with their own exec-test pins. WAIVED: the mechanical out-of-plan finding on
+`docs/roadmap/00-overview.md` + `01-claims-registry.md` — untracked roadmap-planning
+artifacts from another session, not build output (repeats spec 01's recorded waive).
+
+Deviations folded (2026-08-06, one-off): the tests batch kept the two D6-pinned sentences'
+regexes verbatim as invariant pins rather than inventing replacement wording the spec never
+specified; the doctrine batch landed review.md +55 / release.md +28 lines against the File
+Plan's "net lines down" prediction because AC-6/AC-7's pinned prose (manifest lifecycle,
+hard-stop ledger append, two-path release wiring) outweighed the deleted CLEAN prose —
+line-count predictions in File Plan summaries are estimates, not contracts.
 
 ## Canonical Delta
 

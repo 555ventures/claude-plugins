@@ -62,10 +62,21 @@ reason where no mechanical check exists), domain/TLS (`exec`: a curl against
 `productionUrl`). First release: build the full manifest with the user. Later releases:
 re-check only Phase 0's substrate delta plus rows whose targets changed. The manifest is
 committed — it doubles as the handover document: a list of verified observations, not claims.
-Append `{"leg":"substrate","exit":<0 if manifest-check exits 0 else 1>,"observed":"checked=<N> inert=<M>"}`
-to `{manifestPath}`.
+Append `{"leg":"substrate","exit":<0 if manifest-check exits 0 else 1>,"observed":"checked=<N>
+failed=<M> inert=<K>"}` to `{manifestPath}` (`checked`/`failed`/`inert` are manifest-check's
+TOTAL/FAILS/INERT counts) — this exact `checked=N failed=N inert=N` shape is what
+`verdict.js --profile release` parses into the ledger row's `substrate` field; drifting the
+format breaks that derivation silently.
 
 ## Phase 2 — Stage and observe (all executed, fail-closed)
+
+The `deploy`/`ready`/`e2e`/`journeys`/`production` legs' `observed` strings below are pinned —
+`verdict.js --profile release` parses them verbatim into the ledger row (D2/D7): `deploy` and
+`ready` carry no counts (their exit codes alone derive the ledger row's `staging` field —
+`pass` only when both exit 0); `e2e` is `passed=<N> failed=<M> skipped=<K>`; `journeys` is
+`walked=<N> failed=<M>`; `production` is `observed ∈ verified|skipped|failed`. Drifting any of
+these strings breaks that derivation silently — the leg that appends the row and the script
+that parses it must agree on exactly this format.
 
 1. **Deploy to staging:** run `deployCommand`. Append `{"leg":"deploy","exit":<exit>,"observed":"<pass|fail>"}`
    to `{manifestPath}`. Failure → STOP (see below), report.
@@ -92,11 +103,14 @@ observed, and route the defect to the normal flow (direct fix or a spec; if it e
 review, offer `/spec:escape` — `foundBy: later-spec`, `preventedBy: runtime-leg`). Never promote over a red staging.
 
 The stop still runs `node "$(spec-paths verdict)" --profile release --manifest {manifestPath}
---ledger` and quotes, verbatim, its output as the report — its `GATE_RED` word and row are the
-verdict origin, appended to `.claude/spec-runs.jsonl` the same as a successful run's. In short:
-`verdict.js --profile release --ledger` is what the STOP path quotes here (D7: a Phase 2/3
-STOP is never a second, independent verdict origin — the same call runs again in Phase 4
-below).
+--ledger --milestone {milestone} --briefs {shipped brief numbers, comma-separated}` and quotes,
+verbatim, its output as the report — its `GATE_RED` word and row are the verdict origin,
+appended to `.claude/spec-runs.jsonl` the same as a successful run's. In short: `verdict.js
+--profile release --ledger` is what the STOP path quotes here (D7: a Phase 2/3 STOP is never a
+second, independent verdict origin — the same call runs again in Phase 4 below). `--milestone`
+and `--briefs` are orchestrator-supplied identity fields (the `$ARGUMENTS` note / Phase 0 step
+2's shipped-brief list) — everything else in the row (`staging`/`e2e`/`journeys`/`substrate`/
+`production`) is derived from the manifest rows above, never passed as a flag.
 
 ## Phase 3 — Promote (explicitly confirmed, never autonomous)
 
@@ -117,11 +131,14 @@ below).
 ## Phase 4 — Record & report
 
 1. **Verdict + ledger row** — run `node "$(spec-paths verdict)" --profile release --manifest
-   {manifestPath} --ledger` (the same call the Phase 2/3 STOP path above would have quoted, had
-   one fired: `verdict.js --profile release --ledger` is one derivation with one origin on
-   every path). Print line 1 (the word — `CLEAN`, `GATE_RED`, or `UNVERIFIED`) verbatim, and
-   append exactly ONE line to `.claude/spec-runs.jsonl` — line 2, the ledger row, verbatim,
-   counts/enums/paths only, never prose:
+   {manifestPath} --ledger --milestone {milestone} --briefs {shipped brief numbers,
+   comma-separated}` (the same call the Phase 2/3 STOP path above would have quoted, had one
+   fired: `verdict.js --profile release --ledger` is one derivation with one origin on every
+   path). `--milestone`/`--briefs` are orchestrator-supplied identity fields (`$ARGUMENTS` /
+   Phase 0 step 2's shipped-brief list); `staging`/`e2e`/`journeys`/`substrate`/`production`
+   are derived from the Phase 2/3 manifest rows, never passed as flags. Print line 1 (the word
+   — `CLEAN`, `GATE_RED`, or `UNVERIFIED`) verbatim, and append exactly ONE line to
+   `.claude/spec-runs.jsonl` — line 2, the ledger row, verbatim, counts/enums/paths only, never prose:
 
    ```
    {"ts":"<YYYY-MM-DD>","stage":"release","milestone":"<tag or briefs range>","briefs":[<NN>,…],"staging":"<pass|fail>","e2e":{"passed":<n>,"failed":<n>,"skipped":<n>},"journeys":{"walked":<n>,"failed":<n>},"substrate":{"checked":<n>,"failed":<n>,"inert":<n>},"production":"<verified|skipped|failed>"}

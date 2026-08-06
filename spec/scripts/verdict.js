@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 'use strict'
 // verdict.js --manifest <path> --workflow <path> [--waived N] [--rejected N] [--fixDispatched N]
-//   [--ledger [--spec <path>] [--tier <T>] [--diff-loc N] [--iteration N]] [--profile release]
+//   [--ledger [--spec <path>] [--tier <T>] [--diff-loc N] [--iteration N] [--run-id <id>]]
+//   [--profile release [--milestone <string>] [--briefs N,N,...]]
 //
 // Incident (2026-08-05, spec review-evidence-manifest): /spec:review could print CLEAN with
 // nothing executed — a zero-findings panel return WAS the CLEAN definition, and the "CLEAN
@@ -10,10 +11,17 @@
 // the wf-review workflow return + disposition counts -> exactly one verdict word, first-match-
 // wins (spec Decisions D2/D3). --profile release runs the same shape against release.md's
 // legs (D7) — no --workflow, no dispositions, word restricted to CLEAN|GATE_RED|UNVERIFIED.
+// The --ledger row is additive to review.md/release.md's documented templates: review's
+// runId/smoke/testsSkipped/findings are derived here (D2 — smoke and testsSkipped come FROM
+// manifest rows' pinned observed formats, never asserted); release's milestone/briefs are
+// orchestrator-supplied identity flags and staging/e2e/journeys/substrate/production are
+// derived from the release legs' observed strings.
 //
 // What this deliberately does NOT do: read git/frontmatter itself (the orchestrator resolves
-// --spec/--tier/--diff-loc/--iteration and passes them in as mechanical flags), decide whether
-// to run a leg, or retry/poll anything — it only reads evidence that already exists.
+// --spec/--tier/--diff-loc/--iteration/--run-id/--milestone/--briefs and passes them in as
+// mechanical flags), decide whether to run a leg, or retry/poll anything — it only reads
+// evidence that already exists. A missing/unparseable release leg omits that row key rather
+// than failing the ledger print — STOP-path rows are partial by nature.
 //
 // Exit codes: 0 = derived CLEAN · 1 = derived non-CLEAN word (still printed on stdout line 1) ·
 // 2 = usage error, missing/unreadable --manifest or --workflow file, or a disposition
@@ -23,11 +31,13 @@ const fs = require('fs')
 
 function usage() {
   console.error('usage: verdict.js --manifest <path> [--workflow <path>] [--waived N] [--rejected N] ' +
-    '[--fixDispatched N] [--ledger [--spec <path>] [--tier <T>] [--diff-loc N] [--iteration N]] [--profile release]')
+    '[--fixDispatched N] [--ledger [--spec <path>] [--tier <T>] [--diff-loc N] [--iteration N] ' +
+    '[--run-id <id>]] [--profile release [--milestone <string>] [--briefs N,N,...]]')
 }
 
 let manifestPath = null, workflowPath = null, waived = 0, rejected = 0, fixDispatched = 0
 let ledger = false, specArg = null, tier = null, diffLoc = null, iteration = null, profile = 'review'
+let runId = null, milestone = null, briefsArg = null
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
@@ -42,6 +52,9 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--diff-loc') diffLoc = Number(argv[++i])
   else if (a === '--iteration') iteration = Number(argv[++i])
   else if (a === '--profile') profile = argv[++i]
+  else if (a === '--run-id') runId = argv[++i]
+  else if (a === '--milestone') milestone = argv[++i]
+  else if (a === '--briefs') briefsArg = argv[++i]
   else { usage(); process.exit(2) }
 }
 if (!manifestPath || (profile !== 'release' && !workflowPath)) { usage(); process.exit(2) }
@@ -126,29 +139,83 @@ function derive() {
 const word = derive()
 console.log(word)
 
+// ---- ledger-row derivation helpers (D2: observed formats are pinned, so parse failures ------
+// ---- degrade to 0/omitted rather than crashing the ledger print) --------------------------
+
+function deriveSmoke(row) {
+  if (!row) return undefined
+  if (row.exit === 0) return row.observed // pinned: "pass" | "inert"
+  if (row.exit === 4) return 'inert' // sanctioned inert-green
+  return 'fail'
+}
+
+function deriveTestsSkipped(row) {
+  const m = row && /^skips=(\d+) todos=(\d+)$/.exec(row.observed || '')
+  return m ? Number(m[1]) + Number(m[2]) : 0
+}
+
+function parseCounts(row, keys) {
+  if (!row) return undefined
+  const re = new RegExp('^' + keys.map(k => `${k}=(\\d+)`).join(' ') + '$')
+  const m = re.exec(row.observed || '')
+  if (!m) return undefined
+  const obj = {}
+  keys.forEach((k, i) => { obj[k] = Number(m[i + 1]) })
+  return obj
+}
+
+function deriveProduction(row) {
+  if (!row) return undefined
+  if (row.observed === 'verified' || row.observed === 'skipped' || row.observed === 'failed') return row.observed
+  if (row.exit === 0) return 'verified'
+  if (row.exit === 1) return 'failed'
+  return undefined
+}
+
 if (ledger) {
   const legs = [...legRows.values()].map(({ leg, exit }) => ({ leg, exit }))
   const row = { ts: new Date().toISOString() }
   if (specArg) row.spec = specArg
+  row.stage = profile === 'release' ? 'release' : 'review'
   if (tier) row.tier = tier
-  if (diffLoc !== null) row.diff = { loc: diffLoc }
-  if (iteration !== null) row.iteration = iteration
-  if (profile === 'release') {
-    row.stage = 'release'
-  } else {
-    row.stage = 'review'
-    row.scope = workflow.scope
-    row.survived = survivors.length
-    row.killed = workflow.killed
-    row.waived = waived
-    row.rejected = rejected
-    row.fixDispatched = fixDispatched
-    row.reviewerCount = workflow.reviewerCount
-    row.verify = workflow.verify
-    row.tokens = workflow.tokens
-  }
+  if (profile !== 'release' && runId) row.runId = runId
   row.verdict = word
-  row.legs = legs
+  if (profile === 'release') {
+    if (milestone) row.milestone = milestone
+    if (briefsArg) {
+      const briefs = briefsArg.split(',').map(s => Number(s.trim())).filter(Number.isFinite)
+      if (briefs.length) row.briefs = briefs
+    }
+    const deployRow = legRows.get('deploy'), readyRow = legRows.get('ready')
+    if (deployRow && readyRow) row.staging = (deployRow.exit === 0 && readyRow.exit === 0) ? 'pass' : 'fail'
+    const e2e = parseCounts(legRows.get('e2e'), ['passed', 'failed', 'skipped'])
+    if (e2e) row.e2e = e2e
+    const journeys = parseCounts(legRows.get('journeys'), ['walked', 'failed'])
+    if (journeys) row.journeys = journeys
+    const substrate = parseCounts(legRows.get('substrate'), ['checked', 'failed', 'inert'])
+    if (substrate) row.substrate = substrate
+    const production = deriveProduction(legRows.get('production'))
+    if (production) row.production = production
+    row.legs = legs
+  } else {
+    row.scope = workflow.scope
+    if (iteration !== null) row.iteration = iteration
+    if (diffLoc !== null) row.diff = { loc: diffLoc }
+    const smoke = deriveSmoke(legRows.get('smoke'))
+    if (smoke) row.smoke = smoke
+    row.testsSkipped = deriveTestsSkipped(legRows.get('gate'))
+    row.tokens = typeof workflow.tokens === 'number' ? { workflow: workflow.tokens } : workflow.tokens
+    row.legs = legs
+    row.findings = {
+      survived: survivors.length,
+      killed: Array.isArray(workflow.killed) ? workflow.killed.length : (Number(workflow.killed) || 0),
+      waived,
+      rejected,
+      fixDispatched,
+      reviewerCount: workflow.reviewerCount
+    }
+    row.verify = workflow.verify
+  }
   console.log(JSON.stringify(row))
 }
 

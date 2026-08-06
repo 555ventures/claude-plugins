@@ -118,12 +118,17 @@ for (const line of statusOut.split('\n')) {
 }
 
 const renamedFrom = new Set(renamed.map(r => r.from))
-const renamedTo = new Set(renamed.map(r => r.to))
 const excluded = [...changed].filter(p => pipelineOwned.some(g => globMatch(g, p))).sort()
 const excludedSet = new Set(excluded)
+// A rename's new path is exempt from outOfPlan only when its old path realized a plan row (or was
+// itself pipeline-owned) — an unplanned file's rename is an ordinary out-of-plan new path, not a
+// free pass; it still appears in `renamed` either way (visibility).
+const realizedRenamedTo = new Set(
+  renamed.filter(r => filePlanPaths.has(r.from) || excludedSet.has(r.from)).map(r => r.to)
+)
 
 const outOfPlan = [...changed]
-  .filter(p => !filePlanPaths.has(p) && !excludedSet.has(p) && !renamedFrom.has(p) && !renamedTo.has(p))
+  .filter(p => !filePlanPaths.has(p) && !excludedSet.has(p) && !renamedFrom.has(p) && !realizedRenamedTo.has(p))
   .sort()
 const unrealized = [...filePlanPaths].filter(p => !changed.has(p)).sort()
 

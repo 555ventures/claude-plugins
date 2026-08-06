@@ -122,3 +122,36 @@ test('AC-20260805-01-8: a planned file renamed in the diff reports the pair in r
     'the rename must be reported as one informational pair in renamed, per D3 — a routine planned-file ' +
     'rename must never produce a spurious out-of-plan + unrealized finding pair: ' + JSON.stringify(out))
 })
+
+// specs/20260805/01-review-scope-reconciliation.md review (2026-08-06): scope-reconcile.js:125-127
+// exempts BOTH sides of every rename pair from outOfPlan (`!renamedFrom.has(p) && !renamedTo.has(p)`)
+// without checking whether the rename's OLD path was ever in the File Plan. `git mv` of a file the
+// File Plan never mentioned then exits 0 with `outOfPlan: []` — invisible to review. Contracts: "a
+// rename's new path counts as in-plan when its old path was planned"; Behavior: "a rename whose old
+// path was NOT planned is just an ordinary out-of-plan new path." This test pins that an unplanned
+// rename must still surface, while remaining visible in `renamed` too.
+test("AC-20260805-01-9: an unplanned file's rename must not become invisible to review", () => {
+  const dir = tmpdir('scope-reconcile')
+  const g = gitRepo(dir)
+  const specRel = specWithPlan(dir, 'specs/20260805/01-x.md', ['src/a.js'])
+  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'src/a.js'), 'a'.repeat(200) + '\n')
+  fs.writeFileSync(path.join(dir, 'src/unplanned.js'), 'u'.repeat(200) + '\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'add planned and unplanned files')
+  const base = g('rev-parse', 'HEAD').trim()
+
+  g('mv', 'src/unplanned.js', 'src/renamed-unplanned.js')
+  g('add', '-A'); g('commit', '-q', '-m', 'rename the unplanned file')
+
+  const r = runNode(SCRIPT, ['--root', dir, '--base', base, '--spec', specRel, '--json'])
+  assert.strictEqual(r.status, 3,
+    'src/unplanned.js was never in the File Plan — renaming it must still exit 3, not ride the ' +
+    'rename exemption to a silent pass: ' + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.ok(out.outOfPlan.includes('src/renamed-unplanned.js'),
+    'the renamed path must land in outOfPlan since its old path was never planned — a reviewer ' +
+    'scanning outOfPlan alone must not miss this file: ' + JSON.stringify(out))
+  assert.ok((out.renamed || []).some(r2 => r2.from === 'src/unplanned.js' && r2.to === 'src/renamed-unplanned.js'),
+    'the pair must still appear in renamed for context even though it is also an out-of-plan finding — ' +
+    'visibility as a rename and visibility as a scope violation are not mutually exclusive: ' + JSON.stringify(out))
+})

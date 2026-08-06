@@ -1,6 +1,6 @@
 ---
 date: 2026-08-05
-status: implementing
+status: done
 open_markers: 0
 risk: T3
 area: review
@@ -141,6 +141,10 @@ wf-review args (additive): reconcilePath: string  // path to --json output; '' w
   CONTINUE TO produce its current output for `--json`, `--next`, and `--brief` (the lib
   extraction is invisible at the CLI) → tag the existing covering tests in
   tests/spec-status.test.js with this AC-ID (green pre-change; sanctioned pin exception)
+- **AC-20260805-01-9**: WHEN a file NOT in the File Plan is renamed in the diff THE SYSTEM
+  SHALL list the rename's new path in `outOfPlan` and exit 3, while still reporting the pair
+  in `renamed` (added at review 2026-08-06 — the demonstrated unplanned-rename hole)
+  → exec test in tests/review/scope-reconcile.test.js
 
 ## Assumptions (escalation triggers)
 
@@ -189,6 +193,19 @@ From the blind-spot sweep: build's Final gate gains the advisory reconcile (D9 �
 already owned this class as a prose fork with no signal), and this repo's pipeline-rules
 T3 list gains scope-reconcile.js (a new sole-derivation surface belongs on the list that
 exists for exactly that). REJECTED — nothing; every finding was accepted.
+
+Review dispositions (2026-08-06, 2 reviewers + execution verifiers, all findings
+DEMONSTRATED): FIXED — the rename exemption was unconditional (`renamedTo` exempted without
+checking the old path was planned), so `git mv` of an unplanned file exited 0 invisible to
+review; fix makes the exemption conditional (`realizedRenamedTo`), pinned by AC-9;
+fix-delta re-review CLEAN. WAIVED — review.md net-line budget (grew 317→337): the D6/D7/D8
+mechanical-finding prose is new required content and the Rationale's deletion target was
+misattributed at authoring time (the File-Plan-scoped diff prose lived in wf-review.body.js,
+whose row did shrink it); waived rather than trimming unrelated prose to hit a count.
+WAIVED — out-of-plan mechanical finding on untracked `docs/roadmap/{00-overview,01-claims-registry}.md`:
+pre-existing planning-session artifacts unrelated to this build; left untracked. Build
+deviation absorbed: `--untracked-files=all` was required because plain porcelain collapses a
+new directory to one `?? dir/` line (folded into pipeline-rules Gotchas).
 
 ## Canonical Delta
 

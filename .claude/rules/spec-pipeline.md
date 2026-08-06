@@ -160,6 +160,10 @@ incident, and carries a provenance tag: [host] (this repo/stack) or [plugin] (tr
 spec-plugin template/command/generated artifact). Writers: /spec:review close and
 /spec:escape only. /spec:doctor prunes dead citations and rolls [plugin] entries up as an
 upstream bug list. -->
+- `[host]` Plain `git status --porcelain` collapses a wholly-untracked directory to one
+  `?? dir/` line — file-level consumers need `--untracked-files=all` or every file inside a
+  new directory is invisible to them. (specs/20260805/01-review-scope-reconciliation.md —
+  scope-reconcile.js hit this on AC-4's fixture during build.)
 - `[plugin]` A spec Decision that records a class-level item "in spec/INTAKE.md, doctrine-only"
   collides with INTAKE.md's authoring contract: every row's `Pinned by` must name a failing test
   or a `pre-contract` artifact. Plan the citation (or the failing test) with the Decision, or the

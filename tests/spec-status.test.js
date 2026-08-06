@@ -43,6 +43,10 @@ const BRIEFS = {
 // AC-20260805-01-7 (sanctioned pin exception, green pre-change): --json output must stay
 // byte-identical after parseFilePlan/splitPlanCell move into spec/scripts/lib/file-plan.js —
 // the lib extraction is invisible at the CLI.
+// AC-20260805-03-7 (sanctioned pin exception, green pre-change): every test in this file already
+// exercises a host with no `.claude/spec-runs.jsonl` (the `host()` fixture never writes one) —
+// status/--next/--brief derivation must stay unchanged when the ledger is absent, before and
+// after observe-ci.js's new `stage:"observe"` read path lands (specs/20260805/03).
 test('derives unplanned / in-flight / done per doctor check 14', () => {
   const dir = host({
     briefs: BRIEFS,
@@ -346,6 +350,8 @@ test('--next makes no parallel claim when a spec has no brief stamp', () => {
 // lanes, anomalies). Exists so the renderer prints verbatim instead of restyling by hand —
 // the styling-drift sibling of the freehand-Next incident.
 
+// AC-20260805-03-7 (sanctioned pin exception, green pre-change): the dashboard render (headline
+// glyph, roadmap, --next) with an absent ledger must stay unchanged by the observation feature.
 test('bare run renders verdict, progress-bar roadmap, and collapses unplanned runs', () => {
   const dir = host({
     briefs: BRIEFS,

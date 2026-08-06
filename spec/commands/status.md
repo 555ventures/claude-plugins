@@ -21,6 +21,13 @@ judgment happens here — the script derives, you render.
 
 ## Run
 
+**First, observe:** run `node "$(spec-paths observe-ci)" --root .` — it appends this run's
+CI ground truth (green/red/none) for every done spec that's pending or currently red to the
+run ledger before the dashboard derives anything from it (D7); print its output lines
+(`📡 observed …` / `⚠️`) verbatim above the dashboard. Exit 4 (CWD inside a worktree) STOPs
+here — report the remedy (run from the repo root) and don't proceed to the dashboard on stale
+observation state. Any other non-zero exit is a hard stop too — report the error, don't guess.
+
 One bare run IS the whole dashboard (verdict line, roadmap with progress bars, the
 next-action lanes, anomalies); it embeds the `--next` derivation, so there is no second run
 (`--pretty` is accepted as a no-op — pretty is the only human render):

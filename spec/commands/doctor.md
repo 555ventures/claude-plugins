@@ -132,9 +132,14 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
       should have deleted; recommend removing it.
 
 12. **Run ledger hygiene** (only if `.claude/spec-runs.jsonl` exists) — every line parses as
-    JSON with a `stage` of `build | review | escape | release`; any line over ~600 chars is a prose leak
-    (the ledger holds counts/enums/paths only — build.md/review.md define the shape); the
-    file is tracked by git (an ignored or untracked-and-stale ledger defeats its purpose);
+    JSON with a `stage` of `build | review | escape | observe | release`; any line over ~600
+    chars is a prose leak (the ledger holds counts/enums/paths only — build.md/review.md
+    define the shape); the file is tracked by git (an ignored or untracked-and-stale ledger
+    defeats its purpose); `observe` rows are exempt from the build/review required-field
+    expectations (no `tier`/`runId` — they carry `branch`/`ci`/`sha`/`url`/`runAt` instead per
+    spec 03's D1) but the same parse/stage-enum/line-length/git-tracked hygiene checks apply
+    unchanged, and to the year archives (`.claude/spec-runs-<year>.jsonl`) exactly as to the
+    live file — an archived observe row is still a ledger row;
     `git check-attr merge -- .claude/spec-runs.jsonl` reports `union` (without it, parallel
     worktree builds conflict at merge-back on EOF appends — init sets the `.gitattributes`
     entry; recommend re-running `/spec:init` or adding it directly).

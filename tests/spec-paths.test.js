@@ -12,12 +12,17 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // scope-reconcile.js script needs a spec-paths key like every other bundled script — a missing
 // key breaks the command that resolves it silently (§ Risk Tiers, spec-paths).
 
+// AC-20260805-03: specs/20260805/03-done-unobserved-observation.md's File Plan adds
+// spec/scripts/observe-ci.js to the bundle — like every other bundled script it needs a
+// spec-paths key, or /spec:status and /spec:review's D7 observe-ci invocation resolve nothing
+// (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently").
+
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-build', 'wf-design', 'wf-review', 'wf-enforce',
     'wf-panel', 'wf-research', 'dc-extract', 'design-atlas', 'skeletons-check', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'scope-reconcile', 'verdict', 'ci-query',
-    'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
+    'observe-ci', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }

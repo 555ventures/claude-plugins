@@ -59,6 +59,14 @@ actually flip state?) is never parsed from the transcript — the caller re-deri
   first `next[]` entry with no blockers that isn't in its skip set; choosing among the
   oracle's own admissible entries is selection, not derivation. A `/spec:plan` pick runs its
   initial session on `model:"fable"`; every other action takes the default model.
+- **The oracle's action set includes `/spec:escape`** (specs/20260805/03-done-unobserved:
+  a done spec whose latest qualifying `stage:"observe"` ledger row is red tops `--next` as a
+  full oracle-shaped entry — `blockers:[]`, `parallel:false`, `parallel_reason:null`, and
+  `note` carrying the branch/sha/run-url evidence the escape session derives from; D8's
+  implication check may still record no escape). The lane dispatches it through the same
+  generic path as every other action (no special case — the entry shape carries everything
+  `pickFrom` reads) and it is excluded from the `⚡` parallel-lane fan-out on the status side,
+  never here.
 - **Halt policy:** a `failed` stage gets exactly one Fable repair pass, then the lane parks
   and asks — it never auto-advances. `➡ Next spec` adds the path to an in-memory skip set
   (cleared by restart; a restart is the operator's reset lever) and arms a wake chain that

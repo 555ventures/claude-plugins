@@ -14,7 +14,16 @@
 // stamped `brief: NN` → unplanned; any matching spec not done → in-flight; all matching
 // specs done → done. Nothing here writes; this is a viewer. Consumers: /spec:status
 // (render + --next section 2), /spec:doctor check 14 (drift report), /spec:plan Phase 0
-// (--brief dependency preflight), and the /spec:review close-out Next pointer (--next).
+// (--brief dependency preflight), the /spec:review close-out Next pointer (--next), and
+// autopilot/daemon/lane.js (--next --json — it was already consuming this, undocumented).
+//
+// A `done` spec also carries a derived observation sub-state read from `.claude/spec-runs*.jsonl`
+// (live + year archives) `stage:"observe"` rows — written by observe-ci.js, never here. Offline
+// read only (ledger absence = every done spec reports "pending"); the network leg that actually
+// queries CI lives solely in observe-ci.js (specs/20260805/03-done-unobserved-observation.md
+// D2/D6). Pending/red never blocks depends_on satisfaction; a red observation turns the
+// dashboard headline 🔴 and becomes the --next top pick as a full oracle-shaped `/spec:escape`
+// entry (D5).
 //
 // --next derives the recommended next command per open spec — the mapping that used to
 // live as renderer prose (and, worse, as end-of-run improvisation): draft → /spec:plan;
@@ -187,6 +196,48 @@ const LANDED = s => s === 'done' || s === 'implementing'
 // this derivation can't reason about — fail closed: flag it, never route it to an action.
 const KNOWN_STATUS = new Set(['draft', 'hardened', 'implementing', 'done'])
 
+// ---- .claude/spec-runs*.jsonl (live + archives) — done-spec observation sub-state (D2/D6) ----
+// Offline read only — this is a VIEW; the network leg lives solely in observe-ci.js. Absence of
+// the ledger means every done spec resolves to "pending" (fail-closed, not a bug: a host that
+// has never run observe-ci has never checked CI against any landed spec).
+function readLedgerRows(r) {
+  const dir = path.join(r, '.claude')
+  if (!fs.existsSync(dir)) return []
+  const files = fs.readdirSync(dir).filter(f => /^spec-runs.*\.jsonl$/.test(f)).sort()
+  const rows = []
+  for (const f of files) {
+    for (const line of fs.readFileSync(path.join(dir, f), 'utf8').split('\n')) {
+      if (!line.trim()) continue
+      try { rows.push(JSON.parse(line)) } catch { /* doctor check 12's job to flag malformed lines */ }
+    }
+  }
+  return rows
+}
+
+// Qualifying rows for a spec = its stage:"observe" rows appearing (by read-order position, not
+// timestamp) after its latest stage:"review" row. State = the qualifying row with the greatest
+// runAt (tie -> red wins, D2) — a union-merged worktree history reorders lines, not time.
+function observationFor(rows, specPath) {
+  let lastReviewIdx = -1
+  rows.forEach((row, i) => { if (row.stage === 'review' && row.spec === specPath) lastReviewIdx = i })
+  const qualifying = rows.filter((row, i) => i > lastReviewIdx && row.stage === 'observe' && row.spec === specPath)
+  if (!qualifying.length) return { state: 'pending', row: null }
+  const latest = qualifying.reduce((best, row) =>
+    !best || row.runAt > best.runAt || (row.runAt === best.runAt && row.ci === 'red') ? row : best, null)
+  return { state: latest.ci, row: latest }
+}
+
+const ledgerRows = readLedgerRows(root)
+// observationRows kept OUT of the spec objects (never leaks into --json specs[] beyond the
+// documented "observation" string field, Contracts) — a side map keyed by spec path instead.
+const observationRows = new Map()
+for (const s of specs) {
+  if (!DONE(s.status)) { s.observation = 'n/a'; continue }
+  const obs = observationFor(ledgerRows, s.path)
+  s.observation = obs.state
+  if (obs.row) observationRows.set(s.path, obs.row)
+}
+
 for (const b of briefs) {
   b.specs = specs.filter(s => s.brief === b.num)
   b.status = b.specs.length === 0 ? 'unplanned' : b.specs.every(s => DONE(s.status)) ? 'done' : 'in-flight'
@@ -330,6 +381,21 @@ function deriveNext() {
       rank,
     })
   }
+  // D5: a red observation is a dashboard-level alarm — it outranks every build/review/plan
+  // action and every unplanned brief as a full oracle-shaped /spec:escape entry, carrying its
+  // evidence (branch/sha/url) in `note` so the escape session derives from it, never guesses.
+  // blockers:[] (an escape is always actionable) plus parallel:false/parallel_reason:null
+  // (never part of the ⚡ fan-out — it isn't worktree build work) are pinned, not derived.
+  for (const s of specs) {
+    if (s.observation !== 'red') continue
+    const row = observationRows.get(s.path)
+    entries.push({
+      action: '/spec:escape', path: s.path, status: s.status, brief: s.brief, blockers: [],
+      parallel: false, parallelReason: null,
+      note: `CI red on ${row.branch} @${row.sha} — ${row.url}`,
+      rank: -3,
+    })
+  }
   // Closest-to-done first (review > build/design > plan), blocked entries last, then brief
   // order, then path — the first line is THE recommendation.
   entries.sort((a, b) =>
@@ -352,10 +418,15 @@ function deriveNext() {
 
   // Parallel annotation: each unblocked runner-up vs the top pick. Both need a brief to
   // make a claim; shared brief = same surfaces, a brief dependency path = declared order.
-  const top = entries[0]
+  // Escape entries never take part (top or runner-up) — they always sort first (rank -3) when
+  // present, but they carry no worktree-build parallel claim of their own (pinned above) and
+  // must never receive one derived against them either.
+  const top = entries[0] && entries[0].action === '/spec:escape'
+    ? entries.find(e => e.action !== '/spec:escape' && !e.blockers.length)
+    : entries[0]
   if (top && !top.blockers.length) {
     for (const e of entries.slice(1)) {
-      if (e.blockers.length || !e.brief || !top.brief) continue
+      if (e.blockers.length || !e.brief || !top.brief || e.action === '/spec:escape') continue
       const reason = briefSerialReason(e.brief, top.brief)
       if (reason) { e.parallel = false; e.parallelReason = reason }
       else e.parallel = true
@@ -443,7 +514,12 @@ if (json) {
   const scope = briefs.length
     ? [`${doneB} brief${doneB === 1 ? '' : 's'} done`, flightB && `${flightB} in flight`, unplB && `${unplB} unplanned`].filter(Boolean).join(' · ')
     : specs.length ? `${doneS}/${specs.length} specs done` : 'no specs or briefs found'
-  out.push(`${anomalies.length ? '🟠' : '🟢'} ${scope}${retired.length ? ` · ${retired.length} superseded` : ''} · ${anomalies.length ? `⚠️ ${anomalies.length} anomal${anomalies.length === 1 ? 'y' : 'ies'}` : 'no anomalies'}`)
+  // D5(a): a red observation is a dashboard-level alarm, not a lane detail — it overrides the
+  // ordinary 🟢/🟠 anomaly-driven glyph outright.
+  const donePending = specs.filter(s => s.observation === 'pending')
+  const doneRed = specs.filter(s => s.observation === 'red')
+  const headline = doneRed.length ? '🔴' : anomalies.length ? '🟠' : '🟢'
+  out.push(`${headline} ${scope}${retired.length ? ` · ${retired.length} superseded` : ''}${donePending.length ? ` · ⏳ ${donePending.length} unobserved` : ''} · ${anomalies.length ? `⚠️ ${anomalies.length} anomal${anomalies.length === 1 ? 'y' : 'ies'}` : 'no anomalies'}`)
 
   if (briefs.length) {
     out.push('', '🗺️ Roadmap')
@@ -499,7 +575,11 @@ if (json) {
     const warn = e => inlineKinds.has(e.path) ? `  ⚠️ ${inlineKinds.get(e.path).join(', ')}` : ''
     const cmd = e => `${e.action} @${e.path}${warn(e)}`
     const shortBlocker = b => b.replace(/^\S*\//, '').replace(/\s*\([^)]*\)$/, '').replace(/\.md$/, '')
-    const unblocked = entries.filter(e => !e.blockers.length)
+    // Escape entries (D5) rank first but are never worktree build work — they print as their
+    // own bare command line(s) ahead of everything else, excluded from the ⚡ lane fan-out.
+    const escapes = entries.filter(e => e.action === '/spec:escape')
+    escapes.forEach(e => out.push(cmd(e)))
+    const unblocked = entries.filter(e => !e.blockers.length && e.action !== '/spec:escape')
     const blocked = entries.filter(e => e.blockers.length)
     if (unblocked.length) {
       // Lane admission is pairwise, not vs-top-only: `parallel === true` proves safety against
@@ -568,6 +648,19 @@ if (json) {
         e.blockers.forEach((b, i) =>
           out.push(`   ${i === e.blockers.length - 1 ? '└─' : '├─'} ⏳ ${shortBlocker(b)}`))
       })
+    }
+  }
+
+  // D5: pending/red done specs get a per-spec line — a clean-looking dashboard must never
+  // coexist with a landed spec that has never been checked against real CI, or one CI proved
+  // broken. Red carries its evidence inline (branch/sha/url); the escape entry above already
+  // routes the action, this line is the at-a-glance record.
+  if (donePending.length || doneRed.length) {
+    out.push('', '📡 Observation')
+    for (const s of donePending) out.push(`   ${s.path}: done ⏳ unobserved`)
+    for (const s of doneRed) {
+      const row = observationRows.get(s.path)
+      out.push(`   🔴 done-but-red ${s.path} — ${row.branch}@${row.sha} (${row.url})`)
     }
   }
 

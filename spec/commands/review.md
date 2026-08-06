@@ -302,8 +302,11 @@ Then proceed directly into Phase 4 — the user does not re-invoke anything.
 
 ## Phase 4 — Merge-back (on CLEAN, after the close commit)
 
-Merges the working branch into the originating branch recorded by `/spec:build`. Skip with a
-one-line note if the review ran directly on the originating branch — nothing to merge.
+Merges the working branch into the originating branch recorded by `/spec:build`. Skip the
+merge mechanics (steps 1–6) with a one-line note if the review ran directly on the
+originating branch — nothing to merge — but still run step 7 (Observe): the session is
+already at root, and skipping observation on this class of review would mean in-place builds
+never get D7's invocation point.
 
 Run `spec-paths merge-back` once and keep the printed path — it is `{mergeBack}`, a
 deterministic helper for the git mechanics.
@@ -353,7 +356,13 @@ the build branch; `{worktree}` the worktree path (omit `--worktree` if no worktr
    cleanup. (Already-gone worktree path → it prunes and treats cleanup as done.)
 6. **Verify:** `{mergeBack} verify --root {root}` — confirms the merge landed on a clean tree
    with the worktree gone.
-7. **Never push, never force-push.** Pushing remains an explicit user action.
+7. **Observe (D7):** now that the session is relocated to root and the merge has landed, run
+   `node "$(spec-paths observe-ci)" --root {root}` once — this is what closes the loop on
+   *previously*-closed specs (the spec this session just flipped to `done` becomes pending now
+   and is observed at the next invocation, never this one). Print its output lines verbatim.
+   This is not an evidence-manifest leg: it appends to the run ledger only, never to the
+   manifest, and never feeds `verdict.js` — CLEAN was already decided in Phase 2.
+8. **Never push, never force-push.** Pushing remains an explicit user action.
 
 ## Next pointer (every CLEAN close — merge-back run or skipped)
 

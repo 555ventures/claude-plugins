@@ -416,6 +416,39 @@ test('AC-20260801-03-12: answering "Next spec" while halted on a.md picks b.md n
   await lane2.stop()
 })
 
+// AC-20260805-03-11 (sanctioned pin exception, green pre-change): specs/20260805/03-done-
+// unobserved-observation.md D5/A5 — the oracle now emits a full `/spec:escape` entry
+// (`{action,path,status,brief,blockers:[],parallel:false,parallel_reason:null,note}`) as the
+// --next top pick on a red observation. The lane treats EVERY non-/spec:plan action generically
+// (pickFrom, needsCheckpoint, runStageFor — none of them switch on `action` beyond the
+// /spec:plan check), so an escape entry must flow through the exact same path as any other pick
+// with no special case and no crash — pinning that here is what keeps a future action-specific
+// branch from silently breaking escape dispatch.
+test('AC-20260805-03-11: an oracle-returned /spec:escape entry is picked and dispatched through the ordinary generic path, no special case, no crash', async () => {
+  const stateDir = tmpdir('lane-ac11-escape')
+  writeState(stateDir, 'prax', '03')
+  const escapePick = {
+    // brief matches the lane's lastBrief (writeState above) so the checkpoint (D4, exercised
+    // separately by AC-2) doesn't gate this test — it isolates the generic-dispatch claim.
+    action: '/spec:escape', path: 'specs/20260701/01-auth-core.md', status: 'done',
+    brief: '03', blockers: [], parallel: false, parallel_reason: null,
+    note: 'CI red on main @deadbee — https://github.com/x/y/actions/runs/9',
+  }
+  const oracle = async () => ({ next: [escapePick] })
+  const { runStage, calls: runCalls } = makeFakeRunStage(async () => ({ outcome: 'done', resultText: 'escaped', costUsd: 0 }))
+  const adapter = makeFakeAdapter()
+  const lane = createLane({ cfg: makeCfg(), adapter, runStage, oracle, stateDir, log: () => {} })
+  lane.start()
+  await flush()
+  assert.strictEqual(runCalls.length, 1,
+    'the escape entry must be picked and dispatched — a crash or a silent skip here means the lane cannot act on the highest-priority oracle pick')
+  assert.strictEqual(runCalls[0].prompt, '/spec:escape specs/20260701/01-auth-core.md',
+    'the prompt must be the generic "<action> <path>" shape (Behavior) — no action-specific prompt formatting for escape entries')
+  assert.strictEqual(runCalls[0].model, undefined,
+    'only /spec:plan carries model:"fable" (Behavior line 93) — an escape entry must not silently pick up that branch')
+  await lane.stop()
+})
+
 test('AC-20260801-03-13: an oracle that throws (non-zero exit / unparseable JSON) narrates 🚫 once, enters backoff, and retries on the D6 schedule without crashing the lane', async () => {
   const stateDir = tmpdir('lane-ac13')
   writeState(stateDir, 'prax', null)

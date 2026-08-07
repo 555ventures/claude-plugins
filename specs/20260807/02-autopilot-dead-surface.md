@@ -1,6 +1,6 @@
 ---
 date: 2026-08-07
-status: implementing
+status: done
 open_markers: 0
 risk: T2
 area: autopilot
@@ -134,6 +134,11 @@ deletion. Fragile spots for the worker: the `handleMessage` tail must keep the
 `otherAwaitQIdx` completion path intact (delete only the `textCb` dispatch), and
 checkpoint.js's remaining requires must be re-checked after the deletion (spawn stays for
 `startSurfaces`; `os`/`fs` may not).
+
+**Review waiver (2026-08-07):** scope reconciliation flagged `docs/roadmap/00-overview.md` and
+`docs/roadmap/01-claims-registry.md` as out-of-plan — waived by the user as pre-existing
+untracked planning notes (same class waived in the 01-observation-red-alarm review); they
+belong to a future spec, not this deletion.
 
 ## Canonical Delta
 

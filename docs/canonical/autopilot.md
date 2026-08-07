@@ -10,7 +10,11 @@ All messaging goes through the adapter seam in `autopilot/daemon/telegram.js`. T
 speaks Telegram directly, so a later Slack adapter can implement the same surface (BRIEF #10).
 
 Platform-neutral interface:
-`start · stop · send · sendPhoto · askButtons · onText · pendingAsk · cancelAsk`
+`start · stop · send · askButtons · pendingAsk · cancelAsk`
+
+The v0.4 screenshot chain (`sendPhoto` + per-lane `screenshotCommand`) and the `onText`
+free-text callback were deleted in 0.5.0 as zero-consumer surface (2026-08-07 audit);
+free-text "Other…" replies are handled adapter-internally.
 
 - `askButtons(project, ask)` takes the SDK's `AskUserQuestionInput.questions` shape verbatim
   (questions 1–4, options 2–4, `{label, description}`) and resolves
@@ -88,7 +92,7 @@ actually flip state?) is never parsed from the transcript — the caller re-deri
 
 ## Conventions
 
-- Zero dependencies: global `fetch`/`FormData`/`Blob`/`AbortController` and Node built-ins only.
+- Zero dependencies: global `fetch`/`AbortController` and Node built-ins only.
   Transports are injected (`fetchImpl`) rather than mocked by module interception.
 - `autopilot/package.json` is the repo's one sanctioned dependency boundary — `spec/` scripts and
   `tests/` stay zero-dep. The SDK import lives only in `autopilot/daemon/sdk.js`, loaded lazily,

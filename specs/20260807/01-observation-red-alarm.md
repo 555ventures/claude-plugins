@@ -1,6 +1,6 @@
 ---
 date: 2026-08-07
-status: implementing
+status: done
 open_markers: 0
 risk: T3                 # spec-status.js is a listed T3 trigger (sole "what's next" derivation)
 area: status
@@ -186,6 +186,14 @@ Noted, no change — `origin/HEAD` is unset on init-then-push repos (refuter-exe
 current-branch fallback already covers it. The transient-failure ⚠️ line is deleted
 deliberately (D3): a nag on every offline invocation is the noise class this spec retires;
 retry is free at the next invocation.
+
+Review dispositions (2026-08-07, runId wf_783bfca9-dbf): the mechanical out-of-plan finding
+(`docs/roadmap/00-overview.md`, `docs/roadmap/01-claims-registry.md`) was **waived** by the
+user — pre-existing roadmap planning briefs from an earlier session today, untracked, not
+build output; they ship on their own timeline and are excluded from this close commit.
+Build deviation absorbed: the folded-anomaly summary line's trailing clause "tagged ⚠️
+above" was changed to "below" — a plain directional-accuracy fix after D1 moved the
+anomalies section above 🎯 Next; no AC or test pinned the word.
 
 Render inversion is deliberately a pure reorder: no line format changes except deleting the
 ⏳ segment and unobserved lines, so existing content pins survive and only order pins move.

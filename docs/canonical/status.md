@@ -1,9 +1,10 @@
 # status — canonical
 
-`done` carries a derived observation sub-state from `stage:"observe"` ledger rows (written
-by `observe-ci.js` — root-only, ancestry-validated against the spec's close commit,
-transient failures never resolve): pending until a containing run's outcome is recorded;
-the latest-`runAt` qualifying row is the state; red turns the dashboard headline 🔴 and
-outranks all other `--next` picks as an oracle-shaped `/spec:escape` entry carrying
-branch/sha/url; `ci:"none"` completes observation only on structurally CI-less hosts.
-(specs/20260805/03-done-unobserved-observation.md)
+Observation is a red alarm, not a certification (specs/20260807/01): `observe-ci.js` checks
+the default branch's latest completed run once per invocation, attributes a red run to the
+latest-closing done spec whose close commit it contains (ancestry), and appends one red row;
+a later green run appends a clearing row. Everything else — unavailable CI, in-progress
+runs, healthy branches — is silent and writes nothing. `spec-status.js` derives
+`observation: n/a|ok|red`; only red renders (🔴 headline, one 📡 line, `/spec:escape` tops
+--next as the oracle-shaped entry). The `--pretty` dashboard is bottom-anchored: Roadmap and
+detail first, 🎯 Next and the headline verdict are the final lines.

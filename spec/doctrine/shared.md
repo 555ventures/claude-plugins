@@ -958,5 +958,5 @@ following non-blank line, so rewording can never strand it. The claim bar itself
 phrasings count as blocking) is a closed pattern list living as data in
 `spec/scripts/claims-lint.js`, never restated here. That script (`spec-paths claims-lint`) is
 the sole derivation of the claims inventory and the corpus's dual line-count/orphan ratchet
-against `spec/doctrine/claims-baseline.json` — every claim marker MUST <!-- enforcedBy: spec/scripts/claims-lint.js --> resolve or be
-sanctioned.
+against `spec/doctrine/claims-baseline.json` — every claim marker
+MUST resolve or be sanctioned. <!-- enforcedBy: spec/scripts/claims-lint.js -->

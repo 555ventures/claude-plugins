@@ -187,8 +187,9 @@ for (const rel of corpusFiles) {
     })
   }
   if (result.orphans.length > base.orphans) {
+    const surplus = result.orphans.length - base.orphans
     for (const o of result.orphans) {
-      findings.push({ file: rel, line: o.line, kind: 'orphan-claim', detail: `unmarked blocking claim with no enforcedBy/unenforced marker; run ${REMEDY} once every new claim above the baselined count carries a marker` })
+      findings.push({ file: rel, line: o.line, kind: 'orphan-claim', detail: `unmarked blocking claim (file has ${result.orphans.length} unmarked claims; baseline accepts ${base.orphans} — surplus ${surplus}); run ${REMEDY} once every new claim above the baselined count carries a marker` })
     }
   }
 }

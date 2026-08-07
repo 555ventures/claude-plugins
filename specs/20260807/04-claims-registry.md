@@ -1,6 +1,6 @@
 ---
 date: 2026-08-07
-status: implementing
+status: done
 open_markers: 0
 risk: T3
 area: doctrine-governance
@@ -216,6 +216,21 @@ comparing against the commands+doctrine subtotal, a spuriously stricter bar that
 a false STOP). (3) The flagged silent-drift hole — other specs' scoped gates never run
 tests/claims/ and full npm test is already red with sanctioned pins — is closed in-spec by
 D11's mechanical Review Checks bullet rather than deferred to a follow-up brief.
+
+Review dispositions (2026-08-07, two iterations): iteration 1 (full, 2 reviewers) surfaced
+three survivors, all dispatched as fixes — the shared.md exemplar marker moved to satisfy
+D1's placement grammar on the same physical line as its bar keyword (the scanner's per-line
+association makes wrapped-sentence placement an orphan; the rewrap kept the file at 962
+lines), and claims-lint's orphan-claim `detail` gained count context
+(`file has A unmarked claims; baseline accepts B — surplus S`, pinned by a new
+tests/claims test) per the user's "label as context" ruling. The out-of-plan
+`docs/roadmap/` files were resolved by committing them (user ruling — ends the
+waive-per-review recurrence). Iteration 2 (fix-delta) re-raised the orphan over-reporting
+finding with the slice-to-surplus remedy; REJECTED 2026-08-07 (medium + its soft
+duplicate): the user explicitly declined slicing in iteration 1 — the baseline stores
+counts, not line identities, so any per-line slice blames arbitrary lines; listing every
+unmarked line with count context is the sanctioned semantics, and the Behavior section's
+"in excess of the baselined count" defines the ratchet trigger, not a finding-list slice.
 
 ## Canonical Delta
 

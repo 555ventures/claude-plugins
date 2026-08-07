@@ -64,6 +64,30 @@ test('AC-20260807-04-2: --check fails and --json reports an orphan-claim finding
   assert.strictEqual(finding.line, 3, 'orphan-claim finding must cite the exact line so review does not have to re-scan the file')
 })
 
+// specs/20260807/04-claims-registry.md review 2026-08-07 (demonstrated over-reporting
+// finding): an orphan-claim finding's `detail` originally read a fixed string with no count
+// context, so a file already carrying baselined (accepted-debt) orphans reported its NEW
+// surplus claims indistinguishably from its old, already-sanctioned ones — a red run gave no
+// way to tell "this is new" from "this was already accepted" without cross-referencing the
+// baseline JSON by hand. Pins the fixed shape: `detail` must state the file's actual unmarked
+// count, the baselined allowance, and the surplus, so triage reads the number directly.
+test('AC-20260807-04-2 (review 2026-08-07): an orphan-claim finding on a file with baselined orphans states unmarked/baseline/surplus counts in its detail, not just a bare violation string', () => {
+  const dir = host({
+    'spec/commands/surplus.md':
+      '# Bar\n\nX is a **hard** finding.\nY is a **hard** finding too.\nZ is a **hard** finding as well.\n',
+  }, { files: { 'spec/commands/surplus.md': { lines: 5, orphans: 2 } }, totalLines: 5 })
+
+  const jsonRun = runNode(SCRIPT, ['--root', dir, '--json'])
+  const out = JSON.parse(jsonRun.stdout)
+  const findings = out.findings.filter(f => f.kind === 'orphan-claim' && f.file === 'spec/commands/surplus.md')
+  assert.ok(findings.length > 0,
+    'no orphan-claim finding emitted for a file with 3 unmarked bar-matching claims against a baseline of 2 — the 1-claim surplus would ship unaudited')
+  for (const finding of findings) {
+    assert.match(finding.detail, /baseline accepts 2 — surplus 1/,
+      `orphan-claim detail "${finding.detail}" does not state the baseline/surplus counts — a triager reading a red run cannot tell this file's already-accepted 2 orphans from its 1 new one without opening claims-baseline.json by hand`)
+  }
+})
+
 test('AC-20260807-04-3: --check rejects an unenforced reason under 20 characters and accepts one at or above the bar', () => {
   const shortDir = host({
     'spec/commands/baz.md': '# Baz\n\nX is a **hard** finding.\n<!-- unenforced: too vague -->\n',

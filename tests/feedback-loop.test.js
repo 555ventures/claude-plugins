@@ -34,12 +34,29 @@ test('brief template: version stamp, evidence bar, and intake stamp shape are pr
 test('INTAKE.md: states the failing-test contract; every row is complete and its pin resolves', () => {
   const ledger = read('INTAKE.md')
   assert.match(ledger, /failing test first/i)
+  // Resolve columns by header name (D1, spec 20260805/04 A2 remedy) rather than a hard-coded
+  // count — a future appended column (e.g. `Fix`) must not break this pin the way the 7th
+  // column did here. The header row is the single source of truth for column count and order.
+  const headerLine = ledger.split('\n').find(l => /^\| ID \|/.test(l))
+  assert.ok(headerLine, 'INTAKE.md must have an `| ID | ... |` header row for column resolution')
+  const headers = headerLine.split('|').map(s => s.trim()).filter(Boolean)
+  const idxOf = (name) => {
+    const i = headers.indexOf(name)
+    assert.ok(i !== -1, `INTAKE.md header row is missing the required "${name}" column`)
+    return i
+  }
+  const idIdx = idxOf('ID')
+  const pinnedByIdx = idxOf('Pinned by')
+  const fixedInIdx = idxOf('Fixed in')
   const rows = ledger.split('\n').filter(l => /^\| UPWELL-|^\| [A-Z]+-\d{8}-\d{2} \|/.test(l))
   assert.ok(rows.length >= 12, `expected the seeded UpWell rows, got ${rows.length}`)
   for (const row of rows) {
     const cols = row.split('|').map(s => s.trim()).filter(Boolean)
-    assert.strictEqual(cols.length, 6, `row needs all 6 columns: ${row}`)
-    const [id, , , , pinnedBy, fixedIn] = cols
+    assert.strictEqual(cols.length, headers.length,
+      `row has ${cols.length} columns but the header defines ${headers.length} (${headers.join(', ')}); an incomplete row breaks every consumer that indexes by header: ${row}`)
+    const id = cols[idIdx]
+    const pinnedBy = cols[pinnedByIdx]
+    const fixedIn = cols[fixedInIdx]
     assert.match(id, /^[A-Z]+-\d{8}-\d{2}$/, `unstable finding id: ${id}`)
     assert.ok(/^\d+\.\d+\.\d+$/.test(fixedIn) || fixedIn === 'open',
       `Fixed in must be a version or open: ${fixedIn}`)

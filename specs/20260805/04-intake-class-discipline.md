@@ -1,6 +1,6 @@
 ---
 date: 2026-08-05
-status: implementing
+status: done
 open_markers: 0
 risk: T2
 area: intake
@@ -123,6 +123,18 @@ vocabulary (new D3g + AC-6 close the respelling dodge). REJECTED — "move the t
 pipeline-authored tests to `tests/<scope>/` so scoped gate runs stay pin-free; the flat
 convention governs hand-authored plugin pins, and the refuter itself verified no functional
 break either way.
+
+Review dispositions (2026-08-07, iteration 1 FINDINGS → iteration 2 CLEAN): FIXED —
+`tests/feedback-loop.test.js:41` hard-coded a 6-column row assertion against the intake
+table and went red when D1 appended the `Fix` column; A2 was in fact false (its grep was
+scoped to `spec/` and missed this consumer under `tests/`), so A2's own remedy was applied:
+the test now resolves `ID`/`Pinned by`/`Fixed in` by header name and validates row
+completeness against the header's column count. WAIVED — scope-reconcile's out-of-plan
+finding (14 files): 12 fixtures under `tests/fixtures/intake-discipline/` are explicitly
+called for by AC-1's text ("fixture INTAKE variants under tests/fixtures/") — a File Plan
+listing gap, not rogue code; the 2-line ID rename in `tests/gate-activation-probe.test.js`
+is sanctioned verbatim by D6; the 2 untracked `docs/roadmap/` files predate this build and
+were never part of its diff.
 
 ## Canonical Delta
 

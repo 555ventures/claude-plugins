@@ -97,6 +97,18 @@ test('doctor aggregates escapes: contradicted CLEANs and killedMatch flags', () 
   assert.match(doctor, /zero escape rows exist/i)
 })
 
+test('AC-20260805-03-D1: doctor check 12 pins the full five-value ledger stage enum, not a substring that stays green if observe is silently dropped', () => {
+  // specs/20260805/03-done-unobserved-observation.md D1 (2026-08-06 review): D1 extended
+  // doctor.md's ledger stage enum to add `observe` (build | review | escape | observe | release).
+  // The prior pin here (`/build \| review \| escape/`) is a substring match that would stay
+  // green even if `observe` were silently dropped from the enum — it does not prove `observe`
+  // is present. This test pins the complete five-value enum verbatim.
+  const doctor = read('commands/doctor.md')
+  assert.match(doctor, /build \| review \| escape \| observe \| release/,
+    'doctor.md must document the full five-value ledger stage enum including `observe` — a ' +
+    'substring match on `build | review | escape` alone would not catch `observe` being dropped')
+})
+
 test('no per-spec ledger files: nothing instructs writing runs files under specs/', () => {
   for (const f of fs.readdirSync(path.join(SPEC, 'commands'))) {
     if (!f.endsWith('.md')) continue

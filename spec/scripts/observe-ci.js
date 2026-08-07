@@ -23,6 +23,7 @@
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
+const { readLedgerRows, qualifyingObservation } = require('./lib/observation')
 
 let root = '.'
 let json = false
@@ -83,32 +84,12 @@ for (const file of walkMd(path.join(root, 'specs'))) {
 }
 
 // ---- ledger reads (live + archives, filename order then line order — D2/A6) ----------------
-
-function readLedgerRows(r) {
-  const dir = path.join(r, '.claude')
-  if (!fs.existsSync(dir)) return []
-  const files = fs.readdirSync(dir).filter(f => /^spec-runs.*\.jsonl$/.test(f)).sort()
-  const rows = []
-  for (const f of files) {
-    for (const line of fs.readFileSync(path.join(dir, f), 'utf8').split('\n')) {
-      if (!line.trim()) continue
-      try { rows.push(JSON.parse(line)) } catch { /* doctor's job to flag malformed lines */ }
-    }
-  }
-  return rows
-}
-
-// Qualifying rows for a spec = its stage:"observe" rows appearing (by read-order position, not
-// timestamp) after its latest stage:"review" row. State = the qualifying row with the greatest
-// runAt (tie -> red wins). Pending = zero qualifying rows.
+// readLedgerRows/qualifyingObservation (D2 algorithm) now live in lib/observation.js — shared
+// with spec-status.js instead of a second derivation drifting apart (2026-08-06 review of
+// specs/20260805/03-done-unobserved-observation.md). CLI behavior here is byte-identical.
 function observationState(rows, specPath) {
-  let lastReviewIdx = -1
-  rows.forEach((r, i) => { if (r.stage === 'review' && r.spec === specPath) lastReviewIdx = i })
-  const qualifying = rows.filter((r, i) => i > lastReviewIdx && r.stage === 'observe' && r.spec === specPath)
-  if (!qualifying.length) return { pending: true, latest: null }
-  const latest = qualifying.reduce((best, r) =>
-    !best || r.runAt > best.runAt || (r.runAt === best.runAt && r.ci === 'red') ? r : best, null)
-  return { pending: false, latest }
+  const latest = qualifyingObservation(rows, specPath)
+  return latest ? { pending: false, latest } : { pending: true, latest: null }
 }
 
 const ledgerRows = readLedgerRows(root)

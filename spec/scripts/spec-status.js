@@ -47,6 +47,7 @@
 const fs = require('fs')
 const path = require('path')
 const { parseFilePlan } = require('./lib/file-plan')
+const { readLedgerRows, qualifyingObservation } = require('./lib/observation')
 
 // Brief ids are NN plus an optional letter suffix — ad-hoc briefs slot between neighbors
 // as 04a, 04b, … Normalize any spelling (4b, 04B, 04b-auth) to the canonical zero-padded
@@ -200,31 +201,12 @@ const KNOWN_STATUS = new Set(['draft', 'hardened', 'implementing', 'done'])
 // Offline read only — this is a VIEW; the network leg lives solely in observe-ci.js. Absence of
 // the ledger means every done spec resolves to "pending" (fail-closed, not a bug: a host that
 // has never run observe-ci has never checked CI against any landed spec).
-function readLedgerRows(r) {
-  const dir = path.join(r, '.claude')
-  if (!fs.existsSync(dir)) return []
-  const files = fs.readdirSync(dir).filter(f => /^spec-runs.*\.jsonl$/.test(f)).sort()
-  const rows = []
-  for (const f of files) {
-    for (const line of fs.readFileSync(path.join(dir, f), 'utf8').split('\n')) {
-      if (!line.trim()) continue
-      try { rows.push(JSON.parse(line)) } catch { /* doctor check 12's job to flag malformed lines */ }
-    }
-  }
-  return rows
-}
-
-// Qualifying rows for a spec = its stage:"observe" rows appearing (by read-order position, not
-// timestamp) after its latest stage:"review" row. State = the qualifying row with the greatest
-// runAt (tie -> red wins, D2) — a union-merged worktree history reorders lines, not time.
+// readLedgerRows/qualifyingObservation (D2 algorithm) now live in lib/observation.js — shared
+// with observe-ci.js instead of a second derivation drifting apart (2026-08-06 review of
+// specs/20260805/03-done-unobserved-observation.md). CLI behavior here is byte-identical.
 function observationFor(rows, specPath) {
-  let lastReviewIdx = -1
-  rows.forEach((row, i) => { if (row.stage === 'review' && row.spec === specPath) lastReviewIdx = i })
-  const qualifying = rows.filter((row, i) => i > lastReviewIdx && row.stage === 'observe' && row.spec === specPath)
-  if (!qualifying.length) return { state: 'pending', row: null }
-  const latest = qualifying.reduce((best, row) =>
-    !best || row.runAt > best.runAt || (row.runAt === best.runAt && row.ci === 'red') ? row : best, null)
-  return { state: latest.ci, row: latest }
+  const row = qualifyingObservation(rows, specPath)
+  return row ? { state: row.ci, row } : { state: 'pending', row: null }
 }
 
 const ledgerRows = readLedgerRows(root)

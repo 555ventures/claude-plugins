@@ -1,6 +1,6 @@
 ---
 date: 2026-08-05
-status: implementing
+status: done
 open_markers: 0
 risk: T3
 area: status
@@ -192,6 +192,14 @@ escapes (D8), `--next` oracle entry shape + lane crash risk (D5, AC-11), headlin
 wording (A2). REJECTED — "distinguish which spec on a shared branch caused the red": the
 observation layer cannot attribute blame and must not guess — attribution is exactly the
 triage D8 routes to the escape session, which reads the failing run with full context.
+
+Review dispositions (2026-08-06, iteration 1 FINDINGS → iteration 2 CLEAN): WAIVED —
+out-of-plan `docs/roadmap/00-overview.md` + `01-claims-registry.md` (pre-existing untracked
+roadmap work stream, not this spec's scope; same class waived in the two prior reviews).
+FIXED — D2's qualifying-row algorithm existed in two copies (spec-status.js +
+observe-ci.js); extracted to `spec/scripts/lib/observation.js`, both scripts now require it.
+FIXED — doctor check 12's `observe` enum addition was unpinned; full five-value enum regex
+pin added to tests/run-ledger.test.js per the AC-20260805-02-8 precedent.
 
 ## Canonical Delta
 

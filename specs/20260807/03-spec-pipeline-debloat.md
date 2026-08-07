@@ -1,6 +1,6 @@
 ---
 date: 2026-08-07
-status: implementing
+status: done
 open_markers: 0
 risk: T2
 area: spec-pipeline
@@ -106,6 +106,10 @@ sentence where enforcement happens (§ Review Checks) — the Worker Rules and a
 audiences follow pointers, reviewers need the letter. Fragile spot: the two citation edits
 must match the `## Review Checks` heading byte-for-byte (`§` citation rule) or `shared-for`
 filtering silently drops nothing here, but the review check for mismatched citations fires.
+
+Review waiver (2026-08-07): out-of-plan `docs/roadmap/00-overview.md` +
+`docs/roadmap/01-claims-registry.md` waived — pre-existing untracked planning notes,
+unrelated to this diff; same waiver as the 01/02 reviews of 2026-08-07.
 
 ## Canonical Delta
 

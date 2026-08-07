@@ -54,8 +54,11 @@ function makeFakeRunStage(impl) {
   return { runStage, calls }
 }
 
+// spec: specs/20260807/02-autopilot-dead-surface.md D1/D2 — the fake adapter drops sendPhoto
+// so it matches the post-deletion six-method adapter contract; no lane test ever exercised
+// the screenshot leg (it's gated on cfg.screenshotCommand, which no fixture here sets).
 function makeFakeAdapter() {
-  const calls = { send: [], askButtons: [], cancelAsk: [], sendPhoto: [] }
+  const calls = { send: [], askButtons: [], cancelAsk: [] }
   return {
     calls,
     send: async (project, text) => { calls.send.push({ project, text }) },
@@ -63,7 +66,6 @@ function makeFakeAdapter() {
       calls.askButtons.push({ project, ask, resolve, reject })
     }),
     cancelAsk: async (project) => { calls.cancelAsk.push({ project }) },
-    sendPhoto: async (project, photo) => { calls.sendPhoto.push({ project, photo }) },
   }
 }
 

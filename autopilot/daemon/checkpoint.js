@@ -17,8 +17,6 @@
 
 const { spawn } = require('node:child_process')
 const fs = require('node:fs')
-const os = require('node:os')
-const path = require('node:path')
 
 const URL_TIMEOUT_MS = 60000
 const STOP_POLL_MS = 1000
@@ -134,45 +132,4 @@ async function startSurfaces({ devServerCommand, tunnelCommand, cwd, log }) {
   }
 }
 
-// screenshotIfConfigured(opts) — D12: optional per-lane `screenshotCommand` template with
-// `{url}`/`{out}` placeholders. Runs the command against a scratch output path; on a zero exit
-// it reads the produced file and relays it via `adapter.sendPhoto`; on a non-zero exit (or a
-// missing/unset command) it does nothing and never throws — the checkpoint message stays
-// URL-only, per D12's "unset or failing -> URL-only, never blocks".
-async function screenshotIfConfigured({ screenshotCommand, url, project, adapter, cwd, log }) {
-  const logFn = log || (() => {})
-  if (!screenshotCommand) return
-
-  const outPath = path.join(os.tmpdir(), `autopilot-checkpoint-${process.pid}-${Date.now()}.png`)
-  const command = screenshotCommand
-    .split('{url}').join(JSON.stringify(url))
-    .split('{out}').join(JSON.stringify(outPath))
-
-  const exitCode = await new Promise((resolve) => {
-    const child = spawn(command, { cwd, shell: true, stdio: ['ignore', 'ignore', 'pipe'] })
-    child.on('error', (err) => {
-      logFn(`checkpoint: screenshot command failed to start — ${err.message}`)
-      resolve(1)
-    })
-    child.on('exit', (code) => resolve(code === null ? 1 : code))
-  })
-
-  if (exitCode !== 0) {
-    logFn(`checkpoint: screenshot command exited ${exitCode} — posting URL-only message`)
-    return
-  }
-
-  let buffer
-  try {
-    buffer = fs.readFileSync(outPath)
-  } catch (err) {
-    logFn(`checkpoint: screenshot output missing at ${outPath} — ${err.message}`)
-    return
-  } finally {
-    fs.unlink(outPath, () => {})
-  }
-
-  await adapter.sendPhoto(project, { buffer, filename: 'checkpoint.png' })
-}
-
-module.exports = { startSurfaces, screenshotIfConfigured }
+module.exports = { startSurfaces }

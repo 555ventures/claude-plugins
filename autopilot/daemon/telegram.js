@@ -7,7 +7,7 @@
 // because the daemon must never speak Telegram directly (BRIEF #10: thin adapter so a Slack
 // adapter can share the same platform-neutral interface later).
 //
-// Zero dependencies: global fetch/AbortController/FormData/Blob (Node built-ins) only;
+// Zero dependencies: global fetch/AbortController (Node built-ins) only;
 // fetchImpl is injectable so tests never touch the network (D1). All wire calls funnel
 // through one api() helper (Assumption A1) so a Telegram surface drift has one fix point.
 //
@@ -111,17 +111,13 @@ function createTelegramAdapter(opts) {
   let currentAbort = null
   let nextPromptKey = 1
   const pendingByProject = new Map()
-  let textCb = null
 
   // Every Telegram wire call funnels through here (Assumption A1): 429 honors
   // parameters.retry_after and retries the identical call uncapped; other 5xx and network
   // failures use exponential backoff (base 1s, cap 60s) capped at MAX_RETRIES (D6).
   async function api(method, body, callOpts = {}) {
     const url = `${TELEGRAM_API}/bot${botToken}/${method}`
-    const isForm = typeof FormData !== 'undefined' && body instanceof FormData
-    const init = isForm
-      ? { method: 'POST', body, signal: callOpts.signal }
-      : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}), signal: callOpts.signal }
+    const init = { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}), signal: callOpts.signal }
     let attempt = 0
     for (;;) {
       let res
@@ -186,17 +182,6 @@ function createTelegramAdapter(opts) {
     return { messageIds }
   }
 
-  async function sendPhoto(project, { buffer, filename, caption }) {
-    const threadId = requireProject(project)
-    const form = new FormData()
-    form.append('chat_id', String(supergroupId))
-    form.append('message_thread_id', String(threadId))
-    if (caption) form.append('caption', caption)
-    form.append('photo', new Blob([buffer]), filename)
-    const data = await api('sendPhoto', form)
-    return { messageId: data.result && data.result.message_id }
-  }
-
   async function askButtons(project, ask) {
     const threadId = requireProject(project)
     const promptKey = nextPromptKey++
@@ -259,10 +244,6 @@ function createTelegramAdapter(opts) {
     }
   }
 
-  function onText(cb) {
-    textCb = cb
-  }
-
   async function handleCallbackQuery(cq) {
     const userId = cq.from && cq.from.id
     if (!allowedUserIds.includes(userId)) {
@@ -320,13 +301,6 @@ function createTelegramAdapter(opts) {
       state.otherAwaitQIdx = null
       completeQuestion(project, state, qIdx, msg.text)
       return
-    }
-    if (textCb) {
-      try {
-        textCb({ project, text: msg.text, userId })
-      } catch (err) {
-        console.error('telegram: onText callback threw, continuing poll loop', err.message)
-      }
     }
   }
 
@@ -386,7 +360,7 @@ function createTelegramAdapter(opts) {
     loopPromise = null
   }
 
-  return { start, stop, send, sendPhoto, askButtons, onText, pendingAsk, cancelAsk }
+  return { start, stop, send, askButtons, pendingAsk, cancelAsk }
 }
 
 module.exports = { createTelegramAdapter }

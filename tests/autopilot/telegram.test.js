@@ -7,6 +7,14 @@ const assert = require('node:assert')
 // routed through an injected fetchImpl (D1); no real transport, no SDK imports. Tests are
 // written against the Contracts/Behavior/AC sections only — the module does not exist yet,
 // so every test here fails at require() time until autopilot/daemon/telegram.js lands.
+//
+// spec: specs/20260807/02-autopilot-dead-surface.md — dead-surface deletion (D2/D3). AC-1
+// pins the post-deletion six-method surface (fails now: sendPhoto/onText still present).
+// AC-2 and AC-5 pin the otherAwaitQIdx completion/drop paths that the spec's own Rationale/D3
+// and Assumption A4 call out as "byte-identical to today's behavior" — like AC-20260801-01's
+// SHALL-CONTINUE-TO pins elsewhere in this repo, these are authored fresh and are expected
+// green against pre-change code; they guard the D3 deletion from regressing the surviving
+// free-text flow, not from introducing it.
 const { createTelegramAdapter } = require('../../autopilot/daemon/telegram.js')
 
 const BOT_TOKEN = 'TEST:TOKEN'
@@ -250,6 +258,62 @@ test('AC-20260801-01-8: stop() aborts an in-flight long-poll, resolves, and no t
   const countAtStop = calls.length
   await flush()
   assert.strictEqual(calls.length, countAtStop, 'a transport call after stop() resolved means the poll loop kept running behind stop()\'s back')
+})
+
+test('AC-20260807-02-1: createTelegramAdapter returns exactly six methods (askButtons, cancelAsk, pendingAsk, send, start, stop) with no screenshot or free-text-callback surface left', () => {
+  const { fetchImpl } = makeFetch()
+  const adapter = createTelegramAdapter({
+    botToken: BOT_TOKEN, supergroupId: SUPERGROUP_ID, topicMap: TOPIC_MAP, allowedUserIds: ALLOWED_USER_IDS, fetchImpl,
+  })
+  assert.deepStrictEqual(Object.keys(adapter).sort(), ['askButtons', 'cancelAsk', 'pendingAsk', 'send', 'start', 'stop'],
+    'AC-20260807-02-1: the adapter must expose exactly these six methods — a surviving sendPhoto or onText key means D1/D3\'s deleted dead surface is still reachable by callers')
+})
+
+test('AC-20260807-02-2: tapping Other… then sending a topic message resolves that question with the message\'s literal text, unaffected by the onText deletion', async () => {
+  const { fetchImpl, calls, queue } = makeFetch()
+  const adapter = createTelegramAdapter({
+    botToken: BOT_TOKEN, supergroupId: SUPERGROUP_ID, topicMap: TOPIC_MAP, allowedUserIds: ALLOWED_USER_IDS, fetchImpl,
+  })
+  adapter.start()
+  const askPromise = adapter.askButtons('prax', {
+    questions: [{ question: 'Which storage?', options: [{ label: 'SQLite' }, { label: 'Postgres' }], multiSelect: false }],
+  })
+  await flush()
+  queue('getUpdates', { status: 200, json: { ok: true, result: [
+    { update_id: 500, callback_query: { id: 'cb-other', from: { id: ALLOWED_USER_IDS[0] }, data: 'o:1:0', message: { message_thread_id: TOPIC_MAP.prax } } },
+  ] } })
+  await flush()
+  queue('getUpdates', { status: 200, json: { ok: true, result: [
+    { update_id: 501, message: { message_id: 9, chat: { id: SUPERGROUP_ID }, message_thread_id: TOPIC_MAP.prax, from: { id: ALLOWED_USER_IDS[0] }, text: 'MySQL' } },
+  ] } })
+  await flush()
+  const answers = await askPromise
+  assert.deepStrictEqual(answers, { answers: { 'Which storage?': 'MySQL' } },
+    'AC-20260807-02-2: the next topic message after an Other… tap must complete the question with its literal text — the otherAwaitQIdx path is adapter-internal and must survive the onText deletion untouched')
+  const answered = calls.filter(c => c.method === 'answerCallbackQuery').some(c => c.body.callback_query_id === 'cb-other')
+  assert.ok(answered, 'AC-20260807-02-2: the Other… tap must still be acknowledged (answerCallbackQuery) or the tapper\'s client spins forever')
+  await adapter.stop()
+})
+
+test('AC-20260807-02-5: a topic message from an allowed user with no pending Other… await is dropped without throwing or completing any question, and the poll loop keeps running', async () => {
+  const { fetchImpl, calls, queue } = makeFetch()
+  const adapter = createTelegramAdapter({
+    botToken: BOT_TOKEN, supergroupId: SUPERGROUP_ID, topicMap: TOPIC_MAP, allowedUserIds: ALLOWED_USER_IDS, fetchImpl,
+  })
+  adapter.start()
+  await flush()
+  queue('getUpdates', { status: 200, json: { ok: true, result: [
+    { update_id: 600, message: { message_id: 10, chat: { id: SUPERGROUP_ID }, message_thread_id: TOPIC_MAP.prax, from: { id: ALLOWED_USER_IDS[0] }, text: 'random chatter, no ask pending' } },
+  ] } })
+  await flush()
+  queue('getUpdates', { status: 200, json: { ok: true, result: [] } })
+  await flush()
+  const getUpdatesCalls = calls.filter(c => c.method === 'getUpdates')
+  assert.ok(getUpdatesCalls.length >= 3,
+    'AC-20260807-02-5: the poll loop must keep issuing getUpdates after an unmatched topic message — a throw inside handleMessage would stall the loop instead of dropping the message silently')
+  assert.strictEqual(adapter.pendingAsk('prax'), false,
+    'AC-20260807-02-5: an unmatched topic message must cause no state change — pendingAsk must stay false when nothing was ever asked')
+  await adapter.stop()
 })
 
 test('AC-20260801-01-9: cancelAsk rejects the pending ask and clears pendingAsk; a late callback for the cancelled promptKey is still answered but resolves nothing', async () => {

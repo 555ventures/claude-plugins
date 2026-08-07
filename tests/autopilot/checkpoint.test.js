@@ -5,18 +5,22 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir } = require('../helpers')
 
-// spec: specs/20260801/03-lane-engine.md — pins AC-20260801-03-9 and AC-20260801-03-11 for
-// the checkpoint process-surface module (autopilot/daemon/checkpoint.js). AC-9 exercises
-// startSurfaces() against real child processes (fake dev-server + tunnel commands, per the
-// repo Test Rules' "fake commands (echo/sleep)" note) — no mocked child_process, genuine
-// process-group spawn/kill. AC-11 exercises screenshotIfConfigured(), a checkpoint.js export
-// not shown in the spec's Contracts block; its shape is derived from Behavior D12 ("optional
-// screenshotCommand... attach a capture via adapter.sendPhoto... unset or failing -> URL-only,
-// never blocks") since checkpoint.js is the module that owns command-spawning concerns — see
-// specs/20260801/03-lane-engine.deviations.md for the one-line note. The module does not
-// exist yet, so every test here fails at require() time until checkpoint.js lands.
+// spec: specs/20260801/03-lane-engine.md — pins AC-20260801-03-9 for the checkpoint
+// process-surface module (autopilot/daemon/checkpoint.js). AC-9 exercises startSurfaces()
+// against real child processes (fake dev-server + tunnel commands, per the repo Test Rules'
+// "fake commands (echo/sleep)" note) — no mocked child_process, genuine process-group
+// spawn/kill. The module does not exist yet, so every test here fails at require() time until
+// checkpoint.js lands.
+//
+// spec: specs/20260807/02-autopilot-dead-surface.md — dead-surface deletion (D1). AC-3 tags
+// the existing AC-9 test as a SHALL-CONTINUE-TO pin: startSurfaces is explicitly out of scope
+// for the deletion and must keep working byte-identically. AC-4 pins the post-deletion export
+// shape (fails now: screenshotIfConfigured is still exported). The former AC-20260801-03-11
+// test (screenshotIfConfigured) is deleted here per D1 — the function it pinned no longer
+// exists.
 const CHECKPOINT_PATH = path.join(__dirname, '..', '..', 'autopilot', 'daemon', 'checkpoint.js')
-const { startSurfaces, screenshotIfConfigured } = require(CHECKPOINT_PATH)
+const CHECKPOINT_MOD = require(CHECKPOINT_PATH)
+const { startSurfaces } = CHECKPOINT_MOD
 
 function isAlive(pid) {
   try {
@@ -27,7 +31,7 @@ function isAlive(pid) {
   }
 }
 
-test('AC-20260801-03-9: startSurfaces resolves tunnelUrl from the first https:// URL on the tunnel command\'s stdout, and stopAll() leaves no live child processes', async () => {
+test('AC-20260801-03-9 / AC-20260807-02-3: startSurfaces SHALL CONTINUE TO resolve tunnelUrl from the first https:// URL on the tunnel command\'s stdout, and stopAll() leaves no live child processes', async () => {
   const dir = tmpdir('checkpoint-ac9')
   const pidFile = path.join(dir, 'dev.pid')
   const { tunnelUrl, stopAll } = await startSurfaces({
@@ -51,36 +55,7 @@ test('AC-20260801-03-9: startSurfaces resolves tunnelUrl from the first https://
     'stopAll() must leave no live child processes (poll kill(pid,0), AC-9) or a stopped lane leaks dev-server/tunnel processes on every restart')
 })
 
-test('AC-20260801-03-11: screenshotIfConfigured substitutes {url}/{out} into screenshotCommand and calls adapter.sendPhoto with the produced file on success; a non-zero exit posts no photo and never throws', async () => {
-  const dir = tmpdir('checkpoint-ac11')
-  const capScript = path.join(dir, 'cap.js')
-  fs.writeFileSync(capScript, [
-    "const fs = require('fs')",
-    'const url = process.argv[2]',
-    'const out = process.argv[3]',
-    "fs.writeFileSync(out, 'SCREENSHOT-OF:' + url)",
-  ].join('\n'))
-  const screenshotCommand = `node ${JSON.stringify(capScript)} {url} {out}`
-  const calls = []
-  const adapter = { sendPhoto: async (project, photo) => { calls.push({ project, photo }) } }
-  await screenshotIfConfigured({
-    screenshotCommand, url: 'https://t.example', project: 'prax', adapter, cwd: dir, log: () => {},
-  })
-  assert.strictEqual(calls.length, 1,
-    'a successful screenshot command must call adapter.sendPhoto exactly once (D12) or checkpoints never get a visual preview')
-  assert.strictEqual(calls[0].project, 'prax',
-    'sendPhoto must target the checkpoint\'s own project or the photo lands in the wrong Telegram topic')
-  assert.ok(calls[0].photo && calls[0].photo.buffer,
-    'sendPhoto must receive a buffer for the produced screenshot (telegram adapter D2 sendPhoto contract) or the photo has no content to upload')
-  const content = calls[0].photo.buffer.toString('utf8')
-  assert.match(content, /https:\/\/t\.example/,
-    'the {url} placeholder must be substituted with the real checkpoint URL (D12) or the capture command screenshots the literal placeholder text instead of the live page')
-
-  const calls2 = []
-  const adapter2 = { sendPhoto: async () => { calls2.push(1) } }
-  await screenshotIfConfigured({
-    screenshotCommand: 'node -e "process.exit(1)"', url: 'https://t.example', project: 'prax', adapter: adapter2, cwd: dir, log: () => {},
-  })
-  assert.strictEqual(calls2.length, 0,
-    'a non-zero screenshotCommand exit must not call sendPhoto (D12: unset or failing -> URL-only message, never blocks)')
+test('AC-20260807-02-4: requiring autopilot/daemon/checkpoint.js exports exactly [\'startSurfaces\'] — the deleted screenshot chain must leave no export behind', () => {
+  assert.deepStrictEqual(Object.keys(CHECKPOINT_MOD), ['startSurfaces'],
+    'AC-20260807-02-4: checkpoint.js must export exactly startSurfaces — a surviving screenshotIfConfigured key means D1\'s deleted screenshot chain is still reachable by callers')
 })

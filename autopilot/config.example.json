@@ -17,8 +17,7 @@
       "topicId": 7,
       "devServerCommand": "npm run dev",
       "tunnelCommand": "cloudflared tunnel --url http://localhost:3000",
-      "pollSeconds": 300,
-      "screenshotCommand": "node cap.js {url} {out}"
+      "pollSeconds": 300
     }
   ]
 }

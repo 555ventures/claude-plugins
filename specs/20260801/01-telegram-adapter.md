@@ -70,7 +70,7 @@ createTelegramAdapter({
                                             //   multiSelect → toggle buttons + "✔ Done"; resolves only when
                                             //   every question is answered. No timeout ever (BRIEF #5).
   onText(cb),                               // cb({ project, text, userId }) — free-text replies in a topic (D7)
-  pendingAsk(project),                      // → true if a topic has an unresolved ask (used by daemon + D7 matching)
+  pendingAsk(project),                      // → true if a topic has an unresolved ask (exposed for tests; D7 matching is adapter-internal)
   cancelAsk(project),                       // reject + clear the topic's pending ask (lane stop/abort path)
 })
 // callback_data wire format (D3, closed alphabet): `a:<promptKey>:<qIdx>:<optIdx>` answer ·

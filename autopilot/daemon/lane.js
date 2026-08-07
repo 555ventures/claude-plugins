@@ -30,7 +30,7 @@
 
 const fs = require('fs')
 const path = require('path')
-const { startSurfaces, screenshotIfConfigured } = require('./checkpoint')
+const { startSurfaces } = require('./checkpoint')
 
 const BACKOFF_BASE_MS = 30000
 const BACKOFF_CAP_MS = 900000
@@ -155,16 +155,6 @@ function createLane({ cfg, adapter, runStage, oracle, stateDir, log }) {
       log: logFn,
     })
     activeSurfaces = surfaces
-    if (cfg.screenshotCommand && surfaces.tunnelUrl) {
-      await screenshotIfConfigured({
-        screenshotCommand: cfg.screenshotCommand,
-        url: surfaces.tunnelUrl,
-        project: cfg.project,
-        adapter,
-        cwd: cfg.root,
-        log: logFn,
-      })
-    }
     const urlText = surfaces.tunnelUrl ? ` ${surfaces.tunnelUrl}` : ' (no tunnel URL captured)'
     const questionText = `🟡 Brief ${pick.brief} next — start?${urlText}`
     for (;;) {

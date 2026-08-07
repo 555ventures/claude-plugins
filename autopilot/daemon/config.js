@@ -4,8 +4,8 @@
 // config (specs/20260801/03-lane-engine.md D3, D8). Config lives at
 // ~/.config/autopilot/config.json by default; host-level required fields are botToken,
 // supergroupId, allowedUserIds, specPluginRoot, pluginPaths; each entry in `lanes[]` requires
-// project, root, topicId (devServerCommand/tunnelCommand/pollSeconds/screenshotCommand are
-// optional). A missing required field, or two lanes sharing a topicId or root, throws an Error
+// project, root, topicId (devServerCommand/tunnelCommand/pollSeconds are optional). A
+// missing required field, or two lanes sharing a topicId or root, throws an Error
 // naming the field/projects and the config path verbatim (AC-20260801-03-8) — those invariants
 // are load-bearing: one pending ask per topic (spec 01 A2) and one lane per repo (D1). This
 // module never calls process.exit or parses `--config` itself; bin/autopilotd owns argv

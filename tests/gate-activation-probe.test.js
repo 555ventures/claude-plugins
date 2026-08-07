@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const { read } = require('./helpers')
 
-// PRAX-20260721-01 (corroborated by upwell escape 2026-07-24, turbo-cached test leg
+// PRAX-20260721-04 (corroborated by upwell escape 2026-07-24, turbo-cached test leg
 // behind a review CLEAN): a gateCommand leg can be a cache LOOKUP instead of an
 // execution at two independent levels — the task runner's cache AND each tool's own
 // incremental cache (ruff served stale "All checks passed" over files that were red;

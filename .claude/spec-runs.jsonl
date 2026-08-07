@@ -25,3 +25,4 @@
 {"ts":"2026-08-07T00:08:51.460Z","stage":"observe","spec":"specs/20260805/01-review-scope-reconciliation.md","branch":"main","ci":"none","sha":null,"url":null,"runAt":null}
 {"ts":"2026-08-07T00:08:51.470Z","stage":"observe","spec":"specs/20260805/02-review-evidence-manifest.md","branch":"main","ci":"none","sha":null,"url":null,"runAt":null}
 {"ts":"2026-08-07T00:08:51.478Z","stage":"observe","spec":"specs/20260805/03-done-unobserved-observation.md","branch":"main","ci":"none","sha":null,"url":null,"runAt":null}
+{"ts":"2026-08-06","spec":"specs/20260805/04-intake-class-discipline.md","stage":"build","tier":"T2","fastPath":true,"diff":{"files":17,"loc":683},"tokens":{"workflow":null,"phase4Repairs":[]},"gate":{"phase4Rounds":0,"failureSetShrankEachRound":true},"retainer":{"consults":0},"deviations":0}

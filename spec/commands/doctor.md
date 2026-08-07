@@ -264,6 +264,15 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
     every file in it ("fold into an amendment ADR + brief edits per the overview's rule,
     then delete the dir"); deltas are invisible to plan and must not persist.
 
+18. **Claims registry** — run `node "$(spec-paths claims-lint)" --json` and report its
+    findings: orphan claims (blocking-consequence lines with no marker, beyond a file's
+    baselined count), unresolvable `enforcedBy:` pointers, `unenforced:` reasons under 20
+    chars, and baseline drift in either direction against
+    `spec/doctrine/claims-baseline.json`. The marker convention and the claim bar are shared.md
+    § Doctrine Authoring's, not restated here. Output is recommendations only — this check
+    never edits the corpus or the baseline; the remedy for drift is
+    `node "$(spec-paths claims-lint)" --update-baseline`, printed for the user to run.
+
 ## Semantic spot-check — small, bounded
 
 For 2–3 agents (prioritize any with stale citations), read one cited exemplar each and

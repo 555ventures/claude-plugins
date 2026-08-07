@@ -35,6 +35,10 @@ T3 triggers for THIS repo:
   (evidence manifest + workflow return + disposition counts → one word, `--ledger` row); a
   splice bug here corrupts every review and release verdict at once. Never a second place that
   computes or asserts CLEAN (2026-08 spec: review-evidence-manifest).
+- **`spec/scripts/claims-lint.js`** — the sole derivation of the doctrine claims inventory and
+  its dual line-count/orphan ratchet against `claims-baseline.json`; a splice bug here corrupts
+  every version bump's claim gate at once. Never a second place that counts orphan claims or
+  computes the corpus ratchet (2026-08 spec: claims-registry).
 - **`spec/bin/spec-paths`** — every command resolves scripts through it; a wrong key breaks
   commands silently.
 
@@ -122,6 +126,10 @@ T1-shaped work: doctrine prose edits pinned by existing tests, new sweeps in
 - A new mechanism/gate without a `spec/doctrine/scaffold-ledger.md` row carrying a
   promote/retire condition is **hard**.
 - A doctrine/behavior change without a plugin.json version bump is **hard**.
+- A diff hunk in `spec/commands/*.md`, `spec/doctrine/*.md`, or `spec/agents/*.md` that changes
+  line counts, with no `claims-baseline.json` hunk in the same diff, is **hard** — other specs'
+  scoped gates never run `tests/claims/`, so without a review-visible check the claims ratchet
+  drifts silently between claims-scoped runs.
 - A script or test importing a non-builtin package is **hard**. `autopilot/**` may import
   ONLY `@anthropic-ai/claude-agent-sdk`, and only from `autopilot/daemon/sdk.js`; any other
   non-builtin import anywhere, or an SDK import elsewhere, stays a hard finding.

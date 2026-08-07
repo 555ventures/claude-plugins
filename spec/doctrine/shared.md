@@ -949,3 +949,14 @@ dispatching workflow's prompt, or the same file's own body) shrinks to a pointer
 canonical home — never grows another full copy. Exception: guards a test deliberately pins on
 multiple surfaces (e.g. the reviewer stage-ownership carve-out) stay redundant; the pinning
 test is the marker.
+
+**Claim markers.** Every blocking-consequence claim in this corpus (`spec/commands/*.md`,
+`spec/doctrine/*.md`, `spec/agents/*.md`) carries an inline pointer: `<!-- enforcedBy:
+<repo-path>[, <repo-path>…] -->` naming a real carrier, or `<!-- unenforced: <reason ≥20
+chars> -->` when none exists — trailing on the claim's own line, or as the immediately
+following non-blank line, so rewording can never strand it. The claim bar itself (which
+phrasings count as blocking) is a closed pattern list living as data in
+`spec/scripts/claims-lint.js`, never restated here. That script (`spec-paths claims-lint`) is
+the sole derivation of the claims inventory and the corpus's dual line-count/orphan ratchet
+against `spec/doctrine/claims-baseline.json` — every claim marker MUST <!-- enforcedBy: spec/scripts/claims-lint.js --> resolve or be
+sanctioned.

@@ -45,6 +45,11 @@ test('shared-for: every mapped section name still exists as a shared.md heading'
   }
 })
 
+// AC-20260807-04-7 (sanctioned pin exception, green pre-change): specs/20260807/04-claims-
+// registry.md D1 lands HTML-comment `enforcedBy:`/`unenforced:` markers as trailing or
+// next-line content in shared.md. This awk-based section extraction already passes comment
+// lines through unchanged (it filters on `## ` headings only, never on line content), so this
+// coverage stays green across the marker landing — the regression pin the AC calls for.
 test('shared-for: scoped output carries its sections and is smaller than the full doc', () => {
   const full = run('shared-for', 'no-such-command')
   for (const cmd of ['plan', 'design', 'build', 'review', 'release', 'enforce', 'atlas', 'sketch', 'escape', 'doctor']) {

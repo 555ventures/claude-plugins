@@ -17,9 +17,8 @@ survivors (fix / waive / reject) happens in this session with the user — the w
 adjudicates (the kill-grounding standard lives in Rules).
 
 **Setup:** run `spec-paths shared-for review` and read its output (the shared invariants scoped to this command). Read the host's
-`.claude/spec.config.json` and its pipeline rules file. If either is missing, STOP: tell the
-user to run `/spec:init` first. Also run `spec-paths wf-review` once and keep the printed
-absolute path — it is the `scriptPath` for the Workflow call below.
+`.claude/spec.config.json` and its pipeline rules file. If either is missing, STOP: tell the user to run `/spec:init` first. <!-- unenforced: model-judgment step, no deterministic carrier exists -->
+Also run `spec-paths wf-review` once and keep the printed absolute path — it is the `scriptPath` for the Workflow call below.
 
 ## Input
 
@@ -64,7 +63,7 @@ ride pre-fix leg rows). Every leg named below appends one JSONL row on completio
      skipped-test reconciliation in step 6. Leg `gate`, `observed:"skips=<N> todos=<M>"`.
    - `bash $(spec-paths smoke)` — the **boot smoke leg** (shared invariants § Runtime
      Verification). Exit 0 = boot observed ready; exit 4 = runtime declared inert (sanctioned,
-     note it in the verdict); any other exit is an automatic **hard finding** — including
+     note it in the verdict); any other exit is an automatic **hard finding** <!-- enforcedBy: spec/scripts/verdict.js --> — including
      exit 3, "the host gives review no way to boot," which is a grounding-layer defect, not a
      skippable check. This leg is deterministic; no reviewer adjudicates it. Leg `smoke`,
      `observed:"pass"`/`"inert"`/`"fail"` — this row is what makes **the boot smoke leg
@@ -105,7 +104,7 @@ ride pre-fix leg rows). Every leg named below appends one JSONL row on completio
    reconciled against collected tests.) Leg `skip-reconcile`, `observed:"skipped=<N>"` — like
    `ac-matrix`, its non-zero exit means findings, not non-execution.
 7. **Scope reconciliation findings (mechanical, D7):** step 2's exit 3 yields ONE mechanical
-   **hard** finding: "out-of-plan changes: {list}" with each file's diffstat. A non-empty
+   **hard** <!-- enforcedBy: spec/scripts/scope-reconcile.js --> finding: "out-of-plan changes: {list}" with each file's diffstat. A non-empty
    `unrealized` yields ONE mechanical **soft** finding: "planned but untouched: {list}". Both
    enter Phase 2 dispositions like any AC finding. `excluded`/`renamed` carry no finding — they
    print in the Phase 2 verdict presentation (visibility, never a disposition).
@@ -212,16 +211,12 @@ twice per iteration:
    **after** the survivor dispositions are resolved, so the row records how each finding
    actually ended (a row whose survivors were then all waived is otherwise indistinguishable
    from an unresolved one). `verdict.js` exit 0 gates and is required for entry into the Phase 3
-   close — every other derived word (`UNVERIFIED`, `GATE_RED`, `FINDINGS`, `HARD_FINDINGS`,
-   `REVIEWER_FAILED`) exits 1, and a contradictory disposition count exits 2 printing no word
-   at all, so either way Phase 3 is mechanically unreachable.
+   close; every other exit leaves it unreachable.
 
-CLEAN is therefore a residual of the derivation, never computed here: every required leg
-(`gate`, `smoke`, `reconcile`, `ac-matrix`, `skip-reconcile`, `ci` — `reconcile` exempt on
-`scope: "fix-delta"`) present in `{manifestPath}`, including the **boot smoke leg green** (or
-declared inert), `gate`/`smoke`/`ci` all non-red, and zero undispositioned survivors. Nothing
-in this command reconstructs that definition independently — read `verdict.js`'s printed word
-and exit code.
+CLEAN is therefore a residual of the derivation, never computed here — `verdict.js`'s own
+header names the required-leg set, including the **boot smoke leg green** (or declared inert)
+requirement from Phase 0 step 3, and the full exit-code contract (0/1/2); read its printed word
+and exit code, never reconstruct the definition independently.
 
 Ledger row shape (the exact JSON `verdict.js --ledger` prints on line 2 — append exactly ONE line,
 verbatim, never hand-assembled, never prose or finding text):
@@ -304,66 +299,49 @@ Then proceed directly into Phase 4 — the user does not re-invoke anything.
 
 Merges the working branch into the originating branch recorded by `/spec:build`. Skip the
 merge mechanics (steps 1–6) with a one-line note if the review ran directly on the
-originating branch — nothing to merge — but still run step 7 (Observe): the session is
-already at root, and skipping observation on this class of review would mean in-place builds
-never get D7's invocation point.
+originating branch — nothing to merge — but still run step 7 (Observe): in-place builds still
+need D7's invocation point.
 
-Run `spec-paths merge-back` once and keep the printed path — it is `{mergeBack}`, a
-deterministic helper for the git mechanics.
+Run `spec-paths merge-back` once and keep the printed path — it is `{mergeBack}`, the sole
+derivation of the git mechanics (exit-code alphabet: 3 = conflicts, 4 = CWD-inside-worktree
+refusal — shared invariants § Risk Tiers).
 
-`{root}` is the absolute path to the **project root** — the repo's main working tree, e.g.
-`/Users/you/Projects/app`. It is **NOT** your home directory (`$HOME`, `~`) and **NOT** the
-filesystem root (`/`). Get the exact value, don't guess it: run
-`{mergeBack} root --worktree {worktree}` (or just `{mergeBack} root` from inside the worktree)
-and use the absolute path it prints verbatim. `{target}` is the originating branch recovered in
-Phase 0 step 1 (`build_base` from the spec, else root HEAD) — not an in-session given; `{source}`
-the build branch; `{worktree}` the worktree path (omit `--worktree` if no worktree was used).
+`{root}` is the **project root** (the repo's main working tree) — never `$HOME`/`~` or `/`.
+Get it via `{mergeBack} root --worktree {worktree}` (or `{mergeBack} root` from inside the
+worktree) and use the printed absolute path verbatim. `{target}` is the originating branch
+recovered in Phase 0 step 1; `{source}` the build branch; `{worktree}` the worktree path (omit
+`--worktree` if none was used).
 
 1. **Inspect:** `{mergeBack} inspect --root {root} --target {target} --source {source}`. It
-   STOPs (exit 2) if the root tree is dirty. Show the user its summary — N commits, M files,
-   its `RECOMMEND` line. No full diffs.
-2. **Strategy — `AskUserQuestion`, always** (strategy is a real fork): merge-commit /
-   ff-only / squash / rebase-ff. Put the `inspect` `RECOMMEND` option first.
-3. **Relocate to root FIRST — this is the fix for the session landing in `$HOME`.** A
-   subprocess cannot move the session CWD; only these can, so do one of them *before* any
-   worktree removal:
-   - If **this session** entered the worktree via `EnterWorktree`: call
-     `ExitWorktree(action="keep")` — restores session CWD to {root}, leaves worktree + branch
-     intact, no unmerged-commit check. Never `ExitWorktree(action="remove")` after merging —
+   STOPs (exit 2) if the root tree is dirty. Show its summary and `RECOMMEND` line.
+2. **Strategy — `AskUserQuestion`, always** (a real fork): merge-commit / ff-only / squash /
+   rebase-ff. Put `inspect`'s `RECOMMEND` option first.
+3. **Relocate to root FIRST — the fix for the session landing in `$HOME`.** A subprocess
+   cannot move the session CWD, so do this *before* any worktree removal:
+   - This session entered via `EnterWorktree`: call `ExitWorktree(action="keep")` — restores
+     CWD to {root}, leaves worktree + branch intact. Never `action="remove"` after merging —
      the harness still sees the branch as unmerged then.
-   - Otherwise (worktree predates this session — `ExitWorktree` would be a no-op): `cd` in the
-     **main** session to the **absolute `{root}` path** printed by `{mergeBack} root`. It
-     persists, and unlike a no-op `ExitWorktree` it actually moves the session out of the
-     worktree. Use the full path — **never a bare `cd`** (that goes to `$HOME` and *is* the
-     `~/` bug), never `cd ~`, never `cd /`. Do **not** narrate this as "exiting the worktree" —
-     you are relocating the session to the project root, not unwinding harness state.
-   The merge itself runs via `git -C {root}` regardless, but the relocate is what stops
-   `cleanup` from deleting the directory you are standing in.
-4. **Merge:** `{mergeBack} merge --root {root} --target {target} --source {source} --strategy {choice} [--worktree {worktree}]`.
-   - exit 0 → merged.
-   - exit 3 → **conflicts** (merge, or a rebase-ff rebase). Resolve by intent: read **both
-     sides** of every conflicted file — never a blind `--ours`/`--theirs`, never a silent
-     `merge --abort`. Non-trivial conflicts (logic on both sides, structural disagreement,
-     deleted-vs-modified) get an `AskUserQuestion`: keep target / keep source / combine
-     (describe it). Then `git -C {root} add` each, show a concise `git -C {root} diff --cached`
-     summary, and `git -C {root} commit --no-edit`. (For a rebase-ff rebase, resolve in
-     `{worktree}`, `git -C {worktree} rebase --continue`, then re-run the `merge` step.)
-   - exit 2 → precondition failure (e.g. ff-only on diverged branches); report and re-ask
-     strategy.
-5. **Cleanup:** `{mergeBack} cleanup --root {root} --source {source} [--worktree {worktree}]`.
-   It removes the worktree and deletes `{source}` from {root}. **exit 4 means you skipped the
-   relocate in step 3** — the session is still inside the worktree; do step 3, then re-run
-   cleanup. (Already-gone worktree path → it prunes and treats cleanup as done.)
-6. **Verify:** `{mergeBack} verify --root {root}` — confirms the merge landed on a clean tree
-   with the worktree gone.
-7. **Observe (D7):** now that the session is relocated to root and the merge has landed, run
-   `node "$(spec-paths observe-ci)" --root {root}` once — this is what closes the loop on
-   *previously*-closed specs (the spec this session just flipped to `done` starts silent now
-   and only surfaces here on a *later* invocation whose CI check attributes a red run to it —
-   never this one, since the merge just landed). It normally prints nothing at all; print its
-   output verbatim on the rare run it does. This is not an evidence-manifest leg: it appends
-   to the run ledger only, never to the manifest, and never feeds `verdict.js` — CLEAN was
-   already decided in Phase 2.
+   - Otherwise (worktree predates this session, `ExitWorktree` is a no-op): `cd` the **main**
+     session to the **absolute `{root}` path** printed by `{mergeBack} root` — never a bare
+     `cd`, `cd ~`, or `cd /` (that lands in `$HOME`, the bug this step prevents).
+   The merge runs via `git -C {root}` regardless; the relocate is what stops `cleanup` from
+   deleting the directory you're standing in.
+4. **Merge:** `{mergeBack} merge --root {root} --target {target} --source {source} --strategy
+   {choice} [--worktree {worktree}]`. Exit 3 (conflicts): resolve by intent — read **both
+   sides** of every conflicted file, never a blind `--ours`/`--theirs`/`merge --abort`;
+   non-trivial conflicts get an `AskUserQuestion` (keep target / keep source / combine), then
+   `git -C {root} add`, a concise `diff --cached` summary, and `commit --no-edit`. (Rebase-ff:
+   resolve in `{worktree}`, `git -C {worktree} rebase --continue`, re-run `merge`.) Exit 2:
+   precondition failure (e.g. ff-only on diverged branches) — report and re-ask strategy.
+5. **Cleanup:** `{mergeBack} cleanup --root {root} --source {source} [--worktree {worktree}]`
+   — removes the worktree and deletes `{source}`. Exit 4 means step 3's relocate was skipped:
+   do it, then re-run cleanup.
+6. **Verify:** `{mergeBack} verify --root {root}` — confirms a clean tree, worktree gone.
+7. **Observe (D7):** now relocated to root with the merge landed, run
+   `node "$(spec-paths observe-ci)" --root {root}` once — closes the loop on *previously*-closed
+   specs (this spec stays silent until a later CI check attributes a red run to it). Normally
+   prints nothing; print its output verbatim when it does. Appends to the run ledger only —
+   never the manifest, never `verdict.js` (CLEAN was already decided in Phase 2).
 8. **Never push, never force-push.** Pushing remains an explicit user action.
 
 ## Next pointer (every CLEAN close — merge-back run or skipped)

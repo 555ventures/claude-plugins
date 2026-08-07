@@ -1,0 +1,16 @@
+# Roadmap — claude-plugins (spec plugin source)
+
+Planning briefs for work too large or too early to spec directly. Briefs here are planned
+via `/spec:plan docs/roadmap/NN-<name>.md`; specs hydrated from a brief carry `brief: NN`
+in frontmatter, and `spec-status.js` derives each brief's state from those stamps — nothing
+here tracks status by hand.
+
+Conventions: brief files are `NN-<kebab-name>.md` with `Phase:` and `Depends on:` header
+lines before the first `## ` heading. The `Out of scope` section is binding — work it
+fences off belongs to its owning brief.
+
+## Sequence
+
+| Brief | Name |
+|-------|------|
+| 01 | claims-registry |

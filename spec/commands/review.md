@@ -358,10 +358,12 @@ the build branch; `{worktree}` the worktree path (omit `--worktree` if no worktr
    with the worktree gone.
 7. **Observe (D7):** now that the session is relocated to root and the merge has landed, run
    `node "$(spec-paths observe-ci)" --root {root}` once — this is what closes the loop on
-   *previously*-closed specs (the spec this session just flipped to `done` becomes pending now
-   and is observed at the next invocation, never this one). Print its output lines verbatim.
-   This is not an evidence-manifest leg: it appends to the run ledger only, never to the
-   manifest, and never feeds `verdict.js` — CLEAN was already decided in Phase 2.
+   *previously*-closed specs (the spec this session just flipped to `done` starts silent now
+   and only surfaces here on a *later* invocation whose CI check attributes a red run to it —
+   never this one, since the merge just landed). It normally prints nothing at all; print its
+   output verbatim on the rare run it does. This is not an evidence-manifest leg: it appends
+   to the run ledger only, never to the manifest, and never feeds `verdict.js` — CLEAN was
+   already decided in Phase 2.
 8. **Never push, never force-push.** Pushing remains an explicit user action.
 
 ## Next pointer (every CLEAN close — merge-back run or skipped)

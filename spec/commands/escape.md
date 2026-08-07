@@ -62,10 +62,11 @@ session's own diagnosis as the evidence source:
    normally. `foundBy` derives to `production` (D8: a red CI run on landed code is
    production-adjacent evidence, not user inspection) unless session context overrides it.
 
-The red observation clears only when a newer green qualifying `stage:"observe"` row is later
-recorded — this command never writes an observe row itself, only the escape row; fixing the
-defect and waiting for the next `/spec:status` or `/spec:review` invocation to re-observe is
-what turns the dashboard headline back green.
+The red observation clears only when a later green run's ancestry contains the red spec's
+close commit and `observe-ci.js` appends the D3 green-clearing `ci:"green"` row — this command
+never writes an observe row itself, only the escape row; fixing the defect and waiting for the
+next `/spec:status` or `/spec:review` invocation to re-observe is what turns the dashboard
+headline back green.
 
 ## Steps
 

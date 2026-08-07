@@ -19,11 +19,13 @@
 //
 // A `done` spec also carries a derived observation sub-state read from `.claude/spec-runs*.jsonl`
 // (live + year archives) `stage:"observe"` rows — written by observe-ci.js, never here. Offline
-// read only (ledger absence = every done spec reports "pending"); the network leg that actually
-// queries CI lives solely in observe-ci.js (specs/20260805/03-done-unobserved-observation.md
-// D2/D6). Pending/red never blocks depends_on satisfaction; a red observation turns the
-// dashboard headline 🔴 and becomes the --next top pick as a full oracle-shaped `/spec:escape`
-// entry (D5).
+// read only (ledger absence = every done spec reports "ok"); the network leg that actually
+// queries CI lives solely in observe-ci.js. Observation is a red alarm, not a certification
+// (specs/20260807/01-observation-red-alarm.md D2): the derived state is `n/a`/`ok`/`red` only —
+// `pending` is retired, nothing renders for "ok" (no ⏳, no "unobserved" anywhere). Observation
+// never blocks depends_on satisfaction; a red observation turns the dashboard headline 🔴, prints
+// one 📡 line, and becomes the --next top pick as a full oracle-shaped `/spec:escape` entry
+// (unchanged from specs/20260805/03's D5).
 //
 // --next derives the recommended next command per open spec — the mapping that used to
 // live as renderer prose (and, worse, as end-of-run improvisation): draft → /spec:plan;
@@ -197,16 +199,17 @@ const LANDED = s => s === 'done' || s === 'implementing'
 // this derivation can't reason about — fail closed: flag it, never route it to an action.
 const KNOWN_STATUS = new Set(['draft', 'hardened', 'implementing', 'done'])
 
-// ---- .claude/spec-runs*.jsonl (live + archives) — done-spec observation sub-state (D2/D6) ----
+// ---- .claude/spec-runs*.jsonl (live + archives) — done-spec observation sub-state (D2) --------
 // Offline read only — this is a VIEW; the network leg lives solely in observe-ci.js. Absence of
-// the ledger means every done spec resolves to "pending" (fail-closed, not a bug: a host that
-// has never run observe-ci has never checked CI against any landed spec).
+// the ledger means every done spec resolves to "ok" (silent — a host that has never run
+// observe-ci has never seen a red run, which renders identically to a host that has and stayed
+// green; the retired "pending" state used to distinguish the two and nobody wanted the nag).
 // readLedgerRows/qualifyingObservation (D2 algorithm) now live in lib/observation.js — shared
 // with observe-ci.js instead of a second derivation drifting apart (2026-08-06 review of
 // specs/20260805/03-done-unobserved-observation.md). CLI behavior here is byte-identical.
 function observationFor(rows, specPath) {
   const row = qualifyingObservation(rows, specPath)
-  return row ? { state: row.ci, row } : { state: 'pending', row: null }
+  return row && row.ci === 'red' ? { state: 'red', row } : { state: 'ok', row: null }
 }
 
 const ledgerRows = readLedgerRows(root)
@@ -486,6 +489,11 @@ if (json) {
 }
 
 {
+  // D1: a terminal shows the TAIL of output, so section order bottom-anchors the actionable
+  // content — 🗺️ Roadmap → 📡 red-alarm lines (only when red) → ⚠️ Anomalies → 🎯 Next → the
+  // one-line headline verdict LAST (owner directive 2026-08-07 — "I need to scroll up to see
+  // what's Next"). Content within each section is unchanged; only the order moves, plus the
+  // ⏳/"unobserved" segment dies with the retired `pending` state (D2).
   const out = []
   const BRIEF_ICON = { done: '✅', 'in-flight': '🔨', unplanned: '⬜' }
 
@@ -496,12 +504,25 @@ if (json) {
   const scope = briefs.length
     ? [`${doneB} brief${doneB === 1 ? '' : 's'} done`, flightB && `${flightB} in flight`, unplB && `${unplB} unplanned`].filter(Boolean).join(' · ')
     : specs.length ? `${doneS}/${specs.length} specs done` : 'no specs or briefs found'
-  // D5(a): a red observation is a dashboard-level alarm, not a lane detail — it overrides the
-  // ordinary 🟢/🟠 anomaly-driven glyph outright.
-  const donePending = specs.filter(s => s.observation === 'pending')
+  // D2/D5(a): a red observation is a dashboard-level alarm, not a lane detail — it overrides the
+  // ordinary 🟢/🟠 anomaly-driven glyph outright. "ok" never renders anywhere.
   const doneRed = specs.filter(s => s.observation === 'red')
   const headline = doneRed.length ? '🔴' : anomalies.length ? '🟠' : '🟢'
-  out.push(`${headline} ${scope}${retired.length ? ` · ${retired.length} superseded` : ''}${donePending.length ? ` · ⏳ ${donePending.length} unobserved` : ''} · ${anomalies.length ? `⚠️ ${anomalies.length} anomal${anomalies.length === 1 ? 'y' : 'ies'}` : 'no anomalies'}`)
+  const headlineLine = `${headline} ${scope}${retired.length ? ` · ${retired.length} superseded` : ''} · ${anomalies.length ? `⚠️ ${anomalies.length} anomal${anomalies.length === 1 ? 'y' : 'ies'}` : 'no anomalies'}`
+
+  // Computed early: the anomaly-fold (which entries carry a ⚠️ tag vs. stand alone) is needed by
+  // both the ⚠️ Anomalies section and the 🎯 Next section, and D1 now renders Anomalies first.
+  const entries = deriveNext()
+  // An anomaly about a spec that already has a Next line folds onto that line as a ⚠️ tag —
+  // no bottom section repeating the path. Only anomalies with no line of their own (done
+  // specs, brief-level drift, hand-tracked cells) keep a section entry.
+  const inlineKinds = new Map()
+  const standalone = []
+  for (const a of anomalies) {
+    const hit = entries.find(e => a.detail.includes(e.path))
+    if (hit) inlineKinds.set(hit.path, [...new Set([...(inlineKinds.get(hit.path) || []), a.kind])])
+    else standalone.push(a)
+  }
 
   if (briefs.length) {
     out.push('', '🗺️ Roadmap')
@@ -532,18 +553,30 @@ if (json) {
     for (const r of rows) out.push(`   ${r.icon} ${r.label.padEnd(lw)}  ${r.phase.padEnd(pw)}  ${r.tail}`)
   }
 
-  out.push('', '🎯 Next')
-  const entries = deriveNext()
-  // An anomaly about a spec that already has a Next line folds onto that line as a ⚠️ tag —
-  // no bottom section repeating the path. Only anomalies with no line of their own (done
-  // specs, brief-level drift, hand-tracked cells) keep a section entry.
-  const inlineKinds = new Map()
-  const standalone = []
-  for (const a of anomalies) {
-    const hit = entries.find(e => a.detail.includes(e.path))
-    if (hit) inlineKinds.set(hit.path, [...new Set([...(inlineKinds.get(hit.path) || []), a.kind])])
-    else standalone.push(a)
+  // 📡 red-alarm lines (D1: right after Roadmap, only when at least one done spec is red — "ok"
+  // renders nothing at all, D2).
+  if (doneRed.length) {
+    out.push('', '📡 Observation')
+    for (const s of doneRed) {
+      const row = observationRows.get(s.path)
+      out.push(`   🔴 done-but-red ${s.path} — ${row.branch}@${row.sha} (${row.url})`)
+    }
   }
+
+  // ⚠️ Anomalies (D1: above 🎯 Next now, so a scrolled-to-bottom terminal still lands on Next).
+  out.push('')
+  const folded = anomalies.length - standalone.length
+  if (!anomalies.length) {
+    out.push('✅ No anomalies — nothing skipped, no drift')
+  } else if (!standalone.length) {
+    out.push(`⚠️ ${anomalies.length} anomal${anomalies.length === 1 ? 'y' : 'ies'} — each tagged ⚠️ on its 🎯 Next line`)
+  } else {
+    const ANOM_ICON = { 'orphan-stamp': '🏷️', 'skipped-brief': '⏭️', 'out-of-order': '🔀', 'unknown-dependency': '❓', 'skipped-spec': '🕳️', 'hand-tracked-status': '✍️', 'unknown-status': '🚧' }
+    out.push(`⚠️ Anomalies (${standalone.length}${folded ? ` here · ${folded} tagged ⚠️ below` : ''})`)
+    for (const a of standalone) out.push(`   ${ANOM_ICON[a.kind] || '⚠️'} [${a.kind}] ${a.detail}`)
+  }
+
+  out.push('', '🎯 Next')
   if (!entries.length) {
     out.push(`   ✨ ${nothingNextLine()}`)
   } else {
@@ -633,30 +666,9 @@ if (json) {
     }
   }
 
-  // D5: pending/red done specs get a per-spec line — a clean-looking dashboard must never
-  // coexist with a landed spec that has never been checked against real CI, or one CI proved
-  // broken. Red carries its evidence inline (branch/sha/url); the escape entry above already
-  // routes the action, this line is the at-a-glance record.
-  if (donePending.length || doneRed.length) {
-    out.push('', '📡 Observation')
-    for (const s of donePending) out.push(`   ${s.path}: done ⏳ unobserved`)
-    for (const s of doneRed) {
-      const row = observationRows.get(s.path)
-      out.push(`   🔴 done-but-red ${s.path} — ${row.branch}@${row.sha} (${row.url})`)
-    }
-  }
-
-  out.push('')
-  const folded = anomalies.length - standalone.length
-  if (!anomalies.length) {
-    out.push('✅ No anomalies — nothing skipped, no drift')
-  } else if (!standalone.length) {
-    out.push(`⚠️ ${anomalies.length} anomal${anomalies.length === 1 ? 'y' : 'ies'} — each tagged ⚠️ on its 🎯 Next line`)
-  } else {
-    const ANOM_ICON = { 'orphan-stamp': '🏷️', 'skipped-brief': '⏭️', 'out-of-order': '🔀', 'unknown-dependency': '❓', 'skipped-spec': '🕳️', 'hand-tracked-status': '✍️', 'unknown-status': '🚧' }
-    out.push(`⚠️ Anomalies (${standalone.length}${folded ? ` here · ${folded} tagged ⚠️ above` : ''})`)
-    for (const a of standalone) out.push(`   ${ANOM_ICON[a.kind] || '⚠️'} [${a.kind}] ${a.detail}`)
-  }
+  // D1: the one-line headline verdict is the LAST thing printed — everything actionable must
+  // already be on screen by the time a terminal shows only its tail.
+  out.push('', headlineLine)
 
   // Redraw from the top of the viewport (not a scrollback wipe) so re-invoking the dashboard
   // never leaves it stranded wherever the cursor last scrolled to — only when stdout is a TTY,

@@ -1,23 +1,29 @@
 #!/usr/bin/env node
 'use strict'
-// observe-ci.js [--root <dir>] [--json] — closes the post-review observation window: nothing
-// owned the time between /spec:review flipping a spec to `done` and the first CI run on the
-// landed code, and the confirmed 2026-08 escape lived undetected in exactly that gap for days
-// (specs/20260805/03-done-unobserved-observation.md). For every done spec that is pending
-// (no qualifying observe row yet) or currently red (stays under watch until it clears), this
-// resolves a branch, queries ci-query.js (spec 02) at most once per distinct branch per run,
-// validates the observed run's commit against the spec's close commit (D4 ancestry — a
-// branch's latest run routinely predates an unpushed close, and without this check the
-// mechanism stamps specs green on code the run never tested), and appends one `stage:"observe"`
-// row per spec to `.claude/spec-runs.jsonl`.
+// observe-ci.js [--root <dir>] [--json] — the post-review red alarm: nothing owned the time
+// between /spec:review flipping a spec to `done` and CI proving the landed code broke, and the
+// confirmed 2026-08 escape lived undetected in exactly that gap for days
+// (specs/20260805/03-done-unobserved-observation.md). specs/20260807/01-observation-red-alarm.md
+// (D3) retired that spec's per-spec pending-or-red candidate loop and per-spec `build_base`
+// branch resolution in favor of ONE branch-level check per invocation: resolve the default
+// branch once, query ci-query.js once, and react only to a completed run. A completed **red**
+// run is attributed by ancestry (D4 plumbing kept) to the latest-closing done spec whose close
+// commit it contains — one row, never one per contained spec; a spec already red never loses the
+// alarm to a later-closing spec on a fresh red run, it just gets its evidence (sha/url/runAt)
+// refreshed. A completed **green** run appends a clearing row for every currently-red done spec
+// whose close commit it contains (an out-of-order green re-run of an older commit clears
+// nothing). Anything else — unavailable CI (structural or transient), a run still in progress —
+// is silent: no append, no ⚠️ nag (retry is free at the next invocation).
 //
-// What this deliberately does NOT do: interpret WHICH spec on a shared branch caused a red run
-// (that's attribution — /spec:escape's job, reading the run with full context); retry a
-// transient gh failure (it prints one ⚠️ and leaves the spec pending for the next invocation);
-// run from inside a worktree (exit 4 — observation writes happen at the repo root only, the
+// What this deliberately does NOT do: write `ci:"none"` rows (the retired certification state —
+// historical `none` rows stay in the ledger, inert, but this script never writes a new one);
+// retry a transient gh failure in-process; consult a per-spec `build_base` (one branch, once);
+// interpret WHICH of several implicated specs "really" caused a red run beyond the latest-close
+// heuristic (`/spec:escape`'s no-escape-if-unimplicated stop is the sanctioned corrector); run
+// from inside a worktree (exit 4 — observation writes happen at the repo root only, the
 // merge-back exit-4 precedent for the same divergent-worktree double-write class).
 //
-// Exit codes: 0 = ran (per-candidate skips are report lines, not failures) · 2 = usage ·
+// Exit codes: 0 = ran (silence is a normal outcome, not a failure) · 2 = usage ·
 // 4 = refused — CWD is inside .claude/worktrees/...; relocate to the repo root and re-run.
 
 const fs = require('fs')
@@ -80,59 +86,53 @@ for (const file of walkMd(path.join(root, 'specs'))) {
   const text = fs.readFileSync(file, 'utf8')
   const fm = frontmatter(text)
   if (!fm || fm.status !== 'done') continue
-  doneSpecs.push({ path: path.relative(root, file).split(path.sep).join('/'), buildBase: fm.build_base || null })
+  doneSpecs.push({ path: path.relative(root, file).split(path.sep).join('/') })
 }
 
 // ---- ledger reads (live + archives, filename order then line order — D2/A6) ----------------
 // readLedgerRows/qualifyingObservation (D2 algorithm) now live in lib/observation.js — shared
 // with spec-status.js instead of a second derivation drifting apart (2026-08-06 review of
 // specs/20260805/03-done-unobserved-observation.md). CLI behavior here is byte-identical.
-function observationState(rows, specPath) {
-  const latest = qualifyingObservation(rows, specPath)
-  return latest ? { pending: false, latest } : { pending: true, latest: null }
-}
-
 const ledgerRows = readLedgerRows(root)
 
-const candidates = []
-for (const s of doneSpecs) {
-  const state = observationState(ledgerRows, s.path)
-  if (state.pending || state.latest.ci === 'red') candidates.push({ spec: s, state })
-}
+// The spec currently holding the alarm, if any — D3's "at most one spec holds the alarm at any
+// time" invariant, read back from the ledger this script itself maintains.
+const currentRed = doneSpecs
+  .map(s => ({ spec: s, latest: qualifyingObservation(ledgerRows, s.path) }))
+  .find(x => x.latest && x.latest.ci === 'red') || null
 
-// ---- branch resolution -----------------------------------------------------------------------
+// ---- branch resolution — once, no per-spec build_base (D3) ----------------------------------
 
-function resolveBranch(spec) {
-  if (spec.buildBase) return spec.buildBase
+function resolveBranch() {
   const symref = spawnSync('git', ['-C', root, 'symbolic-ref', 'refs/remotes/origin/HEAD'], { encoding: 'utf8' })
   if (symref.status === 0) return symref.stdout.trim().replace(/^refs\/remotes\/origin\//, '')
   const cur = spawnSync('git', ['-C', root, 'rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8' })
   return cur.status === 0 ? cur.stdout.trim() : 'HEAD'
 }
 
-// ---- ci-query.js — at most once per distinct branch per run (in-run cache) ------------------
+const branch = resolveBranch()
+
+// ---- ci-query.js — once per invocation (D3) --------------------------------------------------
 
 const CI_QUERY = path.join(__dirname, 'ci-query.js')
-const queryCache = new Map()
-function queryBranch(branch) {
-  if (queryCache.has(branch)) return queryCache.get(branch)
-  const r = spawnSync(process.execPath, [CI_QUERY, '--branch', branch, '--root', root], { encoding: 'utf8' })
-  let result
+function queryBranch(b) {
+  const r = spawnSync(process.execPath, [CI_QUERY, '--branch', b, '--root', root], { encoding: 'utf8' })
   try {
-    result = JSON.parse(r.stdout)
+    return JSON.parse(r.stdout)
   } catch {
-    result = { available: false, transient: true }
+    return { available: false, transient: true }
   }
-  queryCache.set(branch, result)
-  return result
 }
 
-// ---- D4 ancestry validity: run.sha must descend from the spec's close commit ----------------
+const q = queryBranch(branch)
 
-function closeSha(specPath) {
-  const r = spawnSync('git', ['-C', root, 'log', '-1', '--format=%H', '--', specPath], { encoding: 'utf8' })
-  const sha = r.status === 0 ? r.stdout.trim() : ''
-  return sha || null
+// ---- D4 ancestry: run.sha must descend from a spec's close commit ---------------------------
+
+function closeInfo(specPath) {
+  const r = spawnSync('git', ['-C', root, 'log', '-1', '--format=%H%x09%cI', '--', specPath], { encoding: 'utf8' })
+  if (r.status !== 0 || !r.stdout.trim()) return null
+  const [sha, ts] = r.stdout.trim().split('\t')
+  return sha ? { sha, ts } : null
 }
 
 function isAncestor(ancestor, descendant) {
@@ -145,68 +145,72 @@ function shaKnownLocally(sha) {
   return r.status === 0
 }
 
+// One fetch fallback for an unknown sha, then re-check — never more than once per invocation.
+function ensureShaKnown(sha) {
+  if (shaKnownLocally(sha)) return true
+  spawnSync('git', ['-C', root, 'fetch', 'origin', branch], { encoding: 'utf8' })
+  return shaKnownLocally(sha)
+}
+
 // ---- run -----------------------------------------------------------------------------------
 
-const observed = []
-const pending = []
-const skipped = []
-const outLines = []
 const ledgerPath = path.join(root, '.claude', 'spec-runs.jsonl')
 const appendRows = []
+const outLines = []
 
-for (const { spec, state } of candidates) {
-  const branch = resolveBranch(spec)
-  const q = queryBranch(branch)
-
-  if (!q.available && !q.transient) {
-    // Structural unavailability: no gh, no remote, no runs on this branch — nothing to observe,
-    // ever, on a CI-less host. Observation completes with ci:"none" so it never nags again.
-    const already = state.latest && state.latest.ci === 'none'
-    if (!already) {
-      appendRows.push({ ts: new Date().toISOString(), stage: 'observe', spec: spec.path, branch, ci: 'none', sha: null, url: null, runAt: null })
-      observed.push({ spec: spec.path, ci: 'none' })
-      outLines.push(`📡 observed ${spec.path}: none`)
-    }
-    continue
-  }
-  if (!q.available && q.transient) {
-    // A token blip must not permanently silence observation — append nothing, stay pending.
-    skipped.push({ spec: spec.path, why: 'transient ci-query failure' })
-    outLines.push(`⚠️ ${spec.path}: transient CI query failure — staying pending, retry next run`)
-    pending.push(spec.path)
-    continue
-  }
-  if (q.status !== 'completed') {
-    // Run not finished — not evidence of anything yet.
-    pending.push(spec.path)
-    continue
-  }
-
-  const close = closeSha(spec.path)
-  if (!close) {
-    skipped.push({ spec: spec.path, why: 'no close commit found for spec file' })
-    pending.push(spec.path)
-    continue
-  }
-  if (!shaKnownLocally(q.sha)) {
-    spawnSync('git', ['-C', root, 'fetch', 'origin', branch], { encoding: 'utf8' })
-  }
-  if (!shaKnownLocally(q.sha) || !isAncestor(close, q.sha)) {
-    // Run predates (or is unrelated to) the close commit — never accepted as evidence.
-    pending.push(spec.path)
-    continue
-  }
-
-  const ci = q.conclusion === 'success' ? 'green' : 'red'
-  // Idempotent: never append a row identical (same sha + ci) to the current latest qualifying row.
-  if (state.latest && state.latest.sha === q.sha && state.latest.ci === ci) {
-    observed.push({ spec: spec.path, ci })
-    continue
-  }
-  appendRows.push({ ts: new Date().toISOString(), stage: 'observe', spec: spec.path, branch, ci, sha: q.sha, url: q.url, runAt: q.runAt })
-  observed.push({ spec: spec.path, ci })
-  outLines.push(`📡 observed ${spec.path}: ${ci}`)
+function appendRow(specPath, ci) {
+  appendRows.push({ ts: new Date().toISOString(), stage: 'observe', spec: specPath, branch, ci, sha: q.sha, url: q.url, runAt: q.runAt })
+  outLines.push(`📡 observed ${specPath}: ${ci}`)
 }
+
+// Idempotence (D3, carried from spec 03): never append a row identical (same sha + ci) to the
+// spec's current latest qualifying row.
+function alreadyQualifies(specPath, ci) {
+  const latest = qualifyingObservation(ledgerRows, specPath)
+  return !!(latest && latest.sha === q.sha && latest.ci === ci)
+}
+
+if (q.available && q.status === 'completed') {
+  const ci = q.conclusion === 'success' ? 'green' : 'red'
+
+  if (ci === 'red') {
+    if (currentRed) {
+      // Sticky attribution: a spec already holding the alarm never loses it to a later-closing
+      // spec on a fresh red run — only its evidence is refreshed (D3 refuter B finding 4).
+      if (!alreadyQualifies(currentRed.spec.path, 'red')) {
+        appendRow(currentRed.spec.path, 'red')
+      }
+    } else if (ensureShaKnown(q.sha)) {
+      // Fresh attribution: among done specs whose close commit the run's sha descends from,
+      // the latest-closing one takes the (sole) alarm; a timestamp tie breaks toward the
+      // lexicographically last spec path.
+      let winner = null
+      for (const s of doneSpecs) {
+        const info = closeInfo(s.path)
+        if (!info || !isAncestor(info.sha, q.sha)) continue
+        if (!winner || info.ts > winner.info.ts || (info.ts === winner.info.ts && s.path > winner.spec.path)) {
+          winner = { spec: s, info }
+        }
+      }
+      if (winner && !alreadyQualifies(winner.spec.path, 'red')) appendRow(winner.spec.path, 'red')
+    }
+  } else if (ensureShaKnown(q.sha)) {
+    // Clearing: every currently-red done spec whose close commit the green run's sha descends
+    // from gets a clearing row. A green run on a re-triggered older commit (ancestry miss)
+    // clears nothing — run recency is completion order, not commit order (D3/A3).
+    const redSpecs = doneSpecs
+      .map(s => ({ spec: s, latest: qualifyingObservation(ledgerRows, s.path) }))
+      .filter(x => x.latest && x.latest.ci === 'red')
+    for (const { spec } of redSpecs) {
+      const info = closeInfo(spec.path)
+      if (info && isAncestor(info.sha, q.sha) && !alreadyQualifies(spec.path, 'green')) {
+        appendRow(spec.path, 'green')
+      }
+    }
+  }
+}
+// Unavailable (structural or transient) and not-completed runs fall through here: no append, no
+// output — silence is the sanctioned outcome (D3).
 
 if (appendRows.length) {
   fs.mkdirSync(path.dirname(ledgerPath), { recursive: true })
@@ -214,7 +218,7 @@ if (appendRows.length) {
 }
 
 if (json) {
-  console.log(JSON.stringify({ observed, pending, skipped }, null, 2))
+  console.log(JSON.stringify({ appended: appendRows.map(r => ({ spec: r.spec, ci: r.ci, sha: r.sha, branch: r.branch })) }, null, 2))
 } else if (outLines.length) {
   console.log(outLines.join('\n'))
 }

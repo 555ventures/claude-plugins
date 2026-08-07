@@ -43,10 +43,12 @@ const BRIEFS = {
 // AC-20260805-01-7 (sanctioned pin exception, green pre-change): --json output must stay
 // byte-identical after parseFilePlan/splitPlanCell move into spec/scripts/lib/file-plan.js —
 // the lib extraction is invisible at the CLI.
-// AC-20260805-03-7 (sanctioned pin exception, green pre-change): every test in this file already
-// exercises a host with no `.claude/spec-runs.jsonl` (the `host()` fixture never writes one) —
-// status/--next/--brief derivation must stay unchanged when the ledger is absent, before and
-// after observe-ci.js's new `stage:"observe"` read path lands (specs/20260805/03).
+// AC-20260805-03-7 / AC-20260807-01-11 (sanctioned pin exception, green pre-change): every test
+// in this file already exercises a host with no `.claude/spec-runs.jsonl` (the `host()` fixture
+// never writes one) — status/--next/--brief derivation must stay unchanged when the ledger is
+// absent, across observe-ci.js's spec 03 introduction AND spec 20260807/01's D2/D3 slim
+// (identified by name per specs/20260807/01-observation-red-alarm.md's File Plan, not line
+// number — this is the test the AC retags).
 test('derives unplanned / in-flight / done per doctor check 14', () => {
   const dir = host({
     briefs: BRIEFS,
@@ -362,7 +364,9 @@ test('bare run renders verdict, progress-bar roadmap, and collapses unplanned ru
   })
   const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, r.stderr)
-  assert.match(r.stdout.split('\n')[0], /^🟢 /, 'opens with the verdict line — no anomalies here')
+  const nonEmpty = r.stdout.split('\n').filter((l) => l.trim() !== '')
+  assert.match(nonEmpty[nonEmpty.length - 1], /^🟢 /,
+    'D1: the verdict line is bottom-anchored as the LAST line — no anomalies here')
   assert.match(r.stdout, /🔨 01 auth.*▓{5}░{5} 1\/2/, 'in-flight brief gets a half-full bar')
   assert.match(r.stdout, /⬜ 02–03.*unplanned \(2 briefs\)/, 'consecutive unplanned briefs collapse to one row')
   assert.match(r.stdout, /🎯 Next/, 'embeds the next derivation — no second run needed')
@@ -576,6 +580,31 @@ test('brief: n/a (and none/-) is deliberately briefless — no orphan-stamp, bri
   const orphans = out.anomalies.filter(a => a.kind === 'orphan-stamp')
   assert.strictEqual(orphans.length, 1, 'only the genuine dangling stamp (brief: 07) remains')
   assert.match(orphans[0].detail, /04-typo\.md/)
+})
+
+// D1 render inversion (specs/20260807/01-observation-red-alarm.md): a terminal shows the TAIL
+// of output, so the actionable sections must be the last thing printed. Section order flips to
+// Roadmap → anomalies → 🎯 Next → headline verdict LAST (owner directive 2026-08-07 — "I need
+// to scroll up to see what's Next").
+test('AC-20260807-01-1: --pretty renders Roadmap, then the anomalies section, then 🎯 Next, with the headline verdict as the final line', () => {
+  const dir = host({
+    briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
+    specs: { '20260701/01-x.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 01' },
+    overviewRow: '| 01 | auth | P0 | — | ✅ done |',
+  })
+  const r = runNode(SCRIPT, ['--root', dir])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const lines = r.stdout.split('\n')
+  const idxRoadmap = lines.findIndex((l) => l.includes('🗺️ Roadmap'))
+  const idxAnomalies = lines.findIndex((l) => l.includes('⚠️ Anomalies') || l.includes('No anomalies'))
+  const idxNext = lines.findIndex((l) => l.includes('🎯 Next'))
+  assert.ok(idxRoadmap !== -1 && idxAnomalies !== -1 && idxNext !== -1,
+    'test fixture bug: Roadmap, an anomalies section, and Next must all be present: ' + r.stdout)
+  assert.ok(idxRoadmap < idxAnomalies, 'D1: 🗺️ Roadmap must render before the anomalies section — today anomalies print after 🎯 Next, at the very bottom')
+  assert.ok(idxAnomalies < idxNext, 'D1: the anomalies section must render above 🎯 Next so a scrolled-to-bottom terminal still shows Next, not anomaly detail')
+  const nonEmpty = lines.filter((l) => l.trim() !== '')
+  assert.match(nonEmpty[nonEmpty.length - 1], /^(🔴|🟠|🟢)/,
+    'D1: the one-line headline verdict must be the LAST line of output — today it is printed first, so a terminal showing only the tail never sees it')
 })
 
 test('dashboard folds spec-scoped anomalies onto their Next lines instead of a bottom section', () => {

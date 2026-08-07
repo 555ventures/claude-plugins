@@ -73,10 +73,8 @@ T1-shaped work: doctrine prose edits pinned by existing tests, new sweeps in
   `spec/workflows/src/wf-<name>.body.js` or `spec/workflows/fragments/*.frag`, then
   `npm run build:workflows`.
 - **Zero dependencies**: scripts and tests use only Node built-ins (`fs`, `path`,
-  `child_process`, `os`, `assert`, `node:test`) and `jq` in bash. Never add a package.
-  `autopilot/**` may import ONLY `@anthropic-ai/claude-agent-sdk`, and only from
-  `autopilot/daemon/sdk.js`; any other non-builtin import anywhere, or an SDK import
-  elsewhere, stays a hard finding.
+  `child_process`, `os`, `assert`, `node:test`) and `jq` in bash. Never add a package. The
+  `autopilot/**` SDK-import exception is stated in full in § Review Checks below.
 - Bash scripts open `#!/usr/bin/env bash` + `set -u` (never `set -e` — failures are explicit
   and carry remedies). JS scripts open `#!/usr/bin/env node` + `'use strict'`.
 - Every script starts with a header comment: usage line, why it exists (dated incident),

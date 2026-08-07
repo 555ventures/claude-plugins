@@ -10,8 +10,8 @@
 //
 // What it deliberately does NOT do: query CI (that's ci-query.js/observe-ci.js), write ledger
 // rows (observe-ci.js only), or interpret the result beyond the raw qualifying row — callers
-// shape their own return value (spec-status.js wants {state, row}, observe-ci.js wants
-// {pending, latest}).
+// shape their own return value (spec-status.js wants {state, row}, observe-ci.js reads the
+// winning row directly (as `latest`)).
 //
 // Exit codes: n/a (library, not an entrypoint).
 
@@ -37,7 +37,7 @@ function readLedgerRows(root) {
 // Qualifying rows for a spec = its stage:"observe" rows appearing (by read-order position, not
 // timestamp) after its latest stage:"review" row. Winner = the qualifying row with the greatest
 // runAt (tie -> red wins, D2) — a union-merged worktree history reorders lines, not time.
-// Returns null when there is no qualifying row (pending); otherwise the winning row itself.
+// Returns null when there is no qualifying row (unobserved); otherwise the winning row itself.
 function qualifyingObservation(rows, specPath) {
   let lastReviewIdx = -1
   rows.forEach((row, i) => { if (row.stage === 'review' && row.spec === specPath) lastReviewIdx = i })

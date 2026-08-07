@@ -171,6 +171,34 @@ function ghRun({ status = 'completed', conclusion = 'success', headSha, url = 'h
   return JSON.stringify([{ status, conclusion, headSha, url, updatedAt }])
 }
 
+test('AC-20260807-03-1: observe-ci.js --json exits 2 and prints the [--root <dir>]-only usage line on stderr, D1 retiring the zero-consumer flag', () => {
+  const { dir } = buildHost()
+  const r = runObserve(dir, ['--json'])
+  assert.strictEqual(r.status, 2,
+    'D1 deletes the --json flag entirely — an unrecognized "--json" must now fall into the same unknown-flag usage+exit-2 path every other bad flag hits: ' + r.stderr)
+  assert.match(r.stderr, /usage: observe-ci\.js \[--root <dir>\]/,
+    'the usage line must name ONLY [--root <dir>] — a usage line still mentioning [--json] would mean D1\'s header/usage edit was not applied: ' + r.stderr)
+})
+
+// (sanctioned pin exception, green pre-change, per this file's own AC-20260807-01-8/-9 precedent):
+// AC-20260807-03-2 is a "SHALL CONTINUE TO" invariant — D1 removes only --json, the red-alarm
+// ledger append and human render it names are explicitly unchanged. This is the first assertion
+// of the printed alarm line's literal content (previously only asserted silent on non-red paths);
+// tags the existing red-observation behavior as AC-20260807-03-2's home.
+test('AC-20260807-03-2: a completed red run on a done spec still appends the stage:"observe" ledger row and prints the human alarm render after --json is removed', () => {
+  const { dir, descendantSha, specRel } = buildHost()
+  const bin = fakeGh({ json: ghRun({ conclusion: 'failure', headSha: descendantSha }) })
+  const r = runObserve(dir, [], { env: envWithGh(bin) })
+  assert.strictEqual(r.status, 0, r.stderr)
+  const rows = readLedger(dir).filter((x) => x.stage === 'observe' && x.spec === specRel)
+  assert.strictEqual(rows.length, 1,
+    'a red run on a done spec must append exactly one stage:"observe" ledger row — D1 only removes --json, this contract must continue unchanged: ' + JSON.stringify(rows))
+  assert.strictEqual(rows[0].ci, 'red', 'the appended row must carry ci:"red", or the surviving machine contract lost its signal')
+  const escapedSpec = specRel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  assert.match(r.stdout, new RegExp('📡 observed ' + escapedSpec + ': red'),
+    'a red run must still print the human alarm render naming the spec and "red" — removing --json must not silence the sole surviving output format: ' + r.stdout)
+})
+
 test('AC-20260807-01-3: a completed red run whose sha contains the close commits of two done specs appends exactly one red row, for the later-closing spec', () => {
   const { dir, runSha, specA, specB } = buildTwoDoneSpecsHost(['2026-08-05T10:00:00+00:00', '2026-08-07T10:00:00+00:00'])
   const bin = fakeGh({ json: ghRun({ conclusion: 'failure', headSha: runSha }) })

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict'
-// observe-ci.js [--root <dir>] [--json] — the post-review red alarm: nothing owned the time
+// observe-ci.js [--root <dir>] — the post-review red alarm: nothing owned the time
 // between /spec:review flipping a spec to `done` and CI proving the landed code broke, and the
 // confirmed 2026-08 escape lived undetected in exactly that gap for days
 // (specs/20260805/03-done-unobserved-observation.md). specs/20260807/01-observation-red-alarm.md
@@ -32,13 +32,11 @@ const { spawnSync } = require('child_process')
 const { readLedgerRows, qualifyingObservation } = require('./lib/observation')
 
 let root = '.'
-let json = false
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--root') root = argv[++i]
-  else if (argv[i] === '--json') json = true
   else {
-    console.error('usage: observe-ci.js [--root <dir>] [--json]')
+    console.error('usage: observe-ci.js [--root <dir>]')
     process.exit(2)
   }
 }
@@ -217,9 +215,7 @@ if (appendRows.length) {
   fs.appendFileSync(ledgerPath, appendRows.map(r => JSON.stringify(r)).join('\n') + '\n')
 }
 
-if (json) {
-  console.log(JSON.stringify({ appended: appendRows.map(r => ({ spec: r.spec, ci: r.ci, sha: r.sha, branch: r.branch })) }, null, 2))
-} else if (outLines.length) {
+if (outLines.length) {
   console.log(outLines.join('\n'))
 }
 process.exit(0)

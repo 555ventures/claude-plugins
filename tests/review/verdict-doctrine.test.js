@@ -13,6 +13,7 @@ const { read } = require('../helpers')
 
 const reviewMd = read('spec/commands/review.md')
 const releaseMd = read('spec/commands/release.md')
+const scaffoldLedger = read('spec/doctrine/scaffold-ledger.md')
 
 test('AC-20260805-02-6: review.md builds a fresh per-iteration evidence manifest and re-runs its legs each fix-delta iteration', () => {
   assert.match(reviewMd, /manifestPath/,
@@ -71,6 +72,23 @@ test('AC-20260805-02-7: release.md wires verdict.js --profile release --ledger o
     'verdict.js --profile release --ledger must be quoted as the verdict origin on BOTH the fail-fast STOP ' +
     'path and the Phase 4 success path (D7) — found ' + hits.length + ' occurrence(s), so at least one path ' +
     'still has a second, independent verdict origin: ' + '(release.md)')
+})
+
+// specs/20260807/03-spec-pipeline-debloat.md D2: the user ruled the release profile stays
+// (release.md is a live consumer in every host, and scaffold-ledger's own Verdict-derivation
+// row forbids a stage verdict with no script origin), but the never-run profile gets a dated,
+// checkable retire trigger instead of silent indefinite retention.
+test('AC-20260807-03-3: scaffold-ledger.md\'s "Release stage executed checks" row names a retire condition triggered by zero stage:"release" ledger rows across two consecutive quarters', () => {
+  const rowMatch = scaffoldLedger.match(/^\| Release stage executed checks.*\|$/m)
+  assert.ok(rowMatch,
+    'the "Release stage executed checks" row must still exist in scaffold-ledger.md — D2 amends this row in place, it must not be deleted or renamed: ' + '(not found)')
+  const row = rowMatch[0]
+  assert.match(row, /two consecutive quarters/i,
+    'the row\'s promote/retire condition must name "two consecutive quarters" as the observation window (D2) — without a dated window the retire condition is not checkable, the exact defect this ledger\'s own authoring contract forbids')
+  assert.match(row, /zero[\s\S]{0,60}stage:"release"|stage:"release"[\s\S]{0,60}zero/i,
+    'the retire condition must name zero stage:"release" ledger rows as the trigger — without it the row does not actually schedule verdict.js\'s release profile\'s expiry, D2\'s whole point')
+  assert.match(row, /verdict\.js/,
+    'the retire condition must name verdict.js\'s release profile as what gets deleted when the trigger fires (together with its 7 exec pins and release.md\'s wiring, D2) — otherwise the row is a generic reminder, not the specific expiry D2 registers')
 })
 
 test('AC-20260805-02-7: release.md names verdict.js\'s required legs, including production, as one enumerated list', () => {

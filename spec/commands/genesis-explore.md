@@ -23,6 +23,13 @@ Run `spec-paths wf-research` and `spec-paths design-atlas` once and keep the pri
 state gate blocks this command until `architect: scaffold-complete`; also verify
 `.claude/genesis/stack-descriptor.json` exists.
 
+**Render-capability precondition:** probe for a reachable render/screenshot capability —
+Claude-in-Chrome MCP tools or a Playwright MCP — via tool availability (`ToolSearch` or
+equivalent), never by opening a page or creating a tab. Neither reachable: STOP, telling the user to connect Chrome or enable the Playwright MCP, then re-invoke. <!-- enforcedBy: tests/model-placement.test.js -->
+State is untouched by the probe; re-invoking after connecting
+resumes here. This is an explore-local hard requirement (genesis.md § Genesis: Explore Stage) —
+atlas sweeps and `/spec:design` still degrade gracefully with a note when headless.
+
 ## Input
 
 `$ARGUMENTS` — the same project idea. Archetype, audience, and stack come from
@@ -76,27 +83,43 @@ state gate blocks this command until `architect: scaffold-complete`; also verify
 ## Phase 2 — Round 0: style tiles
 
 1. Pick the **signature screen** (the core-loop moment; confirm with the user in one
-   AskUserQuestion if ambiguous) and author **6–8 position briefs** — each a genuinely distinct
-   psychological/aesthetic stance (instrument / guide / ambient / dense-professional / …), each
-   citing the research-brief rules it leans on and its anti-defaults. Position briefs are
-   session-authored (the taste seat) and written to `design/explore/positions.md`.
-2. Fan out **parallel Sonnet `Agent` calls, one per position** (a single message, all calls
-   together; `model: "sonnet"` explicit). Each builds `design/explore/r0-<position>/` —
-   `tokens.css` (its own, tokens-as-code from birth) + `tile.html` (root
-   `data-screen-label`, links `./tokens.css`) — under the design harness (shared § Design
-   Canon): author → `design-atlas.js check` → render/screenshot/critique when a browser is
-   available. Tiles target the **draft framing only** — the most-constrained declared viewport,
-   light theme (cheap by design; the matrix bill lands on the winner alone, after the pick). Agents receive **paths** (research brief, positions.md, stack descriptor), never
-   inlined prose.
-3. Gate every candidate: `node <design-atlas> check design/explore/r0-<position>` must pass
+   AskUserQuestion if ambiguous).
+2. Author `design/explore/positions.md` from the `design-positions.md` template
+   (`spec-paths templates`) — **6–8 position briefs**, each a genuinely distinct
+   psychological/aesthetic stance (instrument / guide / ambient / dense-professional / …). A
+   position missing any of the template's mandatory fields (stance, rules cited, anti-defaults,
+   reference direction, motion character, density & layout intent, starter-tokens pointer) is
+   not built. Position briefs are session-authored (the taste seat).
+3. **Author each position's starter `tokens.css`** (session, the taste-transfer step — palette
+   recipe, type pairing + scale, spacing rhythm, radii, shadow/elevation language, ~40 lines
+   each), written to `design/explore/r0-<position>/tokens.css` **before** the builder fan-out.
+4. **Commit** `positions.md` + every starter `tokens.css` (`explore: positions-authored`) — this
+   commit is the D8 baseline the additions-only diff check (step 7) runs against, and doubles as
+   the re-entry point.
+5. Fan out **parallel Sonnet `Agent` calls, one per position** (a single message, all calls
+   together; `model: "sonnet"` explicit). Each builds `design/explore/r0-<position>/tile.html`
+   (root `data-screen-label`, links `./tokens.css`) against its position's already-existing
+   starter `tokens.css`: **consume by role; append missing role tokens; never change an
+   authored value.** Tiles target the **draft framing only** — the most-constrained declared
+   viewport, light theme (cheap by design; the matrix bill lands on the winner alone, after the
+   pick). Agents receive **paths** (research brief, positions.md, the position's tokens.css,
+   stack descriptor), never inlined prose.
+6. Gate every candidate: `node <design-atlas> check design/explore/r0-<position>` must pass
    (fail-closed; a failing tile goes back to its builder, max two retries, then it is dropped
    and the drop reported — never shown broken).
-4. Build the comparison gallery: `node <design-atlas> gallery design/explore --out
+7. **Unconditional render → screenshot → session critique**, per tile, every time (no browser-
+   availability conditional — Setup already guaranteed the capability): fix-or-kill, same
+   max-two-retries-then-drop as step 6. Alongside the critique, run the D8 carrier: `git diff
+   <positions-authored commit> -- 'design/explore/r0-*/tokens.css'` must be **additions only**
+   — any changed or deleted authored line is a builder violation, sent back with the diff
+   (counts against the two retries).
+8. Build the comparison gallery: `node <design-atlas> gallery design/explore --out
    design/explore/gallery.html`, tell the user to open it (or serve it), and run the cull:
    `AskUserQuestion` (multiSelect) — **pick 2 finalists**. Record the cull + one-line reasons in
-   `positions.md`. If seeing the tiles surfaced a research-brief correction, apply it now with
-   **scoped invalidation**: rebuild only candidates whose position brief cites a changed rule
-   (the two finalists, if affected), never the whole round. Set `explore: tiles-culled`. Commit.
+   `positions.md`'s `## Cull record` section. If seeing the tiles surfaced a research-brief
+   correction, apply it now with **scoped invalidation**: rebuild only candidates whose
+   position brief cites a changed rule (the two finalists, if affected), never the whole round.
+   Set `explore: tiles-culled`. Commit.
 
 ## Phase 3 — Round 1: interactive prototypes
 
@@ -147,11 +170,16 @@ Next: /spec:genesis-design — ratifies the winner's tokens.css as canon; reject
 
 ## Rules
 
-- **The session writes no candidate HTML.** It authors position briefs, critiques renders, and
-  records rulings; Sonnet builds everything (shared § Model Placement).
-- **Every candidate ships its own `tokens.css`** and consumes it by role — a tile with inline
-  literals fails `design-atlas.js check`. Tokens-as-code from birth is what makes genesis-design
-  ratification (not extraction) possible.
+- **The session writes no candidate HTML.** It authors position briefs, starter `tokens.css`,
+  critiques renders, and records rulings; Sonnet builds everything (shared § Model Placement).
+- **Every candidate ships its own `tokens.css`, session-authored for Round 0** — Sonnet builders
+  consume it by role and may append missing role tokens but must never change an authored
+  value (the D8 additions-only `git diff` check is the deterministic carrier, Phase 2 step 7).
+  A tile with inline literals fails `design-atlas.js check`. Tokens-as-code from birth is what
+  makes genesis-design ratification (not extraction) possible.
+- **A position brief missing a mandatory `design-positions.md` field is not built** — the
+  template's seven fields (stance, rules cited, anti-defaults, reference direction, motion
+  character, density & layout intent, starter tokens) are the execution-level floor.
 - **Divergence is the point of Round 0.** Two tiles that read as the same direction are a
   defect; kill one and re-brief before showing the user.
 - **Deterministic check before human eyes, always** — never show an ungated candidate.

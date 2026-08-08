@@ -228,15 +228,26 @@ drafting on desktop and compressing later is how a pick gets invalidated. Two ro
 
 - **Round 0 — style tiles.** 6–8 one-screen tiles of the same signature screen, each committing
   to a genuinely different position (instrument vs. guide vs. ambient vs. dense-professional …).
-  The session (Fable seat — taste authors the contract) writes one **position brief** per tile:
-  the psychological stance, its research-brief rules, its anti-defaults. Parallel **Sonnet**
-  agents build the tiles under the design harness (shared § Design Canon); each candidate is
-  self-contained in `design/explore/r0-<position>/` with its **own `tokens.css`** — tokens-as-code
-  from birth, so the eventual winner's tokens ARE the canon (ratified, never extracted). Tiles
-  are auto-gated (`design-atlas.js check`, deterministic) before the user sees anything, then
-  presented as one comparison gallery (`design-atlas.js gallery`). Tiles are cheap on purpose:
-  built for the **draft framing only** (most-constrained viewport, light) — the matrix bill
-  comes due only after the pick. The user culls to 2.
+  The session (Fable seat — taste authors the contract) writes one **position brief** per tile,
+  authored from the `design-positions.md` template (`spec-paths templates`): the psychological
+  stance, its research-brief rules, its anti-defaults, a named reference direction, motion
+  character, and density & layout intent — a position missing a mandatory field is not built.
+  The session then authors each position's **starter `tokens.css`** — palette recipe, type
+  pairing + scale, spacing rhythm, radii, shadow/elevation language — written **before** the
+  builder fan-out and committed together with `positions.md` (`explore: positions-authored`);
+  this is the taste-transfer channel, since tokens are already the pipeline's canonical taste
+  carrier and prose paraphrase was the lossy step. Parallel **Sonnet** agents build the tiles
+  under the design harness (shared § Design Canon) against that starter `tokens.css` — consuming
+  it by role, appending missing role tokens, never changing an authored value (a `git diff`
+  against the positions-authored commit must show additions only); each candidate is
+  self-contained in `design/explore/r0-<position>/`, so the eventual winner's tokens ARE the
+  canon (ratified, never extracted). Tiles are auto-gated (`design-atlas.js check`,
+  deterministic), then run an **unconditional** render → screenshot → session critique leg
+  (no browser-availability conditional in explore — Setup's render-capability precondition
+  guarantees the capability) before the user sees anything, then are presented as one comparison
+  gallery (`design-atlas.js gallery`). Tiles are cheap on purpose: built for the **draft framing
+  only** (most-constrained viewport, light) — the matrix bill comes due only after the pick. The
+  user culls to 2.
 - **Round 1 — interactive prototypes.** The two finalists become multi-screen interactive
   prototypes of the signature set (core loop, highest-consequence moment, first-run) in
   `design/explore/r1-<position>/` — interactive because motion, streaming, and latency-feel are
@@ -261,10 +272,12 @@ drafting on desktop and compressing later is how a pick gets invalidated. Two ro
   not deleted work. Non-winning candidate dirs are kept until genesis-design locks, then pruned
   (salvageable pieces are named in the pick record first).
 
-Model placement holds the pipeline rule: Fable authors position briefs and judges critique
-rounds (roadmap-level taste — its one resident seat); Sonnet builds every tile and prototype;
-deterministic checks gate before any human look. For archetypes whose design stage is
-`none`/`skipped`, explore is `skipped` — same applicability gate as genesis-design.
+Model placement holds the pipeline rule: Fable authors position briefs **and each position's
+starter `tokens.css`**, and judges critique rounds (roadmap-level taste — its one resident
+seat); Sonnet builds every tile and prototype HTML — never candidate HTML from the session, and
+Sonnet builders never alter an authored token value; deterministic checks gate before any human
+look. For archetypes whose design stage is `none`/`skipped`, explore is `skipped` — same
+applicability gate as genesis-design.
 
 **Claude Design is the escape hatch, not the path.** The user may still produce a candidate in
 Claude Design (`claude.ai/design`) and drop its export into `design/explore/` as one more

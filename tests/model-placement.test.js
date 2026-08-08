@@ -108,3 +108,77 @@ test('genesis-explore.md: session authors position briefs, Sonnet builds, determ
   assert.match(explore, /design-atlas\.js check/)
   assert.match(explore, /Fresh research every project/)
 })
+
+// 2026-08-07 spec 05-explore-taste-channels: the amateur-tiles incident — Fable's taste
+// reached Sonnet builders only through a 3-ingredient prose brief, and the one high-bandwidth
+// channel (render critique) was conditional on browser availability in the round the look is
+// born. AC-20260807-05-1..7 pin the fix: tokens-as-code authorship, a mandatory-field
+// positions template, and an unconditional Round 0 critique loop with a git-diff-backed
+// never-alter carrier.
+
+test('AC-20260807-05-1: genesis-explore.md states the session authors starter tokens.css before fan-out and builders never change an authored value', () => {
+  const explore = read('commands/genesis-explore.md')
+  assert.match(explore, /starter/i,
+    'the starter tokens.css authorship step must be documented or the taste-transfer channel silently reverts to builder-authored tokens')
+  assert.match(explore, /never change an authored/i,
+    'the builder never-alter constraint must be stated verbatim or Sonnet builders may silently overwrite session-authored taste')
+})
+
+test('AC-20260807-05-2: genesis-explore.md Phase 2 drops the browser-availability conditional and runs an unconditional render-screenshot-critique leg', () => {
+  const explore = read('commands/genesis-explore.md')
+  assert.doesNotMatch(explore, /when a browser is\s+available/i,
+    'Round 0 critique must never be conditional on browser availability — that conditional is exactly what let amateur tiles through ungated')
+  assert.match(explore, /render.*screenshot.*critique|screenshot.*render.*critique/is,
+    'an unconditional render, screenshot, and critique leg must be documented for every Round 0 tile')
+})
+
+test('AC-20260807-05-3: genesis-explore.md Setup declares a render-capability precondition that STOPs with a Chrome/Playwright remedy', () => {
+  const explore = read('commands/genesis-explore.md')
+  assert.match(explore, /Chrome/i,
+    'the Setup precondition must name Chrome (Claude-in-Chrome) as a satisfying capability or the STOP remedy is incomplete')
+  assert.match(explore, /Playwright/i,
+    'the Setup precondition must name Playwright MCP as a satisfying capability or the STOP remedy is incomplete')
+  assert.match(explore, /STOP/,
+    'absence of a render capability must produce a hard STOP, not a silent degrade, per the D4 hard-block decision')
+})
+
+test('AC-20260807-05-4: spec/templates/design-positions.md carries all seven mandatory per-position field labels', () => {
+  const templatePath = path.join(SPEC, 'templates/design-positions.md')
+  assert.ok(fs.existsSync(templatePath),
+    'spec/templates/design-positions.md must exist — the position-brief mandatory-field contract has no template to author from otherwise')
+  const template = fs.readFileSync(templatePath, 'utf8')
+  for (const label of [
+    '**Stance:**',
+    '**Rules cited:**',
+    '**Anti-defaults:**',
+    '**Reference direction:**',
+    '**Motion character:**',
+    '**Density & layout intent:**',
+    '**Starter tokens:**',
+  ]) {
+    assert.ok(template.includes(label),
+      `design-positions.md must contain the literal field label "${label}" or a position brief can omit a mandatory execution-level field`)
+  }
+})
+
+test('AC-20260807-05-5 (regression pin): genesis-explore.md Rules continue to state the session writes no candidate HTML', () => {
+  const explore = read('commands/genesis-explore.md')
+  assert.match(explore, /The session writes no candidate HTML/,
+    'this rule predates the spec and must survive the D1/D2 changes — the session gains tokens.css authorship, never HTML authorship')
+})
+
+test('AC-20260807-05-6: genesis.md Explore Stage names the session as author of position briefs and starter tokens.css, Sonnet as builder of tile/prototype HTML', () => {
+  const genesis = read('doctrine/genesis.md')
+  assert.match(genesis, /starter/i,
+    'genesis.md § Genesis: Explore Stage must name the session as author of starter tokens.css or the D1/D2 model-placement amendment is undocumented at the doctrine layer')
+  assert.match(genesis, /Sonnet builds every tile/i,
+    'genesis.md must continue to name Sonnet as builder of every tile/prototype HTML — the model-placement split must stay explicit after the tokens.css amendment')
+})
+
+test('AC-20260807-05-7: genesis-explore.md Phase 2 requires the pre-fan-out commit of starter tokens and an additions-only git diff check', () => {
+  const explore = read('commands/genesis-explore.md')
+  assert.match(explore, /additions only/i,
+    'the D8 additions-only diff requirement must be stated verbatim or the never-alter rule (AC-1) has no deterministic carrier')
+  assert.match(explore, /git diff/i,
+    'the D8 mechanism (git diff against the positions-authored commit) must be documented — without it the never-alter rule is unenforced prose')
+})

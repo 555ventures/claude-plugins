@@ -131,7 +131,9 @@ atlas sweeps and `/spec:design` still degrade gracefully with a note when headle
    exception: a **minimal dark block** in each finalist's `tokens.css` and **one dark
    screenshot** of the signature screen, surfaced beside the gallery — dark can invalidate a
    palette, and at n=2 the insurance is nearly free (genesis.md § Explore Stage). Harness loop
-   mandatory; session critiques each round (this is the Fable seat earning its keep). Before
+   mandatory; session critiques each round (this is the Fable seat earning its keep). The
+   critique leg is never skippable in explore — Setup's render-capability precondition
+   guarantees it, so there is no degraded/headless path here. Before
    each finalist reaches the user, run the **rule-checklist pass** (shared § Design Canon): a
    Sonnet checker walks the research-brief's admitted rules against each screen, citing rule
    IDs; violations go back to the builder.

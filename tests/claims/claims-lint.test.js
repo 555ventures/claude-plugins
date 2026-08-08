@@ -156,12 +156,20 @@ test('AC-20260807-04-6: --check counts zero claims inside an indented fence and 
     'and the marker line itself must never count as a claim: ' + check.stderr)
 })
 
-test('AC-20260807-04-8: --json against the live corpus reports totalLines under 5186 and zero orphans in the converted review.md', () => {
+test('AC-20260807-04-8: --json against the live corpus matches the stamped baseline totalLines and zero orphans in the converted review.md', () => {
   const r = runNode(SCRIPT, ['--root', ROOT, '--json'])
   assert.strictEqual(r.status, 0, '--json must succeed against the real repo corpus: ' + r.stderr)
   const out = JSON.parse(r.stdout)
-  assert.ok(out.totalLines < 5186,
-    'corpus totalLines must be strictly below the pre-spec 5186 total (2026-08-07 wc -l), got ' + out.totalLines)
+  // The `< 5186` ceiling was spec 04's landing condition (D9: net-lines-down for THAT spec),
+  // verified once at spec 04's close (2026-08-07) and not a permanent live-corpus cap — it
+  // fails whenever a later spec legitimately adds doctrine lines and restamps the baseline via
+  // `claims-lint --update-baseline` (spec 05 did exactly this, corpus now 5226, baseline clean).
+  // Superseded per the 2026-08-08 spec-05 review ruling: pin to baseline-parity instead.
+  const baseline = JSON.parse(fs.readFileSync(path.join(ROOT, BASELINE_REL), 'utf8'))
+  assert.strictEqual(out.totalLines, baseline.totalLines,
+    'live corpus totalLines drifting from the stamped baseline means doctrine changed without ' +
+    'a review-visible restamp (silent ratchet drift) — got ' + out.totalLines +
+    ', baseline stamped ' + baseline.totalLines)
   assert.strictEqual(out.files['spec/commands/review.md'].orphans, 0,
     'review.md is the seed conversion (D6) — every bar-matching claim there must carry a marker, leaving zero orphans')
 })

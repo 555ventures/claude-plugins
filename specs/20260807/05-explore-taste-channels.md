@@ -1,6 +1,6 @@
 ---
 date: 2026-08-07
-status: implementing
+status: done
 open_markers: 0
 risk: T2
 area: genesis-explore
@@ -166,6 +166,17 @@ in hosts where headless degradation is legitimate; explore is the only stage tha
 look from nothing, so the hard requirement is scoped there. Fragile spot to watch: the
 Setup capability probe must not open pages or create tabs (side effects before consent);
 probe tool availability only.
+
+Review dispositions (2026-08-08): reviewer finding "out-of-plan weakened assertion in
+tests/claims/claims-lint.test.js (AC-20260807-04-8)" **waived by user ruling** — the `< 5186`
+ceiling was spec 04's landing condition (its D9: "net-lines-down for THIS spec"), not a
+standing ratchet; this spec's sanctioned doctrine growth (D1/D3/D6) tripped it, and the user
+ruled at review iteration 1 to retarget the pin to baseline-parity
+(`totalLines === claims-baseline.json totalLines`), which preserves silent-drift detection.
+The build's deviations log had pre-flagged exactly this collision and deferred it to review.
+Two other findings fixed in-review: the D8 additions-only diff carrier gained its own
+scaffold-ledger row (gate (explore), promote/retire recorded), and Phase 3 gained the spec'd
+never-skippable-critique note.
 
 ## Canonical Delta
 

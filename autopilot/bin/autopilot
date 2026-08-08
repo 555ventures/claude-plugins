@@ -1,0 +1,123 @@
+#!/usr/bin/env node
+'use strict'
+// autopilot <subcommand> — CLI dispatcher for the autopilot spoke side
+// (specs/20260808/01-autopilot-enroll.md D1). `enroll` is the only subcommand this spec adds.
+// This file owns argv parsing, the contract capability check (D9), and exit-code rendering; all
+// enrollment logic lives in ../daemon/enroll.js (a pure library — config.js/autopilotd
+// precedent) so it stays unit-testable via DI without spawning this process.
+//
+// Deliberately does NOT: implement any enrollment logic itself (that's daemon/enroll.js), print
+// the clear token anywhere (D6 — success output is machineName + spokeId + project count +
+// config path only), retry or normalize --hub (D8, used verbatim).
+//
+// Exit codes:
+//   0  enrollment succeeded
+//   1  exchange failed (hub error response, malformed 201, network failure/timeout)
+//   2  usage/precondition (bad flags, unknown subcommand, existing config without --force,
+//      unloadable contract copy)
+
+const os = require('os')
+
+const USAGE =
+  'usage: autopilot enroll --hub <url> --code <code> [--machine-name <name>] ' +
+  '[--project <name>]... [--force]'
+
+function fail(message) {
+  console.error(message)
+  process.exit(2)
+}
+
+// D9: wraps the contract require in try/catch; exits 2 with a remedy naming Node >= 22.18 (type
+// stripping is default since v22.18.0/v23.6.0 per nodejs.org/api/typescript.html History) rather
+// than a version-arithmetic check we can't execute against other Node majors.
+function loadContractVersion() {
+  try {
+    return require('../contract/constants.ts').CONTRACT_VERSION
+  } catch (err) {
+    fail(
+      `autopilot enroll: could not load the wire contract (${err.message}) — requires Node ` +
+      `>= 22.18 (native TypeScript type stripping default since v22.18.0/v23.6.0); upgrade Node`
+    )
+  }
+}
+
+// Hand-rolled --flag parsing (repo convention — no arg library). --project is repeatable and
+// preserved in argv order (D8, AC-10).
+function parseEnrollArgs(argv) {
+  const args = {
+    hubUrl: undefined,
+    code: undefined,
+    machineName: os.hostname(),
+    projects: [],
+    force: false,
+  }
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]
+    if (arg === '--hub') {
+      args.hubUrl = argv[i + 1]
+      if (args.hubUrl === undefined) fail(`autopilot enroll: --hub needs a value\n${USAGE}`)
+      i++
+    } else if (arg === '--code') {
+      args.code = argv[i + 1]
+      if (args.code === undefined) fail(`autopilot enroll: --code needs a value\n${USAGE}`)
+      i++
+    } else if (arg === '--machine-name') {
+      args.machineName = argv[i + 1]
+      if (args.machineName === undefined) fail(`autopilot enroll: --machine-name needs a value\n${USAGE}`)
+      i++
+    } else if (arg === '--project') {
+      const value = argv[i + 1]
+      if (value === undefined) fail(`autopilot enroll: --project needs a value\n${USAGE}`)
+      args.projects.push(value)
+      i++
+    } else if (arg === '--force') {
+      args.force = true
+    } else {
+      fail(`autopilot enroll: unrecognized argument "${arg}"\n${USAGE}`)
+    }
+  }
+  if (!args.hubUrl || !args.code) {
+    fail(`autopilot enroll: --hub and --code are required\n${USAGE}`)
+  }
+  return args
+}
+
+async function runEnroll(argv) {
+  const args = parseEnrollArgs(argv)
+  const contractVersion = loadContractVersion()
+
+  const { enroll, EnrollError } = require('../daemon/enroll')
+
+  try {
+    const result = await enroll({
+      hubUrl: args.hubUrl,
+      code: args.code,
+      contractVersion,
+      machineName: args.machineName,
+      projects: args.projects,
+      force: args.force,
+    })
+    console.log(
+      `enrolled ${result.machineName} as spoke ${result.spokeId} ` +
+      `(${result.projectCount} projects) — credentials saved to ${result.configPath}`
+    )
+    process.exit(0)
+  } catch (err) {
+    if (err instanceof EnrollError) {
+      console.error(err.message)
+      process.exit(err.exitCode)
+    }
+    throw err
+  }
+}
+
+async function main() {
+  const [subcommand, ...rest] = process.argv.slice(2)
+  if (subcommand === 'enroll') {
+    await runEnroll(rest)
+    return
+  }
+  fail(`autopilot: unknown subcommand "${subcommand}"\n${USAGE}`)
+}
+
+main()

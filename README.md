@@ -100,15 +100,19 @@ your behalf. It ships no README of its own; this section is the whole runbook.
 
 1. **Install dependencies**: `cd autopilot && npm install` (the daemon needs the Claude Agent
    SDK, which this repo does not vendor at the root).
-2. **Ground the target repo**: run `/spec:init` on the repo you want the daemon to drive — an
+2. **Enroll this machine**: paste the hub's Telegram `/enroll` line —
+   `autopilot/bin/autopilot enroll --hub <url> --code <code>` — to exchange the one-time code
+   for a spoke identity; credentials save to a separate, machine-written file under
+   `~/.config/autopilot/`, 0600, and the success line never prints the token.
+3. **Ground the target repo**: run `/spec:init` on the repo you want the daemon to drive — an
    ungrounded repo is a no-op, so a throwaway repo needs this before any lane can touch it.
-3. **Create a config file** at `~/.config/autopilot/config.json` (or pass `--config <path>`)
+4. **Create a config file** at `~/.config/autopilot/config.json` (or pass `--config <path>`)
    naming the bot token, the forum-enabled supergroup, its per-project topic ids, and the
    allowed user ids.
-4. **Start the daemon**: `autopilot/bin/autopilotd`. Use `--check` for an offline preflight
+5. **Start the daemon**: `autopilot/bin/autopilotd`. Use `--check` for an offline preflight
    (validates config, resolves the SDK, asserts the oracle script exists — no network, no
    state written) before trusting a real run.
-5. **Stop the daemon**: send `SIGTERM` (or `SIGINT`) — it tears down in place.
+6. **Stop the daemon**: send `SIGTERM` (or `SIGINT`) — it tears down in place.
 
 Only one process may long-poll a given bot token at a time (Telegram allows a single
 `getUpdates` consumer per token) — never run the daemon and the opt-in live test suite

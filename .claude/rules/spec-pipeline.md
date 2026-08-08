@@ -79,6 +79,9 @@ T1-shaped work: doctrine prose edits pinned by existing tests, new sweeps in
 - **Zero dependencies**: scripts and tests use only Node built-ins (`fs`, `path`,
   `child_process`, `os`, `assert`, `node:test`) and `jq` in bash. Never add a package. The
   `autopilot/**` SDK-import exception is stated in full in § Review Checks below.
+  `autopilot/contract/**` is a read-only vendored copy of the hub's wire contract (ADR-0007) —
+  its inert typebox import in `index.ts`/`contract.test.ts` is sanctioned and never edited,
+  never a package addition (specs/20260808/01-autopilot-enroll.md D2–D3).
 - Bash scripts open `#!/usr/bin/env bash` + `set -u` (never `set -e` — failures are explicit
   and carry remedies). JS scripts open `#!/usr/bin/env node` + `'use strict'`.
 - Every script starts with a header comment: usage line, why it exists (dated incident),
@@ -106,11 +109,14 @@ T1-shaped work: doctrine prose edits pinned by existing tests, new sweeps in
   in-process DI unit tests for `autopilot/daemon/*` lib modules — injected fakes
   (`queryImpl`, transports), `node:test` mock timers, zero real SDK/network calls.
   Fixtures (`tests/fixtures/`) only when the input must be a realistic multi-file artifact.
-- Nothing here is exempt from TDD. One sanctioned env-gated suite exists:
+- Nothing here is exempt from TDD. Two sanctioned env-gated suites exist:
   `tests/autopilot/live.test.js` posts real questions to a real Telegram topic and waits for a
   real tap — it activates only when `AUTOPILOT_LIVE=1` is set in addition to the
   `AUTOPILOT_LIVE_TOKEN`/`_SUPERGROUP`/`_TOPIC`/`_USER` credentials, and skips by declaration
-  otherwise (specs/20260801/04-live-smoke.md D6).
+  otherwise (specs/20260801/04-live-smoke.md D6); `tests/autopilot/enroll-live.test.js`
+  performs a real enrollment against the production autopilot-hub — it activates only when
+  `AUTOPILOT_ENROLL_LIVE=1` is set in addition to `AUTOPILOT_ENROLL_HUB`/`AUTOPILOT_ENROLL_CODE`,
+  and skips by declaration otherwise (specs/20260808/01-autopilot-enroll.md D11).
 - **Red-pin baseline**: the full suite deliberately carries failing INTAKE pins (11 as of
   2026-08-01) — `npm test` exiting 1 on untouched code is the sanctioned state, not a
   regression. The pipeline gate is therefore scoped via `{testDirs}`; pipeline-authored
@@ -133,6 +139,11 @@ T1-shaped work: doctrine prose edits pinned by existing tests, new sweeps in
 - A script or test importing a non-builtin package is **hard**. `autopilot/**` may import
   ONLY `@anthropic-ai/claude-agent-sdk`, and only from `autopilot/daemon/sdk.js`; any other
   non-builtin import anywhere, or an SDK import elsewhere, stays a hard finding.
+  `autopilot/contract/**` is exempt from this check — it is a read-only vendored copy of the
+  hub's wire contract (ADR-0007, specs/20260808/01-autopilot-enroll.md D2) and its
+  `index.ts`/`contract.test.ts` typebox import is sanctioned-inert, never a hard finding,
+  provided the files stay byte-identical to the hub source and no other file adds a typebox
+  import.
 - An error path that doesn't name its remedy command, or a new exit code not documented in
   the script's header, is **hard**.
 - A `§ Section Name` citation that doesn't match a `## ` heading in the cited doctrine file

@@ -93,7 +93,9 @@ actually flip state?) is never parsed from the transcript — the caller re-deri
 ## Conventions
 
 - Zero dependencies: global `fetch`/`AbortController` and Node built-ins only.
-  Transports are injected (`fetchImpl`) rather than mocked by module interception.
+  Transports are injected (`fetchImpl`) rather than mocked by module interception. The one
+  sanctioned inert exception is the vendored hub wire contract at `autopilot/contract/`
+  (see § Enrollment) — its typebox import is deliberately unresolved and adds no dependency.
 - `autopilot/package.json` is the repo's one sanctioned dependency boundary — `spec/` scripts and
   `tests/` stay zero-dep. The SDK import lives only in `autopilot/daemon/sdk.js`, loaded lazily,
   so `npm test` never needs `autopilot/node_modules`; `session.js` takes `queryImpl` by injection.
@@ -124,6 +126,20 @@ alone is not enough, so a stray exported token cannot turn `npm test` into a han
 one `getUpdates` consumer per bot token, so the live tests and a running daemon must never share
 one. Operator setup — install, grounding a throwaway repo, config location, start, stop — lives in
 the root `README.md`; autopilot ships no README of its own.
+
+## Enrollment
+
+Spoke enrollment is `autopilot/bin/autopilot enroll --hub <url> --code <code>` — the
+spoke side of the hub's Telegram `/enroll` paste-line. The wire contract is vendored
+verbatim at `autopilot/contract/` (hub ADR-0007; read-only, typebox import deliberately
+inert; `CONTRACT_VERSION` is always imported from `constants.ts`, never a literal).
+Credentials (hubUrl, spokeId, bearer token, projects) persist to
+`~/.config/autopilot/hub.json`, 0600, written atomically; the token never appears on
+stdout/stderr. Re-enrollment requires `--force` because it mints a second spoke identity
+on the hub. Exit alphabet 0/1/2 per the script convention; 401 always renders the fixed
+"get a fresh one with /enroll in Telegram" line. Live verification is the env-gated
+`tests/autopilot/enroll-live.test.js` (`AUTOPILOT_ENROLL_LIVE=1` + `_HUB` + `_CODE`),
+same opt-in discipline as the Telegram live suite.
 
 **Lane failure semantics (0.4.1).** `mainLoop`'s post-oracle body (checkpoint, stage, repair,
 halt — everything that narrates through the adapter) is covered by the same catch-log-backoff

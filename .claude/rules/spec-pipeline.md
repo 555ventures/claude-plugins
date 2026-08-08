@@ -185,6 +185,11 @@ upstream bug list. -->
   `?? dir/` line — file-level consumers need `--untracked-files=all` or every file inside a
   new directory is invisible to them. (specs/20260805/01-review-scope-reconciliation.md —
   scope-reconcile.js hit this on AC-4's fixture during build.)
+- `[host]` A test that spawns a CLI against an **in-process** stub server must use async
+  `spawn`, never `spawnSync` — spawnSync blocks the parent's event loop for the child's whole
+  lifetime, so the stub can never answer and every such test hangs to its timeout
+  (status=null/SIGTERM). (specs/20260808/01-autopilot-enroll.md — every stub-reaching AC hung
+  in build repair round 1; fixed by switching the helper to awaited `spawn`.)
 - `[plugin]` A spec Decision that records a class-level item "in spec/INTAKE.md, doctrine-only"
   collides with INTAKE.md's authoring contract: every row's `Pinned by` must name a failing test
   or a `pre-contract` artifact. Plan the citation (or the failing test) with the Decision, or the

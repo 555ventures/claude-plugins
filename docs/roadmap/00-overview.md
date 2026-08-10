@@ -14,3 +14,4 @@ fences off belongs to its owning brief.
 | Brief | Name |
 |-------|------|
 | 01 | claims-registry |
+| 02 | design-path-model-placement |

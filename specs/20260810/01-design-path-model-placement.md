@@ -1,6 +1,6 @@
 ---
 date: 2026-08-10
-status: implementing
+status: done
 open_markers: 0
 risk: T2
 area: design

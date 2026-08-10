@@ -133,7 +133,18 @@ Reproduce what the repo already enforces (do not duplicate or fight an existing 
 it and leave it, or fold it into the manifest as already-covered) and add the missing structural
 enforcers. Generation MAY run as a worktree-isolated workflow stage if many artifacts are written
 in parallel; inline is fine when N is small. **This command edits only the host's grounding/gate
-layer — never application source.**
+layer — never application source** (sole exception: the deterministic baseline pass below).
+
+**Deterministic baseline pass — the one sanctioned source edit.** When a verified enforcer has a
+write/fix mode and the tree carries pre-existing violations its new gate check would flag (the
+common `format` case: formatter configured but unwired), run that tool's write mode ONCE over the
+tree so the check lands green instead of handing the user a red gate only the tool itself can
+clear. Conditions, all three: (a) the tool passed two-stage verify (Phases 2–3); (b) the
+pre-existing gate is green before the pass and the full gate — including the new check — is green
+after it; (c) the run is recorded as `baselineRun` in the cell's manifest entry. The danger the
+no-edit rule guards against is semantic edits made by model judgment; a verified deterministic
+tool's own output, gate-checked on both sides, is not that. Never hand-edit toward the same
+result — if the tool cannot establish its own baseline, the category falls back per Phase 3.
 
 ## Phase 5 — Create missing rules (PROPOSE — never auto-author)
 
@@ -170,7 +181,8 @@ Write `.claude/rules/enforcement.json` — the enforcement manifest (one entry p
         "configPath": "<written config/contract path>",
         "gateWiring": "<how it enters the gate / hook>",
         "citations": [{ "url": "...", "note": "..." }],
-        "verifiedRun": "<runCmd that passed in Phase 3>"
+        "verifiedRun": "<runCmd that passed in Phase 3>",
+        "baselineRun": "<write-mode cmd run once to establish the baseline>"  // optional — only when Phase 4's baseline pass ran
       },
       "fallback": "none"                       // "none" | "sweep" | "review-check"
     }
@@ -217,5 +229,7 @@ re-inventory them here.
   judgment — never because research was skipped.
 - **Propose, never auto-author** rules (Phase 5). A dismissed `AskUserQuestion` STOPS the run.
 - **Edits stay in the host grounding/gate layer** — config, rule docs, gate/hook wiring, the
-  pattern-sweep script, generated checker scripts. Never edit application source here.
+  pattern-sweep script, generated checker scripts. Never edit application source here — sole
+  exception: Phase 4's deterministic baseline pass (the verified tool's own write mode, gate
+  green on both sides, recorded as `baselineRun`).
 - Compose over deterministic coverage; never duplicate a linter's check as an LLM check.

@@ -17,7 +17,7 @@
       "orphans": 3
     },
     "spec/commands/enforce.md": {
-      "lines": 221,
+      "lines": 235,
       "orphans": 1
     },
     "spec/commands/escape.md": {
@@ -77,5 +77,5 @@
       "orphans": 4
     }
   },
-  "totalLines": 5229
+  "totalLines": 5243
 }

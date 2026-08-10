@@ -53,7 +53,7 @@
       "orphans": 0
     },
     "spec/commands/sketch.md": {
-      "lines": 123,
+      "lines": 128,
       "orphans": 3
     },
     "spec/commands/status.md": {
@@ -77,5 +77,5 @@
       "orphans": 4
     }
   },
-  "totalLines": 5243
+  "totalLines": 5248
 }

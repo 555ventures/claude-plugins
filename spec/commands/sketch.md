@@ -17,9 +17,11 @@ whole-product map; this command is the per-brief workbench — the atlas's annot
 
 **Intended model: the session model.** This IS the roadmap-level taste seat (shared § Model
 Placement — direction is judged here so `/spec:design` later inherits it): recommend Fable/Opus
-for brainstorm rounds. All mock authoring and mock edits dispatch **Sonnet agents**
-(`Agent {model: "sonnet"}`) under the harness check — the session holds the brief, the triage,
-and the conversation, never mock file contents.
+for brainstorm rounds. **The session authors sketch mocks itself** — at sketch tier taste shows
+up in the authored artifact, and one author holding every surface keeps them reading as one
+product; parallel per-surface agents can't see each other's chrome and drift (ruled 2026-08-10).
+Mechanical mock edits (copy swaps, reorders) may still dispatch Sonnet agents
+(`Agent {model: "sonnet"}`) under the harness check; taste-bearing edits stay in-session.
 
 **Fresh-window contract:** every invocation cold-starts from disk — brief + mocks are re-read,
 state is derived (which surfaces have mocks, at what `data-status`), and each applied round is
@@ -54,11 +56,13 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
 2. **Bound check.** Surfaces already `bound`/`built` (coverage ledger claim) are contracts —
    changes to them route through `/spec:design`'s drift handling, never through this command.
    If the requested change targets one, STOP and say so; sketch is pre-plan only.
-3. **Scoped sweep.** For each **gap surface of this brief only**: one Sonnet agent authors
-   `design/mocks/<label>.html` at sketch tier under the harness check — the identical contract
-   to the atlas sweep (shared § Design Atlas: sketch `data-status`, real copy register, token
-   roles, grounded in the brief + research brief + doctrine + tokens; parallel dispatch, paths
-   not prose). Existing mocks are never re-authored. When a surface carries capability an
+3. **Scoped sweep — single pass, in-session.** The session authors `design/mocks/<label>.html`
+   for every **gap surface of this brief only**, sequentially in one sitting, at sketch tier —
+   same artifact contract as the atlas sweep (shared § Design Atlas: sketch `data-status`, real
+   copy register, token roles, grounded in the brief + research brief + doctrine + tokens),
+   never one-agent-per-surface. Past 5 gap surfaces: author the 5 most journey-central
+   in-session, then one sequential Sonnet dispatch authors the rest with the session-authored
+   mocks cited as exemplars. Existing mocks are never re-authored. When a surface carries capability an
    out-of-scope brief owns, give that capability its own region rather than folding it into a
    region the current brief must bind — an unbound region is inherited for free, while
    future-brief content entangled inside a bound region costs an evidence-gated delta row.
@@ -71,8 +75,9 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    (discover via ToolSearch, never assume). Group notes by surface, present the plan, then
    **triage every change by root cause before touching anything** — the shared triage (shared
    § Design Atlas) plus the architecture route:
-   - **Mock-detail** (spacing, copy, emphasis, pure-UI state) → Sonnet mock edit, `{atlas} check`,
-     rebuild, refresh.
+   - **Mock-detail** (spacing, copy, emphasis, pure-UI state) → taste-bearing edits in-session,
+     mechanical ones (copy swaps, reorders) via Sonnet mock edit; `{atlas} check`, rebuild,
+     refresh.
    - **Structure** (surface added/removed, journey edge changed) → the brief's `surfaces` block
      FIRST, then the mock follows (create/delete/edit as implied).
    - **Intent/scope** (a capability added or dropped — "users can favorite items") → the brief's

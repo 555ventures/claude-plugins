@@ -406,10 +406,15 @@ Issue correction notes and dispatch Sonnet to apply them (you edit nothing), re-
 Hand off with exactly this block (real values; the user runs the command — never launch it):
   🎨 **ready for review** — run: \`${design.command}\` (showcase first)
   🔗 <one navigation line per story/entry touched this round: WHERE to look, not just what.
-     When the catalog supports deep links they are mechanically derivable — derive them, never
-     omit (Storybook: /?path=/story/<title-slug>--<export-slug> from the story title + export
-     name). No deep links → the path within the catalog. A component landing inside an existing
-     entry names its row/section.>
+     Lead with the catalog's searchable keyword in backticks — the string the user pastes into
+     the catalog's search box. Storybook's Find-components input matches space-separated words,
+     NOT slashed paths: emit the title's last segment + the story name as plain words (e.g.
+     \`Showcase Chat Thread\` for Canon/Showcase → Chat Thread), never the slashed title or the
+     export's camelCase. Then the deep link when the catalog supports one;
+     deep links are mechanically derivable — derive them, never omit (Storybook:
+     /?path=/story/<title-slug>--<export-slug> from the story title + export name). No search or
+     deep links → the path within the catalog. A component landing inside an existing entry
+     names its row/section.>
   🆕 <components added/changed this round>
   👀 <one line per component: what to look for>
 AskUserQuestion: Approve / Iterate (notes via Other). Dismissed → STOP (state is on disk).

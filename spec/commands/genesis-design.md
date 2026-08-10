@@ -186,6 +186,13 @@ Author directly (taste exception — not delegated to Sonnet):
    Design Authoring Contracts, component manifest) with the base primitives landed here — `name`, `purpose`,
    `props`, `mockRefs` — so the first `/spec:design` run starts its bind-vs-author decisions
    against a non-empty manifest. Headless/non-visual archetypes skip this item.
+   **Also seed the component vocabulary:** for every building block the ratified direction /
+   doctrine / winner mocks commit the product to — in ratification mode, sourced from the
+   winner's position brief, doctrine rulings, and signature screens; in legacy mode, from the
+   panel outcome + doctrine — add a **commitment entry** (`name`, `purpose`, `boundaries`) to the
+   same manifest, visual archetypes only (shared § Design Authoring Contracts, component
+   vocabulary). These are additional rows alongside the base-primitive entries, distinguished by
+   absent `props`/`mockRefs`.
 4. **Design rules** — write `.claude/genesis/design-rules.json` (template via `spec-paths templates`):
    each rule carries a `targetCategory` **enum only** (the design category set defined in
    genesis.md § Genesis: Enforcement Handoff), `appliesTo`/`exemptGlobs`, `severity`, `rationale`,
@@ -198,7 +205,10 @@ Author directly (taste exception — not delegated to Sonnet):
    breakpoint roles), etc. A
    DECIDED family with no consume-by-name rule is an authoring error: encodable ⇒ token **and**
    category, always.
-5. Commit. Set `status.design: rules-locked`.
+5. **Commit** — first run `node "$(spec-paths components-check)" design/components.json`
+   fail-closed on the vocabulary/base-primitive manifest item 3 just wrote (genesis validates a
+   file it just authored — safe to gate, unlike the driver's advisory brownfield posture); fix
+   any findings before proceeding. Then commit. Set `status.design: rules-locked`.
 
 ## Phase 5 — Report & hand off
 

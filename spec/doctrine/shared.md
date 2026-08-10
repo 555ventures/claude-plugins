@@ -476,6 +476,25 @@ name/purpose comparison a cheap model does reliably). The point is the gradient:
 component must cost strictly more than reusing one — the same inversion that makes the token
 near-match rule work. New components are never forbidden; unjustified ones are.
 
+**Component vocabulary (commitment entries, greenfield-seeded).** `/spec:genesis-design`
+additionally seeds `design/components.json` with **commitment entries** — the product's
+committed building blocks, named ahead of any binding session: `name`, `purpose`, and an
+optional `boundaries` field (an array of non-empty strings naming the usage limits the entry
+commits to, e.g. "status/state signaling only — never interactive, never navigation"). A
+commitment entry is structurally distinguished from a landed entry by absence: no
+`props`/`mockRefs` yet, because nothing has bound it. `spec/scripts/components-check.js`
+(`spec-paths components-check`) is the schema authority for the manifest's canonical shape (a
+top-level JSON array; `name`+`purpose` required non-empty strings, `boundaries` when present an
+array of non-empty strings, duplicate `name`s an error) — it runs fail-closed in
+`/spec:genesis-design`'s commit step and advisory in the design driver's preflight. `wf-design`
+workers read a non-empty manifest path as binding canon exactly like tokens: a vocabulary entry
+is bound/imported or authored to fulfil it, never re-invented as a lookalike, and a `boundaries`
+contradiction stands as a fork (`blocked {kind: "design-fork"}`) at the same standing as a
+token-value contradiction. `/spec:review`'s component-manifest check treats commitment entries
+as first-class: its near-duplicate comparison includes them (a new entry that near-duplicates a
+commitment entry is a finding), and an `author` decision that fulfils a commitment entry cites
+that entry, by name, as its justification.
+
 ## Design Binding Pipeline (/spec:design)
 
 How `/spec:design` turns a mock into components: model placement, source fetch/extraction,
@@ -587,6 +606,18 @@ Claude Design is **strictly opt-in**: `/spec:design` engages this path **only** 
 `design_source`, and `DesignSync` being unavailable is an error **only** then. With no
 `design_source`, nothing is loaded or fetched and the design stage is byte-for-byte unchanged.
 
+**Exit fidelity review (unified, post-gate).** After `wf-design`'s gate returns green
+(`author-green`), the driver's next step is one post-gate fidelity review — state
+`FIDELITY_REVIEW`, mark `fidelity-reviewed` — replacing the earlier config-gated `VISUAL` step
+and the separate advisory vision-review consult (ruled 2026-08-10). It fires whenever the host
+has any render path (`design.screenshot` OR `design.command`); `design_source` only selects the
+comparison target, never gates the state — **mock-bound**: screenshot bound regions vs mock
+slices, one expensive-seat consult (Fable retainer, Opus fallback), a divergence list keyed by
+`regionRef`; **no-mock**: the render critique against skeletons + doctrine (today's no-mock
+behavior, preserved). Either way findings enter the iteration loop as rulings, fixes, or
+evidence-gated `deltas.json` rows — **never a fail-closed gate, never a script**. A legacy
+sidecar's existing `visual-done` mark satisfies `FIDELITY_REVIEW` on resume (compat).
+
 ## Design Atlas
 
 The whole-product design view — the layer that catches what per-screen review provably misses
@@ -622,6 +653,15 @@ Generation is **zero-token**: a script walk, never a model pass.
   will drift before build and get re-touched at promotion; that is the accepted price of early
   whole-product reviewability (the declarations and review rulings survive even where pixels
   don't).
+- **Gap-sweep authoring is sequential, exemplar-grounded, never parallel-blind per-surface
+  (ruled 2026-08-10).** One warm author per pass carries context forward: the sketch shape
+  (`/spec:sketch`, session-authored, one sequential Sonnet dispatch valve past 5 gap surfaces)
+  and the atlas shape (`/spec:atlas`'s full sweep, chained sequential Sonnet dispatches past
+  ~10 surfaces) are both instances of the same rule — each dispatch/round cites the
+  already-authored mocks (ratified/approved first, then this pass's own earlier output) as
+  exemplars, so late surfaces match early chrome instead of drifting independently per-surface.
+  This is the single doctrine home for the ruling; `/spec:sketch`'s inline copy (v6.48.0) is
+  sanctioned test-pinned redundancy until a touch-time dedup.
 - **`/spec:atlas`** is the human loop around the script: regenerate, report the file path
   (serving is opt-in — only on request or for annotation-MCP anchoring; never auto-open a
   browser), run the

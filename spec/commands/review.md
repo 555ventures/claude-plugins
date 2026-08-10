@@ -173,7 +173,10 @@ deliberately outside this command's scoped read.)
   sidecar at reconcile). A component born of an `author` decision with no `authorJustification`
   is a `hard` finding; a justification whose named nearest entry actually covers the need, or a
   new entry that near-duplicates an existing one (name/purpose comparison), is a finding with
-  the reuse named.
+  the reuse named — **the near-duplicate comparison includes commitment entries**
+  (name+purpose+optional `boundaries`, no `props`/`mockRefs` yet — shared § Design Authoring
+  Contracts): authoring a lookalike of a committed block is the same finding, and an `author`
+  decision that fulfils a commitment entry must cite that entry, by name, as its justification.
 
 Their findings enter Phase 2 as ordinary findings at the stated severities. Both legs skip
 silently on specs with no UI surface — never nag a backend diff about design.

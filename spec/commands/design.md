@@ -111,8 +111,10 @@ Next: /spec:build {specPath}
   forks, issues visual-review notes and iteration rulings; Sonnet/Haiku apply every edit (sole
   exception: the driver's micro-edit rule for one-line exact-string changes).
 - **Gate-green ≠ visually right.** A green author is structural (skeleton-expanded) only; the
-  screenshot review (when configured) or the human catalog loop is the visual gate. Never show
-  the user output you have not at least gated.
+  unified exit fidelity review (`FIDELITY_REVIEW` state, fires whenever the host has a render
+  path — mock-bound render-vs-mock, no-mock render critique; shared § Design Binding Pipeline)
+  or the human catalog loop is the visual gate. Never show the user output you have not at
+  least gated.
 - **With a mock bound, the mock is a contract, not an influence — bound region by region.** A
   canvas export is a whole screen; the spec binds only the REGIONS it builds
   (`regionRef: "<surface>#<region>"`, from the driver's feasibility report), and the bound
@@ -165,7 +167,13 @@ Next: /spec:build {specPath}
   (`name`, `purpose`, `props`, `mockRefs`, and — for `author` decisions — `authorJustification`,
   copied verbatim from the binding map: the sidecar is deleted at reconcile, so the manifest is
   where the justification survives for review). Creating must cost more than reusing — that gradient is the anti-duplication
-  mechanism, not anyone's memory.
+  mechanism, not anyone's memory. A **commitment entry** (name+purpose+optional `boundaries`,
+  no `props`/`mockRefs` yet — shared § Design Authoring Contracts) is binding canon exactly like
+  a token role: workers read it via the `componentManifestPath` grounding, bind/import or author
+  to fulfil it, never re-invent a lookalike, and a `boundaries` contradiction is a fork, same
+  standing as a token-value contradiction (`blocked {kind: "design-fork"}`). An `author`
+  decision that fulfils a commitment entry cites that entry, by name, as its nearest-manifest
+  justification.
 - **A `built` surface re-entering design re-syncs its mock first** (mock authority expired at
   `built` — shared § mock-authority lifecycle): refresh the mock to current shipped reality
   (screenshot the live screen, update the file), then design the change on top. Never design

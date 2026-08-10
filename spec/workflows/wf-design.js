@@ -96,6 +96,11 @@ if (!args || typeof args !== 'object' || !STAGES.includes(STAGE)) {
 //   specPath: string,
 //   designDoctrinePath: string,  // path to the design doctrine doc (config design.doctrine); '' if none
 //   tokenPaths: [string],        // token/theme file paths — binding canon, extended never forked
+//   componentManifestPath: string,  // path to design/components.json; '' if the host has none.
+//                                //   Non-empty ⇒ workers read it as binding canon: a block the
+//                                //   vocabulary names is bound/imported or authored to fulfil its
+//                                //   entry, never re-invented as a lookalike; a `boundaries`
+//                                //   contradiction is a fork, same standing as a token-value one.
 //   skeletonPath: string,        // the on-disk skeletons.json the session's warm skeleton-author wrote: the
 //                                //   binding plan implement-/stories-kind batches EXPAND from (never re-derive)
 //   groups: [[{id, agentType, kind, files: [{path, action}]}]],  // author: array of WAVES; each wave is an
@@ -168,6 +173,7 @@ const GATE = {
 const RULES_PATH = args.pipelineRulesPath || ''
 const DOCTRINE_DOC = args.designDoctrinePath || ''
 const TOKEN_PATHS = args.tokenPaths || []
+const componentManifestPath = args.componentManifestPath || ''
 
 const HARD_RULES = [
   `## Hard rules
@@ -182,7 +188,7 @@ const HARD_RULES = [
 - **Stateless discipline:** the surfaces you touch use props + mock data ONLY — no data-layer
   imports, no state-management/store imports, no router/navigation access. Wiring is /spec:build's job.
 - Tokens and the design doctrine are **binding canon**. Extending the token scale (new role) is normal;
-  contradicting a token VALUE, or a doctrine ruling, is a **fork**, not a tweak.${DOCTRINE_DOC ? ` Read ${DOCTRINE_DOC} for the doctrine.` : ''}${TOKEN_PATHS.length ? ` Token files: ${TOKEN_PATHS.join(', ')}.` : ''}
+  contradicting a token VALUE, or a doctrine ruling, is a **fork**, not a tweak.${DOCTRINE_DOC ? ` Read ${DOCTRINE_DOC} for the doctrine.` : ''}${TOKEN_PATHS.length ? ` Token files: ${TOKEN_PATHS.join(', ')}.` : ''}${componentManifestPath ? ` The component vocabulary at ${componentManifestPath} is also binding canon: a block it names is bound/imported or authored to fulfil that entry — never re-invented as a lookalike; a \`boundaries\` contradiction is a fork, same standing as a token-value contradiction.` : ''}
 - **Mock supremacy on mock-bound surfaces:** when a skeleton carries \`regionRef\` (or legacy
   \`sliceRef\`), the bound region's slice is the design authority for copy, structure, order, and layout. A taste-grade doctrine habit (dialog
   conventions, button-order house style, copy tone) YIELDS to the mock — never silently normalize

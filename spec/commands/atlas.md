@@ -87,9 +87,12 @@ are incremental gap-filling.
 For each `gap` surface: one Sonnet agent authors `design/mocks/<label>.html` at **sketch tier**
 (`data-status="sketch"`; structure, real copy register, token roles — no polish pass, no
 screenshot loop) under the harness check, grounded in the owning brief + the research brief
-(`docs/design/research-brief.md`, when present) + doctrine + `design/tokens.css`. Parallel
-dispatch, paths not prose. Then rebuild and report — the whole picture should always exist;
-polish arrives per-surface at `/spec:design`.
+(`docs/design/research-brief.md`, when present) + doctrine + `design/tokens.css`. **Sequential
+dispatch, exemplar-grounded, never parallel per-surface** (shared § Design Atlas — one warm
+author per pass; chained sequential Sonnet dispatches past ~10 gaps, each receiving the
+previously-authored mock paths as exemplars so late surfaces match early chrome); paths not
+prose. Then rebuild and report — the whole picture should always exist; polish arrives
+per-surface at `/spec:design`.
 
 ## Rules
 

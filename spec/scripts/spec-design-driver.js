@@ -17,9 +17,16 @@
 // CONTRACT:
 //   spec-design-driver <spec.md>                 -> print current state + step instructions
 //   spec-design-driver <spec.md> --mark <mark>   -> record progress, then print the next step
-//     marks: author-green [--run-id <wf id>] | visual-done | round-green | approved |
-//            vision-reviewed (advisory only — never gates a state transition)
+//     marks: author-green [--run-id <wf id>] | fidelity-reviewed | round-green | approved
 //   spec-design-driver <spec.md> --state         -> print the state name only (scripting)
+//
+// 2026-08-10 (specs/20260810/01-design-path-model-placement.md D6): the config-gated VISUAL
+// state (`visual-done` mark) and the advisory vision-review block (`vision-reviewed` mark) are
+// RETIRED, replaced by one post-gate FIDELITY_REVIEW state (`fidelity-reviewed` mark) that fires
+// whenever the host has any render path (design.screenshot OR design.command) — a legacy
+// sidecar's existing `visual-done` mark still satisfies it (resume compat). D3/D5: the driver
+// also runs components-check.js advisory (warn, never block) against design/components.json if
+// present, and the AUTHOR step's printed args gain `componentManifestPath`.
 // Exit codes: 0 = step printed; 2 = precondition failure (wrong status, no design block, bad args).
 // State lives in <spec>.design/design-state.json + the artifacts themselves. Deleting the
 // sidecar resets to the start of the design stage (the spec is never touched by this script).
@@ -64,6 +71,20 @@ const design = config.design || (config.storybook ? { tool: 'storybook', command
 if (!design) die('host config declares no design block (nor legacy storybook keys) — the design stage does not apply to this repo; STOP')
 
 const PLUGIN = path.resolve(__dirname, '..')
+
+// ---- component vocabulary registry (D3/D5) — advisory only, never blocks the driver -------------
+const componentManifestPath = fs.existsSync(path.join(repoRoot, 'design/components.json'))
+  ? 'design/components.json' : ''
+let componentManifestWarning = ''
+if (componentManifestPath) {
+  const r = spawnSync(process.execPath,
+    [path.join(PLUGIN, 'scripts/components-check.js'), path.join(repoRoot, componentManifestPath)], { encoding: 'utf8' })
+  if (r.status === 1) {
+    componentManifestWarning = '⚠ component manifest advisory (' + componentManifestPath +
+      ' — components-check found issues, never blocks the driver):\n' + (r.stdout + r.stderr).trim() + '\n\n'
+  }
+}
+
 const sidecar = specPath.replace(/\.md$/, '.design')
 const inSidecar = (f) => path.join(sidecar, f)
 const exists = (f) => fs.existsSync(inSidecar(f))
@@ -126,7 +147,7 @@ function recordCoverage() {
 
 // ---- record a mark (validated against the artifacts, then fall through to print next step) ------
 if (MARK) {
-  const valid = ['author-green', 'visual-done', 'round-green', 'approved', 'vision-reviewed']
+  const valid = ['author-green', 'fidelity-reviewed', 'round-green', 'approved']
   if (!valid.includes(MARK)) die('unknown mark "' + MARK + '" (' + valid.join(' | ') + ')')
   // The mock fidelity gate is FAIL-CLOSED on the marks that assert "this round's code is right":
   // when a mock is bound (extract.json has fidelity data), strings/order/layout are verified
@@ -171,7 +192,7 @@ else {
   if (!sk) state = 'SKELETONS'
   else if (!sk.ok) { state = 'SKELETONS_INVALID'; detail = sk.out }
   else if (!marks['author-green']) state = 'AUTHOR'
-  else if (design.screenshot && !marks['visual-done']) state = 'VISUAL'
+  else if ((design.screenshot || design.command) && !marks['fidelity-reviewed'] && !marks['visual-done']) state = 'FIDELITY_REVIEW'
   else if (!marks.approved) state = 'ITERATE'
   else state = 'RECONCILE'
 }
@@ -280,31 +301,6 @@ const SKELETON_SHAPE_NOMOCK = `4. Write ${sidecar}/skeletons.json — per surfac
    allowlist], shared, usedBy, containment, coherenceGroup, waveOrder } plus top-level
    {schemaVersion, source:{sha256}, tokenForks[]}. Every style value is a ROLE, never a literal.`
 
-// ---- vision review (advisory only — never gates a mark) -----------------------------------------
-// fidelity-check verifies STRINGS (copy, order, layout skeleton) — it cannot see whether the
-// rendered component actually LOOKS like the mock. That is a judgment call, so unlike author-green
-// / round-green it is never wired to a mark that blocks anything: it is a report folded into the
-// human catalog loop the same way a round's notes are. Fires only when a mock is bound (nothing to
-// compare against otherwise) and the host has a runnable catalog; the --mark just silences the
-// reminder on rerun, it does not gate ITERATE, round-green, or approved.
-function visionReviewBlock() {
-  if (!designSource || marks['vision-reviewed'] || !design.command) return ''
-  return `## Advisory: vision review (render vs mock, region by region — never fail-closes)
-1. Screenshot the expanded component's catalog entry${design.screenshot ? ' via the host screenshot command: ' + design.screenshot : ' from a catalog instance the USER runs (ask them; the catalog command is theirs, never yours)'}.
-2. Open/screenshot the bound mock slice(s) for the same region(s): ${sidecar}/slice-*.html.
-3. Dispatch ONE vision-capable consult (Agent {model:"fable"}, Opus fallback) with both images:
-   compare render vs mock REGION BY REGION and return a divergence list keyed by regionRef.
-4. Present the divergence list to the user in this iteration round as a note, not a verdict — this
-   consult is advisory only: it never fail-closes a mark and never writes ${sidecar}/deltas.json
-   itself. An accepted divergence still goes through the normal round protocol (a ruling, then a
-   fix or an evidence-gated deltas.json row) — the consult's opinion alone is never sufficient
-   evidence (shared § mock supremacy — taste is never valid evidence, and this consult is taste).
-Skip this block entirely when the host has no runnable catalog. Done (silences on rerun):
-  spec-design-driver ${specPath} --mark vision-reviewed
-
-`
-}
-
 const STEPS = {
   BLOCKED: () => `Spec status is "${status || '<missing>'}" — /spec:design requires status: hardened.
 ${designed ? 'designed: is already set — a re-design; confirm with the user before deleting it.' : 'Run /spec:plan first.'}`,
@@ -371,6 +367,7 @@ single batch is [[{...}]]. Unsure → more waves (serial), never a fatter wave.
 Invoke Workflow {scriptPath: "${wfDesign}", args: {stage: "author",
   specPath: "${specPath}", skeletonPath: "${sidecar}/skeletons.json", groups: <built above>,
   tokenPaths: [<from doctrine doc>], designDoctrinePath: "${doctrinePath}",
+  componentManifestPath: "${componentManifestPath}",
   agentMap: <config agentMap>, doctrinePaths: {<host agent name: .claude/agents/<name>.md>},
   gate: {command: "${gateCmd}"}, pipelineRulesPath: "${config.pipelineRules || ''}"}}
 args = real JSON object; paths/ids/enums only — no prose.
@@ -382,27 +379,36 @@ fork; then re-invoke the same Workflow with resumeFromRunId. Anything else (gate
 out-of-scope) → read the failures, fix on disk (dispatch Sonnet), re-invoke. A green author is
 "structural (skeleton-expanded) — NOT visually approved."`,
 
-  VISUAL: () => `## Step: rendered visual review (one round — raises the floor)
-Run the host screenshot command: ${design.screenshot}
-Scope: first pass renders everything this spec landed; any re-render covers ONLY changed
-entries + the showcase.
-${designSource && exists('extract.json') ? `The design source is the ground truth and it RENDERS (canvas exports ship support.js):
-this review is the design-QA seat — MOCK vs STORY, side by side, never the story alone.
-1. Render each bound surface's source file in a browser (a one-shot Sonnet Agent with the
-   Chrome/screenshot tooling, or the host's own tooling) and screenshot each BOUND region
-   (extract.json regions carry the region tree; region slices name the subtrees).
-2. Pair each region crop with the matching story screenshot at the SAME viewport width.
-3. Review each pair against this checklist — judge only what the deterministic gate cannot see
-   (copy/order/layout are already verified): structure & element order, spacing rhythm, size
-   hierarchy, color-ROLE usage (the tokenMap applied, incl. dark/mobile variant obligations),
-   alignment, empty/error/long-string states, showcase coherence.
-If the mock cannot be rendered in this environment, fall back to reviewing the story
-screenshots against the region SLICES (markup) — say so in the log.` : `Read the images and critique for real — alignment, contrast, spacing
-rhythm, empty/error/long-string states, showcase coherence.`}
-Issue correction notes and dispatch Sonnet to apply them (you edit nothing), re-run the gate
-(${gateCmd || 'host gate'}), checkpoint-commit when green. Then:  spec-design-driver ${specPath} --mark visual-done`,
+  FIDELITY_REVIEW: () => {
+    const shot = design.screenshot
+      ? 'the host screenshot command: ' + design.screenshot
+      : 'a catalog instance the USER runs (ask them; the catalog command is theirs, never yours)'
+    return `## Step: exit fidelity review (one expensive-seat consult after the gate, before iteration — judgment, never a fail-closed verdict)
+Scope: first pass covers everything this spec landed; any re-review covers ONLY changed entries
++ the showcase.
+${designSource && exists('extract.json') ? `Mock-bound — the design source is the ground truth: compare RENDER vs MOCK, region by region.
+1. Screenshot each bound region's rendered catalog entry via ${shot}.
+2. Screenshot the matching bound mock slice(s): ${sidecar}/slice-*.html (or, if the mock cannot
+   be rendered in this environment, review the region SLICES (markup) instead — say so in the log).
+3. Dispatch ONE vision-capable consult (Agent {model:"fable"}, Opus fallback) with both sets of
+   images: compare render vs mock REGION BY REGION and return a divergence list keyed by regionRef
+   — judge only what the deterministic gate cannot see (copy/order/layout are already verified):
+   structure & element order, spacing rhythm, size hierarchy, color-ROLE usage (the tokenMap
+   applied, incl. dark/mobile variant obligations), alignment, empty/error/long-string states,
+   showcase coherence.` : `No mock bound — critique the render against skeletons + doctrine.
+1. Screenshot the catalog entries via ${shot}.
+2. Read the images and critique for real against ${sidecar}/skeletons.json and the design
+   doctrine${doctrinePath ? ' (' + doctrinePath + ')' : ''}: structure & element order, spacing
+   rhythm, size hierarchy, color-ROLE usage, alignment, empty/error/long-string states, showcase
+   coherence.`}
+The divergence/critique list is NOT applied here and is NEVER a fail-closed verdict — it becomes
+the first round's notes in the human catalog loop next (a ruling, then a fix or an evidence-gated
+${sidecar}/deltas.json row; the consult's opinion alone is never sufficient evidence — shared §
+mock supremacy). It never writes ${sidecar}/deltas.json itself.
+Then:  spec-design-driver ${specPath} --mark fidelity-reviewed`
+  },
 
-  ITERATE: () => `${visionReviewBlock()}## Step: human catalog loop (round ${(marks.rounds || 0) + 1}; cold between rounds by design)
+  ITERATE: () => `## Step: human catalog loop (round ${(marks.rounds || 0) + 1}; cold between rounds by design)
 Hand off with exactly this block (real values; the user runs the command — never launch it):
   🎨 **ready for review** — run: \`${design.command}\` (showcase first)
   🔗 <one navigation line per story/entry touched this round: WHERE to look, not just what.
@@ -462,6 +468,7 @@ const designFlagNote = (designFlag === 'false' && state !== 'DONE' && state !== 
   : ''
 process.stdout.write(`[spec-design-driver] state: ${state}  spec: ${specPath}\n` +
   `(re-run this driver after completing the step; it verifies artifacts and prints the next one)\n` +
+  componentManifestWarning +
   designFlagNote + '\n' +
   STEPS[state]() + '\n')
 process.exit(state === 'BLOCKED' ? 2 : 0)

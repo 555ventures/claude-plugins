@@ -1,7 +1,7 @@
 {
   "files": {
     "spec/commands/atlas.md": {
-      "lines": 109,
+      "lines": 112,
       "orphans": 1
     },
     "spec/commands/build.md": {
@@ -9,7 +9,7 @@
       "orphans": 3
     },
     "spec/commands/design.md": {
-      "lines": 190,
+      "lines": 198,
       "orphans": 1
     },
     "spec/commands/doctor.md": {
@@ -29,7 +29,7 @@
       "orphans": 5
     },
     "spec/commands/genesis-design.md": {
-      "lines": 235,
+      "lines": 245,
       "orphans": 6
     },
     "spec/commands/genesis-explore.md": {
@@ -49,7 +49,7 @@
       "orphans": 8
     },
     "spec/commands/review.md": {
-      "lines": 382,
+      "lines": 385,
       "orphans": 0
     },
     "spec/commands/sketch.md": {
@@ -65,11 +65,11 @@
       "orphans": 1
     },
     "spec/doctrine/scaffold-ledger.md": {
-      "lines": 95,
+      "lines": 97,
       "orphans": 3
     },
     "spec/doctrine/shared.md": {
-      "lines": 962,
+      "lines": 1002,
       "orphans": 6
     },
     "spec/agents/reviewer.md": {
@@ -77,5 +77,5 @@
       "orphans": 4
     }
   },
-  "totalLines": 5248
+  "totalLines": 5314
 }

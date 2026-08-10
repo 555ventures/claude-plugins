@@ -42,6 +42,7 @@ test('full state walk: no-mockup path', () => {
 
   fs.mkdirSync(sidecar, { recursive: true })
   fs.writeFileSync(path.join(sidecar, 'skeletons.json'), '{"skeletons":[{"decision":"maybe"}]}')
+  // AC-20260810-01-7: SKELETONS_INVALID derivation is unchanged by this spec
   assert.strictEqual(stateOf(root, spec), 'SKELETONS_INVALID')
 
   fs.writeFileSync(path.join(sidecar, 'skeletons.json'), VALID_SKELETONS)
@@ -49,7 +50,12 @@ test('full state walk: no-mockup path', () => {
   assert.match(run(root, spec).stdout, /wf-design\.js/)
 
   run(root, spec, '--mark', 'author-green', '--run-id', 'wf_abc123')
-  // no screenshot command configured → straight to the human loop
+  // AC-20260810-01-4: no design_source and no design.screenshot, but the fixture always
+  // configures design.command — that alone is a render path, so FIDELITY_REVIEW (which
+  // replaces VISUAL) must fire rather than falling straight through to the human loop.
+  assert.strictEqual(stateOf(root, spec), 'FIDELITY_REVIEW',
+    'a host with design.command configured has a render path — FIDELITY_REVIEW must fire even with no design.screenshot and no design_source')
+  run(root, spec, '--mark', 'fidelity-reviewed')
   assert.strictEqual(stateOf(root, spec), 'ITERATE')
   // the handoff block must demand WHERE to look (🔗 navigation per touched story), not just what —
   // a mega-catalog host with six bare component names sends the reviewer hunting
@@ -60,7 +66,7 @@ test('full state walk: no-mockup path', () => {
   assert.match(run(root, spec).stdout, /round 3/)
 
   run(root, spec, '--mark', 'approved')
-  assert.strictEqual(stateOf(root, spec), 'RECONCILE')
+  assert.strictEqual(stateOf(root, spec), 'RECONCILE') // AC-20260810-01-7: unchanged by this spec
 
   // reconcile sets designed: and deletes the sidecar
   fs.writeFileSync(spec, fs.readFileSync(spec, 'utf8').replace('---\n# X', 'designed: 2026-07-04\n---\n# X'))
@@ -68,7 +74,7 @@ test('full state walk: no-mockup path', () => {
   assert.strictEqual(stateOf(root, spec), 'DONE')
 })
 
-test('mockup path requires extract before skeletons; screenshot config inserts VISUAL', () => {
+test('AC-20260810-01-4: mockup path requires extract before skeletons; screenshot config inserts FIDELITY_REVIEW (VISUAL retired)', () => {
   const { root, spec, sidecar } = fixture({
     designSource: 'https://claude.ai/design/p/abc?file=X.dc.html', screenshot: 'bun shots' })
   assert.strictEqual(stateOf(root, spec), 'FETCH_EXTRACT')
@@ -79,14 +85,51 @@ test('mockup path requires extract before skeletons; screenshot config inserts V
 
   fs.writeFileSync(path.join(sidecar, 'skeletons.json'), VALID_SKELETONS)
   run(root, spec, '--mark', 'author-green')
-  assert.strictEqual(stateOf(root, spec), 'VISUAL')
-  // with a mock bound, the visual round is the design-QA seat: mock vs story, never story alone
-  assert.match(run(root, spec).stdout, /MOCK vs STORY/)
-  run(root, spec, '--mark', 'visual-done')
+  assert.strictEqual(stateOf(root, spec), 'FIDELITY_REVIEW',
+    'a mock-bound spec with design.screenshot configured must derive FIDELITY_REVIEW — the retired VISUAL state must never reappear')
+  run(root, spec, '--mark', 'fidelity-reviewed')
   assert.strictEqual(stateOf(root, spec), 'ITERATE')
 })
 
+test('AC-20260810-01-4: marks alphabet rejects visual-done and vision-reviewed as new marks', () => {
+  const { root, spec, sidecar } = fixture()
+  fs.mkdirSync(sidecar, { recursive: true })
+  fs.writeFileSync(path.join(sidecar, 'skeletons.json'), VALID_SKELETONS)
+  run(root, spec, '--mark', 'author-green')
+  const r1 = run(root, spec, '--mark', 'visual-done')
+  assert.strictEqual(r1.status, 2,
+    'visual-done must be retired from the marks alphabet by D6 — accepting it as a new mark silently reintroduces the state FIDELITY_REVIEW replaced')
+  const r2 = run(root, spec, '--mark', 'vision-reviewed')
+  assert.strictEqual(r2.status, 2,
+    'vision-reviewed must be retired along with the advisory vision-review block D6 replaces')
+})
+
+test('AC-20260810-01-5: a legacy sidecar with an existing visual-done mark satisfies FIDELITY_REVIEW on resume', () => {
+  const { root, spec, sidecar } = fixture({ screenshot: 'bun shots' })
+  fs.mkdirSync(sidecar, { recursive: true })
+  fs.writeFileSync(path.join(sidecar, 'skeletons.json'), VALID_SKELETONS)
+  fs.writeFileSync(path.join(sidecar, 'design-state.json'), JSON.stringify({ 'author-green': true }))
+  // sanity leg: with no legacy mark at all, FIDELITY_REVIEW (not the retired VISUAL) must be pending
+  assert.strictEqual(stateOf(root, spec), 'FIDELITY_REVIEW')
+
+  fs.writeFileSync(path.join(sidecar, 'design-state.json'),
+    JSON.stringify({ 'author-green': true, 'visual-done': true }))
+  assert.strictEqual(stateOf(root, spec), 'ITERATE',
+    'a pre-existing legacy visual-done mark must satisfy the new FIDELITY_REVIEW state for resume compat — re-deriving FIDELITY_REVIEW here would strand a mid-flight sidecar demanding a mark that no longer exists in the workflow the user was following')
+})
+
+test('AC-20260810-01-6: the AUTHOR step\'s printed wf-design invocation includes componentManifestPath in the args template', () => {
+  const { root, spec, sidecar } = fixture()
+  fs.mkdirSync(sidecar, { recursive: true })
+  fs.writeFileSync(path.join(sidecar, 'skeletons.json'), VALID_SKELETONS)
+  assert.strictEqual(stateOf(root, spec), 'AUTHOR')
+  const out = run(root, spec).stdout
+  assert.match(out, /componentManifestPath/,
+    'the AUTHOR step\'s printed args template must name componentManifestPath so the session copies it into the Workflow call — omitting it silently drops registry grounding (D5) from every wf-design invocation')
+})
+
 test('preconditions: wrong status blocks; missing design block dies; designed is DONE', () => {
+  // AC-20260810-01-7: status !== hardened → BLOCKED is unchanged by this spec
   const draft = fixture({ status: 'draft' })
   const res = run(draft.root, draft.spec)
   assert.strictEqual(res.status, 2)
@@ -164,6 +207,10 @@ test('fidelity gate: author-green/round-green are refused while the code diverge
   // faithful code → the mark lands
   fs.writeFileSync(path.join(root, 'src/Screen.tsx'), '<button>Send invite</button>')
   run(root, spec, '--mark', 'author-green')
+  // AC-20260810-01-4: design.command is always configured in this fixture, so FIDELITY_REVIEW
+  // (not ITERATE) is the state immediately after author-green — must be marked before ITERATE
+  assert.strictEqual(stateOf(root, spec), 'FIDELITY_REVIEW')
+  run(root, spec, '--mark', 'fidelity-reviewed')
   assert.strictEqual(stateOf(root, spec), 'ITERATE')
 
   // a round that regresses the copy cannot go round-green
@@ -213,7 +260,7 @@ test('SKELETONS prints the bind-feasibility report: regions, variant proposals, 
   assert.match(run(root, spec).stdout, /app#sidebar.*CLAIMED by specs\/20260701\/02-other\.md/)
 })
 
-test('--mark approved records the bound regions in the repo-level coverage ledger', () => {
+test('--mark approved records the bound regions in the repo-level coverage ledger', () => { // AC-20260810-01-7: unchanged by this spec
   const { root, spec, sidecar } = fixture({ designSource: './handoff' })
   regionHandoff(root)
   fs.mkdirSync(sidecar, { recursive: true })

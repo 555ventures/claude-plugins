@@ -1,6 +1,6 @@
 ---
 date: 2026-08-10
-status: implementing
+status: done
 diff_base: a33476f3586b571faa1bfccc6d00d59fad6c3b24
 risk: T3                 # touches spec/scripts/spec-state-gate.sh (hook surface — T3 trigger per pipeline rules § Risk Tiers), header/claim text only
 area: cross-cutting

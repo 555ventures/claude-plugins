@@ -1,1 +1,0 @@
-- [other: plugin.json+claims-baseline] Spec's literal bump target 6.50.0→6.51.0 was already taken at HEAD (concurrent 07-batch specs landed 6.51.0 and 6.52.0 first) → bumped to the next free version, 6.53.0, with the same changelog-append convention (spec-pipeline.md Gotcha: version-bump targets are targets, not pins).

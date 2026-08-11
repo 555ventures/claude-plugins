@@ -1,6 +1,6 @@
 ---
 date: 2026-08-10
-status: implementing
+status: done
 risk: T3                 # touches verdict.js — the sole review/release verdict derivation (pipeline rules § Risk Tiers)
 area: cross-cutting
 design: false
@@ -216,6 +216,12 @@ regex pin (now AC-9), and the unspecified placeholder-split boundary (now D5's l
 regex). One finding was adjudicated as a boundary rather than a defect: fix-delta iterations
 re-assert the same reviewed commit because fixes are uncommitted until close — recorded in
 Behavior with the downstream owners (observe-ci, release) named. Nothing was rejected.
+
+Build deviation (2026-08-11, folded at review close): the File Plan's literal bump target
+6.51.0 was already taken at HEAD — concurrent specs landed 6.51.0/6.52.0 first — so the build
+bumped to the next free version, 6.53.0, with the same changelog clause. One-off application
+of the recorded version-race gotcha (pipeline rules § Gotchas: bump targets are targets, not
+pins); no new doctrine needed.
 
 ## Canonical Delta
 

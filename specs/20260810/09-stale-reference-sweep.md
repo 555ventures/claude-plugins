@@ -1,6 +1,6 @@
 ---
 date: 2026-08-10
-status: implementing
+status: done
 risk: T3                 # edits spec/templates/grounding-contract.md (hash-stamped into every host) and spec/bin/spec-paths (new key) — both T3 triggers per pipeline rules § Risk Tiers
 area: cross-cutting
 design: false
@@ -206,6 +206,21 @@ refutation" fragment would have survived the rename (now in D3); the Rationale's
 count was wrong (corrected). Adjudicated out: `.claude/commands/doctrine-review.md`'s
 "refutation-filter retirements" mention is historical evidence, not live-mechanism
 description — renaming it would falsify the history it cites (recorded in D3).
+
+Build deviations (folded at review close, 2026-08-11 — all one-off, no Gotchas candidates):
+D8's "(20260805/02's D-numbers)" attribution was corrected during build by content-matching:
+review.md's `patterns`-leg D1 is 20260805/02 D1, but the scope-reconciliation D7 is
+20260805/01 D7 and the Phase 4 Observe D7 is 20260805/03 D7 — each label got its actual
+owning spec id. D10's literal 6.52.0→6.53.0 bump target was stale at build time (the
+already-documented version-race pattern, pipeline rules § Gotchas / specs/20260810/02 D11);
+the build bumped to the next free version, 6.55.0. D9's citation matching window shipped as
+a per-occurrence directional window (prior-line fallback only when nothing precedes the `§`,
+next-line extension only when the line lacks a terminator — never both, so no cross-line
+dedup is needed) instead of the literal join-each-line-with-successor + file:line-dedup
+mechanism; behaviorally equivalent on the measured corpus (all AC-1/AC-2 window and dedup
+tests pass, live self-application MISS=0), surfaced as a review finding because the
+departure from locked Decision text went unlogged at build time, and recorded here as the
+authoritative account of the shipped algorithm.
 
 ## Canonical Delta
 

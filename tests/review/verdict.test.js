@@ -5,6 +5,14 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 
+// specs/20260810/07-per-sha-ci-legs.md (D3/D4, 2026-08-10, Prax stale-CI-review incident): ci
+// stays a REVIEW_BLOCKING leg (a completed red run on the exact reviewed commit must still
+// derive GATE_RED), and RELEASE_LEGS grows to include `ci` — release gains the authoritative
+// per-SHA CI check the review leg's re-key (D2) intentionally does not carry across to
+// unpushed/stale-branch evidence. This file's release-profile tests below are updated in place
+// per the spec's refuter-demonstrated fixture regression (a six-leg release fixture goes stale
+// the moment RELEASE_LEGS grows to seven).
+//
 // specs/20260805/02-review-evidence-manifest.md (D1-D3): today /spec:review can say CLEAN with
 // nothing executed — a zero-findings panel returns CLEAN from the workflow, and the CLEAN
 // definition is prose a model applies, not a value a script computes. verdict.js makes the
@@ -74,7 +82,7 @@ test('AC-20260805-02-2: six green legs (smoke exit 4 counts green-inert) with a 
   assert.strictEqual(r.status, 0, 'derived CLEAN must exit 0: ' + r.stderr)
 })
 
-test('AC-20260805-02-3: a red ci leg derives GATE_RED and exits 1 even with a CLEAN workflow return', () => {
+test('AC-20260805-02-3 / AC-20260810-07-8: a red ci leg derives GATE_RED and exits 1 even with a CLEAN workflow return (review profile CONTINUES to block on ci per D3)', () => {
   const dir = tmpdir('verdict')
   const rows = SIX_GREEN.map(r => (r.leg === 'ci' ? { leg: 'ci', exit: 1, observed: 'conclusion=failure' } : r))
   const manifest = writeManifest(dir, rows)
@@ -283,22 +291,29 @@ test('AC-20260805-02-8: --ledger normalizes an array-shaped workflow.killed to i
     'unparseable against review.md:229\'s schema: ' + JSON.stringify(row))
 })
 
-test('AC-20260805-02-8: --profile release --ledger with --milestone/--briefs and six green legs derives milestone/briefs/staging/e2e/journeys/substrate/production matching release.md\'s template', () => {
+const RELEASE_SIX_LEGS = [
+  { leg: 'deploy', exit: 0, observed: 'ok' },
+  { leg: 'ready', exit: 0, observed: 'ok' },
+  { leg: 'e2e', exit: 0, observed: 'passed=10 failed=0 skipped=2' },
+  { leg: 'journeys', exit: 0, observed: 'walked=5 failed=0' },
+  { leg: 'substrate', exit: 0, observed: 'checked=8 failed=0 inert=1' },
+  { leg: 'production', exit: 0, observed: 'verified' },
+]
+const RELEASE_SEVEN_LEGS = [
+  ...RELEASE_SIX_LEGS,
+  { leg: 'ci', exit: 0, observed: 'conclusion=success' },
+]
+
+test('AC-20260805-02-8 / AC-20260810-07-5: --profile release --ledger with --milestone/--briefs and all seven green legs (incl. ci) derives milestone/briefs/staging/e2e/journeys/substrate/production/ci matching release.md\'s template', () => {
   const dir = tmpdir('verdict')
-  const manifest = writeManifest(dir, [
-    { leg: 'deploy', exit: 0, observed: 'ok' },
-    { leg: 'ready', exit: 0, observed: 'ok' },
-    { leg: 'e2e', exit: 0, observed: 'passed=10 failed=0 skipped=2' },
-    { leg: 'journeys', exit: 0, observed: 'walked=5 failed=0' },
-    { leg: 'substrate', exit: 0, observed: 'checked=8 failed=0 inert=1' },
-    { leg: 'production', exit: 0, observed: 'verified' },
-  ])
+  const manifest = writeManifest(dir, RELEASE_SEVEN_LEGS)
   const r = runNode(SCRIPT, ['--manifest', manifest, '--profile', 'release', '--ledger',
     '--milestone', 'v1.2.3', '--briefs', '12,13'])
   const lines = r.stdout.trim().split('\n')
   assert.strictEqual(lines[0], 'CLEAN',
-    'six green release legs must derive CLEAN — a wrong word here means the row assertions below are ' +
-    'exercising a path release.md never actually reaches: ' + r.stdout + ' / ' + r.stderr)
+    'seven green release legs (deploy/ready/e2e/journeys/substrate/production/ci) must derive CLEAN — a wrong ' +
+    'word here means the row assertions below are exercising a path release.md never actually reaches: ' +
+    r.stdout + ' / ' + r.stderr)
   const row = JSON.parse(lines[1])
   assert.strictEqual(row.milestone, 'v1.2.3',
     'row.milestone must carry the --milestone flag verbatim — release.md\'s template documents it as the ' +
@@ -320,6 +335,34 @@ test('AC-20260805-02-8: --profile release --ledger with --milestone/--briefs and
   assert.strictEqual(row.production, 'verified',
     'row.production must read the production leg\'s observed enum value directly when it is one of ' +
     'verified|skipped|failed: ' + JSON.stringify(row))
+  assert.strictEqual(row.ci, 'conclusion=success',
+    'row.ci must carry the ci leg\'s observed string verbatim (AC-20260810-07-5) — the release ledger row ' +
+    'gains a "ci" field per D4/Contracts once ci joins RELEASE_LEGS, and this six-leg fixture regresses to ' +
+    'UNVERIFIED the moment that happens (refuter-demonstrated) unless the ci row is present here: ' +
+    JSON.stringify(row))
+})
+
+test('AC-20260810-07-6: --profile release with the other six legs green but NO ci row derives UNVERIFIED and exits 1', () => {
+  const dir = tmpdir('verdict')
+  const manifest = writeManifest(dir, RELEASE_SIX_LEGS)
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--profile', 'release'])
+  assert.strictEqual(r.stdout.split('\n')[0], 'UNVERIFIED',
+    'RELEASE_LEGS must include `ci` (D4/Contracts: "RELEASE_LEGS becomes [...,\'ci\']") — a manifest missing ' +
+    'the ci row is missing a required leg and must derive UNVERIFIED, never CLEAN, even though the other six ' +
+    'legs are all green: ' + r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 1, 'UNVERIFIED must exit 1 so promotion is mechanically unreachable: ' + r.stderr)
+})
+
+test('AC-20260810-07-7: --profile release with a red ci row (exit 1) derives GATE_RED and exits 1', () => {
+  const dir = tmpdir('verdict')
+  const rows = RELEASE_SEVEN_LEGS.map(r => (r.leg === 'ci' ? { leg: 'ci', exit: 1, observed: 'conclusion=failure' } : r))
+  const manifest = writeManifest(dir, rows)
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--profile', 'release'])
+  assert.strictEqual(r.stdout.split('\n')[0], 'GATE_RED',
+    'ci must be a blocking release leg (D4: RELEASE_LEGS is "all release legs blocking, unchanged rule") — a ' +
+    'completed red run on the release commit must derive GATE_RED even with the other six legs green: ' +
+    r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 1, 'GATE_RED must exit 1 so promotion is mechanically unreachable: ' + r.stderr)
 })
 
 test('AC-20260805-02-8: a partial release manifest (STOP path) still prints a ledger row, omitting missing or unparseable leg keys instead of failing', () => {

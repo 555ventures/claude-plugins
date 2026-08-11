@@ -80,11 +80,13 @@ ride pre-fix leg rows). Every leg named below appends one JSONL row on completio
      skippable check. This leg is deterministic; no reviewer adjudicates it. Leg `smoke`,
      `observed:"pass"`/`"inert"`/`"fail"` — this row is what makes **the boot smoke leg
      green** (or declared inert) a derivation input rather than a claim.
-   - `node "$(spec-paths ci-query)" --branch <the branch under review — git -C {root}
-     rev-parse --abbrev-ref HEAD> --root {root}` — the **ci leg** (D4). A red `conclusion`
-     (`failure`/`timed_out`/`cancelled`) maps to `exit:1` (hard-stops pre-panel below, "fix CI
-     first"); `available:false` or an in-progress run map to `exit:0`. Leg `ci`,
-     `observed:"unavailable"`/`"unavailable-transient"`/`"in-progress"`/`"conclusion=<value>"`.
+   - `node "$(spec-paths ci-query)" --commit $(git -C {root} rev-parse HEAD) --root {root}` —
+     the **ci leg**, keyed on the reviewed commit itself (D2) — always `{root}` HEAD, never
+     `{frozenRoot}` (executed evidence must come from the tree that ships). A completed run
+     for that exact commit with `conclusion` ∈ (`failure`/`timed_out`/`cancelled`) maps to
+     `exit:1` (hard-stops pre-panel below, "fix CI first"); everything else — no run seen for
+     this commit (structural or transient), or an in-progress run — maps to `exit:0`. Leg
+     `ci`, `observed:"unavailable"`/`"unavailable-transient"`/`"in-progress"`/`"conclusion=<value>"`.
    - **if config declares `driftScript`**: `{driftScript} {spec path}` — the host's AC-drift
      checker. Leg `drift`, when this leg ran.
 4. Read the spec once; extract AC list, tier, area. Compute `{diffLoc}` =

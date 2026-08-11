@@ -47,8 +47,8 @@ Recorded in the release manifest and tag; never parsed for behavior.
 Create `{manifestPath}` now — a fresh `mktemp` file, one per run — that every leg below
 appends a JSONL row to (`{"leg":"<name>","exit":<code>,"observed":"<≤120-char counts/enums>"}`,
 matching review's evidence-manifest shape (D1/D7)). This run's **required legs** are `deploy`,
-`ready`, `e2e`, `journeys`, `substrate`, `production` — `verdict.js --profile release` derives
-the milestone word from them.
+`ready`, `e2e`, `journeys`, `substrate`, `production`, `ci` — `verdict.js --profile release`
+derives the milestone word from them.
 
 ## Phase 1 — Release manifest (first run heavy, later runs delta-only)
 
@@ -70,25 +70,37 @@ format breaks that derivation silently.
 
 ## Phase 2 — Stage and observe (all executed, fail-closed)
 
-The `deploy`/`ready`/`e2e`/`journeys`/`production` legs' `observed` strings below are pinned —
-`verdict.js --profile release` parses them verbatim into the ledger row (D2/D7): `deploy` and
-`ready` carry no counts (their exit codes alone derive the ledger row's `staging` field —
-`pass` only when both exit 0); `e2e` is `passed=<N> failed=<M> skipped=<K>`; `journeys` is
-`walked=<N> failed=<M>`; `production` is `observed ∈ verified|skipped|failed`. Drifting any of
-these strings breaks that derivation silently — the leg that appends the row and the script
-that parses it must agree on exactly this format.
+The `deploy`/`ready`/`e2e`/`journeys`/`production`/`ci` legs' `observed` strings below are
+pinned — `verdict.js --profile release` parses them verbatim into the ledger row (D2/D7):
+`deploy` and `ready` carry no counts (their exit codes alone derive the ledger row's `staging`
+field — `pass` only when both exit 0); `e2e` is `passed=<N> failed=<M> skipped=<K>`; `journeys`
+is `walked=<N> failed=<M>`; `production` is `observed ∈ verified|skipped|failed`; `ci` is
+`observed ∈ conclusion=<value>|unavailable|in-progress`. Drifting any of these strings breaks
+that derivation silently — the leg that appends the row and the script that parses it must
+agree on exactly this format.
 
 1. **Deploy to staging:** run `deployCommand`. Append `{"leg":"deploy","exit":<exit>,"observed":"<pass|fail>"}`
    to `{manifestPath}`. Failure → STOP (see below), report.
 2. **Ready check against the deployed URL:** the config `runtime.readyCheck` pattern applied
    to `stagingUrl` + `healthPath` (or a plain curl). The boot-leg discipline, applied to real
    infra. Append `{"leg":"ready","exit":<exit>,"observed":"<pass|fail>"}` to `{manifestPath}`.
-3. **e2e against the deployment:** `BASE_URL={stagingUrl} {e2eCommand}`. Capture pass / fail
+3. **CI check on the release commit (D4):** `node "$(spec-paths ci-query)" --commit $(git -C .
+   rev-parse HEAD) --root .` — the authoritative per-commit CI verdict. A completed run with
+   `conclusion` ∈ (`failure`/`timed_out`/`cancelled`) maps to `exit:1`; a completed non-red run
+   maps to `exit:0`, `observed:"conclusion=<value>"`; `available:false` maps to `exit:0`,
+   `observed:"unavailable"`; an in-progress run re-invokes the same command every 30 seconds for
+   up to 10 minutes, then — if still unresolved — maps to `exit:0`, `observed:"in-progress"`.
+   Append `{"leg":"ci","exit":<mapped>,"observed":"<mapped>"}` to `{manifestPath}` exactly once,
+   after the poll loop resolves — never once per poll iteration (a double row corrupts the leg
+   map). Whenever `observed` is not a `conclusion=<value>` string, the Phase 4 pre-promote
+   report MUST carry one ⚠️ line stating CI never delivered a verdict on this exact commit (and,
+   for `unavailable`, that pushing would produce one).
+4. **e2e against the deployment:** `BASE_URL={stagingUrl} {e2eCommand}`. Capture pass / fail
    / skip counts — **a skipped e2e is reported by name, never silently green** (same rule as
    review's skip reconciliation). Append
    `{"leg":"e2e","exit":<0 if zero failed else 1>,"observed":"passed=<N> failed=<M> skipped=<K>"}`
    to `{manifestPath}`.
-4. **Journey walks:** for each brief shipped this milestone, walk its primary journey against
+5. **Journey walks:** for each brief shipped this milestone, walk its primary journey against
    staging (the brief's milestone-gate observable, via the host's spec-verify skill, browser
    automation, or scripted API calls — whatever the skill declares), plus **one standing
    whole-product journey** (sign-up → core loop → the product's reason to exist) every
@@ -98,19 +110,22 @@ that parses it must agree on exactly this format.
    `{"leg":"journeys","exit":<0 if zero failed else 1>,"observed":"walked=<N> failed=<M>"}` to
    `{manifestPath}`.
 
-Any failure here (a red `deploy`/`ready`/`e2e`/`journeys` row): **STOP** — report what was
+Any failure here (a red `deploy`/`ready`/`e2e`/`journeys`/`ci` row): **STOP** — report what was
 observed, and route the defect to the normal flow (direct fix or a spec; if it escaped a CLEAN
-review, offer `/spec:escape` — `foundBy: later-spec`, `preventedBy: runtime-leg`). Never promote over a red staging.
+review, offer `/spec:escape` — `foundBy: later-spec`, `preventedBy: runtime-leg`). Never promote over a red staging or a red release-commit CI run.
 
 The stop still runs `node "$(spec-paths verdict)" --profile release --manifest {manifestPath}
 --ledger --milestone {milestone} --briefs {shipped brief numbers, comma-separated}` and quotes,
-verbatim, its output as the report — its `GATE_RED` word and row are the verdict origin,
-appended to `.claude/spec-runs.jsonl` the same as a successful run's. In short: `verdict.js
---profile release --ledger` is what the STOP path quotes here (D7: a Phase 2/3 STOP is never a
-second, independent verdict origin — the same call runs again in Phase 4 below). `--milestone`
-and `--briefs` are orchestrator-supplied identity fields (the `$ARGUMENTS` note / Phase 0 step
-2's shipped-brief list) — everything else in the row (`staging`/`e2e`/`journeys`/`substrate`/
-`production`) is derived from the manifest rows above, never passed as a flag.
+verbatim, whatever word the derivation prints — an early Phase-2 STOP leaves later legs without
+manifest rows, and `verdict.js` checks missing-required legs *before* red legs, so the quoted
+word on an early stop is typically `UNVERIFIED`, not `GATE_RED` (only a STOP triggered by this
+leg's own red row derives `GATE_RED`); its row is appended to `.claude/spec-runs.jsonl` the
+same as a successful run's. In short: `verdict.js --profile release --ledger` is what the STOP
+path quotes here (D7: a Phase 2/3 STOP is never a second, independent verdict origin — the same
+call runs again in Phase 4 below). `--milestone` and `--briefs` are orchestrator-supplied
+identity fields (the `$ARGUMENTS` note / Phase 0 step 2's shipped-brief list) — everything else
+in the row (`staging`/`e2e`/`journeys`/`substrate`/`production`/`ci`) is derived from the
+manifest rows above, never passed as a flag.
 
 ## Phase 3 — Promote (explicitly confirmed, never autonomous)
 
@@ -135,13 +150,13 @@ and `--briefs` are orchestrator-supplied identity fields (the `$ARGUMENTS` note 
    comma-separated}` (the same call the Phase 2/3 STOP path above would have quoted, had one
    fired: `verdict.js --profile release --ledger` is one derivation with one origin on every
    path). `--milestone`/`--briefs` are orchestrator-supplied identity fields (`$ARGUMENTS` /
-   Phase 0 step 2's shipped-brief list); `staging`/`e2e`/`journeys`/`substrate`/`production`
+   Phase 0 step 2's shipped-brief list); `staging`/`e2e`/`journeys`/`substrate`/`production`/`ci`
    are derived from the Phase 2/3 manifest rows, never passed as flags. Print line 1 (the word
    — `CLEAN`, `GATE_RED`, or `UNVERIFIED`) verbatim, and append exactly ONE line to
    `.claude/spec-runs.jsonl` — line 2, the ledger row, verbatim, counts/enums/paths only, never prose:
 
    ```
-   {"ts":"<YYYY-MM-DD>","stage":"release","milestone":"<tag or briefs range>","briefs":[<NN>,…],"staging":"<pass|fail>","e2e":{"passed":<n>,"failed":<n>,"skipped":<n>},"journeys":{"walked":<n>,"failed":<n>},"substrate":{"checked":<n>,"failed":<n>,"inert":<n>},"production":"<verified|skipped|failed>"}
+   {"ts":"<YYYY-MM-DD>","stage":"release","milestone":"<tag or briefs range>","briefs":[<NN>,…],"staging":"<pass|fail>","e2e":{"passed":<n>,"failed":<n>,"skipped":<n>},"journeys":{"walked":<n>,"failed":<n>},"substrate":{"checked":<n>,"failed":<n>,"inert":<n>},"production":"<verified|skipped|failed>","ci":"<conclusion=<value>|unavailable|in-progress>"}
    ```
 
 2. **Tag** the release (`git tag`) when the user confirmed promotion — never push the tag;
@@ -163,7 +178,7 @@ and `--briefs` are orchestrator-supplied identity fields (the `$ARGUMENTS` note 
    ✅ **milestone green — {N} specs composed, staging + e2e passed, promoted**
       (or: 🚫 **{what blocked promotion}**)
    - shipped: {briefs + specs}
-   - observed: {deploy, ready, e2e counts, journeys walked with outcomes — one line each}
+   - observed: {deploy, ready, e2e counts, journeys walked with outcomes, ci verdict — one line each}
    - substrate: {rows checked / inert-declared} · production: {verification result}
    ⚠️ yours / the client's to do: {inert rows, verbatim — one line each}
    ```

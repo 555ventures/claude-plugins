@@ -276,6 +276,16 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
     never edits the corpus or the baseline; the remedy for drift is
     `node "$(spec-paths claims-lint)" --update-baseline`, printed for the user to run.
 
+19. **CI-gate parity** (deterministic, advisory) — only when `.github/workflows/` exists:
+    split the config `gateCommand` on the regex `/\{[^}]*\}/g`, trim each literal segment, and
+    keep segments ≥10 chars. If no segment survives that floor, the single required segment is
+    the whole trimmed `gateCommand` with placeholder tokens stripped (so a short command like
+    `npm test` never degenerates to a vacuously green check). Require every kept segment to
+    appear as a substring in the concatenation of `.github/workflows/*.yml` + `*.yaml`. Any
+    missing segment is an advisory finding: the host's CI does not invoke the configured
+    `gateCommand`, so CI red/green and pipeline gate red/green can drift; remedy = make one CI
+    step run the `gateCommand` verbatim.
+
 ## Semantic spot-check — small, bounded
 
 For 2–3 agents (prioritize any with stale citations), read one cited exemplar each and

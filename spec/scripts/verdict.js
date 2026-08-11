@@ -110,7 +110,7 @@ if (workflow && waived + rejected + fixDispatched > survivors.length) {
 
 const REVIEW_LEGS = ['gate', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci']
 const REVIEW_BLOCKING = new Set(['gate', 'smoke', 'ci'])
-const RELEASE_LEGS = ['deploy', 'ready', 'e2e', 'journeys', 'substrate', 'production']
+const RELEASE_LEGS = ['deploy', 'ready', 'e2e', 'journeys', 'substrate', 'production', 'ci']
 
 const requiredLegs = profile === 'release'
   ? RELEASE_LEGS
@@ -196,6 +196,8 @@ if (ledger) {
     if (substrate) row.substrate = substrate
     const production = deriveProduction(legRows.get('production'))
     if (production) row.production = production
+    const ciRow = legRows.get('ci')
+    if (ciRow && ciRow.observed) row.ci = ciRow.observed
     row.legs = legs
   } else {
     row.scope = workflow.scope

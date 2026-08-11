@@ -15,6 +15,13 @@ const reviewMd = read('spec/commands/review.md')
 const releaseMd = read('spec/commands/release.md')
 const scaffoldLedger = read('spec/doctrine/scaffold-ledger.md')
 
+// specs/20260810/07-per-sha-ci-legs.md (2026-08-10, Prax stale-CI-review incident): D2 re-keys
+// review.md's ci leg from --branch (a question whose answer can be about any commit) to
+// --commit fed by `git -C {root} rev-parse HEAD` (always {root}, never {frozenRoot} — executed
+// evidence comes from the tree that ships); D4 grows release.md's required-legs list to seven
+// legs including `ci`, RELEASE_LEGS's new authoritative member. These tests pin both doctrine
+// edits by regex over the prose.
+
 test('AC-20260805-02-6: review.md builds a fresh per-iteration evidence manifest and re-runs its legs each fix-delta iteration', () => {
   assert.match(reviewMd, /manifestPath/,
     'review.md must name a manifestPath (the per-iteration evidence manifest) — without it there is no ' +
@@ -91,10 +98,31 @@ test('AC-20260807-03-3: scaffold-ledger.md\'s "Release stage executed checks" ro
     'the retire condition must name verdict.js\'s release profile as what gets deleted when the trigger fires (together with its 7 exec pins and release.md\'s wiring, D2) — otherwise the row is a generic reminder, not the specific expiry D2 registers')
 })
 
-test('AC-20260805-02-7: release.md names verdict.js\'s required legs, including production, as one enumerated list', () => {
-  assert.match(releaseMd, /required legs?[\s\S]{0,200}deploy[\s\S]{0,60}ready[\s\S]{0,60}e2e[\s\S]{0,60}journeys[\s\S]{0,60}substrate[\s\S]{0,60}production/i,
-    'release.md must state the release profile\'s required legs (D7) — deploy, ready, e2e, journeys, ' +
-    'substrate, production — as one explicit enumerated list; scattered mentions of the same words ' +
-    'elsewhere in the doc do not establish that production is actually a required leg (a promote that ' +
-    'cannot be verified serving must be a derivation input, not an inline STOP)')
+test('AC-20260805-02-7 / AC-20260810-07-9: release.md names verdict.js\'s required legs, including production AND ci, as one enumerated list', () => {
+  assert.match(releaseMd, /required legs?[\s\S]{0,200}deploy[\s\S]{0,60}ready[\s\S]{0,60}e2e[\s\S]{0,60}journeys[\s\S]{0,60}substrate[\s\S]{0,60}production[\s\S]{0,60}(`ci`|\bci\b)/i,
+    'release.md must state the release profile\'s required legs (D4/D7) — deploy, ready, e2e, journeys, ' +
+    'substrate, production, ci — as one explicit enumerated list with ci appended after production ' +
+    '(AC-20260810-07-9: matched as `ci` with backticks or as the standalone word "ci", never a bare 2-char ' +
+    '"ci" substring any prose word containing those letters would satisfy); scattered mentions of the same ' +
+    'words elsewhere in the doc do not establish that ci is actually a required leg')
+})
+
+test('AC-20260810-07-10: review.md\'s ci-leg bullet keys ci-query.js on --commit fed by rev-parse HEAD and never mentions --branch', () => {
+  const idx = reviewMd.indexOf('ci-query')
+  assert.notStrictEqual(idx, -1,
+    'review.md must still reference ci-query.js in its ci-leg bullet — without it there is no invocation to ' +
+    'pin at all: (ci-query not found in review.md)')
+  const nextBullet = reviewMd.indexOf('\n   - ', idx)
+  const bullet = reviewMd.slice(idx, nextBullet === -1 ? idx + 500 : nextBullet)
+  assert.match(bullet, /--commit\b/,
+    'the ci-leg bullet must invoke ci-query.js with --commit (D2: keyed on the reviewed commit, not the ' +
+    'branch) — without it review reverts to asking about "the branch\'s latest run," recreating the Prax ' +
+    'stale-CI incident: ' + JSON.stringify(bullet))
+  assert.match(bullet, /rev-parse HEAD\b/,
+    'the --commit value must be fed by `git -C {root} rev-parse HEAD` (D2: always {root}, never ' +
+    '{frozenRoot} — executed evidence comes from the tree that ships) — without it the commit key is not ' +
+    'provably the reviewed HEAD: ' + JSON.stringify(bullet))
+  assert.doesNotMatch(bullet, /--branch\b/,
+    'the ci-leg bullet must not mention --branch anywhere — a leftover --branch invocation would silently ' +
+    're-key on the branch\'s latest run again, the exact defect D2 fixes: ' + JSON.stringify(bullet))
 })

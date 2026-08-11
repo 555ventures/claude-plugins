@@ -1,6 +1,6 @@
 ---
 date: 2026-08-10
-status: hardened
+status: implementing
 risk: T3                 # touches verdict.js — the sole review/release verdict derivation (pipeline rules § Risk Tiers)
 area: cross-cutting
 design: false

@@ -16,7 +16,10 @@ only when the contract genuinely changes, and never edit it for wording alone.
 (`tool`/`command`/`storyFormat`/`doctrine`, optional `screenshot`, optional `rulesManifest`),
 `release` (see § Release), the rule-enforcement keys `enforcementManifest` and
 `rulesEnforcementHash` (see § Rule enforcement), and the genesis-handoff keys
-`genesisStackDescriptor` and `designRulesHash` (see § Genesis handoff).
+`genesisStackDescriptor` and `designRulesHash` (see § Genesis handoff). `design.copyCatalogs`
+is REQUIRED when the host routes copy through an i18n stack (`design` block present and the
+repo has an i18n dependency) — the `/spec:design` fidelity gate accepts mock copy only as
+catalog values, and without this key it would demand literals the host's i18n lint forbids.
 
 ## Runtime verification (required)
 

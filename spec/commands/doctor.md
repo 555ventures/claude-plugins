@@ -139,8 +139,8 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
       (colon form — the open-marker sentinel; bracketed narration without the colon is fine)
       is broken (it should have been impossible to lock);
     - an orphaned design sidecar (`specs/**/*.design/` with no sibling spec mid-design — spec
-      already `done`, or `designed:` set) is leftover transient state `/spec:design` Phase 4
-      should have deleted; recommend removing it.
+      already `done`, or `designed:` set) is leftover transient state `/spec:design`'s reconcile
+      stage should have deleted; recommend removing it.
 
 12. **Run ledger hygiene** (only if `.claude/spec-runs.jsonl` exists) — every line parses as
     JSON with a `stage` of `build | review | escape | observe | release`; any line over ~1000
@@ -172,8 +172,8 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
     loudly:
     - an escape whose `reviewRunId` matches a review row with `verdict:"CLEAN"` is a
       **contradicted CLEAN** — the review passed a real defect; report per-spec;
-    - any `killedMatch:true` row means the refutation filter killed a real bug — the single
-      strongest re-tuning signal the ledger can hold;
+    - any `killedMatch:true` row means execution-grounded verification killed a finding that
+      later proved real — the single strongest re-tuning signal the ledger can hold;
     - conversely, with ≥10 CLEAN review rows and zero escape rows behind any of them, report
       that too — it is the evidence that gates any future cut to review spend (staged
       review). Absence of escapes is only meaningful if escapes are actually being recorded;
@@ -299,6 +299,14 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
     missing segment is an advisory finding: the host's CI does not invoke the configured
     `gateCommand`, so CI red/green and pipeline gate red/green can drift; remedy = make one CI
     step run the `gateCommand` verbatim.
+
+20. **Citation integrity** (deterministic, advisory) — run
+    `node "$(spec-paths citations-check)"` against the repo. Each printed MISS line names a
+    file, a line number, a cited heading, and the resolved doctrine file the heading doesn't
+    exist in — report each as a stale-citation finding; the SKIP list `--verbose` adds is
+    informational only, never a finding. Scaffold-ledger row: enters ADVISORY, promotes to
+    blocking after two consecutive zero-MISS releases, retires if `shared-for` filtering is
+    ever replaced.
 
 ## Semantic spot-check — small, bounded
 

@@ -1,6 +1,6 @@
 ---
 date: 2026-08-10
-status: hardened
+status: implementing
 risk: T3                 # edits spec/templates/grounding-contract.md (hash-stamped into every host) and spec/bin/spec-paths (new key) — both T3 triggers per pipeline rules § Risk Tiers
 area: cross-cutting
 design: false

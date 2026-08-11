@@ -313,7 +313,7 @@ end of bootstrap). The contract:
 
 - `design-rules.json` rules carry a `targetCategory` **enum only** — `color | typography | i18n |
   structure | a11y | density | layout` — **never a tool name** — plus a `grounding` (`grounded` | `taste`, shared
-  § Grounded vs taste; mechanizable closure rules are `grounded`), which records whether the rule binds
+  § Design Authoring Contracts, its "Grounded vs taste" rule; mechanizable closure rules are `grounded`), which records whether the rule binds
   against an explicit mockup or yields to it. `/spec:enforce` folds these into its language-neutral
   enforcement taxonomy and owns the single category→enforcer selection per detected stack, chosen
   at runtime (discover-against-live-sources then verify-it-runs), never from a hardcoded mapping.
@@ -330,7 +330,7 @@ commands; the `genesis-state-gate.sh` hook (UserPromptSubmit) enforces it coarse
 boundary.
 
 - `architect`: `pending → decisions-recorded → scaffold-complete`
-- `explore`: `pending → research-done → tiles-culled → picked` (or `skipped`)
+- `explore`: `pending → research-done → positions-authored → tiles-culled → picked` (or `skipped`)
 - `design`: `pending → doctrine-drafted → tokens-landed → rules-locked` (or `skipped`)
 
 The roadmap (architect Phase C) deliberately has **no enum value**: nothing downstream gates on

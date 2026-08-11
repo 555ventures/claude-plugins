@@ -17,6 +17,9 @@
 #
 # Usage: manifest-check.sh [--manifest .claude/spec-manifest.json]
 # Exit 0 = every check passed. Exit 1 = failures (each listed). Exit 5 = missing/invalid manifest.
+# After the human prose summary, prints one machine sentinel line: TOTAL=<n> FAILS=<n> INERT=<n>
+# (release.md's substrate paragraph parses these three counts verbatim — 2026-08-10 fix: the
+# INERT count was previously attributed from prose that never printed it).
 set -u
 
 MANIFEST=".claude/spec-manifest.json"
@@ -33,6 +36,7 @@ fi
 
 PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 FAILS=0
+INERTS=0
 TOTAL=$(jq -r '.checks | length' "$MANIFEST")
 
 i=0
@@ -60,6 +64,7 @@ while [ "$i" -lt "$TOTAL" ]; do
       ;;
     inert)
       echo "INERT $CLAIM — declared: ${TARGET:-<no reason given>}"
+      INERTS=$((INERTS+1))
       ;;
     *)
       echo "FAIL  ?       $CLAIM — unknown kind '$KIND'"; FAILS=$((FAILS+1))
@@ -70,7 +75,9 @@ done
 
 if [ "$FAILS" -gt 0 ]; then
   echo "manifest-check: $FAILS of $TOTAL checks FAILED — the grounding layer is not activated; do not stamp generatedBy/contractHash"
+  echo "TOTAL=$TOTAL FAILS=$FAILS INERT=$INERTS"
   exit 1
 fi
 echo "manifest-check: all $TOTAL checks passed"
+echo "TOTAL=$TOTAL FAILS=$FAILS INERT=$INERTS"
 exit 0

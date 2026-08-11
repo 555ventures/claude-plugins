@@ -43,7 +43,8 @@ defective file — that is the only unrecoverable input.
 
 `/spec:status --next`'s top pick may be a full oracle-shaped `/spec:escape` entry — a done
 spec whose latest qualifying `stage:"observe"` ledger row (written by `observe-ci.js`) is
-red, carrying `branch`/`sha`/`url` in its `note`. When invoked on such a spec (the given
+red, carrying `branch`/`sha`/`url` as top-level row fields (only the `--next` oracle's own
+entry carries them in a `note`). When invoked on such a spec (the given
 `$ARGUMENTS` names the spec directly, or the session is working the oracle's escape pick),
 this path replaces step 1's grep-locate — the spec is already named — and replaces the
 session's own diagnosis as the evidence source:
@@ -122,11 +123,11 @@ headline back green.
      same call — never derived, never defaulted: "Does this defect match a finding that
      review killed?" Yes → `true`, no → `false`, can't recall → `null`. If `killed` was 0,
      `killedMatch` is `null` without asking. **Unknown is `null`, never a guessed `false`**
-     — a wrong `false` poisons the one signal that tunes the refutation filter.
+     — a wrong `false` poisons the one signal that tunes execution-grounded verification.
 5. **Append exactly ONE line** to `.claude/spec-runs.jsonl` (repo root; `printf '%s\n' '<json>' >>`):
 
    ```
-   {"ts":"<YYYY-MM-DD>","stage":"escape","spec":"<repo-relative spec path>","file":"<repo-relative defect file>","reviewRunId":"<wf_…>"|null,"foundBy":"<user|later-spec|production>","severity":"<hard|soft>","killedMatch":true|false|null,"preventedBy":"<doctrine|enforcer|review-check|runtime-leg|none>","via":"commit|manual"}
+   {"ts":"<ISO-8601>","stage":"escape","spec":"<repo-relative spec path>","file":"<repo-relative defect file>","reviewRunId":"<wf_…>"|null,"foundBy":"<user|later-spec|production>","severity":"<hard|soft>","killedMatch":true|false|null,"preventedBy":"<doctrine|enforcer|review-check|runtime-leg|none>","via":"commit|manual"}
    ```
 
    Fixed shape — paths/enums/booleans only, **never prose or finding text** (the defect
@@ -154,7 +155,7 @@ headline back green.
    📦 **escape logged — {preventedBy} row appended; prevention delta {landed / declined / recommended: <command>}**
    - {N} escape rows now point at this spec
    ⚠️ correlated review said CLEAN — miscalibration signal /spec:doctor aggregates
-   ✨ killedMatch: the refutation filter killed a real bug — strongest re-tuning evidence the ledger can hold
+   ✨ killedMatch: execution-grounded verification killed a finding that later proved real — strongest re-tuning evidence the ledger can hold
    ```
 
    Then stop. Fixing the defect is a separate, normal-flow decision.

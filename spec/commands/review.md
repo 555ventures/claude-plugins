@@ -78,7 +78,7 @@ build that is the worktree itself. Phase 4 resolves a second, distinctly named s
      temp file (`patternsPath` = a fresh `mktemp` path); keep the absolute path for the
      workflow call. The reviewers read it rather than receiving the output inline, which keeps
      `args` a small control channel. Leg `patterns`, `observed:"matches=<N>"` — always
-     recorded (D1), though not a required leg.
+     recorded (20260805/02 D1), though not a required leg.
    - the host's `gateCommand` — the deterministic gate. **Capture the runner's skip/todo
      counts** from its output (every mainstream runner prints them) — they feed the
      skipped-test reconciliation in step 6. Leg `gate`, `observed:"skips=<N> todos=<M>"`.
@@ -110,7 +110,7 @@ build that is the worktree itself. Phase 4 resolves a second, distinctly named s
    silently drop out of coverage and ride to CLEAN). Then, **no `driftScript` only**, the
    AC coverage matrix: for each well-formed AC-ID, grep the File Plan's test paths for it.
    Any AC-ID with zero hits is an **uncovered AC** — an automatic `hard` finding that skips
-   the refutation filter (it is a deterministic fact, not a reviewer claim). Computed before
+   verification (it is a deterministic fact, not a reviewer claim). Computed before
    the reviewer panel runs. (Pin presence — `SHALL CONTINUE TO` on defect-fix specs — is
    plan lock's check, never review's.) Leg `ac-matrix`, `observed:"uncovered=<N>"` — its
    non-zero exit means findings were emitted, not that the leg failed to execute; those
@@ -126,7 +126,7 @@ build that is the worktree itself. Phase 4 resolves a second, distinctly named s
    with a throw sat `describe.skipIf`-skipped through two CLEAN verdicts because the matrix
    reconciled against collected tests.) Leg `skip-reconcile`, `observed:"skipped=<N>"` — like
    `ac-matrix`, its non-zero exit means findings, not non-execution.
-7. **Scope reconciliation findings (mechanical, D7):** step 2's exit 3 yields ONE mechanical
+7. **Scope reconciliation findings (mechanical, 20260805/01 D7):** step 2's exit 3 yields ONE mechanical
    **hard** <!-- enforcedBy: spec/scripts/scope-reconcile.js --> finding: "out-of-plan changes: {list}" with each file's diffstat. A non-empty
    `unrealized` yields ONE mechanical **soft** finding: "planned but untouched: {list}". Both
    enter Phase 2 dispositions like any AC finding. `excluded`/`renamed` carry no finding — they
@@ -214,7 +214,7 @@ Two modes, decided by host config:
   For **orphaned ACs** (in test, no spec): the AC may have been removed — update the test
   docstring/name or remove the test. Re-run the script to verify.
 - **No `driftScript`** — the Phase 0 grep matrix IS the drift gate: an AC-ID with zero test
-  hits is an automatic `hard` finding, no refutation. The reviewer's AC ↔ test coverage check
+  hits is an automatic `hard` finding — no verifier pass, it is a deterministic fact. The reviewer's AC ↔ test coverage check
   remains as the semantic backstop — a test that *names* an AC-ID but doesn't actually test
   the behavior is still a `hard` finding. (The workflow's reviewer prompt already calibrates
   this via `hasDriftScript`.)
@@ -249,7 +249,7 @@ Ledger row shape (the exact JSON `verdict.js --ledger` prints on line 2 — appe
 verbatim, never hand-assembled, never prose or finding text):
 
 ```
-{"ts":"<YYYY-MM-DD>","spec":"<repo-relative spec path>","stage":"review","tier":"<T1|T2|T3>","runId":"<wf_…>","verdict":"<CLEAN|FINDINGS|HARD_FINDINGS|REVIEWER_FAILED|UNVERIFIED|GATE_RED>","scope":"<full|fix-delta>","iteration":<n>,"diff":{"loc":<n>},"smoke":"<pass|fail|inert>","testsSkipped":<n>,"tokens":{"workflow":<n>},"legs":[{"leg":"gate","exit":0},…],"findings":{"survived":<n>,"killed":<n>,"waived":<n>,"rejected":<n>,"fixDispatched":<n>,"reviewerCount":<n>},"verify":{"verified":<n>,"demonstrated":<n>,"killedByExecution":<n>,"sanctioned":<n>,"miscited":<n>,"unverifiable":<n>,"failed":<n>,"capSkipped":<n>}}
+{"ts":"<ISO-8601>","spec":"<repo-relative spec path>","stage":"review","tier":"<T1|T2|T3>","runId":"<wf_…>","verdict":"<CLEAN|FINDINGS|HARD_FINDINGS|REVIEWER_FAILED|UNVERIFIED|GATE_RED>","scope":"<full|fix-delta>","iteration":<n>,"diff":{"loc":<n>},"smoke":"<pass|fail|inert>","testsSkipped":<n>,"tokens":{"workflow":<n>},"legs":[{"leg":"gate","exit":0},…],"findings":{"survived":<n>,"killed":<n>,"waived":<n>,"rejected":<n>,"fixDispatched":<n>,"reviewerCount":<n>},"verify":{"verified":<n>,"demonstrated":<n>,"killedByExecution":<n>,"sanctioned":<n>,"miscited":<n>,"unverifiable":<n>,"failed":<n>,"capSkipped":<n>}}
 ```
 
 `verdict` is the D5 derived-verdict enum — **never write `CLEAN` on a row whose
@@ -327,11 +327,11 @@ Then proceed directly into Phase 4 — the user does not re-invoke anything.
 Merges the working branch into the originating branch recorded by `/git:enter-worktree`. Skip
 the merge mechanics (steps 1–6) with a one-line note if the review ran directly on the
 originating branch — nothing to merge — but still run step 7 (Observe): in-place builds still
-need D7's invocation point.
+need 20260805/03 D7's invocation point.
 
 Run `spec-paths merge-back` once and keep the printed path — it is `{mergeBack}`, the sole
 derivation of the git mechanics (exit-code alphabet: 3 = conflicts, 4 = CWD-inside-worktree
-refusal — shared invariants § Risk Tiers).
+refusal — the merge-back script's own header comment).
 
 **Resolve `{mainRoot}` now, before step 1** — the **project root** (the repo's main working
 tree) — never `$HOME`/`~` or `/`. This is a second, distinctly named symbol from Phase 0's
@@ -368,7 +368,7 @@ worktree path (omit `--worktree` if none was used).
    {worktree}]` — removes the worktree and deletes `{source}`. Exit 4 means step 3's relocate
    was skipped: do it, then re-run cleanup.
 6. **Verify:** `{mergeBack} verify --root {mainRoot}` — confirms a clean tree, worktree gone.
-7. **Observe (D7):** now relocated to root with the merge landed, run
+7. **Observe (20260805/03 D7):** now relocated to root with the merge landed, run
    `node "$(spec-paths observe-ci)" --root {mainRoot}` once — closes the loop on
    *previously*-closed specs (this spec stays silent until a later CI check attributes a red
    run to it). Normally prints nothing; print its output verbatim when it does. Appends to the

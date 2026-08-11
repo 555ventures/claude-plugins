@@ -74,19 +74,19 @@ Launch parallel Explore agents (`model: sonnet`) and read key files yourself:
 Interview the user via `AskUserQuestion` only for what the code cannot answer (e.g. "which
 surfaces do you consider T3?", with informed options).
 
-**Ensure `.claude/worktrees/` is gitignored** (idempotent): `/spec:build`'s worktree workspace
-and the harness's own `EnterWorktree` both create trees there, and an un-ignored worktree path
+**Ensure `.claude/worktrees/` is gitignored** (idempotent): `/git:enter-worktree`'s worktree
+provisioning and the harness's own `EnterWorktree` both create trees there, and an un-ignored worktree path
 makes the root tree read dirty — which trips `/spec:review`'s clean-root merge gate and makes
 `merge-back.sh create` refuse. If `git check-ignore -q .claude/worktrees` fails, append
 `.claude/worktrees/` to the repo's `.gitignore` and tell the user to commit it.
 
 **Also gitignore the design-stage sidecar dirs** (idempotent, same routine): `/spec:design`
 writes a per-spec sidecar dir `specs/YYYYMMDD/##-name.design/` (`extract.json`, `slice-*.html`,
-`skeletons.json`) that is the within-run plan + resume cache, deleted at Phase 4 reconcile — but a
+`skeletons.json`) that is the within-run plan + resume cache, deleted at reconcile — but a
 mid-run checkpoint-commit must not carry it. If `git check-ignore -q specs/00000000/00-x.design/x`
 fails, append `specs/**/*.design/` to `.gitignore`. (Also clean up the retired digest-era patterns
 `*.design-digest.json` / `*.design-digest.raw.html` if a prior init added them.) This does not
-break resume (resume reads the working-tree files); the Phase 4 `rm` is what clears the tree.
+break resume (resume reads the working-tree files); the reconcile step's `rm` is what clears the tree.
 
 **Set the union merge driver for the run ledger** (idempotent): `.claude/spec-runs.jsonl` is
 append-only, and two specs building in parallel worktrees both append at EOF — a default merge
@@ -185,12 +185,9 @@ All keys consumed by the plugin's commands/workflows:
     "bootCommand": "bun dev",
     "readyCheck": "curl -sf http://localhost:3000/api/health",
     "seedCommand": "bun db:seed",     // OPTIONAL: seeds an observable state
-    "readyTimeout": 120               // OPTIONAL: seconds (default 120)
+    "readyTimeout": 120,              // OPTIONAL: seconds (default 120)
+    "stopSignal": "SIGTERM"           // OPTIONAL: signal to stop the booted process (default SIGTERM)
   },
-  // OPTIONAL: default workspace for /spec:build ∈ "worktree" | "in-place" | "ask".
-  // Omit (or "ask") to keep the per-run prompt. Set "worktree" for repos that always want
-  // isolation (e.g. genesis-seeded greenfield), "in-place" for repos that never do.
-  "build": { "workspace": "ask" },
   // Mechanical sweep script (generated in Phase 5); dirs appended, DIFF_BASE env honored.
   "patternsScript": "scripts/spec-patterns.sh",
   // OPTIONAL: AC-drift checker; spec path appended. Omit entirely if the repo has none —
@@ -294,8 +291,7 @@ every turn, which is what keeps its rules followed rather than skimmed.
   registration/wiring File Plan rows this repo's structure demands (with real paths).
 - **`## Build`** — orchestrator-only integration duties with exact commands (e.g. route
   codegen, translation fill via its script, Alembic migration generation + review steps, app
-  boot check), host escalation triggers (e.g. divergent migration heads), and T3 checkpoint
-  surfaces.
+  boot check), and host escalation triggers (e.g. divergent migration heads).
 - **`## Worker Rules`** — repo-specific hard rules appended to every worker prompt: the
   read-only/generated surfaces and their sanctioned change routes, logging/number/i18n
   discipline, import-boundary rules, the scoped self-verify commands workers may run.

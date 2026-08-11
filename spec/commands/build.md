@@ -245,7 +245,7 @@ Checkpoint-commit after the gate is green (and after each earlier green phase if
 (repo root; create on first append) — the repo-wide, committed, append-only run history:
 
 ```
-{"ts":"<YYYY-MM-DD>","spec":"<repo-relative spec path>","stage":"build","tier":"<T1|T2|T3>","runId":"<wf_…>","fastPath":<bool>,"diff":{"files":<n>,"loc":<n>},"tokens":{"workflow":<n>,"phase4Repairs":[<n>,…]},"gate":{"phase4Rounds":<n>,"failureSetShrankEachRound":<bool>},"retainer":{"consults":<n>},"deviations":<n>}
+{"ts":"<ISO-8601>","spec":"<repo-relative spec path>","stage":"build","tier":"<T1|T2|T3>","runId":"<wf_…>","fastPath":<bool>,"diff":{"files":<n>,"loc":<n>},"tokens":{"workflow":<n>,"phase4Repairs":[<n>,…]},"gate":{"phase4Rounds":<n>,"failureSetShrankEachRound":<bool>},"retainer":{"consults":<n>},"deviations":<n>}
 ```
 
 `diff` comes from `git diff --shortstat <build_base>..HEAD` (files changed, insertions +

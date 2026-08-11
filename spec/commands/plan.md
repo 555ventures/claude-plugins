@@ -65,7 +65,7 @@ in Phase 1.5.
      gate command gates it and the change diffs against the host's standards docs." Do not
      write a spec file.
    - **T3** → state the tier and the one-line rubric justification, proceed.
-   - **T2** → apply shared invariants § Pipeline Entry before proceeding: a spec is written
+   - **T2** → apply shared invariants § Pipeline Entry, before proceeding: a spec is written
      only when the work needs **delegation** (execution large enough that Sonnet workers
      should do it while Fable only plans) or **durability** (scope spans sessions; the spec
      is the re-entrant state) — the pipeline is opt-in heavy machinery, not the default path,
@@ -85,7 +85,8 @@ in Phase 1.5.
   the excerpts that matter get embedded into the spec's UI/Contracts sections. Downstream
   workers never query MCPs.
 - UI-bearing spec in a design-capable host: read the design doctrine doc (config
-  `design.doctrine` — shared invariants § Design Canon) before writing the UI section; the
+  `design.doctrine` — shared invariants § Design Canon, not loaded by `shared-for plan`; full
+  text in shared.md) before writing the UI section; the
   component inventory must fit the canon, and reusing existing catalog components beats
   speccing new ones.
 - Then interview the user via `AskUserQuestion` with informed options — never ask in a vacuum,
@@ -158,13 +159,16 @@ While drafting:
   enqueue helper, analytics client) with no consuming call site in the same spec or its
   `depends_on` series is mis-sliced — fold it into the consumer's spec.
 - **Set `design:`** — only in hosts whose config declares a `design` block (component
-  catalog — shared invariants § Design Canon). There: `true` for any spec with a UI section
+  catalog — shared invariants § Design Canon, not loaded by `shared-for plan`; full text in
+  shared.md). There: `true` for any spec with a UI section
   whose look/feel the user should approve before build; `false` for logic-only or
   trivially-styled changes; confirm with the user when borderline. In hosts without a
   catalog, never set the flag (omit it or leave `false`). **If the planning conversation
   surfaced a `claude.ai/design` mockup URL** for this spec, also record it into frontmatter as
   `design_source: <url>` alongside `design: true` — plan only records the pointer (it never
-  fetches); `/spec:design` makes it read-first canon (shared § "Claude Design as a source").
+  fetches); `/spec:design` makes it read-first canon (shared § Design Binding Pipeline, the
+  "Claude Design as a source" escape hatch — not loaded by `shared-for plan`; full text in
+  shared.md).
 - **Never guess — mark it.** Where the draft needs information you don't have (an unconfirmed
   behavior, an unknown constraint, a fork you haven't put to the user yet), write
   `[NEEDS CLARIFICATION: <the question>]` inline at that spot instead of writing something
@@ -293,7 +297,7 @@ Never silently drop a finding.
    **no** `design_source`, a mock already in `design/mocks/` (ratified by `/spec:sketch`,
    or swept by `/spec:atlas`) becomes the `design_source` starting point — record its path
    into the frontmatter now (with none, `/spec:design` authors the mock first — shared
-   § Design Binding Pipeline).
+   § Design Binding Pipeline, not loaded by `shared-for plan`; full text in shared.md).
 
 ## Rules
 

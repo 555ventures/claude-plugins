@@ -17,7 +17,7 @@ MoA panel below. Either way — **one canon, not two**. Same interactive shape a
 the session owns `AskUserQuestion` and writes; `wf-panel` does research + panel.
 
 **Intended model: Opus** (taste IS the work — the design-stage exception; shared invariants
-§ Model Placement keeps genesis design-doctrine authoring an Opus seat).
+§ Model Placement, which keeps genesis design-doctrine authoring an Opus seat).
 
 **Setup:** run `spec-paths shared-for genesis-design` and read its output (the shared
 invariants scoped to this command), then run `spec-paths shared-genesis` and
@@ -78,7 +78,7 @@ Select UX research-angle keys from the archetype + audience (e.g. `ui-ux-categor
 (UX-researcher / Visual-brand / Accessibility-advocate / FE-implementation-pragmatist /
 Target-audience-persona). List the design hard-to-reverse dimensions (component library, token
 tier count, accessibility baseline, doctrine adjectives, navigation shell, layout system,
-color schemes — genesis.md § Hard-to-Reverse Dimensions) under `## Open Dimensions`, marked
+color schemes — genesis.md § Genesis: Hard-to-Reverse Dimensions) under `## Open Dimensions`, marked
 constrained/open. Selective: `runProposers: false` only if all are constrained.
 
 ## Phase 3 — Research + panel loop (session ↔ workflow)
@@ -130,7 +130,7 @@ Author directly (taste exception — not delegated to Sonnet):
    weight and space, not size jumps" is a *posture* — the size roles still ship; weight-led hierarchy
    is expressed *through* a restrained size/weight pairing, not by omitting the scale.) For non-visual
    archetypes this is voice/persona or TUI doctrine instead. **Tag every ruling's grounding** (shared
-   § Grounded vs taste): `grounded` (externally-anchored — contrast/a11y, legal/brand,
+   § Design Authoring Contracts, its "Grounded vs taste" rule): `grounded` (externally-anchored — contrast/a11y, legal/brand,
    destructive-action safety; binds even against an explicit mockup) or `taste` (aesthetic preference;
    yields to an explicit mockup). The tag is **authored here, not judged later** — it is what lets a
    mockup-driven `/spec:design` honor the mock without a doctrine-over-weighting reader silently
@@ -197,7 +197,7 @@ Author directly (taste exception — not delegated to Sonnet):
 4. **Design rules** — write `.claude/genesis/design-rules.json` (template via `spec-paths templates`):
    each rule carries a `targetCategory` **enum only** (the design category set defined in
    genesis.md § Genesis: Enforcement Handoff), `appliesTo`/`exemptGlobs`, `severity`, `rationale`,
-   and `grounding` (`grounded` | `taste`, per shared § Grounded vs taste — mechanizable closure rules
+   and `grounding` (`grounded` | `taste`, per shared § Design Authoring Contracts, its "Grounded vs taste" rule — mechanizable closure rules
    like `no-raw-color` are `grounded`) — **never a tool name** (same section). `/spec:enforce` owns the category→enforcer selection, chosen
    at runtime per stack. **Closure check (binding):** every DECIDED token family from Phase 4.2 gets
    its matching "consume the role by name — no off-token literal" rule — `color → no-raw-color`
@@ -230,7 +230,7 @@ Next: /spec:atlas (sweep + holistic review of the genesis mocks) → /spec:init 
 ## Rules
 
 - **Never Read `wf-panel.js` or `wf-research.js`.** The `args` are `stage: "design"` variants of
-  the contracts documented in `/spec:genesis-architect` (Phase 3 `wf-research`, Phase 4
+  the contracts documented in `/spec:genesis-architect` (Phase 1 `wf-research`, Phase 3
   `wf-panel`) — this command reuses them ("Same loop as architect"). Invoke each by `scriptPath`
   and act on its return; their sources are never orchestrator context.
 - One canon: this supersedes `/spec:init`'s greenfield design sketch; init reads this, never

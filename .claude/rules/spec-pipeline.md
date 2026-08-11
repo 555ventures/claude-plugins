@@ -69,7 +69,6 @@ T1-shaped work: doctrine prose edits pinned by existing tests, new sweeps in
 - Host escalation triggers: any test that must be weakened to pass (tests here are pinned
   invariants with incident headers — weakening one is a doctrine change, not a fix);
   any edit that changes `spec-paths contract-hash` output.
-- T3 checkpoint surfaces: the list in § Risk Tiers, verbatim.
 
 ## Worker Rules
 

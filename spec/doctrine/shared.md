@@ -76,8 +76,8 @@ The grounding layer goes stale two ways; **detection is mechanical, response is 
 
 `/spec:doctor` diagnoses and recommends — targeted user-approved patches, a full `/spec:init`
 refresh when drift is structural, or a `/spec:enforce` re-run when the enforcement layer drifted.
-Which command regenerates what is fixed in § Host Grounding (Regeneration ownership); the doctor
-itself never rewrites either layer.
+Which command regenerates what is fixed in § Host Grounding, its Regeneration-ownership
+passage; the doctor itself never rewrites either layer.
 
 ## Rule Enforcement
 
@@ -380,8 +380,8 @@ precisely so a checker who wasn't in the room can verify them — and files viol
 IDs ("UX-7: max one primary CTA; this screen has three"). Doctrine taste that never became a
 checkable rule, token, or lint is advisory by definition; relying on an authoring session to
 *remember* psychology is not an enforcement mechanism. Any mock-authoring or mock-editing
-pass, in any command, also applies § Design Authoring Contracts' grounded-vs-taste rules at
-authoring time: a `grounded` doctrine ruling (a11y/contrast, legal/brand, destructive-action
+pass, in any command, also applies § Design Authoring Contracts, its grounded-vs-taste rules,
+at authoring time: a `grounded` doctrine ruling (a11y/contrast, legal/brand, destructive-action
 safety) binds the mock's values; a `taste` contradiction is recorded, never silently ratified.
 Copy in mocks is
 authored as the contract it will become: verbatim strings the fidelity gate later holds code to.
@@ -401,7 +401,7 @@ session's context. Three layers, strongest enforcement first:
    rendered value is within tolerance and **reuses it** (a near-match is `matches-canon`, not a new
    token) — this is what keeps mock-driven extension from sprawling the scale.
 2. **The design doctrine doc** (`design.doctrine`, one page, bootstrapped by `/spec:init`
-   § Design foundation — or, for greenfield repos seeded by the genesis stage, authored
+   (init.md § Phase 6 — Design foundation) — or, for greenfield repos seeded by the genesis stage, authored
    by `/spec:genesis-design` and merely extracted by `/spec:init`; the design rules it records
    in `.claude/genesis/design-rules.json` become gate-wired enforcement via `/spec:enforce`) —
    taste rulings tokens can't encode (dialog-vs-page habits, empty-state tone, density philosophy).
@@ -508,14 +508,14 @@ skeleton binding maps, the wf-design expansion, and the deterministic fidelity g
 `design/mocks/`): **Sonnet** end to end — binding-map transcription against `extract.json`
 behind the deterministic fidelity gate — with **Fable** consulted retainer-style only for the
 calls that are genuinely judgment: component-boundary/reuse decisions, blocked-binding rulings
-(§ Base primitives), and delta proposals against the fidelity gate. **No mock yet**: the session
+(the "Base primitives" rule, below), and delta proposals against the fidelity gate. **No mock yet**: the session
 **authors the mock first** under the design harness (sketch tier, promoted on approval), records
 it as `design_source`, and proceeds mock-bound — the taste spend is the mock, small and cheap to
 iterate, never framework code. On roadmap-derived specs the mock-authoring seat is Sonnet with
 the Fable retainer (direction-level questions escalate to the atlas, where roadmap-level taste
 lives); on standalone no-roadmap specs the seat is the **session model** — the user picks it at
-invocation (Opus default; Fable when the surface warrants it). § Model Placement carries the
-placement rule.
+invocation (Opus default; Fable when the surface warrants it). § Model Placement, above,
+carries the placement rule.
 
 **Claude Design as a source (escape hatch, read-only).** The pipeline's mocks are authored
 locally (design harness above); **Claude Design** (`claude.ai/design`) remains a supported
@@ -558,7 +558,7 @@ base-primitive containment, read-first sequencing, values-as-token-**roles**) ho
   bind-vs-author, a `tokenMap` of harvest literals → repo token roles, props, states, `mockRef`,
   variant confirmations — a theme/breakpoint variant becomes a token-pair/responsive obligation,
   never a second string contract), consulting the **Fable retainer** only at the judgment points
-  the Model fork paragraph names (component-boundary/reuse calls, blocked bindings, delta
+  named above (component-boundary/reuse calls, blocked bindings, delta
   proposals, fork rulings), **never a tree**: with a mock bound, the **region's slice is the
   binding authority** for structure, copy, element order, and layout, and restating it would be a
   paraphrase hop (the fidelity hole) at any model's prices. The `wf-design` `stage:"author"` workflow then
@@ -957,15 +957,15 @@ git; commits happen at the phase boundaries the genesis commands define.)
 
 ## Read-Only Surfaces
 
-Hosts declare generated/managed surfaces (and their sanctioned change routes) in pipeline
-rules § Worker Rules — e.g. generated API clients, codegen outputs, lockfiles, translation
-catalogs. Nobody edits them by hand, worker or orchestrator; changes go through the declared
-tool. The pattern sweep and the reviewer both treat hand-edits to them as hard findings.
+Hosts declare generated/managed surfaces (and their sanctioned change routes) in the host's
+pipeline rules § Worker Rules — e.g. generated API clients, codegen outputs, lockfiles,
+translation catalogs. Nobody edits them by hand, worker or orchestrator; changes go through the
+declared tool. The pattern sweep and the reviewer both treat hand-edits to them as hard findings.
 
 ## MCP Policy
 
-Pre-emptive at **plan/design** time: run the registry/library lookups the host's pipeline
-rules § Planning declares (UI registries, Context7 for third-party API shapes) before
+Pre-emptive at **plan/design** time: run the registry/library lookups the host's
+pipeline rules § Planning declares (UI registries, Context7 for third-party API shapes) before
 specifying surfaces that rely on them. Results are **embedded into the spec** (UI / Contracts
 sections) — `/spec:build` workers never query MCPs; they work from the spec and return
 `blocked` if an embedded reference proves wrong against the installed version.

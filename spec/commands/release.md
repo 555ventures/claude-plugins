@@ -66,9 +66,11 @@ reason where no mechanical check exists), domain/TLS (`exec`: a curl against
 `productionUrl`). First release: build the full manifest with the user. Later releases:
 re-check only Phase 0's substrate delta plus rows whose targets changed. The manifest is
 committed — it doubles as the handover document: a list of verified observations, not claims.
-Append `{"leg":"substrate","exit":<0 if manifest-check exits 0 else 1>,"observed":"checked=<N>
-failed=<M> inert=<K>"}` to `{manifestPath}` (`checked`/`failed`/`inert` are manifest-check's
-TOTAL/FAILS/INERT counts) — this exact `checked=N failed=N inert=N` shape is what
+`manifest-check.sh` prints a machine sentinel line after its prose summary —
+`TOTAL=<n> FAILS=<n> INERT=<n>` — parse `checked`/`failed`/`inert` from that sentinel verbatim
+(never hand-counted from the prose lines above it) and append `{"leg":"substrate","exit":<0 if
+manifest-check exits 0 else 1>,"observed":"checked=<N> failed=<M> inert=<K>"}` to
+`{manifestPath}` — this exact `checked=N failed=N inert=N` shape is what
 `verdict.js --profile release` parses into the ledger row's `substrate` field; drifting the
 format breaks that derivation silently.
 
@@ -160,7 +162,7 @@ manifest rows above, never passed as a flag.
    `.claude/spec-runs.jsonl` — line 2, the ledger row, verbatim, counts/enums/paths only, never prose:
 
    ```
-   {"ts":"<YYYY-MM-DD>","stage":"release","milestone":"<tag or briefs range>","briefs":[<NN>,…],"staging":"<pass|fail>","e2e":{"passed":<n>,"failed":<n>,"skipped":<n>},"journeys":{"walked":<n>,"failed":<n>},"substrate":{"checked":<n>,"failed":<n>,"inert":<n>},"production":"<verified|skipped|failed>","ci":"<conclusion=<value>|unavailable|in-progress>"}
+   {"ts":"<ISO-8601>","stage":"release","milestone":"<tag or briefs range>","briefs":[<NN>,…],"staging":"<pass|fail>","e2e":{"passed":<n>,"failed":<n>,"skipped":<n>},"journeys":{"walked":<n>,"failed":<n>},"substrate":{"checked":<n>,"failed":<n>,"inert":<n>},"production":"<verified|skipped|failed>","ci":"<conclusion=<value>|unavailable|in-progress>"}
    ```
 
 2. **Tag** the release (`git tag`) when the user confirmed promotion — never push the tag;

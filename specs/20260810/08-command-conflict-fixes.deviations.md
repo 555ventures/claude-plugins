@@ -1,1 +1,0 @@
-2026-08-11 D12 version deviation: spec expected 6.51.0→6.52.0; siblings 06/07 landed 6.52.0/6.53.0 first, so per D12 binding rule (then-current + one minor) the bump is 6.53.0→6.54.0. Same changelog clause.

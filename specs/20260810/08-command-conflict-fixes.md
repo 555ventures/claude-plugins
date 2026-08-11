@@ -1,6 +1,6 @@
 ---
 date: 2026-08-10
-status: implementing
+status: done
 diff_base: ec76afc8df45f7345120e940c376affde31d73ee
 risk: T2                 # doctrine prose + pinned tests; no T3-trigger file touched (doctor/review/build/plan/release/init/genesis-design prose + spec template)
 area: cross-cutting
@@ -156,6 +156,11 @@ for Phase 4 and hardening AC-2 to assert the consumers, not just the binding sen
 All other decisions were verified against live files with no defect (check-11 wording,
 branch-rule derivation, diff_base non-collision with spec-status.js/spec-state-gate.sh,
 plan.md tier region, genesis arms, atlas chain, version base 6.51.0). Nothing rejected.
+
+Build deviation (2026-08-11, folded at review close): D12's literal 6.51.0→6.52.0 was stale
+by build time — siblings 06/07 landed 6.52.0/6.53.0 first, so per D12's own binding rule
+(then-current + one minor) the bump landed as 6.53.0→6.54.0, same changelog clause. Known
+version-race class (pipeline rules Gotchas, specs/20260810/02 D11); no new gotcha needed.
 
 ## Canonical Delta
 

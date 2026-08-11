@@ -216,8 +216,7 @@ Two modes, decided by host config:
 - **No `driftScript`** — the Phase 0 grep matrix IS the drift gate: an AC-ID with zero test
   hits is an automatic `hard` finding — no verifier pass, it is a deterministic fact. The reviewer's AC ↔ test coverage check
   remains as the semantic backstop — a test that *names* an AC-ID but doesn't actually test
-  the behavior is still a `hard` finding. (The workflow's reviewer prompt already calibrates
-  this via `hasDriftScript`.)
+  the behavior is still a `hard` finding.
 
 ## Phase 2 — Verdict
 

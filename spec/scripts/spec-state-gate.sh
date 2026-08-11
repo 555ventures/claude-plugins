@@ -4,9 +4,11 @@
 #   /spec:build  requires status: hardened (or implementing, for a resume)
 #   /spec:review requires status: implementing (or done, for a re-run)
 #   all three    require zero [NEEDS CLARIFICATION] markers in the spec
-# Also warns (stdout → injected context, never a block) on every pipeline command
-# when the host grounding layer's contractHash stamp no longer matches the plugin's
-# grounding-contract file — fully automatic; no version bookkeeping involved.
+# Also warns (stdout → injected context, never a block) on exactly the four gated
+# commands (/spec:plan, /spec:design, /spec:build, /spec:review — the same case
+# pattern below) when the host grounding layer's contractHash stamp no longer
+# matches the plugin's grounding-contract file —
+# fully automatic; no version bookkeeping involved.
 # Exit 2 blocks the prompt and shows stderr to the user. Exit 0 allows.
 set -u
 

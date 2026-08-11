@@ -65,8 +65,9 @@ The grounding layer goes stale two ways; **detection is mechanical, response is 
   (`spec-paths contract`: required config keys, required rules sections, the canonical
   Worker Contract text). `/spec:init` stamps its hash (`spec-paths contract-hash`) into the
   config as `contractHash`, plus `generatedBy: "spec@<version>"` for provenance. The
-  state-gate hook recomputes the hash on every pipeline command and injects a one-line
-  warning on mismatch — a warning, never a block; stale grounding usually still runs. No
+  state-gate hook recomputes the hash on `/spec:plan`, `/spec:design`, `/spec:build`, and
+  `/spec:review` and injects a one-line warning on mismatch — a warning, never a block; stale
+  grounding usually still runs. No
   bookkeeping: editing the contract file is what changes the hash, so detection is
   automatic by construction.
 - **Codebase drifted.** Stale cited paths, commands, or conventions surface at build time as
@@ -76,8 +77,8 @@ The grounding layer goes stale two ways; **detection is mechanical, response is 
 
 `/spec:doctor` diagnoses and recommends — targeted user-approved patches, a full `/spec:init`
 refresh when drift is structural, or a `/spec:enforce` re-run when the enforcement layer drifted.
-Which command regenerates what is fixed in § Host Grounding, its Regeneration-ownership
-passage; the doctor itself never rewrites either layer.
+Which command regenerates what — and the doctor's own never-rewrites-wholesale limit — is fixed
+in § Host Grounding's Regeneration ownership passage.
 
 ## Rule Enforcement
 
@@ -85,8 +86,10 @@ A host's rules are enforced **deterministically**, in its `gateCommand` — not 
 runtime. The principle is stable and does not rot: *consistency requires determinism.* For any
 rule a linter, arch-tool, or text/structural matcher CAN check, a runtime LLM check is a strict
 downgrade — non-reproducible, brittle, false-confidence coverage. The only sanctioned runtime LLM
-rule-check is `/spec:plan` reading a draft spec (prose has no CI, so reading is the only check).
-The plugin neither depends on nor replicates a host's `/comply`.
+rule-check is `/spec:plan` reading a draft spec (prose has no CI, so reading is the only check),
+and the design harness's per-mock checklist walk — a prose surface with no deterministic checker
+(full mechanism in § Design Binding Pipeline). The plugin neither depends on nor replicates a
+host's `/comply`.
 
 `/spec:enforce` owns this. It classifies the host's rules into a **stable, language-neutral
 category taxonomy** and mechanizes each. The canonical enum lives in the grounding contract
@@ -513,9 +516,8 @@ calls that are genuinely judgment: component-boundary/reuse decisions, blocked-b
 it as `design_source`, and proceeds mock-bound — the taste spend is the mock, small and cheap to
 iterate, never framework code. On roadmap-derived specs the mock-authoring seat is Sonnet with
 the Fable retainer (direction-level questions escalate to the atlas, where roadmap-level taste
-lives); on standalone no-roadmap specs the seat is the **session model** — the user picks it at
-invocation (Opus default; Fable when the surface warrants it). § Model Placement, above,
-carries the placement rule.
+lives); on standalone no-roadmap specs the seat is the **session model**, per
+§ Model Placement's named exception above, which carries the placement rule.
 
 **Claude Design as a source (escape hatch, read-only).** The pipeline's mocks are authored
 locally (design harness above); **Claude Design** (`claude.ai/design`) remains a supported
@@ -726,8 +728,9 @@ Every `Agent` call sets `model:` explicitly. Never inherit.
   roadmap brief behind it there is no atlas seat where direction was already judged, so the user
   picks the seat at invocation — Opus is the cost-rational default, Fable when the surface
   warrants it. Roadmap-derived specs stay the ordinary rule (Sonnet resident, Fable consulted;
-  direction-level questions escalate to the atlas) — the split in full lives in § Design
-  Binding Pipeline, loaded only by `/spec:design`; this bullet is the self-contained rule.
+  direction-level questions escalate to the atlas) — the mock-bound/no-mock mechanics in full
+  live in § Design Binding Pipeline, loaded only by `/spec:design`; this bullet is the
+  self-contained placement rule.
 - **`/spec:enforce` runs on Opus.** Classifying a host's rule surfaces into the enforcement
   taxonomy and choosing category→enforcer mappings against a live stack is judgment-adjacent
   work sitting outside the build/review loop; its workers and sweeps stay Sonnet/Haiku.
@@ -760,9 +763,7 @@ Mechanical triggers — consult the retainer, don't grind:
 6. Any host-declared trigger (pipeline rules § Build — e.g. migration head conflicts)
 
 These six are the entire contract — there is no additional mandatory checkpoint layered on top.
-Retainer consults are surprise-driven only: a T3 spec that never trips one of the six runs start
-to finish without a single consult, and that's a pass, not a coverage gap (§ Model Placement,
-Retainer pattern).
+Retainer consults are surprise-driven only (§ Model Placement, Retainer pattern).
 
 Response path: retainer consult → if a genuine fork or scope change remains → retainer
 **decision brief** → `AskUserQuestion` authored from it → ruling written into the spec's
@@ -915,7 +916,7 @@ loop. In the design stage `wf-design.js` runs one gate-verifiable **workflow** p
 **author** pass (foundation + components + catalog entries in one ordered run behind a single
 typecheck+lint gate) — and **planned component authoring DOES enter the workflow** (it is
 gate-verifiable: workers EXPAND the on-disk `skeletons.json`). Comprehend is now a deterministic
-**`dc-extract` script** (Sonnet only as fallback) and reconcile a **direct inline dispatch** (a Sonnet
+**`dc-extract` script** (deterministic, no model — fail-closed on unparseable mocks) and reconcile a **direct inline dispatch** (a Sonnet
 update + a Haiku structural re-read — two serial agents earn no cold boot); neither is a `wf-design`
 stage. What never enters any of it is the **taste**: the skeletons themselves (what to build, which tokens, how
 surfaces map), fork adjudication, the iteration loop's rulings, and the visual review all stay in

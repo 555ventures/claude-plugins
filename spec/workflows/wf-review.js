@@ -63,8 +63,9 @@ if (!args || typeof args !== 'object' || typeof args.specPath !== 'string') {
 //                             // scope==='fix-delta' — the diff IS the fix, no File Plan to
 //                             // reconcile against. Full scope: out-of-plan files are already a
 //                             // mechanical finding, reviewers only judge their CONTENT.
-//   hasDriftScript: boolean,  // host config declares driftScript? when false, the reviewer's
-//                             // AC ↔ test coverage check IS the drift gate (missing test = hard)
+//   hasDriftScript: boolean,  // host config declares driftScript? when false, the DRIFT_NOTE
+//                             // tells the reviewer the Phase 0 grep matrix is the drift gate
+//                             // and their AC ↔ test check is the semantic backstop
 //   reproCommand: string,     // host's test-runner prefix (config testCommand — repro file
 //                             // path is appended); '' = verifier agents discover the runner
 //                             // from package.json / CLAUDE.md
@@ -121,7 +122,7 @@ const VERIFY = {
 
 const DRIFT_NOTE = args.hasDriftScript
   ? ''
-  : ' (this repo has no AC-drift script — THIS check is the drift gate; a missing test is hard)'
+  : ' (this repo has no AC-drift script — the Phase 0 grep matrix is the deterministic drift gate; your AC↔test check is the semantic backstop — a test that names an AC-ID without testing the behavior is still hard)'
 
 const EMPHASES = [
   'Primary emphasis: design integrity — root-cause fixes vs duct tape, shortcut shapes (backward-compat shims, suppression markers, test-expectation abuse, defensive fallbacks that mask shape bugs instead of fixing the shape, half-done implementations, deferred-work comments), and spec drift (the diff doing things the spec never said).',

@@ -95,8 +95,8 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
    `pipelineRules` path (config value) as `pipelineRulesPath` — workers read its
    `## Worker Rules` / `## Test Rules` sections themselves. The workflow *script* has no
    filesystem access, but the agents it spawns do, so host rules and doctrines travel as PATHS
-   the workers read, never as inline blobs — `args` is a control channel of paths/ids/enums,
-   not a data bus, so no prose ever enters it to corrupt its JSON.
+   the workers read, never as inline blobs — the closed-alphabet invariant below is what keeps
+   `args` from corrupting on this.
 4. Flip `status: hardened → implementing`. Build never writes `build_base` — that field is owned
    solely by `/git:enter-worktree`, which captures the originating branch before entering the
    worktree. If the build is in place, `build_base` is simply absent and `/spec:review`'s

@@ -96,7 +96,7 @@ If the session was NOT entered via `EnterWorktree` (ExitWorktree is a no-op), sk
 1. **Never `--no-verify`** — pre-merge hooks run unmodified
 2. **Never force-push, never `merge --abort` silently** — both require explicit user approval
 3. **Never resolve conflicts by picking a side without reading the file** — conflicts are logic decisions
-4. **Worktree cleanup**: Call `ExitWorktree(action="keep")` first — restores session CWD to the main repo root without checking for unmerged commits. Then merge normally. Then `git worktree remove <path> && git branch -d <branch>` from the main repo root. Never call `ExitWorktree(action="remove")` after merging — the harness still sees the branch as unmerged at that point. If ExitWorktree is a no-op (session not entered via `EnterWorktree`), skip it and run git commands directly; a CWD warning is unavoidable in that case.
+4. **Worktree cleanup**: follow Step 7's sequence exactly.
 5. **Always use `AskUserQuestion`** for strategy choice and non-trivial conflict resolution
    — question style: plain language, self-contained, consequences per option, recommended
    pick first

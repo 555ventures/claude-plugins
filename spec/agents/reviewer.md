@@ -63,9 +63,11 @@ expected precondition of your review, never a finding.
 
 - Hand-edits to generated/managed surfaces (the host's rules name them) are **hard** — they
   change only via their declared tools.
-- A spec'd Acceptance Criterion with no covering test: **hard** when the host has no AC-drift
-  script (your coverage check IS the drift gate); otherwise confirm against the drift
-  script's output.
+- A spec'd Acceptance Criterion with no covering test: when the host has no AC-drift script, the
+  Phase 0 grep matrix IS the deterministic drift gate — an AC-ID with zero test hits is an
+  automatic hard finding, no reviewer claim needed. Your AC↔test coverage check is the
+  **semantic backstop**: a test that names an AC-ID without testing the behavior is still
+  **hard**. When a drift script IS declared, confirm against its output instead.
 - Suppression markers (type-checker ignores, lint disables, blanket casts, expected-failure
   abuse) without a sanctioned justification: **medium**, escalating to **hard** where a rule
   file says so.

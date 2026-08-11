@@ -112,13 +112,16 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
       stamp is stale — re-run `/spec:enforce`").
     - **Category enum** — every manifest entry's `category` is one of the reserved taxonomy
       (`module-boundary | naming | forbidden-symbol | structural-pattern | datetime |
-      schema-validation | format`); an unknown category is broken.
+      schema-validation | format | duplication | cycle`); an unknown category is broken.
     - **Wiring resolves** — for each entry, the recorded enforcer's config/contract/checker path
       exists and the `gateCommand` (or the host hook orchestrator) still invokes it, OR the entry
       records a `sweep`/`review-check` fallback. An entry whose wiring no longer resolves is the
       early-detection signal — recommend re-running `/spec:enforce` (do **not** try to re-derive
       the enforcer here; tool selection is enforce's job, and naming a tool in the doctor would
-      anchor it the same way the plugin prose deliberately avoids).
+      anchor it the same way the plugin prose deliberately avoids). **Ratchet case:** a
+      `duplication`/`cycle` entry whose `baseline.path` does not exist on disk fails this check
+      the same way — the ratchet baseline was never established or was deleted since, and the
+      gate's no-new-violations invocation has nothing to compare against.
 
 11. **Spec-dir hygiene** — sweep `specs/**`:
     - frontmatter `status` of every spec is one of `draft | hardened | implementing | done`;
@@ -331,9 +334,10 @@ Close with exactly one recommendation:
   legacy design keys → `design` block, contract-text resync, re-stamp). Apply only after
   the user approves the list; re-run the affected checks after.
 - **Enforcement drift** — checks 9–10 found design-rules/enforcement-manifest hash drift, an
-  enforcer whose wiring no longer resolves, or a rule category with no enforcer: recommend
-  `/spec:enforce` (not `/spec:init` — enforcement is its own command). Doctor never re-derives an
-  enforcer itself.
+  enforcer whose wiring no longer resolves, a stale or missing ratchet baseline (a
+  `duplication`/`cycle` entry's `baseline.path` doesn't exist), or a rule category with no
+  enforcer: recommend `/spec:enforce` (not `/spec:init` — enforcement is its own command). Doctor
+  never re-derives an enforcer itself.
 - **Structural drift** — architecture reorganized, layers changed, toolchain swapped, or
   the semantic spot-check failed: recommend `/spec:init` and say which findings drove the
   call. Do not attempt the refresh yourself.

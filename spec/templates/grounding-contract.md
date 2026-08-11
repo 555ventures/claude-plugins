@@ -100,15 +100,19 @@ prose rule — never silently dropped.
 
 - `enforcementManifest` — path to `.claude/rules/enforcement.json`: one entry per
   `(stack × category)` cell carrying the chosen enforcer (or fallback), the discovery citation,
-  the verified run command, and the gate wiring. Provenance — never plugin prose.
+  the verified run command, and the gate wiring — plus, for a ratchet category, a `baseline`
+  field (`path`, `establishCmd`) recording the once-established quarantine snapshot. Provenance
+  — never plugin prose.
 - `rulesEnforcementHash` — hash of that manifest, stamped by `/spec:enforce`; `/spec:doctor`
   recomputes it and warns when rules changed but enforcement was not regenerated.
 - The reserved, language-neutral category taxonomy is `module-boundary | naming | forbidden-symbol
-  | structural-pattern | datetime | schema-validation | format`. Tool selection is **two-stage and
-  runtime**: DISCOVER against live sources with citations (never training memory), then VERIFY the
-  tool installs and runs against the repo before adoption. **No plugin file names a specific
-  linter/formatter/arch-tool/hook-runner** — a named tool anchors the agent and goes stale faster
-  than the rules.
+  | structural-pattern | datetime | schema-validation | format | duplication | cycle`. Tool
+  selection is **two-stage and runtime**: DISCOVER against live sources with citations (never
+  training memory), then VERIFY the tool installs and runs against the repo before adoption.
+  **No plugin file names a specific linter/formatter/arch-tool/hook-runner** — a named tool
+  anchors the agent and goes stale faster than the rules. `duplication` and `cycle` are **ratchet
+  categories**: enforcement quarantines the host's existing violations in a one-time baseline
+  snapshot and the gate blocks only on violations not already in it, never on legacy debt.
 
 ## Required pipeline-rules sections (file at `pipelineRules`)
 

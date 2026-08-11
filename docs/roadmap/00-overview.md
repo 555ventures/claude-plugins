@@ -16,3 +16,5 @@ fences off belongs to its owning brief.
 | 01 | claims-registry |
 | 02 | design-path-model-placement |
 | 03 | fleet-provisioning |
+| 04 | review-smell-lens |
+| 05 | hotspot-audit |

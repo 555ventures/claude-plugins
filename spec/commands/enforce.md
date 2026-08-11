@@ -33,16 +33,24 @@ Classify every mechanizable clause into ONE language-neutral category. These are
 *tools* are not, so they are discovered at runtime, never written into this prose:
 
 `module-boundary` · `naming` · `forbidden-symbol` · `structural-pattern` · `datetime` ·
-`schema-validation` · `format`.
+`schema-validation` · `format` · `duplication` · `cycle`.
 
 This is the operational copy of the canonical taxonomy in the grounding contract (`spec-paths
 contract`); they must stay in sync — the contract is the single source of truth, this file is the
 executor's working list.
 
+**Ratchet categories.** `duplication` and `cycle` are enforced as **ratchets**: a per-host
+baseline snapshot quarantines existing violations at wiring time, and the gate blocks only on
+violations not in that baseline. A candidate for either category must additionally support a
+baseline / known-violations mode (Phase 3); a candidate without one fails verify for these
+categories — the existing fallback order (sweep → review-check) applies.
+
 Genesis-seeded repos also carry `.claude/genesis/design-rules.json` whose rules use a design enum
 (`color | typography | i18n | structure | a11y | density | layout`). Fold these in as **pre-classified
 inputs**: `structure → module-boundary`; `color | typography | i18n | density | layout → forbidden-symbol`
-or `structural-pattern`; `a11y → structural-pattern` (or judgment residue if no AST check fits).
+or `structural-pattern`; `a11y → structural-pattern` (or judgment residue if no AST check fits). No
+design category folds into the ratchet categories (`duplication`, `cycle`) — they arrive only via a
+written host rule or the Phase 5 propose flow.
 
 ## The judgment residue (do NOT mechanize — compose over, don't duplicate)
 
@@ -98,6 +106,10 @@ tokens}`. `skipped` accounts for every cell that was NOT researched (`unknown-ca
 `agent-failed`) — reconcile it against the Phase 1 work list and re-research those cells (inline
 for a handful) before Phase 3; a skipped cell is unfinished work, never a silent drop.
 
+For a `duplication` or `cycle` cell, the extra candidate requirement applies: the discovered tool
+must support a baseline / known-violations / ignore-file mode, and the citations must demonstrate
+that capability specifically, not just the underlying check.
+
 (If Phase 1's list was tiny, do this discovery inline with the same discipline: live citation
 required, no tool from memory.)
 
@@ -116,6 +128,12 @@ harness** (`patternsScript`, `scripts/spec-patterns.sh`) for structural/textual 
 pipeline rules **§ Review Checks** prose entry ONLY for genuine-judgment clauses. Never silently
 drop a category.
 
+**Ratchet-category verify.** For a `duplication` or `cycle` cell, verify additionally requires the
+candidate to support a baseline / known-violations mode: install → run → establish the baseline
+via the tool's documented mode → re-run → the re-run must exit green over the established
+baseline. A candidate that cannot go green over its own baseline fails verify for these
+categories and falls back per the order above.
+
 ## Phase 4 — Generate & wire (into the gate)
 
 For each verified enforcer, emit the machine-enforceable artifact and wire it so it runs in the
@@ -128,6 +146,15 @@ host's `gateCommand`:
   script (pure, non-zero exit on violation) and wire it into the gate.
 - **Sweep fallback** → add a grounded `sweep` call to `scripts/spec-patterns.sh` (report-only,
   exits 0 — it is a lead surface for the reviewer, not a gate block).
+- **Ratchet category (`duplication`, `cycle`)** → run the verified tool's baseline/known-violations
+  mode ONCE against the current tree to establish the **ratchet baseline** — a quarantine snapshot
+  of the host's existing violations. This is distinct from the ratchet baseline pass below
+  (`baselineRun`): that pass edits application source once to make a check land green,
+  while the ratchet baseline only snapshots what already exists and never touches source. Wire the
+  gate invocation in **no-new-violations** form (the tool's baseline/ignore-file mode against the
+  established snapshot), commit the baseline file alongside the enforcement config, and record
+  `baseline: {path, establishCmd}` in the manifest entry (`establishCmd` is the command run once at
+  wiring to produce the snapshot).
 
 Reproduce what the repo already enforces (do not duplicate or fight an existing contract — detect
 it and leave it, or fold it into the manifest as already-covered) and add the missing structural
@@ -135,7 +162,9 @@ enforcers. Generation MAY run as a worktree-isolated workflow stage if many arti
 in parallel; inline is fine when N is small. **This command edits only the host's grounding/gate
 layer — never application source** (sole exception: the deterministic baseline pass below).
 
-**Deterministic baseline pass — the one sanctioned source edit.** When a verified enforcer has a
+**Deterministic baseline pass — the one sanctioned source edit** (distinct from the ratchet
+baseline snapshot above — that one never touches source; this one does, under the three
+conditions below). When a verified enforcer has a
 write/fix mode and the tree carries pre-existing violations its new gate check would flag (the
 common `format` case: formatter configured but unwired), run that tool's write mode ONCE over the
 tree so the check lands green instead of handing the user a red gate only the tool itself can
@@ -161,6 +190,12 @@ dynamic asset lookup). These pass typecheck, lint, and string-fidelity gates whi
 wrong output; for each such layer the stack has, propose a rule that every static reference must
 resolve, so Phases 2–4 discover a resolution check for it.
 
+Another gap class to hunt explicitly: **architecture-smell gaps** — a host typically has no
+written `duplication` or `cycle` rule at all. Where the codebase's own shape (repeated blocks,
+import cycles) makes the case, `AskUserQuestion` PROPOSING a duplication and/or cycle rule
+grounded in that evidence; only on approval does the clause enter Phase 1 classification into
+these ratchet categories. Never auto-author either rule.
+
 ## Phase 6 — Record provenance + stamp
 
 Write `.claude/rules/enforcement.json` — the enforcement manifest (one entry per cell):
@@ -182,7 +217,11 @@ Write `.claude/rules/enforcement.json` — the enforcement manifest (one entry p
         "gateWiring": "<how it enters the gate / hook>",
         "citations": [{ "url": "...", "note": "..." }],
         "verifiedRun": "<runCmd that passed in Phase 3>",
-        "baselineRun": "<write-mode cmd run once to establish the baseline>"  // optional — only when Phase 4's baseline pass ran
+        "baselineRun": "<write-mode cmd run once to establish the baseline>",  // optional — only when Phase 4's deterministic baseline pass ran
+        "baseline": {                             // optional — ratchet categories only (duplication, cycle)
+          "path": "<baseline/known-violations file as discovered — tool-native location>",
+          "establishCmd": "<command run once at wiring to snapshot the ratchet baseline>"
+        }
       },
       "fallback": "none"                       // "none" | "sweep" | "review-check"
     }
@@ -205,6 +244,7 @@ any line whose slot is empty, add nothing else:
    (or: ⚠️ **{what needs the user}**)
 - {category}: {enforcer chosen, or fallback} — {verify result}, {newly added / already covered}
 ⚠️ Review-Check fallback: {category} — {one-phrase why}
+🔒 ratchet baseline: {category} — {baseline path}, {quarantined-violation count}
 📦 rulesEnforcementHash {hash}
 
 Next: re-run the host gate once — confirms the new checks pass on a clean tree (or surfaces
@@ -231,5 +271,6 @@ re-inventory them here.
 - **Edits stay in the host grounding/gate layer** — config, rule docs, gate/hook wiring, the
   pattern-sweep script, generated checker scripts. Never edit application source here — sole
   exception: Phase 4's deterministic baseline pass (the verified tool's own write mode, gate
-  green on both sides, recorded as `baselineRun`).
+  green on both sides, recorded as `baselineRun`) — distinct from the ratchet baseline snapshot
+  (Phase 4, `duplication`/`cycle`), which never edits source.
 - Compose over deterministic coverage; never duplicate a linter's check as an LLM check.

@@ -24,6 +24,14 @@ const { ROOT, tmpdir } = require('../helpers')
 // deadlocking every test until the 5s kill-timer fires (repair round 1, 2026-08-08: every
 // AC that reaches a live stub hung with status=null/SIGTERM). `spawn` lets both event loops
 // run concurrently, exactly like the AC-11 closed-port case already required awaiting.
+//
+// MODIFIED for specs/20260810/03-repo-discovery.md: adds AC-20260810-03-9 (--repos-root's
+// discovered-basenames union rides projects[]) and -10 (a discovery refusal exits 2 before any
+// network call). AC-20260810-03-11 ("enroll with no --repos-root behaves exactly as today") is
+// NOT a new test — it is already-passing behavior on current code, so a new test for it would
+// violate the "every new test must fail on current code" rule. It is pinned instead by the
+// untouched AC-20260808-01-* cases below, which continue to exercise plain `enroll` end to end
+// with no --repos-root and must stay green through this change.
 
 const AUTOPILOT_BIN = path.join(ROOT, 'autopilot', 'bin', 'autopilot')
 const CONTRACT_PATH = path.join(ROOT, 'autopilot', 'contract', 'constants.ts')
@@ -86,6 +94,15 @@ function jsonResponder(status, obj) {
     res.writeHead(status, { 'content-type': 'application/json' })
     res.end(JSON.stringify(obj))
   }
+}
+
+// specs/20260810/03-repo-discovery.md fixture: a spec-grounded repo directory (D1) for the
+// --repos-root discovery tests below.
+function makeRepo(root, name) {
+  const dir = path.join(root, name)
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude', 'spec.config.json'), '{}')
+  return dir
 }
 
 test('AC-20260808-01-1: enroll issues exactly one POST to /api/spokes/enroll with a JSON body deep-equal to {code,contractVersion,machineName,projects} using the imported CONTRACT_VERSION', async () => {
@@ -307,6 +324,48 @@ test('AC-20260808-01-13: a 409 conflict reply exits 1 with the fixed machine-nam
     assert.match(res.stderr, /same code is still valid/,
       `stderr must note the code is NOT burned by this failure (hub rolls back the transaction) or an operator wastes a valid code fetching a new one; got ${res.stderr}`)
     assert.ok(!fs.existsSync(hubJsonPath(res.home)), 'a 409 must never create the config file')
+  } finally {
+    await stopStub(server)
+  }
+})
+
+test('AC-20260810-03-9: enroll --repos-root sends the deduped sorted union of discovered basenames and --project flags, and persists reposRoot in hub.json', async () => {
+  const { server, port, requests } = await startStub(jsonResponder(201, {
+    spokeId: 'sp_1', token: 'tok_abc', projects: [], contractVersion: CONTRACT_VERSION,
+  }))
+  try {
+    const reposRoot = tmpdir('discover-root')
+    makeRepo(reposRoot, 'beta')
+    makeRepo(reposRoot, 'alpha')
+    const res = await runAutopilot(['enroll', '--hub', `http://127.0.0.1:${port}`, '--code', 'C',
+      '--repos-root', reposRoot, '--project', 'alpha', '--project', 'gamma'])
+    assert.strictEqual(res.status, 0, `expected exit 0 for a valid --repos-root enroll; got status=${res.status} stderr=${res.stderr}`)
+    assert.strictEqual(requests.length, 1, `a successful --repos-root enroll must still issue exactly one POST; got ${requests.length} requests`)
+    const body = JSON.parse(requests[0].body)
+    assert.deepStrictEqual(body.projects, ['alpha', 'beta', 'gamma'],
+      `projects must be the deduped, sorted union of discovered basenames (beta, alpha) and --project flags (alpha, gamma), or a fresh machine's repos are silently dropped from the enroll exchange (D6); got ${JSON.stringify(body.projects)}`)
+    const saved = JSON.parse(fs.readFileSync(hubJsonPath(res.home), 'utf8'))
+    assert.strictEqual(saved.reposRoot, reposRoot,
+      `hub.json must persist reposRoot so a later "autopilot discover" with no flag reuses it (D6); got ${JSON.stringify(saved)}`)
+  } finally {
+    await stopStub(server)
+  }
+})
+
+test('AC-20260810-03-10: enroll --repos-root pointing at an unusable root exits 2 without any network call, so the one-time code is not burned', async () => {
+  const { server, port, requests } = await startStub(jsonResponder(201, {
+    spokeId: 'sp_1', token: 'tok_abc', projects: [], contractVersion: CONTRACT_VERSION,
+  }))
+  try {
+    const badRoot = path.join(tmpdir('discover-missing'), 'does-not-exist')
+    const res = await runAutopilot(['enroll', '--hub', `http://127.0.0.1:${port}`, '--code', 'C',
+      '--repos-root', badRoot])
+    assert.strictEqual(res.status, 2, `an unusable --repos-root must exit 2; got status=${res.status} stderr=${res.stderr}`)
+    assert.ok(res.stderr.includes(badRoot),
+      `stderr must name the unusable root or an operator cannot tell what to fix; got ${res.stderr}`)
+    assert.strictEqual(requests.length, 0,
+      `discovery must run BEFORE the network exchange (D6) so a refused --repos-root never burns the one-time enrollment code; got ${requests.length} requests`)
+    assert.ok(!fs.existsSync(hubJsonPath(res.home)), 'a discovery-refused enroll must never create the config file')
   } finally {
     await stopStub(server)
   }

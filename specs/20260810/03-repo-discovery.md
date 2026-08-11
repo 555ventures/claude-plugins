@@ -1,7 +1,8 @@
 ---
 date: 2026-08-10
-status: draft
+status: implementing
 risk: T2
+open_markers: 0
 area: autopilot
 design: false
 breaking: false
@@ -28,11 +29,11 @@ Done = a box with N cloned spec-grounded repos needs zero typed project names.
 | ID | Decision | One-line rationale |
 |----|----------|--------------------|
 | D1 | A repo is spec-grounded iff `<repo>/.claude/spec.config.json` exists | The `/spec:init` artifact; `docs/roadmap/`/`specs/` presence is NOT tested — spec-status tolerates their absence, and an empty-but-grounded repo should become an idle lane, not be invisible. Rejected: `generatedBy` gating (warn-only territory, not v1). |
-| D2 | Scan exactly one repo-root level: `readdir(reposRoot)`, keep directories only, skip names starting with `.` and `node_modules`, skip git-worktree checkouts (`.git` present as a regular **file**) | Repos live flat under a projects dir; deep recursion registers vendored fixtures and pipeline worktrees as phantom projects. Worktree marker verified by spike (see A1). |
-| D3 | Project name = directory basename; two candidates sharing a basename is a hard error (exit 2) listing **both** absolute paths, registering **nothing** | The basename rule is load-bearing (`hooks/session-wrapup.js` `repoBasename()` routes wrap-ups on it). Soft-skipping one repo would silently merge two repos into one Telegram topic via the idempotent projects route. Rejected: a `--project-name` remap flag (reintroduces per-repo hand-config and desyncs from the hook's rule). |
+| D2 | Scan exactly one repo-root level: `readdir(reposRoot, {withFileTypes: true})`, keep entries where `dirent.isDirectory()` is true — **symlinks are not followed** (a symlinked repo is not discovered; refuter-executed: `Dirent.isDirectory()` is `false` for a symlink to a directory) — skip names starting with `.` and `node_modules`, skip git-worktree checkouts (`.git` present as a regular **file**) | Repos live flat under a projects dir; deep recursion registers vendored fixtures and pipeline worktrees as phantom projects. Symlink-skip is the conservative pick (cheap to reverse; a follow policy can be added later without breaking anything). Worktree marker verified by spike (see A1). |
+| D3 | Project name = directory basename. Under D2's single flat root, basename uniqueness is structural (readdir names are unique) — `discoverRepos` still asserts uniqueness defensively over its final list and throws `DiscoverError` naming **both** absolute paths (exit 2, register nothing) should a future caller merge lists | The basename rule is load-bearing (`hooks/session-wrapup.js` `repoBasename()` routes wrap-ups on it). A soft merge would silently share one Telegram topic via the idempotent route. Rejected: a `--project-name` remap flag (reintroduces per-repo hand-config and desyncs from the hook's rule). |
 | D4 | `autopilot discover [--repos-root <dir>] [--json]`: read credential from `hub.json` (missing → exit 2, remedy `autopilot enroll`), scan, `POST /api/spokes/projects` per repo **sequentially in basename order**, rewrite `hub.json` (atomic, 0600) with the full registered `{projectId, name}` list and the resolved `reposRoot` | Sequential ordered registration makes output deterministic and failure attribution unambiguous. Partial registration on mid-run failure is harmless — the route is idempotent, re-running heals. |
 | D5 | reposRoot resolution order: `--repos-root` flag → `hub.json.reposRoot` → `~/Projects` if it exists → exit 2 naming the flag | One persisted choice per machine; the default matches the fleet's layout convention. The flag value is persisted back to `hub.json` on success. |
-| D6 | `enroll` gains `--repos-root <dir>`: discovery runs **before** the network exchange and its basenames ride `EnrollRequest.projects[]`; `reposRoot` persists into the written `hub.json`. `--project` stays, additive (deduped union) | The enroll route already accepts `projects[]` (`uniqueItems: true` in the vendored contract) and creates topics at enroll time — one round trip. Discovery failures (collision, bad root) exit 2 **before** any network call, so a refused run never burns the one-time code (existing enroll.js discipline). |
+| D6 | `enroll` gains `--repos-root <dir>`: discovery runs **before** the network exchange and its basenames ride `EnrollRequest.projects[]`; `reposRoot` persists into the written `hub.json`. `--project` stays, additive (deduped union). In the USAGE string, `[--repos-root <dir>]` is appended **after** `[--force]` — `tests/autopilot/enroll.test.js:251` (AC-20260808-01-9) pins the contiguous substring `--project <name>]…[--force]`, and inserting before `--force` would break that regression pin | The enroll route already accepts `projects[]` (`uniqueItems: true` in the vendored contract) and creates topics at enroll time — one round trip. Discovery failures (bad root, defensive collision) exit 2 **before** any network call, so a refused run never burns the one-time code (existing enroll.js discipline). |
 | D7 | Shared spoke-HTTP helpers move to new `autopilot/daemon/hub-http.js` (`postJson`, `mintEventId`, `readCredential`); `wrapup.js` imports them and keeps re-exporting `mintEventId` for its existing consumers/tests | Second consumer has arrived (discover), so the seam earns its file (facades follow their first consumer). Behavior byte-identical — moved, not rewritten. |
 | D8 | Registration responses with `created: true` vs `false` render distinctly in the human output (`+ registered` vs `= already registered`); `--json` emits `{reposRoot, projects: [{projectId, name, created, root}]}` on stdout | Operator feedback on re-runs must show drift-healing did something vs nothing; `--json` is the machine contract per script conventions. |
 
@@ -46,7 +47,7 @@ Done = a box with N cloned spec-grounded repos needs zero typed project names.
 | autopilot/daemon/enroll.js | MODIFY | scripts | accept + persist `reposRoot`; merge discovered project names into the exchange (D6) |
 | autopilot/bin/autopilot | MODIFY | scripts | `discover` subcommand + `enroll --repos-root`; usage/exit-code header updated (D4–D6) |
 | autopilot/.claude-plugin/plugin.json | MODIFY | doctrine | version bump + description changelog line |
-| tests/autopilot/discover.test.js | CREATE | tests | AC-20260810-03-1 … AC-20260810-03-8 |
+| tests/autopilot/discover.test.js | CREATE | tests | AC-20260810-03-1 … AC-20260810-03-8, AC-20260810-03-12 |
 | tests/autopilot/enroll.test.js | MODIFY | tests | AC-20260810-03-9, AC-20260810-03-10; existing cases stay green (regression pins) |
 
 ## Contracts
@@ -94,11 +95,14 @@ contract verbatim: `RegisterProjectRequest { name }` →
 - **AC-20260810-03-2**: WHEN a grounded candidate's `.git` is a regular file (git-worktree
   checkout) THE SYSTEM SHALL skip it (worktree fixture with `.git` file containing
   `gitdir: …` → not in results) → tests/autopilot/discover.test.js
-- **AC-20260810-03-3**: WHEN two candidates share a basename — impossible under one flat
-  root, so via a root whose entries are symlinks to same-named dirs — THE SYSTEM SHALL
-  throw `DiscoverError` naming both absolute paths and register nothing. Literal check:
-  scanning finds `alpha` twice → error message contains both resolved paths →
-  tests/autopilot/discover.test.js
+- **AC-20260810-03-3**: WHEN `discoverRepos`'s scan yields two candidates sharing a
+  basename (exercised via an injected `fsImpl` fake whose readdir/stat answers produce
+  `alpha` twice — structurally impossible on a real flat root, kept as the defensive
+  guard per D3) THE SYSTEM SHALL throw `DiscoverError` whose message contains both
+  resolved absolute paths, and register nothing → tests/autopilot/discover.test.js
+- **AC-20260810-03-12**: WHEN the root contains a symlink pointing at a real
+  spec-grounded directory THE SYSTEM SHALL NOT discover it (D2: `Dirent.isDirectory()`
+  is authoritative; symlinks are skipped) → tests/autopilot/discover.test.js
 - **AC-20260810-03-4**: WHEN `autopilot discover` runs with no `hub.json` THE SYSTEM
   SHALL exit 2 with a message naming `autopilot enroll` as the remedy →
   tests/autopilot/discover.test.js
@@ -133,6 +137,10 @@ contract verbatim: `RegisterProjectRequest { name }` →
   primary checkout's `.git` is a directory. **Executed 2026-08-10**: `git worktree add`
   spike → `stat` reported `Regular File` with `gitdir:` content vs `Directory` for the
   main repo. — **if false:** unreachable; evidence recorded.
+- A1b: `fs.readdirSync(dir, {withFileTypes: true})` reports `isDirectory() === false`
+  for a symlink targeting a directory. **Executed 2026-08-10** (refuter check against
+  Node): confirmed — D2's filter therefore skips symlinks by construction. — **if
+  false:** unreachable; evidence recorded.
 - A2: `POST /api/spokes/projects` is idempotent per (spoke, name) and answers
   `200 {created: false}` on repeat — per the vendored contract comment and
   autopilot-hub `docs/canonical/api.md`. — **if false:** blocked; re-read the hub route

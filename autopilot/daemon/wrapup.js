@@ -15,7 +15,9 @@
 // that, bin/autopilot D9 precedent — verdicts/authScheme arrive as parameters), best-effort
 // POST a malformed verdict line (retainer ruling 2026-08-07: validation failure is a skip),
 // log or print anything (silent library; the hook has no user-facing surface), persist any
-// state (eventId dedupe lives hub-side).
+// state (eventId dedupe lives hub-side). postJson/mintEventId/readCredential moved to
+// daemon/hub-http.js (D7, specs/20260810/03-repo-discovery.md — discover.js is the second
+// consumer); mintEventId stays re-exported here for existing consumers/tests.
 //
 // Exit codes: n/a — library module; hooks/session-wrapup.js always exits 0.
 
@@ -23,10 +25,10 @@ const crypto = require('crypto')
 const fs = require('fs')
 
 const { DEFAULT_CONFIG_PATH } = require('./enroll')
+const { postJson, mintEventId, readCredential } = require('./hub-http')
 
 const PROJECTS_PATH = '/api/spokes/projects'
 const REPORT_PATH = '/api/spokes/report'
-const REQUEST_TIMEOUT_MS = 10000
 const SUMMARY_MAX_CHARS = 500
 
 // Spoke-side rendering convention (STYLE.md verdict line / queue verbs) — the hub only
@@ -108,67 +110,6 @@ function validatePayload(payload, verdicts) {
     Number.isInteger(payload.queueCount) &&
     payload.queueCount >= 0
   )
-}
-
-// ULID (Crockford base32, 26 chars: 10 time + 16 random). byte % 32 is unbiased (256 = 8·32).
-const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
-function mintEventId(nowMs = Date.now(), randomBytesImpl = crypto.randomBytes) {
-  const chars = new Array(26)
-  let t = nowMs
-  for (let i = 9; i >= 0; i--) {
-    chars[i] = CROCKFORD[t % 32]
-    t = Math.floor(t / 32)
-  }
-  const random = randomBytesImpl(16)
-  for (let i = 0; i < 16; i++) {
-    chars[10 + i] = CROCKFORD[random[i] % 32]
-  }
-  return chars.join('')
-}
-
-function readCredential(configPath) {
-  let parsed
-  try {
-    parsed = JSON.parse(fs.readFileSync(configPath, 'utf8'))
-  } catch {
-    return null
-  }
-  if (!parsed || !parsed.hubUrl || !parsed.token) return null
-  return parsed
-}
-
-// One retry on a thrown fetch (network failure/timeout) — at-least-once is safe, eventId
-// dedupes hub-side. A non-2xx answer is terminal: retrying a rejected request can't succeed.
-async function postJson({ url, token, authScheme, body, fetchImpl }) {
-  const attempt = () =>
-    fetchImpl(url, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `${authScheme} ${token}`,
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    })
-  let response
-  try {
-    response = await attempt()
-  } catch {
-    try {
-      response = await attempt()
-    } catch (err) {
-      throw new WrapupError(`could not reach ${url} — ${err.message}`)
-    }
-  }
-  const text = await response.text()
-  if (!response.ok) {
-    throw new WrapupError(`hub answered ${response.status} for ${url}`)
-  }
-  try {
-    return JSON.parse(text)
-  } catch {
-    throw new WrapupError(`hub answered ${response.status} for ${url} but the body is not JSON`)
-  }
 }
 
 async function relayWrapup({

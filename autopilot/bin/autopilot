@@ -1,26 +1,33 @@
 #!/usr/bin/env node
 'use strict'
 // autopilot <subcommand> — CLI dispatcher for the autopilot spoke side
-// (specs/20260808/01-autopilot-enroll.md D1). `enroll` is the only subcommand this spec adds.
-// This file owns argv parsing, the contract capability check (D9), and exit-code rendering; all
-// enrollment logic lives in ../daemon/enroll.js (a pure library — config.js/autopilotd
-// precedent) so it stays unit-testable via DI without spawning this process.
+// (specs/20260808/01-autopilot-enroll.md D1). `enroll` and `discover`
+// (specs/20260810/03-repo-discovery.md) are the two subcommands. This file owns argv parsing,
+// the contract capability check (D9), and exit-code rendering; all enrollment logic lives in
+// ../daemon/enroll.js and all discovery/registration logic lives in ../daemon/discover.js (pure
+// libraries — config.js/autopilotd precedent) so both stay unit-testable via DI without spawning
+// this process.
 //
-// Deliberately does NOT: implement any enrollment logic itself (that's daemon/enroll.js), print
-// the clear token anywhere (D6 — success output is machineName + spokeId + project count +
-// config path only), retry or normalize --hub (D8, used verbatim).
+// Deliberately does NOT: implement any enrollment or discovery logic itself (that's
+// daemon/enroll.js / daemon/discover.js), print the clear token anywhere (D6 — success output is
+// machineName + spokeId + project count + config path only), retry or normalize --hub (D8, used
+// verbatim), follow symlinks or recurse past one repos-root level when discovering (D2).
 //
 // Exit codes:
-//   0  enrollment succeeded
-//   1  exchange failed (hub error response, malformed 201, network failure/timeout)
+//   0  enroll: enrollment succeeded · discover: scan+registration succeeded (zero repos found is
+//      still success)
+//   1  enroll: exchange failed (hub error response, malformed 201, network failure/timeout) ·
+//      discover: a repo's registration POST answered non-2xx or malformed
 //   2  usage/precondition (bad flags, unknown subcommand, existing config without --force,
-//      unloadable contract copy)
+//      unloadable contract copy, no hub.json for discover, no resolvable reposRoot, an unusable
+//      --repos-root, or a basename collision)
 
 const os = require('os')
 
 const USAGE =
   'usage: autopilot enroll --hub <url> --code <code> [--machine-name <name>] ' +
-  '[--project <name>]... [--force]'
+  '[--project <name>]... [--force] [--repos-root <dir>]'
+const DISCOVER_USAGE = 'usage: autopilot discover [--repos-root <dir>] [--json]'
 
 function fail(message) {
   console.error(message)
@@ -50,6 +57,7 @@ function parseEnrollArgs(argv) {
     machineName: os.hostname(),
     projects: [],
     force: false,
+    reposRoot: undefined,
   }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
@@ -72,6 +80,10 @@ function parseEnrollArgs(argv) {
       i++
     } else if (arg === '--force') {
       args.force = true
+    } else if (arg === '--repos-root') {
+      args.reposRoot = argv[i + 1]
+      if (args.reposRoot === undefined) fail(`autopilot enroll: --repos-root needs a value\n${USAGE}`)
+      i++
     } else {
       fail(`autopilot enroll: unrecognized argument "${arg}"\n${USAGE}`)
     }
@@ -88,13 +100,29 @@ async function runEnroll(argv) {
 
   const { enroll, EnrollError } = require('../daemon/enroll')
 
+  // D6: discovery runs BEFORE the network exchange so a refused --repos-root never burns the
+  // one-time code. Plain `enroll` (no --repos-root) skips this entirely — AC-20260810-03-11.
+  let projects = args.projects
+  if (args.reposRoot) {
+    const { discoverRepos, DiscoverError } = require('../daemon/discover')
+    let discovered
+    try {
+      discovered = discoverRepos({ reposRoot: args.reposRoot })
+    } catch (err) {
+      if (err instanceof DiscoverError) fail(err.message)
+      throw err
+    }
+    projects = Array.from(new Set([...args.projects, ...discovered.map((repo) => repo.name)])).sort()
+  }
+
   try {
     const result = await enroll({
       hubUrl: args.hubUrl,
       code: args.code,
       contractVersion,
       machineName: args.machineName,
-      projects: args.projects,
+      projects,
+      reposRoot: args.reposRoot,
       force: args.force,
     })
     console.log(
@@ -111,10 +139,101 @@ async function runEnroll(argv) {
   }
 }
 
+// D4-D8: read credential → resolve reposRoot (D5) → scan (D1-D3) → register sequentially in
+// basename order (D4) → rewrite hub.json atomically, preserving every other field (D4, D8).
+function parseDiscoverArgs(argv) {
+  const args = { reposRoot: undefined, json: false }
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]
+    if (arg === '--repos-root') {
+      args.reposRoot = argv[i + 1]
+      if (args.reposRoot === undefined) fail(`autopilot discover: --repos-root needs a value\n${DISCOVER_USAGE}`)
+      i++
+    } else if (arg === '--json') {
+      args.json = true
+    } else {
+      fail(`autopilot discover: unrecognized argument "${arg}"\n${DISCOVER_USAGE}`)
+    }
+  }
+  return args
+}
+
+async function runDiscover(argv) {
+  const args = parseDiscoverArgs(argv)
+
+  const { readCredential } = require('../daemon/hub-http')
+  const { DEFAULT_CONFIG_PATH, writeConfigAtomic } = require('../daemon/enroll')
+  const { discoverRepos, resolveReposRoot, registerRepos, DiscoverError } = require('../daemon/discover')
+
+  const credential = readCredential(DEFAULT_CONFIG_PATH)
+  if (!credential) {
+    fail(
+      `autopilot discover: no hub.json found at ${DEFAULT_CONFIG_PATH} — run ` +
+      `autopilot enroll first`
+    )
+  }
+
+  let reposRoot
+  try {
+    reposRoot = resolveReposRoot({
+      flagValue: args.reposRoot,
+      hubJsonReposRoot: credential.reposRoot,
+    })
+  } catch (err) {
+    if (err instanceof DiscoverError) fail(err.message)
+    throw err
+  }
+
+  let repos
+  try {
+    repos = discoverRepos({ reposRoot })
+  } catch (err) {
+    if (err instanceof DiscoverError) fail(err.message)
+    throw err
+  }
+
+  let registered
+  try {
+    registered = await registerRepos({
+      hubUrl: credential.hubUrl,
+      token: credential.token,
+      repos,
+      fetchImpl: fetch,
+    })
+  } catch (err) {
+    console.error(err.message)
+    process.exit(1)
+    return
+  }
+
+  writeConfigAtomic(DEFAULT_CONFIG_PATH, {
+    ...credential,
+    projects: registered.map(({ projectId, name }) => ({ projectId, name })),
+    reposRoot,
+  })
+
+  if (args.json) {
+    console.log(JSON.stringify({ reposRoot, projects: registered }))
+  } else {
+    if (registered.length === 0) {
+      console.log(`no spec-grounded repos found under ${reposRoot}`)
+    }
+    for (const project of registered) {
+      const marker = project.created ? '+ registered' : '= already registered'
+      console.log(`${marker} ${project.name} -> ${project.projectId}`)
+    }
+  }
+  process.exit(0)
+}
+
 async function main() {
   const [subcommand, ...rest] = process.argv.slice(2)
   if (subcommand === 'enroll') {
     await runEnroll(rest)
+    return
+  }
+  if (subcommand === 'discover') {
+    await runDiscover(rest)
     return
   }
   fail(`autopilot: unknown subcommand "${subcommand}"\n${USAGE}`)

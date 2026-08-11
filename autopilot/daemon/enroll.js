@@ -1,16 +1,21 @@
 #!/usr/bin/env node
 'use strict'
-// enroll.js — enroll({hubUrl, code, machineName, projects, force, configPath, fetchImpl, now}):
-// exchange a one-time enrollment code for a spoke identity against the deployed autopilot-hub
-// (specs/20260808/01-autopilot-enroll.md D1). Order: refusal check (D5, before any network) →
-// POST exchange (D10) → validate the 201 body has non-empty spokeId/token → atomic 0600
-// persistence (D4). Resolves { spokeId, machineName, projectCount, configPath }; rejects an
-// EnrollError { message, exitCode } (1 or 2, D7). No process.exit, no console — bin/autopilot
-// owns rendering (config.js precedent: pure library, CLI owns argv + exit rendering).
+// enroll.js — enroll({hubUrl, code, machineName, projects, reposRoot, force, configPath,
+// fetchImpl, now}): exchange a one-time enrollment code for a spoke identity against the
+// deployed autopilot-hub (specs/20260808/01-autopilot-enroll.md D1). Order: refusal check (D5,
+// before any network) → POST exchange (D10) → validate the 201 body has non-empty
+// spokeId/token → atomic 0600 persistence (D4). Resolves { spokeId, machineName, projectCount,
+// configPath }; rejects an EnrollError { message, exitCode } (1 or 2, D7). No process.exit, no
+// console — bin/autopilot owns rendering (config.js precedent: pure library, CLI owns argv +
+// exit rendering). `reposRoot` is optional (specs/20260810/03-repo-discovery.md D6):
+// bin/autopilot resolves --repos-root discovery BEFORE calling enroll() and passes the resolved
+// root through to persist into hub.json; omitted, JSON.stringify drops the key so plain `enroll`
+// stays byte-identical (AC-20260810-03-11) — this module never runs discovery itself.
 //
 // Deliberately does NOT: normalize or trailing-slash-strip --hub (D8, verbatim), validate
 // --project values client-side (the hub owns that), retry on network failure, ever print or
-// log the clear token (D6 — the token appears ONLY inside the written hub.json).
+// log the clear token (D6 — the token appears ONLY inside the written hub.json), run repo
+// discovery (bin/autopilot does that, before any network call, per D6).
 //
 // Exit codes: n/a — library module; see autopilot/bin/autopilot for the CLI exit-code wiring
 // (EnrollError.exitCode carries the intended exit: 1 exchange failed, 2 usage/precondition).
@@ -139,7 +144,7 @@ function writeConfigAtomic(configPath, data) {
   fs.renameSync(tempPath, configPath)
 }
 
-// enroll({hubUrl, code, machineName, projects, force, configPath, fetchImpl, now})
+// enroll({hubUrl, code, machineName, projects, reposRoot, force, configPath, fetchImpl, now})
 //   → resolves { spokeId, machineName, projectCount, configPath }
 //   → rejects EnrollError { message, exitCode }
 async function enroll({
@@ -148,6 +153,7 @@ async function enroll({
   contractVersion,
   machineName,
   projects,
+  reposRoot,
   force,
   configPath = DEFAULT_CONFIG_PATH,
   fetchImpl = fetch,
@@ -171,6 +177,7 @@ async function enroll({
     token: result.token,
     machineName,
     projects: result.projects || [],
+    reposRoot,
     contractVersion: result.contractVersion,
     enrolledAt,
   })
@@ -183,4 +190,4 @@ async function enroll({
   }
 }
 
-module.exports = { enroll, EnrollError, DEFAULT_CONFIG_PATH }
+module.exports = { enroll, EnrollError, DEFAULT_CONFIG_PATH, writeConfigAtomic }

@@ -1,6 +1,6 @@
 ---
 date: 2026-08-10
-status: implementing
+status: done
 risk: T2
 open_markers: 0
 area: autopilot
@@ -168,6 +168,16 @@ boot, none of which are hot paths. `--project` survives because removing a shipp
 buys nothing and the union is well-defined. Fragile spot to watch: `hub.json` rewrite
 must go through the same atomic-tmp-rename + 0600 path `enroll.js` established — a
 plain `writeFileSync` would race the Stop hook's `readCredential`.
+
+**Review dispositions (2026-08-10).** Iteration 1 (run wf_fa64a833-d1f) surfaced two
+findings. (1) Reviewer, fixed: the D7 helper extraction changed `relayWrapup`'s rejected
+error class from `WrapupError` to `HubHttpError` on network/hub failures, contradicting
+A4's byte-identical guarantee; fixed by wrapping `HubHttpError` back into `WrapupError`
+(same message) at both `postJson` call sites — fix-delta re-review (wf_40145a27-4b1)
+CLEAN. (2) Mechanical scope finding, rejected: `docs/roadmap/00-overview.md` and
+`docs/roadmap/03-fleet-provisioning.md` appeared out-of-plan in the diff — ruled
+planning-session working-tree edits, not build output; left uncommitted for the planning
+session to own.
 
 ## Canonical Delta
 

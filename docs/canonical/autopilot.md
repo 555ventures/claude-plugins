@@ -101,6 +101,11 @@ actually flip state?) is never parsed from the transcript — the caller re-deri
   so `npm test` never needs `autopilot/node_modules`; `session.js` takes `queryImpl` by injection.
 - `autopilot/**` is covered by `.claude/rules/conventions/scripts.md` (script conventions:
   header comment, remedy-naming errors, hand-rolled arg parsing).
+- Spoke-HTTP helpers (`postJson`, `mintEventId`, `readCredential`) live in
+  `autopilot/daemon/hub-http.js`; `wrapup.js` and `discover.js` consume them. `wrapup.js`
+  re-exports `mintEventId` for its existing consumers and wraps `HubHttpError` back into
+  `WrapupError` at its call sites — its "rejects `WrapupError` only" contract survives the
+  extraction (specs/20260810/03-repo-discovery.md D7/A4).
 - Tests live under `tests/autopilot/` and inject transports — no network, no SDK imports. The
   scoped location matters: the repo's full suite carries deliberate failing INTAKE pins, so
   pipeline gate runs are scoped to `tests/<scope>/`.
@@ -140,6 +145,23 @@ on the hub. Exit alphabet 0/1/2 per the script convention; 401 always renders th
 "get a fresh one with /enroll in Telegram" line. Live verification is the env-gated
 `tests/autopilot/enroll-live.test.js` (`AUTOPILOT_ENROLL_LIVE=1` + `_HUB` + `_CODE`),
 same opt-in discipline as the Telegram live suite.
+
+**Repo discovery (0.8.0).** `autopilot discover [--repos-root <dir>] [--json]` scans exactly
+one directory level under a persisted repos root and registers each spec-grounded repo against
+the hub's idempotent `POST /api/spokes/projects` route, sequentially in basename order, then
+atomically rewrites `hub.json` (0600) with the full `{projectId, name}` list and the resolved
+`reposRoot`. The spec-grounded predicate is `<repo>/.claude/spec.config.json` exists (the
+`/spec:init` artifact — D1); an empty-but-grounded repo becomes an idle lane, never an error.
+Skips: dot-names, `node_modules`, symlinks (`Dirent.isDirectory()` is authoritative), and
+git-worktree checkouts (`.git` present as a regular file — D2). Project name = directory
+basename; a basename collision is a hard `DiscoverError` naming both paths (D3 — the hub topic
+and the Stop hook's wrap-up routing both key on basename, so a soft merge would interleave two
+repos in one Telegram topic). reposRoot resolution: `--repos-root` flag → `hub.json.reposRoot`
+→ `~/Projects` if present → exit 2 naming the flag (D5). `enroll --repos-root <dir>` runs the
+same discovery **before** the network exchange — discovery failures exit 2 without burning the
+one-time code — and the deduped, sorted union of discovered basenames and `--project` values
+rides `EnrollRequest.projects[]` (D6). Non-2xx from the projects route: exit 1 naming the repo,
+`hub.json` untouched; re-running heals (idempotent route).
 
 **Lane failure semantics (0.4.1).** `mainLoop`'s post-oracle body (checkpoint, stage, repair,
 halt — everything that narrates through the adapter) is covered by the same catch-log-backoff

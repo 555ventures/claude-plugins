@@ -25,7 +25,7 @@ const crypto = require('crypto')
 const fs = require('fs')
 
 const { DEFAULT_CONFIG_PATH } = require('./enroll')
-const { postJson, mintEventId, readCredential } = require('./hub-http')
+const { postJson, mintEventId, readCredential, HubHttpError } = require('./hub-http')
 
 const PROJECTS_PATH = '/api/spokes/projects'
 const REPORT_PATH = '/api/spokes/report'
@@ -134,27 +134,38 @@ async function relayWrapup({
   if (!projectName) return { skipped: 'no-project-name' }
 
   const { hubUrl, token } = credential
-  const project = await postJson({
-    url: hubUrl + PROJECTS_PATH,
-    token,
-    authScheme,
-    body: { name: projectName },
-    fetchImpl,
-  })
+  let project
+  try {
+    project = await postJson({
+      url: hubUrl + PROJECTS_PATH,
+      token,
+      authScheme,
+      body: { name: projectName },
+      fetchImpl,
+    })
+  } catch (err) {
+    if (err instanceof HubHttpError) throw new WrapupError(err.message)
+    throw err
+  }
   if (!project || !project.projectId) {
     throw new WrapupError('hub project registration answered without a projectId')
   }
 
   const eventId = mintEventId(nowMs(), randomBytesImpl)
-  await postJson({
-    url: hubUrl + REPORT_PATH,
-    token,
-    authScheme,
-    body: {
-      events: [{ eventId, type: 'session_wrapup', projectId: project.projectId, payload }],
-    },
-    fetchImpl,
-  })
+  try {
+    await postJson({
+      url: hubUrl + REPORT_PATH,
+      token,
+      authScheme,
+      body: {
+        events: [{ eventId, type: 'session_wrapup', projectId: project.projectId, payload }],
+      },
+      fetchImpl,
+    })
+  } catch (err) {
+    if (err instanceof HubHttpError) throw new WrapupError(err.message)
+    throw err
+  }
 
   return { posted: true, projectId: project.projectId, eventId }
 }

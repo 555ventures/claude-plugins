@@ -301,7 +301,9 @@ every turn, which is what keeps its rules followed rather than skimmed.
   discipline, import-boundary rules, the scoped self-verify commands workers may run.
 - **`## Test Rules`** — this repo's test conventions: file placement, naming, AC-ID reference
   style (docstring? test name? comment?), fixture rules, what is exempt from TDD (e.g. pure-UI
-  rendering in repos with a design-stage catalog). **Workspace monorepos (a
+  **appearance** in repos with a design-stage catalog — **reachability is never exempt**: a
+  prop or field whose absence collapses a promised observable is behavior and owes an AC).
+  **Workspace monorepos (a
   `pnpm-workspace.yaml`/equivalent exists): record the test runner's path-filtering semantics
   unconditionally** — e.g. whether paths filter against the workspace root or the package dir,
   and what the wrong form does (vitest exits 1 "No test files found") — this is knowable at

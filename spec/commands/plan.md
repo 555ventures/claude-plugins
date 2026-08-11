@@ -170,14 +170,22 @@ While drafting:
   ambiguity-prone term (rounding mode, ordering,
   inclusive/exclusive bounds, timezone, null vs empty) with a literal input → output example.
   T3 ACs always carry at least one literal example. Test authors derive tests from the spec
-  alone — a concrete pair is the only wording they cannot misread. For a Decision whose data
-  path spans File Plan rows (producer → carrier → consumer → display), at least one AC must
-  pin the chain's **terminal observable** — the response the user actually sees, fed by the
+  alone — a concrete pair is the only wording they cannot misread. **Terminal-observable AC
+  rule:** every Decision that promises a user-observable surface — rendered text/element,
+  emitted row, fired event — owes at least one AC whose test asserts on the observable itself,
+  reached through the real in-repo route; the fixture feeding that assertion is
+  **produced by the spec's own producer chain** — the test executes it (view-model, assembler,
+  defer-derivation) on realistic wire data — never a hand-authored props object. Naming the
+  anti-pattern: **invented-fixture liveness** — a terminal fed hand-typed props proves the
+  component works, never that the product reaches it. Where the observable genuinely has no
+  executable terminal in this host (an email, a cron side effect, a route the host writes no
+  render tests for), say so on the AC line as a named residual routed to the release stage's
+  journey walks — never let it read as covered. For a Decision whose data
+  path spans File Plan rows (producer → carrier → consumer → display), this same rule pins
+  the chain's **terminal observable** — the response the user actually sees, fed by the
   production path — never only an intermediate hop: verifying the chain's end transitively
   verifies every hop, while intermediate-hop ACs stay green with the chain severed (measured:
-  six severed-chain defects rode green gates in one spec, upwell 20260731/04). A fixture-fed
-  observation is not terminal — a component whose only non-null input in the repo lives in a
-  story fixture is unverified. When the spec fixes a
+  six severed-chain defects rode green gates in one spec, upwell 20260731/04). When the spec fixes a
   defect or deliberately changes existing behavior (bugfix briefs, escape-driven specs,
   declared refactors — judged at plan time, recorded either way), write a **regression
   pin** per behavior that must survive the change, not one per spec: `WHEN {trigger} THE
@@ -222,8 +230,10 @@ Dispatch N independent refuters (T2: 1, T3: 2) in a single message, blind to eac
   cron strings, config keys, DSL fragments, version-specific API shapes): do NOT argue from
   reading — EXECUTE the one line that falsifies it in a scratch file against the installed
   dependency, report the observed output, and delete the file (git status clean before
-  returning). Report every genuine defect, ordered by severity. Do not pad with style or
-  speculative nits — an empty list is a valid outcome."*
+  returning). For each Decision promising an observable: verify that an AC's test executes
+  the real in-repo route to it — a mocked or stubbed in-repo hop between producer and
+  terminal is a top-severity finding. Report every genuine defect, ordered by severity. Do
+  not pad with style or speculative nits — an empty list is a valid outcome."*
 
 Fix each finding in the spec, or explicitly reject it with the reason recorded in **Rationale**.
 Never silently drop a finding.
@@ -247,7 +257,10 @@ Never silently drop a finding.
    an AC that goes red in that Decision's absence — a promise with no mechanism, or a
    mechanism no AC can catch missing, blocks lock (add the Decision/AC or strike the promise).
    This is an in-session check, not an emitted table: ACs are written from Decisions, so a
-   Goal promise no Decision covers stays green through every downstream gate.
+   Goal promise no Decision covers stays green through every downstream gate. The same trace
+   widens to **Decision-level observable promises**: a Decision that promises a
+   user-observable surface with no terminal-observable AC that goes red in its absence blocks
+   lock exactly as an uncovered Goal promise does — same in-session check, not a second gate.
    Finally: work this session discovered that needs its own spec → write the roadmap brief
    now (`docs/roadmap/NN-*.md`, planned later via `/spec:plan <brief>`), or record in the
    lock report why not. Discovered follow-ups are the only planning output with no durable

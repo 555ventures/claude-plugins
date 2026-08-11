@@ -272,8 +272,10 @@ When the host config declares a `design` block, specs with a UI section default 
 between plan and build: foundation files + stateless components + catalog entries, the user
 actively iterates in the running catalog, and the spec is reconciled to the approved design
 before build starts. Build then treats the approved components as done inputs — the catalog +
-the user's eyes gate UI rendering; TDD gates logic. Skipping design on a `design: true` spec
-is the user's call, not the model's. Hosts without a catalog never set the flag; the stage
+the user's eyes gate UI **appearance**; TDD gates logic, and **reachability is never exempt**:
+a prop or field whose absence collapses a Decision's promised observable is behavior and owes
+an AC per the terminal-observable rule (`plan.md` Phase 2). Skipping design on a `design: true`
+spec is the user's call, not the model's. Hosts without a catalog never set the flag; the stage
 simply never runs.
 
 **Legacy keys:** host configs may still say `storybook: true` + `storybookCommand`, and older

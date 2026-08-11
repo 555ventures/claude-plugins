@@ -81,9 +81,16 @@ depended_on_by: []
      EXECUTED tests: a skipped test is a hard finding too, unless the AC carries an explicit
      env gate). An AC whose test legitimately needs an environment declares it inline:
      `[env: TEST_DATABASE_URL]` — then a skip reports as a warning naming that environment
-     instead of a hard finding; never leave an env dependency undeclared. In design-capable
-     hosts, pure-UI rendering is exempt from TDD (the component catalog covers it) — ACs here
-     are behavior, not pixels.
+     instead of a hard finding; never leave an env dependency undeclared. A Decision that
+     promises a user-observable surface owes at least one AC whose test asserts on the
+     observable itself, reached through the real in-repo route, fed by a fixture that is
+     **produced** — the test executes the spec's own producer chain (view-model, assembler,
+     defer-derivation) on realistic wire data, never a hand-authored props object (naming the
+     anti-pattern: **invented-fixture liveness** — a terminal fed hand-typed props proves the
+     component works, never that the product reaches it). In design-capable hosts, pure-UI
+     **appearance** is exempt from TDD (the component catalog covers it) — **reachability is
+     never exempt**: a prop or field whose absence collapses a promised observable is behavior
+     and owes an AC per the terminal-observable rule. ACs here are behavior, not pixels.
      Shape: WHEN {trigger/state} THE SYSTEM SHALL {observable response}. Wherever a term can
      be read two ways (rounding mode, ordering, inclusive/exclusive bounds, timezone, null vs
      empty), pin it with a literal input → output example — test authors derive tests from

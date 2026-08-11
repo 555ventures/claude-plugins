@@ -8,26 +8,45 @@
 // libraries — config.js/autopilotd precedent) so both stay unit-testable via DI without spawning
 // this process.
 //
+// `service`/`doctor`/`bootstrap` (specs/20260810/05-service-bootstrap.md D9) follow the same
+// split: this file owns argv parsing, subcommand-specific usage, and exit-code rendering; all
+// logic lives in ../daemon/service.js, ../daemon/doctor.js, and ../daemon/bootstrap.js. `service`
+// and `doctor` wire the library's injected `execImpl` to a real `child_process.execFileSync`
+// (execFileSync-shaped per D4) — no other systemd/loginctl call site exists in this file.
+//
 // Deliberately does NOT: implement any enrollment or discovery logic itself (that's
 // daemon/enroll.js / daemon/discover.js), print the clear token anywhere (D6 — success output is
 // machineName + spokeId + project count + config path only), retry or normalize --hub (D8, used
-// verbatim), follow symlinks or recurse past one repos-root level when discovering (D2).
+// verbatim), follow symlinks or recurse past one repos-root level when discovering (D2), implement
+// any service/doctor/bootstrap logic itself (that's daemon/service.js / daemon/doctor.js /
+// daemon/bootstrap.js), or parse journalctl's stream for `service logs` (pure passthrough).
 //
 // Exit codes:
 //   0  enroll: enrollment succeeded · discover: scan+registration succeeded (zero repos found is
-//      still success)
+//      still success) · service install/uninstall: sequence succeeded · service status/doctor:
+//      every check passed · bootstrap: every step succeeded (doctor's own checks all passed)
 //   1  enroll: exchange failed (hub error response, malformed 201, network failure/timeout) ·
-//      discover: a repo's registration POST answered non-2xx or malformed
+//      discover: a repo's registration POST answered non-2xx or malformed · service
+//      install/uninstall: a systemctl/loginctl call failed mid-sequence · service status/doctor:
+//      at least one check failed · bootstrap: doctor's post-bootstrap checks found a failure
 //   2  usage/precondition (bad flags, unknown subcommand, existing config without --force,
 //      unloadable contract copy, no hub.json for discover, no resolvable reposRoot, an unusable
-//      --repos-root, or a basename collision)
+//      --repos-root, or a basename collision) · service: unrecognized verb, or any verb run on a
+//      non-linux platform (D1 — message names the tmux/launchd deferral remedy) · bootstrap:
+//      missing --hub/--code, or a step's own precondition failure (D7/D8)
 
 const os = require('os')
+const { execFileSync } = require('child_process')
 
 const USAGE =
   'usage: autopilot enroll --hub <url> --code <code> [--machine-name <name>] ' +
   '[--project <name>]... [--force] [--repos-root <dir>]'
 const DISCOVER_USAGE = 'usage: autopilot discover [--repos-root <dir>] [--json]'
+const SERVICE_USAGE = 'usage: autopilot service <install|uninstall|status|logs>'
+const DOCTOR_USAGE = 'usage: autopilot doctor'
+const BOOTSTRAP_USAGE =
+  'usage: autopilot bootstrap --hub <url> --code <code> [--repos-root <dir>] ' +
+  '[--machine-name <name>] [--force]'
 
 function fail(message) {
   console.error(message)
@@ -226,6 +245,121 @@ async function runDiscover(argv) {
   process.exit(0)
 }
 
+// Renders a `{name, ok, detail, remedy?}` line array the way service status/doctor/bootstrap's
+// doctor pass share (D3/D6) — one line per check so an operator sees the whole picture at once.
+function renderLines(lines) {
+  for (const line of lines) {
+    const marker = line.ok ? '✅' : '⚠'
+    const remedy = line.remedy ? ` — remedy: ${line.remedy}` : ''
+    console.log(`${marker} ${line.name}: ${line.detail}${remedy}`)
+  }
+}
+
+function runService(argv) {
+  const [verb, ...rest] = argv
+  const verbs = ['install', 'uninstall', 'status', 'logs']
+  if (!verbs.includes(verb) || rest.length) {
+    fail(`autopilot service: unrecognized argument\n${SERVICE_USAGE}`)
+  }
+
+  const { installService, uninstallService, serviceStatus, serviceLogs, ServiceError } = require('../daemon/service')
+
+  try {
+    if (verb === 'install') {
+      const result = installService({ execImpl: execFileSync })
+      console.log(`installed and started autopilot.service (${result.unitPath})`)
+      process.exit(0)
+    } else if (verb === 'uninstall') {
+      uninstallService({ execImpl: execFileSync })
+      console.log('autopilot.service disabled and unit removed')
+      process.exit(0)
+    } else if (verb === 'status') {
+      const { ok, lines } = serviceStatus({ execImpl: execFileSync })
+      renderLines(lines)
+      process.exit(ok ? 0 : 1)
+    } else if (verb === 'logs') {
+      // Passthrough — serviceLogs itself forwards the spawned journalctl's exit code and
+      // process.exit()s; nothing runs after this call.
+      serviceLogs({})
+    }
+  } catch (err) {
+    if (err instanceof ServiceError) {
+      console.error(err.message)
+      process.exit(err.exitCode)
+    }
+    throw err
+  }
+}
+
+function parseDoctorArgs(argv) {
+  if (argv.length) {
+    fail(`autopilot doctor: unrecognized argument "${argv[0]}"\n${DOCTOR_USAGE}`)
+  }
+}
+
+async function runDoctorCmd(argv) {
+  parseDoctorArgs(argv)
+  const { runDoctor } = require('../daemon/doctor')
+  const { ok, lines } = await runDoctor({ execImpl: execFileSync })
+  renderLines(lines)
+  process.exit(ok ? 0 : 1)
+}
+
+// Hand-rolled --flag parsing (repo convention). --hub/--code are required (D7); the rest mirror
+// enroll's flags so the composed step can pass them through verbatim.
+function parseBootstrapArgs(argv) {
+  const args = {
+    hubUrl: undefined,
+    code: undefined,
+    reposRoot: undefined,
+    machineName: os.hostname(),
+    force: false,
+  }
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]
+    if (arg === '--hub') {
+      args.hubUrl = argv[i + 1]
+      if (args.hubUrl === undefined) fail(`autopilot bootstrap: --hub needs a value\n${BOOTSTRAP_USAGE}`)
+      i++
+    } else if (arg === '--code') {
+      args.code = argv[i + 1]
+      if (args.code === undefined) fail(`autopilot bootstrap: --code needs a value\n${BOOTSTRAP_USAGE}`)
+      i++
+    } else if (arg === '--repos-root') {
+      args.reposRoot = argv[i + 1]
+      if (args.reposRoot === undefined) fail(`autopilot bootstrap: --repos-root needs a value\n${BOOTSTRAP_USAGE}`)
+      i++
+    } else if (arg === '--machine-name') {
+      args.machineName = argv[i + 1]
+      if (args.machineName === undefined) fail(`autopilot bootstrap: --machine-name needs a value\n${BOOTSTRAP_USAGE}`)
+      i++
+    } else if (arg === '--force') {
+      args.force = true
+    } else {
+      fail(`autopilot bootstrap: unrecognized argument "${arg}"\n${BOOTSTRAP_USAGE}`)
+    }
+  }
+  if (!args.hubUrl || !args.code) {
+    fail(`autopilot bootstrap: --hub and --code are required\n${BOOTSTRAP_USAGE}`)
+  }
+  return args
+}
+
+async function runBootstrapCmd(argv) {
+  const args = parseBootstrapArgs(argv)
+  const { runBootstrap, BootstrapError } = require('../daemon/bootstrap')
+  try {
+    const result = await runBootstrap({ args })
+    process.exit(result.ok ? 0 : 1)
+  } catch (err) {
+    if (err instanceof BootstrapError) {
+      console.error(err.message)
+      process.exit(err.exitCode)
+    }
+    throw err
+  }
+}
+
 async function main() {
   const [subcommand, ...rest] = process.argv.slice(2)
   if (subcommand === 'enroll') {
@@ -234,6 +368,18 @@ async function main() {
   }
   if (subcommand === 'discover') {
     await runDiscover(rest)
+    return
+  }
+  if (subcommand === 'service') {
+    runService(rest)
+    return
+  }
+  if (subcommand === 'doctor') {
+    await runDoctorCmd(rest)
+    return
+  }
+  if (subcommand === 'bootstrap') {
+    await runBootstrapCmd(rest)
     return
   }
   fail(`autopilot: unknown subcommand "${subcommand}"\n${USAGE}`)

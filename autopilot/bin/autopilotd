@@ -21,6 +21,14 @@
 // that started anyway would either spawn a session inside a session (unbounded recursion, spec
 // 02 D6) or `ERR_REQUIRE_ESM` when session.js lazily requires ./sdk.js for the first real stage.
 //
+// A real (non---check) start takes a pidfile lock in --state-dir before constructing any lane
+// (specs/20260810/05-service-bootstrap.md D5) so two autopilotd processes — a tmux debug session
+// left running beside the installed `Restart=always` service is the likely accident — can never
+// drive the same repo at once. A live lock holder is fatal (exit 2, message names the pid and
+// the remedy); a stale lock (dead pid) is recovered automatically by daemon/lock.js. The lock is
+// released on clean SIGTERM/SIGINT shutdown, never on the forced double-signal exit. `--check`
+// never touches the lock — preflight must be able to run beside a live daemon.
+//
 // --check runs an offline preflight instead of starting lanes (spec 04-live-smoke D2, carried
 // forward by D8): validate hub.json + discover lanes (both fs-only, `loadHubConfig` performs no
 // network I/O), force-resolve `../daemon/sdk` (session.js otherwise loads it lazily, so a bare
@@ -42,13 +50,16 @@
 //
 // Exit codes:
 //   0  preflight passed (without --hold), or normal shutdown on SIGTERM/SIGINT (every lane
-//      stopped, state persisted, adapter stopped) — --hold's teardown on signal also exits 0
+//      stopped, state persisted, adapter stopped, lock released) — --hold's teardown on signal
+//      also exits 0
 //   1  forced exit on a second SIGTERM/SIGINT during shutdown (D8's double-kill pattern — a
 //      stuck lane never wedges the process) · a real start's repo registration answered non-2xx
 //      or malformed for some repo (message names the failing repo verbatim, D7 Behavior)
 //   2  usage / precondition failure — recursion guard, Node version floor, bad flag, missing or
 //      invalid hub.json/overrides, an unusable reposRoot, a discovery basename collision,
-//      unresolvable SDK, or missing oracle script (message always names the remedy)
+//      unresolvable SDK, missing oracle script (message always names the remedy), or another
+//      live autopilotd already holds the pidfile lock (specs/20260810/05-service-bootstrap.md
+//      D5 — message names the existing pid and the remedy)
 
 const fs = require('fs')
 const os = require('os')
@@ -60,6 +71,7 @@ const { createLane } = require('../daemon/lane')
 const { runStage } = require('../daemon/session')
 const { createHubAdapter } = require('../daemon/hub-adapter')
 const { registerRepos } = require('../daemon/discover')
+const { acquireLock, releaseLock, LockError } = require('../daemon/lock')
 
 const NODE_FLOOR = { major: 20, minor: 19 }
 const DEFAULT_HUB_CONFIG_PATH = path.join(os.homedir(), '.config', 'autopilot', 'hub.json')
@@ -249,9 +261,11 @@ function runPreflight(cfg, args) {
 
 // D8: SIGTERM/SIGINT stop every lane (which aborts its in-flight session, cancels any pending
 // ask, kills dev-server/tunnel process groups, and persists lane state — all inside
-// lane.stop()), then stop the adapter's poll loop, then exit 0. A second signal during
-// shutdown forces an immediate exit rather than waiting out a stuck lane.
-function installSignalHandlers(adapter, lanes) {
+// lane.stop()), then stop the adapter's poll loop, then release the pidfile lock (D5 — "removed
+// on clean shutdown"), then exit 0. A second signal during shutdown forces an immediate exit
+// rather than waiting out a stuck lane — the lock is deliberately left in place on that path;
+// daemon/lock.js's stale-pid recovery is what cleans it up on the next start.
+function installSignalHandlers(adapter, lanes, stateDir) {
   let shuttingDown = false
   async function shutdown(signal) {
     if (shuttingDown) {
@@ -262,6 +276,7 @@ function installSignalHandlers(adapter, lanes) {
     console.error(`autopilotd: ${signal} received — stopping lanes`)
     await Promise.all(lanes.map((lane) => lane.stop()))
     await adapter.stop()
+    releaseLock({ stateDir, pid: process.pid })
     process.exit(0)
   }
   process.on('SIGTERM', () => shutdown('SIGTERM'))
@@ -301,13 +316,26 @@ async function main() {
     return
   }
 
+  // D5 Lock lifecycle order (pinned): mkdirSync(stateDir) — the lock lives inside it — THEN
+  // acquireLock, both BEFORE any adapter/lane construction. --check never reaches this branch,
+  // so preflight always runs beside a live daemon without touching the lock.
   fs.mkdirSync(args.stateDir, { recursive: true })
+
+  try {
+    acquireLock({ stateDir: args.stateDir, pid: process.pid })
+  } catch (err) {
+    if (err instanceof LockError) {
+      fail(err.message)
+      return
+    }
+    throw err
+  }
 
   const { adapter, lanes } = buildAdapterAndLanes(cfg, args.stateDir)
 
   adapter.start()
   for (const lane of lanes) lane.start()
-  installSignalHandlers(adapter, lanes)
+  installSignalHandlers(adapter, lanes, args.stateDir)
 }
 
 main()

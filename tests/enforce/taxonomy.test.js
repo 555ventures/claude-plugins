@@ -16,19 +16,26 @@ const EXPECTED_CATEGORIES = [
   'datetime', 'schema-validation', 'format', 'duplication', 'cycle',
 ]
 
-// AC-20260810-06-1: the reserved category enum must be byte-identical (as a member set) across
-// all four homes, and the member list must be exactly the nine categories including the two new
-// ratchet ones.
-test('AC-20260810-06-1: the reserved category taxonomy includes duplication and cycle identically across all four homes', () => {
+// Single derivation of the CATEGORIES list actually parsed out of wf-enforce.body.js, shared by
+// every test in this file that needs "the CATEGORIES list parsed from the same source" (AC-2)
+// rather than the hardcoded EXPECTED_CATEGORIES literal above.
+function parseCategoriesFromSource () {
   const wfSrc = read('spec/workflows/src/wf-enforce.body.js')
   const catMatch = wfSrc.match(/const CATEGORIES = \[([\s\S]*?)\]/)
   assert.ok(catMatch, 'wf-enforce.body.js must declare a CATEGORIES array — without it there is ' +
     'no reference list to reconcile the other three prose homes against')
-  const wfCategories = catMatch[1]
+  return catMatch[1]
     .split(',')
     .map(s => s.trim())
     .filter(Boolean)
     .map(s => s.replace(/^['"]|['"]$/g, ''))
+}
+
+// AC-20260810-06-1: the reserved category enum must be byte-identical (as a member set) across
+// all four homes, and the member list must be exactly the nine categories including the two new
+// ratchet ones.
+test('AC-20260810-06-1: the reserved category taxonomy includes duplication and cycle identically across all four homes', () => {
+  const wfCategories = parseCategoriesFromSource()
   const wfSet = new Set(wfCategories)
   assert.deepStrictEqual(
     [...wfSet].sort(),
@@ -70,10 +77,11 @@ test('AC-20260810-06-1: the reserved category taxonomy includes duplication and 
 test('AC-20260810-06-2: validateCells accepts a cell whose category is duplication or cycle', () => {
   const src = read('spec/workflows/src/wf-enforce.body.js')
   const { validateCells } = evalFns(src, ['validateCells'])
+  const categories = parseCategoriesFromSource()
 
   const dupResult = validateCells(
     [{ id: 'js:duplication', stack: 'js', category: 'duplication' }],
-    EXPECTED_CATEGORIES,
+    categories,
     () => {}
   )
   assert.ok(
@@ -89,7 +97,7 @@ test('AC-20260810-06-2: validateCells accepts a cell whose category is duplicati
 
   const cycleResult = validateCells(
     [{ id: 'js:cycle', stack: 'js', category: 'cycle' }],
-    EXPECTED_CATEGORIES,
+    categories,
     () => {}
   )
   assert.ok(
@@ -107,10 +115,11 @@ test('AC-20260810-06-2: validateCells accepts a cell whose category is duplicati
 test('AC-20260810-06-5: validateCells continues to accept a cell with a pre-existing category such as module-boundary', () => {
   const src = read('spec/workflows/src/wf-enforce.body.js')
   const { validateCells } = evalFns(src, ['validateCells'])
+  const categories = parseCategoriesFromSource()
 
   const result = validateCells(
     [{ id: 'js:module-boundary', stack: 'js', category: 'module-boundary' }],
-    EXPECTED_CATEGORIES,
+    categories,
     () => {}
   )
   assert.ok(

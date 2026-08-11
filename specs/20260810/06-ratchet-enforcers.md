@@ -1,6 +1,6 @@
 ---
 date: 2026-08-10
-status: implementing
+status: done
 risk: T3
 open_markers: 0
 area: spec-enforce
@@ -192,6 +192,18 @@ the ratchet-baseline vs `baselineRun` disambiguation clause the Rationale calls 
 Verified non-findings worth keeping: no `schemaVersion` bump is required for an additive
 optional manifest field, and `wf-enforce.body.js` has no other CATEGORIES-adjacent enum to
 update.
+
+Review dispositions (2026-08-11, iteration 1 runId wf_da866bc5-acc): (1) WAIVED — out-of-plan
+changes in the review diff (docs/roadmap/00,04,05, .claude/agent-memory/plugin-tests/*,
+setup/export.sh): a concurrent session's commit (97575a2) swept this spec's doctrine edits in
+with its own drafting work; roadmap briefs are sanctioned by D9, agent-memory writes are
+harness side-effects, setup/export.sh is covered by waiver (2). (2) WAIVED — setup/export.sh
+uses `set -euo pipefail` and lacks the incident/exit-codes header required by Worker Rules:
+exempted as personal machine-setup tooling, not pipeline machinery; bring it to convention if
+it ever ships beyond this machine. (3) FIXED — AC-2/AC-5 tests passed the hardcoded
+`EXPECTED_CATEGORIES` literal instead of the source-parsed list AC-2's text specifies;
+fixed by hoisting a shared `parseCategoriesFromSource()` (one derivation, all three tests);
+fix-delta re-review (iteration 2, runId wf_521b09ed-e1f) CLEAN.
 
 ## Canonical Delta
 

@@ -55,13 +55,16 @@ function fail(message) {
 
 // D9: wraps the contract require in try/catch; exits 2 with a remedy naming Node >= 22.18 (type
 // stripping is default since v22.18.0/v23.6.0 per nodejs.org/api/typescript.html History) rather
-// than a version-arithmetic check we can't execute against other Node majors.
+// than a version-arithmetic check we can't execute against other Node majors. Shared by both
+// `enroll` and `bootstrap` (bootstrap's enroll-step passes the resolved version through to
+// daemon/bootstrap.js's runBootstrap as deps.contractVersion — that library module never requires
+// the .ts contract itself, enroll.js's own DI precedent).
 function loadContractVersion() {
   try {
     return require('../contract/constants.ts').CONTRACT_VERSION
   } catch (err) {
     fail(
-      `autopilot enroll: could not load the wire contract (${err.message}) — requires Node ` +
+      `autopilot: could not load the wire contract (${err.message}) — requires Node ` +
       `>= 22.18 (native TypeScript type stripping default since v22.18.0/v23.6.0); upgrade Node`
     )
   }
@@ -347,9 +350,10 @@ function parseBootstrapArgs(argv) {
 
 async function runBootstrapCmd(argv) {
   const args = parseBootstrapArgs(argv)
+  const contractVersion = loadContractVersion()
   const { runBootstrap, BootstrapError } = require('../daemon/bootstrap')
   try {
-    const result = await runBootstrap({ args })
+    const result = await runBootstrap({ args, deps: { contractVersion } })
     process.exit(result.ok ? 0 : 1)
   } catch (err) {
     if (err instanceof BootstrapError) {

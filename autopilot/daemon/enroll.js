@@ -24,6 +24,8 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 
+const { atomicWrite } = require('./atomic')
+
 const DEFAULT_CONFIG_PATH = path.join(os.homedir(), '.config', 'autopilot', 'hub.json')
 const ENROLL_PATH = '/api/spokes/enroll'
 const REQUEST_TIMEOUT_MS = 30000
@@ -135,13 +137,11 @@ async function exchange({ hubUrl, code, contractVersion, machineName, projects, 
 
 // D4: same-dir temp file (mode 0600) then rename — no partial file, mode survives rename
 // (POSIX). Directory created {recursive: true, mode 0o700}; a pre-existing dir keeps its
-// current mode (mkdirSync never chmods — the file's 0600 is the security boundary).
+// current mode (mkdirSync never chmods — the file's 0600 is the security boundary). Mechanics
+// live in atomic.js (shared with service.js/bootstrap.js); this wrapper only fixes the mode and
+// dirMode this call site has always used.
 function writeConfigAtomic(configPath, data) {
-  const dir = path.dirname(configPath)
-  fs.mkdirSync(dir, { recursive: true, mode: 0o700 })
-  const tempPath = path.join(dir, `.hub.json.${process.pid}.${Date.now()}.tmp`)
-  fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), { mode: 0o600 })
-  fs.renameSync(tempPath, configPath)
+  atomicWrite(configPath, JSON.stringify(data, null, 2), { mode: 0o600, dirMode: 0o700 })
 }
 
 // enroll({hubUrl, code, machineName, projects, reposRoot, force, configPath, fetchImpl, now})

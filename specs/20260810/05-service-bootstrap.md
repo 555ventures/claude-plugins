@@ -1,6 +1,6 @@
 ---
 date: 2026-08-10
-status: implementing
+status: done
 risk: T3
 open_markers: 0
 area: autopilot
@@ -211,6 +211,25 @@ launchd surface (bootstrap/bootout verbs, no rotation, gui-domain quirks) is rea
 cost for zero fleet boxes — recorded deferral in brief 03's Out of scope. Adversarial
 note honored from planning: `service logs` must exec-passthrough, not parse journal
 output — parsing invites drift against journalctl formats.
+
+**Build deviations (folded 2026-08-11, one-off interpretation calls):** D6's "daemon
+running (pid N)" liveness line is informational only — it never gates doctor's overall `ok`
+(AC-6 requires a passing doctor on a box with no daemon running; the D3 service checks own
+install/active assertions). D5's post-`EEXIST` pid read in the stale-lock retake is
+best-effort (tolerates `ENOENT` when the racing winner's write is already gone) — the
+`LockError` throw is unconditional either way.
+
+**Review dispositions (2026-08-11, iteration 1 — wf_6c217c0f-8f2):** five panel findings, all
+fix-dispatched (user-approved): re-stat failure error in `daemon/bootstrap.js` now names its
+remedy (demonstrated hard finding); duplicated contract-version loader removed from
+`daemon/bootstrap.js` — `bin/autopilot` resolves once and passes `deps.contractVersion`
+(enroll.js DI precedent); linux service-install success now logs its ✅ line per Behavior;
+the three tmp+rename copies (enroll/service/bootstrap) extracted into shared
+`daemon/atomic.js` — user chose the wider cleanup knowingly, `enroll.js` + `atomic.js` are
+sanctioned review-fix additions outside the original File Plan. Rejected (mechanical scope
+finding): `docs/roadmap/00-overview.md`, `docs/roadmap/04-review-smell-lens.md`,
+`docs/roadmap/05-hotspot-audit.md` are JJ's own uncommitted roadmap-planning edits predating
+this review, not build output — confirmed by user, left uncommitted.
 
 ## Canonical Delta
 

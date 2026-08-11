@@ -110,6 +110,42 @@ actually flip state?) is never parsed from the transcript — the caller re-deri
 - **Lane-state files are advisory.** On restart a lane restores only `lastBrief` and
   re-derives everything else from `spec-status`. A question pending at crash re-materializes
   because the stage re-runs and asks again — repeated, never defaulted.
+- **Pidfile lock — one daemon per box** (specs/20260810/05): normal start takes
+  `<stateDir>/autopilotd.lock` via an `O_EXCL` (`wx`) write before lane construction and
+  releases it on clean shutdown; a live (or `EPERM`-foreign) pid in the lockfile exits 2
+  naming that pid. Stale (`ESRCH`) pids recover by unlink-then-fresh-`wx` — an `EEXIST` on
+  the retake means another starter won the race and is a refusal, never an overwrite.
+  `--check` never touches the lock, so preflight runs beside a live daemon.
+
+## Provisioning
+
+(specs/20260810/05-service-bootstrap.md)
+
+- **Bootstrap is a thin composition of real subcommands** — `autopilot bootstrap --hub <url>
+  --code <code> [--repos-root <dir>]` runs enroll → plugin-enable → `service install` (linux;
+  darwin prints the tmux line and continues) → `doctor`, stopping at the first hard failure
+  with that step's own message. Every step is individually re-runnable and idempotent;
+  bootstrap checks `hub.json` existence itself before invoking enroll (present + no
+  `--force` → `= already enrolled`, no network) — never string-matching enroll's errors.
+  The one manual step it cannot do is the `claude` login; until then lanes halt with the
+  phone-visible 🔑 line.
+- **Service unit parameters and why**: systemd --user only (darwin = exit 2 naming tmux; the
+  launchd deferral is brief 03's). The unit bakes `process.execPath` (service PATH ≠ shell
+  PATH), snapshots the installing shell's `$PATH` into `Environment=PATH=` (covers what SDK
+  sessions spawn), sets `Restart=always` + `RestartSec=30`, and puts
+  `StartLimitIntervalSec=0` in `[Unit]` (post-systemd-230 placement) — without it the default
+  start-limit flips a crash-looping unit to permanently `failed`, another silent-box flavor.
+  `install` ends with `loginctl enable-linger` — without linger the user manager dies at SSH
+  logout and never starts at boot on a headless box.
+- **Doctor is the mechanized silence-runbook**: offline one-line checks (hub.json, reposRoot,
+  discovery, overrides, plugin enablement, Node floor, lock/daemon liveness, service state on
+  linux), each failure naming its remedy command; the hub health probe is network-tolerant —
+  unreachable or >60s clock skew warns, never fails, so a box without NTP still provisions.
+- **Plugin-enable merges user-level `~/.claude/settings.json`** (marketplace entry +
+  `enabledPlugins`), preserving unknown keys, atomic write, mtime-guarded, no-op when already
+  set; unparseable settings fail with a remedy and are never overwritten. Per-repo
+  `.claude/settings.json` surgery is the wrong layer — the Stop hook auto-wires via
+  `plugin.json` on enablement.
 
 ## Conventions
 

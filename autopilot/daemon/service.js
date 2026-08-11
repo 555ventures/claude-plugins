@@ -33,6 +33,8 @@ const os = require('os')
 const path = require('path')
 const { spawn } = require('child_process')
 
+const { atomicWrite } = require('./atomic')
+
 const UNIT_PATH = path.join(os.homedir(), '.config', 'systemd', 'user', 'autopilot.service')
 const SERVICE_UNIT = 'autopilot'
 
@@ -74,14 +76,10 @@ function renderUnit({ nodePath, daemonPath, pathEnv }) {
   )
 }
 
-// Same-dir temp file then rename — no partial unit file ever visible to systemd (enroll.js's
-// writeConfigAtomic precedent).
+// Same-dir temp file then rename — no partial unit file ever visible to systemd. Mechanics live
+// in atomic.js (shared with enroll.js/bootstrap.js).
 function writeUnitAtomic(fsImpl, unitPath, content) {
-  const dir = path.dirname(unitPath)
-  fsImpl.mkdirSync(dir, { recursive: true })
-  const tempPath = path.join(dir, `.autopilot.service.${process.pid}.${Date.now()}.tmp`)
-  fsImpl.writeFileSync(tempPath, content)
-  fsImpl.renameSync(tempPath, unitPath)
+  atomicWrite(unitPath, content, { fsImpl })
 }
 
 function runCmd(execImpl, verb, cmd, args) {

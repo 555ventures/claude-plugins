@@ -18,6 +18,12 @@
 //     homedir/fsImpl/platform/execImpl/fetchImpl/log/checkoutRoot — environment seams; each
 //       defaults to the real thing (os.homedir(), real fs, process.platform, undefined,
 //       global fetch, console.log, this checkout's root).
+//     contractVersion — the wire-contract version the default `enroll` dep passes through to
+//       enroll(). Resolved by autopilot/bin/autopilot (the D9 capability check: require the
+//       vendored .ts contract, catch, exit 2 with the Node-floor remedy) and handed in here —
+//       this module never requires `../contract/constants.ts` itself (enroll.js precedent: the
+//       bin resolves once, library modules stay DI-only). Unused whenever `deps.enroll` is
+//       supplied (every test in this file injects one).
 //   The plugin-enable step (D8) is never injectable — it is plain local `fs` I/O against
 //   `~/.claude/settings.json` with no external side effect to fake away.
 //
@@ -58,26 +64,12 @@ const { enroll } = require('./enroll')
 const { discoverRepos } = require('./discover')
 const { installService } = require('./service')
 const { runDoctor } = require('./doctor')
+const { atomicWrite } = require('./atomic')
 
 class BootstrapError extends Error {
   constructor(message, exitCode) {
     super(message)
     this.exitCode = exitCode
-  }
-}
-
-// D9's contract capability check (spec 01), performed here because the default `enroll` dep
-// calls enroll() directly rather than going through bin/autopilot's `enroll` subcommand. Only
-// invoked when no `deps.enroll` fake is supplied.
-function loadContractVersion() {
-  try {
-    return require('../contract/constants.ts').CONTRACT_VERSION
-  } catch (err) {
-    throw new BootstrapError(
-      `autopilot bootstrap: could not load the wire contract (${err.message}) — requires Node ` +
-      `>= 22.18 (native TypeScript type stripping); upgrade Node`,
-      2
-    )
   }
 }
 
@@ -181,16 +173,16 @@ function pluginEnableStep(ctx, steps) {
   try {
     stat2 = fsImpl.statSync(settingsPath)
   } catch (err) {
-    throw new BootstrapError(`autopilot bootstrap: cannot re-stat ${settingsPath} (${err.message})`, 2)
+    throw new BootstrapError(
+      `autopilot bootstrap: cannot re-stat ${settingsPath} (${err.message}) — re-run bootstrap`,
+      2
+    )
   }
   if (stat2.mtimeMs !== stat1.mtimeMs) {
     throw new BootstrapError('autopilot bootstrap: settings.json changed underneath us — re-run bootstrap', 2)
   }
 
-  const dir = path.dirname(settingsPath)
-  const tempPath = path.join(dir, `.settings.json.${process.pid}.${Date.now()}.tmp`)
-  fsImpl.writeFileSync(tempPath, JSON.stringify(merged, null, 2))
-  fsImpl.renameSync(tempPath, settingsPath)
+  atomicWrite(settingsPath, JSON.stringify(merged, null, 2), { fsImpl })
   const detail = '+ plugin enabled (autopilot@555-tools)'
   steps.push({ step: 'plugin-enable', detail })
   log(detail)
@@ -206,6 +198,7 @@ function defaultServiceDep(ctx) {
       return { ok: true, installed: false }
     }
     installService({ execImpl, fsImpl, platform, env: process.env })
+    log('✅ service installed and started (systemd --user)')
     return { ok: true, installed: true }
   }
 }
@@ -228,7 +221,7 @@ async function runBootstrap({ args, deps = {} }) {
 
   const ctx = { homedir, fsImpl, platform, execImpl, fetchImpl, log, checkoutRoot }
 
-  const enrollImpl = deps.enroll || ((opts) => enroll({ ...opts, contractVersion: loadContractVersion(), fetchImpl }))
+  const enrollImpl = deps.enroll || ((opts) => enroll({ ...opts, contractVersion: deps.contractVersion, fetchImpl }))
   const discoverImpl = deps.discover || ((opts) => discoverRepos(opts))
   const serviceImpl = deps.service || defaultServiceDep(ctx)
   const doctorImpl = deps.doctor || defaultDoctorDep(ctx)

@@ -84,30 +84,39 @@ function loadHubConfig({ hubConfigPath = DEFAULT_HUB_CONFIG_PATH, overridesPath 
     )
   }
 
-  const discovered = discoverRepos({ reposRoot })
-  const projectNames = new Set(discovered.map((repo) => repo.name))
-
+  // Overrides must be parsed BEFORE discovery: a host-level reposRoot override has to steer
+  // which directory actually gets scanned, not just relabel the return value after the fact
+  // (that was the bug — discovery ran against hub.json's root while the override sat unused).
+  // Per-project keys can't be typo-checked yet (that needs the post-override discovery below).
   const overrides = readOverrides(overridesPath)
   const hostOverrides = {}
-  const laneOverrides = {}
+  const laneOverrideCandidates = {}
   for (const key of Object.keys(overrides)) {
     if (HOST_OVERRIDE_FIELDS.includes(key)) {
       hostOverrides[key] = overrides[key]
       continue
     }
-    if (!projectNames.has(key)) {
-      throw new Error(
-        `autopilotd: overrides file ${overridesPath} names unknown project "${key}" — ` +
-        `no discovered repo under ${reposRoot} matches (typo? re-run autopilot discover)`
-      )
-    }
-    laneOverrides[key] = overrides[key]
+    laneOverrideCandidates[key] = overrides[key]
   }
 
   const root = checkoutRoot()
   const specPluginRoot = hostOverrides.specPluginRoot || path.join(root, 'spec')
   const pluginPaths = hostOverrides.pluginPaths || [path.join(root, 'spec'), path.join(root, 'git')]
   const resolvedReposRoot = hostOverrides.reposRoot || reposRoot
+
+  const discovered = discoverRepos({ reposRoot: resolvedReposRoot })
+  const projectNames = new Set(discovered.map((repo) => repo.name))
+
+  const laneOverrides = {}
+  for (const key of Object.keys(laneOverrideCandidates)) {
+    if (!projectNames.has(key)) {
+      throw new Error(
+        `autopilotd: overrides file ${overridesPath} names unknown project "${key}" — ` +
+        `no discovered repo under ${resolvedReposRoot} matches (typo? re-run autopilot discover)`
+      )
+    }
+    laneOverrides[key] = laneOverrideCandidates[key]
+  }
 
   const lanes = discovered.map((repo) => ({
     pollSeconds: DEFAULT_POLL_SECONDS,

@@ -3,6 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
+const http = require('node:http')
 const { spawn, spawnSync } = require('node:child_process')
 const { ROOT, tmpdir } = require('../helpers')
 
@@ -100,6 +101,32 @@ test('AC-20260801-04-2 (rewired for specs/20260810/04-hub-wired-daemon.md D7/D8)
     `the error must name the exact remedy command "cd autopilot && npm install" or an operator is left to guess why the daemon won't boot; got stderr=${res.stderr}`)
 })
 
+// Restores the AC-20260801-04-5 pin dropped by this file's rewire (review finding,
+// specs/20260810/04-hub-wired-daemon.md): the missing-oracle-script guard in
+// autopilot/bin/autopilotd runPreflight (D7/D8) is still live code, but the file's rewrite from
+// `--config`/botToken to `--hub-config` left the case with no test. Rewired to the new boot
+// shape: specPluginRoot is now a HOST_OVERRIDE_FIELDS key in the overrides file (D7 Contracts,
+// autopilot/daemon/config.js), not a hub.json field, so this test points a valid hub.json's
+// reposRoot at a discoverable repo while the overrides file's specPluginRoot names a directory
+// with no scripts/spec-status.js under it.
+test('AC-20260801-04-5: autopilotd --check exits 2 naming the missing oracle script and the offending specPluginRoot when the overrides file points specPluginRoot at a directory with no scripts/spec-status.js', () => {
+  const reposRoot = tmpdir('ac5-repos')
+  writeGroundedRepo(reposRoot, 'alpha')
+  const hubDir = tmpdir('ac5-hub')
+  const hubConfigPath = writeHubConfig(hubDir, { reposRoot })
+  const badSpecPluginRoot = tmpdir('ac5-bad-spec-root') // exists, but has no scripts/ subdirectory at all
+  const overridesDir = tmpdir('ac5-overrides')
+  const overridesPath = path.join(overridesDir, 'config.json')
+  fs.writeFileSync(overridesPath, JSON.stringify({ specPluginRoot: badSpecPluginRoot }))
+  const stateDir = tmpdir('ac5-state')
+  const res = runAutopilotd(['--check', '--hub-config', hubConfigPath, '--config', overridesPath, '--state-dir', stateDir])
+  const expectedScriptPath = path.join(badSpecPluginRoot, 'scripts', 'spec-status.js')
+  assert.strictEqual(res.status, 2,
+    `a specPluginRoot override with no scripts/spec-status.js under it must fail preflight with exit 2 — an oracle-less daemon would boot every lane pointed at a script that isn't there, and only find out on the first poll; got status=${res.status} signal=${res.signal} stderr=${res.stderr}`)
+  assert.match(res.stderr, new RegExp('no oracle script at ' + escapeRe(expectedScriptPath)),
+    `stderr must name the exact missing oracle script path (which embeds the offending specPluginRoot ${badSpecPluginRoot} from the overrides file) — without it an operator debugging a fleet box with a bad override has no lead on which file or which override is wrong; got stderr=${res.stderr}`)
+})
+
 test('AC-20260810-04-8 (exercised end-to-end via --check): autopilotd --check --hub-config <missing path> exits 2 naming "autopilot enroll" as the remedy', () => {
   const hubDir = tmpdir('ac8-hub')
   const hubConfigPath = path.join(hubDir, 'does-not-exist.json')
@@ -186,4 +213,84 @@ test('AC-20260810-04-12: autopilotd --check --hold --ready-file <p> --hub-config
   }
   assert.strictEqual(exitCode, 0,
     `SIGTERM during a --hold must tear down cleanly and exit 0 (spec 04-live-smoke D3, unchanged by the hub-config rewiring); got exitCode=${exitCode} exited=${exited} stderr=${stderr}`)
+})
+
+// Pins the registerRepos loud-failure boot branch (Behavior § Boot order,
+// specs/20260810/04-hub-wired-daemon.md: "registerRepos (network; non-2xx → exit 1 naming the
+// repo — a box that cannot register must say so loudly, not run half-routed)"). This is a real
+// (non---check) boot, so it needs an in-process stub hub to answer the registration POST — per
+// § Gotchas in .claude/rules/spec-pipeline.md, a stub server sharing this process's event loop
+// must be reached with async `spawn`, never `spawnSync` (spawnSync blocks this process's event
+// loop for the child's whole lifetime, starving the very http.Server the child is trying to
+// reach, and every such test hangs to its kill-timer instead of failing).
+function startStub(handler) {
+  return new Promise((resolve) => {
+    const requests = []
+    const server = http.createServer((req, res) => {
+      let body = ''
+      req.on('data', (c) => { body += c })
+      req.on('end', () => {
+        requests.push({ method: req.method, url: req.url, body })
+        handler(req, res, body)
+      })
+    })
+    server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port, requests }))
+  })
+}
+
+function stopStub(server) {
+  return new Promise((resolve) => server.close(resolve))
+}
+
+function runAutopilotdAsync(args, opts = {}) {
+  const home = tmpdir('autopilotd-home')
+  const { env, ...rest } = opts
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [AUTOPILOTD, ...args], {
+      ...rest,
+      env: { ...process.env, HOME: home, USERPROFILE: home, ...(env || {}) },
+    })
+    let stdout = ''
+    let stderr = ''
+    let timedOut = false
+    const timer = setTimeout(() => {
+      timedOut = true
+      child.kill('SIGTERM')
+    }, 5000)
+    child.stdout.on('data', (d) => { stdout += d })
+    child.stderr.on('data', (d) => { stderr += d })
+    child.on('close', (code, signal) => {
+      clearTimeout(timer)
+      resolve({ status: timedOut ? null : code, signal, stdout, stderr, home })
+    })
+  })
+}
+
+test('registerRepos loud-failure boot branch (Behavior § Boot order, specs/20260810/04-hub-wired-daemon.md): a real (non---check) autopilotd boot exits 1 naming the failing repo and the hub\'s non-2xx status when POST /api/spokes/projects fails, and never creates --state-dir', async () => {
+  const { server, port, requests } = await startStub((req, res) => {
+    res.writeHead(500, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ code: 'internal', message: 'boom' }))
+  })
+  try {
+    const reposRoot = tmpdir('reg-fail-repos')
+    writeGroundedRepo(reposRoot, 'alpha')
+    const hubDir = tmpdir('reg-fail-hub')
+    const hubConfigPath = writeHubConfig(hubDir, { reposRoot, hubUrl: `http://127.0.0.1:${port}` })
+    const stateDir = tmpdir('reg-fail-state')
+    const res = await runAutopilotdAsync(['--hub-config', hubConfigPath, '--state-dir', stateDir])
+    assert.strictEqual(res.status, 1,
+      `a non-2xx registration response must exit 1 — "a box that cannot register must say so loudly, not run half-routed" (Behavior § Boot order) — a box that silently continued past this would start lanes the hub never actually knows about; got status=${res.status} signal=${res.signal} stdout=${res.stdout} stderr=${res.stderr}`)
+    assert.match(res.stderr, /registering "alpha" failed/,
+      `stderr must name the specific failing repo ("alpha") or an operator with more than one lane cannot tell which repo's registration failed; got stderr=${res.stderr}`)
+    assert.match(res.stderr, /500/,
+      `stderr must surface the hub's actual non-2xx status or an operator cannot distinguish a hub outage/bug from a bad credential/contract mismatch; got stderr=${res.stderr}`)
+    assert.strictEqual(requests.length, 1,
+      `registerRepos registers sequentially and must stop at the first failing repo rather than retrying it or continuing to the next; got ${requests.length} requests`)
+    assert.strictEqual(requests[0].url, '/api/spokes/projects',
+      `the registration call must hit the contracted route /api/spokes/projects or the hub never sees the registration attempt at all; got ${requests[0].url}`)
+    assert.deepStrictEqual(fs.readdirSync(stateDir), [],
+      'a failed registration must exit before --state-dir is ever created — a populated directory here would mean the daemon ran half-routed instead of failing loudly')
+  } finally {
+    await stopStub(server)
+  }
 })

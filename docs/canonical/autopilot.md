@@ -6,29 +6,36 @@ spec ACs, not by `spec/doctrine/scaffold-ledger.md` rows.
 
 ## Messaging seam
 
-All messaging goes through the adapter seam in `autopilot/daemon/telegram.js`. The daemon never
-speaks Telegram directly, so a later Slack adapter can implement the same surface (BRIEF #10).
+All messaging goes through the adapter seam in `autopilot/daemon/hub-adapter.js`, which speaks
+the hub API (`POST /api/spokes/report`, `POST /api/spokes/asks`, `GET /api/spokes/poll`) — the
+daemon never touches Telegram; the hub owns it. The direct-Telegram adapter was deleted in
+0.9.0 (2026-08-10 ruling: one way to run — Telegram permits one `getUpdates` consumer per bot
+token and the hub is that consumer; a leftover direct-mode box would silently steal its
+updates). The `callback_data` alphabet and 429-handling notes are history — hub-owned now.
 
-Platform-neutral interface:
-`start · stop · send · askButtons · pendingAsk · cancelAsk`
+Platform-neutral interface (a future adapter — Slack, dashboard — implements the same seven):
+`start · stop · send · report · askButtons · pendingAsk · cancelAsk`
 
-The v0.4 screenshot chain (`sendPhoto` + per-lane `screenshotCommand`) and the `onText`
-free-text callback were deleted in 0.5.0 as zero-consumer surface (2026-08-07 audit);
-free-text "Other…" replies are handled adapter-internally.
-
+- `send(project, text)` posts one `narration` event; `report(project, type, payload)` posts a
+  typed event from the vendored `SPOKE_REPORTABLE_EVENT_TYPES` alphabet. Both mint ULID
+  eventIds (`hub-http.js`), retry once, and on terminal failure log and drop — a hub outage
+  never takes a lane down (0.4.1 lane-failure-semantics discipline).
+- Phone-visibility calibration: the hub narrator posts a closed inventory (stage_finished,
+  lane_halted, question_asked, ask_cancelled, session_wrapup, project_registered);
+  `narration` and `stage_started` are durable-log-only. Lane done/halt lines travel as typed
+  events; idle/backoff narration stays free-text `send()`.
 - `askButtons(project, ask)` takes the SDK's `AskUserQuestionInput.questions` shape verbatim
   (questions 1–4, options 2–4, `{label, description}`) and resolves
-  `{ answers: { [question text]: string | string[] } }` — no timeout, ever.
-- `callback_data` is a closed alphabet: `a:<promptKey>:<qIdx>:<optIdx>` (answer) ·
-  `d:<promptKey>:<qIdx>` (multiSelect Done) · `o:<promptKey>:<qIdx>` (Other…). `promptKey` is an
-  adapter-assigned integer because Telegram caps `callback_data` at 64 bytes — question text
-  can never travel on the wire.
-- One pending ask per topic (the lane blocks while asking), which is what makes free-text
-  "Other…" replies matchable without reply-to threading.
-- Every wire call funnels through one `api()` helper: 429 honors `parameters.retry_after` and
-  retries uncapped; other 5xx/network failures back off exponentially (1s base, 60s cap, 5 tries).
-- Updates from user ids outside `allowedUserIds` are logged and dropped — the bot is
-  discoverable, and answering a fork question is a privileged act.
+  `{ answers: { [question text]: string | string[] } }` — no timeout, ever. Creation POSTs a
+  ULID `clientAskId` and retries indefinitely (1s→60s backoff) until 2xx/409. On `409` the
+  adapter adopts a deep-equal pending ask from the next poll's `asks[]` (key-order-insensitive
+  compare — `questions` round-trips a Postgres jsonb column) or cancels and re-creates a
+  mismatched one, so daemon restarts never duplicate the question on the phone.
+- One shared poll loop per adapter: `GET /api/spokes/poll?since=<cursor>` with a durable
+  cursor at `<stateDir>/hub-cursor.json` (atomic write; cold start `since=0` replays the
+  spoke-scoped history once and drains naturally). Consumes `answer_given` (resolve pending
+  ask) and `ask_cancelled` (reject the holder); ignores every other type; errors back off
+  1s→60s and never reject the loop; each iteration yields to the macrotask queue.
 
 ## Stage execution
 
@@ -54,10 +61,17 @@ actually flip state?) is never parsed from the transcript — the caller re-deri
 
 ## Lane engine & daemon
 
-- The daemon (`autopilot/bin/autopilotd`) runs **one lane per project**, configured from
-  `~/.config/autopilot/config.json` (overridable `--config`). Stages within a repo run
-  serially; cross-repo parallelism is the only parallelism. No worktrees, no `build_base`,
-  no merge mutex — the lane is its repo's only writer.
+- The daemon (`autopilot/bin/autopilotd`) runs **one lane per project**, booted from
+  `~/.config/autopilot/hub.json` (`--hub-config` overrides; missing/invalid → exit 2 naming
+  `autopilot enroll`) plus repo discovery re-run at every start, registrations refreshed —
+  a box that cannot register exits 1 naming the repo, never runs half-routed.
+  `config.json` (`--config`) is **optional overrides only**: per-project
+  `{devServerCommand, tunnelCommand, pollSeconds}` keyed by project name (an override key
+  naming no discovered project throws — typo guard; a host-level `reposRoot` override steers
+  discovery itself), host-level `{specPluginRoot, pluginPaths, reposRoot}` with defaults
+  derived from the plugin checkout. Stages within a repo run serially; cross-repo parallelism
+  is the only parallelism. No worktrees, no `build_base`, no merge mutex — the lane is its
+  repo's only writer.
 - Lane states: `idle` · `checkpoint` · `running` · `asking` · `backoff` · `halted`.
 - **The oracle is `spec-status.js --next --json`, never re-derived.** The lane picks the
   first `next[]` entry with no blockers that isn't in its skip set; choosing among the
@@ -72,7 +86,12 @@ actually flip state?) is never parsed from the transcript — the caller re-deri
   `pickFrom` reads) and it is excluded from the `⚡` parallel-lane fan-out on the status side,
   never here.
 - **Halt policy:** a `failed` stage gets exactly one Fable repair pass, then the lane parks
-  and asks — it never auto-advances. `➡ Next spec` adds the path to an in-memory skip set
+  and asks — it never auto-advances. Exception (D9, 0.9.0): an **auth-shaped failure**
+  (anchored, case-insensitive tokens over the stage error's message only —
+  authenticat/unauthorized/oauth/api key/logged out/`/login`/status-anchored 401) skips the
+  repair pass and halts immediately with one 🔑 `lane_halted` report naming `claude login` —
+  a repair pass cannot fix a logged-out box. Subscription-limit exhaustion stays `retryable`
+  (backoff, auto-resume), log-only by design. `➡ Next spec` adds the path to an in-memory skip set
   (cleared by restart; a restart is the operator's reset lever) and arms a wake chain that
   bypasses `pollSeconds` until the lane settles into idle. `retryable` backs off 30s ×2 to a
   15min cap, forever.
@@ -81,8 +100,10 @@ actually flip state?) is never parsed from the transcript — the caller re-deri
   from the last completed one, when the pick's path is a roadmap brief, or on an
   `n/a`→different-path-prefix transition. Tunnel URL is captured from the command's stdout
   **or stderr** (cloudflared prints to stderr), 60s timeout → `null`, which never blocks.
-- **Narration** is one topic message per stage transition — start (`▶ <action> <path>`),
-  done (first report line + cost), halt/idle — never streamed transcripts.
+- **Narration** is one event per stage transition, never streamed transcripts: starts go
+  typed `report('stage_started', {stage})` (durable-log-only), done
+  `report('stage_finished', {stage})` and halts `report('lane_halted', {reason})` (both
+  narrator-posted), idle/backoff lines free-text `send()`.
 - The daemon **never runs git and never pushes**: review stages run unmodified
   `/spec:review`, which owns its own local merge-back. Merge-strategy forks and every other
   in-session question arrive through the ordinary relay; nothing is special-cased.
@@ -110,10 +131,12 @@ actually flip state?) is never parsed from the transcript — the caller re-deri
   scoped location matters: the repo's full suite carries deliberate failing INTAKE pins, so
   pipeline gate runs are scoped to `tests/<scope>/`.
 
-**Operational proof.** `autopilotd --check` is an offline preflight — it validates config, forces
-the real SDK require (which the daemon otherwise loads lazily), asserts the oracle script exists,
+**Operational proof.** `autopilotd --check` is an offline preflight — it validates `hub.json`,
+forces the real SDK require (which the daemon otherwise loads lazily), asserts the oracle script
+exists, **scans for repos but never registers them** (registration is network; preflight is not),
 constructs the adapter and every lane, and reports without touching the network, spawning a
-process, or writing state. With `--hold --ready-file <path>` it stays resident after a passing
+process, or writing state. The boot leg's fixture is `autopilot/fixtures/preflight-hub.json` plus
+the grounded fixture repo under `autopilot/fixtures/repos/demo/`. With `--hold --ready-file <path>` it stays resident after a passing
 preflight so it can serve as a boot leg: `.claude/spec.config.json` declares it as `bootCommand`
 with `readyCheck: test -f <path>`, and the repo no longer declares itself `inert`. The reason the
 hold mode exists is worth remembering — `smoke.sh` treats a boot process that exits before
@@ -124,13 +147,12 @@ overrides the lane-state location and preflight writes nothing there.
 one expired silently the moment a bootable entry point landed, voiding executed verification for
 three consecutive specs. Re-read the declared reason whenever a repo gains a process.
 
-**Live verification.** Real-world behavior is pinned by a deliberately interactive suite
-(`tests/autopilot/live.test.js`) that posts real questions to a real Telegram topic and waits for
-a real tap. It activates only under `AUTOPILOT_LIVE=1` plus credentials — credential presence
-alone is not enough, so a stray exported token cannot turn `npm test` into a hang. Telegram permits
-one `getUpdates` consumer per bot token, so the live tests and a running daemon must never share
-one. Operator setup — install, grounding a throwaway repo, config location, start, stop — lives in
-the root `README.md`; autopilot ships no README of its own.
+**Live verification.** The Telegram live suite (`tests/autopilot/live.test.js`) was retired in
+0.9.0 with the direct-Telegram adapter — the hub owns Telegram now, and that discipline moves
+with it to the hub repo. The spoke's live pin is `tests/autopilot/enroll-live.test.js`
+(`AUTOPILOT_ENROLL_LIVE=1` + credentials — env-gate discipline unchanged: credential presence
+alone never activates a live suite). Operator setup — install, grounding a throwaway repo,
+enrollment, start, stop — lives in the root `README.md`; autopilot ships no README of its own.
 
 ## Enrollment
 

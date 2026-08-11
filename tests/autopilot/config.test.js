@@ -131,6 +131,34 @@ test('AC-20260810-04-9: loadHubConfig throws naming the offending key and the re
   )
 })
 
+// Review finding, specs/20260810/04-hub-wired-daemon.md D7 (Contracts: host-level overrides
+// {specPluginRoot, pluginPaths, reposRoot}): a host-level reposRoot override must steer WHICH
+// directory discovery actually scans, not just relabel the return value after discovery already
+// ran against hub.json's persisted reposRoot — the bug this pins is exactly that ordering
+// mistake (overrides read after discovery instead of before it).
+test('D7 (host-level reposRoot override): loadHubConfig discovers lanes from the overrides file\'s reposRoot, not hub.json\'s persisted reposRoot, and reports cfg.reposRoot as the overridden value', () => {
+  const dir = tmpdir('config-reposroot-override')
+  const rootA = path.join(dir, 'rootA')
+  const rootB = path.join(dir, 'rootB')
+  fs.mkdirSync(rootA)
+  fs.mkdirSync(rootB)
+  groundRepo(rootA, 'projA')
+  groundRepo(rootB, 'projB')
+  const { hubConfigPath } = writeHubJson(dir, { reposRoot: rootA })
+  const overridesPath = writeOverrides(dir, { reposRoot: rootB })
+
+  const cfg = loadHubConfig({ hubConfigPath, overridesPath })
+
+  assert.strictEqual(cfg.reposRoot, rootB,
+    `cfg.reposRoot must report the overridden reposRoot (rootB), not hub.json's persisted reposRoot (rootA), or a caller reading cfg.reposRoot back is told the wrong directory was scanned; got ${cfg.reposRoot}`)
+  assert.strictEqual(cfg.lanes.length, 1,
+    `discovery must have run against rootB (one grounded repo, projB), not rootA — a length other than 1 means the override reposRoot was ignored or both roots got merged; got ${cfg.lanes.length} lanes: ${JSON.stringify(cfg.lanes.map((l) => l.project))}`)
+  assert.strictEqual(cfg.lanes[0].project, 'projB',
+    `the discovered lane must be projB (from rootB, the override) — seeing projA here means discovery scanned hub.json's reposRoot instead of the overrides file's; got ${JSON.stringify(cfg.lanes.map((l) => l.project))}`)
+  assert.ok(!cfg.lanes.some((l) => l.project === 'projA'),
+    `projA (rootA, hub.json's un-overridden reposRoot) must NOT appear as a lane once a host-level reposRoot override is present, or an operator moving a fleet box's repo layout ends up polling stale/wrong directories alongside the new ones; got ${JSON.stringify(cfg.lanes.map((l) => l.project))}`)
+})
+
 test('AC-20260810-04-12: loadHubConfig performs zero network calls (injected-transport leg of the offline preflight guarantee)', () => {
   const dir = tmpdir('config-ac12-offline')
   const reposRoot = path.join(dir, 'repos')

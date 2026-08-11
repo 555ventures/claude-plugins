@@ -170,7 +170,14 @@ While drafting:
   ambiguity-prone term (rounding mode, ordering,
   inclusive/exclusive bounds, timezone, null vs empty) with a literal input → output example.
   T3 ACs always carry at least one literal example. Test authors derive tests from the spec
-  alone — a concrete pair is the only wording they cannot misread. When the spec fixes a
+  alone — a concrete pair is the only wording they cannot misread. For a Decision whose data
+  path spans File Plan rows (producer → carrier → consumer → display), at least one AC must
+  pin the chain's **terminal observable** — the response the user actually sees, fed by the
+  production path — never only an intermediate hop: verifying the chain's end transitively
+  verifies every hop, while intermediate-hop ACs stay green with the chain severed (measured:
+  six severed-chain defects rode green gates in one spec, upwell 20260731/04). A fixture-fed
+  observation is not terminal — a component whose only non-null input in the repo lives in a
+  story fixture is unverified. When the spec fixes a
   defect or deliberately changes existing behavior (bugfix briefs, escape-driven specs,
   declared refactors — judged at plan time, recorded either way), write a **regression
   pin** per behavior that must survive the change, not one per spec: `WHEN {trigger} THE

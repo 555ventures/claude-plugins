@@ -1,7 +1,8 @@
 ---
 date: 2026-08-10
-status: draft
+status: hardened
 risk: T3
+open_markers: 0
 area: autopilot
 design: false
 breaking: true
@@ -28,14 +29,14 @@ zero hand-written config, and messages appear in the hub-owned Telegram topics.
 | ID | Decision | One-line rationale |
 |----|----------|--------------------|
 | D1 | Delete direct-Telegram mode: `daemon/telegram.js`, `tests/autopilot/telegram.test.js`, and the live suite `tests/autopilot/live.test.js` are removed; `config.json`'s `botToken`/`supergroupId`/`allowedUserIds`/`topicId` fields cease to exist | User ruling 2026-08-10: one way to run. Telegram allows one `getUpdates` consumer per bot token and the hub is that consumer — a leftover direct-mode box silently steals the hub's updates. The live-suite discipline moves to the hub repo (it owns Telegram now); the spoke's live pin is `enroll-live.test.js`, which stays. |
-| D2 | `daemon/hub-adapter.js` implements the seam `start · stop · send · askButtons · pendingAsk · cancelAsk` **plus new `report(project, type, payload)`**; lane.js emits `report(project, 'stage_finished', {stage})` on done and `report(project, 'lane_halted', {reason})` on halt, keeping `send()` for free-text narration | The hub narrator posts a **closed inventory** (stage_finished, lane_halted, question_asked, ask_cancelled, session_wrapup, project_registered — narration and stage_started are deliberately log-only). Typed reports are the only way phone-visible lines survive the move; emoji-sniffing `send()` text into types was rejected as fragile. |
+| D2 | `daemon/hub-adapter.js` implements the seam `start · stop · send · askButtons · pendingAsk · cancelAsk` **plus new `report(project, type, payload)`**; lane.js emits `report(project, 'stage_started', {stage})` on start, `report(project, 'stage_finished', {stage})` on done, and `report(project, 'lane_halted', {reason})` on halt, keeping `send()` for remaining free-text narration (idle/backoff lines). `pendingAsk`/every other method keeps the signature and return shape of the deleted telegram adapter verbatim — `report` is the **only** surface change; lane.js's consumption of the untouched six stays as-is | The hub narrator posts a **closed inventory** (stage_finished, lane_halted, question_asked, ask_cancelled, session_wrapup, project_registered — narration and stage_started are deliberately log-only). Typed reports give phone-visible done/halt lines and a typed durable record for starts; emoji-sniffing `send()` text into types was rejected as fragile. |
 | D3 | `send(project, text)` → one `narration` event via `POST /api/spokes/report`; `report()` → the given type; both mint ULID eventIds (`hub-http.js`), one-retry, and on terminal failure **log and drop** — never throw into the lane | Narration is durable-log material (at-least-once, hub-side dedupe); a hub outage must never take a lane down (0.4.1 lane-failure-semantics precedent). Event types are the vendored `SPOKE_REPORTABLE_EVENT_TYPES` alphabet — `stage_started` is reported too (durable record) though the narrator doesn't post it. |
 | D4 | `askButtons(project, ask)` → `POST /api/spokes/asks` with ULID `clientAskId`; resolution arrives as an `answer_given` event `{askId, answers}` over the shared poll loop; `cancelAsk` → `POST /api/spokes/asks/:askId/cancel`. Ask creation retries with the daemon's standard backoff (1s base → 60s cap) **indefinitely** until 2xx/409 — asks have no timeout and must never be lost | Asks are the product's core loop; the hub enforces one-pending-ask-per-project with `409 conflict`. Answer keys/values are the seam's existing shape (`answers: {[question text]: string | string[]}` — verified identical in the hub adapter source). |
-| D5 | On `409 conflict` at ask creation: read the project's pending ask from the next poll's `asks[]`; if its `questions` deep-equal ours → **adopt** its `askId` and await its answer; else cancel it and re-create | After a daemon restart the lane re-asks the same fork (canonical re-materialization rule) — adopting avoids a duplicate question on the phone; a mismatched stale ask is superseded by cancel+recreate. Deep-equal = JSON.stringify equality after stripping undefined-valued keys. |
+| D5 | On `409 conflict` at ask creation: read the project's pending ask from the next poll's `asks[]`; if its `questions` deep-equal ours → **adopt** its `askId` and await its answer; else cancel it and re-create. Deep-equal = stringify equality after **recursively sorting object keys** and stripping undefined-valued keys | After a daemon restart the lane re-asks the same fork (canonical re-materialization rule) — adopting avoids a duplicate question on the phone; a mismatched stale ask is superseded by cancel+recreate. Key-order-insensitive comparison is load-bearing (refuter finding): `WireAsk.questions` round-trips through a Postgres **jsonb** column, which does not preserve key order — raw `JSON.stringify` equality would fail on identical questions and silently turn every restart into cancel+recreate. |
 | D6 | One shared poll loop per adapter: `GET /api/spokes/poll?since=<cursor>` with a **durable cursor** at `<stateDir>/hub-cursor.json`; cold start `since="0"`; consume `answer_given` (resolve pending ask) and `ask_cancelled` (reject/notify holder); ignore every other type; errors back off 1s→60s and never reject | Mirrors the hub narrator's own durable-consumer-cursor design. `since="0"` cold start replays the spoke's history once (spoke-scoped, 100/page, drains naturally) — a "start from now" cursor was rejected because the hub has no tail API and an invented high cursor would permanently skip real events. `asks[]` in the response is used only for D5 adoption, not as an event source. |
 | D7 | `daemon/config.js` is rewritten: the daemon boots from `hub.json` (missing → exit 2, remedy `autopilot enroll`) + discovery (spec 03, re-run every start, registrations refreshed); `config.json` demotes to **optional overrides** — per-project `{devServerCommand, tunnelCommand, pollSeconds}` keyed by project name, host-level `{specPluginRoot, pluginPaths, reposRoot}` | Discovery-at-boot makes fleet ops "clone + restart" and self-heals the `projects: []` class of silence. Defaults derived from the plugin checkout itself: `specPluginRoot = <checkout>/spec`, `pluginPaths = [<checkout>/spec, <checkout>/git]` where `<checkout> = path.resolve(__dirname, '../..')` — the values every box previously hand-typed were always these. |
 | D8 | `autopilotd` gains `--hub-config <path>` (default `~/.config/autopilot/hub.json`); the preflight fixture becomes `fixtures/preflight-hub.json` + a grounded fixture repo `fixtures/repos/demo/.claude/spec.config.json`; `.claude/spec.config.json`'s `bootCommand` updated to pass `--hub-config` | The boot leg (`--check --hold`) must keep passing offline in CI where no real `~/.config` exists. Preflight scans (fs-only) but performs **no** network registration — registration happens only on real start. |
-| D9 | Auth-shaped stage failures skip the Fable repair pass and halt immediately with `report(project, 'lane_halted', {reason: '🔑 <machine> needs `claude login`'})`; detection is a case-insensitive pattern list over the thrown/reported error text: `/authentication|unauthorized|oauth|api key|401|logged? ?out|login/i` | The fleet runs on Claude subscriptions (2026-08-10 ruling — no cost cap; the subscription is the ceiling). Burning a Fable repair on an auth failure wastes a pass that cannot succeed; `lane_halted` is narrator-posted so the phone sees exactly one 🔑 line. Subscription-limit exhaustion already classifies `retryable` (SDK throw) and keeps the existing 30s→15min backoff — auto-resumes when the window resets, log-only by design. |
+| D9 | Auth-shaped stage failures skip the Fable repair pass and halt immediately with `report(project, 'lane_halted', {reason: '🔑 <machine> needs `claude login`'})`; detection runs over the **stage failure's error message only** (the message of the error the SDK session rejected/halted with — never narration, transcript, or stage output), case-insensitive, anchored tokens: `/\bauthenticat|\bunauthorized\b|\boauth\b|\bapi key\b|\blogged ?out\b|(^|\s)\/login\b|\b(http|status|code)\s*:?\s*401\b/i` | The fleet runs on Claude subscriptions (2026-08-10 ruling — no cost cap; the subscription is the ceiling). Burning a Fable repair on an auth failure wastes a pass that cannot succeed; `lane_halted` is narrator-posted so the phone sees exactly one 🔑 line. Bare `401`/`login` were the loosest tokens — an error citing "line 401" or a path like `tests/login-page.test.js` would halt a healthy lane with 🔑; the anchors cost nothing on the observed CLI phrasing ("OAuth token has expired · Please run /login" matches via both `oauth` and `/login`). Subscription-limit exhaustion already classifies `retryable` (SDK throw) and keeps the existing 30s→15min backoff — auto-resumes when the window resets, log-only by design. |
 | D10 | The seam's canonical surface becomes `start · stop · send · report · askButtons · pendingAsk · cancelAsk` | One additive method; recorded in Canonical Delta. A future adapter (Slack, dashboard) implements the same seven. |
 
 ## File Plan
@@ -54,8 +55,10 @@ zero hand-written config, and messages appear in the hub-owned Telegram topics.
 | autopilot/fixtures/repos/demo/.claude/spec.config.json | CREATE | scripts | grounded fixture repo for preflight discovery (D8) |
 | .claude/spec.config.json | MODIFY | other | bootCommand passes `--hub-config autopilot/fixtures/preflight-hub.json` (D8) |
 | autopilot/.claude-plugin/plugin.json | MODIFY | doctrine | version bump (major behavior change) + description changelog |
+| autopilot/fixtures/preflight-config.json | DELETE | scripts | superseded by preflight-hub.json (D8) |
+| tests/autopilot/preflight.test.js | MODIFY | tests | rewire pins from `--config`/botToken shape to `--hub-config` + fixture repo; AC-20260810-04-12 |
 | tests/autopilot/hub-adapter.test.js | CREATE | tests | AC-20260810-04-1 … -7 |
-| tests/autopilot/config.test.js | MODIFY | tests | AC-20260810-04-8, -9; direct-mode cases removed |
+| tests/autopilot/config.test.js | MODIFY | tests | AC-20260810-04-8, -9, -12 (injected-transport leg); direct-mode cases removed |
 | tests/autopilot/lane.test.js | MODIFY | tests | AC-20260810-04-10, -11; adapter fake gains `report` |
 
 ## Contracts
@@ -73,7 +76,7 @@ createHubAdapter({
   async send(project, text),           // narration event; never throws (D3)
   async report(project, type, payload),// typed event; never throws (D3)
   async askButtons(project, ask),      // resolves {answers}; no timeout (D4/D5)
-  pendingAsk(project),                 // → the pending ask's questions | null
+  pendingAsk(project),                 // signature + return shape identical to the deleted telegram adapter (D2)
   async cancelAsk(project),            // cancels via the hub; resolves when done
 }
 ```
@@ -112,8 +115,10 @@ with lanes built from `discoverRepos()` output merged with per-project overrides
 - **Shutdown**: `lane.stop()` semantics unchanged; `adapter.stop()` aborts the in-flight
   poll (`AbortController`), flushes the cursor, resolves. Double-signal force-exit
   unchanged.
-- **stage_started/idle/backoff narration** continues via `send()` — durable event log
-  only; the phone deliberately sees finished/halted/asks/wrap-ups (hub posting policy).
+- **Idle/backoff narration** continues via `send()`; stage starts go typed via
+  `report('stage_started', {stage})` — both durable-log-only (the hub narrator posts
+  neither); the phone deliberately sees finished/halted/asks/wrap-ups (hub posting
+  policy).
 
 ## Acceptance Criteria
 
@@ -123,7 +128,8 @@ with lanes built from `discoverRepos()` output merged with per-project overrides
   SYSTEM SHALL resolve anyway and log — never reject → tests/autopilot/hub-adapter.test.js
 - **AC-20260810-04-2**: WHEN `askButtons` POSTs and the hub answers
   `201 {askId: 'ask_1'}` and a later poll delivers `answer_given` with
-  `{askId: 'ask_1', answers: {'Deploy?': 'Later'}}` THE SYSTEM SHALL resolve
+  `{askId: 'ask_1', answers: {'Deploy?': 'Later'}, answeredBy: 7214666699}` (the
+  real three-field wire payload, A2) THE SYSTEM SHALL resolve
   `{answers: {'Deploy?': 'Later'}}` → tests/autopilot/hub-adapter.test.js
 - **AC-20260810-04-3**: WHEN ask creation answers `409` and the next poll's `asks[]`
   carries a pending ask for the project with deep-equal `questions` THE SYSTEM SHALL
@@ -154,16 +160,19 @@ with lanes built from `discoverRepos()` output merged with per-project overrides
   `{pollSeconds: 60, devServerCommand: 'npm run dev'}` THE SYSTEM SHALL apply them to
   the `prax` lane only; an override key naming no discovered project SHALL throw an
   Error naming the key and the repos root (typo guard) → tests/autopilot/config.test.js
-- **AC-20260810-04-10**: WHEN a stage fails with error text matching the D9 auth pattern
-  (e.g. `"OAuth token has expired · Please run /login"`) THE SYSTEM SHALL skip the
-  repair pass and halt with one `report(project, 'lane_halted', {reason})` whose reason
-  contains `🔑`; a non-auth failure SHALL CONTINUE TO get exactly one Fable repair pass
-  before halting → tests/autopilot/lane.test.js
+- **AC-20260810-04-10**: WHEN a stage fails with an error message matching the D9 auth
+  pattern (e.g. `"OAuth token has expired · Please run /login"`) THE SYSTEM SHALL skip
+  the repair pass and halt with one `report(project, 'lane_halted', {reason})` whose
+  reason contains `🔑`; a failure whose message contains only unanchored look-alikes
+  (literal check: `"assertion failed at line 401 in tests/login-page.test.js"`) SHALL
+  classify non-auth; a non-auth failure SHALL CONTINUE TO get exactly one Fable repair
+  pass before halting → tests/autopilot/lane.test.js
 - **AC-20260810-04-11**: WHEN a stage completes THE SYSTEM SHALL emit
   `report(project, 'stage_finished', {stage})` where `stage` carries the action, path,
-  and cost line, and WHEN the lane parks THE SYSTEM SHALL emit `lane_halted` with the
-  ask's reason — while `send()` free-text SHALL CONTINUE TO flow for idle/backoff lines
-  → tests/autopilot/lane.test.js
+  and cost line, WHEN a stage starts THE SYSTEM SHALL emit
+  `report(project, 'stage_started', {stage})`, and WHEN the lane parks THE SYSTEM SHALL
+  emit `lane_halted` with the ask's reason — while `send()` free-text SHALL CONTINUE TO
+  flow for idle/backoff lines → tests/autopilot/lane.test.js
 - **AC-20260810-04-12**: WHEN `autopilotd --check --hold --ready-file <p> --hub-config
   autopilot/fixtures/preflight-hub.json` runs offline THE SYSTEM SHALL pass preflight
   (≥1 lane from the fixture repo), write the ready file, and perform zero network calls
@@ -176,18 +185,23 @@ with lanes built from `discoverRepos()` output merged with per-project overrides
   stage_finished/lane_halted/question_asked/ask_cancelled/session_wrapup posted) is as
   read 2026-08-10 in autopilot-hub `src/core/narrator.ts` D3. — **if false:** the D2
   mapping is miscalibrated; re-read the narrator before changing any event choice.
-- A2: `answer_given` payload is `{askId, answers}` with answers keyed by question text
-  (verified in hub `src/telegram/adapter.ts:341-350` and `narrator.test.ts:377`). —
-  **if false:** blocked; the wire has drifted — re-vendor the contract first.
+- A2: `answer_given` payload is `{askId, answers, answeredBy}` with answers keyed by
+  question text (verified against the real write path: hub `src/db/asks.ts:167`
+  persists all three fields; `src/telegram/adapter.ts:341-350` supplies them). The
+  adapter destructures **only** `{askId, answers}` and ignores extra keys — test
+  fixtures MUST include `answeredBy` so they match real wire payloads. — **if false:**
+  blocked; the wire has drifted — re-vendor the contract first.
 - A3: Poll `cursor` semantics: advance only on received rows; `since=0` replays the
   spoke's full (spoke-scoped) history, 100 rows/page, drains across successive polls
   (hub `docs/canonical/api.md` § long-poll). — **if false:** blocked; cursor design
   must be re-derived against the live route.
-- A4: SDK auth failures surface as error text matching D9's pattern list — *unverified*;
-  the pattern is an allowlist of observed CLI phrasings, not an SDK contract. —
-  **if false (an auth failure classifies as plain `failed`):** behavior degrades to
-  today's repair-then-halt, which is safe; extend the pattern list from the observed
-  error text, never loosen `failed` handling itself.
+- A4: SDK auth failures surface as error messages matching D9's anchored pattern list —
+  *unverified*; the pattern is an allowlist of observed CLI phrasings, not an SDK
+  contract. — **if false (an auth failure classifies as plain `failed`):** behavior
+  degrades to today's repair-then-halt, which is safe; extend the pattern list from the
+  observed error text, never loosen `failed` handling itself. — **if the reverse (a
+  healthy lane halts 🔑 on a non-auth error):** tighten or drop the offending token,
+  never delete the rule.
 - A5: Deleting `live.test.js` leaves no other consumer of `daemon/telegram.js`
   (grep at build start; `bin/autopilotd` is rewired in this same spec). — **if false:**
   the extra consumer is in-scope to rewire or the deletion is blocked; stop and consult.

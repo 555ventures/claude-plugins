@@ -61,12 +61,27 @@ Statuses: `open` (accepted, test failing, fix not landed) · `fixed@<version>` �
 | PRAX-20260804-02 | prax gotcha (spec 20260731/04 design — a skeleton named exactly as the surface id claims every region of the mock including the fake iOS status bar, and the fidelity refusal names the `09:44` clock copy rather than the naming collision, reading as a transcription miss) | checklist-gap | design | `tests/skeleton-subset-binding.test.js` | 6.37.0 | pre-contract |
 | JJ-20260801-01 | 04-live-smoke.md D8, Fable consult 2026-08-01 (specs 01–03 shipped CLEAN with a `runtime.inert` declaration that was true when written and became false the moment `autopilot/bin/autopilotd` landed as a bootable entry point — nothing re-validated the exemption, so this repo's one executed-verification gate was silently off for three consecutive reviews; the instance is fixed in 04-live-smoke.md D2–D4, this row is the class-level falsifier: a spec whose File Plan adds a bootable entry point under a repo still declaring `runtime.inert` should be a hard finding) | missing-substrate | review | `pre-contract` — specs/20260801/04-live-smoke.md Rationale + D2–D4 (instance fix; the class-level check itself has no repro test yet — fix on its own evidence per D8) | open | — |
 | JJ-20260808-01 | spec-05 review session 2026-08-08 (review.md Phase 0 step 8 documents the pre-panel hard-stop verdict invocation as "no `--workflow` — the derivation reaches GATE_RED from the manifest alone", but verdict.js:60 exits 2 (usage) whenever `--workflow` is absent under the review profile — the documented contract is unimplementable, and the 05 review's GATE_RED row was only ledgered by hand-crafting a stub workflow file, a seam every future aborted review re-pays) | workflow-defect | review | `tests/verdict-gatered-no-workflow.test.js` | open | — |
+| UPWELL-20260810-01 | UpWell `[plugin]` gotcha (spec 20260731/04, build + review 2026-08-10 — SIX severed-chain defects in one spec: always-false render condition, computed number hardcoded null at its one render site, defer-time write rebuilt away by settle, orphaned caller behind a too-narrow filter, heatmap whose only production producer pinned null, ranked list never sorted; every File Plan row implemented faithfully, every AC green, only the panel caught them). Holistic disposition: the reporter's Wiring Plan artifact + wiring-matrix leg + verdict entry REJECTED as additive (the chain already lives in the Decision's prose); the mis-aim is the AC-shape rule — an AC may pin an intermediate hop, so the terminal observable has no observer. Fix: cross-file Decisions must carry ≥1 AC asserting the chain's terminal observable fed by the production path (fixture-fed ≠ terminal); the existing ac-matrix leg then carries it with zero new machinery | checklist-gap | plan | `tests/ac-terminal-observable.test.js` | 6.50.0 | prose(AC-shape rule tightening in plan.md; the existing ac-matrix leg mechanically carries terminal-observable ACs, so no new checker exists to point at) |
+| UPWELL-20260810-02 | UpWell `[plugin]` gotcha (spec 20260807/01, review interrupted 2026-08-07 blocked solely on a red CI leg, resumed 2026-08-09: four later specs had landed on main, so `git diff <pre-build>..HEAD` carried 27 files — 26 from other specs, two not yet reviewed — an unreviewable blob that stalls the spec or launders unreviewed code through its panel; host recovered by hand with a detached frozen worktree + per-hunk drift attribution). In-place fix, no new doctrine: wf-review detects HEAD != the spec's last commit at start and derives the frozen review base itself. The same gotcha's second gap (verdict.js requires `--workflow` on the review profile, contradicting review.md's documented no-workflow hard-stop) is JJ-20260808-01 — second occurrence, corroboration noted here | workflow-defect | review | `tests/review-frozen-base.test.js` | 6.50.0 | mechanism(spec/workflows/src/wf-review.body.js) |
 
 ## Rejected findings
 
 Dedupe stamps for gotcha/escape-sourced findings dispositioned `rejected` — the next sweep
 matches on the ID/signature here and skips them. Corroboration from a second host reopens.
 
+- **CROSS-20260810-R1** (JJ report 2026-08-10, upwell spec 20260731/04 session: "build
+  worktree lifecycle is create-only — merge-back never removes agent worktrees; hosts
+  accumulate stale ones that pollute repo-wide sweeps; doctor should flag them"). Rejected
+  2026-08-10 after re-execution: the mechanism claim does not reproduce — merge-back.sh's
+  `cleanup` subcommand removes the spec worktree + branch and review.md invokes it every
+  merge (upwell, where it runs constantly, has ZERO stale worktrees). The six stale trees
+  measured (hearwell ×4, prax ×2, all `agent-*`, tips merged, dirty) are harness-created
+  Agent-isolation checkouts the harness's auto-clean skipped because they were dirty — not
+  plugin lifecycle output. The systemic damage (verifier false-kills from stale
+  `agent-*` checkouts) is already fixed as CROSS-20260804-01 (6.37.0); what remains is a
+  one-time `git worktree remove --force` on two hosts. A permanent doctor check for a
+  solved failure mode is additive bloat. Reopens if stale worktrees re-accumulate after
+  the one-time sweep, or a post-6.37.0 sweep-pollution defect is recorded.
 - **ZUBU-20260716-01** (zubu-menu escape 2026-07-17, `preventedBy: review-check`): batch
   existence-check in `publishAllCore.ts` treated "not in this batch" as "does not exist"
   for refs legitimately outside the batch; escaped a CLEAN fix-delta review

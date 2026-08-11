@@ -1,7 +1,8 @@
 ---
 date: 2026-08-10
-status: draft
+status: hardened
 risk: T3
+open_markers: 0
 area: autopilot
 design: false
 breaking: false
@@ -28,13 +29,13 @@ plugin-enable → service install → doctor. Done = provisioning a box is one T
 | ID | Decision | One-line rationale |
 |----|----------|--------------------|
 | D1 | systemd --user only; on `process.platform !== 'linux'` every `service` verb exits 2 with the remedy "run `autopilotd` in tmux — launchd support is a recorded deferral (brief 03)" | The fleet is Linux; JJ's Mac is the only darwin box and runs interactive sessions anyway. Building launchd now doubles the surface for zero fleet value. |
-| D2 | Unit written to `~/.config/systemd/user/autopilot.service`: `ExecStart=<process.execPath> <abs path to autopilot/bin/autopilotd>`, `Restart=always`, `RestartSec=30`, `StartLimitIntervalSec=0`, `Environment=PATH=<the installing shell's $PATH>`, `[Install] WantedBy=default.target` | `StartLimitIntervalSec=0` is load-bearing: systemd's default start-limit (5 in 10s) flips a crash-looping unit to permanently `failed` — another flavor of the silence this brief exists to kill. Baking `process.execPath` beats `/usr/bin/env node` because the service PATH is not the shell PATH; the PATH snapshot covers what SDK sessions spawn (git, npm, gates, cloudflared). |
+| D2 | Unit written to `~/.config/systemd/user/autopilot.service`: `StartLimitIntervalSec=0` in the **`[Unit]` section** (moved from `[Service]` to `[Unit]` in systemd 230 — refuter-sourced; `[Service]` placement is at best legacy-compat, at worst silently ignored on current Ubuntu/Debian), `ExecStart=<process.execPath> <abs path to autopilot/bin/autopilotd>`, `Restart=always`, `RestartSec=30`, `Environment=PATH=<the installing shell's $PATH>`, `[Install] WantedBy=default.target` | `StartLimitIntervalSec=0` is load-bearing: systemd's default start-limit (5 in 10s) flips a crash-looping unit to permanently `failed` — another flavor of the silence this brief exists to kill. Baking `process.execPath` beats `/usr/bin/env node` because the service PATH is not the shell PATH; the PATH snapshot covers what SDK sessions spawn (git, npm, gates, cloudflared). |
 | D3 | `service install` = write unit (atomic) → `systemctl --user daemon-reload` → `systemctl --user enable --now autopilot` → `loginctl enable-linger <user>`; `uninstall` = `disable --now` + remove unit + daemon-reload (linger left on); `status` = is-active + linger check + baked-node-path existence + unit-file presence, exit 0 healthy / 1 unhealthy with each failing line naming its remedy; `logs` = exec `journalctl --user -u autopilot -f` passthrough | Linger is the #1 Linux footgun: without it the user manager dies at SSH logout and never starts at boot on a headless box — `enable-linger` needs no root for one's own user. A moved node (nvm/brew upgrade) is detected by `status`/`doctor` with the remedy "re-run autopilot service install". |
 | D4 | All systemd/loginctl calls go through an injected `execImpl` (execFileSync-shaped); unit-file generation is a pure exported function | Test rule: no real systemd in tests (CI and JJ's Mac are darwin); generation is pinned byte-exactly, orchestration is pinned via recorded calls. |
-| D5 | Pidfile lock in `autopilotd` (normal start only, never `--check`): `<stateDir>/autopilotd.lock` written with `O_EXCL` containing the pid; on `EEXIST`, read the pid — if alive (`process.kill(pid, 0)` succeeds) exit 2 naming the pid and remedy, if dead remove and retake; removed on clean shutdown | Under `Restart=always`, a debug daemon in tmux plus the service is now an easy accident — two lanes over one repo means two SDK sessions writing the same worktree. Stale-pid recovery matters precisely because `Restart=always` restarts after crashes that never ran cleanup. |
+| D5 | Pidfile lock in `autopilotd` (normal start only, never `--check`): `<stateDir>/autopilotd.lock` written via `fs.writeFileSync(path, pid, {flag: 'wx'})` (real `O_EXCL` — refuter-executed: second `wx` write throws `EEXIST`); on `EEXIST`, read the pid and branch on **error code, not any-throw**: `process.kill(pid, 0)` succeeding OR throwing `EPERM` = alive (exit 2 naming the pid and remedy — `EPERM` means a live foreign-user process, refuter-executed); throwing `ESRCH` = stale — recover by `unlink` **then a fresh `wx` write**, and an `EEXIST` on that second write means another starter won the race → exit 2 (never an unconditional rewrite). Removed on clean shutdown | Under `Restart=always`, a debug daemon in tmux plus the service is an easy accident — two lanes over one repo means two SDK sessions writing the same worktree. The unlink-then-`wx` recovery closes the refuter-demonstrated TOCTOU: two concurrent starters both seeing a dead pid must not both "rewrite" the lock. Same-user pid-reuse racing the ESRCH check remains accepted residual risk on a single-user box. |
 | D6 | `doctor` — offline checks, one line each, exit 0 all-pass / 1 any-fail, each failure naming its remedy: hub.json present+parseable; reposRoot exists; discovery yields ≥0 repos without error (collision = fail); overrides file (if present) parses and names only discovered projects; plugin enabled (`~/.claude/settings.json` `enabledPlugins["autopilot@555-tools"]` true and the `555-tools` marketplace entry present); Node ≥ floor; lock/daemon liveness (pid in lockfile alive → "daemon running (pid N)"); on linux additionally the D3 service checks. Plus one **network-tolerant** check: `GET <hubUrl>/health` with 5s timeout reporting reachability and clock skew vs the response `Date` header (>60s skew = warn line, never a failure; unreachable = warn, not fail) | Doctor is the "why is this box silent" answer sheet — every historical silence cause (2026-08-10 incident) becomes a named line. Skew is warn-only: enrollment-code TTL confusion is worth a line, but a box with no NTP yet must still pass provisioning. |
-| D7 | `bootstrap --hub <url> --code <code> [--repos-root <dir>] [--machine-name <n>] [--force]` runs: `enroll` (with `--repos-root`, default `~/Projects` per spec 03 D5) → plugin-enable → `service install` (linux; on darwin print the tmux line and continue) → `doctor`; first hard failure stops with that step's own message; every step is individually re-runnable and idempotent, so re-running bootstrap after a fix is always safe | Thin composition over real subcommands (not a monolith): a failure at step 3 must not force a re-enroll that burns a fresh code and mints a duplicate spoke identity. Bootstrap owns only sequencing and the final "what remains manual" print: the `claude` login line. |
-| D8 | Plugin-enable step: read `~/.claude/settings.json`, merge `extraKnownMarketplaces["555-tools"] = {source: {source: "directory", path: <checkout root>}}` (shape copied from a live settings file at build time) and `enabledPlugins["autopilot@555-tools"] = true`, preserving every unknown key, write atomically; already-set is a no-op; unparseable settings = fail with remedy, never overwrite | The Stop hook auto-wires via `plugin.json` `hooks` on enablement — per-repo `.claude/settings.json` surgery is the wrong layer (2026-08-10 finding: the missing enable line was itself a root cause of JJ's silent box). A user-level settings file we cannot parse must never be clobbered. |
+| D7 | `bootstrap --hub <url> --code <code> [--repos-root <dir>] [--machine-name <n>] [--force]` runs: enroll-step → plugin-enable → `service install` (linux; on darwin print the tmux line and continue) → `doctor`; first hard failure stops with that step's own message; every step is individually re-runnable and idempotent. **Enroll-step mechanism (pinned):** bootstrap itself checks `hub.json` existence *before* invoking enroll — present and no `--force` → print the pass line `= already enrolled (<spokeId>)` and skip to the next step (no EnrollError string-matching, no network); absent, or `--force` given → run enroll with the provided flags (`--force` passes through to enroll's documented re-enroll semantics: mints a new spoke identity, overwrites `hub.json`) | Thin composition over real subcommands (not a monolith): a failure at step 3 must not force a re-enroll that burns a fresh code and mints a duplicate spoke identity. The pre-check pin exists because enroll's refusal is exit-2-with-message, not a machine-discriminated error — bootstrap must not parse strings to distinguish "already enrolled" from real failures (refuter finding). |
+| D8 | Plugin-enable step: read `~/.claude/settings.json`, merge `extraKnownMarketplaces["555-tools"] = {source: {source: "directory", path: <checkout root>}}` (shape copied from a live settings file at build time) and `enabledPlugins["autopilot@555-tools"] = true`, preserving every unknown key, write atomically (tmp + rename); already-set is a no-op (no write at all); unparseable settings = fail with remedy, never overwrite. Before writing, re-`stat` the file: if mtime changed since the read, fail with "settings.json changed underneath us — re-run bootstrap". **Accepted residual risk (recorded):** a concurrent Claude Code write landing between the stat and the rename can still be lost — mitigated by the no-op fast path (provisioning boxes rarely have live sessions) and re-runnability | The Stop hook auto-wires via `plugin.json` `hooks` on enablement — per-repo `.claude/settings.json` surgery is the wrong layer (2026-08-10 finding: the missing enable line was itself a root cause of JJ's silent box). A user-level settings file we cannot parse must never be clobbered; the mtime check narrows (not eliminates) the lost-update window Claude Code's own writes create (refuter finding). |
 | D9 | New subcommands live as `daemon/service.js`, `daemon/doctor.js`, `daemon/bootstrap.js` library modules; `bin/autopilot` stays the dispatcher owning argv parsing, usage, and exit rendering (existing `enroll` precedent) | Repo convention: pure lib + thin bin keeps everything unit-testable in-process (§ Test Rules mode 4). |
 
 ## File Plan
@@ -78,12 +79,12 @@ Unit file content (D2), exactly:
 ```ini
 [Unit]
 Description=autopilot spoke daemon
+StartLimitIntervalSec=0
 
 [Service]
 ExecStart={nodePath} {daemonPath}
 Restart=always
 RestartSec=30
-StartLimitIntervalSec=0
 Environment=PATH={pathEnv}
 
 [Install]
@@ -99,10 +100,9 @@ WantedBy=default.target
 - `bootstrap` prints a final report: each step's ✅/⚠ line, then the one manual step —
   `claude` login — with the note that until login, lanes will halt with the 🔑 line
   (spec 04 D9), which is itself phone-visible once the daemon runs.
-- Lock lifecycle: acquire after arg parse, before `mkdirSync(stateDir)`… — order pinned:
-  create stateDir first (lock lives inside it), then acquire, then adapter/lane
-  construction. `--check` never touches the lock (preflight must run beside a live
-  daemon).
+- Lock lifecycle — order pinned: parse args → `mkdirSync(stateDir)` (the lock lives
+  inside it) → `acquireLock` → adapter/lane construction → start. `--check` never
+  touches the lock (preflight must be able to run beside a live daemon).
 - `logs` on linux replaces the process image (spawn with stdio inherit and forward the
   exit code) — a passthrough, not a re-implementation.
 
@@ -111,7 +111,8 @@ WantedBy=default.target
 - **AC-20260810-05-1**: WHEN `renderUnit({nodePath: '/usr/bin/node', daemonPath:
   '/opt/cp/autopilot/bin/autopilotd', pathEnv: '/usr/bin:/bin'})` runs THE SYSTEM SHALL
   return the Contracts unit content byte-exactly with those values substituted
-  (including `StartLimitIntervalSec=0`) → tests/autopilot/service.test.js
+  (including `StartLimitIntervalSec=0` under `[Unit]`, not `[Service]`) →
+  tests/autopilot/service.test.js
 - **AC-20260810-05-2**: WHEN `installService` runs on linux THE SYSTEM SHALL write the
   unit to `~/.config/systemd/user/autopilot.service` then call, in order:
   `systemctl --user daemon-reload`, `systemctl --user enable --now autopilot`,
@@ -144,12 +145,15 @@ WantedBy=default.target
   both and adds the autopilot entry); WHEN the file is unparseable THE SYSTEM SHALL
   fail with a remedy and not write → tests/autopilot/bootstrap.test.js
 - **AC-20260810-05-10**: WHEN the service-install step fails THE SYSTEM SHALL stop,
-  exit non-zero with that step's message, and a re-run SHALL not re-enroll (enroll's
-  existing config-exists refusal short-circuits to a "already enrolled" pass line) →
-  tests/autopilot/bootstrap.test.js
-- **AC-20260810-05-11**: WHEN `acquireLock` finds a lockfile whose pid is alive THE
-  SYSTEM SHALL throw `LockError` carrying that pid; WHEN the pid is dead THE SYSTEM
-  SHALL take the lock (file rewritten with the new pid) → tests/autopilot/lock.test.js
+  exit non-zero with that step's message; WHEN bootstrap re-runs with `hub.json`
+  present and no `--force` THE SYSTEM SHALL print `= already enrolled` and invoke no
+  enroll (and no network) for that step — D7's pre-check, never EnrollError
+  string-matching → tests/autopilot/bootstrap.test.js
+- **AC-20260810-05-11**: WHEN `acquireLock` finds a lockfile whose pid is alive (kill-0
+  succeeds) or foreign (`EPERM`) THE SYSTEM SHALL throw `LockError` carrying that pid;
+  WHEN the pid is dead (`ESRCH`) THE SYSTEM SHALL unlink and retake via a fresh
+  `wx` write; WHEN that fresh `wx` write throws `EEXIST` (a racing starter won) THE
+  SYSTEM SHALL throw `LockError`, never overwrite → tests/autopilot/lock.test.js
 - **AC-20260810-05-12**: WHEN `autopilotd` starts normally THE SYSTEM SHALL hold the
   lock and release it on SIGTERM shutdown; WHEN started with `--check` THE SYSTEM SHALL
   CONTINUE TO run preflight without creating or touching the lockfile →
@@ -174,9 +178,18 @@ WantedBy=default.target
   the build worker copies the exact shape from a live file, not from this spec's
   paraphrase. — **if false / shape differs on a fresh machine:** blocked; verify against
   a clean Claude Code install before writing.
-- A4: `process.kill(pid, 0)` throws `ESRCH` for dead pids and succeeds for live ones
-  (Node documented) — pid-reuse racing the check is accepted as tolerable residual risk
-  for a single-user box. — **if false:** unreachable; documented Node behavior.
+- A4: `process.kill(pid, 0)` throws `ESRCH` for dead pids, `EPERM` for live
+  foreign-user pids, and succeeds for live same-user ones. **Executed 2026-08-10**
+  (refuter checks): self → no throw; dead pid → `ESRCH`; pid 1 → `EPERM`. D5 branches
+  on the code, treating only `ESRCH` as stale. Same-user pid-reuse racing the check is
+  accepted residual risk on a single-user box. — **if false:** unreachable; evidence
+  recorded.
+- A6: systemd claims (`StartLimitIntervalSec` placement in `[Unit]`, bare `autopilot`
+  implying `.service`, `WantedBy=default.target` for user units, rootless
+  `enable-linger`) are documentation-sourced and **unverifiable on this darwin
+  machine**; the first Linux install is the executed check. — **if any false:**
+  `service status`/`doctor` surface it as a failing line; fix the generator, never
+  hand-edit installed units.
 - A5: Journald handles log retention (`journalctl --user`); no rotation work needed
   spoke-side. — **if false (distro without persistent user journal):** logs are still
   viewable per-boot; retention is a recorded deferral, not a blocker.

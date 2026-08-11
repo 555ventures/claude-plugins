@@ -47,7 +47,18 @@ if (!args || typeof args !== 'object' || typeof args.specPath !== 'string') {
 //   reproCommand: string,     // host's test-runner prefix (config testCommand — repro file
 //                             // path is appended); '' = verifier agents discover the runner
 //                             // from package.json / CLAUDE.md
+//   frozenRoot: string,       // '' when root HEAD is still the spec's last commit. When the
+//                             // review waited (e.g. on CI) and later specs landed, HEAD has
+//                             // moved and a naive diff sweeps their files in (UPWELL-20260810-02:
+//                             // 27 files, 26 from other specs); the orchestrator detaches a
+//                             // frozen worktree at the spec's last commit and passes its path —
+//                             // reviewers read and diff THERE, so the panel sees exactly this
+//                             // spec's change. Verifier repros still run at the project root:
+//                             // executed evidence must come from the tree that ships.
 // }
+
+// Reviewers diff in the frozen worktree when the orchestrator supplied one ('' = HEAD never moved).
+const REVIEW_ROOT = args.frozenRoot || '.'
 
 const FINDINGS = {
   type: 'object',
@@ -106,8 +117,11 @@ Cover BOTH shape and correctness regardless of emphasis.
 
 Method:
 1. Read the spec at ${args.specPath} (File Plan, Contracts, UI, Decisions, Acceptance Criteria).
-2. Run: git diff ${args.base}. This is the WHOLE change, unscoped from the File Plan — read any
-   new files the diff adds, including any outside the plan's directories.
+2. Run: git -C ${REVIEW_ROOT} diff ${args.base}. This is the WHOLE change, unscoped from the
+   File Plan — read any new files the diff adds, including any outside the plan's directories.${args.frozenRoot ? `
+   Work inside ${args.frozenRoot} for ALL reads and diffs: it is a frozen worktree detached at
+   this spec's last commit, because later specs have since landed on the branch — files outside
+   it may show other specs' unreviewed changes.` : ''}
 3. Check the implementation against the spec and against the project rules you inherit via CLAUDE.md and .claude/rules/.
 4. Cross-check the mechanical pattern sweep below — confirm or dismiss each non-zero row.
 5. Read ${args.reconcilePath} — the scope reconciliation (out-of-plan / unrealized / renamed
@@ -133,7 +147,7 @@ function fixDeltaPrompt() {
 
 Method:
 1. Read ${args.prevFindingsPath} — the prior iteration's surviving findings (JSON).
-2. Run: git diff ${args.base} — this diff is exactly the fix work since that review.
+2. Run: git -C ${REVIEW_ROOT} diff ${args.base} — this diff is exactly the fix work since that review.
 3. For each prior finding: verify the fix actually resolves the claim (read the changed code,
    not the commit message). An unresolved or partially resolved finding goes back into your
    findings output unchanged (same file/line/severity/claim/rule).

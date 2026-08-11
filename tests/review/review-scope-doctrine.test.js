@@ -17,12 +17,13 @@ const reviewMd = read('spec/commands/review.md')
 const buildMd = read('spec/commands/build.md')
 
 test('AC-20260805-01-5: the full-scope reviewer prompt diffs unscoped from base, with no File-Plan directory scoping', () => {
-  assert.doesNotMatch(wfReviewSrc, /git diff \$\{args\.base\}\s*-- <directories from the spec's File Plan>/,
+  assert.doesNotMatch(wfReviewSrc, /git (-C \$\{REVIEW_ROOT\} )?diff \$\{args\.base\}\s*-- <directories from the spec's File Plan>/,
     'the reviewer diff command must no longer be scoped to the File Plan\'s directories — that scoping is ' +
     'exactly the structural gap the confirmed 2026-08 host escape (an out-of-plan waitForExit edit) exploited')
-  assert.match(wfReviewSrc, /git diff \$\{args\.base\}(?!\s*-- <directories)/,
+  assert.match(wfReviewSrc, /git (-C \$\{REVIEW_ROOT\} )?diff \$\{args\.base\}(?!\s*-- <directories)/,
     'the full-scope reviewer prompt must still instruct an unscoped `git diff ${args.base}` — reviewing ' +
-    'the WHOLE change, not a prediction of it')
+    'the WHOLE change, not a prediction of it (the optional -C is the UPWELL-20260810-02 frozen ' +
+    'review root, which changes WHERE the diff runs, never what it is scoped to)')
 })
 
 test('AC-20260805-01-5: wf-review references args.reconcilePath as an additive workflow arg', () => {

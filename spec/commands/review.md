@@ -40,6 +40,18 @@ ride pre-fix leg rows). Every leg named below appends one JSONL row on completio
    fallback is safe and self-checking: `{mergeBack} inspect` and `assert_target_checked_out`
    require `{target}` to equal root HEAD, so a wrong guess fails loudly at merge-back rather
    than diffing/merging silently against the wrong branch.
+   **Frozen-base check (same step):** derive the spec's last commit —
+   `git -C {root} log -1 --format=%H -- {spec path} <File Plan paths>` — and compare to
+   `git -C {root} rev-parse HEAD`. Equal (the overwhelmingly common case): `{frozenRoot} = ''`,
+   done. Unequal, the review waited while later specs landed — a naive `git diff {base}..HEAD`
+   sweeps their files into this spec's panel (measured: 27 files, 26 from other specs). Create
+   `git -C {root} worktree add --detach <mktemp -d>/frozen <that commit>` and pass its path as
+   `{frozenRoot}`: the panel reads and diffs there; every executed leg (gate, smoke, ci) still
+   runs at `{root}` — executed evidence must come from the tree that ships. If any of the
+   spec's own File Plan files differ between the frozen commit and HEAD, the frozen view lies
+   about what ships: drop the frozen worktree and review at HEAD, attributing each foreign
+   hunk to its owning spec. Remove the worktree (`git -C {root} worktree remove --force`)
+   after Phase 1 returns.
 2. **Scope reconciliation (mechanical, first — sub-second):** `scope-reconcile.js`
    (resolved via `spec-paths scope-reconcile`) computes changed-set-vs-File-Plan: run
    `node "$(spec-paths scope-reconcile)" --root {root} --base {base} --spec {spec path} --json > {reconcilePath}`
@@ -126,7 +138,8 @@ Invoke `Workflow {scriptPath: <spec-paths wf-review output>, args: {specPath, ti
 scope: "full", prevFindingsPath: "", diffLoc: <from Phase 0>, reconcilePath: <temp file from
 Phase 0 step 2, or '' on fix-delta scope>,
 patternsPath: <temp file from Phase 0>, hasDriftScript: <config declares driftScript>,
-reproCommand: <config testCommand, or "">}}`. (`testCommand` is the host's test-runner
+reproCommand: <config testCommand, or "">, frozenRoot: <from Phase 0 step 1's frozen-base
+check, '' when HEAD is still the spec's last commit>}}`. (`testCommand` is the host's test-runner
 prefix — the verifier agents append their repro file path to it; when absent, pass `""`
 and they discover the runner themselves.)
 
@@ -366,7 +379,7 @@ get no Next pointer — the verdict line already names the fix step.
 
 - **Never Read `wf-review.js`.** The complete `args` contract is in Phase 1 (`{specPath, tier,
   base, scope, prevFindingsPath, diffLoc, patternsPath, hasDriftScript, reproCommand,
-  reconcilePath}`) and the return shape is `{verdict, survivors, killed, verify, reviewerCount,
+  reconcilePath, frozenRoot}`) and the return shape is `{verdict, survivors, killed, verify, reviewerCount,
   scope, tokens}`.
   The reviewer/verifier fan-out and all control flow are the workflow's concern — its shape
   lives in the script, not in orchestrator context. Invoke it (by `scriptPath`) and act on

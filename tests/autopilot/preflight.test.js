@@ -6,37 +6,51 @@ const path = require('node:path')
 const { spawn, spawnSync } = require('node:child_process')
 const { ROOT, tmpdir } = require('../helpers')
 
-// spec: specs/20260801/04-live-smoke.md — pins AC-20260801-04-1..5, -12, -13 for the
-// autopilotd offline preflight (autopilot/bin/autopilotd, D2/D3/D5). --check/--hold/
-// --ready-file/--state-dir do not exist yet — today's parseArgs recognizes only --config, so
-// every flag added here is silently ignored and main() falls straight through to a real
-// daemon start (network calls, no exit). AC-3/-12/-13 pin behavior that is ALREADY correct
-// today (config-error rendering, default-mode boot, the recursion guard) — they exist here
-// as regression locks so the --check implementation cannot fork or break that shared code
-// path; every other test fails on current code (see per-test consequence messages).
+// spec: specs/20260810/04-hub-wired-daemon.md — rewires this file's pins from the deleted
+// direct-Telegram `--config`/botToken shape (specs/20260801/04-live-smoke.md) to the hub-wired
+// boot: `autopilotd --hub-config <hub.json>` (default D8), reading credential + reposRoot from
+// hub.json and discovering lanes (spec 03) instead of a hand-typed `lanes[]` array. `--config`
+// demotes to optional per-project overrides only (D7) and is not exercised here. Every test
+// below fails on current code: today's parseArgs recognizes only `--config` (botToken shape)
+// and knows nothing of `--hub-config`, hub.json, or discovery — a flag it doesn't recognize is
+// silently ignored, so every invocation here either falls through to a real (non-hub) boot or
+// fails validation against a config shape that no longer exists. The AC-20260801-04-* names on
+// carried-forward tests are preserved for continuity with the behavioral contract they still
+// pin (offline preflight guarantees); AC-20260810-04-12 is the new hub-config-specific pin.
 // Every child process runs with HOME/USERPROFILE pointed at a throwaway tmpdir so a test
 // invocation can never write into a developer's real ~/.config/autopilot.
 
 const AUTOPILOTD = path.join(ROOT, 'autopilot', 'bin', 'autopilotd')
+const PREFLIGHT_HUB_FIXTURE = path.join(ROOT, 'autopilot', 'fixtures', 'preflight-hub.json')
 
 function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-function validConfig(overrides = {}) {
-  return {
-    botToken: '000000000:preflight-fixture-token-not-a-real-credential',
-    supergroupId: -1000000000000,
-    allowedUserIds: [1],
-    specPluginRoot: path.join(ROOT, 'spec'),
-    pluginPaths: [path.join(ROOT, 'spec'), path.join(ROOT, 'git')],
-    lanes: [{ project: 'preflight', root: ROOT, topicId: 1 }],
-    ...overrides,
-  }
+// A minimal spec-grounded repo per specs/20260810/03-repo-discovery.md D1: discovery keys ONLY
+// on `.claude/spec.config.json` existing, so content is irrelevant to preflight construction
+// (the oracle script is never invoked — only its path is asserted to exist).
+function writeGroundedRepo(reposRoot, name) {
+  const root = path.join(reposRoot, name)
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude', 'spec.config.json'), '{}')
+  return root
 }
 
-function writeConfig(dir, cfg) {
-  const p = path.join(dir, 'config.json')
+// hub.json per the Contracts section: credential (hubUrl/token) + reposRoot feed discovery;
+// the other fields round-trip untouched by preflight.
+function writeHubConfig(dir, overrides = {}) {
+  const p = path.join(dir, 'hub.json')
+  const cfg = {
+    hubUrl: 'http://127.0.0.1:1',
+    token: 'preflight-fixture-token-not-a-real-credential',
+    spokeId: 'spoke_preflight',
+    machineName: 'preflight-test',
+    projects: [],
+    contractVersion: 1,
+    enrolledAt: '2026-08-10T00:00:00.000Z',
+    ...overrides,
+  }
   fs.writeFileSync(p, JSON.stringify(cfg))
   return p
 }
@@ -52,19 +66,23 @@ function runAutopilotd(args, opts = {}) {
   })
 }
 
-test('AC-20260801-04-1: autopilotd --check exits 0 and prints the pass notice naming the lane count for a valid config with the SDK installed', () => {
-  const dir = tmpdir('ac1-cfg')
-  const cfgPath = writeConfig(dir, validConfig())
-  const res = runAutopilotd(['--check', '--config', cfgPath])
+test('AC-20260801-04-1 (rewired for specs/20260810/04-hub-wired-daemon.md D7/D8): autopilotd --check --hub-config <hub.json> exits 0 and prints the pass notice naming the lane count for a hub.json whose reposRoot has one discoverable grounded repo, with the SDK installed', () => {
+  const reposRoot = tmpdir('ac1-repos')
+  writeGroundedRepo(reposRoot, 'alpha')
+  const hubDir = tmpdir('ac1-hub')
+  const hubConfigPath = writeHubConfig(hubDir, { reposRoot })
+  const res = runAutopilotd(['--check', '--hub-config', hubConfigPath])
   assert.strictEqual(res.status, 0,
-    `preflight must exit 0 promptly on a valid config so a boot leg/CI check can trust it as a pass — instead of falling through to the real daemon start; got status=${res.status} signal=${res.signal} stderr=${res.stderr}`)
+    `preflight must exit 0 promptly for a hub.json whose reposRoot yields one discovered lane, so a boot leg/CI check can trust it as a pass — instead of falling through to the real daemon start (today's code doesn't recognize --hub-config at all); got status=${res.status} signal=${res.signal} stderr=${res.stderr}`)
   assert.match(res.stderr, /autopilotd: preflight OK — 1 lane, SDK resolved/,
-    `the pass notice must name the lane count and confirm the SDK resolved, or an operator/boot-leg cannot tell preflight actually ran the full check rather than doing nothing; got stderr=${res.stderr}`)
+    `the pass notice must name the lane count discovered from the hub.json reposRoot and confirm the SDK resolved, or an operator/boot-leg cannot tell preflight actually ran the full check rather than doing nothing; got stderr=${res.stderr}`)
 })
 
-test('AC-20260801-04-2: autopilotd --check exits 2 naming the "cd autopilot && npm install" remedy when the daemon sdk module fails to resolve', () => {
-  const cfgDir = tmpdir('ac2-cfg')
-  const cfgPath = writeConfig(cfgDir, validConfig())
+test('AC-20260801-04-2 (rewired for specs/20260810/04-hub-wired-daemon.md D7/D8): autopilotd --check --hub-config <hub.json> exits 2 naming the "cd autopilot && npm install" remedy when the daemon sdk module fails to resolve', () => {
+  const reposRoot = tmpdir('ac2-repos')
+  writeGroundedRepo(reposRoot, 'alpha')
+  const hubDir = tmpdir('ac2-hub')
+  const hubConfigPath = writeHubConfig(hubDir, { reposRoot })
   // Copies bin+daemon into a tree with no node_modules anywhere in its ancestry, so
   // require('../daemon/sdk') resolves to a real sdk.js whose
   // require('@anthropic-ai/claude-agent-sdk') genuinely throws MODULE_NOT_FOUND — the same
@@ -75,94 +93,40 @@ test('AC-20260801-04-2: autopilotd --check exits 2 naming the "cd autopilot && n
     recursive: true,
     filter: (src) => !src.split(path.sep).includes('node_modules'),
   })
-  const res = runAutopilotd(['--check', '--config', cfgPath], { bin: path.join(copyRoot, 'bin', 'autopilotd') })
+  const res = runAutopilotd(['--check', '--hub-config', hubConfigPath], { bin: path.join(copyRoot, 'bin', 'autopilotd') })
   assert.strictEqual(res.status, 2,
-    `an unresolvable SDK must fail the preflight with exit 2 — a lazy require means a bare boot proves nothing (D2); got status=${res.status} signal=${res.signal} stdout=${res.stdout} stderr=${res.stderr}`)
+    `an unresolvable SDK must fail the preflight with exit 2 even when booting from hub.json — a lazy require means a bare boot proves nothing (D2 of spec 04-live-smoke, carried forward by D8); got status=${res.status} signal=${res.signal} stdout=${res.stdout} stderr=${res.stderr}`)
   assert.match(res.stderr, /cd autopilot && npm install/,
     `the error must name the exact remedy command "cd autopilot && npm install" or an operator is left to guess why the daemon won't boot; got stderr=${res.stderr}`)
 })
 
-test('AC-20260801-04-3: autopilotd --check exits 2 with the identical config-missing-field message a normal start produces', () => {
-  const dir = tmpdir('ac3-cfg')
-  const cfg = validConfig()
-  delete cfg.supergroupId
-  const cfgPath = writeConfig(dir, cfg)
-  const res = runAutopilotd(['--check', '--config', cfgPath])
+test('AC-20260810-04-8 (exercised end-to-end via --check): autopilotd --check --hub-config <missing path> exits 2 naming "autopilot enroll" as the remedy', () => {
+  const hubDir = tmpdir('ac8-hub')
+  const hubConfigPath = path.join(hubDir, 'does-not-exist.json')
+  const res = runAutopilotd(['--check', '--hub-config', hubConfigPath])
   assert.strictEqual(res.status, 2,
-    `a config missing a required field must fail preflight with exit 2, matching a normal start's own validation failure; got status=${res.status} signal=${res.signal} stderr=${res.stderr}`)
-  const expected = new RegExp(`autopilotd: config missing "supergroupId" — edit ${escapeRe(cfgPath)}`)
-  assert.match(res.stderr, expected,
-    `preflight must reuse loadConfig's own error text verbatim (field name + config path) rather than a second, preflight-only rendering of the same failure; got stderr=${res.stderr}`)
+    `a missing hub.json must fail preflight with exit 2 exactly as a normal start would (D7) — a freshly cloned box with no hub.json must never silently fall through to constructing lanes; got status=${res.status} signal=${res.signal} stderr=${res.stderr}`)
+  assert.match(res.stderr, /autopilot enroll/,
+    `the error must name "autopilot enroll" as the remedy (AC-20260810-04-8) or an operator on a fresh box has no lead on how to fix a missing hub.json; got stderr=${res.stderr}`)
 })
 
-test('AC-20260801-04-4: autopilotd --check --state-dir <fresh dir> exits 0 promptly and leaves that directory empty', () => {
-  const cfgDir = tmpdir('ac4-cfg')
-  const cfgPath = writeConfig(cfgDir, validConfig())
+test('AC-20260801-04-4 (rewired for specs/20260810/04-hub-wired-daemon.md D7/D8): autopilotd --check --hub-config <hub.json> --state-dir <fresh dir> exits 0 promptly and leaves that directory empty', () => {
+  const reposRoot = tmpdir('ac4-repos')
+  writeGroundedRepo(reposRoot, 'alpha')
+  const hubDir = tmpdir('ac4-hub')
+  const hubConfigPath = writeHubConfig(hubDir, { reposRoot })
   const stateDir = tmpdir('ac4-state')
-  const res = runAutopilotd(['--check', '--config', cfgPath, '--state-dir', stateDir])
+  const res = runAutopilotd(['--check', '--hub-config', hubConfigPath, '--state-dir', stateDir])
   assert.strictEqual(res.status, 0,
-    `preflight against a valid config must exit 0 promptly rather than fall through to starting lanes (which would hang past this test's timeout); got status=${res.status} signal=${res.signal} stderr=${res.stderr}`)
+    `preflight against a valid hub.json must exit 0 promptly rather than fall through to starting lanes (which would hang past this test's timeout); got status=${res.status} signal=${res.signal} stderr=${res.stderr}`)
   assert.deepStrictEqual(fs.readdirSync(stateDir), [],
     `preflight must never create lane-state files under --state-dir — a non-empty directory means "autopilotd --check" has a filesystem side effect an operator or CI gate cannot safely repeat`)
 })
 
-test('AC-20260801-04-5: autopilotd --check exits 2 naming both the missing oracle script and the offending specPluginRoot', () => {
-  const cfgDir = tmpdir('ac5-cfg')
-  const badRoot = tmpdir('ac5-empty-plugin-root')
-  const cfgPath = writeConfig(cfgDir, validConfig({ specPluginRoot: badRoot }))
-  const res = runAutopilotd(['--check', '--config', cfgPath])
-  assert.strictEqual(res.status, 2,
-    `a specPluginRoot with no scripts/spec-status.js must fail preflight with exit 2 — otherwise this only surfaces later as a lane backoff at runtime; got status=${res.status} signal=${res.signal} stderr=${res.stderr}`)
-  assert.match(res.stderr, /scripts[\\/]spec-status\.js/,
-    `the error must name the missing oracle script path, or an operator has no idea what preflight actually checked; got stderr=${res.stderr}`)
-  assert.match(res.stderr, new RegExp(escapeRe(badRoot)),
-    `the error must name the offending specPluginRoot value verbatim so the operator knows which config field to fix; got stderr=${res.stderr}`)
-})
-
-// Reviewed 2026-08-05 against specs/20260801/04-live-smoke.md (execution-grounded review
-// finding): this test used to wrap the spawn below in a 5x best-effort retry loop, because a
-// real (non---check) daemon on a fake Telegram token races its own first oracle cycle's
-// narration attempt against api.telegram.org, and used to crash with an unhandled rejection
-// on the "Unauthorized" reply before SIGTERM ever landed — a genuine 1-in-4 flake. That crash
-// vector is now fixed: autopilot/daemon/lane.js catches every post-oracle error (including
-// narrate/Telegram failures), logs, backs off, and continues instead of exiting. Surviving
-// until SIGTERM regardless of network outcome (offline, or a real 401 from Telegram) is now
-// part of what this test pins, so a single spawn + SIGTERM must deterministically exit 0 —
-// a resurfaced retry loop here would hide that guarantee regressing, not absorb a sanctioned
-// race.
-async function attemptAc12(cfgPath) {
-  const home = tmpdir('ac12-home')
-  const child = spawn(process.execPath, [AUTOPILOTD, '--config', cfgPath], {
-    env: { ...process.env, HOME: home, USERPROFILE: home },
-  })
-  let stderr = ''
-  let exitCode = null
-  let exited = false
-  child.stderr.on('data', (d) => { stderr += String(d) })
-  child.once('exit', (code) => { exited = true; exitCode = code })
-  const start = Date.now()
-  while (!exited && !/telegram:/.test(stderr) && Date.now() - start < 8000) {
-    await new Promise((r) => setTimeout(r, 50))
-  }
-  if (exited) return { ok: false, stderr, exitCode, sawEvidence: /telegram:/.test(stderr) }
-  child.kill('SIGTERM')
-  const deadline = Date.now() + 5000
-  while (!exited && Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 50))
-  }
-  return { ok: exited && exitCode === 0, stderr, exitCode, sawEvidence: true }
-}
-
-test('AC-20260801-04-12: autopilotd started without --check continues to load config, construct lanes, start the adapter long-poll, and install SIGTERM/SIGINT handlers exactly as before, surviving a real Telegram round-trip on a bad token until SIGTERM', async () => {
-  const cfgDir = tmpdir('ac12-cfg')
-  const cfgPath = writeConfig(cfgDir, validConfig())
-  const result = await attemptAc12(cfgPath)
-  assert.ok(result.sawEvidence,
-    `a normal (non---check) start must construct the adapter and begin its getUpdates long-poll, or adding --check support gated that off by default; observed stderr=${result.stderr}`)
-  assert.strictEqual(result.exitCode, 0,
-    `the installed SIGTERM handler must still stop every lane, stop the adapter, and exit 0 on a single deterministic attempt (no retry) — a bad-token Telegram round-trip racing shutdown must no longer crash the daemon with an unhandled rejection, per the lane.js post-oracle error catch; got ${result.exitCode}, stderr=${result.stderr}`)
-})
-
+// Left pinning the pre-hub `--config` flag deliberately (not rewired): the recursion guard
+// fires before any config file — hub.json or otherwise — is read (spec 04-live-smoke D8,
+// unchanged by specs/20260810/04-hub-wired-daemon.md), so it already passes identically under
+// --hub-config and rewiring it would just be a second, redundant pin of the same invariant.
 test('AC-20260801-04-13: autopilotd exits 2 with the recursion-guard message before reading config when AUTOPILOT_SESSION=1 is set, with or without --check', () => {
   for (const extraArgs of [[], ['--check']]) {
     const cfgDir = tmpdir('ac13-cfg')
@@ -171,8 +135,55 @@ test('AC-20260801-04-13: autopilotd exits 2 with the recursion-guard message bef
     const cfgPath = path.join(cfgDir, 'does-not-exist.json')
     const res = runAutopilotd(['--config', cfgPath, ...extraArgs], { env: { AUTOPILOT_SESSION: '1' } })
     assert.strictEqual(res.status, 2,
-      `AUTOPILOT_SESSION=1 must always exit 2 via the recursion guard (args=${JSON.stringify(extraArgs)}), never proceed to a config read that would otherwise succeed or fail on its own; got status=${res.status} signal=${res.signal} stderr=${res.stderr}`)
+      `AUTOPILOT_SESSION=1 must always exit 2 via the recursion guard (args=${JSON.stringify(extraArgs)}), never proceed to a hub.json read that would otherwise succeed or fail on its own; got status=${res.status} signal=${res.signal} stderr=${res.stderr}`)
     assert.match(res.stderr, /AUTOPILOT_SESSION=1/,
       `the recursion-guard message must name AUTOPILOT_SESSION=1 as the cause (args=${JSON.stringify(extraArgs)}), or an operator debugging a stuck nested daemon has no lead; got stderr=${res.stderr}`)
   }
+})
+
+// AC-20260810-04-12: the exact boot-leg invocation smoke.sh runs. Uses the checked-in fixture
+// (autopilot/fixtures/preflight-hub.json + its grounded fixture repo, D8) rather than an
+// ad-hoc tmpdir, because the AC pins that literal path as the offline boot-leg contract. The
+// fixture's hubUrl deliberately resolves nowhere real — a "zero network calls" preflight must
+// complete (write the ready file) well inside a bounded window regardless, whereas an
+// accidental registration attempt against an unroutable host would stall on connect/DNS well
+// past it.
+test('AC-20260810-04-12: autopilotd --check --hold --ready-file <p> --hub-config autopilot/fixtures/preflight-hub.json passes preflight offline with at least one lane from the fixture repo, writes the ready file, and performs zero network calls', async () => {
+  assert.ok(fs.existsSync(PREFLIGHT_HUB_FIXTURE),
+    `the checked-in fixture autopilot/fixtures/preflight-hub.json must exist for the boot leg to have anything to point --hub-config at (specs/20260810/04-hub-wired-daemon.md D8); got missing at ${PREFLIGHT_HUB_FIXTURE}`)
+
+  const home = tmpdir('ac12-home')
+  const readyDir = tmpdir('ac12-ready')
+  const readyFile = path.join(readyDir, 'ready')
+  const child = spawn(process.execPath, [
+    AUTOPILOTD, '--check', '--hold', '--ready-file', readyFile, '--hub-config', PREFLIGHT_HUB_FIXTURE,
+  ], {
+    env: { ...process.env, HOME: home, USERPROFILE: home },
+  })
+  let stderr = ''
+  let exitCode = null
+  let exited = false
+  child.stderr.on('data', (d) => { stderr += String(d) })
+  child.once('exit', (code) => { exited = true; exitCode = code })
+
+  const deadline = Date.now() + 3000
+  while (!fs.existsSync(readyFile) && !exited && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 25))
+  }
+
+  assert.ok(!exited, `--hold must keep the process resident after a passing preflight rather than exiting — an unregistered zero-network preflight has nothing left to do but wait for the signal that ends the hold; got exitCode=${exitCode} stderr=${stderr}`)
+  assert.ok(fs.existsSync(readyFile),
+    `preflight must write --ready-file well within 3s of a completed, fully offline (zero-network) construction — a slow or missing ready file means either a real network attempt stalled the check or --hold/--ready-file/--hub-config wiring is still absent; got stderr=${stderr}`)
+  assert.match(stderr, /autopilotd: preflight OK — \d+ lanes?, SDK resolved/,
+    `the pass notice must confirm at least one lane was discovered from the fixture repo under the fixture's hub.json reposRoot; got stderr=${stderr}`)
+  assert.doesNotMatch(stderr, /0 lanes/,
+    `AC-20260810-04-12 requires >=1 lane discovered from the fixture repo — a fixture that discovers zero lanes means the fixture repo is not actually grounded (missing .claude/spec.config.json); got stderr=${stderr}`)
+
+  child.kill('SIGTERM')
+  const stopDeadline = Date.now() + 2000
+  while (!exited && Date.now() < stopDeadline) {
+    await new Promise((r) => setTimeout(r, 25))
+  }
+  assert.strictEqual(exitCode, 0,
+    `SIGTERM during a --hold must tear down cleanly and exit 0 (spec 04-live-smoke D3, unchanged by the hub-config rewiring); got exitCode=${exitCode} exited=${exited} stderr=${stderr}`)
 })

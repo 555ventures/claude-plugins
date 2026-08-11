@@ -27,10 +27,28 @@
 // (AC-2: exactly one runStage call per Start).
 //
 // Exit codes: n/a — library module, not a CLI entry point.
+//
+// specs/20260810/04-hub-wired-daemon.md D2/D9/D11: the adapter's send()-based free-text
+// narration (idle/backoff/▶/✅/asking lines) is unchanged; report(project, type, payload) is
+// purely additive — stage_started on every stage attempt, stage_finished on every done
+// outcome, lane_halted on every halt (the only typed events the hub narrator posts phone-side
+// besides asks/wrap-ups). D9 also adds one auth-shaped-failure classifier that skips the Fable
+// repair pass and halts straight through with a 🔑 reason, since a repair pass cannot fix an
+// expired/missing credential.
 
 const fs = require('fs')
+const os = require('os')
 const path = require('path')
 const { startSurfaces } = require('./checkpoint')
+
+// D9: anchored auth-failure token list (verbatim from the Decisions table) — bare `401`/`login`
+// substrings were rejected as too loose (a line-number citation or a login-page test path would
+// false-positive); every branch anchors to a word boundary or a leading slash.
+const AUTH_FAILURE_PATTERN = /\bauthenticat|\bunauthorized\b|\boauth\b|\bapi key\b|\blogged ?out\b|(^|\s)\/login\b|\b(http|status|code)\s*:?\s*401\b/i
+
+function isAuthFailure(message) {
+  return AUTH_FAILURE_PATTERN.test(message || '')
+}
 
 const BACKOFF_BASE_MS = 30000
 const BACKOFF_CAP_MS = 900000
@@ -163,11 +181,15 @@ function createLane({ cfg, adapter, runStage, oracle, stateDir, log }) {
     }
   }
 
-  // D5: one repair pass already ran before this is called. Stay parked re-posts the same ask
-  // (the lane never auto-advances); Next spec adds the pick to the memory-only skip set.
-  async function runHalt(pick, detail) {
+  // D5: one repair pass already ran before this is called (except the D9 auth-shaped shortcut,
+  // which calls straight in). Stay parked re-posts the same ask (the lane never auto-advances);
+  // Next spec adds the pick to the memory-only skip set. D2/D11: the hub gets a typed
+  // lane_halted report carrying the ask's reason — this is the only halt line the hub narrator
+  // posts, so it must fire before the (possibly unanswered-forever) ask blocks below.
+  async function runHalt(pick, reason) {
     setState('halted')
-    const questionText = `🚫 ${cfg.project} halted on ${pick.path}: ${detail}`
+    await adapter.report(cfg.project, 'lane_halted', { reason })
+    const questionText = `🚫 ${cfg.project} halted on ${pick.path}: ${reason}`
     for (;;) {
       const answer = await askSingle(questionText, ['➡ Next spec', '⏸ Stay parked'])
       if (/Next spec/.test(answer)) {
@@ -201,9 +223,13 @@ function createLane({ cfg, adapter, runStage, oracle, stateDir, log }) {
   }
 
   async function runStageFor(pick, { model, promptSuffix } = {}) {
-    // D9: one topic message per stage transition, including a repair pass (also a
+    // D9 (spec 03): one topic message per stage transition, including a repair pass (also a
     // transition) — start, done, halt/idle. Same text regardless of promptSuffix/model.
-    await narrate(`▶ ${pick.action} ${pick.path}`)
+    const stageLabel = `${pick.action} ${pick.path}`
+    await narrate(`▶ ${stageLabel}`)
+    // D2/D11 (spec 04): the same transition also gets a typed, durable report — log-only on the
+    // hub side (the narrator doesn't post stage_started), additive to the send() line above.
+    await adapter.report(cfg.project, 'stage_started', { stage: stageLabel })
     setState('running')
     currentAbortController = new AbortController()
     const prompt = promptSuffix ? `${pick.action} ${pick.path} ${promptSuffix}` : `${pick.action} ${pick.path}`
@@ -305,8 +331,20 @@ function createLane({ cfg, adapter, runStage, oracle, stateDir, log }) {
         if (result.outcome === 'done') {
           lastBrief = pick.brief
           await narrate(`✅ ${(result.resultText || '').split('\n')[0]} 💰 $${(result.costUsd || 0).toFixed(2)}`)
+          await adapter.report(cfg.project, 'stage_finished', {
+            stage: `${pick.action} ${pick.path} · $${(result.costUsd || 0).toFixed(2)}`,
+          })
           if (fastPoll) await yieldTick()
           else await sleep(pollMs)
+          continue
+        }
+
+        // D9: an auth-shaped failure message wastes a repair pass that cannot succeed — skip
+        // straight to the halt ladder's park-and-ask, reported with the 🔑 marker so the phone
+        // sees exactly one line naming the box that needs `claude login`.
+        if (isAuthFailure(result.detail)) {
+          await runHalt(pick, `🔑 ${os.hostname()} needs \`claude login\``)
+          fastPoll = true
           continue
         }
 
@@ -317,6 +355,9 @@ function createLane({ cfg, adapter, runStage, oracle, stateDir, log }) {
         if (repair.outcome === 'done') {
           lastBrief = pick.brief
           await narrate(`✅ ${(repair.resultText || '').split('\n')[0]} 💰 $${(repair.costUsd || 0).toFixed(2)}`)
+          await adapter.report(cfg.project, 'stage_finished', {
+            stage: `${pick.action} ${pick.path} · $${(repair.costUsd || 0).toFixed(2)}`,
+          })
           if (fastPoll) await yieldTick()
           else await sleep(pollMs)
           continue

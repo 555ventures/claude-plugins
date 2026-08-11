@@ -3,109 +3,151 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir } = require('../helpers')
+const { tmpdir, ROOT } = require('../helpers')
 
-// spec: specs/20260801/03-lane-engine.md — pins AC-20260801-03-8 for the daemon's per-host
-// config loader (autopilot/daemon/config.js, D3). loadConfig({configPath}) is the pure
-// validation surface: it reads+validates the JSON and throws a descriptive Error naming the
-// problem field/projects and the config path (D3's fail-loud-with-remedy contract); the exit
-// 2 + stderr rendering the AC's literal wording describes is bin/autopilotd's job (a separate
-// file, not under test here — see tests/autopilot/lane.test.js AC-10 for the process-exit
-// boundary). The module does not exist yet, so every test here fails at require() time until
-// autopilot/daemon/config.js lands.
+// spec: specs/20260810/04-hub-wired-daemon.md — pins AC-20260810-04-8, -9, -12 for the
+// daemon's rewritten config loader (autopilot/daemon/config.js, D7). Direct-Telegram config
+// (botToken/supergroupId/allowedUserIds/topicId, AC-20260801-03-8) is deleted per D1 — this
+// file now exercises only loadHubConfig({hubConfigPath, overridesPath}), which boots from
+// hub.json + spec-03 discovery instead of a hand-written config.json. loadHubConfig does not
+// exist yet, so every test here fails at require() time until autopilot/daemon/config.js is
+// rewritten.
 const CONFIG_PATH = path.join(__dirname, '..', '..', 'autopilot', 'daemon', 'config.js')
-const { loadConfig } = require(CONFIG_PATH)
+const { loadHubConfig } = require(CONFIG_PATH)
 
-function validConfig(overrides = {}) {
-  return Object.assign({
-    botToken: 'TEST:TOKEN',
-    supergroupId: -1001234567890,
-    allowedUserIds: [111],
-    specPluginRoot: '/abs/path/spec',
-    pluginPaths: ['/abs/path/spec'],
-    lanes: [
-      { project: 'prax', root: '/abs/prax', topicId: 7 },
-    ],
+function groundRepo(reposRoot, name) {
+  const root = path.join(reposRoot, name)
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude', 'spec.config.json'), '{}')
+  return root
+}
+
+function writeHubJson(dir, overrides = {}) {
+  const hubConfigPath = path.join(dir, 'hub.json')
+  const cfg = Object.assign({
+    hubUrl: 'https://hub.example.test',
+    spokeId: 'spoke_1',
+    token: 'tok_1',
+    machineName: 'test-box',
+    projects: [],
+    reposRoot: path.join(dir, 'repos'),
+    contractVersion: 1,
+    enrolledAt: new Date().toISOString(),
   }, overrides)
+  fs.writeFileSync(hubConfigPath, JSON.stringify(cfg))
+  return { hubConfigPath, cfg }
 }
 
-function writeConfig(dir, cfg) {
-  const configPath = path.join(dir, 'config.json')
-  fs.writeFileSync(configPath, JSON.stringify(cfg))
-  return configPath
+function writeOverrides(dir, obj) {
+  const overridesPath = path.join(dir, 'config.json')
+  fs.writeFileSync(overridesPath, JSON.stringify(obj))
+  return overridesPath
 }
 
-test('AC-20260801-03-8: loadConfig throws naming the missing field and the config path when botToken is absent', () => {
-  const dir = tmpdir('config-ac8-missing')
-  const cfg = validConfig()
-  delete cfg.botToken
-  const configPath = writeConfig(dir, cfg)
+test('AC-20260810-04-8: loadHubConfig throws naming autopilot enroll as the remedy when hub.json is absent', () => {
+  const dir = tmpdir('config-ac8-missing-hub')
+  const missingPath = path.join(dir, 'hub.json')
   assert.throws(
-    () => loadConfig({ configPath }),
+    () => loadHubConfig({ hubConfigPath: missingPath, overridesPath: path.join(dir, 'config.json') }),
     (err) => {
-      assert.match(err.message, /config missing "botToken"/,
-        'the error must name the exact missing field or an operator cannot find the misconfiguration')
-      assert.ok(err.message.includes(configPath),
-        'the error must name the config path (the remedy target) or the operator does not know which file to edit')
-      assert.match(err.message, /^autopilotd: config missing "botToken"/,
-        'AC-20260801-03-8: the error must carry the literal "autopilotd: " prefix before "config missing" or the daemon\'s own error-naming convention silently drops, leaving an operator unable to tell which process emitted the failure')
+      assert.match(err.message, /autopilot enroll/,
+        'a box with no hub.json must be told to run "autopilot enroll" or an operator has no remedy for a silent boot failure')
       return true
     },
-    'loadConfig must fail loud on a missing required field (AC-8) or a misconfigured daemon starts silently broken',
+    'loadHubConfig must fail loud when hub.json is missing (AC-8) or a freshly-cloned box boots with no lanes and no explanation',
   )
 })
 
-test('AC-20260801-03-8: loadConfig throws naming both offending projects when two lanes share a topicId', () => {
-  const dir = tmpdir('config-ac8-topic')
-  const cfg = validConfig({
-    lanes: [
-      { project: 'prax', root: '/abs/prax', topicId: 7 },
-      { project: 'atlas', root: '/abs/atlas', topicId: 7 },
-    ],
-  })
-  const configPath = writeConfig(dir, cfg)
-  assert.throws(
-    () => loadConfig({ configPath }),
-    (err) => {
-      assert.match(err.message, /prax/,
-        'the error must name the first project sharing the topicId or the operator cannot locate the conflict')
-      assert.match(err.message, /atlas/,
-        'the error must name the second project sharing the topicId or the operator cannot locate the conflict')
-      return true
-    },
-    'a duplicate topicId must be rejected (one-ask-per-topic is load-bearing per D3\'s rationale) or two lanes silently share one Telegram topic',
-  )
-})
-
-test('AC-20260801-03-8: loadConfig throws naming both offending projects when two lanes share a root', () => {
-  const dir = tmpdir('config-ac8-root')
-  const cfg = validConfig({
-    lanes: [
-      { project: 'prax', root: '/abs/shared-repo', topicId: 7 },
-      { project: 'atlas', root: '/abs/shared-repo', topicId: 8 },
-    ],
-  })
-  const configPath = writeConfig(dir, cfg)
-  assert.throws(
-    () => loadConfig({ configPath }),
-    (err) => {
-      assert.match(err.message, /prax/,
-        'the error must name the first project sharing the root or the operator cannot locate the conflict')
-      assert.match(err.message, /atlas/,
-        'the error must name the second project sharing the root or the operator cannot locate the conflict')
-      return true
-    },
-    'a duplicate root must be rejected (one-lane-per-repo is load-bearing per D1/D3) or two lanes race writes against the same repo',
-  )
-})
-
-test('AC-20260801-03-8: loadConfig returns a valid config object unchanged when every field is present and no lane conflicts exist', () => {
+test('AC-20260810-04-8: loadHubConfig returns discovered lanes with pollSeconds 300 and checkout-derived specPluginRoot/pluginPaths when no overrides file exists', () => {
   const dir = tmpdir('config-ac8-valid')
-  const cfg = validConfig()
-  const configPath = writeConfig(dir, cfg)
-  const loaded = loadConfig({ configPath })
-  assert.strictEqual(loaded.botToken, cfg.botToken,
-    'a fully valid config must load successfully or every correctly-configured host fails to boot')
-  assert.strictEqual(loaded.lanes.length, 1,
-    'a fully valid config\'s lanes must round-trip intact or lane wiring silently drops projects')
+  fs.mkdirSync(path.join(dir, 'repos'))
+  const reposRoot = path.join(dir, 'repos')
+  const aliceRoot = groundRepo(reposRoot, 'alice')
+  const { hubConfigPath } = writeHubJson(dir, { reposRoot })
+  const missingOverridesPath = path.join(dir, 'config.json') // deliberately never written
+
+  const cfg = loadHubConfig({ hubConfigPath, overridesPath: missingOverridesPath })
+
+  assert.strictEqual(cfg.lanes.length, 1,
+    'the one grounded repo under reposRoot must produce exactly one lane or discovery silently dropped/duplicated a project')
+  const lane = cfg.lanes[0]
+  assert.strictEqual(lane.project, 'alice',
+    'the lane\'s project name must be the discovered directory basename or lane wiring desynced from discovery')
+  assert.strictEqual(lane.root, aliceRoot,
+    'the lane\'s root must be the discovered repo path or the lane points at the wrong checkout')
+  assert.strictEqual(lane.pollSeconds, 300,
+    'a lane with no override must fall back to the documented 300s default or an un-overridden project silently polls at the wrong cadence')
+  assert.strictEqual(cfg.specPluginRoot, path.join(ROOT, 'spec'),
+    'specPluginRoot must derive to <checkout>/spec (D7) or the oracle script path resolves to the wrong tree')
+  assert.deepStrictEqual(cfg.pluginPaths, [path.join(ROOT, 'spec'), path.join(ROOT, 'git')],
+    'pluginPaths must derive to [<checkout>/spec, <checkout>/git] (D7) or a lane\'s session boots with the wrong plugin set')
+})
+
+test('AC-20260810-04-9: loadHubConfig applies an overrides entry to only the named lane', () => {
+  const dir = tmpdir('config-ac9-scoped')
+  const reposRoot = path.join(dir, 'repos')
+  fs.mkdirSync(reposRoot)
+  groundRepo(reposRoot, 'prax')
+  groundRepo(reposRoot, 'atlas')
+  const { hubConfigPath } = writeHubJson(dir, { reposRoot })
+  const overridesPath = writeOverrides(dir, {
+    prax: { pollSeconds: 60, devServerCommand: 'npm run dev' },
+  })
+
+  const cfg = loadHubConfig({ hubConfigPath, overridesPath })
+
+  const prax = cfg.lanes.find((l) => l.project === 'prax')
+  const atlas = cfg.lanes.find((l) => l.project === 'atlas')
+  assert.strictEqual(prax.pollSeconds, 60,
+    'an overridden project must take the overrides file\'s pollSeconds or per-project tuning is silently ignored')
+  assert.strictEqual(prax.devServerCommand, 'npm run dev',
+    'an overridden project must take the overrides file\'s devServerCommand or the lane cannot boot its dev server')
+  assert.strictEqual(atlas.pollSeconds, 300,
+    'an un-overridden lane must keep the 300s default or one project\'s override leaked onto a sibling lane')
+  assert.strictEqual(atlas.devServerCommand, undefined,
+    'an un-overridden lane must carry no devServerCommand or one project\'s override leaked onto a sibling lane')
+})
+
+test('AC-20260810-04-9: loadHubConfig throws naming the offending key and the repos root when an overrides entry names no discovered project', () => {
+  const dir = tmpdir('config-ac9-typo')
+  const reposRoot = path.join(dir, 'repos')
+  fs.mkdirSync(reposRoot)
+  groundRepo(reposRoot, 'prax')
+  const { hubConfigPath } = writeHubJson(dir, { reposRoot })
+  const overridesPath = writeOverrides(dir, {
+    praxx: { pollSeconds: 60 }, // typo — not a discovered project
+  })
+
+  assert.throws(
+    () => loadHubConfig({ hubConfigPath, overridesPath }),
+    (err) => {
+      assert.match(err.message, /praxx/,
+        'the error must name the offending overrides key or an operator cannot find their typo')
+      assert.ok(err.message.includes(reposRoot),
+        'the error must name the repos root that was scanned or an operator cannot tell where discovery looked')
+      return true
+    },
+    'an overrides key naming no discovered project must throw (typo guard, AC-9) or a misspelled project name silently configures nothing',
+  )
+})
+
+test('AC-20260810-04-12: loadHubConfig performs zero network calls (injected-transport leg of the offline preflight guarantee)', () => {
+  const dir = tmpdir('config-ac12-offline')
+  const reposRoot = path.join(dir, 'repos')
+  fs.mkdirSync(reposRoot)
+  groundRepo(reposRoot, 'alice')
+  const { hubConfigPath } = writeHubJson(dir, { reposRoot })
+  const overridesPath = path.join(dir, 'config.json') // never written
+
+  const originalFetch = global.fetch
+  global.fetch = () => {
+    throw new Error('network call attempted during config load — --check\'s offline guarantee is broken')
+  }
+  try {
+    const cfg = loadHubConfig({ hubConfigPath, overridesPath })
+    assert.strictEqual(cfg.lanes.length, 1,
+      'loadHubConfig must still return the discovered lane while global.fetch is a throwing stub, or it is not actually offline (AC-12)')
+  } finally {
+    global.fetch = originalFetch
+  }
 })

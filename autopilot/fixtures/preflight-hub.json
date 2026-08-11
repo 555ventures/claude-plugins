@@ -1,0 +1,10 @@
+{
+  "hubUrl": "http://127.0.0.1:1",
+  "spokeId": "spoke_preflight",
+  "token": "preflight-fixture-token-not-a-real-credential",
+  "machineName": "preflight-fixture",
+  "projects": [],
+  "reposRoot": "autopilot/fixtures/repos",
+  "contractVersion": 1,
+  "enrolledAt": "2026-08-10T00:00:00.000Z"
+}

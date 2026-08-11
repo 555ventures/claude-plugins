@@ -15,6 +15,12 @@ const { tmpdir } = require('../helpers')
 // Gotcha, flush() yields real setImmediate ticks between assertions so a synchronously
 // resolving fake doesn't starve the lane's own promise chain. The module does not exist yet,
 // so every test here fails at require() time until autopilot/daemon/lane.js lands.
+//
+// spec: specs/20260810/04-hub-wired-daemon.md — pins AC-20260810-04-10 (D9 auth-shaped
+// stage-failure classification skips the Fable repair pass) and AC-20260810-04-11 (D2/D11
+// typed report() calls for stage_started/stage_finished/lane_halted, alongside send()'s
+// unchanged idle/backoff free-text role). Neither AC exists in lane.js yet: there is no
+// auth-message classifier and no adapter.report() call anywhere in the module.
 const LANE_PATH = path.join(__dirname, '..', '..', 'autopilot', 'daemon', 'lane.js')
 const AUTOPILOTD_PATH = path.join(__dirname, '..', '..', 'autopilot', 'bin', 'autopilotd')
 const { createLane } = require(LANE_PATH)
@@ -57,11 +63,16 @@ function makeFakeRunStage(impl) {
 // spec: specs/20260807/02-autopilot-dead-surface.md D1/D2 — the fake adapter drops sendPhoto
 // so it matches the post-deletion six-method adapter contract; no lane test ever exercised
 // the screenshot leg (it's gated on cfg.screenshotCommand, which no fixture here sets).
+//
+// spec: specs/20260810/04-hub-wired-daemon.md D2 — the fake adapter gains `report`, the one
+// additive method on the hub-adapter seam. lane.js is the only consumer exercised here; the
+// hub-adapter's own report() wire behavior is pinned in tests/autopilot/hub-adapter.test.js.
 function makeFakeAdapter() {
-  const calls = { send: [], askButtons: [], cancelAsk: [] }
+  const calls = { send: [], askButtons: [], cancelAsk: [], report: [] }
   return {
     calls,
     send: async (project, text) => { calls.send.push({ project, text }) },
+    report: async (project, type, payload) => { calls.report.push({ project, type, payload }) },
     askButtons: (project, ask) => new Promise((resolve, reject) => {
       calls.askButtons.push({ project, ask, resolve, reject })
     }),
@@ -487,4 +498,88 @@ test('AC-20260801-03-13: an oracle that throws (non-zero exit / unparseable JSON
     mock.timers.reset()
     await lane.stop()
   }
+})
+
+test('AC-20260810-04-10: an auth-shaped stage failure skips the Fable repair pass and halts immediately via report(project, "lane_halted", {reason}) containing 🔑, while an unanchored look-alike failure message still gets exactly one Fable repair pass before halting', async () => {
+  const stateDir = tmpdir('lane-ac10-auth')
+  writeState(stateDir, 'prax', '03')
+  const oracle = async () => ({ next: [PICK_A] })
+  const authMsg = 'OAuth token has expired · Please run /login'
+  const { runStage, calls: runCalls } = makeFakeRunStage(async () => ({ outcome: 'failed', detail: authMsg }))
+  const adapter = makeFakeAdapter()
+  const lane = createLane({ cfg: makeCfg(), adapter, runStage, oracle, stateDir, log: () => {} })
+  lane.start()
+  await flush(30)
+  assert.strictEqual(runCalls.length, 1,
+    `AC-10: an auth-shaped failure message (D9 anchored pattern) must skip the Fable repair pass entirely — got ${runCalls.length} runStage calls, expected exactly 1 (the initial failing attempt, no repair)`)
+  assert.strictEqual(lane.state(), 'halted',
+    'AC-10: an auth-shaped failure must halt the lane immediately rather than entering backoff or waiting on a repair result')
+  const halted = adapter.calls.report.find((r) => r.type === 'lane_halted')
+  assert.ok(halted,
+    'AC-10: an auth-shaped halt must emit exactly one report(project, "lane_halted", {reason}) call or the hub narrator has nothing typed to post the 🔑 line from')
+  assert.strictEqual(halted.project, 'prax',
+    'AC-10: the lane_halted report must name the project it belongs to or the hub cannot route it to the right topic')
+  assert.match(halted.payload.reason, /🔑/,
+    'AC-10: the lane_halted reason for an auth-shaped failure must contain the 🔑 marker (D9) or the phone cannot distinguish "needs claude login" from an ordinary halt')
+  await lane.stop()
+
+  const stateDir2 = tmpdir('lane-ac10-lookalike')
+  writeState(stateDir2, 'prax', '03')
+  const lookalikeMsg = 'assertion failed at line 401 in tests/login-page.test.js'
+  const { runStage: runStage2, calls: runCalls2 } = makeFakeRunStage(async () => ({ outcome: 'failed', detail: lookalikeMsg }))
+  const adapter2 = makeFakeAdapter()
+  const lane2 = createLane({ cfg: makeCfg(), adapter: adapter2, runStage: runStage2, oracle, stateDir: stateDir2, log: () => {} })
+  lane2.start()
+  await flush(30)
+  assert.strictEqual(runCalls2.length, 2,
+    `AC-10: an unanchored look-alike failure message ("${lookalikeMsg}") must classify non-auth and still receive exactly one Fable repair pass before halting (D9's anchored-token list, not bare "401"/"login" substrings) — got ${runCalls2.length} runStage calls`)
+  assert.strictEqual(runCalls2[1].model, 'fable',
+    'AC-10: the repair attempt for a non-auth failure must still use model:"fable" (D5, unchanged by D9) or the halt ladder skipped the repair pass it was supposed to take')
+  assert.strictEqual(lane2.state(), 'halted',
+    'AC-10: a non-auth failure must still reach halted after its one repair pass fails, same as before D9')
+  await lane2.stop()
+})
+
+test('AC-20260810-04-11: a starting stage emits report(project, "stage_started", {stage}), a completed stage emits report(project, "stage_finished", {stage}) carrying the action/path/cost line, and a parked lane emits report(project, "lane_halted", {reason}) with the ask\'s detail — while send() free-text keeps flowing separately', async () => {
+  const stateDir = tmpdir('lane-ac11-done')
+  writeState(stateDir, 'prax', '03')
+  const oracle = async () => ({ next: [PICK_A] })
+  const { runStage, calls: runCalls } = makeFakeRunStage(async () => ({ outcome: 'done', resultText: 'ok', costUsd: 1.23 }))
+  const adapter = makeFakeAdapter()
+  const lane = createLane({ cfg: makeCfg(), adapter, runStage, oracle, stateDir, log: () => {} })
+  lane.start()
+  await flush()
+  assert.strictEqual(runCalls.length, 1,
+    'test fixture bug: the stage must actually run before the report() calls it triggers can be checked')
+  const started = adapter.calls.report.find((r) => r.type === 'stage_started')
+  assert.ok(started,
+    'AC-11: a starting stage must emit report(project, "stage_started", {stage}) or the hub has no durable record that the stage began')
+  assert.strictEqual(started.project, 'prax',
+    'AC-11: the stage_started report must name the project or the hub cannot attribute the durable record')
+  assert.match(started.payload.stage, /\/spec:build\s+specs\/20260801\/05-x\.md/,
+    'AC-11: the stage_started payload.stage must name the action and path (AC text: "carries the action, path…") or the durable record does not identify which stage began')
+  const finished = adapter.calls.report.find((r) => r.type === 'stage_finished')
+  assert.ok(finished,
+    'AC-11: a completed stage must emit report(project, "stage_finished", {stage}) or the hub narrator has nothing typed to post the done line from')
+  assert.match(finished.payload.stage, /\/spec:build\s+specs\/20260801\/05-x\.md/,
+    'AC-11: the stage_finished payload.stage must carry the action and path or the phone-visible done line does not say what finished')
+  assert.match(finished.payload.stage, /\$1\.23/,
+    'AC-11: the stage_finished payload.stage must carry the cost line (AC text: "action, path, and cost line") or the phone-visible done line loses the $ figure')
+  await lane.stop()
+
+  const stateDir2 = tmpdir('lane-ac11-halt')
+  writeState(stateDir2, 'prax', '03')
+  const { runStage: runStage2 } = makeFakeRunStage(async () => ({ outcome: 'failed', detail: 'gate red' }))
+  const adapter2 = makeFakeAdapter()
+  const lane2 = createLane({ cfg: makeCfg(), adapter: adapter2, runStage: runStage2, oracle, stateDir: stateDir2, log: () => {} })
+  lane2.start()
+  await flush(30)
+  assert.strictEqual(lane2.state(), 'halted',
+    'test fixture bug: the lane must halt before the lane_halted report can be checked')
+  const halted = adapter2.calls.report.find((r) => r.type === 'lane_halted')
+  assert.ok(halted,
+    'AC-11: a parked lane must emit report(project, "lane_halted", {reason}) or the hub narrator has nothing typed to post the halt line from')
+  assert.match(halted.payload.reason, /gate red/,
+    "AC-11: the lane_halted reason must carry the ask's detail (the repair/failure detail) or the phone-visible halt line is empty")
+  await lane2.stop()
 })

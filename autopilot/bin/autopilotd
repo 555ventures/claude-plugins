@@ -1,66 +1,80 @@
 #!/usr/bin/env node
 'use strict'
-// autopilotd [--config <path>] [--state-dir <path>] [--check] [--hold] [--ready-file <path>]
-// — the autopilot daemon entry point (specs/20260801/03-lane-engine.md D8,
-// specs/20260801/04-live-smoke.md D2/D3/D5). Boots one lane per project from the host config
-// (D3), wires the real Telegram adapter (spec 01) and SDK session runner (spec 02) into each
-// lane (spec 03), and starts every lane's poll-the-oracle loop. The oracle each lane polls is
-// a thin shell to `node <specPluginRoot>/scripts/spec-status.js --root <lane.root> --next
-// --json` (D2) — this file's only "routing" logic is building that one child-process call;
-// the lane itself picks the first admissible entry.
+// autopilotd [--hub-config <path>] [--config <path>] [--state-dir <path>] [--check] [--hold]
+// [--ready-file <path>] — the autopilot daemon entry point (specs/20260801/03-lane-engine.md D8,
+// specs/20260801/04-live-smoke.md D2/D3/D5, specs/20260810/04-hub-wired-daemon.md D7/D8). Boots
+// one lane per discovered project from `hub.json` (`--hub-config`, default
+// ~/.config/autopilot/hub.json) merged with optional per-project overrides (`--config`, default
+// ~/.config/autopilot/config.json) — `daemon/config.js`'s `loadHubConfig` owns discovery (spec
+// 03) and default derivation; this file only renders its errors and exits. Wires the hub adapter
+// (`daemon/hub-adapter.js`, over the hub API — the direct-Telegram adapter is deleted, D1) and
+// the SDK session runner (spec 02) into each lane (spec 03), registers every discovered repo
+// against the hub on every real start (D7 — "registrations refreshed"), and starts every lane's
+// poll-the-oracle loop. The oracle each lane polls is a thin shell to
+// `node <specPluginRoot>/scripts/spec-status.js --root <lane.root> --next --json` (D2) — this
+// file's only "routing" logic is building that one child-process call; the lane itself picks
+// the first admissible entry.
 //
 // Boot order matters (AC-20260801-03-10): the recursion guard and the Node-version floor are
-// checked BEFORE the config file is even read, so a misconfigured/missing config never masks
-// either precondition. Both are fatal — printed to stderr with the remedy, exit 2 — because a
-// daemon that started anyway would either spawn a session inside a session (unbounded
-// recursion, spec 02 D6) or `ERR_REQUIRE_ESM` when session.js lazily requires ./sdk.js for the
-// first real stage.
+// checked BEFORE hub.json is even read, so a misconfigured/missing hub.json never masks either
+// precondition. Both are fatal — printed to stderr with the remedy, exit 2 — because a daemon
+// that started anyway would either spawn a session inside a session (unbounded recursion, spec
+// 02 D6) or `ERR_REQUIRE_ESM` when session.js lazily requires ./sdk.js for the first real stage.
 //
-// --check runs an offline preflight instead of starting lanes (spec 04 D2): validate config,
-// force-resolve `../daemon/sdk` (session.js otherwise loads it lazily, so a bare boot proves
-// nothing about a missing `autopilot/node_modules`), assert the oracle script exists under
-// `specPluginRoot`, construct the adapter and every lane (construction alone performs no I/O),
-// then PASS — without polling Telegram, spawning a session, or touching --state-dir. --hold
-// turns a passing preflight into a resident process that writes --ready-file and blocks until
-// SIGTERM/SIGINT (spec 04 D3) — this, not bare --check, is what the repo's boot leg runs,
-// because a one-shot preflight as smoke.sh's bootCommand would red-gate every review.
+// --check runs an offline preflight instead of starting lanes (spec 04-live-smoke D2, carried
+// forward by D8): validate hub.json + discover lanes (both fs-only, `loadHubConfig` performs no
+// network I/O), force-resolve `../daemon/sdk` (session.js otherwise loads it lazily, so a bare
+// boot proves nothing about a missing `autopilot/node_modules`), assert the oracle script exists
+// under `specPluginRoot`, construct the adapter and every lane (construction alone performs no
+// I/O), then PASS — without registering a repo, polling the hub, spawning a session, or touching
+// --state-dir. --hold turns a passing preflight into a resident process that writes --ready-file
+// and blocks until SIGTERM/SIGINT (spec 04-live-smoke D3) — this, not bare --check, is what the
+// repo's boot leg runs, because a one-shot preflight as smoke.sh's bootCommand would red-gate
+// every review.
 //
-// Deliberately does NOT: retry a broken config (loadConfig's Error already names the field and
-// the remedy — this file only renders it and exits), re-derive what any lane should run next
-// (that's the injected oracle + lane.js, per the v6.20.0 sole-derivation rule), exit non-zero
-// because a lane failed/halted (halt/backoff are steady states a lane lives in forever; only a
-// signal or a boot precondition ends this process), or create --state-dir during --check (the
-// unconditional mkdirSync stays exclusive to the normal start path).
+// Deliberately does NOT: retry a broken hub.json/overrides file (loadHubConfig's Error already
+// names the field and the remedy — this file only renders it and exits), re-derive what any lane
+// should run next (that's the injected oracle + lane.js, per the v6.20.0 sole-derivation rule),
+// exit non-zero because a lane failed/halted (halt/backoff are steady states a lane lives in
+// forever; only a signal, a boot precondition, or a failed registration ends this process),
+// create --state-dir during --check (the unconditional mkdirSync stays exclusive to the normal
+// start path), or register any repo during --check (D8 — the boot leg must stay network-free).
 //
 // Exit codes:
 //   0  preflight passed (without --hold), or normal shutdown on SIGTERM/SIGINT (every lane
 //      stopped, state persisted, adapter stopped) — --hold's teardown on signal also exits 0
-//   1  forced exit — second SIGTERM/SIGINT received while a shutdown is already in progress
-//      (D8's double-kill pattern — a stuck lane never wedges the process)
-//   2  usage / precondition failure — recursion guard, Node version floor, bad flag, invalid
-//      config file, unresolvable SDK, or missing oracle script (message always names the
-//      remedy)
+//   1  forced exit on a second SIGTERM/SIGINT during shutdown (D8's double-kill pattern — a
+//      stuck lane never wedges the process) · a real start's repo registration answered non-2xx
+//      or malformed for some repo (message names the failing repo verbatim, D7 Behavior)
+//   2  usage / precondition failure — recursion guard, Node version floor, bad flag, missing or
+//      invalid hub.json/overrides, an unusable reposRoot, a discovery basename collision,
+//      unresolvable SDK, or missing oracle script (message always names the remedy)
 
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
 const { execFile } = require('child_process')
 
-const { loadConfig } = require('../daemon/config')
+const { loadHubConfig } = require('../daemon/config')
 const { createLane } = require('../daemon/lane')
 const { runStage } = require('../daemon/session')
-const { createTelegramAdapter } = require('../daemon/telegram')
+const { createHubAdapter } = require('../daemon/hub-adapter')
+const { registerRepos } = require('../daemon/discover')
 
 const NODE_FLOOR = { major: 20, minor: 19 }
+const DEFAULT_HUB_CONFIG_PATH = path.join(os.homedir(), '.config', 'autopilot', 'hub.json')
+const DEFAULT_OVERRIDES_PATH = path.join(os.homedir(), '.config', 'autopilot', 'config.json')
 const DEFAULT_STATE_DIR = path.join(os.homedir(), '.config', 'autopilot', 'state')
-const USAGE = 'usage: autopilotd [--config <path>] [--state-dir <path>] [--check] [--hold] [--ready-file <path>]'
+const USAGE =
+  'usage: autopilotd [--hub-config <path>] [--config <path>] [--state-dir <path>] [--check] ' +
+  '[--hold] [--ready-file <path>]'
 
 function fail(message) {
   console.error(message)
   process.exit(2)
 }
 
-// D8: refuses before config is even read — a session spawning a session recurses unbounded
+// D8: refuses before hub.json is even read — a session spawning a session recurses unbounded
 // (spec 02 D6's recursion guard, checked from this side).
 function assertNoRecursion() {
   if (process.env.AUTOPILOT_SESSION === '1') {
@@ -86,15 +100,26 @@ function assertNodeVersion() {
 }
 
 // Hand-rolled --flag parsing (repo convention — no arg library). --check/--hold are boolean;
-// --config/--state-dir/--ready-file each require a value. --hold requires --ready-file (spec 04
-// D3's Contracts) — checked here, at parse time, before any config/SDK work happens.
+// the rest each require a value. --hold requires --ready-file (spec 04-live-smoke D3's
+// Contracts) — checked here, at parse time, before any hub.json/config work happens.
 function parseArgs(argv) {
-  const args = { configPath: undefined, stateDir: DEFAULT_STATE_DIR, check: false, hold: false, readyFile: undefined }
+  const args = {
+    hubConfigPath: DEFAULT_HUB_CONFIG_PATH,
+    overridesPath: DEFAULT_OVERRIDES_PATH,
+    stateDir: DEFAULT_STATE_DIR,
+    check: false,
+    hold: false,
+    readyFile: undefined,
+  }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
-    if (arg === '--config') {
-      args.configPath = argv[i + 1]
-      if (!args.configPath) fail(`autopilotd: --config needs a path — ${USAGE}`)
+    if (arg === '--hub-config') {
+      args.hubConfigPath = argv[i + 1]
+      if (!args.hubConfigPath) fail(`autopilotd: --hub-config needs a path — ${USAGE}`)
+      i++
+    } else if (arg === '--config') {
+      args.overridesPath = argv[i + 1]
+      if (!args.overridesPath) fail(`autopilotd: --config needs a path — ${USAGE}`)
       i++
     } else if (arg === '--state-dir') {
       args.stateDir = argv[i + 1]
@@ -147,24 +172,16 @@ function makeLog(project) {
   return (message) => console.error(`autopilotd[${project}]: ${message}`)
 }
 
-// Shared by both --check's lane construction and the normal start path (D2's Preflight order:
-// load+validate config → require sdk → assert oracle script → construct adapter → construct
-// every lane). Construction alone performs no I/O — only adapter.start()/lane.start() do.
+// Shared by both --check's lane construction and the normal start path (Behavior: load+validate
+// hub.json+overrides → require sdk → assert oracle script → construct adapter → construct every
+// lane). Construction alone performs no I/O — only adapter.start()/lane.start() do.
 function buildAdapterAndLanes(cfg, stateDir) {
-  const topicMap = {}
-  for (const lane of cfg.lanes) topicMap[lane.project] = lane.topicId
-
-  const adapter = createTelegramAdapter({
-    botToken: cfg.botToken,
-    supergroupId: cfg.supergroupId,
-    topicMap,
-    allowedUserIds: cfg.allowedUserIds,
-  })
+  const adapter = createHubAdapter({ credential: cfg.credential, stateDir })
 
   const lanes = cfg.lanes.map((laneCfg) =>
     createLane({
-      // pluginPaths is host-level config (D3); lane.js reads it off its own `cfg` (Contracts),
-      // so it's merged onto the per-lane row here rather than threaded as a separate param.
+      // pluginPaths is host-level (D7); lane.js reads it off its own `cfg` (Contracts), so it's
+      // merged onto the per-lane row here rather than threaded as a separate param.
       cfg: { ...laneCfg, pluginPaths: cfg.pluginPaths },
       adapter,
       runStage,
@@ -177,10 +194,10 @@ function buildAdapterAndLanes(cfg, stateDir) {
   return { adapter, lanes }
 }
 
-// D2/D3: the offline preflight. Forces the real SDK require, asserts the oracle script exists,
-// constructs the adapter and every lane, then PASSes — never polling Telegram, spawning a
-// session, or writing under --state-dir. --hold (validated at parse time to carry
-// --ready-file) turns a PASS into a resident process for smoke.sh's boot leg instead of
+// D8: the offline preflight. Forces the real SDK require, asserts the oracle script exists,
+// constructs the adapter and every lane, then PASSes — never registering a repo, polling the
+// hub, spawning a session, or writing under --state-dir. --hold (validated at parse time to
+// carry --ready-file) turns a PASS into a resident process for smoke.sh's boot leg instead of
 // exiting, so a killed hold never leaves state behind either.
 function runPreflight(cfg, args) {
   try {
@@ -193,8 +210,8 @@ function runPreflight(cfg, args) {
   const scriptPath = path.join(cfg.specPluginRoot, 'scripts', 'spec-status.js')
   if (!fs.existsSync(scriptPath)) {
     fail(
-      `autopilotd: no oracle script at ${scriptPath} — check specPluginRoot ` +
-      `"${cfg.specPluginRoot}" in ${cfg.configPath}`
+      `autopilotd: no oracle script at ${scriptPath} — check the reposRoot/specPluginRoot ` +
+      `resolved from --hub-config ${args.hubConfigPath}`
     )
     return
   }
@@ -231,7 +248,7 @@ function runPreflight(cfg, args) {
 }
 
 // D8: SIGTERM/SIGINT stop every lane (which aborts its in-flight session, cancels any pending
-// topic ask, kills dev-server/tunnel process groups, and persists lane state — all inside
+// ask, kills dev-server/tunnel process groups, and persists lane state — all inside
 // lane.stop()), then stop the adapter's poll loop, then exit 0. A second signal during
 // shutdown forces an immediate exit rather than waiting out a stuck lane.
 function installSignalHandlers(adapter, lanes) {
@@ -251,7 +268,7 @@ function installSignalHandlers(adapter, lanes) {
   process.on('SIGINT', () => shutdown('SIGINT'))
 }
 
-function main() {
+async function main() {
   assertNoRecursion()
   assertNodeVersion()
 
@@ -259,7 +276,7 @@ function main() {
 
   let cfg
   try {
-    cfg = loadConfig(args.configPath ? { configPath: args.configPath } : {})
+    cfg = loadHubConfig({ hubConfigPath: args.hubConfigPath, overridesPath: args.overridesPath })
   } catch (err) {
     fail(err.message)
     return
@@ -267,6 +284,20 @@ function main() {
 
   if (args.check) {
     runPreflight(cfg, args)
+    return
+  }
+
+  // D7: registrations refreshed on every real start (never inside --check's offline path) — a
+  // box that cannot register must say so loudly, not run half-routed (Behavior § Boot order).
+  try {
+    await registerRepos({
+      hubUrl: cfg.credential.hubUrl,
+      token: cfg.credential.token,
+      repos: cfg.lanes.map((lane) => ({ name: lane.project, root: lane.root })),
+    })
+  } catch (err) {
+    console.error(err.message)
+    process.exit(1)
     return
   }
 

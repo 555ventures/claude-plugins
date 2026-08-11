@@ -1,21 +1,29 @@
 #!/usr/bin/env node
 'use strict'
-// config.js — loadConfig({configPath}): load and validate the autopilot daemon's per-host
-// config (specs/20260801/03-lane-engine.md D3, D8). Config lives at
-// ~/.config/autopilot/config.json by default; host-level required fields are botToken,
-// supergroupId, allowedUserIds, specPluginRoot, pluginPaths; each entry in `lanes[]` requires
-// project, root, topicId (devServerCommand/tunnelCommand/pollSeconds are optional). A
-// missing required field, or two lanes sharing a topicId or root, throws an Error
-// naming the field/projects and the config path verbatim (AC-20260801-03-8) — those invariants
-// are load-bearing: one pending ask per topic (spec 01 A2) and one lane per repo (D1). This
-// module never calls process.exit or parses `--config` itself; bin/autopilotd owns argv
-// parsing and the exit-2 + stderr rendering, which keeps this surface pure and unit-testable
-// in-process (§ Test Rules mode 4).
+// config.js — loadHubConfig({hubConfigPath, overridesPath}): boot the autopilot daemon's
+// lane set from hub.json + repo discovery (specs/20260810/04-hub-wired-daemon.md D7),
+// replacing the old hand-written botToken/supergroupId/topicId config (specs/20260801/03
+// -lane-engine.md D3/D8, deleted here per D1 — direct-Telegram mode is retired). hub.json
+// (written by `autopilot enroll`/`autopilot discover`, specs/20260810/03-repo-discovery.md)
+// supplies the hub credential + persisted reposRoot; discoverRepos() re-scans that root on
+// every call so a fleet box self-heals its lane set on restart with zero hand-editing.
+// `overridesPath` (the old config.json path) demotes to OPTIONAL per-project overrides
+// ({devServerCommand, tunnelCommand, pollSeconds} keyed by project name) plus optional
+// host-level overrides (specPluginRoot, pluginPaths, reposRoot) — an overrides file is not
+// required at all. Host-level defaults are derived from the plugin checkout itself
+// (`<checkout>/spec`, `[<checkout>/spec, <checkout>/git]` where `<checkout> =
+// path.resolve(__dirname, '../..')`) since every box previously hand-typed exactly these
+// values. This module never calls process.exit or parses argv itself — bin/autopilotd owns
+// `--hub-config`/exit-2 rendering, which keeps this surface pure and unit-testable in-process
+// (§ Test Rules mode 4). Performs zero network I/O — discovery is fs-only — so `--check`'s
+// offline guarantee holds through this call (AC-20260810-04-12).
 //
-// Deliberately does NOT: apply any default beyond pollSeconds (300s, per the Behavior
-// section's lane-loop default); read secrets from the environment (botToken lives in the
-// config file only, per D3); catch or wrap JSON.parse/fs errors into anything other than a
-// plain Error naming the config path and the remedy.
+// Deliberately does NOT: apply any lane default beyond pollSeconds (300s); read secrets from
+// the environment (the hub credential lives in hub.json only); register anything with the
+// hub (that's `autopilot discover`'s job, not boot's); resolve a reposRoot other than the one
+// already persisted in hub.json (no `--repos-root` flag here — that lives on the discover
+// subcommand); catch DiscoverError — it propagates verbatim so the caller's exit-2 message
+// matches the discovery failure exactly.
 //
 // Exit codes: n/a — library module; see autopilot/bin/autopilotd for the CLI exit-2 wiring.
 
@@ -23,75 +31,92 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 
-const DEFAULT_CONFIG_PATH = path.join(os.homedir(), '.config', 'autopilot', 'config.json')
+const { discoverRepos } = require('./discover')
+const { readCredential } = require('./hub-http')
+
+const DEFAULT_HUB_CONFIG_PATH = path.join(os.homedir(), '.config', 'autopilot', 'hub.json')
+const DEFAULT_OVERRIDES_PATH = path.join(os.homedir(), '.config', 'autopilot', 'config.json')
 const DEFAULT_POLL_SECONDS = 300
 
-const HOST_REQUIRED_FIELDS = ['botToken', 'supergroupId', 'allowedUserIds', 'specPluginRoot', 'pluginPaths']
-const LANE_REQUIRED_FIELDS = ['project', 'root', 'topicId']
+// Host-level override keys live at the top of the overrides object, alongside per-project
+// keys (keyed by discovered project name) — the two namespaces are disjoint because no repo
+// basename may collide with these names (D3's basename-collision guard already refuses that).
+const HOST_OVERRIDE_FIELDS = ['specPluginRoot', 'pluginPaths', 'reposRoot']
 
-function readConfigFile(configPath) {
+function checkoutRoot() {
+  return path.resolve(__dirname, '..', '..')
+}
+
+// Missing file → {} (an overrides file is optional, D7). Present-but-unparsable → a plain
+// Error naming the path and the remedy — the same discipline the deleted config.js applied
+// to config.json before this rewrite.
+function readOverrides(overridesPath) {
   let raw
   try {
-    raw = fs.readFileSync(configPath, 'utf8')
+    raw = fs.readFileSync(overridesPath, 'utf8')
   } catch {
-    throw new Error(`autopilotd: config not found at ${configPath} — create it (see autopilot/config.example.json)`)
+    return {}
   }
   try {
     return JSON.parse(raw)
   } catch (err) {
-    throw new Error(`autopilotd: config at ${configPath} is not valid JSON — ${err.message}`)
+    throw new Error(`autopilotd: overrides file ${overridesPath} is not valid JSON — ${err.message}`)
   }
 }
 
-function assertHostFields(cfg, configPath) {
-  for (const field of HOST_REQUIRED_FIELDS) {
-    if (cfg[field] === undefined) {
-      throw new Error(`autopilotd: config missing "${field}" — edit ${configPath}`)
-    }
+// loadHubConfig: read hub.json (throws naming "autopilot enroll" if absent/invalid) → read its
+// persisted reposRoot → discoverRepos() that root (DiscoverError propagates verbatim, e.g. a
+// stale reposRoot after a directory move) → merge per-project overrides onto each discovered
+// lane, applying host-level overrides (specPluginRoot/pluginPaths/reposRoot) on top of the
+// checkout-derived defaults. An overrides key naming no discovered project is a typo guard
+// (AC-20260810-04-9): it throws naming the key and the reposRoot that was scanned.
+function loadHubConfig({ hubConfigPath = DEFAULT_HUB_CONFIG_PATH, overridesPath = DEFAULT_OVERRIDES_PATH } = {}) {
+  const hubJson = readCredential(hubConfigPath)
+  if (!hubJson) {
+    throw new Error(`autopilotd: no hub.json at ${hubConfigPath} — run "autopilot enroll" first`)
   }
-  if (!Array.isArray(cfg.lanes) || cfg.lanes.length === 0) {
-    throw new Error(`autopilotd: config missing "lanes" — edit ${configPath}`)
-  }
-}
 
-function assertLaneFields(lane, index, configPath) {
-  for (const field of LANE_REQUIRED_FIELDS) {
-    if (lane[field] === undefined) {
-      throw new Error(`autopilotd: config lane ${index} missing "${field}" — edit ${configPath}`)
-    }
-  }
-}
-
-// Cross-lane invariants (AC-20260801-03-8): a shared topicId breaks "one pending ask per
-// topic" (spec 01 A2); a shared root breaks "one lane per repo" (D1). Both name every
-// offending project so the fix is unambiguous.
-function assertNoDuplicateField(lanes, field, configPath) {
-  const seen = new Map()
-  for (const lane of lanes) {
-    const key = lane[field]
-    if (!seen.has(key)) {
-      seen.set(key, lane.project)
-      continue
-    }
-    const first = seen.get(key)
+  const reposRoot = hubJson.reposRoot
+  if (!reposRoot) {
     throw new Error(
-      `autopilotd: config lanes "${first}" and "${lane.project}" share ${field} "${key}" — edit ${configPath}`
+      `autopilotd: hub.json at ${hubConfigPath} has no reposRoot — run "autopilot discover" ` +
+      `(or re-enroll with --repos-root)`
     )
   }
+
+  const discovered = discoverRepos({ reposRoot })
+  const projectNames = new Set(discovered.map((repo) => repo.name))
+
+  const overrides = readOverrides(overridesPath)
+  const hostOverrides = {}
+  const laneOverrides = {}
+  for (const key of Object.keys(overrides)) {
+    if (HOST_OVERRIDE_FIELDS.includes(key)) {
+      hostOverrides[key] = overrides[key]
+      continue
+    }
+    if (!projectNames.has(key)) {
+      throw new Error(
+        `autopilotd: overrides file ${overridesPath} names unknown project "${key}" — ` +
+        `no discovered repo under ${reposRoot} matches (typo? re-run autopilot discover)`
+      )
+    }
+    laneOverrides[key] = overrides[key]
+  }
+
+  const root = checkoutRoot()
+  const specPluginRoot = hostOverrides.specPluginRoot || path.join(root, 'spec')
+  const pluginPaths = hostOverrides.pluginPaths || [path.join(root, 'spec'), path.join(root, 'git')]
+  const resolvedReposRoot = hostOverrides.reposRoot || reposRoot
+
+  const lanes = discovered.map((repo) => ({
+    pollSeconds: DEFAULT_POLL_SECONDS,
+    ...(laneOverrides[repo.name] || {}),
+    project: repo.name,
+    root: repo.root,
+  }))
+
+  return { credential: hubJson, reposRoot: resolvedReposRoot, specPluginRoot, pluginPaths, lanes }
 }
 
-// loadConfig({configPath}): resolves the config path (default ~/.config/autopilot/config.json),
-// reads+parses it, validates host and per-lane required fields plus cross-lane topicId/root
-// uniqueness, and fills in the one documented default (pollSeconds). Returns the validated
-// config with lane defaults applied.
-function loadConfig({ configPath = DEFAULT_CONFIG_PATH } = {}) {
-  const cfg = readConfigFile(configPath)
-  assertHostFields(cfg, configPath)
-  cfg.lanes.forEach((lane, index) => assertLaneFields(lane, index, configPath))
-  assertNoDuplicateField(cfg.lanes, 'topicId', configPath)
-  assertNoDuplicateField(cfg.lanes, 'root', configPath)
-  const lanes = cfg.lanes.map((lane) => ({ pollSeconds: DEFAULT_POLL_SECONDS, ...lane }))
-  return { ...cfg, lanes, configPath }
-}
-
-module.exports = { loadConfig, DEFAULT_CONFIG_PATH, DEFAULT_POLL_SECONDS }
+module.exports = { loadHubConfig, DEFAULT_HUB_CONFIG_PATH, DEFAULT_OVERRIDES_PATH, DEFAULT_POLL_SECONDS }

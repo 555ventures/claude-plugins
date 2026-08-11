@@ -5,7 +5,7 @@
   "testCommand": "node --test",
   "setupCommand": "npm install",
   "runtime": {
-    "bootCommand": "rm -f /tmp/autopilot-preflight.ready && node autopilot/bin/autopilotd --check --hold --ready-file /tmp/autopilot-preflight.ready --config autopilot/fixtures/preflight-config.json --state-dir /tmp/autopilot-preflight-state",
+    "bootCommand": "rm -f /tmp/autopilot-preflight.ready /tmp/autopilot-preflight-overrides.json && node autopilot/bin/autopilotd --check --hold --ready-file /tmp/autopilot-preflight.ready --hub-config autopilot/fixtures/preflight-hub.json --config /tmp/autopilot-preflight-overrides.json --state-dir /tmp/autopilot-preflight-state",
     "readyCheck": "test -f /tmp/autopilot-preflight.ready",
     "readyTimeout": 60,
     "stopSignal": "SIGTERM"

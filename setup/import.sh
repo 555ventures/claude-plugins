@@ -16,11 +16,16 @@ trap 'rm -rf "$STAGE"' EXIT
 echo "📋 Paste your setup block (copied by export.sh), then press Enter:"
 b64=""
 while IFS= read -r line; do
-  [ "$line" = "555-SETUP-END" ] && break
-  b64+="$line"$'\n'
+  line="${line//$'\r'/}"
+  case "$line" in *555-SETUP-END*) break;; esac
+  b64+="$line"
 done
 
-printf '%s' "$b64" | base64 -d | tar -xzf - -C "$STAGE" \
-  || { echo "❌ Could not decode — paste the whole block, including the final 555-SETUP-END line."; exit 1; }
+if ! printf '%s' "$b64" | tr -d ' \t' | base64 -d 2>/dev/null | tar -xzf - -C "$STAGE" 2>/dev/null; then
+  echo "❌ Decode failed — the paste was truncated or mangled (common with very large blocks)."
+  echo "   Easier path if you have ssh access from the source machine:"
+  echo "     bash setup/export.sh $(whoami)@$(hostname)    # one step, no paste"
+  exit 1
+fi
 
 bash "$STAGE/apply.sh"

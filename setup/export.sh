@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# Export THIS machine's Claude Code setup as one paste-able data block.
+# Export THIS machine's Claude Code setup to another machine.
 #
-#   bash export.sh          # copies the block to your clipboard.
-#   On the remote machine:
-#     bash <(curl -fsSL https://raw.githubusercontent.com/555ventures/claude-plugins/main/setup/import.sh)
-#     → paste, press Enter. That's it.
+#   bash export.sh user@host   # ONE step: streams the setup over ssh and
+#                              # applies it there. Nothing else to do.
+#
+#   bash export.sh             # no ssh access? copies a data block to the
+#                              # clipboard; on the remote machine run
+#                              #   bash <(curl -fsSL https://raw.githubusercontent.com/555ventures/claude-plugins/main/setup/import.sh)
+#                              # and paste when prompted.
 #
 # Works for any user: it reads whatever config the current machine has
 # (settings, statusline, hooks, user-scope MCP servers) and bundles it.
@@ -78,6 +81,16 @@ cat <<'DONE'
 DONE
 APPLY
 chmod +x "$STAGE/apply.sh"
+
+# --- ssh mode: stream + apply in one step ---------------------------------
+if [ $# -ge 1 ]; then
+  TARGET="$1"
+  echo "🚀 Streaming setup to $TARGET ..."
+  tar -czf - -C "$STAGE" . \
+    | ssh "$TARGET" 'D=$(mktemp -d) && tar -xzf - -C "$D" && bash "$D/apply.sh" && rm -rf "$D"'
+  echo "✅ Setup applied on $TARGET."
+  exit 0
+fi
 
 # --- emit one paste-able data block ---------------------------------------
 # Pure data: base64 tarball + end marker. import.sh reads until the marker.

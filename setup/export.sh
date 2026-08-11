@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Export THIS machine's Claude Code setup as one paste-able block.
+# Export THIS machine's Claude Code setup as one paste-able data block.
 #
-#   bash export.sh          # prints a block — copy it, paste into the remote
-#                           # machine's terminal, press enter. That's it.
+#   bash export.sh          # copies the block to your clipboard.
+#   On the remote machine:
+#     bash <(curl -fsSL https://raw.githubusercontent.com/555ventures/claude-plugins/main/setup/import.sh)
+#     → paste, press Enter. That's it.
 #
 # Works for any user: it reads whatever config the current machine has
 # (settings, statusline, hooks, user-scope MCP servers) and bundles it.
@@ -77,37 +79,36 @@ DONE
 APPLY
 chmod +x "$STAGE/apply.sh"
 
-# --- emit one paste-able block -------------------------------------------
-B64=$(tar -czf - -C "$STAGE" . | base64)
+# --- emit one paste-able data block ---------------------------------------
+# Pure data: base64 tarball + end marker. import.sh reads until the marker.
+BLOCK=$(tar -czf - -C "$STAGE" . | base64; echo "555-SETUP-END")
 
-BLOCK=$(cat <<EOF
-D=\$(mktemp -d) && base64 -d <<'CCSETUP' | tar -xzf - -C "\$D" && bash "\$D/apply.sh"
-$B64
-CCSETUP
-EOF
-)
+IMPORT_CMD='bash <(curl -fsSL https://raw.githubusercontent.com/555ventures/claude-plugins/main/setup/import.sh)'
 
 # Auto-copy to clipboard when possible (macOS pbcopy / Linux xclip|wl-copy)
 if command -v pbcopy >/dev/null; then
   printf '%s\n' "$BLOCK" | pbcopy
-  echo "✅ Setup block copied to clipboard ($(printf '%s' "$BLOCK" | wc -c | tr -d ' ') bytes)."
-  echo "   Paste into the remote machine's terminal and press enter."
-  echo "   (Remote prereqs: jq + git — brew install jq git)"
 elif command -v wl-copy >/dev/null; then
   printf '%s\n' "$BLOCK" | wl-copy
-  echo "✅ Setup block copied to clipboard. Paste into the remote terminal."
 elif command -v xclip >/dev/null; then
   printf '%s\n' "$BLOCK" | xclip -selection clipboard
-  echo "✅ Setup block copied to clipboard. Paste into the remote terminal."
 else
   cat <<EOF
 
-# ───────────────────────────────────────────────────────────────
-# Copy EVERYTHING between the lines, paste into the remote
-# machine's terminal, press enter.
-# Prereqs there: jq + git  (brew install jq git)
-# ───────────────────────────────────────────────────────────────
+# ── Copy EVERYTHING between the lines (no clipboard tool found) ──
 $BLOCK
-# ───────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────
 EOF
+  echo "Then on the remote machine, run:"
+  echo "  $IMPORT_CMD"
+  echo "and paste when prompted. (Remote prereqs: jq + git)"
+  exit 0
 fi
+
+cat <<EOF
+✅ Setup block copied to clipboard ($(printf '%s' "$BLOCK" | wc -c | tr -d ' ') bytes).
+
+On the remote machine, run:
+  $IMPORT_CMD
+and paste when prompted, then press Enter. (Remote prereqs: jq + git)
+EOF

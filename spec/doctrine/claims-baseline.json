@@ -5,7 +5,7 @@
       "orphans": 1
     },
     "spec/commands/build.md": {
-      "lines": 312,
+      "lines": 316,
       "orphans": 3
     },
     "spec/commands/design.md": {
@@ -13,7 +13,7 @@
       "orphans": 1
     },
     "spec/commands/doctor.md": {
-      "lines": 368,
+      "lines": 382,
       "orphans": 3
     },
     "spec/commands/enforce.md": {
@@ -29,7 +29,7 @@
       "orphans": 5
     },
     "spec/commands/genesis-design.md": {
-      "lines": 245,
+      "lines": 246,
       "orphans": 6
     },
     "spec/commands/genesis-explore.md": {
@@ -37,19 +37,19 @@
       "orphans": 2
     },
     "spec/commands/init.md": {
-      "lines": 545,
+      "lines": 551,
       "orphans": 6
     },
     "spec/commands/plan.md": {
-      "lines": 295,
-      "orphans": 5
+      "lines": 304,
+      "orphans": 6
     },
     "spec/commands/release.md": {
-      "lines": 200,
+      "lines": 204,
       "orphans": 12
     },
     "spec/commands/review.md": {
-      "lines": 400,
+      "lines": 414,
       "orphans": 0
     },
     "spec/commands/sketch.md": {
@@ -77,5 +77,5 @@
       "orphans": 4
     }
   },
-  "totalLines": 5428
+  "totalLines": 5480
 }

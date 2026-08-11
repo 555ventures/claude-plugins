@@ -16,7 +16,8 @@ legacy `status.json` without the `explore` field), it runs the original directio
 MoA panel below. Either way — **one canon, not two**. Same interactive shape as architect:
 the session owns `AskUserQuestion` and writes; `wf-panel` does research + panel.
 
-**Intended model: Fable or Opus** (taste IS the work — the design-stage exception; Opus is the fallback if Fable is unavailable).
+**Intended model: Opus** (taste IS the work — the design-stage exception; shared invariants
+§ Model Placement keeps genesis design-doctrine authoring an Opus seat).
 
 **Setup:** run `spec-paths shared-for genesis-design` and read its output (the shared
 invariants scoped to this command), then run `spec-paths shared-genesis` and
@@ -223,7 +224,7 @@ any line whose slot is empty, add nothing else:
 ⚠️ dissent recorded: {one-phrase summary, one line each}
 📦 {doctrine path} · {tokens path} · {consumed-surface path}
 
-Next: /spec:init — grounds the repo, then invokes /spec:enforce to generate enforcement from design-rules.json
+Next: /spec:atlas (sweep + holistic review of the genesis mocks) → /spec:init — grounds the repo, then invokes /spec:enforce to generate enforcement from design-rules.json
 ```
 
 ## Rules

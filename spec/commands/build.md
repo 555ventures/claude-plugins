@@ -100,8 +100,11 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
 4. Flip `status: hardened → implementing`. Build never writes `build_base` — that field is owned
    solely by `/git:enter-worktree`, which captures the originating branch before entering the
    worktree. If the build is in place, `build_base` is simply absent and `/spec:review`'s
-   merge-back no-ops — but the ledger's `diff` still needs a base, so record
-   `git rev-parse HEAD` now (before any build edit) as this run's diff base for Phase 5.
+   merge-back no-ops — but the diff base still needs a durable record for both the ledger's
+   `diff` (Phase 5) and `/spec:review`'s recovery: before any build edit (the same edit that
+   flips status), write `diff_base: <git rev-parse HEAD>` into the spec frontmatter — the same
+   disk-recovery pattern `build_base` already uses, so a fresh review session on this spec
+   recovers the base from the spec file, never from conversation context.
 
 ## Phase 1 — Run the build
 
@@ -229,7 +232,7 @@ the prior round, consult the retainer immediately rather than dispatching anothe
 After the ceiling or a stalled round, consult the retainer, then escalate to the user.
 
 **Advisory scope check (D9, report-only — never blocks, no new fork):** run
-`node "$(spec-paths scope-reconcile)" --root {root} --base {build_base or pre-build HEAD}
+`node "$(spec-paths scope-reconcile)" --root {root} --base {build_base or diff_base}
 --spec {spec path} --json`. A non-empty `outOfPlan` prints one line — `⚠️ out-of-plan: {list}`
 — pointing at the `out-of-scope-failure` fork row above; it surfaces drift before the
 checkpoint-commit instead of leaving it for review to catch retroactively.
@@ -246,8 +249,9 @@ Checkpoint-commit after the gate is green (and after each earlier green phase if
 ```
 
 `diff` comes from `git diff --shortstat <build_base>..HEAD` (files changed, insertions +
-deletions summed as `loc`); on an in-place build (`build_base` absent) the base is the
-pre-build HEAD recorded at the Phase 0 status flip. It's what makes token costs comparable
+deletions summed as `loc`); on an in-place build (`build_base` absent) the base is
+`diff_base`, written to the spec frontmatter at the Phase 0 status flip. It's what makes
+token costs comparable
 across specs of different sizes. `fastPath` marks a no-workflow build (`runId` omitted,
 `tokens.workflow` written as `null` — same honesty rule as `phase4Repairs`, never `0`). `deviations` = line count of
 the deviations sidecar (0 if absent) — `/spec:review` folds the sidecar's content at close. `phase4Repairs` entries are each repair agent's actual output-token count as the

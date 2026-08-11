@@ -1,6 +1,7 @@
 ---
 date: 2026-08-10
-status: hardened
+status: implementing
+diff_base: ec76afc8df45f7345120e940c376affde31d73ee
 risk: T2                 # doctrine prose + pinned tests; no T3-trigger file touched (doctor/review/build/plan/release/init/genesis-design prose + spec template)
 area: cross-cutting
 design: false

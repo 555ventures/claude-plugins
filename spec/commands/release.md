@@ -26,6 +26,10 @@ claim a protection it hasn't observed executing.
 `$ARGUMENTS` — optional milestone note or version tag (e.g. `v0.4.0` or `briefs 05-07`).
 Recorded in the release manifest and tag; never parsed for behavior.
 
+**Releasing is deliberately user-invoked:** no command's Next pointer and no
+`spec-status --next` derivation ever suggests running this command — the human decides when a
+milestone ships, not the pipeline.
+
 ## Phase 0 — Grounding (first run interviews; later runs read)
 
 1. **Config `release` block** (contract file § Release): `deployCommand` (staging),

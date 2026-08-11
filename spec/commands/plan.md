@@ -64,7 +64,16 @@ in Phase 1.5.
    - **T1** → STOP: "This is T1-shaped — no spec needed. Just ask me to do it; the host's
      gate command gates it and the change diffs against the host's standards docs." Do not
      write a spec file.
-   - **T2/T3** → state the tier and the one-line rubric justification, proceed.
+   - **T3** → state the tier and the one-line rubric justification, proceed.
+   - **T2** → apply shared invariants § Pipeline Entry before proceeding: a spec is written
+     only when the work needs **delegation** (execution large enough that Sonnet workers
+     should do it while Fable only plans) or **durability** (scope spans sessions; the spec
+     is the re-entrant state) — the pipeline is opt-in heavy machinery, not the default path,
+     and tiers only set intensity once inside it. Neither applies → STOP: "This is T2-shaped
+     but needs no delegation or durability — no spec needed. Just ask me to do it; the host's
+     gate command gates it and the change diffs against the host's standards docs." Do not
+     write a spec file. Either applies → state the tier, the rubric justification, and which
+     criterion (delegation/durability) triggered entry, proceed.
 
 ## Phase 1 — Discovery (cold start only)
 

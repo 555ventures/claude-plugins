@@ -32,14 +32,23 @@ makes stale evidence structurally unrepresentable — the fix-delta hole where a
 ride pre-fix leg rows). Every leg named below appends one JSONL row on completion:
 `{"leg":"<name>","exit":<code>,"observed":"<≤120-char counts/enums, never a command string>"}`.
 
-1. Determine the diff base `{target}` (the originating branch the build started from) by
-   reading `build_base:` from the spec frontmatter — `/git:enter-worktree` wrote it there so a fresh
-   review session recovers it from disk, never from conversation context. If `build_base` is
-   absent (an in-place build — or a spec built before this field existed), fall back to
-   `git -C {root} rev-parse --abbrev-ref HEAD` (the root working tree's current branch). The
-   fallback is safe and self-checking: `{mergeBack} inspect` and `assert_target_checked_out`
-   require `{target}` to equal root HEAD, so a wrong guess fails loudly at merge-back rather
-   than diffing/merging silently against the wrong branch.
+**`{root}` is bound here, at first use, and holds through Phases 0–3:** the working tree under
+review — the session's current toplevel (`git rev-parse --show-toplevel`); for a worktree
+build that is the worktree itself. Phase 4 resolves a second, distinctly named symbol,
+`{mainRoot}`, for the steps that structurally need the main tree.
+
+1. Determine the diff base by reading the spec frontmatter, in this recovery order:
+   **`build_base`** (a worktree build — `/git:enter-worktree` wrote it there so a fresh review
+   session recovers the originating branch from disk, never from conversation context) →
+   **`diff_base`** (an in-place build — `/spec:build` wrote this sha before its first edit; the
+   diff is `git diff {diff_base}..HEAD`, and merge-back still no-ops exactly as today's
+   absent-`build_base` path skips it) → **current-branch-name fallback** (legacy specs
+   predating both fields only): `git -C {root} rev-parse --abbrev-ref HEAD` (the root working
+   tree's current branch). `{target}` is the recovered `build_base` (or the branch-name
+   fallback) used as the merge-back target in Phase 4; the fallback is safe and self-checking:
+   `{mergeBack} inspect` and `assert_target_checked_out` require `{target}` to equal root HEAD,
+   so a wrong guess fails loudly at merge-back rather than diffing/merging silently against the
+   wrong branch.
    **Frozen-base check (same step):** derive the spec's last commit —
    `git -C {root} log -1 --format=%H -- {spec path} <File Plan paths>` — and compare to
    `git -C {root} rev-parse HEAD`. Equal (the overwhelmingly common case): `{frozenRoot} = ''`,
@@ -315,8 +324,8 @@ Then proceed directly into Phase 4 — the user does not re-invoke anything.
 
 ## Phase 4 — Merge-back (on CLEAN, after the close commit)
 
-Merges the working branch into the originating branch recorded by `/spec:build`. Skip the
-merge mechanics (steps 1–6) with a one-line note if the review ran directly on the
+Merges the working branch into the originating branch recorded by `/git:enter-worktree`. Skip
+the merge mechanics (steps 1–6) with a one-line note if the review ran directly on the
 originating branch — nothing to merge — but still run step 7 (Observe): in-place builds still
 need D7's invocation point.
 
@@ -324,42 +333,47 @@ Run `spec-paths merge-back` once and keep the printed path — it is `{mergeBack
 derivation of the git mechanics (exit-code alphabet: 3 = conflicts, 4 = CWD-inside-worktree
 refusal — shared invariants § Risk Tiers).
 
-`{root}` is the **project root** (the repo's main working tree) — never `$HOME`/`~` or `/`.
-Get it via `{mergeBack} root --worktree {worktree}` (or `{mergeBack} root` from inside the
-worktree) and use the printed absolute path verbatim. `{target}` is the originating branch
-recovered in Phase 0 step 1; `{source}` the build branch; `{worktree}` the worktree path (omit
-`--worktree` if none was used).
+**Resolve `{mainRoot}` now, before step 1** — the **project root** (the repo's main working
+tree) — never `$HOME`/`~` or `/`. This is a second, distinctly named symbol from Phase 0's
+`{root}`: Phase 4's inspect and strategy steps run *before* the session relocates, so a single
+Phase-0 binding would hand these steps the worktree path instead of the main tree. Get it via
+`{mergeBack} root --worktree {worktree}` (or `{mergeBack} root` from inside the worktree) and
+use the printed absolute path verbatim as `{mainRoot}` for every step below. `{target}` is the
+originating branch recovered in Phase 0 step 1; `{source}` the build branch; `{worktree}` the
+worktree path (omit `--worktree` if none was used).
 
-1. **Inspect:** `{mergeBack} inspect --root {root} --target {target} --source {source}`. It
+1. **Inspect:** `{mergeBack} inspect --root {mainRoot} --target {target} --source {source}`. It
    STOPs (exit 2) if the root tree is dirty. Show its summary and `RECOMMEND` line.
 2. **Strategy — `AskUserQuestion`, always** (a real fork): merge-commit / ff-only / squash /
    rebase-ff. Put `inspect`'s `RECOMMEND` option first.
 3. **Relocate to root FIRST — the fix for the session landing in `$HOME`.** A subprocess
    cannot move the session CWD, so do this *before* any worktree removal:
    - This session entered via `EnterWorktree`: call `ExitWorktree(action="keep")` — restores
-     CWD to {root}, leaves worktree + branch intact. Never `action="remove"` after merging —
-     the harness still sees the branch as unmerged then.
+     CWD to {mainRoot}, leaves worktree + branch intact. Never `action="remove"` after
+     merging — the harness still sees the branch as unmerged then.
    - Otherwise (worktree predates this session, `ExitWorktree` is a no-op): `cd` the **main**
-     session to the **absolute `{root}` path** printed by `{mergeBack} root` — never a bare
+     session to the **absolute `{mainRoot}` path** printed by `{mergeBack} root` — never a bare
      `cd`, `cd ~`, or `cd /` (that lands in `$HOME`, the bug this step prevents).
-   The merge runs via `git -C {root}` regardless; the relocate is what stops `cleanup` from
+   The merge runs via `git -C {mainRoot}` regardless; the relocate is what stops `cleanup` from
    deleting the directory you're standing in.
-4. **Merge:** `{mergeBack} merge --root {root} --target {target} --source {source} --strategy
-   {choice} [--worktree {worktree}]`. Exit 3 (conflicts): resolve by intent — read **both
-   sides** of every conflicted file, never a blind `--ours`/`--theirs`/`merge --abort`;
+4. **Merge:** `{mergeBack} merge --root {mainRoot} --target {target} --source {source}
+   --strategy {choice} [--worktree {worktree}]`. Exit 3 (conflicts): resolve by intent — read
+   **both sides** of every conflicted file, never a blind `--ours`/`--theirs`/`merge --abort`;
    non-trivial conflicts get an `AskUserQuestion` (keep target / keep source / combine), then
-   `git -C {root} add`, a concise `diff --cached` summary, and `commit --no-edit`. (Rebase-ff:
-   resolve in `{worktree}`, `git -C {worktree} rebase --continue`, re-run `merge`.) Exit 2:
-   precondition failure (e.g. ff-only on diverged branches) — report and re-ask strategy.
-5. **Cleanup:** `{mergeBack} cleanup --root {root} --source {source} [--worktree {worktree}]`
-   — removes the worktree and deletes `{source}`. Exit 4 means step 3's relocate was skipped:
-   do it, then re-run cleanup.
-6. **Verify:** `{mergeBack} verify --root {root}` — confirms a clean tree, worktree gone.
+   `git -C {mainRoot} add`, a concise `diff --cached` summary, and `commit --no-edit`.
+   (Rebase-ff: resolve in `{worktree}`, `git -C {worktree} rebase --continue`, re-run `merge`.)
+   Exit 2: precondition failure (e.g. ff-only on diverged branches) — report and re-ask
+   strategy.
+5. **Cleanup:** `{mergeBack} cleanup --root {mainRoot} --source {source} [--worktree
+   {worktree}]` — removes the worktree and deletes `{source}`. Exit 4 means step 3's relocate
+   was skipped: do it, then re-run cleanup.
+6. **Verify:** `{mergeBack} verify --root {mainRoot}` — confirms a clean tree, worktree gone.
 7. **Observe (D7):** now relocated to root with the merge landed, run
-   `node "$(spec-paths observe-ci)" --root {root}` once — closes the loop on *previously*-closed
-   specs (this spec stays silent until a later CI check attributes a red run to it). Normally
-   prints nothing; print its output verbatim when it does. Appends to the run ledger only —
-   never the manifest, never `verdict.js` (CLEAN was already decided in Phase 2).
+   `node "$(spec-paths observe-ci)" --root {mainRoot}` once — closes the loop on
+   *previously*-closed specs (this spec stays silent until a later CI check attributes a red
+   run to it). Normally prints nothing; print its output verbatim when it does. Appends to the
+   run ledger only — never the manifest, never `verdict.js` (CLEAN was already decided in
+   Phase 2).
 8. **Never push, never force-push.** Pushing remains an explicit user action.
 
 ## Next pointer (every CLEAN close — merge-back run or skipped)
@@ -368,10 +382,10 @@ Close the session's output — after the Phase 4 verify result, or straight afte
 note when Phase 4 didn't run — with the **verbatim** output of:
 
 ```
-node "$(spec-paths spec-status)" --root {root} --next
+node "$(spec-paths spec-status)" --root {mainRoot} --next
 ```
 
-`{root}`: the `{mergeBack} root` output when Phase 4 ran, else `git rev-parse
+`{mainRoot}`: the `{mergeBack} root` output when Phase 4 ran, else `git rev-parse
 --show-toplevel` on the spec path. The script is the only source of the "what now"
 suggestion; if its pick surprises you, say so — its lines still print unaltered. If the
 run errors, print the error and no Next line (absent beats hand-derived). Non-CLEAN closes

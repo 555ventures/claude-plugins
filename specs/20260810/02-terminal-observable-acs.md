@@ -1,6 +1,6 @@
 ---
 date: 2026-08-10
-status: implementing
+status: done
 open_markers: 0
 risk: T2
 area: pipeline
@@ -257,6 +257,19 @@ Fragile spots during execution: the four exemption homes (A1 — an un-narrowed 
 reverts D3, which is why AC-3 pins each by name; search by meaning, never by sentence), the
 claims baseline (every doctrine row moves line counts — regenerate last, same diff), and the
 concurrent session in this repo (A6).
+
+**Review dispositions (2026-08-11, iteration 2).** Iteration 1 hard-stopped GATE_RED: the
+Phase 2 rewrite dropped the phrase "fixture-fed", breaking the previously-green pin
+`tests/ac-terminal-observable.test.js` (UPWELL-20260810-01, fixed@6.50.0). User-ruled fix
+(option a, Opus-seconded): the pin was re-aimed at the disqualification clause ("never a
+hand-authored props object") with its incident header kept and a note added to the INTAKE row —
+a sanctioned vocabulary realignment per A3's precedent, not a weakening. Scope-reconcile's
+out-of-plan finding (423 files) was rejected: every listed file is either a concurrent
+session's untracked working-tree artifact (the `setup/` payload tree, roadmap briefs 04/05,
+agent-memory notes, the 00-overview edit — A6's predicted collision) or one of the two
+user-sanctioned fix edits above; none are this build's diff. Build deviation absorbed: D11's
+6.50.0 bump target was already taken at HEAD by a concurrent session, so the build bumped to
+6.51.0 with the same changelog paragraph.
 
 ## Canonical Delta
 

@@ -190,6 +190,11 @@ upstream bug list. -->
   lifetime, so the stub can never answer and every such test hangs to its timeout
   (status=null/SIGTERM). (specs/20260808/01-autopilot-enroll.md — every stub-reaching AC hung
   in build repair round 1; fixed by switching the helper to awaited `spawn`.)
+- `[host]` A spec Decision naming a literal version-bump target can be stale by build time —
+  concurrent sessions in this repo race the same semver (specs/20260810/02 D11: 6.50.0 was
+  already taken at HEAD before the batch ran; the worker bumped to 6.51.0 with the same
+  changelog paragraph and logged the deviation). The build bumps to the next free version and
+  records the deviation; the spec's literal number is a target, not a pin.
 - `[plugin]` A spec Decision that records a class-level item "in spec/INTAKE.md, doctrine-only"
   collides with INTAKE.md's authoring contract: every row's `Pinned by` must name a failing test
   or a `pre-contract` artifact. Plan the citation (or the failing test) with the Decision, or the

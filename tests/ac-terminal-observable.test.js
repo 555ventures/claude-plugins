@@ -27,8 +27,13 @@ test('plan.md AC-shape rule requires a cross-file Decision to pin the terminal o
 })
 
 test('plan.md AC-shape rule rules out fixture-fed observations as terminal evidence', () => {
-  assert.match(plan, /fixture(-| )fed|only non-null.{0,60}(fixture|story)|story fixture/i,
-    'a component whose only non-null input in the whole repo lives in a story fixture ' +
-    'passes an "observable response" AC today — the recorded invented-fixture tell, on ' +
-    'its fourth appearance, is not named where AC shape is defined')
+  // 6.51.0 (specs/20260810/02-terminal-observable-acs.md D2) renamed this class to
+  // "invented-fixture liveness" and stated it as an explicit disqualification. This pin
+  // now tracks the DISQUALIFICATION clause; the positive produced-fixture requirement and
+  // the anti-pattern's literal name are pinned by tests/terminal-observable-acs.test.js AC-2.
+  assert.match(plan, /never a hand-(authored|typed) props object|hand-(typed|authored) props proves[^.]{0,90}never|fixture(-| )fed observation|only non-null.{0,60}(fixture|story)/i,
+    'a component whose only non-null input in the whole repo lives in an invented fixture ' +
+    'passes an "observable response" AC unless AC-shape doctrine explicitly disqualifies a ' +
+    'hand-authored props object as terminal evidence — the recorded invented-fixture tell, ' +
+    'on its fourth appearance, must be ruled out where AC shape is defined, not merely named')
 })

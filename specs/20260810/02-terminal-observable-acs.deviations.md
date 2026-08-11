@@ -1,1 +1,0 @@
-- [doctrine-batch] D11 named version 6.50.0 as the bump target, but a concurrent session already committed 6.50.0 to `spec/.claude-plugin/plugin.json` at HEAD (241a787) before this batch ran → bumped to 6.51.0 instead, changelog paragraph appended describing this spec's changes.

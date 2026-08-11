@@ -41,8 +41,13 @@ if (!args || typeof args !== 'object' || !Array.isArray(args.cells)) {
 // the actual tool at runtime against live sources.
 const CATEGORIES = [
   'module-boundary', 'naming', 'forbidden-symbol', 'structural-pattern',
-  'datetime', 'schema-validation', 'format',
+  'datetime', 'schema-validation', 'format', 'duplication', 'cycle',
 ]
+
+// Ratchet categories: a per-host baseline snapshot quarantines existing violations at wiring
+// time, and the gate fails only on violations not in the baseline. Candidates for these
+// categories must support a baseline/known-violations mode (spec 20260810/06 D2).
+const RATCHET_CATEGORIES = ['duplication', 'cycle']
 
 const CANDIDATE = {
   type: 'object',
@@ -106,22 +111,34 @@ function researchPrompt(cell) {
     `- Prefer the repo's NATIVE ecosystem enforcer over a bolt-on; prefer a tool already in the repo's lockfile (cite where you saw it).`,
     `- Give installCmd + runCmd the COMMAND will use to VERIFY (stage 2 happens in the command, not here — you do NOT install or run anything; you only propose how).`,
     `- If no deterministic enforcer plausibly fits: return an empty candidates list and set fallback = "sweep" for a structural/textual clause, or "review-check" ONLY for a genuine-judgment clause (data-flow ordering, semantic intent, sentinel usage, "is this a sanctioned carve-out").`,
+    RATCHET_CATEGORIES.includes(cell.category)
+      ? `- This is a RATCHET category: every candidate MUST support a baseline / known-violations / ignore-file mode (so existing violations are quarantined and the gate fails only on new ones); citations must show that mode, not just the underlying check.`
+      : '',
     `Return the schema object. Do not edit any file. Do not install anything.`,
   ].filter(Boolean).join('\n\n')
 }
 
+// Pure, top-level, dependency-injected (no closure over CATEGORIES/sandbox `log`) so
+// tests/enforce/taxonomy.test.js can extract and evaluate it standalone via extractFn/evalFns,
+// which only matches named top-level functions and runs them without module scope.
+function validateCells(cells, categories, log) {
+  const skipped = []
+  // Never silently drop a cell: every cell the command sent is accounted for in the return —
+  // either accepted, or listed in `skipped` with a reason the command can reconcile against its
+  // work list.
+  const accepted = cells.filter(c => {
+    if (!categories.includes(c.category)) {
+      log(`skipping cell ${c.id || '?'}: unknown category '${c.category}' (not in the reserved set)`)
+      skipped.push({ id: c.id || '?', category: c.category, reason: 'unknown-category' })
+      return false
+    }
+    return true
+  })
+  return { accepted, skipped }
+}
+
 phase('Research')
-// Never silently drop a cell: every cell the command sent is accounted for in the return — either
-// researched, or listed in `skipped` with a reason the command can reconcile against its work list.
-const skipped = []
-const cells = args.cells.filter(c => {
-  if (!CATEGORIES.includes(c.category)) {
-    log(`skipping cell ${c.id || '?'}: unknown category '${c.category}' (not in the reserved set)`)
-    skipped.push({ id: c.id || '?', category: c.category, reason: 'unknown-category' })
-    return false
-  }
-  return true
-})
+const { accepted: cells, skipped } = validateCells(args.cells, CATEGORIES, log)
 
 const results = await parallel(cells.map(cell => () =>
   agent(researchPrompt(cell), {

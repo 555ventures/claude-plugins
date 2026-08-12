@@ -734,6 +734,10 @@ Every `Agent` call sets `model:` explicitly. Never inherit.
 - **`/spec:enforce` runs on Opus.** Classifying a host's rule surfaces into the enforcement
   taxonomy and choosing category→enforcer mappings against a live stack is judgment-adjacent
   work sitting outside the build/review loop; its workers and sweeps stay Sonnet/Haiku.
+- **`/spec:audit` runs on Opus.** Deriving hotspots and dispositioning cross-spec debt findings
+  is the same judgment-adjacent class outside the build/review loop as `/spec:enforce`; its
+  hunt readers and per-finding verifiers stay Sonnet, dispatched inline (no session-model
+  routing — audit quality would otherwise vary invisibly with the invoking model).
 - **`/spec:init` and the genesis commands keep their stated models.** Genesis pre-panel
   classification, the panel aggregator, and design-doctrine authoring stay Opus seats — taste is
   the work there, so delegating it would repeat the mistake the unified rule exists to prevent;

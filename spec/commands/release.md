@@ -187,6 +187,7 @@ manifest rows above, never passed as a flag.
    - observed: {deploy, ready, e2e counts, journeys walked with outcomes, ci verdict — one line each}
    - substrate: {rows checked / inert-declared} · production: {verification result}
    ⚠️ yours / the client's to do: {inert rows, verbatim — one line each}
+   🧹 next (optional): /spec:audit — hotspot debt audit for this milestone
    ```
 
    Every line traces to an executed command — the report is the client-facing artifact, so

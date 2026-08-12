@@ -152,6 +152,11 @@ test('AC-20260810-02-5: build.md blocked row owes the AC in the same edit as the
 // AC-20260810-02-6: scaffold-ledger.md carries a terminal-observable-ACs row (kind: gate)
 // naming both retire conditions; verdict.js's REVIEW_LEGS and spec-paths's key set are
 // unchanged (this spec ships no new script/mechanism — regression pins).
+//
+// specs/20260812/02-hotspot-audit.md AC-20260812-02-11 (2026-08-12): this key-set pin was
+// already red at HEAD — missing `citations-check` (20260810/09 drift) — before hotspot-audit
+// even lands its own `hotspot` key. This edit syncs the expected list to the true key set;
+// red-to-green here is the AC's implementation, not a weakened assertion.
 test('AC-20260810-02-6: scaffold-ledger.md gains a gate-kind terminal-observable-ACs row, and verdict.js/spec-paths stay unchanged', () => {
   const rowStart = ledger.search(/\| ?Terminal-observable/i)
   assert.notStrictEqual(rowStart, -1,
@@ -182,15 +187,16 @@ test('AC-20260810-02-6: scaffold-ledger.md gains a gate-kind terminal-observable
   assert.ok(keysOut.trim().length > 0, 'spec-paths root must resolve for the key-set check below to be meaningful')
   const specPathsSrc = read('spec/bin/spec-paths')
   const keys = [...specPathsSrc.matchAll(/^ {2}([a-z0-9-]+)\)/gm)].map(m => m[1]).sort()
-  const expected = ['ci-query', 'claims-lint', 'components-check', 'contract', 'contract-hash',
-    'dc-extract', 'design-atlas', 'design-driver', 'feedback-template', 'fidelity-check',
-    'intake', 'manifest-check', 'merge-back', 'observe-ci', 'parity-check', 'root',
-    'scaffold-ledger', 'scope-reconcile', 'shared', 'shared-for', 'shared-genesis',
-    'skeletons-check', 'smoke', 'spec-status', 'template', 'templates', 'verdict', 'version',
-    'wf-build', 'wf-design', 'wf-enforce', 'wf-panel', 'wf-research', 'wf-review',
-    'workflows'].sort()
+  const expected = ['ci-query', 'citations-check', 'claims-lint', 'components-check', 'contract',
+    'contract-hash', 'dc-extract', 'design-atlas', 'design-driver', 'feedback-template',
+    'fidelity-check', 'hotspot', 'intake', 'manifest-check', 'merge-back', 'observe-ci',
+    'parity-check', 'root', 'scaffold-ledger', 'scope-reconcile', 'shared', 'shared-for',
+    'shared-genesis', 'skeletons-check', 'smoke', 'spec-status', 'template', 'templates',
+    'verdict', 'version', 'wf-build', 'wf-design', 'wf-enforce', 'wf-panel', 'wf-research',
+    'wf-review', 'workflows'].sort()
   assert.deepStrictEqual(keys, expected,
-    'spec/bin/spec-paths SHALL CONTINUE TO resolve exactly this existing key set — D8 commits ' +
-    'this spec to shipping no new script/mechanism, so any added or removed top-level key ' +
-    'means that commitment was broken')
+    'spec/bin/spec-paths\'s key set (AC-20260812-02-11) must be exactly the true set scraped ' +
+    'from the live case statement, including the pre-existing citations-check key (20260810/09 ' +
+    'drift) and this spec\'s new hotspot key — a mismatch means either a key silently drifted ' +
+    'or hotspot-audit failed to register its script under spec-paths')
 })

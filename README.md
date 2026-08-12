@@ -91,6 +91,9 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
   one automatically on fix-shaped commits. This keeps the review layer honest.
 - **`/spec:atlas`** — whole-product design view: every mock at device size, arranged by journey,
   gap cards for unmocked surfaces. Zero tokens, never required.
+- **`/spec:audit`** — hotspot-targeted debt audit: derives churn×complexity hotspots, hunts
+  cross-spec smells there, and forces every finding to a disposition in a ledger the next audit
+  reads first.
 
 ## Autopilot (optional daemon)
 
@@ -150,6 +153,7 @@ concurrently.
 | `/spec:doctor` | Drift + ledger check; `--fix` repairs with approval | When things feel off |
 | `/spec:escape` | Record a defect that slipped past review | When one surfaces |
 | `/spec:enforce` | Turn rules into deterministic checks | On rule/tooling change |
+| `/spec:audit` | Hotspot-targeted debt audit + disposition ledger | On demand, or offered at release |
 | `/git:commit`, `/git:merge` | Add-all-commit (with escape capture); guided merge | Anytime |
 | `/git:enter-worktree` | Enter the isolated worktree for a spec | Before build/design isolation |
 

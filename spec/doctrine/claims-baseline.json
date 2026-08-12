@@ -4,6 +4,10 @@
       "lines": 112,
       "orphans": 1
     },
+    "spec/commands/audit.md": {
+      "lines": 166,
+      "orphans": 3
+    },
     "spec/commands/build.md": {
       "lines": 316,
       "orphans": 3
@@ -45,7 +49,7 @@
       "orphans": 6
     },
     "spec/commands/release.md": {
-      "lines": 206,
+      "lines": 207,
       "orphans": 12
     },
     "spec/commands/review.md": {
@@ -65,11 +69,11 @@
       "orphans": 1
     },
     "spec/doctrine/scaffold-ledger.md": {
-      "lines": 101,
+      "lines": 102,
       "orphans": 3
     },
     "spec/doctrine/shared.md": {
-      "lines": 1005,
+      "lines": 1009,
       "orphans": 6
     },
     "spec/agents/reviewer.md": {
@@ -77,5 +81,5 @@
       "orphans": 5
     }
   },
-  "totalLines": 5534
+  "totalLines": 5706
 }

@@ -26,6 +26,7 @@ const fs = require('fs')
 const path = require('path')
 const { execFileSync } = require('child_process')
 const { parseFilePlan } = require('./lib/file-plan')
+const { globMatch, BASELINE_GLOBS } = require('./lib/glob-match')
 
 function usage() {
   console.error('usage: scope-reconcile.js [--root <dir>] --base <ref> --spec <path> (--json | --dirs)')
@@ -66,28 +67,8 @@ function loadConfig() {
   try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch { return {} }
 }
 const config = loadConfig()
-const pipelineOwned = ['specs/**', '.claude/spec-runs.jsonl']
+const pipelineOwned = BASELINE_GLOBS
   .concat(Array.isArray(config.pipelineOwnedPaths) ? config.pipelineOwnedPaths : [])
-
-// First glob matcher in the repo (A5) — kept deliberately dumb: `**` matches any run of path
-// segments (including zero), `*` matches within one segment, everything else is literal.
-function globMatch(glob, filePath) {
-  let re = '^'
-  for (let i = 0; i < glob.length; i++) {
-    const c = glob[i]
-    if (c === '*' && glob[i + 1] === '*') {
-      i++
-      if (glob[i + 1] === '/') { i++; re += '(?:.*/)?' } else re += '.*'
-    } else if (c === '*') {
-      re += '[^/]*'
-    } else if ('.+^${}()|[]\\'.includes(c)) {
-      re += '\\' + c
-    } else {
-      re += c
-    }
-  }
-  return new RegExp(re + '$').test(filePath)
-}
 
 // ---- changed set: git diff --name-status (both sides of R/C) UNION untracked (D3) ----------
 

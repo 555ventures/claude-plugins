@@ -1,6 +1,6 @@
 ---
 date: 2026-08-12
-status: implementing
+status: done
 diff_base: d0242d8d09751bc40cfeedeae546b127925ad6d4
 risk: T3
 open_markers: 0
@@ -258,6 +258,12 @@ suggests the audit was DOWNGRADED to a cheap source regex folded into AC-7 rathe
 standalone behavioral pin. The merge-commit numstat blind spot (edits made only in
 conflict-resolution commits are invisible to `git log --numstat`) is accepted as a known
 narrow under-count — feature commits are walked individually; not worth `-m` row doubling.
+
+**Build deviation (folded at review, 2026-08-12):** AC-6's "no-arg usage error" was a stale
+assumption — `spec-paths` with no args prints the plugin root and exits 0; the usage line
+fires on an unknown key (exit 1). The test triggers it via an unknown key, matching the cited
+components-check precedent; the pinned behavior (usage line lists `hotspot`) is unchanged.
+One-off spec-authoring slip, absorbed here.
 
 ## Canonical Delta
 

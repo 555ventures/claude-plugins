@@ -316,7 +316,9 @@ every turn, which is what keeps its rules followed rather than skimmed.
   three or more near-identical blocks in one diff is a finding naming the extraction —
   batch-scoped workers never see the third repetition, so the reviewer is the first eye
   that can (measured 3-for-3 across audited hosts: 5× copy-pasted auth-submit, 4× clone
-  provider handlers, 4× hand-rolled loggers, all through CLEAN reviews).
+  provider handlers, 4× hand-rolled loggers, all through CLEAN reviews). Cross-file semantic
+  duplication and error masking are plugin-owned advisory smell-lens output, never a blocking
+  reviewer finding.
 - **`## Gotchas (evidence-cited)`** — write this section EMPTY, carrying nothing but a
   one-line header comment stating its contract: one line per entry; every entry must cite
   either a ledger row (spec path + runId) or a dated incident; and every entry carries a

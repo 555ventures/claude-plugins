@@ -152,7 +152,8 @@ T1-shaped work: doctrine prose edits pinned by existing tests, new sweeps in
   assertion is **hard**.
 - Duplication calibration: three or more near-identical blocks in one diff is a finding
   naming the extraction — batch-scoped workers never see the third repetition; the reviewer
-  is the first eye that can.
+  is the first eye that can. Cross-file semantic duplication and error masking are plugin-owned
+  advisory smell-lens output, never a blocking reviewer finding.
 
 ## Gotchas (evidence-cited)
 

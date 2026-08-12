@@ -169,14 +169,26 @@ What the script does (shape lives in the script, not here):
   `unverifiable` for THIS session to adjudicate. A crashed verifier or a cap-skipped finding
   survives visibly flagged — fail-closed, never a silent kill or a silent confirm. `soft`
   findings skip verification and pass through as `advisory`.
-- Returns `{verdict, survivors, killed, verify, reviewerCount, scope, tokens}` where `verify =
-  {verified, demonstrated, killedByExecution, sanctioned, miscited, unverifiable, failed,
-  capSkipped}`.
+- **Smell lens (advisory, full-scope only):** one dedicated Sonnet agent, launched inside the
+  same panel `parallel()` barrier, scans the diff for two classes only — semantic duplication
+  (a diff symbol re-implementing a job an existing repo symbol already does) and error masking
+  needing cross-file context to adjudicate. `duplication` findings lacking a `counterpart` are
+  dropped after the agent returns. The lens fails open: a null lens result yields `smells: []`,
+  `lensFailed: true`, and never counts toward `failedReviewers` or `REVIEWER_FAILED`. On
+  `scope: "fix-delta"` the lens is not launched at all (`smells: []`, `lensFailed: false`). Its
+  output never enters `findings`, the verify loop, or the verdict derivation — it travels only
+  in the `smells`/`lensFailed` return fields below.
+- Returns `{verdict, survivors, killed, verify, reviewerCount, scope, tokens, smells, lensFailed}`
+  where `verify = {verified, demonstrated, killedByExecution, sanctioned, miscited,
+  unverifiable, failed, capSkipped}` and each `smells` entry is `{file, line, class, claim,
+  counterpart?, suggestion?}`.
   **`verdict: "REVIEWER_FAILED"` means a reviewer agent died — that is a failed RUN, never a
   CLEAN: re-invoke the workflow (journal cache makes it cheap) before any verdict is read.**
   `tokens` is the workflow's output-token spend — carry it into the Phase 3 report. If
   `verify.failed` or `verify.capSkipped` is non-zero, those survivors stand unverified — say
-  so in the verdict presentation.
+  so in the verdict presentation. `smells` and `lensFailed` are advisory-only by construction:
+  neither field ever reaches `verdict.js` or the `.claude/spec-runs.jsonl` ledger row — the
+  verdict word and ledger shape are exactly what they were before this field existed.
 
 ## Design-compliance legs (UI-bearing specs only)
 
@@ -291,6 +303,21 @@ defect," and it must be made against the author's recorded intent, not recalled 
   waives — never invented, never implied.
 - **Reject** — the finding is wrong anyway; record the rejection reason the same way.
 
+**Advisory smell presentation (full-scope iterations only, after the dispositions above
+resolve):** this group can never change the verdict word or block Phase 3 — proceed regardless
+of its outcome. If `lensFailed` is true, print one line — `⚠️ smell lens failed — no advisory
+findings this run` — and skip straight to Phase 3; no lens ran. Otherwise, for each entry in
+`smells` present one plain-language line: class, what duplicates/masks what, both `file:line`
+locations (`counterpart` for `duplication`). Ask ONE batched `AskUserQuestion` (multiSelect) for
+the whole group, options outcome-phrased per finding ("keep — append a dated row to the repo's
+advisory log for the future audit" / "drop — no record kept") — the question-style hook gates
+this like any other question. For each **keep**, append one dated row to
+`docs/audit/advisory-findings.md` (repo root; create it with the header comment shown in the
+Contracts section on first append): date, class, `file:line`, `duplicates {counterpart}` for the
+duplication class, the claim, then `(spec {spec path}, runId {wf id})`. Dismissed findings get no
+record. A dismissed `AskUserQuestion` here follows the standing rule (STOP the run) <!-- unenforced: model-judgment step, no deterministic carrier exists --> — but the
+verdict/ledger row from Phase 2 step 2 is already written by then, so nothing is lost.
+
 ## Phase 3 — Close (on CLEAN)
 
 1. Flip frontmatter `status: implementing → done`.
@@ -313,6 +340,8 @@ defect," and it must be made against the author's recorded intent, not recalled 
    ✅ **CLEAN — merged**          (or: 🚫 **{N} hard findings — build must fix**)
    - {surviving finding: what breaks, where — one plain-language line each}
    ⚠️ waived: {finding — one-phrase reason}
+   ⚠️ smell lens failed — no advisory findings this run    (only when lensFailed)
+   🔍 smells: {N} advisory — {M} accepted → docs/audit/advisory-findings.md
    📦 ledger: {ledger row path}
    ```
 
@@ -394,8 +423,10 @@ get no Next pointer — the verdict line already names the fix step.
 
 - **Never Read `wf-review.js`.** The complete `args` contract is in Phase 1 (`{specPath, tier,
   base, scope, prevFindingsPath, diffLoc, patternsPath, hasDriftScript, reproCommand,
-  reconcilePath, frozenRoot}`) and the return shape is `{verdict, survivors, killed, verify, reviewerCount,
-  scope, tokens}`.
+  reconcilePath, frozenRoot}`) and the return shape is
+  `{verdict, survivors, killed, verify, reviewerCount, scope, tokens, smells, lensFailed}`.
+  `smells`/`lensFailed` are the advisory smell lens's output — they never enter `verdict.js`
+  or the ledger row (Phase 1's smell lens bullet).
   The reviewer/verifier fan-out and all control flow are the workflow's concern — its shape
   lives in the script, not in orchestrator context. Invoke it (by `scriptPath`) and act on
   its return.

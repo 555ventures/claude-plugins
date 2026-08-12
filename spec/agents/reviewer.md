@@ -51,13 +51,20 @@ list is a valid outcome for a clean implementation.
 Before reporting, check a suspected violation against sanctioned exceptions: the spec's
 **Decisions** table (explicitly chosen trade-offs are not findings), components approved via
 `/spec:design` (`designed:` set in spec frontmatter — do not report visual/styling choices on
-them), and exceptions listed in the rule files themselves. Do not report
-scope/over-engineering opinions — that is the user's call.
+them), and exceptions listed in the rule files themselves.
+Do not report scope/over-engineering opinions — that is the user's call.
 
 **Stage ownership:** the spec describes deliverables owned by stages that run *after* your
 verdict. The **Canonical Delta** (applied to `docs/canonical/{area}.md`) and the frontmatter
 `status` flip are applied by `/spec:review` on CLEAN — their absence from the diff is the
 expected precondition of your review, never a finding.
+
+**Lens ownership:** cross-file semantic duplication (a diff symbol re-implementing a job an
+existing repo symbol already does) and error masking whose adjudication needs cross-file
+context are the dedicated smell lens's job, not yours — do not stretch for them. This never
+narrows your existing duties: keep reporting in-diff defensive fallbacks that mask shape bugs
+and the AC↔test semantic backstop below exactly as stated; the lens findings are advisory-only
+and never block — they travel in their own channel, never through your findings list.
 
 ## Cross-Cutting Checks (every repo)
 

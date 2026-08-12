@@ -26,7 +26,7 @@ const fs = require('fs')
 const path = require('path')
 const { execFileSync } = require('child_process')
 const { parseFilePlan } = require('./lib/file-plan')
-const { globMatch, BASELINE_GLOBS } = require('./lib/glob-match')
+const { globMatch, pipelineOwnedGlobs } = require('./lib/glob-match')
 
 function usage() {
   console.error('usage: scope-reconcile.js [--root <dir>] --base <ref> --spec <path> (--json | --dirs)')
@@ -61,14 +61,7 @@ if (filePlanPaths.size === 0) {
 
 // ---- pipeline-owned exclusions (D4): built-in defaults + additive config globs -------------
 
-function loadConfig() {
-  const p = path.join(root, '.claude/spec.config.json')
-  if (!fs.existsSync(p)) return {}
-  try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch { return {} }
-}
-const config = loadConfig()
-const pipelineOwned = BASELINE_GLOBS
-  .concat(Array.isArray(config.pipelineOwnedPaths) ? config.pipelineOwnedPaths : [])
+const pipelineOwned = pipelineOwnedGlobs(root)
 
 // ---- changed set: git diff --name-status (both sides of R/C) UNION untracked (D3) ----------
 

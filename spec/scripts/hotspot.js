@@ -29,10 +29,8 @@
 // repository or is unreadable, or a numstat row fails the `<added>\t<deleted>\t<path>` shape
 // (message quotes the offending line — never silently dropped or skipped).
 
-const fs = require('fs')
-const path = require('path')
 const { execFileSync } = require('child_process')
-const { globMatch, BASELINE_GLOBS } = require('./lib/glob-match')
+const { globMatch, pipelineOwnedGlobs } = require('./lib/glob-match')
 
 function usage() {
   console.error('usage: hotspot.js --root <dir> [--since <days>] [--top <n>] [--json]')
@@ -88,14 +86,7 @@ for (const line of logOut.split('\n')) {
 
 // ---- pipeline-owned exclusions (D5): built-in baseline + additive config globs -------------
 
-function loadConfig() {
-  const p = path.join(root, '.claude/spec.config.json')
-  if (!fs.existsSync(p)) return {}
-  try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch { return {} }
-}
-const config = loadConfig()
-const pipelineOwned = BASELINE_GLOBS
-  .concat(Array.isArray(config.pipelineOwnedPaths) ? config.pipelineOwnedPaths : [])
+const pipelineOwned = pipelineOwnedGlobs(root)
 
 // ---- complexity: indentation sum at HEAD (D4) ------------------------------------------------
 

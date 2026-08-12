@@ -7,9 +7,14 @@
 // T3 list exists to enforce (both adversarial-check refuters on this spec flagged the second
 // private matcher independently).
 //
-// What it deliberately does NOT do: read `.claude/spec.config.json` or resolve
-// `pipelineOwnedPaths` from it (callers own reading config and concatenating BASELINE_GLOBS),
-// or validate glob syntax.
+// Also the sole resolver of the pipeline-owned exclusion set: pipelineOwnedGlobs(root) reads
+// the host's `.claude/spec.config.json` (absent/unparseable → {}) and returns BASELINE_GLOBS
+// plus any `pipelineOwnedPaths` — extracted 2026-08-12 (review advisory on this spec's own
+// diff: both consumers had grown byte-identical private loadConfig blocks).
+//
+// What it deliberately does NOT do: validate glob syntax, or surface config read errors
+// (a broken config skips the additive exclusions, matching AC-20260812-02-3's absent-config
+// contract).
 //
 // Exit codes: n/a (library, not an entrypoint).
 
@@ -36,4 +41,16 @@ function globMatch(glob, filePath) {
 // The additive pipeline-noise baseline — always excluded regardless of host config.
 const BASELINE_GLOBS = ['specs/**', '.claude/spec-runs.jsonl']
 
-module.exports = { globMatch, BASELINE_GLOBS }
+// Baseline + the host config's additive `pipelineOwnedPaths` (absent/unparseable config → baseline only).
+function pipelineOwnedGlobs(root) {
+  const fs = require('fs')
+  const path = require('path')
+  const p = path.join(root, '.claude/spec.config.json')
+  let config = {}
+  if (fs.existsSync(p)) {
+    try { config = JSON.parse(fs.readFileSync(p, 'utf8')) } catch { config = {} }
+  }
+  return BASELINE_GLOBS.concat(Array.isArray(config.pipelineOwnedPaths) ? config.pipelineOwnedPaths : [])
+}
+
+module.exports = { globMatch, BASELINE_GLOBS, pipelineOwnedGlobs }

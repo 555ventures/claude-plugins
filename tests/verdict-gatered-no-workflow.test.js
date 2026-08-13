@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir, runNode } = require('./helpers')
+const { tmpdir, runNode, read } = require('./helpers')
 
 // JJ-20260808-01, found during the 2026-08-08 review of specs/20260807/05-explore-taste-channels.md.
 // review.md Phase 0 step 8 documents the pre-panel hard-stop invocation as: "The stopped attempt
@@ -50,4 +50,31 @@ test('JJ-20260808-01: review.md Phase 0 step 8\'s documented pre-panel hard-stop
     'row without proceeding to Phase 1 — this invocation currently exits 2 (usage error) because ' +
     'verdict.js\'s guard treats --workflow as mandatory outside --profile release, making review.md\'s ' +
     'documented no-workflow contract unimplementable as written: ' + JSON.stringify(r.stdout) + ' / ' + r.stderr)
+})
+
+// JJ-20260808-01 extension (prax is the third corroborating occurrence): the test above pins
+// that a GATE_RED review row structurally carries no `runId` — review.md's own documented Phase
+// 0 step 8 hard-stop invocation omits --workflow, and no wf-review run ever happened to mint
+// one. doctor.md check 12's required-field exemption list accounts for observe/fastPath-build/
+// escape/release rows — every one a distinct ROW CLASS with its own field set — but never
+// accounts for a pre-panel GATE_RED review row, which is an ordinary review row that simply
+// never reached the point of having a runId. prax: 5 of 6 GATE_RED rows carried runId:null and
+// all 5 tripped check 12 on a host doing exactly what review.md documents. The correct contract
+// is narrower than a blanket row-class exemption: runId is OPTIONAL on GATE_RED review rows
+// specifically (an in-workflow iteration that goes red legitimately still carries one), never
+// exempt outright.
+const doctor = read('spec/commands/doctor.md')
+const check12 = doctor.slice(doctor.indexOf('12. **Run ledger hygiene'), doctor.indexOf('13. **Scaffold audit'))
+
+test('JJ-20260808-01 (prax): doctor.md check 12 admits a GATE_RED review row with null/absent runId as OPTIONAL, never as a blanket row-class exemption', () => {
+  assert.notStrictEqual(check12, '',
+    'could not locate check 12\'s text block via the "12. **Run ledger hygiene" / ' +
+    '"13. **Scaffold audit" markers — update the slice bounds if the checks were renumbered')
+  assert.match(check12, /GATE_RED/,
+    'doctor.md check 12\'s required-field exemption list names observe rows, fast-path build ' +
+    'rows, escape rows, and release rows as sanctioned row classes with their own field sets, ' +
+    'but never mentions GATE_RED review rows — prax: a pre-panel GATE_RED hard-stop structurally ' +
+    'has no runId (review.md\'s own documented invocation omits --workflow, so no wf-review run ' +
+    'ever existed to mint one), and 5 of 6 such rows tripped check 12 on a host following ' +
+    'review.md exactly as written, because runId is required for every review row with no carve-out')
 })

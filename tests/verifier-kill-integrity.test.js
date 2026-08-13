@@ -36,3 +36,48 @@ test('MISCITED guard: quoted evidence that confirms the claim forbids ruling MIS
     'finding and still return MISCITED, because nothing in the prompt makes that a contradiction ' +
     'it must resolve before answering')
 })
+
+// PRAX-20260813-01: the MISCITED self-consistency guard above (6.37.0) has no counterpart on the
+// SANCTIONED kill path, and nothing in the workflow mechanically audits killed[] label↔evidence
+// consistency after the verifier returns. Incident: prax review wf_5a730ede-0f8 returned
+// killedBy:"sanction" while its own structured evidence field read "Not actually sanctioned —
+// correcting: the claim stands unrefuted" — only the structured `result` label feeds verdict.js,
+// so the self-contradiction was invisible to the derivation and the workflow returned CLEAN on a
+// real, unrefuted finding. Two gaps, two tests: the SANCTIONED prompt step needs the same
+// self-consistency guard MISCITED already has; and the workflow needs a mechanical post-verify
+// audit so a killed[] entry whose own evidence text contradicts its killedBy label cannot ride
+// through silently even if a prompt-level guard is someday bypassed or misapplied.
+
+const sanctionedStep = src.slice(src.indexOf('2. SANCTIONED'), src.indexOf('3. If the claim cannot'))
+
+test('SANCTIONED guard: evidence that denies or fails to quote a sanctioning row forbids returning SANCTIONED', () => {
+  assert.notStrictEqual(sanctionedStep, '',
+    'could not locate the SANCTIONED step in verifyPrompt — the extraction markers ' +
+    '"2. SANCTIONED" / "3. If the claim cannot" no longer bound it; update the slice markers')
+  assert.match(sanctionedStep, /SANCTIONED is forbidden/,
+    'the SANCTIONED step carries no self-consistency guard mirroring MISCITED\'s: a verifier can ' +
+    'quote evidence that plainly denies a sanction (or fails to quote an actual sanctioning ' +
+    'Decision/design-approval row) and still return result="SANCTIONED" — exactly the prax ' +
+    'wf_5a730ede-0f8 incident (killedBy:"sanction", evidence: "Not actually sanctioned — ' +
+    'correcting: the claim stands unrefuted"), because nothing in the prompt makes that ' +
+    'self-contradiction something the model must resolve before answering')
+})
+
+// Scope the audit check to the actual control-flow region (from the panel phase onward) —
+// the header comment above verifyPrompt uses the word "audit" loosely ("execution-audited",
+// "replaces refute+audit outright") describing the OLD refutation layer this phase replaced,
+// which would make a whole-file regex match vacuously without ever seeing a real mechanism.
+const executionRegion = src.slice(src.indexOf('// ---- Phase: blind review panel'))
+
+test('the workflow mechanically audits killed[] label-evidence consistency instead of trusting the structured result alone', () => {
+  assert.notStrictEqual(executionRegion, '',
+    'could not locate the "// ---- Phase: blind review panel" marker that bounds the execution ' +
+    'region away from the header comment\'s unrelated use of "audit" — update the slice marker')
+  assert.match(executionRegion, /audit|resurrect/i,
+    'nothing in wf-review.body.js\'s actual control flow (panel phase onward) checks a killed ' +
+    'finding\'s own evidence text against its killedBy label after the verifier returns — only ' +
+    'the structured `result` enum feeds verdict.js, so a verifier whose evidence contradicts its ' +
+    'own label (prax wf_5a730ede-0f8: killedBy:"sanction" evidence denying the sanction) is ' +
+    'killed silently with no mechanical check to resurrect or flag the contradiction before the ' +
+    'workflow returns')
+})

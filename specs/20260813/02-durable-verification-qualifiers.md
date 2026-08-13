@@ -1,6 +1,6 @@
 ---
 date: 2026-08-13
-status: implementing
+status: done
 diff_base: 21fded1769ec2050b66c36428cdd1a51a0e287ad
 open_markers: 0
 risk: T3
@@ -198,6 +198,11 @@ enum is narrower than review's). PARTIALLY ACCEPTED: "red/absent declared oracle
 executable coverage" — a doctrine pin is added (AC-6's extension); an execution harness is
 rejected because the adjudication is session-executed prose mechanics with no script carrier,
 the same standing as the ac-matrix and skip-reconcile mechanics themselves.
+
+Build deviation (folded 2026-08-13, one-off): run-ledger.test.js's `/exactly ONE line/` pin
+broke on release.md's incidental markdown line-wrap ("exactly\nONE line"); the test batch
+could not touch release.md, so the regex was widened to `/exactly\s+ONE line/` — the
+exactly-one-line-append invariant is asserted unchanged, minus the formatting dependence.
 
 ## Canonical Delta
 

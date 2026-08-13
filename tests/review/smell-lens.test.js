@@ -75,9 +75,13 @@ function writeVerdictFixture(dir, workflow) {
 // results never pushed into `findings`
 // ---------------------------------------------------------------------------
 
-test('AC-20260812-01-1: every return-object site in wf-review.body.js carries both smells and lensFailed', () => {
+test('AC-20260812-01-1: every workflow-return site in wf-review.body.js carries both smells and lensFailed', () => {
   const src = read('spec/workflows/src/wf-review.body.js')
-  const blocks = extractReturnBlocks(src)
+  // Workflow-return sites are the blocks carrying a `verdict:` key — the caller-facing
+  // returns D2 governs. Helper-internal returns (e.g. auditKilled's {kept, resurrected},
+  // added 2026-08-13 by spec 20260813/01) are not caller-facing and are out of this pin's
+  // scope; an unfiltered scan tripped on them (2026-08-13 review of spec 20260813/02).
+  const blocks = extractReturnBlocks(src).filter(b => /\bverdict:/.test(b))
   assert.ok(blocks.length >= 3,
     `wf-review.body.js must have at least the three return sites (REVIEWER_FAILED, ` +
     `zero-findings CLEAN, final) — found ${blocks.length}, so the AC's "every return{} block" ` +

@@ -24,7 +24,7 @@ const release = read('spec/commands/release.md')
 const verdictJs = read('spec/scripts/verdict.js')
 const specTemplate = read('spec/templates/spec.md')
 
-test('CROSS-20260813-03a: the ledger row schema distinguishes sanctioned [env:]-gated skips from unsanctioned ones in testsSkipped', () => {
+test('AC-20260813-02-3 (CROSS-20260813-03a): the ledger row schema distinguishes sanctioned [env:]-gated skips from unsanctioned ones in testsSkipped', () => {
   // Bound the check to the `testsSkipped` field's own value in the ledger row shape (one JSON
   // line) — a whole-doc regex would match "sanctioned" from the unrelated `verify.sanctioned`
   // field later on the SAME line and pass vacuously without a real split ever existing.
@@ -42,7 +42,7 @@ test('CROSS-20260813-03a: the ledger row schema distinguishes sanctioned [env:]-
     'to tell a sanctioned skip run from an unsanctioned one')
 })
 
-test('CROSS-20260813-03b: a structurally-absent required release leg is made durable in the milestone word or a mandatory row-level qualifier', () => {
+test('AC-20260813-02-4 (CROSS-20260813-03b): a structurally-absent required release leg is made durable in the milestone word or a mandatory row-level qualifier', () => {
   const hasQualifierWord = /CLEAN[- ]with[- ]qualifier/i.test(release) || /CLEAN[- ]with[- ]qualifier/i.test(verdictJs)
   assert.ok(hasQualifierWord,
     'neither release.md nor verdict.js has a distinct verdict word or mandatory row-level ' +
@@ -52,13 +52,47 @@ test('CROSS-20260813-03b: a structurally-absent required release leg is made dur
     'forces a later reader of the milestone word or the durable ledger row to weigh that pair')
 })
 
-test('CROSS-20260813-03c: the AC coverage machinery supports a DECLARED non-test oracle (typecheck/compiler or a named gate command), sibling to [env:]', () => {
-  const declaresOracleSyntax = /\[oracle:/i.test(specTemplate) || /\[oracle:/i.test(review) ||
-    /declared oracle|non-test oracle/i.test(specTemplate) || /declared oracle|non-test oracle/i.test(review)
+test('AC-20260813-02-6 (CROSS-20260813-03c): the AC coverage machinery supports a DECLARED non-test oracle naming a manifest leg, sibling to [env:]', () => {
+  const declaresOracleSyntax = /\[oracle:/i.test(specTemplate) || /\[oracle:/i.test(review)
   assert.ok(declaresOracleSyntax,
-    'neither the spec template nor review.md has an oracle-declaration syntax sibling to the ' +
-    'existing `[env: VAR]` AC tag — an AC whose correctness oracle is legitimately a ' +
-    'typecheck/compiler pass or a named gate command (never a test) has no way to declare that, ' +
-    'so review\'s mechanical grep matrix reports it uncovered identically to an AC nobody ' +
-    'checked at all (upwell spec 20260811/01)')
+    'neither the spec template nor review.md has an `[oracle: <manifest leg>]` declaration ' +
+    'syntax sibling to the existing `[env: VAR]` AC tag — an AC whose correctness oracle is ' +
+    'legitimately a manifest leg (never a test) has no way to declare that, so review\'s ' +
+    'mechanical grep matrix reports it uncovered identically to an AC nobody checked at all ' +
+    '(upwell spec 20260811/01)')
+})
+
+test('AC-20260813-02-6: a declared [oracle:] leg that is red or absent in the manifest is a hard finding, identical standing to an uncovered AC', () => {
+  assert.match(review, /\[oracle:[^\]]*\][\s\S]{0,600}(hard|uncovered)|uncovered[\s\S]{0,600}\[oracle:/i,
+    'review.md must state that an `[oracle:]`-tagged AC whose declared oracle leg is red or ' +
+    'absent in the manifest is a HARD finding — the same standing as an uncovered AC — ' +
+    'otherwise `[oracle: anything]` becomes a coverage-laundering route with no consequence ' +
+    'when the named leg never actually ran or failed')
+})
+
+test('AC-20260813-02-6: the Drift gate section carries the [oracle:] carve-out in BOTH the driftScript and no-driftScript branches', () => {
+  const driftGateSection = /## Drift gate([\s\S]*?)\n## /.exec(review)
+  assert.notStrictEqual(driftGateSection, null,
+    'could not locate the "## Drift gate" section in review.md at all — update the extraction ' +
+    'regex if the section was renamed or the doc restructured')
+  const sectionText = driftGateSection[1]
+  const driftScriptBranch = /driftScript.*declared[\s\S]*?(?=- \*\*No `driftScript`|$)/i.exec(sectionText)
+  const noDriftScriptBranch = /No `driftScript`[\s\S]*$/i.exec(sectionText)
+  assert.notStrictEqual(driftScriptBranch, null,
+    'could not locate the "driftScript declared" branch inside the Drift gate section — update ' +
+    'the extraction regex if that branch was reworded')
+  assert.notStrictEqual(noDriftScriptBranch, null,
+    'could not locate the "No driftScript" branch inside the Drift gate section — update the ' +
+    'extraction regex if that branch was reworded')
+  assert.match(driftScriptBranch[0], /\[oracle:/i,
+    'the Drift gate section\'s driftScript-declared branch must carry the same `[oracle:]` ' +
+    'carve-out as step 5\'s grep matrix — otherwise a host with a driftScript restates the ' +
+    'uncovered-AC rule with no oracle exemption and directly contradicts step 5 for that host ' +
+    '(refuter finding: the Drift gate section currently restates the rule for both modes with ' +
+    'no carve-out at all)')
+  assert.match(noDriftScriptBranch[0], /\[oracle:/i,
+    'the Drift gate section\'s no-driftScript branch must carry the same `[oracle:]` carve-out ' +
+    'as step 5\'s grep matrix — otherwise an `[oracle:]`-tagged AC is exempted by step 5 but ' +
+    'this section\'s "zero test hits is an automatic hard finding" restatement contradicts it ' +
+    'for the exact same AC')
 })

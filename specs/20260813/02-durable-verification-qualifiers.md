@@ -1,6 +1,7 @@
 ---
 date: 2026-08-13
-status: hardened
+status: implementing
+diff_base: 21fded1769ec2050b66c36428cdd1a51a0e287ad
 open_markers: 0
 risk: T3
 area: review-integrity

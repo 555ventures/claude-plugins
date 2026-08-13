@@ -94,7 +94,7 @@ test('AC-20260805-02-3 / AC-20260810-07-8: a red ci leg derives GATE_RED and exi
   assert.strictEqual(r.status, 1, 'GATE_RED must exit 1 so the close step is mechanically unreachable: ' + r.stderr)
 })
 
-test('AC-20260805-02-3: a ci leg observed unavailable with exit 0 is treated as satisfied and CLEAN is still reachable', () => {
+test('AC-20260813-02-8: review-profile CLEAN with a ci leg observed unavailable stays plain CLEAN — the CLEAN-with-qualifier word exists only on the release profile (AC-20260805-02-3)', () => {
   const dir = tmpdir('verdict')
   const manifest = writeManifest(dir, SIX_GREEN) // ci row is exit 0, observed "unavailable"
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
@@ -231,17 +231,56 @@ test('AC-20260805-02-5: --ledger derives row.smoke from the manifest smoke row e
     'history, not just on stderr: ' + JSON.stringify(failRow))
 })
 
-test('AC-20260805-02-5: --ledger derives row.testsSkipped as skips+todos from the gate row\'s pinned "skips=N todos=M" observed format', () => {
+test('AC-20260813-02-7 (updates AC-20260805-02-5): --ledger derives row.testsSkipped.total as skips+todos from the gate row\'s pinned "skips=N todos=M" observed format — the total-summing claim survives the D2 object-shape change', () => {
   const dir = tmpdir('verdict')
   const rows = SIX_GREEN.map(r => (r.leg === 'gate' ? { leg: 'gate', exit: 0, observed: 'skips=2 todos=1' } : r))
   const manifest = writeManifest(dir, rows)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger'])
   const row = JSON.parse(r.stdout.trim().split('\n')[1])
-  assert.strictEqual(row.testsSkipped, 3,
-    'D2 pins the gate leg\'s observed format as "skips=N todos=M" specifically so testsSkipped can be summed ' +
-    'from it (a skip is not a pass) — skips=2 todos=1 must derive testsSkipped 3, not 2 or 1 alone: ' +
+  assert.strictEqual(typeof row.testsSkipped, 'object',
+    'D2 makes row.testsSkipped an object ({total,sanctioned,unsanctioned}) always — a bare number here means ' +
+    'the scalar shape survived and downstream consumers still cannot tell a sanctioned skip run from an ' +
+    'unsanctioned one: ' + JSON.stringify(row))
+  assert.strictEqual(row.testsSkipped.total, 3,
+    'D2 pins the gate leg\'s observed format as "skips=N todos=M" specifically so testsSkipped.total can be ' +
+    'summed from it (a skip is not a pass) — skips=2 todos=1 must derive total 3, not 2 or 1 alone: ' +
     JSON.stringify(row))
+})
+
+test('AC-20260813-02-1: --ledger derives row.testsSkipped as {total,sanctioned,unsanctioned} from the gate row\'s skips+todos and the skip-reconcile row\'s "skipped=K sanctioned=S" observed format', () => {
+  const dir = tmpdir('verdict')
+  const rows = SIX_GREEN.map(r => {
+    if (r.leg === 'gate') return { leg: 'gate', exit: 0, observed: 'skips=2 todos=1' }
+    if (r.leg === 'skip-reconcile') return { leg: 'skip-reconcile', exit: 0, observed: 'skipped=3 sanctioned=2' }
+    return r
+  })
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger'])
+  const row = JSON.parse(r.stdout.trim().split('\n')[1])
+  assert.deepStrictEqual(row.testsSkipped, { total: 3, sanctioned: 2, unsanctioned: 1 },
+    'D2: gate "skips=2 todos=1" (total 3) joined with skip-reconcile "skipped=3 sanctioned=2" (sanctioned 2) ' +
+    'must derive {"total":3,"sanctioned":2,"unsanctioned":1} — without this split, hearwell\'s testsSkipped:5 ' +
+    'incident (identical count for 5 declared-sanctioned skips and 5 undeclared ones) is unfixed: ' +
+    JSON.stringify(row))
+})
+
+test('AC-20260813-02-2: a legacy skip-reconcile "skipped=K" observed (no sanctioned= term) derives sanctioned:0 — undeclared skips are unsanctioned by construction, never silently sanctioned', () => {
+  const dir = tmpdir('verdict')
+  const rows = SIX_GREEN.map(r => {
+    if (r.leg === 'gate') return { leg: 'gate', exit: 0, observed: 'skips=2 todos=1' }
+    if (r.leg === 'skip-reconcile') return { leg: 'skip-reconcile', exit: 0, observed: 'skipped=2' }
+    return r
+  })
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger'])
+  const row = JSON.parse(r.stdout.trim().split('\n')[1])
+  assert.deepStrictEqual(row.testsSkipped, { total: 3, sanctioned: 0, unsanctioned: 3 },
+    'D2: a legacy skip-reconcile row carrying only "skipped=2" (no sanctioned= term) must derive sanctioned:0 ' +
+    '— the conservative reading is that an undeclared skip is unsanctioned by definition, never silently ' +
+    'treated as sanctioned just because an older manifest shape produced it: ' + JSON.stringify(row))
 })
 
 test('AC-20260805-02-8: the review ledger row nests survived/killed/waived/rejected/fixDispatched/reviewerCount under findings and carries none of them flat at the top level', () => {
@@ -304,7 +343,7 @@ const RELEASE_SEVEN_LEGS = [
   { leg: 'ci', exit: 0, observed: 'conclusion=success' },
 ]
 
-test('AC-20260805-02-8 / AC-20260810-07-5: --profile release --ledger with --milestone/--briefs and all seven green legs (incl. ci) derives milestone/briefs/staging/e2e/journeys/substrate/production/ci matching release.md\'s template', () => {
+test('AC-20260813-02-5 (AC-20260805-02-8 / AC-20260810-07-5, byte-identical per D5): --profile release --ledger with --milestone/--briefs and all seven green legs incl. ci observed conclusion=success derives plain CLEAN (never CLEAN-with-qualifier) matching release.md\'s template', () => {
   const dir = tmpdir('verdict')
   const manifest = writeManifest(dir, RELEASE_SEVEN_LEGS)
   const r = runNode(SCRIPT, ['--manifest', manifest, '--profile', 'release', '--ledger',
@@ -340,6 +379,30 @@ test('AC-20260805-02-8 / AC-20260810-07-5: --profile release --ledger with --mil
     'gains a "ci" field per D4/Contracts once ci joins RELEASE_LEGS, and this six-leg fixture regresses to ' +
     'UNVERIFIED the moment that happens (refuter-demonstrated) unless the ci row is present here: ' +
     JSON.stringify(row))
+})
+
+test('AC-20260813-02-4: --profile release with six green legs and a ci row observed "unavailable" (exit 0, structurally-absent verdict) derives CLEAN-with-qualifier on line 1, records it in row.verdict, and exits 0', () => {
+  const dir = tmpdir('verdict')
+  const rows = RELEASE_SEVEN_LEGS.map(r => (r.leg === 'ci' ? { leg: 'ci', exit: 0, observed: 'unavailable' } : r))
+  const manifest = writeManifest(dir, rows)
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--profile', 'release', '--ledger',
+    '--milestone', 'v1.2.3', '--briefs', '12,13'])
+  const lines = r.stdout.trim().split('\n')
+  assert.strictEqual(lines[0], 'CLEAN-with-qualifier',
+    'D3: a release derivation that would otherwise reach CLEAN, but whose ci leg observed is "unavailable" ' +
+    '(a required leg that structurally never delivered a verdict), must print the distinct word ' +
+    '"CLEAN-with-qualifier" on stdout line 1, not plain "CLEAN" — hearwell\'s first release recorded CLEAN ' +
+    'beside ci:"unavailable" with the qualifier living only in transient console scrollback: ' +
+    r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 0,
+    'CLEAN-with-qualifier is CLEAN-family and must exit 0 — it gates nothing extra, it only makes the ' +
+    'qualifier durable: ' + r.stderr)
+  let row
+  assert.doesNotThrow(() => { row = JSON.parse(lines[1]) },
+    '--ledger must still print a parseable JSON row on line 2 for the qualified word: ' + r.stdout)
+  assert.strictEqual(row.verdict, 'CLEAN-with-qualifier',
+    'row.verdict must record the exact qualified word, matching line 1 — a mismatch would let the durable ' +
+    'ledger row disagree with what the console printed: ' + JSON.stringify(row))
 })
 
 test('AC-20260810-07-6: --profile release with the other six legs green but NO ci row derives UNVERIFIED and exits 1', () => {

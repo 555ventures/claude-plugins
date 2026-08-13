@@ -82,7 +82,14 @@ depended_on_by: []
      EXECUTED tests: a skipped test is a hard finding too, unless the AC carries an explicit
      env gate). An AC whose test legitimately needs an environment declares it inline:
      `[env: TEST_DATABASE_URL]` — then a skip reports as a warning naming that environment
-     instead of a hard finding; never leave an env dependency undeclared. A Decision that
+     instead of a hard finding; never leave an env dependency undeclared. An AC whose honest
+     oracle is a non-test gate leg (e.g. the typecheck/gate leg itself) declares
+     `[oracle: <manifest leg>]` — a leg name from the evidence manifest's closed set (`gate`,
+     `smoke`, `drift`, `ci`, …), sibling syntax to `[env:]`, never free-form command text (no
+     manifest row means no mechanical redness check, which would make the tag a coverage-
+     laundering route). A declared oracle covers the AC by declaration in review's matrix; a
+     red or absent oracle leg is a hard finding, identical in standing to an uncovered AC. One
+     oracle per AC; an AC never carries both a test mapping and an `[oracle:]` tag. A Decision that
      promises a user-observable surface owes at least one AC whose test asserts on the
      observable itself, reached through the real in-repo route, fed by a fixture that is
      **produced** — the test executes the spec's own producer chain (view-model, assembler,
@@ -105,6 +112,8 @@ depended_on_by: []
 - **AC-{YYYYMMDD-NN}-1**: WHEN { trigger/state } THE SYSTEM SHALL { observable response }
   (e.g. `{ literal input }` → `{ literal output }`) → { test reference } in { test file }
 - **AC-{YYYYMMDD-NN}-2** `[env: { VAR }]` (only when the test is environment-gated): …
+- **AC-{YYYYMMDD-NN}-3** `[oracle: { manifest leg, e.g. gate }]` (only when no test is the
+  right oracle — the named leg is): …
 
 ## Assumptions (escalation triggers)
 

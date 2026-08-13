@@ -135,6 +135,11 @@ manifest rows above, never passed as a flag.
 
 ## Phase 3 — Promote (explicitly confirmed, never autonomous)
 
+A milestone whose only gap is a `ci` leg that structurally never delivered a verdict
+(`unavailable`/`in-progress`) is `CLEAN-with-qualifier`, not a block: it promotes exactly as
+plain `CLEAN` does, carrying the already-mandated ⚠️ line (Phase 2 step 3) into the promote
+question's context and the Phase 4 report — the word gates nothing extra here.
+
 1. `AskUserQuestion`: promote this build to production? (Include the Phase 2 observation
    summary in the question context.) Dismissed or declined → STOP; staging stands, nothing
    promoted; append `{"leg":"production","exit":0,"observed":"skipped"}` to `{manifestPath}`
@@ -158,12 +163,17 @@ manifest rows above, never passed as a flag.
    path). `--milestone`/`--briefs` are orchestrator-supplied identity fields (`$ARGUMENTS` /
    Phase 0 step 2's shipped-brief list); `staging`/`e2e`/`journeys`/`substrate`/`production`/`ci`
    are derived from the Phase 2/3 manifest rows, never passed as flags. Print line 1 (the word
-   — `CLEAN`, `GATE_RED`, or `UNVERIFIED`) verbatim, and append exactly ONE line to
+   — `CLEAN`, `CLEAN-with-qualifier`, `GATE_RED`, or `UNVERIFIED`) verbatim, and append exactly
+   ONE line to
    `.claude/spec-runs.jsonl` — line 2, the ledger row, verbatim, counts/enums/paths only, never prose:
 
    ```
-   {"ts":"<ISO-8601>","stage":"release","milestone":"<tag or briefs range>","briefs":[<NN>,…],"staging":"<pass|fail>","e2e":{"passed":<n>,"failed":<n>,"skipped":<n>},"journeys":{"walked":<n>,"failed":<n>},"substrate":{"checked":<n>,"failed":<n>,"inert":<n>},"production":"<verified|skipped|failed>","ci":"<conclusion=<value>|unavailable|in-progress>"}
+   {"ts":"<ISO-8601>","stage":"release","milestone":"<tag or briefs range>","briefs":[<NN>,…],"verdict":"<CLEAN|CLEAN-with-qualifier|GATE_RED|UNVERIFIED>","staging":"<pass|fail>","e2e":{"passed":<n>,"failed":<n>,"skipped":<n>},"journeys":{"walked":<n>,"failed":<n>},"substrate":{"checked":<n>,"failed":<n>,"inert":<n>},"production":"<verified|skipped|failed>","ci":"<conclusion=<value>|unavailable|in-progress>"}
    ```
+
+   `verdict` is net-new here as documented text — `verdict.js` has always emitted `row.verdict`
+   on release rows; this is the doctrine catching up to the script and pinning the enum,
+   `CLEAN-with-qualifier` included.
 
 2. **Tag** the release (`git tag`) when the user confirmed promotion — never push the tag;
    pushing remains theirs.
@@ -182,10 +192,12 @@ manifest rows above, never passed as a flag.
 
    ```
    ✅ **milestone green — {N} specs composed, staging + e2e passed, promoted**
-      (or: 🚫 **{what blocked promotion}**)
+      (or, on `CLEAN-with-qualifier`: ✅ **milestone green (qualified: CI never delivered a
+      verdict) — promoted** · or: 🚫 **{what blocked promotion}**)
    - shipped: {briefs + specs}
    - observed: {deploy, ready, e2e counts, journeys walked with outcomes, ci verdict — one line each}
    - substrate: {rows checked / inert-declared} · production: {verification result}
+   ⚠️ {unresolved leg — e.g. "ci never delivered a verdict on this commit"}    (only on `CLEAN-with-qualifier`)
    ⚠️ yours / the client's to do: {inert rows, verbatim — one line each}
    🧹 next (optional): /spec:audit — hotspot debt audit for this milestone
    ```

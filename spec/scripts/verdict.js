@@ -10,7 +10,8 @@
 // the sole derivation: per-iteration evidence-manifest rows (one per executed Phase 0 leg) +
 // the wf-review workflow return + disposition counts -> exactly one verdict word, first-match-
 // wins (spec Decisions D2/D3). --profile release runs the same shape against release.md's
-// legs (D7) — no --workflow, no dispositions, word restricted to CLEAN|GATE_RED|UNVERIFIED.
+// legs (D7) — no --workflow, no dispositions, word restricted to
+// CLEAN|CLEAN-with-qualifier|GATE_RED|UNVERIFIED (D3).
 // The --ledger row is additive to review.md/release.md's documented templates: review's
 // runId/smoke/testsSkipped/findings are derived here (D2 — smoke and testsSkipped come FROM
 // manifest rows' pinned observed formats, never asserted); release's milestone/briefs are
@@ -33,11 +34,22 @@
 // evidence that already exists. A missing/unparseable release leg omits that row key rather
 // than failing the ledger print — STOP-path rows are partial by nature.
 //
-// Exit codes: 0 = derived CLEAN · 1 = derived non-CLEAN word (still printed on stdout line 1) ·
-// 2 = usage error, missing/unreadable --manifest or --workflow file, a disposition
-// contradiction (--waived + --rejected + --fixDispatched exceeds the workflow's survivor count),
-// or (review profile, no --workflow) a manifest that derives green/complete — a panel-less
-// CLEAN is undecidable without --workflow and must not print
+// Incident (2026-08-13, spec durable-verification-qualifiers D2/D3): the ledger's
+// `testsSkipped` count and the release word both silently dropped a qualifier that only ever
+// lived in console scrollback — sanctioned (`[env:]`-declared) skips were indistinguishable
+// from unsanctioned ones, and a release whose `ci` leg structurally never delivered a verdict
+// (`unavailable`/`in-progress`) printed a plain `CLEAN` identical to one with a real green CI
+// run. `testsSkipped` is now always an object `{total, sanctioned, unsanctioned}` (D2); the
+// release profile now derives the distinct CLEAN-family word `CLEAN-with-qualifier` when `ci`
+// is structurally absent (D3) — it exits 0 and gates nothing extra, so the final exit check is
+// a CLEAN-family prefix test rather than an exact match.
+//
+// Exit codes: 0 = derived CLEAN or CLEAN-with-qualifier · 1 = derived other non-CLEAN word
+// (still printed on stdout line 1) · 2 = usage error, missing/unreadable --manifest or
+// --workflow file, a disposition contradiction (--waived + --rejected + --fixDispatched
+// exceeds the workflow's survivor count), or (review profile, no --workflow) a manifest that
+// derives green/complete — a panel-less CLEAN is undecidable without --workflow and must not
+// print
 
 const fs = require('fs')
 
@@ -141,7 +153,13 @@ function derive() {
   if (profile !== 'release' && workflow && workflow.verdict === 'REVIEWER_FAILED') return 'REVIEWER_FAILED'
   if (!manifestValid || requiredLegs.some(l => !legRows.has(l))) return 'UNVERIFIED'
   if ([...blockingLegs].some(legIsRed)) return 'GATE_RED'
-  if (profile === 'release') return 'CLEAN'
+  if (profile === 'release') {
+    const ci = legRows.get('ci')
+    const unresolved = ci && /^(unavailable|in-progress)$/.test(ci.observed || '')
+    // release.md's ci enum is {conclusion=<value>, unavailable, in-progress} —
+    // 'unavailable-transient' is review-profile-only vocabulary, deliberately absent here.
+    return unresolved ? 'CLEAN-with-qualifier' : 'CLEAN'
+  }
   if (fixDispatched > 0) return 'FINDINGS' // a dispatched fix is non-terminal
   const undispositioned = survivors.length - waived - rejected - fixDispatched
   if (undispositioned > 0) return survivors.some(f => f.severity === 'hard') ? 'HARD_FINDINGS' : 'FINDINGS'
@@ -165,9 +183,12 @@ function deriveSmoke(row) {
   return 'fail'
 }
 
-function deriveTestsSkipped(row) {
-  const m = row && /^skips=(\d+) todos=(\d+)$/.exec(row.observed || '')
-  return m ? Number(m[1]) + Number(m[2]) : 0
+function deriveTestsSkipped(gateRow, skipReconcileRow) {
+  const gm = gateRow && /^skips=(\d+) todos=(\d+)$/.exec(gateRow.observed || '')
+  const total = gm ? Number(gm[1]) + Number(gm[2]) : 0
+  const sm = skipReconcileRow && /^skipped=(\d+)(?: sanctioned=(\d+))?$/.exec(skipReconcileRow.observed || '')
+  const sanctioned = sm && sm[2] !== undefined ? Number(sm[2]) : 0
+  return { total, sanctioned, unsanctioned: Math.max(0, total - sanctioned) }
 }
 
 function parseCounts(row, keys) {
@@ -221,7 +242,7 @@ if (ledger) {
     if (diffLoc !== null) row.diff = { loc: diffLoc }
     const smoke = deriveSmoke(legRows.get('smoke'))
     if (smoke) row.smoke = smoke
-    row.testsSkipped = deriveTestsSkipped(legRows.get('gate'))
+    row.testsSkipped = deriveTestsSkipped(legRows.get('gate'), legRows.get('skip-reconcile'))
     row.legs = legs
     if (workflow) {
       row.tokens = typeof workflow.tokens === 'number' ? { workflow: workflow.tokens } : workflow.tokens
@@ -239,4 +260,4 @@ if (ledger) {
   console.log(JSON.stringify(row))
 }
 
-process.exit(word === 'CLEAN' ? 0 : 1)
+process.exit(word.startsWith('CLEAN') ? 0 : 1)

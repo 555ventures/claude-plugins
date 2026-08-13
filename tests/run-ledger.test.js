@@ -62,7 +62,7 @@ test('escape rows: /spec:escape records defects that got past review', () => {
 test('release rows: /spec:release appends one prose-free row and never promotes autonomously', () => {
   const rel = read('commands/release.md')
   assert.match(rel, new RegExp(LEDGER.replace(/[./]/g, '\\$&')), 'release appends to the one ledger')
-  assert.match(rel, /exactly ONE line/)
+  assert.match(rel, /exactly\s+ONE line/)
   assert.match(rel, /never prose/i)
   for (const field of ['"stage":"release"', '"briefs"', '"staging"', '"e2e"', '"journeys"',
     '"substrate"', '"production"']) {
@@ -80,7 +80,7 @@ test('escape rows carry the prevention delta — the loop-closing field', () => 
   assert.match(esc, /`none` is a real answer, never a\s+default/i)
 })
 
-test('review rows carry the executed-leg fields: smoke verdict and skip count', () => {
+test('AC-20260813-02-7: review rows carry the executed-leg fields: smoke verdict and skip count — the "testsSkipped" key survives the D2 scalar-to-object shape change', () => {
   const review = read('commands/review.md')
   assert.ok(review.includes('"smoke"'), 'review schema has smoke')
   assert.ok(review.includes('"testsSkipped"'), 'review schema has testsSkipped')

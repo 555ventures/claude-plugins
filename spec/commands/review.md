@@ -118,9 +118,16 @@ build that is the worktree itself. Phase 4 resolves a second, distinctly named s
    silently drop out of coverage and ride to CLEAN). Then, **no `driftScript` only**, the
    AC coverage matrix: for each well-formed AC-ID, grep the File Plan's test paths for it.
    Any AC-ID with zero hits is an **uncovered AC** — an automatic `hard` finding that skips
-   verification (it is a deterministic fact, not a reviewer claim). Computed before
+   verification (it is a deterministic fact, not a reviewer claim) — **unless** the AC line
+   carries an `[oracle: <manifest leg>]` declaration (sibling syntax to `[env: VAR_NAME]`,
+   template AC comment block): that AC is covered by declaration, excluded from `uncovered`,
+   and reported as a named warning line ("AC-x: oracle = `<leg>` leg") in the verdict — never
+   silent green. Check the manifest: a declared oracle leg that is red or absent in
+   `{manifestPath}` is an automatic `hard` finding, identical in standing to an uncovered AC
+   (the declared oracle never ran). Computed before
    the reviewer panel runs. (Pin presence — `SHALL CONTINUE TO` on defect-fix specs — is
-   plan lock's check, never review's.) Leg `ac-matrix`, `observed:"uncovered=<N>"` — its
+   plan lock's check, never review's.) Leg `ac-matrix`, `observed:"uncovered=<N> oracle=<M>"`
+   (`M` = the count of `[oracle:]`-covered ACs) — its
    non-zero exit means findings were emitted, not that the leg failed to execute; those
    findings ride the normal Phase 2 disposition flow.
 6. **Skipped-test reconciliation (mechanical, both drift modes):** the matrix counts
@@ -132,8 +139,14 @@ build that is the worktree itself. Phase 4 resolves a second, distinctly named s
    skipped is reported as a **warning naming the un-run environment** in the verdict — never
    silent green. (Ground truth: UpWell 2026-07 — a test holding a defect real pg-boss rejects
    with a throw sat `describe.skipIf`-skipped through two CLEAN verdicts because the matrix
-   reconciled against collected tests.) Leg `skip-reconcile`, `observed:"skipped=<N>"` — like
-   `ac-matrix`, its non-zero exit means findings, not non-execution.
+   reconciled against collected tests.) Count `M` — the skipped tests mapped, in this same
+   step, to an AC carrying a declared `[env: VAR_NAME]` — alongside the total: Leg
+   `skip-reconcile`, `observed:"skipped=<N> sanctioned=<M>"` (the legacy `skipped=<N>` form,
+   with no `sanctioned=`, stays parseable — a missing `M` is read as 0, never inferred) — like
+   `ac-matrix`, its non-zero exit means findings, not non-execution. This is the only place
+   that already holds the skip↔AC↔declaration mapping; `verdict.js` derives `row.testsSkipped`
+   from `M` plus the gate leg's total (Phase 2's ledger row shape, below), never a second
+   computation of the same join.
 7. **Scope reconciliation findings (mechanical, 20260805/01 D7):** step 2's exit 3 yields ONE mechanical
    **hard** <!-- enforcedBy: spec/scripts/scope-reconcile.js --> finding: "out-of-plan changes: {list}" with each file's diffstat. A non-empty
    `unrealized` yields ONE mechanical **soft** finding: "planned but untouched: {list}". Both
@@ -235,11 +248,15 @@ Two modes, decided by host config:
 - **`driftScript` declared** — its output is part of the verdict. For **uncovered ACs** (in
   spec, no test): add the missing tests (via `/spec:build` resume if the spec is mid-pipeline).
   For **orphaned ACs** (in test, no spec): the AC may have been removed — update the test
-  docstring/name or remove the test. Re-run the script to verify.
+  docstring/name or remove the test. Re-run the script to verify. An AC the `driftScript`
+  reports uncovered but that carries an `[oracle: <manifest leg>]` declaration is adjudicated
+  against that manifest leg, not the script's test grep — covered when the leg is green,
+  `hard` when it is red or absent.
 - **No `driftScript`** — the Phase 0 grep matrix IS the drift gate: an AC-ID with zero test
   hits is an automatic `hard` finding — no verifier pass, it is a deterministic fact. The reviewer's AC ↔ test coverage check
   remains as the semantic backstop — a test that *names* an AC-ID but doesn't actually test
-  the behavior is still a `hard` finding.
+  the behavior is still a `hard` finding. Same carve-out here: an `[oracle: <manifest leg>]`
+  AC is covered by declaration (step 5), never counted against this leg's `uncovered`.
 
 ## Phase 2 — Verdict
 
@@ -271,7 +288,7 @@ Ledger row shape (the exact JSON `verdict.js --ledger` prints on line 2 — appe
 verbatim, never hand-assembled, never prose or finding text):
 
 ```
-{"ts":"<ISO-8601>","spec":"<repo-relative spec path>","stage":"review","tier":"<T1|T2|T3>","runId":"<wf_…>","verdict":"<CLEAN|FINDINGS|HARD_FINDINGS|REVIEWER_FAILED|UNVERIFIED|GATE_RED>","scope":"<full|fix-delta>","iteration":<n>,"diff":{"loc":<n>},"smoke":"<pass|fail|inert>","testsSkipped":<n>,"tokens":{"workflow":<n>},"legs":[{"leg":"gate","exit":0},…],"findings":{"survived":<n>,"killed":<n>,"waived":<n>,"rejected":<n>,"fixDispatched":<n>,"reviewerCount":<n>},"verify":{"verified":<n>,"demonstrated":<n>,"killedByExecution":<n>,"sanctioned":<n>,"miscited":<n>,"unverifiable":<n>,"failed":<n>,"capSkipped":<n>}}
+{"ts":"<ISO-8601>","spec":"<repo-relative spec path>","stage":"review","tier":"<T1|T2|T3>","runId":"<wf_…>","verdict":"<CLEAN|FINDINGS|HARD_FINDINGS|REVIEWER_FAILED|UNVERIFIED|GATE_RED>","scope":"<full|fix-delta>","iteration":<n>,"diff":{"loc":<n>},"smoke":"<pass|fail|inert>","testsSkipped":{"total":<n>,"sanctioned":<n>,"unsanctioned":<n>},"tokens":{"workflow":<n>},"legs":[{"leg":"gate","exit":0},…],"findings":{"survived":<n>,"killed":<n>,"waived":<n>,"rejected":<n>,"fixDispatched":<n>,"reviewerCount":<n>},"verify":{"verified":<n>,"demonstrated":<n>,"killedByExecution":<n>,"sanctioned":<n>,"miscited":<n>,"unverifiable":<n>,"failed":<n>,"capSkipped":<n>}}
 ```
 
 `verdict` is the D5 derived-verdict enum — **never write `CLEAN` on a row whose

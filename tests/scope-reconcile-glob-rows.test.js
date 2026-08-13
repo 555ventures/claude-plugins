@@ -15,6 +15,10 @@ const { tmpdir, runNode, gitRepo } = require('./helpers')
 // unrealized (the literal glob string was never among the changed files). Confirmed by direct
 // execution against a synthetic fixture below, before this test existed. First incident: prax
 // spec 20260810/05 deviation; second: spec 20260812/01, contracts codegen ripple.
+//
+// specs/20260813/03-gate-script-mechanics.md D2 pins the fix: AC-20260813-03-4 (glob-covered
+// file excluded from outOfPlan) and AC-20260813-03-5 (glob row excluded from unrealized once a
+// non-excluded changed file matches it), both against this same fixture.
 
 const SCRIPT = 'scripts/scope-reconcile.js'
 const GLOB_ROW = 'packages/contracts/schemas/*.json'
@@ -30,7 +34,7 @@ function specWithGlobPlan(dir, relPath) {
   return relPath
 }
 
-test('PRAX-20260813-05: a File Plan glob row does not double-report — the concrete changed file it covers must not land in outOfPlan', () => {
+test('AC-20260813-03-4 / PRAX-20260813-05: a File Plan glob row does not double-report — the concrete changed file it covers must not land in outOfPlan, and the run exits 0', () => {
   const dir = tmpdir('scope-reconcile-glob')
   const g = gitRepo(dir)
   const base = g('rev-parse', 'HEAD').trim()
@@ -46,9 +50,12 @@ test('PRAX-20260813-05: a File Plan glob row does not double-report — the conc
     'only does an exact string match against the literal glob text, never a glob match against ' +
     'the concrete changed file — so a legitimate codegen output the plan explicitly covers is ' +
     'reported as an out-of-plan violation: ' + JSON.stringify(out))
+  assert.strictEqual(r.status, 0,
+    'AC-20260813-03-4 requires exit 0 once the glob-covered file is excluded from outOfPlan — a ' +
+    'nonzero exit here means the glob row is still not recognized as covering the changed file: ' + r.stderr)
 })
 
-test('PRAX-20260813-05: a File Plan glob row realized by a concrete changed file must not also land in unrealized', () => {
+test('AC-20260813-03-5 / PRAX-20260813-05: a File Plan glob row realized by a concrete changed file must not also land in unrealized', () => {
   const dir = tmpdir('scope-reconcile-glob')
   const g = gitRepo(dir)
   const base = g('rev-parse', 'HEAD').trim()

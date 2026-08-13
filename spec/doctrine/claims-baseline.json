@@ -17,7 +17,7 @@
       "orphans": 1
     },
     "spec/commands/doctor.md": {
-      "lines": 390,
+      "lines": 393,
       "orphans": 3
     },
     "spec/commands/enforce.md": {
@@ -81,5 +81,5 @@
       "orphans": 5
     }
   },
-  "totalLines": 5727
+  "totalLines": 5730
 }

@@ -13,6 +13,12 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // planned-but-untouched file surfaces too (`unrealized`), enforced by a script, never reviewer
 // diligence. This file pins the reconciliation contract itself; wf-review/review.md wiring is
 // pinned in review-scope-doctrine.test.js.
+//
+// specs/20260813/03-gate-script-mechanics.md D2 adds glob-row matching alongside these
+// concrete-path rows (pinned separately in tests/scope-reconcile-glob-rows.test.js).
+// AC-20260813-03-6 requires concrete-path reconciliation (exact match, exit-3 out-of-plan,
+// unrealized listing, rename pairing, pipeline-owned exclusion) to stay byte-identical after
+// D2 lands — every test below is that regression pin.
 
 const SCRIPT = 'scripts/scope-reconcile.js'
 
@@ -26,7 +32,7 @@ function specWithPlan(dir, relPath, planPaths) {
   return relPath
 }
 
-test('AC-20260805-01-1: an out-of-plan changed file exits 3 and lands in outOfPlan', () => {
+test('AC-20260805-01-1 / AC-20260813-03-6: an out-of-plan changed file exits 3 and lands in outOfPlan', () => {
   const dir = tmpdir('scope-reconcile')
   const g = gitRepo(dir)
   const base = g('rev-parse', 'HEAD').trim()
@@ -44,7 +50,7 @@ test('AC-20260805-01-1: an out-of-plan changed file exits 3 and lands in outOfPl
     'src/b.js was never in the File Plan and is not pipeline-owned — it must be the sole out-of-plan entry')
 })
 
-test('AC-20260805-01-2: every changed file planned or pipeline-owned exits 0, with pipeline-owned matches in excluded', () => {
+test('AC-20260805-01-2 / AC-20260813-03-6: every changed file planned or pipeline-owned exits 0, with pipeline-owned matches in excluded', () => {
   const dir = tmpdir('scope-reconcile')
   const g = gitRepo(dir)
   const base = g('rev-parse', 'HEAD').trim()
@@ -62,7 +68,7 @@ test('AC-20260805-01-2: every changed file planned or pipeline-owned exits 0, wi
     'the spec doc changed under specs/** (a default pipeline-owned exclusion) must be visible in excluded, never silently dropped: ' + JSON.stringify(out))
 })
 
-test('AC-20260805-01-3: a planned file with no corresponding change lands in unrealized and still exits 0', () => {
+test('AC-20260805-01-3 / AC-20260813-03-6: a planned file with no corresponding change lands in unrealized and still exits 0', () => {
   const dir = tmpdir('scope-reconcile')
   const g = gitRepo(dir)
   const base = g('rev-parse', 'HEAD').trim()
@@ -79,7 +85,7 @@ test('AC-20260805-01-3: a planned file with no corresponding change lands in unr
     'src/never.js was planned but never touched by any changed file — it must surface in unrealized: ' + JSON.stringify(out))
 })
 
-test('AC-20260805-01-4: an untracked out-of-plan file with an empty committed diff still exits 3', () => {
+test('AC-20260805-01-4 / AC-20260813-03-6: an untracked out-of-plan file with an empty committed diff still exits 3', () => {
   const dir = tmpdir('scope-reconcile')
   const g = gitRepo(dir)
   const base = g('rev-parse', 'HEAD').trim()
@@ -98,7 +104,7 @@ test('AC-20260805-01-4: an untracked out-of-plan file with an empty committed di
     'the untracked file must appear in outOfPlan even though it never appears in `git diff --name-status`: ' + JSON.stringify(out))
 })
 
-test('AC-20260805-01-8: a planned file renamed in the diff reports the pair in renamed, not as findings', () => {
+test('AC-20260805-01-8 / AC-20260813-03-6: a planned file renamed in the diff reports the pair in renamed, not as findings', () => {
   const dir = tmpdir('scope-reconcile')
   const g = gitRepo(dir)
   const specRel = specWithPlan(dir, 'specs/20260805/01-x.md', ['src/a.js'])
@@ -130,7 +136,7 @@ test('AC-20260805-01-8: a planned file renamed in the diff reports the pair in r
 // rename's new path counts as in-plan when its old path was planned"; Behavior: "a rename whose old
 // path was NOT planned is just an ordinary out-of-plan new path." This test pins that an unplanned
 // rename must still surface, while remaining visible in `renamed` too.
-test("AC-20260805-01-9: an unplanned file's rename must not become invisible to review", () => {
+test("AC-20260805-01-9 / AC-20260813-03-6: an unplanned file's rename must not become invisible to review", () => {
   const dir = tmpdir('scope-reconcile')
   const g = gitRepo(dir)
   const specRel = specWithPlan(dir, 'specs/20260805/01-x.md', ['src/a.js'])

@@ -12,6 +12,25 @@
 // in either direction fails until `--update-baseline` re-stamps it, so every change to the ratio
 // is a diffable baseline hunk in the same commit (D4).
 //
+// specs/20260813/03-gate-script-mechanics.md D1: default-root resolution (no --root) anchors to
+// the script's OWN location, never process.cwd() — doctor check 18's only call pattern
+// (`node "$(spec-paths claims-lint)" --json`, no --root) was silently scanning nothing from any
+// host CWD before this. Three modes:
+//   1. `--root <dir>` — explicit, byte-identical to always: corpus at <dir>/spec/{commands,
+//      doctrine,agents}, baseline at <dir>/spec/doctrine/claims-baseline.json.
+//   2. no --root, dev/marketplace layout — upward walk from __dirname (at most 3 levels) to the
+//      first directory D containing spec/doctrine/claims-baseline.json; behaves byte-identical
+//      to `--root D`, including enforcedBy: pointer resolution against D.
+//   3. no --root, installed-plugin layout (upward walk finds nothing) — PLUGIN_HOME mode:
+//      PLUGIN_HOME = the script's own plugin root (one level up from its own directory); corpus
+//      at PLUGIN_HOME/{commands,doctrine,agents}, baseline at
+//      PLUGIN_HOME/doctrine/claims-baseline.json, report keys stay canonical
+//      'spec/<subdir>/<file>'. enforcedBy: targets resolve against PLUGIN_HOME with a leading
+//      'spec/' stripped; a target whose first path segment has no directory under PLUGIN_HOME
+//      (an unshipped tree, e.g. 'tests/…') is undecidable in this layout — it is counted in the
+//      `--json` output's `skippedPointers` list and reported informationally, NEVER as a
+//      stale-pointer finding (undecidable is not the same as stale).
+//
 // What this deliberately does NOT do: edit any doctrine file, decide whether a marker's target
 // is the RIGHT carrier (only that the path exists), or special-case bar phrases used as data
 // (e.g. a table cell describing a mechanism) — those enter the baseline like any other orphan
@@ -29,8 +48,8 @@ const fs = require('fs')
 const path = require('path')
 
 const REMEDY = 'node "$(spec-paths claims-lint)" --update-baseline'
-const CORPUS_DIRS = ['spec/commands', 'spec/doctrine', 'spec/agents']
-const BASELINE_REL = path.join('spec', 'doctrine', 'claims-baseline.json')
+const BASELINE_DISPLAY = path.join('spec', 'doctrine', 'claims-baseline.json')
+const UPWARD_WALK_MAX_LEVELS = 3
 
 // D2: the claim bar is a closed pattern list, data here — never a prompt clause. Last four
 // match uppercase only; lowercase normative prose is deliberately below the bar.
@@ -55,21 +74,50 @@ for (let i = 0; i < argv.length; i++) {
     mode = a
   } else { usage(); process.exit(2) }
 }
-if (!root) root = process.cwd()
 if (!mode) { usage(); process.exit(2) }
+
+// D1 mode 2: upward walk from __dirname (at most 3 levels) to the first directory containing
+// spec/doctrine/claims-baseline.json — the dev/marketplace layout, where this script lives at
+// <repo>/spec/scripts/claims-lint.js.
+function findUpwardRoot(startDir, maxLevels) {
+  let dir = startDir
+  for (let level = 0; level <= maxLevels; level++) {
+    if (fs.existsSync(path.join(dir, 'spec', 'doctrine', 'claims-baseline.json'))) return dir
+    const parent = path.dirname(dir)
+    if (parent === dir) return null
+    dir = parent
+  }
+  return null
+}
+
+let pluginHomeMode = false
+if (!root) {
+  const discovered = findUpwardRoot(__dirname, UPWARD_WALK_MAX_LEVELS)
+  if (discovered) {
+    root = discovered
+  } else {
+    // D1 mode 3: installed-plugin layout — this script's own plugin root, one level up from its
+    // own directory (e.g. <plugin>/scripts/claims-lint.js -> PLUGIN_HOME = <plugin>).
+    root = path.resolve(__dirname, '..')
+    pluginHomeMode = true
+  }
+}
 
 function countLines(content) {
   return content.endsWith('\n') ? content.split('\n').length - 1 : content.split('\n').length
 }
 
 // Scan one file's content for claims + markers. Returns { lines, claims: [{line}],
-// orphans: [{line}], findings: [{line, kind, detail}] } — findings are the per-line defects
-// (stale-pointer, sanction-reason); orphans/claims feed the file-level ratchet.
-function scanFile(relPath, content, resolvePath) {
+// orphans: [{line}], findings: [{line, kind, detail}], skipped: [{line, target}] } — findings
+// are the per-line defects (stale-pointer, sanction-reason); skipped are enforcedBy: targets
+// resolvePath could not decide (PLUGIN_HOME mode's unshipped trees) — informational, never a
+// finding; orphans/claims feed the file-level ratchet.
+function scanFile(content, resolvePath) {
   const lines = content.split('\n')
   const findings = []
   const claims = []
   const orphans = []
+  const skipped = []
 
   // Pass 1: classify every line as fence-interior, marker-only, or content (with an optional
   // inline trailing marker). Track fence state with indentation-tolerant delimiter detection.
@@ -99,16 +147,6 @@ function scanFile(relPath, content, resolvePath) {
     if (c.content) lastContentIdx = i
   }
 
-  function validateMarker(m) {
-    if (m.type === 'enforcedBy') {
-      const missing = m.value.split(',').map((s) => s.trim()).filter(Boolean).filter((p) => !resolvePath(p))
-      if (missing.length) return { kind: 'stale-pointer', detail: `enforcedBy path does not exist: ${missing.join(', ')} — fix the marker or remove the dead pointer` }
-    } else if (m.type === 'unenforced') {
-      if (m.value.length < 20) return { kind: 'sanction-reason', detail: `unenforced reason is ${m.value.length} chars, needs >= 20 — lengthen the reason to justify the sanction` }
-    }
-    return null
-  }
-
   for (let i = 0; i < classified.length; i++) {
     const c = classified[i]
     if (!c.content || !c.isClaim) continue
@@ -116,24 +154,57 @@ function scanFile(relPath, content, resolvePath) {
     claims.push({ line: lineNo })
     const marker = c.inlineMarker || attach[i]
     if (!marker) { orphans.push({ line: lineNo }); continue }
-    const bad = validateMarker(marker)
-    if (bad) findings.push({ line: marker.markerLine || lineNo, kind: bad.kind, detail: bad.detail })
+    const markerLine = marker.markerLine || lineNo
+    if (marker.type === 'enforcedBy') {
+      const targets = marker.value.split(',').map((s) => s.trim()).filter(Boolean)
+      const missing = []
+      for (const p of targets) {
+        const status = resolvePath(p)
+        if (status === 'missing') missing.push(p)
+        else if (status === 'skipped') skipped.push({ line: markerLine, target: p })
+      }
+      if (missing.length) findings.push({ line: markerLine, kind: 'stale-pointer', detail: `enforcedBy path does not exist: ${missing.join(', ')} — fix the marker or remove the dead pointer` })
+    } else if (marker.type === 'unenforced') {
+      if (marker.value.length < 20) findings.push({ line: markerLine, kind: 'sanction-reason', detail: `unenforced reason is ${marker.value.length} chars, needs >= 20 — lengthen the reason to justify the sanction` })
+    }
   }
 
-  return { lines: countLines(content), claims, orphans, findings }
+  return { lines: countLines(content), claims, orphans, findings, skipped }
 }
 
-function loadCorpus(rootDir) {
+// D1: corpus directory entries as [fsDir, keyDir] pairs — fsDir is relative to `root` on disk,
+// keyDir is the canonical 'spec/<subdir>' report-key prefix. Identical in every mode except
+// PLUGIN_HOME, where the plugin's shipped tree already IS the 'spec' subtree, so fsDir loses the
+// 'spec/' prefix while report keys stay canonical.
+const CORPUS_ENTRIES = pluginHomeMode
+  ? [['commands', 'spec/commands'], ['doctrine', 'spec/doctrine'], ['agents', 'spec/agents']]
+  : [['spec/commands', 'spec/commands'], ['spec/doctrine', 'spec/doctrine'], ['spec/agents', 'spec/agents']]
+
+function loadCorpus(rootDir, entries) {
   const files = []
-  for (const dir of CORPUS_DIRS) {
-    const abs = path.join(rootDir, dir)
+  for (const [fsDir, keyDir] of entries) {
+    const abs = path.join(rootDir, fsDir)
     if (!fs.existsSync(abs)) continue
     for (const name of fs.readdirSync(abs).sort()) {
       if (!name.endsWith('.md')) continue
-      files.push(path.posix.join(dir, name))
+      files.push({ rel: path.posix.join(fsDir, name), key: path.posix.join(keyDir, name) })
     }
   }
   return files
+}
+
+// D1: resolvePath returns a tri-state status — 'found' | 'missing' | 'skipped'. Non-PLUGIN_HOME
+// modes never return 'skipped' (the full repo is present, so every target is decidable).
+function makeResolvePath(rootDir, isPluginHomeMode) {
+  if (!isPluginHomeMode) {
+    return (p) => (fs.existsSync(path.join(rootDir, p)) ? 'found' : 'missing')
+  }
+  return (p) => {
+    const stripped = p.startsWith('spec/') ? p.slice('spec/'.length) : p
+    const firstSeg = stripped.split('/')[0]
+    if (!fs.existsSync(path.join(rootDir, firstSeg))) return 'skipped'
+    return fs.existsSync(path.join(rootDir, stripped)) ? 'found' : 'missing'
+  }
 }
 
 if (!fs.existsSync(root)) {
@@ -141,38 +212,43 @@ if (!fs.existsSync(root)) {
   process.exit(2)
 }
 
-const baselinePath = path.join(root, BASELINE_REL)
+const baselinePath = pluginHomeMode
+  ? path.join(root, 'doctrine', 'claims-baseline.json')
+  : path.join(root, BASELINE_DISPLAY)
 let baseline = null
 if (mode !== '--update-baseline') {
   if (!fs.existsSync(baselinePath)) {
-    console.error(`claims-lint: no baseline at ${BASELINE_REL} — run ${REMEDY}`)
+    console.error(`claims-lint: no baseline at ${BASELINE_DISPLAY} — run ${REMEDY}`)
     process.exit(2)
   }
   try {
     baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'))
   } catch (e) {
-    console.error(`claims-lint: ${BASELINE_REL} is not valid JSON — run ${REMEDY} (${e.message})`)
+    console.error(`claims-lint: ${BASELINE_DISPLAY} is not valid JSON — run ${REMEDY} (${e.message})`)
     process.exit(2)
   }
 }
 
-const corpusFiles = loadCorpus(root)
-const resolvePath = (p) => fs.existsSync(path.join(root, p))
+const corpusFiles = loadCorpus(root, CORPUS_ENTRIES)
+const resolvePath = makeResolvePath(root, pluginHomeMode)
 
 const fileResults = {}
 const findings = []
+const skippedPointers = []
 let totalLines = 0
 const deltas = []
 
-for (const rel of corpusFiles) {
-  const content = fs.readFileSync(path.join(root, rel), 'utf8')
-  const result = scanFile(rel, content, resolvePath)
+for (const entry of corpusFiles) {
+  const rel = entry.key
+  const content = fs.readFileSync(path.join(root, entry.rel), 'utf8')
+  const result = scanFile(content, resolvePath)
   totalLines += result.lines
   const base = (baseline && baseline.files && baseline.files[rel]) || { lines: 0, orphans: 0 }
 
   fileResults[rel] = { lines: result.lines, claims: result.claims.length, orphans: result.orphans.length, sanctions: result.claims.length - result.orphans.length - result.findings.filter((f) => f.kind === 'stale-pointer').length }
 
   for (const f of result.findings) findings.push({ file: rel, line: f.line, kind: f.kind, detail: f.detail })
+  for (const s of result.skipped) skippedPointers.push({ file: rel, line: s.line, target: s.target })
 
   const linesMismatch = result.lines !== base.lines
   const orphansMismatch = result.orphans.length !== base.orphans
@@ -198,15 +274,20 @@ findings.sort((a, b) => a.file.localeCompare(b.file) || (a.line || 0) - (b.line 
 
 if (mode === '--update-baseline') {
   const out = { files: {}, totalLines }
-  for (const rel of corpusFiles) out.files[rel] = { lines: fileResults[rel].lines, orphans: fileResults[rel].orphans }
+  for (const entry of corpusFiles) out.files[entry.key] = { lines: fileResults[entry.key].lines, orphans: fileResults[entry.key].orphans }
   fs.mkdirSync(path.dirname(baselinePath), { recursive: true })
   fs.writeFileSync(baselinePath, JSON.stringify(out, null, 2) + '\n')
-  console.log(`claims-lint: wrote ${BASELINE_REL} — ${corpusFiles.length} files, ${totalLines} total lines`)
+  console.log(`claims-lint: wrote ${BASELINE_DISPLAY} — ${corpusFiles.length} files, ${totalLines} total lines`)
   process.exit(0)
 }
 
 if (mode === '--json') {
-  console.log(JSON.stringify({ files: fileResults, totalLines, baseline: { stale: deltas.length > 0, deltas }, findings }, null, 2))
+  const report = { files: fileResults, totalLines, baseline: { stale: deltas.length > 0, deltas }, findings }
+  // D1: skippedPointers is PLUGIN_HOME-mode-only — dev/marketplace and --root runs always
+  // resolve every enforcedBy: target decidably, so the key stays absent (byte-identical output
+  // shape) rather than reporting an always-empty list.
+  if (pluginHomeMode) report.skippedPointers = skippedPointers
+  console.log(JSON.stringify(report, null, 2))
   process.exit(0)
 }
 

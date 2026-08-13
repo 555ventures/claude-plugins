@@ -71,7 +71,7 @@ test('AC-20260805-02-1: a manifest missing required legs derives UNVERIFIED and 
   assert.strictEqual(r.status, 1, 'UNVERIFIED must exit 1 so the close step is mechanically unreachable: ' + r.stderr)
 })
 
-test('AC-20260805-02-2: six green legs (smoke exit 4 counts green-inert) with a CLEAN workflow return derive CLEAN and exit 0', () => {
+test('AC-20260805-02-2 / AC-20260813-03-10 (regression pin: --workflow-present derivation stays byte-unchanged by the D3 no-workflow relax): six green legs (smoke exit 4 counts green-inert) with a CLEAN workflow return derive CLEAN and exit 0', () => {
   const dir = tmpdir('verdict')
   const manifest = writeManifest(dir, SIX_GREEN)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))

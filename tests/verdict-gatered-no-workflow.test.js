@@ -33,7 +33,7 @@ const SIX_ROWS_GATE_RED = [
   { leg: 'ci', exit: 0, observed: 'unavailable' },
 ]
 
-test('JJ-20260808-01: review.md Phase 0 step 8\'s documented pre-panel hard-stop invocation (--manifest --ledger, no --workflow) derives GATE_RED and exits 1 from a red gate leg alone', () => {
+test('JJ-20260808-01 / AC-20260813-03-7: review.md Phase 0 step 8\'s documented pre-panel hard-stop invocation (--manifest --ledger, no --workflow) derives GATE_RED and exits 1 from a red gate leg alone', () => {
   const dir = tmpdir('verdict-gatered-no-workflow')
   const manifest = writeManifest(dir, SIX_ROWS_GATE_RED)
   const r = runNode(SCRIPT, ['--manifest', manifest, '--ledger', '--spec', 'x.md',
@@ -63,10 +63,41 @@ test('JJ-20260808-01: review.md Phase 0 step 8\'s documented pre-panel hard-stop
 // is narrower than a blanket row-class exemption: runId is OPTIONAL on GATE_RED review rows
 // specifically (an in-workflow iteration that goes red legitimately still carries one), never
 // exempt outright.
+// AC-20260813-03-8: a manifest that is green and complete stays undecidable without a panel —
+// the D3 guard's protective asymmetry (Contracts: the green-manifest path exits 2 naming
+// --workflow as the remedy: "verdict.js: all legs green — the panel must run; pass --workflow
+// <path to the wf-review return>"). This must never derive CLEAN by manifest evidence alone.
+const SIX_ROWS_GREEN = [
+  { leg: 'gate', exit: 0, observed: 'skips=0 todos=0' },
+  { leg: 'smoke', exit: 4, observed: 'inert' },
+  { leg: 'reconcile', exit: 0, observed: 'outOfPlan=0' },
+  { leg: 'ac-matrix', exit: 0, observed: 'uncovered=0' },
+  { leg: 'skip-reconcile', exit: 0, observed: 'skipped=0' },
+  { leg: 'ci', exit: 0, observed: 'unavailable' },
+]
+
+test('AC-20260813-03-8: verdict.js --manifest with no --workflow on a green, complete manifest exits 2 with a usage error naming --workflow as the remedy, never a derived CLEAN', () => {
+  const dir = tmpdir('verdict-gatered-no-workflow')
+  const manifest = writeManifest(dir, SIX_ROWS_GREEN)
+  const r = runNode(SCRIPT, ['--manifest', manifest])
+  assert.strictEqual(r.status, 2,
+    'a panel-less CLEAN must stay structurally unreachable (Contracts: "a green run without a panel ' +
+    'remains exit 2 — this asymmetry is the whole design") — six green legs with no --workflow must exit ' +
+    '2 as a usage error, never 0/CLEAN by manifest evidence alone: ' + JSON.stringify(r.stdout) + ' / ' + r.stderr)
+  assert.match(r.stderr, /all legs green/i,
+    'the usage error must name the specific reason (all legs are green so a panel is now required), not ' +
+    'the generic flag-syntax usage() banner that already prints on every malformed invocation today — a ' +
+    'caller reading a generic banner cannot distinguish "you typed the flags wrong" from "the panel must ' +
+    'run": ' + JSON.stringify(r.stderr))
+  assert.match(r.stderr, /--workflow/,
+    'the usage error must name --workflow as the remedy so the orchestrator knows exactly which flag to ' +
+    'supply: ' + JSON.stringify(r.stderr))
+})
+
 const doctor = read('spec/commands/doctor.md')
 const check12 = doctor.slice(doctor.indexOf('12. **Run ledger hygiene'), doctor.indexOf('13. **Scaffold audit'))
 
-test('JJ-20260808-01 (prax): doctor.md check 12 admits a GATE_RED review row with null/absent runId as OPTIONAL, never as a blanket row-class exemption', () => {
+test('JJ-20260808-01 (prax) / AC-20260813-03-9: doctor.md check 12 admits a GATE_RED review row with null/absent runId as OPTIONAL, never as a blanket row-class exemption', () => {
   assert.notStrictEqual(check12, '',
     'could not locate check 12\'s text block via the "12. **Run ledger hygiene" / ' +
     '"13. **Scaffold audit" markers — update the slice bounds if the checks were renumbered')

@@ -19,6 +19,14 @@
 // A rename whose old path was planned realizes that plan row — reported once in `renamed`,
 // never as an out-of-plan + unrealized finding pair.
 //
+// File Plan glob rows (D2, specs/20260813/03-gate-script-mechanics.md): a row containing `*`,
+// `?`, or `[` is a pattern, matched via lib/glob-match.js's `globMatch` against concrete changed
+// files — never an exact-string comparison. A changed file matching a glob row is in-plan
+// (never outOfPlan); a glob row matched by >=1 changed file is realized (never unrealized).
+// Realization counts only NON-EXCLUDED changed files (changed minus excludedSet) so a
+// pipeline-owned file overlapping a codegen glob row can't fake that row's realization. Concrete
+// rows keep exact-match semantics untouched.
+//
 // Exit codes: 0 = outOfPlan empty · 3 = outOfPlan non-empty · 2 = usage error, spec unreadable,
 // spec has no File Plan table, or the git ref/repo is unusable.
 
@@ -101,10 +109,21 @@ const realizedRenamedTo = new Set(
   renamed.filter(r => filePlanPaths.has(r.from) || excludedSet.has(r.from)).map(r => r.to)
 )
 
+// ---- glob-row expansion (D2): a File Plan row with *, ?, or [ is a pattern, not a literal ----
+
+const isGlobRow = (p) => /[*?[]/.test(p)
+const globRows = [...filePlanPaths].filter(isGlobRow)
+const concreteRows = new Set([...filePlanPaths].filter(p => !isGlobRow(p)))
+const nonExcludedChanged = [...changed].filter(p => !excludedSet.has(p))
+
 const outOfPlan = [...changed]
-  .filter(p => !filePlanPaths.has(p) && !excludedSet.has(p) && !renamedFrom.has(p) && !realizedRenamedTo.has(p))
+  .filter(p => !concreteRows.has(p) && !globRows.some(g => globMatch(g, p)) &&
+    !excludedSet.has(p) && !renamedFrom.has(p) && !realizedRenamedTo.has(p))
   .sort()
-const unrealized = [...filePlanPaths].filter(p => !changed.has(p)).sort()
+const unrealized = [
+  ...[...concreteRows].filter(p => !changed.has(p)),
+  ...globRows.filter(g => !nonExcludedChanged.some(p => globMatch(g, p)))
+].sort()
 
 if (mode === 'dirs') {
   const dirs = [...new Set([...changed].map(p => path.posix.dirname(p)))].sort()

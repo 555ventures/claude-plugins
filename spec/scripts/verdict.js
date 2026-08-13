@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict'
-// verdict.js --manifest <path> --workflow <path> [--waived N] [--rejected N] [--fixDispatched N]
+// verdict.js --manifest <path> [--workflow <path>] [--waived N] [--rejected N] [--fixDispatched N]
 //   [--ledger [--spec <path>] [--tier <T>] [--diff-loc N] [--iteration N] [--run-id <id>]]
 //   [--profile release [--milestone <string>] [--briefs N,N,...]]
 //
@@ -17,6 +17,16 @@
 // orchestrator-supplied identity flags and staging/e2e/journeys/substrate/production are
 // derived from the release legs' observed strings.
 //
+// Incident (2026-08-13, spec gate-script-mechanics D3): review.md Phase 0 step 8 documents a
+// pre-panel hard-stop invocation with no --workflow (none exists yet — the manifest alone
+// already reaches GATE_RED), but this script treated --workflow as mandatory outside
+// --profile release and exited 2, forcing every aborted review to hand-craft a stub workflow
+// file. --workflow is now optional on the review profile too: without it, derivation is
+// manifest-only and can reach UNVERIFIED or GATE_RED. A manifest that is green and complete
+// with no --workflow is a usage error (exit 2 naming --workflow as the remedy) — a panel-less
+// CLEAN must stay structurally unreachable. The no-workflow --ledger row is partial: it omits
+// scope/tokens/findings/verify, which only a real workflow return can supply.
+//
 // What this deliberately does NOT do: read git/frontmatter itself (the orchestrator resolves
 // --spec/--tier/--diff-loc/--iteration/--run-id/--milestone/--briefs and passes them in as
 // mechanical flags), decide whether to run a leg, or retry/poll anything — it only reads
@@ -24,8 +34,10 @@
 // than failing the ledger print — STOP-path rows are partial by nature.
 //
 // Exit codes: 0 = derived CLEAN · 1 = derived non-CLEAN word (still printed on stdout line 1) ·
-// 2 = usage error, missing/unreadable --manifest or --workflow file, or a disposition
-// contradiction (--waived + --rejected + --fixDispatched exceeds the workflow's survivor count)
+// 2 = usage error, missing/unreadable --manifest or --workflow file, a disposition
+// contradiction (--waived + --rejected + --fixDispatched exceeds the workflow's survivor count),
+// or (review profile, no --workflow) a manifest that derives green/complete — a panel-less
+// CLEAN is undecidable without --workflow and must not print
 
 const fs = require('fs')
 
@@ -57,7 +69,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--briefs') briefsArg = argv[++i]
   else { usage(); process.exit(2) }
 }
-if (!manifestPath || (profile !== 'release' && !workflowPath)) { usage(); process.exit(2) }
+if (!manifestPath) { usage(); process.exit(2) }
 if (![waived, rejected, fixDispatched].every(Number.isFinite)) {
   console.error('verdict.js: --waived/--rejected/--fixDispatched must be numbers')
   process.exit(2)
@@ -114,7 +126,7 @@ const RELEASE_LEGS = ['deploy', 'ready', 'e2e', 'journeys', 'substrate', 'produc
 
 const requiredLegs = profile === 'release'
   ? RELEASE_LEGS
-  : (workflow.scope === 'fix-delta' ? REVIEW_LEGS.filter(l => l !== 'reconcile') : REVIEW_LEGS)
+  : ((workflow && workflow.scope === 'fix-delta') ? REVIEW_LEGS.filter(l => l !== 'reconcile') : REVIEW_LEGS)
 const blockingLegs = profile === 'release' ? new Set(RELEASE_LEGS) : REVIEW_BLOCKING
 
 function legIsRed(leg) {
@@ -126,7 +138,7 @@ function legIsRed(leg) {
 // ---- derivation: first match wins (D3) -----------------------------------------------------
 
 function derive() {
-  if (profile !== 'release' && workflow.verdict === 'REVIEWER_FAILED') return 'REVIEWER_FAILED'
+  if (profile !== 'release' && workflow && workflow.verdict === 'REVIEWER_FAILED') return 'REVIEWER_FAILED'
   if (!manifestValid || requiredLegs.some(l => !legRows.has(l))) return 'UNVERIFIED'
   if ([...blockingLegs].some(legIsRed)) return 'GATE_RED'
   if (profile === 'release') return 'CLEAN'
@@ -137,6 +149,10 @@ function derive() {
 }
 
 const word = derive()
+if (profile !== 'release' && !workflow && word !== 'UNVERIFIED' && word !== 'GATE_RED') {
+  console.error('verdict.js: all legs green — the panel must run; pass --workflow <path to the wf-review return>')
+  process.exit(2)
+}
 console.log(word)
 
 // ---- ledger-row derivation helpers (D2: observed formats are pinned, so parse failures ------
@@ -200,23 +216,25 @@ if (ledger) {
     if (ciRow && ciRow.observed) row.ci = ciRow.observed
     row.legs = legs
   } else {
-    row.scope = workflow.scope
+    if (workflow) row.scope = workflow.scope
     if (iteration !== null) row.iteration = iteration
     if (diffLoc !== null) row.diff = { loc: diffLoc }
     const smoke = deriveSmoke(legRows.get('smoke'))
     if (smoke) row.smoke = smoke
     row.testsSkipped = deriveTestsSkipped(legRows.get('gate'))
-    row.tokens = typeof workflow.tokens === 'number' ? { workflow: workflow.tokens } : workflow.tokens
     row.legs = legs
-    row.findings = {
-      survived: survivors.length,
-      killed: Array.isArray(workflow.killed) ? workflow.killed.length : (Number(workflow.killed) || 0),
-      waived,
-      rejected,
-      fixDispatched,
-      reviewerCount: workflow.reviewerCount
+    if (workflow) {
+      row.tokens = typeof workflow.tokens === 'number' ? { workflow: workflow.tokens } : workflow.tokens
+      row.findings = {
+        survived: survivors.length,
+        killed: Array.isArray(workflow.killed) ? workflow.killed.length : (Number(workflow.killed) || 0),
+        waived,
+        rejected,
+        fixDispatched,
+        reviewerCount: workflow.reviewerCount
+      }
+      row.verify = workflow.verify
     }
-    row.verify = workflow.verify
   }
   console.log(JSON.stringify(row))
 }

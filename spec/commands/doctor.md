@@ -152,8 +152,11 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
     row class rather than only `observe`: `observe` rows (no `tier`/`runId` — they carry
     `branch`/`ci`/`sha`/`url`/`runAt` instead per spec 03's D1), **fast-path build rows**
     (`"fastPath":true`, no `runId` — build.md's fast path), **escape rows** (their own field
-    set, no `runId`), and **release rows** (their own field set, no `runId` — they carry
-    `milestone`/`briefs` instead). The parse/stage-enum/line-length/git-tracked hygiene checks
+    set, no `runId`), **release rows** (their own field set, no `runId` — they carry
+    `milestone`/`briefs` instead), and **a review row whose `verdict` is `GATE_RED`** (`runId`
+    optional — a pre-panel hard stop structurally has no run id; this is narrower than the
+    other exemptions, which cover a whole row class: an in-workflow red iteration is still a
+    review row and still mints a `runId`, which it keeps). The parse/stage-enum/line-length/git-tracked hygiene checks
     stay universal across every row class, unchanged, and apply to the year archives
     (`.claude/spec-runs-<year>.jsonl`) exactly as to the live file — an archived row of any
     class is still a ledger row;

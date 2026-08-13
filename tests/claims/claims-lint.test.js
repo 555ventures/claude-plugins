@@ -11,6 +11,14 @@ const { ROOT, tmpdir, runNode } = require('../helpers')
 // checked by this script's dual ratchet (orphan claims + exact-match line-count baseline).
 // These tests pin AC-20260807-04-1 through -6 and -8 against claims-lint.js, which does not
 // exist yet — every case here is expected red until the script lands.
+//
+// specs/20260813/03-gate-script-mechanics.md AC-20260813-03-3: this whole file is the
+// regression pin for `--root <dir>` semantics — D1's default-root discovery (upward walk /
+// PLUGIN_HOME mode) must leave the explicit `--root <dir>` path byte-identical to today: every
+// fixture below still resolves the corpus at `<dir>/spec/{commands,doctrine,agents}` and the
+// baseline at `<dir>/spec/doctrine/claims-baseline.json`. These tests are green on current code
+// and MUST STAY green after D1 lands — a regression here means D1 leaked its new default-root
+// behavior into the explicit --root path.
 
 const SCRIPT = 'scripts/claims-lint.js'
 const BASELINE_REL = path.join('spec', 'doctrine', 'claims-baseline.json')

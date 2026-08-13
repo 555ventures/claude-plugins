@@ -1,6 +1,6 @@
 ---
 date: 2026-08-13
-status: implementing
+status: done
 diff_base: c20e2ba93647fbc8d8f7435687bb4ee05ffa2e57
 open_markers: 0
 risk: T2
@@ -151,6 +151,14 @@ Phase 1's skill generation, the founding incident's own artifact (moved to the D
 preamble); D3's false claim that placement was test-enforced (the pin slices to EOF —
 corrected to a drafting mandate); the wrap-fragile 01b regex (widening added to the test's
 File Plan row). No findings rejected.
+
+Review disposition (2026-08-13, runId wf_e54b5808-06c): the AC-matrix's mechanical
+"AC-20260813-04-8 uncovered" hard finding was REJECTED by the user — AC-8 is the
+SHALL-CONTINUE-TO regression AC whose named carriers (tests/goal-mechanism-audit.test.js,
+tests/terminal-observable-acs.test.js) are pre-existing pins carrying their original
+AC-20260810-02-* IDs; both executed green in this review's gate run, so coverage is
+demonstrated by execution and the ID-grep oracle is structurally blind to continuation
+pins. No test edit made (the files are outside this spec's File Plan).
 
 ## Canonical Delta
 

@@ -19,7 +19,7 @@ const { read } = require('./helpers')
 const wfReview = read('spec/workflows/src/wf-review.body.js')
 const review = read('spec/commands/review.md')
 
-test('CROSS-20260813-02a: verifyPrompt fences shared stateful substrates (databases, services, env), not just file edits', () => {
+test('AC-20260813-01-3 / CROSS-20260813-02a: verifyPrompt fences shared stateful substrates (databases, services, env), not just file edits', () => {
   assert.match(wfReview, /shared (stateful )?substrate/i,
     'verifyPrompt only fences FILE edits ("Never edit existing files") and git commands ' +
     '("never run git commands other than status") — nothing forbids a verifier from mutating a ' +
@@ -30,7 +30,7 @@ test('CROSS-20260813-02a: verifyPrompt fences shared stateful substrates (databa
     'restore leaves tenant isolation off with nothing in the prompt having forbidden the mutation')
 })
 
-test('CROSS-20260813-02b: review.md mandates a git status --porcelain sweep after the panel and before the close commit', () => {
+test('AC-20260813-01-4 / CROSS-20260813-02b: review.md mandates a git status --porcelain sweep after the panel and before the close commit', () => {
   assert.match(review, /git status --porcelain/,
     'review.md has no mandated `git status --porcelain` sweep between the review panel and the ' +
     'Phase 3 close commit — a /spec:reviewer agent left an untracked scratch file (diff2.txt, ' +

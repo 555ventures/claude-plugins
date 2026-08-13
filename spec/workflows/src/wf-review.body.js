@@ -170,6 +170,11 @@ You are read-only: never edit any file.`
 // the prior survivors — a full panel re-read of an unchanged codebase is the cost this mode
 // deletes (measured: fix→re-review loops paying a full panel per iteration were the single
 // most expensive review pattern in the 2026-07 ledgers).
+// Full-gate re-assertion contract (CROSS-20260727-01): a fix-delta CLEAN re-runs the full gate —
+// the orchestrator re-runs the `gate`, `smoke`, `ac-matrix`, `skip-reconcile`, and `ci` legs into
+// a fresh manifest (review.md Phase 2 Fix step), and `verdict.js`'s required-leg set enforces
+// their presence before the verdict stands. This reviewer stays scoped to the fix diff; the gate
+// re-assertion is a separate orchestrator-owned obligation, not something this prompt performs.
 function fixDeltaPrompt() {
   return `You are re-reviewing ONLY the fixes applied after a prior review of a spec implementation.
 
@@ -254,6 +259,10 @@ Work through these in order and return the FIRST result that applies:
    there). If an explicit Decision or approval sanctions exactly this behavior, return
    result="SANCTIONED" with that row quoted verbatim as evidence. An inference from a related
    decision is NOT a sanction.
+   Self-consistency is mandatory: if the evidence you quote denies a sanction, or fails to quote
+   an actual sanctioning Decision/design-approval row verbatim, SANCTIONED is forbidden — your
+   structured result must agree with your own evidence, and uncertainty resolves toward the
+   finding standing.
 3. If the claim cannot in principle be decided by running code (naming conventions,
    layering/boundary rules, style) → result="NOT_EXECUTABLE" with a one-line reason. Do not
    force a repro; the orchestrating session adjudicates these.
@@ -267,7 +276,37 @@ Work through these in order and return the FIRST result that applies:
    Cleanup is MANDATORY and unconditional: delete every file you created and verify with
    git status --porcelain that no path you introduced remains, before returning.
 
-Never edit existing files; never run git commands other than status.`
+Never edit existing files; never run git commands other than status.
+You must not mutate any shared stateful substrate — databases, running services, env/config
+other processes consume — beyond creating and deleting your own repro file. A repro that would
+require such a mutation returns result="NOT_EXECUTABLE" with the needed mutation named, for
+orchestrator adjudication.`
+}
+
+// Deterministic post-verify audit (D2). Runs after the verify loop, before the final return.
+// No agent, no I/O. PRAX-20260813-01: only the structured `result` enum feeds verdict.js today —
+// a killed[] entry whose own evidence text contradicts its killedBy label (prax wf_5a730ede-0f8:
+// killedBy:"sanction", evidence "Not actually sanctioned — correcting: the claim stands
+// unrefuted") rode to CLEAN invisibly. Fail toward survival, never toward a silent kill.
+// LAYOUT REQUIREMENT (test-mode constraint): the marker regexes are declared INSIDE this
+// function's braces — tests/helpers.js extractFn brace-matches a single named top-level
+// function with no mode for adjacent top-level consts; a top-level-const layout makes the
+// extracted function throw `SANCTION_CONTRA is not defined` under evalFns.
+function auditKilled(killed) { // → { kept: [entry…], resurrected: [entry…] }
+  // Closed marker lists — data, never a prompt clause; widened only from intake evidence:
+  const SANCTION_CONTRA = /not (actually |in fact )?sanctioned|stands unrefuted|no (such|matching) (decision|sanction|approval)|(could|can) ?no?t find (a|the|any) (decision|sanction|approval)/i
+  const MISCITE_CONTRA = /confirms the claim|claim (is|stands) (correct|confirmed)|does exist and/i
+  const kept = []
+  const resurrected = []
+  for (const entry of killed) {
+    const blank = !entry.evidence || entry.evidence.trim() === ''
+    const contradicts =
+      (entry.killedBy === 'sanction' && SANCTION_CONTRA.test(entry.evidence)) ||
+      (entry.killedBy === 'miscitation' && MISCITE_CONTRA.test(entry.evidence))
+    if (blank || contradicts) resurrected.push(entry)
+    else kept.push(entry)
+  }
+  return { kept, resurrected }
 }
 
 // ---- Phase: blind review panel (diff-scaled) ----
@@ -344,7 +383,7 @@ log(`${findings.length} unique findings from ${n} reviewer(s)`)
 if (!findings.length) {
   return {
     verdict: 'CLEAN', survivors: [], killed: [], reviewerCount: n,
-    verify: { verified: 0, demonstrated: 0, killedByExecution: 0, sanctioned: 0, miscited: 0, unverifiable: 0, failed: 0, capSkipped: 0 },
+    verify: { verified: 0, demonstrated: 0, killedByExecution: 0, sanctioned: 0, miscited: 0, unverifiable: 0, failed: 0, capSkipped: 0, killContradicted: 0 },
     scope: fixDelta ? 'fix-delta' : 'full', tokens: budget.spent(),
     smells, lensFailed,
   }
@@ -402,11 +441,22 @@ if (verifiable.length) {
     `${verify.failed} verifier failure(s)`)
 }
 
+// Mechanical post-verify audit (D2): resurrect any killed[] entry whose own evidence
+// contradicts its killedBy label, or carries no evidence at all. Fail toward survival.
+const audited = auditKilled(killed)
+for (const f of audited.resurrected) {
+  survivors.push({ ...f, verification: 'kill-contradicted', evidence: f.evidence })
+}
+verify.killContradicted = audited.resurrected.length
+if (audited.resurrected.length) {
+  log(`killed-audit: resurrected ${audited.resurrected.length} kill(s) whose evidence contradicts the label`)
+}
+
 return {
   verdict: survivors.some(f => f.severity === 'hard') ? 'HARD_FINDINGS'
     : survivors.length ? 'FINDINGS' : 'CLEAN',
   survivors,
-  killed,
+  killed: audited.kept,
   verify,
   reviewerCount: n,
   scope: fixDelta ? 'fix-delta' : 'full',

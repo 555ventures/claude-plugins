@@ -89,6 +89,14 @@ build that is the worktree itself. Phase 4 resolves a second, distinctly named s
      skippable check. This leg is deterministic; no reviewer adjudicates it. Leg `smoke`,
      `observed:"pass"`/`"inert"`/`"fail"` — this row is what makes **the boot smoke leg
      green** (or declared inert) a derivation input rather than a claim.
+     **Inert-falsifier check (session-applied, exit 4 only):** when the smoke leg reports
+     inert, check the spec's own File Plan and diff for a bootable entry point — an executable
+     under a `bin/` path, a process entry with a shebang + argv handling, or a server/daemon
+     bootstrap. Finding one is an automatic **hard** finding <!-- unenforced: session-applied File Plan judgment — no deterministic bootable-entry-point detector exists -->:
+     "inert declaration falsified by this spec's own File Plan," with the remedy named — declare
+     the runtime block, re-run `/spec:init` Phase 1.5, or record the sanctioned inertness in the
+     spec (JJ-20260801-01: three consecutive CLEANs rode `runtime.inert` after a bootable entry
+     point made it false, and nothing re-validated the exemption).
    - `node "$(spec-paths ci-query)" --commit $(git -C {root} rev-parse HEAD) --root {root}` —
      the **ci leg**, keyed on the reviewed commit itself (D2) — always `{root}` HEAD, never
      `{frozenRoot}` (executed evidence must come from the tree that ships). A completed run
@@ -180,8 +188,11 @@ What the script does (shape lives in the script, not here):
   in the `smells`/`lensFailed` return fields below.
 - Returns `{verdict, survivors, killed, verify, reviewerCount, scope, tokens, smells, lensFailed}`
   where `verify = {verified, demonstrated, killedByExecution, sanctioned, miscited,
-  unverifiable, failed, capSkipped}` and each `smells` entry is `{file, line, class, claim,
-  counterpart?, suggestion?}`.
+  unverifiable, failed, capSkipped, killContradicted}` and each `smells` entry is `{file, line,
+  class, claim, counterpart?, suggestion?}`. `killContradicted` is additive — a `killed[]`
+  entry whose own evidence contradicts its `killedBy` label is mechanically resurrected as a
+  survivor flagged `verification: 'kill-contradicted'` before this return is assembled;
+  `verify.killContradicted` is its count.
   **`verdict: "REVIEWER_FAILED"` means a reviewer agent died — that is a failed RUN, never a
   CLEAN: re-invoke the workflow (journal cache makes it cheap) before any verdict is read.**
   `tokens` is the workflow's output-token spend — carry it into the Phase 3 report. If
@@ -279,7 +290,9 @@ If survivors exist, present them with the pattern-sweep context, grouped by veri
 status: `demonstrated` first (a verifier *reproduced the defect by execution* — show the
 `evidence`; rejecting one means overriding a reproduced failure), then `unverifiable`
 (structural claims no repro can decide — this session adjudicates them on the cited rule),
-then `advisory` (soft), then any `verifier-failed`/`cap-skipped` (unverified — say so). With
+then `advisory` (soft), then any `verifier-failed`/`cap-skipped`/`kill-contradicted` (unverified
+— say so; `kill-contradicted` is a mechanically resurrected kill whose own evidence denied its
+label — present the evidence). With
 each survivor, **quote the spec lines its disposition hinges on** — the Decision, Assumption,
 or AC text the finding claims was violated (already in hand from Phase 0; quote verbatim,
 recommend nothing). The recurring disposition call is "over-strict spec text vs. actual code
@@ -331,9 +344,15 @@ verdict/ledger row from Phase 2 step 2 is already written by then, so nothing is
    rolls those up as the upstream bug list) — that is the territory correcting the map.
    One-off deviations just get absorbed into the spec's Rationale. Delete the sidecar after
    folding.
-3. **Close commit:** commit everything still uncommitted on the working branch — status flip,
+3. **Hygiene sweep (mandatory, before the close commit):** run
+   `git status --porcelain --untracked-files=all` and adjudicate every unexpected path —
+   review-agent scratch files (e.g. a verifier's stray repro) are deleted, legitimate strays
+   are explained in the report. Never blind-`git add -A` past an unadjudicated path (prax spec
+   20260812/02: a reviewer's scratch `diff2.txt` sat untracked and would have shipped on the
+   next close's `git add -A`).
+4. **Close commit:** commit everything still uncommitted on the working branch — status flip,
    canonical docs, any review-fix dispatches. The orchestrator owns git; never `--no-verify`.
-4. Report — print exactly this shape (rationale: shared § Console Output Style); fill the
+5. Report — print exactly this shape (rationale: shared § Console Output Style); fill the
    slots, drop any line whose slot is empty, add nothing else:
 
    ```
@@ -424,7 +443,8 @@ get no Next pointer — the verdict line already names the fix step.
 - **Never Read `wf-review.js`.** The complete `args` contract is in Phase 1 (`{specPath, tier,
   base, scope, prevFindingsPath, diffLoc, patternsPath, hasDriftScript, reproCommand,
   reconcilePath, frozenRoot}`) and the return shape is
-  `{verdict, survivors, killed, verify, reviewerCount, scope, tokens, smells, lensFailed}`.
+  `{verdict, survivors, killed, verify, reviewerCount, scope, tokens, smells, lensFailed}` where
+  `verify` now additionally carries `killContradicted` (Phase 1's return-shape bullet).
   `smells`/`lensFailed` are the advisory smell lens's output — they never enter `verdict.js`
   or the ledger row (Phase 1's smell lens bullet).
   The reviewer/verifier fan-out and all control flow are the workflow's concern — its shape

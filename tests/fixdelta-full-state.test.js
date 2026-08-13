@@ -20,7 +20,7 @@ const { SPEC } = require('./helpers')
 const src = fs.readFileSync(
   path.join(SPEC, 'workflows/src/wf-review.body.js'), 'utf8')
 
-test('a fix-delta CLEAN re-asserts the full gate state instead of inheriting it', () => {
+test('AC-20260813-01-5: a fix-delta CLEAN re-asserts the full gate state instead of inheriting it', () => {
   const i = src.indexOf("'fix-delta'")
   assert.ok(i !== -1, 'fix-delta scope missing from wf-review source')
   assert.match(src, /fix-?delta[\s\S]{0,2000}?(full (diff'?s? )?gate|re-?run.{0,40}gate|gate.{0,40}re-?run)/i,

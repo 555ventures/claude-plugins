@@ -182,7 +182,13 @@ While drafting:
   undeclared env dependency reads as a hard finding when the test skips), and pin every
   ambiguity-prone term (rounding mode, ordering,
   inclusive/exclusive bounds, timezone, null vs empty) with a literal input → output example.
-  T3 ACs always carry at least one literal example. Test authors derive tests from the spec
+  T3 ACs always carry at least one literal example. **Library-default split:** when a
+  requirement is satisfied by a library default, split the AC into a pair rather than one pin —
+  (i) pin the library mechanism behaviorally, and (ii) separately assert the **shipped config
+  echo** (the key's presence/absence and surface flags as they actually ship in the
+  configuration); never assert only the library's resolved internals — a behavioral pin alone
+  can go green before any implementation exists while the shipped config quietly disengages the
+  mechanism (`rateLimit: { enabled: false }` shipping with every AC green). Test authors derive tests from the spec
   alone — a concrete pair is the only wording they cannot misread. **Terminal-observable AC
   rule:** every Decision that promises a user-observable surface — rendered text/element,
   emitted row, fired event — owes at least one AC whose test asserts on the observable itself,
@@ -218,6 +224,11 @@ While drafting:
   place to buy execution robustness.
 - File Plan `Layer` values: the host's `layerGroups` (flattened, in order) plus `tests` and
   `other`.
+- **File Plan row grammar:** every touched file gets its own File Plan row — a row that bundles
+  an edit to a different file inside its Summary hands the worker a file its batch contract
+  forbids touching, and the bundled edit silently becomes an unrecorded orchestrator duty.
+  Bundled edits either get their own row, or an explicit orchestrator-duty line outside the
+  table.
 
 ### New product surfaces
 
@@ -274,6 +285,20 @@ Never silently drop a finding.
    widens to **Decision-level observable promises**: a Decision that promises a
    user-observable surface with no terminal-observable AC that goes red in its absence blocks
    lock exactly as an uncovered Goal promise does — same in-session check, not a second gate.
+   **Obligation→carrier sweep:** the same in-session check widens once more — walk the
+   Decisions table and confirm every stated obligation has a carrier someone can point to. Four
+   corroborated shapes anchor the rule.
+   A Decision that names a file by path must get a File Plan row for that file.
+   A Decision that orders a persisted, rendered artifact (a message, card, or notice) owes a
+   Contracts/schema row typing its shape.
+   A spec whose tests import CREATE-d
+   modules must pin those modules' factory signatures (including injectable seams) in Contracts.
+   An AC whose expected value is computed by a helper rather than a literal example owes that
+   helper's own ground-truth carrier — listed or checked.
+   A missing carrier blocks lock
+   exactly as an uncovered Goal promise does — add the row/Contracts entry or strike the
+   obligation before flipping `status: hardened`. These four are illustrative anchors of one
+   rule, not a closed list — a fifth shape not on it is still judged by the rule.
    Finally: work this session discovered that needs its own spec → write the roadmap brief
    now (`docs/roadmap/NN-*.md`, planned later via `/spec:plan <brief>`), or record in the
    lock report why not. Discovered follow-ups are the only planning output with no durable

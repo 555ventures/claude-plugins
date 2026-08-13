@@ -16,7 +16,7 @@ const { read } = require('./helpers')
 
 const init = read('spec/commands/init.md')
 
-test('PRAX-20260813-06: init.md carries an authoring rule that generated prose names the derivation instead of inlining volatile enumerations', () => {
+test('AC-20260813-04-7 / PRAX-20260813-06: init.md carries an authoring rule that generated prose names the derivation instead of inlining volatile enumerations', () => {
   assert.match(init, /name the derivation|names? the (command|location) that yields|never inline the enumeration/i,
     'init.md has no authoring rule requiring generated files to name the DERIVATION of a ' +
     'volatile enumerable fact (the command or location that yields it) instead of inlining the ' +

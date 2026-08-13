@@ -28,7 +28,7 @@ const acBlock = (() => {
   return end === -1 ? rest : rest.slice(0, end)
 })()
 
-test('AC guidance forces the split when a requirement rides a library default', () => {
+test('AC-20260813-04-6: AC guidance forces the split when a requirement rides a library default', () => {
   assert.match(acBlock, /library.{0,60}default|default.{0,60}library/is,
     'no library-default clause: an AC pinning the library mechanism passes red-free while ' +
     'the shipped config silently disengages it')

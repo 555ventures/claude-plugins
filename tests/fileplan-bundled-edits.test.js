@@ -14,7 +14,7 @@ const { read } = require('./helpers')
 
 const plan = read('spec/commands/plan.md')
 
-test('plan.md forbids File Plan rows that bundle edits to other files', () => {
+test('AC-20260813-04-5: plan.md forbids File Plan rows that bundle edits to other files', () => {
   assert.match(plan, /own (File Plan )?row|one file per row|every (touched )?file .{0,40}row|bundle/i,
     'nothing stops a row from smuggling a second file\'s edit into its description: ' +
     'the worker may not touch it, the orchestrator never sees it, and the edit is ' +

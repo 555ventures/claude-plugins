@@ -16,7 +16,7 @@ const { read } = require('./helpers')
 
 const plan = read('spec/commands/plan.md')
 
-test('CROSS-20260813-01a: a Decision naming a file by path must get a File Plan row for that file', () => {
+test('AC-20260813-04-1 / CROSS-20260813-01a: a Decision naming a file by path must get a File Plan row for that file', () => {
   assert.match(plan, /[Dd]ecision (that )?names? a file( by path)?.*File Plan row/,
     'plan.md has no lock-time check forcing a File Plan row for every file a Decision names — ' +
     'upwell spec 20260811/01: D6 ordered an edit to a file no batch owned, so the edit was an ' +
@@ -24,9 +24,9 @@ test('CROSS-20260813-01a: a Decision naming a file by path must get a File Plan 
     'instead of being caught at lock, when the Decision itself already named the file')
 })
 
-test('CROSS-20260813-01b: a Decision ordering a persisted, later-rendered artifact must carry the contracts/schema row typing it', () => {
+test('AC-20260813-04-2 / CROSS-20260813-01b: a Decision ordering a persisted, later-rendered artifact must carry the contracts/schema row typing it', () => {
   assert.match(plan,
-    /[Dd]ecision (that )?orders?.*(persisted|rendered) artifact.*(Contracts|schema)/,
+    /[Dd]ecision (that )?orders?[\s\S]*(persisted|rendered) artifact[\s\S]*(Contracts|schema)/,
     'plan.md has no lock-time check that a Decision promising a persisted, later-rendered ' +
     'artifact (a message, card, or notice) gets a Contracts/schema row typing its shape — ' +
     'upwell spec 20260731/06: the only in-scope option left to the build worker was a raw ' +
@@ -34,7 +34,7 @@ test('CROSS-20260813-01b: a Decision ordering a persisted, later-rendered artifa
     'time forced the artifact into a typed carrier')
 })
 
-test('CROSS-20260813-01c: a spec whose tests import CREATE-d modules must pin those modules\' factory signatures in Contracts', () => {
+test('AC-20260813-04-3 / CROSS-20260813-01c: a spec whose tests import CREATE-d modules must pin those modules\' factory signatures in Contracts', () => {
   assert.match(plan,
     /[Ff]actory signatures?.*Contracts|Contracts.*[Ii]njectable seams?/,
     'plan.md has no lock-time check that a spec whose tests import a CREATE-d module pins that ' +
@@ -43,7 +43,7 @@ test('CROSS-20260813-01c: a spec whose tests import CREATE-d modules must pin th
     'silently conformed to that unreviewed invention instead of a Contracts-pinned signature')
 })
 
-test('CROSS-20260813-01d: an AC expectation computed by a helper needs the helper\'s own ground-truth carrier listed or checked', () => {
+test('AC-20260813-04-4 / CROSS-20260813-01d: an AC expectation computed by a helper needs the helper\'s own ground-truth carrier listed or checked', () => {
   assert.match(plan,
     /helper'?s own (ground.truth|correctness).*(listed|checked)|ground.truth carrier/,
     'plan.md has no lock-time check that an AC whose expected value is COMPUTED by a helper ' +

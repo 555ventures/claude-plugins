@@ -1,6 +1,7 @@
 ---
 date: 2026-08-13
-status: hardened
+status: implementing
+diff_base: c20e2ba93647fbc8d8f7435687bb4ee05ffa2e57
 open_markers: 0
 risk: T2
 area: doctrine-plan

@@ -17,6 +17,14 @@ understand what the process layer expects from the grounding layer.
 
 ## Deliverables (all in the host repo)
 
+**Authoring rule (governs every phase below, including Phase 1's skill generation):** any
+generated file's prose about a **volatile enumerable fact** — routes, table lists, package
+inventories, token homes — must name the derivation, the command or location that yields the
+fact (e.g. "`ls apps/web/src/routes/` is the surface list"), never inline the enumeration
+itself. A sentence that can go stale independently of the derivation it summarizes is a defect
+at generation time (PRAX-20260813-06: a generated run skill said routes are "currently `/` and
+`/api/health`" while 37 existed).
+
 1. `.claude/spec.config.json` — machine-readable knobs
 2. `.claude/rules/spec-pipeline.md` — prose grounding, seven sections, `paths:`-scoped so it
    ambient-loads only for spec/pipeline work (commands Read it explicitly regardless)

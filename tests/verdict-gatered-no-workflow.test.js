@@ -108,4 +108,15 @@ test('JJ-20260808-01 (prax) / AC-20260813-03-9: doctor.md check 12 admits a GATE
     'has no runId (review.md\'s own documented invocation omits --workflow, so no wf-review run ' +
     'ever existed to mint one), and 5 of 6 such rows tripped check 12 on a host following ' +
     'review.md exactly as written, because runId is required for every review row with no carve-out')
+  // D4's exact contract, not just the bare word GATE_RED: runId must be tied to GATE_RED as an
+  // OPTIONAL field on that verdict specifically, AND the clause must call itself narrower than
+  // the other (whole-row-class) exemptions — a future edit that renames the field, drops the
+  // "optional" phrasing, or collapses GATE_RED into a blanket row-class exemption (the exact
+  // failure mode D4's rationale rejects) must fail this pin even though the bare /GATE_RED/
+  // match above would still pass.
+  assert.match(check12,
+    /GATE_RED[\s\S]{0,60}`runId`[\s\S]{0,80}optional[\s\S]{0,400}narrower\s+than\s+the\s+other\s+exemptions/i,
+    'doctor.md check 12 mentions GATE_RED, but the clause tying `runId` to it as OPTIONAL — and ' +
+    'stating that this exemption is narrower than the other (whole-row-class) exemptions, per ' +
+    'D4\'s locked decision — is missing or reworded: ' + JSON.stringify(check12))
 })

@@ -72,3 +72,42 @@ test('AC-20260813-03-5 / PRAX-20260813-05: a File Plan glob row realized by a co
     'planned-but-untouched even though a real file realized it — the same File Plan row is ' +
     'double-counted as BOTH an out-of-plan violation and an unrealized promise: ' + JSON.stringify(out))
 })
+
+// D2's excluded-set rule (Contracts: "unrealized: a glob row is unrealized only if no
+// NON-EXCLUDED changed file globMatch-es it — match set = changed minus excludedSet —
+// pipeline-owned noise never realizes a row"). Fixture: the File Plan glob row is matched ONLY
+// by a changed file that is itself pipeline-owned (via an additive `pipelineOwnedPaths` glob in
+// `.claude/spec.config.json` matching the exact same pattern as the File Plan row) — no
+// non-excluded changed file matches the row at all. Refuter finding folded into D2: without the
+// excludedSet subtraction, this excluded file would fake the row's realization and hide a
+// codegen output File Plan row that no real reviewer-visible file ever touched.
+test('AC-20260813-03-5 (excluded-overlap facet): a File Plan glob row matched ONLY by a pipeline-owned (excluded) changed file stays unrealized, and the excluded file stays out of outOfPlan', () => {
+  const dir = tmpdir('scope-reconcile-glob')
+  const g = gitRepo(dir)
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'),
+    JSON.stringify({ pipelineOwnedPaths: [GLOB_ROW] }))
+  g('add', '-A'); g('commit', '-q', '-m', 'config')
+  const base = g('rev-parse', 'HEAD').trim()
+  const specRel = specWithGlobPlan(dir, 'specs/20260813/05-x.md')
+  fs.mkdirSync(path.join(dir, 'packages/contracts/schemas'), { recursive: true })
+  fs.writeFileSync(path.join(dir, CONCRETE_FILE), '{}\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'codegen output, but pipeline-owned by config')
+
+  const r = runNode(SCRIPT, ['--root', dir, '--base', base, '--spec', specRel, '--json'])
+  const out = JSON.parse(r.stdout)
+  assert.ok(out.excluded.includes(CONCRETE_FILE),
+    `${CONCRETE_FILE} matches the host's additive pipelineOwnedPaths glob (\`${GLOB_ROW}\`) and ` +
+    'must be visible in excluded, or the fixture is not actually exercising the excluded-set ' +
+    'facet this test pins: ' + JSON.stringify(out))
+  assert.ok(!out.outOfPlan.includes(CONCRETE_FILE),
+    `${CONCRETE_FILE} is pipeline-owned (excluded) — the excluded-set filter that already keeps ` +
+    'ordinary excluded files out of outOfPlan must still apply once glob-row matching is added: ' +
+    JSON.stringify(out))
+  assert.ok(out.unrealized.includes(GLOB_ROW),
+    `the File Plan row \`${GLOB_ROW}\` is matched only by ${CONCRETE_FILE}, which is pipeline-` +
+    'owned/excluded — D2 requires realization to count only NON-EXCLUDED changed files, so an ' +
+    'excluded match must not fake this row as realized; if the row is missing from unrealized, ' +
+    'the excludedSet subtraction was skipped and a codegen output row no reviewer-visible file ' +
+    'ever touched would silently pass as done: ' + JSON.stringify(out))
+})

@@ -21,11 +21,17 @@ function extractFn(src, name) {
   const sig = 'function ' + name + '('
   const at = src.indexOf(sig)
   if (at === -1) throw new Error('function ' + name + ' not found')
+  // Preserve a leading `async ` keyword — dropping it silently turned every
+  // await-bearing extraction into a SyntaxError under evalFns (spec 20260813/09 D7).
+  const asyncPrefix = 'async '
+  const start = at >= asyncPrefix.length && src.slice(at - asyncPrefix.length, at) === asyncPrefix
+    ? at - asyncPrefix.length
+    : at
   const open = src.indexOf('{', at)
   let depth = 0
   for (let i = open; i < src.length; i++) {
     if (src[i] === '{') depth++
-    else if (src[i] === '}' && --depth === 0) return src.slice(at, i + 1)
+    else if (src[i] === '}' && --depth === 0) return src.slice(start, i + 1)
   }
   throw new Error('unbalanced braces extracting ' + name)
 }

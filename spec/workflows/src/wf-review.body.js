@@ -334,7 +334,7 @@ const n = fixDelta ? 1
 const panelThunks = Array.from({ length: n }, (_, i) => () =>
   agent(fixDelta ? fixDeltaPrompt() : reviewerPrompt(i), {
     label: fixDelta ? 'review:fix-delta' : `review:${i + 1}`,
-    phase: 'Review', schema: FINDINGS, model: 'sonnet',
+    phase: 'Review', schema: FINDINGS, model: 'sonnet', effort: 'medium',
     agentType: 'spec:reviewer',
   }))
 // Lens thunk appended to the SAME parallel() barrier as the panel (D1) — never launched on
@@ -344,7 +344,7 @@ const panelThunks = Array.from({ length: n }, (_, i) => () =>
 if (!fixDelta) {
   panelThunks.push(() => agent(lensPrompt(), {
     label: 'review:smell-lens',
-    phase: 'Review', schema: LENS, model: 'sonnet',
+    phase: 'Review', schema: LENS, model: 'sonnet', effort: 'medium',
   }))
 }
 const barrier = await parallel(panelThunks)
@@ -425,7 +425,7 @@ if (verifiable.length) {
   const verdicts = await parallel(verifiable.map(f => () =>
     agent(verifyPrompt(f), {
       label: `verify:${f.file.split('/').pop()}:${f.line}`,
-      phase: 'Verify', schema: VERIFY, model: 'sonnet',
+      phase: 'Verify', schema: VERIFY, model: 'sonnet', effort: 'medium',
     })))
   verifiable.forEach((f, i) => {
     const v = verdicts[i]

@@ -1,11 +1,11 @@
 export const meta = {
   name: 'wf-panel',
-  description: 'Genesis research + MoA panel: parallel research fan-out → blind Sonnet proposers → Opus aggregator returning a decision matrix, hard-fork list, and minority positions',
+  description: 'Genesis research + MoA panel: parallel research fan-out → blind Sonnet proposers → Fable aggregator (Opus fallback) returning a decision matrix, hard-fork list, and minority positions',
   whenToUse: 'Invoked between AskUserQuestion rounds by /spec:genesis-architect and /spec:genesis-design',
   phases: [
     { title: 'Research', detail: 'parallel web research, one agent per selected angle' },
     { title: 'Propose', detail: '3 blind Sonnet proposers fed the research (skipped when constrained)' },
-    { title: 'Aggregate', detail: 'Opus aggregator → matrix, hard forks, minority positions' },
+    { title: 'Aggregate', detail: 'Fable aggregator (Opus fallback) → matrix, hard forks, minority positions' },
   ],
 }
 
@@ -43,6 +43,12 @@ if (args.runProposers && (!Array.isArray(args.roleKeys) || args.roleKeys.length 
 //   runProposers: boolean,        // false → selective skip (all hard-to-reverse dims constrained)
 //   contextPaths: [string],       // prior round outputs + stack-descriptor (design stage) to Read; []
 // }
+
+// 2026-08-13 spec 09 D1/D2: the aggregate seat below runs on Fable (JJ's ruling), so it must be
+// routed through the shared `dispatch` helper, not a bare Agent call, for the model-unavailable
+// fallback (fable falling back to opus) to actually apply to it — a bare Agent call would
+// propagate a fable outage straight to the caller.
+// @fragment:dispatch
 
 // 2026-08-13 spec 06 D6: a named top-level function (not inlined into the Propose phase below)
 // so tests can extract and evaluate it standalone via evalFns, matching the guard-function
@@ -148,7 +154,7 @@ const researchRaw = await parallel(args.researchKeys.map(key => () =>
     'opinionated best practice — use WebSearch/WebFetch if available, otherwise rely on your knowledge ' +
     'and say so. Be decisive and specific to THIS project (its archetype, audience/locale, and goals as ' +
     'stated in the brief); call out what to deliberately exclude, not just what to include.',
-    { label: 'research:' + key, phase: 'Research', model: 'sonnet', agentType: 'general-purpose', schema: RESEARCH_SCHEMA }
+    { label: 'research:' + key, phase: 'Research', model: 'sonnet', effort: 'medium', agentType: 'general-purpose', schema: RESEARCH_SCHEMA }
   )
 ))
 // 2026-08-13 spec 06 D6: angle deaths were filtered silently (`.filter(Boolean)` alone) — counted
@@ -172,7 +178,7 @@ if (args.runProposers) {
       '"## Open Dimensions" section, through your role\'s lens. ' + ctxLine + ' Ground your positions ' +
       'in the research below. You are BLIND to the other proposers — do not hedge toward an imagined ' +
       'consensus; recommend decisively and defend it.\n\n' + researchBlock,
-      { label: 'propose:' + role, phase: 'Propose', model: 'sonnet', agentType: 'general-purpose', schema: PROPOSAL_SCHEMA }
+      { label: 'propose:' + role, phase: 'Propose', model: 'sonnet', effort: 'medium', agentType: 'general-purpose', schema: PROPOSAL_SCHEMA }
     )
   ))
   // 2026-08-13 spec 06 D6: proposer deaths were filtered silently — counted here into
@@ -189,8 +195,8 @@ const proposalBlock = args.runProposers
     'user\'s constrained choices plus recommended defaults for any remaining open detail.'
 
 phase('Aggregate')
-const result = await agent(
-  'You are the Opus aggregator for a genesis ' + args.stage + ' panel. Read the brief at ' + briefPath +
+const result = await dispatch(
+  'You are the Fable aggregator for a genesis ' + args.stage + ' panel. Read the brief at ' + briefPath +
   '. ' + ctxLine + ' Integrate the research and proposer positions below into one decision package.\n' +
   '- original_goal: restate the goal from the brief VERBATIM (anti-drift).\n' +
   '- decision_matrix: one row per open dimension with options seen and a recommended default.\n' +
@@ -204,7 +210,7 @@ const result = await agent(
   'rationale so the ADR preserves the full option space.\n' +
   '- research_gaps: angles that warrant a follow-up research round.\n\n' +
   researchBlock + '\n\n' + proposalBlock,
-  { label: 'aggregate', phase: 'Aggregate', model: 'opus', agentType: 'general-purpose', schema: AGGREGATE_SCHEMA }
+  { label: 'aggregate', phase: 'Aggregate', model: 'fable', effort: 'high', agentType: 'general-purpose', schema: AGGREGATE_SCHEMA }
 )
 
 if (!result) {

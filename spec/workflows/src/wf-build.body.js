@@ -389,7 +389,7 @@ if (args.tdd && (args.testBatches || []).length) {
   const out = await parallel(args.testBatches.map(b => () =>
     dispatch(testPrompt(b), {
       label: `tests:${b.id}`, phase: 'TestAuthors', schema: RECEIPT,
-      agentType: resolveType(b.agentType || AGENT_MAP.tests), model: 'sonnet',
+      agentType: resolveType(b.agentType || AGENT_MAP.tests), model: 'sonnet', effort: 'medium',
     })))
   const { blocked, missing } = collectBlocked(args.testBatches, out)
   if (blocked.length || missing.length) {
@@ -494,7 +494,7 @@ for (const group of args.groups) {
   const out = await parallel(group.map(b => () =>
     dispatch(batchPrompt(b), {
       label: `impl:${b.id}`, phase: 'Implement', schema: RECEIPT,
-      agentType: resolveType(b.agentType), model: 'sonnet',
+      agentType: resolveType(b.agentType), model: 'sonnet', effort: 'medium',
     })))
   const { blocked, missing } = collectBlocked(group, out)
   if (blocked.length || missing.length) {
@@ -522,7 +522,7 @@ const loopResult = await runGateLoop({
         repairPrompt(batchById[bid], fails, round + 1, historySnapshot[bid]),
         {
           label: `repair:${bid}:r${round + 1}`, phase: 'Gate', schema: RECEIPT,
-          agentType: resolveType(batchById[bid].agentType), model: 'sonnet',
+          agentType: resolveType(batchById[bid].agentType), model: 'sonnet', effort: 'medium',
         })))
     // A repair worker may hit the same fork/stale-assumption the author path surfaces — HARD_RULES
     // instructs it to return blocked, so honor that here instead of discarding it and exiting as an

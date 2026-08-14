@@ -110,7 +110,7 @@ const menusRaw = await parallel(args.dimensionKeys.map(key => () =>
     'THIS project. If research surfaces a credible contrarian/underdog option, include it and set ' +
     'is_minority (never average it away). Set version_bearing=true if any option carries a ' +
     'library/framework/runtime version whose staleness would corrupt the choice.',
-    { label: 'menu:' + key, phase: 'Research', model: 'sonnet', agentType: 'general-purpose', schema: OPTION_SET_SCHEMA }
+    { label: 'menu:' + key, phase: 'Research', model: 'sonnet', effort: 'medium', agentType: 'general-purpose', schema: OPTION_SET_SCHEMA }
   )
 ))
 let menus = menusRaw

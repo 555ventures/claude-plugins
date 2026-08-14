@@ -166,7 +166,7 @@ const { accepted: cells, skipped } = validateCells(args.cells, CATEGORIES, log)
 
 const results = await parallel(cells.map(cell => () =>
   agent(researchPrompt(cell), {
-    label: `research:${cell.id}`, phase: 'Research', schema: CANDIDATE, model: 'sonnet',
+    label: `research:${cell.id}`, phase: 'Research', schema: CANDIDATE, model: 'sonnet', effort: 'medium',
   })))
 cells.forEach((c, i) => {
   if (!results[i]) skipped.push({ id: c.id, category: c.category, reason: 'agent-failed' })

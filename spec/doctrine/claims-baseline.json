@@ -5,7 +5,7 @@
       "orphans": 1
     },
     "spec/commands/audit.md": {
-      "lines": 182,
+      "lines": 188,
       "orphans": 3
     },
     "spec/commands/build.md": {
@@ -29,11 +29,11 @@
       "orphans": 5
     },
     "spec/commands/genesis-architect.md": {
-      "lines": 327,
+      "lines": 328,
       "orphans": 5
     },
     "spec/commands/genesis-design.md": {
-      "lines": 263,
+      "lines": 264,
       "orphans": 6
     },
     "spec/commands/genesis-explore.md": {
@@ -69,11 +69,11 @@
       "orphans": 1
     },
     "spec/doctrine/scaffold-ledger.md": {
-      "lines": 111,
+      "lines": 114,
       "orphans": 4
     },
     "spec/doctrine/shared.md": {
-      "lines": 1009,
+      "lines": 1029,
       "orphans": 6
     },
     "spec/agents/reviewer.md": {
@@ -81,5 +81,5 @@
       "orphans": 5
     }
   },
-  "totalLines": 6043
+  "totalLines": 6074
 }

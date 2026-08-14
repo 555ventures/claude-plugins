@@ -65,6 +65,12 @@ untouched. <!-- enforcedBy: tests/audit/audit.test.js -->
    rows enter Phase 3 disposition exactly like this audit's own verified findings, tagged
    `source: review-lens`. This audit never re-derives per-diff smells itself — that is the
    lens's job (shared § Model Placement's review panel).
+5. **Mine the Fable consult ledger.** Read `docs/consults.md` (absent = no-op — no command has
+   hit an underivable fork yet on this host; shared § Question Style's underivable-fork clause is
+   what appends rows). Group its rows by fork class (the recorded one-liner's class). Any class at
+   ≥2 rows is presented for promotion through this audit's own existing fate enum (Phase 4) —
+   typically `rule-row` (the derived default becomes doctrine/config) or `enforcer` when
+   mechanizable, `refactor-brief(NN)` when structural. No new fate, no enum change.
 
 ## Phase 1 — Target (derive the hotspots)
 

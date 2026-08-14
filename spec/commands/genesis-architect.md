@@ -324,4 +324,5 @@ Next: /spec:genesis-explore a trading simulator for solo creators
 - `AskUserQuestion` dismissed → STOP; never invent the declined answer.
 - Hard-to-reverse forks always go to the user; never synthesized away.
 - `args` to `wf-panel`/`wf-research` is a control channel — paths, enum keys, booleans only.
-- Every `Agent`/workflow `model:` is explicit (Opus session/aggregator, Sonnet research/proposers).
+- Every `Agent`/workflow `model:` is explicit (Opus session, Fable-first aggregator with an Opus
+  fallback — shared § Model Placement — Sonnet research/proposers).

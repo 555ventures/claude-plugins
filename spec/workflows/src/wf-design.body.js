@@ -312,7 +312,7 @@ const loopResult = await runGateLoop({
         fails.map(f => `- ${f.file} — ${f.summary}`).join('\n'),
         {
           label: `repair:${bid}:r${round + 1}`, phase: 'Gate', schema: RECEIPT,
-          agentType: resolveType(batchById[bid].agentType), model: 'sonnet',
+          agentType: resolveType(batchById[bid].agentType), model: 'sonnet', effort: 'medium',
         })
     }))
     // A repair worker can hit a design fork / stale assumption exactly like an author worker —

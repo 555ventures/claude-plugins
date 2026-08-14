@@ -260,4 +260,5 @@ Next: /spec:atlas (sweep + holistic review of the genesis mocks) → /spec:init 
   backing token is the defect this command guards against.
 - Doctrine stays one page — promote generalizable taste, keep one-offs in the spec layer later.
 - `AskUserQuestion` dismissed → STOP. Hard-to-reverse forks always go to the user.
-- Explicit `model:` everywhere (Opus session/aggregator/doctrine, Sonnet research/proposers).
+- Explicit `model:` everywhere (Opus session/doctrine, Fable-first aggregator with an Opus
+  fallback — shared § Model Placement — Sonnet research/proposers).

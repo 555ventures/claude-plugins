@@ -698,7 +698,8 @@ Generation is **zero-token**: a script walk, never a model pass.
 ## Model Placement
 
 **The expensive model authors the contract; cheap models execute it behind deterministic gates;
-the expensive model is consulted, not resident; an uncorrelated model reviews the result.** This
+the expensive model is consulted, not resident; review independence comes from
+blind-to-author dispatch and execution-grounded verification, never model diversity.** This
 is the v5 placement rule — one governing principle, not a per-command table of exceptions to
 memorize.
 
@@ -712,15 +713,21 @@ every worker, every reviewer, and every verifier. **Haiku** runs the
 gates — lookups, structural re-reads, currency checks. The **build retainer** is Fable (Opus on
 fallback, contract below) — the spec author's proxy for surprise adjudication; same-model-as-planner
 is a *feature* in this one seat, because the retainer's job is to proxy the planning author's
-intent, not to review it. **Reviewers and verifiers are Sonnet, never Fable** — cross-model
-independence from the planning author is the entire value of the review gate; a same-model
-reviewer shares the blind spots that produced the bugs. Everywhere else, Sonnet works and
-orchestrators never hold raw file contents — they pass paths.
+intent, not to review it. **Reviewers and verifiers are Sonnet, never Fable** — review
+independence comes from
+blind-to-author dispatch and execution-grounded verification, never model diversity; a
+same-model reviewer would still share the blind spots that produced the bugs.
+Everywhere else, Sonnet works and orchestrators never hold raw file contents — they pass paths.
 
 Fable is generally available again (the 2026-06 suspension callout is retired). Standing rule
 for resilience: an `Agent {model: "fable"}` call that returns unavailable falls back to
 `{model: "opus"}` and continues — the literal strings stay `"fable"` so recovery needs no edit.
-Every `Agent` call sets `model:` explicitly. Never inherit.
+Every `Agent`/`dispatch()` call sets `model:` AND `effort:` explicitly — never inherit either.
+Effort is a closed three-band set: `low` — mechanical/transcription seats (gates, extraction,
+red-check, currency probes, wf-design skeleton-expansion workers — expansion is transcription of
+a decided plan); `medium` — analysis seats (proposers, researchers, reviewers, verifiers,
+wf-build implementation workers, enforce research); `high` — synthesis/judgment seats (the panel
+aggregator).
 
 **Exceptions (named, not a pattern to extend):**
 
@@ -739,10 +746,13 @@ Every `Agent` call sets `model:` explicitly. Never inherit.
   hunt readers and per-finding verifiers stay Sonnet, dispatched inline (no session-model
   routing — audit quality would otherwise vary invisibly with the invoking model).
 - **`/spec:init` and the genesis commands keep their stated models.** Genesis pre-panel
-  classification, the panel aggregator, and design-doctrine authoring stay Opus seats — taste is
-  the work there, so delegating it would repeat the mistake the unified rule exists to prevent;
-  genesis research agents and the panel's 3 blind proposers are Sonnet; `/spec:init` runs on
-  whatever model invokes it (a bootstrap read, not a judgment seat).
+  classification and design-doctrine authoring stay Opus seats — taste is the work there, so
+  delegating it would repeat the mistake the unified rule exists to prevent. The panel aggregator
+  is the one seat that moved off this list (JJ's 2026-08-13 ruling): it now runs Fable-first with
+  an Opus fallback, the same retainer contract stated above, because writing the decision matrix,
+  hard forks, and ADR input is exactly the judgment-under-surprise work the retainer already
+  covers. Genesis research agents and the panel's 3 blind proposers are Sonnet; `/spec:init` runs
+  on whatever model invokes it (a bootstrap read, not a judgment seat).
 - **Retainer pattern (Fable in the plan-author's seat, Opus on fallback):** spawn once on first
   surprise (`Agent {model: "fable"}`, falling back to `{model: "opus"}` per the availability
   contract above, with the spec's Rationale + Assumptions + Decisions and build.md's role brief
@@ -856,6 +866,16 @@ question for that reader:
   time — `📌 Auto-picked <choice> — <one-line reason it was derivable> (veto anytime)` — and
   lands in the deviations/decision log. A wrong derivation must cost the user a five-second
   veto, not an archaeology dig.
+- **Underivable-fork consult (Fable retainer).** When a genuine fork has no derivable
+  recommended default — the codebase, session, and ledgers all stay silent AND the fork
+  payload's own `recommendation` field (spec 08 D3) is itself empty — the command consults the
+  Fable retainer for a decision brief (never a decision) and derives the default from the
+  brief, announcing the pick via the 📌 line above. The consult appends one row to the host's
+  `docs/consults.md` (header comment on first append, per the debt-ledger/advisory-findings
+  convention): date · command · fork one-liner · derived default. Bounded to the empty-derivation
+  case — a panel or workflow whose `recommendation` field does its spec-08 job never triggers
+  this; § Escalation Contract (build)'s six build-execution triggers are a different mechanism
+  and stay untouched by this rule.
 
 The floor is enforced mechanically by a PreToolUse hook (`scripts/question-style-gate.js`)
 in two tiers. Tier 1 (deterministic, free): rejects options lacking consequence-bearing

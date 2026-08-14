@@ -59,8 +59,9 @@ escape-hatched, each marked **cold** or **research-backed**.
    `{stage: "design", dimensionKeys: ["visual-trend", ...], briefPath, contextPaths:
    [".claude/genesis/stack-descriptor.json", <prior interview-research/*.json>], verifyKeys: []}`
    (taste is not version-bearing → no Haiku pass). Present the current aesthetic/voice directions for
-   this archetype + audience as the options, recommended-first, recency-stamped; the user picks the
-   feeling, references in vs. out.
+   this archetype + audience as the options, recommended-first and labeled "(Recommended)" with the
+   menu's `why_recommended` as the stated reason, recency-stamped; the user picks the feeling,
+   references in vs. out.
 2. **[User lens] — cold.** a **research-assumption** check — "has real user research been done?" If
    no, the doctrine records a *hypothesized* user model with explicit TODO stubs (no research gate
    for solo/MVP).
@@ -88,8 +89,9 @@ so proposers stay within the chosen framework/component library:
 
 1. Invoke `wf-panel` (`Workflow {scriptPath: <spec-paths wf-panel output>}`); write
    `.claude/genesis/panel-results-design.json`.
-2. `AskUserQuestion` on `hard_fork_list` (verbatim, recommended first); record rulings + every
-   `minority_position`. Dismissed → STOP.
+2. `AskUserQuestion` on `hard_fork_list` (verbatim, each option's `consequence` in its description,
+   recommended first labeled "(Recommended)" with `recommended_first_reason` as the stated
+   reason); record rulings + every `minority_position`. Dismissed → STOP.
 3. Fresh round on remaining `research_gaps` / newly-opened dimensions.
 
 ## Phase 4 — Author the canon (Opus)

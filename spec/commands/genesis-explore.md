@@ -61,8 +61,9 @@ atlas sweeps and `/spec:design` still degrade gracefully with a note when headle
    (`spec-paths templates`), holding every admitted principle to the method bar: falsifiable
    rule, evidence tier, archetype/screen conditions, `predicts:` observable, the ethics floor,
    anti-slop negations. The session curates; research content comes from the workflow return,
-   cited. Any user-supplied seed principles enter as hypotheses to re-verify, never as
-   pre-admitted rules.
+   cited — each admitted rule's rationale carries its research menu's `why_recommended` line as
+   the reason it was ranked highest for this project. Any user-supplied seed principles enter as
+   hypotheses to re-verify, never as pre-admitted rules.
 3. Read the brief back for sign-off (the funnel binds to it) — presented as what it is: a
    **constraints floor, not a taste commitment**. The user has seen no visuals yet and cannot
    know what they want; the sign-off must never read as if it were asking for that. Mandatory

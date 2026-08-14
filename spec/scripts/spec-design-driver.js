@@ -432,9 +432,12 @@ deterministic verification. NEVER run --mark author-green for this return — th
 claim this run did not earn.
 blocked → resolve within the skeleton's intent (write the ruling to the on-disk plan: the
 skeleton entry / tokenForks / token file / spec Decisions) or AskUserQuestion for a genuine
-fork; then re-invoke the same Workflow with resumeFromRunId. Anything else (gate-exhausted /
-out-of-scope) → read the failures, fix on disk (dispatch Sonnet), re-invoke. A green author is
-"structural (skeleton-expanded) — NOT visually approved."`,
+fork — build it from the return's own \`blocked.options[].consequence\` (each option's
+description: what it costs / what happens) and \`blocked.recommendation\` (the option to
+present first, labeled "(Recommended)") rather than re-deriving them; then re-invoke the same
+Workflow with resumeFromRunId. Anything else (gate-exhausted / out-of-scope) → read the
+failures, fix on disk (dispatch Sonnet), re-invoke. A green author is "structural
+(skeleton-expanded) — NOT visually approved."`,
 
   FIDELITY_REVIEW: () => {
     const shot = design.screenshot

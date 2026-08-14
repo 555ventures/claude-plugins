@@ -335,9 +335,10 @@ then `advisory` (soft), then any `verifier-failed`/`cap-skipped`/`kill-contradic
 label — present the evidence). With
 each survivor, **quote the spec lines its disposition hinges on** — the Decision, Assumption,
 or AC text the finding claims was violated (already in hand from Phase 0; quote verbatim,
-recommend nothing). The recurring disposition call is "over-strict spec text vs. actual code
+recommend the evidence-implied disposition — fix/waive/reject, argued from the quoted lines,
+never a bare menu). The recurring disposition call is "over-strict spec text vs. actual code
 defect," and it must be made against the author's recorded intent, not recalled intent. Then
-`AskUserQuestion` per finding group:
+`AskUserQuestion` per finding group, batched ≤4 findings per call:
 - **Fix** — dispatch Sonnet workers (routed via the host's `agentMap`, matching the build
   routing). Then re-review **incrementally**: create a fresh `{manifestPath}` (a new `mktemp`
   path, never the prior iteration's — stale rows cannot leak into the new derivation), and

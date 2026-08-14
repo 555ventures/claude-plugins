@@ -66,9 +66,10 @@ const ctxLine = ctx.length
 // preserving any deliberately-contrarian option (MAINTAINED DISSENT, mirrored from the panel).
 const OPTION_SET_SCHEMA = {
   type: 'object', additionalProperties: false,
-  required: ['dimension', 'options', 'version_bearing'],
+  required: ['dimension', 'options', 'version_bearing', 'why_recommended'],
   properties: {
     dimension: { type: 'string' },
+    why_recommended: { type: 'string', description: 'why rank 1 wins for THIS project, one line' },
     options: {
       type: 'array',
       description: '2–4 current options, ranked, rank 1 = recommended first',
@@ -124,10 +125,12 @@ const menusRaw = await parallel(args.dimensionKeys.map(key => () =>
     'WebSearch/WebFetch if available; if not, rely on your knowledge and stamp those options ' +
     '"unverified — model knowledge". Return 2–4 genuinely current options the user should choose ' +
     'between, ranked recommended-first FOR THIS PROJECT (its archetype, audience, goals). Each option ' +
-    'gets an honest one-line tradeoff and a recency stamp grounded in a source. Phrase every label ' +
-    'neutrally — do NOT lead the user. If research surfaces a credible contrarian/underdog option, ' +
-    'include it and set is_minority (never average it away). Set version_bearing=true if any option ' +
-    'carries a library/framework/runtime version whose staleness would corrupt the choice.',
+    'gets an honest one-line tradeoff and a recency stamp grounded in a source. Phrase labels ' +
+    'neutrally; the ranking and `why_recommended` carry the recommendation — the interview shows ' +
+    'rank 1 as (Recommended) with your reason. Set why_recommended to one line: why rank 1 wins for ' +
+    'THIS project. If research surfaces a credible contrarian/underdog option, include it and set ' +
+    'is_minority (never average it away). Set version_bearing=true if any option carries a ' +
+    'library/framework/runtime version whose staleness would corrupt the choice.',
     { label: 'menu:' + key, phase: 'Research', model: 'sonnet', agentType: 'general-purpose', schema: OPTION_SET_SCHEMA }
   )
 ))

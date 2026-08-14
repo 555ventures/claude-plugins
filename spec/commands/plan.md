@@ -52,8 +52,12 @@ in Phase 1.5.
    (not `ratified`+), warn: the brief hasn't been design-ratified — offer `/spec:sketch <brief>`
    first (warn, don't block). Any **mock↔brief mismatch** (the mock shows a capability Scope
    doesn't name, or vice versa) is never resolved silently — it becomes a Phase 1 interview
-   question ("the mock shows an export button; the brief doesn't mention export — which is
-   right?"), and the losing home gets corrected before drafting.
+   question, glossed in plain English with a recommended-first pick backed by whichever artifact
+   carries more evidence of deliberate intent, and the consequence of each pick named (e.g. "the
+   mock shows an export button; the brief doesn't mention export — which is right? (Recommended:
+   keep export — a ratified mock reflects a deliberate design decision, and dropping it silently
+   discards that work; if the brief's Scope was the deliberate cut instead, say so and the mock
+   loses the button)"), and the losing home gets corrected before drafting.
 1. **Harvest or discover.** If this conversation already contains a design discussion of the
    target: summarize what has converged (scope, key decisions, open questions), confirm the
    summary with the user, and skip to Phase 1.5/2. If invoked cold: run Phase 1 discovery. If a

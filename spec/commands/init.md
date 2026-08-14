@@ -79,8 +79,12 @@ Launch parallel Explore agents (`model: sonnet`) and read key files yourself:
   answer from `package.json` scripts, the README, `docker-compose.yml`, Playwright/Cypress
   config, seed scripts — never guess. This is the profiling input to the verify skill below.
 
-Interview the user via `AskUserQuestion` only for what the code cannot answer (e.g. "which
-surfaces do you consider T3?", with informed options).
+Interview the user via `AskUserQuestion` only for what the code cannot answer — glossed in plain
+English, recommended-first, with one line of consequence per option (e.g. "which surfaces should
+get the extra T3 scrutiny — the ones where a bad change is expensive to fix after it ships?
+(Recommended: money/auth/migration paths, if this repo has any — missing one lets a risky change
+through at routine speed; naming too many slows every ordinary edit down with T3's extra
+build/review overhead)", with the real candidate paths as informed options).
 
 **Ensure `.claude/worktrees/` is gitignored** (idempotent): `/git:enter-worktree`'s worktree
 provisioning and the harness's own `EnterWorktree` both create trees there, and an un-ignored worktree path
@@ -160,9 +164,12 @@ manifest row with a reason:
 - **Quickstart** — a root README section (or file) answering "how do I run this?" in five
   lines, citing the real commands.
 - **Git remote / CI activation** — check `git remote -v`. If empty, ask the user
-  (`AskUserQuestion`): connect a remote now, or explicitly declare CI inert. Generated CI
-  config with no remote executes zero times; the manifest records whichever the user chooses —
-  never an undeclared limbo.
+  (`AskUserQuestion`, glossed in plain English with a consequence per option): "this repo has no
+  git remote, so generated CI config would never run — connect one now (Recommended: CI then
+  catches drift on every push, and it's a one-time setup cost) or declare CI inert for now
+  (cheaper today, but nothing checks this repo until a remote exists)." Generated CI config with
+  no remote executes zero times; the manifest records whichever the user chooses — never an
+  undeclared limbo.
 
 ## Phase 2 — Write `.claude/spec.config.json`
 

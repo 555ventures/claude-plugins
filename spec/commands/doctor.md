@@ -334,8 +334,9 @@ The bar, per patch — all three, no exceptions:
    proving the current doctrine text wrong (an escape-ledger row pointing at it qualifies;
    "seems outdated" does not). For dependency-adjudicated claims, run the one falsifying line
    now — same discipline plan's refuters use.
-2. **Per-patch `AskUserQuestion` approval** showing exact before → after text and the
-   evidence. Never batch-approve.
+2. **Batched `AskUserQuestion` approval, ≤4 patches per call** — each patch shows its exact
+   before → after text and the evidence. Never a blanket approve-all across every patch; every
+   patch inside the batch still needs its own explicit yes.
 3. **Scope: line-item only, inside the grounding layer** (pipeline rules file, convention
    rule files, generated agents, generated skills, the settings `permissions` block, config
    values, `scripts/spec-patterns.sh`). Structural drift (layers reorganized,

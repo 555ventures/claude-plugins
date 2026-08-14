@@ -113,15 +113,20 @@ const AGGREGATE_SCHEMA = {
     } },
     hard_fork_list: { type: 'array', description: 'genuine conflicts on hard-to-reverse dimensions → mandatory AskUserQuestion, presented verbatim', items: {
       type: 'object', additionalProperties: false,
-      required: ['dimension', 'conflicting_positions', 'recommended_first'],
+      required: ['dimension', 'conflicting_positions', 'recommended_first', 'recommended_first_reason'],
       properties: {
         dimension: { type: 'string' },
         conflicting_positions: { type: 'array', items: {
           type: 'object', additionalProperties: false,
-          required: ['option', 'rationale'],
-          properties: { option: { type: 'string' }, rationale: { type: 'string' } },
+          required: ['option', 'consequence', 'rationale'],
+          properties: {
+            option: { type: 'string' },
+            consequence: { type: 'string', description: 'one plain-English line: what happens / what it costs if the user picks this' },
+            rationale: { type: 'string' },
+          },
         } },
         recommended_first: { type: 'string', description: 'which option the panel recommends as the first AskUserQuestion choice' },
+        recommended_first_reason: { type: 'string', description: 'why recommended_first should win — the "(Recommended)" gloss shown to the user' },
       },
     } },
     minority_positions: { type: 'array', description: 'any proposer option the synthesis would otherwise suppress — recorded verbatim into the ADR Dissents section', items: {
@@ -190,7 +195,11 @@ const result = await agent(
   '- original_goal: restate the goal from the brief VERBATIM (anti-drift).\n' +
   '- decision_matrix: one row per open dimension with options seen and a recommended default.\n' +
   '- hard_fork_list: ONLY genuine conflicts on hard-to-reverse dimensions (the brief\'s "## Open ' +
-  'Dimensions" marks which are hard-to-reverse). These go to the user VERBATIM — never pre-decide them.\n' +
+  'Dimensions" marks which are hard-to-reverse). These go to the user VERBATIM — never pre-decide them. ' +
+  'Each conflicting_positions entry gets a consequence: one plain-English line stating what happens or ' +
+  'what it costs if the user picks this option — apply the ten-second cold test (answerable by a ' +
+  'product owner who has never seen this repo). Each hard_fork_list entry gets a ' +
+  'recommended_first_reason: why recommended_first should win, in the same cold-test plain English.\n' +
   '- minority_positions: any proposer option you would otherwise suppress — record it verbatim with its ' +
   'rationale so the ADR preserves the full option space.\n' +
   '- research_gaps: angles that warrant a follow-up research round.\n\n' +

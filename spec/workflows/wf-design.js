@@ -141,8 +141,21 @@ const RECEIPT = {
       properties: {
         kind: { type: 'string', enum: ['design-fork', 'stale-assumption'] },
         detail: { type: 'string' },
-        options: { type: 'array', items: { type: 'string' } },
-        recommendation: { type: 'string' },
+        options: {
+          type: 'array',
+          items: {
+            type: 'object', additionalProperties: false,
+            required: ['option', 'consequence'],
+            properties: {
+              option: { type: 'string' },
+              consequence: { type: 'string', description: 'one plain-English line: what happens / what it costs if the user picks this' },
+            },
+          },
+        },
+        recommendation: {
+          type: 'string',
+          description: 'the option to present first, labeled (Recommended) — include whenever any option is defensible; omission means the orchestrator must derive or consult before asking',
+        },
       },
       required: ['kind', 'detail'],
     },

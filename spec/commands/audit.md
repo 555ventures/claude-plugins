@@ -94,12 +94,19 @@ line; it is never presented as a finding.
 ## Phase 4 — Disposition (one fate per finding, executed immediately)
 
 Present surviving findings in batched `AskUserQuestion` calls, **≤4 findings per call**, one
-question per finding, options phrased by outcome (not mechanism):
+question per finding, options phrased by outcome (not mechanism), glossed in plain English with
+one line of consequence each, and the evidence-implied default recommended first — derived per
+finding, never a fixed order (a genuine architecture smell with no cheap mechanization defaults
+to refactor-brief; a one-off stylistic nit defaults to rejected):
 
-- **Write a refactor brief** → `refactor-brief(NN)`
-- **Add a rule** → `rule-row`
-- **Mechanize a check** → `enforcer`
-- **Not worth acting on (name why)** → `rejected(<reason>)`
+- **Write a refactor brief** → `refactor-brief(NN)` — schedules real rework as its own roadmap
+  item; the fix lands later (once that brief is planned and built), not this run.
+- **Add a rule** → `rule-row` — stops new instances of this from now on, but does nothing about
+  the instance already found.
+- **Mechanize a check** → `enforcer` — the strongest guarantee (a deterministic gate check on
+  every future run), but the slowest to land — a full `/spec:enforce` research pass.
+- **Not worth acting on (name why)** → `rejected(<reason>)` — the finding stands as-is; recording
+  the reason is what stops it resurfacing next audit.
 
 `AskUserQuestion` dismissed → STOP; ledger rows already appended this run stay appended, nothing
 further is asked or written.
@@ -110,8 +117,10 @@ further is asked or written.
   `docs/roadmap/` + a minimal overview if absent — never invent the brief-writing recipe here,
   it lives at `/spec:plan`'s roadmap-brief intake). `NN` = max existing `docs/roadmap/NN-*.md`
   number **+ 1** — never fill a gap; this is what keeps `spec-status`'s sequence-order skip
-  anomaly quiet. Write the brief from `roadmap-brief.md`, and append a Sequence-table row when
-  the overview carries one.
+  anomaly quiet. Draft the brief from `roadmap-brief.md` and show the user the drafted
+  Scope/Summary — preview the brief before it is written, matching the rule-row fate's own
+  show-before-write step — then write it, and append a Sequence-table row when the overview
+  carries one.
 - `rule-row`: show the user the exact clause text before writing it, then append it to the
   host's pipeline rules file.
 - `enforcer`: record the proposed `/spec:enforce` cell (stack × category, from the reserved

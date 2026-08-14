@@ -73,9 +73,12 @@ user's input; `sweep` as an argument only skips the gap confirmation.
    (cross-brief scope changes via an amendment ADR — adr.md template § Applies to), then the
    mock follows — a pixel edit over a brief error leaves the brief lying
    to every future planning session. If a note contradicts the doctrine or a bound region
-   (coverage ledger claim), that is a **fork**: `AskUserQuestion` — mock-and-spec both change
-   (route through `/spec:design`'s drift handling for bound regions) or the note is withdrawn;
-   never silently rewrite a bound mock. Then per mock edit: locate the file by
+   (coverage ledger claim), that is a **fork**: `AskUserQuestion`, glossed in plain English with
+   a consequence per option, recommended-first from how concrete the note is — a specific,
+   actionable note recommends "mock-and-spec both change" (route through `/spec:design`'s drift
+   handling for bound regions — the real fix, but reopens a spec); a vague or contested note
+   recommends "withdraw the note" (nothing changes, but the concern stays unaddressed until it's
+   sharper); never silently rewrite a bound mock. Then per mock edit: locate the file by
    `data-screen-label`, dispatch a Sonnet edit under the design harness (`{atlas} check` after
    every edit), rerun `node {atlas} build`, tell the user to refresh. Direction-level notes →
    record, and route per the model note above rather than silently absorbing them into a

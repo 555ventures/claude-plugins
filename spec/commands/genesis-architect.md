@@ -39,8 +39,9 @@ being resumed. The roadmap has no status enum of its own: `architect: scaffold-c
 
 Run intake as a **structured discovery interview**, not a form (genesis.md § Genesis: Discovery
 Interview): funnel-shaped (broad vision → narrow constraints), every `AskUserQuestion` batch
-lens-tagged, neutrally worded, and carrying an **"Other / not sure"** escape hatch (your one open
-lane).
+lens-tagged and carrying an **"Other / not sure"** escape hatch (your one open
+lane). The exception: vision/taste dimensions may stay neutral — everywhere else the derived pick
+leads (the research-woven loop's recommended-first rule below governs).
 
 0. **Reflect back first.** Restate `$ARGUMENTS` in your words — what you think is being built, for
    whom, the core job it does — and run one `AskUserQuestion` to confirm/correct *before* any
@@ -78,8 +79,9 @@ dimension a prior answer opens:
    `fetchedAt`** yourself (the workflow can't — read the date via Bash `date`).
 3. Present an `AskUserQuestion` built from the menu: 2–4 options recommended-first by `rank`, each
    option's `tradeoff` + recency in its description ("current as of `<fetchedAt>`"), neutral
-   phrasing, the **"Other / not sure"** escape hatch. **Drop or demote** any option the Haiku pass
-   marked `still_current: false`.
+   phrasing, the **"Other / not sure"** escape hatch; the rank-1 option is labeled "(Recommended)"
+   with the menu's `why_recommended` as the stated reason. **Drop or demote** any option the Haiku
+   pass marked `still_current: false`.
 4. Record the pick **and its `sources`** to the brief, and mark that dimension **constrained** — it
    then skips the Phase-3 panel (genesis.md § Genesis: Discovery Interview — Discovery↔Panel bridge).
 
@@ -131,9 +133,11 @@ Repeat until no open hard forks remain:
    roleKeys: [...], runProposers: <bool>, contextPaths: [<prior panel-results + research>]}`.
    **`args` is paths/keys/booleans only** — never inline prose.
 2. On return, write `.claude/genesis/panel-results-architect.json`.
-3. `AskUserQuestion` on `hard_fork_list` — conflicting positions **verbatim**, `recommended_first`
-   first. Record each ruling and **every `minority_position`** into the brief's decisions notes
-   (they become ADR `## Dissents`). Dismissed → STOP.
+3. `AskUserQuestion` on `hard_fork_list` — conflicting positions **verbatim**, each option's
+   description carrying its `consequence`; `recommended_first` first, labeled "(Recommended)" with
+   `recommended_first_reason` as the stated reason. Record each ruling and **every
+   `minority_position`** into the brief's decisions notes (they become ADR `## Dissents`).
+   Dismissed → STOP.
 4. If `research_gaps` remain or a ruling opens a deeper dimension, start a **fresh** round with
    only the new `researchKeys` (prior results via `contextPaths`).
 

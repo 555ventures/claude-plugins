@@ -1,11 +1,11 @@
 {
   "files": {
     "spec/commands/atlas.md": {
-      "lines": 120,
+      "lines": 123,
       "orphans": 1
     },
     "spec/commands/audit.md": {
-      "lines": 173,
+      "lines": 182,
       "orphans": 3
     },
     "spec/commands/build.md": {
@@ -17,11 +17,11 @@
       "orphans": 1
     },
     "spec/commands/doctor.md": {
-      "lines": 402,
+      "lines": 403,
       "orphans": 3
     },
     "spec/commands/enforce.md": {
-      "lines": 288,
+      "lines": 293,
       "orphans": 1
     },
     "spec/commands/escape.md": {
@@ -29,35 +29,35 @@
       "orphans": 5
     },
     "spec/commands/genesis-architect.md": {
-      "lines": 323,
+      "lines": 327,
       "orphans": 5
     },
     "spec/commands/genesis-design.md": {
-      "lines": 261,
+      "lines": 263,
       "orphans": 6
     },
     "spec/commands/genesis-explore.md": {
-      "lines": 205,
+      "lines": 206,
       "orphans": 2
     },
     "spec/commands/init.md": {
-      "lines": 570,
+      "lines": 577,
       "orphans": 6
     },
     "spec/commands/plan.md": {
-      "lines": 335,
+      "lines": 339,
       "orphans": 6
     },
     "spec/commands/release.md": {
-      "lines": 242,
+      "lines": 247,
       "orphans": 12
     },
     "spec/commands/review.md": {
-      "lines": 533,
+      "lines": 534,
       "orphans": 0
     },
     "spec/commands/sketch.md": {
-      "lines": 132,
+      "lines": 139,
       "orphans": 3
     },
     "spec/commands/status.md": {
@@ -65,11 +65,11 @@
       "orphans": 0
     },
     "spec/doctrine/genesis.md": {
-      "lines": 399,
+      "lines": 404,
       "orphans": 1
     },
     "spec/doctrine/scaffold-ledger.md": {
-      "lines": 110,
+      "lines": 111,
       "orphans": 4
     },
     "spec/doctrine/shared.md": {
@@ -81,5 +81,5 @@
       "orphans": 5
     }
   },
-  "totalLines": 5988
+  "totalLines": 6043
 }

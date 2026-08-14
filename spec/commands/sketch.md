@@ -39,8 +39,11 @@ exactly one owning brief:
 - **Roadmap brief path** (`docs/roadmap/NN-*.md`) — direct; the whole brief is in scope.
 - **Mock path** (`design/mocks/<label>.html`) — read its root `data-screen-label`, grep the
   label across `docs/roadmap/*.md` ` ```surfaces ` blocks; the declaring brief is the owner and
-  the round starts scoped to that surface. **No declaring brief** (orphan) → `AskUserQuestion`:
-  which brief owns it (add the label to its `surfaces` block) or delete the mock. **Two briefs
+  the round starts scoped to that surface. **No declaring brief** (orphan) → `AskUserQuestion`,
+  glossed in plain English with a consequence per option: "this mock has no brief claiming it —
+  assign it to a brief (Recommended: keeps the surface reachable from the roadmap; adds one line
+  to that brief's `surfaces` block) or delete the mock (the design work is lost, but nothing in
+  the roadmap referenced it anyway)." **Two briefs
   declare the label** → a roadmap defect; surface it for the user to fix, never pick silently.
 - **Bare surface label** — same grep, same rules.
 - **No argument** — derive per-brief status from disk (surfaces × mocks × `data-status`), list
@@ -99,7 +102,11 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
 6. **Exit — ratification.** When the user says done (or asks "where are we"): produce the
    **coherence readout** — one line per declared surface: what the mock shows vs what
    Scope/`surfaces` claim, plus any unresolved architecture flags. Fix what the readout catches
-   (same triage). Then `AskUserQuestion`: ratify? On yes, set `data-status="ratified"` on each
+   (same triage). Then `AskUserQuestion`, glossed in plain English with a consequence per option:
+   "ratify this brief's sketches now? (Recommended when the readout found no open flags:
+   `/spec:plan` can then proceed on a brief that already agrees with its mocks) or keep iterating
+   (nothing changes on disk, but planning stays behind the un-ratified-UI warning until you come
+   back)." On yes, set `data-status="ratified"` on each
    of the brief's `sketch` mocks (`approved`+ mocks are untouched) and rebuild the atlas.
    **Ratified** = direction approved at roadmap level, brief and mocks agree; the matrix and
    polish are still owed later at `/spec:design` promotion. On no — state is on disk; re-invoke

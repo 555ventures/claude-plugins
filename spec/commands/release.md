@@ -35,8 +35,13 @@ milestone ships, not the pipeline.
 1. **Config `release` block** (contract file § Release): `deployCommand` (staging),
    `stagingUrl`, `e2eCommand` (runs the e2e suite against `BASE_URL`), optional
    `promoteCommand`, `productionUrl`, `healthPath`. If absent, this is the first release:
-   derive each value from the repo (deploy tooling config, CI files, e2e config) and confirm
-   the set with the user via `AskUserQuestion` — **host-declared, never invented** — then
+   derive each value from the repo (deploy tooling config, CI files, e2e config) — most fields
+   are fully derivable and are never asked about. Confirm only the fields the repo left
+   genuinely ambiguous, in batched `AskUserQuestion` calls of **≤4 fields per call**, each
+   glossed in plain English with the derived value recommended first and the consequence of
+   overriding it (e.g. "deploy target — {derived value} (Recommended: matches the CI/deploy
+   config already in this repo) or a different URL/command (use only if this repo actually
+   deploys somewhere that config doesn't show)") — **host-declared, never invented** — then
    write the block. A host that deploys through CI-on-tag records that as its
    `promoteCommand` shape (e.g. a tag push) rather than a direct deploy.
 2. **Derive what shipped** since the last `stage:"release"` ledger row (or since genesis, on

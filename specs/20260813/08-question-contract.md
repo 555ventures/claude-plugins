@@ -1,6 +1,7 @@
 ---
 date: 2026-08-13
-status: hardened
+status: implementing
+diff_base: dd4d47e3851225e267aae997293800c28ed81da2
 open_markers: 0
 risk: T3
 area: question-surface
@@ -39,7 +40,7 @@ hook blocks.
 | D6 | Missing-confirm fixes (B7): enforce.md's repo-wide format write-mode pass gains one batched confirm whose anchor sentence is the literal "Confirm before writing: {N} files will be rewritten" (with sample); audit.md's brief-writing fate gains the literal "preview the brief before it is written" step its sibling rule-row fate already has. | Two irreversible-ish actions currently fire with zero decision point — the inverse defect of B1–B4, same contract. |
 | D7 | Question-teaching examples rewritten at the worst B6 sites — init.md's T3-surfaces and CI-inert questions, sketch.md's ratify/gap-surface asks, atlas.md's bound-region ask, release.md's 5-field ask (split to ≤4 + derive), audit.md's four-way fate menu (gains default), plan.md's mock-mismatch "which is right?" (gains recommended-first from evidence) — each rewritten to gloss-in-plain-English + recommended-first + consequence per option. Remaining B6 sites are left to the hook's runtime enforcement. | The hook catches malformed questions at runtime, but doctrine examples *teach* the malformation and cost a bounce every run at these recurring sites; the tail isn't worth hand-edits (the hook covers it). |
 | D8 | Regression pin: hooks.json SHALL CONTINUE TO wire `question-style-gate.js` as a PreToolUse matcher on AskUserQuestion (tagged, green pre-change). | The wave's question contract assumes the hook; pin the wiring so a future hooks.json edit can't silently orphan it. |
-| D9 | Scaffold-ledger row for the schema-level question contract (promote/retire: retire the schema fields only if the hook retires). Version bump target 6.66.0. | Doctor check 13; repo discipline. |
+| D9 | Scaffold-ledger row for the schema-level question contract (promote/retire: retire the schema fields only if the hook retires). Version bump target 6.66.0 — **superseded at build time (2026-08-14): HEAD already ships 6.69.0, so the bump lands on 6.70.0** (the literal in a spec is a target, not a pin; concurrent sessions race the semver). | Doctor check 13; repo discipline. |
 
 ## File Plan
 

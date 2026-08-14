@@ -44,12 +44,15 @@ research-backed round:
    paths/keys/booleans (`stage`, `dimensionKeys`, `briefPath`, `contextPaths`, `verifyKeys`). Batch
    every dimension one answer opens into a single parallel call.
 2. It returns one **option menu per dimension** — 2–4 current options, ranked recommended-first,
-   each with an honest tradeoff, a recency stamp grounded in sources, and an `is_minority` flag
-   preserving any contrarian option (MAINTAINED DISSENT, mirrored from the panel).
+   each with an honest tradeoff, a recency stamp grounded in sources, an `is_minority` flag
+   preserving any contrarian option (MAINTAINED DISSENT, mirrored from the panel), and a required
+   `why_recommended` (one line: why rank 1 wins for THIS project — the stated reason behind the
+   ranking, not just the ranking itself).
 3. The command writes each menu to `.claude/genesis/interview-research/{dimension}.json` (stamping
    `fetchedAt` itself — the workflow can't), then presents an `AskUserQuestion` built **from the
    menu**: options recommended-first, the tradeoff + "current as of `<fetchedAt>`" in each
-   description, neutral phrasing, the escape hatch. The user reacts to an informed menu, never a
+   description, neutral phrasing, the escape hatch, rank 1 labeled "(Recommended)" with
+   `why_recommended` as the stated reason. The user reacts to an informed menu, never a
    blank field; the pick seeds the next round.
 
 **Model placement in the loop:** **Sonnet** builds the menu (research + option synthesis);
@@ -87,8 +90,10 @@ and returns a decision package. One round:
 1. Command writes/updates `.claude/genesis/brief.md`, derives the research + role + dimension keys.
 2. Command invokes `wf-panel` (`Workflow` tool) with `args` = paths + keys + booleans.
 3. Workflow returns the aggregator package; command writes `panel-results-{stage}.json`.
-4. Command runs `AskUserQuestion` on the `hard_fork_list` (conflicting positions **verbatim**,
-   `recommended_first` first), records rulings + every `minority_position` to disk.
+4. Command runs `AskUserQuestion` on the `hard_fork_list` (conflicting positions **verbatim**, each
+   option's `consequence` in its description, `recommended_first` first labeled "(Recommended)"
+   with `recommended_first_reason` as the stated reason), records rulings + every
+   `minority_position` to disk.
 5. If `research_gaps` remain, or the user's choice opens a deeper dimension, the command starts
    a **fresh** `wf-panel` round researching only the new angles (prior results passed via
    `contextPaths`). No reliance on workflow resume — fresh-call-per-round avoids brief-content

@@ -168,11 +168,16 @@ conditions below). When a verified enforcer has a
 write/fix mode and the tree carries pre-existing violations its new gate check would flag (the
 common `format` case: formatter configured but unwired), run that tool's write mode ONCE over the
 tree so the check lands green instead of handing the user a red gate only the tool itself can
-clear. Conditions, all three: (a) the tool passed two-stage verify (Phases 2–3); (b) the
+clear. Conditions, all four: (a) the tool passed two-stage verify (Phases 2–3); (b) the
 pre-existing gate is green before the pass and the full gate — including the new check — is green
-after it; (c) the run is recorded as `baselineRun` in the cell's manifest entry. The danger the
+after it; (c) the run is recorded as `baselineRun` in the cell's manifest entry; (d) before
+running the write mode, run the tool's dry-run/list mode to get the exact file count, then
+`AskUserQuestion` with the literal anchor sentence `Confirm before writing: {N} files will be
+rewritten` (N = that count) plus a short sample of the affected paths — dismissed → skip the
+baseline pass for this cell and fall back per Phase 3, never write anyway. The danger the
 no-edit rule guards against is semantic edits made by model judgment; a verified deterministic
-tool's own output, gate-checked on both sides, is not that. Never hand-edit toward the same
+tool's own output, gate-checked on both sides, is not that — the confirm step is about scale
+(a repo-wide rewrite), not about trusting the tool. Never hand-edit toward the same
 result — if the tool cannot establish its own baseline, the category falls back per Phase 3.
 
 ## Phase 5 — Create missing rules (PROPOSE — never auto-author)

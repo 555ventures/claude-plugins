@@ -18,9 +18,11 @@ const readSpec = (p) => fs.readFileSync(path.join(SPEC, p), 'utf8')
 // Rejected-findings bullet list contributes NO Category history (verified INTAKE.md:63-109,
 // it has no structured Category cell to read). D3 names this file as the enforcement carrier,
 // asserting (a)-(g); this is the only place that logic lives — there is no separate script.
-// AC-20260805-04-4 pins the live table itself and is EXPECTED RED until the implementation
-// batch lands the Fix column (D1) and repairs the duplicate ID PRAX-20260721-01 (D6) — that is
-// sanctioned TDD red, not a regression.
+// AC-20260805-04-4 pins the live table itself. It was authored EXPECTED RED until the
+// implementation batch landed the Fix column (D1) and repaired the duplicate ID
+// PRAX-20260721-01 (D6). Both landed, and as of 2026-08-13 — once parseFixForms stopped
+// misreading multi-mechanism cells — it is GREEN and stays that way: it is now the standing
+// guard on the live file, so a failure here is a real regression, never sanctioned red.
 
 const FIXDIR = path.join(ROOT, 'tests/fixtures/intake-discipline')
 const fixture = (name) => fs.readFileSync(path.join(FIXDIR, name), 'utf8')
@@ -59,6 +61,44 @@ function parseAcceptedTable(content) {
     rows.push(row)
   }
   return { header, rows }
+}
+
+// Parses a `Fix` cell into its `mechanism(...)`/`prose(...)` forms. A single fix legitimately
+// spans several mechanisms (CROSS-20260813-03 credits verdict.js + review.md + release.md), so
+// the cell is a COMMA-SEPARATED LIST of forms, not one form.
+//
+// This cannot be a regex over the whole cell: `/^mechanism\((.+)\)$/` is greedy, so a
+// three-mechanism cell matched as ONE form capturing `a), mechanism(b), mechanism(c` — a path
+// that trivially does not exist, which reported a correct row as a dangling citation and left
+// the live-table assertion permanently red. A test that always fails stops being read, so the
+// parser balances parens per form instead: prose reasons may themselves contain commas and
+// parens, and neither may terminate a form early.
+//
+// Returns null when the cell is not a well-formed list (caller reports it as an invalid Fix).
+function parseFixForms(fix) {
+  const forms = []
+  let i = 0
+  while (i < fix.length) {
+    const rest = fix.slice(i)
+    const m = rest.match(/^(mechanism|prose)\(/)
+    if (!m) return null
+    const kind = m[1]
+    let depth = 0
+    let j = i + m[0].length - 1 // at the opening paren
+    for (; j < fix.length; j++) {
+      if (fix[j] === '(') depth++
+      else if (fix[j] === ')' && --depth === 0) break
+    }
+    if (depth !== 0) return null // unbalanced — not a well-formed form
+    forms.push({ kind, value: fix.slice(i + m[0].length, j) })
+    i = j + 1
+    if (i === fix.length) break
+    // Forms are joined by a comma; anything else between them is malformed.
+    const sep = fix.slice(i).match(/^\s*,\s*/)
+    if (!sep) return null
+    i += sep[0].length
+  }
+  return forms.length ? forms : null
 }
 
 // Runs D3 assertions (a)-(g) over one parsed accepted-findings table and returns every
@@ -110,8 +150,11 @@ function checkIntakeDiscipline(content) {
     // (b) Fix is one of the four sanctioned forms.
     const isDash = fix === '—' || fix === '-'
     const isPreContract = fix === 'pre-contract'
-    const mechMatch = fix && fix.match(/^mechanism\((.+)\)$/)
-    const proseMatch = fix && fix.match(/^prose\((.*)\)$/)
+    const forms = (!fix || isDash || isPreContract) ? null : parseFixForms(fix)
+    const mechForms = (forms || []).filter((f) => f.kind === 'mechanism')
+    const proseForms = (forms || []).filter((f) => f.kind === 'prose')
+    const mechMatch = mechForms.length > 0
+    const proseMatch = proseForms.length > 0
     if (!isDash && !isPreContract && !mechMatch && !proseMatch) {
       violations.push({
         rowId: id,
@@ -136,9 +179,10 @@ function checkIntakeDiscipline(content) {
       })
     }
 
-    // (d) mechanism(<path>) paths exist in the repo.
-    if (mechMatch) {
-      const p = mechMatch[1].trim()
+    // (d) every mechanism(<path>) path exists in the repo — each form checked on its own, so a
+    // multi-mechanism row is judged per citation and the message names the offending one.
+    for (const f of mechForms) {
+      const p = f.value.trim()
       if (!fs.existsSync(path.join(ROOT, p))) {
         violations.push({
           rowId: id,
@@ -154,8 +198,8 @@ function checkIntakeDiscipline(content) {
     if (category) {
       const repeat = seenCategories.has(category)
       if (repeat && fixedIn !== 'open' && !isPreContract) {
-        const mechOk = Boolean(mechMatch)
-        const proseOk = Boolean(proseMatch) && proseMatch[1].trim().length >= 20
+        const mechOk = mechMatch
+        const proseOk = proseForms.some((f) => f.value.trim().length >= 20)
         if (!mechOk && !proseOk) {
           violations.push({
             rowId: id,
@@ -211,6 +255,40 @@ test('AC-20260805-04-2: mechanism(<path>) passes when the path exists in the rep
   assert.strictEqual(findViolation(violations, 'Y-1'), undefined,
     'Y-1 cites tests/helpers.js, which exists — a real mechanism citation must not be flagged, ' +
     'or a compliant row can never close mechanism()')
+})
+
+// A fix spanning several files cites each one. The greedy `/^mechanism\((.+)\)$/` matched such a
+// cell as ONE form whose "path" was `a), mechanism(b), mechanism(c` — flagging a correct row as a
+// dangling citation and leaving the live-table assertion permanently red, which is how a gate
+// stops being read. Each citation is now checked on its own.
+test('a multi-mechanism Fix cell validates each citation separately', () => {
+  const forms = parseFixForms(
+    'mechanism(spec/scripts/verdict.js), mechanism(spec/commands/review.md), ' +
+    'mechanism(spec/commands/release.md)')
+  assert.deepStrictEqual(forms.map((f) => f.value), [
+    'spec/scripts/verdict.js', 'spec/commands/review.md', 'spec/commands/release.md'],
+    'each mechanism must parse as its own citation, not one greedy blob')
+})
+
+test('a multi-mechanism Fix cell still fails on the ONE citation that dangles', () => {
+  const forms = parseFixForms('mechanism(tests/helpers.js), mechanism(spec/nope/absent.js)')
+  const missing = forms.filter((f) => !fs.existsSync(path.join(ROOT, f.value)))
+  assert.deepStrictEqual(missing.map((f) => f.value), ['spec/nope/absent.js'],
+    'splitting the cell must not weaken the check — a dangling path among valid ones still fails')
+})
+
+test('a prose reason containing commas and parens parses as one form', () => {
+  // Splitting the cell on bare commas would truncate a reason mid-sentence and silently pass a
+  // reason far shorter than the >= 20-char bar D2 enforces.
+  const reason = 'no gate is possible here, because the host (any host) supplies the surface'
+  const forms = parseFixForms(`prose(${reason})`)
+  assert.deepStrictEqual(forms, [{ kind: 'prose', value: reason }])
+})
+
+test('a malformed Fix cell parses as null rather than a bogus form', () => {
+  for (const bad of ['done', 'mechanism(a) mechanism(b)', 'mechanism(a', 'mechanism(a), done']) {
+    assert.strictEqual(parseFixForms(bad), null, `"${bad}" must not parse as a valid Fix cell`)
+  }
 })
 
 test('AC-20260805-04-2: mechanism(<path>) fails naming the dangling path when it does not exist', () => {

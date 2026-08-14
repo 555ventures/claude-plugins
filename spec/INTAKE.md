@@ -153,6 +153,8 @@ version contains.
 
 `Fix` records how a closed row was actually fixed: `mechanism(<repo path>)` when a script,
 gate, or test carries the discipline, or `prose(<impossibility reason>)` when none is
-possible — an open row stays `Fix: —` until it closes. A row whose Category already appears
+possible — an open row stays `Fix: —` until it closes. A fix spanning several files cites
+each one, comma-separated (`mechanism(a), mechanism(b)`); every citation is checked
+independently, so one dangling path still fails the row. A row whose Category already appears
 earlier in this table may only close `prose(...)` with a stated reason (≥ 20 chars); otherwise
 it must land a `mechanism(<path>)`, enforced by `tests/intake/intake-discipline.test.js`.

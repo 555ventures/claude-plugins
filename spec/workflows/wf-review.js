@@ -153,7 +153,7 @@ const VERIFY = {
 // panel) EMPHASES[1] seat.
 const EMPHASES = [
   'Primary emphasis: design integrity — root-cause fixes vs duct tape, shortcut shapes (backward-compat shims, suppression markers, test-expectation abuse, defensive fallbacks that mask shape bugs instead of fixing the shape, half-done implementations, deferred-work comments), and spec drift (the diff doing things the spec never said).',
-  `Primary emphasis: rule compliance and correctness — every File Plan entry present and matching, Contracts implemented as written, Decisions table honored, and the host's architectural boundaries and managed/generated surfaces respected (per .claude/rules/).`,
+  'Primary emphasis: rule compliance and correctness (per .claude/rules/).',
 ]
 
 function reviewerPrompt(i) {

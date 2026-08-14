@@ -1,6 +1,7 @@
 ---
 date: 2026-08-13
-status: hardened
+status: implementing
+diff_base: 6e9e764527e608314348a1017c49a52ca3629465
 open_markers: 0
 risk: T3
 area: report-surface

@@ -66,9 +66,10 @@ if (!args || typeof args !== 'object' || typeof args.specPath !== 'string') {
 //   hasDriftScript: boolean,  // host config declares driftScript? when false, the DRIFT_NOTE
 //                             // tells the reviewer the Phase 0 grep matrix is the drift gate
 //                             // and their AC ↔ test check is the semantic backstop
-//   reproCommand: string,     // host's test-runner prefix (config testCommand — repro file
-//                             // path is appended); '' = verifier agents discover the runner
-//                             // from package.json / CLAUDE.md
+//   reproCommand: string,     // host's configured testCommand — the source of truth for the
+//                             // repro runner (repro file path is appended); '' = verifier
+//                             // agents discover the runner from the host's own config
+//                             // (e.g. package.json) / CLAUDE.md
 //   frozenRoot: string,       // '' when root HEAD is still the spec's last commit. When the
 //                             // review waited (e.g. on CI) and later specs landed, HEAD has
 //                             // moved and a naive diff sweeps their files in (UPWELL-20260810-02:
@@ -301,9 +302,10 @@ Work through these in order and return the FIRST result that applies:
    layering/boundary rules, style) → result="NOT_EXECUTABLE" with a one-line reason. Do not
    force a repro; the orchestrating session adjudicates these.
 4. Otherwise write a MINIMAL repro — one new test file or script inside the repo, nothing
-   else — and run it. Host test command: ${args.reproCommand
+   else — and run it. Host test command (the configured testCommand — the source of truth):
+   ${args.reproCommand
     ? args.reproCommand + ' <path to your repro file>'
-    : '(none declared — discover the single-file runner from package.json / CLAUDE.md)'}
+    : '(none declared — discover the single-file runner from the host\'s own config, e.g. package.json / CLAUDE.md)'}
    result="DEMONSTRATED" if the run exhibits the claimed defect as described.
    result="NOT_DEMONSTRABLE" if your best good-faith repro fails to exhibit it.
    evidence = the exact command you ran plus the 1-3 observed output lines.

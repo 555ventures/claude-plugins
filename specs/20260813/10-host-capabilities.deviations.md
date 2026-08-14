@@ -1,0 +1,1 @@
+- [doctrine batch] D9's literal version-bump target 6.68.0 was already taken at HEAD (plugin.json was 6.71.0 when this batch ran) → bumped to the next free version, 6.72.0, same changelog paragraph.

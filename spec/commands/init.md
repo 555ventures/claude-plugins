@@ -58,8 +58,9 @@ Launch parallel Explore agents (`model: sonnet`) and read key files yourself:
   typechecker, codegen tools. Extract the real commands from `package.json` scripts /
   `Makefile` / `pyproject.toml` — never guess (`make check`? `bun typecheck && bun lint &&
   bun test:run`? `uv run pytest`?).
-- **Component catalog:** present? Storybook (web: `.storybook/` config, `storybook` script)
-  or Widgetbook (Flutter: `widgetbook` in `pubspec.yaml`, a widgetbook entrypoint/sub-package).
+- **Component catalog:** present? A component-preview host (e.g. Storybook — web: `.storybook/`
+  config, `storybook` script — or Widgetbook — Flutter: `widgetbook` in `pubspec.yaml`, a
+  widgetbook entrypoint/sub-package — or an equivalent like Ladle or Histoire).
   This decides the config `design` block and whether `/spec:design` ever runs here. If
   design-capable, also profile the **design language**: existing theme/token files, a base
   design system in the dependencies (shadcn/Radix, MUI, Material 3, Cupertino, …), and how
@@ -249,7 +250,22 @@ All keys consumed by the plugin's commands/workflows:
     "types": "types.ts, constants.ts",
     "queries": "api.ts, queries.ts, data hooks"
   },
-  "pipelineRules": ".claude/rules/spec-pipeline.md"
+  "pipelineRules": ".claude/rules/spec-pipeline.md",
+  // OPTIONAL: capabilities block (grounding-contract.md § Capabilities) — stack-shaped facts
+  // detected at init time instead of hardcoded by consuming commands/scripts. forge: "github"
+  // iff the origin remote is a GitHub URL AND `gh` resolves, else "none" (a real GitLab/
+  // Bitbucket host earns an adapter later — this repo declares honest inertness now).
+  // skipReportPattern: name the test runner Phase 1 already detected, propose its known
+  // skip-count regex as a recommended-first AskUserQuestion default, and let the user confirm
+  // or override — probe silence is never evidence (many runners print a skip line only when
+  // skips are nonzero, so a quiet probe run at init time would wrongly write "none" on a
+  // perfectly capable host). "none" only when no format is derivable or the user says so.
+  // ciPoll: optional override of /spec:release's 30s/600s poll interval/timeout defaults.
+  "capabilities": {
+    "forge": "github",
+    "skipReportPattern": "none",
+    "ciPoll": { "intervalSeconds": 30, "timeoutSeconds": 600 }
+  }
 }
 ```
 
@@ -314,9 +330,9 @@ every turn, which is what keeps its rules followed rather than skimmed.
   style (docstring? test name? comment?), fixture rules, what is exempt from TDD (e.g. pure-UI
   **appearance** in repos with a design-stage catalog — **reachability is never exempt**: a
   prop or field whose absence collapses a promised observable is behavior and owes an AC).
-  **Workspace monorepos (a
-  `pnpm-workspace.yaml`/equivalent exists): record the test runner's path-filtering semantics
-  unconditionally** — e.g. whether paths filter against the workspace root or the package dir,
+  **Workspace monorepos (more than one test-collecting package/module exists — e.g. `pnpm-workspace.yaml`, Cargo workspaces, Nx/Turborepo, `go.work`, mix umbrella apps): record the
+  test runner's path-filtering semantics unconditionally** — e.g. whether paths filter
+  against the workspace root or the package dir,
   and what the wrong form does (vitest exits 1 "No test files found") — this is knowable at
   init time from the workspace manifest and is otherwise re-discovered by every worker.
   **Environment-gated suites** (`skipIf(!ENV_VAR)` shapes): name each gating variable and the

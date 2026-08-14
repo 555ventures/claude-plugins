@@ -44,6 +44,17 @@
 // is structurally absent (D3) — it exits 0 and gates nothing extra, so the final exit check is
 // a CLEAN-family prefix test rather than an exact match.
 //
+// Incident (2026-08-13, spec host-capabilities D4): `CLEAN-with-qualifier` existed only in the
+// release branch above — the review branch fell straight through disposition counting to plain
+// `CLEAN`, silently swallowing an honest `unavailable` `ci` leg (host declares no forge adapter)
+// or an `unavailable` `gate` leg (host declares no skip-report format, spec 10 D3) the exact
+// moment those two new honest sources started landing. The review branch now checks the same two
+// legs once the disposition count would otherwise reach plain CLEAN, deriving
+// `CLEAN-with-qualifier` instead — same word, same CLEAN-family exit semantics as the release
+// branch. A `CLEAN-with-qualifier`-eligible leg never blocks: gate/ci both stay in
+// `REVIEW_BLOCKING`, so a truly red gate or ci leg is caught by the GATE_RED branch above and
+// never reaches this check.
+//
 // Exit codes: 0 = derived CLEAN or CLEAN-with-qualifier · 1 = derived other non-CLEAN word
 // (still printed on stdout line 1) · 2 = usage error, missing/unreadable --manifest or
 // --workflow file, a disposition contradiction (--waived + --rejected + --fixDispatched
@@ -163,6 +174,16 @@ function derive() {
   if (fixDispatched > 0) return 'FINDINGS' // a dispatched fix is non-terminal
   const undispositioned = survivors.length - waived - rejected - fixDispatched
   if (undispositioned > 0) return survivors.some(f => f.severity === 'hard') ? 'HARD_FINDINGS' : 'FINDINGS'
+  // D4: the disposition branch reached CLEAN — before printing it, check the two legs that can
+  // carry an honest `unavailable` observation without being red (ci: no forge adapter to consult;
+  // gate: no skip-report format declared, spec 10 D3). Prefix match, not exact — review's ci
+  // vocabulary includes `unavailable-transient` (retryable gh failure) alongside plain
+  // `unavailable`/`in-progress`, and the skip-unavailable sentence is a whole clause.
+  const legUnavailable = (leg) => {
+    const row = legRows.get(leg)
+    return !!row && /^(unavailable|in-progress)/.test(row.observed || '')
+  }
+  if (legUnavailable('ci') || legUnavailable('gate')) return 'CLEAN-with-qualifier'
   return 'CLEAN'
 }
 

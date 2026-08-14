@@ -23,6 +23,15 @@
 // from inside a worktree (exit 4 — observation writes happen at the repo root only, the
 // merge-back exit-4 precedent for the same divergent-worktree double-write class).
 //
+// 2026-08-13 (specs/20260813/10-host-capabilities.md D2): a host with no forge adapter was
+// silently probed every invocation via ci-query.js's dynamic `gh` fallback. When the host config
+// declares `capabilities.forge:"none"`, this script now reads that declaration itself (D2: both
+// CI consumers gate independently — ci-query.js's own JSON contract can't carry the plain
+// canonical line without breaking observe-ci's `JSON.parse` of its output) and short-circuits
+// BEFORE resolving a branch or spawning ci-query.js: prints the canonical line
+// `unavailable — no supported forge adapter` and exits 0, no ledger append. `forge:"github"` or
+// an absent `capabilities` block (legacy mode) fall through to the unchanged dynamic probe.
+//
 // Exit codes: 0 = ran (silence is a normal outcome, not a failure) · 2 = usage ·
 // 4 = refused — CWD is inside .claude/worktrees/...; relocate to the repo root and re-run.
 
@@ -39,6 +48,21 @@ for (let i = 0; i < argv.length; i++) {
     console.error('usage: observe-ci.js [--root <dir>]')
     process.exit(2)
   }
+}
+
+// D2: capabilities.forge:"none" is a declared, not probed, fact — read it before resolving a
+// branch or spawning ci-query.js. A missing/unreadable/unparsable config is legacy mode.
+function readForge(dir) {
+  try {
+    const config = JSON.parse(fs.readFileSync(path.join(dir, '.claude', 'spec.config.json'), 'utf8'))
+    return config.capabilities && config.capabilities.forge
+  } catch {
+    return undefined
+  }
+}
+if (readForge(root) === 'none') {
+  console.log('unavailable — no supported forge adapter')
+  process.exit(0)
 }
 
 // Refuse before touching anything: observation writes happen at the repo root only — a session

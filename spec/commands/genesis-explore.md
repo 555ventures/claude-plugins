@@ -24,8 +24,9 @@ state gate blocks this command until `architect: scaffold-complete`; also verify
 `.claude/genesis/stack-descriptor.json` exists.
 
 **Render-capability precondition:** probe for a reachable render/screenshot capability —
-Claude-in-Chrome MCP tools or a Playwright MCP — via tool availability (`ToolSearch` or
-equivalent), never by opening a page or creating a tab. Neither reachable: STOP, telling the user to connect Chrome or enable the Playwright MCP, then re-invoke. <!-- enforcedBy: tests/model-placement.test.js -->
+Claude-in-Chrome MCP tools or a Playwright MCP, or an equivalent scriptable browser-capture
+tool — via tool availability (`ToolSearch` or equivalent), never by opening a page or creating
+a tab. No scriptable browser-capture capability reachable: STOP, telling the user to connect Chrome (Claude-in-Chrome) or enable the Playwright MCP, then re-invoke. <!-- enforcedBy: tests/model-placement.test.js -->
 State is untouched by the probe; re-invoking after connecting
 resumes here. This is an explore-local hard requirement (genesis.md § Genesis: Explore Stage) —
 atlas sweeps and `/spec:design` still degrade gracefully with a note when headless.

@@ -132,14 +132,21 @@ test('AC-20260807-05-2: genesis-explore.md Phase 2 drops the browser-availabilit
     'an unconditional render, screenshot, and critique leg must be documented for every Round 0 tile')
 })
 
-test('AC-20260807-05-3: genesis-explore.md Setup declares a render-capability precondition that STOPs with a Chrome/Playwright remedy', () => {
+// specs/20260813/10-host-capabilities.md D5: this pin's SUBSTANCE survives (the hard STOP on
+// absent render/screenshot capability stays hard) but its TRIGGER wording is retagged from
+// enumerated tool names to capability shape — enumerated names silently exclude an equivalent
+// capture tool. Chrome/Playwright now belong only in the remedy text, not the trigger condition.
+
+test('AC-20260813-10-10 (retag of AC-20260807-05-3): genesis-explore.md Setup declares a capability-shaped hard STOP on absent scriptable browser-capture capability, remedy names Chrome/Playwright', () => {
   const explore = read('commands/genesis-explore.md')
-  assert.match(explore, /Chrome/i,
-    'the Setup precondition must name Chrome (Claude-in-Chrome) as a satisfying capability or the STOP remedy is incomplete')
-  assert.match(explore, /Playwright/i,
-    'the Setup precondition must name Playwright MCP as a satisfying capability or the STOP remedy is incomplete')
+  assert.match(explore, /no scriptable browser-capture capability/i,
+    'the Setup precondition\'s TRIGGER must be capability-shaped ("no scriptable browser-capture capability"), not name Chrome/Playwright as the condition itself — enumerated tool names silently exclude an equivalent capture tool (D5)')
   assert.match(explore, /STOP/,
-    'absence of a render capability must produce a hard STOP, not a silent degrade, per the D4 hard-block decision')
+    'absence of a capture capability must still produce a hard STOP, not a silent degrade — the pinned hardness must survive the D5 retag')
+  assert.match(explore, /Chrome/i,
+    'the remedy text must still name Chrome (Claude-in-Chrome) as a satisfying capability')
+  assert.match(explore, /Playwright/i,
+    'the remedy text must still name Playwright MCP as a satisfying capability')
 })
 
 test('AC-20260807-05-4: spec/templates/design-positions.md carries all seven mandatory per-position field labels', () => {

@@ -14,12 +14,13 @@ only when the contract genuinely changes, and never edit it for wording alone.
 `pipelineRules`, `runtime` (see § Runtime verification). Optional: `driftScript`, `routing`,
 `design`
 (`tool`/`command`/`storyFormat`/`doctrine`, optional `screenshot`, optional `rulesManifest`),
-`release` (see § Release), the rule-enforcement keys `enforcementManifest` and
-`rulesEnforcementHash` (see § Rule enforcement), and the genesis-handoff keys
-`genesisStackDescriptor` and `designRulesHash` (see § Genesis handoff). `design.copyCatalogs`
-is REQUIRED when the host routes copy through an i18n stack (`design` block present and the
-repo has an i18n dependency) — the `/spec:design` fidelity gate accepts mock copy only as
-catalog values, and without this key it would demand literals the host's i18n lint forbids.
+`release` (see § Release), `capabilities` (see § Capabilities), the rule-enforcement keys
+`enforcementManifest` and `rulesEnforcementHash` (see § Rule enforcement), and the
+genesis-handoff keys `genesisStackDescriptor` and `designRulesHash` (see § Genesis handoff).
+`design.copyCatalogs` is REQUIRED when the host routes copy through an i18n stack (`design`
+block present and the repo has an i18n dependency) — the `/spec:design` fidelity gate accepts
+mock copy only as catalog values, and without this key it would demand literals the host's
+i18n lint forbids.
 
 ## Runtime verification (required)
 
@@ -77,6 +78,32 @@ checked-in permissions, generated project skills):
 (staging), `stagingUrl`, `e2eCommand` (takes the target URL via `BASE_URL`), optional
 `promoteCommand` + `productionUrl` + `healthPath`. All host-declared at init/first-release
 time — the plugin never invents deploy mechanics.
+
+## Capabilities (optional — declares stack-shaped facts the pipeline would otherwise assume)
+
+Several commands and scripts used to hardcode a stack shape — GitHub as the forge, a universal
+skip-count format, pnpm-shaped monorepos, Storybook-shaped previews — and on a host where the
+assumption missed, the consuming leg went inert *silently* (audit Class C). `capabilities` is
+one closed block, written by `/spec:init`'s detection pass, read at the single points that
+consume each fact:
+
+```jsonc
+"capabilities": {
+  "forge": "github",              // or "none" — who runs CI/PRs; read by ci-query.js/observe-ci.js
+  "skipReportPattern": "none",    // regex over test-runner output capturing the skip count (group 1;
+                                  // optional group 2 = todos), or "none"
+  "ciPoll": { "intervalSeconds": 30, "timeoutSeconds": 600 }
+}
+```
+
+**Absent block = legacy mode** — today's dynamic probing (`ci-query.js`/`observe-ci.js` probe
+`gh` at use time) plus `/spec:doctor` check 2's undeclared-capabilities nudge; nothing breaks on
+a host that predates this block. A present block is authoritative: `forge:"none"` makes the CI
+scripts print the canonical line `unavailable — no supported forge adapter` and exit cleanly
+rather than probe; a `skipReportPattern` of `"none"` (or no match) makes a skip-capture leg
+report `unavailable — host runner declares no skip format` instead of assuming zero;
+`ciPoll` overrides `/spec:release`'s poll interval/timeout when present, otherwise the 30s/600s
+defaults hold.
 
 ## Genesis handoff (optional — present when the genesis stage seeded the repo)
 

@@ -1,6 +1,7 @@
 ---
 date: 2026-08-13
-status: hardened
+status: implementing
+diff_base: 08b5e48699c0de1f232a3e2a83e69c4c02dba2b1
 open_markers: 0
 risk: T3
 area: host-grounding

@@ -26,8 +26,13 @@ branch's latest completed CI run once, attributes a red run by ancestry to the l
 done spec whose close commit it contains and appends one `ci:"red"` row, and clears a
 currently-red spec with a `ci:"green"` row once a later green run's ancestry contains that
 spec's close commit; everything else (CI unavailable, a run still in progress, a healthy
-branch) is silent and writes nothing. It normally prints nothing at all; only a fresh red or
-clearing row prints its one `📡 observed …` line, which prints verbatim above the dashboard.
+branch) is silent and writes nothing. A host with a declared `capabilities.forge: "none"` (D1)
+is the one loud exception: the script prints the canonical `unavailable — no supported forge
+adapter` line and exits cleanly every run — print it verbatim above the dashboard exactly like
+a `📡 observed …` line, never suppress it as if it were the silent CI-unavailable case (the
+whole point of D2 is that a declared absence stops being silent). Otherwise it normally prints
+nothing at all; only a fresh red or clearing row prints its one `📡 observed …` line, which
+prints verbatim above the dashboard.
 Exit 4 (CWD inside a worktree) STOPs here — report the remedy (run from the repo root) and
 don't proceed to the dashboard on stale observation state. Any other non-zero exit is a hard
 stop too — report the error, don't guess.

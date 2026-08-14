@@ -20,8 +20,20 @@
 // `ci` legs and observe-ci.js each map the normalized fields to their own exit codes), retry, or
 // read more than the most recent run for the key (--limit 1).
 //
-// Exit codes: 0 = answered (available true or false either way) · 2 = usage error
+// 2026-08-13 (specs/20260813/10-host-capabilities.md D2): a host with no forge adapter (e.g.
+// GitLab/Bitbucket, or no `gh`) was silently probed as if it were GitHub — `gh` missing already
+// answered `available:false`, but nothing distinguished "this host declares it has no CI forge"
+// from "gh happens to be uninstalled right now." When the host config declares
+// `capabilities.forge:"none"`, this script now short-circuits BEFORE ever invoking `gh`: it
+// prints the canonical line `unavailable — no supported forge adapter` (plain text, not the JSON
+// shape below — a Claude session reads either) and exits 0. `capabilities.forge:"github"` or an
+// absent `capabilities` block (legacy mode) fall through to the unchanged dynamic `gh` probe.
+//
+// Exit codes: 0 = answered (available true or false either way, OR the forge:"none" canonical
+// line) · 2 = usage error
 
+const fs = require('fs')
+const path = require('path')
 const { spawnSync } = require('child_process')
 
 function usage() {
@@ -38,6 +50,21 @@ for (let i = 0; i < argv.length; i++) {
   else { usage(); process.exit(2) }
 }
 if ((!branch && !commit) || (branch && commit)) { usage(); process.exit(2) }
+
+// D2: capabilities.forge:"none" is a declared, not probed, fact — read it before touching `gh`.
+// A missing/unreadable/unparsable config is legacy mode (dynamic probing continues unchanged).
+function readForge(dir) {
+  try {
+    const config = JSON.parse(fs.readFileSync(path.join(dir, '.claude', 'spec.config.json'), 'utf8'))
+    return config.capabilities && config.capabilities.forge
+  } catch {
+    return undefined
+  }
+}
+if (readForge(root) === 'none') {
+  console.log('unavailable — no supported forge adapter')
+  process.exit(0)
+}
 
 const NO_REMOTE = /no git remotes found|failed to determine base repo/i
 

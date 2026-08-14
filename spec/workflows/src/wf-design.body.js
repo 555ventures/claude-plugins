@@ -260,11 +260,12 @@ const UNGATED_GATE = '__UNGATED__'
 // author's gate is typecheck+lint — it proves STRUCTURE, never that the result looks right. A green
 // author means foundation + structure were authored by expanding the skeletons (token-closed, every
 // state covered); the caller (/spec:design) clears it with the screenshot visual review when one is
-// configured, otherwise straight through the human Storybook loop (Phase 3). The note attaches
-// whenever the run authored any component (an implement-kind batch is present).
+// configured, otherwise straight through the human loop in the host's component preview host
+// (Phase 3). The note attaches whenever the run authored any component (an implement-kind batch
+// is present).
 const hasImplement = Object.values(batchById).some(b => b.kind === 'implement')
 const implementNote = hasImplement
-  ? { note: 'structural (skeleton-expanded) — NOT visually approved; the screenshot visual review (if configured) or the human Storybook loop (Phase 3) is the gate that clears it' }
+  ? { note: 'structural (skeleton-expanded) — NOT visually approved; the screenshot visual review (if configured) or the human loop in the host\'s component preview host (Phase 3) is the gate that clears it' }
   : {}
 
 if (!gateCmd || gateCmd === UNGATED_GATE) {

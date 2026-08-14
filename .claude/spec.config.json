@@ -10,6 +10,11 @@
     "readyTimeout": 60,
     "stopSignal": "SIGTERM"
   },
+  "capabilities": {
+    "forge": "github",
+    "skipReportPattern": "ℹ skipped (\\d+)",
+    "ciPoll": { "intervalSeconds": 30, "timeoutSeconds": 600 }
+  },
   "patternsScript": "scripts/spec-patterns.sh",
   "pipelineOwnedPaths": ["spec/workflows/wf-*.js"],
   "layerGroups": [["doctrine"], ["scripts", "workflows"]],

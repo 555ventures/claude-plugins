@@ -86,10 +86,16 @@ build that is the worktree itself. Phase 4 resolves a second, distinctly named s
      `unavailable`, naming the token — never a raw `{testDirs}`-bearing command execution. An
      `unavailable` gate is a red leg for step 8's purposes (hard-stop before the panel, remedy
      = fix the host's `gateCommand`/File Plan tests rows so the placeholder resolves), exactly
-     like a failing gate command. **Capture the runner's skip/todo
-     counts** from its output (every mainstream runner prints them) — they feed the
-     skipped-test reconciliation in step 6. Leg `gate`, `observed:"skips=<N> todos=<M>"` (or
-     `"unavailable: <token>"` when unresolvable).
+     like a failing gate command. **Capture the runner's skip/todo counts** from its output
+     using the host's declared `capabilities.skipReportPattern` (config key, D1 — no format is
+     universal: go test, cargo, pytest without `-rs`, and Gradle all omit skip lines by
+     default): when declared and it matches, capture group 1 as skips and group 2 (if present,
+     else 0) as todos — they feed the skipped-test reconciliation in step 6; when the pattern
+     is absent, `"none"`, or doesn't match, the skip portion is honestly
+     `unavailable — host runner declares no skip format`, never assumed-zero. Leg `gate`,
+     `observed:"skips=<N> todos=<M>"` (or `"unavailable: <token>"` when the gate itself is
+     unresolvable, or `"unavailable — host runner declares no skip format"` when the gate ran
+     but the skip format is undeclared/unmatched).
    - `bash $(spec-paths smoke)` — the **boot smoke leg** (shared invariants § Runtime
      Verification). Exit 0 = boot observed ready; exit 4 = runtime declared inert (sanctioned,
      note it in the verdict); any other exit is an automatic **hard finding** <!-- enforcedBy: spec/scripts/verdict.js --> — including
@@ -309,7 +315,7 @@ Ledger row shape (the exact JSON `verdict.js --ledger` prints on line 2 — appe
 verbatim, never hand-assembled, never prose or finding text):
 
 ```
-{"ts":"<ISO-8601>","spec":"<repo-relative spec path>","stage":"review","tier":"<T1|T2|T3>","runId":"<wf_…>","verdict":"<CLEAN|FINDINGS|HARD_FINDINGS|REVIEWER_FAILED|UNVERIFIED|GATE_RED>","scope":"<full|fix-delta>","iteration":<n>,"diff":{"loc":<n>},"smoke":"<pass|fail|inert>","testsSkipped":{"total":<n>,"sanctioned":<n>,"unsanctioned":<n>},"tokens":{"workflow":<n>},"legs":[{"leg":"gate","exit":0},…],"findings":{"survived":<n>,"killed":<n>,"waived":<n>,"rejected":<n>,"fixDispatched":<n>,"reviewerCount":<n>},"verify":{"verified":<n>,"demonstrated":<n>,"killedByExecution":<n>,"sanctioned":<n>,"miscited":<n>,"unverifiable":<n>,"failed":<n>,"capSkipped":<n>}}
+{"ts":"<ISO-8601>","spec":"<repo-relative spec path>","stage":"review","tier":"<T1|T2|T3>","runId":"<wf_…>","verdict":"<CLEAN|CLEAN-with-qualifier|FINDINGS|HARD_FINDINGS|REVIEWER_FAILED|UNVERIFIED|GATE_RED>","scope":"<full|fix-delta>","iteration":<n>,"diff":{"loc":<n>},"smoke":"<pass|fail|inert>","testsSkipped":{"total":<n>,"sanctioned":<n>,"unsanctioned":<n>},"tokens":{"workflow":<n>},"legs":[{"leg":"gate","exit":0},…],"findings":{"survived":<n>,"killed":<n>,"waived":<n>,"rejected":<n>,"fixDispatched":<n>,"reviewerCount":<n>},"verify":{"verified":<n>,"demonstrated":<n>,"killedByExecution":<n>,"sanctioned":<n>,"miscited":<n>,"unverifiable":<n>,"failed":<n>,"capSkipped":<n>}}
 ```
 
 `verdict` is the D5 derived-verdict enum, printed by `verdict.js` and copied verbatim —

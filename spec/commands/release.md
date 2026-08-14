@@ -99,17 +99,24 @@ agree on exactly this format.
    rev-parse HEAD) --root .` — the authoritative per-commit CI verdict. A completed run with
    `conclusion` ∈ (`failure`/`timed_out`/`cancelled`) maps to `exit:1`; a completed non-red run
    maps to `exit:0`, `observed:"conclusion=<value>"`; `available:false` maps to `exit:0`,
-   `observed:"unavailable"`; an in-progress run re-invokes the same command every 30 seconds for
-   up to 10 minutes, then — if still unresolved — maps to `exit:0`, `observed:"in-progress"`.
+   `observed:"unavailable"`; an in-progress run re-invokes the same command every
+   `capabilities.ciPoll.intervalSeconds` seconds (default 30 — every 30 seconds — when the
+   block or key is absent, D7) for up to `capabilities.ciPoll.timeoutSeconds` seconds (default
+   600 — up to 10 minutes — when absent), then — if still unresolved — maps to `exit:0`,
+   `observed:"in-progress"`.
    Append `{"leg":"ci","exit":<mapped>,"observed":"<mapped>"}` to `{manifestPath}` exactly once,
    after the poll loop resolves — never once per poll iteration (a double row corrupts the leg
    map). Whenever `observed` is not a `conclusion=<value>` string, the Phase 4 pre-promote
    report MUST carry one ⚠️ line stating CI never delivered a verdict on this exact commit (and,
    for `unavailable`, that pushing would produce one).
 4. **e2e against the deployment:** `BASE_URL={stagingUrl} {e2eCommand}`. Capture pass / fail
-   / skip counts — **a skipped e2e is reported by name, never silently green** (same rule as
-   review's skip reconciliation). Append
+   / skip counts from the runner's own output — **a skipped e2e is reported by name, never
+   silently green.** When the host's declared `capabilities.skipReportPattern` (D1) is absent,
+   `"none"`, or doesn't match this run's output, the skip count is honestly
+   `unavailable — host runner declares no skip format`, never assumed-zero (no format is
+   universal). Append
    `{"leg":"e2e","exit":<0 if zero failed else 1>,"observed":"passed=<N> failed=<M> skipped=<K>"}`
+   (or `skipped=unavailable` in place of `<K>` when the skip format is undeclared/unmatched)
    to `{manifestPath}`.
 5. **Journey walks:** for each brief shipped this milestone, walk its primary journey against
    staging (the brief's milestone-gate observable, via the host's spec-verify skill, browser

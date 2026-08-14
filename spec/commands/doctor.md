@@ -30,6 +30,13 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
 2. **Contract stamp** — config `contractHash` equals `$(spec-paths contract-hash)`. A
    mismatch is a lead, not a verdict — checks 3–6 below test the *current* contract (Read
    `$(spec-paths contract)`) directly and decide whether the drift is real.
+   **Capabilities declaration (D2 fold-in, no new numbered check):** config has no
+   `capabilities` block → flag "capabilities undeclared — CI observation and skip accounting
+   run on assumptions; /spec:init refreshes"; config declares `capabilities.forge: "none"` but
+   a live check finds a GitHub remote (`git remote -v`) AND `gh` resolves → flag
+   "declared none, host looks GitHub-capable — re-run /spec:init" (a real capability going
+   undetected is the same silent-drift class as a stale contract stamp, so it rides check 2
+   rather than a third stand-alone nudge stacking with checks 2+15).
 3. **Agent roster** — every non-`default` `agentMap` value has a matching
    `.claude/agents/*.md` whose frontmatter `name:` is exactly that value; no orphan agents
    claiming pipeline kinds. **Routing coverage:** every layer in `layerGroups` (plus `tests`

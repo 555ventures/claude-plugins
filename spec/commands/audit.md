@@ -123,18 +123,25 @@ with a header comment naming the Contracts-section row shape, on first append).
 
 ## Report
 
-Print exactly this shape (rationale: shared § Console Output Style); fill the slots, drop any
-line whose slot is empty, add nothing else:
+Assemble slots and render via `node "$(spec-paths report-render)" --slots <file>`, print the
+script's output verbatim (rationale: shared § Console Output Style):
 
-```
-✅ **audit complete — {N} findings, {M} disposed**
-   (or: 🚫 **{what blocked disposition}**)
-- hotspots scanned: {top-N list, one line}
-- fates: {refactor-brief: n · rule-row: n · enforcer: n · rejected: n}
-📦 ledger: docs/audit/debt-ledger.md
+- `outcome`: anchor `✅` text `audit complete — {N} findings, {M} disposed` (or anchor `🚫`
+  text `{what blocked disposition}` when a dismissed `AskUserQuestion` stopped Phase 4
+  before every surviving finding got a fate).
+- `bullets`: `- hotspots scanned: {top-N list, one line}`, then
+  `- fates: {refactor-brief: n · rule-row: n · enforcer: n · rejected: n}`.
+- `artifacts`: `docs/audit/debt-ledger.md`.
+- `next`: unconditional (A4) — `{kind:'command', text:'/spec:enforce — mechanize the
+  {category} check just recorded'}` when any `enforcer` fate landed this run, else
+  `{kind:'status-verbatim', text: <this session's captured `spec-status --next` output>}`.
 
-Next: /spec:enforce — mechanize the {category} check just recorded (iff any `enforcer` fate
-landed this run; otherwise this line is dropped entirely)
+```report
+✅ **audit complete — 4 findings, 4 disposed**
+- hotspots scanned: spec/scripts/verdict.js, spec/workflows/wf-build.js, spec/doctrine/shared.md
+- fates: refactor-brief: 1 · rule-row: 1 · enforcer: 1 · rejected: 1
+📦 docs/audit/debt-ledger.md
+Next: /spec:enforce — mechanize the duplication check just recorded
 ```
 
 ## Contracts

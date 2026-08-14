@@ -236,19 +236,31 @@ when rules changed but enforcement was not regenerated — the early-detection s
 
 ## Phase 7 — Report
 
-Print exactly this shape (rationale: shared § Console Output Style); fill the slots, drop
-any line whose slot is empty, add nothing else:
+Assemble the slots below and write them to a scratch JSON file, then print
+`node "$(spec-paths report-render)" --slots <file>` verbatim (shared § Console Output Style —
+the script is the sole render authority; never hand-format the output):
 
-```
-✅ **enforcement wired — {N} categories mechanized, {M} as Review-Check prose**
-   (or: ⚠️ **{what needs the user}**)
-- {category}: {enforcer chosen, or fallback} — {verify result}, {newly added / already covered}
-⚠️ Review-Check fallback: {category} — {one-phrase why}
-🔒 ratchet baseline: {category} — {baseline path}, {quarantined-violation count}
-📦 rulesEnforcementHash {hash}
+- `outcome`: ✅ anchor (⚠️ if something needs the user), text
+  `enforcement wired — {N} categories mechanized, {M} as Review-Check prose`
+- `bullets`: one line per category — `{category}: {enforcer chosen, or fallback} — {verify
+  result}, {newly added / already covered}`; one further line per ratchet category
+  (`duplication`/`cycle`) — `{category} ratchet baseline: {baseline path}, {quarantined-violation
+  count}` (the bespoke 🔒 glyph retires to a plain bullet — the fixed anchor set is closed)
+- `warns`: one line per Review-Check fallback — `Review-Check fallback: {category} —
+  {one-phrase why}`
+- `artifacts`: `rulesEnforcementHash {hash}`
+- `next`: `{kind: 'command', text: '{resolved gateCommand} — confirms the new checks pass on a
+  clean tree (or surfaces the real violations they just caught)'}` — the host's `gateCommand`
+  from `.claude/spec.config.json`, printed verbatim, never paraphrased as "re-run the host gate"
 
-Next: re-run the host gate once — confirms the new checks pass on a clean tree (or surfaces
-the real violations they just caught)
+```report
+✅ **enforcement wired — 6 categories mechanized, 1 as Review-Check prose**
+- module-boundary: dependency-cruiser — verified, newly added
+- naming: eslint rule — verified, already covered
+- duplication ratchet baseline: .claude/rules/duplication-baseline.json, 4 quarantined violations
+⚠️ Review-Check fallback: cycle — no verified tool supports a baseline mode for this stack
+📦 rulesEnforcementHash a1b2c3d4
+Next: bun typecheck && bun lint && bun test:run — confirms the new checks pass on a clean tree (or surfaces the real violations they just caught)
 ```
 
 Rules proposed vs accepted were already settled interactively in their own phase — don't

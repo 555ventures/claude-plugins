@@ -310,11 +310,24 @@ test('AC-20260812-01-6: review.md describes the advisory presentation group with
     'review.md must document the first-append header mechanics for docs/audit/advisory-findings.md (D9)')
 })
 
-test('AC-20260812-01-6: review.md\'s report template carries the drop-when-empty 🔍 smells line and the lensFailed ⚠️ line', () => {
+// 2026-08-14 spec 20260813/07-command-report-conformance D8 (build-time ruling, user-approved):
+// the fixed report anchor set (✅⚠️🚫📌📦✨) closed over review.md's report template, retiring
+// the bespoke 🔍 glyph this pin originally asserted. The smells summary moved into the 📦
+// `artifacts` slot description instead of a dedicated 🔍-anchored line. This test retargets the
+// first half of the pin to the new home and pins the retirement itself; the lensFailed half
+// (originally AC-20260812-01-6) is unchanged and untouched below.
+test('AC-20260813-07-7: review.md\'s Phase 3 artifacts slot carries the smells summary (superseding the 🔍 glyph half of AC-20260812-01-6), and the lensFailed ⚠️ line survives unchanged', () => {
   const doc = read('spec/commands/review.md')
-  assert.match(doc, /🔍[\s\S]{0,40}smells/,
-    'review.md\'s Phase 3 report template must gain the drop-when-empty "🔍 smells: {N} ' +
-    'advisory — {M} accepted → docs/audit/advisory-findings.md" line')
+  assert.match(doc, /`artifacts`[\s\S]{0,300}smells:\s*\{N\}\s*advisory\s*—\s*\{M\}\s*accepted\s*→\s*docs\/audit\/advisory-findings\.md/,
+    'review.md\'s Phase 3 `artifacts` slot description must carry "smells: {N} advisory — {M} ' +
+    'accepted → docs/audit/advisory-findings.md" (D8/AC-20260813-07-7) — without this the smells ' +
+    'summary has no documented home now that the bespoke 🔍 line is retired, and a future edit ' +
+    'could drop the smells summary from the report entirely without any test catching it')
+  assert.doesNotMatch(doc, /^\s*🔍/m,
+    'review.md must contain no line that opens with the 🔍 glyph (D8: the fixed report anchor ' +
+    'set ✅⚠️🚫📌📦✨ is closed) — a reappearing 🔍-anchored smells line would resurrect the retired ' +
+    'bespoke anchor this spec deliberately removed (the sentence naming the retired glyph in ' +
+    'prose, mid-line, is fine and is not what this pins)')
   assert.match(doc, /⚠️[\s\S]{0,60}smell lens failed/i,
     'review.md must document the "⚠️ smell lens failed — no advisory findings this run" line ' +
     'for lensFailed: true')

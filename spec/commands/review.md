@@ -168,8 +168,18 @@ build that is the worktree itself. Phase 4 resolves a second, distinctly named s
    derivation reaches `GATE_RED` from the manifest alone before it would need one) and appends
    the printed row **verbatim** to `.claude/spec-runs.jsonl` — a stopped attempt is never
    invisible to doctor's correlations or the observation derivation. Report the named red leg
-   and its remedy; do not proceed to Phase 1. Findings-producing legs (`reconcile`,
-   `ac-matrix`, `skip-reconcile`) never trigger this stop — their findings enter Phase 2.
+   via the shared STOP shape <!-- enforcedBy: tests/consistency/report-shape.test.js -->: assemble `outcome: {anchor:'🚫', text:'{leg} failed — {plain
+   consequence}'}` and `next: {kind:'command', text:'{named remedy}'}`, write to a temp file,
+   and run `node "$(spec-paths report-render)" --slots <file>`, printing its output verbatim;
+   do not proceed to Phase 1.
+
+   ```report
+   🚫 **{leg} failed — {plain consequence}**
+   Next: {named remedy}
+   ```
+
+   Findings-producing legs (`reconcile`, `ac-matrix`, `skip-reconcile`) never trigger this
+   stop — their findings enter Phase 2.
 
 ## Phase 1 — Review workflow
 
@@ -382,20 +392,37 @@ verdict/ledger row from Phase 2 step 2 is already written by then, so nothing is
    next close's `git add -A`).
 4. **Close commit:** commit everything still uncommitted on the working branch — status flip,
    canonical docs, any review-fix dispatches. The orchestrator owns git; never `--no-verify`.
-5. Report — print exactly this shape (rationale: shared § Console Output Style); fill the
-   slots, drop any line whose slot is empty, add nothing else:
+5. **Report:** assemble the slots object — `outcome` (✅ `CLEAN — merged` on CLEAN, 🚫 `{N}
+   hard findings — build must fix` <!-- unenforced: report slot template text, not a blocking rule --> on non-CLEAN), `bullets` (one `- {surviving finding: what
+   breaks, where}` line per survivor), `warns` (`waived: {finding — one-phrase reason}` per
+   waived finding, plus `smell lens failed — no advisory findings this run` when
+   `lensFailed`), `artifacts` (`ledger: {ledger row path}` always, plus `smells: {N} advisory
+   — {M} accepted → docs/audit/advisory-findings.md` when the smell lens ran — the 🔍 glyph
+   retires to a plain artifact pointer, the fixed anchor set is closed), and `next` — on
+   CLEAN, `{kind:'none', reason:'merge-back runs next'}` (Phase 4 follows automatically, so
+   this report is not the run's terminal close); on non-CLEAN, `{kind:'command',
+   text:'/spec:build {spec path} — fix the {N} hard findings'}` <!-- unenforced: report slot template text, not a blocking rule --> (sanctioned same-spec chain,
+   A1 — this IS review's terminal close, since Phase 4 never runs on non-CLEAN). Write the
+   slots to a temp file and run `node "$(spec-paths report-render)" --slots <file>`, printing
+   its output verbatim. Kill lists, full gate tables, and drift detail go to the ledger row,
+   not the console — print paths.
 
-   ```
-   ✅ **CLEAN — merged**          (or: 🚫 **{N} hard findings — build must fix**)
+   ```report
+   ✅ **CLEAN — merged**
    - {surviving finding: what breaks, where — one plain-language line each}
    ⚠️ waived: {finding — one-phrase reason}
-   ⚠️ smell lens failed — no advisory findings this run    (only when lensFailed)
-   🔍 smells: {N} advisory — {M} accepted → docs/audit/advisory-findings.md
+   ⚠️ smell lens failed — no advisory findings this run
    📦 ledger: {ledger row path}
+   📦 smells: {N} advisory — {M} accepted → docs/audit/advisory-findings.md
+   Next: nothing needs you — merge-back runs next
    ```
 
-   Kill lists, full gate tables, and drift detail go to the ledger
-   row, not the console — print paths.
+   ```report
+   🚫 **{N} hard findings — build must fix**
+   - {surviving finding: what breaks, where — one plain-language line each}
+   📦 ledger: {ledger row path}
+   Next: /spec:build {spec path} — fix the {N} hard findings
+   ```
 
 Then proceed directly into Phase 4 — the user does not re-invoke anything.
 
@@ -456,7 +483,9 @@ worktree path (omit `--worktree` if none was used).
 ## Next pointer (every CLEAN close — merge-back run or skipped)
 
 Close the session's output — after the Phase 4 verify result, or straight after the skip
-note when Phase 4 didn't run — with the **verbatim** output of:
+note when Phase 4 didn't run — by re-printing the one-line CLEAN verdict contiguous with the
+close (A2: a run of merge-back mechanics must not separate the outcome from the
+recommendation). Capture the **verbatim** output of:
 
 ```
 node "$(spec-paths spec-status)" --root {mainRoot} --next
@@ -464,9 +493,18 @@ node "$(spec-paths spec-status)" --root {mainRoot} --next
 
 `{mainRoot}`: the `{mergeBack} root` output when Phase 4 ran, else `git rev-parse
 --show-toplevel` on the spec path. The script is the only source of the "what now"
-suggestion; if its pick surprises you, say so — its lines still print unaltered. If the
-run errors, print the error and no Next line (absent beats hand-derived). Non-CLEAN closes
-get no Next pointer — the verdict line already names the fix step.
+suggestion; if its pick surprises you, say so — its lines still print unaltered. If the run
+errors, print the error and no Next line (absent beats hand-derived) — skip the render below
+entirely. Otherwise assemble `outcome: {anchor:'✅', text:'CLEAN — merged'}`, `next:
+{kind:'status-verbatim', text: <the captured output>}`, write to a temp file, and run
+`node "$(spec-paths report-render)" --slots <file>`, printing its output verbatim:
+
+```report
+✅ **CLEAN — merged**
+{spec-status --next, verbatim}
+```
+
+Non-CLEAN closes get no Next pointer — the verdict line already names the fix step.
 
 ## Rules
 

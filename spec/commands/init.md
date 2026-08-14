@@ -518,20 +518,33 @@ Both modes also:
    layer is authored but not activated — fix and re-run. **Only after it passes**, stamp the
    config: `generatedBy` = `spec@$(spec-paths version)`, `contractHash` =
    `$(spec-paths contract-hash)`. The stamp asserts "mechanically verified," not "generated."
-5. Report — print exactly this shape (rationale: shared § Console Output Style); fill the
-   slots, drop any line whose slot is empty, add nothing else:
+5. Report — assemble the slots below and write them to a scratch JSON file, then print
+   `node "$(spec-paths report-render)" --slots <file>` verbatim (shared § Console Output
+   Style — the script is the sole render authority; never hand-format the output):
+   - `outcome`: ✅ anchor (⚠️ if something needs the user), text
+     `initialized — {N} files, gate verified, stamped`
+   - `bullets`: two plain-language lines, replacing the old `{kind → name}`/glob dumps with
+     meaning (§ Console Output Style's "meaning over dumps") — (1) what was generated: agent
+     count, the verify + run skills, convention-file count, the T3 triggers chosen, and the
+     permissions entries landed; (2) runtime + design-foundation state: boot/ready commands
+     or a declared-inert reason, and the design foundation status — genesis / extracted /
+     adopted / crafted / pending (name `/spec:genesis-design` as the finisher when pending) —
+     with its doctrine path
+   - `warns`: one line per unresolved item — a Phase 2.5 merge conflict, a manifest-check
+     failure, anything Phase 7 step 1 couldn't verify; the manifest-check result is a pass/fail
+     mention only, its full table stays in the run output
+   - `next`: `{kind: 'status-verbatim', text: <captured output of
+     node "$(spec-paths spec-status)" --next>}` — never a hand-written `Next: /spec:enforce`:
+     Phase 8 auto-chains enforcement in this same run, so naming it as a next step would
+     misleadingly suggest a manual action that is about to happen automatically
 
+   ```report
+   ✅ **initialized — 14 files, gate verified, stamped**
+   - generated 6 implementer agents, the verify + run skills, 3 convention rule files, and the T3/permissions grounding this repo needs to run the pipeline safely
+   - runtime ready (`bun dev`, health-checked) · design foundation adopted — docs/design/doctrine.md
+   ⚠️ manifest-check found one unverified row — settings.json permissions merge kept an existing deny in place, surfaced for review
+   {spec-status --next, verbatim}
    ```
-   ✅ **initialized — {N} files, gate verified, stamped**    (or: ⚠️ **{what needs the user}**)
-   - agents: {kind → name, …} · skills: spec-verify, run · conventions: {kind → globs, …}
-   - runtime: {boot/ready commands, or inert — one-phrase reason} · substrate: {created / found}
-   - T3 triggers: {chosen} · permissions: {allow}/{deny} entries
-   - design foundation: {genesis / extracted / adopted / crafted / pending — finish with /spec:genesis-design} — {doctrine path}{; for genesis: rules categories + designRulesHash}
-   ⚠️ {merge conflict surfaced in Phase 2.5 / manifest-check failure / anything not verified — one line each}
-   ```
-
-   The manifest-check result stays a pass/fail mention — its full table lives in the run
-   output, not the console.
 
 ## Phase 8 — Generate enforcement (invoke `/spec:enforce`)
 

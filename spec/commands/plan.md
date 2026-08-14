@@ -61,18 +61,18 @@ in Phase 1.5.
    recorded into the spec's `design_source:` frontmatter at the Set-`design:` step below.
 2. **Apply the tier rubric** (shared invariants § Risk Tiers; concrete T3 triggers in the
    host's pipeline rules § Risk Tiers).
-   - **T1** → STOP: "This is T1-shaped — no spec needed. Just ask me to do it; the host's
-     gate command gates it and the change diffs against the host's standards docs." Do not
-     write a spec file.
+   - **T1** → STOP: `🚫 **T1-shaped — no spec needed.**` then `Next: ask me directly — the
+     host's gate command gates it and the change diffs against the host's standards docs.`
+     Do not write a spec file.
    - **T3** → state the tier and the one-line rubric justification, proceed.
    - **T2** → apply shared invariants § Pipeline Entry, before proceeding: a spec is written
      only when the work needs **delegation** (execution large enough that Sonnet workers
      should do it while Fable only plans) or **durability** (scope spans sessions; the spec
      is the re-entrant state) — the pipeline is opt-in heavy machinery, not the default path,
-     and tiers only set intensity once inside it. Neither applies → STOP: "This is T2-shaped
-     but needs no delegation or durability — no spec needed. Just ask me to do it; the host's
-     gate command gates it and the change diffs against the host's standards docs." Do not
-     write a spec file. Either applies → state the tier, the rubric justification, and which
+     and tiers only set intensity once inside it. Neither applies → STOP: `🚫 **T2-shaped —
+     no delegation or durability, no spec needed.**` then `Next: ask me directly — the
+     host's gate command gates it and the change diffs against the host's standards docs.`
+     Do not write a spec file. Either applies → state the tier, the rubric justification, and which
      criterion (delegation/durability) triggered entry, proceed.
 
 ## Phase 1 — Discovery (cold start only)
@@ -304,25 +304,27 @@ Never silently drop a finding.
    lock report why not. Discovered follow-ups are the only planning output with no durable
    artifact otherwise — "plan it after this lands" said in conversation dies with the session.
 3. Flip frontmatter `status: draft → hardened`.
-4. Report — print exactly this shape (rationale: shared § Console Output Style); fill the
-   slots, drop any line whose slot is empty, add nothing else:
+4. **Report.** Before reporting: if `design: true` with **no** `design_source`, a mock
+   already in `design/mocks/` (ratified by `/spec:sketch`, or swept by `/spec:atlas`)
+   becomes the `design_source` starting point — record its path into the frontmatter now
+   (with none, `/spec:design` authors the mock first — shared § Design Binding Pipeline, not
+   loaded by `shared-for plan`; full text in shared.md). Then assemble the slots (rationale:
+   shared § Console Output Style) — `outcome`: ✅ `spec hardened & locked — {path}`;
+   `bullets`: one plain-language line per decision made this session; `warns`: any notable
+   refuter/spike finding (drop when none); `next`: run
+   `node "$(spec-paths spec-status)" --root . --next`, capture its output, and pass
+   `{kind: 'status-verbatim', text: <captured output>}` — the script is the sole derivation
+   of the Next suggestion (it prints the 🎯 top pick); never hand-derive the design-vs-build
+   routing here. Run `node "$(spec-paths report-render)" --slots <file>` and print its
+   output verbatim. Counts and field inventories stay in the spec file.
 
+   ```report
+   ✅ **spec hardened & locked — specs/20260813/09-example.md**
+   - checkout now retries payment capture once before failing
+   ⚠️ refuter flagged a stale webhook signature check — fixed in Decisions
+
+   {spec-status --next, verbatim}
    ```
-   ✅ **spec hardened & locked — {path}**
-   - {decision made this session, plain language — one line each}
-   ⚠️ {notable refuter/spike finding — only if any}
-
-   {spec-status --next output, verbatim}
-   ```
-
-   Counts and field inventories stay in the
-   spec file. Next: run `node "$(spec-paths spec-status)" --root . --next` and print its
-   output verbatim — the script is the sole derivation of the Next suggestion (it prints the
-   🎯 top pick); never hand-derive the design-vs-build routing here. Before reporting: if `design: true` with
-   **no** `design_source`, a mock already in `design/mocks/` (ratified by `/spec:sketch`,
-   or swept by `/spec:atlas`) becomes the `design_source` starting point — record its path
-   into the frontmatter now (with none, `/spec:design` authors the mock first — shared
-   § Design Binding Pipeline, not loaded by `shared-for plan`; full text in shared.md).
 
 ## Rules
 

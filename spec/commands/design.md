@@ -95,14 +95,17 @@ conversation. The iteration loop is deliberately **cold between rounds** — the
 `design-log.md` carries each round's rulings, so no expensive session idles while the user looks
 at the catalog.
 
-When the driver prints `DONE`, report — print exactly this shape (rationale: shared
-§ Console Output Style); fill the slots, drop any line whose slot is empty, add nothing else:
+When the driver prints `DONE`, report (rationale: shared § Console Output Style). Assemble
+the slots — `outcome`: ✅ `designed — {N} components kept, manifest extended, spec
+reconciled`; `warns`: anything that changes the user's next step (drop when nothing does);
+`next`: `{kind: 'command', text: '/spec:build {specPath}'}`. Run
+`node "$(spec-paths report-render)" --slots <file>` and print its output verbatim.
 
-```
-✅ **designed — {N} components kept, manifest extended, spec reconciled**
-⚠️ {anything that changes the user's next step}
+```report
+✅ **designed — 4 components kept, manifest extended, spec reconciled**
+⚠️ two bound regions still need the sibling-asymmetry ruling — see design-log.md
 
-Next: /spec:build {specPath}
+Next: /spec:build specs/20260813/09-example.md
 ```
 
 ## Rules (session-binding — the driver cannot enforce these)

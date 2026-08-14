@@ -278,25 +278,37 @@ written against real code. Never pre-plan the whole roadmap into specs.
 
 ## Phase D — Report & hand off
 
-Print exactly this shape (rationale: shared § Console Output Style); fill the slots, drop
-any line whose slot is empty, add nothing else:
+Assemble the slots object (shared § Console Output Style — `report-render.js` is the sole
+render authority; commands assemble slots and print its output verbatim):
 
+- `outcome`: `✅ architected — scaffold green, {N} ADRs, roadmap of {M} briefs` when Phase C
+  commits; `⚠️ {what needs the user}` when it stops short.
+- `bullets`: `{archetype} for {audience}; gate: {resolved gate command}`; one
+  `{decision made — ADR path}` entry per decision; a `Chain: genesis-explore → genesis-design
+  → /spec:atlas sweep + your holistic atlas review → /spec:init → /spec:enforce → /spec:plan
+  docs/roadmap/01-*.md` entry — the chain is a bullet, rendered above the close (never below
+  it), so the whole sequence is visible before the one recommended next step. For an
+  archetype whose design stage is `none` (backend-api, data-ml) the chain bullet shrinks to
+  `Chain: /spec:init → /spec:enforce → /spec:plan docs/roadmap/01-*.md`, noting explore +
+  design are skipped. The atlas review step (design-capable archetypes only) is where the
+  whole product's sketches are audited before any UI brief is planned — shared § Design Atlas.
+- `warns`: one `dissent recorded: {one-phrase summary}` entry per dissent (drop if none).
+- `next`: `{kind: 'command', text: '/spec:genesis-explore {same idea}'}` — for a design-stage-
+  `none` archetype, `{kind: 'command', text: '/spec:init'}` instead.
+
+Write the slots file and run `node "$(spec-paths report-render)" --slots <file>`; print stdout
+verbatim. Filled example:
+
+```report
+✅ **architected — scaffold green, 3 ADRs, roadmap of 6 briefs**
+- web-app for solo creators; gate: npm run typecheck && npm run lint && npm test
+- framework: Next.js 15 (App Router) — docs/adr/0001-framework.md
+- persistence: Postgres via Neon — docs/adr/0002-persistence.md
+- Chain: genesis-explore → genesis-design → /spec:atlas sweep + your holistic atlas review → /spec:init → /spec:enforce → /spec:plan docs/roadmap/01-*.md
+⚠️ dissent recorded: SQLite rejected — no managed backup story for a solo operator
+
+Next: /spec:genesis-explore a trading simulator for solo creators
 ```
-✅ **architected — scaffold green, {N} ADRs, roadmap of {M} briefs**
-   (or: ⚠️ **{what needs the user}**)
-- {archetype} for {audience}; gate: {resolved gate command}
-- {decision made — ADR path, one line each}
-⚠️ dissent recorded: {one-phrase summary, one line each}
-
-Next: /spec:genesis-explore {same idea}
-Chain: genesis-explore → genesis-design → /spec:atlas sweep + your holistic atlas review → /spec:init → /spec:enforce → /spec:plan docs/roadmap/01-*.md
-```
-
-For an archetype whose design stage is `none` (backend-api, data-ml): Next is `/spec:init`,
-with a note that explore + design are skipped, and the chain shrinks accordingly. The atlas
-review step (design-capable archetypes only) is where the whole product's sketches are
-audited before any UI brief is planned — shared § Design Atlas. The chain is always printed
-in full so initiation is never a mystery.
 
 ## Rules
 

@@ -1,6 +1,7 @@
 ---
 date: 2026-08-13
-status: hardened
+status: implementing
+diff_base: e73193298027348bfe497cf6a3bb17702103ba1d
 open_markers: 0
 risk: T2
 area: doctrine-reports
@@ -32,7 +33,8 @@ path uses the shared two-line STOP shape, and the new test fails on any future d
 | D4 | Every STOP/failure path in the migrating set adopts the shared STOP shape via the renderer (`outcome.anchor: 🚫`, required `next` naming the remedy): review.md/release.md leg-failure STOPs get the two-line template with the failed leg's plain consequence (A8); git merge's dirty-tree STOP stages `/git:commit` (recommended) with `git stash -u` as the alternative inside the same line (A10); enter-worktree ends with a ```report (not "Done.") (A10); commit.md — which today has NO report shape at all (refuter-verified: zero anchor glyphs in git/commands/) — gains a net-new minimal terminal ```report: `✅ **committed — {subject} ({N} files)**` + `Next: nothing needs you — commit landed` (worktree branch case: `Next: /git:merge — land it on {base}`). | Failure paths are where close-the-loop matters most and were systematically ungoverned; commit.md's row is authoring, not tagging — sized accordingly. |
 | D5 | Git plugin doctrine wiring (audit D2): each git command file opens its report section with a one-line contract citation ("report contract: spec shared.md § Console Output Style — rendered via `spec-paths report-render`") rather than a new `shared-for` arm. | The three files are small and stable; a full shared-for plumbing arm for one section is additive machinery the citation line buys for free. |
 | D6 | review.md/release.md conformance edits preserve verbatim the verdict/qualifier semantics landed by specs 20260813/01–03 (testsSkipped object, CLEAN-with-qualifier word, `[oracle:]` matrix handling): this spec relocates their rendering into slots, it never rewords the semantics. | Three specs landed on these files today; the conformance pass must be shape-only there or it re-opens reviewed behavior. |
-| D7 | Scaffold-ledger row for the report-shape test (gate; retire: only with the console contract itself). Version bump target 6.65.0. | Doctor check 13; repo discipline. |
+| D7 | Scaffold-ledger row for the report-shape test (gate; retire: only with the console contract itself). Version bump target **6.69.0** (orchestrator-refreshed 2026-08-14: the spec's original 6.65.0 target was consumed by concurrent sessions — plugin.json is at 6.68.0 at this build's base commit; per the host pipeline rules' stale-version gotcha the literal is a target, not a pin). | Doctor check 13; repo discipline. |
+| D8 | **Build-time ruling (2026-08-14, user-approved).** D3's 🔍→📦 retirement on review.md's smells line breaks a pre-existing regression pin outside this spec's File Plan: `tests/review/smell-lens.test.js` AC-20260812-01-6 asserts the retired 🔍 glyph literally. The pin is **updated in place** to assert the 📦 artifacts entry (`artifacts` slot text `smells: {N} advisory — {M} accepted → docs/audit/advisory-findings.md`) and retagged `AC-20260813-07-7`, keeping its AC-20260812-01-6 provenance comment — the identical treatment the File Plan already sanctioned for the genesis-design pin (AC-20260813-07-5). The lensFailed ⚠️ half of the same pin is unchanged. Scope widens by exactly one test file, recorded here rather than silently. | Never weaken a locked Decision to keep an old test green, and never leave the repo carrying a red pin that contradicts a Decision this spec locked; the pin tracks the contract, it does not outrank it. |
 
 ## File Plan
 
@@ -58,6 +60,7 @@ path uses the shared two-line STOP shape, and the new test fails on any future d
 | git/commands/commit.md | MODIFY | doctrine | D4 net-new minimal terminal ```report (authoring, not tagging) + D5 citation line |
 | tests/consistency/report-shape.test.js | CREATE | tests | AC-20260813-07-1 … AC-20260813-07-4 |
 | tests/consistency/conflict-fixes.test.js | MODIFY | tests | AC-20260813-07-5 (retag the genesis-design ending pin with this AC-ID — regression pin, stays green) |
+| tests/review/smell-lens.test.js | MODIFY | tests | AC-20260813-07-7 (D8 build-time ruling: the 🔍-glyph half of AC-20260812-01-6 retargets to the 📦 artifacts entry; lensFailed ⚠️ half unchanged) |
 | spec/doctrine/scaffold-ledger.md | MODIFY | doctrine | D7 row |
 | spec/doctrine/claims-baseline.json | MODIFY | doctrine | ratchet re-stamp for all doctrine deltas (same commit) |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D7 bump + changelog |
@@ -104,6 +107,11 @@ path uses the shared two-line STOP shape, and the new test fails on any future d
 - **AC-20260813-07-5**: WHEN the existing genesis-design ending pin runs THE SYSTEM SHALL
   CONTINUE TO pass (the one pre-existing report pin survives the migration; retagged with
   this AC-ID) → tests/consistency/conflict-fixes.test.js
+- **AC-20260813-07-7**: WHEN review.md's Phase 3 report slots are read THE SYSTEM SHALL carry
+  the smells summary as a 📦 artifacts entry (`smells: {N} advisory — {M} accepted →
+  docs/audit/advisory-findings.md`) and no longer as a 🔍-anchored line, while the
+  `⚠️ smell lens failed` warns entry survives unchanged (D8 build-time ruling; supersedes the
+  🔍 half of AC-20260812-01-6) → tests/review/smell-lens.test.js
 - **AC-20260813-07-6** `[oracle: gate]`: WHEN the scoped gate runs THE SYSTEM SHALL keep
   `tests/claims/claims-lint.test.js` green — the migration's claims-baseline re-stamp is
   verified in-run because this spec's scoped gate explicitly includes that file (see

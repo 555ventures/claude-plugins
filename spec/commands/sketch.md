@@ -55,7 +55,9 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    declared surfaces; derive gaps and statuses.
 2. **Bound check.** Surfaces already `bound`/`built` (coverage ledger claim) are contracts —
    changes to them route through `/spec:design`'s drift handling, never through this command.
-   If the requested change targets one, STOP and say so; sketch is pre-plan only.
+   If the requested change targets one, STOP with the shared shape (shared § Console Output
+   Style): `🚫 **{surface} is bound — sketch is pre-plan only.**` then `Next: /spec:design —
+   reopen the spec that bound this surface.`
 3. **Scoped sweep — single pass, in-session.** The session authors `design/mocks/<label>.html`
    for every **gap surface of this brief only**, sequentially in one sitting, at sketch tier —
    same artifact contract as the atlas sweep (shared § Design Atlas: sketch `data-status`, real
@@ -102,18 +104,20 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    **Ratified** = direction approved at roadmap level, brief and mocks agree; the matrix and
    polish are still owed later at `/spec:design` promotion. On no — state is on disk; re-invoke
    to continue. `AskUserQuestion` dismissed → STOP.
-7. **Report** — print exactly this shape (rationale: shared § Console Output Style); fill
-   the slots, drop any line whose slot is empty, add nothing else:
+7. **Report.** Assemble the slots (rationale: shared § Console Output Style) — `outcome`:
+   ✅ `ratified {N} of {M} surfaces — {brief}`; `warns`: one line per un-ratified surface or
+   open question written (drop when none); `artifacts`: the brief path (edited-section
+   inventories stay in the brief file — print its path, not the sections); `next`:
+   `{kind: 'command', text: '/spec:plan {brief}'}`. Run
+   `node "$(spec-paths report-render)" --slots <file>` and print its output verbatim.
 
+   ```report
+   ✅ **ratified 3 of 4 surfaces — docs/roadmap/09-checkout.md**
+   ⚠️ checkout-confirm still sketch — open question: refund flow ownership
+   📦 docs/roadmap/09-checkout.md
+
+   Next: /spec:plan docs/roadmap/09-checkout.md
    ```
-   ✅ **ratified {N} of {M} surfaces — {brief}**
-   ⚠️ {un-ratified surface / open question written — one line each}
-   📦 {brief path}
-
-   Next: /spec:plan {brief}
-   ```
-
-   Edited-section inventories stay in the brief — print its path, not the sections.
 
 ## Rules
 

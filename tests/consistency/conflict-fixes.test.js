@@ -231,7 +231,7 @@ test('AC-20260810-08-9: genesis-design.md header names Opus alone, not "Fable or
     'the header must still name Opus as the seat')
 })
 
-test('AC-20260810-08-9: genesis-design.md terminal Next pointer inserts /spec:atlas before /spec:init', () => {
+test('AC-20260813-07-5 (retagged from AC-20260810-08-9): genesis-design.md terminal Next pointer inserts /spec:atlas before /spec:init — survives the spec-06 ```report fence migration', () => {
   const gd = read('spec/commands/genesis-design.md')
   const nextLine = gd.split('\n').find(l => l.trim().startsWith('Next:'))
   assert.ok(nextLine, 'genesis-design.md has no terminal "Next:" pointer line')

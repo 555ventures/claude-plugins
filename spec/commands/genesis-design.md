@@ -213,16 +213,31 @@ Author directly (taste exception — not delegated to Sonnet):
 
 ## Phase 5 — Report & hand off
 
-Print exactly this shape (rationale: shared § Console Output Style); fill the slots, drop
-any line whose slot is empty, add nothing else:
+Assemble the slots object (shared § Console Output Style — `report-render.js` is the sole
+render authority; commands assemble slots and print its output verbatim):
 
-```
-✅ **canon locked — {direction} ratified, {N} rules across {M} categories**
-   (or: ⚠️ **{what needs the user}**)
-- dimensions: {D} DECIDED (each token-family ↔ rule paired) · {K} DEFERRED — {one-phrase reasons}
-- designCatalog for /spec:init: {value, or none}
-⚠️ dissent recorded: {one-phrase summary, one line each}
-📦 {doctrine path} · {tokens path} · {consumed-surface path}
+- `outcome`: `✅ canon locked — {direction} ratified, {N} rules across {M} categories` when
+  Phase 4 commits; `⚠️ {what needs the user}` when it stops short of a lock.
+- `bullets`: `dimensions: {D} DECIDED (each token-family ↔ rule paired) · {K} DEFERRED —
+  {one-phrase reasons}`; `designCatalog for /spec:init: {value, or none}`.
+- `warns`: one `dissent recorded: {one-phrase summary}` entry per `## Dissents` row (drop the
+  slot if none).
+- `artifacts`: `{doctrine path}`, `{tokens path}`, `{consumed-surface path}` — one entry each.
+- `next`: `{kind: 'command', text: '/spec:atlas (sweep + holistic review of the genesis mocks)
+  → /spec:init — grounds the repo, then invokes /spec:enforce to generate enforcement from
+  design-rules.json'}`.
+
+Write the slots file and run `node "$(spec-paths report-render)" --slots <file>`; print stdout
+verbatim. Filled example (canon-locked arm):
+
+```report
+✅ **canon locked — dense-professional ratified, 14 rules across 5 categories**
+- dimensions: 9 DECIDED (each token-family ↔ rule paired) · 2 DEFERRED — motion system out of v1 scope
+- designCatalog for /spec:init: design/tokens.css
+⚠️ dissent recorded: instrument direction rejected — too clinical for the target audience
+📦 docs/design/doctrine.md
+📦 design/tokens.css
+📦 design/tokens-consumed.css
 
 Next: /spec:atlas (sweep + holistic review of the genesis mocks) → /spec:init — grounds the repo, then invokes /spec:enforce to generate enforcement from design-rules.json
 ```

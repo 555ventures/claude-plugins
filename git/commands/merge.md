@@ -26,7 +26,8 @@ Run **in parallel in a single message**:
 - `git diff --stat <target>...<source>` — file-level summary of incoming changes
 - `git merge-base <target> <source>` — common ancestor (for sanity)
 
-**If working tree is dirty**: STOP. Report to user, do not proceed.
+**If working tree is dirty**: STOP — do not proceed. Report as **dirty working tree** (see
+## Report).
 
 **Show user**: short summary — N commits, M files, list of touched paths. Do not dump full diffs.
 
@@ -90,6 +91,30 @@ If we are inside a worktree (detected in Step 1) OR the source branch had a dedi
 If the worktree path no longer exists (e.g. already removed), treat cleanup as done — verify with `git worktree list` if unsure.
 
 If the session was NOT entered via `EnterWorktree` (ExitWorktree is a no-op), skip step 1 and do steps 2–3 directly via `git -C <main-repo-path>`. A CWD warning may appear — this is unavoidable in that case.
+
+## Report
+
+report contract: spec shared.md § Console Output Style — rendered via `spec-paths report-render`
+
+Assemble a slots object and run `node "$(spec-paths report-render)" --slots <file>` (write the
+JSON to the scratch dir first), printing its output verbatim:
+
+- **Merged** (Step 7 done, or Step 6 confirmed clean with no worktree to clean up):
+  `outcome: {anchor:'✅', text:'merged {source} into {target}'}`, optional `bullets` noting
+  commit/file counts from Step 2, `next: {kind:'none', reason:'merge landed'}`.
+- **Dirty working tree** (Step 2): `outcome: {anchor:'🚫', text:'working tree is dirty — cannot
+  inspect or merge safely'}`, `next: {kind:'command', text:'/git:commit — commit the dirty tree
+  (or run \`git stash -u\` to shelve it), then retry the merge'}`.
+
+```report
+✅ **merged spec/checkout into main**
+Next: nothing needs you — merge landed
+```
+
+```report
+🚫 **working tree is dirty — cannot inspect or merge safely**
+Next: /git:commit — commit the dirty tree (or run `git stash -u` to shelve it), then retry the merge
+```
 
 ## NON-NEGOTIABLE RULES
 

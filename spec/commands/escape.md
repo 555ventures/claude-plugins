@@ -147,15 +147,31 @@ headline back green.
    - `review-check` → draft the one-line § Review Checks severity row the same way, same
      Gotchas discipline, same severable approval ask.
    - `runtime-leg` / `none` → nothing to write; the ledger row itself is the signal.
-7. **Report the context, not a fix** — print exactly this shape (rationale: shared
-   § Console Output Style); fill the slots, drop any line whose slot is empty, add nothing
-   else:
+7. **Report the context, not a fix.** Assemble slots and render via
+   `node "$(spec-paths report-render)" --slots <file>`, print the script's output verbatim
+   (rationale: shared § Console Output Style):
+   - `outcome`: anchor `✅` (record-completion is an outcome, not an artifact pointer —
+     the closed anchor set wins over a bespoke lead), text `escape logged — {preventedBy}
+     row appended; prevention delta {landed / declined / recommended: <command>}`.
+   - `bullets`: one line, `- {N} escape rows now point at this spec`.
+   - `warns`: `correlated review said CLEAN — miscalibration signal /spec:doctor aggregates`
+     when the step-3 correlated review row's verdict was CLEAN, else omit.
+   - `found`: `killedMatch: execution-grounded verification killed a finding that later
+     proved real — strongest re-tuning evidence the ledger can hold` when `killedMatch` is
+     `true`, else omit.
+   - `next`: `{kind:'command', text:'/spec:enforce — mechanize the {category} check this
+     escape implies'}` when `preventedBy` is `enforcer`; otherwise
+     `{kind:'status-verbatim', text: <this session's captured `spec-status --next`
+     output>}` — the step-6 prevention delta only ever names a runnable command in the
+     enforcer case; every other case already wrote (or declined) its fix inside step 6, so
+     the close routes to what's next across the pipeline instead of repeating it.
 
-   ```
-   📦 **escape logged — {preventedBy} row appended; prevention delta {landed / declined / recommended: <command>}**
-   - {N} escape rows now point at this spec
+   ```report
+   ✅ **escape logged — enforcer row appended; prevention delta recommended: /spec:enforce**
+   - 3 escape rows now point at this spec
    ⚠️ correlated review said CLEAN — miscalibration signal /spec:doctor aggregates
    ✨ killedMatch: execution-grounded verification killed a finding that later proved real — strongest re-tuning evidence the ledger can hold
+   Next: /spec:enforce — mechanize the report-shape check this escape implies
    ```
 
    Then stop. Fixing the defect is a separate, normal-flow decision.

@@ -347,17 +347,26 @@ the wrong text came from) — the repair itself becomes territory-corrects-map h
 
 ## Report & recommendation
 
-Print exactly this shape (rationale: shared § Console Output Style); fill the slots, drop
-any line whose slot is empty, add nothing else — per finding, one plain-language line
-stating what's wrong and what it affects (evidence detail on demand, not inlined), grouped
-**stale / broken**:
+Assemble slots (rationale: shared § Console Output Style) — per finding, one
+plain-language line stating what's wrong and what it affects (evidence detail on demand,
+not inlined) — and render via `node "$(spec-paths report-render)" --slots <file>`,
+printing its stdout verbatim:
 
-```
-✅ **grounding healthy**     (or: ⚠️ **{N} stale** / 🚫 **broken — {what}**)
-⚠️ stale: {what's wrong — what it affects, one line each}
-🚫 broken: {what's wrong — what it affects, one line each}
+- `outcome`: ✅ `grounding healthy` when clean; ⚠️ `{N} stale` when only stale findings
+  exist; 🚫 `broken — {what}` when any broken finding exists.
+- `warns`: one `stale: {what's wrong — what it affects}` line per stale finding — the
+  clean arm drops this slot entirely (empty array, no line printed).
+- `blocks`: one `broken: {what's wrong — what it affects}` line per broken finding, same
+  droppable rule.
+- `next`: the single recommendation below, as `{kind: 'command', text}` (or `{kind:
+  'none', reason}` for the clean arm with nothing to patch).
 
-Next: {the single recommendation below}
+```report
+⚠️ **2 stale**
+⚠️ stale: review.md cites a deleted § heading — the citation silently drops at render time
+⚠️ stale: an `agentMap` entry has no matching `.claude/agents/*.md` — batch dispatch for that kind fails silently
+
+Next: apply the 2 targeted patches above (per-patch approval via AskUserQuestion)
 ```
 
 Close with exactly one recommendation:

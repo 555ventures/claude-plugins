@@ -261,28 +261,32 @@ harness reports it; if a count isn't visible, write `null` — **never `0`** (a 
 `printf '%s\n' '<json>' >> .claude/spec-runs.jsonl`. The next checkpoint/close commit picks it
 up — never gitignore it; durable cost + verdict history is its whole point.
 
-Report — print exactly this shape (rationale: shared § Console Output Style); fill the
-slots, drop any line whose slot is empty, add nothing else:
+Report — assemble slots (rationale: shared § Console Output Style) and render via
+`node "$(spec-paths report-render)" --slots <file>`, printing its stdout verbatim:
 
+- `outcome`: ✅ `build green — {N} files, gate passed` on success; ⚠️ `{what needs the
+  user}` when the run needs attention.
+- `bullets`: one `- {topic}` line per escalation/consult that happened (empty when none).
+- `warns`: one line per unresolved item (empty when none).
+- `artifacts`: `runId {runId} · {tokens} tokens` — mandatory (every workflow return carries
+  `tokens`; spend visibility is how the pipeline's cost gets tuned instead of guessed;
+  `runId` enables later resume).
+- `next`: `{kind: 'command', text: '/spec:review {args}'}` — the same `{args}` this build
+  was invoked with, folded here rather than repeated as a second closing line.
+
+```report
+✅ **build green — 6 files, gate passed**
+📦 runId wf_a1b2c3d4-5e6 · 48213 tokens
+
+Next: /spec:review specs/20260813/07-command-report-conformance.md
 ```
-✅ **build green — {N} files, gate passed**    (or: ⚠️ **{what needs the user}**)
-- {escalation/consult that happened: one-phrase topic each}
-⚠️ {unresolved item}
-📦 runId {runId} · {tokens} tokens
 
-Next: /spec:review {args}
-```
-
-The 📦 line is mandatory (every workflow return carries `tokens`; spend visibility is how
-the pipeline's cost gets tuned instead of guessed; `runId` enables later resume). File
-lists and full gate tables stay out of the console — the diff and ledger hold them.
+File lists and full gate tables stay out of the console — the diff and ledger hold them.
 Status stays `implementing` — only `/spec:review` flips `done`.
 
 If in a worktree: **stay in it** — `/spec:review` runs there and merges back to the
 originating branch on CLEAN (its Phase 4). Only `AskUserQuestion` (keep / discard +
 `ExitWorktree`) if the user is abandoning the spec instead of proceeding to review.
-
-Next: `/spec:review $ARGUMENTS`
 
 ## Rules
 

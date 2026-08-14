@@ -116,22 +116,31 @@ agree on exactly this format.
    `{"leg":"journeys","exit":<0 if zero failed else 1>,"observed":"walked=<N> failed=<M>"}` to
    `{manifestPath}`.
 
-Any failure here (a red `deploy`/`ready`/`e2e`/`journeys`/`ci` row): **STOP** — report what was
-observed, and route the defect to the normal flow (direct fix or a spec; if it escaped a CLEAN
-review, offer `/spec:escape` — `foundBy: later-spec`, `preventedBy: runtime-leg`). Never promote over a red staging or a red release-commit CI run.
+Any failure here (a red `deploy`/`ready`/`e2e`/`journeys`/`ci` row): **STOP.**
+Never promote over a red staging or a red release-commit CI run.
 
 The stop still runs `node "$(spec-paths verdict)" --profile release --manifest {manifestPath}
---ledger --milestone {milestone} --briefs {shipped brief numbers, comma-separated}` and quotes,
-verbatim, whatever word the derivation prints — an early Phase-2 STOP leaves later legs without
-manifest rows, and `verdict.js` checks missing-required legs *before* red legs, so the quoted
-word on an early stop is typically `UNVERIFIED`, not `GATE_RED` (only a STOP triggered by this
-leg's own red row derives `GATE_RED`); its row is appended to `.claude/spec-runs.jsonl` the
-same as a successful run's. In short: `verdict.js --profile release --ledger` is what the STOP
-path quotes here (D7: a Phase 2/3 STOP is never a second, independent verdict origin — the same
-call runs again in Phase 4 below). `--milestone` and `--briefs` are orchestrator-supplied
-identity fields (the `$ARGUMENTS` note / Phase 0 step 2's shipped-brief list) — everything else
-in the row (`staging`/`e2e`/`journeys`/`substrate`/`production`/`ci`) is derived from the
-manifest rows above, never passed as a flag.
+--ledger --milestone {milestone} --briefs {shipped brief numbers, comma-separated}` — an early
+Phase-2 STOP leaves later legs without manifest rows, and `verdict.js` checks missing-required
+legs *before* red legs, so the word it derives on an early stop is typically `UNVERIFIED`, not
+`GATE_RED` (only a STOP triggered by this leg's own red row derives `GATE_RED`); its row is
+appended to `.claude/spec-runs.jsonl` the same as a successful run's. In short: `verdict.js
+--profile release --ledger` is what the STOP path derives here (D7: a Phase 2/3 STOP is never a
+second, independent verdict origin — the same call runs again in Phase 4 below). `--milestone`
+and `--briefs` are orchestrator-supplied identity fields (the `$ARGUMENTS` note / Phase 0 step
+2's shipped-brief list) — everything else in the row (`staging`/`e2e`/`journeys`/`substrate`/
+`production`/`ci`) is derived from the manifest rows above, never passed as a flag.
+
+Report via the shared STOP shape: assemble `outcome: {anchor:'🚫', text:'{the derived verdict
+word} — {leg} failed'}` and `next: {kind:'command', text:'route the defect to the normal flow
+— direct fix or a spec, or /spec:escape (foundBy: later-spec, preventedBy: runtime-leg) if it
+escaped a CLEAN review'}`, write to a temp file, and run `node "$(spec-paths report-render)"
+--slots <file>`, printing its output verbatim:
+
+```report
+🚫 **{the derived verdict word} — {leg} failed**
+Next: route the defect to the normal flow — direct fix or a spec, or /spec:escape if it escaped a CLEAN review
+```
 
 ## Phase 3 — Promote (explicitly confirmed, never autonomous)
 
@@ -151,8 +160,11 @@ question's context and the Phase 4 report — the word gates nothing extra here.
    field, or the platform's deployment id). A promote that cannot be verified serving is a
    failure, not a success with a caveat. Append
    `{"leg":"production","exit":<0 if verified else 1>,"observed":"<verified|failed>"}` to
-   `{manifestPath}`. A red `production` row here is a Phase 3 failure — STOP per the same
-   rule as Phase 2 above, quoting `verdict.js --profile release --ledger`'s `GATE_RED` output.
+   `{manifestPath}`. A red `production` row here is a Phase 3 failure — STOP via the same
+   renderer shape as Phase 2 above (`outcome: {anchor:'🚫', text:'GATE_RED — production
+   verification failed'}`, `next: {kind:'command', text:'verify {productionUrl}/{healthPath}
+   serves the staged build, then re-run /spec:release'}`), quoting
+   `verdict.js --profile release --ledger`'s `GATE_RED` output.
 
 ## Phase 4 — Record & report
 
@@ -187,19 +199,30 @@ question's context and the Phase 4 report — the word gates nothing extra here.
    verbatim from the source material. No qualifying items → no brief (never write an empty
    one). Briefs are append-only: never edit a prior brief; a row the plugin repo's intake
    already stamped (`intake:` present) is never re-reported.
-4. **Release report** — print exactly this shape (rationale: shared § Console Output
-   Style); fill the slots, drop any line whose slot is empty, add nothing else:
+4. **Release report:** assemble the slots object — `outcome` (✅ `milestone green — {N} specs
+   composed, staging + e2e passed, promoted` on CLEAN; ✅ `milestone green (qualified: CI
+   never delivered a verdict) — promoted` on `CLEAN-with-qualifier`; 🚫 `{what blocked
+   promotion}` otherwise), `bullets` (`- shipped: {briefs + specs}`, `- observed: {deploy,
+   ready, e2e counts, journeys walked with outcomes, ci verdict — one line each}`,
+   `- substrate: {rows checked / inert-declared} · production: {verification result}`),
+   `warns` (`ci never delivered a verdict on this commit` only on `CLEAN-with-qualifier`, plus
+   `yours / the client's to do: {inert rows, verbatim — one line each}` whenever inert rows
+   exist), and `next` — **unconditional, branched by outcome** (A7 — never the old
+   "(optional)" framing): `{kind:'command', text:'/spec:audit — hotspot debt audit for this
+   milestone'}` on CLEAN/`CLEAN-with-qualifier`; `{kind:'command', text: the remedy for what
+   blocked promotion}` on 🚫. Write the slots to a temp file and run
+   `node "$(spec-paths report-render)" --slots <file>`, printing its output verbatim.
 
-   ```
+   ```report
    ✅ **milestone green — {N} specs composed, staging + e2e passed, promoted**
       (or, on `CLEAN-with-qualifier`: ✅ **milestone green (qualified: CI never delivered a
       verdict) — promoted** · or: 🚫 **{what blocked promotion}**)
    - shipped: {briefs + specs}
    - observed: {deploy, ready, e2e counts, journeys walked with outcomes, ci verdict — one line each}
    - substrate: {rows checked / inert-declared} · production: {verification result}
-   ⚠️ {unresolved leg — e.g. "ci never delivered a verdict on this commit"}    (only on `CLEAN-with-qualifier`)
+   ⚠️ ci never delivered a verdict on this commit    (only on `CLEAN-with-qualifier`)
    ⚠️ yours / the client's to do: {inert rows, verbatim — one line each}
-   🧹 next (optional): /spec:audit — hotspot debt audit for this milestone
+   Next: /spec:audit — hotspot debt audit for this milestone    (or, on 🚫: the remedy for what blocked promotion)
    ```
 
    Every line traces to an executed command — the report is the client-facing artifact, so

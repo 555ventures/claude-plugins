@@ -159,13 +159,22 @@ atlas sweeps and `/spec:design` still degrade gracefully with a note when headle
 
 ## Phase 4 — Report & hand off
 
-Print exactly this shape (rationale: shared § Console Output Style); fill the slots, drop
-any line whose slot is empty, add nothing else:
+Assemble the slots object (shared § Console Output Style — `report-render.js` is the sole
+render authority; commands assemble slots and print its output verbatim):
 
-```
-✅ **picked — {position} wins, {N} grafts applied, matrix confirmed**
-- explored {positions}; culled {culled}; walkthrough: {finding counts}
-📦 {research-brief path} — {rule counts by evidence tier}
+- `outcome`: `✅ picked — {position} wins, {N} grafts applied, matrix confirmed`.
+- `bullets`: `explored {positions}; culled {culled}; walkthrough: {finding counts}`.
+- `artifacts`: `{research-brief path} — {rule counts by evidence tier}`.
+- `next`: `{kind: 'command', text: "/spec:genesis-design — ratifies the winner's tokens.css as
+  canon; rejected candidates land in its ## Dissents"}`.
+
+Write the slots file and run `node "$(spec-paths report-render)" --slots <file>`; print stdout
+verbatim. Filled example:
+
+```report
+✅ **picked — dense-professional wins, 2 grafts applied, matrix confirmed**
+- explored instrument, guide, ambient, dense-professional; culled to dense-professional, instrument; walkthrough: 3 friction findings, 0 blockers
+📦 docs/design/research-brief.md — 12 grounded, 4 taste
 
 Next: /spec:genesis-design — ratifies the winner's tokens.css as canon; rejected candidates land in its ## Dissents
 ```

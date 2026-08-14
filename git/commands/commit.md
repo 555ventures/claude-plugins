@@ -49,6 +49,30 @@ message is fix-shaped: `fix`/`bug`/`regression`/`hotfix`) **and**
 4. Yes → run `/spec:escape <spec path>` (it owns the row schema; tell it the invocation is
    commit-driven so the row carries `via:"commit"`). No → proceed silently.
 
+## Step 4: Report
+
+report contract: spec shared.md § Console Output Style — rendered via `spec-paths report-render`
+
+Assemble slots and run `node "$(spec-paths report-render)" --slots <file>` (write the JSON to
+the scratch dir first), printing its output verbatim:
+
+- `outcome: {anchor:'✅', text:'committed — {subject} ({N} files)'}` — `{subject}` is the
+  commit message's first line, `{N}` is the file count from Step 1's `git status`.
+- `next`: if `git branch --show-current` (Step 1) matches the worktree convention
+  `spec/<slug>` (set by `/git:enter-worktree`), find `specs/**/<slug>.md` and read its
+  `build_base` frontmatter field as `{base}` — `next: {kind:'command', text:'/git:merge — land
+  it on {base}'}`. Otherwise `next: {kind:'none', reason:'commit landed'}`.
+
+```report
+✅ **committed — fix(spec): tighten worktree entry gate (3 files)**
+Next: nothing needs you — commit landed
+```
+
+```report
+✅ **committed — fix(spec): tighten worktree entry gate (3 files)**
+Next: /git:merge — land it on main
+```
+
 ## NON-NEGOTIABLE RULES
 
 1. **`git add -A` is MANDATORY** — add ALL changes regardless of relevance to previous work

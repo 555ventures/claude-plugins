@@ -35,19 +35,26 @@ once and keep the path — `{atlas}` below. Read `.claude/spec.config.json` if p
 There are no modes to choose. Bare invocation detects everything from the build report and the
 user's input; `sweep` as an argument only skips the gap confirmation.
 
-1. `node {atlas} build` (add `--root` if not at repo root). Report — print exactly this
-   shape (rationale: shared § Console Output Style); fill the slots, drop any line whose
-   slot is empty, add nothing else:
+1. `node {atlas} build` (add `--root` if not at repo root). Assemble slots and render via
+   `node "$(spec-paths report-render)" --slots <file>`, print the script's output verbatim
+   (rationale: shared § Console Output Style) — this is the run's terminal report:
+   - `outcome`: anchor `✅` text `atlas rebuilt — {N} surfaces ({M} bound, {K} gaps)`.
+   - `bullets`: `- orphan: {mock path} — declare in {owning brief} or delete` (one per orphan).
+   - `warns`: `{bound-but-drifted suspicion the user raised}`, when raised.
+   - `artifacts`: `design/atlas/index.html`.
+   - `next`: two arms (A5) — `{kind:'command', text:'/spec:atlas sweep — fill the {K} gap
+     surfaces at sketch tier'}` when `K` (gaps) > 0, else `{kind:'status-verbatim', text:
+     <this session's captured `spec-status --next` output>}`.
 
-   ```
-   ✅ **atlas rebuilt — {N} surfaces ({M} bound, {K} gaps)**
-   - orphan: {mock path} — declare in {owning brief} or delete
-   ⚠️ {bound-but-drifted suspicion the user raised}
+   ```report
+   ✅ **atlas rebuilt — 12 surfaces (9 bound, 3 gaps)**
+   - orphan: design/mocks/old-settings.html — declare in 04-settings-revamp or delete
    📦 design/atlas/index.html
+   Next: /spec:atlas sweep — fill the 3 gap surfaces at sketch tier
    ```
 2. **Gaps in the report → offer the sweep** ("N declared surfaces have no mock — fill them at
-   sketch tier?"). Yes → run the sweep below. Invoked as `/spec:atlas sweep`, skip the question
-   and run it directly.
+   sketch tier?" — the interactive confirmation behind the Next line above). Yes → run the
+   sweep below. Invoked as `/spec:atlas sweep`, skip the question and run it directly.
 3. Report the output path (`design/atlas/index.html`) — the user opens the file themselves
    (e.g. from VS Code); do **not** start a server or open a browser unprompted. Serve
    (`python3 -m http.server` or the host's equivalent, backgrounded from the repo root) only
@@ -91,8 +98,9 @@ screenshot loop) under the harness check, grounded in the owning brief + the res
 dispatch, exemplar-grounded, never parallel per-surface** (shared § Design Atlas — one warm
 author per pass; chained sequential Sonnet dispatches past ~10 gaps, each receiving the
 previously-authored mock paths as exemplars so late surfaces match early chrome); paths not
-prose. Then rebuild and report — the whole picture should always exist; polish arrives
-per-surface at `/spec:design`.
+prose. Then rebuild and report — same ```report template as step 1 above, fresh slots from
+the post-sweep build (the whole picture should always exist; polish arrives per-surface at
+`/spec:design`).
 
 ## Rules
 

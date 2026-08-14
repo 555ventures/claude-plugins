@@ -77,10 +77,6 @@ if (!args || typeof args !== 'object' || typeof args.specPath !== 'string') {
 //                             // reviewers read and diff THERE, so the panel sees exactly this
 //                             // spec's change. Verifier repros still run at the project root:
 //                             // executed evidence must come from the tree that ships.
-//   runId: string,            // this Workflow invocation's own run id (the orchestrator mints/
-//                             // persists it for resume and passes it back in); echoed verbatim
-//                             // into every return below so report/ledger consumers never need a
-//                             // side channel for it (2026-08-13 spec 06 D9).
 // }
 
 // Reviewers diff in the frozen worktree when the orchestrator supplied one ('' = HEAD never moved).
@@ -401,7 +397,7 @@ if (failedReviewers) {
   return {
     verdict: 'REVIEWER_FAILED', failedReviewers, reviewerCount: n,
     survivors: [], killed: [], scope: fixDelta ? 'fix-delta' : 'full', tokens: budget.spent(),
-    smells, lensFailed, runId: args.runId,
+    smells, lensFailed,
   }
 }
 
@@ -424,7 +420,7 @@ if (!findings.length) {
     verdict: 'CLEAN', survivors: [], killed: [], reviewerCount: n,
     verify: { verified: 0, demonstrated: 0, killedByExecution: 0, sanctioned: 0, miscited: 0, unverifiable: 0, failed: 0, capSkipped: 0, killContradicted: 0 },
     scope: fixDelta ? 'fix-delta' : 'full', tokens: budget.spent(),
-    smells, lensFailed, runId: args.runId,
+    smells, lensFailed,
   }
 }
 
@@ -505,5 +501,4 @@ return {
   tokens: budget.spent(),
   smells,
   lensFailed,
-  runId: args.runId,
 }

@@ -42,9 +42,6 @@ if (args.runProposers && (!Array.isArray(args.roleKeys) || args.roleKeys.length 
 //   roleKeys: [string],           // enum keys for the 3 proposer role personas
 //   runProposers: boolean,        // false → selective skip (all hard-to-reverse dims constrained)
 //   contextPaths: [string],       // prior round outputs + stack-descriptor (design stage) to Read; []
-//   runId: string,                // this Workflow invocation's own run id (the orchestrator
-//                                 //   mints/persists it for resume and passes it back in);
-//                                 //   echoed verbatim into the return below (spec 06 D9).
 // }
 
 // 2026-08-13 spec 06 D6: a named top-level function (not inlined into the Propose phase below)
@@ -205,4 +202,4 @@ if (!result) {
   // FAIL CLOSED: a dead aggregator must not read as an empty decision package.
   throw new Error('wf-panel: aggregator agent returned no result — re-invoke this round')
 }
-return { ...result, agentsFailed: researchFailed + proposalsFailed, runId: args.runId, tokens: budget.spent() }
+return { ...result, agentsFailed: researchFailed + proposalsFailed, tokens: budget.spent() }

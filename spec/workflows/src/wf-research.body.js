@@ -31,9 +31,6 @@ if (!args || typeof args !== 'object' || !Array.isArray(args.dimensionKeys) || !
 //   briefPath: string,         // .claude/genesis/brief.md — goal + intake + Research Angles focus; Read
 //   contextPaths: [string],    // prior interview-research/*.json + descriptors to Read; []
 //   verifyKeys: [string],      // subset of dimensionKeys that are version-bearing → Haiku check; []
-//   runId: string,             // this Workflow invocation's own run id (the orchestrator mints/
-//                              // persists it for resume and passes it back in); echoed verbatim
-//                              // into the return below (2026-08-13 spec 06 D9).
 // }
 
 const briefPath = args.briefPath
@@ -117,18 +114,39 @@ let menus = menusRaw
   .map((m, i) => (m ? { ...m, dimension: args.dimensionKeys[i] } : null))
   .filter(Boolean)
 
-// 2026-08-13 spec 06 D6: enforce the 2–4 cap HERE — a researcher may return more than 4 options
-// despite the schema's guidance, and nothing previously trimmed it. Anything beyond the top 4
-// (by rank) is cut before the Haiku verify pass (no point spending a currency check on an option
-// about to be dropped) and its label recorded in `alsoConsidered` rather than silently discarded.
-const OPTION_CAP = 4
-const alsoConsidered = []
-menus = menus.map(m => {
-  if (!Array.isArray(m.options) || m.options.length <= OPTION_CAP) return m
-  const sorted = [...m.options].sort((a, b) => (a.rank || 0) - (b.rank || 0))
-  alsoConsidered.push(...sorted.slice(OPTION_CAP).map(o => o.label))
-  return { ...m, options: sorted.slice(0, OPTION_CAP) }
-})
+// 2026-08-13 spec 06 D6, amended 06a D5: enforce the 2–4 cap HERE — a researcher may return more
+// than 4 options despite the schema's guidance, and nothing previously trimmed it. Cut before the
+// Haiku verify pass (no point spending a currency check on an option about to be dropped).
+// Minority-preserving: an `is_minority: true` option is a deliberately-preserved contrarian pick
+// the research prompt orders kept ("never average it away") — cut only when minority options
+// alone exceed the cap. Cut order per group: ascending-rank STABLE sort (ties keep researcher
+// order), then cut worst-(highest-)rank-first from the end; the non-minority group is exhausted
+// before the minority group is touched at all. Each cut is recorded as {dimension, label}.
+//
+// A named top-level function (not inlined) so tests/report/return-slots.test.js can execute it
+// standalone via evalFns. LAYOUT REQUIREMENT (test-mode constraint, per wf-review's auditKilled
+// precedent): OPTION_CAP is declared INSIDE this function's braces — tests/helpers.js extractFn
+// brace-matches a single named top-level function with no mode for adjacent top-level consts.
+function capOptions(menus) {
+  const OPTION_CAP = 4
+  const alsoConsidered = []
+  const cappedMenus = menus.map(m => {
+    if (!Array.isArray(m.options) || m.options.length <= OPTION_CAP) return m
+    const sorted = [...m.options].sort((a, b) => (a.rank || 0) - (b.rank || 0))
+    const nonMinority = sorted.filter(o => o.is_minority !== true)
+    const minority = sorted.filter(o => o.is_minority === true)
+    const cutQueue = [...nonMinority].reverse().concat([...minority].reverse())
+    const cutCount = sorted.length - OPTION_CAP
+    const cut = cutQueue.slice(0, cutCount)
+    const cutSet = new Set(cut)
+    for (const o of cut) alsoConsidered.push({ dimension: m.dimension, label: o.label })
+    return { ...m, options: sorted.filter(o => !cutSet.has(o)) }
+  })
+  return { menus: cappedMenus, alsoConsidered }
+}
+const capResult = capOptions(menus)
+menus = capResult.menus
+const alsoConsidered = capResult.alsoConsidered
 
 // Haiku currency check for version-bearing dimensions. Triggered by the UNION of the command's
 // verifyKeys flag and the researcher's own version_bearing discovery — the command knows which
@@ -170,4 +188,4 @@ if (toVerify.length) {
 // (stamping fetchedAt), curates from the (already ≤4) menu into a recommended-first
 // AskUserQuestion, and records the pick + sources to the brief. Stale options
 // (still_current === false) should be demoted or dropped there.
-return { stage: args.stage, menus, verifyFailed: verifyFailed, alsoConsidered: alsoConsidered, runId: args.runId, tokens: budget.spent() }
+return { stage: args.stage, menus, verifyFailed: verifyFailed, alsoConsidered: alsoConsidered, tokens: budget.spent() }

@@ -17,9 +17,15 @@ const { ROOT, read, evalFns } = require('../helpers')
 // (`assertGateArgs`, `assertBatchKinds`, `assertResolutions`) specifically so
 // `evalFns`/`extractFn` — which cannot reach bare top-level statements — can execute them.
 
+// specs/20260813/06a-return-envelope-corrections.md (2026-08-14) D4/D3(c): `const GATE` moves
+// into this same fragment, immediately above `runGateLoop`, single-sourcing the schema both
+// twins dispatch with (spec 06's D7 loosening had drifted — it only reached wf-build). Tag-only
+// addition below: the byte-identical-splice pin already covers the moved definition by
+// construction, no new assertion needed.
+
 const FRAG_PATH = path.join(ROOT, 'spec/workflows/fragments/gate-loop.js.frag')
 
-test('AC-20260813-05-7: the gate-loop fragment exists, avoids __WF_NAME__, and is spliced byte-identically into both wf-build.js and wf-design.js', () => {
+test('AC-20260813-05-7 / AC-20260813-06a-6: the gate-loop fragment exists, avoids __WF_NAME__, and is spliced byte-identically into both wf-build.js and wf-design.js (now including the moved GATE definition)', () => {
   assert.ok(fs.existsSync(FRAG_PATH),
     'fragments/gate-loop.js.frag must exist — the shared gate-repair loop (probe, repair-round ' +
     'loop, phantom-failure hardening, anti-oscillation history, deviations sidecar, exhaustion ' +

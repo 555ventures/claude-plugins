@@ -34,9 +34,6 @@ if (!args || typeof args !== 'object' || !Array.isArray(args.cells)) {
 //     category: string,             // ONE of the reserved categories (see CATEGORIES below)
 //     ruleRefs: [string],           // PATHS (rule doc files) or rule ids the agent Reads for clause text
 //   }],
-//   runId: string,                  // this Workflow invocation's own run id (the orchestrator
-//                                   // mints/persists it for resume and passes it back in);
-//                                   // echoed verbatim into the return below (spec 06 D9).
 // }
 
 // Stable, language-neutral rule categories. Encoded as a method/category vocabulary — never a tool
@@ -158,6 +155,5 @@ return {
   stage: 'researched',
   cells: results.filter(Boolean),
   skipped,
-  runId: args.runId,
   tokens: budget.spent(),
 }

@@ -33,6 +33,35 @@ function resolveBatch(file) {
   return hit ? fileToBatch[hit] : null
 }
 
+// Single source of the GATE schema (2026-08-14 spec 06a D4): moved here, beside its sole reader
+// (the `schema: GATE` dispatch inside runGateLoop below), because spec 06 D7's loosening wording
+// scoped the GATE shape to wf-build only, silently forking the twins' gate schemas — exactly the
+// hand-copy drift this fragment exists to make impossible. A schema change here reaches both
+// twins by construction; this block carries no per-workflow-name splice substitution token, so
+// the spliced region stays byte-identical in both generated files.
+const GATE = {
+  type: 'object',
+  properties: {
+    pass: { type: 'boolean' },
+    failures: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          file: { type: 'string', description: 'File Plan path of the file that needs the fix' },
+          summary: { type: 'string', description: 'one-line failure description incl. test/check name' },
+        },
+        required: ['file', 'summary'],
+      },
+    },
+    // 2026-08-13 spec 06 D7: dropped from `required` — a repo-wide grep found zero readers of
+    // this field (files[].summary above IS actively consumed by repair prompts and stays
+    // required). Left as an optional property so an agent that still emits it is not penalized.
+    summary: { type: 'string' },
+  },
+  required: ['pass', 'failures'],
+}
+
 // The shared gate-repair loop. `repairFn(repairEntries, round, historySnapshot)` dispatches one
 // repair round for the caller's batch shape and must return `{blocked, missing}` (the shape
 // `collectBlocked` already returns in both bodies) — a non-empty `blocked` routes straight to the

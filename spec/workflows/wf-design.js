@@ -119,9 +119,6 @@ if (!args || typeof args !== 'object' || !STAGES.includes(STAGE)) {
 //     command: string,   // resolved deterministic gate: host typecheck + lint, run once over the whole pass
 //   },
 //   pipelineRulesPath: string,  // host pipeline rules file; workers read its '## Worker Rules'. '' if none.
-//   runId: string,              // this Workflow invocation's own run id (the orchestrator
-//                                //   mints/persists it for resume and passes it back in);
-//                                //   echoed verbatim into every return below (spec 06 D9).
 // }
 
 const RECEIPT = {
@@ -151,26 +148,6 @@ const RECEIPT = {
     },
   },
   required: ['files', 'blocked'],
-}
-
-const GATE = {
-  type: 'object',
-  properties: {
-    pass: { type: 'boolean' },
-    failures: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          file: { type: 'string', description: 'File Plan path of the file that needs the fix' },
-          summary: { type: 'string', description: 'one-line failure description incl. test/check name' },
-        },
-        required: ['file', 'summary'],
-      },
-    },
-    summary: { type: 'string' },
-  },
-  required: ['pass', 'failures', 'summary'],
 }
 
 const RULES_PATH = args.pipelineRulesPath || ''
@@ -337,7 +314,7 @@ for (const group of groups) {
     })))
   const { blocked, missing } = collectBlocked(group, out)
   if (blocked.length || missing.length) {
-    return { stage: 'blocked', blocked, missing, completed: receipts, runId: args.runId, tokens: budget.spent() }
+    return { stage: 'blocked', blocked, missing, completed: receipts, tokens: budget.spent() }
   }
 }
 
@@ -384,6 +361,35 @@ function resolveBatch(file) {
     return f === sn || f.endsWith('/' + sn) || sn.endsWith('/' + f)
   })
   return hit ? fileToBatch[hit] : null
+}
+
+// Single source of the GATE schema (2026-08-14 spec 06a D4): moved here, beside its sole reader
+// (the `schema: GATE` dispatch inside runGateLoop below), because spec 06 D7's loosening wording
+// scoped the GATE shape to wf-build only, silently forking the twins' gate schemas — exactly the
+// hand-copy drift this fragment exists to make impossible. A schema change here reaches both
+// twins by construction; this block carries no per-workflow-name splice substitution token, so
+// the spliced region stays byte-identical in both generated files.
+const GATE = {
+  type: 'object',
+  properties: {
+    pass: { type: 'boolean' },
+    failures: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          file: { type: 'string', description: 'File Plan path of the file that needs the fix' },
+          summary: { type: 'string', description: 'one-line failure description incl. test/check name' },
+        },
+        required: ['file', 'summary'],
+      },
+    },
+    // 2026-08-13 spec 06 D7: dropped from `required` — a repo-wide grep found zero readers of
+    // this field (files[].summary above IS actively consumed by repair prompts and stays
+    // required). Left as an optional property so an agent that still emits it is not penalized.
+    summary: { type: 'string' },
+  },
+  required: ['pass', 'failures'],
 }
 
 // The shared gate-repair loop. `repairFn(repairEntries, round, historySnapshot)` dispatches one
@@ -513,7 +519,6 @@ if (!gateCmd || gateCmd === UNGATED_GATE) {
       (gateCmd === UNGATED_GATE
         ? 'gate resolved to __UNGATED__ — every gateCommand leg dropped for an unresolved placeholder; verification is absent'
         : 'no gate command configured — verification is absent'),
-    runId: args.runId,
     tokens: budget.spent(),
   }
 }
@@ -562,10 +567,10 @@ const loopResult = await runGateLoop({
 })
 
 if (loopResult.blocked && loopResult.blocked.length) {
-  return { stage: 'blocked', blocked: loopResult.blocked, missing: loopResult.missing, gate: loopResult.gate, completed: receipts, runId: args.runId, tokens: budget.spent() }
+  return { stage: 'blocked', blocked: loopResult.blocked, missing: loopResult.missing, gate: loopResult.gate, completed: receipts, tokens: budget.spent() }
 }
 if (loopResult.outOfScope && loopResult.outOfScope.length) {
-  return { stage: 'out-of-scope-failure', failures: loopResult.outOfScope, gate: loopResult.gate, completed: receipts, runId: args.runId, tokens: budget.spent() }
+  return { stage: 'out-of-scope-failure', failures: loopResult.outOfScope, gate: loopResult.gate, completed: receipts, tokens: budget.spent() }
 }
 
 return {
@@ -576,6 +581,5 @@ return {
   deviations: loopResult.deviations,
   completed: receipts,
   ...implementNote,
-  runId: args.runId,
   tokens: budget.spent(),
 }

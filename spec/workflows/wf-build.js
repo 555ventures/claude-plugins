@@ -218,9 +218,6 @@ assertResolutions(args.resolutions)
 //                               // '## Worker Rules' / '## Test Rules' sections. '' if none.
 //   deviationsPath: string,     // sidecar file workers APPEND forced-but-unblocking departures
 //                               // to (one line each); /spec:review folds it at close. '' = off.
-//   runId: string,               // this Workflow invocation's own run id (the orchestrator
-//                               // mints/persists it for resume and passes it back in); echoed
-//                               // verbatim into every return below (2026-08-13 spec 06 D9).
 // }
 
 const RECEIPT = {
@@ -307,29 +304,6 @@ const RED = {
     summary: { type: 'string' },
   },
   required: ['allMatch', 'mismatches', 'summary', 'sentinels'],
-}
-
-const GATE = {
-  type: 'object',
-  properties: {
-    pass: { type: 'boolean' },
-    failures: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          file: { type: 'string', description: 'File Plan path of the file that needs the fix' },
-          summary: { type: 'string', description: 'one-line failure description incl. test/check name' },
-        },
-        required: ['file', 'summary'],
-      },
-    },
-    // 2026-08-13 spec 06 D7: dropped from `required` — a repo-wide grep found zero readers of
-    // this field (files[].summary below IS actively consumed by repair prompts and stays
-    // required). Left as an optional property so an agent that still emits it is not penalized.
-    summary: { type: 'string' },
-  },
-  required: ['pass', 'failures'],
 }
 
 const RULES_PATH = args.pipelineRulesPath || ''
@@ -501,6 +475,35 @@ function resolveBatch(file) {
   return hit ? fileToBatch[hit] : null
 }
 
+// Single source of the GATE schema (2026-08-14 spec 06a D4): moved here, beside its sole reader
+// (the `schema: GATE` dispatch inside runGateLoop below), because spec 06 D7's loosening wording
+// scoped the GATE shape to wf-build only, silently forking the twins' gate schemas — exactly the
+// hand-copy drift this fragment exists to make impossible. A schema change here reaches both
+// twins by construction; this block carries no per-workflow-name splice substitution token, so
+// the spliced region stays byte-identical in both generated files.
+const GATE = {
+  type: 'object',
+  properties: {
+    pass: { type: 'boolean' },
+    failures: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          file: { type: 'string', description: 'File Plan path of the file that needs the fix' },
+          summary: { type: 'string', description: 'one-line failure description incl. test/check name' },
+        },
+        required: ['file', 'summary'],
+      },
+    },
+    // 2026-08-13 spec 06 D7: dropped from `required` — a repo-wide grep found zero readers of
+    // this field (files[].summary above IS actively consumed by repair prompts and stays
+    // required). Left as an optional property so an agent that still emits it is not penalized.
+    summary: { type: 'string' },
+  },
+  required: ['pass', 'failures'],
+}
+
 // The shared gate-repair loop. `repairFn(repairEntries, round, historySnapshot)` dispatches one
 // repair round for the caller's batch shape and must return `{blocked, missing}` (the shape
 // `collectBlocked` already returns in both bodies) — a non-empty `blocked` routes straight to the
@@ -631,7 +634,7 @@ if (args.tdd && (args.testBatches || []).length) {
     })))
   const { blocked, missing } = collectBlocked(args.testBatches, out)
   if (blocked.length || missing.length) {
-    return { stage: 'blocked', blocked, missing, completed: receipts, runId: args.runId, tokens: budget.spent() }
+    return { stage: 'blocked', blocked, missing, completed: receipts, tokens: budget.spent() }
   }
 
   phase('RedCheck')
@@ -720,7 +723,7 @@ if (args.tdd && (args.testBatches || []).length) {
       stage: 'tdd-red-check',
       mismatches: red ? red.mismatches : [],
       summary: red ? red.summary : 'red-check agent returned no result — TDD state unverified; re-run',
-      completed: receipts, runId: args.runId, tokens: budget.spent(),
+      completed: receipts, tokens: budget.spent(),
     }
   }
 }
@@ -736,7 +739,7 @@ for (const group of args.groups) {
     })))
   const { blocked, missing } = collectBlocked(group, out)
   if (blocked.length || missing.length) {
-    return { stage: 'blocked', blocked, missing, completed: receipts, runId: args.runId, tokens: budget.spent() }
+    return { stage: 'blocked', blocked, missing, completed: receipts, tokens: budget.spent() }
   }
 }
 
@@ -772,10 +775,10 @@ const loopResult = await runGateLoop({
 })
 
 if (loopResult.blocked && loopResult.blocked.length) {
-  return { stage: 'blocked', blocked: loopResult.blocked, missing: loopResult.missing, gate: loopResult.gate, completed: receipts, runId: args.runId, tokens: budget.spent() }
+  return { stage: 'blocked', blocked: loopResult.blocked, missing: loopResult.missing, gate: loopResult.gate, completed: receipts, tokens: budget.spent() }
 }
 if (loopResult.outOfScope && loopResult.outOfScope.length) {
-  return { stage: 'out-of-scope-failure', failures: loopResult.outOfScope, gate: loopResult.gate, completed: receipts, runId: args.runId, tokens: budget.spent() }
+  return { stage: 'out-of-scope-failure', failures: loopResult.outOfScope, gate: loopResult.gate, completed: receipts, tokens: budget.spent() }
 }
 
 return {
@@ -785,6 +788,5 @@ return {
   agentsFailed: agentsFailed + (loopResult.exhaustedBy === 'agent-died' ? 1 : 0),
   deviations: loopResult.deviations,
   completed: receipts,
-  runId: args.runId,
   tokens: budget.spent(),
 }

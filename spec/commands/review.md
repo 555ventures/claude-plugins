@@ -119,7 +119,7 @@ build that is the worktree itself. Phase 4 resolves a second, distinctly named s
 5. **AC hygiene + coverage (mechanical):** first, in **both drift modes**, lint AC-line
    shape: strip HTML comments and walk only the top-level `- ` bullets of the spec's
    `## Acceptance Criteria` section — nothing outside that section is linted. A bullet whose
-   leading bold token is not a full anchored match of `AC-\d{8}-\d{2}-\d+` is a **malformed
+   leading bold token is not a full anchored match of `AC-\d{8}-\d{2}[a-z]?-\d+` is a **malformed
    AC**, an automatic `hard` finding (a malformed ID is invisible to every AC-ID grep —
    this matrix's, step 5's, and a host `driftScript`'s — so without the lint the AC would
    silently drop out of coverage and ride to CLEAN). Then, **no `driftScript` only**, the

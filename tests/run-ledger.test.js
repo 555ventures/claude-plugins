@@ -129,7 +129,10 @@ test('AC-20260805-02-8: review ledger rows carry the D5 derived-verdict enum and
   assert.doesNotMatch(review, /"verdict":"<CLEAN\|SURVIVORS\|REVIEWER_FAILED>"/,
     'the old CLEAN|SURVIVORS|REVIEWER_FAILED enum documentation must be gone — SURVIVORS was an ' +
     'undocumented mapping this spec retires (D5)')
-  assert.match(review, /CLEAN\|FINDINGS\|HARD_FINDINGS\|REVIEWER_FAILED\|UNVERIFIED\|GATE_RED/,
+  // specs/20260813/10-host-capabilities.md D4 widened the enum with CLEAN-with-qualifier (the
+  // review profile can now derive the release profile's qualified word). The pin follows the
+  // documented enum verbatim, exactly as its own consequence message demands.
+  assert.match(review, /CLEAN\|CLEAN-with-qualifier\|FINDINGS\|HARD_FINDINGS\|REVIEWER_FAILED\|UNVERIFIED\|GATE_RED/,
     'the review ledger schema must document the new derived-verdict enum verbatim — a consumer ' +
     'matching against the old enum would silently drop every new-word row')
   assert.ok(review.includes('"legs":['),

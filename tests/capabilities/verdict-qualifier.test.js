@@ -50,6 +50,25 @@ test('AC-20260813-10-8: verdict.js derives CLEAN-with-qualifier on the review pr
     'CLEAN-with-qualifier is a CLEAN-family word — it must exit 0 like plain CLEAN, gating nothing extra (same word/exit family spec 20260813/02 established): ' + r.stderr)
 })
 
+// D4's shipped derivation matches `unavailable`, `unavailable-transient`, AND `in-progress` —
+// the last is a deliberate widening past the Decision's literal "unavailable" wording, on the
+// same reasoning release.md already states: whenever the ci observation is not a `conclusion=`
+// string, CI never delivered a verdict on this commit. Pinned so the choice is declared rather
+// than an accident of the regex; narrowing it later is a doctrine change, not a silent fix.
+test('AC-20260813-10-8: a review-profile ci leg still in progress also derives CLEAN-with-qualifier — CI never delivered a verdict on this commit', () => {
+  const dir = tmpdir('verdict-qualifier-inprogress')
+  const manifest = writeManifest(dir, [
+    ...GREEN_REVIEW_LEGS,
+    { leg: 'ci', exit: 0, observed: 'in-progress' },
+  ])
+  const workflow = writeWorkflow(dir, { verdict: 'CLEAN', survivors: [], killed: [], scope: 'full', tokens: 100, reviewerCount: 1 })
+  const r = runNode('scripts/verdict.js',
+    ['--manifest', manifest, '--workflow', workflow, '--waived', '0', '--rejected', '0', '--fixDispatched', '0'])
+  assert.strictEqual(firstLine(r.stdout), 'CLEAN-with-qualifier',
+    'an unresolved CI run delivered no verdict on this commit, exactly like an absent one — printing plain CLEAN would claim an observation the review never made: ' + JSON.stringify(r.stdout) + ' stderr: ' + r.stderr)
+  assert.strictEqual(r.status, 0, 'the qualified word stays CLEAN-family and must exit 0: ' + r.stderr)
+})
+
 test('AC-20260813-10-9 (regression pin): verdict.js continues to derive plain CLEAN on the review profile when every leg, including ci, is fully green', () => {
   const dir = tmpdir('verdict-plain-clean')
   const manifest = writeManifest(dir, [

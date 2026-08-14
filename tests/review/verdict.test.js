@@ -35,14 +35,24 @@ function writeWorkflow(dir, obj) {
   return p
 }
 
+// specs/20260813/10-host-capabilities.md D4: the ci row carries a real `conclusion=` observation,
+// not `unavailable`. Every test below that reuses this fixture pins a subject OTHER than the
+// qualifier word (leg presence, disposition counting, ledger row shape) and states "every leg is
+// green" — since D4, an `unavailable` ci leg is no longer a plain-CLEAN input, so leaving it here
+// would silently turn all of them into qualifier tests asserting the wrong subject. The
+// unavailable-ci case has its own dedicated pin below.
 const SIX_GREEN = [
   { leg: 'gate', exit: 0, observed: 'skips=0 todos=0' },
   { leg: 'smoke', exit: 4, observed: 'inert' },
   { leg: 'reconcile', exit: 0, observed: 'outOfPlan=0' },
   { leg: 'ac-matrix', exit: 0, observed: 'uncovered=0' },
   { leg: 'skip-reconcile', exit: 0, observed: 'skipped=0' },
-  { leg: 'ci', exit: 0, observed: 'unavailable' },
+  { leg: 'ci', exit: 0, observed: 'conclusion=success' },
 ]
+
+// The same six legs with ci structurally unobservable — the qualifier fixture (D4).
+const SIX_GREEN_CI_UNAVAILABLE = SIX_GREEN.map(
+  r => (r.leg === 'ci' ? { leg: 'ci', exit: 0, observed: 'unavailable' } : r))
 
 function cleanWorkflow(survivors) {
   return {
@@ -57,7 +67,7 @@ function cleanWorkflow(survivors) {
   }
 }
 
-const VERDICT_WORDS = /^(CLEAN|FINDINGS|HARD_FINDINGS|REVIEWER_FAILED|UNVERIFIED|GATE_RED)$/
+const VERDICT_WORDS = /^(CLEAN|CLEAN-with-qualifier|FINDINGS|HARD_FINDINGS|REVIEWER_FAILED|UNVERIFIED|GATE_RED)$/
 
 test('AC-20260805-02-1: a manifest missing required legs derives UNVERIFIED and exits 1, never CLEAN', () => {
   const dir = tmpdir('verdict')
@@ -94,14 +104,23 @@ test('AC-20260805-02-3 / AC-20260810-07-8: a red ci leg derives GATE_RED and exi
   assert.strictEqual(r.status, 1, 'GATE_RED must exit 1 so the close step is mechanically unreachable: ' + r.stderr)
 })
 
-test('AC-20260813-02-8: review-profile CLEAN with a ci leg observed unavailable stays plain CLEAN — the CLEAN-with-qualifier word exists only on the release profile (AC-20260805-02-3)', () => {
+// specs/20260813/10-host-capabilities.md D4 retags this pin: its SUBSTANCE — an unavailable ci
+// leg must never BLOCK, since exit 0 satisfies the leg requirement — survives byte-for-byte and
+// is what the exit-code assertion below guards. Only its word changed: the release profile's
+// CLEAN-with-qualifier now derives on the review profile too, so the review-profile-plain-CLEAN
+// half of the old claim is retired by a locked Decision, not weakened.
+test('AC-20260813-10-8 (retag of AC-20260813-02-8): a review-profile run whose ci leg is observed unavailable still reaches a CLEAN-family word and exit 0 — the leg qualifies the verdict, never blocks it', () => {
   const dir = tmpdir('verdict')
-  const manifest = writeManifest(dir, SIX_GREEN) // ci row is exit 0, observed "unavailable"
+  const manifest = writeManifest(dir, SIX_GREEN_CI_UNAVAILABLE)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
-  assert.strictEqual(r.stdout.split('\n')[0], 'CLEAN',
-    'per D4, ci "unavailable" (no CI to consult) must never block — it is exit 0 and satisfies the ci ' +
-    'leg requirement, so an otherwise-green run must still reach CLEAN: ' + r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.stdout.split('\n')[0], 'CLEAN-with-qualifier',
+    'ci "unavailable" (no CI to consult) must qualify the verdict word rather than be swallowed into a ' +
+    'plain CLEAN indistinguishable from a real green run (D4): ' + r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 0,
+    'the retained substance of AC-20260813-02-8: an unavailable ci leg is exit 0 and satisfies the ci leg ' +
+    'requirement, so it must never block the close — a non-zero exit here would make every no-CI host ' +
+    'unable to ever close a review: ' + r.stderr)
 })
 
 test('AC-20260805-02-3: a non-zero ac-matrix exit (findings emitted) counts as executed-green and CLEAN is reachable once those findings are waived', () => {

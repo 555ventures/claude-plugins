@@ -232,4 +232,12 @@ Regression-pin coverage: AC-5 (two-seat framing), AC-9 build half (phantom harde
 
 ## Canonical Delta
 
-None — no docs/canonical/ exists in this repo; scaffold-ledger rows are the durable record.
+**Corrected at review close (2026-08-13).** The planned delta read "None — no docs/canonical/
+exists in this repo; scaffold-ledger rows are the durable record." That premise was false:
+`docs/canonical/` exists and is actively maintained (every recent CLEAN close updates it), and
+this spec's area had no file yet. Applied instead: `docs/canonical/workflows.md` created, with
+sections for degraded-verification-as-a-distinct-state (D1/D2/D6), per-command placeholder
+resolution (D10), twin extraction over copied comments (D5), the two-line gate probe and why
+source-text pins cannot guard it (D12), exit-code evidence in the red-check (D4), named
+arg-boundary asserts (D8), and per-seat emphases as framings only (D3 plus the duplication its
+own review caught). Scaffold-ledger rows (D9) remain the guard registry — a different record.

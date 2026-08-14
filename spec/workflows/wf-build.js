@@ -218,6 +218,9 @@ assertResolutions(args.resolutions)
 //                               // '## Worker Rules' / '## Test Rules' sections. '' if none.
 //   deviationsPath: string,     // sidecar file workers APPEND forced-but-unblocking departures
 //                               // to (one line each); /spec:review folds it at close. '' = off.
+//   runId: string,               // this Workflow invocation's own run id (the orchestrator
+//                               // mints/persists it for resume and passes it back in); echoed
+//                               // verbatim into every return below (2026-08-13 spec 06 D9).
 // }
 
 const RECEIPT = {
@@ -321,9 +324,12 @@ const GATE = {
         required: ['file', 'summary'],
       },
     },
+    // 2026-08-13 spec 06 D7: dropped from `required` — a repo-wide grep found zero readers of
+    // this field (files[].summary below IS actively consumed by repair prompts and stays
+    // required). Left as an optional property so an agent that still emits it is not penalized.
     summary: { type: 'string' },
   },
-  required: ['pass', 'failures', 'summary'],
+  required: ['pass', 'failures'],
 }
 
 const RULES_PATH = args.pipelineRulesPath || ''
@@ -625,7 +631,7 @@ if (args.tdd && (args.testBatches || []).length) {
     })))
   const { blocked, missing } = collectBlocked(args.testBatches, out)
   if (blocked.length || missing.length) {
-    return { stage: 'blocked', blocked, missing, completed: receipts, tokens: budget.spent() }
+    return { stage: 'blocked', blocked, missing, completed: receipts, runId: args.runId, tokens: budget.spent() }
   }
 
   phase('RedCheck')
@@ -714,7 +720,7 @@ if (args.tdd && (args.testBatches || []).length) {
       stage: 'tdd-red-check',
       mismatches: red ? red.mismatches : [],
       summary: red ? red.summary : 'red-check agent returned no result — TDD state unverified; re-run',
-      completed: receipts, tokens: budget.spent(),
+      completed: receipts, runId: args.runId, tokens: budget.spent(),
     }
   }
 }
@@ -730,13 +736,20 @@ for (const group of args.groups) {
     })))
   const { blocked, missing } = collectBlocked(group, out)
   if (blocked.length || missing.length) {
-    return { stage: 'blocked', blocked, missing, completed: receipts, tokens: budget.spent() }
+    return { stage: 'blocked', blocked, missing, completed: receipts, runId: args.runId, tokens: budget.spent() }
   }
 }
 
 // ---- Phase: deterministic gate + repair loop (shared fragments/gate-loop.js.frag) ----
 phase('Gate')
 const gateCmd = args.gate.command
+// 2026-08-13 spec 06 D6: repair-agent deaths inside the gate loop were silently absorbed (a
+// null repair result is "not fatal" — the next round re-measures — but it was also never
+// counted anywhere). Accumulated here (the repairFn closure lives in THIS file even though
+// runGateLoop itself is the shared fragment) and folded into the exhaustion return's
+// `agentsFailed` below, alongside the one gate-agent death `exhaustedBy: 'agent-died'` already
+// signals — every reduced-assurance path gets a data carrier (audit E9).
+let agentsFailed = 0
 const loopResult = await runGateLoop({
   gateCmd,
   phase: 'Gate',
@@ -752,22 +765,26 @@ const loopResult = await runGateLoop({
     // A repair worker may hit the same fork/stale-assumption the author path surfaces — HARD_RULES
     // instructs it to return blocked, so honor that here instead of discarding it and exiting as an
     // opaque gate-exhausted. (A null repair result is not fatal: the next gate round re-measures.)
-    return collectBlocked(repairEntries.map(([bid]) => batchById[bid]), repairOut)
+    const result = collectBlocked(repairEntries.map(([bid]) => batchById[bid]), repairOut)
+    agentsFailed += result.missing.length
+    return result
   },
 })
 
 if (loopResult.blocked && loopResult.blocked.length) {
-  return { stage: 'blocked', blocked: loopResult.blocked, missing: loopResult.missing, gate: loopResult.gate, completed: receipts, tokens: budget.spent() }
+  return { stage: 'blocked', blocked: loopResult.blocked, missing: loopResult.missing, gate: loopResult.gate, completed: receipts, runId: args.runId, tokens: budget.spent() }
 }
 if (loopResult.outOfScope && loopResult.outOfScope.length) {
-  return { stage: 'out-of-scope-failure', failures: loopResult.outOfScope, gate: loopResult.gate, completed: receipts, tokens: budget.spent() }
+  return { stage: 'out-of-scope-failure', failures: loopResult.outOfScope, gate: loopResult.gate, completed: receipts, runId: args.runId, tokens: budget.spent() }
 }
 
 return {
   stage: loopResult.pass ? 'complete' : 'gate-exhausted',
   gate: loopResult.gate,
   exhaustedBy: loopResult.exhaustedBy,
+  agentsFailed: agentsFailed + (loopResult.exhaustedBy === 'agent-died' ? 1 : 0),
   deviations: loopResult.deviations,
   completed: receipts,
+  runId: args.runId,
   tokens: budget.spent(),
 }

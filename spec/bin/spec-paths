@@ -29,6 +29,7 @@ case "${1:-root}" in
   manifest-check) echo "$ROOT/scripts/manifest-check.sh" ;;
   citations-check) echo "$ROOT/scripts/citations-check.js" ;;
   parity-check)   echo "$ROOT/scripts/parity-check.js" ;;
+  report-render)  echo "$ROOT/scripts/report-render.js" ;;
   spec-status)    echo "$ROOT/scripts/spec-status.js" ;;
   scope-reconcile) echo "$ROOT/scripts/scope-reconcile.js" ;;
   hotspot)        echo "$ROOT/scripts/hotspot.js" ;;
@@ -88,7 +89,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-build|wf-design|wf-review|wf-enforce|wf-panel|wf-research|dc-extract|design-atlas|skeletons-check|fidelity-check|components-check|merge-back|smoke|manifest-check|citations-check|parity-check|spec-status|scope-reconcile|hotspot|verdict|claims-lint|ci-query|observe-ci|shared|shared-for <command>|shared-genesis|scaffold-ledger|template|templates|feedback-template|intake|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-build|wf-design|wf-review|wf-enforce|wf-panel|wf-research|dc-extract|design-atlas|skeletons-check|fidelity-check|components-check|merge-back|smoke|manifest-check|citations-check|parity-check|report-render|spec-status|scope-reconcile|hotspot|verdict|claims-lint|ci-query|observe-ci|shared|shared-for <command>|shared-genesis|scaffold-ledger|template|templates|feedback-template|intake|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

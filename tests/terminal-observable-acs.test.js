@@ -157,6 +157,12 @@ test('AC-20260810-02-5: build.md blocked row owes the AC in the same edit as the
 // already red at HEAD — missing `citations-check` (20260810/09 drift) — before hotspot-audit
 // even lands its own `hotspot` key. This edit syncs the expected list to the true key set;
 // red-to-green here is the AC's implementation, not a weakened assertion.
+//
+// AC-20260813-06-11 (specs/20260813/06-report-renderer.md, 2026-08-13): D1/D4 add
+// spec/scripts/report-render.js behind a new `report-render` spec-paths key — like every
+// other bundled script it needs one, or every command that resolves it fails silently
+// (§ Risk Tiers, spec-paths). This deep-equal literal is the only place that key set is
+// pinned, so the new key is added here rather than in a second, competing key-set test.
 test('AC-20260810-02-6: scaffold-ledger.md gains a gate-kind terminal-observable-ACs row, and verdict.js/spec-paths stay unchanged', () => {
   const rowStart = ledger.search(/\| ?Terminal-observable/i)
   assert.notStrictEqual(rowStart, -1,
@@ -190,13 +196,13 @@ test('AC-20260810-02-6: scaffold-ledger.md gains a gate-kind terminal-observable
   const expected = ['ci-query', 'citations-check', 'claims-lint', 'components-check', 'contract',
     'contract-hash', 'dc-extract', 'design-atlas', 'design-driver', 'feedback-template',
     'fidelity-check', 'hotspot', 'intake', 'manifest-check', 'merge-back', 'observe-ci',
-    'parity-check', 'root', 'scaffold-ledger', 'scope-reconcile', 'shared', 'shared-for',
-    'shared-genesis', 'skeletons-check', 'smoke', 'spec-status', 'template', 'templates',
-    'verdict', 'version', 'wf-build', 'wf-design', 'wf-enforce', 'wf-panel', 'wf-research',
-    'wf-review', 'workflows'].sort()
+    'parity-check', 'report-render', 'root', 'scaffold-ledger', 'scope-reconcile', 'shared',
+    'shared-for', 'shared-genesis', 'skeletons-check', 'smoke', 'spec-status', 'template',
+    'templates', 'verdict', 'version', 'wf-build', 'wf-design', 'wf-enforce', 'wf-panel',
+    'wf-research', 'wf-review', 'workflows'].sort()
   assert.deepStrictEqual(keys, expected,
-    'spec/bin/spec-paths\'s key set (AC-20260812-02-11) must be exactly the true set scraped ' +
-    'from the live case statement, including the pre-existing citations-check key (20260810/09 ' +
-    'drift) and this spec\'s new hotspot key — a mismatch means either a key silently drifted ' +
-    'or hotspot-audit failed to register its script under spec-paths')
+    'spec/bin/spec-paths\'s key set (AC-20260812-02-11, AC-20260813-06-11) must be exactly the ' +
+    'true set scraped from the live case statement, including the pre-existing citations-check ' +
+    'key (20260810/09 drift), hotspot-audit\'s hotspot key, and this spec\'s new report-render ' +
+    'key — a mismatch means a key silently drifted or a script shipped unregistered')
 })

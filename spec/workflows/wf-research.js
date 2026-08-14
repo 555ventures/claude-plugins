@@ -52,6 +52,9 @@ if (!args || typeof args !== 'object' || !Array.isArray(args.dimensionKeys) || !
 //   briefPath: string,         // .claude/genesis/brief.md — goal + intake + Research Angles focus; Read
 //   contextPaths: [string],    // prior interview-research/*.json + descriptors to Read; []
 //   verifyKeys: [string],      // subset of dimensionKeys that are version-bearing → Haiku check; []
+//   runId: string,             // this Workflow invocation's own run id (the orchestrator mints/
+//                              // persists it for resume and passes it back in); echoed verbatim
+//                              // into the return below (2026-08-13 spec 06 D9).
 // }
 
 const briefPath = args.briefPath
@@ -135,11 +138,27 @@ let menus = menusRaw
   .map((m, i) => (m ? { ...m, dimension: args.dimensionKeys[i] } : null))
   .filter(Boolean)
 
+// 2026-08-13 spec 06 D6: enforce the 2–4 cap HERE — a researcher may return more than 4 options
+// despite the schema's guidance, and nothing previously trimmed it. Anything beyond the top 4
+// (by rank) is cut before the Haiku verify pass (no point spending a currency check on an option
+// about to be dropped) and its label recorded in `alsoConsidered` rather than silently discarded.
+const OPTION_CAP = 4
+const alsoConsidered = []
+menus = menus.map(m => {
+  if (!Array.isArray(m.options) || m.options.length <= OPTION_CAP) return m
+  const sorted = [...m.options].sort((a, b) => (a.rank || 0) - (b.rank || 0))
+  alsoConsidered.push(...sorted.slice(OPTION_CAP).map(o => o.label))
+  return { ...m, options: sorted.slice(0, OPTION_CAP) }
+})
+
 // Haiku currency check for version-bearing dimensions. Triggered by the UNION of the command's
 // verifyKeys flag and the researcher's own version_bearing discovery — the command knows which
 // dimensions are stacks/libraries up front, but a researcher can legitimately surface versioned
 // options on a dimension the command didn't anticipate; either signal alone suffices.
 const toVerify = menus.filter(m => verifyKeys.includes(m.dimension) || m.version_bearing)
+// 2026-08-13 spec 06 D6: true when at least one currency verifier died — a stale-versus-current
+// stamp on those options was never actually confirmed, and it must not silently read as fresh.
+let verifyFailed = false
 if (toVerify.length) {
   phase('Verify')
   const verdicts = await parallel(toVerify.map(m => () =>
@@ -152,6 +171,7 @@ if (toVerify.length) {
       { label: 'verify:' + m.dimension, phase: 'Verify', model: 'haiku', agentType: 'general-purpose', schema: RECENCY_VERDICT_SCHEMA, effort: 'low' }
     )
   ))
+  verifyFailed = verdicts.some(v => !v)
   // Merge BY INDEX (toVerify[i] ↔ verdicts[i]); within a menu, match options by exact label echo
   // with a positional fallback so a paraphrased label degrades to positional, never to silence.
   const verdictFor = new Map(toVerify.map((m, i) => [m, verdicts[i]]))
@@ -168,6 +188,7 @@ if (toVerify.length) {
 }
 
 // One option set per opened dimension. The command writes each to interview-research/{dimension}.json
-// (stamping fetchedAt), curates 2–4 into a recommended-first AskUserQuestion, and records the pick +
-// sources to the brief. Stale options (still_current === false) should be demoted or dropped there.
-return { stage: args.stage, menus, tokens: budget.spent() }
+// (stamping fetchedAt), curates from the (already ≤4) menu into a recommended-first
+// AskUserQuestion, and records the pick + sources to the brief. Stale options
+// (still_current === false) should be demoted or dropped there.
+return { stage: args.stage, menus, verifyFailed: verifyFailed, alsoConsidered: alsoConsidered, runId: args.runId, tokens: budget.spent() }

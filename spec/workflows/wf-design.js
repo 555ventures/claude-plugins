@@ -119,6 +119,9 @@ if (!args || typeof args !== 'object' || !STAGES.includes(STAGE)) {
 //     command: string,   // resolved deterministic gate: host typecheck + lint, run once over the whole pass
 //   },
 //   pipelineRulesPath: string,  // host pipeline rules file; workers read its '## Worker Rules'. '' if none.
+//   runId: string,              // this Workflow invocation's own run id (the orchestrator
+//                                //   mints/persists it for resume and passes it back in);
+//                                //   echoed verbatim into every return below (spec 06 D9).
 // }
 
 const RECEIPT = {
@@ -334,7 +337,7 @@ for (const group of groups) {
     })))
   const { blocked, missing } = collectBlocked(group, out)
   if (blocked.length || missing.length) {
-    return { stage: 'blocked', blocked, missing, completed: receipts, tokens: budget.spent() }
+    return { stage: 'blocked', blocked, missing, completed: receipts, runId: args.runId, tokens: budget.spent() }
   }
 }
 
@@ -510,10 +513,18 @@ if (!gateCmd || gateCmd === UNGATED_GATE) {
       (gateCmd === UNGATED_GATE
         ? 'gate resolved to __UNGATED__ — every gateCommand leg dropped for an unresolved placeholder; verification is absent'
         : 'no gate command configured — verification is absent'),
+    runId: args.runId,
     tokens: budget.spent(),
   }
 }
 
+// 2026-08-13 spec 06 D6: repair-agent deaths inside the gate loop were silently absorbed (a
+// null repair result is "not fatal" — the next round re-measures — but it was also never
+// counted anywhere). Accumulated here (the repairFn closure lives in THIS file even though
+// runGateLoop itself is the shared fragment) and folded into the exhaustion return's
+// `agentsFailed` below, alongside the one gate-agent death `exhaustedBy: 'agent-died'` already
+// signals — every reduced-assurance path gets a data carrier (audit E9).
+let agentsFailed = 0
 const loopResult = await runGateLoop({
   gateCmd,
   phase: 'Gate',
@@ -544,23 +555,27 @@ const loopResult = await runGateLoop({
     // HARD_RULES instructs it to return blocked; honor that instead of discarding the receipt and
     // exiting as an opaque gate-exhausted. (Null repair results are not fatal: the next gate round
     // re-measures what actually landed.)
-    return collectBlocked(repairEntries.map(([bid]) => batchById[bid]), repairOut)
+    const result = collectBlocked(repairEntries.map(([bid]) => batchById[bid]), repairOut)
+    agentsFailed += result.missing.length
+    return result
   },
 })
 
 if (loopResult.blocked && loopResult.blocked.length) {
-  return { stage: 'blocked', blocked: loopResult.blocked, missing: loopResult.missing, gate: loopResult.gate, completed: receipts, tokens: budget.spent() }
+  return { stage: 'blocked', blocked: loopResult.blocked, missing: loopResult.missing, gate: loopResult.gate, completed: receipts, runId: args.runId, tokens: budget.spent() }
 }
 if (loopResult.outOfScope && loopResult.outOfScope.length) {
-  return { stage: 'out-of-scope-failure', failures: loopResult.outOfScope, gate: loopResult.gate, completed: receipts, tokens: budget.spent() }
+  return { stage: 'out-of-scope-failure', failures: loopResult.outOfScope, gate: loopResult.gate, completed: receipts, runId: args.runId, tokens: budget.spent() }
 }
 
 return {
   stage: loopResult.pass ? 'complete' : 'gate-exhausted',
   gate: loopResult.gate,
   exhaustedBy: loopResult.exhaustedBy,
+  agentsFailed: agentsFailed + (loopResult.exhaustedBy === 'agent-died' ? 1 : 0),
   deviations: loopResult.deviations,
   completed: receipts,
   ...implementNote,
+  runId: args.runId,
   tokens: budget.spent(),
 }

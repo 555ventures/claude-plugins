@@ -34,6 +34,9 @@ if (!args || typeof args !== 'object' || !Array.isArray(args.cells)) {
 //     category: string,             // ONE of the reserved categories (see CATEGORIES below)
 //     ruleRefs: [string],           // PATHS (rule doc files) or rule ids the agent Reads for clause text
 //   }],
+//   runId: string,                  // this Workflow invocation's own run id (the orchestrator
+//                                   // mints/persists it for resume and passes it back in);
+//                                   // echoed verbatim into the return below (spec 06 D9).
 // }
 
 // Stable, language-neutral rule categories. Encoded as a method/category vocabulary — never a tool
@@ -87,9 +90,12 @@ const CANDIDATE = {
       enum: ['none', 'sweep', 'review-check'],
       description: 'recommended fallback if every candidate fails verify: sweep = host pattern-sweep harness; review-check = reviewer severity prose (judgment clause only)',
     },
-    notes: { type: 'string', description: 'one line: why this fallback, or what makes the category hard here' },
+    notes: {
+      type: 'string',
+      description: 'required (may be "" only when this category needed no fallback): one line consumed verbatim by the report\'s ⚠️ fallback line — why this fallback, or what makes the category hard here',
+    },
   },
-  required: ['id', 'stack', 'category', 'candidates', 'fallback'],
+  required: ['id', 'stack', 'category', 'candidates', 'fallback', 'notes'],
 }
 
 function researchPrompt(cell) {
@@ -152,5 +158,6 @@ return {
   stage: 'researched',
   cells: results.filter(Boolean),
   skipped,
+  runId: args.runId,
   tokens: budget.spent(),
 }

@@ -206,10 +206,14 @@ What the script does (shape lives in the script, not here):
   `scope: "fix-delta"` the lens is not launched at all (`smells: []`, `lensFailed: false`). Its
   output never enters `findings`, the verify loop, or the verdict derivation — it travels only
   in the `smells`/`lensFailed` return fields below.
-- Returns `{verdict, survivors, killed, verify, reviewerCount, scope, tokens, smells, lensFailed}`
+- Returns `{verdict, survivors, killed, verify, reviewerCount, scope, tokens, smells, lensFailed, runId}`
   where `verify = {verified, demonstrated, killedByExecution, sanctioned, miscited,
-  unverifiable, failed, capSkipped, killContradicted}` and each `smells` entry is `{file, line,
-  class, claim, counterpart?, suggestion?}`. `killContradicted` is additive — a `killed[]`
+  unverifiable, failed, capSkipped, killContradicted}`, each finding in `survivors`/`killed`
+  now carries a required `impact` — one plain-English line, no code identifiers, the report's
+  display line (identifiers stay in the finding's `claim`/`evidence` for the ledger) — and each
+  `smells` entry is `{file, line, class, claim, counterpart?, suggestion?}`. `runId` is this
+  Workflow invocation's run id, the same value Phase 2 step 2 passes to `verdict.js --run-id`.
+  `killContradicted` is additive — a `killed[]`
   entry whose own evidence contradicts its `killedBy` label is mechanically resurrected as a
   survivor flagged `verification: 'kill-contradicted'` before this return is assembled;
   `verify.killContradicted` is its count.
@@ -467,8 +471,9 @@ get no Next pointer — the verdict line already names the fix step.
 - **Never Read `wf-review.js`.** The complete `args` contract is in Phase 1 (`{specPath, tier,
   base, scope, prevFindingsPath, diffLoc, patternsPath, hasDriftScript, reproCommand,
   reconcilePath, frozenRoot}`) and the return shape is
-  `{verdict, survivors, killed, verify, reviewerCount, scope, tokens, smells, lensFailed}` where
-  `verify` now additionally carries `killContradicted` (Phase 1's return-shape bullet).
+  `{verdict, survivors, killed, verify, reviewerCount, scope, tokens, smells, lensFailed, runId}`
+  where `verify` now additionally carries `killContradicted`, and each finding in
+  `survivors`/`killed` carries a required `impact` line (Phase 1's return-shape bullet).
   `smells`/`lensFailed` are the advisory smell lens's output — they never enter `verdict.js`
   or the ledger row (Phase 1's smell lens bullet).
   The reviewer/verifier fan-out and all control flow are the workflow's concern — its shape

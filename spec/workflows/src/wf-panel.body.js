@@ -42,7 +42,24 @@ if (args.runProposers && (!Array.isArray(args.roleKeys) || args.roleKeys.length 
 //   roleKeys: [string],           // enum keys for the 3 proposer role personas
 //   runProposers: boolean,        // false → selective skip (all hard-to-reverse dims constrained)
 //   contextPaths: [string],       // prior round outputs + stack-descriptor (design stage) to Read; []
+//   runId: string,                // this Workflow invocation's own run id (the orchestrator
+//                                 //   mints/persists it for resume and passes it back in);
+//                                 //   echoed verbatim into the return below (spec 06 D9).
 // }
+
+// 2026-08-13 spec 06 D6: a named top-level function (not inlined into the Propose phase below)
+// so tests can extract and evaluate it standalone via evalFns, matching the guard-function
+// convention this workflow set already uses (wf-build's assertGateArgs, wf-design's
+// assertBatchKinds). The panel doctrine's 3-proposer floor (genesis.md § The MoA Panel) is
+// enforced at runtime, not just by the trust-boundary arg check above: fewer than 3 surviving
+// proposals loses the minority-view texture the aggregator needs, so this throws
+// pre-aggregation, naming the degraded count, instead of quietly synthesizing from a
+// degraded panel. Takes the already-filtered surviving proposals array.
+function assertProposalSurvival(proposals) {
+  if (proposals.length < 3) {
+    throw new Error('panel degraded: ' + proposals.length + '<3 proposals')
+  }
+}
 
 const briefPath = args.briefPath
 const ctx = Array.isArray(args.contextPaths) ? args.contextPaths : []
@@ -121,7 +138,7 @@ const AGGREGATE_SCHEMA = {
 }
 
 phase('Research')
-const research = (await parallel(args.researchKeys.map(key => () =>
+const researchRaw = await parallel(args.researchKeys.map(key => () =>
   agent(
     'You are the research agent for the "' + key + '" angle of a ' + args.stage + ' genesis session. ' +
     'Read the brief at ' + briefPath + ' and find your angle\'s focus under its "## Research Angles" ' +
@@ -131,16 +148,21 @@ const research = (await parallel(args.researchKeys.map(key => () =>
     'stated in the brief); call out what to deliberately exclude, not just what to include.',
     { label: 'research:' + key, phase: 'Research', model: 'sonnet', agentType: 'general-purpose', schema: RESEARCH_SCHEMA }
   )
-))).filter(Boolean)
+))
+// 2026-08-13 spec 06 D6: angle deaths were filtered silently (`.filter(Boolean)` alone) — counted
+// here and folded into `agentsFailed` on the return below, alongside proposer deaths.
+const research = researchRaw.filter(Boolean)
+const researchFailed = researchRaw.length - research.length
 
 // Compact JSON: this block is inlined into 3 proposer prompts + the aggregator (4x), so the
 // pretty-print whitespace alone was a ~30% pure-overhead multiplier on the largest prompt block.
 const researchBlock = 'THIS ROUND\'S RESEARCH (structured JSON):\n' + JSON.stringify(research)
 
 let proposals = []
+let proposalsFailed = 0
 if (args.runProposers) {
   phase('Propose')
-  proposals = (await parallel(args.roleKeys.map(role => () =>
+  const proposalsRaw = await parallel(args.roleKeys.map(role => () =>
     agent(
       'You are the "' + role + '" proposer on a genesis design panel (' + args.stage + ' stage). ' +
       'Read the brief at ' + briefPath + ' — adopt the persona described for your role under its ' +
@@ -150,7 +172,12 @@ if (args.runProposers) {
       'consensus; recommend decisively and defend it.\n\n' + researchBlock,
       { label: 'propose:' + role, phase: 'Propose', model: 'sonnet', agentType: 'general-purpose', schema: PROPOSAL_SCHEMA }
     )
-  ))).filter(Boolean)
+  ))
+  // 2026-08-13 spec 06 D6: proposer deaths were filtered silently — counted here into
+  // `agentsFailed` on the return below.
+  proposals = proposalsRaw.filter(Boolean)
+  proposalsFailed = proposalsRaw.length - proposals.length
+  assertProposalSurvival(proposals)
 }
 
 const proposalBlock = args.runProposers
@@ -178,4 +205,4 @@ if (!result) {
   // FAIL CLOSED: a dead aggregator must not read as an empty decision package.
   throw new Error('wf-panel: aggregator agent returned no result — re-invoke this round')
 }
-return { ...result, tokens: budget.spent() }
+return { ...result, agentsFailed: researchFailed + proposalsFailed, runId: args.runId, tokens: budget.spent() }

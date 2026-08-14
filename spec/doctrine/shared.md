@@ -875,12 +875,12 @@ glance should land like the `/spec:status` dashboard, not a paragraph. It is NOT
 an artifact: specs, briefs, docs, and ledger rows keep their rigorous, machine-parseable
 style; this section governs only the console.
 
-Enforcement is split: this section is the single home of the **rationale** and the fixed
-emoji meanings; each command's report step carries its own **literal fenced template** — a
-filled instance of one skeleton (outcome line → detail bullets → ⚠️ lines → 📦 line →
-`Next:`), read at the moment of reporting so the style survives long-context runs. Fill the
-slots, drop empty-slot lines, add nothing else; a report that restyles or pads the template
-is a defect. (`/spec:status` needs no template — its script renders the output itself.)
+The render lives in a script, not this prose: **`report-render.js`** (`spec-paths
+report-render`) is the sole render authority — commands assemble slots and print the
+script's output **verbatim**; restyling or padding it is a defect. The 📌 line is a slot
+already defined at § Question Style's announce line — referenced here, never redefined.
+Every failure close renders the same shape as any other outcome — `🚫 **{what failed —
+plain consequence}**` + `Next: {named remedy}` — via the same script (`outcome.anchor: 🚫`).
 
 - **Outcome first, bold, anchored.** Open with one emoji-anchored **bold** line carrying
   outcome + stakes ("✅ **review CLEAN — merged, nothing needs you**"), then only the

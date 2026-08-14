@@ -1,7 +1,7 @@
 ---
 date: 2026-08-13
 status: implementing
-diff_base: 6e9e764527e608314348a1017c49a52ca3629465
+diff_base: 607085137519e2a7ee1e0e398a92ac90d2550a5b
 open_markers: 0
 risk: T3
 area: report-surface

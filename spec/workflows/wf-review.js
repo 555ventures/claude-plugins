@@ -77,6 +77,10 @@ if (!args || typeof args !== 'object' || typeof args.specPath !== 'string') {
 //                             // reviewers read and diff THERE, so the panel sees exactly this
 //                             // spec's change. Verifier repros still run at the project root:
 //                             // executed evidence must come from the tree that ships.
+//   runId: string,            // this Workflow invocation's own run id (the orchestrator mints/
+//                             // persists it for resume and passes it back in); echoed verbatim
+//                             // into every return below so report/ledger consumers never need a
+//                             // side channel for it (2026-08-13 spec 06 D9).
 // }
 
 // Reviewers diff in the frozen worktree when the orchestrator supplied one ('' = HEAD never moved).
@@ -95,9 +99,10 @@ const FINDINGS = {
           severity: { type: 'string', enum: ['hard', 'medium', 'soft'] },
           claim: { type: 'string', description: 'self-contained one-paragraph claim, verifiable from code + spec alone' },
           rule: { type: 'string', description: 'rule file § or spec section violated' },
+          impact: { type: 'string', description: 'one line, plain English, no code identifiers: what a user or operator sees go wrong if this ships' },
           suggestion: { type: 'string' },
         },
-        required: ['file', 'line', 'severity', 'claim', 'rule'],
+        required: ['file', 'line', 'severity', 'claim', 'rule', 'impact'],
       },
     },
     summary: { type: 'string' },
@@ -216,7 +221,7 @@ Method:
 2. Run: git -C ${REVIEW_ROOT} diff ${args.base} — this diff is exactly the fix work since that review.
 3. For each prior finding: verify the fix actually resolves the claim (read the changed code,
    not the commit message). An unresolved or partially resolved finding goes back into your
-   findings output unchanged (same file/line/severity/claim/rule).
+   findings output unchanged (same file/line/severity/claim/rule/impact).
 4. Review the changed lines themselves for NEW defects the fixes introduced — the spec is at
    ${args.specPath}; your agent doctrine (system prompt) carries the severity calibration,
    finding requirements, and sanctioned-exception checks, same as any review.
@@ -396,7 +401,7 @@ if (failedReviewers) {
   return {
     verdict: 'REVIEWER_FAILED', failedReviewers, reviewerCount: n,
     survivors: [], killed: [], scope: fixDelta ? 'fix-delta' : 'full', tokens: budget.spent(),
-    smells, lensFailed,
+    smells, lensFailed, runId: args.runId,
   }
 }
 
@@ -419,7 +424,7 @@ if (!findings.length) {
     verdict: 'CLEAN', survivors: [], killed: [], reviewerCount: n,
     verify: { verified: 0, demonstrated: 0, killedByExecution: 0, sanctioned: 0, miscited: 0, unverifiable: 0, failed: 0, capSkipped: 0, killContradicted: 0 },
     scope: fixDelta ? 'fix-delta' : 'full', tokens: budget.spent(),
-    smells, lensFailed,
+    smells, lensFailed, runId: args.runId,
   }
 }
 
@@ -486,6 +491,9 @@ if (audited.resurrected.length) {
   log(`killed-audit: resurrected ${audited.resurrected.length} kill(s) whose evidence contradicts the label`)
 }
 
+// D8 (2026-08-13 spec 06): a `FINDINGS` verdict (mediums-only, no hard findings) maps in the
+// report to an advisory ⚠️ line — "no hard findings; N advisory findings recorded — CLEAN is
+// not blocked" — consumed by the report assembly (spec 07), not rendered by this workflow.
 return {
   verdict: survivors.some(f => f.severity === 'hard') ? 'HARD_FINDINGS'
     : survivors.length ? 'FINDINGS' : 'CLEAN',
@@ -497,4 +505,5 @@ return {
   tokens: budget.spent(),
   smells,
   lensFailed,
+  runId: args.runId,
 }

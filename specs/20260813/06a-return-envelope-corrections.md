@@ -1,6 +1,6 @@
 ---
 date: 2026-08-14
-status: implementing
+status: done
 diff_base: 58ac2a2c6a470059f2108c3908458dea6e0f59f3
 open_markers: 0
 risk: T3

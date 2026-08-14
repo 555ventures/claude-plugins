@@ -45,6 +45,16 @@ Extraction is behavior-preserving for the source-of-truth twin and behavior-*add
 drift victim. A forced departure from the source twin's semantics during such an extraction is
 a recorded deviation, never a silent adaptation.
 
+The extraction includes the schemas the shared loop dispatches with (2026-08-14, spec 06a D4).
+`GATE` lives in `fragments/gate-loop.js.frag` beside its sole reader — the `schema: GATE`
+dispatch inside `runGateLoop` — with `required: ['pass', 'failures']` and `summary` an optional
+property (zero readers). Leaving the schema in each body is exactly the copy the fragment
+exists to prevent: the twins had already diverged, wf-design still requiring `summary` after
+wf-build's shape was loosened. A schema defined beside its one reader reaches both twins by
+construction. Related, same spec: wf-research's cap contract is `alsoConsidered:
+[{dimension, label}]` with a minority-preserving cut order — `is_minority` options are cut only
+when minority options alone exceed the cap.
+
 ## A pass sentinel must prove the whole gate passed (2026-08-13, same spec, D12)
 
 The gate probe is two lines — `( set -e; <gateCmd> )` on its own, then a separate
@@ -105,3 +115,17 @@ The review of this very spec caught the half-done version of this move: the chec
 to the shared body but also left in `EMPHASES[1]`, so seat-1 prompts stated it twice. Moving a
 block means deleting the original — and the acceptance criteria that assert *presence* of text
 cannot see a duplicate, so they will not catch it for you.
+
+## A workflow never claims data only its caller holds (2026-08-14, spec 06a D1/D2)
+
+A workflow script cannot know its own run id. The harness mints it at invoke time and delivers
+it only in the caller's tool result, so a return envelope that echoes `args.runId` evaluates to
+`undefined` in every live run — no orchestrator passes such a key, and none can at first invoke.
+
+Provenance stays where the value actually exists: the orchestrator stamps the run id from the
+Workflow tool result into the run-ledger row and the 📦 report line. Return envelopes carry no
+`runId`.
+
+The general rule: a return-envelope field whose value the script cannot observe is a contract
+that lies. Delete it rather than thread it — a field defined only on resume is worse than no
+field, because consumers cannot tell the two states apart.

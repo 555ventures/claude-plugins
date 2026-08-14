@@ -118,6 +118,65 @@ function assertResolutions(resolutions) {
   }
   return resolutions
 }
+// RedCheck cross-check, hoisted to a named top-level function for the same reason as the guards
+// above: tests/redcheck-sentinel-dual-leg.test.js executes it standalone via evalFns.
+//
+// Combines BOTH legs into one observation, because the `expect` it is compared against is itself
+// dual-leg. A runtime-only observation is incommensurable with a dual-leg expectation and
+// deadlocks compile-time-only carriers — see the RED schema note.
+//
+// Returns an array of mismatches (empty = every file matched). Every uncertain path fails CLOSED
+// as 'not-collected'/UNVERIFIED rather than silently resolving to green.
+function crossCheckSentinels(expectations, sentinels, hasTypecheckLeg) {
+  const byPath = {}
+  for (const s of sentinels || []) byPath[s.path] = s
+  const unverified = (path, expect, detail) => ({
+    path, expected: expect, observed: 'not-collected', leg: 'none',
+    detail: detail + ' — UNVERIFIED red state',
+  })
+  const mismatches = []
+  for (const f of expectations) {
+    const s = byPath[f.path]
+    if (!s) {
+      mismatches.push(unverified(f.path, f.expect, 'no sentinel reported for ' + f.path))
+      continue
+    }
+    const runtimeRed = s.sentinel === 'AUDIT_RED:' + f.path
+    const runtimeGreen = s.sentinel === 'AUDIT_GREEN:' + f.path
+    if (!runtimeRed && !runtimeGreen) {
+      mismatches.push(unverified(f.path, f.expect,
+        'malformed runtime sentinel for ' + f.path + ': expected "AUDIT_RED:' + f.path +
+        '" or "AUDIT_GREEN:' + f.path + '", observed "' + s.sentinel + '"'))
+      continue
+    }
+    // A typecheck attribution is a reading, not an exit code, so it is honoured only when it
+    // carries the verbatim diagnostic naming the file — and it is impossible at all on a host
+    // with no typecheck leg. Both fail closed rather than silently downgrading to green.
+    if (s.typecheckRed && !hasTypecheckLeg) {
+      mismatches.push(unverified(f.path, f.expect,
+        'typecheckRed asserted for ' + f.path + ' but this host declares no typecheck leg'))
+      continue
+    }
+    if (s.typecheckRed && !String(s.typecheckEvidence || '').includes(f.path)) {
+      mismatches.push(unverified(f.path, f.expect,
+        'typecheckRed asserted for ' + f.path + ' without a verbatim diagnostic naming it'))
+      continue
+    }
+    const typecheckRed = hasTypecheckLeg && s.typecheckRed === true
+    const observedRed = runtimeRed || typecheckRed
+    if (observedRed !== (f.expect === 'red')) {
+      const leg = runtimeRed === typecheckRed ? 'none' : (runtimeRed ? 'runtime' : 'typecheck')
+      mismatches.push({
+        path: f.path, expected: f.expect, observed: observedRed ? 'red' : 'green', leg,
+        detail: 'expected ' + f.expect + ', observed ' + (observedRed ? 'red' : 'green') +
+          ' (runtime: ' + (runtimeRed ? 'red' : 'green') + ' via "' + s.sentinel + '"; typecheck: ' +
+          (typecheckRed ? 'red — ' + s.typecheckEvidence : hasTypecheckLeg ? 'clean' : 'no leg') + ')',
+      })
+    }
+  }
+  return mismatches
+}
+
 assertGateArgs(args.gate)
 assertResolutions(args.resolutions)
 
@@ -212,15 +271,34 @@ const RED = {
     // observed per file, cross-checked against its allMatch/mismatches reading below — the same
     // exit-code-only discipline the Gate phase's own sentinel already enforces. null ONLY for the
     // sanctioned-green-carriers path (no agent runs — pinned by tests/redcheck-green-carriers.test.js).
+    //
+    // Per-file evidence is DUAL-LEG, because the expectation it is cross-checked against is
+    // dual-leg (a file is red if EITHER leg fails on it — HEARWELL-20260721-01). Carrying only
+    // the runtime sentinel made the two measurements incommensurable and DEADLOCKED any
+    // compile-time-only carrier: a type-level test (`expectTypeOf`, an assert-absence pin, a test
+    // importing a module the implementation has not created yet) is ERASED at runtime, so it can
+    // never be runtime-red by construction — `expect: 'red'` failed the sentinel cross-check while
+    // `expect: 'green'` failed the dual-leg reading, and NO classification could pass. Observed on
+    // dashboard spec 20260813/10, whose AC promise was itself a compile-time one.
+    //
+    // The runtime leg keeps its exit-code-only proof. The typecheck leg cannot have one: a host
+    // typecheck is whole-repo, so its exit code says nothing about WHICH file failed. Attribution
+    // is therefore a reading, and is made proof-bearing instead by requiring the verbatim
+    // diagnostic — cross-checked below to actually name the file it is claimed against.
     sentinels: {
       type: ['array', 'null'],
       items: {
         type: 'object',
         properties: {
           path: { type: 'string' },
+          // Runtime leg: verbatim `AUDIT_RED:<path>` or `AUDIT_GREEN:<path>`.
           sentinel: { type: 'string' },
+          // Typecheck leg: did the typecheck run report a diagnostic against THIS file.
+          typecheckRed: { type: 'boolean' },
+          // Verbatim diagnostic line(s) naming this path. Non-empty iff typecheckRed is true.
+          typecheckEvidence: { type: 'string' },
         },
-        required: ['path', 'sentinel'],
+        required: ['path', 'sentinel', 'typecheckRed', 'typecheckEvidence'],
       },
     },
     summary: { type: 'string' },
@@ -590,30 +668,40 @@ if (args.tdd && (args.testBatches || []).length) {
       `test command is likely workspace-filtered while the paths are repo-root-relative — ` +
       `rewrite the paths relative to the command's workspace and re-run before concluding; ` +
       `report observed "not-collected" only if no rewrite makes the runner collect them.\n` +
-      `For EACH file (both RED- and GREEN-expected), also run the sentinel command exactly: ` +
-      `${args.gate.testCommand} <path> && echo AUDIT_GREEN:<path> || echo AUDIT_RED:<path> ` +
-      `— this is the exit-code-only proof, the same discipline the Gate phase's own sentinel ` +
-      `already enforces, so "red"/"green" never rests on your reading of raw stdout alone. ` +
-      `Report every observed AUDIT_RED:<path> / AUDIT_GREEN:<path> line verbatim in \`sentinels\` ` +
-      `as {path, sentinel}, one entry per file.\n` +
+      `For EACH file (both RED- and GREEN-expected), report one \`sentinels\` entry carrying ` +
+      `BOTH legs — {path, sentinel, typecheckRed, typecheckEvidence}:\n` +
+      `- \`sentinel\`: run exactly ${args.gate.testCommand} <path> && echo AUDIT_GREEN:<path> ` +
+      `|| echo AUDIT_RED:<path> and report the printed line verbatim. This is the runtime leg's ` +
+      `exit-code-only proof, the same discipline the Gate phase's own sentinel already enforces, ` +
+      `so the runtime verdict never rests on your reading of raw stdout alone.\n` +
+      (args.gate.typecheckCommand
+        ? `- \`typecheckRed\`: true iff the ${args.gate.typecheckCommand} run reported a ` +
+          `diagnostic against THIS file. That leg is whole-repo, so its exit code cannot ` +
+          `attribute a failure to one file — you must attribute it by reading. Set ` +
+          `\`typecheckEvidence\` to the verbatim diagnostic line(s) naming this path (it is ` +
+          `checked to actually contain the path; a claim without it is treated as UNVERIFIED), ` +
+          `or "" when typecheckRed is false.\n` +
+          `A file that PASSES at runtime but carries a typecheck diagnostic is RED — the normal ` +
+          `shape for a compile-time-only carrier (a type-level assertion, an assert-absence pin, ` +
+          `a test importing a module the implementation has not created yet), which is erased at ` +
+          `runtime and therefore can never be runtime-red.\n`
+        : `- \`typecheckRed\`: this host declares no standalone typecheck leg — report false and ` +
+          `"" for every file; a true here is treated as UNVERIFIED.\n`) +
       `Report allMatch=true only when every file matches its expectation; list every mismatch ` +
       `with the leg that decided it. Do not edit any file.`,
       { label: 'red-check', phase: 'RedCheck', schema: RED, model: 'sonnet', effort: 'low' })
-    // Cross-check each file's reported red/green state against its OWN observed sentinel line —
-    // a mismatched or missing sentinel means the agent's allMatch/mismatches reading is unproven,
+    // Cross-check each file's reported red/green state against its OWN observed evidence —
+    // unproven or missing evidence means the agent's allMatch/mismatches reading is unverified,
     // never a silent pass-through. sentinels: null (the sanctioned-green-carriers path above,
     // where no agent runs) is exempt from this check by construction.
+    //
+    // The observation combined here is DUAL-LEG, matching the expectation it is compared
+    // against: red iff the runtime sentinel is AUDIT_RED **or** the typecheck leg is attributed
+    // to this file. Comparing a runtime-only sentinel against a dual-leg expectation is what
+    // deadlocked compile-time-only carriers (see the RED schema note above).
     if (red && red.sentinels !== null) {
-      const sentinelByPath = {}
-      for (const s of red.sentinels || []) sentinelByPath[s.path] = s.sentinel
-      const sentinelMismatches = expectations
-        .filter(f => sentinelByPath[f.path] !== `AUDIT_${f.expect.toUpperCase()}:${f.path}`)
-        .map(f => ({
-          path: f.path, expected: f.expect, observed: 'not-collected', leg: 'none',
-          detail: sentinelByPath[f.path]
-            ? `sentinel mismatch: expected "AUDIT_${f.expect.toUpperCase()}:${f.path}", observed "${sentinelByPath[f.path]}" — UNVERIFIED red state`
-            : `no sentinel reported for ${f.path} — UNVERIFIED red state`,
-        }))
+      const sentinelMismatches = crossCheckSentinels(
+        expectations, red.sentinels, Boolean(args.gate.typecheckCommand))
       if (sentinelMismatches.length) {
         red = { ...red, allMatch: false, mismatches: [...red.mismatches, ...sentinelMismatches] }
       }

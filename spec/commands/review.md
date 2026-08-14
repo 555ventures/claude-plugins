@@ -301,9 +301,12 @@ verbatim, never hand-assembled, never prose or finding text):
 {"ts":"<ISO-8601>","spec":"<repo-relative spec path>","stage":"review","tier":"<T1|T2|T3>","runId":"<wf_…>","verdict":"<CLEAN|FINDINGS|HARD_FINDINGS|REVIEWER_FAILED|UNVERIFIED|GATE_RED>","scope":"<full|fix-delta>","iteration":<n>,"diff":{"loc":<n>},"smoke":"<pass|fail|inert>","testsSkipped":{"total":<n>,"sanctioned":<n>,"unsanctioned":<n>},"tokens":{"workflow":<n>},"legs":[{"leg":"gate","exit":0},…],"findings":{"survived":<n>,"killed":<n>,"waived":<n>,"rejected":<n>,"fixDispatched":<n>,"reviewerCount":<n>},"verify":{"verified":<n>,"demonstrated":<n>,"killedByExecution":<n>,"sanctioned":<n>,"miscited":<n>,"unverifiable":<n>,"failed":<n>,"capSkipped":<n>}}
 ```
 
-`verdict` is the D5 derived-verdict enum — **never write `CLEAN` on a row whose
-`survived` is non-zero**; `waived`/`rejected`/`fixDispatched` record what the user then did
-with the survivors, and `legs` mirrors `{manifestPath}`'s name+exit pairs. Fixed shape,
+`verdict` is the D5 derived-verdict enum, printed by `verdict.js` and copied verbatim —
+**never hand-write the word, and never write `CLEAN` while any survivor is undispositioned**:
+`waived`/`rejected`/`fixDispatched` account for every survivor, which is why the row is
+written only after the dispositions resolve. A `CLEAN` row with non-zero `survived` is
+therefore well-formed and expected — it records findings the user disposed of, never findings
+that were ignored. `legs` mirrors `{manifestPath}`'s name+exit pairs. Fixed shape,
 counts/enums only — never finding text or prose (disposition *reasons* land in the spec's
 Rationale). One line per Phase-1 invocation, so fix→re-review iterations each leave a row —
 that history is what calibrates the verification layer over time. `runId` is the Workflow

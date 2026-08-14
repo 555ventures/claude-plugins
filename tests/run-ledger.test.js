@@ -36,8 +36,11 @@ test('ledger schemas carry the fields the v5 design consumes', () => {
     '"verify"', '"demonstrated"', '"capSkipped"']) {
     assert.ok(review.includes(field), `review schema has ${field}`)
   }
-  assert.match(review, /never write `CLEAN` on a row whose\s*\n?`survived` is non-zero/,
-    'the CLEAN-with-survivors schema hole must stay closed')
+  // 2026-08-14 (JJ-20260814-01, user ruling): the hole is CLEAN with an UNDISPOSITIONED
+  // survivor. The old wording said "survived is non-zero", which verdict.js contradicts on
+  // every waive-closed review — retargeted to the accurate statement, same hole.
+  assert.match(review, /never write `CLEAN` while any survivor is undispositioned/,
+    'the CLEAN-with-undispositioned-survivors schema hole must stay closed')
   // dispositions must be knowable when the row is written
   assert.match(review, /\*\*after\*\* the survivor\s+dispositions/)
 })

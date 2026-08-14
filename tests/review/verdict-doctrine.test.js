@@ -63,14 +63,24 @@ test('AC-20260805-02-6: review.md no longer defines CLEAN independently of verdi
   assert.doesNotMatch(reviewMd, /CLEAN ⇔/,
     'the old free-standing "CLEAN ⇔ gateCommand green AND boot smoke leg green AND ... " sentence must be ' +
     'deleted — it was a second, independent assertion of the CLEAN definition, exactly the seam this spec closes')
-  // D6: the smoke-leg requirement and the "never write CLEAN on a survived-non-zero row" invariant are
-  // updated in place, not deleted — the underlying requirement must still be findable in the new prose.
+  // D6: the smoke-leg requirement and the CLEAN-with-survivors invariant are updated in place,
+  // not deleted — the underlying requirement must still be findable in the new prose.
+  //
+  // 2026-08-14 (JJ-20260814-01, user ruling): this pin previously matched the sentence "never
+  // write `CLEAN` on a row whose `survived` is non-zero", which stated the requirement WRONGLY —
+  // verdict.js reaches CLEAN once every survivor is dispositioned, so the sanctioned all-waived
+  // close prints exactly the row that sentence forbade (run wf_59aba53d-4a5 did). The hole was
+  // always UNDISPOSITIONED survivors, never survivors as such. Retargeted, not weakened: the
+  // executed halves of the same invariant live in tests/clean-row-survivor-consistency.test.js.
   assert.match(reviewMd, /boot smoke leg green/i,
     'the smoke-leg requirement (previously pinned inside the retired CLEAN ⇔ sentence) must still be present ' +
     'in the new wording — D6 updates this pin in place, it does not delete the requirement')
-  assert.match(reviewMd, /never write `CLEAN` on a row whose\s*\n?`survived` is non-zero/,
-    'the "never write CLEAN on a row whose survived is non-zero" invariant must still be present in the new ' +
-    'wording — D6 updates this pin in place, it does not delete the requirement')
+  assert.match(reviewMd, /never write `CLEAN` while any survivor is undispositioned/,
+    'the CLEAN-with-undispositioned-survivors invariant must still be present in the new wording — D6 ' +
+    'updates this pin in place, it does not delete the requirement')
+  assert.doesNotMatch(reviewMd, /never write `CLEAN` on a row whose\s*\n?`survived` is non-zero/,
+    'the superseded blanket wording must not return — it contradicts verdict.js, which derives CLEAN for ' +
+    'fully-dispositioned survivors, and a reader who believes it will "fix" correct ledger rows')
 })
 
 test('AC-20260805-02-7: release.md wires verdict.js --profile release --ledger on both the STOP path and Phase 4', () => {

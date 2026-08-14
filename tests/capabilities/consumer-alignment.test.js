@@ -98,6 +98,17 @@ test('AC-20260813-10-5: doctor.md folds the capabilities undeclared/staleness nu
     'D2 folds the capabilities nudge into check 2 to avoid a third near-duplicate "run /spec:init" nudge stacking on hosts where checks 2+15 already fire — a new numbered check 21 would mean that fold-in was abandoned for a stand-alone check')
 })
 
+test('AC-20260813-10-6: wf-review.body.js names the configured testCommand as the source of truth for the repro runner, with package.json surviving only as an example', () => {
+  const src = read('spec/workflows/src/wf-review.body.js')
+  assert.match(src, /configured\s+`?testCommand`?\s*—\s*the source of truth/,
+    'the repro-runner discovery text must name the configured testCommand as the source of truth (D6) — otherwise a verifier agent on a host with no package.json has no general mechanism to fall back on')
+  const packageJsonMatches = src.match(/[^\n]*package\.json[^\n]*/g) || []
+  assert.ok(packageJsonMatches.length > 0,
+    'package.json must still appear somewhere in wf-review.body.js as the worked example for the discovery fallback — losing it entirely strips reviewers of the one concrete illustration')
+  assert.ok(packageJsonMatches.every(line => /e\.g\.,?\s+package\.json/.test(line)),
+    'package.json must survive only inside an e.g./example context, never as the hard-coded assumption itself (D6) — a host with no package.json (e.g. a Cargo or Go repo) must not be steered at a file that does not exist for it')
+})
+
 test('AC-20260813-10-6: wf-design.body.js generalizes the hard-coded "Storybook loop" phrase to a capability-shaped component preview host', () => {
   const src = read('spec/workflows/src/wf-design.body.js')
   assert.doesNotMatch(src, /Storybook loop/i,

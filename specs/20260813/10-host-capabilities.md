@@ -1,6 +1,6 @@
 ---
 date: 2026-08-13
-status: implementing
+status: done
 diff_base: 08b5e48699c0de1f232a3e2a83e69c4c02dba2b1
 open_markers: 0
 risk: T3
@@ -185,6 +185,21 @@ plugin dependency — genericizing it would break a correct citation); atlas.md'
 dropped (no hard STOP exists there — it already degrades gracefully); genesis-explore's
 STOP keeps its pinned hardness with a same-commit retag; AC-3 was replaced with the D8
 dogfood row (the original "regenerated at build time" described no real mechanism).
+
+Build deviation (absorbed, no new Gotcha — the class is already recorded in the host rules'
+Gotchas): D9's literal version-bump target 6.68.0 was taken at build time (plugin.json was at
+6.71.0), so the doctrine batch bumped to the next free version, 6.72.0, with the same changelog
+paragraph. The spec's literal number is a target, not a pin.
+
+Review disposition (2026-08-14, runIds wf_aa92b4e0-575 → wf_e1da0ea6-94c): one hard finding,
+execution-demonstrated — AC-20260813-10-6 names four D6 sites but its covering test pinned only
+three, leaving wf-review's runner-discovery generalization unpinned while the AC and File Plan
+both claimed coverage. Fixed in a fix-delta iteration (one added test block in
+tests/capabilities/consumer-alignment.test.js); re-review CLEAN. The advisory smell lens flagged
+the byte-identical `readForge` in both CI scripts; recorded in docs/audit/advisory-findings.md
+rather than extracted, because a Fable retainer brief found `lib/glob-match.js` already carries a
+third config read — the correct paydown is one shared `readConfig(root)` across all three sites,
+not a `readForge`-only lib.
 
 Deliberately excluded and routed to the follow-up roadmap brief
 (docs/roadmap/06-mechanized-prose-checks.md): C1 (ac-matrix.js), C4 (doctor check-19

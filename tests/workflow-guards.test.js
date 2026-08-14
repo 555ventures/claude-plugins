@@ -130,11 +130,27 @@ test('workflow codegen: committed wf-*.js files match their fragments + bodies',
     out.stdout + out.stderr)
 })
 
+// 2026-08-13: this guard's NAME was true but its assertion was not — it pinned
+// `( ${gateCmd} ) && echo <sentinel>`, which reports only the LAST statement of a `;`-joined gate,
+// so a failing early leg still printed the sentinel. Tightened (never weakened) to the shape that
+// actually delivers what the name promises: a standalone `set -e` subshell whose `$?` is tested on
+// its own line. Folding it back onto `&&`, or into an `if` condition, re-breaks it silently —
+// errexit is ignored for any non-final command of an AND-OR list, and bash applies that
+// suppression inside the subshell too. Behavioral pins: tests/workflows/twin-parity.test.js
+// AC-20260813-05-15.
 test('gate sentinel: gate command is subshell-wrapped so `;` cannot false-green', () => {
   for (const wf of ['spec/workflows/wf-build.js', 'spec/workflows/wf-design.js']) {
     const src = read(wf)
-    assert.match(src, /\( \$\{gateCmd\} \) && echo/,
-      wf + ': sentinel must chain off a subshell of the whole gate command')
+    assert.match(src, /\( set -e; \$\{gateCmd\} \)\\n/,
+      wf + ': the gate command must run as a STANDALONE `( set -e; ... )` subshell — without set -e ' +
+      'a `;`-joined host gate false-greens on a failing early leg')
+    assert.match(src, /if \[ \$\? -eq 0 \]; then echo \$\{GATE_SENTINEL\}; fi/,
+      wf + ': the sentinel must print from a separate `$?` test, never chained off the subshell ' +
+      'with `&&` — errexit is ignored for the non-final command of an AND-OR list, so `( set -e; ' +
+      '... ) && echo` leaves the set -e completely inert')
+    assert.doesNotMatch(src, /\( set -e; \$\{gateCmd\} \) &&/,
+      wf + ': the probe must not chain the sentinel off the subshell with `&&` — that shape ' +
+      'disables the set -e it appears to apply')
   }
 })
 

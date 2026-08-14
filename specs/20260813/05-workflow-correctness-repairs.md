@@ -41,6 +41,9 @@ fragments so the twins cannot drift again.
 | D9 | Scaffold-ledger rows for the previously unregistered guards: `MAX_VERIFIES=12` (retune: raise if two quarters show capped-finding runs), the shared repair ceiling (retune: raise on two gate-exhausted-at-ceiling escapes with distinct causes), the red-check sentinel cross-check (retire: never — it is the TDD evidence floor), and the `__UNGATED__`/`complete-ungated` guard (retire: only if a host class emerges where ungated design completion is sanctioned — none known). | Every new mechanism/gate needs a ledger row or review flags it hard (§ Review Checks); the D2 guard is itself a new mechanism (refuter-caught self-inflicted hard finding). |
 | D10 | `spec/commands/review.md`'s gate leg (Phase 0 step "run the host's gateCommand") gains the same placeholder resolution build.md already performs: `{testDirs}` resolves from the spec's File Plan tests rows to the glob form before the leg runs; an unresolvable placeholder makes the leg `unavailable` naming the token, never a raw execution. | Blind-spot finding: review.md runs the raw `gateCommand` with zero substitution — on any `{testDirs}` host every review's gate leg is an unconditional red (worse than F1, it fires unconditionally); init.md's own config comment promises review substitutes. |
 | D11 | Version bump target 6.63.0 (next free at build time), plugin.json description updated as changelog. | Repo discipline; literal number is a target, not a pin. |
+| D12 | **(post-build user ruling, 2026-08-13 — overrides this spec's original rejection of the subshell-sentinel nit.)** The shared fragment's gate probe becomes two lines: `( set -e; <gateCmd> )` on its own, then `if [ $? -eq 0 ]; then echo __GATE_PASS__; fi`. The prompt text instructs the agent to run both lines in one shell and explicitly forbids collapsing them back to `( … ) && echo`. Pinned by AC-20260813-05-15. | The old `( <gate> ) && echo` probe reported only the LAST statement's status, so a `;`-joined host gate whose first leg failed still printed the pass sentinel — a false green at the one point the whole pipeline trusts. The two-line shape is not stylistic: POSIX ignores errexit for any non-final command of an AND-OR list and bash applies that suppression *inside* the subshell, so `( set -e; … ) && echo` (and `if ( set -e; … ); then`) leave the `set -e` completely inert — verified by execution, which is why the AC carries behavioral pins for the naive fix as well as the defect. |
+
+| D13 | **(post-build user ruling, 2026-08-13 — out-of-area, admitted deliberately.)** `tests/autopilot/lock.test.js`'s AC-20260810-05-12 lifecycle pin waits for the daemon lockfile's CONTENT (`existsSync && readFileSync().trim() !== ''`), not bare existence. No production code changes. | The pin polled `existsSync` and then asserted on the file's pid contents, but D5 of specs/20260810/05 pins `writeFileSync(path, pid, {flag:'wx'})` — an `O_CREAT\|O_EXCL` open followed by a *separate* write. The poller can observe the file between those two syscalls and read an empty string. Microseconds when idle; milliseconds when the child is descheduled under a loaded full-suite run — which is exactly when this test was observed flaking (1 in ~7 runs, never reproducible in isolation). Test-only defect; the daemon behavior it pins is correct. |
 
 ## File Plan
 
@@ -58,8 +61,10 @@ fragments so the twins cannot drift again.
 | tests/workflows/design-gate-resolution.test.js | CREATE | tests | AC-20260813-05-1, AC-20260813-05-2, AC-20260813-05-3, AC-20260813-05-12 |
 | tests/workflows/review-emphasis-coverage.test.js | CREATE | tests | AC-20260813-05-4, AC-20260813-05-5, AC-20260813-05-11, AC-20260813-05-13 |
 | tests/workflows/red-check-sentinel.test.js | CREATE | tests | AC-20260813-05-6, AC-20260813-05-14 |
-| tests/workflows/twin-parity.test.js | CREATE | tests | AC-20260813-05-7, AC-20260813-05-8, AC-20260813-05-10 |
+| tests/workflows/twin-parity.test.js | CREATE | tests | AC-20260813-05-7, AC-20260813-05-8, AC-20260813-05-10, AC-20260813-05-15 |
 | tests/gate-phantom-failures.test.js | MODIFY | tests | AC-20260813-05-9 (widen the existing pin to assert the hardening text in BOTH bodies via the shared fragment) |
+| tests/workflow-guards.test.js | MODIFY | tests | D12 — tighten the pre-existing `gate sentinel` guard to the probe shape that actually delivers its own stated intent (was pinning the false-greening `( … ) && echo`) |
+| tests/autopilot/lock.test.js | MODIFY | tests | D13 — flake fix: wait for lockfile CONTENT, not bare existence |
 
 ## Contracts
 
@@ -163,6 +168,13 @@ fragments so the twins cannot drift again.
 - **AC-20260813-05-13**: WHEN review.md's gate-leg step is read THE SYSTEM SHALL contain the
   placeholder-resolution instruction (literal: `{testDirs}` resolved to the glob form before
   the leg runs, unresolvable → `unavailable`) → tests/workflows/review-emphasis-coverage.test.js
+- **AC-20260813-05-15**: WHEN the shared gate probe runs a `;`-joined gate whose first leg fails
+  (`false; true`) THE SYSTEM SHALL NOT print `__GATE_PASS__`, WHILE CONTINUING TO print it for a
+  passing gate (`true; true`, `true && true`) and for a gate that deliberately tolerates a failing
+  step (`false || true`); the probe source in the fragment and in BOTH generated workflows SHALL
+  carry the two-line shape (`( set -e; …)` then a separate `$?` test), and the pin SHALL also
+  execute the old probe and the naive one-line `set -e` fix to demonstrate both still leak the
+  sentinel → tests/workflows/twin-parity.test.js
 - **AC-20260813-05-14**: WHEN every test carrier is sanctioned-green THE SYSTEM SHALL
   CONTINUE TO skip the red-check probe with the hand-built literal (existing pin
   tests/redcheck-green-carriers.test.js stays green; the literal gains `sentinels: null`
@@ -204,10 +216,16 @@ the fourth ledger row (the D2 guard is itself a new mechanism — shipping it ro
 a self-inflicted hard review finding); D10 was added whole from the blind-spot pass.
 
 Rejected from this spec: E-class report/schema fields beyond `exhaustedBy` (spec 06 owns the
-report surface); F9 stack-shaped phrasing (spec 10); the pre-existing subshell-sentinel
-falsifiability nit (the `( cmd ) && echo` wrapper fires on `( false; true )` — real but
-unchanged by this spec: relocated verbatim, and fixing it is a behavior change outside this
-spec's findings; recorded here so it isn't lost).
+report surface); F9 stack-shaped phrasing (spec 10).
+
+The pre-existing subshell-sentinel falsifiability nit (the `( cmd ) && echo` wrapper fires on
+`( false; true )`) was originally rejected here as a behavior change outside this spec's
+findings, to be relocated verbatim. **The user reversed that after the build**, and it landed
+as D12 / AC-20260813-05-15 — the extraction had just made it a one-place fix instead of two,
+which is what changed the cost side of the original call. Worth recording: the first attempt
+at the fix (`( set -e; cmd ) && echo`) was inert, and only the AC's *executable* assertions
+caught it — a source-text pin on the presence of `set -e` would have passed while the guard
+did nothing.
 
 Regression-pin coverage: AC-5 (two-seat framing), AC-9 build half (phantom hardening), AC-14
 (sanctioned-green skip), AC-7 (extraction didn't fork build's loop semantics).

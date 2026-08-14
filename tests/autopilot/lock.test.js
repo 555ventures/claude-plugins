@@ -210,9 +210,15 @@ test('AC-20260810-05-12: a real (non-check) autopilotd start holds the pidfile l
     child.stderr.on('data', (d) => { stderr += d })
 
     const lockPath = path.join(stateDir, 'autopilotd.lock')
-    const acquired = await waitFor(() => fs.existsSync(lockPath))
+    // Wait for CONTENT, not mere existence: D5 pins `writeFileSync(path, pid, {flag:'wx'})`, which
+    // is an O_CREAT|O_EXCL open followed by a separate write — so a bare existsSync() poll can win
+    // the race against the daemon between those two syscalls and read an empty file. That window is
+    // microseconds when idle but widens to milliseconds when the child is descheduled under a
+    // loaded full-suite run, which is exactly when this test was observed flaking (2026-08-13).
+    const acquired = await waitFor(() =>
+      fs.existsSync(lockPath) && fs.readFileSync(lockPath, 'utf8').trim() !== '')
     assert.ok(acquired,
-      `a normal (non---check) start must create ${lockPath} — the Behavior § Lock lifecycle order pins mkdirSync(stateDir) → acquireLock BEFORE lane construction/start; got stderr so far=${stderr}`)
+      `a normal (non---check) start must create ${lockPath} and write its pid — the Behavior § Lock lifecycle order pins mkdirSync(stateDir) → acquireLock BEFORE lane construction/start; got stderr so far=${stderr}`)
 
     const lockContent = fs.readFileSync(lockPath, 'utf8').trim()
     assert.strictEqual(lockContent, String(child.pid),

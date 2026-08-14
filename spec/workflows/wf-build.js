@@ -440,10 +440,28 @@ async function runGateLoop({ gateCmd, phase, repairFn, contextLabel }) {
   // from the clean path worth surfacing, not just silently corrected.
   const deviations = []
   for (let round = 0; round <= REPAIR_CEILING; round++) {
+    // The two-line probe shape is load-bearing and every part of it was arrived at by execution
+    // (pinned in tests/workflows/twin-parity.test.js AC-20260813-05-15):
+    //   * `set -e` inside the subshell is what makes a `;`-joined host gate (`lint; test`) honest.
+    //     Without it a subshell reports only its LAST statement's status, so a failing lint leg
+    //     still printed the pass sentinel — a false green in the one place the pipeline trusts
+    //     absolutely. `&&`-joined gates are unaffected (their list status propagates either way),
+    //     and a gate that deliberately tolerates a step via `|| true` keeps passing, because
+    //     errexit never applies to the left operand of `&&`/`||`.
+    //   * The exit code is tested on a SEPARATE line, never as `( … ) && echo`. POSIX says errexit
+    //     is ignored for any command of an AND-OR list other than the last, and bash honors that
+    //     INSIDE the subshell too — so `( set -e; false; true ) && echo SENTINEL` prints the
+    //     sentinel and the `set -e` is inert. `if ( … ); then` is suppressed the same way. Only a
+    //     standalone subshell followed by a `$?` test actually applies errexit.
+    // This is NOT the host script conventions' `never set -e` rule — that governs authored bash
+    // scripts, where every failure must be caught and answered with a remedy. Here the entire
+    // point is the opposite: any failure is fatal and unanswerable.
     gate = await agent(
-      `Run this command exactly as written and report results. Do not edit any file.\n\n( ${gateCmd} ) && echo ${GATE_SENTINEL}\n\n` +
-      `The subshell wrapper makes the trailing \`&& echo ${GATE_SENTINEL}\` fire ONLY when the WHOLE gate command exits 0 ` +
-      `(even if it contains \`;\`); any non-zero exit means the sentinel never prints. Set pass=true ONLY if the ` +
+      `Run this command exactly as written and report results. Do not edit any file.\n\n( set -e; ${gateCmd} )\nif [ $? -eq 0 ]; then echo ${GATE_SENTINEL}; fi\n\n` +
+      `Run BOTH lines together in one shell invocation. The \`set -e\` subshell makes the gate fail on its FIRST failing ` +
+      `step (even if the command is joined with \`;\`), and the separate \`$?\` test is what prints ${GATE_SENTINEL} ONLY when ` +
+      `the WHOLE gate command exited 0 — do not rewrite it as \`( … ) && echo\`, which silently disables the \`set -e\`. ` +
+      `Any non-zero exit means the sentinel never prints. Set pass=true ONLY if the ` +
       `exact string ${GATE_SENTINEL} appears in the command output — if it is absent, the gate failed, set pass=false. ` +
       `Put the raw exit code (or "non-zero, no ${GATE_SENTINEL}") and the error/failure count in summary. ` +
       `For each failure, identify the single file that most likely needs the fix${contextLabel ? ' ' + contextLabel : ''} and summarize the ` +

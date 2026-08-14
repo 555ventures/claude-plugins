@@ -3,6 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
+const { execFileSync } = require('node:child_process')
 const { ROOT, read, evalFns } = require('../helpers')
 
 // specs/20260813/05-workflow-correctness-repairs.md D5/D6/D8 (AC-20260813-05-7, -8, -10). Today
@@ -77,4 +78,72 @@ test('AC-20260813-05-10: assertResolutions throws naming the offending key when 
     'assertResolutions must throw naming the offending key "D3" when its value fails the closed ' +
     'args token alphabet /^[A-Za-z0-9._\\/:@=-]+$/ — free-text resolutions are the last open door ' +
     'in the 2026 args-corruption class (quotes/backslashes corrupting the JSON channel)')
+})
+
+// AC-20260813-05-15 (post-build ruling, spec D12): the gate's pass sentinel is the single point the
+// whole pipeline trusts — every "gate passed" verdict in build and design reduces to whether
+// __GATE_PASS__ appeared. Before 2026-08-13 the probe was `( <gate> ) && echo __GATE_PASS__`, whose
+// own instruction text told the gate agent it fires "ONLY when the WHOLE gate command exits 0 (even
+// if it contains `;`)" — false: a subshell reports its LAST statement's status, so a `;`-joined host
+// gate whose first leg failed still printed the sentinel. The spec's Rationale originally deferred
+// this as out-of-findings; the user ruled it in after the build (D12).
+//
+// The FIX is two lines, and the second line is not cosmetic. POSIX (and bash) ignore errexit for
+// any command of an AND-OR list other than the last — and that suppression reaches INSIDE the
+// subshell — so the obvious `( set -e; <gate> ) && echo <sentinel>` leaves the `set -e` completely
+// inert, as does `if ( set -e; <gate> ); then`. Only a standalone subshell whose `$?` is tested on
+// its own line actually applies errexit. The execution pins below are what caught that; keep them.
+// Matched against workflow SOURCE, where the probe lives inside a JS template literal — so the line
+// break is the two characters `\` `n`, not a real newline (String.raw keeps it that way).
+const SENTINEL_WRAPPER = String.raw`( set -e; ${'${gateCmd}'} )\nif [ $? -eq 0 ]; then echo ${'${GATE_SENTINEL}'}; fi`
+// Executed as a real shell script, so this one takes a real newline.
+const PROBE = (gate) => `( set -e; ${gate} )\nif [ $? -eq 0 ]; then echo __GATE_PASS__; fi`
+
+test('AC-20260813-05-15: the gate probe runs the host gate under `set -e` and tests $? on its own line, never as the left operand of &&', () => {
+  const frag = fs.readFileSync(FRAG_PATH, 'utf8')
+  assert.ok(frag.includes(SENTINEL_WRAPPER),
+    'the shared gate probe must run the host gate as a standalone `( set -e; <gate> )` subshell and ' +
+    'print the sentinel from a separate `$?` test — without set -e a `;`-joined host gate reports ' +
+    'only its LAST statement\'s status, and folding the test back into `( … ) && echo` silently ' +
+    'disables the set -e again (errexit is ignored for the non-final command of an AND-OR list)')
+
+  for (const generated of ['spec/workflows/wf-build.js', 'spec/workflows/wf-design.js']) {
+    assert.ok(read(generated).includes(SENTINEL_WRAPPER),
+      `${generated} must carry the hardened probe — both twins splice the same fragment, so a ` +
+      'miss here means the fragment was bypassed and that workflow can still report a false green')
+  }
+})
+
+test('AC-20260813-05-15: the hardened probe is falsifiable — an early failing leg of a `;`-joined gate prints no sentinel, where the old probe did', () => {
+  const run = (script) => execFileSync('bash', ['-c', script], { encoding: 'utf8' }).trim()
+
+  assert.strictEqual(run(PROBE('false; true')), '',
+    'the hardened probe must swallow the sentinel when an EARLY leg of a `;`-joined gate fails — ' +
+    'if this prints the sentinel the probe is back to trusting the last statement only, which is ' +
+    'the false-green this guard exists to kill')
+
+  assert.strictEqual(run('( false; true ) && echo __GATE_PASS__ || true'), '__GATE_PASS__',
+    'the ORIGINAL probe shape must still print the sentinel here — this asserts the defect was real; ' +
+    'if it ever stops printing, the assertion above is passing vacuously and the pin has stopped ' +
+    'measuring anything')
+
+  assert.strictEqual(run('( set -e; false; true ) && echo __GATE_PASS__ || true'), '__GATE_PASS__',
+    'the NAIVE fix (set -e folded into the left operand of &&) must still print the sentinel — this ' +
+    'pins WHY the probe is two lines: errexit is ignored for the non-final command of an AND-OR ' +
+    'list, so anyone "simplifying" the probe back to one line reintroduces the false green')
+
+  assert.strictEqual(run(PROBE('true; true')), '__GATE_PASS__',
+    'a fully passing `;`-joined gate must still print the sentinel — if this fails, the hardening ' +
+    'turned every green gate red and no build or design run can ever complete')
+
+  assert.strictEqual(run(PROBE('false && true')), '',
+    'a failing `&&`-joined gate (the common host shape, and the only shape the design driver emits) ' +
+    'must keep failing exactly as before — the hardening must not change these semantics')
+
+  assert.strictEqual(run(PROBE('true && true')), '__GATE_PASS__',
+    'a passing `&&`-joined gate must keep passing — the regression half of the pin above')
+
+  assert.strictEqual(run(PROBE('false || true')), '__GATE_PASS__',
+    'a gate that DELIBERATELY tolerates a non-zero step via `||` must keep passing — errexit never ' +
+    'applies to the left operand of `||`, so hosts that opted into tolerance keep it')
 })

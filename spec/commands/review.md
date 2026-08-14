@@ -11,8 +11,9 @@ single pass. On CLEAN: flips `status → done`, applies the spec's Canonical Del
 and merges the build branch back into its originating branch (Phase 4). This is the only
 command that flips `done`.
 
-**Orchestrator: Sonnet. Reviewers and verifiers: Sonnet — never Fable.** Cross-model
-independence from the planning author is the gate's value; capability is not. Judgment on
+**Orchestrator: Sonnet. Reviewers and verifiers: Sonnet — never Fable.** Review independence
+comes from blind-to-author dispatch and execution-grounded verification, never model
+diversity (shared § Model Placement). Judgment on
 survivors (fix / waive / reject) happens in this session with the user — the workflow never
 adjudicates (the kill-grounding standard lives in Rules).
 

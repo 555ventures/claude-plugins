@@ -195,16 +195,32 @@ upstream bug list. -->
   already taken at HEAD before the batch ran; the worker bumped to 6.51.0 with the same
   changelog paragraph and logged the deviation). The build bumps to the next free version and
   records the deviation; the spec's literal number is a target, not a pin.
-- `[host]` A locked Decision that retires a literal glyph or phrase from doctrine prose can break
-  a regression pin in a test file **outside** the spec's File Plan — doctrine shape here is pinned
-  by dense regex asserts, so the retired literal is asserted somewhere the File Plan never looked.
-  Grep `tests/` for the retired literal at plan time and put every hit's file in the File Plan;
-  mid-build the pin is updated in place and retagged with the new AC-ID (never weakened, never left
-  red). (specs/20260813/07-command-report-conformance.md D8 — the 🔍→📦 retirement broke
-  `tests/review/smell-lens.test.js` AC-20260812-01-6 during build; that was the second such
-  collision in one spec, the first having been caught at plan time.)
+- `[host]` A locked Decision that retires or narrows a literal glyph, phrase, or claim from
+  doctrine prose can leave a live assertion of the retired form **outside** the spec's File
+  Plan, on two surfaces: test files (doctrine shape here is pinned by dense regex asserts, so
+  the retired literal is asserted somewhere the File Plan never looked) and the doctrine corpus
+  itself (the same claim restated in another command/doctrine file — often paraphrased, often
+  hard-wrapped mid-phrase, so neither the literal nor the full phrase ever matches). At plan
+  time, grep `tests/` for the retired literal AND grep `spec/commands/ spec/doctrine/
+  spec/agents/ git/commands/` case-insensitively for each distinctive single-word stem of the
+  retired claim (stems, never the multi-word phrase — hard wrapping defeats it); every hit's
+  file enters the File Plan as fix or recorded waive. Mid-build a colliding test pin is updated
+  in place and retagged with the new AC-ID (never weakened, never left red).
+  (specs/20260813/07-command-report-conformance.md D8 — the 🔍→📦 retirement broke
+  `tests/review/smell-lens.test.js` AC-20260812-01-6 during build, the second such collision in
+  one spec; specs/20260813/09-model-placement-mechanics.md D4 — the "uncorrelated model"
+  narrowing enumerated both shared.md loci but missed the paraphrased restatement at
+  spec/commands/review.md:14, caught at review time by corpus stem-grep.)
 - `[plugin]` A spec Decision that records a class-level item "in spec/INTAKE.md, doctrine-only"
   collides with INTAKE.md's authoring contract: every row's `Pinned by` must name a failing test
   or a `pre-contract` artifact. Plan the citation (or the failing test) with the Decision, or the
   build worker is forced to invent one. (specs/20260801/04-live-smoke.md D8 — landed as a
   `pre-contract` citation to the spec's own Rationale.)
+- `[plugin]` A Decision that pins a non-default `model:` on a workflow seat owes the seat's **call
+  mechanism** too — resilience helpers like `dispatch()`'s model fallback only apply to calls routed
+  through them, so pinning the model on a bare `agent()` call leaves the seat with no recovery path
+  and makes the fallback machinery dead code for the one seat it was built for. Name the routing
+  (and any `// @fragment:` splice it requires) in the Decision or the File Plan row, not just the
+  model string. (specs/20260813/09-model-placement-mechanics.md D2 — the build had to splice
+  `@fragment:dispatch` into wf-panel and convert the aggregate call itself; logged as that spec's
+  only deviation.)

@@ -1,6 +1,6 @@
 ---
 date: 2026-08-13
-status: implementing
+status: done
 diff_base: 4b4f2c16bcb80a73ea1d814b93ebee1392fec46c
 open_markers: 0
 risk: T3
@@ -38,6 +38,7 @@ aggregator with Opus fallback; wording-narrowing over reviewer-tier change; wave
 | D7 | `tests/helpers.js` `extractFn` gains async preservation: when the matched `function name(` is preceded by `async `, the extracted source keeps the `async` keyword (today it silently drops it, making every `await`-bearing extraction a SyntaxError under `evalFns`). | `dispatch` is an `async function` — the sanctioned source-shape test mode is otherwise unusable for AC-1/2/3 (refuter-executed: `evalFns(src, ['dispatch'])` → SyntaxError at HEAD). `dispatch` is the repo's only top-level async extraction target, so the fix is surgical. |
 | D3a | *(orchestrator clarification, build 2026-08-14 — measured, not a scope change)* AC-5's "five pre-existing `effort: 'low'` sites" is the count in the **generated** `spec/workflows/wf-*.js` (wf-research ×1, wf-design ×2, wf-build ×2); the **source** count is four (`src/wf-research.body.js`, `src/wf-build.body.js`, `src/wf-design.body.js`, `fragments/gate-loop.js.frag`) because `gate-loop.js.frag` splices into two workflows. AC-5 therefore scans the generated files (five sites); AC-4's six-bodies scan stays on `src/*.body.js`. | Measured at HEAD before dispatch. Without this the test author must guess which surface the number counts, and an off-by-one turns a correct regression pin into a false red. |
 | D8a | *(orchestrator clarification, build 2026-08-14)* D8's literal version target 6.67.0 is stale — HEAD is already 6.70.0. Bump to **6.71.0**. Recorded as a deviation, per the known concurrent-session semver race. | Pipeline rules § Gotchas: a spec's literal bump number is a target, not a pin. |
+| D4a | *(review-time addendum, 2026-08-14 — ratified by JJ at the disposition step)* D4's "both loci" enumeration was short by one: `spec/commands/review.md`'s paraphrased, hard-wrapped restatement of the same claim, which no grep for the literal or the full phrase caught. Corrected in this close to a pointer at shared.md § Model Placement. The plan-time sweep rule is widened from `tests/` alone to the doctrine corpus by stem (plan.md Phase 4 check 2 + the host rules Gotcha row) so the class is caught at plan time rather than review time. | The refuter pass finds "one more site" but never proves exhaustion (D2 grew 1→5, D4 enumerated 2 of 3); a stem-level grep is the only carrier verified to catch a paraphrased, hard-wrapped echo, since neither the retired literal nor the full phrase matches it. |
 | D8 | Scaffold-ledger rows: model fallback (retire: when the harness exposes model availability to workflows), effort rule (retire: if the harness ever prices effort automatically), consult ledger (promote: each ≥2-recurrence promotion IS the promotion; retire: if two quarters produce zero rows, fold the rule back into retainer prose). Version bump target 6.67.0. | Doctor check 13; repo discipline. |
 
 ## File Plan
@@ -202,6 +203,16 @@ Rejected: MODEL_FALLBACK entries beyond fable (no evidence of opus outages; sile
 substitution at a judgment seat would be a quality lie); a config knob for the aggregator
 model (one ruling, one code point); extending the audit fate enum for consult promotions
 (the existing fates express every outcome).
+
+Review-time waived advisories (2026-08-14): (i) `MODEL_FALLBACK` is declared inside
+`dispatch()`'s body rather than at top level as the Contracts block writes it — waived
+because the in-code `LAYOUT REQUIREMENT` comment in
+`spec/workflows/fragments/dispatch.js.frag` states the `extractFn` constraint and cites two
+named precedents, a better-placed carrier than a deviations-sidecar row; (ii) both new test
+files carry their own copy of the 15-line `findCalls` scanner — waived because the second
+copy cites its sibling as origin and both are exercised on every suite run, so divergence
+cannot hide; hoisting to `tests/helpers.js` is ordinary touch-time cleanup, not a recorded
+deviation.
 
 ## Canonical Delta
 

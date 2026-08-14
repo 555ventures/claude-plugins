@@ -45,7 +45,7 @@
       "orphans": 6
     },
     "spec/commands/plan.md": {
-      "lines": 339,
+      "lines": 341,
       "orphans": 6
     },
     "spec/commands/release.md": {
@@ -53,7 +53,7 @@
       "orphans": 12
     },
     "spec/commands/review.md": {
-      "lines": 534,
+      "lines": 535,
       "orphans": 0
     },
     "spec/commands/sketch.md": {
@@ -81,5 +81,5 @@
       "orphans": 5
     }
   },
-  "totalLines": 6074
+  "totalLines": 6077
 }

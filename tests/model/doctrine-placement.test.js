@@ -125,3 +125,41 @@ test('AC-20260813-09-8: § Question Style gains the underivable-fork Fable-consu
     '§ Escalation Contract\'s six build triggers must stay unmodified — D5 explicitly does not ' +
     'touch this list, a different mechanism gating build-execution failures, not underivable forks')
 })
+
+// D4a (review-time addendum, ratified by JJ 2026-08-14): review found a THIRD locus of the same
+// retired claim that D4's spec missed — spec/commands/review.md restated it, paraphrased and
+// hard-wrapped across a line break, so neither D4's retired literal nor the full replacement
+// phrase ever matched a grep there. Corrected in the working tree to the same replacement
+// sentence shared.md now carries at its two loci. This test pins that third locus so a future
+// edit can't silently re-split or reintroduce the cross-model/uncorrelated-model framing here
+// the way it escaped the original spec.
+test('AC-20260813-09-7 (third locus): spec/commands/review.md states the D4 replacement sentence across its existing hard wrap, drops the cross-model/"gate\'s value" and uncorrelated-model framing, and keeps the Sonnet-only placement rule', () => {
+  const review = read('spec/commands/review.md')
+
+  const replacement = /Review independence\s+comes from blind-to-author dispatch and execution-grounded\s+verification,\s+never model\s+diversity/
+  assert.match(review, replacement,
+    'review.md must state the D4 replacement sentence ("Review independence comes from blind-to-author ' +
+    'dispatch and execution-grounded verification, never model diversity") even though it is hard-wrapped ' +
+    'across this file\'s existing line breaks — this is the third locus D4\'s spec missed, only caught at ' +
+    'review time as D4a; a single-line literal here would silently pass a regression that re-splits the ' +
+    'phrase across a different line break')
+
+  assert.doesNotMatch(review, /cross[- ]model/i,
+    'review.md must not reintroduce a "cross-model" framing for review independence — the retired claim ' +
+    'attributed the gate\'s value to cross-model diversity, which is false: workers, reviewers, and ' +
+    'verifiers here are all Sonnet')
+  assert.doesNotMatch(review, /is\s+the\s+gate['’]s\s+value/i,
+    'review.md must not reintroduce the "...is the gate\'s value" framing that used to attribute review ' +
+    'independence to model diversity rather than to blind-to-author dispatch and execution-grounded ' +
+    'verification')
+  assert.doesNotMatch(review, /uncorrelated model/i,
+    'review.md must not reintroduce an "uncorrelated model" claim — AC-20260813-09-7 already forbids this ' +
+    'stem at shared.md\'s canonical locus, and this third locus must hold the same line')
+
+  const placementRule = /\*\*Orchestrator: Sonnet\. Reviewers and verifiers: Sonnet — never Fable\.\*\*/
+  assert.match(review, placementRule,
+    'the bold placement rule ("Orchestrator: Sonnet. Reviewers and verifiers: Sonnet — never Fable.") must ' +
+    'survive independently of its retired reason — only the CAUSE claimed for review independence was ' +
+    'false, not the placement itself, so a future edit must not delete the rule along with the now-fixed ' +
+    'reasoning sentence beside it')
+})

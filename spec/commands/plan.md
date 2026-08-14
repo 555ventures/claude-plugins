@@ -299,6 +299,8 @@ Never silently drop a finding.
    modules must pin those modules' factory signatures (including injectable seams) in Contracts.
    An AC whose expected value is computed by a helper rather than a literal example owes that
    helper's own ground-truth carrier — listed or checked.
+   A Decision that retires or narrows doctrine prose owes a stem-level grep of the doctrine
+   corpus and `tests/`, every hit enumerated in the File Plan as fix or recorded waive.
    A missing carrier blocks lock
    exactly as an uncovered Goal promise does — add the row/Contracts entry or strike the
    obligation before flipping `status: hardened`. These four are illustrative anchors of one

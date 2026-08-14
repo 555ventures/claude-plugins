@@ -195,6 +195,14 @@ upstream bug list. -->
   already taken at HEAD before the batch ran; the worker bumped to 6.51.0 with the same
   changelog paragraph and logged the deviation). The build bumps to the next free version and
   records the deviation; the spec's literal number is a target, not a pin.
+- `[host]` A locked Decision that retires a literal glyph or phrase from doctrine prose can break
+  a regression pin in a test file **outside** the spec's File Plan — doctrine shape here is pinned
+  by dense regex asserts, so the retired literal is asserted somewhere the File Plan never looked.
+  Grep `tests/` for the retired literal at plan time and put every hit's file in the File Plan;
+  mid-build the pin is updated in place and retagged with the new AC-ID (never weakened, never left
+  red). (specs/20260813/07-command-report-conformance.md D8 — the 🔍→📦 retirement broke
+  `tests/review/smell-lens.test.js` AC-20260812-01-6 during build; that was the second such
+  collision in one spec, the first having been caught at plan time.)
 - `[plugin]` A spec Decision that records a class-level item "in spec/INTAKE.md, doctrine-only"
   collides with INTAKE.md's authoring contract: every row's `Pinned by` must name a failing test
   or a `pre-contract` artifact. Plan the citation (or the failing test) with the Decision, or the

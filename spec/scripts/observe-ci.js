@@ -39,6 +39,7 @@ const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
 const { readLedgerRows, qualifyingObservation } = require('./lib/observation')
+const { declaredForge } = require('./lib/host-config')
 
 let root = '.'
 const argv = process.argv.slice(2)
@@ -51,16 +52,9 @@ for (let i = 0; i < argv.length; i++) {
 }
 
 // D2: capabilities.forge:"none" is a declared, not probed, fact — read it before resolving a
-// branch or spawning ci-query.js. A missing/unreadable/unparsable config is legacy mode.
-function readForge(dir) {
-  try {
-    const config = JSON.parse(fs.readFileSync(path.join(dir, '.claude', 'spec.config.json'), 'utf8'))
-    return config.capabilities && config.capabilities.forge
-  } catch {
-    return undefined
-  }
-}
-if (readForge(root) === 'none') {
+// branch or spawning ci-query.js. A missing/unreadable/unparsable config is legacy mode;
+// lib/host-config.js is the sole reader of that declaration for both CI scripts.
+if (declaredForge(root) === 'none') {
   console.log('unavailable — no supported forge adapter')
   process.exit(0)
 }

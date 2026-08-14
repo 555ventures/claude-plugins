@@ -32,9 +32,8 @@
 // Exit codes: 0 = answered (available true or false either way, OR the forge:"none" canonical
 // line) · 2 = usage error
 
-const fs = require('fs')
-const path = require('path')
 const { spawnSync } = require('child_process')
+const { declaredForge } = require('./lib/host-config')
 
 function usage() {
   console.error('usage: ci-query.js (--branch <name> | --commit <sha>) [--root <dir>]')
@@ -52,16 +51,9 @@ for (let i = 0; i < argv.length; i++) {
 if ((!branch && !commit) || (branch && commit)) { usage(); process.exit(2) }
 
 // D2: capabilities.forge:"none" is a declared, not probed, fact — read it before touching `gh`.
-// A missing/unreadable/unparsable config is legacy mode (dynamic probing continues unchanged).
-function readForge(dir) {
-  try {
-    const config = JSON.parse(fs.readFileSync(path.join(dir, '.claude', 'spec.config.json'), 'utf8'))
-    return config.capabilities && config.capabilities.forge
-  } catch {
-    return undefined
-  }
-}
-if (readForge(root) === 'none') {
+// A missing/unreadable/unparsable config is legacy mode (dynamic probing continues unchanged);
+// lib/host-config.js is the sole reader of that declaration for both CI scripts.
+if (declaredForge(root) === 'none') {
   console.log('unavailable — no supported forge adapter')
   process.exit(0)
 }

@@ -1,6 +1,6 @@
 ---
 date: 2026-08-13
-status: implementing
+status: done
 diff_base: 607085137519e2a7ee1e0e398a92ac90d2550a5b
 open_markers: 0
 risk: T3
@@ -8,7 +8,7 @@ area: report-surface
 design: false
 breaking: false
 depends_on: ["specs/20260813/05-workflow-correctness-repairs.md"]
-depended_on_by: ["specs/20260813/07-command-report-conformance.md"]
+depended_on_by: ["specs/20260813/06a-return-envelope-corrections.md", "specs/20260813/07-command-report-conformance.md"]
 brief: n/a
 ---
 
@@ -199,6 +199,53 @@ shared; chain ordering serializes.
 
 The 📌 slot ships here (in shared.md + renderer) but fires from commands only after specs
 07/08 land — mechanism before migration, migration before the doctrine that assumes it.
+
+### Review disposition (2026-08-14, run `wf_59aba53d-4a5`)
+
+**WAIVED — one hard finding, verification `demonstrated`: D9's `runId` echo evaluates to
+`undefined` in every live run.** Reason: **D9 was unimplementable as written — a
+spec-authoring defect, not a build defect.** A workflow script cannot obtain its own run id:
+the harness mints it at invoke time and delivers it only in the *caller's* tool result, and
+no sandbox global carries it. The build worker, having no channel, added `runId` to the six
+bodies' args contracts and echoed `args.runId` (deviation logged, folded in below); no
+command's Workflow invocation args literal supplies the key, so the field is permanently
+`undefined`. The build worker's sidecar deferred the wiring to spec 07, but spec 07 never
+took ownership of it — the deferral pointed nowhere.
+
+**Repealed, not deferred:** `specs/20260813/06a-return-envelope-corrections.md` D1 deletes
+the `runId` property from all six return assemblies with no replacement; D2 keeps provenance
+where the id actually exists (the orchestrator's tool result → ledger row + 📦 report line).
+06a is `hardened` and chained (`07.depends_on` includes 06a; this spec's `depended_on_by`
+records it), so the corrected contract lands before spec 07 builds 19 command reports on it.
+Waiving rather than fixing here is deliberate: 06's own AC-6/AC-8 pin `runId` *presence*, and
+their retirement is sanctioned by 06a D3 — deleting the field inside this spec's fix-delta
+would weaken tests outside their sanctioning spec and half-build 06a outside its own gate.
+No consumer reads a return-envelope `runId` today (the only `.runId` readers are
+orchestrator-side), so the window carries no functional risk.
+
+Rejection was not available: the finding was reproduced by execution against review.md's real
+call-site args literal.
+
+### Deviations folded in (sidecar deleted)
+
+Five build deviations, all one-off and absorbed here rather than into Gotchas:
+
+1. AC-7's "named filter helper" locked no function name → the build pinned
+   `assertProposalSurvival(proposals)`, matching this repo's `assertGateArgs`/`assertResolutions`
+   convention. Authoring lesson only.
+2. D11's literal 6.64.0 target was taken at build time → bumped to 6.66.0. Already a standing
+   Gotcha (version races); no new entry.
+3. D9's `runId` requirement had no supplying channel → see the waive above. **No Gotchas entry
+   is added here deliberately**: 06a's Canonical Delta ("a workflow never claims data only its
+   caller holds") is the durable carrier, and its AC-1 pins the absence mechanically — a
+   Gotchas line would be duplicate prose behind a real test.
+4. D6's `agentsFailed` was scoped to the one exhaustion return that already carries
+   `exhaustedBy`; earlier-phase agent deaths short-circuit to a `blocked` return, where the
+   count would always read 0. Narrower than D6's wording, correct in substance.
+5. D6's `alsoConsidered` assumed a wf-research option cap that did not exist → the build
+   enforced one (top 4 by rank) inside the workflow, pre-Verify. Placement correct; the cut
+   *order* is corrected by 06a D5 (rank-only truncation can silently discard the minority
+   option the researcher prompt orders preserved).
 
 ## Canonical Delta
 

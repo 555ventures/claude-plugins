@@ -6,7 +6,7 @@ risk: T2
 area: doctrine-reports
 design: false
 breaking: false
-depends_on: ["specs/20260813/06-report-renderer.md"]
+depends_on: ["specs/20260813/06-report-renderer.md", "specs/20260813/06a-return-envelope-corrections.md"]
 depended_on_by: ["specs/20260813/08-question-contract.md"]
 brief: n/a
 ---

@@ -23,3 +23,11 @@ will be checked against prose in `spec/commands/`, `spec/doctrine/`, or `spec/te
 default to `\s+` for inter-word gaps beyond the first, rather than a literal space — cheap
 insurance against line-wrap false negatives, and it doesn't loosen what the pin requires
 semantically.
+
+**Recurred 2026-08-14:** `tests/workflow-runid-provenance.test.js` (JJ-20260814-02, build.md's
+resume sentence) — `reuse the prior \`runId\` if known` wraps as `reuse the prior\n
+\`runId\` if known` in build.md. First-draft regex used a literal space and failed with a
+false "sentence not found" instead of the intended red assertion; caught immediately by
+actually executing the test (`node --test`) rather than trusting the regex by inspection —
+reinforces always running a new doctrine pin once before reporting it, not just reading the
+source for the phrase.

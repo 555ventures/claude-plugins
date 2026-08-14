@@ -27,6 +27,17 @@
 // sidecar's existing `visual-done` mark still satisfies it (resume compat). D3/D5: the driver
 // also runs components-check.js advisory (warn, never block) against design/components.json if
 // present, and the AUTHOR step's printed args gain `componentManifestPath`.
+//
+// 2026-08-13 (specs/20260813/05-workflow-correctness-repairs.md D1/D2): the design gate is no
+// longer the raw, unsubstituted `config.gateCommand` (a host gate composing a `{testDirs}`-style
+// leg could never pass — guaranteed gate-exhausted). It is resolved leg-by-leg: split on
+// top-nesting-level `&&` only (parens/quotes protect nested `&&`; unbalanced input passes through
+// unsplit rather than risk mis-splitting a subshell/quoted host gate), drop any leg still carrying
+// an unresolved `{placeholder}` token and log the drop, rejoin the survivors. The optional
+// `design.gateCommand` config key bypasses this whole derivation, verbatim. Zero surviving legs
+// (or no gateCommand at all) resolve to the literal sentinel `__UNGATED__`, never an empty
+// string; the AUTHOR step's printed instructions route a wf-design `complete-ungated` return
+// straight to `/spec:review` stating the absent verification, never the `author-green` mark.
 // Exit codes: 0 = step printed; 2 = precondition failure (wrong status, no design block, bad args).
 // State lives in <spec>.design/design-state.json + the artifacts themselves. Deleting the
 // sidecar resets to the start of the design stage (the spec is never touched by this script).
@@ -201,7 +212,49 @@ if (STATE_ONLY) { process.stdout.write(state + '\n'); process.exit(state === 'BL
 
 // ---- step fragments ------------------------------------------------------------------------------
 const doctrinePath = design.doctrine || ''
-const gateCmd = [config.gateCommand].filter(Boolean).join(' ')
+
+// D1: per-leg gate resolution. `&&` only splits at top nesting level — inside balanced `(...)` or
+// inside a quoted string it never splits; unbalanced parens/quotes fail closed by returning the
+// whole command as one unsplit leg rather than risk mis-splitting a subshell/quoted host gate.
+function splitTopLevelAnd(cmd) {
+  const legs = []
+  let depth = 0, quote = null, start = 0
+  for (let i = 0; i < cmd.length; i++) {
+    const c = cmd[i]
+    if (quote) { if (c === quote) quote = null; continue }
+    if (c === '"' || c === "'") { quote = c; continue }
+    if (c === '(') { depth++; continue }
+    if (c === ')') { depth--; if (depth < 0) return [cmd]; continue }
+    if (depth === 0 && c === '&' && cmd[i + 1] === '&') {
+      legs.push(cmd.slice(start, i))
+      i++
+      start = i + 1
+    }
+  }
+  if (depth !== 0 || quote) return [cmd]
+  legs.push(cmd.slice(start))
+  return legs.map((s) => s.trim()).filter(Boolean)
+}
+const UNGATED_GATE = '__UNGATED__'
+// This driver never substitutes placeholders itself (build.md owns that recipe) — a leg still
+// carrying `{...}` after config.gateCommand is therefore unresolved-by-definition and gets dropped.
+const droppedGateLegs = []
+let gateCmd
+if (design.gateCommand) {
+  gateCmd = design.gateCommand // explicit override — bypasses leg-dropping entirely
+} else if (!config.gateCommand) {
+  gateCmd = UNGATED_GATE
+} else {
+  const survivingLegs = splitTopLevelAnd(config.gateCommand).filter((leg) => {
+    if (/\{[^{}]+\}/.test(leg)) { droppedGateLegs.push(leg); return false }
+    return true
+  })
+  gateCmd = survivingLegs.length ? survivingLegs.join(' && ') : UNGATED_GATE
+}
+const droppedGateLegsNote = droppedGateLegs.length
+  ? droppedGateLegs.map((l) => 'dropped leg (unresolved placeholder): ' + l).join('\n') + '\n\n'
+  : ''
+
 const wfDesign = path.join(PLUGIN, 'workflows/wf-design.js')
 const dcExtract = path.join(PLUGIN, 'scripts/dc-extract.js')
 const skCheck = path.join(PLUGIN, 'scripts/skeletons-check.js')
@@ -373,7 +426,11 @@ Invoke Workflow {scriptPath: "${wfDesign}", args: {stage: "author",
 args = real JSON object; paths/ids/enums only — no prose.
 
 Returns: complete → checkpoint-commit, then run:  spec-design-driver ${specPath} --mark author-green --run-id <runId>
-${designSource ? '(the mark runs the mock fidelity gate — strings/order/layout vs extract.json — FAIL-CLOSED;\na refusal lists the divergences to fix or delta with evidence)\n' : ''}blocked → resolve within the skeleton's intent (write the ruling to the on-disk plan: the
+${designSource ? '(the mark runs the mock fidelity gate — strings/order/layout vs extract.json — FAIL-CLOSED;\na refusal lists the divergences to fix or delta with evidence)\n' : ''}complete-ungated → the gate resolved to ${UNGATED_GATE} — verification is absent. Checkpoint-commit,
+then route straight to /spec:review ${specPath} stating plainly that this round shipped with zero
+deterministic verification. NEVER run --mark author-green for this return — that mark is a green
+claim this run did not earn.
+blocked → resolve within the skeleton's intent (write the ruling to the on-disk plan: the
 skeleton entry / tokenForks / token file / spec Decisions) or AskUserQuestion for a genuine
 fork; then re-invoke the same Workflow with resumeFromRunId. Anything else (gate-exhausted /
 out-of-scope) → read the failures, fix on disk (dispatch Sonnet), re-invoke. A green author is
@@ -469,6 +526,7 @@ const designFlagNote = (designFlag === 'false' && state !== 'DONE' && state !== 
 process.stdout.write(`[spec-design-driver] state: ${state}  spec: ${specPath}\n` +
   `(re-run this driver after completing the step; it verifies artifacts and prints the next one)\n` +
   componentManifestWarning +
+  droppedGateLegsNote +
   designFlagNote + '\n' +
   STEPS[state]() + '\n')
 process.exit(state === 'BLOCKED' ? 2 : 0)

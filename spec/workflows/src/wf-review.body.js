@@ -126,22 +126,34 @@ const VERIFY = {
   required: ['result', 'evidence'],
 }
 
-const DRIFT_NOTE = args.hasDriftScript
-  ? ''
-  : ' (this repo has no AC-drift script — the Phase 0 grep matrix is the deterministic drift gate; your AC↔test check is the semantic backstop — a test that names an AC-ID without testing the behavior is still hard)'
-
+// 2026-08-13 spec 05 D3: EMPHASES stays a 2-element array of pure per-seat FRAMINGS — the
+// AC↔test coverage requirement and the drift-note text below moved into reviewerPrompt's own
+// shared body so they render unconditionally, not only on the (unreachable on a single-reviewer
+// panel) EMPHASES[1] seat.
 const EMPHASES = [
   'Primary emphasis: design integrity — root-cause fixes vs duct tape, shortcut shapes (backward-compat shims, suppression markers, test-expectation abuse, defensive fallbacks that mask shape bugs instead of fixing the shape, half-done implementations, deferred-work comments), and spec drift (the diff doing things the spec never said).',
-  `Primary emphasis: rule compliance and correctness — every File Plan entry present and matching, Contracts implemented as written, Decisions table honored, every AC covered by a real test${DRIFT_NOTE}, wiring complete (new surfaces reachable from their entry points; registrations, exports, and routes match the spec's public surface), and the host's architectural boundaries and managed/generated surfaces respected (per .claude/rules/).`,
+  `Primary emphasis: rule compliance and correctness — every File Plan entry present and matching, Contracts implemented as written, Decisions table honored, and the host's architectural boundaries and managed/generated surfaces respected (per .claude/rules/).`,
 ]
 
 function reviewerPrompt(i) {
+  // Inlined (not a top-level const) so this literal text is reachable from reviewerPrompt's OWN
+  // extracted source — D3 fixes EMPHASES[1] being the only place this ever rendered, which a
+  // single-reviewer panel (fix-delta always 1, full scope usually 1 — the majority path) never
+  // selects.
+  const driftNote = args.hasDriftScript
+    ? ''
+    : ' (this repo has no AC-drift script — the Phase 0 grep matrix is the deterministic drift gate; your AC↔test check is the semantic backstop — a test that names an AC-ID without testing the behavior is still hard)'
   return `You are independently reviewing a spec implementation. Your agent doctrine (system
 prompt) carries the severity calibration, finding requirements, and sanctioned-exception
 checks — apply them as written.
 
 ${EMPHASES[i]}
-Cover BOTH shape and correctness regardless of emphasis.
+Cover BOTH shape and correctness regardless of emphasis. Regardless of emphasis, always verify:
+every File Plan entry present and matching, Contracts implemented as written, Decisions table
+honored, every AC covered by a real test${driftNote}, wiring complete (new surfaces reachable
+from their entry points; registrations, exports, and routes match the spec's public surface),
+and the host's architectural boundaries and managed/generated surfaces respected (per
+.claude/rules/).
 
 Method:
 1. Read the spec at ${args.specPath} (File Plan, Contracts, UI, Decisions, Acceptance Criteria).
@@ -273,10 +285,11 @@ Work through these in order and return the FIRST result that applies:
    result="DEMONSTRATED" if the run exhibits the claimed defect as described.
    result="NOT_DEMONSTRABLE" if your best good-faith repro fails to exhibit it.
    evidence = the exact command you ran plus the 1-3 observed output lines.
-   Cleanup is MANDATORY and unconditional: delete every file you created and verify with
-   git status --porcelain that no path you introduced remains, before returning.
+   Cleanup is best-effort: delete every file you created and verify with git status --porcelain
+   that no path you introduced remains before returning — the orchestrator's close sweep is the
+   authoritative guarantee, not this step.
 
-Never edit existing files; never run git commands other than status.
+Never edit existing files; never run git commands other than status and log.
 You must not mutate any shared stateful substrate — databases, running services, env/config
 other processes consume — beyond creating and deleting your own repro file. A repro that would
 require such a mutation returns result="NOT_EXECUTABLE" with the needed mutation named, for

@@ -159,6 +159,21 @@ function fileList(b) {
 // `author` is the only stage, and it always iterates groups: a missing/malformed array is a producer
 // bug, not a silent no-op, so validate the nested shape at the trust boundary before any loop reads it.
 const groups = validateGroups(args.groups, 'wf-design')
+// Trust-boundary assert (2026-08-13 spec 05 D8): a named function (not a bare top-level
+// statement) so tests/workflows/twin-parity.test.js can execute it standalone via evalFns. An
+// unvalidated batch `kind` today silently routes a batch to the wrong worker prompt instead of
+// failing loud at the trust boundary.
+function assertBatchKinds(batches) {
+  const KINDS = ['foundation', 'implement', 'stories']
+  for (const b of batches) {
+    if (!KINDS.includes(b.kind)) {
+      throw new Error('wf-design: batch "' + b.id + '" has kind ' + JSON.stringify(b.kind) +
+        ' outside the closed set {' + KINDS.join(', ') + '}')
+    }
+  }
+  return batches
+}
+assertBatchKinds(groups.flat())
 // The on-disk plan every implement-/stories-kind worker EXPANDS from: skeletons.json, written by the
 // session's warm skeleton-author (mockup or no-mockup path alike). Falls back to the spec only if a
 // caller somehow omitted it (the worker still reads the spec for Decisions/UI regardless).
@@ -237,28 +252,17 @@ for (const group of groups) {
   }
 }
 
-// ---- Deterministic gate + repair loop (progress-based termination + hard ceiling) ----
+// ---- Deterministic gate + repair loop (shared fragments/gate-loop.js.frag) ----
 phase('Gate')
 const gateCmd = args.gate && args.gate.command
-// The gate's truth is the command's EXIT CODE, never the model's reading of stdout. We append a
-// sentinel echo that only fires on a 0-exit chain and key pass off that exact string — closing the
-// false-green hole where a Haiku read a typecheck as clean while it exited non-zero.
-const GATE_SENTINEL = '__GATE_PASS__'
+// 2026-08-13 spec 05 D1/D2: spec-design-driver.js resolves config.gateCommand leg-by-leg and
+// emits the literal sentinel __UNGATED__ when every leg drops for an unresolved {placeholder}
+// (or when the host declares no gateCommand at all) — the raw unresolved command must never
+// reach this workflow, so a gate that is missing or is the sentinel both mean the same thing:
+// zero deterministic verification ran.
+const UNGATED_GATE = '__UNGATED__'
 
-// The gate agent reads paths out of gate-command output — which routinely prints absolute or
-// ./-prefixed paths. Match tolerantly so an in-scope failure isn't misclassified out-of-scope.
-const normPath = p => String(p).replace(/^\.\//, '').replace(/^\/+/, '')
-const scopePaths = Object.keys(fileToBatch)
-function resolveBatch(file) {
-  if (fileToBatch[file]) return fileToBatch[file]
-  const f = normPath(file)
-  if (fileToBatch[f]) return fileToBatch[f]
-  const hit = scopePaths.find(s => {
-    const sn = normPath(s)
-    return f === sn || f.endsWith('/' + sn) || sn.endsWith('/' + f)
-  })
-  return hit ? fileToBatch[hit] : null
-}
+// @fragment:gate-loop
 
 // author's gate is typecheck+lint — it proves STRUCTURE, never that the result looks right. A green
 // author means foundation + structure were authored by expanding the skeletons (token-closed, every
@@ -270,83 +274,67 @@ const implementNote = hasImplement
   ? { note: 'structural (skeleton-expanded) — NOT visually approved; the screenshot visual review (if configured) or the human Storybook loop (Phase 3) is the gate that clears it' }
   : {}
 
-if (!gateCmd) {
-  // No host gate configured for this stage — nothing deterministic to run; return what landed.
-  return { stage: 'complete', completed: receipts, ...implementNote, note: implementNote.note || 'no gate command — designer self-gates', tokens: budget.spent() }
+if (!gateCmd || gateCmd === UNGATED_GATE) {
+  // D2: no deterministic verification ran (either the host declares no gate for this stage, or
+  // every gateCommand leg dropped for an unresolved placeholder) — 'complete-ungated' is a
+  // DISTINCT stage from 'complete' so every consumer sees the degradation loudly instead of a
+  // false-green mark; the driver routes this straight to /spec:review, never --mark author-green.
+  return {
+    stage: 'complete-ungated', completed: receipts, ...implementNote,
+    note: implementNote.note ||
+      (gateCmd === UNGATED_GATE
+        ? 'gate resolved to __UNGATED__ — every gateCommand leg dropped for an unresolved placeholder; verification is absent'
+        : 'no gate command configured — verification is absent'),
+    tokens: budget.spent(),
+  }
 }
 
-let gate = null
-// Repair loop terminates on PROGRESS, not a blind counter (mirrors wf-build). After each failing
-// round we compare the failing file-SET (comparable across rounds because GATE requires `file` on
-// every failure) to the prior round's: an unchanged set means the repair waves are grinding the same
-// files with nothing to show — escalate now instead of burning another wave. The hard ceiling below
-// stays load-bearing: it catches OSCILLATION (fix A → break B → fix B → break A forever), which a
-// no-progress check on an ever-changing set never terminates.
-let prevFailKey = null
-for (let round = 0; round <= 3; round++) {
-  gate = await agent(
-    `Run this command exactly as written and report results. Do not edit any file.\n\n( ${gateCmd} ) && echo ${GATE_SENTINEL}\n\n` +
-    `The subshell wrapper makes the trailing \`&& echo ${GATE_SENTINEL}\` fire ONLY when the WHOLE gate command exits 0 ` +
-    `(even if it contains \`;\`); any non-zero exit means the sentinel never prints. Set pass=true ONLY if the ` +
-    `exact string ${GATE_SENTINEL} appears in the command output — if it is absent, the gate failed, set pass=false. ` +
-    `Put the raw exit code (or "non-zero, no ${GATE_SENTINEL}") and the error/failure count in summary. ` +
-    `For each failure, identify the single file that most likely needs the fix and summarize the ` +
-    `failure in one line including the check name.`,
-    { label: `gate:round-${round}`, phase: 'Gate', schema: GATE, model: 'haiku', effort: 'low' })
-  // Self-contradiction guard: a model may still report pass=true while listing failures (the
-  // false-green this guard exists to kill). The workflow, not the model, decides — pass with any
-  // failure listed is a fail. Enforced regardless of model behavior.
-  if (gate && gate.pass && gate.failures && gate.failures.length > 0) gate.pass = false
-  if (!gate || gate.pass) break
-  // A failed gate with NO per-file failures gives the repair loop nothing to route — an empty
-  // repair wave would burn a round and then trip no-progress anyway. Escalate immediately.
-  if (!gate.failures || !gate.failures.length) break
+const loopResult = await runGateLoop({
+  gateCmd,
+  phase: 'Gate',
+  contextLabel: '',
+  repairFn: async (repairEntries, round, historySnapshot) => {
+    // Repair rounds run at default effort (unlike first-pass expansion): the cheap transcription
+    // already failed once here, so the retry gets full reasoning headroom.
+    const repairOut = await parallel(repairEntries.map(([bid, fails]) => () => {
+      // Prior-round failures are shown so a late-round worker can detect oscillation (its "fix" is
+      // a re-proposal of an approach an earlier round already tried and the gate already rejected).
+      // Files on disk carry the prior fixes' STATE, but only this block carries their OUTCOME.
+      const prior = (historySnapshot[bid] || []).map(h =>
+        `Round ${h.round}:\n${h.fails.map(f => `- ${f.file} — ${f.summary}`).join('\n')}`).join('\n')
+      return dispatch(
+        workerPrompt(batchById[bid]) +
+        (prior
+          ? `\n\n## Already attempted (earlier repair rounds)\nThese failures were repaired in earlier rounds and the gate re-ran afterward:\n${prior}\nIf a failure below matches one of these, the earlier approach was wrong or caused a regression elsewhere — do NOT repeat it; take a different approach. If your fix would undo an earlier round's fix, reconcile both instead of trading one failure for the other.`
+          : '') +
+        `\n\n## Repair (round ${round + 1})\nYour batch's previous output produced these gate failures. ` +
+        `Fix them without changing unrelated code:\n` +
+        fails.map(f => `- ${f.file} — ${f.summary}`).join('\n'),
+        {
+          label: `repair:${bid}:r${round + 1}`, phase: 'Gate', schema: RECEIPT,
+          agentType: resolveType(batchById[bid].agentType), model: 'sonnet',
+        })
+    }))
+    // A repair worker can hit a design fork / stale assumption exactly like an author worker —
+    // HARD_RULES instructs it to return blocked; honor that instead of discarding the receipt and
+    // exiting as an opaque gate-exhausted. (Null repair results are not fatal: the next gate round
+    // re-measures what actually landed.)
+    return collectBlocked(repairEntries.map(([bid]) => batchById[bid]), repairOut)
+  },
+})
 
-  const byBatch = {}
-  const outOfScope = []
-  for (const f of gate.failures) {
-    const bid = resolveBatch(f.file)
-    if (!bid) { outOfScope.push(f); continue }
-    if (!byBatch[bid]) byBatch[bid] = []
-    byBatch[bid].push(f)
-  }
-  if (outOfScope.length) {
-    return { stage: 'out-of-scope-failure', failures: outOfScope, gate, completed: receipts, tokens: budget.spent() }
-  }
-  // No-progress escalation: identical failing file-set to last round → stop (routes to the
-  // gate-exhausted return below; no new exit path).
-  const failKey = gate.failures.map(f => f.file).sort().join('\n')
-  if (failKey === prevFailKey) break
-  prevFailKey = failKey
-  if (round === 3) break
-
-  log(`Gate round ${round} failed — repairing batches: ${Object.keys(byBatch).join(', ')}`)
-  const repairEntries = Object.entries(byBatch)
-  // Repair rounds run at default effort (unlike first-pass expansion): the cheap transcription
-  // already failed once here, so the retry gets full reasoning headroom.
-  const repairOut = await parallel(repairEntries.map(([bid, fails]) => () =>
-    dispatch(
-      workerPrompt(batchById[bid]) +
-      `\n\n## Repair (round ${round + 1})\nYour batch's previous output produced these gate failures. ` +
-      `Fix them without changing unrelated code:\n` +
-      fails.map(f => `- ${f.file} — ${f.summary}`).join('\n'),
-      {
-        label: `repair:${bid}:r${round + 1}`, phase: 'Gate', schema: RECEIPT,
-        agentType: resolveType(batchById[bid].agentType), model: 'sonnet',
-      })))
-  // A repair worker can hit a design fork / stale assumption exactly like an author worker —
-  // HARD_RULES instructs it to return blocked; honor that instead of discarding the receipt and
-  // exiting as an opaque gate-exhausted. (Null repair results are not fatal: the next gate round
-  // re-measures what actually landed.)
-  const repairStatus = collectBlocked(repairEntries.map(([bid]) => batchById[bid]), repairOut)
-  if (repairStatus.blocked.length) {
-    return { stage: 'blocked', blocked: repairStatus.blocked, missing: repairStatus.missing, gate, completed: receipts, tokens: budget.spent() }
-  }
+if (loopResult.blocked && loopResult.blocked.length) {
+  return { stage: 'blocked', blocked: loopResult.blocked, missing: loopResult.missing, gate: loopResult.gate, completed: receipts, tokens: budget.spent() }
+}
+if (loopResult.outOfScope && loopResult.outOfScope.length) {
+  return { stage: 'out-of-scope-failure', failures: loopResult.outOfScope, gate: loopResult.gate, completed: receipts, tokens: budget.spent() }
 }
 
 return {
-  stage: gate && gate.pass ? 'complete' : 'gate-exhausted',
-  gate,
+  stage: loopResult.pass ? 'complete' : 'gate-exhausted',
+  gate: loopResult.gate,
+  exhaustedBy: loopResult.exhaustedBy,
+  deviations: loopResult.deviations,
   completed: receipts,
   ...implementNote,
   tokens: budget.spent(),

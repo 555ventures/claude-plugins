@@ -1,6 +1,7 @@
 ---
 date: 2026-08-13
-status: hardened
+status: implementing
+diff_base: 4d476ffe8889698f3170d560141d80fb095b4d42
 open_markers: 0
 risk: T3
 area: workflows

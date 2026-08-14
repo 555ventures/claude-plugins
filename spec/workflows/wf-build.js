@@ -94,6 +94,33 @@ args.groups = validateGroups(args.groups, 'wf-build')
   }
 })
 
+// Trust-boundary asserts (2026-08-13 spec 05 D8): named functions (not bare top-level statements)
+// so tests/workflows/twin-parity.test.js can execute them standalone via evalFns. An unguarded
+// `args.gate.testCommand` deref crashes cryptically the first time the red-check phase reaches it;
+// free text in `resolutions` is the last open door in the 2026 args-corruption class (quotes/
+// backslashes corrupting the JSON channel the same way the top-of-file normalizeArgs guard exists
+// for) — both fail loud here, once, instead of wherever they happen to be first dereferenced.
+function assertGateArgs(gate) {
+  if (!gate || typeof gate.testCommand !== 'string') {
+    throw new Error('wf-build: args.gate.testCommand must be a string (got ' +
+      (gate ? typeof gate.testCommand : 'no gate object') + ') — malformed args.gate')
+  }
+  return gate
+}
+function assertResolutions(resolutions) {
+  const TOKEN_RE = /^[A-Za-z0-9._\/:@=-]+$/
+  for (const key of Object.keys(resolutions || {})) {
+    const value = resolutions[key]
+    if (typeof value !== 'string' || !TOKEN_RE.test(value)) {
+      throw new Error('wf-build: resolutions["' + key + '"] is not a valid args token (must match ' +
+        TOKEN_RE + ') — resolutions carries an opaque cache-bust token only, never the ruling prose')
+    }
+  }
+  return resolutions
+}
+assertGateArgs(args.gate)
+assertResolutions(args.resolutions)
+
 // args carries ONLY paths, ids, enums, booleans, and the host's gate command — no free text.
 // Any human/spec prose (per-file intent, batch notes, orchestrator rulings) is Read from the
 // spec on disk by the agent that needs it. Free text in args corrupts the JSON (quotes/
@@ -181,9 +208,24 @@ const RED = {
         required: ['path', 'expected', 'observed', 'detail'],
       },
     },
+    // 2026-08-13 spec 05 D4: the AUDIT_RED:<path> / AUDIT_GREEN:<path> sentinel line the agent
+    // observed per file, cross-checked against its allMatch/mismatches reading below — the same
+    // exit-code-only discipline the Gate phase's own sentinel already enforces. null ONLY for the
+    // sanctioned-green-carriers path (no agent runs — pinned by tests/redcheck-green-carriers.test.js).
+    sentinels: {
+      type: ['array', 'null'],
+      items: {
+        type: 'object',
+        properties: {
+          path: { type: 'string' },
+          sentinel: { type: 'string' },
+        },
+        required: ['path', 'sentinel'],
+      },
+    },
     summary: { type: 'string' },
   },
-  required: ['allMatch', 'mismatches', 'summary'],
+  required: ['allMatch', 'mismatches', 'summary', 'sentinels'],
 }
 
 const GATE = {
@@ -340,11 +382,28 @@ for (const b of args.testBatches || []) {
   for (const f of b.files) fileToBatch[f.path] = b.id
 }
 
-// The gate agent is asked for File Plan paths, but it reads them out of gate-command output —
-// which routinely prints absolute or ./-prefixed paths. Match the reported path against the
-// File Plan scope keys tolerantly so an in-scope failure isn't misclassified out-of-scope and
-// bounced to the orchestrator instead of through the repair loop. Exact match first, then a
-// path-boundary suffix match in either direction (absolute→relative or basename→full).
+// generated from fragments/gate-loop.js.frag — edit the fragment, then `npm run build:workflows`.
+// WHY this exists (specs/20260813/05-workflow-correctness-repairs.md D5): wf-build's gate-repair
+// loop (probe, repair-round loop with a hard ceiling, anti-oscillation history, phantom-failure
+// hardening) was hand-copied into wf-design and drifted — wf-design never received the deviations
+// tracking, the repair history, or the phantom-failure prompt hardening even though the
+// justifying comments were copied over. This fragment is the ONE place the loop lives; both
+// bodies splice it verbatim and thread only what genuinely differs (prompt context, how a
+// repair round is dispatched) through `runGateLoop`'s parameters. wf-build is the extraction's
+// behavior-preserving source of truth; wf-design gains the hardening it was missing.
+// NOTE: `gateCmd` is the load-bearing interpolated variable name — tests/workflow-guards.test.js
+// pins the literal `${gateCmd}` in both generated outputs. Never rename it.
+// Must not use the per-workflow-name splice substitution token build-workflows.js applies to
+// fragments — the spliced region must be byte-identical in wf-build.js and wf-design.js
+// (tests/workflows/twin-parity.test.js AC-20260813-05-7).
+const REPAIR_CEILING = 3
+
+// Failure→batch routing. The gate agent reads File Plan paths out of gate-command output, which
+// routinely prints absolute or ./-prefixed paths — match tolerantly (exact, then a path-boundary
+// suffix match in either direction) so an in-scope failure isn't misclassified out-of-scope and
+// bounced to the orchestrator instead of through the repair loop. Closured over the body's own
+// `fileToBatch` (built identically — same variable name — by both wf-build and wf-design before
+// this fragment's marker).
 const normPath = p => String(p).replace(/^\.\//, '').replace(/^\/+/, '')
 const scopePaths = Object.keys(fileToBatch)
 function resolveBatch(file) {
@@ -356,6 +415,94 @@ function resolveBatch(file) {
     return f === sn || f.endsWith('/' + sn) || sn.endsWith('/' + f)
   })
   return hit ? fileToBatch[hit] : null
+}
+
+// The shared gate-repair loop. `repairFn(repairEntries, round, historySnapshot)` dispatches one
+// repair round for the caller's batch shape and must return `{blocked, missing}` (the shape
+// `collectBlocked` already returns in both bodies) — a non-empty `blocked` routes straight to the
+// caller's blocked-return, exactly like the author/implement phase does.
+async function runGateLoop({ gateCmd, phase, repairFn, contextLabel }) {
+  const GATE_SENTINEL = '__GATE_PASS__'
+  let gate = null
+  // Repair loop terminates on PROGRESS, not a blind counter. After each failing round we compare
+  // the failing file-SET (comparable across rounds because GATE requires `file` on every failure)
+  // to the prior round's: an unchanged set means the repair waves are grinding the same files with
+  // nothing to show — escalate now instead of burning another wave. The hard ceiling stays
+  // load-bearing: it catches OSCILLATION (fix A -> break B -> fix B -> break A forever), which a
+  // no-progress check on an ever-changing set never terminates.
+  let prevFailKey = null
+  // Per-batch failure history across repair rounds (bid -> [{round, fails}]), fed into repairFn so
+  // a late-round worker can see what earlier rounds already tried — the anti-oscillation
+  // counterpart to prevFailKey, which only TERMINATES on repetition and never warns the repairer.
+  const repairHistory = {}
+  // Sidecar rows accumulated across repair rounds for the report surface (spec 06 consumes this;
+  // this spec only records it) — e.g. the self-contradiction guard firing is itself a deviation
+  // from the clean path worth surfacing, not just silently corrected.
+  const deviations = []
+  for (let round = 0; round <= REPAIR_CEILING; round++) {
+    gate = await agent(
+      `Run this command exactly as written and report results. Do not edit any file.\n\n( ${gateCmd} ) && echo ${GATE_SENTINEL}\n\n` +
+      `The subshell wrapper makes the trailing \`&& echo ${GATE_SENTINEL}\` fire ONLY when the WHOLE gate command exits 0 ` +
+      `(even if it contains \`;\`); any non-zero exit means the sentinel never prints. Set pass=true ONLY if the ` +
+      `exact string ${GATE_SENTINEL} appears in the command output — if it is absent, the gate failed, set pass=false. ` +
+      `Put the raw exit code (or "non-zero, no ${GATE_SENTINEL}") and the error/failure count in summary. ` +
+      `For each failure, identify the single file that most likely needs the fix${contextLabel ? ' ' + contextLabel : ''} and summarize the ` +
+      `failure in one line including the test/check name. Enumerate a failure only where the runner itself attributes one (a ` +
+      `failing test block, a compiler/lint error line). Error-shaped strings logged by passing tests ` +
+      `(mocked-rejection messages, expected-error output) are never failures — cross-check the ` +
+      `runner's own per-file pass/fail summary before listing a file.`,
+      { label: `gate:round-${round}`, phase, schema: GATE, model: 'haiku', effort: 'low' })
+    // Self-contradiction guard: a model may still report pass=true while listing failures (the
+    // false-green this guard exists to kill). The workflow, not the model, decides — pass with any
+    // failure listed is a fail. Enforced regardless of model behavior; recorded as a deviation so
+    // the eventual report surface can see the correction happened, not just its silent effect.
+    if (gate && gate.pass && gate.failures && gate.failures.length > 0) {
+      deviations.push({ round, note: 'gate agent reported pass=true while listing failures — corrected to fail' })
+      gate.pass = false
+    }
+    // FAIL CLOSED: a dead gate agent is neither a pass nor a genuine red state — record the
+    // distinct cause so a consumer can tell a crashed gate agent apart from a real gate failure.
+    if (!gate) return { pass: false, rounds: round, deviations, exhaustedBy: 'agent-died', gate }
+    if (gate.pass) return { pass: true, rounds: round, deviations, exhaustedBy: null, gate }
+    // A failed gate with NO per-file failures gives the repair loop nothing to route — an empty
+    // repair wave would burn a round and then trip no-progress anyway. Escalate immediately.
+    if (!gate.failures || !gate.failures.length) return { pass: false, rounds: round, deviations, exhaustedBy: 'no-attributable-failure', gate }
+
+    const byBatch = {}
+    const outOfScope = []
+    for (const f of gate.failures) {
+      const bid = resolveBatch(f.file)
+      if (!bid) { outOfScope.push(f); continue }
+      if (!byBatch[bid]) byBatch[bid] = []
+      byBatch[bid].push(f)
+    }
+    if (outOfScope.length) return { pass: false, rounds: round, deviations, exhaustedBy: null, gate, outOfScope }
+
+    // No-progress escalation: identical failing file-set to last round -> stop (oscillation; routes
+    // to the caller's gate-exhausted return, no new exit path).
+    const failKey = gate.failures.map(f => f.file).sort().join('\n')
+    if (failKey === prevFailKey) return { pass: false, rounds: round, deviations, exhaustedBy: 'oscillation', gate }
+    prevFailKey = failKey
+    if (round === REPAIR_CEILING) return { pass: false, rounds: round, deviations, exhaustedBy: 'ceiling', gate }
+
+    log(`Gate round ${round} failed — repairing batches: ${Object.keys(byBatch).join(', ')}`)
+    const repairEntries = Object.entries(byBatch)
+    // Snapshot each batch's PRIOR-round history for the prompt before recording this round — the
+    // current failures belong in "to fix", not "already attempted".
+    const historySnapshot = {}
+    for (const [bid, fails] of repairEntries) {
+      historySnapshot[bid] = (repairHistory[bid] || []).slice()
+      if (!repairHistory[bid]) repairHistory[bid] = []
+      repairHistory[bid].push({ round: round + 1, fails })
+    }
+    const repairStatus = await repairFn(repairEntries, round, historySnapshot)
+    // A repair worker may hit the same fork/stale-assumption the author path surfaces — honor a
+    // blocked return instead of discarding it and exiting as an opaque gate-exhausted. (A null/
+    // empty repairStatus is not fatal: the next gate round re-measures what actually landed.)
+    if (repairStatus && repairStatus.blocked && repairStatus.blocked.length) {
+      return { pass: false, rounds: round, deviations, exhaustedBy: null, gate, blocked: repairStatus.blocked, missing: repairStatus.missing }
+    }
+  }
 }
 
 const receipts = []
@@ -397,7 +544,7 @@ if (args.tdd && (args.testBatches || []).length) {
     b.files.map(f => ({ path: f.path, expect: f.expect === 'green' ? 'green' : 'red' })))
   const redExpected = expectations.filter(f => f.expect === 'red')
   const greenExpected = expectations.filter(f => f.expect === 'green')
-  let red = { allMatch: true, mismatches: [], summary: 'all carriers sanctioned-green; probe skipped' }
+  let red = { allMatch: true, mismatches: [], summary: 'all carriers sanctioned-green; probe skipped', sentinels: null }
   if (redExpected.length === 0) {
     // Every carrier is sanctioned-green: there is no red-first state to verify, and under the
     // old allRed contract this exact spec shape looped the build into fastPath abandonment.
@@ -425,9 +572,34 @@ if (args.tdd && (args.testBatches || []).length) {
       `test command is likely workspace-filtered while the paths are repo-root-relative — ` +
       `rewrite the paths relative to the command's workspace and re-run before concluding; ` +
       `report observed "not-collected" only if no rewrite makes the runner collect them.\n` +
+      `For EACH file (both RED- and GREEN-expected), also run the sentinel command exactly: ` +
+      `${args.gate.testCommand} <path> && echo AUDIT_GREEN:<path> || echo AUDIT_RED:<path> ` +
+      `— this is the exit-code-only proof, the same discipline the Gate phase's own sentinel ` +
+      `already enforces, so "red"/"green" never rests on your reading of raw stdout alone. ` +
+      `Report every observed AUDIT_RED:<path> / AUDIT_GREEN:<path> line verbatim in \`sentinels\` ` +
+      `as {path, sentinel}, one entry per file.\n` +
       `Report allMatch=true only when every file matches its expectation; list every mismatch ` +
       `with the leg that decided it. Do not edit any file.`,
       { label: 'red-check', phase: 'RedCheck', schema: RED, model: 'sonnet', effort: 'low' })
+    // Cross-check each file's reported red/green state against its OWN observed sentinel line —
+    // a mismatched or missing sentinel means the agent's allMatch/mismatches reading is unproven,
+    // never a silent pass-through. sentinels: null (the sanctioned-green-carriers path above,
+    // where no agent runs) is exempt from this check by construction.
+    if (red && red.sentinels !== null) {
+      const sentinelByPath = {}
+      for (const s of red.sentinels || []) sentinelByPath[s.path] = s.sentinel
+      const sentinelMismatches = expectations
+        .filter(f => sentinelByPath[f.path] !== `AUDIT_${f.expect.toUpperCase()}:${f.path}`)
+        .map(f => ({
+          path: f.path, expected: f.expect, observed: 'not-collected', leg: 'none',
+          detail: sentinelByPath[f.path]
+            ? `sentinel mismatch: expected "AUDIT_${f.expect.toUpperCase()}:${f.path}", observed "${sentinelByPath[f.path]}" — UNVERIFIED red state`
+            : `no sentinel reported for ${f.path} — UNVERIFIED red state`,
+        }))
+      if (sentinelMismatches.length) {
+        red = { ...red, allMatch: false, mismatches: [...red.mismatches, ...sentinelMismatches] }
+      }
+    }
   }
   // FAIL CLOSED: a null red-check (agent died) is an UNVERIFIED red state, not a match —
   // proceeding would build on tests nobody confirmed fail. Surface it like a red-check failure.
@@ -456,95 +628,40 @@ for (const group of args.groups) {
   }
 }
 
-// ---- Phase: deterministic gate + repair loop ----
+// ---- Phase: deterministic gate + repair loop (shared fragments/gate-loop.js.frag) ----
 phase('Gate')
 const gateCmd = args.gate.command
-// The gate's truth is the command's EXIT CODE, never the model's reading of stdout. We append a
-// sentinel echo that only fires on a 0-exit chain and key pass off that exact string — closing the
-// false-green hole where a Haiku read a typecheck as clean while it exited non-zero.
-const GATE_SENTINEL = '__GATE_PASS__'
-let gate = null
-// Repair loop terminates on PROGRESS, not a blind counter. After each failing round we compare the
-// failing file-SET (comparable across rounds because GATE requires `file` on every failure) to the
-// prior round's: an unchanged set means the repair waves are grinding the same files with nothing to
-// show — escalate now instead of burning another wave. The hard ceiling below stays load-bearing: it
-// catches OSCILLATION (fix A → break B → fix B → break A forever), which a no-progress check on an
-// ever-changing set never terminates.
-let prevFailKey = null
-// Per-batch failure history across repair rounds (bid -> [{round, fails}]). Fed into repairPrompt
-// so late-round workers see what earlier rounds already tried — the anti-oscillation counterpart
-// to prevFailKey, which only TERMINATES on repetition and never warns the repairer.
-const repairHistory = {}
-for (let round = 0; round <= 3; round++) {
-  gate = await agent(
-    `Run this command exactly as written and report results. Do not edit any file.\n\n( ${gateCmd} ) && echo ${GATE_SENTINEL}\n\n` +
-    `The subshell wrapper makes the trailing \`&& echo ${GATE_SENTINEL}\` fire ONLY when the WHOLE gate command exits 0 ` +
-    `(even if it contains \`;\`); any non-zero exit means the sentinel never prints. Set pass=true ONLY if the ` +
-    `exact string ${GATE_SENTINEL} appears in the command output — if it is absent, the gate failed, set pass=false. ` +
-    `Put the raw exit code (or "non-zero, no ${GATE_SENTINEL}") and the error/failure count in summary. ` +
-    `For each failure, identify the single file that most likely needs the fix (source file for ` +
-    `implementation bugs, test file for bad tests) and summarize the failure in one line including ` +
-    `the test/check name. Enumerate a failure only where the runner itself attributes one (a ` +
-    `failing test block, a compiler/lint error line). Error-shaped strings logged by passing tests ` +
-    `(mocked-rejection messages, expected-error output) are never failures — cross-check the ` +
-    `runner's own per-file pass/fail summary before listing a file.`,
-    { label: `gate:round-${round}`, phase: 'Gate', schema: GATE, model: 'haiku', effort: 'low' })
-  // Self-contradiction guard: a model may still report pass=true while listing failures (the
-  // false-green this guard exists to kill). The workflow, not the model, decides — pass with any
-  // failure listed is a fail. Enforced regardless of model behavior.
-  if (gate && gate.pass && gate.failures && gate.failures.length > 0) gate.pass = false
-  if (!gate || gate.pass) break
-  // A failed gate with NO per-file failures gives the repair loop nothing to route — an empty
-  // repair wave would burn a round and then trip no-progress anyway. Escalate immediately.
-  if (!gate.failures || !gate.failures.length) break
+const loopResult = await runGateLoop({
+  gateCmd,
+  phase: 'Gate',
+  contextLabel: '(source file for implementation bugs, test file for bad tests)',
+  repairFn: async (repairEntries, round, historySnapshot) => {
+    const repairOut = await parallel(repairEntries.map(([bid, fails]) => () =>
+      dispatch(
+        repairPrompt(batchById[bid], fails, round + 1, historySnapshot[bid]),
+        {
+          label: `repair:${bid}:r${round + 1}`, phase: 'Gate', schema: RECEIPT,
+          agentType: resolveType(batchById[bid].agentType), model: 'sonnet',
+        })))
+    // A repair worker may hit the same fork/stale-assumption the author path surfaces — HARD_RULES
+    // instructs it to return blocked, so honor that here instead of discarding it and exiting as an
+    // opaque gate-exhausted. (A null repair result is not fatal: the next gate round re-measures.)
+    return collectBlocked(repairEntries.map(([bid]) => batchById[bid]), repairOut)
+  },
+})
 
-  const byBatch = {}
-  const outOfScope = []
-  for (const f of gate.failures) {
-    const bid = resolveBatch(f.file)
-    if (!bid) { outOfScope.push(f); continue }
-    if (!byBatch[bid]) byBatch[bid] = []
-    byBatch[bid].push(f)
-  }
-  if (outOfScope.length) {
-    return { stage: 'out-of-scope-failure', failures: outOfScope, gate, completed: receipts, tokens: budget.spent() }
-  }
-  // No-progress escalation: identical failing file-set to last round → stop (routes to the
-  // gate-exhausted return below; no new exit path).
-  const failKey = gate.failures.map(f => f.file).sort().join('\n')
-  if (failKey === prevFailKey) break
-  prevFailKey = failKey
-  if (round === 3) break
-
-  log(`Gate round ${round} failed — repairing batches: ${Object.keys(byBatch).join(', ')}`)
-  const repairEntries = Object.entries(byBatch)
-  // Snapshot each batch's PRIOR-round history for the prompt before recording this round —
-  // the current failures belong in "to fix", not "already attempted".
-  const historySnapshot = {}
-  for (const [bid, fails] of repairEntries) {
-    historySnapshot[bid] = (repairHistory[bid] || []).slice()
-    if (!repairHistory[bid]) repairHistory[bid] = []
-    repairHistory[bid].push({ round: round + 1, fails })
-  }
-  const repairOut = await parallel(repairEntries.map(([bid, fails]) => () =>
-    dispatch(
-      repairPrompt(batchById[bid], fails, round + 1, historySnapshot[bid]),
-      {
-        label: `repair:${bid}:r${round + 1}`, phase: 'Gate', schema: RECEIPT,
-        agentType: resolveType(batchById[bid].agentType), model: 'sonnet',
-      })))
-  // A repair worker may hit the same fork/stale-assumption the author path surfaces — HARD_RULES
-  // instructs it to return blocked, so honor that here instead of discarding it and exiting as an
-  // opaque gate-exhausted. (A null repair result is not fatal: the next gate round re-measures.)
-  const repairStatus = collectBlocked(repairEntries.map(([bid]) => batchById[bid]), repairOut)
-  if (repairStatus.blocked.length) {
-    return { stage: 'blocked', blocked: repairStatus.blocked, missing: repairStatus.missing, gate, completed: receipts, tokens: budget.spent() }
-  }
+if (loopResult.blocked && loopResult.blocked.length) {
+  return { stage: 'blocked', blocked: loopResult.blocked, missing: loopResult.missing, gate: loopResult.gate, completed: receipts, tokens: budget.spent() }
+}
+if (loopResult.outOfScope && loopResult.outOfScope.length) {
+  return { stage: 'out-of-scope-failure', failures: loopResult.outOfScope, gate: loopResult.gate, completed: receipts, tokens: budget.spent() }
 }
 
 return {
-  stage: gate && gate.pass ? 'complete' : 'gate-exhausted',
-  gate,
+  stage: loopResult.pass ? 'complete' : 'gate-exhausted',
+  gate: loopResult.gate,
+  exhaustedBy: loopResult.exhaustedBy,
+  deviations: loopResult.deviations,
   completed: receipts,
   tokens: budget.spent(),
 }

@@ -79,9 +79,16 @@ build that is the worktree itself. Phase 4 resolves a second, distinctly named s
      workflow call. The reviewers read it rather than receiving the output inline, which keeps
      `args` a small control channel. Leg `patterns`, `observed:"matches=<N>"` — always
      recorded (20260805/02 D1), though not a required leg.
-   - the host's `gateCommand` — the deterministic gate. **Capture the runner's skip/todo
+   - the host's `gateCommand` — the deterministic gate. Before this leg runs, resolve it exactly
+     as `build.md` Phase 0 step 3 already does (cited, not duplicated): `{testDirs}` resolved to
+     the glob form before the leg runs, from the spec's File Plan tests rows; unresolvable →
+     `unavailable`, naming the token — never a raw `{testDirs}`-bearing command execution. An
+     `unavailable` gate is a red leg for step 8's purposes (hard-stop before the panel, remedy
+     = fix the host's `gateCommand`/File Plan tests rows so the placeholder resolves), exactly
+     like a failing gate command. **Capture the runner's skip/todo
      counts** from its output (every mainstream runner prints them) — they feed the
-     skipped-test reconciliation in step 6. Leg `gate`, `observed:"skips=<N> todos=<M>"`.
+     skipped-test reconciliation in step 6. Leg `gate`, `observed:"skips=<N> todos=<M>"` (or
+     `"unavailable: <token>"` when unresolvable).
    - `bash $(spec-paths smoke)` — the **boot smoke leg** (shared invariants § Runtime
      Verification). Exit 0 = boot observed ready; exit 4 = runtime declared inert (sanctioned,
      note it in the verdict); any other exit is an automatic **hard finding** <!-- enforcedBy: spec/scripts/verdict.js --> — including

@@ -1,6 +1,6 @@
 ---
 date: 2026-08-13
-status: implementing
+status: done
 diff_base: dd4d47e3851225e267aae997293800c28ed81da2
 open_markers: 0
 risk: T3
@@ -161,6 +161,14 @@ schema field names (`hard_fork_list`/`conflicting_positions` — the audit's
 field); D4 (consumption rows) was added because every question-building consumer site was
 verified to ignore the payloads — producing unconsumed required fields repeats the exact
 GATE.summary defect spec 06 deletes.
+
+Build deviation (2026-08-14, absorbed): D4 named genesis-explore.md's "interview question
+site" for the `why_recommended` consumption edit, but unlike genesis-architect/genesis-design
+that file never builds an AskUserQuestion directly from wf-research's per-dimension option
+menu — its Phase 1 step 2 folds the menu return into research-brief.md's admitted rules
+instead. The consumption edit landed there (each admitted rule's rationale cites its menu's
+`why_recommended`), the closest analog to a question-builder site in that file. One-off:
+the site exists, it just isn't shaped like its siblings.
 
 Rejected findings/items, with reasons: **B5 (git merge.md) dropped** — refuter verified
 merge.md already derives the strategy from its printed table, recommends first, and glosses

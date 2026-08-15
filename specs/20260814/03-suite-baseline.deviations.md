@@ -1,1 +1,0 @@
-- [doctrine-batch] D8's plugin.json bump target (6.75.0) was already taken at HEAD (JJ-20260815-04 shipped it first, per § Gotchas' version-race precedent) → bumped to 6.76.0 with the same changelog paragraph appended, same commit.

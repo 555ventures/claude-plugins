@@ -1,6 +1,6 @@
 ---
 date: 2026-08-14
-status: implementing
+status: done
 diff_base: 4fd90683d604be55c9ed042045cdd7ed8ffb5177
 open_markers: 0
 risk: T2
@@ -354,6 +354,22 @@ Fragile spots for build: the trailer parser must skip the `✖ failing tests:` h
 itself (it matches `^✖ `); duration suffixes must strip before comparison; file paths in
 `test at` lines are absolute-or-relative depending on invocation — normalize to
 repo-relative before keying.
+
+**Build deviation, absorbed (2026-08-14).** D8's plugin.json bump target 6.75.0 was already
+taken at HEAD (JJ-20260815-04 shipped it first), so the doctrine batch bumped to 6.76.0 with
+the same changelog paragraph. This is the § Gotchas version-race class exactly as recorded —
+a one-off, no new Gotcha owed.
+
+**Review disposition (2026-08-15, CLEAN-with-qualifier).** One finding survived verification,
+DEMONSTRATED: `keyOf` joined its `(file, name)` key with a **raw NUL byte typed into the
+source** rather than the `'\0'` escape, which made git classify the whole script as binary —
+`git diff` printed `Binary files … differ`, `git blame` was dead, and every future edit to the
+sole derivation of suite-drift comparison would have been un-reviewable. Runtime semantics were
+correct throughout and all pins passed, which is why no gate caught it. **Fixed** (the raw byte
+replaced by the two-character escape; separator still U+0000, tests re-run green), then
+re-reviewed at `scope: "fix-delta"` — CLEAN, no new findings. The `CLEAN-with-qualifier`
+qualifier is the `ci` leg reporting `unavailable` (no CI run exists for this commit), not a
+finding.
 
 ## Canonical Delta
 

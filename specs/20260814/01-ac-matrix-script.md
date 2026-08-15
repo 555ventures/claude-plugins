@@ -1,6 +1,6 @@
 ---
 date: 2026-08-14
-status: implementing
+status: done
 diff_base: 009b5addecf6129b7ec892820a80e64cf52cfb15
 open_markers: 0
 risk: T3
@@ -213,6 +213,32 @@ Refuter-verified clean: the producer-chain claim (executed against real `verdict
 lines (A6 executed), fresh-manifest-per-iteration compatibility with the self-appending
 design, the D6 retag list's completeness (corpus grep found no further pins), and the
 three-copy ownership-claim consistency.
+
+Build deviation absorbed (2026-08-14, sidecar folded and deleted): D6's retag list also missed
+`tests/consistency/drift-reconcile.test.js`'s literal-phrase pin on "the Phase 0 grep matrix IS
+the drift gate" — the reworked step-5 invocation text initially dropped that literal while
+adding D5's script-executor citation. Resolved by keeping the literal intact ("the Phase 0 grep
+matrix IS the drift gate, now executed by `ac-matrix.js` …") rather than retagging an
+out-of-batch test file, per the in-place-update-without-weakening remedy; both the pin and D5's
+citation requirement hold. Same class as the waiver below, same root cause — recorded here
+rather than as a new Gotchas bullet, because pipeline rules § Gotchas already states this class
+and adding prose is not the fix for a prose guard that isn't being executed.
+
+Review waiver (2026-08-14, JJ): scope reconciliation flagged
+`tests/terminal-observable-acs.test.js` as an out-of-plan change (hard finding). **Waived —
+the edit was structurally mandatory and doctrine-sanctioned.** That file holds the only
+deep-equal pin over `spec/bin/spec-paths`'s complete key set, so D1's new `ac-matrix` key
+turns it red by construction; the build updated it in place and retagged it with
+AC-20260814-01-8, strengthening the assert message rather than weakening the pin — exactly the
+remedy pipeline rules § Gotchas prescribes ("a colliding test pin is updated in place and
+retagged with the new AC-ID (never weakened, never left red)"). The defect is D6's retag list,
+not the edit: the colliding-pin sweep is a prose instruction executed by hand at plan time and
+has now missed a pin three times (20260813/07 D8, 20260813/09 D4, and this spec) — the same
+"hand-executed from prose drifts per session and per model" class this spec exists to kill,
+left unmechanized on the pipeline's own plan-time surface. A follow-up spec mechanizing the
+sweep at plan lock is staged; this spec is not the place for it. The two `docs/roadmap/` paths
+in the same reconciliation are planning artifacts of specs 02–04 that shared the working tree,
+committed here on JJ's explicit call, not products of this build.
 
 ## Canonical Delta
 

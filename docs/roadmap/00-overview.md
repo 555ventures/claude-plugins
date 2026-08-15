@@ -18,3 +18,5 @@ fences off belongs to its owning brief.
 | 03 | fleet-provisioning |
 | 04 | review-smell-lens |
 | 05 | hotspot-audit |
+| 06 | mechanized-prose-checks |
+| 07 | suite-baseline |

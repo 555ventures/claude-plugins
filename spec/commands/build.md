@@ -85,7 +85,11 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
      A pin's falsifiability is verified by hand when in doubt (mutate the target, watch it
      redden, revert) — never by weakening or deleting the carrier.
 3. **Resolve the gate.** Take `gateCommand` and `testCommand` from config; substitute
-   `{testDirs}`/`{scopeDirs}` placeholders from the spec's File Plan dirs. Also resolve
+   `{testDirs}`/`{scopeDirs}` placeholders from the spec's File Plan dirs, **resolved to the
+   form the host's runner actually executes — for `node --test` that is the glob form**
+   (`node --test 'tests/<dir>/*.test.js'`; a bare directory does not run its test files on
+   Node 26 — it reports MODULE_NOT_FOUND and exits non-zero, a red leg with nothing wrong
+   under it; reproduced twice in this repo, INTAKE JJ-20260815-04). Also resolve
    `typecheckCommand`: the host's standalone typecheck leg when config or the gate exposes one
    (e.g. a `typecheck` script the gateCommand composes); `''` when the host has none. The
    red-check treats a file as red if it fails **either** leg — a test red only under typecheck

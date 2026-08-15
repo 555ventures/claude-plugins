@@ -116,9 +116,10 @@ T1-shaped work: doctrine prose edits pinned by existing tests, new sweeps in
   performs a real enrollment against the production autopilot-hub — it activates only when
   `AUTOPILOT_ENROLL_LIVE=1` is set in addition to `AUTOPILOT_ENROLL_HUB`/`AUTOPILOT_ENROLL_CODE`,
   and skips by declaration otherwise (specs/20260808/01-autopilot-enroll.md D11).
-- **Red-pin baseline**: the full suite deliberately carries failing INTAKE pins (11 as of
-  2026-08-01) — `npm test` exiting 1 on untouched code is the sanctioned state, not a
-  regression. The pipeline gate is therefore scoped via `{testDirs}`; pipeline-authored
+- **Red-pin baseline**: the full suite deliberately carries failing INTAKE pins — the
+  sanctioned-failing set is declared in `.claude/suite-baseline.json`, checked by
+  `spec/scripts/suite-baseline.js` — `npm test` exiting 1 on untouched code is the sanctioned
+  state, not a regression. The pipeline gate is therefore scoped via `{testDirs}`; pipeline-authored
   tests live under `tests/<scope>/` (e.g. `tests/autopilot/`) so scoped gate runs are
   pin-free. Turning a pin green happens only by implementing its intake item.
 - Scoped runs: `node --test tests/<file>` — paths are repo-root-relative and the runner

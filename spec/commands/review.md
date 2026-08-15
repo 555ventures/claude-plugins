@@ -120,6 +120,14 @@ build that is the worktree itself. Phase 4 resolves a second, distinctly named s
      `ci`, `observed:"unavailable"`/`"unavailable-transient"`/`"in-progress"`/`"conclusion=<value>"`.
    - **if config declares `driftScript`**: `{driftScript} {spec path}` — the host's AC-drift
      checker. Leg `drift`, when this leg ran.
+   - `node "$(spec-paths suite-baseline)" --check --root {root}` — the **suite leg** (D5,
+     specs/20260814/03-suite-baseline.md): drift against `.claude/suite-baseline.json`, the
+     checked-in sanctioned-red set, recorded but not required — the `patterns` precedent —
+     leg `suite`, `observed:"newFailing=<N> fixedNotRemoved=<M>"` (or `"unavailable —
+     <reason>"` on exit 4, which carries no finding). Exit 1 yields ONE mechanical **hard** <!-- enforcedBy: spec/scripts/suite-baseline.js -->
+     finding — "suite drift vs .claude/suite-baseline.json: {lines}" — entering Phase 2
+     dispositions exactly as step 7's reconcile findings do. Re-runs on fix-delta iterations
+     exactly as `patterns` does.
 4. Read the spec once; extract AC list, tier, area. Compute `{diffLoc}` =
    insertions + deletions from `git diff --shortstat {base}` — it scales the reviewer panel
    (a small diff never pays a 2-reviewer panel, whatever the tier).
@@ -183,8 +191,8 @@ build that is the worktree itself. Phase 4 resolves a second, distinctly named s
    Next: {named remedy}
    ```
 
-   Findings-producing legs (`reconcile`, `ac-matrix`, `skip-reconcile`) never trigger this
-   stop — their findings enter Phase 2.
+   Findings-producing legs (`reconcile`, `ac-matrix`, `skip-reconcile`, `suite`) never trigger
+   this stop — their findings enter Phase 2.
 
 ## Phase 1 — Review workflow
 

@@ -110,6 +110,15 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
    disk-recovery pattern `build_base` already uses, so a fresh review session on this spec
    recovers the base from the spec file, never from conversation context.
 
+   **At this same step, capture the build's pre-image** (D10, specs/20260814/03-suite-baseline.md
+   — attribution for Phase 4's suite check below): run
+   `node "$(spec-paths suite-baseline)" --snapshot --root {root} --out
+   .claude/spec-preimage/{specid}.json`, where `{specid}` is the spec path's date dir + number,
+   hyphen-joined (`specs/20260814/03-suite-baseline.md` → `20260814-03`). A resumed build
+   never re-snapshots — the snapshot binds to this one status-flipping step, which a resumed
+   build skips by construction; re-snapshotting mid-build would absorb this build's own red
+   TDD tests into the pre-image and mask them at Phase 4.
+
 ## Phase 1 — Run the build
 
 **Fast path (no workflow).** If the File Plan parses to a **single implementation batch of
@@ -240,6 +249,22 @@ After the ceiling or a stalled round, consult the retainer, then escalate to the
 --spec {spec path} --json`. A non-empty `outOfPlan` prints one line — `⚠️ out-of-plan: {list}`
 — pointing at the `out-of-scope-failure` fork row above; it surfaces drift before the
 checkpoint-commit instead of leaving it for review to catch retroactively.
+
+**Suite pre-image check (D10, BLOCKING on `preNewFailing` only —
+specs/20260814/03-suite-baseline.md):** after the gate above is green, beside the scope check
+and before the checkpoint-commit, run exactly once:
+`node "$(spec-paths suite-baseline)" --check --root {root} --pre
+.claude/spec-preimage/{specid}.json`. Disposition is four-way:
+- **`preNewFailing > 0` BLOCKs** into the repair path above — retag the colliding pin in place
+  with the new AC-ID per § Gotchas (never weakened, never left red), then re-run; after the
+  repair ceiling, consult the retainer, then escalate.
+- **`newFailing > 0` with `preNewFailing = 0` WARNS** loudly — `pre-existing at Phase 0 — not
+  this build's diff` — printing every name and the `--update` remedy, and never enters the
+  repair path.
+- **`fixedNotRemoved > 0` WARNS** with the `--update` remedy (the update rides the batch).
+- **Exit 4, or a missing pre-image, WARNS and falls back** to blocking on baseline `newFailing`,
+  printing the fallback note — conservative and deterministic, never a fresh mid-build
+  snapshot. Exit 2 is a build-config defect: print the remedy and escalate.
 
 Checkpoint-commit after the gate is green (and after each earlier green phase if the run is long).
 

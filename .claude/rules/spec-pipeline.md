@@ -211,11 +211,6 @@ upstream bug list. -->
   one spec; specs/20260813/09-model-placement-mechanics.md D4 — the "uncorrelated model"
   narrowing enumerated both shared.md loci but missed the paraphrased restatement at
   spec/commands/review.md:14, caught at review time by corpus stem-grep.)
-- `[plugin]` A spec Decision that records a class-level item "in spec/INTAKE.md, doctrine-only"
-  collides with INTAKE.md's authoring contract: every row's `Pinned by` must name a failing test
-  or a `pre-contract` artifact. Plan the citation (or the failing test) with the Decision, or the
-  build worker is forced to invent one. (specs/20260801/04-live-smoke.md D8 — landed as a
-  `pre-contract` citation to the spec's own Rationale.)
 - `[plugin]` `ac-matrix.js` parses AC bullets as `^- \*\*(token)\*\*` and requires the token to
   fully match `AC-\d{8}-\d{2}[a-z]?-\d+`. A build-time amendment written the way the Decisions
   table writes one — a prime-suffixed successor (`AC-…-3′`) plus the superseded original left as
@@ -232,11 +227,13 @@ upstream bug list. -->
   the durable fix is a cross-spec `[env:]` lookup (or scoping the reconciliation to the ACs the
   spec under review declares). (specs/20260814/04-lock-signal-window.md review 2026-08-15 —
   `AC-20260808-01-12`, declared `[env: AUTOPILOT_ENROLL_LIVE]` in specs/20260808/01.)
-- `[plugin]` A Decision that pins a non-default `model:` on a workflow seat owes the seat's **call
-  mechanism** too — resilience helpers like `dispatch()`'s model fallback only apply to calls routed
-  through them, so pinning the model on a bare `agent()` call leaves the seat with no recovery path
-  and makes the fallback machinery dead code for the one seat it was built for. Name the routing
-  (and any `// @fragment:` splice it requires) in the Decision or the File Plan row, not just the
-  model string. (specs/20260813/09-model-placement-mechanics.md D2 — the build had to splice
-  `@fragment:dispatch` into wf-panel and convert the aggregate call itself; logged as that spec's
-  only deviation.)
+- `[host]` Two former `[plugin]` gotchas were closed at intake 2026-08-15 as already covered by
+  plan lock's obligation→carrier sweep (spec 6.62.0), whose anchor list explicitly is not closed:
+  a Decision recording a class-level item "in spec/INTAKE.md, doctrine-only" owes the citation or
+  failing test that INTAKE's `Pinned by` contract requires (specs/20260801/04 D8), and a Decision
+  pinning a non-default `model:` on a workflow seat owes the seat's **call mechanism** too —
+  `dispatch()`'s model fallback only reaches calls routed through it, so a bare `agent()` call
+  leaves the seat with no recovery path (specs/20260813/09 D2). Both obligations are stated in
+  their Decisions' own text, which is what the sweep reads; keep them as worked examples, not as
+  new anchors. Contrast JJ-20260815-03, whose obligation is stated nowhere and therefore is not
+  covered.

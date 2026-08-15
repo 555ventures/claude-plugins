@@ -1,6 +1,6 @@
 ---
 date: 2026-08-14
-status: implementing
+status: done
 diff_base: 0d2eb6238aba909a9c360289c227a85aa1309b74
 open_markers: 0
 risk: T3
@@ -188,6 +188,23 @@ log), the `roadmap/deltas` literal surviving conditionally (roadmap-amendments p
 12's boundary phrases, PRAX-20260721-03 orthogonality, fidelity per-region attribution
 feasibility (`e.region` on every entry — A2's premise holds structurally), and the
 exit-code-neutrality claim (diagnosis only fires when findings already exist).
+
+Build deviation folded in (2026-08-15, one-off — absorbed here rather than into the host
+rules' Gotchas): D7 directs `branch-for` to "amend the merge-back row" in
+`scaffold-ledger.md`, but no existing row registers the `spec/<stem>` branch-derivation rule
+as a guard — only unrelated rows mention merge-back in passing. The doctrine batch added a
+new `merge-back.sh branch-for` row instead of amending a nonexistent one, which satisfies
+D7's intent (one registered owner with a promote/retire condition) at the same ledger cost.
+A planning-time miss on which rows exist, not a convention gap.
+
+Review close (2026-08-15, runId `wf_84fc6287-e19`): CLEAN-with-qualifier — the qualifier is
+the `ci` leg, structurally unavailable (this repo declares no forge workflow, so no CI run
+exists for the reviewed commit). Two blind reviewers, zero survivors, zero kills. The scoped
+gate exits 1 against this repo's sanctioned red-pin baseline; the failing-test NAME set was
+diffed against the pre-spec base (`0d2eb62`) and is identical, so the gate leg was recorded
+green on zero-regression evidence. One advisory smell-lens finding (ci-gate-parity.js's
+private config read) was auto-kept to `docs/audit/advisory-findings.md` — never a blocking
+finding.
 
 ## Canonical Delta
 

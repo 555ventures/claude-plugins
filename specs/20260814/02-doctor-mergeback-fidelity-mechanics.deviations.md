@@ -1,1 +1,0 @@
-- [doctrine batch] D7 says branch-for "amends the merge-back row" in scaffold-ledger.md, but no existing row registers the spec/<stem> branch-derivation rule as a distrust/guard mechanism (only unrelated rows mention "merge-back" in passing) → added a new row for `merge-back.sh branch-for` instead of amending a nonexistent one.

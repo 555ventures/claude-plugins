@@ -216,6 +216,22 @@ upstream bug list. -->
   or a `pre-contract` artifact. Plan the citation (or the failing test) with the Decision, or the
   build worker is forced to invent one. (specs/20260801/04-live-smoke.md D8 — landed as a
   `pre-contract` citation to the spec's own Rationale.)
+- `[plugin]` `ac-matrix.js` parses AC bullets as `^- \*\*(token)\*\*` and requires the token to
+  fully match `AC-\d{8}-\d{2}[a-z]?-\d+`. A build-time amendment written the way the Decisions
+  table writes one — a prime-suffixed successor (`AC-…-3′`) plus the superseded original left as
+  a struck top-level `- ~~**AC-…-3**~~` bullet — yields TWO `malformed-ac` hard findings, and a
+  malformed bullet is **dropped from the coverage sweep entirely**, so the amended AC's test
+  could be deleted and review would still report full coverage. Amend an AC by keeping the plain
+  ID and demoting the superseded text to an indented sub-line; prime marks are for Decision IDs
+  (unlinted) only. (specs/20260814/04-lock-signal-window.md — review 2026-08-15 caught it on the
+  spec's own load-bearing ordering pin.)
+- `[plugin]` `ac-matrix.js`'s skipped-test reconciliation reads `[env: VAR]` declarations from
+  **only the spec under review**, but the scoped gate glob runs every test file in the directory.
+  A test whose AC is env-gated in a *different* spec therefore reports as an unsanctioned skip —
+  a hard finding — on every review touching that area, forever. Waive with the owning spec cited;
+  the durable fix is a cross-spec `[env:]` lookup (or scoping the reconciliation to the ACs the
+  spec under review declares). (specs/20260814/04-lock-signal-window.md review 2026-08-15 —
+  `AC-20260808-01-12`, declared `[env: AUTOPILOT_ENROLL_LIVE]` in specs/20260808/01.)
 - `[plugin]` A Decision that pins a non-default `model:` on a workflow seat owes the seat's **call
   mechanism** too — resilience helpers like `dispatch()`'s model fallback only apply to calls routed
   through them, so pinning the model on a bare `agent()` call leaves the seat with no recovery path

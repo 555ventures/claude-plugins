@@ -31,7 +31,7 @@ const { ROOT, tmpdir, extractFn } = require('../helpers')
 // AC-20260814-04-1..3 below, pinning `installEarlyLockRelease` (D1). AC-20260814-04-4 retags
 // the existing AC-20260810-05-12 real-start lifecycle test (D4c) as this spec's regression pin.
 //
-// AC-3′ (amended at build, 2026-08-15, D2′) pins TWO orderings in bin/autopilotd, because the
+// AC-20260814-04-3 (amended at build, 2026-08-15, D2′) pins TWO orderings in bin/autopilotd, because the
 // build's stability duty proved each one is load-bearing and each was originally wrong:
 //   (a) installEarlyLockRelease BEFORE acquireLock. "Same tick, immediately after" is not a
 //       closed window — the `wx` write and the sigaction install are separate syscalls and the

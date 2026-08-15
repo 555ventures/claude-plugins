@@ -1,6 +1,6 @@
 ---
 date: 2026-08-14
-status: implementing
+status: done
 diff_base: 35522c2d3403c5e2733f626d614a54e4e0e5005c
 open_markers: 0
 risk: T3
@@ -91,7 +91,10 @@ installEarlyLockRelease({ stateDir, pid, processImpl = process, fsImpl = fs })
 - **AC-20260814-04-2**: WHEN `remove()` on the returned handle is called THE SYSTEM SHALL
   deregister both listeners (fake `processImpl` listener registry empty for both signals)
   → tests/autopilot/lock.test.js
-- **AC-20260814-04-3′** *(amended at build 2026-08-15 with D2′; supersedes AC-3 below)*: WHEN
+- **AC-20260814-04-3** *(amended at build 2026-08-15 with D2′; the superseded original is kept
+  as an indented sub-line below — the AC-ID itself stays plain, never prime-suffixed, because
+  `ac-matrix.js` drops any bullet whose leading bold token fails `AC-\d{8}-\d{2}[a-z]?-\d+`
+  and a dropped bullet is silently excluded from the coverage sweep)*: WHEN
   `autopilot/bin/autopilotd`'s source is read THE SYSTEM SHALL show, inside `main()`, the
   `installEarlyLockRelease(` call expression **before** the `acquireLock({` call expression
   with no `await` token in the slice between them; AND `installSignalHandlers(` before
@@ -100,16 +103,19 @@ installEarlyLockRelease({ stateDir, pid, processImpl = process, fsImpl = fs })
   the live in-window signal timing has no deterministic external repro without a test seam —
   that residual is covered by these pins plus AC-4's end-to-end net and the orchestrator's
   under-load loop) → tests/autopilot/lock.test.js
-- ~~**AC-20260814-04-3**~~ *(superseded by AC-3′)*: ~~WHEN the source slice of
-  `autopilot/bin/autopilotd` from the `acquireLock({` call expression to the
-  `buildAdapterAndLanes` call is read THE SYSTEM SHALL contain `installEarlyLockRelease` and
-  no `await` token in that slice; and `installSignalHandlers(` SHALL appear in source before
-  `adapter.start()`, with its body calling `early.remove()`~~ → tests/autopilot/lock.test.js
+  - *superseded original (kept for the record, never a live AC):* ~~WHEN the source slice of
+    `autopilot/bin/autopilotd` from the `acquireLock({` call expression to the
+    `buildAdapterAndLanes` call is read THE SYSTEM SHALL contain `installEarlyLockRelease` and
+    no `await` token in that slice; and `installSignalHandlers(` SHALL appear in source before
+    `adapter.start()`, with its body calling `early.remove()`~~
 - **AC-20260814-04-4**: WHEN a real spawned `autopilotd` acquires the lock and receives
   SIGTERM THE SYSTEM SHALL CONTINUE TO exit cleanly with the lockfile removed (the
-  existing `AC-20260810-05-12` lifecycle test, additionally tagged with this ID — green
-  pre-change in isolation; post-change 10-run stability evidence is the orchestrator duty
-  under the File Plan) → tests/autopilot/lock.test.js
+  existing `AC-20260810-05-12` lifecycle test, additionally tagged with this ID —
+  **corrected at build 2026-08-15:** NOT green pre-change in isolation, it failed ~1-in-40
+  there carrying the stale-lock signature, so this pin was already reporting the real defect;
+  post-change stability evidence is the several-hundred-loaded-cycle orchestrator duty under
+  the File Plan, never a 10-run loop, which cannot see a ~0.5% rate at all)
+  → tests/autopilot/lock.test.js
 
 ## Assumptions (escalation triggers)
 
@@ -167,10 +173,41 @@ detection to the probabilistic flake signal this incident proved unjudgeable.
 Fragile spot for build: the slice pin must anchor on the `acquireLock({` call expression
 (never the require line) and tolerate the `try/catch` around it.
 
+Review dispositions (2026-08-15, /spec:review iteration 1 — two mechanical findings fixed in
+place, two waived by the user):
+
+- **Fixed** — the build's amendment notation (`AC-20260814-04-3′` plus a struck top-level
+  `~~**AC-20260814-04-3**~~` bullet) produced two `malformed-ac` hard findings: `ac-matrix.js`
+  parses only `^- \*\*(token)\*\*` and requires `AC-\d{8}-\d{2}[a-z]?-\d+`, so both bullets were
+  dropped from the AC↔test coverage sweep — leaving this spec's load-bearing ordering pin
+  unverified by the gate even though its test exists and passes. The amended AC now carries the
+  plain ID the test already tags, and the superseded original is an indented sub-line, not a
+  top-level bullet. **Amendment rule for this repo: never prime-suffix an AC-ID, and never leave
+  a superseded AC as a top-level bullet — Decision IDs (D2′) are unlinted and may.**
+- **Fixed** — AC-4's parenthetical still asserted "green pre-change in isolation" and a "10-run"
+  stability duty, both of which this spec's own Build-time amendments section falsifies (measured
+  ~1-in-40 failure in isolation; the duty is several hundred loaded cycles). A build-time
+  amendment that lands in a Decision and an amendments note but not in the AC text leaves the
+  spec asserting the refuted claim at the one place a future reader treats as authoritative.
+- **Waived (2026-08-15, JJ)** — `docs/canonical/autopilot.md` flagged out-of-plan by
+  `scope-reconcile.js`. The build applied this spec's own Canonical Delta ahead of the review
+  close step; the content is verbatim what the Canonical Delta section prescribes, so review's
+  Phase 3 step 2 is a no-op rather than a missing write. No rework.
+- **Waived (2026-08-15, JJ)** — `skip-reconcile` reported `AC-20260808-01-12` as an unsanctioned
+  skip. That AC declares `[env: AUTOPILOT_ENROLL_LIVE]` in **its own** spec
+  (specs/20260808/01-autopilot-enroll.md), but `ac-matrix.js` reads only the spec under review,
+  so it cannot see a declaration owned by another spec while the scoped gate glob
+  (`tests/autopilot/*.test.js`) still executes that test. False positive, and a recurring one —
+  every future review of this area re-reports it, which is exactly how a real skipped test
+  eventually gets waved through. Logged as a `[plugin]` Gotcha in the pipeline rules (the
+  sanctioned review-side carrier; `/spec:doctor` rolls `[plugin]` gotchas up as the upstream bug
+  list and `/intake` triages them into `spec/INTAKE.md` behind its failing-test-first contract,
+  which review may not bypass).
+
 ## Build-time amendments (2026-08-15)
 
 The build's own stability duty falsified two of this spec's claims. Both are recorded above as
-D2′/AC-3′ rather than patched silently:
+D2′ and the amended AC-3 rather than patched silently:
 
 1. **"Same synchronous tick after `acquireLock`" is not a closed window.** The lockfile write
    and the signal-handler install are two syscalls; the kernel delivers between them at ~0.5%

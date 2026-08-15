@@ -1,7 +1,9 @@
 'use strict'
 const { test } = require('node:test')
 const assert = require('node:assert')
-const { read } = require('./helpers')
+const fs = require('node:fs')
+const path = require('node:path')
+const { read, ROOT, SPEC, tmpdir, runNode } = require('./helpers')
 
 // CROSS-20260813-03 (hearwell ×2 + upwell): qualifiers that exist at run time die before the
 // durable, machine-readable artifact records them. Three shapes:
@@ -95,4 +97,43 @@ test('AC-20260813-02-6: the Drift gate section carries the [oracle:] carve-out i
     'as step 5\'s grep matrix — otherwise an `[oracle:]`-tagged AC is exempted by step 5 but ' +
     'this section\'s "zero test hits is an automatic hard finding" restatement contradicts it ' +
     'for the exact same AC')
+})
+
+// specs/20260814/01-ac-matrix-script.md D6 (retag): the [oracle:] consequence semantics stay
+// stated in review.md's step-5 residue and both Drift gate branches (D5), but the algorithm
+// that ENFORCES them moved to spec/scripts/ac-matrix.js — D5's enforcedBy markers must now
+// point there, and the semantics must actually be enforced by the script, not just asserted
+// in prose. Two pins: the doctrine citation, and a live exec check against the script.
+
+test('AC-20260814-01-10: review.md\'s [oracle:] consequence sentences carry an enforcedBy marker pointing at spec/scripts/ac-matrix.js', () => {
+  assert.match(review, /enforcedBy:\s*spec\/scripts\/ac-matrix\.js/,
+    'specs/20260814/01-ac-matrix-script.md D5 requires the retained [oracle:]/[env:] consequence ' +
+    'sentences in review.md to carry an `enforcedBy: spec/scripts/ac-matrix.js` marker once the ' +
+    'algorithm moves out of doctrine and into the script — without it, nothing durably links the ' +
+    'consequence prose to the code that actually enforces it')
+})
+
+test('AC-20260814-01-10: ac-matrix.js actually enforces the oracle-red-or-absent hard-finding semantics review.md documents', () => {
+  const dir = tmpdir('vqd10')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/oracle.test.js'), '// unrelated content\n')
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, '# Test Spec\n\n## Acceptance Criteria\n\n' +
+    '- **AC-20260814-10-1**: WHEN X THE SYSTEM SHALL Y [oracle: gate] → tests/oracle.test.js\n\n' +
+    '## File Plan\n\n| Path | Action | Layer | Summary |\n|------|--------|-------|---------|\n' +
+    '| tests/oracle.test.js | CREATE | tests | covers AC |\n')
+  const manifest = path.join(dir, 'manifest.jsonl')
+  fs.writeFileSync(manifest, '')
+  const res = runNode('scripts/ac-matrix.js',
+    ['--spec', spec, '--root', dir, '--manifest', manifest, '--json'])
+  assert.strictEqual(res.status, 1,
+    `ac-matrix.js must exist and enforce review.md's documented rule (a declared oracle leg ` +
+    `absent from the manifest is a hard finding, identical standing to an uncovered AC) — got status ${res.status}, stderr: ${res.stderr}`)
+  let out
+  try { out = JSON.parse(res.stdout) } catch (e) {
+    assert.fail(`--json output did not parse: ${e.message} (stderr: ${res.stderr})`)
+  }
+  assert.ok(out.findings.some(f => f.class === 'oracle-red-or-absent'),
+    'the AC declares [oracle: gate] but the manifest has no gate row at all — the script must ' +
+    'emit oracle-red-or-absent, the same consequence review.md\'s doctrine states in prose')
 })

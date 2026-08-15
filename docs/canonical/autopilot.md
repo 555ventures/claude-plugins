@@ -111,11 +111,22 @@ actually flip state?) is never parsed from the transcript — the caller re-deri
   re-derives everything else from `spec-status`. A question pending at crash re-materializes
   because the stage re-runs and asks again — repeated, never defaulted.
 - **Pidfile lock — one daemon per box** (specs/20260810/05): normal start takes
-  `<stateDir>/autopilotd.lock` via an `O_EXCL` (`wx`) write before lane construction and
-  releases it on clean shutdown; a live (or `EPERM`-foreign) pid in the lockfile exits 2
-  naming that pid. Stale (`ESRCH`) pids recover by unlink-then-fresh-`wx` — an `EEXIST` on
-  the retake means another starter won the race and is a refusal, never an overwrite.
-  `--check` never touches the lock, so preflight runs beside a live daemon.
+  `<stateDir>/autopilotd.lock` via an `O_EXCL` (`wx`) write before lane construction; a live
+  (or `EPERM`-foreign) pid in the lockfile exits 2 naming that pid. Stale (`ESRCH`) pids
+  recover by unlink-then-fresh-`wx` — an `EEXIST` on the retake means another starter won the
+  race and is a refusal, never an overwrite. `--check` never touches the lock, so preflight
+  runs beside a live daemon.
+- **The release contract is a pair, not one promise** (specs/20260814/04): clean release on
+  SIGTERM/SIGINT is **best-effort** — it runs in a JS listener, and no listener can run on a
+  process that has been killed outright or whose loop is wedged. Reclamation is the
+  **guaranteed** leg: after any unclean death the next start's `ESRCH` recovery retakes the
+  lock, and a supervisor's SIGKILL escalation (systemd `TimeoutStopSec`) restores the kernel
+  default that installing a handler removes. Reading "released on clean shutdown" as a
+  guarantee is what made the 2026-08-15 escape look impossible. The daemon's job is to keep a
+  listener armed continuously from before the lockfile is written until it exits (the two
+  orderings in `bin/autopilotd`, both pinned); the recovery ladder covers everything else.
+  Never reclaim a lock from a **live** pid — two daemons on one repo is the hazard the module
+  exists to prevent.
 
 ## Provisioning
 

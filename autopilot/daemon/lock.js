@@ -14,12 +14,24 @@
 //   LockError instead of an unconditional rewrite (the TOCTOU this module exists to close).
 // releaseLock({stateDir, pid, fsImpl}): removes the lockfile only if it still holds THIS pid —
 //   a stale/foreign lock is never touched by a process that doesn't own it.
+// installEarlyLockRelease({stateDir, pid, processImpl, fsImpl}) (specs/20260814/04-lock-signal-
+//   window.md D1): closes the boot window in which a SIGTERM/SIGINT would hit the default action
+//   and leave a stale lockfile (2026-08-15 escape row on specs/20260810/05 D5). Registers one
+//   SIGTERM and one SIGINT listener that call this module's own releaseLock then
+//   processImpl.exit(0), and returns {remove()} to deregister both once the full handlers take
+//   over. CALLERS OWN THE ORDERING, and both directions are load-bearing (D2′): arm this BEFORE
+//   acquireLock (never after — the write and the sigaction are two syscalls and the kernel can
+//   deliver between them), and call remove() only AFTER the replacement listeners are registered
+//   (never before — dropping the last listener stops libuv's signal handle and discards a signal
+//   already captured but not yet dispatched, silently swallowing the shutdown). Both orderings
+//   are pinned by source-slice tests, because neither is visible in this module.
 //
 // Deliberately does NOT: retry, poll, or wait for a live lock to free up (the caller — bin/
 // autopilotd — exits 2 immediately and names the remedy); treat same-user pid reuse racing the
 // ESRCH check as anything but accepted residual risk on a single-user box (D5); touch the lock
 // during `autopilotd --check` (preflight must run beside a live daemon — bin/autopilotd never
-// calls acquireLock on that path).
+// calls acquireLock on that path); have installEarlyLockRelease touch lanes/adapter — it runs
+// before either exists and is replaced before either starts.
 //
 // Exit codes: n/a — library module; bin/autopilotd owns exit-code rendering for LockError.
 
@@ -114,4 +126,23 @@ function releaseLock({ stateDir, pid, fsImpl = fs }) {
   }
 }
 
-module.exports = { acquireLock, releaseLock, LockError, LOCK_FILENAME }
+// D1: covers the boot window between acquireLock returning and bin/autopilotd's full signal
+// handlers taking over — construction only, no lanes/adapter exist yet. Same synchronous tick
+// as the acquireLock call site (no await between them) is what closes the window; this function
+// itself is timing-agnostic, just DI-testable plumbing.
+function installEarlyLockRelease({ stateDir, pid, processImpl = process, fsImpl = fs }) {
+  function onSignal() {
+    releaseLock({ stateDir, pid, fsImpl })
+    processImpl.exit(0)
+  }
+  processImpl.on('SIGTERM', onSignal)
+  processImpl.on('SIGINT', onSignal)
+  return {
+    remove() {
+      processImpl.removeListener('SIGTERM', onSignal)
+      processImpl.removeListener('SIGINT', onSignal)
+    },
+  }
+}
+
+module.exports = { acquireLock, releaseLock, installEarlyLockRelease, LockError, LOCK_FILENAME }

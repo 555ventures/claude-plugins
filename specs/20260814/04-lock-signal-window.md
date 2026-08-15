@@ -1,6 +1,7 @@
 ---
 date: 2026-08-14
-status: hardened
+status: implementing
+diff_base: 35522c2d3403c5e2733f626d614a54e4e0e5005c
 open_markers: 0
 risk: T3
 area: autopilot-daemon
@@ -31,7 +32,8 @@ previously-flaky lifecycle test passes its stability loop.
 | ID | Decision | One-line rationale |
 |----|----------|--------------------|
 | D1 | `autopilot/daemon/lock.js` gains `installEarlyLockRelease({ stateDir, pid, processImpl = process, fsImpl = fs })`: registers one listener each for `SIGTERM` and `SIGINT` on `processImpl` that calls the module's own `releaseLock({ stateDir, pid, fsImpl })` then `processImpl.exit(0)` (exit 0 = the documented "normal shutdown on SIGTERM/SIGINT" code — no new exit code); returns `{ remove() }` which deregisters both listeners via `processImpl.removeListener`. DI seams follow the module's existing `killImpl`/`fsImpl` convention so the handler chain is unit-executable with zero timing. | The logic lives beside `acquireLock`/`releaseLock` (single lock-lifecycle module, mode-4 DI-testable); a bin-inline closure would be untestable except by racing real signals. |
-| D2 | `autopilot/bin/autopilotd`: call `installEarlyLockRelease` **immediately after `acquireLock` succeeds, synchronously — no `await` between them — and before `buildAdapterAndLanes`**. `installSignalHandlers(adapter, lanes, stateDir, early)` takes the returned handle and calls `early.remove()` before registering the full shutdown handlers (double-signal force-exit(1) semantics live only in the full handler, unchanged) — **and its call site moves to immediately after `buildAdapterAndLanes`, BEFORE `adapter.start()` and the lane-start loop** (refuter-caught: leaving it after the start calls would keep the provisional handler covering live lanes, reaching exit 0 without stopping them; both stop paths are pre-start-safe — `lane.stop()` guards on `loopPromise`, `adapter.stop()` on `running` — so the full graceful path is valid from the moment construction returns). The early handler therefore covers **construction only**: an early-window exit 0 releases the lock with zero lanes ever started, so the header's bundled exit-0 contract ("every lane stopped, state persisted, adapter stopped, lock released") is satisfied vacuously — the header's new sentence states exactly that. | The spike proved the ordering is the whole fix (`late: stale=true`, `early: stale=false`); moving the full-handler install to pre-start shrinks the provisional coverage to the one gap it was designed for. |
+| D2′ | **(amended at build, 2026-08-15 — supersedes D2 below on the strength of executed evidence; the original text is kept struck for the record.)** One invariant governs the boot path: *from before the lockfile is written until the process exits, a SIGTERM/SIGINT listener is armed continuously — there is never an instant with a lock on disk and no listener.* Two orderings in `autopilot/bin/autopilotd` carry it, and both are load-bearing: (a) `installEarlyLockRelease` is armed **BEFORE `acquireLock`**, synchronously, no `await` between them, with `early.remove()` on the `LockError` branch; (b) `installSignalHandlers` registers **both** full listeners **before** calling `early.remove()`, never before. Its call site stays immediately after `buildAdapterAndLanes` and before `adapter.start()`/the lane-start loop, unchanged from D2. | D2's "same tick, immediately after acquire" narrows the window but cannot close it: the `wx` write and the sigaction install are two syscalls and the kernel can deliver between them — measured at ~0.5% under load (lockfile on disk, no handler, default-action kill, stale lock). Arming first makes "lockfile exists ⇒ handler armed" true by construction. And `early.remove()`-first stops libuv's signal handle while a captured-but-undispatched signal is still pending, discarding it: the daemon idles forever in a healthy event loop having swallowed its own SIGTERM, holding a lock no stale-recovery can reclaim because its holder is alive — measured ~0.7% under load, 0 in 1500 runs after reordering. |
+| ~~D2~~ *(superseded by D2′)* | ~~`autopilot/bin/autopilotd`: call `installEarlyLockRelease` **immediately after `acquireLock` succeeds, synchronously — no `await` between them — and before `buildAdapterAndLanes`**. `installSignalHandlers(adapter, lanes, stateDir, early)` takes the returned handle and calls `early.remove()` before registering the full shutdown handlers (double-signal force-exit(1) semantics live only in the full handler, unchanged) — **and its call site moves to immediately after `buildAdapterAndLanes`, BEFORE `adapter.start()` and the lane-start loop** (refuter-caught: leaving it after the start calls would keep the provisional handler covering live lanes, reaching exit 0 without stopping them; both stop paths are pre-start-safe — `lane.stop()` guards on `loopPromise`, `adapter.stop()` on `running` — so the full graceful path is valid from the moment construction returns). The early handler therefore covers **construction only**: an early-window exit 0 releases the lock with zero lanes ever started, so the header's bundled exit-0 contract ("every lane stopped, state persisted, adapter stopped, lock released") is satisfied vacuously — the header's new sentence states exactly that.~~ | ~~The spike proved the ordering is the whole fix (`late: stale=true`, `early: stale=false`); moving the full-handler install to pre-start shrinks the provisional coverage to the one gap it was designed for.~~ |
 | D3 | Signals before the lock exists (during `registerRepos`) stay default-action kills — nothing stale exists yet, deliberately out of scope. A construction **throw** (not a signal) between lock and handlers also stays out of scope: stale-pid recovery already owns that path, and conflating it here would grow the diff on a T3 boot surface. | Narrowest change that closes the falsified contract; both residuals are named, bounded, and recovery-covered. |
 | D4 | Tests (`tests/autopilot/lock.test.js`, same file as the existing pins): (a) DI unit pins executing the real handler chain — captured listener → real `releaseLock` on a real `tmpdir()` lockfile → fake `exit` recorded; (b) a source-ordering pin over the bin, **anchored on the call-site slice, never whole-file distance** (refuter-caught brittleness: unrelated `await` tokens sit between the require line and the call site): slice the source from the `acquireLock({` call expression to the `buildAdapterAndLanes` call and assert the slice contains `installEarlyLockRelease` and no `await` token; separately assert `installSignalHandlers(` appears in source before `adapter.start()` and that its function body calls `early.remove()`. This is the repo's read()-content pin technique applied to the one script with no importable seam — justified in Rationale, not a new test mode to extend; (c) the existing lifecycle test (`AC-20260810-05-12`) is additionally tagged `AC-20260814-04-4` as the regression pin — green pre-change in isolation. Post-change stability evidence is an **orchestrator duty** (line under the File Plan), not an AC clause. No test-only seam enters the daemon. | Deterministic coverage without racing signals: the DI pin executes the fix, the slice pin makes the window structurally absent, the lifecycle test stays the end-to-end net. |
 | D5 | `autopilot/.claude-plugin/plugin.json` bump target 0.10.1 (target, not a pin), description notes the shutdown-window fix. No scaffold-ledger row — this is a defect fix, not a new pipeline guard. | Version-bump discipline (pipeline rules § Planning); ledger rows are for mechanisms with promote/retire lifecycles. |
@@ -45,10 +47,15 @@ previously-flaky lifecycle test passes its stability loop.
 | tests/autopilot/lock.test.js | MODIFY | tests | AC-20260814-04-1, AC-20260814-04-2, AC-20260814-04-3, AC-20260814-04-4 (D4 retag) |
 | autopilot/.claude-plugin/plugin.json | MODIFY | doctrine | D5: bump + changelog description |
 
-Orchestrator duty (D4c): after the batch goes green, run the scoped suite ten times in a row
-(`for i in $(seq 10); do node --test 'tests/autopilot/lock.test.js' || break; done`) and
-record the 10/10 result in the build report — stability evidence, not a gate; a failure in
-the loop is a `blocked` return, never a silent retry.
+Orchestrator duty (D4c′, amended at build 2026-08-15): after the batch goes green, exercise
+the lifecycle **under load** — a ten-run scoped loop is far too small to see the failure rates
+this spec is about (~0.5–0.7%, i.e. one in a few hundred). Run several hundred spawn/SIGTERM
+cycles with the machine loaded, and record the observed counts in the build report — evidence,
+not a gate. **Triage any failure by signature before treating it as blocking:** a lockfile
+present after an observed exit is the startup-gap defect (D2′a); a process that never exits
+while alive is the handoff-gap defect (D2′b) — both are this spec's and both block. A `ps`
+STAT of `Z` (dead, unreaped) is neither, and means the harness's observation is at fault, not
+the daemon. A failure is a `blocked` return, never a silent retry, and never a rerun-until-clean.
 
 ## Contracts
 
@@ -84,13 +91,20 @@ installEarlyLockRelease({ stateDir, pid, processImpl = process, fsImpl = fs })
 - **AC-20260814-04-2**: WHEN `remove()` on the returned handle is called THE SYSTEM SHALL
   deregister both listeners (fake `processImpl` listener registry empty for both signals)
   → tests/autopilot/lock.test.js
-- **AC-20260814-04-3**: WHEN the source slice of `autopilot/bin/autopilotd` from the
-  `acquireLock({` call expression to the `buildAdapterAndLanes` call is read THE SYSTEM
-  SHALL contain `installEarlyLockRelease` and no `await` token in that slice; and
-  `installSignalHandlers(` SHALL appear in source before `adapter.start()`, with its body
-  calling `early.remove()` (call-site slice pin; the live in-window signal timing itself
-  has no deterministic external repro without a test seam — that residual is covered by
-  this pin plus AC-4's end-to-end net) → tests/autopilot/lock.test.js
+- **AC-20260814-04-3′** *(amended at build 2026-08-15 with D2′; supersedes AC-3 below)*: WHEN
+  `autopilot/bin/autopilotd`'s source is read THE SYSTEM SHALL show, inside `main()`, the
+  `installEarlyLockRelease(` call expression **before** the `acquireLock({` call expression
+  with no `await` token in the slice between them; AND `installSignalHandlers(` before
+  `adapter.start()`; AND inside `installSignalHandlers`'s body, both `process.on('SIGTERM'`
+  and `process.on('SIGINT'` registrations **before** `early.remove()` (call-site slice pins;
+  the live in-window signal timing has no deterministic external repro without a test seam —
+  that residual is covered by these pins plus AC-4's end-to-end net and the orchestrator's
+  under-load loop) → tests/autopilot/lock.test.js
+- ~~**AC-20260814-04-3**~~ *(superseded by AC-3′)*: ~~WHEN the source slice of
+  `autopilot/bin/autopilotd` from the `acquireLock({` call expression to the
+  `buildAdapterAndLanes` call is read THE SYSTEM SHALL contain `installEarlyLockRelease` and
+  no `await` token in that slice; and `installSignalHandlers(` SHALL appear in source before
+  `adapter.start()`, with its body calling `early.remove()`~~ → tests/autopilot/lock.test.js
 - **AC-20260814-04-4**: WHEN a real spawned `autopilotd` acquires the lock and receives
   SIGTERM THE SYSTEM SHALL CONTINUE TO exit cleanly with the lockfile removed (the
   existing `AC-20260810-05-12` lifecycle test, additionally tagged with this ID — green
@@ -153,7 +167,34 @@ detection to the probabilistic flake signal this incident proved unjudgeable.
 Fragile spot for build: the slice pin must anchor on the `acquireLock({` call expression
 (never the require line) and tolerate the `try/catch` around it.
 
+## Build-time amendments (2026-08-15)
+
+The build's own stability duty falsified two of this spec's claims. Both are recorded above as
+D2′/AC-3′ rather than patched silently:
+
+1. **"Same synchronous tick after `acquireLock`" is not a closed window.** The lockfile write
+   and the signal-handler install are two syscalls; the kernel delivers between them at ~0.5%
+   under load. Only arming the handler *before* the lock makes the invariant structural.
+2. **Replacing the provisional handler dropped signals.** `early.remove()` ran before the full
+   listeners were registered; removing the last listener stops libuv's signal handle and
+   discards a signal already captured but not yet dispatched. The daemon then idled forever —
+   stack sampling showed a *healthy* event loop (`uv_run → kevent`), not a wedge — holding a
+   lock that stale-recovery can never reclaim, because its holder is alive. ~0.7% under load,
+   0 in 1500 runs after registering before removing.
+
+Assumption deviation: **A2 and AC-4's "green pre-change in isolation" is false.** Measured at
+the diff base, the lifecycle test fails ~1-in-40 in isolation — carrying the exact stale-lock
+signature this spec fixes. The claim was wrong in the confirming direction, and A2's "if false,
+escalate" trigger did not need to fire.
+
+Measured, both fixes in place, under load: see the build report's counts.
+
 ## Canonical Delta
 
-None — docs/canonical/autopilot.md describes lane/adapter behavior, not the lock lifecycle
-ordering; nothing there changes.
+`docs/canonical/autopilot.md` § Lock — the pidfile-lock bullet dropped its "releases it on
+clean shutdown" clause, and a new bullet states the release contract as the pair it actually
+is: clean release is **best-effort** (no JS listener runs on a killed or wedged process),
+reclamation after unclean death is **guaranteed** (next start's `ESRCH` recovery, plus the
+supervisor's SIGKILL escalation restoring the kernel default that installing a handler
+removes). Reading the old single clause as a guarantee is what made this escape look
+impossible; leaving it unamended would leave the next reader with the same false floor.

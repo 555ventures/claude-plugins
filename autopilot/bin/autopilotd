@@ -29,6 +29,15 @@
 // released on clean SIGTERM/SIGINT shutdown, never on the forced double-signal exit. `--check`
 // never touches the lock — preflight must be able to run beside a live daemon.
 //
+// One invariant governs signal handling on the boot path (specs/20260814/04-lock-signal-window.md
+// D1/D2′): from before the lockfile is written until the process exits, a SIGTERM/SIGINT listener
+// is armed CONTINUOUSLY — there is never an instant with a lock on disk and no listener. Two gaps
+// once violated it, and both are closed by ordering alone: a provisional release-and-exit handler
+// (daemon/lock.js's installEarlyLockRelease) is armed BEFORE acquireLock, not after it; and the
+// full lane-stopping handlers are registered BEFORE `early.remove()` deregisters the provisional
+// pair, not after. The provisional handler covers construction only — it is replaced before
+// adapter.start()/lane.start(), so it never reaches exit 0 with a lane running.
+//
 // --check runs an offline preflight instead of starting lanes (spec 04-live-smoke D2, carried
 // forward by D8): validate hub.json + discover lanes (both fs-only, `loadHubConfig` performs no
 // network I/O), force-resolve `../daemon/sdk` (session.js otherwise loads it lazily, so a bare
@@ -51,7 +60,9 @@
 // Exit codes:
 //   0  preflight passed (without --hold), or normal shutdown on SIGTERM/SIGINT (every lane
 //      stopped, state persisted, adapter stopped, lock released) — --hold's teardown on signal
-//      also exits 0
+//      also exits 0. A signal during the pre-lane construction window hits the provisional
+//      handler instead: zero lanes ever started, so the "every lane stopped" contract is
+//      satisfied vacuously and this is still the normal-shutdown exit 0.
 //   1  forced exit on a second SIGTERM/SIGINT during shutdown (D8's double-kill pattern — a
 //      stuck lane never wedges the process) · a real start's repo registration answered non-2xx
 //      or malformed for some repo (message names the failing repo verbatim, D7 Behavior)
@@ -71,7 +82,7 @@ const { createLane } = require('../daemon/lane')
 const { runStage } = require('../daemon/session')
 const { createHubAdapter } = require('../daemon/hub-adapter')
 const { registerRepos } = require('../daemon/discover')
-const { acquireLock, releaseLock, LockError } = require('../daemon/lock')
+const { acquireLock, releaseLock, installEarlyLockRelease, LockError } = require('../daemon/lock')
 
 const NODE_FLOOR = { major: 20, minor: 19 }
 const DEFAULT_HUB_CONFIG_PATH = path.join(os.homedir(), '.config', 'autopilot', 'hub.json')
@@ -265,7 +276,14 @@ function runPreflight(cfg, args) {
 // on clean shutdown"), then exit 0. A second signal during shutdown forces an immediate exit
 // rather than waiting out a stuck lane — the lock is deliberately left in place on that path;
 // daemon/lock.js's stale-pid recovery is what cleans it up on the next start.
-function installSignalHandlers(adapter, lanes, stateDir) {
+// D2′ (specs/20260814/04): `early.remove()` runs LAST, after both full listeners are registered
+// — never first. Removing the only listener stops libuv's signal handle, and a signal already
+// captured but not yet dispatched to JS is discarded with it: the daemon then idles forever in a
+// healthy event loop, having silently swallowed its own SIGTERM, still holding the lock (measured
+// at ~0.7% under load before this ordering; 0 in 1500 runs after). Registering first keeps a
+// listener armed continuously across the handoff, so a pending signal is delivered to the full
+// handler instead of dropped.
+function installSignalHandlers(adapter, lanes, stateDir, early) {
   let shuttingDown = false
   async function shutdown(signal) {
     if (shuttingDown) {
@@ -281,6 +299,7 @@ function installSignalHandlers(adapter, lanes, stateDir) {
   }
   process.on('SIGTERM', () => shutdown('SIGTERM'))
   process.on('SIGINT', () => shutdown('SIGINT'))
+  early.remove()
 }
 
 async function main() {
@@ -321,9 +340,18 @@ async function main() {
   // so preflight always runs beside a live daemon without touching the lock.
   fs.mkdirSync(args.stateDir, { recursive: true })
 
+  // D2′ (specs/20260814/04): the provisional handler is armed BEFORE acquireLock, never after.
+  // "Same synchronous tick, immediately after" still leaves a real gap — the `wx` write and the
+  // sigaction install are two syscalls, and the kernel can deliver SIGTERM between them (measured
+  // at ~0.5% under load: lockfile on disk, no handler yet, default-action kill, stale lock left).
+  // Arming first makes "lockfile exists ⇒ handler armed" true by construction instead of by
+  // scheduling luck. A signal landing before the lock is taken is harmless: releaseLock no-ops on
+  // a missing file and on a foreign pid, so it exits 0 having touched nothing.
+  const early = installEarlyLockRelease({ stateDir: args.stateDir, pid: process.pid })
   try {
     acquireLock({ stateDir: args.stateDir, pid: process.pid })
   } catch (err) {
+    early.remove()
     if (err instanceof LockError) {
       fail(err.message)
       return
@@ -333,9 +361,10 @@ async function main() {
 
   const { adapter, lanes } = buildAdapterAndLanes(cfg, args.stateDir)
 
+  installSignalHandlers(adapter, lanes, args.stateDir, early)
+
   adapter.start()
   for (const lane of lanes) lane.start()
-  installSignalHandlers(adapter, lanes, args.stateDir)
 }
 
 main()

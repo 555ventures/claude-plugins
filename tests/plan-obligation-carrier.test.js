@@ -13,6 +13,13 @@ const { read } = require('./helpers')
 // shapes below, one test each: the class fix is a single lock-time obligation→carrier sweep,
 // but each shape gets its own assertion so a partial fix (e.g. only the File Plan row shape)
 // still surfaces the other three as red.
+//
+// AC-20260814-05-9 (specs/20260814/05-collision-closure.md D9a, 2026-08-14): D7 rewrites this
+// same Phase 4 step 2 paragraph's FIFTH obligation shape (the hand-executed stem-level-grep
+// sentence) into an invocation line for spec/scripts/collision-closure.js. This is a regression
+// pin — the sanctioned exception to red-first named in that spec's Goal — green before D7's
+// edit lands and required to stay green after it, so a collateral deletion of one of the four
+// surviving shapes while rewriting the fifth is caught immediately.
 
 const plan = read('spec/commands/plan.md')
 
@@ -51,4 +58,23 @@ test('AC-20260813-04-4 / CROSS-20260813-01d: an AC expectation computed by a hel
     'prax spec 20260812/02: flat_bars_after_warmup encoded a subtle kernel claim with zero ' +
     'direct tests, so every downstream AC was expectation-construction against an unverified ' +
     'helper, never a real check against ground truth')
+})
+
+test('AC-20260814-05-9: plan.md Phase 4 step 2 continues to state all four surviving obligation shapes after the fifth shape is rewritten into a collision-closure invocation line', () => {
+  assert.match(plan, /[Dd]ecision (that )?names? a file( by path)?.*File Plan row/,
+    'the file-by-path obligation shape must survive D7\'s rewrite of the fifth (stem-grep) shape ' +
+    'in the same Phase 4 step 2 paragraph — a collateral deletion here means the regression pin ' +
+    'guarding the paragraph did not hold')
+  assert.match(plan,
+    /[Dd]ecision (that )?orders?[\s\S]*(persisted|rendered) artifact[\s\S]*(Contracts|schema)/,
+    'the persisted-artifact obligation shape must survive D7\'s rewrite of the fifth shape in ' +
+    'the same paragraph')
+  assert.match(plan,
+    /[Ff]actory signatures?.*Contracts|Contracts.*[Ii]njectable seams?/,
+    'the CREATE-d-module factory-signature obligation shape must survive D7\'s rewrite of the ' +
+    'fifth shape in the same paragraph')
+  assert.match(plan,
+    /helper'?s own (ground.truth|correctness).*(listed|checked)|ground.truth carrier/,
+    'the helper ground-truth obligation shape must survive D7\'s rewrite of the fifth shape in ' +
+    'the same paragraph')
 })

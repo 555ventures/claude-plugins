@@ -201,17 +201,19 @@ upstream bug list. -->
   Plan, on two surfaces: test files (doctrine shape here is pinned by dense regex asserts, so
   the retired literal is asserted somewhere the File Plan never looked) and the doctrine corpus
   itself (the same claim restated in another command/doctrine file — often paraphrased, often
-  hard-wrapped mid-phrase, so neither the literal nor the full phrase ever matches). At plan
-  time, grep `tests/` for the retired literal AND grep `spec/commands/ spec/doctrine/
-  spec/agents/ git/commands/` case-insensitively for each distinctive single-word stem of the
-  retired claim (stems, never the multi-word phrase — hard wrapping defeats it); every hit's
-  file enters the File Plan as fix or recorded waive. Mid-build a colliding test pin is updated
-  in place and retagged with the new AC-ID (never weakened, never left red).
+  hard-wrapped mid-phrase, so neither the literal nor the full phrase ever matches). Two
+  mechanisms now catch it: `collision-closure` at plan lock lists both the paths and literals
+  legs (advisory, never blocking — every hit enters the File Plan as fix or recorded waive);
+  spec 03 D10's blocking whole-suite check at build Phase 4 catches the behavioral variant a
+  naming closure cannot reach. Mid-build a colliding test pin is updated in place and retagged
+  with the new AC-ID (never weakened, never left red).
   (specs/20260813/07-command-report-conformance.md D8 — the 🔍→📦 retirement broke
   `tests/review/smell-lens.test.js` AC-20260812-01-6 during build, the second such collision in
   one spec; specs/20260813/09-model-placement-mechanics.md D4 — the "uncorrelated model"
   narrowing enumerated both shared.md loci but missed the paraphrased restatement at
-  spec/commands/review.md:14, caught at review time by corpus stem-grep.)
+  spec/commands/review.md:14, caught at review time by corpus stem-grep; specs/20260814/01-ac-matrix-script.md
+  — the `spec-paths` key-set collision landed out-of-plan and had to be waived at review, the
+  third recurrence and this spec's own trigger.)
 - `[plugin]` `ac-matrix.js` parses AC bullets as `^- \*\*(token)\*\*` and requires the token to
   fully match `AC-\d{8}-\d{2}[a-z]?-\d+`. A build-time amendment written the way the Decisions
   table writes one — a prime-suffixed successor (`AC-…-3′`) plus the superseded original left as

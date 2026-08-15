@@ -169,7 +169,15 @@ test('AC-20260810-02-5: build.md blocked row owes the AC in the same edit as the
 // bundled script it needs one, or the review workflow's invocation of it fails silently
 // (§ Risk Tiers, spec-paths). This deep-equal literal is the only place that key set is
 // pinned, so the new key is added here rather than in a second, competing key-set test.
-test('AC-20260810-02-6: scaffold-ledger.md gains a gate-kind terminal-observable-ACs row, and verdict.js/spec-paths stay unchanged', () => {
+//
+// AC-20260814-02-11 (specs/20260814/02-doctor-mergeback-fidelity-mechanics.md, 2026-08-14,
+// amended during 20260814/05's plan-time collision sweep): D1 registers
+// spec/scripts/ci-gate-parity.js behind a new `ci-gate-parity` spec-paths key — the same
+// silent-failure risk as every other bundled script (§ Risk Tiers, spec-paths). This closed
+// deep-equal is the only place that key set is pinned, so the key change reddens this test by
+// construction, from outside 02's own File Plan and outside its scoped gate — added here
+// rather than left to surface as a mid-build out-of-plan patch.
+test('AC-20260810-02-6, AC-20260814-02-11: scaffold-ledger.md gains a gate-kind terminal-observable-ACs row, and verdict.js/spec-paths stay unchanged apart from the registered ci-gate-parity key', () => {
   const rowStart = ledger.search(/\| ?Terminal-observable/i)
   assert.notStrictEqual(rowStart, -1,
     'scaffold-ledger.md has no Terminal-observable-ACs row — a new gate mechanism with no ' +
@@ -199,17 +207,18 @@ test('AC-20260810-02-6: scaffold-ledger.md gains a gate-kind terminal-observable
   assert.ok(keysOut.trim().length > 0, 'spec-paths root must resolve for the key-set check below to be meaningful')
   const specPathsSrc = read('spec/bin/spec-paths')
   const keys = [...specPathsSrc.matchAll(/^ {2}([a-z0-9-]+)\)/gm)].map(m => m[1]).sort()
-  const expected = ['ac-matrix', 'ci-query', 'citations-check', 'claims-lint', 'components-check', 'contract',
-    'contract-hash', 'dc-extract', 'design-atlas', 'design-driver', 'feedback-template',
+  const expected = ['ac-matrix', 'ci-gate-parity', 'ci-query', 'citations-check', 'claims-lint', 'components-check',
+    'contract', 'contract-hash', 'dc-extract', 'design-atlas', 'design-driver', 'feedback-template',
     'fidelity-check', 'hotspot', 'intake', 'manifest-check', 'merge-back', 'observe-ci',
     'parity-check', 'report-render', 'root', 'scaffold-ledger', 'scope-reconcile', 'shared',
     'shared-for', 'shared-genesis', 'skeletons-check', 'smoke', 'spec-status', 'template',
     'templates', 'verdict', 'version', 'wf-build', 'wf-design', 'wf-enforce', 'wf-panel',
     'wf-research', 'wf-review', 'workflows'].sort()
   assert.deepStrictEqual(keys, expected,
-    'spec/bin/spec-paths\'s key set (AC-20260812-02-11, AC-20260813-06-11, AC-20260814-01-8) ' +
-    'must be exactly the true set scraped from the live case statement, including the ' +
-    'pre-existing citations-check key (20260810/09 drift), hotspot-audit\'s hotspot key, ' +
-    'report-renderer\'s report-render key, and ac-matrix-script\'s new ac-matrix key — a ' +
-    'mismatch means a key silently drifted or a script shipped unregistered')
+    'spec/bin/spec-paths\'s key set (AC-20260812-02-11, AC-20260813-06-11, AC-20260814-01-8, ' +
+    'AC-20260814-02-11) must be exactly the true set scraped from the live case statement, ' +
+    'including the pre-existing citations-check key (20260810/09 drift), hotspot-audit\'s ' +
+    'hotspot key, report-renderer\'s report-render key, ac-matrix-script\'s ac-matrix key, and ' +
+    'this spec\'s new ci-gate-parity key — a mismatch means a key silently drifted or a script ' +
+    'shipped unregistered')
 })

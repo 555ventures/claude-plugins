@@ -136,12 +136,12 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
       silent by design (a retired-and-preserved spec; template + `spec-status.js` already
       sanction it): never flag one, and never recommend un-retiring it;
     - an `implementing` spec carrying `build_base:` is stale when its **build branch** —
-      derived as `spec/<stem>`, where `<stem>` is the spec's filename sans directory and
-      extension (the same derivation `/git:enter-worktree` step 1 and `merge-back.sh create`
-      both apply, e.g. `specs/20260810/07-per-sha-ci-legs.md` → `spec/07-per-sha-ci-legs`) —
-      does not exist in the repo (the branch was merged or deleted without `/spec:review`
-      closing the spec). In-place builds (`build_base` absent) are skipped by this sub-check —
-      there is no build branch to derive;
+      derived by `node $(spec-paths merge-back) branch-for <spec path>` (e.g.
+      `specs/20260810/07-per-sha-ci-legs.md` → `spec/07-per-sha-ci-legs`; the sole owner of the
+      `spec/<stem>` rule, also invoked by `/git:enter-worktree` step 1) — does not exist in the
+      repo (the branch was merged or deleted without `/spec:review` closing the spec). In-place
+      builds (`build_base` absent) are skipped by this sub-check — there is no build branch to
+      derive;
     - a `hardened`/`implementing`/`done` spec containing a live `[NEEDS CLARIFICATION:` marker
       (colon form — the open-marker sentinel; bracketed narration without the colon is fine)
       is broken (it should have been impossible to lock);
@@ -149,24 +149,28 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
       already `done`, or `designed:` set) is leftover transient state `/spec:design`'s reconcile
       stage should have deleted; recommend removing it.
 
-12. **Run ledger hygiene** (only if `.claude/spec-runs.jsonl` exists) — every line parses as
-    JSON with a `stage` of `build | review | escape | observe | release`; any line over ~1000
-    chars is a prose leak (the ledger holds counts/enums/paths only — build.md/review.md
-    define the shape; a fully conforming review row carries the mandated verbatim ledger row
-    and lands ~600–650 chars with ordinary values, so ~1000 is a floor with margin, not a
-    tightened bar); the file is tracked by git (an ignored or untracked-and-stale ledger
-    defeats its purpose); the build/review required-field expectations exempt every sanctioned
-    row class rather than only `observe`: `observe` rows (no `tier`/`runId` — they carry
-    `branch`/`ci`/`sha`/`url`/`runAt` instead per spec 03's D1), **fast-path build rows**
-    (`"fastPath":true`, no `runId` — build.md's fast path), **escape rows** (their own field
-    set, no `runId`), **release rows** (their own field set, no `runId` — they carry
-    `milestone`/`briefs` instead), and **a review row whose `verdict` is `GATE_RED`** (`runId`
-    optional — a pre-panel hard stop structurally has no run id; this is narrower than the
-    other exemptions, which cover a whole row class: an in-workflow red iteration is still a
-    review row and still mints a `runId`, which it keeps). The parse/stage-enum/line-length/git-tracked hygiene checks
-    stay universal across every row class, unchanged, and apply to the year archives
-    (`.claude/spec-runs-<year>.jsonl`) exactly as to the live file — an archived row of any
-    class is still a ledger row;
+12. **Run ledger hygiene** (only if `.claude/spec-runs.jsonl` exists) — the JSON/shape checks
+    are the primary signal: every line parses as JSON with a `stage` of
+    `build | review | escape | observe | release`; the build/review required-field
+    expectations exempt every sanctioned row class rather than only `observe`: `observe` rows
+    (no `tier`/`runId` — they carry `branch`/`ci`/`sha`/`url`/`runAt` instead per spec 03's D1),
+    **fast-path build rows** (`"fastPath":true`, no `runId` — build.md's fast path), **escape
+    rows** (their own field set, no `runId`), **release rows** (their own field set, no
+    `runId` — they carry `milestone`/`briefs` instead), and **a review row whose `verdict` is
+    `GATE_RED`** (`runId` optional — a pre-panel hard stop structurally has no run id; this is
+    narrower than the other exemptions, which cover a whole row class: an in-workflow red
+    iteration is still a review row and still mints a `runId`, which it keeps); the file is
+    tracked by git (an ignored or untracked-and-stale ledger defeats its purpose). Any line over
+    ~1000 chars demotes to an advisory tripwire, never a standalone broken finding (the ledger
+    holds counts/enums/paths only — build.md/review.md define the shape; a fully conforming
+    review row carries the mandated verbatim ledger row and lands ~600–650 chars with ordinary
+    values, so ~1000 is a floor with margin, not a tightened bar): report it only as
+    corroboration when a row also fails a shape check above, or standalone as advisory ("long
+    but well-formed — inspect for prose leak") — never on its own as a broken finding; shape is
+    the real invariant, length is a smell. The parse/stage-enum/git-tracked hygiene checks stay
+    universal across every row
+    class, unchanged, and apply to the year archives (`.claude/spec-runs-<year>.jsonl`) exactly
+    as to the live file — an archived row of any class is still a ledger row;
     `git check-attr merge -- .claude/spec-runs.jsonl` reports `union` (without it, parallel
     worktree builds conflict at merge-back on EOF appends — init sets the `.gitattributes`
     entry; recommend re-running `/spec:init` or adding it directly).
@@ -266,8 +270,13 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
 
 16. **Representation parity** (only if `docs/adr/` greps for the locked row label
     `per-surface casing ownership` — genesis Phase A writes it verbatim; an ops-conventions
-    ADR present *without* that label is itself a finding — pre-6.7 grounding, recommend the
-    targeted-patch flow — never a silent skip) — re-run `node $(spec-paths parity-check)
+    ADR present *without* that label is itself a finding, gated on the config's `generatedBy`
+    (the version check 15 already parses, `sort -V` semantics; missing `generatedBy` reads as
+    predating everything, the conservative default): `generatedBy` < 6.7.0 reports it as
+    pre-6.7 grounding, a legacy migration; `generatedBy` at/after 6.7.0 reports the same
+    observation as ordinary drift — "label missing on a current grounding" — routed to the
+    targeted-patch flow, never a migration. Never a silent skip either way) — re-run `node
+    $(spec-paths parity-check)
     <files>` once per surface in that row, passing the row's recorded globs as they match
     *now* plus one temp file of the surface's decided spelling exemplars copied verbatim
     from its row. Never pass the whole ADR (other surfaces' rows legitimately differ; one
@@ -287,9 +296,14 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
     - an `Applies to` row naming a brief whose specs are all `done` (check 14's derivation)
       with no letter-suffixed successor brief in the Sequence table is surfaced as a finding:
       the amendment has no plannable home and will never be picked up.
-    Legacy migration: a non-empty `docs/roadmap/deltas/` dir predates spec@6.18.0 — flag
-    every file in it ("fold into an amendment ADR + brief edits per the overview's rule,
-    then delete the dir"); deltas are invisible to plan and must not persist.
+    Legacy migration, gated on the config's `generatedBy` (same `sort -V` comparison check 15
+    performs; missing `generatedBy` reads as predating everything): a non-empty
+    `docs/roadmap/deltas/` dir with `generatedBy` < 6.18.0 predates spec@6.18.0 — flag every
+    file in it ("fold into an amendment ADR + brief edits per the overview's rule, then delete
+    the dir"); deltas are invisible to plan and must not persist. On a grounding at/after
+    6.18.0 the same non-empty `docs/roadmap/deltas/` reports as ordinary drift — "stray
+    deltas/ dir on a current grounding — delete it" — routed to the targeted-patch flow,
+    never as a migration.
 
 18. **Claims registry** — run `node "$(spec-paths claims-lint)" --json` and report its
     findings: orphan claims (blocking-consequence lines with no marker, beyond a file's
@@ -300,15 +314,13 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
     never edits the corpus or the baseline; the remedy for drift is
     `node "$(spec-paths claims-lint)" --update-baseline`, printed for the user to run.
 
-19. **CI-gate parity** (deterministic, advisory) — only when `.github/workflows/` exists:
-    split the config `gateCommand` on the regex `/\{[^}]*\}/g`, trim each literal segment, and
-    keep segments ≥10 chars. If no segment survives that floor, the single required segment is
-    the whole trimmed `gateCommand` with placeholder tokens stripped (so a short command like
-    `npm test` never degenerates to a vacuously green check). Require every kept segment to
-    appear as a substring in the concatenation of `.github/workflows/*.yml` + `*.yaml`. Any
-    missing segment is an advisory finding: the host's CI does not invoke the configured
-    `gateCommand`, so CI red/green and pipeline gate red/green can drift; remedy = make one CI
-    step run the `gateCommand` verbatim.
+19. **CI-gate parity** (deterministic, advisory) — run `node "$(spec-paths ci-gate-parity)"
+    --root .`. It owns the whole algorithm (gateCommand segmentation and the substring check
+    against the host's CI workflows) and self-gates on `.github/workflows/` existing, printing
+    one of its `inapplicable —` sentinels and exiting 0 when there is no CI to check parity
+    against. A non-zero exit means the host's CI does not invoke the configured `gateCommand`,
+    so CI red/green and pipeline gate red/green can drift; report each printed line as an
+    advisory finding — remedy = make one CI step run the `gateCommand` verbatim.
 
 20. **Citation integrity** (deterministic, advisory) — run
     `node "$(spec-paths citations-check)"` against the repo. Each printed MISS line names a

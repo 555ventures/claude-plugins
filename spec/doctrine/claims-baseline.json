@@ -13,11 +13,11 @@
       "orphans": 3
     },
     "spec/commands/design.md": {
-      "lines": 201,
+      "lines": 200,
       "orphans": 1
     },
     "spec/commands/doctor.md": {
-      "lines": 410,
+      "lines": 422,
       "orphans": 3
     },
     "spec/commands/enforce.md": {
@@ -69,7 +69,7 @@
       "orphans": 1
     },
     "spec/doctrine/scaffold-ledger.md": {
-      "lines": 116,
+      "lines": 118,
       "orphans": 4
     },
     "spec/doctrine/shared.md": {
@@ -81,5 +81,5 @@
       "orphans": 5
     }
   },
-  "totalLines": 6121
+  "totalLines": 6134
 }

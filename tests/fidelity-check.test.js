@@ -436,6 +436,83 @@ test('a declared catalog that does not exist on disk is a loud failure, not a si
   assert.match(res.stderr, /copy catalog app\/messages\/en\.json.*not readable/)
 })
 
+// ---- over-claim detection (spec 20260814/02 D5) ---------------------------------------------------
+// A root-bound skeleton (bare-surface ref / legacy sliceRef / id == surface id) claims every
+// region of the surface, including chrome no shipped screen renders. When the pass fully
+// satisfies one obligation-bearing child region while fully missing another, that shape IS the
+// naming-collision incident (PRAX-20260804-02) — the fix names the true cause directly instead of
+// leaving the reader to infer it from an unexplained missing-chrome-copy finding.
+const ROOT_BOUND_SURFACE = {
+  id: 'screen', sliceFile: 'slice-s1.html',
+  regions: [
+    { id: 'root', label: null, source: 'root', parent: null },
+    { id: 'form', label: 'Form', source: 'screen-label', parent: 'root' },
+    { id: 'chrome', label: 'Chrome', source: 'screen-label', parent: 'root' },
+  ],
+  entries: [
+    { region: 'form', kind: 'copy', value: 'Email address' },
+    { region: 'chrome', kind: 'copy', value: 'Sign out' },
+  ],
+  layout: [],
+}
+const rootBoundSkeleton = () => ({
+  skeletons: [{ id: 'screen', decision: 'author', componentPath: 'src/Screen.tsx',
+    sliceRef: 'slice-s1.html', states: ['default'], tokens: ['surface'] }],
+})
+
+test('AC-20260814-02-7: a root-bound skeleton whose pass fully implements one child region and fully misses another gets the over-claim diagnosis naming the implemented region', () => {
+  const f = fixture({
+    surfaces: [ROOT_BOUND_SURFACE],
+    skeletons: rootBoundSkeleton(),
+    files: { 'src/Screen.tsx': '<label>Email address</label>' }, // 'Sign out' (chrome) never renders
+  })
+  const res = run(f)
+  assert.strictEqual(res.status, 1, 'the missing chrome copy must still fail the gate — the diagnosis re-labels why the finding fired, it never suppresses it')
+  assert.match(res.stderr, /copy "Sign out" missing/,
+    'the underlying unexcused finding for the fully-unreferenced chrome region must still print')
+  assert.match(res.stderr, /over-claim: skeleton 'screen' binds all of 'screen'/,
+    'a root-bound skeleton with one fully-satisfied and one fully-unreferenced obligation-bearing child region must get a prepended over-claim diagnosis naming the skeleton and surface — this is the mechanized fix for the fidelity refusal misdiagnosing a naming collision as missing chrome copy')
+  assert.match(res.stderr, /\[form\] are implemented/,
+    'the diagnosis must name the fully-implemented region (form), not the fully-missing one (chrome), as what the skeleton actually covers')
+  assert.match(res.stderr, /bind those regions and name the skeleton distinctly/,
+    'the diagnosis must suggest the remedy: bind the implemented region(s) explicitly and rename the skeleton away from the bare surface id')
+})
+
+test('AC-20260814-02-7: findings spread across every obligation-bearing child region never trigger the over-claim diagnosis', () => {
+  const f = fixture({
+    surfaces: [ROOT_BOUND_SURFACE],
+    skeletons: rootBoundSkeleton(),
+    files: { 'src/Screen.tsx': '<div>nothing renders here</div>' }, // both form and chrome fully missing
+  })
+  const res = run(f)
+  assert.strictEqual(res.status, 1, 'both regions failing must still fail the gate')
+  assert.match(res.stderr, /copy "Email address" missing/, 'the form region finding must still print')
+  assert.match(res.stderr, /copy "Sign out" missing/, 'the chrome region finding must still print')
+  assert.doesNotMatch(res.stderr, /over-claim:/,
+    'when no obligation-bearing child region is fully satisfied there is no "subset actually implemented" to name — the diagnosis must not fire on a plain across-the-board miss (D5: needs ≥1 fully-satisfied region alongside ≥1 fully-unreferenced one)')
+})
+
+test('AC-20260814-02-8: a clean pass and a flat schemaVersion-2 extract never emit the over-claim diagnosis and exit exactly as at HEAD (regression pin)', () => {
+  const clean = fixture({
+    surfaces: [ROOT_BOUND_SURFACE],
+    skeletons: rootBoundSkeleton(),
+    files: { 'src/Screen.tsx': '<label>Email address</label><button>Sign out</button>' },
+  })
+  const cres = run(clean)
+  assert.strictEqual(cres.status, 0, cres.stderr)
+  assert.doesNotMatch(cres.stdout, /over-claim:/,
+    'a clean root-bound pass (every child region fully satisfied) must never emit the over-claim diagnosis — there is no unexcused finding for it to re-label')
+
+  const flat = fixture({
+    strings: ['Email address', 'Sign out'],
+    files: { 'src/S1.tsx': '<label>Email address</label>' }, // legacy flat extract: one root region, no children
+  })
+  const fres = run(flat)
+  assert.strictEqual(fres.status, 1, fres.stdout)
+  assert.doesNotMatch(fres.stderr, /over-claim:/,
+    'a schemaVersion-2 flat extract has one root region with no children — there is no child-region coverage split to compute, so the over-claim diagnosis can never fire on it (D5: no false positives on old sidecars)')
+})
+
 test('the catalog does not excuse copy that is nowhere: missing copy still fails with catalogs declared', () => {
   const f = fixture({
     surfaces: [{ ...V3_SURFACE, entries: [{ region: 'sidebar', kind: 'copy', value: 'Send invite' }], layout: [] }],

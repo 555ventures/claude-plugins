@@ -59,9 +59,12 @@ the scratch dir first), printing its output verbatim:
 - `outcome: {anchor:'✅', text:'committed — {subject} ({N} files)'}` — `{subject}` is the
   commit message's first line, `{N}` is the file count from Step 1's `git status`.
 - `next`: if `git branch --show-current` (Step 1) matches the worktree convention
-  `spec/<slug>` (set by `/git:enter-worktree`), find `specs/**/<slug>.md` and read its
-  `build_base` frontmatter field as `{base}` — `next: {kind:'command', text:'/git:merge — land
-  it on {base}'}`. Otherwise `next: {kind:'none', reason:'commit landed'}`.
+  `spec/<slug>` (set by `/git:enter-worktree`, whose branch-derivation rule is owned by
+  `merge-back.sh branch-for` — this reverse parse can't call a forward-derivation subcommand,
+  so it keeps its own inline match, but the rule's owner is that subcommand), find
+  `specs/**/<slug>.md` and read its `build_base` frontmatter field as `{base}` — `next:
+  {kind:'command', text:'/git:merge — land it on {base}'}`. Otherwise `next: {kind:'none',
+  reason:'commit landed'}`.
 
 ```report
 ✅ **committed — fix(spec): tighten worktree entry gate (3 files)**

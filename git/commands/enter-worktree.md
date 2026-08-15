@@ -23,9 +23,10 @@ spec plugin must be installed.
 
 1. **Derive paths.** Run `spec-paths merge-back` and keep its output as `{mergeBack}` (the
    `merge-back.sh` path; its `create` subcommand builds the worktree). Derive:
-   - `{source} = spec/<slug>` where `<slug>` is the spec filename (sans directory and
-     extension) — the branch rule this command and `{mergeBack} create` own; `/spec:build`
-     disowns all worktree mechanics and has no branch rule of its own.
+   - `{source} = "$({mergeBack} branch-for $ARGUMENTS)"` — `branch-for` is the sole owner of
+     the `spec/<stem>` branch rule (e.g. `specs/20260810/07-per-sha-ci-legs.md` →
+     `spec/07-per-sha-ci-legs`); `/spec:build` disowns all worktree mechanics and has no branch
+     rule of its own.
    - `{name} = {source}` with `/`→`-` (e.g. `spec/checkout` → `spec-checkout`) — the exact
      rule `{mergeBack} create` applies.
    - `{root} =` the last stdout line of `{mergeBack} root` (the project root / main worktree).

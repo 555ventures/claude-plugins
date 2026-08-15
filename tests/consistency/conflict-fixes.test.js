@@ -142,11 +142,11 @@ test('AC-20260810-08-4: review.md step 1 recovers build_base, then diff_base (di
 // AC-20260810-08-5 — doctor.md check 11 re-keyed to derived build branch + superseded enum
 // ---------------------------------------------------------------------------
 
-test('AC-20260810-08-5: doctor.md check 11 keys staleness to a derived spec/<stem> build branch, conditional on build_base: presence', () => {
+test('AC-20260814-02-6 (retagged from AC-20260810-08-5): doctor.md check 11 keys staleness to the branch-for-derived build branch, conditional on build_base: presence', () => {
   const doctor = read('spec/commands/doctor.md')
   const check11 = section(doctor, '11. **Spec-dir hygiene**', '12. **Run ledger hygiene**')
-  assert.match(check11, /spec\/<[^>]*stem[^>]*>|spec\/\$\{?stem\}?|derived[^.\n]*spec\//i,
-    'check 11 must derive the build branch as spec/<stem> from the spec filename (the literal rule enter-worktree.md and merge-back create apply), per D5')
+  assert.match(check11, /branch-for/,
+    'check 11 must derive the build branch by invoking merge-back.sh\'s branch-for subcommand (spec 20260814/02 D2) rather than restating the spec/<stem> algorithm inline — the invocation is the single owner of the derivation now')
   assert.match(check11, /build_base:/,
     'the re-keyed stale-implementing sub-check must stay conditional on build_base: presence, so in-place builds (no build_base) are skipped rather than false-flagged')
 })
@@ -259,4 +259,42 @@ test('AC-20260810-08-10: review.md Phase 4 attributes build_base merge-back targ
     'the recorder of build_base must be attributed to /git:enter-worktree, matching build.md\'s own "Build never writes build_base" and review.md\'s own step 1')
   assert.doesNotMatch(attributionLine, /\/spec:build/,
     'the attribution line must never credit /spec:build with recording build_base — build.md itself states build never writes it')
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260814-02-10 — doctor.md checks 16/17 gate legacy arms on generatedBy;
+// check 12 demotes the ~1000-char threshold to an advisory tripwire behind shape
+// ---------------------------------------------------------------------------
+
+test('AC-20260814-02-10: doctor.md check 16 gates its legacy-migration arm on generatedBy predating 6.7.0, else reports ordinary drift', () => {
+  const doctor = read('spec/commands/doctor.md')
+  const check16 = section(doctor, '16. **Representation parity**', '17. **Roadmap amendment integrity**')
+  assert.match(check16, /generatedBy/,
+    'check 16 must condition the "pre-6.7 grounding" migration flag on the config\'s generatedBy version — otherwise a current grounding missing the per-surface-casing-ownership label is misreported as a legacy migration forever')
+  assert.match(check16, /6\.7\.0/,
+    'check 16 must name 6.7.0 as the version boundary the migration flag gates on (D3)')
+  assert.match(check16, /targeted.?patch/i,
+    'on a grounding at/after 6.7.0, the missing label must report as ordinary drift routed to the targeted-patch flow, not as a migration')
+})
+
+test('AC-20260814-02-10: doctor.md check 17 gates its legacy-migration arm on generatedBy predating 6.18.0, else reports ordinary drift, and keeps the roadmap/deltas literal', () => {
+  const doctor = read('spec/commands/doctor.md')
+  const check17 = section(doctor, '17. **Roadmap amendment integrity**', '18. **Claims registry**')
+  assert.match(check17, /generatedBy/,
+    'check 17 must condition the "predates spec@6.18.0" migration flag on the config\'s generatedBy version — otherwise a current grounding\'s stray docs/roadmap/deltas/ dir is misreported as a legacy migration forever')
+  assert.match(check17, /6\.18\.0/,
+    'check 17 must keep 6.18.0 as the version boundary the migration flag gates on (D3)')
+  assert.match(check17, /roadmap\/deltas/,
+    'the roadmap/deltas literal must survive the gating change — tests/roadmap-amendments.test.js pins it and must stay green')
+})
+
+test('AC-20260814-02-10: doctor.md check 12 presents the JSON/shape checks as the primary signal and the ~1000-char threshold as an advisory-only tripwire, never a standalone broken finding', () => {
+  const doctor = read('spec/commands/doctor.md')
+  const check12 = section(doctor, '12. **Run ledger hygiene**', '13. **Scaffold audit**')
+  assert.match(check12, /`build \| review \| escape \| observe \| release`/,
+    'the five-value stage enum pin must survive check 12\'s reorder (D4 states wording around it is preserved)')
+  assert.match(check12, /advisory/i,
+    'the ~1000-char oversize-line check must be reframed as advisory (D4: reported only as corroboration when a row also fails shape, or as a standalone advisory) — the current text reports it as an unconditional finding')
+  assert.match(check12, /never[^.\n]*(broken finding|on its own)/i,
+    'check 12 must state the length threshold never stands alone as a broken finding — shape is the primary signal per D4, length is a smell')
 })

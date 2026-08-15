@@ -1,7 +1,9 @@
 'use strict'
 const { test } = require('node:test')
 const assert = require('node:assert')
-const { read } = require('../helpers')
+const fs = require('node:fs')
+const path = require('node:path')
+const { read, tmpdir, runNode } = require('../helpers')
 
 // specs/20260810/07-per-sha-ci-legs.md (2026-08-10, Prax stale-CI-review incident): D5 adds
 // doctor.md check 19 — CI-gate parity, an advisory check that the host's CI actually invokes the
@@ -11,39 +13,110 @@ const { read } = require('../helpers')
 // immediate-STOP enumeration extended to include a red ci row (without which a red release-commit
 // run would only surface post-promotion — a refuter finding). This file pins both doctrine edits
 // by regex over the prose.
+//
+// specs/20260814/02-doctor-mergeback-fidelity-mechanics.md (2026-08-14, D1/D6): the
+// split/trim/floor/substring algorithm doctor.md check 19 hand-executed becomes
+// spec/scripts/ci-gate-parity.js — a deterministic script check 19 now only INVOKES.
+// AC-20260810-07-11's paragraph-regex pins retag to exec pins against the script (AC-1/2/3
+// below), plus one doctrine pin confirming check 19 shrinks to an invocation with no restated
+// algorithm.
 
 const doctorMd = read('spec/commands/doctor.md')
 const scaffoldLedger = read('spec/doctrine/scaffold-ledger.md')
 const releaseMd = read('spec/commands/release.md')
 
-test('AC-20260810-07-11: doctor.md check 19 gates on .github/workflows existing, states the placeholder-split ≥10-char literal-segment substring rule, is advisory, and names the gateCommand remedy', () => {
+function makeHost(gateCommand, workflowContent) {
+  const dir = tmpdir('ci-gate')
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude', 'spec.config.json'),
+    JSON.stringify({ gateCommand }))
+  if (workflowContent !== undefined) {
+    fs.mkdirSync(path.join(dir, '.github', 'workflows'), { recursive: true })
+    fs.writeFileSync(path.join(dir, '.github', 'workflows', 'ci.yml'), workflowContent)
+  }
+  return dir
+}
+
+test('AC-20260814-02-1: this repo\'s real gateCommand splits to exactly one ≥10-char kept segment, exiting 0 when a workflow contains it and 1 naming it when none does', () => {
+  const gateCommand = 'node spec/scripts/build-workflows.js --check && node --test {testDirs}'
+  const kept = 'node spec/scripts/build-workflows.js --check && node --test'
+
+  const present = makeHost(gateCommand, `jobs:\n  test:\n    run: ${kept} 'tests/**/*.test.js'\n`)
+  const rPresent = runNode('scripts/ci-gate-parity.js', ['--root', present])
+  assert.strictEqual(rPresent.status, 0,
+    'ci-gate-parity.js must exit 0 when the workflow YAML contains the one kept segment of ' +
+    'this repo\'s real gateCommand (AC-1) — the split must drop the trailing empty tail after ' +
+    'the {testDirs} placeholder and keep only the ≥10-char literal prefix: ' + rPresent.stderr)
+
+  const absent = makeHost(gateCommand, 'jobs:\n  test:\n    run: echo nope\n')
+  const rAbsent = runNode('scripts/ci-gate-parity.js', ['--root', absent])
+  assert.strictEqual(rAbsent.status, 1,
+    'ci-gate-parity.js must exit 1 when no workflow file contains the kept segment — a missing ' +
+    'CI invocation of gateCommand is the exact local-green/CI-red drift this check exists to ' +
+    'catch: ' + rAbsent.stdout + rAbsent.stderr)
+  assert.match(rAbsent.stdout + rAbsent.stderr, /node --test/,
+    'the exit-1 finding must name the missing segment so the remedy is actionable: ' +
+    rAbsent.stdout + rAbsent.stderr)
+})
+
+test('AC-20260814-02-1: a synthetic two-placeholder gateCommand keeps only its ≥10-char second split segment, exiting 1 naming it when the workflow has only the first', () => {
+  const gateCommand = 'lint {a} && test-suite-run {b}'
+  const dir = makeHost(gateCommand, 'jobs:\n  test:\n    run: lint --fix\n')
+  const r = runNode('scripts/ci-gate-parity.js', ['--root', dir])
+  assert.strictEqual(r.status, 1,
+    'the multi-placeholder split drops the 4-char "lint" segment (below the ≥10-char floor) ' +
+    'and keeps "&& test-suite-run" — a workflow containing only "lint" text must still fail ' +
+    'parity because the ENFORCED segment is absent: ' + r.stdout + r.stderr)
+  assert.match(r.stdout + r.stderr, /test-suite-run/,
+    'the exit-1 finding must name the second split segment ("&& test-suite-run") — the only ' +
+    'one that survives the ≥10-char floor: ' + r.stdout + r.stderr)
+})
+
+test('AC-20260814-02-2: a gateCommand with no segment ≥10 chars after split falls back to the whole placeholder-stripped command as the single required segment', () => {
+  const gateCommand = 'npm test'
+
+  const present = makeHost(gateCommand, 'jobs:\n  test:\n    run: npm test\n')
+  const rPresent = runNode('scripts/ci-gate-parity.js', ['--root', present])
+  assert.strictEqual(rPresent.status, 0,
+    '"npm test" is 8 chars — below the ≥10-char floor — so the fallback rule must require the ' +
+    'whole command as one segment, not silently pass with zero segments enforced: ' +
+    rPresent.stderr)
+
+  const absent = makeHost(gateCommand, 'jobs:\n  test:\n    run: echo hi\n')
+  const rAbsent = runNode('scripts/ci-gate-parity.js', ['--root', absent])
+  assert.strictEqual(rAbsent.status, 1,
+    'without the fallback, a short gateCommand like "npm test" would degenerate into a ' +
+    'vacuously green check (D1) — the fallback must still catch a workflow that never runs it: ' +
+    rAbsent.stdout + rAbsent.stderr)
+})
+
+test('AC-20260814-02-3: --root with no .github/workflows prints the inapplicable sentinel and exits 0 (advisory absence, not a finding)', () => {
+  const dir = makeHost('npm test', undefined)
+  const r = runNode('scripts/ci-gate-parity.js', ['--root', dir])
+  assert.strictEqual(r.status, 0,
+    'a host with no .github/workflows/ has no CI to check parity against — this must exit 0 ' +
+    'with the sentinel, never a finding: ' + r.stdout + r.stderr)
+  assert.match(r.stdout, /inapplicable — no \.github\/workflows/,
+    'the exact sentinel text "inapplicable — no .github/workflows" must print so doctor.md can ' +
+    'rely on it instead of its own existence pre-check: ' + r.stdout)
+})
+
+test('AC-20260814-02-3: doctor.md check 19 invokes ci-gate-parity.js via spec-paths and no longer restates the split/floor/substring algorithm', () => {
   const m = doctorMd.match(/19\.\s+\*\*[^*]*\*\*[\s\S]*?(?=\n\d+\.\s+\*\*|\n## )/)
   assert.ok(m,
-    'doctor.md must have a numbered check 19 inside "## Checks — deterministic first" (D5) — without it ' +
-    'there is no CI-gate parity check at all, and local-green/CI-red drift has no root-cause fix: ' +
-    '(no "19. **...**" entry found)')
+    'doctor.md must still have a numbered check 19 — without it there is no CI-gate parity ' +
+    'check at all, and local-green/CI-red drift has no root-cause fix: (no "19. **...**" entry found)')
   const section = m[0]
-  assert.match(section, /\.github\/workflows/,
-    'check 19 must gate on `.github/workflows/` existing (D5: "only when .github/workflows/ exists") — ' +
-    'without that guard the check would run/skip vacuously on hosts with no GitHub Actions at all: ' + section)
-  assert.match(section, /gateCommand/,
-    'check 19 must name the config gateCommand — it is the value split into literal segments and checked ' +
-    'against the workflow YAML (D5): ' + section)
-  assert.match(section, /\{[^}]*\}/,
-    'check 19 must show the placeholder-split pattern (D5: split on the regex /\\{[^}]*\\}/g) that separates ' +
-    'literal segments from templated placeholder tokens before the substring check runs: ' + section)
-  assert.match(section, /\b10\b[\s\S]{0,30}char|char[\s\S]{0,30}\b10\b/i,
-    'check 19 must state the ≥10-char floor for kept literal segments (D5) — without the floor a short, ' +
-    'noisy segment would false-positive-match almost any CI YAML text: ' + section)
-  assert.match(section, /substring/i,
-    'check 19 must state the substring-containment rule — each kept segment must appear as a substring in ' +
-    'the concatenation of .github/workflows/*.yml + *.yaml (D5/Contracts): ' + section)
-  assert.match(section, /advisory/i,
-    'check 19 must be advisory severity (D5) — never a hard/blocking finding, since equivalent-but-respelled ' +
-    'CI is a false positive this substring check cannot see: ' + section)
-  assert.match(section, /gateCommand[\s\S]{0,200}(remedy|verbatim)|remedy[\s\S]{0,200}gateCommand/i,
-    'check 19\'s finding must name a remedy referencing gateCommand — D5\'s remedy is "make one CI step run ' +
-    'the gateCommand verbatim": ' + section)
+  assert.match(section, /ci-gate-parity/,
+    'check 19 must invoke the script by its spec-paths key (`ci-gate-parity`) — the algorithm ' +
+    'now lives once, in the script, per D1: ' + section)
+  assert.doesNotMatch(section, /\{[^}]*\}/,
+    'check 19 must NOT restate the placeholder-split regex pattern — that prose now lives only ' +
+    'in the script; a surviving copy means the algorithm still lives in two places: ' + section)
+  assert.doesNotMatch(section, /keep segments.{0,20}\b10\b|\b10\b.{0,20}char/i,
+    'check 19 must NOT restate the ≥10-char literal-segment floor — the script owns this ' +
+    'algorithm now; doctor.md should shrink to the invocation + one sentence on what a finding ' +
+    'means (D1): ' + section)
 })
 
 test('AC-20260810-07-11: scaffold-ledger.md registers a row for doctor check 19 (CI-gate parity)', () => {

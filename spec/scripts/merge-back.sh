@@ -14,6 +14,11 @@
 #   the model: `merge` exits 3 on conflicts for the model to resolve, then commit.
 #
 # Subcommands:
+#   branch-for <spec path>    -> prints `spec/<stem>` (the spec filename sans directory and
+#                                extension) — pure string derivation, no git ops, no --root
+#                                precondition. The sole owner of the build-branch naming rule;
+#                                `create`'s --source is derived by callers via this subcommand
+#                                (see create's own note below), never re-derived inline.
 #   create   --source S [--root R] [--base REF] [--name N]
 #                             -> deterministically `git worktree add` the build tree under
 #                                .claude/worktrees/, then print its ABSOLUTE path as the LAST
@@ -23,6 +28,8 @@
 #                                run-from-worktree) so /spec:build never silently lands on the
 #                                root branch when isolation was requested. Defaults: base=HEAD,
 #                                name=S with '/'->'-'. Must run from the MAIN working tree.
+#                                --source is taken pre-derived; callers derive it via `branch-for`
+#                                — `create` itself never re-derives the `spec/<stem>` naming rule.
 #   root     [--worktree W]   -> prints the absolute PROJECT root (the main worktree), so the
 #                                caller cd's to a verified path and never guesses "root".
 #                                Project root != $HOME. Run from inside the worktree if no W.
@@ -43,6 +50,21 @@ note() { echo "$*"; }
 
 ROOT=""; TARGET=""; SOURCE=""; STRATEGY=""; WORKTREE=""; BASE=""; NAME=""
 SUB="${1:-}"; shift || true
+
+# branch-for is pure string derivation (no git ops, no --root precondition) — it must be
+# special-cased HERE, before the generic flag loop below, because that loop dies on any bare
+# positional ("unknown arg") before subcommand dispatch ever runs (refuter-executed defect,
+# spec 20260814/02 D2). The sole owner of the `spec/<stem>` build-branch rule: doctor.md check 11
+# and enter-worktree.md step 1 both derive {source} by invoking this instead of restating the rule.
+if [ "$SUB" = "branch-for" ]; then
+  SPEC_PATH="${1:-}"
+  [ -n "$SPEC_PATH" ] || die "branch-for needs a spec path (e.g. branch-for specs/20260810/07-per-sha-ci-legs.md)"
+  STEM="$(basename "$SPEC_PATH")"
+  STEM="${STEM%.*}"
+  echo "spec/$STEM"
+  exit 0
+fi
+
 while [ $# -gt 0 ]; do
   # Every flag REQUIRES a value; a trailing/valueless flag dies loudly. (The old `shift 2` on a
   # 1-arg tail shifted nothing and spun this loop forever.)

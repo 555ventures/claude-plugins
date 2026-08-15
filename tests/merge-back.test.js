@@ -3,9 +3,50 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir, runBash, gitRepo } = require('./helpers')
+const { read, tmpdir, runBash, gitRepo } = require('./helpers')
 
 const SCRIPT = 'scripts/merge-back.sh'
+
+// specs/20260814/02-doctor-mergeback-fidelity-mechanics.md (2026-08-14, D2): the `spec/<stem>`
+// build-branch derivation had three prose copies (enter-worktree.md step 1, doctor.md check 11,
+// git/commands/commit.md's reverse parse) all restating the same rule by hand. `branch-for` gives
+// the rule one owner: a print-only subcommand needing no git repo, special-cased before the
+// generic flag loop (a bare positional there currently dies with "unknown arg", exit 2 — the
+// refuter-executed defect D2 fixes). enter-worktree.md and doctor.md check 11 must call it
+// instead of restating `spec/<stem>` freehand.
+
+test('AC-20260814-02-4: branch-for prints spec/<stem> for a spec path, and exits 2 naming the usage when no path is given', () => {
+  const r = runBash(SCRIPT, ['branch-for', 'specs/20260810/07-per-sha-ci-legs.md'])
+  assert.strictEqual(r.status, 0,
+    'branch-for must exit 0 on a valid spec path — it is pure string derivation with no git ' +
+    'ops and no repo precondition (D2): ' + r.stderr)
+  assert.strictEqual(r.stdout.trim(), 'spec/07-per-sha-ci-legs',
+    'branch-for must print exactly "spec/<stem>" (filename sans directory and extension) — a ' +
+    'wrong derivation here breaks both call sites that will depend on it (doctor check 11, ' +
+    'enter-worktree step 1): got ' + JSON.stringify(r.stdout))
+
+  const r2 = runBash(SCRIPT, ['branch-for'])
+  assert.strictEqual(r2.status, 2,
+    'branch-for with no spec path must exit 2 (usage/precondition failure per the script\'s own ' +
+    'exit-code alphabet), never hang or crash uninformatively: ' + r2.stderr)
+  assert.match(r2.stderr, /branch-for/,
+    'the usage error must name the subcommand so the remedy is discoverable: ' + r2.stderr)
+})
+
+test('AC-20260814-02-5: enter-worktree.md and doctor.md check 11 derive the build branch by invoking branch-for, not by restating the spec/<stem> rule freehand', () => {
+  const enterWorktree = read('git/commands/enter-worktree.md')
+  const doctorMd = read('spec/commands/doctor.md')
+
+  assert.match(enterWorktree, /branch-for/,
+    'enter-worktree.md step 1 must derive {source} via `{mergeBack} branch-for {spec path}` ' +
+    '(D2) — a free-standing restatement of "spec/<slug>" duplicates the rule this script now owns')
+
+  const check11 = doctorMd.match(/11\.\s+\*\*[^*]*\*\*[\s\S]*?(?=\n12\.\s+\*\*)/)
+  assert.ok(check11, 'doctor.md must still have a numbered check 11 — without it the stale-branch sub-check is gone')
+  assert.match(check11[0], /branch-for/,
+    'doctor.md check 11 must derive the build branch via `branch-for` (D2) — a free-standing ' +
+    '"derived as spec/<stem>" restatement duplicates the rule the script now owns: ' + check11[0])
+})
 
 test('flag with missing value dies instead of hanging', () => {
   const res = runBash(SCRIPT, ['cleanup', '--source'], { timeout: 5000 })

@@ -137,11 +137,10 @@ Next: /spec:build specs/20260813/09-example.md
   exception is a `mock authority:`-marked carrier comment beside an indirected render; unmarked
   comments quoting the mock are stripped from the haystack as narration. Fold delta rows into
   spec Decisions at reconcile.
-- **Name a partial-binding screen skeleton for the subset, not the surface.** Name
-  screen-level skeletons `<surface>-screen` (or anything that is not the surface id) whenever
-  binding a SUBSET of a surface's regions — a bare-surface ref claims every region of the
-  mock, including chrome (status bars, browser furniture) no shipped screen renders, and the
-  fidelity refusal will then name the chrome copy, not the naming collision.
+- **Name a partial-binding screen skeleton for the subset, not the surface.** Name a
+  skeleton binding a SUBSET of a surface's regions distinctly (e.g. `<surface>-screen`) — a
+  bare-surface ref claims every region including chrome, and the fidelity gate now names that
+  over-claim directly.
 - **Sibling mocks ground asymmetry detection — never transcription.** When the bound surface
   belongs to a mock family (other mocks of the same route group or shared entry frame), the
   session seat reads the siblings' **extract inventories** (region labels + furniture from the

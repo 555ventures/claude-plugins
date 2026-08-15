@@ -1,6 +1,7 @@
 ---
 date: 2026-08-14
-status: hardened
+status: implementing
+diff_base: 0d2eb6238aba909a9c360289c227a85aa1309b74
 open_markers: 0
 risk: T3
 area: pipeline-mechanics
@@ -57,6 +58,7 @@ the branch rule are invocations, and the retagged doctrine pins run green.
 | tests/fidelity-check.test.js | MODIFY | tests | AC-20260814-02-7, AC-20260814-02-8 |
 | tests/skeleton-subset-binding.test.js | MODIFY | tests | AC-20260814-02-9 (D6 retag — this suite WILL go red on the design.md collapse; rewritten, never deleted) |
 | git/commands/commit.md | MODIFY | doctrine | D2: reverse-parse site cites branch-for as the pattern owner (one clause) |
+| tests/terminal-observable-acs.test.js | MODIFY | tests | AC-20260814-02-11: add `ci-gate-parity` to the spec-paths key-set `expected` array + retag (amended 2026-08-14 — see Rationale) |
 
 ## Contracts
 
@@ -111,6 +113,7 @@ distinctly (e.g. <surface>-screen)
 - **AC-20260814-02-8**: WHEN a run is clean or the extract is flat (schemaVersion-2 single root, no children) THE SYSTEM SHALL CONTINUE TO exit exactly as at HEAD with no diagnosis line (regression pin, green pre-change) → tests/fidelity-check.test.js
 - **AC-20260814-02-9**: WHEN design.md is read THE SYSTEM SHALL state the subset-binding naming rule as one class-level sentence retaining the literal `<surface>-screen` remedy, without the multi-line chrome-misdiagnosis narration (retagged pins) → tests/skeleton-subset-binding.test.js
 - **AC-20260814-02-10**: WHEN doctor.md checks 16/17 are read THE SYSTEM SHALL gate both legacy-migration arms on `generatedBy` predating 6.7.0 / 6.18.0 respectively (missing `generatedBy` = both arms live), and check 12 SHALL present the shape checks as primary with the ~1000-char threshold as an advisory tripwire, while THE SYSTEM SHALL CONTINUE TO pin the five-value stage enum and the check-12/15 feedback roll-up (existing pins stay green) → tests/consistency/conflict-fixes.test.js
+- **AC-20260814-02-11**: WHEN `spec/bin/spec-paths`'s complete key set is scraped from its live case statement THE SYSTEM SHALL CONTINUE TO deep-equal the pinned `expected` array, with `ci-gate-parity` present in both (regression pin, green pre-change; D1's new key breaks this closed deep-equal by construction — the pin is the only place that key set is asserted) → tests/terminal-observable-acs.test.js
 
 ## Assumptions (escalation triggers)
 
@@ -143,6 +146,16 @@ distinctly (e.g. <surface>-screen)
   agree.
 
 ## Rationale
+
+**Amendment (2026-08-14, during the planning of `specs/20260814/05-collision-closure.md`).**
+That spec's plan-time paths sweep was run by hand across every in-flight spec and found the
+same invisible collision in three of them, this one included: D1 adds a `spec-paths` key, and
+`tests/terminal-observable-acs.test.js` holds a **closed** `deepStrictEqual` over the complete
+key set — the only place that set is pinned — so the new key reddens it by construction, from
+outside this spec's File Plan and outside its scoped gate. Added here as a File Plan row plus
+the AC-11 regression pin (update in place, retag; never weaken, never leave red) rather than
+left to surface as a mid-build out-of-plan patch, which is exactly what happened on
+`specs/20260814/01` and had to be waived at review.
 
 T3: `merge-back.sh` is a named T3 surface (destructive git ops; load-bearing exit alphabet)
 and doctor/fidelity sit in every host's grounding and design gates. One planning session, two

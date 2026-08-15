@@ -9,7 +9,7 @@
       "orphans": 3
     },
     "spec/commands/build.md": {
-      "lines": 349,
+      "lines": 353,
       "orphans": 3
     },
     "spec/commands/design.md": {
@@ -81,5 +81,5 @@
       "orphans": 5
     }
   },
-  "totalLines": 6172
+  "totalLines": 6176
 }

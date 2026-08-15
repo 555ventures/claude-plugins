@@ -264,7 +264,11 @@ and before the checkpoint-commit, run exactly once:
 - **`fixedNotRemoved > 0` WARNS** with the `--update` remedy (the update rides the batch).
 - **Exit 4, or a missing pre-image, WARNS and falls back** to blocking on baseline `newFailing`,
   printing the fallback note — conservative and deterministic, never a fresh mid-build
-  snapshot. Exit 2 is a build-config defect: print the remedy and escalate.
+  snapshot. The script never degrades silently, so the fallback is the caller's move: check
+  that `.claude/spec-preimage/{specid}.json` exists **before** invoking, and when it is absent
+  run the same `--check --root {root}` with **no `--pre` flag at all** — that invocation IS the
+  fallback. Exit 2 therefore always means a real build-config defect (a corrupt pre-image, an
+  unreadable baseline, no `testCommand`): print the remedy and escalate.
 
 Checkpoint-commit after the gate is green (and after each earlier green phase if the run is long).
 

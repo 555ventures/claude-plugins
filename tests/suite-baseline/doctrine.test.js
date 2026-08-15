@@ -148,6 +148,17 @@ test('AC-20260814-03-12: build.md states the Phase 0 pre-image snapshot, the exa
   assert.match(phase4, /fallback/i,
     'exit 4 or a missing pre-image must WARN and fall back to blocking on baseline ' +
     'newFailing — never a fresh mid-build snapshot')
+  // JJ-20260815-06 (review 2026-08-15 of specs/20260814/03): the fallback bullet said a
+  // missing pre-image "warns and falls back" while its own last sentence routed exit 2 to
+  // escalate — and suite-baseline.js exits 2, not 4, on an absent --pre path (AC-…-17 pins
+  // that deliberately: the script must never silently degrade to a baseline-only compare).
+  // Two contradictory prescriptions for one observable. The caller, not the script, owns the
+  // fallback, so build.md must say to drop the flag.
+  assert.match(phase4, /no `--pre` flag at all|without `--pre`|with no `--pre`/i,
+    'build.md must state the missing-pre-image fallback as re-invoking --check with NO --pre ' +
+    'flag — the script exits 2 on an absent --pre path, so doctrine that promises a fallback ' +
+    'while also routing exit 2 to escalate leaves the orchestrator with two contradictory ' +
+    'prescriptions for the same observable and it will pick one at random per session')
 
   const step3 = between(buildDoc, '3. **Resolve the gate.**', '4. Flip')
   assert.doesNotMatch(step3, /suite-baseline/,

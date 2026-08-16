@@ -37,3 +37,16 @@ matching changed-file path stems against the content of test files outside the p
 findings the session disposes of; a pre-existing sanctioned pin is a waive naming the pin. The
 gate never runs unscoped, and the prediction the scoping makes is now itself under test.
 (specs/20260815/02-at-risk-pins.md, done 2026-08-16.)
+
+## Runtime verification covers stopping, not just starting
+
+A verification stack of static legs passes a program that cannot start — the founding
+observation behind the boot smoke leg. The same argument applies unchanged to shutdown: static
+legs also all pass a program that boots but cannot cleanly stop, which is where a long-running
+service's state-corrupting defects live (a stranded pidfile lock that blocked the daemon's own
+restart rode two CLEAN reviews). The runtime leg therefore sends the host's declared
+`runtime.stopSignal` after readiness and requires a bounded, clean exit —
+`runtime.stopTimeout` and `runtime.stopExitCodes`, both optional and additive with sanctioned
+defaults (30 seconds, `[0]`). A hung or unclean shutdown fails the leg exactly as a boot
+failure does. Declared-inert hosts stay exempt: the shutdown check never runs when there is
+nothing to boot. (specs/20260815/04-runtime-shutdown-leg.md, 2026-08-16)

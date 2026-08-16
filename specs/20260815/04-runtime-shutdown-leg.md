@@ -1,6 +1,6 @@
 ---
 date: 2026-08-15
-status: implementing
+status: done
 diff_base: 97454d27f69e35355a41d950d714e5b8f855536c
 open_markers: 0
 risk: T3
@@ -171,6 +171,24 @@ untagged assertion would read as an uncovered AC). Every executable mechanic —
 trap delivery, wait-after-poll status propagation, jq defaults, stopTimeout 0, the
 dead-before-shutdown race, both pin regexes against candidate lines — was executed by the
 refuters and observed to behave as this spec claims.
+
+**Review dispositions (2026-08-16, run `wf_f3f7be47-db1`, CLEAN-with-qualifier).** The panel
+returned zero findings; both survivors were mechanical and waived by JJ:
+
+- **Waived — out-of-plan `.claude/suite-baseline.json`:** closing INTAKE pin JJ-20260815-05
+  requires removing its two sanctioned-red rows, which the File Plan never listed. This is the
+  standing class recorded in the host Gotchas and specs/20260814/03's Contracts block (the
+  baseline update rides the landing batch); `suite-baseline.js --check` is green
+  (`newFailing=0 fixedNotRemoved=0`). The build's deviations sidecar had already flagged a
+  second cause for the same edit: tagging the two pins with their AC-IDs renamed them, which
+  desyncs the baseline's exact-name entries — same file, same remedy, folded in here rather
+  than left as a separate obligation.
+- **Waived — at-risk leg red on `tests/tdd-waiver-provenance.test.js`:** one failure across 46
+  at-risk suites, and it is open intake item JJ-20260816-02's own pin — sanctioned in the
+  baseline, untouched by this diff. Turning it green means implementing that item.
+
+The qualifier is `ci: unavailable` — no GitHub Actions run exists for this commit, an honest
+absent observation rather than a red one.
 
 ## Canonical Delta
 

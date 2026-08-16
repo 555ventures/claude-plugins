@@ -47,3 +47,23 @@
   single-segment basename; the full repo-relative path always survives so a root-level file
   stays matchable. (specs/20260815/02-at-risk-pins.md, done 2026-08-16; the stem-degeneracy
   clause added by that spec's own review, AC-20260815-02-15)
+
+- The boot smoke leg certifies **both halves of a process life**: exit 0 now means "boot
+  observed ready AND stopped cleanly on the declared stop signal." After readiness (and any
+  `--seed` run), `smoke.sh` sends `runtime.stopSignal` to the boot process group, polls
+  liveness for `runtime.stopTimeout` seconds (optional, default 30), then `wait`s and requires
+  the exit status to be in `runtime.stopExitCodes` (optional, default `[0]`). A process that
+  ignores the signal is SIGKILLed and fails as `__SMOKE_FAIL__ shutdown-hung`; one whose
+  status falls outside the declared set fails as `__SMOKE_FAIL__ shutdown-unclean` — both
+  **exit 6**, which rides `verdict.js`'s existing non-zero-non-4 red-smoke semantics unchanged
+  (blocking leg, pre-panel hard stop, `smoke: "fail"` in the ledger). The default `[0]`
+  deliberately rejects 128+signum: status alone cannot distinguish a deliberate
+  re-raise-after-cleanup from a default-action death, and the default-action death is the
+  recorded escape — a host using the re-raise idiom declares `stopExitCodes: [143]`. The
+  signal was already being sent from the EXIT trap, where the verdict was already fixed; the
+  change is claiming the observation, not adding a probe. Declared-inert hosts (exit 4), hosts
+  with no runtime block (exit 3), and boots that never reach ready (exits 1/2) never enter the
+  shutdown block. A dedicated post-stop `runtime.stoppedCheck` probe was deliberately deferred:
+  re-running `readyCheck` after exit false-passes for the common file-probe form, and an
+  assertion that cannot fail is worse than none.
+  (specs/20260815/04-runtime-shutdown-leg.md, done 2026-08-16; INTAKE JJ-20260815-05)

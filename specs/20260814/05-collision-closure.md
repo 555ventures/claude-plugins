@@ -1,6 +1,6 @@
 ---
 date: 2026-08-14
-status: implementing
+status: done
 diff_base: a15ddb3cd725299ac36a83f05d91e6603b0e150c
 open_markers: 0
 risk: T3
@@ -395,6 +395,27 @@ generated surfaces are excluded by construction, which is correct only while the
 keeps generated files out of File Plans; and a closed pin in one of D13's three unmatched forms
 lands in `mentions` and is caught only later, at build Phase 4 — bounded to friction by spec 03
 D10's pre-image attribution, and monitored by D10's tier-reopen condition.
+
+**Review waives (2026-08-15, review runId wf_917cb3b3-98d).** Both surviving panel findings
+(reported independently by both reviewers, each verified DEMONSTRATED) named the same object:
+an uncommitted working-tree edit to `spec/scripts/dc-extract.js` adding an `if (!normText(buf))
+break` "ANCHOR RULE" guard, attributed by its own comment to a different host's spec
+(salon-os 20260814/04). **Waived for this spec** on ownership, not on merit: the edit is absent
+from this spec's committed range (`a15ddb3..HEAD` = 13 files, no `dc-extract.js`) and belongs to
+the design-pipeline workstream that authored it; `scope-reconcile.js` surfaced it only because it
+reads the working tree, not the committed diff. The close commit therefore stages named paths
+only and deliberately leaves the file dirty — a departure from Phase 3 step 4's "commit
+everything still uncommitted," recorded here and in the review report per step 3's
+legitimate-stray rule. The waiver is not a dismissal: the edit was measured during adjudication
+and is **wrong as written** (it fixes two merge shapes and regresses a third — executed
+comparison below), so it is carried as `JJ-20260815-06` in `spec/INTAKE.md` behind a failing
+test, `tests/dc-extract-anchor-rule.test.js`, rather than as prose. Executed 2026-08-15, one
+fixture, HEAD vs working tree: `<div>⏎ <span>CCC</span><span>DDD</span>` → `"CCCDDD"` at HEAD,
+split by the guard (guard correct); `<div>⏎ <span>EEE</span>⏎ <span>FFF</span>` → `"EEE FFF"` at
+HEAD, split by the guard (guard correct); `<p>⏎<b>GGG:</b> hhh iii` → `"GGG: hhh iii"` at HEAD,
+split into two entries by the guard (**guard regresses**); `<p><b>JJJ:</b> kkk lll` splits under
+both (pre-existing HEAD defect neither addresses). No existing extractor test distinguishes any
+of it — all 25 pass either way.
 
 ## Canonical Delta
 

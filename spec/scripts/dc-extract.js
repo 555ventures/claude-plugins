@@ -400,32 +400,49 @@ function analyzeSurface(raw) {
         idx++
         continue
       }
-      if (n.type === 'text' && !n.raw) {
-        // Join this text node with every consecutive sibling that is either more text or a
-        // purely-inline formatting element whose whole subtree flattens cleanly — one leaf
-        // sentence, split by <b>/<i>/etc, becomes ONE catalog entry (PRAX-20260801-01). The run
-        // stops the moment a sibling doesn't flatten (an <a>, a block element, a region marker).
-        let buf = n.text
-        let j = idx + 1
+      // RUN SCAN (PRAX-20260801-01 × JJ-20260815-06): a joinable RUN is the maximal sequence of
+      // consecutive siblings starting here that are non-raw text, inert comments, or purely-inline
+      // formatting elements whose subtrees flatten cleanly. The run JOINS into one catalog entry
+      // iff at least one SIBLING-LEVEL text node in it carries real prose — prose at this level is
+      // what makes the run one sentence a reader sees ("Invited <b>3</b> people";
+      // "<b>GGG:</b> hhh iii"). Without such prose the run is a stack of adjacent sibling elements
+      // (chips fed by distinct props): each keeps its own entry, whatever whitespace formatting
+      // put between them.
+      const startsRun = (n.type === 'text' && !n.raw) ||
+        (n.type === 'el' && flattenInlineText(n) !== null)
+      if (startsRun) {
+        let j = idx
+        let hasProse = false
+        let end = idx // index AFTER the last non-comment member: trailing comments stay unconsumed
         while (j < children.length) {
           const sib = children[j]
-          if (sib.type === 'text' && !sib.raw) { buf += sib.text; j++; continue }
-          if (sib.type === 'el') {
-            const t = flattenInlineText(sib)
-            if (t === null) break
-            buf += t
-            harvestInlineStyles(sib, region, layout, layoutSeen, colorCount, fontCount)
-            j++
-            continue
+          if (sib.type === 'text' && !sib.raw) {
+            if (normText(sib.text)) hasProse = true
+            end = ++j; continue
           }
-          if (sib.type === 'comment') { buf += ''; j++; continue } // a comment mid-sentence is inert
+          if (sib.type === 'comment') { j++; continue } // a comment mid-sentence is inert
+          if (sib.type === 'el' && flattenInlineText(sib) !== null) { end = ++j; continue }
           break
         }
-        const before = entries.length
-        entries.push(...classifyText(buf, inFor).map(e => ({ region, ...e })))
-        if (entries.length > before) pending = null // real content consumed the comment
-        idx = j
-        continue
+        if (hasProse) {
+          let buf = ''
+          for (let k = idx; k < end; k++) {
+            const sib = children[k]
+            if (sib.type === 'text') buf += sib.text
+            else if (sib.type === 'el') {
+              buf += flattenInlineText(sib)
+              harvestInlineStyles(sib, region, layout, layoutSeen, colorCount, fontCount)
+            }
+          }
+          const before = entries.length
+          entries.push(...classifyText(buf, inFor).map(e => ({ region, ...e })))
+          if (entries.length > before) pending = null // real content consumed the comment
+          idx = end
+          continue
+        }
+        // No sibling-level prose: not a sentence. A whitespace-only text node emits nothing; an
+        // element falls through to normal handling (regions, attrs, recursion) below.
+        if (n.type === 'text') { idx++; continue }
       }
       if (n.type === 'text') { idx++; continue } // raw text (style/script bodies) handled by their element
       // element

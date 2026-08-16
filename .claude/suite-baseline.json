@@ -17,6 +17,10 @@
       "name": "wf-build supports an orchestrator-executed step between layer groups"
     },
     {
+      "file": "tests/dc-extract-anchor-rule.test.js",
+      "name": "JJ-20260815-06: the inline-text join separates adjacent sibling elements while still reuniting one sentence split by emphasis, whatever whitespace precedes the first tag"
+    },
+    {
       "file": "tests/enforce-hash-stamp.test.js",
       "name": "enforce.md pins the hash to the final on-disk manifest, after the last write"
     },

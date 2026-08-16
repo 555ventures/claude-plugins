@@ -57,14 +57,6 @@
       "name": "JJ-20260815-09: the migrations check is asserted after the deploy, so a host with no migrate step fails instead of passing by coincidence"
     },
     {
-      "file": "tests/runtime-leg-shutdown.test.js",
-      "name": "JJ-20260815-05: § Runtime Verification claims clean shutdown, not just an observed boot"
-    },
-    {
-      "file": "tests/runtime-leg-shutdown.test.js",
-      "name": "JJ-20260815-05: smoke.sh asserts the booted process actually exits on the declared stop signal"
-    },
-    {
       "file": "tests/tdd-waiver-provenance.test.js",
       "name": "JJ-20260816-02: a run that waived the red-first evidence floor says so in its returned artifact"
     },

@@ -97,8 +97,9 @@ build that is the worktree itself. Phase 4 resolves a second, distinctly named s
      unresolvable, or `"unavailable — host runner declares no skip format"` when the gate ran
      but the skip format is undeclared/unmatched).
    - `bash $(spec-paths smoke)` — the **boot smoke leg** (shared invariants § Runtime
-     Verification). Exit 0 = boot observed ready; exit 4 = runtime declared inert (sanctioned,
-     note it in the verdict); any other exit is an automatic **hard finding** <!-- enforcedBy: spec/scripts/verdict.js --> — including
+     Verification). Exit 0 = boot observed ready **and stopped cleanly on the declared stop
+     signal**; exit 4 = runtime declared inert (sanctioned, note it in the verdict); any other
+     exit is an automatic **hard finding** <!-- enforcedBy: spec/scripts/verdict.js --> — including
      exit 3, "the host gives review no way to boot," which is a grounding-layer defect, not a
      skippable check. This leg is deterministic; no reviewer adjudicates it. Leg `smoke`,
      `observed:"pass"`/`"inert"`/`"fail"` — this row is what makes **the boot smoke leg

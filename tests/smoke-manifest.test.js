@@ -8,6 +8,14 @@ const { tmpdir, runBash, gitRepo } = require('./helpers')
 // The boot smoke leg and the deliverable manifest check are the executed-observation gates
 // behind /spec:review and /spec:init (shared § Runtime Verification). Pinned: exit codes are
 // the verdict — no model narrates pass/fail — and both fail closed.
+//
+// specs/20260815/04-runtime-shutdown-leg.md D5(a): the shutdown observation D1 adds reddens
+// this file's pass-path fixture as a collision — a bare `sleep 30` boot command has no
+// SIGTERM handler, so once smoke.sh sends the stop signal the process dies by default action
+// (143 ∉ [0]) and the leg now fails as unclean instead of passing. The fixture gains a
+// `trap 'exit 0' TERM` handler so it keeps meaning "this boots and stops cleanly." The
+// inert/no-runtime/boot-crashed/not-ready pins are untouched by construction (AC-20260815-04-7)
+// — the shutdown block sits after readiness, and none of those paths ever reach it.
 
 function writeConfig(dir, runtime) {
   fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
@@ -18,29 +26,33 @@ function writeConfig(dir, runtime) {
 
 const smoke = (dir, ...args) => runBash('scripts/smoke.sh', args, { cwd: dir })
 
-test('smoke: no runtime block is exit 3 — "no way to boot" is a finding, not a skip', () => {
+test('AC-20260815-04-7: smoke: no runtime block CONTINUES TO exit 3 — "no way to boot" is a finding, not a skip', () => {
   const dir = writeConfig(tmpdir('smoke'), undefined)
   const res = smoke(dir)
   assert.strictEqual(res.status, 3, res.stdout + res.stderr)
   assert.match(res.stdout, /__SMOKE_FAIL__ no-runtime/)
 })
 
-test('smoke: missing config is exit 3 too', () => {
+test('AC-20260815-04-7: smoke: missing config CONTINUES TO be exit 3 too', () => {
   const res = smoke(tmpdir('smoke'))
   assert.strictEqual(res.status, 3)
 })
 
-test('smoke: declared inert is exit 4 with the reason printed — sanctioned, never silent', () => {
+test('AC-20260815-04-7: smoke: declared inert CONTINUES TO exit 4 with the reason printed — sanctioned, never silent', () => {
   const dir = writeConfig(tmpdir('smoke'), { inert: 'pure library, nothing to boot' })
   const res = smoke(dir)
   assert.strictEqual(res.status, 4)
   assert.match(res.stdout, /__SMOKE_INERT__ pure library/)
 })
 
-test('smoke: boot observed ready is exit 0 with the pass sentinel', () => {
+test('AC-20260815-04-7: smoke: boot observed ready with a clean-handler boot CONTINUES TO be exit 0 with the pass sentinel', () => {
   const dir = tmpdir('smoke')
   writeConfig(dir, {
-    bootCommand: `touch ${dir}/up && sleep 30`,
+    // D5(a): the shutdown observation this spec adds requires a SIGTERM handler for the boot
+    // to still pass — a bare `sleep 30` dies 143 on the stop signal (default action), which is
+    // exactly the escape this spec exists to catch. `trap 'exit 0' TERM` keeps this fixture
+    // meaning "boots and stops cleanly."
+    bootCommand: `touch ${dir}/up && trap 'exit 0' TERM && while :; do sleep 1; done`,
     readyCheck: `test -f ${dir}/up`,
     readyTimeout: 20,
   })
@@ -49,7 +61,7 @@ test('smoke: boot observed ready is exit 0 with the pass sentinel', () => {
   assert.match(res.stdout, /__SMOKE_PASS__/)
 })
 
-test('smoke: boot process dying before ready is exit 2 with log tail', () => {
+test('AC-20260815-04-7: smoke: boot process dying before ready CONTINUES TO exit 2 with log tail', () => {
   const dir = writeConfig(tmpdir('smoke'), {
     bootCommand: 'echo boom >&2; exit 1',
     readyCheck: 'false',
@@ -61,7 +73,7 @@ test('smoke: boot process dying before ready is exit 2 with log tail', () => {
   assert.match(res.stdout, /boom/)
 })
 
-test('smoke: readyCheck never passing is exit 1 after the timeout', () => {
+test('AC-20260815-04-7: smoke: readyCheck never passing CONTINUES TO exit 1 after the timeout', () => {
   const dir = writeConfig(tmpdir('smoke'), {
     bootCommand: 'sleep 30',
     readyCheck: 'false',

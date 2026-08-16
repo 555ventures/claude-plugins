@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 # Deterministic boot-smoke leg — the executed-program check behind every review verdict.
 # Boots the host app (config runtime.bootCommand), polls runtime.readyCheck until it passes
-# or times out, then tears the process group down. No model narrates pass/fail: the exit
-# code and the __SMOKE_*__ sentinel line are the verdict (same lesson as the gate sentinel).
+# or times out, then — after readiness (and any --seed run) — sends the declared
+# runtime.stopSignal and requires a bounded, clean exit before tearing the process group down.
+# The stop half was previously only sent from the EXIT trap, where the leg's verdict was
+# already fixed and the observation discarded (INTAKE JJ-20260815-05: a stranded pidfile lock
+# rode two CLEAN reviews on this gap). No model narrates pass/fail: the exit code and the
+# __SMOKE_*__ sentinel line are the verdict (same lesson as the gate sentinel). This script
+# deliberately does NOT re-run readyCheck after shutdown (undefined for file-probe hosts —
+# would false-pass) and does NOT add a post-stop probe (deferred, see shared.md).
 #
 # Usage: smoke.sh [--config <path>] [--timeout <seconds>] [--seed]
 #   --config   path to spec.config.json (default .claude/spec.config.json under CWD)
@@ -10,7 +16,7 @@
 #   --seed     also run runtime.seedCommand after ready (for behavioral checks; boot-only by default)
 #
 # Exit codes:
-#   0  boot observed ready            (__SMOKE_PASS__)
+#   0  boot observed ready AND stopped cleanly on stopSignal (__SMOKE_PASS__ … stopped cleanly …)
 #   1  readyCheck never passed        (__SMOKE_FAIL__ not-ready)
 #   2  boot process died before ready (__SMOKE_FAIL__ boot-crashed)
 #   3  no runtime block in config     (__SMOKE_FAIL__ no-runtime) — "the host gives review no
@@ -18,6 +24,10 @@
 #   4  runtime declared inert         (__SMOKE_INERT__) — sanctioned only for hosts with no
 #      bootable process (libraries, pure CLIs); the declared reason is printed
 #   5  usage / config parse error
+#   6  shutdown failed after readiness:
+#        __SMOKE_FAIL__ shutdown-hung:    still alive runtime.stopTimeout seconds after
+#                                          stopSignal (group is then SIGKILLed)
+#        __SMOKE_FAIL__ shutdown-unclean: exit status outside runtime.stopExitCodes
 set -u
 
 CONFIG=".claude/spec.config.json"
@@ -57,6 +67,8 @@ SEED=$(jq -r '.runtime.seedCommand // empty' "$CONFIG")
 STOP_SIGNAL=$(jq -r '.runtime.stopSignal // "SIGTERM"' "$CONFIG")
 TIMEOUT=$(jq -r '.runtime.readyTimeout // 120' "$CONFIG")
 [ -n "$TIMEOUT_OVERRIDE" ] && TIMEOUT="$TIMEOUT_OVERRIDE"
+STOP_TIMEOUT=$(jq -r '.runtime.stopTimeout // 30' "$CONFIG")
+STOP_EXIT_CODES=$(jq -r '(.runtime.stopExitCodes // [0]) | join(" ")' "$CONFIG")
 
 if [ -z "$BOOT" ] || [ -z "$READY" ]; then
   echo "__SMOKE_FAIL__ no-runtime: runtime block is missing bootCommand or readyCheck"
@@ -98,7 +110,34 @@ while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
         exit 1
       fi
     fi
-    echo "__SMOKE_PASS__ ready after ${ELAPSED}s (boot: $BOOT | ready: $READY)"
+    # Shutdown observation (D1): the signal was already being sent from the EXIT-trap
+    # cleanup below, but by then the leg's verdict was already fixed — claim it here,
+    # before the pass line, while the exit status still counts.
+    STOP_ELAPSED=0
+    kill -s "$STOP_SIGNAL" -- "-$BOOT_PID" 2>/dev/null || kill -s "$STOP_SIGNAL" "$BOOT_PID" 2>/dev/null
+    while [ "$STOP_ELAPSED" -lt "$STOP_TIMEOUT" ]; do
+      kill -0 "$BOOT_PID" 2>/dev/null || break
+      sleep 1
+      STOP_ELAPSED=$((STOP_ELAPSED + 1))
+    done
+    if kill -0 "$BOOT_PID" 2>/dev/null; then
+      kill -9 -- "-$BOOT_PID" 2>/dev/null || kill -9 "$BOOT_PID" 2>/dev/null
+      echo "__SMOKE_FAIL__ shutdown-hung: process ignored ${STOP_SIGNAL} for ${STOP_TIMEOUT}s. Last output:"
+      tail -30 "$LOG" | sed 's/^/    /'
+      exit 6
+    fi
+    wait "$BOOT_PID"
+    STOP_STATUS=$?
+    STATUS_OK=0
+    for code in $STOP_EXIT_CODES; do
+      [ "$STOP_STATUS" = "$code" ] && { STATUS_OK=1; break; }
+    done
+    if [ "$STATUS_OK" -ne 1 ]; then
+      echo "__SMOKE_FAIL__ shutdown-unclean: exit status ${STOP_STATUS} on ${STOP_SIGNAL} (128+signum means the default signal action killed it — no handler ran). Last output:"
+      tail -30 "$LOG" | sed 's/^/    /'
+      exit 6
+    fi
+    echo "__SMOKE_PASS__ ready after ${ELAPSED}s, stopped cleanly (exit ${STOP_STATUS}) after ${STOP_ELAPSED}s (boot: $BOOT | ready: $READY)"
     exit 0
   fi
   sleep 2

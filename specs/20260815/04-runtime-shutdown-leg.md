@@ -1,6 +1,7 @@
 ---
 date: 2026-08-15
-status: hardened
+status: implementing
+diff_base: 97454d27f69e35355a41d950d714e5b8f855536c
 open_markers: 0
 risk: T3
 area: runtime-verification

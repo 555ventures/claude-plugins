@@ -26,20 +26,24 @@ i18n lint forbids.
 
 Every verification claim the pipeline makes must be backed by an executed observation — a
 verification stack composed entirely of static legs can pass a program that cannot start
-(UpWell, 2026-07: 8/8 gate tasks green while `GET /` returned 500 on every commit). The
-`runtime` config block is the contract for the executed leg:
+(UpWell, 2026-07: 8/8 gate tasks green while `GET /` returned 500 on every commit), and can
+equally pass a program that starts but cannot cleanly stop. The `runtime` config block is the
+contract for the executed leg:
 
 - `runtime.bootCommand` — starts the app locally (e.g. the dev command).
 - `runtime.readyCheck` — a command that exits 0 once the app observably serves (e.g.
   `curl -sf localhost:3000/api/health`).
 - Optional: `runtime.seedCommand` (seeds an observable state), `runtime.readyTimeout`
-  (seconds, default 120), `runtime.stopSignal` (default SIGTERM).
+  (seconds, default 120), `runtime.stopSignal` (default SIGTERM), `runtime.stopTimeout`
+  (seconds, default 30), `runtime.stopExitCodes` (integer array, default `[0]`).
 - Hosts with no bootable process (libraries, pure CLIs) declare
   `runtime: {"inert": "<reason>"}` — an explicit exemption, never a silent omission.
 
-The plugin's `smoke.sh` (`spec-paths smoke`) executes this contract deterministically;
-`/spec:review` runs it as a verdict leg (CLEAN requires it), and `/spec:init` proves it once
-via the deliverable manifest before stamping.
+The plugin's `smoke.sh` (`spec-paths smoke`) executes this contract deterministically: after
+readiness, it sends `runtime.stopSignal` and requires a bounded, clean exit
+(`stopTimeout`/`stopExitCodes`) — a hung or unclean shutdown fails the leg. `/spec:review` runs
+it as a verdict leg (CLEAN requires it), and `/spec:init` proves it once via the deliverable
+manifest before stamping.
 
 ## Deliverable manifest (required)
 

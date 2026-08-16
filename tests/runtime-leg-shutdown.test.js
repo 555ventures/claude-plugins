@@ -37,7 +37,7 @@ const { read } = require('./helpers')
 const smoke = read('spec/scripts/smoke.sh')
 const shared = read('spec/doctrine/shared.md')
 
-test('JJ-20260815-05: smoke.sh asserts the booted process actually exits on the declared stop signal', () => {
+test('AC-20260815-04-5 / JJ-20260815-05: smoke.sh asserts the booted process actually exits on the declared stop signal', () => {
   // The signal is already sent in cleanup(); the question is whether anything OBSERVES it.
   const trapIdx = smoke.indexOf('trap cleanup EXIT')
   assert.notStrictEqual(trapIdx, -1, 'smoke.sh must still install its cleanup trap')
@@ -57,7 +57,7 @@ test('JJ-20260815-05: smoke.sh asserts the booted process actually exits on the 
     'own restart. The signal is already being sent — only the observation is missing.')
 })
 
-test('JJ-20260815-05: § Runtime Verification claims clean shutdown, not just an observed boot', () => {
+test('AC-20260815-04-6 / JJ-20260815-05: § Runtime Verification claims clean shutdown, not just an observed boot', () => {
   const at = shared.indexOf('## Runtime Verification')
   assert.notStrictEqual(at, -1, 'shared.md must still carry § Runtime Verification')
   const section = shared.slice(at, shared.indexOf('\n## ', at + 4))

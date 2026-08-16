@@ -173,6 +173,13 @@ CLEAN reviews). The pipeline therefore treats *an observed boot* as a first-clas
   the enforcement; this sentence names the requirement, never asserts CLEAN independently of
   it). A host that gives review no way to boot (missing runtime block) is itself a hard
   finding, not a skipped check. A declared-inert runtime is sanctioned and reported.
+- A static leg set also passes a program that boots but cannot cleanly stop — a long-running
+  service's state-corrupting defects live in shutdown, not startup. The leg therefore sends
+  the host's declared `runtime.stopSignal` after readiness observes ready and requires a
+  bounded, clean exit (`runtime.stopTimeout`/`runtime.stopExitCodes`, both optional and
+  additive with sanctioned defaults); a hung or unclean shutdown fails the leg exactly as a
+  boot failure does. Declared-inert hosts stay exempt — the shutdown check never runs when
+  there is nothing to boot.
 - `/spec:init` proves the runtime contract once, via the deliverable manifest
   (`manifest-check.sh`), before it may stamp the grounding layer complete.
 - **Skipped tests are not passes.** The review's AC ↔ test reconciliation counts *executed*

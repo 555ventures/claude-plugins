@@ -202,7 +202,9 @@ All keys consumed by the plugin's commands/workflows:
     "readyCheck": "curl -sf http://localhost:3000/api/health",
     "seedCommand": "bun db:seed",     // OPTIONAL: seeds an observable state
     "readyTimeout": 120,              // OPTIONAL: seconds (default 120)
-    "stopSignal": "SIGTERM"           // OPTIONAL: signal to stop the booted process (default SIGTERM)
+    "stopSignal": "SIGTERM",          // OPTIONAL: signal to stop the booted process (default SIGTERM)
+    "stopTimeout": 30,                // OPTIONAL: seconds to wait for clean exit (default 30)
+    "stopExitCodes": [0]              // OPTIONAL: exit statuses counted as clean (default [0])
   },
   // Mechanical sweep script (generated in Phase 5); dirs appended, DIFF_BASE env honored.
   "patternsScript": "scripts/spec-patterns.sh",

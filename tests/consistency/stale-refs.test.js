@@ -114,6 +114,26 @@ test('AC-20260810-09-9: init.md\'s runtime config example mentions stopSignal', 
 })
 
 // ---------------------------------------------------------------------------
+// AC-20260815-04-8 — specs/20260815/04-runtime-shutdown-leg.md D2: init.md's worked-example
+// runtime block gains stopTimeout/stopExitCodes as OPTIONAL keys, alongside the stopSignal
+// this same file already pins above.
+// ---------------------------------------------------------------------------
+
+test('AC-20260815-04-8: init.md\'s runtime config example documents stopTimeout and stopExitCodes as optional keys', () => {
+  const init = read('spec/commands/init.md')
+  assert.match(init, /"stopTimeout":\s*30.*OPTIONAL/,
+    'init.md\'s runtime example must gain a `"stopTimeout": 30` line marked OPTIONAL (D2) — ' +
+    'the shutdown observation smoke.sh now performs reads this key with a default, but a ' +
+    'session authoring a runtime block from the worked example alone would never learn it ' +
+    'exists')
+  assert.match(init, /"stopExitCodes":\s*\[\s*0\s*\].*OPTIONAL/,
+    'init.md\'s runtime example must gain a `"stopExitCodes": [0]` line marked OPTIONAL (D2) ' +
+    '— this is the only way a host using the deliberate re-raise-after-cleanup idiom ' +
+    '(exiting 128+signum on purpose) learns how to declare it acceptable, and its absence ' +
+    'from the worked example means every such host silently fails the leg')
+})
+
+// ---------------------------------------------------------------------------
 // AC-20260810-09-10 — D5: ledger ts templates move from <YYYY-MM-DD> to ISO-8601 in all four
 // carriers
 // ---------------------------------------------------------------------------

@@ -119,6 +119,53 @@ test('AC-20260814-02-3: doctor.md check 19 invokes ci-gate-parity.js via spec-pa
     'means (D1): ' + section)
 })
 
+// specs/20260815/01-recurrence-carriers.md (2026-08-15, D5/D6/D7): the config-read class pays
+// down to lib/host-config.js's readConfigStrict — ci-gate-parity.js becomes a strict caller.
+// AC-20260815-01-13 pins the script's config-error and scalar-config-degrade behavior as a
+// regression contract the swap must preserve byte-identically; both cases were confirmed by
+// direct execution at plan time (spec Assumption A8) and are net-new coverage (no existing
+// test anywhere exercised the config-error path before this spec).
+test('AC-20260815-01-13: ci-gate-parity.js SHALL CONTINUE TO exit 2 naming "cannot read/parse" and its remedy when .claude/spec.config.json is missing or unparsable, and exit 0 "inapplicable — no gateCommand" when it parses to the valid-JSON scalar 3', () => {
+  const dir = tmpdir('ci-gate-cfg')
+
+  const rMissing = runNode('scripts/ci-gate-parity.js', ['--root', dir])
+  assert.strictEqual(rMissing.status, 2,
+    'ci-gate-parity.js must CONTINUE TO exit 2 when .claude/spec.config.json is missing — the ' +
+    'D5/D6 readConfigStrict swap must preserve this exit code byte-identically: ' +
+    rMissing.stdout + rMissing.stderr)
+  assert.match(rMissing.stderr, /cannot read\/parse/,
+    'the exit-2 stderr line must contain "cannot read/parse" for a missing config — the ' +
+    'readConfigStrict swap must reuse this exact phrase (D5\'s Error message contract): ' +
+    rMissing.stderr)
+  assert.match(rMissing.stderr, /fix the config or check --root/,
+    'the exit-2 stderr line must name its remedy ("fix the config or check --root") — an error ' +
+    'path with no remedy is a hard review finding per this repo\'s own Review Checks: ' +
+    rMissing.stderr)
+
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude', 'spec.config.json'), '{ this is not valid json')
+  const rUnparsable = runNode('scripts/ci-gate-parity.js', ['--root', dir])
+  assert.strictEqual(rUnparsable.status, 2,
+    'ci-gate-parity.js must CONTINUE TO exit 2 when .claude/spec.config.json exists but fails ' +
+    'to parse as JSON — the readConfigStrict swap must preserve this exit code: ' +
+    rUnparsable.stdout + rUnparsable.stderr)
+  assert.match(rUnparsable.stderr, /cannot read\/parse/,
+    'the exit-2 stderr line must contain "cannot read/parse" for an unparsable config: ' +
+    rUnparsable.stderr)
+  assert.match(rUnparsable.stderr, /fix the config or check --root/,
+    'the exit-2 stderr line must name its remedy for an unparsable config: ' + rUnparsable.stderr)
+
+  fs.writeFileSync(path.join(dir, '.claude', 'spec.config.json'), '3')
+  const rScalar = runNode('scripts/ci-gate-parity.js', ['--root', dir])
+  assert.strictEqual(rScalar.status, 0,
+    'ci-gate-parity.js must CONTINUE TO exit 0 when the config parses to the valid-JSON scalar ' +
+    '3 — a non-object throw in readConfigStrict would silently rewrite this locked exit ' +
+    'contract (the exact adversarial finding D5 folds): ' + rScalar.stdout + rScalar.stderr)
+  assert.match(rScalar.stdout, /inapplicable — no gateCommand/,
+    'a scalar config has no string gateCommand, so the script must CONTINUE TO print the ' +
+    '"inapplicable — no gateCommand" sentinel rather than a finding or a crash: ' + rScalar.stdout)
+})
+
 test('AC-20260810-07-11: scaffold-ledger.md registers a row for doctor check 19 (CI-gate parity)', () => {
   const rowMatch = scaffoldLedger.match(/^\|[^\n]*[Cc]heck 19[^\n]*\|$/m)
   assert.ok(rowMatch,

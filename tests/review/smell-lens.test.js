@@ -14,6 +14,14 @@ const path = require('path')
 // spec-pipeline.md. AC-20260812-01-1..7 below; AC-8 is satisfied by the pre-existing
 // tests/consistency/drift-reconcile.test.js and tests/workflow-guards.test.js staying green
 // (no new test — File Plan deliberately omits a row for them).
+//
+// 2026-08-15 spec 20260815/01-recurrence-carriers D3 (colliding-pin Gotcha): two AC-20260812-01-6
+// pin halves and AC-20260813-07-7's literal are retargeted IN PLACE, never weakened — the batched
+// keep/drop AskUserQuestion is deleted in favor of a `spec-paths advisory-append` invocation
+// (AC-20260815-01-7), and "{M} accepted" becomes "{M} recorded" now that audit, not review,
+// decides a row's fate (AC-20260815-01-8). The return-shape pin and the never-enters-verdict pin
+// are untouched but retagged as this spec's regression pin (AC-20260815-01-9). AC-20260815-01-15
+// is net-new: scaffold-ledger.md's Review smell lens row and its two new sibling rows (D4).
 
 // ---------------------------------------------------------------------------
 // helpers: brace/paren-balanced extraction, mirroring tests/helpers.js extractFn's approach
@@ -273,7 +281,7 @@ test('AC-20260812-01-5: verdict.js prints the identical HARD_FINDINGS/exit-1 ver
 // sentence, the advisory presentation group, and the report lines
 // ---------------------------------------------------------------------------
 
-test('AC-20260812-01-6: review.md documents the return shape with smells appended after tokens, in both locations, while the pinned prefix substring stays intact', () => {
+test('AC-20260812-01-6 / AC-20260815-01-9 (regression): review.md documents the return shape with smells appended after tokens, in both locations, while the pinned prefix substring stays intact', () => {
   const doc = read('spec/commands/review.md')
   const pinnedPrefix = 'verdict, survivors, killed, verify, reviewerCount, scope, tokens'
   const occurrences = doc.split(pinnedPrefix).length - 1
@@ -287,7 +295,7 @@ test('AC-20260812-01-6: review.md documents the return shape with smells appende
     `a location left at the old shape would document a return object the workflow no longer sends`)
 })
 
-test('AC-20260812-01-6: review.md states smells never enters verdict.js or the ledger row', () => {
+test('AC-20260812-01-6 / AC-20260815-01-9 (regression): review.md states smells never enters verdict.js or the ledger row', () => {
   const doc = read('spec/commands/review.md')
   assert.match(doc, /smells[\s\S]{0,80}never[\s\S]{0,40}(verdict\.js|ledger)/i,
     'review.md must carry an explicit sentence that `smells` never enters verdict.js or the ' +
@@ -295,19 +303,38 @@ test('AC-20260812-01-6: review.md states smells never enters verdict.js or the l
     'the ledger row expectations')
 })
 
-test('AC-20260812-01-6: review.md describes the advisory presentation group with a batched keep/drop question and the durable append mechanics to docs/audit/advisory-findings.md', () => {
+// 2026-08-15 spec 20260815/01-recurrence-carriers D1/D3: the batched keep/drop
+// AskUserQuestion bounced the question-style judge three times (review.md itself declares the
+// fork consequence-free) and is deleted outright — the session now derives-and-announces through
+// `spec-paths advisory-append`. This retargets AC-20260812-01-6's advisory-presentation-group
+// pin (which asserted the now-deleted question existed) to the opposite assertion.
+test('AC-20260815-01-7: review.md\'s advisory smell paragraph names the spec-paths advisory-append invocation with --smells, contains no AskUserQuestion between its opening bold phrase and Phase 3, and drops the retired keep/drop literals', () => {
   const doc = read('spec/commands/review.md')
-  assert.match(doc, /docs\/audit\/advisory-findings\.md/,
-    'review.md must name the durable capture file docs/audit/advisory-findings.md (D8/D9) — ' +
-    'without this the accepted-finding append mechanics have no documented destination')
-  assert.match(doc, /keep/i,
-    'review.md must document the "keep" outcome-phrased option of the batched smells ' +
-    'AskUserQuestion (D9)')
-  assert.match(doc, /drop/i,
-    'review.md must document the "drop" outcome-phrased option of the batched smells ' +
-    'AskUserQuestion (D9)')
-  assert.match(doc, /first[- ]append|first append/i,
-    'review.md must document the first-append header mechanics for docs/audit/advisory-findings.md (D9)')
+  const startIdx = doc.indexOf('**Advisory smell presentation')
+  assert.notStrictEqual(startIdx, -1,
+    'review.md must still contain the "Advisory smell presentation" paragraph\'s opening bold ' +
+    'phrase — the anchor this AC scans from is missing')
+  const endIdx = doc.indexOf('## Phase 3', startIdx)
+  assert.ok(endIdx > startIdx,
+    'review.md must contain a "## Phase 3" heading after the advisory smell paragraph — the ' +
+    'anchor this AC scans to is missing')
+  const paragraph = doc.slice(startIdx, endIdx)
+  assert.doesNotMatch(paragraph, /AskUserQuestion/,
+    'the advisory smell paragraph must contain no AskUserQuestion (D1) — the keep/drop ask was ' +
+    'deleted because review.md itself declares the fork consequence-free, which is exactly what ' +
+    'the question-style judge correctly blocked three times')
+  assert.match(paragraph, /spec-paths advisory-append/,
+    'the advisory smell paragraph must invoke `spec-paths advisory-append` (D1) — the session ' +
+    'now derives-and-announces through the script instead of asking a keep/drop question')
+  assert.match(paragraph, /--smells/,
+    'the advisory smell paragraph\'s advisory-append invocation must pass --smells (D1) — ' +
+    'without it the script has no findings to append')
+  assert.doesNotMatch(doc, /drop — no record kept/,
+    'review.md must not contain the retired literal "drop — no record kept" (D1) anywhere — the ' +
+    'keep/drop question option sentences were deleted along with the question itself')
+  assert.doesNotMatch(doc, /Dismissed findings get no record/,
+    'review.md must not contain the retired literal "Dismissed findings get no record" (D1) — ' +
+    'dismissal no longer exists once keep is the derived, announced default')
 })
 
 // 2026-08-14 spec 20260813/07-command-report-conformance D8 (build-time ruling, user-approved):
@@ -316,13 +343,22 @@ test('AC-20260812-01-6: review.md describes the advisory presentation group with
 // `artifacts` slot description instead of a dedicated 🔍-anchored line. This test retargets the
 // first half of the pin to the new home and pins the retirement itself; the lensFailed half
 // (originally AC-20260812-01-6) is unchanged and untouched below.
-test('AC-20260813-07-7: review.md\'s Phase 3 artifacts slot carries the smells summary (superseding the 🔍 glyph half of AC-20260812-01-6), and the lensFailed ⚠️ line survives unchanged', () => {
+// 2026-08-15 spec 20260815/01-recurrence-carriers D3/D8: "accepted" implied an adjudication that
+// no longer happens at review time (audit now decides fate) — the literal retargets to
+// "{M} recorded", retagged AC-20260815-01-8.
+test('AC-20260813-07-7 / AC-20260815-01-8: review.md\'s Phase 3 artifacts slot description and report template carry "{M} recorded", never "{M} accepted", and the lensFailed ⚠️ line survives unchanged', () => {
   const doc = read('spec/commands/review.md')
-  assert.match(doc, /`artifacts`[\s\S]{0,300}smells:\s*\{N\}\s*advisory\s*—\s*\{M\}\s*accepted\s*→\s*docs\/audit\/advisory-findings\.md/,
+  assert.match(doc, /`artifacts`[\s\S]{0,300}smells:\s*\{N\}\s*advisory\s*—\s*\{M\}\s*recorded\s*→\s*docs\/audit\/advisory-findings\.md/,
     'review.md\'s Phase 3 `artifacts` slot description must carry "smells: {N} advisory — {M} ' +
-    'accepted → docs/audit/advisory-findings.md" (D8/AC-20260813-07-7) — without this the smells ' +
-    'summary has no documented home now that the bespoke 🔍 line is retired, and a future edit ' +
-    'could drop the smells summary from the report entirely without any test catching it')
+    'recorded → docs/audit/advisory-findings.md" (D8/AC-20260815-01-8) — "accepted" implied an ' +
+    'adjudication that no longer happens at review; audit is where fate is decided now')
+  assert.match(doc, /📦 smells:\s*\{N\}\s*advisory\s*—\s*\{M\}\s*recorded\s*→\s*docs\/audit\/advisory-findings\.md/,
+    'review.md\'s report template line must also carry "{M} recorded" (D8/AC-20260815-01-8) — ' +
+    'both documented locations must move together or the template and the slot description ' +
+    'would disagree with each other')
+  assert.doesNotMatch(doc, /\{M\}\s*accepted/,
+    'review.md must not contain the retired literal "{M} accepted" anywhere (D8/AC-20260815-01-8) ' +
+    '— a location left at the old wording would document a report the workflow no longer emits')
   assert.doesNotMatch(doc, /^\s*🔍/m,
     'review.md must contain no line that opens with the 🔍 glyph (D8: the fixed report anchor ' +
     'set ✅⚠️🚫📌📦✨ is closed) — a reappearing 🔍-anchored smells line would resurrect the retired ' +
@@ -387,4 +423,49 @@ test('AC-20260812-01-7: this host\'s .claude/rules/spec-pipeline.md § Review Ch
   assert.match(rules, /three or more near-identical/,
     'spec-pipeline.md must keep the pre-existing duplication-calibration bullet byte-present ' +
     '(it is one of this host\'s two sanctioned homes for that duty, alongside init.md)')
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260815-01-15 — scaffold-ledger.md's Review smell lens row is rewritten in place (D4):
+// mechanism names advisory-append.js, RETIRE re-anchors off "zero accepted findings" to
+// emission volume + audit-side fate, and two new rows (advisory-append.js, config-read
+// closure pin) each carry a promote/retire condition.
+// ---------------------------------------------------------------------------
+
+test('AC-20260815-01-15: scaffold-ledger.md\'s Review smell lens row names advisory-append.js in its mechanism text and drops the retired "zero accepted findings" RETIRE clause', () => {
+  const doc = read('spec/doctrine/scaffold-ledger.md')
+  const rowIdx = doc.indexOf('Review smell lens')
+  assert.notStrictEqual(rowIdx, -1,
+    'scaffold-ledger.md must still contain a "Review smell lens" row — the anchor this AC scans ' +
+    'from is missing')
+  const rowEnd = doc.indexOf('\n', rowIdx)
+  const row = doc.slice(rowIdx, rowEnd === -1 ? doc.length : rowEnd)
+  assert.match(row, /advisory-append/,
+    'the Review smell lens row\'s mechanism text must name advisory-append.js (D4) — the row ' +
+    'still describes the retired keep/drop-question mechanism otherwise, mismatching the actual ' +
+    'derive-and-announce implementation')
+  assert.doesNotMatch(row, /zero accepted findings/,
+    'the Review smell lens row must not carry the literal "zero accepted findings" RETIRE clause ' +
+    '(D4) — auto-keep makes acceptance automatic, so that clause measures nothing once it no ' +
+    'longer gates on a model adjudication')
+})
+
+test('AC-20260815-01-15: scaffold-ledger.md carries a table row for advisory-append.js and a table row for the config-read closure pin, each with a promote or retire condition', () => {
+  const doc = read('spec/doctrine/scaffold-ledger.md')
+  const lines = doc.split('\n').filter(l => l.startsWith('|'))
+  const appendRow = lines.find(l => l.includes('advisory-append.js'))
+  assert.ok(appendRow,
+    'scaffold-ledger.md must carry a table row for advisory-append.js itself (structural; D4) — ' +
+    'every new mechanism owes a ledger row (doctor check 13; hard review check), and the append ' +
+    'script is a new mechanism')
+  assert.match(appendRow, /promote|retire/i,
+    'the advisory-append.js row must name a promote or retire condition (D4) — a row with no ' +
+    'promote/retire condition is a mechanism nobody has agreed to ever remove or upgrade')
+  const closureRow = lines.find(l => /config-read closure|readConfigStrict/i.test(l))
+  assert.ok(closureRow,
+    'scaffold-ledger.md must carry a table row naming the config-read closure pin (D4) — the ' +
+    'gate that makes a fifth private-config-read recurrence a red suite instead of a fifth ' +
+    'ledger row is itself a new mechanism owed a row (doctor check 13)')
+  assert.match(closureRow, /promote|retire/i,
+    'the config-read closure pin row must name a promote or retire condition (D4)')
 })

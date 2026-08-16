@@ -377,15 +377,13 @@ resolve):** this group can never change the verdict word or block Phase 3 — pr
 of its outcome. If `lensFailed` is true, print one line — `⚠️ smell lens failed — no advisory
 findings this run` — and skip straight to Phase 3; no lens ran. Otherwise, for each entry in
 `smells` present one plain-language line: class, what duplicates/masks what, both `file:line`
-locations (`counterpart` for `duplication`). Ask ONE batched `AskUserQuestion` (multiSelect) for
-the whole group, options outcome-phrased per finding ("keep — append a dated row to the repo's
-advisory log for the future audit" / "drop — no record kept") — the question-style hook gates
-this like any other question. For each **keep**, append one dated row to
-`docs/audit/advisory-findings.md` (repo root; create it with the header comment shown in the
-Contracts section on first append): date, class, `file:line`, `duplicates {counterpart}` for the
-duplication class, the claim, then `(spec {spec path}, runId {wf id})`. Dismissed findings get no
-record. A dismissed `AskUserQuestion` here follows the standing rule (STOP the run) <!-- unenforced: model-judgment step, no deterministic carrier exists --> — but the
-verdict/ledger row from Phase 2 step 2 is already written by then, so nothing is lost.
+locations (`counterpart` for `duplication`). Write `smells` to a fresh `mktemp` JSON file and
+run `node "$(spec-paths advisory-append)" --root {root} --spec {spec path} --run-id {wf id}
+--smells <that file>`, printing its output verbatim — the script appends the rows (creating the
+ledger with its header comment on first append), suppresses duplicates of still-open rows, and
+announces the auto-keep with its 📌 line. Keep is the conservative option per shared.md
+§ Question Style: a kept row is later-rejectable at audit via `rejected(<reason>)`, while a
+dropped signal is unrecoverable — the derivation, not a question.
 
 ## Phase 3 — Close (on CLEAN)
 
@@ -413,7 +411,7 @@ verdict/ledger row from Phase 2 step 2 is already written by then, so nothing is
    breaks, where}` line per survivor), `warns` (`waived: {finding — one-phrase reason}` per
    waived finding, plus `smell lens failed — no advisory findings this run` when
    `lensFailed`), `artifacts` (`ledger: {ledger row path}` always, plus `smells: {N} advisory
-   — {M} accepted → docs/audit/advisory-findings.md` when the smell lens ran — the 🔍 glyph
+   — {M} recorded → docs/audit/advisory-findings.md` when the smell lens ran — the 🔍 glyph
    retires to a plain artifact pointer, the fixed anchor set is closed), and `next` — on
    CLEAN, `{kind:'none', reason:'merge-back runs next'}` (Phase 4 follows automatically, so
    this report is not the run's terminal close); on non-CLEAN, `{kind:'command',
@@ -429,7 +427,7 @@ verdict/ledger row from Phase 2 step 2 is already written by then, so nothing is
    ⚠️ waived: {finding — one-phrase reason}
    ⚠️ smell lens failed — no advisory findings this run
    📦 ledger: {ledger row path}
-   📦 smells: {N} advisory — {M} accepted → docs/audit/advisory-findings.md
+   📦 smells: {N} advisory — {M} recorded → docs/audit/advisory-findings.md
    Next: nothing needs you — merge-back runs next
    ```
 

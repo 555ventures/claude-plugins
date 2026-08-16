@@ -46,6 +46,7 @@
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
+const { readConfigStrict } = require('./lib/host-config')
 
 function die(msg) { process.stderr.write('spec-design-driver: ' + msg + '\n'); process.exit(2) }
 
@@ -74,9 +75,8 @@ const repoRoot = (() => {
   const r = spawnSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8', cwd: path.dirname(path.resolve(specPath)) })
   return r.status === 0 ? r.stdout.trim() : process.cwd()
 })()
-const configPath = path.join(repoRoot, '.claude/spec.config.json')
-let config = {}
-try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')) } catch (e) { die('cannot read ' + configPath + ' — run /spec:init first (' + e.message + ')') }
+let config
+try { config = readConfigStrict(repoRoot) } catch (e) { die(e.message + ' — run /spec:init first') }
 // Legacy key mapping (shared § Design Canon)
 const design = config.design || (config.storybook ? { tool: 'storybook', command: config.storybookCommand, storyFormat: 'CSF3 stories' } : null)
 if (!design) die('host config declares no design block (nor legacy storybook keys) — the design stage does not apply to this repo; STOP')

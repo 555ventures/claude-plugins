@@ -16,6 +16,7 @@
 'use strict'
 const fs = require('node:fs')
 const path = require('node:path')
+const { readConfig } = require('./lib/host-config')
 
 const die = (msg) => { process.stderr.write('[design-atlas] ' + msg + '\n'); process.exit(2) }
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -362,10 +363,7 @@ function cmdBuild(argv) {
   } catch {}
 
   // optional built routes: config design.atlasRoutes {label: url}
-  let routes = {}
-  try {
-    routes = JSON.parse(fs.readFileSync(path.join(root, '.claude/spec.config.json'), 'utf8')).design.atlasRoutes || {}
-  } catch {}
+  const routes = ((readConfig(root).design || {}).atlasRoutes) || {}
 
   const labels = [...new Set([...nodes.keys(), ...mocks.keys()])].sort()
   const outDir = path.dirname(out)

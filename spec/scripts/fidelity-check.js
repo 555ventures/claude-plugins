@@ -51,6 +51,7 @@
 'use strict'
 const fs = require('fs')
 const path = require('path')
+const { readConfig } = require('./lib/host-config')
 
 function die(msg) { process.stderr.write('fidelity-check: ' + msg + '\n'); process.exit(2) }
 
@@ -111,7 +112,7 @@ const excused = []
 // design.copyCatalogs in the host config names the message catalog files (e.g. app/messages/en.json).
 // A mock copy string passes when it appears as a catalog VALUE — verbatim, or via a {hole} template
 // ("Hello {name}" matches "Hello Jamie"). Order never applies to catalogs: key order is arbitrary.
-const config = readJson(path.join(repoRoot, '.claude/spec.config.json')) || {}
+const config = readConfig(repoRoot)
 const catalogPaths = (config.design && Array.isArray(config.design.copyCatalogs)) ? config.design.copyCatalogs : []
 const catalogs = [] // {rel, values: Set<norm>, templates: [segs[]], text: norm(content)|null}
 for (const rel of catalogPaths) {

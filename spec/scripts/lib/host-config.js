@@ -11,23 +11,54 @@
 // declared forge capability, so the two CI scripts read the same fact the same way rather than
 // each restating the key path (specs/20260813/10-host-capabilities.md D1/D2).
 //
-// What it deliberately does NOT do: validate the config's shape, apply defaults for any key, or
-// surface read/parse errors. An absent, unreadable, or unparsable config reads as `{}` — every
-// caller degrades to its own documented default (glob-match: baseline globs only; the CI
-// scripts: legacy dynamic `gh` probing), which is the contract each of them already had.
+// What `readConfig` deliberately does NOT do: validate the config's shape, apply defaults for
+// any key, or surface read/parse errors. An absent, unreadable, or unparsable config reads as
+// `{}` — every caller degrades to its own documented default (glob-match: baseline globs only;
+// the CI scripts: legacy dynamic `gh` probing), which is the contract each of them already had.
+//
+// `readConfigStrict(root)` is the fail-loud sibling (specs/20260815/01-recurrence-carriers.md
+// D5): the divergence across this repo's config readers was always the ERROR POLICY, never the
+// read — strict-flavored consumers (ci-gate-parity.js, spec-design-driver.js) structurally
+// could not call `readConfig` and read the file privately instead, which is what recurred the
+// config-read class a day after its second paydown. It throws on absent/unreadable/unparsable
+// and otherwise returns the parsed value VERBATIM — object, array, scalar, or null, with no
+// shape coercion and no non-object throw: every caller's existing guard
+// (`typeof config.gateCommand === 'string'`, `config.design && …`) already owns shape handling,
+// and the verbatim return is what keeps each script's behavior on odd-but-valid JSON identical
+// to before the swap (a non-object throw would have silently rewritten ci-gate-parity's locked
+// exit-0 "inapplicable — no gateCommand" degrade on a scalar config into an exit-2 crash).
 //
 // Exit codes: n/a (library, not an entrypoint).
 
 const fs = require('fs')
 const path = require('path')
 
+function configPathFor(root) { return path.join(root, '.claude', 'spec.config.json') }
+
 // Absent / unreadable / unparsable / non-object config → {} (never a throw).
 function readConfig(root) {
   try {
-    const parsed = JSON.parse(fs.readFileSync(path.join(root, '.claude', 'spec.config.json'), 'utf8'))
+    const parsed = JSON.parse(fs.readFileSync(configPathFor(root), 'utf8'))
     return parsed && typeof parsed === 'object' ? parsed : {}
   } catch {
     return {}
+  }
+}
+
+// Absent / unreadable / unparsable config → throws. A successful parse returns verbatim, no
+// shape coercion, no non-object throw — callers own shape handling.
+function readConfigStrict(root) {
+  const configPath = configPathFor(root)
+  let raw
+  try {
+    raw = fs.readFileSync(configPath, 'utf8')
+  } catch (e) {
+    throw new Error('cannot read/parse ' + configPath + ' (' + e.message + ')')
+  }
+  try {
+    return JSON.parse(raw)
+  } catch (e) {
+    throw new Error('cannot read/parse ' + configPath + ' (' + e.message + ')')
   }
 }
 
@@ -38,4 +69,4 @@ function declaredForge(root) {
   return capabilities && capabilities.forge
 }
 
-module.exports = { readConfig, declaredForge }
+module.exports = { readConfig, declaredForge, readConfigStrict }

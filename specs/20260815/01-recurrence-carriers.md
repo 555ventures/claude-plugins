@@ -1,6 +1,7 @@
 ---
 date: 2026-08-15
-status: hardened
+status: implementing
+diff_base: 2b8dd3b0d8b378c425efe5135d759c9f92076150
 open_markers: 0
 risk: T3
 area: authoring-integrity
@@ -43,6 +44,7 @@ place, never weakened.
 | D7 | CREATE `tests/host-config/config-read.test.js`: (a) exec pins for `readConfigStrict` (AC-10) and the `readConfig` degrade regression (AC-11); (b) **the closure pin** (AC-12): walk every `.js` under `spec/scripts/` except `lib/host-config.js` and assert **no line pairs `spec.config.json` with `readFileSync` or `path.join`** — the assert message names the offending file:line and the remedy (`require lib/host-config.js — readConfig for degrade-to-{} semantics, readConfigStrict for fail-loud`). Comment and error-message mentions stay green by construction (executed A2: the predicate flags exactly the four real reads today and neither prose mention). The pin is authored red-first: it fails on the four live offenders until D6's swaps land. | This is the class's deterministic carrier — the thing four ledger rows, an extraction with a self-describing header, and a one-day recurrence prove prose cannot be. Lexical scope is `spec/scripts/**/*.js` because that is the ledgered population; repo-root `scripts/` measured clean (A2). |
 | D8 | Report surface: review.md Phase 3's `artifacts` slot description and report template line change `{M} accepted` → `{M} recorded` (M = rows the script actually appended, read from its output; suppressed-duplicate counts stay in the script's stdout, not the slot). `spec/doctrine/claims-baseline.json` is re-stamped via the standard remedy — `node "$(spec-paths claims-lint)" --update-baseline`, a **full-corpus rescan** — in the same commit, covering **both** doctrine files whose line counts move (review.md AND scaffold-ledger.md; the baseline carries a live per-file entry for each, and `tests/claims/`' corpus `totalLines` assert reddens outside this spec's scoped gate if either entry is hand-edited in isolation). `spec/.claude-plugin/plugin.json` bumps with a changelog description naming both carriers — target 6.77.0 (target, not a pin: specs 20260814/03 and /05 are hardened-unbuilt targeting 6.75.0/6.76.0 and concurrent sessions race semver; build takes the next free number). | "Accepted" implied an adjudication that no longer happens at review; audit is where fate is decided now. Version/claims discipline per host rules; full-corpus re-stamp per the adversarial check (a review.md-only hand edit strands scaffold-ledger.md's entry). |
 | D9 | v1 deliberately does NOT: add a meta-doctrine rule ("every recurring ledger class must be mechanized") — audit's ≥2-per-class enforcer promotion and the intake class-discipline row already own that policy, and this spec is that policy being applied, not restated; touch `scripts/question-style-gate.js` or shared.md § Question Style (the gate correctly caught the class — the filter clause is the ruling, not the defect); touch `wf-review` source or `verdict.js` (the `smells`/`lensFailed` return contract is untouched; advisory stays advisory by construction); touch `spec/commands/audit.md` (its ingest contract reads the same row grammar the script preserves). Reopen conditions: a second doctrine-mandated question the judge blocks structurally → sweep command doctrine for mandated asks; a fifth config-read recurrence that evades the lexical predicate → widen it and record the measurement, mirroring the collision-closure tier reopen. | Fencing to the two live classes keeps the blast radius at one doctrine paragraph, one lib addition, four one-line swaps, and two test files; every exclusion carries its reopen condition. |
+| D10 | **Build-time ruling (2026-08-16, retainer; A2's refine branch exercised).** The AC-12 closure predicate is specified exactly, and D7's one-line lexical sketch is superseded by it: the pin walks `spec/scripts/` recursively with a pure `fs.readdirSync` walk — **never a shell grep** (`fidelity-check.js` carries a stray NUL byte at line 136 that makes grep classify the file binary and silently drop its hits, which is how the plan-time census mis-measured) — collects `*.js`, skips exactly `lib/host-config.js`, reads each file `utf8`, splits on `\n`, and applies per line **in this order**: (1) line lacks the literal `spec.config.json` → green; (2) line contains `readFileSync` → **offender, unconditionally** (checked first so no later clause can exempt a read); (3) line contains `path.join` → **offender**, unless the line matches the display-join exemption `/\$\{\s*path\.join\([^()]*['"`][^'"`]*spec\.config\.json['"`][^()]*\)\s*\}/` — the pairing occurs as a template-literal interpolation consisting solely of one `path.join(...)` call with no nested parentheses and the filename as a quoted literal argument, i.e. a path rendered for display and structurally incapable of reading; (4) otherwise → green. The assert names `file:line` plus the D7 remedy string, unchanged. | A2's escalation clause authorized exactly this ("a prose mention trips it → refine the predicate so prose mentions stay green — never exempt a real read"). `suite-baseline.js:150` renders the config path inside an error message while its real read goes through the lib three lines above; it is a prose mention, not a fifth offender, so swapping it would be cosmetic churn on a T3 script that the next remedy message would re-redden. The worker's blocking claim — that any predicate catching the two cross-line offenders must also catch `:150` — was refuted by execution: the offenders' joins are plain-code expressions, `:150`'s is an interpolation-only display join, and clause 2's unconditional read check keeps a real read inside an interpolation flagged. D9's reopen condition is unchanged: the one evasion shape this adds (capture a display join, read it later) already falls under "evades the lexical predicate → widen it and record the measurement", and enumerating shapes there would be the additive-prose move the spec rejects. |
 
 ## File Plan
 
@@ -187,12 +189,14 @@ node "$(spec-paths advisory-append)" --root {root} --spec {spec path} --run-id {
   garbage JSON THE SYSTEM SHALL CONTINUE TO return `{}` without throwing (regression pin,
   green pre-change) → tests/host-config/config-read.test.js
 - **AC-20260815-01-12**: WHEN any `.js` file under `spec/scripts/` other than
-  `lib/host-config.js` contains a line pairing `spec.config.json` with `readFileSync` or
-  `path.join` THE SYSTEM SHALL fail the suite naming that file:line and the lib remedy
-  (authored red-first: red on the four live offenders at plan time — A2 — and green only
-  once D6's swaps land; comment/message mentions at `scope-reconcile.js:13` and
-  `spec-design-driver.js`'s catalog warning stay green by construction) →
-  tests/host-config/config-read.test.js
+  `lib/host-config.js` contains a line that **D10's ordered clause predicate** classifies an
+  offender — the literal `spec.config.json` paired with `readFileSync` (unconditional), or
+  with `path.join` outside the display-join interpolation exemption — THE SYSTEM SHALL fail
+  the suite naming that file:line and the lib remedy (authored red-first: red on exactly the
+  four D6 offenders at build time — A2, re-measured under D10 — and green only once D6's
+  swaps land; the mentions at `scope-reconcile.js:13`, `spec-design-driver.js`'s catalog
+  warning, and `suite-baseline.js:150`'s error-message display join stay green by
+  construction) → tests/host-config/config-read.test.js
 - **AC-20260815-01-13**: WHEN `ci-gate-parity.js` runs with `.claude/spec.config.json`
   missing, and separately with it unparsable, THE SYSTEM SHALL CONTINUE TO exit 2 with a
   stderr line containing `cannot read/parse` and the remedy; and WHEN the config parses to
@@ -230,6 +234,17 @@ node "$(spec-paths advisory-append)" --root {root} --spec {spec path} --run-id {
   `spec-design-driver.js` catalog-warning string) are not flagged. **if false at build** (a
   fifth offender appeared, or a prose mention trips it): swap the new offender too, or
   refine the predicate so prose mentions stay green — never exempt a real read.
+  **FALSIFIED AT BUILD, refine branch taken (2026-08-16).** The plan-time census was measured
+  with a grep that silently dropped hits: `spec/scripts/fidelity-check.js` carries a stray NUL
+  byte at line 136, so grep classified the file binary. Re-measured with a pure `fs` walk, the
+  literal one-line predicate flags a fifth non-exempt line — `spec/scripts/suite-baseline.js:150`,
+  a `path.join` rendered inside an error-message template literal, whose real config read goes
+  through the lib at `suite-baseline.js:37`/`:147`. That is a prose mention, not an offender, so
+  A2's refine branch applies and D10 states the resulting predicate exactly. Amended measurement:
+  D10's predicate flags exactly `ci-gate-parity.js:40`, `design-atlas.js:367`,
+  `fidelity-check.js:114`, `spec-design-driver.js:77` and nothing else; `scope-reconcile.js:13`,
+  `spec-design-driver.js:317`, `fidelity-check.js:17/:47/:120/:569` and `suite-baseline.js:150`
+  are green by classification.
 - **A3** (read at HEAD): the wf-review return's `smells` entries carry
   `{file, line, class, claim, counterpart?, suggestion?}` (review.md's documented shape +
   the workflow's LENS schema), sufficient for the row grammar with session-supplied

@@ -190,7 +190,15 @@ test('AC-20260810-02-5: build.md blocked row owes the AC in the same edit as the
 // set is pinned, so the new key breaks it by construction — the fourth recurrence of this same
 // spec's own headline class, caught by this spec's own paths leg before build rather than at
 // it (D9's Rationale). Neither weakened nor left red: the key is added here, in place.
-test('AC-20260810-02-6, AC-20260814-02-11, AC-20260814-03-13, AC-20260814-05-12: scaffold-ledger.md gains a gate-kind terminal-observable-ACs row, and verdict.js/spec-paths stay unchanged apart from the registered ci-gate-parity, suite-baseline, and collision-closure keys', () => {
+//
+// AC-20260815-01-14 (specs/20260815/01-recurrence-carriers.md D2, 2026-08-15): D2 registers
+// spec/scripts/advisory-append.js behind a new `advisory-append` spec-paths key — review.md's
+// D1 invocation line resolves it via `spec-paths advisory-append`, the same silent-failure risk
+// as every other bundled script (§ Risk Tiers, spec-paths). This closed deep-equal is the only
+// place that key set is pinned — the fifth recurrence of this exact collision, per D9's own
+// reopen condition — so the new key is added here, in place, rather than left to surface as a
+// mid-build out-of-plan patch.
+test('AC-20260810-02-6, AC-20260814-02-11, AC-20260814-03-13, AC-20260814-05-12, AC-20260815-01-14: scaffold-ledger.md gains a gate-kind terminal-observable-ACs row, and verdict.js/spec-paths stay unchanged apart from the registered ci-gate-parity, suite-baseline, collision-closure, and advisory-append keys', () => {
   const rowStart = ledger.search(/\| ?Terminal-observable/i)
   assert.notStrictEqual(rowStart, -1,
     'scaffold-ledger.md has no Terminal-observable-ACs row — a new gate mechanism with no ' +
@@ -220,7 +228,7 @@ test('AC-20260810-02-6, AC-20260814-02-11, AC-20260814-03-13, AC-20260814-05-12:
   assert.ok(keysOut.trim().length > 0, 'spec-paths root must resolve for the key-set check below to be meaningful')
   const specPathsSrc = read('spec/bin/spec-paths')
   const keys = [...specPathsSrc.matchAll(/^ {2}([a-z0-9-]+)\)/gm)].map(m => m[1]).sort()
-  const expected = ['ac-matrix', 'ci-gate-parity', 'ci-query', 'citations-check', 'claims-lint', 'collision-closure',
+  const expected = ['ac-matrix', 'advisory-append', 'ci-gate-parity', 'ci-query', 'citations-check', 'claims-lint', 'collision-closure',
     'components-check', 'contract', 'contract-hash', 'dc-extract', 'design-atlas', 'design-driver', 'feedback-template',
     'fidelity-check', 'hotspot', 'intake', 'manifest-check', 'merge-back', 'observe-ci',
     'parity-check', 'report-render', 'root', 'scaffold-ledger', 'scope-reconcile', 'shared',
@@ -229,10 +237,11 @@ test('AC-20260810-02-6, AC-20260814-02-11, AC-20260814-03-13, AC-20260814-05-12:
     'wf-research', 'wf-review', 'workflows'].sort()
   assert.deepStrictEqual(keys, expected,
     'spec/bin/spec-paths\'s key set (AC-20260812-02-11, AC-20260813-06-11, AC-20260814-01-8, ' +
-    'AC-20260814-02-11, AC-20260814-03-13, AC-20260814-05-12) must be exactly the true set ' +
-    'scraped from the live case statement, including the pre-existing citations-check key ' +
-    '(20260810/09 drift), hotspot-audit\'s hotspot key, report-renderer\'s report-render key, ' +
-    'ac-matrix-script\'s ac-matrix key, 20260814/02\'s ci-gate-parity key, 20260814/03\'s ' +
-    'suite-baseline key, and this spec\'s new collision-closure key — a mismatch means a key ' +
-    'silently drifted or a script shipped unregistered')
+    'AC-20260814-02-11, AC-20260814-03-13, AC-20260814-05-12, AC-20260815-01-14) must be exactly ' +
+    'the true set scraped from the live case statement, including the pre-existing ' +
+    'citations-check key (20260810/09 drift), hotspot-audit\'s hotspot key, report-renderer\'s ' +
+    'report-render key, ac-matrix-script\'s ac-matrix key, 20260814/02\'s ci-gate-parity key, ' +
+    '20260814/03\'s suite-baseline key, 20260814/05\'s collision-closure key, and this spec\'s ' +
+    'new advisory-append key — a mismatch means a key silently drifted or a script shipped ' +
+    'unregistered')
 })

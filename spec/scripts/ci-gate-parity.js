@@ -29,6 +29,7 @@
 'use strict'
 const fs = require('fs')
 const path = require('path')
+const { readConfigStrict } = require('./lib/host-config')
 
 function die(msg) { process.stderr.write('ci-gate-parity: ' + msg + '\n'); process.exit(2) }
 
@@ -37,12 +38,11 @@ const rootIdx = argv.indexOf('--root')
 if (rootIdx === -1 || !argv[rootIdx + 1]) die('usage: ci-gate-parity.js --root <dir>')
 const root = argv[rootIdx + 1]
 
-const configPath = path.join(root, '.claude', 'spec.config.json')
 let config
 try {
-  config = JSON.parse(fs.readFileSync(configPath, 'utf8'))
+  config = readConfigStrict(root)
 } catch (e) {
-  die('cannot read/parse ' + configPath + ' (' + e.message + ') — fix the config or check --root')
+  die(e.message + ' — fix the config or check --root')
 }
 
 const gateCommand = typeof config.gateCommand === 'string' ? config.gateCommand : ''

@@ -19,3 +19,21 @@ mid-build ruling adds its AC in the same edit), and `/spec:review`'s AC↔test m
 skipped-test reconciliation and semantic backstop. No new script, section, or review leg
 exists for this — deliberately (ruled 2026-08-10, superseding the discarded `## Surface
 Paths` design; specs/20260810/02-terminal-observable-acs.md).
+
+## The gate is scoped, and the scoping is compensated
+
+Every gate in the pipeline resolves `{testDirs}` from the spec's own File Plan tests rows, so
+a run never executes the whole suite. That scoping is deliberate and load-bearing — it is what
+makes a red-pin baseline livable — and it is never widened. Its cost is precise: a Decision
+that changes what a shared script *returns* reddens suites that pinned the old behavior, and
+because those suites sit outside the File Plan, neither the build gate nor the review panel
+ever runs them (escape `wf_e1da0ea6-94c`: five pins, two files, zero signal, found by hand
+twelve minutes after a CLEAN verdict).
+
+The compensation is a derivation, not a wider gate: `scope-reconcile.js` — already the sole
+owner of the changed-set-vs-File-Plan comparison — also derives the **at-risk** set by
+matching changed-file path stems against the content of test files outside the plan, and
+`/spec:review` runs that set as a required, non-blocking leg. Failures become ordinary
+findings the session disposes of; a pre-existing sanctioned pin is a waive naming the pin. The
+gate never runs unscoped, and the prediction the scoping makes is now itself under test.
+(specs/20260815/02-at-risk-pins.md, done 2026-08-16.)

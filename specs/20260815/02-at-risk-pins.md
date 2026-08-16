@@ -1,6 +1,6 @@
 ---
 date: 2026-08-15
-status: implementing
+status: done
 diff_base: e3ebaa871c799cbf95d51f2f7287d32264edfae3
 open_markers: 0
 risk: T3
@@ -169,6 +169,15 @@ CLEAN-with-qualifier unavailable-leg set: 'ci' | 'gate' | 'at-risk'
   `['gate', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk']`) →
   tests/terminal-observable-acs.test.js (retargeted byte-exact pin, red-first post-retarget
   until D4 lands)
+- **AC-20260815-02-15**: WHEN a changed file's stem forms would not discriminate — the empty
+  string (a root dotfile such as `.gitignore` strips to `''` under the last-extension regex,
+  and `content.includes('')` is vacuously true for every candidate) or a bare single-segment
+  basename (`index.js` → `index`, `package.json` → `package`) — THE SYSTEM SHALL NOT emit them
+  as stems, so unrelated test files are never listed in `atRisk`; the full repo-relative path
+  (form (a)) is always emitted, so a root-level file stays matchable by its literal path →
+  red-first exec tests in tests/scope-reconcile-at-risk.test.js (added at review 2026-08-16;
+  D1's own guard clause — "so a bare basename like `index` never becomes a stem" — was written
+  on form (c) only, and form (b) reproduced the degeneracy for 1-segment paths)
 
 ## Assumptions (escalation triggers)
 
@@ -212,6 +221,84 @@ AC-12 covers the no-unit-test doctrine artifacts honestly rather than laundering
 covered. One cost accepted knowingly: build's Final gate calls the same `--json` and now
 computes `atRisk` it uses only for D7's advisory count — one extra sub-second walk per build
 was judged cheaper than a mode flag forking the script's output shape by call site.
+
+## Build deviations (sidecar folded in at review 2026-08-16)
+
+- AC-20260815-02-7 and AC-20260815-02-8 were **not** red-first, honestly and structurally: a
+  manifest-only construction cannot distinguish "at-risk row ignored by the old REVIEW_LEGS"
+  from "correctly required-but-non-blocking" until `at-risk` actually enters the array. Both
+  were kept as written — they are valid regression guards now that D4 has landed. Only
+  AC-20260815-02-6 was genuinely red-first at build time.
+- D8's literal `6.78.0` target was stale by build time (6.80.0 shipped first from the prior
+  spec); the build took the next free number, 6.81.0. The standing `[host]` Gotcha about
+  concurrent sessions racing the same semver covers this — the spec's number is a target, not
+  a pin.
+- **Assumption A4 fired.** The adversarial pass predicted four suites would redden under D4's
+  required-leg extension; the build's pre-image check found **six pins across three more**
+  (`clean-row-survivor-consistency`, `verdict-gatered-no-workflow`, `suite-baseline/doctrine`
+  — the last one broken by D3's prose edit, not D4). All three became in-flight File Plan
+  rows; fixtures gained the row, the two byte-exact regexes were retargeted, none weakened,
+  and AC-20260815-02-14 was added for the step-8 promise that had no AC. This is the spec's
+  own thesis landing on the spec itself: the derivation listed all three surprise suites,
+  which is precisely the argument behind D3's run-not-list design.
+- `.claude/suite-baseline.json` was edited surgically rather than via the printed `--update`
+  remedy — see the suite-leg waive below for why.
+
+## Review dispositions (2026-08-16, run `wf_c1e30dad-b85`)
+
+**Fixed (4 findings, one locus).** The Sonnet panel returned zero findings; a Fable retainer
+consult requested by the user found a reproduced correctness defect in the derivation's own
+heart, and three lesser defects around it. All four were fixed in-review, red-first:
+
+- *hard* — `stemsFor()` emitted the empty string for any root-level dotfile, and
+  `content.includes('')` is vacuously true, so a diff touching `.gitignore`/`.npmrc`/an
+  `.eslintrc` listed the entire test universe as at-risk. Reproduced in a synthetic tree
+  (only `.gitignore` changed → two content-unrelated test files returned). On a red-pin host
+  this is a guaranteed red leg and a mandatory waive on every such review — the exact
+  cry-wolf trajectory D6's RETIRE condition exists to catch, arriving on day one.
+- *soft* — the same function emitted bare single-segment basenames (`index`, `package`),
+  contradicting D1's own stated guard. Both closed by AC-20260815-02-15.
+- *soft* — the script header's "deliberately does NOT: review file CONTENT" claim went false
+  the moment the at-risk block began substring-scanning candidates; corrected in place
+  (§ Worker Rules makes the header a contract, and the `Exit codes:` list stayed untouched
+  per D2).
+- *soft* — AC-20260815-02-4's pin was vacuous: its fixture referenced the helper as
+  `require('./helpers')`, matching neither stem of `tests/helpers.js`, so `atRisk` was `[]`
+  with or without the guard it claimed to pin. Mutation-proven in both directions (guard
+  removed: real `[]`, mutant `[]`), then repaired to discriminate. A pin that cannot fail is
+  a false coverage claim — ac-matrix counted AC-4 covered throughout.
+
+**Waived (2 findings, both pre-existing, neither attributable to this diff).**
+
+- *at-risk leg red* — the leg's first live run executed 45 of this repo's 128 test files in
+  3.1s and exited 1 on six failures. Five are sanctioned in `.claude/suite-baseline.json`
+  (`gate-activation-probe` ×2, `gate-env-preflight` ×2, `workflow-runid-provenance` ×1). The
+  sixth was re-run in a detached worktree at `diff_base` and was already red there. D3's own
+  text names this disposition: "a pre-existing sanctioned red (e.g. this repo's INTAKE pins)
+  is a five-second waive naming the pin."
+- *suite leg `newFailing=1`* — `tests/feedback-loop.test.js`, red because INTAKE row
+  JJ-20260816-02 (landed the previous commit) names a pin file,
+  `tests/tdd-waiver-provenance.test.js`, that was never authored. Warned, never absorbed,
+  exactly as this spec's `.claude/suite-baseline.json` File Plan row instructs — absorbing it
+  via `--update` would silently sanction an unrelated defect. **Open debt, not this spec's:**
+  an accepted intake row without its red carrier on disk.
+
+**Recorded, not fixed (D9 addendum — reopen conditions).**
+
+- *rename gap* — D1 excludes rename-from paths from stem sources, so renaming a shared script
+  yields zero at-risk hits for the suites still referencing the old path, while this spec's
+  own Behavior section argues a test referencing a *deleted* file is at risk by definition
+  (a rename is delete+create on the reference side). The implementation follows D1 verbatim,
+  so this is a spec design gap, not a build defect. **Reopen** on the first collision that
+  ships behind a rename, recording the miss verbatim — the same evidence bar D9's other
+  exclusions carry.
+- *derivation duplication* — the advisory smell lens flags that this at-risk block re-implements
+  `collision-closure.js`'s paths-leg mechanism (walk a test corpus, substring-scan content
+  against File-Plan-derived targets, subtract covered hits). The two differ in input and stage,
+  which is why `collision-closure.js`'s header already disclaims the overlap; the *matching*
+  mechanism is nonetheless duplicated. Recorded in the advisory ledger. **Reopen** as a
+  `lib/` extraction if a third consumer of the same shape appears — this repo's own
+  duplication calibration (§ Review Checks: three near-identical blocks) is the trigger.
 
 ## Canonical Delta
 

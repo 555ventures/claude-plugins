@@ -16,3 +16,15 @@
   flows through `ci-query.js` (also used by observe-ci) — red blocks pre-panel, unavailable
   never blocks; verdict.js exit 0 is the only door to Phase 3 close.
   (specs/20260805/02-review-evidence-manifest.md, done 2026-08-06)
+
+- The Phase 0 leg inventory carries **`at-risk`**: required on full scope, skipped on
+  fix-delta (mirroring `reconcile`), never blocking. `scope-reconcile.js` derives it as an
+  additive `atRisk` field — path-stem matching, deliberately language-agnostic — naming the
+  test files outside the spec's File Plan whose content references a changed source file;
+  review then **runs** them via the host's `testCommand` and turns failures into ordinary
+  dispositionable findings. Listing alone was rejected: a listed-only at-risk file is how the
+  founding escape survived two process layers. Stems must discriminate — never the empty
+  string (a root dotfile strips to `''` and matches every candidate) and never a bare
+  single-segment basename; the full repo-relative path always survives so a root-level file
+  stays matchable. (specs/20260815/02-at-risk-pins.md, done 2026-08-16; the stem-degeneracy
+  clause added by that spec's own review, AC-20260815-02-15)

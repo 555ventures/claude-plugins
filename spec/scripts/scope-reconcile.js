@@ -2,6 +2,8 @@
 'use strict'
 // scope-reconcile.js --base <ref> --spec <path> (--json | --dirs) [--root <dir>] — reconciles
 // the WHOLE changed-file set (committed diff UNION untracked) against a spec's File Plan.
+// --json additionally emits `atRisk` (specs/20260815/02-at-risk-pins.md D1): test files outside
+// the spec's File Plan tests rows whose content references a changed file's path stem.
 //
 // Incident (confirmed 2026-08): /spec:review diffed only the File Plan's directories, so an
 // out-of-plan `waitForExit` edit was structurally invisible to review and rode a CLEAN verdict
@@ -9,9 +11,11 @@
 // prediction-under-test: every changed file is seen; the plan's misses (out-of-plan) and
 // overshoots (unrealized) both surface, mechanically, never by reviewer diligence.
 //
-// What it deliberately does NOT do: review file CONTENT, resolve `pipelineOwnedPaths` beyond
-// the additive glob list in .claude/spec.config.json, or re-derive the changed set anywhere
-// else — /spec:review and /spec:build's Final gate both call this, once each.
+// What it deliberately does NOT do: resolve `pipelineOwnedPaths` beyond the additive glob list
+// in .claude/spec.config.json, or re-derive the changed set anywhere else — /spec:review and
+// /spec:build's Final gate both call this, once each. It DOES read test-file CONTENT, but only
+// for the at-risk derivation's substring scan below (specs/20260815/02-at-risk-pins.md D1) — the
+// outOfPlan/unrealized/excluded/renamed derivation never looks past a path string.
 //
 // Changed set = `git diff --name-status -M <base>` (BOTH sides of R/C rows) UNION `??` paths
 // from `git status --porcelain --untracked-files=all` (the `=all` flag is required — plain
@@ -141,11 +145,18 @@ const testGlobs = Array.isArray(configTestGlobs) ? configTestGlobs : defaultTest
 const isTestClassified = (p) => testGlobs.some(g => globMatch(g, p))
 
 function stemsFor(p) {
+  // Form (a) — the full repo-relative path — is always emitted, even when it is a bare
+  // single-segment basename, so a root-level file stays matchable at all (D1). Forms (b) and
+  // (c) must be able to discriminate: never a bare single-segment basename (no `/`), and never
+  // the empty string (a root dotfile like `.gitignore` strips to '' under the last-extension
+  // regex, and `content.includes('')` is vacuously true for every candidate — the reproduced
+  // defect this guard closes).
   const noExt = p.replace(/\.[^./]+$/, '')
-  const stems = [p, noExt].filter((s, i, arr) => arr.indexOf(s) === i)
+  const stems = [p]
+  if (noExt && noExt.includes('/')) stems.push(noExt)
   const segs = noExt.split('/')
   if (segs.length >= 2) stems.push(segs.slice(-2).join('/'))
-  return stems
+  return stems.filter((s, i, arr) => arr.indexOf(s) === i)
 }
 
 const stemSources = [...changed]

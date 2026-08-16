@@ -123,7 +123,14 @@ test('AC-20260815-02-4: a changed file that is itself test-classified per testGl
   ])
   fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'tests/helpers.js'), 'module.exports = { v: 1 }\n')
-  fs.writeFileSync(path.join(dir, 'tests/other.test.js'), "require('./helpers')\n")
+  // The literal "tests/helpers" (a stem the changed file WOULD seed if the isTestClassified
+  // guard were removed) is embedded deliberately — a relative `./helpers` require alone
+  // matches neither of tests/helpers.js's stems ("tests/helpers.js", "tests/helpers") and
+  // makes this fixture pass with the guard stripped out, which is the vacuous-pin defect this
+  // fixture was rewritten to close (mutation-proved 2026-08-16, specs/20260815/02-at-risk-pins.md
+  // review).
+  fs.writeFileSync(path.join(dir, 'tests/other.test.js'),
+    "// depends on tests/helpers for shared assertions\nrequire('./helpers')\n")
   g('add', '-A'); g('commit', '-q', '-m', 'base')
   const base = g('rev-parse', 'HEAD').trim()
 
@@ -134,8 +141,84 @@ test('AC-20260815-02-4: a changed file that is itself test-classified per testGl
   const out = JSON.parse(r.stdout)
   assert.deepStrictEqual(out.atRisk, [],
     'tests/helpers.js matches the default testGlobs, so it must not seed stems even though ' +
-    'tests/other.test.js references it by path — atRisk must stay empty, or every host\'s shared ' +
-    'test helper edit would flag its entire suite as at-risk of itself: ' + JSON.stringify(out))
+    'tests/other.test.js contains the literal stem "tests/helpers" — atRisk must stay empty, or ' +
+    'every host\'s shared test helper edit would flag its entire suite as at-risk of itself: ' +
+    JSON.stringify(out))
+})
+
+// specs/20260815/02-at-risk-pins.md review 2026-08-16: two degenerate-stem defects in stemsFor(),
+// both reproduced against today's code. (a) EMPTY STEM: '.gitignore'.replace(/\.[^./]+$/, '')
+// returns '' because the whole basename is consumed as "the extension" — the empty string
+// survives stemsFor's dedupe and `content.includes('')` is true for every candidate file, so a
+// diff touching ANY root-level dotfile lists the entire test universe as at-risk. (b) BARE
+// SINGLE-SEGMENT STEM: D1 states the intent "form (c) only when the path has >=2 segments, so a
+// bare basename like `index` never becomes a stem" — but that guard is written on form (c) only;
+// form (b) (path minus last extension) has no such guard, so a root-level `index.js` yields the
+// bare stem "index" and a root-level `package.json` yields "package", reproducing the exact
+// degeneracy the D1 guard was meant to prevent, just via a different form. Both must FAIL against
+// current stemsFor() and PASS once it stops emitting empty stems and bare single-segment stems.
+
+test('AC-20260815-02-15: a changed root-level dotfile whose noExt form is empty does not flag every candidate test file as at-risk', () => {
+  const dir = tmpdir('scope-reconcile-at-risk')
+  const g = gitRepo(dir) // gitRepo's init commit already seeds and commits a root .gitignore
+
+  const specRel = specWithFilePlan(dir, 'specs/20260815/02-x.md', [
+    { path: '.gitignore', action: 'MODIFY', layer: 'other' },
+  ])
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/unrelated-a.test.js'),
+    "const assert = require('node:assert')\nassert.ok(true, 'placeholder')\n")
+  fs.writeFileSync(path.join(dir, 'tests/unrelated-b.test.js'),
+    "const assert = require('node:assert')\nassert.ok(true, 'placeholder')\n")
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const base = g('rev-parse', 'HEAD').trim()
+
+  fs.appendFileSync(path.join(dir, '.gitignore'), 'dist/\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'change .gitignore')
+
+  const r = runNode(SCRIPT, ['--root', dir, '--base', base, '--spec', specRel, '--json'])
+  const out = JSON.parse(r.stdout)
+  assert.deepStrictEqual(out.atRisk, [],
+    '".gitignore".replace(/\\.[^./]+$/, "") strips to the empty string, and content.includes("") ' +
+    'is true for every file — a non-empty atRisk here (listing tests/unrelated-a.test.js and/or ' +
+    'tests/unrelated-b.test.js, which reference nothing about .gitignore) means the empty-stem ' +
+    'bug is flagging the entire test universe as at-risk on any root dotfile edit: ' +
+    JSON.stringify(out))
+})
+
+test('AC-20260815-02-15: a changed root-level file whose bare noExt basename is a common word does not flag unrelated test files as at-risk', () => {
+  const dir = tmpdir('scope-reconcile-at-risk')
+  const g = gitRepo(dir)
+
+  const specRel = specWithFilePlan(dir, 'specs/20260815/02-x.md', [
+    { path: 'index.js', action: 'MODIFY', layer: 'scripts' },
+    { path: 'package.json', action: 'MODIFY', layer: 'other' },
+  ])
+  fs.writeFileSync(path.join(dir, 'index.js'), 'module.exports = { v: 1 }\n')
+  fs.writeFileSync(path.join(dir, 'package.json'), '{ "name": "host", "version": "1.0.0" }\n')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  // Neither file references index.js or package.json — "index" and "package" appear only as an
+  // ordinary loop-variable name and an ordinary English word, the two shapes form (b)'s bare
+  // single-segment stem turns into false positives.
+  fs.writeFileSync(path.join(dir, 'tests/loop-var.test.js'),
+    'for (let index = 0; index < 3; index++) { /* noop */ }\n')
+  fs.writeFileSync(path.join(dir, 'tests/word-package.test.js'),
+    '// this test lives in a package directory of its own\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const base = g('rev-parse', 'HEAD').trim()
+
+  fs.writeFileSync(path.join(dir, 'index.js'), 'module.exports = { v: 2 }\n')
+  fs.writeFileSync(path.join(dir, 'package.json'), '{ "name": "host", "version": "1.0.1" }\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'change index.js and package.json')
+
+  const r = runNode(SCRIPT, ['--root', dir, '--base', base, '--spec', specRel, '--json'])
+  const out = JSON.parse(r.stdout)
+  assert.deepStrictEqual(out.atRisk, [],
+    'stemsFor("index.js") and stemsFor("package.json") emit the bare single-segment stems ' +
+    '"index" and "package" via form (b), which have no >=2-segment guard the way form (c) does ' +
+    '— a non-empty atRisk here means an ordinary loop-variable name or English word is being ' +
+    'misread as a reference to a changed root-level file, exactly the degeneracy D1\'s form-(c) ' +
+    'guard was meant to prevent: ' + JSON.stringify(out))
 })
 
 test('AC-20260815-02-5: a stem match that exists only under node_modules/ is never listed in atRisk (the walk never enters node_modules)', () => {

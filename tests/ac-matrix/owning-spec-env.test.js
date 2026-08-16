@@ -174,3 +174,82 @@ test('AC-20260815-03-6: a current-spec re-declaration without [env:] wins over a
     'the other must stay unsanctioned (the acById-hit one, whose local no-env bullet wins) — got ' +
     `"${out.observed.skipReconcile}"`)
 })
+
+// Found at review of specs/20260815/03 (2026-08-16): resolveOwningBullet's cache in
+// spec/scripts/ac-matrix.js keys owningSpecCache by date+ordinal (the owning FILE) but stores
+// one AC's { path, bullet } resolution under that key, not the file's parsed contents. Every
+// fixture above gives each AC-ID its own distinct owning spec, so the collision is invisible
+// there. When two skipped tests resolve to two different ACs living in the SAME owning spec,
+// whichever resolves first poisons the cache for the second: gated-first sanctions both
+// (skipped=2 sanctioned=2, zero findings); ungated-first unsanctions both, the second finding's
+// detail falsely claiming the owning spec has no [env:] declaration on the gated AC. The two
+// cases below build one owning spec with both an [env:]-bearing and an env-less AC and run the
+// same two skips in both orders — order-independence is what a correct per-AC cache must give.
+
+function twoAcOwnerHost(dir) {
+  const spec = baseHost(dir)
+  fs.mkdirSync(path.join(dir, 'specs', '20260601'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'specs', '20260601', '04-shared-owner.md'), specMd(
+    ['- **AC-20260601-04-1** `[env: SOME_VAR]`: WHEN X THE SYSTEM SHALL Y → tests/gated.test.js',
+      '- **AC-20260601-04-2**: WHEN X THE SYSTEM SHALL Z → tests/ungated.test.js'],
+    ['| tests/gated.test.js | CREATE | tests | covers gated AC |',
+      '| tests/ungated.test.js | CREATE | tests | covers ungated AC |']))
+  return spec
+}
+
+function assertSharedOwnerOutcome(out, orderLabel) {
+  assert.strictEqual(out.observed.skipReconcile, 'skipped=2 sanctioned=1',
+    `two ACs sharing one owning spec (specs/20260601/04-shared-owner.md), one [env:]-gated and ` +
+    `one not, must sanction exactly the gated one regardless of skip order (${orderLabel}) — a ` +
+    `per-file cache that stores only the first-resolved AC's bullet instead of a per-AC-ID ` +
+    `resolution answers for BOTH ACs with whichever one hit first; got "${out.observed.skipReconcile}"`)
+  assert.ok(!out.findings.some(f => f.ac === 'AC-20260601-04-1'),
+    `AC-20260601-04-1 carries [env: SOME_VAR] in its owning spec and must never produce a finding ` +
+    `(${orderLabel}) — a cache-poisoned lookup that answered with the OTHER AC's env-less bullet ` +
+    `would wrongly hard-fail it; findings: ${JSON.stringify(out.findings)}`)
+  const ungatedFinding = out.findings.find(f => f.class === 'unsanctioned-skip' && f.ac === 'AC-20260601-04-2')
+  assert.ok(ungatedFinding,
+    `AC-20260601-04-2 has no [env:] anywhere and must stay a hard unsanctioned-skip (${orderLabel}) — ` +
+    `a cache-poisoned lookup that answered with the OTHER AC's [env: SOME_VAR] bullet would wrongly ` +
+    `silently sanction it instead; findings: ${JSON.stringify(out.findings)}`)
+  assert.doesNotMatch(ungatedFinding.detail, /SOME_VAR/,
+    `AC-20260601-04-2's unsanctioned-skip detail must not mention SOME_VAR (${orderLabel}) — that ` +
+    `would prove the finding was built from AC-20260601-04-1's cached bullet instead of its own; ` +
+    `got "${ungatedFinding.detail}"`)
+  const gatedWarning = out.warnings.find(w => w.startsWith('AC-20260601-04-1:'))
+  assert.ok(gatedWarning,
+    `AC-20260601-04-1's sanction must be reported by name in warnings (${orderLabel}), never folded ` +
+    `into a generic sanctioned count with no per-AC evidence; warnings: ${JSON.stringify(out.warnings)}`)
+  assert.match(gatedWarning, /\(declared in specs\/20260601\/04-shared-owner\.md\)/,
+    `D3's literal warning form must name the owning spec that actually declared [env: SOME_VAR] ` +
+    `(${orderLabel}), so a reviewer can audit which file authorized the sanction rather than trust ` +
+    `an unsourced claim; got "${gatedWarning}"`)
+}
+
+test('AC-20260815-03-2/AC-20260815-03-5: two skips resolving to different ACs in the SAME owning spec sanction only the [env:]-gated one when the gated skip is listed FIRST, proving the owning-spec cache resolves per AC-ID and not per owning file', () => {
+  const dir = tmpdir('acm-owner-shared-gated-first')
+  const spec = twoAcOwnerHost(dir)
+  const manifest = writeManifest(dir, [])
+  const skips = path.join(dir, 'skips.txt')
+  fs.writeFileSync(skips, [
+    'skipped test for AC-20260601-04-1 gated AC resolved first',
+    'skipped test for AC-20260601-04-2 ungated AC resolved second',
+  ].join('\n') + '\n')
+  const res = run(spec, dir, manifest, ['--skips', skips, '--json'])
+  const out = findings(res)
+  assertSharedOwnerOutcome(out, 'gated skip listed first')
+})
+
+test('AC-20260815-03-2/AC-20260815-03-5: two skips resolving to different ACs in the SAME owning spec sanction only the [env:]-gated one when the ungated skip is listed FIRST, proving the owning-spec cache resolves per AC-ID and not per owning file', () => {
+  const dir = tmpdir('acm-owner-shared-ungated-first')
+  const spec = twoAcOwnerHost(dir)
+  const manifest = writeManifest(dir, [])
+  const skips = path.join(dir, 'skips.txt')
+  fs.writeFileSync(skips, [
+    'skipped test for AC-20260601-04-2 ungated AC resolved first',
+    'skipped test for AC-20260601-04-1 gated AC resolved second',
+  ].join('\n') + '\n')
+  const res = run(spec, dir, manifest, ['--skips', skips, '--json'])
+  const out = findings(res)
+  assertSharedOwnerOutcome(out, 'ungated skip listed first')
+})

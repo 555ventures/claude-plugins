@@ -217,19 +217,29 @@ upstream bug list. -->
 - `[plugin]` `ac-matrix.js` parses AC bullets as `^- \*\*(token)\*\*` and requires the token to
   fully match `AC-\d{8}-\d{2}[a-z]?-\d+`. A build-time amendment written the way the Decisions
   table writes one — a prime-suffixed successor (`AC-…-3′`) plus the superseded original left as
-  a struck top-level `- ~~**AC-…-3**~~` bullet — yields TWO `malformed-ac` hard findings, and a
-  malformed bullet is **dropped from the coverage sweep entirely**, so the amended AC's test
-  could be deleted and review would still report full coverage. Amend an AC by keeping the plain
-  ID and demoting the superseded text to an indented sub-line; prime marks are for Decision IDs
-  (unlinted) only. (specs/20260814/04-lock-signal-window.md — review 2026-08-15 caught it on the
-  spec's own load-bearing ordering pin.)
-- `[plugin]` `ac-matrix.js`'s skipped-test reconciliation reads `[env: VAR]` declarations from
-  **only the spec under review**, but the scoped gate glob runs every test file in the directory.
-  A test whose AC is env-gated in a *different* spec therefore reports as an unsanctioned skip —
-  a hard finding — on every review touching that area, forever. Waive with the owning spec cited;
-  the durable fix is a cross-spec `[env:]` lookup (or scoping the reconciliation to the ACs the
-  spec under review declares). (specs/20260814/04-lock-signal-window.md review 2026-08-15 —
-  `AC-20260808-01-12`, declared `[env: AUTOPILOT_ENROLL_LIVE]` in specs/20260808/01.)
+  a struck top-level `- ~~**AC-…-3**~~` bullet — yields TWO `malformed-ac` hard findings. Amend
+  an AC by keeping the plain ID and demoting the superseded text to an indented sub-line; prime
+  marks are for Decision IDs (unlinted) only. (specs/20260814/04-lock-signal-window.md — review
+  2026-08-15 caught it on the spec's own load-bearing ordering pin. The second half of that
+  incident — a malformed bullet silently dropped from the coverage denominator, so the amended
+  AC's test could be deleted and review still report full coverage — was closed by
+  specs/20260815/03: unparseable now counts as uncovered in both drift modes.)
+- `[host]` A spec that turns an INTAKE pin green makes `.claude/suite-baseline.json` an
+  **out-of-plan** change every time: the pin's sanctioned-red row must come off the list, which
+  `suite-baseline.js --check` reports as `fixedNotRemoved>0` with the `--update` remedy, and
+  specs/20260814/03's Contracts block says that update rides the landing batch. Review's
+  scope-reconcile then raises a hard out-of-plan finding on a file the contract required the
+  build to touch. It is a five-second waive citing 20260814/03 Contracts — plan it into the
+  File Plan up front on any defect-fix spec that closes a pin, and the finding never fires.
+  (specs/20260815/03-ac-matrix-fail-closed.md — waived at review 2026-08-16.)
+- `[plugin]` **CLOSED 2026-08-16 by specs/20260815/03** — `ac-matrix.js`'s skipped-test
+  reconciliation once read `[env: VAR]` from only the spec under review, so a test env-gated in
+  a *different* spec was a perpetual unsanctioned-skip hard finding. It now derives the owning
+  spec from the AC-ID and reads the declaration there, failing closed at every edge. Kept as a
+  worked example of the class: a check whose declaration lookup is narrower than the scope it
+  audits cries wolf forever, and waiving is not a fix. (Original hit:
+  specs/20260814/04-lock-signal-window.md review 2026-08-15 — `AC-20260808-01-12`, declared
+  `[env: AUTOPILOT_ENROLL_LIVE]` in specs/20260808/01.)
 - `[host]` Two former `[plugin]` gotchas were closed at intake 2026-08-15 as already covered by
   plan lock's obligation→carrier sweep (spec 6.62.0), whose anchor list explicitly is not closed:
   a Decision recording a class-level item "in spec/INTAKE.md, doctrine-only" owes the citation or

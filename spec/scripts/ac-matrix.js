@@ -269,34 +269,37 @@ if (!hasDriftScript) {
 // ^{NN[a-z]?}-.*\.md$ under {root}/specs/{YYYYMMDD}/. Fails closed (returns an `error` string,
 // never a partial/guessed match) on: date dir absent, zero or >=2 filename matches, file
 // unreadable, no AC section, or the AC not found in it — the caller treats every edge as
-// unsanctioned-skip. Reads are cached per owning-spec candidate (date+ordinal) within one run.
+// unsanctioned-skip.
+//
+// Caching seam (bug fixed 2026-08-16, spec 20260815/03): only the owning FILE's resolved
+// state — its relative path plus every parsed AC bullet, or a file-level error (date dir
+// absent / ambiguous or missing filename match / unreadable / no AC section) — is cached per
+// date+ordinal. Two different AC-IDs owned by the same file share that one read. The
+// per-AC-ID step — finding the bullet whose id equals the AC-ID, and the "no AC bullet
+// matching X" error when it's absent — is NOT part of the cached value: it runs fresh on
+// every call so each AC-ID gets its own answer instead of inheriting whichever AC-ID happened
+// to resolve the file first.
 const AC_ID_PARTS_RE = /^AC-(\d{8})-(\d{2}[a-z]?)-\d+$/
-const owningSpecCache = new Map()
+const owningSpecFileCache = new Map()
 
-function resolveOwningBullet(acId) {
-  const parts = acId.match(AC_ID_PARTS_RE)
-  if (!parts) return { error: `AC-ID "${acId}" does not match the owning-spec grammar` }
-  const [, date, ordinal] = parts
+function resolveOwningSpecFile(date, ordinal) {
   const cacheKey = `${date}/${ordinal}`
-  if (owningSpecCache.has(cacheKey)) return owningSpecCache.get(cacheKey)
+  if (owningSpecFileCache.has(cacheKey)) return owningSpecFileCache.get(cacheKey)
 
   const dateDir = path.join(root, 'specs', date)
   let entries
   try {
     entries = fs.readdirSync(dateDir)
   } catch {
-    const result = { error: `owning spec date dir specs/${date}/ not found for ${acId}` }
-    owningSpecCache.set(cacheKey, result)
+    const result = { errorKind: 'no-date-dir' }
+    owningSpecFileCache.set(cacheKey, result)
     return result
   }
   const nameRe = new RegExp(`^${ordinal}-.*\\.md$`)
   const matches = entries.filter(f => nameRe.test(f)).sort()
   if (matches.length !== 1) {
-    const result = {
-      error: `owning spec file matching ^${ordinal}-.*\\.md$ under specs/${date}/ is ` +
-        `${matches.length === 0 ? 'missing' : `ambiguous (${matches.length} matches: ${matches.join(', ')})`} for ${acId}`,
-    }
-    owningSpecCache.set(cacheKey, result)
+    const result = { errorKind: 'name-match', matches }
+    owningSpecFileCache.set(cacheKey, result)
     return result
   }
   const owningRelPath = `specs/${date}/${matches[0]}`
@@ -304,25 +307,49 @@ function resolveOwningBullet(acId) {
   try {
     ownerText = fs.readFileSync(path.join(root, owningRelPath), 'utf8')
   } catch (e) {
-    const result = { error: `owning spec ${owningRelPath} unreadable for ${acId}: ${e.message}` }
-    owningSpecCache.set(cacheKey, result)
+    const result = { errorKind: 'unreadable', owningRelPath, message: e.message }
+    owningSpecFileCache.set(cacheKey, result)
     return result
   }
   const ownerSection = extractSection(ownerText, 'Acceptance Criteria')
   if (ownerSection === null) {
-    const result = { error: `owning spec ${owningRelPath} has no ## Acceptance Criteria section for ${acId}` }
-    owningSpecCache.set(cacheKey, result)
+    const result = { errorKind: 'no-ac-section', owningRelPath }
+    owningSpecFileCache.set(cacheKey, result)
     return result
   }
-  const ownerBullet = parseBullets(ownerSection).find(b => b.id === acId)
-  if (!ownerBullet) {
-    const result = { error: `owning spec ${owningRelPath} has no AC bullet matching ${acId}` }
-    owningSpecCache.set(cacheKey, result)
-    return result
-  }
-  const result = { path: owningRelPath, bullet: ownerBullet }
-  owningSpecCache.set(cacheKey, result)
+  const result = { path: owningRelPath, bullets: parseBullets(ownerSection) }
+  owningSpecFileCache.set(cacheKey, result)
   return result
+}
+
+function resolveOwningBullet(acId) {
+  const parts = acId.match(AC_ID_PARTS_RE)
+  if (!parts) return { error: `AC-ID "${acId}" does not match the owning-spec grammar` }
+  const [, date, ordinal] = parts
+  const file = resolveOwningSpecFile(date, ordinal)
+
+  if (file.errorKind === 'no-date-dir') {
+    return { error: `owning spec date dir specs/${date}/ not found for ${acId}` }
+  }
+  if (file.errorKind === 'name-match') {
+    return {
+      error: `owning spec file matching ^${ordinal}-.*\\.md$ under specs/${date}/ is ` +
+        `${file.matches.length === 0 ? 'missing' : `ambiguous (${file.matches.length} matches: ${file.matches.join(', ')})`} for ${acId}`,
+    }
+  }
+  if (file.errorKind === 'unreadable') {
+    return { error: `owning spec ${file.owningRelPath} unreadable for ${acId}: ${file.message}` }
+  }
+  if (file.errorKind === 'no-ac-section') {
+    return { error: `owning spec ${file.owningRelPath} has no ## Acceptance Criteria section for ${acId}` }
+  }
+  // File-level resolution succeeded (and may be shared with other AC-IDs via the cache above):
+  // the specific-bullet lookup and its "not found" error are per-AC-ID and run every call.
+  const ownerBullet = file.bullets.find(b => b.id === acId)
+  if (!ownerBullet) {
+    return { error: `owning spec ${file.path} has no AC bullet matching ${acId}` }
+  }
+  return { path: file.path, bullet: ownerBullet }
 }
 
 // ---- step 6: skipped-test reconciliation (both drift modes) ---------------------------------

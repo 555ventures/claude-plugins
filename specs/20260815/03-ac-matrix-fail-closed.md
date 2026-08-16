@@ -1,6 +1,6 @@
 ---
 date: 2026-08-15
-status: implementing
+status: done
 diff_base: 96e4c2e1e1eb1b52da371cdaa74a31edf84e6ac6
 open_markers: 0
 risk: T2
@@ -166,6 +166,34 @@ Rejected at plan time:
 extending the lookup to `[oracle:]` (no observed case; D5 reopen), and a shared
 "spec-resolver" lib (one call site today — extraction earns its keep at the second consumer,
 per this repo's duplication calibration).
+
+**Review dispositions (2026-08-16, run `wf_041e15f4-0f1`).** One hard defect was found and
+**fixed** before close, by a Fable retainer consult the single-reviewer panel had missed:
+`owningSpecCache` keyed by `date/ordinal` but stored a per-AC-ID *resolution*, so two skipped
+ACs sharing one owning spec poisoned each other — reproduced in both directions (gated AC
+first → the ungated AC silently sanctioned, `skipped=2 sanctioned=2` exit 0, violating D2's
+fail-closed contract and AC-20260815-03-5's SHALL; ungated first → the correctly gated AC
+drew a hard `unsanctioned-skip` whose detail falsely denied its declaration, reopening this
+leg's founding cry-wolf incident). D2's text said "owning-spec **reads** are cached per file";
+the implementation cached the resolution. Fixed by caching the owning spec's parsed bullets
+and resolving the AC-ID per call, with a two-ACs-one-owner regression case in both skip orders
+extending AC-20260815-03-2/-5 to the fixture shape every prior fixture missed (each gave its
+AC a distinct owning spec, which is why the suite was blind).
+
+Three findings **waived**:
+- `.claude/suite-baseline.json` out-of-plan (mechanical, scope-reconcile). Demanded by the
+  owning contract — specs/20260814/03 Contracts, `fixedNotRemoved>0 → WARN: --update remedy;
+  the update rides the batch` — since this spec turns both pins green; recorded in the
+  deviations sidecar, and the two row swaps are that contract's sort normalization (its D2).
+- At-risk leg red on three `JJ-20260816-02` tests (mechanical). All three present verbatim in
+  `.claude/suite-baseline.json`, committed as red intake carriers at this spec's own
+  `diff_base`; `newFailing=0` corroborates. Sanctioned per § Test Rules' red-pin baseline.
+- Fourth literal AC-ID grammar copy (`AC_ID_PARTS_RE`) unreached by the lift-and-execute pin
+  (soft, advisory). A3's STOP-and-consult on grammar forking is the live guard, and the
+  reviewer's "silently breaking" consequence was refuted on execution — a PARTS_RE miss
+  returns an `error` the caller converts to a hard `unsanctioned-skip`, i.e. it fails loud.
+  **Reopen condition:** compose it from `AC_ID_RE.source` the next time this file is opened
+  for other reasons.
 
 ## Canonical Delta
 

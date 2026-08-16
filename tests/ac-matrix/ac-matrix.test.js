@@ -37,7 +37,7 @@ function findings(res) {
   return parsed
 }
 
-test('AC-20260814-01-1: a malformed leading bold token emits a hard malformed-ac finding, exit 1, and observed counts only the well-formed ACs', () => {
+test('AC-20260815-03-1: a malformed leading bold token emits a hard malformed-ac finding, exit 1, AND the fail-closed uncovered count includes the malformed bullet (retargets AC-20260814-01-1, which asserted the retired uncovered=0 exemption)', () => {
   const dir = tmpdir('acm1')
   fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'tests/foo.test.js'), '// covers AC-20260814-01-1\n')
@@ -53,9 +53,12 @@ test('AC-20260814-01-1: a malformed leading bold token emits a hard malformed-ac
   assert.ok(out.findings.some(f => f.class === 'malformed-ac'),
     'AC-2026-1 fails the full anchored AC-ID match (missing the -NN-N ordinal segments) and must ' +
     'surface as a malformed-ac finding — a malformed id is invisible to every downstream AC-ID grep')
-  assert.match(out.observed.acMatrix, /^uncovered=0 oracle=0$/,
-    `observed must count only the well-formed AC-20260814-01-1 (which IS covered by tests/foo.test.js) ` +
-    `and must not count the malformed bullet toward uncovered/oracle at all — got "${out.observed.acMatrix}"`)
+  assert.match(out.observed.acMatrix, /^uncovered=1 oracle=0$/,
+    `unparseable = unknown = uncovered (D1): the malformed AC-2026-1 bullet must increment uncovered ` +
+    `even though it also trips its own malformed-ac finding — a reviewer who waives that one notation ` +
+    `finding must not then be told by the durable manifest row that coverage is complete. ` +
+    `AC-20260814-01-1 stays well-formed and covered so it must NOT also add a second uncovered-ac row ` +
+    `— got "${out.observed.acMatrix}"`)
 })
 
 test('AC-20260814-01-2: a well-formed AC-ID with zero hits and no [oracle:] tag emits a hard uncovered-ac finding with observed uncovered=1 oracle=0', () => {
@@ -77,7 +80,7 @@ test('AC-20260814-01-2: a well-formed AC-ID with zero hits and no [oracle:] tag 
     `observed must be the exact pinned grammar verdict.js parses byte-for-byte — got "${out.observed.acMatrix}"`)
 })
 
-test('AC-20260814-01-3a: an [oracle:] AC whose declared leg is green in the manifest is excluded from uncovered, counted in oracle=, and warned (not a finding)', () => {
+test('AC-20260814-01-3a / continues AC-20260815-03-7: an [oracle:] AC whose declared leg is green in the manifest is excluded from uncovered, counted in oracle=, and warned (not a finding)', () => {
   const dir = tmpdir('acm3a')
   fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'tests/oracle.test.js'), '// unrelated\n')
@@ -95,6 +98,9 @@ test('AC-20260814-01-3a: an [oracle:] AC whose declared leg is green in the mani
     `a green-oracle AC must be counted in oracle= — got "${out.observed.acMatrix}"`)
   assert.ok(out.warnings.some(w => /oracle/i.test(w) && /gate/i.test(w)),
     'coverage-by-declaration must still surface as a named warning line ("AC-x: oracle = `gate` leg") — never silent green')
+  assert.strictEqual(res.status, 0,
+    `AC-20260815-03-7: a spec whose only AC is well-formed and covered (by declaration) must CONTINUE ` +
+    `TO exit 0 — got ${res.status} (stderr: ${res.stderr})`)
 })
 
 test('AC-20260814-01-3b: an [oracle:] AC whose declared leg is red or absent from the manifest is a hard oracle-red-or-absent finding, identical standing to uncovered', () => {
@@ -115,7 +121,7 @@ test('AC-20260814-01-3b: an [oracle:] AC whose declared leg is red or absent fro
     'oracle-red-or-absent finding, standing identical to an uncovered AC, never covered-by-declaration')
 })
 
-test('AC-20260814-01-4a: a skipped test whose AC line carries [env: TEST_DB] is sanctioned, observed skipped=1 sanctioned=1, and warns naming TEST_DB', () => {
+test('AC-20260814-01-4a / continues AC-20260815-03-8: a skipped test whose AC line carries [env: TEST_DB] is sanctioned, observed skipped=1 sanctioned=1, and warns naming TEST_DB', () => {
   const dir = tmpdir('acm4a')
   fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'tests/env.test.js'), '// covers AC-20260814-01-4\n')
@@ -243,6 +249,28 @@ test('AC-20260814-01-7: --has-drift-script suppresses uncovered-ac findings whil
     'lint runs in BOTH drift modes — AC-2026-1 must still be flagged malformed-ac under --has-drift-script')
   assert.ok(out.findings.some(f => f.class === 'unmapped-skip'),
     'skip reconciliation runs in BOTH drift modes — the unmapped skip line must still be flagged under --has-drift-script')
+})
+
+test('AC-20260815-03-9: --has-drift-script still counts a malformed AC bullet toward uncovered — the fail-closed denominator applies in drift mode too', () => {
+  const dir = tmpdir('acm9')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/nine.test.js'), '// covers AC-20260814-01-9\n')
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-2026-1**: WHEN X THE SYSTEM SHALL Y → tests/nine.test.js',
+      '- **AC-20260814-01-9**: WHEN X THE SYSTEM SHALL Y → tests/nine.test.js'],
+    ['| tests/nine.test.js | CREATE | tests | covers ACs |']))
+  const manifest = writeManifest(dir, [])
+  const res = run(spec, dir, manifest, ['--has-drift-script', '--json'])
+  const out = findings(res)
+  assert.ok(out.findings.some(f => f.class === 'malformed-ac'),
+    'lint runs in BOTH drift modes — AC-2026-1 must still be flagged malformed-ac under --has-drift-script')
+  assert.strictEqual(out.observed.acMatrix, 'uncovered=1 oracle=0',
+    'today --has-drift-script structurally skips the well-formed coverage loop entirely (the host ' +
+    'driftScript owns coverage there), so the manifest row records uncovered=0 no matter how many ' +
+    'unparseable bullets sit in the AC section — the same fail-closed-denominator hole as AC-20260815-03-1, ' +
+    'just reached through the other code path (D1: "the malformed term applies in --has-drift-script mode ' +
+    `too"). got "${out.observed.acMatrix}"`)
 })
 
 test('AC-20260814-01-8a: invocation with no --spec exits 2 with a stderr line naming the remedy command', () => {

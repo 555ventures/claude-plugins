@@ -172,9 +172,10 @@ build that is the worktree itself. Phase 4 resolves a second, distinctly named s
    run above also reconciles skips — the matrix counts **executed** tests, never collected ones,
    a skip is not a pass. An AC whose mapped test **skipped** is an automatic `hard` finding —
    identical in standing to an uncovered AC — **unless** the AC carries an explicit
-   environment-gating declaration in the spec (`[env: VAR_NAME]` on the AC line). A declared
-   env-gated AC that skipped is reported as a **warning naming the un-run environment** — never
-   silent green. (Ground truth: UpWell 2026-07 — a test holding a defect real pg-boss rejects
+   environment-gating declaration (`[env: VAR_NAME]`) on its AC line in the spec under review
+   or in the AC's owning spec (derived from the AC-ID). A declared env-gated AC that skipped is
+   reported as a **warning naming the un-run environment** — never silent green. (Ground truth:
+   UpWell 2026-07 — a test holding a defect real pg-boss rejects
    with a throw sat `describe.skipIf`-skipped through two CLEAN verdicts because the matrix
    reconciled against collected tests.) The script appends
    `{"leg":"skip-reconcile","exit":<0|1>,"observed":"skipped=<N> sanctioned=<M>"}` (the legacy

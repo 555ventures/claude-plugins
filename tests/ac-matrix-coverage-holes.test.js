@@ -61,7 +61,7 @@ function acMatrixRow(manifestPath, leg) {
   return rows.find(r => r.leg === leg)
 }
 
-test('JJ-20260815-01: a malformed AC bullet counts toward uncovered — an unparseable AC is unknown, never absent', () => {
+test('AC-20260815-03-1 / JJ-20260815-01: a malformed AC bullet counts toward uncovered — an unparseable AC is unknown, never absent', () => {
   const root = tmpdir('acm-malformed')
   fs.mkdirSync(path.join(root, 'specs', '20260814'), { recursive: true })
   fs.mkdirSync(path.join(root, 'tests'), { recursive: true })
@@ -92,7 +92,7 @@ test('JJ-20260815-01: a malformed AC bullet counts toward uncovered — an unpar
     'observed=' + JSON.stringify(row.observed) + ' stdout=' + JSON.stringify(res.stdout))
 })
 
-test('JJ-20260815-02: a skipped test whose AC declares [env:] in the spec that OWNS it is sanctioned, not a hard finding', () => {
+test('AC-20260815-03-2 / JJ-20260815-02: a skipped test whose AC declares [env:] in the spec that OWNS it is sanctioned, not a hard finding', () => {
   const root = tmpdir('acm-crossspec')
   fs.mkdirSync(path.join(root, 'specs', '20260808'), { recursive: true })
   fs.mkdirSync(path.join(root, 'specs', '20260814'), { recursive: true })
@@ -139,4 +139,12 @@ test('JJ-20260815-02: a skipped test whose AC declares [env:] in the spec that O
     'the durable skip-reconcile row must record the skip as sanctioned=1 so downstream sweeps ' +
     'and the ledger\'s testsSkipped split can tell a declared env gate from a test that simply ' +
     'never ran (CROSS-20260813-03\'s whole point); observed=' + JSON.stringify(row.observed))
+
+  // D3 (AC-20260815-03-2): the sanction warning must name the declaring file — an auditable
+  // cross-spec sanction, never a silent green that looks identical to a same-spec one.
+  assert.match(res.stdout || '', /declared in .*specs\/20260808\/01/,
+    'the sanction warning for a cross-spec [env:] declaration must name the owning spec path ' +
+    '(specs/20260808/01-enroll.md) so a reviewer can audit WHERE the gate was declared — a bare ' +
+    '"sanctioned by [env: VAR]" line with no source is indistinguishable from a same-spec sanction. ' +
+    'stdout=' + JSON.stringify(res.stdout))
 })

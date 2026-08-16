@@ -126,8 +126,16 @@ const acById = new Map(wellFormed.map(b => [b.id, b]))
 const findings = []
 const warnings = []
 
+// D1: unparseable = unknown = uncovered. `uncovered` is declared here (before both the
+// malformed loop below and step 5's well-formed coverage loop) so a malformed bullet
+// increments the same denominator step 5 uses, in BOTH drift modes — a driftScript can't
+// parse a malformed bullet either, so exempting drift-mode hosts would reopen the hole
+// exactly where the host can't see it.
+let uncovered = 0
+
 for (const b of bullets) {
   if (b.malformed) {
+    uncovered++
     findings.push({
       severity: 'hard', class: 'malformed-ac', ac: b.token || '',
       detail: `malformed AC-ID "${b.token}" — leading bold token must fully match AC-\\d{8}-\\d{2}[a-z]?-\\d+`,
@@ -230,7 +238,7 @@ const manifestRows = readManifestRows(manifestPath)
 
 // ---- step 5: coverage matrix (skipped entirely in --has-drift-script mode: host owns it) ----
 
-let uncovered = 0, oracleCovered = 0
+let oracleCovered = 0
 if (!hasDriftScript) {
   for (const b of wellFormed) {
     if (acHits.get(b.id) > 0) continue
@@ -253,6 +261,68 @@ if (!hasDriftScript) {
       })
     }
   }
+}
+
+// ---- D2: owning-spec [env:] lookup — consulted ONLY on an acById MISS (a current-spec hit,
+// with or without [env:], is final and never falls through here). The AC-ID grammar itself
+// encodes the owner: AC-{YYYYMMDD}-{NN[a-z]?}-{k} -> the single file matching
+// ^{NN[a-z]?}-.*\.md$ under {root}/specs/{YYYYMMDD}/. Fails closed (returns an `error` string,
+// never a partial/guessed match) on: date dir absent, zero or >=2 filename matches, file
+// unreadable, no AC section, or the AC not found in it — the caller treats every edge as
+// unsanctioned-skip. Reads are cached per owning-spec candidate (date+ordinal) within one run.
+const AC_ID_PARTS_RE = /^AC-(\d{8})-(\d{2}[a-z]?)-\d+$/
+const owningSpecCache = new Map()
+
+function resolveOwningBullet(acId) {
+  const parts = acId.match(AC_ID_PARTS_RE)
+  if (!parts) return { error: `AC-ID "${acId}" does not match the owning-spec grammar` }
+  const [, date, ordinal] = parts
+  const cacheKey = `${date}/${ordinal}`
+  if (owningSpecCache.has(cacheKey)) return owningSpecCache.get(cacheKey)
+
+  const dateDir = path.join(root, 'specs', date)
+  let entries
+  try {
+    entries = fs.readdirSync(dateDir)
+  } catch {
+    const result = { error: `owning spec date dir specs/${date}/ not found for ${acId}` }
+    owningSpecCache.set(cacheKey, result)
+    return result
+  }
+  const nameRe = new RegExp(`^${ordinal}-.*\\.md$`)
+  const matches = entries.filter(f => nameRe.test(f)).sort()
+  if (matches.length !== 1) {
+    const result = {
+      error: `owning spec file matching ^${ordinal}-.*\\.md$ under specs/${date}/ is ` +
+        `${matches.length === 0 ? 'missing' : `ambiguous (${matches.length} matches: ${matches.join(', ')})`} for ${acId}`,
+    }
+    owningSpecCache.set(cacheKey, result)
+    return result
+  }
+  const owningRelPath = `specs/${date}/${matches[0]}`
+  let ownerText
+  try {
+    ownerText = fs.readFileSync(path.join(root, owningRelPath), 'utf8')
+  } catch (e) {
+    const result = { error: `owning spec ${owningRelPath} unreadable for ${acId}: ${e.message}` }
+    owningSpecCache.set(cacheKey, result)
+    return result
+  }
+  const ownerSection = extractSection(ownerText, 'Acceptance Criteria')
+  if (ownerSection === null) {
+    const result = { error: `owning spec ${owningRelPath} has no ## Acceptance Criteria section for ${acId}` }
+    owningSpecCache.set(cacheKey, result)
+    return result
+  }
+  const ownerBullet = parseBullets(ownerSection).find(b => b.id === acId)
+  if (!ownerBullet) {
+    const result = { error: `owning spec ${owningRelPath} has no AC bullet matching ${acId}` }
+    owningSpecCache.set(cacheKey, result)
+    return result
+  }
+  const result = { path: owningRelPath, bullet: ownerBullet }
+  owningSpecCache.set(cacheKey, result)
+  return result
 }
 
 // ---- step 6: skipped-test reconciliation (both drift modes) ---------------------------------
@@ -286,13 +356,38 @@ for (const line of skipLines) {
   }
   const primary = mappedIds[0]
   const bullet = acById.get(primary)
-  if (bullet && bullet.env) {
+  if (bullet) {
+    // D2 branch (1): a current-spec hit is final, with or without [env:] — the owning spec is
+    // never consulted here (a re-declared bullet that dropped its gate is authoritative).
+    if (bullet.env) {
+      sanctioned++
+      warnings.push(`${primary}: skipped test sanctioned by [env: ${bullet.env}]`)
+    } else {
+      findings.push({
+        severity: 'hard', class: 'unsanctioned-skip', ac: primary,
+        detail: `${primary}: skipped test with no [env:] declaration on its AC line — ${line}`,
+      })
+    }
+    continue
+  }
+  // D2 branch (2): acById MISS — derive the owning spec from the AC-ID grammar and read its
+  // declaration there. Every edge (missing/ambiguous/unreadable/no-section/not-found/no-env)
+  // fails closed to unsanctioned-skip, the detail naming the owning-spec edge that fired.
+  const owning = resolveOwningBullet(primary)
+  if (owning.error) {
+    findings.push({
+      severity: 'hard', class: 'unsanctioned-skip', ac: primary,
+      detail: `${primary}: skipped test with no [env:] declaration on its AC line — ${line} (${owning.error})`,
+    })
+  } else if (owning.bullet.env) {
+    // D3: an owning-spec sanction counts and reports like a same-spec sanction, naming the source.
     sanctioned++
-    warnings.push(`${primary}: skipped test sanctioned by [env: ${bullet.env}]`)
+    warnings.push(`${primary}: skipped test sanctioned by [env: ${owning.bullet.env}] (declared in ${owning.path})`)
   } else {
     findings.push({
       severity: 'hard', class: 'unsanctioned-skip', ac: primary,
-      detail: `${primary}: skipped test with no [env:] declaration on its AC line — ${line}`,
+      detail: `${primary}: skipped test with no [env:] declaration on its AC line — ${line} ` +
+        `(owning spec ${owning.path} has no [env:] declaration on ${primary})`,
     })
   }
 }

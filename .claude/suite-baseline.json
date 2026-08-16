@@ -5,14 +5,6 @@
       "name": "autopilot/contract/contract.test.ts"
     },
     {
-      "file": "tests/ac-matrix-coverage-holes.test.js",
-      "name": "JJ-20260815-01: a malformed AC bullet counts toward uncovered — an unparseable AC is unknown, never absent"
-    },
-    {
-      "file": "tests/ac-matrix-coverage-holes.test.js",
-      "name": "JJ-20260815-02: a skipped test whose AC declares [env:] in the spec that OWNS it is sanctioned, not a hard finding"
-    },
-    {
       "file": "tests/build-codegen-seam.test.js",
       "name": "wf-build supports an orchestrator-executed step between layer groups"
     },
@@ -74,11 +66,11 @@
     },
     {
       "file": "tests/tdd-waiver-provenance.test.js",
-      "name": "JJ-20260816-02: the TDD red-check waiver is scoped to the adjudicated unit, never the whole run"
+      "name": "JJ-20260816-02: a run that waived the red-first evidence floor says so in its returned artifact"
     },
     {
       "file": "tests/tdd-waiver-provenance.test.js",
-      "name": "JJ-20260816-02: a run that waived the red-first evidence floor says so in its returned artifact"
+      "name": "JJ-20260816-02: the TDD red-check waiver is scoped to the adjudicated unit, never the whole run"
     },
     {
       "file": "tests/tdd-waiver-provenance.test.js",

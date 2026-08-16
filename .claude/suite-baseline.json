@@ -73,6 +73,18 @@
       "name": "JJ-20260815-05: smoke.sh asserts the booted process actually exits on the declared stop signal"
     },
     {
+      "file": "tests/tdd-waiver-provenance.test.js",
+      "name": "JJ-20260816-02: the TDD red-check waiver is scoped to the adjudicated unit, never the whole run"
+    },
+    {
+      "file": "tests/tdd-waiver-provenance.test.js",
+      "name": "JJ-20260816-02: a run that waived the red-first evidence floor says so in its returned artifact"
+    },
+    {
+      "file": "tests/tdd-waiver-provenance.test.js",
+      "name": "JJ-20260816-02: waiving the red-first floor costs an evidence record, not a boolean"
+    },
+    {
       "file": "tests/workflow-runid-provenance.test.js",
       "name": "JJ-20260814-02: build.md's resume sentence states the runId comes from the Workflow tool result, never that a workflow receives one through its own args"
     },

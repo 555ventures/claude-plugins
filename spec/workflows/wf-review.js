@@ -188,7 +188,9 @@ Method:
 3. Check the implementation against the spec and against the project rules you inherit via CLAUDE.md and .claude/rules/.
 4. Cross-check the mechanical pattern sweep below — confirm or dismiss each non-zero row.
 5. Read ${args.reconcilePath} — the scope reconciliation (out-of-plan / unrealized / renamed
-   files vs the File Plan). Its \`outOfPlan\` entries are ALREADY a mechanical hard finding —
+   files vs the File Plan), plus an additive \`atRisk\` field (test files outside this spec's
+   File Plan whose content references a changed file — that leg is run and adjudicated
+   separately, not by you). Its \`outOfPlan\` entries are ALREADY a mechanical hard finding —
    do not re-report their mere existence. Instead review THEIR CONTENT against spec intent and
    repo rules, same as any planned file, and report only substantive defects you find in them.
 

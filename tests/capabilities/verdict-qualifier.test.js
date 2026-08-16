@@ -27,15 +27,21 @@ function firstLine(stdout) {
   return stdout.split('\n')[0]
 }
 
+// specs/20260815/02-at-risk-pins.md D4/D1 (AC-20260815-02-9, self-application, CONTINUE TO):
+// `at-risk` joins REVIEW_LEGS as a required-but-non-blocking leg — this spec's own adversarial
+// pass named this fixture as one of the four suites its own required-leg extension would redden.
+// The row is added here so every test below that reuses GREEN_REVIEW_LEGS CONTINUES TO derive
+// the same qualifier/plain-CLEAN words it already asserts.
 const GREEN_REVIEW_LEGS = [
   { leg: 'gate', exit: 0, observed: 'skips=0 todos=0' },
   { leg: 'smoke', exit: 0, observed: 'pass' },
   { leg: 'reconcile', exit: 0, observed: 'outOfPlan=0' },
   { leg: 'ac-matrix', exit: 0, observed: 'uncovered=0 oracle=0' },
   { leg: 'skip-reconcile', exit: 0, observed: 'skipped=0 sanctioned=0' },
+  { leg: 'at-risk', exit: 0, observed: 'files=0' },
 ]
 
-test('AC-20260813-10-8: verdict.js derives CLEAN-with-qualifier on the review profile when every leg is green but the ci leg is structurally unavailable', () => {
+test('AC-20260813-10-8 (CONTINUE TO AC-20260815-02-9): verdict.js derives CLEAN-with-qualifier on the review profile when every leg is green but the ci leg is structurally unavailable', () => {
   const dir = tmpdir('verdict-qualifier-review')
   const manifest = writeManifest(dir, [
     ...GREEN_REVIEW_LEGS,
@@ -55,7 +61,7 @@ test('AC-20260813-10-8: verdict.js derives CLEAN-with-qualifier on the review pr
 // same reasoning release.md already states: whenever the ci observation is not a `conclusion=`
 // string, CI never delivered a verdict on this commit. Pinned so the choice is declared rather
 // than an accident of the regex; narrowing it later is a doctrine change, not a silent fix.
-test('AC-20260813-10-8: a review-profile ci leg still in progress also derives CLEAN-with-qualifier — CI never delivered a verdict on this commit', () => {
+test('AC-20260813-10-8 (CONTINUE TO AC-20260815-02-9): a review-profile ci leg still in progress also derives CLEAN-with-qualifier — CI never delivered a verdict on this commit', () => {
   const dir = tmpdir('verdict-qualifier-inprogress')
   const manifest = writeManifest(dir, [
     ...GREEN_REVIEW_LEGS,
@@ -69,7 +75,7 @@ test('AC-20260813-10-8: a review-profile ci leg still in progress also derives C
   assert.strictEqual(r.status, 0, 'the qualified word stays CLEAN-family and must exit 0: ' + r.stderr)
 })
 
-test('AC-20260813-10-9 (regression pin): verdict.js continues to derive plain CLEAN on the review profile when every leg, including ci, is fully green', () => {
+test('AC-20260813-10-9 (regression pin; CONTINUE TO AC-20260815-02-9): verdict.js continues to derive plain CLEAN on the review profile when every leg, including ci, is fully green', () => {
   const dir = tmpdir('verdict-plain-clean')
   const manifest = writeManifest(dir, [
     ...GREEN_REVIEW_LEGS,
@@ -83,7 +89,7 @@ test('AC-20260813-10-9 (regression pin): verdict.js continues to derive plain CL
   assert.strictEqual(r.status, 0, 'plain CLEAN must still exit 0: ' + r.stderr)
 })
 
-test('AC-20260813-10-9 (regression pin): verdict.js\'s release profile continues to derive CLEAN-with-qualifier when its ci leg is structurally unavailable, per spec 20260813/02 unchanged', () => {
+test('AC-20260813-10-9 (regression pin; CONTINUE TO AC-20260815-02-9): verdict.js\'s release profile continues to derive CLEAN-with-qualifier when its ci leg is structurally unavailable, per spec 20260813/02 unchanged', () => {
   const dir = tmpdir('verdict-release-qualifier')
   const manifest = writeManifest(dir, [
     { leg: 'deploy', exit: 0, observed: 'pass' },

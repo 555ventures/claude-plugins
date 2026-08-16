@@ -1,6 +1,7 @@
 ---
 date: 2026-08-15
-status: hardened
+status: implementing
+diff_base: e3ebaa871c799cbf95d51f2f7287d32264edfae3
 open_markers: 0
 risk: T3
 area: review-integrity
@@ -56,6 +57,7 @@ JJ-20260815-03 is stamped fixed.
 | spec/doctrine/claims-baseline.json | MODIFY | doctrine | D8: full-corpus `--update-baseline` re-stamp, same commit |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D8: bump + changelog description (target 6.78.0) |
 | spec/INTAKE.md | MODIFY | other | D8: JJ-20260815-03 → fixed @ landed version, same commit |
+| .claude/suite-baseline.json | MODIFY | other | D8 companion (in-flight): drop the JJ-20260815-03 sanctioned-red row the D3 landing turns green. Removed surgically, NOT via `--update` — a wholesale rewrite would also sanction the unrelated pre-existing red in tests/feedback-loop.test.js (a stale INTAKE pin naming a nonexistent tests/tdd-waiver-provenance.test.js), which Phase 4's disposition says to WARN on, never absorb |
 | tests/scope-reconcile-at-risk.test.js | CREATE | tests | AC-20260815-02-1 … AC-20260815-02-5 (red-first, synthetic host trees) |
 | tests/review/verdict.test.js | MODIFY | tests | AC-20260815-02-6, AC-20260815-02-7, AC-20260815-02-8, AC-20260815-02-9: SIX_GREEN fixture gains the at-risk row; ledger-field pins stay green unweakened (D4 self-application) |
 | tests/capabilities/verdict-qualifier.test.js | MODIFY | tests | D4 self-application: `GREEN_REVIEW_LEGS` manifests gain the at-risk row; CONTINUE TO tag AC-20260815-02-9 |
@@ -63,6 +65,9 @@ JJ-20260815-03 is stamped fixed.
 | tests/scoped-gate-behavior-collision.test.js | MODIFY | tests | AC-20260815-02-10: tag the intake pin (goes green via D3's wording) |
 | tests/scope-reconcile-glob-rows.test.js | MODIFY | tests | AC-20260815-02-11: CONTINUE TO tags on existing field/exit pins |
 | tests/terminal-observable-acs.test.js | MODIFY | tests | AC-20260815-02-13: retarget the byte-exact REVIEW_LEGS pin to the seven-leg array, unweakened (D4 self-application) |
+| tests/clean-row-survivor-consistency.test.js | MODIFY | tests | A4 in-flight row (D4 self-application, found by Phase 4's pre-image check): six-leg manifest fixtures gain the at-risk row; CONTINUE TO tag AC-20260815-02-9 |
+| tests/verdict-gatered-no-workflow.test.js | MODIFY | tests | A4 in-flight row (D4 self-application): six-leg manifest fixtures gain the at-risk row; CONTINUE TO tag AC-20260815-02-9 |
+| tests/suite-baseline/doctrine.test.js | MODIFY | tests | A4 in-flight row: six-leg manifest fixture gains the at-risk row (AC-20260815-02-9); step-8 findings-producing-legs regex retargeted to the at-risk-bearing list (AC-20260815-02-14) |
 
 ## Contracts
 
@@ -154,6 +159,11 @@ CLEAN-with-qualifier unavailable-leg set: 'ci' | 'gate' | 'at-risk'
   SHALL pass it — the leg is the honest oracle for the doctrine-file edits (claims baseline,
   scaffold ledger, init.md's example line, wf-review regeneration via the gate's `--check`)
   no unit test asserts individually
+- **AC-20260815-02-14**: WHEN review.md step 8's closing sentence enumerating the legs that
+  never trigger the pre-panel hard stop is read THE SYSTEM SHALL name `at-risk` among them
+  (literal: ``Findings-producing legs (`reconcile`, `ac-matrix`, `skip-reconcile`, `suite`,
+  `at-risk`)``) — D3's never-a-step-8-pre-panel-stop clause stated where review.md declares
+  which legs are non-blocking → tests/suite-baseline/doctrine.test.js (retargeted regex)
 - **AC-20260815-02-13**: WHEN verdict.js source is scanned THE SYSTEM SHALL expose the
   seven-leg `REVIEW_LEGS` array (literal:
   `['gate', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk']`) →

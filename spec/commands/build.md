@@ -248,7 +248,11 @@ After the ceiling or a stalled round, consult the retainer, then escalate to the
 `node "$(spec-paths scope-reconcile)" --root {root} --base {build_base or diff_base}
 --spec {spec path} --json`. A non-empty `outOfPlan` prints one line — `⚠️ out-of-plan: {list}`
 — pointing at the `out-of-scope-failure` fork row above; it surfaces drift before the
-checkpoint-commit instead of leaving it for review to catch retroactively.
+checkpoint-commit instead of leaving it for review to catch retroactively. The same `--json`
+call's `atRisk` field (specs/20260815/02-at-risk-pins.md D1/D7 — the scoped gate's compensating
+derivation) prints one more line when non-empty — `⚠️ {N} at-risk pins outside this spec's
+gate — review will run them`; this is visibility only, no build-time run against them and no
+gate effect — the executed run stays review-owned (its Phase 0 `at-risk` leg).
 
 **Suite pre-image check (D10, BLOCKING on `preNewFailing` only —
 specs/20260814/03-suite-baseline.md):** after the gate above is green, beside the scope check

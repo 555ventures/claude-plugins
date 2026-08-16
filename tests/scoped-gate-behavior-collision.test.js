@@ -53,7 +53,7 @@ const NAMES_BEHAVIOR_COLLISION =
 const NAMES_OUT_OF_SCOPE_PIN_SWEEP =
   /(pins?|tests?|suites?)\s+(that\s+)?[^.\n]{0,80}(outside|beyond|not (run|executed) by)\s+[^.\n]{0,40}(the\s+)?(scoped gate|resolved \{?testDirs\}?|spec's gate)/i
 
-test('JJ-20260815-03: some pipeline surface obliges a sweep for pins outside the scoped gate when a Decision changes shared behavior', () => {
+test('JJ-20260815-03 / AC-20260815-02-10: some pipeline surface obliges a sweep for pins outside the scoped gate when a Decision changes shared behavior', () => {
   const hit = [plan, build, review].some(
     doc => NAMES_BEHAVIOR_COLLISION.test(doc) || NAMES_OUT_OF_SCOPE_PIN_SWEEP.test(doc))
   assert.ok(hit,

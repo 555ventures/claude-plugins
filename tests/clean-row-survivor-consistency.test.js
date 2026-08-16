@@ -28,13 +28,20 @@ const REVIEW = path.join(ROOT, 'spec/commands/review.md')
 
 // A fully-green manifest across every required review leg, so derive() reaches the disposition
 // branch rather than GATE_RED/UNVERIFIED — the branch under test is the disposition one.
+//
+// specs/20260815/02-at-risk-pins.md D4/D1 (AC-20260815-02-9, self-application, CONTINUE TO):
+// `at-risk` joins REVIEW_LEGS as a required-but-non-blocking leg — this spec's own adversarial
+// pass named this fixture as one of the four suites its own required-leg extension would redden
+// (found by Phase 4's pre-image check as an in-flight File Plan row). The row is added here so
+// both tests below CONTINUE TO derive the same verdict words they already assert.
 const GREEN_LEGS = [
   { leg: 'gate', exit: 0, observed: 'skips=0 todos=0' },
   { leg: 'smoke', exit: 0, observed: 'pass' },
   { leg: 'reconcile', exit: 0, observed: 'clean' },
   { leg: 'ac-matrix', exit: 0, observed: 'covered' },
   { leg: 'skip-reconcile', exit: 0, observed: 'skipped=0' },
-  { leg: 'ci', exit: 0, observed: 'success' }
+  { leg: 'ci', exit: 0, observed: 'success' },
+  { leg: 'at-risk', exit: 0, observed: 'files=0' }
 ]
 
 // Runs verdict.js --ledger over one survivor with the given dispositions, returning the exec
@@ -62,7 +69,7 @@ function deriveWithOneSurvivor(label, severity, dispositions) {
   return { r, word: lines[0], row }
 }
 
-test('JJ-20260814-01: a survivor the user disposed of still closes CLEAN, and the ledger row records both the finding and its disposition', () => {
+test('JJ-20260814-01 (CONTINUE TO AC-20260815-02-9): a survivor the user disposed of still closes CLEAN, and the ledger row records both the finding and its disposition', () => {
   const { r, word, row } = deriveWithOneSurvivor('waived', 'soft', ['--waived', '1'])
 
   assert.strictEqual(r.status, 0,
@@ -87,7 +94,7 @@ test('JJ-20260814-01: a survivor the user disposed of still closes CLEAN, and th
     'between verification and the ledger')
 })
 
-test('JJ-20260814-01: an undispositioned survivor cannot reach CLEAN — the hole the doctrine sentence meant to close', () => {
+test('JJ-20260814-01 (CONTINUE TO AC-20260815-02-9): an undispositioned survivor cannot reach CLEAN — the hole the doctrine sentence meant to close', () => {
   const { r, word, row } = deriveWithOneSurvivor('undisposed', 'hard', [])
 
   assert.notStrictEqual(word, 'CLEAN',

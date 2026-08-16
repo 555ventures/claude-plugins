@@ -142,14 +142,24 @@ if (workflow && waived + rejected + fixDispatched > survivors.length) {
 }
 
 // ---- required/blocking legs per profile (D3/D7) --------------------------------------------
+//
+// specs/20260815/02-at-risk-pins.md D4: 'at-risk' joins REVIEW_LEGS as a required-but-non-
+// blocking leg — an absent row derives UNVERIFIED (the same fail-closed presence rule below),
+// a red row never derives GATE_RED (it stays out of REVIEW_BLOCKING; the finding is a review
+// disposition, not a gate), and an honest `unavailable` observation widens the
+// CLEAN-with-qualifier check alongside 'ci'/'gate' so it never reads as plain CLEAN. Excluded
+// from fix-delta's requiredLegs alongside 'reconcile' — the leg mirrors reconcile's standing
+// exactly (both derive from the changed-set-vs-plan comparison scope skips).
 
-const REVIEW_LEGS = ['gate', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci']
+const REVIEW_LEGS = ['gate', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk']
 const REVIEW_BLOCKING = new Set(['gate', 'smoke', 'ci'])
 const RELEASE_LEGS = ['deploy', 'ready', 'e2e', 'journeys', 'substrate', 'production', 'ci']
 
 const requiredLegs = profile === 'release'
   ? RELEASE_LEGS
-  : ((workflow && workflow.scope === 'fix-delta') ? REVIEW_LEGS.filter(l => l !== 'reconcile') : REVIEW_LEGS)
+  : ((workflow && workflow.scope === 'fix-delta')
+      ? REVIEW_LEGS.filter(l => l !== 'reconcile' && l !== 'at-risk')
+      : REVIEW_LEGS)
 const blockingLegs = profile === 'release' ? new Set(RELEASE_LEGS) : REVIEW_BLOCKING
 
 function legIsRed(leg) {
@@ -183,7 +193,7 @@ function derive() {
     const row = legRows.get(leg)
     return !!row && /^(unavailable|in-progress)/.test(row.observed || '')
   }
-  if (legUnavailable('ci') || legUnavailable('gate')) return 'CLEAN-with-qualifier'
+  if (legUnavailable('ci') || legUnavailable('gate') || legUnavailable('at-risk')) return 'CLEAN-with-qualifier'
   return 'CLEAN'
 }
 

@@ -118,6 +118,21 @@ build that is the worktree itself. Phase 4 resolves a second, distinctly named s
      `exit:1` (hard-stops pre-panel below, "fix CI first"); everything else — no run seen for
      this commit (structural or transient), or an in-progress run — maps to `exit:0`. Leg
      `ci`, `observed:"unavailable"`/`"unavailable-transient"`/`"in-progress"`/`"conclusion=<value>"`.
+   - **at-risk leg (D1/D3, specs/20260815/02-at-risk-pins.md — the scoped gate's compensating
+     derivation):** read `{reconcilePath}`'s `atRisk` field (populated by step 2, before this
+     parallel batch launches — the same dependency `patternsScript`'s dirs already have).
+     Non-empty `atRisk` → run the host's `testCommand` with the at-risk files appended (cwd
+     `{root}`) — the same file-path repro contract the Phase 1 verifier agents already rely on.
+     Skip entirely, including the manifest row, on `scope: "fix-delta"` (`reconcilePath` is `''`
+     there, exactly like `reconcile`). `files=0` → no run, exit 0. No `testCommand` in config →
+     exit 0, `observed:"unavailable — host declares no testCommand"`. A red at-risk leg yields
+     ONE mechanical **hard** finding <!-- enforcedBy: spec/scripts/scope-reconcile.js --> —
+     "at-risk pins red: pins that live outside the scoped gate failed on this diff; {failing
+     files/digest, session-extracted from runner output}" — entering Phase 2 dispositions like
+     reconcile's out-of-plan finding; a pre-existing sanctioned red (e.g. this repo's INTAKE
+     pins) is a five-second waive naming the pin. **Never a step-8 pre-panel stop**
+     <!-- enforcedBy: spec/scripts/verdict.js -->. Leg `at-risk`, `observed:"files=<N>"` (or
+     the `unavailable` string above).
    - **if config declares `driftScript`**: `{driftScript} {spec path}` — the host's AC-drift
      checker. Leg `drift`, when this leg ran.
    - `node "$(spec-paths suite-baseline)" --check --root {root}` — the **suite leg** (D5,
@@ -191,8 +206,8 @@ build that is the worktree itself. Phase 4 resolves a second, distinctly named s
    Next: {named remedy}
    ```
 
-   Findings-producing legs (`reconcile`, `ac-matrix`, `skip-reconcile`, `suite`) never trigger
-   this stop — their findings enter Phase 2.
+   Findings-producing legs (`reconcile`, `ac-matrix`, `skip-reconcile`, `suite`, `at-risk`)
+   never trigger this stop — their findings enter Phase 2.
 
 ## Phase 1 — Review workflow
 

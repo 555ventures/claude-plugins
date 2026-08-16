@@ -209,6 +209,10 @@ All keys consumed by the plugin's commands/workflows:
   // OPTIONAL: AC-drift checker; spec path appended. Omit entirely if the repo has none —
   // then the reviewer's AC ↔ test coverage check is the drift gate.
   "driftScript": "uv run python scripts/spec_drift.py --spec",
+  // OPTIONAL: the repo's test-file universe (glob array), read only by scope-reconcile.js's
+  // at-risk derivation (specs/20260815/02-at-risk-pins.md D1/D5) — covers dir-rooted and
+  // colocated test conventions across stacks. Default when absent (= this value):
+  "testGlobs": ["tests/**", "test/**", "**/*.test.*", "**/*.spec.*", "**/*_test.*"],
   // OPTIONAL: component-catalog design stage (/spec:design). Omit entirely if the repo has
   // no catalog. tool: "storybook" (web) | "widgetbook" (Flutter) | any catalog; command
   // launches it; storyFormat is what stories-kind workers author.

@@ -24,6 +24,10 @@ function writeManifest(dir, rows) {
   return p
 }
 
+// specs/20260815/02-at-risk-pins.md D4/D1 (AC-20260815-02-9, self-application, CONTINUE TO):
+// `at-risk` joins REVIEW_LEGS as a required-but-non-blocking leg (found by Phase 4's pre-image
+// check as an in-flight File Plan row) — the row is added to both six-leg manifests below so
+// the tests CONTINUE TO derive the same verdict words/exit codes they already assert.
 const SIX_ROWS_GATE_RED = [
   { leg: 'gate', exit: 1, observed: 'boot-crash' },
   { leg: 'smoke', exit: 4, observed: 'inert' },
@@ -31,9 +35,10 @@ const SIX_ROWS_GATE_RED = [
   { leg: 'ac-matrix', exit: 0, observed: 'uncovered=0' },
   { leg: 'skip-reconcile', exit: 0, observed: 'skipped=0' },
   { leg: 'ci', exit: 0, observed: 'unavailable' },
+  { leg: 'at-risk', exit: 0, observed: 'files=0' },
 ]
 
-test('JJ-20260808-01 / AC-20260813-03-7: review.md Phase 0 step 8\'s documented pre-panel hard-stop invocation (--manifest --ledger, no --workflow) derives GATE_RED and exits 1 from a red gate leg alone', () => {
+test('JJ-20260808-01 / AC-20260813-03-7 (CONTINUE TO AC-20260815-02-9): review.md Phase 0 step 8\'s documented pre-panel hard-stop invocation (--manifest --ledger, no --workflow) derives GATE_RED and exits 1 from a red gate leg alone', () => {
   const dir = tmpdir('verdict-gatered-no-workflow')
   const manifest = writeManifest(dir, SIX_ROWS_GATE_RED)
   const r = runNode(SCRIPT, ['--manifest', manifest, '--ledger', '--spec', 'x.md',
@@ -74,9 +79,10 @@ const SIX_ROWS_GREEN = [
   { leg: 'ac-matrix', exit: 0, observed: 'uncovered=0' },
   { leg: 'skip-reconcile', exit: 0, observed: 'skipped=0' },
   { leg: 'ci', exit: 0, observed: 'unavailable' },
+  { leg: 'at-risk', exit: 0, observed: 'files=0' },
 ]
 
-test('AC-20260813-03-8: verdict.js --manifest with no --workflow on a green, complete manifest exits 2 with a usage error naming --workflow as the remedy, never a derived CLEAN', () => {
+test('AC-20260813-03-8 (CONTINUE TO AC-20260815-02-9): verdict.js --manifest with no --workflow on a green, complete manifest exits 2 with a usage error naming --workflow as the remedy, never a derived CLEAN', () => {
   const dir = tmpdir('verdict-gatered-no-workflow')
   const manifest = writeManifest(dir, SIX_ROWS_GREEN)
   const r = runNode(SCRIPT, ['--manifest', manifest])

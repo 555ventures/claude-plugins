@@ -198,7 +198,7 @@ test('AC-20260810-02-5: build.md blocked row owes the AC in the same edit as the
 // place that key set is pinned — the fifth recurrence of this exact collision, per D9's own
 // reopen condition — so the new key is added here, in place, rather than left to surface as a
 // mid-build out-of-plan patch.
-test('AC-20260810-02-6, AC-20260814-02-11, AC-20260814-03-13, AC-20260814-05-12, AC-20260815-01-14: scaffold-ledger.md gains a gate-kind terminal-observable-ACs row, and verdict.js/spec-paths stay unchanged apart from the registered ci-gate-parity, suite-baseline, collision-closure, and advisory-append keys', () => {
+test('AC-20260810-02-6, AC-20260814-02-11, AC-20260814-03-13, AC-20260814-05-12, AC-20260815-01-14, AC-20260815-02-13: scaffold-ledger.md gains a gate-kind terminal-observable-ACs row, and verdict.js/spec-paths stay unchanged apart from the registered ci-gate-parity, suite-baseline, collision-closure, advisory-append keys and verdict.js\'s seven-leg REVIEW_LEGS array', () => {
   const rowStart = ledger.search(/\| ?Terminal-observable/i)
   assert.notStrictEqual(rowStart, -1,
     'scaffold-ledger.md has no Terminal-observable-ACs row — a new gate mechanism with no ' +
@@ -219,11 +219,16 @@ test('AC-20260810-02-6, AC-20260814-02-11, AC-20260814-03-13, AC-20260814-05-12,
     'finer-grained retirement this spec\'s Decisions table locks')
 
   // Regression pins (D8: no new script, no new mechanism touching these two surfaces).
+  // specs/20260815/02-at-risk-pins.md D4 (AC-20260815-02-13): retargeted IN PLACE from the
+  // six-leg array to the seven-leg array — `at-risk` joins REVIEW_LEGS as a required-but-
+  // non-blocking leg, the compensating derivation for the scoped gate's behavior-collision gap
+  // (JJ-20260815-03). Red-first until D4 lands: today's verdict.js still exposes the six-leg
+  // array this literal no longer matches.
   const verdictSrc = read('spec/scripts/verdict.js')
-  assert.match(verdictSrc, /const REVIEW_LEGS = \['gate', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci'\]/,
-    'verdict.js\'s REVIEW_LEGS SHALL CONTINUE TO expose exactly this six-leg array unchanged — ' +
-    'this spec adds no review leg (D8); a changed array means a mechanism crept into the ' +
-    'wrong file')
+  assert.match(verdictSrc, /const REVIEW_LEGS = \['gate', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk'\]/,
+    'verdict.js\'s REVIEW_LEGS must expose exactly this seven-leg array, byte-exact, with ' +
+    '\'at-risk\' appended last (D4/AC-20260815-02-13) — a missing or differently-ordered entry ' +
+    'means the at-risk leg never actually joined the required-leg set verdict.js derives against')
   const keysOut = runBash('bin/spec-paths', ['root']).stdout
   assert.ok(keysOut.trim().length > 0, 'spec-paths root must resolve for the key-set check below to be meaningful')
   const specPathsSrc = read('spec/bin/spec-paths')

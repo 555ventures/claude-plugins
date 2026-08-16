@@ -19,6 +19,10 @@ const { tmpdir, runNode, gitRepo } = require('./helpers')
 // specs/20260813/03-gate-script-mechanics.md D2 pins the fix: AC-20260813-03-4 (glob-covered
 // file excluded from outOfPlan) and AC-20260813-03-5 (glob row excluded from unrealized once a
 // non-excluded changed file matches it), both against this same fixture.
+//
+// specs/20260815/02-at-risk-pins.md AC-20260815-02-11 (D2 byte-compatibility): the additive
+// `atRisk` field must not disturb outOfPlan/unrealized/excluded/renamed or the exit-code
+// alphabet these three tests already pin — retagged in place, assertions unweakened.
 
 const SCRIPT = 'scripts/scope-reconcile.js'
 const GLOB_ROW = 'packages/contracts/schemas/*.json'
@@ -34,7 +38,7 @@ function specWithGlobPlan(dir, relPath) {
   return relPath
 }
 
-test('AC-20260813-03-4 / PRAX-20260813-05: a File Plan glob row does not double-report — the concrete changed file it covers must not land in outOfPlan, and the run exits 0', () => {
+test('AC-20260813-03-4 / PRAX-20260813-05 / AC-20260815-02-11 (CONTINUE TO): a File Plan glob row does not double-report — the concrete changed file it covers must not land in outOfPlan, and the run exits 0', () => {
   const dir = tmpdir('scope-reconcile-glob')
   const g = gitRepo(dir)
   const base = g('rev-parse', 'HEAD').trim()
@@ -55,7 +59,7 @@ test('AC-20260813-03-4 / PRAX-20260813-05: a File Plan glob row does not double-
     'nonzero exit here means the glob row is still not recognized as covering the changed file: ' + r.stderr)
 })
 
-test('AC-20260813-03-5 / PRAX-20260813-05: a File Plan glob row realized by a concrete changed file must not also land in unrealized', () => {
+test('AC-20260813-03-5 / PRAX-20260813-05 / AC-20260815-02-11 (CONTINUE TO): a File Plan glob row realized by a concrete changed file must not also land in unrealized', () => {
   const dir = tmpdir('scope-reconcile-glob')
   const g = gitRepo(dir)
   const base = g('rev-parse', 'HEAD').trim()
@@ -81,7 +85,7 @@ test('AC-20260813-03-5 / PRAX-20260813-05: a File Plan glob row realized by a co
 // non-excluded changed file matches the row at all. Refuter finding folded into D2: without the
 // excludedSet subtraction, this excluded file would fake the row's realization and hide a
 // codegen output File Plan row that no real reviewer-visible file ever touched.
-test('AC-20260813-03-5 (excluded-overlap facet): a File Plan glob row matched ONLY by a pipeline-owned (excluded) changed file stays unrealized, and the excluded file stays out of outOfPlan', () => {
+test('AC-20260813-03-5 (excluded-overlap facet) / AC-20260815-02-11 (CONTINUE TO): a File Plan glob row matched ONLY by a pipeline-owned (excluded) changed file stays unrealized, and the excluded file stays out of outOfPlan', () => {
   const dir = tmpdir('scope-reconcile-glob')
   const g = gitRepo(dir)
   fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })

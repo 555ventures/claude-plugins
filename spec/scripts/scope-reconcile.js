@@ -33,8 +33,9 @@
 const fs = require('fs')
 const path = require('path')
 const { execFileSync } = require('child_process')
-const { parseFilePlan } = require('./lib/file-plan')
+const { parseFilePlan, parseFilePlanRows } = require('./lib/file-plan')
 const { globMatch, pipelineOwnedGlobs } = require('./lib/glob-match')
+const { readConfig } = require('./lib/host-config')
 
 function usage() {
   console.error('usage: scope-reconcile.js [--root <dir>] --base <ref> --spec <path> (--json | --dirs)')
@@ -125,10 +126,79 @@ const unrealized = [
   ...globRows.filter(g => !nonExcludedChanged.some(p => globMatch(g, p)))
 ].sort()
 
+// ---- at-risk derivation (D1/D2/D5, specs/20260815/02-at-risk-pins.md) ----------------------
+// A Decision that changes what a shared script returns reddens suites the scoped gate never
+// runs, because those suites live outside the spec's own File Plan tests rows (escape
+// wf_e1da0ea6-94c / INTAKE JJ-20260815-03). For each changed file that is neither test-classified
+// (testGlobs), pipeline-owned, nor a rename-from path, derive path stems and substring-scan the
+// repo's test-classified files for them; a hit that is not resolved by the File Plan's
+// tests-layer rows and is not itself in the changed set is at-risk. Additive to outOfPlan/
+// unrealized/excluded/renamed above — never affects the exit code (D2).
+
+const defaultTestGlobs = ['tests/**', 'test/**', '**/*.test.*', '**/*.spec.*', '**/*_test.*']
+const configTestGlobs = readConfig(root).testGlobs
+const testGlobs = Array.isArray(configTestGlobs) ? configTestGlobs : defaultTestGlobs
+const isTestClassified = (p) => testGlobs.some(g => globMatch(g, p))
+
+function stemsFor(p) {
+  const noExt = p.replace(/\.[^./]+$/, '')
+  const stems = [p, noExt].filter((s, i, arr) => arr.indexOf(s) === i)
+  const segs = noExt.split('/')
+  if (segs.length >= 2) stems.push(segs.slice(-2).join('/'))
+  return stems
+}
+
+const stemSources = [...changed]
+  .filter(p => !isTestClassified(p) && !excludedSet.has(p) && !renamedFrom.has(p))
+  .map(p => ({ file: p, stems: stemsFor(p) }))
+
+const filePlanTestsPaths = parseFilePlanRows(specText)
+  .filter(r => r.layer && /^tests?$/i.test(r.layer))
+  .flatMap(r => r.paths)
+const isResolvedByTestsRows = (p) =>
+  filePlanTestsPaths.some(row => (isGlobRow(row) ? globMatch(row, p) : row === p))
+
+function walkTestFiles(dir, out) {
+  let entries
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return
+  }
+  for (const entry of entries) {
+    if (entry.name === '.git' || entry.name === 'node_modules') continue
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      walkTestFiles(full, out)
+    } else if (entry.isFile()) {
+      const rel = path.relative(root, full).split(path.sep).join('/')
+      if (isTestClassified(rel)) out.push(rel)
+    }
+  }
+}
+const candidates = []
+walkTestFiles(root, candidates)
+
+const atRiskMap = new Map()
+for (const candidate of candidates) {
+  if (changed.has(candidate) || isResolvedByTestsRows(candidate)) continue
+  let content
+  try {
+    content = fs.readFileSync(path.join(root, candidate), 'utf8')
+  } catch {
+    continue
+  }
+  const refs = stemSources.filter(s => s.stems.some(stem => content.includes(stem))).map(s => s.file)
+  if (refs.length) atRiskMap.set(candidate, refs.sort())
+}
+const atRisk = [...atRiskMap.entries()]
+  .map(([file, refs]) => ({ file, refs }))
+  .sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0))
+
 if (mode === 'dirs') {
   const dirs = [...new Set([...changed].map(p => path.posix.dirname(p)))].sort()
   console.log(dirs.join('\n'))
 } else {
-  console.log(JSON.stringify({ outOfPlan, unrealized, excluded, renamed }, null, 2))
+  console.log(JSON.stringify({ outOfPlan, unrealized, excluded, renamed, atRisk }, null, 2))
 }
 process.exit(outOfPlan.length ? 3 : 0)

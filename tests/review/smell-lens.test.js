@@ -59,6 +59,12 @@ function extractParenBalanced(src, openParenIdx) {
 }
 
 // Full green manifest for verdict.js's `full`-scope required leg set (REVIEW_LEGS).
+//
+// specs/20260815/02-at-risk-pins.md D4/D1 (AC-20260815-02-9, self-application, CONTINUE TO):
+// `at-risk` joins REVIEW_LEGS as a required-but-non-blocking leg — this spec's own adversarial
+// pass named this fixture as one of the four suites its own required-leg extension would redden.
+// The row is added here so the two tests below CONTINUE TO derive the same verdict words they
+// already assert.
 function greenManifest() {
   return [
     { leg: 'gate', exit: 0, observed: 'skips=0 todos=0' },
@@ -67,6 +73,7 @@ function greenManifest() {
     { leg: 'ac-matrix', exit: 0, observed: 'uncovered=0' },
     { leg: 'skip-reconcile', exit: 0, observed: 'skipped=0' },
     { leg: 'ci', exit: 0, observed: 'unavailable' },
+    { leg: 'at-risk', exit: 0, observed: 'files=0' },
   ].map(r => JSON.stringify(r)).join('\n') + '\n'
 }
 
@@ -222,7 +229,7 @@ test('AC-20260812-01-3: returned duplication smells lacking a non-empty counterp
 // HARD_FINDINGS/exit 1 with and without the fields on a survivor manifest
 // ---------------------------------------------------------------------------
 
-test('AC-20260812-01-4: verdict.js prints CLEAN and exits 0 against an all-green manifest and a zero-survivor workflow return carrying a non-empty smells array — advisory never gates, executed not argued', () => {
+test('AC-20260812-01-4 (CONTINUE TO AC-20260815-02-9): verdict.js prints CLEAN and exits 0 against an all-green manifest and a zero-survivor workflow return carrying a non-empty smells array — advisory never gates, executed not argued', () => {
   const dir = tmpdir('smell-lens-verdict-clean')
   const { manifestPath, workflowPath } = writeVerdictFixture(dir, {
     verdict: 'CLEAN', survivors: [], killed: [],
@@ -242,7 +249,7 @@ test('AC-20260812-01-4: verdict.js prints CLEAN and exits 0 against an all-green
     `never gates" (stderr: ${r.stderr})`)
 })
 
-test('AC-20260812-01-5: verdict.js prints the identical HARD_FINDINGS/exit-1 verdict with and without the smells/lensFailed fields on a survivor workflow return', () => {
+test('AC-20260812-01-5 (CONTINUE TO AC-20260815-02-9): verdict.js prints the identical HARD_FINDINGS/exit-1 verdict with and without the smells/lensFailed fields on a survivor workflow return', () => {
   const dir = tmpdir('smell-lens-verdict-parity')
   const baseWorkflow = {
     verdict: 'HARD_FINDINGS',

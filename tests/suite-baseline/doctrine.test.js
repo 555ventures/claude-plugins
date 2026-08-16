@@ -31,7 +31,11 @@ function between(src, startMarker, endMarker) {
 // AC-20260814-03-9: review.md Phase 0 step 3 lists the `suite` leg (background, recorded-not-
 // required); step 8's findings-producing-legs enumeration gains `suite`; step 8's hard-stop
 // trigger list continues to name only gate/smoke/ci (regression half of the same AC).
-test('AC-20260814-03-9: review.md Phase 0 gains a background suite leg, step 8\'s findings-producing list gains suite, and the hard-stop trigger list continues to name only gate/smoke/ci', () => {
+// specs/20260815/02-at-risk-pins.md D3 (AC-20260815-02-14): review.md step 8's findings-
+// producing-legs sentence gains `at-risk` alongside `suite` — the never-a-step-8-pre-panel-stop
+// clause stated where review.md declares which legs are non-blocking. Retargeted to the new
+// byte-exact list below, never loosened into a partial/optional match.
+test('AC-20260814-03-9 / AC-20260815-02-14: review.md Phase 0 gains a background suite leg, step 8\'s findings-producing list gains suite and at-risk, and the hard-stop trigger list continues to name only gate/smoke/ci', () => {
   const step3 = between(reviewDoc, '3. Launch in parallel', '## Phase 1')
   assert.match(step3, /spec-paths suite-baseline/,
     'Phase 0 step 3 must invoke the suite-baseline script via spec-paths — a literal plugin ' +
@@ -45,10 +49,11 @@ test('AC-20260814-03-9: review.md Phase 0 gains a background suite leg, step 8\'
     'verdict.js\'s requiredLegs check by accident')
 
   const step8 = between(reviewDoc, '8. **Hard stop', '## Phase 1')
-  assert.match(step8, /Findings-producing legs \(`reconcile`, `ac-matrix`, `skip-reconcile`, `suite`\)/,
-    'step 8\'s closing sentence enumerating findings-producing legs must gain `suite` — without ' +
-    'this the leg\'s D5-mandated advisory status is undocumented at the one place review.md ' +
-    'states which legs never hard-stop')
+  assert.match(step8, /Findings-producing legs \(`reconcile`, `ac-matrix`, `skip-reconcile`, `suite`, `at-risk`\)/,
+    'step 8\'s closing sentence enumerating findings-producing legs must gain `suite` and, per ' +
+    'specs/20260815/02-at-risk-pins.md D3, `at-risk` (AC-20260815-02-14) — without both names ' +
+    'the legs\' D5/D3-mandated advisory status is undocumented at the one place review.md states ' +
+    'which legs never hard-stop; this stays a byte-exact pin, never loosened to a partial match')
   assert.match(step8, /If the `gate`,\s*\n?\s*`smoke`, or `ci` row is red/,
     'the hard-stop trigger list SHALL CONTINUE TO name only gate/smoke/ci — adding `suite` here ' +
     'would make the advisory leg block pre-panel spend, re-committing the exact escape this ' +
@@ -59,7 +64,14 @@ test('AC-20260814-03-9: review.md Phase 0 gains a background suite leg, step 8\'
 // present as without it, and its source continues to exclude `suite` from REVIEW_LEGS and
 // REVIEW_BLOCKING (D9: verdict.js is untouched by this spec — the whole safety argument for
 // D5's advisory design is that the leg cannot move the verdict word, made mechanical here).
-test('AC-20260814-03-10: verdict.js continues to derive CLEAN with or without a red suite leg row, and continues to exclude suite from REVIEW_LEGS/REVIEW_BLOCKING', () => {
+//
+// specs/20260815/02-at-risk-pins.md D4/D1 (AC-20260815-02-9, self-application, CONTINUE TO):
+// `at-risk` joins REVIEW_LEGS as a required-but-non-blocking leg (found by Phase 4's pre-image
+// check as an in-flight File Plan row) — the six-leg manifests below gain the at-risk row so
+// the CLEAN derivation this test pins keeps happening, and the REVIEW_LEGS regex is retargeted
+// to the new byte-exact array below. Both changes are additive: the pin's own intent — that
+// `suite` stays excluded from REVIEW_LEGS/REVIEW_BLOCKING — is asserted unchanged.
+test('AC-20260814-03-10 (CONTINUE TO AC-20260815-02-9): verdict.js continues to derive CLEAN with or without a red suite leg row, and continues to exclude suite from REVIEW_LEGS/REVIEW_BLOCKING', () => {
   const dir = tmpdir('verdict-suite-leg')
   const sixGreen = [
     { leg: 'gate', exit: 0, observed: 'skips=0 todos=0' },
@@ -67,7 +79,8 @@ test('AC-20260814-03-10: verdict.js continues to derive CLEAN with or without a 
     { leg: 'reconcile', exit: 0, observed: 'outOfPlan=0' },
     { leg: 'ac-matrix', exit: 0, observed: 'uncovered=0 oracle=0' },
     { leg: 'skip-reconcile', exit: 0, observed: 'skipped=0 sanctioned=0' },
-    { leg: 'ci', exit: 0, observed: 'conclusion=success' }
+    { leg: 'ci', exit: 0, observed: 'conclusion=success' },
+    { leg: 'at-risk', exit: 0, observed: 'files=0' }
   ]
   const withRedSuite = [...sixGreen, { leg: 'suite', exit: 1, observed: 'newFailing=1 fixedNotRemoved=0' }]
 
@@ -92,9 +105,11 @@ test('AC-20260814-03-10: verdict.js continues to derive CLEAN with or without a 
     'changed word here means the leg silently became blocking')
 
   const verdictSrc = read('spec/scripts/verdict.js')
-  assert.match(verdictSrc, /REVIEW_LEGS = \['gate', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci'\]/,
+  assert.match(verdictSrc, /REVIEW_LEGS = \['gate', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk'\]/,
     'verdict.js\'s REVIEW_LEGS array must continue to exclude `suite` verbatim — this spec adds ' +
-    'no review leg to the required/blocking machinery (D9)')
+    'no review leg to the required/blocking machinery (D9); the array is retargeted to the ' +
+    'seven-leg byte-exact form (at-risk joined per specs/20260815/02-at-risk-pins.md D4) so this ' +
+    'pin still matches the array it reads, with `suite` still absent from it')
   assert.match(verdictSrc, /REVIEW_BLOCKING = new Set\(\['gate', 'smoke', 'ci'\]\)/,
     'verdict.js\'s REVIEW_BLOCKING set must continue to exclude `suite` verbatim — D5\'s ' +
     'advisory design is impossible to verify if the blocking set ever gains this leg')

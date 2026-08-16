@@ -73,10 +73,6 @@
       "name": "JJ-20260815-05: smoke.sh asserts the booted process actually exits on the declared stop signal"
     },
     {
-      "file": "tests/scoped-gate-behavior-collision.test.js",
-      "name": "JJ-20260815-03: some pipeline surface obliges a sweep for pins outside the scoped gate when a Decision changes shared behavior"
-    },
-    {
       "file": "tests/workflow-runid-provenance.test.js",
       "name": "JJ-20260814-02: build.md's resume sentence states the runId comes from the Workflow tool result, never that a workflow receives one through its own args"
     },

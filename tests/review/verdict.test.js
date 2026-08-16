@@ -41,6 +41,13 @@ function writeWorkflow(dir, obj) {
 // green" — since D4, an `unavailable` ci leg is no longer a plain-CLEAN input, so leaving it here
 // would silently turn all of them into qualifier tests asserting the wrong subject. The
 // unavailable-ci case has its own dedicated pin below.
+//
+// specs/20260815/02-at-risk-pins.md D4/D1 (AC-20260815-02-9, self-application): `at-risk` joins
+// REVIEW_LEGS as a required-but-non-blocking leg, and this spec's own adversarial pass named
+// this fixture as one of the four suites its own required-leg extension would redden. The row is
+// added here so every existing test below that reuses SIX_GREEN CONTINUES TO derive the same
+// verdict words and ledger fields it already asserts — the fixture gains the row, the assertions
+// stay unweakened.
 const SIX_GREEN = [
   { leg: 'gate', exit: 0, observed: 'skips=0 todos=0' },
   { leg: 'smoke', exit: 4, observed: 'inert' },
@@ -48,6 +55,7 @@ const SIX_GREEN = [
   { leg: 'ac-matrix', exit: 0, observed: 'uncovered=0' },
   { leg: 'skip-reconcile', exit: 0, observed: 'skipped=0' },
   { leg: 'ci', exit: 0, observed: 'conclusion=success' },
+  { leg: 'at-risk', exit: 0, observed: 'files=0' },
 ]
 
 // The same six legs with ci structurally unobservable — the qualifier fixture (D4).
@@ -347,6 +355,67 @@ test('AC-20260805-02-8: --ledger normalizes an array-shaped workflow.killed to i
     'workflow.tokens arriving as a plain number must be normalized to the documented {"workflow":<n>} object ' +
     'shape, not passed through as a bare number — a bare number here makes the ledger\'s tokens accounting ' +
     'unparseable against review.md:229\'s schema: ' + JSON.stringify(row))
+})
+
+// specs/20260815/02-at-risk-pins.md D4/D1 (AC-20260815-02-6 .. -02-8): `at-risk` joins
+// REVIEW_LEGS as a required-but-non-blocking full-scope leg, mirroring the fail-closed presence
+// rule the ci/gate oracle legs already establish, and mirroring `reconcile`'s standing on the
+// blocking question. This fixture predates the at-risk row (unlike SIX_GREEN above, which now
+// carries it) so these three tests can isolate at-risk's own presence/absence/redness.
+const SIX_LEGS_NO_AT_RISK = [
+  { leg: 'gate', exit: 0, observed: 'skips=0 todos=0' },
+  { leg: 'smoke', exit: 4, observed: 'inert' },
+  { leg: 'reconcile', exit: 0, observed: 'outOfPlan=0' },
+  { leg: 'ac-matrix', exit: 0, observed: 'uncovered=0' },
+  { leg: 'skip-reconcile', exit: 0, observed: 'skipped=0' },
+  { leg: 'ci', exit: 0, observed: 'conclusion=success' },
+]
+
+test('AC-20260815-02-6: a full-scope review manifest missing the at-risk row derives UNVERIFIED, never CLEAN, even with all six legacy legs green and a CLEAN workflow return', () => {
+  const dir = tmpdir('verdict-at-risk-missing')
+  const manifest = writeManifest(dir, SIX_LEGS_NO_AT_RISK)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
+  assert.strictEqual(r.stdout.split('\n')[0], 'UNVERIFIED',
+    'D4 makes at-risk a required full-scope leg via the same fail-closed presence rule the ' +
+    'other REVIEW_LEGS entries already carry — a manifest missing it must derive UNVERIFIED even ' +
+    'though all six legacy legs are green and the workflow returned zero-survivor CLEAN, or a ' +
+    'review could close CLEAN having never run the compensating derivation at all: ' +
+    r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 1, 'UNVERIFIED must exit 1 so the close step is mechanically unreachable: ' + r.stderr)
+})
+
+test('AC-20260815-02-7: a red at-risk leg does not derive GATE_RED — at-risk is required but non-blocking, so a zero-survivor workflow still reaches a CLEAN-family word at exit 0', () => {
+  const dir = tmpdir('verdict-at-risk-red')
+  const rows = [...SIX_LEGS_NO_AT_RISK, { leg: 'at-risk', exit: 1, observed: 'files=2' }]
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
+  assert.match(r.stdout.split('\n')[0], /^CLEAN/,
+    'D4: at-risk does NOT join REVIEW_BLOCKING — a red at-risk leg must never derive GATE_RED, ' +
+    'matching reconcile\'s exit-3 standing (the finding flows to Phase 2 dispositions instead), ' +
+    'never a hard gate stop: ' + r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 0,
+    'a CLEAN-family word reached via a non-blocking red at-risk leg must exit 0, or a red-but-' +
+    'non-blocking leg would still make the review mechanically unclosable: ' + r.stderr)
+})
+
+// The manifest below (fix-delta scope, missing both reconcile and at-risk) already derives CLEAN
+// on pre-D4 code, since `at-risk` does not exist in today's REVIEW_LEGS at all — there is no
+// manifest-only construction that makes this AC red on unimplemented code without at-risk first
+// entering REVIEW_LEGS. Logged per host rules' conservative-deviation clause (this AC's shape is
+// a regression continuity guard, not a reachable red-first case): 02-at-risk-pins.deviations.md.
+test('AC-20260815-02-8: on scope fix-delta, a manifest lacking both reconcile and at-risk rows still derives from the remaining required legs', () => {
+  const dir = tmpdir('verdict-at-risk-fixdelta')
+  const rows = SIX_LEGS_NO_AT_RISK.filter(r => r.leg !== 'reconcile')
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, { ...cleanWorkflow([]), scope: 'fix-delta' })
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
+  assert.strictEqual(r.stdout.split('\n')[0], 'CLEAN',
+    'D4: the fix-delta filter excludes both reconcile and at-risk from requiredLegs — a manifest ' +
+    'missing both rows must still derive CLEAN from the remaining five green legs, never ' +
+    'UNVERIFIED for a leg fix-delta scope never had to run: ' + r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 0, 'CLEAN must exit 0: ' + r.stderr)
 })
 
 const RELEASE_SIX_LEGS = [

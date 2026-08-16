@@ -37,12 +37,36 @@
       "name": "gate doctrine requires cache-defeat per tool, not just per runner"
     },
     {
+      "file": "tests/gate-env-preflight.test.js",
+      "name": "JJ-20260815-08: an unprovisioned environment is routed away from the repair loop and toward the host's provisioning path"
+    },
+    {
+      "file": "tests/gate-env-preflight.test.js",
+      "name": "JJ-20260815-08: build doctrine preflights the suite-gating environment variables the host declares before running the gate"
+    },
+    {
       "file": "tests/parity-check-roles.test.js",
       "name": "a declared seam vocabulary exempts wire kwargs inside internal-plane files"
     },
     {
       "file": "tests/parity-check-roles.test.js",
       "name": "a PascalCase class in its own snake_case module is not a parity finding"
+    },
+    {
+      "file": "tests/redcheck-load-failure-attribution.test.js",
+      "name": "JJ-20260815-07: a red-expected carrier whose file failed to LOAD executed zero assertions and must fail closed as unverified, never count as a satisfied red"
+    },
+    {
+      "file": "tests/redcheck-load-failure-attribution.test.js",
+      "name": "JJ-20260815-07: a sentinel omitting the assertion attribution entirely fails closed rather than being read as attributed"
+    },
+    {
+      "file": "tests/release-migrations-applied.test.js",
+      "name": "JJ-20260815-09: release requires a migrations-applied manifest row from any host whose config declares a database"
+    },
+    {
+      "file": "tests/release-migrations-applied.test.js",
+      "name": "JJ-20260815-09: the migrations check is asserted after the deploy, so a host with no migrate step fails instead of passing by coincidence"
     },
     {
       "file": "tests/runtime-leg-shutdown.test.js",

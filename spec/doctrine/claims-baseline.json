@@ -69,7 +69,7 @@
       "orphans": 1
     },
     "spec/doctrine/scaffold-ledger.md": {
-      "lines": 122,
+      "lines": 123,
       "orphans": 4
     },
     "spec/doctrine/shared.md": {
@@ -81,5 +81,5 @@
       "orphans": 5
     }
   },
-  "totalLines": 6182
+  "totalLines": 6183
 }

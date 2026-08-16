@@ -134,7 +134,7 @@ for (const rel of catalogPaths) {
     }
     collect(doc)
     // Every catalog value as one haystack, for the FRAGMENT case below.
-    cat.joined = [...cat.values, ...cat.templates.map(segs => segs.join(' '))].join(' ')
+    cat.joined = [...cat.values, ...cat.templates.map(segs => segs.join(' '))].join('\x00')
   }
   catalogs.push(cat)
 }

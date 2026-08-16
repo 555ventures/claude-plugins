@@ -1,1 +1,0 @@
-- [doctrine-batch] D8's literal version target 6.77.0 was already taken at HEAD (6.78.0 shipped via 5f84c40 before this batch ran) → bumped to the next free version, 6.79.0, keeping D8's changelog paragraph, per the version-bump-discipline Gotcha.

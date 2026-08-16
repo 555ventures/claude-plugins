@@ -1,6 +1,6 @@
 ---
 date: 2026-08-15
-status: implementing
+status: done
 diff_base: 2b8dd3b0d8b378c425efe5135d759c9f92076150
 open_markers: 0
 risk: T3
@@ -372,6 +372,30 @@ measured clean); 📌 one spec over two siblings (user's stated hypothesis; fits
 📌 ledger header text kept byte-identical to the live artifact ("accepted at review" —
 byte-stability for the dedupe parser and audit ingest outweighs retitling; rows are still
 accepted into the ledger, by derivation).
+
+**Build deviation, absorbed (2026-08-16).** D8's literal version target 6.77.0 was already
+taken at HEAD (6.78.0 shipped via 5f84c40 before the doctrine batch ran), so the bump went to
+the next free number, 6.79.0, keeping D8's changelog paragraph — exactly A7's declared "at
+build" branch, and already covered by the version-bump-discipline Gotcha. One-off, no new
+Gotcha earned.
+
+**Review dispositions (2026-08-16, iteration 1 → fix, iteration 2 CLEAN).** Two survivors,
+both fixed rather than waived:
+(i) *demonstrated, medium* — `advisory-append.js`'s `keyOf` joined its dedupe-key components
+with two **literal raw NUL bytes** instead of the escaped literal `\x00`, so `file` classified
+the new script as binary data and `git diff` rendered it "Binary files differ". That is this
+spec's own D10/A2 landmine (`fidelity-check.js`'s stray NUL, which made the plan-time grep
+census silently drop the file) reintroduced by the very spec written to disarm it. Fixed by
+replacing the two raw bytes with the two-character escape; the runtime separator is still
+U+0000, so dedupe behavior is byte-identical and only the source encoding changed.
+(ii) *advisory, soft* — the script printed an extra `advisory-append: appended N row(s), M
+duplicate(s) suppressed` status line ahead of the 📌 summary, contradicting the Contracts
+block's "Stdout: one line per appended row, then exactly one summary" (and duplicating the
+📌 line's own counts into every review report). The redundant line was deleted. That line
+turned out to be AC-20260815-01-3's stdout assertion carrier, so the pin was **retargeted in
+place, never weakened** (the colliding-pin Gotcha): its `/appended.*1/` match became a match on
+`📌 Auto-kept 1 advisory row(s) — 0 duplicate(s) suppressed`, which asserts the same claim and
+additionally pins the suppressed count; the test's two ledger-content assertions are untouched.
 
 ## Canonical Delta
 

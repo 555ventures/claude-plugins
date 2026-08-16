@@ -102,8 +102,8 @@ test('AC-20260815-01-3: an entry whose only matching key is a RESOLVED row appen
     '--smells', smells, '--date', '2026-08-15'
   ])
   assert.strictEqual(r.status, 0, 'a recurrence-after-RESOLVED run must exit 0: ' + r.stderr)
-  assert.match(r.stdout, /(^|\D)1(\D|$).*appended|appended.*(^|\D)1(\D|$)/i,
-    'exactly one fresh row must be reported appended when the only key match is RESOLVED — recurrence after a paydown is the designed-for signal, not a suppression: got ' + JSON.stringify(r.stdout))
+  assert.match(r.stdout, /📌 Auto-kept 1 advisory row\(s\) — 0 duplicate\(s\) suppressed/,
+    'exactly one fresh row must be reported appended (and none suppressed) when the only key match is RESOLVED — recurrence after a paydown is the designed-for signal, not a suppression: got ' + JSON.stringify(r.stdout))
 
   const content = fs.readFileSync(ledgerPath(root), 'utf8')
   assert.match(content, /RESOLVED 2026-08-14: paid down/,

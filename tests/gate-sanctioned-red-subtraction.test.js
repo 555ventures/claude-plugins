@@ -32,12 +32,16 @@ const { read } = require('./helpers')
 //
 // These pins are deliberately LOOSE (the tests/gate-env-preflight.test.js precedent): they assert
 // that the doctrine states the obligation, not how it is mechanized, so the fix spec keeps its
-// design freedom. EXPECTED RED until that spec lands.
+// design freedom.
+//
+// specs/20260816/02-sanctioned-red-closure.md D6: these four pins are retagged
+// AC-20260816-02-1..4 (closing INTAKE JJ-20260816-03) — green once this spec's doctrine rows
+// land (build.md D4, review.md D1/D2), red before.
 
 const build = read('spec/commands/build.md')
 const review = read('spec/commands/review.md')
 
-test('JJ-20260816-03: gate resolution subtracts the host\'s declared sanctioned-red set, so a red composed only of known pins is not read as a regression', () => {
+test('AC-20260816-02-1: gate resolution subtracts the host\'s declared sanctioned-red set, so a red composed only of known pins is not read as a regression', () => {
   // Deliberately anchored on the gate's own FAILURES being adjudicated: build.md already
   // mentions suite-baseline (Phase 4, after the gate is green), so a bare gate↔baseline
   // proximity match would pass on prose that has nothing to do with this defect.
@@ -49,7 +53,7 @@ test('JJ-20260816-03: gate resolution subtracts the host\'s declared sanctioned-
     'on a provably clean diff (observed: spec 20260815/05, 17/17 failures all baseline)')
 })
 
-test('JJ-20260816-03: a gate red made only of sanctioned pins is routed away from the repair loop, exactly as an unprovisioned environment is', () => {
+test('AC-20260816-02-2: a gate red made only of sanctioned pins is routed away from the repair loop, exactly as an unprovisioned environment is', () => {
   const routedAway = /(sanctioned|baseline|known[- ]failing)[\s\S]{0,300}(never enter|not enter|instead of entering|skip|no repair)[\s\S]{0,120}repair/i
   assert.ok(routedAway.test(build),
     'build doctrine never states that a gate red consisting only of declared sanctioned-red pins ' +
@@ -58,7 +62,7 @@ test('JJ-20260816-03: a gate red made only of sanctioned pins is routed away fro
     'JJ-20260815-08 closed for unprovisioned environment variables')
 })
 
-test('JJ-20260816-03: review\'s at-risk leg adjudicates its failures against the sanctioned-red set instead of spending a per-review human waive', () => {
+test('AC-20260816-02-3: review\'s at-risk leg adjudicates its failures against the sanctioned-red set instead of spending a per-review human waive', () => {
   const mechanized = /at-risk[\s\S]{0,900}(sanctioned[- ]red|suite-baseline)[\s\S]{0,300}(subtract|adjudicat|excluded|not a finding)/i
   assert.ok(mechanized.test(review),
     'review.md still instructs the session to hand-waive a red at-risk leg whose failures are ' +
@@ -68,7 +72,7 @@ test('JJ-20260816-03: review\'s at-risk leg adjudicates its failures against the
     'this leg, or a leg earned by a real escape gets retired as noise it never was')
 })
 
-test('JJ-20260816-03: the run ledger can express a gate red that was entirely sanctioned, so the sanction survives outside console scrollback', () => {
+test('AC-20260816-02-4: the run ledger can express a gate red that was entirely sanctioned, so the sanction survives outside console scrollback', () => {
   // Anchored on a distinct encoding token, not the word "sanctioned" — review.md already uses
   // that word for skip reconciliation, which would make a proximity match pass vacuously.
   const durable = /(subtracted|sanctioned-only)[\s\S]{0,300}qualifier/i

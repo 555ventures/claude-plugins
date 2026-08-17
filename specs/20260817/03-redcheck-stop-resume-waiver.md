@@ -7,7 +7,7 @@ area: build-workflow
 design: false
 breaking: false
 depends_on: []
-depended_on_by: []
+depended_on_by: ["specs/20260817/04-redcheck-sentinel-path-keying.md"]
 brief: n/a
 ---
 

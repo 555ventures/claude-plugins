@@ -21,9 +21,13 @@ const { SPEC } = require('./helpers')
 // path, and the runtime leg must be one probe per file.
 
 const src = fs.readFileSync(path.join(SPEC, 'workflows/src/wf-build.body.js'), 'utf8')
-const start = src.indexOf("phase('RedCheck')")
-assert.ok(start !== -1, 'RedCheck phase missing from wf-build source')
-const end = src.indexOf('FAIL CLOSED', start)
+// Spec 20260817/03 hoists the RedCheck prompt into a top-level redCheckPrompt() function; the
+// slice must keep covering the prompt text wherever it lives, or these pins pass vacuously.
+const fnStart = src.indexOf('function redCheckPrompt')
+const phaseStart = src.indexOf("phase('RedCheck')")
+assert.ok(phaseStart !== -1, 'RedCheck phase missing from wf-build source')
+const start = fnStart !== -1 ? Math.min(fnStart, phaseStart) : phaseStart
+const end = src.indexOf('FAIL CLOSED', phaseStart)
 const redBlock = src.slice(start, end)
 
 test('JJ-20260817-04: the sentinel instruction keys AUDIT_RED/AUDIT_GREEN to the File Plan path even when the runner invocation path was rewritten', () => {
@@ -36,7 +40,10 @@ test('JJ-20260817-04: the sentinel instruction keys AUDIT_RED/AUDIT_GREEN to the
 })
 
 test('JJ-20260817-04: the runtime leg requires one probe invocation per file, not a combined multi-path run', () => {
-  assert.doesNotMatch(redBlock, /Runtime:\s*\$\{args\.gate\.testCommand\}\s*<paths>/,
+  // The token is `args.gate.testCommand` today and becomes `gate.testCommand` after spec
+  // 20260817/03 hoists the prompt into redCheckPrompt(…, gate, …) — the pin must survive that
+  // rename red, or 03's landing would retire it spuriously with the combined-run defect intact.
+  assert.doesNotMatch(src, /Runtime:\s*\$\{(args\.)?gate\.testCommand\}\s*<paths>/,
     'the prompt currently reads "Runtime: <testCommand> <paths>" (plural) inviting one combined ' +
     'invocation across all files, which yields only a single whole-run exit code and cannot ' +
     'attribute pass/fail to any individual file — the observation leg must mandate a separate ' +

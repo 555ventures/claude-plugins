@@ -7,7 +7,7 @@ area: review-integrity
 design: false
 breaking: false
 depends_on: []
-depended_on_by: []
+depended_on_by: ["specs/20260817/05-ac-matrix-anchored-id-match.md"]
 brief: n/a
 ---
 

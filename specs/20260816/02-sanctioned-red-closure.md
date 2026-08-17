@@ -1,6 +1,6 @@
 ---
 date: 2026-08-16
-status: implementing
+status: done
 diff_base: 097e2c1480be65ed3f507bccc4805245c167b798
 open_markers: 0
 risk: T3                 # touches verdict.js (sole-derivation surface, host T3 trigger)
@@ -231,6 +231,38 @@ conformance (intake-discipline: D6 conforms to the enforced grammar; claims-lint
 row planned; drift-reconcile/terminal-observable: consistency suites adjudicated by the
 build-time whole-suite check per the sweep's own contract; scope-reconcile-at-risk: pins
 `scope-reconcile.js` stem derivation, which this spec never touches).
+
+Review disposition (2026-08-17, runs `wf_fd02abb6-ef0` full / `wf_ae30bd4b-7ab` fix-delta,
+verdict `CLEAN-with-qualifier` — this spec's own D2 firing on its own review, gate leg
+`sanctionedReds=22`, at-risk leg `sanctionedReds=7`). The panel returned zero findings both
+iterations; two findings came from the session's corpus sweep and were both **fixed**, not
+waived:
+
+- **hard** — `build.md` Phase 0 step 3 still read "the red-check's per-file probe and every
+  other `testCommand` consumer stay unwrapped", which D1's wrapped at-risk leg falsifies. D9
+  amended 01's D5 *cell* and wired the backlink, but the same claim's restatement in the
+  doctrine prose was never narrowed — build.md was a File Plan row, yet its row summary named
+  only D4, so the worker had no instruction to touch it. This is the corpus-restatement class
+  the host Gotcha names, in a new carrier: the colliding restatement lived *inside* a File Plan
+  file whose row scoped the worker away from it. Fixed by narrowing the prohibition to the
+  red-check probe and expected-red observation paths and naming the at-risk leg as the wrapped
+  adjudication consumer; the pinned literal `testCommand is never wrapped` (AC-20260816-01-9)
+  survives verbatim.
+- **soft** — the ledger-row JSON template's `legs` example still showed the two-key shape,
+  though the File Plan row and the Rationale above both required the optional key there. Fixed;
+  the template now shows `{"leg":"gate","exit":0,"sanctionedReds":<n>},{"leg":"at-risk","exit":0}`.
+
+Both build deviations are absorbed here rather than promoted to Gotchas — each is already a
+standing Gotcha in its own right. The version-target staleness (D8's 6.86.0 taken; landed
+6.91.0, INTAKE `Fixed in` reconciled to match) is the recorded concurrent-semver race. The
+dropped "at-risk pins red: …" headline that reddened `tests/scoped-gate-behavior-collision.test.js`
+mid-build is the colliding-pin class in its behavior-change form; the orchestrator restored the
+headline inside D1's rewritten sentence without weakening the pin.
+
+The Canonical Delta below specified a **new** `docs/canonical/gate-integrity.md` section
+("Sanctioned-red subtraction"), authored before 01's own delta landed. 01 had since created an
+equivalent "Sanctioned-red reconciliation" section, so this spec's content was folded into that
+section instead of shipping a near-duplicate beside it.
 
 ## Canonical Delta
 

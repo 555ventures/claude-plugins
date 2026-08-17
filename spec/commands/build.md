@@ -95,11 +95,14 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
    the resolved command itself contains a double quote or `$`, write it verbatim to a mktemp
    file and use `--gate-file <path>` instead. This wrapped form is what Phase 1's initial gate,
    Phase 4's final gate, and the workflow wave gates (`args.gate.command`) all run.
-   testCommand is never wrapped — the red-check's per-file probe and every other
-   `testCommand` consumer stay unwrapped: wrapping it would let sanctioned subtraction blur
-   the red-check's expected-red observations. A gate failing only against the host's declared
-   sanctioned-red baseline is adjudicated by subtraction, not treated as a regression: it exits
-   0 through the wrapper and therefore never enters the repair loop below — the repair loop is
+   testCommand is never wrapped for the red-check's per-file probe or any other
+   expected-red observation path: wrapping it would let sanctioned subtraction blur the
+   observation that a test is red. An adjudication consumer whose purpose is sanctioned-set
+   subtraction rather than expected-red observation — review's at-risk leg — IS wrapped
+   (specs/20260816/02-sanctioned-red-closure.md D1/D9, amending 01's D5 in place). A gate
+   failing only against the host's declared sanctioned-red baseline is adjudicated by
+   subtraction, not treated as a regression: it exits 0 through the wrapper and therefore
+   never enters the repair loop below — the repair loop is
    structurally incapable of fixing another intake item's open pin (the JJ-20260815-08 category
    error, second class; specs/20260816/02-sanctioned-red-closure.md D4). Also resolve
    `typecheckCommand`: the host's standalone typecheck leg when config or the gate exposes one

@@ -53,8 +53,29 @@ glob form — which reaches build's initial and final gates and the workflow wav
 `args.gate.command`. `review.md` states the wrap in its own gate-leg text (and in its
 fix→re-review re-run) rather than inheriting it by citation, because review is a separate
 session whose citation of build's step 3 is scoped to the glob substitution alone. `testCommand`
-is never wrapped: the red-check's per-file probe and every other expected-red observation path
-must see raw reds.
+is never wrapped for the red-check's per-file probe or any other expected-red observation path:
+those must see raw reds. The one `testCommand` consumer that IS wrapped is review's `at-risk`
+leg — an adjudication consumer whose entire purpose is sanctioned-set subtraction, never an
+expected-red probe — so every gate site in the pipeline (build's gates, the workflow wave gates,
+review's gate leg, review's at-risk leg) adjudicates against the baseline by that one derivation.
+A red at-risk leg therefore means residual failures outside the sanctioned set, and its one
+mechanical hard finding cites exactly the wrapper's `NEW-FAILING` lines; the per-review hand
+waive of a sanctioned at-risk red is retired.
+
+**Green-by-subtraction is always visibly qualified.** A leg that reached green only by
+subtraction records `sanctionedReds=<K>` in its manifest `observed`, `verdict.js` derives
+`CLEAN-with-qualifier` rather than plain `CLEAN` whenever a green `gate` or `at-risk` row
+carries that suffix, and the `--ledger` legs row carries the count as a conditional third key
+(`{leg, exit, sanctionedReds}`; every suffix-free row stays the byte-identical two-key shape).
+That durable encoding is what makes the retire falsifier derivable from `.claude/spec-runs.jsonl`
+alone — a gate or at-risk leg green with `sanctionedReds>0` while the same iteration's suite leg
+reports `newFailing>0` — instead of dying with the console scrollback.
+
+The baseline file is thereby a blocking-gate trust surface: its edits ride only a pin-closing
+spec's File Plan or the `--update` remedy after an adjudicated drift finding, and review's
+out-of-plan hard finding on the file is the enforcement. Scoping the pipeline gate via
+`{testDirs}` buys speed and relevance, never pin-freedom — every pin-closing spec modifies a
+pre-existing top-level test file, so subtraction, not scoping, is what keeps a gate honest.
 
 **The wrapper fails closed on absence of evidence.** Subtraction can only ever turn a red green
 by name-level proof. A child that exits non-zero with a parseable trailer is subtracted; one
@@ -71,4 +92,7 @@ session verified them by hand and overrode the red, the third recurrence of judg
 for derivation at a gate site. The fail-closed and sentinel-anchoring clauses were added at that
 spec's own review (2026-08-17) after execution showed the first implementation reporting green
 for a child killed by a signal, and for a genuinely failing child whose output exceeded the
-default buffer. Registered in `spec/doctrine/scaffold-ledger.md` as a `gate`-kind mechanism.
+default buffer. The at-risk consumer, the `CLEAN-with-qualifier` derivation, and the ledger
+encoding come from `specs/20260816/02-sanctioned-red-closure.md` (run `wf_2222584b-9a8` filed the
+intake row after four consecutive full-scope reviews spent a hand waive on a sanctioned at-risk
+red). Registered in `spec/doctrine/scaffold-ledger.md` as a `gate`-kind mechanism.

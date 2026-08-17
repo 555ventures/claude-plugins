@@ -1,6 +1,6 @@
 ---
 date: 2026-08-15
-status: implementing
+status: done
 diff_base: 23fea7c8d6d2436bc1e5680db78aac867600edfd
 open_markers: 0
 risk: T3                 # edits spec/scripts/verdict.js — the sole derivation of the review/release verdict word (named T3 trigger) — plus the hash-stamped grounding contract
@@ -179,6 +179,12 @@ over INTAKE.md/release.md, tests/terminal-observable-acs.test.js over
 verdict.js/scaffold-ledger, tests/enforce/taxonomy.test.js over grounding-contract,
 tests/claims-lint-baseline-path.test.js) verified at plan time not to close over the changed
 surfaces — waived; the build Phase 4 whole-suite check adjudicates any miss.
+
+Build deviation (folded in at review close 2026-08-17): D8's literal target `6.81.0` was
+already taken at HEAD (`6.86.0`), so the build bumped to the next free `6.87.0` with D8's
+changelog intent intact and amended D8 in place. A4 pre-answers this, and the class already
+carries a `[host]` Gotcha in `.claude/rules/spec-pipeline.md` (concurrent sessions race the
+same semver) — one-off, absorbed here, no new rules entry.
 
 ## Canonical Delta
 

@@ -343,7 +343,12 @@ every turn, which is what keeps its rules followed rather than skimmed.
   init time from the workspace manifest and is otherwise re-discovered by every worker.
   **Environment-gated suites** (`skipIf(!ENV_VAR)` shapes): name each gating variable and the
   provisioning command that satisfies it (Phase 1.5) — review treats a skipped AC-mapped test
-  as a hard finding, so a suite that can't run locally is a defect, not a convention.
+  as a hard finding, so a suite that can't run locally is a defect, not a convention. This
+  step is cross-phase (like Phase 6's `genesisStackDescriptor`/`design.rulesManifest` writes,
+  ~line 474): the same var+provision pairs derived here ALSO get written into
+  `.claude/spec.config.json`'s `testEnv` array (`[{"var": "<NAME>", "provision": "<command>"}]`)
+  — the machine twin `/spec:build`'s Phase 0 preflight and `/spec:doctor`'s check 6b both read.
+  No environment-gated suites found → omit the key entirely (legacy mode, no preflight).
 - **`## Review Checks`** — repo-specific severity calibrations for the reviewer (the plugin's
   generic `reviewer` reads this repo's `.claude/rules/` — this section is where checks
   like "runtime import from a feature barrel in `stores.ts` or `*.test.ts` is **hard**",

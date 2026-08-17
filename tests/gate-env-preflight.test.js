@@ -24,14 +24,14 @@ const { read } = require('./helpers')
 
 const build = read('spec/commands/build.md')
 
-test('JJ-20260815-08: build doctrine preflights the suite-gating environment variables the host declares before running the gate', () => {
+test('AC-20260815-05-5, JJ-20260815-08: build doctrine preflights the suite-gating environment variables the host declares before running the gate', () => {
   assert.match(build, /(preflight|provision)[\s\S]{0,400}(environment variable|env var|suite-gating)/i,
     'nothing in build names an environment preflight, so an unprovisioned variable reaches the ' +
     'gate as an ordinary red and is indistinguishable from broken code — the observed salon-os ' +
     'failure, hit twice')
 })
 
-test('JJ-20260815-08: an unprovisioned environment is routed away from the repair loop and toward the host\'s provisioning path', () => {
+test('AC-20260815-05-6, JJ-20260815-08: an unprovisioned environment is routed away from the repair loop and toward the host\'s provisioning path', () => {
   const nearRepair = /(environment|env)[\s\S]{0,300}(never enter|instead of entering|not enter|skip)[\s\S]{0,80}repair/i
   const nearProvision = /(environment|env)[\s\S]{0,300}(Test Rules)[\s\S]{0,200}(provision)/i
   assert.ok(nearRepair.test(build) || nearProvision.test(build),

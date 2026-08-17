@@ -12,7 +12,9 @@ only when the contract genuinely changes, and never edit it for wording alone.
 `generatedBy`, `contractHash`, `gateCommand`, `testCommand`, `setupCommand`,
 `patternsScript`, `layerGroups`, `agentMap` (must include `tests` and `default`),
 `pipelineRules`, `runtime` (see § Runtime verification). Optional: `driftScript`, `routing`,
-`design`
+`testEnv` (array of `{"var": "<NAME>", "provision": "<command>"}` rows — suite-gating
+environment variables, checked by `env-preflight.js` before `/spec:build`'s and
+`/spec:design`'s gate/repair paths run; absent = legacy mode, no preflight), `design`
 (`tool`/`command`/`storyFormat`/`doctrine`, optional `screenshot`, optional `rulesManifest`),
 `release` (see § Release), `capabilities` (see § Capabilities), the rule-enforcement keys
 `enforcementManifest` and `rulesEnforcementHash` (see § Rule enforcement), and the

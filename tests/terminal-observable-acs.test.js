@@ -198,7 +198,7 @@ test('AC-20260810-02-5: build.md blocked row owes the AC in the same edit as the
 // place that key set is pinned — the fifth recurrence of this exact collision, per D9's own
 // reopen condition — so the new key is added here, in place, rather than left to surface as a
 // mid-build out-of-plan patch.
-test('AC-20260810-02-6, AC-20260814-02-11, AC-20260814-03-13, AC-20260814-05-12, AC-20260815-01-14, AC-20260815-02-13: scaffold-ledger.md gains a gate-kind terminal-observable-ACs row, and verdict.js/spec-paths stay unchanged apart from the registered ci-gate-parity, suite-baseline, collision-closure, advisory-append keys and verdict.js\'s seven-leg REVIEW_LEGS array', () => {
+test('AC-20260810-02-6, AC-20260814-02-11, AC-20260814-03-13, AC-20260814-05-12, AC-20260815-01-14, AC-20260815-02-13: scaffold-ledger.md gains a gate-kind terminal-observable-ACs row, and verdict.js/spec-paths stay unchanged apart from the registered ci-gate-parity, suite-baseline, collision-closure, advisory-append, env-preflight keys and verdict.js\'s seven-leg REVIEW_LEGS array', () => {
   const rowStart = ledger.search(/\| ?Terminal-observable/i)
   assert.notStrictEqual(rowStart, -1,
     'scaffold-ledger.md has no Terminal-observable-ACs row — a new gate mechanism with no ' +
@@ -234,7 +234,7 @@ test('AC-20260810-02-6, AC-20260814-02-11, AC-20260814-03-13, AC-20260814-05-12,
   const specPathsSrc = read('spec/bin/spec-paths')
   const keys = [...specPathsSrc.matchAll(/^ {2}([a-z0-9-]+)\)/gm)].map(m => m[1]).sort()
   const expected = ['ac-matrix', 'advisory-append', 'ci-gate-parity', 'ci-query', 'citations-check', 'claims-lint', 'collision-closure',
-    'components-check', 'contract', 'contract-hash', 'dc-extract', 'design-atlas', 'design-driver', 'feedback-template',
+    'components-check', 'contract', 'contract-hash', 'dc-extract', 'design-atlas', 'design-driver', 'env-preflight', 'feedback-template',
     'fidelity-check', 'hotspot', 'intake', 'manifest-check', 'merge-back', 'observe-ci',
     'parity-check', 'report-render', 'root', 'scaffold-ledger', 'scope-reconcile', 'shared',
     'shared-for', 'shared-genesis', 'skeletons-check', 'smoke', 'spec-status', 'suite-baseline',
@@ -242,11 +242,13 @@ test('AC-20260810-02-6, AC-20260814-02-11, AC-20260814-03-13, AC-20260814-05-12,
     'wf-research', 'wf-review', 'workflows'].sort()
   assert.deepStrictEqual(keys, expected,
     'spec/bin/spec-paths\'s key set (AC-20260812-02-11, AC-20260813-06-11, AC-20260814-01-8, ' +
-    'AC-20260814-02-11, AC-20260814-03-13, AC-20260814-05-12, AC-20260815-01-14) must be exactly ' +
+    'AC-20260814-02-11, AC-20260814-03-13, AC-20260814-05-12, AC-20260815-01-14) ' +
+    'must be exactly ' +
     'the true set scraped from the live case statement, including the pre-existing ' +
     'citations-check key (20260810/09 drift), hotspot-audit\'s hotspot key, report-renderer\'s ' +
     'report-render key, ac-matrix-script\'s ac-matrix key, 20260814/02\'s ci-gate-parity key, ' +
-    '20260814/03\'s suite-baseline key, 20260814/05\'s collision-closure key, and this spec\'s ' +
+    '20260814/03\'s suite-baseline key, 20260814/05\'s collision-closure key, ' +
+    '20260815/05\'s env-preflight key, and this spec\'s ' +
     'new advisory-append key — a mismatch means a key silently drifted or a script shipped ' +
     'unregistered')
 })

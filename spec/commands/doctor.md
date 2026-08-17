@@ -75,9 +75,14 @@ Run these with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:li
      `inert` row declaring CI local-only. CI authored + no remote + no declaration = the
      highest-leverage silent absence on record (UpWell: zero CI executions in 10 days,
      unnoticed).
-   - every env var that gates a test suite (`skipIf`-shaped) has a provisioning path named in
-     pipeline rules § Test Rules — an unsatisfiable gate variable means those suites have
-     never run anywhere; flag loudly with the affected suite count.
+   - every env var that gates a test suite has a provisioning path named in pipeline rules
+     § Test Rules — run `node "$(spec-paths env-preflight)" --root . --rules <pipelineRules>`
+     (registry↔prose cross-check only, never reads `process.env`); exit 3 flags each declared
+     `testEnv` variable absent from § Test Rules, or the `## Test Rules` heading itself absent,
+     with the script's line — an unsatisfiable gate variable means those suites have never run
+     anywhere. The reverse direction — § Test Rules names variables while config carries no
+     `testEnv` registry — stays a one-line legacy-drift model check recommending `/spec:init`
+     refresh (prose has no grammar to parse that direction).
    - **enforcement claims in host docs resolve** — grep `docs/adr/` and `docs/canonical/`
      for enforcement-claim phrases (`CI-verified`, `enforced by`, `gated by`, `checked in
      CI`); each claim must map to a check that actually resolves in the `gateCommand`, the

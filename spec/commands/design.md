@@ -110,6 +110,12 @@ Next: /spec:build specs/20260813/09-example.md
 
 ## Rules (session-binding — the driver cannot enforce these)
 
+- **Preflight the environment before invoking `wf-design`.** `wf-design` splices the same
+  gate-repair loop `wf-build` does — before executing the driver's `wf-design` invocation
+  step, run `node "$(spec-paths env-preflight)" --root .`. Exit 1 is a provisioning
+  STOP: print the script's output verbatim and STOP — an unprovisioned environment must
+  never enter design's gate-repair loop either, same incident class as build (INTAKE
+  JJ-20260815-08).
 - **The expensive model writes no framework code.** It authors `skeletons.json`, adjudicates
   forks, issues visual-review notes and iteration rulings; Sonnet/Haiku apply every edit (sole
   exception: the driver's micro-edit rule for one-line exact-string changes).

@@ -1,6 +1,7 @@
 ---
 date: 2026-08-15
-status: hardened
+status: implementing
+diff_base: 866ce9cc303429e1dab6c75e9f2449a3ea7cf0b2
 open_markers: 0
 risk: T3                 # edits spec/templates/grounding-contract.md (hash-stamped into every host) and spec/bin/spec-paths — both named T3 triggers in pipeline rules § Risk Tiers
 area: gate-integrity

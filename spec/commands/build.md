@@ -101,6 +101,18 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
    filesystem access, but the agents it spawns do, so host rules and doctrines travel as PATHS
    the workers read, never as inline blobs — the closed-alphabet invariant below is what keeps
    `args` from corrupting on this.
+
+   **Immediately after resolving the gate command, preflight the environment.** Run
+   `node "$(spec-paths env-preflight)" --root {root}` — it checks every suite-gating
+   environment variable the host's config `testEnv` registry declares (absent or empty
+   registry = no-op, byte-identical to today). Exit 1 is a provisioning STOP: print the
+   script's output verbatim (each missing variable plus its provisioning command) and STOP
+   here — the run never enters Phase 1, the red-check probe, or any repair loop. An
+   unprovisioned environment must never enter the repair loop: the gate cannot distinguish
+   "the code under test is wrong" from "the environment the test needs was never
+   provisioned", and the repair loop is structurally incapable of fixing the second class —
+   the fix is the provisioning command § Test Rules declares, not a repair dispatch
+   (INTAKE JJ-20260815-08). Exit 0 (including the absent-registry no-op) proceeds normally.
 4. Flip `status: hardened → implementing`. Build never writes `build_base` — that field is owned
    solely by `/git:enter-worktree`, which captures the originating branch before entering the
    worktree. If the build is in place, `build_base` is simply absent and `/spec:review`'s

@@ -9,15 +9,15 @@
       "orphans": 3
     },
     "spec/commands/build.md": {
-      "lines": 357,
-      "orphans": 3
+      "lines": 369,
+      "orphans": 5
     },
     "spec/commands/design.md": {
-      "lines": 200,
-      "orphans": 1
+      "lines": 206,
+      "orphans": 2
     },
     "spec/commands/doctor.md": {
-      "lines": 422,
+      "lines": 427,
       "orphans": 3
     },
     "spec/commands/enforce.md": {
@@ -41,7 +41,7 @@
       "orphans": 2
     },
     "spec/commands/init.md": {
-      "lines": 599,
+      "lines": 604,
       "orphans": 6
     },
     "spec/commands/plan.md": {
@@ -69,7 +69,7 @@
       "orphans": 1
     },
     "spec/doctrine/scaffold-ledger.md": {
-      "lines": 124,
+      "lines": 125,
       "orphans": 4
     },
     "spec/doctrine/shared.md": {
@@ -81,5 +81,5 @@
       "orphans": 5
     }
   },
-  "totalLines": 6218
+  "totalLines": 6247
 }

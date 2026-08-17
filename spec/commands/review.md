@@ -83,19 +83,29 @@ build that is the worktree itself. Phase 4 resolves a second, distinctly named s
    - the host's `gateCommand` — the deterministic gate. Before this leg runs, resolve it exactly
      as `build.md` Phase 0 step 3 already does (cited, not duplicated): `{testDirs}` resolved to
      the glob form before the leg runs, from the spec's File Plan tests rows; unresolvable →
-     `unavailable`, naming the token — never a raw `{testDirs}`-bearing command execution. An
-     `unavailable` gate is a red leg for step 8's purposes (hard-stop before the panel, remedy
-     = fix the host's `gateCommand`/File Plan tests rows so the placeholder resolves), exactly
-     like a failing gate command. **Capture the runner's skip/todo counts** from its output
-     using the host's declared `capabilities.skipReportPattern` (config key, D1 — no format is
-     universal: go test, cargo, pytest without `-rs`, and Gradle all omit skip lines by
-     default): when declared and it matches, capture group 1 as skips and group 2 (if present,
-     else 0) as todos — they feed the skipped-test reconciliation in step 6; when the pattern
-     is absent, `"none"`, or doesn't match, the skip portion is honestly
-     `unavailable — host runner declares no skip format`, never assumed-zero. Leg `gate`,
-     `observed:"skips=<N> todos=<M>"` (or `"unavailable: <token>"` when the gate itself is
-     unresolvable, or `"unavailable — host runner declares no skip format"` when the gate ran
-     but the skip format is undeclared/unmatched).
+     `unavailable`, naming the token — never a raw `{testDirs}`-bearing command execution. **Run
+     the resolved command wrapped through the sanctioned-red baseline** (this wrap is stated
+     here, not cited from build.md — review is a separate session):
+     `node "$(spec-paths suite-baseline)" --gate "<resolved gateCommand>" --root {root}`, or
+     `--gate-file <path>` (verbatim-to-mktemp) when the resolved command contains a double quote
+     or `$`. An `unavailable` gate is a red leg for step 8's purposes (hard-stop before the
+     panel, remedy = fix the host's `gateCommand`/File Plan tests rows so the placeholder
+     resolves), exactly like a failing gate command. **Capture the runner's skip/todo counts**
+     from its output using the host's declared `capabilities.skipReportPattern` (config key, D1
+     — no format is universal: go test, cargo, pytest without `-rs`, and Gradle all omit skip
+     lines by default): when declared and it matches, capture group 1 as skips and group 2 (if
+     present, else 0) as todos — they feed the skipped-test reconciliation in step 6; when the
+     pattern is absent, `"none"`, or doesn't match, the skip portion is honestly
+     `unavailable — host runner declares no skip format`, never assumed-zero. When the wrapped
+     run printed a `__SUITE_BASELINE__` sentinel with `sanctioned=<S>`, S>0, capture S as
+     `sanctionedReds` and append it to `observed`. Leg `gate`,
+     `observed:"skips=<N> todos=<M>"` or `observed:"skips=<N> todos=<M> sanctionedReds=<K>"`
+     (or `"unavailable: <token>"` when the gate itself is unresolvable, or
+     `"unavailable — host runner declares no skip format"` when the gate ran but the skip format
+     is undeclared/unmatched). A gate that went green only because every failure was a
+     sanctioned baseline pin (wrapper exit 0, sentinel `residual=0`) is recorded exit 0 with
+     `sanctionedReds` in `observed` — visibly different from a plainly green gate, never
+     silently identical.
    - `bash $(spec-paths smoke)` — the **boot smoke leg** (shared invariants § Runtime
      Verification). Exit 0 = boot observed ready **and stopped cleanly on the declared stop
      signal**; exit 4 = runtime declared inert (sanctioned, note it in the verdict); any other
@@ -376,7 +386,11 @@ defect," and it must be made against the author's recorded intent, not recalled 
   path, never the prior iteration's — stale rows cannot leak into the new derivation), and
   **re-run the `gate`, `smoke`, `ac-matrix`, `skip-reconcile`, and `ci` legs into it** (the
   existing fix-delta full-gate-reassertion rule, made mechanical — `reconcile` stays exempt,
-  matching Phase 0 step 2's `scope: "fix-delta"` skip). Write the surviving findings to a temp
+  matching Phase 0 step 2's `scope: "fix-delta"` skip). The re-run `gate` leg is the same
+  wrapped invocation as step 3 above —
+  `node "$(spec-paths suite-baseline)" --gate "<resolved gateCommand>" --root {root}` (or
+  `--gate-file`) — never the bare resolved command; a fix→re-review iteration re-derives
+  `sanctionedReds` exactly as the first pass did. Write the surviving findings to a temp
   JSON file, and re-invoke the workflow with `scope: "fix-delta"`, `prevFindingsPath: <that
   file>`, `reconcilePath: ''` (the fix diff is by definition responding to findings, not new
   scope to reconcile), and `base: <the commit the just-reviewed diff ended at>` — one reviewer

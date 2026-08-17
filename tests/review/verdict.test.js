@@ -258,7 +258,7 @@ test('AC-20260805-02-5: --ledger derives row.smoke from the manifest smoke row e
     'history, not just on stderr: ' + JSON.stringify(failRow))
 })
 
-test('AC-20260813-02-7 (updates AC-20260805-02-5): --ledger derives row.testsSkipped.total as skips+todos from the gate row\'s pinned "skips=N todos=M" observed format — the total-summing claim survives the D2 object-shape change', () => {
+test('AC-20260813-02-7 (updates AC-20260805-02-5) / AC-20260816-01-7 (CONTINUES TO hold post-D6): --ledger derives row.testsSkipped.total as skips+todos from the gate row\'s pinned "skips=N todos=M" observed format — the total-summing claim survives the D2 object-shape change and the D6 suffix-tolerance change', () => {
   const dir = tmpdir('verdict')
   const rows = SIX_GREEN.map(r => (r.leg === 'gate' ? { leg: 'gate', exit: 0, observed: 'skips=2 todos=1' } : r))
   const manifest = writeManifest(dir, rows)
@@ -273,6 +273,53 @@ test('AC-20260813-02-7 (updates AC-20260805-02-5): --ledger derives row.testsSki
     'D2 pins the gate leg\'s observed format as "skips=N todos=M" specifically so testsSkipped.total can be ' +
     'summed from it (a skip is not a pass) — skips=2 todos=1 must derive total 3, not 2 or 1 alone: ' +
     JSON.stringify(row))
+})
+
+test('AC-20260816-01-8: --ledger reads a gate row observed "skips=2 todos=1 sanctionedReds=21" and derives row.testsSkipped.total = 3 identically to the suffix-free form — the sanctionedReds suffix is tolerated and never summed into the total', () => {
+  const dir = tmpdir('verdict')
+  const rows = SIX_GREEN.map(r => (r.leg === 'gate'
+    ? { leg: 'gate', exit: 0, observed: 'skips=2 todos=1 sanctionedReds=21' } : r))
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger'])
+  const row = JSON.parse(r.stdout.trim().split('\n')[1])
+  assert.strictEqual(row.testsSkipped.total, 3,
+    'D6: deriveTestsSkipped\'s gate-row regex must tolerate the optional " sanctionedReds=<K>" trailer and ' +
+    'still derive total 3 (skips=2 + todos=1) — summing the 21 sanctioned reds into the total (giving 24), or ' +
+    'failing to match the trailer at all (giving 0), would both corrupt the ledger\'s testsSkipped accounting ' +
+    'the moment review.md starts appending the suffix on a green-by-subtraction gate: ' + JSON.stringify(row))
+})
+
+// specs/20260816/01-gate-baseline-reconcile.md D10 (retainer ruling, 2026-08-17, tdd-red-check
+// consult): AC-20260816-01-12 is a sanctioned-green regression pin, standalone (never folded
+// onto AC-8's testsSkipped-total test, which pins a different observable — see D10's rationale).
+// The verdict word derives from leg exit codes alone (derive()/legIsRed reads row.exit, never
+// row.observed), so a gate row's "sanctionedReds=<K>" suffix must never perturb it — this test
+// is specified to already pass, and its falsifiability is demonstrated in-line by mutating the
+// same fixture's gate exit to 1 and asserting the word flips to GATE_RED (D10: verified by
+// mutation, never by weakening).
+test('AC-20260816-01-12: a green-by-subtraction gate row (exit:0, observed "skips=0 todos=0 sanctionedReds=21") with all other legs green and a clean workflow return derives a CLEAN-family word, never GATE_RED — the terminal observable of the spec\'s chain', () => {
+  const dir = tmpdir('verdict')
+  const rows = SIX_GREEN.map(r => (r.leg === 'gate'
+    ? { leg: 'gate', exit: 0, observed: 'skips=0 todos=0 sanctionedReds=21' } : r))
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
+  assert.match(r.stdout.split('\n')[0], /^CLEAN/,
+    'a gate leg that went green by sanctioned-baseline subtraction is still exit:0 — derive()/legIsRed reads ' +
+    'only the exit code, never the observed string, so a review that closed via suite-baseline.js --gate must ' +
+    'still reach a CLEAN-family verdict, not be misread as red because its observed text names 21 sanctioned ' +
+    'reds: ' + r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 0, 'a CLEAN-family word here must exit 0: ' + r.stderr)
+
+  const redRows = SIX_GREEN.map(r => (r.leg === 'gate'
+    ? { leg: 'gate', exit: 1, observed: 'skips=0 todos=0 sanctionedReds=21' } : r))
+  const redManifest = writeManifest(dir, redRows)
+  const rRed = runNode(SCRIPT, ['--manifest', redManifest, '--workflow', workflow])
+  assert.strictEqual(rRed.stdout.split('\n')[0], 'GATE_RED',
+    'falsifiability check (D10): the exact same sanctionedReds=21 observed text with the gate row\'s exit ' +
+    'flipped to 1 must derive GATE_RED — proving the pin above is actually sensitive to the gate leg\'s exit ' +
+    'code and is not a vacuously-true assertion: ' + rRed.stdout + ' / ' + rRed.stderr)
 })
 
 test('AC-20260813-02-1: --ledger derives row.testsSkipped as {total,sanctioned,unsanctioned} from the gate row\'s skips+todos and the skip-reconcile row\'s "skipped=K sanctioned=S" observed format', () => {

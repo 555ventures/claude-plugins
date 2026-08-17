@@ -287,6 +287,95 @@ test('AC-20260814-03-16: a "flaky": true baseline row is exempt from both pre-im
     'the flaky exemption must apply to the pre-image comparison, not just the baseline comparison: ' + out(r))
 })
 
+// specs/20260816/01-gate-baseline-reconcile.md: a fourth mode, --gate, wraps an arbitrary
+// resolved gate command and subtracts sanctioned baseline pins from its observed failing set
+// by derivation — the reconciliation a session used to perform by hand (2026-08-15 review of
+// specs/20260815/01, 21 sanctioned reds hand-verified and the gate re-scoped around them).
+
+test('AC-20260816-01-1: --gate on a command that exits 0 exits 0, passes the child output through unchanged, and prints no __SUITE_BASELINE__ sentinel', () => {
+  const dir = tmpdir('sb-gate-ac1')
+  const r = run(['--gate', 'echo ok; true', '--root', dir])
+  assert.strictEqual(r.status, 0,
+    'a green child command must make --gate exit 0 — the wrapper must be invisible on a green gate: ' + out(r))
+  assert.match(out(r), /ok/,
+    'the child\'s own stdout must pass through unchanged so a green gate reads exactly as an unwrapped gate: ' + out(r))
+  assert.doesNotMatch(out(r), /__SUITE_BASELINE__/,
+    'a green child run must print no sentinel at all — a sentinel here would falsely imply subtraction happened: ' + out(r))
+})
+
+test('AC-20260816-01-2: --gate on a non-zero command whose every parsed failure matches a baseline row (flaky rows counting as matched) reports residual=0 and exits 0', () => {
+  const dir = tmpdir('sb-gate-ac2')
+  writeTests(dir, 't.test.js', [{ name: 'it fails', fails: true }])
+  writeBaseline(dir, [{ file: 't.test.js', name: 'it fails' }])
+
+  const r = run(['--gate', 'node --test t.test.js', '--root', dir])
+  assert.strictEqual(r.status, 0,
+    'a red child run whose only failure is a sanctioned baseline pin must make --gate exit 0 — this is the whole point of the reconciliation: ' + out(r))
+  assert.match(out(r), /__SUITE_BASELINE__ failing=1 sanctioned=1 residual=0/,
+    'the sentinel must report the exact failing/sanctioned/residual counts so review/build gate legs can record sanctionedReds: ' + out(r))
+})
+
+test('AC-20260816-01-3: --gate on a non-zero command with one sanctioned and one unsanctioned failure prints exactly one NEW-FAILING line, a residual=1 sentinel, and exits 1', () => {
+  const dir = tmpdir('sb-gate-ac3')
+  writeTests(dir, 't.test.js', [
+    { name: 'sanctioned fail', fails: true },
+    { name: 'unsanctioned fail', fails: true },
+  ])
+  writeBaseline(dir, [{ file: 't.test.js', name: 'sanctioned fail' }])
+
+  const r = run(['--gate', 'node --test t.test.js', '--root', dir])
+  assert.strictEqual(r.status, 1,
+    'a genuinely new (non-baseline) failure must make --gate exit 1 — subtraction must never mask real breakage: ' + out(r))
+  const newFailingLines = (out(r).match(/^NEW-FAILING /gm) || [])
+  assert.strictEqual(newFailingLines.length, 1,
+    'exactly one NEW-FAILING line must be printed, naming only the residual (non-sanctioned) failure, never the sanctioned one too: ' + out(r))
+  assert.match(out(r), /NEW-FAILING\s+\S*t\.test\.js\s*::\s*unsanctioned fail/,
+    'the single NEW-FAILING line must name the unsanctioned failure specifically: ' + out(r))
+  assert.doesNotMatch(out(r), /NEW-FAILING\s+\S*t\.test\.js\s*::\s*sanctioned fail/,
+    'the sanctioned failure must never appear as a NEW-FAILING line — it is subtracted, not merely counted: ' + out(r))
+  assert.match(out(r), /__SUITE_BASELINE__ failing=2 sanctioned=1 residual=1/,
+    'the sentinel must report failing=2 sanctioned=1 residual=1, matching one real new failure against two total: ' + out(r))
+})
+
+test('AC-20260816-01-4: --gate on a non-zero command with no parseable "✖ failing tests:" trailer prints the passthrough note and exits with the child\'s own exit code', () => {
+  const dir = tmpdir('sb-gate-ac4')
+  const r = run(['--gate', 'exit 7', '--root', dir])
+  assert.strictEqual(r.status, 7,
+    'a non-zero child with no parseable trailer must pass the child\'s own exit code through — the wrapper must never guess or normalize it: ' + out(r))
+  assert.match(out(r), /suite-baseline: no failing-test trailer — exit 7 passed through/,
+    'the documented passthrough note line must name the child\'s exact exit code — without it a non-test failure (e.g. build-workflows --check) looks unexplained: ' + out(r))
+})
+
+test('AC-20260816-01-5: --gate with no .claude/suite-baseline.json file treats the sanctioned set as empty, so a single failure is fully residual and exits 1', () => {
+  const dir = tmpdir('sb-gate-ac5')
+  writeTests(dir, 't.test.js', [{ name: 'it fails', fails: true }])
+  // deliberately no writeBaseline() call — pin-free host
+
+  const r = run(['--gate', 'node --test t.test.js', '--root', dir])
+  assert.strictEqual(r.status, 1,
+    'an absent baseline must behave exactly as an unwrapped gate — every failure is residual: ' + out(r))
+  assert.match(out(r), /__SUITE_BASELINE__ failing=1 sanctioned=0 residual=1/,
+    'the sentinel must report sanctioned=0 when no baseline file exists at all: ' + out(r))
+  assert.match(out(r), /NEW-FAILING\s+\S*t\.test\.js\s*::\s*it fails/,
+    'the lone failure must still be named as NEW-FAILING on a pin-free host: ' + out(r))
+})
+
+test('AC-20260816-01-6: --gate strips NODE_TEST_CONTEXT before spawning the child, so a `node --test` child actually executes its files instead of silently skipping them', () => {
+  const dir = tmpdir('sb-gate-ac6')
+  writeTests(dir, 't.test.js', [{ name: 'it fails', fails: true }])
+
+  // Simulate the wrapper itself running from inside a `node --test` parent (as this very test
+  // file does): NODE_TEST_CONTEXT is set in this process's env and inherited by spawnSync
+  // unless the wrapper explicitly strips it before invoking the child.
+  const r = runNode(SCRIPT, ['--gate', 'node --test t.test.js', '--root', dir],
+    { env: { ...process.env, NODE_TEST_CONTEXT: '1' } })
+
+  assert.strictEqual(r.status, 1,
+    'with NODE_TEST_CONTEXT stripped the child must actually execute t.test.js and observe its one real failure, exiting 1 — a leaked NODE_TEST_CONTEXT makes the nested `node --test` silently skip execution and exit 0 instead: ' + out(r))
+  assert.match(out(r), /__SUITE_BASELINE__ failing=1 sanctioned=0 residual=1/,
+    'the sentinel must report the actually-observed failure count, proving the child ran the file rather than silently no-op-ing under an inherited NODE_TEST_CONTEXT: ' + out(r))
+})
+
 test('AC-20260814-03-17: --check --pre with a missing or unparseable pre-image file exits 2 naming the remedy, never silently degrading to a baseline-only comparison', () => {
   const dir = tmpdir('sb-ac17')
   writeConfig(dir, 'node --test t.test.js')

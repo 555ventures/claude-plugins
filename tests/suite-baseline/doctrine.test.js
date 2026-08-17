@@ -18,6 +18,7 @@ const { read, runNode, tmpdir } = require('../helpers')
 const reviewDoc = read('spec/commands/review.md')
 const buildDoc = read('spec/commands/build.md')
 const rulesDoc = read('.claude/rules/spec-pipeline.md')
+const gateLoopFrag = read('spec/workflows/fragments/gate-loop.js.frag')
 
 function between(src, startMarker, endMarker) {
   const start = src.indexOf(startMarker)
@@ -131,7 +132,7 @@ test('AC-20260814-03-11: .claude/rules/spec-pipeline.md Test Rules names .claude
 // (never on resume), the exactly-once Phase 4 --pre check after the gate is green, the
 // four-way disposition literally, and Phase 0 step 3's gate resolution continues to carry no
 // suite-baseline invocation (D9's surviving fence: the inner scoped-gate loop stays scoped).
-test('AC-20260814-03-12: build.md states the Phase 0 pre-image snapshot, the exactly-once Phase 4 --pre check, the four-way disposition, and step 3\'s gate resolution stays free of suite-baseline', () => {
+test('AC-20260814-03-12 / AC-20260816-01-9 (fence narrowed 2026-08-17 by specs/20260816/01 D5): build.md states the Phase 0 pre-image snapshot, the exactly-once Phase 4 --pre check, the four-way disposition, and step 3\'s gate resolution stays free of whole-suite suite-baseline modes (--gate wrap permitted)', () => {
   const diffBaseWrite = between(buildDoc, 'write `diff_base:', '## Phase 1')
   assert.match(diffBaseWrite, /--snapshot/,
     'the diff_base-writing step must capture the pre-image via --snapshot — without it Phase ' +
@@ -175,9 +176,83 @@ test('AC-20260814-03-12: build.md states the Phase 0 pre-image snapshot, the exa
     'while also routing exit 2 to escalate leaves the orchestrator with two contradictory ' +
     'prescriptions for the same observable and it will pick one at random per session')
 
+  // Narrowed 2026-08-17 (specs/20260816/01 D5, retainer ruling D11): the original blanket
+  // doesNotMatch(/suite-baseline/) was a proxy exact only while every suite-baseline mode ran
+  // the whole suite. --gate wraps the already-scoped command, spawns one child, and never runs
+  // a second suite (20260816/01 Behavior), so D9's fence — repair loops never pay a full-suite
+  // run — is untouched by its presence here. The fence now pins the real hazard alphabet.
   const step3 = between(buildDoc, '3. **Resolve the gate.**', '4. Flip')
-  assert.doesNotMatch(step3, /suite-baseline/,
-    'Phase 0 step 3\'s gate resolution SHALL CONTINUE TO carry no suite-baseline invocation — ' +
-    'D9\'s fence keeps the pre-image check out of the inner scoped-gate resolution entirely; a ' +
-    'mention here means the check leaked into the loop this spec\'s Rationale explicitly guards')
+  assert.doesNotMatch(step3, /--(check|snapshot|update|pre)\b/,
+    'Phase 0 step 3\'s gate resolution SHALL CONTINUE TO carry no whole-suite suite-baseline ' +
+    'mode (--check/--pre/--snapshot/--update) — D9\'s fence (specs/20260814/03) keeps the ' +
+    'pre-image machinery out of the inner scoped-gate resolution so repair loops never pay a ' +
+    'full-suite run per round; a hit here means the check leaked into the loop that fence ' +
+    'guards. The --gate wrap (specs/20260816/01 D5) is permitted by construction: one child, ' +
+    'the already-scoped command, no second suite')
+})
+
+// AC-20260816-01-9: specs/20260816/01-gate-baseline-reconcile.md D5 — build.md Phase 0 step 3
+// wraps the resolved gateCommand via `spec-paths suite-baseline --gate` (with the
+// `--gate-file` escape for a resolved command containing `"` or `$`), and states that
+// `testCommand` is never wrapped.
+test('AC-20260816-01-9: build.md Phase 0 step 3 states the resolved gateCommand is wrapped via spec-paths suite-baseline --gate (with a --gate-file escape) and that testCommand is never wrapped', () => {
+  const step3 = between(buildDoc, '3. **Resolve the gate.**', '4. Flip')
+  assert.match(step3, /spec-paths suite-baseline\)"\s+--gate\b/,
+    'Phase 0 step 3 must wrap the resolved gateCommand through `spec-paths suite-baseline` ' +
+    '--gate — without this the scoped gate keeps red-gating on sanctioned baseline pins exactly ' +
+    'as it did the 2026-08-15 review this spec exists to fix')
+  assert.match(step3, /--gate-file/,
+    'Phase 0 step 3 must document the --gate-file escape for a resolved command containing a ' +
+    'double quote or $ — without it a resolved gateCommand with those characters breaks the ' +
+    '--gate "<command>" quoting silently')
+  assert.match(step3, /testCommand is never wrapped/,
+    'Phase 0 step 3 must state explicitly that testCommand is never wrapped — without this ' +
+    'clause a worker could plausibly wrap the red-check\'s per-file probe too, blurring its ' +
+    'expected-red observations (D5\'s named rejection)')
+})
+
+// AC-20260816-01-10: specs/20260816/01-gate-baseline-reconcile.md D5+D6 — review.md's own gate
+// leg text (never by citation of build.md — the JJ-20260815-04 citation-scope incident) states
+// the --gate wrap, requires capturing sanctionedReds from the sentinel into observed, and the
+// fix→re-review gate re-run names the same wrapped invocation.
+test('AC-20260816-01-10: review.md states the gate leg\'s own --gate wrap explicitly, requires capturing sanctionedReds into observed, and the fix→re-review gate re-run names the same wrapped invocation', () => {
+  const gateLeg = between(reviewDoc, 'the host\'s `gateCommand` — the deterministic gate.', 'the **boot smoke leg**')
+  assert.match(gateLeg, /spec-paths suite-baseline\)"\s+--gate\b/,
+    'review.md\'s gate leg must state the --gate wrap in its OWN invocation text — D5 requires ' +
+    'this because review re-derives the gate in its own session and a citation of build.md\'s ' +
+    'step 3 (which resolves {testDirs} only) does not carry the wrap across, exactly the ' +
+    'JJ-20260815-04 citation-scope incident this spec\'s adversarial check caught')
+  assert.match(gateLeg, /sanctionedReds/,
+    'review.md\'s gate leg must require capturing sanctionedReds from the __SUITE_BASELINE__ ' +
+    'sentinel into the gate row\'s observed field when sanctioned>0 — without this the manifest ' +
+    'cannot distinguish a plainly green gate from a green-by-subtraction one')
+
+  const fixReReview = between(reviewDoc, '**Fix** — dispatch Sonnet workers', 'Waive')
+  assert.match(fixReReview, /spec-paths suite-baseline\)"\s+--gate\b/,
+    'the fix→re-review gate re-run must name the same wrapped `--gate` invocation — a re-review ' +
+    'that re-runs the gate leg unwrapped would red-gate on sanctioned pins exactly as the ' +
+    'original gate leg does without the wrap')
+})
+
+// AC-20260816-01-11: specs/20260816/01-gate-baseline-reconcile.md D7 — the gate-loop fragment
+// gains one prompt sentence teaching the gate agent to read the __SUITE_BASELINE__ sentinel,
+// with no per-workflow substitution token inside it so the spliced region stays byte-identical
+// in wf-build.js and wf-design.js (twin-parity pin AC-20260813-05-7).
+test('AC-20260816-01-11: the gate-loop fragment contains the D7 sentence naming __SUITE_BASELINE__ and residual=0, with no per-workflow substitution token inside it', () => {
+  assert.match(gateLoopFrag,
+    /If the output contains a __SUITE_BASELINE__ line with residual=0, every ✖ failure it counted\s*\n?\s*is a sanctioned baseline pin — do not list any of them as failures\./,
+    'the gate-loop fragment must contain the exact D7 sentence — without it a gate agent may ' +
+    'enumerate sanctioned ✖ lines as failures and the self-contradiction guard flips a true ' +
+    'pass to false, burning repair rounds on unfixable baseline pins')
+
+  const sentenceStart = gateLoopFrag.indexOf('If the output contains a __SUITE_BASELINE__')
+  assert.ok(sentenceStart !== -1,
+    'the D7 sentence must be present in the fragment before its splice-token isolation can be checked')
+  const sentenceEnd = gateLoopFrag.indexOf('failures.', sentenceStart) + 'failures.'.length
+  const sentence = gateLoopFrag.slice(sentenceStart, sentenceEnd)
+  assert.doesNotMatch(sentence, /\$\{[a-zA-Z]+\}|__WF_NAME__/,
+    'the D7 sentence must carry no per-workflow-name splice substitution token (e.g. `${wfName}` ' +
+    'or `__WF_NAME__`) — build-workflows.js applies per-workflow substitution to such tokens, ' +
+    'which would break the twin-parity byte-identical splice pin (AC-20260813-05-7) between ' +
+    'wf-build.js and wf-design.js')
 })

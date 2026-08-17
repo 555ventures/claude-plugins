@@ -89,7 +89,15 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
    form the host's runner actually executes — for `node --test` that is the glob form**
    (`node --test 'tests/<dir>/*.test.js'`; a bare directory does not run its test files on
    Node 26 — it reports MODULE_NOT_FOUND and exits non-zero, a red leg with nothing wrong
-   under it; reproduced twice in this repo, INTAKE JJ-20260815-04). Also resolve
+   under it; reproduced twice in this repo, INTAKE JJ-20260815-04). **Wrap the resolved
+   `gateCommand`** through the sanctioned-red baseline before running or passing it anywhere:
+   `node "$(spec-paths suite-baseline)" --gate "<resolved gateCommand>" --root {root}` — when
+   the resolved command itself contains a double quote or `$`, write it verbatim to a mktemp
+   file and use `--gate-file <path>` instead. This wrapped form is what Phase 1's initial gate,
+   Phase 4's final gate, and the workflow wave gates (`args.gate.command`) all run.
+   testCommand is never wrapped — the red-check's per-file probe and every other
+   `testCommand` consumer stay unwrapped: wrapping it would let sanctioned subtraction blur
+   the red-check's expected-red observations. Also resolve
    `typecheckCommand`: the host's standalone typecheck leg when config or the gate exposes one
    (e.g. a `typecheck` script the gateCommand composes); `''` when the host has none. The
    red-check treats a file as red if it fails **either** leg — a test red only under typecheck

@@ -66,6 +66,12 @@
 // the profile) are de-duplicated; the flag never removes or reorders a profile's built-in legs.
 // This is the one accumulator flag — every other flag here is scalar-overwrite.
 //
+// Incident (2026-08-16, spec gate-baseline-reconcile D6): a scoped gate that goes green only
+// because suite-baseline.js's --gate wrapper subtracted sanctioned baseline pins now appends
+// ` sanctionedReds=<K>` to the gate leg's observed string (review.md), so the manifest stays
+// honest about a green-by-subtraction gate. deriveTestsSkipped's regex tolerates the optional
+// suffix and never sums K into testsSkipped.total — the suffix is provenance, not a skip count.
+//
 // Exit codes: 0 = derived CLEAN or CLEAN-with-qualifier · 1 = derived other non-CLEAN word
 // (still printed on stdout line 1) · 2 = usage error, missing/unreadable --manifest or
 // --workflow file, a disposition contradiction (--waived + --rejected + --fixDispatched
@@ -235,7 +241,7 @@ function deriveSmoke(row) {
 }
 
 function deriveTestsSkipped(gateRow, skipReconcileRow) {
-  const gm = gateRow && /^skips=(\d+) todos=(\d+)$/.exec(gateRow.observed || '')
+  const gm = gateRow && /^skips=(\d+) todos=(\d+)(?: sanctionedReds=\d+)?$/.exec(gateRow.observed || '')
   const total = gm ? Number(gm[1]) + Number(gm[2]) : 0
   const sm = skipReconcileRow && /^skipped=(\d+)(?: sanctioned=(\d+))?$/.exec(skipReconcileRow.observed || '')
   const sanctioned = sm && sm[2] !== undefined ? Number(sm[2]) : 0

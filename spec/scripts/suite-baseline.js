@@ -13,23 +13,42 @@
 //   suite-baseline.js --check [--pre <file>] --root <dir>
 //   suite-baseline.js --update --root <dir>
 //   suite-baseline.js --snapshot --out <file> --root <dir>
+//   suite-baseline.js --gate "<command>" --root <dir>
+//   suite-baseline.js --gate-file <path> --root <dir>    # command read verbatim from <path>,
+//                                                         # for commands containing '"' or '$'
 //
 // What it deliberately does NOT do: create or consult a second (base-commit) worktree, compare
-// counts instead of names, attribute a drift to a cause beyond the pre-image axis, or add a
-// capabilities key to the grounding contract.
+// counts instead of names, attribute a drift to a cause beyond the pre-image axis, add a
+// capabilities key to the grounding contract, or (--gate/--gate-file) compute fixedNotRemoved —
+// a scoped gate run doesn't execute most baseline files, so absence proves nothing; that stays
+// --check's job (specs/20260816/01-gate-baseline-reconcile.md D3).
+//
+// Incident (2026-08-16, spec gate-baseline-reconcile): the scoped gate exits red on a spec's
+// sanctioned always-red intake pins for reasons unrelated to the spec, and a session hand-
+// verified the red names against the baseline and overrode it — judgment substituting for
+// derivation, the third recurrence of the class. --gate/--gate-file (D1) run the wrapped
+// command through this same failing-set differ and subtract the baseline by name on the way
+// out, so a red gate whose only failures are sanctioned pins now exits 0 by derivation.
 //
 // Exit codes:
 //   0  --check: observed failing set exactly matches the baseline (flaky-exempt) ·
-//      --update: baseline rewritten · --snapshot: file written
-//   1  --check only: drift (NEW-FAILING / FIXED-NOT-REMOVED lines printed)
+//      --update: baseline rewritten · --snapshot: file written ·
+//      --gate/--gate-file: child exited 0, OR child exited non-zero and every parsed failure is
+//      sanctioned (residual=0)
+//   1  --check only: drift (NEW-FAILING / FIXED-NOT-REMOVED lines printed) ·
+//      --gate/--gate-file only: residual>0 (NEW-FAILING lines + sentinel printed)
 //   2  usage · unreadable/corrupt baseline or --pre JSON · config has no testCommand
-//   4  unavailable — the suite exited non-zero but no `✖ failing tests:` trailer was
-//      parseable; --snapshot writes NO file in this case
+//   4  --check/--update/--snapshot only: the suite exited non-zero but no `✖ failing tests:`
+//      trailer was parseable; --snapshot writes NO file in this case
+//   <child's exit code>  --gate/--gate-file only: child exited non-zero with no parseable
+//      trailer — passthrough (a note line is printed; never exit 4, since the gate must report
+//      the real failure, not a fixed sentinel)
 //
 // The observed failing set: suite exit 0 → empty, by definition, zero output parsing. Suite
 // exit non-zero → parse the node:test spec-reporter trailer from the `✖ failing tests:`
 // marker, pairing each `test at <file>:<line>:<col>` line with its following
-// `✖ <name> (<duration>)` line; unparseable → exit 4, never a guess.
+// `✖ <name> (<duration>)` line; unparseable → exit 4 (--check/--update/--snapshot) or
+// passthrough (--gate/--gate-file), never a guess.
 
 const fs = require('fs')
 const path = require('path')
@@ -38,7 +57,8 @@ const { readConfig } = require('./lib/host-config')
 
 function usage(msg) {
   console.error(`suite-baseline: ${msg}`)
-  console.error('usage: suite-baseline.js (--check [--pre <file>] | --update | --snapshot --out <file>) --root <dir>')
+  console.error('usage: suite-baseline.js (--check [--pre <file>] | --update | --snapshot --out <file> | ' +
+    '--gate "<command>" | --gate-file <path>) --root <dir>')
   process.exit(2)
 }
 
@@ -51,21 +71,32 @@ let mode = null
 let root = '.'
 let pre = null
 let out = null
+let gateCommand = null
+let gateFile = null
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
   if (a === '--check' || a === '--update' || a === '--snapshot') {
-    if (mode) usage(`--check, --update, and --snapshot are mutually exclusive`)
+    if (mode) usage(`--check, --update, --snapshot, --gate, and --gate-file are mutually exclusive`)
     mode = a.slice(2)
+  } else if (a === '--gate') {
+    if (mode) usage(`--check, --update, --snapshot, --gate, and --gate-file are mutually exclusive`)
+    mode = 'gate'
+    gateCommand = argv[++i]
+  } else if (a === '--gate-file') {
+    if (mode) usage(`--check, --update, --snapshot, --gate, and --gate-file are mutually exclusive`)
+    mode = 'gate'
+    gateFile = argv[++i]
   } else if (a === '--root') root = argv[++i]
   else if (a === '--pre') pre = argv[++i]
   else if (a === '--out') out = argv[++i]
   else usage(`unrecognized flag '${a}'`)
 }
-if (!mode) usage('one of --check, --update, or --snapshot is required')
+if (!mode) usage('one of --check, --update, --snapshot, --gate, or --gate-file is required')
 if (mode === 'snapshot' && !out) usage('--snapshot requires --out <file>')
 if (out && mode !== 'snapshot') usage('--out is only valid with --snapshot')
 if (pre && mode !== 'check') usage('--pre is only valid with --check')
+if (mode === 'gate' && !gateCommand && !gateFile) usage('--gate requires a command or --gate-file requires a path')
 
 // ---- shared helpers -----------------------------------------------------------------------
 
@@ -217,6 +248,47 @@ function doSnapshot() {
   process.exit(0)
 }
 
+// ---- --gate / --gate-file ------------------------------------------------------------------
+//
+// D1-D4: run the resolved gate command through the same failing-set differ, subtract the
+// baseline by name, and turn a red gate whose only failures are sanctioned pins into an exit
+// 0 — deterministically, never by a session hand-verifying names against the baseline. D3:
+// asymmetric by design — only the residual (observed minus baseline) is computed, never
+// fixedNotRemoved; a scoped gate run doesn't execute most baseline files, so absence proves
+// nothing there.
+
+function doGate() {
+  let cmd = gateCommand
+  if (gateFile) {
+    try {
+      cmd = fs.readFileSync(gateFile, 'utf8')
+    } catch {
+      fail2(`--gate-file ${gateFile} does not exist or is not readable`)
+    }
+  }
+  const baselineRows = readBaselineFile(path.join(root, '.claude', 'suite-baseline.json'), 'baseline', true)
+  const flakyKeys = new Set(baselineRows.filter(r => r.flaky).map(keyOf))
+  const baselineKeys = new Set(baselineRows.filter(r => !r.flaky).map(keyOf))
+
+  const r = runSuite(root, cmd)
+  const combined = (r.stdout || '') + '\n' + (r.stderr || '')
+  process.stdout.write(combined)
+
+  if (r.status === 0) process.exit(0)
+
+  const pairs = extractFailing(root, combined)
+  if (pairs === null) {
+    console.log(`suite-baseline: no failing-test trailer — exit ${r.status} passed through`)
+    process.exit(r.status)
+  }
+
+  const residual = sortRows(pairs.filter(o => !baselineKeys.has(keyOf(o)) && !flakyKeys.has(keyOf(o))))
+  for (const row of residual) console.log(`NEW-FAILING ${row.file} :: ${row.name}`)
+  console.log(`__SUITE_BASELINE__ failing=${pairs.length} sanctioned=${pairs.length - residual.length} residual=${residual.length}`)
+  process.exit(residual.length > 0 ? 1 : 0)
+}
+
 if (mode === 'check') doCheck()
 else if (mode === 'update') doUpdate()
-else doSnapshot()
+else if (mode === 'snapshot') doSnapshot()
+else doGate()

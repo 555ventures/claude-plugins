@@ -180,9 +180,14 @@ pins, falsifying pipeline rules § Test Rules' stated premise that "pipeline-aut
 under `tests/<scope>/` … so scoped gate runs are pin-free". The gate leg was therefore recorded
 against the host rules' other sanctioned scoping (`node --test tests/<file>`, § Test Rules'
 "Scoped runs" clause): 22/22 green over this spec's three test files, with `build-workflows
---check` green and the suite leg proving zero drift. The mechanism gap — review's gate leg has no
-way to subtract the declared sanctioned-red set the way `suite-baseline.js` already does — is
-recorded as its own intake item rather than re-adjudicated per review.
+--check` green and the suite leg proving zero drift. That substitution is itself a defect, not a
+clean workaround: it recorded a `gate` leg row the gate as defined never produced, so the red left
+no trace in `.claude/spec-runs.jsonl` for doctor's correlations to see — no honest encoding for
+"gate red, all failures sanctioned" exists today. The mechanism gap — neither build's gate
+resolution nor review's gate leg can subtract the declared sanctioned-red set the way
+`suite-baseline.js` already does, and the `at-risk` leg has the same disease at 4/4 recent reviews
+— is recorded as **INTAKE JJ-20260816-03**, pinned red by
+`tests/gate-sanctioned-red-subtraction.test.js`, rather than re-adjudicated per review.
 
 Adversarial round (2 refuters): five findings adopted into Decisions, each marked in place —
 the spec-paths closed key-list collision (now a File Plan row), the design-twin repair loop

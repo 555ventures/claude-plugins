@@ -25,6 +25,22 @@
       "name": "gate doctrine requires cache-defeat per tool, not just per runner"
     },
     {
+      "file": "tests/gate-sanctioned-red-subtraction.test.js",
+      "name": "JJ-20260816-03: a gate red made only of sanctioned pins is routed away from the repair loop, exactly as an unprovisioned environment is"
+    },
+    {
+      "file": "tests/gate-sanctioned-red-subtraction.test.js",
+      "name": "JJ-20260816-03: gate resolution subtracts the host's declared sanctioned-red set, so a red composed only of known pins is not read as a regression"
+    },
+    {
+      "file": "tests/gate-sanctioned-red-subtraction.test.js",
+      "name": "JJ-20260816-03: review's at-risk leg adjudicates its failures against the sanctioned-red set instead of spending a per-review human waive"
+    },
+    {
+      "file": "tests/gate-sanctioned-red-subtraction.test.js",
+      "name": "JJ-20260816-03: the run ledger can express a gate red that was entirely sanctioned, so the sanction survives outside console scrollback"
+    },
+    {
       "file": "tests/parity-check-roles.test.js",
       "name": "a declared seam vocabulary exempts wire kwargs inside internal-plane files"
     },

@@ -5,6 +5,14 @@
       "name": "autopilot/contract/contract.test.ts"
     },
     {
+      "file": "tests/ac-matrix-duplicate-id.test.js",
+      "name": "JJ-20260817-01: a second criterion reusing an AC-ID is a hard duplicate-ac finding and counts toward uncovered — a criterion with no test must never read as covered"
+    },
+    {
+      "file": "tests/ac-matrix-duplicate-id.test.js",
+      "name": "JJ-20260817-01: a skipped test mapping to a duplicated AC-ID is never sanctioned by either copy's [env:] declaration"
+    },
+    {
       "file": "tests/build-codegen-seam.test.js",
       "name": "wf-build supports an orchestrator-executed step between layer groups"
     },

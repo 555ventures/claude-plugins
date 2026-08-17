@@ -97,7 +97,11 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
    Phase 4's final gate, and the workflow wave gates (`args.gate.command`) all run.
    testCommand is never wrapped — the red-check's per-file probe and every other
    `testCommand` consumer stay unwrapped: wrapping it would let sanctioned subtraction blur
-   the red-check's expected-red observations. Also resolve
+   the red-check's expected-red observations. A gate failing only against the host's declared
+   sanctioned-red baseline is adjudicated by subtraction, not treated as a regression: it exits
+   0 through the wrapper and therefore never enters the repair loop below — the repair loop is
+   structurally incapable of fixing another intake item's open pin (the JJ-20260815-08 category
+   error, second class; specs/20260816/02-sanctioned-red-closure.md D4). Also resolve
    `typecheckCommand`: the host's standalone typecheck leg when config or the gate exposes one
    (e.g. a `typecheck` script the gateCommand composes); `''` when the host has none. The
    red-check treats a file as red if it fails **either** leg — a test red only under typecheck

@@ -1,6 +1,7 @@
 ---
 date: 2026-08-16
-status: hardened
+status: implementing
+diff_base: 097e2c1480be65ed3f507bccc4805245c167b798
 open_markers: 0
 risk: T3                 # touches verdict.js (sole-derivation surface, host T3 trigger)
 area: spec-pipeline

@@ -72,6 +72,15 @@
 // honest about a green-by-subtraction gate. deriveTestsSkipped's regex tolerates the optional
 // suffix and never sums K into testsSkipped.total — the suffix is provenance, not a skip count.
 //
+// Incident (2026-08-16, spec sanctioned-red-closure D2/D3): the at-risk leg's per-review hand
+// waive of sanctioned-only reds left a green-by-subtraction leg indistinguishable from a genuinely
+// clean one in both the verdict word and the ledger — the same gap D6 above closed for the gate
+// leg's own greenness, but the disposition branch's CLEAN check and the --ledger legs mirror never
+// looked at the suffix. The disposition branch now also derives CLEAN-with-qualifier when the
+// gate or at-risk row is green with a `sanctionedReds=<K>` (K>=1) observed suffix, and every
+// --ledger legs row carries that count (`{leg,exit,sanctionedReds}`) when its observed matches —
+// every other row stays the byte-identical `{leg,exit}` pair (AC-20260805-02-5 pin).
+//
 // Exit codes: 0 = derived CLEAN or CLEAN-with-qualifier · 1 = derived other non-CLEAN word
 // (still printed on stdout line 1) · 2 = usage error, missing/unreadable --manifest or
 // --workflow file, a disposition contradiction (--waived + --rejected + --fixDispatched
@@ -219,7 +228,15 @@ function derive() {
     const row = legRows.get(leg)
     return !!row && /^(unavailable|in-progress)/.test(row.observed || '')
   }
+  // D2: a green-by-subtraction gate or at-risk leg (suite-baseline.js's --gate wrapper
+  // subtracted K>=1 sanctioned reds) qualifies CLEAN identically — greenness resting on the
+  // baseline trust surface is always visibly qualified, never a fabricated plain CLEAN.
+  const legSanctionedRed = (leg) => {
+    const row = legRows.get(leg)
+    return !!row && row.exit === 0 && /sanctionedReds=([1-9]\d*)/.test(row.observed || '')
+  }
   if (legUnavailable('ci') || legUnavailable('gate') || legUnavailable('at-risk')) return 'CLEAN-with-qualifier'
+  if (legSanctionedRed('gate') || legSanctionedRed('at-risk')) return 'CLEAN-with-qualifier'
   return 'CLEAN'
 }
 
@@ -266,8 +283,18 @@ function deriveProduction(row) {
   return undefined
 }
 
+// D3: the durable encoding — a row whose observed carries `sanctionedReds=<K>` (K>=1) emits
+// the count so doctor's correlations (01's D8 retire falsifier) can see a green-by-subtraction
+// leg without re-parsing observed strings; every other row stays byte-identical (AC-20260805-02-5).
+function legsWithSanctioned(rows) {
+  return rows.map(({ leg, exit, observed }) => {
+    const m = /sanctionedReds=([1-9]\d*)/.exec(observed || '')
+    return m ? { leg, exit, sanctionedReds: Number(m[1]) } : { leg, exit }
+  })
+}
+
 if (ledger) {
-  const legs = [...legRows.values()].map(({ leg, exit }) => ({ leg, exit }))
+  const legs = legsWithSanctioned([...legRows.values()])
   const row = { ts: new Date().toISOString() }
   if (specArg) row.spec = specArg
   row.stage = profile === 'release' ? 'release' : 'review'

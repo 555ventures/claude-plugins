@@ -119,9 +119,11 @@ T1-shaped work: doctrine prose edits pinned by existing tests, new sweeps in
 - **Red-pin baseline**: the full suite deliberately carries failing INTAKE pins — the
   sanctioned-failing set is declared in `.claude/suite-baseline.json`, checked by
   `spec/scripts/suite-baseline.js` — `npm test` exiting 1 on untouched code is the sanctioned
-  state, not a regression. The pipeline gate is therefore scoped via `{testDirs}`; pipeline-authored
-  tests live under `tests/<scope>/` (e.g. `tests/autopilot/`) so scoped gate runs are
-  pin-free. Turning a pin green happens only by implementing its intake item.
+  state, not a regression. The pipeline gate is scoped via `{testDirs}` for speed and
+  relevance, not pin-freedom — every pin-closing spec MODIFIES a pre-existing top-level test
+  file (measured: 405 tests / 17 failures / 17-of-17 baseline at run wf_2222584b-9a8), and pin
+  subtraction is owned by the `--gate` wrapper at every gate site. Turning a pin green happens
+  only by implementing its intake item.
 - Scoped runs: `node --test tests/<file>` — paths are repo-root-relative and the runner
   filters exactly; no workspace/monorepo path semantics apply.
 

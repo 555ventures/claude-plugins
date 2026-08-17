@@ -108,7 +108,9 @@ build that is the worktree itself. Phase 4 resolves a second, distinctly named s
      is undeclared/unmatched). A gate that went green only because every failure was a
      sanctioned baseline pin (wrapper exit 0, sentinel `residual=0`) is recorded exit 0 with
      `sanctionedReds` in `observed` — visibly different from a plainly green gate, never
-     silently identical.
+     silently identical. A sanctioned-only green derives `CLEAN-with-qualifier` at Phase 2 (D2,
+     specs/20260816/02-sanctioned-red-closure.md), never plain CLEAN — greenness resting on the
+     baseline trust surface is always visibly qualified.
    - `bash $(spec-paths smoke)` — the **boot smoke leg** (shared invariants § Runtime
      Verification). Exit 0 = boot observed ready **and stopped cleanly on the declared stop
      signal**; exit 4 = runtime declared inert (sanctioned, note it in the verdict); any other
@@ -133,20 +135,27 @@ build that is the worktree itself. Phase 4 resolves a second, distinctly named s
      this commit (structural or transient), or an in-progress run — maps to `exit:0`. Leg
      `ci`, `observed:"unavailable"`/`"unavailable-transient"`/`"in-progress"`/`"conclusion=<value>"`.
    - **at-risk leg (D1/D3, specs/20260815/02-at-risk-pins.md — the scoped gate's compensating
-     derivation):** read `{reconcilePath}`'s `atRisk` field (populated by step 2, before this
-     parallel batch launches — the same dependency `patternsScript`'s dirs already have).
-     Non-empty `atRisk` → run the host's `testCommand` with the at-risk files appended (cwd
-     `{root}`) — the same file-path repro contract the Phase 1 verifier agents already rely on.
-     Skip entirely, including the manifest row, on `scope: "fix-delta"` (`reconcilePath` is `''`
+     derivation; wrapped per specs/20260816/02-sanctioned-red-closure.md D1/D9):** read
+     `{reconcilePath}`'s `atRisk` field (populated by step 2, before this parallel batch
+     launches — the same dependency `patternsScript`'s dirs already have). Non-empty `atRisk` →
+     run the host's `testCommand` with the at-risk files appended (cwd `{root}`), wrapped through
+     the sanctioned-red baseline exactly as the gate leg above:
+     `node "$(spec-paths suite-baseline)" --gate "<testCommand> <at-risk file paths>" --root
+     {root}` (or `--gate-file <path>` — verbatim-to-mktemp — when the command carries a double
+     quote or `$`, same escape as the gate leg). A red composed only of sanctioned baseline pins
+     is adjudicated by subtraction, never spent as a per-review hand waive — the wrapper exits 0,
+     the leg is green, and `observed` carries `sanctionedReds=<K>` (K from the trailing
+     `__SUITE_BASELINE__` sentinel, appended only when K>0), the same grammar as the gate leg's
+     `sanctionedReds` suffix, and the same `CLEAN-with-qualifier` derivation applies. Skip
+     entirely, including the manifest row, on `scope: "fix-delta"` (`reconcilePath` is `''`
      there, exactly like `reconcile`). `files=0` → no run, exit 0. No `testCommand` in config →
-     exit 0, `observed:"unavailable — host declares no testCommand"`. A red at-risk leg yields
-     ONE mechanical **hard** finding <!-- enforcedBy: spec/scripts/scope-reconcile.js --> —
-     "at-risk pins red: pins that live outside the scoped gate failed on this diff; {failing
-     files/digest, session-extracted from runner output}" — entering Phase 2 dispositions like
-     reconcile's out-of-plan finding; a pre-existing sanctioned red (e.g. this repo's INTAKE
-     pins) is a five-second waive naming the pin. **Never a step-8 pre-panel stop**
-     <!-- enforcedBy: spec/scripts/verdict.js -->. Leg `at-risk`, `observed:"files=<N>"` (or
-     the `unavailable` string above).
+     exit 0, `observed:"unavailable — host declares no testCommand"`. A residual red — failures
+     outside the sanctioned set — yields ONE mechanical **hard** finding <!-- enforcedBy: spec/scripts/scope-reconcile.js -->
+     — "at-risk pins red: pins that live outside the scoped gate failed on this diff" — citing
+     exactly the wrapper's `NEW-FAILING` residual lines — entering Phase 2 dispositions
+     like reconcile's out-of-plan finding. **Never a step-8 pre-panel stop** <!-- enforcedBy: spec/scripts/verdict.js -->.
+     Leg `at-risk`, `observed:"files=<N>"` or `"files=<N> sanctionedReds=<K>"` (or the
+     `unavailable` string above).
    - **if config declares `driftScript`**: `{driftScript} {spec path}` — the host's AC-drift
      checker. Leg `drift`, when this leg ran.
    - `node "$(spec-paths suite-baseline)" --check --root {root}` — the **suite leg** (D5,
@@ -361,8 +370,11 @@ verbatim, never hand-assembled, never prose or finding text):
 `waived`/`rejected`/`fixDispatched` account for every survivor, which is why the row is
 written only after the dispositions resolve. A `CLEAN` row with non-zero `survived` is
 therefore well-formed and expected — it records findings the user disposed of, never findings
-that were ignored. `legs` mirrors `{manifestPath}`'s name+exit pairs. Fixed shape,
-counts/enums only — never finding text or prose (disposition *reasons* land in the spec's
+that were ignored. `legs` mirrors `{manifestPath}`'s name+exit pairs, plus a conditional third
+key: any `gate` or `at-risk` row whose `observed` carried `sanctionedReds=<K>` (K≥1) emits
+`{"leg":…,"exit":…,"sanctionedReds":<K>}`; every other row stays the byte-identical two-key
+`{leg,exit}` shape (the `AC-20260805-02-5` legs-mirror pin covers the suffix-free rows). Fixed
+shape, counts/enums only — never finding text or prose (disposition *reasons* land in the spec's
 Rationale). One line per Phase-1 invocation, so fix→re-review iterations each leave a row —
 that history is what calibrates the verification layer over time. `runId` is the Workflow
 invocation's run id: when a defect later surfaces in code this review passed, `/spec:escape`

@@ -13,6 +13,14 @@
       "name": "JJ-20260817-01: a skipped test mapping to a duplicated AC-ID is never sanctioned by either copy's [env:] declaration"
     },
     {
+      "file": "tests/ac-matrix-skip-attribution.test.js",
+      "name": "PRAX-20260817-01: a skip owned by AC-20260815-03-14 is attributed to it (and sanctioned by its own [env:]), not to the shorter AC-20260815-03-1 it happens to prefix"
+    },
+    {
+      "file": "tests/ac-matrix-skip-attribution.test.js",
+      "name": "PRAX-20260817-01: AC-20260815-03-1, which no test cites on its own, is reported uncovered — a longer AC-ID it merely prefixes does not count as its coverage"
+    },
+    {
       "file": "tests/build-codegen-seam.test.js",
       "name": "wf-build supports an orchestrator-executed step between layer groups"
     },
@@ -47,6 +55,14 @@
     {
       "file": "tests/parity-check-roles.test.js",
       "name": "a PascalCase class in its own snake_case module is not a parity finding"
+    },
+    {
+      "file": "tests/redcheck-sentinel-path-keying.test.js",
+      "name": "JJ-20260817-04: the runtime leg requires one probe invocation per file, not a combined multi-path run"
+    },
+    {
+      "file": "tests/redcheck-sentinel-path-keying.test.js",
+      "name": "JJ-20260817-04: the sentinel instruction keys AUDIT_RED/AUDIT_GREEN to the File Plan path even when the runner invocation path was rewritten"
     },
     {
       "file": "tests/tdd-waiver-provenance.test.js",

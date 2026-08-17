@@ -161,7 +161,7 @@ test('AC-20260815-06-9: the retired "importing a module the implementation has n
     'runs the probe itself, so build.md must state the same stub/re-run/clean discipline by hand')
 })
 
-test('AC-20260815-06-10: build.md\'s tdd-red-check row scopes "strictly redder than red" to collection-level absence and states a load-shaped not-collected never proceeds on the spec\'s authority', () => {
+test('AC-20260815-06-11: build.md\'s tdd-red-check row scopes "strictly redder than red" to collection-level absence and states a load-shaped not-collected never proceeds on the spec\'s authority', () => {
   const rowStart = buildMd.indexOf('| `tdd-red-check` |')
   const row = buildMd.slice(rowStart, buildMd.indexOf('| `out-of-scope-failure` |'))
   assert.match(row, /strictly redder than red/,

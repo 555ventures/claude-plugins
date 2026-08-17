@@ -1,6 +1,6 @@
 ---
 date: 2026-08-15
-status: implementing
+status: done
 diff_base: 45a2eca0e3cf20c70ff996c830693edd67294398
 open_markers: 0
 risk: T3                 # rewrites wf-build.body.js through the codegen seam (named T3 trigger) — a defect here corrupts the TDD red-first evidence floor for every host
@@ -47,7 +47,7 @@ real. Compile-time-only carriers (the 20260813/10 deadlock class) stay classifia
 |------|--------|-------|---------|
 | spec/workflows/src/wf-build.body.js | MODIFY | workflows | D1 schema field + required; D2/D3 crossCheckSentinels attribution (OR-composition); D4 stub protocol in the RED dispatch prompt INCLUDING the scoped replacement of the closing "Do not edit any file." sentence; D5 replacement in BOTH in-file loci — schema comment (~231) and prompt string (~454). Orchestrator duty (not a row): `npm run build:workflows` regenerates wf-*.js, committed together |
 | spec/commands/build.md | MODIFY | doctrine | D5: fast-path step 1 additive load-red stub discipline + `tdd-red-check` row example-list replacement; D9: scope the "strictly redder than red" exception to collection-level absence, keeping its pinned literals verbatim |
-| tests/redcheck-load-failure-attribution.test.js | MODIFY | tests | Tag the three existing carrier tests AC-20260815-06-1/2/3; add new asserts — D3 resolution-shaped typecheck evidence fails closed (AC-20260815-06-7), D4 prompt source pins (AC-20260815-06-8), D5 doctrine pins (AC-20260815-06-9), D3's amended missing-export marker fails closed (AC-20260815-06-10) |
+| tests/redcheck-load-failure-attribution.test.js | MODIFY | tests | Tag the three existing carrier tests AC-20260815-06-1/2/3; add new asserts — D3 resolution-shaped typecheck evidence fails closed (AC-20260815-06-7), D4 prompt source pins (AC-20260815-06-8), D5 doctrine pins (AC-20260815-06-9), D3's amended missing-export marker fails closed (AC-20260815-06-10), D9's tdd-red-check scoping pin (AC-20260815-06-11) |
 | tests/redcheck-sentinel-dual-leg.test.js | MODIFY | tests | D6 retags: TYPE_DIAG swap (AC-20260815-06-4), assertionsRun on the ordinary-red case (AC-20260815-06-5 tag), header-comment example fix, schema pin extension (AC-20260815-06-6) |
 | spec/doctrine/scaffold-ledger.md | MODIFY | doctrine | D7: extend the red-check row in place |
 | spec/doctrine/claims-baseline.json | MODIFY | other | Re-baseline for build.md/scaffold-ledger line-count changes |
@@ -162,7 +162,7 @@ real. Compile-time-only carriers (the 20260813/10 deadlock class) stay classifia
   create)" (the retired sanction; red today in all three loci, green after D5) AND build.md's
   fast-path step SHALL name the load-red stub discipline → new doctrine + source pins in
   tests/redcheck-load-failure-attribution.test.js
-- **AC-20260815-06-10**: WHEN build.md's `tdd-red-check` row is read THE SYSTEM SHALL scope
+- **AC-20260815-06-11**: WHEN build.md's `tdd-red-check` row is read THE SYSTEM SHALL scope
   the "strictly redder than red" exception to collection-level absence and SHALL state that a
   load-shaped `not-collected` never proceeds on the spec's authority (regex pin: the pinned
   literals `strictly redder than red` and `the spec itself creates` still present — the
@@ -259,6 +259,25 @@ prompt-text regexes plus the fail-closed default. The build should exercise the 
 against a synthetic host (spec-verify skill) before review; a probe agent that skips the stub
 protocol leaves carriers `not-collected`, which blocks loudly rather than passing silently —
 the failure mode of an unfollowed prompt is noise, not escape.
+
+**Review dispositions (2026-08-17, run `wf_1ccb6314-efb` → fix-delta `wf_2270e922-c5b`).** Both
+reviewers of the T3 panel returned zero findings; the advisory smell lens returned zero. Two
+mechanical legs needed disposition:
+
+- **Waived — at-risk leg red (11 failures over 37 files).** Every failing name is already
+  declared in `.claude/suite-baseline.json` as sanctioned red: open INTAKE pins for specs not
+  yet built (JJ-20260816-02, JJ-20260816-03, JJ-20260814-02, plus three older rows). The
+  independent whole-suite baseline leg was green in the same run (`newFailing=0
+  fixedNotRemoved=0`), so nothing this spec changed caused them. This is the five-second waive
+  the at-risk contract anticipates for a pre-existing sanctioned red.
+- **Fixed — duplicate AC-ID.** The 2026-08-16 D3 amendment added `AC-20260815-06-10` for the
+  TS2305 missing-export pin while that ID was already carried by D9's build.md
+  `tdd-red-check` scoping AC. `ac-matrix.js` has no duplicate-ID detection, so the two collapsed
+  into one matrix entry: both had passing tests, but deleting either would have left the ID
+  reading as covered — the silent-coverage-hole class specs/20260815/03 closed for *malformed*
+  IDs, re-entering through *duplicated* ones. D9's AC is renumbered `AC-20260815-06-11` in the
+  Acceptance Criteria, the File Plan's test row, and the test name; the gate re-ran green (17/17)
+  and the fix-delta re-review returned CLEAN.
 
 ## Canonical Delta
 

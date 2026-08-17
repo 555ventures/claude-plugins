@@ -288,3 +288,44 @@ test('--mark approved records the bound regions in the repo-level coverage ledge
   assert.ok(regions['app-dark#root'], 'legacy sliceRef binding must be recorded as the root region')
   assert.match(regions['app#sidebar'].spec, /01-x\.md$/)
 })
+
+// Fail-open found at the review of specs/20260816/01-gate-baseline-reconcile.md (2026-08-17,
+// runId `wf_28d80534-707`), second confirmed instance of that spec's own incident class. The
+// mock fidelity gate — whose comment states it is FAIL-CLOSED — branched only on
+// `r.status === 1` (refuse the mark) and `r.status > 1` (could not run). `spawnSync` returns
+// `status: null` when the child is killed by a signal, fails to spawn, or overflows `maxBuffer`,
+// and `null` satisfies NEITHER comparison, so execution fell through and the mark was written.
+// Measured before the fix: a genuinely failing fidelity-check emitting >1MB of divergence lines
+// overflowed Node's default 1MB buffer and the mark was accepted on 6 of 6 identical runs.
+test('the fidelity gate refuses the mark when fidelity-check dies with no exit code, not only when it exits 1', () => {
+  const { root, spec, sidecar } = fixture()
+  fs.mkdirSync(sidecar, { recursive: true })
+  // A large genuinely-divergent surface: every mock string is absent from the implementation, so
+  // the checker fails AND emits enough output to overflow a default-sized capture buffer.
+  const strings = Array.from({ length: 8000 }, (_, i) =>
+    'Missing copy string number ' + i + ' that the implementation does not contain at all')
+  fs.writeFileSync(path.join(sidecar, 'slice-s1.html'),
+    '<div>' + strings.map(s => '<span>' + s + '</span>').join('') + '</div>')
+  fs.writeFileSync(path.join(sidecar, 'extract.json'), JSON.stringify({
+    schemaVersion: 2,
+    surfaces: [{ id: 's1', sliceFile: 'slice-s1.html', strings, layout: [] }],
+  }))
+  fs.writeFileSync(path.join(sidecar, 'skeletons.json'), JSON.stringify({
+    skeletons: [{ id: 's1', decision: 'author', componentPath: 'src/S1.tsx',
+      sliceRef: 'slice-s1.html', states: ['default'], tokens: ['surface'] }],
+  }))
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+  fs.writeFileSync(path.join(root, 'src/S1.tsx'), '<div>nothing matches</div>')
+
+  const r = run(root, spec, '--mark', 'author-green')
+  assert.notStrictEqual(r.status, 0,
+    'a fidelity-check that never delivered a verdict must refuse the mark — accepting it means ' +
+    'the design round is approved by a gate that did not run, which is the exact fail-open the ' +
+    'FAIL-CLOSED comment above this branch promises against')
+
+  const stateFile = path.join(sidecar, 'design-state.json')
+  const marks = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile, 'utf8')) : {}
+  assert.notStrictEqual(marks['author-green'], true,
+    'the author-green mark must not be written when the fidelity gate could not reach a verdict — ' +
+    'a persisted mark makes the unverified round durable and every later state derives from it')
+})

@@ -165,14 +165,33 @@ if (MARK) {
   // against the authored files before the mark is accepted. Divergence needs an evidence-gated
   // deltas.json row — the check itself validates the evidence, so the refusal is mechanical.
   if ((MARK === 'author-green' || MARK === 'round-green') && exists('extract.json')) {
+    // maxBuffer: a divergent surface emits one line per finding and easily clears Node's 1MB
+    // default, which kills the child mid-run (status null, ENOBUFS) — the refusal list is the
+    // whole point of the gate, so it must not be the thing that gets truncated away.
     const r = spawnSync(process.execPath,
-      [path.join(PLUGIN, 'scripts/fidelity-check.js'), sidecar, '--repo-root', repoRoot], { encoding: 'utf8' })
+      [path.join(PLUGIN, 'scripts/fidelity-check.js'), sidecar, '--repo-root', repoRoot],
+      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
     if (r.status === 1) {
       die('mock fidelity gate FAILED — mark "' + MARK + '" refused:\n' + (r.stdout + r.stderr).trim() +
         '\nFix the divergences (dispatch Sonnet with the list above), or record a verified delta in ' +
         inSidecar('deltas.json') + ', then re-run this mark.')
     }
-    if (r.status > 1) die('fidelity-check could not run: ' + (r.stdout + r.stderr).trim())
+    // Anything that is not a clean exit 0 refuses the mark. Comparing against specific non-zero
+    // values let `status: null` — what spawnSync returns when the child is killed by a signal,
+    // fails to spawn, or overflows maxBuffer — satisfy neither arm and fall through to a written
+    // mark: a design round approved by a gate that never delivered a verdict. Fail closed on
+    // absence of evidence, exactly as the FAIL-CLOSED comment above promises.
+    // (Review of specs/20260816/01-gate-baseline-reconcile.md, 2026-08-17 — same class as that
+    // spec's own `--gate` fail-open; measured accepting the mark on 6 of 6 overflowing runs.)
+    if (r.status !== 0) {
+      const cause = r.status === null
+        ? (r.signal ? 'killed by ' + r.signal : (r.error && r.error.code) || 'no exit code')
+        : 'exit ' + r.status
+      die('fidelity-check could not run (' + cause + ') — mark "' + MARK + '" refused: ' +
+        (r.stdout + r.stderr).trim() +
+        '\nRe-run `node "$(spec-paths fidelity-check)" ' + sidecar + ' --repo-root ' + repoRoot +
+        '` directly to see the real failure, then re-run this mark.')
+    }
   }
   fs.mkdirSync(sidecar, { recursive: true })
   if (MARK === 'round-green') {

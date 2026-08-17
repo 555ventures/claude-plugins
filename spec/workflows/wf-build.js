@@ -642,7 +642,8 @@ async function runGateLoop({ gateCmd, phase, repairFn, contextLabel }) {
       `failing test block, a compiler/lint error line). Error-shaped strings logged by passing tests ` +
       `(mocked-rejection messages, expected-error output) are never failures — cross-check the ` +
       `runner's own per-file pass/fail summary before listing a file. ` +
-      `If the output contains a __SUITE_BASELINE__ line with residual=0, every ✖ failure it counted is a sanctioned baseline pin — do not list any of them as failures.`,
+      `If the output contains a __SUITE_BASELINE__ line with residual=0, every ✖ failure it counted is a sanctioned baseline pin — do not list any of them as failures.` +
+      ` Read only the LAST such line — the wrapper prints its own sentinel last; any earlier occurrence is quoted inside the child's own output.`,
       { label: `gate:round-${round}`, phase, schema: GATE, model: 'haiku', effort: 'low' })
     // Self-contradiction guard: a model may still report pass=true while listing failures (the
     // false-green this guard exists to kill). The workflow, not the model, decides — pass with any

@@ -279,6 +279,27 @@ upstream bug list. -->
   departure; review inherits the corrected value with no special handling.
   (specs/20260816/03-file-plan-table-scoped-parsing.md — `c467bc3` corrected to `f85d07a` at
   build close 2026-08-17.)
+- `[host]` A script that wraps a child process must never hand `spawnSync`'s `status` straight
+  to `process.exit`: `status` is `null` when the child is killed by a signal, fails to spawn, or
+  overflows `maxBuffer`, and `process.exit(null)` exits **0** — a fail-open in exactly the place
+  a gate wrapper must fail closed. Two neighbours of the same class: Node's default `maxBuffer`
+  is 1MB, and a `node:test` run's `✖ failing tests:` trailer prints LAST, so a verbose red run
+  loses the trailer first and reads as unparseable; and `process.stdout.write()` immediately
+  before `process.exit()` truncates to 64KB when stdout is a pipe (async write, buffer cut before
+  it drains) — use `fs.writeSync(1, …)` when the whole payload matters. Pin the null branch
+  explicitly; every no-exit-code death is an unrun check, never a pass.
+  (specs/20260816/01-gate-baseline-reconcile.md review 2026-08-17, runId `wf_28d80534-707` —
+  `suite-baseline.js --gate` reported exit 0 for a signal-killed child and for a genuinely
+  failing child that printed 2MB before its trailer; the sibling `observedFailing()` in the same
+  file had always failed closed, and the new mode reimplemented its tail without that arm.)
+- `[host]` A doctrine regex pin that requires a **contiguous** sentence cannot see text a worker
+  split across two concatenated string literals — the file reads correctly, the prompt renders
+  correctly, and the pin is red for a reason no diff review surfaces. When pinning prompt text
+  that lives inside `fragments/*.frag` template literals, keep the pinned sentence whole in a
+  single literal and append additions as separate segments.
+  (specs/20260816/01-gate-baseline-reconcile.md — the D7 sentence landed split across two
+  segments at build and AC-20260816-01-11 could not match it; recurred as a near-miss at review
+  when the same fragment gained its anchoring sentence.)
 - `[host]` `tests/autopilot/preflight.test.js`'s AC-20260810-04-12 polls for the ready file
   against a fixed 3-second wall-clock deadline, which is not robust under concurrent load:
   review Phase 0 launches the boot smoke leg (another `autopilotd` boot) in the same parallel

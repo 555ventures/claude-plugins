@@ -1,6 +1,6 @@
 ---
 date: 2026-08-16
-status: implementing
+status: done
 diff_base: 9006f241ef812af5b0a16ec3a48ab684e62121e1
 open_markers: 0
 risk: T3                 # touches verdict.js and suite-baseline.js (sole-derivation surfaces) + the gate-loop fragment (codegen seam)
@@ -40,6 +40,7 @@ and a session never again decides whether a red gate "really" failed.
 | D8 | New scaffold-ledger row, kind **gate**: "Gate/baseline reconciliation (`suite-baseline.js --gate`)", justified by the 2026-08-15 review override (third recurrence). Promote/retire: retire if the intake pin baseline is empty for two consecutive quarters (the wrapper is then identity); re-examine if any ledger row ever shows a gate leg green with `sanctionedReds>0` while the same iteration's suite leg reports `newFailing>0` (a subtraction the whole-suite truth contradicts). | Every new mechanism ships with its falsifier named. |
 | D9 | Version bump target: spec plugin 6.81.0 (target, not a pin — build bumps to the next free version per Gotchas), description line = the changelog sentence. | House rule. |
 | D10 | Retainer ruling (2026-08-17, build, tdd-red-check consult): AC-20260816-01-12 is a sanctioned-green regression pin — Phase 0 classifies its carrier `expect: green`, and it is authored as a standalone new test in tests/review/verdict.test.js per its own "new test" directive, never folded onto AC-8's test (AC-8 pins the ledger's `testsSkipped` derivation; AC-12 pins the verdict word — two observables, one file; a tag-only fold would claim coverage of an observable AC-8's test never asserts). The verdict word derives from leg exit codes alone (verdict.js `legIsRed`/`derive`), so the suffix not perturbing it is a SHALL-CONTINUE-TO obligation in substance; passing before the change is the specified outcome. The fixture MUST carry the clean workflow return the AC names — verdict.js exits 2 on an all-green manifest invoked without `--workflow`. Falsifiability verified by mutation (fixture gate row `exit:1` → `GATE_RED`), never by weakening. | The Behavior section already states the pin's content ("verdict.js derives CLEAN-family exactly as for any green gate"); the AC's SHALL phrasing under-declared its regression-pin class — classification corrected here, AC text unchanged. |
+| D12 | Review fix-delta (2026-08-17, JJ ruling on a Fable retainer brief): `--gate`'s passthrough branch fails **closed** when the child dies without an exit code. `spawnSync` returns `status: null` on signal termination, spawn failure, and `maxBuffer` overflow, and `process.exit(null)` exits 0 — so a gate that never finished, or one whose real failure trailer was truncated past Node's 1MB default buffer, reported green through every gate site to a CLEAN verdict. `doGate()` now exits 1 naming the cause before trailer parsing, and `runSuite()` raises `maxBuffer` to 64MB (which also un-degrades `--check`'s exit-4 path). Additionally, both readers of the `__SUITE_BASELINE__` sentinel — the D7 gate-agent sentence and review.md's `sanctionedReds` capture — are anchored on the **final** sentinel line. ACs 13–17. | D2's own rationale forbids turning a red green "by absence of evidence," and INTAKE JJ-20260816-03's locked fix shape requires failing closed "on any red whose output has no parseable trailer" — `doGate()` reimplemented `observedFailing()`'s tail and dropped exactly that arm. The sentinel anchoring closes a self-silencing loop: this spec's own tests print sentinel text inside assert messages, so a genuine failure in them would instruct the gate agent to report nothing. |
 | D11 | Retainer ruling (2026-08-17, build, gate-red pin collision): AC-20260814-03-12's final assert (`doesNotMatch(step3, /suite-baseline/)`, tests/suite-baseline/doctrine.test.js) collides with D5 by literal over-breadth, not by intent — 20260814/03 D9's fence keeps the whole-suite pre-image machinery (snapshot/check) out of the inner scoped-gate loops on speed grounds, and `--gate` wraps the already-scoped command, spawns one child, and never runs a second suite, so the fence's invariant is untouched. Per § Gotchas the pin is updated in place, blocking, narrowed to the hazard alphabet — step 3 carries no `--check`/`--pre`/`--snapshot`/`--update` (`--update` added: it also runs the full suite) with `--gate` permitted — and retagged `AC-20260814-03-12 / AC-20260816-01-9`. This corrects the plan-time collision-closure claim ("every doctrine edit is additive"): D5 does narrow a pinned literal, and the sweep missed it because the pin asserts absence — no grep over added text can hit an absence pin. | Narrowing to the named hazard preserves the fence's falsifiability (any whole-suite mode in step 3 still reddens it); blanket token-absence forbade what D9 never claimed. No escalation owed: JJ ratified the wrap-at-seam substance 2026-08-16, and the Gotchas' colliding-pin prescription is the standing rule for this class. |
 
 ## File Plan
@@ -180,6 +181,31 @@ node "$(spec-paths suite-baseline)" --gate "<resolved gateCommand>" --root {root
   produced manifest fixture (`runNode` verdict.js → stdout line 1 begins `CLEAN`) → new test
   in tests/review/verdict.test.js
 
+<!-- AC-13 … AC-17 are review fix-delta criteria, added 2026-08-17 during the review of this
+     spec (D12). They pin the two findings the panel missed and the session/retainer caught. -->
+
+- **AC-20260816-01-13**: WHEN `--gate`'s child is terminated by a signal (no exit code — the
+  spawn result carries `status: null`) THE SYSTEM SHALL exit 1 and print a note naming the
+  signal, never exit 0 (`--gate 'echo running tests; kill -INT $$'` → exit 1, output matches
+  `/terminated by SIG/`) → new test in tests/suite-baseline/suite-baseline.test.js
+- **AC-20260816-01-14**: WHEN `--gate`'s child emits combined output exceeding Node's default
+  1MB `spawnSync` buffer and then fails THE SYSTEM SHALL still parse its `✖ failing tests:`
+  trailer and report the residual (≈2MB of filler followed by a valid trailer naming a test
+  absent from the baseline → exit 1 with that `NEW-FAILING` line, never exit 0) → new test in
+  tests/suite-baseline/suite-baseline.test.js
+- **AC-20260816-01-15**: WHEN `--gate`'s child exits with a genuine non-zero numeric code and
+  no parseable trailer THE SYSTEM SHALL CONTINUE TO pass that code through unchanged
+  (`--gate 'exit 7'` → exit 7 with the passthrough note) — the regression pin protecting AC-4
+  from the AC-13 guard → new test in tests/suite-baseline/suite-baseline.test.js
+- **AC-20260816-01-16**: WHEN the gate-loop fragment is read THE SYSTEM SHALL, immediately
+  after the D7 sentence, anchor the sentinel read on the LAST `__SUITE_BASELINE__` line, with
+  no per-workflow substitution token inside the appended sentence (twin splice stays
+  byte-identical) → doctrine regex pin in tests/suite-baseline/doctrine.test.js
+- **AC-20260816-01-17**: WHEN review.md's gate leg is read THE SYSTEM SHALL state that
+  `sanctioned=<S>` is captured from the FINAL `__SUITE_BASELINE__` line in the output, never
+  from any earlier occurrence quoted inside the child's own output → doctrine regex pin in
+  tests/suite-baseline/doctrine.test.js
+
 ## Assumptions (escalation triggers)
 
 - A1: A scoped `node --test` red run emits the same parseable `✖ failing tests:` trailer as a
@@ -258,6 +284,30 @@ Regression pinning: AC-6 and AC-7 carry `SHALL CONTINUE TO` for the two behavior
 brushes (env stripping in the shared runner; the two-field observed parse). The other
 neighbors (`--check/--update/--snapshot`) are untouched code paths already pinned by their
 own suite.
+
+Review dispositions (2026-08-17, runId `wf_28d80534-707`). The 2-reviewer blind panel returned
+**zero** findings; three survivors came from the deterministic legs, this session's own
+execution, and a Fable retainer brief dispatched on JJ's instruction precisely because a
+zero-finding panel on a T3 sole-derivation diff is itself a signal.
+
+- **FIXED** — `--gate` reported exit 0 whenever its child died without an exit code. Executed at
+  review: `kill -INT $$` → wrapper 0 (unwrapped 130); 2MB of output ahead of a valid trailer and
+  `exit 1` → wrapper 0. Closed by D12/ACs 13–15. The panel missed it because no reviewer executed
+  the wrapper against a non-exit death — the "execution adjudicates" gap this pipeline's own
+  doctrine warns about.
+- **FIXED** — both `__SUITE_BASELINE__` readers matched any line rather than the wrapper's final
+  one, and this spec's own tests embed sentinel text in assert messages. Closed by D12/ACs 16–17.
+- **WAIVED** — the review `at-risk` leg ran red on 5 pre-existing sanctioned pins
+  (4× JJ-20260816-03 in tests/gate-sanctioned-red-subtraction.test.js, 1× JJ-20260814-02 in
+  tests/workflow-runid-provenance.test.js) while `suite-baseline.js --check` independently
+  reported `newFailing=0`. Nothing this diff touched broke. All four JJ-20260816-03 regexes were
+  executed against HEAD's build.md/review.md and none match: pin 1 misses its 200-char adjacency
+  window by ~286 chars, and pins 2–4 map onto specs/20260816/02's D4/D1/D2 respectively, with
+  that spec's D6 owning the retag-and-debaseline. Closure is deferred by design, not missed.
+- **LOGGED, not fixed** — INTAKE JJ-20260817-02 (the mandated wrap form leaves `{root}` unquoted,
+  and `args.gate.command` now carries an unexpanded `$(spec-paths …)` for the first time) and
+  JJ-20260817-03 (a malformed `sanctionedReds` suffix makes `deriveTestsSkipped` report a
+  confident `total=0` rather than announcing itself). Neither can produce a false verdict.
 
 ## Canonical Delta
 

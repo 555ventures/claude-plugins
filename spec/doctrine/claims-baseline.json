@@ -53,7 +53,7 @@
       "orphans": 12
     },
     "spec/commands/review.md": {
-      "lines": 578,
+      "lines": 581,
       "orphans": 0
     },
     "spec/commands/sketch.md": {
@@ -81,5 +81,5 @@
       "orphans": 5
     }
   },
-  "totalLines": 6309
+  "totalLines": 6312
 }

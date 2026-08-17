@@ -37,3 +37,38 @@ Provenance: `specs/20260815/05-env-preflight.md`, INTAKE JJ-20260815-08 (salon-o
 twice: `DATABASE_URL` unset made two DB-backed suites fail inside env parsing, `wf-build`
 classified that as implementation breakage and burned a full repair round on correct code).
 Registered in `spec/doctrine/scaffold-ledger.md` as a `gate`-kind mechanism.
+
+## Sanctioned-red reconciliation
+
+The resolved gate command is always executed through `suite-baseline.js --gate` (or
+`--gate-file` when the resolved command carries a `"` or `$`), which subtracts the sanctioned
+always-red baseline pins by name on failure. A red gate exit therefore means genuinely new
+failures — or a non-test failure passed through — and sanctioned-only reds exit 0, recorded as
+`sanctionedReds=<K>` in the review manifest so a green-by-subtraction gate is visibly different
+from a plainly green one. The reconciliation is a derivation of the sole failing-set differ; no
+session, prompt, or reviewer re-adjudicates a red gate against the baseline by hand.
+
+The wrap happens at one seam — `build.md` Phase 0 step 3, after `{testDirs}` resolves to the
+glob form — which reaches build's initial and final gates and the workflow wave gates through
+`args.gate.command`. `review.md` states the wrap in its own gate-leg text (and in its
+fix→re-review re-run) rather than inheriting it by citation, because review is a separate
+session whose citation of build's step 3 is scoped to the glob substitution alone. `testCommand`
+is never wrapped: the red-check's per-file probe and every other expected-red observation path
+must see raw reds.
+
+**The wrapper fails closed on absence of evidence.** Subtraction can only ever turn a red green
+by name-level proof. A child that exits non-zero with a parseable trailer is subtracted; one
+that exits non-zero with no trailer passes its real exit code through; and one that dies with
+**no exit code at all** — killed by a signal, failed to spawn, or overflowing the child-output
+buffer — exits 1 naming the cause, never 0. Both readers of the `__SUITE_BASELINE__` sentinel
+(the gate agent's prompt and review's `sanctionedReds` capture) read only the **final** sentinel
+line, since the wrapper prints its own last and any earlier occurrence is child output quoted
+inside the run.
+
+Provenance: `specs/20260816/01-gate-baseline-reconcile.md`, INTAKE JJ-20260816-03 — a red gate
+on the 2026-08-15 review of `specs/20260815/01` named 21 of 22 baseline-sanctioned pins and the
+session verified them by hand and overrode the red, the third recurrence of judgment substituting
+for derivation at a gate site. The fail-closed and sentinel-anchoring clauses were added at that
+spec's own review (2026-08-17) after execution showed the first implementation reporting green
+for a child killed by a signal, and for a genuinely failing child whose output exceeded the
+default buffer. Registered in `spec/doctrine/scaffold-ledger.md` as a `gate`-kind mechanism.

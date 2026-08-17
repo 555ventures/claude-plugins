@@ -36,19 +36,25 @@
 //      --gate/--gate-file: child exited 0, OR child exited non-zero and every parsed failure is
 //      sanctioned (residual=0)
 //   1  --check only: drift (NEW-FAILING / FIXED-NOT-REMOVED lines printed) ·
-//      --gate/--gate-file only: residual>0 (NEW-FAILING lines + sentinel printed)
+//      --gate/--gate-file: residual>0 (NEW-FAILING lines + sentinel printed), OR the child died
+//      without an exit code at all (killed by a signal, failed to spawn, or its output overflowed
+//      maxBuffer) — there is nothing to pass through and no complete trailer to trust, so this
+//      fails closed rather than exiting 0 by absence of evidence (D2)
 //   2  usage · unreadable/corrupt baseline or --pre JSON · config has no testCommand
 //   4  --check/--update/--snapshot only: the suite exited non-zero but no `✖ failing tests:`
 //      trailer was parseable; --snapshot writes NO file in this case
-//   <child's exit code>  --gate/--gate-file only: child exited non-zero with no parseable
-//      trailer — passthrough (a note line is printed; never exit 4, since the gate must report
-//      the real failure, not a fixed sentinel)
+//   <child's exit code>  --gate/--gate-file only: child exited non-zero WITH an exit code but no
+//      parseable trailer — passthrough (a note line is printed; never exit 4, since the gate must
+//      report the real failure, not a fixed sentinel). A child that exits with no code at all
+//      (status null) is not passthrough-eligible — see exit 1 above.
 //
 // The observed failing set: suite exit 0 → empty, by definition, zero output parsing. Suite
-// exit non-zero → parse the node:test spec-reporter trailer from the `✖ failing tests:`
-// marker, pairing each `test at <file>:<line>:<col>` line with its following
-// `✖ <name> (<duration>)` line; unparseable → exit 4 (--check/--update/--snapshot) or
-// passthrough (--gate/--gate-file), never a guess.
+// exit non-zero (with a real exit code) → parse the node:test spec-reporter trailer from the
+// `✖ failing tests:` marker, pairing each `test at <file>:<line>:<col>` line with its following
+// `✖ <name> (<duration>)` line; unparseable → exit 4 (--check/--update/--snapshot) or passthrough
+// (--gate/--gate-file), never a guess. Suite exit code null (signal/spawn-failure/maxBuffer
+// overflow) → fail closed, exit 4 (--check/--update/--snapshot) or exit 1 (--gate/--gate-file);
+// there is no output left to trust, so this is never treated as passthrough-eligible.
 
 const fs = require('fs')
 const path = require('path')
@@ -157,7 +163,10 @@ function extractFailing(rootDir, combinedOutput) {
 function runSuite(rootDir, testCommand) {
   const env = { ...process.env }
   delete env.NODE_TEST_CONTEXT
-  return spawnSync('bash', ['-c', testCommand], { cwd: rootDir, encoding: 'utf8', env })
+  // Node's spawnSync default maxBuffer is 1MB; a verbose runner's stdout blows past that on a
+  // suite this size, and the `✖ failing tests:` trailer prints LAST — so a truncation drops
+  // exactly the evidence this script exists to read. Raised well past any observed suite output.
+  return spawnSync('bash', ['-c', testCommand], { cwd: rootDir, encoding: 'utf8', env, maxBuffer: 64 * 1024 * 1024 })
 }
 
 // Suite exit 0 → empty failing set, zero parsing (D4). Suite exit non-zero → parse the trailer;
@@ -272,9 +281,26 @@ function doGate() {
 
   const r = runSuite(root, cmd)
   const combined = (r.stdout || '') + '\n' + (r.stderr || '')
-  process.stdout.write(combined)
+  // fs.writeSync (not process.stdout.write) — when stdout is a pipe, process.stdout.write on a
+  // multi-MB string is asynchronous, and the process.exit() calls below (needed for the gate's
+  // exit-code contract) cut the pipe before the OS drains it, truncating exactly the trailer this
+  // script depends on. writeSync blocks until the write completes, so process.exit() is safe
+  // immediately after (found via AC-20260816-01-14, a >1MB combined-output gate).
+  fs.writeSync(1, combined)
 
   if (r.status === 0) process.exit(0)
+
+  // A null status means the child was killed by a signal, failed to spawn, or overflowed
+  // spawnSync's maxBuffer — there is no exit code to pass through and no complete output to
+  // trust. Fail closed (D2: never green by absence of evidence; INTAKE JJ-20260816-03 requires
+  // fail-closed on any red without a parseable trailer). The sibling observedFailing() has
+  // always done this; the review of specs/20260816/01 (2026-08-17) found doGate() had dropped it.
+  if (r.status === null) {
+    const cause = r.signal ? `terminated by ${r.signal}`
+      : (r.error ? `spawn failed: ${r.error.code || r.error.message}` : 'no exit code')
+    console.log(`suite-baseline: child ${cause} — failing closed with exit 1; re-run the gate command directly to observe the real failure`)
+    process.exit(1)
+  }
 
   const pairs = extractFailing(root, combined)
   if (pairs === null) {

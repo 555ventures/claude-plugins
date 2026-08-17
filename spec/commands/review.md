@@ -98,7 +98,10 @@ build that is the worktree itself. Phase 4 resolves a second, distinctly named s
      pattern is absent, `"none"`, or doesn't match, the skip portion is honestly
      `unavailable — host runner declares no skip format`, never assumed-zero. When the wrapped
      run printed a `__SUITE_BASELINE__` sentinel with `sanctioned=<S>`, S>0, capture S as
-     `sanctionedReds` and append it to `observed`. Leg `gate`,
+     `sanctionedReds` and append it to `observed` — read S from the final `__SUITE_BASELINE__`
+     line in the output: the wrapper always prints its own sentinel last, so any earlier
+     occurrence is child output quoted inside the run, never the wrapper's own verdict. Leg
+     `gate`,
      `observed:"skips=<N> todos=<M>"` or `observed:"skips=<N> todos=<M> sanctionedReds=<K>"`
      (or `"unavailable: <token>"` when the gate itself is unresolvable, or
      `"unavailable — host runner declares no skip format"` when the gate ran but the skip format

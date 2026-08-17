@@ -17,8 +17,8 @@ const { tmpdir, runNode } = require('../helpers')
 
 const SCRIPT = 'scripts/suite-baseline.js'
 
-function run(argv) {
-  return runNode(SCRIPT, argv)
+function run(argv, opts) {
+  return runNode(SCRIPT, argv, opts)
 }
 
 function writeConfig(dir, testCommand) {
@@ -374,6 +374,51 @@ test('AC-20260816-01-6: --gate strips NODE_TEST_CONTEXT before spawning the chil
     'with NODE_TEST_CONTEXT stripped the child must actually execute t.test.js and observe its one real failure, exiting 1 — a leaked NODE_TEST_CONTEXT makes the nested `node --test` silently skip execution and exit 0 instead: ' + out(r))
   assert.match(out(r), /__SUITE_BASELINE__ failing=1 sanctioned=0 residual=1/,
     'the sentinel must report the actually-observed failure count, proving the child ran the file rather than silently no-op-ing under an inherited NODE_TEST_CONTEXT: ' + out(r))
+})
+
+// Review finding (2026-08-17, review of specs/20260816/01-gate-baseline-reconcile.md), hard
+// severity: doGate()'s passthrough branch ended in `process.exit(r.status)`, and spawnSync sets
+// status:null on a signal-killed, un-spawnable, or maxBuffer-overflowed child — process.exit(null)
+// exits 0. A gate interrupted mid-run (or one whose combined output overruns the default 1MB
+// buffer) therefore reported GREEN with no evidence at all, contradicting D2's rationale ("the
+// wrapper can only ever turn a red green by name-level proof, never by absence of evidence") and
+// INTAKE JJ-20260816-03's bolded "fails closed on any red whose output has no parseable
+// trailer." observedFailing() (the --check/--update/--snapshot sibling) already fails closed on
+// this exact shape; doGate() dropped that arm. Fix: a status===null branch that exits 1 naming
+// the cause, plus a 64MB maxBuffer on runSuite()'s spawnSync options.
+
+test('AC-20260816-01-13: --gate on a child killed by a signal fails closed with exit 1 and names the signal, instead of process.exit(null) silently reporting exit 0', () => {
+  const dir = tmpdir('sb-gate-ac13')
+  const r = run(['--gate', 'echo running tests; kill -INT $$', '--root', dir])
+  assert.strictEqual(r.status, 1,
+    'a gate child killed by a signal must fail closed with exit 1 — spawnSync sets status:null on a signal kill, and process.exit(null) exits 0, so a gate interrupted mid-run currently reports green to review and build, and verdict.js derives CLEAN from exit codes alone: ' + out(r))
+  assert.match(out(r), /terminated by SIG/,
+    'the fail-closed note must name the signal that killed the child, or an interrupted run looks unexplained: ' + out(r))
+})
+
+test('AC-20260816-01-14: --gate still reports a genuinely failing gate when the child\'s combined output exceeds spawnSync\'s default 1MB buffer', () => {
+  const dir = tmpdir('sb-gate-ac14')
+  const cmd = 'head -c 2000000 /dev/zero | tr "\\0" "x"; echo; echo "✖ failing tests:"; ' +
+    'echo "test at tests/a.test.js:1:1"; echo "✖ some real failure (1ms)"; exit 1'
+  // The 2MB+ gate output round-trips twice: once inside suite-baseline.js's own spawnSync of the
+  // gate command (raised to 64MB there), and again here, where THIS test's spawnSync captures
+  // suite-baseline.js's own stdout. Without this override the OUTER capture hits Node's 1MB
+  // default and this process — not the script under test — gets SIGTERM/ENOBUFS, failing the
+  // assertion for a reason unrelated to doGate()'s logic. Do not remove this as a "simplification".
+  const r = run(['--gate', cmd, '--root', dir], { maxBuffer: 64 * 1024 * 1024 })
+  assert.strictEqual(r.status, 1,
+    'a genuinely failing gate must still exit 1 even when its combined output exceeds 1MB — the default maxBuffer truncates and kills the child (ENOBUFS, status:null) before runSuite\'s 64MB maxBuffer raises the ceiling, and without it a failing gate that merely prints more than 1MB is waved through as an unparseable passthrough: ' + out(r))
+  assert.match(out(r), /NEW-FAILING\s+\S*tests\/a\.test\.js\s*::\s*some real failure/,
+    'the >1MB-output failure must still be parsed and named, proving the buffer was actually raised rather than the failure being silently swallowed: ' + out(r))
+})
+
+test('AC-20260816-01-15 (SHALL CONTINUE TO, regression pin for AC-20260816-01-4): --gate on a child that exits non-zero with no parseable trailer still passes the child\'s own numeric exit code through unchanged', () => {
+  const dir = tmpdir('sb-gate-ac15')
+  const r = run(['--gate', 'exit 7', '--root', dir])
+  assert.strictEqual(r.status, 7,
+    'a real numeric non-zero exit code with no parseable trailer is informative and distinguishable from a null/signal-killed status, and must still pass through unchanged — collapsing it into the new fail-closed branch would erase this signal for e.g. a bare `exit 7` or a build-workflows --check failure: ' + out(r))
+  assert.match(out(r), /suite-baseline: no failing-test trailer — exit 7 passed through/,
+    'the existing passthrough note text must still be printed verbatim for a genuine non-zero exit code, unchanged by the new signal/null-status guard: ' + out(r))
 })
 
 test('AC-20260814-03-17: --check --pre with a missing or unparseable pre-image file exits 2 naming the remedy, never silently degrading to a baseline-only comparison', () => {

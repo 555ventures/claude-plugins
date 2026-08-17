@@ -49,6 +49,14 @@
       "name": "JJ-20260816-03: the run ledger can express a gate red that was entirely sanctioned, so the sanction survives outside console scrollback"
     },
     {
+      "file": "tests/gate-wrap-quoting.test.js",
+      "name": "JJ-20260817-02: the gate wrap invocation quotes its root argument at every gate-resolution site, so a repo path containing a space does not break the wrapped command"
+    },
+    {
+      "file": "tests/gate-wrap-quoting.test.js",
+      "name": "JJ-20260817-02: the wrapped command handed to the workflow gate (args.gate.command) carries an already-resolved absolute wrapper path, not an inline `$(spec-paths suite-baseline)` command substitution"
+    },
+    {
       "file": "tests/parity-check-roles.test.js",
       "name": "a declared seam vocabulary exempts wire kwargs inside internal-plane files"
     },
@@ -67,6 +75,10 @@
     {
       "file": "tests/tdd-waiver-provenance.test.js",
       "name": "JJ-20260816-02: waiving the red-first floor costs an evidence record, not a boolean"
+    },
+    {
+      "file": "tests/verdict-observed-anomaly.test.js",
+      "name": "JJ-20260817-03: a malformed gate \"observed\" string (empty sanctionedReds value) is recorded as unavailable/anomalous in the ledger row, never as a confident testsSkipped.total of 0"
     },
     {
       "file": "tests/workflow-runid-provenance.test.js",

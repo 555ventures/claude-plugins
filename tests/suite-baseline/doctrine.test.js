@@ -256,3 +256,41 @@ test('AC-20260816-01-11: the gate-loop fragment contains the D7 sentence naming 
     'which would break the twin-parity byte-identical splice pin (AC-20260813-05-7) between ' +
     'wf-build.js and wf-design.js')
 })
+
+// Review finding (2026-08-17, review of specs/20260816/01-gate-baseline-reconcile.md), soft
+// severity: the D7 gate-agent prompt sentence (AC-20260816-01-11, pinned verbatim above) and
+// review.md's sentinel capture rule both trigger on "the output contains a __SUITE_BASELINE__
+// line" — ANY line, not only the wrapper's own final one. The wrapper's sentinel is always
+// printed last, but tests/suite-baseline/suite-baseline.test.js bakes sentinel text into its own
+// assert messages, so a genuine failure inside those tests puts a residual=0 sentinel into the
+// gate runner's own failure output and the gate agent is instructed to report no failures — the
+// repair loop then exits with nothing to route, self-silencing on this spec's own files. Fixed
+// by an appended anchoring sentence at each locus — never editing the existing D7 sentence,
+// which AC-20260816-01-11 above continues to pin verbatim.
+
+test('AC-20260816-01-16: the gate-loop fragment appends a last-line anchoring sentence immediately after the D7 sentence, with no per-workflow substitution token inside it', () => {
+  const d7Start = gateLoopFrag.indexOf('If the output contains a __SUITE_BASELINE__')
+  assert.ok(d7Start !== -1,
+    'the D7 sentence must be present before its trailing anchoring sentence can be located')
+  const d7End = gateLoopFrag.indexOf('failures.', d7Start) + 'failures.'.length
+  const after = gateLoopFrag.slice(d7End, d7End + 400)
+  assert.match(after,
+    /\s*Read only the LAST such line — the wrapper prints its own sentinel last; any earlier\s*\n?\s*occurrence is quoted inside the child's own output\./,
+    'the fragment must append the anchoring sentence directly after the D7 sentence — without it a gate agent that sees an earlier, mid-output __SUITE_BASELINE__ line (e.g. one quoted inside these very tests\' own assert-failure output) may read that one instead of the wrapper\'s actual final sentinel, self-silencing the repair loop: ' + after)
+
+  const anchorStart = gateLoopFrag.indexOf('Read only the LAST such line')
+  assert.ok(anchorStart !== -1,
+    'the anchoring sentence must be present before its splice-token isolation can be checked')
+  const anchorEnd = gateLoopFrag.indexOf('output.', anchorStart) + 'output.'.length
+  const anchorSentence = gateLoopFrag.slice(anchorStart, anchorEnd)
+  assert.doesNotMatch(anchorSentence, /\$\{[a-zA-Z]+\}|__WF_NAME__/,
+    'the appended anchoring sentence must carry no per-workflow-name splice substitution token (e.g. `${wfName}` or `__WF_NAME__`) — build-workflows.js applies per-workflow substitution to such tokens, which would break the twin-parity byte-identical splice pin (AC-20260813-05-7) between wf-build.js and wf-design.js')
+})
+
+test('AC-20260816-01-17: review.md\'s gate leg states that S/sanctionedReds is read from the FINAL __SUITE_BASELINE__ line, beside the existing sanctionedReds capture instruction', () => {
+  const gateLeg = between(reviewDoc, 'the host\'s `gateCommand` — the deterministic gate.', 'the **boot smoke leg**')
+  assert.match(gateLeg, /sanctionedReds/,
+    'review.md\'s gate leg must still require capturing sanctionedReds from the sentinel — the anchoring requirement is stated beside this instruction, so it must still be present: ' + gateLeg)
+  assert.match(gateLeg, /final\s+`__SUITE_BASELINE__`\s+line/i,
+    'review.md\'s gate leg must state that S/sanctionedReds is read from the FINAL __SUITE_BASELINE__ line — without this anchoring requirement, capturing sanctionedReds from "a" __SUITE_BASELINE__ line risks reading an earlier occurrence quoted inside the wrapped command\'s own output (e.g. these very suite-baseline tests\' assert messages) instead of the wrapper\'s own trailing sentinel: ' + gateLeg)
+})

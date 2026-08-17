@@ -2,7 +2,7 @@
 'use strict'
 // verdict.js --manifest <path> [--workflow <path>] [--waived N] [--rejected N] [--fixDispatched N]
 //   [--ledger [--spec <path>] [--tier <T>] [--diff-loc N] [--iteration N] [--run-id <id>]]
-//   [--profile release [--milestone <string>] [--briefs N,N,...]]
+//   [--profile release [--milestone <string>] [--briefs N,N,...]] [--require <leg> ...]
 //
 // Incident (2026-08-05, spec review-evidence-manifest): /spec:review could print CLEAN with
 // nothing executed — a zero-findings panel return WAS the CLEAN definition, and the "CLEAN
@@ -55,6 +55,17 @@
 // `REVIEW_BLOCKING`, so a truly red gate or ci leg is caught by the GATE_RED branch above and
 // never reaches this check.
 //
+// Incident (2026-08-15, spec release-migrations-leg D4): a release could read CLEAN while the
+// deployed database was missing migrations the milestone shipped, because the migrations check
+// was one prose noun in release.md's manifest — nothing required the row, and pre-deploy timing
+// made a coincidental match indistinguishable from a real one. --require <leg> is repeatable:
+// each occurrence appends <leg> to the active profile's required set and, on --profile release
+// only, its blocking set too (on --profile review a --require'd leg joins required-only, so a
+// mis-wired review invocation derives UNVERIFIED forever rather than silently gating nothing —
+// a safe, loud failure, not an error). Duplicates (repeated flag, or a leg already built into
+// the profile) are de-duplicated; the flag never removes or reorders a profile's built-in legs.
+// This is the one accumulator flag — every other flag here is scalar-overwrite.
+//
 // Exit codes: 0 = derived CLEAN or CLEAN-with-qualifier · 1 = derived other non-CLEAN word
 // (still printed on stdout line 1) · 2 = usage error, missing/unreadable --manifest or
 // --workflow file, a disposition contradiction (--waived + --rejected + --fixDispatched
@@ -67,12 +78,13 @@ const fs = require('fs')
 function usage() {
   console.error('usage: verdict.js --manifest <path> [--workflow <path>] [--waived N] [--rejected N] ' +
     '[--fixDispatched N] [--ledger [--spec <path>] [--tier <T>] [--diff-loc N] [--iteration N] ' +
-    '[--run-id <id>]] [--profile release [--milestone <string>] [--briefs N,N,...]]')
+    '[--run-id <id>]] [--profile release [--milestone <string>] [--briefs N,N,...]] [--require <leg> ...]')
 }
 
 let manifestPath = null, workflowPath = null, waived = 0, rejected = 0, fixDispatched = 0
 let ledger = false, specArg = null, tier = null, diffLoc = null, iteration = null, profile = 'review'
 let runId = null, milestone = null, briefsArg = null
+const requireLegs = []
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
@@ -90,6 +102,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--run-id') runId = argv[++i]
   else if (a === '--milestone') milestone = argv[++i]
   else if (a === '--briefs') briefsArg = argv[++i]
+  else if (a === '--require') requireLegs.push(argv[++i])
   else { usage(); process.exit(2) }
 }
 if (!manifestPath) { usage(); process.exit(2) }
@@ -156,11 +169,18 @@ const REVIEW_BLOCKING = new Set(['gate', 'smoke', 'ci'])
 const RELEASE_LEGS = ['deploy', 'ready', 'e2e', 'journeys', 'substrate', 'production', 'ci']
 
 const requiredLegs = profile === 'release'
-  ? RELEASE_LEGS
+  ? [...RELEASE_LEGS]
   : ((workflow && workflow.scope === 'fix-delta')
       ? REVIEW_LEGS.filter(l => l !== 'reconcile' && l !== 'at-risk')
-      : REVIEW_LEGS)
-const blockingLegs = profile === 'release' ? new Set(RELEASE_LEGS) : REVIEW_BLOCKING
+      : [...REVIEW_LEGS])
+const blockingLegs = profile === 'release' ? new Set(RELEASE_LEGS) : new Set(REVIEW_BLOCKING)
+
+// D4: --require <leg> widens the active profile's required set (and, release-only, its
+// blocking set too) — never removes or reorders the built-ins above; duplicates collapse.
+for (const leg of requireLegs) {
+  if (!requiredLegs.includes(leg)) requiredLegs.push(leg)
+  if (profile === 'release') blockingLegs.add(leg)
+}
 
 function legIsRed(leg) {
   const row = legRows.get(leg)

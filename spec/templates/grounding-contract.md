@@ -82,8 +82,10 @@ checked-in permissions, generated project skills):
 
 `release` — the milestone release gate's grounding (`/spec:release`): `deployCommand`
 (staging), `stagingUrl`, `e2eCommand` (takes the target URL via `BASE_URL`), optional
-`promoteCommand` + `productionUrl` + `healthPath`. All host-declared at init/first-release
-time — the plugin never invents deploy mechanics.
+`promoteCommand` + `productionUrl` + `healthPath` + `migrationsCheck` (a host command that
+exits 0 iff every journaled migration is applied on the just-deployed staging database; the
+literal `"none"` records an explicit decline, absent = legacy). All host-declared at
+init/first-release time — the plugin never invents deploy mechanics.
 
 ## Capabilities (optional — declares stack-shaped facts the pipeline would otherwise assume)
 

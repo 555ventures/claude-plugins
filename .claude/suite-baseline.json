@@ -57,14 +57,6 @@
       "name": "a PascalCase class in its own snake_case module is not a parity finding"
     },
     {
-      "file": "tests/release-migrations-applied.test.js",
-      "name": "JJ-20260815-09: release requires a migrations-applied manifest row from any host whose config declares a database"
-    },
-    {
-      "file": "tests/release-migrations-applied.test.js",
-      "name": "JJ-20260815-09: the migrations check is asserted after the deploy, so a host with no migrate step fails instead of passing by coincidence"
-    },
-    {
       "file": "tests/tdd-waiver-provenance.test.js",
       "name": "JJ-20260816-02: a run that waived the red-first evidence floor says so in its returned artifact"
     },

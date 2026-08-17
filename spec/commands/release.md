@@ -52,25 +52,43 @@ milestone ships, not the pipeline.
 3. **Substrate delta:** diff the shipped specs' File Plans for new env vars, new third-party
    integrations, and new migrations since the last release — each becomes a checklist row in
    Phase 1 (only the delta is re-checked on later runs; the first run checks everything).
+4. **Migrations detection (runs on every Phase 0 execution, first run and delta runs alike):**
+   when the repo carries a migrations directory (any of `drizzle/`, `prisma/migrations/`,
+   `migrations/`, `db/migrate/`, `alembic/`, `supabase/migrations/`) and the config `release`
+   block declares neither `migrationsCheck` nor the literal `"none"`, ask the user for the
+   host's migrations-status command (detect → recommend → confirm, the same interview pattern
+   as init's `capabilities.skipReportPattern` step: propose a derived command as the
+   recommended-first default, glossed in plain English with the consequence of overriding it,
+   confirm or override in one `AskUserQuestion` call) and write the answer — including an
+   explicit decline as `"none"` — into config before Phase 1. **A runnable `migrationsCheck`**
+   is this spec's single defined term, cited (never restated) everywhere below: config declares
+   a `migrationsCheck` value other than `"none"` or absent.
 
 Create `{manifestPath}` now — a fresh `mktemp` file, one per run — that every leg below
 appends a JSONL row to (`{"leg":"<name>","exit":<code>,"observed":"<≤120-char counts/enums>"}`,
 matching review's evidence-manifest shape (D1/D7)). This run's **required legs** are `deploy`,
 `ready`, `e2e`, `journeys`, `substrate`, `production`, `ci` — `verdict.js --profile release`
-derives the milestone word from them.
+derives the milestone word from them. When the config declares a runnable `migrationsCheck`
+(Phase 0's defined term), the verdict invocation below additionally passes `--require migrations`,
+making `migrations` required too.
 
 ## Phase 1 — Release manifest (first run heavy, later runs delta-only)
 
 Maintain `.claude/release-manifest.json` — same shape and same checker as init's deliverable
 manifest (`{claim, kind, target}` rows; `bash $(spec-paths manifest-check) --manifest
 .claude/release-manifest.json`). Rows for: production env vars set (an `exec` row per
-verifiable check, `inert` with reason where unverifiable from this host), migrations path
-(`exec` against staging), monitoring/error-tracking reachable, live-mode third parties
+verifiable check, `inert` with reason where unverifiable from this host), monitoring/error-tracking reachable, live-mode third parties
 (payments/email/OAuth — `inert` rows with the user's explicit confirmation recorded as the
 reason where no mechanical check exists), domain/TLS (`exec`: a curl against
 `productionUrl`). First release: build the full manifest with the user. Later releases:
 re-check only Phase 0's substrate delta plus rows whose targets changed. The manifest is
 committed — it doubles as the handover document: a list of verified observations, not claims.
+Any host declaring `migrationsCheck` owes the Phase 2 `migrations` leg below (required into
+the verdict via `--require migrations`) — deliberately never here: a pre-deploy comparison of
+applied-vs-journal migrations cannot distinguish a deploy that actually applies migrations from
+a journal that happens to already match what's applied, which is exactly the coincidence that
+let a prior release pass green while the deployed database sat four migrations behind. The
+check runs after the deploy, in Phase 2, where the comparison is finally meaningful.
 `manifest-check.sh` prints a machine sentinel line after its prose summary —
 `TOTAL=<n> FAILS=<n> INERT=<n>` — parse `checked`/`failed`/`inert` from that sentinel verbatim
 (never hand-counted from the prose lines above it) and append `{"leg":"substrate","exit":<0 if
@@ -81,10 +99,12 @@ format breaks that derivation silently.
 
 ## Phase 2 — Stage and observe (all executed, fail-closed)
 
-The `deploy`/`ready`/`e2e`/`journeys`/`production`/`ci` legs' `observed` strings below are
-pinned — `verdict.js --profile release` parses them verbatim into the ledger row (D2/D7):
-`deploy` and `ready` carry no counts (their exit codes alone derive the ledger row's `staging`
-field — `pass` only when both exit 0); `e2e` is `passed=<N> failed=<M> skipped=<K>`; `journeys`
+The `deploy`/`ready`/`migrations`/`e2e`/`journeys`/`production`/`ci` legs' `observed` strings
+below are pinned — `verdict.js --profile release` parses them verbatim into the ledger row
+(D2/D7): `deploy` and `ready` carry no counts (their exit codes alone derive the ledger row's
+`staging` field — `pass` only when both exit 0); `migrations` carries no counts either — its
+`observed` is the literal `pass`/`fail`, matching deploy/ready's shape; `e2e` is
+`passed=<N> failed=<M> skipped=<K>`; `journeys`
 is `walked=<N> failed=<M>`; `production` is `observed ∈ verified|skipped|failed`; `ci` is
 `observed ∈ conclusion=<value>|unavailable|in-progress`. Drifting any of these strings breaks
 that derivation silently — the leg that appends the row and the script that parses it must
@@ -95,7 +115,13 @@ agree on exactly this format.
 2. **Ready check against the deployed URL:** the config `runtime.readyCheck` pattern applied
    to `stagingUrl` + `healthPath` (or a plain curl). The boot-leg discipline, applied to real
    infra. Append `{"leg":"ready","exit":<exit>,"observed":"<pass|fail>"}` to `{manifestPath}`.
-3. **CI check on the release commit (D4):** `node "$(spec-paths ci-query)" --commit $(git -C .
+3. **Migrations check (when a runnable `migrationsCheck` is declared — Phase 0's defined
+   term):** run it now, after the deploy and the ready check — the comparison is meaningful
+   only here, since before the deploy a host with no migrate step at all is indistinguishable
+   from one that is up to date. Append `{"leg":"migrations","exit":<exit>,"observed":"<pass|fail>"}`
+   to `{manifestPath}`. Declined (`"none"`) or legacy (key absent): the leg is neither run nor
+   appended.
+4. **CI check on the release commit (D4):** `node "$(spec-paths ci-query)" --commit $(git -C .
    rev-parse HEAD) --root .` — the authoritative per-commit CI verdict. A completed run with
    `conclusion` ∈ (`failure`/`timed_out`/`cancelled`) maps to `exit:1`; a completed non-red run
    maps to `exit:0`, `observed:"conclusion=<value>"`; `available:false` maps to `exit:0`,
@@ -109,7 +135,7 @@ agree on exactly this format.
    map). Whenever `observed` is not a `conclusion=<value>` string, the Phase 4 pre-promote
    report MUST carry one ⚠️ line stating CI never delivered a verdict on this exact commit (and,
    for `unavailable`, that pushing would produce one).
-4. **e2e against the deployment:** `BASE_URL={stagingUrl} {e2eCommand}`. Capture pass / fail
+5. **e2e against the deployment:** `BASE_URL={stagingUrl} {e2eCommand}`. Capture pass / fail
    / skip counts from the runner's own output — **a skipped e2e is reported by name, never
    silently green.** When the host's declared `capabilities.skipReportPattern` (D1) is absent,
    `"none"`, or doesn't match this run's output, the skip count is honestly
@@ -118,7 +144,7 @@ agree on exactly this format.
    `{"leg":"e2e","exit":<0 if zero failed else 1>,"observed":"passed=<N> failed=<M> skipped=<K>"}`
    (or `skipped=unavailable` in place of `<K>` when the skip format is undeclared/unmatched)
    to `{manifestPath}`.
-5. **Journey walks:** for each brief shipped this milestone, walk its primary journey against
+6. **Journey walks:** for each brief shipped this milestone, walk its primary journey against
    staging (the brief's milestone-gate observable, via the host's spec-verify skill, browser
    automation, or scripted API calls — whatever the skill declares), plus **one standing
    whole-product journey** (sign-up → core loop → the product's reason to exist) every
@@ -128,11 +154,12 @@ agree on exactly this format.
    `{"leg":"journeys","exit":<0 if zero failed else 1>,"observed":"walked=<N> failed=<M>"}` to
    `{manifestPath}`.
 
-Any failure here (a red `deploy`/`ready`/`e2e`/`journeys`/`ci` row): **STOP.**
+Any failure here (a red `deploy`/`ready`/`migrations`/`e2e`/`journeys`/`ci` row): **STOP.**
 Never promote over a red staging or a red release-commit CI run.
 
 The stop still runs `node "$(spec-paths verdict)" --profile release --manifest {manifestPath}
---ledger --milestone {milestone} --briefs {shipped brief numbers, comma-separated}` — an early
+--ledger --milestone {milestone} --briefs {shipped brief numbers, comma-separated}` (plus
+`--require migrations` when the config declares a runnable `migrationsCheck`) — an early
 Phase-2 STOP leaves later legs without manifest rows, and `verdict.js` checks missing-required
 legs *before* red legs, so the word it derives on an early stop is typically `UNVERIFIED`, not
 `GATE_RED` (only a STOP triggered by this leg's own red row derives `GATE_RED`); its row is
@@ -158,7 +185,7 @@ Next: route the defect to the normal flow — direct fix or a spec, or /spec:esc
 
 A milestone whose only gap is a `ci` leg that structurally never delivered a verdict
 (`unavailable`/`in-progress`) is `CLEAN-with-qualifier`, not a block: it promotes exactly as
-plain `CLEAN` does, carrying the already-mandated ⚠️ line (Phase 2 step 3) into the promote
+plain `CLEAN` does, carrying the already-mandated ⚠️ line (Phase 2 step 4) into the promote
 question's context and the Phase 4 report — the word gates nothing extra here.
 
 1. `AskUserQuestion`: promote this build to production? (Include the Phase 2 observation
@@ -182,9 +209,11 @@ question's context and the Phase 4 report — the word gates nothing extra here.
 
 1. **Verdict + ledger row** — run `node "$(spec-paths verdict)" --profile release --manifest
    {manifestPath} --ledger --milestone {milestone} --briefs {shipped brief numbers,
-   comma-separated}` (the same call the Phase 2/3 STOP path above would have quoted, had one
-   fired: `verdict.js --profile release --ledger` is one derivation with one origin on every
-   path). `--milestone`/`--briefs` are orchestrator-supplied identity fields (`$ARGUMENTS` /
+   comma-separated}` (plus `--require migrations` when the config declares a runnable
+   `migrationsCheck` — Phase 0's defined term) (the same call the Phase 2/3 STOP path above
+   would have quoted, had one fired: `verdict.js --profile release --ledger` is one derivation
+   with one origin on every path). `--milestone`/`--briefs` are orchestrator-supplied identity
+   fields (`$ARGUMENTS` /
    Phase 0 step 2's shipped-brief list); `staging`/`e2e`/`journeys`/`substrate`/`production`/`ci`
    are derived from the Phase 2/3 manifest rows, never passed as flags. Print line 1 (the word
    — `CLEAN`, `CLEAN-with-qualifier`, `GATE_RED`, or `UNVERIFIED`) verbatim, and append exactly
@@ -215,7 +244,8 @@ question's context and the Phase 4 report — the word gates nothing extra here.
    composed, staging + e2e passed, promoted` on CLEAN; ✅ `milestone green (qualified: CI
    never delivered a verdict) — promoted` on `CLEAN-with-qualifier`; 🚫 `{what blocked
    promotion}` otherwise), `bullets` (`- shipped: {briefs + specs}`, `- observed: {deploy,
-   ready, e2e counts, journeys walked with outcomes, ci verdict — one line each}`,
+   ready, migrations (pass/fail, when the leg ran), e2e counts, journeys walked with outcomes,
+   ci verdict — one line each}`,
    `- substrate: {rows checked / inert-declared} · production: {verification result}`),
    `warns` (`ci never delivered a verdict on this commit` only on `CLEAN-with-qualifier`, plus
    `yours / the client's to do: {inert rows, verbatim — one line each}` whenever inert rows
@@ -230,7 +260,7 @@ question's context and the Phase 4 report — the word gates nothing extra here.
       (or, on `CLEAN-with-qualifier`: ✅ **milestone green (qualified: CI never delivered a
       verdict) — promoted** · or: 🚫 **{what blocked promotion}**)
    - shipped: {briefs + specs}
-   - observed: {deploy, ready, e2e counts, journeys walked with outcomes, ci verdict — one line each}
+   - observed: {deploy, ready, migrations (pass/fail, when the leg ran), e2e counts, journeys walked with outcomes, ci verdict — one line each}
    - substrate: {rows checked / inert-declared} · production: {verification result}
    ⚠️ ci never delivered a verdict on this commit    (only on `CLEAN-with-qualifier`)
    ⚠️ yours / the client's to do: {inert rows, verbatim — one line each}

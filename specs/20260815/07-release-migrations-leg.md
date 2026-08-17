@@ -1,6 +1,7 @@
 ---
 date: 2026-08-15
-status: hardened
+status: implementing
+diff_base: 23fea7c8d6d2436bc1e5680db78aac867600edfd
 open_markers: 0
 risk: T3                 # edits spec/scripts/verdict.js — the sole derivation of the review/release verdict word (named T3 trigger) — plus the hash-stamped grounding contract
 area: release-integrity
@@ -37,7 +38,7 @@ host-declared, never invented by the plugin.
 | D5 | release.md Phase 1's manifest clause "migrations path (`exec` against staging)" is **replaced in place**: the migrations row leaves the Phase 1 manifest list; in its place one sentence states that any host declaring `migrationsCheck` owes the Phase 2 `migrations` leg (required via `--require migrations`) and why pre-deploy comparison is refused. Phase 1 keeps all its other rows untouched. | The pre-deploy manifest row IS the measured false-green; leaving it alongside the leg would keep a second, vacuous-by-timing assertion of the same fact. |
 | D6 | `spec/templates/grounding-contract.md` § Release gains optional `migrationsCheck` in the release-block key list (this spec's single contract edit; the contract-hash escalation trigger is pre-answered by this Decision — proceed, no consult). | Same deliberate-contract-change discipline as specs 05/06. |
 | D7 | Scaffold-ledger: **extend** the existing "Release stage executed checks" row (~line 39 — the row that already absorbed the ci leg's 2026-08-10 addition, the exact structural precedent for a new release-stage leg; refuter finding: the draft cited the "Declared host capabilities" row, but that row's own text scopes itself to the `capabilities` config block and its key-level retire framing doesn't fit a conditional leg). The addition follows the ci-leg addition's format: dated, spec-cited, naming the `migrations` leg + `--require` mechanism; evidence gains the hearwell four-behind incident; the residual "a milestone shipping zero migrations passes trivially green" is recorded there as accepted-harmless. | The row that governs release-stage executed legs is where a release-stage executed leg belongs; the capabilities row documents config-block facts, not legs. |
-| D8 | Version bump target `6.81.0` (target, not pin — next-free rule on race). | Version-bump discipline. |
+| D8 | Version bump target `6.81.0` (target, not pin — next-free rule on race). **Resolved at build 2026-08-17 (A4 escalation, pre-answered): HEAD already carries `6.86.0`, so the bump target is `6.87.0`.** | Version-bump discipline. |
 
 ## File Plan
 

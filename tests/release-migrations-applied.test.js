@@ -24,17 +24,33 @@ const { read } = require('./helpers')
 
 const release = read('spec/commands/release.md')
 
-test('JJ-20260815-09: release requires a migrations-applied manifest row from any host whose config declares a database', () => {
+test('AC-20260815-07-4 (JJ-20260815-09): release doctrine states a declaring host\'s manifest owes/requires the migrations check', () => {
   assert.match(release, /migrations[\s\S]{0,300}(required|must carry|must contain|owes)/i,
-    'the migrations row is listed as one example among several, so a schema-carrying host that ' +
-    'simply never writes it still passes the substrate leg — the check that would have caught a ' +
-    'four-migration gap existed only because one host invented it')
+    'the migrations row must be stated as an obligation on any host that declares migrationsCheck — a ' +
+    'schema-carrying host that simply never writes it still passes the substrate leg, which is exactly ' +
+    'how the four-migration gap escaped')
 })
 
-test('JJ-20260815-09: the migrations check is asserted after the deploy, so a host with no migrate step fails instead of passing by coincidence', () => {
+test('AC-20260815-07-5 (JJ-20260815-09): release doctrine places the migrations check after the deploy (Phase 2/post-deploy), with the coincidence rationale', () => {
   assert.match(release,
     /migrations[\s\S]{0,400}(after the deploy|post-deploy|Phase 2)|((after the deploy|post-deploy)[\s\S]{0,200}migrations)/i,
     'comparing journal count to applied count BEFORE the deploy cannot distinguish "the deploy ' +
     'applies migrations" from "the journal happens to match what was already applied" — which is ' +
     'exactly how the prior release went green while carrying the same missing wiring')
+})
+
+test('AC-20260815-07-7: release doctrine\'s Phase 0 names migrations-directory detection and the explicit "none" decline recording', () => {
+  assert.match(release, /migrationsCheck[\s\S]{0,600}"none"/,
+    'Phase 0 must detect a migrations directory (drizzle/prisma/migrations/db-migrate/alembic/supabase) ' +
+    'and, when config has neither migrationsCheck nor "none", ask for the command and record a decline as ' +
+    'the literal "none" — without this a host that adds its first migrations directory after release ' +
+    'wiring exists silently never gets asked, reproducing the vacuous-green class this spec closes')
+})
+
+test('AC-20260815-07-8: release doctrine\'s Phase 2 blanket STOP sentence includes "migrations" in its red-row enumeration', () => {
+  assert.match(release, /Any failure here \(a red [^)]*`migrations`[^)]*row\): \*\*STOP\.\*\*/,
+    'the STOP sentence must enumerate migrations alongside deploy/ready/e2e/journeys/ci so a red ' +
+    'migrations leg halts Phase 2 before CI/e2e/journeys spend their runs — a rationale-only claim of ' +
+    'fail-fast without this enumeration edit does not actually stop anything, the identical gap the ' +
+    'ci-leg spec 20260810/07 hit and fixed')
 })

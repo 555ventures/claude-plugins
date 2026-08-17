@@ -128,6 +128,14 @@ function assertResolutions(resolutions) {
 // Returns an array of mismatches (empty = every file matched). Every uncertain path fails CLOSED
 // as 'not-collected'/UNVERIFIED rather than silently resolving to green.
 function crossCheckSentinels(expectations, sentinels, hasTypecheckLeg) {
+  // 2026-08-15 spec 06 D3 (amended 2026-08-16 for TS2305/missing-export): a typecheck diagnostic
+  // that is itself resolution-shaped — "cannot find this module/export" — names the importing
+  // file exactly like a genuine type-level red does, but proves nothing about the file's OWN
+  // assertions. It must never satisfy a red expectation on its own; it is load-shaped, exactly
+  // like an unattributed runtime red, and routes to the same D4 stub remedy. (Kept inside the
+  // function body, not hoisted: tests/*.test.js extract this function standalone via evalFns.)
+  const RESOLUTION_SHAPED_RE =
+    /cannot find module|cannot resolve|module_not_found|modulenotfounderror|TS2307|TS2305|has no exported member/i
   const byPath = {}
   for (const s of sentinels || []) byPath[s.path] = s
   const unverified = (path, expect, detail) => ({
@@ -163,6 +171,39 @@ function crossCheckSentinels(expectations, sentinels, hasTypecheckLeg) {
       continue
     }
     const typecheckRed = hasTypecheckLeg && s.typecheckRed === true
+    const typecheckResolutionShaped = typecheckRed && RESOLUTION_SHAPED_RE.test(s.typecheckEvidence || '')
+    // "Attributed" red on the typecheck leg excludes the resolution-shaped diagnostics above —
+    // those never satisfy red by themselves (D3), even though they remain `typecheckRed: true`
+    // for the plain green-vs-red comparison a green expectation still uses below.
+    const typecheckAttributedRed = typecheckRed && !typecheckResolutionShaped
+
+    if (f.expect === 'red') {
+      // D1/D2: a runtime-red observation satisfies red only when ATTRIBUTED — an assertion
+      // actually ran and failed in the file's own probe run (`assertionsRun >= 1`). Legs compose
+      // by OR (D2, refuter finding): an attributed leg alone is enough, so a non-resolution
+      // typecheck red still proves the file red even when the SAME sentinel's runtime leg is
+      // unattributed. A resolution-shaped typecheck red never contributes to satisfying red.
+      const assertionsRun = s.assertionsRun
+      const runtimeAttributedRed = runtimeRed &&
+        typeof assertionsRun === 'number' && assertionsRun >= 1
+      if (runtimeAttributedRed || typecheckAttributedRed) continue
+      if (runtimeRed || typecheckResolutionShaped) {
+        // Load-shaped red: the file (or an import it triggers) crashed before demonstrating
+        // anything about its own assertions — fails CLOSED exactly like every other uncertain
+        // path here, never counted as a satisfied red.
+        mismatches.push(unverified(f.path, f.expect,
+          'red observed for ' + f.path + ' but not attributed to an executed assertion ' +
+          '(assertionsRun ' + JSON.stringify(assertionsRun) + (typecheckResolutionShaped
+            ? '; typecheck evidence is resolution-shaped (missing module/export), not a genuine ' +
+              'type-level red'
+            : '') + ') — a load-blocked carrier proves nothing until re-probed against an inert ' +
+          'stub at its File-Plan CREATE path (D4 stub protocol)'))
+        continue
+      }
+      // Falls through: runtime green, no typecheck red at all — a genuine green observation
+      // against a red expectation, handled by the plain comparison below exactly as before.
+    }
+
     const observedRed = runtimeRed || typecheckRed
     if (observedRed !== (f.expect === 'red')) {
       const leg = runtimeRed === typecheckRed ? 'none' : (runtimeRed ? 'runtime' : 'typecheck')
@@ -288,16 +329,28 @@ const RED = {
     // Per-file evidence is DUAL-LEG, because the expectation it is cross-checked against is
     // dual-leg (a file is red if EITHER leg fails on it — HEARWELL-20260721-01). Carrying only
     // the runtime sentinel made the two measurements incommensurable and DEADLOCKED any
-    // compile-time-only carrier: a type-level test (`expectTypeOf`, an assert-absence pin, a test
-    // importing a module the implementation has not created yet) is ERASED at runtime, so it can
-    // never be runtime-red by construction — `expect: 'red'` failed the sentinel cross-check while
-    // `expect: 'green'` failed the dual-leg reading, and NO classification could pass. Observed on
-    // dashboard spec 20260813/10, whose AC promise was itself a compile-time one.
+    // compile-time-only carrier: a type-level test (`expectTypeOf`, an assert-absence pin) is
+    // ERASED at runtime, so it can never be runtime-red by construction — `expect: 'red'` failed
+    // the sentinel cross-check while `expect: 'green'` failed the dual-leg reading, and NO
+    // classification could pass. Observed on dashboard spec 20260813/10, whose AC promise was
+    // itself a compile-time one.
     //
     // The runtime leg keeps its exit-code-only proof. The typecheck leg cannot have one: a host
     // typecheck is whole-repo, so its exit code says nothing about WHICH file failed. Attribution
     // is therefore a reading, and is made proof-bearing instead by requiring the verbatim
     // diagnostic — cross-checked below to actually name the file it is claimed against.
+    //
+    // 2026-08-15 spec 06 (HEARWELL-20260814-01): a red observation must also be ATTRIBUTED. A
+    // test importing a module or export the implementation has not yet written is NOT erased at
+    // runtime like the compile-time-only carrier above — it CRASHES at runtime, "failing" while
+    // executing zero assertions, and a spec's first act is overwhelmingly a new export, so that
+    // vacuous case is the COMMON one, not an edge. `assertionsRun` below records how many
+    // assertions actually executed; runtime-red with `assertionsRun` 0/absent/non-numeric
+    // satisfies nothing on its own. A resolution-shaped typecheck diagnostic (missing module or
+    // missing export) is exactly as vacuous and never satisfies red either. Both route to the D4
+    // stub protocol in the RED dispatch prompt below: an inert stub at the file's File-Plan CREATE
+    // path lets the probe re-run and report a genuinely demonstrated (or honestly still-vacuous)
+    // observation.
     sentinels: {
       type: ['array', 'null'],
       items: {
@@ -310,8 +363,12 @@ const RED = {
           typecheckRed: { type: 'boolean' },
           // Verbatim diagnostic line(s) naming this path. Non-empty iff typecheckRed is true.
           typecheckEvidence: { type: 'string' },
+          // 2026-08-15 spec 06 D1: assertions that actually EXECUTED in the probe run this
+          // sentinel reports (the post-stub run when D4 stubbed a load-blocked carrier). 0 means
+          // the file loaded nothing / crashed before asserting.
+          assertionsRun: { type: 'integer', minimum: 0 },
         },
-        required: ['path', 'sentinel', 'typecheckRed', 'typecheckEvidence'],
+        required: ['path', 'sentinel', 'typecheckRed', 'typecheckEvidence', 'assertionsRun'],
       },
     },
     summary: { type: 'string' },
@@ -706,12 +763,18 @@ if (args.tdd && (args.testBatches || []).length) {
       `test command is likely workspace-filtered while the paths are repo-root-relative — ` +
       `rewrite the paths relative to the command's workspace and re-run before concluding; ` +
       `report observed "not-collected" only if no rewrite makes the runner collect them.\n` +
-      `For EACH file (both RED- and GREEN-expected), report one \`sentinels\` entry carrying ` +
-      `BOTH legs — {path, sentinel, typecheckRed, typecheckEvidence}:\n` +
+      `For EACH file (both RED- and GREEN-expected), report one \`sentinels\` entry carrying BOTH ` +
+      `legs plus assertion attribution — {path, sentinel, typecheckRed, typecheckEvidence, ` +
+      `assertionsRun}:\n` +
       `- \`sentinel\`: run exactly ${args.gate.testCommand} <path> && echo AUDIT_GREEN:<path> ` +
       `|| echo AUDIT_RED:<path> and report the printed line verbatim. This is the runtime leg's ` +
       `exit-code-only proof, the same discipline the Gate phase's own sentinel already enforces, ` +
       `so the runtime verdict never rests on your reading of raw stdout alone.\n` +
+      `- \`assertionsRun\`: the count of assertions that actually EXECUTED in the run you just ` +
+      `performed for this file (the POST-STUB run below if you had to stub). 0 means the file ` +
+      `loaded nothing or crashed before any assertion ran — report this honestly for every file; ` +
+      `a red observation with \`assertionsRun\` 0 proves nothing and is treated as UNVERIFIED, ` +
+      `never as a satisfied red.\n` +
       (args.gate.typecheckCommand
         ? `- \`typecheckRed\`: true iff the ${args.gate.typecheckCommand} run reported a ` +
           `diagnostic against THIS file. That leg is whole-repo, so its exit code cannot ` +
@@ -720,13 +783,28 @@ if (args.tdd && (args.testBatches || []).length) {
           `checked to actually contain the path; a claim without it is treated as UNVERIFIED), ` +
           `or "" when typecheckRed is false.\n` +
           `A file that PASSES at runtime but carries a typecheck diagnostic is RED — the normal ` +
-          `shape for a compile-time-only carrier (a type-level assertion, an assert-absence pin, ` +
-          `a test importing a module the implementation has not created yet), which is erased at ` +
-          `runtime and therefore can never be runtime-red.\n`
+          `shape for a compile-time-only carrier (a type-level assertion, an assert-absence pin), ` +
+          `which is ERASED at runtime and therefore can never be runtime-red. A diagnostic that is ` +
+          `itself a missing-module or missing-export error (e.g. "Cannot find module", TS2307, ` +
+          `TS2305, "has no exported member") is NOT this compile-time-only case — it is ` +
+          `load-shaped exactly like the runtime crash below, and never on its own satisfies a red ` +
+          `expectation.\n`
         : `- \`typecheckRed\`: this host declares no standalone typecheck leg — report false and ` +
           `"" for every file; a true here is treated as UNVERIFIED.\n`) +
+      `Load-blocked red-expected files (stub protocol): if a RED-expected file fails to LOAD — ` +
+      `for example it imports a module or export the implementation has not written yet, and it ` +
+      `CRASHES at runtime rather than being cleanly erased by it — that crash alone proves nothing ` +
+      `about the file's own assertions. If the missing specifier is a path this spec's own File ` +
+      `Plan CREATEs, write an inert stub there (a minimal module with placeholder exports), re-run ` +
+      `this file's probe leg(s), and report the POST-STUB sentinel and assertionsRun. Then DELETE ` +
+      `the stub(s) you created and verify only those exact stub paths are gone — never a ` +
+      `whole-tree cleanliness check, since this build's own newly authored test files are ` +
+      `legitimately untracked at probe time. If the file is still load-red after stubbing, or the ` +
+      `missing specifier names no File Plan CREATE path, report assertionsRun 0 honestly — an ` +
+      `unattributed red, not a satisfied one.\n` +
       `Report allMatch=true only when every file matches its expectation; list every mismatch ` +
-      `with the leg that decided it. Do not edit any file.`,
+      `with the leg that decided it. Do not edit any file, with exactly one exception: the stub ` +
+      `protocol above (create the named stub paths, delete them before returning).`,
       { label: 'red-check', phase: 'RedCheck', schema: RED, model: 'sonnet', effort: 'low' })
     // Cross-check each file's reported red/green state against its OWN observed evidence —
     // unproven or missing evidence means the agent's allMatch/mismatches reading is unverified,

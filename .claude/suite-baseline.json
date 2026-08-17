@@ -49,14 +49,6 @@
       "name": "a PascalCase class in its own snake_case module is not a parity finding"
     },
     {
-      "file": "tests/redcheck-load-failure-attribution.test.js",
-      "name": "JJ-20260815-07: a red-expected carrier whose file failed to LOAD executed zero assertions and must fail closed as unverified, never count as a satisfied red"
-    },
-    {
-      "file": "tests/redcheck-load-failure-attribution.test.js",
-      "name": "JJ-20260815-07: a sentinel omitting the assertion attribution entirely fails closed rather than being read as attributed"
-    },
-    {
       "file": "tests/release-migrations-applied.test.js",
       "name": "JJ-20260815-09: release requires a migrations-applied manifest row from any host whose config declares a database"
     },

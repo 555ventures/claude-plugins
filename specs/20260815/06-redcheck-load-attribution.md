@@ -1,6 +1,7 @@
 ---
 date: 2026-08-15
-status: hardened
+status: implementing
+diff_base: 45a2eca0e3cf20c70ff996c830693edd67294398
 open_markers: 0
 risk: T3                 # rewrites wf-build.body.js through the codegen seam (named T3 trigger) — a defect here corrupts the TDD red-first evidence floor for every host
 area: build-integrity
@@ -38,7 +39,7 @@ real. Compile-time-only carriers (the 20260813/10 deadlock class) stay classifia
 | D6 | Colliding pins updated in place, retagged, never weakened (the sanctioned mid-build collision path): in tests/redcheck-sentinel-dual-leg.test.js, (i) the deadlock test's `TYPE_DIAG` — today literally `TS2307: Cannot find module` — becomes a genuine type-assertion diagnostic (e.g. `error TS2344: Type 'string' does not satisfy the constraint …`) so the deadlock pin keeps pinning the deadlock fix without embodying the newly-refused class; (ii) the "ordinary runtime-red carrier" case gains `assertionsRun: 1`; (iii) the header comment's example list drops the missing-module item mirroring D5; (iv) the schema-required pin extends to `assertionsRun`. | The dual-leg suite is the load-bearing pin surface for this exact function; every change here is a retag that preserves each test's original invariant with a truthful example. |
 | D7 | Scaffold-ledger: **extend** the existing "Red-check sentinel cross-check" row (~line 85 — the row whose retire condition reads "Retire never — it is the TDD red-first evidence floor"; refuter finding: the draft cited the neighboring classification row, whose retire condition is unrelated re-tune language). Attribution (`assertionsRun`), the D3 resolution-marker refusal, and the stub protocol join that row's mechanism description; JJ-20260815-07 joins its evidence — never a new row. | The mechanism being hardened IS the sentinel cross-check; a second row would fork its promote/retire condition, and citing the wrong neighbor would leave the Behavior section's quoted retire text unmatched to the edited row. |
 | D9 | The `tdd-red-check` row's pre-existing "strictly redder than red" exception is **disambiguated in the same edit** (refuter finding, adopted — without this, that clause silently re-swallows D2's fail-closed result): the exception is explicitly scoped to **collection-level absence** — the runner collected zero files because the collecting home (workspace package, config registration, harness) the spec itself creates does not exist yet (HEARWELL-20260804-02's class) — and explicitly does NOT cover a file the runner collected and attempted whose **load** failed: load-shaped `not-collected` always takes D4's stub route or the `tdd-red-check` consult, never "proceed on the spec's authority". The clause's pinned literals ("strictly redder than red", "the spec itself creates" — tests/redcheck-new-package.test.js) survive verbatim; the scoping sentence is added around them. | The two clauses share the `not-collected` word and near-identical "spec creates it" language; without an explicit boundary, the pre-existing pass-through converts the new fail-closed result back into a pass — precisely the vacuous class this spec closes. |
-| D8 | Version bump target `6.80.0` (target, not pin — next-free rule on race). | Version-bump discipline. |
+| D8 | Version bump target `6.80.0` (target, not pin — next-free rule on race). **Resolved at build 2026-08-17 (A5 escape, orchestrator ruling): HEAD already carries `6.84.0`, so the bump target is `6.85.0`** — next free, deviation logged. | Version-bump discipline. |
 
 ## File Plan
 

@@ -259,3 +259,32 @@ upstream bug list. -->
   ID to fill it. (specs/20260815/05-env-preflight.md build 2026-08-16 —
   `tests/terminal-observable-acs.test.js`, caught by the orchestrator, logged in that spec's
   deviations sidecar.)
+- `[plugin]` `suite-baseline.js --snapshot` / `--check --pre` binds the pre-image to a single
+  instant and so assumes exclusive repo access for the whole build. Concurrent sessions are
+  normal here (there is already a `[host]` entry for them racing the same semver), so a sibling
+  session landing its own TDD red pins mid-build reports them as `preNewFailing` — a nominally
+  BLOCKING result whose only honest resolution is out-of-band attribution work, since
+  "repairing" it would mean implementing an unrelated INTAKE item. Attribute by execution
+  (restore the pre-change file, re-run the pins, compare creation times against the snapshot),
+  record it, and do not weaken or retag the sibling's pins. A cheap closure would be for
+  `--check --pre` to subtract rows whose test file did not exist at snapshot time, or rows the
+  checked-in `.claude/suite-baseline.json` sanctions and the pre-image predates.
+  (specs/20260816/03-file-plan-table-scoped-parsing.md build 2026-08-17 —
+  `tests/ac-matrix-duplicate-id.test.js`, JJ-20260817-01's pins, logged in that spec's
+  deviations sidecar.)
+- `[plugin]` `diff_base` is written once at build Phase 0 and is documented as never rewritten,
+  but a concurrent session committing between that capture and the build's own commit makes the
+  recorded sha a stale pre-image — review then diffs the sibling's unrelated commit into this
+  spec's panel. The build corrects `diff_base` to the true pre-image at close and records the
+  departure; review inherits the corrected value with no special handling.
+  (specs/20260816/03-file-plan-table-scoped-parsing.md — `c467bc3` corrected to `f85d07a` at
+  build close 2026-08-17.)
+- `[host]` `tests/autopilot/preflight.test.js`'s AC-20260810-04-12 polls for the ready file
+  against a fixed 3-second wall-clock deadline, which is not robust under concurrent load:
+  review Phase 0 launches the boot smoke leg (another `autopilotd` boot) in the same parallel
+  batch as the whole-suite `suite-baseline --check`, and the test went red on that contention
+  alone. Serial re-run and isolated run are both green. A red `suite` leg naming only this test
+  is a load artifact, not a diff defect — re-run the suite leg serially before treating it as a
+  finding; the durable fix is a load-tolerant deadline or a bounded predicate poll, not a
+  baseline row. (specs/20260816/03-file-plan-table-scoped-parsing.md review 2026-08-17,
+  runId `wf_85d3d332-882`.)

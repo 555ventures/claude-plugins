@@ -1,6 +1,6 @@
 ---
 date: 2026-08-16
-status: implementing
+status: done
 diff_base: f85d07a  # corrected at build close: a concurrent session committed JJ-20260817-01 between Phase 0's capture (c467bc3) and this build's commit; f85d07a is the true pre-image of this spec's diff
 open_markers: 0
 risk: T3                 # contract surface consumed by 4 gate scripts, two of them T3-listed sole derivations (spec-status.js, scope-reconcile.js)

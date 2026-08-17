@@ -250,3 +250,12 @@ upstream bug list. -->
   their Decisions' own text, which is what the sweep reads; keep them as worked examples, not as
   new anchors. Contrast JJ-20260815-03, whose obligation is stated nowhere and therefore is not
   covered.
+- `[plugin]` A test worker editing a File Plan row that carries **no AC** still reaches for the
+  spec template's AC-ID shape and writes the literal placeholder (`AC-<date>-NN-N`) into the test
+  name and assert message. The token is not a valid AC-ID under `ac-matrix.js`'s grammar, so it
+  is silently invisible to the coverage matrix rather than caught — a placeholder that looks like
+  coverage and is not. Collision-sweep rows (an exhaustive key-set pin updated in place) are the
+  usual carrier, since they are edit-only by construction. The fix is removal, never inventing an
+  ID to fill it. (specs/20260815/05-env-preflight.md build 2026-08-16 —
+  `tests/terminal-observable-acs.test.js`, caught by the orchestrator, logged in that spec's
+  deviations sidecar.)

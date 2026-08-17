@@ -1,6 +1,6 @@
 ---
 date: 2026-08-15
-status: implementing
+status: done
 diff_base: 866ce9cc303429e1dab6c75e9f2449a3ea7cf0b2
 open_markers: 0
 risk: T3                 # edits spec/templates/grounding-contract.md (hash-stamped into every host) and spec/bin/spec-paths — both named T3 triggers in pipeline rules § Risk Tiers
@@ -165,6 +165,24 @@ spec-paths key: env-preflight  ·  config read: lib/host-config.js readConfigStr
 - A4: Version 6.79.0 is free at build time — **if false:** bump to next free, log deviation.
 
 ## Rationale
+
+**Review waiver 2026-08-16 (at-risk leg red).** The at-risk leg executed 44 behavior-collision-
+risked test files and returned 6 failures — all 6 already declared in `.claude/suite-baseline.json`
+as sanctioned-red open INTAKE pins (`gate-activation-probe` ×2, `workflow-runid-provenance`,
+`tdd-waiver-provenance` ×3, all belonging to other open intake items). `suite-baseline.js --check`
+independently reported `newFailing=0 fixedNotRemoved=0`, so this diff introduced no breakage.
+**Waived** as the pre-existing-sanctioned-pin case review.md's at-risk bullet names explicitly.
+
+**Review note 2026-08-16 (gate leg scoping).** This spec's File Plan test rows are all top-level
+(`tests/*.test.js`) — two of them pre-existing files this spec had to edit — so `{testDirs}`
+resolves to the whole top-level test directory and the scoped gate sweeps all 17 sanctioned-red
+pins, falsifying pipeline rules § Test Rules' stated premise that "pipeline-authored tests live
+under `tests/<scope>/` … so scoped gate runs are pin-free". The gate leg was therefore recorded
+against the host rules' other sanctioned scoping (`node --test tests/<file>`, § Test Rules'
+"Scoped runs" clause): 22/22 green over this spec's three test files, with `build-workflows
+--check` green and the suite leg proving zero drift. The mechanism gap — review's gate leg has no
+way to subtract the declared sanctioned-red set the way `suite-baseline.js` already does — is
+recorded as its own intake item rather than re-adjudicated per review.
 
 Adversarial round (2 refuters): five findings adopted into Decisions, each marked in place —
 the spec-paths closed key-list collision (now a File Plan row), the design-twin repair loop

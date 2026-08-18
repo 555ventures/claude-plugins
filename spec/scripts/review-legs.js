@@ -126,7 +126,11 @@ async function main() {
   const gateOutPath = path.join(outDir, 'gate-output.txt')
   const patternsPath = path.join(outDir, 'patterns.txt')
 
-  // ---- wave 1 (parallel): reconcile, gate, smoke, ci --------------------------------------
+  // ---- wave 1 (parallel): reconcile, gate, ci ---------------------------------------------
+  // smoke deliberately runs AFTER the gate (wave 2): a gate that itself boots the app (this
+  // repo's smoke-leg test does) collides with a concurrent smoke boot on shared runtime state
+  // (observed 2026-08-17: two boots rm -f'ing each other's ready file, and a SIGTERM landing
+  // in the handler-install window under full-suite load — status 143, shutdown-unclean).
   const wave1 = []
 
   let reconcileJson = null
@@ -161,10 +165,6 @@ async function main() {
     appendRow('gate', 1, `unavailable: ${resolved.reason}`)
   }
 
-  wave1.push(sh(`bash ${q(path.join(scriptDir, 'smoke.sh'))}`).then(r => {
-    appendRow('smoke', r.code, r.code === 0 ? 'pass' : r.code === 4 ? 'inert' : 'fail')
-  }))
-
   wave1.push(sh(`node ${q(path.join(scriptDir, 'ci-query.js'))} --commit $(git rev-parse HEAD) --root ${q(root)}`).then(r => {
     let observed = 'unavailable', exit = 0
     const line = (r.out || '').trim().split('\n').pop() || ''
@@ -182,8 +182,12 @@ async function main() {
 
   await Promise.all(wave1)
 
-  // ---- wave 2 (parallel): at-risk + patterns (both need reconcile's output) ---------------
+  // ---- wave 2 (parallel): smoke + at-risk + patterns (post-gate; at-risk/patterns need ----
+  // ---- reconcile's output) ----------------------------------------------------------------
   const wave2 = []
+  wave2.push(sh(`bash ${q(path.join(scriptDir, 'smoke.sh'))}`).then(r => {
+    appendRow('smoke', r.code, r.code === 0 ? 'pass' : r.code === 4 ? 'inert' : 'fail')
+  }))
   if (!fixDelta) {
     const atRisk = (reconcileJson && Array.isArray(reconcileJson.atRisk)) ? reconcileJson.atRisk : []
     if (!atRisk.length) appendRow('at-risk', 0, 'files=0')

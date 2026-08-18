@@ -1,26 +1,17 @@
 ---
-description: Implement a hardened spec — Sonnet orchestrator and workers, Fable retainer consulted on surprises; small specs skip the workflow entirely
+description: Implement a hardened spec — direct Sonnet worker dispatch per layer wave behind the deterministic gate
 argument-hint: <spec path>
 ---
 
-# Spec Build: Orchestrated Implementation
+# Spec Build
 
-Implement a hardened spec. The orchestrator parses the File Plan into batches, invokes the
-bundled `wf-build` workflow (Sonnet workers, deterministic control flow), resolves surprises
-via the retainer + user, and resumes until green.
+Implement a hardened spec: resolve the gate, author tests red-first, dispatch one worker
+agent per layer wave, gate, ship. Orchestrator and workers: Sonnet. The spec is the
+contract; the gate is deterministic; surprises go to the user with the spec's own language.
 
-**Intended orchestrator model: Sonnet — all tiers.** Workers: Sonnet. Lookups: Haiku.
-Surprises: the **Fable retainer** subagent (below; Opus fallback per the shared invariants'
-model-fallback contract). The build needs no resident expensive model: the spec is the
-contract, the gate is deterministic, and the only judgment that enters a build is the rare
-surprise — which is exactly when the retainer is consulted. The retainer is the spec author's
-proxy, so running it on the planning model is a feature (it proxies the author's intent; it
-reviews nothing).
-
-**Setup:** run `spec-paths shared-for build` and read its output (the shared invariants scoped to this command). Read the host's
-`.claude/spec.config.json` and its pipeline rules file (`pipelineRules`). If either is
-missing, STOP: tell the user to run `/spec:init` first. Also run `spec-paths wf-build` once
-and keep the printed absolute path — it is the `scriptPath` for the Workflow call below.
+**Setup:** run `spec-paths shared-for build` and read its output. Read the host's
+`.claude/spec.config.json` and its `pipelineRules` file. Either missing → STOP: run
+`/spec:init` first.
 
 ## Input
 
@@ -28,366 +19,122 @@ and keep the printed absolute path — it is the `scriptPath` for the Workflow c
 
 ## Phase 0 — Preflight
 
-1. **Frontmatter gate** (the `spec-state-gate` hook also enforces this): `status: hardened` →
-   proceed; `implementing` → this is a resume (workflow caching makes it cheap — reuse the prior
-   `runId` if known); anything else → STOP with the required command. In design-capable hosts
-   (config `design` block, or legacy `storybook: true` — shared invariants § Design Canon):
-   `design: true` without `designed:` → ask the user whether to run `/spec:design` first or
-   skip it deliberately.
+1. **State:** `status: hardened` → proceed; `implementing` → resume (skip already-landed
+   File Plan rows by inspecting the diff); anything else → STOP with the required command.
+   `design: true` without `designed:` (design-capable hosts) → ask whether to run
+   `/spec:design` first. **Worktree isolation is not build's concern** — run
+   `/git:enter-worktree <spec>` first to build in isolation; build never creates, enters,
+   or leaves one and never writes `build_base`.
+2. **Parse the spec once.** File Plan rows → waves by **Layer**, ordered per the host's
+   `layerGroups` (layers listed together in one group form ONE wave; their file sets must
+   be disjoint or the wave splits). `tests` rows form the test-author dispatch (Phase 1);
+   `other` rows and shared registration/wiring files form a final serial wave. Classify
+   every test file `expect: red | green` from the spec's AC vocabulary: `green` iff every
+   AC it carries is a sanctioned-green carrier (`SHALL CONTINUE TO` pin, absence/negative-
+   invariant AC, tag-only AC on an *edit* action, or a design-stage pre-landed component);
+   all others `red`.
+3. **Resolve the gate.** Substitute `{testDirs}`/`{scopeDirs}` in `gateCommand` from the
+   spec's File Plan test rows, **resolved to the form the host's runner actually executes**
+   — for `node --test` the glob form (`node --test 'tests/<dir>/*.test.js'`; a bare
+   directory silently runs nothing or errors). Also resolve `typecheckCommand` when the
+   host exposes a standalone typecheck leg; the red-check treats a file red if it fails
+   **either** leg. Then run `node "$(spec-paths env-preflight)" --root {root}` — exit 1 is
+   a provisioning STOP: print its output verbatim and stop; an unprovisioned environment
+   must never enter a repair loop (the gate cannot distinguish wrong code from a missing
+   variable, and repair dispatches structurally cannot fix the second).
+4. **Flip `status: hardened → implementing`**, and in the same edit write
+   `diff_base: <git rev-parse HEAD>` into frontmatter when no `build_base` exists (an
+   in-place build) — `/spec:review` recovers its diff base from the spec file, never from
+   conversation context.
 
-   **Worktree isolation is not build's concern.** Build runs the workflow in whatever cwd it is
-   in. If the user ran `/git:enter-worktree <spec>` first, that cwd is the worktree; if not, it
-   is the working tree (in place). Build neither creates, enters, nor re-enters a worktree, and
-   never captures or writes `build_base`. To build in isolation, run `/git:enter-worktree`
-   before this command (it is idempotent, so it is also the fresh-process re-entry mechanism).
-2. **Parse the spec** (read it once):
-   - File Plan table → batches: group rows by **Layer** (and by area where the host's
-     pipeline rules § Build says so); order groups per the host's `layerGroups` — layers
-     listed together in one group run as ONE parallel group (their file sets must be disjoint;
-     if they are not, serialize). `tests` rows become test-author batches (Phase 1 of the
-     workflow, before implementation). `other` rows and shared-by-definition files (the
-     registration/wiring files pipeline rules § Build names) go in a final serial group.
-     Each file in a batch is `{path, action}` **only** — never attach the File Plan `Summary`
-     prose or batch `notes`. Planning stays the orchestrator's job (full conversation context);
-     only the *payload* is lean. Workers recover per-file intent by reading the spec's File Plan
-     Summary column themselves. Free text in `args` corrupts its JSON — prose lives in the spec.
-   - **`designed:` set** (design-capable hosts) → UI-layer rows whose files already exist on disk
-     are approved inputs: drop them from batches entirely; any wiring edits to those
-     components belong to the final serial group.
-   - `agentType` per batch: assign each File Plan row a batch kind using the host config's
-     `routing` hints (or judgment from the `agentMap` kind names), then
-     `agentType = agentMap[kind]`. Rows with no matching kind get `agentMap.default`
-     (falling back to `general-purpose`). Never invent agent names — only the host's
-     `agentMap` values are valid.
-   - **Doctrine paths.** The workflow's agent registry resolves only built-in and plugin agent
-     types — host `.claude/agents/*.md` are invisible to it. For every `agentMap` value that
-     is a host-local agent, collect its file path into
-     `doctrinePaths: {<name>: ".claude/agents/<name>.md"}`. The workflow dispatches that role on
-     `general-purpose` and the worker READS the file for its doctrine — bodies travel as paths,
-     not inline text (the `args` channel coordinates; the agents do the file I/O). Plugin/built-in
-     names need no entry and dispatch natively.
-   - Decisions table, Assumptions, host-specific frontmatter flags the pipeline rules § Build
-     declares (e.g. `migration:`), AC list (TDD enabled iff ACs exist). In design-capable
-     hosts, pure-UI **appearance** gets no TDD tests — the component catalog covers it.
-     **Reachability is never exempt**: a prop or field whose absence collapses a Decision's
-     promised observable is behavior, and owes an AC per the terminal-observable rule
-     (`plan.md` Phase 2). ACs are behavior.
-   - **Red/green expectations.** Classify every test-batch file `expect: "red" | "green"`
-     from the spec's own AC vocabulary — deterministic, no judgment call at probe time. A file
-     is `green` iff every AC it carries is a **sanctioned-green carrier**: a `SHALL CONTINUE
-     TO` regression pin, a negative-invariant/absence AC (asserts a construct is ABSENT from a
-     file the spec locks untouched), a tag-only AC (the AC-ID attaches to an existing test —
-     the file's File Plan action is *edit*, not *create* — with no assertion change), or a
-     test against a component the design stage pre-landed (per the component manifest). All
-     other files are `red`. The workflow verifies each file *matches* its expectation and
-     skips the probe entirely when nothing expects red — a spec whose carriers are all
-     sanctioned-green proceeds; it is not a red-check failure and never a reason for fastPath.
-     A pin's falsifiability is verified by hand when in doubt (mutate the target, watch it
-     redden, revert) — never by weakening or deleting the carrier.
-3. **Resolve the gate.** Take `gateCommand` and `testCommand` from config; substitute
-   `{testDirs}`/`{scopeDirs}` placeholders from the spec's File Plan dirs, **resolved to the
-   form the host's runner actually executes — for `node --test` that is the glob form**
-   (`node --test 'tests/<dir>/*.test.js'`; a bare directory does not run its test files on
-   Node 26 — it reports MODULE_NOT_FOUND and exits non-zero, a red leg with nothing wrong
-   under it; reproduced twice in this repo, INTAKE JJ-20260815-04). **Wrap the resolved
-   `gateCommand`** through the sanctioned-red baseline before running or passing it anywhere:
-   `node "$(spec-paths suite-baseline)" --gate "<resolved gateCommand>" --root {root}` — when
-   the resolved command itself contains a double quote or `$`, write it verbatim to a mktemp
-   file and use `--gate-file <path>` instead. This wrapped form is what Phase 1's initial gate,
-   Phase 4's final gate, and the workflow wave gates (`args.gate.command`) all run.
-   testCommand is never wrapped for the red-check's per-file probe or any other
-   expected-red observation path: wrapping it would let sanctioned subtraction blur the
-   observation that a test is red. An adjudication consumer whose purpose is sanctioned-set
-   subtraction rather than expected-red observation — review's at-risk leg — IS wrapped
-   (specs/20260816/02-sanctioned-red-closure.md D1/D9, amending 01's D5 in place). A gate
-   failing only against the host's declared sanctioned-red baseline is adjudicated by
-   subtraction, not treated as a regression: it exits 0 through the wrapper and therefore
-   never enters the repair loop below — the repair loop is
-   structurally incapable of fixing another intake item's open pin (the JJ-20260815-08 category
-   error, second class; specs/20260816/02-sanctioned-red-closure.md D4). Also resolve
-   `typecheckCommand`: the host's standalone typecheck leg when config or the gate exposes one
-   (e.g. a `typecheck` script the gateCommand composes); `''` when the host has none. The
-   red-check treats a file as red if it fails **either** leg — a test red only under typecheck
-   (optional-property additions, new union members, assert-absence tests) is genuinely red
-   under the gate that will later judge the implementation, and a runtime-only probe cannot
-   see it. Pass the
-   `pipelineRules` path (config value) as `pipelineRulesPath` — workers read its
-   `## Worker Rules` / `## Test Rules` sections themselves. The workflow *script* has no
-   filesystem access, but the agents it spawns do, so host rules and doctrines travel as PATHS
-   the workers read, never as inline blobs — the closed-alphabet invariant below is what keeps
-   `args` from corrupting on this.
+## Phase 1 — Tests first (when ACs exist)
 
-   **Immediately after resolving the gate command, preflight the environment.** Run
-   `node "$(spec-paths env-preflight)" --root {root}` — it checks every suite-gating
-   environment variable the host's config `testEnv` registry declares (absent or empty
-   registry = no-op, byte-identical to today). Exit 1 is a provisioning STOP: print the
-   script's output verbatim (each missing variable plus its provisioning command) and STOP
-   here — the run never enters Phase 1, the red-check probe, or any repair loop. An
-   unprovisioned environment must never enter the repair loop: the gate cannot distinguish
-   "the code under test is wrong" from "the environment the test needs was never
-   provisioned", and the repair loop is structurally incapable of fixing the second class —
-   the fix is the provisioning command § Test Rules declares, not a repair dispatch
-   (INTAKE JJ-20260815-08). Exit 0 (including the absent-registry no-op) proceeds normally.
-4. Flip `status: hardened → implementing`. Build never writes `build_base` — that field is owned
-   solely by `/git:enter-worktree`, which captures the originating branch before entering the
-   worktree. If the build is in place, `build_base` is simply absent and `/spec:review`'s
-   merge-back no-ops — but the diff base still needs a durable record for both the ledger's
-   `diff` (Phase 5) and `/spec:review`'s recovery: before any build edit (the same edit that
-   flips status), write `diff_base: <git rev-parse HEAD>` into the spec frontmatter — the same
-   disk-recovery pattern `build_base` already uses, so a fresh review session on this spec
-   recovers the base from the spec file, never from conversation context.
+Dispatch the test author: one `Agent {subagent_type: <agentMap.tests>, model: sonnet}` with
+the spec path and pipeline-rules path — it derives tests from the spec alone.
+Implementation workers never write tests for code they implement.
 
-   **At this same step, capture the build's pre-image** (D10, specs/20260814/03-suite-baseline.md
-   — attribution for Phase 4's suite check below): run
-   `node "$(spec-paths suite-baseline)" --snapshot --root {root} --out
-   .claude/spec-preimage/{specid}.json`, where `{specid}` is the spec path's date dir + number,
-   hyphen-joined (`specs/20260814/03-suite-baseline.md` → `20260814-03`). A resumed build
-   never re-snapshots — the snapshot binds to this one status-flipping step, which a resumed
-   build skips by construction; re-snapshotting mid-build would absorb this build's own red
-   TDD tests into the pre-image and mask them at Phase 4.
+**Red-check (executed, per file — never skipped when any file expects red):** run
+`{testCommand} <file>` (one invocation per file — one observation per verdict) plus the
+`typecheckCommand` leg, and check each file against its Phase 0 expectation. Every
+red-expected file must fail with at least one assertion (or typecheck diagnostic)
+**attributable to the spec's contract** — a file that crashes on loading a module the File
+Plan's CREATE rows name is not yet demonstrated red: stub the missing module inert, re-run,
+confirm assertions now execute and fail, then delete the stub. A red-expected file that
+**passes** means the spec is wrong somewhere — diagnose (stale assumption, wrong target,
+behavior already exists, mis-classified pin) and confirm with the user before proceeding. A
+green-expected pin that **fails** is a broken pin: diagnose the drift, never weaken the
+carrier.
 
-## Phase 1 — Run the build
+## Phase 2 — Implementation waves
 
-**Fast path (no workflow).** If the File Plan parses to a **single implementation batch of
-≤ 4 files** (plus at most one test batch), skip the Workflow tool entirely — multi-agent
-fan-out is overhead a one-batch spec never repays:
+For each wave, in `layerGroups` order: dispatch **one worker `Agent` per layer in the wave**
+(`subagent_type` = the host `agentMap` value for that layer's kind, `model: sonnet`),
+in parallel within the wave. Each worker prompt carries only:
 
-1. TDD (if ACs exist): dispatch the test-author as one `Agent {subagent_type: <agentMap.tests>,
-   model: "sonnet"}` (host agents resolve natively in-session — the doctrine-paths workaround
-   is a workflow-registry problem, not yours), then run `{testCommand} <test files>` plus the
-   `typecheckCommand` leg yourself and check each file against its Phase 0 expectation: every
-   red-expected file fails (either leg) with at least one assertion having actually executed,
-   every green-expected carrier passes. A red-expected file that fails to **load** (crashes
-   before any assertion runs) on a specifier the File Plan's own CREATE rows name is not yet
-   demonstrated red — apply the same discipline the workflow path's probe agent applies by
-   hand: write an inert stub at that File-Plan path, re-run the file's probe leg(s), and
-   confirm assertions now execute and fail, then delete the stub(s) and verify only the stub
-   paths you created are gone (never a whole-tree `git status` emptiness check — this build's
-   own untracked test files are legitimately present). Still load-red, or turned green under
-   the stub, after that is an honest observation, not a demonstrated red — treat it like any
-   other mismatch below. A passing red-expected test = the spec is wrong → `tdd-red-check`
-   handling per Phase 2; a failing green-expected carrier is a broken pin — a defect to
-   diagnose, never red-state success. All carriers green-expected → skip the probe and
-   proceed.
-2. Dispatch the implementation batch as one `Agent {subagent_type: <agentMap kind>,
-   model: "sonnet"}` — same grounding as any worker: Read the spec's Decisions / Contracts /
-   UI / File Plan rows, pipeline rules § Worker Rules, blocked-on-fork, deviations sidecar
-   (Phase 2), no git.
-3. Run the resolved `gateCommand` yourself (Bash). On failure: max 2 repair dispatches to the
-   same agent kind, then retainer, then user — same escalation ladder as Phase 2.
-4. Ledger row (Phase 5) gets `"fastPath":true` and no `runId`.
+- the spec path (workers Read Decisions, Contracts, UI, and their own File Plan rows
+  themselves), the pipeline-rules path, and the worker's file list `{path, action}`;
+- the **Worker Contract** block from the host's grounding layer (pipeline rules § Worker
+  Rules): apply Decisions verbatim, never run git, never query MCPs, read-only surfaces
+  stay read-only, return `blocked` naming the assumption instead of improvising, append
+  forced-but-unblocking departures to the deviations sidecar
+  (`<spec path minus .md>.deviations.md`).
 
-Blocked returns, retainer consults, and everything else behave exactly as Phase 2 describes —
-the fast path changes the execution vehicle, not the contract.
+On a `blocked` return: resolve it against the spec's Rationale/Assumptions when the intent
+is clear; a genuine fork or scope change goes to the user via `AskUserQuestion` with the
+consequence of each option. Write the ruling **into the spec's Decisions table** (that is
+where workers read it), then re-dispatch that worker. A ruling that adds or changes an
+observable promise updates its terminal-observable AC in the same spec edit. A gate failure
+implicating a file outside the File Plan is never silently widened — ask: add to scope /
+file separately / pause.
 
-**Workflow path (everything else).** Invoke `Workflow {scriptPath: <spec-paths wf-build
-output>, args: {specPath, tdd, testBatches, groups, resolutions: {}, agentMap, doctrinePaths,
-deviationsPath, gate: {command, testCommand, typecheckCommand}, pipelineRulesPath}}` — with
-each test-batch file carrying its Phase 0 `expect` value. Pass `args` as a real JSON
-object (the script tolerates the harness's stringified delivery, but never double-encode it
-yourself). `deviationsPath` is `<spec path minus .md>.deviations.md` — the sidecar workers
-append forced-but-unblocking departures to (Phase 2).
+## Phase 3 — Host integration (orchestrator-only)
 
-**Invariant — no free text in `args`.** `args` carries only paths, ids, enums, booleans, and
-the host's gate command. Any prose — per-file intent, batch notes, orchestrator rulings — is
-Read from the spec on disk by the agent that needs it, never inlined. Free text (quotes,
-backslashes) corrupts the args JSON against the harness's version-inconsistent string-vs-object
-encoding; that is the closed-alphabet guarantee that keeps the channel from breaking, not a size
-budget. (`resolutions` is `{}` on first run; on resume each value is a ruling *token*, not the
-ruling text — see Phase 2.)
-
-**Shape of `groups`.** `groups` is an array of **waves**; each wave is an array of **batches**.
-Even a single batch is double-bracketed (`[[{id,…}]]`) — never `[{…}]`, never `{id,…}`. Waves run
-in order; batches in a wave run in parallel. When unsure, resolve toward **more waves** (serial),
-never a fatter wave (parallel) — over-serializing only costs speed; over-parallelizing can violate
-wave ordering. The workflow asserts this shape at init and fails loud with an indexed message
-(`groups[i][j] …`) if it arrives malformed, so a misbuilt arg costs a cheap re-invoke, not a
-silent crash.
-
-Test-author separation is enforced by construction: test batches are authored in the workflow's
-first phase by `agentMap.tests` workers that derive only from the spec; implementation workers
-never write tests for code they implement.
-
-## Phase 2 — Handle returns (loop until `stage: complete`)
-
-| Return stage | Action |
-|---|---|
-| `blocked` | Per item: the return's `options[].consequence` and `recommendation` are the question's raw material — carry them into both the retainer consult and the eventual question, never re-derived. If resolvable within the spec's stated intent → consult the **retainer**; if a genuine fork or scope change → retainer **decision brief** first (contract below), then `AskUserQuestion` authored from it. Write the ruling **prose into the spec's Decisions table** (that is where the worker reads it). A ruling that adds or changes an observable promise adds or updates its terminal-observable AC **in the same spec edit** that records the ruling — the AC's test may lag to a later batch (the review AC-matrix then flags it uncovered), but the promise itself is never left unrecorded. Then set `args.resolutions[batchId]` to a short **token** — a hash of the ruling text or a monotonic counter, **never the ruling prose itself** — which busts the journal cache for that batch only. Keep `resolutions` **cumulative** across resumes: dropping an entry reverts that batch's prompt and silently un-applies its ruling. Resume with `resumeFromRunId`. |
-| `tdd-red-check` | A test file mismatched its expectation (the return's `mismatches` list names each file, its expected/observed state, and the deciding leg). A **red-expected file that passes** = the spec is wrong somewhere, and *where* is the interpretive question — consult the retainer for a diagnosis first: stale spec assumption, test targeting the wrong contract, behavior that already exists, or a carrier Phase 0 should have classified green — each claim cited `path:line`. **A file passing at runtime while failing typecheck is NOT that case**: it is red, correctly classified, and reclassifying it green is a misdiagnosis — compile-time-only carriers (type-level assertions, assert-absence pins) are erased at runtime and can never be runtime-red. A test importing a module the implementation has not yet created is NOT in that class — it crashes at runtime rather than being erased, and is load-shaped red routed through the stub protocol above (fast path) or the workflow's RED dispatch (workflow path), never assumed compile-time-only. A **green-expected carrier that fails** = a broken pin: the behavior it pins has drifted; diagnose the drift, never weaken the carrier. Then confirm the fix (spec, tests, or classification) with the user and resume. A red-expected file observed `not-collected` is strictly redder than red only when the mismatch is **collection-level absence** — the runner collected zero files because the collecting home (workspace package, config registration, harness) the spec itself creates does not exist yet — a satisfied expectation, not a mismatch; proceed on the spec's authority and let the post-scaffold gate verify it. A file the runner **collected and attempted but failed to load** is never that case: loaded-but-crashed `not-collected` never proceeds on the spec's authority — it always routes to the stub protocol or this `tdd-red-check` consult. |
-| `out-of-scope-failure` | A gate failure implicates a file outside the File Plan. If the repair loop localized a mechanical cause (a stray import, a missed re-export), go straight to `AskUserQuestion`; if the cause is not localized, get a retainer decision brief first — a File Plan that missed a real coupling is a plan-authorship question. Options: add to scope (mini-batch) / file as a separate fix / pause the spec. Per Blast Radius Discipline — never silently widen. |
-| `gate-exhausted` | Repair loop hit its cap. Consult the retainer with the failure output before escalating to the user; if a fork remains after the consult, escalate with a decision brief. |
-| `complete` | Proceed to Phase 3. |
-
-**Retainer (Fable, seated as the plan author):** on the first surprise, spawn
-`Agent {model: "fable"}` (if it returns unavailable, respawn `{model: "opus"}` — the shared
-invariants' fallback contract) with the spec's Rationale + Assumptions sections, its
-Decisions table, the divergence — and this role brief **verbatim**:
-
-> You are the retainer for this build: the spec author's proxy, not a second implementer and
-> not a reviewer. Every ruling derives from the spec's stated Rationale, Assumptions, and
-> locked Decisions — never from implementation convenience; the cheapest diff is not an
-> argument. Prefer the reading that preserves the spec's invariants and Blast Radius over the
-> one that unblocks fastest. Rulings are short, declarative, and written to be pasted into the
-> Decisions table verbatim. If the spec's intent is genuinely ambiguous, or any ruling would
-> widen scope or contradict a locked Decision, reply `ESCALATE:` followed by a decision brief:
-> the tension in one short paragraph; each branch stated symmetrically with what it costs and
-> what it buys against the spec's stated Rationale and Assumptions; a `path:line` citation for
-> every factual claim; and one closing line naming what you could not verify. Never guess the
-> author's intent, and never soften an escalation into a provisional ruling.
-
-On later surprises, continue the SAME agent via `SendMessage` — it accumulates context of
-this run's weirdness, and its prompt cache makes follow-up consults cheap. Consults are
-**surprise-driven only** — there is no mandatory checkpoint ritual (the v4 T3 diff checkpoint
-returned PASS on 100% of measured runs: a gate that never blocks is spend, not signal; see
-the scaffold ledger). Consult triggers: worker blocked on a stale assumption, gate failed
-twice on the same batch, out-of-scope file, newly authored tests passing before
-implementation (`tdd-red-check`), a change contradicting the approved design or a
-locked Decision, plus any host-declared triggers (pipeline rules § Build).
-
-**Decision briefs (fork-bound consults).** Every exception row that ends at
-`AskUserQuestion` passes through the retainer first, and the retainer's output is a
-**decision brief, never a decision** — the user keeps the fork; the brief exists to make
-their confirm/deny fast, not to pre-make it. The brief's shape is in the role brief above:
-symmetric options with costs and buys, `path:line` citations for every factual claim, an
-explicit could-not-verify line. A brief without citations is rejected and re-requested —
-an uncited brief is exactly the confident-anchor failure mode this format exists to
-prevent. The `AskUserQuestion` is then authored *from* the brief per the shared doctrine's
-Question Style: the brief's options become the question's options with their consequences,
-and a supported pick is marked "(Recommended)" — but the decision is the user's.
-
-**Consult context (pass the delta, not the world).** The spawn already carries the spec's
-Rationale + Assumptions + Decisions and the role brief; every follow-up `SendMessage`
-carries only the delta: the trigger name, the failure output trimmed to the failing lines,
-and file **paths, not contents** — the retainer Reads what it needs itself. Pasting file
-bodies into the consult burns the prompt-cache continuity the persistent seat exists to
-exploit, and stale pastes are how a retainer rules on code that no longer says that.
-
-Completed batches return from the workflow journal cache on resume — only changed work re-runs.
-
-## Phase 3 — Host integration (orchestrator-only; never delegated, never inside the workflow)
-
-Execute the orchestrator duties the host's pipeline rules § Build declares — e.g. codegen
-regeneration, translation-catalog fills, migration generation and review, boot checks, public
-surface/barrel verification. These are deliberately outside the workflow: they touch shared
-or generated surfaces that parallel workers must never own. Where § Build marks a step as
-high-risk (e.g. migration review), consult the retainer before the step executes — that is a
-host-declared surprise trigger, not a checkpoint ritual.
+Execute the orchestrator duties the host's pipeline rules § Build declares (codegen
+regeneration, migrations, catalog fills, wiring checks) — these touch shared or generated
+surfaces parallel workers must never own. When a worker reports an embedded reference wrong
+against the installed version, re-run the plan-time lookup (e.g. Context7) and record the
+corrected reference in Decisions before dispatching a fix.
 
 ## Phase 4 — Final gate
 
-Run the resolved `gateCommand`. On failure: repair via Sonnet dispatches mapped to the owning
-batch, max 3 rounds (detect → repair → verify); if a round leaves the failure set unchanged from
-the prior round, consult the retainer immediately rather than dispatching another repair round.
-After the ceiling or a stalled round, consult the retainer, then escalate to the user.
-
-**Advisory scope check (D9, report-only — never blocks, no new fork):** run
-`node "$(spec-paths scope-reconcile)" --root {root} --base {build_base or diff_base}
---spec {spec path} --json`. A non-empty `outOfPlan` prints one line — `⚠️ out-of-plan: {list}`
-— pointing at the `out-of-scope-failure` fork row above; it surfaces drift before the
-checkpoint-commit instead of leaving it for review to catch retroactively. The same `--json`
-call's `atRisk` field (specs/20260815/02-at-risk-pins.md D1/D7 — the scoped gate's compensating
-derivation) prints one more line when non-empty — `⚠️ {N} at-risk pins outside this spec's
-gate — review will run them`; this is visibility only, no build-time run against them and no
-gate effect — the executed run stays review-owned (its Phase 0 `at-risk` leg).
-
-**Suite pre-image check (D10, BLOCKING on `preNewFailing` only —
-specs/20260814/03-suite-baseline.md):** after the gate above is green, beside the scope check
-and before the checkpoint-commit, run exactly once:
-`node "$(spec-paths suite-baseline)" --check --root {root} --pre
-.claude/spec-preimage/{specid}.json`. Disposition is four-way:
-- **`preNewFailing > 0` BLOCKs** into the repair path above — retag the colliding pin in place
-  with the new AC-ID per § Gotchas (never weakened, never left red), then re-run; after the
-  repair ceiling, consult the retainer, then escalate.
-- **`newFailing > 0` with `preNewFailing = 0` WARNS** loudly — `pre-existing at Phase 0 — not
-  this build's diff` — printing every name and the `--update` remedy, and never enters the
-  repair path.
-- **`fixedNotRemoved > 0` WARNS** with the `--update` remedy (the update rides the batch).
-- **Exit 4, or a missing pre-image, WARNS and falls back** to blocking on baseline `newFailing`,
-  printing the fallback note — conservative and deterministic, never a fresh mid-build
-  snapshot. The script never degrades silently, so the fallback is the caller's move: check
-  that `.claude/spec-preimage/{specid}.json` exists **before** invoking, and when it is absent
-  run the same `--check --root {root}` with **no `--pre` flag at all** — that invocation IS the
-  fallback. Exit 2 therefore always means a real build-config defect (a corrupt pre-image, an
-  unreadable baseline, no `testCommand`): print the remedy and escalate.
-
-Checkpoint-commit after the gate is green (and after each earlier green phase if the run is long).
+Run the resolved `gateCommand`. On failure: repair via Sonnet dispatches mapped to the
+owning wave, max 3 rounds (detect → repair → verify); a round that leaves the failure set
+unchanged escalates to the user immediately. Then run
+`node "$(spec-paths scope-reconcile)" --root {root} --base {build_base or diff_base} --spec
+{spec path} --json` (advisory, never blocks): non-empty `outOfPlan` prints
+`⚠️ out-of-plan: {list}`; non-empty `atRisk` prints `⚠️ {N} at-risk pins outside this
+spec's gate — review will run them`. Checkpoint-commit once the gate is green.
 
 ## Phase 5 — Report & handoff
 
-**Run ledger (before the chat report):** append exactly ONE line to `.claude/spec-runs.jsonl`
-(repo root; create on first append) — the repo-wide, committed, append-only run history:
+Append exactly ONE line to `.claude/spec-runs.jsonl` (repo root; create on first append):
 
 ```
-{"ts":"<ISO-8601>","spec":"<repo-relative spec path>","stage":"build","tier":"<T1|T2|T3>","runId":"<wf_…>","fastPath":<bool>,"diff":{"files":<n>,"loc":<n>},"tokens":{"workflow":<n>,"phase4Repairs":[<n>,…]},"gate":{"phase4Rounds":<n>,"failureSetShrankEachRound":<bool>},"retainer":{"consults":<n>},"deviations":<n>}
+{"ts":"<ISO-8601>","spec":"<repo-relative spec path>","stage":"build","tier":"<standard|critical>","diff":{"files":<n>,"loc":<n>},"gate":{"finalRounds":<n>},"deviations":<n>}
 ```
 
-`diff` comes from `git diff --shortstat <build_base>..HEAD` (files changed, insertions +
-deletions summed as `loc`); on an in-place build (`build_base` absent) the base is
-`diff_base`, written to the spec frontmatter at the Phase 0 status flip. It's what makes
-token costs comparable
-across specs of different sizes. `fastPath` marks a no-workflow build (`runId` omitted,
-`tokens.workflow` written as `null` — same honesty rule as `phase4Repairs`, never `0`). `deviations` = line count of
-the deviations sidecar (0 if absent) — `/spec:review` folds the sidecar's content at close. `phase4Repairs` entries are each repair agent's actual output-token count as the
-harness reports it; if a count isn't visible, write `null` — **never `0`** (a zero reads as
-"free repair" and silently poisons averages; a null is an honest, detectable gap). Fixed shape, counts/enums/paths only — **never prose, rulings, or pasted gate output**
-(those live in the spec's Decisions table); a fat line is a bug. Append via
-`printf '%s\n' '<json>' >> .claude/spec-runs.jsonl`. The next checkpoint/close commit picks it
-up — never gitignore it; durable cost + verdict history is its whole point.
+`diff` from `git diff --shortstat {base}..HEAD`; `deviations` = sidecar line count (0 if
+absent). Counts/enums/paths only — never prose or pasted gate output (rulings live in the
+spec's Decisions table).
 
-Report — assemble slots (rationale: shared § Console Output Style) and render via
-`node "$(spec-paths report-render)" --slots <file>`, printing its stdout verbatim:
-
-- `outcome`: ✅ `build green — {N} files, gate passed` on success; ⚠️ `{what needs the
-  user}` when the run needs attention.
-- `bullets`: one `- {topic}` line per escalation/consult that happened (empty when none).
-- `warns`: one line per unresolved item (empty when none).
-- `artifacts`: `runId {runId} · {tokens} tokens` — mandatory (every workflow return carries
-  `tokens`; spend visibility is how the pipeline's cost gets tuned instead of guessed;
-  `runId` enables later resume).
-- `next`: `{kind: 'command', text: '/spec:review {args}'}` — the same `{args}` this build
-  was invoked with, folded here rather than repeated as a second closing line.
+Report — assemble slots and render via `node "$(spec-paths report-render)" --slots <file>`,
+print verbatim. `outcome`: ✅ `build green — {N} files, gate passed` (⚠️ when the run needs
+the user); `bullets`: one line per escalation; `next`: `/spec:review {spec path}`.
 
 ```report
 ✅ **build green — 6 files, gate passed**
-📦 runId wf_a1b2c3d4-5e6 · 48213 tokens
 
-Next: /spec:review specs/20260813/07-command-report-conformance.md
+Next: /spec:review specs/20260817/01-example.md
 ```
 
-File lists and full gate tables stay out of the console — the diff and ledger hold them.
-Status stays `implementing` — only `/spec:review` flips `done`.
-
-If in a worktree: **stay in it** — `/spec:review` runs there and merges back to the
-originating branch on CLEAN (its Phase 4). Only `AskUserQuestion` (keep / discard +
-`ExitWorktree`) if the user is abandoning the spec instead of proceeding to review.
+Status stays `implementing` — only `/spec:review` flips `done`. If in a worktree, stay in
+it: review runs there and merges back on CLEAN.
 
 ## Rules
 
-- **Never Read `wf-build.js`.** The complete `args` contract is specified in Phase 1
-  (`{specPath, tdd, testBatches, groups, resolutions, agentMap, doctrinePaths, deviationsPath,
-  gate, pipelineRulesPath}`); the return stages are enumerated in Phase 2. The workflow's internals —
-  batch execution, gate, repair loop, journal cache, resume — are the workflow's concern, not
-  the orchestrator's. Invoke it (by `scriptPath`) and act on its returns; its source is never
-  orchestrator context. "Read the workflow to understand the args contract" is the anti-pattern —
-  the contract lives here, not there.
-- **Workers never run git.** Any git command in a worker prompt response is a defect. The
-  orchestrator owns all git and checkpoint-commits after green phases. (Hard-learned: a
-  worker's repo-wide `git checkout .` once destroyed sibling workers' uncommitted edits.)
-- **Decisions table is authoritative.** Nobody overrides it; nobody invents entries except the
-  orchestrator recording a user/consultant ruling.
-- **Read-only surfaces stay read-only** (pipeline rules § Worker Rules) — generated/managed
-  files change only via their declared tools.
-- **Workers never query MCPs** — they build from the spec's embedded references and return
-  `blocked` if one proves wrong against the installed version.
-- **Falsified embedded reference → orchestrator refreshes it first.** When a `blocked` return
-  (or a gate failure) shows an embedded reference wrong against the installed version, the
-  orchestrator re-runs the plan-time lookup the pipeline rules § Planning declares (e.g.
-  Context7) and records the corrected reference in the Decisions table **before** any retainer
-  consult. The no-MCP rule binds workers; its premise — references verified at plan time — is
-  void the moment one falsifies. A retainer consult about vendor behavior without a fresh docs
-  citation is a defect: it manufactures remedies by inference that thirty seconds of docs
-  would refute.
-- **Host integration steps are orchestrator-only** — never delegated into the workflow.
-- **Resume over restart.** Blocked batches re-run via the `resolutions` salt; everything
-  finished returns from cache. Never restart a run from scratch when a `runId` exists.
+- **Workers never run git.** The orchestrator owns all git and checkpoint commits.
+- **Decisions table is authoritative** — nobody overrides it; only the orchestrator adds
+  entries, recording a user ruling.
+- **Workers never query MCPs** and read-only/generated surfaces change only via their
+  declared tools.
 - `AskUserQuestion` dismissed → STOP.

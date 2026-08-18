@@ -1,346 +1,127 @@
 ---
-description: Author and harden a spec in one Fable session — explore, draft, adversarial check, lock
-argument-hint: <feature description | spec path | roadmap brief path> [--spike]
+description: Author and harden a spec in one session — explore, draft, executed micro-spikes, lock
+argument-hint: <feature description | spec path | roadmap brief path>
 ---
 
-# Spec Plan: Author + Harden (Fable)
+# Spec Plan
 
-One session: explore → draft → adversarial check → lock. Produces a hardened spec at
-`specs/YYYYMMDD/##-{name}.md`.
+One session: explore → draft → lock. Produces a hardened spec at
+`specs/YYYYMMDD/##-{name}.md`, written from the plugin template (`spec-paths template`).
+Spec quality determines all downstream spend — this is the pipeline's judgment
+concentration point.
 
-**Intended model: Fable** (Opus fallback if unavailable — see shared § Model Placement). This is the pipeline's judgment concentration point; spec quality
-determines all downstream spend. Execution and review never use Fable as the primary model.
-
-**Setup (before Phase 0):** run `spec-paths shared-for plan` and read its output — the shared invariants scoped to this command
-(tier rubric, state machine, MCP policy). Then read the host's `.claude/spec.config.json` and
-the pipeline rules file it points to (`pipelineRules`). If either is missing, STOP: tell the
-user to run `/spec:init` first.
+**Setup:** run `spec-paths shared-for plan` and read its output. Read the host's
+`.claude/spec.config.json` and its `pipelineRules` file. Either missing → STOP: run
+`/spec:init` first.
 
 ## Input
 
-`$ARGUMENTS` — a feature description, a path to an existing draft spec to re-open, or a path
-to a **roadmap planning brief** (`docs/roadmap/NN-*.md`). `--spike` forces the worktree spike
-in Phase 1.5.
+`$ARGUMENTS` — a feature description, a path to an existing draft spec to re-open, or a
+path to a roadmap planning brief (`docs/roadmap/NN-*.md`).
 
-## Phase 0 — Context check & tier
+## Entry
 
-0. **Roadmap brief intake** (when `$ARGUMENTS` is a roadmap brief). Read the brief, then
-   `docs/roadmap/00-overview.md` (conventions + milestone context), then every ADR the brief's
-   Grounding cites — including each `Amended by ADR-NNNN` line (amendments are edited into the
-   brief when the ADR is written, so the brief is self-contained; the ADR supplies the why).
-   **Unpropagated-amendment net:** grep `docs/adr/*.md` `Applies to` sections for this brief's
-   number; an ADR that names this brief with no matching `Amended by` line in the brief means
-   a decision was recorded but never propagated — fold it into the brief (with the user)
-   before drafting; never plan past it. **Dependency check:** run
-   `node "$(spec-paths spec-status)" --root . --brief NN` (NN = the brief filename's number;
-   the shared derivation behind /spec:status and /spec:doctor check 14). Exit 1 means a
-   `Depends on` brief has no spec at `implementing`/`done`: warn the user with the script's
-   line and confirm before proceeding (warn, don't block — they may know the needed surface
-   already landed). Exit 2 means the brief file itself wasn't found — re-check the path. The brief's Scope seeds the draft, its
-   Grounding section is the required reading list, and its Open questions seed the Phase 1
-   interview; its "Current state" is a snapshot — re-verify against live code, never trust it.
-   **Every spec this session produces gets `brief: NN` in frontmatter** — that stamp is how
-   roadmap status is derived (nothing tracks it by hand). An ad-hoc spec the roadmap missed
-   (no brief exists and none is warranted) gets the explicit `brief: n/a` — the derivation
-   treats it as deliberately briefless, never as a dangling pointer; leaving the field off
-   entirely means the same thing, but the explicit spelling records that the omission was a
-   decision, not a forgotten stamp. The brief's Out of scope section is
-   binding: work it fences off goes to its owning brief, not into these specs.
-   **Mock intake (UI-bearing briefs — a `surfaces` block exists):** Read `design/mocks/<label>.html`
-   for each declared surface alongside the brief — the mocks carry the field-level design the
-   brief deliberately doesn't. If any surface is a gap or its mock is still `data-status="sketch"`
-   (not `ratified`+), warn: the brief hasn't been design-ratified — offer `/spec:sketch <brief>`
-   first (warn, don't block). Any **mock↔brief mismatch** (the mock shows a capability Scope
-   doesn't name, or vice versa) is never resolved silently — it becomes a Phase 1 interview
-   question, glossed in plain English with a recommended-first pick backed by whichever artifact
-   carries more evidence of deliberate intent, and the consequence of each pick named (e.g. "the
-   mock shows an export button; the brief doesn't mention export — which is right? (Recommended:
-   keep export — a ratified mock reflects a deliberate design decision, and dropping it silently
-   discards that work; if the brief's Scope was the deliberate cut instead, say so and the mock
-   loses the button)"), and the losing home gets corrected before drafting.
-1. **Harvest or discover.** If this conversation already contains a design discussion of the
-   target: summarize what has converged (scope, key decisions, open questions), confirm the
-   summary with the user, and skip to Phase 1.5/2. If invoked cold: run Phase 1 discovery. If a
-   `claude.ai/design` mockup URL surfaces here (or anywhere in planning), note it — it is
-   recorded into the spec's `design_source:` frontmatter at the Set-`design:` step below.
-2. **Apply the tier rubric** (shared invariants § Risk Tiers; concrete T3 triggers in the
-   host's pipeline rules § Risk Tiers).
-   - **T1** → STOP: `🚫 **T1-shaped — no spec needed.**` then `Next: ask me directly — the
-     host's gate command gates it and the change diffs against the host's standards docs.`
-     Do not write a spec file.
-   - **T3** → state the tier and the one-line rubric justification, proceed.
-   - **T2** → apply shared invariants § Pipeline Entry, before proceeding: a spec is written
-     only when the work needs **delegation** (execution large enough that Sonnet workers
-     should do it while Fable only plans) or **durability** (scope spans sessions; the spec
-     is the re-entrant state) — the pipeline is opt-in heavy machinery, not the default path,
-     and tiers only set intensity once inside it. Neither applies → STOP: `🚫 **T2-shaped —
-     no delegation or durability, no spec needed.**` then `Next: ask me directly — the
-     host's gate command gates it and the change diffs against the host's standards docs.`
-     Do not write a spec file. Either applies → state the tier, the rubric justification, and which
-     criterion (delegation/durability) triggered entry, proceed.
+- **Roadmap brief:** read the brief, `docs/roadmap/00-overview.md`, and every ADR the
+  brief's Grounding cites (including each `Amended by ADR-NNNN`). Run
+  `node "$(spec-paths spec-status)" --root . --brief NN` — exit 1 means a `Depends on`
+  brief has no spec at `implementing`/`done`: warn and confirm before proceeding. Every
+  spec this session produces gets `brief: NN` in frontmatter (that stamp is how roadmap
+  status is derived); an ad-hoc spec gets `brief: n/a`. The brief's Out of scope section
+  is binding. UI-bearing briefs (a `surfaces` block): read each surface's mock under
+  `design/mocks/`; a missing or un-ratified mock → offer `/spec:sketch <brief>` first
+  (warn, don't block); a mock↔brief mismatch becomes a user question, never a silent pick.
+- **Tier:** `standard` for almost everything; `critical` when the work touches
+  irreversible or high-blast-radius surfaces — auth/security boundaries, data migrations,
+  money, deletion of user data, or whatever the host's pipeline rules add. State the tier
+  and why. Work too small to need delegation (Sonnet workers building while you only plan)
+  or durability (scope spanning sessions) gets no spec — say so and stop.
+- **Explore before asking.** Ground every claim in current code (parallel Explore agents
+  where the surface is wide; `docs/canonical/{area}.md` when present). Run the pre-emptive
+  lookups the host's pipeline rules § Planning declares (Context7 for third-party APIs the
+  spec relies on) and embed the excerpts that matter into Contracts/UI — downstream workers
+  never query MCPs. Then put the genuine forks to the user via `AskUserQuestion`, options
+  grounded in what you found; never ask what the codebase can answer.
 
-## Phase 1 — Discovery (cold start only)
+## Micro-spikes (mandatory — the shape triggers it, never felt uncertainty)
 
-- Launch parallel `Explore` agents (`model: haiku`, `sonnet` for multi-file reasoning) over the
-  affected areas and `docs/canonical/{area}.md` if present. Ground every claim in current code —
-  including any generated contract surfaces the host's pipeline rules name.
-- Run the pre-emptive lookups the host's pipeline rules § Planning declares (UI registry
-  searches, Context7 for every third-party API the spec will rely on). Workers return digests;
-  the excerpts that matter get embedded into the spec's UI/Contracts sections. Downstream
-  workers never query MCPs.
-- UI-bearing spec in a design-capable host: read the design doctrine doc (config
-  `design.doctrine` — shared invariants § Design Canon, not loaded by `shared-for plan`; full
-  text in shared.md) before writing the UI section; the
-  component inventory must fit the canon, and reusing existing catalog components beats
-  speccing new ones.
-- Then interview the user via `AskUserQuestion` with informed options — never ask in a vacuum,
-  never ask what the codebase can answer. Batch questions, and weight them toward whatever
-  would reshape the architecture — data models, type interfaces, UX flows — over what only
-  tunes a detail: an unasked detail costs a small edit later, an unasked architecture question
-  costs a rebuild.
+Any claim the draft will lock whose truth a **third-party dependency adjudicates** —
+name/format constraints, cron strings, config keys, DSL fragments, version-specific API
+shapes — is falsifiable in one executed line, and that line MUST run before the claim
+enters a Decision, Contract, or AC (scratch file against the installed dependency; run,
+observe, delete). This includes **negative claims**: an assertion that a named mutation or
+misconfiguration will make a named check fail is dependency-adjudicated identically —
+execute it and observe the red before locking it. Record the executed check + observed
+output in Assumptions. For a genuinely high-unknown area (unfamiliar API, risky
+integration), run a full throwaway spike in an isolated worktree
+(`Agent {isolation: 'worktree'}`) and fold the findings in; set `spiked: YYYY-MM-DD`.
 
-## Phase 1.5 — Spike (when `--spike`, judged necessary, or shape-triggered)
+## Draft
 
-**Shape-triggered micro-spike (mandatory, not judgment):** any claim the draft will lock
-whose truth a **third-party dependency adjudicates** — queue/topic/identifier name
-constraints, cron/schedule strings, config keys, DSL fragments, version-specific API
-shapes — is falsifiable in one executed line, and that line MUST run before the claim enters
-a Decision, Contract, or AC. A scratch file against the installed dependency (run, observe,
-delete; `git status --porcelain` clean after) suffices — this is far lighter than a full
-spike. The trigger is the claim's *shape*, never felt uncertainty: the deadliest wrong
-assumptions feel settled precisely because an ADR or doctrine line already asserts them
-(measured: UpWell's `domain:action` queue convention — ADR-bound, never flagged as unknown,
-rejected by the exact-pinned dependency's own validation at first `createQueue`; one executed
-line at plan or genesis time falsifies it for free). Record the executed check + observed
-output in **Assumptions** as evidence. The shape includes **negative claims**: an assertion
-that a specific mutation, fault, or misconfiguration will make a named check fail (or that a
-dependency will repair a named state) is dependency-adjudicated identically — execute it and
-observe the red (or the repair) before it enters a Decision, Contract, AC, or falsifiability
-plan. A proof-of-falsifiability that has never itself failed is unverified.
+Write the spec per the template. `status: draft`. While drafting:
 
-**Full spike:** run whenever the interview or drafting surfaces a genuinely high-unknown
-area — an unfamiliar API, an unclear data model, a risky integration surface, blast radius
-that's genuinely unclear in brownfield code, or a complex migration. Skip for greenfield and
-well-understood changes.
-Reason: a throwaway prototype is the cheapest way to find out what you didn't know, before it
-gets expensive — cheap now, versus a wrong assumption baked into a locked spec, versus a
-surprise mid-build. In design-capable hosts (config `design` block), if the unknown is
-**visual** (layout, interaction feel), don't spike — set `design: true` and let `/spec:design`
-iterate on real components in the catalog instead.
+- **Never guess — mark it.** Where information is missing, write
+  `[NEEDS CLARIFICATION: <question>]` inline instead of something plausible. The state-gate
+  hook blocks `/spec:design`, `/spec:build`, and `/spec:review` while any marker survives.
+- **Decomposition cap:** a spec must fit one `/spec:build` run — roughly ≤15 File Plan
+  rows, one primary area. Bigger work splits into `##-` siblings sliced by **landing unit**
+  (each leaves the system green on its own), never by layer; wire `depends_on`. A facade
+  with no consumer in the same spec or its series is mis-sliced — fold it into the
+  consumer's spec.
+- **File Plan row grammar:** every touched file gets its own row (Path | Action | Layer |
+  Summary; Layer ∈ the host's layerGroups flattened, plus `tests` and `other`). A row that
+  bundles an edit to a different file inside its Summary hands a worker a file its contract
+  forbids touching — bundled edits get their own row or an explicit orchestrator-duty line
+  outside the table.
+- **ACs** follow the template's contract: `WHEN … THE SYSTEM SHALL …`, namespaced IDs
+  (`AC-{YYYYMMDD-NN}-k`), `[env: VAR]` on environment-gated tests, `[oracle: <leg>]` where
+  a gate leg is the honest oracle, literal input→output examples on ambiguity-prone terms
+  (always, on critical tier). A Decision that promises a user-observable surface owes an AC
+  asserting on the observable itself through the real in-repo route (the template names the
+  anti-pattern: invented-fixture liveness). Defect-fix and behavior-change specs write a
+  **regression pin** per behavior that must survive: `WHEN {trigger} THE SYSTEM SHALL
+  CONTINUE TO {existing behavior}` — the literal words `SHALL CONTINUE TO` are the
+  machine-visible marker (build's red-check treats pin carriers as sanctioned-green);
+  prefer tagging the existing covering test with the AC-ID over duplicating it.
+- **Decisions table is authoritative** — every fork's outcome lands there; zero open forks
+  at lock. Fill **Assumptions** with each load-bearing assumption paired with its
+  `if false →` fallback. Fill **Rationale** (for the cold-start reader) and **Canonical
+  Delta** (applied by `/spec:review` on CLEAN).
+- **`design:`** — only in hosts whose config declares a `design` block: `true` when the
+  user should approve look/feel before build; record any `claude.ai/design` mockup URL or
+  ratified mock path as `design_source:`. Hosts without a catalog never set the flag.
 
-- One `Agent`: `subagent_type: general-purpose`, `model: sonnet`, `isolation: worktree`
-  (REQUIRED — without it the spike pollutes the working tree).
-- Prompt: a throwaway implementation scoped to the specific unknown question — answer it
-  empirically, don't build the feature. No tests, no polish. First action: the host's
-  `setupCommand` (from config). Report back: files touched, unexpected discoveries, design
-  forks hit, cross-area impact, state/data migration needed, typecheck/lint output — plus any
-  report items the host's pipeline rules § Planning adds. Never merge, never push; the
-  worktree is discarded — only the findings survive.
-- Fold findings into the spec's **Assumptions**, **Decisions**, and **Acceptance Criteria**
-  sections as evidence (what was actually observed, not just a conclusion). Set
-  `spiked: YYYY-MM-DD` in frontmatter.
+## Lock
 
-## Phase 2 — Draft
-
-Write the spec per the plugin template (run `spec-paths template` and Read it) at
-`specs/{YYYYMMDD}/{##}-{kebab-name}.md` (today's date dir, next free `##`; create the dir if
-needed). `status: draft`.
-
-While drafting:
-
-- **Blind-spot pass:** somewhere before lock, deliberately hunt the territory the spec's
-  current framing doesn't cover — codebase conventions, runtime constraints, adjacent call
-  sites or surfaces it hasn't mentioned. This is not the Phase 3 adversarial check, which
-  attacks what's already written; this hunts what isn't written yet. A single `Explore`
-  dispatch framed as "what does this spec's current scope miss?", or a focused self-pass over
-  the affected areas, is cheap — far cheaper than the surprise that shows up mid-build.
-- **Decomposition gate:** a spec must fit one `/spec:build` run — roughly ≤15 File Plan rows,
-  one primary area, plus any host-declared caps (pipeline rules § Planning). Bigger work is
-  not a bigger spec: split into `##-` siblings in the same date dir, sliced by **landing
-  unit** (each spec leaves the system green and shippable on its own), never by layer. Wire
-  `depends_on`/`depended_on_by` and harden each; one planning session may produce the whole series.
-  **Facades follow their first consumer:** a spec that lands a wrapper/seam (queue facade,
-  enqueue helper, analytics client) with no consuming call site in the same spec or its
-  `depends_on` series is mis-sliced — fold it into the consumer's spec.
-- **Set `design:`** — only in hosts whose config declares a `design` block (component
-  catalog — shared invariants § Design Canon, not loaded by `shared-for plan`; full text in
-  shared.md). There: `true` for any spec with a UI section
-  whose look/feel the user should approve before build; `false` for logic-only or
-  trivially-styled changes; confirm with the user when borderline. In hosts without a
-  catalog, never set the flag (omit it or leave `false`). **If the planning conversation
-  surfaced a `claude.ai/design` mockup URL** for this spec, also record it into frontmatter as
-  `design_source: <url>` alongside `design: true` — plan only records the pointer (it never
-  fetches); `/spec:design` makes it read-first canon (shared § Design Binding Pipeline, the
-  "Claude Design as a source" escape hatch — not loaded by `shared-for plan`; full text in
-  shared.md).
-- **Never guess — mark it.** Where the draft needs information you don't have (an unconfirmed
-  behavior, an unknown constraint, a fork you haven't put to the user yet), write
-  `[NEEDS CLARIFICATION: <the question>]` inline at that spot instead of writing something
-  plausible. Markers are resolved in Phase 4 via `AskUserQuestion` or further exploration;
-  the state-gate hook blocks `/spec:design`, `/spec:build`, and `/spec:review` while any
-  marker survives in the file.
-- **AC shape:** write every AC as `WHEN {trigger/state} THE SYSTEM SHALL {observable
-  response}`, with **namespaced IDs** (`AC-{YYYYMMDD-NN}-1` — the spec's date dir + number;
-  un-namespaced `AC-1` collides in the review grep matrix when two specs touch one test
-  file), an explicit `[env: VAR]` tag on any AC whose test is environment-gated (an
-  undeclared env dependency reads as a hard finding when the test skips), and pin every
-  ambiguity-prone term (rounding mode, ordering,
-  inclusive/exclusive bounds, timezone, null vs empty) with a literal input → output example.
-  T3 ACs always carry at least one literal example. **Library-default split:** when a
-  requirement is satisfied by a library default, split the AC into a pair rather than one pin —
-  (i) pin the library mechanism behaviorally, and (ii) separately assert the **shipped config
-  echo** (the key's presence/absence and surface flags as they actually ship in the
-  configuration); never assert only the library's resolved internals — a behavioral pin alone
-  can go green before any implementation exists while the shipped config quietly disengages the
-  mechanism (`rateLimit: { enabled: false }` shipping with every AC green). Test authors derive tests from the spec
-  alone — a concrete pair is the only wording they cannot misread. **Terminal-observable AC
-  rule:** every Decision that promises a user-observable surface — rendered text/element,
-  emitted row, fired event — owes at least one AC whose test asserts on the observable itself,
-  reached through the real in-repo route; the fixture feeding that assertion is
-  **produced by the spec's own producer chain** — the test executes it (view-model, assembler,
-  defer-derivation) on realistic wire data — never a hand-authored props object. Naming the
-  anti-pattern: **invented-fixture liveness** — a terminal fed hand-typed props proves the
-  component works, never that the product reaches it. Where the observable genuinely has no
-  executable terminal in this host (an email, a cron side effect, a route the host writes no
-  render tests for), say so on the AC line as a named residual routed to the release stage's
-  journey walks — never let it read as covered. For a Decision whose data
-  path spans File Plan rows (producer → carrier → consumer → display), this same rule pins
-  the chain's **terminal observable** — the response the user actually sees, fed by the
-  production path — never only an intermediate hop: verifying the chain's end transitively
-  verifies every hop, while intermediate-hop ACs stay green with the chain severed (measured:
-  six severed-chain defects rode green gates in one spec, upwell 20260731/04). When the spec fixes a
-  defect or deliberately changes existing behavior (bugfix briefs, escape-driven specs,
-  declared refactors — judged at plan time, recorded either way), write a **regression
-  pin** per behavior that must survive the change, not one per spec: `WHEN {trigger} THE
-  SYSTEM SHALL CONTINUE TO {existing observable behavior}`. The literal words `SHALL
-  CONTINUE TO` are the pin's machine-visible marker — never paraphrase them. A pin's test
-  verifies behavior that already works: prefer tagging the existing covering test with the
-  AC-ID (that test file becomes a File Plan row) over writing a duplicate, and either way
-  the test is expected **green against pre-change code** — pins are the sanctioned
-  exception to red-first test authoring (the build red-check knows this).
-- Run your own pre-mortem (plausible failure modes worked backwards) and over-engineering check
-  (counterfactual test + broken-vs-ugly test) — these are part of drafting, not separate passes.
-- Every genuine design fork → `AskUserQuestion` **now**, with options grounded in exploration.
-  Record the outcome in the **Decisions** table. The spec must leave this session with zero
-  open forks.
-- Fill **Assumptions** with every load-bearing assumption paired with its `if false →` fallback.
-  This section is the consultant's cold-start map during `/spec:build` — it is the cheapest
-  place to buy execution robustness.
-- File Plan `Layer` values: the host's `layerGroups` (flattened, in order) plus `tests` and
-  `other`.
-- **File Plan row grammar:** every touched file gets its own File Plan row — a row that bundles
-  an edit to a different file inside its Summary hands the worker a file its batch contract
-  forbids touching, and the bundled edit silently becomes an unrecorded orchestrator duty.
-  Bundled edits either get their own row, or an explicit orchestrator-duty line outside the
-  table.
-
-### New product surfaces
-
-A new feature/domain/module is a normal spec — usually a decomposed `depends_on` series —
-with no separate pipeline. The planning session must additionally run the host's new-surface
-checklist (pipeline rules § Planning): requirements interview, data-shape design, cross-area
-contract mapping, UI inventory where applicable, and the registration/wiring rows the host's
-structure demands in the File Plan.
-
-## Phase 3 — Adversarial check
-
-Dispatch N independent refuters (T2: 1, T3: 2) in a single message, blind to each other:
-
-- `subagent_type: general-purpose`, `model: sonnet`
-- Prompt: the spec content inlined cold (the document only — no drafting rationale beyond what
-  it contains) and the path to the host's pipeline rules file, plus: *"Try to break this spec
-  against the live codebase: stale file/symbol references, wrong types/signatures or
-  nullability vs the actual code and generated contracts, missed call sites,
-  architectural-boundary violations, persisted-state or migration coexistence problems, stale
-  embedded library references vs installed versions, edge cases at boundaries, and conflicts
-  with the host's pipeline rules (Read the rules file; cite the section). Read the code; cite
-  file:line. For any claim a third-party dependency adjudicates (name/format constraints,
-  cron strings, config keys, DSL fragments, version-specific API shapes): do NOT argue from
-  reading — EXECUTE the one line that falsifies it in a scratch file against the installed
-  dependency, report the observed output, and delete the file (git status clean before
-  returning). For each Decision promising an observable: verify that an AC's test executes
-  the real in-repo route to it — a mocked or stubbed in-repo hop between producer and
-  terminal is a top-severity finding. Report every genuine defect, ordered by severity. Do
-  not pad with style or speculative nits — an empty list is a valid outcome."*
-
-Fix each finding in the spec, or explicitly reject it with the reason recorded in **Rationale**.
-Never silently drop a finding.
-
-## Phase 4 — Lock
-
-1. **Marker sweep (mechanical):** `grep -n "NEEDS CLARIFICATION" {spec path}`. Each hit is
-   either an unresolved gap — resolve it (`AskUserQuestion` or targeted exploration), edit the
-   spec, re-grep — or prose narrating history, which is fine. Resolving a marker means
-   **deleting it** and recording the ruling in Decisions. Then **write the adjudicated count
-   into frontmatter as `open_markers: N`** (0 to lock — the count of LIVE markers only;
-   quoted narration doesn't count). The state gate reads this field as authoritative, so
-   Rationale may quote the marker syntax freely; the gate's prose grep is only the fallback
-   for specs predating the field. Lock requires `open_markers: 0`.
-2. Confirm: zero open forks, **Rationale** and **Canonical Delta** written, ACs mapped to test
-   files, every shape-triggered micro-spike (Phase 1.5) executed with its evidence recorded in
-   Assumptions, for a defect-fix/behavior-change spec at least one regression pin
-   (`SHALL CONTINUE TO`) or a Rationale line saying why no neighbor needs pinning — lock
-   owns this check; review never lints for pin presence — and every promise in the **Goal**
-   traced to a Decision that delivers it plus
-   an AC that goes red in that Decision's absence — a promise with no mechanism, or a
-   mechanism no AC can catch missing, blocks lock (add the Decision/AC or strike the promise).
-   This is an in-session check, not an emitted table: ACs are written from Decisions, so a
-   Goal promise no Decision covers stays green through every downstream gate. The same trace
-   widens to **Decision-level observable promises**: a Decision that promises a
-   user-observable surface with no terminal-observable AC that goes red in its absence blocks
-   lock exactly as an uncovered Goal promise does — same in-session check, not a second gate.
-   **Obligation→carrier sweep:** the same in-session check widens once more — walk the
-   Decisions table and confirm every stated obligation has a carrier someone can point to. Four
-   corroborated shapes anchor the rule.
-   A Decision that names a file by path must get a File Plan row for that file.
-   A Decision that orders a persisted, rendered artifact (a message, card, or notice) owes a
-   Contracts/schema row typing its shape.
-   A spec whose tests import CREATE-d
-   modules must pin those modules' factory signatures (including injectable seams) in Contracts.
-   An AC whose expected value is computed by a helper rather than a literal example owes that
-   helper's own ground-truth carrier — listed or checked.
-   A Decision that retires or narrows doctrine prose runs
+1. **Marker sweep:** `grep -n "NEEDS CLARIFICATION" {spec path}`. Resolve every live hit
+   (ask or explore; delete the marker, record the ruling in Decisions), then write
+   `open_markers: N` into frontmatter (0 to lock; quoted narration doesn't count — the
+   state gate reads this field as authoritative).
+2. **Confirm:** zero open forks; every shape-triggered micro-spike executed with evidence
+   in Assumptions; every Goal promise traced to a Decision that delivers it and an AC that
+   goes red in its absence; for a defect-fix spec, at least one `SHALL CONTINUE TO` pin or
+   a Rationale line saying why no neighbor needs pinning. A Decision that retires or
+   narrows prose elsewhere runs
    `node "$(spec-paths collision-closure)" --spec {spec path} --root . --literal <stem>…`
-   (one `--literal` per distinctive single-word stem the spec retires; stem selection stays
-   the planner's judgment) and enumerates every `likely`-tier paths hit and every literals hit
-   in the File Plan as fix or recorded waive — `mentions`-tier hits are skimmed for visibility
-   and owe no waive line.
-   <!-- enforcedBy: spec/scripts/collision-closure.js -->
-   A missing carrier blocks lock
-   exactly as an uncovered Goal promise does — add the row/Contracts entry or strike the
-   obligation before flipping `status: hardened`. These four are illustrative anchors of one
-   rule, not a closed list — a fifth shape not on it is still judged by the rule.
-   Finally: work this session discovered that needs its own spec → write the roadmap brief
-   now (`docs/roadmap/NN-*.md`, planned later via `/spec:plan <brief>`), or record in the
-   lock report why not. Discovered follow-ups are the only planning output with no durable
-   artifact otherwise — "plan it after this lands" said in conversation dies with the session.
-3. Flip frontmatter `status: draft → hardened`.
-4. **Report.** Before reporting: if `design: true` with **no** `design_source`, a mock
-   already in `design/mocks/` (ratified by `/spec:sketch`, or swept by `/spec:atlas`)
-   becomes the `design_source` starting point — record its path into the frontmatter now
-   (with none, `/spec:design` authors the mock first — shared § Design Binding Pipeline, not
-   loaded by `shared-for plan`; full text in shared.md). Then assemble the slots (rationale:
-   shared § Console Output Style) — `outcome`: ✅ `spec hardened & locked — {path}`;
-   `bullets`: one plain-language line per decision made this session; `warns`: any notable
-   refuter/spike finding (drop when none); `next`: run
-   `node "$(spec-paths spec-status)" --root . --next`, capture its output, and pass
-   `{kind: 'status-verbatim', text: <captured output>}` — the script is the sole derivation
-   of the Next suggestion (it prints the 🎯 top pick); never hand-derive the design-vs-build
-   routing here. Run `node "$(spec-paths report-render)" --slots <file>` and print its
-   output verbatim. Counts and field inventories stay in the spec file.
+   and enumerates every `likely`-tier hit in the File Plan as fix or recorded waive.
+   Work discovered this session that needs its own spec → write the roadmap brief now, or
+   record why not.
+3. Flip `status: draft → hardened`.
+4. **Report:** assemble slots — `outcome`: ✅ `spec hardened & locked — {path}`; `bullets`:
+   one plain line per decision made; `warns`: notable spike findings; `next`: the verbatim
+   output of `node "$(spec-paths spec-status)" --root . --next` as
+   `{kind: 'status-verbatim'}` — the script is the sole source of the Next suggestion.
+   Render via `node "$(spec-paths report-render)" --slots <file>`, print verbatim.
 
    ```report
-   ✅ **spec hardened & locked — specs/20260813/09-example.md**
+   ✅ **spec hardened & locked — specs/20260817/01-example.md**
    - checkout now retries payment capture once before failing
-   ⚠️ refuter flagged a stale webhook signature check — fixed in Decisions
 
    {spec-status --next, verbatim}
    ```
 
 ## Rules
 
-- Genuine forks go to the user — never silently decided, at any phase.
-- The spec must be executable by an orchestrator that was not in this conversation. If a
-  section relies on unstated context, write it down (that's what Rationale is for).
-- T1 work never gets a spec file.
-- `AskUserQuestion` dismissed → STOP the run; never invent the answer.
+- Genuine forks go to the user — never silently decided. `AskUserQuestion` dismissed →
+  STOP; never invent the answer.
+- The spec must be executable by an orchestrator that was not in this conversation —
+  unstated context goes in Rationale.

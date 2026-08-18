@@ -28,6 +28,7 @@ case "${1:-root}" in
   manifest-check) echo "$ROOT/scripts/manifest-check.sh" ;;
   env-preflight)  echo "$ROOT/scripts/env-preflight.js" ;;
   citations-check) echo "$ROOT/scripts/citations-check.js" ;;
+  review-legs)    echo "$ROOT/scripts/review-legs.js" ;;
   report-render)  echo "$ROOT/scripts/report-render.js" ;;
   spec-status)    echo "$ROOT/scripts/spec-status.js" ;;
   scope-reconcile) echo "$ROOT/scripts/scope-reconcile.js" ;;
@@ -62,7 +63,6 @@ case "${1:-root}" in
       status)  SECTIONS="Host Grounding|State Machine|Question Style|Console Output Style" ;;
       escape)  SECTIONS="Host Grounding|Feedback Loop|Question Style|Console Output Style" ;;
       doctor)  SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Runtime Verification|Feedback Loop|Risk Tiers|State Machine|Question Style|Console Output Style" ;;
-      audit)   SECTIONS="Host Grounding|Model Placement|Decisions|Question Style|Console Output Style" ;;
       *) cat "$DOC"; exit 0 ;;
     esac
     echo "<!-- shared invariants scoped to /spec:${CMD} — full doctrine: $DOC -->"
@@ -86,7 +86,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-design|wf-enforce|wf-panel|wf-research|dc-extract|design-atlas|design-driver|skeletons-check|fidelity-check|components-check|advisory-append|merge-back|smoke|manifest-check|env-preflight|citations-check|report-render|spec-status|scope-reconcile|verdict|ac-matrix|collision-closure|ci-query|ci-gate-parity|shared|shared-for <command>|shared-genesis|template|templates|feedback-template|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-design|wf-enforce|wf-panel|wf-research|dc-extract|design-atlas|design-driver|skeletons-check|fidelity-check|components-check|advisory-append|merge-back|smoke|manifest-check|env-preflight|citations-check|review-legs|report-render|spec-status|scope-reconcile|verdict|ac-matrix|collision-closure|ci-query|ci-gate-parity|shared|shared-for <command>|shared-genesis|template|templates|feedback-template|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

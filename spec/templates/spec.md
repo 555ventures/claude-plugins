@@ -1,7 +1,7 @@
 ---
 date: { YYYY-MM-DD }
 status: draft            # draft → hardened → implementing → done (hook-enforced); to retire a preserved spec: superseded (terminal — drops out of /spec:status silently; optional superseded_by: <what replaced it> is free-form provenance)
-risk: T2                 # T2 | T3 per tier rubric (plugin shared invariants + host pipeline rules). T1 work gets no spec.
+tier: standard           # standard | critical (critical: irreversible/high-blast-radius surfaces — auth, migrations, money, data deletion). Work too small to need a spec gets none.
 area: { area-name }      # primary feature/domain/module; "cross-cutting" if none
 design: false            # design-capable hosts only (config design block): true → /spec:design gates before /spec:build
 breaking: false
@@ -102,8 +102,8 @@ depended_on_by: []
      Shape: WHEN {trigger/state} THE SYSTEM SHALL {observable response}. Wherever a term can
      be read two ways (rounding mode, ordering, inclusive/exclusive bounds, timezone, null vs
      empty), pin it with a literal input → output example — test authors derive tests from
-     this spec alone, and a concrete pair is the only wording they cannot misread. T3 ACs
-     always carry at least one literal example. Defect-fix/behavior-change specs carry a
+     this spec alone, and a concrete pair is the only wording they cannot misread. Critical-
+     tier ACs always carry at least one literal example. Defect-fix/behavior-change specs carry a
      regression pin per behavior that must survive: WHEN {trigger} THE SYSTEM SHALL
      CONTINUE TO {existing behavior} — literal marker, never paraphrased. Pin tests are
      expected GREEN against pre-change code (the sanctioned exception to red-first);
@@ -118,7 +118,7 @@ depended_on_by: []
 ## Assumptions (escalation triggers)
 
 <!-- Load-bearing assumptions. If one proves false mid-build, the worker returns
-     blocked and the retainer starts HERE. Pair every assumption with its fallback. -->
+     blocked and adjudication starts HERE. Pair every assumption with its fallback. -->
 
 - A1: { assumption } — **if false:** { pre-thought fallback, or "STOP, ask the user" }
 

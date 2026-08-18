@@ -13,13 +13,10 @@ const { tmpdir, runNode } = require('../helpers')
 // per the spec's refuter-demonstrated fixture regression (a six-leg release fixture goes stale
 // the moment RELEASE_LEGS grows to seven).
 //
-// specs/20260816/02-sanctioned-red-closure.md (D2/D3, 2026-08-16): the review-profile CLEAN
-// disposition branch widens — a green `gate` or `at-risk` row whose observed carries
-// ` sanctionedReds=<K>` (K>=1) must derive `CLEAN-with-qualifier`, never plain CLEAN, and the
-// `--ledger` legs row for that leg must carry a `sanctionedReds` key mirroring K while every
-// suffix-free row stays byte-identical `{leg, exit}` (AC-20260805-02-5's existing legs-mirror
-// pin, tagged AC-20260816-02-8 below, is the regression guard for the untouched byte-identical
-// case). AC-20260816-02-5..7 pin the widening by execution against the real binary.
+// v7.0.0 (2026-08-17): CLEAN-with-qualifier and the sanctionedReds suffix are retired with the
+// sanctioned-red baseline apparatus — the verdict enum is CLEAN|FINDINGS|HARD_FINDINGS|
+// REVIEWER_FAILED|UNVERIFIED|GATE_RED, an `unavailable` observation leg derives plain CLEAN
+// (recorded in the leg row, never a distinct word), and ledger legs rows are always {leg,exit}.
 //
 // specs/20260805/02-review-evidence-manifest.md (D1-D3): today /spec:review can say CLEAN with
 // nothing executed — a zero-findings panel returns CLEAN from the workflow, and the CLEAN
@@ -83,7 +80,7 @@ function cleanWorkflow(survivors) {
   }
 }
 
-const VERDICT_WORDS = /^(CLEAN|CLEAN-with-qualifier|FINDINGS|HARD_FINDINGS|REVIEWER_FAILED|UNVERIFIED|GATE_RED)$/
+const VERDICT_WORDS = /^(CLEAN|FINDINGS|HARD_FINDINGS|REVIEWER_FAILED|UNVERIFIED|GATE_RED)$/
 
 test('AC-20260805-02-1: a manifest missing required legs derives UNVERIFIED and exits 1, never CLEAN', () => {
   const dir = tmpdir('verdict')
@@ -120,19 +117,17 @@ test('AC-20260805-02-3 / AC-20260810-07-8: a red ci leg derives GATE_RED and exi
   assert.strictEqual(r.status, 1, 'GATE_RED must exit 1 so the close step is mechanically unreachable: ' + r.stderr)
 })
 
-// specs/20260813/10-host-capabilities.md D4 retags this pin: its SUBSTANCE — an unavailable ci
-// leg must never BLOCK, since exit 0 satisfies the leg requirement — survives byte-for-byte and
-// is what the exit-code assertion below guards. Only its word changed: the release profile's
-// CLEAN-with-qualifier now derives on the review profile too, so the review-profile-plain-CLEAN
-// half of the old claim is retired by a locked Decision, not weakened.
-test('AC-20260813-10-8 (retag of AC-20260813-02-8): a review-profile run whose ci leg is observed unavailable still reaches a CLEAN-family word and exit 0 — the leg qualifies the verdict, never blocks it', () => {
+// v7.0.0 retag: the SUBSTANCE — an unavailable ci leg must never BLOCK, since exit 0 satisfies
+// the leg requirement — survives byte-for-byte. The qualifier word is retired: an unavailable
+// observation derives plain CLEAN with the observation recorded in the leg row.
+test('AC-20260813-10-8 (retag of AC-20260813-02-8): a review-profile run whose ci leg is observed unavailable derives plain CLEAN and exit 0 — the leg never blocks the close', () => {
   const dir = tmpdir('verdict')
   const manifest = writeManifest(dir, SIX_GREEN_CI_UNAVAILABLE)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
-  assert.strictEqual(r.stdout.split('\n')[0], 'CLEAN-with-qualifier',
-    'ci "unavailable" (no CI to consult) must qualify the verdict word rather than be swallowed into a ' +
-    'plain CLEAN indistinguishable from a real green run (D4): ' + r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.stdout.split('\n')[0], 'CLEAN',
+    'v7: ci "unavailable" (no CI to consult) derives plain CLEAN — the qualifier word is retired and the ' +
+    'observation lives in the leg row: ' + r.stdout + ' / ' + r.stderr)
   assert.strictEqual(r.status, 0,
     'the retained substance of AC-20260813-02-8: an unavailable ci leg is exit 0 and satisfies the ci leg ' +
     'requirement, so it must never block the close — a non-zero exit here would make every no-CI host ' +
@@ -283,21 +278,6 @@ test('AC-20260813-02-7 (updates AC-20260805-02-5) / AC-20260816-01-7 (CONTINUES 
     JSON.stringify(row))
 })
 
-test('AC-20260816-01-8: --ledger reads a gate row observed "skips=2 todos=1 sanctionedReds=21" and derives row.testsSkipped.total = 3 identically to the suffix-free form — the sanctionedReds suffix is tolerated and never summed into the total', () => {
-  const dir = tmpdir('verdict')
-  const rows = SIX_GREEN.map(r => (r.leg === 'gate'
-    ? { leg: 'gate', exit: 0, observed: 'skips=2 todos=1 sanctionedReds=21' } : r))
-  const manifest = writeManifest(dir, rows)
-  const workflow = writeWorkflow(dir, cleanWorkflow([]))
-  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger'])
-  const row = JSON.parse(r.stdout.trim().split('\n')[1])
-  assert.strictEqual(row.testsSkipped.total, 3,
-    'D6: deriveTestsSkipped\'s gate-row regex must tolerate the optional " sanctionedReds=<K>" trailer and ' +
-    'still derive total 3 (skips=2 + todos=1) — summing the 21 sanctioned reds into the total (giving 24), or ' +
-    'failing to match the trailer at all (giving 0), would both corrupt the ledger\'s testsSkipped accounting ' +
-    'the moment review.md starts appending the suffix on a green-by-subtraction gate: ' + JSON.stringify(row))
-})
-
 // specs/20260816/01-gate-baseline-reconcile.md D10 (retainer ruling, 2026-08-17, tdd-red-check
 // consult): AC-20260816-01-12 is a sanctioned-green regression pin, standalone (never folded
 // onto AC-8's testsSkipped-total test, which pins a different observable — see D10's rationale).
@@ -328,57 +308,6 @@ test('AC-20260816-01-12: a green-by-subtraction gate row (exit:0, observed "skip
     'falsifiability check (D10): the exact same sanctionedReds=21 observed text with the gate row\'s exit ' +
     'flipped to 1 must derive GATE_RED — proving the pin above is actually sensitive to the gate leg\'s exit ' +
     'code and is not a vacuously-true assertion: ' + rRed.stdout + ' / ' + rRed.stderr)
-})
-
-test('AC-20260816-02-5: a review-profile manifest whose gate row is {leg:"gate",exit:0,observed:"skips=0 todos=0 sanctionedReds=17"} and every other leg green derives CLEAN-with-qualifier on line 1 and exits 0, never plain CLEAN', () => {
-  const dir = tmpdir('verdict-sanctioned-gate')
-  const rows = SIX_GREEN.map(r => (r.leg === 'gate'
-    ? { leg: 'gate', exit: 0, observed: 'skips=0 todos=0 sanctionedReds=17' } : r))
-  const manifest = writeManifest(dir, rows)
-  const workflow = writeWorkflow(dir, cleanWorkflow([]))
-  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
-  assert.strictEqual(r.stdout.split('\n')[0], 'CLEAN-with-qualifier',
-    'D2: a green gate row whose observed carries " sanctionedReds=17" (K>=1) means the gate reached green ' +
-    'only by subtracting the host\'s declared sanctioned-red set — that must be visible in the verdict word, ' +
-    'not silently folded into plain CLEAN indistinguishable from a real all-passing gate: ' +
-    r.stdout + ' / ' + r.stderr)
-  assert.strictEqual(r.status, 0, 'CLEAN-with-qualifier is CLEAN-family and must exit 0: ' + r.stderr)
-})
-
-test('AC-20260816-02-6: the same all-green manifest with the at-risk row instead carrying observed "files=3 sanctionedReds=3" derives CLEAN-with-qualifier identically', () => {
-  const dir = tmpdir('verdict-sanctioned-at-risk')
-  const rows = SIX_GREEN.map(r => (r.leg === 'at-risk'
-    ? { leg: 'at-risk', exit: 0, observed: 'files=3 sanctionedReds=3' } : r))
-  const manifest = writeManifest(dir, rows)
-  const workflow = writeWorkflow(dir, cleanWorkflow([]))
-  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
-  assert.strictEqual(r.stdout.split('\n')[0], 'CLEAN-with-qualifier',
-    'D2 widens the qualifier check to the at-risk leg as well as gate — a green at-risk row whose observed ' +
-    'carries " sanctionedReds=3" means the leg\'s failures were adjudicated by baseline subtraction, not a ' +
-    'real all-clean run, and that must derive CLEAN-with-qualifier exactly as the gate-row case does: ' +
-    r.stdout + ' / ' + r.stderr)
-  assert.strictEqual(r.status, 0, 'CLEAN-with-qualifier is CLEAN-family and must exit 0: ' + r.stderr)
-})
-
-test('AC-20260816-02-7: --ledger emits the gate leg\'s legs entry as {"leg":"gate","exit":0,"sanctionedReds":17} when its observed carries the suffix, while a suffix-free at-risk row (observed "files=0") stays exactly {"leg":"at-risk","exit":0}', () => {
-  const dir = tmpdir('verdict-sanctioned-ledger')
-  const rows = SIX_GREEN.map(r => (r.leg === 'gate'
-    ? { leg: 'gate', exit: 0, observed: 'skips=0 todos=0 sanctionedReds=17' } : r))
-  const manifest = writeManifest(dir, rows)
-  const workflow = writeWorkflow(dir, cleanWorkflow([]))
-  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger'])
-  const row = JSON.parse(r.stdout.trim().split('\n')[1])
-  const gateLeg = row.legs.find(l => l.leg === 'gate')
-  const atRiskLeg = row.legs.find(l => l.leg === 'at-risk')
-  assert.deepStrictEqual(gateLeg, { leg: 'gate', exit: 0, sanctionedReds: 17 },
-    'D3: the durable ledger encoding for a green-by-subtraction leg is a conditional third key on its legs ' +
-    'row — without it, 01\'s D8 re-examine falsifier (a gate leg green with sanctionedReds>0 while the same ' +
-    'iteration\'s suite leg reports newFailing>0) has no field to derive from, and doctor\'s correlations ' +
-    'cannot see the subtraction at all: ' + JSON.stringify(row.legs))
-  assert.deepStrictEqual(atRiskLeg, { leg: 'at-risk', exit: 0 },
-    'a legs row whose observed carries no " sanctionedReds=<K>" suffix must stay byte-identical {leg,exit} — ' +
-    'adding the key unconditionally would break the AC-20260805-02-5 legs-mirror deepStrictEqual pin and every ' +
-    'other ledger consumer that assumes the fixed two-key shape: ' + JSON.stringify(row.legs))
 })
 
 test('AC-20260813-02-1: --ledger derives row.testsSkipped as {total,sanctioned,unsanctioned} from the gate row\'s skips+todos and the skip-reconcile row\'s "skipped=K sanctioned=S" observed format', () => {
@@ -575,28 +504,24 @@ test('AC-20260813-02-5 (AC-20260805-02-8 / AC-20260810-07-5, byte-identical per 
     JSON.stringify(row))
 })
 
-test('AC-20260813-02-4: --profile release with six green legs and a ci row observed "unavailable" (exit 0, structurally-absent verdict) derives CLEAN-with-qualifier on line 1, records it in row.verdict, and exits 0', () => {
+test('AC-20260813-02-4 (v7 retag): --profile release with six green legs and a ci row observed "unavailable" (exit 0, structurally-absent verdict) derives plain CLEAN, records the observation in row.ci, and exits 0', () => {
   const dir = tmpdir('verdict')
   const rows = RELEASE_SEVEN_LEGS.map(r => (r.leg === 'ci' ? { leg: 'ci', exit: 0, observed: 'unavailable' } : r))
   const manifest = writeManifest(dir, rows)
   const r = runNode(SCRIPT, ['--manifest', manifest, '--profile', 'release', '--ledger',
     '--milestone', 'v1.2.3', '--briefs', '12,13'])
   const lines = r.stdout.trim().split('\n')
-  assert.strictEqual(lines[0], 'CLEAN-with-qualifier',
-    'D3: a release derivation that would otherwise reach CLEAN, but whose ci leg observed is "unavailable" ' +
-    '(a required leg that structurally never delivered a verdict), must print the distinct word ' +
-    '"CLEAN-with-qualifier" on stdout line 1, not plain "CLEAN" — hearwell\'s first release recorded CLEAN ' +
-    'beside ci:"unavailable" with the qualifier living only in transient console scrollback: ' +
+  assert.strictEqual(lines[0], 'CLEAN',
+    'v7: the qualifier word is retired — a release whose ci leg observed is "unavailable" derives plain ' +
+    'CLEAN; the structurally-absent observation stays durable in row.ci, never a distinct verdict word: ' +
     r.stdout + ' / ' + r.stderr)
-  assert.strictEqual(r.status, 0,
-    'CLEAN-with-qualifier is CLEAN-family and must exit 0 — it gates nothing extra, it only makes the ' +
-    'qualifier durable: ' + r.stderr)
+  assert.strictEqual(r.status, 0, 'CLEAN must exit 0: ' + r.stderr)
   let row
   assert.doesNotThrow(() => { row = JSON.parse(lines[1]) },
-    '--ledger must still print a parseable JSON row on line 2 for the qualified word: ' + r.stdout)
-  assert.strictEqual(row.verdict, 'CLEAN-with-qualifier',
-    'row.verdict must record the exact qualified word, matching line 1 — a mismatch would let the durable ' +
-    'ledger row disagree with what the console printed: ' + JSON.stringify(row))
+    '--ledger must still print a parseable JSON row on line 2: ' + r.stdout)
+  assert.strictEqual(row.ci, 'unavailable',
+    'row.ci must record the unavailable observation — with the qualifier word retired this field is the ' +
+    'only durable carrier of "CI never delivered a verdict on this commit": ' + JSON.stringify(row))
 })
 
 test('AC-20260810-07-6: --profile release with the other six legs green but NO ci row derives UNVERIFIED and exits 1', () => {

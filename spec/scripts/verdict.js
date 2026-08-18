@@ -10,8 +10,7 @@
 // the sole derivation: per-iteration evidence-manifest rows (one per executed Phase 0 leg) +
 // the wf-review workflow return + disposition counts -> exactly one verdict word, first-match-
 // wins (spec Decisions D2/D3). --profile release runs the same shape against release.md's
-// legs (D7) — no --workflow, no dispositions, word restricted to
-// CLEAN|CLEAN-with-qualifier|GATE_RED|UNVERIFIED (D3).
+// legs (D7) — no --workflow, no dispositions, word restricted to CLEAN|GATE_RED|UNVERIFIED.
 // The --ledger row is additive to review.md/release.md's documented templates: review's
 // runId/smoke/testsSkipped/findings are derived here (D2 — smoke and testsSkipped come FROM
 // manifest rows' pinned observed formats, never asserted); release's milestone/briefs are
@@ -34,26 +33,11 @@
 // evidence that already exists. A missing/unparseable release leg omits that row key rather
 // than failing the ledger print — STOP-path rows are partial by nature.
 //
-// Incident (2026-08-13, spec durable-verification-qualifiers D2/D3): the ledger's
-// `testsSkipped` count and the release word both silently dropped a qualifier that only ever
-// lived in console scrollback — sanctioned (`[env:]`-declared) skips were indistinguishable
-// from unsanctioned ones, and a release whose `ci` leg structurally never delivered a verdict
-// (`unavailable`/`in-progress`) printed a plain `CLEAN` identical to one with a real green CI
-// run. `testsSkipped` is now always an object `{total, sanctioned, unsanctioned}` (D2); the
-// release profile now derives the distinct CLEAN-family word `CLEAN-with-qualifier` when `ci`
-// is structurally absent (D3) — it exits 0 and gates nothing extra, so the final exit check is
-// a CLEAN-family prefix test rather than an exact match.
-//
-// Incident (2026-08-13, spec host-capabilities D4): `CLEAN-with-qualifier` existed only in the
-// release branch above — the review branch fell straight through disposition counting to plain
-// `CLEAN`, silently swallowing an honest `unavailable` `ci` leg (host declares no forge adapter)
-// or an `unavailable` `gate` leg (host declares no skip-report format, spec 10 D3) the exact
-// moment those two new honest sources started landing. The review branch now checks the same two
-// legs once the disposition count would otherwise reach plain CLEAN, deriving
-// `CLEAN-with-qualifier` instead — same word, same CLEAN-family exit semantics as the release
-// branch. A `CLEAN-with-qualifier`-eligible leg never blocks: gate/ci both stay in
-// `REVIEW_BLOCKING`, so a truly red gate or ci leg is caught by the GATE_RED branch above and
-// never reaches this check.
+// v7.0.0 (2026-08-17): the CLEAN-with-qualifier word and the sanctionedReds suffix are
+// retired with the sanctioned-red baseline apparatus — gates are plainly green or red, and a
+// structurally-absent leg observation (`unavailable`/`in-progress`) is recorded in the leg row
+// and the ledger, never a distinct verdict word. `testsSkipped` stays the
+// `{total, sanctioned, unsanctioned}` object (sanctioned = `[env:]`-declared skips).
 //
 // Incident (2026-08-15, spec release-migrations-leg D4): a release could read CLEAN while the
 // deployed database was missing migrations the milestone shipped, because the migrations check
@@ -66,22 +50,7 @@
 // the profile) are de-duplicated; the flag never removes or reorders a profile's built-in legs.
 // This is the one accumulator flag — every other flag here is scalar-overwrite.
 //
-// Incident (2026-08-16, spec gate-baseline-reconcile D6): a scoped gate that goes green only
-// because suite-baseline.js's --gate wrapper subtracted sanctioned baseline pins now appends
-// ` sanctionedReds=<K>` to the gate leg's observed string (review.md), so the manifest stays
-// honest about a green-by-subtraction gate. deriveTestsSkipped's regex tolerates the optional
-// suffix and never sums K into testsSkipped.total — the suffix is provenance, not a skip count.
-//
-// Incident (2026-08-16, spec sanctioned-red-closure D2/D3): the at-risk leg's per-review hand
-// waive of sanctioned-only reds left a green-by-subtraction leg indistinguishable from a genuinely
-// clean one in both the verdict word and the ledger — the same gap D6 above closed for the gate
-// leg's own greenness, but the disposition branch's CLEAN check and the --ledger legs mirror never
-// looked at the suffix. The disposition branch now also derives CLEAN-with-qualifier when the
-// gate or at-risk row is green with a `sanctionedReds=<K>` (K>=1) observed suffix, and every
-// --ledger legs row carries that count (`{leg,exit,sanctionedReds}`) when its observed matches —
-// every other row stays the byte-identical `{leg,exit}` pair (AC-20260805-02-5 pin).
-//
-// Exit codes: 0 = derived CLEAN or CLEAN-with-qualifier · 1 = derived other non-CLEAN word
+// Exit codes: 0 = derived CLEAN · 1 = derived other non-CLEAN word
 // (still printed on stdout line 1) · 2 = usage error, missing/unreadable --manifest or
 // --workflow file, a disposition contradiction (--waived + --rejected + --fixDispatched
 // exceeds the workflow's survivor count), or (review profile, no --workflow) a manifest that
@@ -174,8 +143,7 @@ if (workflow && waived + rejected + fixDispatched > survivors.length) {
 // specs/20260815/02-at-risk-pins.md D4: 'at-risk' joins REVIEW_LEGS as a required-but-non-
 // blocking leg — an absent row derives UNVERIFIED (the same fail-closed presence rule below),
 // a red row never derives GATE_RED (it stays out of REVIEW_BLOCKING; the finding is a review
-// disposition, not a gate), and an honest `unavailable` observation widens the
-// CLEAN-with-qualifier check alongside 'ci'/'gate' so it never reads as plain CLEAN. Excluded
+// disposition, not a gate). Excluded
 // from fix-delta's requiredLegs alongside 'reconcile' — the leg mirrors reconcile's standing
 // exactly (both derive from the changed-set-vs-plan comparison scope skips).
 
@@ -209,34 +177,10 @@ function derive() {
   if (profile !== 'release' && workflow && workflow.verdict === 'REVIEWER_FAILED') return 'REVIEWER_FAILED'
   if (!manifestValid || requiredLegs.some(l => !legRows.has(l))) return 'UNVERIFIED'
   if ([...blockingLegs].some(legIsRed)) return 'GATE_RED'
-  if (profile === 'release') {
-    const ci = legRows.get('ci')
-    const unresolved = ci && /^(unavailable|in-progress)$/.test(ci.observed || '')
-    // release.md's ci enum is {conclusion=<value>, unavailable, in-progress} —
-    // 'unavailable-transient' is review-profile-only vocabulary, deliberately absent here.
-    return unresolved ? 'CLEAN-with-qualifier' : 'CLEAN'
-  }
+  if (profile === 'release') return 'CLEAN'
   if (fixDispatched > 0) return 'FINDINGS' // a dispatched fix is non-terminal
   const undispositioned = survivors.length - waived - rejected - fixDispatched
   if (undispositioned > 0) return survivors.some(f => f.severity === 'hard') ? 'HARD_FINDINGS' : 'FINDINGS'
-  // D4: the disposition branch reached CLEAN — before printing it, check the two legs that can
-  // carry an honest `unavailable` observation without being red (ci: no forge adapter to consult;
-  // gate: no skip-report format declared, spec 10 D3). Prefix match, not exact — review's ci
-  // vocabulary includes `unavailable-transient` (retryable gh failure) alongside plain
-  // `unavailable`/`in-progress`, and the skip-unavailable sentence is a whole clause.
-  const legUnavailable = (leg) => {
-    const row = legRows.get(leg)
-    return !!row && /^(unavailable|in-progress)/.test(row.observed || '')
-  }
-  // D2: a green-by-subtraction gate or at-risk leg (suite-baseline.js's --gate wrapper
-  // subtracted K>=1 sanctioned reds) qualifies CLEAN identically — greenness resting on the
-  // baseline trust surface is always visibly qualified, never a fabricated plain CLEAN.
-  const legSanctionedRed = (leg) => {
-    const row = legRows.get(leg)
-    return !!row && row.exit === 0 && /sanctionedReds=([1-9]\d*)/.test(row.observed || '')
-  }
-  if (legUnavailable('ci') || legUnavailable('gate') || legUnavailable('at-risk')) return 'CLEAN-with-qualifier'
-  if (legSanctionedRed('gate') || legSanctionedRed('at-risk')) return 'CLEAN-with-qualifier'
   return 'CLEAN'
 }
 
@@ -258,7 +202,7 @@ function deriveSmoke(row) {
 }
 
 function deriveTestsSkipped(gateRow, skipReconcileRow) {
-  const gm = gateRow && /^skips=(\d+) todos=(\d+)(?: sanctionedReds=\d+)?$/.exec(gateRow.observed || '')
+  const gm = gateRow && /^skips=(\d+) todos=(\d+)$/.exec(gateRow.observed || '')
   const total = gm ? Number(gm[1]) + Number(gm[2]) : 0
   const sm = skipReconcileRow && /^skipped=(\d+)(?: sanctioned=(\d+))?$/.exec(skipReconcileRow.observed || '')
   const sanctioned = sm && sm[2] !== undefined ? Number(sm[2]) : 0
@@ -283,18 +227,8 @@ function deriveProduction(row) {
   return undefined
 }
 
-// D3: the durable encoding — a row whose observed carries `sanctionedReds=<K>` (K>=1) emits
-// the count so doctor's correlations (01's D8 retire falsifier) can see a green-by-subtraction
-// leg without re-parsing observed strings; every other row stays byte-identical (AC-20260805-02-5).
-function legsWithSanctioned(rows) {
-  return rows.map(({ leg, exit, observed }) => {
-    const m = /sanctionedReds=([1-9]\d*)/.exec(observed || '')
-    return m ? { leg, exit, sanctionedReds: Number(m[1]) } : { leg, exit }
-  })
-}
-
 if (ledger) {
-  const legs = legsWithSanctioned([...legRows.values()])
+  const legs = [...legRows.values()].map(({ leg, exit }) => ({ leg, exit }))
   const row = { ts: new Date().toISOString() }
   if (specArg) row.spec = specArg
   row.stage = profile === 'release' ? 'release' : 'review'
@@ -344,4 +278,4 @@ if (ledger) {
   console.log(JSON.stringify(row))
 }
 
-process.exit(word.startsWith('CLEAN') ? 0 : 1)
+process.exit(word === 'CLEAN' ? 0 : 1)

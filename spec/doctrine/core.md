@@ -78,6 +78,12 @@ exactly what static gates cannot see. Critical tier means: literal examples on e
 spike-verified assumptions, and the user confirms the lock. Mid-build evidence of a critical
 trigger upgrades the tier immediately (note it in the spec).
 
+Critical tier adds review capacity only as **narrowly-scoped, non-redundant legs registered
+by name** (host pipeline rules § Review Checks; wired via `verdict.js --require`) — never a
+second general reviewer: reviewer agreement is measurably not a correctness signal (Spearman
+ρ 0.20–0.59, Aug 2026). `promise-sweep` is one such leg and runs at every tier, not only
+critical; this ruling governs future capacity, not its admission.
+
 ## Runtime Verification
 
 **No verdict may rest on static legs alone.** Typecheck, lint, mocked unit tests, pattern

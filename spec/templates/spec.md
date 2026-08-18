@@ -30,9 +30,14 @@ depended_on_by: []
 
 ## Decisions (locked — workers apply verbatim, never override)
 
+<!-- Carrier contract (specs/20260817/07-promise-sweep-leg.md D8; enforced by promise-sweep.js
+     at plan lock and in every review): every row cites ≥1 of this spec's own AC-IDs — the AC
+     whose test goes red if the decision is unimplemented — or carries `[no-ac: <reason>]` for
+     a row with no testable surface. An empty reason ([no-ac: ]) does not count as a sanction. -->
+
 | ID | Decision | One-line rationale |
 |----|----------|--------------------|
-| D1 | { choice } | { why; rejected alternative named — full story in Rationale } |
+| D1 | { choice } (AC-{YYYYMMDD-NN}-1) | { why; rejected alternative named — full story in Rationale } |
 
 ## File Plan
 
@@ -69,7 +74,9 @@ depended_on_by: []
 ## Behavior
 
 { Interaction flows, handler/store transitions, edge cases. Free-form — prose, tables,
-  whatever the problem needs. This is the one deliberately unstructured section. }
+  whatever the problem needs. This is the one deliberately unstructured section — but any
+  testable promise written here must be restated as an Acceptance Criterion; Behavior prose
+  itself is deliberately NOT enumerated by the promise sweep (JJ ruling 2026-08-17). }
 
 ## Acceptance Criteria
 

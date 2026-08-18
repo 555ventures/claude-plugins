@@ -146,8 +146,14 @@ if (workflow && waived + rejected + fixDispatched > survivors.length) {
 // disposition, not a gate). Excluded
 // from fix-delta's requiredLegs alongside 'reconcile' — the leg mirrors reconcile's standing
 // exactly (both derive from the changed-set-vs-plan comparison scope skips).
+//
+// specs/20260817/07-promise-sweep-leg.md D4: 'promise-sweep' joins REVIEW_LEGS the same way —
+// required-but-non-blocking (absent row -> UNVERIFIED, red row -> a disposition finding, never
+// GATE_RED) — but unlike reconcile/at-risk it is required in BOTH scopes: it is excluded from
+// neither scope's requiredLegs filter below, mirroring ac-matrix's standing exactly (the spec
+// text may be amended during a fix pass, and the leg costs milliseconds).
 
-const REVIEW_LEGS = ['gate', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk']
+const REVIEW_LEGS = ['gate', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk', 'promise-sweep']
 const REVIEW_BLOCKING = new Set(['gate', 'smoke', 'ci'])
 const RELEASE_LEGS = ['deploy', 'ready', 'e2e', 'journeys', 'substrate', 'production', 'ci']
 

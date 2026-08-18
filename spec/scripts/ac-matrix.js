@@ -16,8 +16,12 @@
 // authority), compute the review verdict (verdict.js reads this script's manifest rows, never
 // the reverse), parse runner output to discover skipped-test names (the orchestrator extracts
 // names per the host's declared format and passes them via --skips — no universal name format
-// exists, only the skip *count* format is host-declared), or expand a File Plan glob through
-// any matcher but the shared lib/glob-match.js.
+// exists, only the skip *count* format is host-declared), expand a File Plan glob through any
+// matcher but the shared lib/glob-match.js, or own the AC-ID grammar / `## ` section extraction
+// / AC-bullet parsing — those are lifted verbatim into lib/spec-sections.js (2026-08-17, spec
+// promise-sweep-leg D3), the single authority a sibling script (promise-sweep.js) also imports;
+// no test named `ac-id-lint.test.js` lifts the regex from this file's source (that test does
+// not exist — grep evidence, 2026-08-17).
 //
 // Exit codes: 0 = executed, no findings · 1 = executed, findings emitted (rides the normal
 // Phase 2 disposition flow — not a script failure) · 2 = usage error, unreadable --spec, or a
@@ -27,11 +31,7 @@ const fs = require('fs')
 const path = require('path')
 const { parseFilePlanRows } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
-
-// AC-ID shape (the single authority; ac-id-lint.test.js lifts it from this source):
-//   full anchored match of `AC-\d{8}-\d{2}[a-z]?-\d+`
-const AC_ID_RE = /^AC-\d{8}-\d{2}[a-z]?-\d+$/
-const AC_ID_RE_GLOBAL = /AC-\d{8}-\d{2}[a-z]?-\d+/g
+const { AC_ID_RE, AC_ID_RE_GLOBAL, extractSection, parseAcBullets } = require('./lib/spec-sections')
 
 function usage() {
   console.error('usage: ac-matrix.js --spec <path> --root <dir> --manifest <path> ' +
@@ -61,24 +61,8 @@ try {
   process.exit(2)
 }
 
-// ---- ## Acceptance Criteria section extraction ----------------------------------------------
-
-function extractSection(text, heading) {
-  const lines = text.split('\n')
-  let start = -1, level = 0
-  const re = new RegExp(`^(#{2,3}) ${heading}`, 'i')
-  for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(re)
-    if (m) { start = i + 1; level = m[1].length; break }
-  }
-  if (start === -1) return null
-  let end = lines.length
-  for (let i = start; i < lines.length; i++) {
-    const hm = lines[i].match(/^(#{1,6})\s/)
-    if (hm && hm[1].length <= level) { end = i; break }
-  }
-  return lines.slice(start, end).join('\n')
-}
+// ---- ## Acceptance Criteria section extraction + bullet parsing: both lifted verbatim into
+// ---- lib/spec-sections.js (D3) — extractSection/parseAcBullets imported above -----------------
 
 const acSection = extractSection(specText, 'Acceptance Criteria')
 if (acSection === null) {
@@ -86,40 +70,7 @@ if (acSection === null) {
   process.exit(2)
 }
 
-// ---- bullet parsing: top-level `- ` bullets only, HTML comments stripped --------------------
-
-function parseBullets(sectionText) {
-  const stripped = sectionText.replace(/<!--[\s\S]*?-->/g, '')
-  const lines = stripped.split('\n')
-  const groups = []
-  let cur = null
-  for (const line of lines) {
-    if (/^- /.test(line)) {
-      if (cur) groups.push(cur)
-      cur = [line]
-    } else if (cur) {
-      cur.push(line)
-    }
-  }
-  if (cur) groups.push(cur)
-  return groups.map(linesArr => {
-    const raw = linesArr.join('\n')
-    const tokenMatch = linesArr[0].match(/^- \*\*([^*]*)\*\*/)
-    const token = tokenMatch ? tokenMatch[1] : ''
-    const malformed = !AC_ID_RE.test(token)
-    const oracleMatch = raw.match(/\[oracle:\s*([^\]]+)\]/)
-    const envMatch = raw.match(/\[env:\s*([^\]]+)\]/)
-    return {
-      id: malformed ? null : token,
-      token,
-      malformed,
-      oracle: oracleMatch ? oracleMatch[1].trim() : null,
-      env: envMatch ? envMatch[1].trim() : null,
-    }
-  })
-}
-
-const bullets = parseBullets(acSection)
+const bullets = parseAcBullets(acSection)
 const wellFormed = bullets.filter(b => !b.malformed)
 const acById = new Map(wellFormed.map(b => [b.id, b]))
 
@@ -317,7 +268,7 @@ function resolveOwningSpecFile(date, ordinal) {
     owningSpecFileCache.set(cacheKey, result)
     return result
   }
-  const result = { path: owningRelPath, bullets: parseBullets(ownerSection) }
+  const result = { path: owningRelPath, bullets: parseAcBullets(ownerSection) }
   owningSpecFileCache.set(cacheKey, result)
   return result
 }

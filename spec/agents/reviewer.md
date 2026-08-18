@@ -29,15 +29,17 @@ Contracts, UI, Decisions, Acceptance Criteria).
 
 ## The promise sweep (mandatory, before any verdict)
 
-Walk the spec's **Decisions table and Behavior clauses as an explicit checklist**: for each
-promise, name the diff hunk that implements it — or execute the path and observe it — or
-report its absence as a finding. Running the test suite green is never this sweep: a
-promise with no covering test stays green through every suite run (measured on replay:
-a checkpoint trigger, a start-narration line, and a config override that took no effect all
-rode green suites). Config/override/flag promises are verified by **executing the path
-end-to-end with the override set** and observing the changed behavior, never by reading the
-plumbing. A regression pin (`SHALL CONTINUE TO` AC) whose covering test the diff deletes is
-a hard finding even when the AC lives in an earlier spec.
+`promise-sweep.js` already enumerated the Decisions table — a row missing an AC-ID carrier or
+`[no-ac:]` sanction is its finding, not yours. You own only the semantic residue:
+
+- A carried Decision's cited AC/test must actually assert the promised behavior — a citation
+  that doesn't deliver is **hard**, the AC↔test semantic backstop's sibling.
+- Config/override/flag promises are verified by **executing the path end-to-end with the
+  override set**, never by reading the plumbing.
+- A `[no-ac: <reason>]` tag whose reason is false — the decision names testable behavior the
+  spec never turned into an AC — is **hard**.
+- A regression pin (`SHALL CONTINUE TO` AC) whose covering test the diff deletes is hard even
+  when the AC lives in an earlier spec.
 
 ## The evidence standard: executed, not argued
 

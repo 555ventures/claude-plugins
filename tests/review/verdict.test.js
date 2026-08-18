@@ -53,6 +53,13 @@ function writeWorkflow(dir, obj) {
 // added here so every existing test below that reuses SIX_GREEN CONTINUES TO derive the same
 // verdict words and ledger fields it already asserts — the fixture gains the row, the assertions
 // stay unweakened.
+//
+// specs/20260817/07-promise-sweep-leg.md D4 (AC-20260817-07-11, AC-20260817-07-12): 'promise-
+// sweep' joins REVIEW_LEGS as required-but-non-blocking in BOTH scopes (unlike reconcile/
+// at-risk, never filtered out on fix-delta) — mirroring ac-matrix's standing exactly. The row is
+// added here so every existing test below that reuses SIX_GREEN CONTINUES TO derive the same
+// verdict words it already asserts (A2's executed redden spike named this file as one of the
+// three suites the extension reds).
 const SIX_GREEN = [
   { leg: 'gate', exit: 0, observed: 'skips=0 todos=0' },
   { leg: 'smoke', exit: 4, observed: 'inert' },
@@ -61,6 +68,7 @@ const SIX_GREEN = [
   { leg: 'skip-reconcile', exit: 0, observed: 'skipped=0' },
   { leg: 'ci', exit: 0, observed: 'conclusion=success' },
   { leg: 'at-risk', exit: 0, observed: 'files=0' },
+  { leg: 'promise-sweep', exit: 0, observed: 'rows=1 carried=1 sanctioned=0 orphans=0' },
 ]
 
 // The same six legs with ci structurally unobservable — the qualifier fixture (D4).
@@ -397,6 +405,18 @@ test('AC-20260805-02-8: --ledger normalizes an array-shaped workflow.killed to i
 // rule the ci/gate oracle legs already establish, and mirroring `reconcile`'s standing on the
 // blocking question. This fixture predates the at-risk row (unlike SIX_GREEN above, which now
 // carries it) so these three tests can isolate at-risk's own presence/absence/redness.
+//
+// specs/20260817/07-promise-sweep-leg.md D4 (retarget, deviation logged in this spec's
+// deviations sidecar): `promise-sweep` joins REVIEW_LEGS required in BOTH scopes, unlike
+// `at-risk`/`reconcile` which the fix-delta filter excludes — so under fix-delta scope this
+// fixture (minus `reconcile`) collapses to the exact same row set AC-20260817-07-11's fix-delta
+// fixture uses, and AC-20260817-07-11 pins that exact set as UNVERIFIED when promise-sweep is
+// absent. AC-20260815-02-8 below asserts CLEAN for that identical row set — the two claims are
+// mutually exclusive by construction, not a judgment call (verified: filtering this fixture the
+// same way AC-20260815-02-8 does yields ["gate","smoke","ac-matrix","skip-reconcile","ci"],
+// byte-identical to AC-20260817-07-11's fix-delta manifest). The row is added here, mirroring
+// SIX_GREEN's own retarget, so AC-20260815-02-6/-7/-8 keep meaning "every OTHER leg genuinely
+// passed" instead of silently asserting a claim D4 makes structurally false.
 const SIX_LEGS_NO_AT_RISK = [
   { leg: 'gate', exit: 0, observed: 'skips=0 todos=0' },
   { leg: 'smoke', exit: 4, observed: 'inert' },
@@ -404,6 +424,7 @@ const SIX_LEGS_NO_AT_RISK = [
   { leg: 'ac-matrix', exit: 0, observed: 'uncovered=0' },
   { leg: 'skip-reconcile', exit: 0, observed: 'skipped=0' },
   { leg: 'ci', exit: 0, observed: 'conclusion=success' },
+  { leg: 'promise-sweep', exit: 0, observed: 'rows=1 carried=1 sanctioned=0 orphans=0' },
 ]
 
 test('AC-20260815-02-6: a full-scope review manifest missing the at-risk row derives UNVERIFIED, never CLEAN, even with all six legacy legs green and a CLEAN workflow return', () => {
@@ -451,6 +472,52 @@ test('AC-20260815-02-8: on scope fix-delta, a manifest lacking both reconcile an
     'missing both rows must still derive CLEAN from the remaining five green legs, never ' +
     'UNVERIFIED for a leg fix-delta scope never had to run: ' + r.stdout + ' / ' + r.stderr)
   assert.strictEqual(r.status, 0, 'CLEAN must exit 0: ' + r.stderr)
+})
+
+// specs/20260817/07-promise-sweep-leg.md D4 (AC-20260817-07-11, AC-20260817-07-12): isolates the
+// promise-sweep row's own presence/redness the same way SIX_LEGS_NO_AT_RISK isolates at-risk's.
+const EIGHT_LEGS_NO_PROMISE_SWEEP = SIX_GREEN.filter(r => r.leg !== 'promise-sweep')
+
+test('AC-20260817-07-11: a full-scope manifest missing the promise-sweep row derives UNVERIFIED, never CLEAN, even with every other leg green and a CLEAN workflow return', () => {
+  const dir = tmpdir('verdict-promise-sweep-missing-full')
+  const manifest = writeManifest(dir, EIGHT_LEGS_NO_PROMISE_SWEEP)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
+  assert.strictEqual(r.stdout.split('\n')[0], 'UNVERIFIED',
+    'D4 makes promise-sweep a required full-scope leg via the same fail-closed presence rule the other ' +
+    'REVIEW_LEGS entries already carry — a manifest missing it must derive UNVERIFIED even though every ' +
+    'other leg is green and the workflow returned zero-survivor CLEAN, or a review could close CLEAN ' +
+    'having never run the leg that closes the v7 replay eval\'s one measured miss class: ' +
+    r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 1, 'UNVERIFIED must exit 1 so the close step is mechanically unreachable: ' + r.stderr)
+})
+
+test('AC-20260817-07-11 (fix-delta scope): a fix-delta manifest missing the promise-sweep row also derives UNVERIFIED — the leg is excluded from neither scope\'s required set', () => {
+  const dir = tmpdir('verdict-promise-sweep-missing-fixdelta')
+  const rows = EIGHT_LEGS_NO_PROMISE_SWEEP.filter(r => r.leg !== 'reconcile' && r.leg !== 'at-risk')
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, { ...cleanWorkflow([]), scope: 'fix-delta' })
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
+  assert.strictEqual(r.stdout.split('\n')[0], 'UNVERIFIED',
+    'D4: promise-sweep is required in BOTH scopes, unlike reconcile/at-risk which fix-delta filters out of ' +
+    'requiredLegs — a fix-delta manifest missing the promise-sweep row must still derive UNVERIFIED, never ' +
+    'CLEAN from the remaining green legs alone: ' + r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 1, 'UNVERIFIED must exit 1 so the close step is mechanically unreachable: ' + r.stderr)
+})
+
+test('AC-20260817-07-12: a non-zero promise-sweep exit (orphan-decision findings) counts as executed-green for leg presence and CLEAN is reachable once that finding is waived — the leg never derives GATE_RED', () => {
+  const dir = tmpdir('verdict-promise-sweep-red')
+  const rows = SIX_GREEN.map(r => (r.leg === 'promise-sweep'
+    ? { leg: 'promise-sweep', exit: 1, observed: 'rows=1 carried=0 sanctioned=0 orphans=1' } : r))
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, cleanWorkflow([{ severity: 'hard', id: 'D1' }]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '1'])
+  assert.strictEqual(r.stdout.split('\n')[0], 'CLEAN',
+    'D4: promise-sweep is a findings-producing leg like ac-matrix (mirror of its standing) — its non-zero ' +
+    'exit must count as executed-green for leg presence, and once its one orphan-decision finding is fully ' +
+    'waived the derivation must still reach CLEAN, never stick at GATE_RED, since the leg never joins ' +
+    'REVIEW_BLOCKING: ' + r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 0, 'CLEAN reached via a dispositioned promise-sweep finding must exit 0: ' + r.stderr)
 })
 
 const RELEASE_SIX_LEGS = [

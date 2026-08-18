@@ -11,6 +11,13 @@ const { tmpdir, runNode, runBash, ROOT, SPEC } = require('../helpers')
 // spec/scripts/ac-matrix.js, by executing it against synthetic host trees — never against
 // implementation internals, since the script does not exist yet at HEAD. Scoped under
 // tests/ac-matrix/ so other specs' gate runs stay pin-free (D7).
+//
+// RETAG (specs/20260817/07-promise-sweep-leg.md D3, AC-20260817-07-14): AC_ID_RE,
+// AC_ID_RE_GLOBAL, extractSection, and parseAcBullets move out of this file into the new
+// spec/scripts/lib/spec-sections.js, which ac-matrix.js now imports; every observed string,
+// finding class, and exit code below stays byte-identical. This whole suite — unchanged, no
+// assertion edited — IS the byte-identity pin for D3: any divergence introduced by the
+// extraction surfaces here as a wrong observed grammar, finding class, or exit code.
 
 function specMd(acLines, filePlanRows) {
   return '# Test Spec\n\n## Acceptance Criteria\n\n' + acLines.join('\n') + '\n\n' +

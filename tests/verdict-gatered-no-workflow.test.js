@@ -28,6 +28,12 @@ function writeManifest(dir, rows) {
 // `at-risk` joins REVIEW_LEGS as a required-but-non-blocking leg (found by Phase 4's pre-image
 // check as an in-flight File Plan row) — the row is added to both six-leg manifests below so
 // the tests CONTINUE TO derive the same verdict words/exit codes they already assert.
+//
+// specs/20260817/07-promise-sweep-leg.md D4 (AC-20260817-07-13, CONTINUE TO): 'promise-sweep'
+// joins REVIEW_LEGS the same way — required-but-non-blocking in both scopes — and A2's executed
+// redden spike named this file as one of the three suites the extension reds. The row is added
+// to both fixture manifests below so these two pins CONTINUE TO derive GATE_RED / exit 2
+// unweakened; this file carries no new tests, only the retargeted fixtures.
 const SIX_ROWS_GATE_RED = [
   { leg: 'gate', exit: 1, observed: 'boot-crash' },
   { leg: 'smoke', exit: 4, observed: 'inert' },
@@ -36,9 +42,10 @@ const SIX_ROWS_GATE_RED = [
   { leg: 'skip-reconcile', exit: 0, observed: 'skipped=0' },
   { leg: 'ci', exit: 0, observed: 'unavailable' },
   { leg: 'at-risk', exit: 0, observed: 'files=0' },
+  { leg: 'promise-sweep', exit: 0, observed: 'rows=1 carried=1 sanctioned=0 orphans=0' },
 ]
 
-test('JJ-20260808-01 / AC-20260813-03-7 (CONTINUE TO AC-20260815-02-9): review.md Phase 0 step 8\'s documented pre-panel hard-stop invocation (--manifest --ledger, no --workflow) derives GATE_RED and exits 1 from a red gate leg alone', () => {
+test('JJ-20260808-01 / AC-20260813-03-7 (CONTINUE TO AC-20260815-02-9 / AC-20260817-07-13): review.md Phase 0 step 8\'s documented pre-panel hard-stop invocation (--manifest --ledger, no --workflow) derives GATE_RED and exits 1 from a red gate leg alone', () => {
   const dir = tmpdir('verdict-gatered-no-workflow')
   const manifest = writeManifest(dir, SIX_ROWS_GATE_RED)
   const r = runNode(SCRIPT, ['--manifest', manifest, '--ledger', '--spec', 'x.md',
@@ -80,9 +87,10 @@ const SIX_ROWS_GREEN = [
   { leg: 'skip-reconcile', exit: 0, observed: 'skipped=0' },
   { leg: 'ci', exit: 0, observed: 'unavailable' },
   { leg: 'at-risk', exit: 0, observed: 'files=0' },
+  { leg: 'promise-sweep', exit: 0, observed: 'rows=1 carried=1 sanctioned=0 orphans=0' },
 ]
 
-test('AC-20260813-03-8 (CONTINUE TO AC-20260815-02-9): verdict.js --manifest with no --workflow on a green, complete manifest exits 2 with a usage error naming --workflow as the remedy, never a derived CLEAN', () => {
+test('AC-20260813-03-8 (CONTINUE TO AC-20260815-02-9 / AC-20260817-07-13): verdict.js --manifest with no --workflow on a green, complete manifest exits 2 with a usage error naming --workflow as the remedy, never a derived CLEAN', () => {
   const dir = tmpdir('verdict-gatered-no-workflow')
   const manifest = writeManifest(dir, SIX_ROWS_GREEN)
   const r = runNode(SCRIPT, ['--manifest', manifest])

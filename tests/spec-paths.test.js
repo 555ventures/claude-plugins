@@ -17,12 +17,17 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // spec-paths key, or /spec:status and /spec:review's D7 observe-ci invocation resolve nothing
 // (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently").
 
+// AC-20260817-07-15: specs/20260817/07-promise-sweep-leg.md D5 adds spec/scripts/promise-sweep.js
+// to the bundle (the Decisions-carrier leg run at plan lock and in every review scope) — like
+// every other bundled script it needs a spec-paths key, or plan.md's Lock checklist invocation
+// and review-legs.js's own resolution find nothing.
+
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-design', 'wf-enforce',
     'wf-panel', 'wf-research', 'dc-extract', 'design-atlas', 'skeletons-check', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'scope-reconcile', 'verdict', 'ci-query', 'review-legs',
-    'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
+    'promise-sweep', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }

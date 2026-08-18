@@ -98,7 +98,10 @@ Write the spec per the template. `status: draft`. While drafting:
    state gate reads this field as authoritative).
 2. **Confirm:** zero open forks; every shape-triggered micro-spike executed with evidence
    in Assumptions; every Goal promise traced to a Decision that delivers it and an AC that
-   goes red in its absence; for a defect-fix spec, at least one `SHALL CONTINUE TO` pin or
+   goes red in its absence — run `node "$(spec-paths promise-sweep)" --spec {spec path}`
+   (no `--manifest`) and resolve every `orphan-decision` finding by citing the delivering
+   AC in the row or recording `[no-ac: <reason>]`; zero orphans to lock; for a defect-fix
+   spec, at least one `SHALL CONTINUE TO` pin or
    a Rationale line saying why no neighbor needs pinning. A Decision that retires or
    narrows prose elsewhere runs
    `node "$(spec-paths collision-closure)" --spec {spec path} --root . --literal <stem>…`

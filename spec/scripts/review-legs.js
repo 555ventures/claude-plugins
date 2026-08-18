@@ -18,6 +18,10 @@
 //   ci             {"leg":"ci","exit":<0|1>,"observed":"unavailable"|"unavailable-transient"|"in-progress"|"conclusion=<v>"}
 //   at-risk        {"leg":"at-risk","exit":<code>,"observed":"files=<N>"|"unavailable — …"}
 //   ac-matrix / skip-reconcile — appended by ac-matrix.js itself (same manifest)
+//   promise-sweep  {"leg":"promise-sweep","exit":<0|1>,"observed":"rows=N carried=C sanctioned=S orphans=O"}
+//                  appended by promise-sweep.js itself (same manifest); runs in EVERY scope
+//                  including --fix-delta — excluded from no scope (D4,
+//                  specs/20260817/07-promise-sweep-leg.md)
 //   patterns       recorded when config declares patternsScript; never required
 //   drift          recorded when config declares driftScript
 // --fix-delta skips reconcile/at-risk/patterns (the fix diff is a response to findings) and
@@ -213,6 +217,12 @@ async function main() {
   const acr = await sh(`node ${q(path.join(scriptDir, 'ac-matrix.js'))} --spec ${q(spec)} --root ${q(root)} --manifest ${q(manifest)}${skips ? ` --skips ${q(skips)}` : ''}${config.driftScript ? ' --has-drift-script' : ''}`)
   fs.writeFileSync(path.join(outDir, 'ac-matrix.txt'), acr.out + acr.err)
 
+  // ---- wave 3b: promise-sweep — runs in EVERY scope including --fix-delta (D4: the spec text
+  // may be amended during a fix pass, and the leg is milliseconds); appends its own manifest row
+  // the same way ac-matrix.js does above, never via appendRow (that would double-write it).
+  const psr = await sh(`node ${q(path.join(scriptDir, 'promise-sweep.js'))} --spec ${q(spec)} --manifest ${q(manifest)}`)
+  fs.writeFileSync(path.join(outDir, 'promise-sweep.txt'), psr.out + psr.err)
+
   // ---- summary ----------------------------------------------------------------------------
   const all = fs.readFileSync(manifest, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
   const byLeg = new Map(all.map(r => [r.leg, r]))
@@ -225,7 +235,7 @@ async function main() {
     console.log(`${red ? (blocking ? '❌' : '⚠️ ') : '✅'} ${r.leg.padEnd(14)} exit=${r.exit} ${r.observed}${red && !blocking ? ' (findings — disposition in review)' : ''}`)
   }
   console.log(`manifest: ${manifest}`)
-  console.log(`outputs: ${outDir}  (reconcile.json, gate-output.txt, ac-matrix.txt${config.patternsScript ? ', patterns.txt' : ''})`)
+  console.log(`outputs: ${outDir}  (reconcile.json, gate-output.txt, ac-matrix.txt, promise-sweep.txt${config.patternsScript ? ', patterns.txt' : ''})`)
   if (blockedBy.length) {
     console.log(`RED_BLOCKING: ${blockedBy.join(',')}`)
     process.exit(1)

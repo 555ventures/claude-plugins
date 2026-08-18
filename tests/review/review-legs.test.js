@@ -11,6 +11,12 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // derives from, and exits 1 only when a blocking leg (gate/smoke/ci) is red. These tests drive
 // it end-to-end against a synthetic git host — the same manifest then feeds verdict.js, pinning
 // the two scripts' row-shape contract in one place.
+//
+// specs/20260817/07-promise-sweep-leg.md D4 (AC-20260817-07-9, AC-20260817-07-10): review-legs.js
+// gains an eighth leg, promise-sweep, run in every scope including --fix-delta. The synthetic
+// host spec below gains a `## Decisions` section with one row carrying the spec's own AC-ID
+// (per the spec's own Fragile Spots note) so the green-host test's exit-0 assertions keep
+// meaning "every leg genuinely passed" rather than "promise-sweep honestly reported an orphan".
 
 const SCRIPT = 'scripts/review-legs.js'
 
@@ -19,6 +25,12 @@ status: implementing
 tier: standard
 ---
 # Test Spec
+
+## Decisions
+
+| ID | Decision | One-line rationale |
+|----|----------|--------------------|
+| D1 | foo() returns 42 (AC-20260817-99-1) | why |
 
 ## File Plan
 
@@ -77,12 +89,19 @@ function run(dir, base, extra = []) {
 test('a green synthetic host produces every required leg row, resolves {testDirs} to the glob form, and exits 0', () => {
   const { dir, base } = makeHost({ testBody: GREEN_TEST })
   const { r, byLeg } = run(dir, base)
-  for (const leg of ['gate', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk']) {
+  for (const leg of ['gate', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk', 'promise-sweep']) {
     assert.ok(byLeg.has(leg),
       `the manifest must carry a "${leg}" row — verdict.js's REVIEW_LEGS presence rule derives UNVERIFIED ` +
       `without it, so a review over this manifest could never close: rows=${JSON.stringify([...byLeg.keys()])} ` +
       `stderr=${r.stderr}`)
   }
+  assert.strictEqual(byLeg.get('promise-sweep').exit, 0,
+    `AC-20260817-07-9: the synthetic host spec's one Decisions row cites the spec's own declared AC-ID, so ` +
+    `promise-sweep must report it carried and exit 0 — a non-zero exit here means the fixture's carrier row ` +
+    `regressed to an orphan: ${JSON.stringify(byLeg.get('promise-sweep'))}`)
+  assert.strictEqual(byLeg.get('promise-sweep').observed, 'rows=1 carried=1 sanctioned=0 orphans=0',
+    `promise-sweep's observed must match the pinned grammar for one carried row — got ` +
+    `${JSON.stringify(byLeg.get('promise-sweep'))}`)
   assert.strictEqual(byLeg.get('gate').exit, 0,
     'the gate must run the resolved glob form and pass — a non-zero exit here means {testDirs} resolution ' +
     'handed the runner something it could not execute (the JJ-20260815-04 bare-directory class): ' + r.stdout)
@@ -132,11 +151,15 @@ test('--fix-delta skips reconcile/at-risk and still records the re-executed legs
   assert.ok(!byLeg.has('reconcile') && !byLeg.has('at-risk'),
     'fix-delta scope must not run reconcile/at-risk (the fix diff is by definition a response to findings): ' +
     JSON.stringify([...byLeg.keys()]))
-  for (const leg of ['gate', 'smoke', 'ci', 'ac-matrix', 'skip-reconcile']) {
+  for (const leg of ['gate', 'smoke', 'ci', 'ac-matrix', 'skip-reconcile', 'promise-sweep']) {
     assert.ok(byLeg.has(leg),
       `fix-delta must RE-RUN "${leg}" in full — inheriting the prior iteration's row is the exact ` +
       `fail-open CROSS-20260727-01 closed: ${JSON.stringify([...byLeg.keys()])}`)
   }
+  assert.strictEqual(byLeg.get('promise-sweep').exit, 0,
+    `AC-20260817-07-10: promise-sweep is excluded from no scope (D4: "the leg is milliseconds") — a ` +
+    `--fix-delta run must still emit a green promise-sweep row, not skip it alongside reconcile/at-risk: ` +
+    `${JSON.stringify(byLeg.get('promise-sweep'))}`)
   assert.strictEqual(r.status, 0, 'green fix-delta legs must exit 0: ' + r.stdout + r.stderr)
 })
 

@@ -193,7 +193,14 @@ test('AC-20260810-04-12: autopilotd --check --hold --ready-file <p> --hub-config
   child.stderr.on('data', (d) => { stderr += String(d) })
   child.once('exit', (code) => { exited = true; exitCode = code })
 
-  const deadline = Date.now() + 3000
+  // Load-tolerant ceiling (2026-08-17): under a full parallel `npm test` this box takes
+  // >3s of scheduler contention before the child even boots — the 3s wall-clock deadline
+  // reddened this test twice on pure load (2026-08-17 v7 rebuild; 2026-08-17 review
+  // wf_85d3d332-882, already a Gotchas entry). The predicate poll below exits the moment
+  // the ready file lands, so a generous ceiling costs nothing on a quiet box and only
+  // buys headroom under contention; the "well inside a bounded window" claim survives —
+  // 15s is still bounded and still far below any network-stall timescale.
+  const deadline = Date.now() + 15000
   while (!fs.existsSync(readyFile) && !exited && Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 25))
   }
@@ -207,7 +214,7 @@ test('AC-20260810-04-12: autopilotd --check --hold --ready-file <p> --hub-config
     `AC-20260810-04-12 requires >=1 lane discovered from the fixture repo — a fixture that discovers zero lanes means the fixture repo is not actually grounded (missing .claude/spec.config.json); got stderr=${stderr}`)
 
   child.kill('SIGTERM')
-  const stopDeadline = Date.now() + 2000
+  const stopDeadline = Date.now() + 10000 // same load-tolerance rationale as the ready deadline above
   while (!exited && Date.now() < stopDeadline) {
     await new Promise((r) => setTimeout(r, 25))
   }

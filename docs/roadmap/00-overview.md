@@ -21,3 +21,5 @@ fences off belongs to its owning brief.
 | 06 | mechanized-prose-checks |
 | 07 | suite-baseline |
 | 08 | design-thinning |
+| 09 | promise-sweep-leg |
+| 10 | genesis-single-proposer |

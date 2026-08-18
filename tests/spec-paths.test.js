@@ -19,10 +19,10 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
-  for (const key of ['root', 'workflows', 'wf-build', 'wf-design', 'wf-review', 'wf-enforce',
+  for (const key of ['root', 'workflows', 'wf-design', 'wf-enforce',
     'wf-panel', 'wf-research', 'dc-extract', 'design-atlas', 'skeletons-check', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'scope-reconcile', 'verdict', 'ci-query',
-    'observe-ci', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
+    'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }

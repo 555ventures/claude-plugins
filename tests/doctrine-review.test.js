@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { ROOT, read } = require('./helpers')
+const { ROOT } = require('./helpers')
 
 // Doctrine-diff review panel (2026-07-17): doctrine is the one artifact class in the system
 // that gets no adversarial pass — host code gets a diff-scaled review panel, doctrine changes
@@ -44,13 +44,4 @@ test('panel is advisory and diffs against the last shipped version', () => {
     'verdicts are reported, never bump-blocking, until the ledger promotes')
   assert.match(cmd, /plugin\.json/,
     'diff base is the last commit that bumped spec/.claude-plugin/plugin.json')
-})
-
-test('the panel is registered in the scaffold ledger with a promote/retire condition', () => {
-  const ledger = read('spec/doctrine/scaffold-ledger.md')
-  assert.match(ledger, /Doctrine-diff review panel/,
-    'no ledger row: a mechanism nobody agreed to ever promote or retire is a defect')
-  const row = ledger.split('\n').find(l => l.includes('Doctrine-diff review panel')) || ''
-  assert.match(row, /advisory/i, 'enters as advisory, not gate')
-  assert.match(row, /PROMOTE|RETIRE/i, 'row must name its promote/retire condition')
 })

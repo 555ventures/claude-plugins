@@ -156,23 +156,6 @@ test('AC-20260810-09-5: doctor.md documents check 20 (advisory) invoking citatio
     'contradict the Decision that scoped it advisory pending two clean releases')
 })
 
-test('AC-20260810-09-5: scaffold-ledger.md carries a row for the citations checker with promote/retire conditions', () => {
-  const ledger = read('spec/doctrine/scaffold-ledger.md')
-  const rowIdx = ledger.search(/citations-check/i)
-  assert.ok(rowIdx !== -1,
-    'scaffold-ledger.md has no row mentioning citations-check — every new mechanism/gate ' +
-    'needs a promote/retire condition per pipeline rules § Review Checks, or the check is ' +
-    'unaccountable the moment it stops earning its keep')
-  const row = ledger.slice(rowIdx - 200, rowIdx + 600)
-  assert.match(row, /promote/i,
-    'the citations-check ledger row must state a promote condition (D9: two consecutive ' +
-    'clean releases) — a row with no promote/retire condition is a mechanism nobody agreed ' +
-    'to ever remove or upgrade')
-  assert.match(row, /retire/i,
-    'the citations-check ledger row must state a retire condition (D9: if shared-for ' +
-    'filtering is ever replaced)')
-})
-
 // ---------------------------------------------------------------------------
 // AC-20260810-09-6
 // ---------------------------------------------------------------------------

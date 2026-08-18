@@ -12,9 +12,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 case "${1:-root}" in
   root)        echo "$ROOT" ;;
   workflows)   echo "$ROOT/workflows" ;;
-  wf-build)    echo "$ROOT/workflows/wf-build.js" ;;
   wf-design)   echo "$ROOT/workflows/wf-design.js" ;;
-  wf-review)   echo "$ROOT/workflows/wf-review.js" ;;
   wf-enforce)  echo "$ROOT/workflows/wf-enforce.js" ;;
   wf-panel)    echo "$ROOT/workflows/wf-panel.js" ;;
   wf-research) echo "$ROOT/workflows/wf-research.js" ;;
@@ -30,22 +28,16 @@ case "${1:-root}" in
   manifest-check) echo "$ROOT/scripts/manifest-check.sh" ;;
   env-preflight)  echo "$ROOT/scripts/env-preflight.js" ;;
   citations-check) echo "$ROOT/scripts/citations-check.js" ;;
-  parity-check)   echo "$ROOT/scripts/parity-check.js" ;;
   report-render)  echo "$ROOT/scripts/report-render.js" ;;
   spec-status)    echo "$ROOT/scripts/spec-status.js" ;;
-  suite-baseline) echo "$ROOT/scripts/suite-baseline.js" ;;
   scope-reconcile) echo "$ROOT/scripts/scope-reconcile.js" ;;
-  hotspot)        echo "$ROOT/scripts/hotspot.js" ;;
   verdict)        echo "$ROOT/scripts/verdict.js" ;;
   ac-matrix)      echo "$ROOT/scripts/ac-matrix.js" ;;
   collision-closure) echo "$ROOT/scripts/collision-closure.js" ;;
-  claims-lint)    echo "$ROOT/scripts/claims-lint.js" ;;
   ci-query)       echo "$ROOT/scripts/ci-query.js" ;;
   ci-gate-parity) echo "$ROOT/scripts/ci-gate-parity.js" ;;
-  observe-ci)     echo "$ROOT/scripts/observe-ci.js" ;;
   shared)         echo "$ROOT/doctrine/shared.md" ;;
   shared-genesis) echo "$ROOT/doctrine/genesis.md" ;;
-  scaffold-ledger) echo "$ROOT/doctrine/scaffold-ledger.md" ;;
   shared-for)
     # Print the shared-invariants CONTENT scoped to one command — only the `## ` sections that
     # command consumes, so a session never pays for doctrine it cannot act on. `spec-paths shared`
@@ -83,7 +75,6 @@ case "${1:-root}" in
     ;;
   template)    echo "$ROOT/templates/spec.md" ;;
   feedback-template) echo "$ROOT/templates/feedback-brief.md" ;;
-  intake)      echo "$ROOT/INTAKE.md" ;;
   templates)   echo "$ROOT/templates" ;;
   version)     jq -r '.version // empty' "$ROOT/.claude-plugin/plugin.json" ;;
   contract)    echo "$ROOT/templates/grounding-contract.md" ;;
@@ -95,7 +86,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-build|wf-design|wf-review|wf-enforce|wf-panel|wf-research|dc-extract|design-atlas|skeletons-check|fidelity-check|components-check|advisory-append|merge-back|smoke|manifest-check|env-preflight|citations-check|parity-check|report-render|spec-status|suite-baseline|scope-reconcile|hotspot|verdict|ac-matrix|collision-closure|claims-lint|ci-query|ci-gate-parity|observe-ci|shared|shared-for <command>|shared-genesis|scaffold-ledger|template|templates|feedback-template|intake|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-design|wf-enforce|wf-panel|wf-research|dc-extract|design-atlas|design-driver|skeletons-check|fidelity-check|components-check|advisory-append|merge-back|smoke|manifest-check|env-preflight|citations-check|report-render|spec-status|scope-reconcile|verdict|ac-matrix|collision-closure|ci-query|ci-gate-parity|shared|shared-for <command>|shared-genesis|template|templates|feedback-template|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

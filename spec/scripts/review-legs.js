@@ -206,7 +206,8 @@ async function main() {
   await Promise.all(wave2)
 
   // ---- wave 3: ac-matrix (+ skip-reconcile) — needs the gate row present in the manifest --
-  await sh(`node ${q(path.join(scriptDir, 'ac-matrix.js'))} --spec ${q(spec)} --root ${q(root)} --manifest ${q(manifest)}${skips ? ` --skips ${q(skips)}` : ''}${config.driftScript ? ' --has-drift-script' : ''}`)
+  const acr = await sh(`node ${q(path.join(scriptDir, 'ac-matrix.js'))} --spec ${q(spec)} --root ${q(root)} --manifest ${q(manifest)}${skips ? ` --skips ${q(skips)}` : ''}${config.driftScript ? ' --has-drift-script' : ''}`)
+  fs.writeFileSync(path.join(outDir, 'ac-matrix.txt'), acr.out + acr.err)
 
   // ---- summary ----------------------------------------------------------------------------
   const all = fs.readFileSync(manifest, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
@@ -220,7 +221,7 @@ async function main() {
     console.log(`${red ? (blocking ? '❌' : '⚠️ ') : '✅'} ${r.leg.padEnd(14)} exit=${r.exit} ${r.observed}${red && !blocking ? ' (findings — disposition in review)' : ''}`)
   }
   console.log(`manifest: ${manifest}`)
-  console.log(`outputs: ${outDir}  (reconcile.json, gate-output.txt${config.patternsScript ? ', patterns.txt' : ''})`)
+  console.log(`outputs: ${outDir}  (reconcile.json, gate-output.txt, ac-matrix.txt${config.patternsScript ? ', patterns.txt' : ''})`)
   if (blockedBy.length) {
     console.log(`RED_BLOCKING: ${blockedBy.join(',')}`)
     process.exit(1)

@@ -20,3 +20,4 @@ fences off belongs to its owning brief.
 | 05 | hotspot-audit |
 | 06 | mechanized-prose-checks |
 | 07 | suite-baseline |
+| 08 | design-thinning |

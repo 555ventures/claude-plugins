@@ -195,6 +195,6 @@ established pattern never gets a spec — the plugin will tell you the same.
   Policy), never by an incident memory written into doctrine.
 - **The design family's `wf-*.js` files are frozen checked-in scripts** (the codegen seam was
   retired in v7.0); they change only under a spec that names them, pending the v7.1 design
-  thinning (`docs/roadmap/design-thinning.md`).
+  thinning (`docs/roadmap/08-design-thinning.md`).
 - **Doctrine hygiene:** state a fact once (highest common ancestor in `doctrine/core.md` or
   `doctrine/design.md`, everywhere else points); never name a derived case.

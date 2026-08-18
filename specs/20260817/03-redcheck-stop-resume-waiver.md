@@ -1,6 +1,6 @@
 ---
 date: 2026-08-17
-status: hardened
+status: superseded
 open_markers: 0
 risk: T3                 # rewrites wf-build.body.js through the codegen seam (named T3 trigger) — a defect here corrupts the TDD red-first evidence floor for every host
 area: build-workflow

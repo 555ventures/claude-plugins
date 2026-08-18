@@ -1,6 +1,6 @@
 ---
 date: 2026-08-17
-status: hardened
+status: superseded
 open_markers: 0
 risk: T2
 area: workflows

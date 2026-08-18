@@ -113,7 +113,8 @@ Append exactly ONE line to `.claude/spec-runs.jsonl` (repo root; create on first
 {"ts":"<ISO-8601>","spec":"<repo-relative spec path>","stage":"build","tier":"<standard|critical>","diff":{"files":<n>,"loc":<n>},"gate":{"finalRounds":<n>},"deviations":<n>}
 ```
 
-`diff` from `git diff --shortstat {base}..HEAD`; `deviations` = sidecar line count (0 if
+`diff` from `git diff --shortstat {base}..HEAD` — `loc` = insertions + deletions (the same
+sum review's {diffLoc} uses); `deviations` = sidecar entry count (lines matching `^- `; 0 if
 absent). Counts/enums/paths only — never prose or pasted gate output (rulings live in the
 spec's Decisions table).
 

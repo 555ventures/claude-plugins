@@ -39,6 +39,18 @@
 // and the ledger, never a distinct verdict word. `testsSkipped` stays the
 // `{total, sanctioned, unsanctioned}` object (sanctioned = `[env:]`-declared skips).
 //
+// Incident (2026-08-18, spec ledger-truth, 2026-08-18 Fable retainer consult on v7's first full
+// pipeline run): a red findings leg (reconcile/ac-matrix/skip-reconcile/promise-sweep/at-risk)
+// could derive CLEAN with zero reviewer survivors and zero dispositions — the sole verdict
+// arithmetic counted workflow.survivors only, never the deterministic legs that v7 moved
+// findings into. Every red non-blocking manifest row now contributes a parsed finding count
+// (pinned observed grammars, floored at 1) to the SAME undispositioned pool as reviewer
+// survivors (D1/D2), the disposition-contradiction guard widens to that pool's sum (D3),
+// ledger leg rows retain `observed` in both profiles so a structurally-absent observation stays
+// distinguishable from a pass (D4), and review rows always carry `runId` — the orchestrator's
+// --run-id verbatim, else `rv_` + 12 lowercase hex generated here (D5) — so /spec:escape has a
+// backlink on every row, not a conditional one.
+//
 // Incident (2026-08-15, spec release-migrations-leg D4): a release could read CLEAN while the
 // deployed database was missing migrations the milestone shipped, because the migrations check
 // was one prose noun in release.md's manifest — nothing required the row, and pre-deploy timing
@@ -53,11 +65,13 @@
 // Exit codes: 0 = derived CLEAN · 1 = derived other non-CLEAN word
 // (still printed on stdout line 1) · 2 = usage error, missing/unreadable --manifest or
 // --workflow file, a disposition contradiction (--waived + --rejected + --fixDispatched
-// exceeds the workflow's survivor count), or (review profile, no --workflow) a manifest that
-// derives green/complete — a panel-less CLEAN is undecidable without --workflow and must not
-// print
+// exceeds the workflow's survivor count PLUS the manifest's leg-finding count — the guard spans
+// both pools per D1-D3, specs/20260818/01-ledger-truth.md), or (review profile, no --workflow) a
+// manifest that derives green/complete — a panel-less CLEAN is undecidable without --workflow
+// and must not print
 
 const fs = require('fs')
+const crypto = require('crypto')
 
 function usage() {
   console.error('usage: verdict.js --manifest <path> [--workflow <path>] [--waived N] [--rejected N] ' +
@@ -131,12 +145,6 @@ if (workflowPath) {
 }
 
 const survivors = workflow && Array.isArray(workflow.survivors) ? workflow.survivors : []
-if (workflow && waived + rejected + fixDispatched > survivors.length) {
-  console.error(`verdict.js: --waived(${waived}) + --rejected(${rejected}) + --fixDispatched(${fixDispatched}) ` +
-    `= ${waived + rejected + fixDispatched} exceeds the workflow file's ${survivors.length} survivors — ` +
-    'dispositions cannot exceed what the panel actually found; recount before re-running')
-  process.exit(2)
-}
 
 // ---- required/blocking legs per profile (D3/D7) --------------------------------------------
 //
@@ -177,7 +185,54 @@ function legIsRed(leg) {
   return row.exit !== 0
 }
 
-// ---- derivation: first match wins (D3) -----------------------------------------------------
+// ---- leg-findings pool (D1/D2): every red non-blocking manifest row contributes its parsed ----
+// ---- finding count to the SAME undispositioned pool as reviewer survivors. Count grammar is --
+// ---- parsed from the leg's pinned observed format and floored at 1 (a red row can never -------
+// ---- contribute 0 — a format drift must fail closed, not silently disappear).------------------
+
+function countLegFinding(row) {
+  const observed = (row && row.observed) || ''
+  let n = NaN
+  if (row && row.leg === 'reconcile') {
+    const m = /outOfPlan=(\d+)/.exec(observed)
+    if (m) n = Number(m[1])
+  } else if (row && row.leg === 'ac-matrix') {
+    const m = /uncovered=(\d+)/.exec(observed)
+    if (m) n = Number(m[1])
+  } else if (row && row.leg === 'skip-reconcile') {
+    const m = /^skipped=(\d+)(?: sanctioned=(\d+))?/.exec(observed)
+    if (m) n = Number(m[1]) - (m[2] !== undefined ? Number(m[2]) : 0)
+  } else if (row && row.leg === 'promise-sweep') {
+    const m = /orphans=(\d+)/.exec(observed)
+    if (m) n = Number(m[1])
+  }
+  // any other red non-blocking leg (at-risk, drift, patterns) or an unparseable observed floors to 1
+  return Number.isFinite(n) && n >= 1 ? n : 1
+}
+
+function computeLegFindings() {
+  let total = 0
+  for (const [leg, row] of legRows) {
+    if (blockingLegs.has(leg)) continue
+    if (legIsRed(leg)) total += countLegFinding(row)
+  }
+  return total
+}
+
+const legFindings = computeLegFindings()
+
+// ---- disposition-contradiction guard (D3): widens to survivors + legFindings ----------------
+
+if (workflow && waived + rejected + fixDispatched > survivors.length + legFindings) {
+  const total = waived + rejected + fixDispatched
+  console.error(`verdict.js: --waived(${waived}) + --rejected(${rejected}) + --fixDispatched(${fixDispatched}) ` +
+    `= ${total} exceeds the workflow file's ${survivors.length} survivors + the manifest's ${legFindings} ` +
+    `legFindings (sum ${survivors.length + legFindings}) — dispositions cannot exceed what was actually found ` +
+    'across both pools; recount before re-running')
+  process.exit(2)
+}
+
+// ---- derivation: first match wins (D1/D3) ----------------------------------------------------
 
 function derive() {
   if (profile !== 'release' && workflow && workflow.verdict === 'REVIEWER_FAILED') return 'REVIEWER_FAILED'
@@ -185,8 +240,11 @@ function derive() {
   if ([...blockingLegs].some(legIsRed)) return 'GATE_RED'
   if (profile === 'release') return 'CLEAN'
   if (fixDispatched > 0) return 'FINDINGS' // a dispatched fix is non-terminal
-  const undispositioned = survivors.length - waived - rejected - fixDispatched
-  if (undispositioned > 0) return survivors.some(f => f.severity === 'hard') ? 'HARD_FINDINGS' : 'FINDINGS'
+  const undispositioned = (survivors.length + legFindings) - waived - rejected - fixDispatched
+  if (undispositioned > 0) {
+    // leg findings are always hard (deterministic contract violations); survivors fall back to severity
+    return (legFindings > 0 || survivors.some(f => f.severity === 'hard')) ? 'HARD_FINDINGS' : 'FINDINGS'
+  }
   return 'CLEAN'
 }
 
@@ -234,12 +292,18 @@ function deriveProduction(row) {
 }
 
 if (ledger) {
-  const legs = [...legRows.values()].map(({ leg, exit }) => ({ leg, exit }))
+  // D4: observed is retained (sliced to 120 chars) in both profiles — a structurally-absent
+  // observation ("unavailable") must stay byte-distinguishable from a real pass forever.
+  const legs = [...legRows.values()].map(({ leg, exit, observed }) => ({
+    leg, exit, observed: typeof observed === 'string' ? observed.slice(0, 120) : observed,
+  }))
   const row = { ts: new Date().toISOString() }
   if (specArg) row.spec = specArg
   row.stage = profile === 'release' ? 'release' : 'review'
   if (tier) row.tier = tier
-  if (profile !== 'release' && runId) row.runId = runId
+  // D5: review rows always carry runId — the passed --run-id verbatim, else generated here
+  // ("rv_" + 12 lowercase hex via crypto.randomBytes) so /spec:escape always has a backlink.
+  if (profile !== 'release') row.runId = runId || ('rv_' + crypto.randomBytes(6).toString('hex'))
   row.verdict = word
   if (profile === 'release') {
     if (milestone) row.milestone = milestone
@@ -276,7 +340,9 @@ if (ledger) {
         waived,
         rejected,
         fixDispatched,
-        reviewerCount: workflow.reviewerCount
+        reviewerCount: workflow.reviewerCount,
+        legFindings // D4: the leg-findings pool's count, so a reader can tell CLEAN-because-zero-findings
+                    // from CLEAN-because-dispositioned
       }
       row.verify = workflow.verify
     }

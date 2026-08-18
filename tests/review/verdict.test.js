@@ -16,7 +16,24 @@ const { tmpdir, runNode } = require('../helpers')
 // v7.0.0 (2026-08-17): CLEAN-with-qualifier and the sanctionedReds suffix are retired with the
 // sanctioned-red baseline apparatus — the verdict enum is CLEAN|FINDINGS|HARD_FINDINGS|
 // REVIEWER_FAILED|UNVERIFIED|GATE_RED, an `unavailable` observation leg derives plain CLEAN
-// (recorded in the leg row, never a distinct word), and ledger legs rows are always {leg,exit}.
+// (recorded in the leg row, never a distinct word). Ledger legs rows are NO LONGER {leg,exit}
+// only — specs/20260818/01-ledger-truth.md below widens them to {leg,exit,observed}.
+//
+// specs/20260818/01-ledger-truth.md (D1-D7, 2026-08-18, Fable retainer consult on v7's first
+// full pipeline run): a red findings leg (reconcile/ac-matrix/skip-reconcile/promise-sweep/
+// at-risk/drift/patterns) now contributes to the SAME undispositioned pool as reviewer
+// survivors — legFindings = Σ over red non-blocking manifest rows, parsed by the pinned
+// observed grammar and floored at 1 — so CLEAN is unreachable while any leg finding sits
+// undispositioned (previously a red findings leg with zero survivors and zero dispositions
+// derived CLEAN, a demonstrated fail-open). The disposition-contradiction guard widens to
+// `waived+rejected+fixDispatched <= survivors+legFindings`. Ledger legs rows keep `observed`
+// (sliced to 120 chars) in both profiles, review rows always carry `runId` (passed verbatim
+// via --run-id, else generated `rv_`+12hex), and the review row's findings object gains
+// `legFindings`. Five prior pins collided and are updated in place below, retagged
+// AC-20260818-01-6 .. -01-10 (never weakened, never left red): the {leg,exit}-only legs-shape
+// assert, AC-20260805-02-5's omit-the-runId-key half (superseded — split into
+// AC-20260818-01-7/-01-8), AC-20260815-02-7's red-at-risk-derives-CLEAN-for-free half, and
+// AC-20260817-07-12 / AC-20260805-02-3's waive-the-survivor-alone-suffices halves.
 //
 // specs/20260805/02-review-evidence-manifest.md (D1-D3): today /spec:review can say CLEAN with
 // nothing executed — a zero-findings panel returns CLEAN from the workflow, and the CLEAN
@@ -142,16 +159,28 @@ test('AC-20260813-10-8 (retag of AC-20260813-02-8): a review-profile run whose c
     'unable to ever close a review: ' + r.stderr)
 })
 
-test('AC-20260805-02-3: a non-zero ac-matrix exit (findings emitted) counts as executed-green and CLEAN is reachable once those findings are waived', () => {
+// specs/20260818/01-ledger-truth.md D7 retag: the surviving half (ac-matrix's non-zero exit
+// counts as executed-green leg presence) continues; the fail-open half (waiving only the
+// reviewer survivor was enough to reach CLEAN while the ac-matrix leg finding itself sat
+// undispositioned) is the defect D1-D3 close, so the fixture's disposition count is updated
+// in place — never weakened, never left red.
+test('AC-20260818-01-10 (retag of AC-20260805-02-3): a red ac-matrix leg finding coexisting with a reviewer survivor requires dispositions covering both pools before CLEAN — waiving only the survivor still derives HARD_FINDINGS', () => {
   const dir = tmpdir('verdict')
   const rows = SIX_GREEN.map(r => (r.leg === 'ac-matrix' ? { leg: 'ac-matrix', exit: 1, observed: 'uncovered=1' } : r))
   const manifest = writeManifest(dir, rows)
   const workflow = writeWorkflow(dir, cleanWorkflow([{ severity: 'soft', id: 'AC-20260805-02-99' }]))
-  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '1'])
-  assert.strictEqual(r.stdout.split('\n')[0], 'CLEAN',
-    'ac-matrix is a findings-producing leg (D3) — its non-zero exit must count as executed-green for leg ' +
-    'purposes, and its one finding is fully waived, so the derivation must still reach CLEAN, not get stuck ' +
-    'unable to ever return to CLEAN: ' + r.stdout + ' / ' + r.stderr)
+  const partial = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '1'])
+  assert.strictEqual(partial.stdout.split('\n')[0], 'HARD_FINDINGS',
+    'D1/D2: ac-matrix\'s "uncovered=1" observed must parse to 1 leg finding — waiving only the 1 reviewer ' +
+    'survivor leaves that leg finding undispositioned, so the derivation must stay HARD_FINDINGS ' +
+    '(legFindings>0 makes it hard even though the survivor itself is soft), never the CLEAN the pre-D1 ' +
+    'survivors-only arithmetic wrongly reached: ' + partial.stdout + ' / ' + partial.stderr)
+  const full = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '2'])
+  assert.strictEqual(full.stdout.split('\n')[0], 'CLEAN',
+    'ac-matrix is a findings-producing leg (D3) — its non-zero exit still counts as executed-green for leg ' +
+    'presence, and waiving both the survivor and the leg finding (2 total) must reach CLEAN, not get stuck ' +
+    'unable to ever return to CLEAN: ' + full.stdout + ' / ' + full.stderr)
+  assert.strictEqual(full.status, 0, 'CLEAN reached via full disposition of both pools must exit 0: ' + full.stderr)
 })
 
 test('AC-20260805-02-4: undispositioned survivors of medium+soft severity derive FINDINGS', () => {
@@ -190,7 +219,10 @@ test('AC-20260805-02-4: a non-zero fixDispatched derives FINDINGS even when it e
     r.stdout + ' / ' + r.stderr)
 })
 
-test('AC-20260805-02-5 / AC-20260816-02-8 (legs stay exactly {leg,exit} — no sanctionedReds key — when no observed carries the suffix): --ledger prints a row whose verdict matches line 1 and whose legs mirror the manifest name+exit pairs exactly', () => {
+// specs/20260818/01-ledger-truth.md D7 retag: the surviving half (legs mirror the manifest,
+// in order, with leg+exit intact) continues; the {leg,exit}-only SHAPE is the defect D4
+// closes — the assert widens to per-row {leg,exit,observed} equality, never weakened.
+test('AC-20260818-01-6 (retag of AC-20260805-02-5/AC-20260816-02-8\'s legs-shape pin): --ledger prints a row whose verdict matches line 1 and whose legs mirror the manifest\'s leg+exit+observed rows exactly, in order', () => {
   const dir = tmpdir('verdict')
   const manifest = writeManifest(dir, SIX_GREEN)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
@@ -205,9 +237,10 @@ test('AC-20260805-02-5 / AC-20260816-02-8 (legs stay exactly {leg,exit} — no s
   assert.strictEqual(row.verdict, 'CLEAN',
     'the ledger row\'s verdict field must equal the word printed on line 1 — a mismatch means the ledger ' +
     'and the console can disagree about what happened: ' + JSON.stringify(row))
-  assert.deepStrictEqual(row.legs, SIX_GREEN.map(({ leg, exit }) => ({ leg, exit })),
-    'the row\'s legs must mirror the manifest\'s name+exit pairs exactly, in order — anything else means the ' +
-    'ledger record diverges from the evidence that actually produced the verdict: ' + JSON.stringify(row.legs))
+  assert.deepStrictEqual(row.legs, SIX_GREEN,
+    'D4: the row\'s legs must mirror the manifest\'s leg+exit+observed rows exactly, in order — the ' +
+    '{leg,exit}-only shape this pin used to assert is retired, since it strips the observed string that ' +
+    'makes "CI passed" distinguishable from "no CI exists": ' + JSON.stringify(row.legs))
 })
 
 // 2026-08-06 review-fix findings (prev-findings.json): verdict.js's --ledger row was missing
@@ -219,7 +252,35 @@ test('AC-20260805-02-5 / AC-20260816-02-8 (legs stay exactly {leg,exit} — no s
 // npm test instead of shipping silently behind doctrine-text-only pins (as run-ledger.test.js's
 // existing checks did here).
 
-test('AC-20260805-02-5: --ledger carries row.runId only when --run-id is passed, and omits the key entirely otherwise', () => {
+// specs/20260818/01-ledger-truth.md D7 retag: AC-20260805-02-5's omit-the-key half is
+// superseded by D5 — all five v7 review rows read runId:null in practice because the flag
+// rides choreography review.md never performs, so an omitted key is not a safe default. The
+// passed-flag-wins half continues (AC-20260818-01-8, below); the omit half is replaced, never
+// left red, by the generation contract (AC-20260818-01-7).
+test('AC-20260818-01-7: --ledger generates row.runId matching ^rv_[0-9a-f]{12}$ when --run-id is not passed, distinct per invocation', () => {
+  const dir = tmpdir('verdict')
+  const manifest = writeManifest(dir, SIX_GREEN)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const first = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger',
+    '--spec', 'x.md', '--tier', 'T2', '--diff-loc', '1', '--iteration', '1'])
+  const rowFirst = JSON.parse(first.stdout.trim().split('\n')[1])
+  assert.ok(typeof rowFirst.runId === 'string' && /^rv_[0-9a-f]{12}$/.test(rowFirst.runId),
+    'D5: when --run-id is absent, verdict.js must generate its own review-row id ("rv_" + 12 lowercase hex ' +
+    'chars via crypto.randomBytes) rather than omit the key — an omitted key was AC-20260805-02-5\'s old ' +
+    'contract, superseded because /spec:escape needs a real backlink on every row, not a conditional one: ' +
+    JSON.stringify(rowFirst))
+  const second = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger',
+    '--spec', 'x.md', '--tier', 'T2', '--diff-loc', '1', '--iteration', '1'])
+  const rowSecond = JSON.parse(second.stdout.trim().split('\n')[1])
+  assert.ok(typeof rowSecond.runId === 'string' && /^rv_[0-9a-f]{12}$/.test(rowSecond.runId),
+    'the second invocation\'s generated runId must also match the pinned shape: ' + JSON.stringify(rowSecond))
+  assert.notStrictEqual(rowFirst.runId, rowSecond.runId,
+    'two separate invocations on the identical fixture must generate two DISTINCT runIds — a constant or ' +
+    'input-derived id would collide two different review runs onto one /spec:escape backlink: ' +
+    rowFirst.runId + ' vs ' + rowSecond.runId)
+})
+
+test('AC-20260818-01-8 (retag of AC-20260805-02-5\'s surviving half): --ledger CONTINUES TO write a passed --run-id verbatim, winning over generation', () => {
   const dir = tmpdir('verdict')
   const manifest = writeManifest(dir, SIX_GREEN)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
@@ -227,16 +288,10 @@ test('AC-20260805-02-5: --ledger carries row.runId only when --run-id is passed,
     '--spec', 'x.md', '--tier', 'T2', '--diff-loc', '1', '--iteration', '1', '--run-id', 'wf_abc123'])
   const rowWith = JSON.parse(withFlag.stdout.trim().split('\n')[1])
   assert.strictEqual(rowWith.runId, 'wf_abc123',
-    'orchestrator passes --run-id so /spec:escape can later point reviewRunId back at this exact review ' +
-    'invocation (review.md: "runId is the Workflow invocation\'s run id") — a mismatch or missing value ' +
-    'breaks that backlink: ' + JSON.stringify(rowWith))
-  const withoutFlag = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger',
-    '--spec', 'x.md', '--tier', 'T2', '--diff-loc', '1', '--iteration', '1'])
-  const rowWithout = JSON.parse(withoutFlag.stdout.trim().split('\n')[1])
-  assert.ok(!('runId' in rowWithout),
-    'when the orchestrator omits --run-id the row must omit the key entirely rather than writing null or ' +
-    'an empty string — a present-but-empty runId would look like a real (if blank) backlink to a consumer: ' +
-    JSON.stringify(rowWithout))
+    'D5: a passed --run-id must win verbatim over generation — the orchestrator passes --run-id so ' +
+    '/spec:escape can later point reviewRunId back at this exact review invocation (review.md: "runId is ' +
+    'the Workflow invocation\'s run id") — a mismatch or generated-override value breaks that backlink: ' +
+    JSON.stringify(rowWith))
 })
 
 test('AC-20260805-02-5: --ledger derives row.smoke from the manifest smoke row exit code, never from prose', () => {
@@ -353,7 +408,13 @@ test('AC-20260813-02-2: a legacy skip-reconcile "skipped=K" observed (no sanctio
     'treated as sanctioned just because an older manifest shape produced it: ' + JSON.stringify(row))
 })
 
-test('AC-20260805-02-8: the review ledger row nests survived/killed/waived/rejected/fixDispatched/reviewerCount under findings and carries none of them flat at the top level', () => {
+// specs/20260818/01-ledger-truth.md D8 (build-time addendum to D7, found by the red gate
+// 2026-08-18 — a sixth colliding pin this pass's own collision sweep missed): the surviving
+// half (counts nested under `findings`, never flat at top level) continues; the exhaustive
+// six-key `deepStrictEqual` is the defect — D4 adds a seventh key (`legFindings`) to
+// `row.findings`, so the old six-key object is no longer what the script emits. Updated in
+// place and retagged to AC-20260818-01-2, never weakened to a subset/partial match.
+test('AC-20260818-01-2 (retag of AC-20260805-02-8): the review ledger row nests survived/killed/waived/rejected/fixDispatched/reviewerCount/legFindings under findings and carries none of them flat at the top level', () => {
   const dir = tmpdir('verdict')
   const manifest = writeManifest(dir, SIX_GREEN)
   const workflow = writeWorkflow(dir, cleanWorkflow([{ severity: 'soft', id: 'AC-a' }]))
@@ -364,10 +425,12 @@ test('AC-20260805-02-8: the review ledger row nests survived/killed/waived/rejec
     'template — a flat row is a schema shape a consumer reading row.findings.killed cannot parse: ' +
     JSON.stringify(row))
   assert.deepStrictEqual(row.findings, {
-    survived: 1, killed: 0, waived: 1, rejected: 0, fixDispatched: 0, reviewerCount: 1,
-  }, 'row.findings must carry exactly the six disposition counts with their derived values — a mismatch ' +
-    'means escape.md\'s "findings.killed" backlink reads the wrong number: ' + JSON.stringify(row.findings))
-  for (const flatKey of ['survived', 'killed', 'waived', 'rejected', 'fixDispatched', 'reviewerCount']) {
+    survived: 1, killed: 0, waived: 1, rejected: 0, fixDispatched: 0, reviewerCount: 1, legFindings: 0,
+  }, 'D4: row.findings must carry exactly the SEVEN disposition/finding counts with their derived values ' +
+    '(all legs green in this fixture, so legFindings:0) — a mismatch means either escape.md\'s ' +
+    '"findings.killed" backlink reads the wrong number, or a reader of the ledger row cannot tell ' +
+    'CLEAN-because-zero-leg-findings from CLEAN-because-some-were-waived: ' + JSON.stringify(row.findings))
+  for (const flatKey of ['survived', 'killed', 'waived', 'rejected', 'fixDispatched', 'reviewerCount', 'legFindings']) {
     assert.ok(!(flatKey in row),
       `row.${flatKey} must not also exist flat at the top level once nested under findings — carrying both ` +
       'shapes at once is not what "additive" (Contracts: "ledger row (additive)") means, and a consumer ' +
@@ -441,19 +504,33 @@ test('AC-20260815-02-6: a full-scope review manifest missing the at-risk row der
   assert.strictEqual(r.status, 1, 'UNVERIFIED must exit 1 so the close step is mechanically unreachable: ' + r.stderr)
 })
 
-test('AC-20260815-02-7: a red at-risk leg does not derive GATE_RED — at-risk is required but non-blocking, so a zero-survivor workflow still reaches a CLEAN-family word at exit 0', () => {
+// specs/20260818/01-ledger-truth.md D7 retag: the surviving half (at-risk never derives
+// GATE_RED — it stays non-blocking) continues; the fail-open half (a red at-risk leg with
+// zero survivors and zero dispositions reached CLEAN for free) is the defect D1-D3 close, so
+// the fixture now needs a waive before CLEAN — updated in place, never weakened, never left red.
+test('AC-20260818-01-9 (retag of AC-20260815-02-7): a red at-risk leg CONTINUES TO never derive GATE_RED, but now needs its leg finding waived before CLEAN is reachable', () => {
   const dir = tmpdir('verdict-at-risk-red')
   const rows = [...SIX_LEGS_NO_AT_RISK, { leg: 'at-risk', exit: 1, observed: 'files=2' }]
   const manifest = writeManifest(dir, rows)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
-  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
-  assert.match(r.stdout.split('\n')[0], /^CLEAN/,
-    'D4: at-risk does NOT join REVIEW_BLOCKING — a red at-risk leg must never derive GATE_RED, ' +
-    'matching reconcile\'s exit-3 standing (the finding flows to Phase 2 dispositions instead), ' +
-    'never a hard gate stop: ' + r.stdout + ' / ' + r.stderr)
-  assert.strictEqual(r.status, 0,
-    'a CLEAN-family word reached via a non-blocking red at-risk leg must exit 0, or a red-but-' +
-    'non-blocking leg would still make the review mechanically unclosable: ' + r.stderr)
+  const undispositioned = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
+  assert.notStrictEqual(undispositioned.stdout.split('\n')[0], 'GATE_RED',
+    'D4: at-risk does NOT join REVIEW_BLOCKING — a red at-risk leg must never derive GATE_RED, matching ' +
+    'reconcile\'s exit-3 standing (the finding flows to Phase 2 dispositions instead), never a hard gate ' +
+    'stop: ' + undispositioned.stdout + ' / ' + undispositioned.stderr)
+  assert.strictEqual(undispositioned.stdout.split('\n')[0], 'HARD_FINDINGS',
+    'D1: a red at-risk row ("files=2", unparseable by D2\'s named grammars) contributes 1 leg finding floored ' +
+    'at 1, which now sits undispositioned alongside zero survivors and zero dispositions — the derivation ' +
+    'must be HARD_FINDINGS, not the silent CLEAN the 2026-08-18 Fable consult demonstrated fails open: ' +
+    undispositioned.stdout)
+  const waived = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '1'])
+  assert.match(waived.stdout.split('\n')[0], /^CLEAN/,
+    'the same red at-risk leg (files=2) with its one leg finding waived must reach a CLEAN-family word at ' +
+    'exit 0 — at-risk stays non-blocking but is no longer free to skip disposition entirely: ' +
+    waived.stdout + ' / ' + waived.stderr)
+  assert.strictEqual(waived.status, 0,
+    'a CLEAN-family word reached via a dispositioned non-blocking red at-risk leg must exit 0, or a red-but-' +
+    'non-blocking leg would still make the review mechanically unclosable: ' + waived.stderr)
 })
 
 // The manifest below (fix-delta scope, missing both reconcile and at-risk) already derives CLEAN
@@ -505,19 +582,30 @@ test('AC-20260817-07-11 (fix-delta scope): a fix-delta manifest missing the prom
   assert.strictEqual(r.status, 1, 'UNVERIFIED must exit 1 so the close step is mechanically unreachable: ' + r.stderr)
 })
 
-test('AC-20260817-07-12: a non-zero promise-sweep exit (orphan-decision findings) counts as executed-green for leg presence and CLEAN is reachable once that finding is waived — the leg never derives GATE_RED', () => {
+// specs/20260818/01-ledger-truth.md D7 retag: the surviving half (promise-sweep's non-zero
+// exit counts as executed-green leg presence, and it never derives GATE_RED) continues; the
+// fail-open half (waiving only the reviewer survivor was enough to reach CLEAN while the
+// promise-sweep leg finding itself sat undispositioned) is the defect D1-D3 close — updated in
+// place, never weakened, never left red.
+test('AC-20260818-01-10 (retag of AC-20260817-07-12): a red promise-sweep leg finding coexisting with a reviewer survivor requires dispositions covering both pools before CLEAN — waiving only the survivor still derives HARD_FINDINGS', () => {
   const dir = tmpdir('verdict-promise-sweep-red')
   const rows = SIX_GREEN.map(r => (r.leg === 'promise-sweep'
     ? { leg: 'promise-sweep', exit: 1, observed: 'rows=1 carried=0 sanctioned=0 orphans=1' } : r))
   const manifest = writeManifest(dir, rows)
   const workflow = writeWorkflow(dir, cleanWorkflow([{ severity: 'hard', id: 'D1' }]))
-  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '1'])
-  assert.strictEqual(r.stdout.split('\n')[0], 'CLEAN',
+  const partial = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '1'])
+  assert.strictEqual(partial.stdout.split('\n')[0], 'HARD_FINDINGS',
+    'D1/D3: 1 reviewer survivor + 1 promise-sweep leg finding (orphans=1) is a pool of 2 — waiving only 1 ' +
+    'covers just the survivor and leaves the leg finding undispositioned, so the derivation must stay ' +
+    'HARD_FINDINGS, not the CLEAN the pre-D1 survivors-only arithmetic wrongly reached: ' +
+    partial.stdout + ' / ' + partial.stderr)
+  const full = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '2'])
+  assert.strictEqual(full.stdout.split('\n')[0], 'CLEAN',
     'D4: promise-sweep is a findings-producing leg like ac-matrix (mirror of its standing) — its non-zero ' +
-    'exit must count as executed-green for leg presence, and once its one orphan-decision finding is fully ' +
-    'waived the derivation must still reach CLEAN, never stick at GATE_RED, since the leg never joins ' +
-    'REVIEW_BLOCKING: ' + r.stdout + ' / ' + r.stderr)
-  assert.strictEqual(r.status, 0, 'CLEAN reached via a dispositioned promise-sweep finding must exit 0: ' + r.stderr)
+    'exit still counts as executed-green for leg presence, and waiving both the survivor and the leg ' +
+    'finding (2 total) must reach CLEAN, never stick at GATE_RED since the leg never joins REVIEW_BLOCKING: ' +
+    full.stdout + ' / ' + full.stderr)
+  assert.strictEqual(full.status, 0, 'CLEAN reached via full disposition of both pools must exit 0: ' + full.stderr)
 })
 
 const RELEASE_SIX_LEGS = [
@@ -662,4 +750,125 @@ test('AC-20260805-02-9: dispositions exceeding the workflow file\'s survivor cou
     'no verdict word may be printed on a contradictory-input run — printing one anyway would let a caller ' +
     'read stdout without checking the exit code and get a fabricated verdict: ' + JSON.stringify(r.stdout))
   assert.ok(r.stderr.length > 0, 'the contradiction must be named on stderr so the remedy is discoverable: (empty stderr)')
+})
+
+// --- specs/20260818/01-ledger-truth.md: AC-20260818-01-1 .. -01-5 (D1-D3) ---
+// New coverage for the leg-findings pool D1-D3 introduce: a red findings leg's parsed count now
+// joins reviewer survivors in the same undispositioned pool, and CLEAN is unreachable until
+// dispositions cover both. (AC-20260818-01-6 .. -01-10 are retags of prior pins, updated in
+// place above at their original locations — legs-shape widen, runId generation split,
+// at-risk/promise-sweep/ac-matrix waive-both-pools.)
+
+test('AC-20260818-01-1: a red findings leg with zero survivors and zero dispositions derives HARD_FINDINGS and exits 1, never CLEAN', () => {
+  const dir = tmpdir('verdict-legfindings')
+  const rows = SIX_GREEN.map(r => (r.leg === 'promise-sweep'
+    ? { leg: 'promise-sweep', exit: 1, observed: 'rows=9 carried=5 sanctioned=2 orphans=2' } : r))
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
+  assert.strictEqual(r.stdout.split('\n')[0], 'HARD_FINDINGS',
+    'D1: a red promise-sweep row (orphans=2) with every other leg green, zero reviewer survivors, and zero ' +
+    'dispositions must derive HARD_FINDINGS — the 2026-08-18 Fable consult demonstrated the pre-D1 ' +
+    'arithmetic derived CLEAN here instead, a fail-open that let orphaned Decisions close a review ' +
+    'unnoticed: ' + r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 1, 'HARD_FINDINGS must exit 1 so the close step is mechanically unreachable: ' + r.stderr)
+})
+
+test('AC-20260818-01-2: the same red-findings-leg manifest reaches CLEAN once its leg findings are fully dispositioned, and the ledger row records the leg-finding count', () => {
+  const dir = tmpdir('verdict-legfindings')
+  const rows = SIX_GREEN.map(r => (r.leg === 'promise-sweep'
+    ? { leg: 'promise-sweep', exit: 1, observed: 'rows=9 carried=5 sanctioned=2 orphans=2' } : r))
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '2', '--ledger'])
+  const lines = r.stdout.trim().split('\n')
+  assert.strictEqual(lines[0], 'CLEAN',
+    'D2: promise-sweep\'s "orphans=2" observed must parse to exactly 2 leg findings, so waiving 2 fully ' +
+    'disposition the pool and reach CLEAN — an off-by-one in the count grammar would leave this stuck at ' +
+    'HARD_FINDINGS or wrongly reach CLEAN with 1 orphan still uncovered: ' + r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 0, 'CLEAN must exit 0: ' + r.stderr)
+  const row = JSON.parse(lines[1])
+  assert.strictEqual(row.findings.waived, 2,
+    'the ledger row must record the actual waived count passed: ' + JSON.stringify(row.findings))
+  assert.strictEqual(row.findings.legFindings, 2,
+    'D4: the review row\'s findings object must carry legFindings:2 — without this field a reader of the ' +
+    'ledger row cannot tell CLEAN-because-zero-findings from CLEAN-because-2-waived: ' +
+    JSON.stringify(row.findings))
+})
+
+test('AC-20260818-01-3: a red leg\'s contribution to legFindings is parsed from its pinned observed format and floored at 1', () => {
+  const dir = tmpdir('verdict-count-grammar')
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const cases = [
+    { leg: 'reconcile', row: { leg: 'reconcile', exit: 3, observed: 'outOfPlan=3' }, expected: 3 },
+    { leg: 'skip-reconcile', row: { leg: 'skip-reconcile', exit: 1, observed: 'skipped=3 sanctioned=2' }, expected: 1 },
+    { leg: 'at-risk', row: { leg: 'at-risk', exit: 1, observed: 'files=2' }, expected: 1 },
+    { leg: 'promise-sweep', row: { leg: 'promise-sweep', exit: 1, observed: 'garbled' }, expected: 1 },
+  ]
+  for (const c of cases) {
+    const rows = SIX_GREEN.map(r => (r.leg === c.leg ? c.row : r))
+    const manifest = writeManifest(dir, rows)
+    const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger'])
+    const row = JSON.parse(r.stdout.trim().split('\n')[1])
+    assert.strictEqual(row.findings.legFindings, c.expected,
+      `D2: a red ${c.leg} row observed "${c.row.observed}" must parse to legFindings:${c.expected} — a ` +
+      'wrong count under- or over-disposition the pool relative to the actual number of contract ' +
+      'violations the row asserts: ' + JSON.stringify(row.findings))
+  }
+})
+
+test('AC-20260818-01-4: dispositions exceeding survivors+legFindings exit 2 naming both pools, but exceeding survivors alone (not the sum) still proceeds', () => {
+  const dir = tmpdir('verdict-guard')
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+
+  // All legs green, zero survivors, zero legFindings: --waived 1 exceeds the sum (0+0=0).
+  const cleanManifest = writeManifest(dir, SIX_GREEN)
+  const over = runNode(SCRIPT, ['--manifest', cleanManifest, '--workflow', workflow, '--waived', '1'])
+  assert.strictEqual(over.status, 2,
+    'D3: waived(1) exceeds survivors(0)+legFindings(0)=0 — the widened guard must still exit 2 on a ' +
+    'contradictory disposition count: ' + over.stdout + ' / ' + over.stderr)
+  assert.match(over.stderr, /surviv/i,
+    'D3: the contradiction message must name the survivors pool so the remedy is discoverable: ' + over.stderr)
+  assert.match(over.stderr, /legFindings/i,
+    'D3: the contradiction message must ALSO name the legFindings pool — the guard now spans two pools, and ' +
+    'a message naming only survivors would mislead a reader chasing a leg-finding-caused contradiction: ' +
+    over.stderr)
+
+  // promise-sweep red (orphans=2, legFindings=2), zero survivors: --waived 2 exceeds survivors(0) alone but
+  // not the sum (0+2=2) — must proceed, not exit 2.
+  const legRows = SIX_GREEN.map(r => (r.leg === 'promise-sweep'
+    ? { leg: 'promise-sweep', exit: 1, observed: 'rows=9 carried=5 sanctioned=2 orphans=2' } : r))
+  const legManifest = writeManifest(dir, legRows)
+  const proceeds = runNode(SCRIPT, ['--manifest', legManifest, '--workflow', workflow, '--waived', '2'])
+  assert.strictEqual(proceeds.stdout.split('\n')[0], 'CLEAN',
+    'D3: waived(2) exceeds survivors(0) alone but not survivors+legFindings(0+2=2) — this must PROCEED to a ' +
+    'verdict, not exit 2, or the ratified waive path for leg findings (D1\'s rejected-alternative: making ' +
+    'findings legs blocking would break it) would be structurally unreachable: ' +
+    proceeds.stdout + ' / ' + proceeds.stderr)
+  assert.strictEqual(proceeds.status, 0, 'the proceeding case must exit 0 at CLEAN: ' + proceeds.stderr)
+})
+
+test('AC-20260818-01-5: --ledger retains each leg\'s observed string in the row, byte-distinguishing a real observation from a structurally-absent one', () => {
+  const dir = tmpdir('verdict-observed')
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+
+  const passManifest = writeManifest(dir, SIX_GREEN)
+  const passRun = runNode(SCRIPT, ['--manifest', passManifest, '--workflow', workflow, '--ledger'])
+  const passRow = JSON.parse(passRun.stdout.trim().split('\n')[1])
+  const passCi = passRow.legs.find(l => l.leg === 'ci')
+  assert.strictEqual(passCi.observed, 'conclusion=success',
+    'D4: a real CI observation must survive into the ledger row verbatim — stripping it (the pre-D4 shape) ' +
+    'makes "CI passed" indistinguishable from "no CI exists": ' + JSON.stringify(passCi))
+
+  const unavailManifest = writeManifest(dir, SIX_GREEN_CI_UNAVAILABLE)
+  const unavailRun = runNode(SCRIPT, ['--manifest', unavailManifest, '--workflow', workflow, '--ledger'])
+  const unavailRow = JSON.parse(unavailRun.stdout.trim().split('\n')[1])
+  const unavailCi = unavailRow.legs.find(l => l.leg === 'ci')
+  assert.strictEqual(unavailCi.observed, 'unavailable',
+    'D4: a structurally-absent CI observation must ALSO survive into the ledger row, distinct from ' +
+    '"conclusion=success" — the two rows above must be byte-distinguishable at row.legs, which is the ' +
+    'whole point of retaining observed: ' + JSON.stringify(unavailCi))
+  assert.notStrictEqual(passCi.observed, unavailCi.observed,
+    'a pass and a structurally-absent observation must never collapse to the same ledger string: ' +
+    passCi.observed + ' vs ' + unavailCi.observed)
 })

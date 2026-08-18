@@ -196,3 +196,22 @@ test('AC-20260817-06-5 (CONTINUE TO): runDoctor reports the "unknown project key
   assert.match(overridesLine.remedy || '', /autopilot discover/,
     `the unknown-key line's remedy must still name "autopilot discover" (SHALL CONTINUE TO) or an operator with a real typo loses their fix path; got ${JSON.stringify(overridesLine)}`)
 })
+
+test('AC-20260817-06-5a: an overrides file carrying BOTH a retired legacy key and a genuinely unknown key gets BOTH overrides lines — the legacy line never swallows the unknown-project line', async () => {
+  const { home } = makeHome()
+  writeOverrides(home, { botToken: 'x', totallyUnknownTypo: { pollSeconds: 60 } })
+  const result = await runDoctor({
+    fsImpl: fs, execImpl: noopExec, fetchImpl: okFetch(), platform: 'darwin', homedir: home,
+  })
+  assert.strictEqual(result.ok, false,
+    `doctor must report ok:false when config.json carries either a retired or an unknown key; got ${JSON.stringify(result)}`)
+  const overridesLines = result.lines.filter((l) => l.name === 'overrides file' && l.ok === false)
+  const legacyLine = overridesLines.find((l) => /retired direct-Telegram key\(s\): botToken/.test(l.detail || ''))
+  const unknownLine = overridesLines.find((l) => /unknown project key\(s\): totallyUnknownTypo/.test(l.detail || ''))
+  assert.ok(legacyLine,
+    `doctor must still report the retired-key line for botToken even when an unknown key is also present; got overrides lines=${JSON.stringify(overridesLines)}`)
+  assert.ok(unknownLine,
+    `doctor's if/else-if lets the legacy-key branch swallow the unknown-key finding it already computed — an operator who deletes botToken as told, reboots, and still crashes on the totallyUnknownTypo the health check silently dropped; got overrides lines=${JSON.stringify(overridesLines)}`)
+  assert.match(unknownLine.remedy || '', /autopilot discover/,
+    `the unknown-key line's remedy must still name "autopilot discover" when co-occurring with a legacy key, or the operator has no fix path for the typo once the legacy line is also present; got ${JSON.stringify(unknownLine)}`)
+})

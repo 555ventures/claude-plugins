@@ -153,14 +153,16 @@ async function runDoctor({
           detail: `retired direct-Telegram key(s): ${legacy.join(', ')}`,
           remedy: `delete them from ${overridesPath} — the hub-era daemon ignores them`,
         })
-      } else if (unknown.length) {
+      }
+      if (unknown.length) {
         lines.push({
           name: 'overrides file',
           ok: false,
           detail: `unknown project key(s): ${unknown.join(', ')}`,
           remedy: 'autopilot discover (or fix the typo in config.json)',
         })
-      } else {
+      }
+      if (!legacy.length && !unknown.length) {
         lines.push({ name: 'overrides file', ok: true, detail: overridesPath })
       }
     }

@@ -67,7 +67,12 @@ actually flip state?) is never parsed from the transcript — the caller re-deri
   a box that cannot register exits 1 naming the repo, never runs half-routed.
   `config.json` (`--config`) is **optional overrides only**: per-project
   `{devServerCommand, tunnelCommand, pollSeconds}` keyed by project name (an override key
-  naming no discovered project throws — typo guard; a host-level `reposRoot` override steers
+  naming no discovered project throws — typo guard; `_`-prefixed annotation keys are
+  ignored silently, and the retired direct-Telegram host keys — `botToken`, `supergroupId`,
+  `allowedUserIds`, `lanes` — are skipped with one boot warning naming the migration, so a
+  pre-0.9.0 config degrades instead of crashing; the doctor health check mirrors both
+  rules, reporting legacy and unknown-key lines independently (specs/20260817/06); a
+  host-level `reposRoot` override steers
   discovery itself), host-level `{specPluginRoot, pluginPaths, reposRoot}` with defaults
   derived from the plugin checkout. Stages within a repo run serially; cross-repo parallelism
   is the only parallelism. No worktrees, no `build_base`, no merge mutex — the lane is its

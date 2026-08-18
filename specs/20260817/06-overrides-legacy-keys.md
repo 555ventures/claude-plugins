@@ -1,6 +1,6 @@
 ---
 date: 2026-08-17
-status: implementing
+status: done
 tier: standard
 area: autopilot
 design: false
@@ -116,6 +116,14 @@ tmpdir/reposRoot, making the compared lane roots structurally different absolute
 unsatisfiable for any implementation. The implementation worker blocked rather than edit
 the test; the orchestrator repaired the fixture to a same-fixture comparison (one repo
 root, only the overrides file differs), assertions unweakened.
+
+**Review dispositions (2026-08-17):** iteration 1 GATE_RED was a review-legs infrastructure
+collision (smoke beside a gate that itself boots — fixed in review-legs.js, ledgered).
+Iteration 2: reconcile's one out-of-plan hunk (spec/scripts/review-legs.js) waived —
+concurrent pipeline-infrastructure commit under the v7 Stage 4 mandate, attributed, not this
+spec's work. Two reviewer findings fix-dispatched and verified resolved by execution at
+iteration 3 (doctor co-occurrence line-drop → independent lines + AC-20260817-06-5a pin;
+autopilot 0.11.0 bump).
 
 ## Canonical Delta
 

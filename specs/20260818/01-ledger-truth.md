@@ -1,6 +1,6 @@
 ---
 date: 2026-08-18
-status: implementing
+status: done
 diff_base: 6839e10c90edf35ad8293ece19f26631f7e88ff4
 tier: critical
 area: review
@@ -189,6 +189,20 @@ by brief 14 (reviewer-measurement), which also owns retained reviewer evidence k
 what the existing count means. Fragile to watch: the three retargeted fixtures in
 verdict.test.js encode disposition arithmetic — a worker adjusting `--waived` counts without
 reading D7's table will leave a red pin and must not weaken it.
+
+Deviation folded at review close (2026-08-18, one sidecar entry, one-off — the class is already
+recorded as the `[host]` colliding-pin Gotcha, so no new Gotcha entry): D4's unconditional
+`legFindings` key reddened `AC-20260805-02-8`, a pre-existing exhaustive six-key
+`deepStrictEqual` on `row.findings` that the spec's own File Plan had not listed. The scripts
+worker implemented the Contract literally and left the assert red rather than edit a test
+outside its scope; the orchestrator adjudicated it at build Phase 4 as Decision D8 and the test
+author retagged the pin in place to `AC-20260818-01-2` with `legFindings: 0` added to the
+still-exhaustive expected object and the flat-key negative loop widened to match. Never
+weakened, never left red — D7's own contract ("each pin's surviving half continues, the changed
+half flips") decided it without a fork. Note the variant worth remembering: the existing Gotcha
+describes a *retired* literal breaking a pin; this was an *additive* field breaking an
+exhaustive key-set assert. Same carrier (dense key-set pins in test files the File Plan never
+looked at), opposite direction.
 
 Collision-closure waives (run at lock, 2026-08-18): `tests/scope-reconcile-at-risk.test.js`
 (likely-tier hit — uses `spec/scripts/verdict.js` only as a synthetic fixture *path* inside

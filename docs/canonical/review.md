@@ -18,6 +18,17 @@
   never blocks; verdict.js exit 0 is the only door to Phase 3 close.
   (specs/20260805/02-review-evidence-manifest.md, done 2026-08-06)
 
+  Findings legs are counted, not just colored: every red non-blocking manifest row
+  contributes its parsed finding count (pinned observed grammars; floor 1) to the
+  undispositioned pool beside reviewer survivors, and `CLEAN` is unreachable until
+  dispositions cover the whole pool — leg findings are always hard. Ledger leg rows retain
+  their `observed` string in both profiles, so a structurally-absent observation
+  (`unavailable`) is permanently distinguishable from a pass. Review rows always carry
+  `runId` (orchestrator-passed, else generated `rv_`+12hex by verdict.js) — the backlink
+  `/spec:escape` correlates on. Build rows count `deviations` as sidecar entries (`^- `
+  lines) and `diff.loc` as insertions+deletions, matching review.
+  (specs/20260818/01-ledger-truth.md)
+
 - `ac-matrix`'s coverage denominator fails closed: an AC bullet no ID grammar can parse counts
   as **uncovered** — unparseable = unknown, never absent — in both drift modes, since a host
   `driftScript` cannot parse a malformed bullet either. The `malformed-ac` hard finding is

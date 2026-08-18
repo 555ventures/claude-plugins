@@ -44,7 +44,9 @@ for (let i = 0; i < argv.length; i++) {
 }
 
 const SCANNED_DIRS = ['spec/commands', 'spec/doctrine', 'spec/agents', 'git/commands']
-const SHARED_PATH = path.join(root, 'spec/doctrine/shared.md')
+// v7.0.0: shared.md split into core.md + design.md — a "shared" citation may target a
+// heading in either, so shared idioms resolve to BOTH files and the heading check unions.
+const SHARED_PATHS = [path.join(root, 'spec/doctrine/core.md'), path.join(root, 'spec/doctrine/design.md')]
 const GENESIS_PATH = path.join(root, 'spec/doctrine/genesis.md')
 const SKIP_HOST_DIRS = new Set(['node_modules', '.git'])
 
@@ -131,14 +133,14 @@ function cleanTok(t) {
 // citing, because most files carry no heading answering random prose).
 function resolveTarget(farWord, nearWord, citingFile, citingDir) {
   const two = farWord && nearWord ? `${farWord.toLowerCase()} ${nearWord.toLowerCase()}` : null
-  if (two === 'shared invariants') return { kind: 'match', target: SHARED_PATH }
+  if (two === 'shared invariants') return { kind: 'match', target: SHARED_PATHS }
   if (two === 'pipeline rules') return { kind: 'skip', reason: 'pipeline rules — host-generated file, skipped by design' }
 
   let sawFilenameToken = false
   for (const w of [nearWord, farWord]) {
     if (!w) continue
     const wl = w.toLowerCase()
-    if (wl === 'shared' || wl === 'shared.md') return { kind: 'match', target: SHARED_PATH }
+    if (wl === 'shared' || wl === 'shared.md' || wl === 'core.md' || wl === 'design.md') return { kind: 'match', target: SHARED_PATHS }
     if (wl === 'genesis.md') return { kind: 'match', target: GENESIS_PATH }
     if (wl.endsWith('.md')) {
       sawFilenameToken = true
@@ -224,7 +226,8 @@ for (const file of scannedFiles) {
       }
 
       checked++
-      const heads = headingsOf(resolution.target)
+      const targets = Array.isArray(resolution.target) ? resolution.target : [resolution.target]
+      const heads = targets.flatMap(headingsOf)
       // Untruncated text following `§` (joined across the wrap window, same as `heading`'s
       // source) — used to check the OTHER direction: a heading with no parenthetical whose
       // name the citation's own sentence over-runs ("§ Risk Tiers makes it universal") still
@@ -243,7 +246,7 @@ for (const file of scannedFiles) {
       })
       if (!matched) {
         miss++
-        missLines.push(`MISS ${file}:${lineNo} § ${heading} → ${resolution.target}`)
+        missLines.push(`MISS ${file}:${lineNo} § ${heading} → ${targets.join(' + ')}`)
       }
     }
   }

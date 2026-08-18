@@ -63,7 +63,7 @@ test('AC-20260810-09-2: citations-check.js resolves a citation wrapped across a 
   const root = tmpdir('citations-ac2b')
   writeFixture(root, {
     'spec/commands/a.md': 'This references shared\n§ Real Heading.\nMore text follows here.\n',
-    'spec/doctrine/shared.md': '## Real Heading\n\ncontent\n'
+    'spec/doctrine/core.md': '## Real Heading\n\ncontent\n'
   })
   const r = runNode('scripts/citations-check.js', ['--root', root])
   assert.match(r.stdout, /MISS=0/,
@@ -73,17 +73,18 @@ test('AC-20260810-09-2: citations-check.js resolves a citation wrapped across a 
     'files: ' + (r.stdout || ''))
 })
 
-test('AC-20260810-09-2: citations-check.js resolves the two-word idiom "shared invariants §" to shared.md', () => {
+test('AC-20260810-09-2: citations-check.js resolves the two-word idiom "shared invariants §" against the core.md + design.md union (v7 split)', () => {
   const root = tmpdir('citations-ac2c')
   writeFixture(root, {
-    'spec/commands/a.md': 'Per shared invariants § Real Heading, do this.\n',
-    'spec/doctrine/shared.md': '## Real Heading\n\ncontent\n'
+    'spec/commands/a.md': 'Per shared invariants § Real Heading, and shared invariants § Design Thing too.\n',
+    'spec/doctrine/core.md': '## Real Heading\n\ncontent\n',
+    'spec/doctrine/design.md': '## Design Thing\n\ncontent\n'
   })
   const r = runNode('scripts/citations-check.js', ['--root', root])
   assert.match(r.stdout, /MISS=0/,
-    'the two-word lookback idiom "shared invariants §" must resolve to spec/doctrine/shared.md ' +
-    '— a scanner with only single-word lookback silently skips 71% of the live corpus\'s ' +
-    'citations, which use exactly this two-word form: ' + (r.stdout || ''))
+    'the two-word lookback idiom "shared invariants §" must resolve against BOTH core.md and ' +
+    'design.md (the v7 split of shared.md) — a checker aimed at only one file would false-MISS ' +
+    'every citation whose heading lives in the other: ' + (r.stdout || ''))
 })
 
 test('AC-20260810-09-2: citations-check.js counts an unresolvable file reference and "pipeline rules §" as SKIP, never MISS', () => {
@@ -143,17 +144,16 @@ test('AC-20260810-09-5: spec-paths citations-check prints the checker script\'s 
     'check 20 silently: got "' + printed + '" (stderr: ' + (r.stderr || '') + ')')
 })
 
-test('AC-20260810-09-5: doctor.md documents check 20 (advisory) invoking citations-check', () => {
+test('AC-20260810-09-5: doctor.md documents a numbered advisory check invoking citations-check (check 15 after the v7 renumber)', () => {
   const doctor = read('spec/commands/doctor.md')
-  assert.match(doctor, /20\.\s*\*\*[^*]*\*\*[\s\S]{0,400}citations-check/,
-    'doctor.md must contain a numbered check 20 that names citations-check — without it a ' +
-    'fresh /spec:doctor run never invokes the new checker at all')
-  const check20Idx = doctor.search(/20\.\s*\*\*/)
-  assert.ok(check20Idx !== -1, 'no "20. **" numbered check heading found in doctor.md')
-  const nearby = doctor.slice(check20Idx, check20Idx + 400)
+  assert.match(doctor, /15\.\s*\*\*[^*]*\*\*[\s\S]{0,400}citations-check/,
+    'doctor.md must contain a numbered check that names citations-check — without it a ' +
+    'fresh /spec:doctor run never invokes the checker at all')
+  const idx = doctor.search(/15\.\s*\*\*/)
+  const nearby = doctor.slice(idx, idx + 400)
   assert.match(nearby, /advisory/i,
-    'check 20 must be documented as advisory (D9) — a silently-blocking new check would ' +
-    'contradict the Decision that scoped it advisory pending two clean releases')
+    'the citations check must stay documented as advisory — a silently-blocking check would ' +
+    'contradict the Decision that scoped it advisory')
 })
 
 // ---------------------------------------------------------------------------

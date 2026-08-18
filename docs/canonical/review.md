@@ -10,10 +10,10 @@
 
 - The verdict word and the ledger row are both emitted by `verdict.js` from the
   per-iteration evidence manifest (fresh mktemp file; legs re-executed each iteration) +
-  workflow return + dispositions; survivor counts come from the workflow file, never flags;
+  reviewer return + dispositions; survivor counts come from the return file, never flags;
   `UNVERIFIED` = required leg missing, `GATE_RED` = blocking leg red; only `gate`/`smoke`/`ci`
   block — `reconcile`/`ac-matrix`/`skip-reconcile` emit dispositionable findings; CI status
-  flows through `ci-query.js` (also used by observe-ci) — red blocks pre-panel, unavailable
+  flows through `ci-query.js` — red blocks pre-reviewer, unavailable
   never blocks; verdict.js exit 0 is the only door to Phase 3 close.
   (specs/20260805/02-review-evidence-manifest.md, done 2026-08-06)
 

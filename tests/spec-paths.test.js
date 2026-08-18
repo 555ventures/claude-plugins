@@ -30,9 +30,9 @@ test('every documented key resolves to an existing path', () => {
   assert.match(run('contract-hash').trim(), /^[0-9a-f]{12}$/)
 })
 
-test('shared-for: every mapped section name still exists as a shared.md heading', () => {
+test('shared-for: every mapped section name still exists as a core.md or design.md heading', () => {
   const src = read('spec/bin/spec-paths')
-  const doc = read('spec/doctrine/shared.md')
+  const doc = read('spec/doctrine/core.md') + '\n' + read('spec/doctrine/design.md')
   const headings = [...doc.matchAll(/^## (.+)$/gm)].map(m => m[1])
   const maps = [...src.matchAll(/SECTIONS="([^"]+)"/g)].map(m => m[1])
   assert.ok(maps.length >= 6, 'expected a SECTIONS map per scoped command')
@@ -71,7 +71,7 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
   assert.match(run('shared-for', 'genesis-design'), /## Design Authoring Contracts/)
   assert.ok(!/## Design Binding Pipeline/.test(run('shared-for', 'genesis-design')),
     'genesis-design authors canon, never binds specs')
-  assert.match(run('shared-for', 'build'), /## Escalation Contract/)
+  assert.match(run('shared-for', 'build'), /## Worker Git Ban/)
   assert.ok(!/## Design (Canon|Authoring Contracts|Binding Pipeline)/.test(run('shared-for', 'review')),
     'review must not pay for design doctrine')
   assert.match(run('shared-for', 'review'), /## Runtime Verification/,

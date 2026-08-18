@@ -1,7 +1,7 @@
 ---
 name: spec-verify
 description: "Use when exercising a spec-pipeline finding or an acceptance criterion against this repo's real behavior instead of just reading code — executing scripts against synthetic host trees, running scoped tests, and observing exit codes/sentinels."
-allowed-tools: Bash(npm test:*), Bash(node --test:*), Bash(node spec/scripts/build-workflows.js:*), Bash(node spec/scripts/spec-status.js:*), Bash(bash scripts/spec-patterns.sh:*)
+allowed-tools: Bash(npm test:*), Bash(node --test:*), Bash(node spec/scripts/spec-status.js:*), Bash(bash scripts/spec-patterns.sh:*)
 ---
 
 # Spec-verify — claude-plugins
@@ -11,7 +11,7 @@ Behavior is exercised by **executing scripts and tests**, not by booting anythin
 
 ## Launch (the executed leg)
 
-- Full gate: `node spec/scripts/build-workflows.js --check && npm test`
+- Full gate: `npm test` (plainly green — no sanctioned-red baseline)
 - One suite: `node --test tests/<file>.test.js`
 - One script directly: `node spec/scripts/<name>.js --flags` / `bash spec/scripts/<name>.sh` —
   every script documents usage + exit codes in its header comment; the exit code IS the verdict.

@@ -1,27 +1,109 @@
 {
   "checks": [
-    { "claim": "spec config parses and declares required keys", "kind": "exec", "target": "jq -e '.gateCommand and .testCommand and .setupCommand and .patternsScript and .layerGroups and .agentMap.tests and .agentMap.default and .pipelineRules and .runtime' .claude/spec.config.json" },
-    { "claim": "pipeline rules file exists (7 sections)", "kind": "file", "target": ".claude/rules/spec-pipeline.md" },
-    { "claim": "conventions rule: gate scripts", "kind": "file", "target": ".claude/rules/conventions/scripts.md" },
-    { "claim": "conventions rule: tests", "kind": "file", "target": ".claude/rules/conventions/tests.md" },
-    { "claim": "conventions rule: workflows", "kind": "file", "target": ".claude/rules/conventions/workflows.md" },
-    { "claim": "conventions rule: doctrine/commands", "kind": "file", "target": ".claude/rules/conventions/doctrine.md" },
-    { "claim": "implementer agent: gate-scripts", "kind": "file", "target": ".claude/agents/gate-scripts.md" },
-    { "claim": "implementer agent: workflow-author", "kind": "file", "target": ".claude/agents/workflow-author.md" },
-    { "claim": "implementer agent: doctrine-author", "kind": "file", "target": ".claude/agents/doctrine-author.md" },
-    { "claim": "implementer agent: plugin-tests", "kind": "file", "target": ".claude/agents/plugin-tests.md" },
-    { "claim": "patterns sweep executes cleanly", "kind": "exec", "target": "bash scripts/spec-patterns.sh" },
-    { "claim": "spec-verify skill written", "kind": "file", "target": ".claude/skills/spec-verify/SKILL.md" },
-    { "claim": "run skill written", "kind": "file", "target": ".claude/skills/run/SKILL.md" },
-    { "claim": "settings permissions block parses", "kind": "exec", "target": "jq -e '.permissions.allow and .permissions.deny' .claude/settings.json" },
-    { "claim": "boot smoke honors inert runtime declaration", "kind": "smoke", "target": "" },
-    { "claim": "git remote resolves (CI activation proxy)", "kind": "remote", "target": "origin" },
-    { "claim": "gate command executes (scoped to a pin-free suite)", "kind": "exec", "target": "node spec/scripts/build-workflows.js --check && node --test tests/run-ledger.test.js" },
-    { "claim": "full-suite red baseline", "kind": "inert", "target": "npm test exits 1 by design: 11 deliberately failing INTAKE pins (242/253 pass, 2026-08-01) — the pipeline gate scopes via {testDirs}; pins turn green only by implementing their intake items" },
-    { "claim": "worktree/design-sidecar gitignore rules present", "kind": "exec", "target": "git check-ignore -q .claude/worktrees && git check-ignore -q specs/00000000/00-x.design/x" },
-    { "claim": "run-ledger union merge driver declared", "kind": "exec", "target": "git check-attr merge -- .claude/spec-runs.jsonl | grep -q 'merge: union'" },
-    { "claim": "health endpoint / seed / DB provisioning", "kind": "inert", "target": "plugin-source repo: no app process, no persistence — the executed leg is the test suite + codegen drift check" },
-    { "claim": "design foundation", "kind": "inert", "target": "no UI and no component catalog — no design block; /spec:design never runs here" },
-    { "claim": ".worktreeinclude env manifest", "kind": "inert", "target": "no gitignored runtime config exists (no .env*); worktree builds need only npm install" }
+    {
+      "claim": "spec config parses and declares required keys",
+      "kind": "exec",
+      "target": "jq -e '.gateCommand and .testCommand and .setupCommand and .patternsScript and .layerGroups and .agentMap.tests and .agentMap.default and .pipelineRules and .runtime' .claude/spec.config.json"
+    },
+    {
+      "claim": "pipeline rules file exists (7 sections)",
+      "kind": "file",
+      "target": ".claude/rules/spec-pipeline.md"
+    },
+    {
+      "claim": "conventions rule: gate scripts",
+      "kind": "file",
+      "target": ".claude/rules/conventions/scripts.md"
+    },
+    {
+      "claim": "conventions rule: tests",
+      "kind": "file",
+      "target": ".claude/rules/conventions/tests.md"
+    },
+    {
+      "claim": "conventions rule: doctrine/commands",
+      "kind": "file",
+      "target": ".claude/rules/conventions/doctrine.md"
+    },
+    {
+      "claim": "implementer agent: gate-scripts",
+      "kind": "file",
+      "target": ".claude/agents/gate-scripts.md"
+    },
+    {
+      "claim": "implementer agent: doctrine-author",
+      "kind": "file",
+      "target": ".claude/agents/doctrine-author.md"
+    },
+    {
+      "claim": "implementer agent: plugin-tests",
+      "kind": "file",
+      "target": ".claude/agents/plugin-tests.md"
+    },
+    {
+      "claim": "patterns sweep executes cleanly",
+      "kind": "exec",
+      "target": "bash scripts/spec-patterns.sh"
+    },
+    {
+      "claim": "spec-verify skill written",
+      "kind": "file",
+      "target": ".claude/skills/spec-verify/SKILL.md"
+    },
+    {
+      "claim": "run skill written",
+      "kind": "file",
+      "target": ".claude/skills/run/SKILL.md"
+    },
+    {
+      "claim": "settings permissions block parses",
+      "kind": "exec",
+      "target": "jq -e '.permissions.allow and .permissions.deny' .claude/settings.json"
+    },
+    {
+      "claim": "boot smoke honors inert runtime declaration",
+      "kind": "smoke",
+      "target": ""
+    },
+    {
+      "claim": "git remote resolves (CI activation proxy)",
+      "kind": "remote",
+      "target": "origin"
+    },
+    {
+      "claim": "gate command executes (scoped)",
+      "kind": "exec",
+      "target": "node --test tests/run-ledger.test.js"
+    },
+    {
+      "claim": "full suite plainly green (v7: no sanctioned-red baseline)",
+      "kind": "exec",
+      "target": "npm test"
+    },
+    {
+      "claim": "worktree/design-sidecar gitignore rules present",
+      "kind": "exec",
+      "target": "git check-ignore -q .claude/worktrees && git check-ignore -q specs/00000000/00-x.design/x"
+    },
+    {
+      "claim": "run-ledger union merge driver declared",
+      "kind": "exec",
+      "target": "git check-attr merge -- .claude/spec-runs.jsonl | grep -q 'merge: union'"
+    },
+    {
+      "claim": "health endpoint / seed / DB provisioning",
+      "kind": "inert",
+      "target": "plugin-source repo: no app process, no persistence \u2014 the executed leg is the test suite + codegen drift check"
+    },
+    {
+      "claim": "design foundation",
+      "kind": "inert",
+      "target": "no UI and no component catalog \u2014 no design block; /spec:design never runs here"
+    },
+    {
+      "claim": ".worktreeinclude env manifest",
+      "kind": "inert",
+      "target": "no gitignored runtime config exists (no .env*); worktree builds need only npm install"
+    }
   ]
 }

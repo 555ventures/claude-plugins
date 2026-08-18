@@ -1,6 +1,6 @@
 {
-  "generatedBy": "spec@6.35.0",
-  "contractHash": "be68352bb957",
+  "generatedBy": "spec@7.0.0",
+  "contractHash": "dca383facd28",
   "gateCommand": "node --test {testDirs}",
   "testCommand": "node --test",
   "setupCommand": "npm install",
@@ -12,12 +12,22 @@
   },
   "capabilities": {
     "forge": "github",
-    "skipReportPattern": "ℹ skipped (\\d+)",
-    "ciPoll": { "intervalSeconds": 30, "timeoutSeconds": 600 }
+    "skipReportPattern": "\u2139 skipped (\\d+)",
+    "ciPoll": {
+      "intervalSeconds": 30,
+      "timeoutSeconds": 600
+    }
   },
   "patternsScript": "scripts/spec-patterns.sh",
-  "pipelineOwnedPaths": ["spec/workflows/wf-*.js"],
-  "layerGroups": [["doctrine", "scripts"]],
+  "pipelineOwnedPaths": [
+    "spec/workflows/wf-*.js"
+  ],
+  "layerGroups": [
+    [
+      "doctrine",
+      "scripts"
+    ]
+  ],
   "agentMap": {
     "tests": "plugin-tests",
     "doctrine": "doctrine-author",

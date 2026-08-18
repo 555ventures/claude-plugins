@@ -2,7 +2,7 @@
 
 Autopilot is a sibling plugin in this marketplace repo (`autopilot/`): a daemon plus its
 messaging adapters. It is product code, not spec-pipeline machinery — its guards are pinned by
-spec ACs, not by `spec/doctrine/scaffold-ledger.md` rows.
+spec ACs and behavioral tests.
 
 ## Messaging seam
 
@@ -175,8 +175,7 @@ actually flip state?) is never parsed from the transcript — the caller re-deri
   `WrapupError` at its call sites — its "rejects `WrapupError` only" contract survives the
   extraction (specs/20260810/03-repo-discovery.md D7/A4).
 - Tests live under `tests/autopilot/` and inject transports — no network, no SDK imports. The
-  scoped location matters: the repo's full suite carries deliberate failing INTAKE pins, so
-  pipeline gate runs are scoped to `tests/<scope>/`.
+  scoped location keeps pipeline gate runs fast (`tests/<scope>/` glob form).
 
 **Operational proof.** `autopilotd --check` is an offline preflight — it validates `hub.json`,
 forces the real SDK require (which the daemon otherwise loads lazily), asserts the oracle script

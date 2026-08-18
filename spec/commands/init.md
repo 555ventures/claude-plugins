@@ -72,7 +72,7 @@ Launch parallel Explore agents (`model: sonnet`) and read key files yourself:
   canonical exemplar files, the rules docs that already exist (`.claude/rules/`,
   `docs/standards/`, `docs/rules/`, `AGENTS.md`, `CLAUDE.md`).
 - **High-risk surfaces:** money paths, auth, migrations, cross-area contracts — what here
-  would be T3?
+  would be critical-tier?
 - **Runtime & observability:** how to launch the app locally — dev command, ports, required
   env vars/secrets stubs; how to seed a testable state — test user/credentials, fixtures, seed
   script, db reset; how to observe behavior once it's running — URLs/routes, CLI invocations,
@@ -82,9 +82,9 @@ Launch parallel Explore agents (`model: sonnet`) and read key files yourself:
 
 Interview the user via `AskUserQuestion` only for what the code cannot answer — glossed in plain
 English, recommended-first, with one line of consequence per option (e.g. "which surfaces should
-get the extra T3 scrutiny — the ones where a bad change is expensive to fix after it ships?
+get the extra critical-tier scrutiny — the ones where a bad change is expensive to fix after it ships?
 (Recommended: money/auth/migration paths, if this repo has any — missing one lets a risky change
-through at routine speed; naming too many slows every ordinary edit down with T3's extra
+through at routine speed; naming too many slows every ordinary edit down with critical tier's extra
 build/review overhead)", with the real candidate paths as informed options).
 
 **Ensure `.claude/worktrees/` is gitignored** (idempotent): `/git:enter-worktree`'s worktree
@@ -121,7 +121,7 @@ not incidental notes. Two skills, one profiling pass:
   repo — `package.json` scripts, the README, `docker-compose.yml`, Playwright/Cypress config,
   a seed script; where the repo is silent, write `[NEEDS CLARIFICATION: <question>]` rather
   than guess. State its consumers in the body: `/spec:review`'s verifiers use it to exercise
-  findings; T3 builds may use it for advisory behavioral checks of acceptance criteria —
+  findings; critical-tier builds may use it for advisory behavioral checks of acceptance criteria —
   advisory only, it gates nothing until the run ledger (`.claude/spec-runs.jsonl`) shows its
   verdicts track real escapes.
 - **`.claude/skills/run/SKILL.md`** — the session-facing sibling: frontmatter `name: run`,
@@ -313,12 +313,12 @@ Seven sections, all grounded in Phase 1 findings. This file is read by every pip
 they lose nothing — but ordinary sessions in the host stop paying its full context cost on
 every turn, which is what keeps its rules followed rather than skimmed.
 
-- **`## Risk Tiers`** — the concrete T3 trigger list for THIS repo (e.g. "order/position/trade
+- **`## Risk Tiers`** — the concrete critical-tier trigger list for THIS repo (e.g. "order/position/trade
   mutation paths or money math (`src/lib/decimal.ts` call sites)"; "anything touching the
   `billing` or `identity` domain's write paths; migrations beyond pure-additive"), and what
-  T1-shaped work looks like here. **Always include the process-boundary trigger with this
-  repo's concrete boot-path files named** (entry point, plugin/process registration, env
-  schema, signal handling) — shared invariants § Risk Tiers makes it universal; this section
+  spec-free direct work looks like here. **Always include the process-boundary trigger with
+  this repo's concrete boot-path files named** (entry point, plugin/process registration, env
+  schema, signal handling) — shared invariants § Tiers makes it universal; this section
   grounds it in real paths.
 - **`## Planning`** — discovery surfaces (generated contract files to ground against),
   pre-emptive MCP/registry lookups to run at plan time (e.g. Shadcn registry for new UI
@@ -559,7 +559,7 @@ Both modes also:
      `initialized — {N} files, gate verified, stamped`
    - `bullets`: two plain-language lines, replacing the old `{kind → name}`/glob dumps with
      meaning (§ Console Output Style's "meaning over dumps") — (1) what was generated: agent
-     count, the verify + run skills, convention-file count, the T3 triggers chosen, and the
+     count, the verify + run skills, convention-file count, the critical-tier triggers chosen, and the
      permissions entries landed; (2) runtime + design-foundation state: boot/ready commands
      or a declared-inert reason, and the design foundation status — genesis / extracted /
      adopted / crafted / pending (name `/spec:genesis-design` as the finisher when pending) —
@@ -574,7 +574,7 @@ Both modes also:
 
    ```report
    ✅ **initialized — 14 files, gate verified, stamped**
-   - generated 6 implementer agents, the verify + run skills, 3 convention rule files, and the T3/permissions grounding this repo needs to run the pipeline safely
+   - generated 6 implementer agents, the verify + run skills, 3 convention rule files, and the tier/permissions grounding this repo needs to run the pipeline safely
    - runtime ready (`bun dev`, health-checked) · design foundation adopted — docs/design/doctrine.md
    ⚠️ manifest-check found one unverified row — settings.json permissions merge kept an existing deny in place, surfaced for review
    {spec-status --next, verbatim}

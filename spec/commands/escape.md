@@ -39,36 +39,6 @@ to the ledger**.
 If invoked with no arguments AND no defect is identifiable in the session, ask for the
 defective file — that is the only unrecoverable input.
 
-## Red-observation entry path (D8)
-
-`/spec:status --next`'s top pick may be a full oracle-shaped `/spec:escape` entry — a done
-spec whose latest qualifying `stage:"observe"` ledger row (written by `observe-ci.js`) is
-red, carrying `branch`/`sha`/`url` as top-level row fields (only the `--next` oracle's own
-entry carries them in a `note`). When invoked on such a spec (the given
-`$ARGUMENTS` names the spec directly, or the session is working the oracle's escape pick),
-this path replaces step 1's grep-locate — the spec is already named — and replaces the
-session's own diagnosis as the evidence source:
-
-1. **Read the run first.** `gh run view {url}` (the `url` from the observe row / oracle
-   `note`) — see what actually failed before touching the ledger. Never record an escape from
-   the red glyph alone.
-2. **Implication check.** If the failure does not implicate this spec — its File Plan files
-   or its landed behavior (the run failed on an unrelated suite, a different spec's
-   shared-branch neighbor, or CI infra noise) — record NO escape and STOP: name the
-   implicated surface instead (the other spec, the shared-branch neighbor, or CI infra) so
-   the session or the user can route to the right place. A red observation is evidence
-   something broke, never evidence *this spec* broke it.
-3. **If implicated**, continue at step 1 below using this spec (skip its grep — already
-   located) and the run's failure as the defect description, then proceed through steps 2–7
-   normally. `foundBy` derives to `production` (D8: a red CI run on landed code is
-   production-adjacent evidence, not user inspection) unless session context overrides it.
-
-The red observation clears only when a later green run's ancestry contains the red spec's
-close commit and `observe-ci.js` appends the D3 green-clearing `ci:"green"` row — this command
-never writes an observe row itself, only the escape row; fixing the defect and waiting for the
-next `/spec:status` or `/spec:review` invocation to re-observe is what turns the dashboard
-headline back green.
-
 ## Steps
 
 1. **Locate the spec.** If a spec path was given, use it. Otherwise take the defective
@@ -104,8 +74,7 @@ headline back green.
      production behavior → `production`; otherwise `user` (the manual-invocation default).
      A calling command's prescription is derivation evidence and outranks this table —
      `/spec:release` prescribes `foundBy: later-spec`, `preventedBy: runtime-leg` for
-     defects its staging walkthrough catches (a staging walk is not production); the
-     red-observation entry path (D8) prescribes `foundBy: production`.
+     defects its staging walkthrough catches (a staging walk is not production).
    - `preventedBy` — the **prevention delta**: what change would have caught this defect
      before it escaped? `doctrine` (a Gotchas/rules line) | `enforcer` (a mechanical check —
      `/spec:enforce` territory) | `review-check` (a § Review Checks severity row) |

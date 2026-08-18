@@ -91,9 +91,6 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
   one automatically on fix-shaped commits. This keeps the review layer honest.
 - **`/spec:atlas`** — whole-product design view: every mock at device size, arranged by journey,
   gap cards for unmocked surfaces. Zero tokens, never required.
-- **`/spec:audit`** — hotspot-targeted debt audit: derives churn×complexity hotspots, hunts
-  cross-spec smells there, and forces every finding to a disposition in a ledger the next audit
-  reads first.
 
 ## Autopilot (optional daemon)
 
@@ -153,7 +150,6 @@ concurrently.
 | `/spec:doctor` | Drift + ledger check; `--fix` repairs with approval | When things feel off |
 | `/spec:escape` | Record a defect that slipped past review | When one surfaces |
 | `/spec:enforce` | Turn rules into deterministic checks | On rule/tooling change |
-| `/spec:audit` | Hotspot-targeted debt audit + disposition ledger | On demand, or offered at release |
 | `/git:commit`, `/git:merge` | Add-all-commit (with escape capture); guided merge | Anytime |
 | `/git:enter-worktree` | Enter the isolated worktree for a spec | Before build/design isolation |
 
@@ -177,10 +173,10 @@ elsewhere:
   with hard forks surfaced as questions — not a template questionnaire.
 - **It's shaped by daily production use.** 555 Ventures LLC runs this pipeline internally every
   day across multiple projects. Features here were promoted or retired on evidence from real
-  builds — the scaffold ledger records why each guard exists and what would remove it.
+  builds — the v7.0 redesign deleted every guard that stopped earning its keep.
 
-Honest trade-off: this buys rigor with ceremony and maintenance surface (generated workflows,
-grounding layers, doctor checks). If you want a lightweight spec loop, Spec Kit or OpenSpec is
+Honest trade-off: this buys rigor with ceremony and maintenance surface (grounding layers,
+deterministic gate scripts, doctor checks). If you want a lightweight spec loop, Spec Kit or OpenSpec is
 less to carry. This is for when the failure you fear is *plausible-looking work that was never
 actually verified*.
 
@@ -193,15 +189,12 @@ established pattern never gets a spec — the plugin will tell you the same.
 
 ## Notes for plugin authors
 
-- **`args` is a control channel, not a data bus.** Workflow args carry only paths, ids, enums,
-  booleans, and the gate command — never free text. Prose lives in files agents `Read`. Every
-  script starts with the shared `normalizeArgs()` guard.
-- **Workflow `agent()` resolves only built-in and plugin agent types.** Host `.claude/agents/*.md`
-  are invisible to it — pass doctrine file paths via `args` and dispatch on `general-purpose`.
-- **Never hand-edit a committed `wf-*.js`.** They're generated from `spec/workflows/src/*.body.js`
-  plus shared fragments by `npm run build:workflows`; `npm test` fails on drift.
-- **Every guard earns its keep.** Each gate/advisory is registered in
-  `spec/doctrine/scaffold-ledger.md` with the evidence that justified it and the condition that
-  retires it; `/spec:doctor` audits the ledger. Guards without evidence get retired.
-- **Doctrine hygiene:** state a fact once (highest common ancestor in `doctrine/shared.md`,
-  everywhere else points); never name a derived case.
+- **Behavior lives in scripts; prose states contracts.** Deterministic checks are scripts with
+  exit codes (`spec/scripts/`), pinned by behavioral tests that execute them — never regexes
+  over prose. A standing guard is earned by a third recurrence of a class (core § Incident
+  Policy), never by an incident memory written into doctrine.
+- **The design family's `wf-*.js` files are frozen checked-in scripts** (the codegen seam was
+  retired in v7.0); they change only under a spec that names them, pending the v7.1 design
+  thinning (`docs/roadmap/design-thinning.md`).
+- **Doctrine hygiene:** state a fact once (highest common ancestor in `doctrine/core.md` or
+  `doctrine/design.md`, everywhere else points); never name a derived case.

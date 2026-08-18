@@ -157,27 +157,5 @@ test('AC-20260813-06-5: `spec-paths report-render` prints the renderer\'s absolu
 // Mirrors the awk-range extraction used elsewhere in this suite (tests/terminal-observable-acs.test.js's
 // `between`): slice by line index from the heading up to (not including) the next `## ` heading, so the
 // count matches exactly what a human reading the file between the two headings would count.
-function sectionLines(doc, heading) {
-  const allLines = doc.split('\n')
-  const startIdx = allLines.findIndex(l => l.startsWith(heading))
-  assert.ok(startIdx !== -1, `heading "${heading}" not found in shared.md — the Console Output Style section moved or was renamed`)
-  let endIdx = allLines.findIndex((l, i) => i > startIdx && l.startsWith('## '))
-  if (endIdx === -1) endIdx = allLines.length
-  return allLines.slice(startIdx, endIdx)
-}
 
-test('AC-20260813-06-10: shared.md § Console Output Style names the renderer as render authority, cross-references the 📌 slot, states the STOP shape, and stays within its 44-line pre-change bound', () => {
-  const sharedMd = read('spec/doctrine/shared.md')
-  const lines = sectionLines(sharedMd, '## Console Output Style')
-  const section = lines.join('\n')
-  assert.match(section, /report-render/,
-    'the section must name the report-render script as the render authority (D4) — the current prose still describes each command\'s own hand-filled fenced template, with no script named as the authority')
-  assert.match(section, /📌[^\n]*slot/i,
-    'the section must gain a one-line 📌 slot cross-reference (D4) — the 📌 anchor is not mentioned anywhere in this section today')
-  assert.match(section, /🚫 \*\*\{[^}]*\}\*\*/,
-    'the section must state the shared two-line STOP shape\'s 🚫 line template verbatim (D4) — no STOP shape is defined here today')
-  assert.match(section, /Next: \{named remedy\}/,
-    'the STOP shape\'s second line (`Next: {named remedy}`) must be stated verbatim (D4)')
-  assert.ok(lines.length <= 44,
-    `§ Console Output Style must stay within its pre-change 44-line bound (AC-10 is a direct line-count pin, not a ratchet oracle — a refuter proved --update-baseline legalizes growth) — additions are paid by deleting the now-script-owned mechanics prose; measured ${lines.length} lines`)
-})
+

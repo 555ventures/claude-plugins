@@ -99,30 +99,3 @@ test('AC-20260813-03-8 (CONTINUE TO AC-20260815-02-9): verdict.js --manifest wit
     'the usage error must name --workflow as the remedy so the orchestrator knows exactly which flag to ' +
     'supply: ' + JSON.stringify(r.stderr))
 })
-
-const doctor = read('spec/commands/doctor.md')
-const check12 = doctor.slice(doctor.indexOf('12. **Run ledger hygiene'), doctor.indexOf('13. **Scaffold audit'))
-
-test('JJ-20260808-01 (prax) / AC-20260813-03-9: doctor.md check 12 admits a GATE_RED review row with null/absent runId as OPTIONAL, never as a blanket row-class exemption', () => {
-  assert.notStrictEqual(check12, '',
-    'could not locate check 12\'s text block via the "12. **Run ledger hygiene" / ' +
-    '"13. **Scaffold audit" markers — update the slice bounds if the checks were renumbered')
-  assert.match(check12, /GATE_RED/,
-    'doctor.md check 12\'s required-field exemption list names observe rows, fast-path build ' +
-    'rows, escape rows, and release rows as sanctioned row classes with their own field sets, ' +
-    'but never mentions GATE_RED review rows — prax: a pre-panel GATE_RED hard-stop structurally ' +
-    'has no runId (review.md\'s own documented invocation omits --workflow, so no wf-review run ' +
-    'ever existed to mint one), and 5 of 6 such rows tripped check 12 on a host following ' +
-    'review.md exactly as written, because runId is required for every review row with no carve-out')
-  // D4's exact contract, not just the bare word GATE_RED: runId must be tied to GATE_RED as an
-  // OPTIONAL field on that verdict specifically, AND the clause must call itself narrower than
-  // the other (whole-row-class) exemptions — a future edit that renames the field, drops the
-  // "optional" phrasing, or collapses GATE_RED into a blanket row-class exemption (the exact
-  // failure mode D4's rationale rejects) must fail this pin even though the bare /GATE_RED/
-  // match above would still pass.
-  assert.match(check12,
-    /GATE_RED[\s\S]{0,60}`runId`[\s\S]{0,80}optional[\s\S]{0,400}narrower\s+than\s+the\s+other\s+exemptions/i,
-    'doctor.md check 12 mentions GATE_RED, but the clause tying `runId` to it as OPTIONAL — and ' +
-    'stating that this exemption is narrower than the other (whole-row-class) exemptions, per ' +
-    'D4\'s locked decision — is missing or reworded: ' + JSON.stringify(check12))
-})

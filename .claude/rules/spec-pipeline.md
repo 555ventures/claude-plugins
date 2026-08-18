@@ -12,7 +12,7 @@ Everything is dependency-free Node + bash; the only external binary assumed is `
 
 ## Risk Tiers
 
-T3 triggers for THIS repo:
+Critical-tier triggers for THIS repo:
 
 - **`spec/templates/grounding-contract.md`** — its hash is stamped into every host's
   `spec.config.json`; any edit flags every host's grounding as stale. Edit only when the
@@ -23,58 +23,51 @@ T3 triggers for THIS repo:
   session's prompts in every host repo.
 - **`spec/scripts/merge-back.sh`** — runs destructive git ops against host repos; exit-code
   alphabet (3 = conflicts, 4 = CWD-inside-worktree refusal) is load-bearing for /spec:review.
-- **The codegen seam**: `spec/scripts/build-workflows.js` + `spec/workflows/fragments/*` — a
-  splice bug corrupts all six generated workflows at once.
-- **`spec/scripts/spec-status.js`** — the sole source of "what's next" across all hosts
-  (v6.20.0 rule); never a second derivation of roadmap state anywhere.
+- **`spec/scripts/spec-status.js`** — the sole source of "what's next" across all hosts and a
+  frozen API for the autopilot daemon (`--root/--next/--json` shape, the five action strings);
+  never a second derivation of roadmap state anywhere.
 - **`spec/scripts/scope-reconcile.js`** — the sole derivation of changed-set-vs-File-Plan
-  reconciliation behind `/spec:review`'s scope gate and `/spec:build`'s Final-gate advisory;
-  never a second derivation of the changed-file/File-Plan diff anywhere (2026-08 spec:
-  review-scope-reconciliation).
-- **`spec/scripts/verdict.js`** — the sole derivation of the review/release verdict word
-  (evidence manifest + workflow return + disposition counts → one word, `--ledger` row); a
+  reconciliation (incl. `atRisk`) behind review's reconcile/at-risk legs and build's Final-gate
+  advisory.
+- **`spec/scripts/verdict.js`** — the sole derivation of the review/release verdict word; a
   splice bug here corrupts every review and release verdict at once. Never a second place that
-  computes or asserts CLEAN (2026-08 spec: review-evidence-manifest).
-- **`spec/scripts/claims-lint.js`** — the sole derivation of the doctrine claims inventory and
-  its dual line-count/orphan ratchet against `claims-baseline.json`; a splice bug here corrupts
-  every version bump's claim gate at once. Never a second place that counts orphan claims or
-  computes the corpus ratchet (2026-08 spec: claims-registry).
+  computes or asserts CLEAN.
+- **`spec/scripts/review-legs.js`** — runs every deterministic review leg and writes the
+  evidence manifest verdict.js derives from; a bug here silently changes what every review
+  observes.
 - **`spec/bin/spec-paths`** — every command resolves scripts through it; a wrong key breaks
   commands silently.
 
-T1-shaped work: doctrine prose edits pinned by existing tests, new sweeps in
+Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
 `scripts/spec-patterns.sh`, additive template fields, README touch-ups.
 
 ## Planning
 
-- Ground against the real surfaces: `spec/doctrine/shared.md` (invariants; sections served
-  via `spec-paths shared-for <command>` — section lists there are the canonical map),
-  `spec/doctrine/scaffold-ledger.md` (every guard needs a promote/retire condition),
-  `spec/templates/grounding-contract.md` (host contract), `spec/INTAKE.md` (open pins).
-- Decomposition caps: at most one edit to `grounding-contract.md` per spec; a doctrine change
-  and its pinning test belong in the same File Plan row pair; **never a File Plan row for a
-  generated `wf-*.js`** — the row is the `.body.js`/`.frag` source plus a regenerate step.
+- Ground against the real surfaces: `spec/doctrine/core.md` + `spec/doctrine/design.md`
+  (invariants; sections served via `spec-paths shared-for <command>` — the section lists in
+  `spec/bin/spec-paths` are the canonical map) and `spec/templates/grounding-contract.md`
+  (host contract).
+- Decomposition caps: at most one edit to `grounding-contract.md` per spec; a behavior change
+  and its behavioral test belong in the same File Plan row pair.
 - New-surface checklist: a new command needs frontmatter (`description`, `argument-hint`),
-  a `spec-paths` key if it ships a script, a `shared-for` section list if it reads shared.md,
-  and a plugin.json `description` update (the de facto changelog). A new plugin needs
-  `<plugin>/.claude-plugin/plugin.json` and a `.claude-plugin/marketplace.json` entry.
+  a `spec-paths` key if it ships a script, a `shared-for` section list if it reads the
+  doctrine, and a plugin.json `description` update (the changelog surface, last-3-versions
+  form). A new plugin needs `<plugin>/.claude-plugin/plugin.json` and a
+  `.claude-plugin/marketplace.json` entry.
 - Version bump discipline: every behavior change bumps the owning plugin's
-  `.claude-plugin/plugin.json` semver (see git log: `bump to 6.35.0` in every commit subject).
+  `.claude-plugin/plugin.json` semver.
 
 ## Build
 
-- Orchestrator-only integration duties: run `npm run build:workflows` after any
-  `spec/workflows/src/*` or `fragments/*` edit and commit source + generated together;
-  run `node spec/scripts/build-workflows.js --check` before declaring a batch done.
 - Host escalation triggers: any test that must be weakened to pass (tests here are pinned
   invariants with incident headers — weakening one is a doctrine change, not a fix);
   any edit that changes `spec-paths contract-hash` output.
 
 ## Worker Rules
 
-- **Generated surface**: `spec/workflows/wf-*.js` is read-only. Sanctioned route: edit
-  `spec/workflows/src/wf-<name>.body.js` or `spec/workflows/fragments/*.frag`, then
-  `npm run build:workflows`.
+- **Frozen scripts**: `spec/workflows/wf-*.js` (the design/enforce workflow scripts) are
+  plain checked-in scripts carried as-is for the design family; edit them only under a spec
+  that names them, never as a side effect.
 - **Zero dependencies**: scripts and tests use only Node built-ins (`fs`, `path`,
   `child_process`, `os`, `assert`, `node:test`) and `jq` in bash. Never add a package. The
   `autopilot/**` SDK-import exception is stated in full in § Review Checks below.
@@ -88,26 +81,22 @@ T1-shaped work: doctrine prose edits pinned by existing tests, new sweeps in
 - Error messages name the remedy command. Machine contracts are sentinel lines
   (`__SMOKE_PASS__`-style) or `--json`; the human render is the only other format.
 - Hand-rolled `--flag value` arg parsing only; no arg-parsing library, ever.
-- Workflow bodies: meta block first, then the `@fragment:normalize-args` splice, then
-  `args = normalizeArgs(args)`, then the shape assertion. `args` is a closed alphabet —
-  paths/ids/enums/booleans/commands; prose travels on disk as paths.
 
 ## Test Rules
 
 - Framework: `node:test` + `node:assert`, flat `test('...')` — no `describe` blocks. Files
   are `tests/<topic>.test.js`; helpers from `tests/helpers.js`
-  (`ROOT, SPEC, read, extractFn, evalFns, checkWorkflowSyntax, tmpdir, runNode, runBash, gitRepo`).
+  (`ROOT, SPEC, read, tmpdir, runNode, runBash, gitRepo`).
 - Test names are full sentences stating the invariant. Every assert carries a third-arg
   message stating the **consequence of failure**, not the expectation.
-- Plugin tests reference incident ids / dated escapes in a header comment (this repo's
-  analogue of AC-IDs). Pipeline-authored tests for new specs reference AC-IDs in the test
-  name per the spec template (`AC-{YYYYMMDD-NN}-1`).
-- Four sanctioned modes: (1) exec-a-script against a synthetic host in `tmpdir()` via
-  `runNode`/`runBash`, asserting on status + output; (2) doctrine regex pins over `read()`
-  file content; (3) source-shape pins on workflow bodies via `extractFn`/`evalFns`; (4)
-  in-process DI unit tests for `autopilot/daemon/*` lib modules — injected fakes
-  (`queryImpl`, transports), `node:test` mock timers, zero real SDK/network calls.
-  Fixtures (`tests/fixtures/`) only when the input must be a realistic multi-file artifact.
+- Tests are **behavioral**: exec-a-script against a synthetic host in `tmpdir()` via
+  `runNode`/`runBash`, asserting on status + output, or in-process DI unit tests for
+  `autopilot/daemon/*` lib modules (injected fakes, `node:test` mock timers, zero real
+  SDK/network calls). Fixtures (`tests/fixtures/`) only when the input must be a realistic
+  multi-file artifact. Regexes over prose are not tests — a rule that matters gets a script
+  (core § Incident Policy).
+- Tests reference incident ids / dated escapes in a header comment. Pipeline-authored tests
+  for new specs reference AC-IDs in the test name (`AC-{YYYYMMDD-NN}-1`).
 - Nothing here is exempt from TDD. Two sanctioned env-gated suites exist:
   `tests/autopilot/live.test.js` posts real questions to a real Telegram topic and waits for a
   real tap — it activates only when `AUTOPILOT_LIVE=1` is set in addition to the
@@ -116,28 +105,15 @@ T1-shaped work: doctrine prose edits pinned by existing tests, new sweeps in
   performs a real enrollment against the production autopilot-hub — it activates only when
   `AUTOPILOT_ENROLL_LIVE=1` is set in addition to `AUTOPILOT_ENROLL_HUB`/`AUTOPILOT_ENROLL_CODE`,
   and skips by declaration otherwise (specs/20260808/01-autopilot-enroll.md D11).
-- **Red-pin baseline**: the full suite deliberately carries failing INTAKE pins — the
-  sanctioned-failing set is declared in `.claude/suite-baseline.json`, checked by
-  `spec/scripts/suite-baseline.js` — `npm test` exiting 1 on untouched code is the sanctioned
-  state, not a regression. The pipeline gate is scoped via `{testDirs}` for speed and
-  relevance, not pin-freedom — every pin-closing spec MODIFIES a pre-existing top-level test
-  file (measured: 405 tests / 17 failures / 17-of-17 baseline at run wf_2222584b-9a8), and pin
-  subtraction is owned by the `--gate` wrapper at every gate site. Turning a pin green happens
-  only by implementing its intake item.
-- Scoped runs: `node --test tests/<file>` — paths are repo-root-relative and the runner
-  filters exactly; no workspace/monorepo path semantics apply.
+- **Gates are plainly green** (v7): `npm test` exits 0 on untouched code; there is no
+  sanctioned-failing baseline and no standing red pins. A red suite is a regression or an
+  unfinished change, never a TODO.
+- Scoped runs: `node --test 'tests/<scope>/*.test.js'` — the glob form; `node --test <dir>`
+  does not run files on Node 26. Paths are repo-root-relative.
 
 ## Review Checks
 
-- Any diff hunk in `spec/workflows/wf-*.js` without a matching `src/`/`fragments/` change in
-  the same diff is **hard** (hand-edited generated surface).
-- A new mechanism/gate without a `spec/doctrine/scaffold-ledger.md` row carrying a
-  promote/retire condition is **hard**.
 - A doctrine/behavior change without a plugin.json version bump is **hard**.
-- A diff hunk in `spec/commands/*.md`, `spec/doctrine/*.md`, or `spec/agents/*.md` that changes
-  line counts, with no `claims-baseline.json` hunk in the same diff, is **hard** — other specs'
-  scoped gates never run `tests/claims/`, so without a review-visible check the claims ratchet
-  drifts silently between claims-scoped runs.
 - A script or test importing a non-builtin package is **hard**. `autopilot/**` may import
   ONLY `@anthropic-ai/claude-agent-sdk`, and only from `autopilot/daemon/sdk.js`; any other
   non-builtin import anywhere, or an SDK import elsewhere, stays a hard finding.
@@ -150,13 +126,12 @@ T1-shaped work: doctrine prose edits pinned by existing tests, new sweeps in
   the script's header, is **hard**.
 - A `§ Section Name` citation that doesn't match a `## ` heading in the cited doctrine file
   byte-for-byte (prefix match tolerates parentheticals) is **hard** — `shared-for` filtering
-  silently drops mismatches.
+  silently drops mismatches (`citations-check.js` is the deterministic sweep).
 - A new test whose asserts lack consequence-of-failure messages is soft; a weakened existing
   assertion is **hard**.
 - Duplication calibration: three or more near-identical blocks in one diff is a finding
   naming the extraction — batch-scoped workers never see the third repetition; the reviewer
-  is the first eye that can. Cross-file semantic duplication and error masking are plugin-owned
-  advisory smell-lens output, never a blocking reviewer finding.
+  is the first eye that can.
 
 ## Gotchas (evidence-cited)
 

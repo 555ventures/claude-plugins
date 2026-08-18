@@ -97,15 +97,15 @@ consume each fact:
 
 ```jsonc
 "capabilities": {
-  "forge": "github",              // or "none" — who runs CI/PRs; read by ci-query.js/observe-ci.js
+  "forge": "github",              // or "none" — who runs CI/PRs; read by ci-query.js
   "skipReportPattern": "none",    // regex over test-runner output capturing the skip count (group 1;
                                   // optional group 2 = todos), or "none"
   "ciPoll": { "intervalSeconds": 30, "timeoutSeconds": 600 }
 }
 ```
 
-**Absent block = legacy mode** — today's dynamic probing (`ci-query.js`/`observe-ci.js` probe
-`gh` at use time) plus `/spec:doctor` check 2's undeclared-capabilities nudge; nothing breaks on
+**Absent block = legacy mode** — dynamic probing (`ci-query.js` probes `gh` at use time)
+plus `/spec:doctor` check 2's undeclared-capabilities nudge; nothing breaks on
 a host that predates this block. A present block is authoritative: `forge:"none"` makes the CI
 scripts print the canonical line `unavailable — no supported forge adapter` and exit cleanly
 rather than probe; a `skipReportPattern` of `"none"` (or no match) makes a skip-capture leg
@@ -165,7 +165,7 @@ the same way in every agent:
 ```markdown
 ## Worker Contract (spec pipeline)
 
-When dispatched as a batch worker by the `wf-build` workflow:
+When dispatched as a build worker by `/spec:build`:
 
 - The spec's **Decisions** table is authoritative — apply it verbatim. An unlocked design fork or stale spec assumption is a `blocked` return (kind, detail, options, recommendation), never a guess.
 - The rules file's `## Gotchas` section is hard context, not a suggestion — it is distilled from this repo's real failures.

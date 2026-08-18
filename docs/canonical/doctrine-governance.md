@@ -1,40 +1,20 @@
-# Canonical: doctrine-governance
+# Doctrine governance
 
-<!-- Maintained by /spec:review Canonical Delta application. Last delta: specs/20260807/04-claims-registry.md (2026-08-07). -->
+v7.0.0 (2026-08-17) retired the claims registry (`claims-lint.js`, `claims-baseline.json`,
+the `enforcedBy:`/`unenforced:` marker ratchet) and the scaffold-ledger guard registry. The
+governing rules now:
 
-## Claims registry (specs/20260807/04-claims-registry.md)
+- **One binding home per rule** (core.md § Doctrine Authoring): prose that restates canon
+  living elsewhere shrinks to a pointer; touch-time dedup, never a sweep.
+- **Behavior is pinned by behavioral tests** that execute it — never by regexes over prose.
+- **Incident policy** (core.md § Incident Policy): an incident is fixed with a behavioral
+  test in the same session; only a third recurrence of a class earns a standing guard, and
+  that guard is a deterministic script with an exit code — never prose, never a registry row.
+- **Version discipline:** every behavior change bumps the owning plugin's semver;
+  `plugin.json`'s `description` carries a last-3-versions changelog summary.
+- **Citations stay live:** `citations-check.js` is the deterministic sweep over `§` heading
+  citations (doctor check 15); a citation that resolves nowhere silently drops at
+  `shared-for` render time.
 
-- **Marker grammar** — binding home: `spec/doctrine/shared.md` § Doctrine Authoring. Two
-  tokens only: `<!-- enforcedBy: <repo-path>[, <repo-path>…] -->` (every path must exist) and
-  `<!-- unenforced: <reason ≥20 chars> -->`. Association is per physical line: trailing on the
-  claim's bar-keyword line, or the marker is the entire next non-blank line (binds to the
-  nearest preceding non-blank content line). In wrapped sentences the marker must share the
-  physical line that carries the bar keyword — trailing a later wrapped line strands it.
-- **Claim bar** — a closed pattern list living as data in `spec/scripts/claims-lint.js`:
-  `**hard**`, `hard finding` (case-insensitive), uppercase-only `STOP`/`MUST`/`NEVER`/`ALWAYS`.
-  Fenced code blocks (including indented fences) and HTML comments are excluded from scanning.
-  Extending the list = a script edit with a pinning test, never a prompt clause.
-- **Sole derivation** — `spec/scripts/claims-lint.js` (`spec-paths claims-lint`) is the only
-  computation of the claims inventory and both ratchets; modes `--check` (exit 0/1/2),
-  `--json` (single object: `files`, `totalLines`, `baseline`, `findings`), `--update-baseline`
-  (the ONLY writer of the baseline). Never a second derivation of claim state anywhere.
-- **Dual-ratchet baseline** — `spec/doctrine/claims-baseline.json` records per-file
-  `{lines, orphans}` + corpus total; `--check` fails on ANY mismatch in either direction
-  (growth AND shrinkage), naming the remedy `node "$(spec-paths claims-lint)" --update-baseline`.
-  Every line-count change in the corpus therefore requires a visible baseline hunk in the same
-  diff (pipeline rules § Review Checks carries the mechanical bullet).
-- **Orphan reporting semantics** (review-adjudicated 2026-08-07) — when a file's unmarked-claim
-  count exceeds baseline, the lint flags every unmarked line but each finding's detail carries
-  count context (`file has A unmarked claims; baseline accepts B — surplus S`): the baseline
-  stores counts, not line identities, so slicing to "the surplus lines" would blame arbitrary
-  lines. The ratchet trigger is the count excess; the finding list is diagnostic.
-- **Corpus** — `spec/commands/*.md` + `spec/doctrine/*.md` + `spec/agents/*.md` (D2a).
-  Excluded with recorded reasons: `spec/templates/` (host-copied; grounding-contract.md is
-  hash-stamped), `git/commands/` (separate plugin/version line), `specs/` and `docs/`
-  (artifacts, not doctrine).
-- **Migration rule** — touched-file-only, never a sweep. Seed state: `spec/commands/review.md`
-  converted 2026-08-07 (zero orphans); all other files baselined at their pre-conversion
-  orphan counts, converted at touch-time.
-- **Teeth** — `tests/claims/*.test.js` runs `--check` against the live corpus in `npm test`
-  (gates every version bump); `/spec:doctor` check 18 runs `--json` on demand
-  (recommendations only, never edits).
+Legacy `<!-- enforcedBy: … -->` / `<!-- unenforced: … -->` comments surviving in doctrine
+files are inert annotations, not a maintained registry.

@@ -37,41 +37,45 @@ case "${1:-root}" in
   collision-closure) echo "$ROOT/scripts/collision-closure.js" ;;
   ci-query)       echo "$ROOT/scripts/ci-query.js" ;;
   ci-gate-parity) echo "$ROOT/scripts/ci-gate-parity.js" ;;
-  shared)         echo "$ROOT/doctrine/shared.md" ;;
+  shared)         echo "$ROOT/doctrine/core.md" ;;
+  shared-design)  echo "$ROOT/doctrine/design.md" ;;
   shared-genesis) echo "$ROOT/doctrine/genesis.md" ;;
   shared-for)
     # Print the shared-invariants CONTENT scoped to one command — only the `## ` sections that
-    # command consumes, so a session never pays for doctrine it cannot act on. `spec-paths shared`
-    # (the full-doc path) stays for init (it generates what the whole doctrine consumes) and for humans. Section names must match shared.md
-    # headings exactly; an unknown command falls back to the full document (fail-open, never less
-    # doctrine than intended). Question Style + Console Output Style ride on every list: every
-    # command asks questions and reports.
+    # command consumes, so a session never pays for doctrine it cannot act on. Sections are
+    # drawn from core.md and (for design-family commands) design.md; section names must match
+    # the headings exactly (prefix match tolerates parentheticals); an unknown command falls
+    # back to both full documents (fail-open, never less doctrine than intended). Question
+    # Style + Console Output Style ride on every list: every command asks questions and reports.
     CMD="${2:-}"
-    DOC="$ROOT/doctrine/shared.md"
+    CORE="$ROOT/doctrine/core.md"
+    DESIGN="$ROOT/doctrine/design.md"
     case "$CMD" in
-      plan)    SECTIONS="Host Grounding|Pipeline Entry|Risk Tiers|Decomposition|State Machine|Model Placement|Decisions|Question Style|Console Output Style|MCP Policy|Canonical Docs Loop" ;;
+      plan)    SECTIONS="Host Grounding|Pipeline Entry|Tiers|Decomposition|State Machine|Model Placement|Decisions|Question Style|Console Output Style|MCP Policy|Canonical Docs Loop" ;;
       design)  SECTIONS="Host Grounding|State Machine|Design Canon|Design Authoring Contracts|Design Binding Pipeline|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|MCP Policy" ;;
       atlas)   SECTIONS="Host Grounding|Design Canon|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style" ;;
       sketch)  SECTIONS="Host Grounding|State Machine|Design Canon|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style" ;;
-      build)   SECTIONS="Host Grounding|Risk Tiers|State Machine|Model Placement|Escalation Contract|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|MCP Policy" ;;
-      review)  SECTIONS="Host Grounding|Risk Tiers|State Machine|Runtime Verification|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban|Read-Only Surfaces|Canonical Docs Loop" ;;
+      build)   SECTIONS="Host Grounding|Tiers|State Machine|Model Placement|Incident Policy|Decisions|Question Style|Console Output Style|Worker Git Ban|Read-Only Surfaces|MCP Policy|On-Disk Handoff" ;;
+      review)  SECTIONS="Host Grounding|Tiers|State Machine|Runtime Verification|Model Placement|Incident Policy|Decisions|Question Style|Console Output Style|Worker Git Ban|Read-Only Surfaces|Canonical Docs Loop" ;;
       release) SECTIONS="Host Grounding|Runtime Verification|Release Stage|Feedback Loop|Model Placement|Decisions|Question Style|Console Output Style|Canonical Docs Loop" ;;
       enforce) SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Model Placement|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment" ;;
       genesis-architect) SECTIONS="Host Grounding|Pipeline Entry|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban|MCP Policy" ;;
       genesis-explore)   SECTIONS="Design Canon|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban" ;;
       genesis-design)    SECTIONS="Design Canon|Design Authoring Contracts|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment" ;;
       status)  SECTIONS="Host Grounding|State Machine|Question Style|Console Output Style" ;;
-      escape)  SECTIONS="Host Grounding|Feedback Loop|Question Style|Console Output Style" ;;
-      doctor)  SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Runtime Verification|Feedback Loop|Risk Tiers|State Machine|Question Style|Console Output Style" ;;
-      *) cat "$DOC"; exit 0 ;;
+      escape)  SECTIONS="Host Grounding|Feedback Loop|Incident Policy|Question Style|Console Output Style" ;;
+      doctor)  SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Runtime Verification|Feedback Loop|Tiers|State Machine|Question Style|Console Output Style" ;;
+      *) cat "$CORE" "$DESIGN"; exit 0 ;;
     esac
-    echo "<!-- shared invariants scoped to /spec:${CMD} — full doctrine: $DOC -->"
-    # Prefix match on the heading (some headings carry a parenthetical suffix).
+    echo "<!-- shared invariants scoped to /spec:${CMD} — full doctrine: $CORE + $DESIGN -->"
+    # Prefix match on the heading (some headings carry a parenthetical suffix). keep resets at
+    # each file boundary so the second file's frontmatter never rides a kept tail section.
     awk -v re="^## (${SECTIONS})" '
+      FNR == 1 { keep = 0 }
+      FNR <= 4 && NR <= 4 { print; next }
       /^## / { keep = ($0 ~ re) }
-      NR <= 4 { print; next }   # frontmatter + title context
       keep { print }
-    ' "$DOC"
+    ' "$CORE" "$DESIGN"
     ;;
   template)    echo "$ROOT/templates/spec.md" ;;
   feedback-template) echo "$ROOT/templates/feedback-brief.md" ;;
@@ -86,7 +90,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-design|wf-enforce|wf-panel|wf-research|dc-extract|design-atlas|design-driver|skeletons-check|fidelity-check|components-check|advisory-append|merge-back|smoke|manifest-check|env-preflight|citations-check|review-legs|report-render|spec-status|scope-reconcile|verdict|ac-matrix|collision-closure|ci-query|ci-gate-parity|shared|shared-for <command>|shared-genesis|template|templates|feedback-template|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-design|wf-enforce|wf-panel|wf-research|dc-extract|design-atlas|design-driver|skeletons-check|fidelity-check|components-check|advisory-append|merge-back|smoke|manifest-check|env-preflight|citations-check|review-legs|report-render|spec-status|scope-reconcile|verdict|ac-matrix|collision-closure|ci-query|ci-gate-parity|shared|shared-design|shared-for <command>|shared-genesis|template|templates|feedback-template|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

@@ -184,9 +184,10 @@ Next: route the defect to the normal flow — direct fix or a spec, or /spec:esc
 ## Phase 3 — Promote (explicitly confirmed, never autonomous)
 
 A milestone whose only gap is a `ci` leg that structurally never delivered a verdict
-(`unavailable`/`in-progress`) is `CLEAN-with-qualifier`, not a block: it promotes exactly as
-plain `CLEAN` does, carrying the already-mandated ⚠️ line (Phase 2 step 4) into the promote
-question's context and the Phase 4 report — the word gates nothing extra here.
+(`unavailable`/`in-progress`) still derives plain `CLEAN` (v7: the qualifier word is retired)
+and promotes normally, carrying the already-mandated ⚠️ line (Phase 2 step 4) into the promote
+question's context and the Phase 4 report — the ledger row's `ci` field is the durable carrier
+of the observation.
 
 1. `AskUserQuestion`: promote this build to production? (Include the Phase 2 observation
    summary in the question context.) Dismissed or declined → STOP; staging stands, nothing
@@ -216,17 +217,17 @@ question's context and the Phase 4 report — the word gates nothing extra here.
    fields (`$ARGUMENTS` /
    Phase 0 step 2's shipped-brief list); `staging`/`e2e`/`journeys`/`substrate`/`production`/`ci`
    are derived from the Phase 2/3 manifest rows, never passed as flags. Print line 1 (the word
-   — `CLEAN`, `CLEAN-with-qualifier`, `GATE_RED`, or `UNVERIFIED`) verbatim, and append exactly
+   — `CLEAN`, `GATE_RED`, or `UNVERIFIED`) verbatim, and append exactly
    ONE line to
    `.claude/spec-runs.jsonl` — line 2, the ledger row, verbatim, counts/enums/paths only, never prose:
 
    ```
-   {"ts":"<ISO-8601>","stage":"release","milestone":"<tag or briefs range>","briefs":[<NN>,…],"verdict":"<CLEAN|CLEAN-with-qualifier|GATE_RED|UNVERIFIED>","staging":"<pass|fail>","e2e":{"passed":<n>,"failed":<n>,"skipped":<n>},"journeys":{"walked":<n>,"failed":<n>},"substrate":{"checked":<n>,"failed":<n>,"inert":<n>},"production":"<verified|skipped|failed>","ci":"<conclusion=<value>|unavailable|in-progress>"}
+   {"ts":"<ISO-8601>","stage":"release","milestone":"<tag or briefs range>","briefs":[<NN>,…],"verdict":"<CLEAN|GATE_RED|UNVERIFIED>","staging":"<pass|fail>","e2e":{"passed":<n>,"failed":<n>,"skipped":<n>},"journeys":{"walked":<n>,"failed":<n>},"substrate":{"checked":<n>,"failed":<n>,"inert":<n>},"production":"<verified|skipped|failed>","ci":"<conclusion=<value>|unavailable|in-progress>"}
    ```
 
-   `verdict` is net-new here as documented text — `verdict.js` has always emitted `row.verdict`
-   on release rows; this is the doctrine catching up to the script and pinning the enum,
-   `CLEAN-with-qualifier` included.
+   `verdict` is emitted by `verdict.js` — the doctrine documents the enum, never re-derives
+   the word. When `ci` is `unavailable`/`in-progress`, the row's `ci` field carries that
+   observation beside a plain `CLEAN`.
 
 2. **Tag** the release (`git tag`) when the user confirmed promotion — never push the tag;
    pushing remains theirs.
@@ -241,30 +242,29 @@ question's context and the Phase 4 report — the word gates nothing extra here.
    one). Briefs are append-only: never edit a prior brief; a row the plugin repo's intake
    already stamped (`intake:` present) is never re-reported.
 4. **Release report:** assemble the slots object — `outcome` (✅ `milestone green — {N} specs
-   composed, staging + e2e passed, promoted` on CLEAN; ✅ `milestone green (qualified: CI
-   never delivered a verdict) — promoted` on `CLEAN-with-qualifier`; 🚫 `{what blocked
+   composed, staging + e2e passed, promoted` on CLEAN; 🚫 `{what blocked
    promotion}` otherwise), `bullets` (`- shipped: {briefs + specs}`, `- observed: {deploy,
    ready, migrations (pass/fail, when the leg ran), e2e counts, journeys walked with outcomes,
    ci verdict — one line each}`,
    `- substrate: {rows checked / inert-declared} · production: {verification result}`),
-   `warns` (`ci never delivered a verdict on this commit` only on `CLEAN-with-qualifier`, plus
+   `warns` (`ci never delivered a verdict on this commit` when the ci leg observed
+   `unavailable`/`in-progress`, plus
    `yours / the client's to do: {inert rows, verbatim — one line each}` whenever inert rows
    exist), and `next` — **unconditional, branched by outcome** (A7 — never the old
-   "(optional)" framing): `{kind:'command', text:'/spec:audit — hotspot debt audit for this
-   milestone'}` on CLEAN/`CLEAN-with-qualifier`; `{kind:'command', text: the remedy for what
-   blocked promotion}` on 🚫. Write the slots to a temp file and run
+   "(optional)" framing): on CLEAN, the verbatim output of
+   `node "$(spec-paths spec-status)" --root . --next` as `{kind: 'status-verbatim'}`;
+   `{kind:'command', text: the remedy for what blocked promotion}` on 🚫. Write the slots to a temp file and run
    `node "$(spec-paths report-render)" --slots <file>`, printing its output verbatim.
 
    ```report
    ✅ **milestone green — {N} specs composed, staging + e2e passed, promoted**
-      (or, on `CLEAN-with-qualifier`: ✅ **milestone green (qualified: CI never delivered a
-      verdict) — promoted** · or: 🚫 **{what blocked promotion}**)
+      (or: 🚫 **{what blocked promotion}**)
    - shipped: {briefs + specs}
    - observed: {deploy, ready, migrations (pass/fail, when the leg ran), e2e counts, journeys walked with outcomes, ci verdict — one line each}
    - substrate: {rows checked / inert-declared} · production: {verification result}
-   ⚠️ ci never delivered a verdict on this commit    (only on `CLEAN-with-qualifier`)
+   ⚠️ ci never delivered a verdict on this commit    (when the ci leg observed unavailable/in-progress)
    ⚠️ yours / the client's to do: {inert rows, verbatim — one line each}
-   Next: /spec:audit — hotspot debt audit for this milestone    (or, on 🚫: the remedy for what blocked promotion)
+   Next: {spec-status --next, verbatim}    (or, on 🚫: the remedy for what blocked promotion)
    ```
 
    Every line traces to an executed command — the report is the client-facing artifact, so

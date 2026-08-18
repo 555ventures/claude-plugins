@@ -14,8 +14,8 @@ export, so the vacuous case is the common case rather than an edge. (Ground trut
 green through a two-reviewer CLEAN panel, because the carrier that should have caught it was
 load-blocked and read as satisfied red.)
 
-Four rules follow, all enforced in `crossCheckSentinels()`
-(`spec/workflows/src/wf-build.body.js`) and its `RED.sentinels` schema:
+Four rules follow (v7: the red-check is an executed step in build.md Phase 1 — the
+wf-build workflow that mechanized them is retired; the rules bind the by-hand check):
 
 - **Runtime red satisfies a red expectation only when demonstrated.** Each sentinel carries a
   required `assertionsRun` integer — the count of assertions that actually executed in the probe

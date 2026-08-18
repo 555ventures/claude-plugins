@@ -393,7 +393,7 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
   derived from specs' `brief:` frontmatter (`/spec:status`, or `/spec:doctor` check 14 for
   the audited version). Brownfield repos (no
   genesis) hand-author from the same templates; a dedicated command exists only if evidence
-  demands one (scaffold-ledger row "Roadmap as genesis phase").
+  demands one.
 
 ## Genesis: Dismissed Questions
 

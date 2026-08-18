@@ -239,8 +239,8 @@ of the observation.
    from the plugin's brief template (`spec-paths feedback-template`) — the installed
    version (`spec-paths version`) stamped as `plugin:`, one findings row per item, evidence
    verbatim from the source material. No qualifying items → no brief (never write an empty
-   one). Briefs are append-only: never edit a prior brief; a row the plugin repo's intake
-   already stamped (`intake:` present) is never re-reported.
+   one). Briefs are append-only: never edit a prior brief. (Dedup against prior
+   reports happens at consumption time in the plugin repo.)
 4. **Release report:** assemble the slots object — `outcome` (✅ `milestone green — {N} specs
    composed, staging + e2e passed, promoted` on CLEAN; 🚫 `{what blocked
    promotion}` otherwise), `bullets` (`- shipped: {briefs + specs}`, `- observed: {deploy,

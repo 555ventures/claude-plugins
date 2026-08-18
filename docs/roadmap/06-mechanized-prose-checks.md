@@ -3,6 +3,8 @@
 Phase: P2
 Depends on: none
 
+> **Substantially delivered by v7.0.0 (2026-08-17).** The hand-executed verdict legs this brief targets were mechanized (`ac-matrix.js`, `review-legs.js`); the residue class is owned by core.md § Incident Policy at touch time. No reopen condition — completed, not deferred.
+
 ## Why this brief
 
 The 2026-08-13 style/workflow audit (docs/audit/style-audit-2026-08-13.md, Class C) found a

@@ -1,11 +1,11 @@
-# 03 — Deviations sidecar mechanization
+# 13 — Deviations sidecar mechanization
 
 Phase: P3
 Depends on: none
 
 ## Why this brief
 
-The deviations sidecar (`<spec>.deviations.md`, `spec/doctrine/shared.md` § Escalation, `build.md`
+The deviations sidecar (`<spec>.deviations.md`, `build.md` Phase 2, `core.md` § Feedback Loop,
 Phase 2/§ ledger row, `review.md` Phase 3 close) is today entirely conventional: a worker
 *appends* a line by hand when it takes a conservative option under a forced-but-unblocking
 departure, `/spec:review` *reads* the file by hand at close and folds recurring entries into the
@@ -42,7 +42,7 @@ promise).
 
 ## Grounding
 
-- `spec/doctrine/shared.md` § Escalation contract — "Deviations sidecar" paragraph (the append
+- `build.md` Phase 2 — the deviations-sidecar append contract (the append
   contract workers follow).
 - `spec/commands/build.md` Phase 2 (dispatch grounding includes the sidecar), § ledger row shape
   (`"deviations":<n>` = sidecar line count).
@@ -56,7 +56,7 @@ promise).
 ## Out of scope
 
 - Changing what counts as a forced-but-unblocking departure, or the six-trigger escalation
-  contract it sits beside (`shared.md` § Escalation) — this brief mechanizes the existing
+  contract it sits beside (`build.md` Phase 2 / `core.md` § Feedback Loop) — this brief mechanizes the existing
   convention, it does not redesign when a worker reaches for the sidecar versus a `blocked`
   return or a retainer consult.
 - A new review leg or agent — any mechanization here rides existing gates (`/spec:review` Phase

@@ -3,6 +3,8 @@
 Phase: P2
 Depends on: none
 
+> **Superseded by v7.0.0 (2026-08-17).** `/spec:audit` and `hotspot.js` died in the v7 delete layer. The cross-spec-debt concern is real but currently unowned; reopen if a post-v7 escape names cross-spec accretion the per-spec path structurally could not see.
+
 ## Why this brief
 
 Every check in the pipeline is spec-scoped; smells that emerge *across* specs — accreted

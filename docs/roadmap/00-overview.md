@@ -13,13 +13,16 @@ fences off belongs to its owning brief.
 
 | Brief | Name |
 |-------|------|
-| 01 | claims-registry |
+| 01 | claims-registry *(superseded by v7)* |
 | 02 | design-path-model-placement |
 | 03 | fleet-provisioning |
 | 04 | review-smell-lens |
-| 05 | hotspot-audit |
-| 06 | mechanized-prose-checks |
-| 07 | suite-baseline |
+| 05 | hotspot-audit *(superseded by v7)* |
+| 06 | mechanized-prose-checks *(delivered by v7)* |
+| 07 | suite-baseline *(superseded by v7)* |
 | 08 | design-thinning |
 | 09 | promise-sweep-leg |
 | 10 | genesis-single-proposer |
+| 11 | init-thinning |
+| 12 | release-legs |
+| 13 | deviations-sidecar-mechanization |

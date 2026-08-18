@@ -2,6 +2,8 @@
 
 Phase: P1
 
+> **Superseded by v7.0.0 (2026-08-17).** Every mechanism this brief binds to — scaffold-ledger, the intake Fix column, the ~4,900-line prose corpus — was deleted; the Incident Policy (fix + test same session, guard on third recurrence, never prose) replaces claims-carrier bookkeeping wholesale. Reopen only if orphan normative prose is the named cause of a third recurrence-class escape.
+
 ## Why deferred
 
 Deliberately deferred from the 2026-08-05 planning session (specs/20260805/01–04, the

@@ -3,6 +3,8 @@
 Phase: P2
 Depends on: 06
 
+> **Superseded by v7.0.0 (2026-08-17).** The sanctioned-red baseline was retired; v7 gates must be plainly green, so this brief's mechanism is forbidden, not pending. The underlying escape class (a Decision breaking tests outside the scoped gate) reopens on its next occurrence — as a fresh design (failing-test-NAME diff vs the pre-spec base), never as a standing-red baseline.
+
 ## Why this brief
 
 A 2026-08-14 escape (ledger row on specs/20260813/10-host-capabilities.md): a Decision

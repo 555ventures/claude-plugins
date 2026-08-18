@@ -22,7 +22,7 @@ review, and direct-dispatch orchestration.
 
 ## Scope
 
-- **Prose cut** — `design.md` plus the design/genesis command files get the same ~80% cut
+- **Prose cut** — `design.md` and `genesis.md` plus the design/genesis command files get the same ~80% cut
   the core commands got: worked examples, incident narratives, and
   choreography-that-should-be-code deleted; contracts and invariants kept.
 - **Workflow replacement** — a direct Agent-dispatch equivalent for the design and genesis

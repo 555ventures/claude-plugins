@@ -52,6 +52,13 @@ review, and direct-dispatch orchestration.
 - `spec/doctrine/design.md` — the carried-verbatim corpus this brief cuts.
 - `spec/doctrine/core.md` § Incident Policy, § Model Placement — the rules the design
   family must land on.
+- Memory `research-20260817-ai-first-best-practice` (July-2026+ sweep): stale scaffolding
+  actively distorts newer models — they follow outdated instructions MORE faithfully (Corti
+  Jul 28 2026) — and the design corpus is the largest v6-era prose block still running
+  verbatim on Claude-5-generation models. Keep-signals from the same sweep: mock-first
+  ("code-based references beat prose descriptions of intent", claude.com Jul 24 2026) and
+  wf-design's planner+workers shape match the field's convergence — the thinning cuts
+  choreography, not those two structures.
 
 ## Open questions
 

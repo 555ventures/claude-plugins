@@ -1,10 +1,12 @@
 # 14 — Reviewer measurement: retained evidence, scheduled mutation replay, a plan trace
 
 Phase: P1
-Depends on: none (sequence after the ledger-truth fix spec staged 2026-08-18 — mutation
-replay writes ledger rows and needs that spec's `runId` + fail-closed verdict landed first)
+Depends on: none
 
 ## Why this brief
+
+Sequence after the ledger-truth fix spec staged 2026-08-18 — mutation replay writes ledger
+rows and needs that spec's `runId` + fail-closed verdict landed first.
 
 v7's central bet is that one executed-evidence reviewer plus deterministic legs replaces
 the panel. The 2026-08-18 Fable retainer consult (run on v7's first full pipeline pass,

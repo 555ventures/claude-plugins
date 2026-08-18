@@ -286,3 +286,11 @@ upstream bug list. -->
   finding; the durable fix is a load-tolerant deadline or a bounded predicate poll, not a
   baseline row. (specs/20260816/03-file-plan-table-scoped-parsing.md review 2026-08-17,
   runId `wf_85d3d332-882`.)
+- `[plugin]` An AC asserting that a **newly-required-but-non-blocking** verdict leg does not
+  derive `GATE_RED` is vacuous pre-implementation: `verdict.js` ignores any leg name outside
+  `REVIEW_LEGS`/`REVIEW_BLOCKING`, so an unknown-and-red row is already indistinguishable from a
+  known-and-non-blocking one and its TDD red check cannot go red. The presence half (missing row
+  → `UNVERIFIED`) is the pin that actually reddens; write the non-blocking AC as a companion and
+  log the vacuity rather than inventing a red. (specs/20260817/07-promise-sweep-leg.md
+  AC-20260817-07-12, build 2026-08-17; same shape as specs/20260815/02-at-risk-pins.md
+  AC-20260815-02-7 — second occurrence, guard on a third.)

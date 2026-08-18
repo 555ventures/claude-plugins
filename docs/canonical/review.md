@@ -12,7 +12,8 @@
   per-iteration evidence manifest (fresh mktemp file; legs re-executed each iteration) +
   reviewer return + dispositions; survivor counts come from the return file, never flags;
   `UNVERIFIED` = required leg missing, `GATE_RED` = blocking leg red; only `gate`/`smoke`/`ci`
-  block — `reconcile`/`ac-matrix`/`skip-reconcile` emit dispositionable findings; CI status
+  block — `reconcile`/`ac-matrix`/`skip-reconcile`/`at-risk`/`promise-sweep` emit
+  dispositionable findings; CI status
   flows through `ci-query.js` — red blocks pre-reviewer, unavailable
   never blocks; verdict.js exit 0 is the only door to Phase 3 close.
   (specs/20260805/02-review-evidence-manifest.md, done 2026-08-06)
@@ -47,6 +48,25 @@
   single-segment basename; the full repo-relative path always survives so a root-level file
   stays matchable. (specs/20260815/02-at-risk-pins.md, done 2026-08-16; the stem-degeneracy
   clause added by that spec's own review, AC-20260815-02-15)
+
+- The promise sweep's **deterministic half** lives in `promise-sweep.js` — run manifest-less at
+  plan lock and in every review scope (full AND fix-delta) by `review-legs.js`. It reads only
+  the spec text: it enumerates the `## Decisions` table's non-struck rows and hard-flags any row
+  (`orphan-decision`) lacking a carrier — an AC-ID declared in this same spec's Acceptance
+  Criteria, anchored full-token match — or a `[no-ac: <reason>]` sanction with a non-empty
+  reason. Foreign AC citations are not carriers and raise no finding of their own; an orphan's
+  detail lists them so a same-spec typo is visible. `promise-sweep` is required-but-non-blocking
+  in both scopes: an absent row derives `UNVERIFIED`, a red row rides the findings disposition
+  and never `GATE_RED`. The reviewer retains only the **semantic half** — verifying that a
+  carried Decision's cited AC/test actually asserts the promised behavior, executing
+  config/override/flag promises with the override set, and treating a false `[no-ac:]` as hard.
+  Behavior-section prose is deliberately not enumerated (JJ ruling 2026-08-17); the first escape
+  traced to a Behavior-only promise reopens that call. AC parsing is shared with `ac-matrix.js`
+  through `spec/scripts/lib/spec-sections.js` — one authority for the AC-ID grammar and section
+  extraction. Critical tier adds review capacity only as **named scoped legs** wired via
+  `verdict.js --require` (host rules § Review Checks), never a second general reviewer —
+  reviewer agreement is measurably not a correctness signal (core.md § Tiers).
+  (specs/20260817/07-promise-sweep-leg.md, done 2026-08-18)
 
 - The boot smoke leg certifies **both halves of a process life**: exit 0 now means "boot
   observed ready AND stopped cleanly on the declared stop signal." After readiness (and any

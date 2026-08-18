@@ -1,6 +1,6 @@
 ---
 date: 2026-08-17
-status: implementing
+status: done
 diff_base: d5fdcc63ff0e5c85c6729eb44a3956469f0ef8c2
 tier: critical           # edits verdict.js + review-legs.js — both named critical triggers in host rules § Risk Tiers
 area: review
@@ -181,7 +181,17 @@ docs/roadmap/09-promise-sweep-leg.md — waived: historical record and the found
 neither is edited by a spec they ground.
 
 This spec dogfoods its own contract: every Decisions row above cites its delivering AC or
-carries a `[no-ac:]`, because the leg it ships will parse this file at its own review.
+carries a `[no-ac:]`, because the leg it ships will parse this file at its own review. Its
+own review confirmed it: `rows=9 carried=5 sanctioned=4 orphans=0`.
+
+Build deviation (one-off, folded from the sidecar at review close 2026-08-18): the
+gate-scripts worker retargeted the `SIX_LEGS_NO_AT_RISK` fixture in tests/review/verdict.test.js
+— outside its assigned scripts-layer File Plan — because D4 makes `promise-sweep` required in
+BOTH scopes, so that fixture's fix-delta row set became byte-identical to AC-20260817-07-11's
+UNVERIFIED fixture while AC-20260815-02-8 asserted CLEAN for it. Proven mutually exclusive by
+execution, resolved by adding one green `promise-sweep` row to the shared fixture with no
+assertion touched (29/29 green after). This is the host Gotchas' colliding-test-pin class and
+A2's named remedy — attribute by execution, retarget in place — not a new class.
 
 Fragile spots for build: verdict.js's `derive()` checks presence before blocking-red, so
 every fixture manifest that expects `GATE_RED` must carry the new row (A2's two

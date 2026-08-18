@@ -16,7 +16,12 @@
 // values. This module never calls process.exit or parses argv itself — bin/autopilotd owns
 // `--hub-config`/exit-2 rendering, which keeps this surface pure and unit-testable in-process
 // (§ Test Rules mode 4). Performs zero network I/O — discovery is fs-only — so `--check`'s
-// offline guarantee holds through this call (AC-20260810-04-12).
+// offline guarantee holds through this call (AC-20260810-04-12). Every machine enrolled
+// before the 0.9.0 rewire still has a legacy-shaped overrides file on disk: LEGACY_HOST_FIELDS
+// (the old botToken/supergroupId/allowedUserIds/lanes keys) are skipped with one stderr
+// warning per call naming the migration, and `_`-prefixed keys (the config.example.json
+// `_comment` annotation convention) are skipped silently — neither is ever mistaken for a
+// lane-override project name (specs/20260817/06-overrides-legacy-keys.md D1/D2).
 //
 // Deliberately does NOT: apply any lane default beyond pollSeconds (300s); read secrets from
 // the environment (the hub credential lives in hub.json only); register anything with the
@@ -42,6 +47,13 @@ const DEFAULT_POLL_SECONDS = 300
 // keys (keyed by discovered project name) — the two namespaces are disjoint because no repo
 // basename may collide with these names (D3's basename-collision guard already refuses that).
 const HOST_OVERRIDE_FIELDS = ['specPluginRoot', 'pluginPaths', 'reposRoot']
+
+// Fields the pre-0.9.0 direct-Telegram config shape wrote at top level (specs/20260801/03
+// -lane-engine.md D3/D8) — deleted by the 0.9.0 hub rewire (specs/20260810/04) but still
+// present in every machine's overrides file from before that upgrade. A closed set: skipped
+// (never consumed, never treated as a lane-override project name) with one warning per
+// loadHubConfig call naming the migration (specs/20260817/06-overrides-legacy-keys.md D1).
+const LEGACY_HOST_FIELDS = ['botToken', 'supergroupId', 'allowedUserIds', 'lanes']
 
 function checkoutRoot() {
   return path.resolve(__dirname, '..', '..')
@@ -91,12 +103,30 @@ function loadHubConfig({ hubConfigPath = DEFAULT_HUB_CONFIG_PATH, overridesPath 
   const overrides = readOverrides(overridesPath)
   const hostOverrides = {}
   const laneOverrideCandidates = {}
+  const legacyKeysFound = []
   for (const key of Object.keys(overrides)) {
     if (HOST_OVERRIDE_FIELDS.includes(key)) {
       hostOverrides[key] = overrides[key]
       continue
     }
+    // D2: the `_comment` annotation convention (config.example.json ships one) — silently
+    // invisible, never warned about, never a lane-override candidate.
+    if (key.startsWith('_')) {
+      continue
+    }
+    // D1: retired direct-Telegram fields — collected for the single warning below, never
+    // consumed and never mistaken for a lane-override project name.
+    if (LEGACY_HOST_FIELDS.includes(key)) {
+      legacyKeysFound.push(key)
+      continue
+    }
     laneOverrideCandidates[key] = overrides[key]
+  }
+  if (legacyKeysFound.length) {
+    console.error(
+      `autopilotd: retired direct-Telegram key(s) in ${overridesPath}: ${legacyKeysFound.join(', ')} — ` +
+      `the hub-era daemon ignores them; delete them (autopilot enroll owns credentials now)`
+    )
   }
 
   const root = checkoutRoot()
@@ -128,4 +158,11 @@ function loadHubConfig({ hubConfigPath = DEFAULT_HUB_CONFIG_PATH, overridesPath 
   return { credential: hubJson, reposRoot: resolvedReposRoot, specPluginRoot, pluginPaths, lanes }
 }
 
-module.exports = { loadHubConfig, DEFAULT_HUB_CONFIG_PATH, DEFAULT_OVERRIDES_PATH, DEFAULT_POLL_SECONDS }
+module.exports = {
+  loadHubConfig,
+  DEFAULT_HUB_CONFIG_PATH,
+  DEFAULT_OVERRIDES_PATH,
+  DEFAULT_POLL_SECONDS,
+  HOST_OVERRIDE_FIELDS,
+  LEGACY_HOST_FIELDS,
+}

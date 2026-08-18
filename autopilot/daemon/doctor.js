@@ -9,7 +9,10 @@
 //   remedy?}]}. Checks, each independent so one run always shows the whole picture: hub.json
 //   present+parseable; reposRoot exists; discovery yields >=0 repos without error (a basename
 //   collision fails this line); an overrides file, if present, parses and names only discovered
-//   projects; the plugin enabled in ~/.claude/settings.json (enabledPlugins +
+//   projects — retired direct-Telegram keys and genuinely unknown keys get distinct ok:false
+//   lines (specs/20260817/06-overrides-legacy-keys.md D3, mirroring config.js's loadHubConfig
+//   walk so doctor and boot never tell different stories); the plugin enabled in
+//   ~/.claude/settings.json (enabledPlugins +
 //   extraKnownMarketplaces); Node >= the SDK's ESM floor; lock/daemon liveness; on linux,
 //   additionally every serviceStatus() line (D3). Plus one network-tolerant check: GET
 //   <hubUrl>/health with a 5s timeout, reporting reachability and clock skew against the
@@ -30,11 +33,11 @@ const path = require('path')
 
 const { discoverRepos } = require('./discover')
 const { serviceStatus } = require('./service')
+const { HOST_OVERRIDE_FIELDS, LEGACY_HOST_FIELDS } = require('./config')
 
 // spec 02 D11: the Claude Agent SDK is ESM-only, needing Node >=20.19.0 for require(ESM) to
 // work (session.js's lazy require('./sdk')) — same floor autopilotd itself asserts at boot.
 const NODE_FLOOR = { major: 20, minor: 19 }
-const HOST_OVERRIDE_FIELDS = ['specPluginRoot', 'pluginPaths', 'reposRoot']
 const NETWORK_TIMEOUT_MS = 5000
 const SKEW_WARN_MS = 60000
 
@@ -131,10 +134,26 @@ async function runDoctor({
     }
     if (overrides) {
       const discoveredNames = new Set(discovered.map((repo) => repo.name))
-      const unknown = Object.keys(overrides).filter(
-        (key) => !HOST_OVERRIDE_FIELDS.includes(key) && !discoveredNames.has(key)
+      // specs/20260817/06-overrides-legacy-keys.md D3: mirror loadHubConfig's key walk —
+      // `_`-prefixed keys never count toward either finding; retired direct-Telegram keys
+      // get their own ok:false line (delete-them remedy), distinct from and never folded
+      // into the unknown-project-key(s) line below.
+      const candidateKeys = Object.keys(overrides).filter((key) => !key.startsWith('_'))
+      const legacy = candidateKeys.filter((key) => LEGACY_HOST_FIELDS.includes(key))
+      const unknown = candidateKeys.filter(
+        (key) =>
+          !HOST_OVERRIDE_FIELDS.includes(key) &&
+          !LEGACY_HOST_FIELDS.includes(key) &&
+          !discoveredNames.has(key)
       )
-      if (unknown.length) {
+      if (legacy.length) {
+        lines.push({
+          name: 'overrides file',
+          ok: false,
+          detail: `retired direct-Telegram key(s): ${legacy.join(', ')}`,
+          remedy: `delete them from ${overridesPath} — the hub-era daemon ignores them`,
+        })
+      } else if (unknown.length) {
         lines.push({
           name: 'overrides file',
           ok: false,

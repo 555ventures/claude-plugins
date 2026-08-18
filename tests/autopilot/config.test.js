@@ -108,7 +108,79 @@ test('AC-20260810-04-9: loadHubConfig applies an overrides entry to only the nam
     'an un-overridden lane must carry no devServerCommand or one project\'s override leaked onto a sibling lane')
 })
 
-test('AC-20260810-04-9: loadHubConfig throws naming the offending key and the repos root when an overrides entry names no discovered project', () => {
+// spec: specs/20260817/06-overrides-legacy-keys.md D1/D2 — the pre-0.9.0 direct-Telegram
+// config (botToken/supergroupId/allowedUserIds/lanes) and the `_comment` annotation
+// convention (config.example.json ships one) must not be mistaken for lane-override
+// project names by loadHubConfig's overrides key walk. Observed live 2026-08-17: this
+// machine's own ~/.config/autopilot/config.json crashed boot with `unknown project
+// "botToken"` and the wrong remedy.
+test('AC-20260817-06-1: loadHubConfig skips the four retired direct-Telegram host keys (never treating them as project names), still applies a valid per-project override entry beside them, and prints exactly one stderr warning naming every retired key found', (t) => {
+  const dir = tmpdir('config-ac1-legacy')
+  const reposRoot = path.join(dir, 'repos')
+  fs.mkdirSync(reposRoot)
+  groundRepo(reposRoot, 'prax')
+  const { hubConfigPath } = writeHubJson(dir, { reposRoot })
+  const overridesPath = writeOverrides(dir, {
+    botToken: 'legacy-token',
+    supergroupId: -100123456,
+    allowedUserIds: [111, 222],
+    lanes: [{ project: 'old-shape' }],
+    prax: { pollSeconds: 60 },
+  })
+
+  const errSpy = t.mock.method(console, 'error', () => {})
+  const cfg = loadHubConfig({ hubConfigPath, overridesPath })
+
+  const prax = cfg.lanes.find((l) => l.project === 'prax')
+  assert.ok(prax,
+    `a legacy-shaped overrides file must still boot with the discovered lane set, or a valid project silently disappears when legacy keys are present; got lanes=${JSON.stringify(cfg.lanes)}`)
+  assert.strictEqual(prax.pollSeconds, 60,
+    'the valid per-project override entry sitting beside the legacy keys must still apply its pollSeconds, or a legacy-shaped config silently loses real per-project tuning')
+
+  assert.strictEqual(errSpy.mock.calls.length, 1,
+    `loadHubConfig must print exactly one stderr warning for the whole legacy-key set per invocation (D1), never one per key or silence; got ${errSpy.mock.calls.length} console.error call(s)`)
+  const warning = errSpy.mock.calls[0].arguments.join(' ')
+  for (const key of ['botToken', 'supergroupId', 'allowedUserIds', 'lanes']) {
+    assert.match(warning, new RegExp(key),
+      `the single warning must name every retired key found in the file (missing: ${key}) or an operator migrating a legacy config can't tell which keys to delete; got: ${warning}`)
+  }
+})
+
+// spec: specs/20260817/06-overrides-legacy-keys.md D2 — `_`-prefixed keys (the
+// config.example.json `_comment` annotation convention) must be silently invisible to
+// loadHubConfig: no warning (that's D1's channel, reserved for the four legacy keys) and
+// no effect on the returned config.
+test('AC-20260817-06-2: loadHubConfig ignores a `_comment` top-level key silently — no stderr warning, no error, and a return identical to the same config without the key', (t) => {
+  const dir = tmpdir('config-ac2-underscore')
+  const reposRoot = path.join(dir, 'repos')
+  fs.mkdirSync(reposRoot)
+  groundRepo(reposRoot, 'prax')
+  const { hubConfigPath } = writeHubJson(dir, { reposRoot })
+
+  const withCommentPath = writeOverrides(dir, {
+    _comment: 'this file is optional; per-project keys override the defaults below',
+    prax: { pollSeconds: 60 },
+  })
+  const errSpy = t.mock.method(console, 'error', () => {})
+  const cfgWithComment = loadHubConfig({ hubConfigPath, overridesPath: withCommentPath })
+  assert.strictEqual(errSpy.mock.calls.length, 0,
+    `a \`_comment\` key must never trigger the legacy-key stderr warning (D2 is silent, not a variant of D1's warning) or the example config itself would crash-warn on every boot; got ${errSpy.mock.calls.length} console.error call(s)`)
+
+  // Same fixture, only the overrides file differs — building the baseline from a second
+  // tmpdir made the compared lane roots structurally different absolute paths, so the
+  // equality below could never pass for ANY implementation (build-time fixture repair,
+  // 2026-08-17: orchestrator ruling on the worker's blocked return).
+  const withoutCommentPath = path.join(dir, 'overrides-baseline.json')
+  fs.writeFileSync(withoutCommentPath, JSON.stringify({ prax: { pollSeconds: 60 } }))
+  const cfgWithoutComment = loadHubConfig({ hubConfigPath, overridesPath: withoutCommentPath })
+
+  assert.strictEqual(
+    JSON.stringify(cfgWithComment.lanes),
+    JSON.stringify(cfgWithoutComment.lanes),
+    `the \`_comment\` key must have zero effect on the returned lanes — a config that only differs by an annotation key must resolve identically; got with=${JSON.stringify(cfgWithComment.lanes)} without=${JSON.stringify(cfgWithoutComment.lanes)}`)
+})
+
+test('AC-20260810-04-9 / AC-20260817-06-3 (CONTINUE TO): loadHubConfig throws naming the offending key and the repos root when an overrides entry names no discovered project, no host-override field, no `_`-prefix, and no legacy direct-Telegram field', () => {
   const dir = tmpdir('config-ac9-typo')
   const reposRoot = path.join(dir, 'repos')
   fs.mkdirSync(reposRoot)

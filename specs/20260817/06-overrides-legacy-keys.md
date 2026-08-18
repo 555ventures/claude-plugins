@@ -1,6 +1,6 @@
 ---
 date: 2026-08-17
-status: hardened
+status: implementing
 tier: standard
 area: autopilot
 design: false
@@ -9,6 +9,7 @@ depends_on: []
 depended_on_by: []
 brief: n/a
 open_markers: 0
+diff_base: 4a40b4ff88a827dc755cb2fb433d0883c20097c6
 ---
 
 # Overrides file: legacy and annotation keys must not parse as project names
@@ -109,6 +110,12 @@ two classes whose meaning is knowable: the schema's own retired keys and the ann
 convention the plugin itself ships. Rejected: silently ignoring ALL unknown non-project
 keys (defeats D7's typo net); auto-migrating the legacy file (writes to user config the
 user didn't ask for).
+
+**Build ruling (2026-08-17):** AC-20260817-06-2's authored baseline built a second
+tmpdir/reposRoot, making the compared lane roots structurally different absolute paths —
+unsatisfiable for any implementation. The implementation worker blocked rather than edit
+the test; the orchestrator repaired the fixture to a same-fixture comparison (one repo
+root, only the overrides file differs), assertions unweakened.
 
 ## Canonical Delta
 

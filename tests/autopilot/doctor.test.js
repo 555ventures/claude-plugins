@@ -65,6 +65,16 @@ function allText(line) {
   return [line && line.name, line && line.detail, line && line.remedy].filter(Boolean).join(' ')
 }
 
+// Writes the daemon's overrides file (~/.config/autopilot/config.json) into a makeHome()
+// home directory — the same path doctor.js's overrides check reads (specs/20260817/06
+// -overrides-legacy-keys.md D3).
+function writeOverrides(home, obj) {
+  const overridesPath = path.join(home, '.config', 'autopilot', 'config.json')
+  fs.mkdirSync(path.dirname(overridesPath), { recursive: true })
+  fs.writeFileSync(overridesPath, JSON.stringify(obj))
+  return overridesPath
+}
+
 test('AC-20260810-05-5: runDoctor on a box with no hub.json fails that line naming "autopilot enroll" as the remedy, still runs every other check, and reports ok:false', async () => {
   const { home } = makeHome({ hubJson: false })
   const result = await runDoctor({
@@ -139,4 +149,50 @@ test('AC-20260810-05-7: runDoctor fails the plugin-enabled line naming the boots
     `the plugin-enabled line's remedy must name the bootstrap plugin-enable step or an operator has no fix path; got ${JSON.stringify(pluginLine)}`)
   assert.ok(result.lines.length >= 3,
     `doctor must keep running every other check after the plugin-enabled failure, never short-circuit; got ${result.lines.length} line(s): ${JSON.stringify(result.lines)}`)
+})
+
+// spec: specs/20260817/06-overrides-legacy-keys.md D3 — doctor's overrides check must tell
+// the same story as boot's loadHubConfig (D1): a legacy direct-Telegram config.json must
+// read as "retired keys, delete them", never as the typo-guard's "unknown project key(s)"
+// line, or doctor's green/ok:false state contradicts what actually happens at boot.
+test('AC-20260817-06-4: runDoctor reports an ok:false overrides line naming the retired direct-Telegram key(s) with a delete-them remedy when config.json carries botToken, and never emits the unknown-project-key(s) line for it', async () => {
+  const { home } = makeHome()
+  const overridesPath = writeOverrides(home, { botToken: 'legacy-token' })
+  const result = await runDoctor({
+    fsImpl: fs, execImpl: noopExec, fetchImpl: okFetch(), platform: 'darwin', homedir: home,
+  })
+  assert.strictEqual(result.ok, false,
+    `doctor must report ok:false when config.json carries a retired direct-Telegram key, or an operator is never told to delete it; got ${JSON.stringify(result)}`)
+  const overridesLine = result.lines.find((l) => l.name === 'overrides file')
+  assert.ok(overridesLine,
+    `doctor must include an "overrides file" line; got lines=${JSON.stringify(result.lines)}`)
+  assert.strictEqual(overridesLine.ok, false,
+    `the overrides file line must be ok:false when a retired key is present; got ${JSON.stringify(overridesLine)}`)
+  assert.match(overridesLine.detail || '',
+    /retired direct-Telegram key\(s\): botToken/,
+    `the overrides file line's detail must read "retired direct-Telegram key(s): botToken" (D3) or an operator can't tell a legacy key was the cause; got ${JSON.stringify(overridesLine)}`)
+  assert.match(overridesLine.remedy || '',
+    new RegExp(`delete them from .*${overridesPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
+    `the overrides file line's remedy must read "delete them from ${overridesPath} — the hub-era daemon ignores them" (D3) or an operator has no fix path; got ${JSON.stringify(overridesLine)}`)
+  assert.doesNotMatch(overridesLine.detail || '', /unknown project key\(s\)/,
+    `a retired direct-Telegram key must never be reported via the "unknown project key(s)" line — D3 requires a distinct line, or doctor's message points an operator at the wrong remedy (re-discover instead of delete); got ${JSON.stringify(overridesLine)}`)
+})
+
+test('AC-20260817-06-5 (CONTINUE TO): runDoctor reports the "unknown project key(s)" line with the discover remedy when config.json carries a genuinely unknown key', async () => {
+  const { home } = makeHome()
+  writeOverrides(home, { totallyUnknownKey: 'oops' })
+  const result = await runDoctor({
+    fsImpl: fs, execImpl: noopExec, fetchImpl: okFetch(), platform: 'darwin', homedir: home,
+  })
+  assert.strictEqual(result.ok, false,
+    `doctor must report ok:false when config.json carries a genuinely unknown key, or a real typo goes unreported; got ${JSON.stringify(result)}`)
+  const overridesLine = result.lines.find((l) => l.name === 'overrides file')
+  assert.ok(overridesLine,
+    `doctor must include an "overrides file" line; got lines=${JSON.stringify(result.lines)}`)
+  assert.strictEqual(overridesLine.ok, false,
+    `the overrides file line must be ok:false when an unknown key is present; got ${JSON.stringify(overridesLine)}`)
+  assert.match(overridesLine.detail || '', /unknown project key\(s\): totallyUnknownKey/,
+    `a genuinely unknown key must still produce the "unknown project key(s)" line (SHALL CONTINUE TO) or a real typo's diagnosis regresses; got ${JSON.stringify(overridesLine)}`)
+  assert.match(overridesLine.remedy || '', /autopilot discover/,
+    `the unknown-key line's remedy must still name "autopilot discover" (SHALL CONTINUE TO) or an operator with a real typo loses their fix path; got ${JSON.stringify(overridesLine)}`)
 })

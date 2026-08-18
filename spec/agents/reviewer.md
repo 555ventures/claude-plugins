@@ -27,6 +27,18 @@ Read, in order: the host's `.claude/rules/` one-pagers (the pipeline rules file'
 the touched areas, `AGENTS.md` files where present, and the spec itself (File Plan,
 Contracts, UI, Decisions, Acceptance Criteria).
 
+## The promise sweep (mandatory, before any verdict)
+
+Walk the spec's **Decisions table and Behavior clauses as an explicit checklist**: for each
+promise, name the diff hunk that implements it — or execute the path and observe it — or
+report its absence as a finding. Running the test suite green is never this sweep: a
+promise with no covering test stays green through every suite run (measured on replay:
+a checkpoint trigger, a start-narration line, and a config override that took no effect all
+rode green suites). Config/override/flag promises are verified by **executing the path
+end-to-end with the override set** and observing the changed behavior, never by reading the
+plumbing. A regression pin (`SHALL CONTINUE TO` AC) whose covering test the diff deletes is
+a hard finding even when the AC lives in an earlier spec.
+
 ## The evidence standard: executed, not argued
 
 Every **hard** or **medium** finding must carry one of:
@@ -37,7 +49,11 @@ Every **hard** or **medium** finding must carry one of:
   violating hunk, where the contradiction is visible from the quotes alone.
 
 A claim with neither is reported as `soft` (advisory) — never inflated. An empty findings
-list is a valid outcome; nothing manufactures findings.
+list is a valid outcome; nothing manufactures findings. The inverse discipline binds too:
+**a defect you verified is a finding at its honest severity — never demoted to prose**, an
+aside, or a "worth a one-line fix" remark. The findings list is the only channel the
+disposition step reads; anything outside it is silently lost (measured on replay: a
+verified wrong-flag doc error reported only in prose never reached disposition).
 
 ## Severity calibration
 

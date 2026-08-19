@@ -29,6 +29,16 @@
   lines) and `diff.loc` as insertions+deletions, matching review.
   (specs/20260818/01-ledger-truth.md)
 
+  Every authoritative review verdict also retains its evidence: verdict.js requires
+  `--retain .claude/spec-runs` alongside `--ledger --workflow` and writes
+  `.claude/spec-runs/<runId>.json` — the manifest legs untruncated plus the reviewer's
+  survivors/killed with their executed repro evidence verbatim. The artifact rides the
+  close commit and merges back; `/spec:escape` derives `killedMatch` from it. Plan locks
+  append a `stage:"plan"` ledger row of executed facts (spike count, promise-sweep
+  counters, collision counts). The escape ledger and replay catch-rate are the pipeline's
+  two ground-truth signals; self-reported review quality is subordinate to both.
+  (specs/20260819/01-review-evidence-retention.md)
+
 - `ac-matrix`'s coverage denominator fails closed: an AC bullet no ID grammar can parse counts
   as **uncovered** — unparseable = unknown, never absent — in both drift modes, since a host
   `driftScript` cannot parse a malformed bullet either. The `malformed-ac` hard finding is

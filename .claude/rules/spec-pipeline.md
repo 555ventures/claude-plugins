@@ -293,4 +293,12 @@ upstream bug list. -->
   → `UNVERIFIED`) is the pin that actually reddens; write the non-blocking AC as a companion and
   log the vacuity rather than inventing a red. (specs/20260817/07-promise-sweep-leg.md
   AC-20260817-07-12, build 2026-08-17; same shape as specs/20260815/02-at-risk-pins.md
-  AC-20260815-02-7 — second occurrence, guard on a third.)
+  AC-20260815-02-7.)
+  Generalized on the third occurrence: **any AC asserting that the system REJECTS something is
+  vacuous as a red pin when a pre-existing generic fallback already rejects it** — unknown-leg
+  classification and unrecognized-flag arg parsing are two mechanisms of the same shape. Before
+  writing a rejection AC, execute it against the pre-image; if it already passes, keep it as the
+  correct post-implementation assertion and log the vacuity in the deviations sidecar, never
+  redden it artificially. (specs/20260819/01-review-evidence-retention.md AC-20260819-01-5,
+  build 2026-08-19 — arg-parse fallback; third occurrence, a deterministic guard is the next
+  escalation if a fourth lands.)

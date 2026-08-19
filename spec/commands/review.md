@@ -122,13 +122,16 @@ records dispositioned findings, never ignored ones. Exit 0 gates Phase 3.
    `--no-verify`.
 5. **Report** (render via report-render, print verbatim): `outcome` ✅ `CLEAN — merged` /
    🚫 `{N} hard findings — build must fix`; `bullets`: one plain line per survivor;
-   `warns`: waived findings; `next`: on CLEAN `{kind:'none', reason:'merge-back runs
-   next'}`, on non-CLEAN `/spec:build {spec path}`.
+   `warns`: waived findings, plus (CLEAN only) `🧪 reviewer replay due — run /spec:replay`
+   when `node "$(spec-paths replay)" --due` exits 0 — advisory, never blocking a CLEAN;
+   `next`: on CLEAN `{kind:'none', reason:'merge-back runs next'}`, on non-CLEAN
+   `/spec:build {spec path}`.
 
    ```report
    ✅ **CLEAN — merged**
    - {surviving finding: what breaks, where}
    ⚠️ waived: {finding — one-phrase reason}
+   ⚠️ 🧪 reviewer replay due — run /spec:replay
    Next: nothing needs you — merge-back runs next
    ```
 

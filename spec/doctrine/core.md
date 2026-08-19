@@ -129,6 +129,12 @@ Self-reported review quality (a reviewer's own confidence, a clean-looking findi
 explicitly subordinate to both: it is evidence of nothing until one of the two ground-truth
 signals corroborates it. This is what makes a CLEAN verdict falsifiable rather than argued.
 
+**Replay cadence** is `replay.js --due` policy, never a session's memory: due every 5th
+review and at minimum once per major pipeline version, sampling critical-tier targets first
+when one is available in the window. A sustained replay miss-rate is the evidence that
+reopens the second-reviewer question core § Tiers currently rules against — not a hunch, not
+a single bad run.
+
 ## Incident Policy
 
 An incident (a pipeline defect, an escape, a wrong assumption that cost a session) is fixed

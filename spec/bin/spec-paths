@@ -38,9 +38,11 @@ case "${1:-root}" in
   collision-closure) echo "$ROOT/scripts/collision-closure.js" ;;
   ci-query)       echo "$ROOT/scripts/ci-query.js" ;;
   ci-gate-parity) echo "$ROOT/scripts/ci-gate-parity.js" ;;
+  replay)         echo "$ROOT/scripts/replay.js" ;;
   shared)         echo "$ROOT/doctrine/core.md" ;;
   shared-design)  echo "$ROOT/doctrine/design.md" ;;
   shared-genesis) echo "$ROOT/doctrine/genesis.md" ;;
+  replay-corpus)  echo "$ROOT/doctrine/replay-corpus.md" ;;
   shared-for)
     # Print the shared-invariants CONTENT scoped to one command — only the `## ` sections that
     # command consumes, so a session never pays for doctrine it cannot act on. Sections are
@@ -66,6 +68,7 @@ case "${1:-root}" in
       status)  SECTIONS="Host Grounding|State Machine|Question Style|Console Output Style" ;;
       escape)  SECTIONS="Host Grounding|Feedback Loop|Incident Policy|Question Style|Console Output Style" ;;
       doctor)  SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Runtime Verification|Feedback Loop|Tiers|State Machine|Question Style|Console Output Style" ;;
+      replay)  SECTIONS="Host Grounding|Tiers|Model Placement|Decisions|Question Style|Console Output Style|Feedback Loop" ;;
       *) cat "$CORE" "$DESIGN"; exit 0 ;;
     esac
     echo "<!-- shared invariants scoped to /spec:${CMD} — full doctrine: $CORE + $DESIGN -->"
@@ -91,7 +94,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-design|wf-enforce|wf-panel|wf-research|dc-extract|design-atlas|design-driver|skeletons-check|fidelity-check|components-check|advisory-append|merge-back|smoke|manifest-check|env-preflight|citations-check|review-legs|report-render|spec-status|scope-reconcile|verdict|ac-matrix|promise-sweep|collision-closure|ci-query|ci-gate-parity|shared|shared-design|shared-for <command>|shared-genesis|template|templates|feedback-template|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-design|wf-enforce|wf-panel|wf-research|dc-extract|design-atlas|design-driver|skeletons-check|fidelity-check|components-check|advisory-append|merge-back|smoke|manifest-check|env-preflight|citations-check|review-legs|report-render|spec-status|scope-reconcile|verdict|ac-matrix|promise-sweep|collision-closure|ci-query|ci-gate-parity|replay|shared|shared-design|shared-for <command>|shared-genesis|replay-corpus|template|templates|feedback-template|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

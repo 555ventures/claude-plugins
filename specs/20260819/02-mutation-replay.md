@@ -1,6 +1,6 @@
 ---
 date: 2026-08-19
-status: hardened
+status: implementing
 tier: standard
 area: review
 design: false
@@ -8,6 +8,7 @@ breaking: false
 depends_on: [specs/20260819/01-review-evidence-retention.md]
 depended_on_by: []
 open_markers: 0
+diff_base: fe096c335ee22bd4dfffa0d7ed91bedb74fd7443
 brief: 14
 ---
 

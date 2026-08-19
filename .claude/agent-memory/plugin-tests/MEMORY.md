@@ -3,3 +3,4 @@
 - [Doctrine regex pins and line-wrap](doctrine-regex-linewrap.md) — use \s+ not a literal space between words in multi-word doctrine regex pins; markdown hard-wrap can split the phrase across lines in only one of several files.
 - [Stale dispatch premise from a concurrent session](stale-dispatch-premise-concurrent-session.md) — re-derive current repo state (git log, live grep) before authoring a red pin from a dispatch prompt's incident narrative; another session can land the fix mid-task.
 - [scope-reconcile degenerate stems](scope-reconcile-degenerate-stems.md) — gitRepo() pre-seeds a committed root .gitignore; mutation-proof one AC via cp-mutant + test-name-pattern + restore, never a stray scratch file.
+- [replay.js: cwd not --root](replay-js-cwd-not-root.md) — spec 20260819/02's Decisions give exhaustive flag lists with no --root; replay.test.js uses runNode(..., {cwd: dir}) + explicit --dir, never --root.

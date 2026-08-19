@@ -22,12 +22,18 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // every other bundled script it needs a spec-paths key, or plan.md's Lock checklist invocation
 // and review-legs.js's own resolution find nothing.
 
+// AC-20260819-02-10: specs/20260819/02-mutation-replay.md D14 adds spec/scripts/replay.js and
+// spec/doctrine/replay-corpus.md to the bundle — like every other bundled script/doctrine file
+// they need spec-paths keys (`replay`, `replay-corpus`), or /spec:replay resolves nothing. This
+// is the third recurrence of the known spec-paths additive-collision class (JJ-20260814-01):
+// the key list below is updated in place, never a parallel exhaustive pin.
+
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-design', 'wf-enforce',
     'wf-panel', 'wf-research', 'dc-extract', 'design-atlas', 'skeletons-check', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'scope-reconcile', 'verdict', 'ci-query', 'review-legs',
-    'promise-sweep', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
+    'promise-sweep', 'replay', 'replay-corpus', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }
@@ -57,7 +63,7 @@ test('shared-for: every mapped section name still exists as a core.md or design.
 // coverage stays green across the marker landing — the regression pin the AC calls for.
 test('shared-for: scoped output carries its sections and is smaller than the full doc', () => {
   const full = run('shared-for', 'no-such-command')
-  for (const cmd of ['plan', 'design', 'build', 'review', 'release', 'enforce', 'atlas', 'sketch', 'escape', 'doctor']) {
+  for (const cmd of ['plan', 'design', 'build', 'review', 'release', 'enforce', 'atlas', 'sketch', 'escape', 'doctor', 'replay']) {
     const out = run('shared-for', cmd)
     assert.ok(out.length < full.length, cmd + ' output should be a strict subset')
     assert.match(out, /## Host Grounding/, cmd + ' must keep Host Grounding')
@@ -89,4 +95,29 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
     'doctor must not pay for design doctrine — check 8 only verifies design files exist')
   assert.match(run('shared-for', 'doctor'), /## Grounding Drift/)
   assert.match(run('shared-for', 'doctor'), /## Rule Enforcement/)
+  // D14: replay's section list — Feedback Loop is where the cadence policy (D12) lives, so the
+  // command must be served it or /spec:replay's own doctrine reads nothing about its cadence.
+  assert.match(run('shared-for', 'replay'), /## Tiers/)
+  assert.match(run('shared-for', 'replay'), /## Model Placement/)
+  assert.match(run('shared-for', 'replay'), /## Decisions/)
+  assert.match(run('shared-for', 'replay'), /## Question Style/)
+  assert.match(run('shared-for', 'replay'), /## Console Output Style/)
+  assert.match(run('shared-for', 'replay'), /## Feedback Loop/,
+    'replay reads the cadence policy (D12) from Feedback Loop — without this section the command has no ' +
+    'doctrine source for "every 5th review" at all')
+})
+
+test('AC-20260819-02-10: spec-paths replay and spec-paths replay-corpus resolve to the D14 script and corpus paths', () => {
+  const fs = require('node:fs')
+  const replayPath = run('replay').trim()
+  assert.strictEqual(replayPath, path.join(SPEC, 'scripts/replay.js'),
+    'D14: `spec-paths replay` must resolve to spec/scripts/replay.js — a wrong or missing key breaks every ' +
+    '/spec:replay invocation silently (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently")')
+  assert.ok(fs.existsSync(replayPath), 'the resolved replay.js path must actually exist on disk: ' + replayPath)
+
+  const corpusPath = run('replay-corpus').trim()
+  assert.strictEqual(corpusPath, path.join(SPEC, 'doctrine/replay-corpus.md'),
+    'D14: `spec-paths replay-corpus` must resolve to spec/doctrine/replay-corpus.md — the corpus is served ' +
+    'to /spec:replay through this key, and a wrong key means the command can never find its own corpus')
+  assert.ok(fs.existsSync(corpusPath), 'the resolved replay-corpus.md path must actually exist on disk: ' + corpusPath)
 })

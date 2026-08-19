@@ -2,3 +2,5 @@
 
 - [replay.js mode-flag dispatch](replay-js-mode-flag-dispatch.md) — one script, several mutually-exclusive `--mode` flags via a lookup object; root = process.cwd(), no --root flag, even for git-shelling modes
 - [Parallel batch corpus landing](gate-scripts-parallel-batch-corpus-landing.md) — a cross-batch AC (e.g. needing a doctrine-authored corpus file) can go green from a sibling worker landing concurrently; check git status before calling `blocked`
+- [Reviewer workflow-return schema](reviewer-workflow-return-schema.md) — raw wf.verdict is only "CLEAN"|"REVIEWER_FAILED" (ran-ok, not findings-count); don't confuse with verdict.js's derived FINDINGS/HARD_FINDINGS word
+- [info/exclude is not per-worktree](info-exclude-not-per-worktree.md) — it resolves to the MAIN repo's .git/info/exclude, not the linked worktree's; use `rev-parse --git-dir` for any marker that must die with the worktree

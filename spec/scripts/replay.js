@@ -3,7 +3,7 @@
 // replay.js --due
 //         | --select
 //         | --setup --commit <sha> --dir <path>
-//         | --apply --dir <path> --patch <file> --class <id>
+//         | --apply --dir <path> --patch <file> --class <id> [--subject <text>]
 //         | --score --workflow <file> --file <path> --line N
 //         | --record --spec <path> --review-run-id <id> --class <id> --file <path>
 //                     --legs green|red:<leg> --outcome caught|missed|leg-caught
@@ -23,11 +23,37 @@
 // (D6) — the orchestrating session runs legs itself and passes the verdict in via --record
 // --legs.
 //
+// Incident (2026-08-19, independent review of specs/20260819/02-mutation-replay.md's own build):
+// four defects let the harness leak its own presence into the material the blind reviewer reads.
+// (1) --setup's untracked marker was swept into --apply's `git add -A`, so the reconcile leg
+// flagged it out-of-plan on every run and no run could ever score `caught`/`missed`. An initial
+// fix wrote the marker into the worktree's working tree and tried to exclude it via `git rev-parse
+// --git-path info/exclude` — but info/exclude is NOT per-worktree: it resolves into the shared
+// common git dir (the MAIN repo's `.git/info/exclude`), so every run permanently appended a
+// duplicate line to the maintainer's real local git config and it survived teardown. Fixed for
+// real by writing the marker into the worktree's own private git dir (`git -C <dir> rev-parse
+// --git-dir`, which for a linked worktree resolves under `.git/worktrees/<name>` and is deleted by
+// `git worktree remove`) instead of the working tree at all — this makes the original marker-leak
+// defect structurally impossible rather than merely excluded: `git add -A` cannot sweep a file
+// that was never in the working tree, and `git status` cannot show it.
+// (2) --apply's commit subject named the harness and the defect class, readable via reviewer.md's
+// own sanctioned `git log` — fixed with a --subject flag, structurally rejecting a `replay:`-style
+// subject or any value containing the class id. (3) --select handed the reviewer a ~3-line needle-only
+// diff (worktree stood up at the CLOSE commit) instead of review.md Phase 0's real base-to-HEAD
+// diff — fixed by additionally resolving the close commit's PARENT and that revision's own
+// diff_base/build_base, for the caller to stand the worktree up at. (4) --score classified a
+// crashed or malformed reviewer return as `missed`, permanently deflating the catch rate with
+// evidence that was never produced — fixed by requiring verdict:"CLEAN" plus a survivors array
+// before scoring anything. What this harness must never do, going forward: sign its own work into
+// the tree under review — no marker, message, or diff shape may tell the reviewer it is being
+// tested.
+//
 // What this deliberately does NOT do: derive review-legs verdicts, touch the main working tree
 // (--setup/--apply/--teardown only ever act on a --dir the caller supplies; --setup refuses one
-// that resolves inside the repo root, and --teardown refuses one carrying no .replay-worktree
-// marker — the marker guard means teardown can only ever delete a directory THIS harness
-// created), or retry/poll anything.
+// that resolves inside the repo root, and --teardown refuses one whose private git dir carries no
+// replay-worktree marker — the marker guard means teardown can only ever delete a directory THIS
+// harness created), write anything into a worktree's working tree (the marker lives in the
+// worktree's private git dir, never in the tree under review), or retry/poll anything.
 //
 // Root resolution: every ledger/git-reading mode (--select/--setup/--teardown use git; --due/
 // --record/--stats read the ledger) resolves against `process.cwd()` — there is no --root flag,
@@ -36,10 +62,14 @@
 //
 // Exit codes: 0 = mode succeeded (--due: due; --select: printed a selection; --score: printed a
 // score) · 1 = --due not due, or --select found no eligible CLEAN review row in the window ·
-// 2 = usage error / missing required flag / unreadable or unparseable input · 3 = safety
-// refusal (--setup --dir resolves inside the repo root; --teardown --dir carries no
-// .replay-worktree marker) · 4 = a git operation (worktree add/remove, apply, commit, log)
-// failed.
+// 2 = usage error / missing required flag / unreadable or unparseable input / --apply --subject
+// names the harness, the defect class, or the mutation class value / --score --workflow is not a
+// CLEAN verdict with a survivors array · 3 = safety refusal (--setup --dir resolves inside the
+// repo root; --teardown --dir does not exist, is not a linked worktree, or its private git dir
+// carries no replay-worktree marker) · 4 = a git operation (worktree add/remove, apply, commit,
+// log, git-dir resolution) failed, --setup's --dir resolves to a git-dir with no `worktrees` path
+// segment (not a linked worktree), or --select's target spec carries neither build_base nor
+// diff_base at the close commit's parent.
 
 const fs = require('fs')
 const path = require('path')
@@ -49,7 +79,8 @@ const { readLedgerRows } = require('./lib/observation')
 
 function usage() {
   console.error('usage: replay.js --due | --select | --setup --commit <sha> --dir <path> | ' +
-    '--apply --dir <path> --patch <file> --class <id> | --score --workflow <file> --file <path> --line N | ' +
+    '--apply --dir <path> --patch <file> --class <id> [--subject <text>] | ' +
+    '--score --workflow <file> --file <path> --line N | ' +
     '--record --spec <path> --review-run-id <id> --class <id> --file <path> --legs green|red:<leg> ' +
     '--outcome caught|missed|leg-caught [--patch <file>] [--workflow <file>] [--tokens N] | --stats | ' +
     '--teardown --dir <path>')
@@ -62,7 +93,7 @@ const MODE_FLAGS = {
 
 let mode = null
 let commit = null, dir = null, patch = null, cls = null, workflowPath = null, file = null, lineArg = null
-let specArg = null, reviewRunId = null, legs = null, outcome = null, tokensArg = null
+let specArg = null, reviewRunId = null, legs = null, outcome = null, tokensArg = null, subjectArg = null
 
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
@@ -83,6 +114,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--legs') legs = argv[++i]
   else if (a === '--outcome') outcome = argv[++i]
   else if (a === '--tokens') tokensArg = argv[++i]
+  else if (a === '--subject') subjectArg = argv[++i]
   else { usage(); process.exit(2) }
 }
 if (!mode) { usage(); process.exit(2) }
@@ -103,6 +135,21 @@ function cmdDue() {
   }
   console.log(`not due reviewsSince=${reviewsSince}`)
   process.exit(1)
+}
+
+// ---- frontmatter: minimal YAML key: value scan between --- fences, matching spec-status.js's ----
+// ---- own parser — no YAML dependency, this repo never needs nested/list frontmatter values. ----
+
+function frontmatter(text) {
+  const m = text.match(/^---\n([\s\S]*?)\n---/)
+  if (!m) return null
+  const fm = {}
+  for (const line of m[1].split('\n')) {
+    const kv = line.match(/^([A-Za-z_]+):\s*(.*)$/)
+    if (!kv) continue
+    fm[kv[1]] = kv[2].replace(/\s*#.*$/, '').trim()
+  }
+  return fm
 }
 
 // ---- --select (D3): among CLEAN review rows with a runId in the same window as --due, prefer --
@@ -144,12 +191,40 @@ function cmdSelect() {
       'and was actually committed')
     process.exit(4)
   }
-  console.log(`spec=${specPath} reviewRunId=${best.r.runId} commit=${commitSha}`)
+  // F3 (2026-08-19): the worktree must stand up at the CLOSE commit's PARENT, on the spec's
+  // pre-review base — not the close commit itself, which reads status: done and would leak
+  // "already reviewed" into the diff the blind reviewer is handed.
+  let parent
+  try {
+    parent = execFileSync('git', ['rev-parse', `${commitSha}^`], { cwd: root, encoding: 'utf8' }).trim()
+  } catch (e) {
+    console.error(`replay.js: git rev-parse ${commitSha}^ failed in ${root} — confirm ${commitSha} has a ` +
+      `parent commit: ${e.message}`)
+    process.exit(4)
+  }
+  let specAtParent
+  try {
+    specAtParent = execFileSync('git', ['show', `${parent}:${specPath}`], { cwd: root, encoding: 'utf8' })
+  } catch (e) {
+    console.error(`replay.js: git show ${parent}:${specPath} failed in ${root} — confirm the spec existed ` +
+      `at the close commit's parent: ${e.message}`)
+    process.exit(4)
+  }
+  const fm = frontmatter(specAtParent) || {}
+  const diffBase = (fm.build_base && fm.build_base.trim()) ? fm.build_base.trim() :
+    ((fm.diff_base && fm.diff_base.trim()) ? fm.diff_base.trim() : null)
+  if (!diffBase) {
+    console.error(`replay.js: ${specPath} at ${parent} carries neither build_base nor diff_base in its ` +
+      'frontmatter — confirm the spec was planned with a recorded base commit')
+    process.exit(4)
+  }
+  console.log(`spec=${specPath} reviewRunId=${best.r.runId} commit=${commitSha} parent=${parent} diffBase=${diffBase}`)
   process.exit(0)
 }
 
 // ---- --setup (D4): refuse a --dir that resolves inside the repo root (exit 3, creates ---------
-// ---- nothing); otherwise `git worktree add --detach` and drop the .replay-worktree marker. ----
+// ---- nothing); otherwise `git worktree add --detach` and drop a replay-worktree marker into ----
+// ---- the new worktree's own private git dir — never into its working tree. -------------------
 
 function cmdSetup() {
   if (!commit || !dir) { usage(); process.exit(2) }
@@ -169,7 +244,33 @@ function cmdSetup() {
       `confirm the commit exists (git -C ${root} rev-parse ${commit}) and the --dir's parent is writable: ${e.message}`)
     process.exit(4)
   }
-  fs.writeFileSync(path.join(resolvedDir, '.replay-worktree'), '')
+  // F1 (2026-08-19, corrected): the marker must never touch the worktree's WORKING tree — write
+  // it into the worktree's own private git dir instead, which `git worktree remove` deletes for
+  // free. `git -C <dir> rev-parse --git-dir` for a linked worktree resolves under
+  // .git/worktrees/<name> in the shared common git dir; info/exclude does NOT have this property
+  // (it resolves into the MAIN repo's .git/info/exclude) and must never be used for this again.
+  let gitDirAbs
+  try {
+    const gitDirRaw = execFileSync('git', ['rev-parse', '--git-dir'], { cwd: resolvedDir, encoding: 'utf8' }).trim()
+    gitDirAbs = path.isAbsolute(gitDirRaw) ? gitDirRaw : path.resolve(resolvedDir, gitDirRaw)
+  } catch (e) {
+    console.error(`replay.js: git rev-parse --git-dir failed in ${resolvedDir} right after worktree add — the ` +
+      `worktree is registered but unusable; remove it with git -C ${root} worktree remove --force ${resolvedDir}: ${e.message}`)
+    process.exit(4)
+  }
+  if (!gitDirAbs.split(path.sep).includes('worktrees')) {
+    console.error(`replay.js: resolved git-dir ${gitDirAbs} for ${resolvedDir} carries no 'worktrees' path ` +
+      'segment — this is not a linked worktree, so no private git dir exists to hold the marker; remove it ' +
+      `with git -C ${root} worktree remove --force ${resolvedDir}`)
+    process.exit(4)
+  }
+  try {
+    fs.writeFileSync(path.join(gitDirAbs, 'replay-worktree'), '')
+  } catch (e) {
+    console.error(`replay.js: failed to write the replay-worktree marker in ${gitDirAbs} — the worktree is ` +
+      `registered but unusable; remove it with git -C ${root} worktree remove --force ${resolvedDir}: ${e.message}`)
+    process.exit(4)
+  }
   console.log(`setup dir=${resolvedDir} commit=${commit}`)
   process.exit(0)
 }
@@ -179,6 +280,23 @@ function cmdSetup() {
 
 function cmdApply() {
   if (!dir || !patch || !cls) { usage(); process.exit(2) }
+  // F2 (2026-08-19): the commit subject must never let a reviewer's sanctioned `git log` reveal
+  // this is a test, or which defect class to hunt — reject structurally, not by convention. The
+  // rejected set is deliberately narrow: the --class value (which names the defect to hunt) and a
+  // `replay:`-style subject (the harness announcing itself). A subject derived from the target
+  // spec's own build commit is indistinguishable from the real thing BECAUSE it is the real thing
+  // — even when that spec's title happens to contain 'replay' or 'mutation'. An earlier draft
+  // rejected those words anywhere in the subject and thereby refused exactly the derived subject
+  // replay.md mandates (this spec's own build subject is 'build(20260819/02): scheduled mutation
+  // replay harness'); vocabulary is not a leak, provenance is.
+  const subject = subjectArg === null ? 'build: follow-up' : subjectArg
+  if (/^\s*replay\b/i.test(subject) || subject.includes(cls)) {
+    console.error(`replay.js: --subject '${subject}' announces the harness or names the --class ` +
+      `value '${cls}' — the commit message must be indistinguishable from a normal commit; pass a ` +
+      'build-commit-shaped --subject that neither starts with "replay" nor contains the class id, ' +
+      'or omit it to use the default')
+    process.exit(2)
+  }
   const patchAbs = path.resolve(patch)
   try {
     execFileSync('git', ['apply', patchAbs], { cwd: dir, stdio: 'pipe' })
@@ -189,7 +307,7 @@ function cmdApply() {
   }
   try {
     execFileSync('git', ['add', '-A'], { cwd: dir, stdio: 'pipe' })
-    execFileSync('git', ['commit', '-q', '-m', `replay: ${cls}`], { cwd: dir, stdio: 'pipe' })
+    execFileSync('git', ['commit', '-q', '-m', subject], { cwd: dir, stdio: 'pipe' })
   } catch (e) {
     console.error(`replay.js: git commit failed in ${dir} after applying the mutation — inspect with ` +
       `git -C ${dir} status: ${e.message}`)
@@ -217,7 +335,15 @@ function cmdScore() {
       `return must be written to this path as JSON before scoring: ${e.message}`)
     process.exit(2)
   }
-  const survivors = Array.isArray(wf.survivors) ? wf.survivors : []
+  // F4 (2026-08-19): a crashed or malformed reviewer return must never be scored as `missed` —
+  // that converts "the reviewer never ran" into permanent, indistinguishable-from-real evidence.
+  if (wf.verdict !== 'CLEAN' || !Array.isArray(wf.survivors)) {
+    console.error(`replay.js: --workflow ${workflowPath} has verdict=${JSON.stringify(wf.verdict)} ` +
+      `survivors=${Array.isArray(wf.survivors) ? 'array' : typeof wf.survivors} — a non-CLEAN or malformed ` +
+      'reviewer return must never be scored; re-dispatch the reviewer and retry --score')
+    process.exit(2)
+  }
+  const survivors = wf.survivors
   const hit = survivors.some(f => f && f.file === file && Number.isFinite(Number(f.line)) &&
     Math.abs(Number(f.line) - targetLine) <= 5)
   if (hit) { console.log('caught'); process.exit(0) }
@@ -307,15 +433,37 @@ function cmdStats() {
   process.exit(0)
 }
 
-// ---- --teardown (D4): refuse a --dir with no .replay-worktree marker (exit 3, deletes ---------
-// ---- nothing); otherwise `git worktree remove --force` so git's own registry is pruned too. ---
+// ---- --teardown (D4): refuse a --dir whose private git dir carries no replay-worktree marker ---
+// ---- (exit 3, deletes nothing); otherwise `git worktree remove --force` so git's own registry ---
+// ---- is pruned too, taking the marker with it. --------------------------------------------------
 
 function cmdTeardown() {
   if (!dir) { usage(); process.exit(2) }
   const resolvedDir = path.resolve(dir)
-  const marker = path.join(resolvedDir, '.replay-worktree')
+  if (!fs.existsSync(resolvedDir)) {
+    console.error(`replay.js: --dir ${dir} does not exist — refusing to remove nothing; if this really is a ` +
+      `stale replay worktree, confirm the path with git -C ${root} worktree list`)
+    process.exit(3)
+  }
+  let gitDirAbs
+  try {
+    const gitDirRaw = execFileSync('git', ['rev-parse', '--git-dir'], { cwd: resolvedDir, encoding: 'utf8' }).trim()
+    gitDirAbs = path.isAbsolute(gitDirRaw) ? gitDirRaw : path.resolve(resolvedDir, gitDirRaw)
+  } catch (e) {
+    console.error(`replay.js: git rev-parse --git-dir failed in ${resolvedDir} — refusing to remove a ` +
+      `directory that is not a git worktree; if this really is a stale replay worktree, remove it manually ` +
+      `with rm -rf ${dir}: ${e.message}`)
+    process.exit(3)
+  }
+  if (!gitDirAbs.split(path.sep).includes('worktrees')) {
+    console.error(`replay.js: resolved git-dir ${gitDirAbs} for ${resolvedDir} carries no 'worktrees' path ` +
+      'segment — refusing to remove a directory this harness did not create as a linked worktree; if this ' +
+      `really is a stale replay worktree, remove it manually with git -C ${root} worktree remove --force ${dir}`)
+    process.exit(3)
+  }
+  const marker = path.join(gitDirAbs, 'replay-worktree')
   if (!fs.existsSync(marker)) {
-    console.error(`replay.js: --dir ${dir} carries no .replay-worktree marker — refusing to remove a ` +
+    console.error(`replay.js: ${gitDirAbs} carries no replay-worktree marker — refusing to remove a ` +
       'directory this harness did not create; if this really is a stale replay worktree, remove it ' +
       `manually with git -C ${root} worktree remove --force ${dir}`)
     process.exit(3)

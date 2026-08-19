@@ -39,6 +39,14 @@
   two ground-truth signals; self-reported review quality is subordinate to both.
   (specs/20260819/01-review-evidence-retention.md)
 
+  Reviewer catch-rate is measured, not assumed: every 5th review (and at least once per
+  major version) `/spec:replay` injects one corpus-class defect into the last CLEANed
+  spec's tree in a marker-guarded scratch worktree, re-runs the legs, and dispatches the
+  standard reviewer blind; catch/miss/leg-caught lands as a `stage:"replay"` ledger row
+  with retained evidence, and `replay.js --stats` derives the catch-rate. A sustained
+  miss-rate is the evidence that reopens the second-reviewer question.
+  (specs/20260819/02-mutation-replay.md)
+
 - `ac-matrix`'s coverage denominator fails closed: an AC bullet no ID grammar can parse counts
   as **uncovered** — unparseable = unknown, never absent — in both drift modes, since a host
   `driftScript` cannot parse a malformed bullet either. The `malformed-ac` hard finding is

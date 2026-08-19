@@ -30,14 +30,17 @@ asked.
 1. Run `node "$(spec-paths replay)" --due`. Exit 1 (not due) → report the printed
    `reviewsSince=N` as an advisory ("not due yet — N/5 reviews since the last replay") and STOP;
    no further phases run. Exit 0 → continue.
-2. Run `node "$(spec-paths replay)" --select` and parse `spec=… reviewRunId=… commit=…` from its
-   stdout. A non-zero exit (no eligible CLEAN row in the window) → report advisory, STOP.
+2. Run `node "$(spec-paths replay)" --select` and parse `spec=… reviewRunId=… commit=…
+   parent=… diffBase=…` from its stdout. A non-zero exit (no eligible CLEAN row in the window)
+   → report advisory, STOP.
 
 ## Phase 1 — Mutation authoring
 
 1. **Setup:** `{dir}` = a fresh directory outside the repo (e.g. `mktemp -d`) — never under the
    repo root, which `--setup` refuses with exit 3. Run
-   `node "$(spec-paths replay)" --setup --commit {commit} --dir {dir}`.
+   `node "$(spec-paths replay)" --setup --commit {parent} --dir {dir}` — the worktree stands up
+   at the close commit's **parent**, never the close commit itself, so the tree the mutation
+   lands on is the one the original review actually judged.
 2. **Pick a corpus class:** run `node "$(spec-paths replay)" --stats`, read the per-class
    counts, and pick the class with the fewest recorded rows so far (ties broken by the class's
    order in `spec-paths replay-corpus`) — this is what keeps the six classes exercised evenly
@@ -54,15 +57,22 @@ asked.
 4. **Capture and apply:** `git -C {dir} diff > {patchFile}`, then `git -C {dir} checkout -- <file>`
    to return the worktree to clean (the mutation must be applied fresh through the harness, not
    left as the worker's raw edit — AC-20260819-02-4's own fixture pattern). Run
-   `node "$(spec-paths replay)" --apply --dir {dir} --patch {patchFile} --class {classId}`.
+   `node "$(spec-paths replay)" --apply --dir {dir} --patch {patchFile} --class {classId}
+   --subject "{subject}"`, where `{subject}` is a build-commit-shaped subject derived from the
+   target spec — the same shape this repo's real build commits use (e.g.
+   `build(20260819/02): scheduled mutation replay harness`) — never the class id and never a
+   subject that opens with `replay`, both of which `--apply` refuses outright. A spec whose own
+   title contains "replay" or "mutation" still derives a legal subject: the derived subject is
+   indistinguishable from a real build commit because it IS the real build commit's shape —
+   vocabulary is not the leak, provenance is.
 5. **Legs:** fresh `{manifestPath}` (`mktemp`), then
-   `node "$(spec-paths review-legs)" --root {dir} --spec {spec} --base {commit} --manifest
+   `node "$(spec-paths review-legs)" --root {dir} --spec {spec} --base {diffBase} --manifest
    {manifestPath}` — the sole leg derivation (pipeline rules § Risk Tiers); replay never
    re-derives legs.
 6. **Red legs → one retry of authoring, not of the whole run:** if any leg is red, that's either
    the class catching itself (leg-caught) or an authoring miss on a class the corpus promises
    stays leg-invisible. Tear the worktree down (`--teardown --dir {dir}`), `--setup` a fresh one
-   at the same `{commit}`, and re-dispatch the mutation-authoring worker **once** for the same
+   at the same `{parent}`, and re-dispatch the mutation-authoring worker **once** for the same
    class, telling it which leg the first attempt tripped and to pick a different site inside the
    recipe. Re-run steps 4–5. If legs are STILL red after the retry, this run's outcome is
    `leg-caught` — skip Phase 2 (the reviewer is never dispatched) and go straight to Phase 3 with
@@ -71,9 +81,9 @@ asked.
 ## Phase 2 — Blind reviewer dispatch (skipped on `leg-caught`)
 
 **The blind-dispatch contract:** dispatch **one** `Agent {subagent_type: 'spec:reviewer'}` with
-*exactly* the inputs `/spec:review` Phase 1 gives it — the spec path, the diff base (`{commit}`),
-`{dir}` as the root, the pipeline-rules path, and the paths review-legs printed — and nothing
-else. The prompt carries no mention of "replay," "mutation," "corpus," "injected," or that
+*exactly* the inputs `/spec:review` Phase 1 gives it — the spec path, the diff base
+(`{diffBase}`), `{dir}` as the root, the pipeline-rules path, and the paths review-legs printed —
+and nothing else. The prompt carries no mention of "replay," "mutation," "corpus," "injected," or that
 anything is being measured; the reviewer must believe this is an ordinary `/spec:review` run.
 Same evidence standard (executed repro or quoted spec violation; an empty findings list is
 valid), same structured return: `{verdict: "CLEAN"|"REVIEWER_FAILED", survivors: [{severity,
@@ -85,7 +95,9 @@ tipped-off reviewer measures nothing (D10's rationale).
 
 1. Run `node "$(spec-paths replay)" --score --workflow {workflowReturnFile} --file {file}
    --line {N}` (the mutation-authoring worker's own file/line) → `caught` / `ambiguous` /
-   `missed`.
+   `missed`. Exit 2 (the reviewer return wasn't `verdict: CLEAN` with a `survivors` array) means
+   the return itself was unusable, not a score — re-dispatch Phase 2's reviewer and re-run
+   `--score`; never record this run's outcome from an exit-2 attempt.
 2. **`ambiguous` is the one judgment seam:** one `AskUserQuestion` showing the reviewer's
    nearest finding beside the injected defect (file, line, the patch hunk) — did it actually name
    this defect? Resolves the outcome to `caught` or `missed` for the record step; a dismissed
@@ -124,7 +136,12 @@ Next: {spec-status --next, verbatim}
 
 - **Blindness is the measurement's validity.** Nothing dispatched to the reviewer, directly or
   transitively (file contents at `{dir}`, prompt text, worktree branch name), may reveal that a
-  replay is in progress.
+  replay is in progress. The same bar covers everything the harness itself creates inside
+  `{dir}`: no artifact it produces — commit subject, tracked file, `git status` entry, log
+  line — may carry the harness's own name, a corpus term, or a class id into anything readable
+  from that tree. `--setup` and `--apply` excluding their own markers and subjects from the diff
+  and the commit log are this invariant's enforcement, not the invariant itself — a new leak
+  surface is still a blindness violation even where no flag polices it yet.
 - **The main tree is never in scope.** Every mutating step runs inside `{dir}`, a detached
   worktree outside the repo; `--setup`/`--teardown`'s marker guard is what makes that safe to
   automate.

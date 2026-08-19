@@ -1,6 +1,6 @@
 ---
 date: 2026-08-19
-status: implementing
+status: done
 tier: standard
 area: review
 design: false
@@ -31,11 +31,11 @@ one-reviewer bet falsifiable.
 |----|----------|--------------------|
 | D1 | New script `spec/scripts/replay.js` (spec-paths key `replay`) owning the deterministic mechanics as flag modes: `--due`, `--select`, `--setup`, `--apply`, `--score`, `--record`, `--stats`, `--teardown` — hand-rolled flags, zero dependencies, header per Worker Rules (AC-20260819-02-1 … -8) | The brief demands a script-owned harness; one script with modes beats eight scripts (one glob, one header, one test file) — rejected: folding modes into review-legs.js (its header forbids deciding whether to run) |
 | D2 | `--due`: due when review rows appended after the last replay row (read-order, live+archives via lib/observation.js readLedgerRows) number ≥ 5; exit 0 = due (prints `due reviewsSince=N`), exit 1 = not due, exit 2 = usage (AC-20260819-02-1) | JJ-confirmed cadence 2026-08-19: every 5th review (~20% review-cost overhead); read-order matches the observation reader's union-merge stance |
-| D3 | `--select`: among CLEAN review rows with a `runId` appended after the last replay row, prefer `tier:"critical"`, tie → latest; target commit = `git log -1 --format=%H -- <spec path>` (the close commit touches the spec's status flip); prints `spec=… reviewRunId=… commit=…` (AC-20260819-02-2) | Critical-tier priority sampling per the brief; the close commit is the newest commit guaranteed to contain exactly the reviewed tree for that spec |
-| D4 | `--setup --commit <sha> --dir <path>`: REFUSES a `--dir` inside the repo (exit 3), creates `git worktree add --detach`, writes a `.replay-worktree` marker inside; `--teardown --dir <path>` refuses without the marker (exit 3), else `git worktree remove --force` (AC-20260819-02-3, AC-20260819-02-8) | The main tree is never touched — restore is worktree removal; the marker guard means teardown can only ever delete a directory this harness created (this session's own spike accidentally created a worktree inside the repo — the refusal pins that mistake) |
-| D5 | `--apply --dir <d> --patch <file> --class <id>`: `git apply` then commit on the detached HEAD (`replay: <class>`), so the mutation is inside `base..HEAD` — the diff surface the reviewer and every leg actually read (AC-20260819-02-4) | An uncommitted mutation is invisible to `git diff base..HEAD`; the throwaway detached commit dies with the worktree |
+| D3 | `--select`: among CLEAN review rows with a `runId` appended after the last replay row, prefer `tier:"critical"`, tie → latest; target commit = `git log -1 --format=%H -- <spec path>` (the close commit touches the spec's status flip); `parent` = that commit's parent; `diffBase` = the target spec's frontmatter `build_base` (else `diff_base`), read at `parent`; prints `spec=… reviewRunId=… commit=… parent=… diffBase=…` (AC-20260819-02-2) | Critical-tier priority sampling per the brief; the close commit is the newest commit guaranteed to contain the reviewed tree, but it also carries the status flip and the Canonical Delta — `parent` is the pre-review tree the harness must stand the worktree up at, and `diffBase` is the base the original review actually diffed against |
+| D4 | `--setup --commit <sha> --dir <path>`: REFUSES a `--dir` inside the repo (exit 3), creates `git worktree add --detach`, writes a marker file named `replay-worktree` into the worktree's PRIVATE git dir (resolved via `git -C <dir> rev-parse --git-dir`, which for a linked worktree ends `/.git/worktrees/<name>`) — nothing is written into the worktree's working tree; exits 4 if the resolved path has no `worktrees` segment; `--teardown --dir <path>` resolves the same private git dir and refuses with exit 3 when the dir is missing, `rev-parse --git-dir` fails, the resolved path has no `worktrees` segment, or the marker is absent — else `git worktree remove --force` (AC-20260819-02-3, AC-20260819-02-8) | The main tree is never touched — restore is worktree removal; the marker lives in the worktree's private git dir rather than its working tree, so it cannot be swept into a commit by `git add -A` and cannot appear in `git status` — the leak becomes structurally impossible rather than merely excluded (this is stronger than the iteration-1 approach, which wrote into the worktree and leaked into the host's shared `.git/info/exclude`); the marker guard means teardown can only ever delete a directory this harness created (this session's own spike accidentally created a worktree inside the repo — the refusal pins that mistake) |
+| D5 | `--apply --dir <d> --patch <file> --class <id> [--subject <text>]`: `git apply` then commit on the detached HEAD with `<text>` (default `build: follow-up`) as the subject — REFUSES a subject that opens with `replay` or contains the class id — so the mutation is inside `base..HEAD` — the diff surface the reviewer and every leg actually read (AC-20260819-02-4) | A subject naming the class or announcing the harness is a blindness leak the reviewer can read straight out of `git log`; a subject derived from the target spec's own build commit is indistinguishable from the real thing because it IS the real thing — so the refusal is narrow (leading `replay`, or the class id) rather than a vocabulary blocklist, which would have refused this very spec's real build subject. An uncommitted mutation is invisible to `git diff base..HEAD`; the throwaway detached commit dies with the worktree |
 | D6 | Leg verification reuses `review-legs.js` run by the orchestrating session against the worktree (`--root <dir>`) — replay.js never re-derives legs; a red leg records outcome `leg-caught` and skips the reviewer dispatch (AC-20260819-02-6 covers the row) | review-legs.js is the sole leg derivation (Risk Tiers); a leg that catches the mutation is itself a data point, and the ~100k-token reviewer dispatch is wasted on it |
-| D7 | `--score --workflow <file> --file <path> --line N`: ≥1 finding with the mutated file and line within ±5 → prints `caught`; findings but none matching → `ambiguous` (session adjudicates via one AskUserQuestion); zero findings → `missed`; exit 0 always when parseable (AC-20260819-02-5) | Deterministic proxy first, judgment only on the ambiguous residue — a pure-deterministic scorer would misgrade a reviewer that names the defect from its call site |
+| D7 | `--score --workflow <file> --file <path> --line N`: a workflow return that isn't `verdict: CLEAN` with a `survivors` array → exit 2, prints nothing (a usage error, never a score — the caller re-dispatches the reviewer and never records the attempt); otherwise ≥1 finding with the mutated file and line within ±5 → prints `caught`; findings but none matching → `ambiguous` (session adjudicates via one AskUserQuestion); zero findings → `missed`; exit 0 when parseable (AC-20260819-02-5) | Deterministic proxy first, judgment only on the ambiguous residue — a pure-deterministic scorer would misgrade a reviewer that names the defect from its call site; an unparseable return is not a data point about the reviewer's catch rate, it's a failed dispatch, and scoring it as `missed` would silently corrupt the catch-rate denominator |
 | D8 | `--record --spec … --review-run-id … --class … --file … --legs green\|red:<leg> --outcome caught\|missed\|leg-caught [--patch <file>] [--workflow <file>] [--tokens N]`: generates runId `rp_` + 12 lowercase hex, appends the pinned ledger row to `.claude/spec-runs.jsonl`, writes `.claude/spec-runs/<rp_id>.json` (patch + reviewer return verbatim; reviewer null on leg-caught) (AC-20260819-02-6) | Script-owned append (unlike escape's choreography) because the row's shape is the catch-rate's substrate; evidence retention mirrors sibling spec 01's artifact discipline |
 | D9 | `--stats`: aggregates replay rows — total, caught, missed, leg-caught, per-class counts, and `catch-rate = caught/(caught+missed)` (leg-caught excluded: the reviewer was never asked) (AC-20260819-02-7) | The catch-rate view lives in the harness, NOT in spec-status.js — its `--root/--next/--json` shape and five action strings are a frozen API (Risk Tiers) that a sixth surface must not touch |
 | D10 | New command `spec/commands/replay.md` orchestrates: due → select → a Sonnet worker authors the mutation patch from the corpus class recipe (one retry if legs go red) → legs in the worktree → dispatch the reviewer BLIND with review.md Phase 1's exact contract (same agent, same inputs, no replay mention anywhere in its prompt) → score → record → teardown → report via report-render [no-ac: doctrine choreography; regex-over-prose pins are unsanctioned (Test Rules) — the reviewer verifies the file against this row] | Blindness is the measurement's validity: a reviewer told it is being tested measures nothing; mutation authoring is model work, so it lives in the command, not the script |
@@ -93,8 +93,13 @@ doc-contract-lie               — a header/doc claim (exit code, format) contra
 ```
 
 Exit codes (replay.js header): 0 = mode succeeded (`--due`: due) · 1 = `--due` not due ·
-2 = usage / unreadable input · 3 = safety refusal (worktree dir inside repo; teardown
-without marker) · 4 = git operation failed.
+2 = usage / unreadable input, incl. `--apply`'s refused `--subject` and `--score`'s
+unusable reviewer return (not `verdict: CLEAN` with a `survivors` array) · 3 = safety
+refusal (worktree dir inside repo; `--teardown` on a dir that is missing, resolves no
+git dir, has no `worktrees` segment, or holds no marker) · 4 = git operation failed, incl.
+`--select`'s missing `build_base`/`diff_base` (a data-precondition failure, not a git
+failure) and `--setup` resolving a git dir with no `worktrees` segment (not a linked
+worktree).
 
 ## Behavior
 
@@ -116,22 +121,35 @@ one judgment seam: the session shows the finding beside the injected defect and 
   (e.g. 5 review rows, 0 replay rows → exit 0; a replay row then 4 review rows → exit 1)
   → new tests in tests/replay/replay.test.js
 - **AC-20260819-02-2**: WHEN selecting THE SYSTEM SHALL prefer a critical-tier CLEAN row
-  over a later standard-tier one within the window and print `spec= reviewRunId= commit=`
-  (e.g. rows [critical@t1, standard@t2] → the t1 spec; [standard@t1, standard@t2] → t2) →
-  same file
+  over a later standard-tier one within the window and print
+  `spec= reviewRunId= commit= parent= diffBase=` (e.g. rows [critical@t1, standard@t2] →
+  the t1 spec, `parent` = the t1 close commit's parent, `diffBase` = that spec's
+  frontmatter `build_base`/`diff_base` read at `parent`; [standard@t1, standard@t2] → t2)
+  → same file
 - **AC-20260819-02-3**: WHEN `--setup` is given a `--dir` inside the repo root THE SYSTEM
   SHALL refuse with exit 3 and create nothing; WHEN given an outside dir THE SYSTEM SHALL
-  create a detached worktree containing the `.replay-worktree` marker (e.g. `--dir
-  <repo>/x` → exit 3; `--dir <tmp>/x` → worktree at the commit, marker present) → same file
+  create a detached worktree and write the `replay-worktree` marker into its private git dir
+  (`git -C <dir> rev-parse --git-dir`), leaving the host repo unchanged — its
+  `.git/info/exclude` byte-identical and `git status --porcelain` in the main tree empty
+  (e.g. `--dir <repo>/x` → exit 3; `--dir <tmp>/x` → worktree at the commit, marker present
+  at `<git -C <tmp>/x rev-parse --git-dir>/replay-worktree`, host `.git/info/exclude`
+  unchanged and host `git status --porcelain` empty) → same file
 - **AC-20260819-02-4**: WHEN `--apply` runs THE SYSTEM SHALL leave the mutation committed
-  on the worktree's detached HEAD so `git diff <base>..HEAD` contains the patch's hunks
-  (e.g. a one-line patch → `git -C <dir> diff <base>..HEAD` includes that line; `git
-  status --porcelain` in the worktree is clean) → same file
+  on the worktree's detached HEAD, with the passed `--subject` (default `build:
+  follow-up`) as the commit subject, so `git diff <base>..HEAD` contains the patch's hunks
+  and nothing else — the `replay-worktree` marker lives in the private git dir per D4 and
+  so can never reach the working tree, the index, or the diff (e.g. a one-line patch with
+  `--subject "build(20260819/02): scheduled mutation replay harness"` → `git -C <dir> log
+  -1 --format=%s` prints that subject verbatim, `git -C <dir> diff --name-status
+  <base>..HEAD` lists only the patched file; `git status --porcelain` in the worktree is
+  clean) → same file
 - **AC-20260819-02-5**: WHEN `--score` reads a workflow return THE SYSTEM SHALL print
   `caught` on a finding at the mutated file within ±5 lines, `ambiguous` on findings
-  elsewhere, `missed` on zero findings (e.g. mutation at lib/x.js:40 — finding
+  elsewhere, `missed` on zero findings, and exit 2 printing nothing on a return that isn't
+  `verdict: CLEAN` with a `survivors` array (e.g. mutation at lib/x.js:40 — finding
   `{file:"lib/x.js",line:43}` → caught; `{file:"lib/y.js",line:40}` → ambiguous; `[]` →
-  missed) → same file
+  missed; `{verdict:"REVIEWER_FAILED"}` or a return with no `survivors` array → exit 2,
+  nothing printed) → same file
 - **AC-20260819-02-6**: WHEN `--record` runs THE SYSTEM SHALL append exactly one ledger
   row matching the Contracts shape with a fresh `rp_` runId and write
   `.claude/spec-runs/<rp_id>.json` holding the patch verbatim (and `reviewer: null` when
@@ -140,10 +158,13 @@ one judgment seam: the session shows the finding beside the injected defect and 
 - **AC-20260819-02-7**: WHEN `--stats` reads a ledger with 2 caught, 1 missed, 1
   leg-caught THE SYSTEM SHALL print totals per outcome, per-class counts, and
   `catch-rate 2/3` (leg-caught excluded from the denominator) → same file
-- **AC-20260819-02-8**: WHEN `--teardown` targets a dir without the `.replay-worktree`
-  marker THE SYSTEM SHALL refuse with exit 3 and delete nothing; with the marker THE
-  SYSTEM SHALL remove the worktree (e.g. a plain mkdir dir → exit 3 and still present; a
-  --setup dir → removed and pruned from `git worktree list`) → same file
+- **AC-20260819-02-8**: WHEN `--teardown` targets a dir whose private git dir (`git -C
+  <dir> rev-parse --git-dir`) holds no `replay-worktree` marker THE SYSTEM SHALL refuse
+  with exit 3 and delete nothing; with the marker present there THE SYSTEM SHALL remove the
+  worktree (e.g. a plain mkdir dir → `rev-parse --git-dir` fails or has no `worktrees`
+  segment → exit 3 and still present; a --setup dir → marker found at
+  `.git/worktrees/<name>/replay-worktree` → removed and pruned from `git worktree list`)
+  → same file
 - **AC-20260819-02-9**: WHEN the shipped corpus file is parsed THE SYSTEM SHALL find all 6
   class ids from Contracts, each carrying a recipe section (structural check executed
   against `spec/doctrine/replay-corpus.md` — the one sanctioned prose-shape assert, on the
@@ -201,6 +222,42 @@ trigger fires exactly where the reminder can print); a `--next` action string fo
 evidence artifacts reuse the `.claude/spec-runs/` home and correlate on the `runId`
 discipline 01 completes. Fragile to watch: AC-2's tier-priority selection reads `tier`
 from review rows — older rows lack the field; treat absent as standard.
+
+**2026-08-19 (review disposition — four confirmed defects, fixed under user approval):**
+the harness's first review found that (1) the worktree stood up at the close commit and
+the legs/reviewer diffed from it, so the reviewer read only the mutation's ~3 lines instead
+of the 600–1000-line diff a real review judges — inflating the catch rate so far that the
+sustained-miss-rate trigger in core.md's Feedback Loop could never fire; (2) the applied
+commit's subject `replay: <class>` leaked the class id straight into `git log`; (3) the
+`.replay-worktree` marker file appeared in the diff and in `git status`, both readable by
+the dispatched reviewer; and (4) `--score`'s `missed` branch conflated an unusable reviewer
+return with a genuine zero-finding miss, silently corrupting the catch-rate denominator.
+All four are fixed in place in this spec — D3, D5, D7 and their ACs above — because none
+changes the harness's structural idea (see above), only its fidelity to it; (2) and (3) are
+now covered by one blindness invariant in replay.md's Rules rather than three separate
+checklist items. The base correction (1) is not a design amendment: D10 already locks
+"review.md Phase 1's exact contract, same inputs," and review.md derives its diff base from
+the target spec's frontmatter (`build_base`/`diff_base`) read at the pre-review commit —
+targeting the close commit itself was already a deviation from D10's own locked contract,
+not a new decision, so D3's correction closes that deviation rather than opening one.
+A fix iteration on this same review then surfaced a fifth: the (3) fix wrote the
+`.replay-worktree` marker inside the worktree but kept it out of `git status` via a write
+into the worktree's `.git/info/exclude` — `info/exclude` is not per-worktree, and
+`git rev-parse --git-path info/exclude` run inside a linked worktree resolves to the MAIN
+repo's `.git/info/exclude`, so the write landed in the host repo and survived teardown,
+breaking this very spec's own "the main tree is never touched" guarantee. The marker moved
+to the worktree's PRIVATE git dir (`git rev-parse --git-dir`, which for a linked worktree
+ends `/.git/worktrees/<name>` and is deleted by `git worktree remove`) — nothing enters the
+working tree at all, so the marker cannot be swept into a commit by `git add -A` and cannot
+appear in `git status` in either the worktree or the host. The blind spot that let this
+through is the same shape as (3): no test ever asserted the host repo was unmodified after
+`--setup`; AC-20260819-02-3 now closes it directly by pinning the host's
+`.git/info/exclude` byte-identical and `git status --porcelain` empty after `--setup`.
+
+**2026-08-19 (waived — agent-memory scratch files):** this review's diff also carried five
+files under `.claude/agent-memory/` outside the File Plan. JJ waived them: they are the
+helper agents' own scratch notes (doctrine-author, gate-scripts, plugin-tests), ship no
+behavior, and the same class of file has landed the same way in three prior CLEAN reviews.
 
 ## Canonical Delta
 

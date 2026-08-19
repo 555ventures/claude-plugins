@@ -1,0 +1,69 @@
+{
+  "runId": "rv_a77b34464a17",
+  "ts": "2026-08-19T22:34:22.095Z",
+  "spec": "specs/20260819/02-mutation-replay.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 9,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 3,
+      "observed": "outOfPlan=9"
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": "unavailable"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": "skips=0 todos=0"
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": "matches=10"
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": "files=10"
+    },
+    {
+      "leg": "smoke",
+      "exit": 0,
+      "observed": "pass"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": "uncovered=0 oracle=0"
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": "skipped=0 sanctioned=0"
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": "rows=14 carried=11 sanctioned=3 orphans=0"
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [],
+    "reviewerCount": 1,
+    "scope": "fix-delta",
+    "tokens": 665624
+  }
+}

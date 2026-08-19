@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 'use strict'
 // verdict.js --manifest <path> [--workflow <path>] [--waived N] [--rejected N] [--fixDispatched N]
-//   [--ledger [--spec <path>] [--tier <T>] [--diff-loc N] [--iteration N] [--run-id <id>]]
+//   [--ledger [--spec <path>] [--tier <T>] [--diff-loc N] [--iteration N] [--run-id <id>]
+//     [--retain <dir>]]
 //   [--profile release [--milestone <string>] [--briefs N,N,...]] [--require <leg> ...]
 //
 // Incident (2026-08-05, spec review-evidence-manifest): /spec:review could print CLEAN with
@@ -62,26 +63,48 @@
 // the profile) are de-duplicated; the flag never removes or reorders a profile's built-in legs.
 // This is the one accumulator flag — every other flag here is scalar-overwrite.
 //
+// Incident (2026-08-19, spec review-evidence-retention, brief 14): the reviewer was the one
+// pipeline component whose work was argued, not executed-and-retained — the wf-review return
+// lived only in a mktemp file review.md's own Phase 3 hygiene sweep deleted, and the ledger row
+// kept truncated observations and counts, nothing repro-able. --retain <dir> is now REQUIRED on
+// the review profile whenever both --ledger and --workflow are present (absent -> exit 2 naming
+// --retain .claude/spec-runs as the remedy, before any verdict word prints, D1) and writes
+// <dir>/<runId>.json atomically (temp file + rename) — the manifest legs with `observed`
+// UNTRUNCATED plus the --workflow file's parsed JSON verbatim (survivors/killed with their
+// executed repro evidence intact). A no-workflow --ledger row (the 2026-08-13 Phase 0 hard-stop)
+// stays retain-optional; passed anyway, the artifact's `reviewer` is null (D2). --retain on
+// --profile release is a usage error (D3) — a release row carries no runId and no reviewer
+// return, so accepting the flag would mint an artifact nothing can ever key or read. --retain
+// without --ledger is the same usage error — retention with no row has no runId to key (D1's
+// Contracts requiredness matrix). The stdout/ledger contracts stay byte-unchanged (D4): the
+// artifact write adds no third stdout line and no eighth `findings` key — the retained file is
+// the full-fidelity home, the printed row stays the summary.
+//
 // Exit codes: 0 = derived CLEAN · 1 = derived other non-CLEAN word
 // (still printed on stdout line 1) · 2 = usage error, missing/unreadable --manifest or
 // --workflow file, a disposition contradiction (--waived + --rejected + --fixDispatched
 // exceeds the workflow's survivor count PLUS the manifest's leg-finding count — the guard spans
-// both pools per D1-D3, specs/20260818/01-ledger-truth.md), or (review profile, no --workflow) a
+// both pools per D1-D3, specs/20260818/01-ledger-truth.md), (review profile, no --workflow) a
 // manifest that derives green/complete — a panel-less CLEAN is undecidable without --workflow
-// and must not print
+// and must not print, --retain passed with --profile release (D3 — release rows carry no runId
+// to key an artifact by), --retain passed without --ledger (retention with no row has no runId
+// to key), or (review profile, --ledger + --workflow both present) --retain absent (D1 — the
+// required-evidence-retention flag; message names --retain .claude/spec-runs as the remedy)
 
 const fs = require('fs')
+const path = require('path')
 const crypto = require('crypto')
 
 function usage() {
   console.error('usage: verdict.js --manifest <path> [--workflow <path>] [--waived N] [--rejected N] ' +
     '[--fixDispatched N] [--ledger [--spec <path>] [--tier <T>] [--diff-loc N] [--iteration N] ' +
-    '[--run-id <id>]] [--profile release [--milestone <string>] [--briefs N,N,...]] [--require <leg> ...]')
+    '[--run-id <id>] [--retain <dir>]] [--profile release [--milestone <string>] [--briefs N,N,...]] ' +
+    '[--require <leg> ...]')
 }
 
 let manifestPath = null, workflowPath = null, waived = 0, rejected = 0, fixDispatched = 0
 let ledger = false, specArg = null, tier = null, diffLoc = null, iteration = null, profile = 'review'
-let runId = null, milestone = null, briefsArg = null
+let runId = null, milestone = null, briefsArg = null, retainDir = null
 const requireLegs = []
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
@@ -101,11 +124,32 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--milestone') milestone = argv[++i]
   else if (a === '--briefs') briefsArg = argv[++i]
   else if (a === '--require') requireLegs.push(argv[++i])
+  else if (a === '--retain') retainDir = argv[++i]
   else { usage(); process.exit(2) }
 }
 if (!manifestPath) { usage(); process.exit(2) }
 if (![waived, rejected, fixDispatched].every(Number.isFinite)) {
   console.error('verdict.js: --waived/--rejected/--fixDispatched must be numbers')
+  process.exit(2)
+}
+
+// ---- --retain requiredness matrix (D1-D3, specs/20260819/01-review-evidence-retention.md) ----
+// Checked purely on flag presence, before the manifest/workflow files are even read, so a
+// misuse fails loudly and immediately rather than after paying for file I/O.
+
+if (retainDir && profile === 'release') {
+  console.error('verdict.js: --retain is not valid with --profile release — a release row carries ' +
+    'no runId and no reviewer return, so an artifact here has nothing to key or read; drop --retain')
+  process.exit(2)
+}
+if (retainDir && !ledger) {
+  console.error('verdict.js: --retain requires --ledger — retention with no ledger row has no runId ' +
+    'to key an artifact by; add --ledger or drop --retain')
+  process.exit(2)
+}
+if (ledger && workflowPath && profile !== 'release' && !retainDir) {
+  console.error('verdict.js: authoritative review rows (--ledger + --workflow) must retain evidence ' +
+    '— add --retain .claude/spec-runs')
   process.exit(2)
 }
 
@@ -291,13 +335,27 @@ function deriveProduction(row) {
   return undefined
 }
 
+// ---- retention artifact (D1/D2, specs/20260819/01-review-evidence-retention.md): the full-
+// ---- fidelity home for a review run, written atomically (temp file + rename) so a reader never
+// ---- observes a partial file. Never called on the release profile (rejected above, D3).
+
+function writeRetainedArtifact(dir, artifactRunId, data) {
+  fs.mkdirSync(dir, { recursive: true })
+  const finalPath = path.join(dir, `${artifactRunId}.json`)
+  const tmpPath = path.join(dir, `.${artifactRunId}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`)
+  fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2) + '\n')
+  fs.renameSync(tmpPath, finalPath)
+  return finalPath
+}
+
 if (ledger) {
   // D4: observed is retained (sliced to 120 chars) in both profiles — a structurally-absent
   // observation ("unavailable") must stay byte-distinguishable from a real pass forever.
+  const ts = new Date().toISOString()
   const legs = [...legRows.values()].map(({ leg, exit, observed }) => ({
     leg, exit, observed: typeof observed === 'string' ? observed.slice(0, 120) : observed,
   }))
-  const row = { ts: new Date().toISOString() }
+  const row = { ts }
   if (specArg) row.spec = specArg
   row.stage = profile === 'release' ? 'release' : 'review'
   if (tier) row.tier = tier
@@ -348,6 +406,24 @@ if (ledger) {
     }
   }
   console.log(JSON.stringify(row))
+
+  // D1/D2: retention is additive to the printed row above — it never changes row's shape or
+  // adds a third stdout line (D4). Reached only when profile !== 'release' (rejected earlier, D3).
+  if (retainDir) {
+    const artifact = {
+      runId: row.runId,
+      ts,
+      spec: specArg,
+      tier,
+      iteration,
+      scope: workflow ? workflow.scope : null,
+      verdict: word,
+      dispositions: { waived, rejected, fixDispatched },
+      legs: [...legRows.values()], // verbatim manifest rows — observed UNTRUNCATED (D1)
+      reviewer: workflow, // the --workflow file's parsed JSON verbatim, or null (D2)
+    }
+    writeRetainedArtifact(retainDir, row.runId, artifact)
+  }
 }
 
 process.exit(word === 'CLEAN' ? 0 : 1)

@@ -112,12 +112,22 @@ territory — per-spec CLEANs do not compose. Production actions are never auton
 
 ## Feedback Loop
 
-The pipeline improves on evidence, through artifacts — never through anyone's memory. Two
-carriers, both side effects of normal runs: the **run ledger** (`.claude/spec-runs.jsonl` —
-stage-tagged counts; escape rows with `preventedBy`) and **Gotchas** entries in the host's
-pipeline rules (tagged `[host]` or `[plugin]` by provenance, folded from deviations sidecars
-at review close). `/spec:escape` records a defect that got past a review — one row pointing
-back at the review that passed it; that ground truth is what makes CLEAN falsifiable.
+The pipeline improves on evidence, through artifacts — never through anyone's memory.
+Carriers, all side effects of normal runs: the **run ledger** (`.claude/spec-runs.jsonl` —
+stage-tagged rows: `plan` records a lock's executed facts, `review` and `escape` as below),
+its **retained evidence artifacts** (`.claude/spec-runs/<runId>.json` — a review row's
+full-fidelity manifest legs and reviewer return, `runId`-keyed), and **Gotchas** entries in
+the host's pipeline rules (tagged `[host]` or `[plugin]` by provenance, folded from
+deviations sidecars at review close). `/spec:escape` records a defect that got past a
+review — one row pointing back at the review that passed it, and (when the artifact
+survives) `killedMatch` derived from that review's own retained claims rather than memory.
+
+The **escape ledger** and the **reviewer replay catch-rate** (brief 14's harness, sibling
+spec specs/20260819/02-mutation-replay.md) are the pipeline's only two ground-truth
+signals — both measure what a review actually caught against what was actually there.
+Self-reported review quality (a reviewer's own confidence, a clean-looking findings list) is
+explicitly subordinate to both: it is evidence of nothing until one of the two ground-truth
+signals corroborates it. This is what makes a CLEAN verdict falsifiable rather than argued.
 
 ## Incident Policy
 

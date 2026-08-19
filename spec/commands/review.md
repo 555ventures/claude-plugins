@@ -98,11 +98,13 @@ hinges on quoted verbatim, and recommend the evidence-implied disposition; then
   user waives.
 
 **Authoritative pass:** re-run verdict.js with the real
-`--waived/--rejected/--fixDispatched` counts plus `--ledger --spec {spec path} --tier
-{tier} --diff-loc {diffLoc} --iteration <n>`; print line 1 (the verdict word) verbatim and
-append line 2 verbatim to `.claude/spec-runs.jsonl`. Never hand-write the word; a CLEAN
-row with non-zero `survived` records dispositioned findings, never ignored ones. Exit 0
-gates Phase 3.
+`--waived/--rejected/--fixDispatched` counts plus `--ledger --retain .claude/spec-runs
+--spec {spec path} --tier {tier} --diff-loc {diffLoc} --iteration <n>` — every
+authoritative pass retains its full-fidelity evidence artifact at
+`.claude/spec-runs/<runId>.json`, fix-delta iterations included, each under its own
+iteration's runId; print line 1 (the verdict word) verbatim and append line 2 verbatim to
+`.claude/spec-runs.jsonl`. Never hand-write the word; a CLEAN row with non-zero `survived`
+records dispositioned findings, never ignored ones. Exit 0 gates Phase 3.
 
 ## Phase 3 — Close (on CLEAN)
 
@@ -112,8 +114,10 @@ gates Phase 3.
    rules' **Gotchas** section (tagged `[host]`/`[plugin]` by provenance); one-offs go to
    the spec's Rationale; delete the sidecar.
 3. **Hygiene sweep:** `git status --porcelain --untracked-files=all`; adjudicate every
-   unexpected path (reviewer scratch files deleted, legitimate strays explained). Never
-   blind-`git add -A` past an unadjudicated path.
+   unexpected path (reviewer scratch files deleted, legitimate strays explained).
+   `.claude/spec-runs/*.json` written by this run's authoritative pass(es) are EXPECTED
+   artifacts, not reviewer scratch — they ride the close commit and merge back with the
+   branch; never delete them. Never blind-`git add -A` past an unadjudicated path.
 4. **Close commit** — everything still uncommitted on the working branch. Never
    `--no-verify`.
 5. **Report** (render via report-render, print verbatim): `outcome` ✅ `CLEAN — merged` /

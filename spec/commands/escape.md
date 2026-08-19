@@ -24,8 +24,9 @@ with no commit in the loop to trigger the offer.
 already being diagnosed or fixed — the session holds the defective file, the diagnosis, and
 often the fix diff. Every classification field is derived from that evidence first; the user
 is asked to *confirm or correct* the derivation in one call, never to supply answers the
-context already contains. The single exception is `killedMatch` (step 4), which lives only
-in the user's memory. Recording friction is a measurement bug: an escape too annoying to
+context already contains. `killedMatch` (step 4) derives the same way when the correlated
+review's retained evidence artifact exists; user memory is the fallback, used only when it
+does not. Recording friction is a measurement bug: an escape too annoying to
 record never lands, and "zero escapes" silently becomes false evidence that reviews work.
 
 ## Input
@@ -57,7 +58,10 @@ defective file — that is the only unrecoverable input.
 3. **Correlate the review run.** From `.claude/spec-runs.jsonl`, take the LAST row with
    `stage:"review"` and this spec path (jq/grep — never read the ledger into context):
    `reviewRunId` = that row's `runId`; `null` if no review row exists or it predates the
-   `runId` field. Note the row's `verdict` and `findings.killed` for steps 4–5.
+   `runId` field. Note the row's `verdict` and `findings.killed` for steps 4–5. When
+   `reviewRunId` is set, check for `.claude/spec-runs/<reviewRunId>.json` — if it exists,
+   read its `killed[]` claims (evidence strings intact); step 4 derives `killedMatch` from
+   them.
 4. **Classify — derive from context, confirm in ONE call.** Derive every field from the
    evidence in hand (the session's diagnosis and fix work, the defective file, the given
    description, the correlated review row), then confirm in a single `AskUserQuestion`
@@ -86,13 +90,22 @@ defective file — that is the only unrecoverable input.
      default** — derive it only with stated reasoning that no plausible mechanism exists;
      an escape recorded without naming its prevention delta is a confession booth, not a
      feedback loop.
-   - `killedMatch` — **the one underivable field.** Review persists killed findings only as
-     counts; their content is unrecoverable, so only the user's memory can answer. If the
-     correlated review row had `findings.killed > 0`, it rides as its own question in the
-     same call — never derived, never defaulted: "Does this defect match a finding that
-     review killed?" Yes → `true`, no → `false`, can't recall → `null`. If `killed` was 0,
-     `killedMatch` is `null` without asking. **Unknown is `null`, never a guessed `false`**
-     — a wrong `false` poisons the one signal that tunes execution-grounded verification.
+   - `killedMatch` — derive from the retained review artifact when step 3 found one;
+     user memory is the fallback, used only when no artifact exists. **Artifact path:**
+     compare the defect against the artifact's `killed[]` claims (evidence intact) and
+     derive a match — an entry whose claim/evidence names this defect's file and behavior →
+     `true`; the artifact present with `killed[]` non-empty but nothing matching → `false`;
+     genuinely ambiguous even with the evidence in hand → `null`. It rides as its own
+     question in the same call, the derived value first and marked "(Recommended)" with its
+     reasoning citing the matched claim — the user CONFIRMS or corrects it, same as every
+     other field (derive-don't-interview). **Fallback path (no artifact — an older review
+     predating retention, or `reviewRunId` is `null`):** if the correlated review row had
+     `findings.killed > 0`, ask from memory, never derived: "Does this defect match a
+     finding that review killed?" Yes → `true`, no → `false`, can't recall → `null`. Either
+     path: if there is nothing to match against (`findings.killed` was 0, or the artifact's
+     `killed[]` is empty), `killedMatch` is `null` without asking. **Unknown is `null`,
+     never a guessed `false`** — a wrong `false` poisons the one signal that tunes
+     execution-grounded verification.
 5. **Append exactly ONE line** to `.claude/spec-runs.jsonl` (repo root; `printf '%s\n' '<json>' >>`):
 
    ```

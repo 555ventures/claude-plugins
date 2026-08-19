@@ -108,8 +108,24 @@ Write the spec per the template. `status: draft`. While drafting:
    and enumerates every `likely`-tier hit in the File Plan as fix or recorded waive.
    Work discovered this session that needs its own spec → write the roadmap brief now, or
    record why not.
-3. Flip `status: draft → hardened`.
-4. **Report:** assemble slots — `outcome`: ✅ `spec hardened & locked — {path}`; `bullets`:
+3. **Ledger row:** append exactly ONE row to `.claude/spec-runs.jsonl` (repo root;
+   escape.md's mechanism — `printf '%s\n' '<json>' >>`) recording this lock's executed
+   facts, before the status flip so an interrupted lock leaves either no row or a complete
+   one, never a partial: `spikes` = the count of executed micro-spikes recorded in
+   Assumptions; `promiseSweep` = step 2's `promise-sweep.js` printed counters
+   (`rows`/`carried`/`sanctioned`/`orphans`) copied verbatim; `collisions` = `{hits,
+   waived}` from step 2's `collision-closure.js` run, omitted entirely when no Decision
+   triggered that sweep. Numbers, enums, and paths only — never prose or a self-scored
+   judgment of lock quality:
+
+   ```
+   {"ts":"<ISO-8601>","stage":"plan","spec":"<repo-relative spec path>","tier":"<tier>",
+    "brief":"NN"|"n/a","spikes":N,"promiseSweep":{"rows":N,"carried":N,"sanctioned":N,
+    "orphans":0},"collisions":{"hits":N,"waived":N},"verdict":"locked"}
+   ```
+
+4. Flip `status: draft → hardened`.
+5. **Report:** assemble slots — `outcome`: ✅ `spec hardened & locked — {path}`; `bullets`:
    one plain line per decision made; `warns`: notable spike findings; `next`: the verbatim
    output of `node "$(spec-paths spec-status)" --root . --next` as
    `{kind: 'status-verbatim'}` — the script is the sole source of the Next suggestion.

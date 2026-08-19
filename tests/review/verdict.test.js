@@ -42,6 +42,17 @@ const { tmpdir, runNode } = require('../helpers')
 // the workflow's return + disposition counts feed one derivation (D3's first-match-wins
 // order). This file pins verdict.js's derivation contract directly by execution; review.md's
 // wiring of the script is pinned in verdict-doctrine.test.js.
+//
+// specs/20260819/01-review-evidence-retention.md (D1-D4, D9, 2026-08-19, brief 14 — the
+// reviewer's return lived only in a mktemp file the Phase 3 hygiene sweep deleted): verdict.js
+// gains --retain <dir>, REQUIRED on the review profile whenever both --ledger and --workflow are
+// passed, writing <dir>/<runId>.json with the manifest legs' observed UNTRUNCATED and the
+// workflow's reviewer return verbatim — the full-fidelity home the ledger row's 120-char slice
+// only summarizes. No-workflow --ledger rows (Phase 0 hard-stops) stay retain-optional
+// (reviewer: null when passed); --profile release rejects the flag as a usage error (no runId to
+// key an artifact by). D9 threads --retain <tmpdir> through every pre-existing review-profile
+// --ledger+--workflow invocation below in place, per the standing colliding-pin Gotcha — none
+// retagged, none weakened, none left red.
 
 const SCRIPT = 'scripts/verdict.js'
 
@@ -227,6 +238,7 @@ test('AC-20260818-01-6 (retag of AC-20260805-02-5/AC-20260816-02-8\'s legs-shape
   const manifest = writeManifest(dir, SIX_GREEN)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger',
+    '--retain', dir,
     '--spec', 'specs/20260805/02-review-evidence-manifest.md', '--tier', 'T2',
     '--diff-loc', '42', '--iteration', '1'])
   const lines = r.stdout.trim().split('\n')
@@ -262,7 +274,7 @@ test('AC-20260818-01-7: --ledger generates row.runId matching ^rv_[0-9a-f]{12}$ 
   const manifest = writeManifest(dir, SIX_GREEN)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
   const first = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger',
-    '--spec', 'x.md', '--tier', 'T2', '--diff-loc', '1', '--iteration', '1'])
+    '--retain', dir, '--spec', 'x.md', '--tier', 'T2', '--diff-loc', '1', '--iteration', '1'])
   const rowFirst = JSON.parse(first.stdout.trim().split('\n')[1])
   assert.ok(typeof rowFirst.runId === 'string' && /^rv_[0-9a-f]{12}$/.test(rowFirst.runId),
     'D5: when --run-id is absent, verdict.js must generate its own review-row id ("rv_" + 12 lowercase hex ' +
@@ -270,7 +282,7 @@ test('AC-20260818-01-7: --ledger generates row.runId matching ^rv_[0-9a-f]{12}$ 
     'contract, superseded because /spec:escape needs a real backlink on every row, not a conditional one: ' +
     JSON.stringify(rowFirst))
   const second = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger',
-    '--spec', 'x.md', '--tier', 'T2', '--diff-loc', '1', '--iteration', '1'])
+    '--retain', dir, '--spec', 'x.md', '--tier', 'T2', '--diff-loc', '1', '--iteration', '1'])
   const rowSecond = JSON.parse(second.stdout.trim().split('\n')[1])
   assert.ok(typeof rowSecond.runId === 'string' && /^rv_[0-9a-f]{12}$/.test(rowSecond.runId),
     'the second invocation\'s generated runId must also match the pinned shape: ' + JSON.stringify(rowSecond))
@@ -285,7 +297,8 @@ test('AC-20260818-01-8 (retag of AC-20260805-02-5\'s surviving half): --ledger C
   const manifest = writeManifest(dir, SIX_GREEN)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
   const withFlag = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger',
-    '--spec', 'x.md', '--tier', 'T2', '--diff-loc', '1', '--iteration', '1', '--run-id', 'wf_abc123'])
+    '--retain', dir, '--spec', 'x.md', '--tier', 'T2', '--diff-loc', '1', '--iteration', '1',
+    '--run-id', 'wf_abc123'])
   const rowWith = JSON.parse(withFlag.stdout.trim().split('\n')[1])
   assert.strictEqual(rowWith.runId, 'wf_abc123',
     'D5: a passed --run-id must win verbatim over generation — the orchestrator passes --run-id so ' +
@@ -300,14 +313,14 @@ test('AC-20260805-02-5: --ledger derives row.smoke from the manifest smoke row e
 
   const passRows = SIX_GREEN.map(r => (r.leg === 'smoke' ? { leg: 'smoke', exit: 0, observed: 'pass' } : r))
   const passManifest = writeManifest(dir, passRows)
-  const passRun = runNode(SCRIPT, ['--manifest', passManifest, '--workflow', workflow, '--ledger'])
+  const passRun = runNode(SCRIPT, ['--manifest', passManifest, '--workflow', workflow, '--ledger', '--retain', dir])
   const passRow = JSON.parse(passRun.stdout.trim().split('\n')[1])
   assert.strictEqual(passRow.smoke, 'pass',
     'a smoke row with exit 0 and observed "pass" must derive row.smoke "pass" — D2 requires smoke be ' +
     'derived FROM the manifest row, not hardcoded: ' + JSON.stringify(passRow))
 
   const inertManifest = writeManifest(dir, SIX_GREEN) // smoke row: exit 4, observed "inert"
-  const inertRun = runNode(SCRIPT, ['--manifest', inertManifest, '--workflow', workflow, '--ledger'])
+  const inertRun = runNode(SCRIPT, ['--manifest', inertManifest, '--workflow', workflow, '--ledger', '--retain', dir])
   const inertRow = JSON.parse(inertRun.stdout.trim().split('\n')[1])
   assert.strictEqual(inertRow.smoke, 'inert',
     'a smoke row with exit 4 (the sanctioned inert-green case) must derive row.smoke "inert" regardless of ' +
@@ -316,7 +329,7 @@ test('AC-20260805-02-5: --ledger derives row.smoke from the manifest smoke row e
 
   const failRows = SIX_GREEN.map(r => (r.leg === 'smoke' ? { leg: 'smoke', exit: 2, observed: 'boot-crash' } : r))
   const failManifest = writeManifest(dir, failRows)
-  const failRun = runNode(SCRIPT, ['--manifest', failManifest, '--workflow', workflow, '--ledger'])
+  const failRun = runNode(SCRIPT, ['--manifest', failManifest, '--workflow', workflow, '--ledger', '--retain', dir])
   const failRow = JSON.parse(failRun.stdout.trim().split('\n')[1])
   assert.strictEqual(failRow.smoke, 'fail',
     'a smoke row with a non-0, non-4 exit must derive row.smoke "fail" — the row must still print (GATE_RED ' +
@@ -329,7 +342,7 @@ test('AC-20260813-02-7 (updates AC-20260805-02-5) / AC-20260816-01-7 (CONTINUES 
   const rows = SIX_GREEN.map(r => (r.leg === 'gate' ? { leg: 'gate', exit: 0, observed: 'skips=2 todos=1' } : r))
   const manifest = writeManifest(dir, rows)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
-  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger'])
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
   const row = JSON.parse(r.stdout.trim().split('\n')[1])
   assert.strictEqual(typeof row.testsSkipped, 'object',
     'D2 makes row.testsSkipped an object ({total,sanctioned,unsanctioned}) always — a bare number here means ' +
@@ -382,7 +395,7 @@ test('AC-20260813-02-1: --ledger derives row.testsSkipped as {total,sanctioned,u
   })
   const manifest = writeManifest(dir, rows)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
-  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger'])
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
   const row = JSON.parse(r.stdout.trim().split('\n')[1])
   assert.deepStrictEqual(row.testsSkipped, { total: 3, sanctioned: 2, unsanctioned: 1 },
     'D2: gate "skips=2 todos=1" (total 3) joined with skip-reconcile "skipped=3 sanctioned=2" (sanctioned 2) ' +
@@ -400,7 +413,7 @@ test('AC-20260813-02-2: a legacy skip-reconcile "skipped=K" observed (no sanctio
   })
   const manifest = writeManifest(dir, rows)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
-  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger'])
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
   const row = JSON.parse(r.stdout.trim().split('\n')[1])
   assert.deepStrictEqual(row.testsSkipped, { total: 3, sanctioned: 0, unsanctioned: 3 },
     'D2: a legacy skip-reconcile row carrying only "skipped=2" (no sanctioned= term) must derive sanctioned:0 ' +
@@ -418,7 +431,7 @@ test('AC-20260818-01-2 (retag of AC-20260805-02-8): the review ledger row nests 
   const dir = tmpdir('verdict')
   const manifest = writeManifest(dir, SIX_GREEN)
   const workflow = writeWorkflow(dir, cleanWorkflow([{ severity: 'soft', id: 'AC-a' }]))
-  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--waived', '1'])
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir, '--waived', '1'])
   const row = JSON.parse(r.stdout.trim().split('\n')[1])
   assert.ok(row.findings && typeof row.findings === 'object',
     'the disposition counts must be nested under a findings object per review.md\'s documented ledger-row ' +
@@ -450,7 +463,7 @@ test('AC-20260805-02-8: --ledger normalizes an array-shaped workflow.killed to i
   workflowObj.killed = [{ file: 'x' }, { file: 'y' }]
   workflowObj.tokens = 777
   const workflow = writeWorkflow(dir, workflowObj)
-  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--waived', '1'])
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir, '--waived', '1'])
   const row = JSON.parse(r.stdout.trim().split('\n')[1])
   assert.strictEqual(row.findings.killed, 2,
     'workflow.killed arriving as an array of killed-finding objects must be normalized to its LENGTH under ' +
@@ -780,7 +793,7 @@ test('AC-20260818-01-2: the same red-findings-leg manifest reaches CLEAN once it
     ? { leg: 'promise-sweep', exit: 1, observed: 'rows=9 carried=5 sanctioned=2 orphans=2' } : r))
   const manifest = writeManifest(dir, rows)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
-  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '2', '--ledger'])
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '2', '--ledger', '--retain', dir])
   const lines = r.stdout.trim().split('\n')
   assert.strictEqual(lines[0], 'CLEAN',
     'D2: promise-sweep\'s "orphans=2" observed must parse to exactly 2 leg findings, so waiving 2 fully ' +
@@ -808,7 +821,7 @@ test('AC-20260818-01-3: a red leg\'s contribution to legFindings is parsed from 
   for (const c of cases) {
     const rows = SIX_GREEN.map(r => (r.leg === c.leg ? c.row : r))
     const manifest = writeManifest(dir, rows)
-    const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger'])
+    const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
     const row = JSON.parse(r.stdout.trim().split('\n')[1])
     assert.strictEqual(row.findings.legFindings, c.expected,
       `D2: a red ${c.leg} row observed "${c.row.observed}" must parse to legFindings:${c.expected} — a ` +
@@ -853,7 +866,7 @@ test('AC-20260818-01-5: --ledger retains each leg\'s observed string in the row,
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
 
   const passManifest = writeManifest(dir, SIX_GREEN)
-  const passRun = runNode(SCRIPT, ['--manifest', passManifest, '--workflow', workflow, '--ledger'])
+  const passRun = runNode(SCRIPT, ['--manifest', passManifest, '--workflow', workflow, '--ledger', '--retain', dir])
   const passRow = JSON.parse(passRun.stdout.trim().split('\n')[1])
   const passCi = passRow.legs.find(l => l.leg === 'ci')
   assert.strictEqual(passCi.observed, 'conclusion=success',
@@ -861,7 +874,7 @@ test('AC-20260818-01-5: --ledger retains each leg\'s observed string in the row,
     'makes "CI passed" indistinguishable from "no CI exists": ' + JSON.stringify(passCi))
 
   const unavailManifest = writeManifest(dir, SIX_GREEN_CI_UNAVAILABLE)
-  const unavailRun = runNode(SCRIPT, ['--manifest', unavailManifest, '--workflow', workflow, '--ledger'])
+  const unavailRun = runNode(SCRIPT, ['--manifest', unavailManifest, '--workflow', workflow, '--ledger', '--retain', dir])
   const unavailRow = JSON.parse(unavailRun.stdout.trim().split('\n')[1])
   const unavailCi = unavailRow.legs.find(l => l.leg === 'ci')
   assert.strictEqual(unavailCi.observed, 'unavailable',
@@ -871,4 +884,189 @@ test('AC-20260818-01-5: --ledger retains each leg\'s observed string in the row,
   assert.notStrictEqual(passCi.observed, unavailCi.observed,
     'a pass and a structurally-absent observation must never collapse to the same ledger string: ' +
     passCi.observed + ' vs ' + unavailCi.observed)
+})
+
+// --- specs/20260819/01-review-evidence-retention.md: AC-20260819-01-1 .. -01-7 (D1-D4) ---
+// AC-1/-6/-7 share one fixture (a 300-char leg observed string plus a survivor carrying an
+// `evidence` string) so the byte-untruncated artifact and the byte-unchanged stdout/ledger
+// contracts are pinned against the exact same input, per the spec's own AC-6/-7 text ("e.g. the
+// AC-1 fixture's row"). The leg elongated is promise-sweep, left exit:0 (green) so its observed
+// content never feeds legFindings parsing (that grammar only applies to a RED leg, AC-20260818-
+// 01-3) and the derivation stays reachable to CLEAN via the one waived survivor.
+
+const LONG_OBSERVED = 'o'.repeat(300)
+
+function retentionFixture(dir) {
+  const rows = SIX_GREEN.map(r => (r.leg === 'promise-sweep'
+    ? { leg: 'promise-sweep', exit: 0, observed: LONG_OBSERVED } : r))
+  const manifest = writeManifest(dir, rows)
+  const workflowObj = cleanWorkflow([
+    { severity: 'soft', id: 'AC-20260819-01-x', evidence: 'e'.repeat(40) + '-repro-transcript' },
+  ])
+  const workflow = writeWorkflow(dir, workflowObj)
+  return { manifest, workflow, rows, workflowObj }
+}
+
+test('AC-20260819-01-1: the review profile with --ledger, --workflow, and --retain <dir> writes <dir>/<runId>.json carrying the derived verdict, dispositions, every manifest leg row with observed untruncated, and the workflow return verbatim', () => {
+  const dir = tmpdir('verdict-retain')
+  const retainDir = path.join(dir, 'spec-runs')
+  const { manifest, workflow, rows, workflowObj } = retentionFixture(dir)
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', retainDir,
+    '--waived', '1', '--spec', 'specs/20260819/01-review-evidence-retention.md', '--tier', 'critical',
+    '--diff-loc', '10', '--iteration', '1'])
+  assert.strictEqual(r.status, 0,
+    'D1: a fully-dispositioned retained review run must exit 0, not fail merely because --retain is now the ' +
+    'required flag: ' + r.stdout + ' / ' + r.stderr)
+  const row = JSON.parse(r.stdout.trim().split('\n')[1])
+  const artifactPath = path.join(retainDir, row.runId + '.json')
+  assert.ok(fs.existsSync(artifactPath),
+    'D1: a --retain invocation must write <dir>/<runId>.json keyed by the ledger row\'s own runId — no ' +
+    'artifact at that path means /spec:escape has nothing to read: ' + artifactPath)
+  const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'))
+  assert.strictEqual(artifact.verdict, row.verdict,
+    'the artifact\'s verdict must equal the ledger row\'s derived verdict — a mismatch means the two records ' +
+    'of the same run disagree about what happened: ' + JSON.stringify(artifact))
+  assert.deepStrictEqual(artifact.dispositions, { waived: 1, rejected: 0, fixDispatched: 0 },
+    'the artifact must carry a dispositions object reflecting the counts this invocation actually passed: ' +
+    JSON.stringify(artifact.dispositions))
+  assert.deepStrictEqual(artifact.legs, rows,
+    'D1: the artifact\'s legs must mirror the manifest rows exactly, including the untruncated 300-char ' +
+    'observed string on the promise-sweep leg — the ledger row\'s 120-char slice is a summary and the ' +
+    'artifact is the full-fidelity home retention exists to provide: ' + JSON.stringify(artifact.legs))
+  assert.strictEqual(artifact.reviewer.survivors[0].evidence, workflowObj.survivors[0].evidence,
+    'the artifact\'s reviewer block must carry the workflow file\'s survivors verbatim, including the ' +
+    'evidence string byte-for-byte — a lossy copy here defeats /spec:escape\'s derivation of killedMatch ' +
+    'from the retained artifact: ' + JSON.stringify(artifact.reviewer))
+})
+
+test('AC-20260819-01-2: the review profile with --ledger and --workflow but no --retain exits 2 naming --retain .claude/spec-runs as the remedy and prints no verdict word', () => {
+  const dir = tmpdir('verdict-retain-missing')
+  const { manifest, workflow } = retentionFixture(dir)
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--waived', '1'])
+  assert.strictEqual(r.status, 2,
+    'D1: an authoritative review invocation (--ledger + --workflow) with no --retain must exit 2 — the flag ' +
+    'is REQUIRED here so a review that forgets retention fails loudly at verdict time instead of succeeding ' +
+    'amnesiac: ' + r.stdout + ' / ' + r.stderr)
+  assert.match(r.stderr, /--retain \.claude\/spec-runs/,
+    'D1: the error must name the exact flag and the canonical remedy path — a vague message leaves the fix ' +
+    'undiscoverable, contradicting the host\'s "error messages name the remedy command" rule: ' + r.stderr)
+  assert.ok(!VERDICT_WORDS.test((r.stdout.split('\n')[0] || '').trim()),
+    'no verdict word may print on the missing---retain usage error — a caller reading stdout without ' +
+    'checking the exit code must not see a fabricated verdict: ' + JSON.stringify(r.stdout))
+})
+
+test('AC-20260819-01-3: retention names the artifact by the row\'s runId — a passed --run-id verbatim, or the generated rv_ id — and creates the --retain directory when it does not yet exist', () => {
+  const dir = tmpdir('verdict-retain-mkdir')
+  const { manifest, workflow } = retentionFixture(dir)
+  const retainDir = path.join(dir, 'nested', 'spec-runs')
+  assert.ok(!fs.existsSync(retainDir),
+    'the fixture must not pre-create the --retain directory, or this test cannot prove verdict.js creates ' +
+    'it on demand: ' + retainDir)
+
+  const withRunId = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger',
+    '--retain', retainDir, '--waived', '1', '--run-id', 'wf_abc123'])
+  assert.strictEqual(withRunId.status, 0,
+    'D1/D3: a fully-dispositioned retained run against a not-yet-existing --retain directory must still ' +
+    'exit 0: ' + withRunId.stdout + ' / ' + withRunId.stderr)
+  assert.ok(fs.existsSync(path.join(retainDir, 'wf_abc123.json')),
+    'D1: a passed --run-id must name the artifact <dir>/wf_abc123.json, and the directory must have been ' +
+    'created since it did not exist before this run: ' + retainDir)
+
+  const generated = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger',
+    '--retain', retainDir, '--waived', '1'])
+  const row = JSON.parse(generated.stdout.trim().split('\n')[1])
+  assert.match(row.runId, /^rv_[0-9a-f]{12}$/,
+    'without --run-id the row\'s runId must still be the D5-generated rv_ id: ' + JSON.stringify(row))
+  assert.ok(fs.existsSync(path.join(retainDir, row.runId + '.json')),
+    'D1: the generated-runId case must name the artifact by the row\'s OWN generated runId, equal to the ' +
+    'filename actually written — a mismatch breaks the derivable <dir>/<runId>.json path the Contracts ' +
+    'block documents: ' + retainDir)
+})
+
+test('AC-20260819-01-4: --ledger without --workflow (the hard-stop row) does not require --retain, and when --retain is passed anyway the artifact is written with reviewer null and the manifest legs verbatim', () => {
+  const dir = tmpdir('verdict-retain-hardstop')
+  const gateRedRows = SIX_GREEN.map(r => (r.leg === 'ci' ? { leg: 'ci', exit: 1, observed: 'conclusion=failure' } : r))
+  const manifest = writeManifest(dir, gateRedRows)
+
+  const noRetain = runNode(SCRIPT, ['--manifest', manifest, '--ledger'])
+  assert.strictEqual(noRetain.stdout.split('\n')[0], 'GATE_RED',
+    'the fixture\'s red ci leg must still derive GATE_RED with no --workflow present, establishing this as ' +
+    'the Phase 0 hard-stop shape D2 describes: ' + noRetain.stdout + ' / ' + noRetain.stderr)
+  assert.strictEqual(noRetain.status, 1,
+    'D2: a no-workflow --ledger invocation (the Phase 0 hard-stop row) must exit 1 for GATE_RED, never the 2 ' +
+    'a missing-required-flag usage error would produce — requiring --retain here would block the stop-path ' +
+    'row 20260813 D3 exists to keep: ' + noRetain.stderr)
+
+  const retainDir = path.join(dir, 'spec-runs')
+  const withRetain = runNode(SCRIPT, ['--manifest', manifest, '--ledger', '--retain', retainDir])
+  assert.strictEqual(withRetain.status, 1, 'GATE_RED with --retain passed anyway must still exit 1: ' + withRetain.stderr)
+  const row = JSON.parse(withRetain.stdout.trim().split('\n')[1])
+  const artifactPath = path.join(retainDir, row.runId + '.json')
+  assert.ok(fs.existsSync(artifactPath),
+    'D2: --retain passed on a no-workflow invocation must still write the artifact — manifest-only legs are ' +
+    'worth retaining too: ' + artifactPath)
+  const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'))
+  assert.strictEqual(artifact.reviewer, null,
+    'D2: with no --workflow file, the artifact\'s reviewer field must be null, never fabricated or omitted ' +
+    '— a fabricated reviewer block would misreport a review that never ran: ' + JSON.stringify(artifact))
+  assert.deepStrictEqual(artifact.legs, gateRedRows,
+    'D2: the manifest legs must still be written verbatim into the artifact even with no reviewer present: ' +
+    JSON.stringify(artifact.legs))
+})
+
+// Vacuity note (same class as the standing Gotcha for specs/20260817/07's AC-20260817-07-12 /
+// specs/20260815/02's AC-20260815-02-7): pre-implementation, verdict.js's arg parser does not
+// recognize --retain on ANY profile, so it already exits 2 with a generic "usage: verdict.js…"
+// message on this invocation — this AC is vacuously true on current code for the wrong reason
+// (unknown-flag rejection, not D3's release-specific "no runId to key an artifact by" rejection).
+// AC-20260819-01-2's requiredness-message pin is the companion that actually reddens for the
+// --retain parsing mechanism; this assertion is kept unweakened as the correct terminal contract
+// (status 2, no artifact) and becomes a genuine pin once D1's --retain parsing exists and D3's
+// release branch is reachable behind it.
+test('AC-20260819-01-5: --profile release with --retain is a usage error, exit 2, and no artifact is ever written', () => {
+  const dir = tmpdir('verdict-retain-release')
+  const manifest = writeManifest(dir, RELEASE_SEVEN_LEGS)
+  const retainDir = path.join(dir, 'spec-runs')
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--profile', 'release', '--ledger', '--retain', retainDir,
+    '--milestone', 'v1.2.3', '--briefs', '12,13'])
+  assert.strictEqual(r.status, 2,
+    'D3: --retain on the release profile must be a usage error — release rows carry no runId and no ' +
+    'reviewer return, so accepting the flag would mint an artifact nothing can ever key or read: ' +
+    r.stdout + ' / ' + r.stderr)
+  assert.ok(!fs.existsSync(retainDir) || fs.readdirSync(retainDir).length === 0,
+    'D3: a rejected --retain on the release profile must never write an artifact — a stray file here would ' +
+    'be evidence keyed by a runId the release row never carries: ' + retainDir)
+})
+
+test('AC-20260819-01-6: --ledger CONTINUES TO truncate each leg\'s observed at 120 chars in the printed row and carry exactly the seven findings keys — retention adds no new ledger key', () => {
+  const dir = tmpdir('verdict-retain-truncate')
+  const retainDir = path.join(dir, 'spec-runs')
+  const { manifest, workflow } = retentionFixture(dir)
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', retainDir,
+    '--waived', '1'])
+  const row = JSON.parse(r.stdout.trim().split('\n')[1])
+  const promiseSweepLeg = row.legs.find(l => l.leg === 'promise-sweep')
+  assert.strictEqual(promiseSweepLeg.observed.length, 120,
+    'D4: retention must not change the printed ledger row\'s existing 120-char observed slice — a 300-char ' +
+    'source observed must still print truncated to 120, with the full string living only in the retained ' +
+    'artifact (AC-1): got ' + promiseSweepLeg.observed.length + ' chars')
+  assert.strictEqual(Object.keys(row.findings).length, 7,
+    'D4: retention adds no new ledger key — row.findings must still carry exactly its seven documented keys ' +
+    '(survived/killed/waived/rejected/fixDispatched/reviewerCount/legFindings), never an eighth for the ' +
+    'artifact path or retain directory: ' + JSON.stringify(row.findings))
+})
+
+test('AC-20260819-01-7: retention CONTINUES TO print exactly the verdict word as stdout line 1 and the ledger row as stdout line 2 with nothing after', () => {
+  const dir = tmpdir('verdict-retain-stdout-shape')
+  const retainDir = path.join(dir, 'spec-runs')
+  const { manifest, workflow } = retentionFixture(dir)
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', retainDir,
+    '--waived', '1'])
+  assert.strictEqual(r.stdout.trim().split('\n').length, 2,
+    'D4: a successful retained review invocation must still print exactly two stdout lines (verdict word, ' +
+    'ledger row) — a third line (e.g. an artifact-path confirmation) would break every consumer that ' +
+    'indexes stdout lines [0]/[1] only (A1: "all 19 --ledger pin sites split and index [0]/[1] only"): ' +
+    JSON.stringify(r.stdout))
+  assert.match(r.stdout.trim().split('\n')[0], VERDICT_WORDS,
+    'line 1 must still be a bare verdict word, never prose or a path: ' + JSON.stringify(r.stdout))
 })

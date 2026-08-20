@@ -1,7 +1,8 @@
 ---
 date: 2026-08-20
-status: hardened
+status: implementing
 open_markers: 0
+diff_base: cf10ce87c8c5f0a16b04c060130dd1da04beb38f
 tier: standard
 area: consistency-guards
 design: false
@@ -35,6 +36,8 @@ the diff that introduces it instead of surfacing as a host field report.
 | D4 | Reverse check: every `spec-paths <key>` occurrence under `spec/commands/`, `spec/doctrine/`, `spec/agents/`, `spec/templates/`, `git/commands/`, plus every `${CLAUDE_PLUGIN_ROOT}` script path in `spec/hooks/hooks.json`, must map to a manifest entry that declares that file (AC-20260820-04-5) | An invocation the manifest doesn't know means the manifest lies about coverage; the reverse direction is what keeps declarations honest without a human sweep |
 | D5 | The checker logic lives in the test file as pure functions over an injectable root, exercised twice: against the live repo (green pin) and against `tmpdir()` fixture repos for each red case — missing entry, dangling key, declared-but-absent invocation, undeclared call site (AC-20260820-04-2..6) | House test style is behavioral-in-tmpdir; live-repo-only assertions would make the red paths unfalsifiable (the live repo is, by definition, green) |
 | D6 | Non-goals, recorded: no `observed`-grammar declarations in the manifest (spec 03's executed pair test owns grammar liveness — prose grammar rows would be unverified registry rows, the exact v7 smell), and no dynamic-invocation detection (a call site grep cannot see is listed manually in `entryPoints`; the forward check then only verifies file existence for entries flagged `"dynamic": true`) [no-ac: scoping decision — the delivered surface is D1–D5's] | Keep the guard exactly as strong as what it can verify by execution; declared-but-unverifiable rows are what made registries rot |
+| D7 | `spec/scripts/advisory-append.js` is DELETED, along with its `spec-paths advisory-append` case-table entry, its usage-line token, and `tests/advisory-append/advisory-append.test.js` — the guard's first catch, adjudicated by the user at build time 2026-08-20 (AC-20260820-04-6) | The script's sole producer was `wf-review`'s `smells` return; v7 deleted the review workflow and nothing has invoked the script since — a genuine orphan of exactly the class D3 declares red. Re-wiring it would restore a dropped feature (a design call, its own spec); an exempt marker would create the sanctioned-orphan form D3 rules out. Deletion is the only option that keeps the guard as strong as authored. Historical incident-header prose naming the file (tests/tracked-text-purity.test.js) is an incident record, not an invocation, and stays |
+| D8 | The reverse check (D4) considers a `spec-paths <key>` occurrence only when the key resolves to a path inside D1's executable inventory (`spec/scripts/*.js|*.sh` minus `lib/`, `spec/workflows/*.js`); keys resolving to doctrine files, templates, or directories are not script invocations and raise nothing (AC-20260820-04-5) | Nine live keys (`shared`, `shared-design`, `shared-genesis`, `replay-corpus`, `template`, `feedback-template`, `templates`, `contract`, `workflows`) resolve to non-executables. D4 read literally would demand a manifest entry for `spec/doctrine/core.md`, and the only ways to satisfy it are to key non-executables (breaking D1) or to weaken the check — so D4's domain is D1's domain, made explicit here rather than left to the checker's author |
 
 ## File Plan
 
@@ -43,6 +46,9 @@ the diff that introduces it instead of surfacing as a host field report.
 | spec/entrypoints.json | CREATE | other | D1: manifest seeded from the repo's actual call sites at build time (post-03 reality, including review-legs.js → env-preflight.js) |
 | tests/consistency/entrypoints.test.js | CREATE | tests | AC-20260820-04-1, AC-20260820-04-2, AC-20260820-04-3, AC-20260820-04-4, AC-20260820-04-5, AC-20260820-04-6 |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | Version bump target 7.8.0 (next free at build time) + description changelog |
+| spec/scripts/advisory-append.js | DELETE | scripts | D7: orphaned since v7 deleted its `wf-review` producer — the guard's first catch |
+| tests/advisory-append/advisory-append.test.js | DELETE | tests | D7: the deleted script's test suite |
+| spec/bin/spec-paths | MODIFY | scripts | D7: drop the `advisory-append` case entry and its usage-line token |
 
 ## Contracts
 

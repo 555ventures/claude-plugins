@@ -5,10 +5,7 @@
   "testCommand": "node --test",
   "setupCommand": "npm install",
   "runtime": {
-    "bootCommand": "rm -f /tmp/autopilot-preflight.ready /tmp/autopilot-preflight-overrides.json && node autopilot/bin/autopilotd --check --hold --ready-file /tmp/autopilot-preflight.ready --hub-config autopilot/fixtures/preflight-hub.json --config /tmp/autopilot-preflight-overrides.json --state-dir /tmp/autopilot-preflight-state",
-    "readyCheck": "test -f /tmp/autopilot-preflight.ready",
-    "readyTimeout": 60,
-    "stopSignal": "SIGTERM"
+    "inert": "marketplace of CLI plugins and dependency-free scripts \u2014 no bootable app; the autopilot daemon is parked (JJ 2026-08-18, confirmed 2026-08-20)"
   },
   "capabilities": {
     "forge": "github",

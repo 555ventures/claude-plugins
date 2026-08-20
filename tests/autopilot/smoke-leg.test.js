@@ -3,29 +3,27 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const { ROOT, runBash } = require('../helpers')
 
-// spec: specs/20260801/04-live-smoke.md — pins AC-20260801-04-6 for the boot-smoke leg
-// (D3/D4). Today's .claude/spec.config.json still declares `runtime.inert`, the stale
-// exemption this spec exists to close — smoke.sh reads that block first and short-circuits
-// to __SMOKE_INERT__/exit 4 before ever trying to boot anything, so this fails on current
-// code regardless of whether autopilotd's --check/--hold flags land. Runs against the
-// repo's OWN real config (not a synthetic fixture) — that is the whole point: a stale
-// runtime declaration voided executed verification for three consecutive spec reviews
-// (Rationale), and only the real config file can prove the class of failure is closed.
+// spec: specs/20260801/04-live-smoke.md — originally pinned AC-20260801-04-6: smoke.sh
+// against this repo's REAL config must boot autopilotd and print __SMOKE_PASS__, closing a
+// stale runtime.inert exemption that had voided executed verification for three reviews
+// while a bootable daemon existed.
 //
-// specs/20260815/04-runtime-shutdown-leg.md D5(b): the shutdown observation (D1) adds a new
-// exit code (6 = shutdown failed) to smoke.sh's alphabet. This suite runs against this
-// repo's real, live daemon config, which the spike executed and confirmed exits 0 on
-// SIGTERM via its own handler — so the run stays green — but the assertion message's failure
-// prose enumerated the old alphabet by hand and must name 6 too, or a real shutdown
-// regression in this repo's own daemon would print a message that doesn't mention the code
-// that actually fired.
+// REVERSED 2026-08-20 (JJ ruling, autopilot parked as product failure 2026-08-18): there is
+// no bootable product in this repo any more, so `runtime.inert` is now the TRUE declaration
+// and a bootCommand claiming otherwise would be the stale lie. The pin's job is unchanged in
+// spirit — smoke.sh against the real config must yield its sanctioned outcome, and the
+// config must never silently drift — but the sanctioned outcome is now __SMOKE_INERT__/exit 4
+// with a reason naming the parked daemon. If autopilot is ever revived as a bootable
+// product, this pin must flip back to __SMOKE_PASS__/exit 0 in the same commit that revives
+// it — an inert declaration alongside a real bootable app is exactly the class of lie the
+// original AC existed to kill.
 
-test('AC-20260801-04-6 (D5(b) alphabet update, specs/20260815/04): smoke.sh against this repo\'s real .claude/spec.config.json prints __SMOKE_PASS__ and exits 0', () => {
+test('JJ-20260820 (supersedes AC-20260801-04-6): smoke.sh against this repo\'s real .claude/spec.config.json prints __SMOKE_INERT__ naming the parked daemon and exits 4', () => {
   const res = runBash('scripts/smoke.sh', [], { cwd: ROOT, timeout: 90000 })
-  assert.strictEqual(res.status, 0,
-    `smoke.sh must exit 0 against this repo's real runtime config — anything else (4 = still __SMOKE_INERT__, 2 = boot-crashed, 1 = not-ready, 6 = shutdown failed — hung or unclean on the declared stop signal) means /spec:review's one executed-verification leg still isn't passing against a real bootable process; got status=${res.status} stdout=${res.stdout} stderr=${res.stderr}`)
-  assert.match(res.stdout, /__SMOKE_PASS__/,
-    `the __SMOKE_PASS__ sentinel is the machine verdict every caller of smoke.sh keys off of; its absence (e.g. __SMOKE_INERT__ from the stale runtime.inert declaration this spec replaces) means every future review still runs with zero executed verification; got stdout=${res.stdout}`)
-  assert.doesNotMatch(res.stdout, /__SMOKE_INERT__/,
-    `runtime.inert must be replaced by a real bootCommand/readyCheck block (D4) — an __SMOKE_INERT__ line means the stale exemption this spec exists to close is still in place`)
+  assert.strictEqual(res.status, 4,
+    `smoke.sh must exit 4 (sanctioned inert) against this repo's real runtime config — exit 0 means a bootCommand crept back in without reviving this pin's boot assertions, and 1/2/6 mean the config claims something bootable that is not; got status=${res.status} stdout=${res.stdout} stderr=${res.stderr}`)
+  assert.match(res.stdout, /__SMOKE_INERT__/,
+    `the __SMOKE_INERT__ sentinel is the machine verdict callers key off for an inert host; its absence means the config's runtime block no longer declares inert and every review's smoke leg is now booting something in a repo with no bootable product; got stdout=${res.stdout}`)
+  assert.match(res.stdout, /parked/,
+    `the inert reason must name WHY there is nothing to boot (the parked autopilot daemon) — a reasonless or rewritten inert declaration loses the audit trail that distinguishes an honest inert from the stale-exemption lie the original AC-20260801-04-6 closed`)
 })

@@ -12,6 +12,17 @@ const { tmpdir, runNode } = require('../helpers')
 // promise-sweep.js, by executing it against synthetic specs in tmpdir() — the script does not
 // exist yet at HEAD, so every test here is a TDD red pin. It reads ONLY the spec text (no
 // --root, no File Plan, no test-file reads — that half of the chain stays ac-matrix's).
+//
+// specs/20260820/03-review-observation-truth.md D5 (AC-20260820-03-7 .. -03-9, 2026-08-20, Salon
+// OS field report — 52 noise findings that trained bulk-waiving, which shipped escape
+// rv_8b7c4e2e9ec0 inside a 17/17-waive review): the sweep applied retroactively to specs locked
+// before the carrier convention existed. It now gains an applicability cutoff — spec date = the
+// first `specs/<YYYYMMDD>/` path segment, compared against built-in `APPLIES_FROM = '20260817'`
+// (the date specs/20260817/07 shipped the convention). A pre-cutoff spec exits 0 with zero
+// findings and (with --manifest) appends a distinct `not-applicable` row instead of sweeping —
+// even a spec whose Decisions carry a genuinely uncarried row. A path with no dated segment
+// applies the sweep in full (fail-closed, unchanged behavior) — AC-20260817-07-2's tmpdir-based
+// fixture below already pins that default and is retagged accordingly.
 
 function specMd({ decisionsRows, acLines }) {
   return '# Test Spec\n\n## Decisions\n\n' +
@@ -66,7 +77,7 @@ test('AC-20260817-07-1: a Decisions row citing an AC-ID declared in this spec\'s
     `otherwise — got "${row.observed}"`)
 })
 
-test('AC-20260817-07-2: a non-struck Decisions row with no AC-ID token and no [no-ac:] tag is an orphan, exiting 1 with a hard orphan-decision finding naming its own D-ID', () => {
+test('AC-20260817-07-2 / AC-20260820-03-8 (CONTINUES TO enumerate and finding fully — this tmpdir spec path carries no specs/<YYYYMMDD>/ segment, pinning D5\'s fail-closed default for undated paths): a non-struck Decisions row with no AC-ID token and no [no-ac:] tag is an orphan, exiting 1 with a hard orphan-decision finding naming its own D-ID', () => {
   const dir = tmpdir('ps2')
   const spec = path.join(dir, 'spec.md')
   fs.writeFileSync(spec, specMd({
@@ -245,4 +256,44 @@ test('AC-20260817-07-8: --manifest <path> appends exactly one promise-sweep JSON
   assert.deepStrictEqual(afterFiles, [...beforeFiles, 'spec-nomanifest.md'].sort(),
     `plan-lock mode (--manifest omitted) must write NO file at all — the directory must gain only the spec ` +
     `file this test itself wrote, never a manifest or any stray side file (stderr: ${resNoManifest.stderr})`)
+})
+
+test('AC-20260820-03-7: a spec whose path\'s dated segment predates the cutoff (specs/20260701/...) exits 0 with zero findings even though its lone Decisions row is uncarried, stdout naming "not-applicable spec=20260701 appliesFrom=20260817"', () => {
+  const dir = tmpdir('ps-cutoff')
+  const specDir = path.join(dir, 'specs', '20260701')
+  fs.mkdirSync(specDir, { recursive: true })
+  const spec = path.join(specDir, '01-old.md')
+  fs.writeFileSync(spec, specMd({
+    decisionsRows: ['| D1 | does X | why |'], // uncarried: no AC-ID, no [no-ac:] — would orphan if genuinely swept
+    acLines: ['- **AC-20260899-99-1**: WHEN X THE SYSTEM SHALL Y → tests/foo.test.js'],
+  }))
+  const manifest = writeManifest(dir, [])
+  const res = run(spec, manifest)
+  assert.strictEqual(res.status, 0,
+    `D5: a spec dated before APPLIES_FROM (20260817) must exit 0 with zero findings regardless of an ` +
+    `uncarried Decisions row — retroactive application to pre-convention specs is the exact defect that ` +
+    `trained bulk-waiving and shipped escape rv_8b7c4e2e9ec0 (stderr: ${res.stderr})`)
+  assert.match(res.stdout, /not-applicable spec=20260701 appliesFrom=20260817/,
+    `D5: stdout must contain the literal "not-applicable spec=20260701 appliesFrom=20260817" so a caller ` +
+    `reading console output (not just the manifest) can tell a genuinely-swept clean spec from one the ` +
+    `cutoff exempted — got "${res.stdout}"`)
+})
+
+test('AC-20260820-03-9: --manifest for the same pre-cutoff spec appends exactly one promise-sweep row {"exit":0,"observed":"not-applicable spec=20260701 appliesFrom=20260817"}', () => {
+  const dir = tmpdir('ps-cutoff-manifest')
+  const specDir = path.join(dir, 'specs', '20260701')
+  fs.mkdirSync(specDir, { recursive: true })
+  const spec = path.join(specDir, '01-old.md')
+  fs.writeFileSync(spec, specMd({
+    decisionsRows: ['| D1 | does X | why |'],
+    acLines: ['- **AC-20260899-99-1**: WHEN X THE SYSTEM SHALL Y → tests/foo.test.js'],
+  }))
+  const manifest = writeManifest(dir, [])
+  run(spec, manifest)
+  const row = lastManifestRow(manifest)
+  assert.deepStrictEqual(row, {
+    leg: 'promise-sweep', exit: 0, observed: 'not-applicable spec=20260701 appliesFrom=20260817',
+  }, `D5: the appended manifest row for a pre-cutoff spec must be exactly this shape — a caller consuming ` +
+    `the manifest cannot distinguish "genuinely swept, zero orphans" from "skipped by the cutoff entirely" ` +
+    `without this distinct observed literal — got ${JSON.stringify(row)}`)
 })

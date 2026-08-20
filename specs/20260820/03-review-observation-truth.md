@@ -1,6 +1,6 @@
 ---
 date: 2026-08-20
-status: hardened
+status: implementing
 open_markers: 0
 tier: critical
 area: review-verification
@@ -9,6 +9,7 @@ breaking: false
 depends_on: []
 depended_on_by: ["specs/20260820/04-entrypoint-conformance.md"]
 brief: n/a
+diff_base: b098cd9eb5febc1798c8249f8be9f3a78b8b431c
 ---
 
 # Review Observation Truth — typed unavailability, env preflight in review, promise-sweep applicability

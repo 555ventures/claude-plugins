@@ -80,6 +80,20 @@
 // artifact write adds no third stdout line and no eighth `findings` key — the retained file is
 // the full-fidelity home, the printed row stays the summary.
 //
+// Incident (2026-08-20, spec review-observation-truth.md D2-D4, Salon OS field report): a gate
+// row whose `observed` was unparseable by the "skips=N todos=M" grammar silently decayed to
+// `testsSkipped: {total:0,...}` and a CLEAN verdict — a fabricated zero-skip measurement no run
+// ever made, violating UPWELL-20260716-02's never-assumed-zero rule. `deriveTestsSkipped` now
+// types any gate `observed` starting with "unavailable" as exactly `{"unavailable":true}` (D2),
+// never the `{total,sanctioned,unsanctioned}` shape (unchanged for a parseable "skips=N todos=M"
+// row). An exit-0 gate row whose `observed` is EXACTLY "unavailable — skip format did not match
+// gate output" additionally contributes 1 finding to the leg-findings pool (D3) — a narrow,
+// deliberate special case inside `computeLegFindings`, which otherwise skips every blocking leg
+// (gate included) entirely; this does not lift that skip. The sibling literal "unavailable — host
+// runner declares no skip format" (declared-none, honest standing config, not drift) raises no
+// finding. `legIsRed`/`GATE_RED` derivation stays exit-code-only and untouched (D4) — the D3
+// finding rides the leg-findings pool alone and never derives GATE_RED.
+//
 // Exit codes: 0 = derived CLEAN · 1 = derived other non-CLEAN word
 // (still printed on stdout line 1) · 2 = usage error, missing/unreadable --manifest or
 // --workflow file, a disposition contradiction (--waived + --rejected + --fixDispatched
@@ -260,6 +274,16 @@ function computeLegFindings() {
     if (blockingLegs.has(leg)) continue
     if (legIsRed(leg)) total += countLegFinding(row)
   }
+  // D3 (specs/20260820/03-review-observation-truth.md): gate is a blocking leg and is skipped by
+  // the loop above like every other blocking leg — this is a deliberate, narrow addition, not a
+  // lifting of that skip. An exit-0 gate row whose observed is EXACTLY the did-not-match literal
+  // still contributes 1 finding, so a run whose skip observation went unparseable pages itself
+  // instead of decaying silently over five runs (dead-man's-switch, no cross-run state). The
+  // sibling declared-none literal is honest standing config and must key on nothing here.
+  const gateRow = legRows.get('gate')
+  if (gateRow && gateRow.exit === 0 && gateRow.observed === 'unavailable — skip format did not match gate output') {
+    total += 1
+  }
   return total
 }
 
@@ -310,7 +334,12 @@ function deriveSmoke(row) {
 }
 
 function deriveTestsSkipped(gateRow, skipReconcileRow) {
-  const gm = gateRow && /^skips=(\d+) todos=(\d+)$/.exec(gateRow.observed || '')
+  const gateObserved = (gateRow && gateRow.observed) || ''
+  // D2: a structurally-absent observation is typed, never coerced to a fabricated zero — this
+  // check must run BEFORE the "skips=N todos=M" regex, since "unavailable — …" never matches it
+  // anyway but the typed shape communicates the distinction explicitly rather than by accident.
+  if (/^unavailable/.test(gateObserved)) return { unavailable: true }
+  const gm = /^skips=(\d+) todos=(\d+)$/.exec(gateObserved)
   const total = gm ? Number(gm[1]) + Number(gm[2]) : 0
   const sm = skipReconcileRow && /^skipped=(\d+)(?: sanctioned=(\d+))?$/.exec(skipReconcileRow.observed || '')
   const sanctioned = sm && sm[2] !== undefined ? Number(sm[2]) : 0

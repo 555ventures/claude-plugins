@@ -17,6 +17,17 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // host spec below gains a `## Decisions` section with one row carrying the spec's own AC-ID
 // (per the spec's own Fragile Spots note) so the green-host test's exit-0 assertions keep
 // meaning "every leg genuinely passed" rather than "promise-sweep honestly reported an orphan".
+//
+// specs/20260820/03-review-observation-truth.md D1 (AC-20260820-03-1, AC-20260820-03-2,
+// 2026-08-20, Salon OS field report): env-preflight.js was authored and wired into
+// build/design/doctor but absent from the review path (the 3rd recurrence of the
+// authored-not-activated class) — review-legs.js now runs `env-preflight.js --root <root>`
+// (default mode) as a precondition before wave 1; a preflight exit 1 (an unset declared
+// `testEnv` var) becomes review-legs.js exit 2, stderr naming the unset var(s) and their
+// provision command(s), with NO manifest row appended for any leg. `makeHost` below grows an
+// optional `testEnv` param so the one new test can declare an unset gating var without
+// disturbing every other fixture in this file, which omit it and so see zero behavior change
+// (AC-2 — the existing green-host test, tagged below).
 
 const SCRIPT = 'scripts/review-legs.js'
 
@@ -44,18 +55,22 @@ tier: standard
 - **AC-20260817-99-1**: foo() returns 42.
 `
 
-function makeHost({ testBody }) {
+function makeHost({ testBody, testEnv }) {
   const dir = tmpdir('review-legs')
   const g = gitRepo(dir)
   fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
   fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
   fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
-  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify({
+  const config = {
     gateCommand: 'node --test {testDirs}',
     testCommand: 'node --test',
     runtime: { inert: 'plugin repo — nothing boots' },
     capabilities: { forge: 'none', skipReportPattern: 'ℹ skipped (\\d+)' },
-  }))
+  }
+  // AC-20260820-03-1: only set when a test explicitly opts in — every other fixture in this file
+  // omits `testEnv` and must see byte-identical config JSON to before this param existed (AC-2).
+  if (testEnv) config.testEnv = testEnv
+  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify(config))
   fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 41\n')
   g('add', '-A'); g('commit', '-q', '-m', 'base')
   const base = g('rev-parse', 'HEAD').trim()
@@ -86,7 +101,30 @@ function run(dir, base, extra = []) {
   return { r, rows, byLeg: new Map(rows.map(x => [x.leg, x])), manifest }
 }
 
-test('a green synthetic host produces every required leg row, resolves {testDirs} to the glob form, and exits 0', () => {
+test('AC-20260820-03-1: an unset declared testEnv var makes review-legs.js exit 2 before any leg runs, naming the var and its provision command on stderr, with no manifest row appended', () => {
+  const { dir, base } = makeHost({
+    testBody: GREEN_TEST,
+    testEnv: [{ var: 'SPEC_FAKE_GATE_VAR', provision: 'echo provision-me' }],
+  })
+  const { r, manifest } = run(dir, base)
+  assert.strictEqual(r.status, 2,
+    'D1: review-legs.js must run env-preflight.js --root <root> as a precondition before wave 1 — an unset ' +
+    'declared testEnv var must stop the run at exit 2 (the same usage/precondition-failure code an unreadable ' +
+    'config produces), never proceed to spawn any leg against an unprovisioned environment: ' +
+    r.stdout + r.stderr)
+  assert.ok(!fs.existsSync(manifest) || fs.readFileSync(manifest, 'utf8').trim() === '',
+    'a precondition failure must append NO manifest rows — any row here means a leg ran before the preflight ' +
+    'check stopped it, the exact "review refuses to start on an unprovisioned environment" guarantee this AC ' +
+    'exists to pin: ' + (fs.existsSync(manifest) ? fs.readFileSync(manifest, 'utf8') : '(absent)'))
+  assert.match(r.stderr, /SPEC_FAKE_GATE_VAR/,
+    'stderr must name the unset variable SPEC_FAKE_GATE_VAR so the session knows which var to provision — a ' +
+    'generic failure message here leaves the remedy undiscoverable: ' + r.stderr)
+  assert.match(r.stderr, /echo provision-me/,
+    'stderr must name the provision command "echo provision-me" verbatim so the session can run it directly ' +
+    'without reading .claude/spec.config.json itself: ' + r.stderr)
+})
+
+test('AC-20260820-03-2: a green synthetic host produces every required leg row, resolves {testDirs} to the glob form, and exits 0', () => {
   const { dir, base } = makeHost({ testBody: GREEN_TEST })
   const { r, byLeg } = run(dir, base)
   for (const leg of ['gate', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk', 'promise-sweep']) {

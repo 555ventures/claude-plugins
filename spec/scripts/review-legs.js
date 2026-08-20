@@ -32,13 +32,24 @@
 // extract skipped-test NAMES from gate output (runner-specific; the session passes --skips
 // when the gate reports skips), or retry/poll anything.
 //
+// Incident (2026-08-20, spec review-observation-truth.md D1, Salon OS field report): env-
+// preflight.js was authored and wired into build/design/doctor but absent from the review path —
+// the 3rd recurrence of the authored-not-activated class. Before wave 1 (and before any manifest
+// row is appended), this script now runs `env-preflight.js --root <root>` (default mode,
+// process.env presence only — never --rules) as a hard precondition. A preflight exit 1 (>=1
+// declared testEnv var unset) makes review-legs.js exit 2, with preflight's own per-var
+// unset/provision lines and remedy sentence (printed on ITS stdout) re-emitted here on stderr,
+// prefixed `review-legs.js:`, and no leg has spawned yet so no manifest row exists. A host with no
+// testEnv registry (or an empty one) sees preflight exit 0 and zero behavior change.
+//
 // Exit codes: 0 = every blocking leg (gate/smoke/ci) green — findings legs may still have
 // findings for disposition · 1 = a blocking leg is red (review hard-stops pre-reviewer) ·
-// 2 = usage error or precondition failure (unreadable config/spec, scope-reconcile exit 2)
+// 2 = usage error or precondition failure (unreadable config/spec, scope-reconcile exit 2, or
+// env-preflight.js exit 1 — an unprovisioned declared testEnv var)
 
 const fs = require('fs')
 const path = require('path')
-const { spawn } = require('child_process')
+const { spawn, spawnSync } = require('child_process')
 const { readConfig } = require('./lib/host-config')
 const { parseFilePlan, parseFilePlanRows } = require('./lib/file-plan')
 
@@ -68,6 +79,16 @@ try { config = readConfig(root) } catch (e) {
 }
 if (!config.gateCommand) {
   console.error('review-legs.js: no gateCommand in .claude/spec.config.json under --root — run /spec:init first')
+  process.exit(2)
+}
+
+// ---- D1 precondition: env-preflight.js, default mode, before wave 1 and before any manifest ----
+// row is appended (specs/20260820/03-review-observation-truth.md). No --rules — that mode is
+// doctor's registry-vs-doctrine check, unrelated to this run-time presence gate.
+const preflight = spawnSync(process.execPath, [path.join(__dirname, 'env-preflight.js'), '--root', root], { encoding: 'utf8' })
+if (preflight.status !== 0) {
+  const detail = `${preflight.stdout || ''}${preflight.stderr || ''}`.trim() || `env-preflight.js exited ${preflight.status}`
+  console.error(`review-legs.js: environment not provisioned — env-preflight.js failed before any leg could run:\n${detail}`)
   process.exit(2)
 }
 outDir = outDir || fs.mkdtempSync(path.join(require('os').tmpdir(), 'review-legs-'))

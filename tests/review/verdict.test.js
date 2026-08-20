@@ -43,6 +43,21 @@ const { tmpdir, runNode } = require('../helpers')
 // order). This file pins verdict.js's derivation contract directly by execution; review.md's
 // wiring of the script is pinned in verdict-doctrine.test.js.
 //
+// specs/20260820/03-review-observation-truth.md (D2-D4, D6, 2026-08-20, Salon OS field report):
+// a gate row whose `observed` is unparseable by the pinned "skips=N todos=M" grammar was
+// silently decaying to `testsSkipped: {total:0,...}` and a CLEAN verdict — a fabricated
+// zero-skip measurement no run ever made, violating UPWELL-20260716-02's never-assumed-zero
+// rule. `deriveTestsSkipped` now types any `observed` starting with "unavailable" as exactly
+// `{"unavailable":true}` (D2); a gate row whose observed is EXACTLY
+// "unavailable — skip format did not match gate output" (exit 0) additionally contributes 1 leg
+// finding to the undispositioned pool (D3, a deliberate special case — gate is otherwise a
+// blocking leg and blocking legs are excluded from `computeLegFindings`, per this spec's own
+// Rationale) so drift pages the run it occurs on; the sibling declared-none variant
+// ("unavailable — host runner declares no skip format") raises no finding — honest standing
+// config, not drift. `legIsRed`/GATE_RED derivation stays exit-code-only (D4), untouched by
+// either variant. New tests below key on the exact did-not-match literal so none of SIX_GREEN's
+// ~30 other reuses redden (Fragile Spots).
+//
 // specs/20260819/01-review-evidence-retention.md (D1-D4, D9, 2026-08-19, brief 14 — the
 // reviewer's return lived only in a mktemp file the Phase 3 hygiene sweep deleted): verdict.js
 // gains --retain <dir>, REQUIRED on the review profile whenever both --ledger and --workflow are
@@ -337,7 +352,7 @@ test('AC-20260805-02-5: --ledger derives row.smoke from the manifest smoke row e
     'history, not just on stderr: ' + JSON.stringify(failRow))
 })
 
-test('AC-20260813-02-7 (updates AC-20260805-02-5) / AC-20260816-01-7 (CONTINUES TO hold post-D6): --ledger derives row.testsSkipped.total as skips+todos from the gate row\'s pinned "skips=N todos=M" observed format — the total-summing claim survives the D2 object-shape change and the D6 suffix-tolerance change', () => {
+test('AC-20260813-02-7 (updates AC-20260805-02-5) / AC-20260816-01-7 (CONTINUES TO hold post-D6) / AC-20260820-03-4 (CONTINUES TO hold post-D2\'s typed-unavailable branch): --ledger derives row.testsSkipped.total as skips+todos from the gate row\'s pinned "skips=N todos=M" observed format — the total-summing claim survives the D2 object-shape change, the D6 suffix-tolerance change, and specs/20260820/03\'s new unavailable-observed branch, which is a disjoint regex arm and must never perturb the matched-format case', () => {
   const dir = tmpdir('verdict')
   const rows = SIX_GREEN.map(r => (r.leg === 'gate' ? { leg: 'gate', exit: 0, observed: 'skips=2 todos=1' } : r))
   const manifest = writeManifest(dir, rows)
@@ -354,6 +369,64 @@ test('AC-20260813-02-7 (updates AC-20260805-02-5) / AC-20260816-01-7 (CONTINUES 
     JSON.stringify(row))
 })
 
+test('AC-20260820-03-3: a gate row observed "unavailable — skip format did not match gate output" (exit 0) derives ledger row.testsSkipped as exactly {"unavailable":true}, never a fabricated zero total', () => {
+  const dir = tmpdir('verdict-skip-unavailable')
+  const rows = SIX_GREEN.map(r => (r.leg === 'gate'
+    ? { leg: 'gate', exit: 0, observed: 'unavailable — skip format did not match gate output' } : r))
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
+  const lines = r.stdout.trim().split('\n')
+  let row
+  assert.doesNotThrow(() => { row = JSON.parse(lines[1]) },
+    'D2: --ledger must still print a parseable ledger row on line 2 for an unavailable-skip-format gate ' +
+    'observation: ' + r.stdout + ' / ' + r.stderr)
+  assert.deepStrictEqual(row.testsSkipped, { unavailable: true },
+    'D2: a gate observed starting with "unavailable" must derive row.testsSkipped as exactly ' +
+    '{"unavailable":true} — the pre-D2 arithmetic (deriveTestsSkipped regexing ' +
+    '"^skips=(\\d+) todos=(\\d+)$") silently falls through to {"total":0,"sanctioned":0,"unsanctioned":0} on ' +
+    'this input, fabricating a zero-skip measurement no run ever made (A1, the Salon OS field report defect): ' +
+    JSON.stringify(row))
+})
+
+test('AC-20260820-03-5: an all-green manifest whose gate row observed is "unavailable — skip format did not match gate output" (exit 0) derives HARD_FINDINGS, never CLEAN, even with a zero-survivor zero-disposition workflow return', () => {
+  const dir = tmpdir('verdict-skip-unavailable-finding')
+  const rows = SIX_GREEN.map(r => (r.leg === 'gate'
+    ? { leg: 'gate', exit: 0, observed: 'unavailable — skip format did not match gate output' } : r))
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
+  assert.strictEqual(r.stdout.split('\n')[0], 'HARD_FINDINGS',
+    'D3: an unmatched skip-format observation is drift, not honest config, and must page the same run it ' +
+    'occurs on (dead-man\'s-switch, never a consecutive-miss counter) — every other leg is green and the ' +
+    'workflow returned zero-survivor CLEAN, so any word other than HARD_FINDINGS here means the silent-decay ' +
+    'defect A1 demonstrated on this exact manifest (CLEAN + testsSkipped.total:0) is still live: ' +
+    r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 1, 'HARD_FINDINGS must exit 1 so the close step is mechanically unreachable: ' + r.stderr)
+})
+
+test('AC-20260820-03-6: an all-green manifest whose gate row observed is "unavailable — host runner declares no skip format" (exit 0) derives CLEAN, with ledger row.testsSkipped typed {"unavailable":true} — declared-none is sanctioned, never a finding', () => {
+  const dir = tmpdir('verdict-skip-declared-none')
+  const rows = SIX_GREEN.map(r => (r.leg === 'gate'
+    ? { leg: 'gate', exit: 0, observed: 'unavailable — host runner declares no skip format' } : r))
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
+  const lines = r.stdout.trim().split('\n')
+  assert.strictEqual(lines[0], 'CLEAN',
+    'D3: a host that declares no skip format at all is honest standing config, not drift — only the ' +
+    'unmatched-pattern variant pages; this exact observed string must derive CLEAN with zero dispositions ' +
+    'needed: ' + r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 0, 'CLEAN must exit 0: ' + r.stderr)
+  let row
+  assert.doesNotThrow(() => { row = JSON.parse(lines[1]) },
+    'D2: --ledger must still print a parseable ledger row on line 2: ' + r.stdout)
+  assert.deepStrictEqual(row.testsSkipped, { unavailable: true },
+    'D2: this observed string also starts with "unavailable" so testsSkipped must be typed ' +
+    '{"unavailable":true}, never a fabricated zero total, matching the drift variant\'s shape even though ' +
+    'this row raises no finding of its own: ' + JSON.stringify(row))
+})
+
 // specs/20260816/01-gate-baseline-reconcile.md D10 (retainer ruling, 2026-08-17, tdd-red-check
 // consult): AC-20260816-01-12 is a sanctioned-green regression pin, standalone (never folded
 // onto AC-8's testsSkipped-total test, which pins a different observable — see D10's rationale).
@@ -362,7 +435,7 @@ test('AC-20260813-02-7 (updates AC-20260805-02-5) / AC-20260816-01-7 (CONTINUES 
 // is specified to already pass, and its falsifiability is demonstrated in-line by mutating the
 // same fixture's gate exit to 1 and asserting the word flips to GATE_RED (D10: verified by
 // mutation, never by weakening).
-test('AC-20260816-01-12: a green-by-subtraction gate row (exit:0, observed "skips=0 todos=0 sanctionedReds=21") with all other legs green and a clean workflow return derives a CLEAN-family word, never GATE_RED — the terminal observable of the spec\'s chain', () => {
+test('AC-20260816-01-12 / AC-20260820-03-12 (CONTINUES TO hold — D4: gate-leg verdict derivation stays exit-code-only, the D3 skip-observation finding rides the leg-findings pool and never derives GATE_RED): a green-by-subtraction gate row (exit:0, observed "skips=0 todos=0 sanctionedReds=21") with all other legs green and a clean workflow return derives a CLEAN-family word, never GATE_RED — the terminal observable of the spec\'s chain', () => {
   const dir = tmpdir('verdict')
   const rows = SIX_GREEN.map(r => (r.leg === 'gate'
     ? { leg: 'gate', exit: 0, observed: 'skips=0 todos=0 sanctionedReds=21' } : r))

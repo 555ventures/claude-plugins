@@ -34,11 +34,15 @@ adjudicates.
 2. **Run the legs:** `{manifestPath}` = fresh `mktemp` (never reused across iterations —
    stale evidence must be unrepresentable), then
    `node "$(spec-paths review-legs)" --root {root} --spec {spec path} --base {base}
-   --manifest {manifestPath}`. It runs reconcile, the resolved gate, smoke, ci, at-risk,
-   ac-matrix + skip-reconcile, and promise-sweep in parallel, appends one JSONL row per leg,
-   and prints the red/green summary — print it. If the gate row reports skips > 0, extract the
-   skipped test names from the printed gate-output file into a file and re-run with
-   `--skips <file>` (fresh manifest) so the skip reconciliation can attribute them.
+   --manifest {manifestPath}`. review-legs first runs the host's env preflight; an unset
+   declared var stops the run before any leg — review-legs exits 2 with the unset variable
+   and its provision command on stderr, appending no manifest rows, and the session
+   provisions the variable and re-runs. Otherwise it runs reconcile, the resolved gate,
+   smoke, ci, at-risk, ac-matrix + skip-reconcile, and promise-sweep in parallel, appends one
+   JSONL row per leg, and prints the red/green summary — print it. If the gate row reports
+   skips > 0, extract the skipped test names from the printed gate-output file into a file
+   and re-run with `--skips <file>` (fresh manifest) so the skip reconciliation can attribute
+   them.
 3. **Hard stop on `RED_BLOCKING`** (exit 1 — gate/smoke/ci red): do not dispatch the
    reviewer on a red substrate. Still run `node "$(spec-paths verdict)" --manifest
    {manifestPath} --ledger --spec {spec path} --tier {tier} --diff-loc {diffLoc}

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict'
-// promise-sweep.js --spec <path> [--manifest <path>] [--json]
+// promise-sweep.js --spec <path> [--manifest <path>] [--json] [--applies-from <YYYYMMDD>]
 //
 // Why (2026-08-17, specs/20260817/07-promise-sweep-leg.md D1/D2): the v7 replay eval measured
 // the single reviewer's one systematic miss class — a spec `## Decisions` row that promises
@@ -14,6 +14,18 @@
 // at plan lock (no --manifest) so orphans die at authoring time, and as a findings leg in every
 // review scope (review-legs.js appends its manifest row).
 //
+// Incident (2026-08-20, spec review-observation-truth.md D5, Salon OS field report): the sweep
+// applied retroactively to specs locked before this carrier convention existed, producing 52
+// noise findings that trained bulk-waiving — escape rv_8b7c4e2e9ec0 shipped inside a 17/17-waive
+// review. It now gains an applicability cutoff: spec date = the first `specs/<YYYYMMDD>/` path
+// segment in --spec, compared against built-in `APPLIES_FROM = '20260817'` (the date this
+// convention shipped, specs/20260817/07), overridable via `--applies-from <YYYYMMDD>` (must be 8
+// digits). A pre-cutoff spec skips Decisions enumeration entirely, exits 0 with zero findings, and
+// (with --manifest) appends a distinct `not-applicable` row instead of a swept one. A path with no
+// `specs/<YYYYMMDD>/` segment applies the sweep in full — unchanged, fail-closed behavior every
+// existing tmpdir-based test pin depends on. One parameter, no baseline file, no host config key:
+// the convention's ship date is a plugin fact.
+//
 // What this deliberately does NOT do: read anything but the spec text — no --root, no File Plan
 // parsing, no test-file reads (ac-matrix.js owns the AC-ID -> test -> executed chain; this
 // script only proves Decision -> AC). It also never requires ac-matrix.js as a module — that
@@ -21,28 +33,38 @@
 // imported by a sibling. Shared parsing (AC-ID grammar, `## ` section extraction) is imported
 // from lib/spec-sections.js, the single authority both scripts use (D3).
 //
-// Exit codes: 0 = executed, no findings (every non-struck row carried or sanctioned) ·
+// Exit codes: 0 = executed, no findings (every non-struck row carried or sanctioned), OR a
+// pre-cutoff spec exempted by the applicability cutoff (not-applicable, zero findings) ·
 // 1 = executed, findings emitted (orphan-decision rows — rides the normal review disposition
 // flow, or resolved by hand at plan lock; never a script failure) · 2 = usage error, unreadable
-// --spec, or a spec with no `## Decisions` section (stderr names the remedy).
+// --spec, a spec with no `## Decisions` section, or a malformed --applies-from value (not 8
+// digits) (stderr names the remedy).
 
 const fs = require('fs')
 const { AC_ID_RE_GLOBAL, extractSection } = require('./lib/spec-sections')
 
+const APPLIES_FROM = '20260817'
+
 function usage() {
-  console.error('usage: promise-sweep.js --spec <path> [--manifest <path>] [--json]')
+  console.error('usage: promise-sweep.js --spec <path> [--manifest <path>] [--json] [--applies-from <YYYYMMDD>]')
 }
 
-let specPath = null, manifestPath = null, jsonOut = false
+let specPath = null, manifestPath = null, jsonOut = false, appliesFromArg = null
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
   if (a === '--spec') specPath = argv[++i]
   else if (a === '--manifest') manifestPath = argv[++i]
   else if (a === '--json') jsonOut = true
+  else if (a === '--applies-from') appliesFromArg = argv[++i]
   else { usage(); process.exit(2) }
 }
 if (!specPath) { usage(); process.exit(2) }
+if (appliesFromArg !== null && !/^\d{8}$/.test(appliesFromArg)) {
+  console.error(`promise-sweep: --applies-from must be 8 digits (YYYYMMDD) — got "${appliesFromArg}"`)
+  process.exit(2)
+}
+const appliesFrom = appliesFromArg || APPLIES_FROM
 
 let specText
 try {
@@ -50,6 +72,31 @@ try {
 } catch (e) {
   console.error(`promise-sweep: cannot read --spec ${specPath} — confirm the spec file exists: ${e.message}`)
   process.exit(2)
+}
+
+// ---- applicability cutoff (D5, specs/20260820/03-review-observation-truth.md): spec date = the
+// first specs/<YYYYMMDD>/ path segment in --spec; a path with none applies the sweep in full
+// (fail-closed — every existing tmpdir-based test fixture has no dated segment and depends on
+// this default staying unchanged). Runs before any Decisions-section read, so a pre-cutoff spec
+// with no `## Decisions` section at all is still exempted, never a usage error.
+const specDateMatch = /specs\/(\d{8})\//.exec(specPath)
+if (specDateMatch && specDateMatch[1] < appliesFrom) {
+  const specDate = specDateMatch[1]
+  const observed = `not-applicable spec=${specDate} appliesFrom=${appliesFrom}`
+  if (manifestPath) {
+    try {
+      fs.appendFileSync(manifestPath, JSON.stringify({ leg: 'promise-sweep', exit: 0, observed }) + '\n')
+    } catch (e) {
+      console.error(`promise-sweep: cannot append to --manifest ${manifestPath}: ${e.message}`)
+      process.exit(2)
+    }
+  }
+  if (jsonOut) {
+    console.log(JSON.stringify({ findings: [], warnings: [], observed }, null, 2))
+  } else {
+    console.log(`promise-sweep: ${observed}`)
+  }
+  process.exit(0)
 }
 
 const decisionsSection = extractSection(specText, 'Decisions')

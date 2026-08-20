@@ -49,7 +49,12 @@ asked.
    stays due (D5: a non-measurement row never resets the clock). Zero exit → restore tracked
    files inside `{dir}` (`git -C {dir} checkout -- .`) so nothing `setupCommand` wrote — a
    rewritten lockfile, generated code — reaches the tree the legs and the blind reviewer read
-   (D10), then continue to class selection.
+   (D10), then run `git -C {dir} clean -fd` — `git checkout -- .` alone restores tracked files
+   but cannot remove files `setupCommand` *creates* (the 2026-08-20 first live run left an
+   untracked root `package-lock.json` that would have polluted the blind reviewer's tree), and
+   `clean -fd` cannot touch the `replay-worktree` marker, which lives in the worktree's private
+   git dir outside the working tree — order is load-bearing: checkout first, then clean — then
+   continue to class selection.
 3. **Pick a corpus class:** run `node "$(spec-paths replay)" --stats`, read the per-class
    counts, and pick the class with the fewest recorded rows so far (ties broken by the class's
    order in `spec-paths replay-corpus`) — this is what keeps the six classes exercised evenly
@@ -64,7 +69,10 @@ asked.
    recipe binds a matched guard-and-assertion pair that spans whichever File Plan files its two
    sites actually live in: two files on a stack that keeps tests apart from code, or one file on
    a stack that co-locates them (Rust `#[cfg(test)] mod tests`, Elixir, doctests) — and returns
-   the edited path(s), no line number; D9's canonical patch carries the positions. A worker that
+   the edited path(s), no line number; D9's canonical patch carries the positions. Its Edit/Write
+   into `{dir}` passes the cross-worktree write guard via the `replay-worktree` marker allow
+   (`block-cross-worktree-writes.sh`); mutating files through Bash instead remains a contract
+   violation, treated as a failed authoring attempt rather than an improvisation. A worker that
    cannot find a File-Plan-scoped site satisfying the recipe returns `blocked` naming why; pick a
    different class and retry once before escalating to the user.
 5. **Capture and apply (D9):** capture the worker's raw edit with the same pinned flags D9's

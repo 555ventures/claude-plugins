@@ -15,9 +15,23 @@
 # Worker Contract's git ban — workers run with cwd = their own worktree, so a
 # parallel worker that writes an absolute path into the root checkout is blocked.
 #
+# One sanctioned exception (2026-08-20, specs/20260820/02): /spec:replay's mutation
+# worker is correctly dispatched from a main-anchored session to Edit a disposable
+# scratch worktree that `replay.js --setup` stood up — a cross-worktree write that is
+# the whole point of the tool, not pollution. The first live run blocked it and the
+# worker tunneled the same write through Bash instead, tripping an Auto-Mode Bypass
+# warning. The fix: allow when the TARGET tree's PRIVATE git dir (outside the working
+# tree, so the blind reviewer never sees it) carries a `replay-worktree` marker file,
+# planted only by `replay.js --setup` and gone after `--teardown` / `git worktree
+# remove`. The scratch tree is a sink, never a source: the allow keys on the TARGET
+# only, so a session anchored inside the marker-carrying tree writing OUT to the main
+# checkout still blocks.
+#
 # Invariant enforced (topology-independent):
 #   - target resolves to the SAME worktree as cwd            -> ALLOW
 #   - target is in the SAME repo but a DIFFERENT working tree -> BLOCK (pollution)
+#   - target is a same-repo different tree whose PRIVATE git
+#     dir carries the `replay-worktree` marker (TARGET only)  -> ALLOW (replay sink)
 #   - target is in a DIFFERENT repo, or outside any repo      -> ALLOW
 #
 # Correct for every nesting: a worktree spawned from another worktree, or a spec
@@ -71,6 +85,20 @@ tgt_common="$(canon "$tgt_common_raw")" || exit 0
 [ "$tgt_common" = "$cur_common" ] || exit 0
 # Same worktree -> allow.
 [ "$tgt_top" = "$cur_top" ] && exit 0
+
+# --- Replay-scratch marker allow (D1/D2, specs/20260820/02): TARGET only ---
+# `git rev-parse --git-dir` returns the tree's PRIVATE git dir: a bare relative `.git`
+# from a main checkout, or an absolute `.../.git/worktrees/<name>` from a linked
+# worktree (both observed in the executed spike) — absolutize a relative result
+# against $probe, same as the git-common-dir resolution above. Any failure here (git
+# error, empty result, missing marker) simply falls through to the BLOCK below: this
+# path can only ALLOW, never widen a failure into a block, and it never inspects the
+# cwd side, so a write anchored inside a marked tree and aimed at the main checkout
+# still hits the BLOCK.
+tgt_gitdir_raw="$(git -C "$probe" rev-parse --git-dir 2>/dev/null)" && [ -n "$tgt_gitdir_raw" ] && {
+  case "$tgt_gitdir_raw" in /*) tgt_gitdir="$tgt_gitdir_raw" ;; *) tgt_gitdir="$probe/$tgt_gitdir_raw" ;; esac
+  [ -f "$tgt_gitdir/replay-worktree" ] && exit 0
+}
 
 # Same repo, different working tree -> pollution. Block.
 {

@@ -85,3 +85,10 @@ sanctioned), design-stage approvals (`designed:` set — don't report visual cho
 approved components), and exceptions in the rule files. Scope/over-engineering opinions are
 the user's call. Deliverables owned by stages that run after your verdict — the Canonical
 Delta application and the `status` flip — are expected preconditions, never findings.
+
+## Return contract
+
+Return `{verdict, survivors: [{severity, claim, file, line, impact, evidence}], killed: [],
+reviewerCount, scope, tokens}`. `verdict` is exactly one of two words — `CLEAN` or
+`REVIEWER_FAILED` — and nothing else: findings ride `survivors`, never the verdict word, so a
+non-empty `survivors` list is still `CLEAN`.

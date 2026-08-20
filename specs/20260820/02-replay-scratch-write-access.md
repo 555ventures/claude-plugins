@@ -1,6 +1,7 @@
 ---
 date: 2026-08-20
-status: hardened
+status: implementing
+diff_base: a50f14d03b6559b9897f1dabbbb43cac8d23b257
 tier: critical
 area: replay
 design: false
@@ -44,6 +45,7 @@ reviewer return contract's loose verdict vocabulary.
 |------|--------|-------|---------|
 | spec/scripts/block-cross-worktree-writes.sh | MODIFY | scripts | D1/D2: target-marker allow before the block; header comment gains the replay-sink rationale |
 | tests/worktree-hook.test.js | MODIFY | tests | AC-20260820-02-1..5 — marker-allow case, scratch-to-main still-blocked case, unmarked/same-tree/fail-open regression pins tagged |
+| tests/replay/replay.test.js | MODIFY | tests | AC-20260820-02-6 — doctrine assertions on replay.md Phase 1 (added at build: the AC named this oracle, the plan omitted the row) |
 | spec/commands/replay.md | MODIFY | doctrine | D4/D5: setup-gate `clean -fd` step; sanctioned-write sentence at worker dispatch (AC-20260820-02-6) |
 | spec/agents/reviewer.md | MODIFY | doctrine | D6: verdict-word vocabulary tightened to the closed set |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D7: version 7.6.0 + changelog paragraph |

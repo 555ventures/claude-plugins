@@ -1,6 +1,6 @@
 ---
 date: 2026-08-20
-status: implementing
+status: done
 tier: standard
 diff_base: ba9faae412b82148c8dab05d0ccfe9b545692e60
 area: autopilot
@@ -134,6 +134,48 @@ repo's README — waived). Literals hits outside the File Plan, all waived as hi
 (uses `AUTOPILOT_ENROLL_LIVE` purely as a self-contained fixture string in a synthetic spec —
 no autopilot code reached). Every file under `autopilot/**`/`tests/autopilot/**` in the census
 is covered by those two DELETE glob rows.
+
+### Review waives (2026-08-20, run rv_4aab3989b913)
+
+Four deterministic leg findings, all waived by JJ after executed adjudication; zero reviewer
+survivors.
+
+- **Out-of-plan (2)**: `.claude/agent-memory/plugin-tests/MEMORY.md` and
+  `.claude/agent-memory/plugin-tests/self-matching-literal-pin-fragment-idiom.md`, written by
+  the tests worker during the mid-review pin repair. Waived on the precedent this repo already
+  set (specs/20260819/03 § review waives: "agent memory is never a File Plan deliverable") —
+  the note records the fragment-not-exempt idiom for the next self-matching pin, and deleting
+  it would discard the lesson.
+- **Uncovered ACs (2)**: AC-20260820-01-1 and AC-20260820-01-2 report zero hits because their
+  tests deliberately retain older pin identifiers — `JJ-20260820 (supersedes AC-20260801-04-6)`
+  in tests/host-config/smoke-inert.test.js (D2 mandates verbatim relocation including the
+  supersession header) and `AC-20260807-01-7` in tests/status/red-alarm.test.js (D3 keeps the
+  frozen-shape pin, rewording only its message). The reviewer executed both suites and observed
+  the promised assertions pass. Renaming either test would override a locked Decision and erase
+  a supersession record to silence a cosmetic matcher warning.
+
+### Incident: the pin that matched itself (2026-08-20, fixed same session)
+
+AC-20260820-01-3 as first authored spelled `@anthropic-ai/claude-agent-sdk` literally in its own
+test title and assert message while grepping every tracked file for that string — so the pin
+returned itself as the violation and could never go green. The gate caught it before any
+reviewer ran (run rv_67c33e2306f8, GATE_RED).
+
+Fixed by assembling the specifier from fragments at runtime, matching this repo's one existing
+precedent for the same hazard (tests/tracked-text-purity.test.js spells the banned raw NUL byte
+as `'\x00'` rather than emitting it, and refuses a self-path allowlist for the same reason: an
+exemption fails silent if the fragments are ever rejoined, whereas an un-literal name keeps the
+pin honest about itself).
+
+A consultation brief (Fable, 2026-08-20) established the deeper defect: the AC encoded a
+blocklist of one dead package standing in for the repo's actual dependency-free invariant, so a
+worker importing any *other* package sailed past it. JJ ruled in the generalization; a third,
+AC-less structural test now pins that no tracked manifest declares dependencies, no tracked path
+carries a `node_modules/` segment, and no tracked JS imports a non-builtin. All three assertions
+were mutation-proven red-capable in an isolated scratch repo by the reviewer. Deliberate blind
+spots (vendored source behind relative requires, install instructions in prose, runtime package-
+manager invocations) are listed in the file's header rather than guarded — none is instantiated
+today.
 
 ## Canonical Delta
 

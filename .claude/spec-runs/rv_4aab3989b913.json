@@ -1,0 +1,95 @@
+{
+  "runId": "rv_4aab3989b913",
+  "ts": "2026-08-20T20:29:17.173Z",
+  "spec": "specs/20260820/01-autopilot-removal.md",
+  "tier": "standard",
+  "iteration": 2,
+  "scope": "full",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 4,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 3,
+      "observed": "outOfPlan=2"
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": "unavailable"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": "skips=0 todos=0"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": "inert"
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": "matches=10"
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": "files=12"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 1,
+      "observed": "uncovered=2 oracle=1"
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": "skipped=0 sanctioned=0"
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": "rows=7 carried=4 sanctioned=3 orphans=0"
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "severity": "advisory",
+        "claim": "reconcile flags .claude/agent-memory/plugin-tests/ files as out-of-plan",
+        "impact": "none — worker persistent memory, precedent-sanctioned in specs/20260819/03"
+      },
+      {
+        "severity": "advisory",
+        "claim": "ac-matrix reports AC-20260820-01-1 and AC-20260820-01-2 uncovered",
+        "impact": "none — both covered under preserved older pin IDs per D2/D3, executed"
+      },
+      {
+        "severity": "advisory",
+        "claim": "at-risk lists 8 tests referencing deleted autopilot fixture paths",
+        "impact": "none — stem-collision false positives in scope-reconcile.js, verified by grep"
+      },
+      {
+        "severity": "advisory",
+        "claim": "dependency-free pin could be vacuous",
+        "impact": "none — three mutations each turned it red in an isolated scratch repo"
+      },
+      {
+        "severity": "advisory",
+        "claim": "spec-status.js touch could need a version bump",
+        "impact": "none — comment-only hunk, confirmed by diff"
+      }
+    ],
+    "reviewerCount": 1,
+    "scope": "full",
+    "tokens": 104034
+  }
+}

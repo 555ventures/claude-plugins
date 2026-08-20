@@ -51,7 +51,15 @@
   `setup-failed`) is visible in the totals, absent from the rate, and leaves the harness
   due, so the next review session retries rather than waiting five more.
   A sustained miss-rate is the evidence that reopens the second-reviewer question.
-  (specs/20260819/02-mutation-replay.md, specs/20260819/03-replay-first-run-fixes.md)
+  The mutation worker's writes are sanctioned by the cross-worktree write guard: a write is
+  allowed when the TARGET tree carries the `replay-worktree` marker, honoured only when that
+  marker sits in a linked worktree's private git dir. The scratch tree is a sink, never a
+  source — scratch-anchored writes outward stay blocked — and a write into this repo's own
+  git metadata is attributed to its owning worktree and blocked unless that owner is the
+  writing session's own tree, so the marker cannot be forged through the tool surface the
+  guard governs.
+  (specs/20260819/02-mutation-replay.md, specs/20260819/03-replay-first-run-fixes.md,
+  specs/20260820/02-replay-scratch-write-access.md)
 
 - `ac-matrix`'s coverage denominator fails closed: an AC bullet no ID grammar can parse counts
   as **uncovered** — unparseable = unknown, never absent — in both drift modes, since a host

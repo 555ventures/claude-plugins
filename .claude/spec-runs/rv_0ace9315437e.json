@@ -1,0 +1,54 @@
+{
+  "runId": "rv_0ace9315437e",
+  "ts": "2026-08-20T22:41:44.915Z",
+  "spec": "specs/20260820/02-replay-scratch-write-access.md",
+  "tier": "critical",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": "unavailable"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": "skips=0 todos=0"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": "inert"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": "uncovered=0 oracle=0"
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": "skipped=0 sanctioned=0"
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": "rows=8 carried=6 sanctioned=2 orphans=0"
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [],
+    "reviewerCount": 1,
+    "scope": "fix-delta",
+    "tokens": 47191
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "runId": "rv_e572268a732a",
+  "ts": "2026-08-20T22:41:34.384Z",
+  "spec": "specs/20260820/02-replay-scratch-write-access.md",
+  "tier": "critical",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "FINDINGS",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 1
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": "unavailable"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": "skips=0 todos=0"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": "inert"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": "uncovered=0 oracle=0"
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": "skipped=0 sanctioned=0"
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": "rows=8 carried=6 sanctioned=2 orphans=0"
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "soft",
+        "claim": "The fix adds a fourth copy of the 4-line absolutize-a-git-rev-parse-result idiom already present three times in this file; a small absolutize_gitdir() helper would remove all four.",
+        "file": "spec/scripts/block-cross-worktree-writes.sh",
+        "line": 106,
+        "impact": "Hygiene only. Below the duplication-calibration bar, which keys on 3+ near-identical blocks introduced in ONE diff; this diff introduces one copy joining a reviewed-clean baseline.",
+        "evidence": "Reviewer read lines 78, 106, 134, 153 of the shipped script; no behavior consequence, no repro."
+      }
+    ],
+    "killed": [],
+    "reviewerCount": 1,
+    "scope": "fix-delta",
+    "tokens": 106551
+  }
+}

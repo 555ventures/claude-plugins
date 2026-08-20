@@ -1,0 +1,78 @@
+{
+  "runId": "rv_aefac2f485f5",
+  "ts": "2026-08-20T22:41:34.327Z",
+  "spec": "specs/20260820/02-replay-scratch-write-access.md",
+  "tier": "critical",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "FINDINGS",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 1
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 3,
+      "observed": "outOfPlan=3"
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": "unavailable"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": "skips=0 todos=0"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": "inert"
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": "matches=10"
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": "files=3"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": "uncovered=0 oracle=0"
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": "skipped=0 sanctioned=0"
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": "rows=7 carried=5 sanctioned=2 orphans=0"
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "The replay-worktree marker allow is forgeable by any session: writes into another worktree's private git dir were already fail-open, so an agent can plant the marker in two permitted steps and permanently disable the cross-worktree guard for the main checkout or any sibling worktree.",
+        "file": "spec/scripts/block-cross-worktree-writes.sh",
+        "line": 98,
+        "impact": "Any session that can attempt a blocked cross-worktree write can turn the pollution guard off permanently for the primary checkout; contradicts D1's stated rejection of spoofable mechanisms and the Contracts decision table.",
+        "evidence": "Executed against the real hook: wt2->root/README.md exit=2 (blocked); wt2->root/.git/replay-worktree exit=0 (permitted); after touch, wt2->root/README.md exit=0. Sibling variant root/.git/worktrees/wt2/replay-worktree reproduces identically."
+      }
+    ],
+    "killed": [],
+    "reviewerCount": 1,
+    "scope": "full",
+    "tokens": 70247
+  }
+}

@@ -42,10 +42,16 @@
   Reviewer catch-rate is measured, not assumed: every 5th review (and at least once per
   major version) `/spec:replay` injects one corpus-class defect into the last CLEANed
   spec's tree in a marker-guarded scratch worktree, re-runs the legs, and dispatches the
-  standard reviewer blind; catch/miss/leg-caught lands as a `stage:"replay"` ledger row
-  with retained evidence, and `replay.js --stats` derives the catch-rate. A sustained
-  miss-rate is the evidence that reopens the second-reviewer question.
-  (specs/20260819/02-mutation-replay.md)
+  standard reviewer blind; the run lands as a `stage:"replay"` ledger row with retained
+  evidence, and `replay.js --stats` derives the catch-rate. Outcomes are
+  `caught`/`missed`/`leg-caught`/`unresolved`/`setup-failed`. Scoring is never a
+  self-reported point: survivors are compared against the mutation patch's own hunks —
+  caught when a survivor names any mutated file within ±5 lines of one of its hunks. Only
+  `caught`+`missed` enter the catch-rate; a non-measurement outcome (`unresolved`,
+  `setup-failed`) is visible in the totals, absent from the rate, and leaves the harness
+  due, so the next review session retries rather than waiting five more.
+  A sustained miss-rate is the evidence that reopens the second-reviewer question.
+  (specs/20260819/02-mutation-replay.md, specs/20260819/03-replay-first-run-fixes.md)
 
 - `ac-matrix`'s coverage denominator fails closed: an AC bullet no ID grammar can parse counts
   as **uncovered** — unparseable = unknown, never absent — in both drift modes, since a host

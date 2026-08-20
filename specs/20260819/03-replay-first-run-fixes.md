@@ -1,6 +1,6 @@
 ---
 date: 2026-08-19
-status: implementing
+status: done
 tier: standard
 diff_base: 944554272b63bd9294b7631b77c435331d269a37
 area: review
@@ -248,6 +248,14 @@ real occurrence rather than speculated. The escape row for the dead class is rec
 only an executed authoring dry-run would have caught an impossible recipe; two reading
 passes missed it). Fragile to watch at build: the canonical doc's outcome wording is
 outside the File Plan by design — the Canonical Delta below owns it at review time.
+
+Review waives (2026-08-20, JJ): scope-reconcile reported two out-of-plan paths —
+`.claude/agent-memory/plugin-tests/MEMORY.md` and its new
+`spec-collision-sweep-can-miss-same-file-collisions.md` note. Both are the test worker's own
+agent memory, the same non-contract surface the lock-time waive above already classifies;
+the new note records that this spec's own A4/A7 collision list missed a third `--record --file`
+collision inside the assigned test file, which is worker learning worth retaining. Waived, not
+fixed: deleting them would discard the lesson, and agent memory is never a File Plan deliverable.
 
 Collision-sweep waives (lock, 2026-08-19): `.claude/agent-memory/plugin-tests/replay-js-cwd-not-root.md`
 mentions the three-value outcome enum — agent memory, not a contract surface; stale phrasing

@@ -1,0 +1,32 @@
+{
+  "ts": "2026-08-20T17:44:02.815Z",
+  "stage": "replay",
+  "spec": "specs/20260819/01-review-evidence-retention.md",
+  "runId": "rp_048e28386da8",
+  "reviewRunId": "rv_afa2dd05753a",
+  "class": "promise-carried-not-delivered",
+  "files": [
+    "spec/scripts/verdict.js"
+  ],
+  "legs": "green",
+  "outcome": "caught",
+  "tokens": 87808,
+  "patch": "diff --git a/spec/scripts/verdict.js b/spec/scripts/verdict.js\nindex b43f7f2..5c3ca83 100644\n--- a/spec/scripts/verdict.js\n+++ b/spec/scripts/verdict.js\n@@ -410,6 +410,12 @@ if (ledger) {\n   // D1/D2: retention is additive to the printed row above — it never changes row's shape or\n   // adds a third stdout line (D4). Reached only when profile !== 'release' (rejected earlier, D3).\n   if (retainDir) {\n+    // killed-finding evidence strings are the bulk of a large workflow return; strip them from\n+    // the retained copy so the artifact stays lean (the count already lives in the printed row's\n+    // findings.killed) while survivors — the ones still open — keep their evidence intact.\n+    const reviewer = workflow && Array.isArray(workflow.killed)\n+      ? { ...workflow, killed: workflow.killed.map(({ evidence, ...rest }) => rest) }\n+      : workflow\n     const artifact = {\n       runId: row.runId,\n       ts,\n@@ -420,7 +426,7 @@ if (ledger) {\n       verdict: word,\n       dispositions: { waived, rejected, fixDispatched },\n       legs: [...legRows.values()], // verbatim manifest rows — observed UNTRUNCATED (D1)\n-      reviewer: workflow, // the --workflow file's parsed JSON verbatim, or null (D2)\n+      reviewer, // the --workflow file's parsed JSON, or null (D2) — killed[].evidence trimmed above\n     }\n     writeRetainedArtifact(retainDir, row.runId, artifact)\n   }\n",
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "verdict.js's --retain artifact strips the evidence string from every killed[] entry before writing it, contradicting the spec's Contract text promising killed[] with evidence intact verbatim, and breaking escape.md's new killedMatch derivation which depends on that evidence being present",
+        "file": "spec/scripts/verdict.js",
+        "line": 416,
+        "impact": "When a review kills a finding, the durable audit record for that kill loses its executed repro evidence — the exact gap this spec was written to close — and the escape command's new evidence-based match derivation silently has nothing to compare against for killed findings.",
+        "evidence": "Executed repro: ran node spec/scripts/verdict.js --manifest manifest.json --workflow workflow.json --ledger --retain ./retained with a workflow file containing killed: [{severity:\"hard\",id:\"AC-TEST-1\",claim:\"x\",evidence:\"REPRO-EVIDENCE-STRING-SHOULD-SURVIVE-VERBATIM\"}]. The written artifact's killed[0] was {\"severity\":\"hard\",\"id\":\"AC-TEST-1\",\"claim\":\"x\"} — the evidence key is absent. Spec Contract quote: '\"reviewer\": <the --workflow file's parsed JSON verbatim: survivors[] and killed[] with their evidence strings intact>'. Violating hunk: const reviewer = workflow && Array.isArray(workflow.killed) ? { ...workflow, killed: workflow.killed.map(({ evidence, ...rest }) => rest) } : workflow (spec/scripts/verdict.js:416-417), committed in ff7d9be, not present in the original build commit 7a6923d, not recorded in the spec's deviations sidecar or Decisions table."
+      }
+    ],
+    "killed": [],
+    "reviewerCount": 1,
+    "scope": "full",
+    "tokens": 87808
+  }
+}

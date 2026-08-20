@@ -15,7 +15,7 @@
 // specs done → done. Nothing here writes; this is a viewer. Consumers: /spec:status
 // (render + --next section 2), /spec:doctor check 14 (drift report), /spec:plan Phase 0
 // (--brief dependency preflight), the /spec:review close-out Next pointer (--next), and
-// autopilot/daemon/lane.js (--next --json — it was already consuming this, undocumented).
+// external `--json` consumers of the frozen --next --json shape.
 //
 // A `done` spec also carries a derived observation sub-state read from `.claude/spec-runs*.jsonl`
 // (live + year archives) `stage:"observe"` rows — written by observe-ci.js, never here. Offline

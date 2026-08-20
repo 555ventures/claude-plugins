@@ -6,7 +6,7 @@ paths:
 
 # Spec pipeline grounding — claude-plugins
 
-This repo is the **source of the spec plugin itself** (plus `git/` and `autopilot/`). The
+This repo is the **source of the spec plugin itself** (plus `git/`). The
 pipeline dogfoods here: the grounding below describes the marketplace repo, not an app.
 Everything is dependency-free Node + bash; the only external binary assumed is `jq`.
 
@@ -24,8 +24,8 @@ Critical-tier triggers for THIS repo:
 - **`spec/scripts/merge-back.sh`** — runs destructive git ops against host repos; exit-code
   alphabet (3 = conflicts, 4 = CWD-inside-worktree refusal) is load-bearing for /spec:review.
 - **`spec/scripts/spec-status.js`** — the sole source of "what's next" across all hosts and a
-  frozen API for the autopilot daemon (`--root/--next/--json` shape, the five action strings);
-  never a second derivation of roadmap state anywhere.
+  frozen API for external `--json` consumers (`--root/--next/--json` shape, the five action
+  strings); never a second derivation of roadmap state anywhere.
 - **`spec/scripts/scope-reconcile.js`** — the sole derivation of changed-set-vs-File-Plan
   reconciliation (incl. `atRisk`) behind review's reconcile/at-risk legs and build's Final-gate
   advisory.
@@ -69,11 +69,8 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
   plain checked-in scripts carried as-is for the design family; edit them only under a spec
   that names them, never as a side effect.
 - **Zero dependencies**: scripts and tests use only Node built-ins (`fs`, `path`,
-  `child_process`, `os`, `assert`, `node:test`) and `jq` in bash. Never add a package. The
-  `autopilot/**` SDK-import exception is stated in full in § Review Checks below.
-  `autopilot/contract/**` is a read-only vendored copy of the hub's wire contract (ADR-0007) —
-  its inert typebox import in `index.ts`/`contract.test.ts` is sanctioned and never edited,
-  never a package addition (specs/20260808/01-autopilot-enroll.md D2–D3).
+  `child_process`, `os`, `assert`, `node:test`) and `jq` in bash. Never add a package. Any
+  non-builtin import anywhere is a hard finding, no footnotes.
 - Bash scripts open `#!/usr/bin/env bash` + `set -u` (never `set -e` — failures are explicit
   and carry remedies). JS scripts open `#!/usr/bin/env node` + `'use strict'`.
 - Every script starts with a header comment: usage line, why it exists (dated incident),
@@ -90,21 +87,12 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
 - Test names are full sentences stating the invariant. Every assert carries a third-arg
   message stating the **consequence of failure**, not the expectation.
 - Tests are **behavioral**: exec-a-script against a synthetic host in `tmpdir()` via
-  `runNode`/`runBash`, asserting on status + output, or in-process DI unit tests for
-  `autopilot/daemon/*` lib modules (injected fakes, `node:test` mock timers, zero real
-  SDK/network calls). Fixtures (`tests/fixtures/`) only when the input must be a realistic
-  multi-file artifact. Regexes over prose are not tests — a rule that matters gets a script
-  (core § Incident Policy).
+  `runNode`/`runBash`, asserting on status + output. Fixtures (`tests/fixtures/`) only when
+  the input must be a realistic multi-file artifact. Regexes over prose are not tests — a rule
+  that matters gets a script (core § Incident Policy).
 - Tests reference incident ids / dated escapes in a header comment. Pipeline-authored tests
   for new specs reference AC-IDs in the test name (`AC-{YYYYMMDD-NN}-1`).
-- Nothing here is exempt from TDD. Two sanctioned env-gated suites exist:
-  `tests/autopilot/live.test.js` posts real questions to a real Telegram topic and waits for a
-  real tap — it activates only when `AUTOPILOT_LIVE=1` is set in addition to the
-  `AUTOPILOT_LIVE_TOKEN`/`_SUPERGROUP`/`_TOPIC`/`_USER` credentials, and skips by declaration
-  otherwise (specs/20260801/04-live-smoke.md D6); `tests/autopilot/enroll-live.test.js`
-  performs a real enrollment against the production autopilot-hub — it activates only when
-  `AUTOPILOT_ENROLL_LIVE=1` is set in addition to `AUTOPILOT_ENROLL_HUB`/`AUTOPILOT_ENROLL_CODE`,
-  and skips by declaration otherwise (specs/20260808/01-autopilot-enroll.md D11).
+- Nothing here is exempt from TDD. There are no sanctioned env-gated skips.
 - **Gates are plainly green** (v7): `npm test` exits 0 on untouched code; there is no
   sanctioned-failing baseline and no standing red pins. A red suite is a regression or an
   unfinished change, never a TODO.
@@ -114,14 +102,8 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
 ## Review Checks
 
 - A doctrine/behavior change without a plugin.json version bump is **hard**.
-- A script or test importing a non-builtin package is **hard**. `autopilot/**` may import
-  ONLY `@anthropic-ai/claude-agent-sdk`, and only from `autopilot/daemon/sdk.js`; any other
-  non-builtin import anywhere, or an SDK import elsewhere, stays a hard finding.
-  `autopilot/contract/**` is exempt from this check — it is a read-only vendored copy of the
-  hub's wire contract (ADR-0007, specs/20260808/01-autopilot-enroll.md D2) and its
-  `index.ts`/`contract.test.ts` typebox import is sanctioned-inert, never a hard finding,
-  provided the files stay byte-identical to the hub source and no other file adds a typebox
-  import.
+- A script or test importing a non-builtin package is **hard**. Any non-builtin import
+  anywhere stays a hard finding, no exceptions.
 - An error path that doesn't name its remedy command, or a new exit code not documented in
   the script's header, is **hard**.
 - A `§ Section Name` citation that doesn't match a `## ` heading in the cited doctrine file
@@ -150,7 +132,7 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
   (specs/20260801/03-lane-engine.md — AC-2's checkpoint-ask assertion; fixed in the test.)
 - `[plugin]` The gate's `{testDirs}` placeholder invites a directory, but `node --test <dir>`
   fails on Node 26 in this repo — with or without a trailing slash it reports
-  `test at tests/autopilot:1:1 ✖` and `MODULE_NOT_FOUND`. Only the glob form
+  `test at tests/status:1:1 ✖` and `MODULE_NOT_FOUND`. Only the glob form
   `node --test 'tests/<scope>/*.test.js'` actually runs the files. Resolve `{testDirs}` to the
   glob on every scoped gate run. (specs/20260801/02-session-runner.md — the build hit this
   resolving its own gate command.)
@@ -277,15 +259,6 @@ upstream bug list. -->
   (specs/20260816/01-gate-baseline-reconcile.md — the D7 sentence landed split across two
   segments at build and AC-20260816-01-11 could not match it; recurred as a near-miss at review
   when the same fragment gained its anchoring sentence.)
-- `[host]` `tests/autopilot/preflight.test.js`'s AC-20260810-04-12 polls for the ready file
-  against a fixed 3-second wall-clock deadline, which is not robust under concurrent load:
-  review Phase 0 launches the boot smoke leg (another `autopilotd` boot) in the same parallel
-  batch as the whole-suite `suite-baseline --check`, and the test went red on that contention
-  alone. Serial re-run and isolated run are both green. A red `suite` leg naming only this test
-  is a load artifact, not a diff defect — re-run the suite leg serially before treating it as a
-  finding; the durable fix is a load-tolerant deadline or a bounded predicate poll, not a
-  baseline row. (specs/20260816/03-file-plan-table-scoped-parsing.md review 2026-08-17,
-  runId `wf_85d3d332-882`.)
 - `[plugin]` An AC asserting that a **newly-required-but-non-blocking** verdict leg does not
   derive `GATE_RED` is vacuous pre-implementation: `verdict.js` ignores any leg name outside
   `REVIEW_LEGS`/`REVIEW_BLOCKING`, so an unknown-and-red row is already indistinguishable from a

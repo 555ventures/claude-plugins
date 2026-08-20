@@ -3,7 +3,6 @@ paths:
   - "spec/scripts/**"
   - "spec/bin/**"
   - "scripts/**"
-  - "autopilot/**"
 ---
 
 # Gate-script conventions

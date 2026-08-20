@@ -92,48 +92,6 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
 - **`/spec:atlas`** — whole-product design view: every mock at device size, arranged by journey,
   gap cards for unmocked surfaces. Zero tokens, never required.
 
-## Autopilot (optional daemon)
-
-`autopilot/` runs the spec pipeline unattended from a Telegram supergroup — the daemon relays
-checkpoint questions to a topic, waits for a tap, and drives `/spec:plan` (and later stages) on
-your behalf. It ships no README of its own; this section is the whole runbook.
-
-1. **Install dependencies**: `cd autopilot && npm install` (the daemon needs the Claude Agent
-   SDK, which this repo does not vendor at the root).
-2. **Ground every repo you want driven**: run `/spec:init` on each target repo before bootstrap —
-   an ungrounded repo is a no-op, so a throwaway repo needs this first.
-3. **Config file location**: identity lives in `~/.config/autopilot/hub.json`, written by enroll —
-   nothing to hand-edit there. Optional per-project/host overrides, if you ever need one, go in
-   `~/.config/autopilot/config.json` at the same directory (`--config` to point elsewhere); most
-   setups never touch it.
-4. **One-command machine setup**: paste the hub's Telegram `/enroll` line as
-   `autopilot/bin/autopilot bootstrap --hub <url> --code <code> [--repos-root <dir>]`. It
-   sequences enroll → discover → plugin-enable (wires `autopilot@555-tools` into
-   `~/.claude/settings.json`) → service install → doctor, stopping at the first hard failure
-   with that step's own remedy; re-running is safe — an already-enrolled box skips straight to
-   the next step instead of burning a second code. **On Linux** (the fleet) this also installs
-   and starts a `systemd --user` service (`Restart=always`, survives reboot once
-   `loginctl enable-linger` is set — bootstrap does this for you). **On macOS** (JJ's machine is
-   the only one) there is no service: bootstrap prints the reminder to run
-   `autopilot/bin/autopilotd` inside `tmux` instead and continues, stopped with `SIGTERM`
-   (`Ctrl-C` sends the equivalent `SIGINT`) — launchd support is a recorded deferral, not a
-   blocker.
-5. **Log in**: run `claude` once on the box so the daemon's SDK sessions have credentials — it's
-   the one step bootstrap can't do for you. Until it's done, lanes halt with the phone-visible
-   🔑 checkpoint.
-6. **Check health anytime**: `autopilot doctor` runs the full offline runbook (hub.json,
-   discovery, plugin-enable, Node floor, daemon liveness, and — on Linux — the service checks)
-   plus a network-tolerant hub reachability/clock-skew check; every line degrades gracefully and
-   names its own remedy on failure.
-7. **Manage the service** (Linux): `autopilot service status|logs|uninstall` — `uninstall`
-   stops the unit (equivalent to `SIGTERM`) before removing it; `logs` passthroughs
-   `journalctl --user -u autopilot -f`.
-
-Only one process may long-poll a given bot token at a time (Telegram allows a single
-`getUpdates` consumer per token) — never run the daemon and the opt-in live test suite
-(`tests/autopilot/live.test.js`, gated on `AUTOPILOT_LIVE=1`) against the same token
-concurrently.
-
 ## Command reference
 
 | Command | What it does | When |

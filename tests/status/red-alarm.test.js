@@ -90,7 +90,7 @@ test('AC-20260807-01-7: a red latest observation turns the headline red, renders
   const top = j.next[0]
   assert.strictEqual(top.action, '/spec:escape', 'a red observation must outrank every build/review/plan action as the --next top pick')
   assert.strictEqual(top.path, specPath, 'the escape entry must point at the red spec itself')
-  assert.deepStrictEqual(top.blockers, [], 'blockers:[] is pinned — a populated blockers array would make the autopilot lane treat a ready escape as stuck')
+  assert.deepStrictEqual(top.blockers, [], 'blockers:[] is pinned — a populated blockers array would make an external --next --json consumer treat a ready escape as stuck')
   assert.strictEqual(top.parallel, false, 'escape entries are excluded from the parallel fan-out — parallel must be false, not null')
   assert.strictEqual(top.parallel_reason, null, 'parallel_reason must be null alongside parallel:false')
   assert.match(top.note, /main/, 'the note must carry the branch — the escape session derives its evidence from this field')

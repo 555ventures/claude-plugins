@@ -19,11 +19,6 @@
       "name": "style",
       "source": "./style",
       "description": "JJ's cross-machine communication style — a SessionStart hook injects outcome-first, emoji-anchored response rules into every session, replacing per-machine CLAUDE.md edits"
-    },
-    {
-      "name": "autopilot",
-      "source": "./autopilot",
-      "description": "Remote-controlled spec pipeline daemon: a platform-neutral messaging adapter seam (Telegram v1) that renders fork questions as inline keyboards and routes answers back to pending asks"
     }
   ]
 }

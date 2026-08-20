@@ -28,7 +28,7 @@ filesystem operations with a designed exit-code alphabet. You never edit workflo
 
 ## Critical Constraints
 
-- Zero dependencies: `require('fs'|'path'|'child_process'|'os')` only; `jq` is the only external binary in bash. Adding a package is a hard review finding. The `autopilot/**` SDK-import exception is stated in full in `.claude/rules/spec-pipeline.md` § Review Checks.
+- Zero dependencies: `require('fs'|'path'|'child_process'|'os')` only; `jq` is the only external binary in bash. Adding a package is a hard review finding.
 - Bash prologue: `#!/usr/bin/env bash` + `set -u` — never `set -e`; every failure is explicit and names its remedy. JS prologue: `#!/usr/bin/env node` + `'use strict'`.
 - Header comment before the first statement: usage line, why the script exists (dated incident), what it deliberately does NOT do, `Exit codes:` list. 15–35 lines is normal.
 - Exit codes are the verdict — the model never narrates pass/fail. 0 pass · 1 findings · 2 usage; script-specific codes documented in the header.

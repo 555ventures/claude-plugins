@@ -1,9 +1,0 @@
-{
-  "_comment": "autopilot daemon overrides — OPTIONAL, copy to ~/.config/autopilot/config.json (or pass --config <path>). The daemon boots from hub.json (written by `autopilot enroll`/`autopilot discover`) + repo discovery; this file only tweaks what discovery can't know. Per-project entries are keyed by discovered project name (the repo's directory basename) and may set devServerCommand/tunnelCommand/pollSeconds. Host-level overrides (specPluginRoot, pluginPaths, reposRoot) replace the checkout-derived defaults. An overrides key naming no discovered project is a typo — the daemon refuses to boot rather than silently configure nothing (specs/20260810/04-hub-wired-daemon.md D7).",
-
-  "prax": {
-    "devServerCommand": "npm run dev",
-    "tunnelCommand": "cloudflared tunnel --url http://localhost:3000",
-    "pollSeconds": 300
-  }
-}

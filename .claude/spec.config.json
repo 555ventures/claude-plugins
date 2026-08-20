@@ -34,7 +34,7 @@
   "routing": {
     "tests": "tests/*.test.js rows",
     "doctrine": "spec/commands/*.md, spec/doctrine/*.md, spec/agents/*.md, spec/templates/*, git/commands/*.md, spec/hooks/hooks.json, plugin manifests",
-    "scripts": "spec/scripts/*.js|*.sh, spec/bin/*, scripts/*, spec/workflows/wf-*.js (frozen design/enforce scripts), autopilot daemon source (routes here until it earns its own kind)"
+    "scripts": "spec/scripts/*.js|*.sh, spec/bin/*, scripts/*, spec/workflows/wf-*.js (frozen design/enforce scripts)"
   },
   "pipelineRules": ".claude/rules/spec-pipeline.md"
 }

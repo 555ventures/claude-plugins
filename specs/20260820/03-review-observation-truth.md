@@ -1,6 +1,6 @@
 ---
 date: 2026-08-20
-status: implementing
+status: done
 open_markers: 0
 tier: critical
 area: review-verification
@@ -203,6 +203,16 @@ reused by ~30 pins — D3's new branch must key on the exact did-not-match liter
 fixture reuse reddens; and `computeLegFindings` currently skips blocking legs, so the D3
 count is a deliberate special case, not a lifting of that skip. Salon OS's backfill of
 its own pre-convention specs stays host-side work, recommended in the report reply.
+
+Build deviation (folded from the deviations sidecar at review close, 2026-08-20): AC-20260820-03-10
+could not be demonstrated red pre-implementation and was not artificially reddened. It pins the
+producer→consumer pair on the *parseable* gate-observed branch (`skips=N todos=M` →
+`testsSkipped.total`), which D2's Contracts block declares byte-unchanged — so it is a
+green-carrier regression pin in substance, the same shape as a `SHALL CONTINUE TO` AC, even though
+its text is not phrased that way. Kept as the correct post-implementation assertion per the
+standing vacuous-AC Gotcha (`.claude/rules/spec-pipeline.md` § Gotchas, specs/20260819/01 entry);
+its sibling AC-20260820-03-11, which pins the unmatched-pattern branch this spec actually changes,
+did go red and now passes. No contract was weakened and no red was invented.
 
 ## Canonical Delta
 

@@ -13,27 +13,112 @@ const { ROOT, tmpdir } = require('../helpers')
 // each red case (AC-2..AC-5). spec/entrypoints.json does not exist on disk yet; the live-repo
 // tests below are TDD red until a later worker in this build seeds it (D1, A4). Never weaken
 // these assertions to make them pass early — the manifest must actually be seeded and correct.
+//
+// D8 (orchestrator ruling, same day): the reverse check (checkReverseInvocation) narrows to
+// spec-paths keys resolving inside D1's executable-inventory glob shape — nine live keys
+// (shared, shared-design, shared-genesis, replay-corpus, template, feedback-template,
+// templates, contract, workflows) resolve to doctrine files, templates, or directories, and
+// D4 read literally demanded an unsatisfiable manifest entry for each.
+//
+// D9 (orchestrator ruling, same day — A2 FALSIFIED): the forward check's script-to-script
+// grammar was bare-substring matching over the whole file, comments included. Measured false
+// GREEN: severing the real `path.join(scriptDir, 'ac-matrix.js')` call in review-legs.js while
+// leaving its header comment's plain-text mentions of "ac-matrix.js" intact left the suite 8/8
+// green. 8 of the then-12 live script-to-script edges — every review-legs.js leg (ac-matrix.js,
+// ci-query.js, env-preflight.js, promise-sweep.js, scope-reconcile.js, smoke.sh) plus
+// spec-design-driver.js -> components-check.js and manifest-check.sh -> smoke.sh — had a
+// comment-only mention sufficient to hold the check green on its own, INCLUDING
+// review-legs.js -> env-preflight.js: the exact edge whose absence was this spec's third
+// recurrence. The guard was blind on its own motivating case. checkForwardInvocation's
+// script-to-script branch now strips comment lines and requires D9's declared shape (an
+// exact-delimited quoted literal, or the tail of a quoted path) on what remains — see
+// stripCommentLines/matchesScriptInvocation below for the grammar and its false-RED bias.
+//
+// D10 (orchestrator ruling, adversarial sweep at build close 2026-08-20 — A1's hook grammar
+// FALSIFIED, then REDIRECTED to an oracle change): the reverse-hooks regex was
+// `CLAUDE_PLUGIN_ROOT\}"?\/scripts\/...` — `}` then an OPTIONAL BARE `"` then `/`. The live
+// spec/hooks/hooks.json's raw bytes are `\"${CLAUDE_PLUGIN_ROOT}\"/scripts/<basename>` (a JSON
+// string escaping its own embedded quote) — the backslash between `}` and `"` was unaccounted
+// for. Executed proof: the old regex returned zero matches against the live file, which
+// genuinely references four scripts (spec-state-gate.sh, genesis-state-gate.sh,
+// question-style-gate.js, block-cross-worktree-writes.sh) — the whole reverse-hooks direction
+// had never fired, and shipped unexercised because no fixture anywhere in this file covers the
+// hooks corpus. A first fix widened the regex to accept the escaped-quote form; the orchestrator
+// then REDIRECTED away from that fix, on the reasoning that hooks.json is JSON — text with
+// STRUCTURE — and a regex over its raw bytes is the wrong oracle regardless of how carefully it
+// is widened: it buys exactly one more evasion (this quoting style) until the next one appears.
+// The fix actually shipped is an ORACLE CHANGE, not a wider pattern: parseHookScriptBasenames
+// below JSON.parses the file and walks the parsed tree collecting every string under a
+// `command` key, wherever it nests; by the time a command string is in hand, JSON's own
+// escaping is already resolved (`\"` is plain `"`), so a single generic `/scripts/<basename>`
+// extraction is quoting-agnostic — escaped-double-quote, single-quoted, and unquoted forms all
+// collapse to the identical plain string and are handled identically, with no per-style branch.
+// A parse failure is fail-closed (a violation naming the file and the JSON error), never a
+// silent skip and never a fallback to regex. The hooks FORWARD branch (previously
+// `epSrc.includes('/scripts/' + basename)`) was checked by the same executed sweep and did NOT
+// share the original regex defect — the substring `/scripts/<basename>` was present verbatim in
+// the raw file regardless of what preceded the `/`, so it already matched all four live
+// basenames — but it is now on the same parse-based oracle as the reverse direction for the same
+// durability reason, rather than left as the one remaining raw-bytes match in the file.
+//
+// D11 (orchestrator ruling, same sweep): `scanExecutables` was non-recursive and `.js`/`.sh`-
+// only, and `isExecutableDomainPath` mirrored the same shape — the two agreed perfectly, so a
+// script placed one directory deeper or saved without a recognized extension was invisible to
+// BOTH the inventory scan and the D8 domain filter at once: no manifest-orphan red, no
+// reverse-invocation red. Executed repro: `spec/scripts/legs/ac-matrix.js`, reachable via a
+// real spec-paths key and invoked from a command markdown file, with manifest `{}`, made every
+// one of checkInventoryForward/checkInventoryReverse/checkForwardInvocation/
+// checkReverseInvocation return `[]`. scanExecutables is now a recursive walk under
+// spec/scripts/ (still excluding spec/scripts/lib/) and spec/workflows/, admitting
+// extensionless files alongside .js/.mjs/.cjs/.sh; isExecutableDomainPath is kept in exact
+// shape-agreement (same isExecutableName test, same lib/ exclusion, same two root prefixes) —
+// a divergence between the two is exactly how this hole opened. checkKeyReachability is the
+// independent belt-and-braces leg D11 also requires: every spec-paths key resolving under
+// spec/scripts/ or spec/workflows/ must resolve to a file the (now-recursive) inventory scan
+// actually enumerates, closing the class by REACHABILITY rather than by re-deriving the same
+// shape rule, so a future placement the shape rule fails to anticipate still surfaces.
+// Recursion adds zero files against the live repo (spec/scripts/ holds only flat .js/.sh plus
+// lib/; spec/workflows/ only flat .js) — verified by listing both trees before this edit.
 
 // ---------------------------------------------------------------------------
 // Checker logic (D5): pure functions over an injectable repo root.
 // ---------------------------------------------------------------------------
 
-// D1 inventory: spec/scripts/*.js|*.sh + spec/workflows/*.js, excluding spec/scripts/lib/
-// (a plain non-recursive listing already excludes lib/ — it is a subdirectory, never a file).
+// D11: an executable file name is .js/.mjs/.cjs/.sh OR extensionless — a shape a file cannot
+// dodge merely by omitting an extension.
+function isExecutableName(name) {
+  const ext = path.extname(name)
+  return ext === '' || ['.js', '.mjs', '.cjs', '.sh'].includes(ext)
+}
+
+function walkFiles(dir) {
+  if (!fs.existsSync(dir)) return []
+  let out = []
+  for (const name of fs.readdirSync(dir)) {
+    const full = path.join(dir, name)
+    const st = fs.statSync(full)
+    if (st.isDirectory()) out = out.concat(walkFiles(full))
+    else if (st.isFile()) out.push(full)
+  }
+  return out
+}
+
+// D1/D11 inventory: every file (recursive) under spec/scripts/ (excluding spec/scripts/lib/,
+// modules not entry points) and spec/workflows/, whose name matches isExecutableName. Recursive
+// on purpose — D11: a script placed one directory deeper than the live tree's current flat
+// layout must not fall out of scope silently.
 function scanExecutables(root) {
-  const dirs = [
-    { rel: 'spec/scripts', exts: ['.js', '.sh'] },
-    { rel: 'spec/workflows', exts: ['.js'] }
-  ]
   const out = []
-  for (const { rel, exts } of dirs) {
-    const dir = path.join(root, rel)
-    if (!fs.existsSync(dir)) continue
-    for (const name of fs.readdirSync(dir)) {
-      const full = path.join(dir, name)
-      if (!fs.statSync(full).isFile()) continue
-      if (exts.includes(path.extname(name))) out.push(rel + '/' + name)
-    }
+  const scriptsRoot = path.join(root, 'spec/scripts')
+  const libRoot = path.join(root, 'spec/scripts/lib')
+  for (const full of walkFiles(scriptsRoot)) {
+    if (full === libRoot || full.startsWith(libRoot + path.sep)) continue
+    if (!isExecutableName(path.basename(full))) continue
+    out.push(path.relative(root, full).split(path.sep).join('/'))
+  }
+  for (const full of walkFiles(path.join(root, 'spec/workflows'))) {
+    if (!isExecutableName(path.basename(full))) continue
+    out.push(path.relative(root, full).split(path.sep).join('/'))
   }
   return out.sort()
 }
@@ -54,10 +139,15 @@ function readManifest(root) {
 // naming the missing script — it is not silently swallowed just because scanExecutables can no
 // longer see the file. (checkInventoryReverse below is the separate, unrelated check for a
 // manifest key that itself resolves to a missing file — the two checks stay orthogonal.)
+// D11: kept in EXACT shape-agreement with scanExecutables (same isExecutableName test, same
+// lib/ exclusion, same two recursive root prefixes) — a divergence between this function and
+// scanExecutables is precisely how the D11 hole opened (a script invisible to one but not the
+// other, or invisible to both at once).
 function isExecutableDomainPath(p) {
   if (/^spec\/scripts\/lib\//.test(p)) return false
-  if (/^spec\/scripts\/[^/]+\.(js|sh)$/.test(p)) return true
-  if (/^spec\/workflows\/[^/]+\.js$/.test(p)) return true
+  if (/^spec\/scripts\//.test(p) || /^spec\/workflows\//.test(p)) {
+    return isExecutableName(p.split('/').pop())
+  }
   return false
 }
 
@@ -70,6 +160,77 @@ function specPathsKeyMap(root) {
   let m
   while ((m = re.exec(src)) !== null) map[m[1]] = 'spec/' + m[2]
   return map
+}
+
+// D11 belt-and-braces (independent of scanExecutables/isExecutableDomainPath): every
+// spec-paths key resolving under spec/scripts/ or spec/workflows/ must resolve to a file
+// scanExecutables actually enumerates. This closes the same class of hole D11's recursion +
+// extension fix closes, but by REACHABILITY against the real inventory rather than by
+// re-deriving the same shape rule a second time — a future placement or naming convention the
+// shape rule fails to anticipate (and so wrongly excludes from the inventory) still surfaces
+// here as long as the spec-paths key itself resolves under one of the two script roots.
+function checkKeyReachability(root) {
+  const keyMap = specPathsKeyMap(root)
+  const inventory = new Set(scanExecutables(root))
+  const violations = []
+  for (const [key, target] of Object.entries(keyMap)) {
+    if (!/^spec\/(scripts|workflows)\//.test(target)) continue
+    if (!inventory.has(target)) {
+      violations.push('spec-paths key "' + key + '" resolves to ' + target +
+        ', which is not in the executable inventory (missing from disk, or excluded by the ' +
+        'scan rules) — the key is a dead or unreachable reference')
+    }
+  }
+  return violations
+}
+
+// D10: recursively collect every string value found under a key literally named "command",
+// wherever it nests in the parsed hooks.json tree — generic on purpose, so a reshaping of the
+// hooks.json structure (a nested group, a new event) does not require touching this walk.
+function collectHookCommandStrings(node, out) {
+  if (Array.isArray(node)) {
+    for (const item of node) collectHookCommandStrings(item, out)
+  } else if (node && typeof node === 'object') {
+    for (const [k, v] of Object.entries(node)) {
+      if (k === 'command' && typeof v === 'string') out.push(v)
+      else collectHookCommandStrings(v, out)
+    }
+  }
+  return out
+}
+
+// D10: once a command string is in hand, JSON's own escaping is already resolved — `\"` is
+// plain `"` — so a single generic extraction ("whatever directly follows /scripts/, up to the
+// next whitespace or quote character") is quoting-agnostic: escaped-double-quote, single-quoted,
+// and unquoted `${CLAUDE_PLUGIN_ROOT}` forms all collapse to the identical plain string here.
+function scriptBasenamesFromCommand(cmd) {
+  const re = /\/scripts\/([^\s"'`]+)/g
+  const out = []
+  let m
+  while ((m = re.exec(cmd)) !== null) out.push(m[1])
+  return out
+}
+
+// D10's oracle: JSON.parse spec/hooks/hooks.json (never a regex over its raw bytes) and return
+// the set of script basenames its command strings genuinely invoke. A missing hooks.json is
+// simply "no hooks corpus to check" (`ok: true`, empty set) — unaffected fixtures without a
+// hooks.json continue to see no hooks-direction findings. A PRESENT but invalid-JSON hooks.json
+// is fail-closed (`ok: false`): the caller must surface this as a violation naming the file and
+// the parse error, never silently skip the hooks direction and never fall back to a regex scan.
+function parseHookScriptBasenames(root) {
+  const hooksPath = path.join(root, 'spec/hooks/hooks.json')
+  if (!fs.existsSync(hooksPath)) return { ok: true, basenames: new Set() }
+  let parsed
+  try {
+    parsed = JSON.parse(fs.readFileSync(hooksPath, 'utf8'))
+  } catch (e) {
+    return { ok: false, error: 'spec/hooks/hooks.json is not valid JSON (' + e.message + ')' }
+  }
+  const basenames = new Set()
+  for (const cmd of collectHookCommandStrings(parsed, [])) {
+    for (const b of scriptBasenamesFromCommand(cmd)) basenames.add(b)
+  }
+  return { ok: true, basenames }
 }
 
 // Non-recursive single-level listing of a call-site corpus directory (the Contracts "Scan
@@ -127,9 +288,44 @@ function checkInventoryReverse(root) {
   return dangling
 }
 
+// D9 (retires A2's bare-basename grammar — A2 FALSIFIED at build close 2026-08-20, measured):
+// a script-to-script caller's basename must appear, on a NON-comment line, as an
+// exact-delimited quoted literal ('<b>', "<b>") or as the tail of a quoted path (/<b>', /<b>").
+// Executed proof that bare-substring matching is a false-GREEN generator: severing the real
+// `path.join(scriptDir, 'ac-matrix.js')` invocation in review-legs.js while leaving its header
+// comment's three plain-text mentions of "ac-matrix.js" untouched left the suite 8/8 GREEN.
+// 8 of the then-12 live script-to-script edges (every review-legs.js leg — ac-matrix.js,
+// ci-query.js, env-preflight.js, promise-sweep.js, scope-reconcile.js, smoke.sh — plus
+// spec-design-driver.js -> components-check.js and manifest-check.sh -> smoke.sh) had a
+// comment-only mention sufficient to hold the check green on its own, INCLUDING
+// review-legs.js -> env-preflight.js — the exact edge whose absence was this spec's third
+// recurrence; the guard was blind on its own motivating case. Comment stripping below
+// deliberately biases toward a false RED over a false GREEN (D9's own instruction): a `//`
+// (.js) or `#` (.sh) starts a comment for the rest of its line, trailing same-line comments
+// included; no block-comment or in-string awareness is attempted, so a basename genuinely
+// present only inside a `/* */` block or a string that itself contains `//`/`#` is treated as
+// noise (an over-strip, costs nothing but a `"dynamic": true` escape hatch per D6) rather than
+// as a false invocation match (an under-strip, the wrong-direction failure this spec exists to
+// close).
+function stripCommentLines(src, ext) {
+  const marker = ext === '.sh' ? '#' : '//'
+  return src.split('\n').map((line) => {
+    const idx = line.indexOf(marker)
+    return idx === -1 ? line : line.slice(0, idx)
+  }).join('\n')
+}
+
+// D9's declared invocation shape: an exact single/double-quoted literal, or the tail of a
+// quoted path (a `/` immediately before the basename, a closing quote immediately after).
+function matchesScriptInvocation(codeOnlySrc, basename) {
+  const b = basename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp("'" + b + "'|\"" + b + '"|/' + b + "'|/" + b + '"').test(codeOnlySrc)
+}
+
 // D3/AC-4: every declared entry point exists and actually invokes its script. `.md` entry
-// points need the literal `spec-paths <key>`; a `hooks.json` entry point needs a
-// `/scripts/<basename>` occurrence; a script-to-script caller needs the basename. An entry
+// points need the literal `spec-paths <key>`; a `hooks.json` entry point needs the script's
+// basename among D10's parse-based hook-command extraction (parseHookScriptBasenames); a
+// script-to-script caller needs D9's quoted-literal shape on a non-comment line. An entry
 // flagged `"dynamic": true` (D6) still needs the entry-point file to exist, but skips the
 // invocation-literal check (a call site grep cannot see).
 function checkForwardInvocation(root) {
@@ -152,9 +348,15 @@ function checkForwardInvocation(root) {
         const keys = Object.keys(keyMap).filter((k) => keyMap[k] === script)
         ok = keys.some((k) => new RegExp('spec-paths ' + k + '\\b').test(epSrc))
       } else if (path.basename(ep) === 'hooks.json') {
-        ok = epSrc.includes('/scripts/' + basename)
+        // D10: parse-based oracle, not a raw-bytes match — see parseHookScriptBasenames.
+        const hookResult = parseHookScriptBasenames(root)
+        if (!hookResult.ok) {
+          violations.push(script + ' -> ' + ep + ' (' + hookResult.error + ' — fail-closed, D10)')
+          continue
+        }
+        ok = hookResult.basenames.has(basename)
       } else {
-        ok = epSrc.includes(basename)
+        ok = matchesScriptInvocation(stripCommentLines(epSrc, path.extname(ep)), basename)
       }
       if (!ok) violations.push(script + ' -> ' + ep + ' (no invocation literal for ' + basename + ' found in ' + ep + ')')
     }
@@ -162,9 +364,9 @@ function checkForwardInvocation(root) {
   return violations
 }
 
-// D4/AC-5: every `spec-paths <key>` occurrence in the call-site corpus, plus every
-// `${CLAUDE_PLUGIN_ROOT}/scripts/<basename>` occurrence in hooks.json, must map to a manifest
-// entry that declares the calling file.
+// D4/AC-5: every `spec-paths <key>` occurrence in the call-site corpus, plus every script
+// basename D10's parse-based extraction finds in hooks.json's command strings, must map to a
+// manifest entry that declares the calling file.
 function checkReverseInvocation(root) {
   const manifest = readManifest(root)
   const keyMap = specPathsKeyMap(root)
@@ -185,21 +387,22 @@ function checkReverseInvocation(root) {
       }
     }
   }
+  // D10: parse-based oracle, not a raw-bytes regex — see parseHookScriptBasenames. A present but
+  // invalid-JSON hooks.json fails closed (a violation naming the file), never a silent skip.
   const hooksRel = 'spec/hooks/hooks.json'
-  const hooksPath = path.join(root, hooksRel)
-  if (fs.existsSync(hooksPath)) {
-    const hooksSrc = fs.readFileSync(hooksPath, 'utf8')
-    const re2 = /CLAUDE_PLUGIN_ROOT\}"?\/scripts\/([\w.-]+\.(?:js|sh))/g
-    let m2
-    while ((m2 = re2.exec(hooksSrc)) !== null) {
-      const basename = m2[1]
+  const hookResult = parseHookScriptBasenames(root)
+  if (!hookResult.ok) {
+    violations.add(hookResult.error + ' — the hooks reverse-invocation check cannot run (fail-closed, D10)')
+  } else {
+    for (const basename of hookResult.basenames) {
       const script = Object.keys(manifest).find((s) => s.startsWith('spec/scripts/') && path.basename(s) === basename)
       if (!script) continue
       const entry = manifest[script]
       const declared = !!entry && Array.isArray(entry.entryPoints) && entry.entryPoints.includes(hooksRel)
       if (!declared) {
-        violations.add(hooksRel + ' invokes ' + script + ' via ${CLAUDE_PLUGIN_ROOT}/scripts/' + basename +
-          ' but the manifest entry for ' + script + ' does not declare ' + hooksRel + ' as an entry point')
+        violations.add(hooksRel + ' invokes ' + script + ' (parsed hooks.json command string, ' +
+          'basename ' + basename + ') but the manifest entry for ' + script +
+          ' does not declare ' + hooksRel + ' as an entry point')
       }
     }
   }
@@ -242,6 +445,43 @@ test('AC-20260820-04-1: every executable in spec/scripts/*.js|*.sh and spec/work
     'entry with at least one declared entry point — an orphan here means a script exists that ' +
     'the manifest never accounts for, silently reopening the "authored but never activated" ' +
     'class: ' + JSON.stringify(orphans))
+
+  const manifest = readManifest(ROOT)
+  assert.strictEqual(Object.keys(manifest).length, executables.length,
+    'the manifest must have exactly one key per scanned executable (30 as seeded) — a mismatch ' +
+    'means either the manifest carries a stale/duplicate key or the recursive D11 scan is ' +
+    'finding files the manifest was never seeded to cover: manifest has ' +
+    Object.keys(manifest).length + ', scan found ' + executables.length)
+})
+
+test('AC-20260820-04-1 / D11: every spec-paths key resolving under spec/scripts/ or spec/workflows/ resolves to a file the (recursive) executable inventory actually enumerates', () => {
+  const manifestPath = path.join(ROOT, 'spec/entrypoints.json')
+  assert.ok(fs.existsSync(manifestPath),
+    'spec/entrypoints.json does not exist — the D11 belt-and-braces reachability leg needs the ' +
+    'manifest seeded before it can be exercised against the live repo')
+  const violations = checkKeyReachability(ROOT)
+  assert.deepStrictEqual(violations, [],
+    'a spec-paths key resolving under spec/scripts/ or spec/workflows/ to a file the recursive ' +
+    'inventory scan does not enumerate means the key is dead, or the scan/domain-shape rules ' +
+    'have diverged from reality — this is D11\'s independent reachability cross-check, kept ' +
+    'deliberately separate from the shape-based checks above: ' + JSON.stringify(violations))
+})
+
+test('AC-20260820-04-5 / D10: parseHookScriptBasenames extracts exactly the four live hooks.json script basenames, proving the parse-based oracle actually fires against the real file', () => {
+  const result = parseHookScriptBasenames(ROOT)
+  assert.strictEqual(result.ok, true,
+    'the live spec/hooks/hooks.json must parse as valid JSON — a parse failure here would fail ' +
+    'the whole hooks direction closed: ' + (result.error || ''))
+  assert.deepStrictEqual([...result.basenames].sort(), [
+    'block-cross-worktree-writes.sh',
+    'genesis-state-gate.sh',
+    'question-style-gate.js',
+    'spec-state-gate.sh'
+  ],
+    'the parse-based extraction must yield exactly these four basenames from the live file — ' +
+    'this is the executed proof that the oracle change (not a widened regex) actually resolves ' +
+    'the measured D10 defect (the old raw-bytes regex returned zero matches here): ' +
+    JSON.stringify([...result.basenames].sort()))
 })
 
 test('AC-20260820-04-6: the live repo, scanned in both inventory directions and both invocation directions, reports zero violations — the green pin every future drift turns red', () => {
@@ -272,6 +512,13 @@ test('AC-20260820-04-6: the live repo, scanned in both inventory directions and 
     'a `spec-paths <key>` or hooks.json call site the manifest does not know about means the ' +
     'manifest is incomplete in the direction that matters most — an invocation nobody declared: ' +
     JSON.stringify(reverseViolations))
+
+  const reachabilityViolations = checkKeyReachability(ROOT)
+  assert.deepStrictEqual(reachabilityViolations, [],
+    'a live spec-paths key resolving under spec/scripts/ or spec/workflows/ to a file the ' +
+    'inventory scan cannot see (D11\'s independent reachability leg) means either the key is ' +
+    'dead or the scan/domain-shape logic has silently diverged from reality: ' +
+    JSON.stringify(reachabilityViolations))
 })
 
 // ---------------------------------------------------------------------------
@@ -350,6 +597,86 @@ test('AC-20260820-04-4: a declared entry point whose spec-paths invocation liter
     'which manifest row to look at: ' + violations[0])
 })
 
+test('AC-20260820-04-4 / D9: a script-to-script caller mentioning the basename ONLY in a comment fails — a comment is not an invocation', () => {
+  const root = tmpdir('entrypoints-ac4-d9-comment')
+  writeTree(root, {
+    'spec/scripts/ac-matrix.js': '#!/usr/bin/env node\n',
+    'spec/bin/spec-paths': '#!/usr/bin/env bash\nset -u\nROOT="$(pwd)"\ncase "${1:-root}" in\nesac\n',
+    // the only mention of ac-matrix.js is a plain-text header comment, exactly the shape
+    // that held the live suite green while the real invocation was severed (D9's proof)
+    'spec/scripts/review-legs.js':
+      '#!/usr/bin/env node\n' +
+      '// The leg scripts (scope-reconcile.js, smoke.sh, ci-query.js, ac-matrix.js) are reused as-is.\n' +
+      'const path = require("path")\n' +
+      'const target = path.join(__dirname, "renamed-away.js") // no real ac-matrix.js call left\n',
+    'spec/entrypoints.json': JSON.stringify({
+      'spec/scripts/ac-matrix.js': { entryPoints: ['spec/scripts/review-legs.js'] }
+    })
+  })
+  const violations = checkForwardInvocation(root)
+  assert.strictEqual(violations.length, 1,
+    'a comment-only mention of ac-matrix.js must NOT satisfy the forward check — this is the ' +
+    'measured false-GREEN shape D9 closes (severing the real review-legs.js -> ac-matrix.js ' +
+    'call while leaving the header comment intact left the live suite green): ' + JSON.stringify(violations))
+  assert.match(violations[0], /review-legs\.js/,
+    'the violation must name the entry-point file: ' + violations[0])
+  assert.match(violations[0], /ac-matrix\.js/,
+    'the violation must name the script: ' + violations[0])
+})
+
+test('AC-20260820-04-4 / D9: a script-to-script caller mentioning the basename only inside a prose/error-message string fails — a string literal is not an invocation', () => {
+  const root = tmpdir('entrypoints-ac4-d9-prose')
+  writeTree(root, {
+    'spec/scripts/env-preflight.js': '#!/usr/bin/env node\n',
+    'spec/bin/spec-paths': '#!/usr/bin/env bash\nset -u\nROOT="$(pwd)"\ncase "${1:-root}" in\nesac\n',
+    // "env-preflight.js" appears only as prose inside an error-message template literal —
+    // no quote/path-tail delimits it as an invocation per D9's grammar
+    'spec/scripts/review-legs.js':
+      '#!/usr/bin/env node\n' +
+      'const detail = "boom"\n' +
+      'console.error(`review-legs.js: environment not provisioned — env-preflight.js failed before any leg could run:\\n${detail}`)\n',
+    'spec/entrypoints.json': JSON.stringify({
+      'spec/scripts/env-preflight.js': { entryPoints: ['spec/scripts/review-legs.js'] }
+    })
+  })
+  const violations = checkForwardInvocation(root)
+  assert.strictEqual(violations.length, 1,
+    'a bare prose mention of env-preflight.js inside a template-literal error message must NOT ' +
+    'satisfy the forward check — this is the exact edge (review-legs.js -> env-preflight.js) ' +
+    'whose absence was this spec\'s third recurrence, and D9 exists precisely so this shape ' +
+    'cannot hide it again: ' + JSON.stringify(violations))
+  assert.match(violations[0], /env-preflight\.js/,
+    'the violation must name the script: ' + violations[0])
+})
+
+test('AC-20260820-04-4 / D9: a genuine path.join quoted-literal call and a genuine bash quoted-path call both pass the forward check', () => {
+  const root = tmpdir('entrypoints-ac4-d9-genuine')
+  writeTree(root, {
+    'spec/scripts/ac-matrix.js': '#!/usr/bin/env node\n',
+    'spec/scripts/smoke.sh': '#!/usr/bin/env bash\nset -u\n',
+    'spec/bin/spec-paths': '#!/usr/bin/env bash\nset -u\nROOT="$(pwd)"\ncase "${1:-root}" in\nesac\n',
+    'spec/scripts/review-legs.js':
+      '#!/usr/bin/env node\n' +
+      'const path = require("path")\n' +
+      "const acr = path.join(__dirname, 'ac-matrix.js') // genuine quoted-literal invocation\n",
+    'spec/scripts/manifest-check.sh':
+      '#!/usr/bin/env bash\n' +
+      'set -u\n' +
+      'PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"\n' +
+      'OUT=$(bash "$PLUGIN_ROOT/scripts/smoke.sh" 2>&1)\n',
+    'spec/entrypoints.json': JSON.stringify({
+      'spec/scripts/ac-matrix.js': { entryPoints: ['spec/scripts/review-legs.js'] },
+      'spec/scripts/smoke.sh': { entryPoints: ['spec/scripts/manifest-check.sh'] }
+    })
+  })
+  const violations = checkForwardInvocation(root)
+  assert.deepStrictEqual(violations, [],
+    'a genuine path.join(scriptDir, \'ac-matrix.js\') call and a genuine bash ' +
+    '"$PLUGIN_ROOT/scripts/smoke.sh" call must both satisfy D9\'s quoted-literal / ' +
+    'quoted-path-tail grammar — narrowing away the false-GREEN comment/prose shapes must not ' +
+    'also reject the real invocation forms A2 verified: ' + JSON.stringify(violations))
+})
+
 // ---------------------------------------------------------------------------
 // AC-20260820-04-5: undeclared call site (fixture).
 // ---------------------------------------------------------------------------
@@ -411,4 +738,198 @@ test('AC-20260820-04-5 / D8: a spec-paths key resolving to a non-executable (a d
     'the sibling undeclared executable-key invocation (widget) must still be caught — D8 ' +
     'narrows the domain the reverse check considers, it does not disable the check for keys ' +
     'that remain in-domain: ' + violations[0])
+})
+
+// ---------------------------------------------------------------------------
+// D10: hooks.json direction fixtures (both were previously unexercised by any fixture here).
+// ---------------------------------------------------------------------------
+
+test('AC-20260820-04-5 / D10: hooks.json written in the repo\'s live escaped-quote style invoking an undeclared script raises a reverse-invocation violation', () => {
+  const root = tmpdir('entrypoints-ac5-d10-reverse')
+  const hooksObj = {
+    hooks: {
+      UserPromptSubmit: [
+        { hooks: [{ type: 'command', command: '"${CLAUDE_PLUGIN_ROOT}"/scripts/widget.sh' }] }
+      ]
+    }
+  }
+  writeTree(root, {
+    'spec/scripts/widget.sh': '#!/usr/bin/env bash\nset -u\n',
+    'spec/bin/spec-paths': '#!/usr/bin/env bash\nset -u\nROOT="$(pwd)"\ncase "${1:-root}" in\nesac\n',
+    'spec/hooks/hooks.json': JSON.stringify(hooksObj, null, 2),
+    // manifest exists for widget.sh but never learned about hooks.json's call site
+    'spec/entrypoints.json': JSON.stringify({
+      'spec/scripts/widget.sh': { entryPoints: ['spec/commands/other.md'] }
+    })
+  })
+  // sanity: prove the fixture is really written in the live escaped-quote byte shape (JSON.stringify
+  // escapes the embedded `"` as `\"`, matching the repo's actual raw bytes) — without this check a
+  // typo here would make the assertion below meaningless
+  const raw = fs.readFileSync(path.join(root, 'spec/hooks/hooks.json'), 'utf8')
+  assert.ok(raw.includes('\\"${CLAUDE_PLUGIN_ROOT}\\"/scripts/widget.sh'),
+    'fixture setup bug: the written hooks.json does not contain the escaped-quote byte sequence ' +
+    '(backslash, quote, slash) this test claims to exercise')
+
+  const violations = checkReverseInvocation(root)
+  assert.strictEqual(violations.length, 1,
+    'D10: the parse-based oracle must recognize the repo\'s ACTUAL mandated escaped-quote form ' +
+    '— before the fix a raw-bytes regex returned ZERO matches against a file that genuinely ' +
+    'invokes a script, exactly the measured live-repo defect (the whole reverse-hooks direction ' +
+    'had never fired): ' + JSON.stringify(violations))
+  assert.match(violations[0], /spec\/hooks\/hooks\.json/,
+    'the violation must name hooks.json as the undeclared call site: ' + violations[0])
+  assert.match(violations[0], /widget\.sh/,
+    'the violation must name the invoked script: ' + violations[0])
+})
+
+test('AC-20260820-04-5 / D10: hooks.json using quoting styles OTHER than the live escaped-double-quote form (single-quoted, unquoted) are still recognized correctly — the parse-based oracle does not care about quoting', () => {
+  const root = tmpdir('entrypoints-ac5-d10-quoting')
+  const hooksObj = {
+    hooks: {
+      UserPromptSubmit: [
+        { hooks: [{ type: 'command', command: "bash '${CLAUDE_PLUGIN_ROOT}'/scripts/single-quoted.sh" }] },
+        { hooks: [{ type: 'command', command: 'bash ${CLAUDE_PLUGIN_ROOT}/scripts/unquoted.sh' }] }
+      ]
+    }
+  }
+  writeTree(root, {
+    'spec/scripts/single-quoted.sh': '#!/usr/bin/env bash\nset -u\n',
+    'spec/scripts/unquoted.sh': '#!/usr/bin/env bash\nset -u\n',
+    'spec/bin/spec-paths': '#!/usr/bin/env bash\nset -u\nROOT="$(pwd)"\ncase "${1:-root}" in\nesac\n',
+    'spec/hooks/hooks.json': JSON.stringify(hooksObj, null, 2),
+    // both scripts have a manifest entry, but neither declares hooks.json — resolving the
+    // basename to its full manifest key needs SOME existing entry to match against, so this
+    // isolates exactly what's under test (quoting-agnostic extraction), not a second orphan
+    'spec/entrypoints.json': JSON.stringify({
+      'spec/scripts/single-quoted.sh': { entryPoints: ['spec/commands/other.md'] },
+      'spec/scripts/unquoted.sh': { entryPoints: ['spec/commands/other.md'] }
+    })
+  })
+  const violations = checkReverseInvocation(root)
+  assert.strictEqual(violations.length, 2,
+    'both the single-quoted and the fully unquoted command forms must be recognized as genuine ' +
+    'hooks invocations — this is the pin a mere widened regex cannot satisfy (it only ever ' +
+    'anticipates the quoting styles its author thought of), which is the whole point of moving ' +
+    'the oracle to JSON.parse + structural extraction instead: ' + JSON.stringify(violations))
+  assert.ok(violations.some((v) => v.includes('single-quoted.sh')),
+    'the single-quoted command\'s invocation must be recognized: ' + JSON.stringify(violations))
+  assert.ok(violations.some((v) => v.includes('unquoted.sh')),
+    'the fully unquoted command\'s invocation must be recognized: ' + JSON.stringify(violations))
+})
+
+test('AC-20260820-04-5 / D10: a present but invalid-JSON hooks.json fails closed — a reverse-invocation violation naming the file, never a silent skip', () => {
+  const root = tmpdir('entrypoints-ac5-d10-invalid-json')
+  writeTree(root, {
+    'spec/bin/spec-paths': '#!/usr/bin/env bash\nset -u\nROOT="$(pwd)"\ncase "${1:-root}" in\nesac\n',
+    'spec/hooks/hooks.json': '{ this is not valid JSON ]',
+    'spec/entrypoints.json': JSON.stringify({})
+  })
+  const violations = checkReverseInvocation(root)
+  assert.strictEqual(violations.length, 1,
+    'a present-but-invalid-JSON hooks.json must fail CLOSED (a red violation), never silently ' +
+    'skip the hooks direction and never fall back to a regex scan of the broken file: ' +
+    JSON.stringify(violations))
+  assert.match(violations[0], /spec\/hooks\/hooks\.json/,
+    'the fail-closed violation must name the file: ' + violations[0])
+  assert.match(violations[0], /not valid JSON/,
+    'the fail-closed violation must say the file is not valid JSON, not fail silently or with an ' +
+    'unrelated message: ' + violations[0])
+})
+
+test('AC-20260820-04-4 / D10: a manifest declaring hooks.json as an entry point for a script hooks.json does not actually invoke raises a forward-invocation violation', () => {
+  const root = tmpdir('entrypoints-ac4-d10-forward')
+  const hooksObj = {
+    hooks: {
+      PreToolUse: [
+        { matcher: 'Write', hooks: [{ type: 'command', command: '"${CLAUDE_PLUGIN_ROOT}"/scripts/other.sh' }] }
+      ]
+    }
+  }
+  writeTree(root, {
+    'spec/scripts/widget.sh': '#!/usr/bin/env bash\nset -u\n', // never mentioned in hooks.json below
+    'spec/bin/spec-paths': '#!/usr/bin/env bash\nset -u\nROOT="$(pwd)"\ncase "${1:-root}" in\nesac\n',
+    'spec/hooks/hooks.json': JSON.stringify(hooksObj, null, 2),
+    'spec/entrypoints.json': JSON.stringify({
+      'spec/scripts/widget.sh': { entryPoints: ['spec/hooks/hooks.json'] }
+    })
+  })
+  const violations = checkForwardInvocation(root)
+  assert.strictEqual(violations.length, 1,
+    'a manifest declaring hooks.json as an entry point for widget.sh, when hooks.json actually ' +
+    'invokes a DIFFERENT script (other.sh), must fail — this is the forward-direction half of ' +
+    'the missing hooks fixture coverage D10 closes: ' + JSON.stringify(violations))
+  assert.match(violations[0], /widget\.sh/,
+    'the violation must name the script: ' + violations[0])
+  assert.match(violations[0], /hooks\.json/,
+    'the violation must name the entry-point file: ' + violations[0])
+})
+
+// ---------------------------------------------------------------------------
+// D11: recursive scan + extensionless admission + the independent reachability leg.
+// ---------------------------------------------------------------------------
+
+test('AC-20260820-04-1 / D11: a script placed in a spec/scripts/<subdir>/, reachable via a spec-paths key and invoked from a command markdown file, is caught by both inventory-forward and reverse-invocation against an empty manifest', () => {
+  const root = tmpdir('entrypoints-ac1-d11-subdir')
+  writeTree(root, {
+    'spec/scripts/legs/ac-matrix.js': '#!/usr/bin/env node\n',
+    'spec/bin/spec-paths':
+      '#!/usr/bin/env bash\nset -u\nROOT="$(pwd)"\ncase "${1:-root}" in\n' +
+      '  ac-matrix)  echo "$ROOT/scripts/legs/ac-matrix.js" ;;\n' +
+      'esac\n',
+    'spec/commands/review.md': '# Review\n\nRun `node "$(spec-paths ac-matrix)" --root .` here.\n',
+    'spec/entrypoints.json': JSON.stringify({})
+  })
+  const orphans = checkInventoryForward(root)
+  assert.deepStrictEqual(orphans, ['spec/scripts/legs/ac-matrix.js (no manifest entry)'],
+    'D11: a script one directory deeper than the flat layout must still be enumerated by the ' +
+    'recursive scan and flagged as an orphan — before the fix, this exact repro (a script under ' +
+    'spec/scripts/legs/) was invisible to the inventory scan entirely: ' + JSON.stringify(orphans))
+
+  const reverseViolations = checkReverseInvocation(root)
+  assert.strictEqual(reverseViolations.length, 1,
+    'D11: review.md\'s `spec-paths ac-matrix` call, resolving to a subdirectory script, must ' +
+    'still be recognized as in-domain by isExecutableDomainPath (kept in shape-agreement with ' +
+    'the recursive scan) and flagged as an undeclared call site — before the fix the D8 domain ' +
+    'filter and the inventory scan agreed on the WRONG shape and both missed it: ' +
+    JSON.stringify(reverseViolations))
+  assert.match(reverseViolations[0], /legs\/ac-matrix\.js/,
+    'the violation must name the subdirectory script: ' + reverseViolations[0])
+})
+
+test('AC-20260820-04-3 / D11: an extensionless executable and a .mjs executable are both caught by inventory-forward as orphans', () => {
+  const root = tmpdir('entrypoints-ac3-d11-ext')
+  writeTree(root, {
+    'spec/scripts/orphan-noext': '#!/usr/bin/env node\n',
+    'spec/scripts/orphan.mjs': '#!/usr/bin/env node\nexport {}\n',
+    'spec/entrypoints.json': JSON.stringify({})
+  })
+  const orphans = checkInventoryForward(root)
+  assert.deepStrictEqual(orphans.slice().sort(), [
+    'spec/scripts/orphan-noext (no manifest entry)',
+    'spec/scripts/orphan.mjs (no manifest entry)'
+  ].sort(),
+    'D11: a script saved without an extension, or as .mjs, must not evade the inventory scan by ' +
+    'file naming alone — before the fix only .js/.sh were admitted and both of these files were ' +
+    'invisible to it: ' + JSON.stringify(orphans))
+})
+
+test('AC-20260820-04-1 / D11: checkKeyReachability fails naming a spec-paths key whose target does not exist on disk', () => {
+  const root = tmpdir('entrypoints-ac1-d11-reachability')
+  writeTree(root, {
+    'spec/bin/spec-paths':
+      '#!/usr/bin/env bash\nset -u\nROOT="$(pwd)"\ncase "${1:-root}" in\n' +
+      '  ghost)  echo "$ROOT/scripts/ghost.js" ;;\n' +
+      'esac\n',
+    'spec/entrypoints.json': JSON.stringify({})
+    // spec/scripts/ghost.js deliberately does not exist on disk
+  })
+  const violations = checkKeyReachability(root)
+  assert.strictEqual(violations.length, 1,
+    'a spec-paths key resolving under spec/scripts/ to a file absent from the executable ' +
+    'inventory (here: absent from disk entirely) must be caught by the independent D11 ' +
+    'reachability leg — this check is deliberately separate from, and does not depend on, the ' +
+    'shape-based inventory/domain checks above: ' + JSON.stringify(violations))
+  assert.match(violations[0], /ghost/,
+    'the violation must name the dead key or its target so a reader can find and fix the stale ' +
+    'spec-paths case-table row: ' + violations[0])
 })

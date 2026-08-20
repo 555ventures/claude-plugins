@@ -3,13 +3,6 @@
 Phase: P3
 Depends on: none
 
-## Gate to plan this brief
-
-Five product specs (not self-repair) through the v7.0 pipeline with a self-repair share
-below 20% of specs authored in the window. Until the gate is met, `/spec:plan` on this
-brief should be declined — the v7.0 bet must prove itself on the core loop before the
-design surface is rebuilt on top of it. (Progress: 1 of 5 — specs/20260817/06.)
-
 ## Why this brief
 
 The v7.0 redesign (2026-08-17) rebuilt the core pipeline and deliberately carried the design

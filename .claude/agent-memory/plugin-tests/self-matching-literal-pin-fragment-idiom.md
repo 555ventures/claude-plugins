@@ -27,7 +27,10 @@ instead).
 
 **Why:** dispatched from JJ 2026-08-20 fixing `tests/consistency/dependency-free.test.js`
 (spec `specs/20260820/01-autopilot-removal.md`), which was red against itself because its
-test title and messages spelled `@anthropic-ai/claude-agent-sdk` in full.
+test title and messages spelled the retired SDK package name in full — the `@anthropic-ai`
+scope joined by `/` to `claude-agent-sdk`. This note is tracked and therefore scanned by
+that same pin, so the name stays split here too: writing it whole in this paragraph is what
+turned this file into the pin's next self-hit (caught 2026-08-20, one build later).
 
 **How to apply:** whenever authoring or repairing a literal/regex pin whose own file lives
 inside the tree it scans, check first whether the forbidden string appears in the pin's own

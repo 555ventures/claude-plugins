@@ -3,11 +3,11 @@
 // replay.js --due
 //         | --select
 //         | --setup --commit <sha> --dir <path>
-//         | --apply --dir <path> --patch <file> --class <id> [--subject <text>]
-//         | --score --workflow <file> --file <path> --line N
-//         | --record --spec <path> --review-run-id <id> --class <id> --file <path>
-//                     --legs green|red:<leg> --outcome caught|missed|leg-caught
-//                     [--patch <file>] [--workflow <file>] [--tokens N]
+//         | --apply --dir <path> --patch <file> --patch-out <file> --class <id> [--subject <text>]
+//         | --score --workflow <file> --patch <file>
+//         | --record --spec <path> --review-run-id <id> --legs green|red:<leg>|none
+//                     --outcome caught|missed|leg-caught|unresolved|setup-failed
+//                     [--class <id>] [--patch <file>] [--workflow <file>] [--tokens N]
 //         | --stats
 //         | --teardown --dir <path>
 //
@@ -48,28 +48,59 @@
 // the tree under review — no marker, message, or diff shape may tell the reviewer it is being
 // tested.
 //
+// Incident (2026-08-19, specs/20260819/03-replay-first-run-fixes.md — a post-CLEAN consult found
+// four defects before the harness ever executed once, plus a portability sweep found three host-
+// config defects this repo's own git settings hide): (D1) --score scored off a single self-reported
+// --file/--line point; it now takes --patch and scores off EVERY hunk in the mutation's own patch,
+// catching multi-file mutations and misplaced-but-real findings a point score would miss. (D3/D4) a
+// dismissed `ambiguous` adjudication and a failed scratch-worktree `setupCommand` used to record
+// nothing; both now record `unresolved`/`setup-failed` so the run is never silent, and (D5) neither
+// resets the --due/--select measurement window — only a real `caught`/`missed`/`leg-caught` row
+// does, so a broken setup gets retried at the very next review instead of leaving the harness
+// permanently unmeasured. (D6) --stats gained the two new buckets; catch-rate still excludes
+// anything that isn't caught/missed. (D7) --record's --file flag is gone — `files` derives from
+// --patch — and gained a validation matrix per outcome. (D9) host git config (`diff.noprefix`,
+// `diff.mnemonicPrefix`, `core.quotePath`) can make a bare `git diff` produce a patch D1's parser
+// reads as zero hunks, permanently killing the harness on that host — --apply is now the harness's
+// ONLY patch emitter: it re-emits the mutation diff itself under pinned `-c` flags to a REQUIRED
+// --patch-out, and refuses a --patch-out resolving inside --dir (exit 3) before applying anything,
+// since writing the emission into the tree under review would itself be a blindness leak. (D10)
+// --apply now applies with `git apply --index` and commits the index only, never `git add -A` —
+// D4's new setup-gate runs `setupCommand` BEFORE --apply, and any lockfile/generated-code churn it
+// leaves in the working tree must never ride into the diff the blind reviewer reads. (D11) --score
+// normalizes a survivor's path (stripping a leading `./`, matching an absolute path at a path-
+// segment boundary) before comparing it against the patch, since the reviewer contract never pins
+// a path form. What this harness must still never do: sign its own work into the tree under
+// review, or let a run with no truth value enter the catch-rate denominator.
+//
 // What this deliberately does NOT do: derive review-legs verdicts, touch the main working tree
 // (--setup/--apply/--teardown only ever act on a --dir the caller supplies; --setup refuses one
 // that resolves inside the repo root, and --teardown refuses one whose private git dir carries no
 // replay-worktree marker — the marker guard means teardown can only ever delete a directory THIS
 // harness created), write anything into a worktree's working tree (the marker lives in the
-// worktree's private git dir, never in the tree under review), or retry/poll anything.
+// worktree's private git dir, never in the tree under review), retry/poll anything, or run an
+// automated ambiguity judge (an `unresolved` row is retained evidence for a human, never scored).
 //
 // Root resolution: every ledger/git-reading mode (--select/--setup/--teardown use git; --due/
 // --record/--stats read the ledger) resolves against `process.cwd()` — there is no --root flag,
-// matching spec-status.js's own cwd-default shape. --apply and --score take their target as an
-// explicit --dir/--workflow flag and never consult cwd at all.
+// matching spec-status.js's own cwd-default shape. --apply and --score take their target as
+// explicit flags (--dir/--patch/--patch-out, --workflow/--patch) and never consult cwd at all.
 //
 // Exit codes: 0 = mode succeeded (--due: due; --select: printed a selection; --score: printed a
 // score) · 1 = --due not due, or --select found no eligible CLEAN review row in the window ·
 // 2 = usage error / missing required flag / unreadable or unparseable input / --apply --subject
-// names the harness, the defect class, or the mutation class value / --score --workflow is not a
-// CLEAN verdict with a survivors array · 3 = safety refusal (--setup --dir resolves inside the
-// repo root; --teardown --dir does not exist, is not a linked worktree, or its private git dir
-// carries no replay-worktree marker) · 4 = a git operation (worktree add/remove, apply, commit,
-// log, git-dir resolution) failed, --setup's --dir resolves to a git-dir with no `worktrees` path
-// segment (not a linked worktree), or --select's target spec carries neither build_base nor
-// diff_base at the close commit's parent.
+// names the harness, the defect class, or the mutation class value / --apply missing --patch-out /
+// --score --workflow is not a CLEAN verdict with a survivors array / --score --patch parses to zero
+// hunks / any --record D7 validation-matrix refusal (an --outcome outside the five-value enum, a
+// malformed --legs, a missing --patch/--workflow for caught|missed|unresolved, a missing --patch or
+// a non-`red:`-shaped --legs for leg-caught, or setup-failed riding with --class/--patch/--workflow)
+// · 3 = safety refusal (--setup --dir resolves inside the repo root; --apply --patch-out resolves
+// inside --dir, refused before the patch is applied; --teardown --dir does not exist, is not a
+// linked worktree, or its private git dir carries no replay-worktree marker) · 4 = a git operation
+// (worktree add/remove, apply, commit, log, git-dir resolution, or --apply's canonical --patch-out
+// re-emission) failed, --setup's --dir resolves to a git-dir with no `worktrees` path segment (not
+// a linked worktree), or --select's target spec carries neither build_base nor diff_base at the
+// close commit's parent.
 
 const fs = require('fs')
 const path = require('path')
@@ -79,11 +110,11 @@ const { readLedgerRows } = require('./lib/observation')
 
 function usage() {
   console.error('usage: replay.js --due | --select | --setup --commit <sha> --dir <path> | ' +
-    '--apply --dir <path> --patch <file> --class <id> [--subject <text>] | ' +
-    '--score --workflow <file> --file <path> --line N | ' +
-    '--record --spec <path> --review-run-id <id> --class <id> --file <path> --legs green|red:<leg> ' +
-    '--outcome caught|missed|leg-caught [--patch <file>] [--workflow <file>] [--tokens N] | --stats | ' +
-    '--teardown --dir <path>')
+    '--apply --dir <path> --patch <file> --patch-out <file> --class <id> [--subject <text>] | ' +
+    '--score --workflow <file> --patch <file> | ' +
+    '--record --spec <path> --review-run-id <id> --legs green|red:<leg>|none ' +
+    '--outcome caught|missed|leg-caught|unresolved|setup-failed [--class <id>] [--patch <file>] ' +
+    '[--workflow <file>] [--tokens N] | --stats | --teardown --dir <path>')
 }
 
 const MODE_FLAGS = {
@@ -92,7 +123,7 @@ const MODE_FLAGS = {
 }
 
 let mode = null
-let commit = null, dir = null, patch = null, cls = null, workflowPath = null, file = null, lineArg = null
+let commit = null, dir = null, patch = null, cls = null, workflowPath = null, patchOut = null
 let specArg = null, reviewRunId = null, legs = null, outcome = null, tokensArg = null, subjectArg = null
 
 const argv = process.argv.slice(2)
@@ -105,10 +136,9 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--commit') commit = argv[++i]
   else if (a === '--dir') dir = argv[++i]
   else if (a === '--patch') patch = argv[++i]
+  else if (a === '--patch-out') patchOut = argv[++i]
   else if (a === '--class') cls = argv[++i]
   else if (a === '--workflow') workflowPath = argv[++i]
-  else if (a === '--file') file = argv[++i]
-  else if (a === '--line') lineArg = argv[++i]
   else if (a === '--spec') specArg = argv[++i]
   else if (a === '--review-run-id') reviewRunId = argv[++i]
   else if (a === '--legs') legs = argv[++i]
@@ -121,13 +151,22 @@ if (!mode) { usage(); process.exit(2) }
 
 const root = process.cwd()
 
-// ---- --due (D2): reviewsSince = count of stage:"review" rows in READ order after the last ----
-// ---- stage:"replay" row (readLedgerRows already merges live+archives in that order) ----------
+// ---- D5: a "measurement" replay row is one whose outcome actually answers caught/missed/scores --
+// ---- the reviewer against a real leg (leg-caught) — unresolved/setup-failed never reset the -----
+// ---- --due/--select window, since neither produced a truth value. --------------------------------
+
+const MEASUREMENT_OUTCOMES = new Set(['caught', 'missed', 'leg-caught'])
+function isMeasurementReplay(r) {
+  return r.stage === 'replay' && MEASUREMENT_OUTCOMES.has(r.outcome)
+}
+
+// ---- --due: reviewsSince = count of stage:"review" rows in READ order after the last MEASUREMENT -
+// ---- stage:"replay" row (readLedgerRows already merges live+archives in that order) --------------
 
 function cmdDue() {
   const rows = readLedgerRows(root)
   let lastReplayIdx = -1
-  rows.forEach((r, i) => { if (r.stage === 'replay') lastReplayIdx = i })
+  rows.forEach((r, i) => { if (isMeasurementReplay(r)) lastReplayIdx = i })
   const reviewsSince = rows.filter((r, i) => i > lastReplayIdx && r.stage === 'review').length
   if (reviewsSince >= 5) {
     console.log(`due reviewsSince=${reviewsSince}`)
@@ -152,20 +191,20 @@ function frontmatter(text) {
   return fm
 }
 
-// ---- --select (D3): among CLEAN review rows with a runId in the same window as --due, prefer --
-// ---- tier:"critical", tie -> latest (read-order); target commit = the close commit for the ----
-// ---- selected spec's OWN path. -----------------------------------------------------------------
+// ---- --select: among CLEAN review rows with a runId in the same D5 window as --due, prefer ------
+// ---- tier:"critical", tie -> latest (read-order); target commit = the close commit for the ------
+// ---- selected spec's OWN path. ---------------------------------------------------------------------
 
 function cmdSelect() {
   const rows = readLedgerRows(root)
   let lastReplayIdx = -1
-  rows.forEach((r, i) => { if (r.stage === 'replay') lastReplayIdx = i })
+  rows.forEach((r, i) => { if (isMeasurementReplay(r)) lastReplayIdx = i })
   const candidates = rows
     .map((r, i) => ({ r, i }))
     .filter(({ r, i }) => i > lastReplayIdx && r.stage === 'review' && r.verdict === 'CLEAN' && r.runId)
   if (!candidates.length) {
     console.error('replay.js: no eligible CLEAN review row with a runId found in the window since the ' +
-      'last replay row — run /spec:review first, or check replay.js --due to confirm one is expected')
+      'last measurement replay row — run /spec:review first, or check replay.js --due to confirm one is expected')
     process.exit(1)
   }
   let best = null
@@ -222,9 +261,9 @@ function cmdSelect() {
   process.exit(0)
 }
 
-// ---- --setup (D4): refuse a --dir that resolves inside the repo root (exit 3, creates ---------
-// ---- nothing); otherwise `git worktree add --detach` and drop a replay-worktree marker into ----
-// ---- the new worktree's own private git dir — never into its working tree. -------------------
+// ---- --setup: refuse a --dir that resolves inside the repo root (exit 3, creates nothing); -------
+// ---- otherwise `git worktree add --detach` and drop a replay-worktree marker into the new --------
+// ---- worktree's own private git dir — never into its working tree. --------------------------------
 
 function cmdSetup() {
   if (!commit || !dir) { usage(); process.exit(2) }
@@ -275,11 +314,21 @@ function cmdSetup() {
   process.exit(0)
 }
 
-// ---- --apply (D5): git apply then commit on the worktree's detached HEAD, so the mutation ----
-// ---- lands inside base..HEAD — the diff surface review-legs.js and the reviewer both read. ----
+// ---- --apply (D9/D10): git apply --index (never `git add -A`, D10) then commit on the -----------
+// ---- worktree's detached HEAD, so the mutation lands inside base..HEAD — the diff surface --------
+// ---- review-legs.js and the reviewer both read. After committing, re-emit the canonical patch -----
+// ---- under pinned git config to the REQUIRED --patch-out (D9) — this harness's only emitter. ------
 
 function cmdApply() {
   if (!dir || !patch || !cls) { usage(); process.exit(2) }
+  // D9: --patch-out is required — --apply is now the harness's only patch emitter, so every
+  // downstream --score/--record call depends on this file existing.
+  if (!patchOut) {
+    console.error('replay.js: --apply requires --patch-out <file> — --apply is the harness\'s only patch ' +
+      'emitter (specs/20260819/03 D9); pass a --patch-out path OUTSIDE --dir to receive the canonically ' +
+      're-emitted patch')
+    process.exit(2)
+  }
   // F2 (2026-08-19): the commit subject must never let a reviewer's sanctioned `git log` reveal
   // this is a test, or which defect class to hunt — reject structurally, not by convention. The
   // rejected set is deliberately narrow: the --class value (which names the defect to hunt) and a
@@ -297,36 +346,107 @@ function cmdApply() {
       'or omit it to use the default')
     process.exit(2)
   }
+  // D9: a --patch-out resolving inside --dir would write the harness's own emission into the exact
+  // tree the blind reviewer reads — refused structurally, BEFORE anything is applied or committed.
+  const resolvedDir = path.resolve(dir)
+  const resolvedPatchOut = path.resolve(patchOut)
+  const relOut = path.relative(resolvedDir, resolvedPatchOut)
+  const patchOutInsideDir = relOut === '' || (!relOut.startsWith('..') && !path.isAbsolute(relOut))
+  if (patchOutInsideDir) {
+    console.error(`replay.js: --patch-out ${patchOut} resolves inside --dir ${dir} — writing the harness's ` +
+      'own emitted patch into the exact tree the blind reviewer reads is a blindness violation; pass a ' +
+      '--patch-out path outside the worktree')
+    process.exit(3)
+  }
   const patchAbs = path.resolve(patch)
+  // D10: --index stages only the files the patch itself touches — never `git add -A`, which would
+  // sweep whatever D4's setup-gate `setupCommand` left dirty in the worktree into this exact commit.
   try {
-    execFileSync('git', ['apply', patchAbs], { cwd: dir, stdio: 'pipe' })
+    execFileSync('git', ['apply', '--index', patchAbs], { cwd: dir, stdio: 'pipe' })
   } catch (e) {
-    console.error(`replay.js: git apply ${patch} failed in ${dir} — confirm the patch applies cleanly ` +
+    console.error(`replay.js: git apply --index ${patch} failed in ${dir} — confirm the patch applies cleanly ` +
       `against the worktree's current HEAD (git -C ${dir} apply --check ${patch}): ${e.message}`)
     process.exit(4)
   }
   try {
-    execFileSync('git', ['add', '-A'], { cwd: dir, stdio: 'pipe' })
     execFileSync('git', ['commit', '-q', '-m', subject], { cwd: dir, stdio: 'pipe' })
   } catch (e) {
     console.error(`replay.js: git commit failed in ${dir} after applying the mutation — inspect with ` +
       `git -C ${dir} status: ${e.message}`)
     process.exit(4)
   }
-  console.log(`applied class=${cls} dir=${dir}`)
+  // D9: re-emit the just-committed mutation under pinned flags that neutralize a hostile host git
+  // config (diff.noprefix/diff.mnemonicPrefix/core.quotePath) — every downstream --score/--record
+  // call reads THIS file, never a caller's own raw `git diff` capture.
+  let emitted
+  try {
+    emitted = execFileSync('git', [
+      '-c', 'core.quotePath=off', '-c', 'diff.noprefix=false', '-c', 'diff.mnemonicPrefix=false',
+      '-c', 'diff.srcPrefix=a/', '-c', 'diff.dstPrefix=b/',
+      'diff', '--no-ext-diff', '--no-color', 'HEAD^', 'HEAD',
+    ], { cwd: dir, encoding: 'utf8' })
+  } catch (e) {
+    console.error(`replay.js: canonical patch re-emission (git diff HEAD^ HEAD) failed in ${dir} after the ` +
+      `mutation was committed — inspect with git -C ${dir} log: ${e.message}`)
+    process.exit(4)
+  }
+  try {
+    fs.writeFileSync(resolvedPatchOut, emitted)
+  } catch (e) {
+    console.error(`replay.js: failed to write --patch-out ${patchOut} — the mutation IS committed in ${dir}, ` +
+      `but no canonical patch was written for --score/--record to read: ${e.message}`)
+    process.exit(4)
+  }
+  console.log(`applied class=${cls} dir=${dir} patchOut=${resolvedPatchOut}`)
   process.exit(0)
 }
 
-// ---- --score (D7): deterministic proxy — caught (same file, +/-5 lines), ambiguous ------------
-// ---- (findings exist, none matching), missed (zero findings). Always exit 0 when parseable. ---
+// ---- Patch parsing (D1/D7 shared): a mutated file is every `+++ b/<path>` header; each `@@` ------
+// ---- hunk header under it contributes a post-image range [start, start+max(count,1)-1] -----------
+// ---- (omitted count = 1; a pure-deletion count-0 hunk keeps a 1-line window at start). ------------
+
+function parsePatch(patchText) {
+  const files = [] // order of first appearance
+  const ranges = new Map() // file -> array of [lo, hi] (unwidened post-image ranges)
+  let hunkCount = 0
+  let currentFile = null
+  for (const line of patchText.split('\n')) {
+    const fm = line.match(/^\+\+\+ b\/(.*)$/)
+    if (fm) {
+      currentFile = fm[1]
+      if (!ranges.has(currentFile)) { ranges.set(currentFile, []); files.push(currentFile) }
+      continue
+    }
+    const hm = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/)
+    if (hm && currentFile) {
+      const start = Number(hm[1])
+      const count = hm[2] !== undefined ? Number(hm[2]) : 1
+      const effCount = Math.max(count, 1)
+      ranges.get(currentFile).push([start, start + effCount - 1])
+      hunkCount++
+    }
+  }
+  return { files, ranges, hunkCount }
+}
+
+// ---- D11: normalize a survivor's file before matching — strip a leading "./"; an absolute path ---
+// ---- matches a mutated file when it ends on that file's repo-relative path at a path-segment ------
+// ---- boundary (the reviewer contract never pins a path form, and the reviewer is rooted at --dir).
+
+function matchesMutatedFile(survivorFile, mutatedFile) {
+  if (typeof survivorFile !== 'string') return false
+  const norm = survivorFile.startsWith('./') ? survivorFile.slice(2) : survivorFile
+  if (path.isAbsolute(norm)) return norm === '/' + mutatedFile || norm.endsWith('/' + mutatedFile)
+  return norm === mutatedFile
+}
+
+// ---- --score (D1): scores off EVERY hunk in the mutation's own --patch, never a single self- -----
+// ---- reported point — caught (a survivor lands within +/-5 lines of any hunk in a mutated file), --
+// ---- ambiguous (survivors present, none matching), missed (zero survivors). Always exit 0 once ----
+// ---- the workflow return and patch are both usable. -------------------------------------------------
 
 function cmdScore() {
-  if (!workflowPath || !file || lineArg === null) { usage(); process.exit(2) }
-  const targetLine = Number(lineArg)
-  if (!Number.isFinite(targetLine)) {
-    console.error(`replay.js: --line must be a number, got '${lineArg}'`)
-    process.exit(2)
-  }
+  if (!workflowPath || !patch) { usage(); process.exit(2) }
   let wf
   try {
     wf = JSON.parse(fs.readFileSync(workflowPath, 'utf8'))
@@ -343,34 +463,102 @@ function cmdScore() {
       'reviewer return must never be scored; re-dispatch the reviewer and retry --score')
     process.exit(2)
   }
+  let patchText
+  try {
+    patchText = fs.readFileSync(patch, 'utf8')
+  } catch (e) {
+    console.error(`replay.js: cannot read --patch ${patch} — pass the canonical patch --apply --patch-out ` +
+      `emitted, never a caller's own raw capture: ${e.message}`)
+    process.exit(2)
+  }
+  const { ranges, hunkCount } = parsePatch(patchText)
+  if (hunkCount === 0) {
+    console.error(`replay.js: --patch ${patch} parses to zero @@ hunks under a +++ b/ file header — this is ` +
+      'unusable input, most likely a patch this harness did not emit itself; re-run --apply --patch-out to ' +
+      `regenerate a scoreable canonical patch: ${patch}`)
+    process.exit(2)
+  }
   const survivors = wf.survivors
-  const hit = survivors.some(f => f && f.file === file && Number.isFinite(Number(f.line)) &&
-    Math.abs(Number(f.line) - targetLine) <= 5)
+  const hit = survivors.some(s => {
+    if (!s || !Number.isFinite(Number(s.line))) return false
+    const line = Number(s.line)
+    for (const [mutatedFile, fileRanges] of ranges) {
+      if (!matchesMutatedFile(s.file, mutatedFile)) continue
+      if (fileRanges.some(([lo, hi]) => line >= lo - 5 && line <= hi + 5)) return true
+    }
+    return false
+  })
   if (hit) { console.log('caught'); process.exit(0) }
   if (survivors.length > 0) { console.log('ambiguous'); process.exit(0) }
   console.log('missed')
   process.exit(0)
 }
 
-// ---- --record (D8): append one Contracts-shaped ledger row with a fresh rp_ runId, and --------
-// ---- write the full-fidelity evidence artifact (patch verbatim, reviewer verbatim or null). ---
+// ---- --record (D7): validation matrix per --outcome, then appends one Contracts-shaped ledger ----
+// ---- row with a fresh rp_ runId (files DERIVED from --patch, never hand-passed) and writes the ----
+// ---- full-fidelity evidence artifact (patch verbatim or null, reviewer verbatim or null). ---------
+
+const RECORD_OUTCOMES = ['caught', 'missed', 'leg-caught', 'unresolved', 'setup-failed']
 
 function cmdRecord() {
-  if (!specArg || !reviewRunId || !cls || !file || !legs || !outcome) { usage(); process.exit(2) }
-  if (!['caught', 'missed', 'leg-caught'].includes(outcome)) {
-    console.error(`replay.js: --outcome must be caught|missed|leg-caught, got '${outcome}'`)
+  if (!specArg || !reviewRunId || !legs || !outcome) { usage(); process.exit(2) }
+  if (!RECORD_OUTCOMES.includes(outcome)) {
+    console.error(`replay.js: --outcome must be one of ${RECORD_OUTCOMES.join('|')}, got '${outcome}'`)
     process.exit(2)
   }
-  if (legs !== 'green' && !/^red:.+/.test(legs)) {
-    console.error(`replay.js: --legs must be 'green' or 'red:<leg>', got '${legs}'`)
+  if (legs !== 'green' && legs !== 'none' && !/^red:.+/.test(legs)) {
+    console.error(`replay.js: --legs must be 'green', 'red:<leg>', or 'none', got '${legs}'`)
     process.exit(2)
+  }
+  // D7 validation matrix.
+  if (outcome === 'caught' || outcome === 'missed' || outcome === 'unresolved') {
+    if (!patch) {
+      console.error(`replay.js: --outcome ${outcome} requires --patch`)
+      process.exit(2)
+    }
+    if (!workflowPath) {
+      console.error(`replay.js: --outcome ${outcome} requires --workflow`)
+      process.exit(2)
+    }
+    if (legs !== 'green') {
+      console.error(`replay.js: --outcome ${outcome} requires --legs green, got '${legs}'`)
+      process.exit(2)
+    }
+  } else if (outcome === 'leg-caught') {
+    if (!patch) {
+      console.error('replay.js: --outcome leg-caught requires --patch')
+      process.exit(2)
+    }
+    if (!/^red:.+/.test(legs)) {
+      console.error(`replay.js: --outcome leg-caught requires --legs red:<leg>, got '${legs}'`)
+      process.exit(2)
+    }
+  } else { // setup-failed
+    if (legs !== 'none') {
+      console.error(`replay.js: --outcome setup-failed requires --legs none, got '${legs}'`)
+      process.exit(2)
+    }
+    if (cls) {
+      console.error('replay.js: --outcome setup-failed refuses --class — no class was ever selected when ' +
+        'setup itself failed')
+      process.exit(2)
+    }
+    if (patch) {
+      console.error('replay.js: --outcome setup-failed refuses --patch — nothing was ever measured')
+      process.exit(2)
+    }
+    if (workflowPath) {
+      console.error('replay.js: --outcome setup-failed refuses --workflow — the reviewer was never dispatched')
+      process.exit(2)
+    }
   }
   const tokens = tokensArg === null ? 0 : Number(tokensArg)
   if (!Number.isFinite(tokens)) {
     console.error(`replay.js: --tokens must be a number, got '${tokensArg}'`)
     process.exit(2)
   }
-  let patchContent = ''
+  let patchContent = null
+  let filesArr = null
   if (patch) {
     try {
       patchContent = fs.readFileSync(patch, 'utf8')
@@ -378,6 +566,7 @@ function cmdRecord() {
       console.error(`replay.js: cannot read --patch ${patch}: ${e.message}`)
       process.exit(2)
     }
+    filesArr = parsePatch(patchContent).files
   }
   let reviewer = null
   if (workflowPath) {
@@ -391,51 +580,50 @@ function cmdRecord() {
   const runId = 'rp_' + crypto.randomBytes(6).toString('hex')
   const ts = new Date().toISOString()
   const row = {
-    ts, stage: 'replay', spec: specArg, runId, reviewRunId, class: cls, file, legs, outcome, tokens,
+    ts, stage: 'replay', spec: specArg, runId, reviewRunId,
+    class: cls || null, files: filesArr, legs, outcome, tokens,
   }
   const claudeDir = path.join(root, '.claude')
   fs.mkdirSync(claudeDir, { recursive: true })
   fs.appendFileSync(path.join(claudeDir, 'spec-runs.jsonl'), JSON.stringify(row) + '\n')
   const artifactDir = path.join(claudeDir, 'spec-runs')
   fs.mkdirSync(artifactDir, { recursive: true })
-  const artifact = {
-    runId, ts, spec: specArg, reviewRunId, class: cls, file, patch: patchContent, reviewer,
-  }
+  const artifact = { ...row, patch: patchContent, reviewer }
   fs.writeFileSync(path.join(artifactDir, runId + '.json'), JSON.stringify(artifact, null, 2) + '\n')
   console.log(`recorded runId=${runId}`)
   process.exit(0)
 }
 
-// ---- --stats (D9): per-outcome totals, per-class counts, catch-rate = caught/(caught+missed) --
-// ---- — leg-caught is corpus feedback (the class wasn't leg-invisible), never reviewer evidence.
+// ---- --stats (D6): per-outcome totals across all five buckets, per-class counts, catch-rate = ----
+// ---- caught/(caught+missed) — leg-caught is corpus feedback, unresolved/setup-failed carry no -----
+// ---- truth value; none of the three ever enters the denominator. ----------------------------------
+
+const STATS_BUCKETS = ['caught', 'missed', 'leg-caught', 'unresolved', 'setup-failed']
 
 function cmdStats() {
   const rows = readLedgerRows(root).filter(r => r.stage === 'replay')
   const total = rows.length
-  const caught = rows.filter(r => r.outcome === 'caught').length
-  const missed = rows.filter(r => r.outcome === 'missed').length
-  const legCaught = rows.filter(r => r.outcome === 'leg-caught').length
+  const counts = {}
+  for (const b of STATS_BUCKETS) counts[b] = rows.filter(r => r.outcome === b).length
   const byClass = new Map()
   for (const r of rows) {
-    if (!byClass.has(r.class)) byClass.set(r.class, { caught: 0, missed: 0, 'leg-caught': 0 })
+    if (!byClass.has(r.class)) byClass.set(r.class, Object.fromEntries(STATS_BUCKETS.map(b => [b, 0])))
     const c = byClass.get(r.class)
     if (Object.prototype.hasOwnProperty.call(c, r.outcome)) c[r.outcome]++
   }
   console.log(`total ${total}`)
-  console.log(`caught ${caught}`)
-  console.log(`missed ${missed}`)
-  console.log(`leg-caught ${legCaught}`)
-  console.log(`catch-rate ${caught}/${caught + missed}`)
+  for (const b of STATS_BUCKETS) console.log(`${b} ${counts[b]}`)
+  console.log(`catch-rate ${counts.caught}/${counts.caught + counts.missed}`)
   console.log('per-class:')
   for (const [name, c] of byClass) {
-    console.log(`  ${name} caught=${c.caught} missed=${c.missed} leg-caught=${c['leg-caught']}`)
+    console.log(`  ${name} ` + STATS_BUCKETS.map(b => `${b}=${c[b]}`).join(' '))
   }
   process.exit(0)
 }
 
-// ---- --teardown (D4): refuse a --dir whose private git dir carries no replay-worktree marker ---
-// ---- (exit 3, deletes nothing); otherwise `git worktree remove --force` so git's own registry ---
-// ---- is pruned too, taking the marker with it. --------------------------------------------------
+// ---- --teardown: refuse a --dir whose private git dir carries no replay-worktree marker ----------
+// ---- (exit 3, deletes nothing); otherwise `git worktree remove --force` so git's own registry -----
+// ---- is pruned too, taking the marker with it. -----------------------------------------------------
 
 function cmdTeardown() {
   if (!dir) { usage(); process.exit(2) }

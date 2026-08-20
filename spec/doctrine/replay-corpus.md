@@ -50,7 +50,11 @@ inverted behavior.
 
 **Leg-invisibility requirement:** the guard and its assert must be mutated as a matched pair —
 an isolated single-line flip fails the pinned assertion and the mutation dies on the gate before
-it ever reaches a reviewer. Both sides move together or the class doesn't fire.
+it ever reaches a reviewer. Both sides move together or the class doesn't fire. The pair spans
+whichever File Plan files its two sites actually live in: two files on a stack that keeps tests
+apart from the code they cover, or one file on a stack that co-locates them (Rust's
+`#[cfg(test)] mod tests`, Elixir, a doctest beside the function it documents) — the recipe binds
+the pair, not a file count.
 
 **Worked example:** a rate limiter's `if (attempts >= limit) return reject()` flipped to
 `if (attempts < limit) return reject()`, paired with its test's `assert(rejected === true)`
@@ -95,7 +99,10 @@ exclusive.
 
 **Recipe:** Find a flag/config key that is still parsed, validated, and accepted without error,
 but sever the site that reads it at runtime — the value is captured and never consulted, so the
-flag becomes a silent no-op.
+flag becomes a silent no-op. The severed value must land in a consumed-but-ignored sink (a
+variable read once for something else, a destructured field passed on unread, a logged-but-unused
+capture) — never a stranded local nothing else touches, which a compiled or strict-lint host's
+unused-variable/unused-binding check would flag on its own gate before a reviewer ever runs.
 
 **Leg-invisibility requirement:** the flag's only pinned coverage must be a parse/shape
 assertion (it exists, it doesn't error) rather than an assertion on its runtime *effect* — the

@@ -79,6 +79,37 @@ const { ROOT, tmpdir } = require('../helpers')
 // shape rule, so a future placement the shape rule fails to anticipate still surfaces.
 // Recursion adds zero files against the live repo (spec/scripts/ holds only flat .js/.sh plus
 // lib/; spec/workflows/ only flat .js) — verified by listing both trees before this edit.
+//
+// KNOWN GAPS (accepted at build close 2026-08-20, D12 — adversarial sweep, same day as
+// D9-D11): four residual false-green holes deliberately left open. None lets an executable
+// exist with zero callers undetected — the class this guard exists to close — so each was
+// accepted rather than fixed. Read this before adding a fifth epicycle to the checker.
+//
+// 1. A command .md entry point satisfies the forward check on ANY prose mention of
+//    `spec-paths <key>`, including a sentence stating the command NO LONGER runs it. Not
+//    closable statically: command files are prose, and "run X" and "no longer run X" are
+//    both mentions. The reverse direction still catches the inverse case (an undeclared call
+//    site).
+// 2. `"dynamic": true` (D6) suppresses the invocation check entirely and nothing constrains
+//    the declared entry point's relation to the script, so it can launder a true orphan.
+//    Zero live entries use it; a diff adding one is the review signal.
+// 3. The reverse direction covers spec-paths keys and hooks.json only — there is NO reverse
+//    leg for script-to-script invocation. A genuinely new undeclared script-to-script call
+//    raises nothing, so that edge is never protected by the forward check and can later be
+//    severed silently. This is the original recurrence shape, one hop removed.
+// 4. D9's grammar matches a quoted basename anywhere on a non-comment line, including inside
+//    a prose string literal. Constructible but not currently live: all 12 script-to-script
+//    edges match on a genuine invocation line.
+//
+// SUCCESSOR TRIGGER: the accepted design is per-edge bookkeeping, which pays only while the
+// script-to-script edge count stays small — 12 today. If that count grows materially past a
+// dozen, the correct fix is to stop declaring edges and assert REACHABILITY instead — every
+// executable reachable from a known entry surface — which closes gaps 3 and 4 as a side
+// effect and removes the two-direction bookkeeping entirely. Trade that makes it wrong to do
+// today: reachability no longer reddens on a MOVED call site, and this spec's Rationale
+// deliberately wanted renames to trip the guard. Holds either way: this repo's zero-
+// dependency rule means there is no JS parser available, so script-to-script detection still
+// bottoms out in text matching even under reachability.
 
 // ---------------------------------------------------------------------------
 // Checker logic (D5): pure functions over an injectable repo root.

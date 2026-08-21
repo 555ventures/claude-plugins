@@ -41,6 +41,7 @@ the diff that introduces it instead of surfacing as a host field report.
 | D9 | The forward check's script-to-script grammar is A2's declared shape, not a bare basename: on a NON-comment line, the basename must appear as an exact-delimited quoted literal (`'<b>'`, `"<b>"`) or as the tail of a quoted path (`/<b>'`, `/<b>"`). Bare-substring matching is retired (AC-20260820-04-4) | A2 sanctioned a bare basename grep; measured at build close it is too weak in this comment-dense codebase — 8 of the 12 script-to-script edges carry comment mentions that satisfy the check on their own, including every review leg and `review-legs.js → env-preflight.js`, the exact edge whose absence was this spec's third recurrence. Executed proof: severing the real `ac-matrix.js` invocation while leaving its header comments intact left the suite 8/8 green. A false GREEN is the failure mode this spec exists to kill, so the grammar is narrowed to the invocation shape A2 itself names; `"dynamic": true` (D6) stays the escape hatch for a shape no grep can see |
 | D10 | The reverse check's hooks.json grammar must match the repo's ACTUAL mandated quoting, `"\"${CLAUDE_PLUGIN_ROOT}\"/scripts/<basename>"` — the escaped quote between `}` and `/`. The shipped regex allowed only `}` + optional bare `"` + `/` and therefore matched NOTHING against the live file: the entire reverse-hooks direction had never fired, on a file that genuinely invokes four scripts. Fixture coverage for the hooks direction is added in the same edit (AC-20260820-04-5) | Found by adversarial sweep at build close 2026-08-20; executed: the regex returns zero matches against the live `spec/hooks/hooks.json` while four scripts are referenced. A declared check direction that is provably inert is the precise failure this spec exists to close — the guard had reproduced its own bug class internally. The missing fixture is why it shipped unexercised: AC-2..AC-5's fixtures covered spec-paths and script-to-script only |
 | D11 | The executable inventory and D8's domain test must not be evadable by file placement or extension: the scan is recursive under `spec/scripts/` (excluding `spec/scripts/lib/`) and `spec/workflows/`, and admits extensionless files alongside `.js`/`.mjs`/`.cjs`/`.sh`. Additionally — and independently — every `spec-paths` case-table key whose target resolves under `spec/scripts/` or `spec/workflows/` MUST resolve to a file present in the inventory (AC-20260820-04-1) | Executed: a script at `spec/scripts/legs/ac-matrix.js`, reachable via a real `spec-paths` key and invoked from a command, is skipped by the inventory scan AND filtered out of the reverse check by the D8 shape test — invisible in all four directions at once, with the orphan class fully reopened and no red anywhere. The key-table cross-check is the belt-and-braces leg: it closes the case by reachability rather than by file shape, so a future placement the shape rule fails to anticipate still surfaces |
+| D12 | Four residual false-green holes, found by adversarial sweep at build close, are ACCEPTED and recorded in § Known Gaps rather than closed. Successor trigger: when the script-to-script edge count grows materially past the 12 present today, replace per-edge declaration with a reachability model (AC-20260820-04-6) | None of the four lets an executable exist with zero callers undetected — the class that recurred three times and that this spec exists to close. Each is narrower: whether one already-declared edge is still real. Closing them costs either a false-red-generating grammar (gap 1 is prose and not statically decidable at all) or the reachability rewrite, which is a lateral trade today — it surrenders the rename detection this spec's Rationale deliberately chose, and this repo's zero-dependency rule leaves no JS parser, so script-to-script detection still bottoms out in text matching even under reachability. Recording the trigger as a number rather than as taste is what keeps the next session from re-deriving this |
 
 ## File Plan
 
@@ -50,7 +51,7 @@ the diff that introduces it instead of surfacing as a host field report.
 | tests/consistency/entrypoints.test.js | CREATE | tests | AC-20260820-04-1, AC-20260820-04-2, AC-20260820-04-3, AC-20260820-04-4, AC-20260820-04-5, AC-20260820-04-6 |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | Version bump target 7.8.0 (next free at build time) + description changelog |
 | spec/scripts/advisory-append.js | DELETE | scripts | D7: orphaned since v7 deleted its `wf-review` producer — the guard's first catch |
-| tests/advisory-append/advisory-append.test.js | DELETE | tests | D7: the deleted script's test suite |
+| tests/advisory-append/advisory-append.test.js | DELETE | tests | D7: the deleted script's test suite. **Expected review finding, waive:** `ac-matrix.js`'s `missing-test-file` check asserts existence for every `tests`-layer row regardless of action, so a DELETE row is a HARD finding by construction (`uncovered=0 oracle=0`, the coverage matrix itself is clean). The row is correctly classified — retagging it `other` to dodge the check would be gaming it. Upstream fix belongs in `ac-matrix.js` (skip DELETE rows), outside this spec's File Plan |
 | spec/bin/spec-paths | MODIFY | scripts | D7: drop the `advisory-append` case entry and its usage-line token |
 
 ## Contracts
@@ -135,6 +136,44 @@ Scan surfaces (closed set, D3/D4): scripts inventory = `spec/scripts/*.{js,sh}` 
   lands (`depends_on` ordering) — **if false** (03 blocked): seed from current reality
   minus the review-legs entry and note the follow-up edit in 03's File Plan is already
   covered by its own diff plus this test going red — STOP and re-order instead.
+
+## Known Gaps (residual, accepted at build close — D12)
+
+Four false-green holes this guard deliberately does not close. All were found by an
+adversarial sweep on 2026-08-20, after the first green gate; each was verified by an
+executed repro against a scratch tree. They are accepted because **none of them lets an
+executable exist with zero callers undetected** — every one concerns whether a single
+already-declared edge is still real, which is strictly narrower than the class that
+recurred three times.
+
+1. **Prose satisfies a command's forward check.** A `.md` entry point passes on any
+   `spec-paths <key>` mention, including a sentence stating the command *no longer* runs
+   it. Not statically decidable: command files are prose, and "run X" and "no longer run
+   X" are both mentions; a stricter grammar reds legitimate phrasings the corpus already
+   uses (`Run \`spec-paths design-atlas\``). The reverse direction still catches the
+   inverse (an undeclared call site).
+2. **`"dynamic": true` launders an orphan.** D6's escape hatch suppresses the invocation
+   check and constrains nothing about the declared entry point's relation to the script.
+   Zero live entries use it; a diff adding one is the review signal.
+3. **No reverse leg for script-to-script.** The reverse direction covers `spec-paths` keys
+   and `hooks.json` only, so a genuinely new undeclared script-to-script call raises
+   nothing and that edge is never protected by the forward check — it can later be severed
+   silently. This is the original recurrence shape, one hop removed, and the most serious
+   of the four.
+4. **A quoted basename inside a prose string still matches.** D9's grammar accepts
+   `'<basename>'` anywhere on a non-comment line, including inside a message string.
+   Constructible but not live: all 12 script-to-script edges match on a genuine invocation
+   line (13 matching lines total, every one an invocation).
+
+**Successor trigger (numeric, not taste).** The accepted design is per-edge bookkeeping,
+which pays only while the script-to-script edge count stays small. There are **12** today.
+Materially past a dozen, the correct move is to stop declaring edges and assert
+**reachability** — every executable reachable from a known entry surface — which closes
+gaps 3 and 4 as a side effect and removes the two-direction bookkeeping entirely. It was
+wrong to do today for two reasons worth carrying forward: reachability no longer reddens on
+a *moved* call site, and this spec's Rationale deliberately wanted renames to trip the
+guard; and the zero-dependency rule leaves no JS parser, so script-to-script detection still
+bottoms out in text matching even under reachability.
 
 ## Rationale
 

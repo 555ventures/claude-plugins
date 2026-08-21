@@ -10,16 +10,17 @@
 // 2026-08-08). This driver, on the spec-design-driver.js contract, EXECUTES every deterministic
 // step itself (base derivation, the per-iteration manifest lifecycle, review-legs.js, all three
 // verdict.js passes, both ledger appends, the implementing->done flip, the merge-back sequence,
-// replay --due) and prints ONLY the step that needs this session's judgment (reviewer + design-
-// leg dispatch, dispositions, the Canonical Delta + deviations fold, the close commit, merge
-// strategy, conflict resolution). State is re-derived from spec frontmatter + the <spec>.review/
+// REPLAY's own replay --due/--select derivation) and prints ONLY the step that needs this
+// session's judgment (reviewer + design-leg dispatch, dispositions, the Canonical Delta +
+// deviations fold, the close commit, merge strategy, conflict resolution, and the due replay's
+// own execution phases). State is re-derived from spec frontmatter + the <spec>.review/
 // sidecar + on-disk artifacts on EVERY invocation — a mark whose artifact vanished is demanded
 // again, and the fix-iteration cap is counted from manifest-<n>.jsonl files actually present on
 // disk, never a sidecar counter (hand-editing the sidecar cannot reach ESCALATE). Every child
-// process this driver spawns — legs, all three verdict.js passes, replay --due, spec-status
-// --next, every merge-back.sh subcommand, every git call — is routed through one fail-closed
-// helper (runChild): spawnSync's status is null when a child dies by signal, never spawns, or
-// overflows maxBuffer, and treating that null as a pass (or as an inline .stdout.trim() of a
+// process this driver spawns — legs, all three verdict.js passes, replay --due/--select,
+// spec-status --next, every merge-back.sh subcommand, every git call — is routed through one
+// fail-closed helper (runChild): spawnSync's status is null when a child dies by signal,
+// never spawns, or overflows maxBuffer, and treating that null as a pass (or as an inline .stdout.trim() of a
 // child that never ran) is the exact silent-success failure this driver exists to prevent.
 //
 // What this deliberately does NOT do: recommend a disposition, pick a merge strategy, or render
@@ -33,11 +34,12 @@
 //     marks: skips-extracted --file <f> | reviewer-returned --file <json> |
 //            dispositions --waived N --rejected N --fix-dispatched N | fix-applied | closed |
 //            merge-strategy <merge-commit|ff-only|squash|rebase-ff> (bare token) |
-//            conflicts-resolved
+//            conflicts-resolved | replay-recorded
 //   spec-review-driver <spec.md> --state          -> print the state name only (scripting)
 //
 // States: LEGS (driver-only) -> STOPPED (terminal on RED_BLOCKING) | SKIPS? -> REVIEWER ->
-//   DISPOSITIONS -> FIX/ESCALATE(cap 2, terminal)? -> CLOSE -> MERGE/CONFLICTS -> DONE (terminal)
+//   DISPOSITIONS -> FIX/ESCALATE(cap 2, terminal)? -> CLOSE -> MERGE/CONFLICTS -> REPLAY? ->
+//   DONE (terminal)
 //
 // Exit codes: 0 = step printed · 2 = precondition failure or refused mark (message names the
 // repair — a missing/malformed artifact, a REVIEWER_FAILED return, dispositions exceeding the
@@ -47,13 +49,18 @@
 // no exit code — signal-killed, never spawned, or maxBuffer-overflowed — via runChild()'s
 // fail-closed refusal, a legs iteration reporting success with a missing/empty manifest, or a
 // cold invocation on a spec already marked status: done whose sidecar carries no closeRunId of
-// its own (use /spec:escape instead)).
+// its own (use /spec:escape instead), a `replay-recorded` mark with no new stage:"replay" ledger
+// row for the sidecar target's reviewRunId, or replay.js --select exiting 0 while printing no
+// parseable selection line).
 
 'use strict'
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
 const { spawnSync } = require('child_process')
+// The repo's ONE ledger reader (live + year archives, in read order) — REPLAY counts
+// stage:"replay" rows through it rather than opening the ledger a second way.
+const { readLedgerRows } = require('./lib/observation')
 
 function die(msg) { process.stderr.write('spec-review-driver: ' + msg + '\n'); process.exit(2) }
 
@@ -141,10 +148,16 @@ if (!['implementing', 'done'].includes(status)) {
     'status: implementing (or done for a re-run); run /spec:build first')
 }
 
-const sidecarDir = resolvedSpecPath.replace(/\.md$/, '.review')
-const sidecarRel = path.relative(repoRoot, sidecarDir)
+// `let`, not `const`: a worktree merge relocates the sidecar into the main root mid-invocation
+// (D8 (b)) — REPLAY runs after `merge-back.sh cleanup` has already deleted the worktree the
+// sidecar used to live in. `replaySpecPath` is the path the REPLAY step tells the session to
+// re-invoke with, which after that relocation is the main root's copy of the spec, never the
+// deleted worktree's.
+let sidecarDir = resolvedSpecPath.replace(/\.md$/, '.review')
+let sidecarRel = path.relative(repoRoot, sidecarDir)
+let stateFile = path.join(sidecarDir, 'review-state.json')
+let replaySpecPath = specPath
 const specRel = path.relative(repoRoot, resolvedSpecPath) || resolvedSpecPath
-const stateFile = path.join(sidecarDir, 'review-state.json')
 
 let marks = {}
 try { marks = JSON.parse(fs.readFileSync(stateFile, 'utf8')) } catch { marks = {} }
@@ -290,7 +303,7 @@ function runLegsIteration(n, opts) {
   return { stopped: false, n }
 }
 
-// ---- CLOSE driver work: authoritative verdict + ledger append + status flip + replay --due ----
+// ---- CLOSE driver work: authoritative verdict + ledger append + status flip --------------------
 function doCloseWork(n) {
   const runId = ensureRunId()
   const diffLoc = computeDiffLoc()
@@ -309,11 +322,9 @@ function doCloseWork(n) {
   const newSpecText = specText.replace(/^status:\s*.*$/m, 'status: done')
   fs.writeFileSync(resolvedSpecPath, newSpecText)
 
-  const due = runChild(process.execPath, [replayBin, '--due'], { encoding: 'utf8', cwd: repoRoot },
-    'replay.js --due')
-  marks.replayNote = due.status === 0
-    ? '📋 replay is DUE — run /spec:replay after this closes (' + due.stdout.trim() + ')'
-    : ''
+  // D8: no dueness probe here. A printed "run /spec:replay yourself" reminder was the measured
+  // failure this state machine replaces (shipped 2026-08-19, skipped through 12+ reviews in ~48h);
+  // REPLAY's own entry --due, once MERGE has concluded, is the single dueness derivation.
   marks.closeRunId = runId
   saveSidecar()
 }
@@ -361,14 +372,88 @@ function findWorktreeForBranch(root, branch) {
   return null
 }
 
-function printDoneNow(note) {
+// D8 (a): the sidecar dies HERE, at DONE — not at MERGE's conclusion, which is where 07 deleted
+// it. REPLAY runs after the merge and reads it, so the only safe deletion point is the terminal
+// state itself. `--state` is answered before the delete: a state query must not be the thing that
+// tears down the run it is querying.
+function printDoneNow(note, harnessLine) {
+  if (STATE_ONLY) { process.stdout.write('DONE\n'); process.exit(0) }
+  fs.rmSync(sidecarDir, { recursive: true, force: true })
   const status2 = runChild(process.execPath, [specStatusBin, '--root', repoRoot, '--next'],
     { encoding: 'utf8' }, 'spec-status.js --next')
   const nextLine = status2.status === 0 ? status2.stdout.trim() : '(spec-status --next unavailable)'
-  process.stdout.write(`[spec-review-driver] state: DONE  spec: ${specPath}\n` +
+  process.stdout.write(`[spec-review-driver] state: DONE  spec: ${replaySpecPath}\n` +
     (note ? note + '\n' : '') +
-    (marks.replayNote ? marks.replayNote + '\n' : '') +
+    (harnessLine ? harnessLine + '\n' : '') +
     '\n## DONE\n' + nextLine + '\n')
+  process.exit(0)
+}
+
+// ---- REPLAY (D1/D2/D3) ---------------------------------------------------------------------------
+// Entered from BOTH of MERGE's conclusions — a landed merge-back and the merge-skipped note — and
+// from nowhere else: STOPPED and every non-CLEAN path terminate before it. It never re-derives,
+// re-opens, or gates the verdict (D3); CLOSE is committed and the merge has landed by the time a
+// single line here runs, so "blocking" the verdict is not even mechanically available. What it
+// does block is calling the review FINISHED while the measurement it owes is unrun — the review is
+// complete as a verdict and unfinished as a checklist. The advisory form of exactly this reminder
+// shipped 2026-08-19 and was skipped through 12+ reviews in ~48 hours; that is the whole argument
+// for a state instead of a print.
+function countReplayRowsFor(reviewRunId) {
+  return readLedgerRows(repoRoot)
+    .filter((r) => r.stage === 'replay' && r.reviewRunId === reviewRunId).length
+}
+
+function parseSelection(out) {
+  const m = /spec=(\S+)\s+reviewRunId=(\S+)\s+commit=(\S+)\s+parent=(\S+)\s+diffBase=(\S+)/.exec(out)
+  if (!m) return null
+  return { spec: m[1], reviewRunId: m[2], commit: m[3], parent: m[4], diffBase: m[5] }
+}
+
+function replayStepBody(t) {
+  return `## Step: run the due reviewer replay\n` +
+    `The replay window is due and the harness selected a target. Execute ` +
+    `spec/commands/replay.md's Phases 1-5 in THIS session — mutation-authoring worker, blind ` +
+    `reviewer dispatch, score, record, teardown. Phase 0 is this driver's own entry work above ` +
+    `and is never repeated.\n` +
+    `  spec:        ${t.spec}\n` +
+    `  reviewRunId: ${t.reviewRunId}\n` +
+    `  commit:      ${t.commit}\n` +
+    `  parent:      ${t.parent}\n` +
+    `  diffBase:    ${t.diffBase}\n` +
+    `Phase 4 records the outcome via replay.js --record --review-run-id ${t.reviewRunId}. ANY ` +
+    `outcome concludes this review; a non-measurement outcome (unresolved/setup-failed) leaves ` +
+    `the harness due, so the NEXT review retries rather than this one.\n` +
+    `Then: node ${__filename} ${replaySpecPath} --mark replay-recorded`
+}
+
+// The entry derivation. Both --due and --select are replay.js's own reads — the driver never
+// hand-derives dueness or picks a target, so a change to the measurement window cannot silently
+// diverge between the two callers.
+function replayEntry(note) {
+  const due = runChild(process.execPath, [replayBin, '--due'], { encoding: 'utf8', cwd: repoRoot },
+    'replay.js --due')
+  if (due.status !== 0) printDoneNow(note, (due.stdout + due.stderr).trim())
+  const sel = runChild(process.execPath, [replayBin, '--select'], { encoding: 'utf8', cwd: repoRoot },
+    'replay.js --select')
+  // Any non-zero --select exit means nothing measurable was resolved in this window; a
+  // due-but-unmeasurable close concludes rather than parking on work that cannot be done.
+  if (sel.status !== 0) printDoneNow(note, (sel.stdout + sel.stderr).trim())
+  const t = parseSelection(sel.stdout)
+  if (!t) {
+    die('replay.js --select exited 0 but printed no parseable `spec=… reviewRunId=… commit=… ' +
+      'parent=… diffBase=…` line (got: ' + JSON.stringify(sel.stdout.trim()) + ') — re-run ' +
+      '`node ' + replayBin + ' --select` from ' + repoRoot + ' and fix the harness before ' +
+      'concluding this review')
+  }
+  // rowsAtEntry joins on the SELECTED target's reviewRunId, never a bare row count: a concurrent
+  // session appending its own replay row for a different target must not satisfy this mark.
+  marks.replayTarget = { ...t, rowsAtEntry: countReplayRowsFor(t.reviewRunId) }
+  saveSidecar()
+  if (STATE_ONLY) { process.stdout.write('REPLAY\n'); process.exit(0) }
+  process.stdout.write(`[spec-review-driver] state: REPLAY  spec: ${replaySpecPath}\n` +
+    (note ? note + '\n' : '') +
+    '(re-run this driver after completing the step; it verifies artifacts and prints the next one)\n\n' +
+    replayStepBody(marks.replayTarget) + '\n')
   process.exit(0)
 }
 
@@ -578,17 +663,65 @@ function promoteEvidenceAndClean(wt, mainRootDir) {
   }
 }
 
+// D8 (b): `git worktree remove` refuses on ANY untracked file, so the worktree-local sidecar has
+// to be gone before cleanup runs — but REPLAY runs AFTER cleanup, from the main root, and needs
+// this run's state. Move review-state.json into the main root's own <spec>.review/ and rebind this
+// invocation's paths to it. The per-iteration manifests are deliberately NOT carried over: they
+// are evidence of a verdict that is already concluded and already retained under
+// .claude/spec-runs/, and REPLAY's own derivation never reads them.
+function relocateSidecar(wt, mainRootDir) {
+  const relSidecar = path.relative(wt, sidecarDir)
+  if (relSidecar.startsWith('..') || path.isAbsolute(relSidecar)) return // already outside the worktree
+  const dst = path.join(mainRootDir, relSidecar)
+  fs.mkdirSync(dst, { recursive: true })
+  fs.writeFileSync(path.join(dst, 'review-state.json'), JSON.stringify(marks, null, 2) + '\n')
+  fs.rmSync(sidecarDir, { recursive: true, force: true })
+  sidecarDir = dst
+  stateFile = path.join(dst, 'review-state.json')
+  sidecarRel = path.relative(mainRootDir, dst)
+  replaySpecPath = path.join(mainRootDir, path.relative(wt, resolvedSpecPath))
+}
+
 function finishMerge(mainRootDir, source, wt) {
   if (wt) {
     promoteEvidenceAndClean(wt, mainRootDir)
-    fs.rmSync(sidecarDir, { recursive: true, force: true })
+    relocateSidecar(wt, mainRootDir)
   }
   const cleanupArgs = ['cleanup', '--root', mainRootDir, '--source', source]
   if (wt) cleanupArgs.push('--worktree', wt)
   const c = runChild('bash', [mergeBackBin, ...cleanupArgs], { encoding: 'utf8' }, 'merge-back.sh cleanup')
   if (c.status !== 0) die('merge-back.sh cleanup failed: ' + (c.stdout + c.stderr).trim())
   runChild('bash', [mergeBackBin, 'verify', '--root', mainRootDir], { encoding: 'utf8' }, 'merge-back.sh verify')
-  printDoneNow('merged ' + source + ' into the target branch; worktree and branch cleaned up.')
+  marks.mergeConcluded = true
+  saveSidecar()
+  replayEntry('merged ' + source + ' into the target branch; worktree and branch cleaned up.')
+}
+
+// D2: refused unless the count of stage:"replay" rows carrying the SELECTED target's reviewRunId
+// has strictly increased since REPLAY was entered. The join is on the run id, never a bare row
+// count, so a concurrent session recording its own replay cannot conclude this review. The
+// outcome itself is never inspected: caught, missed, leg-caught, unresolved and setup-failed all
+// satisfy the mark, because a broken scratch worktree must not park a finished review (a
+// non-measurement outcome leaves the harness due, and the next review retries it).
+function handleReplayRecorded() {
+  const t = marks.replayTarget
+  if (!t) {
+    die('no replay target is recorded for this review — re-run the driver with no mark first so ' +
+      'REPLAY\'s own --due/--select derivation runs')
+  }
+  const now = countReplayRowsFor(t.reviewRunId)
+  if (now <= t.rowsAtEntry) {
+    die('no stage:"replay" ledger row for reviewRunId ' + t.reviewRunId + ' has been appended ' +
+      'since REPLAY was entered (' + t.rowsAtEntry + ' then, ' + now + ' now) — run ' +
+      'spec/commands/replay.md Phases 1-5 against that target and record the outcome first: ' +
+      'node ' + replayBin + ' --record --spec ' + t.spec + ' --review-run-id ' + t.reviewRunId +
+      ' --legs <green|red:leg|none> --outcome <caught|missed|leg-caught|unresolved|setup-failed> ' +
+      '[--class <id>] [--patch <f>] [--workflow <f>]')
+  }
+  marks.replayTarget = null
+  marks.replayRecorded = { reviewRunId: t.reviewRunId, rows: now }
+  saveSidecar()
+  printDoneNow('reviewer replay recorded against review ' + t.reviewRunId + '.')
 }
 
 function handleMark() {
@@ -600,9 +733,10 @@ function handleMark() {
     case 'closed': return handleClosed()
     case 'merge-strategy': return handleMergeStrategy() // exits the process itself
     case 'conflicts-resolved': return handleConflictsResolved() // exits the process itself
+    case 'replay-recorded': return handleReplayRecorded() // exits the process itself
     default:
       die('unknown mark "' + MARK + '" (skips-extracted | reviewer-returned | dispositions | ' +
-        'fix-applied | closed | merge-strategy | conflicts-resolved)')
+        'fix-applied | closed | merge-strategy | conflicts-resolved | replay-recorded)')
   }
 }
 
@@ -613,6 +747,15 @@ function deriveMergeOrDone() {
 }
 
 function deriveState() {
+  // Post-merge short circuit, BEFORE any manifest/legs logic: after a worktree merge the
+  // per-iteration manifests are gone with the worktree, and falling through to the `n === 0`
+  // branch below would re-run review-legs.js over a review that is already a committed verdict.
+  // The sidecar alone is what a fresh session resuming after the merge can read.
+  if (marks.mergeConcluded) {
+    if (!marks.replayTarget) printDoneNow('')
+    return 'REPLAY'
+  }
+
   const manifests = listManifestNumbers()
   let n = manifests.length ? Math.max(...manifests) : 0
 
@@ -664,7 +807,6 @@ if (STATE_ONLY) { process.stdout.write(state + '\n'); process.exit(0) }
 // ---- step text per state -------------------------------------------------------------------------
 const manifestPath = manifestPathFor(currentN)
 const outDir = outDirFor(currentN)
-const replayNoteLine = marks.replayNote ? marks.replayNote + '\n' : ''
 const waivedWarn = (marks.dispositions && marks.dispositions.waived > 0)
   ? `⚠ ${marks.dispositions.waived} finding(s) waived this run — confirm in the close report.\n`
   : ''
@@ -745,7 +887,7 @@ const STEPS = {
     return `## Step: close (the driver has already run the authoritative verdict and flipped status: done)\n` +
       `verdict: ${marks.dispositions.word}   runId: ${marks.closeRunId}   ` +
       `retained: .claude/spec-runs/${marks.closeRunId}.json\n` +
-      replayNoteLine + waivedWarn +
+      waivedWarn +
       `1. Apply the spec's Canonical Delta to docs/canonical/${area}.md.\n` +
       `2. Fold the deviations sidecar if one exists (recurring -> Gotchas [host]/[plugin]; one-offs ` +
       `-> the spec's Rationale); delete the sidecar.\n` +
@@ -760,9 +902,12 @@ const STEPS = {
   MERGE: () => {
     const source = sourceBranchFor()
     if (!branchExists(mainRoot, source)) {
-      // D6: review ran directly on the originating branch — nothing to merge.
-      fs.rmSync(sidecarDir, { recursive: true, force: true })
-      printDoneNow('review ran on the originating branch — MERGE skipped, nothing to merge.')
+      // D6: review ran directly on the originating branch — nothing to merge. D1: this arm
+      // concludes MERGE exactly like a landed merge-back does, so it enters REPLAY too — a review
+      // that happened not to run in a worktree owes the same measurement as one that did.
+      marks.mergeConcluded = true
+      saveSidecar()
+      replayEntry('review ran on the originating branch — MERGE skipped, nothing to merge.')
     }
     const target = runChild('git', ['-C', mainRoot, 'symbolic-ref', '--short', 'HEAD'],
       { encoding: 'utf8' }, 'git symbolic-ref').stdout.trim()
@@ -770,7 +915,7 @@ const STEPS = {
       [mergeBackBin, 'inspect', '--root', mainRoot, '--target', target, '--source', source],
       { encoding: 'utf8' }, 'merge-back.sh inspect')
     return `## Step: merge strategy\n` + (inspect.stdout + inspect.stderr).trim() + '\n\n' +
-      replayNoteLine + waivedWarn +
+      waivedWarn +
       `AskUserQuestion for the strategy (RECOMMEND above first). Then:\n` +
       `  node ${__filename} ${specPath} --mark merge-strategy <merge-commit|ff-only|squash|rebase-ff>\n` +
       `Relocate first if needed: ExitWorktree(action="keep") if this session entered the worktree, ` +
@@ -779,6 +924,11 @@ const STEPS = {
   },
 
   CONFLICTS: () => `## CONFLICTS — resolve then mark conflicts-resolved (see prior output)`,
+
+  // A bare re-invocation while parked at REPLAY re-prints the same step from the sidecar's own
+  // target — it never re-runs --due/--select, which could otherwise select a DIFFERENT target and
+  // silently move the goalposts mid-measurement.
+  REPLAY: () => replayStepBody(marks.replayTarget),
 }
 
 process.stdout.write(`[spec-review-driver] state: ${state}  spec: ${specPath}\n` +

@@ -32,10 +32,11 @@ Loop until the driver prints `DONE`:
    instructions** — running deterministic work itself (base derivation —
    `build_base` → `diff_base` → `merge-base HEAD main|master` —, the per-iteration manifest,
    `review-legs.js`, diffLoc, every `verdict.js` pass, both ledger appends, the `done` flip,
-   `merge-back`'s inspect/merge/cleanup/verify sequence, `replay --due`, the `spec-status
-   --next` capture) and printing only the steps that need this session's judgment: reviewer +
-   design-leg dispatch, dispositions, the Canonical Delta + deviations fold, the close commit,
-   merge strategy, conflict resolution.
+   `merge-back`'s inspect/merge/cleanup/verify sequence, the REPLAY state's own
+   `replay --due`/`--select` checks, the `spec-status --next` capture) and printing only the
+   steps that need this session's judgment: reviewer + design-leg dispatch, dispositions, the
+   Canonical Delta + deviations fold, the close commit, merge strategy, conflict resolution,
+   and — on a due REPLAY — the replay execution phases.
 2. Execute exactly that step. Record it with `node {driver} <spec> --mark <mark>` once the
    step is done — the driver verifies the step's artifacts before it advances; a missing or
    malformed artifact is refused (exit 2) with the repair named, and the state is left
@@ -49,7 +50,9 @@ lands exactly where the last run left off. A `RED_BLOCKING` gate failure lands t
 state `STOPPED` — the driver has already appended the `GATE_RED` ledger line and printed the
 red leg and its remedy; a later invocation restarts at the leg run with a fresh manifest. A
 third `fix-applied` lands `ESCALATE` — the fix loop is capped at 2 iterations, and a capped run
-needs the user, not a fourth dispatch.
+needs the user, not a fourth dispatch. A CLEAN close whose replay window is due parks at
+`REPLAY` until a measurement is on the record: the review is complete as a verdict and
+unfinished as a checklist, and re-invocation re-prints the execution step.
 
 When the driver prints `DONE`, report (rationale: core § Console Output Style). Assemble the
 slots — `outcome`: ✅ `CLEAN — merged` (or the driver's one-line note when MERGE was skipped
@@ -124,4 +127,19 @@ Run `node "$(spec-paths report-render)" --slots <file>` and print its output ver
   subprocess cannot move the session CWD, and the driver refuses the mark (exit 2, relocate
   instruction) while it is inherited inside the build worktree, since cleanup must never delete
   the directory the session stands in.
+- **The due replay (the REPLAY step).** Once MERGE has concluded — merged back or skipped
+  because review ran on the originating branch — the driver runs the replay harness's own
+  dueness and selection checks itself and either lands `DONE` (not due, or nothing selectable,
+  printing the harness's line verbatim) or prints the REPLAY execution step. When it prints
+  that step, execute `spec/commands/replay.md`'s **Phases 1–5** in this session — mutation
+  authoring worker, blind reviewer dispatch, score, record, teardown — with the `--select`
+  values the driver inlined (spec, reviewRunId, commit, parent, diffBase); Phase 0 is the
+  driver's own entry work and is never repeated. Those phases live in `replay.md` alone —
+  never restate them here. The ambiguous-score adjudication (`AskUserQuestion`) happens in this
+  same session; the user is present at a review close. Return with
+  `node {driver} <spec> --mark replay-recorded`. **Any** recorded outcome concludes the review;
+  a non-measurement outcome (`unresolved`/`setup-failed`) leaves the harness due, so the NEXT
+  review retries rather than this one. REPLAY never re-derives, re-opens, or gates the verdict —
+  CLOSE is committed and MERGE has concluded before it runs, and a `missed` outcome changes the
+  replay ledger and nothing else. `/spec:replay` stays the manual and retry surface.
 - **Never push.** Pushing is an explicit user action, never part of this command.

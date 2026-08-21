@@ -131,9 +131,15 @@ signals corroborates it. This is what makes a CLEAN verdict falsifiable rather t
 
 **Replay cadence** is `replay.js --due` policy, never a session's memory: due every 5th
 review and at minimum once per major pipeline version, sampling critical-tier targets first
-when one is available in the window. A sustained replay miss-rate is the evidence that
-reopens the second-reviewer question core § Tiers currently rules against — not a hunch, not
-a single bad run.
+when one is available in the window. Execution is review's own close, never a printed
+reminder: the review driver's REPLAY state (between MERGE and DONE) runs the dueness and
+selection checks itself and refuses to conclude the review until a `stage:"replay"` row for
+the selected target exists. The printed-reminder form was tried and measured to fail — it
+shipped 2026-08-19 and was skipped through 12+ reviews in ~48 hours while printing on every
+CLEAN report. `/spec:replay` remains the manual surface and the retry path after a
+non-measurement outcome. A sustained replay miss-rate is the evidence that reopens the
+second-reviewer question core § Tiers currently rules against — not a hunch, not a single bad
+run.
 
 ## Incident Policy
 

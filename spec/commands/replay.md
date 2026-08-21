@@ -12,6 +12,13 @@ blind to the fact that anything is being tested. Catch/miss/leg-caught lands as 
 `stage:"replay"` ledger row with retained evidence — the number that makes the pipeline's
 one-reviewer bet falsifiable (shared § Feedback Loop).
 
+**Two entry points, one executor.** `/spec:review`'s driver invokes Phases 1–5 below itself
+when the harness reports a replay is due — its REPLAY state refuses to conclude the review
+until an outcome is recorded for the selected target. This command remains the **manual
+surface**: ad-hoc measurement, and the retry after a non-measurement outcome
+(`unresolved`/`setup-failed`), which leaves the harness due. Phase 0's STOP-on-not-due is
+unchanged here.
+
 **Setup:** run `spec-paths shared-for replay` and read its output. Read the host's
 `.claude/spec.config.json` and its `pipelineRules` file. Either missing → STOP: run
 `/spec:init` first.

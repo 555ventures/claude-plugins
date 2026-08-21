@@ -1,6 +1,7 @@
 ---
 date: 2026-08-21
-status: hardened
+status: implementing
+diff_base: 496378b4d61c3976e324c3943e7c1b4934eef102
 open_markers: 0
 tier: standard           # no critical-trigger file gets a behavioral edit (verdict.js/review-legs.js untouched); worst failure is the driver refusing DONE after a completed merge — resumable, never destructive
 area: review-verification
@@ -38,6 +39,9 @@ recorded `stage:"replay"` ledger row, a not-due close passes through untouched, 
 | D5 | `spec/doctrine/core.md` § Feedback Loop's cadence paragraph is amended: cadence remains `replay.js --due` policy, and execution is review's own close — the driver's REPLAY state — rather than a printed reminder, with `/spec:replay` named as the manual/retry surface; the amendment cites the measured failure of the reminder (shipped 2026-08-19, skipped through 12+ reviews in 48h) (AC-20260821-02-9) | Doctrine records who executes, or the next session re-litigates it from memory; the citation is what stops a future "make it advisory again" edit from landing evidence-free |
 | D6 | REJECTED — a standing never-red census surface (a doctor line, a REPLAY-state print, or any other advisory flag for legs that have never failed: fleet `patterns` leg 195 runs, `neverRed: true`). No recorded escape or missed replay has ever been attributed to a never-red leg, so Generality and Materiality are unfillable under core § Incident Policy; an advisory line is also exactly the mechanism this spec exists to replace. Reopen condition (ledger-answerable): the first `stage:"escape"` row or `stage:"replay"` row with outcome `missed` whose defect a deterministic leg should have caught while fleet-reader `legRecency` reported that leg `neverRed: true` at the row's timestamp; `node "$(spec-paths fleet-reader)" --json` remains the on-demand census (JJ ruling 2026-08-21) [no-ac: rejection record per core § Incident Policy] | The census exists and is queryable; adding an unforced reminder in the same spec that proves reminders don't work would be self-refuting |
 | D7 | Wiring: `spec/entrypoints.json`'s `spec/scripts/replay.js` entry gains the `spec/scripts/spec-review-driver.js` edge and drops `spec/commands/review.md`'s retired `--due` edge (whichever of the two 07 left standing is adjudicated at build); `spec/.claude-plugin/plugin.json` bumps (target 7.15.0 — a target, not a pin, per the semver-race gotcha; 20260820/07 and 20260821/01 both target 7.13.0 ahead of this) with the changelog paragraph (last-3-versions form) [no-ac: both enforced by standing suites — the data-driven entry-point conformance suite and review's version-bump hard check; a vacuous absence pin here would be the class 20260821/01 mechanizes] | A stale entry edge makes the conformance suite lie about who calls the harness; version discipline is the host's own review check — an AC would double-adjudicate both |
+
+| D8 | Build ruling (2026-08-21, orchestrator): the driver's CLOSE-time `replay.js --due` probe and its `marks.replayNote` reminder (`📋 replay is DUE — run /spec:replay after this closes`, echoed into the CLOSE, MERGE and DONE step text) are RETIRED — REPLAY's own entry `--due` is the single dueness derivation, and a printed "run it yourself" line contradicts a state machine that now runs the replay itself (D4/D5's retirement applied to the driver's own copy of the same advisory). Two mechanical consequences follow and are part of this row: (a) A5 confirmed — `finishMerge()` deletes the sidecar today, so deletion moves to DONE (every DONE exit deletes it, including the cold `status: done` fast path); (b) in a linked-worktree merge the sidecar's `review-state.json` is relocated into the MAIN root's `<spec>.review/` before `merge-back.sh cleanup` runs (`git worktree remove` refuses on any untracked file) and the printed REPLAY step names the main-root spec path, since REPLAY runs after cleanup from the main root (AC-20260821-02-2) | The retired line is the exact advisory this spec exists to replace; relocation is what makes "sidecar retained -> REPLAY" in Contracts mechanically true on the worktree path |
+| D9 | Build ruling (2026-08-21, orchestrator, D7's named adjudication): 20260820/07 already landed `spec/entrypoints.json`'s `spec/scripts/replay.js` entry as `["spec/commands/replay.md", "spec/scripts/spec-review-driver.js"]` — the driver edge is present and there is no `spec/commands/review.md` edge to drop, so the File Plan's `spec/entrypoints.json` row lands as a verified no-op (checked, not skipped) [no-ac: D7's own no-ac sanction] | D7 delegated exactly this call to build; recording the executed check is what keeps "no change" distinguishable from "never looked" |
 
 ## File Plan
 
@@ -105,7 +109,12 @@ DONE     unchanged (terminal; re-prints the next pointer; sidecar deleted here n
   `reviewsSince=3`, `--state` prints `DONE`) → tests/review/review-driver.test.js
 - **AC-20260821-02-2**: WHEN due and `--select` yields an eligible CLEAN row THE SYSTEM
   SHALL print an execution step naming `spec/commands/replay.md` and the selection's spec
-  path and reviewRunId, and `--state` SHALL print `REPLAY` → tests/review/review-driver.test.js
+  path and reviewRunId, `--state` SHALL print `REPLAY`, and no step the driver prints on that
+  run SHALL carry the retired manual reminder to run `/spec:replay` (D8) →
+  tests/review/review-driver.test.js
+  - superseded at build 2026-08-21 by D8's retirement of `marks.replayNote` (original text:
+    “SHALL print an execution step naming `spec/commands/replay.md` and the selection's spec
+    path and reviewRunId, and `--state` SHALL print `REPLAY`”)
 - **AC-20260821-02-3**: WHEN due but no eligible CLEAN row exists in the window THE SYSTEM
   SHALL transition to DONE printing the harness's advisory (a due-but-unmeasurable close is
   never parked) → tests/review/review-driver.test.js

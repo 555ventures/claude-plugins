@@ -144,6 +144,12 @@ test, no intake queue. Only a **third recurrence of the same class** earns a sta
 and that guard is deterministic — a script with an exit code wired where the class occurs —
 never prose. Doctrine text is for contracts and invariants, not for incident memories.
 
+A guard so earned must also pass the **admission bar**: portable across host stacks, general
+to the class rather than the triggering instance, material (value exceeds its maintenance and
+reading cost), falsified once (deliberately tripped to prove it can go red), and shipped with
+the kill condition that would retire it. A proposal that cannot state all five in one line is
+a rejection with a reopen condition.
+
 ## Decomposition
 
 A spec must fit one `/spec:build` run: roughly ≤15 File Plan rows, one primary area (plus any

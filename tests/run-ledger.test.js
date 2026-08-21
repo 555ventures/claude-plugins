@@ -113,3 +113,44 @@ test('AC-20260821-02-9: core § Feedback Loop names the driver\'s REPLAY state a
     'the cadence itself is unchanged and must stay stated as replay.js --due policy, never a ' +
     'session\'s memory')
 })
+
+// specs/20260821/02-replay-review-phase.md D10 (JJ ruling 2026-08-21, after a Fable 5 consult on
+// this build's own recorded debts): core § Feedback Loop states the pipeline improves "through
+// artifacts — never through anyone's memory" and enumerates carriers that are each either derived
+// or passed through a review disposition. `.claude/agent-memory/` was the one carrier with none:
+// written by dispatched workers, it shapes future worker behaviour before any gate can observe
+// the effect and outlives the session that wrote it. This build proved the gap by shipping a
+// false memory — two entries from one incident both attributed the orchestrator's own concurrent
+// edits to a phantom sibling worker and concluded the assignment could be stood down from; one
+// was deleted, its twin was committed unexamined until the consult found it. The disposition step
+// is the whole fix: no memory-review gate, no write hook, no lint (unearned under core § Incident
+// Policy at recurrence count 1).
+
+test('AC-20260821-02-10: agent memory is a disposed artifact, never a silent improvement carrier — review.md\'s close gives every touched memory file one stated fate, and core § Feedback Loop says why', () => {
+  const review = squash(read('commands/review.md'))
+  assert.match(review, /agent-memory/,
+    'review.md\'s close step must name .claude/agent-memory/ as something the session disposes — ' +
+    'a memory file nobody adjudicates rides the spec\'s own commit into every future session and ' +
+    'starts steering workers before any gate can see the effect')
+  assert.match(review, /carry, correct, or delete/,
+    'the close step must state the three fates explicitly: a disposition rule with no enumerated ' +
+    'outcomes collapses back into "leave it alone", which is the behaviour that shipped a false ' +
+    'memory in this very build')
+  assert.doesNotMatch(review, /§ Feedback Loop/,
+    'review.md must state this duty OPERATIONALLY, never by citing § Feedback Loop — `spec-paths ' +
+    'shared-for review` does not serve that section, so a citation would point the executing ' +
+    'session at text it never receives')
+
+  const core = read('doctrine/core.md')
+  const section = squash(core.slice(core.indexOf('## Feedback Loop'), core.indexOf('## Incident Policy')))
+  assert.match(section, /agent-memory/,
+    '§ Feedback Loop enumerates the pipeline\'s improvement carriers; leaving agent memory out of ' +
+    'that enumeration while it demonstrably steers workers is the contract contradiction D10 closes')
+  assert.match(section, /not (a|an) .{0,40}carrier|never a carrier|is not one of these carriers/,
+    '§ Feedback Loop must say agent memory is NOT a carrier — the doctrine\'s own claim that the ' +
+    'pipeline never improves through anyone\'s memory is false while an undisposed memory directory ' +
+    'exists, and stating the exclusion is what makes the disposition duty follow')
+  assert.match(section, /dispos/,
+    '§ Feedback Loop must name the disposition at review close as the mechanism that keeps agent ' +
+    'memory from becoming a carrier by default')
+})

@@ -78,11 +78,30 @@ diff touches `.claude/agent-memory/` without a matching sidecar entry disposing 
 an exit code wired where the class occurs, deliberately trippable, removable by a ledger count.
 Sketched here so a third recurrence has a candidate to admit, not so one gets built now.
 
-Open question for JJ, deliberately NOT actioned (core § Feedback Loop is doctrine; a doctrine
-edit needs an explicit yes): § Feedback Loop states the pipeline improves "through artifacts —
+RESOLVED — JJ ruled "do it" (2026-08-21), recorded as D10 with AC-20260821-02-10 and a red-first
+pin in tests/run-ledger.test.js. The disposition step only; the guard candidate above stays
+unbuilt. Original framing of the question, kept for the record: § Feedback Loop states the pipeline improves "through artifacts —
 never through anyone's memory" and enumerates its carriers — ledger, retained evidence, Gotchas —
 each of which is either derived or passes through a review disposition. `.claude/agent-memory/`
 is literally someone's memory, shapes future worker behaviour before any gate can observe the
 effect, outlives the session that wrote it, and is the only such carrier with NO disposition
 step. That is a contract coherence question, not an incident count — which is why it is left as
 a question rather than a fix.
+
+## Agent-memory disposition for THIS spec (D10, applied to its own diff)
+
+The rule D10 adds is executed at review close; recording the four files here so that close has the
+adjudication ready rather than re-deriving it.
+
+- `.claude/agent-memory/gate-scripts/assigned-file-may-already-be-implemented.md` — **DELETE**
+  (done at build). Taught workers to skip an assigned MODIFY row when the file "already looks
+  complete"; written from reading the orchestrator's half-applied patch. False premise, harmful
+  prescription, no salvageable content.
+- `.claude/agent-memory/gate-scripts/MEMORY.md` — **CARRY** (index line for the above removed).
+- `.claude/agent-memory/plugin-tests/concurrent-worker-file-collision-select-tiebreak.md` —
+  **CORRECT** (done post-consult). Same false attribution and the same stand-down inference, but
+  its re-read discipline is sound and its `replay.js --select` tie-break finding is load-bearing
+  for any future REPLAY-phase fixture author. Attribution now names the orchestrator; the
+  stand-down line is replaced with "report what you found and let the orchestrator adjudicate";
+  the recall `description` — the half read in isolation — was rewritten.
+- `.claude/agent-memory/plugin-tests/MEMORY.md` — **CARRY** (index line for a corrected memory).

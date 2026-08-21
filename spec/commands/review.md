@@ -110,7 +110,13 @@ Run `node "$(spec-paths report-render)" --slots <file>` and print its output ver
 - **Close (the CLOSE step).** Apply the spec's Canonical Delta to `docs/canonical/{area}.md`.
   Fold the deviations sidecar if one exists: recurring-shaped deviations become one-line
   entries in the host rules' Gotchas section (tagged `[host]`/`[plugin]` by provenance);
-  one-offs go to the spec's Rationale; delete the sidecar. Adjudicate the driver's printed
+  one-offs go to the spec's Rationale; delete the sidecar. **Dispose every
+  `.claude/agent-memory/` file this spec's diff touched** — one stated fate each: carry, correct,
+  or delete. Judge what each teaches, not that a worker wrote it; a memory attributing observed
+  work to an unnamed "concurrent process", or concluding an assignment was already done and could
+  be stood down from, is corrected or dropped, never carried. Nothing derives these files and no
+  gate can see their effect, so an undisposed one becomes standing worker guidance by default.
+  Adjudicate the driver's printed
   hygiene listing — everything it doesn't mark EXPECTED is a stray to explain or clean before
   marking `closed`; never blind-`git add -A` past an unadjudicated path. Commit everything
   still uncommitted on the working branch, following the driver's printed instruction for what

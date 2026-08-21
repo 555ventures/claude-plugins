@@ -122,6 +122,18 @@ deviations sidecars at review close). `/spec:escape` records a defect that got p
 review — one row pointing back at the review that passed it, and (when the artifact
 survives) `killedMatch` derived from that review's own retained claims rather than memory.
 
+**Agent memory is not one of these carriers, and must never quietly become one.**
+`.claude/agent-memory/` is written by dispatched workers, steers what the next worker does
+before any gate can observe the effect, and outlives the session that wrote it — nothing
+derives it and nothing reviews it. Every memory file a spec's diff touches is therefore
+disposed at review close, one stated fate each — carry, correct, or delete — exactly as the
+deviations sidecar is folded. Judge what it teaches, not that it was written: a memory
+attributing observed work to an unnamed "concurrent process", or concluding an assignment
+could be stood down from, is corrected or dropped, never carried. (2026-08-21: one build's
+two memories both misattributed the orchestrator's own concurrent edits to a phantom sibling
+worker and both ended in that stand-down inference; one was deleted at the time, its twin
+rode the same commit unexamined.)
+
 The **escape ledger** and the **reviewer replay catch-rate** (brief 14's harness, sibling
 spec specs/20260819/02-mutation-replay.md) are the pipeline's only two ground-truth
 signals — both measure what a review actually caught against what was actually there.

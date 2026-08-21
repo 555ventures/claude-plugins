@@ -15,7 +15,12 @@
 // strategy, conflict resolution). State is re-derived from spec frontmatter + the <spec>.review/
 // sidecar + on-disk artifacts on EVERY invocation — a mark whose artifact vanished is demanded
 // again, and the fix-iteration cap is counted from manifest-<n>.jsonl files actually present on
-// disk, never a sidecar counter (hand-editing the sidecar cannot reach ESCALATE).
+// disk, never a sidecar counter (hand-editing the sidecar cannot reach ESCALATE). Every child
+// process this driver spawns — legs, all three verdict.js passes, replay --due, spec-status
+// --next, every merge-back.sh subcommand, every git call — is routed through one fail-closed
+// helper (runChild): spawnSync's status is null when a child dies by signal, never spawns, or
+// overflows maxBuffer, and treating that null as a pass (or as an inline .stdout.trim() of a
+// child that never ran) is the exact silent-success failure this driver exists to prevent.
 //
 // What this deliberately does NOT do: recommend a disposition, pick a merge strategy, or render
 // a user-facing report (D9) — it prints machine summaries plus which judgment is due and the
@@ -37,8 +42,12 @@
 // Exit codes: 0 = step printed · 2 = precondition failure or refused mark (message names the
 // repair — a missing/malformed artifact, a REVIEWER_FAILED return, dispositions exceeding the
 // survivor+leg-finding pools via verdict.js's own contradiction arithmetic, a dirty tree at
-// `closed`, a third `fix-applied` past the iteration cap, or `merge-strategy` marked while the
-// driver's own inherited CWD sits inside the build worktree).
+// `closed`, a third `fix-applied` past the iteration cap, `merge-strategy` marked while the
+// driver's own inherited CWD sits inside the build worktree, ANY wrapped child process dying with
+// no exit code — signal-killed, never spawned, or maxBuffer-overflowed — via runChild()'s
+// fail-closed refusal, a legs iteration reporting success with a missing/empty manifest, or a
+// cold invocation on a spec already marked status: done whose sidecar carries no closeRunId of
+// its own (use /spec:escape instead)).
 
 'use strict'
 const fs = require('fs')
@@ -47,6 +56,25 @@ const crypto = require('crypto')
 const { spawnSync } = require('child_process')
 
 function die(msg) { process.stderr.write('spec-review-driver: ' + msg + '\n'); process.exit(2) }
+
+// R9: spawnSync's `status` is null when the child dies by signal, fails to spawn, or overflows
+// maxBuffer — every branch in this file that reads `.status`/`.code` or trusts `.stdout` without
+// checking either used to tolerate that null silently (a SIGKILLed review-legs.js printed
+// `state: REVIEWER` over a manifest that was never written). This is the ONE place that death is
+// handled: every spawnSync call in the file is routed through here, and only a genuine no-exit-
+// code death is fatal — a legitimate non-zero exit (RED_BLOCKING, merge conflicts, a branch that
+// doesn't exist yet) still comes back as a normal result for the caller's own branch to read.
+function runChild(cmd, args, opts, what) {
+  const r = spawnSync(cmd, args, opts)
+  if (r.error || r.status === null) {
+    const reason = r.error ? r.error.message
+      : r.signal ? 'killed by signal ' + r.signal
+      : 'exited with no status (spawn failure)'
+    die(what + ' died without an exit code (' + reason + ') — nothing it was meant to produce can ' +
+      'be trusted; fix the cause and re-run `node ' + __filename + ' ' + (specPath || '<spec.md>') + '`')
+  }
+  return r
+}
 
 const argv = process.argv.slice(2)
 const specPath = argv[0]
@@ -71,7 +99,8 @@ const replayBin = path.join(PLUGIN, 'scripts/replay.js')
 // spec's own path — the whole relocation guard at MERGE depends on the session's shell CWD, not
 // on where the spec file happens to live (which stays inside the build worktree even after the
 // session cd's back to the main root to accept `merge-strategy`).
-const repoRootResult = spawnSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' })
+const repoRootResult = runChild('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' },
+  'git rev-parse --show-toplevel')
 if (repoRootResult.status !== 0) {
   die('not inside a git repo (git rev-parse --show-toplevel failed against ' + process.cwd() +
     ') — run this from inside the review root/worktree')
@@ -129,13 +158,26 @@ const sidecarExistsAtStart = fs.existsSync(sidecarDir)
 if (!sidecarExistsAtStart && status === 'done') {
   printDoneNow('')
 }
+// R8: a spec already marked done whose sidecar does not carry THIS run's own closeRunId is not
+// mid-review — either the promise was already kept and the sidecar is a stray/hand-recreated
+// artifact, or an aborted run left one behind. Re-walking a full review here can never reach
+// doCloseWork() again (it is gated on status !== 'done'), so it would print CLOSE with
+// runId: undefined and append zero ledger rows while looking like a real run. Refuse instead. A
+// sidecar that DOES carry this run's own closeRunId is the normal tail of a successful run and
+// must keep flowing to MERGE/DONE below (AC-20260820-07-12) — unaffected by this check.
+if (status === 'done' && !marks.closeRunId) {
+  die('spec status is already "done" and ' + sidecarRel + ' does not record this run\'s own ' +
+    'close — the authoritative verdict for this spec already ran; use /spec:escape to record a ' +
+    'defect that escaped a review that already passed, not another review run')
+}
 
 // ---- base derivation (D2: build_base -> diff_base -> branch) ----------------------------------
 function resolveBase() {
   if (buildBase) return buildBase
   if (diffBaseFm) return diffBaseFm
   for (const cand of ['main', 'master']) {
-    const r = spawnSync('git', ['-C', repoRoot, 'merge-base', 'HEAD', cand], { encoding: 'utf8' })
+    const r = runChild('git', ['-C', repoRoot, 'merge-base', 'HEAD', cand], { encoding: 'utf8' },
+      'git merge-base HEAD ' + cand)
     if (r.status === 0 && r.stdout.trim()) return r.stdout.trim()
   }
   die('spec frontmatter carries neither build_base nor diff_base, and no main/master branch ' +
@@ -181,7 +223,7 @@ function runLegs(n, opts = {}) {
     '--manifest', manifestPathFor(n), '--out-dir', outDirFor(n)]
   if (opts.skipsFile) args.push('--skips', opts.skipsFile)
   if (opts.fixDelta) args.push('--fix-delta')
-  const r = spawnSync(process.execPath, [legsBin, ...args], { encoding: 'utf8' })
+  const r = runChild(process.execPath, [legsBin, ...args], { encoding: 'utf8' }, 'review-legs.js')
   if (r.status === 2) {
     die(`review-legs.js precondition failed (iteration ${n}):\n` + (r.stdout + r.stderr).trim())
   }
@@ -192,13 +234,28 @@ function runLegs(n, opts = {}) {
   return { code: r.status, out: r.stdout, err: r.stderr }
 }
 
+// R9 (AC-20260820-07-1): a legs run that did NOT hard-stop must have actually written a
+// manifest — the child's own exit code alone is not proof; a killed/never-run leg can still leave
+// review-legs.js's wrapper exiting 0 over a manifest nobody wrote. Refuse to advance past an
+// unverified artifact rather than trust the exit code in isolation.
+function verifyManifestWritten(n) {
+  const p = manifestPathFor(n)
+  const rows = readManifestRows(p)
+  if (!rows.length) {
+    die('legs iteration ' + n + ' reported success but ' + p + ' is missing or has no parseable ' +
+      'rows — nothing it was meant to produce can be trusted; delete ' + sidecarDir + ' and ' +
+      're-run `node ' + __filename + ' ' + specPath + '`')
+  }
+}
+
 function ensureRunId() {
   if (!marks.runId) { marks.runId = 'rv_' + crypto.randomBytes(6).toString('hex'); saveSidecar() }
   return marks.runId
 }
 
 function computeDiffLoc() {
-  const r = spawnSync('git', ['-C', repoRoot, 'diff', '--shortstat', base], { encoding: 'utf8' })
+  const r = runChild('git', ['-C', repoRoot, 'diff', '--shortstat', base], { encoding: 'utf8' },
+    'git diff --shortstat')
   if (r.status !== 0) return 0
   const m = /(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?/.exec(r.stdout)
   if (!m) return 0
@@ -217,7 +274,8 @@ function runHardStopVerdict(n) {
   const diffLoc = computeDiffLoc()
   const args = ['--manifest', manifestPathFor(n), '--ledger', '--spec', specRel, '--tier', tier,
     '--diff-loc', String(diffLoc), '--iteration', String(n), '--run-id', runId]
-  const r = spawnSync(process.execPath, [verdictBin, ...args], { encoding: 'utf8' })
+  const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
+    'verdict.js (hard-stop pass)')
   if (r.status === 2) die('verdict.js (hard-stop pass) failed: ' + (r.stdout + r.stderr).trim())
   const lines = r.stdout.split('\n')
   appendLedger(lines[1])
@@ -228,6 +286,7 @@ function runHardStopVerdict(n) {
 function runLegsIteration(n, opts) {
   const res = runLegs(n, opts)
   if (res.code === 1) { runHardStopVerdict(n); return { stopped: true, n } }
+  verifyManifestWritten(n)
   return { stopped: false, n }
 }
 
@@ -241,7 +300,8 @@ function doCloseWork(n) {
     '--waived', String(d.waived), '--rejected', String(d.rejected), '--fixDispatched', String(d.fixDispatched),
     '--ledger', '--spec', specRel, '--tier', tier, '--diff-loc', String(diffLoc),
     '--iteration', String(n), '--run-id', runId, '--retain', retainDir]
-  const r = spawnSync(process.execPath, [verdictBin, ...args], { encoding: 'utf8' })
+  const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
+    'verdict.js (authoritative pass)')
   if (r.status === 2) die('verdict.js (authoritative pass) failed: ' + (r.stdout + r.stderr).trim())
   const lines = r.stdout.split('\n')
   appendLedger(lines[1])
@@ -249,7 +309,8 @@ function doCloseWork(n) {
   const newSpecText = specText.replace(/^status:\s*.*$/m, 'status: done')
   fs.writeFileSync(resolvedSpecPath, newSpecText)
 
-  const due = spawnSync(process.execPath, [replayBin, '--due'], { encoding: 'utf8', cwd: repoRoot })
+  const due = runChild(process.execPath, [replayBin, '--due'], { encoding: 'utf8', cwd: repoRoot },
+    'replay.js --due')
   marks.replayNote = due.status === 0
     ? '📋 replay is DUE — run /spec:replay after this closes (' + due.stdout.trim() + ')'
     : ''
@@ -259,28 +320,33 @@ function doCloseWork(n) {
 
 // ---- git status helper (closed mark's dirty-tree check) ---------------------------------------
 function gitStatusPaths(root) {
-  const r = spawnSync('git', ['-C', root, 'status', '--porcelain', '--untracked-files=all'], { encoding: 'utf8' })
+  const r = runChild('git', ['-C', root, 'status', '--porcelain', '--untracked-files=all'],
+    { encoding: 'utf8' }, 'git status --porcelain')
   if (r.status !== 0) return []
   return r.stdout.split('\n').filter(Boolean).map((l) => l.slice(3).trim().replace(/^"|"$/g, ''))
 }
 
 // ---- merge-back helpers -------------------------------------------------------------------------
 function mainRootPath() {
-  const r = spawnSync('bash', [mergeBackBin, 'root'], { encoding: 'utf8', cwd: repoRoot })
+  const r = runChild('bash', [mergeBackBin, 'root'], { encoding: 'utf8', cwd: repoRoot },
+    'merge-back.sh root')
   if (r.status !== 0) die('merge-back.sh root failed: ' + (r.stdout + r.stderr).trim())
   return r.stdout.trim()
 }
 function sourceBranchFor() {
-  const r = spawnSync('bash', [mergeBackBin, 'branch-for', resolvedSpecPath], { encoding: 'utf8' })
+  const r = runChild('bash', [mergeBackBin, 'branch-for', resolvedSpecPath], { encoding: 'utf8' },
+    'merge-back.sh branch-for')
   if (r.status !== 0) die('merge-back.sh branch-for failed: ' + (r.stdout + r.stderr).trim())
   return r.stdout.trim()
 }
 function branchExists(root, branch) {
-  const r = spawnSync('git', ['-C', root, 'rev-parse', '--verify', '-q', 'refs/heads/' + branch], { encoding: 'utf8' })
+  const r = runChild('git', ['-C', root, 'rev-parse', '--verify', '-q', 'refs/heads/' + branch],
+    { encoding: 'utf8' }, 'git rev-parse --verify')
   return r.status === 0
 }
 function findWorktreeForBranch(root, branch) {
-  const r = spawnSync('git', ['-C', root, 'worktree', 'list', '--porcelain'], { encoding: 'utf8' })
+  const r = runChild('git', ['-C', root, 'worktree', 'list', '--porcelain'], { encoding: 'utf8' },
+    'git worktree list')
   if (r.status !== 0) return null
   const blocks = r.stdout.split('\n\n')
   for (const block of blocks) {
@@ -296,7 +362,8 @@ function findWorktreeForBranch(root, branch) {
 }
 
 function printDoneNow(note) {
-  const status2 = spawnSync(process.execPath, [specStatusBin, '--root', repoRoot, '--next'], { encoding: 'utf8' })
+  const status2 = runChild(process.execPath, [specStatusBin, '--root', repoRoot, '--next'],
+    { encoding: 'utf8' }, 'spec-status.js --next')
   const nextLine = status2.status === 0 ? status2.stdout.trim() : '(spec-status --next unavailable)'
   process.stdout.write(`[spec-review-driver] state: DONE  spec: ${specPath}\n` +
     (note ? note + '\n' : '') +
@@ -369,7 +436,8 @@ function handleDispositions() {
   const n = marks.reviewerReturnIteration
   const args = ['--manifest', manifestPathFor(n), '--workflow', marks.reviewerReturnFile,
     '--waived', String(waived), '--rejected', String(rejected), '--fixDispatched', String(fixDispatched)]
-  const r = spawnSync(process.execPath, [verdictBin, ...args], { encoding: 'utf8' })
+  const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
+    'verdict.js (dispositions pass)')
   if (r.status === 2) die((r.stderr || r.stdout).trim())
   const word = r.stdout.split('\n')[0].trim()
   marks.dispositions = { waived, rejected, fixDispatched, word }
@@ -438,11 +506,12 @@ function handleMergeStrategy() {
       'session entered it, else `cd ' + mainRoot + '` in the main session, then re-run this mark')
   }
   const source = sourceBranchFor()
-  const target = spawnSync('git', ['-C', mainRoot, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).stdout.trim()
+  const target = runChild('git', ['-C', mainRoot, 'symbolic-ref', '--short', 'HEAD'],
+    { encoding: 'utf8' }, 'git symbolic-ref').stdout.trim()
   const wt = findWorktreeForBranch(mainRoot, source)
   const mergeArgs = ['merge', '--root', mainRoot, '--target', target, '--source', source, '--strategy', strategy]
   if (wt) mergeArgs.push('--worktree', wt)
-  const r = spawnSync('bash', [mergeBackBin, ...mergeArgs], { encoding: 'utf8' })
+  const r = runChild('bash', [mergeBackBin, ...mergeArgs], { encoding: 'utf8' }, 'merge-back.sh merge')
   if (r.status === 3) {
     marks.mergeConflicted = true
     marks.mergeCtx = { mainRoot, target, source, wt: wt || null }
@@ -461,9 +530,11 @@ function handleMergeStrategy() {
 function handleConflictsResolved() {
   if (!marks.mergeConflicted) die('no merge is in conflict — nothing to resolve')
   const { mainRoot, source, wt } = marks.mergeCtx
-  const unmerged = spawnSync('git', ['-C', mainRoot, 'ls-files', '-u'], { encoding: 'utf8' }).stdout.trim()
+  const unmerged = runChild('git', ['-C', mainRoot, 'ls-files', '-u'], { encoding: 'utf8' },
+    'git ls-files -u').stdout.trim()
   if (unmerged) die('unresolved conflicts remain in ' + mainRoot + ' — resolve every path, git add, and commit before marking conflicts-resolved')
-  const gitDir = spawnSync('git', ['-C', mainRoot, 'rev-parse', '--git-dir'], { encoding: 'utf8' }).stdout.trim()
+  const gitDir = runChild('git', ['-C', mainRoot, 'rev-parse', '--git-dir'], { encoding: 'utf8' },
+    'git rev-parse --git-dir').stdout.trim()
   const mergeHead = path.isAbsolute(gitDir) ? path.join(gitDir, 'MERGE_HEAD') : path.join(mainRoot, gitDir, 'MERGE_HEAD')
   if (fs.existsSync(mergeHead)) die('the merge is still in progress (MERGE_HEAD present) in ' + mainRoot + ' — commit the resolution first')
   marks.mergeConflicted = false
@@ -514,9 +585,9 @@ function finishMerge(mainRootDir, source, wt) {
   }
   const cleanupArgs = ['cleanup', '--root', mainRootDir, '--source', source]
   if (wt) cleanupArgs.push('--worktree', wt)
-  const c = spawnSync('bash', [mergeBackBin, ...cleanupArgs], { encoding: 'utf8' })
+  const c = runChild('bash', [mergeBackBin, ...cleanupArgs], { encoding: 'utf8' }, 'merge-back.sh cleanup')
   if (c.status !== 0) die('merge-back.sh cleanup failed: ' + (c.stdout + c.stderr).trim())
-  spawnSync('bash', [mergeBackBin, 'verify', '--root', mainRootDir], { encoding: 'utf8' })
+  runChild('bash', [mergeBackBin, 'verify', '--root', mainRootDir], { encoding: 'utf8' }, 'merge-back.sh verify')
   printDoneNow('merged ' + source + ' into the target branch; worktree and branch cleaned up.')
 }
 
@@ -653,20 +724,38 @@ const STEPS = {
     `The fix/review loop is capped at 2 iterations (iteration cap 2) and a third fix-applied was ` +
     `refused. Surface this to the user — a capped run needs a decision, not a fourth dispatch.`,
 
-  CLOSE: () => `## Step: close (the driver has already run the authoritative verdict and flipped status: done)\n` +
-    `verdict: ${marks.dispositions.word}   runId: ${marks.closeRunId}   ` +
-    `retained: .claude/spec-runs/${marks.closeRunId}.json\n` +
-    replayNoteLine + waivedWarn +
-    `1. Apply the spec's Canonical Delta to docs/canonical/${area}.md.\n` +
-    `2. Fold the deviations sidecar if one exists (recurring -> Gotchas [host]/[plugin]; one-offs ` +
-    `-> the spec's Rationale); delete the sidecar.\n` +
-    `3. Hygiene listing — everything not marked EXPECTED below is a stray to explain or clean:\n` +
-    `   EXPECTED   ${sidecarRel}/            (never committed — deleted at DONE)\n` +
-    `   EXPECTED   .claude/spec-runs/*.json  (retained review evidence)\n` +
-    `   EXPECTED   .claude/spec-runs.jsonl   (the run ledger)\n` +
-    `4. Commit everything still uncommitted on the working branch (never --no-verify) — this is ` +
-    `the close commit.\n` +
-    `Then: node ${__filename} ${specPath} --mark closed`,
+  // R10: the close-commit instruction derives from whether this review is running in-place or in
+  // a linked worktree. In-place, the ledger + retained evidence ride the close commit as always.
+  // In a linked worktree, finishMerge()'s evidence-promotion step is what moves those paths into
+  // the main root (only once the merge has actually landed) — committing them here would just
+  // have finishMerge() delete now-tracked files back out from under a clean-tree assumption,
+  // leaving the worktree dirty and `merge-back.sh cleanup` refusing at exit 2. Excluding them from
+  // the close commit in that case is not a lesser standard, it is the correct one; handleClosed()'s
+  // dirty-tree tolerance for these exact paths already accounts for both branches unchanged.
+  CLOSE: () => {
+    const inPlace = repoRoot === mainRoot
+    const closeCommitLine = inPlace
+      ? `4. Commit everything still uncommitted on the working branch (never --no-verify) — this ` +
+        `is the close commit.\n`
+      : `4. Commit everything still uncommitted on the working branch EXCEPT ${sidecarRel}/, ` +
+        `.claude/spec-runs.jsonl, and .claude/spec-runs/ (never --no-verify) — this review is ` +
+        `running in a linked worktree (main root: ${mainRoot}), so the ledger and retained ` +
+        `evidence are promoted there only once the merge lands, not committed from the worktree ` +
+        `now; this is the close commit.\n`
+    return `## Step: close (the driver has already run the authoritative verdict and flipped status: done)\n` +
+      `verdict: ${marks.dispositions.word}   runId: ${marks.closeRunId}   ` +
+      `retained: .claude/spec-runs/${marks.closeRunId}.json\n` +
+      replayNoteLine + waivedWarn +
+      `1. Apply the spec's Canonical Delta to docs/canonical/${area}.md.\n` +
+      `2. Fold the deviations sidecar if one exists (recurring -> Gotchas [host]/[plugin]; one-offs ` +
+      `-> the spec's Rationale); delete the sidecar.\n` +
+      `3. Hygiene listing — everything not marked EXPECTED below is a stray to explain or clean:\n` +
+      `   EXPECTED   ${sidecarRel}/            (never committed — deleted at DONE)\n` +
+      `   EXPECTED   .claude/spec-runs/*.json  (retained review evidence)\n` +
+      `   EXPECTED   .claude/spec-runs.jsonl   (the run ledger)\n` +
+      closeCommitLine +
+      `Then: node ${__filename} ${specPath} --mark closed`
+  },
 
   MERGE: () => {
     const source = sourceBranchFor()
@@ -675,8 +764,11 @@ const STEPS = {
       fs.rmSync(sidecarDir, { recursive: true, force: true })
       printDoneNow('review ran on the originating branch — MERGE skipped, nothing to merge.')
     }
-    const target = spawnSync('git', ['-C', mainRoot, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).stdout.trim()
-    const inspect = spawnSync('bash', [mergeBackBin, 'inspect', '--root', mainRoot, '--target', target, '--source', source], { encoding: 'utf8' })
+    const target = runChild('git', ['-C', mainRoot, 'symbolic-ref', '--short', 'HEAD'],
+      { encoding: 'utf8' }, 'git symbolic-ref').stdout.trim()
+    const inspect = runChild('bash',
+      [mergeBackBin, 'inspect', '--root', mainRoot, '--target', target, '--source', source],
+      { encoding: 'utf8' }, 'merge-back.sh inspect')
     return `## Step: merge strategy\n` + (inspect.stdout + inspect.stderr).trim() + '\n\n' +
       replayNoteLine + waivedWarn +
       `AskUserQuestion for the strategy (RECOMMEND above first). Then:\n` +

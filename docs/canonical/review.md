@@ -39,8 +39,14 @@
   Every authoritative review verdict also retains its evidence: verdict.js requires
   `--retain .claude/spec-runs` alongside `--ledger --workflow` and writes
   `.claude/spec-runs/<runId>.json` — the manifest legs untruncated plus the reviewer's
-  survivors/killed with their executed repro evidence verbatim. The artifact rides the
-  close commit and merges back; `/spec:escape` derives `killedMatch` from it. Plan locks
+  survivors/killed with their executed repro evidence verbatim. The artifact rides the close commit in an
+  in-place review; in a linked-worktree review the ledger and retained evidence are written
+  under the worktree, EXCLUDED from the close commit, and promoted (deduped) into the main root
+  only once a merge has actually landed — writing them straight to the main root at close time
+  dirties it before `merge` runs and trips `assert_clean_root`/`ff-only`, and committing them
+  from the worktree makes `git worktree remove` refuse cleanup after the merge already landed.
+  `/spec:escape` derives `killedMatch` from it. (amended by specs/20260820/07-review-driver.md,
+  2026-08-21) Plan locks
   append a `stage:"plan"` ledger row of executed facts (spike count, promise-sweep
   counters, collision counts). The escape ledger and replay catch-rate are the pipeline's
   two ground-truth signals; self-reported review quality is subordinate to both.
@@ -138,3 +144,32 @@
   re-running `readyCheck` after exit false-passes for the common file-probe form, and an
   assertion that cannot fail is worse than none.
   (specs/20260815/04-runtime-shutdown-leg.md, done 2026-08-16; INTAKE JJ-20260815-05)
+
+- The review stage is a **stepped program**, not prose choreography: `spec-review-driver.js`
+  owns the sequence (LEGS -> SKIPS? -> REVIEWER -> DISPOSITIONS -> FIX/ESCALATE? -> CLOSE ->
+  MERGE/CONFLICTS -> DONE, with STOPPED terminal on `RED_BLOCKING`) and is the sole invoker of
+  `review-legs.js`, `verdict.js`, `merge-back.sh`, `replay.js`, and `spec-status.js` within the
+  stage. It EXECUTES every deterministic step itself — base derivation, the per-iteration
+  manifest lifecycle (`<spec>.review/manifest-<n>.jsonl`, never reused), all three `verdict.js`
+  passes, both ledger appends, the `implementing → done` flip, the merge-back sequence — and
+  PRINTS exactly one step at a time for what needs judgment: reviewer + design-leg dispatch,
+  dispositions, the Canonical Delta + deviations fold, the close commit, merge strategy,
+  conflict resolution. `review.md` is the judgment shell that hosts those conversations; the
+  driver never recommends a disposition, never picks a merge strategy, and never renders a
+  user-facing report. Marks are a closed, artifact-verified set — state is re-derived from
+  frontmatter + sidecar + on-disk artifacts on every invocation, a mark whose artifact vanished
+  is demanded again, and the fix-iteration cap (2) is counted from manifest files present, so
+  hand-editing the sidecar cannot reach ESCALATE. The `<spec>.review/` sidecar is scratch: never
+  committed, deleted at DONE — everything that must outlive the run already lives in
+  `.claude/spec-runs`. Every child process the driver spawns runs through one fail-closed
+  helper: `spawnSync` returning no exit code (signal death, spawn failure, maxBuffer overflow)
+  is refused with exit 2, never read as success — a killed leg runner that wrote no manifest
+  must never present as green legs, and a reported-green legs run with no parseable manifest
+  rows is refused too (found at this spec's own review, 2026-08-21; executed repro plus a
+  negative control against the pre-fix driver). Two mechanisms were retired rather than carried
+  as debt: the frozen-base check + detached review worktree (attributing foreign hunks to their
+  owning spec covers both the moved-HEAD case it targeted and the interleaved-concurrent case it
+  structurally cannot see), and the `done`-spec re-run — a re-review recorded no run at all, so
+  a `done` spec whose sidecar lacks this run's own `closeRunId` is refused naming `/spec:escape`,
+  the command that exists for defects escaping a review that already passed.
+  (specs/20260820/07-review-driver.md, done 2026-08-21)

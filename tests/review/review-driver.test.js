@@ -470,3 +470,187 @@ test('AC-20260820-07-12: WHEN merge-strategy is marked from the main root in a t
   assert.ok(status.stdout.trim() && merged.stdout.includes(status.stdout.trim()),
     'the driver must print spec-status --next\'s output VERBATIM as the closing pointer — it is the only source of the "what now" suggestion, and independently re-deriving it against the post-merge root must reproduce byte-identical text: ' + JSON.stringify({ driver: merged.stdout, status: status.stdout }))
 })
+
+// specs/20260820/07-review-driver.md (2026-08-21 review, rulings R8/R9/R10): three fixes landed
+// past the original AC-1..12 build. R9: every child this driver spawns is wrapped by runChild(),
+// which fails closed on spawnSync's status === null (signal death, spawn failure, maxBuffer
+// overflow) instead of tolerating it as a silent pass — the reviewer's own executed repro was a
+// gateCommand that SIGKILLs review-legs.js itself via the `bash -c` tail-exec trick, which the
+// OLD driver let through as `state: REVIEWER` over a manifest nobody wrote. R8: a cold invocation
+// on a spec already `status: done` whose sidecar carries no closeRunId of ITS OWN run is refused
+// (exit 2, names /spec:escape) rather than silently re-walking a review that records nothing —
+// note this refusal fires only when the sidecar directory exists (a stray/hand-recreated
+// artifact); a `done` spec with NO sidecar at all stays the legitimate post-merge DONE fast path
+// (R2 arm (a), unaffected). R10: the CLOSE step's close-commit instruction now excludes the
+// sidecar + ledger + retained-evidence paths when running in a linked worktree (they promote to
+// the main root only after the merge lands), but includes them unchanged when running in-place.
+
+function makeKillHost() {
+  const root = fs.realpathSync(tmpdir('rvdrv-kill'))
+  const g = gitRepo(root)
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({
+    // `bash -c '<cmd>'` tail-exec's a lone last command, so this node process's ppid IS
+    // review-legs.js's own pid, not bash's — the SIGKILL lands on the leg runner itself.
+    gateCommand: "node -e \"process.kill(process.ppid,'SIGKILL')\"",
+    testCommand: 'node --test',
+    runtime: { inert: 'plugin repo — nothing boots' },
+    capabilities: { forge: 'none', skipReportPattern: 'none' },
+  }))
+  fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 41\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const diffBase = g('rev-parse', 'HEAD').trim()
+  fs.mkdirSync(path.join(root, 'specs/20260820'), { recursive: true })
+  const spec = path.join(root, 'specs/20260820/99-drv-kill.md')
+  fs.writeFileSync(spec, specBody({ diffBase, acId: 'AC-20260820-99-4' }))
+  fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 42\n')
+  fs.writeFileSync(path.join(root, 'tests/foo.test.js'), GREEN_TEST.replace('AC-20260820-99-1', 'AC-20260820-99-4'))
+  g('add', '-A'); g('commit', '-q', '-m', 'implement')
+  return { root, spec, sidecar: spec.replace(/\.md$/, '.review') }
+}
+
+test('AC-20260820-07-14: WHEN the gateCommand SIGKILLs review-legs.js itself THE SYSTEM exits 2 naming the dead child, never reports state REVIEWER, and never writes manifest-1.jsonl', () => {
+  const host = makeKillHost()
+  const r = run(host.root, host.spec)
+  assert.strictEqual(r.status, 2,
+    'a leg runner that dies by signal mid-run must be treated as an unrun check, never a pass — exit 0 here would hand the session a manifest path that was never written: ' + r.stdout + r.stderr)
+  assert.match(r.stderr, /review-legs\.js/,
+    'the refusal must name review-legs.js as the dead child so the session knows which subprocess died, not just that something failed: ' + r.stderr)
+  const manifestPath = path.join(host.sidecar, 'manifest-1.jsonl')
+  assert.ok(!fs.existsSync(manifestPath),
+    'a signal-killed leg runner must leave no manifest-1.jsonl behind — a file existing here would mean partial evidence got treated as trustworthy: ' + JSON.stringify(fs.existsSync(host.sidecar) ? fs.readdirSync(host.sidecar) : []))
+
+  const r2 = run(host.root, host.spec, '--state')
+  assert.notStrictEqual(r2.stdout.trim(), 'REVIEWER',
+    'a re-invocation after the kill must never derive state REVIEWER — that would mean the driver advanced past a leg run that never actually produced evidence: ' + r2.stdout + r2.stderr)
+  assert.strictEqual(r2.status, 2,
+    'the SAME unfixed host must refuse identically on re-invocation (the kill reproduces every time) rather than flip to a stale cached REVIEWER state: ' + r2.stdout + r2.stderr)
+  assert.ok(!fs.existsSync(manifestPath),
+    'the re-invocation must also leave manifest-1.jsonl unwritten — the underlying cause (the gateCommand) was never fixed, so nothing new can have been trusted into existence: ' + r2.stdout + r2.stderr)
+})
+
+function makeDoneHost() {
+  const root = fs.realpathSync(tmpdir('rvdrv-done'))
+  const g = gitRepo(root)
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({
+    gateCommand: 'node --test {testDirs}',
+    testCommand: 'node --test',
+    runtime: { inert: 'plugin repo — nothing boots' },
+    capabilities: { forge: 'none', skipReportPattern: 'none' },
+  }))
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const diffBase = g('rev-parse', 'HEAD').trim()
+  fs.mkdirSync(path.join(root, 'specs/20260820'), { recursive: true })
+  const spec = path.join(root, 'specs/20260820/99-drv-done.md')
+  fs.writeFileSync(spec, specBody({ status: 'done', diffBase, acId: 'AC-20260820-99-5' }))
+  g('add', '-A'); g('commit', '-q', '-m', 'spec')
+  return { root, spec, sidecar: spec.replace(/\.md$/, '.review') }
+}
+
+test('AC-20260820-07-15: WHEN a done spec\'s sidecar exists but does not record this run\'s own closeRunId THE SYSTEM refuses (exit 2, names /spec:escape) and appends no ledger line, in BOTH an empty hand-recreated sidecar and one carrying stray marks with no closeRunId', () => {
+  const host = makeDoneHost()
+  const ledger = path.join(host.root, '.claude/spec-runs.jsonl')
+  const ledgerSnap = () => (fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8') : '')
+
+  // Case 1: sidecar directory hand-recreated with nothing in it (no review-state.json at all).
+  fs.mkdirSync(host.sidecar, { recursive: true })
+  const before1 = ledgerSnap()
+  const r1 = run(host.root, host.spec)
+  assert.strictEqual(r1.status, 2,
+    'a done spec whose sidecar carries no closeRunId of its own must be refused, not walked as a fresh review that would record nothing: ' + r1.stdout + r1.stderr)
+  assert.match(r1.stderr, /\/spec:escape/,
+    'the refusal must name /spec:escape as the remedy — that command exists precisely to record a defect escaping an already-passed review: ' + r1.stderr)
+  assert.strictEqual(ledgerSnap(), before1,
+    'the refused cold invocation must append NO ledger line — the old bug was a full review walk over a done spec recording nothing while looking like a real run: ' + JSON.stringify({ before: before1, after: ledgerSnap() }))
+
+  // Case 2: sidecar carries a hand-written review-state.json with unrelated marks but no closeRunId
+  // (an aborted prior run's stray artifact) — must refuse identically.
+  fs.writeFileSync(path.join(host.sidecar, 'review-state.json'), JSON.stringify({ iteration: 1, reviewerReturnFile: 'x' }))
+  const before2 = ledgerSnap()
+  const r2 = run(host.root, host.spec)
+  assert.strictEqual(r2.status, 2,
+    'a sidecar carrying OTHER marks but still no closeRunId must be refused the same way — closeRunId, not sidecar existence alone, is the signal that THIS run already closed: ' + r2.stdout + r2.stderr)
+  assert.match(r2.stderr, /\/spec:escape/,
+    'this case must also name /spec:escape: ' + r2.stderr)
+  assert.strictEqual(ledgerSnap(), before2,
+    'this case must also append no ledger line: ' + JSON.stringify({ before: before2, after: ledgerSnap() }))
+
+  // Non-regression: a done spec with NO sidecar at all is the legitimate post-merge fast path
+  // (the sidecar is deleted at DONE) and must keep printing DONE at exit 0 — this refusal must
+  // not over-fire onto the ordinary completed-review case.
+  fs.rmSync(host.sidecar, { recursive: true, force: true })
+  const r3 = run(host.root, host.spec)
+  assert.strictEqual(r3.status, 0,
+    'a done spec with no sidecar at all must NOT be refused — that is the ordinary post-merge state (sidecar deleted at DONE), and refusing it here would break every already-completed review: ' + r3.stdout + r3.stderr)
+  assert.match(r3.stdout, /state: DONE/,
+    'a done spec with no sidecar must still print state DONE: ' + r3.stdout)
+
+  // AC-20260820-07-12's own fixture already proves the OTHER direction of R8 (a sidecar that DOES
+  // carry this run's own closeRunId keeps flowing to MERGE/DONE) — not duplicated here.
+})
+
+test('AC-20260820-07-16: the CLOSE step\'s close-commit instruction excludes the sidecar/ledger/retained-evidence paths in a linked worktree but includes them unchanged when running in-place', () => {
+  // In-place branch: a plain tmpdir host has no linked worktree, so repoRoot === mainRoot.
+  const host = makeHost()
+  toReviewer(host)
+  const returnFile = returnFileWith('rvdrv-close-inplace', CLEAN_RETURN)
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile)
+  const inPlaceR = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE', 'setup: a clean in-place pass must reach CLOSE')
+  assert.doesNotMatch(inPlaceR.stdout, /EXCEPT/,
+    'an in-place review (repoRoot === mainRoot) must instruct that EVERYTHING rides the close commit — an EXCEPT clause here would wrongly exclude evidence that has nowhere else to be promoted from: ' + inPlaceR.stdout)
+  assert.match(inPlaceR.stdout, /Commit everything still uncommitted on the working branch \(never --no-verify\)/,
+    'the in-place close-commit line must instruct committing everything uncommitted, unconditionally: ' + inPlaceR.stdout)
+
+  // Linked-worktree branch: the same two-branch fixture AC-20260820-07-12 drives to CLOSE.
+  const root = fs.realpathSync(tmpdir('rvdrv-close-wt'))
+  const g = gitRepo(root)
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({
+    gateCommand: 'node --test {testDirs}',
+    testCommand: 'node --test',
+    runtime: { inert: 'plugin repo — nothing boots' },
+    capabilities: { forge: 'none', skipReportPattern: 'none' },
+  }))
+  fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 41\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const baseSha = g('rev-parse', 'HEAD').trim()
+
+  const created = runBash('scripts/merge-back.sh', ['create', '--source', 'spec/99-drv-close-wt', '--root', root])
+  assert.strictEqual(created.status, 0, 'setup: worktree creation must succeed: ' + created.stderr)
+  const wt = created.stdout.trim().split('\n').pop()
+
+  fs.mkdirSync(path.join(wt, 'specs/20260820'), { recursive: true })
+  const spec = path.join(wt, 'specs/20260820/99-drv-close-wt.md')
+  fs.writeFileSync(spec, specBody({ diffBase: baseSha, acId: 'AC-20260820-99-6' }).replace('diff_base:', 'build_base:'))
+  fs.writeFileSync(path.join(wt, 'src/foo.js'), 'module.exports = () => 42\n')
+  fs.mkdirSync(path.join(wt, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(wt, 'tests/foo.test.js'), GREEN_TEST.replace('AC-20260820-99-1', 'AC-20260820-99-6'))
+  const gw = (...a) => execFileSync('git', ['-C', wt, ...a], { encoding: 'utf8' })
+  gw('add', '-A'); gw('commit', '-q', '-m', 'implement')
+  const wtSidecarRel = 'specs/20260820/99-drv-close-wt.review'
+
+  run(wt, spec)
+  assert.strictEqual(stateOf(wt, spec), 'REVIEWER', 'setup: the worktree fixture must reach REVIEWER on green legs')
+  const wtReturnFile = returnFileWith('rvdrv-close-wt-return', CLEAN_RETURN)
+  run(wt, spec, '--mark', 'reviewer-returned', '--file', wtReturnFile)
+  const wtR = run(wt, spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(stateOf(wt, spec), 'CLOSE', 'setup: a clean worktree pass must reach CLOSE')
+
+  assert.match(wtR.stdout, new RegExp('EXCEPT ' + wtSidecarRel.replace(/\//g, '\\/') + '\\/'),
+    'a linked-worktree review must name its OWN sidecar path as excluded from the close commit — evidence promotion (only once the merge lands) is what moves it into the main root, not this commit: ' + wtR.stdout)
+  assert.match(wtR.stdout, /EXCEPT[^\n]*\.claude\/spec-runs\.jsonl/,
+    'the exclusion must name .claude/spec-runs.jsonl — committing the ledger from the worktree now would leave the tree dirty after evidence promotion runs post-merge, per R3\'s "cleanup exits 2 after the merge already landed": ' + wtR.stdout)
+  assert.match(wtR.stdout, /EXCEPT[^\n]*\.claude\/spec-runs\//,
+    'the exclusion must also name .claude/spec-runs/ (the retained-evidence directory) for the same reason: ' + wtR.stdout)
+  assert.doesNotMatch(wtR.stdout, /Commit everything still uncommitted on the working branch \(never --no-verify\) —/,
+    'the worktree branch must NOT print the unconditional in-place close-commit line — the two branches must read as genuinely different instructions, not the same text with an aside: ' + wtR.stdout)
+
+  // Clean up: this fixture's worktree is left dangling deliberately (the test never marks
+  // closed/merges it) — merge-back.sh has its own idempotent cleanup path and stray worktrees
+  // under tmpdir() do not affect other tests, matching this file's existing worktree fixtures.
+})

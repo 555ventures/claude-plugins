@@ -1,6 +1,6 @@
 ---
 date: 2026-08-20
-status: implementing
+status: done
 diff_base: 730a2bc2725f5bc1485cac4fc13c41be21856374
 open_markers: 0
 tier: critical
@@ -36,7 +36,7 @@ evidence paths, never the answer.
 | ID | Decision | One-line rationale |
 |----|----------|--------------------|
 | D1 | New `spec/scripts/spec-review-driver.js` on the design-driver contract: `<spec.md>` prints current state + only that step's instructions; `--mark <mark>` verifies the step's artifacts then advances; `--state` prints the bare state name; exit 0 = step printed, 2 = precondition failure or refused mark; state = spec frontmatter + `<spec>.review/review-state.json` sidecar + on-disk artifacts, re-entrant from cold (AC-20260820-07-1, AC-20260820-07-9, AC-20260820-07-11) | The in-repo proven shape for "a stage the model cannot skip steps of" — same contract, same exit alphabet, zero new conventions to learn; re-derivation from artifacts is what makes resume correct by construction |
-| D2 | The driver EXECUTES deterministic steps itself — base derivation (`build_base`→`diff_base`→branch), frozen-base check + detached-worktree add/remove, per-iteration manifest lifecycle (`<spec>.review/manifest-<n>.jsonl`, never reused), `review-legs.js`, diffLoc, all three `verdict.js` passes, both ledger appends (verdict's line 2 verbatim), the `implementing → done` flip, `merge-back` inspect/merge/cleanup/verify, `replay --due`, `spec-status --next` capture — and PRINTS instruction steps for session-only work: skip-name extraction, reviewer + design-leg dispatch, dispositions, Canonical Delta + deviations fold, hygiene adjudication, the close commit, merge strategy, conflict resolution (AC-20260820-07-1, AC-20260820-07-6) | The brief's split: deterministic spine in code, judgment surfaced explicitly; every step the driver executes is one the session can no longer skip, mis-flag, or hand-compose (the ledger line and verdict flags were the two most re-typed contracts in the stage) |
+| D2 | (frozen-base clause retired by R7 — see the rulings table) The driver EXECUTES deterministic steps itself — base derivation (`build_base`→`diff_base`→`merge-base`), per-iteration manifest lifecycle (`<spec>.review/manifest-<n>.jsonl`, never reused), `review-legs.js`, diffLoc, all three `verdict.js` passes, both ledger appends (verdict's line 2 verbatim), the `implementing → done` flip, `merge-back` inspect/merge/cleanup/verify, `replay --due`, `spec-status --next` capture — and PRINTS instruction steps for session-only work: skip-name extraction, reviewer + design-leg dispatch, dispositions, Canonical Delta + deviations fold, hygiene adjudication, the close commit, merge strategy, conflict resolution (AC-20260820-07-1, AC-20260820-07-6) | The brief's split: deterministic spine in code, judgment surfaced explicitly; every step the driver executes is one the session can no longer skip, mis-flag, or hand-compose (the ledger line and verdict flags were the two most re-typed contracts in the stage) |
 | D3 | Marks are a closed set: `skips-extracted --file <f>` · `reviewer-returned --file <json>` · `dispositions --waived N --rejected N --fix-dispatched N` · `fix-applied` · `closed` · `merge-strategy <merge-commit\|ff-only\|squash\|rebase-ff>` · `conflicts-resolved`; every mark is verified before it lands — a missing/malformed reviewer return file, a `REVIEWER_FAILED` verdict, disposition counts exceeding the survivor+leg-finding pools, or `closed` on a dirty tree are refused with exit 2 and the state unchanged (AC-20260820-07-3, AC-20260820-07-4, AC-20260820-07-5, AC-20260820-07-7) | An unverifiable mark accepted on trust would re-open the procedural-hallucination class inside the driver itself; refusal messages name the repair, mirroring the design driver |
 | D4 | `RED_BLOCKING` from review-legs: the driver itself runs the no-workflow hard-stop verdict, appends the `GATE_RED` ledger line, prints the red leg + remedy, and lands in terminal state `STOPPED`; a later invocation restarts at LEGS with a fresh manifest (AC-20260820-07-2) | "A stopped attempt is never invisible" was a prose duty the session could forget; driver-owned, it is unforgettable — and the reviewer stays structurally unreachable on a red substrate |
 | D5 | Fix loop: `dispositions --fix-dispatched N>0` → FIX state (prints the worker-dispatch step); `fix-applied` → the driver re-runs legs `--fix-delta` on a fresh manifest and returns to REVIEWER for the fix-delta pass; iteration cap 2 is driver-enforced — a third `fix-applied` is refused and state ESCALATE prints the escalation step (AC-20260820-07-8) | The cap lived in prose and its miscounting was invisible; the driver counts iterations in the sidecar and the cap becomes unpassable rather than advisory |
@@ -56,6 +56,10 @@ evidence paths, never the answer.
 | R4 | `diff_base` 730a2bc stands — the true pre-image; no later sha excludes the sibling session's interleaved work without hiding this spec's own hunks in 8b0d668. 8b0d668 is not amended; f856f1c's message is the standing correction of record. Review proceeds by attribution: `spec/scripts/review-legs.js` + `tests/review/review-legs-smoke-wave.test.js` = the concurrent session's 7.14.1 smoke-wave fix, waived as foreign; the five `.claude/agent-memory/**` files and the ledger row = session bookkeeping, waived; `specs/20260821/02-replay-review-phase.md` = pipeline-owned, already excluded. The reviewer receives this list at dispatch so foreign hunks are never litigated as spec-07 scope; waives recorded in Rationale with attribution. | executed: `scope-reconcile --base 730a2bc` exit 3, seven outOfPlan paths |
 | R5 | D4 amended by ruling: STOPPED is sticky/idempotent; "a later invocation restarts at LEGS with a fresh manifest" reads as "a later invocation, after the red iteration's manifest (or the sidecar) is deleted, restarts at LEGS with a fresh manifest." Restart-on-bare-invocation is unimplementable against AC-9's no-side-effect guarantee (a `--state` probe would append a duplicate `GATE_RED`); the printed remedy names the exact paths. | accepted as recorded; AC-9 pins the no-side-effect guarantee |
 | R6 | `marks.escalated` accepted: adversarial sidecar edits executed both directions — hand-setting the flag flips only the printed label (a `fix-applied` under the fake flag still succeeds; the cap ignores it), and clearing it from a real ESCALATE buys nothing (fourth `fix-applied` refused exit 2, no manifest-4). The Rationale warning's substance — enforcement never derives from a stored counter — holds; the spoofable label carries no authority. plugin.json 7.14.0-not-7.13.0 accepted per the standing `[host]` semver-race gotcha. | executed: two synthetic hosts, edits + refusals observed |
+| R7 | D2's frozen-base check + detached-worktree add/remove is RETIRED, not deferred (JJ + Fable 5 consult, 2026-08-21, review of this spec): attribution of foreign hunks to their owning spec (R4) covers both the HEAD-moved-past case the mechanism targeted and the interleaved-concurrent case it structurally cannot see, and the mechanism imports the worktree-lifecycle complexity R3 shows is bug-prone. `review.md` § Protocol's claim that the driver runs it is corrected in the same fix pass; no backlog obligation survives. | executed at review: R1's grep/read evidence stands; this review itself is the case the mechanism would have missed |
+| R8 | The `done`-spec re-run promise is RETIRED (R2 arm (a), JJ 2026-08-21): `review.md` Input drops "(or `done` for a re-run)", the Behavior bullet is rewritten, and a cold invocation on a `done` spec is refused with exit 2 naming `/spec:escape` — the command that exists for post-CLEAN defects. Gated on the sidecar: the refusal fires only when a sidecar EXISTS without a `closeRunId` (the booby-trapped re-run); a `done` spec whose sidecar records this run's own close continues to MERGE/DONE, and a `done` spec with no sidecar stays the post-merge fast path (verified at fix time, 2026-08-21). (AC-20260820-07-15) | executed at build: R2's synthetic-host walk (ledger 0→0, `runId: undefined`) |
+| R9 | Every child process the driver spawns runs through ONE fail-closed helper (JJ + Fable 5, 2026-08-21): `spawnSync`'s `error`/`status === null` (signal death, spawn failure, maxBuffer overflow) is refused with exit 2 naming the repair, never read as success — the standing `[host]` gotcha ("every no-exit-code death is an unrun check, never a pass"). The extraction, not four inline null-pins: the pattern sits in four call sites, at the § Review Checks duplication trigger. A legs run that reports success must also have written a manifest with rows, or the driver refuses. (AC-20260820-07-14) | executed at review by the independent reviewer: synthetic host whose gate SIGKILLs `review-legs.js` → driver exit 0, state REVIEWER, `manifest-1.jsonl` never written |
+| R10 | R3's two halves split (JJ + Fable 5, 2026-08-21): the CLOSE step text is corrected now — in a linked-worktree review the close commit EXCLUDES `.claude/spec-runs.jsonl` and `.claude/spec-runs/` (they are promoted to the main root after the merge lands, and committing them makes `worktree remove` see a dirty tree and exit 2 after the merge already landed); in an in-place review (`repoRoot === mainRoot`) there is no promotion step, so they ride the close commit as before. R3(1) — making a terminal-red run's `GATE_RED` row durable without a landed merge — is DEFERRED to its own spec: it touches merge-back's clean-root preconditions and needs worktree fixtures, and a rushed version inside a capped fix loop trades a durability bug for a merge-refusal bug. (AC-20260820-07-16) | executed at build: R3's two worktree fixtures |
 
 ## File Plan
 
@@ -122,7 +126,9 @@ Never committed; deleted at DONE.
 - Interruption at any point resumes correctly: the driver re-derives state from disk and
   re-prints the current step; a mark that was recorded is never re-demanded; a mark whose
   artifact vanished is demanded again.
-- A re-run of a `done` spec starts a fresh run (new sidecar), exactly like today's re-review.
+- A cold invocation on a `done` spec is REFUSED (exit 2) naming `/spec:escape` — a re-review
+  records no run, so the promise is retired rather than half-kept (R8). A `done` spec whose
+  sidecar records this run's own close continues to MERGE/DONE unchanged.
 
 ## Acceptance Criteria
 
@@ -175,6 +181,24 @@ Never committed; deleted at DONE.
   `review.md` the sentences "derived by `verdict.js`, never asserted in prose", "Never
   hand-write the word", and the `.claude/spec-runs.jsonl` reference (tag the existing
   tests/run-ledger.test.js pins with this AC-ID) → tests/run-ledger.test.js
+- **AC-20260820-07-14**: WHEN a child process the driver spawns dies without an exit code
+  (signal kill, spawn failure) THE SYSTEM SHALL exit 2 naming the dead child and the repair,
+  never advance state, and never treat the death as a pass (R9; literal: a host whose gate
+  SIGKILLs the leg runner yields exit 2, no `manifest-1.jsonl`, and never state REVIEWER — the
+  same refusal on re-invocation, never a cached advance). The companion manifest-written guard
+  (a reported-green legs run that wrote no parseable rows is refused) is belt-and-braces behind
+  the same helper and has no behavioral path of its own without stubbing review-legs.js
+  → tests/review/review-driver.test.js
+- **AC-20260820-07-15**: WHEN the driver is invoked on a spec whose status is already `done`
+  and whose sidecar EXISTS but records no `closeRunId` (the hand-recreated-sidecar re-run) THE
+  SYSTEM SHALL exit 2 naming `/spec:escape` and append no ledger line; a `done` spec with no
+  sidecar at all stays the legitimate post-merge fast path (exit 0, DONE) and a `done` spec whose
+  sidecar carries this run's own `closeRunId` still flows to MERGE/DONE (R8)
+  → tests/review/review-driver.test.js
+- **AC-20260820-07-16**: WHEN the CLOSE step prints in a linked-worktree review THE SYSTEM
+  SHALL instruct that the close commit excludes `.claude/spec-runs.jsonl` and
+  `.claude/spec-runs/`, and WHEN it prints in an in-place review (`repoRoot === mainRoot`) it
+  SHALL instruct that they ride the close commit (R10) → tests/review/review-driver.test.js
 
 ## Assumptions (escalation triggers)
 
@@ -235,10 +259,28 @@ owned by this spec's Canonical Delta; the paths-leg `likely` on
 `tests/consistency/entrypoints.test.js` needs no test edit — that suite derives from the
 live repo, and D8's same-diff manifest update is the closure.
 
+Review dispositions (2026-08-21, runId in `.claude/spec-runs.jsonl`). Waived with
+attribution: the reconcile leg's seven out-of-plan paths — `spec/scripts/review-legs.js` +
+`tests/review/review-legs-smoke-wave.test.js` are a concurrent session's 7.14.1 smoke-wave
+serialization fix, and the five `.claude/agent-memory/**` files are session bookkeeping;
+neither is this spec's work (R4). Fixed in one pass: R9 (fail-closed child helper — the one
+hard survivor), R7 (frozen-base retirement + the false `review.md` sentence), R8 (the `done`
+re-run refusal), R10's close-commit text. Deferred to its own spec: durable terminal-red
+evidence from an abandoned worktree run (R10).
+
+Deviations fold (close, 2026-08-21): all six sidecar entries are one-offs already carried by
+the rulings table — the semver race is an existing `[host]` gotcha (R6), the evidence-promotion
+ordering and the close-commit exclusion are now canonical (R10, docs/canonical/review.md), and
+STOPPED's stickiness (R5), `marks.escalated` (R6), the frozen-base narrowing (R7) and the
+`done`-no-sidecar reading (R8) are each recorded above. No new Gotchas entry: the lesson is
+stated once, in the canonical doc, rather than restated as host prose.
+
 ## Canonical Delta
 
 `docs/canonical/review.md`: the flow description is rewritten around the driver — states,
 marks, what the driver executes vs prints, the sidecar lifecycle, and the rule that
 review.md hosts judgment while the driver owns sequencing; the existing "sole derivation"
 entries (verdict.js, scope-reconcile.js) gain the sentence that the driver is their sole
-invoker within the review stage.
+invoker within the review stage. One added rule: retained evidence and the run
+ledger ride the close commit only in an in-place review; in a linked-worktree review they are
+excluded from it and promoted to the main root after the merge lands (R10).

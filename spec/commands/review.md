@@ -19,7 +19,9 @@ is `{driver}` below.
 
 ## Input
 
-`$ARGUMENTS` — path to a spec with `status: implementing` (or `done` for a re-run).
+`$ARGUMENTS` — path to a spec with `status: implementing`. A spec that already closed
+(`status: done`) is refused (exit 2) — `/spec:escape` records a defect that escaped a review
+that already passed.
 
 ## Protocol — the driver owns the state machine
 
@@ -27,12 +29,13 @@ Loop until the driver prints `DONE`:
 
 1. Run `node {driver} <spec path>`. It inspects on-disk state (frontmatter, the
    `<spec>.review/` sidecar, artifacts already on disk) and prints the **current step's
-   instructions** — running deterministic work itself (base derivation and the frozen-base
-   check, the per-iteration manifest, `review-legs.js`, diffLoc, every `verdict.js` pass, both
-   ledger appends, the `done` flip, `merge-back`'s inspect/merge/cleanup/verify sequence,
-   `replay --due`, the `spec-status --next` capture) and printing only the steps that need
-   this session's judgment: reviewer + design-leg dispatch, dispositions, the Canonical Delta
-   + deviations fold, the close commit, merge strategy, conflict resolution.
+   instructions** — running deterministic work itself (base derivation —
+   `build_base` → `diff_base` → `merge-base HEAD main|master` —, the per-iteration manifest,
+   `review-legs.js`, diffLoc, every `verdict.js` pass, both ledger appends, the `done` flip,
+   `merge-back`'s inspect/merge/cleanup/verify sequence, `replay --due`, the `spec-status
+   --next` capture) and printing only the steps that need this session's judgment: reviewer +
+   design-leg dispatch, dispositions, the Canonical Delta + deviations fold, the close commit,
+   merge strategy, conflict resolution.
 2. Execute exactly that step. Record it with `node {driver} <spec> --mark <mark>` once the
    step is done — the driver verifies the step's artifacts before it advances; a missing or
    malformed artifact is refused (exit 2) with the repair named, and the state is left
@@ -107,7 +110,10 @@ Run `node "$(spec-paths report-render)" --slots <file>` and print its output ver
   one-offs go to the spec's Rationale; delete the sidecar. Adjudicate the driver's printed
   hygiene listing — everything it doesn't mark EXPECTED is a stray to explain or clean before
   marking `closed`; never blind-`git add -A` past an unadjudicated path. Commit everything
-  still uncommitted on the working branch. Never `--no-verify`.
+  still uncommitted on the working branch, following the driver's printed instruction for what
+  the close commit includes — a worktree review's close commit excludes
+  `.claude/spec-runs.jsonl` and `.claude/spec-runs/` (promoted to the main root once the merge
+  lands); an in-place review's close commit rides them as before. Never `--no-verify`.
 - **Merge strategy and non-trivial conflicts always go through `AskUserQuestion`** (the MERGE
   step) — the driver runs `merge-back` inspect and prints its `RECOMMEND` line, but the choice
   (merge-commit / ff-only / squash / rebase-ff) is this session's call, `RECOMMEND` first.

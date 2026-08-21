@@ -18,10 +18,28 @@ const { tmpdir, runNode, runBash, ROOT, SPEC } = require('../helpers')
 // finding class, and exit code below stays byte-identical. This whole suite — unchanged, no
 // assertion edited — IS the byte-identity pin for D3: any divergence introduced by the
 // extraction surfaces here as a wrong observed grammar, finding class, or exit code.
+//
+// D13 (2026-08-20, specs/20260820/04-entrypoint-conformance.md): `missing-test-file` asserted
+// existence for EVERY tests-layer File Plan row regardless of its Action column — reproduced
+// live against this spec's own D7 row (`tests/advisory-append/advisory-append.test.js`,
+// planned DELETE): `ac-matrix: uncovered=0 oracle=0 · 1 finding(s)`. A row that plans a
+// deletion is satisfied by the file's absence, not violated by it. Fixed fail-closed: the
+// check skips ONLY an explicit `DELETE` action; a `CREATE` row or a row whose table binds no
+// Action column at all keeps the existence requirement.
 
 function specMd(acLines, filePlanRows) {
   return '# Test Spec\n\n## Acceptance Criteria\n\n' + acLines.join('\n') + '\n\n' +
     '## File Plan\n\n| Path | Action | Layer | Summary |\n|------|--------|-------|---------|\n' +
+    filePlanRows.join('\n') + '\n'
+}
+
+// D13 fixture idiom: unlike specMd() above, this table's header row binds NO Action column at
+// all (lib/file-plan.js's walkFilePlanTables sets actionIdx=-1 for the whole table when its
+// first non-separator row carries no cell matching /^actions?$/i) — a genuinely absent column,
+// not merely an empty cell in a row of an Action-bearing table.
+function specMdNoActionColumn(acLines, filePlanRows) {
+  return '# Test Spec\n\n## Acceptance Criteria\n\n' + acLines.join('\n') + '\n\n' +
+    '## File Plan\n\n| Path | Layer | Summary |\n|------|-------|---------|\n' +
     filePlanRows.join('\n') + '\n'
 }
 
@@ -305,4 +323,58 @@ test('AC-20260814-01-8c: spec-paths ac-matrix prints the script\'s existing abso
   assert.strictEqual(printed, path.join(SPEC, 'scripts/ac-matrix.js'),
     `spec-paths ac-matrix must print the absolute path to spec/scripts/ac-matrix.js — got "${printed}"`)
   assert.ok(fs.existsSync(printed), 'the printed path must actually exist — an unregistered/missing script fails every command that resolves it via spec-paths')
+})
+
+test('AC-20260820-04-7: a DELETE-action tests-layer File Plan row naming a missing file raises no missing-test-file finding, while an otherwise-identical CREATE row or a row whose table binds no Action column still does', () => {
+  // Arm 1 (the red arm — D13's fix is not yet written): DELETE + missing file must NOT raise.
+  const dirDelete = tmpdir('acm-d13-delete')
+  fs.mkdirSync(path.join(dirDelete, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dirDelete, 'tests/covered.test.js'), '// covers AC-20260820-04-7\n')
+  const specDelete = path.join(dirDelete, 'spec.md')
+  fs.writeFileSync(specDelete, specMd(
+    ['- **AC-20260820-04-7**: WHEN X THE SYSTEM SHALL Y → tests/covered.test.js'],
+    ['| tests/covered.test.js | CREATE | tests | dummy row so the AC bullet is covered, isolating this arm to the missing-test-file class |',
+      '| tests/gone-delete.test.js | DELETE | tests | D13: File Plan plans this test file\'s deletion; it is correctly already absent |']))
+  const manifestDelete = writeManifest(dirDelete, [])
+  const resDelete = run(specDelete, dirDelete, manifestDelete, ['--json'])
+  const outDelete = findings(resDelete)
+  assert.ok(!outDelete.findings.some(f => f.class === 'missing-test-file'),
+    'D13: a tests-layer row whose Action is DELETE is satisfied by the named file\'s absence, not violated by it — ' +
+    'it must never raise missing-test-file, or every spec that plans a test deletion (this spec\'s own D7 row, ' +
+    'tests/advisory-append/advisory-append.test.js) fails ac-matrix by construction on a correctly-classified row')
+
+  // Arm 2: an otherwise-identical CREATE row naming a missing file must still raise — proves
+  // the fix is scoped to DELETE, not a blanket disable of the check.
+  const dirCreate = tmpdir('acm-d13-create')
+  fs.mkdirSync(path.join(dirCreate, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dirCreate, 'tests/covered.test.js'), '// covers AC-20260820-04-7\n')
+  const specCreate = path.join(dirCreate, 'spec.md')
+  fs.writeFileSync(specCreate, specMd(
+    ['- **AC-20260820-04-7**: WHEN X THE SYSTEM SHALL Y → tests/covered.test.js'],
+    ['| tests/covered.test.js | CREATE | tests | dummy row so the AC bullet is covered, isolating this arm to the missing-test-file class |',
+      '| tests/gone-create.test.js | CREATE | tests | D13: an otherwise-identical CREATE row naming a missing file must still be enforced |']))
+  const manifestCreate = writeManifest(dirCreate, [])
+  const resCreate = run(specCreate, dirCreate, manifestCreate, ['--json'])
+  const outCreate = findings(resCreate)
+  assert.ok(outCreate.findings.some(f => f.class === 'missing-test-file' && f.detail.includes('tests/gone-create.test.js')),
+    'D13 fail-closed: the skip must fire ONLY on an explicit DELETE action — a CREATE row naming a missing file must ' +
+    'still raise missing-test-file naming it, proving the DELETE fix did not blanket-disable the check for every action')
+
+  // Arm 3: a row in a table with NO Action column bound at all must still raise — proves the
+  // check fails closed on an absent Action column, not just a present-but-empty one.
+  const dirNoAction = tmpdir('acm-d13-noaction')
+  fs.mkdirSync(path.join(dirNoAction, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dirNoAction, 'tests/covered.test.js'), '// covers AC-20260820-04-7\n')
+  const specNoAction = path.join(dirNoAction, 'spec.md')
+  fs.writeFileSync(specNoAction, specMdNoActionColumn(
+    ['- **AC-20260820-04-7**: WHEN X THE SYSTEM SHALL Y → tests/covered.test.js'],
+    ['| tests/covered.test.js | tests | dummy row so the AC bullet is covered, isolating this arm to the missing-test-file class |',
+      '| tests/gone-noaction.test.js | tests | D13: this table binds no Action column at all — action must resolve to null, not DELETE |']))
+  const manifestNoAction = writeManifest(dirNoAction, [])
+  const resNoAction = run(specNoAction, dirNoAction, manifestNoAction, ['--json'])
+  const outNoAction = findings(resNoAction)
+  assert.ok(outNoAction.findings.some(f => f.class === 'missing-test-file' && f.detail.includes('tests/gone-noaction.test.js')),
+    'D13 fail-closed: a File Plan table whose header row binds no Action column at all must NOT be treated as an ' +
+    'implicit DELETE — a null/absent Action keeps the existence requirement, so this row must still raise ' +
+    'missing-test-file naming it')
 })

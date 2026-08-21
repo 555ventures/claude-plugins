@@ -42,6 +42,7 @@ the diff that introduces it instead of surfacing as a host field report.
 | D10 | The reverse check's hooks.json grammar must match the repo's ACTUAL mandated quoting, `"\"${CLAUDE_PLUGIN_ROOT}\"/scripts/<basename>"` — the escaped quote between `}` and `/`. The shipped regex allowed only `}` + optional bare `"` + `/` and therefore matched NOTHING against the live file: the entire reverse-hooks direction had never fired, on a file that genuinely invokes four scripts. Fixture coverage for the hooks direction is added in the same edit (AC-20260820-04-5) | Found by adversarial sweep at build close 2026-08-20; executed: the regex returns zero matches against the live `spec/hooks/hooks.json` while four scripts are referenced. A declared check direction that is provably inert is the precise failure this spec exists to close — the guard had reproduced its own bug class internally. The missing fixture is why it shipped unexercised: AC-2..AC-5's fixtures covered spec-paths and script-to-script only |
 | D11 | The executable inventory and D8's domain test must not be evadable by file placement or extension: the scan is recursive under `spec/scripts/` (excluding `spec/scripts/lib/`) and `spec/workflows/`, and admits extensionless files alongside `.js`/`.mjs`/`.cjs`/`.sh`. Additionally — and independently — every `spec-paths` case-table key whose target resolves under `spec/scripts/` or `spec/workflows/` MUST resolve to a file present in the inventory (AC-20260820-04-1) | Executed: a script at `spec/scripts/legs/ac-matrix.js`, reachable via a real `spec-paths` key and invoked from a command, is skipped by the inventory scan AND filtered out of the reverse check by the D8 shape test — invisible in all four directions at once, with the orphan class fully reopened and no red anywhere. The key-table cross-check is the belt-and-braces leg: it closes the case by reachability rather than by file shape, so a future placement the shape rule fails to anticipate still surfaces |
 | D12 | Four residual false-green holes, found by adversarial sweep at build close, are ACCEPTED and recorded in § Known Gaps rather than closed. Successor trigger: when the script-to-script edge count grows materially past the 12 present today, replace per-edge declaration with a reachability model (AC-20260820-04-6) | None of the four lets an executable exist with zero callers undetected — the class that recurred three times and that this spec exists to close. Each is narrower: whether one already-declared edge is still real. Closing them costs either a false-red-generating grammar (gap 1 is prose and not statically decidable at all) or the reachability rewrite, which is a lateral trade today — it surrenders the rename detection this spec's Rationale deliberately chose, and this repo's zero-dependency rule leaves no JS parser, so script-to-script detection still bottoms out in text matching even under reachability. Recording the trigger as a number rather than as taste is what keeps the next session from re-deriving this |
+| D13 | `ac-matrix.js`'s `missing-test-file` check MUST NOT fire for a File Plan row whose Action is `DELETE` — a row that plans a deletion is satisfied by the file's absence, not violated by it. Fail closed: skip only on an explicit `DELETE` action; a null/absent Action column keeps the existence requirement (AC-20260820-04-7) | This spec introduced the repo's first `tests`-layer DELETE row (D7), which is why a latent defect surfaced now: the check asserts existence for every tests row regardless of action, so planning a test deletion is a HARD finding by construction. First occurrence, so core § Incident Policy calls for the fix plus a behavioral test that executes the fixed path — not a waive and not doctrine prose. Waiving would have taught the next session to retag rows to dodge checks |
 
 ## File Plan
 
@@ -53,6 +54,8 @@ the diff that introduces it instead of surfacing as a host field report.
 | spec/scripts/advisory-append.js | DELETE | scripts | D7: orphaned since v7 deleted its `wf-review` producer — the guard's first catch |
 | tests/advisory-append/advisory-append.test.js | DELETE | tests | D7: the deleted script's test suite. **Expected review finding, waive:** `ac-matrix.js`'s `missing-test-file` check asserts existence for every `tests`-layer row regardless of action, so a DELETE row is a HARD finding by construction (`uncovered=0 oracle=0`, the coverage matrix itself is clean). The row is correctly classified — retagging it `other` to dodge the check would be gaming it. Upstream fix belongs in `ac-matrix.js` (skip DELETE rows), outside this spec's File Plan |
 | spec/bin/spec-paths | MODIFY | scripts | D7: drop the `advisory-append` case entry and its usage-line token |
+| spec/scripts/ac-matrix.js | MODIFY | scripts | D13: `missing-test-file` skips DELETE-action rows |
+| tests/ac-matrix/ac-matrix.test.js | MODIFY | tests | AC-20260820-04-7 |
 
 ## Contracts
 
@@ -116,6 +119,13 @@ Scan surfaces (closed set, D3/D4): scripts inventory = `spec/scripts/*.{js,sh}` 
 - **AC-20260820-04-6**: WHEN the live repo is scanned THE SYSTEM SHALL CONTINUE TO pass
   with the manifest as seeded — the green pin that makes every future drift a red diff →
   live-repo test in tests/consistency/entrypoints.test.js
+
+- **AC-20260820-04-7**: WHEN a File Plan carries a `tests`-layer row whose Action is
+  `DELETE` and the named file does not exist THE SYSTEM SHALL NOT raise a
+  `missing-test-file` finding, while an otherwise-identical row with a `CREATE` action, or
+  with no Action column bound, SHALL still raise it (literal: a plan with
+  `| tests/gone.test.js | DELETE | tests | ... |` and no such file on disk exits with zero
+  `missing-test-file` findings) → tests/ac-matrix/ac-matrix.test.js
 
 ## Assumptions (escalation triggers)
 

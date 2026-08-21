@@ -26,6 +26,15 @@
 // Exit codes: 0 = executed, no findings · 1 = executed, findings emitted (rides the normal
 // Phase 2 disposition flow — not a script failure) · 2 = usage error, unreadable --spec, or a
 // spec with no `## Acceptance Criteria` section.
+//
+// Defect fixed (2026-08-20, D13, specs/20260820/04-entrypoint-conformance.md): the
+// missing-test-file check asserted existence for EVERY tests-layer File Plan row regardless of
+// its Action column, so a spec that plans a test file's deletion raised a HARD finding by
+// construction — the check punished a correctly-classified DELETE row for the absence it
+// itself planned. Fixed to read each row's Action (lib/file-plan.js's parseFilePlanRows already
+// exposes it) and skip the existence check ONLY on an explicit, case-insensitive `DELETE`. Fails
+// closed: a row whose table bound no Action column (action === null) keeps the existence
+// requirement — a missing Action is never treated as an implicit DELETE.
 
 const fs = require('fs')
 const path = require('path')
@@ -97,9 +106,13 @@ for (const b of bullets) {
 // ---- File Plan tests-layer rows: resolve to real files (globs expanded via lib/glob-match) --
 
 const filePlanRows = parseFilePlanRows(specText)
+// D13: each path carries its own row's Action (normalized trim+lowercase, mirroring the
+// existing layer normalization) so a DELETE row's missing file is a satisfied plan, not a
+// finding — while a null/absent Action (no Action column bound in that row's table) keeps
+// isDelete false and the existence requirement stays enforced.
 const testsRowPaths = filePlanRows
   .filter(r => (r.layer || '').trim().toLowerCase() === 'tests')
-  .flatMap(r => r.paths)
+  .flatMap(r => r.paths.map(p => ({ p, isDelete: (r.action || '').trim().toLowerCase() === 'delete' })))
 
 function walkAll(dir, base, out = []) {
   let entries
@@ -119,18 +132,20 @@ function walkAll(dir, base, out = []) {
 
 const testFiles = new Set()
 let allFilesCache = null
-for (const p of testsRowPaths) {
+for (const { p, isDelete } of testsRowPaths) {
   if (p.includes('*')) {
     if (allFilesCache === null) allFilesCache = walkAll(root, root)
     for (const f of allFilesCache) if (globMatch(p, f)) testFiles.add(f)
   } else if (fs.existsSync(path.join(root, p))) {
     testFiles.add(p)
-  } else {
+  } else if (!isDelete) {
     findings.push({
       severity: 'hard', class: 'missing-test-file', ac: '',
       detail: `File Plan tests row ${p} does not exist under --root ${root}`,
     })
   }
+  // D13: an Action=DELETE row naming a missing file is correctly absent — no finding, and the
+  // path stays out of testFiles (it can't be grepped for AC-ID coverage if it doesn't exist).
 }
 
 // ---- coverage grep: literal AC-ID per resolved test file, always computed (step 6's file->AC

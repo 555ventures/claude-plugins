@@ -26,6 +26,16 @@
 // existing tmpdir-based test pin depends on. One parameter, no baseline file, no host config key:
 // the convention's ship date is a plugin fact.
 //
+// specs/20260820/06-typed-evidence-manifest.md D8/D9 (2026-08-20, brief 16's second move): the
+// two rows this script can append to --manifest carry typed JSON objects, not packed strings —
+// the counted row is {"rows":N,"carried":C,"sanctioned":S,"orphans":O} and the pre-cutoff row is
+// {"notApplicable":{"spec":"YYYYMMDD","appliesFrom":"YYYYMMDD"}}. The human-readable stdout
+// counters line ("rows=N carried=C sanctioned=S orphans=O") and the pre-cutoff stdout line
+// ("not-applicable spec=X appliesFrom=Y") — and this script's own --json `observed` field, which
+// mirrors those same stdout strings — stay byte-unchanged (D8): plan.md's lock step copies the
+// plain-mode line verbatim into the plan ledger row, and only ac-matrix.js's --json observed is
+// retyped by this spec, not this script's.
+//
 // What this deliberately does NOT do: read anything but the spec text — no --root, no File Plan
 // parsing, no test-file reads (ac-matrix.js owns the AC-ID -> test -> executed chain; this
 // script only proves Decision -> AC). It also never requires ac-matrix.js as a module — that
@@ -82,7 +92,12 @@ try {
 const specDateMatch = /specs\/(\d{8})\//.exec(specPath)
 if (specDateMatch && specDateMatch[1] < appliesFrom) {
   const specDate = specDateMatch[1]
-  const observed = `not-applicable spec=${specDate} appliesFrom=${appliesFrom}`
+  // D9: the MANIFEST row's observed is the typed {"notApplicable":{"spec":...,"appliesFrom":...}}
+  // object; the human stdout line below stays the byte-unchanged "not-applicable spec=X
+  // appliesFrom=Y" string (D8) — plan.md never reads this branch's stdout, but AC-20260820-03-7
+  // pins the literal text regardless.
+  const observed = { notApplicable: { spec: specDate, appliesFrom } }
+  const stdoutLine = `not-applicable spec=${specDate} appliesFrom=${appliesFrom}`
   if (manifestPath) {
     try {
       fs.appendFileSync(manifestPath, JSON.stringify({ leg: 'promise-sweep', exit: 0, observed }) + '\n')
@@ -92,9 +107,9 @@ if (specDateMatch && specDateMatch[1] < appliesFrom) {
     }
   }
   if (jsonOut) {
-    console.log(JSON.stringify({ findings: [], warnings: [], observed }, null, 2))
+    console.log(JSON.stringify({ findings: [], warnings: [], observed: stdoutLine }, null, 2))
   } else {
-    console.log(`promise-sweep: ${observed}`)
+    console.log(`promise-sweep: ${stdoutLine}`)
   }
   process.exit(0)
 }
@@ -162,7 +177,12 @@ for (const row of liveRows) {
   findings.push({ severity: 'hard', class: 'orphan-decision', id: dId, detail })
 }
 
-const observed = `rows=${liveRows.length} carried=${carried} sanctioned=${sanctioned} orphans=${orphans}`
+// D9: the MANIFEST row's observed is the typed {"rows":N,"carried":C,"sanctioned":S,"orphans":O}
+// object; the human stdout/--json observed stays the byte-unchanged packed string (D8: plan.md's
+// lock step copies the plain stdout line verbatim into the plan ledger row, and only ac-matrix's
+// --json observed is retyped by this spec — promise-sweep's is not).
+const observed = { rows: liveRows.length, carried, sanctioned, orphans }
+const stdoutLine = `rows=${liveRows.length} carried=${carried} sanctioned=${sanctioned} orphans=${orphans}`
 const exitCode = findings.length ? 1 : 0
 
 if (manifestPath) {
@@ -175,10 +195,10 @@ if (manifestPath) {
 }
 
 if (jsonOut) {
-  console.log(JSON.stringify({ findings, warnings: [], observed }, null, 2))
+  console.log(JSON.stringify({ findings, warnings: [], observed: stdoutLine }, null, 2))
 } else {
   for (const f of findings) console.log(`HARD  ${f.class.padEnd(20)} ${f.detail}`)
-  console.log(`promise-sweep: ${observed} · ${findings.length} finding(s)`)
+  console.log(`promise-sweep: ${stdoutLine} · ${findings.length} finding(s)`)
 }
 
 process.exit(exitCode)

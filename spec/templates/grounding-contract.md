@@ -100,6 +100,8 @@ consume each fact:
   "forge": "github",              // or "none" — who runs CI/PRs; read by ci-query.js
   "skipReportPattern": "none",    // regex over test-runner output capturing the skip count (group 1;
                                   // optional group 2 = todos), or "none"
+  "testCountPattern": "none",     // regex over test-runner output, group 1 = executed-test count,
+                                  // or "none"; read by review-legs.js for the gate and at-risk rows
   "ciPoll": { "intervalSeconds": 30, "timeoutSeconds": 600 }
 }
 ```
@@ -108,10 +110,12 @@ consume each fact:
 plus `/spec:doctor` check 2's undeclared-capabilities nudge; nothing breaks on
 a host that predates this block. A present block is authoritative: `forge:"none"` makes the CI
 scripts print the canonical line `unavailable — no supported forge adapter` and exit cleanly
-rather than probe; a `skipReportPattern` of `"none"` (or no match) makes a skip-capture leg
-report `unavailable — host runner declares no skip format` instead of assuming zero;
-`ciPoll` overrides `/spec:release`'s poll interval/timeout when present, otherwise the 30s/600s
-defaults hold.
+rather than probe; a `skipReportPattern` (or `testCountPattern`) of `"none"` (or no match) makes
+the corresponding observation slot a typed unavailability object instead of assuming zero —
+`{"unavailable":"no-format-declared"}` when the host declares no pattern (sanctioned) and
+`{"unavailable":"pattern-no-match"}` when a declared pattern misses the output (drift, which
+raises a leg finding); `ciPoll` overrides `/spec:release`'s poll interval/timeout when present,
+otherwise the 30s/600s defaults hold.
 
 ## Genesis handoff (optional — present when the genesis stage seeded the repo)
 

@@ -36,6 +36,14 @@ const { tmpdir, runNode } = require('./helpers')
 // carries no [env:] — unknown is never sanctioned.
 //
 // Executed against synthetic host trees, never against script internals.
+//
+// specs/20260820/06-typed-evidence-manifest.md D1/D2 (2026-08-20, brief 16's second move): every
+// manifest row's `observed` field becomes a typed JSON object — the gate/skip-reconcile rows
+// below retire their packed "skips=1 todos=0"/"sanctioned=1" strings for typed objects. The two
+// existing regex-over-string assertions this file's incident predates (`/uncovered=0/.test(...)`,
+// `/sanctioned=1/.test(...)`) are retyped to field reads in place — a regex applied to a
+// stringified object would silently always fail to match, turning a real red pin into a
+// vacuously-true one, exactly the class this migration exists to make impossible.
 
 function specMd(acLines, filePlanRows) {
   return '# Test Spec\n\n## Acceptance Criteria\n\n' + acLines.join('\n') + '\n\n' +
@@ -51,8 +59,8 @@ function writeManifest(dir, lines) {
 
 function greenGateManifest(dir) {
   return writeManifest(dir, [
-    { leg: 'gate', exit: 0, observed: 'skips=1 todos=0' },
-    { leg: 'smoke', exit: 0, observed: 'pass' },
+    { leg: 'gate', exit: 0, observed: { skips: 1, todos: 0, testsExecuted: 4 } },
+    { leg: 'smoke', exit: 0, observed: { result: 'pass' } },
   ])
 }
 
@@ -83,8 +91,8 @@ test('AC-20260815-03-1 / JJ-20260815-01: a malformed AC bullet counts toward unc
 
   const row = acMatrixRow(manifestPath, 'ac-matrix')
   assert.ok(row, 'ac-matrix.js must append its own manifest row')
-  assert.ok(!/uncovered=0/.test(row.observed),
-    'the durable manifest row recorded uncovered=0 while an unparseable AC bullet sat outside ' +
+  assert.ok(row.observed && typeof row.observed === 'object' && row.observed.uncovered !== 0,
+    'the durable manifest row recorded uncovered:0 while an unparseable AC bullet sat outside ' +
     'the coverage sweep entirely: a reviewer who waives the malformed-ac notation finding is ' +
     'then told, by the only artifact that outlives the run, that every requirement has a test. ' +
     'The load-bearing pin can be deleted afterwards and nothing reports it. An AC the script ' +
@@ -135,8 +143,8 @@ test('AC-20260815-03-2 / JJ-20260815-02: a skipped test whose AC declares [env:]
 
   const row = acMatrixRow(manifestPath, 'skip-reconcile')
   assert.ok(row, 'ac-matrix.js must append a skip-reconcile manifest row')
-  assert.ok(/sanctioned=1/.test(row.observed),
-    'the durable skip-reconcile row must record the skip as sanctioned=1 so downstream sweeps ' +
+  assert.strictEqual(row.observed && row.observed.sanctioned, 1,
+    'the durable skip-reconcile row must record the skip as observed.sanctioned:1 so downstream sweeps ' +
     'and the ledger\'s testsSkipped split can tell a declared env gate from a test that simply ' +
     'never ran (CROSS-20260813-03\'s whole point); observed=' + JSON.stringify(row.observed))
 

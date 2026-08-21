@@ -16,6 +16,12 @@ const { tmpdir, runNode } = require('../helpers')
 // re-declaration without [env:] overrides a farther owning-spec declaration) by executing
 // ac-matrix.js against synthetic host trees. None of this derivation exists at HEAD — every
 // case here is red-first.
+//
+// specs/20260820/06-typed-evidence-manifest.md D2 (2026-08-20, brief 16's second move):
+// ac-matrix.js's `--json` observed.skipReconcile field retires the packed "skipped=N
+// sanctioned=S" string for the typed object {"skipped":N,"sanctioned":S} — every assertion
+// below is retyped in place; the invariant under test (which lookup path sanctioned which skip)
+// is unchanged, so none of these pins are retagged.
 
 function specMd(acLines, filePlanRows) {
   return '# Test Spec\n\n## Acceptance Criteria\n\n' + acLines.join('\n') + '\n\n' +
@@ -118,8 +124,8 @@ test('AC-20260815-03-5: a skip mapped to an AC whose (unambiguous, readable) own
     'the owning spec specs/20260301/07-owner.md is found unambiguously and its AC-20260301-07-1 ' +
     'bullet is read, but that bullet carries no [env:] tag — the skip must fail closed as ' +
     'unsanctioned-skip exactly like any other undeclared gate')
-  assert.strictEqual(out.observed.skipReconcile, 'skipped=1 sanctioned=0',
-    `an owning-spec bullet with no [env:] must not be counted toward sanctioned= — got "${out.observed.skipReconcile}"`)
+  assert.deepStrictEqual(out.observed.skipReconcile, { skipped: 1, sanctioned: 0 },
+    `an owning-spec bullet with no [env:] must not be counted toward the typed object's "sanctioned" field — got ${JSON.stringify(out.observed.skipReconcile)}`)
   assert.match(f.detail, /07-owner\.md|owning spec/i,
     'the detail must show the lookup actually consulted the owning spec (naming the file or the ' +
     'owning-spec mechanism), distinguishing this fail-closed edge from the plain same-spec-hit ' +
@@ -169,10 +175,10 @@ test('AC-20260815-03-6: a current-spec re-declaration without [env:] wins over a
     'AC-20260501-09-1 has NO bullet at all in the spec under review (an acById MISS) — its owning ' +
     'spec declares [env: OTHER_VAR], so the fallback must sanction it, proving the owning-spec ' +
     'mechanism is actually exercised in this run and this is not merely a permanently-absent feature')
-  assert.strictEqual(out.observed.skipReconcile, 'skipped=2 sanctioned=1',
+  assert.deepStrictEqual(out.observed.skipReconcile, { skipped: 2, sanctioned: 1 },
     'exactly one of the two skips must be sanctioned (the acById-miss one, via its owning spec) and ' +
     'the other must stay unsanctioned (the acById-hit one, whose local no-env bullet wins) — got ' +
-    `"${out.observed.skipReconcile}"`)
+    JSON.stringify(out.observed.skipReconcile))
 })
 
 // Found at review of specs/20260815/03 (2026-08-16): resolveOwningBullet's cache in
@@ -198,11 +204,11 @@ function twoAcOwnerHost(dir) {
 }
 
 function assertSharedOwnerOutcome(out, orderLabel) {
-  assert.strictEqual(out.observed.skipReconcile, 'skipped=2 sanctioned=1',
+  assert.deepStrictEqual(out.observed.skipReconcile, { skipped: 2, sanctioned: 1 },
     `two ACs sharing one owning spec (specs/20260601/04-shared-owner.md), one [env:]-gated and ` +
     `one not, must sanction exactly the gated one regardless of skip order (${orderLabel}) — a ` +
     `per-file cache that stores only the first-resolved AC's bullet instead of a per-AC-ID ` +
-    `resolution answers for BOTH ACs with whichever one hit first; got "${out.observed.skipReconcile}"`)
+    `resolution answers for BOTH ACs with whichever one hit first; got ${JSON.stringify(out.observed.skipReconcile)}`)
   assert.ok(!out.findings.some(f => f.ac === 'AC-20260601-04-1'),
     `AC-20260601-04-1 carries [env: SOME_VAR] in its owning spec and must never produce a finding ` +
     `(${orderLabel}) — a cache-poisoned lookup that answered with the OTHER AC's env-less bullet ` +

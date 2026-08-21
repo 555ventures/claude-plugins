@@ -35,6 +35,13 @@
 // exposes it) and skip the existence check ONLY on an explicit, case-insensitive `DELETE`. Fails
 // closed: a row whose table bound no Action column (action === null) keeps the existence
 // requirement — a missing Action is never treated as an implicit DELETE.
+//
+// specs/20260820/06-typed-evidence-manifest.md D2/D8 (2026-08-20, brief 16's second move): the
+// two manifest rows this script appends — leg "ac-matrix" ({"uncovered":N,"oracle":N}) and leg
+// "skip-reconcile" ({"skipped":N,"sanctioned":N}) — carry typed JSON objects, not packed
+// "uncovered=N oracle=M"/"skipped=N sanctioned=S" strings; `--json`'s own `observed` field
+// mirrors those same objects exactly. The plain-mode stdout summary line stays byte-unchanged
+// (D8) — only the manifest rows and --json's observed field take the typed shape.
 
 const fs = require('fs')
 const path = require('path')
@@ -385,10 +392,13 @@ for (const line of skipLines) {
   }
 }
 
-// ---- observed strings + manifest append (this script is the sole writer of its two rows) ----
+// ---- observed objects + manifest append (this script is the sole writer of its two rows) -----
+// specs/20260820/06-typed-evidence-manifest.md D2/D8: both rows' `observed` are typed JSON
+// objects, never packed strings — `--json`'s own `observed` field (below) mirrors these same
+// objects exactly, byte-identical to what gets appended to --manifest.
 
-const acMatrixObserved = `uncovered=${uncovered} oracle=${oracleCovered}`
-const skipReconcileObserved = `skipped=${skipLines.length} sanctioned=${sanctioned}`
+const acMatrixObserved = { uncovered, oracle: oracleCovered }
+const skipReconcileObserved = { skipped: skipLines.length, sanctioned }
 
 const ACM_FINDING_CLASSES = new Set(['malformed-ac', 'uncovered-ac', 'oracle-red-or-absent', 'missing-test-file'])
 const SKIP_FINDING_CLASSES = new Set(['unsanctioned-skip', 'unmapped-skip'])
@@ -416,7 +426,11 @@ if (jsonOut) {
 } else {
   for (const f of findings) console.log(`HARD  ${f.class.padEnd(20)} ${f.detail}`)
   for (const w of warnings) console.log(`WARN  ${''.padEnd(20)} ${w}`)
-  console.log(`ac-matrix: ${acMatrixObserved} · ${skipReconcileObserved} · ${findings.length} finding(s), ${warnings.length} warning(s)`)
+  // D8: the plain-mode stdout summary line stays byte-unchanged — only the manifest rows and
+  // --json's observed field (above) take the typed-object shape.
+  console.log(`ac-matrix: uncovered=${acMatrixObserved.uncovered} oracle=${acMatrixObserved.oracle} · ` +
+    `skipped=${skipReconcileObserved.skipped} sanctioned=${skipReconcileObserved.sanctioned} · ` +
+    `${findings.length} finding(s), ${warnings.length} warning(s)`)
 }
 
 process.exit(findings.length ? 1 : 0)

@@ -65,8 +65,8 @@ milestone ships, not the pipeline.
    a `migrationsCheck` value other than `"none"` or absent.
 
 Create `{manifestPath}` now — a fresh `mktemp` file, one per run — that every leg below
-appends a JSONL row to (`{"leg":"<name>","exit":<code>,"observed":"<≤120-char counts/enums>"}`,
-matching review's evidence-manifest shape (D1/D7)). This run's **required legs** are `deploy`,
+appends a JSONL row to (`{"leg":"<name>","exit":<int>,"observed":<non-null JSON object>}`,
+matching review's evidence-manifest shape v2 (D1/D7)). This run's **required legs** are `deploy`,
 `ready`, `e2e`, `journeys`, `substrate`, `production`, `ci` — `verdict.js --profile release`
 derives the milestone word from them. When the config declares a runnable `migrationsCheck`
 (Phase 0's defined term), the verdict invocation below additionally passes `--require migrations`,
@@ -90,59 +90,60 @@ a journal that happens to already match what's applied, which is exactly the coi
 let a prior release pass green while the deployed database sat four migrations behind. The
 check runs after the deploy, in Phase 2, where the comparison is finally meaningful.
 `manifest-check.sh` prints a machine sentinel line after its prose summary —
-`TOTAL=<n> FAILS=<n> INERT=<n>` — parse `checked`/`failed`/`inert` from that sentinel verbatim
-(never hand-counted from the prose lines above it) and append `{"leg":"substrate","exit":<0 if
-manifest-check exits 0 else 1>,"observed":"checked=<N> failed=<M> inert=<K>"}` to
-`{manifestPath}` — this exact `checked=N failed=N inert=N` shape is what
-`verdict.js --profile release` parses into the ledger row's `substrate` field; drifting the
-format breaks that derivation silently.
+`TOTAL=<n> FAILS=<n> INERT=<n>`, byte-unchanged — parse `checked`/`failed`/`inert` from that
+sentinel verbatim (never hand-counted from the prose lines above it); the session transcribes
+the sentinel into the typed object `{"checked":N,"failed":N,"inert":K}` and appends
+`{"leg":"substrate","exit":<0 if manifest-check exits 0 else 1>,"observed":{"checked":<N>,"failed":<M>,"inert":<K>}}`
+to `{manifestPath}` — `verdict.js --profile release` copies this object verbatim into the ledger
+row's `substrate` field; drifting the sentinel format breaks that derivation silently.
 
 ## Phase 2 — Stage and observe (all executed, fail-closed)
 
-The `deploy`/`ready`/`migrations`/`e2e`/`journeys`/`production`/`ci` legs' `observed` strings
-below are pinned — `verdict.js --profile release` parses them verbatim into the ledger row
-(D2/D7): `deploy` and `ready` carry no counts (their exit codes alone derive the ledger row's
-`staging` field — `pass` only when both exit 0); `migrations` carries no counts either — its
-`observed` is the literal `pass`/`fail`, matching deploy/ready's shape; `e2e` is
-`passed=<N> failed=<M> skipped=<K>`; `journeys`
-is `walked=<N> failed=<M>`; `production` is `observed ∈ verified|skipped|failed`; `ci` is
-`observed ∈ conclusion=<value>|unavailable|in-progress`. Drifting any of these strings breaks
-that derivation silently — the leg that appends the row and the script that parses it must
-agree on exactly this format.
+The `deploy`/`ready`/`migrations`/`e2e`/`journeys`/`production`/`ci` legs' `observed` objects
+below are pinned — `verdict.js --profile release` copies the typed shapes verbatim into the
+ledger row (D2/D7): `deploy`, `ready`, and `migrations` each carry `{"result":"pass"|"fail"}`
+(the ledger row's `staging` field is still derived from `deploy`'s and `ready`'s exit codes
+alone — `pass` only when both exit 0 — never from these observed objects); `e2e` is
+`{"passed":<N>,"failed":<M>,"skipped":<K>|{"unavailable":"pattern-no-match"|"no-format-declared"}}`;
+`journeys` is `{"walked":<N>,"failed":<M>}`; `production` is
+`{"result":"verified"|"skipped"|"failed"}`; `ci` is `{"conclusion":"<value>"}` or
+`{"status":"in-progress"}` or `{"unavailable":"no-adapter"|"transient"}`. Drifting any of these
+shapes breaks that derivation silently — the leg that appends the row and the script that reads
+it must agree on exactly this grammar.
 
-1. **Deploy to staging:** run `deployCommand`. Append `{"leg":"deploy","exit":<exit>,"observed":"<pass|fail>"}`
+1. **Deploy to staging:** run `deployCommand`. Append `{"leg":"deploy","exit":<exit>,"observed":{"result":"<pass|fail>"}}`
    to `{manifestPath}`. Failure → STOP (see below), report.
 2. **Ready check against the deployed URL:** the config `runtime.readyCheck` pattern applied
    to `stagingUrl` + `healthPath` (or a plain curl). The boot-leg discipline, applied to real
-   infra. Append `{"leg":"ready","exit":<exit>,"observed":"<pass|fail>"}` to `{manifestPath}`.
+   infra. Append `{"leg":"ready","exit":<exit>,"observed":{"result":"<pass|fail>"}}` to `{manifestPath}`.
 3. **Migrations check (when a runnable `migrationsCheck` is declared — Phase 0's defined
    term):** run it now, after the deploy and the ready check — the comparison is meaningful
    only here, since before the deploy a host with no migrate step at all is indistinguishable
-   from one that is up to date. Append `{"leg":"migrations","exit":<exit>,"observed":"<pass|fail>"}`
+   from one that is up to date. Append `{"leg":"migrations","exit":<exit>,"observed":{"result":"<pass|fail>"}}`
    to `{manifestPath}`. Declined (`"none"`) or legacy (key absent): the leg is neither run nor
    appended.
 4. **CI check on the release commit (D4):** `node "$(spec-paths ci-query)" --commit $(git -C .
    rev-parse HEAD) --root .` — the authoritative per-commit CI verdict. A completed run with
    `conclusion` ∈ (`failure`/`timed_out`/`cancelled`) maps to `exit:1`; a completed non-red run
-   maps to `exit:0`, `observed:"conclusion=<value>"`; `available:false` maps to `exit:0`,
-   `observed:"unavailable"`; an in-progress run re-invokes the same command every
-   `capabilities.ciPoll.intervalSeconds` seconds (default 30 — every 30 seconds — when the
-   block or key is absent, D7) for up to `capabilities.ciPoll.timeoutSeconds` seconds (default
-   600 — up to 10 minutes — when absent), then — if still unresolved — maps to `exit:0`,
-   `observed:"in-progress"`.
-   Append `{"leg":"ci","exit":<mapped>,"observed":"<mapped>"}` to `{manifestPath}` exactly once,
-   after the poll loop resolves — never once per poll iteration (a double row corrupts the leg
-   map). Whenever `observed` is not a `conclusion=<value>` string, the Phase 4 pre-promote
+   maps to `exit:0`, `observed:{"conclusion":"<value>"}`; an unavailable adapter maps to
+   `exit:0`, `observed:{"unavailable":"no-adapter"|"transient"}`; an in-progress run
+   re-invokes the same command every `capabilities.ciPoll.intervalSeconds` seconds (default 30
+   — every 30 seconds — when the block or key is absent, D7) for up to
+   `capabilities.ciPoll.timeoutSeconds` seconds (default 600 — up to 10 minutes — when
+   absent), then — if still unresolved — maps to `exit:0`, `observed:{"status":"in-progress"}`.
+   Append `{"leg":"ci","exit":<mapped>,"observed":<mapped object>}` to `{manifestPath}` exactly
+   once, after the poll loop resolves — never once per poll iteration (a double row corrupts
+   the leg map). Whenever `observed` carries no `conclusion` key, the Phase 4 pre-promote
    report MUST carry one ⚠️ line stating CI never delivered a verdict on this exact commit (and,
    for `unavailable`, that pushing would produce one).
 5. **e2e against the deployment:** `BASE_URL={stagingUrl} {e2eCommand}`. Capture pass / fail
    / skip counts from the runner's own output — **a skipped e2e is reported by name, never
    silently green.** When the host's declared `capabilities.skipReportPattern` (D1) is absent,
-   `"none"`, or doesn't match this run's output, the skip count is honestly
-   `unavailable — host runner declares no skip format`, never assumed-zero (no format is
-   universal). Append
-   `{"leg":"e2e","exit":<0 if zero failed else 1>,"observed":"passed=<N> failed=<M> skipped=<K>"}`
-   (or `skipped=unavailable` in place of `<K>` when the skip format is undeclared/unmatched)
+   `"none"`, or doesn't match this run's output, the skip slot is a typed unavailability
+   object — `{"unavailable":"no-format-declared"}` when the host declares no pattern
+   (sanctioned) or `{"unavailable":"pattern-no-match"}` when a declared pattern misses the
+   output (drift) — never assumed-zero (no format is universal). Append
+   `{"leg":"e2e","exit":<0 if zero failed else 1>,"observed":{"passed":<N>,"failed":<M>,"skipped":<K>|{"unavailable":"pattern-no-match"|"no-format-declared"}}}`
    to `{manifestPath}`.
 6. **Journey walks:** for each brief shipped this milestone, walk its primary journey against
    staging (the brief's milestone-gate observable, via the host's spec-verify skill, browser
@@ -151,7 +152,7 @@ agree on exactly this format.
    release regardless of what shipped. Record each as observed-pass / observed-fail with the
    command or interaction trace. A journey that cannot be walked (no seed path, no access) is
    a **blocking finding**, not a skip. Append
-   `{"leg":"journeys","exit":<0 if zero failed else 1>,"observed":"walked=<N> failed=<M>"}` to
+   `{"leg":"journeys","exit":<0 if zero failed else 1>,"observed":{"walked":<N>,"failed":<M>}}` to
    `{manifestPath}`.
 
 Any failure here (a red `deploy`/`ready`/`migrations`/`e2e`/`journeys`/`ci` row): **STOP.**
@@ -191,15 +192,16 @@ of the observation.
 
 1. `AskUserQuestion`: promote this build to production? (Include the Phase 2 observation
    summary in the question context.) Dismissed or declined → STOP; staging stands, nothing
-   promoted; append `{"leg":"production","exit":0,"observed":"skipped"}` to `{manifestPath}`
-   (D7: a user-declined promote is exit 0, `observed:"skipped"` — it is not a failure).
+   promoted; append `{"leg":"production","exit":0,"observed":{"result":"skipped"}}` to
+   `{manifestPath}` (D7: a user-declined promote is exit 0, `observed:{"result":"skipped"}` —
+   it is not a failure).
 2. On yes: run `promoteCommand` (or instruct the user through their CI-on-tag flow when
    promotion is tag-driven and the tag push is theirs to make — **never push for them**).
 3. **Verify production serves:** ready check against `productionUrl` + `healthPath`, and
    confirm the deployed version/build id is the one staged (the health endpoint's version
    field, or the platform's deployment id). A promote that cannot be verified serving is a
    failure, not a success with a caveat. Append
-   `{"leg":"production","exit":<0 if verified else 1>,"observed":"<verified|failed>"}` to
+   `{"leg":"production","exit":<0 if verified else 1>,"observed":{"result":"<verified|failed>"}}` to
    `{manifestPath}`. A red `production` row here is a Phase 3 failure — STOP via the same
    renderer shape as Phase 2 above (`outcome: {anchor:'🚫', text:'GATE_RED — production
    verification failed'}`, `next: {kind:'command', text:'verify {productionUrl}/{healthPath}
@@ -222,12 +224,15 @@ of the observation.
    `.claude/spec-runs.jsonl` — line 2, the ledger row, verbatim, counts/enums/paths only, never prose:
 
    ```
-   {"ts":"<ISO-8601>","stage":"release","milestone":"<tag or briefs range>","briefs":[<NN>,…],"verdict":"<CLEAN|GATE_RED|UNVERIFIED>","staging":"<pass|fail>","e2e":{"passed":<n>,"failed":<n>,"skipped":<n>},"journeys":{"walked":<n>,"failed":<n>},"substrate":{"checked":<n>,"failed":<n>,"inert":<n>},"production":"<verified|skipped|failed>","ci":"<conclusion=<value>|unavailable|in-progress>"}
+   {"ts":"<ISO-8601>","stage":"release","milestone":"<tag or briefs range>","briefs":[<NN>,…],"verdict":"<CLEAN|GATE_RED|UNVERIFIED>","staging":"<pass|fail>","e2e":{"passed":<n>,"failed":<n>,"skipped":<n>|{"unavailable":"pattern-no-match"|"no-format-declared"}},"journeys":{"walked":<n>,"failed":<n>},"substrate":{"checked":<n>,"failed":<n>,"inert":<n>},"production":"<verified|skipped|failed>","ci":{"conclusion":"<value>"}|{"status":"in-progress"}|{"unavailable":"no-adapter"|"transient"}}
    ```
 
    `verdict` is emitted by `verdict.js` — the doctrine documents the enum, never re-derives
-   the word. When `ci` is `unavailable`/`in-progress`, the row's `ci` field carries that
-   observation beside a plain `CLEAN`.
+   the word. `e2e`/`journeys`/`substrate`/`ci` are the leg's `observed` object copied verbatim
+   (D3/D11 — never re-derived counts); `production` is `observed.result`; `staging` stays the
+   exit-code derivation, unchanged. When `ci`'s object carries `unavailable`/`in-progress`
+   rather than `conclusion`, the row's `ci` field carries that observation beside a plain
+   `CLEAN`.
 
 2. **Tag** the release (`git tag`) when the user confirmed promotion — never push the tag;
    pushing remains theirs.

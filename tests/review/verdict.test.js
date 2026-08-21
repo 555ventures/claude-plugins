@@ -69,6 +69,20 @@ const { tmpdir, runNode } = require('../helpers')
 // --ledger+--workflow invocation below in place, per the standing colliding-pin Gotcha — none
 // retagged, none weakened, none left red.
 
+// specs/20260820/06-typed-evidence-manifest.md (D1-D11, 2026-08-20, brief 16's second move):
+// every manifest row's `observed` field becomes a typed JSON object from the Contracts' closed
+// set; `verdict.js` stops regex-parsing packed strings — `parseCounts`/`deriveProduction` are
+// deleted, `countLegFinding`/`deriveTestsSkipped` read typed fields, and release ledger keys
+// (`e2e`/`journeys`/`substrate`/`ci`) copy the leg's `observed` object VERBATIM instead of
+// re-deriving a shape by regex. D1: ANY row whose `observed` is not a non-null object makes the
+// WHOLE manifest invalid -> UNVERIFIED (spike A: the pre-image silently misreads a typed-looking
+// object and prints CLEAN with a fabricated zero — there is no safe compat window). SIX_GREEN and
+// every other shared fixture below are retyped ONCE at their definition per the spec's own
+// Fragile Spots note (~30 pins reuse SIX_GREEN alone); spec 03's five em-dash literal pins
+// (AC-20260820-03-3/5/6/9/11) collide with this migration by design and are updated in place and
+// retagged per A8 — AC-20260820-03-9 lives in promise-sweep.test.js, the other four are retagged
+// at their original locations below, never weakened, never left red.
+
 const SCRIPT = 'scripts/verdict.js'
 
 function writeManifest(dir, rows) {
@@ -104,19 +118,19 @@ function writeWorkflow(dir, obj) {
 // verdict words it already asserts (A2's executed redden spike named this file as one of the
 // three suites the extension reds).
 const SIX_GREEN = [
-  { leg: 'gate', exit: 0, observed: 'skips=0 todos=0' },
-  { leg: 'smoke', exit: 4, observed: 'inert' },
-  { leg: 'reconcile', exit: 0, observed: 'outOfPlan=0' },
-  { leg: 'ac-matrix', exit: 0, observed: 'uncovered=0' },
-  { leg: 'skip-reconcile', exit: 0, observed: 'skipped=0' },
-  { leg: 'ci', exit: 0, observed: 'conclusion=success' },
-  { leg: 'at-risk', exit: 0, observed: 'files=0' },
-  { leg: 'promise-sweep', exit: 0, observed: 'rows=1 carried=1 sanctioned=0 orphans=0' },
+  { leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 40 } },
+  { leg: 'smoke', exit: 4, observed: { result: 'inert' } },
+  { leg: 'reconcile', exit: 0, observed: { outOfPlan: 0 } },
+  { leg: 'ac-matrix', exit: 0, observed: { uncovered: 0, oracle: 0 } },
+  { leg: 'skip-reconcile', exit: 0, observed: { skipped: 0, sanctioned: 0 } },
+  { leg: 'ci', exit: 0, observed: { conclusion: 'success' } },
+  { leg: 'at-risk', exit: 0, observed: { files: 0, testsExecuted: 0 } },
+  { leg: 'promise-sweep', exit: 0, observed: { rows: 1, carried: 1, sanctioned: 0, orphans: 0 } },
 ]
 
 // The same six legs with ci structurally unobservable — the qualifier fixture (D4).
 const SIX_GREEN_CI_UNAVAILABLE = SIX_GREEN.map(
-  r => (r.leg === 'ci' ? { leg: 'ci', exit: 0, observed: 'unavailable' } : r))
+  r => (r.leg === 'ci' ? { leg: 'ci', exit: 0, observed: { unavailable: 'no-adapter' } } : r))
 
 function cleanWorkflow(survivors) {
   return {
@@ -133,9 +147,25 @@ function cleanWorkflow(survivors) {
 
 const VERDICT_WORDS = /^(CLEAN|FINDINGS|HARD_FINDINGS|REVIEWER_FAILED|UNVERIFIED|GATE_RED)$/
 
+test('AC-20260820-06-1: WHEN verdict.js reads a manifest whose gate row is {"leg":"gate","exit":0,"observed":"skips=2 todos=1"} (string observed, all other legs typed and green, clean workflow) THE SYSTEM SHALL print UNVERIFIED as stdout line 1, never CLEAN', () => {
+  const dir = tmpdir('verdict-06-1')
+  const rows = SIX_GREEN.map(r => (r.leg === 'gate' ? { leg: 'gate', exit: 0, observed: 'skips=2 todos=1' } : r))
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
+  assert.strictEqual(r.stdout.split('\n')[0], 'UNVERIFIED',
+    'AC-20260820-06-1 (literal, A1): D1 requires ANY row whose observed is not a non-null JSON object to make ' +
+    'the whole manifest invalid — a lone string-observed gate row (all six other legs typed and green, ' +
+    'workflow return zero-survivor CLEAN) must derive UNVERIFIED, never CLEAN. Spike A demonstrates the ' +
+    'pre-image silently misreads this exact row and prints CLEAN with a fabricated ' +
+    '"testsSkipped":{"total":0,"sanctioned":0,"unsanctioned":0} — a real 2-skip observation discarded to a ' +
+    'measurement no run ever made: ' + r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 1, 'UNVERIFIED must exit 1 so the close step is mechanically unreachable: ' + r.stderr)
+})
+
 test('AC-20260805-02-1: a manifest missing required legs derives UNVERIFIED and exits 1, never CLEAN', () => {
   const dir = tmpdir('verdict')
-  const manifest = writeManifest(dir, [{ leg: 'gate', exit: 0, observed: 'skips=0 todos=0' }])
+  const manifest = writeManifest(dir, [{ leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 0 } }])
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
   assert.strictEqual(r.stdout.split('\n')[0], 'UNVERIFIED',
@@ -158,7 +188,7 @@ test('AC-20260805-02-2 / AC-20260813-03-10 (regression pin: --workflow-present d
 
 test('AC-20260805-02-3 / AC-20260810-07-8: a red ci leg derives GATE_RED and exits 1 even with a CLEAN workflow return (review profile CONTINUES to block on ci per D3)', () => {
   const dir = tmpdir('verdict')
-  const rows = SIX_GREEN.map(r => (r.leg === 'ci' ? { leg: 'ci', exit: 1, observed: 'conclusion=failure' } : r))
+  const rows = SIX_GREEN.map(r => (r.leg === 'ci' ? { leg: 'ci', exit: 1, observed: { conclusion: 'failure' } } : r))
   const manifest = writeManifest(dir, rows)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
@@ -192,7 +222,7 @@ test('AC-20260813-10-8 (retag of AC-20260813-02-8): a review-profile run whose c
 // in place — never weakened, never left red.
 test('AC-20260818-01-10 (retag of AC-20260805-02-3): a red ac-matrix leg finding coexisting with a reviewer survivor requires dispositions covering both pools before CLEAN — waiving only the survivor still derives HARD_FINDINGS', () => {
   const dir = tmpdir('verdict')
-  const rows = SIX_GREEN.map(r => (r.leg === 'ac-matrix' ? { leg: 'ac-matrix', exit: 1, observed: 'uncovered=1' } : r))
+  const rows = SIX_GREEN.map(r => (r.leg === 'ac-matrix' ? { leg: 'ac-matrix', exit: 1, observed: { uncovered: 1, oracle: 0 } } : r))
   const manifest = writeManifest(dir, rows)
   const workflow = writeWorkflow(dir, cleanWorkflow([{ severity: 'soft', id: 'AC-20260805-02-99' }]))
   const partial = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '1'])
@@ -326,23 +356,23 @@ test('AC-20260805-02-5: --ledger derives row.smoke from the manifest smoke row e
   const dir = tmpdir('verdict')
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
 
-  const passRows = SIX_GREEN.map(r => (r.leg === 'smoke' ? { leg: 'smoke', exit: 0, observed: 'pass' } : r))
+  const passRows = SIX_GREEN.map(r => (r.leg === 'smoke' ? { leg: 'smoke', exit: 0, observed: { result: 'pass' } } : r))
   const passManifest = writeManifest(dir, passRows)
   const passRun = runNode(SCRIPT, ['--manifest', passManifest, '--workflow', workflow, '--ledger', '--retain', dir])
   const passRow = JSON.parse(passRun.stdout.trim().split('\n')[1])
   assert.strictEqual(passRow.smoke, 'pass',
-    'a smoke row with exit 0 and observed "pass" must derive row.smoke "pass" — D2 requires smoke be ' +
-    'derived FROM the manifest row, not hardcoded: ' + JSON.stringify(passRow))
+    'a smoke row with exit 0 and observed {"result":"pass"} must derive row.smoke "pass" — D2 requires smoke ' +
+    'be derived FROM the manifest row\'s typed observed.result field, not hardcoded: ' + JSON.stringify(passRow))
 
-  const inertManifest = writeManifest(dir, SIX_GREEN) // smoke row: exit 4, observed "inert"
+  const inertManifest = writeManifest(dir, SIX_GREEN) // smoke row: exit 4, observed {"result":"inert"}
   const inertRun = runNode(SCRIPT, ['--manifest', inertManifest, '--workflow', workflow, '--ledger', '--retain', dir])
   const inertRow = JSON.parse(inertRun.stdout.trim().split('\n')[1])
   assert.strictEqual(inertRow.smoke, 'inert',
     'a smoke row with exit 4 (the sanctioned inert-green case) must derive row.smoke "inert" regardless of ' +
-    'its observed text — exit 4 is the authority, per D3\'s "exit 4 = inert counts green": ' +
+    'its observed object — exit 4 is the authority, per D3\'s "exit 4 = inert counts green": ' +
     JSON.stringify(inertRow))
 
-  const failRows = SIX_GREEN.map(r => (r.leg === 'smoke' ? { leg: 'smoke', exit: 2, observed: 'boot-crash' } : r))
+  const failRows = SIX_GREEN.map(r => (r.leg === 'smoke' ? { leg: 'smoke', exit: 2, observed: { result: 'fail' } } : r))
   const failManifest = writeManifest(dir, failRows)
   const failRun = runNode(SCRIPT, ['--manifest', failManifest, '--workflow', workflow, '--ledger', '--retain', dir])
   const failRow = JSON.parse(failRun.stdout.trim().split('\n')[1])
@@ -352,9 +382,9 @@ test('AC-20260805-02-5: --ledger derives row.smoke from the manifest smoke row e
     'history, not just on stderr: ' + JSON.stringify(failRow))
 })
 
-test('AC-20260813-02-7 (updates AC-20260805-02-5) / AC-20260816-01-7 (CONTINUES TO hold post-D6) / AC-20260820-03-4 (CONTINUES TO hold post-D2\'s typed-unavailable branch): --ledger derives row.testsSkipped.total as skips+todos from the gate row\'s pinned "skips=N todos=M" observed format — the total-summing claim survives the D2 object-shape change, the D6 suffix-tolerance change, and specs/20260820/03\'s new unavailable-observed branch, which is a disjoint regex arm and must never perturb the matched-format case', () => {
+test('AC-20260813-02-7 (updates AC-20260805-02-5) / AC-20260816-01-7 (CONTINUES TO hold post-D6) / AC-20260820-03-4 (CONTINUES TO hold post-D2\'s typed-unavailable branch) / AC-20260820-06-2\'s sibling claim (retyped post-D1/D2): --ledger derives row.testsSkipped.total as skips+todos from the gate row\'s typed {"skips":N,"todos":N} observed object — the total-summing claim survives the D2 object-shape change, the D6 suffix-tolerance change, specs/20260820/03\'s unavailable-observed branch, and specs/20260820/06\'s full retyping from packed string to JSON object', () => {
   const dir = tmpdir('verdict')
-  const rows = SIX_GREEN.map(r => (r.leg === 'gate' ? { leg: 'gate', exit: 0, observed: 'skips=2 todos=1' } : r))
+  const rows = SIX_GREEN.map(r => (r.leg === 'gate' ? { leg: 'gate', exit: 0, observed: { skips: 2, todos: 1, testsExecuted: 40 } } : r))
   const manifest = writeManifest(dir, rows)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
@@ -364,15 +394,36 @@ test('AC-20260813-02-7 (updates AC-20260805-02-5) / AC-20260816-01-7 (CONTINUES 
     'the scalar shape survived and downstream consumers still cannot tell a sanctioned skip run from an ' +
     'unsanctioned one: ' + JSON.stringify(row))
   assert.strictEqual(row.testsSkipped.total, 3,
-    'D2 pins the gate leg\'s observed format as "skips=N todos=M" specifically so testsSkipped.total can be ' +
-    'summed from it (a skip is not a pass) — skips=2 todos=1 must derive total 3, not 2 or 1 alone: ' +
-    JSON.stringify(row))
+    'D2 pins the gate leg\'s observed shape as the typed {"skips":N,"todos":N,...} object specifically so ' +
+    'testsSkipped.total can be summed from its fields (a skip is not a pass) — skips:2 todos:1 must derive ' +
+    'total 3, not 2 or 1 alone: ' + JSON.stringify(row))
 })
 
-test('AC-20260820-03-3: a gate row observed "unavailable — skip format did not match gate output" (exit 0) derives ledger row.testsSkipped as exactly {"unavailable":true}, never a fabricated zero total', () => {
+test('AC-20260820-06-2: WHEN the gate row is {"exit":0,"observed":{"skips":2,"todos":1,"testsExecuted":48}} and skip-reconcile is {"exit":0,"observed":{"skipped":2,"sanctioned":1}} THE SYSTEM SHALL derive the ledger\'s testsSkipped as exactly {"total":3,"sanctioned":1,"unsanctioned":2} and carry the gate row\'s observed object verbatim in legs[]', () => {
+  const dir = tmpdir('verdict-06-2')
+  const rows = SIX_GREEN.map(r => {
+    if (r.leg === 'gate') return { leg: 'gate', exit: 0, observed: { skips: 2, todos: 1, testsExecuted: 48 } }
+    if (r.leg === 'skip-reconcile') return { leg: 'skip-reconcile', exit: 0, observed: { skipped: 2, sanctioned: 1 } }
+    return r
+  })
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
+  const row = JSON.parse(r.stdout.trim().split('\n')[1])
+  assert.deepStrictEqual(row.testsSkipped, { total: 3, sanctioned: 1, unsanctioned: 2 },
+    'AC-20260820-06-2 (literal): gate {"skips":2,"todos":1} (total 3) joined with skip-reconcile ' +
+    '{"skipped":2,"sanctioned":1} must derive exactly {"total":3,"sanctioned":1,"unsanctioned":2} — the typed ' +
+    'field reads must sum and split identically to the retired packed-string grammar: ' + JSON.stringify(row))
+  const gateLeg = row.legs.find(l => l.leg === 'gate')
+  assert.deepStrictEqual(gateLeg.observed, { skips: 2, todos: 1, testsExecuted: 48 },
+    'AC-20260820-06-2: the gate row\'s observed object must be carried into legs[] VERBATIM, byte-for-byte, ' +
+    'never sliced or re-derived (D11: objects are not sliced) — got ' + JSON.stringify(gateLeg))
+})
+
+test('AC-20260820-06-3 (ledger half, retag of AC-20260820-03-3): a gate row {"exit":0,"observed":{"skips":{"unavailable":"pattern-no-match"},"testsExecuted":48}} derives ledger row.testsSkipped as exactly {"unavailable":true}, never a fabricated zero total', () => {
   const dir = tmpdir('verdict-skip-unavailable')
   const rows = SIX_GREEN.map(r => (r.leg === 'gate'
-    ? { leg: 'gate', exit: 0, observed: 'unavailable — skip format did not match gate output' } : r))
+    ? { leg: 'gate', exit: 0, observed: { skips: { unavailable: 'pattern-no-match' }, testsExecuted: 48 } } : r))
   const manifest = writeManifest(dir, rows)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
@@ -382,47 +433,47 @@ test('AC-20260820-03-3: a gate row observed "unavailable — skip format did not
     'D2: --ledger must still print a parseable ledger row on line 2 for an unavailable-skip-format gate ' +
     'observation: ' + r.stdout + ' / ' + r.stderr)
   assert.deepStrictEqual(row.testsSkipped, { unavailable: true },
-    'D2: a gate observed starting with "unavailable" must derive row.testsSkipped as exactly ' +
-    '{"unavailable":true} — the pre-D2 arithmetic (deriveTestsSkipped regexing ' +
-    '"^skips=(\\d+) todos=(\\d+)$") silently falls through to {"total":0,"sanctioned":0,"unsanctioned":0} on ' +
-    'this input, fabricating a zero-skip measurement no run ever made (A1, the Salon OS field report defect): ' +
-    JSON.stringify(row))
+    'D2: a gate observed.skips typed {"unavailable":"pattern-no-match"} must derive row.testsSkipped as ' +
+    'exactly {"unavailable":true} — the pre-D1/D2 arithmetic (deriveTestsSkipped regexing ' +
+    '"^skips=(\\d+) todos=(\\d+)$" over a packed string) silently falls through to ' +
+    '{"total":0,"sanctioned":0,"unsanctioned":0} on this input, fabricating a zero-skip measurement no run ' +
+    'ever made (A1, the Salon OS field report defect): ' + JSON.stringify(row))
 })
 
-test('AC-20260820-03-5: an all-green manifest whose gate row observed is "unavailable — skip format did not match gate output" (exit 0) derives HARD_FINDINGS, never CLEAN, even with a zero-survivor zero-disposition workflow return', () => {
+test('AC-20260820-06-3 (verdict-word half, retag of AC-20260820-03-5): an all-green manifest whose gate row is {"exit":0,"observed":{"skips":{"unavailable":"pattern-no-match"},"testsExecuted":48}} derives HARD_FINDINGS, never CLEAN, even with a zero-survivor zero-disposition workflow return', () => {
   const dir = tmpdir('verdict-skip-unavailable-finding')
   const rows = SIX_GREEN.map(r => (r.leg === 'gate'
-    ? { leg: 'gate', exit: 0, observed: 'unavailable — skip format did not match gate output' } : r))
+    ? { leg: 'gate', exit: 0, observed: { skips: { unavailable: 'pattern-no-match' }, testsExecuted: 48 } } : r))
   const manifest = writeManifest(dir, rows)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
   assert.strictEqual(r.stdout.split('\n')[0], 'HARD_FINDINGS',
-    'D3: an unmatched skip-format observation is drift, not honest config, and must page the same run it ' +
-    'occurs on (dead-man\'s-switch, never a consecutive-miss counter) — every other leg is green and the ' +
-    'workflow returned zero-survivor CLEAN, so any word other than HARD_FINDINGS here means the silent-decay ' +
-    'defect A1 demonstrated on this exact manifest (CLEAN + testsSkipped.total:0) is still live: ' +
-    r.stdout + ' / ' + r.stderr)
+    'D3/D4: an unmatched skip-format observation (observed.skips.unavailable === "pattern-no-match") is ' +
+    'drift, not honest config, and must page the same run it occurs on (dead-man\'s-switch, never a ' +
+    'consecutive-miss counter) — every other leg is green and the workflow returned zero-survivor CLEAN, so ' +
+    'any word other than HARD_FINDINGS here means the silent-decay defect A1 demonstrated on this exact ' +
+    'manifest (CLEAN + testsSkipped.total:0) is still live: ' + r.stdout + ' / ' + r.stderr)
   assert.strictEqual(r.status, 1, 'HARD_FINDINGS must exit 1 so the close step is mechanically unreachable: ' + r.stderr)
 })
 
-test('AC-20260820-03-6: an all-green manifest whose gate row observed is "unavailable — host runner declares no skip format" (exit 0) derives CLEAN, with ledger row.testsSkipped typed {"unavailable":true} — declared-none is sanctioned, never a finding', () => {
+test('AC-20260820-06-4 (retag of AC-20260820-03-6): an all-green manifest whose gate row is {"exit":0,"observed":{"skips":{"unavailable":"no-format-declared"},"testsExecuted":{"unavailable":"no-format-declared"}}} derives CLEAN, with ledger row.testsSkipped typed {"unavailable":true} — declared-none is sanctioned, never a finding', () => {
   const dir = tmpdir('verdict-skip-declared-none')
   const rows = SIX_GREEN.map(r => (r.leg === 'gate'
-    ? { leg: 'gate', exit: 0, observed: 'unavailable — host runner declares no skip format' } : r))
+    ? { leg: 'gate', exit: 0, observed: { skips: { unavailable: 'no-format-declared' }, testsExecuted: { unavailable: 'no-format-declared' } } } : r))
   const manifest = writeManifest(dir, rows)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
   const lines = r.stdout.trim().split('\n')
   assert.strictEqual(lines[0], 'CLEAN',
-    'D3: a host that declares no skip format at all is honest standing config, not drift — only the ' +
-    'unmatched-pattern variant pages; this exact observed string must derive CLEAN with zero dispositions ' +
-    'needed: ' + r.stdout + ' / ' + r.stderr)
+    'D3/D4: a host that declares no skip format at all is honest standing config, not drift — only the ' +
+    '"pattern-no-match" variant pages; this exact typed observed object must derive CLEAN with zero ' +
+    'dispositions needed: ' + r.stdout + ' / ' + r.stderr)
   assert.strictEqual(r.status, 0, 'CLEAN must exit 0: ' + r.stderr)
   let row
   assert.doesNotThrow(() => { row = JSON.parse(lines[1]) },
     'D2: --ledger must still print a parseable ledger row on line 2: ' + r.stdout)
   assert.deepStrictEqual(row.testsSkipped, { unavailable: true },
-    'D2: this observed string also starts with "unavailable" so testsSkipped must be typed ' +
+    'D2: this observed.skips is also typed {"unavailable":...} so testsSkipped must be typed ' +
     '{"unavailable":true}, never a fabricated zero total, matching the drift variant\'s shape even though ' +
     'this row raises no finding of its own: ' + JSON.stringify(row))
 })
@@ -435,35 +486,35 @@ test('AC-20260820-03-6: an all-green manifest whose gate row observed is "unavai
 // is specified to already pass, and its falsifiability is demonstrated in-line by mutating the
 // same fixture's gate exit to 1 and asserting the word flips to GATE_RED (D10: verified by
 // mutation, never by weakening).
-test('AC-20260816-01-12 / AC-20260820-03-12 (CONTINUES TO hold — D4: gate-leg verdict derivation stays exit-code-only, the D3 skip-observation finding rides the leg-findings pool and never derives GATE_RED): a green-by-subtraction gate row (exit:0, observed "skips=0 todos=0 sanctionedReds=21") with all other legs green and a clean workflow return derives a CLEAN-family word, never GATE_RED — the terminal observable of the spec\'s chain', () => {
+test('AC-20260816-01-12 / AC-20260820-03-12 / AC-20260820-06-13 (retag: tags the existing pin after retyping its fixture — CONTINUES TO hold — D4: gate-leg verdict derivation stays exit-code-only, the D3 skip-observation finding rides the leg-findings pool and never derives GATE_RED): a green-by-subtraction gate row (exit:0, observed carrying an extra "sanctionedReds":21 field alongside the typed skips/todos/testsExecuted) with all other legs green and a clean workflow return derives a CLEAN-family word, never GATE_RED — the terminal observable of the spec\'s chain', () => {
   const dir = tmpdir('verdict')
   const rows = SIX_GREEN.map(r => (r.leg === 'gate'
-    ? { leg: 'gate', exit: 0, observed: 'skips=0 todos=0 sanctionedReds=21' } : r))
+    ? { leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 40, sanctionedReds: 21 } } : r))
   const manifest = writeManifest(dir, rows)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
   assert.match(r.stdout.split('\n')[0], /^CLEAN/,
     'a gate leg that went green by sanctioned-baseline subtraction is still exit:0 — derive()/legIsRed reads ' +
-    'only the exit code, never the observed string, so a review that closed via suite-baseline.js --gate must ' +
-    'still reach a CLEAN-family verdict, not be misread as red because its observed text names 21 sanctioned ' +
-    'reds: ' + r.stdout + ' / ' + r.stderr)
+    'only the exit code, never the observed object\'s fields, so a review that closed via suite-baseline.js ' +
+    '--gate must still reach a CLEAN-family verdict, not be misread as red because its observed object names ' +
+    '21 sanctioned reds: ' + r.stdout + ' / ' + r.stderr)
   assert.strictEqual(r.status, 0, 'a CLEAN-family word here must exit 0: ' + r.stderr)
 
   const redRows = SIX_GREEN.map(r => (r.leg === 'gate'
-    ? { leg: 'gate', exit: 1, observed: 'skips=0 todos=0 sanctionedReds=21' } : r))
+    ? { leg: 'gate', exit: 1, observed: { skips: 0, todos: 0, testsExecuted: 40, sanctionedReds: 21 } } : r))
   const redManifest = writeManifest(dir, redRows)
   const rRed = runNode(SCRIPT, ['--manifest', redManifest, '--workflow', workflow])
   assert.strictEqual(rRed.stdout.split('\n')[0], 'GATE_RED',
-    'falsifiability check (D10): the exact same sanctionedReds=21 observed text with the gate row\'s exit ' +
+    'falsifiability check (D10): the exact same sanctionedReds:21 observed object with the gate row\'s exit ' +
     'flipped to 1 must derive GATE_RED — proving the pin above is actually sensitive to the gate leg\'s exit ' +
     'code and is not a vacuously-true assertion: ' + rRed.stdout + ' / ' + rRed.stderr)
 })
 
-test('AC-20260813-02-1: --ledger derives row.testsSkipped as {total,sanctioned,unsanctioned} from the gate row\'s skips+todos and the skip-reconcile row\'s "skipped=K sanctioned=S" observed format', () => {
+test('AC-20260813-02-1: --ledger derives row.testsSkipped as {total,sanctioned,unsanctioned} from the gate row\'s typed skips+todos fields and the skip-reconcile row\'s typed {"skipped":K,"sanctioned":S} object', () => {
   const dir = tmpdir('verdict')
   const rows = SIX_GREEN.map(r => {
-    if (r.leg === 'gate') return { leg: 'gate', exit: 0, observed: 'skips=2 todos=1' }
-    if (r.leg === 'skip-reconcile') return { leg: 'skip-reconcile', exit: 0, observed: 'skipped=3 sanctioned=2' }
+    if (r.leg === 'gate') return { leg: 'gate', exit: 0, observed: { skips: 2, todos: 1, testsExecuted: 40 } }
+    if (r.leg === 'skip-reconcile') return { leg: 'skip-reconcile', exit: 0, observed: { skipped: 3, sanctioned: 2 } }
     return r
   })
   const manifest = writeManifest(dir, rows)
@@ -471,17 +522,17 @@ test('AC-20260813-02-1: --ledger derives row.testsSkipped as {total,sanctioned,u
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
   const row = JSON.parse(r.stdout.trim().split('\n')[1])
   assert.deepStrictEqual(row.testsSkipped, { total: 3, sanctioned: 2, unsanctioned: 1 },
-    'D2: gate "skips=2 todos=1" (total 3) joined with skip-reconcile "skipped=3 sanctioned=2" (sanctioned 2) ' +
-    'must derive {"total":3,"sanctioned":2,"unsanctioned":1} — without this split, hearwell\'s testsSkipped:5 ' +
-    'incident (identical count for 5 declared-sanctioned skips and 5 undeclared ones) is unfixed: ' +
-    JSON.stringify(row))
+    'D2: gate {"skips":2,"todos":1} (total 3) joined with skip-reconcile {"skipped":3,"sanctioned":2} ' +
+    '(sanctioned 2) must derive {"total":3,"sanctioned":2,"unsanctioned":1} — without this split, hearwell\'s ' +
+    'testsSkipped:5 incident (identical count for 5 declared-sanctioned skips and 5 undeclared ones) is ' +
+    'unfixed: ' + JSON.stringify(row))
 })
 
-test('AC-20260813-02-2: a legacy skip-reconcile "skipped=K" observed (no sanctioned= term) derives sanctioned:0 — undeclared skips are unsanctioned by construction, never silently sanctioned', () => {
+test('AC-20260813-02-2: a skip-reconcile typed observed object carrying only {"skipped":2} (no "sanctioned" key) derives sanctioned:0 — an absent typed field is unsanctioned by construction, never silently sanctioned', () => {
   const dir = tmpdir('verdict')
   const rows = SIX_GREEN.map(r => {
-    if (r.leg === 'gate') return { leg: 'gate', exit: 0, observed: 'skips=2 todos=1' }
-    if (r.leg === 'skip-reconcile') return { leg: 'skip-reconcile', exit: 0, observed: 'skipped=2' }
+    if (r.leg === 'gate') return { leg: 'gate', exit: 0, observed: { skips: 2, todos: 1, testsExecuted: 40 } }
+    if (r.leg === 'skip-reconcile') return { leg: 'skip-reconcile', exit: 0, observed: { skipped: 2 } }
     return r
   })
   const manifest = writeManifest(dir, rows)
@@ -489,9 +540,10 @@ test('AC-20260813-02-2: a legacy skip-reconcile "skipped=K" observed (no sanctio
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
   const row = JSON.parse(r.stdout.trim().split('\n')[1])
   assert.deepStrictEqual(row.testsSkipped, { total: 3, sanctioned: 0, unsanctioned: 3 },
-    'D2: a legacy skip-reconcile row carrying only "skipped=2" (no sanctioned= term) must derive sanctioned:0 ' +
-    '— the conservative reading is that an undeclared skip is unsanctioned by definition, never silently ' +
-    'treated as sanctioned just because an older manifest shape produced it: ' + JSON.stringify(row))
+    'D2: a skip-reconcile typed object carrying only {"skipped":2} with no "sanctioned" key must derive ' +
+    'sanctioned:0 — the conservative reading is that an absent sanctioned field means unsanctioned by ' +
+    'definition, never silently treated as sanctioned just because a producer omitted the field: ' +
+    JSON.stringify(row))
 })
 
 // specs/20260818/01-ledger-truth.md D8 (build-time addendum to D7, found by the red gate
@@ -567,13 +619,13 @@ test('AC-20260805-02-8: --ledger normalizes an array-shaped workflow.killed to i
 // SIX_GREEN's own retarget, so AC-20260815-02-6/-7/-8 keep meaning "every OTHER leg genuinely
 // passed" instead of silently asserting a claim D4 makes structurally false.
 const SIX_LEGS_NO_AT_RISK = [
-  { leg: 'gate', exit: 0, observed: 'skips=0 todos=0' },
-  { leg: 'smoke', exit: 4, observed: 'inert' },
-  { leg: 'reconcile', exit: 0, observed: 'outOfPlan=0' },
-  { leg: 'ac-matrix', exit: 0, observed: 'uncovered=0' },
-  { leg: 'skip-reconcile', exit: 0, observed: 'skipped=0' },
-  { leg: 'ci', exit: 0, observed: 'conclusion=success' },
-  { leg: 'promise-sweep', exit: 0, observed: 'rows=1 carried=1 sanctioned=0 orphans=0' },
+  { leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 40 } },
+  { leg: 'smoke', exit: 4, observed: { result: 'inert' } },
+  { leg: 'reconcile', exit: 0, observed: { outOfPlan: 0 } },
+  { leg: 'ac-matrix', exit: 0, observed: { uncovered: 0, oracle: 0 } },
+  { leg: 'skip-reconcile', exit: 0, observed: { skipped: 0, sanctioned: 0 } },
+  { leg: 'ci', exit: 0, observed: { conclusion: 'success' } },
+  { leg: 'promise-sweep', exit: 0, observed: { rows: 1, carried: 1, sanctioned: 0, orphans: 0 } },
 ]
 
 test('AC-20260815-02-6: a full-scope review manifest missing the at-risk row derives UNVERIFIED, never CLEAN, even with all six legacy legs green and a CLEAN workflow return', () => {
@@ -596,7 +648,7 @@ test('AC-20260815-02-6: a full-scope review manifest missing the at-risk row der
 // the fixture now needs a waive before CLEAN — updated in place, never weakened, never left red.
 test('AC-20260818-01-9 (retag of AC-20260815-02-7): a red at-risk leg CONTINUES TO never derive GATE_RED, but now needs its leg finding waived before CLEAN is reachable', () => {
   const dir = tmpdir('verdict-at-risk-red')
-  const rows = [...SIX_LEGS_NO_AT_RISK, { leg: 'at-risk', exit: 1, observed: 'files=2' }]
+  const rows = [...SIX_LEGS_NO_AT_RISK, { leg: 'at-risk', exit: 1, observed: { files: 2, testsExecuted: 1 } }]
   const manifest = writeManifest(dir, rows)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
   const undispositioned = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
@@ -605,8 +657,9 @@ test('AC-20260818-01-9 (retag of AC-20260815-02-7): a red at-risk leg CONTINUES 
     'reconcile\'s exit-3 standing (the finding flows to Phase 2 dispositions instead), never a hard gate ' +
     'stop: ' + undispositioned.stdout + ' / ' + undispositioned.stderr)
   assert.strictEqual(undispositioned.stdout.split('\n')[0], 'HARD_FINDINGS',
-    'D1: a red at-risk row ("files=2", unparseable by D2\'s named grammars) contributes 1 leg finding floored ' +
-    'at 1, which now sits undispositioned alongside zero survivors and zero dispositions — the derivation ' +
+    'D1: a red at-risk row (typed {"files":2,"testsExecuted":1}, unparseable by D2\'s named-field grammars — ' +
+    'at-risk carries no reconcile/ac-matrix/skip-reconcile/promise-sweep-named field) contributes 1 leg ' +
+    'finding floored at 1, which now sits undispositioned alongside zero survivors and zero dispositions — the derivation ' +
     'must be HARD_FINDINGS, not the silent CLEAN the 2026-08-18 Fable consult demonstrated fails open: ' +
     undispositioned.stdout)
   const waived = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '1'])
@@ -676,7 +729,7 @@ test('AC-20260817-07-11 (fix-delta scope): a fix-delta manifest missing the prom
 test('AC-20260818-01-10 (retag of AC-20260817-07-12): a red promise-sweep leg finding coexisting with a reviewer survivor requires dispositions covering both pools before CLEAN — waiving only the survivor still derives HARD_FINDINGS', () => {
   const dir = tmpdir('verdict-promise-sweep-red')
   const rows = SIX_GREEN.map(r => (r.leg === 'promise-sweep'
-    ? { leg: 'promise-sweep', exit: 1, observed: 'rows=1 carried=0 sanctioned=0 orphans=1' } : r))
+    ? { leg: 'promise-sweep', exit: 1, observed: { rows: 1, carried: 0, sanctioned: 0, orphans: 1 } } : r))
   const manifest = writeManifest(dir, rows)
   const workflow = writeWorkflow(dir, cleanWorkflow([{ severity: 'hard', id: 'D1' }]))
   const partial = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '1'])
@@ -695,16 +748,16 @@ test('AC-20260818-01-10 (retag of AC-20260817-07-12): a red promise-sweep leg fi
 })
 
 const RELEASE_SIX_LEGS = [
-  { leg: 'deploy', exit: 0, observed: 'ok' },
-  { leg: 'ready', exit: 0, observed: 'ok' },
-  { leg: 'e2e', exit: 0, observed: 'passed=10 failed=0 skipped=2' },
-  { leg: 'journeys', exit: 0, observed: 'walked=5 failed=0' },
-  { leg: 'substrate', exit: 0, observed: 'checked=8 failed=0 inert=1' },
-  { leg: 'production', exit: 0, observed: 'verified' },
+  { leg: 'deploy', exit: 0, observed: { result: 'pass' } },
+  { leg: 'ready', exit: 0, observed: { result: 'pass' } },
+  { leg: 'e2e', exit: 0, observed: { passed: 10, failed: 0, skipped: 2 } },
+  { leg: 'journeys', exit: 0, observed: { walked: 5, failed: 0 } },
+  { leg: 'substrate', exit: 0, observed: { checked: 8, failed: 0, inert: 1 } },
+  { leg: 'production', exit: 0, observed: { result: 'verified' } },
 ]
 const RELEASE_SEVEN_LEGS = [
   ...RELEASE_SIX_LEGS,
-  { leg: 'ci', exit: 0, observed: 'conclusion=success' },
+  { leg: 'ci', exit: 0, observed: { conclusion: 'success' } },
 ]
 
 test('AC-20260813-02-5 (AC-20260805-02-8 / AC-20260810-07-5, byte-identical per D5): --profile release --ledger with --milestone/--briefs and all seven green legs incl. ci observed conclusion=success derives plain CLEAN (never CLEAN-with-qualifier) matching release.md\'s template', () => {
@@ -736,33 +789,34 @@ test('AC-20260813-02-5 (AC-20260805-02-8 / AC-20260810-07-5, byte-identical per 
     'row.substrate must parse the substrate leg\'s "checked=N failed=N inert=N" observed string: ' +
     JSON.stringify(row))
   assert.strictEqual(row.production, 'verified',
-    'row.production must read the production leg\'s observed enum value directly when it is one of ' +
-    'verified|skipped|failed: ' + JSON.stringify(row))
-  assert.strictEqual(row.ci, 'conclusion=success',
-    'row.ci must carry the ci leg\'s observed string verbatim (AC-20260810-07-5) — the release ledger row ' +
-    'gains a "ci" field per D4/Contracts once ci joins RELEASE_LEGS, and this six-leg fixture regresses to ' +
-    'UNVERIFIED the moment that happens (refuter-demonstrated) unless the ci row is present here: ' +
-    JSON.stringify(row))
+    'row.production must derive from the production leg\'s typed observed.result field (D3: "row.production = ' +
+    'observed.result") when it is one of verified|skipped|failed: ' + JSON.stringify(row))
+  assert.deepStrictEqual(row.ci, { conclusion: 'success' },
+    'D3: row.ci must carry the ci leg\'s observed object VERBATIM (D3: "row.ci = observed"), never sliced to ' +
+    'just its .result the way production is — the release ledger row gains a "ci" field per D4/Contracts ' +
+    'once ci joins RELEASE_LEGS, and this six-leg fixture regresses to UNVERIFIED the moment that happens ' +
+    '(refuter-demonstrated) unless the ci row is present here: ' + JSON.stringify(row))
 })
 
-test('AC-20260813-02-4 (v7 retag): --profile release with six green legs and a ci row observed "unavailable" (exit 0, structurally-absent verdict) derives plain CLEAN, records the observation in row.ci, and exits 0', () => {
+test('AC-20260813-02-4 (v7 retag): --profile release with six green legs and a ci row observed {"unavailable":"no-adapter"} (exit 0, structurally-absent verdict) derives plain CLEAN, records the typed observation in row.ci, and exits 0', () => {
   const dir = tmpdir('verdict')
-  const rows = RELEASE_SEVEN_LEGS.map(r => (r.leg === 'ci' ? { leg: 'ci', exit: 0, observed: 'unavailable' } : r))
+  const rows = RELEASE_SEVEN_LEGS.map(r => (r.leg === 'ci' ? { leg: 'ci', exit: 0, observed: { unavailable: 'no-adapter' } } : r))
   const manifest = writeManifest(dir, rows)
   const r = runNode(SCRIPT, ['--manifest', manifest, '--profile', 'release', '--ledger',
     '--milestone', 'v1.2.3', '--briefs', '12,13'])
   const lines = r.stdout.trim().split('\n')
   assert.strictEqual(lines[0], 'CLEAN',
-    'v7: the qualifier word is retired — a release whose ci leg observed is "unavailable" derives plain ' +
+    'v7: the qualifier word is retired — a release whose ci leg observed is typed unavailable derives plain ' +
     'CLEAN; the structurally-absent observation stays durable in row.ci, never a distinct verdict word: ' +
     r.stdout + ' / ' + r.stderr)
   assert.strictEqual(r.status, 0, 'CLEAN must exit 0: ' + r.stderr)
   let row
   assert.doesNotThrow(() => { row = JSON.parse(lines[1]) },
     '--ledger must still print a parseable JSON row on line 2: ' + r.stdout)
-  assert.strictEqual(row.ci, 'unavailable',
-    'row.ci must record the unavailable observation — with the qualifier word retired this field is the ' +
-    'only durable carrier of "CI never delivered a verdict on this commit": ' + JSON.stringify(row))
+  assert.deepStrictEqual(row.ci, { unavailable: 'no-adapter' },
+    'D3: row.ci must record the typed unavailable observation VERBATIM — with the qualifier word retired ' +
+    'this field is the only durable carrier of "CI never delivered a verdict on this commit": ' +
+    JSON.stringify(row))
 })
 
 test('AC-20260810-07-6: --profile release with the other six legs green but NO ci row derives UNVERIFIED and exits 1', () => {
@@ -778,7 +832,7 @@ test('AC-20260810-07-6: --profile release with the other six legs green but NO c
 
 test('AC-20260810-07-7: --profile release with a red ci row (exit 1) derives GATE_RED and exits 1', () => {
   const dir = tmpdir('verdict')
-  const rows = RELEASE_SEVEN_LEGS.map(r => (r.leg === 'ci' ? { leg: 'ci', exit: 1, observed: 'conclusion=failure' } : r))
+  const rows = RELEASE_SEVEN_LEGS.map(r => (r.leg === 'ci' ? { leg: 'ci', exit: 1, observed: { conclusion: 'failure' } } : r))
   const manifest = writeManifest(dir, rows)
   const r = runNode(SCRIPT, ['--manifest', manifest, '--profile', 'release'])
   assert.strictEqual(r.stdout.split('\n')[0], 'GATE_RED',
@@ -788,12 +842,12 @@ test('AC-20260810-07-7: --profile release with a red ci row (exit 1) derives GAT
   assert.strictEqual(r.status, 1, 'GATE_RED must exit 1 so promotion is mechanically unreachable: ' + r.stderr)
 })
 
-test('AC-20260805-02-8: a partial release manifest (STOP path) still prints a ledger row, omitting missing or unparseable leg keys instead of failing', () => {
+test('AC-20260805-02-8 (behavior updated by D3 — verbatim copy replaces re-derive-or-omit): a partial release manifest (STOP path) still prints a ledger row; a leg genuinely ABSENT from the manifest omits its key, but a leg row that IS present copies its typed observed object verbatim even when its shape does not match the leg\'s usual closed set', () => {
   const dir = tmpdir('verdict')
   const manifest = writeManifest(dir, [
-    { leg: 'deploy', exit: 0, observed: 'ok' },
-    { leg: 'ready', exit: 0, observed: 'ok' },
-    { leg: 'e2e', exit: 0, observed: 'not-the-pinned-format' }, // present but unparseable
+    { leg: 'deploy', exit: 0, observed: { result: 'pass' } },
+    { leg: 'ready', exit: 0, observed: { result: 'pass' } },
+    { leg: 'e2e', exit: 0, observed: { note: 'a shape ac-matrix.js would never actually emit' } }, // present, off-shape
     // journeys/substrate/production never ran — the STOP fired before them
   ])
   const r = runNode(SCRIPT, ['--manifest', manifest, '--profile', 'release', '--ledger',
@@ -811,14 +865,16 @@ test('AC-20260805-02-8: a partial release manifest (STOP path) still prints a le
   assert.strictEqual(row.staging, 'pass',
     'staging is derivable from the deploy+ready rows that DID execute, so it must still be present even ' +
     'though later legs did not run: ' + JSON.stringify(row))
-  assert.ok(!('e2e' in row),
-    'the e2e leg\'s observed string does not match the pinned "passed=N failed=N skipped=N" format — the ' +
-    'row must omit row.e2e rather than print nulls/NaNs that a consumer would read as real zero counts: ' +
-    JSON.stringify(row))
+  assert.deepStrictEqual(row.e2e, { note: 'a shape ac-matrix.js would never actually emit' },
+    'D3: the e2e row IS present in the manifest, so its typed observed object must be copied into row.e2e ' +
+    'VERBATIM, even though its shape does not match e2e\'s usual {"passed":N,...} closed set — D3 deletes the ' +
+    'old re-derive-or-omit parseCounts() behavior entirely; verdict.js is a pure copier now, never a second ' +
+    'validator of what an emitter should have written: ' + JSON.stringify(row))
   for (const missingKey of ['journeys', 'substrate', 'production']) {
     assert.ok(!(missingKey in row),
-      `the ${missingKey} leg never ran on this STOP path, so row.${missingKey} must be omitted entirely — ` +
-      'a fabricated value would misreport a leg that was never executed: ' + JSON.stringify(row))
+      `the ${missingKey} leg never ran on this STOP path (genuinely ABSENT from the manifest, not merely ` +
+      `off-shape), so row.${missingKey} must be omitted entirely — a fabricated value would misreport a leg ` +
+      'that was never executed: ' + JSON.stringify(row))
   }
 })
 
@@ -848,7 +904,7 @@ test('AC-20260805-02-9: dispositions exceeding the workflow file\'s survivor cou
 test('AC-20260818-01-1: a red findings leg with zero survivors and zero dispositions derives HARD_FINDINGS and exits 1, never CLEAN', () => {
   const dir = tmpdir('verdict-legfindings')
   const rows = SIX_GREEN.map(r => (r.leg === 'promise-sweep'
-    ? { leg: 'promise-sweep', exit: 1, observed: 'rows=9 carried=5 sanctioned=2 orphans=2' } : r))
+    ? { leg: 'promise-sweep', exit: 1, observed: { rows: 9, carried: 5, sanctioned: 2, orphans: 2 } } : r))
   const manifest = writeManifest(dir, rows)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
@@ -863,7 +919,7 @@ test('AC-20260818-01-1: a red findings leg with zero survivors and zero disposit
 test('AC-20260818-01-2: the same red-findings-leg manifest reaches CLEAN once its leg findings are fully dispositioned, and the ledger row records the leg-finding count', () => {
   const dir = tmpdir('verdict-legfindings')
   const rows = SIX_GREEN.map(r => (r.leg === 'promise-sweep'
-    ? { leg: 'promise-sweep', exit: 1, observed: 'rows=9 carried=5 sanctioned=2 orphans=2' } : r))
+    ? { leg: 'promise-sweep', exit: 1, observed: { rows: 9, carried: 5, sanctioned: 2, orphans: 2 } } : r))
   const manifest = writeManifest(dir, rows)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '2', '--ledger', '--retain', dir])
@@ -882,14 +938,18 @@ test('AC-20260818-01-2: the same red-findings-leg manifest reaches CLEAN once it
     JSON.stringify(row.findings))
 })
 
-test('AC-20260818-01-3: a red leg\'s contribution to legFindings is parsed from its pinned observed format and floored at 1', () => {
+test('AC-20260818-01-3 / AC-20260820-06-14 (this test\'s last case tags the SHALL-CONTINUE-TO pin, per the AC\'s own literal example, after retyping the fixture from packed strings to JSON objects): a red leg\'s contribution to legFindings is read from its pinned typed observed field and floored at 1 when that field is absent or non-numeric', () => {
   const dir = tmpdir('verdict-count-grammar')
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
   const cases = [
-    { leg: 'reconcile', row: { leg: 'reconcile', exit: 3, observed: 'outOfPlan=3' }, expected: 3 },
-    { leg: 'skip-reconcile', row: { leg: 'skip-reconcile', exit: 1, observed: 'skipped=3 sanctioned=2' }, expected: 1 },
-    { leg: 'at-risk', row: { leg: 'at-risk', exit: 1, observed: 'files=2' }, expected: 1 },
-    { leg: 'promise-sweep', row: { leg: 'promise-sweep', exit: 1, observed: 'garbled' }, expected: 1 },
+    { leg: 'reconcile', row: { leg: 'reconcile', exit: 3, observed: { outOfPlan: 3 } }, expected: 3 },
+    { leg: 'skip-reconcile', row: { leg: 'skip-reconcile', exit: 1, observed: { skipped: 3, sanctioned: 2 } }, expected: 1 },
+    { leg: 'at-risk', row: { leg: 'at-risk', exit: 1, observed: { files: 2, testsExecuted: 1 } }, expected: 1 },
+    { leg: 'promise-sweep', row: { leg: 'promise-sweep', exit: 1, observed: {} }, expected: 1 },
+    // AC-20260820-06-14 (literal): "e.g. reconcile exit 3 with observed {}" — the absent-field floor
+    // applies even to a NAMED field (reconcile normally reads observed.outOfPlan), not just an
+    // unnamed leg like at-risk/drift/patterns.
+    { leg: 'reconcile', row: { leg: 'reconcile', exit: 3, observed: {} }, expected: 1 },
   ]
   for (const c of cases) {
     const rows = SIX_GREEN.map(r => (r.leg === c.leg ? c.row : r))
@@ -897,8 +957,8 @@ test('AC-20260818-01-3: a red leg\'s contribution to legFindings is parsed from 
     const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
     const row = JSON.parse(r.stdout.trim().split('\n')[1])
     assert.strictEqual(row.findings.legFindings, c.expected,
-      `D2: a red ${c.leg} row observed "${c.row.observed}" must parse to legFindings:${c.expected} — a ` +
-      'wrong count under- or over-disposition the pool relative to the actual number of contract ' +
+      `D2: a red ${c.leg} row observed ${JSON.stringify(c.row.observed)} must read to legFindings:${c.expected} ` +
+      '— a wrong count under- or over-disposition the pool relative to the actual number of contract ' +
       'violations the row asserts: ' + JSON.stringify(row.findings))
   }
 })
@@ -923,7 +983,7 @@ test('AC-20260818-01-4: dispositions exceeding survivors+legFindings exit 2 nami
   // promise-sweep red (orphans=2, legFindings=2), zero survivors: --waived 2 exceeds survivors(0) alone but
   // not the sum (0+2=2) — must proceed, not exit 2.
   const legRows = SIX_GREEN.map(r => (r.leg === 'promise-sweep'
-    ? { leg: 'promise-sweep', exit: 1, observed: 'rows=9 carried=5 sanctioned=2 orphans=2' } : r))
+    ? { leg: 'promise-sweep', exit: 1, observed: { rows: 9, carried: 5, sanctioned: 2, orphans: 2 } } : r))
   const legManifest = writeManifest(dir, legRows)
   const proceeds = runNode(SCRIPT, ['--manifest', legManifest, '--workflow', workflow, '--waived', '2'])
   assert.strictEqual(proceeds.stdout.split('\n')[0], 'CLEAN',
@@ -942,36 +1002,48 @@ test('AC-20260818-01-5: --ledger retains each leg\'s observed string in the row,
   const passRun = runNode(SCRIPT, ['--manifest', passManifest, '--workflow', workflow, '--ledger', '--retain', dir])
   const passRow = JSON.parse(passRun.stdout.trim().split('\n')[1])
   const passCi = passRow.legs.find(l => l.leg === 'ci')
-  assert.strictEqual(passCi.observed, 'conclusion=success',
-    'D4: a real CI observation must survive into the ledger row verbatim — stripping it (the pre-D4 shape) ' +
-    'makes "CI passed" indistinguishable from "no CI exists": ' + JSON.stringify(passCi))
+  assert.deepStrictEqual(passCi.observed, { conclusion: 'success' },
+    'D4/D11: a real CI observation must survive into the ledger row verbatim (objects are not sliced) — ' +
+    'stripping or re-shaping it (the pre-D4 shape) makes "CI passed" indistinguishable from "no CI exists": ' +
+    JSON.stringify(passCi))
 
   const unavailManifest = writeManifest(dir, SIX_GREEN_CI_UNAVAILABLE)
   const unavailRun = runNode(SCRIPT, ['--manifest', unavailManifest, '--workflow', workflow, '--ledger', '--retain', dir])
   const unavailRow = JSON.parse(unavailRun.stdout.trim().split('\n')[1])
   const unavailCi = unavailRow.legs.find(l => l.leg === 'ci')
-  assert.strictEqual(unavailCi.observed, 'unavailable',
+  assert.deepStrictEqual(unavailCi.observed, { unavailable: 'no-adapter' },
     'D4: a structurally-absent CI observation must ALSO survive into the ledger row, distinct from ' +
-    '"conclusion=success" — the two rows above must be byte-distinguishable at row.legs, which is the ' +
+    '{"conclusion":"success"} — the two rows above must be byte-distinguishable at row.legs, which is the ' +
     'whole point of retaining observed: ' + JSON.stringify(unavailCi))
-  assert.notStrictEqual(passCi.observed, unavailCi.observed,
-    'a pass and a structurally-absent observation must never collapse to the same ledger string: ' +
-    passCi.observed + ' vs ' + unavailCi.observed)
+  assert.notDeepStrictEqual(passCi.observed, unavailCi.observed,
+    'a pass and a structurally-absent observation must never collapse to the same ledger object (notStrictEqual ' +
+    'on two distinct object references would be vacuously true regardless of content — this must compare by ' +
+    'value): ' + JSON.stringify(passCi.observed) + ' vs ' + JSON.stringify(unavailCi.observed))
 })
 
 // --- specs/20260819/01-review-evidence-retention.md: AC-20260819-01-1 .. -01-7 (D1-D4) ---
-// AC-1/-6/-7 share one fixture (a 300-char leg observed string plus a survivor carrying an
+// AC-1/-6/-7 share one fixture (a long leg observed field plus a survivor carrying an
 // `evidence` string) so the byte-untruncated artifact and the byte-unchanged stdout/ledger
 // contracts are pinned against the exact same input, per the spec's own AC-6/-7 text ("e.g. the
-// AC-1 fixture's row"). The leg elongated is promise-sweep, left exit:0 (green) so its observed
-// content never feeds legFindings parsing (that grammar only applies to a RED leg, AC-20260818-
-// 01-3) and the derivation stays reachable to CLEAN via the one waived survivor.
+// AC-1 fixture's row").
+//
+// specs/20260820/06-typed-evidence-manifest.md D1/D2/D11 forced-but-unblocking departure
+// (logged in specs/20260820/06-typed-evidence-manifest.deviations.md): D1 makes a raw-string
+// `observed` unconditionally manifest-invalid, so the pre-image's 300-char PROMISE-SWEEP
+// observed STRING this fixture used is now structurally impossible to construct as a valid row
+// — promise-sweep's own typed shape ({"rows":N,"carried":N,"sanctioned":N,"orphans":N}) also has
+// no free-text field to elongate. D2/D11 say the 120-char bound "moves to emitters' string
+// FIELDS" (D2) and that verdict.js never slices an object (D11) — so the long-string carrier
+// becomes the DRIFT leg's `summary` field (drift's contract shape is exactly {"summary":"<first
+// stdout line>"}, the one per-leg shape built for free text). drift is optional (not in
+// REVIEW_LEGS) and green (exit 0), so it never feeds legFindings parsing (AC-20260818-01-3's
+// grammar only applies to a RED leg) and the derivation stays reachable to CLEAN via the one
+// waived survivor, exactly as before.
 
 const LONG_OBSERVED = 'o'.repeat(300)
 
 function retentionFixture(dir) {
-  const rows = SIX_GREEN.map(r => (r.leg === 'promise-sweep'
-    ? { leg: 'promise-sweep', exit: 0, observed: LONG_OBSERVED } : r))
+  const rows = [...SIX_GREEN, { leg: 'drift', exit: 0, observed: { summary: LONG_OBSERVED } }]
   const manifest = writeManifest(dir, rows)
   const workflowObj = cleanWorkflow([
     { severity: 'soft', id: 'AC-20260819-01-x', evidence: 'e'.repeat(40) + '-repro-transcript' },
@@ -1004,8 +1076,8 @@ test('AC-20260819-01-1: the review profile with --ledger, --workflow, and --reta
     JSON.stringify(artifact.dispositions))
   assert.deepStrictEqual(artifact.legs, rows,
     'D1: the artifact\'s legs must mirror the manifest rows exactly, including the untruncated 300-char ' +
-    'observed string on the promise-sweep leg — the ledger row\'s 120-char slice is a summary and the ' +
-    'artifact is the full-fidelity home retention exists to provide: ' + JSON.stringify(artifact.legs))
+    'summary field on the drift leg\'s observed object — the ledger row is a summary and the artifact is the ' +
+    'full-fidelity home retention exists to provide: ' + JSON.stringify(artifact.legs))
   assert.strictEqual(artifact.reviewer.survivors[0].evidence, workflowObj.survivors[0].evidence,
     'the artifact\'s reviewer block must carry the workflow file\'s survivors verbatim, including the ' +
     'evidence string byte-for-byte — a lossy copy here defeats /spec:escape\'s derivation of killedMatch ' +
@@ -1058,7 +1130,7 @@ test('AC-20260819-01-3: retention names the artifact by the row\'s runId — a p
 
 test('AC-20260819-01-4: --ledger without --workflow (the hard-stop row) does not require --retain, and when --retain is passed anyway the artifact is written with reviewer null and the manifest legs verbatim', () => {
   const dir = tmpdir('verdict-retain-hardstop')
-  const gateRedRows = SIX_GREEN.map(r => (r.leg === 'ci' ? { leg: 'ci', exit: 1, observed: 'conclusion=failure' } : r))
+  const gateRedRows = SIX_GREEN.map(r => (r.leg === 'ci' ? { leg: 'ci', exit: 1, observed: { conclusion: 'failure' } } : r))
   const manifest = writeManifest(dir, gateRedRows)
 
   const noRetain = runNode(SCRIPT, ['--manifest', manifest, '--ledger'])
@@ -1111,18 +1183,21 @@ test('AC-20260819-01-5: --profile release with --retain is a usage error, exit 2
     'be evidence keyed by a runId the release row never carries: ' + retainDir)
 })
 
-test('AC-20260819-01-6: --ledger CONTINUES TO truncate each leg\'s observed at 120 chars in the printed row and carry exactly the seven findings keys — retention adds no new ledger key', () => {
+test('AC-20260819-01-6 (behavior updated by D2/D11 — the 120-char bound moves to emitters, so verdict.js truncates nothing): --ledger prints the drift leg\'s 300-char summary field at FULL length in row.legs (an object is never sliced) and carries exactly the seven findings keys — retention adds no new ledger key', () => {
   const dir = tmpdir('verdict-retain-truncate')
   const retainDir = path.join(dir, 'spec-runs')
   const { manifest, workflow } = retentionFixture(dir)
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', retainDir,
     '--waived', '1'])
   const row = JSON.parse(r.stdout.trim().split('\n')[1])
-  const promiseSweepLeg = row.legs.find(l => l.leg === 'promise-sweep')
-  assert.strictEqual(promiseSweepLeg.observed.length, 120,
-    'D4: retention must not change the printed ledger row\'s existing 120-char observed slice — a 300-char ' +
-    'source observed must still print truncated to 120, with the full string living only in the retained ' +
-    'artifact (AC-1): got ' + promiseSweepLeg.observed.length + ' chars')
+  const driftLeg = row.legs.find(l => l.leg === 'drift')
+  assert.strictEqual(driftLeg.observed.summary.length, 300,
+    'D2/D11: bounding a free-text field is now the EMITTER\'s job (D2: "free-text fields ... bounded to 120 ' +
+    'chars AT THE EMITTER"), never verdict.js\'s — an object-shaped observed is never sliced (D11: "objects ' +
+    'are not sliced"). The pre-image\'s own 120-char ledger-only truncation of a raw observed STRING is ' +
+    'retired along with the string shape it applied to: the printed row must carry the drift leg\'s summary ' +
+    'at its FULL 300-char length, matching the retained artifact byte-for-byte, never re-truncated a second ' +
+    'time on the way to stdout: got ' + driftLeg.observed.summary.length + ' chars')
   assert.strictEqual(Object.keys(row.findings).length, 7,
     'D4: retention adds no new ledger key — row.findings must still carry exactly its seven documented keys ' +
     '(survived/killed/waived/rejected/fixDispatched/reviewerCount/legFindings), never an eighth for the ' +

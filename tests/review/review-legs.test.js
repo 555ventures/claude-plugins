@@ -28,6 +28,14 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // optional `testEnv` param so the one new test can declare an unset gating var without
 // disturbing every other fixture in this file, which omit it and so see zero behavior change
 // (AC-2 — the existing green-host test, tagged below).
+//
+// specs/20260820/06-typed-evidence-manifest.md D1/D2/D5 (2026-08-20, brief 16's second move):
+// every leg row's `observed` field becomes a typed JSON object. This host declares no
+// `testCountPattern`, so the gate row's `testsExecuted` typed sub-field is
+// {"unavailable":"no-format-declared"} throughout (D5: pattern absent -> typed unavailability,
+// never assumed zero) — the testCountPattern-driven branches (AC-20260820-06-5/6/7) are pinned
+// separately in tests/review/legs-verdict-pair.test.js, the grammar authority (D10). Every
+// `byLeg.get(...).observed` assertion below is retyped in place; none is retagged.
 
 const SCRIPT = 'scripts/review-legs.js'
 
@@ -137,23 +145,25 @@ test('AC-20260820-03-2: a green synthetic host produces every required leg row, 
     `AC-20260817-07-9: the synthetic host spec's one Decisions row cites the spec's own declared AC-ID, so ` +
     `promise-sweep must report it carried and exit 0 — a non-zero exit here means the fixture's carrier row ` +
     `regressed to an orphan: ${JSON.stringify(byLeg.get('promise-sweep'))}`)
-  assert.strictEqual(byLeg.get('promise-sweep').observed, 'rows=1 carried=1 sanctioned=0 orphans=0',
-    `promise-sweep's observed must match the pinned grammar for one carried row — got ` +
+  assert.deepStrictEqual(byLeg.get('promise-sweep').observed, { rows: 1, carried: 1, sanctioned: 0, orphans: 0 },
+    `promise-sweep's observed must match the pinned typed grammar for one carried row — got ` +
     `${JSON.stringify(byLeg.get('promise-sweep'))}`)
   assert.strictEqual(byLeg.get('gate').exit, 0,
     'the gate must run the resolved glob form and pass — a non-zero exit here means {testDirs} resolution ' +
     'handed the runner something it could not execute (the JJ-20260815-04 bare-directory class): ' + r.stdout)
-  assert.strictEqual(byLeg.get('gate').observed, 'skips=0 todos=0',
+  assert.deepStrictEqual(byLeg.get('gate').observed, { skips: 0, todos: 0, testsExecuted: { unavailable: 'no-format-declared' } },
     'skip counts must be captured via capabilities.skipReportPattern from the gate output, zero-skip runs ' +
-    'included — an unavailable observation here means the pattern was not applied: ' + JSON.stringify(byLeg.get('gate')))
-  assert.strictEqual(byLeg.get('smoke').observed, 'inert',
+    'included — an unavailable skips observation here means the pattern was not applied; this host declares ' +
+    'no testCountPattern, so testsExecuted must be typed {"unavailable":"no-format-declared"}, never assumed ' +
+    'zero (D5): ' + JSON.stringify(byLeg.get('gate')))
+  assert.deepStrictEqual(byLeg.get('smoke').observed, { result: 'inert' },
     'a host declaring runtime.inert must record the sanctioned inert observation (smoke exit 4): ' +
     JSON.stringify(byLeg.get('smoke')))
-  assert.strictEqual(byLeg.get('ci').observed, 'unavailable',
-    'capabilities.forge "none" must short-circuit the ci leg to an honest unavailable, never a probe: ' +
+  assert.deepStrictEqual(byLeg.get('ci').observed, { unavailable: 'no-adapter' },
+    'capabilities.forge "none" must short-circuit the ci leg to an honest typed unavailable, never a probe: ' +
     JSON.stringify(byLeg.get('ci')))
-  assert.strictEqual(byLeg.get('reconcile').observed, 'outOfPlan=0',
-    'both changed files are File Plan rows, so reconcile must report outOfPlan=0: ' + JSON.stringify(byLeg.get('reconcile')))
+  assert.deepStrictEqual(byLeg.get('reconcile').observed, { outOfPlan: 0 },
+    'both changed files are File Plan rows, so reconcile must report {"outOfPlan":0}: ' + JSON.stringify(byLeg.get('reconcile')))
   assert.strictEqual(byLeg.get('ac-matrix').exit, 0,
     'the one AC is cited by the test file, so ac-matrix must report full coverage: ' + JSON.stringify(byLeg.get('ac-matrix')))
   assert.strictEqual(r.status, 0,

@@ -26,6 +26,16 @@ const { tmpdir, runNode, runBash, ROOT, SPEC } = require('../helpers')
 // deletion is satisfied by the file's absence, not violated by it. Fixed fail-closed: the
 // check skips ONLY an explicit `DELETE` action; a `CREATE` row or a row whose table binds no
 // Action column at all keeps the existence requirement.
+//
+// specs/20260820/06-typed-evidence-manifest.md D2/D8/AC-20260820-06-10 (2026-08-20, brief 16's
+// second move): ac-matrix.js's two manifest rows and its `--json` output's `observed` field both
+// retire the packed "uncovered=N oracle=M" / "skipped=N sanctioned=S" strings for the typed
+// objects {"uncovered":N,"oracle":N} and {"skipped":N,"sanctioned":N} — D8 pins the `--json`
+// field mirrors the manifest objects exactly, byte-unchanged plain-mode stdout summary line
+// aside (untouched by this spec). Every `out.observed.acMatrix` / `out.observed.skipReconcile`
+// assertion below is retyped in place; none is retagged (D8/AC-20260820-06-10 is a NEW test,
+// added at the end of this file, that owns the AC-ID — these existing pins keep their own
+// AC-IDs, since their invariant — which finding drives which count — is unchanged by the shape).
 
 function specMd(acLines, filePlanRows) {
   return '# Test Spec\n\n## Acceptance Criteria\n\n' + acLines.join('\n') + '\n\n' +
@@ -78,12 +88,12 @@ test('AC-20260815-03-1: a malformed leading bold token emits a hard malformed-ac
   assert.ok(out.findings.some(f => f.class === 'malformed-ac'),
     'AC-2026-1 fails the full anchored AC-ID match (missing the -NN-N ordinal segments) and must ' +
     'surface as a malformed-ac finding — a malformed id is invisible to every downstream AC-ID grep')
-  assert.match(out.observed.acMatrix, /^uncovered=1 oracle=0$/,
+  assert.deepStrictEqual(out.observed.acMatrix, { uncovered: 1, oracle: 0 },
     `unparseable = unknown = uncovered (D1): the malformed AC-2026-1 bullet must increment uncovered ` +
     `even though it also trips its own malformed-ac finding — a reviewer who waives that one notation ` +
     `finding must not then be told by the durable manifest row that coverage is complete. ` +
     `AC-20260814-01-1 stays well-formed and covered so it must NOT also add a second uncovered-ac row ` +
-    `— got "${out.observed.acMatrix}"`)
+    `— got ${JSON.stringify(out.observed.acMatrix)}`)
 })
 
 test('AC-20260814-01-2: a well-formed AC-ID with zero hits and no [oracle:] tag emits a hard uncovered-ac finding with observed uncovered=1 oracle=0', () => {
@@ -101,8 +111,8 @@ test('AC-20260814-01-2: a well-formed AC-ID with zero hits and no [oracle:] tag 
   assert.ok(out.findings.some(f => f.class === 'uncovered-ac' && f.ac === 'AC-20260814-01-2'),
     'AC-20260814-01-2 never appears as a literal inside tests/bar.test.js and carries no [oracle:] ' +
     'tag, so it must surface as a named uncovered-ac finding — otherwise an untested AC rides to CLEAN')
-  assert.strictEqual(out.observed.acMatrix, 'uncovered=1 oracle=0',
-    `observed must be the exact pinned grammar verdict.js parses byte-for-byte — got "${out.observed.acMatrix}"`)
+  assert.deepStrictEqual(out.observed.acMatrix, { uncovered: 1, oracle: 0 },
+    `observed must be the exact pinned typed object verdict.js reads field-by-field — got ${JSON.stringify(out.observed.acMatrix)}`)
 })
 
 test('AC-20260814-01-3a / continues AC-20260815-03-7: an [oracle:] AC whose declared leg is green in the manifest is excluded from uncovered, counted in oracle=, and warned (not a finding)', () => {
@@ -119,8 +129,8 @@ test('AC-20260814-01-3a / continues AC-20260815-03-7: an [oracle:] AC whose decl
   assert.ok(!out.findings.some(f => f.ac === 'AC-20260814-01-3'),
     'AC-20260814-01-3 has zero literal test hits but declares [oracle: gate], and the manifest\'s ' +
     'gate row is green — it must be covered-by-declaration, never an uncovered-ac finding')
-  assert.strictEqual(out.observed.acMatrix, 'uncovered=0 oracle=1',
-    `a green-oracle AC must be counted in oracle= — got "${out.observed.acMatrix}"`)
+  assert.deepStrictEqual(out.observed.acMatrix, { uncovered: 0, oracle: 1 },
+    `a green-oracle AC must be counted in the typed object's "oracle" field — got ${JSON.stringify(out.observed.acMatrix)}`)
   assert.ok(out.warnings.some(w => /oracle/i.test(w) && /gate/i.test(w)),
     'coverage-by-declaration must still surface as a named warning line ("AC-x: oracle = `gate` leg") — never silent green')
   assert.strictEqual(res.status, 0,
@@ -159,8 +169,8 @@ test('AC-20260814-01-4a / continues AC-20260815-03-8: a skipped test whose AC li
   fs.writeFileSync(skips, 'skipped test for AC-20260814-01-4 database round-trip\n')
   const res = run(spec, dir, manifest, ['--skips', skips, '--json'])
   const out = findings(res)
-  assert.strictEqual(out.observed.skipReconcile, 'skipped=1 sanctioned=1',
-    `a skip mapped to an [env:]-declared AC must be sanctioned — got "${out.observed.skipReconcile}"`)
+  assert.deepStrictEqual(out.observed.skipReconcile, { skipped: 1, sanctioned: 1 },
+    `a skip mapped to an [env:]-declared AC must be sanctioned — got ${JSON.stringify(out.observed.skipReconcile)}`)
   assert.ok(out.warnings.some(w => /TEST_DB/.test(w)),
     'the sanctioned skip must warn naming the un-run environment (TEST_DB) — never silent green')
   assert.ok(!out.findings.some(f => f.class === 'unsanctioned-skip'),
@@ -185,8 +195,8 @@ test('AC-20260814-01-4b: a skipped test mapped to an AC with no [env:] tag is a 
     'AC-20260814-01-4 carries no [env: VAR] tag on this fixture, so its mapped skip must be an ' +
     'unsanctioned-skip hard finding, identical standing to an uncovered AC — a silently-skipped ' +
     'test caught a real defect once (UpWell)')
-  assert.strictEqual(out.observed.skipReconcile, 'skipped=1 sanctioned=0',
-    `an unsanctioned skip must not be counted toward sanctioned= — got "${out.observed.skipReconcile}"`)
+  assert.deepStrictEqual(out.observed.skipReconcile, { skipped: 1, sanctioned: 0 },
+    `an unsanctioned skip must not be counted toward the typed object's "sanctioned" field — got ${JSON.stringify(out.observed.skipReconcile)}`)
 })
 
 test('AC-20260814-01-5: a skipped test name matching no AC-ID and no File Plan test file is a hard unmapped-skip finding naming the test', () => {
@@ -221,7 +231,7 @@ test('AC-20260814-01-6: the script appends exactly two JSONL manifest rows, and 
       '- **AC-20260814-06-2**: WHEN X THE SYSTEM SHALL Y [env: DB_TWO] → tests/six.test.js',
       '- **AC-20260814-06-3**: WHEN X THE SYSTEM SHALL Y → tests/six.test.js'],
     ['| tests/six.test.js | CREATE | tests | covers ACs |']))
-  const manifest = writeManifest(dir, [{ leg: 'gate', exit: 0, observed: 'skips=3 todos=0' }])
+  const manifest = writeManifest(dir, [{ leg: 'gate', exit: 0, observed: { skips: 3, todos: 0, testsExecuted: 6 } }])
   const before = fs.readFileSync(manifest, 'utf8').trim().split('\n').filter(Boolean)
   const skips = path.join(dir, 'skips.txt')
   fs.writeFileSync(skips, [
@@ -238,8 +248,8 @@ test('AC-20260814-01-6: the script appends exactly two JSONL manifest rows, and 
   assert.deepStrictEqual(appended.map(r => r.leg).sort(), ['ac-matrix', 'skip-reconcile'],
     `the two appended rows must be leg "ac-matrix" and leg "skip-reconcile" — got ${JSON.stringify(appended.map(r => r.leg))}`)
   const skipRow = appended.find(r => r.leg === 'skip-reconcile')
-  assert.strictEqual(skipRow.observed, 'skipped=3 sanctioned=2',
-    `skip-reconcile's observed must reconcile 3 skips, 2 env-sanctioned — got "${skipRow.observed}"`)
+  assert.deepStrictEqual(skipRow.observed, { skipped: 3, sanctioned: 2 },
+    `skip-reconcile's observed must be the typed object reconciling 3 skips, 2 env-sanctioned — got ${JSON.stringify(skipRow.observed)}`)
 
   const verdictRes = require('node:child_process').spawnSync(process.execPath,
     [path.join(SPEC, 'scripts/verdict.js'), '--manifest', manifest, '--ledger'], { encoding: 'utf8' })
@@ -290,12 +300,12 @@ test('AC-20260815-03-9: --has-drift-script still counts a malformed AC bullet to
   const out = findings(res)
   assert.ok(out.findings.some(f => f.class === 'malformed-ac'),
     'lint runs in BOTH drift modes — AC-2026-1 must still be flagged malformed-ac under --has-drift-script')
-  assert.strictEqual(out.observed.acMatrix, 'uncovered=1 oracle=0',
+  assert.deepStrictEqual(out.observed.acMatrix, { uncovered: 1, oracle: 0 },
     'today --has-drift-script structurally skips the well-formed coverage loop entirely (the host ' +
-    'driftScript owns coverage there), so the manifest row records uncovered=0 no matter how many ' +
+    'driftScript owns coverage there), so the manifest row records uncovered:0 no matter how many ' +
     'unparseable bullets sit in the AC section — the same fail-closed-denominator hole as AC-20260815-03-1, ' +
     'just reached through the other code path (D1: "the malformed term applies in --has-drift-script mode ' +
-    `too"). got "${out.observed.acMatrix}"`)
+    `too"). got ${JSON.stringify(out.observed.acMatrix)}`)
 })
 
 test('AC-20260814-01-8a: invocation with no --spec exits 2 with a stderr line naming the remedy command', () => {
@@ -377,4 +387,34 @@ test('AC-20260820-04-7: a DELETE-action tests-layer File Plan row naming a missi
     'D13 fail-closed: a File Plan table whose header row binds no Action column at all must NOT be treated as an ' +
     'implicit DELETE — a null/absent Action keeps the existence requirement, so this row must still raise ' +
     'missing-test-file naming it')
+})
+
+test('AC-20260820-06-10: on an all-green fixture, ac-matrix.js appends {"uncovered":N,"oracle":N} and {"skipped":N,"sanctioned":N} typed manifest rows, and --json\'s observed field mirrors the identical objects verbatim', () => {
+  const dir = tmpdir('acm-d06-10')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/foo.test.js'), '// covers AC-20260820-06-10\n')
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260820-06-10**: WHEN X THE SYSTEM SHALL Y → tests/foo.test.js'],
+    ['| tests/foo.test.js | CREATE | tests | covers AC |']))
+  const manifest = writeManifest(dir, [])
+  const before = fs.readFileSync(manifest, 'utf8').trim().split('\n').filter(Boolean)
+  const res = run(spec, dir, manifest, ['--json'])
+  const out = findings(res)
+  assert.deepStrictEqual(out.observed, { acMatrix: { uncovered: 0, oracle: 0 }, skipReconcile: { skipped: 0, sanctioned: 0 } },
+    'AC-20260820-06-10 (literal): the --json output\'s observed field must mirror exactly ' +
+    '{acMatrix: {uncovered: 0, oracle: 0}, skipReconcile: {skipped: 0, sanctioned: 0}} — a caller reading ' +
+    '--json cannot script against this field if it disagrees with the manifest rows the script also writes: ' +
+    JSON.stringify(out.observed))
+  const lines = fs.readFileSync(manifest, 'utf8').trim().split('\n').filter(Boolean)
+  const appended = lines.slice(before.length).map(l => JSON.parse(l))
+  const acmRow = appended.find(r => r.leg === 'ac-matrix')
+  const skipRow = appended.find(r => r.leg === 'skip-reconcile')
+  assert.deepStrictEqual(acmRow.observed, out.observed.acMatrix,
+    `the appended ac-matrix manifest row's observed must be byte-identical to --json's mirrored acMatrix ` +
+    `object — a divergence here means the manifest and --json report two different coverage stories from ` +
+    `the same run: manifest=${JSON.stringify(acmRow.observed)} json=${JSON.stringify(out.observed.acMatrix)}`)
+  assert.deepStrictEqual(skipRow.observed, out.observed.skipReconcile,
+    `the appended skip-reconcile manifest row's observed must be byte-identical to --json's mirrored ` +
+    `skipReconcile object: manifest=${JSON.stringify(skipRow.observed)} json=${JSON.stringify(out.observed.skipReconcile)}`)
 })

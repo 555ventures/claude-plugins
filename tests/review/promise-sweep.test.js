@@ -23,6 +23,22 @@ const { tmpdir, runNode } = require('../helpers')
 // even a spec whose Decisions carry a genuinely uncarried row. A path with no dated segment
 // applies the sweep in full (fail-closed, unchanged behavior) — AC-20260817-07-2's tmpdir-based
 // fixture below already pins that default and is retagged accordingly.
+//
+// specs/20260820/06-typed-evidence-manifest.md D1/D9 (2026-08-20, brief 16's second move): every
+// manifest row's `observed` field becomes a typed JSON object — promise-sweep's counted row
+// becomes exactly {"rows":N,"carried":C,"sanctioned":S,"orphans":O} and the pre-cutoff row
+// becomes {"notApplicable":{"spec":"YYYYMMDD","appliesFrom":"YYYYMMDD"}}; the packed
+// "rows=N carried=C sanctioned=S orphans=O" and "not-applicable spec=X appliesFrom=Y" strings
+// are retired from the MANIFEST only. D8/AC-20260820-06-9: the plain-mode STDOUT counters line
+// ("promise-sweep: rows=N carried=C sanctioned=S orphans=O · K finding(s)") stays byte-unchanged
+// — plan.md's lock step copies it verbatim into the plan ledger row, and this spec never touches
+// that contract. No existing test in this file asserted that stdout line's literal shape before
+// this pass (every prior pin read `row.observed`, the manifest field, never console output), so
+// AC-20260820-06-9 is a SHALL-CONTINUE-TO pin added fresh to AC-20260817-07-8's plan-lock branch
+// below — it is true against both the pre- and post-migration script, since D9 never touches
+// stdout. AC-20260820-03-9's manifest-row pin (the pre-cutoff not-applicable row) is retyped in
+// place and retagged AC-20260820-06-8 per D9; AC-20260820-03-7's stdout assertion for the SAME
+// pre-cutoff branch is untouched (same "human stdout stays byte-unchanged" reasoning as AC-9).
 
 function specMd({ decisionsRows, acLines }) {
   return '# Test Spec\n\n## Decisions\n\n' +
@@ -71,10 +87,11 @@ test('AC-20260817-07-1: a Decisions row citing an AC-ID declared in this spec\'s
   const row = lastManifestRow(manifest)
   assert.strictEqual(row.leg, 'promise-sweep', `the appended manifest row's leg must be "promise-sweep" — got "${row.leg}"`)
   assert.strictEqual(row.exit, 0, `the appended row's exit must mirror the script's own exit code — got ${row.exit}`)
-  assert.strictEqual(row.observed, 'rows=1 carried=1 sanctioned=0 orphans=0',
-    `the pinned observed grammar for one carried row must read exactly "rows=1 carried=1 sanctioned=0 ` +
-    `orphans=0" (D1) — a caller parsing this field byte-for-byte would misreport the spec's promise coverage ` +
-    `otherwise — got "${row.observed}"`)
+  assert.deepStrictEqual(row.observed, { rows: 1, carried: 1, sanctioned: 0, orphans: 0 },
+    `specs/20260820/06-typed-evidence-manifest.md D1/D9: the pinned observed grammar for one carried row ` +
+    `must be exactly the typed object {"rows":1,"carried":1,"sanctioned":0,"orphans":0} — never the packed ` +
+    `"rows=1 carried=1 sanctioned=0 orphans=0" string, which a downstream reader can no longer misparse or ` +
+    `silently drop a key from — got ${JSON.stringify(row.observed)}`)
 })
 
 test('AC-20260817-07-2 / AC-20260820-03-8 (CONTINUES TO enumerate and finding fully — this tmpdir spec path carries no specs/<YYYYMMDD>/ segment, pinning D5\'s fail-closed default for undated paths): a non-struck Decisions row with no AC-ID token and no [no-ac:] tag is an orphan, exiting 1 with a hard orphan-decision finding naming its own D-ID', () => {
@@ -112,8 +129,9 @@ test('AC-20260817-07-3: a [no-ac: reason] row with no AC-ID counts sanctioned, a
     `a row carrying a non-empty [no-ac: reason] tag and no AC-ID must be sanctioned and exit 0, never ` +
     `treated as an orphan (stderr: ${res1.stderr})`)
   const row1 = lastManifestRow(manifest1)
-  assert.strictEqual(row1.observed, 'rows=1 carried=0 sanctioned=1 orphans=0',
-    `a sanctioned row must be counted in sanctioned=, not carried= or orphans= — got "${row1.observed}"`)
+  assert.deepStrictEqual(row1.observed, { rows: 1, carried: 0, sanctioned: 1, orphans: 0 },
+    `a sanctioned row must be counted in the typed object's "sanctioned" field, not "carried" or "orphans" ` +
+    `— got ${JSON.stringify(row1.observed)}`)
 
   const spec2 = path.join(dir, 'spec2.md')
   fs.writeFileSync(spec2, specMd({
@@ -126,9 +144,9 @@ test('AC-20260817-07-3: a [no-ac: reason] row with no AC-ID counts sanctioned, a
     `an empty-reason [no-ac: ] tag must NOT count as a sanction (D2: "empty reason ≠ sanction") — the row ` +
     `is an orphan and must exit 1, never 0 (stderr: ${res2.stderr})`)
   const row2 = lastManifestRow(manifest2)
-  assert.strictEqual(row2.observed, 'rows=1 carried=0 sanctioned=0 orphans=1',
+  assert.deepStrictEqual(row2.observed, { rows: 1, carried: 0, sanctioned: 0, orphans: 1 },
     `an empty [no-ac: ] tag must count the row as an orphan, not sanctioned — a blank rubber-stamp reason ` +
-    `must not silently waive the check — got "${row2.observed}"`)
+    `must not silently waive the check — got ${JSON.stringify(row2.observed)}`)
 })
 
 test('AC-20260817-07-4: a row citing AC-20260899-99-11 is not a carrier for a spec declaring only AC-20260899-99-1 — the anchored match forbids a prefix-phantom hit', () => {
@@ -201,10 +219,10 @@ test('AC-20260817-07-6: a struck Decisions row is excluded entirely — a spec w
     `a struck row must never itself trip a finding (D2: "Struck rows ... excluded ... never findings") — ` +
     `the spec must exit 0 (stderr: ${res.stderr})`)
   const row = lastManifestRow(manifest)
-  assert.strictEqual(row.observed, 'rows=1 carried=1 sanctioned=0 orphans=0',
-    `a struck row must be excluded from rows= entirely — counting it as an uncarried orphan would falsely ` +
-    `flag a superseded row nobody can fix, and counting it toward rows at all inflates the denominator — ` +
-    `got "${row.observed}"`)
+  assert.deepStrictEqual(row.observed, { rows: 1, carried: 1, sanctioned: 0, orphans: 0 },
+    `a struck row must be excluded from the "rows" count entirely — counting it as an uncarried orphan would ` +
+    `falsely flag a superseded row nobody can fix, and counting it toward rows at all inflates the ` +
+    `denominator — got ${JSON.stringify(row.observed)}`)
 })
 
 test('AC-20260817-07-7: a spec with no ## Decisions section exits 2 with a stderr line naming the missing section and the spec path', () => {
@@ -242,8 +260,16 @@ test('AC-20260817-07-8: --manifest <path> appends exactly one promise-sweep JSON
   assert.strictEqual(appended[0].leg, 'promise-sweep', `the appended row's leg must be "promise-sweep" — got "${appended[0].leg}"`)
   assert.ok(appended[0].exit === 0 || appended[0].exit === 1,
     `the appended row's exit must mirror the script's own exit code, 0 or 1 — got ${appended[0].exit}`)
-  assert.match(appended[0].observed, /^rows=\d+ carried=\d+ sanctioned=\d+ orphans=\d+$/,
-    `the appended row's observed must match the pinned grammar "rows=N carried=C sanctioned=S orphans=O" — got "${appended[0].observed}"`)
+  assert.ok(appended[0].observed && typeof appended[0].observed === 'object',
+    `specs/20260820/06-typed-evidence-manifest.md D1: the appended row's observed must be a non-null typed ` +
+    `object, never a packed string — got ${JSON.stringify(appended[0].observed)}`)
+  assert.deepStrictEqual(Object.keys(appended[0].observed).sort(), ['carried', 'orphans', 'rows', 'sanctioned'],
+    `D9: the appended row's observed must match the pinned typed grammar {"rows":N,"carried":C,` +
+    `"sanctioned":S,"orphans":O} — got ${JSON.stringify(appended[0].observed)}`)
+  for (const k of ['rows', 'carried', 'sanctioned', 'orphans']) {
+    assert.strictEqual(typeof appended[0].observed[k], 'number',
+      `D9: observed.${k} must be a number, never a string digit or missing — got ${JSON.stringify(appended[0].observed)}`)
+  }
 
   const beforeFiles = fs.readdirSync(dir).sort()
   const specNoManifest = path.join(dir, 'spec-nomanifest.md')
@@ -256,6 +282,13 @@ test('AC-20260817-07-8: --manifest <path> appends exactly one promise-sweep JSON
   assert.deepStrictEqual(afterFiles, [...beforeFiles, 'spec-nomanifest.md'].sort(),
     `plan-lock mode (--manifest omitted) must write NO file at all — the directory must gain only the spec ` +
     `file this test itself wrote, never a manifest or any stray side file (stderr: ${resNoManifest.stderr})`)
+  assert.match(resNoManifest.stdout, /^promise-sweep: rows=\d+ carried=\d+ sanctioned=\d+ orphans=\d+ · \d+ finding\(s\)$/m,
+    `AC-20260820-06-9: plan-lock mode's plain stdout SHALL CONTINUE TO include, on its own line, the ` +
+    `byte-unchanged "promise-sweep: rows=N carried=C sanctioned=S orphans=O · K finding(s)" counters format ` +
+    `— D9 retypes only the MANIFEST row's observed field above; plan.md's lock step copies this printed line ` +
+    `verbatim into the plan ledger row, and this spec never touches that contract, so the counters line's ` +
+    `format must be unchanged before and after D9's migration (stdout may also carry HARD/SOFT finding lines ` +
+    `ahead of it, which this assertion does not constrain) — got ${JSON.stringify(resNoManifest.stdout)}`)
 })
 
 test('AC-20260820-03-7: a spec whose path\'s dated segment predates the cutoff (specs/20260701/...) exits 0 with zero findings even though its lone Decisions row is uncarried, stdout naming "not-applicable spec=20260701 appliesFrom=20260817"', () => {
@@ -279,7 +312,7 @@ test('AC-20260820-03-7: a spec whose path\'s dated segment predates the cutoff (
     `cutoff exempted — got "${res.stdout}"`)
 })
 
-test('AC-20260820-03-9: --manifest for the same pre-cutoff spec appends exactly one promise-sweep row {"exit":0,"observed":"not-applicable spec=20260701 appliesFrom=20260817"}', () => {
+test('AC-20260820-06-8 (retag of AC-20260820-03-9): --manifest for a pre-cutoff spec appends exactly one promise-sweep row {"exit":0,"observed":{"notApplicable":{"spec":"20260701","appliesFrom":"20260817"}}}', () => {
   const dir = tmpdir('ps-cutoff-manifest')
   const specDir = path.join(dir, 'specs', '20260701')
   fs.mkdirSync(specDir, { recursive: true })
@@ -292,8 +325,10 @@ test('AC-20260820-03-9: --manifest for the same pre-cutoff spec appends exactly 
   run(spec, manifest)
   const row = lastManifestRow(manifest)
   assert.deepStrictEqual(row, {
-    leg: 'promise-sweep', exit: 0, observed: 'not-applicable spec=20260701 appliesFrom=20260817',
-  }, `D5: the appended manifest row for a pre-cutoff spec must be exactly this shape — a caller consuming ` +
-    `the manifest cannot distinguish "genuinely swept, zero orphans" from "skipped by the cutoff entirely" ` +
-    `without this distinct observed literal — got ${JSON.stringify(row)}`)
+    leg: 'promise-sweep', exit: 0, observed: { notApplicable: { spec: '20260701', appliesFrom: '20260817' } },
+  }, `D9: the appended manifest row for a pre-cutoff spec must be exactly this typed shape, never the retired ` +
+    `packed "not-applicable spec=20260701 appliesFrom=20260817" string — a caller consuming the manifest ` +
+    `cannot distinguish "genuinely swept, zero orphans" from "skipped by the cutoff entirely" without this ` +
+    `distinct observed object, and D1's object-or-invalid rule makes the old string shape UNVERIFIED, not a ` +
+    `readable not-applicable row: got ${JSON.stringify(row)}`)
 })

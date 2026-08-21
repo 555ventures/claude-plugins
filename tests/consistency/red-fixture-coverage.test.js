@@ -183,8 +183,10 @@ function legAtRisk() {
   assert.notStrictEqual(row.exit, 0,
     'the planted out-of-plan test asserts a deliberate falsehood — the at-risk leg must redden: ' +
     JSON.stringify(row) + ' / ' + r.stdout + r.stderr)
-  assert.strictEqual(row.observed, 'files=1',
-    'exactly one at-risk file was planted — observed must report files=1: ' + JSON.stringify(row))
+  assert.deepStrictEqual(row.observed, { files: 1, testsExecuted: { unavailable: 'no-format-declared' } },
+    'specs/20260820/06-typed-evidence-manifest.md D2/D5: exactly one at-risk file was planted and this ' +
+    'fixture host declares no testCountPattern — observed must be the typed object {"files":1,' +
+    '"testsExecuted":{"unavailable":"no-format-declared"}}, never a "files=N" packed string: ' + JSON.stringify(row))
   const atRiskOutput = fs.readFileSync(path.join(outDir, 'at-risk.txt'), 'utf8')
   assert.doesNotMatch(atRiskOutput, /\[object Object\]/,
     'THE historical death this guard exists to catch: a bare `atRisk.map(q)` over {file, refs} objects ' +
@@ -237,9 +239,10 @@ function legCi() {
   assert.strictEqual(row.exit, 1,
     'a completed CI run with conclusion:failure for the exact reviewed commit must redden the ci leg: ' +
     JSON.stringify(row) + ' / ' + r.stdout + r.stderr)
-  assert.strictEqual(row.observed, 'conclusion=failure',
-    'evidence the check engaged: observed must echo the PLANTED conclusion value verbatim, proving the leg ' +
-    'parsed the fake gh\'s real JSON rather than falling back to a generic unavailable: ' + JSON.stringify(row))
+  assert.deepStrictEqual(row.observed, { conclusion: 'failure' },
+    'specs/20260820/06-typed-evidence-manifest.md D2: evidence the check engaged: observed must be the typed ' +
+    'object {"conclusion":"failure"}, echoing the PLANTED conclusion value verbatim — proving the leg parsed ' +
+    'the fake gh\'s real JSON rather than falling back to a generic unavailable: ' + JSON.stringify(row))
 }
 
 // reconcile: scope-reconcile.js directly — a changed file with no File Plan row at all.
@@ -311,7 +314,9 @@ function legSkipReconcile() {
   assert.ok(row, 'ac-matrix.js must append a "skip-reconcile" manifest row: ' + r.stdout + r.stderr)
   assert.strictEqual(row.exit, 1,
     'a reported skip on an AC bullet with no [env:] sanction must redden skip-reconcile: ' + JSON.stringify(row))
-  assert.strictEqual(row.observed, 'skipped=1 sanctioned=0', JSON.stringify(row))
+  assert.deepStrictEqual(row.observed, { skipped: 1, sanctioned: 0 },
+    'specs/20260820/06-typed-evidence-manifest.md D2: skip-reconcile\'s observed must be the typed object ' +
+    '{"skipped":1,"sanctioned":0}, never the packed "skipped=1 sanctioned=0" string: ' + JSON.stringify(row))
   assert.ok(out.findings.some((f) => f.class === 'unsanctioned-skip' && f.detail.includes('AC-20260820-94-1')),
     'evidence the check engaged: the finding must name the exact planted AC-ID, proving the check mapped and ' +
     'evaluated OUR skip line: ' + JSON.stringify(out.findings))

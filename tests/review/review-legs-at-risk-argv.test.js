@@ -24,6 +24,15 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // Before v7 the step was performed by the session, which plausibly read `.file` correctly, so the
 // mechanically-guaranteed-dead window is v7 onward — earlier runs are unverified, not exonerated.
 //
+// specs/20260820/06-typed-evidence-manifest.md D1/D2/D5 (2026-08-20, brief 16's second move):
+// the at-risk leg's `observed` field becomes a typed JSON object — {"files":N,"testsExecuted":
+// N|{"unavailable":"<enum>"}}, or {"malformed":{"entries":N,"of":M}} on a schema-drifted entry.
+// This fixture host declares no `testCountPattern`, so testsExecuted is typed
+// {"unavailable":"no-format-declared"} throughout (D5) — the testCountPattern-driven
+// contradiction branch (files>0 && testsExecuted===0 forces exit 1) is pinned separately in
+// tests/review/legs-verdict-pair.test.js (AC-20260820-06-6), the grammar authority (D10). Every
+// `observed` assertion below is retyped in place; none is retagged.
+//
 // The fix has three parts and this file pins all three:
 //   (a) extract `.file`, so the runner receives real repo-relative paths;
 //   (b) fail closed on a malformed entry — a schema drift must be legible, never silent garbage;
@@ -146,8 +155,10 @@ test('the at-risk leg passes real repo-relative paths to the host testCommand �
   assert.strictEqual(byLeg.get('at-risk').exit, 0,
     'the recorder exits 0, so the leg row must be green — a nonzero exit here means the leg failed for a ' +
     'reason other than the tests it was asked to run: ' + JSON.stringify(byLeg.get('at-risk')))
-  assert.strictEqual(byLeg.get('at-risk').observed, 'files=1',
-    'the observed string counts the at-risk files: ' + JSON.stringify(byLeg.get('at-risk')))
+  assert.deepStrictEqual(byLeg.get('at-risk').observed, { files: 1, testsExecuted: { unavailable: 'no-format-declared' } },
+    'D2/D5: the typed observed object must count the at-risk files, and since this host declares no ' +
+    'testCountPattern, testsExecuted must be typed {"unavailable":"no-format-declared"}, never assumed zero: ' +
+    JSON.stringify(byLeg.get('at-risk')))
 })
 
 test('the at-risk leg saves the runner output to at-risk.txt, so its red finding is diagnosable', () => {
@@ -200,9 +211,10 @@ test('a malformed atRisk entry fails the leg closed rather than shipping garbage
     (fs.existsSync(argvLog) ? fs.readFileSync(argvLog, 'utf8') : ''))
   assert.strictEqual(atRiskRow && atRiskRow.exit, 1,
     'a malformed entry must surface as a red at-risk row, never a green count: ' + JSON.stringify(atRiskRow))
-  assert.match((atRiskRow && atRiskRow.observed) || '', /malformed atRisk entry \(1\/1\)/,
-    'the observed string must say the entries were malformed rather than reporting files=N — a count ' +
-    'over entries the runner never received is the same lie in a new shape: ' + JSON.stringify(atRiskRow))
+  assert.deepStrictEqual(atRiskRow && atRiskRow.observed, { malformed: { entries: 1, of: 1 } },
+    'D2: the typed observed object must say the entries were malformed ({"malformed":{"entries":1,"of":1}}) ' +
+    'rather than reporting {"files":N} — a count over entries the runner never received is the same lie in a ' +
+    'new shape: ' + JSON.stringify(atRiskRow))
   assert.match(fs.readFileSync(path.join(outDir, 'at-risk.txt'), 'utf8'), /malformed atRisk entries/,
     'at-risk.txt must carry the rejected entries so the schema drift is diagnosable from evidence')
 })

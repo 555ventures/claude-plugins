@@ -14,9 +14,9 @@
 // legs (D7) — no --workflow, no dispositions, word restricted to CLEAN|GATE_RED|UNVERIFIED.
 // The --ledger row is additive to review.md/release.md's documented templates: review's
 // runId/smoke/testsSkipped/findings are derived here (D2 — smoke and testsSkipped come FROM
-// manifest rows' pinned observed formats, never asserted); release's milestone/briefs are
-// orchestrator-supplied identity flags and staging/e2e/journeys/substrate/production are
-// derived from the release legs' observed strings.
+// manifest rows' typed observed fields, never asserted); release's milestone/briefs are
+// orchestrator-supplied identity flags and staging/e2e/journeys/substrate/production/ci are
+// derived from the release legs' typed observed objects.
 //
 // Incident (2026-08-13, spec gate-script-mechanics D3): review.md Phase 0 step 8 documents a
 // pre-panel hard-stop invocation with no --workflow (none exists yet — the manifest alone
@@ -36,16 +36,17 @@
 //
 // v7.0.0 (2026-08-17): the CLEAN-with-qualifier word and the sanctionedReds suffix are
 // retired with the sanctioned-red baseline apparatus — gates are plainly green or red, and a
-// structurally-absent leg observation (`unavailable`/`in-progress`) is recorded in the leg row
-// and the ledger, never a distinct verdict word. `testsSkipped` stays the
-// `{total, sanctioned, unsanctioned}` object (sanctioned = `[env:]`-declared skips).
+// structurally-absent leg observation (a typed `{"unavailable":...}` field, or an `in-progress`
+// status) is recorded in the leg row and the ledger, never a distinct verdict word.
+// `testsSkipped` stays the `{total, sanctioned, unsanctioned}` object (sanctioned = `[env:]`-
+// declared skips).
 //
 // Incident (2026-08-18, spec ledger-truth, 2026-08-18 Fable retainer consult on v7's first full
 // pipeline run): a red findings leg (reconcile/ac-matrix/skip-reconcile/promise-sweep/at-risk)
 // could derive CLEAN with zero reviewer survivors and zero dispositions — the sole verdict
 // arithmetic counted workflow.survivors only, never the deterministic legs that v7 moved
-// findings into. Every red non-blocking manifest row now contributes a parsed finding count
-// (pinned observed grammars, floored at 1) to the SAME undispositioned pool as reviewer
+// findings into. Every red non-blocking manifest row now contributes a finding count read off
+// its typed observed field (floored at 1) to the SAME undispositioned pool as reviewer
 // survivors (D1/D2), the disposition-contradiction guard widens to that pool's sum (D3),
 // ledger leg rows retain `observed` in both profiles so a structurally-absent observation stays
 // distinguishable from a pass (D4), and review rows always carry `runId` — the orchestrator's
@@ -70,7 +71,7 @@
 // the review profile whenever both --ledger and --workflow are present (absent -> exit 2 naming
 // --retain .claude/spec-runs as the remedy, before any verdict word prints, D1) and writes
 // <dir>/<runId>.json atomically (temp file + rename) — the manifest legs with `observed`
-// UNTRUNCATED plus the --workflow file's parsed JSON verbatim (survivors/killed with their
+// verbatim plus the --workflow file's parsed JSON verbatim (survivors/killed with their
 // executed repro evidence intact). A no-workflow --ledger row (the 2026-08-13 Phase 0 hard-stop)
 // stays retain-optional; passed anyway, the artifact's `reviewer` is null (D2). --retain on
 // --profile release is a usage error (D3) — a release row carries no runId and no reviewer
@@ -81,18 +82,40 @@
 // the full-fidelity home, the printed row stays the summary.
 //
 // Incident (2026-08-20, spec review-observation-truth.md D2-D4, Salon OS field report): a gate
-// row whose `observed` was unparseable by the "skips=N todos=M" grammar silently decayed to
+// row whose skip observation was structurally unparseable silently decayed to
 // `testsSkipped: {total:0,...}` and a CLEAN verdict — a fabricated zero-skip measurement no run
-// ever made, violating UPWELL-20260716-02's never-assumed-zero rule. `deriveTestsSkipped` now
-// types any gate `observed` starting with "unavailable" as exactly `{"unavailable":true}` (D2),
-// never the `{total,sanctioned,unsanctioned}` shape (unchanged for a parseable "skips=N todos=M"
-// row). An exit-0 gate row whose `observed` is EXACTLY "unavailable — skip format did not match
-// gate output" additionally contributes 1 finding to the leg-findings pool (D3) — a narrow,
-// deliberate special case inside `computeLegFindings`, which otherwise skips every blocking leg
-// (gate included) entirely; this does not lift that skip. The sibling literal "unavailable — host
-// runner declares no skip format" (declared-none, honest standing config, not drift) raises no
-// finding. `legIsRed`/`GATE_RED` derivation stays exit-code-only and untouched (D4) — the D3
-// finding rides the leg-findings pool alone and never derives GATE_RED.
+// ever made, violating UPWELL-20260716-02's never-assumed-zero rule. `deriveTestsSkipped` types
+// any structurally-absent gate observation (the whole-row unavailable alternative, or the
+// skips-slot's own unavailable alternative) as exactly `{"unavailable":true}` (D2), never the
+// `{total,sanctioned,unsanctioned}` shape (unchanged for a parseable numeric skips-and-todos
+// pair). An exit-0 gate row whose skips observation is the drift enum (a declared pattern that
+// simply did not match, distinct from the host declaring no pattern at all) additionally
+// contributes 1 finding to the leg-findings pool (D3) — a narrow, deliberate special case inside
+// `computeLegFindings`, which otherwise skips every blocking leg (gate included) entirely; this
+// does not lift that skip. The sibling declared-none enum (honest standing config, not drift)
+// raises no finding. `legIsRed`/`GATE_RED` derivation stays exit-code-only and untouched (D4) —
+// the D3 finding rides the leg-findings pool alone and never derives GATE_RED.
+//
+// specs/20260820/06-typed-evidence-manifest.md (D1/D3/D4/D11, 2026-08-20, brief 16's second
+// move): every manifest row's `observed` field is now a typed JSON object, and this script's
+// packed-string parser is deleted, not hardened — it becomes a copier of typed fields, never a
+// second parser of what an emitter already typed. D1: ANY row whose `observed` is not a
+// non-null JSON object (a bare string, a number, null, or an array) makes the WHOLE manifest
+// invalid -> UNVERIFIED, on BOTH profiles — there is no compat window, since a typed-looking or
+// gibberish string observed both silently decayed to a fabricated measurement on the pre-image
+// parser (spike A/A2). D3: `countLegFinding` now reads each red leg's finding count directly
+// off its own typed field (reconcile's out-of-plan count, ac-matrix's uncovered count,
+// skip-reconcile's skipped count minus its sanctioned count, promise-sweep's orphan count),
+// floored at 1 when the field is absent or non-numeric — every regex-based extraction this file
+// used to perform is deleted outright; this script no longer runs a pattern match against ANY
+// `observed` value. The release ledger's e2e/journeys/substrate/ci keys now copy the
+// corresponding leg's `observed` object VERBATIM — a present row always yields a present key,
+// whatever shape its object holds — and production is simply its observed row's `result` field;
+// this script is a pure copier for those keys now, never a second validator of what an emitter
+// should have written (spike C's silent key omission on an unparseable release leg becomes
+// structurally impossible). D2/D11: free-text fields are bounded at the emitter, never here — an
+// `observed` object is never sliced (slicing a JSON object corrupts it), only a string field
+// inside one.
 //
 // Exit codes: 0 = derived CLEAN · 1 = derived other non-CLEAN word
 // (still printed on stdout line 1) · 2 = usage error, missing/unreadable --manifest or
@@ -183,6 +206,13 @@ for (const line of manifestRaw.split('\n')) {
   try {
     const row = JSON.parse(line)
     if (!row.leg || typeof row.exit !== 'number') throw new Error('missing leg/exit')
+    // D1: `observed` must be a non-null JSON object — arrays are not objects for this purpose.
+    // ANY other shape (string, number, null, array) makes the WHOLE manifest invalid, never a
+    // silently misread row (spike A: a typed-looking or gibberish string observed both decayed
+    // to a fabricated zero/CLEAN on the pre-image parser).
+    if (row.observed === null || typeof row.observed !== 'object' || Array.isArray(row.observed)) {
+      throw new Error('observed must be a non-null JSON object')
+    }
     legRows.set(row.leg, row)
   } catch {
     manifestValid = false
@@ -243,28 +273,28 @@ function legIsRed(leg) {
   return row.exit !== 0
 }
 
-// ---- leg-findings pool (D1/D2): every red non-blocking manifest row contributes its parsed ----
-// ---- finding count to the SAME undispositioned pool as reviewer survivors. Count grammar is --
-// ---- parsed from the leg's pinned observed format and floored at 1 (a red row can never -------
-// ---- contribute 0 — a format drift must fail closed, not silently disappear).------------------
+// ---- leg-findings pool (D1/D2): every red non-blocking manifest row contributes a finding -----
+// ---- count read off its own typed observed field to the SAME undispositioned pool as reviewer -
+// ---- survivors, floored at 1 (a red row can never contribute 0 — an absent/non-numeric field ---
+// ---- must fail closed, not silently disappear). specs/20260820/06-typed-evidence-manifest.md ---
+// ---- D3: this reads typed fields directly now — no leg's finding count is pattern-matched -----
+// ---- out of a string any more. -----------------------------------------------------------------
 
 function countLegFinding(row) {
-  const observed = (row && row.observed) || ''
+  const observed = (row && row.observed) || {}
   let n = NaN
   if (row && row.leg === 'reconcile') {
-    const m = /outOfPlan=(\d+)/.exec(observed)
-    if (m) n = Number(m[1])
+    n = observed.outOfPlan
   } else if (row && row.leg === 'ac-matrix') {
-    const m = /uncovered=(\d+)/.exec(observed)
-    if (m) n = Number(m[1])
+    n = observed.uncovered
   } else if (row && row.leg === 'skip-reconcile') {
-    const m = /^skipped=(\d+)(?: sanctioned=(\d+))?/.exec(observed)
-    if (m) n = Number(m[1]) - (m[2] !== undefined ? Number(m[2]) : 0)
+    if (typeof observed.skipped === 'number') {
+      n = observed.skipped - (typeof observed.sanctioned === 'number' ? observed.sanctioned : 0)
+    }
   } else if (row && row.leg === 'promise-sweep') {
-    const m = /orphans=(\d+)/.exec(observed)
-    if (m) n = Number(m[1])
+    n = observed.orphans
   }
-  // any other red non-blocking leg (at-risk, drift, patterns) or an unparseable observed floors to 1
+  // any other red non-blocking leg (at-risk, drift, patterns) or an absent/non-numeric field floors to 1
   return Number.isFinite(n) && n >= 1 ? n : 1
 }
 
@@ -274,14 +304,18 @@ function computeLegFindings() {
     if (blockingLegs.has(leg)) continue
     if (legIsRed(leg)) total += countLegFinding(row)
   }
-  // D3 (specs/20260820/03-review-observation-truth.md): gate is a blocking leg and is skipped by
+  // D3 (specs/20260820/03-review-observation-truth.md), keyed on the typed enum per
+  // specs/20260820/06-typed-evidence-manifest.md D4: gate is a blocking leg and is skipped by
   // the loop above like every other blocking leg — this is a deliberate, narrow addition, not a
-  // lifting of that skip. An exit-0 gate row whose observed is EXACTLY the did-not-match literal
-  // still contributes 1 finding, so a run whose skip observation went unparseable pages itself
-  // instead of decaying silently over five runs (dead-man's-switch, no cross-run state). The
-  // sibling declared-none literal is honest standing config and must key on nothing here.
+  // lifting of that skip. An exit-0 gate row whose skips observation is the drift enum
+  // (observed.skips.unavailable === "pattern-no-match") still contributes 1 finding, so a run
+  // whose skip observation went unparseable pages itself instead of decaying silently over five
+  // runs (dead-man's-switch, no cross-run state). The sibling declared-none enum
+  // ("no-format-declared") is honest standing config and must key on nothing here.
   const gateRow = legRows.get('gate')
-  if (gateRow && gateRow.exit === 0 && gateRow.observed === 'unavailable — skip format did not match gate output') {
+  const gateSkips = gateRow && gateRow.observed && gateRow.observed.skips
+  if (gateRow && gateRow.exit === 0 && gateSkips && typeof gateSkips === 'object' &&
+      gateSkips.unavailable === 'pattern-no-match') {
     total += 1
   }
   return total
@@ -323,45 +357,29 @@ if (profile !== 'release' && !workflow && word !== 'UNVERIFIED' && word !== 'GAT
 }
 console.log(word)
 
-// ---- ledger-row derivation helpers (D2: observed formats are pinned, so parse failures ------
-// ---- degrade to 0/omitted rather than crashing the ledger print) --------------------------
+// ---- ledger-row derivation helpers (D2: observed shapes are pinned per leg, so a field that ----
+// ---- is absent or off-shape degrades to 0/omitted rather than crashing the ledger print) -------
 
 function deriveSmoke(row) {
   if (!row) return undefined
-  if (row.exit === 0) return row.observed // pinned: "pass" | "inert"
+  if (row.exit === 0) return row.observed && row.observed.result // pinned: "pass" | "inert"
   if (row.exit === 4) return 'inert' // sanctioned inert-green
   return 'fail'
 }
 
 function deriveTestsSkipped(gateRow, skipReconcileRow) {
-  const gateObserved = (gateRow && gateRow.observed) || ''
-  // D2: a structurally-absent observation is typed, never coerced to a fabricated zero — this
-  // check must run BEFORE the "skips=N todos=M" regex, since "unavailable — …" never matches it
-  // anyway but the typed shape communicates the distinction explicitly rather than by accident.
-  if (/^unavailable/.test(gateObserved)) return { unavailable: true }
-  const gm = /^skips=(\d+) todos=(\d+)$/.exec(gateObserved)
-  const total = gm ? Number(gm[1]) + Number(gm[2]) : 0
-  const sm = skipReconcileRow && /^skipped=(\d+)(?: sanctioned=(\d+))?$/.exec(skipReconcileRow.observed || '')
-  const sanctioned = sm && sm[2] !== undefined ? Number(sm[2]) : 0
+  const gateObserved = (gateRow && gateRow.observed) || {}
+  // D2/D4: a structurally-absent observation is typed, never coerced to a fabricated zero — this
+  // check runs BEFORE reading skips/todos as numbers, covering both the whole-row unavailable
+  // alternative (no gate ran at all) and the skips-slot's own unavailable alternative.
+  if (gateObserved.unavailable !== undefined) return { unavailable: true }
+  const skips = gateObserved.skips
+  if (skips && typeof skips === 'object' && skips.unavailable !== undefined) return { unavailable: true }
+  const total = (typeof skips === 'number' ? skips : 0) +
+    (typeof gateObserved.todos === 'number' ? gateObserved.todos : 0)
+  const skipReconcileObserved = (skipReconcileRow && skipReconcileRow.observed) || {}
+  const sanctioned = typeof skipReconcileObserved.sanctioned === 'number' ? skipReconcileObserved.sanctioned : 0
   return { total, sanctioned, unsanctioned: Math.max(0, total - sanctioned) }
-}
-
-function parseCounts(row, keys) {
-  if (!row) return undefined
-  const re = new RegExp('^' + keys.map(k => `${k}=(\\d+)`).join(' ') + '$')
-  const m = re.exec(row.observed || '')
-  if (!m) return undefined
-  const obj = {}
-  keys.forEach((k, i) => { obj[k] = Number(m[i + 1]) })
-  return obj
-}
-
-function deriveProduction(row) {
-  if (!row) return undefined
-  if (row.observed === 'verified' || row.observed === 'skipped' || row.observed === 'failed') return row.observed
-  if (row.exit === 0) return 'verified'
-  if (row.exit === 1) return 'failed'
-  return undefined
 }
 
 // ---- retention artifact (D1/D2, specs/20260819/01-review-evidence-retention.md): the full-
@@ -378,12 +396,11 @@ function writeRetainedArtifact(dir, artifactRunId, data) {
 }
 
 if (ledger) {
-  // D4: observed is retained (sliced to 120 chars) in both profiles — a structurally-absent
+  // D4/D11: observed is retained VERBATIM (never sliced — a JSON object is never sliced, the
+  // 120-char bound lives on emitters' string fields) in both profiles — a structurally-absent
   // observation ("unavailable") must stay byte-distinguishable from a real pass forever.
   const ts = new Date().toISOString()
-  const legs = [...legRows.values()].map(({ leg, exit, observed }) => ({
-    leg, exit, observed: typeof observed === 'string' ? observed.slice(0, 120) : observed,
-  }))
+  const legs = [...legRows.values()].map(({ leg, exit, observed }) => ({ leg, exit, observed }))
   const row = { ts }
   if (specArg) row.spec = specArg
   row.stage = profile === 'release' ? 'release' : 'review'
@@ -400,16 +417,20 @@ if (ledger) {
     }
     const deployRow = legRows.get('deploy'), readyRow = legRows.get('ready')
     if (deployRow && readyRow) row.staging = (deployRow.exit === 0 && readyRow.exit === 0) ? 'pass' : 'fail'
-    const e2e = parseCounts(legRows.get('e2e'), ['passed', 'failed', 'skipped'])
-    if (e2e) row.e2e = e2e
-    const journeys = parseCounts(legRows.get('journeys'), ['walked', 'failed'])
-    if (journeys) row.journeys = journeys
-    const substrate = parseCounts(legRows.get('substrate'), ['checked', 'failed', 'inert'])
-    if (substrate) row.substrate = substrate
-    const production = deriveProduction(legRows.get('production'))
-    if (production) row.production = production
+    // D3: a present leg row copies its observed object into the ledger VERBATIM — a present row
+    // always yields a present key, whatever shape its object holds; a genuinely ABSENT row (never
+    // ran, e.g. a STOP path) omits the key entirely. This script is a copier now, never a second
+    // validator of what an emitter should have written.
+    const e2eRow = legRows.get('e2e')
+    if (e2eRow) row.e2e = e2eRow.observed
+    const journeysRow = legRows.get('journeys')
+    if (journeysRow) row.journeys = journeysRow.observed
+    const substrateRow = legRows.get('substrate')
+    if (substrateRow) row.substrate = substrateRow.observed
+    const productionRow = legRows.get('production')
+    if (productionRow) row.production = productionRow.observed && productionRow.observed.result
     const ciRow = legRows.get('ci')
-    if (ciRow && ciRow.observed) row.ci = ciRow.observed
+    if (ciRow) row.ci = ciRow.observed
     row.legs = legs
   } else {
     if (workflow) row.scope = workflow.scope

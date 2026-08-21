@@ -11,19 +11,45 @@
 // red/green summary. The leg scripts (scope-reconcile.js, smoke.sh, ci-query.js, ac-matrix.js)
 // are reused as-is — this file only orchestrates.
 //
-// Legs and row shapes (verdict.js's REVIEW_LEGS, byte-compatible):
-//   reconcile      {"leg":"reconcile","exit":<0|3>,"observed":"outOfPlan=<N>"}
-//   gate           {"leg":"gate","exit":<code>,"observed":"skips=<N> todos=<M>"|"unavailable — …"}
-//   smoke          {"leg":"smoke","exit":<code>,"observed":"pass"|"inert"|"fail"}
-//   ci             {"leg":"ci","exit":<0|1>,"observed":"unavailable"|"unavailable-transient"|"in-progress"|"conclusion=<v>"}
-//   at-risk        {"leg":"at-risk","exit":<code>,"observed":"files=<N>"|"unavailable — …"}
+// Legs and row shapes (verdict.js's REVIEW_LEGS; observed is always a typed JSON object per
+// specs/20260820/06-typed-evidence-manifest.md D1/D2 — the Contracts block there is the closed
+// set, reproduced here for orientation):
+//   reconcile      {"leg":"reconcile","exit":<0|3>,"observed":{"outOfPlan":N}}
+//   gate           {"leg":"gate","exit":<code>,"observed":{"skips":N,"todos":N,"testsExecuted":N|
+//                  {"unavailable":"pattern-no-match"|"no-format-declared"}}} — skips itself takes
+//                  the same {"unavailable":...} shape (then no "todos" key) when skipReportPattern
+//                  is absent/"none" or declared-but-unmatched; a gate that never ran at all (no
+//                  {testDirs} resolution) appends the whole-row alternative
+//                  {"unavailable":"gate-unresolvable","detail":"<reason>"}, exit 1
+//   smoke          {"leg":"smoke","exit":<code>,"observed":{"result":"pass"|"inert"|"fail"}}
+//   ci             {"leg":"ci","exit":<0|1>,"observed":{"conclusion":"<v>"}|{"status":"in-progress"}|
+//                  {"unavailable":"no-adapter"|"transient"}}
+//   at-risk        {"leg":"at-risk","exit":<code>,"observed":{"files":N,"testsExecuted":N|
+//                  {"unavailable":"pattern-no-match"|"no-format-declared"}}} |
+//                  {"unavailable":"no-test-command"} | {"malformed":{"entries":N,"of":M}} — exit is
+//                  FORCED to 1 when files>0 and testsExecuted===0 strictly (D5, emitter-side
+//                  contradiction; an unavailability object is not a zero)
 //   ac-matrix / skip-reconcile — appended by ac-matrix.js itself (same manifest)
-//   promise-sweep  {"leg":"promise-sweep","exit":<0|1>,"observed":"rows=N carried=C sanctioned=S orphans=O"}
-//                  appended by promise-sweep.js itself (same manifest); runs in EVERY scope
-//                  including --fix-delta — excluded from no scope (D4,
-//                  specs/20260817/07-promise-sweep-leg.md)
-//   patterns       recorded when config declares patternsScript; never required
-//   drift          recorded when config declares driftScript
+//   promise-sweep  {"leg":"promise-sweep","exit":<0|1>,"observed":{"rows":N,"carried":C,
+//                  "sanctioned":S,"orphans":O}} — appended by promise-sweep.js itself (same
+//                  manifest); runs in EVERY scope including --fix-delta — excluded from no scope
+//                  (D4, specs/20260817/07-promise-sweep-leg.md)
+//   patterns       {"matches":N} — recorded when config declares patternsScript; never required
+//   drift          {"summary":"<first stdout line, bounded to 120 chars>"} — recorded when config
+//                  declares driftScript
+//
+// specs/20260820/06-typed-evidence-manifest.md D2/D5 (2026-08-20, brief 16's second move): every
+// row's `observed` is now a typed JSON object instead of a packed/prefixed string — a string row
+// is manifest-invalid to verdict.js by construction (D1), so this script never emits one. Free-
+// text sub-fields (gate's whole-row `detail`, drift's `summary`) are bounded to 120 chars AT THE
+// EMITTER (D2) — the bound is on the string field, never the whole row object (D11: slicing a
+// JSON object corrupts it). A new capability, `testCountPattern` (regex over runner output, group
+// 1 = executed-test count, or "none"), is read the same way `skipReportPattern` already is and
+// applied to the gate and at-risk legs' child output, writing `testsExecuted` as a number or a
+// typed `{"unavailable":...}` — absent/"none"/no-match is never assumed zero (UPWELL-20260716-02's
+// lesson, extended). The at-risk leg's exit is forced to 1 when it captured files>0 but a declared
+// testCountPattern observed exactly 0 executed tests — the 2026-08-16 vacuous-green escape
+// (files=N, exit=0, runner executed nothing) becomes a same-run red instead of silent decay.
 // --fix-delta skips reconcile/at-risk/patterns (the fix diff is a response to findings) and
 // re-runs everything else in full — a fix-delta pass must re-assert executed state, never
 // inherit it (CROSS-20260727-01).
@@ -96,9 +122,26 @@ fs.mkdirSync(outDir, { recursive: true })
 
 const rows = []
 function appendRow(leg, exit, observed) {
-  const row = { leg, exit, observed: String(observed).slice(0, 120) }
+  const row = { leg, exit, observed }
   rows.push(row)
   fs.appendFileSync(manifest, JSON.stringify(row) + '\n')
+}
+
+// D5: testCountPattern is read/handled exactly like skipReportPattern below — absent or "none"
+// means the host declares no format (sanctioned, never a finding); declared but unmatched means
+// drift (pages via verdict.js's gate-skips finding for skips specifically; at-risk's contradiction
+// rule for testsExecuted). Never assumed zero either way.
+function computeTestsExecuted(output, pattern) {
+  if (!pattern || pattern === 'none') return { unavailable: 'no-format-declared' }
+  const m = new RegExp(pattern).exec(output)
+  return m ? (Number(m[1]) || 0) : { unavailable: 'pattern-no-match' }
+}
+
+function computeSkips(output, pattern) {
+  if (!pattern || pattern === 'none') return { skips: { unavailable: 'no-format-declared' } }
+  const m = new RegExp(pattern).exec(output)
+  if (!m) return { skips: { unavailable: 'pattern-no-match' } }
+  return { skips: Number(m[1]) || 0, todos: m[2] !== undefined ? Number(m[2]) || 0 : 0 }
 }
 
 function sh(cmd, opts = {}) {
@@ -169,7 +212,7 @@ async function main() {
       fs.writeFileSync(reconcilePath, r.out)
       try { reconcileJson = JSON.parse(r.out) } catch { reconcileJson = null }
       const n = reconcileJson ? reconcileJson.outOfPlan.length : 0
-      appendRow('reconcile', r.code, `outOfPlan=${n}`)
+      appendRow('reconcile', r.code, { outOfPlan: n })
     }))
   }
 
@@ -177,34 +220,31 @@ async function main() {
   if (resolved.gate) {
     wave1.push(sh(resolved.gate).then(r => {
       fs.writeFileSync(gateOutPath, r.out + r.err)
-      const pat = config.capabilities && config.capabilities.skipReportPattern
-      let observed
-      if (pat && pat !== 'none') {
-        const m = new RegExp(pat).exec(r.out + r.err)
-        // No match is honestly unavailable, never assumed-zero (UPWELL-20260716-02's lesson) —
-        // runners that print a zero-skip line still match the declared pattern with count 0.
-        observed = m ? `skips=${Number(m[1]) || 0} todos=${m[2] !== undefined ? Number(m[2]) || 0 : 0}`
-          : 'unavailable — skip format did not match gate output'
-      } else {
-        observed = 'unavailable — host runner declares no skip format'
-      }
+      const output = r.out + r.err
+      const skipPat = config.capabilities && config.capabilities.skipReportPattern
+      const countPat = config.capabilities && config.capabilities.testCountPattern
+      // No match is honestly unavailable, never assumed-zero (UPWELL-20260716-02's lesson) —
+      // runners that print a zero-skip line still match the declared pattern with count 0.
+      const observed = { ...computeSkips(output, skipPat), testsExecuted: computeTestsExecuted(output, countPat) }
       appendRow('gate', r.code, observed)
     }))
   } else {
-    appendRow('gate', 1, `unavailable: ${resolved.reason}`)
+    // D2: the whole-row unavailable alternative — no gate command could be resolved at all — is
+    // still a red gate row (exit 1), with the reason bounded to 120 chars at this emitter.
+    appendRow('gate', 1, { unavailable: 'gate-unresolvable', detail: String(resolved.reason || '').slice(0, 120) })
   }
 
   wave1.push(sh(`node ${q(path.join(scriptDir, 'ci-query.js'))} --commit $(git rev-parse HEAD) --root ${q(root)}`).then(r => {
-    let observed = 'unavailable', exit = 0
+    let observed = { unavailable: 'no-adapter' }, exit = 0
     const line = (r.out || '').trim().split('\n').pop() || ''
-    if (/^unavailable/.test(line)) observed = 'unavailable'
+    if (/^unavailable/.test(line)) observed = { unavailable: 'no-adapter' }
     else {
       try {
         const j = JSON.parse(line)
-        if (!j.available) observed = j.transient ? 'unavailable-transient' : 'unavailable'
-        else if (j.status && j.status !== 'completed') observed = 'in-progress'
-        else { observed = `conclusion=${j.conclusion}`; exit = /^(failure|timed_out|cancelled)$/.test(j.conclusion) ? 1 : 0 }
-      } catch { observed = 'unavailable' }
+        if (!j.available) observed = { unavailable: j.transient ? 'transient' : 'no-adapter' }
+        else if (j.status && j.status !== 'completed') observed = { status: 'in-progress' }
+        else { observed = { conclusion: j.conclusion }; exit = /^(failure|timed_out|cancelled)$/.test(j.conclusion) ? 1 : 0 }
+      } catch { observed = { unavailable: 'no-adapter' } }
     }
     appendRow('ci', exit, observed)
   }))
@@ -215,12 +255,14 @@ async function main() {
   // ---- reconcile's output) ----------------------------------------------------------------
   const wave2 = []
   wave2.push(sh(`bash ${q(path.join(scriptDir, 'smoke.sh'))}`).then(r => {
-    appendRow('smoke', r.code, r.code === 0 ? 'pass' : r.code === 4 ? 'inert' : 'fail')
+    appendRow('smoke', r.code, { result: r.code === 0 ? 'pass' : r.code === 4 ? 'inert' : 'fail' })
   }))
   if (!fixDelta) {
     const atRisk = (reconcileJson && Array.isArray(reconcileJson.atRisk)) ? reconcileJson.atRisk : []
-    if (!atRisk.length) appendRow('at-risk', 0, 'files=0')
-    else if (!config.testCommand) appendRow('at-risk', 0, 'unavailable — host declares no testCommand')
+    // Zero at-risk files is a genuine, known zero (nothing needed to run) — not an unmade
+    // observation, so testsExecuted is the literal 0 here, never a typed unavailability.
+    if (!atRisk.length) appendRow('at-risk', 0, { files: 0, testsExecuted: 0 })
+    else if (!config.testCommand) appendRow('at-risk', 0, { unavailable: 'no-test-command' })
     // scope-reconcile emits atRisk as {file, refs} objects (the `refs` provenance is load-bearing
     // and the patterns consumer below already reads the object form). Extract `.file` — a bare
     // map(q) stringified each entry to "[object Object]", a path matching no test files, and
@@ -233,7 +275,7 @@ async function main() {
       if (malformed.length) {
         fs.writeFileSync(atRiskPath, `malformed atRisk entries (expected {file, refs}):\n${JSON.stringify(malformed, null, 2)}\n`)
         wroteAtRisk = true
-        appendRow('at-risk', 1, `malformed atRisk entry (${malformed.length}/${atRisk.length})`)
+        appendRow('at-risk', 1, { malformed: { entries: malformed.length, of: atRisk.length } })
       } else {
         const atRiskFiles = atRisk.map(a => a.file)
         wave2.push(sh(`${config.testCommand} ${atRiskFiles.map(q).join(' ')}`).then(r => {
@@ -241,7 +283,11 @@ async function main() {
           // runner output}" — discarding the output makes that finding unproducible.
           fs.writeFileSync(atRiskPath, `$ ${config.testCommand} ${atRiskFiles.map(q).join(' ')}\n\n${r.out}${r.err}`)
           wroteAtRisk = true
-          appendRow('at-risk', r.code, `files=${atRisk.length}`)
+          const testsExecuted = computeTestsExecuted(r.out + r.err, config.capabilities && config.capabilities.testCountPattern)
+          // D5: exit is FORCED to 1 when files>0 and testsExecuted===0 STRICTLY (an unavailability
+          // object is not a zero) — the 2026-08-16 vacuous-green escape becomes a same-run red.
+          const exit = (testsExecuted === 0) ? 1 : r.code
+          appendRow('at-risk', exit, { files: atRisk.length, testsExecuted })
         }))
       }
     }
@@ -252,12 +298,15 @@ async function main() {
         : []
       wave2.push(sh(`DIFF_BASE=${q(base)} bash ${q(path.resolve(root, config.patternsScript))} ${dirs.map(q).join(' ')}`).then(r => {
         fs.writeFileSync(patternsPath, r.out)
-        appendRow('patterns', r.code, `matches=${r.out.split('\n').filter(l => l.trim()).length}`)
+        appendRow('patterns', r.code, { matches: r.out.split('\n').filter(l => l.trim()).length })
       }))
     }
   }
   if (config.driftScript) {
-    wave2.push(sh(`${config.driftScript} ${q(spec)}`).then(r => appendRow('drift', r.code, (r.out.trim().split('\n')[0] || '').slice(0, 120))))
+    // D2: drift's summary is the one built-in free-text field — bounded to 120 chars at this
+    // emitter, never sliced as a whole row downstream.
+    wave2.push(sh(`${config.driftScript} ${q(spec)}`).then(r =>
+      appendRow('drift', r.code, { summary: (r.out.trim().split('\n')[0] || '').slice(0, 120) })))
   }
   await Promise.all(wave2)
 
@@ -280,7 +329,7 @@ async function main() {
     const red = r.leg === 'smoke' ? (r.exit !== 0 && r.exit !== 4) : r.exit !== 0
     const blocking = BLOCKING.includes(r.leg)
     if (red && blocking) blockedBy.push(r.leg)
-    console.log(`${red ? (blocking ? '❌' : '⚠️ ') : '✅'} ${r.leg.padEnd(14)} exit=${r.exit} ${r.observed}${red && !blocking ? ' (findings — disposition in review)' : ''}`)
+    console.log(`${red ? (blocking ? '❌' : '⚠️ ') : '✅'} ${r.leg.padEnd(14)} exit=${r.exit} ${JSON.stringify(r.observed)}${red && !blocking ? ' (findings — disposition in review)' : ''}`)
   }
   console.log(`manifest: ${manifest}`)
   console.log(`outputs: ${outDir}  (reconcile.json, gate-output.txt, ac-matrix.txt, promise-sweep.txt${config.patternsScript ? ', patterns.txt' : ''}${wroteAtRisk ? ', at-risk.txt' : ''})`)

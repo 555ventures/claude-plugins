@@ -1,6 +1,7 @@
 ---
 date: 2026-08-20
-status: hardened
+status: implementing
+diff_base: 7e9f33746ed21870fd082fe306fce06a3a6a5e94
 open_markers: 0
 tier: critical
 area: review-verification

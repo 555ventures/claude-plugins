@@ -63,6 +63,16 @@
   `caught`+`missed` enter the catch-rate; a non-measurement outcome (`unresolved`,
   `setup-failed`) is visible in the totals, absent from the rate, and leaves the harness
   due, so the next review session retries rather than waiting five more.
+  Cadence is `replay.js --due` policy (every 5th review, at least once per major version) and
+  execution is review's own close: the review driver's REPLAY state, between MERGE and DONE,
+  runs the dueness and selection checks itself and refuses to conclude the review until a
+  `stage:"replay"` row for the selected target exists. Any outcome concludes the state;
+  non-measurement outcomes leave the harness due and retry at the next review. REPLAY never
+  re-derives or gates the review verdict — CLOSE has committed and MERGE has concluded before
+  it runs, so it measures the reviewer while the verdict measures the diff. `/spec:replay`
+  remains the manual and retry surface. The printed-advisory form it replaces was tried and
+  measured to fail: shipped 2026-08-19, due at 5 reviews, skipped through 12+ reviews in ~48
+  hours.
   A sustained miss-rate is the evidence that reopens the second-reviewer question.
   The mutation worker's writes are sanctioned by the cross-worktree write guard: a write is
   allowed when the TARGET tree carries the `replay-worktree` marker, honoured only when that
@@ -72,7 +82,8 @@
   writing session's own tree, so the marker cannot be forged through the tool surface the
   guard governs.
   (specs/20260819/02-mutation-replay.md, specs/20260819/03-replay-first-run-fixes.md,
-  specs/20260820/02-replay-scratch-write-access.md)
+  specs/20260820/02-replay-scratch-write-access.md,
+  specs/20260821/02-replay-review-phase.md)
 
 - `ac-matrix`'s coverage denominator fails closed: an AC bullet no ID grammar can parse counts
   as **uncovered** — unparseable = unknown, never absent — in both drift modes, since a host

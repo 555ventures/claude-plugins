@@ -292,3 +292,18 @@ upstream bug list. -->
   and un-actioned: it needs the core § Incident Policy admission bar (five ledger-derived fields)
   before any guard is admitted, which is a user decision, not a close-time edit. Recorded at
   review 2026-08-21 so the count is not lost.
+- `[plugin]` **`orchestrator-compensation-during-live-worker`** (class stands at 1; grep this slug
+  to count recurrences). The harness fired completion notifications for two `/spec:build` workers
+  while they were still executing; the orchestrator read those as returns-with-no-work and began
+  writing the same files itself, making the concurrency real in a tree build deliberately does not
+  isolate. The workers' "a concurrent process already landed this" observations were CORRECT with
+  WRONG attribution, and the orchestrator's own first account ("there was no concurrent process")
+  was wrong — it WAS the concurrent process. The fix target is liveness/serialization (never write
+  into a possibly-live worker's file set on a notification alone), not worker prompting; it is
+  plausibly a harness defect to report upstream rather than a pipeline defect. Reopen/recurrence
+  condition (grep-answerable): any agent memory or worker return attributing observed work to "a
+  concurrent process" / "already implemented" WITHOUT naming the commit or worker that landed it.
+  A guard candidate is pre-registered and deliberately unbuilt — Generality and Materiality are
+  unfillable at count 1 (core § Incident Policy). (specs/20260821/02-replay-review-phase.md build
+  2026-08-21 — two agent memories written from a half-applied orchestrator patch, one deleted as
+  false-and-harmful, one corrected in place.)

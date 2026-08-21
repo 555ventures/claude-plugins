@@ -1,6 +1,6 @@
 ---
 date: 2026-08-21
-status: implementing
+status: done
 diff_base: 496378b4d61c3976e324c3943e7c1b4934eef102
 open_markers: 0
 tier: standard           # no critical-trigger file gets a behavioral edit (verdict.js/review-legs.js untouched); worst failure is the driver refusing DONE after a completed merge — resumable, never destructive
@@ -191,6 +191,47 @@ surface — D6, JJ ruling 2026-08-21, reopen condition recorded there. Fragile s
 is mid-build; contract drift re-opens Contracts) and the ~88K-token replay cost now landing
 inside review sessions (~once per 5 reviews ≈ 2–4% of review spend — accepted when this
 approach was chosen).
+
+Review disposition 2026-08-21 — waived: the reconcile leg reported two out-of-plan paths,
+`.claude/agent-memory/plugin-tests/MEMORY.md` and
+`.claude/agent-memory/plugin-tests/concurrent-worker-file-collision-select-tiebreak.md`.
+Both are the disposition D10 mandates: the false-attribution note was corrected in place and
+its index line updated, one stated fate each, at the review close that D10 defines. Flagging
+the very edit the spec's own ruling requires would make the check cry wolf on every future
+spec that touches agent memory; the File Plan cannot pre-declare which memory files a
+dispatched worker will touch, which is precisely why D10 puts the duty at close rather than
+in plan. No fix dispatched.
+
+Deviations folded at close 2026-08-21 (sidecar deleted; the recurring class went to the host
+rules' Gotchas as `orchestrator-compensation-during-live-worker`, tagged `[plugin]`):
+
+- Worker dispatch degraded. The harness fired completion notifications for the `plugin-tests`
+  and `gate-scripts` workers while they were still executing; the orchestrator authored both
+  test files and the driver row itself, and both workers then collided with it in the shared
+  tree. The load-bearing separation held — the ten pins were authored and executed RED on
+  spec-contract assertions before a line of the driver existed — but "test author is a
+  different agent from the code author" does not hold for this build. `doctrine-author`
+  completed normally, though it and the orchestrator overlapped on `review.md`/`replay.md`;
+  the worker deduped and the final files carry exactly one copy of each added block.
+- `printDoneNow()` now honours `--state` (printing the bare `DONE`) rather than writing its
+  whole block and exiting. Required by AC-20260821-02-1 and -5; it also closes a 07-era wart
+  where both DONE fast paths ignored the flag. A behavioural addition no Decision names.
+- AC-20260821-02-3's exit-1 arm ("due but no eligible CLEAN row in the window") is structurally
+  unreachable from REPLAY: `doCloseWork()` appends this review's own CLEAN row moments before
+  REPLAY runs, so `--select` always has a candidate. The reachable arm is `--select` failing to
+  RESOLVE it (exit 4). The driver treats any non-zero `--select` exit as "nothing measurable,
+  conclude"; the test exercises exit 4 and records why in its comment.
+- D9 executed as a verified no-op: `spec/entrypoints.json` needed no edit — 20260820/07 had
+  already landed `replay.js`'s `entryPoints`, and no `review.md` edge for it ever existed to
+  drop. Not a skipped row; the entry-point conformance suite is green.
+- Agent-memory disposition under D10, applied to this spec's own diff:
+  `gate-scripts/assigned-file-may-already-be-implemented.md` DELETED (false premise — written
+  from a half-applied patch — and its prescription would teach workers to skip assigned work);
+  `plugin-tests/concurrent-worker-file-collision-select-tiebreak.md` CORRECTED in place
+  (attribution fixed to the orchestrator, the stand-down inference replaced with "report what
+  you found and let the orchestrator adjudicate", the recall description rewritten, since its
+  `replay.js --select` tie-break finding is load-bearing for future REPLAY fixture authors);
+  both `MEMORY.md` index files CARRIED with their lines updated.
 
 ## Canonical Delta
 

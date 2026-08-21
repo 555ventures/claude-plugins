@@ -15,6 +15,15 @@ rules that replaced it:
   UNVERIFIED; a child process that dies without an exit code is a failure, never a pass
   (`spawnSync` `status: null` — signal kill, spawn failure, maxBuffer overflow — must be an
   explicit red branch in any wrapper; see the 2026-08-17 Gotchas entry).
+- **Every executable declares who calls it.** `spec/entrypoints.json` maps each executable under
+  `spec/scripts/` (minus `lib/`) and `spec/workflows/` to the files that invoke it, and
+  `tests/consistency/entrypoints.test.js` diffs those declarations against the repo's real call
+  sites in both directions on every run. Four conditions are red: a script nothing invokes, a
+  declared call site that no longer invokes, an invocation the manifest does not know, and a
+  `spec-paths` key resolving to a deleted file. Zero entry points has no sanctioned form — an
+  orphan is deleted or re-wired, never marked exempt. The inventory is admit-everything-by-location
+  on purpose: any file-name or extension filter is itself the evasion surface (see the Gotchas
+  entry). Adding, deleting, or renaming a script must update the manifest in the same diff.
 - **The gate resolves `{testDirs}` to the glob form** (`node --test 'tests/<scope>/*.test.js'`)
   — a bare directory runs nothing on Node 26.
 

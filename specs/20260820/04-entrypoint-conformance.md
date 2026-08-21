@@ -1,6 +1,6 @@
 ---
 date: 2026-08-20
-status: implementing
+status: done
 open_markers: 0
 diff_base: cf10ce87c8c5f0a16b04c060130dd1da04beb38f
 tier: standard
@@ -206,6 +206,65 @@ rather than prose. No post-July-2026 industry source shows this exact declared-v
 entry-point diff — adjacent evidence (dead-code detection, contract testing) supports it;
 we are slightly ahead of practice, sized to three File Plan rows.
 
+### Review dispositions (2026-08-20, iteration 2)
+
+- **Waived (soft, reviewer):** `isExecutableName` admits every extension, broader than D11's
+  locked text. Recorded in full in the deviations sidecar, including the prototyped-but-deliberately-
+  unbuilt `notEntryPoints` escape and the executed evidence killing the executable-bit and shebang
+  alternatives. JJ's call, 2026-08-20: leave exemptions out until the situation actually arises —
+  the audit stays airtight and the trigger condition is currently extinct.
+- **Waived (leg, reconcile `outOfPlan=3`):** `.claude/spec-runs/rv_8e44087e330b.json` is this
+  review's own retained evidence artifact, EXPECTED per /spec:review Phase 3 and riding the close
+  commit. `spec/scripts/review-legs.js` and `tests/review/review-legs-at-risk-argv.test.js` belong
+  to a concurrent session's unrelated escape fix (the at-risk leg passed `[object Object]` to the
+  runner and had never executed a test since v7 mechanized it); adjudicated as foreign, left
+  uncommitted and untouched by this close.
+
+**Evidence note:** iteration 1's at-risk leg (`files=11 exit=0`) was vacuous — it ran under the
+defective consumer above and executed nothing. Iteration 2's at-risk leg ran against the concurrent
+session's repaired script and genuinely executed 108 tests, 0 failures. The CLEAN verdict rests on
+iteration 2.
+
+### Deviations (folded from sidecar at close, 2026-08-20)
+
+- D5 puts the checker logic inside `tests/consistency/entrypoints.test.js` itself, so the only implementation surface this spec creates is the data file `spec/entrypoints.json`. Consequence for TDD: the fixture red-case tests (AC-2, AC-3 x2, AC-4, AC-5, AC-5/D8) exercise functions authored in the same file and therefore pass on their first run — they cannot be red against a pre-image. The executed red state was carried entirely by the two live-repo pins (AC-1, AC-6), which failed on a clean `assert.ok(fs.existsSync(...))` naming the missing manifest and went green only once the manifest was seeded. Logged rather than reddened artificially, per the pipeline rules' vacuous-red-pin gotcha. The guard's red-on-drift behaviour was additionally verified by execution at build close: removing `spec-paths env-preflight` from `spec/commands/build.md` turned AC-6 red naming both the entry-point file and the script; reverted, green again.
+
+- **D11 broadened at review (iteration 2, 2026-08-20).** D11's locked text admits "extensionless
+  files alongside `.js`/`.mjs`/`.cjs`/`.sh`". The shipped guard admits EVERY file under
+  `spec/scripts/` (minus `lib/`) and `spec/workflows/`; `isExecutableName` returns `true`
+  unconditionally and domain narrowing is purely the directory walk. Cause: an adversarial review
+  pass produced an executed evasion of the locked shape — `spec/scripts/orphan-helper.py`, zero
+  callers, left the full 437-test suite green, falsifying D11's own "must not be evadable by file
+  placement or extension" and D12's "none [of the known gaps] lets an executable exist with zero
+  callers undetected". Any extension allowlist is the evasion surface itself, so the fail-closed
+  shape is admit-all-by-directory. Accepted cost: a legitimate non-executable placed directly in
+  either root (outside `lib/`) now reds the live-repo pin. Historically bounded — the only
+  precedent is the v7-deleted workflow codegen seam (`spec/workflows/fragments/*.js.frag`,
+  `spec/workflows/src/*.body.js`, removed 2026-08-17 in 61e2e5a); `spec/scripts/` outside `lib/`
+  has held only `.js`/`.sh` for its entire life.
+
+  **Planned escape, deliberately NOT built (JJ, 2026-08-20):** a reserved top-level
+  `notEntryPoints` array in `spec/entrypoints.json` — `checkInventoryForward` skips listed paths,
+  `checkInventoryReverse` reds a stale or out-of-root row, and `isExecutableDomainPath` ignores the
+  list so an invocation of an "excluded" file still reds (an exclusion cannot lie about liveness).
+  Prototyped and executed at review time: identity on the pristine tree (23/23), orphan unlisted
+  reds, orphan listed greens, excluded-but-invoked reds, stale row reds. Add it on FIRST real
+  occurrence, not speculatively — the trigger condition is currently extinct, and the trust model
+  is identical to `"dynamic": true` (diff-visible, greppable, zero live uses).
+
+  **Rejected alternatives, killed by executed evidence:** executable-bit classification — 20 of 30
+  inventory files are mode `100644` in the git index (including `ac-matrix.js`, `review-legs.js`,
+  all four `wf-*.js`), so bit-classification would silently drop two-thirds of the inventory;
+  shebang detection — all four `spec/workflows/wf-*.js` have none (sandbox function bodies), and a
+  shebang-less orphan evades exactly as the allowlist did; a sanctioned non-executable
+  subdirectory — a blanket exclusion under which an orphan *executable* evades with no
+  manifest-diff signal.
+
 ## Canonical Delta
 
-None — no docs/canonical/ in this repo; plugin.json description carries the changelog.
+Applied at close 2026-08-20. The Delta as authored said "None — no docs/canonical/ in this repo",
+which was false: `docs/canonical/` exists and `gate-integrity.md` is exactly this spec's subject.
+Corrected at review on JJ's call — `docs/canonical/gate-integrity.md` gains a standing entry for
+the entry-point manifest and its four red conditions, including why the inventory admits every
+file by location rather than by name shape. The recurring-shaped deviation (a name/extension
+filter in a conformance guard is the evasion surface) went to the host rules' Gotchas section.

@@ -47,19 +47,23 @@ const { ROOT, tmpdir } = require('../helpers')
 // then REDIRECTED away from that fix, on the reasoning that hooks.json is JSON — text with
 // STRUCTURE — and a regex over its raw bytes is the wrong oracle regardless of how carefully it
 // is widened: it buys exactly one more evasion (this quoting style) until the next one appears.
-// The fix actually shipped is an ORACLE CHANGE, not a wider pattern: parseHookScriptBasenames
+// The fix actually shipped is an ORACLE CHANGE, not a wider pattern: parseHookScriptPaths
 // below JSON.parses the file and walks the parsed tree collecting every string under a
 // `command` key, wherever it nests; by the time a command string is in hand, JSON's own
-// escaping is already resolved (`\"` is plain `"`), so a single generic `/scripts/<basename>`
-// extraction is quoting-agnostic — escaped-double-quote, single-quoted, and unquoted forms all
-// collapse to the identical plain string and are handled identically, with no per-style branch.
-// A parse failure is fail-closed (a violation naming the file and the JSON error), never a
-// silent skip and never a fallback to regex. The hooks FORWARD branch (previously
+// escaping is already resolved (`\"` is plain `"`), so a single generic extraction ("whatever
+// directly follows /scripts/ or /workflows/, up to the next whitespace or quote character") is
+// quoting-agnostic — escaped-double-quote, single-quoted, and unquoted forms all collapse to
+// the identical plain string and are handled identically, with no per-style branch. A parse
+// failure is fail-closed (a violation naming the file and the JSON error), never a silent skip
+// and never a fallback to regex. The hooks FORWARD branch (previously
 // `epSrc.includes('/scripts/' + basename)`) was checked by the same executed sweep and did NOT
 // share the original regex defect — the substring `/scripts/<basename>` was present verbatim in
 // the raw file regardless of what preceded the `/`, so it already matched all four live
 // basenames — but it is now on the same parse-based oracle as the reverse direction for the same
 // durability reason, rather than left as the one remaining raw-bytes match in the file.
+// (Renamed parseHookScriptBasenames -> parseHookScriptPaths at the 2026-08-20b hole2 fix: the
+// function now returns full repo-relative paths across BOTH /scripts/ and /workflows/, not bare
+// basenames confined to /scripts/ — see the D10/hole2 note near its definition below.)
 //
 // D11 (orchestrator ruling, same sweep): `scanExecutables` was non-recursive and `.js`/`.sh`-
 // only, and `isExecutableDomainPath` mirrored the same shape — the two agreed perfectly, so a
@@ -69,10 +73,12 @@ const { ROOT, tmpdir } = require('../helpers')
 // real spec-paths key and invoked from a command markdown file, with manifest `{}`, made every
 // one of checkInventoryForward/checkInventoryReverse/checkForwardInvocation/
 // checkReverseInvocation return `[]`. scanExecutables is now a recursive walk under
-// spec/scripts/ (still excluding spec/scripts/lib/) and spec/workflows/, admitting
-// extensionless files alongside .js/.mjs/.cjs/.sh; isExecutableDomainPath is kept in exact
-// shape-agreement (same isExecutableName test, same lib/ exclusion, same two root prefixes) —
-// a divergence between the two is exactly how this hole opened. checkKeyReachability is the
+// spec/scripts/ (still excluding spec/scripts/lib/) and spec/workflows/, admitting every file
+// regardless of extension (see the isExecutableName fix note below dated 2026-08-20b — an
+// extension allowlist was itself found to be a fifth, unlisted evasion after this D11 fix
+// shipped); isExecutableDomainPath is kept in exact shape-agreement (same isExecutableName
+// test, same lib/ exclusion, same two root prefixes) — a divergence between the two is
+// exactly how this hole opened. checkKeyReachability is the
 // independent belt-and-braces leg D11 also requires: every spec-paths key resolving under
 // spec/scripts/ or spec/workflows/ must resolve to a file the (now-recursive) inventory scan
 // actually enumerates, closing the class by REACHABILITY rather than by re-deriving the same
@@ -84,6 +90,25 @@ const { ROOT, tmpdir } = require('../helpers')
 // D9-D11): four residual false-green holes deliberately left open. None lets an executable
 // exist with zero callers undetected — the class this guard exists to close — so each was
 // accepted rather than fixed. Read this before adding a fifth epicycle to the checker.
+//
+// CORRECTION (2026-08-20b, adversarial review with executed repros): D12's premise above —
+// "none lets an executable exist with zero callers undetected" — was itself FALSIFIED. Two
+// holes, neither one of the four listed below, did exactly that or its D4 mirror-image, and
+// both are now fixed (not accepted) as of this correction:
+//   - D11's own claim ("not evadable by ... extension") was false: isExecutableName's
+//     extension allowlist left spec/scripts/orphan-helper.py (zero callers) invisible to the
+//     inventory scan — executed repro, scoped suite AND full npm test both green. Fixed:
+//     isExecutableName now admits every file; see its definition above.
+//   - D4/AC-20260820-04-5's claim ("every ${CLAUDE_PLUGIN_ROOT} script path in hooks.json must
+//     map to a manifest entry") was false in two compounding ways: the extraction regex only
+//     ever matched /scripts/, so a hook invoking a /workflows/ script raised nothing in either
+//     direction; and the reverse loop silently `continue`d past a hook-invoked path with no
+//     matching manifest entry at all instead of reporting a violation. Fixed: extraction now
+//     covers both roots and matches by full repo-relative path (scriptPathsFromCommand,
+//     parseHookScriptPaths), and a hook path absent from the manifest is a violation, never a
+//     skip.
+// The four gaps below were re-verified still narrower than the recurrence class after this
+// correction and remain accepted.
 //
 // 1. A command .md entry point satisfies the forward check on ANY prose mention of
 //    `spec-paths <key>`, including a sentence stating the command NO LONGER runs it. Not
@@ -115,11 +140,19 @@ const { ROOT, tmpdir } = require('../helpers')
 // Checker logic (D5): pure functions over an injectable repo root.
 // ---------------------------------------------------------------------------
 
-// D11: an executable file name is .js/.mjs/.cjs/.sh OR extensionless — a shape a file cannot
-// dodge merely by omitting an extension.
-function isExecutableName(name) {
-  const ext = path.extname(name)
-  return ext === '' || ['.js', '.mjs', '.cjs', '.sh'].includes(ext)
+// D11-hole1 (fix 2026-08-20b, adversarial review executed repro): admits EVERY file — no
+// extension allowlist at all. The prior allowlist ('' | .js/.mjs/.cjs/.sh) was itself the hole:
+// creating spec/scripts/orphan-helper.py (nothing calls it) left the scoped 33/33 suite AND the
+// full npm test green, because '.py' fails the allowlist and the file is simply never scanned —
+// contradicting D11's own claim ("not evadable by ... extension") and D12's premise ("none of
+// the four [known gaps] lets an executable exist with zero callers undetected": this was a
+// FIFTH, unlisted hole that does exactly that). Same repro for spec/scripts/orphan-helper.bash.
+// Domain narrowing (spec/scripts/ minus lib/, spec/workflows/) is already done by the caller's
+// directory walk, so this function no longer needs to look at the name at all — an extension
+// check here can only ever be a new evasion surface, never a legitimate filter, given both live
+// trees are flat and hold only executables plus lib/ (verified by listing on disk 2026-08-20).
+function isExecutableName(_name) {
+  return true
 }
 
 function walkFiles(dir) {
@@ -230,38 +263,45 @@ function collectHookCommandStrings(node, out) {
   return out
 }
 
-// D10: once a command string is in hand, JSON's own escaping is already resolved — `\"` is
-// plain `"` — so a single generic extraction ("whatever directly follows /scripts/, up to the
-// next whitespace or quote character") is quoting-agnostic: escaped-double-quote, single-quoted,
-// and unquoted `${CLAUDE_PLUGIN_ROOT}` forms all collapse to the identical plain string here.
-function scriptBasenamesFromCommand(cmd) {
-  const re = /\/scripts\/([^\s"'`]+)/g
+// D10/hole2 (fix 2026-08-20b, adversarial review executed repro): once a command string is in
+// hand, JSON's own escaping is already resolved — `\"` is plain `"` — so a single generic
+// extraction is quoting-agnostic: escaped-double-quote, single-quoted, and unquoted
+// `${CLAUDE_PLUGIN_ROOT}` forms all collapse to the identical plain string here. Now covers BOTH
+// script roots (/scripts/ and /workflows/), returning the REPO-RELATIVE PATH ('spec/scripts/<x>'
+// or 'spec/workflows/<x>'), not a bare basename — matching by path rather than basename means the
+// two roots can never collide. The prior /scripts/-only regex was the hole: a hook command
+// invoking "${CLAUDE_PLUGIN_ROOT}"/workflows/wf-panel.js was never seen by this extraction at
+// all, so adding that live command to hooks.json left the scoped suite green — an undeclared,
+// invisible call site to an in-inventory executable.
+function scriptPathsFromCommand(cmd) {
+  const re = /\/(scripts|workflows)\/([^\s"'`]+)/g
   const out = []
   let m
-  while ((m = re.exec(cmd)) !== null) out.push(m[1])
+  while ((m = re.exec(cmd)) !== null) out.push('spec/' + m[1] + '/' + m[2])
   return out
 }
 
 // D10's oracle: JSON.parse spec/hooks/hooks.json (never a regex over its raw bytes) and return
-// the set of script basenames its command strings genuinely invoke. A missing hooks.json is
-// simply "no hooks corpus to check" (`ok: true`, empty set) — unaffected fixtures without a
-// hooks.json continue to see no hooks-direction findings. A PRESENT but invalid-JSON hooks.json
-// is fail-closed (`ok: false`): the caller must surface this as a violation naming the file and
-// the parse error, never silently skip the hooks direction and never fall back to a regex scan.
-function parseHookScriptBasenames(root) {
+// the set of repo-relative script paths its command strings genuinely invoke, across both
+// /scripts/ and /workflows/ (hole2 fix, 2026-08-20b). A missing hooks.json is simply "no hooks
+// corpus to check" (`ok: true`, empty set) — unaffected fixtures without a hooks.json continue to
+// see no hooks-direction findings. A PRESENT but invalid-JSON hooks.json is fail-closed
+// (`ok: false`): the caller must surface this as a violation naming the file and the parse error,
+// never silently skip the hooks direction and never fall back to a regex scan.
+function parseHookScriptPaths(root) {
   const hooksPath = path.join(root, 'spec/hooks/hooks.json')
-  if (!fs.existsSync(hooksPath)) return { ok: true, basenames: new Set() }
+  if (!fs.existsSync(hooksPath)) return { ok: true, paths: new Set() }
   let parsed
   try {
     parsed = JSON.parse(fs.readFileSync(hooksPath, 'utf8'))
   } catch (e) {
     return { ok: false, error: 'spec/hooks/hooks.json is not valid JSON (' + e.message + ')' }
   }
-  const basenames = new Set()
+  const paths = new Set()
   for (const cmd of collectHookCommandStrings(parsed, [])) {
-    for (const b of scriptBasenamesFromCommand(cmd)) basenames.add(b)
+    for (const p of scriptPathsFromCommand(cmd)) paths.add(p)
   }
-  return { ok: true, basenames }
+  return { ok: true, paths }
 }
 
 // Non-recursive single-level listing of a call-site corpus directory (the Contracts "Scan
@@ -355,7 +395,7 @@ function matchesScriptInvocation(codeOnlySrc, basename) {
 
 // D3/AC-4: every declared entry point exists and actually invokes its script. `.md` entry
 // points need the literal `spec-paths <key>`; a `hooks.json` entry point needs the script's
-// basename among D10's parse-based hook-command extraction (parseHookScriptBasenames); a
+// basename among D10's parse-based hook-command extraction (parseHookScriptPaths); a
 // script-to-script caller needs D9's quoted-literal shape on a non-comment line. An entry
 // flagged `"dynamic": true` (D6) still needs the entry-point file to exist, but skips the
 // invocation-literal check (a call site grep cannot see).
@@ -379,13 +419,15 @@ function checkForwardInvocation(root) {
         const keys = Object.keys(keyMap).filter((k) => keyMap[k] === script)
         ok = keys.some((k) => new RegExp('spec-paths ' + k + '\\b').test(epSrc))
       } else if (path.basename(ep) === 'hooks.json') {
-        // D10: parse-based oracle, not a raw-bytes match — see parseHookScriptBasenames.
-        const hookResult = parseHookScriptBasenames(root)
+        // D10/hole2: parse-based oracle, not a raw-bytes match — see parseHookScriptPaths.
+        // Matched by full repo-relative path (not basename) so /scripts/ and /workflows/
+        // entries sharing a basename can never collide (fix 2026-08-20b).
+        const hookResult = parseHookScriptPaths(root)
         if (!hookResult.ok) {
           violations.push(script + ' -> ' + ep + ' (' + hookResult.error + ' — fail-closed, D10)')
           continue
         }
-        ok = hookResult.basenames.has(basename)
+        ok = hookResult.paths.has(script)
       } else {
         ok = matchesScriptInvocation(stripCommentLines(epSrc, path.extname(ep)), basename)
       }
@@ -418,22 +460,31 @@ function checkReverseInvocation(root) {
       }
     }
   }
-  // D10: parse-based oracle, not a raw-bytes regex — see parseHookScriptBasenames. A present but
-  // invalid-JSON hooks.json fails closed (a violation naming the file), never a silent skip.
+  // D10/hole2 (fix 2026-08-20b): parse-based oracle, not a raw-bytes regex — see
+  // parseHookScriptPaths. A present but invalid-JSON hooks.json fails closed (a violation
+  // naming the file), never a silent skip. Matched by full repo-relative path across BOTH
+  // /scripts/ and /workflows/ (the prior /scripts/-only extraction made a hook invoking a
+  // /workflows/ script invisible here). A hook-invoked path with NO manifest entry at all is
+  // now a violation naming the file and the path — the prior code silently `continue`d past
+  // this case (a hook naming an undeclared, even nonexistent, script raised nothing).
   const hooksRel = 'spec/hooks/hooks.json'
-  const hookResult = parseHookScriptBasenames(root)
+  const hookResult = parseHookScriptPaths(root)
   if (!hookResult.ok) {
     violations.add(hookResult.error + ' — the hooks reverse-invocation check cannot run (fail-closed, D10)')
   } else {
-    for (const basename of hookResult.basenames) {
-      const script = Object.keys(manifest).find((s) => s.startsWith('spec/scripts/') && path.basename(s) === basename)
-      if (!script) continue
-      const entry = manifest[script]
-      const declared = !!entry && Array.isArray(entry.entryPoints) && entry.entryPoints.includes(hooksRel)
+    for (const scriptPath of hookResult.paths) {
+      const entry = manifest[scriptPath]
+      if (!entry) {
+        violations.add(hooksRel + ' invokes ' + scriptPath + ' (parsed hooks.json command ' +
+          'string) but the manifest has no entry for ' + scriptPath + ' at all — an ' +
+          'invocation the manifest does not know about')
+        continue
+      }
+      const declared = Array.isArray(entry.entryPoints) && entry.entryPoints.includes(hooksRel)
       if (!declared) {
-        violations.add(hooksRel + ' invokes ' + script + ' (parsed hooks.json command string, ' +
-          'basename ' + basename + ') but the manifest entry for ' + script +
-          ' does not declare ' + hooksRel + ' as an entry point')
+        violations.add(hooksRel + ' invokes ' + scriptPath + ' (parsed hooks.json command ' +
+          'string) but the manifest entry for ' + scriptPath + ' does not declare ' + hooksRel +
+          ' as an entry point')
       }
     }
   }
@@ -498,21 +549,22 @@ test('AC-20260820-04-1 / D11: every spec-paths key resolving under spec/scripts/
     'deliberately separate from the shape-based checks above: ' + JSON.stringify(violations))
 })
 
-test('AC-20260820-04-5 / D10: parseHookScriptBasenames extracts exactly the four live hooks.json script basenames, proving the parse-based oracle actually fires against the real file', () => {
-  const result = parseHookScriptBasenames(ROOT)
+test('AC-20260820-04-5 / D10 / hole2: parseHookScriptPaths extracts exactly the four live hooks.json script paths (repo-relative, /scripts/-rooted today), proving the parse-based oracle actually fires against the real file', () => {
+  const result = parseHookScriptPaths(ROOT)
   assert.strictEqual(result.ok, true,
     'the live spec/hooks/hooks.json must parse as valid JSON — a parse failure here would fail ' +
     'the whole hooks direction closed: ' + (result.error || ''))
-  assert.deepStrictEqual([...result.basenames].sort(), [
-    'block-cross-worktree-writes.sh',
-    'genesis-state-gate.sh',
-    'question-style-gate.js',
-    'spec-state-gate.sh'
+  assert.deepStrictEqual([...result.paths].sort(), [
+    'spec/scripts/block-cross-worktree-writes.sh',
+    'spec/scripts/genesis-state-gate.sh',
+    'spec/scripts/question-style-gate.js',
+    'spec/scripts/spec-state-gate.sh'
   ],
-    'the parse-based extraction must yield exactly these four basenames from the live file — ' +
-    'this is the executed proof that the oracle change (not a widened regex) actually resolves ' +
-    'the measured D10 defect (the old raw-bytes regex returned zero matches here): ' +
-    JSON.stringify([...result.basenames].sort()))
+    'the parse-based extraction must yield exactly these four repo-relative paths from the live ' +
+    'file — this is the executed proof that the oracle change (not a widened regex) actually ' +
+    'resolves the measured D10 defect (the old raw-bytes regex returned zero matches here), and ' +
+    'that the hole2 path-based extraction (covering /workflows/ too) still returns the correct ' +
+    'live /scripts/-only set unchanged: ' + JSON.stringify([...result.paths].sort()))
 })
 
 test('AC-20260820-04-6: the live repo, scanned in both inventory directions and both invocation directions, reports zero violations — the green pin every future drift turns red', () => {
@@ -896,6 +948,72 @@ test('AC-20260820-04-4 / D10: a manifest declaring hooks.json as an entry point 
 })
 
 // ---------------------------------------------------------------------------
+// hole2 (adversarial review, executed repro 2026-08-20b): the reverse-hooks direction failed
+// OPEN in two compounding ways — the extraction regex only ever matched /scripts/, and the
+// reverse loop silently `continue`d past a hook-invoked path with no matching manifest entry.
+// ---------------------------------------------------------------------------
+
+test('AC-20260820-04-5 / hole2: a hooks.json command invoking an undeclared /workflows/ script raises a reverse-invocation violation', () => {
+  const root = tmpdir('entrypoints-hole2-workflows-reverse')
+  const hooksObj = {
+    hooks: {
+      UserPromptSubmit: [
+        { hooks: [{ type: 'command', command: '"${CLAUDE_PLUGIN_ROOT}"/workflows/wf-panel.js' }] }
+      ]
+    }
+  }
+  writeTree(root, {
+    'spec/workflows/wf-panel.js': '// workflow\n',
+    'spec/bin/spec-paths': '#!/usr/bin/env bash\nset -u\nROOT="$(pwd)"\ncase "${1:-root}" in\nesac\n',
+    'spec/hooks/hooks.json': JSON.stringify(hooksObj, null, 2),
+    // wf-panel.js has a manifest entry, but it never learned about hooks.json's call site — the
+    // live executed repro was adding this exact command to the real hooks.json, which left the
+    // scoped suite green because scriptBasenamesFromCommand's regex only ever matched /scripts/
+    'spec/entrypoints.json': JSON.stringify({
+      'spec/workflows/wf-panel.js': { entryPoints: ['spec/commands/design.md'] }
+    })
+  })
+  const violations = checkReverseInvocation(root)
+  assert.strictEqual(violations.length, 1,
+    'a hooks.json command invoking a /workflows/ script must be seen by the reverse-invocation ' +
+    'check exactly like a /scripts/ command is — before the fix, the /scripts/-only extraction ' +
+    'regex made this call site entirely invisible in both directions: ' + JSON.stringify(violations))
+  assert.match(violations[0], /spec\/hooks\/hooks\.json/,
+    'the violation must name hooks.json as the undeclared call site: ' + violations[0])
+  assert.match(violations[0], /wf-panel\.js/,
+    'the violation must name the invoked workflow script: ' + violations[0])
+})
+
+test('AC-20260820-04-5 / hole2: a hooks.json command invoking a /scripts/ path with NO manifest entry at all raises a reverse-invocation violation naming the file, not a silent skip', () => {
+  const root = tmpdir('entrypoints-hole2-ghost-script')
+  const hooksObj = {
+    hooks: {
+      UserPromptSubmit: [
+        { hooks: [{ type: 'command', command: '"${CLAUDE_PLUGIN_ROOT}"/scripts/ghost-script.sh' }] }
+      ]
+    }
+  }
+  writeTree(root, {
+    // ghost-script.sh does not exist on disk and has no manifest entry at all — the pre-fix
+    // reverse loop did `Object.keys(manifest).find(...); if (!script) continue`, silently
+    // skipping exactly this case instead of reporting it
+    'spec/bin/spec-paths': '#!/usr/bin/env bash\nset -u\nROOT="$(pwd)"\ncase "${1:-root}" in\nesac\n',
+    'spec/hooks/hooks.json': JSON.stringify(hooksObj, null, 2),
+    'spec/entrypoints.json': JSON.stringify({})
+  })
+  const violations = checkReverseInvocation(root)
+  assert.strictEqual(violations.length, 1,
+    'a hooks.json command naming a script with zero manifest coverage must be reported, never ' +
+    'silently skipped — this is the "an invocation the manifest doesn\'t know about" red ' +
+    'condition D4/AC-20260820-04-5 requires, and the pre-fix code satisfied it with a bare ' +
+    '`continue`: ' + JSON.stringify(violations))
+  assert.match(violations[0], /spec\/hooks\/hooks\.json/,
+    'the violation must name hooks.json as the call site: ' + violations[0])
+  assert.match(violations[0], /ghost-script\.sh/,
+    'the violation must name the undeclared, unmanifested script: ' + violations[0])
+})
+
+// ---------------------------------------------------------------------------
 // D11: recursive scan + extensionless admission + the independent reachability leg.
 // ---------------------------------------------------------------------------
 
@@ -942,6 +1060,30 @@ test('AC-20260820-04-3 / D11: an extensionless executable and a .mjs executable 
     'D11: a script saved without an extension, or as .mjs, must not evade the inventory scan by ' +
     'file naming alone — before the fix only .js/.sh were admitted and both of these files were ' +
     'invisible to it: ' + JSON.stringify(orphans))
+})
+
+// ---------------------------------------------------------------------------
+// hole1 (adversarial review, executed repro 2026-08-20b): the extension allowlist itself was
+// the evasion. A non-allowlisted extension (.py) is a strictly stronger repro than D11's
+// extensionless/.mjs cases above — it proves isExecutableName no longer filters by extension AT
+// ALL, not merely that it grew a slightly wider allowlist.
+// ---------------------------------------------------------------------------
+
+test('AC-20260820-04-3 / hole1: an orphan script with a non-allowlisted extension (.py) under spec/scripts/ is caught by inventory-forward, not silently skipped by an extension allowlist', () => {
+  const root = tmpdir('entrypoints-hole1-ext-allowlist')
+  writeTree(root, {
+    // nothing calls this file — the executed live-repo repro was spec/scripts/orphan-helper.py,
+    // which the pre-fix isExecutableName ('' | .js/.mjs/.cjs/.sh) rejected outright, leaving
+    // both the scoped suite and the full npm test green with a genuine zero-caller orphan on disk
+    'spec/scripts/orphan-helper.py': '#!/usr/bin/env python3\n',
+    'spec/entrypoints.json': JSON.stringify({})
+  })
+  const orphans = checkInventoryForward(root)
+  assert.deepStrictEqual(orphans, ['spec/scripts/orphan-helper.py (no manifest entry)'],
+    'a .py file under spec/scripts/ must be enumerated by the inventory scan and flagged as an ' +
+    'orphan exactly like a .js or .sh file would be — an extension allowlist here is a pure ' +
+    'evasion surface, since domain narrowing (spec/scripts/ minus lib/, spec/workflows/) is ' +
+    'already done by directory, not by file naming: ' + JSON.stringify(orphans))
 })
 
 test('AC-20260820-04-1 / D11: checkKeyReachability fails naming a spec-paths key whose target does not exist on disk', () => {

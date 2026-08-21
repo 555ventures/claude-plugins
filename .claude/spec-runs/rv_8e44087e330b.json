@@ -1,0 +1,69 @@
+{
+  "runId": "rv_8e44087e330b",
+  "ts": "2026-08-21T00:26:25.043Z",
+  "spec": "specs/20260820/04-entrypoint-conformance.md",
+  "tier": "standard",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 0,
+      "observed": "outOfPlan=0"
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": "unavailable"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": "skips=0 todos=0"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": "inert"
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": "matches=10"
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": "files=11"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": "uncovered=0 oracle=0"
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": "skipped=0 sanctioned=0"
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": "rows=13 carried=12 sanctioned=1 orphans=0"
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [],
+    "reviewerCount": 1,
+    "scope": "full",
+    "tokens": 66626
+  }
+}

@@ -117,6 +117,15 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
 
 ## Gotchas (evidence-cited)
 
+- `[plugin]` A conformance guard that decides what to inspect by **file name or extension** is
+  evadable by the exact thing it guards: the entry-point guard's inventory allowlisted
+  `''`/`.js`/`.mjs`/`.cjs`/`.sh`, so `spec/scripts/orphan-helper.py` with zero callers left the full
+  437-test suite green. Classify by **location** (the directory walk) and admit everything inside it;
+  any name-shape filter is a new hole, never a legitimate narrowing. Corollary for the reviewer: a
+  break attempt aimed at a path the guard's own fixtures already cover confirms nothing — the three
+  attempts that "passed" this guard were all inside its fixture envelope, and two independent
+  evasions sat just outside it. (specs/20260820/04-entrypoint-conformance.md — found at review,
+  fixed in the same session; executed repro in the deviations record.)
 - `[host]` A poll/retry loop driven by an **injected** transport has no I/O to pace it: if the
   fake resolves synchronously, `while (running) { await fake() }` recurses on microtasks only,
   never yields to the macrotask queue, and OOMs the test run instead of failing. Any such loop

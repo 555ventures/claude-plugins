@@ -1,0 +1,78 @@
+{
+  "runId": "rv_3587c8a90999",
+  "ts": "2026-08-21T01:02:47.139Z",
+  "spec": "specs/20260820/04-entrypoint-conformance.md",
+  "tier": "standard",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "HARD_FINDINGS",
+  "dispositions": {
+    "waived": 1,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 3,
+      "observed": "outOfPlan=3"
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": "unavailable"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": "skips=0 todos=0"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": "inert"
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": "matches=10"
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": "files=13"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": "uncovered=0 oracle=0"
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": "skipped=0 sanctioned=0"
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": "rows=13 carried=12 sanctioned=1 orphans=0"
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "soft",
+        "claim": "isExecutableName now admits every file extension, broader than D11's locked text; a future non-executable file dropped into spec/scripts/ or spec/workflows/ outside lib/ would redden AC-20260820-04-6.",
+        "file": "tests/consistency/entrypoints.test.js",
+        "line": 154,
+        "impact": "Maintenance tax not recorded in the spec's Decisions table.",
+        "evidence": "Both live trees verified flat, executables plus lib/ only; risk real but not currently triggered."
+      }
+    ],
+    "killed": [],
+    "reviewerCount": 1,
+    "scope": "fix-delta",
+    "tokens": 65147
+  }
+}

@@ -150,6 +150,10 @@ async function main() {
   const reconcilePath = path.join(outDir, 'reconcile.json')
   const gateOutPath = path.join(outDir, 'gate-output.txt')
   const patternsPath = path.join(outDir, 'patterns.txt')
+  const atRiskPath = path.join(outDir, 'at-risk.txt')
+  // Advertise at-risk.txt only when THIS run wrote it — a reused --out-dir can hold a stale
+  // copy from a prior run, and an existence probe would advertise it as this run's evidence.
+  let wroteAtRisk = false
 
   // ---- wave 1 (parallel): reconcile, gate, ci ---------------------------------------------
   // smoke deliberately runs AFTER the gate (wave 2): a gate that itself boots the app (this
@@ -217,7 +221,30 @@ async function main() {
     const atRisk = (reconcileJson && Array.isArray(reconcileJson.atRisk)) ? reconcileJson.atRisk : []
     if (!atRisk.length) appendRow('at-risk', 0, 'files=0')
     else if (!config.testCommand) appendRow('at-risk', 0, 'unavailable — host declares no testCommand')
-    else wave2.push(sh(`${config.testCommand} ${atRisk.map(q).join(' ')}`).then(r => appendRow('at-risk', r.code, `files=${atRisk.length}`)))
+    // scope-reconcile emits atRisk as {file, refs} objects (the `refs` provenance is load-bearing
+    // and the patterns consumer below already reads the object form). Extract `.file` — a bare
+    // map(q) stringified each entry to "[object Object]", a path matching no test files, and
+    // `node --test` exits 0 over zero matched tests — so the leg reported files=N as a VACUOUS
+    // GREEN having executed nothing (observed 36c2f14: files=11 exit=0, runner printed pass 0).
+    // Fail closed on a malformed entry rather than shipping garbage to the runner: a schema
+    // drift here must be legible, never silent.
+    else {
+      const malformed = atRisk.filter(a => !a || typeof a.file !== 'string' || !a.file.trim())
+      if (malformed.length) {
+        fs.writeFileSync(atRiskPath, `malformed atRisk entries (expected {file, refs}):\n${JSON.stringify(malformed, null, 2)}\n`)
+        wroteAtRisk = true
+        appendRow('at-risk', 1, `malformed atRisk entry (${malformed.length}/${atRisk.length})`)
+      } else {
+        const atRiskFiles = atRisk.map(a => a.file)
+        wave2.push(sh(`${config.testCommand} ${atRiskFiles.map(q).join(' ')}`).then(r => {
+          // The leg's finding is contractually "{failing files/digest, session-extracted from
+          // runner output}" — discarding the output makes that finding unproducible.
+          fs.writeFileSync(atRiskPath, `$ ${config.testCommand} ${atRiskFiles.map(q).join(' ')}\n\n${r.out}${r.err}`)
+          wroteAtRisk = true
+          appendRow('at-risk', r.code, `files=${atRisk.length}`)
+        }))
+      }
+    }
 
     if (config.patternsScript) {
       const dirs = reconcileJson
@@ -256,7 +283,7 @@ async function main() {
     console.log(`${red ? (blocking ? '❌' : '⚠️ ') : '✅'} ${r.leg.padEnd(14)} exit=${r.exit} ${r.observed}${red && !blocking ? ' (findings — disposition in review)' : ''}`)
   }
   console.log(`manifest: ${manifest}`)
-  console.log(`outputs: ${outDir}  (reconcile.json, gate-output.txt, ac-matrix.txt, promise-sweep.txt${config.patternsScript ? ', patterns.txt' : ''})`)
+  console.log(`outputs: ${outDir}  (reconcile.json, gate-output.txt, ac-matrix.txt, promise-sweep.txt${config.patternsScript ? ', patterns.txt' : ''}${wroteAtRisk ? ', at-risk.txt' : ''})`)
   if (blockedBy.length) {
     console.log(`RED_BLOCKING: ${blockedBy.join(',')}`)
     process.exit(1)

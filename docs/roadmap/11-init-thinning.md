@@ -18,6 +18,15 @@ a script cannot do — here, the repo profiling judgment and the interview.
   out, contract hash stamped); `init.md` shrinks to profiling + interview + one invocation.
 - Same evidence bar as v7: the generated tree passes `manifest-check` and `doctor` executed,
   not asserted.
+- **`testCommand` contract, documented and probed (folded 2026-08-20, at-risk escape).** The
+  review's at-risk leg appends file paths to `testCommand` — an assumption made load-bearing
+  by the 2026-08-20 fix and satisfied silently or violated silently: `cargo test <path>`
+  matches nothing and exits 0, the same vacuous-green class as the escape itself. Init must
+  state the contract where it captures `testCommand` (accepts appended file paths; a
+  no-match must not read as pass) and, where derivable, verify it against the profiled
+  runner rather than trusting the interview. Same duty for the at-risk detector's
+  applicability: the path-substring heuristic likely yields an empty set on Python/Go
+  hosts, and init is where a host learns its at-risk leg is inert rather than clean.
 
 ## Out of scope
 
@@ -28,3 +37,6 @@ a script cannot do — here, the repo profiling judgment and the interview.
 
 - Memory `research-20260817-ai-first-best-practice`; `spec/commands/init.md`;
   `spec/scripts/review-legs.js` (the inversion pattern).
+- The 2026-08-20 at-risk escape (dead since v7, vacuous green on `[object Object]`):
+  `tests/review/review-legs-at-risk-argv.test.js` header carries the full history; the two
+  host assumptions above are its documentation remainder.

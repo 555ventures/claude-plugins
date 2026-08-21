@@ -27,7 +27,7 @@
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
-const { configPathFor } = require('./lib/host-config')
+const { configExists } = require('./lib/host-config')
 
 const USAGE = 'Usage: node fleet-reader.js [--repos-root <dir>] [--json]'
 
@@ -81,9 +81,8 @@ function discoverRepos(root) {
     if (name.startsWith('.')) continue
     if (name === 'node_modules') continue
     const dir = path.join(root, name)
-    // Existence check only (never a content read — lib/host-config.js's readConfig/
-    // readConfigStrict own reading the file; this predicate only gates discovery on presence).
-    if (!fs.existsSync(configPathFor(dir))) continue
+    // Discovery gates on config presence only; lib/host-config.js owns the read.
+    if (!configExists(dir)) continue
     const gitPath = path.join(dir, '.git')
     if (fs.existsSync(gitPath) && fs.statSync(gitPath).isFile()) continue // worktree checkout
     repos.push({ name, dir })

@@ -51,7 +51,7 @@
 'use strict'
 const fs = require('fs')
 const path = require('path')
-const { readConfig } = require('./lib/host-config')
+const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
 
 function die(msg) { process.stderr.write('fidelity-check: ' + msg + '\n'); process.exit(2) }
 
@@ -118,7 +118,7 @@ const catalogs = [] // {rel, values: Set<norm>, templates: [segs[]], text: norm(
 for (const rel of catalogPaths) {
   let content
   try { content = fs.readFileSync(path.resolve(repoRoot, rel), 'utf8') }
-  catch { failures.push('copy catalog ' + rel + ' (spec.config.json design.copyCatalogs) is not readable — fix the config or restore the file'); continue }
+  catch { failures.push('copy catalog ' + rel + ' (' + CONFIG_RELPATH + ' design.copyCatalogs) is not readable — fix the config or restore the file'); continue }
   const cat = { rel, values: new Set(), templates: [], text: null, joined: null }
   let doc = null
   try { doc = JSON.parse(content) } catch { cat.text = norm(content) } // non-JSON catalog: raw text haystack
@@ -567,7 +567,7 @@ for (const surf of surfaces) {
         failures.push(id + ' [' + e.region + ']: copy "' + e.value + '" missing — not in ' +
           (readable.length ? readable.join(', ') : '(no readable files)') +
           ', the pass, an interpolation template' + (catalogs.length ? ', or the copy catalogs' : '') +
-          (catalogs.length ? '' : ' (no design.copyCatalogs declared — if this repo routes copy through i18n catalogs, declare them in spec.config.json)'))
+          (catalogs.length ? '' : ' (no design.copyCatalogs declared — if this repo routes copy through i18n catalogs, declare them in ' + CONFIG_RELPATH + ')'))
         entryOutcome.set(e, 'fail')
       } else {
         entryOutcome.set(e, 'pass')

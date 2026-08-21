@@ -209,19 +209,26 @@ test('review finding 5: the gate08 percent rounds half up from the two integer c
     'zero in-window authored specs is a 0/0 case for the percent — it must render a defined 0%, never NaN leaking into the human output')
 })
 
-// review fix 6
-test('review finding 6: the config-existence check routes through host-config.js\'s exported configPathFor, not a re-inlined concatenation', () => {
+// review fix 6 — retagged AC-20260820-08-8 at build 2026-08-20 (D14, orchestrator collision
+// ruling): specs/20260820/08-config-name-ban.md D7/D8 retire the `configPathFor` name at the
+// export boundary (it becomes `configExists`/`configPath`) and retire this file's call site along
+// with it, so the literal this test pinned no longer exists to pin. Updated in place per this
+// repo's rules § Gotchas prescription for a retired-literal collision outside the retiring spec's
+// own File Plan — never weakened, never left red. The anti-concatenation assertion is unchanged.
+test('AC-20260820-08-8: the config-existence check routes through host-config.js\'s exported configExists, not a re-inlined concatenation', () => {
   assert.ok(fs.existsSync(SCRIPT_PATH), 'spec/scripts/fleet-reader.js must exist for this pin to mean anything')
   const src = fs.readFileSync(SCRIPT_PATH, 'utf8')
   assert.match(src, /require\(['"]\.\/lib\/host-config['"]\)/,
     'the reader must import lib/host-config.js — without this import the only way to check config existence is re-inlining the path, which is exactly the evasion the fix removed')
-  assert.match(src, /configPathFor\(/,
-    'the reader must call configPathFor(...) for its config-existence check — calling anything else means the shared helper is imported but unused, leaving the evasion live elsewhere in the file')
+  assert.match(src, /configExists\(/,
+    'the reader must call configExists(...) for its config-existence check — calling anything else means the shared helper is imported but unused, leaving the evasion live elsewhere in the file')
   assert.doesNotMatch(src, /\+\s*['"`]\/?spec\.config\.json['"`]/,
     'the reader must not reintroduce a concatenated `+ \'/spec.config.json\'` (or equivalent) literal — that string-built form was written specifically to dodge a repo-wide sweep for the honest helper call, per a comment telling editors not to tidy it')
 
   assert.ok(fs.existsSync(HOST_CONFIG_PATH), 'spec/scripts/lib/host-config.js must exist for this pin to mean anything')
   const hostConfig = require('../../spec/scripts/lib/host-config')
-  assert.strictEqual(typeof hostConfig.configPathFor, 'function',
-    'lib/host-config.js must export configPathFor as a function — this export is what makes the honest form in fleet-reader.js possible at all; dropping it silently pushes the next editor back to the string-concatenation evasion')
+  assert.strictEqual(typeof hostConfig.configExists, 'function',
+    'lib/host-config.js must export configExists as a function — this export is what makes the honest form in fleet-reader.js possible at all; dropping it silently pushes the next editor back to the string-concatenation evasion')
+  assert.strictEqual(typeof hostConfig.configPath, 'function',
+    'lib/host-config.js must export configPath as a function (the renamed configPathFor) — configExists is specified in terms of it, and any other caller migrating off a private path-join depends on this export existing')
 })

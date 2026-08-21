@@ -46,7 +46,7 @@
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
-const { readConfigStrict } = require('./lib/host-config')
+const { readConfigStrict, CONFIG_RELPATH } = require('./lib/host-config')
 
 function die(msg) { process.stderr.write('spec-design-driver: ' + msg + '\n'); process.exit(2) }
 
@@ -333,7 +333,7 @@ function feasibilityReport() {
     if (g.status === 0 && g.stdout.trim()) {
       lines.push('⚠ i18n stack detected (' + g.stdout.trim().split('\n')[0] + ') but design.copyCatalogs is NOT declared — ' +
         'the fidelity gate would demand literals the host lint forbids. Declare design.copyCatalogs ' +
-        '(e.g. ["app/messages/en.json"]) in .claude/spec.config.json BEFORE binding regions.')
+        '(e.g. ["app/messages/en.json"]) in ' + CONFIG_RELPATH + ' BEFORE binding regions.')
     }
   }
   return lines.join('\n') + '\n\n'

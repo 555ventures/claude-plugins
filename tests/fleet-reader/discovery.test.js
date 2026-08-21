@@ -4,7 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const crypto = require('node:crypto')
-const { tmpdir, runNode } = require('../helpers')
+const { ROOT, tmpdir, runNode } = require('../helpers')
 
 // Fleet evidence reader (specs/20260820/05-fleet-evidence-reader.md, 2026-08-20): brief 17's
 // motivating incident is that pipeline questions get answered from whichever repo happens to
@@ -13,8 +13,15 @@ const { tmpdir, runNode } = require('../helpers')
 // skipped verbatim from brief 03's ratified rule), D4's population-first render, D12's
 // read-only/exit-code contract, and D13's --json shape. spec/scripts/fleet-reader.js does not
 // exist yet (TDD red phase) — every runNode call below fails until D1 ships it.
+//
+// specs/20260820/08-config-name-ban.md (2026-08-20, D8/AC-20260820-08-8): the discovery probe's
+// config-presence check migrates from a private `fs.existsSync(claudeDir + '/spec.config.json')`
+// (or an equally private path build) to `configExists(dir)` imported from `lib/host-config.js` —
+// the sanctioned route this spec's ban opens for exactly this reason. The five-line comment above
+// the old probe, ending "Do not tidy", is replaced (not trimmed) by a one-line comment.
 
 const SCRIPT = 'scripts/fleet-reader.js'
+const SCRIPT_PATH = path.join(ROOT, 'spec/scripts/fleet-reader.js')
 
 function mkRepo(root, name, { config = true, git = 'dir', ledgers = {} } = {}) {
   const dir = path.join(root, name)
@@ -158,4 +165,22 @@ test('AC-20260820-05-13: --json prints exactly the seven contracted top-level ke
   assert.strictEqual(bare.status, 0, bare.stderr)
   assert.throws(() => JSON.parse(bare.stdout),
     'D13: "--json is the sole machine format" — the bare invocation must render as human text, not double as a second JSON mode')
+})
+
+// AC-20260820-08-8
+test('AC-20260820-08-8: fleet-reader.js determines config presence via configExists imported from lib/host-config, and its source names the config filename nowhere', () => {
+  assert.ok(fs.existsSync(SCRIPT_PATH), 'spec/scripts/fleet-reader.js must exist for this pin to mean anything')
+  const src = fs.readFileSync(SCRIPT_PATH, 'utf8')
+  assert.strictEqual(src.includes('spec.config.json'), false,
+    'fleet-reader.js\'s source must contain zero occurrences of the literal spec.config.json — the config-name ban (specs/20260820/08 D2) forbids naming the file outside lib/host-config.js and the two named shell scripts, and fleet-reader.js is not one of the three exempt paths')
+  assert.match(src, /require\(['"]\.\/lib\/host-config['"]\)/,
+    'the reader must import lib/host-config.js — this is the only sanctioned route to a config-presence check once the filename itself may not be named in this file')
+  assert.match(src, /\bconfigExists\(/,
+    'discovery must call configExists(...) for its presence check — calling anything else means the shared helper is imported but a private presence check still exists somewhere in this file')
+
+  const hostConfig = require('../../spec/scripts/lib/host-config')
+  assert.strictEqual(typeof hostConfig.configExists, 'function',
+    'lib/host-config.js must export configExists as a function — without this export fleet-reader.js has no sanctioned way to check presence without naming the config filename itself')
+  assert.strictEqual(typeof hostConfig.configPath, 'function',
+    'lib/host-config.js must export configPath as a function (the renamed configPathFor) — configExists is specified in terms of it, and other callers migrating off private path-joins depend on this export existing')
 })

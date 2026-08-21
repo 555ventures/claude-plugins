@@ -50,7 +50,7 @@
 const fs = require('fs')
 const path = require('path')
 const { spawn, spawnSync } = require('child_process')
-const { readConfig } = require('./lib/host-config')
+const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
 const { parseFilePlan, parseFilePlanRows } = require('./lib/file-plan')
 
 function usage() {
@@ -74,11 +74,11 @@ if (!root || !spec || !base || !manifest) { usage(); process.exit(2) }
 root = path.resolve(root)
 let config
 try { config = readConfig(root) } catch (e) {
-  console.error(`review-legs.js: cannot read .claude/spec.config.json under --root: ${e.message} — run /spec:init first`)
+  console.error(`review-legs.js: cannot read ${CONFIG_RELPATH} under --root: ${e.message} — run /spec:init first`)
   process.exit(2)
 }
 if (!config.gateCommand) {
-  console.error('review-legs.js: no gateCommand in .claude/spec.config.json under --root — run /spec:init first')
+  console.error(`review-legs.js: no gateCommand in ${CONFIG_RELPATH} under --root — run /spec:init first`)
   process.exit(2)
 }
 

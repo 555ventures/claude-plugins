@@ -32,7 +32,7 @@
 
 'use strict'
 const fs = require('fs')
-const { readConfigStrict } = require('./lib/host-config')
+const { readConfigStrict, CONFIG_RELPATH } = require('./lib/host-config')
 
 function die(msg) { process.stderr.write('env-preflight: ' + msg + '\n'); process.exit(2) }
 
@@ -61,13 +61,13 @@ if (rawTestEnv === undefined || rawTestEnv === null) {
   process.exit(0)
 }
 if (!Array.isArray(rawTestEnv)) {
-  die('testEnv in .claude/spec.config.json must be an array — fix the config (run /spec:init to regenerate it)')
+  die('testEnv in ' + CONFIG_RELPATH + ' must be an array — fix the config (run /spec:init to regenerate it)')
 }
 
 rawTestEnv.forEach((row, i) => {
   if (!row || typeof row !== 'object' || typeof row.var !== 'string' || !row.var ||
       typeof row.provision !== 'string' || !row.provision) {
-    die('testEnv[' + i + '] in .claude/spec.config.json is missing "var" or "provision" — fix the row (run /spec:init to regenerate the registry)')
+    die('testEnv[' + i + '] in ' + CONFIG_RELPATH + ' is missing "var" or "provision" — fix the row (run /spec:init to regenerate the registry)')
   }
 })
 

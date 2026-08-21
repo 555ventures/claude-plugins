@@ -28,17 +28,33 @@
 // to before the swap (a non-object throw would have silently rewritten ci-gate-parity's locked
 // exit-0 "inapplicable — no gateCommand" degrade on a scalar config into an exit-2 crash).
 //
+// specs/20260820/08-config-name-ban.md (2026-08-20, D7): `tests/host-config/config-read.test.js`
+// bans naming the literal filename `spec.config.json` (stem `spec.config`) in executable text
+// anywhere under `spec/scripts/`, with exactly three named exemptions: this file (the sole Node
+// reader), and `smoke.sh`/`spec-state-gate.sh` (read via `jq`; bash cannot `require()` this
+// library). This file is therefore where the literal legitimately lives — every other script
+// routes through the exports below instead of spelling the filename itself. `configPath(root)`
+// (the renamed `configPathFor`) and `configExists(root)` (a presence-only probe) are the two
+// sanctioned routes for the two legitimate reasons a script named the file before this spec: a
+// presence check and a remedy string (`CONFIG_RELPATH`, for display only, never path-building).
+//
 // Exit codes: n/a (library, not an entrypoint).
 
 const fs = require('fs')
 const path = require('path')
 
-function configPathFor(root) { return path.join(root, '.claude', 'spec.config.json') }
+const CONFIG_RELPATH = '.claude/spec.config.json'
+
+function configPath(root) { return path.join(root, '.claude', 'spec.config.json') }
+
+// Presence only — never opens, reads, or parses the file. A directory occupying the path
+// returns true (existsSync semantics); callers that need readability call readConfigStrict.
+function configExists(root) { return fs.existsSync(configPath(root)) }
 
 // Absent / unreadable / unparsable / non-object config → {} (never a throw).
 function readConfig(root) {
   try {
-    const parsed = JSON.parse(fs.readFileSync(configPathFor(root), 'utf8'))
+    const parsed = JSON.parse(fs.readFileSync(configPath(root), 'utf8'))
     return parsed && typeof parsed === 'object' ? parsed : {}
   } catch {
     return {}
@@ -48,17 +64,17 @@ function readConfig(root) {
 // Absent / unreadable / unparsable config → throws. A successful parse returns verbatim, no
 // shape coercion, no non-object throw — callers own shape handling.
 function readConfigStrict(root) {
-  const configPath = configPathFor(root)
+  const p = configPath(root)
   let raw
   try {
-    raw = fs.readFileSync(configPath, 'utf8')
+    raw = fs.readFileSync(p, 'utf8')
   } catch (e) {
-    throw new Error('cannot read/parse ' + configPath + ' (' + e.message + ')')
+    throw new Error('cannot read/parse ' + p + ' (' + e.message + ')')
   }
   try {
     return JSON.parse(raw)
   } catch (e) {
-    throw new Error('cannot read/parse ' + configPath + ' (' + e.message + ')')
+    throw new Error('cannot read/parse ' + p + ' (' + e.message + ')')
   }
 }
 
@@ -69,4 +85,4 @@ function declaredForge(root) {
   return capabilities && capabilities.forge
 }
 
-module.exports = { readConfig, declaredForge, readConfigStrict, configPathFor }
+module.exports = { readConfig, readConfigStrict, declaredForge, configPath, configExists, CONFIG_RELPATH }

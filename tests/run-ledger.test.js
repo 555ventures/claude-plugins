@@ -15,7 +15,7 @@ const read = (p) => fs.readFileSync(path.join(SPEC, p), 'utf8')
 
 const LEDGER = '.claude/spec-runs.jsonl'
 
-test('build, review, escape, and release all append to the single repo-wide ledger', () => {
+test('AC-20260820-07-13: build, review, escape, and release all append to the single repo-wide ledger', () => {
   for (const f of ['commands/build.md', 'commands/review.md', 'commands/escape.md', 'commands/release.md']) {
     assert.match(read(f), new RegExp(LEDGER.replace(/[./]/g, '\\$&')),
       `${f} must reference ${LEDGER} — a stage that stops writing ledger rows silently drops ` +
@@ -31,7 +31,11 @@ test('no per-spec ledger files: nothing instructs writing runs files under specs
   }
 })
 
-test('review never hand-writes the verdict word — verdict.js is the sole derivation', () => {
+// specs/20260820/07-review-driver.md D7 (AC-20260820-07-13): review.md shrinks to a thin
+// shell around spec-review-driver.js — these standing pins on its verdict-derivation
+// sentences are kept verbatim through that rewrite (load-bearing regression carriers, per
+// D7's own rationale), so they are tagged with the new AC-ID here rather than restated.
+test('AC-20260820-07-13: review never hand-writes the verdict word — verdict.js is the sole derivation', () => {
   const review = read('commands/review.md')
   assert.match(review, /derived by `verdict\.js`, never asserted in prose/,
     'review.md must state that the verdict word is script-derived — the 2026-08-05 incident ' +

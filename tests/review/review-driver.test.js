@@ -1,0 +1,472 @@
+'use strict'
+const { test } = require('node:test')
+const assert = require('node:assert')
+const fs = require('node:fs')
+const path = require('node:path')
+const { execFileSync } = require('node:child_process')
+const { tmpdir, runNode, runBash, gitRepo } = require('../helpers')
+
+// specs/20260820/07-review-driver.md (2026-08-20, brief 16): the review stage's ~14
+// hand-performed choreography steps (base derivation, manifest lifecycle, both verdict
+// passes, ledger appends, the status flip, merge-back) move into spec-review-driver.js on
+// the spec-design-driver.js contract — a session that only follows printed steps can no
+// longer skip or hand-compose any of them. These tests drive the real binary end-to-end
+// against synthetic git hosts (the spec-design-driver.js idiom: tmpdir() + gitRepo(),
+// runNode with cwd), never poke at internals, and are written BEFORE the driver exists —
+// every test here fails on a missing/inert spec-review-driver.js and must go green only
+// once the state machine genuinely does what its AC names. AC-20260820-07-1 … -12 below.
+
+const DRIVER = 'scripts/spec-review-driver.js'
+
+const GREEN_TEST = `'use strict'
+const { test } = require('node:test')
+const assert = require('node:assert')
+const foo = require('../src/foo.js')
+test('AC-20260820-99-1: foo() returns 42', () => { assert.strictEqual(foo(), 42) })
+`
+
+function specBody({ status = 'implementing', tier = 'standard', diffBase, acId = 'AC-20260820-99-1' }) {
+  return `---
+status: ${status}
+tier: ${tier}
+diff_base: ${diffBase}
+---
+# Driver Test Spec
+
+## Decisions
+
+| ID | Decision | One-line rationale |
+|----|----------|--------------------|
+| D1 | foo() returns 42 (${acId}) | why |
+
+## File Plan
+
+| File | Action | Layer |
+|---|---|---|
+| src/foo.js | edit | scripts |
+| tests/foo.test.js | create | tests |
+
+## Acceptance Criteria
+
+- **${acId}**: foo() returns 42.
+`
+}
+
+function makeHost({ gateFails = false } = {}) {
+  const root = fs.realpathSync(tmpdir('rvdrv'))
+  const g = gitRepo(root)
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({
+    gateCommand: 'node --test {testDirs}',
+    testCommand: 'node --test',
+    runtime: { inert: 'plugin repo — nothing boots' },
+    capabilities: { forge: 'none', skipReportPattern: 'none' },
+  }))
+  fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 41\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const diffBase = g('rev-parse', 'HEAD').trim()
+  fs.mkdirSync(path.join(root, 'specs/20260820'), { recursive: true })
+  const spec = path.join(root, 'specs/20260820/99-drv-test.md')
+  fs.writeFileSync(spec, specBody({ diffBase }))
+  fs.writeFileSync(path.join(root, 'src/foo.js'), gateFails ? 'module.exports = () => 0\n' : 'module.exports = () => 42\n')
+  fs.writeFileSync(path.join(root, 'tests/foo.test.js'), GREEN_TEST)
+  g('add', '-A'); g('commit', '-q', '-m', 'implement')
+  return { root, spec, sidecar: spec.replace(/\.md$/, '.review') }
+}
+
+function makeSkipsHost() {
+  const root = fs.realpathSync(tmpdir('rvdrv-skips'))
+  const g = gitRepo(root)
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({
+    gateCommand: "echo 'ℹ skipped 1'; node --test {testDirs}",
+    testCommand: 'node --test',
+    runtime: { inert: 'plugin repo — nothing boots' },
+    capabilities: { forge: 'none', skipReportPattern: 'ℹ skipped (\\d+)' },
+  }))
+  fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 41\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const diffBase = g('rev-parse', 'HEAD').trim()
+  fs.mkdirSync(path.join(root, 'specs/20260820'), { recursive: true })
+  const spec = path.join(root, 'specs/20260820/99-drv-skips.md')
+  fs.writeFileSync(spec, specBody({ diffBase, acId: 'AC-20260820-99-2' }))
+  fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 42\n')
+  fs.writeFileSync(path.join(root, 'tests/foo.test.js'), GREEN_TEST.replace('AC-20260820-99-1', 'AC-20260820-99-2'))
+  g('add', '-A'); g('commit', '-q', '-m', 'implement')
+  return { root, spec, sidecar: spec.replace(/\.md$/, '.review') }
+}
+
+function run(root, spec, ...args) {
+  return runNode(DRIVER, [spec, ...args], { cwd: root })
+}
+const stateOf = (root, spec) => run(root, spec, '--state').stdout.trim()
+
+function toReviewer(host) {
+  const r = run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER',
+    'setup precondition: a fresh green-legs fixture must reach REVIEWER before this AC can be exercised: ' + r.stdout + r.stderr)
+  return r
+}
+
+function returnFileWith(scratchName, body) {
+  const scratch = fs.realpathSync(tmpdir(scratchName))
+  const file = path.join(scratch, 'return.json')
+  fs.writeFileSync(file, JSON.stringify(body))
+  return file
+}
+const CLEAN_RETURN = { verdict: 'CLEAN', survivors: [], killed: [], reviewerCount: 1, scope: 'full', tokens: 10 }
+const SURVIVOR_RETURN = {
+  verdict: 'CLEAN',
+  survivors: [{ severity: 'soft', claim: 'x', file: 'src/foo.js', line: 1, impact: 'x', evidence: 'x' }],
+  killed: [], reviewerCount: 1, scope: 'full', tokens: 10,
+}
+
+test('AC-20260820-07-1: WHEN the driver runs on an implementing spec whose legs all pass THE SYSTEM executes review-legs itself (manifest-1.jsonl carries every leg row) and prints the REVIEWER dispatch step, never a leg instruction', () => {
+  const { root, spec, sidecar } = makeHost()
+  const r = run(root, spec)
+  assert.strictEqual(r.status, 0, 'a fully green legs run must exit 0 (step printed), not a precondition failure: ' + r.stdout + r.stderr)
+  const manifestPath = path.join(sidecar, 'manifest-1.jsonl')
+  assert.ok(fs.existsSync(manifestPath),
+    'the driver must execute review-legs.js itself and write manifest-1.jsonl into the <spec>.review sidecar — a session that only follows printed steps could otherwise skip this deterministic leg run entirely: ' + r.stdout + r.stderr)
+  const rows = fs.readFileSync(manifestPath, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l))
+  for (const leg of ['gate', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk', 'promise-sweep']) {
+    assert.ok(rows.some(x => x.leg === leg),
+      `manifest-1.jsonl must carry a "${leg}" row from the driver's own review-legs.js invocation — a missing row means the driver did not genuinely run the leg it claims to have executed: ${JSON.stringify(rows)}`)
+  }
+  assert.match(r.stdout, /reviewer/i,
+    'a fully green legs run must print the REVIEWER dispatch step — printing a leg instruction instead would ask the session to redo work the driver already did: ' + r.stdout)
+  assert.strictEqual(stateOf(root, spec), 'REVIEWER', 'the derived state after a green legs run must be REVIEWER: ' + r.stdout)
+})
+
+test('AC-20260820-07-2: WHEN the synthetic gate fails THE SYSTEM appends exactly one GATE_RED ledger line byte-equal to verdict.js\'s own line, prints the red leg + remedy, and reports state STOPPED — the reviewer step is never printed', () => {
+  const { root, spec, sidecar } = makeHost({ gateFails: true })
+  const ledger = path.join(root, '.claude/spec-runs.jsonl')
+  const before = fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8') : ''
+  const r = run(root, spec)
+  assert.strictEqual(stateOf(root, spec), 'STOPPED',
+    'a red blocking leg must land the driver in the terminal state STOPPED, never proceed as if the substrate were clean: ' + r.stdout + r.stderr)
+  assert.doesNotMatch(r.stdout, /reviewer dispatch|dispatch.*reviewer/i,
+    'a red substrate must never print the reviewer dispatch step — dispatching the reviewer on a red gate is exactly the procedural-hallucination class this driver exists to structurally eliminate: ' + r.stdout)
+
+  const beforeLines = before.trim() ? before.trim().split('\n') : []
+  assert.ok(fs.existsSync(ledger), 'a GATE_RED run must append a ledger line — a stopped attempt left un-appended is invisible to the pipeline: ' + r.stdout + r.stderr)
+  const afterLines = fs.readFileSync(ledger, 'utf8').trim().split('\n')
+  assert.strictEqual(afterLines.length, beforeLines.length + 1,
+    'exactly one ledger line must be appended for the STOPPED run — more than one is a duplicate append, fewer means the append was skipped: before=' + beforeLines.length + ' after=' + afterLines.length)
+  const appended = JSON.parse(afterLines[afterLines.length - 1])
+  assert.strictEqual(appended.verdict, 'GATE_RED', 'the appended ledger row must carry verdict GATE_RED: ' + JSON.stringify(appended))
+  assert.ok(appended.runId, 'the appended row must carry a runId — /spec:escape needs a backlink on every row: ' + JSON.stringify(appended))
+
+  // Reproducibility check for "byte-equal to verdict.js's stdout line 2": feeding verdict.js the
+  // SAME manifest with the exact tier/diff/iteration/runId the driver's own row recorded must
+  // reproduce an identical row (every field but the call-time timestamp) — proving the driver
+  // appended verdict.js's own printed line rather than hand-composing one.
+  const manifestPath = path.join(sidecar, 'manifest-1.jsonl')
+  assert.ok(fs.existsSync(manifestPath), 'a STOPPED run must still have written manifest-1.jsonl before hard-stopping: ' + r.stdout)
+  assert.ok(appended.spec && appended.tier, 'the ledger row must carry --spec and --tier so a GATE_RED run is attributable: ' + JSON.stringify(appended))
+  const reArgs = ['--manifest', manifestPath, '--ledger', '--spec', appended.spec, '--tier', appended.tier, '--run-id', appended.runId]
+  if (appended.diff && typeof appended.diff.loc === 'number') reArgs.push('--diff-loc', String(appended.diff.loc))
+  if (appended.iteration !== undefined) reArgs.push('--iteration', String(appended.iteration))
+  const reRun = runNode('scripts/verdict.js', reArgs)
+  const reRunLine = reRun.stdout.trim().split('\n')[1]
+  assert.ok(reRunLine, 'verdict.js must print a ledger line when re-invoked with the driver\'s own recorded flags against the same manifest: ' + reRun.stdout + reRun.stderr)
+  const reRunRow = JSON.parse(reRunLine)
+  delete reRunRow.ts
+  const appendedNoTs = { ...appended }; delete appendedNoTs.ts
+  assert.deepStrictEqual(appendedNoTs, reRunRow,
+    'the ledger row the driver appended must be byte-equal (aside from the call-time timestamp) to verdict.js\'s own output for the same manifest and flags — any divergence means the driver hand-assembled the row instead of using verdict.js\'s printed line: appended=' + JSON.stringify(appended) + ' reRun=' + JSON.stringify(reRunRow))
+})
+
+test('AC-20260820-07-3: WHEN --mark reviewer-returned --file names a missing or malformed file THE SYSTEM exits 2 naming the defect and leaves the state unchanged', () => {
+  const host = makeHost()
+  toReviewer(host)
+
+  const missing = path.join(fs.realpathSync(tmpdir('rvdrv-scratch')), 'nope.json')
+  const rMissing = run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', missing)
+  assert.strictEqual(rMissing.status, 2,
+    'a reviewer-returned mark whose --file is missing must exit 2, never crash uninformatively or silently accept the mark: ' + rMissing.stdout + rMissing.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER',
+    'a refused mark must leave state at REVIEWER — advancing here would accept an evidence-less reviewer pass')
+
+  const malformed = path.join(fs.realpathSync(tmpdir('rvdrv-scratch2')), 'bad.json')
+  fs.writeFileSync(malformed, '{not valid json')
+  const rBad = run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', malformed)
+  assert.strictEqual(rBad.status, 2, 'an unparseable reviewer return file must also exit 2: ' + rBad.stdout + rBad.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER', 'the malformed-file mark must also leave the state unchanged')
+})
+
+test('AC-20260820-07-4: WHEN the reviewer return file\'s verdict is REVIEWER_FAILED THE SYSTEM refuses the mark (exit 2) and prints the re-dispatch instruction', () => {
+  const host = makeHost()
+  toReviewer(host)
+  const failedFile = returnFileWith('rvdrv-failed', { verdict: 'REVIEWER_FAILED', survivors: [], killed: [], reviewerCount: 1, scope: 'full', tokens: 10 })
+  const r = run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', failedFile)
+  assert.strictEqual(r.status, 2,
+    'a REVIEWER_FAILED return must refuse the mark — accepting it would let a reviewer that died mid-run read as a completed pass: ' + r.stdout + r.stderr)
+  assert.match(r.stdout + r.stderr, /re-?dispatch/i,
+    'the refusal must print the re-dispatch instruction so the session relaunches the reviewer instead of stalling: ' + r.stdout + r.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER', 'the state must remain REVIEWER so the very next driver run asks for a fresh dispatch')
+})
+
+test('AC-20260820-07-5: WHEN --mark dispositions counts exceed the survivor + leg-finding pools THE SYSTEM exits 2 (verdict.js\'s contradiction arithmetic, surfaced through the driver) and leaves the state unchanged', () => {
+  const host = makeHost()
+  toReviewer(host)
+  const returnFile = returnFileWith('rvdrv-disp', SURVIVOR_RETURN)
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile)
+  assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS', 'setup: a returned non-empty survivor list must land DISPOSITIONS')
+
+  const r = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '5', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(r.status, 2,
+    'dispositions summing to more than the survivor+leg-finding pool (1 survivor here) must exit 2 — accepting it would record counts the run never actually found: ' + r.stdout + r.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS', 'a refused dispositions mark must leave the state at DISPOSITIONS unchanged')
+})
+
+test('AC-20260820-07-6: WHEN a clean run reaches CLOSE (0 survivors, dispositions 0 0 0) THE SYSTEM runs the authoritative verdict with --retain .claude/spec-runs, appends one ledger line, flips status implementing -> done, and prints the close-step instructions', () => {
+  const host = makeHost()
+  toReviewer(host)
+  const returnFile = returnFileWith('rvdrv-clean', CLEAN_RETURN)
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile)
+  assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS')
+
+  const ledger = path.join(host.root, '.claude/spec-runs.jsonl')
+  const before = fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean) : []
+  const r = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(r.status, 0, 'a zero-survivor, zero-finding disposition must be accepted: ' + r.stdout + r.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE', 'zero undispositioned findings must land CLOSE: ' + r.stdout + r.stderr)
+
+  const after = fs.readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean)
+  assert.strictEqual(after.length, before.length + 1,
+    'exactly one ledger line must be appended for the authoritative CLOSE pass: ' + JSON.stringify({ before, after }))
+  const row = JSON.parse(after[after.length - 1])
+  assert.strictEqual(row.verdict, 'CLEAN', 'the authoritative pass must derive CLEAN for a zero-survivor, zero-leg-finding run: ' + JSON.stringify(row))
+
+  const retainDir = path.join(host.root, '.claude/spec-runs')
+  assert.ok(fs.existsSync(retainDir) && fs.readdirSync(retainDir).includes(row.runId + '.json'),
+    'the authoritative verdict must run with --retain .claude/spec-runs, writing <runId>.json — without it the reviewer\'s full-fidelity evidence is never durable: ' + retainDir)
+
+  assert.match(fs.readFileSync(host.spec, 'utf8'), /status:\s*done/,
+    'CLOSE must flip the spec\'s frontmatter status from implementing to done')
+
+  assert.match(r.stdout, /Canonical Delta/, 'the CLOSE step must print the Canonical Delta instruction: ' + r.stdout)
+  assert.match(r.stdout, /\.claude\/spec-runs\/\*\.json/,
+    'the CLOSE step\'s hygiene listing must name .claude/spec-runs/*.json as an EXPECTED artifact — omitting it invites deleting durable evidence as reviewer scratch: ' + r.stdout)
+  assert.match(r.stdout, /EXPECTED/, 'the hygiene listing must mark expected artifacts (retained evidence + sidecar) as EXPECTED, not stray paths to clean up: ' + r.stdout)
+  assert.match(r.stdout, /close[- ]commit/i, 'the CLOSE step must print the close-commit instruction: ' + r.stdout)
+})
+
+test('AC-20260820-07-7: WHEN --mark closed is passed while the tree is dirty beyond the sidecar THE SYSTEM exits 2 naming the unexpected paths', () => {
+  const host = makeHost()
+  toReviewer(host)
+  const returnFile = returnFileWith('rvdrv-dirty', CLEAN_RETURN)
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile)
+  run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE')
+
+  fs.writeFileSync(path.join(host.root, 'stray-uncommitted.txt'), 'oops\n')
+  const r = run(host.root, host.spec, '--mark', 'closed')
+  assert.strictEqual(r.status, 2,
+    'a dirty tree beyond the sidecar must refuse the closed mark — accepting it would leave an unadjudicated stray path riding the close commit: ' + r.stdout + r.stderr)
+  assert.match(r.stdout + r.stderr, /stray-uncommitted\.txt/,
+    'the refusal must name the unexpected path so the session can adjudicate it, not just report generic dirtiness: ' + r.stdout + r.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE', 'a refused closed mark must leave the state at CLOSE')
+})
+
+test('AC-20260820-07-8: a dispatched fix cycles FIX -> fix-applied (fresh manifest, legs --fix-delta) -> REVIEWER twice, and a third fix-applied is refused with state ESCALATE naming the iteration cap of 2', () => {
+  const host = makeHost()
+  run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER')
+
+  for (let cycle = 1; cycle <= 2; cycle++) {
+    const returnFile = returnFileWith('rvdrv-fix-' + cycle, SURVIVOR_RETURN)
+    run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile)
+    assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS', `cycle ${cycle}: a returned survivor must land DISPOSITIONS`)
+
+    const dispR = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
+    assert.strictEqual(dispR.status, 0, `cycle ${cycle}: fix-dispatched 1 (within the 1-survivor pool) must be accepted: ` + dispR.stdout + dispR.stderr)
+    assert.strictEqual(stateOf(host.root, host.spec), 'FIX', `cycle ${cycle}: fix-dispatched 1 must land FIX`)
+
+    const fixR = run(host.root, host.spec, '--mark', 'fix-applied')
+    assert.strictEqual(fixR.status, 0, `cycle ${cycle}: fix-applied within the cap must succeed: ` + fixR.stdout + fixR.stderr)
+    const manifestN = path.join(host.sidecar, `manifest-${cycle + 1}.jsonl`)
+    assert.ok(fs.existsSync(manifestN),
+      `cycle ${cycle}: fix-applied must re-run legs --fix-delta on a FRESH manifest-${cycle + 1}.jsonl — reusing the prior manifest would carry stale pre-fix evidence into the fix-delta pass: ` + fixR.stdout + fixR.stderr)
+    assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER', `cycle ${cycle}: fix-applied must return to REVIEWER for the fix-delta reviewer pass: ` + fixR.stdout + fixR.stderr)
+  }
+
+  const returnFile3 = returnFileWith('rvdrv-fix-3', SURVIVOR_RETURN)
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile3)
+  const dispR3 = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
+  assert.strictEqual(dispR3.status, 0, 'a third dispositions-with-fix-dispatched must still be accepted — the cap applies to fix-applied, not to entering FIX: ' + dispR3.stdout + dispR3.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'FIX')
+
+  const manifestsBefore = fs.readdirSync(host.sidecar).filter(f => /^manifest-\d+\.jsonl$/.test(f)).sort()
+  const thirdFix = run(host.root, host.spec, '--mark', 'fix-applied')
+  assert.strictEqual(thirdFix.status, 2,
+    'a third fix-applied must be refused — the iteration cap is 2, and accepting a third cycle re-opens unbounded fix/review churn: ' + thirdFix.stdout + thirdFix.stderr)
+  assert.match(thirdFix.stdout + thirdFix.stderr, /iteration cap 2/,
+    'the refusal must literally name the iteration cap ("iteration cap 2") per the Contracts\' own literal note: ' + thirdFix.stdout + thirdFix.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'ESCALATE',
+    'a refused third fix-applied must land the terminal state ESCALATE and print the escalation step: ' + thirdFix.stdout + thirdFix.stderr)
+  const manifestsAfter = fs.readdirSync(host.sidecar).filter(f => /^manifest-\d+\.jsonl$/.test(f)).sort()
+  assert.deepStrictEqual(manifestsAfter, manifestsBefore,
+    'a refused fix-applied must create NO new manifest file — a manifest-4.jsonl appearing here means legs re-ran on a mark the driver was supposed to refuse: ' + JSON.stringify({ manifestsBefore, manifestsAfter }))
+})
+
+test('AC-20260820-07-8 (manifest-provable cap): hand-editing the sidecar\'s stored iteration count cannot reach ESCALATE — only manifest-<n>.jsonl files actually present on disk advance the cap', () => {
+  const host = makeHost()
+  run(host.root, host.spec)
+  const returnFile = returnFileWith('rvdrv-hand-edit', SURVIVOR_RETURN)
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile)
+  run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
+  assert.strictEqual(stateOf(host.root, host.spec), 'FIX')
+  const fixR = run(host.root, host.spec, '--mark', 'fix-applied')
+  assert.strictEqual(fixR.status, 0, 'setup: one real fix-applied cycle must succeed: ' + fixR.stdout + fixR.stderr)
+  assert.ok(fs.existsSync(path.join(host.sidecar, 'manifest-2.jsonl')), 'setup: one real fix-applied cycle must produce manifest-2.jsonl')
+  assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER')
+
+  // Hand-edit the sidecar to CLAIM the cap is already exhausted, with only manifest-1/2 on disk.
+  const stateFile = path.join(host.sidecar, 'review-state.json')
+  const stateJson = JSON.parse(fs.readFileSync(stateFile, 'utf8'))
+  stateJson.iteration = 99
+  stateJson.fixIterations = 99
+  fs.writeFileSync(stateFile, JSON.stringify(stateJson, null, 2))
+
+  assert.notStrictEqual(stateOf(host.root, host.spec), 'ESCALATE',
+    'a hand-edited sidecar counter must NEVER be able to reach ESCALATE on its own — the iteration cap must derive from manifest-<n>.jsonl files actually present on disk (only manifest-1 and manifest-2 exist, within the cap of 2), per the Fragile Spots note that the count must not be a stored counter')
+
+  // The real cap must still be reachable normally afterward — the fabricated counter consumed nothing real.
+  const returnFile2 = returnFileWith('rvdrv-hand-edit-2', SURVIVOR_RETURN)
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile2)
+  run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
+  const fixR2 = run(host.root, host.spec, '--mark', 'fix-applied')
+  assert.strictEqual(fixR2.status, 0,
+    'the hand-edited counter must not have consumed the real cap — the second genuine fix-applied (only manifest-1/2 on disk beforehand) must still succeed: ' + fixR2.stdout + fixR2.stderr)
+  assert.ok(fs.existsSync(path.join(host.sidecar, 'manifest-3.jsonl')), 'the second genuine fix cycle must produce manifest-3.jsonl')
+})
+
+test('AC-20260820-07-9: WHEN the driver is re-invoked with no mark THE SYSTEM prints the same step again with no side effects — no duplicate manifest rows, no duplicate ledger lines', () => {
+  const host = makeHost()
+  run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER', 'setup: fixture must reach REVIEWER before exercising re-invocation idempotency')
+
+  const manifestPath = path.join(host.sidecar, 'manifest-1.jsonl')
+  const ledger = path.join(host.root, '.claude/spec-runs.jsonl')
+  const readLedger = () => (fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8') : '')
+
+  const manifestSnap = fs.readFileSync(manifestPath, 'utf8')
+  const ledgerSnap = readLedger()
+
+  const r1 = run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER', 'literal: a no-mark invocation at REVIEWER must derive the identical state: ' + r1.stdout + r1.stderr)
+  assert.strictEqual(fs.readFileSync(manifestPath, 'utf8'), manifestSnap,
+    'a no-mark invocation must not append duplicate manifest rows — manifest-1.jsonl must stay byte-identical: ' + r1.stdout + r1.stderr)
+  assert.strictEqual(readLedger(), ledgerSnap,
+    'a no-mark invocation must not append a ledger line — the ledger must stay byte-identical: ' + r1.stdout + r1.stderr)
+
+  const r2 = run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER',
+    'literal: TWO consecutive no-mark invocations at REVIEWER must derive the identical state both times: ' + r2.stdout + r2.stderr)
+  assert.strictEqual(fs.readFileSync(manifestPath, 'utf8'), manifestSnap,
+    'the second consecutive no-mark invocation must also leave manifest-1.jsonl byte-identical: ' + r2.stdout + r2.stderr)
+  assert.strictEqual(readLedger(), ledgerSnap,
+    'literal: the ledger must stay byte-identical across both consecutive no-mark invocations at REVIEWER: ' + r2.stdout + r2.stderr)
+})
+
+test('AC-20260820-07-10: WHEN the gate row reports skips > 0 and no skips file is marked THE SYSTEM prints the SKIPS extraction step; after skips-extracted --file <f> it re-runs legs with --skips <f> on a fresh manifest', () => {
+  const host = makeSkipsHost()
+  const r1 = run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'SKIPS',
+    'a gate row reporting skips > 0 with no skips file marked must land state SKIPS, not proceed straight to REVIEWER: ' + r1.stdout + r1.stderr)
+  assert.match(r1.stdout, /skip/i, 'the SKIPS state must print the extraction step instructions: ' + r1.stdout)
+
+  const skipsFile = path.join(fs.realpathSync(tmpdir('rvdrv-skipfile')), 'skips.txt')
+  fs.writeFileSync(skipsFile, 'AC-20260820-99-2: foo() returns 42\n')
+  const r2 = run(host.root, host.spec, '--mark', 'skips-extracted', '--file', skipsFile)
+  assert.strictEqual(r2.status, 0, 'a valid skips-extracted mark must be accepted: ' + r2.stdout + r2.stderr)
+
+  const manifest2 = path.join(host.sidecar, 'manifest-2.jsonl')
+  assert.ok(fs.existsSync(manifest2),
+    'skips-extracted must re-run legs on a FRESH manifest-2.jsonl — reusing manifest-1.jsonl would mix pre- and post-skip-attribution evidence: ' + r2.stdout + r2.stderr)
+  const rows2 = fs.readFileSync(manifest2, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l))
+  assert.ok(rows2.some(x => x.leg === 'gate'), 'the fresh manifest must still carry a gate row from the re-run: ' + JSON.stringify(rows2))
+})
+
+test('AC-20260820-07-11: WHEN --state is passed THE SYSTEM prints the bare state name only', () => {
+  const host = makeHost()
+  run(host.root, host.spec)
+  const r = run(host.root, host.spec, '--state')
+  assert.strictEqual(r.status, 0, '--state must exit 0 for a non-blocked state: ' + r.stdout + r.stderr)
+  assert.strictEqual(r.stdout.trim(), 'REVIEWER',
+    '--state must print exactly the bare state name and nothing else — a caller scripting against this needs one clean token: ' + JSON.stringify(r.stdout))
+})
+
+test('AC-20260820-07-12: WHEN merge-strategy is marked from the main root in a two-branch fixture THE SYSTEM runs merge, cleanup, and verify, prints spec-status --next verbatim, and lands DONE; the same mark from inside the build worktree is refused with a relocate instruction', () => {
+  const root = fs.realpathSync(tmpdir('rvdrv-merge'))
+  const g = gitRepo(root)
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({
+    gateCommand: 'node --test {testDirs}',
+    testCommand: 'node --test',
+    runtime: { inert: 'plugin repo — nothing boots' },
+    capabilities: { forge: 'none', skipReportPattern: 'none' },
+  }))
+  fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 41\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const baseSha = g('rev-parse', 'HEAD').trim()
+
+  const created = runBash('scripts/merge-back.sh', ['create', '--source', 'spec/99-drv-merge', '--root', root])
+  assert.strictEqual(created.status, 0, 'setup: worktree creation must succeed: ' + created.stderr)
+  const wt = created.stdout.trim().split('\n').pop()
+
+  fs.mkdirSync(path.join(wt, 'specs/20260820'), { recursive: true })
+  const spec = path.join(wt, 'specs/20260820/99-drv-merge.md')
+  fs.writeFileSync(spec, specBody({ diffBase: baseSha, acId: 'AC-20260820-99-3' }).replace('diff_base:', 'build_base:'))
+  fs.writeFileSync(path.join(wt, 'src/foo.js'), 'module.exports = () => 42\n')
+  fs.mkdirSync(path.join(wt, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(wt, 'tests/foo.test.js'), GREEN_TEST.replace('AC-20260820-99-1', 'AC-20260820-99-3'))
+  const gw = (...a) => execFileSync('git', ['-C', wt, ...a], { encoding: 'utf8' })
+  gw('add', '-A'); gw('commit', '-q', '-m', 'implement')
+
+  const sidecar = spec.replace(/\.md$/, '.review')
+
+  run(wt, spec)
+  assert.strictEqual(stateOf(wt, spec), 'REVIEWER', 'setup: the two-branch fixture must reach REVIEWER on green legs')
+  const returnFile = returnFileWith('rvdrv-merge-return', CLEAN_RETURN)
+  run(wt, spec, '--mark', 'reviewer-returned', '--file', returnFile)
+  run(wt, spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(stateOf(wt, spec), 'CLOSE', 'setup: a clean pass must reach CLOSE')
+
+  // The session's close commit — specific file only, never a blind `add -A` that would scoop up
+  // the sidecar (never committed, per D10).
+  gw('add', 'specs/20260820/99-drv-merge.md')
+  gw('commit', '-q', '-m', 'close')
+  const closeR = run(wt, spec, '--mark', 'closed')
+  assert.strictEqual(closeR.status, 0, 'setup: closed must succeed once the tree is clean apart from the sidecar: ' + closeR.stdout + closeR.stderr)
+  assert.strictEqual(stateOf(wt, spec), 'MERGE', 'setup: a closed spec must land state MERGE')
+
+  const refused = run(wt, spec, '--mark', 'merge-strategy', 'ff-only')
+  assert.strictEqual(refused.status, 2,
+    'marking merge-strategy while the driver\'s own inherited CWD is inside the build worktree must be refused — cleanup would otherwise delete the directory the session stands in: ' + refused.stdout + refused.stderr)
+  assert.match(refused.stdout + refused.stderr, /relocate/i,
+    'the refusal must print the relocate instruction so the session knows to ExitWorktree/cd before retrying: ' + refused.stdout + refused.stderr)
+  assert.ok(fs.existsSync(wt), 'a refused merge-strategy mark must never remove the worktree')
+
+  const merged = run(root, spec, '--mark', 'merge-strategy', 'ff-only')
+  assert.strictEqual(merged.status, 0,
+    'the same mark, issued with CWD relocated to the main root, must be accepted and run merge + cleanup + verify: ' + merged.stdout + merged.stderr)
+  assert.match(merged.stdout, /DONE/, 'a completed merge-strategy mark must land (and report) the terminal state DONE: ' + merged.stdout)
+
+  assert.ok(!fs.existsSync(wt),
+    'cleanup must remove the build worktree — the sidecar living inside it dies with it, per D10\'s "dies with the worktree at cleanup, by design"')
+  assert.match(fs.readFileSync(path.join(root, 'specs/20260820/99-drv-merge.md'), 'utf8'), /status:\s*done/,
+    'the merge must fast-forward the close commit into the main root — the root\'s own copy of the spec must now read status: done')
+
+  const status = runNode('scripts/spec-status.js', ['--root', root, '--next'])
+  assert.strictEqual(status.status, 0, 'spec-status.js --next must succeed against the post-merge root: ' + status.stdout + status.stderr)
+  assert.ok(status.stdout.trim() && merged.stdout.includes(status.stdout.trim()),
+    'the driver must print spec-status --next\'s output VERBATIM as the closing pointer — it is the only source of the "what now" suggestion, and independently re-deriving it against the post-merge root must reproduce byte-identical text: ' + JSON.stringify({ driver: merged.stdout, status: status.stdout }))
+})

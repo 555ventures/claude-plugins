@@ -28,12 +28,17 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // is the third recurrence of the known spec-paths additive-collision class (JJ-20260814-01):
 // the key list below is updated in place, never a parallel exhaustive pin.
 
+// specs/20260820/07-review-driver.md File Plan (spec/bin/spec-paths row): the new
+// spec-review-driver.js script needs a spec-paths key like every other bundled script — a
+// missing key breaks /spec:review's driver invocation silently (§ Risk Tiers, spec-paths).
+// This row carries no AC — it is a key-resolution addition following the pattern above.
+
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-design', 'wf-enforce',
     'wf-panel', 'wf-research', 'dc-extract', 'design-atlas', 'skeletons-check', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'scope-reconcile', 'verdict', 'ci-query', 'review-legs',
-    'promise-sweep', 'replay', 'replay-corpus', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
+    'review-driver', 'promise-sweep', 'replay', 'replay-corpus', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }

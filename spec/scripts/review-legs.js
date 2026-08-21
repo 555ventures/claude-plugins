@@ -199,10 +199,13 @@ async function main() {
   let wroteAtRisk = false
 
   // ---- wave 1 (parallel): reconcile, gate, ci ---------------------------------------------
-  // smoke deliberately runs AFTER the gate (wave 2): a gate that itself boots the app (this
-  // repo's smoke-leg test does) collides with a concurrent smoke boot on shared runtime state
-  // (observed 2026-08-17: two boots rm -f'ing each other's ready file, and a SIGTERM landing
-  // in the handler-install window under full-suite load — status 143, shutdown-unclean).
+  // smoke deliberately runs AFTER the gate AND after the at-risk/patterns wave (its own wave
+  // below): anything that runs host tests can boot or build the app and collide with a
+  // concurrent smoke boot on shared runtime state. Observed twice: 2026-08-17, gate vs smoke
+  // (two boots rm -f'ing each other's ready file, and a SIGTERM landing in the handler-install
+  // window under full-suite load — status 143, shutdown-unclean); 2026-08-21 UpWell, at-risk
+  // vs smoke (an at-risk test's production build clobbered the artifact smoke was booting —
+  // ENOTEMPTY under .nitro/vite, then readyCheck never passed; 3/3 runs, smoke alone green).
   const wave1 = []
 
   let reconcileJson = null
@@ -251,12 +254,8 @@ async function main() {
 
   await Promise.all(wave1)
 
-  // ---- wave 2 (parallel): smoke + at-risk + patterns (post-gate; at-risk/patterns need ----
-  // ---- reconcile's output) ----------------------------------------------------------------
+  // ---- wave 2 (parallel): at-risk + patterns (post-gate; both need reconcile's output) ----
   const wave2 = []
-  wave2.push(sh(`bash ${q(path.join(scriptDir, 'smoke.sh'))}`).then(r => {
-    appendRow('smoke', r.code, { result: r.code === 0 ? 'pass' : r.code === 4 ? 'inert' : 'fail' })
-  }))
   if (!fixDelta) {
     const atRisk = (reconcileJson && Array.isArray(reconcileJson.atRisk)) ? reconcileJson.atRisk : []
     // Zero at-risk files is a genuine, known zero (nothing needed to run) — not an unmade
@@ -310,6 +309,14 @@ async function main() {
   }
   await Promise.all(wave2)
 
+  // ---- wave 2b: smoke, ALONE — after every leg that can run host tests or build the app ---
+  // (gate in wave 1, at-risk/patterns in wave 2; see the wave-1 comment for both observed
+  // collisions). Its full output is retained: a red smoke row with no captured boot log is
+  // undiagnosable and has cost multi-run archaeology (UpWell 2026-08-21).
+  const smokeR = await sh(`bash ${q(path.join(scriptDir, 'smoke.sh'))}`)
+  fs.writeFileSync(path.join(outDir, 'smoke.txt'), smokeR.out + smokeR.err)
+  appendRow('smoke', smokeR.code, { result: smokeR.code === 0 ? 'pass' : smokeR.code === 4 ? 'inert' : 'fail' })
+
   // ---- wave 3: ac-matrix (+ skip-reconcile) — needs the gate row present in the manifest --
   const acr = await sh(`node ${q(path.join(scriptDir, 'ac-matrix.js'))} --spec ${q(spec)} --root ${q(root)} --manifest ${q(manifest)}${skips ? ` --skips ${q(skips)}` : ''}${config.driftScript ? ' --has-drift-script' : ''}`)
   fs.writeFileSync(path.join(outDir, 'ac-matrix.txt'), acr.out + acr.err)
@@ -332,7 +339,7 @@ async function main() {
     console.log(`${red ? (blocking ? '❌' : '⚠️ ') : '✅'} ${r.leg.padEnd(14)} exit=${r.exit} ${JSON.stringify(r.observed)}${red && !blocking ? ' (findings — disposition in review)' : ''}`)
   }
   console.log(`manifest: ${manifest}`)
-  console.log(`outputs: ${outDir}  (reconcile.json, gate-output.txt, ac-matrix.txt, promise-sweep.txt${config.patternsScript ? ', patterns.txt' : ''}${wroteAtRisk ? ', at-risk.txt' : ''})`)
+  console.log(`outputs: ${outDir}  (reconcile.json, gate-output.txt, smoke.txt, ac-matrix.txt, promise-sweep.txt${config.patternsScript ? ', patterns.txt' : ''}${wroteAtRisk ? ', at-risk.txt' : ''})`)
   if (blockedBy.length) {
     console.log(`RED_BLOCKING: ${blockedBy.join(',')}`)
     process.exit(1)

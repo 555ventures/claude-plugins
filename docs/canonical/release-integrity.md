@@ -11,7 +11,10 @@ mechanics — and its contract is exit-code-only: 0 iff every journaled migratio
 the database the just-deployed staging environment actually uses.
 
 The leg runs in `/spec:release` Phase 2, **after** the deploy and the ready check, and appends
-`{"leg":"migrations","exit":<exit>,"observed":"<pass|fail>"}` to the run manifest. A red row
+`{"leg":"migrations","exit":<exit>,"observed":{"result":"pass"|"fail"}}` to the run manifest —
+every release leg's `observed` is a typed object, and the named ledger keys (`e2e`, `journeys`,
+`substrate`, `ci`) copy that object **verbatim** rather than re-deriving it, so no observed key
+is ever silently omitted. A red row
 joins Phase 2's blanket STOP enumeration, so it halts the phase before CI, e2e, and the journey
 walks spend their runs.
 

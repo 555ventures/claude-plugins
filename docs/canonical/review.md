@@ -19,11 +19,18 @@
   (specs/20260805/02-review-evidence-manifest.md, done 2026-08-06)
 
   Findings legs are counted, not just colored: every red non-blocking manifest row
-  contributes its parsed finding count (pinned observed grammars; floor 1) to the
-  undispositioned pool beside reviewer survivors, and `CLEAN` is unreachable until
-  dispositions cover the whole pool — leg findings are always hard. Ledger leg rows retain
-  their `observed` string in both profiles, so a structurally-absent observation
-  (`unavailable`) is permanently distinguishable from a pass. Review rows always carry
+  contributes its typed finding count (`observed`'s per-leg count field; floor 1 when that
+  field is absent or non-numeric) to the undispositioned pool beside reviewer survivors, and
+  `CLEAN` is unreachable until dispositions cover the whole pool — leg findings are always
+  hard. **Manifest row v2** is `{"leg","exit","observed"}` where `observed` is always a
+  non-null JSON object drawn from the Contracts closed set; any row whose `observed` is a
+  string, an array, null, or absent makes the manifest invalid and derives `UNVERIFIED` in
+  both profiles — an old-format row is loudly underivable, never silently misread. verdict.js
+  holds no packed-string parser: it reads typed fields and copies `observed` objects verbatim
+  into ledger leg rows and release keys, so a structurally-absent observation
+  (`{"unavailable":"pattern-no-match"|"no-format-declared"}`) is permanently distinguishable
+  from a pass and can never be coerced to zero.
+  (specs/20260820/06-typed-evidence-manifest.md, done 2026-08-21) Review rows always carry
   `runId` (orchestrator-passed, else generated `rv_`+12hex by verdict.js) — the backlink
   `/spec:escape` correlates on. Build rows count `deviations` as sidecar entries (`^- `
   lines) and `diff.loc` as insertions+deletions, matching review.
@@ -64,8 +71,9 @@
 - `ac-matrix`'s coverage denominator fails closed: an AC bullet no ID grammar can parse counts
   as **uncovered** — unparseable = unknown, never absent — in both drift modes, since a host
   `driftScript` cannot parse a malformed bullet either. The `malformed-ac` hard finding is
-  unchanged and never doubled by a second `uncovered-ac` row; the observed grammar
-  `uncovered=N oracle=M` is byte-unchanged.
+  unchanged and never doubled by a second `uncovered-ac` row; the leg's observation is the
+  typed object `{"uncovered":N,"oracle":N}` (and skip-reconcile's `{"skipped":N,"sanctioned":N}`),
+  mirrored byte-for-byte by `--json`'s `observed` field.
 
 - Skip sanctions resolve on the **spec under review's** bullet when it declares that AC (a hit
   is final, with or without `[env:]` — a re-declared bullet that dropped its gate is

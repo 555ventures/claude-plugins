@@ -1,6 +1,6 @@
 ---
 date: 2026-08-20
-status: implementing
+status: done
 diff_base: 7e9f33746ed21870fd082fe306fce06a3a6a5e94
 open_markers: 0
 tier: critical
@@ -286,6 +286,34 @@ flag / incident narration), verified by grep 2026-08-20. The two paths-leg `like
 `tests/consistency/entrypoints.test.js` (via the review-legs.js/ac-matrix.js rows) need no
 edit: this spec changes row payloads, never call edges, so the conformance suite's
 live-repo pins stay green by construction.
+
+### Build deviations (folded at review close, 2026-08-21)
+
+Five one-off deviations, all direct consequences of D1/D3 landing on pre-existing pins; the
+sixth (the plugin.json version-bump race — 7.12.0 taken at HEAD, bumped to 7.13.0 with the
+same changelog) is an already-documented host Gotcha and needs no new entry.
+
+- `verdict.test.js` AC-20260819-01-1/-01-6/-01-7's shared `retentionFixture` used a 300-char
+  STRING `observed` on the promise-sweep leg to pin byte-untruncated-artifact vs 120-char
+  ledger slice. D1 makes that row structurally impossible and promise-sweep's typed shape has
+  no free-text field, so the fixture moved to the optional `drift` leg (green, outside
+  `REVIEW_LEGS`, never feeds `legFindings`), whose `{"summary":"<first stdout line>"}` is the
+  one shape built for free text (D2/D11). AC-20260819-01-6's direction flips accordingly: the
+  test now pins that an object-shaped `observed` is never truncated anywhere.
+- `verdict.test.js` AC-20260805-02-8 (STOP-path partial release manifest) asserted that a
+  present-but-unparseable `e2e` row's key is OMITTED. D3 inverts that: a PRESENT row's key is
+  copied verbatim whatever its shape; omission now means the leg is genuinely absent. The
+  sub-case was rewritten to assert verbatim copy of an off-shape observed object while
+  `journeys`/`substrate`/`production` (never ran) still omit.
+- `legs-verdict-pair.test.js`: A8 names AC-20260820-03-11 for retag, but no AC in this spec's
+  own list textually covers its content (skip-pattern mismatch + `legFindings >= 1`). Retagged
+  as an AC-20260820-06-5 companion under D10's umbrella rather than inventing a placeholder ID.
+- `promise-sweep.test.js` AC-20260817-07-8 / -06-9's plan-lock branch anchored
+  `stdout.trim()` against the whole buffer, asserting "no other lines" — a claim -06-9 never
+  makes. The fixture's lone Decisions row genuinely cites no AC-ID, so an `orphan-decision`
+  line correctly precedes the byte-unchanged counters line. Re-scoped the pin to the `m` flag
+  (line anchors, raw stdout); regex body and byte-exact format contract unchanged. Assertion
+  scope bug, not an implementation or fixture defect.
 
 ## Canonical Delta
 

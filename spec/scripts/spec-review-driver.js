@@ -1,0 +1,695 @@
+#!/usr/bin/env node
+// Deterministic state-machine driver for /spec:review.
+//
+// WHY: specs/20260820/07-review-driver.md (brief 16) — /spec:review hand-performed ~14
+// choreography steps around review-legs.js/verdict.js/merge-back.sh every review: resolve the
+// base, launch legs, append the GATE_RED ledger line by hand, run three separate verdict.js
+// passes, flip status, drive merge-back's inspect/merge/cleanup/verify sequence. Every one of
+// those steps is deterministic; procedural hallucination — skipping or fabricating a step while
+// reporting success — is the measured largest agent-failure class (38.5%, agenticrail.nz
+// 2026-08-08). This driver, on the spec-design-driver.js contract, EXECUTES every deterministic
+// step itself (base derivation, the per-iteration manifest lifecycle, review-legs.js, all three
+// verdict.js passes, both ledger appends, the implementing->done flip, the merge-back sequence,
+// replay --due) and prints ONLY the step that needs this session's judgment (reviewer + design-
+// leg dispatch, dispositions, the Canonical Delta + deviations fold, the close commit, merge
+// strategy, conflict resolution). State is re-derived from spec frontmatter + the <spec>.review/
+// sidecar + on-disk artifacts on EVERY invocation — a mark whose artifact vanished is demanded
+// again, and the fix-iteration cap is counted from manifest-<n>.jsonl files actually present on
+// disk, never a sidecar counter (hand-editing the sidecar cannot reach ESCALATE).
+//
+// What this deliberately does NOT do: recommend a disposition, pick a merge strategy, or render
+// a user-facing report (D9) — it prints machine summaries plus which judgment is due and the
+// evidence paths; report assembly stays with the session via report-render.js. It never asserts
+// the verdict word itself (verdict.js is the sole derivation, surfaced through this driver).
+//
+// CONTRACT:
+//   spec-review-driver <spec.md>                  -> print current state + ONLY that step
+//   spec-review-driver <spec.md> --mark <mark>    -> verify artifacts, record, print next step
+//     marks: skips-extracted --file <f> | reviewer-returned --file <json> |
+//            dispositions --waived N --rejected N --fix-dispatched N | fix-applied | closed |
+//            merge-strategy <merge-commit|ff-only|squash|rebase-ff> (bare token) |
+//            conflicts-resolved
+//   spec-review-driver <spec.md> --state          -> print the state name only (scripting)
+//
+// States: LEGS (driver-only) -> STOPPED (terminal on RED_BLOCKING) | SKIPS? -> REVIEWER ->
+//   DISPOSITIONS -> FIX/ESCALATE(cap 2, terminal)? -> CLOSE -> MERGE/CONFLICTS -> DONE (terminal)
+//
+// Exit codes: 0 = step printed · 2 = precondition failure or refused mark (message names the
+// repair — a missing/malformed artifact, a REVIEWER_FAILED return, dispositions exceeding the
+// survivor+leg-finding pools via verdict.js's own contradiction arithmetic, a dirty tree at
+// `closed`, a third `fix-applied` past the iteration cap, or `merge-strategy` marked while the
+// driver's own inherited CWD sits inside the build worktree).
+
+'use strict'
+const fs = require('fs')
+const path = require('path')
+const crypto = require('crypto')
+const { spawnSync } = require('child_process')
+
+function die(msg) { process.stderr.write('spec-review-driver: ' + msg + '\n'); process.exit(2) }
+
+const argv = process.argv.slice(2)
+const specPath = argv[0]
+if (!specPath || specPath.startsWith('--')) {
+  die('usage: spec-review-driver <spec.md> [--mark <mark> [args...]] [--state]')
+}
+if (!fs.existsSync(specPath)) die('spec not found: ' + specPath)
+
+const flag = (name) => { const i = argv.indexOf(name); return i > -1 ? (argv[i + 1] || true) : null }
+const markIdx = argv.indexOf('--mark')
+const MARK = markIdx > -1 ? argv[markIdx + 1] : null
+const STATE_ONLY = argv.includes('--state')
+
+const PLUGIN = path.resolve(__dirname, '..')
+const legsBin = path.join(PLUGIN, 'scripts/review-legs.js')
+const verdictBin = path.join(PLUGIN, 'scripts/verdict.js')
+const mergeBackBin = path.join(PLUGIN, 'scripts/merge-back.sh')
+const specStatusBin = path.join(PLUGIN, 'scripts/spec-status.js')
+const replayBin = path.join(PLUGIN, 'scripts/replay.js')
+
+// D6/A3: repoRoot is derived from process.cwd() (the driver's INHERITED CWD), never from the
+// spec's own path — the whole relocation guard at MERGE depends on the session's shell CWD, not
+// on where the spec file happens to live (which stays inside the build worktree even after the
+// session cd's back to the main root to accept `merge-strategy`).
+const repoRootResult = spawnSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' })
+if (repoRootResult.status !== 0) {
+  die('not inside a git repo (git rev-parse --show-toplevel failed against ' + process.cwd() +
+    ') — run this from inside the review root/worktree')
+}
+const repoRoot = repoRootResult.stdout.trim()
+// mergeBackBin's own `root` subcommand: the first entry of `git worktree list`, self-discovering
+// from repoRoot regardless of whether repoRoot IS the main root or a linked worktree. Used for the
+// D6 relocation check and the merge/cleanup/verify sequence. Ledger + retained evidence are
+// written under repoRoot (wherever THIS review is actually running, worktree included, so a plain
+// `git merge --ff-only`/`assert_clean_root` at the main root is never dirtied by a review running
+// in a linked worktree) and promoted into mainRoot only once a merge has actually landed — see
+// finishMerge()'s evidence-promotion step, which also clears repoRoot's copies (+ the sidecar) so
+// `git worktree remove` sees a clean tree (D10: the sidecar "dies with the worktree at cleanup").
+const mainRoot = mainRootPath()
+
+const resolvedSpecPath = path.resolve(specPath)
+const specText = fs.readFileSync(resolvedSpecPath, 'utf8')
+const fmMatch = /^---\n([\s\S]*?)\n---/.exec(specText)
+const fmRaw = fmMatch ? fmMatch[1] : ''
+const fmVal = (k) => {
+  const m = new RegExp('^' + k + ':\\s*(.+)$', 'm').exec(fmRaw)
+  if (!m) return ''
+  const v = m[1].trim()
+  const q = /^(["'])([\s\S]*)\1$/.exec(v)
+  return q ? q[2] : v
+}
+
+let status = fmVal('status')
+const tier = fmVal('tier') || 'standard'
+const area = fmVal('area') || '{area}'
+const buildBase = fmVal('build_base')
+const diffBaseFm = fmVal('diff_base')
+const designFlag = fmVal('design') === 'true'
+const designSource = fmVal('design_source')
+
+if (!['implementing', 'done'].includes(status)) {
+  die('spec status is "' + (status || '<missing>') + '" — spec-review-driver requires ' +
+    'status: implementing (or done for a re-run); run /spec:build first')
+}
+
+const sidecarDir = resolvedSpecPath.replace(/\.md$/, '.review')
+const sidecarRel = path.relative(repoRoot, sidecarDir)
+const specRel = path.relative(repoRoot, resolvedSpecPath) || resolvedSpecPath
+const stateFile = path.join(sidecarDir, 'review-state.json')
+
+let marks = {}
+try { marks = JSON.parse(fs.readFileSync(stateFile, 'utf8')) } catch { marks = {} }
+function saveSidecar() {
+  fs.mkdirSync(sidecarDir, { recursive: true })
+  fs.writeFileSync(stateFile, JSON.stringify(marks, null, 2) + '\n')
+}
+
+// ---- terminal cold path: no sidecar, status already done -> DONE, no auto-restart -------------
+const sidecarExistsAtStart = fs.existsSync(sidecarDir)
+if (!sidecarExistsAtStart && status === 'done') {
+  printDoneNow('')
+}
+
+// ---- base derivation (D2: build_base -> diff_base -> branch) ----------------------------------
+function resolveBase() {
+  if (buildBase) return buildBase
+  if (diffBaseFm) return diffBaseFm
+  for (const cand of ['main', 'master']) {
+    const r = spawnSync('git', ['-C', repoRoot, 'merge-base', 'HEAD', cand], { encoding: 'utf8' })
+    if (r.status === 0 && r.stdout.trim()) return r.stdout.trim()
+  }
+  die('spec frontmatter carries neither build_base nor diff_base, and no main/master branch ' +
+    'exists to derive one from — add build_base (or diff_base) to the spec frontmatter')
+}
+const base = resolveBase()
+
+// ---- manifest helpers ---------------------------------------------------------------------------
+function manifestPathFor(n) { return path.join(sidecarDir, `manifest-${n}.jsonl`) }
+function outDirFor(n) { return path.join(sidecarDir, `legs-${n}`) }
+function listManifestNumbers() {
+  if (!fs.existsSync(sidecarDir)) return []
+  return fs.readdirSync(sidecarDir)
+    .map((f) => /^manifest-(\d+)\.jsonl$/.exec(f))
+    .filter(Boolean).map((m) => Number(m[1])).sort((a, b) => a - b)
+}
+function readManifestRows(p) {
+  if (!fs.existsSync(p)) return []
+  return fs.readFileSync(p, 'utf8').split('\n').filter((l) => l.trim())
+    .map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
+}
+// Mirrors review-legs.js's own blocking-leg/exit rule (gate/smoke/ci; smoke's exit 4 = sanctioned
+// inert-green) — this is plumbing over review-legs.js's OWN typed exit codes, never a second
+// derivation of a verdict word (verdict.js stays the sole derivation of that).
+const BLOCKING_LEGS = new Set(['gate', 'smoke', 'ci'])
+function isRedBlocking(rows) {
+  for (const r of rows) {
+    if (!BLOCKING_LEGS.has(r.leg)) continue
+    const red = r.leg === 'smoke' ? (r.exit !== 0 && r.exit !== 4) : r.exit !== 0
+    if (red) return true
+  }
+  return false
+}
+function gateSkipsCount(rows) {
+  const gate = rows.find((r) => r.leg === 'gate')
+  const skips = gate && gate.observed && gate.observed.skips
+  return typeof skips === 'number' ? skips : 0
+}
+
+function runLegs(n, opts = {}) {
+  fs.mkdirSync(sidecarDir, { recursive: true })
+  const args = ['--root', repoRoot, '--spec', specRel, '--base', base,
+    '--manifest', manifestPathFor(n), '--out-dir', outDirFor(n)]
+  if (opts.skipsFile) args.push('--skips', opts.skipsFile)
+  if (opts.fixDelta) args.push('--fix-delta')
+  const r = spawnSync(process.execPath, [legsBin, ...args], { encoding: 'utf8' })
+  if (r.status === 2) {
+    die(`review-legs.js precondition failed (iteration ${n}):\n` + (r.stdout + r.stderr).trim())
+  }
+  marks.legsMode = marks.legsMode || {}
+  marks.legsMode[String(n)] = { skipsFile: opts.skipsFile || null, fixDelta: !!opts.fixDelta }
+  marks.iteration = n
+  saveSidecar()
+  return { code: r.status, out: r.stdout, err: r.stderr }
+}
+
+function ensureRunId() {
+  if (!marks.runId) { marks.runId = 'rv_' + crypto.randomBytes(6).toString('hex'); saveSidecar() }
+  return marks.runId
+}
+
+function computeDiffLoc() {
+  const r = spawnSync('git', ['-C', repoRoot, 'diff', '--shortstat', base], { encoding: 'utf8' })
+  if (r.status !== 0) return 0
+  const m = /(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?/.exec(r.stdout)
+  if (!m) return 0
+  return (Number(m[2]) || 0) + (Number(m[3]) || 0)
+}
+
+function appendLedger(jsonLine) {
+  const ledgerPath = path.join(repoRoot, '.claude/spec-runs.jsonl')
+  fs.mkdirSync(path.dirname(ledgerPath), { recursive: true })
+  fs.appendFileSync(ledgerPath, jsonLine + '\n')
+}
+
+// ---- D4: RED_BLOCKING hard-stop — no-workflow verdict pass, GATE_RED ledger line appended -----
+function runHardStopVerdict(n) {
+  const runId = ensureRunId()
+  const diffLoc = computeDiffLoc()
+  const args = ['--manifest', manifestPathFor(n), '--ledger', '--spec', specRel, '--tier', tier,
+    '--diff-loc', String(diffLoc), '--iteration', String(n), '--run-id', runId]
+  const r = spawnSync(process.execPath, [verdictBin, ...args], { encoding: 'utf8' })
+  if (r.status === 2) die('verdict.js (hard-stop pass) failed: ' + (r.stdout + r.stderr).trim())
+  const lines = r.stdout.split('\n')
+  appendLedger(lines[1])
+  marks.stoppedIteration = n
+  saveSidecar()
+}
+
+function runLegsIteration(n, opts) {
+  const res = runLegs(n, opts)
+  if (res.code === 1) { runHardStopVerdict(n); return { stopped: true, n } }
+  return { stopped: false, n }
+}
+
+// ---- CLOSE driver work: authoritative verdict + ledger append + status flip + replay --due ----
+function doCloseWork(n) {
+  const runId = ensureRunId()
+  const diffLoc = computeDiffLoc()
+  const retainDir = path.join(repoRoot, '.claude/spec-runs')
+  const d = marks.dispositions
+  const args = ['--manifest', manifestPathFor(n), '--workflow', marks.reviewerReturnFile,
+    '--waived', String(d.waived), '--rejected', String(d.rejected), '--fixDispatched', String(d.fixDispatched),
+    '--ledger', '--spec', specRel, '--tier', tier, '--diff-loc', String(diffLoc),
+    '--iteration', String(n), '--run-id', runId, '--retain', retainDir]
+  const r = spawnSync(process.execPath, [verdictBin, ...args], { encoding: 'utf8' })
+  if (r.status === 2) die('verdict.js (authoritative pass) failed: ' + (r.stdout + r.stderr).trim())
+  const lines = r.stdout.split('\n')
+  appendLedger(lines[1])
+
+  const newSpecText = specText.replace(/^status:\s*.*$/m, 'status: done')
+  fs.writeFileSync(resolvedSpecPath, newSpecText)
+
+  const due = spawnSync(process.execPath, [replayBin, '--due'], { encoding: 'utf8', cwd: repoRoot })
+  marks.replayNote = due.status === 0
+    ? '📋 replay is DUE — run /spec:replay after this closes (' + due.stdout.trim() + ')'
+    : ''
+  marks.closeRunId = runId
+  saveSidecar()
+}
+
+// ---- git status helper (closed mark's dirty-tree check) ---------------------------------------
+function gitStatusPaths(root) {
+  const r = spawnSync('git', ['-C', root, 'status', '--porcelain', '--untracked-files=all'], { encoding: 'utf8' })
+  if (r.status !== 0) return []
+  return r.stdout.split('\n').filter(Boolean).map((l) => l.slice(3).trim().replace(/^"|"$/g, ''))
+}
+
+// ---- merge-back helpers -------------------------------------------------------------------------
+function mainRootPath() {
+  const r = spawnSync('bash', [mergeBackBin, 'root'], { encoding: 'utf8', cwd: repoRoot })
+  if (r.status !== 0) die('merge-back.sh root failed: ' + (r.stdout + r.stderr).trim())
+  return r.stdout.trim()
+}
+function sourceBranchFor() {
+  const r = spawnSync('bash', [mergeBackBin, 'branch-for', resolvedSpecPath], { encoding: 'utf8' })
+  if (r.status !== 0) die('merge-back.sh branch-for failed: ' + (r.stdout + r.stderr).trim())
+  return r.stdout.trim()
+}
+function branchExists(root, branch) {
+  const r = spawnSync('git', ['-C', root, 'rev-parse', '--verify', '-q', 'refs/heads/' + branch], { encoding: 'utf8' })
+  return r.status === 0
+}
+function findWorktreeForBranch(root, branch) {
+  const r = spawnSync('git', ['-C', root, 'worktree', 'list', '--porcelain'], { encoding: 'utf8' })
+  if (r.status !== 0) return null
+  const blocks = r.stdout.split('\n\n')
+  for (const block of blocks) {
+    const lines = block.split('\n')
+    let wtPath = null, wtBranch = null
+    for (const l of lines) {
+      if (l.startsWith('worktree ')) wtPath = l.slice('worktree '.length)
+      if (l.startsWith('branch ')) wtBranch = l.slice('branch '.length).replace('refs/heads/', '')
+    }
+    if (wtBranch === branch) return wtPath
+  }
+  return null
+}
+
+function printDoneNow(note) {
+  const status2 = spawnSync(process.execPath, [specStatusBin, '--root', repoRoot, '--next'], { encoding: 'utf8' })
+  const nextLine = status2.status === 0 ? status2.stdout.trim() : '(spec-status --next unavailable)'
+  process.stdout.write(`[spec-review-driver] state: DONE  spec: ${specPath}\n` +
+    (note ? note + '\n' : '') +
+    (marks.replayNote ? marks.replayNote + '\n' : '') +
+    '\n## DONE\n' + nextLine + '\n')
+  process.exit(0)
+}
+
+// ---- mark handlers --------------------------------------------------------------------------
+// Each handler validates BEFORE mutating anything (a refused mark leaves state unchanged) and
+// returns null to let the generic deriveState() below continue naturally, or 'STOPPED' when the
+// mark's own fresh legs run hard-stopped (bypassing deriveState()'s own auto-retry, which would
+// otherwise treat the just-created red manifest as "needs another retry" in the SAME invocation).
+
+function handleSkipsExtracted() {
+  const file = flag('--file')
+  if (!file || typeof file !== 'string') die('--mark skips-extracted needs --file <extracted skip names>')
+  if (!fs.existsSync(file)) die('--file ' + file + ' does not exist — extract the skipped-test names and pass a real path')
+  const resolved = path.resolve(file)
+  marks.skipsExtracted = true
+  marks.skipsFile = resolved
+  saveSidecar()
+  const n = (listManifestNumbers().length ? Math.max(...listManifestNumbers()) : 0) + 1
+  const r = runLegsIteration(n, { skipsFile: resolved })
+  return r.stopped ? 'STOPPED' : null
+}
+
+function handleReviewerReturned() {
+  const file = flag('--file')
+  if (!file || typeof file !== 'string') die('--mark reviewer-returned needs --file <return json>')
+  let raw
+  try { raw = fs.readFileSync(file, 'utf8') } catch (e) {
+    die('--file ' + file + ' could not be read (' + e.message + ') — re-dispatch the reviewer ' +
+      'and pass the path it actually wrote its return to')
+  }
+  let json
+  try { json = JSON.parse(raw) } catch (e) {
+    die('--file ' + file + ' is not valid JSON (' + e.message + ') — re-dispatch the reviewer ' +
+      'and write a clean {verdict, survivors, killed, reviewerCount, scope, tokens} return')
+  }
+  if (json.verdict === 'REVIEWER_FAILED') {
+    die('the reviewer returned REVIEWER_FAILED (the run died mid-review, never CLEAN) — ' +
+      're-dispatch Agent {subagent_type: "spec:reviewer"} and mark reviewer-returned again once it completes')
+  }
+  if (!Array.isArray(json.survivors)) {
+    die('--file ' + file + ' is missing a survivors array — the reviewer return shape must be ' +
+      '{verdict, survivors, killed, reviewerCount, scope, tokens}; re-dispatch and write a valid return')
+  }
+  const n = listManifestNumbers().length ? Math.max(...listManifestNumbers()) : 0
+  fs.mkdirSync(sidecarDir, { recursive: true })
+  const dest = path.join(sidecarDir, `reviewer-return-${n}.json`)
+  fs.writeFileSync(dest, raw)
+  marks.reviewerReturnFile = dest
+  marks.reviewerReturnIteration = n
+  marks.dispositions = null
+  marks.dispositionsIteration = null
+  marks.pendingFix = false
+  saveSidecar()
+  return null
+}
+
+function handleDispositions() {
+  if (!marks.reviewerReturnFile) die('no reviewer return recorded yet — mark reviewer-returned first')
+  const waivedRaw = flag('--waived'), rejectedRaw = flag('--rejected'), fixRaw = flag('--fix-dispatched')
+  const waived = Number(waivedRaw), rejected = Number(rejectedRaw), fixDispatched = Number(fixRaw)
+  if (![waived, rejected, fixDispatched].every(Number.isFinite)) {
+    die('--mark dispositions needs numeric --waived/--rejected/--fix-dispatched (got ' +
+      JSON.stringify({ waivedRaw, rejectedRaw, fixRaw }) + ')')
+  }
+  const n = marks.reviewerReturnIteration
+  const args = ['--manifest', manifestPathFor(n), '--workflow', marks.reviewerReturnFile,
+    '--waived', String(waived), '--rejected', String(rejected), '--fixDispatched', String(fixDispatched)]
+  const r = spawnSync(process.execPath, [verdictBin, ...args], { encoding: 'utf8' })
+  if (r.status === 2) die((r.stderr || r.stdout).trim())
+  const word = r.stdout.split('\n')[0].trim()
+  marks.dispositions = { waived, rejected, fixDispatched, word }
+  marks.dispositionsIteration = n
+  marks.pendingFix = fixDispatched > 0
+  if (marks.pendingFix) marks.escalated = false // a fresh fix cycle — any stale escalation no longer applies
+  saveSidecar()
+  return null
+}
+
+// D5/AC-20260820-07-8 (manifest-provable cap): the cap itself is enforced HERE, from
+// manifest-<n>.jsonl files actually present on disk — a hand-edited sidecar counter cannot
+// influence it. Whether the STATE reads FIX vs ESCALATE, though, cannot be re-derived from disk
+// alone (a refused 3rd attempt and a not-yet-attempted 3rd attempt look identical on disk: same
+// manifest count, same pendingFix=true) — `marks.escalated` is the persisted record of an actual
+// refusal, set only here, never by a hand-edited iteration counter.
+const FIX_CAP = 2
+function handleFixApplied() {
+  if (!marks.pendingFix) die('no fix was dispatched for the current findings — mark dispositions --fix-dispatched N first')
+  const manifests = listManifestNumbers()
+  const fixIterationsDone = manifests.length - 1
+  if (fixIterationsDone >= FIX_CAP) {
+    marks.escalated = true
+    saveSidecar()
+    die('iteration cap 2 reached — a third fix-applied is refused; the fix/review loop is capped ' +
+      'at 2 iterations, escalate to the user instead of dispatching another fix')
+  }
+  const n = Math.max(...manifests) + 1
+  const r = runLegsIteration(n, { fixDelta: true })
+  if (r.stopped) return 'STOPPED'
+  marks.pendingFix = false
+  saveSidecar()
+  return null
+}
+
+function handleClosed() {
+  if (status !== 'done') {
+    die('spec status is not yet "done" — re-run the driver with no mark first so CLOSE\'s ' +
+      'authoritative verdict runs and flips status')
+  }
+  const dirty = gitStatusPaths(repoRoot)
+  const unexpected = dirty.filter((p) =>
+    !(p === sidecarRel || p.startsWith(sidecarRel + '/') ||
+      p === '.claude/spec-runs.jsonl' || p.startsWith('.claude/spec-runs/')))
+  if (unexpected.length) {
+    die('tree is dirty beyond the sidecar and retained evidence — unexpected path(s): ' +
+      unexpected.join(', ') + ' — commit or clean them (never git add -A past an unadjudicated ' +
+      'path), then re-run this mark')
+  }
+  marks.closed = true
+  saveSidecar()
+  return null
+}
+
+function handleMergeStrategy() {
+  const strategy = argv[markIdx + 2]
+  const VALID = ['merge-commit', 'ff-only', 'squash', 'rebase-ff']
+  if (!VALID.includes(strategy)) {
+    die('--mark merge-strategy needs a bare strategy token (' + VALID.join('|') + '), got ' + JSON.stringify(strategy))
+  }
+  if (!marks.closed) die('spec is not closed yet — mark closed first')
+  const here = path.resolve(process.cwd())
+  if (here !== path.resolve(mainRoot)) {
+    die('refused — the driver\'s inherited CWD (' + here + ') is inside the build worktree, not ' +
+      'the main root (' + mainRoot + '); relocate first: ExitWorktree(action="keep") if this ' +
+      'session entered it, else `cd ' + mainRoot + '` in the main session, then re-run this mark')
+  }
+  const source = sourceBranchFor()
+  const target = spawnSync('git', ['-C', mainRoot, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).stdout.trim()
+  const wt = findWorktreeForBranch(mainRoot, source)
+  const mergeArgs = ['merge', '--root', mainRoot, '--target', target, '--source', source, '--strategy', strategy]
+  if (wt) mergeArgs.push('--worktree', wt)
+  const r = spawnSync('bash', [mergeBackBin, ...mergeArgs], { encoding: 'utf8' })
+  if (r.status === 3) {
+    marks.mergeConflicted = true
+    marks.mergeCtx = { mainRoot, target, source, wt: wt || null }
+    saveSidecar()
+    process.stdout.write(`[spec-review-driver] state: CONFLICTS  spec: ${specPath}\n\n` +
+      '## Step: resolve merge conflicts by intent\n' + (r.stdout + r.stderr).trim() + '\n\n' +
+      'Read both sides, resolve by INTENT (never a mechanical pick), `git -C ' + mainRoot +
+      ' add` each resolved file, then commit.\nThen: node ' + __filename + ' ' + specPath +
+      ' --mark conflicts-resolved\n')
+    process.exit(0)
+  }
+  if (r.status !== 0) die('merge-back.sh merge failed: ' + (r.stdout + r.stderr).trim())
+  finishMerge(mainRoot, source, wt)
+}
+
+function handleConflictsResolved() {
+  if (!marks.mergeConflicted) die('no merge is in conflict — nothing to resolve')
+  const { mainRoot, source, wt } = marks.mergeCtx
+  const unmerged = spawnSync('git', ['-C', mainRoot, 'ls-files', '-u'], { encoding: 'utf8' }).stdout.trim()
+  if (unmerged) die('unresolved conflicts remain in ' + mainRoot + ' — resolve every path, git add, and commit before marking conflicts-resolved')
+  const gitDir = spawnSync('git', ['-C', mainRoot, 'rev-parse', '--git-dir'], { encoding: 'utf8' }).stdout.trim()
+  const mergeHead = path.isAbsolute(gitDir) ? path.join(gitDir, 'MERGE_HEAD') : path.join(mainRoot, gitDir, 'MERGE_HEAD')
+  if (fs.existsSync(mergeHead)) die('the merge is still in progress (MERGE_HEAD present) in ' + mainRoot + ' — commit the resolution first')
+  marks.mergeConflicted = false
+  saveSidecar()
+  finishMerge(mainRoot, source, wt)
+}
+
+// Shared tail for a concluded merge (whether it went straight through or via CONFLICTS ->
+// conflicts-resolved): cleanup (removes the worktree, taking the sidecar with it per D10) +
+// verify + spec-status --next verbatim, then DONE. Exits the process directly — after cleanup the
+// sidecar this invocation loaded may no longer exist on disk, so nothing here re-reads it.
+// D10: the ledger + retained evidence were written under the WORKTREE (repoRoot at CLOSE time,
+// wherever the review actually ran) so the main root stays clean for `merge-back.sh merge`'s
+// assert_clean_root/ff-only preconditions. Once the merge has landed, promote them into mainRoot
+// (dedup by exact line / by filename) and clear the worktree-local copies — plus the sidecar
+// itself, never committed by design — so the worktree is genuinely clean before `git worktree
+// remove` runs (a plain `worktree remove`, no --force, refuses on ANY untracked file).
+function promoteEvidenceAndClean(wt, mainRootDir) {
+  const srcLedger = path.join(wt, '.claude/spec-runs.jsonl')
+  const dstLedger = path.join(mainRootDir, '.claude/spec-runs.jsonl')
+  if (fs.existsSync(srcLedger)) {
+    const srcLines = fs.readFileSync(srcLedger, 'utf8').split('\n').filter(Boolean)
+    const dstLines = fs.existsSync(dstLedger) ? fs.readFileSync(dstLedger, 'utf8').split('\n').filter(Boolean) : []
+    const dstSet = new Set(dstLines)
+    const toAppend = srcLines.filter((l) => !dstSet.has(l))
+    if (toAppend.length) {
+      fs.mkdirSync(path.dirname(dstLedger), { recursive: true })
+      fs.appendFileSync(dstLedger, toAppend.join('\n') + '\n')
+    }
+    fs.rmSync(srcLedger, { force: true })
+  }
+  const srcDir = path.join(wt, '.claude/spec-runs')
+  const dstDir = path.join(mainRootDir, '.claude/spec-runs')
+  if (fs.existsSync(srcDir)) {
+    fs.mkdirSync(dstDir, { recursive: true })
+    for (const f of fs.readdirSync(srcDir)) {
+      const dst = path.join(dstDir, f)
+      if (!fs.existsSync(dst)) fs.copyFileSync(path.join(srcDir, f), dst)
+    }
+    fs.rmSync(srcDir, { recursive: true, force: true })
+  }
+}
+
+function finishMerge(mainRootDir, source, wt) {
+  if (wt) {
+    promoteEvidenceAndClean(wt, mainRootDir)
+    fs.rmSync(sidecarDir, { recursive: true, force: true })
+  }
+  const cleanupArgs = ['cleanup', '--root', mainRootDir, '--source', source]
+  if (wt) cleanupArgs.push('--worktree', wt)
+  const c = spawnSync('bash', [mergeBackBin, ...cleanupArgs], { encoding: 'utf8' })
+  if (c.status !== 0) die('merge-back.sh cleanup failed: ' + (c.stdout + c.stderr).trim())
+  spawnSync('bash', [mergeBackBin, 'verify', '--root', mainRootDir], { encoding: 'utf8' })
+  printDoneNow('merged ' + source + ' into the target branch; worktree and branch cleaned up.')
+}
+
+function handleMark() {
+  switch (MARK) {
+    case 'skips-extracted': return handleSkipsExtracted()
+    case 'reviewer-returned': return handleReviewerReturned()
+    case 'dispositions': return handleDispositions()
+    case 'fix-applied': return handleFixApplied()
+    case 'closed': return handleClosed()
+    case 'merge-strategy': return handleMergeStrategy() // exits the process itself
+    case 'conflicts-resolved': return handleConflictsResolved() // exits the process itself
+    default:
+      die('unknown mark "' + MARK + '" (skips-extracted | reviewer-returned | dispositions | ' +
+        'fix-applied | closed | merge-strategy | conflicts-resolved)')
+  }
+}
+
+// ---- state derivation (side-effecting: runs deterministic driver work as needed, idempotent) --
+function deriveMergeOrDone() {
+  if (marks.mergeConflicted) return 'CONFLICTS'
+  return 'MERGE'
+}
+
+function deriveState() {
+  const manifests = listManifestNumbers()
+  let n = manifests.length ? Math.max(...manifests) : 0
+
+  if (n === 0) {
+    const r = runLegsIteration(1, {})
+    if (r.stopped) return 'STOPPED'
+    n = 1
+  } else if (isRedBlocking(readManifestRows(manifestPathFor(n)))) {
+    // STOPPED is sticky, like DONE/ESCALATE — it does not auto-retry on a bare re-invocation (a
+    // no-mark call must stay idempotent, AC-20260820-07-9's guarantee generalized). Re-entry
+    // requires the underlying issue to be fixed AND a fresh attempt: delete the sidecar (or just
+    // this iteration's manifest) to force LEGS to run again from cold.
+    return 'STOPPED'
+  }
+
+  const rows = readManifestRows(manifestPathFor(n))
+
+  if (!marks.skipsExtracted) {
+    if (gateSkipsCount(rows) > 0) return 'SKIPS'
+  }
+
+  const reviewerFresh = marks.reviewerReturnFile && marks.reviewerReturnIteration === n
+  if (!reviewerFresh) return 'REVIEWER'
+
+  const dispositionsFresh = marks.dispositions && marks.dispositionsIteration === n
+  if (!dispositionsFresh) return 'DISPOSITIONS'
+
+  if (marks.pendingFix) return marks.escalated ? 'ESCALATE' : 'FIX'
+
+  if (marks.dispositions.word !== 'CLEAN') return 'DISPOSITIONS'
+
+  if (status !== 'done') {
+    doCloseWork(n)
+    status = 'done'
+  }
+  if (!marks.closed) return 'CLOSE'
+
+  return deriveMergeOrDone()
+}
+
+// ---- run ----------------------------------------------------------------------------------------
+let forcedState = null
+if (MARK) forcedState = handleMark()
+const state = forcedState || deriveState()
+const currentN = listManifestNumbers().length ? Math.max(...listManifestNumbers()) : 0
+
+if (STATE_ONLY) { process.stdout.write(state + '\n'); process.exit(0) }
+
+// ---- step text per state -------------------------------------------------------------------------
+const manifestPath = manifestPathFor(currentN)
+const outDir = outDirFor(currentN)
+const replayNoteLine = marks.replayNote ? marks.replayNote + '\n' : ''
+const waivedWarn = (marks.dispositions && marks.dispositions.waived > 0)
+  ? `⚠ ${marks.dispositions.waived} finding(s) waived this run — confirm in the close report.\n`
+  : ''
+
+const STEPS = {
+  STOPPED: () => {
+    const rows = readManifestRows(manifestPathFor(marks.stoppedIteration || currentN))
+    const red = rows.filter((r) => BLOCKING_LEGS.has(r.leg) &&
+      (r.leg === 'smoke' ? (r.exit !== 0 && r.exit !== 4) : r.exit !== 0))
+    return `## STOPPED — a blocking leg is red; the run hard-stopped before any further step\n` +
+      red.map((r) => `❌ ${r.leg} exit=${r.exit} ${JSON.stringify(r.observed)}`).join('\n') +
+      `\nmanifest: ${manifestPathFor(marks.stoppedIteration || currentN)}\noutputs: ${outDirFor(marks.stoppedIteration || currentN)}\n` +
+      `A GATE_RED ledger line has been appended.\nRemedy: fix the failing leg(s) above, then delete ` +
+      `${sidecarDir} (or just ${manifestPathFor(marks.stoppedIteration || currentN)}) and re-run this driver — it restarts at LEGS with a fresh manifest.`
+  },
+
+  SKIPS: () => `## Step: extract skipped-test names\n` +
+    `The gate leg reports skipped tests (manifest: ${manifestPath}). Extract the skip names per ` +
+    `the host's declared format, write them to a scratch file, then:\n` +
+    `  node ${__filename} ${specPath} --mark skips-extracted --file <path>`,
+
+  REVIEWER: () => `## Step: dispatch the reviewer\n` +
+    `Legs are green. Dispatch ONE Agent {subagent_type: "spec:reviewer"} with the spec path, ` +
+    `diff base ${base}, root ${repoRoot}, and this run's evidence:\n` +
+    `  manifest: ${manifestPath}\n  outputs: ${outDir}\n` +
+    (designFlag || designSource
+      ? '  design specs also get two parallel Sonnet design-leg agents (rule-checklist + ' +
+        'component-manifest audit) alongside the reviewer.\n'
+      : '') +
+    `Write its structured return ({verdict, survivors, killed, reviewerCount, scope, tokens}) to ` +
+    `a file, then:\n  node ${__filename} ${specPath} --mark reviewer-returned --file <return.json>\n` +
+    `REVIEWER_FAILED is a failed run, never CLEAN — re-dispatch before marking.`,
+
+  DISPOSITIONS: () => {
+    let survivors = []
+    try { survivors = JSON.parse(fs.readFileSync(marks.reviewerReturnFile, 'utf8')).survivors || [] } catch { /* ignore */ }
+    const legRows = readManifestRows(manifestPath).filter((r) => !BLOCKING_LEGS.has(r.leg) &&
+      r.exit !== 0)
+    return `## Step: dispositions due — judgment on every survivor and leg finding\n` +
+      `survivors (${survivors.length}):\n` +
+      survivors.map((s) => `  [${s.severity}] ${s.file}:${s.line} — ${s.claim}`).join('\n') + '\n' +
+      `leg findings (${legRows.length}):\n` +
+      legRows.map((r) => `  ${r.leg} exit=${r.exit} ${JSON.stringify(r.observed)}`).join('\n') + '\n' +
+      `Present each with the spec lines its disposition hinges on, quoted verbatim. Fix -> dispatch ` +
+      `Sonnet workers, mark dispositions --fix-dispatched N. Waive/Reject -> record in the spec's ` +
+      `Rationale (date + reason; only the user waives).\n` +
+      `Then: node ${__filename} ${specPath} --mark dispositions --waived N --rejected N --fix-dispatched N`
+  },
+
+  FIX: () => `## Step: dispatch fix workers\n` +
+    `${marks.dispositions.fixDispatched} finding(s) routed to Fix (via the host's agentMap). ` +
+    `Dispatch the workers, wait for them to return, then:\n` +
+    `  node ${__filename} ${specPath} --mark fix-applied\n` +
+    `(re-runs legs --fix-delta on a fresh manifest and returns to REVIEWER for the fix-delta pass)`,
+
+  ESCALATE: () => `## ESCALATE — iteration cap 2 reached\n` +
+    `The fix/review loop is capped at 2 iterations (iteration cap 2) and a third fix-applied was ` +
+    `refused. Surface this to the user — a capped run needs a decision, not a fourth dispatch.`,
+
+  CLOSE: () => `## Step: close (the driver has already run the authoritative verdict and flipped status: done)\n` +
+    `verdict: ${marks.dispositions.word}   runId: ${marks.closeRunId}   ` +
+    `retained: .claude/spec-runs/${marks.closeRunId}.json\n` +
+    replayNoteLine + waivedWarn +
+    `1. Apply the spec's Canonical Delta to docs/canonical/${area}.md.\n` +
+    `2. Fold the deviations sidecar if one exists (recurring -> Gotchas [host]/[plugin]; one-offs ` +
+    `-> the spec's Rationale); delete the sidecar.\n` +
+    `3. Hygiene listing — everything not marked EXPECTED below is a stray to explain or clean:\n` +
+    `   EXPECTED   ${sidecarRel}/            (never committed — deleted at DONE)\n` +
+    `   EXPECTED   .claude/spec-runs/*.json  (retained review evidence)\n` +
+    `   EXPECTED   .claude/spec-runs.jsonl   (the run ledger)\n` +
+    `4. Commit everything still uncommitted on the working branch (never --no-verify) — this is ` +
+    `the close commit.\n` +
+    `Then: node ${__filename} ${specPath} --mark closed`,
+
+  MERGE: () => {
+    const source = sourceBranchFor()
+    if (!branchExists(mainRoot, source)) {
+      // D6: review ran directly on the originating branch — nothing to merge.
+      fs.rmSync(sidecarDir, { recursive: true, force: true })
+      printDoneNow('review ran on the originating branch — MERGE skipped, nothing to merge.')
+    }
+    const target = spawnSync('git', ['-C', mainRoot, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).stdout.trim()
+    const inspect = spawnSync('bash', [mergeBackBin, 'inspect', '--root', mainRoot, '--target', target, '--source', source], { encoding: 'utf8' })
+    return `## Step: merge strategy\n` + (inspect.stdout + inspect.stderr).trim() + '\n\n' +
+      replayNoteLine + waivedWarn +
+      `AskUserQuestion for the strategy (RECOMMEND above first). Then:\n` +
+      `  node ${__filename} ${specPath} --mark merge-strategy <merge-commit|ff-only|squash|rebase-ff>\n` +
+      `Relocate first if needed: ExitWorktree(action="keep") if this session entered the worktree, ` +
+      `else \`cd ${mainRoot}\` in the main session — the mark is refused while the driver's ` +
+      `inherited CWD sits inside the build worktree.`
+  },
+
+  CONFLICTS: () => `## CONFLICTS — resolve then mark conflicts-resolved (see prior output)`,
+}
+
+process.stdout.write(`[spec-review-driver] state: ${state}  spec: ${specPath}\n` +
+  `(re-run this driver after completing the step; it verifies artifacts and prints the next one)\n\n` +
+  STEPS[state]() + '\n')
+process.exit(0)

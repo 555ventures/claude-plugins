@@ -64,7 +64,7 @@
   "spec/scripts/merge-back.sh": {
     "entryPoints": [
       "spec/commands/doctor.md",
-      "spec/commands/review.md",
+      "spec/scripts/spec-review-driver.js",
       "git/commands/enter-worktree.md"
     ]
   },
@@ -75,7 +75,7 @@
     "entryPoints": ["spec/hooks/hooks.json"]
   },
   "spec/scripts/replay.js": {
-    "entryPoints": ["spec/commands/replay.md", "spec/commands/review.md"]
+    "entryPoints": ["spec/commands/replay.md", "spec/scripts/spec-review-driver.js"]
   },
   "spec/scripts/report-render.js": {
     "entryPoints": [
@@ -92,6 +92,7 @@
       "spec/commands/enforce.md",
       "spec/commands/design.md",
       "spec/commands/escape.md",
+      "spec/commands/review.md",
       "spec/commands/plan.md",
       "git/commands/enter-worktree.md",
       "git/commands/merge.md",
@@ -99,7 +100,7 @@
     ]
   },
   "spec/scripts/review-legs.js": {
-    "entryPoints": ["spec/commands/replay.md", "spec/commands/review.md"]
+    "entryPoints": ["spec/commands/replay.md", "spec/scripts/spec-review-driver.js"]
   },
   "spec/scripts/scope-reconcile.js": {
     "entryPoints": ["spec/commands/build.md", "spec/scripts/review-legs.js"]
@@ -117,6 +118,9 @@
   "spec/scripts/spec-design-driver.js": {
     "entryPoints": ["spec/commands/design.md"]
   },
+  "spec/scripts/spec-review-driver.js": {
+    "entryPoints": ["spec/commands/review.md"]
+  },
   "spec/scripts/spec-state-gate.sh": {
     "entryPoints": ["spec/hooks/hooks.json"]
   },
@@ -128,11 +132,12 @@
       "spec/commands/release.md",
       "spec/commands/plan.md",
       "spec/commands/review.md",
+      "spec/scripts/spec-review-driver.js",
       "spec/doctrine/core.md"
     ]
   },
   "spec/scripts/verdict.js": {
-    "entryPoints": ["spec/commands/release.md", "spec/commands/review.md"]
+    "entryPoints": ["spec/commands/release.md", "spec/scripts/spec-review-driver.js"]
   },
   "spec/workflows/wf-design.js": {
     "entryPoints": ["spec/scripts/spec-design-driver.js"]

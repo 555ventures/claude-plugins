@@ -54,6 +54,12 @@ review, and direct-dispatch orchestration.
 - **Retainer language** — `design.md` still speaks of the Fable retainer seat for design
   judgment calls; re-derive the model-placement story for the design seats against the v7
   rule (session adjudicates; no resident consultant).
+- **Quality mechanism (ADR-0001)** — the mechanism review evaluates the
+  render-screenshot-critique loop (serve locally, screenshot desktop + mobile, critique,
+  fix) as the design-quality gate, and lands the prose-cut on the `frontend-design` plugin
+  as the instructional layer instead of carrying bespoke aesthetic prose in `design.md`.
+  The in-Code `/design` canvas is settled: optional presentation layer only, never a
+  pipeline dependency (client repos hold only a Claude Code token).
 
 ## Out of scope
 
@@ -65,6 +71,8 @@ review, and direct-dispatch orchestration.
 
 ## Grounding
 
+- Amended by ADR-0001 — design authoring stays local-first; quality via `frontend-design` +
+  render critique; `/design` canvas is presentation-only.
 - `docs/audit/v7-replay-eval.md` — the evidence bar v7 review work is held to.
 - `spec/doctrine/design.md` — the carried-verbatim corpus this brief cuts.
 - `spec/doctrine/core.md` § Incident Policy, § Model Placement — the rules the design

@@ -18,6 +18,9 @@ a script cannot do — here, the repo profiling judgment and the interview.
   out, contract hash stamped); `init.md` shrinks to profiling + interview + one invocation.
 - Same evidence bar as v7: the generated tree passes `manifest-check` and `doctor` executed,
   not asserted.
+- **`frontend-design` provisioning (ADR-0001)** — bootstrap checks for (or offers to
+  install, user scope) Anthropic's `frontend-design` plugin, so host repos don't silently
+  author design without the instructional layer the design surfaces now assume.
 - **`testCommand` contract, documented and probed (folded 2026-08-20, at-risk escape).** The
   review's at-risk leg appends file paths to `testCommand` — an assumption made load-bearing
   by the 2026-08-20 fix and satisfied silently or violated silently: `cargo test <path>`
@@ -35,6 +38,8 @@ a script cannot do — here, the repo profiling judgment and the interview.
 
 ## Grounding
 
+- Amended by ADR-0001 — bootstrap provisions/checks the `frontend-design` plugin (user
+  scope) as the design instructional layer.
 - Memory `research-20260817-ai-first-best-practice`; `spec/commands/init.md`;
   `spec/scripts/review-legs.js` (the inversion pattern).
 - The 2026-08-20 at-risk escape (dead since v7, vacuous green on `[object Object]`):

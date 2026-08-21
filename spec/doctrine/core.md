@@ -144,11 +144,22 @@ test, no intake queue. Only a **third recurrence of the same class** earns a sta
 and that guard is deterministic — a script with an exit code wired where the class occurs —
 never prose. Doctrine text is for contracts and invariants, not for incident memories.
 
-A guard so earned must also pass the **admission bar**: portable across host stacks, general
-to the class rather than the triggering instance, material (value exceeds its maintenance and
-reading cost), falsified once (deliberately tripped to prove it can go red), and shipped with
-the kill condition that would retire it. A proposal that cannot state all five in one line is
-a rejection with a reopen condition.
+A guard so earned must also pass the **admission bar** — five separately answered tests,
+derived from ledger evidence wherever a ledger can answer them, asserted only where it cannot:
+
+- **Portability** — works for any host stack. Prose by design: a synthetic second-stack run
+  would be fixture evidence, and fixture-fed proof is not terminal.
+- **Generality** — names at least two ledger-recorded members of the class, at least one of
+  which is not the triggering incident.
+- **Materiality** — the class's recurrence count across every readable repo ledger, cited as
+  a number, never claimed.
+- **Falsifiability** — deliberately tripped once; the proposal cites the red run.
+- **Removability** — a kill condition phrased as a question a ledger query answers with a
+  count.
+
+A proposal that cannot fill all five fields is a rejection, and the rejection's reopen
+condition must itself be ledger-answerable. Derived numbers come from the fleet evidence
+reader where it exists; a bar filled from one repo's ledger says so.
 
 ## Decomposition
 

@@ -33,6 +33,14 @@ Also measured and worth acting on separately: `killedMatch` is null in 22 of 26 
 14's retention isn't yet feeding escape classification), and **2 replay rows across ~380 fleet
 reviews**, with seven repos never having replayed.
 
+**The reader is the admission bar's evidence source** (JJ's 2026-08-20 ruling; `core.md`
+§ Incident Policy). The bar's derivable tests — materiality's recurrence count, generality's
+ledger-recorded class members, removability's countable kill condition — are answered by this
+reader, not asserted by the proposer. That is also the reader's invocation point: it runs
+whenever a standing guard is proposed or a rejection's reopen condition is evaluated, because
+the bar requires its numbers. Until it lands, bar fields are filled from the local ledger and
+must say so.
+
 ## Scope
 
 One zero-dependency script in `spec/scripts/` conventions (usage header, hand-rolled flags,
@@ -54,7 +62,9 @@ parse in milliseconds; there is nothing to cache.
   2. **Brief-08 gate evaluation** — distinct host specs CLEANed post-cutover, and in-window
      self-repair share.
   3. **Escape aggregates fleet-wide** — `preventedBy` distribution and per-class recurrence, so
-     the Incident Policy's third-recurrence trigger has an honest denominator.
+     the Incident Policy's third-recurrence trigger has an honest denominator. The render
+     explicitly flags **recurrent-unguarded** classes (≥3 recurrences, no standing guard) —
+     the priced cost of the admission bar's rejection bias.
   4. **Replay coverage debt** — replay rows and reviews-since-last-replay per repo. The reader
      cannot schedule (ruled out below); making the debt visible is the only lever that respects
      the autopilot ruling.

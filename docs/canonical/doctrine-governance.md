@@ -8,7 +8,9 @@ governing rules now:
   living elsewhere shrinks to a pointer; touch-time dedup, never a sweep.
 - **Behavior is pinned by behavioral tests** that execute it — never by regexes over prose.
 - **Incident policy** (core.md § Incident Policy): an incident is fixed with a behavioral
-  test in the same session; only a third recurrence of a class earns a standing guard, and
+  test in the same session; only a third recurrence of a class — counted across every readable
+  repo ledger on this machine, numbers from `node "$(spec-paths fleet-reader)" --json` — earns a
+  standing guard, and
   that guard is a deterministic script with an exit code — never prose, never a registry row.
 - **Version discipline:** every behavior change bumps the owning plugin's semver;
   `plugin.json`'s `description` carries a last-3-versions changelog summary.

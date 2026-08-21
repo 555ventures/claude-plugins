@@ -20,12 +20,14 @@
 //
 // Exit codes: 0 = derived (0 repos scanned is still a derived answer — the population block
 //                 carries the absence, never an error)
-//             2 = usage error: unknown flag, missing --repos-root value, or --repos-root not a
-//                 directory; usage line printed to stderr
+//             2 = usage error: unknown flag, missing --repos-root value, --repos-root not a
+//                 directory, or --repos-root not a readable directory; usage line printed to
+//                 stderr
 
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
+const { configPathFor } = require('./lib/host-config')
 
 const USAGE = 'Usage: node fleet-reader.js [--repos-root <dir>] [--json]'
 
@@ -65,7 +67,13 @@ if (!rootStat || !rootStat.isDirectory()) {
 // ---- discovery (D2/D3): one level under reposRoot, config-gated, read-only --------------------
 
 function discoverRepos(root) {
-  const entries = fs.readdirSync(root, { withFileTypes: true })
+  let entries
+  try {
+    entries = fs.readdirSync(root, { withFileTypes: true })
+  } catch (e) {
+    printUsage(`--repos-root ${root} could not be listed (${e.code || e.message}) — pass a readable directory, e.g. chmod u+r ${root} or --repos-root ~/Projects`)
+    process.exit(2)
+  }
   const repos = []
   for (const e of entries) {
     if (!e.isDirectory()) continue
@@ -75,11 +83,7 @@ function discoverRepos(root) {
     const dir = path.join(root, name)
     // Existence check only (never a content read — lib/host-config.js's readConfig/
     // readConfigStrict own reading the file; this predicate only gates discovery on presence).
-    // The filename is concatenated rather than joined on purpose: config-read.test.js's
-    // repo-wide sweep flags any single line pairing a `path.join` call with the config
-    // filename literal, and it has no exemption for a presence-only probe. Do not "tidy".
-    const claudeDir = path.join(dir, '.claude')
-    if (!fs.existsSync(claudeDir + '/spec.config.json')) continue
+    if (!fs.existsSync(configPathFor(dir))) continue
     const gitPath = path.join(dir, '.git')
     if (fs.existsSync(gitPath) && fs.statSync(gitPath).isFile()) continue // worktree checkout
     repos.push({ name, dir })
@@ -90,17 +94,35 @@ function discoverRepos(root) {
 
 // Ledger glob (D3): .claude/spec-runs*.jsonl — live file plus year archives, spec-status.js's
 // own contract, so a reader blind to archives does not silently lose history.
-function ledgerFiles(dir) {
-  const claudeDir = path.join(dir, '.claude')
-  let names = []
-  try { names = fs.readdirSync(claudeDir) } catch { names = [] }
-  return names.filter(n => /^spec-runs.*\.jsonl$/.test(n)).sort().map(n => path.join(claudeDir, n))
+// A readdir failure here means ".claude provably exists (discovery's config check already
+// passed) but its listing could not be read" — that is never the same fact as "listed fine,
+// no ledger files present", so it is reported via unreadablePaths rather than folded into an
+// empty file list (FIX 3 / the D4 silent-absence lie-risk).
+function ledgerFiles(claudeDir) {
+  let names
+  try {
+    names = fs.readdirSync(claudeDir)
+  } catch {
+    return { files: [], unreadablePaths: [claudeDir] }
+  }
+  return {
+    files: names.filter(n => /^spec-runs.*\.jsonl$/.test(n)).sort().map(n => path.join(claudeDir, n)),
+    unreadablePaths: [],
+  }
 }
 
+// Returns null when the file exists but could not be read (EISDIR, EACCES, ...) — the caller
+// counts that as unreadable rather than crashing the whole fleet run over one bad path.
 function parseLedgerFile(filePath) {
+  let text
+  try {
+    text = fs.readFileSync(filePath, 'utf8')
+  } catch {
+    return null
+  }
   const rows = []
   let unparseable = 0
-  for (const line of fs.readFileSync(filePath, 'utf8').split('\n')) {
+  for (const line of text.split('\n')) {
     const trimmed = line.trim()
     if (!trimmed) continue
     try { rows.push(JSON.parse(trimmed)) } catch { unparseable++ }
@@ -111,8 +133,19 @@ function parseLedgerFile(filePath) {
 function loadRepo(repo) {
   let rawRows = []
   let unparseable = 0
-  for (const f of ledgerFiles(repo.dir)) {
+  let unreadable = 0
+  const unreadablePaths = []
+  const claudeDir = path.join(repo.dir, '.claude')
+  const listing = ledgerFiles(claudeDir)
+  unreadable += listing.unreadablePaths.length
+  unreadablePaths.push(...listing.unreadablePaths)
+  for (const f of listing.files) {
     const parsed = parseLedgerFile(f)
+    if (!parsed) {
+      unreadable++
+      unreadablePaths.push(f)
+      continue
+    }
     rawRows = rawRows.concat(parsed.rows)
     unparseable += parsed.unparseable
   }
@@ -122,6 +155,8 @@ function loadRepo(repo) {
     name: repo.name,
     rawRows,
     unparseable,
+    unreadable,
+    unreadablePaths,
     oldest: tsList.length ? tsList[0] : null,
     newest: tsList.length ? tsList[tsList.length - 1] : null,
     selfRepair,
@@ -136,6 +171,7 @@ const population = {
   scanned: reposData.length,
   repos: reposData.map(r => ({
     name: r.name, rows: r.rawRows.length, unparseable: r.unparseable,
+    unreadable: r.unreadable, unreadablePaths: r.unreadablePaths,
     oldest: r.oldest, newest: r.newest, selfRepair: r.selfRepair,
   })),
 }
@@ -359,7 +395,7 @@ function computeDriftCensus(reposList) {
       if (!reasons.length) inShape++
       else for (const reason of reasons) drift[reason] = (drift[reason] || 0) + 1
     }
-    byRepo.push({ name: repo.name, inShape, drift, unparseable: repo.unparseable })
+    byRepo.push({ name: repo.name, inShape, drift, unparseable: repo.unparseable, unreadable: repo.unreadable })
   }
   return { byRepo }
 }
@@ -371,11 +407,21 @@ const replayDebt = computeReplayDebt(reposData)
 const cleanContradicted = computeCleanContradicted(reposData)
 const driftCensus = computeDriftCensus(reposData)
 
+// fs.writeSync(1, …), looped to absorb a partial write, rather than process.stdout.write()
+// followed by process.exit(): stdout.write is async when stdout is a pipe, and process.exit
+// cuts the internal buffer before it drains — a large fleet's JSON silently truncates at 64KB
+// while the process still reports exit 0 (spec-pipeline.md [host] gotcha, reproduced here on a
+// 20-repo synthetic fleet). Falling off the end of the script with nothing else keeping the
+// event loop alive exits 0 on its own, so neither branch below calls process.exit(0).
+function writeAll(fd, buf) {
+  let written = 0
+  while (written < buf.length) written += fs.writeSync(fd, buf, written)
+}
+
 if (json) {
-  process.stdout.write(JSON.stringify({
+  writeAll(1, Buffer.from(JSON.stringify({
     population, legRecency, gate08, escapes, replayDebt, cleanContradicted, driftCensus,
-  }, null, 2) + '\n')
-  process.exit(0)
+  }, null, 2) + '\n'))
 }
 
 // ---- human render (D4/D13/D14 Behavior): population first, then queries 1-6 numbered, each
@@ -387,8 +433,12 @@ function renderPopulation(pop) {
   const lines = [`Fleet population — scoped to this machine's checkouts under ${pop.reposRoot} (scanned: ${pop.scanned})`]
   if (!pop.repos.length) lines.push('  (no repos found)')
   for (const r of pop.repos) {
-    const marker = r.rows === 0 ? ' — no ledger' : ''
-    lines.push(`  ${r.name}: rows=${r.rows} unparseable=${r.unparseable} oldest=${r.oldest || 'n/a'} newest=${r.newest || 'n/a'} selfRepair=${r.selfRepair}${marker}`)
+    // A readdir/read failure is never "no ledger" (D4) — that marker is reserved for a
+    // directory that listed cleanly and simply held no ledger files.
+    const marker = r.unreadable > 0
+      ? ` — UNREADABLE: ${r.unreadablePaths.join(', ')} (fix permissions, e.g. chmod, or remove the blocking path; rows below undercount)`
+      : (r.rows === 0 ? ' — no ledger' : '')
+    lines.push(`  ${r.name}: rows=${r.rows} unparseable=${r.unparseable} unreadable=${r.unreadable} oldest=${r.oldest || 'n/a'} newest=${r.newest || 'n/a'} selfRepair=${r.selfRepair}${marker}`)
   }
   return lines.join('\n')
 }
@@ -403,7 +453,12 @@ function renderLegRecency(lr) {
 }
 
 function renderGate08(g) {
-  const pct = Math.round(g.selfRepairShare * 100)
+  // Round-half-up on the two integer counts, never on the ratio: scaling a non-dyadic sub-1
+  // ratio by 100 in floating point loses the half (23/40 * 100 === 57.49999999999999, so
+  // Math.round gives 57 where round-half-up demands 58); 23*100/40 === 57.5 exactly, so the
+  // integer arithmetic below is the fix, not a cosmetic reordering. The 4dp selfRepairShare
+  // field stays untouched — this percent is derived independently, only for this render line.
+  const pct = g.inWindowAuthored === 0 ? 0 : Math.round((g.selfRepairAuthored * 100) / g.inWindowAuthored)
   const lines = [
     `2. Brief-08 gate — cutover ${g.cutover}: hostSpecsCleaned=${g.hostSpecsCleaned} (clause1 ${g.clause1Met ? 'MET' : 'not met'}), selfRepairShare=${pct}% (clause2 ${g.clause2Met ? 'MET' : 'not met'})`,
     `  inWindowAuthored=${g.inWindowAuthored} selfRepairAuthored=${g.selfRepairAuthored}`,
@@ -444,18 +499,19 @@ function renderDriftCensus(dc) {
   const lines = ['6. Drift census — ledger rows outside the current shape, per repo']
   for (const r of dc.byRepo) {
     const driftStr = Object.entries(r.drift).map(([k, v]) => `${k}=${v}`).join(', ') || 'none'
-    lines.push(`  ${r.name}: inShape=${r.inShape} unparseable=${r.unparseable} drift: ${driftStr}`)
+    lines.push(`  ${r.name}: inShape=${r.inShape} unparseable=${r.unparseable} unreadable=${r.unreadable} drift: ${driftStr}`)
   }
   return lines.join('\n')
 }
 
-console.log([
-  renderPopulation(population),
-  renderLegRecency(legRecency),
-  renderGate08(gate08),
-  renderEscapes(escapes),
-  renderReplayDebt(replayDebt),
-  renderCleanContradicted(cleanContradicted),
-  renderDriftCensus(driftCensus),
-].join('\n\n'))
-process.exit(0)
+if (!json) {
+  console.log([
+    renderPopulation(population),
+    renderLegRecency(legRecency),
+    renderGate08(gate08),
+    renderEscapes(escapes),
+    renderReplayDebt(replayDebt),
+    renderCleanContradicted(cleanContradicted),
+    renderDriftCensus(driftCensus),
+  ].join('\n\n'))
+}

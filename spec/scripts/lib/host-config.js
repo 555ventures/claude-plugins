@@ -69,4 +69,4 @@ function declaredForge(root) {
   return capabilities && capabilities.forge
 }
 
-module.exports = { readConfig, declaredForge, readConfigStrict }
+module.exports = { readConfig, declaredForge, readConfigStrict, configPathFor }

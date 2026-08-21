@@ -1,0 +1,126 @@
+{
+  "runId": "rv_3983db070f16",
+  "ts": "2026-08-21T06:22:24.056Z",
+  "spec": "specs/20260820/05-fleet-evidence-reader.md",
+  "tier": "standard",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "FINDINGS",
+  "dispositions": {
+    "waived": 1,
+    "rejected": 0,
+    "fixDispatched": 6
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 3,
+      "observed": "outOfPlan=8"
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": "unavailable"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": "skips=0 todos=0"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": "inert"
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": "matches=10"
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": "files=10"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": "uncovered=0 oracle=1"
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": "skipped=0 sanctioned=0"
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": "rows=16 carried=15 sanctioned=1 orphans=0"
+    }
+  ],
+  "reviewer": {
+    "verdict": "REVIEWED",
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "--json truncates at 64KB with exit 0 when stdout is a pipe (write-then-exit)",
+        "file": "spec/scripts/fleet-reader.js",
+        "line": 375,
+        "impact": "A green exit carrying corrupt JSON on the exact invocation D7 enshrined in doctrine; latent at ~3x headroom against the live fleet.",
+        "evidence": "20-repo synthetic fleet: exit 0, stdout exactly 65536 bytes, JSON.parse 'Unexpected end of JSON input'. Live fleet emits 19416 bytes. Verbatim shape of the repo's recorded [host] gotcha from specs/20260816/01."
+      },
+      {
+        "severity": "hard",
+        "claim": "unreadable ledger file crashes the whole fleet run with an undocumented exit code 1",
+        "file": "spec/scripts/fleet-reader.js",
+        "line": 103,
+        "impact": "One bad file anywhere takes down every other repo's numbers; stdout empty.",
+        "evidence": "Ledger path as a directory -> uncaught EISDIR at parseLedgerFile, exit 1, empty stdout. Same for chmod 000 (EACCES). Header documents only exit 0 and 2; host rules make an undocumented exit code hard."
+      },
+      {
+        "severity": "hard",
+        "claim": "a .claude directory that cannot be listed renders as 'no ledger' at exit 0",
+        "file": "spec/scripts/fleet-reader.js",
+        "line": 96,
+        "impact": "Silent absence — the exact lie-risk D4 names as this reader's biggest — produced by a swallow-to-empty catch.",
+        "evidence": "chmod 0111 .claude on a repo whose ledger holds 3 rows: population row {\"name\":\"xonly\",\"rows\":0,...}, human render 'rows=0 ... no ledger', exit 0."
+      },
+      {
+        "severity": "soft",
+        "claim": "gate08 human render does not round-half-up at a .5 percentage boundary",
+        "file": "spec/scripts/fleet-reader.js",
+        "line": 406,
+        "impact": "Contradicts the spec's pinned rounding rule on the figure the adoption gate is read from.",
+        "evidence": "23/40 = 0.575 exactly renders 57%, spec requires 58%. Root cause is scaling a non-dyadic ratio by 100 ((23/40)*100 === 57.49999999999999), NOT the 4dp intermediate: Math.round(23/40*100) is also 57. Second independent bug: 51/101 is truly 50.495% but renders 51% via the 4dp value."
+      },
+      {
+        "severity": "soft",
+        "claim": "AC-20260820-05-17's oracle is bound to the wrong assert",
+        "file": "tests/spec-paths.test.js",
+        "line": 64,
+        "impact": "The AC names the section D7 rewrites; the tag landed on a neighbouring assert, so the coverage matrix credits a label rather than a check.",
+        "evidence": "`spec-paths shared-for escape` serves '## Incident Policy' at line 51; `grep -n 'Incident Policy' tests/spec-paths.test.js` returned nothing. Equivalent protection existed via the generic mapped-section pin."
+      },
+      {
+        "severity": "soft",
+        "claim": "config-existence check is a disclosed evasion of a standing repo-wide sweep",
+        "file": "spec/scripts/fleet-reader.js",
+        "line": 82,
+        "impact": "Documents a technique that also defeats the sweep for a genuine config read; second shape-classifier evasion in this repo in one week.",
+        "evidence": "Written as `claudeDir + '/spec.config.json'` so no line pairs path.join with the literal, dodging config-read.test.js AC-20260815-01-12, with a comment instructing editors not to tidy it. lib/host-config.js already defined configPathFor but never exported it."
+      },
+      {
+        "severity": "soft",
+        "claim": "escape.md edit exceeds the spec's declared doctrine-delta scope",
+        "file": "spec/commands/escape.md",
+        "line": 69,
+        "impact": "Contracts says 'nothing else in either file changes'; the build also changed 'up to four ride together' to 'up to five'.",
+        "evidence": "git diff 7bc2d57..HEAD -- spec/commands/escape.md shows the four->five hunk alongside the two sanctioned hunks. Necessary (D8 adds a fifth field to that call) and recorded in the build's deviations sidecar."
+      }
+    ],
+    "killed": [],
+    "reviewerCount": 1,
+    "scope": "full",
+    "tokens": 125734
+  }
+}

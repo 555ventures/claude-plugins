@@ -1,6 +1,6 @@
 ---
 date: 2026-08-20
-status: implementing
+status: done
 tier: standard
 area: fleet-evidence
 design: false
@@ -71,9 +71,12 @@ manifest row, spec-paths key, and core.md citation land (AC-20260820-05-14 rides
 
 ```
 Usage: node fleet-reader.js [--repos-root <dir>] [--json]
-Exit codes: 0 = derived (0 repos found is still 0 — population carries the absence)
-            2 = usage error (unknown flag, missing flag value, --repos-root not a directory);
-                usage line on stderr
+Exit codes: 0 = derived (0 repos found is still 0 — population carries the absence; a repo
+                whose ledger or .claude dir cannot be READ is still exit 0, counted as
+                `unreadable` and named in both renders — a partial fleet answer that says what
+                it could not read, never a dead run)
+            2 = usage error (unknown flag, missing flag value, --repos-root not a directory or
+                not a readable one); usage line on stderr
 Flags: hand-rolled --flag value parsing only. No other flags in v1 (queries are fixed).
 ```
 
@@ -88,7 +91,8 @@ Discovery (D2): `readdirSync(reposRoot)`, one level. Include `<dir>` iff
 ```json
 {
   "population": { "reposRoot": "...", "scanned": 11, "repos": [
-      { "name": "hearwell", "rows": 77, "unparseable": 0,
+      { "name": "hearwell", "rows": 77, "unparseable": 0, "unreadable": 0,
+        "unreadablePaths": [],
         "oldest": "…", "newest": "…", "selfRepair": false } ] },
   "legRecency": { "fleet": [
       { "leg": "at-risk", "totalRuns": 47, "runsSinceRed": 24,
@@ -110,7 +114,7 @@ Discovery (D2): `readdirSync(reposRoot)`, one level. Include `<dir>` iff
       "contradicted": 2, "escapesUnjoined": 1 } ] },
   "driftCensus": { "byRepo": [ { "name": "prax", "inShape": 200,
       "drift": { "pre-v7-tier": 75, "preventedBy-out-of-enum": 1 },
-      "unparseable": 0 } ] }
+      "unparseable": 0, "unreadable": 0 } ] }
 }
 ```
 
@@ -131,6 +135,13 @@ increments a named reason bucket:
   `foundBy-out-of-enum`); `severity` ∈ `hard|soft` (else `severity-out-of-enum`)
 - unparseable lines (JSON.parse throws): counted per repo as `unparseable`, excluded from
   queries, always printed (D11)
+- unreadable FILES (the ledger read throws — EISDIR, EACCES) and an unreadable `.claude`
+  directory (its listing throws): counted per repo as `unreadable`, path recorded in
+  `unreadablePaths`, surfaced in population AND census, named in the human render with a
+  remedy. Never folded into `unparseable` — that counter's unit is lines read-and-rejected,
+  and an unreadable file's line count is unknowable. A repo whose `.claude` cannot be listed
+  is NEVER rendered `no ledger`: `.claude` provably exists at that point, so a listing failure
+  is an unknown, never an absence (D4's silent-absence rule). Added at review 2026-08-21.
 
 Query definitions (leg names come only from `legs[].leg` + `legs[].exit` — never `observed`):
 
@@ -165,7 +176,9 @@ Doctrine deltas (exact scope — nothing else in either file changes):
 
 Human render order: population block first (D4), then queries 1–6 in numbered order, each
 with a one-line takeaway heading. Repos with `rows: 0` render in the population block with
-an explicit `no ledger` marker. `recurrentUnguarded` renders each qualifying class with its
+an explicit `no ledger` marker — except where the absence is unproven: a repo whose ledger
+file or `.claude` listing could not be read renders `UNREADABLE: <path>` plus a remedy
+instead, never `no ledger` (review 2026-08-21). `recurrentUnguarded` renders each qualifying class with its
 count and latest ts; while all escape rows are `unclassed` the section renders
 `unclassed: 26 — class labels start accruing from escape.md's class field` (self-explaining
 emptiness, not silence). The reader never prints a claim of fleet completeness — the
@@ -304,6 +317,66 @@ are unclassed) — the render says so explicitly rather than implying a clean bi
 Fragile to watch during build: the census classifier's enum lists must match escape.md's
 enums byte-for-byte (including the new `class` nullability), and the human render must not
 drift into report-render.js's lane — the reader owns its render like spec-status.js does.
+
+Build deviations, folded at close (sidecar deleted 2026-08-21). Two were one-offs: escape.md's
+"up to four ride together" literal became "up to five" because D8 adds a fifth field to that same
+classification call (waived above); and the config-existence check had been written as string
+concatenation to dodge config-read.test.js's sweep — that one was NOT a one-off but a guard
+evasion, and review closed it properly by exporting `configPathFor` (see finding 6 above). The
+third deviation was recurring-shaped and went to the host rules' Gotchas: AC-20260820-05-10 and
+AC-20260820-05-11 are absence-invariants (assert something is NOT present / NOT changed), so both
+pass against an inert stub and neither can redden pre-implementation — the fourth and fifth
+instances of the vacuous-red-pin class, which trips the escalation the existing Gotchas entry
+declared. That escalation needs the § Incident Policy admission bar and a user decision, so it is
+recorded as DUE, not actioned here.
+
+Review dispositions (2026-08-21). Six findings, all FIXED in the review's repair pass; the
+user ruled the full scope. The four that changed behavior:
+
+1. **64KB fail-open on the machine surface (hard).** `process.stdout.write(...)` followed by
+   `process.exit(0)` truncated `--json` at exactly 65,536 bytes when stdout is a pipe and still
+   exited 0 — a green exit carrying corrupt JSON, on the exact invocation D7 had just enshrined
+   in doctrine (command substitution IS a pipe). Executed: a 20-repo fleet produced 65,536
+   bytes and `JSON.parse` "Unexpected end of JSON input"; the live fleet emits ~19KB, so it was
+   latent with ~3x headroom and grows with repos x leg names. This is the verbatim shape of the
+   repo's own recorded `[host]` gotcha from specs/20260816/01. Fixed with a `writeAll` loop over
+   `fs.writeSync(1, …)` and deletion of both `process.exit(0)` calls (the script keeps nothing
+   alive; falling off the end exits 0 after a clean flush).
+2. **Unreadable ledger crashed the whole fleet run (hard).** Unguarded `readFileSync`: a ledger
+   path that is a directory, or a chmod-000 file, threw uncaught, exited 1 (a code the header
+   never documented, which host § Review Checks makes hard by name) and printed nothing —
+   losing every healthy repo's numbers. Fixed per the `unreadable` counter above.
+3. **Unlistable `.claude` rendered a confident lie (hard, missed by the reviewer).** The
+   adjacent `readdirSync` catch swallowed EACCES into an empty file list, so a repo with a
+   3-row ledger rendered `rows=0 … no ledger` at exit 0. Executed and confirmed. This is
+   precisely D4's named biggest lie-risk, produced by a `silent-fallback`.
+4. **Percent rounding violated the Contracts rounding rule (soft, fixed).** `Math.round(share *
+   100)` printed 57% for an exact 57.5%. The first reviewer's root cause (the 4dp intermediate)
+   was wrong: `Math.round(23/40*100)` is ALSO 57, because `(23/40)*100 === 57.49999999999999` —
+   scaling a non-dyadic sub-1 ratio by 100 is the real cause. Only `Math.round(count * 100 /
+   total)` is correct (`23*100/40 === 57.5` exactly). A second, independent double-rounding bug
+   was found in passing (51/101 is truly 50.495% but rendered 51% via the 4dp value). `--json`'s
+   `selfRepairShare` was always correct and is unchanged; only the human render moved.
+
+And two that did not change behavior: **AC-20260820-05-17's oracle was bound to the wrong
+assert** — the AC names `## Incident Policy` (the section D7 rewrites) but the tag landed on the
+neighbouring `## Feedback Loop` assert, and no assert anywhere named Incident Policy, so the
+coverage matrix credited a label rather than a check (equivalent protection existed via the
+generic mapped-section pin, so nothing was truly unguarded); retagged with a real assert. And
+**the config-existence check was a disclosed guard evasion** — written as string concatenation
+purely so no line paired `path.join` with the literal `spec.config.json`, dodging
+config-read.test.js's AC-20260815-01-12 sweep, with a comment instructing future editors not to
+tidy it. Semantically harmless (existence-only, never a content read) but it documented a
+technique that also defeats the sweep for a genuine read, and it is the second shape-classifier
+evasion found in this repo in one week (the first: specs/20260820/04's name-shape allowlist).
+Closed properly rather than waived: `lib/host-config.js` already had `configPathFor` and merely
+never exported it; exporting it (additive, no caller affected) lets the check pass the sweep
+honestly. That export is a one-line out-of-plan touch to lib/host-config.js, waived here.
+
+The escape.md hunk changing "up to four ride together" to "up to five" is outside this spec's
+declared doctrine-delta scope ("nothing else in either file changes") and is **waived**: D8 adds
+a fifth field to that same single classification call, so leaving the literal would ship
+self-contradicting doctrine in the file D8 edits. Recorded in the deviations sidecar at build.
 
 Collision-closure waives (sweep run at lock, stems "third recurrence" / "same class"):
 the `likely` hit on tests/consistency/entrypoints.test.js is waived — that suite reads the

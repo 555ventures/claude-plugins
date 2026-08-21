@@ -284,3 +284,11 @@ upstream bug list. -->
   redden it artificially. (specs/20260819/01-review-evidence-retention.md AC-20260819-01-5,
   build 2026-08-19 — arg-parse fallback; third occurrence, a deterministic guard is the next
   escalation if a fourth lands.)
+  **The fourth and fifth landed** (specs/20260820/05-fleet-evidence-reader.md build 2026-08-20,
+  AC-20260820-05-10 "source holds zero `observed` tokens" and AC-20260820-05-11 "run leaves every
+  file byte-identical"), naming a second sub-shape: an **absence-invariant** — an AC asserting
+  that something is NOT present or NOT changed — passes against an inert stub by construction, so
+  it can never redden pre-implementation. The escalation this entry called for is therefore DUE
+  and un-actioned: it needs the core § Incident Policy admission bar (five ledger-derived fields)
+  before any guard is admitted, which is a user decision, not a close-time edit. Recorded at
+  review 2026-08-21 so the count is not lost.

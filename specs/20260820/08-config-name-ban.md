@@ -1,6 +1,6 @@
 ---
 date: 2026-08-20
-status: implementing
+status: done
 diff_base: 5628834de5418a29561b4d63c9d59ced88fc5fa6
 tier: standard
 area: gate-integrity
@@ -315,6 +315,17 @@ entry-point manifest against real call sites, and this spec adds no script, dele
 renames none; the one new call site (`fleet-reader.js` requiring `lib/host-config.js`) is a `lib/`
 require, and `lib/` is excluded from the manifest by that test's own pin at line 519 (A6). The
 remaining hits are `mentions` tier, which owe no waive line.
+
+**Review disposition (2026-08-21, runId `rv_ee8a27ff5a0c`, CLEAN).** The reviewer returned zero
+survivors. The only leg finding was scope-reconcile's `outOfPlan=12`, **waived** in full: none of
+the twelve paths appears in this spec's build commit `7687071`. Six are agent-memory writes (this
+build's workers plus specs/20260820/05's fix batch), four are unrelated design-flow roadmap and ADR
+work from an adjacent session, and two were browser-session scratch files. At close the scratch was
+deleted and `.playwright-mcp/` gitignored, and the design roadmap/ADR work was committed separately
+as `196bdaf` so this spec's close commit describes only its own contents. One follow-on repair rode
+the close: the gate-scripts agent memory still taught `configPathFor(root)` as the sanctioned
+existence-check route, an export D7 retires — rewritten to teach `configExists`/`configPath`/
+`CONFIG_RELPATH` and the ban itself, so the next worker is not steered to a dead import.
 
 ## Canonical Delta
 

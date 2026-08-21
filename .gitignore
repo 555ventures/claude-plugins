@@ -3,3 +3,4 @@ node_modules/
 .claude/settings.local.json
 specs/**/*.design/
 .claude/spec-preimage/
+.playwright-mcp/

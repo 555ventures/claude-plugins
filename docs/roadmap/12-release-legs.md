@@ -1,7 +1,7 @@
 # 12 — Release legs: the milestone gate's checklist becomes a driver script
 
 Phase: P2
-Depends on: none
+Depends on: 16
 
 ## Why this brief (stub — expand at plan time)
 

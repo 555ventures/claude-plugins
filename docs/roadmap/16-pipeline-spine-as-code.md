@@ -64,6 +64,18 @@ model holds explicit judgment points.
   (`grounding-contract.md`, `release.md`), so it re-grounds every host — a deliberate
   one-time cost the spec must state up front, paid once at a moment hosts are re-grounding
   anyway, never dribbled across releases.
+  **Fields record what the child process reported, never what the caller intended.** The
+  at-risk leg's death (2026-08-16 → 2026-08-20, ~10 reviews green having executed nothing)
+  is the proof: it emitted `files=13` — the count of paths it *handed* the runner — while
+  the runner printed "pass 0, fail 0", an observation the leg discarded. Re-encoding that
+  same intent number as `{"files":13}` would have preserved the false confidence exactly.
+  Typed rows carry the executed count alongside the intended one
+  (`{"files":13,"testsExecuted":0}`), and drivers refuse the denominator contradiction
+  (intended > 0 ∧ executed = 0 → red). This closes inertness at run time; it does NOT close
+  a matcher that legitimately finds nothing versus one that can no longer find anything —
+  that needs a build-time planted-violation fixture, which lives in the plugin's own suite
+  (`tests/consistency/red-fixture-coverage.test.js`, landed 2026-08-20 as an incident guard)
+  and is this brief's complement, not its scope.
 - **Sequencing.** After specs/20260820/03 and /04 land (03's pair test and 04's manifest
   stay useful mid-migration and their defects are bleeding now); planned before or with
   briefs 12/13, which would otherwise birth new emitter/parser string pairs this brief

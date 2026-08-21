@@ -8,7 +8,23 @@ Depends on: none
 Five product specs (not self-repair) through the v7.0 pipeline with a self-repair share
 below 20% of specs authored in the window. Until the gate is met, `/spec:plan` on this
 brief should be declined — the v7.0 bet must prove itself on the core loop before the
-design surface is rebuilt on top of it. (Progress: 1 of 5 — specs/20260817/06.)
+design surface is rebuilt on top of it.
+
+**Host passes count (JJ, 2026-08-20).** The gate asks whether the pipeline works, and a
+spec shipped in a real product repo is the strongest available answer; a self-repair spec
+in this repo is the weakest — the pipeline building fixes for itself, in the one codebase
+that resembles no product. Counting only this repo's ledger measures the wrong population.
+A qualifying pass is a spec taken to `done` by `/spec:review` in a host repo, evidenced by
+its own run ledger row.
+
+**Progress is currently underdetermined, and that is itself the finding.** This repo's
+ledger shows 1 of 5 (specs/20260817/06) at ~93% self-repair across 15 in-window specs. Host
+passes are invisible here — every ledger, escape row, and replay result lives in whichever
+repo produced it, and nothing reads across them. The 2026-08-20 at-risk escape (a review leg
+dead for ~10 reviews) was found while reviewing a HOST spec and reached this repo only
+because a session happened to patch it directly. Until a read-only cross-repo evidence
+reader exists, this gate cannot be evaluated from data — count host passes by hand at plan
+time, and treat the counting friction as evidence for building the reader.
 
 ## Why this brief
 

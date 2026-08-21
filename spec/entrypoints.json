@@ -47,6 +47,9 @@
   "spec/scripts/fidelity-check.js": {
     "entryPoints": ["spec/doctrine/design.md", "spec/scripts/spec-design-driver.js"]
   },
+  "spec/scripts/fleet-reader.js": {
+    "entryPoints": ["spec/doctrine/core.md"]
+  },
   "spec/scripts/genesis-state-gate.sh": {
     "entryPoints": ["spec/hooks/hooks.json"]
   },

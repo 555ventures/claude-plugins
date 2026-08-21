@@ -38,6 +38,7 @@ case "${1:-root}" in
   ci-query)       echo "$ROOT/scripts/ci-query.js" ;;
   ci-gate-parity) echo "$ROOT/scripts/ci-gate-parity.js" ;;
   replay)         echo "$ROOT/scripts/replay.js" ;;
+  fleet-reader)   echo "$ROOT/scripts/fleet-reader.js" ;;
   shared)         echo "$ROOT/doctrine/core.md" ;;
   shared-design)  echo "$ROOT/doctrine/design.md" ;;
   shared-genesis) echo "$ROOT/doctrine/genesis.md" ;;
@@ -93,7 +94,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-design|wf-enforce|wf-panel|wf-research|dc-extract|design-atlas|design-driver|skeletons-check|fidelity-check|components-check|merge-back|smoke|manifest-check|env-preflight|citations-check|review-legs|report-render|spec-status|scope-reconcile|verdict|ac-matrix|promise-sweep|collision-closure|ci-query|ci-gate-parity|replay|shared|shared-design|shared-for <command>|shared-genesis|replay-corpus|template|templates|feedback-template|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-design|wf-enforce|wf-panel|wf-research|dc-extract|design-atlas|design-driver|skeletons-check|fidelity-check|components-check|merge-back|smoke|manifest-check|env-preflight|citations-check|review-legs|report-render|spec-status|scope-reconcile|verdict|ac-matrix|promise-sweep|collision-closure|ci-query|ci-gate-parity|replay|fleet-reader|shared|shared-design|shared-for <command>|shared-genesis|replay-corpus|template|templates|feedback-template|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

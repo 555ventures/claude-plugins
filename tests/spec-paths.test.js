@@ -61,7 +61,11 @@ test('shared-for: every mapped section name still exists as a core.md or design.
 // next-line content in shared.md. This awk-based section extraction already passes comment
 // lines through unchanged (it filters on `## ` headings only, never on line content), so this
 // coverage stays green across the marker landing — the regression pin the AC calls for.
-test('shared-for: scoped output carries its sections and is smaller than the full doc', () => {
+// AC-20260820-05-17 (regression pin, specs/20260820/05-fleet-evidence-reader.md): this test's
+// existing `run('shared-for', 'escape')` / Feedback Loop assert below is the oracle for D1's
+// entrypoints-adjacent claim that escape.md keeps serving `## Feedback Loop` unchanged by the
+// fleet-evidence-reader spec — tagged here rather than duplicated, per that spec's File Plan.
+test('shared-for: scoped output carries its sections and is smaller than the full doc (incl. AC-20260820-05-17: escape keeps serving Feedback Loop)', () => {
   const full = run('shared-for', 'no-such-command')
   for (const cmd of ['plan', 'design', 'build', 'review', 'release', 'enforce', 'atlas', 'sketch', 'escape', 'doctor', 'replay']) {
     const out = run('shared-for', cmd)
@@ -90,7 +94,7 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
   assert.match(run('shared-for', 'release'), /## Release Stage/)
   assert.match(run('shared-for', 'release'), /## Runtime Verification/)
   assert.match(run('shared-for', 'escape'), /## Feedback Loop/,
-    'escape IS the Emit leg — it writes preventedBy rows and Gotchas tags')
+    'escape IS the Emit leg — it writes preventedBy rows and Gotchas tags (AC-20260820-05-17: must continue to serve this section unchanged)')
   assert.ok(!/## Design (Canon|Authoring Contracts|Binding Pipeline)/.test(run('shared-for', 'doctor')),
     'doctor must not pay for design doctrine — check 8 only verifies design files exist')
   assert.match(run('shared-for', 'doctor'), /## Grounding Drift/)

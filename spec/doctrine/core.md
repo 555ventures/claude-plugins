@@ -140,9 +140,10 @@ a single bad run.
 An incident (a pipeline defect, an escape, a wrong assumption that cost a session) is fixed
 **in the same session it is understood**: the fix plus a behavioral test that executes the
 fixed path. No ledger row beyond the run ledger, no doctrine paragraph, no standing failing
-test, no intake queue. Only a **third recurrence of the same class** earns a standing guard,
-and that guard is deterministic — a script with an exit code wired where the class occurs —
-never prose. Doctrine text is for contracts and invariants, not for incident memories.
+test, no intake queue. Only a **third recurrence of the same class** — counted across every
+readable repo ledger on this machine — earns a standing guard, and that guard is
+deterministic — a script with an exit code wired where the class occurs — never prose.
+Doctrine text is for contracts and invariants, not for incident memories.
 
 A guard so earned must also pass the **admission bar** — five separately answered tests,
 derived from ledger evidence wherever a ledger can answer them, asserted only where it cannot:
@@ -159,7 +160,8 @@ derived from ledger evidence wherever a ledger can answer them, asserted only wh
 
 A proposal that cannot fill all five fields is a rejection, and the rejection's reopen
 condition must itself be ledger-answerable. Derived numbers come from the fleet evidence
-reader where it exists; a bar filled from one repo's ledger says so.
+reader where it exists, run as `node "$(spec-paths fleet-reader)" --json`; a bar filled from
+one repo's ledger says so.
 
 ## Decomposition
 

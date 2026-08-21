@@ -66,7 +66,7 @@ defective file — that is the only unrecoverable input.
    evidence in hand (the session's diagnosis and fix work, the defective file, the given
    description, the correlated review row), then confirm in a single `AskUserQuestion`
    call. **"One call" is the budget, not "one question"** — the call carries one question
-   per field (up to four ride together): each field's derived value is the FIRST option,
+   per field (up to five ride together): each field's derived value is the FIRST option,
    marked "(Recommended)", with its one-line derivation reasoning in the option
    description and the other enum values as alternates. The user's time goes into
    correcting a visible wrong derivation, never into a field-by-field interview across
@@ -79,6 +79,10 @@ defective file — that is the only unrecoverable input.
      A calling command's prescription is derivation evidence and outranks this table —
      `/spec:release` prescribes `foundBy: later-spec`, `preventedBy: runtime-leg` for
      defects its staging walkthrough catches (a staging walk is not production).
+   - `class` — a stable kebab-case defect-class id derived from the evidence (same naming
+     style as replay-corpus.md's classes, e.g. `silent-fallback`), naming what kind of
+     defect this is rather than this incident's specifics. Value is null when underivable —
+     unknown is null, never a guess.
    - `preventedBy` — the **prevention delta**: what change would have caught this defect
      before it escaped? `doctrine` (a Gotchas/rules line) | `enforcer` (a mechanical check —
      `/spec:enforce` territory) | `review-check` (a § Review Checks severity row) |
@@ -109,7 +113,7 @@ defective file — that is the only unrecoverable input.
 5. **Append exactly ONE line** to `.claude/spec-runs.jsonl` (repo root; `printf '%s\n' '<json>' >>`):
 
    ```
-   {"ts":"<ISO-8601>","stage":"escape","spec":"<repo-relative spec path>","file":"<repo-relative defect file>","reviewRunId":"<wf_…>"|null,"foundBy":"<user|later-spec|production>","severity":"<hard|soft>","killedMatch":true|false|null,"preventedBy":"<doctrine|enforcer|review-check|runtime-leg|none>","via":"commit|manual"}
+   {"ts":"<ISO-8601>","stage":"escape","spec":"<repo-relative spec path>","file":"<repo-relative defect file>","reviewRunId":"<wf_…>"|null,"foundBy":"<user|later-spec|production>","severity":"<hard|soft>","killedMatch":true|false|null,"class":"<kebab-case defect-class id>"|null,"preventedBy":"<doctrine|enforcer|review-check|runtime-leg|none>","via":"commit|manual"}
    ```
 
    Fixed shape — paths/enums/booleans only, **never prose or finding text** (the defect

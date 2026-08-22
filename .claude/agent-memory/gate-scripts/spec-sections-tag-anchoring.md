@@ -1,6 +1,6 @@
 ---
 name: spec-sections-tag-anchoring
-description: parseAcBullets' oracle/env/pre-green tags are position-anchored (declaration slot or trailing only) AND multi-tag-aware within each position; real specs/ corpus only ever uses one tag per bullet, declaration slot
+description: parseAcBullets' oracle/env/pre-green tags are position-anchored (declaration slot backticked-or-bare, trailing BARE-only) and multi-tag-aware; red-check.js's SHALL CONTINUE TO pin check normalizes (strip code spans, collapse whitespace) before matching
 metadata:
   type: project
 ---
@@ -44,3 +44,30 @@ encoded a THIRD position that was never real-corpus-observed and is no longer sa
 not adjacent to either the declaration colon or the true end of the bullet). They were retagged
 into the declaration slot on 2026-08-22 at this spec's review close, assertions byte-identical,
 and five new pins now cover both anchoring and multi-tag runs — nothing is left outstanding here.
+
+**Third hardening, same day, escape rv_640c582f4902 (unanchored-marker-match, logged against
+this same spec):** the trailing position originally accepted backticked-or-bare like the
+declaration slot. Fixed to require the trailing tag be **BARE** (`BARE_TAG_ITEM_SRC`, no
+surrounding backticks) — `` … SHALL y `[oracle: gate]` `` is a worked example (self-tagging,
+laundered coverage/skip) and now parses `null` there, while the declaration slot is untouched
+(still backticked-or-bare — all 8 real corpus tags sit there) and `spec.md`'s own bare trailing
+example (AC-20260821-99-1) keeps parsing. Verified against the full `specs/` corpus: zero
+membership changes to any real `oracle`/`env`/`preGreen` field (the 8 genuine tags are unaffected
+since none were trailing+backticked).
+
+**Sibling defect, same escape, in `spec/scripts/red-check.js` not this file:** `isSanctioned`'s
+`SHALL CONTINUE TO` pin check was an unanchored literal match over the bullet's whole `raw` text —
+the exact same disease this file was hardened against twice already, just for the pin marker
+instead of `[oracle:]`/`[env:]`/`[pre-green:]`. Fails open both directions: a bullet that only
+*quotes* the phrase in backticks self-sanctions with no real pin (specs/20260821/01-red-check.md
+AC-20260821-01-4), and a genuine pin hard-wrapped across a continuation line
+(`…AND SHALL\n  CONTINUE TO require…`, specs/20260810/02-terminal-observable-acs.md
+AC-20260810-02-4) misses the literal match — the pipeline rules' recorded hard-wrap-blindness
+hazard, recurring on a different marker. Fixed with `normalizeForPinCheck(raw)`: strip inline
+code spans (`` `[^`]*` `` → space) BEFORE collapsing all whitespace runs (including newlines) to
+one space, then test `/SHALL CONTINUE TO/` on that. A full corpus walk confirmed 22 previously
+hard-wrap-hidden genuine pins across `specs/` now correctly sanction (all manually spot-checked as
+real `SHALL\n  CONTINUE TO` pins, none spurious from backtick-stripping), and only
+AC-20260821-01-4 flips the other way (quote → correctly unsanctioned). If you touch
+`isSanctioned` again, keep the strip-then-collapse order — collapsing whitespace first would
+leave a backticked quote's contiguous phrase intact and still match.

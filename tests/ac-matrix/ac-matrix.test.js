@@ -570,6 +570,63 @@ test('AC-20260821-01-2: a RUN of two sibling tags quoted together mid-sentence �
     `same guard, the other tag of the mid-sentence pair — got ${JSON.stringify(b)}`)
 })
 
+// 2026-08-22 escape (unanchored-marker-match, specs/20260821/01-red-check.md review passed
+// CLEAN with this present): extractTag's TRAILING position accepted a tag item whether or not it
+// was backtick-wrapped — identical to the declaration slot's grammar — so a bullet ending in a
+// BACKTICKED tag illustration (documentation-by-example, e.g. `... name the gate, e.g.
+// \`[oracle: gate]\``) self-tagged exactly like the mid-prose case the anchoring fix above
+// already closed. A phantom [oracle:] then makes ac-matrix.js treat a zero-hit AC as
+// covered-by-declaration whenever the named leg happens to be green in the manifest — laundered
+// coverage, fail-open. Fixed: the trailing position now requires a BARE (un-backticked) tag; the
+// declaration slot still accepts either, per the two tests below that pin it stays that way.
+test('AC-20260821-01-2: a bullet ending in a BACKTICKED trailing tag illustration — e.g. `... name the gate, e.g. `[oracle: gate]`` — parses that tag null, and driven through ac-matrix.js the zero-hit AC is NOT treated as covered by declaration even when the manifest\'s gate leg is green', () => {
+  const section = '- **AC-20260822-71-1**: WHEN a skip is reported THE SYSTEM SHALL name the gate, e.g. `[oracle: gate]`\n'
+  const bullets = parseAcBullets(section)
+  assert.strictEqual(bullets.length, 1, `fixture must parse to exactly one AC bullet — got ${bullets.length}`)
+  assert.strictEqual(bullets[0].oracle, null,
+    `a backticked tag illustration ending the bullet is a worked example, not a declaration — a parser that ` +
+    `accepts a backtick-wrapped item in the trailing position identically to the declaration slot self-tags ` +
+    `on this exact shape — got ${JSON.stringify(bullets[0])}`)
+
+  const dir = tmpdir('acm-rc2-trailing-backtick')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/illustrate.test.js'), '// unrelated, no AC-ID literal\n')
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260822-71-1**: WHEN a skip is reported THE SYSTEM SHALL name the gate, e.g. `[oracle: gate]`'],
+    ['| tests/illustrate.test.js | CREATE | tests | zero AC-ID hits, bullet ends in a backticked oracle illustration |']))
+  const manifest = writeManifest(dir, [{ leg: 'gate', exit: 0, observed: 'skips=0 todos=0' }])
+  const res = run(spec, dir, manifest, ['--json'])
+  const out = findings(res)
+  assert.strictEqual(res.status, 1,
+    `AC-20260822-71-1 has zero literal test hits and no genuine [oracle:] declaration — it must be a hard ` +
+    `uncovered-ac finding, exit 1, not silently laundered green by the gate leg's manifest status (stderr: ${res.stderr})`)
+  assert.ok(out.findings.some(f => f.class === 'uncovered-ac' && f.ac === 'AC-20260822-71-1'),
+    `the illustration must not sanction coverage — the finding must be uncovered-ac naming AC-20260822-71-1 — got ${JSON.stringify(out.findings)}`)
+  assert.strictEqual(out.observed.acMatrix.oracle, 0,
+    `the typed row's oracle field must NOT count this AC — a backticked illustration counting toward oracle ` +
+    `coverage is exactly the fail-open this pin closes — got ${JSON.stringify(out.observed.acMatrix)}`)
+})
+
+test('AC-20260821-01-2: a bullet ending in a BARE trailing tag — the position specs/20260821/01-red-check.md\'s own AC-20260821-01-1 mandates — still parses it, unaffected by the backtick-only trailing restriction', () => {
+  const section = '- **AC-20260822-72-1**: WHEN x THE SYSTEM SHALL y [oracle: gate]\n'
+  const bullets = parseAcBullets(section)
+  assert.strictEqual(bullets.length, 1, `fixture must parse to exactly one AC bullet — got ${bullets.length}`)
+  assert.strictEqual(bullets[0].oracle, 'gate',
+    `a BARE (un-backticked) trailing tag is a genuine declaration and must keep parsing after the backtick-only ` +
+    `trailing restriction lands — got ${JSON.stringify(bullets[0])}`)
+})
+
+test('AC-20260821-01-2: the declaration slot still accepts BOTH a backticked and a bare tag — the trailing-only backtick restriction must not narrow the declaration slot too', () => {
+  const backticked = parseAcBullets('- **AC-20260822-73-1** `[oracle: gate]`: WHEN x THE SYSTEM SHALL y\n')
+  assert.strictEqual(backticked[0].oracle, 'gate',
+    `a BACKTICKED declaration-slot tag must keep parsing — the trailing-only fix must not also restrict the ` +
+    `declaration slot to bare tags — got ${JSON.stringify(backticked[0])}`)
+  const bare = parseAcBullets('- **AC-20260822-74-1** [env: FOO]: WHEN x THE SYSTEM SHALL y\n')
+  assert.strictEqual(bare[0].env, 'FOO',
+    `a BARE declaration-slot tag must also keep parsing — got ${JSON.stringify(bare[0])}`)
+})
+
 test('AC-20260821-01-10: a spec carrying exactly 2 valid [pre-green:] tags (different enum members) appends the ac-matrix manifest row with preGreen:2, and --json mirrors it', () => {
   const dir = tmpdir('acm-rc10')
   fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })

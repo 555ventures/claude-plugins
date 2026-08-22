@@ -112,6 +112,85 @@ test('AC-20260821-01-4: a fixture spec whose SHALL-CONTINUE-TO file passes AND w
     `no file diverges from its expected colour, so findings must be empty — got ${JSON.stringify(out.findings)}`)
 })
 
+// 2026-08-22 escape (unanchored-marker-match, specs/20260821/01-red-check.md review passed
+// CLEAN with this present): isSanctioned() tested `/SHALL CONTINUE TO/` unanchored over the
+// bullet's raw text, so an AC that merely QUOTES the marker inside backticks while discussing
+// it — exactly how this spec's own AC-20260821-01-4 bullet reads ("a `SHALL CONTINUE TO`
+// pin-carrier file passing AND an unsanctioned file failing") — was wrongly sanctioned: a
+// vacuous test passing against the pre-image raised nothing, the false CLEAN this script exists
+// to prevent. Fixed: isSanctioned now strips inline code spans before matching, so a quoted
+// mention is not a declaration.
+test('AC-20260821-01-4: an AC bullet that only quotes `SHALL CONTINUE TO` in backticks mid-sentence, discussing it rather than declaring it — matching how this spec\'s own AC-20260821-01-4 bullet reads — is not sanctioned, so its vacuously-green pre-image test is an unsanctioned-green finding, exit 1', () => {
+  const { dir, base } = newHost('rc4-quoted')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/quoted.test.js'),
+    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260821-95-1: vacuously true, no implementation required', () => { assert.ok(true) })\n")
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260821-95-1**: WHEN every resolved tests-layer file matches its expectation ' +
+      '(a `SHALL CONTINUE TO` pin-carrier file passing AND an unsanctioned file failing) ' +
+      'THE SYSTEM SHALL exit 0 → tests/quoted.test.js'],
+    ['| tests/quoted.test.js | CREATE | tests | quotes SHALL CONTINUE TO in backticks mid-sentence — must NOT be sanctioned |']))
+  const res = run(spec, dir, base, ['--json'])
+  assert.strictEqual(res.status, 1,
+    `a bullet that only QUOTES the marker in backticks — never declares it — must not be sanctioned, so its ` +
+    `green pre-image test must be an unsanctioned-green finding, exit 1 — an exit 0 here is exactly the false ` +
+    `CLEAN this script exists to prevent (stderr: ${res.stderr})`)
+  const out = findings(res)
+  assert.ok(out.findings.some(f => f.class === 'unsanctioned-green' && f.path === 'tests/quoted.test.js' &&
+    Array.isArray(f.acs) && f.acs.includes('AC-20260821-95-1')),
+    `the finding must be classed unsanctioned-green, name tests/quoted.test.js, and carry AC-20260821-95-1 — got ${JSON.stringify(out.findings)}`)
+})
+
+// Sibling pin, same escape: a GENUINE marker hard-wrapped mid-phrase across two lines — matching
+// how the real specs/20260810/02-terminal-observable-acs.md AC-20260810-02-4 bullet wraps
+// ("AND SHALL" / "CONTINUE TO require the existing...") — was MISSED by the pre-fix literal
+// regex, since a single space never matches a newline. Fixed: isSanctioned now collapses
+// whitespace runs (including newlines) before matching, so the wrapped genuine pin still counts.
+test('AC-20260821-01-4: a genuine SHALL CONTINUE TO marker hard-wrapped across two lines — matching how the real AC-20260810-02-4 bullet wraps ("AND SHALL" / "CONTINUE TO require") — is still sanctioned, so its green pre-image test matches its expectation with no finding', () => {
+  const { dir, base } = newHost('rc4-wrapped')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/wrapped.test.js'),
+    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260810-96-1: genuine regression pin, hard-wrapped in its AC bullet', () => { assert.ok(true) })\n")
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260810-96-1**: WHEN x THE SYSTEM SHALL y, AND SHALL\n' +
+      '  CONTINUE TO require the existing pin check in the same step → tests/wrapped.test.js'],
+    ['| tests/wrapped.test.js | CREATE | tests | genuine SHALL CONTINUE TO pin hard-wrapped across two lines — must be sanctioned, expected+observed green |']))
+  const res = run(spec, dir, base, ['--json'])
+  const out = findings(res)
+  assert.strictEqual(res.status, 0,
+    `a genuine marker split across two lines by hard-wrap must still be recognized as sanctioned — a nonzero ` +
+    `exit here means a routine markdown line-wrap breaks a legitimate regression pin: findings=${JSON.stringify(out.findings)}, stderr=${res.stderr}`)
+  assert.deepStrictEqual(out.findings, [],
+    `the wrapped file matches its sanctioned-green expectation, so findings must be empty — got ${JSON.stringify(out.findings)}`)
+})
+
+// Guard pin, same escape: the marker written normally on one line, unbackticked, must keep
+// working once the fix adds code-span stripping and whitespace collapsing — the ordinary case
+// must not regress. (Observed to pass both before and after the isSanctioned fix — the ordinary
+// case was never broken; this pin only guards against the fix itself introducing a regression.)
+test('AC-20260821-01-4: a SHALL CONTINUE TO marker written normally on one line, unbackticked, stays sanctioned after the quoting/wrap fix', () => {
+  const { dir, base } = newHost('rc4-normal')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/normal.test.js'),
+    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260821-97-1: ordinary sanctioned regression pin', () => { assert.ok(true) })\n")
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260821-97-1**: WHEN x THE SYSTEM SHALL CONTINUE TO y → tests/normal.test.js'],
+    ['| tests/normal.test.js | CREATE | tests | ordinary one-line marker, no backticks — must stay sanctioned |']))
+  const res = run(spec, dir, base, ['--json'])
+  const out = findings(res)
+  assert.strictEqual(res.status, 0,
+    `the ordinary one-line, unbackticked marker must remain sanctioned — a nonzero exit here means the ` +
+    `code-span-stripping/whitespace-collapsing fix broke the common case: findings=${JSON.stringify(out.findings)}, stderr=${res.stderr}`)
+  assert.deepStrictEqual(out.findings, [],
+    `the normal file matches its sanctioned-green expectation, so findings must be empty — got ${JSON.stringify(out.findings)}`)
+})
+
 test('AC-20260821-01-5: a file whose every carried AC is sanctioned (SHALL CONTINUE TO) but whose test fails is a broken-pin finding naming the file, exit 1', () => {
   const { dir, base } = newHost('rc5')
   fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })

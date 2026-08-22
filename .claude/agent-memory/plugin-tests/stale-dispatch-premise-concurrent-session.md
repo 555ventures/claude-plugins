@@ -34,3 +34,18 @@ spec assumption" discipline the worker contract states for spec-pipeline dispatc
 here to an ad hoc dispatch outside that pipeline. See also
 [[doctrine-regex-linewrap]] for the companion lesson of always executing a new pin once
 before reporting it, rather than trusting it by inspection.
+
+**2026-08-22 recurrence, uncommitted-worktree variant:** dispatched alongside a `gate-scripts`
+sibling worker fixing `spec/scripts/red-check.js` (`isSanctioned`) and
+`spec/scripts/lib/spec-sections.js` (`extractTag`) in the SAME working tree — no commit
+involved at all, just two agents editing different files concurrently. Read both functions
+pre-fix (confirmed unanchored `/SHALL CONTINUE TO/.test(b.raw)` and a backtick-optional
+`TAG_ITEM_SRC` used for the trailing position too — both bugs live), wrote six pins against
+that reading, then ran the suite: all passed immediately, because the sibling worker's edits
+had landed on disk between my `Read`/`grep` and my `node --test` run. Diffing the file again
+afterward showed the actual fix (`normalizeForPinCheck`, a new `BARE_TAG_ITEM_SRC`). Do not
+treat "I already confirmed the bug by reading the source" as proof a pin is red — a same-tree
+concurrent editor can land between the read and the test run, not just between conversation
+turns. Report the true state honestly (pins passing, fix already landed) rather than asserting
+they were proven red, and re-diff the source at report time if the claim "this is the fix"
+matters to the write-up.

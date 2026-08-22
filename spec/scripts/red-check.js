@@ -167,6 +167,24 @@ for (const { p, isDelete } of testsRowEntries) {
 // ---- D1: per-AC sanctioning — `SHALL CONTINUE TO` in the bullet's raw text, or a VALID
 // `[pre-green:]` reason (validated here against PRE_GREEN_REASONS; the parser itself does no
 // enum validation, D1) — plus the invalid-pre-green fail-closed classification -------------------
+//
+// Hardened 2026-08-22 (escape rv_640c582f4902, unanchored-marker-match — the same defect class
+// the review just fixed for [oracle:]/[env:]/[pre-green:], left in place for this sibling
+// marker): a literal `SHALL CONTINUE TO` search over the bullet's whole raw text fails OPEN in
+// both directions. A quoted mention inside a backticked code span (an AC discussing the marker,
+// not declaring one — specs/20260821/01-red-check.md AC-20260821-01-4) self-sanctions with no
+// real pin. Conversely a genuine pin hard-wrapped mid-phrase across a continuation line
+// (`…AND SHALL\n  CONTINUE TO require…` — specs/20260810/02-terminal-observable-acs.md
+// AC-20260810-02-4, the Gotchas' recorded hard-wrap-blindness hazard) can miss the literal regex
+// entirely and only "pass" by accident when the bullet ALSO happens to quote the phrase
+// elsewhere. `normalizeForPinCheck` fixes both at once: inline code spans are stripped first (a
+// quoted marker is never a declaration), then whitespace runs — including the newline a
+// hard-wrap introduces — collapse to a single space (a wrapped genuine pin still reads as one
+// phrase). The regex then runs on that normalized text, never on `b.raw` directly.
+
+function normalizeForPinCheck(raw) {
+  return raw.replace(/`[^`]*`/g, ' ').replace(/\s+/g, ' ').trim()
+}
 
 const preGreenValidity = new Map() // AC-ID -> 'valid' | 'invalid' (only set when tagged)
 for (const b of wellFormed) {
@@ -175,7 +193,7 @@ for (const b of wellFormed) {
 }
 
 function isSanctioned(b) {
-  if (/SHALL CONTINUE TO/.test(b.raw)) return true
+  if (/SHALL CONTINUE TO/.test(normalizeForPinCheck(b.raw))) return true
   return preGreenValidity.get(b.id) === 'valid'
 }
 

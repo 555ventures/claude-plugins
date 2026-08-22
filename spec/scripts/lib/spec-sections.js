@@ -51,6 +51,15 @@
 // once, then `extractTag` searches within that run for the one named tag. A tag anywhere outside
 // either run still parses `null`.
 //
+// Hardened a third time 2026-08-22 (escape rv_640c582f4902, unanchored-marker-match): the
+// trailing position still accepted a BACKTICKED tag, so a bullet illustrating the trailing-tag
+// grammar as a worked example (`` … SHALL y `[oracle: gate]` `` — every self-tagging illustration
+// observed in this repo's prose quotes tag grammar inside a code span) still self-tagged there.
+// The trailing position now requires the tag to be BARE (`BARE_TAG_ITEM_SRC`, no surrounding
+// backticks) — the declaration slot is unaffected and keeps accepting backticked-or-bare, since
+// all 8 genuinely-declared tags in `specs/` sit there, and `spec/templates/spec.md`'s own
+// trailing worked example (AC-20260821-99-1) is already bare.
+//
 // Exit codes: n/a (library, not an entrypoint).
 
 // AC-ID shape: full anchored match of `AC-\d{8}-\d{2}[a-z]?-\d+`.
@@ -66,21 +75,38 @@ const PRE_GREEN_REASONS = ['fallback-rejection', 'absence-invariant', 'predicate
 // tag-shaped items, never to extract a value, so it need not be tied to one tagName.
 const TAG_ITEM_SRC = '`?\\[[a-z][a-z-]*:\\s*[^\\]]+\\]`?'
 
+// The BARE variant — same shape, backticks forbidden. Trailing-position only (see trailingRun):
+// every self-tagging illustration observed in this repo's prose quotes the tag grammar inside a
+// code span (documentation-by-example), so a backticked tag at the trailing position is a quote,
+// never a declaration.
+const BARE_TAG_ITEM_SRC = '\\[[a-z][a-z-]*:\\s*[^\\]]+\\]'
+
 // The declaration-slot run — the segment between the bold AC token's closing `**` and the `:`
 // that opens the requirement text on the bullet's first line. May hold zero or more tag items
 // (`spec/templates/spec.md` 90-103 sanctions sibling tags, e.g. `[env:]` + `[pre-green:]`
 // together — only `[oracle:]` alongside a test mapping is forbidden), or null if the first line
-// doesn't have this shape at all.
+// doesn't have this shape at all. Backticked-or-bare: the declaration slot is never prose, so a
+// backticked tag there is still a real declaration (all 8 genuinely-declared tags in `specs/`
+// sit here today).
 function slotRun(firstLine) {
   const re = new RegExp('^- \\*\\*[^*]*\\*\\*\\s*((?:' + TAG_ITEM_SRC + '\\s*)*):')
   const m = firstLine.match(re)
   return m ? m[1] : null
 }
 
-// The trailing run — one or more tag items ending the bullet's full raw text (trailing
-// whitespace ignored), or null if the raw text doesn't end in a tag item at all.
+// The trailing run — one or more BARE tag items ending the bullet's full raw text (trailing
+// whitespace ignored), or null if the raw text doesn't end in a bare tag item at all.
+//
+// Hardened 2026-08-22 (escape rv_640c582f4902, unanchored-marker-match): the trailing position
+// used to accept a backticked tag too, so an AC that merely ILLUSTRATES the trailing-tag grammar
+// in its own prose (e.g. `` … SHALL y `[oracle: gate]` `` — a worked example, not a declaration)
+// self-tagged: ac-matrix.js would read the phantom tag as covered-by-declaration or a sanctioned
+// skip, laundering coverage/skips exactly like the original oracle/env/pre-green defect this
+// module was hardened against. Requiring the trailing tag to be BARE closes it without touching
+// the declaration slot (spec.md's own trailing example, AC-20260821-99-1, is bare and keeps
+// parsing) or any real corpus tag (all 8 sit in the declaration slot).
 function trailingRun(raw) {
-  const re = new RegExp('((?:' + TAG_ITEM_SRC + '\\s*)+)$')
+  const re = new RegExp('((?:' + BARE_TAG_ITEM_SRC + '\\s*)+)$')
   const m = raw.replace(/\s+$/, '').match(re)
   return m ? m[1] : null
 }

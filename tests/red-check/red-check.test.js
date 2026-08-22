@@ -384,3 +384,47 @@ test('AC-20260821-01-14: a tests-row file carrying zero AC-IDs is reported uncla
   assert.ok(!fs.existsSync(markerPath),
     `D3: a zero-AC file must never be executed at all — the probe writes its marker the instant node --test loads the file, and the marker's presence would prove it was run despite carrying no AC-ID: ${fs.existsSync(markerPath) ? fs.readFileSync(markerPath, 'utf8') : '(absent, as required)'}`)
 })
+
+// specs/20260821/03-cross-spec-skip-mapping.md D7 (2026-08-22 amendment): the carried-AC
+// classifier at line ~233 (`wellFormed.filter(b => content.includes(b.id))`) is the SAME
+// bare-substring class as ac-matrix.js's coverage grep (tests/ac-matrix-coverage-holes.test.js's
+// Hole 3) — a shorter red-expected AC-ID phantom-carries into a file that only ever cites a
+// LONGER AC-ID sharing its prefix, forcing a false red expectation onto a file that genuinely
+// carries only a sanctioned pin. The false `unsanctioned-green` this produces is exactly what
+// stopped specs/20260822/02's build on 2026-08-22 (this spec's own D7 provenance note). The fix
+// is the same exported `acIdOccurs(text, id)` full-token check, replacing the bare `.includes` at
+// this one call site.
+test('AC-20260821-03-12: a tests-layer file whose only ACTUAL citation is a longer AC-ID, sharing a shorter red-expected AC-ID\'s prefix, is classified by the full-token citation ALONE — carriedAcs names only the longer id, expected green, zero findings, exit 0 — red-first, since the pre-image bare-substring classifier phantom-carries the shorter red-expected id and reports a false unsanctioned-green, exit 1', () => {
+  const { dir, base } = newHost('rc12-prefix')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/x.test.js'),
+    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260101-01-12: sanctioned regression pin, passes against the pre-image', () => { assert.ok(true) })\n")
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260101-01-1**: WHEN x THE SYSTEM SHALL y → tests/x.test.js',
+      '- **AC-20260101-01-12**: WHEN x THE SYSTEM SHALL CONTINUE TO y → tests/x.test.js'],
+    ['| tests/x.test.js | CREATE | tests | cites only the LONGER id, AC-20260101-01-12 — AC-20260101-01-1 is red-expected and unsanctioned, and must NOT be phantom-carried into this file |']))
+  const res = run(spec, dir, base, ['--json'])
+  assert.strictEqual(res.status, 0,
+    `the file genuinely cites only AC-20260101-01-12 (SHALL CONTINUE TO, sanctioned-green) and ` +
+    `passes against the pre-image — classifying it by full-token citation alone must match its ` +
+    `expectation exactly and exit 0; a nonzero exit here means the shorter AC-20260101-01-1 ` +
+    `(red-expected, unsanctioned, cited nowhere in this file) was phantom-carried in via a ` +
+    `bare-substring match, forcing a false red expectation onto a file that never mentions it: ` +
+    `stderr=${res.stderr}`)
+  const out = findings(res)
+  assert.deepStrictEqual(out.findings, [],
+    `no finding may be raised for this file — a false unsanctioned-green here is exactly the ` +
+    `2026-08-22 defect that stopped specs/20260822/02's build: got ${JSON.stringify(out.findings)}`)
+  const row = out.files.find(f => f.path === 'tests/x.test.js')
+  assert.ok(row, `files[] must carry a row for tests/x.test.js — got ${JSON.stringify(out.files)}`)
+  assert.deepStrictEqual(row.carriedAcs, ['AC-20260101-01-12'],
+    `carriedAcs must list ONLY AC-20260101-01-12 — AC-20260101-01-1 appearing here would prove the ` +
+    `classifier is still matching it as a bare substring of the longer id's full token: got ${JSON.stringify(row.carriedAcs)}`)
+  assert.strictEqual(row.expected, 'green',
+    `full-token classification must see this file as carrying only a SANCTIONED AC and expect ` +
+    `green — got ${JSON.stringify(row)}`)
+  assert.strictEqual(row.observed, 'green',
+    `the file's own test genuinely passes against the pre-image — got ${JSON.stringify(row)}`)
+})

@@ -9,6 +9,19 @@ const { tmpdir, runNode } = require('./helpers')
 // coverage accounting, both surfaced by the self-hosted review of
 // specs/20260814/04-lock-signal-window.md (run wf_e9e438d1-c94, 2026-08-15).
 //
+// Hole 3 (specs/20260821/03-cross-spec-skip-mapping.md D7, 2026-08-22 amendment): the coverage
+// grep at step 6 (`readTestFile(f).includes(b.id)`) is a bare substring test, so a well-formed
+// AC whose ID is a PREFIX of another declared AC's ID (`AC-...-1` inside `AC-...-12`) is credited
+// covered by a test that only ever cites the LONGER id — a phantom hit that suppresses
+// `uncovered-ac` and silently launders a genuinely untested requirement into "covered". Executed
+// red repro at pre-image 090b45a (2026-08-22): a fixture identical except for AC ordinals 1 vs 12
+// reported uncovered 0 / exit 0; the sibling 1,2 fixture correctly reported uncovered 1 / exit 1.
+// The fix is `lib/spec-sections.js`'s exported `acIdOccurs(text, id)` — a full-token occurrence
+// check (preceding/following char absent or non-alphanumeric) — replacing the bare `.includes` at
+// this one call site. AC-20260821-03-11 pins the red-first defect; AC-20260821-03-13 pins the
+// boundary the fix must NOT break (a citation directly after a quote, inside backticks, or as a
+// file's final token all still count — anchoring rejects only alphanumeric neighbours).
+//
 // Hole 1 (malformed-ac fails OPEN on the denominator). parseBullets() matches
 // `^- \*\*(token)\*\*` and requires the token to satisfy AC_ID_RE; a bullet failing either
 // is dropped from `wellFormed`, hence from `acById` AND from the coverage loop. The script
@@ -155,4 +168,85 @@ test('AC-20260815-03-2 / JJ-20260815-02: a skipped test whose AC declares [env:]
     '(specs/20260808/01-enroll.md) so a reviewer can audit WHERE the gate was declared — a bare ' +
     '"sanctioned by [env: VAR]" line with no source is indistinguishable from a same-spec sanction. ' +
     'stdout=' + JSON.stringify(res.stdout))
+})
+
+test('AC-20260821-03-11: a well-formed AC whose ID is only a PREFIX of a longer declared AC-ID, cited in test files ONLY via that longer id, is uncovered-ac — a hard finding, exit 1 — red-first, since the pre-image bare-substring grep phantom-hits it as covered (uncovered=0, exit 0)', () => {
+  const root = tmpdir('acm-prefix-collision')
+  fs.mkdirSync(path.join(root, 'tests'), { recursive: true })
+  const specPath = path.join(root, 'spec.md')
+  fs.writeFileSync(specPath, specMd(
+    [
+      '- **AC-20260101-01-1**: WHEN X THE SYSTEM SHALL Y → tests/x.test.js',
+      '- **AC-20260101-01-12**: WHEN Z THE SYSTEM SHALL W → tests/x.test.js',
+    ],
+    ['| tests/x.test.js | CREATE | tests | cites only the LONGER id, AC-20260101-01-12 |']
+  ))
+  // Cites ONLY the longer id — never AC-20260101-01-1 as its own full token.
+  fs.writeFileSync(path.join(root, 'tests', 'x.test.js'),
+    "test('AC-20260101-01-12: the thing', () => {})\n")
+
+  const manifestPath = greenGateManifest(root)
+  const res = runNode('scripts/ac-matrix.js',
+    ['--spec', specPath, '--root', root, '--manifest', manifestPath])
+
+  assert.strictEqual(res.status, 1,
+    `a genuinely untested AC (AC-20260101-01-1, never cited as its own full token anywhere) must ` +
+    `fail the run at exit 1 via uncovered-ac — an exit 0 here means a test that only ever mentions ` +
+    `the LONGER id is laundering coverage for the SHORTER one, exactly the escape that stopped ` +
+    `specs/20260822/02's build the same day: got status=${res.status} stdout=${res.stdout}`)
+  assert.match(res.stdout, /AC-20260101-01-1: zero hits across File Plan tests rows/,
+    `the hard finding must name AC-20260101-01-1 by its own full token (not the AC-20260101-01-12 ` +
+    `line, which must NOT be reported uncovered) — got stdout=${res.stdout}`)
+  assert.doesNotMatch(res.stdout, /AC-20260101-01-12: zero hits/,
+    `AC-20260101-01-12 IS genuinely cited in tests/x.test.js and must never be reported uncovered — ` +
+    `got stdout=${res.stdout}`)
+
+  const row = acMatrixRow(manifestPath, 'ac-matrix')
+  assert.ok(row, 'ac-matrix.js must append its own manifest row')
+  assert.strictEqual(row.observed && row.observed.uncovered, 1,
+    `the durable manifest row must record uncovered:1 for this prefix-collision case — a bare ` +
+    `substring grep recording uncovered:0 here is the exact defect D7 fixes (pre-image 090b45a, ` +
+    `executed 2026-08-22): observed=${JSON.stringify(row.observed)}`)
+})
+
+test('AC-20260821-03-13: an AC-ID cited directly after a quote, inside backticks, or as a test file\'s final token all SHALL CONTINUE TO count as a covered hit — anchoring rejects only alphanumeric neighbours, never punctuation or file edges', () => {
+  const root = tmpdir('acm-boundary-positions')
+  fs.mkdirSync(path.join(root, 'tests'), { recursive: true })
+  const specPath = path.join(root, 'spec.md')
+  fs.writeFileSync(specPath, specMd(
+    [
+      '- **AC-20260102-01-1**: WHEN X THE SYSTEM SHALL Y → tests/quote.test.js',
+      '- **AC-20260102-01-2**: WHEN X THE SYSTEM SHALL Y → tests/backtick.test.js',
+      '- **AC-20260102-01-3**: WHEN X THE SYSTEM SHALL Y → tests/edge.test.js',
+    ],
+    [
+      '| tests/quote.test.js | CREATE | tests | cites the AC directly after a quote |',
+      '| tests/backtick.test.js | CREATE | tests | cites the AC inside backticks |',
+      '| tests/edge.test.js | CREATE | tests | cites the AC as the file\'s final token |',
+    ]
+  ))
+  fs.writeFileSync(path.join(root, 'tests', 'quote.test.js'),
+    "test('AC-20260102-01-1 covers the thing', () => {})\n")
+  fs.writeFileSync(path.join(root, 'tests', 'backtick.test.js'),
+    '// see `AC-20260102-01-2` for detail\n')
+  fs.writeFileSync(path.join(root, 'tests', 'edge.test.js'),
+    '// covers AC-20260102-01-3')
+
+  const manifestPath = greenGateManifest(root)
+  const res = runNode('scripts/ac-matrix.js',
+    ['--spec', specPath, '--root', root, '--manifest', manifestPath])
+
+  assert.strictEqual(res.status, 0,
+    `all three ordinary delimited citations (after a quote, inside backticks, at the file's final ` +
+    `token) must still count as hits — a nonzero exit here means the full-token anchoring fix ` +
+    `(D7) over-rejected a punctuation or file-edge neighbour it was never meant to touch: ` +
+    `stdout=${res.stdout}`)
+  assert.doesNotMatch(res.stdout, /uncovered-ac/,
+    `none of the three ACs may be reported uncovered-ac — got stdout=${res.stdout}`)
+
+  const row = acMatrixRow(manifestPath, 'ac-matrix')
+  assert.strictEqual(row.observed && row.observed.uncovered, 0,
+    `the manifest row must record uncovered:0 — a quote, a backtick, and a file's final token are ` +
+    `all non-alphanumeric (or absent) neighbours, so anchored full-token matching must still hit ` +
+    `all three: observed=${JSON.stringify(row.observed)}`)
 })

@@ -83,7 +83,11 @@ test('AC-20260815-04-3: smoke.sh accepts a declared stopExitCodes value as a cle
     `a reviewer can see what "clean" meant for this host; got stdout=${res.stdout}`)
 })
 
-test('AC-20260815-04-4: smoke.sh passes with the shutdown recorded when the process exits 0 on the stop signal', () => {
+// specs/20260821/03-cross-spec-skip-mapping.md AC-20260821-03-10 (2026-08-21, D4's covering
+// pin): this fixture's readyCheck (`test -f $dir/up`) is false until bootCommand itself creates
+// the marker, so D4's new pre-boot staleness probe never fires here — the pin stays green,
+// tagged in place per this spec's Decisions (never duplicated, never weakened).
+test('AC-20260815-04-4 (also AC-20260821-03-10, SHALL CONTINUE TO): smoke.sh passes with the shutdown recorded when the process exits 0 on the stop signal', () => {
   const dir = tmpdir('smoke-shutdown')
   writeConfig(dir, {
     bootCommand: `touch ${dir}/up && trap 'exit 0' TERM && while :; do sleep 1; done`,

@@ -52,12 +52,33 @@
 // with zero test hits still counts uncovered (AC-20260821-01-12). The plain-mode summary line
 // gains a `preGreen=N` segment (D6: "yours to extend sensibly" — not pinned byte-unchanged like
 // D8's uncovered/oracle/skipped/sanctioned segments).
+//
+// specs/20260821/03-cross-spec-skip-mapping.md D1/D2 (2026-08-21, UpWell defect 1): step 6's
+// skip reconciliation only mapped a skip line via an AC-ID embedded in the line itself (route 1)
+// or a content-match against the spec-under-review's own File Plan test files (route 2) - a
+// skip owned by an EARLIER spec, reported by a runner that qualifies its line with the file's own
+// path (<relpath>::<name>, e.g. pytest), fell to unmapped-skip unless that file happened to be
+// in THIS spec's File Plan (observed: the same env-gated tests were sanctioned=4 under their
+// owning spec, sanctioned=0 under every other). Route 3 (new): tried ONLY when routes 1/2 both
+// miss and the line contains "::" - resolve the prefix against --root, and if it stays strictly
+// inside root and the file exists, read its full-token AC-ID citations (dedup in file order,
+// via the existing readTestFile cache) as mappedIds, feeding the SAME acById/owning-spec logic
+// below untouched. Every edge (no "::", outside-root, missing file, zero citations) fails closed
+// to today's unmapped-skip, byte-identical detail - monotonic widening only (D2): a bare-name
+// line never enters route 3, and an already-mapped line never re-resolves through it.
+//
+// D7 (2026-08-22 amendment, same spec): the coverage grep at step 6 (readTestFile(f).includes
+// (b.id)) was a bare substring test - a well-formed AC whose ID is a PREFIX of another declared
+// AC's ID (AC-...-1 inside AC-...-12) read as covered by a test citing only the LONGER id,
+// silently laundering uncovered-ac. Fixed by replacing the bare .includes with
+// lib/spec-sections.js's exported acIdOccurs, a full-token occurrence check - the single
+// authority also used by red-check.js's carried-AC classifier.
 
 const fs = require('fs')
 const path = require('path')
 const { parseFilePlanRows } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
-const { AC_ID_RE, AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, extractSection, parseAcBullets } = require('./lib/spec-sections')
+const { AC_ID_RE, AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, extractSection, parseAcBullets, acIdOccurs } = require('./lib/spec-sections')
 
 function usage() {
   console.error('usage: ac-matrix.js --spec <path> --root <dir> --manifest <path> ' +
@@ -202,7 +223,7 @@ const acHits = new Map() // acId -> hit count
 for (const b of wellFormed) {
   let hits = 0
   for (const f of testFiles) {
-    if (readTestFile(f).includes(b.id)) {
+    if (acIdOccurs(readTestFile(f), b.id)) {
       hits++
       if (!fileAcMap.has(f)) fileAcMap.set(f, new Set())
       fileAcMap.get(f).add(b.id)
@@ -365,6 +386,15 @@ if (skipsFile) {
   skipLines = raw.split('\n').map(l => l.trim()).filter(Boolean)
 }
 
+// D1: route 3's fail-closed containment check — the resolved path must land strictly inside
+// --root, never merely start with the same string prefix (a sibling directory sharing a name
+// prefix with root must not pass).
+function resolveInsideRoot(rootDir, rel) {
+  const rootResolved = path.resolve(rootDir)
+  const resolved = path.resolve(rootDir, rel)
+  return resolved === rootResolved || resolved.startsWith(rootResolved + path.sep) ? resolved : null
+}
+
 let sanctioned = 0
 for (const line of skipLines) {
   const embedded = [...line.matchAll(AC_ID_RE_GLOBAL)].map(m => m[0])
@@ -372,6 +402,19 @@ for (const line of skipLines) {
   if (!mappedIds.length) {
     for (const [f, ids] of fileAcMap) {
       if (readTestFile(f).includes(line)) { mappedIds = [...ids]; break }
+    }
+  }
+  // D1/D2: route 3 — only after routes 1/2 both miss AND the line carries a runner-style file
+  // qualifier. Fails closed at every edge (no "::", outside --root, missing file, zero
+  // citations) straight through to the unmapped-skip fallthrough below, byte-identical detail.
+  if (!mappedIds.length && line.includes('::')) {
+    const rel = line.slice(0, line.indexOf('::'))
+    const resolved = resolveInsideRoot(root, rel)
+    if (resolved && fs.existsSync(resolved)) {
+      const relForCache = path.relative(root, resolved).split(path.sep).join('/')
+      const cited = [...readTestFile(relForCache).matchAll(AC_ID_RE_GLOBAL)].map(m => m[0])
+      const deduped = [...new Set(cited)]
+      if (deduped.length) mappedIds = deduped
     }
   }
   if (!mappedIds.length) {

@@ -929,7 +929,10 @@ const STEPS = {
 
   SKIPS: () => `## Step: extract skipped-test names\n` +
     `The gate leg reports skipped tests (manifest: ${manifestPath}). Extract the skip names per ` +
-    `the host's declared format, write them to a scratch file, then:\n` +
+    `the host's declared format, write them to a scratch file — keep the runner's own file ` +
+    `qualifier (\`<relpath>::<name>\`) on each line when the runner emits one (pytest's ` +
+    `path::name form is the worked example); use bare names only when the runner reports no ` +
+    `path — then:\n` +
     `  node ${__filename} ${specPath} --mark skips-extracted --file <path>`,
 
   REVIEWER: () => `## Step: dispatch the reviewer\n` +

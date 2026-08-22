@@ -1,6 +1,7 @@
 ---
 date: 2026-08-21
-status: hardened
+status: implementing
+diff_base: 4a06c5be1415890b4996f25c3798b77fc5ef862f
 open_markers: 0
 tier: standard           # no critical-trigger file gets a behavioral edit (ac-matrix.js, red-check.js, lib/spec-sections.js, smoke.sh, and the driver are not on the Risk Tiers list); worst failure is a wrong skip disposition, a false smoke red, or a wrong coverage verdict, all surfaced loudly at review
 area: review-integrity
@@ -50,6 +51,7 @@ prefix hit neither launders coverage nor stops a build.
 | D6 | `spec/.claude-plugin/plugin.json` bumps — target 7.18.0 (target, not a pin; build takes the next free number per the concurrent-semver gotcha — the original 7.15.0 target was already taken at HEAD by the time this spec was amended), description updated as the changelog surface [no-ac: process row — version discipline is review's own hard check, no test surface] | Host rules: every behavior change bumps the owning plugin's semver |
 | D7 | **Full-token AC-ID occurrence at both bare-substring call sites, via one exported helper.** `lib/spec-sections.js` exports `acIdOccurs(text, id)`: true iff `id` occurs at a position whose preceding char is absent or outside `[A-Za-z0-9]` AND whose following char is absent or outside `[0-9A-Za-z]` — the 20260817/05 discipline `promise-sweep.js` already applies inline to Decision-row citations; an `indexOf` scan, no per-call RegExp. `ac-matrix.js`'s coverage grep (`readTestFile(f).includes(b.id)`) and `red-check.js`'s carried-AC classifier (`content.includes(b.id)`) each become `acIdOccurs(…)`. Every `matchAll(AC_ID_RE_GLOBAL)` site (route 1, route 3, promise-sweep) is full-token by greedy `\d+` (A1) and stays untouched; route 2's line-content match compares the skip LINE, not an AC-ID, and stays byte-unchanged — it now reads a phantom-free `fileAcMap`, and a disposition that existed only through a prefix phantom changing IS this fix, not a D2 violation. promise-sweep's inline filter stays as-is: same discipline, different operation (enumeration with indexes), zero behavior delta in consolidating (AC-20260821-03-11, AC-20260821-03-12, AC-20260821-03-13) | ac-matrix fails OPEN (phantom hit suppresses `uncovered-ac` — an AC with no test anywhere reports covered) and red-check fails CLOSED (false `unsanctioned-green`, the 2026-08-22 build stop). Rejected: a per-ID `(?!\d)` lookahead — no leading boundary, admits letter-after, and a THIRD spelling of a discipline the repo already carries |
 | D8 | **Historical audit is separate, recorded work.** The four scan-flagged ACs whose only apparent coverage is a longer AC-ID (specs/20260808/01 AC-1, specs/20260813/03 AC-1, specs/20260815/01 AC-1, specs/20260816/01 AC-1) are re-checked AFTER this spec lands by running the fixed ac-matrix against each owning spec; every confirmed uncovered AC gets a `/spec:escape` row against the review run that passed it — the escape ledger is the durable record, never an intake note. All four target code since deleted or retired (autopilot, `claims-lint.js`, `suite-baseline.js`, advisory-append), so no live coverage hole is expected; the rows record the escape, not a repair [no-ac: operator process — the deliverable is escape-ledger rows, no test surface in this repo's tree] | The fix and the archaeology have different blast radii; escape rows are the repo's existing mechanism for "review passed what it shouldn't", so nothing rides on memory |
+| D9 | **Build-time disposition (2026-08-22, user-confirmed): the pre-image red-check's `unsanctioned-green` on `tests/smoke-shutdown-behavior.test.js` is D7's own defect self-firing; the build proceeds past it for THAT ONE FILE ONLY.** Executed evidence at base 4a06c5b: the file's full-token AC-ID set is `{AC-20260815-04-1..4, AC-20260821-03-10}` — `AC-20260821-03-1` occurs at no token boundary; AC-20260821-03-10's bullet says SHALL CONTINUE TO, so `isSanctioned` is true; the file runs 4/4 green; and its entire diff since 4a06c5b is a header comment plus a test-title tag, with zero assertion or fixture changes. Under D7's `acIdOccurs` the classifier yields `carriedAcs = ['AC-20260821-03-10']` → expected green, observed green, no finding. The per-file manifest confirms Phase 1's red evidence is real: the other five tests-layer files are all expected-red / observed-red. **This ruling disposes one finding on one file, never the finding class** — any later `unsanctioned-green` in this build (which prints an identical console line) gets a fresh diagnosis, and "red-check is buggy here" is never a standing waiver [no-ac: build-time disposition — the terminal observable already exists as AC-20260821-03-12, whose synthetic fixture is this incident's isomorph] | Proceeding on a general "the tool under repair is wrong" argument would launder a real red-first miss; proceeding on this file's executed counterfactual does not. Doctrine requires user confirmation on `unsanctioned-green` — given 2026-08-22 |
 
 ## File Plan
 
@@ -66,7 +68,7 @@ prefix hit neither launders coverage nor stops a build.
 | tests/smoke-shutdown-behavior.test.js | MODIFY | tests | AC-20260821-03-10: tag the existing green boot→ready→clean-stop pin (CONTINUE TO; tag, never duplicate) |
 | tests/ac-matrix-coverage-holes.test.js | MODIFY | tests | AC-20260821-03-11 (red-first), AC-20260821-03-13 (green boundary pin) — Hole 3 in this file's incident family; header extended |
 | tests/red-check/red-check.test.js | MODIFY | tests | AC-20260821-03-12 (red-first: a phantom prefix carry no longer forces red-expected on a green pin) |
-| spec/.claude-plugin/plugin.json | MODIFY | doctrine | D6: bump + changelog description (target 7.15.0) |
+| spec/.claude-plugin/plugin.json | MODIFY | doctrine | D6: bump + changelog description (target 7.18.0 — stale 7.15.0 cell corrected 2026-08-22 per D9; HEAD was 7.17.0 at build) |
 
 ## Contracts
 
@@ -234,9 +236,17 @@ review fixed a different unanchored-substring bug (tag-position anchoring in
 in-family: one class, one helper, and this spec already sits behind 20260821/01 in
 `depends_on`. promise-sweep is deliberately untouched (D7): consolidating its inline filter
 is a zero-behavior-delta cleanup, not this defect. This amendment takes the spec past its
-own ≥10-AC threshold — traced: every new or modified test file that phantom-carries the
-red-first `AC-…-1` under the PRE-image red-check is genuinely red pre-image for its own
-reasons, so build Phase 1 sees expected red / observed red and no false stop. Sequencing
+own ≥10-AC threshold. The plan-time trace claimed every new or modified test file that
+phantom-carries the red-first `AC-…-1` under the PRE-image red-check is genuinely red for
+its own reasons, so build Phase 1 would see expected red / observed red and no false stop.
+**That trace was wrong; corrected 2026-08-22 from build's own executed manifest:** it holds
+for `tests/ac-matrix-coverage-holes.test.js` and `tests/red-check/red-check.test.js` (both
+phantom-carry `AC-…-1`, both observed red), but it missed this spec's own instance of the
+very shape the sequencing note records next for specs/20260822/01 —
+`tests/smoke-shutdown-behavior.test.js` carries the CONTINUE-TO tag `AC-20260821-03-10`,
+which substring-contains `AC-…-1`, and is green. Phase 1 therefore stopped on a false
+`unsanctioned-green`; D9 records the executed counterfactual and the user-confirmed
+disposition. Sequencing
 consequence recorded for the roadmap: specs/20260822/01 (its `AC-…-10` pin file
 substring-contains `AC-…-1`) and specs/20260822/02 trip the pre-fix red-check by
 construction — this spec builds first, and both gain it in `depends_on`.

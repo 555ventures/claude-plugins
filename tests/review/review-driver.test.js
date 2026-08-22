@@ -394,6 +394,34 @@ test('AC-20260820-07-10: WHEN the gate row reports skips > 0 and no skips file i
   assert.ok(rows2.some(x => x.leg === 'gate'), 'the fresh manifest must still carry a gate row from the re-run: ' + JSON.stringify(rows2))
 })
 
+// specs/20260821/03-cross-spec-skip-mapping.md D3 (2026-08-21): ac-matrix.js's new route 3
+// (D1) maps a skipped test through the file its runner names — but only if the SKIPS step's
+// printed instruction actually tells the session to keep that qualifier. The pre-existing test
+// above pins the SKIPS step only as /skip/i (deliberately loose, per this spec's Rationale), so
+// this is a purely additive assertion, not a collision. Red-first: today's SKIPS step says only
+// "Extract the skip names ... write them to a scratch file" — it never mentions a file qualifier,
+// a bare-names fallback, or pytest's path::name form at all.
+test('AC-20260821-03-8: the SKIPS step\'s extraction instruction names the <relpath>::<name> qualifier form (pytest-style) and instructs bare names only when the runner reports no path — red-first, since today\'s step gives no qualifier guidance at all', () => {
+  const host = makeSkipsHost()
+  const r1 = run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'SKIPS',
+    'setup precondition: a gate row reporting skips > 0 with no skips file marked must land state SKIPS before this AC can be exercised: ' + r1.stdout + r1.stderr)
+  assert.match(r1.stdout, /<relpath>::<name>/,
+    'the SKIPS step must literally name the <relpath>::<name> qualifier form — route 3 ' +
+    '(specs/20260821/03-cross-spec-skip-mapping.md D1) consumes exactly this shape, and a prompt ' +
+    'that omits it starves the fix: a session extracting only bare test names produces the same ' +
+    'unmapped input the new mapping route cannot use: ' + r1.stdout)
+  assert.match(r1.stdout, /pytest/i,
+    'the instruction must name pytest\'s path::name form as the worked example of a runner that ' +
+    'emits a file qualifier: ' + r1.stdout)
+  assert.match(r1.stdout, /bare names?/i,
+    'the instruction must cover the bare-names case for a runner that emits no path at all: ' + r1.stdout)
+  assert.match(r1.stdout, /no path/i,
+    'the bare-names instruction must be conditioned on "the runner reports no path" — an ' +
+    'unconditional bare-names instruction would tell every session to strip qualifiers regardless ' +
+    'of what the runner actually emitted, starving route 3 for every runner that DOES emit one: ' + r1.stdout)
+})
+
 test('AC-20260820-07-11: WHEN --state is passed THE SYSTEM prints the bare state name only', () => {
   const host = makeHost()
   run(host.root, host.spec)

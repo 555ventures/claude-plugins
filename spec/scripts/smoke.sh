@@ -28,6 +28,21 @@
 #        __SMOKE_FAIL__ shutdown-hung:    still alive runtime.stopTimeout seconds after
 #                                          stopSignal (group is then SIGKILLed)
 #        __SMOKE_FAIL__ shutdown-unclean: exit status outside runtime.stopExitCodes
+#   7  environment already ready before boot was ever spawned (D4 below):
+#        __SMOKE_FAIL__ stale-ready: readyCheck passed before bootCommand was spawned — a
+#                                     process from a previous run is likely still answering;
+#                                     stop it (or clean the stale ready state), then re-run.
+#
+# specs/20260821/03-cross-spec-skip-mapping.md D4 (2026-08-21, UpWell defect 2): this script used
+# to trust whatever readyCheck answered on the FIRST poll after boot spawn — an orphaned server
+# left over from a crashed prior run (or any other environment whose ready predicate is already
+# true) made readiness look instantaneous, crediting THIS run's boot for a readiness it never
+# produced, then SIGTERMing its own still-building process (observed: shutdown-unclean, exit
+# 143). Fixed by probing readyCheck ONCE, immediately before bootCommand is ever spawned: a
+# predicate that is already true cannot distinguish this run's readiness from history, so it
+# fails closed as stale-ready without spawning boot at all — deliberately even for hosts whose
+# ready state legitimately persists across runs (a probe file never cleaned), since the honest
+# remedy in either case is for the operator to clean the stale state before re-running.
 set -u
 
 CONFIG=".claude/spec.config.json"
@@ -73,6 +88,13 @@ STOP_EXIT_CODES=$(jq -r '(.runtime.stopExitCodes // [0]) | join(" ")' "$CONFIG")
 if [ -z "$BOOT" ] || [ -z "$READY" ]; then
   echo "__SMOKE_FAIL__ no-runtime: runtime block is missing bootCommand or readyCheck"
   exit 3
+fi
+
+# D4: pre-boot staleness probe — one readyCheck run before bootCommand is ever spawned. See the
+# header note above for why this fails closed instead of trusting the first post-boot poll.
+if bash -c "$READY" >/dev/null 2>&1; then
+  echo "__SMOKE_FAIL__ stale-ready: readyCheck already passed before bootCommand was spawned — a process from a previous run is likely still answering. Stop it (or clean the stale ready state), then re-run."
+  exit 7
 fi
 
 LOG=$(mktemp "${TMPDIR:-/tmp}/spec-smoke.XXXXXX")

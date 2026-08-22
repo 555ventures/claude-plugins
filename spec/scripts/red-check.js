@@ -32,6 +32,15 @@
 //                 script failure · 2 = usage error, unreadable --spec, no ## Acceptance Criteria
 //                 section, host config declares no testCommand, or a pre-image purity refusal
 //                 (a non-tests File Plan path already differs from --base — tracked or untracked)
+//
+// specs/20260821/03-cross-spec-skip-mapping.md D7 (2026-08-22 amendment): the carried-AC
+// classifier below (content.includes(b.id)) was a bare substring test — a tests-layer file
+// citing only a longer AC-ID that shares a shorter red-expected AC's prefix (AC-...-12 sharing
+// AC-...-1's prefix) phantom-carried the shorter id in too, forcing a false red expectation onto
+// a file that never mentions it (observed: a false unsanctioned-green, the live hit that stopped
+// specs/20260822/02's build 2026-08-22). Fixed by replacing the bare .includes with
+// lib/spec-sections.js's exported acIdOccurs, a full-token occurrence check — the same authority
+// ac-matrix.js's coverage grep now uses.
 
 const fs = require('fs')
 const path = require('path')
@@ -39,7 +48,7 @@ const { execFileSync, spawnSync } = require('child_process')
 const { parseFilePlanRows } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
 const { readConfig } = require('./lib/host-config')
-const { extractSection, parseAcBullets, PRE_GREEN_REASONS } = require('./lib/spec-sections')
+const { extractSection, parseAcBullets, PRE_GREEN_REASONS, acIdOccurs } = require('./lib/spec-sections')
 
 function usage() {
   console.error('usage: red-check.js --spec <path> --root <dir> --base <sha-or-ref> ' +
@@ -230,7 +239,7 @@ for (const relPath of [...testFiles].sort()) {
   }
 
   const content = fs.readFileSync(fullPath, 'utf8')
-  const carriedAcs = wellFormed.filter(b => content.includes(b.id)).map(b => b.id)
+  const carriedAcs = wellFormed.filter(b => acIdOccurs(content, b.id)).map(b => b.id)
 
   // D3: zero carried AC-IDs → unclassified, a warning, and NEVER executed.
   if (carriedAcs.length === 0) {

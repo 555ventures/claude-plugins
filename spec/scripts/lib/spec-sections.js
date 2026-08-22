@@ -60,11 +60,41 @@
 // all 8 genuinely-declared tags in `specs/` sit there, and `spec/templates/spec.md`'s own
 // trailing worked example (AC-20260821-99-1) is already bare.
 //
-// Exit codes: n/a (library, not an entrypoint).
+// specs/20260821/03-cross-spec-skip-mapping.md D7 (2026-08-22 amendment): exports
+// `acIdOccurs(text, id)`, a full-token occurrence check — `id` counts as occurring only at a
+// position whose preceding char is absent or outside `[A-Za-z0-9]` AND whose following char is
+// absent or outside `[0-9A-Za-z]`. Two call sites (ac-matrix.js's coverage grep, red-check.js's
+// carried-AC classifier) used a bare `String.includes(id)`, so a well-formed AC whose ID is a
+// PREFIX of another declared AC's ID (`AC-…-1` inside `AC-…-12`) was credited a phantom hit —
+// ac-matrix failed OPEN (a genuinely untested AC read "covered") and red-check failed CLOSED (a
+// sanctioned-green pin read as a false `unsanctioned-green`, the live hit that stopped
+// specs/20260822/02's build 2026-08-22). This is an `indexOf` scan, not a per-call RegExp — the
+// same discipline `promise-sweep.js` already applies inline to Decision-row citations, now given
+// one exported authority instead of a third from-scratch spelling.
 
 // AC-ID shape: full anchored match of `AC-\d{8}-\d{2}[a-z]?-\d+`.
 const AC_ID_RE = /^AC-\d{8}-\d{2}[a-z]?-\d+$/
 const AC_ID_RE_GLOBAL = /AC-\d{8}-\d{2}[a-z]?-\d+/g
+
+function isAlnumChar(ch) {
+  return (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')
+}
+
+// Pure, no I/O, sibling to AC_ID_RE. True iff `id` occurs in `text` at a full-token position —
+// see the D7 header note above for the exact boundary rule and its provenance.
+function acIdOccurs(text, id) {
+  let from = 0
+  for (;;) {
+    const i = text.indexOf(id, from)
+    if (i === -1) return false
+    const before = i > 0 ? text[i - 1] : null
+    const after = i + id.length < text.length ? text[i + id.length] : null
+    if ((before === null || !isAlnumChar(before)) && (after === null || !isAlnumChar(after))) {
+      return true
+    }
+    from = i + 1
+  }
+}
 
 // The closed enum of `[pre-green: <reason>]` sub-shapes (D1) — the single authority every
 // consumer validates a tagged bullet's raw reason against.
@@ -179,4 +209,4 @@ function parseAcBullets(sectionText) {
   })
 }
 
-module.exports = { AC_ID_RE, AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, extractSection, parseAcBullets }
+module.exports = { AC_ID_RE, AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, extractSection, parseAcBullets, acIdOccurs }

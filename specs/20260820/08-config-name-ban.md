@@ -327,6 +327,38 @@ the close: the gate-scripts agent memory still taught `configPathFor(root)` as t
 existence-check route, an export D7 retires — rewritten to teach `configExists`/`configPath`/
 `CONFIG_RELPATH` and the ban itself, so the next worker is not steered to a dead import.
 
+**Deviations folded 2026-08-21** (sidecar deleted; the two recurring-shaped items went to the
+host rules' Gotchas — the collision-closure retires-vs-inherits gap as a new entry, and the
+vacuous-red-pin count as an update to the existing one):
+
+- AC-20260820-08-9's own worked example named an unreachable branch. The message it quotes sits
+  behind `readConfig(root)` throwing, and `readConfig` never throws — it swallows every
+  read/parse failure to `{}`. The test executes the reachable remedy instead (absent config
+  degrades to `{}`, `gateCommand` then reports missing, which is one of the same seven D9 remedy
+  strings and does render the path). Not blocked: the AC's normative text is satisfied by the
+  reachable arm; only its illustration was dead.
+- A1's migration table was stale on `fleet-reader.js`. It listed eight sites in five files; the
+  `fleet-reader.js` entry had already been migrated by the 2026-08-20 review of specs/20260820/05.
+  Executed at Phase 0, the predicate reported seven offenders in four files. Per A1's own
+  escalation clause the actual set was migrated and D8's substance applied in full.
+- D15 — AC-20260820-08-14 had no carrier. It cites "the existing version-bump consistency test";
+  executed at Phase 0, no test read `plugin.json`'s `version`, so the AC would have been reported
+  uncovered at review. Closed with `tests/consistency/plugin-version.test.js`, pinning the durable
+  invariant (semver shape, numerically greater than 7.11.0, exactly three changelog versions,
+  leading version equals the declared one) rather than the literal `7.12.0`.
+- Red-check note: most of this spec's ACs are green-by-construction. The guard IS the test —
+  `offendingLine` and `scanConfigReadOffenders` live inside `tests/host-config/config-read.test.js`,
+  so AC-1/-2/-3/-4/-7/-10/-11/-13/-15/-16 pass the moment the test author writes them. The observed
+  file-level red came from the production pin (seven live migration sites), AC-5/-6 (missing
+  exports), and AC-9's `fidelity-check.js` leg: six failing assertions across four files, each
+  attributable to the contract. Recorded because "13 of 14 green at red-check" reads as a weak TDD
+  phase and is not — it is the shape of a spec whose deliverable is a predicate living in a test.
+- The Contracts block's NUL-byte claim is stale. It states `fidelity-check.js` carries a stray NUL
+  byte that makes `grep` classify it as binary; executed at Phase 4, the file contains zero NUL
+  bytes at `diff_base` and after the migration. Nothing changes — the pure `fs` walk is right on
+  D4's independent grounds — but the Rationale's "standing landmine for every future grep-shaped
+  tool" describes a condition not in the tree.
+
 ## Canonical Delta
 
 `docs/canonical/gate-integrity.md` — extend the "Every executable declares who calls it" bullet's

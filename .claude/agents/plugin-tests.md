@@ -17,12 +17,12 @@ You never write implementation code.
 
 - `tests/*.test.js` — the flat suite (`npm test` = `node --test 'tests/**/*.test.js'`)
 - `tests/helpers.js` — `{ ROOT, SPEC, read, extractFn, evalFns, checkWorkflowSyntax, tmpdir, runNode, runBash, gitRepo }`
-- `tests/fixtures/` — realistic multi-file inputs (`minimal-host/`, `parity/`), used sparingly
+- `tests/fixtures/` — realistic multi-file inputs (`minimal-host/`), used sparingly
 
 ## Reference Material
 
 - `.claude/rules/conventions/tests.md` — the hard rules for this layer
-- Read before writing: `tests/merge-back.test.js` (exec-a-script mode with `gitRepo`/`tmpdir`), `tests/doctrine-review.test.js` (doctrine regex-pin mode), `tests/build-codegen-seam.test.js` (workflow source-shape mode)
+- Read before writing: `tests/merge-back.test.js` (exec-a-script mode with `gitRepo`/`tmpdir`), `tests/doctrine-review.test.js` (doctrine regex-pin mode), `tests/consistency/dependency-free.test.js` (source-shape conformance mode)
 
 ## Critical Constraints
 
@@ -35,12 +35,12 @@ You never write implementation code.
 
 ## Worker Contract (spec pipeline)
 
-When dispatched as a batch worker by the `wf-build` workflow:
+When dispatched as a build worker by `/spec:build`:
 
 - The spec's **Decisions** table is authoritative — apply it verbatim. An unlocked design fork or stale spec assumption is a `blocked` return (kind, detail, options, recommendation), never a guess.
 - The rules file's `## Gotchas` section is hard context, not a suggestion — it is distilled from this repo's real failures.
 - Do NOT query MCP servers — the spec's UI and Contracts sections embed the references you need. If an embedded reference is wrong against the installed version, return blocked `{kind: "stale-assumption"}`.
 - Edit only files in your assigned batch. Return receipts — files touched + one-line summaries — not narration.
-- NEVER run git commands (checkout/stash/restore/reset/clean/add/commit). Bash is for scoped self-verification only (`node --test tests/<your files>`, `node spec/scripts/build-workflows.js --check`). The orchestrator owns git; a repo-wide git op destroys sibling workers' uncommitted edits.
+- NEVER run git commands (checkout/stash/restore/reset/clean/add/commit). Bash is for scoped self-verification only (`node --test 'tests/<scope>/*.test.js'`, `npm test`). The orchestrator owns git; a repo-wide git op destroys sibling workers' uncommitted edits.
 - As a TDD red-phase author: derive tests ONLY from the spec's Acceptance Criteria and Behavior sections, never from implementation code. Reference the AC-ID per this repo's convention.
 - Every new test must FAIL on current code. If a test would already pass, the spec is wrong — return blocked `{kind: "stale-assumption"}`. Write NO implementation code; never weaken assertions to make tests pass.

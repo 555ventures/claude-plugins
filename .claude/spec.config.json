@@ -1,16 +1,16 @@
 {
-  "generatedBy": "spec@7.0.0",
-  "contractHash": "dca383facd28",
+  "generatedBy": "spec@7.15.0",
+  "contractHash": "7f3aa1a834ed",
   "gateCommand": "node --test {testDirs}",
   "testCommand": "node --test",
   "setupCommand": "npm install",
   "runtime": {
-    "inert": "marketplace of CLI plugins and dependency-free scripts \u2014 no bootable app; the autopilot daemon is parked (JJ 2026-08-18, confirmed 2026-08-20)"
+    "inert": "marketplace of CLI plugins and dependency-free scripts — no bootable app; the autopilot daemon is parked (JJ 2026-08-18, confirmed 2026-08-20)"
   },
   "capabilities": {
     "forge": "github",
-    "skipReportPattern": "\u2139 skipped (\\d+)",
-    "testCountPattern": "\u2139 tests (\\d+)",
+    "skipReportPattern": "ℹ skipped (\\d+)",
+    "testCountPattern": "ℹ tests (\\d+)",
     "ciPoll": {
       "intervalSeconds": 30,
       "timeoutSeconds": 600

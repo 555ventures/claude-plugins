@@ -292,6 +292,10 @@ upstream bug list. -->
   and un-actioned: it needs the core § Incident Policy admission bar (five ledger-derived fields)
   before any guard is admitted, which is a user decision, not a close-time edit. Recorded at
   review 2026-08-21 so the count is not lost.
+  **A sixth landed** (specs/20260820/08-config-name-ban.md build 2026-08-20, AC-20260820-08-9): a
+  pin asserting a literal the pre-image already hardcodes passes before and after the change,
+  because only the string's *construction* migrates, never its value. The genuine red lived in a
+  sibling production pin over the source. Folded 2026-08-21.
 - `[plugin]` **`orchestrator-compensation-during-live-worker`** (class stands at 1; grep this slug
   to count recurrences). The harness fired completion notifications for two `/spec:build` workers
   while they were still executing; the orchestrator read those as returns-with-no-work and began
@@ -307,3 +311,13 @@ upstream bug list. -->
   unfillable at count 1 (core § Incident Policy). (specs/20260821/02-replay-review-phase.md build
   2026-08-21 — two agent memories written from a half-applied orchestrator patch, one deleted as
   false-and-harmful, one corrected in place.)
+- `[plugin]` The lock-time **collision-closure literals leg sweeps the literals a spec INHERITS,
+  not the ones it RETIRES** — so the exact class the retired-literal entry above exists to catch
+  walks straight past it. A spec retiring an export name has that name asserted somewhere outside
+  its File Plan (a test pinning the old symbol), and the leg never looks for it because the name is
+  not in the spec's inherited literal set. Until the leg sweeps retired names too, read every
+  Decision that removes or renames a public symbol and grep that symbol across `tests/` by hand at
+  lock. (specs/20260820/08-config-name-ban.md D14, build 2026-08-20 —
+  `tests/fleet-reader/review-fixes.test.js` pinned `configPathFor` at both the source and export
+  boundary while D7/D8 retired it; the leg had swept `d10-predicate-v1`, `DISPLAY_JOIN_EXEMPT`, and
+  `display-join` instead. Updated in place and retagged to AC-20260820-08-8, never weakened.)

@@ -15,7 +15,7 @@ filesystem operations with a designed exit-code alphabet. You never edit workflo
 
 ## Your Expertise
 
-- `spec/scripts/*.js` — derivers and checkers (`spec-status.js`, `parity-check.js`, `fidelity-check.js`)
+- `spec/scripts/*.js` — derivers and checkers (`spec-status.js`, `scope-reconcile.js`, `fidelity-check.js`)
 - `spec/scripts/*.sh` — mechanics, gates, and hooks (`merge-back.sh`, `smoke.sh`, `manifest-check.sh`, `spec-state-gate.sh`)
 - `spec/bin/spec-paths` — the key→path resolver every command uses
 - `scripts/` — host-side sweeps (`scripts/spec-patterns.sh`)
@@ -38,10 +38,10 @@ filesystem operations with a designed exit-code alphabet. You never edit workflo
 
 ## Worker Contract (spec pipeline)
 
-When dispatched as a batch worker by the `wf-build` workflow:
+When dispatched as a build worker by `/spec:build`:
 
 - The spec's **Decisions** table is authoritative — apply it verbatim. An unlocked design fork or stale spec assumption is a `blocked` return (kind, detail, options, recommendation), never a guess.
 - The rules file's `## Gotchas` section is hard context, not a suggestion — it is distilled from this repo's real failures.
 - Do NOT query MCP servers — the spec's UI and Contracts sections embed the references you need. If an embedded reference is wrong against the installed version, return blocked `{kind: "stale-assumption"}`.
 - Edit only files in your assigned batch. Return receipts — files touched + one-line summaries — not narration.
-- NEVER run git commands (checkout/stash/restore/reset/clean/add/commit). Bash is for scoped self-verification only (`node --test tests/<your files>`, `node spec/scripts/build-workflows.js --check`). The orchestrator owns git; a repo-wide git op destroys sibling workers' uncommitted edits.
+- NEVER run git commands (checkout/stash/restore/reset/clean/add/commit). Bash is for scoped self-verification only (`node --test 'tests/<scope>/*.test.js'`, `npm test`). The orchestrator owns git; a repo-wide git op destroys sibling workers' uncommitted edits.

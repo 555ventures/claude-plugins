@@ -27,6 +27,30 @@
 // red-check.js needs it to check for a `SHALL CONTINUE TO` sanctioned-pin phrase, and no existing
 // consumer's shape assertion depended on the object's key set being closed.
 //
+// Hardened 2026-08-22 (specs/20260821/01-red-check.md review finding, reviewer-1.json): the
+// `[oracle:]`/`[env:]`/`[pre-green:]` extractions used to be unanchored substring searches over
+// the bullet's whole raw text, so an AC bullet that merely ILLUSTRATES the tag syntax in its own
+// prose (documentation-by-example, the pattern spec.md/plan.md themselves encourage) self-tagged
+// — this spec's own AC-20260821-01-1 and AC-20260821-01-2 misparsed as carrying real tags. A tag
+// is now recognised in exactly two positions: (1) the DECLARATION SLOT — directly between the
+// bold AC token's closing `**` and the `:` that opens the requirement text, optionally wrapped in
+// backticks (`spec/templates/spec.md` line 129-130; where all real tags in `specs/` sit today),
+// or (2) TRAILING — the tag is the last non-whitespace content of the bullet's raw text, optionally
+// backticked. A tag appearing mid-prose anywhere else (inside a parenthetical, inside a code span
+// mid-sentence, describing the grammar by example) parses as `null`.
+//
+// Hardened again 2026-08-22 (same-day regression): the position-anchored regexes above each
+// matched at most ONE tag occupying the slot, so a bullet declaring two SIBLING tags in the same
+// position (`spec/templates/spec.md` lines 90-103 sanction `[env:]` and `[pre-green:]` together —
+// only `[oracle:]` alongside a test mapping is forbidden) silently dropped both:
+// `` `[env: FOO]` `[oracle: gate]`: `` parsed as `{env: null, oracle: null}`. A dropped `[env:]`
+// turns a properly-declared skip into a fabricated hard finding — the exact false-finding class
+// this spec exists to eliminate. Both positions now match a RUN of one or more tag items (each
+// optionally backticked, whitespace-separated) instead of a single tag: `slotRun`/`trailingRun`
+// find the declaration-slot segment (between `**` and the requirement colon) or the trailing run
+// once, then `extractTag` searches within that run for the one named tag. A tag anywhere outside
+// either run still parses `null`.
+//
 // Exit codes: n/a (library, not an entrypoint).
 
 // AC-ID shape: full anchored match of `AC-\d{8}-\d{2}[a-z]?-\d+`.
@@ -36,6 +60,50 @@ const AC_ID_RE_GLOBAL = /AC-\d{8}-\d{2}[a-z]?-\d+/g
 // The closed enum of `[pre-green: <reason>]` sub-shapes (D1) — the single authority every
 // consumer validates a tagged bullet's raw reason against.
 const PRE_GREEN_REASONS = ['fallback-rejection', 'absence-invariant', 'predicate-in-test']
+
+// One `[tagname: value]` item, optionally backtick-wrapped. `[a-z][a-z-]*` covers the three
+// known tag names (oracle, env, pre-green) generically — this is only used to consume a run of
+// tag-shaped items, never to extract a value, so it need not be tied to one tagName.
+const TAG_ITEM_SRC = '`?\\[[a-z][a-z-]*:\\s*[^\\]]+\\]`?'
+
+// The declaration-slot run — the segment between the bold AC token's closing `**` and the `:`
+// that opens the requirement text on the bullet's first line. May hold zero or more tag items
+// (`spec/templates/spec.md` 90-103 sanctions sibling tags, e.g. `[env:]` + `[pre-green:]`
+// together — only `[oracle:]` alongside a test mapping is forbidden), or null if the first line
+// doesn't have this shape at all.
+function slotRun(firstLine) {
+  const re = new RegExp('^- \\*\\*[^*]*\\*\\*\\s*((?:' + TAG_ITEM_SRC + '\\s*)*):')
+  const m = firstLine.match(re)
+  return m ? m[1] : null
+}
+
+// The trailing run — one or more tag items ending the bullet's full raw text (trailing
+// whitespace ignored), or null if the raw text doesn't end in a tag item at all.
+function trailingRun(raw) {
+  const re = new RegExp('((?:' + TAG_ITEM_SRC + '\\s*)+)$')
+  const m = raw.replace(/\s+$/, '').match(re)
+  return m ? m[1] : null
+}
+
+// Extracts one named `[tagName: value]` tag's value, searching the declaration-slot run first
+// and falling through to the trailing run — a slot present but lacking this particular tag must
+// still fall through (siblings occupy the same run; this tag may simply be the OTHER position).
+// Anything outside either run (mid-prose, inside a parenthetical, a code span mid-sentence) is
+// not a declaration and returns null — see the hardening notes above the module header.
+function extractTag(tagName, firstLine, raw) {
+  const tagRe = new RegExp('`?\\[' + tagName + ':\\s*([^\\]]+)\\]`?')
+  const slot = slotRun(firstLine)
+  if (slot !== null) {
+    const m = slot.match(tagRe)
+    if (m) return m[1].trim()
+  }
+  const trail = trailingRun(raw)
+  if (trail !== null) {
+    const m = trail.match(tagRe)
+    if (m) return m[1].trim()
+  }
+  return null
+}
 
 function extractSection(text, heading) {
   const lines = text.split('\n')
@@ -73,17 +141,14 @@ function parseAcBullets(sectionText) {
     const tokenMatch = linesArr[0].match(/^- \*\*([^*]*)\*\*/)
     const token = tokenMatch ? tokenMatch[1] : ''
     const malformed = !AC_ID_RE.test(token)
-    const oracleMatch = raw.match(/\[oracle:\s*([^\]]+)\]/)
-    const envMatch = raw.match(/\[env:\s*([^\]]+)\]/)
-    const preGreenMatch = raw.match(/\[pre-green:\s*([^\]]+)\]/)
     return {
       id: malformed ? null : token,
       token,
       malformed,
       raw,
-      oracle: oracleMatch ? oracleMatch[1].trim() : null,
-      env: envMatch ? envMatch[1].trim() : null,
-      preGreen: preGreenMatch ? preGreenMatch[1].trim() : null,
+      oracle: extractTag('oracle', linesArr[0], raw),
+      env: extractTag('env', linesArr[0], raw),
+      preGreen: extractTag('pre-green', linesArr[0], raw),
     }
   })
 }

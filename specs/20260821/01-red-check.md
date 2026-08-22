@@ -1,6 +1,6 @@
 ---
 date: 2026-08-21
-status: implementing
+status: done
 diff_base: 0496a4fe968b796d7448104ec84015e426b2f6f4
 open_markers: 0
 tier: standard           # additive spec-paths key follows 20260819/02 + 20260820/05 precedent; no critical-trigger file gets a behavioral edit; worst failure is a false exit 1 pausing a build
@@ -216,6 +216,25 @@ pre-implementation but unknowable at plan time (design runs after plan) — that
 following ac-matrix's `--skips` precedent (orchestrator-extracted inputs passed
 explicitly), never a tag.
 
+
+**Build deviation (folded at close, 2026-08-22):** D11 named 7.13.0 as the plugin.json
+version-bump target, but a Decision's literal version is a target, not a pin — HEAD's installed
+version at build time was already 7.16.0, so the build bumped to 7.17.0 (next free) keeping the
+last-3-versions changelog form. This is the established remedy for the semver-race class already
+recorded in `.claude/rules/spec-pipeline.md` Gotchas (`[host]`, citing specs/20260810/02 D11); a
+one-off instance of a known class, so no new Gotchas line was added.
+
+**Review close (2026-08-22):** two hard findings, both fixed, none waived. (1) `parseAcBullets`
+extracted the three AC-grammar tags with unanchored substring matches over a bullet's whole raw
+text, so AC-1 and AC-2 of this spec — whose requirement text illustrates the `[pre-green:]`
+grammar by example — self-tagged and fired a fabricated `invalid-pre-green` against this spec's
+own review. Fixed by anchoring extraction to the two real declaration positions. (2) That fix
+matched only one tag per position, silently dropping both when sibling tags shared a slot —
+a regression against the pre-fix behavior, and a live trap for the `[env:]`+`[pre-green:]`
+combination `spec/templates/spec.md` sanctions. Fixed by matching a run of tag items per
+position. Six `tests/ac-matrix/ac-matrix.test.js` fixtures encoded the retired mid-sentence
+position and were retagged into the declaration slot with their assertions byte-identical; five
+new pins cover both anchoring and multi-tag runs.
 ## Canonical Delta
 
 docs/canonical/build-integrity.md: add — build Phase 1's red-check is mechanized by

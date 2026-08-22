@@ -5,6 +5,11 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, runBash, ROOT, SPEC } = require('../helpers')
 
+// AC-20260821-01-2 (multi-tag regression, 2026-08-22) additionally pins lib/spec-sections.js's
+// parseAcBullets directly for exact per-tag VALUES — a plain require()able library, unlike a
+// workflow script (mirrors tests/red-check/red-check.test.js's existing idiom).
+const { parseAcBullets } = require('../../spec/scripts/lib/spec-sections')
+
 // specs/20260814/01-ac-matrix-script.md: review.md Phase 0 steps 5-6 (AC-line lint, AC<->test
 // coverage matrix, [oracle:]/[env:] handling, skipped-test reconciliation) are today hand-
 // executed prose that drifts per session/model. This suite pins the sole-derivation replacement,
@@ -136,7 +141,7 @@ test('AC-20260814-01-3a / continues AC-20260815-03-7: an [oracle:] AC whose decl
   fs.writeFileSync(path.join(dir, 'tests/oracle.test.js'), '// unrelated\n')
   const spec = path.join(dir, 'spec.md')
   fs.writeFileSync(spec, specMd(
-    ['- **AC-20260814-01-3**: WHEN X THE SYSTEM SHALL Y [oracle: gate] → tests/oracle.test.js'],
+    ['- **AC-20260814-01-3** `[oracle: gate]`: WHEN X THE SYSTEM SHALL Y → tests/oracle.test.js'],
     ['| tests/oracle.test.js | CREATE | tests | covers AC |']))
   const manifest = writeManifest(dir, [{ leg: 'gate', exit: 0, observed: 'skips=0 todos=0' }])
   const res = run(spec, dir, manifest, ['--json'])
@@ -160,7 +165,7 @@ test('AC-20260814-01-3b: an [oracle:] AC whose declared leg is red or absent fro
   fs.writeFileSync(path.join(dir, 'tests/oracle.test.js'), '// unrelated\n')
   const spec = path.join(dir, 'spec.md')
   fs.writeFileSync(spec, specMd(
-    ['- **AC-20260814-01-3**: WHEN X THE SYSTEM SHALL Y [oracle: gate] → tests/oracle.test.js'],
+    ['- **AC-20260814-01-3** `[oracle: gate]`: WHEN X THE SYSTEM SHALL Y → tests/oracle.test.js'],
     ['| tests/oracle.test.js | CREATE | tests | covers AC |']))
   // No manifest row for `gate` at all — the declared oracle leg never ran.
   const manifest = writeManifest(dir, [])
@@ -178,7 +183,7 @@ test('AC-20260814-01-4a / continues AC-20260815-03-8: a skipped test whose AC li
   fs.writeFileSync(path.join(dir, 'tests/env.test.js'), '// covers AC-20260814-01-4\n')
   const spec = path.join(dir, 'spec.md')
   fs.writeFileSync(spec, specMd(
-    ['- **AC-20260814-01-4**: WHEN X THE SYSTEM SHALL Y [env: TEST_DB] → tests/env.test.js'],
+    ['- **AC-20260814-01-4** `[env: TEST_DB]`: WHEN X THE SYSTEM SHALL Y → tests/env.test.js'],
     ['| tests/env.test.js | CREATE | tests | covers AC |']))
   const manifest = writeManifest(dir, [])
   const skips = path.join(dir, 'skips.txt')
@@ -243,8 +248,8 @@ test('AC-20260814-01-6: the script appends exactly two JSONL manifest rows, and 
     '// covers AC-20260814-06-1 AC-20260814-06-2 AC-20260814-06-3\n')
   const spec = path.join(dir, 'spec.md')
   fs.writeFileSync(spec, specMd(
-    ['- **AC-20260814-06-1**: WHEN X THE SYSTEM SHALL Y [env: DB_ONE] → tests/six.test.js',
-      '- **AC-20260814-06-2**: WHEN X THE SYSTEM SHALL Y [env: DB_TWO] → tests/six.test.js',
+    ['- **AC-20260814-06-1** `[env: DB_ONE]`: WHEN X THE SYSTEM SHALL Y → tests/six.test.js',
+      '- **AC-20260814-06-2** `[env: DB_TWO]`: WHEN X THE SYSTEM SHALL Y → tests/six.test.js',
       '- **AC-20260814-06-3**: WHEN X THE SYSTEM SHALL Y → tests/six.test.js'],
     ['| tests/six.test.js | CREATE | tests | covers ACs |']))
   const manifest = writeManifest(dir, [{ leg: 'gate', exit: 0, observed: { skips: 3, todos: 0, testsExecuted: 6 } }])
@@ -446,7 +451,7 @@ test('AC-20260821-01-2: an AC bullet carrying [pre-green: because-i-said-so] —
   fs.writeFileSync(path.join(dir, 'tests/foo.test.js'), '// covers AC-20260821-85-1\n')
   const spec = path.join(dir, 'spec.md')
   fs.writeFileSync(spec, specMd(
-    ['- **AC-20260821-85-1**: WHEN X THE SYSTEM SHALL Y [pre-green: because-i-said-so] → tests/foo.test.js'],
+    ['- **AC-20260821-85-1** `[pre-green: because-i-said-so]`: WHEN X THE SYSTEM SHALL Y → tests/foo.test.js'],
     ['| tests/foo.test.js | CREATE | tests | covers AC, isolates this fixture to the invalid-pre-green class |']))
   const manifest = writeManifest(dir, [])
   const res = run(spec, dir, manifest, ['--json'])
@@ -463,6 +468,108 @@ test('AC-20260821-01-2: an AC bullet carrying [pre-green: because-i-said-so] —
     `the invalid-tag class is the only signal in this fixture — got ${JSON.stringify(out.observed.acMatrix)}`)
 })
 
+// 2026-08-22 review finding: parseAcBullets/extractTag (lib/spec-sections.js) used to scan a
+// whole AC bullet for [oracle:]/[env:]/[pre-green:], so a spec's own prose EXAMPLE of a tag —
+// exactly how specs/20260821/01-red-check.md writes its own AC-20260821-01-2 requirement text,
+// which quotes `[pre-green: because-i-said-so]` mid-sentence to describe the invalid-tag case —
+// self-tagged and fired a fabricated invalid-pre-green finding against a spec that declares no
+// such tag at all. Fixed: extractTag now recognizes exactly two positions — the declaration slot
+// (first line, right after the bold AC token's closing `**`, before the requirement-opening `:`)
+// and true trailing content (last non-whitespace of the bullet) — so a mid-sentence prose mention
+// parses preGreen: null and is inert.
+test('AC-20260821-01-2: an AC bullet whose PROSE mentions [pre-green: reason] mid-sentence — matching how specs/20260821/01-red-check.md writes its own AC-2 — is not a declared tag, parses preGreen: null, and exits 0 with no invalid-pre-green finding', () => {
+  const dir = tmpdir('acm-rc2-prose')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/foo.test.js'), '// covers AC-20260821-90-1\n')
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260821-90-1**: WHEN a spec\'s AC bullet carries `[pre-green: because-i-said-so]` (outside PRE_GREEN_REASONS) THE SYSTEM SHALL emit hard finding invalid-pre-green → tests/foo.test.js'],
+    ['| tests/foo.test.js | CREATE | tests | covers AC, isolates this fixture to extractTag anchoring |']))
+  const manifest = writeManifest(dir, [])
+  const res = run(spec, dir, manifest, ['--json'])
+  assert.strictEqual(res.status, 0,
+    `a bracket tag quoted mid-sentence in the requirement PROSE — neither the declaration slot (right after ` +
+    `the bold AC token's closing **, before the requirement-opening :) nor true trailing content — must NOT ` +
+    `be recognized as a declared [pre-green:] tag, or a spec's own worked example of the invalid-tag case ` +
+    `self-tags and fires a fabricated finding (stderr: ${res.stderr})`)
+  const out = findings(res)
+  assert.ok(!out.findings.some(f => f.class === 'invalid-pre-green'),
+    'a mid-sentence prose mention of [pre-green: ...] must never fire invalid-pre-green — extractTag only ' +
+    'recognizes the declaration slot and true trailing content, never an arbitrary mid-bullet position')
+  assert.deepStrictEqual(out.observed.acMatrix, { uncovered: 0, oracle: 0, preGreen: 0 },
+    `the prose mention must not count toward preGreen (parses null) — the AC is covered by its own literal ` +
+    `hit so uncovered/oracle stay 0 too — got ${JSON.stringify(out.observed.acMatrix)}`)
+})
+
+// 2026-08-22 regression (false-negative sibling of the anchoring fix above): extractTag
+// (lib/spec-sections.js) matches its declaration-slot and trailing regexes against exactly ONE
+// tag name at a time, anchored to "right after **...**:" / "right at the raw text's end" — so a
+// bullet carrying TWO sibling tags in the SAME slot (spec/templates/spec.md lines 90-103 sanction
+// combinations like [env:]+[oracle:]+[pre-green:] together, forbidding only [oracle:] paired
+// with a test mapping) silently drops every tag but the one immediately adjacent to the anchor:
+// declaration-slot `[env: FOO]` `[oracle: gate]`: parses oracle (adjacent to `:`) but env: null;
+// trailing `... [env: X] [oracle: Y]` parses oracle (adjacent to raw's end) but env: null. A
+// dropped [env:] un-sanctions a legitimately env-gated skip into a fabricated unsanctioned-skip
+// hard finding — the exact false-finding class specs/20260821/01-red-check.md exists to
+// eliminate. These four tests pin every sibling tag in a run being extracted, in both positions,
+// mixed, and confirm the mid-prose anchoring above still holds for a RUN of tags, not just one.
+test('AC-20260821-01-2: a run of three sibling tags in the declaration slot — [env:] [oracle:] [pre-green:], each backticked, before the requirement-opening colon — parses every one of them, not just the tag adjacent to the colon', () => {
+  const section = '- **AC-20260821-86-1** `[env: FOO]` `[oracle: gate]` `[pre-green: absence-invariant]`: WHEN X THE SYSTEM SHALL Y → tests/foo.test.js\n'
+  const bullets = parseAcBullets(section)
+  assert.strictEqual(bullets.length, 1, `fixture must parse to exactly one AC bullet — got ${bullets.length}`)
+  const b = bullets[0]
+  assert.strictEqual(b.env, 'FOO',
+    `spec/templates/spec.md lines 90-103 sanction stacking sibling tags in the declaration slot — [env:] sits ` +
+    `farthest from the requirement colon in this fixture, so a parser that only recognizes the tag adjacent to ` +
+    `the colon drops it to null and un-sanctions whatever skip declares it — got ${JSON.stringify(b)}`)
+  assert.strictEqual(b.oracle, 'gate',
+    `the middle tag of the run must also be extracted, not just the first or last — got ${JSON.stringify(b)}`)
+  assert.strictEqual(b.preGreen, 'absence-invariant',
+    `[pre-green:] sits closest to the colon (the position the pre-fix single-tag regex already matched) — it ` +
+    `must keep parsing correctly once its siblings are added to the run, not regress when the run grows — got ${JSON.stringify(b)}`)
+})
+
+test('AC-20260821-01-2: a run of two sibling tags at the TRAILING position — both after the requirement prose, in raw-text order — parses both of them, not just the one adjacent to the raw text\'s end', () => {
+  const section = '- **AC-20260821-87-1**: WHEN X THE SYSTEM SHALL Y [env: X] [oracle: Y]\n'
+  const bullets = parseAcBullets(section)
+  assert.strictEqual(bullets.length, 1, `fixture must parse to exactly one AC bullet — got ${bullets.length}`)
+  const b = bullets[0]
+  assert.strictEqual(b.env, 'X',
+    `[env: X] sits FIRST in the trailing run, not adjacent to the raw text's end — a parser anchored only to ` +
+    `"last non-whitespace content" drops it to null even though specs/20260821/01-red-check.md's own AC-1 ` +
+    `example mandates trailing tags as legal syntax — got ${JSON.stringify(b)}`)
+  assert.strictEqual(b.oracle, 'Y',
+    `[oracle: Y] sits last (the position the pre-fix single-tag regex already matched) and must keep parsing ` +
+    `correctly once a sibling tag is stacked before it — got ${JSON.stringify(b)}`)
+})
+
+test('AC-20260821-01-2: one tag in the declaration slot and a sibling tag trailing — mixed positions on the same bullet — both parse correctly together', () => {
+  const section = '- **AC-20260821-88-1** `[oracle: gate]`: WHEN X THE SYSTEM SHALL Y [env: TEST_DB]\n'
+  const bullets = parseAcBullets(section)
+  assert.strictEqual(bullets.length, 1, `fixture must parse to exactly one AC bullet — got ${bullets.length}`)
+  const b = bullets[0]
+  assert.strictEqual(b.oracle, 'gate',
+    `the declaration-slot tag must still parse when a DIFFERENT tag also appears trailing on the same bullet ` +
+    `— got ${JSON.stringify(b)}`)
+  assert.strictEqual(b.env, 'TEST_DB',
+    `the trailing tag must still parse when a DIFFERENT tag also occupies the declaration slot on the same ` +
+    `bullet — a fix scoped to only same-position runs would leave this cross-position combination broken — got ${JSON.stringify(b)}`)
+})
+
+test('AC-20260821-01-2: a RUN of two sibling tags quoted together mid-sentence — neither in the declaration slot nor trailing — still parses both null (the anchoring fix must not regress when the run grows from one tag to a pair)', () => {
+  const section = "- **AC-20260821-89-1**: WHEN a spec's requirement text illustrates the sibling tags `[env: FOO]` `[oracle: gate]` together as a worked example THE SYSTEM SHALL do nothing special → tests/foo.test.js\n"
+  const bullets = parseAcBullets(section)
+  assert.strictEqual(bullets.length, 1, `fixture must parse to exactly one AC bullet — got ${bullets.length}`)
+  const b = bullets[0]
+  assert.strictEqual(b.env, null,
+    `this pair of tags sits mid-sentence, adjacent to EACH OTHER but not to the declaration slot or the raw ` +
+    `text's end — extending extractTag to recognize a run of siblings must not loosen the anchoring to accept ` +
+    `a run anywhere in the bullet, or a spec's own worked example of the multi-tag syntax (like this one) ` +
+    `self-tags — got ${JSON.stringify(b)}`)
+  assert.strictEqual(b.oracle, null,
+    `same guard, the other tag of the mid-sentence pair — got ${JSON.stringify(b)}`)
+})
+
 test('AC-20260821-01-10: a spec carrying exactly 2 valid [pre-green:] tags (different enum members) appends the ac-matrix manifest row with preGreen:2, and --json mirrors it', () => {
   const dir = tmpdir('acm-rc10')
   fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
@@ -470,8 +577,8 @@ test('AC-20260821-01-10: a spec carrying exactly 2 valid [pre-green:] tags (diff
     '// covers AC-20260821-84-1 AC-20260821-84-2\n')
   const spec = path.join(dir, 'spec.md')
   fs.writeFileSync(spec, specMd(
-    ['- **AC-20260821-84-1**: WHEN X THE SYSTEM SHALL Y [pre-green: absence-invariant] → tests/foo.test.js',
-      '- **AC-20260821-84-2**: WHEN X THE SYSTEM SHALL Y [pre-green: predicate-in-test] → tests/foo.test.js'],
+    ['- **AC-20260821-84-1** `[pre-green: absence-invariant]`: WHEN X THE SYSTEM SHALL Y → tests/foo.test.js',
+      '- **AC-20260821-84-2** `[pre-green: predicate-in-test]`: WHEN X THE SYSTEM SHALL Y → tests/foo.test.js'],
     ['| tests/foo.test.js | CREATE | tests | covers both ACs |']))
   const manifest = writeManifest(dir, [])
   const before = fs.readFileSync(manifest, 'utf8').trim().split('\n').filter(Boolean)

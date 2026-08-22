@@ -1,6 +1,6 @@
 ---
 date: 2026-08-22
-status: hardened
+status: implementing
 open_markers: 0
 tier: standard           # additive spec-paths key follows 20260819/02 + 20260820/05 + 20260821/01 precedent; scope-reconcile.js (critical-named) gets one additive read-only flag, no behavioral edit to existing modes (pinned by AC-12); init runs only at bootstrap — worst failure is a broken bootstrap in a fresh host, recoverable by re-run
 area: bootstrap
@@ -9,6 +9,7 @@ breaking: false
 depends_on: ["specs/20260821/03-cross-spec-skip-mapping.md"]
 depended_on_by: []
 brief: 11
+build_base: 909bd30a126fbe9fab7632909fcc0b36fabeacdf   # corrected at build close from the branch name `main`: a sibling session landed 20260822/01 (b4cf091) on main after this worktree branched, so the moving-branch base diffed that spec into this one
 ---
 
 # Init generation script — the bootstrap's deterministic file generation becomes code

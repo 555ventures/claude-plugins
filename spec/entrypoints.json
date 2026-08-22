@@ -53,12 +53,15 @@
   "spec/scripts/genesis-state-gate.sh": {
     "entryPoints": ["spec/hooks/hooks.json"]
   },
+  "spec/scripts/init-gen.js": {
+    "entryPoints": ["spec/commands/init.md"]
+  },
   "spec/scripts/manifest-check.sh": {
     "entryPoints": [
       "spec/commands/doctor.md",
       "spec/commands/release.md",
-      "spec/commands/init.md",
-      "spec/templates/grounding-contract.md"
+      "spec/templates/grounding-contract.md",
+      "spec/scripts/init-gen.js"
     ]
   },
   "spec/scripts/merge-back.sh": {
@@ -106,7 +109,7 @@
     "entryPoints": ["spec/commands/replay.md", "spec/scripts/spec-review-driver.js"]
   },
   "spec/scripts/scope-reconcile.js": {
-    "entryPoints": ["spec/commands/build.md", "spec/scripts/review-legs.js"]
+    "entryPoints": ["spec/commands/build.md", "spec/scripts/review-legs.js", "spec/scripts/init-gen.js"]
   },
   "spec/scripts/skeletons-check.js": {
     "entryPoints": ["spec/scripts/spec-design-driver.js"]

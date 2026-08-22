@@ -33,6 +33,17 @@
 //
 // Exit codes: 0 = outOfPlan empty · 3 = outOfPlan non-empty · 2 = usage error, spec unreadable,
 // spec has no File Plan table, or the git ref/repo is unusable.
+//
+// --probe-at-risk <file> [--test-globs <csv>] --root <dir> (D9, specs/20260822/02-init-generation-
+// script.md): an ADDITIVE, read-only mode for init-gen.js's at-risk-applicability probe — `<file>`
+// is a newline-separated list of repo-relative source paths (init-gen samples up to 20 tracked
+// non-test files). It reuses THIS file's existing `stemsFor` derivation and `walkTestFiles` test-file
+// scan in place (never a second implementation — the sole-derivation rule), fed the caller-supplied
+// sample list instead of a git-diff changed set, and `--test-globs`/the same default array instead of
+// the host config (which does not exist yet at init probe time). Prints `{sampled, testFiles, refs}`
+// and always exits 0 (D13: probe findings are data). This mode is checked BEFORE the --base/--spec/
+// mode requirement below so it never needs a spec or a git ref; it never touches outOfPlan/unrealized/
+// excluded/renamed, and D10 pins the existing --json/--dirs modes byte-identical around it.
 
 const fs = require('fs')
 const path = require('path')
@@ -41,11 +52,16 @@ const { parseFilePlan, parseFilePlanRows } = require('./lib/file-plan')
 const { globMatch, pipelineOwnedGlobs } = require('./lib/glob-match')
 const { readConfig } = require('./lib/host-config')
 
+// Shared by both the --probe-at-risk mode and the main at-risk derivation further down — moved
+// here (from its former inline position) so the probe branch above can use it before requiring a
+// spec/base ref.
+const defaultTestGlobs = ['tests/**', 'test/**', '**/*.test.*', '**/*.spec.*', '**/*_test.*']
+
 function usage() {
-  console.error('usage: scope-reconcile.js [--root <dir>] --base <ref> --spec <path> (--json | --dirs)')
+  console.error('usage: scope-reconcile.js [--root <dir>] --base <ref> --spec <path> (--json | --dirs) | --probe-at-risk <file> [--test-globs <csv>] --root <dir>')
 }
 
-let root = '.', base = null, specPath = null, mode = null
+let root = '.', base = null, specPath = null, mode = null, probeAtRiskFile = null, testGlobsArg = null
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
@@ -54,8 +70,51 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--spec') specPath = argv[++i]
   else if (a === '--json') mode = 'json'
   else if (a === '--dirs') mode = 'dirs'
+  else if (a === '--probe-at-risk') probeAtRiskFile = argv[++i]
+  else if (a === '--test-globs') testGlobsArg = argv[++i]
   else { usage(); process.exit(2) }
 }
+
+if (probeAtRiskFile) {
+  let listRaw
+  try {
+    listRaw = fs.readFileSync(probeAtRiskFile, 'utf8')
+  } catch (e) {
+    console.error(`scope-reconcile: cannot read --probe-at-risk file at ${probeAtRiskFile}: ${e.message}`)
+    process.exit(2)
+  }
+  const sampledFiles = listRaw.split('\n').map(s => s.trim()).filter(Boolean)
+  const probeTestGlobs = testGlobsArg ? testGlobsArg.split(',').map(s => s.trim()).filter(Boolean) : defaultTestGlobs
+  const probeIsTestClassified = (p) => probeTestGlobs.some(g => globMatch(g, p))
+
+  // Reuses stemsFor (declared below, a hoisted function — pure over its argument, no TDZ risk
+  // at this call site) exactly as the main derivation does, fed the sample list instead of a
+  // changed-git-diff set.
+  const stemSources = sampledFiles
+    .filter(p => !probeIsTestClassified(p))
+    .map(p => ({ file: p, stems: stemsFor(p) }))
+
+  // Reuses walkTestFiles (declared below) via its injectable classifier param — the probe path
+  // has no host config yet, so it can never use the config-derived isTestClassified the main
+  // path uses further down.
+  const candidates = []
+  walkTestFiles(root, candidates, probeIsTestClassified)
+
+  let refs = 0
+  for (const candidate of candidates) {
+    let content
+    try {
+      content = fs.readFileSync(path.join(root, candidate), 'utf8')
+    } catch {
+      continue
+    }
+    if (stemSources.some(s => s.stems.some(stem => content.includes(stem)))) refs++
+  }
+
+  console.log(JSON.stringify({ sampled: sampledFiles.length, testFiles: candidates.length, refs }, null, 2))
+  process.exit(0)
+}
+
 if (!base || !specPath || !mode) { usage(); process.exit(2) }
 
 const specFull = path.join(root, specPath)
@@ -139,7 +198,6 @@ const unrealized = [
 // tests-layer rows and is not itself in the changed set is at-risk. Additive to outOfPlan/
 // unrealized/excluded/renamed above — never affects the exit code (D2).
 
-const defaultTestGlobs = ['tests/**', 'test/**', '**/*.test.*', '**/*.spec.*', '**/*_test.*']
 const configTestGlobs = readConfig(root).testGlobs
 const testGlobs = Array.isArray(configTestGlobs) ? configTestGlobs : defaultTestGlobs
 const isTestClassified = (p) => testGlobs.some(g => globMatch(g, p))
@@ -169,7 +227,10 @@ const filePlanTestsPaths = parseFilePlanRows(specText)
 const isResolvedByTestsRows = (p) =>
   filePlanTestsPaths.some(row => (isGlobRow(row) ? globMatch(row, p) : row === p))
 
-function walkTestFiles(dir, out) {
+// classifyFn defaults to the config-derived isTestClassified above (evaluated only when the
+// argument is omitted, so the --probe-at-risk branch above — which calls this before that const
+// exists — always passes its own classifier explicitly and never touches the default).
+function walkTestFiles(dir, out, classifyFn = isTestClassified) {
   let entries
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true })
@@ -180,10 +241,10 @@ function walkTestFiles(dir, out) {
     if (entry.name === '.git' || entry.name === 'node_modules') continue
     const full = path.join(dir, entry.name)
     if (entry.isDirectory()) {
-      walkTestFiles(full, out)
+      walkTestFiles(full, out, classifyFn)
     } else if (entry.isFile()) {
       const rel = path.relative(root, full).split(path.sep).join('/')
-      if (isTestClassified(rel)) out.push(rel)
+      if (classifyFn(rel)) out.push(rel)
     }
   }
 }

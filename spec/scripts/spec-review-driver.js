@@ -28,6 +28,21 @@
 // evidence paths; report assembly stays with the session via report-render.js. It never asserts
 // the verdict word itself (verdict.js is the sole derivation, surfaced through this driver).
 //
+// specs/20260822/01-escalate-ledger-row.md (D5-D10, 2026-08-22): a review that burns its fix loop
+// to the cap and is then abandoned used to write ZERO ledger rows — three leg iterations and three
+// reviewer dispatches left no trace, because the only two append points were the hard-stop and the
+// CLEAN close and the ESCALATE refusal reached neither. writeEscalateRow() is the third write
+// point: called from handleFixApplied()'s cap branch before die() (the refusal is the last
+// guaranteed execution moment an abandoning session ever runs), self-healed from a bare
+// re-invocation parked at ESCALATE (a session that walks away never re-invokes with `fix-applied`
+// again), idempotent on marks.escalateRunId, and durable via the exact spec-04 stopped-ledger path
+// (never a new filename). A verdict.js exit 2 during the escalate pass (evidence drift — a red leg
+// going green between the dispositions pass and the cap) is never a crash: it is embedded in the
+// refusal/step text verbatim and retried on the next invocation, so the cap record itself is never
+// lost. The D10 silent-loss detector runs once on every entry, stderr-only, and never blocks — it
+// exists because spec 04's own A6 assumed a durable-write loss would be observed, when by
+// construction it is silent (a dead worktree's durable file simply no longer has the row).
+//
 // CONTRACT:
 //   spec-review-driver <spec.md>                  -> print current state + ONLY that step
 //   spec-review-driver <spec.md> --mark <mark>    -> verify artifacts, record, print next step
@@ -168,10 +183,41 @@ const specRel = path.relative(repoRoot, resolvedSpecPath) || resolvedSpecPath
 
 let marks = {}
 try { marks = JSON.parse(fs.readFileSync(stateFile, 'utf8')) } catch { marks = {} }
+// D8/D9: set only when a self-heal attempt (deriveState()'s ESCALATE arm) hits a verdict.js drift
+// refusal — the ESCALATE step text names it in place of the (unset) escalateLedgerPath. Never
+// persisted: a fresh invocation retries the write from scratch rather than trusting a stale error.
+let escalateDriftError = null
 function saveSidecar() {
   fs.mkdirSync(sidecarDir, { recursive: true })
   fs.writeFileSync(stateFile, JSON.stringify(marks, null, 2) + '\n')
 }
+
+// ---- D10: silent-loss detector, run once per invocation, stderr-only, never blocks ------------
+// specs/20260822/01-escalate-ledger-row.md: spec 04's own A6 assumed loss would be "observed", but
+// the loss is silent by construction (a dead worktree's durable file just quietly no longer has the
+// row) — this is the trigger. Checked only against a DURABLE path (one whose basename isn't the
+// plain tracked ledger — an in-place spec-runs.jsonl append rides normal git history and has no
+// comparable loss mode). Partial by design (a dead worktree's sidecar never speaks at all — this
+// only catches the case where THIS sidecar is still readable but the row it points at is not).
+function checkDurableRowPresent(ledgerPathKey, runIdKey) {
+  const ledgerPath = marks[ledgerPathKey]
+  const rid = marks[runIdKey]
+  if (!ledgerPath || !rid || path.basename(ledgerPath) === 'spec-runs.jsonl') return
+  let rows = []
+  try {
+    rows = fs.readFileSync(ledgerPath, 'utf8').split('\n').filter((l) => l.trim())
+      .map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
+  } catch { rows = [] }
+  const present = rows.some((r) => r.spec === specRel && r.runId === rid)
+  if (!present) {
+    process.stderr.write('spec-review-driver: durable ledger row for ' + specRel + ' (runId ' + rid +
+      ') is no longer readable at ' + ledgerPath + ' — the row may have been lost (a dead worktree, ' +
+      'a manual edit, or file truncation); this is an observation only and does not block or change ' +
+      'this invocation\'s result\n')
+  }
+}
+checkDurableRowPresent('stoppedLedgerPath', 'runId')
+checkDurableRowPresent('escalateLedgerPath', 'escalateRunId')
 
 // ---- terminal cold path: no sidecar, status already done -> DONE, no auto-restart -------------
 const sidecarExistsAtStart = fs.existsSync(sidecarDir)
@@ -376,6 +422,53 @@ function runLegsIteration(n, opts) {
   if (res.code === 1) { runHardStopVerdict(n); return { stopped: true, n } }
   verifyManifestWritten(n)
   return { stopped: false, n }
+}
+
+// ---- D5-D8: writeEscalateRow() — the durable-path branch mirroring runHardStopVerdict(), for the
+// fix-cap ESCALATE refusal rather than a RED_BLOCKING hard-stop. specs/20260822/01-escalate-ledger-
+// row.md: a review that burns its fix loop to the cap wrote ZERO ledger rows — this is the one
+// write point, called from handleFixApplied()'s cap branch (before die()) and self-healed from the
+// ESCALATE step arm on a bare re-invocation (D5) — the abandonment path never re-invokes, so the
+// refusal moment is the last guaranteed chance to record it. Idempotent via marks.escalateRunId,
+// set only after a successful append (D5's own idempotency guard). D2's invocation shape: the
+// FINAL manifest/reviewer-return, the recorded dispositions' waived/rejected, --fixDispatched 0
+// FORCED (the dispatched fix never landed — crediting it would fabricate coverage), --escalated,
+// --retain (a feature: the capped run's survivors are retained full-fidelity under the run's own
+// runId). D6: durability reuses spec 04's stopped-ledger path VERBATIM (never a new filename — A2
+// falsified sorting a spec-runs.escalated.jsonl ahead of spec-runs.jsonl). D8: any exit-2 from the
+// escalate verdict pass (D4's CLEAN guard, or the contradiction guard tripping on a shrunk pool) is
+// returned to the caller as { ok: false, error } — loud, row-less, retryable: no row is appended,
+// escalateRunId stays unset so a later self-heal retries, and the caller's own refusal message
+// embeds `error` verbatim rather than this function calling die() and losing the cap record.
+function writeEscalateRow(n) {
+  if (marks.escalateRunId) return { ok: true } // already written — never re-append
+  const runId = ensureRunId()
+  const diffLoc = computeDiffLoc()
+  const d = marks.dispositions
+  const args = ['--manifest', manifestPathFor(n), '--workflow', marks.reviewerReturnFile,
+    '--waived', String(d.waived), '--rejected', String(d.rejected), '--fixDispatched', '0',
+    '--escalated', '--ledger', '--spec', specRel, '--tier', tier, '--diff-loc', String(diffLoc),
+    '--iteration', String(n), '--run-id', runId, '--retain', path.join(repoRoot, '.claude/spec-runs')]
+  const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
+    'verdict.js (escalate pass)')
+  if (r.status === 2) return { ok: false, error: (r.stdout + r.stderr).trim() }
+  const lines = r.stdout.split('\n')
+  const line = lines[1]
+
+  if (repoRoot !== mainRoot && ensureStoppedLedgerIgnored(mainRoot)) {
+    const stoppedPath = path.join(mainRoot, STOPPED_LEDGER)
+    fs.mkdirSync(path.dirname(stoppedPath), { recursive: true })
+    fs.appendFileSync(stoppedPath, line + '\n')
+    marks.escalateLedgerPath = stoppedPath
+    marks.escalateFallback = false
+  } else {
+    appendLedger(line)
+    marks.escalateLedgerPath = path.join(repoRoot, '.claude/spec-runs.jsonl')
+    marks.escalateFallback = repoRoot !== mainRoot // only a real fallback when durable was attempted and lost
+  }
+  marks.escalateRunId = runId
+  saveSidecar()
+  return { ok: true }
 }
 
 // ---- CLOSE driver work: authoritative verdict + ledger append + status flip --------------------
@@ -629,8 +722,19 @@ function handleFixApplied() {
   if (fixIterationsDone >= FIX_CAP) {
     marks.escalated = true
     saveSidecar()
-    die('iteration cap 2 reached — a third fix-applied is refused; the fix/review loop is capped ' +
-      'at 2 iterations, escalate to the user instead of dispatching another fix')
+    // D5: the refusal is the last guaranteed execution moment — write the escalate row HERE,
+    // before die(), never after (the abandonment path never re-invokes).
+    const capN = Math.max(...manifests)
+    const result = writeEscalateRow(capN)
+    const capMsg = 'iteration cap 2 reached — a third fix-applied is refused; the fix/review loop ' +
+      'is capped at 2 iterations, escalate to the user instead of dispatching another fix'
+    die(result.ok
+      ? capMsg + '\nAn escalate ledger line has been appended to ' + marks.escalateLedgerPath + '.'
+      // D8: loud, row-less, retryable — embed the verdict.js drift error verbatim, never crash the
+      // refusal and lose the cap record; escalateRunId stays unset so the next bare invocation's
+      // self-heal (D5) retries the append.
+      : capMsg + '\nThe escalate ledger pass could not be completed: ' + result.error +
+        '\nRe-run this driver once the evidence is repaired — the append will be retried.')
   }
   const n = Math.max(...manifests) + 1
   const r = runLegsIteration(n, { fixDelta: true })
@@ -879,7 +983,22 @@ function deriveState() {
   const dispositionsFresh = marks.dispositions && marks.dispositionsIteration === n
   if (!dispositionsFresh) return 'DISPOSITIONS'
 
-  if (marks.pendingFix) return marks.escalated ? 'ESCALATE' : 'FIX'
+  if (marks.pendingFix) {
+    if (!marks.escalated) return 'FIX'
+    // D5 self-heal: a session that hit the cap and walked away never re-invokes with --mark
+    // fix-applied again (that mark is refused forever) — a bare re-invocation here is the ONLY
+    // remaining chance to append the row for an abandonment that crashed or exited between the
+    // cap refusal and the write. D8 applies the same way here as at the direct write point: a
+    // drift refusal is stashed for the ESCALATE step text, never thrown — a bare (no --mark)
+    // invocation must still exit 0. Gated on !STATE_ONLY — a `--state` query must not be the thing
+    // that performs the write it is merely reporting on (same principle as printDoneNow's deferred
+    // sidecar deletion).
+    if (!marks.escalateRunId && !STATE_ONLY) {
+      const result = writeEscalateRow(n)
+      if (!result.ok) escalateDriftError = result.error
+    }
+    return 'ESCALATE'
+  }
 
   if (marks.dispositions.word !== 'CLEAN') return 'DISPOSITIONS'
 
@@ -969,9 +1088,25 @@ const STEPS = {
     `  node ${__filename} ${specPath} --mark fix-applied\n` +
     `(re-runs legs --fix-delta on a fresh manifest and returns to REVIEWER for the fix-delta pass)`,
 
-  ESCALATE: () => `## ESCALATE — iteration cap 2 reached\n` +
-    `The fix/review loop is capped at 2 iterations (iteration cap 2) and a third fix-applied was ` +
-    `refused. Surface this to the user — a capped run needs a decision, not a fourth dispatch.`,
+  // D9: the ESCALATE step names both exit routes plus where the escalate row landed (or, when D8
+  // withheld the write, the loud drift note naming why — never silently omitted).
+  ESCALATE: () => {
+    const rowLine = marks.escalateRunId
+      ? `An escalate ledger line has been appended to ${marks.escalateLedgerPath}.\n`
+      : (escalateDriftError
+          ? `The escalate ledger pass could not be completed: ${escalateDriftError}\n` +
+            `Re-run this driver once the evidence is repaired — the append will be retried.\n`
+          : '')
+    return `## ESCALATE — iteration cap 2 reached\n` +
+      `The fix/review loop is capped at 2 iterations (iteration cap 2) and a third fix-applied was ` +
+      `refused. Surface this to the user — a capped run needs a decision, not a fourth dispatch.\n` +
+      rowLine +
+      `Remedy — two exits:\n` +
+      `  waive/reject: mark dispositions --fix-dispatched 0 once --waived/--rejected covers the ` +
+      `pool — that closes normally:\n` +
+      `    node ${__filename} ${specPath} --mark dispositions --waived N --rejected N --fix-dispatched 0\n` +
+      `  abandon: delete ${sidecarDir} (the <spec>.review sidecar and its manifests) to restart cold.\n`
+  },
 
   // R10: the close-commit instruction derives from whether this review is running in-place or in
   // a linked worktree. In-place, the ledger + retained evidence ride the close commit as always.

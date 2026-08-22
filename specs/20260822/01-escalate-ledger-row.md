@@ -1,6 +1,7 @@
 ---
 date: 2026-08-22
-status: hardened
+status: implementing
+diff_base: 909bd30a126fbe9fab7632909fcc0b36fabeacdf
 open_markers: 0
 spiked: 2026-08-22
 tier: critical           # edits verdict.js derive()/arg surface — named on Risk Tiers ("sole derivation of the review/release verdict word; never a second place that computes or asserts CLEAN"). The driver edit alone would be standard (spec 04 precedent), but the verdict edit governs.

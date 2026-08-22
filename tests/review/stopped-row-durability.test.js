@@ -263,13 +263,20 @@ test('AC-20260821-04-4: WHEN the driver prints the STOPPED step THE SYSTEM names
     'the fallback re-invocation must also re-print the worktree ledger path: ' + r2Again.stdout)
 })
 
-test('AC-20260821-04-5: WHEN a worktree review closes CLEAN and the merge lands THE SYSTEM drains this spec\'s rows out of spec-runs.stopped.jsonl into the tracked ledger before the close row, leaving other specs\' rows byte-for-byte untouched', () => {
+// specs/20260822/01-escalate-ledger-row.md D7/D12 (2026-08-22, AC-20260822-01-11): an escalate
+// row (a capped-review row carrying "escalated": true) is drained by the exact same
+// spec-partitioned mechanism as a GATE_RED stopped row — drainStoppedRows() partitions purely on
+// JSON.parse(line).spec (A4), never on verdict word, so it needs zero code changes to also
+// relocate an escalated:true row. cRow below is seeded alongside the pre-existing GATE_RED row to
+// prove that: this is an extension of the SAME test (never weakened), retagged below.
+test('AC-20260821-04-5 (also AC-20260822-01-11, SHALL CONTINUE TO): WHEN a worktree review closes CLEAN and the merge lands THE SYSTEM drains this spec\'s rows out of spec-runs.stopped.jsonl into the tracked ledger before the close row — including an escalated:true row, unchanged and in read order — leaving other specs\' rows byte-for-byte untouched', () => {
   const host = makeWorktreeHost({ name: 'sr-durability-ac5', acId: 'AC-20260820-99-36', gateFails: false, ignoreStopped: true })
   const stoppedPath = path.join(host.root, STOPPED_LEDGER_REL)
   const aRow = JSON.stringify({ ts: '2026-08-21T00:00:00Z', stage: 'review', spec: host.specRel, verdict: 'GATE_RED', runId: 'rv_seed0000a1', tier: 'standard' })
   const bRow = JSON.stringify({ ts: '2026-08-21T00:00:00Z', stage: 'review', spec: 'specs/other/01-unrelated.md', verdict: 'GATE_RED', runId: 'rv_seed0000b1', tier: 'standard' })
+  const cRow = JSON.stringify({ ts: '2026-08-21T01:00:00Z', stage: 'review', spec: host.specRel, verdict: 'HARD_FINDINGS', escalated: true, runId: 'rv_seed0000c1', tier: 'standard', iteration: 3 })
   fs.mkdirSync(path.dirname(stoppedPath), { recursive: true })
-  fs.writeFileSync(stoppedPath, aRow + '\n' + bRow + '\n')
+  fs.writeFileSync(stoppedPath, aRow + '\n' + bRow + '\n' + cRow + '\n')
 
   run(host.wt, host.spec)
   assert.strictEqual(stateOf(host.wt, host.spec), 'REVIEWER', 'setup precondition: green legs must reach REVIEWER before the drain can be exercised')
@@ -288,16 +295,24 @@ test('AC-20260821-04-5: WHEN a worktree review closes CLEAN and the merge lands 
 
   const trackedRows = readJsonl(path.join(host.root, '.claude/spec-runs.jsonl'))
   const gateRedIdx = trackedRows.findIndex((x) => x.spec === host.specRel && x.verdict === 'GATE_RED')
+  const escalateIdx = trackedRows.findIndex((x) => x.spec === host.specRel && x.escalated === true)
   const cleanIdx = trackedRows.findIndex((x) => x.spec === host.specRel && x.verdict === 'CLEAN')
   assert.ok(gateRedIdx !== -1,
     'this spec\'s stopped GATE_RED row must be drained into the tracked ledger at merge time — left undrained it either dies with the worktree at cleanup or is stranded in the stopped file forever: ' + JSON.stringify(trackedRows))
+  assert.ok(escalateIdx !== -1,
+    'this spec\'s escalated:true row must ALSO be drained into the tracked ledger at merge time — the drain partitions purely by spec, never by verdict word, so an escalate row sitting in the same stopped file must relocate exactly like a GATE_RED row: ' + JSON.stringify(trackedRows))
   assert.ok(cleanIdx !== -1, 'setup: the merge must also append the authoritative CLEAN close row: ' + JSON.stringify(trackedRows))
-  assert.ok(gateRedIdx < cleanIdx,
-    'the drained GATE_RED row must sit BEFORE the CLEAN close row in read order — qualifyingObservation() picks the LAST review row by read-order position, so a GATE_RED row landing after CLEAN would poison observation for this spec forever: ' + JSON.stringify(trackedRows))
+  assert.ok(gateRedIdx < cleanIdx && escalateIdx < cleanIdx,
+    'both drained rows (GATE_RED and escalated:true) must sit BEFORE the CLEAN close row in read order — qualifyingObservation() picks the LAST review row by read-order position, so either one landing after CLEAN would poison observation for this spec forever: ' + JSON.stringify(trackedRows))
+  const drainedEscalate = trackedRows[escalateIdx]
+  assert.strictEqual(drainedEscalate.escalated, true,
+    'the drained row must still carry escalated:true unchanged — the drain moves rows verbatim, never rewriting fields: ' + JSON.stringify(drainedEscalate))
+  assert.strictEqual(JSON.stringify(drainedEscalate), cRow,
+    'the drained escalated row must be byte-for-byte identical to the seeded stopped-ledger line — the drain MOVES rows, it must never re-serialize or otherwise alter them: ' + JSON.stringify({ drainedEscalate, cRow }))
 
   const stoppedAfter = fs.existsSync(stoppedPath) ? fs.readFileSync(stoppedPath, 'utf8').trim() : ''
   assert.strictEqual(stoppedAfter, bRow,
-    'the drain must remove ONLY this spec\'s rows from the stopped file, leaving the unrelated spec\'s row byte-for-byte untouched — rewriting or dropping another spec\'s evidence would be a second, unrelated data-loss bug riding this fix: ' + JSON.stringify({ stoppedAfter }))
+    'the drain must remove ONLY this spec\'s rows (both the GATE_RED and the escalated:true row) from the stopped file, leaving the unrelated spec\'s row byte-for-byte untouched — rewriting or dropping another spec\'s evidence would be a second, unrelated data-loss bug riding this fix: ' + JSON.stringify({ stoppedAfter }))
 })
 
 test('AC-20260821-04-6: WHEN an in-place review closes CLEAN and the stopped file holds rows for this spec THE SYSTEM drains them into the tracked ledger before appending the close row, with the same ordering and other-spec preservation as the merge-time drain', () => {

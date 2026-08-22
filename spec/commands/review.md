@@ -52,7 +52,12 @@ red leg and its remedy, naming the absolute path the row landed in; in a worktre
 the main root's gitignored stopped-ledger, so the evidence survives an abandoned or
 force-removed worktree. A later invocation restarts at the leg run with a fresh manifest. A
 third `fix-applied` lands `ESCALATE` — the fix loop is capped at 2 iterations, and a capped run
-needs the user, not a fourth dispatch. A CLEAN close whose replay window is due parks at
+needs the user, not a fourth dispatch. The driver has already appended the escalate row — an
+honestly-derived non-CLEAN verdict carrying `escalated: true` — at the moment of the refusal, and
+prints the absolute path it landed in; ESCALATE names two exits: fresh dispositions
+(`--fix-dispatched 0` covering the pool) close normally through the waive/reject route, or deleting
+the `<spec>.review/` sidecar and manifests abandons the run to restart cold. A CLEAN close whose
+replay window is due parks at
 `REPLAY` until a measurement is on the record: the review is complete as a verdict and
 unfinished as a checklist, and re-invocation re-prints the execution step.
 
@@ -105,8 +110,8 @@ Run `node "$(spec-paths report-render)" --slots <file>` and print its output ver
   every verdict pass and prints its word; the session never asserts CLEAN itself.
   Never hand-write the word; a CLEAN row with non-zero `survived` records dispositioned
   findings, never ignored ones. Every pass's ledger line lands in `.claude/spec-runs.jsonl`,
-  appended by the driver at STOPPED and CLOSE — the session never hand-appends a line. The
-  exception is a worktree review's STOPPED line: it lands durably in
+  appended by the driver at STOPPED, ESCALATE, and CLOSE — the session never hand-appends a
+  line. The exception is a worktree review's STOPPED or ESCALATE line: it lands durably in
   `.claude/spec-runs.stopped.jsonl` at the main root (gitignored, self-provisioned via git's
   `info/exclude` when the host lacks the ignore line), and is folded into the tracked ledger
   at close/merge. In-place reviews are unchanged.

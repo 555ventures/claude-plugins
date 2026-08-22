@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 'use strict'
 // verdict.js --manifest <path> [--workflow <path>] [--waived N] [--rejected N] [--fixDispatched N]
+//   [--escalated]
 //   [--ledger [--spec <path>] [--tier <T>] [--diff-loc N] [--iteration N] [--run-id <id>]
 //     [--retain <dir>]]
 //   [--profile release [--milestone <string>] [--briefs N,N,...]] [--require <leg> ...]
@@ -117,6 +118,21 @@
 // `observed` object is never sliced (slicing a JSON object corrupts it), only a string field
 // inside one.
 //
+// specs/20260822/01-escalate-ledger-row.md (D1-D4, 2026-08-22): a review that burns its fix loop
+// to the cap was writing zero ledger rows — the driver's only two append points (hard-stop, CLEAN
+// close) never reach the cap refusal. `--escalated` marks a review-profile pass as a fix-cap
+// escalation: the row gains `escalated: true` (D1 — never a new verdict word; the escalation fact
+// is a typed row field, the word itself stays whatever the evidence honestly derives). Refused
+// (exit 2, before any manifest/workflow file I/O, same flag-presence-first pattern as the
+// --retain matrix) with `--fixDispatched > 0` (D2 — a capped run's dispatched fix never landed;
+// crediting it would fabricate disposition coverage) or with `--profile release` (D3 — a release
+// row carries no runId/reviewer return for `escalated` to key). Refused (exit 2, AFTER
+// derivation, no verdict word and no ledger line printed) when the derived word is CLEAN (D4 —
+// spike S1 Case B: a red non-blocking leg going green between the dispositions pass and the
+// escalate pass can shrink the recomputed pool enough for recorded waives to cover it; a
+// self-contradictory CLEAN+escalated:true row in the one file that must never wrongly say CLEAN
+// is the worst possible output, so this is a correctness guard, not belt-and-braces).
+//
 // Exit codes: 0 = derived CLEAN · 1 = derived other non-CLEAN word
 // (still printed on stdout line 1) · 2 = usage error, missing/unreadable --manifest or
 // --workflow file, a disposition contradiction (--waived + --rejected + --fixDispatched
@@ -126,7 +142,11 @@
 // and must not print, --retain passed with --profile release (D3 — release rows carry no runId
 // to key an artifact by), --retain passed without --ledger (retention with no row has no runId
 // to key), or (review profile, --ledger + --workflow both present) --retain absent (D1 — the
-// required-evidence-retention flag; message names --retain .claude/spec-runs as the remedy)
+// required-evidence-retention flag; message names --retain .claude/spec-runs as the remedy),
+// --escalated passed with --fixDispatched > 0 (message names "dispatched fix never landed"),
+// --escalated passed with --profile release (message names "drop --escalated"), or --escalated
+// whose derivation reaches CLEAN (message names "derived CLEAN under --escalated" — evidence
+// drift; no verdict word or ledger line is printed)
 
 const fs = require('fs')
 const path = require('path')
@@ -134,14 +154,14 @@ const crypto = require('crypto')
 
 function usage() {
   console.error('usage: verdict.js --manifest <path> [--workflow <path>] [--waived N] [--rejected N] ' +
-    '[--fixDispatched N] [--ledger [--spec <path>] [--tier <T>] [--diff-loc N] [--iteration N] ' +
-    '[--run-id <id>] [--retain <dir>]] [--profile release [--milestone <string>] [--briefs N,N,...]] ' +
-    '[--require <leg> ...]')
+    '[--fixDispatched N] [--escalated] [--ledger [--spec <path>] [--tier <T>] [--diff-loc N] ' +
+    '[--iteration N] [--run-id <id>] [--retain <dir>]] [--profile release [--milestone <string>] ' +
+    '[--briefs N,N,...]] [--require <leg> ...]')
 }
 
 let manifestPath = null, workflowPath = null, waived = 0, rejected = 0, fixDispatched = 0
 let ledger = false, specArg = null, tier = null, diffLoc = null, iteration = null, profile = 'review'
-let runId = null, milestone = null, briefsArg = null, retainDir = null
+let runId = null, milestone = null, briefsArg = null, retainDir = null, escalated = false
 const requireLegs = []
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
@@ -151,6 +171,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--waived') waived = Number(argv[++i])
   else if (a === '--rejected') rejected = Number(argv[++i])
   else if (a === '--fixDispatched') fixDispatched = Number(argv[++i])
+  else if (a === '--escalated') escalated = true
   else if (a === '--ledger') ledger = true
   else if (a === '--spec') specArg = argv[++i]
   else if (a === '--tier') tier = argv[++i]
@@ -167,6 +188,25 @@ for (let i = 0; i < argv.length; i++) {
 if (!manifestPath) { usage(); process.exit(2) }
 if (![waived, rejected, fixDispatched].every(Number.isFinite)) {
   console.error('verdict.js: --waived/--rejected/--fixDispatched must be numbers')
+  process.exit(2)
+}
+
+// ---- --escalated refusal matrix (D2/D3, specs/20260822/01-escalate-ledger-row.md) ------------
+// Checked purely on flag presence, before the manifest/workflow files are even read — the exact
+// flag-presence-first pattern the --retain matrix below already uses, for the same reason (a
+// misuse fails loudly and immediately rather than after paying for file I/O). The pre-image
+// rejects --escalated as an unknown flag via the generic usage() fallback above, which ALSO exits
+// 2 — every refusal here names the specific rule so a test can never pass vacuously against that
+// fallback (spike S3).
+
+if (escalated && fixDispatched > 0) {
+  console.error('verdict.js: --escalated with --fixDispatched > 0 — a capped run\'s dispatched fix ' +
+    'never landed; pass --fixDispatched 0')
+  process.exit(2)
+}
+if (escalated && profile === 'release') {
+  console.error('verdict.js: --escalated is a review-profile fact — drop --escalated (or drop ' +
+    '--profile release)')
   process.exit(2)
 }
 
@@ -351,6 +391,20 @@ function derive() {
 }
 
 const word = derive()
+
+// D4 (load-bearing guard, specs/20260822/01-escalate-ledger-row.md): a derived CLEAN under
+// --escalated is refused BEFORE anything prints — spike S1 Case B falsified "CLEAN is
+// arithmetically unreachable at --fixDispatched 0": a red non-blocking leg going green between
+// the dispositions pass and this escalate pass shrinks the recomputed pool enough for the
+// recorded waives to cover it. A self-contradictory CLEAN+escalated:true row in the one file that
+// must never wrongly say CLEAN would be the worst possible output, so this checks before the
+// verdict word or the ledger line is ever printed.
+if (escalated && word === 'CLEAN') {
+  console.error('verdict.js: derived CLEAN under --escalated — evidence drifted since the ' +
+    'dispositions pass; re-run dispositions against the current evidence')
+  process.exit(2)
+}
+
 if (profile !== 'release' && !workflow && word !== 'UNVERIFIED' && word !== 'GATE_RED') {
   console.error('verdict.js: all legs green — the panel must run; pass --workflow <path to the wf-review return>')
   process.exit(2)
@@ -409,6 +463,10 @@ if (ledger) {
   // ("rv_" + 12 lowercase hex via crypto.randomBytes) so /spec:escape always has a backlink.
   if (profile !== 'release') row.runId = runId || ('rv_' + crypto.randomBytes(6).toString('hex'))
   row.verdict = word
+  // D1: the escalation fact is a typed row field, never a second verdict word — `escalated` is
+  // only ever set on the review profile (the D3 refusal above makes profile === 'release'
+  // unreachable here).
+  if (escalated) row.escalated = true
   if (profile === 'release') {
     if (milestone) row.milestone = milestone
     if (briefsArg) {

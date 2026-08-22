@@ -274,7 +274,12 @@ test('AC-20260820-07-7: WHEN --mark closed is passed while the tree is dirty bey
   assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE', 'a refused closed mark must leave the state at CLOSE')
 })
 
-test('AC-20260820-07-8: a dispatched fix cycles FIX -> fix-applied (fresh manifest, legs --fix-delta) -> REVIEWER twice, and a third fix-applied is refused with state ESCALATE naming the iteration cap of 2', () => {
+// specs/20260822/01-escalate-ledger-row.md D12 (2026-08-22): the cap refusal below is retagged
+// (never weakened) as a SHALL-CONTINUE-TO pin for AC-20260822-01-10 — that spec inserts a
+// writeEscalateRow() call ahead of this same die(), but the refusal itself (exit 2, iteration cap
+// 2, state ESCALATE) must survive byte-for-byte in spirit. The new escalate-row mechanics are
+// pinned separately in tests/review/escalate-row.test.js.
+test('AC-20260820-07-8 (also AC-20260822-01-10, SHALL CONTINUE TO): a dispatched fix cycles FIX -> fix-applied (fresh manifest, legs --fix-delta) -> REVIEWER twice, and a third fix-applied is refused with state ESCALATE naming the iteration cap of 2', () => {
   const host = makeHost()
   run(host.root, host.spec)
   assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER')

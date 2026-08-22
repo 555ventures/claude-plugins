@@ -142,7 +142,7 @@ test('AC-20260820-07-1: WHEN the driver runs on an implementing spec whose legs 
   assert.strictEqual(stateOf(root, spec), 'REVIEWER', 'the derived state after a green legs run must be REVIEWER: ' + r.stdout)
 })
 
-test('AC-20260820-07-2: WHEN the synthetic gate fails THE SYSTEM appends exactly one GATE_RED ledger line byte-equal to verdict.js\'s own line, prints the red leg + remedy, and reports state STOPPED — the reviewer step is never printed', () => {
+test('AC-20260820-07-2 (also AC-20260821-04-8, SHALL CONTINUE TO): WHEN the synthetic gate fails THE SYSTEM appends exactly one GATE_RED ledger line byte-equal to verdict.js\'s own line, prints the red leg + remedy, and reports state STOPPED — the reviewer step is never printed', () => {
   const { root, spec, sidecar } = makeHost({ gateFails: true })
   const ledger = path.join(root, '.claude/spec-runs.jsonl')
   const before = fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8') : ''
@@ -403,7 +403,7 @@ test('AC-20260820-07-11: WHEN --state is passed THE SYSTEM prints the bare state
     '--state must print exactly the bare state name and nothing else — a caller scripting against this needs one clean token: ' + JSON.stringify(r.stdout))
 })
 
-test('AC-20260820-07-12: WHEN merge-strategy is marked from the main root in a two-branch fixture THE SYSTEM runs merge, cleanup, and verify, prints spec-status --next verbatim, and lands DONE; the same mark from inside the build worktree is refused with a relocate instruction', () => {
+test('AC-20260820-07-12 (also AC-20260821-04-9, SHALL CONTINUE TO): WHEN merge-strategy is marked from the main root in a two-branch fixture THE SYSTEM runs merge, cleanup, and verify — promoting the worktree\'s ledger and retained evidence into the main root (exact-line / filename dedup) and leaving the worktree clean for a plain `git worktree remove` — prints spec-status --next verbatim, and lands DONE; the same mark from inside the build worktree is refused with a relocate instruction', () => {
   const root = fs.realpathSync(tmpdir('rvdrv-merge'))
   const g = gitRepo(root)
   fs.mkdirSync(path.join(root, '.claude'), { recursive: true })

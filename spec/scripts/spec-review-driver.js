@@ -62,6 +62,13 @@ const { spawnSync } = require('child_process')
 // stage:"replay" rows through it rather than opening the ledger a second way.
 const { readLedgerRows } = require('./lib/observation')
 
+// D1-D6 (specs/20260821/04-stopped-row-durability.md): a worktree review's RED_BLOCKING hard-stop
+// durably appends here, at the MAIN root, instead of the worktree's own (destructible)
+// spec-runs.jsonl — closes R3(1) of specs/20260820/07. readLedgerRows() already matches
+// /^spec-runs.*\.jsonl$/ and union-merges in filename order (this file sorts after
+// spec-runs.jsonl) — zero reader changes anywhere.
+const STOPPED_LEDGER = '.claude/spec-runs.stopped.jsonl'
+
 function die(msg) { process.stderr.write('spec-review-driver: ' + msg + '\n'); process.exit(2) }
 
 // R9: spawnSync's `status` is null when the child dies by signal, fails to spawn, or overflows
@@ -281,7 +288,63 @@ function appendLedger(jsonLine) {
   fs.appendFileSync(ledgerPath, jsonLine + '\n')
 }
 
-// ---- D4: RED_BLOCKING hard-stop — no-workflow verdict pass, GATE_RED ledger line appended -----
+// D2/D3: is STOPPED_LEDGER ignored at mainRootDir right now? `check-ignore -q` verdicts a
+// not-yet-existing path (A3's executed spike), so this runs before the first durable append ever
+// happens. Routed through runChild: exit 1 (not ignored) is a legitimate result, not a death —
+// only a signal-killed/never-spawned git is fatal here, same as every other git call in this file.
+function checkStoppedLedgerIgnored(mainRootDir) {
+  const r = runChild('git', ['-C', mainRootDir, 'check-ignore', '-q', STOPPED_LEDGER],
+    { encoding: 'utf8' }, 'git check-ignore -q ' + STOPPED_LEDGER)
+  return r.status === 0
+}
+
+// D2/D3 (Contracts): ensure-ignored guard with self-heal, run once per hard stop before the
+// durable write. Not ignored -> append the line to <git-common-dir>/info/exclude (shared by every
+// linked worktree, A5) and re-check once. Returns true when the durable write is safe to proceed,
+// false when the path genuinely cannot be made ignored (D3: e.g. a .gitignore negation, which
+// outranks info/exclude in git's precedence) — the caller falls back to today's behavior.
+function ensureStoppedLedgerIgnored(mainRootDir) {
+  if (checkStoppedLedgerIgnored(mainRootDir)) return true
+  const commonDirR = runChild('git',
+    ['-C', mainRootDir, 'rev-parse', '--path-format=absolute', '--git-common-dir'],
+    { encoding: 'utf8' }, 'git rev-parse --git-common-dir')
+  if (commonDirR.status !== 0) return false
+  const excludePath = path.join(commonDirR.stdout.trim(), 'info', 'exclude')
+  fs.mkdirSync(path.dirname(excludePath), { recursive: true })
+  fs.appendFileSync(excludePath, STOPPED_LEDGER + '\n')
+  return checkStoppedLedgerIgnored(mainRootDir)
+}
+
+// D5/D6 (Contracts): the one spec-scoped drain, two callers (promoteEvidenceAndClean(),
+// doCloseWork() when repoRoot === mainRoot). Reads STOPPED_LEDGER at mainRootDir (absent -> no
+// rows to drain), partitions lines by parsed .spec === specRel — unparseable lines are KEPT
+// (flagging malformed lines is doctor's job, mirroring readLedgerRows's own silent-drop), rewrites
+// the file with only the non-matching lines (deletes it when none remain), and returns the
+// matching lines VERBATIM for the caller to append ahead of its own close/promotion lines. This
+// MOVES rows, never copies them, so a later close can never double-count a drained row.
+function drainStoppedRows(mainRootDir, specRel) {
+  const stoppedPath = path.join(mainRootDir, STOPPED_LEDGER)
+  if (!fs.existsSync(stoppedPath)) return { drained: [] }
+  const lines = fs.readFileSync(stoppedPath, 'utf8').split('\n').filter((l) => l.trim())
+  const drained = []
+  const kept = []
+  for (const line of lines) {
+    let row
+    try { row = JSON.parse(line) } catch { kept.push(line); continue }
+    if (row.spec === specRel) drained.push(line); else kept.push(line)
+  }
+  if (kept.length) fs.writeFileSync(stoppedPath, kept.join('\n') + '\n')
+  else fs.rmSync(stoppedPath, { force: true })
+  return { drained }
+}
+
+// ---- D1-D4: RED_BLOCKING hard-stop — no-workflow verdict pass, GATE_RED ledger line appended ---
+// In-place (repoRoot === mainRoot) keeps today's appendLedger() path unchanged (D1). A worktree
+// review durably appends to <mainRoot>/STOPPED_LEDGER instead — surviving an abandoned or
+// force-removed worktree (R3(1) of specs/20260820/07) — once the ensure-ignored guard confirms
+// the write cannot dirty mainRoot's tree; when it genuinely cannot be ignored (D3), fall back to
+// the worktree ledger exactly as before. Either way marks.stoppedLedgerPath records where the row
+// actually landed, for the STOPPED step text to name (D4) and for a bare re-invocation to re-print.
 function runHardStopVerdict(n) {
   const runId = ensureRunId()
   const diffLoc = computeDiffLoc()
@@ -291,7 +354,19 @@ function runHardStopVerdict(n) {
     'verdict.js (hard-stop pass)')
   if (r.status === 2) die('verdict.js (hard-stop pass) failed: ' + (r.stdout + r.stderr).trim())
   const lines = r.stdout.split('\n')
-  appendLedger(lines[1])
+  const line = lines[1]
+
+  if (repoRoot !== mainRoot && ensureStoppedLedgerIgnored(mainRoot)) {
+    const stoppedPath = path.join(mainRoot, STOPPED_LEDGER)
+    fs.mkdirSync(path.dirname(stoppedPath), { recursive: true })
+    fs.appendFileSync(stoppedPath, line + '\n')
+    marks.stoppedLedgerPath = stoppedPath
+    marks.stoppedFallback = false
+  } else {
+    appendLedger(line)
+    marks.stoppedLedgerPath = path.join(repoRoot, '.claude/spec-runs.jsonl')
+    marks.stoppedFallback = repoRoot !== mainRoot // only a real fallback when durable was attempted and lost
+  }
   marks.stoppedIteration = n
   saveSidecar()
 }
@@ -309,6 +384,13 @@ function doCloseWork(n) {
   const diffLoc = computeDiffLoc()
   const retainDir = path.join(repoRoot, '.claude/spec-runs')
   const d = marks.dispositions
+  // D6: in-place close drain (same helper as D5) — covers a spec that stopped in a since-
+  // abandoned worktree and later closed CLEAN in-place. doCloseWork() is the only append point for
+  // that path, so the drain has to run here too, ahead of the close-row append below.
+  if (repoRoot === mainRoot) {
+    const { drained } = drainStoppedRows(mainRoot, specRel)
+    if (drained.length) appendLedger(drained.join('\n'))
+  }
   const args = ['--manifest', manifestPathFor(n), '--workflow', marks.reviewerReturnFile,
     '--waived', String(d.waived), '--rejected', String(d.rejected), '--fixDispatched', String(d.fixDispatched),
     '--ledger', '--spec', specRel, '--tier', tier, '--diff-loc', String(diffLoc),
@@ -640,6 +722,20 @@ function handleConflictsResolved() {
 function promoteEvidenceAndClean(wt, mainRootDir) {
   const srcLedger = path.join(wt, '.claude/spec-runs.jsonl')
   const dstLedger = path.join(mainRootDir, '.claude/spec-runs.jsonl')
+  // D5: drain this spec's durable stopped rows into the tracked ledger BEFORE promoting the
+  // worktree's own ledger lines below, so a drained GATE_RED row lands ahead of this run's CLOSE
+  // row in read order (A4: qualifyingObservation() picks the LAST review row by read-order
+  // position — an undrained-then-appended-after row would poison observation for this spec
+  // forever). The key is the spec's path relative to the WORKTREE, not to mainRootDir: this
+  // invocation's own repoRoot is mainRootDir (merge-strategy runs from there), so the top-level
+  // `specRel` carries the .claude/worktrees/<name>/ prefix and would never match the rows written
+  // (from inside the worktree, at hard-stop time) with the plain repo-relative form.
+  const specRelInWt = path.relative(wt, resolvedSpecPath)
+  const { drained } = drainStoppedRows(mainRootDir, specRelInWt)
+  if (drained.length) {
+    fs.mkdirSync(path.dirname(dstLedger), { recursive: true })
+    fs.appendFileSync(dstLedger, drained.join('\n') + '\n')
+  }
   if (fs.existsSync(srcLedger)) {
     const srcLines = fs.readFileSync(srcLedger, 'utf8').split('\n').filter(Boolean)
     const dstLines = fs.existsSync(dstLedger) ? fs.readFileSync(dstLedger, 'utf8').split('\n').filter(Boolean) : []
@@ -816,10 +912,18 @@ const STEPS = {
     const rows = readManifestRows(manifestPathFor(marks.stoppedIteration || currentN))
     const red = rows.filter((r) => BLOCKING_LEGS.has(r.leg) &&
       (r.leg === 'smoke' ? (r.exit !== 0 && r.exit !== 4) : r.exit !== 0))
+    // D4: name the absolute path the GATE_RED row actually landed in (durable main-root path or
+    // fallback worktree path), including on a bare re-invocation — sourced from the sidecar mark,
+    // never re-derived, so the answer cannot silently change between invocations.
+    const remedy = marks.stoppedFallback
+      ? `\nThe durable stopped-ledger location could not be made ignored at the main root — add ` +
+        `this line to its .gitignore to enable durable hard-stop evidence: ${STOPPED_LEDGER}\n`
+      : ''
     return `## STOPPED — a blocking leg is red; the run hard-stopped before any further step\n` +
       red.map((r) => `❌ ${r.leg} exit=${r.exit} ${JSON.stringify(r.observed)}`).join('\n') +
       `\nmanifest: ${manifestPathFor(marks.stoppedIteration || currentN)}\noutputs: ${outDirFor(marks.stoppedIteration || currentN)}\n` +
-      `A GATE_RED ledger line has been appended.\nRemedy: fix the failing leg(s) above, then delete ` +
+      `A GATE_RED ledger line has been appended to ${marks.stoppedLedgerPath}.\n` + remedy +
+      `Remedy: fix the failing leg(s) above, then delete ` +
       `${sidecarDir} (or just ${manifestPathFor(marks.stoppedIteration || currentN)}) and re-run this driver — it restarts at LEGS with a fresh manifest.`
   },
 

@@ -48,7 +48,9 @@ Loop until the driver prints `DONE`:
 Re-entrancy is the driver's job: a fresh session, or this one resuming later, runs step 1 and
 lands exactly where the last run left off. A `RED_BLOCKING` gate failure lands the terminal
 state `STOPPED` — the driver has already appended the `GATE_RED` ledger line and printed the
-red leg and its remedy; a later invocation restarts at the leg run with a fresh manifest. A
+red leg and its remedy, naming the absolute path the row landed in; in a worktree that path is
+the main root's gitignored stopped-ledger, so the evidence survives an abandoned or
+force-removed worktree. A later invocation restarts at the leg run with a fresh manifest. A
 third `fix-applied` lands `ESCALATE` — the fix loop is capped at 2 iterations, and a capped run
 needs the user, not a fourth dispatch. A CLEAN close whose replay window is due parks at
 `REPLAY` until a measurement is on the record: the review is complete as a verdict and
@@ -103,7 +105,11 @@ Run `node "$(spec-paths report-render)" --slots <file>` and print its output ver
   every verdict pass and prints its word; the session never asserts CLEAN itself.
   Never hand-write the word; a CLEAN row with non-zero `survived` records dispositioned
   findings, never ignored ones. Every pass's ledger line lands in `.claude/spec-runs.jsonl`,
-  appended by the driver at STOPPED and CLOSE — the session never hand-appends a line.
+  appended by the driver at STOPPED and CLOSE — the session never hand-appends a line. The
+  exception is a worktree review's STOPPED line: it lands durably in
+  `.claude/spec-runs.stopped.jsonl` at the main root (gitignored, self-provisioned via git's
+  `info/exclude` when the host lacks the ignore line), and is folded into the tracked ledger
+  at close/merge. In-place reviews are unchanged.
 - review-legs first runs the host's env preflight; an unset declared var stops the run before
   any leg — review-legs exits 2 with the unset variable and its provision command on stderr,
   appending no manifest rows, and the session provisions the variable and re-runs.

@@ -3,4 +3,5 @@ node_modules/
 .claude/settings.local.json
 specs/**/*.design/
 .claude/spec-preimage/
+.claude/spec-runs.stopped.jsonl
 .playwright-mcp/

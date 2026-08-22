@@ -1,5 +1,5 @@
 {
-  "generatedBy": "spec@7.15.0",
+  "generatedBy": "spec@7.15.1",
   "contractHash": "7f3aa1a834ed",
   "gateCommand": "node --test {testDirs}",
   "testCommand": "node --test",

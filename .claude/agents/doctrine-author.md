@@ -30,7 +30,7 @@ edit gate scripts, workflow bodies, or generated `wf-*.js`.
 
 - Script references go through `spec-paths <key>`, never a literal path — command markdown cannot expand `${CLAUDE_PLUGIN_ROOT}` (hooks.json and frontmatter can, quoted: `"\"${CLAUDE_PLUGIN_ROOT}\"/scripts/<file>"`).
 - `§ Section Name` citations must match a `## ` heading byte-for-byte in the cited file (prefix match tolerates parentheticals) — `spec-paths shared-for` silently drops mismatches. After renaming any `## ` heading in core.md, re-check every citation and the per-command section lists.
-- Every new gate/mechanism gets a `scaffold-ledger.md` row: `| Mechanism | Kind | Justification (dated) | Earned under | Promote/retire condition |` — a row without a promote/retire condition is a defect; new guards enter ADVISORY.
+- New standing guards are deterministic scripts earned by a third recurrence of a class and admitted through `spec/doctrine/core.md` § Incident Policy's five-field bar (Removability is the retire condition) — never prose, never a registry row.
 - `grounding-contract.md` is hash-stamped into every host repo — an edit flags all hosts stale. Only genuine contract changes; never wording.
 - Behavior changes bump the owning plugin's `.claude-plugin/plugin.json` semver; its `description` line is the changelog surface.
 - Command frontmatter: `description` (one long line, em-dash clauses), `argument-hint`; intended model is stated in bold prose in the body, never a `model:` key. Plugin agents may NOT declare `permissionMode`/`memory` (host agents like this one may).

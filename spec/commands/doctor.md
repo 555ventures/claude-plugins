@@ -69,8 +69,12 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
      CI`); each must map to a check that actually resolves in the `gateCommand`, CI config,
      or the enforcement manifest. Presence only — never judge whether the check is good.
 7. **Cited references** — extract repo paths cited in the pipeline rules file, the
-   convention rule files, and each generated agent; verify each exists. Stale citations are
-   the most common drift and are individually patchable.
+   convention rule files, and each generated agent; verify each exists. Extract **bare
+   filenames too** (`scaffold-ledger.md`, `helpers.js` — a citation with no directory
+   prefix), resolving each against the file set its sentence implies; a path-shaped regex
+   alone silently passes every directory-less reference, which is how a rule citing a file
+   deleted five days earlier survived a full sweep (2026-08-21). Stale citations are the
+   most common drift and are individually patchable.
 8. **Design foundation** (only if the config has a `design` block) — `design.doctrine`
    exists and is ~one page; token files and the living-showcase entry it names exist.
 9. **Genesis handoff** (only if `.claude/genesis/status.json` exists) — the consume-side

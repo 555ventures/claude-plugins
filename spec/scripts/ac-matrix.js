@@ -42,12 +42,22 @@
 // "uncovered=N oracle=M"/"skipped=N sanctioned=S" strings; `--json`'s own `observed` field
 // mirrors those same objects exactly. The plain-mode stdout summary line stays byte-unchanged
 // (D8) — only the manifest rows and --json's observed field take the typed shape.
+//
+// specs/20260821/01-red-check.md D1/D6 (2026-08-21): the acMatrix row extends in place to
+// {"uncovered":N,"oracle":N,"preGreen":N} — `preGreen` counts well-formed AC bullets carrying a
+// VALID `[pre-green: <reason>]` tag (validated here against lib/spec-sections.js's
+// PRE_GREEN_REASONS, the single enum authority; the parser itself does no enum validation, D1).
+// An out-of-enum reason is hard finding `invalid-pre-green` (added to ACM_FINDING_CLASSES) and
+// does NOT count toward preGreen. The tag NEVER sanctions a skip out of `uncovered` — a tagged AC
+// with zero test hits still counts uncovered (AC-20260821-01-12). The plain-mode summary line
+// gains a `preGreen=N` segment (D6: "yours to extend sensibly" — not pinned byte-unchanged like
+// D8's uncovered/oracle/skipped/sanctioned segments).
 
 const fs = require('fs')
 const path = require('path')
 const { parseFilePlanRows } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
-const { AC_ID_RE, AC_ID_RE_GLOBAL, extractSection, parseAcBullets } = require('./lib/spec-sections')
+const { AC_ID_RE, AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, extractSection, parseAcBullets } = require('./lib/spec-sections')
 
 function usage() {
   console.error('usage: ac-matrix.js --spec <path> --root <dir> --manifest <path> ' +
@@ -106,6 +116,23 @@ for (const b of bullets) {
     findings.push({
       severity: 'hard', class: 'malformed-ac', ac: b.token || '',
       detail: `malformed AC-ID "${b.token}" — leading bold token must fully match AC-\\d{8}-\\d{2}[a-z]?-\\d+`,
+    })
+  }
+}
+
+// D6 (specs/20260821/01-red-check.md): [pre-green:] validation — unconditional, independent of
+// --has-drift-script (coverage suppression under drift mode is orthogonal to tag validity), and
+// independent of the AC's own coverage standing (D6: the tag never launders coverage — a valid
+// tag on a zero-hit AC still counts uncovered via the loop below, AND still counts preGreen here).
+let preGreen = 0
+for (const b of wellFormed) {
+  if (b.preGreen === null) continue
+  if (PRE_GREEN_REASONS.includes(b.preGreen)) {
+    preGreen++
+  } else {
+    findings.push({
+      severity: 'hard', class: 'invalid-pre-green', ac: b.id,
+      detail: `${b.id}: [pre-green: ${b.preGreen}] is not in PRE_GREEN_REASONS (${PRE_GREEN_REASONS.join(' | ')})`,
     })
   }
 }
@@ -397,10 +424,10 @@ for (const line of skipLines) {
 // objects, never packed strings — `--json`'s own `observed` field (below) mirrors these same
 // objects exactly, byte-identical to what gets appended to --manifest.
 
-const acMatrixObserved = { uncovered, oracle: oracleCovered }
+const acMatrixObserved = { uncovered, oracle: oracleCovered, preGreen }
 const skipReconcileObserved = { skipped: skipLines.length, sanctioned }
 
-const ACM_FINDING_CLASSES = new Set(['malformed-ac', 'uncovered-ac', 'oracle-red-or-absent', 'missing-test-file'])
+const ACM_FINDING_CLASSES = new Set(['malformed-ac', 'uncovered-ac', 'oracle-red-or-absent', 'missing-test-file', 'invalid-pre-green'])
 const SKIP_FINDING_CLASSES = new Set(['unsanctioned-skip', 'unmapped-skip'])
 const acMatrixExit = findings.some(f => ACM_FINDING_CLASSES.has(f.class)) ? 1 : 0
 const skipReconcileExit = findings.some(f => SKIP_FINDING_CLASSES.has(f.class)) ? 1 : 0
@@ -426,9 +453,11 @@ if (jsonOut) {
 } else {
   for (const f of findings) console.log(`HARD  ${f.class.padEnd(20)} ${f.detail}`)
   for (const w of warnings) console.log(`WARN  ${''.padEnd(20)} ${w}`)
-  // D8: the plain-mode stdout summary line stays byte-unchanged — only the manifest rows and
-  // --json's observed field (above) take the typed-object shape.
-  console.log(`ac-matrix: uncovered=${acMatrixObserved.uncovered} oracle=${acMatrixObserved.oracle} · ` +
+  // D8: the plain-mode stdout summary line stays byte-unchanged for the uncovered/oracle/
+  // skipped/sanctioned segments — D6 extends it with a preGreen segment ("yours to extend
+  // sensibly", not pinned byte-unchanged like D8's four).
+  console.log(`ac-matrix: uncovered=${acMatrixObserved.uncovered} oracle=${acMatrixObserved.oracle} ` +
+    `preGreen=${acMatrixObserved.preGreen} · ` +
     `skipped=${skipReconcileObserved.skipped} sanctioned=${skipReconcileObserved.sanctioned} · ` +
     `${findings.length} finding(s), ${warnings.length} warning(s)`)
 }

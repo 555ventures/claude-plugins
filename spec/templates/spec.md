@@ -96,7 +96,15 @@ depended_on_by: []
      manifest row means no mechanical redness check, which would make the tag a coverage-
      laundering route). A declared oracle covers the AC by declaration in review's matrix; a
      red or absent oracle leg is a hard finding, identical in standing to an uncovered AC. One
-     oracle per AC; an AC never carries both a test mapping and an `[oracle:]` tag. A Decision that
+     oracle per AC; an AC never carries both a test mapping and an `[oracle:]` tag. An AC whose
+     test is legitimately green pre-implementation declares `[pre-green: <reason>]` — closed
+     enum `fallback-rejection` | `absence-invariant` | `predicate-in-test`, sibling syntax to
+     `[env:]`/`[oracle:]`: tag a rejection criterion a pre-existing generic fallback already
+     satisfies, an absence invariant an inert stub already satisfies, or a predicate that IS the
+     deliverable living inside a test file. Verify against the pre-image before tagging at plan
+     time — build's red-check reads the tag as a sanction to test at Phase 1, never an
+     attestation taken on faith, and it never launders coverage (a tagged AC with zero test hits
+     still counts uncovered in ac-matrix). A Decision that
      promises a user-observable surface owes at least one AC whose test asserts on the
      observable itself, reached through the real in-repo route, fed by a fixture that is
      **produced** — the test executes the spec's own producer chain (view-model, assembler,

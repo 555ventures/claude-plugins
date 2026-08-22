@@ -268,34 +268,11 @@ upstream bug list. -->
   (specs/20260816/01-gate-baseline-reconcile.md — the D7 sentence landed split across two
   segments at build and AC-20260816-01-11 could not match it; recurred as a near-miss at review
   when the same fragment gained its anchoring sentence.)
-- `[plugin]` An AC asserting that a **newly-required-but-non-blocking** verdict leg does not
-  derive `GATE_RED` is vacuous pre-implementation: `verdict.js` ignores any leg name outside
-  `REVIEW_LEGS`/`REVIEW_BLOCKING`, so an unknown-and-red row is already indistinguishable from a
-  known-and-non-blocking one and its TDD red check cannot go red. The presence half (missing row
-  → `UNVERIFIED`) is the pin that actually reddens; write the non-blocking AC as a companion and
-  log the vacuity rather than inventing a red. (specs/20260817/07-promise-sweep-leg.md
-  AC-20260817-07-12, build 2026-08-17; same shape as specs/20260815/02-at-risk-pins.md
-  AC-20260815-02-7.)
-  Generalized on the third occurrence: **any AC asserting that the system REJECTS something is
-  vacuous as a red pin when a pre-existing generic fallback already rejects it** — unknown-leg
-  classification and unrecognized-flag arg parsing are two mechanisms of the same shape. Before
-  writing a rejection AC, execute it against the pre-image; if it already passes, keep it as the
-  correct post-implementation assertion and log the vacuity in the deviations sidecar, never
-  redden it artificially. (specs/20260819/01-review-evidence-retention.md AC-20260819-01-5,
-  build 2026-08-19 — arg-parse fallback; third occurrence, a deterministic guard is the next
-  escalation if a fourth lands.)
-  **The fourth and fifth landed** (specs/20260820/05-fleet-evidence-reader.md build 2026-08-20,
-  AC-20260820-05-10 "source holds zero `observed` tokens" and AC-20260820-05-11 "run leaves every
-  file byte-identical"), naming a second sub-shape: an **absence-invariant** — an AC asserting
-  that something is NOT present or NOT changed — passes against an inert stub by construction, so
-  it can never redden pre-implementation. The escalation this entry called for is therefore DUE
-  and un-actioned: it needs the core § Incident Policy admission bar (five ledger-derived fields)
-  before any guard is admitted, which is a user decision, not a close-time edit. Recorded at
-  review 2026-08-21 so the count is not lost.
-  **A sixth landed** (specs/20260820/08-config-name-ban.md build 2026-08-20, AC-20260820-08-9): a
-  pin asserting a literal the pre-image already hardcodes passes before and after the change,
-  because only the string's *construction* migrates, never its value. The genuine red lived in a
-  sibling production pin over the source. Folded 2026-08-21.
+- `[plugin]` The vacuous-pre-implementation-pin class (six recorded instances, 2026-08-17
+  through 2026-08-20 — unknown-leg, rejection-fallback, absence-invariant, and hardcoded-literal
+  sub-shapes) is now a mechanized guard, not a doctrine paragraph: see `spec/scripts/red-check.js`'s
+  incident header and `tests/red-check/red-check.test.js` for the class history. (specs/20260821/01-red-check.md
+  — JJ approved this deletion 2026-08-21.)
 - `[plugin]` **`orchestrator-compensation-during-live-worker`** (class stands at 1; grep this slug
   to count recurrences). The harness fired completion notifications for two `/spec:build` workers
   while they were still executing; the orchestrator read those as returns-with-no-work and began

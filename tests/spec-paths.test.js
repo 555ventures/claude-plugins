@@ -28,6 +28,12 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // is the third recurrence of the known spec-paths additive-collision class (JJ-20260814-01):
 // the key list below is updated in place, never a parallel exhaustive pin.
 
+// AC-20260821-01-11: specs/20260821/01-red-check.md D11 adds spec/scripts/red-check.js to the
+// bundle (build.md's Phase 1 invocation, D8) — like every other bundled script it needs a
+// spec-paths key, or build.md's `node "$(spec-paths red-check)"` line resolves nothing. This is
+// the fourth recurrence of the known spec-paths additive-collision class (JJ-20260814-01): the
+// key list below is updated in place, never a parallel exhaustive pin.
+
 // specs/20260820/07-review-driver.md File Plan (spec/bin/spec-paths row): the new
 // spec-review-driver.js script needs a spec-paths key like every other bundled script — a
 // missing key breaks /spec:review's driver invocation silently (§ Risk Tiers, spec-paths).
@@ -38,7 +44,8 @@ test('every documented key resolves to an existing path', () => {
   for (const key of ['root', 'workflows', 'wf-design', 'wf-enforce',
     'wf-panel', 'wf-research', 'dc-extract', 'design-atlas', 'skeletons-check', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'scope-reconcile', 'verdict', 'ci-query', 'review-legs',
-    'review-driver', 'promise-sweep', 'replay', 'replay-corpus', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
+    'review-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'shared', 'shared-genesis',
+    'template', 'templates', 'contract']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }
@@ -133,4 +140,14 @@ test('AC-20260819-02-10: spec-paths replay and spec-paths replay-corpus resolve 
     'D14: `spec-paths replay-corpus` must resolve to spec/doctrine/replay-corpus.md — the corpus is served ' +
     'to /spec:replay through this key, and a wrong key means the command can never find its own corpus')
   assert.ok(fs.existsSync(corpusPath), 'the resolved replay-corpus.md path must actually exist on disk: ' + corpusPath)
+})
+
+test('AC-20260821-01-11: spec-paths red-check resolves to spec/scripts/red-check.js, an existing path', () => {
+  const fs = require('node:fs')
+  const redCheckPath = run('red-check').trim()
+  assert.strictEqual(redCheckPath, path.join(SPEC, 'scripts/red-check.js'),
+    'D11: `spec-paths red-check` must resolve to spec/scripts/red-check.js — a wrong or missing key breaks ' +
+    'build.md\'s `node "$(spec-paths red-check)"` invocation silently (§ Risk Tiers, spec-paths: "a wrong ' +
+    'key breaks commands silently")')
+  assert.ok(fs.existsSync(redCheckPath), 'the resolved red-check.js path must actually exist on disk: ' + redCheckPath)
 })

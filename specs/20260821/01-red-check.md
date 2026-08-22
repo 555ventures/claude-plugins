@@ -1,6 +1,7 @@
 ---
 date: 2026-08-21
-status: hardened
+status: implementing
+diff_base: 0496a4fe968b796d7448104ec84015e426b2f6f4
 open_markers: 0
 tier: standard           # additive spec-paths key follows 20260819/02 + 20260820/05 precedent; no critical-trigger file gets a behavioral edit; worst failure is a false exit 1 pausing a build
 area: build-integrity

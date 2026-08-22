@@ -36,6 +36,18 @@ const { tmpdir, runNode, runBash, ROOT, SPEC } = require('../helpers')
 // assertion below is retyped in place; none is retagged (D8/AC-20260820-06-10 is a NEW test,
 // added at the end of this file, that owns the AC-ID — these existing pins keep their own
 // AC-IDs, since their invariant — which finding drives which count — is unchanged by the shape).
+//
+// specs/20260821/01-red-check.md D1/D6 (2026-08-21): the `[pre-green: <reason>]` AC tag (closed
+// enum `fallback-rejection | absence-invariant | predicate-in-test`, lib/spec-sections.js) rides
+// into ac-matrix.js's typed acMatrix row as a third counted field, extending 06's shape in place
+// to {"uncovered":N,"oracle":N,"preGreen":N}. Every existing `out.observed.acMatrix` literal
+// above is updated in place to add `preGreen: 0` (none of those fixture bullets carry the tag) —
+// none is retagged, since none of them happens to also satisfy AC-20260821-01-2/-10/-12's own
+// fixture shape. Three NEW tests below own those AC-IDs: an out-of-enum reason is its own hard
+// finding (`invalid-pre-green`, AC-2), the field counts exactly N valid tags (AC-10), and the tag
+// never launders an AC with zero test hits out of `uncovered` (AC-12, a SHALL-CONTINUE-TO pin —
+// its carrier assertion already passes today, since an unrecognized bracket tag is inert to the
+// pre-06 uncovered/oracle logic; only the shape/finding-class additions above are new).
 
 function specMd(acLines, filePlanRows) {
   return '# Test Spec\n\n## Acceptance Criteria\n\n' + acLines.join('\n') + '\n\n' +
@@ -88,11 +100,13 @@ test('AC-20260815-03-1: a malformed leading bold token emits a hard malformed-ac
   assert.ok(out.findings.some(f => f.class === 'malformed-ac'),
     'AC-2026-1 fails the full anchored AC-ID match (missing the -NN-N ordinal segments) and must ' +
     'surface as a malformed-ac finding — a malformed id is invisible to every downstream AC-ID grep')
-  assert.deepStrictEqual(out.observed.acMatrix, { uncovered: 1, oracle: 0 },
+  assert.deepStrictEqual(out.observed.acMatrix, { uncovered: 1, oracle: 0, preGreen: 0 },
     `unparseable = unknown = uncovered (D1): the malformed AC-2026-1 bullet must increment uncovered ` +
     `even though it also trips its own malformed-ac finding — a reviewer who waives that one notation ` +
     `finding must not then be told by the durable manifest row that coverage is complete. ` +
-    `AC-20260814-01-1 stays well-formed and covered so it must NOT also add a second uncovered-ac row ` +
+    `AC-20260814-01-1 stays well-formed and covered so it must NOT also add a second uncovered-ac row. ` +
+    `specs/20260821/01-red-check.md D6 extends this typed row with preGreen — neither fixture bullet ` +
+    `carries a [pre-green:] tag, so preGreen must be 0 ` +
     `— got ${JSON.stringify(out.observed.acMatrix)}`)
 })
 
@@ -111,8 +125,9 @@ test('AC-20260814-01-2: a well-formed AC-ID with zero hits and no [oracle:] tag 
   assert.ok(out.findings.some(f => f.class === 'uncovered-ac' && f.ac === 'AC-20260814-01-2'),
     'AC-20260814-01-2 never appears as a literal inside tests/bar.test.js and carries no [oracle:] ' +
     'tag, so it must surface as a named uncovered-ac finding — otherwise an untested AC rides to CLEAN')
-  assert.deepStrictEqual(out.observed.acMatrix, { uncovered: 1, oracle: 0 },
-    `observed must be the exact pinned typed object verdict.js reads field-by-field — got ${JSON.stringify(out.observed.acMatrix)}`)
+  assert.deepStrictEqual(out.observed.acMatrix, { uncovered: 1, oracle: 0, preGreen: 0 },
+    `observed must be the exact pinned typed object verdict.js reads field-by-field — specs/20260821/01-red-check.md ` +
+    `D6 extends this row with preGreen, 0 here since the fixture bullet carries no [pre-green:] tag — got ${JSON.stringify(out.observed.acMatrix)}`)
 })
 
 test('AC-20260814-01-3a / continues AC-20260815-03-7: an [oracle:] AC whose declared leg is green in the manifest is excluded from uncovered, counted in oracle=, and warned (not a finding)', () => {
@@ -129,8 +144,9 @@ test('AC-20260814-01-3a / continues AC-20260815-03-7: an [oracle:] AC whose decl
   assert.ok(!out.findings.some(f => f.ac === 'AC-20260814-01-3'),
     'AC-20260814-01-3 has zero literal test hits but declares [oracle: gate], and the manifest\'s ' +
     'gate row is green — it must be covered-by-declaration, never an uncovered-ac finding')
-  assert.deepStrictEqual(out.observed.acMatrix, { uncovered: 0, oracle: 1 },
-    `a green-oracle AC must be counted in the typed object's "oracle" field — got ${JSON.stringify(out.observed.acMatrix)}`)
+  assert.deepStrictEqual(out.observed.acMatrix, { uncovered: 0, oracle: 1, preGreen: 0 },
+    `a green-oracle AC must be counted in the typed object's "oracle" field — specs/20260821/01-red-check.md ` +
+    `D6 extends this row with preGreen, 0 here since the fixture bullet carries no [pre-green:] tag — got ${JSON.stringify(out.observed.acMatrix)}`)
   assert.ok(out.warnings.some(w => /oracle/i.test(w) && /gate/i.test(w)),
     'coverage-by-declaration must still surface as a named warning line ("AC-x: oracle = `gate` leg") — never silent green')
   assert.strictEqual(res.status, 0,
@@ -300,12 +316,13 @@ test('AC-20260815-03-9: --has-drift-script still counts a malformed AC bullet to
   const out = findings(res)
   assert.ok(out.findings.some(f => f.class === 'malformed-ac'),
     'lint runs in BOTH drift modes — AC-2026-1 must still be flagged malformed-ac under --has-drift-script')
-  assert.deepStrictEqual(out.observed.acMatrix, { uncovered: 1, oracle: 0 },
+  assert.deepStrictEqual(out.observed.acMatrix, { uncovered: 1, oracle: 0, preGreen: 0 },
     'today --has-drift-script structurally skips the well-formed coverage loop entirely (the host ' +
     'driftScript owns coverage there), so the manifest row records uncovered:0 no matter how many ' +
     'unparseable bullets sit in the AC section — the same fail-closed-denominator hole as AC-20260815-03-1, ' +
     'just reached through the other code path (D1: "the malformed term applies in --has-drift-script mode ' +
-    `too"). got ${JSON.stringify(out.observed.acMatrix)}`)
+    'too"). specs/20260821/01-red-check.md D6 extends this row with preGreen, 0 here since neither fixture ' +
+    `bullet carries a [pre-green:] tag. got ${JSON.stringify(out.observed.acMatrix)}`)
 })
 
 test('AC-20260814-01-8a: invocation with no --spec exits 2 with a stderr line naming the remedy command', () => {
@@ -401,10 +418,12 @@ test('AC-20260820-06-10: on an all-green fixture, ac-matrix.js appends {"uncover
   const before = fs.readFileSync(manifest, 'utf8').trim().split('\n').filter(Boolean)
   const res = run(spec, dir, manifest, ['--json'])
   const out = findings(res)
-  assert.deepStrictEqual(out.observed, { acMatrix: { uncovered: 0, oracle: 0 }, skipReconcile: { skipped: 0, sanctioned: 0 } },
+  assert.deepStrictEqual(out.observed, { acMatrix: { uncovered: 0, oracle: 0, preGreen: 0 }, skipReconcile: { skipped: 0, sanctioned: 0 } },
     'AC-20260820-06-10 (literal): the --json output\'s observed field must mirror exactly ' +
-    '{acMatrix: {uncovered: 0, oracle: 0}, skipReconcile: {skipped: 0, sanctioned: 0}} — a caller reading ' +
-    '--json cannot script against this field if it disagrees with the manifest rows the script also writes: ' +
+    '{acMatrix: {uncovered: 0, oracle: 0, preGreen: 0}, skipReconcile: {skipped: 0, sanctioned: 0}} — a caller reading ' +
+    '--json cannot script against this field if it disagrees with the manifest rows the script also writes ' +
+    '(specs/20260821/01-red-check.md D6 extends acMatrix with preGreen, 0 here since the fixture bullet ' +
+    'carries no [pre-green:] tag): ' +
     JSON.stringify(out.observed))
   const lines = fs.readFileSync(manifest, 'utf8').trim().split('\n').filter(Boolean)
   const appended = lines.slice(before.length).map(l => JSON.parse(l))
@@ -417,4 +436,81 @@ test('AC-20260820-06-10: on an all-green fixture, ac-matrix.js appends {"uncover
   assert.deepStrictEqual(skipRow.observed, out.observed.skipReconcile,
     `the appended skip-reconcile manifest row's observed must be byte-identical to --json's mirrored ` +
     `skipReconcile object: manifest=${JSON.stringify(skipRow.observed)} json=${JSON.stringify(out.observed.skipReconcile)}`)
+})
+
+test('AC-20260821-01-2: an AC bullet carrying [pre-green: because-i-said-so] — outside PRE_GREEN_REASONS — is a hard invalid-pre-green finding, exit 1, and the tag does not count toward preGreen', () => {
+  const dir = tmpdir('acm-rc2')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  // Covered by a literal hit so this fixture isolates to the invalid-tag class alone — an
+  // out-of-enum reason must not also masquerade as an uncovered-ac or oracle finding.
+  fs.writeFileSync(path.join(dir, 'tests/foo.test.js'), '// covers AC-20260821-85-1\n')
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260821-85-1**: WHEN X THE SYSTEM SHALL Y [pre-green: because-i-said-so] → tests/foo.test.js'],
+    ['| tests/foo.test.js | CREATE | tests | covers AC, isolates this fixture to the invalid-pre-green class |']))
+  const manifest = writeManifest(dir, [])
+  const res = run(spec, dir, manifest, ['--json'])
+  assert.strictEqual(res.status, 1,
+    `an out-of-enum [pre-green:] reason must be a hard finding, exit 1 — a silent exit 0 would let a ` +
+    `worker invent an arbitrary reason string and have it accepted (stderr: ${res.stderr})`)
+  const out = findings(res)
+  assert.ok(out.findings.some(f => f.class === 'invalid-pre-green' && f.ac === 'AC-20260821-85-1'),
+    `"because-i-said-so" is not in PRE_GREEN_REASONS, so the finding must be classed invalid-pre-green ` +
+    `and name AC-20260821-85-1 — got ${JSON.stringify(out.findings)}`)
+  assert.deepStrictEqual(out.observed.acMatrix, { uncovered: 0, oracle: 0, preGreen: 0 },
+    `the tag stays red-expected (fail closed, D2 of specs/20260821/01-red-check.md) — an invalid reason ` +
+    `must NOT increment preGreen, and the AC's real literal hit must still keep uncovered/oracle at 0 so ` +
+    `the invalid-tag class is the only signal in this fixture — got ${JSON.stringify(out.observed.acMatrix)}`)
+})
+
+test('AC-20260821-01-10: a spec carrying exactly 2 valid [pre-green:] tags (different enum members) appends the ac-matrix manifest row with preGreen:2, and --json mirrors it', () => {
+  const dir = tmpdir('acm-rc10')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/foo.test.js'),
+    '// covers AC-20260821-84-1 AC-20260821-84-2\n')
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260821-84-1**: WHEN X THE SYSTEM SHALL Y [pre-green: absence-invariant] → tests/foo.test.js',
+      '- **AC-20260821-84-2**: WHEN X THE SYSTEM SHALL Y [pre-green: predicate-in-test] → tests/foo.test.js'],
+    ['| tests/foo.test.js | CREATE | tests | covers both ACs |']))
+  const manifest = writeManifest(dir, [])
+  const before = fs.readFileSync(manifest, 'utf8').trim().split('\n').filter(Boolean)
+  const res = run(spec, dir, manifest, ['--json'])
+  const out = findings(res)
+  assert.deepStrictEqual(out.observed.acMatrix, { uncovered: 0, oracle: 0, preGreen: 2 },
+    `two well-formed bullets each carry a DIFFERENT valid [pre-green:] reason and are both covered by a ` +
+    `literal hit, so preGreen must count exactly 2 while uncovered/oracle stay 0 — a count that only ` +
+    `recognized one reason, or that conflated the tag with coverage, would drift from this exact object: ` +
+    `got ${JSON.stringify(out.observed.acMatrix)}`)
+  const lines = fs.readFileSync(manifest, 'utf8').trim().split('\n').filter(Boolean)
+  const acmRow = lines.slice(before.length).map(l => JSON.parse(l)).find(r => r.leg === 'ac-matrix')
+  assert.deepStrictEqual(acmRow.observed, out.observed.acMatrix,
+    `the appended ac-matrix manifest row's observed must be byte-identical to --json's mirrored acMatrix ` +
+    `object, so every review ledger row that rides this manifest row sees the same preGreen count a ` +
+    `caller reading --json sees: manifest=${JSON.stringify(acmRow.observed)} json=${JSON.stringify(out.observed.acMatrix)}`)
+})
+
+test('AC-20260821-01-12: an AC carrying [pre-green:] with zero test hits SHALL CONTINUE TO count as uncovered — the tag never launders coverage (carrier assertion, already passing pre-D6)', () => {
+  const dir = tmpdir('acm-rc12')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/bar.test.js'), '// no matrix id present here\n')
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260821-83-1**: WHEN X THE SYSTEM SHALL Y [pre-green: fallback-rejection] → tests/bar.test.js'],
+    ['| tests/bar.test.js | CREATE | tests | zero literal hits despite the pre-green tag |']))
+  const manifest = writeManifest(dir, [])
+  const res = run(spec, dir, manifest, ['--json'])
+  assert.strictEqual(res.status, 1,
+    `a [pre-green:] tag must never sanction a zero-hit AC out of uncovered-ac — this carrier assertion ` +
+    `holds against today's tree, since an unrecognized bracket tag is inert to the pre-existing ` +
+    `uncovered/oracle logic (stderr: ${res.stderr})`)
+  const out = findings(res)
+  assert.ok(out.findings.some(f => f.class === 'uncovered-ac' && f.ac === 'AC-20260821-83-1'),
+    `AC-20260821-83-1 never appears as a literal inside tests/bar.test.js — the [pre-green:] tag must not ` +
+    `suppress the uncovered-ac finding — got ${JSON.stringify(out.findings)}`)
+  assert.strictEqual(out.observed.acMatrix.uncovered, 1,
+    `the typed row's uncovered field must count this AC regardless of its [pre-green:] tag — only the ` +
+    `uncovered field is asserted here (not the full object with preGreen) so this pin stays green both ` +
+    `before and after specs/20260821/01-red-check.md D6 lands the preGreen field — got ` +
+    `${JSON.stringify(out.observed.acMatrix)}`)
 })

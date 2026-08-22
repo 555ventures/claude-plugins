@@ -28,11 +28,7 @@ contract; the gate is deterministic; surprises go to the user with the spec's ow
 2. **Parse the spec once.** File Plan rows → waves by **Layer**, ordered per the host's
    `layerGroups` (layers listed together in one group form ONE wave; their file sets must
    be disjoint or the wave splits). `tests` rows form the test-author dispatch (Phase 1);
-   `other` rows and shared registration/wiring files form a final serial wave. Classify
-   every test file `expect: red | green` from the spec's AC vocabulary: `green` iff every
-   AC it carries is a sanctioned-green carrier (`SHALL CONTINUE TO` pin, absence/negative-
-   invariant AC, tag-only AC on an *edit* action, or a design-stage pre-landed component);
-   all others `red`.
+   `other` rows and shared registration/wiring files form a final serial wave.
 3. **Resolve the gate.** Substitute `{testDirs}`/`{scopeDirs}` in `gateCommand` from the
    spec's File Plan test rows, **resolved to the form the host's runner actually executes**
    — for `node --test` the glob form (`node --test 'tests/<dir>/*.test.js'`; a bare
@@ -53,17 +49,35 @@ Dispatch the test author: one `Agent {subagent_type: <agentMap.tests>, model: so
 the spec path and pipeline-rules path — it derives tests from the spec alone.
 Implementation workers never write tests for code they implement.
 
-**Red-check (executed, per file — never skipped when any file expects red):** run
-`{testCommand} <file>` (one invocation per file — one observation per verdict) plus the
-`typecheckCommand` leg, and check each file against its Phase 0 expectation. Every
-red-expected file must fail with at least one assertion (or typecheck diagnostic)
-**attributable to the spec's contract** — a file that crashes on loading a module the File
-Plan's CREATE rows name is not yet demonstrated red: stub the missing module inert, re-run,
-confirm assertions now execute and fail, then delete the stub. A red-expected file that
-**passes** means the spec is wrong somewhere — diagnose (stale assumption, wrong target,
-behavior already exists, mis-classified pin) and confirm with the user before proceeding. A
-green-expected pin that **fails** is a broken pin: diagnose the drift, never weaken the
-carrier.
+**Red-check (executed, one observation per verdict):** run
+`node "$(spec-paths red-check)" --spec {spec path} --root {root} --base {build_base or
+diff_base}` — it resolves the spec's own expectation (a `SHALL CONTINUE TO` pin or a valid
+`[pre-green:]` tag sanctions green; everything else expects red), executes `{testCommand}
+<file>` (plus the `typecheckCommand` leg when declared) once per tests-layer file, and
+reads exit codes only. For a design-stage pre-landed component's test (design-capable
+hosts only), pass `--expect-green <path>` per such file — an orchestrator-derived,
+per-invocation sanction, printed as a warning naming the flag and the path.
+
+Dispositions:
+- **exit 0** — every file matched its expectation; proceed. The script proves the file's
+  colour only, never that the failure is attributable to the spec's contract — a
+  red-expected file that fails by crashing on loading a module the File Plan's CREATE rows
+  name is not yet demonstrated red (the script deliberately does not distinguish crash-red
+  from assert-red): stub the missing module inert, re-run, confirm the file's assertions
+  now execute and fail, then delete the stub.
+- **exit 1, `unsanctioned-green`** — a red-expected file passed: the spec is wrong
+  somewhere. Diagnose (stale assumption, wrong target, behavior already exists,
+  mis-classified pin) and confirm with the user before proceeding.
+- **exit 1, `broken-pin`** — a sanctioned-green file failed. Diagnose the drift; never
+  weaken the carrier.
+- **exit 1, `missing-test-file`** — a non-DELETE tests-layer File Plan path does not exist
+  on disk; the script probes existence before invoking the runner and never fakes a
+  satisfied red expectation. Author the missing file.
+- **exit 1, `invalid-pre-green`** — an AC bullet's `[pre-green:]` reason is outside the
+  closed enum, so it sanctions nothing and the file stays red-expected. Fix the tag to a
+  valid enum member (`fallback-rejection` | `absence-invariant` | `predicate-in-test`).
+- **exit 2** — a refusal (usage, config, or pre-image purity), never a findings result:
+  print the remedy verbatim and stop.
 
 ## Phase 2 — Implementation waves
 

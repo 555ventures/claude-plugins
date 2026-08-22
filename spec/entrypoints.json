@@ -74,6 +74,9 @@
   "spec/scripts/question-style-gate.js": {
     "entryPoints": ["spec/hooks/hooks.json"]
   },
+  "spec/scripts/red-check.js": {
+    "entryPoints": ["spec/commands/build.md"]
+  },
   "spec/scripts/replay.js": {
     "entryPoints": ["spec/commands/replay.md", "spec/scripts/spec-review-driver.js"]
   },

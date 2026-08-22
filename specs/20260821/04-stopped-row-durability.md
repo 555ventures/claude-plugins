@@ -1,6 +1,6 @@
 ---
 date: 2026-08-21
-status: implementing
+status: done
 diff_base: fda882b1f33a55eae0b2acd0974875193a678745
 open_markers: 0
 tier: standard           # merge-back.sh (critical) is read, never edited; the driver is not on the Risk Tiers list. Worst failure: a stop row written to the fallback location (today's behavior, printed loudly) or a failed drain (rows remain visible via the union-read either way) — recoverable, never destructive, and the clean-root precondition is respected by construction (executed spike: gitignored paths are invisible to `git status --porcelain`).
@@ -220,6 +220,12 @@ row at all is a PRE-EXISTING gap deliberately out of scope — it deserves its o
 scoping is visible, not silent. Locking around the drain is rejected as gold-plating (A6).
 Build-order note: specs/20260821/02 (hardened) also modifies `spec-review-driver.js` —
 build serially after it lands, or accept a mechanical merge; no semantic dependency.
+
+Build deviation (folded at close, 2026-08-22): D9's literal version target `7.15.0` was
+already taken at build time — `spec/.claude-plugin/plugin.json` read `7.15.1` at the diff
+base — so the build bumped to **7.16.0** carrying D9's changelog paragraph verbatim. This is
+the recorded `[host]` gotcha that a spec Decision's literal version number is a target, not a
+pin; one-off application, no new rules entry.
 
 Collision sweep at lock (2026-08-21, `collision-closure` — both literals hits are already
 File Plan rows): two `likely`-tier paths WAIVED as synthetic-fixture false positives —

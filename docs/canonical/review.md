@@ -45,6 +45,13 @@
   only once a merge has actually landed — writing them straight to the main root at close time
   dirties it before `merge` runs and trips `assert_clean_root`/`ff-only`, and committing them
   from the worktree makes `git worktree remove` refuse cleanup after the merge already landed.
+  The exception is terminal-red evidence: a worktree review's `RED_BLOCKING` hard-stop appends
+  its `GATE_RED` line to the gitignored `<main root>/.claude/spec-runs.stopped.jsonl` at the
+  moment of the stop (self-provisioned via git's `info/exclude` when the host lacks the ignore
+  line), so a stopped attempt survives an abandoned or force-removed worktree; every ledger
+  reader union-merges `spec-runs*.jsonl`, and the rows are drained into the tracked ledger —
+  positioned before the close row — when that spec later closes CLEAN, in-place or via merge
+  promotion. (specs/20260821/04-stopped-row-durability.md)
   `/spec:escape` derives `killedMatch` from it. (amended by specs/20260820/07-review-driver.md,
   2026-08-21) Plan locks
   append a `stage:"plan"` ledger row of executed facts (spike count, promise-sweep

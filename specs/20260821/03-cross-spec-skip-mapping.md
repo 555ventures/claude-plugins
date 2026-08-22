@@ -1,6 +1,6 @@
 ---
 date: 2026-08-21
-status: implementing
+status: done
 diff_base: 4a06c5be1415890b4996f25c3798b77fc5ef862f
 open_markers: 0
 tier: standard           # no critical-trigger file gets a behavioral edit (ac-matrix.js, red-check.js, lib/spec-sections.js, smoke.sh, and the driver are not on the Risk Tiers list); worst failure is a wrong skip disposition, a false smoke red, or a wrong coverage verdict, all surfaced loudly at review

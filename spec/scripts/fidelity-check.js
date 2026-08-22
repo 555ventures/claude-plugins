@@ -387,6 +387,64 @@ function templateHit(files, needle) {
   return null
 }
 
+// ---- coverage (tiling) matcher ------------------------------------------------------------------
+// PRAX-20260821-01: a needle used to pass if ANY single technique matched it WHOLE — a verbatim
+// file substring, a whole catalog value, or a template. That let one unrelated anchor-free
+// template (matchesTemplate verifies plain CONTAINMENT when neither end is anchored) certify an
+// entire composite needle on one incidental >=3-char overlap — a false CLEAN even when the real
+// value had been replaced with unrelated text. It also FAILED needles the mock legitimately
+// splits across a markup boundary — a data prop and a fixture string, two catalog values joined
+// by a renderer's `fill()` seam, a renderer-owned glyph beside a catalog template — because no
+// single technique ever saw the whole string.
+// The fix: a needle passes only when it is fully TILED, left to right, with no gaps, by a
+// sequence of tiles, each one of:
+//   - a verbatim occurrence of that substring in one of the needle's mapped files;
+//   - a whole catalog value;
+//   - a template match (matchesTemplate, catalog or file template — same anchoring as always,
+//     but applied to the TILE, not the whole needle, so an anchor-free template only ever
+//     certifies the tile it actually covers, never the untiled remainder around it);
+//   - neutral residue — a run with no letters or digits (glyphs, `·`, `/`, dashes, whitespace),
+//     skipped for free and exempt from the length guard.
+// The existing per-piece guards still apply: a non-residue tile needs norm(tile).length >= 3,
+// and matchesTemplate's own lead/tail anchoring applies within the tile.
+// This is a fallback ONLY — every existing whole-needle fast path (verbatim / catalog value /
+// template / edge-separator retry) runs first, unchanged, and still short-circuits on its own
+// terms. Tiling only runs once the whole-needle attempt has already failed.
+const HAS_ALNUM_RE = /[\p{L}\p{N}]/u
+const isNeutralChar = ch => !HAS_ALNUM_RE.test(ch)
+function wholeTileMatch(tile, files) {
+  const t = norm(tile)
+  if (t.length < 3) return false
+  if (files.some(f => hayOf(f) !== null && hayOf(f).includes(t))) return true
+  if (catalogs.some(cat => cat.values.has(t))) return true
+  if (catalogs.some(cat => cat.templates.some(segs => matchesTemplate(segs, t)))) return true
+  if (templateHit(files, t)) return true
+  return false
+}
+// Left-to-right reachability DP over needle offsets 0..needle.length — not exponential
+// backtracking. Needles are short (<300 chars); O(n^2) tile checks over the existing file set
+// (no new haystacks) is cheap.
+function tiledCoverage(needle, files) {
+  const n = needle.length
+  if (!n) return true
+  const reach = new Array(n + 1).fill(false)
+  reach[0] = true
+  const tileCache = new Map() // tile text → bool, memoized within this one coverage search
+  for (let i = 0; i < n; i++) {
+    if (!reach[i]) continue
+    if (isNeutralChar(needle[i])) reach[i + 1] = true
+    for (let j = i + 1; j <= n; j++) {
+      if (reach[j]) continue
+      const tile = needle.slice(i, j)
+      let ok = tileCache.get(tile)
+      if (ok === undefined) { ok = wholeTileMatch(tile, files); tileCache.set(tile, ok) }
+      if (ok) reach[j] = true
+    }
+    if (reach[n]) return true
+  }
+  return reach[n]
+}
+
 // ---- layout candidates ---------------------------------------------------------------------------
 const TW_FLEX = { column: 'flex-col', row: 'flex-row', 'column-reverse': 'flex-col-reverse', 'row-reverse': 'flex-row-reverse' }
 function layoutCandidates(property, value) {
@@ -419,6 +477,7 @@ let checkedStrings = 0
 let interpolated = 0
 let catalogHits = 0
 let bindingsSkipped = 0
+let tiled = 0
 for (const surf of surfaces) {
   const id = surf.raw.id
   const surfFailStart = failures.length // over-claim detection (D5) splices its line at this index
@@ -563,6 +622,14 @@ for (const surf of surfaces) {
         entryOutcome.set(e, 'pass')
         continue // the value is homed; only the edge separator lives in the renderer
       }
+      // last resort: the needle may be legitimately TILED across a markup boundary — a data prop
+      // + a fixture string, two catalog values joined by a renderer seam, a glyph beside a
+      // catalog template. Only runs once every whole-needle technique above has failed.
+      if (tiledCoverage(needle, readable)) {
+        tiled++
+        entryOutcome.set(e, 'pass')
+        continue
+      }
       if (!excuse(id, 'string', e.value)) {
         failures.push(id + ' [' + e.region + ']: copy "' + e.value + '" missing — not in ' +
           (readable.length ? readable.join(', ') : '(no readable files)') +
@@ -689,5 +756,6 @@ process.stdout.write('fidelity-check: ' + surfaces.length + ' surface(s), ' + ch
   ' string(s) verified' + (interpolated ? ' (' + interpolated + ' via interpolation template)' : '') +
   (catalogHits ? ' (' + catalogHits + ' via copy catalog)' : '') +
   (separatorTrimmed ? ' (' + separatorTrimmed + ' via edge-separator trim)' : '') +
+  (tiled ? ' (' + tiled + ' via coverage tiling)' : '') +
   (bindingsSkipped ? ', ' + bindingsSkipped + ' prop binding(s) skipped' : '') +
   (excused.length ? ', ' + excused.length + ' excused by delta' : '') + ' — clean\n')

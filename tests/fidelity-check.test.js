@@ -513,6 +513,89 @@ test('AC-20260814-02-8: a clean pass and a flat schemaVersion-2 extract never em
     'a schemaVersion-2 flat extract has one root region with no children — there is no child-region coverage split to compute, so the over-claim diagnosis can never fire on it (D5: no false positives on old sidecars)')
 })
 
+// ---- PRAX-20260821-01: coverage (tiling) matcher --------------------------------------------------
+// A needle passes only when it is fully TILED, left to right, with no gaps, by a sequence of
+// tiles: a verbatim occurrence in a mapped file, a whole catalog value, a template match, or
+// neutral residue (no letters/digits — skipped for free, exempt from the length guard). This is a
+// fallback ONLY, run after every whole-needle fast path has already failed.
+
+test('coverage tiling: two adjacent verbatim tiles across mapped files, joined by whitespace, pass', () => {
+  // The mock splits a composite string across a markup boundary: one half lives in the component,
+  // the other in its catalog-entry fixture — the real "341 / ≈520" shape (a data prop plus a
+  // fixture string), simplified to plain verbatim text in two homes.
+  const f = fixture({
+    strings: ['Alpha Bravo'],
+    skeletons: { skeletons: [{ id: 's1', decision: 'author', componentPath: 'src/S1.tsx',
+      catalogEntryPath: 'src/S1.stories.tsx', sliceRef: 'slice-s1.html', states: ['default'], tokens: ['x'] }] },
+    files: {
+      'src/S1.tsx': '<span>Alpha</span>',
+      'src/S1.stories.tsx': 'export const bravo = "Bravo"',
+    },
+  })
+  const res = run(f)
+  assert.strictEqual(res.status, 0, res.stderr)
+  assert.match(res.stdout, /via coverage tiling/)
+})
+
+test('coverage tiling: two catalog values joined by neutral `·` residue pass', () => {
+  // The real "param · matched its null twins" shape: two catalog values joined by a renderer's
+  // `fill()` seam through a 1-char separator, whose template has no static segment >=3 chars and
+  // is filtered out of templatesOf entirely — only tiling can certify this.
+  const f = fixture({
+    strings: ['Param · Reason'],
+    config: { design: { copyCatalogs: ['app/messages/en.json'] } },
+    files: {
+      'src/S1.tsx': '<span>{m.param()} · {m.reason()}</span>',
+      'app/messages/en.json': JSON.stringify({ param: 'Param', reason: 'Reason' }),
+    },
+  })
+  const res = run(f)
+  assert.strictEqual(res.status, 0, res.stderr)
+  assert.match(res.stdout, /via coverage tiling/)
+})
+
+test('coverage tiling: a 1-char glyph residue plus an anchored catalog template pass', () => {
+  // The real "✦ PRAX · GROUNDED IN 520 TRIALS" shape: a renderer-owned 1-char glyph const beside
+  // a catalog template. The whole-needle template fast path fails because the glyph precedes the
+  // template's anchored lead segment; only tiling can skip the glyph as residue and cover the rest.
+  const f = fixture({
+    strings: ['✦ Grounded in 520 trials'],
+    config: { design: { copyCatalogs: ['app/messages/en.json'] } },
+    files: {
+      'src/S1.tsx': 'const GLYPH = "✦"; <span>{GLYPH} {m.grounded({ n: 520 })}</span>',
+      'app/messages/en.json': JSON.stringify({ grounded: 'Grounded in {n} trials' }),
+    },
+  })
+  const res = run(f)
+  assert.strictEqual(res.status, 0, res.stderr)
+  assert.match(res.stdout, /via coverage tiling/)
+})
+
+test('coverage tiling never rescues absent copy: the "Go" probe still fails', () => {
+  // PRAX-20260821-01's false negative: a real catalog value replaced with the unrelated literal
+  // "Go" — the mock string exists nowhere on disk. Tiling must not manufacture coverage out of
+  // text that shares no substring with the needle.
+  const f = fixture({
+    strings: ['Send invite'],
+    files: { 'src/S1.tsx': '<Button>Go</Button>' },
+  })
+  const res = run(f)
+  assert.strictEqual(res.status, 1)
+  assert.match(res.stderr, /Send invite/)
+})
+
+test('coverage tiling holds the >=3-char guard per tile: a 2-char alnum gap still fails', () => {
+  // "Bravo" alone is verbatim and would satisfy a tail tile, but the leading "Hi" is only 2 chars
+  // — the same guard non-residue tiles have always had — so tiling must not stitch it together.
+  const f = fixture({
+    strings: ['Hi Bravo'],
+    files: { 'src/S1.tsx': '<span>Hi</span><span>Bravo</span>' },
+  })
+  const res = run(f)
+  assert.strictEqual(res.status, 1)
+  assert.match(res.stderr, /Hi Bravo/)
+})
+
 test('the catalog does not excuse copy that is nowhere: missing copy still fails with catalogs declared', () => {
   const f = fixture({
     surfaces: [{ ...V3_SURFACE, entries: [{ region: 'sidebar', kind: 'copy', value: 'Send invite' }], layout: [] }],

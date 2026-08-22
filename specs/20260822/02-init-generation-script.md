@@ -6,7 +6,7 @@ tier: standard           # additive spec-paths key follows 20260819/02 + 2026082
 area: bootstrap
 design: false
 breaking: false
-depends_on: []
+depends_on: ["specs/20260821/03-cross-spec-skip-mapping.md"]
 depended_on_by: []
 brief: 11
 ---

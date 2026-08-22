@@ -7,7 +7,7 @@ tier: critical           # edits verdict.js derive()/arg surface — named on Ri
 area: review-verification
 design: false
 breaking: false
-depends_on: ["specs/20260821/04-stopped-row-durability.md"]
+depends_on: ["specs/20260821/04-stopped-row-durability.md", "specs/20260821/03-cross-spec-skip-mapping.md"]
 depended_on_by: []
 brief: n/a
 ---

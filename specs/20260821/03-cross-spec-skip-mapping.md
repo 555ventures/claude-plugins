@@ -2,7 +2,7 @@
 date: 2026-08-21
 status: hardened
 open_markers: 0
-tier: standard           # no critical-trigger file gets a behavioral edit (ac-matrix.js, smoke.sh, and the driver are not on the Risk Tiers list); worst failure is a wrong skip disposition or a false smoke red, both surfaced loudly at review
+tier: standard           # no critical-trigger file gets a behavioral edit (ac-matrix.js, red-check.js, lib/spec-sections.js, smoke.sh, and the driver are not on the Risk Tiers list); worst failure is a wrong skip disposition, a false smoke red, or a wrong coverage verdict, all surfaced loudly at review
 area: review-integrity
 design: false
 breaking: false
@@ -12,7 +12,7 @@ brief: n/a
 spiked: 2026-08-21
 ---
 
-# Cross-spec skip mapping reaches the owning-spec sanction; smoke fails closed on a stale-ready environment
+# Cross-spec skip mapping reaches the owning-spec sanction; smoke fails closed on a stale-ready environment; AC-ID coverage matching is full-token
 
 ## Goal
 
@@ -30,6 +30,14 @@ citations into the existing sanction logic with every edge failing closed, bare-
 byte-identical, the driver's skip-extraction step preserves the runner's file qualifier, and
 smoke refuses to boot into an environment whose ready predicate is already true.
 
+Amended 2026-08-22 — D5's pre-registered reopen condition fired (a live hit): the coverage
+grep's bare-substring AC-ID matching lets `AC-…-1` match inside `AC-…-12`, so ac-matrix
+fails OPEN (a phantom prefix hit suppresses `uncovered-ac` — 4 laundered ACs on a 78-spec
+scan) and red-check fails CLOSED (a green pin phantom-carrying a shorter red-expected AC is
+a false `unsanctioned-green` — it stopped specs/20260822/02's build the same day). Done
+additionally means: both call sites match full tokens through one exported helper, and a
+prefix hit neither launders coverage nor stops a build.
+
 ## Decisions (locked — workers apply verbatim, never override)
 
 | ID | Decision | One-line rationale |
@@ -38,20 +46,26 @@ smoke refuses to boot into an environment whose ready predicate is already true.
 | D2 | **Monotonic widening only.** Route 3 runs solely where today's outcome is `unmapped-skip`: the embedded-AC-ID route keeps absolute precedence (a qualified line embedding an ID never reads the file), the content-match route is byte-unchanged, and bare-name lines (no `::`) never enter route 3 (AC-20260821-03-5, AC-20260821-03-6) | Every currently-mapped skip keeps its exact disposition; only lines that were dead ends can change, and only to a mapped disposition — no re-litigating 20260815/03's precedence rules |
 | D3 | **The driver's SKIPS step instructs qualifier retention.** `spec-review-driver.js`'s SKIPS prompt adds: keep the runner's own file qualifier (`<relpath>::<name>`) on each line when the runner emits one (pytest-style `path::name` as the example); bare names only when the runner reports no path (AC-20260821-03-8) | Route 3 consumes the qualifier; a prompt that trims to bare names starves the fix. The existing driver test pins the prompt only as `/skip/i`, so this is additive, no collision |
 | D4 | **`smoke.sh` pre-boot staleness probe.** Immediately before spawning `bootCommand`, run `readyCheck` once; if it ALREADY passes, print `__SMOKE_FAIL__ stale-ready` naming the remedy (find and stop the orphaned process / clean the stale ready state, then re-run) and exit **7** — a new documented code — without spawning boot. Header usage/exit-code list updated in the same edit (AC-20260821-03-9, AC-20260821-03-10) | A ready predicate that is true before boot cannot attribute readiness to this run's process — fail closed with a named remedy. Rejected: port-identity via lsof — unportable by design (readyCheck is arbitrary shell: file probes and CLI checks have no port), and smoke.sh's own header already declares file-probe hosts in scope |
-| D5 | v1 deliberately does NOT: fix the coverage grep's bare-substring AC-ID prefix collision (superseded spec 20260817/05's scope — never built; reopen via its intake trail on a live hit); redesign `mappedIds[0]` primary-pick arbitrariness (20260817/05 D2's accepted residual, unchanged); attempt owning-spec mapping for bare-name skip lines (no evidence to map from — the gap remains for runners that emit no qualifier, reopen when a host observes it); pin review-legs' exit-7→`"fail"` mapping with an AC (pre-existing generic `code!==0&&!==4` branch — a rejection AC here is the vacuous-pin class with five Gotcha-recorded occurrences) [no-ac: pure scope fence — each exclusion names its reopen condition] | Fenced scope = one mapping route, one prompt sentence, one pre-boot probe; every exclusion is re-openable on evidence, not memory |
-| D6 | `spec/.claude-plugin/plugin.json` bumps — target 7.15.0 (target, not a pin; build takes the next free number per the concurrent-semver gotcha), description updated as the changelog surface [no-ac: process row — version discipline is review's own hard check, no test surface] | Host rules: every behavior change bumps the owning plugin's semver |
+| D5 | v1 deliberately does NOT: ~~fix the coverage grep's bare-substring AC-ID prefix collision~~ (reopened 2026-08-22 as D7 — the named live-hit condition fired: red-check's false `unsanctioned-green` stopped specs/20260822/02's build, and the historical scan found 4 laundered ACs; superseded 20260817/05's intake trail terminates here); redesign `mappedIds[0]` primary-pick arbitrariness (20260817/05 D2's accepted residual, unchanged); attempt owning-spec mapping for bare-name skip lines (no evidence to map from — the gap remains for runners that emit no qualifier, reopen when a host observes it); pin review-legs' exit-7→`"fail"` mapping with an AC (pre-existing generic `code!==0&&!==4` branch — a rejection AC here is the vacuous-pin class with five Gotcha-recorded occurrences) [no-ac: pure scope fence — each exclusion names its reopen condition or its resolution] | Fenced scope = one mapping route, one prompt sentence, one pre-boot probe, one anchored matcher; every exclusion is re-openable on evidence, not memory |
+| D6 | `spec/.claude-plugin/plugin.json` bumps — target 7.18.0 (target, not a pin; build takes the next free number per the concurrent-semver gotcha — the original 7.15.0 target was already taken at HEAD by the time this spec was amended), description updated as the changelog surface [no-ac: process row — version discipline is review's own hard check, no test surface] | Host rules: every behavior change bumps the owning plugin's semver |
+| D7 | **Full-token AC-ID occurrence at both bare-substring call sites, via one exported helper.** `lib/spec-sections.js` exports `acIdOccurs(text, id)`: true iff `id` occurs at a position whose preceding char is absent or outside `[A-Za-z0-9]` AND whose following char is absent or outside `[0-9A-Za-z]` — the 20260817/05 discipline `promise-sweep.js` already applies inline to Decision-row citations; an `indexOf` scan, no per-call RegExp. `ac-matrix.js`'s coverage grep (`readTestFile(f).includes(b.id)`) and `red-check.js`'s carried-AC classifier (`content.includes(b.id)`) each become `acIdOccurs(…)`. Every `matchAll(AC_ID_RE_GLOBAL)` site (route 1, route 3, promise-sweep) is full-token by greedy `\d+` (A1) and stays untouched; route 2's line-content match compares the skip LINE, not an AC-ID, and stays byte-unchanged — it now reads a phantom-free `fileAcMap`, and a disposition that existed only through a prefix phantom changing IS this fix, not a D2 violation. promise-sweep's inline filter stays as-is: same discipline, different operation (enumeration with indexes), zero behavior delta in consolidating (AC-20260821-03-11, AC-20260821-03-12, AC-20260821-03-13) | ac-matrix fails OPEN (phantom hit suppresses `uncovered-ac` — an AC with no test anywhere reports covered) and red-check fails CLOSED (false `unsanctioned-green`, the 2026-08-22 build stop). Rejected: a per-ID `(?!\d)` lookahead — no leading boundary, admits letter-after, and a THIRD spelling of a discipline the repo already carries |
+| D8 | **Historical audit is separate, recorded work.** The four scan-flagged ACs whose only apparent coverage is a longer AC-ID (specs/20260808/01 AC-1, specs/20260813/03 AC-1, specs/20260815/01 AC-1, specs/20260816/01 AC-1) are re-checked AFTER this spec lands by running the fixed ac-matrix against each owning spec; every confirmed uncovered AC gets a `/spec:escape` row against the review run that passed it — the escape ledger is the durable record, never an intake note. All four target code since deleted or retired (autopilot, `claims-lint.js`, `suite-baseline.js`, advisory-append), so no live coverage hole is expected; the rows record the escape, not a repair [no-ac: operator process — the deliverable is escape-ledger rows, no test surface in this repo's tree] | The fix and the archaeology have different blast radii; escape rows are the repo's existing mechanism for "review passed what it shouldn't", so nothing rides on memory |
 
 ## File Plan
 
 | Path | Action | Layer | Summary |
 |------|--------|-------|---------|
-| spec/scripts/ac-matrix.js | MODIFY | scripts | D1/D2: qualified-line mapping route before the unmapped-skip fallthrough; fail-closed edges; existing sanction logic untouched |
+| spec/scripts/ac-matrix.js | MODIFY | scripts | D1/D2: qualified-line mapping route before the unmapped-skip fallthrough; fail-closed edges; existing sanction logic untouched. D7: coverage grep uses `acIdOccurs`; header defect note (dated) |
+| spec/scripts/lib/spec-sections.js | MODIFY | scripts | D7: export `acIdOccurs(text, id)` — anchored full-token occurrence (the 20260817/05 discipline); header note |
+| spec/scripts/red-check.js | MODIFY | scripts | D7: carried-AC classifier uses `acIdOccurs`; header defect note (dated) |
 | spec/scripts/spec-review-driver.js | MODIFY | scripts | D3: SKIPS prompt gains the qualifier-retention instruction |
 | spec/scripts/smoke.sh | MODIFY | scripts | D4: pre-boot readyCheck probe, `stale-ready` sentinel, exit 7, header exit-code list |
 | tests/ac-matrix/qualified-skip-mapping.test.js | CREATE | tests | AC-20260821-03-1 … AC-20260821-03-7 (red-first for 1/4; CONTINUE-TO pins for 2/3/5/6; synthetic host trees, sibling to owning-spec-env.test.js) |
 | tests/review/review-driver.test.js | MODIFY | tests | AC-20260821-03-8: SKIPS prompt asserts the qualifier-retention instruction (red-first) |
 | tests/smoke-stale-ready.test.js | CREATE | tests | AC-20260821-03-9 (red-first: pre-boot-true config → exit 7 + sentinel) |
 | tests/smoke-shutdown-behavior.test.js | MODIFY | tests | AC-20260821-03-10: tag the existing green boot→ready→clean-stop pin (CONTINUE TO; tag, never duplicate) |
+| tests/ac-matrix-coverage-holes.test.js | MODIFY | tests | AC-20260821-03-11 (red-first), AC-20260821-03-13 (green boundary pin) — Hole 3 in this file's incident family; header extended |
+| tests/red-check/red-check.test.js | MODIFY | tests | AC-20260821-03-12 (red-first: a phantom prefix carry no longer forces red-expected on a green pin) |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D6: bump + changelog description (target 7.15.0) |
 
 ## Contracts
@@ -78,6 +92,15 @@ smoke refuses to boot into an environment whose ready predicate is already true.
 # Probe runs after config validation/inert handling (codes 3/4/5 unreachable changes: none),
 # immediately before the `bash -c "$BOOT" &` spawn. review-legs.js needs no change: its
 # observed mapping (code!==0 && code!==4 → "fail") already covers 7.
+```
+
+```js
+// lib/spec-sections.js — new export (D7). Pure, no I/O, sibling to AC_ID_RE.
+//   acIdOccurs(text, id) -> boolean
+//   true iff `id` occurs in `text` at a full-token position: preceding char absent or
+//   outside [A-Za-z0-9], following char absent or outside [0-9A-Za-z]. indexOf scan —
+//   no per-call RegExp. 'AC-…-1' never hits inside 'AC-…-12'; a quoted, backticked,
+//   parenthesized, or file-edge citation always hits.
 ```
 
 ## Behavior
@@ -134,6 +157,24 @@ and reporting the misleading `shutdown-unclean`.
 - **AC-20260821-03-10**: WHEN `readyCheck` fails before boot and passes after it, followed
   by a clean stop on the declared signal THE SYSTEM SHALL CONTINUE TO print `__SMOKE_PASS__`
   and exit 0 (existing covering pin in tests/smoke-shutdown-behavior.test.js, tagged)
+- **AC-20260821-03-11**: WHEN a well-formed AC's ID appears in the File Plan's test files
+  only as a prefix of a longer AC-ID THE SYSTEM SHALL report it `uncovered-ac` (spec
+  declaring `AC-20260101-01-1` and `AC-20260101-01-12`, one test file citing only
+  `AC-20260101-01-12` → hard `uncovered-ac` naming `AC-20260101-01-1`, manifest
+  `observed.uncovered` = 1, exit 1; pre-image at 090b45a observes uncovered 0, exit 0) →
+  red-first in tests/ac-matrix-coverage-holes.test.js
+- **AC-20260821-03-12**: WHEN a red-check tests-layer file's only citation is a longer
+  AC-ID sharing a shorter red-expected AC's prefix THE SYSTEM SHALL classify the file by
+  the full-token citation alone (spec declaring red-first `AC-20260101-01-1` and pin
+  `AC-20260101-01-12` whose bullet says SHALL CONTINUE TO; a passing file citing only
+  `AC-20260101-01-12` → `carriedAcs` `["AC-20260101-01-12"]`, expected green, zero
+  findings, exit 0; pre-image phantom-carries `AC-20260101-01-1` and reports a false
+  `unsanctioned-green`, exit 1) → red-first in tests/red-check/red-check.test.js
+- **AC-20260821-03-13**: WHEN an AC-ID is cited at ordinary delimited positions THE SYSTEM
+  SHALL CONTINUE TO count the citing file covered (a citation directly after a quote as
+  `'AC-20260101-01-1 …'`, one inside backticks, and one as the file's final token all
+  count as hits — anchoring rejects only `[A-Za-z0-9]` neighbours, never punctuation or
+  file edges) → tests/ac-matrix-coverage-holes.test.js
 
 ## Assumptions (escalation triggers)
 
@@ -156,6 +197,11 @@ and reporting the misleading `shutdown-unclean`.
 - A6: Runners that emit no file qualifier keep byte-identical (bare-name) behavior; the
   cross-spec gap remains for them by D5's fence. **if false is the wrong call for a real
   host:** reopen via D5's named condition, not mid-build.
+- A7: The bare-substring class has exactly two call sites — ac-matrix.js's coverage grep
+  and red-check.js's carried-AC classifier (grep evidence 2026-08-22; every other AC-ID
+  consumer is `matchAll` over `AC_ID_RE_GLOBAL`, full-token per A1, or promise-sweep's
+  inline anchored filter). **if false:** STOP, widen D7 — never patch a third site
+  un-specced.
 
 ## Rationale
 
@@ -176,6 +222,36 @@ operator what to clean. Sequencing: `depends_on` pins this spec behind the drive
 state, disjoint from the SKIPS prompt — parallel risk accepted and noted rather than
 chained. No INTAKE row exists for either defect (external report, not an intake pin), so no
 suite-baseline update rides this spec.
+
+D7's provenance: D5's reopen condition fired 2026-08-22 with an executed repro at HEAD
+090b45a — two ac-matrix fixtures identical except AC ids 1,12 vs 1,2, each with a test
+naming only the second AC: the 1,12 fixture reported uncovered 0 / exit 0, the 1,2 fixture
+the `uncovered-ac` hard finding / exit 1 — plus the live red-check stop of
+specs/20260822/02's build the same day. The defect shipped 2026-08-14 with ac-matrix.js
+itself (552d80d); 20260821/01 inherited it knowingly (its D2: same literal grep) and its
+review fixed a different unanchored-substring bug (tag-position anchoring in
+`parseAcBullets`) while leaving this one to D5's fence. Fixing red-check.js here is
+in-family: one class, one helper, and this spec already sits behind 20260821/01 in
+`depends_on`. promise-sweep is deliberately untouched (D7): consolidating its inline filter
+is a zero-behavior-delta cleanup, not this defect. This amendment takes the spec past its
+own ≥10-AC threshold — traced: every new or modified test file that phantom-carries the
+red-first `AC-…-1` under the PRE-image red-check is genuinely red pre-image for its own
+reasons, so build Phase 1 sees expected red / observed red and no false stop. Sequencing
+consequence recorded for the roadmap: specs/20260822/01 (its `AC-…-10` pin file
+substring-contains `AC-…-1`) and specs/20260822/02 trip the pre-fix red-check by
+construction — this spec builds first, and both gain it in `depends_on`.
+
+Collision closure (run at the 2026-08-22 amendment; the original lock recorded none —
+closed here). Paths leg, two `likely` hits, both WAIVED: `tests/consistency/entrypoints.test.js`
+is data-driven over `spec/entrypoints.json` and the live command files, and this spec adds no
+new script or entry point (ac-matrix.js, red-check.js, and lib/spec-sections.js are all
+already wired), so it needs no edit — residual redness at build would be a wiring defect in
+this spec, never a reason to edit the checker. `tests/ac-matrix/owning-spec-env.test.js` pins
+the owning-spec `[env:]` lookup that D1's route 3 feeds; D2's monotonic-widening rule keeps
+every currently-mapped disposition byte-identical, and the file's fixture AC-IDs all carry
+single-digit ordinals (verified 2026-08-22), so D7's anchoring cannot change a single one of
+its hits. `mentions`-tier hits owe no waive; note that `tests/ac-matrix-coverage-holes.test.js`
+and `tests/red-check/red-check.test.js` appear there and are both planned File Plan rows.
 
 ## Canonical Delta
 

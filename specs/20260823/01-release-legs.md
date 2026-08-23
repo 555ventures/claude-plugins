@@ -1,6 +1,6 @@
 ---
 date: 2026-08-23
-status: hardened
+status: implementing
 tier: critical           # touches spec/bin/spec-paths (key-set edit — critical trigger per pipeline
                          # rules § Risk Tiers) and creates the single invocation point every release
                          # verdict/ledger row flows through (record wraps verdict.js)
@@ -9,6 +9,7 @@ design: false
 breaking: false
 depends_on: []
 depended_on_by: []
+build_base: main
 brief: 12
 open_markers: 0
 ---

@@ -15,7 +15,11 @@ const read = (p) => fs.readFileSync(path.join(SPEC, p), 'utf8')
 
 const LEDGER = '.claude/spec-runs.jsonl'
 
-test('AC-20260820-07-13: build, review, escape, and release all append to the single repo-wide ledger', () => {
+// specs/20260823/01-release-legs.md AC-20260823-01-20 [pre-green: predicate-in-test]: the
+// release.md leg of this pin (the file already matches .claude/spec-runs.jsonl) is a SHALL-
+// CONTINUE-TO carrier through the release-legs.js rewrite (D11) — tagged here rather than
+// restated, since the assertion below already exercises exactly this file.
+test('AC-20260820-07-13 / AC-20260823-01-20: build, review, escape, and release all append to the single repo-wide ledger', () => {
   for (const f of ['commands/build.md', 'commands/review.md', 'commands/escape.md', 'commands/release.md']) {
     assert.match(read(f), new RegExp(LEDGER.replace(/[./]/g, '\\$&')),
       `${f} must reference ${LEDGER} — a stage that stops writing ledger rows silently drops ` +

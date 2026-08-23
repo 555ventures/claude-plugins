@@ -1,6 +1,6 @@
 ---
 date: 2026-08-23
-status: implementing
+status: done
 diff_base: ce6488c9b8c8d63a551c4f7469ef982cf548d101
 tier: standard
 area: review-pipeline
@@ -211,6 +211,25 @@ execution: the CLOSE print is partially pinned by existing driver tests (hygiene
 so the enumeration must be additive; and refusal 1 must run its re-observe *before*
 refusing, or a repair made after the last derivation would be invisible to the malformed
 check. Retroactive validation of already-folded sidecars stays out of scope per the brief.
+
+**Review 2026-08-23 — survivor fixed (medium).** `observeDeviations()` set `entryOpen = false`
+in its malformed branch, which the Contracts' closing-condition list does not sanction: only a
+blank line and a header close an open entry. The drift made an indented continuation following a
+stray flush-left line classify as a second malformed row rather than as content of the still-open
+entry. Fixed by deleting that one assignment; pinned by the sibling test
+`AC-20260823-07-2 (grammar)` (AC-2 already owns "one malformed row per invalid line", and which
+lines are invalid *is* the grammar — no new AC was minted mid-review). The pin was observed red
+against the pre-fix driver and green after, independently by both the fix session and the
+fix-delta reviewer. Blast radius was bounded: the refusal fires on the stray line either way, so
+the drift only inflated the printed evidence listing — but the code contradicted its own doc
+comment, which already stated the Contracts' rule correctly.
+
+**Deviations fold 2026-08-23 (one-off).** D9 named `7.26.0` as the plugin.json bump target;
+`spec/.claude-plugin/plugin.json` was already at `7.26.0` at HEAD (specs/20260823/06 landed it
+first), so the build bumped to `7.27.0` carrying D9's changelog paragraph under the new number.
+Recorded here rather than in the host rules' Gotchas because that section already carries this
+exact class — "a spec's literal version-bump target is a target, not a pin" — and a second entry
+would be prose debt, not new knowledge.
 
 ## Canonical Delta
 

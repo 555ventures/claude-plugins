@@ -235,3 +235,16 @@
   stale literal inside a worker memory is no longer swept — acceptable only because CLOSE reads
   every touched memory on content.
   (specs/20260823/04-review-close-hardening.md, done 2026-08-23)
+
+- **The deviations sidecar is backstopped by the driver, not by convention.** The review driver
+  validates the deviations sidecar against the bullets-only entry grammar whenever it derives
+  state, persists the observation (`entries`, `malformed`) in the review sidecar, and enumerates
+  every entry into the printed CLOSE step. `--mark closed` refuses (exit 2, remedy named) while
+  the sidecar still exists on disk, or while the last observation records a malformed —
+  flush-left, count-invisible — line, even after the file's deletion. The grammar's closing
+  conditions are exhaustive and exactly two: a blank line and a header close an open entry;
+  nothing else does, a malformed line included, so a stray flush-left line inflates the evidence
+  listing by exactly itself and never by the valid continuations beneath it. Fold outcome is
+  deliberately not ledgered — it would be self-attested at exactly the moment the backstop exists
+  to distrust; the build row's `deviations` count remains the cross-spec signal.
+  (specs/20260823/07-deviations-sidecar-backstop.md, done 2026-08-23)

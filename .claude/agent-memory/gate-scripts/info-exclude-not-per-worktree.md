@@ -3,6 +3,7 @@ name: info-exclude-not-per-worktree
 description: git info/exclude is NOT per-worktree — it lives in the shared common git dir; use the worktree's private git-dir (rev-parse --git-dir) for any marker that must die with the worktree
 metadata:
   type: feedback
+  reviewed: 2026-08-23
 ---
 
 `git -C <linked-worktree> rev-parse --git-path info/exclude` resolves into the **shared common git
@@ -31,3 +32,10 @@ all if you can avoid it — that's strictly better than working-tree-plus-exclud
 `git add -A` structurally cannot sweep a file that was never in the working tree, and `git status`
 cannot show it either. `git worktree remove` deletes the private git dir for free, so no teardown
 bookkeeping is needed beyond checking the marker exists before removing.
+
+**Scope (clarified 2026-08-23).** This is a ban on info/exclude for *worktree-lifetime* markers,
+not on info/exclude as such. A deliberate, deduped write of a MAIN-root ignore line for a file
+that is *meant* to outlive every worktree is a legitimate different use — `spec-review-driver.js`'s
+stopped-ledger self-provisioning is the standing example: it checks `git check-ignore` first,
+appends at most once, and its shared-common-dir reach is the point rather than the bug. Do not
+report that pattern as a recurrence of this note.

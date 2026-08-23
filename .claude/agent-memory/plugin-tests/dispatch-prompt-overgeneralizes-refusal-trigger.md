@@ -3,6 +3,7 @@ name: dispatch-prompt-overgeneralizes-refusal-trigger
 description: a dispatch prompt's paraphrase of an AC's refusal condition can be broader than the AC/code actually specify — verify the exact trigger empirically before writing "both directions" of a refusal pin
 metadata:
   type: feedback
+  reviewed: 2026-08-23
 ---
 
 specs/20260820/07-review-driver.md's AC-20260820-07-15 (R8) refuses a cold invocation on a

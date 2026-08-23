@@ -164,6 +164,18 @@ test('AC-20260823-07-2: WHEN the driver derives state while a deviations sidecar
     'a changed sidecar must OVERWRITE the previously persisted observation rather than merge with it — a stale malformed row surviving here would block --mark closed forever on content that no longer exists: ' + JSON.stringify(marks2.deviations))
 })
 
+test('AC-20260823-07-2 (grammar): WHEN a malformed line appears inside an open entry THE SYSTEM leaves the entry open — an indented line following it is a continuation, never a second malformed row', () => {
+  const fixture = '- bullet one\n' +
+    'Flush-left malformed line.\n' +
+    '  continuation after malformed\n'
+  const host = makeHost({ deviations: fixture, specName: '02b-dev-grammar', acId: 'AC-20260823-97-8' })
+  run(host.root, host.spec)
+  const stateFile = path.join(host.sidecar, 'review-state.json')
+  const marks = JSON.parse(fs.readFileSync(stateFile, 'utf8'))
+  assert.deepStrictEqual(marks.deviations, { entries: 1, malformed: [{ line: 2, text: 'Flush-left malformed line.' }] },
+    'a malformed line must NOT close the open entry — only a blank line or a header closes it, per the Contracts\' entry-grammar block — the indented line-3 continuation belongs to entry 1, and a resurrection of malformed-closes-entry would misparse it as a second malformed row, inflating the evidence list with a line the Contract says is a valid continuation: ' + JSON.stringify(marks.deviations))
+})
+
 test('AC-20260823-07-3: WHEN --mark closed is passed after the sidecar was deleted but the last persisted observation records a malformed line THE SYSTEM exits 2, prints the recorded line as "<line>: <text>", and names the restore remedy including "git checkout" and the sidecar path', () => {
   const fixture = '# Deviations — malformed\n' +
     '- a real bullet\n' +

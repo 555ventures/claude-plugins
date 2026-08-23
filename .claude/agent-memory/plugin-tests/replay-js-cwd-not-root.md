@@ -3,6 +3,7 @@ name: replay-js-cwd-not-root
 description: spec/scripts/replay.js (specs/20260819/02-mutation-replay.md) has no --root flag in any Decision's exhaustive flag list — tests invoke it via runNode(SCRIPT, argv, {cwd: dir}), not --root <dir>.
 metadata:
   type: project
+  reviewed: 2026-08-23
 ---
 
 specs/20260819/02-mutation-replay.md's Decisions D2/D3/D8 (--due/--select/--record) give exhaustive-looking bracketed flag lists (e.g. D8: `--record --spec … --review-run-id … --class … --file … --legs green|red:<leg> --outcome caught|missed|leg-caught [--patch <file>] [--workflow <file>] [--tokens N]`) and none of them include `--root`, unlike every sibling script in this repo (merge-back.sh, scope-reconcile.js, review-legs.js, spec-status.js all take an explicit `--root <dir>`).

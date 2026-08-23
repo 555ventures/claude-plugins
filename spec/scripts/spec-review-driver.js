@@ -232,7 +232,6 @@ function observeDeviations() {
     if (/^- /.test(raw)) { entries++; entryOpen = true; return }
     if (entryOpen && /^\s+\S/.test(raw)) return
     malformed.push({ line: idx + 1, text: raw.slice(0, 120) })
-    entryOpen = false
   })
   marks.deviations = { entries, malformed }
   saveSidecar()

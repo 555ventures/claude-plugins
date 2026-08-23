@@ -15,9 +15,25 @@ const { ROOT, tmpdir, runNode, runBash } = require('../helpers')
 // soften it to pass early. Continuation-line exclusion (AC-2) and the overage remedy message
 // (AC-1) both guard the same failure mode: a miscount that either hides a real overage or
 // invents a false one.
+//
+// 2026-08-23 fail-open fix: the original entry regex required a tag-FIRST bullet — a shape
+// only this repo and these self-authored fixtures happened to write. Upwell's real Gotchas
+// section (tag-at-end: `- **Bold claim** … [host]`) held 138 entries and matched 0, so the
+// cap had never fired on any tag-at-end host. The tag-at-end tests below are the regression
+// pin and the deliberate trip in exactly the shape that previously counted 0.
 
 function bullet (n) {
   return '- `[host]` fixture entry ' + n + ' citing a synthetic incident, only for AC coverage of prose-cap.js.'
+}
+
+// The real host shape the 2026-08-23 fail-open missed: bold-opening bullet wrapped onto an
+// indented continuation line, bracket tag at the END — mirrors Upwell's rules file, where the
+// original bracket-first regex matched 0 of 138 entries.
+function tagAtEndEntry (n) {
+  return [
+    '- **Bold claim ' + n + '** fixture entry wrapped onto a',
+    '  second indented line citing a synthetic incident, tag at the end like real hosts write. [host]'
+  ]
 }
 
 // Builds a fixture markdown file with a decoy section before and after the named section, so
@@ -91,8 +107,41 @@ test('AC-20260823-06-2: continuation lines inside a wrapped entry never count as
     ' — this section holds 15 logical entries (14 plain + 1 wrapped across 3 physical lines); ' +
     'counting the wrap\'s continuation lines as new entries would falsely push it over the cap')
   assert.match(r.stdout || '', /15\/15/,
-    (r.stdout || '') + ' — stdout must still report 15, not 17: a continuation line never ' +
-    'opens with `- \\`[` and must never be mistaken for a new entry bullet')
+    (r.stdout || '') + ' — stdout must still report 15, not 17: a continuation line is ' +
+    'indented, so it never matches the top-level `- ` entry shape and must never be mistaken ' +
+    'for a new entry bullet')
+})
+
+test('fail-open regression 2026-08-23: tag-at-end entries (the real host shape) are counted, not silently skipped', () => {
+  const dir = tmpdir('prose-cap-tagend')
+  const entries = []
+  for (let i = 1; i <= 15; i++) entries.push(...tagAtEndEntry(i))
+  const file = writeFixture(dir, entries)
+  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas', '--cap', '15'])
+  assert.strictEqual(r.status, 0, (r.stderr || '') +
+    ' — 15 logical tag-at-end entries at a cap of 15 must exit 0; a nonzero exit means the ' +
+    'indented continuation lines were miscounted as entries')
+  assert.match(r.stdout || '', /15\/15/,
+    (r.stdout || '') + ' — stdout must report 15/15: under the original bracket-first regex ' +
+    'this exact shape counted 0 (Upwell measured 138 entries, 0 matched), leaving every ' +
+    'tag-at-end host permanently fail-open with a cap that never fires')
+})
+
+test('fail-open regression 2026-08-23: 16 tag-at-end entries over a cap of 15 trip exit 1 naming the count and remedy', () => {
+  const dir = tmpdir('prose-cap-tagend-over')
+  const entries = []
+  for (let i = 1; i <= 16; i++) entries.push(...tagAtEndEntry(i))
+  const file = writeFixture(dir, entries)
+  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas', '--cap', '15'])
+  assert.strictEqual(r.status, 1, (r.stderr || '') +
+    ' — the cap must trip on the exact shape that previously counted 0; a silent pass here ' +
+    'means the guard still only fires on self-authored tag-first fixtures, never on real hosts')
+  assert.match(r.stderr || '', /16\/15/,
+    'stderr must name the exact overage (16/15) — an evicting session with no count has to ' +
+    're-derive it by hand before it can act')
+  assert.match(r.stderr || '', /evict/i,
+    'stderr must name the eviction remedy — an overage reported with no remedy leaves the ' +
+    'session to guess at delete / merge / mechanize instead of being told')
 })
 
 test('AC-20260823-06-3: this repo\'s suite runs prose-cap.js against the live rules file\'s Gotchas section — red on the 23-entry pre-image, green once the D9 triage lands', () => {

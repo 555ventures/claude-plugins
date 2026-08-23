@@ -13,10 +13,18 @@
 // delete), so that judgment stays with the session at fold time, never this script.
 //
 // Usage: node prose-cap.js --file <path> --section <heading substring> [--cap N]  (default 15)
-// Entry = a line matching  ^- `?\[  inside the section (a bullet opening with a bracket tag,
-// backtick-wrapped or bare); continuation lines (indented, or not opening with the bullet
-// shape) never count. Section = from the first `## ` heading containing <heading substring>
-// to the next `## ` heading or EOF.
+// Entry = a line matching  ^-   (any top-level `- ` bullet) inside the section; indented
+// continuation lines never count (`^- ` requires column 0). Section = from the first `## `
+// heading containing <heading substring> to the next `## ` heading or EOF.
+//
+// 2026-08-23 fail-open fix: the original entry shape  ^- `?\[  required the bullet to OPEN
+// with a bracket tag — a position no doctrine ever mandated (entries "carry" `[host]`/`[plugin]`,
+// positionless). Measured against a real host (Upwell's .claude/rules/spec-pipeline.md,
+// tag-at-end entries): 138 entries, 0 matched — the cap had never fired there, while this
+// repo's own tag-first file kept the live-file test green. Broadened same-day (core
+// § Incident Policy) to any top-level bullet — the shape the review driver and build.md's
+// ledger count already use: overcounting fires the cap early, where a human judges at fold
+// time; undercounting was the fail-open.
 // stdout: single line  <count>/<cap> entries in "<section>" of <file>
 //
 // Exit codes:
@@ -79,7 +87,7 @@ for (let i = startIdx + 1; i < lines.length; i++) {
   if (lines[i].startsWith('## ')) { endIdx = i; break }
 }
 
-const ENTRY_RE = /^- `?\[/
+const ENTRY_RE = /^- /
 let count = 0
 for (let i = startIdx + 1; i < endIdx; i++) {
   if (ENTRY_RE.test(lines[i])) count++

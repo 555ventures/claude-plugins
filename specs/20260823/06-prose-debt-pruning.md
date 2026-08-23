@@ -70,9 +70,11 @@ note can no longer outlive its subject silently.
 ```
 prose-cap.js — cap lint for one markdown section's entry count
 Usage: node prose-cap.js --file <path> --section <heading substring> [--cap N]   (default cap 15)
-Entry = a line matching  ^- `?\[  inside the section (a bullet opening with a bracket tag,
-backtick-wrapped or bare); continuation lines never count. Section = from the first `## `
-heading containing <heading substring> to the next `## ` or EOF.
+Entry = a line matching  ^-   (any top-level `- ` bullet) inside the section; indented
+continuation lines never count. Section = from the first `## ` heading containing
+<heading substring> to the next `## ` or EOF.
+(Amended 2026-08-23: the original bracket-first entry shape was fail-open against real
+tag-at-end hosts — see Rationale.)
 stdout: single line  <count>/<cap> entries in "<section>" of <file>
 Exit codes:
   0  count <= cap
@@ -158,11 +160,11 @@ eviction (delete / merge / mechanize).
 
 - **AC-20260823-06-1**: WHEN prose-cap.js runs against a file whose named section holds more
   entry bullets than the cap THE SYSTEM SHALL exit 1 and print count, cap, and the eviction
-  remedy (e.g. fixture section with 16 `` - `[host]` … `` bullets, `--cap 15` → exit 1,
-  stderr contains `16/15` and `evict`) → tests/prose-debt/prose-cap.test.js
+  remedy (e.g. fixture section with 16 top-level `- ` entry bullets — tag-first or
+  tag-at-end — `--cap 15` → exit 1, stderr contains `16/15` and `evict`) → tests/prose-debt/prose-cap.test.js
 - **AC-20260823-06-2**: WHEN the count is at or under the cap THE SYSTEM SHALL exit 0
-  (15 entries, `--cap 15` → exit 0; continuation lines inside a wrapped entry never count:
-  a 3-line wrapped entry counts once) → tests/prose-debt/prose-cap.test.js
+  (15 entries in either tag position, `--cap 15` → exit 0; indented continuation lines
+  inside a wrapped entry never count: a 3-line wrapped entry counts once) → tests/prose-debt/prose-cap.test.js
 - **AC-20260823-06-3**: WHEN this repo's suite runs THE SYSTEM SHALL execute prose-cap.js
   against `.claude/rules/spec-pipeline.md` section `Gotchas` at cap 15 and assert exit 0 —
   red against the pre-image (23 entries) and green exactly when the D9 triage lands; this
@@ -267,6 +269,23 @@ batches it describes, where `/spec:build` now dispatches workers directly per la
 concurrency lesson stood; only the machinery name was stale. That is exactly the falsification the
 TTL arm exists to catch, and no diff would have surfaced it. Gotchas measured 10/15 after the fold,
 so no eviction was owed.
+
+**Contracts amendment (2026-08-23, same-day incident fix per core § Incident Policy).** The
+original entry shape `` ^- `?\[ `` required a bullet to OPEN with a bracket tag — a position
+no doctrine ever mandated (review.md, escape.md, and the init-generated section comment all
+say entries "carry"/"are tagged with" `[host]`/`[plugin]`, positionless). Measured against a
+real host, Upwell's `.claude/rules/spec-pipeline.md`: 138 entries, 0 matched — the cap had
+never fired there and nothing was ever evicted, while this repo's own tag-first file kept
+AC-3 green (authored ≠ activated; second recorded member of the silent-matcher fail-open
+class after the AC-ID prefix-collision coverage fail-open, 2026-08-22). Entry is now any
+top-level `- ` bullet — the same shape the review driver's sidecar grammar and build.md's
+ledger count already use, ending the asymmetry where the fold moved entries from a loose
+counter into a strict one. Overcounting fires the cap early, where a human judges at fold
+time; undercounting was the defect. Fixed in place with tag-at-end regression and
+deliberate-trip tests; no new spec and no standing guard yet (that needs a third class
+recurrence). D1 locked only "counts entry bullets" — the regex was a Contracts-level detail,
+so no locked Decision is contradicted. A1's executed record above deliberately keeps the
+original regex: it is history of what was measured at plan time.
 
 ## Canonical Delta
 

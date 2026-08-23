@@ -76,9 +76,11 @@ const { spawnSync } = require('child_process')
 // The repo's ONE ledger reader (live + year archives, in read order) — REPLAY counts
 // stage:"replay" rows through it rather than opening the ledger a second way.
 const { readLedgerRows } = require('./lib/observation')
-// D4 (specs/20260823/03-silent-drop-hardening.md): the one shared frontmatter-value reader,
-// replacing this driver's own local copy (rv_e83659d49386).
-const { fmVal: fmValLib } = require('./lib/frontmatter')
+// D4 (specs/20260823/03-silent-drop-hardening.md): the one shared frontmatter reader, replacing
+// this driver's own local copy (rv_e83659d49386). D2 (specs/20260823/04-review-close-hardening.md):
+// fmVal renamed fmValue (D8/D9 — no alias survives); fmBlock replaces this file's own
+// `/^---\n([\s\S]*?)\n---/` block regex below.
+const { fmBlock, fmValue } = require('./lib/frontmatter')
 
 // D1-D6 (specs/20260821/04-stopped-row-durability.md): a worktree review's RED_BLOCKING hard-stop
 // durably appends here, at the MAIN root, instead of the worktree's own (destructible)
@@ -150,13 +152,12 @@ const mainRoot = mainRootPath()
 
 const resolvedSpecPath = path.resolve(specPath)
 const specText = fs.readFileSync(resolvedSpecPath, 'utf8')
-const fmMatch = /^---\n([\s\S]*?)\n---/.exec(specText)
-const fmRaw = fmMatch ? fmMatch[1] : ''
+const fmRaw = fmBlock(specText)
 // D4 (specs/20260823/03-silent-drop-hardening.md, rv_e83659d49386): the local fmVal this replaced
 // captured everything after `key:` verbatim, inline comment included — the mechanism that
 // polluted seven live review ledger rows' `tier` fields and once broke `build_base:` outright.
-// lib/frontmatter.js's fmVal is quote-aware and strips a whitespace-preceded `#` comment.
-const fmVal = (k) => fmValLib(fmRaw, k)
+// lib/frontmatter.js's fmValue is quote-aware and strips a whitespace-preceded `#` comment.
+const fmVal = (k) => fmValue(fmRaw, k)
 
 let status = fmVal('status')
 const tier = fmVal('tier') || 'standard'
@@ -781,6 +782,31 @@ function handleMergeStrategy() {
   const target = runChild('git', ['-C', mainRoot, 'symbolic-ref', '--short', 'HEAD'],
     { encoding: 'utf8' }, 'git symbolic-ref').stdout.trim()
   const wt = findWorktreeForBranch(mainRoot, source)
+
+  // D4 (specs/20260823/04-review-close-hardening.md, rv_6825fa48c98d): re-entrancy. The recorded
+  // deadlock — a retry after a landed merge re-ran merge-back.sh merge and died on
+  // assert_clean_root against its own promoted evidence — is broken by detecting "already landed"
+  // BEFORE ever invoking merge-back.sh merge. Order: resolve source first (a gone branch means the
+  // merge, and cleanup, already landed); otherwise ask git directly whether source is already
+  // fully contained in target. Either way, skip straight to finishMerge (promotion/cleanup, both
+  // already idempotent) — the first-merge path and assert_clean_root below are untouched when the
+  // merge has NOT yet landed (AC-8: SHALL CONTINUE TO refuse a dirty root on the first attempt).
+  if (!branchExists(mainRoot, source)) {
+    process.stdout.write('[spec-review-driver] source branch ' + source + ' no longer exists — ' +
+      'the merge already landed; skipping merge-back.sh merge and resuming at promotion/cleanup.\n')
+    finishMerge(mainRoot, source, wt)
+    return
+  }
+  const containedR = runChild('git', ['-C', mainRoot, 'rev-list', '--count', target + '..' + source],
+    { encoding: 'utf8' }, 'git rev-list --count')
+  if (containedR.status === 0 && containedR.stdout.trim() === '0') {
+    process.stdout.write('[spec-review-driver] ' + source + ' is already fully contained in ' +
+      target + ' — the merge already landed; skipping merge-back.sh merge and resuming at ' +
+      'promotion/cleanup.\n')
+    finishMerge(mainRoot, source, wt)
+    return
+  }
+
   const mergeArgs = ['merge', '--root', mainRoot, '--target', target, '--source', source, '--strategy', strategy]
   if (wt) mergeArgs.push('--worktree', wt)
   const r = runChild('bash', [mergeBackBin, ...mergeArgs], { encoding: 'utf8' }, 'merge-back.sh merge')
@@ -821,9 +847,28 @@ function handleConflictsResolved() {
 // D10: the ledger + retained evidence were written under the WORKTREE (repoRoot at CLOSE time,
 // wherever the review actually ran) so the main root stays clean for `merge-back.sh merge`'s
 // assert_clean_root/ff-only preconditions. Once the merge has landed, promote them into mainRoot
-// (dedup by exact line / by filename) and clear the worktree-local copies — plus the sidecar
-// itself, never committed by design — so the worktree is genuinely clean before `git worktree
-// remove` runs (a plain `worktree remove`, no --force, refuses on ANY untracked file).
+// (dedup by exact line / by filename), then per D5 (specs/20260823/04-review-close-hardening.md,
+// rv_6825fa48c98d) clear the worktree-local copies by TRACKED STATUS, not by blanket delete: a
+// path tracked in the worktree is restored to its own HEAD content (`git -C <wt> checkout --
+// <path>`), an untracked path is `fs.rmSync`'d exactly as before (A3: the ledger may be tracked or
+// untracked depending on the host, decided per path). Deleting a TRACKED file used to leave it
+// "deleted" in `git status`, which made the plain `git worktree remove` below (no --force) refuse
+// at exit 128 (A1, spiked) — the second half of the recorded deadlock. Restoring instead of
+// deleting keeps `git -C <wt> status --porcelain` empty either way, so cleanup's `worktree remove`
+// succeeds without --force.
+function isTrackedInWorktree(wt, relPath) {
+  const r = runChild('git', ['-C', wt, 'ls-files', '--error-unmatch', relPath],
+    { encoding: 'utf8' }, 'git ls-files --error-unmatch ' + relPath)
+  return r.status === 0
+}
+function clearPromotedCopy(wt, absPath, relPath) {
+  if (isTrackedInWorktree(wt, relPath)) {
+    runChild('git', ['-C', wt, 'checkout', '--', relPath], { encoding: 'utf8' },
+      'git checkout -- ' + relPath)
+  } else {
+    fs.rmSync(absPath, { force: true })
+  }
+}
 function promoteEvidenceAndClean(wt, mainRootDir) {
   const srcLedger = path.join(wt, '.claude/spec-runs.jsonl')
   const dstLedger = path.join(mainRootDir, '.claude/spec-runs.jsonl')
@@ -850,17 +895,22 @@ function promoteEvidenceAndClean(wt, mainRootDir) {
       fs.mkdirSync(path.dirname(dstLedger), { recursive: true })
       fs.appendFileSync(dstLedger, toAppend.join('\n') + '\n')
     }
-    fs.rmSync(srcLedger, { force: true })
+    clearPromotedCopy(wt, srcLedger, path.relative(wt, srcLedger))
   }
   const srcDir = path.join(wt, '.claude/spec-runs')
   const dstDir = path.join(mainRootDir, '.claude/spec-runs')
   if (fs.existsSync(srcDir)) {
     fs.mkdirSync(dstDir, { recursive: true })
     for (const f of fs.readdirSync(srcDir)) {
+      const srcFile = path.join(srcDir, f)
       const dst = path.join(dstDir, f)
-      if (!fs.existsSync(dst)) fs.copyFileSync(path.join(srcDir, f), dst)
+      if (!fs.existsSync(dst)) fs.copyFileSync(srcFile, dst)
+      clearPromotedCopy(wt, srcFile, path.relative(wt, srcFile))
     }
-    fs.rmSync(srcDir, { recursive: true, force: true })
+    // The directory itself: a restored tracked file (per clearPromotedCopy above) is put back on
+    // disk at its HEAD content, so the directory is non-empty and rmdir refuses — that is a clean
+    // worktree state, not a leftover; only remove the directory when nothing tracked remains in it.
+    try { fs.rmdirSync(srcDir) } catch { /* non-empty: a restored tracked file remains, by design */ }
   }
 }
 

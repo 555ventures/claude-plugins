@@ -50,6 +50,11 @@ const fs = require('fs')
 const path = require('path')
 const { parseFilePlan } = require('./lib/file-plan')
 const { readLedgerRows, qualifyingObservation } = require('./lib/observation')
+// D2 (specs/20260823/04-review-close-hardening.md, rv_6825fa48c98d): the local frontmatter() kv
+// loop this replaced stripped a trailing comment at the FIRST "#" regardless of what preceded it,
+// corrupting an unspaced value like `design_source: https://x/p#frag` — the sole shared derivation
+// strips only a whitespace-preceded "#", per YAML unquoted-scalar semantics.
+const { fmMap } = require('./lib/frontmatter')
 
 // Brief ids are NN plus an optional letter suffix — ad-hoc briefs slot between neighbors
 // as 04a, 04b, … Normalize any spelling (4b, 04B, 04b-auth) to the canonical zero-padded
@@ -99,18 +104,6 @@ function walkMd(dir, out = []) {
   return out
 }
 
-function frontmatter(text) {
-  const m = text.match(/^---\n([\s\S]*?)\n---/)
-  if (!m) return null
-  const fm = {}
-  for (const line of m[1].split('\n')) {
-    const kv = line.match(/^([A-Za-z_]+):\s*(.*)$/)
-    if (!kv) continue
-    fm[kv[1]] = kv[2].replace(/\s*#.*$/, '').trim()
-  }
-  return fm
-}
-
 // File Plan parsing (parseFilePlan/splitPlanCell) now lives in lib/file-plan.js (D2,
 // specs/20260805/01-review-scope-reconciliation.md) — scope-reconcile.js shares the same
 // derivation instead of a second one drifting apart from this one. CLI behavior here is
@@ -124,8 +117,8 @@ function parseList(v) {
 const allSpecs = []
 for (const file of walkMd(path.join(root, 'specs'))) {
   const text = fs.readFileSync(file, 'utf8')
-  const fm = frontmatter(text)
-  if (!fm || !fm.status) continue
+  const fm = fmMap(text)
+  if (!fm.status) continue
   allSpecs.push({
     path: path.relative(root, file),
     status: fm.status,

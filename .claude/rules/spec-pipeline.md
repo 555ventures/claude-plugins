@@ -145,7 +145,26 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
   `node --test 'tests/<scope>/*.test.js'` actually runs the files. Resolve `{testDirs}` to the
   glob on every scoped gate run. (specs/20260801/02-session-runner.md — the build hit this
   resolving its own gate command.)
-- `[plugin]` Frontmatter values are read with a plain `^key:\s*(.+)$` regex — **inline `#` comments are NOT stripped**. A note appended to `tier:` is harmless (the value is only compared to `critical`), but the same habit applied to `build_base:` makes the whole comment part of the ref, and every consumer that resolves it dies: `/spec:review`'s driver refused to start with `fatal: invalid object name` and `bash: line 1: main: command not found` from scope-reconcile's shell interpolation. Put the note on its own `#` line ABOVE the key. (specs/20260822/02-init-generation-script.md — the build-close correction blocked its own review the next morning; rv_e83659d49386.) **Closed for driver-read keys 2026-08-23 by specs/20260823/03** (shared `lib/frontmatter.js` strips whitespace-preceded comments; seven polluted ledger `tier` rows repaired). The own-line-comment habit remains good style; `spec-status.js` always stripped.
+- `[plugin]` Frontmatter values are read with a plain `^key:\s*(.+)$` regex — **inline `#`
+  comments are NOT stripped**, and the risk model this entry used to teach was wrong: a note
+  appended to `tier:` is NOT harmless. It corrupts the run ledger row's `tier` field — the whole
+  comment sentence lands inside it — and `fleet-reader` then EXCLUDES that row under the reason
+  `pre-v7-tier`, which is misleading: the row isn't pre-v7, it's comment-polluted, so the
+  corruption is invisible AND mislabelled at the fleet-evidence boundary (measured: seven live
+  review ledger rows carried a whole sentence inside `tier`). The same habit applied to
+  `build_base:` makes the whole comment part of the ref, and every consumer that resolves it
+  dies: `/spec:review`'s driver refused to start with `fatal: invalid object name` and `bash:
+  line 1: main: command not found` from scope-reconcile's shell interpolation. Put the note on
+  its own `#` line ABOVE the key — that habit remains good style regardless.
+  (specs/20260822/02-init-generation-script.md — the build-close correction blocked its own
+  review the next morning; rv_e83659d49386.) **Closed 2026-08-23** by specs/20260823/03 (the
+  first two drivers) and widened by specs/20260823/04 (rv_6825fa48c98d) to all four JS
+  frontmatter readers: `spec/scripts/lib/frontmatter.js` is now the sole derivation for
+  `spec-review-driver.js`, `spec-design-driver.js`, `spec-status.js`, and `replay.js` alike, and
+  the seven polluted ledger `tier` rows are repaired in place. Correction to spec 03's own note:
+  `spec-status.js`'s prior reader was NOT "always correct" — its private kv loop stripped at ANY
+  `#`, corrupting an unspaced value such as a `design_source:` URL fragment, and that bug closes
+  with the same fix.
 - `[plugin]` `red-check.js` derives carried-AC expectation from **AC-ID occurrence anywhere in the file**, comments included. An edit-only File Plan row that mentions another AC's new behavioral home in a comment (`// ... AC-20260822-02-3 now lives in ...`) forces a false red expectation onto a file whose only change is a deletion, and the build stops at `unsanctioned-green`. Name the file, not the ID — the removal fix, never an invented ID. (specs/20260822/02-init-generation-script.md — tests/run-ledger.test.js during build.)
 <!-- One line per entry; every entry cites a ledger row (spec path + runId) or a dated
 incident, and carries a provenance tag: [host] (this repo/stack) or [plugin] (traces to a

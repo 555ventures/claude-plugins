@@ -1,6 +1,6 @@
 ---
 date: 2026-08-23
-status: hardened
+status: implementing
 tier: critical
 area: review
 design: false
@@ -9,6 +9,7 @@ depends_on: []
 depended_on_by: []
 brief: n/a
 open_markers: 0
+diff_base: c61802b8dd503c1a8b6a000d270d2719dcae2acf
 ---
 
 # Review-close hardening: frontmatter comments, merge re-entrancy, agent-memory scope
@@ -36,6 +37,8 @@ completes instead of dying, and worker memories never raise an out-of-plan findi
 | D5 | `promoteEvidenceAndClean` restores tracked worktree copies instead of deleting them: per promoted path, if tracked in the worktree (`git -C <wt> ls-files --error-unmatch <path>` exits 0) → `git -C <wt> checkout -- <path>` after promoting the delta; untracked → `fs.rmSync` as today (AC-20260823-04-6) | Deleting a tracked file guarantees `git worktree remove` refuses (spiked: exit 128), which is what set up the retry deadlock; restore leaves the worktree genuinely clean |
 | D6 | Add `.claude/agent-memory/**` to `BASELINE_GLOBS` in `spec/scripts/lib/glob-match.js`; fix the stale header comment naming hotspot.js as a consumer (actual: scope-reconcile.js, collision-closure.js) (AC-20260823-04-7, AC-20260823-04-9) | No File Plan can enumerate the memories a worker will write; review CLOSE's per-file content disposal is strictly stronger than a path flag (Fable consult, JJ accepted 2026-08-23); rejected: host-config `pipelineOwnedPaths` (the class is universal, not host-specific) |
 | D7 | Bump `spec/.claude-plugin/plugin.json` to the next free minor (target 7.22.0 — a target, not a pin, per the host semver-race gotcha) with the description changelog entry `[no-ac: the version-bump obligation is enforced by review's hard check, not a test]` | Behavior change across review, status, replay, and scope surfaces |
+| D8 | **Orchestrator reconciliation, build 2026-08-23 (D1/D2/A4 premise falsified by a sibling landing first).** specs/20260823/03 D4 landed `spec/scripts/lib/frontmatter.js` at HEAD exporting only `fmVal(fmRaw, key)`, and routed spec-review-driver.js + spec-design-driver.js through it. D1's action is therefore **MODIFY, not CREATE**, and its contract is unchanged: the module ends this build exporting exactly `{ fmBlock, fmValue, fmMap }` per Contracts — `fmValue` SUPERSEDES `fmVal` by rename (same stripping semantics, widened to accept full document text or a raw block); no `fmVal` alias survives, because a second name for one derivation is the drift D2 exists to end. Both drivers already wrap the import as a local `fmVal(k)` arrow, so each is a one-line import rename — the D2 obligation for them is satisfied by that rename plus a re-verified absence of any local `^key:\\s*(.+)$` construction. The substantive D2 work is spec-status.js and replay.js, which still carry private `frontmatter()` kv loops whose `.replace(/\\s*#.*$/, '')` strips at ANY `#` and so corrupts an unspaced value (AC-20260823-04-3's exact shape). D3's obligation is likewise partial-not-void: spec 03 appended a "Closed for driver-read keys" note to the Gotcha but left the false `A note appended to tier: is harmless` claim standing — that sentence is what D3 corrects. D7's target 7.22.0 and 7.23.0 are both taken at HEAD; the bump lands on **7.24.0** per A6 and the host semver-race gotcha. | A sibling spec landing half of D1/D2/D3 changes the actions, never the contracts — the Contracts block is the authority on the module's final shape, and one export name per derivation is D2's whole point |
+| D9 | **A4 is falsified — the retired name IS pinned.** `tests/frontmatter.test.js` (spec 03's carrier, outside this spec's File Plan) imports and asserts on `fmVal`. Per A4's own escalation route the pin is **updated in place, never weakened and never deleted**: call sites move to `fmValue`, spec 03's AC-IDs stay in the test names, and each name gains this spec's AC-20260823-04-10 additively (the repo's existing multi-AC retag form). The new tests/frontmatter/frontmatter.test.js does NOT restate those scalar assertions — it pins the surface this spec adds: `fmBlock`, `fmMap`, `fmValue` entered with FULL document text, the driver's `build_base:` exec path, and the four-script routing sweep. | A4 named the risk and its remedy; duplicating spec 03's assertions in a second file would trip the reviewer's own three-near-identical-blocks calibration |
 
 ## File Plan
 

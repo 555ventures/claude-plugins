@@ -47,9 +47,11 @@ const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
 const { readConfigStrict, CONFIG_RELPATH } = require('./lib/host-config')
-// D4 (specs/20260823/03-silent-drop-hardening.md): the one shared frontmatter-value reader,
-// replacing this driver's own local copy (rv_e83659d49386).
-const { fmVal: fmValLib } = require('./lib/frontmatter')
+// D4 (specs/20260823/03-silent-drop-hardening.md): the one shared frontmatter reader, replacing
+// this driver's own local copy (rv_e83659d49386). D2 (specs/20260823/04-review-close-hardening.md):
+// fmVal renamed fmValue (D8/D9 — no alias survives); fmBlock replaces this file's own
+// `/^---\n([\s\S]*?)\n---/` block regex below.
+const { fmBlock, fmValue } = require('./lib/frontmatter')
 
 function die(msg) { process.stderr.write('spec-design-driver: ' + msg + '\n'); process.exit(2) }
 
@@ -65,12 +67,11 @@ const STATE_ONLY = argv.includes('--state')
 
 // ---- read the world ----------------------------------------------------------------------------
 const spec = fs.readFileSync(specPath, 'utf8')
-const fmMatch = /^---\n([\s\S]*?)\n---/.exec(spec)
-const fm = fmMatch ? fmMatch[1] : ''
+const fm = fmBlock(spec)
 // D4 (specs/20260823/03-silent-drop-hardening.md, rv_e83659d49386): the local fmVal this
 // replaced captured everything after `key:` verbatim, inline comment included.
-// lib/frontmatter.js's fmVal is quote-aware and strips a whitespace-preceded `#` comment.
-const fmVal = (k) => fmValLib(fm, k)
+// lib/frontmatter.js's fmValue is quote-aware and strips a whitespace-preceded `#` comment.
+const fmVal = (k) => fmValue(fm, k)
 
 const status = fmVal('status')
 const designFlag = fmVal('design')

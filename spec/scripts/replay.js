@@ -107,6 +107,11 @@ const path = require('path')
 const crypto = require('crypto')
 const { execFileSync } = require('child_process')
 const { readLedgerRows } = require('./lib/observation')
+// D2 (specs/20260823/04-review-close-hardening.md, rv_6825fa48c98d): the local frontmatter() kv
+// loop this replaced stripped a trailing comment at the FIRST "#" regardless of what preceded it,
+// corrupting an unspaced value like `build_base: <sha>#frag` — the sole shared derivation strips
+// only a whitespace-preceded "#", per YAML unquoted-scalar semantics.
+const { fmMap } = require('./lib/frontmatter')
 
 function usage() {
   console.error('usage: replay.js --due | --select | --setup --commit <sha> --dir <path> | ' +
@@ -176,21 +181,6 @@ function cmdDue() {
   process.exit(1)
 }
 
-// ---- frontmatter: minimal YAML key: value scan between --- fences, matching spec-status.js's ----
-// ---- own parser — no YAML dependency, this repo never needs nested/list frontmatter values. ----
-
-function frontmatter(text) {
-  const m = text.match(/^---\n([\s\S]*?)\n---/)
-  if (!m) return null
-  const fm = {}
-  for (const line of m[1].split('\n')) {
-    const kv = line.match(/^([A-Za-z_]+):\s*(.*)$/)
-    if (!kv) continue
-    fm[kv[1]] = kv[2].replace(/\s*#.*$/, '').trim()
-  }
-  return fm
-}
-
 // ---- --select: among CLEAN review rows with a runId in the same D5 window as --due, prefer ------
 // ---- tier:"critical", tie -> latest (read-order); target commit = the close commit for the ------
 // ---- selected spec's OWN path. ---------------------------------------------------------------------
@@ -249,7 +239,7 @@ function cmdSelect() {
       `at the close commit's parent: ${e.message}`)
     process.exit(4)
   }
-  const fm = frontmatter(specAtParent) || {}
+  const fm = fmMap(specAtParent)
   const diffBase = (fm.build_base && fm.build_base.trim()) ? fm.build_base.trim() :
     ((fm.diff_base && fm.diff_base.trim()) ? fm.diff_base.trim() : null)
   if (!diffBase) {

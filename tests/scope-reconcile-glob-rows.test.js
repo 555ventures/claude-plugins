@@ -23,6 +23,19 @@ const { tmpdir, runNode, gitRepo } = require('./helpers')
 // specs/20260815/02-at-risk-pins.md AC-20260815-02-11 (D2 byte-compatibility): the additive
 // `atRisk` field must not disturb outOfPlan/unrealized/excluded/renamed or the exit-code
 // alphabet these three tests already pin — retagged in place, assertions unweakened.
+//
+// specs/20260823/04-review-close-hardening.md D6/D9 (2026-08-23): `.claude/agent-memory/**` is
+// structurally out-of-plan on every worker-dispatching build (no File Plan can enumerate the
+// memories a worker will write) — D6 adds it to lib/glob-match.js's BASELINE_GLOBS, so a changed
+// agent-memory file must land in `excluded`, never `outOfPlan` (AC-20260823-04-7, new test below,
+// red at HEAD: BASELINE_GLOBS is `['specs/**', '.claude/spec-runs.jsonl']` today and does not
+// match `.claude/agent-memory/**`). Per D9, AC-20260823-04-9 (a plainly unplanned file still
+// lands in outOfPlan) has no existing positive assertion in THIS file to retag — the three tests
+// above only assert the negative (`!outOfPlan.includes(...)`), and the positive can't be folded
+// into any of them without changing their own pinned `exit 0` (a genuinely unplanned file flips
+// scope-reconcile.js's exit code to 3) — so AC-9 lands as one new, minimal, standalone test
+// instead of duplicating a fourth near-identical fixture block; `[pre-green: predicate-in-test]`
+// since the outOfPlan predicate itself is unchanged by D6.
 
 const SCRIPT = 'scripts/scope-reconcile.js'
 const GLOB_ROW = 'packages/contracts/schemas/*.json'
@@ -114,4 +127,53 @@ test('AC-20260813-03-5 (excluded-overlap facet) / AC-20260815-02-11 (CONTINUE TO
     'excluded match must not fake this row as realized; if the row is missing from unrealized, ' +
     'the excludedSet subtraction was skipped and a codegen output row no reviewer-visible file ' +
     'ever touched would silently pass as done: ' + JSON.stringify(out))
+})
+
+function specWithEmptyPlan(dir, relPath) {
+  const full = path.join(dir, relPath)
+  fs.mkdirSync(path.dirname(full), { recursive: true })
+  fs.writeFileSync(full,
+    '---\nstatus: implementing\n---\n\n## File Plan\n\n' +
+    '| Path | Action | Layer | Summary |\n|---|---|---|---|\n' +
+    '| `src/planned.js` | CREATE | src | unrelated planned row |\n')
+  return relPath
+}
+
+test('AC-20260823-04-7: a changed .claude/agent-memory/ file absent from the File Plan lands in excluded (never outOfPlan), and outOfPlan is empty', () => {
+  const dir = tmpdir('scope-reconcile-glob')
+  const g = gitRepo(dir)
+  const base = g('rev-parse', 'HEAD').trim()
+  const specRel = specWithEmptyPlan(dir, 'specs/20260823/04-x.md')
+  fs.mkdirSync(path.join(dir, '.claude/agent-memory/gate-scripts'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude/agent-memory/gate-scripts/x.md'), '# worker memory\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'worker memory write')
+
+  const r = runNode(SCRIPT, ['--root', dir, '--base', base, '--spec', specRel, '--json'])
+  const out = JSON.parse(r.stdout)
+  assert.ok(out.excluded.includes('.claude/agent-memory/gate-scripts/x.md'),
+    'no File Plan can enumerate the memories a worker will write (D6\'s own rationale) — ' +
+    '.claude/agent-memory/** must be a BASELINE_GLOBS exclusion like specs/** already is, so a ' +
+    'changed worker-memory file is visible in excluded rather than silently invisible: ' + JSON.stringify(out))
+  assert.deepStrictEqual(out.outOfPlan, [],
+    'BASELINE_GLOBS does not include .claude/agent-memory/** at HEAD, so this changed file is ' +
+    'neither excluded nor in the File Plan — a worker-dispatching build would raise a spurious ' +
+    'out-of-plan finding on its own memory write every single time: ' + JSON.stringify(out))
+})
+
+test('AC-20260823-04-9 (CONTINUE TO) [pre-green: predicate-in-test]: a changed file outside every exclusion and every File Plan row still lands in outOfPlan', () => {
+  const dir = tmpdir('scope-reconcile-glob')
+  const g = gitRepo(dir)
+  const base = g('rev-parse', 'HEAD').trim()
+  const specRel = specWithEmptyPlan(dir, 'specs/20260823/04-y.md')
+  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'src/stray.js'), '// unplanned, unrelated to src/planned.js\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'unplanned change')
+
+  const r = runNode(SCRIPT, ['--root', dir, '--base', base, '--spec', specRel, '--json'])
+  const out = JSON.parse(r.stdout)
+  assert.ok(out.outOfPlan.includes('src/stray.js'),
+    'a changed file matching no File Plan row (literal or glob) and no pipeline-owned/baseline ' +
+    'exclusion must still land in outOfPlan — D6\'s agent-memory addition must narrow this ' +
+    'predicate\'s BLIND SPOT (agent-memory only) without ever widening the exclusion itself to ' +
+    'swallow an ordinary unplanned file: ' + JSON.stringify(out))
 })

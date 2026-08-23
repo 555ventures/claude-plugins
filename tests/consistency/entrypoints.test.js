@@ -15,10 +15,12 @@ const { ROOT, tmpdir } = require('../helpers')
 // these assertions to make them pass early — the manifest must actually be seeded and correct.
 //
 // D8 (orchestrator ruling, same day): the reverse check (checkReverseInvocation) narrows to
-// spec-paths keys resolving inside D1's executable-inventory glob shape — nine live keys
-// (shared, shared-design, shared-genesis, replay-corpus, template, feedback-template,
-// templates, contract, workflows) resolve to doctrine files, templates, or directories, and
-// D4 read literally demanded an unsatisfiable manifest entry for each.
+// spec-paths keys resolving inside D1's executable-inventory glob shape — eight live keys
+// (shared, shared-design, shared-genesis, replay-corpus, template, templates, contract,
+// workflows) resolve to doctrine files, templates, or directories, and D4 read literally
+// demanded an unsatisfiable manifest entry for each. (specs/20260823/01-release-legs.md D10,
+// 2026-08-23, retired the ninth — `feedback-template` — along with its dead /intake consumer;
+// this is a comment-accuracy update only, the shape check below never enumerated keys by name.)
 //
 // D9 (orchestrator ruling, same day — A2 FALSIFIED): the forward check's script-to-script
 // grammar was bare-substring matching over the whole file, comments included. Measured false
@@ -193,9 +195,10 @@ function readManifest(root) {
 
 // D8: whether a resolved path falls inside D1's executable-inventory glob shape
 // (spec/scripts/*.js|*.sh minus lib/, spec/workflows/*.js). Deliberately a SHAPE test, not
-// `scanExecutables(root).includes(p)` — nine live spec-paths keys (shared, shared-design,
-// shared-genesis, replay-corpus, template, feedback-template, templates, contract, workflows)
-// resolve to doctrine files, templates, or directories, and D4 read literally would demand an
+// `scanExecutables(root).includes(p)` — eight live spec-paths keys (shared, shared-design,
+// shared-genesis, replay-corpus, template, templates, contract, workflows) resolve to doctrine
+// files, templates, or directories (specs/20260823/01-release-legs.md D10 retired the ninth,
+// `feedback-template`, comment-accuracy only), and D4 read literally would demand an
 // unsatisfiable manifest entry for each. Using the on-disk listing instead of the glob shape
 // would also open a hole the shape test closes for free: a spec-paths key whose target matches
 // the glob shape but was deleted from disk (a stale case-table row) still counts as in-domain

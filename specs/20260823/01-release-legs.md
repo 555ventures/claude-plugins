@@ -1,6 +1,6 @@
 ---
 date: 2026-08-23
-status: hardened
+status: done
 tier: critical           # touches spec/bin/spec-paths (key-set edit — critical trigger per pipeline
                          # rules § Risk Tiers) and creates the single invocation point every release
                          # verdict/ledger row flows through (record wraps verdict.js)
@@ -9,6 +9,12 @@ design: false
 breaking: false
 depends_on: []
 depended_on_by: []
+# build_base pinned to a sha at build (2026-08-23): the branch was cut from main@fd1b15a, but
+# spec/02-init-generation-script merged to main mid-build, touching three of this spec's File
+# Plan files. main was merged in and the base repinned to that tip so review diffs this spec's
+# work only. Never append an inline # comment to this key — the frontmatter reader does not
+# strip them (§ Gotchas).
+build_base: 7861ed3f6dbbbc8f1b0ada6f95607f987c9148ac
 brief: 12
 open_markers: 0
 ---
@@ -264,6 +270,41 @@ writing into it is forbidden; (2) `docs/roadmap/12-release-legs.md` — the orig
 an intent record this spec satisfies, never a live assertion of the retired step;
 (3) `specs/20260820/04-entrypoint-conformance.md` — an immutable historical spec record
 (retired literals survive in closed specs by design).
+
+Review waive, 2026-08-23 — reconcile `outOfPlan: 4`, all four
+`.claude/agent-memory/{gate-scripts,plugin-tests}/*` files written by this build's dispatched
+workers. Waived by JJ. The class is structural, not incidental: no File Plan can enumerate the
+memories a worker will write, so every worker-dispatching build reproduces this finding
+verbatim. Reconcile is non-blocking (`verdict.js` `REVIEW_BLOCKING` = gate/smoke/ci), so the
+flag's only force is compelling one user decision whose answer is foreknown — the cry-wolf
+shape this repo's own § Gotchas already rules on ("waiving is not a fix"). The protection it
+appears to supply is supplied more strongly elsewhere: core § Feedback Loop and review's CLOSE
+step dispose EVERY touched agent-memory file with a stated fate (carry/correct/delete), judged
+on content, unconditionally and per-file — where reconcile inspects only path strings and
+cannot tell a misattributing memory from a sound one. Both memories here were read at close and
+carried (see the CLOSE disposal record). Root-cause fix staged as a follow-up rather than
+dispatched here: it belongs in `spec/scripts/lib/glob-match.js`'s `BASELINE_GLOBS` (shared with
+`hotspot.js`, needs its own pin and semver bump), and editing that surface mid-close on a
+critical-tier spec whose File Plan never named it would itself be the unplanned change
+reconcile exists to catch.
+
+Deviations folded at close, 2026-08-23 (sidecar deleted). One entry, a recurrence of the
+already-recorded `[host]` semver-race Gotcha, so no new Gotchas line was added: D13's literal
+version target (7.20.0, chosen at plan time) was taken on main by a concurrent session before
+this build committed; `spec/.claude-plugin/plugin.json` was bumped to the next free minor,
+**7.21.0**, keeping D13's changelog form (last-3-versions 7.21.0/7.20.0/7.19.0). The spec's
+literal number is a target, not a pin — exactly what the existing Gotcha says.
+
+Agent-memory disposal at close, 2026-08-23 — four files touched, both content memories
+**carried**, both indexes carried with them. `gate-scripts/wave1-buffer-then-append-for-fail-closed-precondition.md`
+records why `stage`'s wave 1 buffers results and defers every `appendRow` until after the abort
+check: the naive port of `review-legs.js`'s write-as-you-go pattern races AC-20260823-01-4's
+zero-rows-on-abort guarantee. `plugin-tests/path-stub-binaries-for-cli-retry-loops.md` records
+the PATH-stubbed `curl`/`gh` + invocation-counter-file technique (and the real-child-process HTTP
+server for reachable-URL legs) that made AC-3's retry count and AC-7's single-ci-row poll loop
+observable without depending on real network timing. Both teach a reusable technique, both name
+the spec and ACs they came from, neither attributes work to an unnamed concurrent process nor
+concludes an assignment could be stood down from.
 
 ## Canonical Delta
 

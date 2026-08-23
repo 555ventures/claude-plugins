@@ -64,118 +64,76 @@ milestone ships, not the pipeline.
    is this spec's single defined term, cited (never restated) everywhere below: config declares
    a `migrationsCheck` value other than `"none"` or absent.
 
-Create `{manifestPath}` now — a fresh `mktemp` file, one per run — that every leg below
-appends a JSONL row to (`{"leg":"<name>","exit":<int>,"observed":<non-null JSON object>}`,
-matching review's evidence-manifest shape v2 (D1/D7)). This run's **required legs** are `deploy`,
-`ready`, `e2e`, `journeys`, `substrate`, `production`, `ci` — `verdict.js --profile release`
-derives the milestone word from them. When the config declares a runnable `migrationsCheck`
-(Phase 0's defined term), the verdict invocation below additionally passes `--require migrations`,
-making `migrations` required too.
-
 ## Phase 1 — Release manifest (first run heavy, later runs delta-only)
 
-Maintain `.claude/release-manifest.json` — same shape and same checker as init's deliverable
-manifest (`{claim, kind, target}` rows; `bash $(spec-paths manifest-check) --manifest
-.claude/release-manifest.json`). Rows for: production env vars set (an `exec` row per
+Maintain `.claude/release-manifest.json` — same shape as init's deliverable manifest
+(`{claim, kind, target}` rows). Rows for: production env vars set (an `exec` row per
 verifiable check, `inert` with reason where unverifiable from this host), monitoring/error-tracking reachable, live-mode third parties
 (payments/email/OAuth — `inert` rows with the user's explicit confirmation recorded as the
 reason where no mechanical check exists), domain/TLS (`exec`: a curl against
 `productionUrl`). First release: build the full manifest with the user. Later releases:
 re-check only Phase 0's substrate delta plus rows whose targets changed. The manifest is
 committed — it doubles as the handover document: a list of verified observations, not claims.
-Any host declaring `migrationsCheck` owes the Phase 2 `migrations` leg below (required into
-the verdict via `--require migrations`) — deliberately never here: a pre-deploy comparison of
-applied-vs-journal migrations cannot distinguish a deploy that actually applies migrations from
-a journal that happens to already match what's applied, which is exactly the coincidence that
-let a prior release pass green while the deployed database sat four migrations behind. The
-check runs after the deploy, in Phase 2, where the comparison is finally meaningful.
-`manifest-check.sh` prints a machine sentinel line after its prose summary —
-`TOTAL=<n> FAILS=<n> INERT=<n>`, byte-unchanged — parse `checked`/`failed`/`inert` from that
-sentinel verbatim (never hand-counted from the prose lines above it); the session transcribes
-the sentinel into the typed object `{"checked":N,"failed":N,"inert":K}` and appends
-`{"leg":"substrate","exit":<0 if manifest-check exits 0 else 1>,"observed":{"checked":<N>,"failed":<M>,"inert":<K>}}`
-to `{manifestPath}` — `verdict.js --profile release` copies this object verbatim into the ledger
-row's `substrate` field; drifting the sentinel format breaks that derivation silently.
+Any host declaring `migrationsCheck` owes the Phase 2 `migrations` leg below (deliberately
+never here): a pre-deploy comparison of applied-vs-journal migrations cannot distinguish a
+deploy that actually applies migrations from a journal that happens to already match what's
+applied, which is exactly the coincidence that let a prior release pass green while the
+deployed database sat four migrations behind. The check runs after the deploy, in Phase 2,
+where the comparison is finally meaningful.
+
+Phase 2's `stage` call validates this manifest as its own `substrate` leg (wrapping
+`manifest-check.sh` — spec-paths release-legs) and fails closed, naming the remedy, if it's
+missing or malformed. Build it correctly here; `stage` below confirms it, it never guesses at
+it — never hand-parse `manifest-check.sh`'s output yourself, that transcription lives in the
+script now.
 
 ## Phase 2 — Stage and observe (all executed, fail-closed)
 
-The `deploy`/`ready`/`migrations`/`e2e`/`journeys`/`production`/`ci` legs' `observed` objects
-below are pinned — `verdict.js --profile release` copies the typed shapes verbatim into the
-ledger row (D2/D7): `deploy`, `ready`, and `migrations` each carry `{"result":"pass"|"fail"}`
-(the ledger row's `staging` field is still derived from `deploy`'s and `ready`'s exit codes
-alone — `pass` only when both exit 0 — never from these observed objects); `e2e` is
-`{"passed":<N>,"failed":<M>,"skipped":<K>|{"unavailable":"pattern-no-match"|"no-format-declared"}}`;
-`journeys` is `{"walked":<N>,"failed":<M>}`; `production` is
-`{"result":"verified"|"skipped"|"failed"}`; `ci` is `{"conclusion":"<value>"}` or
-`{"status":"in-progress"}` or `{"unavailable":"no-adapter"|"transient"}`. Drifting any of these
-shapes breaks that derivation silently — the leg that appends the row and the script that reads
-it must agree on exactly this grammar.
+Pick two fresh paths now (`mktemp` for the leg manifest, `mktemp -d` for retained per-leg
+output) — every leg below is executed and recorded through them, never re-derived by hand:
 
-1. **Deploy to staging:** run `deployCommand`. Append `{"leg":"deploy","exit":<exit>,"observed":{"result":"<pass|fail>"}}`
-   to `{manifestPath}`. Failure → STOP (see below), report.
-2. **Ready check against the deployed URL:** the config `runtime.readyCheck` pattern applied
-   to `stagingUrl` + `healthPath` (or a plain curl). The boot-leg discipline, applied to real
-   infra. Append `{"leg":"ready","exit":<exit>,"observed":{"result":"<pass|fail>"}}` to `{manifestPath}`.
-3. **Migrations check (when a runnable `migrationsCheck` is declared — Phase 0's defined
-   term):** run it now, after the deploy and the ready check — the comparison is meaningful
-   only here, since before the deploy a host with no migrate step at all is indistinguishable
-   from one that is up to date. Append `{"leg":"migrations","exit":<exit>,"observed":{"result":"<pass|fail>"}}`
-   to `{manifestPath}`. Declined (`"none"`) or legacy (key absent): the leg is neither run nor
-   appended.
-4. **CI check on the release commit (D4):** `node "$(spec-paths ci-query)" --commit $(git -C .
-   rev-parse HEAD) --root .` — the authoritative per-commit CI verdict. A completed run with
-   `conclusion` ∈ (`failure`/`timed_out`/`cancelled`) maps to `exit:1`; a completed non-red run
-   maps to `exit:0`, `observed:{"conclusion":"<value>"}`; an unavailable adapter maps to
-   `exit:0`, `observed:{"unavailable":"no-adapter"|"transient"}`; an in-progress run
-   re-invokes the same command every `capabilities.ciPoll.intervalSeconds` seconds (default 30
-   — every 30 seconds — when the block or key is absent, D7) for up to
-   `capabilities.ciPoll.timeoutSeconds` seconds (default 600 — up to 10 minutes — when
-   absent), then — if still unresolved — maps to `exit:0`, `observed:{"status":"in-progress"}`.
-   Append `{"leg":"ci","exit":<mapped>,"observed":<mapped object>}` to `{manifestPath}` exactly
-   once, after the poll loop resolves — never once per poll iteration (a double row corrupts
-   the leg map). Whenever `observed` carries no `conclusion` key, the Phase 4 pre-promote
-   report MUST carry one ⚠️ line stating CI never delivered a verdict on this exact commit (and,
-   for `unavailable`, that pushing would produce one).
-5. **e2e against the deployment:** `BASE_URL={stagingUrl} {e2eCommand}`. Capture pass / fail
-   / skip counts from the runner's own output — **a skipped e2e is reported by name, never
-   silently green.** When the host's declared `capabilities.skipReportPattern` (D1) is absent,
-   `"none"`, or doesn't match this run's output, the skip slot is a typed unavailability
-   object — `{"unavailable":"no-format-declared"}` when the host declares no pattern
-   (sanctioned) or `{"unavailable":"pattern-no-match"}` when a declared pattern misses the
-   output (drift) — never assumed-zero (no format is universal). Append
-   `{"leg":"e2e","exit":<0 if zero failed else 1>,"observed":{"passed":<N>,"failed":<M>,"skipped":<K>|{"unavailable":"pattern-no-match"|"no-format-declared"}}}`
-   to `{manifestPath}`.
-6. **Journey walks:** for each brief shipped this milestone, walk its primary journey against
-   staging (the brief's milestone-gate observable, via the host's spec-verify skill, browser
-   automation, or scripted API calls — whatever the skill declares), plus **one standing
-   whole-product journey** (sign-up → core loop → the product's reason to exist) every
-   release regardless of what shipped. Record each as observed-pass / observed-fail with the
-   command or interaction trace. A journey that cannot be walked (no seed path, no access) is
-   a **blocking finding**, not a skip. Append
-   `{"leg":"journeys","exit":<0 if zero failed else 1>,"observed":{"walked":<N>,"failed":<M>}}` to
-   `{manifestPath}`.
+```
+node "$(spec-paths release-legs)" stage --root . --manifest {manifestPath} --out-dir {outDir}
+```
 
-Any failure here (a red `deploy`/`ready`/`migrations`/`e2e`/`journeys`/`ci` row): **STOP.**
-Never promote over a red staging or a red release-commit CI run.
+This one call runs every deterministic leg — `substrate` (the Phase 1 manifest check),
+`deploy` (`deployCommand`), `ready` (a probe of the deployed `stagingUrl` + `healthPath`),
+`migrations` (only when Phase 0 found a runnable `migrationsCheck`), `e2e` (`{e2eCommand}`
+against `BASE_URL={stagingUrl}`), and `ci` (the release commit's CI verdict, via `ci-query.js`,
+polling until it resolves or times out) — in the dependency order, with the exit codes,
+retained output, and row shapes documented in `spec-paths release-legs`'s own header comment;
+this doc does not restate them. Its own summary (per-leg pass/fail lines, `RED_BLOCKING:
+<legs>` when any leg is red) is the evidence a STOP report below quotes.
 
-The stop still runs `node "$(spec-paths verdict)" --profile release --manifest {manifestPath}
---ledger --milestone {milestone} --briefs {shipped brief numbers, comma-separated}` (plus
-`--require migrations` when the config declares a runnable `migrationsCheck`) — an early
-Phase-2 STOP leaves later legs without manifest rows, and `verdict.js` checks missing-required
-legs *before* red legs, so the word it derives on an early stop is typically `UNVERIFIED`, not
-`GATE_RED` (only a STOP triggered by this leg's own red row derives `GATE_RED`); its row is
-appended to `.claude/spec-runs.jsonl` the same as a successful run's. In short: `verdict.js
---profile release --ledger` is what the STOP path derives here (D7: a Phase 2/3 STOP is never a
-second, independent verdict origin — the same call runs again in Phase 4 below). `--milestone`
-and `--briefs` are orchestrator-supplied identity fields (the `$ARGUMENTS` note / Phase 0 step
-2's shipped-brief list) — everything else in the row (`staging`/`e2e`/`journeys`/`substrate`/
-`production`/`ci`) is derived from the manifest rows above, never passed as a flag.
+- **Exit 0:** every leg it ran was green — continue to journey walks below.
+- **Exit 1:** at least one leg red — **STOP.** Never promote over a red staging or a red
+  release-commit CI run. Skip straight to Phase 4's `record` (below); it is the only path to a
+  report from here.
+- **Exit 2:** a usage or precondition failure (unreadable config, a missing `release` block or
+  required key, a missing/invalid `.claude/release-manifest.json`, a non-empty `--manifest`) —
+  the printed remedy names the fix (Phase 0's interview, or Phase 1's manifest). Same STOP path
+  as exit 1.
 
-Report via the shared STOP shape: assemble `outcome: {anchor:'🚫', text:'{the derived verdict
-word} — {leg} failed'}` and `next: {kind:'command', text:'route the defect to the normal flow
-— direct fix or a spec, or /spec:escape (foundBy: later-spec, preventedBy: runtime-leg) if it
-escaped a CLEAN review'}`, write to a temp file, and run `node "$(spec-paths report-render)"
---slots <file>`, printing its output verbatim:
+**Journey walks** (session judgment — `release-legs.js` does not walk journeys): for each brief
+shipped this milestone, walk its primary journey against staging (the brief's milestone-gate
+observable, via the host's spec-verify skill, browser automation, or scripted API calls —
+whatever the skill declares), plus **one standing whole-product journey** (sign-up → core loop
+→ the product's reason to exist) every release regardless of what shipped. Record each as
+observed-pass / observed-fail with the command or interaction trace. A journey that cannot be
+walked (no seed path, no access) is a **blocking finding**, not a skip. Then record it:
+
+```
+node "$(spec-paths release-legs)" append --manifest {manifestPath} --leg journeys --walked <N> --failed <M>
+```
+
+Exit 0 (zero failed) → continue to Phase 3. Exit 1 (≥1 failed) → **STOP**, same as above: skip
+to Phase 4's `record`.
+
+Report a Phase 2 STOP via the shared shape: assemble `outcome: {anchor:'🚫', text:'{the derived
+verdict word} — {leg} failed'}` and `next: {kind:'command', text:'route the defect to the
+normal flow — direct fix or a spec, or /spec:escape (foundBy: later-spec,
+preventedBy: runtime-leg) if it escaped a CLEAN review'}`, write to a temp file, and run
+`node "$(spec-paths report-render)" --slots <file>`, printing its output verbatim:
 
 ```report
 🚫 **{the derived verdict word} — {leg} failed**
@@ -184,82 +142,66 @@ Next: route the defect to the normal flow — direct fix or a spec, or /spec:esc
 
 ## Phase 3 — Promote (explicitly confirmed, never autonomous)
 
-A milestone whose only gap is a `ci` leg that structurally never delivered a verdict
-(`unavailable`/`in-progress`) still derives plain `CLEAN` (v7: the qualifier word is retired)
-and promotes normally, carrying the already-mandated ⚠️ line (Phase 2 step 4) into the promote
-question's context and the Phase 4 report — the ledger row's `ci` field is the durable carrier
-of the observation.
+A milestone whose only gap is a `ci` leg that structurally never delivered a verdict (`stage`'s
+summary flags this) still derives plain `CLEAN` (v7: the qualifier word is retired) and
+promotes normally, carrying that observation into the promote question's context and the
+Phase 4 report — the ledger row's `ci` field is the durable carrier of the observation.
 
 1. `AskUserQuestion`: promote this build to production? (Include the Phase 2 observation
-   summary in the question context.) Dismissed or declined → STOP; staging stands, nothing
-   promoted; append `{"leg":"production","exit":0,"observed":{"result":"skipped"}}` to
-   `{manifestPath}` (D7: a user-declined promote is exit 0, `observed:{"result":"skipped"}` —
-   it is not a failure).
+   summary in the question context.) Dismissed or declined → record the decline (exit 0 — a
+   decline is not a failure):
+   ```
+   node "$(spec-paths release-legs)" append --manifest {manifestPath} --leg production --result skipped
+   ```
+   then **STOP** to Phase 4's `record`; staging stands, nothing promoted.
 2. On yes: run `promoteCommand` (or instruct the user through their CI-on-tag flow when
    promotion is tag-driven and the tag push is theirs to make — **never push for them**).
 3. **Verify production serves:** ready check against `productionUrl` + `healthPath`, and
    confirm the deployed version/build id is the one staged (the health endpoint's version
    field, or the platform's deployment id). A promote that cannot be verified serving is a
-   failure, not a success with a caveat. Append
-   `{"leg":"production","exit":<0 if verified else 1>,"observed":{"result":"<verified|failed>"}}` to
-   `{manifestPath}`. A red `production` row here is a Phase 3 failure — STOP via the same
+   failure, not a success with a caveat. Record it:
+   ```
+   node "$(spec-paths release-legs)" append --manifest {manifestPath} --leg production --result <verified|failed>
+   ```
+   A `failed` result (or a nonzero `append` exit) is a Phase 3 failure — **STOP** via the same
    renderer shape as Phase 2 above (`outcome: {anchor:'🚫', text:'GATE_RED — production
    verification failed'}`, `next: {kind:'command', text:'verify {productionUrl}/{healthPath}
-   serves the staged build, then re-run /spec:release'}`), quoting
-   `verdict.js --profile release --ledger`'s `GATE_RED` output.
+   serves the staged build, then re-run /spec:release'}`), then Phase 4's `record`.
 
 ## Phase 4 — Record & report
 
-1. **Verdict + ledger row** — run `node "$(spec-paths verdict)" --profile release --manifest
-   {manifestPath} --ledger --milestone {milestone} --briefs {shipped brief numbers,
-   comma-separated}` (plus `--require migrations` when the config declares a runnable
-   `migrationsCheck` — Phase 0's defined term) (the same call the Phase 2/3 STOP path above
-   would have quoted, had one fired: `verdict.js --profile release --ledger` is one derivation
-   with one origin on every path). `--milestone`/`--briefs` are orchestrator-supplied identity
-   fields (`$ARGUMENTS` /
-   Phase 0 step 2's shipped-brief list); `staging`/`e2e`/`journeys`/`substrate`/`production`/`ci`
-   are derived from the Phase 2/3 manifest rows, never passed as flags. Print line 1 (the word
-   — `CLEAN`, `GATE_RED`, or `UNVERIFIED`) verbatim, and append exactly
-   ONE line to
-   `.claude/spec-runs.jsonl` — line 2, the ledger row, verbatim, counts/enums/paths only, never prose:
-
+1. **Verdict + ledger row** — run:
    ```
-   {"ts":"<ISO-8601>","stage":"release","milestone":"<tag or briefs range>","briefs":[<NN>,…],"verdict":"<CLEAN|GATE_RED|UNVERIFIED>","staging":"<pass|fail>","e2e":{"passed":<n>,"failed":<n>,"skipped":<n>|{"unavailable":"pattern-no-match"|"no-format-declared"}},"journeys":{"walked":<n>,"failed":<n>},"substrate":{"checked":<n>,"failed":<n>,"inert":<n>},"production":"<verified|skipped|failed>","ci":{"conclusion":"<value>"}|{"status":"in-progress"}|{"unavailable":"no-adapter"|"transient"}}
+   node "$(spec-paths release-legs)" record --root . --manifest {manifestPath} --milestone {milestone} --briefs {shipped brief numbers, comma-separated}
    ```
-
-   `verdict` is emitted by `verdict.js` — the doctrine documents the enum, never re-derives
-   the word. `e2e`/`journeys`/`substrate`/`ci` are the leg's `observed` object copied verbatim
-   (D3/D11 — never re-derived counts); `production` is `observed.result`; `staging` stays the
-   exit-code derivation, unchanged. When `ci`'s object carries `unavailable`/`in-progress`
-   rather than `conclusion`, the row's `ci` field carries that observation beside a plain
-   `CLEAN`.
+   This is the **sole** verdict/ledger invocation point on every path — an early Phase 2 STOP,
+   a red-journeys STOP, a declined or failed promote, and this normal close all run the exact
+   same call (one origin, never a second, independent derivation). It derives `--require
+   migrations` itself from the config (Phase 0's defined term — never a flag this doc passes),
+   streams `verdict.js`'s own two lines verbatim (line 1 the word — `CLEAN`, `GATE_RED`, or
+   `UNVERIFIED` — line 2 the ledger row), and appends exactly ONE line to
+   `.claude/spec-runs.jsonl`. `--milestone`/`--briefs` are the only fields this doc supplies
+   (the `$ARGUMENTS` note / Phase 0 step 2's shipped-brief list) — every other field in the row
+   is the manifest's observed data, carried through unchanged. A null-status child death exits
+   2 naming the remedy — never a silent pass.
 
 2. **Tag** the release (`git tag`) when the user confirmed promotion — never push the tag;
    pushing remains theirs.
-3. **Feedback flush (emit half of the feedback loop — shared invariants § Feedback Loop):**
-   sweep the window since the last release row for upstream signal: `[plugin]`-tagged
-   Gotchas entries, `stage:"escape"` ledger rows, review rows with non-zero `skipped`
-   counts, and review-folded deviations that implicated plugin templates or doctrine. If
-   **at least one** qualifying item exists, write `docs/spec-feedback/<YYYYMMDD>-brief.md`
-   from the plugin's brief template (`spec-paths feedback-template`) — the installed
-   version (`spec-paths version`) stamped as `plugin:`, one findings row per item, evidence
-   verbatim from the source material. No qualifying items → no brief (never write an empty
-   one). Briefs are append-only: never edit a prior brief. (Dedup against prior
-   reports happens at consumption time in the plugin repo.)
-4. **Release report:** assemble the slots object — `outcome` (✅ `milestone green — {N} specs
+
+3. **Release report:** assemble the slots object — `outcome` (✅ `milestone green — {N} specs
    composed, staging + e2e passed, promoted` on CLEAN; 🚫 `{what blocked
    promotion}` otherwise), `bullets` (`- shipped: {briefs + specs}`, `- observed: {deploy,
    ready, migrations (pass/fail, when the leg ran), e2e counts, journeys walked with outcomes,
-   ci verdict — one line each}`,
+   ci verdict — one line each, read off `stage`'s and `append`'s own output}`,
    `- substrate: {rows checked / inert-declared} · production: {verification result}`),
-   `warns` (`ci never delivered a verdict on this commit` when the ci leg observed
-   `unavailable`/`in-progress`, plus
+   `warns` (`ci never delivered a verdict on this commit` when the ci leg observed no
+   `conclusion`, plus
    `yours / the client's to do: {inert rows, verbatim — one line each}` whenever inert rows
-   exist), and `next` — **unconditional, branched by outcome** (A7 — never the old
+   exist), and `next` — **unconditional, branched by outcome** (never the old
    "(optional)" framing): on CLEAN, the verbatim output of
    `node "$(spec-paths spec-status)" --root . --next` as `{kind: 'status-verbatim'}`;
    `{kind:'command', text: the remedy for what blocked promotion}` on 🚫. Write the slots to a temp file and run
-   `node "$(spec-paths report-render)" --slots <file>`, printing its output verbatim.
+   `node "$(spec-paths report-render)" --slots <file>`, printing its output verbatim:
 
    ```report
    ✅ **milestone green — {N} specs composed, staging + e2e passed, promoted**
@@ -267,7 +209,7 @@ of the observation.
    - shipped: {briefs + specs}
    - observed: {deploy, ready, migrations (pass/fail, when the leg ran), e2e counts, journeys walked with outcomes, ci verdict — one line each}
    - substrate: {rows checked / inert-declared} · production: {verification result}
-   ⚠️ ci never delivered a verdict on this commit    (when the ci leg observed unavailable/in-progress)
+   ⚠️ ci never delivered a verdict on this commit    (when the ci leg observed no conclusion)
    ⚠️ yours / the client's to do: {inert rows, verbatim — one line each}
    Next: {spec-status --next, verbatim}    (or, on 🚫: the remedy for what blocked promotion)
    ```

@@ -46,6 +46,14 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // list below is updated in place (pre-image: `spec-paths init-gen` exits 1 on the unknown key,
 // executed 2026-08-22), never a parallel exhaustive pin.
 
+// AC-20260823-01-16: specs/20260823/01-release-legs.md D1/D10 adds spec/scripts/release-legs.js
+// to the bundle (a new `release-legs` key) and retires `feedback-template` (its consumer,
+// /intake, died in v7) — like every other bundled-script addition it needs a spec-paths key or
+// release.md's stage/append/record invocations resolve nothing, and like every other retired
+// key it must fail loudly rather than keep quietly resolving a deleted template. Sixth
+// recurrence of the additive-collision class (JJ-20260814-01), and the first that also RETIRES
+// a key: the key list below is updated in place, never a parallel exhaustive pin.
+
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-design', 'wf-enforce',
@@ -86,7 +94,7 @@ test('shared-for: every mapped section name still exists as a core.md or design.
 // `run('shared-for', 'escape')` / Incident Policy assert below is the oracle that `shared-for
 // escape` keeps serving that section after D7 lands — tagged here rather than duplicated, per
 // that spec's File Plan.
-test('shared-for: scoped output carries its sections and is smaller than the full doc (incl. AC-20260820-05-17: escape keeps serving Incident Policy)', () => {
+test('shared-for: scoped output carries its sections and is smaller than the full doc (incl. AC-20260820-05-17: escape keeps serving Incident Policy; AC-20260823-01-19: release keeps Release Stage/Runtime Verification and drops Feedback Loop)', () => {
   const full = run('shared-for', 'no-such-command')
   for (const cmd of ['plan', 'design', 'build', 'review', 'release', 'enforce', 'atlas', 'sketch', 'escape', 'doctor', 'replay']) {
     const out = run('shared-for', cmd)
@@ -114,6 +122,11 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
     'review pays for the boot-leg doctrine — CLEAN requires it')
   assert.match(run('shared-for', 'release'), /## Release Stage/)
   assert.match(run('shared-for', 'release'), /## Runtime Verification/)
+  assert.ok(!/## Feedback Loop/.test(run('shared-for', 'release')),
+    'AC-20260823-01-19/D10: release must no longer be served § Feedback Loop — its SECTIONS list ' +
+    'drops "Feedback Loop" now that the feedback-brief flush is retired, so a surviving citation ' +
+    'here would mean the doc still tells the session to read doctrine for a step that no longer ' +
+    'exists: ' + run('shared-for', 'release'))
   assert.match(run('shared-for', 'escape'), /## Feedback Loop/,
     'escape IS the Emit leg — it writes preventedBy rows and Gotchas tags')
   assert.match(run('shared-for', 'escape'), /## Incident Policy/,
@@ -167,4 +180,31 @@ test('AC-20260822-02-13: spec-paths init-gen resolves to spec/scripts/init-gen.j
     'spec/commands/init.md\'s invocation of the generation script silently (§ Risk Tiers, spec-paths: "a ' +
     'wrong key breaks commands silently")')
   assert.ok(fs.existsSync(initGenPath), 'the resolved init-gen.js path must actually exist on disk: ' + initGenPath)
+})
+
+test('AC-20260823-01-16: spec-paths release-legs resolves to spec/scripts/release-legs.js, and spec-paths feedback-template is refused now that D10 retires the key', () => {
+  const fs = require('node:fs')
+  const releaseLegsPath = run('release-legs').trim()
+  assert.match(releaseLegsPath, /spec\/scripts\/release-legs\.js$/,
+    'D1: `spec-paths release-legs` must resolve to spec/scripts/release-legs.js — a wrong or ' +
+    'missing key breaks release.md\'s stage/append/record invocations silently (§ Risk Tiers, ' +
+    'spec-paths: "a wrong key breaks commands silently"): got ' + releaseLegsPath)
+  assert.ok(fs.existsSync(releaseLegsPath),
+    'the resolved release-legs.js path must actually exist on disk: ' + releaseLegsPath)
+
+  let threw = false
+  let output = ''
+  try {
+    run('feedback-template')
+  } catch (e) {
+    threw = true
+    output = String(e.stdout || '') + String(e.stderr || '')
+  }
+  assert.ok(threw,
+    'D10: `spec-paths feedback-template` must exit non-zero now that the key is retired (its ' +
+    'consumer, /intake, died in v7) — a still-resolving key means the retirement never actually ' +
+    'landed and a caller could still write a document nothing reads')
+  assert.match(output, /usage: spec-paths/,
+    'the refusal must print the usage line, the same way any other unknown key does, so a caller ' +
+    'relying on the old key gets a discoverable error rather than a silent wrong path: ' + output)
 })

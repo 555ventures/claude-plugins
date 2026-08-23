@@ -9,7 +9,10 @@ depends_on: []
 depended_on_by: []
 open_markers: 0
 brief: n/a
-build_base: main
+# pinned at build close 2026-08-23 from the moving ref `main`, which advanced 3x during this
+# build (spec 02's merge + two ledger promotions). This sha is the true pre-image: everything
+# in 4b8c837..HEAD is this spec's own work. See the semver-race / stale-diff_base gotchas.
+build_base: 4b8c83797b8816e20a920ca0d3e5bb925ae8bd63
 ---
 
 # Silent-drop hardening: loud trailing-tag rejection, frontmatter comment strip, ledger repair, D8 archaeology

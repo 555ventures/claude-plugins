@@ -45,56 +45,70 @@ enum-clean (past and future), and the four escape rows exist.
 | D8 | **Blocked-return ruling (build, 2026-08-23): AC-20260823-03-3's fixture is retargeted; D2's anchor is NOT widened.** The authored fixture placed the backticked `[pre-green:]` tag BEFORE a `→ tests/x3.test.js` reference suffix, so the tag is not the bullet's last content and no trailing run — tolerant or bare — matches it (executed check: `parseAcBullets` returns `trailingRejected: null` for that text with AND without backticks). AC-20260823-03-3's own literal example ends with the tag; the fixture drops the suffix to match it. D2's `((?:TAG_ITEM_SRC\s*)+)$` end-anchor stands unchanged [no-ac: fixture correction inside an existing AC's own test — AC-20260823-03-3 already says "bullet ends in a backticked pre-green tag"] | Widening the anchor would change what the trailing position PARSES, which D1 forbids outright ("nothing about what PARSES changes, only what is SAID when parsing refuses"); `trailingRun`'s bare path carries the identical end-anchor today, so a suffix-tolerant tolerant-run would report refusals the bare run never even considered — a new silent-drop class, not a fix for one |
 | D9 | **Leg exits partition by EMISSION SITE, not by finding class.** `ac-matrix.js` derives its two manifest leg exits (`ac-matrix`, `skip-reconcile`) by testing each finding's `class` against two class sets. `rejected-trailing-tag` is emitted from BOTH loops, so adding it to both sets makes either emission redden both legs. Executed repro (build, 2026-08-23): a spec with one uncovered AC carrying a refused trailing `[oracle:]` and ZERO skip lines wrote `{"leg":"skip-reconcile","exit":1,"observed":{"skipped":0,"sanctioned":0}}` — a leg reporting red having observed nothing. Fix: each of the three `rejected-trailing-tag` emission sites records which leg it belongs to, and the two exits are computed from that origin; `rejected-trailing-tag` is removed from both class sets. The `--json` findings array and every finding's own shape stay byte-identical — origin is internal bookkeeping, never an emitted field (AC-20260823-03-13) | This spec exists to stop silent misreports; shipping one into the evidence manifest that verdict.js reads would be self-refuting. D1's Behavior clause already promises "verdict arithmetic sees no delta" — a falsely-red leg is exactly such a delta |
 | D10 | **The `rejected-trailing-tag` remedy text is ONE authority, exported from `lib/spec-sections.js`.** The first implementation landed a byte-identical `rejectedTrailingTagDetail(acId, trailingRejected, underlying)` in both `ac-matrix.js` and `red-check.js`. It is exported from `lib/spec-sections.js` — the module that already owns the refusal predicate D2 defines — and imported by both consumers; the per-consumer `underlying` clause stays a parameter. Pure refactor, message bytes unchanged, already pinned by the AC-1/-2/-3 detail assertions [no-ac: behavior-preserving extraction covered by the existing detail assertions on AC-20260823-03-1/-2/-3] | This spec's own D4 rationale is that two identical copies are how one buggy regex reached both drivers and that extraction is the holistic fix — shipping two copies of the remedy text in the same spec would refute it, and the remedy belongs beside the grammar whose refusal it explains |
+| D11 | **Refusal = what is SAID minus what PARSED; position-blind, JJ-approved amendment (2026-08-23), supersedes D8's rationale and D2's predicate formula.** Live evidence: specs/20260823/01 AC-20260823-01-18 and AC-20260823-01-20 each end `` `[pre-green: predicate-in-test]` → tests/… `` — genuine declarations at NEITHER recognized position, so they neither parse nor set `trailingRejected` (that spec's own review row rv_6825fa48c98d recorded `preGreen:0` with both present): the same silent-drop class this spec exists to close. Fix, all inside lib/spec-sections.js's authority: (a) a WIDENED tolerant run `((?:TAG_ITEM_SRC\s*)+)(?:→[^→]*)?$` — built from the same `TAG_ITEM_SRC`, tolerating exactly one final `→ <tail containing no second →>` File-Plan-reference suffix, capture trimmed of trailing whitespace; (b) the predicate GENERALIZES to a said-vs-parsed comparison: `trailingRejected = (wide !== null && wide !== trailingRun(raw)) ? wide : null` (trimmed captures) — this subsumes D2's formula (bare-run null ≠ non-null wide) AND catches a backticked tag standing beside an accepted bare one at the true end, which D2's null-test missed (AC-20260823-03-16); (c) each bullet also gains `trailingRejectedCause`: `'backticked-at-end'` when the UNWIDENED end-anchored tolerant run matches and equals the wide capture, else `'not-at-end'` (AC-20260823-03-14); (d) `rejectedTrailingTagDetail` gains the cause parameter and forks its middle sentences — the backticked-at-end message stays byte-identical to D10's pinned text, and the not-at-end message says the tag sits before the bullet's final `→` reference (not a recognized declaration position) with remedy "move it into the declaration slot (backticks allowed there)" — NEVER "remove the backticks", which is false there (a bare tag before the arrow still does not parse) (AC-20260823-03-15, -17); (e) the four `rejectedTrailingTagDetail` call sites (ac-matrix ×3, red-check ×1) pass the bullet's cause — the relevance gates themselves are unchanged substring tests. What PARSES is untouched: `slotRun`/`trailingRun`/`extractTag` keep their exact grammar, so D1's parse-freeze holds. **D8's ruling (fixture retarget) stands as a build-time act, but its rationale was factually wrong and is corrected here**: D1 freezes what PARSES; the tolerant run is on the "what is SAID" side, which D2 built precisely so it could see more than the parser accepts — and D8's "refusals the bare run never considered would be a new silent-drop class" objection has it backwards: a tag that was SAID and did not PARSE is exactly what refusal reporting exists to surface. AC-20260823-03-3's before-the-arrow fixture shape is re-legitimized (AC-20260823-03-17 pins it end-to-end). **Out-of-plan repair, JJ-approved explicitly**: specs/20260823/01's two bullets move their tag into the declaration slot so the shipped declarations actually parse (File Plan row added; deviations sidecar records it). Evidence: executed corpus run over all 843 AC bullets in specs/ — the generalized predicate fires on exactly the 2 known drops (both `not-at-end`), zero prose false positives, zero delta elsewhere; 10 synthetic edge shapes verified (bare-at-end, slot-only, mid-prose illustration, tag before first-of-two arrows, arrow-tail parenthetical, mixed runs) | A hardening spec that ships still-silent drops of its own target class refutes itself; the said-vs-parsed comparison is the principled predicate the null-test only approximated, and Fable's independent regex review plus the executed corpus run ground the widening in observation, not assumption |
 
 ## File Plan
 
 | Path | Action | Layer | Summary |
 |------|--------|-------|---------|
-| spec/scripts/lib/spec-sections.js | MODIFY | scripts | D2 `trailingRejected` on parseAcBullets bullets; D3 census-comment rescope |
-| spec/scripts/ac-matrix.js | MODIFY | scripts | D1 `rejected-trailing-tag` replacing `uncovered-ac` (refused trailing oracle) and `unsanctioned-skip` (refused trailing env on owning bullet); D9 leg exits partition by emission site |
-| spec/scripts/red-check.js | MODIFY | scripts | D1 `rejected-trailing-tag` replacing `unsanctioned-green` when a carried AC's bullet has a refused trailing `[pre-green:]` |
+| spec/scripts/lib/spec-sections.js | MODIFY | scripts | D2 `trailingRejected` on parseAcBullets bullets; D3 census-comment rescope; D11 widened run, said-vs-parsed predicate, `trailingRejectedCause`, forked remedy |
+| spec/scripts/ac-matrix.js | MODIFY | scripts | D1 `rejected-trailing-tag` replacing `uncovered-ac` (refused trailing oracle) and `unsanctioned-skip` (refused trailing env on owning bullet); D9 leg exits partition by emission site; D11 cause threaded to the detail builder |
+| spec/scripts/red-check.js | MODIFY | scripts | D1 `rejected-trailing-tag` replacing `unsanctioned-green` when a carried AC's bullet has a refused trailing `[pre-green:]`; D11 cause threaded to the detail builder |
 | spec/scripts/lib/frontmatter.js | CREATE | scripts | D4 shared `fmVal(fmRaw, key)` — quote-aware, YAML-correct comment strip |
 | spec/scripts/spec-review-driver.js | MODIFY | scripts | D4: local fmVal replaced by the lib import; no other behavior change |
 | spec/scripts/spec-design-driver.js | MODIFY | scripts | D4: local fmVal replaced by the lib import; no other behavior change |
-| tests/ac-matrix/rejected-trailing-tag.test.js | CREATE | tests | AC-20260823-03-1, AC-20260823-03-2, AC-20260823-03-4, AC-20260823-03-7, AC-20260823-03-13 |
+| tests/ac-matrix/rejected-trailing-tag.test.js | CREATE | tests | AC-20260823-03-1, AC-20260823-03-2, AC-20260823-03-4, AC-20260823-03-7, AC-20260823-03-13, AC-20260823-03-14, AC-20260823-03-15, AC-20260823-03-16 |
 | tests/ac-matrix/ac-matrix.test.js | MODIFY | tests | Tag the existing bare-trailing and mid-sentence-null pins with AC-20260823-03-5, AC-20260823-03-6 (retag only, assertions untouched) |
-| tests/red-check/red-check.test.js | MODIFY | tests | AC-20260823-03-3 |
+| tests/red-check/red-check.test.js | MODIFY | tests | AC-20260823-03-3, AC-20260823-03-17 |
 | tests/frontmatter.test.js | CREATE | tests | AC-20260823-03-8, AC-20260823-03-9, AC-20260823-03-10 |
 | tests/review/review-driver.test.js | MODIFY | tests | AC-20260823-03-11 |
 | tests/design-driver.test.js | MODIFY | tests | AC-20260823-03-12 |
 | .claude/spec-runs.jsonl | MODIFY | other | D5 six-row tier repair; D6 up-to-four appended escape rows |
 | spec/.claude-plugin/plugin.json | MODIFY | other | D7 version bump + description changelog |
+| specs/20260823/01-release-legs.md | MODIFY | other | D11 JJ-approved repair: move the two before-the-arrow `[pre-green: predicate-in-test]` declarations (AC-20260823-01-18, -20) into the declaration slot so they parse |
 
 ## Contracts
 
 ```js
-// lib/spec-sections.js — parseAcBullets bullet shape gains one field
+// lib/spec-sections.js — parseAcBullets bullet shape gains two fields (D2 as amended by D11)
 {
   id, token, malformed, raw,
-  oracle, env, preGreen,          // unchanged
-  trailingRejected: string|null,  // the backtick-tolerant trailing tag run's text when the
-                                  // bare-only trailingRun refused it; null when there is no
-                                  // trailing tag run at all, or the bare-only run accepted it
+  oracle, env, preGreen,            // unchanged — what PARSES never changes (D1)
+  trailingRejected: string|null,    // the tolerant reading's tag run when it differs from what
+                                    // the bare-only trailingRun accepted; null when there is no
+                                    // near-trailing tag run, or the bare rule accepted it whole
+  trailingRejectedCause:            // 'backticked-at-end' | 'not-at-end' | null (null iff
+    string|null,                    // trailingRejected is null)
 }
-// Refusal predicate (the ONE authority — consumers never re-derive):
-//   tolerantTrailingRun(raw) matches ((?:TAG_ITEM_SRC\s*)+)$ on trailing-whitespace-trimmed raw;
-//   trailingRejected = (tolerant run !== null && trailingRun(raw) === null) ? tolerant run : null
+// Refusal predicate (the ONE authority — consumers never re-derive), D11:
+//   wide = widened tolerant run: ((?:TAG_ITEM_SRC\s*)+)(?:→[^→]*)?$ on trailing-whitespace-
+//          trimmed raw — tolerates exactly one final `→ <tail with no second →>` reference
+//          suffix; capture trimmed of trailing whitespace
+//   trailingRejected = (wide !== null && wide !== trailingRun(raw)) ? wide : null
+//   trailingRejectedCause: 'backticked-at-end' when the UNWIDENED end-anchored tolerant run
+//          ((?:TAG_ITEM_SRC\s*)+)$ matches and equals wide; else 'not-at-end'
 // Note a mixed run (`[env: A] `[oracle: g]``) is refused WHOLE — bare members are inside
-// trailingRejected too, because trailingRun's all-bare anchor already drops them all today.
+// trailingRejected too; a backticked tag beside an ACCEPTED bare tag at the true end is also
+// refused (wide ≠ bare capture) while the bare tag itself keeps parsing (AC-20260823-03-16).
 ```
 
 ```js
 // ac-matrix.js / red-check.js — new finding class (hard), replacing the generic finding
 { severity: 'hard', class: 'rejected-trailing-tag', ac: '<AC-ID>',
-  detail: /* names: the refused tag text; that it ended the bullet backticked so it was
-             refused as a declaration (bare-only trailing rule, rv_640c582f4902); remedy
-             both ways — "if this is a declaration: remove the backticks, or move it into
-             the declaration slot (backticks allowed there); if it is a quote: <the
-             underlying problem — no executed coverage / unsanctioned skip / green
-             expected-red file> still stands and needs its own fix" */ }
-// Relevance gate per consumer (D1): oracle ↔ uncovered-ac · env ↔ unsanctioned-skip ·
-// pre-green ↔ unsanctioned-green. Tag-name match is a substring test against
-// trailingRejected ('[oracle:', '[env:', '[pre-green:').
+  detail: /* rejectedTrailingTagDetail(acId, trailingRejected, cause, underlying) — forked on
+             cause (D11). backticked-at-end: byte-identical to D10's pinned text — names the
+             refused tag text, that it ended the bullet backticked (bare-only trailing rule,
+             rv_640c582f4902), remedy "remove the backticks, or move it into the declaration
+             slot (backticks allowed there)". not-at-end: names that the tag sits before the
+             bullet's final `→` reference, which is not a recognized declaration position;
+             remedy "move it into the declaration slot (backticks allowed there)" — NEVER
+             "remove the backticks" (false there: a bare tag before the arrow still does not
+             parse). Both end: "if it is a quote: <the underlying problem — no executed
+             coverage / unsanctioned skip / green expected-red file> still stands and needs
+             its own fix" */ }
+// Relevance gate per consumer (D1, unchanged by D11): oracle ↔ uncovered-ac ·
+// env ↔ unsanctioned-skip · pre-green ↔ unsanctioned-green. Tag-name match is a substring
+// test against trailingRejected ('[oracle:', '[env:', '[pre-green:').
 ```
 
 ```js
@@ -127,6 +141,13 @@ jq -c 'if (.stage=="review" and (.tier|type=="string") and (.tier|test("\\s#|\\s
   bare-only ban itself is untouched — nothing about what PARSES changes, only what is SAID
   when parsing refuses (AC-5/6 pin the grammar; AC-4 pins silence when the refusal is
   irrelevant).
+- **Position-blind refusal (D11).** A genuine declaration written just before the bullet's
+  final `→ tests/…` reference — the shape two shipped criteria in specs/20260823/01 actually
+  used — is at neither recognized position, so before D11 it neither parsed nor set
+  `trailingRejected`: still silent. After: the tolerant reading tolerates that one reference
+  suffix and refusal is defined as tolerant-reading ≠ bare-accepted, with a cause
+  (`backticked-at-end` / `not-at-end`) forking the remedy so it never prescribes the wrong
+  fix. What PARSES is still untouched.
 - **Replacement, not addition.** For one AC, the consumer emits either the generic finding
   or `rejected-trailing-tag`, never both. Severity is identical (hard), so no verdict gets
   softer; the finding count per AC is unchanged, so verdict arithmetic and fix-loop caps see
@@ -195,6 +216,26 @@ jq -c 'if (.stage=="review" and (.tier|type=="string") and (.tier|test("\\s#|\\s
   `{"leg":"ac-matrix","exit":1,…}`, and a skip-loop emission on a spec whose every AC is
   covered writes `{"leg":"ac-matrix","exit":0,…}` alongside
   `{"leg":"skip-reconcile","exit":1,…}` → tests/ac-matrix/rejected-trailing-tag.test.js
+- **AC-20260823-03-14**: WHEN parseAcBullets parses a bullet whose tag run sits immediately
+  before the bullet's final `→` reference (e.g.
+  `` …SHALL y `[pre-green: predicate-in-test]` → tests/a.test.js ``) THE SYSTEM SHALL return
+  `trailingRejected` = that run's text and `trailingRejectedCause === 'not-at-end'` with
+  `preGreen === null`, while a backticked run at the true end returns
+  `trailingRejectedCause === 'backticked-at-end'` →
+  tests/ac-matrix/rejected-trailing-tag.test.js
+- **AC-20260823-03-15**: WHEN rejectedTrailingTagDetail renders a `not-at-end` refusal THE
+  SYSTEM SHALL name the position problem and the move-into-the-declaration-slot remedy and
+  SHALL NOT contain the phrase "remove the backticks"; a `backticked-at-end` refusal SHALL
+  CONTINUE TO render D10's exact message bytes →
+  tests/ac-matrix/rejected-trailing-tag.test.js
+- **AC-20260823-03-16**: WHEN a bullet ends with a backticked tag followed by an accepted
+  bare tag (e.g. `` …SHALL y `[oracle: gate]` [env: FOO] ``) THE SYSTEM SHALL set
+  `trailingRejected` to the tolerant run's text while `[env: FOO]` SHALL CONTINUE TO parse
+  as a declaration (`env === 'FOO'`) → tests/ac-matrix/rejected-trailing-tag.test.js
+- **AC-20260823-03-17**: WHEN red-check finds an expected-red file observed green and the
+  carried AC's bullet carries a refused pre-green tag before its final `→` reference THE
+  SYSTEM SHALL emit `rejected-trailing-tag` (not `unsanctioned-green`) whose detail carries
+  the `not-at-end` remedy → tests/red-check/red-check.test.js
 
 ## Assumptions (escalation triggers)
 

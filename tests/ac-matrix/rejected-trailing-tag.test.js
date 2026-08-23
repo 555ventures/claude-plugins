@@ -30,7 +30,22 @@ const { tmpdir, runNode } = require('../helpers')
 // direction of the symmetric contamination, plus that `--json`'s findings array and each finding's
 // field set stay byte-identical (emission-site origin is internal bookkeeping only).
 
-const { parseAcBullets } = require('../../spec/scripts/lib/spec-sections')
+// D11 amendment (build-time, JJ-approved 2026-08-23, supersedes D8's rationale and D2's predicate
+// formula): D2's null-test formula only caught a refusal at the bullet's TRUE end — a genuine
+// declaration written just before the bullet's final `→ tests/…` File-Plan reference (the shape
+// specs/20260823/01 AC-20260823-01-18/-20 actually shipped) sat at NEITHER recognized position, so
+// it neither parsed nor set `trailingRejected`: the same silent-drop class this spec exists to
+// close, discovered live in that spec's own review row (rv_6825fa48c98d, `preGreen:0` with both
+// tags present). D11 widens the tolerant run to tolerate exactly one trailing `→ <tail>` reference
+// suffix and generalizes the predicate to a said-vs-parsed comparison (`wide !== trailingRun(raw)`),
+// adding `trailingRejectedCause` (`'backticked-at-end' | 'not-at-end' | null`) so the remedy never
+// tells a not-at-end host to "remove the backticks" (false there — a bare tag before the arrow
+// still would not parse). AC-14/-16 pin the widened predicate at the parse layer (parseAcBullets);
+// AC-15 pins the forked remedy text at the detail layer (rejectedTrailingTagDetail, gaining `cause`
+// as its third argument). All three are RED at HEAD: lib/spec-sections.js still exports the D2-era
+// 3-arg rejectedTrailingTagDetail and the unwidened tolerant/predicate.
+
+const { parseAcBullets, rejectedTrailingTagDetail } = require('../../spec/scripts/lib/spec-sections')
 
 function specMd(acLines, filePlanRows) {
   return '# Test Spec\n\n## Acceptance Criteria\n\n' + acLines.join('\n') + '\n\n' +
@@ -209,4 +224,64 @@ test('AC-20260823-03-13b: WHEN ac-matrix emits rejected-trailing-tag from the SK
     `the skip loop genuinely emitted rejected-trailing-tag for the mapped skip on AC-20260823-41-1, so its OWN leg must redden — got ${JSON.stringify(skipRow)}`)
   assert.strictEqual(acmRow.exit, 0,
     `D9: leg exits partition by EMISSION SITE — a skip-loop-only emission must never redden ac-matrix. AC-20260823-41-1 is covered by a literal hit, so the coverage loop skipped it entirely and observed no finding for it at all — a red ac-matrix row here misreports a coverage failure that never happened — got ${JSON.stringify(acmRow)}`)
+})
+
+test('AC-20260823-03-14: WHEN parseAcBullets parses a bullet whose tag run sits immediately before the bullet\'s final → reference THE SYSTEM returns trailingRejected as that run\'s text with trailingRejectedCause === \'not-at-end\' and preGreen === null, while a backticked run at the true end returns trailingRejectedCause === \'backticked-at-end\', and a bare-at-end or tagless bullet returns both fields null', () => {
+  const notAtEnd = parseAcBullets(
+    '- **AC-20260823-60-1**: WHEN x THE SYSTEM SHALL y `[pre-green: predicate-in-test]` → tests/a.test.js\n')
+  assert.strictEqual(notAtEnd.length, 1, `fixture must parse to exactly one AC bullet — got ${notAtEnd.length}`)
+  assert.strictEqual(notAtEnd[0].trailingRejected, '`[pre-green: predicate-in-test]`',
+    `D11: a genuine declaration written just before the bullet's final → reference (the shape specs/20260823/01 AC-20260823-01-18/-20 actually shipped, discovered via review row rv_6825fa48c98d) must still expose the refused run's exact text via trailingRejected, or the widened said-vs-parsed comparison silently misses the very drop it exists to close — got ${JSON.stringify(notAtEnd[0])}`)
+  assert.strictEqual(notAtEnd[0].trailingRejectedCause, 'not-at-end',
+    `a tag sitting before the final → reference — never a recognized declaration position — must be tagged 'not-at-end', not 'backticked-at-end': the two causes drive different remedy text, and a mislabeled cause here would tell the host "remove the backticks" when that alone would not make this tag parse — got ${JSON.stringify(notAtEnd[0])}`)
+  assert.strictEqual(notAtEnd[0].preGreen, null,
+    `what PARSES is untouched by D11 — a refused not-at-end tag must still parse the named field null, or the widening would silently soften the position rule it only annotates — got ${JSON.stringify(notAtEnd[0])}`)
+
+  const atEnd = parseAcBullets('- **AC-20260823-61-1**: WHEN x THE SYSTEM SHALL y `[oracle: gate]`\n')
+  assert.strictEqual(atEnd[0].trailingRejectedCause, 'backticked-at-end',
+    `a backticked run that IS the bullet's true end (no → reference following it) must be tagged 'backticked-at-end', so its remedy correctly offers "remove the backticks" as one of the two readings — got ${JSON.stringify(atEnd[0])}`)
+
+  const bareAtEnd = parseAcBullets('- **AC-20260823-62-1**: WHEN x THE SYSTEM SHALL y [oracle: gate]\n')
+  assert.strictEqual(bareAtEnd[0].trailingRejected, null,
+    `a bare tag at the true end was accepted, not refused — trailingRejected must stay null — got ${JSON.stringify(bareAtEnd[0])}`)
+  assert.strictEqual(bareAtEnd[0].trailingRejectedCause, null,
+    `the Contracts invariant is trailingRejectedCause null IFF trailingRejected is null — a non-null cause on an accepted bullet would tell a consumer something was refused when nothing was — got ${JSON.stringify(bareAtEnd[0])}`)
+
+  const none = parseAcBullets('- **AC-20260823-63-1**: WHEN x THE SYSTEM SHALL y\n')
+  assert.strictEqual(none[0].trailingRejected, null,
+    `a bullet with no trailing tag run at all must parse trailingRejected null — got ${JSON.stringify(none[0])}`)
+  assert.strictEqual(none[0].trailingRejectedCause, null,
+    `and trailingRejectedCause null alongside it, for the same reason — got ${JSON.stringify(none[0])}`)
+})
+
+test('AC-20260823-03-15: WHEN rejectedTrailingTagDetail renders a not-at-end refusal THE SYSTEM names the position problem and the move-into-the-declaration-slot remedy and does NOT contain the phrase "remove the backticks"; a backticked-at-end refusal renders D10\'s exact pinned message bytes unchanged', () => {
+  const acId = 'AC-20260823-64-1'
+  const trailingRejected = '`[pre-green: predicate-in-test]`'
+  const underlying = 'tests/x64.test.js is a green expected-red file'
+
+  const notAtEnd = rejectedTrailingTagDetail(acId, trailingRejected, 'not-at-end', underlying)
+  assert.ok(!notAtEnd.includes('remove the backticks'),
+    `D11: for a not-at-end refusal, removing the backticks alone would NOT make the tag parse — it still sits before the bullet's final → reference, not a recognized declaration position. Offering that remedy is false there and sends the host chasing the wrong fix — got detail "${notAtEnd}"`)
+  assert.match(notAtEnd, /final.*→|→.*reference|before.*→|not a recognized declaration position/i,
+    `the not-at-end message must name the actual position problem (the tag sits before the bullet's final → reference, not a recognized declaration position) — a message silent on WHY reproduces the same silent-cause misreport this spec fixes — got detail "${notAtEnd}"`)
+  assert.match(notAtEnd, /declaration slot/i,
+    `the not-at-end message must still name the move-into-the-declaration-slot remedy — got detail "${notAtEnd}"`)
+
+  const expectedBacktickedAtEnd = `${acId}: trailing tag ${trailingRejected} was refused as a declaration — it ends the ` +
+    `bullet backticked, and the bare-only trailing rule (rv_640c582f4902) accepts only a BARE ` +
+    `trailing tag as a declaration. If this is a genuine declaration: remove the backticks, or ` +
+    `move it into the declaration slot (backticks allowed there). If it is meant only as a quote: ` +
+    `${underlying} still stands and needs its own fix.`
+  const backtickedAtEnd = rejectedTrailingTagDetail(acId, trailingRejected, 'backticked-at-end', underlying)
+  assert.strictEqual(backtickedAtEnd, expectedBacktickedAtEnd,
+    `D10/D11: the backticked-at-end branch must render D10's exact pinned message bytes unchanged — the new cause parameter forks the message, it must never reword the branch that was already correct, or every existing rejected-trailing-tag consumer's detail assertion (AC-1/-2/-3) silently drifts underneath it — got detail "${backtickedAtEnd}"`)
+})
+
+test('AC-20260823-03-16: WHEN a bullet ends with a backticked tag followed by an accepted bare tag THE SYSTEM sets trailingRejected to the tolerant run\'s text while the bare tag SHALL CONTINUE TO parse as a declaration', () => {
+  const mixed = parseAcBullets('- **AC-20260823-65-1**: WHEN x THE SYSTEM SHALL y `[oracle: gate]` [env: FOO]\n')
+  assert.strictEqual(mixed.length, 1, `fixture must parse to exactly one AC bullet — got ${mixed.length}`)
+  assert.strictEqual(mixed[0].trailingRejected, '`[oracle: gate]` [env: FOO]',
+    `D11: a backticked tag standing beside an accepted bare tag at the true end is ALSO refused (the widened run differs from the bare-only capture, which accepted only the trailing [env:] item) — D2's null-test missed this exact shape because trailingRun(raw) was non-null (it matched the bare [env:] tail alone), so the old formula silently reported no refusal at all. A silently-dropped backticked sibling here would recreate the upwell incident class this spec exists to close — got ${JSON.stringify(mixed[0])}`)
+  assert.strictEqual(mixed[0].env, 'FOO',
+    `the accepted bare [env:] tag must keep parsing as a declaration even though its backticked sibling is refused — refusing the sibling must never launder into refusing the tag that legitimately parsed — got ${JSON.stringify(mixed[0])}`)
 })

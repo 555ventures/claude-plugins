@@ -333,7 +333,8 @@ if (!hasDriftScript) {
       if (b.trailingRejected && b.trailingRejected.includes('[oracle:')) {
         const f = {
           severity: 'hard', class: 'rejected-trailing-tag', ac: b.id,
-          detail: rejectedTrailingTagDetail(b.id, b.trailingRejected, 'no executed coverage for this AC'),
+          detail: rejectedTrailingTagDetail(b.id, b.trailingRejected, b.trailingRejectedCause,
+            'no executed coverage for this AC'),
         }
         findings.push(f)
         acMatrixOrigin.add(f) // D9: this loop is the ac-matrix leg
@@ -500,7 +501,8 @@ for (const line of skipLines) {
       // unsanctioned-skip — the refusal is causally relevant (this skip's only sanction attempt).
       const f = {
         severity: 'hard', class: 'rejected-trailing-tag', ac: primary,
-        detail: rejectedTrailingTagDetail(primary, bullet.trailingRejected, 'an unsanctioned skip for this AC'),
+        detail: rejectedTrailingTagDetail(primary, bullet.trailingRejected, bullet.trailingRejectedCause,
+          'an unsanctioned skip for this AC'),
       }
       findings.push(f)
       skipOrigin.add(f) // D9: this loop is the skip-reconcile leg
@@ -530,7 +532,7 @@ for (const line of skipLines) {
     // same relevance gate as the current-spec branch above, applied to the cross-spec lookup.
     const f = {
       severity: 'hard', class: 'rejected-trailing-tag', ac: primary,
-      detail: rejectedTrailingTagDetail(primary, owning.bullet.trailingRejected,
+      detail: rejectedTrailingTagDetail(primary, owning.bullet.trailingRejected, owning.bullet.trailingRejectedCause,
         `an unsanctioned skip for this AC (owning spec ${owning.path})`),
     }
     findings.push(f)

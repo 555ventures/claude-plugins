@@ -87,3 +87,24 @@
   all still green). Corrected both scripts' header comments where they said the builder was
   local/per-script. Confirmed: `node --test 'tests/ac-matrix/*.test.js'` — 46/46; `node --test
   'tests/red-check/*.test.js'` — 15/15; `node --test 'tests/**/*.test.js'` — 653/653 (full suite).
+- **Orchestrator ruling, D11 (locked, JJ-approved, 2026-08-23), amendment before review**: both
+  `trailingRun` and `tolerantTrailingRun` are end-of-bullet anchored, so a declaration placed
+  before the canonical `→ tests/…` File-Plan reference is at NEITHER recognized position —
+  it neither parses nor sets `trailingRejected`, the exact silent-drop class this spec closes.
+  Live instances: specs/20260823/01 AC-20260823-01-18 and AC-20260823-01-20 (their own review
+  row rv_6825fa48c98d recorded `preGreen:0` with both declarations present). D11 widens the
+  TOLERANT side only (a `(?:→[^→]*)?$` suffix tolerance on the same TAG_ITEM_SRC authority),
+  generalizes the refusal predicate to said-vs-parsed (`wide !== trailingRun(raw)`), adds
+  `trailingRejectedCause` (`backticked-at-end`/`not-at-end`), and forks the remedy text on
+  cause — "remove the backticks" is never emitted for `not-at-end`, where it is false. The
+  predicate generalization (beyond the initially staged widen-only form) was adopted after the
+  staged form was shown to still silently drop a backticked tag standing beside an accepted
+  bare tag at the true end (AC-20260823-03-16 pins it). Evidence: executed corpus run over all
+  843 AC bullets in specs/ — exactly the 2 known drops fire, both `not-at-end`, zero prose
+  false positives; 10 synthetic edge shapes verified. D8's ruling stands but its rationale is
+  corrected in D11's own text (D1 freezes what PARSES; the tolerant run is the what-is-SAID
+  side D2 built to be widenable). **Out-of-plan repair, JJ-approved explicitly**: the two
+  specs/20260823/01 bullets moved their `[pre-green: predicate-in-test]` tag into the
+  declaration slot; executed check post-repair: both parse `preGreen: "predicate-in-test"`,
+  `trailingRejected: null`, `malformed: false`. File Plan row added for
+  specs/20260823/01-release-legs.md in the same amendment.

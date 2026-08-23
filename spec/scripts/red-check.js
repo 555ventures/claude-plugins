@@ -307,7 +307,7 @@ for (const relPath of [...testFiles].sort()) {
       const b = bulletById.get(rejectedAc)
       findings.push({
         class: 'rejected-trailing-tag', path: relPath, acs: carriedAcs,
-        detail: rejectedTrailingTagDetail(rejectedAc, b.trailingRejected,
+        detail: rejectedTrailingTagDetail(rejectedAc, b.trailingRejected, b.trailingRejectedCause,
           `${relPath} is a green expected-red file`),
       })
     } else {

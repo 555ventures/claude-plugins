@@ -188,16 +188,17 @@ Phase 3 session concerns the script never reads.
   `spec-paths release-legs` for stage/append/record and SHALL NOT contain a hand-authored leg
   row literal (no `{"leg":` outside a fenced citation of the script's own contract) — the row
   grammar's home is the script header → tests/release-legs/doctrine.test.js
-- **AC-20260823-01-18**: WHEN release.md is read post-rewrite THE SYSTEM SHALL CONTINUE TO
-  gate promotion behind a fresh per-run `AskUserQuestion` and SHALL CONTINUE TO state that tags
-  and pushes are never the pipeline's to make (the never-autonomous rule survives the shrink)
-  `[pre-green: predicate-in-test]` → tests/release-legs/doctrine.test.js
+- **AC-20260823-01-18** `[pre-green: predicate-in-test]`: WHEN release.md is read
+  post-rewrite THE SYSTEM SHALL CONTINUE TO gate promotion behind a fresh per-run
+  `AskUserQuestion` and SHALL CONTINUE TO state that tags and pushes are never the
+  pipeline's to make (the never-autonomous rule survives the shrink) →
+  tests/release-legs/doctrine.test.js
 - **AC-20260823-01-19**: WHEN `spec-paths shared-for release` runs THE SYSTEM SHALL CONTINUE TO
   serve `## Release Stage` and `## Runtime Verification`, and SHALL no longer serve
   `## Feedback Loop` → tests/spec-paths.test.js (existing assertions tagged, one added)
-- **AC-20260823-01-20**: WHEN release.md is read post-rewrite THE SYSTEM SHALL CONTINUE TO name
-  `.claude/spec-runs.jsonl` as the single ledger the release row lands in
-  `[pre-green: predicate-in-test]` → tests/run-ledger.test.js (existing pin tagged)
+- **AC-20260823-01-20** `[pre-green: predicate-in-test]`: WHEN release.md is read
+  post-rewrite THE SYSTEM SHALL CONTINUE TO name `.claude/spec-runs.jsonl` as the single
+  ledger the release row lands in → tests/run-ledger.test.js (existing pin tagged)
 
 ## Assumptions (escalation triggers)
 

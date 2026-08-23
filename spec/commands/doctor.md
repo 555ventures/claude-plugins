@@ -124,8 +124,7 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
       **open repair** (`--fix` input); `preventedBy:"enforcer"` with no matching
       enforcement-manifest entry means `/spec:enforce` is due.
     **Plugin-defect roll-up:** collect `[plugin]`-tagged Gotchas entries into one "upstream
-    bug report" block (entry + citation, verbatim) — offer to write them as a feedback brief
-    (`docs/spec-feedback/<YYYYMMDD>-brief.md` from `spec-paths feedback-template`).
+    bug report" block (entry + citation, verbatim).
 13. **Roadmap derivation** (only if `docs/roadmap/00-overview.md` exists) — run
     `node "$(spec-paths spec-status)" --root . --json` (the one derivation, shared with
     `/spec:status` and `/spec:plan`'s preflight). Report its derived table and surface every

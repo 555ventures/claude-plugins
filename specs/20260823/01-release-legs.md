@@ -9,7 +9,12 @@ design: false
 breaking: false
 depends_on: []
 depended_on_by: []
-build_base: main
+# build_base pinned to a sha at build (2026-08-23): the branch was cut from main@fd1b15a, but
+# spec/02-init-generation-script merged to main mid-build, touching three of this spec's File
+# Plan files. main was merged in and the base repinned to that tip so review diffs this spec's
+# work only. Never append an inline # comment to this key — the frontmatter reader does not
+# strip them (§ Gotchas).
+build_base: 7861ed3f6dbbbc8f1b0ada6f95607f987c9148ac
 brief: 12
 open_markers: 0
 ---

@@ -1,0 +1,89 @@
+{
+  "outOfPlan": [
+    ".claude/agent-memory/gate-scripts/MEMORY.md",
+    ".claude/agent-memory/gate-scripts/wave1-buffer-then-append-for-fail-closed-precondition.md",
+    ".claude/agent-memory/plugin-tests/MEMORY.md",
+    ".claude/agent-memory/plugin-tests/path-stub-binaries-for-cli-retry-loops.md",
+    ".claude/spec-runs/rv_6825fa48c98d.json",
+    "docs/canonical/release-pipeline.md"
+  ],
+  "unrealized": [],
+  "excluded": [
+    ".claude/spec-runs.jsonl",
+    "specs/20260823/01-release-legs.md",
+    "specs/20260823/01-release-legs.review/review-state.json",
+    "specs/20260823/02-init-gen-input-hardening.md",
+    "specs/20260823/03-silent-drop-hardening.md"
+  ],
+  "renamed": [],
+  "atRisk": [
+    {
+      "file": "tests/ac-matrix/ac-matrix.test.js",
+      "refs": [
+        "spec/bin/spec-paths"
+      ]
+    },
+    {
+      "file": "tests/collision-closure/collision-closure.test.js",
+      "refs": [
+        "spec/bin/spec-paths"
+      ]
+    },
+    {
+      "file": "tests/components-check.test.js",
+      "refs": [
+        "spec/bin/spec-paths"
+      ]
+    },
+    {
+      "file": "tests/consistency/citations-check.test.js",
+      "refs": [
+        "spec/bin/spec-paths",
+        "spec/commands/doctor.md"
+      ]
+    },
+    {
+      "file": "tests/consistency/plugin-version.test.js",
+      "refs": [
+        "spec/.claude-plugin/plugin.json"
+      ]
+    },
+    {
+      "file": "tests/doctrine-review.test.js",
+      "refs": [
+        "spec/.claude-plugin/plugin.json"
+      ]
+    },
+    {
+      "file": "tests/env-preflight.test.js",
+      "refs": [
+        "spec/commands/doctor.md"
+      ]
+    },
+    {
+      "file": "tests/init-gen/generate.test.js",
+      "refs": [
+        "spec/bin/spec-paths"
+      ]
+    },
+    {
+      "file": "tests/merge-back.test.js",
+      "refs": [
+        "spec/commands/doctor.md"
+      ]
+    },
+    {
+      "file": "tests/report/report-render.test.js",
+      "refs": [
+        "spec/bin/spec-paths"
+      ]
+    },
+    {
+      "file": "tests/spec-status.test.js",
+      "refs": [
+        "spec/bin/spec-paths",
+        "spec/commands/doctor.md"
+      ]
+    }
+  ]
+}

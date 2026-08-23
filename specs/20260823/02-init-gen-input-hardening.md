@@ -36,7 +36,7 @@ exit-code alphabet change.
 | D3 | The `mergeSettings(...)` call moves INSIDE the try boundary as its first statement — still ahead of `buildFileTargets` and every write, preserving round 2's no-settings-throw-after-a-write ordering, now also covered by the exit-4 boundary `[no-ac: after D1/D2 close the enumerated triggers, no JSON-representable profile reaches a throw inside mergeSettings (String() throws only on symbols, unreachable via JSON — A1); the move guards the unenumerable residue, and a behavioral trigger would have to be fault-injected, which the host's exec-real-scripts test rule forbids. AC-20260823-02-7 pins that the boundary's one executed trigger still exits 4]` | Fable ruling round 3: the round-2 hoist was correct and its composition with the boundary an ordering error of one line; the achievable invariant is everything post-pre-flight inside one boundary, not complete validation |
 | D4 | The unreadable-settings arm branches on `e.code`: `EISDIR` gets its own message — the path is a directory, not a file; remedy = remove or replace the directory with a JSON file — and every other code keeps the existing permissions message with the `chmod u+r` remedy verbatim (AC-20260823-02-5, AC-20260823-02-6) | The one message told a directory-shaped-settings operator to chmod a file; spiked: `readFileSync` on a directory yields code `EISDIR` on this platform |
 | D5 | The exit-code alphabet is unchanged: D1/D2's refusals and D4's branch land on the documented exit 2 (invalid profile / settings merge impossible, nothing written); D3's residue lands on the documented exit 4. The script's `Exit codes:` header needs no new entries (AC-20260823-02-1, AC-20260823-02-3, AC-20260823-02-7) | The review's ruling was explicit: no new codes needed — widening 2 and 4's populations, never their meanings, keeps every documented consumer contract intact |
-| D6 | `spec/.claude-plugin/plugin.json` bumps to the next free version (target 7.21.0 — a target, not a pin, per the recorded semver-race class) with the changelog-form description updated for the hardening `[no-ac: version-bump-without-behavior is review's own hard check; no behavioral test surface]` | Host rule: every behavior change bumps the owning plugin's semver |
+| D6 | `spec/.claude-plugin/plugin.json` bumps to the next free version (target 7.22.0 — a target, not a pin, per the recorded semver-race class; 7.21.0 was taken by specs/20260823/01, and specs/20260823/03 holds the 7.23.0 lane) with the changelog-form description updated for the hardening `[no-ac: version-bump-without-behavior is review's own hard check; no behavioral test surface]` | Host rule: every behavior change bumps the owning plugin's semver |
 
 ## File Plan
 
@@ -117,7 +117,7 @@ the settings diff and throws nothing; see Rationale).
   spiked 2026-08-23: observed `EISDIR` on darwin. **if false** on some host platform: the
   default arm keeps the generic cannot-read message, still exit 2 — degraded remedy, correct
   refusal.
-- A3: 7.21.0 is free at build time. **if false:** bump to the next free version and record
+- A3: 7.22.0 is free at build time (re-derived 2026-08-23: main is at 7.21.0). **if false:** bump to the next free version and record
   the deviation (recorded semver-race class; the literal is a target, not a pin).
 - Micro-spikes executed 2026-08-23 (one Node process, scratchpad, deleted): (1)
   `[...new Set([...("Bash(bun x *)" || [])])]` → 12 unique one-char entries — the exit-0

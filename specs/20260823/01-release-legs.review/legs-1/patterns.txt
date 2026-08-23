@@ -1,0 +1,18 @@
+## Mechanical pattern sweep
+Scope: .claude/agent-memory/gate-scripts .claude/agent-memory/plugin-tests .claude/spec-runs docs/canonical .claude specs/20260823 specs/20260823/01-release-legs.review
+
+### deferred-work comments (TODO/FIXME/HACK/XXX): 0
+
+### skipped or todo tests: 0
+
+### non-builtin require() (dependency creep): 0
+
+### set -e in bash (convention: set -u + explicit failures): 0
+
+### prose stringified into workflow args: 0
+
+### single-arg assert.ok (no consequence message): 0
+
+### generated-surface edits vs 7861ed3f6dbbbc8f1b0ada6f95607f987c9148ac (sanctioned tool: npm run build:workflows)
+
+Sweep complete. Counts are leads, not verdicts — sanctioned exceptions exist.

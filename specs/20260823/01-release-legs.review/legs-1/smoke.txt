@@ -1,0 +1,1 @@
+__SMOKE_INERT__ marketplace of CLI plugins and dependency-free scripts — no bootable app; the autopilot daemon is parked (JJ 2026-08-18, confirmed 2026-08-20)

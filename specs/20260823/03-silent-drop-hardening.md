@@ -20,7 +20,7 @@ AC-tag parser's bare-only trailing rule (escape rv_640c582f4902) refuses a backt
 trailing tag **silently**, so a host that writes genuine declarations backticked sees them
 misreported as `uncovered-ac` / `unsanctioned-skip` / `unsanctioned-green` with no hint of
 the real cause — the refusal must become a loud, remedy-naming hard finding exactly where it
-bites. (2) The two drivers' frontmatter reader captures YAML inline comments; six live
+bites. (2) The two drivers' frontmatter reader captures YAML inline comments; seven live
 review ledger rows carry a whole sentence inside `tier` — strip comments and repair the
 rows. (3) specs/20260821/03 D8's post-land archaeology (escape rows for the four
 prefix-collision-laundered ACs) never ran — execute it here. Done means: every refused
@@ -35,9 +35,9 @@ enum-clean (past and future), and the four escape rows exist.
 | D2 | `parseAcBullets` exposes the refusal: each bullet gains `trailingRejected` — the backtick-tolerant trailing tag run's text when `trailingRun` refused it (i.e. tolerant run matches, bare-only run does not), else `null` (AC-20260823-03-7). Consumers detect relevance by tag name within that string | Consumers must not re-derive the trailing grammar; one authority stays in lib/spec-sections.js |
 | D3 | The module-header and `slotRun`/`trailingRun` comments claiming "all 8 genuinely-declared tags in `specs/` sit in the declaration slot" are rescoped as a dated THIS-REPO census ("this repo's corpus as of 2026-08-22"), never a grammar claim — host corpora (upwell) demonstrably backtick trailing declarations [no-ac: comment-only edit, no behavioral surface; rides the spec-sections.js row] | A census stated as grammar is how the silent drop shipped: the fixture assumption looked like a language rule |
 | D4 | **One shared frontmatter reader**: new `spec/scripts/lib/frontmatter.js` exports `fmVal(fmRaw, key)`; both `spec-review-driver.js` and `spec-design-driver.js` replace their local copies with it. Semantics: quoted value → content up to the matching closing quote, anything after (incl. comments) ignored (AC-20260823-03-9); unquoted value → strip `\s+#.*$` (YAML-correct: a comment requires preceding whitespace), so an unspaced `#` inside a value (URL fragment) survives (AC-20260823-03-8, -10). `spec-status.js` is NOT touched — its own reader already strips comments, and it is a frozen critical-tier API | Two identical buggy copies exist today; a third copy is the next incident — extraction is the holistic fix, while touching spec-status.js would pull critical tier for zero behavior change |
-| D5 | **Repair the six polluted ledger rows in place** (lines carrying `"tier":"<enum><spaces>#…"`, all `stage:"review"`: specs/20260821/02, 20260821/04, 20260821/01, 20260821/03, 20260822/01, 20260822/02): truncate `tier` at the first whitespace, yielding `standard`×5 and `critical`×1 — a deterministic jq rewrite of exactly those rows, byte-identical elsewhere, verified by `grep -c '"tier":"[^"]*#'` = 0 before and after diff review [no-ac: one-time data repair on the live ledger — no test surface; the executed rewrite command and verification grep are recorded in the build deviations sidecar] | The ledger is the sole ground truth for materiality and tier economics; six rows that fail a `tier === "critical"` comparison corrupt every downstream derivation |
+| D5 | **Repair the seven polluted ledger rows in place** (lines carrying `"tier":"<enum><spaces>#…"`, all `stage:"review"`: specs/20260821/02, 20260821/04, 20260821/01, 20260821/03, 20260822/01, 20260822/02, 20260823/01): truncate `tier` at the first whitespace, yielding `standard`×5 and `critical`×2 — a deterministic jq rewrite of exactly those rows, byte-identical elsewhere, verified by `grep -c '"tier":"[^"]*#'` = 0 before and after diff review [no-ac: one-time data repair on the live ledger — no test surface; the executed rewrite command and verification grep are recorded in the build deviations sidecar] | The ledger is the sole ground truth for materiality and tier economics; seven rows that fail a `tier === "critical"` comparison corrupt every downstream derivation |
 | D6 | **Execute 20260821/03 D8's slipped archaeology in this build**: run the fixed ac-matrix (`--spec <owning spec> --root . --manifest <scratch> --json`) against specs/20260808/01, specs/20260813/03, specs/20260815/01, specs/20260816/01; for each AC-1 confirmed uncovered, append one `stage:"escape"` row per the escape.md schema with derived fields — `reviewRunId` from the ledger (wf_38e9474f-cb9, wf_5beb7951-8fc, wf_5ea3aad0-546, wf_e468156d-f2b respectively — the CLEAN/latest review row per spec), `file` = the owning spec path, `foundBy:"later-spec"`, `severity:"hard"`, `class:"prefix-collision-coverage-fail-open"`, `preventedBy:"enforcer"`, `killedMatch:null` (reviews predate artifact retention), `via:"manual"`. An AC that unexpectedly shows covered gets no row and a deviations note [no-ac: operator process — the deliverable is escape-ledger rows, no test surface in this repo's tree; mirrors 20260821/03 D8's own sanction] | D8's obligation had no post-`done` carrier and slipped for a day; a File Plan row in a spec that cannot close without it is the carrier this time |
-| D7 | Version bump `spec/.claude-plugin/plugin.json` 7.20.0 → 7.21.0 (target, not pin — concurrent sessions race semver; build takes the next free minor) with the last-3-versions description update [no-ac: manifest bookkeeping; review's version-bump check is the enforcement] | Behavior change (new finding class, changed frontmatter semantics) mandates a minor bump |
+| D7 | Version bump `spec/.claude-plugin/plugin.json` 7.21.0 → 7.23.0 (target, not pin — 7.21.0 was taken by specs/20260823/01 and 7.22.0 is the parallel lane of specs/20260823/02 — concurrent sessions race semver; build takes the next free minor) with the last-3-versions description update [no-ac: manifest bookkeeping; review's version-bump check is the enforcement] | Behavior change (new finding class, changed frontmatter semantics) mandates a minor bump |
 
 ## File Plan
 
@@ -101,7 +101,7 @@ module.exports = { fmVal }
 
 ```
 # D5 repair — exactly this shape, run at the repo root (verify, rewrite, re-verify):
-grep -c '"tier":"[^"]*#' .claude/spec-runs.jsonl          # expect 6 before, 0 after
+grep -c '"tier":"[^"]*#' .claude/spec-runs.jsonl          # expect 7 before, 0 after
 jq -c 'if (.stage=="review" and (.tier|type=="string") and (.tier|test("\\s#|\\s+#|#")))
        then .tier = (.tier | split(" ")[0]) else . end' …  # byte-identical on untouched rows
 
@@ -130,8 +130,8 @@ jq -c 'if (.stage=="review" and (.tier|type=="string") and (.tier|test("\\s#|\\s
   inline comment on ANY frontmatter key the drivers read is inert. The existing pipeline
   gotcha's workaround ("put the note on its own line") becomes unnecessary for driver-read
   keys — Canonical Delta updates the entry.
-- **Ledger.** D5 rewrites exactly six rows' `tier` to its leading enum token; every other
-  byte of the ledger is preserved (the rewrite is refused if the before-count isn't 6 —
+- **Ledger.** D5 rewrites exactly seven rows' `tier` to its leading enum token; every other
+  byte of the ledger is preserved (the rewrite is refused if the before-count isn't 7 —
   STOP and re-derive). D6 appends up to four escape rows via the `printf '%s\n' >>`
   mechanism. Both happen in the build session, recorded in the deviations sidecar.
 
@@ -185,7 +185,7 @@ jq -c 'if (.stage=="review" and (.tier|type=="string") and (.tier|test("\\s#|\\s
 
 ## Assumptions (escalation triggers)
 
-- A1: All six polluted `tier` values were written by spec-review-driver's `--tier`
+- A1: All seven polluted `tier` values were written by spec-review-driver's `--tier`
   passthrough into verdict.js's ledger append (driver lines pass `tier` verbatim at its
   three `--ledger` call sites) — executed check: every polluted row is `stage:"review"`,
   and the pollution text matches each spec's own frontmatter comment byte-for-byte. —
@@ -203,8 +203,10 @@ jq -c 'if (.stage=="review" and (.tier|type=="string") and (.tier|test("\\s#|\\s
   silently today — `parseAcBullets` on `` - **AC-…-1**: …SHALL y `[oracle: gate]` ``
   returned `{oracle: null}` with no error, while the bare variant returned
   `{oracle: 'gate'}` and a backticked slot tag returned `{env: 'FOO'}`. Executed ledger
-  scan: exactly six rows match `"tier":"[^"]*#`, all `stage:"review"`, enums
-  standard×5/critical×1. — **if false:** re-derive the repair set; the count-guard in
+  scan (re-derived 2026-08-23 after specs/20260823/01's review appended a seventh
+  polluted row — `tier: critical` with a multi-line inline comment, the same mechanism
+  D4 closes): exactly seven rows match `"tier":"[^"]*#`, all `stage:"review"`, enums
+  standard×5/critical×2. — **if false:** re-derive the repair set; the count-guard in
   Behavior refuses the rewrite.
 
 ## Rationale
@@ -243,6 +245,6 @@ worktree and reconcile at its own merge-back: waived.
 
 Pipeline rules § Gotchas, the `[plugin]` frontmatter-inline-comment entry
 (rv_e83659d49386): append — "Closed for driver-read keys 2026-08-23 by
-specs/20260823/03 (shared lib/frontmatter.js strips whitespace-preceded comments; six
+specs/20260823/03 (shared lib/frontmatter.js strips whitespace-preceded comments; seven
 polluted ledger `tier` rows repaired). The own-line-comment habit remains good style;
 spec-status.js always stripped." No other canonical docs change.

@@ -26,10 +26,14 @@
 // Exit codes:
 //   generate: 0 = generated, manifest-check green, config stamped
 //             1 = manifest-check red — nothing stamped
-//             2 = usage error / invalid or incomplete profile (missing field named + remedy) /
-//                 unparseable Worker Contract (grounding-contract.md heading drifted, D6/A7)
+//             2 = usage error / invalid or incomplete profile (missing or non-array field
+//                 named + remedy) / unparseable Worker Contract (grounding-contract.md
+//                 heading drifted, D6/A7) / existing .claude/settings.json unreadable,
+//                 invalid JSON, or not a JSON object (D5 merge impossible — nothing written)
 //             3 = an existing target differs from what the profile would produce and
 //                 --refresh was not given — every target left byte-identical, nothing written
+//             4 = unexpected internal error (uncaught throw) — the host tree may be
+//                 partially written; remedy = re-run generate. Never a verdict; always a bug.
 //   probe:    0 = always (adverse findings — no claude CLI, a vacuous test runner, an inert
 //                 at-risk leg — are data for the interview, never a probe failure)
 //             2 = usage error
@@ -170,6 +174,7 @@ function validateProfile(p) {
     'config.layerGroups', 'config.agentMap', 'config.pipelineRules', 'config.runtime',
     'rules.paths', 'rules.sections',
     'agents',
+    'conventionRules',
     'selfVerifyExamples',
     'skills.specVerify', 'skills.run',
     'settings',
@@ -185,6 +190,16 @@ function validateProfile(p) {
   if (p.rules && p.rules.sections) {
     for (const s of ['Risk Tiers', 'Planning', 'Build', 'Worker Rules', 'Test Rules', 'Review Checks']) {
       if (!(s in p.rules.sections)) fieldMissing(`rules.sections["${s}"]`)
+    }
+  }
+  // conventionRules was previously required-but-unchecked-for-shape (dereferenced at ~332/350
+  // with no validation, uncaught TypeError at exit 1); now every field the script iterates with
+  // for-of gets an explicit array-shape check with a matched remedy.
+  for (const field of ['rules.paths', 'conventionRules', 'agents', 'patternSweeps', 'manifestExtras']) {
+    const v = field.split('.').reduce((o, k) => o && o[k], p)
+    if (!Array.isArray(v)) {
+      console.error(`init-gen: profile field "${field}" must be an array — fix the profile JSON per the Contracts profile schema in specs/20260822/02-init-generation-script.md before running generate again`)
+      process.exit(2)
     }
   }
 }
@@ -482,12 +497,8 @@ function deriveAllowEntries(config) {
   return [...bases].map((b) => `Bash(${b}:*)`)
 }
 
-function mergeSettings(hostRoot, p) {
+function mergeSettings(hostRoot, existing, p) {
   const settingsPath = path.join(hostRoot, '.claude', 'settings.json')
-  let existing = {}
-  if (fs.existsSync(settingsPath)) {
-    try { existing = JSON.parse(fs.readFileSync(settingsPath, 'utf8')) } catch { existing = {} }
-  }
   const existingAllow = (existing.permissions && Array.isArray(existing.permissions.allow)) ? existing.permissions.allow : []
   const existingDeny = (existing.permissions && Array.isArray(existing.permissions.deny)) ? existing.permissions.deny : []
 
@@ -518,54 +529,98 @@ function computeContractHash() {
 
 // ---- main generate flow -----------------------------------------------------------------------
 
-const fileTargets = buildFileTargets(profile)
-const manifestObj = buildManifestObject(root, profile)
-const targets = [...fileTargets, { rel: '.claude/spec-manifest.json', kind: 'json', obj: manifestObj }]
-
-const states = new Map()
-const offenders = []
-for (const t of targets) {
-  const st = compareExisting(root, t)
-  states.set(t, st)
-  if (st.existed && st.differs && !refresh) offenders.push(t.rel)
-}
-if (offenders.length) {
-  console.error(`init-gen: refusing to overwrite ${offenders.length} existing target(s) without --refresh — fold any hand-edits into the profile and re-run with --refresh: ${offenders.join(', ')}`)
-  process.exit(3)
-}
-
-for (const t of targets) {
-  writeTarget(root, t)
-  if (refresh) {
-    const st = states.get(t)
-    console.log(`${st.existed && !st.differs ? 'unchanged' : 'changed'}: ${t.rel}`)
+// D5: settings.json is always merge-preserved, never rebuilt — so an unreadable, unparseable, or
+// non-object existing file makes the merge impossible rather than emptyable. Read, parsed, and
+// shape-checked once, here, pre-flight, before any target is written (both modes: --refresh's
+// overwrite semantics apply only to script-owned targets, and settings.json is explicitly not
+// one). The merge itself is also computed here, pre-flight (D5 round 2): a value that parses as
+// valid JSON but isn't a usable object — `null`, a top-level array — used to pass this block and
+// only blow up inside mergeSettings, after every other target was already written to disk. No
+// settings-derived throw can follow a write now.
+const existingSettingsPath = path.join(root, '.claude', 'settings.json')
+let existingSettings = {}
+if (fs.existsSync(existingSettingsPath)) {
+  let rawSettings
+  try {
+    rawSettings = fs.readFileSync(existingSettingsPath, 'utf8')
+  } catch (e) {
+    console.error(`init-gen: cannot read existing ${existingSettingsPath} (${e.message}) — settings.json is always merge-preserved per D5, so generate refuses rather than risk dropping entries it cannot see; nothing written. Fix the file's permissions (e.g. \`chmod u+r ${existingSettingsPath}\`) and re-run generate.`)
+    process.exit(2)
+  }
+  try {
+    existingSettings = JSON.parse(rawSettings)
+  } catch (e) {
+    console.error(`init-gen: existing ${existingSettingsPath} is not valid JSON (${e.message}) — settings.json is always merge-preserved per D5 (every existing allow/deny entry kept), never rebuilt from scratch, so generate refuses rather than risk silently dropping them; nothing written. Inspect it with \`jq . ${existingSettingsPath}\`, fix the JSON, and re-run generate.`)
+    process.exit(2)
+  }
+  if (existingSettings === null || typeof existingSettings !== 'object' || Array.isArray(existingSettings)) {
+    const found = Array.isArray(existingSettings) ? 'an array' : existingSettings === null ? 'null' : 'a ' + typeof existingSettings
+    console.error(`init-gen: existing ${existingSettingsPath} is valid JSON but its top level is ${found}, not an object — D5's merge needs an object to preserve entries into, so generate refuses; nothing written. Make the file a JSON object (\`{}\` if it holds nothing) and re-run generate.`)
+    process.exit(2)
   }
 }
+// D5 round 2: the merge is COMPUTED here, pre-flight — no settings-derived throw can follow a write.
+const merged = mergeSettings(root, existingSettings, profile)
 
-ensureGitignore(root)
-ensureGitattributes(root)
+// D6.4 round 2: everything below can hit an unforeseen host filesystem state (a confirmed repro:
+// .gitignore is a directory, so ensureGitignore's read throws EISDIR after all targets are
+// written). A pre-flight check can't be written for every such case, so the remainder is boundary-
+// wrapped — any uncaught throw here becomes an unmistakable exit 4, never a collision with the
+// documented 0/1/2/3 verdicts. process.exit() calls inside do not throw, so they pass through.
+try {
+  const fileTargets = buildFileTargets(profile)
+  const manifestObj = buildManifestObject(root, profile)
+  const targets = [...fileTargets, { rel: '.claude/spec-manifest.json', kind: 'json', obj: manifestObj }]
 
-const { settingsPath, settingsObj, conflicts } = mergeSettings(root, profile)
-fs.mkdirSync(path.dirname(settingsPath), { recursive: true })
-fs.writeFileSync(settingsPath, JSON.stringify(settingsObj, null, 2) + '\n')
-for (const c of conflicts) {
-  console.log(`init-gen: existing deny '${c}' shadows a config-derived allow — kept, not overridden`)
+  const states = new Map()
+  const offenders = []
+  for (const t of targets) {
+    const st = compareExisting(root, t)
+    states.set(t, st)
+    if (st.existed && st.differs && !refresh) offenders.push(t.rel)
+  }
+  if (offenders.length) {
+    console.error(`init-gen: refusing to overwrite ${offenders.length} existing target(s) without --refresh — fold any hand-edits into the profile and re-run with --refresh: ${offenders.join(', ')}`)
+    process.exit(3)
+  }
+
+  for (const t of targets) {
+    writeTarget(root, t)
+    if (refresh) {
+      const st = states.get(t)
+      console.log(`${st.existed && !st.differs ? 'unchanged' : 'changed'}: ${t.rel}`)
+    }
+  }
+
+  ensureGitignore(root)
+  ensureGitattributes(root)
+
+  const { settingsPath, settingsObj, conflicts } = merged
+  fs.mkdirSync(path.dirname(settingsPath), { recursive: true })
+  fs.writeFileSync(settingsPath, JSON.stringify(settingsObj, null, 2) + '\n')
+  for (const c of conflicts) {
+    console.log(`init-gen: existing deny '${c}' shadows a config-derived allow — kept, not overridden`)
+  }
+
+  const manifestCheckPath = path.join(__dirname, 'manifest-check.sh')
+  const check = spawnSync('bash', [manifestCheckPath], { cwd: root, encoding: 'utf8' })
+  if (check.stdout) process.stdout.write(check.stdout)
+  if (check.stderr) process.stderr.write(check.stderr)
+  if (check.status !== 0) {
+    console.error('init-gen: manifest-check failed — the config is left unstamped; fix the failing row(s) above and re-run generate')
+    process.exit(1)
+  }
+
+  // D3: stamp only after a green manifest-check.
+  const cfgPath = configPath(root)
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
+  cfg.generatedBy = 'spec@' + readVersion()
+  cfg.contractHash = computeContractHash()
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n')
+
+  process.exit(0)
+} catch (e) {
+  console.error(e && e.stack ? e.stack : String(e))
+  console.error(`init-gen: unexpected internal error (${e && e.message ? e.message : e}) — generate may have stopped mid-write; inspect with \`git -C ${root} status\`, fix the named cause, and re-run generate (add --refresh if targets now differ). If the cause is not a host-file problem, report this stack against init-gen.js.`)
+  process.exit(4)
 }
-
-const manifestCheckPath = path.join(__dirname, 'manifest-check.sh')
-const check = spawnSync('bash', [manifestCheckPath], { cwd: root, encoding: 'utf8' })
-if (check.stdout) process.stdout.write(check.stdout)
-if (check.stderr) process.stderr.write(check.stderr)
-if (check.status !== 0) {
-  console.error('init-gen: manifest-check failed — the config is left unstamped; fix the failing row(s) above and re-run generate')
-  process.exit(1)
-}
-
-// D3: stamp only after a green manifest-check.
-const cfgPath = configPath(root)
-const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
-cfg.generatedBy = 'spec@' + readVersion()
-cfg.contractHash = computeContractHash()
-fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n')
-
-process.exit(0)

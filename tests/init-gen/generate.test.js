@@ -344,6 +344,199 @@ test('AC-20260822-02-16: probeOutcomes.atRisk.applicable false with a reason wri
     'D9: an inapplicable at-risk leg must be recorded as an explicit inert row naming at-risk detection and the interview\'s stated reason — a silent drop here reproduces "indistinguishable from clean," the exact gap D9 exists to close: ' + JSON.stringify(manifest))
 })
 
+// Review finding on specs/20260822/02-init-generation-script.md, found 2026-08-23: generate
+// silently destroyed a pre-existing host .claude/settings.json when that file failed to parse
+// as JSON — every allow entry, every deny entry, and every unrelated top-level key were
+// replaced by a freshly-derived permissions block, exit 0, no warning. Locked Decision D5
+// requires settings.json to be "always merge-preserving (every existing entry kept ...), both
+// modes". The approved fix parses the existing settings file in a pre-flight step before any
+// file is written; an unparseable file makes generate exit 2 naming the settings path and a
+// remedy, with nothing at all written — not the settings file, not the config, rules, agents,
+// or any other generated target — and --refresh does not bypass this. These two tests pin
+// AC-20260822-02-18.
+
+test('AC-20260822-02-18: generate exits 2 naming .claude/settings.json and writes nothing when the existing settings file is unparseable', () => {
+  const dir = newHost('init-gen-generate')
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  const badSettings = '{"permissions":{"allow":["Bash(custom:*)"],"deny":["Read(.secret*)"]},"someOtherKey":"must-survive" INVALID}'
+  fs.writeFileSync(path.join(dir, '.claude/settings.json'), badSettings)
+  const profile = baseProfile()
+  const profilePath = writeProfile(dir, profile)
+
+  const r = runNode('scripts/init-gen.js', ['generate', '--root', dir, '--profile', profilePath])
+  assert.strictEqual(r.status, 2,
+    'AC-18/D5: an unparseable pre-existing settings.json must be caught by a pre-flight parse and exit 2, never fall through to the silent-clobber path that replaced every allow/deny entry with a freshly-derived block: ' + r.stderr)
+  assert.match(r.stderr, /\.claude[/\\]settings\.json/,
+    'AC-18: the refusal must name .claude/settings.json — a silent or unnamed refusal leaves the operator unable to tell which file has the hand-edit typo: ' + r.stderr)
+  assert.ok(r.stderr.trim().length > '.claude/settings.json'.length + 20,
+    'AC-18/D13: the refusal must print a remedy alongside the path, not just the bare filename, or the operator is left guessing how to recover: ' + r.stderr)
+
+  const onDisk = fs.readFileSync(path.join(dir, '.claude/settings.json'), 'utf8')
+  assert.strictEqual(onDisk, badSettings,
+    'AC-18/D5: the existing settings file must be left byte-identical on a parse failure — any change here means the pre-existing allow/deny rules or unrelated keys were touched before the refusal fired: ' + onDisk)
+  assert.ok(!fs.existsSync(path.join(dir, '.claude/spec.config.json')),
+    'AC-18: nothing at all may be written on this refusal — a config file appearing here means the settings pre-flight check ran too late, after other targets were already written')
+  assert.ok(!fs.existsSync(path.join(dir, '.claude/rules/spec-pipeline.md')),
+    'AC-18: nothing at all may be written on this refusal — a rules file appearing here means the settings pre-flight check did not gate every other generated deliverable')
+})
+
+test('AC-20260822-02-18: --refresh does not bypass the unparseable-settings refusal', () => {
+  const dir = newHost('init-gen-generate')
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  const badSettings = '{"permissions":{"allow":["Bash(custom:*)"],"deny":["Read(.secret*)"]},"someOtherKey":"must-survive" INVALID}'
+  fs.writeFileSync(path.join(dir, '.claude/settings.json'), badSettings)
+  const profile = baseProfile()
+  const profilePath = writeProfile(dir, profile)
+
+  const r = runNode('scripts/init-gen.js', ['generate', '--root', dir, '--profile', profilePath, '--refresh'])
+  assert.strictEqual(r.status, 2,
+    'AC-18/D5: "always merge-preserving ... both modes" means --refresh must not bypass the unparseable-settings refusal — a 0 here means a refresh run on a broken host silently destroys the existing permissions block: ' + r.stderr)
+
+  const onDisk = fs.readFileSync(path.join(dir, '.claude/settings.json'), 'utf8')
+  assert.strictEqual(onDisk, badSettings,
+    'AC-18/D5: the existing settings file must stay byte-identical under --refresh too — any change here reproduces the exact silent clobber this finding was filed against: ' + onDisk)
+})
+
+// Review of specs/20260822/02-init-generation-script.md, round 2, found 2026-08-23: the round-1
+// settings pre-flight only caught JSON.parse throwing, never checked the parsed value's shape.
+// A second blind reviewer broke generate again with two shapes JSON.parse accepts: a top-level
+// `null` settings file passed pre-flight, then threw inside the merge AFTER every other target
+// was already written (exit 1 — colliding with the documented manifest-check-red exit code); a
+// top-level array passed pre-flight, exited 0 with no warning, and spread the user's allow/deny
+// content into a numeric-indexed object. The round-2 fix splits the pre-flight into three arms
+// (unreadable file / invalid JSON / valid-JSON-but-not-an-object), each exiting 2 with a remedy
+// matched to its cause and nothing written; computes the settings merge pre-flight so no
+// settings-derived throw can ever follow a write; makes validateProfile require
+// conventionRules and check that iterated profile fields are arrays; and adds a top-level error
+// boundary so any remaining uncaught throw exits 4 with a stack and a re-run remedy instead of
+// Node's implicit 1. Ties to locked Decision D5 and the new exit-4 boundary.
+
+test('AC-20260822-02-18: generate exits 2, names .claude/settings.json, and writes nothing when the existing settings file parses as valid JSON but the top level is not an object — across all three non-object shapes (null, array, bare string)', () => {
+  const shapes = [
+    { label: 'null', content: 'null' },
+    { label: 'array', content: JSON.stringify(['perm-marker-A', 'perm-marker-B']) },
+    { label: 'string', content: JSON.stringify('just-a-string') }
+  ]
+  for (const shape of shapes) {
+    const dir = newHost('init-gen-generate')
+    fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+    const settingsPath = path.join(dir, '.claude/settings.json')
+    fs.writeFileSync(settingsPath, shape.content)
+    const profile = baseProfile()
+    const profilePath = writeProfile(dir, profile)
+
+    const r = runNode('scripts/init-gen.js', ['generate', '--root', dir, '--profile', profilePath])
+    assert.strictEqual(r.status, 2,
+      `AC-18/D5 (${shape.label} shape): a settings file that parses but is not a top-level object must be caught by pre-flight shape validation and exit 2 — anything else means either the null-shape merge-time throw after writes (exit 1) or the array-shape silent-clobber (exit 0) has come back: ` + r.stderr)
+    assert.match(r.stderr, /\.claude[/\\]settings\.json/,
+      `AC-18 (${shape.label} shape): the refusal must name .claude/settings.json — an unnamed refusal leaves the operator unable to tell which file needs fixing: ` + r.stderr)
+    assert.match(r.stderr, /not an object/i,
+      `AC-18 (${shape.label} shape): the remedy must say the top level is not an object — this is the shape check the round-1 fix never had, so a generic message here would mean the shape arm still doesn't exist: ` + r.stderr)
+    assert.doesNotMatch(r.stderr, /not valid JSON/i,
+      `AC-18 (${shape.label} shape): this file IS valid JSON — a "not valid JSON" message here means the shape arm collapsed back into the parse-error arm and the operator gets a remedy for the wrong cause: ` + r.stderr)
+
+    const onDisk = fs.readFileSync(settingsPath, 'utf8')
+    assert.strictEqual(onDisk, shape.content,
+      `AC-18/D5 (${shape.label} shape): the existing settings file must be left byte-identical — any change here means the merge ran (and possibly threw, or silently spread content into a numeric-indexed object) before the refusal fired: ` + onDisk)
+    assert.ok(!fs.existsSync(path.join(dir, '.claude/spec.config.json')),
+      `AC-18 (${shape.label} shape): nothing at all may be written on this refusal — a config file appearing here means the shape check ran too late, after other targets were already written`)
+    assert.ok(!fs.existsSync(path.join(dir, '.claude/rules/spec-pipeline.md')),
+      `AC-18 (${shape.label} shape): nothing at all may be written on this refusal — a rules file appearing here means the shape check did not gate every other generated deliverable`)
+  }
+})
+
+test('AC-20260822-02-18: --refresh does not bypass the non-object-settings refusal for the array shape', () => {
+  const dir = newHost('init-gen-generate')
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  const settingsPath = path.join(dir, '.claude/settings.json')
+  const content = JSON.stringify(['perm-marker-A', 'perm-marker-B'])
+  fs.writeFileSync(settingsPath, content)
+  const profile = baseProfile()
+  const profilePath = writeProfile(dir, profile)
+
+  const r = runNode('scripts/init-gen.js', ['generate', '--root', dir, '--profile', profilePath, '--refresh'])
+  assert.strictEqual(r.status, 2,
+    'AC-18/D5: "always merge-preserving ... both modes" covers the shape arm too — a 0 here under --refresh means a top-level-array settings file on a refresh run silently spreads the user\'s array content into a numeric-indexed permissions object: ' + r.stderr)
+
+  const onDisk = fs.readFileSync(settingsPath, 'utf8')
+  assert.strictEqual(onDisk, content,
+    'AC-18/D5: the existing array-shaped settings file must stay byte-identical under --refresh too — any change here reproduces the exact silent-clobber-into-numeric-indexed-object finding this pin exists to catch: ' + onDisk)
+})
+
+test('AC-20260822-02-18: an unreadable existing settings.json exits 2 with a permissions remedy distinct from the invalid-JSON message', () => {
+  const isRoot = !!(process.getuid && process.getuid() === 0)
+  if (isRoot) return // chmod 000 cannot deny a root-owned process; this pin cannot distinguish the fix from the bug under root, so it is skipped rather than asserting a false pass
+
+  const dir = newHost('init-gen-generate')
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  const settingsPath = path.join(dir, '.claude/settings.json')
+  fs.writeFileSync(settingsPath, JSON.stringify({ permissions: { allow: ['Bash(custom:*)'], deny: [] } }, null, 2))
+  fs.chmodSync(settingsPath, 0o000)
+  const profile = baseProfile()
+  const profilePath = writeProfile(dir, profile)
+
+  try {
+    const r = runNode('scripts/init-gen.js', ['generate', '--root', dir, '--profile', profilePath])
+    assert.strictEqual(r.status, 2,
+      'AC-18/D5: an unreadable existing settings file must be its own pre-flight arm and exit 2, not fall through to a JSON-parse or shape error: ' + r.stderr)
+    assert.match(r.stderr, /cannot read/i,
+      'AC-18: the unreadable-file arm must say the file cannot be read — a generic or parse-flavored message here means this is not actually a separate arm from the invalid-JSON case: ' + r.stderr)
+    assert.match(r.stderr, /permission/i,
+      'AC-18: the remedy for an unreadable file must point at permissions — this is the remedy that has to differ from "fix the JSON", or the operator chases the wrong fix: ' + r.stderr)
+    assert.doesNotMatch(r.stderr, /not valid JSON/i,
+      'AC-18: this pins the remedy split, which is the whole point of the separate read arm — a "not valid JSON" message on an unreadable (not unparseable) file means read failures and parse failures still share one arm: ' + r.stderr)
+  } finally {
+    fs.chmodSync(settingsPath, 0o644)
+  }
+})
+
+test('AC-20260822-02-19: an uncaught internal error (a .gitignore that is a directory, not a file) exits 4 with a stack and a re-run remedy instead of Node\'s implicit exit 1', () => {
+  const dir = newHost('init-gen-generate')
+  fs.rmSync(path.join(dir, '.gitignore'), { force: true })
+  fs.mkdirSync(path.join(dir, '.gitignore'))
+  const profile = baseProfile()
+  const profilePath = writeProfile(dir, profile)
+
+  const r = runNode('scripts/init-gen.js', ['generate', '--root', dir, '--profile', profilePath])
+  assert.strictEqual(r.status, 4,
+    'AC-19: an uncaught internal throw (writing to a .gitignore that is actually a directory) must be caught by the top-level error boundary and exit 4 — today this exits 1 with a raw Node stack after every other target has already been written, indistinguishable from Node\'s own crash exit: ' + r.status + ' stderr: ' + r.stderr)
+  assert.match(r.stderr, /unexpected internal error/i,
+    'AC-19: the boundary must label the failure as an unexpected internal error, or the operator cannot tell this apart from one of the documented refusal exits (1/2/3): ' + r.stderr)
+  assert.match(r.stderr, /re-?run/i,
+    'AC-19: the boundary must print a re-run remedy alongside the stack — a bare stack trace with no next step leaves the operator to guess whether re-running is even safe: ' + r.stderr)
+})
+
+test('AC-20260822-02-17: a profile with a non-array where an array is required (agents: {}), and a profile missing conventionRules entirely, both exit 2 naming the offending field and leave the host tree untouched', () => {
+  const cases = [
+    {
+      label: 'agents not an array',
+      mutate: (p) => { p.agents = {} },
+      fieldPattern: /agents/
+    },
+    {
+      label: 'conventionRules missing',
+      mutate: (p) => { delete p.conventionRules },
+      fieldPattern: /conventionRules/
+    }
+  ]
+  for (const c of cases) {
+    const dir = newHost('init-gen-generate')
+    const profile = baseProfile()
+    c.mutate(profile)
+    const profilePath = writeProfile(dir, profile)
+
+    const r = runNode('scripts/init-gen.js', ['generate', '--root', dir, '--profile', profilePath])
+    assert.strictEqual(r.status, 2,
+      `AC-17 (${c.label}): an invalid profile shape must be caught by validateProfile and exit 2 — today this either falls through to a raw TypeError crash (agents: {} is not iterable) or is never checked at all (conventionRules absent) instead of a clean, named usage error: ` + r.status + ' stderr: ' + r.stderr)
+    assert.match(r.stderr, c.fieldPattern,
+      `AC-17 (${c.label}): the error must name the offending field — a silent or generic failure here leaves the operator guessing which profile field is malformed: ` + r.stderr)
+    assert.ok(!fs.existsSync(path.join(dir, '.claude/spec.config.json')),
+      `AC-17 (${c.label}): a usage-error exit must write nothing — a config file appearing here means generation proceeded past the invalid field before the check fired`)
+    assert.ok(!fs.existsSync(path.join(dir, '.claude/rules/spec-pipeline.md')),
+      `AC-17 (${c.label}): a usage-error exit must write nothing — a rules file appearing here means generation proceeded past the invalid field before the check fired`)
+  }
+})
+
 test('AC-20260822-02-17: a profile missing a required config field exits 2, names the field, and writes nothing', () => {
   const dir = newHost('init-gen-generate')
   const profile = baseProfile()

@@ -1,6 +1,6 @@
 ---
 date: 2026-08-22
-status: implementing
+status: done
 open_markers: 0
 tier: standard           # additive spec-paths key follows 20260819/02 + 20260820/05 + 20260821/01 precedent; scope-reconcile.js (critical-named) gets one additive read-only flag, no behavioral edit to existing modes (pinned by AC-12); init runs only at bootstrap — worst failure is a broken bootstrap in a fresh host, recoverable by re-run
 area: bootstrap
@@ -9,7 +9,10 @@ breaking: false
 depends_on: ["specs/20260821/03-cross-spec-skip-mapping.md"]
 depended_on_by: []
 brief: 11
-build_base: 909bd30a126fbe9fab7632909fcc0b36fabeacdf   # corrected at build close from the branch name `main`: a sibling session landed 20260822/01 (b4cf091) on main after this worktree branched, so the moving-branch base diffed that spec into this one
+# build_base corrected at build close from the branch name `main`: a sibling session landed
+# 20260822/01 (b4cf091) on main after this worktree branched, so the moving-branch base diffed
+# that spec into this one. Inline `#` comments are NOT stripped from frontmatter values.
+build_base: 909bd30a126fbe9fab7632909fcc0b36fabeacdf
 ---
 
 # Init generation script — the bootstrap's deterministic file generation becomes code
@@ -36,7 +39,7 @@ asserted) in tests, and `init.md` shrinks to profiling + interview + probe + one
 | D2 | The script is the **sole writer** of the grounding-layer deliverables — `.claude/spec.config.json`, pipeline rules file, `.claude/rules/conventions/*.md`, `.claude/agents/*.md`, both skills, `.claude/settings.json` permissions merge, `scripts/spec-patterns.sh`, `.claude/spec-manifest.json`, gitignore/gitattributes entries. Judgment content travels as structured profile fields (JJ fork ruling 2026-08-22: "script writes everything"). Phase 1.5 substrate code (health route, seed script, compose files) and Phase 6 design-foundation artifacts stay session-authored; the profile's `manifestExtras` records them as manifest rows (AC-20260822-02-1, AC-20260822-02-14) | Byte-identical file shapes by construction across every host and model; the "performed the template slightly differently" drift class dies where workers trust files blindly |
 | D3 | Stamp ordering enforced in code: `generatedBy`/`contractHash` are written into the config **only after** `manifest-check.sh` exits 0; a red manifest-check leaves the config unstamped and `generate` exits 1 (AC-20260822-02-2) | The contract's "may not stamp until it exits 0" rule was prose an interrupted session could violate; code cannot |
 | D4 | Idempotency by executed probe, and the broken prose form is retired: ignore-entry detection probes a **child path** (`git check-ignore -q .claude/worktrees/x`), never the bare directory — the current init.md form `git check-ignore -q .claude/worktrees` exits 1 on a fresh host even when the entry exists (dir-only pattern, path not yet on disk; executed 2026-08-22, see A5), so it re-appends forever. gitattributes detection stays `git check-attr merge` (AC-20260822-02-3, AC-20260822-02-4) | A spike falsified the locked prose; the script carries the correct form and a test pins it |
-| D5 | Refresh contract: any target file that exists with content differing from what the profile would produce → `generate` exits 3 listing the files and writes **nothing**; `--refresh` overwrites and prints one `changed:`/`unchanged:` line per file. `.claude/settings.json` is the exception: always merge-preserving (every existing entry kept; an existing deny covering a would-be allow is kept and reported, never overridden), both modes (AC-20260822-02-6, AC-20260822-02-7) | Re-running init must never silently clobber user hand-edits; the session folds edits into the profile first, then refreshes |
+| D5 | Refresh contract: any target file that exists with content differing from what the profile would produce → `generate` exits 3 listing the files and writes **nothing**; `--refresh` overwrites and prints one `changed:`/`unchanged:` line per file. `.claude/settings.json` is the exception: always merge-preserving (every existing entry kept; an existing deny covering a would-be allow is kept and reported, never overridden), both modes. **Amended at review 2026-08-23**: an existing `.claude/settings.json` that cannot be read, is not valid JSON, **or parses to anything other than a JSON object (null, an array, or any primitive)** makes the merge impossible, so `generate` refuses in pre-flight — exit 2 naming the file and a remedy matched to the failure (permissions vs JSON vs shape), nothing written anywhere — in both modes; it is never treated as empty and rebuilt. The merge itself is computed pre-flight, so no settings-derived throw can follow a write (second amendment, review 2026-08-23 round 2) (AC-20260822-02-6, AC-20260822-02-7, AC-20260822-02-18) | Re-running init must never silently clobber user hand-edits; the session folds edits into the profile first, then refreshes |
 | D6 | The Worker Contract block is extracted at runtime from the plugin's own `templates/grounding-contract.md` (the fenced block under `## Worker Contract`, plugin root resolved from `__dirname` like sibling scripts), self-verify examples substituted from `profile.selfVerifyExamples`, tests-kind agent appending the `## Tests-kind addendum` fenced block verbatim. Unparseable contract → exit 2 naming the file (AC-20260822-02-5) | Byte-identity across agents by construction, and the contract file is already the hash-stamped single source — no second copy to drift |
 | D7 | `frontend-design` (ADR-0001): `probe` reports `{installed, enabled, scope}` from `claude plugin list --json` (shape executed 2026-08-22, A1); `claude` CLI absent from PATH → `{"unavailable": "no-claude-cli"}`, never a probe failure. The install **offer** stays an init.md interview step on design-capable hosts only (ADR-0001 says "offers", and headless hosts author no design); the embedded install command is `claude plugin install frontend-design@claude-plugins-official --scope user -y` (flags executed, A2) (AC-20260822-02-9, AC-20260822-02-10) | Detection is deterministic and belongs in the script; consent is the user's and belongs in the interview |
 | D8 | `testCommand` no-match probe: `probe --test-command "<cmd>"` executes `<cmd> <generated nonexistent path>` in the host root and reports `failsLoudOnNoMatch` (exit≠0 → true). False (the `cargo test <path>`-matches-nothing-exits-0 class) is surfaced to the user in the interview; the outcome lands in the manifest either as an `exec` row `bash -c "! <testCommand> <nonexistent path>"` (fails-loud, permanently re-verifiable by doctor check 6b; negation form executed, A4) or as an `inert` row carrying the user's accepted-risk reason. init.md's config comment states the full contract at the capture site: testCommand accepts appended file paths; a no-match must not read as pass (AC-20260822-02-8, AC-20260822-02-15) | The 2026-08-20 at-risk escape was vacuous green on exactly this class; init is the one moment the assumption is cheap to execute |
@@ -44,7 +47,7 @@ asserted) in tests, and `init.md` shrinks to profiling + interview + probe + one
 | D10 | Existing scope-reconcile modes are untouched: `--json`/`--dirs` output stays byte-identical on the existing at-risk fixtures (AC-20260822-02-12, regression pin on the existing covering tests) | The critical-named script's live consumers (review legs, build final gate) must see zero behavior change |
 | D11 | Wiring: `spec-paths` gains key `init-gen`; `spec/entrypoints.json` gains `spec/scripts/init-gen.js` → `["spec/commands/init.md"]` and records init-gen.js's quoted-literal invocations of `scope-reconcile.js` and `manifest-check.sh`; `tests/spec-paths.test.js`'s key list is updated IN PLACE (additive-collision class JJ-20260814-01, planned here so it never lands out-of-plan); plugin.json bumps (target 7.17.0 — a target, not a pin, per the semver-race gotcha) with the changelog paragraph (AC-20260822-02-13) | A missing key breaks commands silently; the collision-prone surfaces enter the File Plan up front |
 | D12 | `tests/run-ledger.test.js`'s prose pin over init.md (`/\.claude\/spec-runs\.jsonl merge=union/`) is retargeted: the union-driver instruction moves from prose to init-gen.js, and the pin's job passes to AC-20260822-02-3's behavioral test (generate → `.gitattributes` contains the line); the run-ledger test drops its init.md clause, keeping its other asserts (AC-20260822-02-3) | Regexes over prose are not tests (§ Test Rules); the behavior is now executable |
-| D13 | Exit codes for `generate`: 0 = generated, manifest-check green, stamped · 1 = manifest-check red, nothing stamped · 2 = usage error / invalid profile (missing required field named, remedy printed) / unparseable Worker Contract · 3 = existing targets differ and no `--refresh`, nothing written. `probe` exits 0 on findings (findings are data), 2 on usage (AC-20260822-02-2, AC-20260822-02-7, AC-20260822-02-17) | § Worker Rules: explicit exit-code alphabet in the header; adverse findings are observations, not failures |
+| D13 | Exit codes for `generate`: 0 = generated, manifest-check green, stamped · 1 = manifest-check red, nothing stamped · 2 = usage error / invalid profile (missing or non-array required field named, remedy printed) / unparseable Worker Contract / existing `.claude/settings.json` unreadable, invalid JSON, or non-object (D5 merge impossible, nothing written; amended at review 2026-08-23, widened round 2) · 3 = existing targets differ and no `--refresh`, nothing written · 4 = unexpected internal error (uncaught throw; boundary added at review 2026-08-23 round 2 — the tree may be partially written, remedy = re-run generate; never a verdict, always a bug). `probe` exits 0 on findings (findings are data), 2 on usage (AC-20260822-02-2, AC-20260822-02-7, AC-20260822-02-17, AC-20260822-02-18, AC-20260822-02-19) | § Worker Rules: explicit exit-code alphabet in the header; adverse findings are observations, not failures |
 | D14 | init.md is rewritten around the script: keeps Phase 1 profiling, Phase 1.5 substrate authoring, the interview, Phase 6 design foundation, the Phase 8 `/spec:enforce` handoff, and the report; everything the script now owns (the Phase 1 gitignore/gitattributes mechanics, Phase 2's config JSON body, Phase 2.5 merge mechanics, Phase 3/4 file-shape skeletons, the Phase 5 harness heredoc, Phase 7 manifest assembly/ordering) is replaced by the profile-schema reference and the two invocations [no-ac: prose thinning has no executable oracle; the moved literals are closed by AC-3/AC-5/AC-14's behavioral tests, the collision-closure sweep at lock, and review's diff] | The brief's ablation rule: keep only what the model must judge — profiling and the interview |
 
 ## File Plan
@@ -239,8 +242,17 @@ enforcement generation — `/spec:enforce` owns that), and the exit-code alphabe
   SYSTEM SHALL write an `inert` manifest row naming at-risk detection and that reason →
   tests/init-gen/generate.test.js
 - **AC-20260822-02-17**: WHEN the profile is missing a required field (e.g.
-  `config.gateCommand`) THE SYSTEM SHALL exit 2 naming the field and printing the remedy,
-  writing nothing → tests/init-gen/generate.test.js
+  `config.gateCommand`) or carries a required array field that is not an array THE SYSTEM
+  SHALL exit 2 naming the field and printing the remedy, writing nothing →
+  tests/init-gen/generate.test.js
+- **AC-20260822-02-18**: WHEN an existing host `.claude/settings.json` cannot be read or does
+  not parse as a JSON **object** (invalid JSON, or valid JSON whose top level is null, an
+  array, or a primitive) THE SYSTEM SHALL exit 2 in pre-flight naming that file and a remedy
+  matched to the failure, leaving the settings file byte-identical and writing no other
+  generated target — in both default and `--refresh` modes → tests/init-gen/generate.test.js
+- **AC-20260822-02-19**: WHEN `generate` throws past its pre-flight validations (e.g. the
+  host's `.gitignore` is a directory) THE SYSTEM SHALL exit 4 — never a documented verdict
+  code — printing the stack and a re-run remedy → tests/init-gen/generate.test.js
 
 ## Assumptions (escalation triggers)
 
@@ -286,6 +298,75 @@ enforcement generation — `/spec:enforce` owns that), and the exit-code alphabe
   behavior (D10's pin decides).
 
 ## Rationale
+
+**Build deviations (folded at close 2026-08-23; sidecar deleted).** One one-off: D11 named
+7.17.0 as the version target, but HEAD already carried 7.18.0 — the recorded semver-race
+class, where a literal version in a Decision is a target and not a pin. The build bumped to
+7.19.0 carrying the same changelog obligation. The other two deviations were
+recurring-shaped and became `[plugin]` Gotchas entries in the host pipeline rules: the
+frontmatter reader not stripping inline `#` comments (which blocked this spec's own review at
+its first driver run), and `red-check.js` deriving carried-AC expectation from an AC-ID token
+appearing anywhere in a file, comments included.
+
+**Review dispositions (2026-08-23).**
+
+- *Fixed.* The reviewer found that `mergeSettings()` swallowed a JSON parse error on an
+  existing host `.claude/settings.json` and rebuilt the file from scratch — destroying the
+  user's allow **and deny** entries plus any unrelated top-level keys, at exit 0 with no
+  warning. That is a direct violation of D5's "every existing entry kept ... both modes", and
+  dropping deny rules makes it a security regression rather than mere data loss. A second
+  opinion (Fable, 2026-08-23) upheld the finding at hard and refined the remedy: the parse
+  moves to pre-flight so the refusal happens before *any* target is written (the merge
+  previously ran last, so failing in place would have left a half-written tree), it reuses the
+  existing exit-2 "unparseable input, remedy named, nothing written" arm rather than opening a
+  new code, and `--refresh` does not bypass it. D5, D13 and AC-20260822-02-18 record the
+  amendment; two behavioral tests pin it.
+- *Fixed (round 2).* A second blind reviewer broke the round-1 fix through a different
+  door: the pre-flight guarded only `JSON.parse` throwing, never the parsed value's shape, so
+  a settings file of `null` passed pre-flight and then threw inside the merge **after every
+  target and the gitignore/gitattributes mutations were written** (exit 1, colliding with the
+  documented "manifest-check red"), and a top-level array reached exit 0 with the user's
+  content spread into a numeric-indexed object. A second Fable consult (2026-08-23) judged
+  round 1 "the right location at the wrong granularity" and ruled: complete the pre-flight
+  (read / parse / shape arms, each with a matched remedy — the round-1 message told a
+  `chmod 000` operator to "fix the JSON") and **hoist the merge computation ahead of the write
+  phase**, so no settings-derived throw can follow a write, anticipated or not. It explicitly
+  rejected an all-or-nothing staged writer: `manifest-check.sh` executes against real files on
+  disk, and D3 already sanctions the written-but-unstamped state as the recovery model. It
+  added a top-level error boundary at the new exit 4, because no pre-flight can cover every
+  filesystem state a host presents — confirmed by its own repro of a host whose `.gitignore`
+  is a directory. Two adjacent instances of the same class found in that sweep are folded in
+  (JJ, 2026-08-23): `conventionRules` was dereferenced but never required, and the iterated
+  profile fields were never checked as arrays. D5, D13, AC-17, AC-18 amended;
+  AC-20260822-02-19 added; five behavioral tests pin the paths.
+- *Waived (JJ, 2026-08-23, round 3) — owned by a follow-up spec, not dropped.* A third blind
+  reviewer found that `mergeSettings`'s own two spread sites (`profile.settings.extraAllow` /
+  `extraDeny`) were omitted from round 2's array-shape sweep, and that the hoisted
+  `mergeSettings` call sits one line ABOVE the try block, so the exit-4 boundary added in the
+  same round does not cover the call that round moved. A third Fable consult (2026-08-23)
+  widened it to four executed sites and one class the reviewer had not reached: a **string**
+  in `extraAllow`/`extraDeny` does not throw at all — it spreads per character into the host's
+  permission list at exit 0 (observed: `"Bash(bun x *)"` → twelve one-character allow
+  entries), so no boundary placement can catch it and only a shape check can. The other two
+  sites are `validateProfile`'s own `in`-operator uses (agentMap ~188, rules.sections ~192),
+  which throw bare at exit 1 on a primitive, outside every boundary. Its ruling on the
+  three-round pattern: severity converged — round 2's ordering change structurally closed host
+  data loss, and round 3 wrote nothing precisely because of it — but a hand-enumerated field
+  list is enumerative by construction and will not converge; the achievable invariant is a
+  complete failure *taxonomy* (everything post-pre-flight inside one boundary), not complete
+  validation. It judged the round-2 hoist correct and its composition with the boundary an
+  error of ordering, one line. Waived here rather than fixed because the review's fix loop is
+  capped at two iterations and both are spent, and because every path is reachable only from a
+  malformed session-authored profile with zero host data at risk; the remedy — move the merge
+  inside the try, add an optional-array arm for the two settings fields, guard the two `in`
+  sites, branch the EISDIR remedy — lands as its own spec with its own tests and its own
+  review rather than as an uncovered escalation on this one.
+- *Waived (JJ, 2026-08-23).* `scope-reconcile` reported one out-of-plan file, `.gitignore`,
+  which gained a `package-lock.json` entry in the build-close commit (24fd07a) — unrelated
+  repo housekeeping that rode this spec's diff range. Kept deliberately: the change is a
+  one-line ignore entry with no behavioral surface, and reverting it to satisfy plan hygiene
+  would restore the lockfile noise for no gain. Recorded here so the record matches what
+  landed.
 
 The shape follows review-legs.js deliberately: a long-header script that IS the phase, a
 command file that invokes it and adjudicates, and typed observations instead of narrated

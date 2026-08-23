@@ -57,8 +57,25 @@
 // observed in this repo's prose quotes tag grammar inside a code span) still self-tagged there.
 // The trailing position now requires the tag to be BARE (`BARE_TAG_ITEM_SRC`, no surrounding
 // backticks) — the declaration slot is unaffected and keeps accepting backticked-or-bare, since
-// all 8 genuinely-declared tags in `specs/` sit there, and `spec/templates/spec.md`'s own
-// trailing worked example (AC-20260821-99-1) is already bare.
+// (as of a 2026-08-22 census of THIS REPO's own `specs/` corpus, not a grammar rule — see the
+// 2026-08-23 note below) every genuinely-declared tag observed here sat in the declaration slot,
+// and `spec/templates/spec.md`'s own trailing worked example (AC-20260821-99-1) is already bare.
+//
+// specs/20260823/03-silent-drop-hardening.md D2/D3 (2026-08-23, the 2026-08-21..23 upwell
+// silent-drop incident): the bare-only trailing refusal above is a REFUSAL, not a drop — parsing
+// still had no way to say a trailing tag WAS refused, so a host whose real declarations happen to
+// be backticked (upwell: 17 of them) got a bare parse-null with no trace of why. `parseAcBullets`
+// now also returns `trailingRejected`: the backtick-tolerant trailing run's text (built from the
+// SAME `TAG_ITEM_SRC` used by `slotRun`, never a re-spelled regex — a second authority here is
+// exactly the fragile spot this hardening exists to avoid) when the bare-only `trailingRun` above
+// refused it, else null. `trailingRejected` does NOT change what parses (the named tag fields
+// stay null on a refused run, D1's bare-only ban is untouched) — it only lets a consumer detect,
+// by substring-testing the tag name against this one string, that a refusal was the cause of an
+// otherwise-generic finding. D3 rescopes every "all 8 tags sit in the declaration slot" claim in
+// this file's comments from an implied grammar fact to what it always actually was: a dated
+// census of this repo's own `specs/` corpus as of 2026-08-22 — a host corpus (upwell)
+// demonstrably backticks trailing declarations, so the census was never a rule to build parsing
+// around, only an observation about the fixtures this file happened to be tested against.
 //
 // specs/20260821/03-cross-spec-skip-mapping.md D7 (2026-08-22 amendment): exports
 // `acIdOccurs(text, id)`, a full-token occurrence check — `id` counts as occurring only at a
@@ -116,8 +133,9 @@ const BARE_TAG_ITEM_SRC = '\\[[a-z][a-z-]*:\\s*[^\\]]+\\]'
 // (`spec/templates/spec.md` 90-103 sanctions sibling tags, e.g. `[env:]` + `[pre-green:]`
 // together — only `[oracle:]` alongside a test mapping is forbidden), or null if the first line
 // doesn't have this shape at all. Backticked-or-bare: the declaration slot is never prose, so a
-// backticked tag there is still a real declaration (all 8 genuinely-declared tags in `specs/`
-// sit here today).
+// backticked tag there is still a real declaration (a 2026-08-22 census of this repo's own
+// `specs/` corpus found every genuinely-declared tag sitting here — a THIS-REPO observation, not
+// a grammar rule; see the D2/D3 note above the module header).
 function slotRun(firstLine) {
   const re = new RegExp('^- \\*\\*[^*]*\\*\\*\\s*((?:' + TAG_ITEM_SRC + '\\s*)*):')
   const m = firstLine.match(re)
@@ -134,11 +152,39 @@ function slotRun(firstLine) {
 // skip, laundering coverage/skips exactly like the original oracle/env/pre-green defect this
 // module was hardened against. Requiring the trailing tag to be BARE closes it without touching
 // the declaration slot (spec.md's own trailing example, AC-20260821-99-1, is bare and keeps
-// parsing) or any real corpus tag (all 8 sit in the declaration slot).
+// parsing) or any tag this repo's own corpus census (2026-08-22, a this-repo observation, not a
+// grammar rule) found sitting in the declaration slot.
 function trailingRun(raw) {
   const re = new RegExp('((?:' + BARE_TAG_ITEM_SRC + '\\s*)+)$')
   const m = raw.replace(/\s+$/, '').match(re)
   return m ? m[1] : null
+}
+
+// D2 (2026-08-23): the backtick-TOLERANT sibling of trailingRun above, built from the SAME
+// TAG_ITEM_SRC slotRun uses — never a re-spelled regex, the one authority both positions share.
+// Used ONLY to detect a REFUSED trailing declaration for `trailingRejected` below; it never
+// extracts a tag value itself and the bare-only ban it annotates stays completely untouched.
+function tolerantTrailingRun(raw) {
+  const re = new RegExp('((?:' + TAG_ITEM_SRC + '\\s*)+)$')
+  const m = raw.replace(/\s+$/, '').match(re)
+  return m ? m[1] : null
+}
+
+// specs/20260823/03-silent-drop-hardening.md D10 (2026-08-23): the ONE authority for the
+// `rejected-trailing-tag` remedy text — the first implementation landed a byte-identical copy of
+// this function in both ac-matrix.js and red-check.js, the exact two-identical-copies shape D4
+// (this same spec) exists to eliminate elsewhere. It lives here, beside `tolerantTrailingRun` and
+// `trailingRejected`, because the remedy explains THIS module's own refusal (D2) — consumers
+// import it rather than re-deriving the text, matching D2's "consumers never re-derive" rule for
+// the predicate itself. The per-consumer `underlying` clause (what the refusal turned out to mean
+// for that specific finding — absent coverage, an unsanctioned skip, a green expected-red file)
+// stays a parameter; nothing else about the message differs across callers.
+function rejectedTrailingTagDetail(acId, trailingRejected, underlying) {
+  return `${acId}: trailing tag ${trailingRejected} was refused as a declaration — it ends the ` +
+    `bullet backticked, and the bare-only trailing rule (rv_640c582f4902) accepts only a BARE ` +
+    `trailing tag as a declaration. If this is a genuine declaration: remove the backticks, or ` +
+    `move it into the declaration slot (backticks allowed there). If it is meant only as a quote: ` +
+    `${underlying} still stands and needs its own fix.`
 }
 
 // Extracts one named `[tagName: value]` tag's value, searching the declaration-slot run first
@@ -197,6 +243,10 @@ function parseAcBullets(sectionText) {
     const tokenMatch = linesArr[0].match(/^- \*\*([^*]*)\*\*/)
     const token = tokenMatch ? tokenMatch[1] : ''
     const malformed = !AC_ID_RE.test(token)
+    // D2: refused iff the tolerant run matched something the bare-only run refused — a tolerant
+    // miss (no trailing tag run at all) and a bare-only accept both yield null, never the run's text.
+    const tolerant = tolerantTrailingRun(raw)
+    const trailingRejected = (tolerant !== null && trailingRun(raw) === null) ? tolerant : null
     return {
       id: malformed ? null : token,
       token,
@@ -205,8 +255,12 @@ function parseAcBullets(sectionText) {
       oracle: extractTag('oracle', linesArr[0], raw),
       env: extractTag('env', linesArr[0], raw),
       preGreen: extractTag('pre-green', linesArr[0], raw),
+      trailingRejected,
     }
   })
 }
 
-module.exports = { AC_ID_RE, AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, extractSection, parseAcBullets, acIdOccurs }
+module.exports = {
+  AC_ID_RE, AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, extractSection, parseAcBullets, acIdOccurs,
+  rejectedTrailingTagDetail,
+}

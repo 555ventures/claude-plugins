@@ -1,6 +1,6 @@
 ---
 date: 2026-08-23
-status: hardened
+status: implementing
 tier: standard
 area: scripts
 design: false
@@ -9,6 +9,7 @@ depends_on: []
 depended_on_by: []
 open_markers: 0
 brief: n/a
+build_base: main
 ---
 
 # Silent-drop hardening: loud trailing-tag rejection, frontmatter comment strip, ledger repair, D8 archaeology
@@ -38,18 +39,21 @@ enum-clean (past and future), and the four escape rows exist.
 | D5 | **Repair the seven polluted ledger rows in place** (lines carrying `"tier":"<enum><spaces>#…"`, all `stage:"review"`: specs/20260821/02, 20260821/04, 20260821/01, 20260821/03, 20260822/01, 20260822/02, 20260823/01): truncate `tier` at the first whitespace, yielding `standard`×5 and `critical`×2 — a deterministic jq rewrite of exactly those rows, byte-identical elsewhere, verified by `grep -c '"tier":"[^"]*#'` = 0 before and after diff review [no-ac: one-time data repair on the live ledger — no test surface; the executed rewrite command and verification grep are recorded in the build deviations sidecar] | The ledger is the sole ground truth for materiality and tier economics; seven rows that fail a `tier === "critical"` comparison corrupt every downstream derivation |
 | D6 | **Execute 20260821/03 D8's slipped archaeology in this build**: run the fixed ac-matrix (`--spec <owning spec> --root . --manifest <scratch> --json`) against specs/20260808/01, specs/20260813/03, specs/20260815/01, specs/20260816/01; for each AC-1 confirmed uncovered, append one `stage:"escape"` row per the escape.md schema with derived fields — `reviewRunId` from the ledger (wf_38e9474f-cb9, wf_5beb7951-8fc, wf_5ea3aad0-546, wf_e468156d-f2b respectively — the CLEAN/latest review row per spec), `file` = the owning spec path, `foundBy:"later-spec"`, `severity:"hard"`, `class:"prefix-collision-coverage-fail-open"`, `preventedBy:"enforcer"`, `killedMatch:null` (reviews predate artifact retention), `via:"manual"`. An AC that unexpectedly shows covered gets no row and a deviations note [no-ac: operator process — the deliverable is escape-ledger rows, no test surface in this repo's tree; mirrors 20260821/03 D8's own sanction] | D8's obligation had no post-`done` carrier and slipped for a day; a File Plan row in a spec that cannot close without it is the carrier this time |
 | D7 | Version bump `spec/.claude-plugin/plugin.json` 7.21.0 → 7.23.0 (target, not pin — 7.21.0 was taken by specs/20260823/01 and 7.22.0 is the parallel lane of specs/20260823/02 — concurrent sessions race semver; build takes the next free minor) with the last-3-versions description update [no-ac: manifest bookkeeping; review's version-bump check is the enforcement] | Behavior change (new finding class, changed frontmatter semantics) mandates a minor bump |
+| D8 | **Blocked-return ruling (build, 2026-08-23): AC-20260823-03-3's fixture is retargeted; D2's anchor is NOT widened.** The authored fixture placed the backticked `[pre-green:]` tag BEFORE a `→ tests/x3.test.js` reference suffix, so the tag is not the bullet's last content and no trailing run — tolerant or bare — matches it (executed check: `parseAcBullets` returns `trailingRejected: null` for that text with AND without backticks). AC-20260823-03-3's own literal example ends with the tag; the fixture drops the suffix to match it. D2's `((?:TAG_ITEM_SRC\s*)+)$` end-anchor stands unchanged [no-ac: fixture correction inside an existing AC's own test — AC-20260823-03-3 already says "bullet ends in a backticked pre-green tag"] | Widening the anchor would change what the trailing position PARSES, which D1 forbids outright ("nothing about what PARSES changes, only what is SAID when parsing refuses"); `trailingRun`'s bare path carries the identical end-anchor today, so a suffix-tolerant tolerant-run would report refusals the bare run never even considered — a new silent-drop class, not a fix for one |
+| D9 | **Leg exits partition by EMISSION SITE, not by finding class.** `ac-matrix.js` derives its two manifest leg exits (`ac-matrix`, `skip-reconcile`) by testing each finding's `class` against two class sets. `rejected-trailing-tag` is emitted from BOTH loops, so adding it to both sets makes either emission redden both legs. Executed repro (build, 2026-08-23): a spec with one uncovered AC carrying a refused trailing `[oracle:]` and ZERO skip lines wrote `{"leg":"skip-reconcile","exit":1,"observed":{"skipped":0,"sanctioned":0}}` — a leg reporting red having observed nothing. Fix: each of the three `rejected-trailing-tag` emission sites records which leg it belongs to, and the two exits are computed from that origin; `rejected-trailing-tag` is removed from both class sets. The `--json` findings array and every finding's own shape stay byte-identical — origin is internal bookkeeping, never an emitted field (AC-20260823-03-13) | This spec exists to stop silent misreports; shipping one into the evidence manifest that verdict.js reads would be self-refuting. D1's Behavior clause already promises "verdict arithmetic sees no delta" — a falsely-red leg is exactly such a delta |
+| D10 | **The `rejected-trailing-tag` remedy text is ONE authority, exported from `lib/spec-sections.js`.** The first implementation landed a byte-identical `rejectedTrailingTagDetail(acId, trailingRejected, underlying)` in both `ac-matrix.js` and `red-check.js`. It is exported from `lib/spec-sections.js` — the module that already owns the refusal predicate D2 defines — and imported by both consumers; the per-consumer `underlying` clause stays a parameter. Pure refactor, message bytes unchanged, already pinned by the AC-1/-2/-3 detail assertions [no-ac: behavior-preserving extraction covered by the existing detail assertions on AC-20260823-03-1/-2/-3] | This spec's own D4 rationale is that two identical copies are how one buggy regex reached both drivers and that extraction is the holistic fix — shipping two copies of the remedy text in the same spec would refute it, and the remedy belongs beside the grammar whose refusal it explains |
 
 ## File Plan
 
 | Path | Action | Layer | Summary |
 |------|--------|-------|---------|
 | spec/scripts/lib/spec-sections.js | MODIFY | scripts | D2 `trailingRejected` on parseAcBullets bullets; D3 census-comment rescope |
-| spec/scripts/ac-matrix.js | MODIFY | scripts | D1 `rejected-trailing-tag` replacing `uncovered-ac` (refused trailing oracle) and `unsanctioned-skip` (refused trailing env on owning bullet) |
+| spec/scripts/ac-matrix.js | MODIFY | scripts | D1 `rejected-trailing-tag` replacing `uncovered-ac` (refused trailing oracle) and `unsanctioned-skip` (refused trailing env on owning bullet); D9 leg exits partition by emission site |
 | spec/scripts/red-check.js | MODIFY | scripts | D1 `rejected-trailing-tag` replacing `unsanctioned-green` when a carried AC's bullet has a refused trailing `[pre-green:]` |
 | spec/scripts/lib/frontmatter.js | CREATE | scripts | D4 shared `fmVal(fmRaw, key)` — quote-aware, YAML-correct comment strip |
 | spec/scripts/spec-review-driver.js | MODIFY | scripts | D4: local fmVal replaced by the lib import; no other behavior change |
 | spec/scripts/spec-design-driver.js | MODIFY | scripts | D4: local fmVal replaced by the lib import; no other behavior change |
-| tests/ac-matrix/rejected-trailing-tag.test.js | CREATE | tests | AC-20260823-03-1, AC-20260823-03-2, AC-20260823-03-4, AC-20260823-03-7 |
+| tests/ac-matrix/rejected-trailing-tag.test.js | CREATE | tests | AC-20260823-03-1, AC-20260823-03-2, AC-20260823-03-4, AC-20260823-03-7, AC-20260823-03-13 |
 | tests/ac-matrix/ac-matrix.test.js | MODIFY | tests | Tag the existing bare-trailing and mid-sentence-null pins with AC-20260823-03-5, AC-20260823-03-6 (retag only, assertions untouched) |
 | tests/red-check/red-check.test.js | MODIFY | tests | AC-20260823-03-3 |
 | tests/frontmatter.test.js | CREATE | tests | AC-20260823-03-8, AC-20260823-03-9, AC-20260823-03-10 |
@@ -182,6 +186,12 @@ jq -c 'if (.stage=="review" and (.tier|type=="string") and (.tier|test("\\s#|\\s
 - **AC-20260823-03-12**: WHEN the design driver reads frontmatter keys carrying inline
   comments (`design: true   # note`) THE SYSTEM SHALL behave as if the comment were absent
   (`design` flag true) → tests/design-driver.test.js
+- **AC-20260823-03-13**: WHEN ac-matrix emits `rejected-trailing-tag` from ONE of its two loops
+  THE SYSTEM SHALL redden only that loop's manifest leg — a coverage-loop emission on a spec
+  with zero skip lines writes `{"leg":"skip-reconcile","exit":0,…}` alongside
+  `{"leg":"ac-matrix","exit":1,…}`, and a skip-loop emission on a spec whose every AC is
+  covered writes `{"leg":"ac-matrix","exit":0,…}` alongside
+  `{"leg":"skip-reconcile","exit":1,…}` → tests/ac-matrix/rejected-trailing-tag.test.js
 
 ## Assumptions (escalation triggers)
 

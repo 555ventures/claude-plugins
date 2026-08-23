@@ -47,6 +47,9 @@ const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
 const { readConfigStrict, CONFIG_RELPATH } = require('./lib/host-config')
+// D4 (specs/20260823/03-silent-drop-hardening.md): the one shared frontmatter-value reader,
+// replacing this driver's own local copy (rv_e83659d49386).
+const { fmVal: fmValLib } = require('./lib/frontmatter')
 
 function die(msg) { process.stderr.write('spec-design-driver: ' + msg + '\n'); process.exit(2) }
 
@@ -64,7 +67,10 @@ const STATE_ONLY = argv.includes('--state')
 const spec = fs.readFileSync(specPath, 'utf8')
 const fmMatch = /^---\n([\s\S]*?)\n---/.exec(spec)
 const fm = fmMatch ? fmMatch[1] : ''
-const fmVal = (k) => { const m = new RegExp('^' + k + ':\\s*(.+)$', 'm').exec(fm); if (!m) return ''; const v = m[1].trim(); const q = /^(["'])([\s\S]*)\1$/.exec(v); return q ? q[2] : v }
+// D4 (specs/20260823/03-silent-drop-hardening.md, rv_e83659d49386): the local fmVal this
+// replaced captured everything after `key:` verbatim, inline comment included.
+// lib/frontmatter.js's fmVal is quote-aware and strips a whitespace-preceded `#` comment.
+const fmVal = (k) => fmValLib(fm, k)
 
 const status = fmVal('status')
 const designFlag = fmVal('design')

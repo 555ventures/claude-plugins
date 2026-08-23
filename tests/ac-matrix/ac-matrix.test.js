@@ -53,6 +53,16 @@ const { parseAcBullets } = require('../../spec/scripts/lib/spec-sections')
 // never launders an AC with zero test hits out of `uncovered` (AC-12, a SHALL-CONTINUE-TO pin —
 // its carrier assertion already passes today, since an unrecognized bracket tag is inert to the
 // pre-06 uncovered/oracle logic; only the shape/finding-class additions above are new).
+//
+// specs/20260823/03-silent-drop-hardening.md D1/D2 (2026-08-23, the upwell silent-drop incident):
+// two pins below are retagged (bare-trailing-tag AC-5, mid-sentence-quoted-null AC-6 — assertions
+// unchanged). A third is a genuine COLLISION found at test-authoring time, not a mere retag: the
+// former AC-20260821-01-2 "backticked trailing tag illustration" test drove ac-matrix.js and
+// pinned its zero-hit AC as a plain `uncovered-ac` finding — but that fixture (zero coverage plus
+// a refused trailing `[oracle:]`) is exactly D1's rule 1, which now requires `rejected-trailing-tag`
+// instead. Updated in place and retagged to AC-20260823-03-1, never weakened — the assertion
+// changed because the correct behavior changed, not because the invariant it protects got looser.
+// See specs/20260823/03-silent-drop-hardening.deviations.md.
 
 function specMd(acLines, filePlanRows) {
   return '# Test Spec\n\n## Acceptance Criteria\n\n' + acLines.join('\n') + '\n\n' +
@@ -556,7 +566,7 @@ test('AC-20260821-01-2: one tag in the declaration slot and a sibling tag traili
     `bullet — a fix scoped to only same-position runs would leave this cross-position combination broken — got ${JSON.stringify(b)}`)
 })
 
-test('AC-20260821-01-2: a RUN of two sibling tags quoted together mid-sentence — neither in the declaration slot nor trailing — still parses both null (the anchoring fix must not regress when the run grows from one tag to a pair)', () => {
+test('AC-20260823-03-6 (retags this mid-sentence-quoted-null pin, previously plain AC-20260821-01-2, per specs/20260823/03-silent-drop-hardening.md — assertion unchanged): a RUN of two sibling tags quoted together mid-sentence — neither in the declaration slot nor trailing — still parses both null (the anchoring fix must not regress when the run grows from one tag to a pair)', () => {
   const section = "- **AC-20260821-89-1**: WHEN a spec's requirement text illustrates the sibling tags `[env: FOO]` `[oracle: gate]` together as a worked example THE SYSTEM SHALL do nothing special → tests/foo.test.js\n"
   const bullets = parseAcBullets(section)
   assert.strictEqual(bullets.length, 1, `fixture must parse to exactly one AC bullet — got ${bullets.length}`)
@@ -579,7 +589,7 @@ test('AC-20260821-01-2: a RUN of two sibling tags quoted together mid-sentence �
 // covered-by-declaration whenever the named leg happens to be green in the manifest — laundered
 // coverage, fail-open. Fixed: the trailing position now requires a BARE (un-backticked) tag; the
 // declaration slot still accepts either, per the two tests below that pin it stays that way.
-test('AC-20260821-01-2: a bullet ending in a BACKTICKED trailing tag illustration — e.g. `... name the gate, e.g. `[oracle: gate]`` — parses that tag null, and driven through ac-matrix.js the zero-hit AC is NOT treated as covered by declaration even when the manifest\'s gate leg is green', () => {
+test('AC-20260821-01-2: a bullet ending in a BACKTICKED trailing tag illustration — e.g. `... name the gate, e.g. `[oracle: gate]`` — parses that tag null', () => {
   const section = '- **AC-20260822-71-1**: WHEN a skip is reported THE SYSTEM SHALL name the gate, e.g. `[oracle: gate]`\n'
   const bullets = parseAcBullets(section)
   assert.strictEqual(bullets.length, 1, `fixture must parse to exactly one AC bullet — got ${bullets.length}`)
@@ -587,7 +597,20 @@ test('AC-20260821-01-2: a bullet ending in a BACKTICKED trailing tag illustratio
     `a backticked tag illustration ending the bullet is a worked example, not a declaration — a parser that ` +
     `accepts a backtick-wrapped item in the trailing position identically to the declaration slot self-tags ` +
     `on this exact shape — got ${JSON.stringify(bullets[0])}`)
+})
 
+// COLLISION (specs/20260823/03-silent-drop-hardening.md D1, found and fixed in place at
+// test-authoring time, 2026-08-23 — never weakened, per this repo's own collision-resolution
+// convention): this fixture IS "rv_640c582f4902's own case" the new spec's Goal cites —
+// AC-20260822-71-1 has zero literal test hits and its only would-be oracle declaration is
+// refused for being backticked, so it is exactly D1's rule 1 (`uncovered-ac` with a refused
+// trailing `[oracle:]`), not AC-4's "otherwise clean" carve-out (AC-4 requires the AC be
+// COVERED — this one is genuinely uncovered). Driven through ac-matrix.js the finding must now
+// be `rejected-trailing-tag`, not `uncovered-ac` — updated in place and retagged to
+// AC-20260823-03-1 (also pinned by its own dedicated fixture in
+// tests/ac-matrix/rejected-trailing-tag.test.js; kept here too as the real-corpus-derived shape
+// that surfaced the collision). See specs/20260823/03-silent-drop-hardening.deviations.md.
+test('AC-20260823-03-1 (retargets AC-20260821-01-2\'s zero-hit backticked-trailing-oracle fixture): driven through ac-matrix.js, the zero-hit AC with a refused trailing [oracle:] tag is a hard rejected-trailing-tag finding — never uncovered-ac, and never laundered green by the gate leg\'s manifest status', () => {
   const dir = tmpdir('acm-rc2-trailing-backtick')
   fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'tests/illustrate.test.js'), '// unrelated, no AC-ID literal\n')
@@ -599,16 +622,20 @@ test('AC-20260821-01-2: a bullet ending in a BACKTICKED trailing tag illustratio
   const res = run(spec, dir, manifest, ['--json'])
   const out = findings(res)
   assert.strictEqual(res.status, 1,
-    `AC-20260822-71-1 has zero literal test hits and no genuine [oracle:] declaration — it must be a hard ` +
-    `uncovered-ac finding, exit 1, not silently laundered green by the gate leg's manifest status (stderr: ${res.stderr})`)
-  assert.ok(out.findings.some(f => f.class === 'uncovered-ac' && f.ac === 'AC-20260822-71-1'),
-    `the illustration must not sanction coverage — the finding must be uncovered-ac naming AC-20260822-71-1 — got ${JSON.stringify(out.findings)}`)
+    `AC-20260822-71-1 has zero literal test hits and no genuine [oracle:] declaration — it must exit 1, ` +
+    `not silently laundered green by the gate leg's manifest status (stderr: ${res.stderr})`)
+  assert.ok(!out.findings.some(f => f.class === 'uncovered-ac' && f.ac === 'AC-20260822-71-1'),
+    `specs/20260823/03-silent-drop-hardening.md D1: rejected-trailing-tag REPLACES uncovered-ac for ` +
+    `this AC — a surviving uncovered-ac finding here means the refusal's cause (a backticked trailing ` +
+    `tag) is still hidden from the host, the exact silent misreport that spec fixes — got ${JSON.stringify(out.findings)}`)
+  assert.ok(out.findings.some(f => f.class === 'rejected-trailing-tag' && f.ac === 'AC-20260822-71-1'),
+    `the illustration must surface as rejected-trailing-tag naming AC-20260822-71-1 — got ${JSON.stringify(out.findings)}`)
   assert.strictEqual(out.observed.acMatrix.oracle, 0,
     `the typed row's oracle field must NOT count this AC — a backticked illustration counting toward oracle ` +
     `coverage is exactly the fail-open this pin closes — got ${JSON.stringify(out.observed.acMatrix)}`)
 })
 
-test('AC-20260821-01-2: a bullet ending in a BARE trailing tag — the position specs/20260821/01-red-check.md\'s own AC-20260821-01-1 mandates — still parses it, unaffected by the backtick-only trailing restriction', () => {
+test('AC-20260823-03-5 (retags this bare-trailing-tag pin, previously plain AC-20260821-01-2, per specs/20260823/03-silent-drop-hardening.md — assertion unchanged): a bullet ending in a BARE trailing tag — the position specs/20260821/01-red-check.md\'s own AC-20260821-01-1 mandates — still parses it, unaffected by the backtick-only trailing restriction', () => {
   const section = '- **AC-20260822-72-1**: WHEN x THE SYSTEM SHALL y [oracle: gate]\n'
   const bullets = parseAcBullets(section)
   assert.strictEqual(bullets.length, 1, `fixture must parse to exactly one AC bullet — got ${bullets.length}`)

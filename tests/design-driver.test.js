@@ -36,6 +36,48 @@ const VALID_SKELETONS = JSON.stringify({
     tree: [{ el: 'div', style: { fill: 'surface-raised' } }], states: ['default'], tokens: ['surface-raised'] }],
 })
 
+// specs/20260823/03-silent-drop-hardening.md D4/AC-20260823-03-12 (2026-08-23, rv_e83659d49386):
+// this driver's local `fmVal` (line 67) propagates everything after `key:` verbatim, including an
+// inline `#` comment — the same defect class D4 fixes via the new shared lib/frontmatter.js. The
+// `design:` frontmatter flag is read into `designFlag` (line 70) but is compared ONLY against the
+// literal 'false' (line 545's confirm-with-user NOTE) — a `true` value never gates any branch, so
+// a comment-polluted "true   # note" is indistinguishable from a clean "true" through any current
+// driver output (a vacuous proxy for the AC's own "design: true # note" example, per this repo's
+// own convention for a literal that doesn't reach an observable branch — see the AC example vs
+// unreachable branch memory: a vacuous-but-correct pin is kept, and a stronger proof is added
+// alongside it rather than left unverified). Arm 1 below is that vacuous-but-correct proof (the
+// AC's own literal). Arm 2 makes the SAME defect decisively observable and RED today, using
+// `design: false # note`: confirmed by executed run — a clean `design: false` prints the NOTE
+// warning, but `design: false   # note` does not (today's fmVal's strict `=== 'false'` comparison
+// at line 545 fails against the comment-polluted string).
+test('AC-20260823-03-12: WHEN the design driver reads frontmatter keys carrying inline comments (design: true # note) THE SYSTEM SHALL behave as if the comment were absent (design flag true) — proven on the AC\'s own true example (state derivation unaffected, the only proxy "true" supports today) and, decisively, on design: false # note, whose strict designFlag === "false" comparison silently drops the confirm-with-user NOTE while the comment survives', () => {
+  const root = fs.realpathSync(tmpdir('drv-fm12'))
+  gitRepo(root)
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({
+    gateCommand: 'true',
+    design: { tool: 'storybook', command: 'bun storybook', storyFormat: 'CSF3', doctrine: 'docs/design/doctrine.md' },
+  }))
+  const specDir = path.join(root, 'specs/20260823')
+  fs.mkdirSync(specDir, { recursive: true })
+
+  // Arm 1 (the AC's own literal example): design: true with an inline comment must derive the
+  // same SKELETONS state a clean design: true does (matches the "no-mockup path" baseline above).
+  const specTrue = path.join(specDir, '01-true.md')
+  fs.writeFileSync(specTrue, '---\nstatus: hardened\ndesign: true   # any note\n---\n# X\n')
+  assert.strictEqual(stateOf(root, specTrue), 'SKELETONS',
+    'a design: true value carrying an inline comment must still derive SKELETONS exactly like a clean design: true — a comment must never change which state the driver reports')
+
+  // Arm 2 (decisive): design: false with an inline comment must still print the confirm-with-user
+  // NOTE — today's driver-local fmVal propagates "false   # any note" verbatim, which fails the
+  // strict === 'false' comparison and silently drops the warning.
+  const specFalse = path.join(specDir, '02-false.md')
+  fs.writeFileSync(specFalse, '---\nstatus: hardened\ndesign: false   # any note\n---\n# X\n')
+  const out = run(root, specFalse).stdout
+  assert.match(out, /NOTE: frontmatter says design: false/,
+    'an inline comment on design: false must be inert — the NOTE that tells a human to confirm intent must still print; a comment silently suppressing it means a host that annotates design: false loses the confirmation prompt with no error: ' + out)
+})
+
 test('full state walk: no-mockup path', () => {
   const { root, spec, sidecar } = fixture()
   assert.strictEqual(stateOf(root, spec), 'SKELETONS')

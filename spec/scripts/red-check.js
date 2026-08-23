@@ -28,10 +28,11 @@
 //
 // Exit codes: 0 = every resolved tests-layer file matches its expected pre-image colour ·
 //             1 = findings emitted (unsanctioned-green | broken-pin | missing-test-file |
-//                 invalid-pre-green) — rides the normal build Phase 1 disposition flow, never a
-//                 script failure · 2 = usage error, unreadable --spec, no ## Acceptance Criteria
-//                 section, host config declares no testCommand, or a pre-image purity refusal
-//                 (a non-tests File Plan path already differs from --base — tracked or untracked)
+//                 invalid-pre-green | rejected-trailing-tag) — rides the normal build Phase 1
+//                 disposition flow, never a script failure · 2 = usage error, unreadable --spec,
+//                 no ## Acceptance Criteria section, host config declares no testCommand, or a
+//                 pre-image purity refusal (a non-tests File Plan path already differs from
+//                 --base — tracked or untracked)
 //
 // specs/20260821/03-cross-spec-skip-mapping.md D7 (2026-08-22 amendment): the carried-AC
 // classifier below (content.includes(b.id)) was a bare substring test — a tests-layer file
@@ -41,6 +42,16 @@
 // specs/20260822/02's build 2026-08-22). Fixed by replacing the bare .includes with
 // lib/spec-sections.js's exported acIdOccurs, a full-token occurrence check — the same authority
 // ac-matrix.js's coverage grep now uses.
+//
+// specs/20260823/03-silent-drop-hardening.md D1 (2026-08-23, the 2026-08-21..23 upwell
+// silent-drop incident): a carried AC's `[pre-green:]` tag, when it ends the bullet backticked,
+// is refused as a declaration by lib/spec-sections.js's bare-only trailing rule (rv_640c582f4902)
+// — that refusal used to misreport as a plain `unsanctioned-green` with no hint the refusal is
+// the actual cause. Loud-when-it-bites, never unconditional: when a red-expected file is observed
+// green AND a carried AC's bullet has a refused trailing tag naming `[pre-green:`, the new hard
+// finding `rejected-trailing-tag` REPLACES `unsanctioned-green` for that file — never both. A
+// carried AC whose refused tag never changes the file's expected colour (e.g. the AC is already
+// sanctioned another way) stays silent.
 
 const fs = require('fs')
 const path = require('path')
@@ -48,7 +59,9 @@ const { execFileSync, spawnSync } = require('child_process')
 const { parseFilePlanRows } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
 const { readConfig } = require('./lib/host-config')
-const { extractSection, parseAcBullets, PRE_GREEN_REASONS, acIdOccurs } = require('./lib/spec-sections')
+const {
+  extractSection, parseAcBullets, PRE_GREEN_REASONS, acIdOccurs, rejectedTrailingTagDetail,
+} = require('./lib/spec-sections')
 
 function usage() {
   console.error('usage: red-check.js --spec <path> --root <dir> --base <sha-or-ref> ' +
@@ -84,6 +97,14 @@ if (acSection === null) {
 }
 const bullets = parseAcBullets(acSection)
 const wellFormed = bullets.filter(b => !b.malformed)
+const bulletById = new Map(wellFormed.map(b => [b.id, b]))
+
+// D10 (2026-08-23, same spec): `rejectedTrailingTagDetail` — the `rejected-trailing-tag`
+// remedy-text builder — is imported from lib/spec-sections.js, the one authority, rather than
+// defined here. The first implementation landed a byte-identical local copy in both this file and
+// ac-matrix.js — the exact two-identical-copies shape D4 (this spec) exists to eliminate. See
+// that module's own comment above the function for why it lives beside the refusal predicate (D2)
+// it explains; message bytes are unchanged (pinned by the AC-20260823-03-3 detail assertions).
 
 const filePlanRows = parseFilePlanRows(specText)
 
@@ -276,10 +297,25 @@ for (const relPath of [...testFiles].sort()) {
       detail: `${relPath}: sanctioned-green file failed its run`,
     })
   } else if (expected === 'red' && observed === 'green') {
-    findings.push({
-      class: 'unsanctioned-green', path: relPath, acs: carriedAcs,
-      detail: `${relPath}: red-expected file passed against the pre-image — carried ${carriedAcs.join(', ')}`,
+    // D1: a refused trailing [pre-green:] tag on a carried AC's bullet replaces unsanctioned-green
+    // — the refusal is causally relevant (it would have been this file's only sanction).
+    const rejectedAc = carriedAcs.find((id) => {
+      const b = bulletById.get(id)
+      return b && b.trailingRejected && b.trailingRejected.includes('[pre-green:')
     })
+    if (rejectedAc) {
+      const b = bulletById.get(rejectedAc)
+      findings.push({
+        class: 'rejected-trailing-tag', path: relPath, acs: carriedAcs,
+        detail: rejectedTrailingTagDetail(rejectedAc, b.trailingRejected,
+          `${relPath} is a green expected-red file`),
+      })
+    } else {
+      findings.push({
+        class: 'unsanctioned-green', path: relPath, acs: carriedAcs,
+        detail: `${relPath}: red-expected file passed against the pre-image — carried ${carriedAcs.join(', ')}`,
+      })
+    }
   }
 
   files.push({ path: relPath, expected, observed, carriedAcs })

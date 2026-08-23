@@ -1,6 +1,7 @@
 ---
 date: 2026-08-23
-status: hardened
+status: implementing
+diff_base: ce6488c9b8c8d63a551c4f7469ef982cf548d101
 tier: standard
 area: review-pipeline
 design: false

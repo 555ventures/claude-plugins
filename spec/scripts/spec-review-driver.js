@@ -43,6 +43,16 @@
 // exists because spec 04's own A6 assumed a durable-write loss would be observed, when by
 // construction it is silent (a dead worktree's durable file simply no longer has the row).
 //
+// specs/20260823/07-deviations-sidecar-backstop.md (D1-D6, 2026-08-23): the deviations sidecar
+// (<spec>.deviations.md) was pure convention — build sessions appended departure entries by hand,
+// review folded and deleted the file by hand, and nothing caught a skipped fold or an entry written
+// in a shape the ledger's own `^- ` bullet count could never see. This driver now classifies the
+// sidecar against the bullets-only entry grammar on every invocation while it exists on disk,
+// persists {entries, malformed} into the sidecar state (surviving the file's own deletion),
+// enumerates every entry into the printed CLOSE step, and refuses `--mark closed` (exit 2) while the
+// sidecar still exists on disk or while the last observation recorded a malformed line even after
+// deletion — prevention before loss, since same-commit fold forensics measured vacuous (A5).
+//
 // CONTRACT:
 //   spec-review-driver <spec.md>                  -> print current state + ONLY that step
 //   spec-review-driver <spec.md> --mark <mark>    -> verify artifacts, record, print next step
@@ -66,7 +76,9 @@
 // cold invocation on a spec already marked status: done whose sidecar carries no closeRunId of
 // its own (use /spec:escape instead), a `replay-recorded` mark with no new stage:"replay" ledger
 // row for the sidecar target's reviewRunId, or replay.js --select exiting 0 while printing no
-// parseable selection line).
+// parseable selection line, `--mark closed` while the deviations sidecar still exists on disk
+// (fold-then-delete-then-commit remedy), or while the last persisted deviations observation
+// recorded a malformed line even after the sidecar's own deletion (restore-then-repair remedy)).
 
 'use strict'
 const fs = require('fs')
@@ -182,6 +194,10 @@ let sidecarRel = path.relative(repoRoot, sidecarDir)
 let stateFile = path.join(sidecarDir, 'review-state.json')
 let replaySpecPath = specPath
 const specRel = path.relative(repoRoot, resolvedSpecPath) || resolvedSpecPath
+// D2/D5 (specs/20260823/07-deviations-sidecar-backstop.md): derived from resolvedSpecPath, never
+// from sidecarDir — worktree-aware the same way the sidecar itself is, but never relocated (unlike
+// sidecarDir) because the file is gone (folded) long before any merge-back relocation could run.
+const deviationsPath = resolvedSpecPath.replace(/\.md$/, '.deviations.md')
 
 let marks = {}
 try { marks = JSON.parse(fs.readFileSync(stateFile, 'utf8')) } catch { marks = {} }
@@ -192,6 +208,44 @@ let escalateDriftError = null
 function saveSidecar() {
   fs.mkdirSync(sidecarDir, { recursive: true })
   fs.writeFileSync(stateFile, JSON.stringify(marks, null, 2) + '\n')
+}
+
+// ---- D2/D5: deviations sidecar observation (specs/20260823/07-deviations-sidecar-backstop.md) --
+// Classifies every line of the deviations sidecar per the bullets-only entry grammar (Contracts):
+// blank/`#`-header/`- `-bullet are always allowed; a whitespace-indented continuation is allowed
+// only while an entry is open (a bullet just opened it, no blank/header line has closed it since);
+// anything else is malformed. `entries` counts bullet lines only — identical to build's own ledger
+// `^- ` count, so a malformed flush-left line is exactly the content that count could never see.
+// Called unconditionally near the top of every invocation (mark or bare) — D5's "on every
+// derivation" — and persists {entries, malformed} into the sidecar state, overwriting any prior
+// observation. Deliberately a no-op when the file is absent: the previously persisted observation
+// must survive the file's own deletion (that survival is what makes refusal 2 possible below).
+function observeDeviations() {
+  if (!fs.existsSync(deviationsPath)) return
+  const lines = fs.readFileSync(deviationsPath, 'utf8').split('\n')
+  let entries = 0
+  let entryOpen = false
+  const malformed = []
+  lines.forEach((raw, idx) => {
+    if (/^\s*$/.test(raw)) { entryOpen = false; return }
+    if (/^#/.test(raw)) { entryOpen = false; return }
+    if (/^- /.test(raw)) { entries++; entryOpen = true; return }
+    if (entryOpen && /^\s+\S/.test(raw)) return
+    malformed.push({ line: idx + 1, text: raw.slice(0, 120) })
+    entryOpen = false
+  })
+  marks.deviations = { entries, malformed }
+  saveSidecar()
+}
+observeDeviations()
+
+// Shared "<line>: <text>" renderer for both `closed` refusals (Contracts: "first 10, then `… and N
+// more`") — bare lines, no leading indentation, so a caller printing them straight (the refusal
+// messages) gets one evidence line per line-of-file; CLOSE's own enumeration below indents it.
+function malformedLines(malformed) {
+  const shown = malformed.slice(0, 10).map((m) => m.line + ': ' + m.text)
+  if (malformed.length > 10) shown.push('… and ' + (malformed.length - 10) + ' more')
+  return shown
 }
 
 // ---- D10: silent-loss detector, run once per invocation, stderr-only, never blocks ------------
@@ -782,6 +836,33 @@ function handleClosed() {
     die('spec status is not yet "done" — re-run the driver with no mark first so CLOSE\'s ' +
       'authoritative verdict runs and flips status')
   }
+  // D3/D5 (specs/20260823/07-deviations-sidecar-backstop.md): both deviations refusals run BEFORE
+  // the dirty-tree check below — a lingering (committed, unchanged) sidecar is invisible to that
+  // check entirely (A3), which is the whole gap this closes. Refusal 1 re-observes and persists
+  // FIRST, then refuses — otherwise a repair made to the file after the last derivation would be
+  // invisible to refusal 2's own check on a later invocation. State is left unchanged either way:
+  // die() exits before marks.closed is ever set.
+  if (fs.existsSync(deviationsPath)) {
+    observeDeviations()
+    const dev = marks.deviations
+    const foldRemedy = 'fold-then-delete-then-commit: fold ' + deviationsPath + ' into Gotchas ' +
+      '[host]/[plugin] (recurring departures) or the spec\'s Rationale (one-offs), delete the ' +
+      'sidecar, and commit the deletion, then re-run `node ' + __filename + ' ' + specPath +
+      ' --mark closed`'
+    if (dev && dev.malformed && dev.malformed.length) {
+      die('deviations sidecar ' + deviationsPath + ' still exists on disk and its last observation ' +
+        'recorded ' + dev.malformed.length + ' malformed line(s) — repair them, then ' + foldRemedy +
+        ':\n' + malformedLines(dev.malformed).join('\n'))
+    }
+    die('deviations sidecar ' + deviationsPath + ' still exists on disk — ' + foldRemedy)
+  }
+  if (marks.deviations && marks.deviations.malformed && marks.deviations.malformed.length) {
+    const dev = marks.deviations
+    die('deviations sidecar ' + deviationsPath + ' is gone but the last observation recorded ' +
+      dev.malformed.length + ' malformed line(s) — restore it, repair, then re-run this driver so ' +
+      'it re-observes clean, fold, delete, and re-commit before re-marking closed:\n' +
+      '  git checkout <ref> -- ' + deviationsPath + '\n' + malformedLines(dev.malformed).join('\n'))
+  }
   const dirty = gitStatusPaths(repoRoot)
   const unexpected = dirty.filter((p) =>
     !(p === sidecarRel || p.startsWith(sidecarRel + '/') ||
@@ -1108,6 +1189,27 @@ const waivedWarn = (marks.dispositions && marks.dispositions.waived > 0)
   ? `⚠ ${marks.dispositions.waived} finding(s) waived this run — confirm in the close report.\n`
   : ''
 
+// D4 (specs/20260823/07-deviations-sidecar-backstop.md): the CLOSE enumeration reads entry
+// first-lines from the sidecar FILE itself, never a persisted key — at CLOSE-print time the fold
+// has not happened yet (Behavior), so the file is still on disk, and the persisted `deviations`
+// observation deliberately carries only `entries`/`malformed` (no third key for entry text).
+function deviationsEntryLines() {
+  if (!fs.existsSync(deviationsPath)) return []
+  return fs.readFileSync(deviationsPath, 'utf8').split('\n')
+    .filter((l) => /^- /.test(l)).map((l) => l.slice(0, 120))
+}
+// Additive-only: byte-identical CLOSE print when no observation was ever persisted (no sidecar ever
+// seen this run) — `marks.deviations` stays undefined and this returns ''.
+function deviationsEnumBlock() {
+  if (!marks.deviations || marks.deviations.entries < 1) return ''
+  const numbered = deviationsEntryLines().map((l, i) => `  ${i + 1}. ${l}`).join('\n')
+  const malformed = marks.deviations.malformed || []
+  const malformedPart = malformed.length
+    ? `\n⚠️ malformed:\n` + malformedLines(malformed).map((l) => '  ' + l).join('\n')
+    : ''
+  return numbered + malformedPart + '\n'
+}
+
 const STEPS = {
   STOPPED: () => {
     const rows = readManifestRows(manifestPathFor(marks.stoppedIteration || currentN))
@@ -1215,6 +1317,7 @@ const STEPS = {
       `1. Apply the spec's Canonical Delta to docs/canonical/${area}.md.\n` +
       `2. Fold the deviations sidecar if one exists (recurring -> Gotchas [host]/[plugin]; one-offs ` +
       `-> the spec's Rationale); delete the sidecar.\n` +
+      deviationsEnumBlock() +
       `3. Hygiene listing — everything not marked EXPECTED below is a stray to explain or clean:\n` +
       `   EXPECTED   ${sidecarRel}/            (never committed — deleted at DONE)\n` +
       `   EXPECTED   .claude/spec-runs/*.json  (retained review evidence)\n` +

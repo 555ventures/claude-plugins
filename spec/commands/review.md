@@ -121,7 +121,12 @@ Run `node "$(spec-paths report-render)" --slots <file>` and print its output ver
 - **Close (the CLOSE step).** Apply the spec's Canonical Delta to `docs/canonical/{area}.md`.
   Fold the deviations sidecar if one exists: recurring-shaped deviations become one-line
   entries in the host rules' Gotchas section (tagged `[host]`/`[plugin]` by provenance);
-  one-offs go to the spec's Rationale; delete the sidecar. After the deviations fold, run
+  one-offs go to the spec's Rationale; delete the sidecar. The driver enumerates every
+  sidecar entry (numbered, first line, 120-char-bounded) into this step's printed
+  instruction ahead of the fold, and refuses `--mark closed` (exit 2, remedy named) while
+  the sidecar still exists on disk, or while the last persisted observation records a
+  malformed — flush-left, count-invisible — line even after the file's deletion. After the
+  deviations fold, run
   `node "$(spec-paths prose-cap)" --file <host pipelineRules> --section Gotchas`; exit 1
   means the section is at or over cap — evict before the close commit, choosing one of
   exactly three fates per evicted entry: **delete** (wrong, dead-cited, or mechanized — the

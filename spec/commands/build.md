@@ -91,7 +91,8 @@ in parallel within the wave. Each worker prompt carries only:
   Rules): apply Decisions verbatim, never run git, never query MCPs, read-only surfaces
   stay read-only, return `blocked` naming the assumption instead of improvising, append
   forced-but-unblocking departures to the deviations sidecar
-  (`<spec path minus .md>.deviations.md`).
+  (`<spec path minus .md>.deviations.md`) as one `- ` bullet per departure, continuations
+  indented — flush-left prose is invisible to the ledger count and refused at review close.
 
 On a `blocked` return: resolve it against the spec's Rationale/Assumptions when the intent
 is clear; a genuine fork or scope change goes to the user via `AskUserQuestion` with the

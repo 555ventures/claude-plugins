@@ -1,6 +1,6 @@
 ---
 date: 2026-08-23
-status: implementing
+status: done
 diff_base: 9e626d2da2960587418c1ce0e30f5a1f8168aa87
 tier: standard            # additive spec-paths keys follow 20260823/01's precedent; no critical-trigger file gets a behavioral edit; worst failure is a false exit 1 at review close, repaired by re-running the script
 area: scripts
@@ -250,6 +250,23 @@ brief 13 (deviations-sidecar shape validation) is adjacent and untouched — thi
 what accumulates *after* a fold, brief 13 governs the fold's inputs. Cap 15 and TTL 10 were
 put to JJ with an override offer on 2026-08-23 and taken as blessed; the burst cap of 3 and
 the body-grep-not-frontmatter simplification are this plan's derivations.
+
+**Deviation folded at review close (2026-08-23).** D12 named 7.24.0 as the version-bump
+target ("a target, not a pin, per the version-race gotcha"). By doctrine-layer edit time
+`spec/.claude-plugin/plugin.json` was already at 7.25.0 from a concurrent spec, so the bump
+landed on the next free version, 7.26.0, and the `description` changelog's last-3-versions
+window now reads 7.26.0 / 7.25.0 / 7.24.0, dropping 7.23.0. One-off: the host rules' Gotchas
+section already carries the stale-version-target entry that predicted and prescribed exactly
+this remedy, so no new Gotchas entry is minted.
+
+**Memory disposition at this close (2026-08-23), the sweep's first live run.** `memory-sweep.js`
+surfaced nine notes (six diff-hit, three ttl-expired) beyond the two files this spec's own diff
+touched. Eight were carried with a `reviewed:` stamp; one — `gate-scripts-parallel-batch-corpus-landing`
+— was **corrected**: it named the retired `wf-build` workflow as the dispatcher behind the parallel
+batches it describes, where `/spec:build` now dispatches workers directly per layer wave. The
+concurrency lesson stood; only the machinery name was stale. That is exactly the falsification the
+TTL arm exists to catch, and no diff would have surfaced it. Gotchas measured 10/15 after the fold,
+so no eviction was owed.
 
 ## Canonical Delta
 

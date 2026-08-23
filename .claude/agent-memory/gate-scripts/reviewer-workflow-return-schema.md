@@ -3,6 +3,7 @@ name: reviewer-workflow-return-schema
 description: the raw reviewer workflow-return object's verdict field is only ever "CLEAN"|"REVIEWER_FAILED" — findings live separately in survivors, so "CLEAN" means "ran successfully" not "no findings"
 metadata:
   type: project
+  reviewed: 2026-08-23
 ---
 
 `spec/commands/review.md` (around the Phase 1 dispatch contract) documents the reviewer agent's

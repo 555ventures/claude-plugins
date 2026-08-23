@@ -131,7 +131,13 @@ test('AC-20260821-02-9: core § Feedback Loop names the driver\'s REPLAY state a
 // edits to a phantom sibling worker and concluded the assignment could be stood down from; one
 // was deleted, its twin was committed unexamined until the consult found it. The disposition step
 // is the whole fix: no memory-review gate, no write hook, no lint (unearned under core § Incident
-// Policy at recurrence count 1).
+// Policy at recurrence count 1). PARTIALLY REOPENED 2026-08-23 by specs/20260823/06 D13, on the
+// class's second recorded member — a gate-scripts note falsified by the same diff that shipped it,
+// caught only because that diff happened to touch the note's own file. `memory-sweep.js` now
+// WIDENS the disposition trigger from "the diff touched the note file" to "the diff touched what
+// the note is about", plus a TTL of 10 undisposed review closes. It is still not a gate, hook, or
+// lint: it exits 0 with or without findings and nothing feeds verdict.js. The duty pinned below is
+// unchanged — this spec widened who lands on the disposition desk, never what disposition means.
 
 test('AC-20260821-02-10 / AC-20260823-06-9: agent memory is a disposed artifact, never a silent improvement carrier — review.md\'s close gives every touched memory file one stated fate, and core § Feedback Loop says why', () => {
   const review = squash(read('commands/review.md'))

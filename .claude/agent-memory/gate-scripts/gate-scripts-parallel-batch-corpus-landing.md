@@ -1,9 +1,15 @@
 ---
 name: gate-scripts-parallel-batch-corpus-landing
-description: wf-build dispatches batch workers in parallel — a script-layer AC that depends on a doctrine-layer file (e.g. a corpus the script's --class values must match) can go green without this worker touching that file, because a sibling batch (doctrine-author) lands it concurrently
+description: /spec:build dispatches workers in parallel within a layer wave — a script-layer AC that depends on a doctrine-layer file (e.g. a corpus the script's --class values must match) can go green without this worker touching that file, because a sibling worker lands it concurrently
 metadata:
   type: project
+  reviewed: 2026-08-23
 ---
+
+**Corrected 2026-08-23 (review close, specs/20260823/06):** this note originally named `wf-build`
+as the dispatcher. That workflow is retired — `/spec:build` now dispatches Sonnet workers
+directly per layer wave. The concurrency it describes is unchanged (siblings in one wave still
+land in parallel); only the dispatcher's name was stale.
 
 On specs/20260819/02-mutation-replay.md's build, my assigned batch was scripts-only
 (`spec/scripts/replay.js`, `spec/bin/spec-paths`) but `tests/replay/replay.test.js`'s

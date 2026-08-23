@@ -3,6 +3,7 @@ name: writesync-loop-and-config-exists-export
 description: fs.writeSync(1,...) needs a while-loop for the 64KB-pipe fix (partial writes are real), and lib/host-config.js's configExists(root)/configPath(root) are the sanctioned routes out of the config-name ban (never name spec.config.json under spec/scripts/)
 metadata:
   type: feedback
+  reviewed: 2026-08-23
 ---
 
 Two reusable patterns from fixing spec/scripts/fleet-reader.js (2026-08-20, JJ-dispatched review-fix batch):

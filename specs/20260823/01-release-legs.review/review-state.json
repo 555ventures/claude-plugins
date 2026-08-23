@@ -1,0 +1,22 @@
+{
+  "legsMode": {
+    "1": {
+      "skipsFile": null,
+      "fixDelta": false
+    }
+  },
+  "iteration": 1,
+  "reviewerReturnFile": "/Users/jj/Projects/claude-plugins/.claude/worktrees/spec-01-release-legs/specs/20260823/01-release-legs.review/reviewer-return-1.json",
+  "reviewerReturnIteration": 1,
+  "dispositions": {
+    "waived": 4,
+    "rejected": 0,
+    "fixDispatched": 0,
+    "word": "CLEAN"
+  },
+  "dispositionsIteration": 1,
+  "pendingFix": false,
+  "runId": "rv_6825fa48c98d",
+  "closeRunId": "rv_6825fa48c98d",
+  "closed": true
+}

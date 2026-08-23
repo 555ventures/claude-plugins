@@ -1,0 +1,32 @@
+{
+  "ts": "2026-08-23T18:08:32.515Z",
+  "stage": "replay",
+  "spec": "specs/20260823/02-init-gen-input-hardening.md",
+  "runId": "rp_1824810068a4",
+  "reviewRunId": "rv_387d84a3b424",
+  "class": "silent-fallback",
+  "files": [
+    "spec/scripts/init-gen.js"
+  ],
+  "legs": "green",
+  "outcome": "caught",
+  "tokens": 156000,
+  "patch": "diff --git a/spec/scripts/init-gen.js b/spec/scripts/init-gen.js\nindex 7e1daca..c3d48af 100755\n--- a/spec/scripts/init-gen.js\n+++ b/spec/scripts/init-gen.js\n@@ -222,7 +222,7 @@ function validateProfile(p) {\n   if (p.rules) {\n     mustBeObject('rules.sections', p.rules.sections)\n     for (const s of ['Risk Tiers', 'Planning', 'Build', 'Worker Rules', 'Test Rules', 'Review Checks']) {\n-      if (!(s in p.rules.sections)) fieldMissing(`rules.sections[\"${s}\"]`)\n+      if (!(s in p.rules.sections)) p.rules.sections[s] = ''\n     }\n   }\n   // conventionRules was previously required-but-unchecked-for-shape (dereferenced at ~332/350\n",
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "validateProfile's rules.sections per-key loop was silently changed from a fieldMissing()/exit-2 refusal to auto-filling a missing required section key with an empty string, an unauthorized behavior change (no Decision in this spec touches this) that contradicts the parent spec's Contract (six required named keys) and this spec's own Goal ('every malformed input lands on the documented exit 2')",
+        "file": "spec/scripts/init-gen.js",
+        "line": 225,
+        "impact": "A profile missing a required grounding-rules section now silently succeeds instead of being refused, writing a corrupted (empty) section into the host's generated pipeline-rules file with no warning — the exact silent-corruption-at-exit-0 class this spec exists to close, just on an untested field.",
+        "evidence": "Executed repro: built a synthetic host via the test suite's own newHost()/baseProfile() helpers, deleted the 'Risk Tiers' key from rules.sections, ran `node spec/scripts/init-gen.js generate --root <dir> --profile <path>`. Observed: EXIT CODE 0, manifest-check TOTAL=12 FAILS=0, and .claude/rules/spec-pipeline.md written containing an empty '## Risk Tiers' section. Diff shows the sibling config.agentMap loop unchanged (still fieldMissing/exit 2) while only the rules.sections loop's action was swapped from `fieldMissing(...)` to `p.rules.sections[s] = ''`. specs/20260822/02-init-generation-script.md Contracts: rules.sections lists all six keys as required with no optionality language. specs/20260823/02 Goal: 'Done = every malformed input lands on the documented exit 2 with a matched remedy.'"
+      }
+    ],
+    "killed": [],
+    "reviewerCount": 1,
+    "scope": "full",
+    "tokens": 71721
+  }
+}

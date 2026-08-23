@@ -1,6 +1,6 @@
 ---
 date: 2026-08-23
-status: hardened
+status: implementing
 open_markers: 0
 tier: standard
 area: review
@@ -10,6 +10,7 @@ depends_on: []
 depended_on_by: []
 brief: n/a
 spiked: 2026-08-23
+diff_base: 6ae2d45a4bc3e873d18bcdc95eaedf01597b4265
 ---
 
 # Replay unattended hardening — writable scratch worktree + pinned diff base

@@ -473,6 +473,36 @@ function writeEscalateRow(n) {
   return { ok: true }
 }
 
+// ---- D3 (specs/20260823/05-replay-unattended-hardening.md): stamp diff_base at the close flip --
+// specs/20260819/02's replay harness read a spec's build_base — typically the moving ref `main`
+// — as its diff base; that ref goes stale the instant THIS review's own merge lands, so a
+// scheduled replay run diffed the wrong tree (rv_387d84a3b424). The close commit is the last
+// moment the moving ref and the true pre-image coincide, so this is the one durable place to pin
+// it: `base` (resolveBase()'s own build_base -> diff_base -> branch derivation, already used for
+// every leg's diffing this run) is resolved to a full sha here, pre-merge, and inserted directly
+// after the `build_base:` line (or before the closing `---` fence when no build_base line exists)
+// — never as a second derivation, and never overwriting a diff_base already present (absent-only:
+// a spec closed once already keeps its original pin byte-identical forever).
+function stampDiffBaseIfAbsent(text) {
+  if (diffBaseFm) return text // already stamped (or hand-authored) — never overwritten
+  const shaR = runChild('git', ['-C', repoRoot, 'rev-parse', '--verify', base + '^{commit}'],
+    { encoding: 'utf8' }, 'git rev-parse --verify (diff_base stamp)')
+  if (shaR.status !== 0 || !shaR.stdout.trim()) {
+    process.stderr.write('spec-review-driver: could not resolve base "' + base + '" as a commit to stamp ' +
+      'diff_base — leaving diff_base unstamped; the next replay --select falls back to build_base\n')
+    return text
+  }
+  const sha = shaR.stdout.trim()
+  const m = /^---\n([\s\S]*?)\n---/.exec(text)
+  if (!m) return text // no frontmatter fence to stamp into — should not happen for a valid spec
+  const lines = m[1].split('\n')
+  const buildIdx = lines.findIndex((l) => /^build_base:/.test(l))
+  const stampLine = 'diff_base: ' + sha
+  if (buildIdx !== -1) lines.splice(buildIdx + 1, 0, stampLine)
+  else lines.push(stampLine)
+  return text.slice(0, m.index) + '---\n' + lines.join('\n') + '\n---' + text.slice(m.index + m[0].length)
+}
+
 // ---- CLOSE driver work: authoritative verdict + ledger append + status flip --------------------
 function doCloseWork(n) {
   const runId = ensureRunId()
@@ -497,7 +527,8 @@ function doCloseWork(n) {
   appendLedger(lines[1])
 
   const newSpecText = specText.replace(/^status:\s*.*$/m, 'status: done')
-  fs.writeFileSync(resolvedSpecPath, newSpecText)
+  const stampedText = stampDiffBaseIfAbsent(newSpecText)
+  fs.writeFileSync(resolvedSpecPath, stampedText)
 
   // D8: no dueness probe here. A printed "run /spec:replay yourself" reminder was the measured
   // failure this state machine replaces (shipped 2026-08-19, skipped through 12+ reviews in ~48h);

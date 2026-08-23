@@ -43,8 +43,11 @@ asked.
 
 ## Phase 1 — Mutation authoring
 
-1. **Setup:** `{dir}` = a fresh directory outside the repo (e.g. `mktemp -d`) — never under the
-   repo root, which `--setup` refuses with exit 3. Run
+1. **Setup:** `{dir}` = a fresh, uniquely-named path under `<root>/.claude/worktrees/` (e.g.
+   `.claude/worktrees/replay-<random>`) — `--setup` self-provisions the host's ignore line when
+   it's missing, so the worktree stays invisible to `git status` in the main tree. An in-repo
+   `--dir` that resolves outside `.claude/worktrees/` keeps the exit-3 refusal unchanged; a
+   `--dir` outside the repo (e.g. `mktemp -d`) remains an accepted manual fallback. Run
    `node "$(spec-paths replay)" --setup --commit {parent} --dir {dir}` — the worktree stands up
    at the close commit's **parent**, never the close commit itself, so the tree the mutation
    lands on is the one the original review actually judged.
@@ -189,8 +192,10 @@ Next: {spec-status --next, verbatim}
   and the commit log are this invariant's enforcement, not the invariant itself — a new leak
   surface is still a blindness violation even where no flag polices it yet.
 - **The main tree is never in scope.** Every mutating step runs inside `{dir}`, a detached
-  worktree outside the repo; `--setup`/`--teardown`'s marker guard is what makes that safe to
-  automate.
+  worktree isolated by three mechanisms together — the worktree itself, the ignore line
+  `--setup` self-provisions when the host lacks it, and the `--setup`/`--teardown` marker guard
+  in its private git dir — never by living outside the repo, which is now only the manual
+  fallback's isolation story.
 - **Mutation authoring is model work; scoring and recording are not.** The worker picks the site
   and writes the patch; every other step is a deterministic `replay.js` mode — the orchestrating
   session never hand-derives due/select/score/record itself.

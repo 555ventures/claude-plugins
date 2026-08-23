@@ -73,6 +73,23 @@
 // a path form. What this harness must still never do: sign its own work into the tree under
 // review, or let a run with no truth value enter the catch-rate denominator.
 //
+// Incident (2026-08-23, specs/20260823/05-replay-unattended-hardening.md, rv_387d84a3b424's
+// replay): --setup's blanket in-repo refusal forced every scratch worktree under /private/tmp,
+// where the permission classifier denies every agent Edit/Write — the mutation-authoring worker
+// blocked on manual approval on both live runs that day. (D1/D2) --setup now accepts a --dir
+// inside <root>/.claude/worktrees/ specifically (every other in-repo path keeps refusing, exit 3
+// unchanged) — that directory is already gitignored precedent for agent-editable worktrees (build
+// worktrees live there daily); when a host's own ignore rules don't cover it, --setup
+// self-provisions the line into the shared common git dir's info/exclude (never a host's tracked
+// .gitignore) before creating anything, skipping the append when the line is already present.
+// Separately, --select's diffBase was observed handing the reviewer a moving ref (build_base:
+// main) that goes stale the instant the review's own merge lands. (D4) --select now reads
+// frontmatter at the CLOSE commit (not its parent), tries diff_base before build_base, and emits
+// only a candidate that `git rev-parse --verify` resolves to a full sha which `git merge-base
+// --is-ancestor` confirms is an ancestor of the close commit's parent and not equal to it —
+// nothing qualifies is now a named exit-4 refusal (stale-base cause + the stamped-at-close
+// remedy, spec-review-driver.js's diff_base stamp) rather than a silently wrong diff base.
+//
 // What this deliberately does NOT do: derive review-legs verdicts, touch the main working tree
 // (--setup/--apply/--teardown only ever act on a --dir the caller supplies; --setup refuses one
 // that resolves inside the repo root, and --teardown refuses one whose private git dir carries no
@@ -94,18 +111,22 @@
 // hunks / any --record D7 validation-matrix refusal (an --outcome outside the five-value enum, a
 // malformed --legs, a missing --patch/--workflow for caught|missed|unresolved, a missing --patch or
 // a non-`red:`-shaped --legs for leg-caught, or setup-failed riding with --class/--patch/--workflow)
-// · 3 = safety refusal (--setup --dir resolves inside the repo root; --apply --patch-out resolves
-// inside --dir, refused before the patch is applied; --teardown --dir does not exist, is not a
-// linked worktree, or its private git dir carries no replay-worktree marker) · 4 = a git operation
-// (worktree add/remove, apply, commit, log, git-dir resolution, or --apply's canonical --patch-out
+// · 3 = safety refusal (--setup --dir resolves inside the repo root but NOT inside
+// <root>/.claude/worktrees/ — specs/20260823/05 D1 narrows this population, the worktrees/ arm
+// itself now succeeds; --apply --patch-out resolves inside --dir, refused before the patch is
+// applied; --teardown --dir does not exist, is not a linked worktree, or its private git dir
+// carries no replay-worktree marker) · 4 = a git operation (worktree add/remove, apply, commit,
+// log, git-dir resolution, info/exclude provisioning, or --apply's canonical --patch-out
 // re-emission) failed, --setup's --dir resolves to a git-dir with no `worktrees` path segment (not
-// a linked worktree), or --select's target spec carries neither build_base nor diff_base at the
-// close commit's parent.
+// a linked worktree), or --select's target spec (read at the CLOSE commit, specs/20260823/05 D4)
+// carries no diff_base/build_base candidate that resolves to a validated ancestor of the close
+// commit's parent distinct from it — widened by D4 to also cover a stale (moving-ref) candidate,
+// not just an absent one.
 
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
-const { execFileSync } = require('child_process')
+const { execFileSync, spawnSync } = require('child_process')
 const { readLedgerRows } = require('./lib/observation')
 // D2 (specs/20260823/04-review-close-hardening.md, rv_6825fa48c98d): the local frontmatter() kv
 // loop this replaced stripped a trailing comment at the FIRST "#" regardless of what preceded it,
@@ -231,29 +252,88 @@ function cmdSelect() {
       `parent commit: ${e.message}`)
     process.exit(4)
   }
-  let specAtParent
+  // D4 (specs/20260823/05): read frontmatter at the CLOSE commit itself, never its parent — the
+  // parent predates spec-review-driver.js's own diff_base stamp (written at the implementing ->
+  // done flip), so reading the parent could never see a stamped value.
+  let specAtClose
   try {
-    specAtParent = execFileSync('git', ['show', `${parent}:${specPath}`], { cwd: root, encoding: 'utf8' })
+    specAtClose = execFileSync('git', ['show', `${commitSha}:${specPath}`], { cwd: root, encoding: 'utf8' })
   } catch (e) {
-    console.error(`replay.js: git show ${parent}:${specPath} failed in ${root} — confirm the spec existed ` +
-      `at the close commit's parent: ${e.message}`)
+    console.error(`replay.js: git show ${commitSha}:${specPath} failed in ${root} — confirm the spec exists ` +
+      `at its own close commit: ${e.message}`)
     process.exit(4)
   }
-  const fm = fmMap(specAtParent)
-  const diffBase = (fm.build_base && fm.build_base.trim()) ? fm.build_base.trim() :
-    ((fm.diff_base && fm.diff_base.trim()) ? fm.diff_base.trim() : null)
+  const fm = fmMap(specAtClose)
+  // D4: try diff_base BEFORE build_base (the reverse of the old preference) — diff_base is now
+  // the durable pin spec-review-driver.js stamps at close, while build_base is typically the
+  // moving ref `main`, stale the instant the review's own merge lands. Each candidate must
+  // resolve to a full sha via `git rev-parse --verify` AND validate as an ancestor of `parent`
+  // (and not equal to it) via `git merge-base --is-ancestor` before it is trusted — an
+  // unresolvable or non-ancestor candidate (a merged-away `main`) is skipped, never emitted.
+  const tried = []
+  let diffBase = null
+  for (const key of ['diff_base', 'build_base']) {
+    const val = fm[key] && fm[key].trim()
+    if (!val) continue
+    tried.push(`${key}=${val}`)
+    const verify = spawnSync('git', ['rev-parse', '--verify', `${val}^{commit}`], { cwd: root, encoding: 'utf8' })
+    if (verify.status !== 0) continue
+    const sha = verify.stdout.trim()
+    if (!sha || sha === parent) continue
+    const ancestor = spawnSync('git', ['merge-base', '--is-ancestor', sha, parent], { cwd: root })
+    if (ancestor.status !== 0) continue
+    diffBase = sha
+    break
+  }
   if (!diffBase) {
-    console.error(`replay.js: ${specPath} at ${parent} carries neither build_base nor diff_base in its ` +
-      'frontmatter — confirm the spec was planned with a recorded base commit')
+    console.error(`replay.js: no base candidate for ${specPath} at ${commitSha} (tried: ` +
+      `${tried.length ? tried.join(', ') : 'none present'}) resolves to a validated ancestor of ${parent} ` +
+      'distinct from it — a moving ref like build_base: main no longer names the true pre-image once the ' +
+      "review's merge lands into it; reviews closed from this version on stamp diff_base at close " +
+      '(spec-review-driver.js), so the next review\'s replay selects cleanly')
     process.exit(4)
   }
   console.log(`spec=${specPath} reviewRunId=${best.r.runId} commit=${commitSha} parent=${parent} diffBase=${diffBase}`)
   process.exit(0)
 }
 
-// ---- --setup: refuse a --dir that resolves inside the repo root (exit 3, creates nothing); -------
-// ---- otherwise `git worktree add --detach` and drop a replay-worktree marker into the new --------
-// ---- worktree's own private git dir — never into its working tree. --------------------------------
+// ---- D2: is `resolvedDir` (already inside the repo root) covered by the repo's ignore rules -----
+// ---- (.gitignore + info/exclude alike)? If not, append the fixed literal ".claude/worktrees/" ----
+// ---- to the shared common git dir's info/exclude — never a host's own tracked .gitignore, and ----
+// ---- never a duplicate of a line already present. -------------------------------------------------
+
+function provisionWorktreesIgnore(resolvedRoot, resolvedDir) {
+  const already = spawnSync('git', ['check-ignore', '-q', resolvedDir], { cwd: resolvedRoot }).status === 0
+  if (already) return
+  let gitCommonDirRaw
+  try {
+    gitCommonDirRaw = execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd: resolvedRoot, encoding: 'utf8' }).trim()
+  } catch (e) {
+    console.error(`replay.js: git rev-parse --git-common-dir failed in ${resolvedRoot} — confirm ${resolvedRoot} ` +
+      `is a git repo: ${e.message}`)
+    process.exit(4)
+  }
+  const gitCommonDirAbs = path.isAbsolute(gitCommonDirRaw) ? gitCommonDirRaw : path.resolve(resolvedRoot, gitCommonDirRaw)
+  const excludePath = path.join(gitCommonDirAbs, 'info', 'exclude')
+  let existing = ''
+  try { existing = fs.readFileSync(excludePath, 'utf8') } catch { /* absent info/exclude is a valid start state */ }
+  if (existing.split('\n').some((l) => l.trim() === '.claude/worktrees/')) return
+  try {
+    fs.mkdirSync(path.dirname(excludePath), { recursive: true })
+    const sep = existing.length && !existing.endsWith('\n') ? '\n' : ''
+    fs.appendFileSync(excludePath, sep + '.claude/worktrees/\n')
+  } catch (e) {
+    console.error(`replay.js: failed to append .claude/worktrees/ to ${excludePath} — without it the ` +
+      `worktree at ${resolvedDir} would dirty git status in the main root: ${e.message}`)
+    process.exit(4)
+  }
+}
+
+// ---- --setup: refuse a --dir that resolves inside the repo root UNLESS it resolves inside --------
+// ---- <root>/.claude/worktrees/ (D1, specs/20260823/05) — exit 3, creates nothing for every other --
+// ---- in-repo path; otherwise self-provision the ignore line (D2) then `git worktree add --detach` -
+// ---- and drop a replay-worktree marker into the new worktree's own private git dir — never into ---
+// ---- its working tree. -----------------------------------------------------------------------------
 
 function cmdSetup() {
   if (!commit || !dir) { usage(); process.exit(2) }
@@ -262,9 +342,19 @@ function cmdSetup() {
   const rel = path.relative(resolvedRoot, resolvedDir)
   const isInsideRepo = rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
   if (isInsideRepo) {
-    console.error(`replay.js: --dir ${dir} resolves inside the repo root ${root} — refusing to create a ` +
-      'worktree there (the main tree must never be touched by this harness); pass a --dir outside the repo')
-    process.exit(3)
+    // D1: the ONLY in-repo location this harness allows is <root>/.claude/worktrees/ itself —
+    // resolved by location (path.relative), never by name/string-prefix, so a lookalike directory
+    // (.claude/worktrees-evil/) cannot evade the narrower refusal below.
+    const worktreesRoot = path.join(resolvedRoot, '.claude', 'worktrees')
+    const relToWorktrees = path.relative(worktreesRoot, resolvedDir)
+    const isInsideWorktreesDir = relToWorktrees !== '' && !relToWorktrees.startsWith('..') && !path.isAbsolute(relToWorktrees)
+    if (!isInsideWorktreesDir) {
+      console.error(`replay.js: --dir ${dir} resolves inside the repo root ${root} — refusing to create a ` +
+        'worktree there (the main tree must never be touched by this harness); pass a --dir outside the repo, ' +
+        'or inside <root>/.claude/worktrees/, which this harness self-provisions as ignored')
+      process.exit(3)
+    }
+    provisionWorktreesIgnore(resolvedRoot, resolvedDir)
   }
   try {
     execFileSync('git', ['worktree', 'add', '--detach', resolvedDir, commit], { cwd: root, stdio: 'pipe' })

@@ -1046,3 +1046,123 @@ test('AC-20260821-02-2 (worktree merge carrier): WHEN a due CLEAN close merges b
   assert.strictEqual(stateOf(root, mainSpec), 'REPLAY',
     'a due close that merged back must park at REPLAY, re-derivable from the main root alone — a fresh session resuming after the merge has nothing else to read: ' + merged.stdout)
 })
+
+// specs/20260823/05-replay-unattended-hardening.md D3 (2026-08-23, rv_387d84a3b424's replay):
+// replay.js --select emits a spec's build_base ref verbatim — typically the MOVING ref "main",
+// stale the instant the review's own merge lands (observed: reconcile exit 3, phantom out-of-plan
+// and unrealized files, until hand-pinned to the true pre-image sha). The close commit is the last
+// moment a symbolic base ref and the true pre-image coincide, so the driver stamps a durable
+// diff_base into the spec frontmatter at the SAME implementing -> done edit that flips status —
+// but only when the frontmatter carries no diff_base already, since an existing pin (however it
+// got there) must never be silently repointed. AC-20260823-05-7.
+
+function noDiffBaseSpecBody({ status = 'implementing', tier = 'standard', buildBaseRef, acId }) {
+  return `---
+status: ${status}
+tier: ${tier}
+build_base: ${buildBaseRef}
+---
+# Driver Test Spec (no diff_base)
+
+## Decisions
+
+| ID | Decision | One-line rationale |
+|----|----------|--------------------|
+| D1 | foo() returns 42 (${acId}) | why |
+
+## File Plan
+
+| File | Action | Layer |
+|---|---|---|
+| src/foo.js | edit | scripts |
+| tests/foo.test.js | create | tests |
+
+## Acceptance Criteria
+
+- **${acId}**: foo() returns 42.
+`
+}
+
+function makeNoDiffBaseHost() {
+  const root = fs.realpathSync(tmpdir('rvdrv-stamp'))
+  const g = gitRepo(root)
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({
+    gateCommand: 'node --test {testDirs}',
+    testCommand: 'node --test',
+    runtime: { inert: 'plugin repo — nothing boots' },
+    capabilities: { forge: 'none', skipReportPattern: 'none' },
+  }))
+  fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 41\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  fs.mkdirSync(path.join(root, 'specs/20260820'), { recursive: true })
+  const spec = path.join(root, 'specs/20260820/99-drv-stamp.md')
+  fs.writeFileSync(spec, noDiffBaseSpecBody({ buildBaseRef: 'main', acId: 'AC-20260820-99-16' }))
+  fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 42\n')
+  fs.writeFileSync(path.join(root, 'tests/foo.test.js'), GREEN_TEST.replace('AC-20260820-99-1', 'AC-20260820-99-16'))
+  g('add', '-A'); g('commit', '-q', '-m', 'implement')
+  return { root, spec, sidecar: spec.replace(/\.md$/, '.review') }
+}
+
+test('AC-20260823-05-7: WHEN the driver flips a spec whose frontmatter has build_base but no diff_base to status: done THE SYSTEM stamps diff_base: <sha> (the base ref resolved at flip time) into the frontmatter in the same edit, directly after build_base, with no inline comment', () => {
+  const host = makeNoDiffBaseHost()
+  toReviewer(host)
+  const beforeText = fs.readFileSync(host.spec, 'utf8')
+  assert.doesNotMatch(beforeText, /^diff_base:/m,
+    'fixture sanity: this spec must start with no diff_base line at all, or this test cannot tell a genuine ' +
+    'stamp apart from a pre-existing value')
+
+  const expectedSha = execFileSync('git', ['-C', host.root, 'rev-parse', 'main'], { encoding: 'utf8' }).trim()
+
+  const returnFile = returnFileWith('rvdrv-stamp-clean', CLEAN_RETURN)
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile)
+  assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS', 'setup: a returned CLEAN, zero-survivor result must land DISPOSITIONS')
+  const r = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(r.status, 0, 'D3: the close flip must still succeed for a spec with no diff_base: ' + r.stdout + r.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE', 'D3: a zero-survivor disposition must still land CLOSE')
+
+  const afterText = fs.readFileSync(host.spec, 'utf8')
+  assert.match(afterText, /^status:\s*done$/m, 'D3: the flip must still write status: done alongside the stamp')
+  const fmBlock = afterText.slice(0, afterText.indexOf('\n---', 4))
+  const lines = fmBlock.split('\n')
+  const buildIdx = lines.findIndex((l) => l.startsWith('build_base:'))
+  const diffIdx = lines.findIndex((l) => l.startsWith('diff_base:'))
+  assert.ok(buildIdx !== -1, 'sanity: build_base: must survive the flip: ' + fmBlock)
+  assert.ok(diffIdx !== -1,
+    'D3: a diff_base: line must be stamped into the frontmatter at the implementing -> done flip — without ' +
+    'it replay.js --select has nothing durable to read once the review\'s merge makes build_base: main a ' +
+    'moving, stale ref: ' + fmBlock)
+  assert.strictEqual(diffIdx, buildIdx + 1,
+    'D3 Contracts: the stamped diff_base: line must be inserted DIRECTLY AFTER the build_base: line — a ' +
+    'stamp landing anywhere else deviates from the pinned frontmatter shape: ' + fmBlock)
+  assert.strictEqual(lines[diffIdx].trim(), 'diff_base: ' + expectedSha,
+    'D3: the stamped value must be EXACTLY "diff_base: <sha>" with no inline comment (the Contracts\' own ' +
+    'comment is illustrative, never emitted) and no trailing text — the sha must be the review\'s own base ' +
+    'ref (main) resolved at flip time: ' + JSON.stringify(lines[diffIdx]))
+})
+
+test('AC-20260823-05-7: WHEN the driver flips a spec whose frontmatter already carries a diff_base THE SYSTEM leaves that value byte-identical, never overwriting it', () => {
+  const host = makeHost() // makeHost()'s specBody() already carries a diff_base line
+  toReviewer(host)
+  const beforeText = fs.readFileSync(host.spec, 'utf8')
+  const beforeMatch = beforeText.match(/^diff_base:.*$/m)
+  assert.ok(beforeMatch, 'fixture sanity: makeHost()\'s spec must already carry a diff_base line, or this test proves nothing about the absent-only guard')
+
+  const returnFile = returnFileWith('rvdrv-stamp-existing', CLEAN_RETURN)
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile)
+  const r = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(r.status, 0, 'the close flip must succeed for a spec that already carries diff_base: ' + r.stdout + r.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE')
+
+  const afterText = fs.readFileSync(host.spec, 'utf8')
+  const afterMatches = afterText.match(/^diff_base:.*$/gm)
+  assert.strictEqual(afterMatches.length, 1,
+    'D3: an existing diff_base must never gain a SECOND diff_base line at the flip — an absent-only stamp ' +
+    'must check for presence before writing, not just unconditionally append: ' + JSON.stringify(afterMatches))
+  assert.strictEqual(afterMatches[0], beforeMatch[0],
+    'D3: an existing diff_base value must be left BYTE-IDENTICAL by the close flip — overwriting it would ' +
+    'silently repoint a review\'s pinned diff base after the fact: before=' + JSON.stringify(beforeMatch[0]) +
+    ' after=' + JSON.stringify(afterMatches[0]))
+})

@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { execFileSync } = require('node:child_process')
+const { execFileSync, spawnSync } = require('node:child_process')
 const { SPEC, read, tmpdir, runNode, gitRepo } = require('../helpers')
 
 // specs/20260819/02-mutation-replay.md (brief 14, 2026-08-19): the 2026-08-18 ad-hoc consult
@@ -63,8 +63,47 @@ const { SPEC, read, tmpdir, runNode, gitRepo } = require('../helpers')
 // patch assertion added to each), AC-IDs kept since the invariant under test (D8's record/
 // artifact shape) is unchanged, only its file-derivation mechanism is. Flagged in the build
 // return as a File Plan gap the collision sweep should have caught.
+//
+// specs/20260823/05-replay-unattended-hardening.md (2026-08-23, rv_387d84a3b424's replay): the
+// scheduled harness could not run unattended, twice over — `--setup` refused every in-repo `--dir`
+// (forcing `/private/tmp`, where agent Edit/Write is classifier-denied) and `--select` emitted a
+// moving-ref `diffBase` that goes stale the instant the review's own merge lands. D1/D2 narrow the
+// `--setup` refusal to allow exactly `<root>/.claude/worktrees/`, self-provisioning the host's
+// `info/exclude` when the ignore line is missing (AC-1..AC-4, AC-6). D4 makes `--select` read
+// frontmatter at the CLOSE commit (not its parent, per the old F3 pin) and validate each base
+// candidate — trying `diff_base` before `build_base`, the reverse of spec 20260819/02's original
+// preference now that D3 (tests/review/review-driver.test.js) stamps `diff_base` durably at every
+// close — via `git merge-base --is-ancestor`, refusing (exit 4) when nothing validates (AC-5, AC-8).
+// Collision fix: AC-20260819-02-2's --select fixtures fed the old code fabricated 40-hex strings as
+// diff_base/build_base, which the OLD code printed back verbatim with no resolution at all; the NEW
+// ancestry-validated --select can never resolve a fake sha, so every such fixture below (AC-2's own
+// row-selection/tie-break cases, and AC-20260819-03-9's setup-failed-retry case) is updated in place
+// to use a REAL commit sha from the fixture's own history — AC-IDs kept since the invariants under
+// test (critical-tier priority, latest-wins tie-break, setup-failed retry targeting) are unchanged,
+// only the base value's shape is. The old build_base-wins-over-diff_base sub-case is retired outright
+// (superseded by D4's reordering) and its coverage folds into the new AC-20260823-05-5 test.
 
 const SCRIPT = 'scripts/replay.js'
+
+// D4 (specs/20260823/05): every --select fixture that supplies a base candidate must use a REAL
+// commit sha — the new ancestry-validated --select rejects anything `git rev-parse --verify` can't
+// resolve, so a fabricated hex string (the old fixture idiom) can never validate. This makes one
+// commit and returns its sha for embedding as diff_base/build_base in a LATER commit's frontmatter.
+function commitReal(root, relFile, content, msg) {
+  const full = path.join(root, relFile)
+  fs.mkdirSync(path.dirname(full), { recursive: true })
+  fs.writeFileSync(full, content)
+  execFileSync('git', ['-C', root, 'add', '-A'])
+  execFileSync('git', ['-C', root, 'commit', '-q', '-m', msg])
+  return execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+}
+
+// D2: whether `rel` is covered by the repo's ignore rules (`.gitignore` + `info/exclude` alike) —
+// `git check-ignore -q` exits 0 when ignored, 1 when not; spawnSync (not execFileSync) since exit 1
+// is an expected, not exceptional, outcome here.
+function isIgnored(root, rel) {
+  return spawnSync('git', ['-C', root, 'check-ignore', '-q', rel]).status === 0
+}
 
 // D4 (fix iteration 2): the marker lives at `<git -C <dir> rev-parse --git-dir>/replay-worktree` —
 // the worktree's PRIVATE git dir, never its working tree. Both AC-3 and AC-8 resolve the marker's
@@ -194,15 +233,19 @@ test('AC-20260819-03-8: --due CONTINUES TO report not due and exit 1 when fewer 
     'and exit 1, or replay would fire before the Decision\'s own window closes: ' + r.stderr)
 })
 
-test('AC-20260819-02-2: --select prints all five fields spec/reviewRunId/commit/parent/diffBase, preferring a critical-tier CLEAN row over a later standard-tier one, and ties resolve to the latest row', () => {
+test('AC-20260819-02-2 (collision fix, specs/20260823/05): --select prints all five fields spec/reviewRunId/commit/parent/diffBase, preferring a critical-tier CLEAN row over a later standard-tier one, and ties resolve to the latest row', () => {
   const root = fs.realpathSync(tmpdir('replay-select'))
   gitRepo(root)
+  // D4 (2026-08-23): every diff_base value below is now a REAL ancestor commit sha — the old
+  // fabricated hex ('aaaa000...aaaa') can never resolve under the new ancestry-validated --select.
+  const aAncestor = commitReal(root, 'lib/a-pre.js', 'a\n', 'pre a')
   const a = commitSpecFlow(root, 'specs/a.md',
-    '---\ndiff_base: aaaa000000000000000000000000000000aaaa\n---\n# a\n',
-    '---\ndiff_base: aaaa000000000000000000000000000000aaaa\nstatus: done\n---\n# a\n')
+    `---\ndiff_base: ${aAncestor}\n---\n# a\n`,
+    `---\ndiff_base: ${aAncestor}\nstatus: done\n---\n# a\n`)
+  const bAncestor = commitReal(root, 'lib/b-pre.js', 'b\n', 'pre b')
   const b = commitSpecFlow(root, 'specs/b.md',
-    '---\ndiff_base: bbbb000000000000000000000000000000bbbb\n---\n# b\n',
-    '---\ndiff_base: bbbb000000000000000000000000000000bbbb\nstatus: done\n---\n# b\n')
+    `---\ndiff_base: ${bAncestor}\n---\n# b\n`,
+    `---\ndiff_base: ${bAncestor}\nstatus: done\n---\n# b\n`)
   writeLedger(root, [
     { ts: '2026-08-10T00:00:00Z', stage: 'review', spec: 'specs/a.md', runId: 'rv_aaaaaaaaaaaa', verdict: 'CLEAN', tier: 'critical' },
     { ts: '2026-08-11T00:00:00Z', stage: 'review', spec: 'specs/b.md', runId: 'rv_bbbbbbbbbbbb', verdict: 'CLEAN', tier: 'standard' },
@@ -222,19 +265,21 @@ test('AC-20260819-02-2: --select prints all five fields spec/reviewRunId/commit/
     'F3 regression pin (2026-08-19 review): parent must be the close commit\'s OWN parent, printed as its ' +
     'own field — the first review found the worktree standing up at the close commit itself, handing the ' +
     'blind reviewer a ~3-line needle-only diff instead of the real base-to-HEAD diff a review judges: ' + r.stdout)
-  assert.match(r.stdout, /diffBase=aaaa000000000000000000000000000000aaaa/,
-    'F3 regression pin: diffBase must be read from the selected spec\'s frontmatter AT THE PARENT commit — ' +
-    'reading it at the close commit (or hardcoding it) would drift from the base review.md itself diffed ' +
-    'against: ' + r.stdout)
+  assert.match(r.stdout, new RegExp('diffBase=' + aAncestor),
+    'D4 (2026-08-23): diffBase must be the validated ancestor sha read from the selected spec\'s ' +
+    'frontmatter AT THE CLOSE commit — reading a different commit or printing an unvalidated value would ' +
+    'drift from the base review.md itself diffed against: ' + r.stdout)
 
   const root2 = fs.realpathSync(tmpdir('replay-select-tie'))
   gitRepo(root2)
+  const dAncestor = commitReal(root2, 'lib/d-pre.js', 'd\n', 'pre d')
   const d = commitSpecFlow(root2, 'specs/d.md',
-    '---\ndiff_base: dddd000000000000000000000000000000dddd\n---\n# d\n',
-    '---\ndiff_base: dddd000000000000000000000000000000dddd\nstatus: done\n---\n# d\n')
+    `---\ndiff_base: ${dAncestor}\n---\n# d\n`,
+    `---\ndiff_base: ${dAncestor}\nstatus: done\n---\n# d\n`)
+  const cAncestor = commitReal(root2, 'lib/c-pre.js', 'c\n', 'pre c')
   commitSpecFlow(root2, 'specs/c.md',
-    '---\ndiff_base: cccc000000000000000000000000000000cccc\n---\n# c\n',
-    '---\ndiff_base: cccc000000000000000000000000000000cccc\nstatus: done\n---\n# c\n')
+    `---\ndiff_base: ${cAncestor}\n---\n# c\n`,
+    `---\ndiff_base: ${cAncestor}\nstatus: done\n---\n# c\n`)
   writeLedger(root2, [
     { ts: '2026-08-10T00:00:00Z', stage: 'review', spec: 'specs/d.md', runId: 'rv_dddddddddddd', verdict: 'CLEAN', tier: 'standard' },
     { ts: '2026-08-11T00:00:00Z', stage: 'review', spec: 'specs/c.md', runId: 'rv_cccccccccccc', verdict: 'CLEAN', tier: 'standard' },
@@ -244,24 +289,6 @@ test('AC-20260819-02-2: --select prints all five fields spec/reviewRunId/commit/
   assert.match(r2.stdout, /spec=specs\/c\.md/,
     'D3: no critical row exists in this window, so the tie between two standard rows must resolve to the ' +
     'LATEST one — resolving to the earliest would replay the same stale spec forever: ' + r2.stdout)
-
-  const root3 = fs.realpathSync(tmpdir('replay-select-buildbase'))
-  gitRepo(root3)
-  const e = commitSpecFlow(root3, 'specs/e.md',
-    '---\nbuild_base: eeee111111111111111111111111111111eeee\ndiff_base: eeee222222222222222222222222222222eeee\n---\n# e\n',
-    '---\nbuild_base: eeee111111111111111111111111111111eeee\ndiff_base: eeee222222222222222222222222222222eeee\nstatus: done\n---\n# e\n')
-  writeLedger(root3, [
-    { ts: '2026-08-10T00:00:00Z', stage: 'review', spec: 'specs/e.md', runId: 'rv_eeeeeeeeeeee', verdict: 'CLEAN' },
-  ])
-  const r3 = runNode(SCRIPT, ['--select'], { cwd: root3 })
-  assert.strictEqual(r3.status, 0, 'D3: a spec carrying both build_base and diff_base must still select cleanly: ' + r3.stderr)
-  assert.match(r3.stdout, /diffBase=eeee111111111111111111111111111111eeee/,
-    'D3: build_base must win over diff_base when both are present in the parent\'s frontmatter — the ' +
-    'Decision states build_base first, diff_base only as the fallback: ' + r3.stdout)
-  assert.ok(!r3.stdout.includes('eeee222222222222222222222222222222eeee'),
-    'D3: the diff_base value must NOT leak into the printed diffBase when build_base is present and ' +
-    'non-empty — printing both/either nondeterministically would make --setup stand up the wrong base: ' +
-    r3.stdout)
 
   const root4 = fs.realpathSync(tmpdir('replay-select-nobase'))
   gitRepo(root4)
@@ -273,19 +300,112 @@ test('AC-20260819-02-2: --select prints all five fields spec/reviewRunId/commit/
   ])
   const r4 = runNode(SCRIPT, ['--select'], { cwd: root4 })
   assert.strictEqual(r4.status, 4,
-    'D3: a selected spec carrying NEITHER build_base nor diff_base at the close commit\'s parent must exit ' +
-    '4 — printing a blank or fabricated diffBase would hand --setup a base nobody can verify: ' + r4.stdout)
+    'D3/D4: a selected spec carrying NEITHER build_base nor diff_base at the close commit must exit 4 — ' +
+    'printing a blank or fabricated diffBase would hand --setup a base nobody can verify: ' + r4.stdout)
   assert.strictEqual(r4.stdout.trim(), '',
     'D3: an unresolvable diffBase is a git-operation failure, not a partial selection — nothing must print ' +
     'on stdout: ' + JSON.stringify(r4.stdout))
 })
 
-test('AC-20260819-03-9: --select still selects a CLEAN review row when it is followed only by a setup-failed replay row, so the retry targets the same review', () => {
+test('AC-20260823-05-5: --select tries diff_base BEFORE build_base — a validated diff_base wins outright, and build_base is the fallback only when diff_base is absent', () => {
+  // D4 reorders spec 20260819/02's original preference (build_base first): D3 now stamps diff_base
+  // durably at every close, making it the trustworthy pin, so it is tried first.
+  const root = fs.realpathSync(tmpdir('replay-select-priority'))
+  gitRepo(root)
+  const ancestor = commitReal(root, 'lib/pre.js', 'a\n', 'pre h')
+  commitReal(root, 'lib/mid.js', 'b\n', 'mid h')
+  // The spec file must already exist at the PARENT (with no base fields at all) so that this
+  // fixture can only pass once --select reads frontmatter at the CLOSE commit — reading at the
+  // parent (today's behavior) finds a base-less frontmatter and can never see the stamped values.
+  const parent = commitReal(root, 'specs/h.md', '---\nstatus: implementing\n---\n# h\n', 'stub h')
+  const close = commitReal(root, 'specs/h.md',
+    `---\nbuild_base: 0000000000000000000000000000000000dead\ndiff_base: ${ancestor}\nstatus: done\n---\n# h\n`,
+    'close specs/h.md')
+  writeLedger(root, [
+    { ts: '2026-08-23T00:00:00Z', stage: 'review', spec: 'specs/h.md', runId: 'rv_hhhhhhhhhhhh', verdict: 'CLEAN' },
+  ])
+  const r = runNode(SCRIPT, ['--select'], { cwd: root })
+  assert.strictEqual(r.status, 0, 'D4: a validating diff_base candidate must select cleanly: ' + r.stderr)
+  assert.match(r.stdout, new RegExp('diffBase=' + ancestor),
+    'D4: diff_base must win once it validates as an ancestor of the close commit\'s parent, even with a ' +
+    'build_base value also present — trying build_base first (the old order) would print the wrong base ' +
+    'the moment a stamped diff_base coexists with a stale build_base: ' + r.stdout)
+  assert.match(r.stdout, new RegExp('parent=' + parent), 'D4: parent must stay the close commit\'s own parent: ' + r.stdout)
+  assert.match(r.stdout, new RegExp('commit=' + close), 'D4: commit must stay the close commit itself: ' + r.stdout)
+  assert.ok(!r.stdout.includes('0000000000000000000000000000000000dead'),
+    'D4: the non-validating (and unresolvable) build_base value must never leak into the printed diffBase ' +
+    'once diff_base has already validated: ' + r.stdout)
+
+  const root2 = fs.realpathSync(tmpdir('replay-select-priority-fallback'))
+  gitRepo(root2)
+  const ancestor2 = commitReal(root2, 'lib/pre.js', 'a\n', 'pre i')
+  commitReal(root2, 'specs/i.md', `---\nstatus: implementing\n---\n# i\n`, 'stub i')
+  const close2 = commitReal(root2, 'specs/i.md',
+    `---\nbuild_base: ${ancestor2}\nstatus: done\n---\n# i\n`,
+    'close specs/i.md')
+  writeLedger(root2, [
+    { ts: '2026-08-23T00:00:00Z', stage: 'review', spec: 'specs/i.md', runId: 'rv_iiiiiiiiiiii', verdict: 'CLEAN' },
+  ])
+  const r2 = runNode(SCRIPT, ['--select'], { cwd: root2 })
+  assert.strictEqual(r2.status, 0, 'D4: build_base alone (no diff_base present) must still validate and select: ' + r2.stderr)
+  assert.match(r2.stdout, new RegExp('diffBase=' + ancestor2),
+    'D4: with no diff_base present, build_base is the fallback candidate and must be emitted once it ' +
+    'validates — a spec closed before diff_base stamping existed (D3) must still select cleanly: ' + r2.stdout)
+})
+
+test('AC-20260823-05-8: --select exits 4 naming the stale-base cause and the stamped-at-close remedy when the only base candidate is a ref that has since absorbed the merge (a descendant, not an ancestor, of the close commit\'s parent)', () => {
+  // A3 (spiked, spec 20260823/05): `git merge-base --is-ancestor main <close parent>` exits 1 once
+  // main has merged the spec's own branch back in — this fixture reproduces exactly that shape.
+  const root = fs.realpathSync(tmpdir('replay-select-descendant'))
+  gitRepo(root)
+  execFileSync('git', ['-C', root, 'checkout', '-q', '-b', 'feature'])
+  commitReal(root, 'lib/feature-pre.js', 'a\n', 'feature pre')
+  // The spec file must already exist at the PARENT (implementing, no base fields) so --select can
+  // resolve a commit/parent pair at all — build_base only appears at the close commit itself,
+  // matching the real shape a build produces.
+  const parent = commitReal(root, 'specs/j.md', '---\nstatus: implementing\n---\n# j\n', 'stub j')
+  const close = commitReal(root, 'specs/j.md',
+    '---\nbuild_base: main\nstatus: done\n---\n# j\n', 'close specs/j.md')
+  execFileSync('git', ['-C', root, 'checkout', '-q', 'main'])
+  execFileSync('git', ['-C', root, 'merge', '-q', '--no-ff', '-m', 'merge feature', 'feature'])
+  execFileSync('git', ['-C', root, 'branch', '-D', 'feature'])
+  writeLedger(root, [
+    { ts: '2026-08-23T00:00:00Z', stage: 'review', spec: 'specs/j.md', runId: 'rv_jjjjjjjjjjjj', verdict: 'CLEAN' },
+  ])
+  const sanity = spawnSync('git', ['-C', root, 'merge-base', '--is-ancestor', 'main', parent])
+  assert.notStrictEqual(sanity.status, 0,
+    'sanity: this fixture must reproduce the actual distortion — main must NOT be an ancestor of the ' +
+    'close commit\'s parent (it absorbed the merge and moved past it), or this test proves nothing about D4\'s ' +
+    'refusal arm')
+  const r = runNode(SCRIPT, ['--select'], { cwd: root })
+  assert.strictEqual(r.status, 4,
+    'D4: build_base=main resolving to a commit that is a DESCENDANT of the close parent (post-merge) must ' +
+    'be refused, never silently emitted as diffBase — a wrong base here would distort the very measurement ' +
+    'replay exists to produce: ' + JSON.stringify({ status: r.status, stdout: r.stdout }))
+  assert.strictEqual(r.stdout.trim(), '',
+    'D4: a stale-base refusal is a git-operation failure, not a partial selection — no spec= line may print: ' +
+    JSON.stringify(r.stdout))
+  assert.doesNotMatch(r.stdout, /spec=/, 'D4: no spec= selection line may print on a refused --select: ' + r.stdout)
+  assert.match(r.stderr, /main/,
+    'D4: the refusal must name the candidate value tried (main) so the cause is on the record: ' + r.stderr)
+  assert.match(r.stderr, /no longer names the pre-image|moving ref|merge|stale/i,
+    'D4: the refusal must state that a moving ref no longer names the pre-image once the review\'s merge ' +
+    'lands — a generic git-failure message here would leave the actual cause undiagnosed: ' + r.stderr)
+  assert.match(r.stderr, /diff_base|stamp/i,
+    'D4: the refusal must give the remedy — reviews closed from this version on stamp diff_base at close ' +
+    '(D3), so the NEXT review\'s replay selects cleanly: ' + r.stderr)
+})
+
+test('AC-20260819-03-9 (collision fix, specs/20260823/05): --select still selects a CLEAN review row when it is followed only by a setup-failed replay row, so the retry targets the same review', () => {
   const root = fs.realpathSync(tmpdir('replay-select-setupfailed'))
   gitRepo(root)
+  // D4 (2026-08-23): a REAL ancestor sha, not a fabricated hex — the new ancestry-validated
+  // --select can never resolve a fake sha, and this test's own claim (a successful selection)
+  // would otherwise become unreachable.
+  const gAncestor = commitReal(root, 'lib/g-pre.js', 'g\n', 'pre g')
   commitSpecFlow(root, 'specs/g.md',
-    '---\ndiff_base: gggg000000000000000000000000000000gggg\n---\n# g\n',
-    '---\ndiff_base: gggg000000000000000000000000000000gggg\nstatus: done\n---\n# g\n')
+    `---\ndiff_base: ${gAncestor}\n---\n# g\n`,
+    `---\ndiff_base: ${gAncestor}\nstatus: done\n---\n# g\n`)
   writeLedger(root, [
     { ts: '2026-08-10T00:00:00Z', stage: 'review', spec: 'specs/g.md', runId: 'rv_gggggggggggg', verdict: 'CLEAN' },
     { ts: '2026-08-11T00:00:00Z', stage: 'replay', spec: 'specs/g.md', runId: 'rp_gggggggggggg',
@@ -303,7 +423,138 @@ test('AC-20260819-03-9: --select still selects a CLEAN review row when it is fol
     'exact run and not some other selection: ' + r.stdout)
 })
 
-test('AC-20260819-02-3: --setup refuses a --dir inside the repo with exit 3 and creates nothing, and builds a marker-carrying detached worktree at an outside --dir that leaves the host repo byte-identical', () => {
+// specs/20260823/05-replay-unattended-hardening.md D1 (2026-08-23, rv_387d84a3b424): the old
+// combined refuse/accept test above split three ways below — AC-1 (new: the .claude/worktrees/
+// allow arm), AC-2 (retagged: the surviving in-repo refusal, now narrowed to non-worktrees paths),
+// AC-6 (retagged verbatim, SHALL CONTINUE TO: the outside-repo accept path with all its
+// fix-iteration-2 regression pins intact, never weakened).
+
+test('AC-20260823-05-1: --setup accepts a --dir inside <root>/.claude/worktrees/ in a repo that already ignores that path, creating the marker-carrying detached worktree there and exiting 0; a follow-up --teardown removes it', () => {
+  const root = fs.realpathSync(tmpdir('replay-setup-wt-ok'))
+  gitRepo(root) // gitRepo()'s own fixture .gitignore already covers .claude/worktrees/
+  const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  assert.ok(isIgnored(root, '.claude/worktrees/replay-x'),
+    'sanity: this fixture\'s .gitignore must already cover .claude/worktrees/ — otherwise this test does ' +
+    'not exercise the "already ignored" arm AC-1 names, it exercises D2\'s provisioning arm instead')
+
+  const dir = path.join(root, '.claude/worktrees/replay-x')
+  const r = runNode(SCRIPT, ['--setup', '--commit', sha, '--dir', dir], { cwd: root })
+  assert.strictEqual(r.status, 0,
+    'D1: a --dir resolving inside <root>/.claude/worktrees/ must now be ACCEPTED — refusing it is exactly ' +
+    'the defect that forced the replay harness into /private/tmp, where agent Edit/Write is classifier-' +
+    'denied and the mutation-authoring worker blocked on manual approval on both live 2026-08-23 runs: ' + r.stderr)
+  assert.match(r.stdout, new RegExp('setup dir=' + dir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' commit=' + sha),
+    'D1: the success line must print the resolved dir and commit exactly as every other --setup success ' +
+    'does — this in-repo arm must not grow a different output shape: ' + r.stdout)
+
+  const marker = markerPath(dir)
+  assert.ok(fs.existsSync(marker),
+    'D1: the accepted in-repo worktree must still carry the replay-worktree marker at its resolved private ' +
+    'git dir path, exactly like the outside-repo path — --teardown\'s marker guard must work identically here: ' +
+    marker)
+
+  const teardown = runNode(SCRIPT, ['--teardown', '--dir', dir], { cwd: root })
+  assert.strictEqual(teardown.status, 0,
+    'D1: a --setup-created in-repo worktree must be removable by --teardown exactly like an outside one: ' +
+    teardown.stderr)
+  assert.ok(!fs.existsSync(dir), 'D1: teardown must remove the in-repo worktree directory: ' + dir)
+})
+
+// Vacuity note (2026-08-23, per this repo's own generalized-third-occurrence vacuous-rejection
+// class, § Gotchas): this AC's own text says "CONTINUE TO refuse" — and it DOES already pass
+// against today's script, since today refuses every in-repo --dir unconditionally, .claude/
+// worktrees/ included. Kept as the correct post-implementation regression pin (D1 narrows the
+// allow-list to exactly .claude/worktrees/; every other in-repo path must keep refusing) rather
+// than reddened artificially. The lookalike-prefix sub-case below is the one assertion here that
+// actually exercises new surface: it guards against a naive `dir.startsWith(path.join(root,
+// '.claude/worktrees'))` implementation of D1 (a STRING-prefix check), which would wrongly accept
+// `.claude/worktrees-evil/` — the same guard-by-name-not-location class this repo's own Gotchas
+// record for the entrypoint conformance guard (specs/20260820/04).
+test('AC-20260823-05-2: --setup CONTINUES TO refuse a --dir that resolves inside the repo root but NOT inside <root>/.claude/worktrees/, with exit 3 and nothing created — including a lookalike path that only shares a string prefix with .claude/worktrees/', () => {
+  const root = fs.realpathSync(tmpdir('replay-setup-inside-notwt'))
+  gitRepo(root)
+  const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+
+  const dir = path.join(root, 'scratch')
+  const r = runNode(SCRIPT, ['--setup', '--commit', sha, '--dir', dir], { cwd: root })
+  assert.strictEqual(r.status, 3,
+    'D1: an in-repo --dir OUTSIDE .claude/worktrees/ must keep the exit-3 refusal — widening the allow-list ' +
+    'to "any in-repo path" is exactly the hole D1\'s Rationale rejects: ' + JSON.stringify({ status: r.status, stdout: r.stdout }))
+  assert.ok(!fs.existsSync(dir),
+    'D1: a refused --setup must create nothing — a partially-created worktree here would pollute the main ' +
+    'repo\'s own working tree: ' + dir)
+
+  const evilDir = path.join(root, '.claude/worktrees-evil/x')
+  const rEvil = runNode(SCRIPT, ['--setup', '--commit', sha, '--dir', evilDir], { cwd: root })
+  assert.strictEqual(rEvil.status, 3,
+    'D1: a --dir sharing only a STRING PREFIX with .claude/worktrees/ (e.g. .claude/worktrees-evil/) but not ' +
+    'actually resolving INSIDE it must still be refused as an ordinary in-repo path — evading D1\'s allow-list ' +
+    'via a lookalike directory name is the guard-by-name-not-location class this repo\'s own Gotchas record: ' +
+    JSON.stringify({ status: rEvil.status, stdout: rEvil.stdout }))
+  assert.ok(!fs.existsSync(evilDir), 'D1: the lookalike-prefix refusal must also create nothing: ' + evilDir)
+
+  const listAfter = execFileSync('git', ['-C', root, 'worktree', 'list'], { encoding: 'utf8' })
+  assert.ok(!listAfter.includes(dir) && !listAfter.includes(evilDir),
+    'D1: a refused --setup must register nothing in git\'s own worktree list either: ' + listAfter)
+})
+
+test('AC-20260823-05-3: --setup targets <root>/.claude/worktrees/<name> in a repo whose ignore rules do NOT already cover that path, appending ".claude/worktrees/" to info/exclude before creating so the path is ignored and git status stays empty afterward', () => {
+  const root = fs.realpathSync(tmpdir('replay-setup-provision'))
+  gitRepo(root, { empty: true }) // no .gitignore at all — the un-ignoring host D2 targets
+  fs.writeFileSync(path.join(root, 'a.txt'), 'a\n')
+  execFileSync('git', ['-C', root, 'add', '-A'])
+  execFileSync('git', ['-C', root, 'commit', '-q', '-m', 'init'])
+  const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+
+  assert.ok(!isIgnored(root, '.claude/worktrees/replay-y'),
+    'sanity: this fixture must NOT already ignore .claude/worktrees/ — otherwise this test does not exercise ' +
+    'D2\'s provisioning arm at all')
+  const excludePath = path.join(root, '.git/info/exclude')
+
+  const dir = path.join(root, '.claude/worktrees/replay-y')
+  const r = runNode(SCRIPT, ['--setup', '--commit', sha, '--dir', dir], { cwd: root })
+  assert.strictEqual(r.status, 0,
+    'D2: --setup must self-provision the ignore line and succeed even on a host whose .gitignore never ' +
+    'mentions .claude/worktrees/ — host repos are not guaranteed to already carry the line: ' + r.stderr)
+
+  const excludeAfter = fs.existsSync(excludePath) ? fs.readFileSync(excludePath, 'utf8') : ''
+  assert.ok(excludeAfter.includes('.claude/worktrees/'),
+    'D2: info/exclude must now carry the .claude/worktrees/ line — without it the worktree stays visible to ' +
+    'git status on every host that lacks the line in its own .gitignore: ' + JSON.stringify(excludeAfter))
+  assert.ok(isIgnored(root, '.claude/worktrees/replay-y'),
+    'D2: after provisioning, git check-ignore -q must exit 0 for the worktree path — this is the AC\'s own ' +
+    'stated check for success')
+  const status = execFileSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' })
+  assert.strictEqual(status.trim(), '',
+    'D2: git status --porcelain in the main root must print nothing after setup — an ignore line that fails ' +
+    'to actually cover the worktree would leave it dirtying the tree the maintainer works in: ' + JSON.stringify(status))
+})
+
+test('AC-20260823-05-4: WHEN the repo\'s info/exclude already carries the .claude/worktrees/ line THE SYSTEM does not append a duplicate — two consecutive setups leave exactly one occurrence', () => {
+  const root = fs.realpathSync(tmpdir('replay-setup-provision-idempotent'))
+  gitRepo(root, { empty: true })
+  fs.writeFileSync(path.join(root, 'a.txt'), 'a\n')
+  execFileSync('git', ['-C', root, 'add', '-A'])
+  execFileSync('git', ['-C', root, 'commit', '-q', '-m', 'init'])
+  const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+
+  const dir1 = path.join(root, '.claude/worktrees/replay-first')
+  const r1 = runNode(SCRIPT, ['--setup', '--commit', sha, '--dir', dir1], { cwd: root })
+  assert.strictEqual(r1.status, 0, 'fixture setup: the first --setup must succeed and provision the ignore line: ' + r1.stderr)
+
+  const dir2 = path.join(root, '.claude/worktrees/replay-second')
+  const r2 = runNode(SCRIPT, ['--setup', '--commit', sha, '--dir', dir2], { cwd: root })
+  assert.strictEqual(r2.status, 0, 'D2: a second --setup on an already-provisioned host must still succeed: ' + r2.stderr)
+
+  const excludeContent = fs.readFileSync(path.join(root, '.git/info/exclude'), 'utf8')
+  const occurrences = excludeContent.split('\n').filter((l) => l.trim() === '.claude/worktrees/').length
+  assert.strictEqual(occurrences, 1,
+    'D2: exactly one occurrence of the .claude/worktrees/ line must exist after two consecutive setups — a ' +
+    'duplicate here means every future host repo accumulates one more line per replay run forever: ' +
+    JSON.stringify(excludeContent))
+})
+
+test('AC-20260823-05-6 (retagged from AC-20260819-02-3, SHALL CONTINUE TO): --setup builds a marker-carrying detached worktree at an outside --dir that leaves the host repo byte-identical', () => {
   const root = fs.realpathSync(tmpdir('replay-setup'))
   gitRepo(root)
   const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
@@ -312,24 +563,16 @@ test('AC-20260819-02-3: --setup refuses a --dir inside the repo with exit 3 and 
   // .git/info/exclude (absent is a valid snapshot value — handled below) and `git status
   // --porcelain` BEFORE any --setup call. Iteration 1's fix wrote its exclusion line into exactly
   // this file, resolved from INSIDE the worktree via `git rev-parse --git-path info/exclude` —
-  // which is not per-worktree and lands in the shared common git dir — so this snapshot is taken
-  // before the refuse case too, not just the successful one.
+  // which is not per-worktree and lands in the shared common git dir.
   const excludePath = path.join(root, '.git/info/exclude')
   const excludeBefore = fs.existsSync(excludePath) ? fs.readFileSync(excludePath, 'utf8') : null
   const statusBefore = execFileSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' })
 
-  const insideDir = path.join(root, 'x')
-  const refuse = runNode(SCRIPT, ['--setup', '--commit', sha, '--dir', insideDir], { cwd: root })
-  assert.strictEqual(refuse.status, 3,
-    'D4: a --dir inside the repo root must be refused with exit 3 — this session\'s own spike accidentally ' +
-    'created a worktree inside the repo, which is exactly the mistake this refusal pins: ' + refuse.stderr)
-  assert.ok(!fs.existsSync(insideDir),
-    'D4: a refused --setup must create nothing at the inside dir — a partially-created worktree there would ' +
-    'pollute the main repo\'s own working tree: ' + insideDir)
-
   const outsideDir = path.join(fs.realpathSync(tmpdir('replay-setup-outside')), 'wt')
   const create = runNode(SCRIPT, ['--setup', '--commit', sha, '--dir', outsideDir], { cwd: root })
-  assert.strictEqual(create.status, 0, 'D4: an outside --dir must succeed and create the detached worktree: ' + create.stderr)
+  assert.strictEqual(create.status, 0,
+    'D1: an outside-repo --dir must CONTINUE TO succeed exactly as today — the manual fallback path must ' +
+    'survive D1\'s narrower in-repo allow-list untouched: ' + create.stderr)
 
   const marker = markerPath(outsideDir)
   assert.ok(marker.split(path.sep).includes('worktrees'),
@@ -350,16 +593,11 @@ test('AC-20260819-02-3: --setup refuses a --dir inside the repo with exit 3 and 
     'D4: the worktree must be checked out detached at exactly --commit — a wrong sha means the mutation ' +
     'would land on the wrong tree entirely: ' + wtSha)
 
-  // D4 host-unmodified pin, continued: this is the regression pin for the fix-iteration-2 defect —
-  // a full green suite shipped it twice because no test here ever looked at the host repo's git
-  // config after --setup. Must fail against iteration 1's info/exclude-based exclusion approach.
   const excludeAfter = fs.existsSync(excludePath) ? fs.readFileSync(excludePath, 'utf8') : null
   assert.strictEqual(excludeAfter, excludeBefore,
     'D4 host-unmodified pin (fix iteration 2): the HOST repo\'s .git/info/exclude must be BYTE-IDENTICAL ' +
-    'before and after --setup — iteration 1 wrote a `.replay-worktree` exclusion line into exactly this file ' +
-    'via `git rev-parse --git-path info/exclude` run inside the worktree, which resolves to the MAIN repo\'s ' +
-    'shared info/exclude (not a per-worktree file) and survives teardown, breaking this spec\'s own "the main ' +
-    'tree is never touched" guarantee: ' + JSON.stringify({ before: excludeBefore, after: excludeAfter }))
+    'before and after an OUTSIDE-repo --setup — D2\'s new self-provisioning arm exists only for the in-repo ' +
+    'allow arm and must never fire here: ' + JSON.stringify({ before: excludeBefore, after: excludeAfter }))
   const statusAfter = execFileSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' })
   assert.strictEqual(statusAfter, statusBefore,
     'D4 host-unmodified pin (fix iteration 2): `git status --porcelain` in the HOST repo\'s main tree must be ' +

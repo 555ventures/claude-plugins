@@ -234,7 +234,7 @@ test('AC-20260822-02-5: the Worker Contract section is strictEqual across every 
   }
 })
 
-test('AC-20260822-02-6: an existing settings.json allow entry and a deny entry covering a config-derived allow are both preserved, with a printed conflict line naming the deny', () => {
+test('AC-20260822-02-6/AC-20260823-02-8: an existing settings.json allow entry and a deny entry covering a config-derived allow are both preserved, with a printed conflict line naming the deny', () => {
   const dir = newHost('init-gen-generate')
   fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
   fs.writeFileSync(path.join(dir, '.claude/settings.json'), JSON.stringify({
@@ -463,7 +463,7 @@ test('AC-20260822-02-18: --refresh does not bypass the non-object-settings refus
     'AC-18/D5: the existing array-shaped settings file must stay byte-identical under --refresh too — any change here reproduces the exact silent-clobber-into-numeric-indexed-object finding this pin exists to catch: ' + onDisk)
 })
 
-test('AC-20260822-02-18: an unreadable existing settings.json exits 2 with a permissions remedy distinct from the invalid-JSON message', () => {
+test('AC-20260822-02-18/AC-20260823-02-6: an unreadable existing settings.json exits 2 with a permissions remedy distinct from the invalid-JSON message', () => {
   const isRoot = !!(process.getuid && process.getuid() === 0)
   if (isRoot) return // chmod 000 cannot deny a root-owned process; this pin cannot distinguish the fix from the bug under root, so it is skipped rather than asserting a false pass
 
@@ -490,7 +490,7 @@ test('AC-20260822-02-18: an unreadable existing settings.json exits 2 with a per
   }
 })
 
-test('AC-20260822-02-19: an uncaught internal error (a .gitignore that is a directory, not a file) exits 4 with a stack and a re-run remedy instead of Node\'s implicit exit 1', () => {
+test('AC-20260822-02-19/AC-20260823-02-7: an uncaught internal error (a .gitignore that is a directory, not a file) exits 4 with a stack and a re-run remedy instead of Node\'s implicit exit 1', () => {
   const dir = newHost('init-gen-generate')
   fs.rmSync(path.join(dir, '.gitignore'), { force: true })
   fs.mkdirSync(path.join(dir, '.gitignore'))
@@ -551,4 +551,112 @@ test('AC-20260822-02-17: a profile missing a required config field exits 2, name
     'D13 requires the remedy be printed alongside the field name, not just the bare field: ' + r.stderr)
   assert.ok(!fs.existsSync(path.join(dir, '.claude/spec.config.json')),
     'a usage-error exit must write nothing — a partial config here means a later manifest-check would run against an incomplete host')
+})
+
+// Review rv_e83659d49386 (2026-08-23) closed specs/20260822/02-init-generation-script.md CLEAN
+// but waived four executed defect sites into this spec (20260823/02) under the two-iteration fix
+// cap: a string settings.extraAllow/extraDeny spreads per character into the host allow list at
+// exit 0 (spiked: 12 one-char entries — no error boundary can ever catch it, only a shape check
+// can); a non-array/primitive at either of validateProfile's config.agentMap or rules.sections
+// `in`-operator sites dies as a bare TypeError at Node's implicit exit 1, colliding with the
+// documented manifest-check-red exit code; and the unreadable-settings remedy told a
+// directory-shaped settings.json operator to `chmod` a file when the true cause is EISDIR. These
+// five tests pin AC-20260823-02-1 through AC-20260823-02-5 — none can pass yet, since D1
+// (optional-array arm), D2 (object-shape guards), and D4 (EISDIR branch) are not yet implemented
+// in init-gen.js (TDD red, 2026-08-23).
+
+test('AC-20260823-02-1: a settings.extraAllow that is the string "Bash(bun x *)" exits 2 naming settings.extraAllow as must-be-an-array and writes nothing, never spreading it into twelve one-character allow entries', () => {
+  const dir = newHost('init-gen-generate')
+  const profile = baseProfile()
+  profile.settings.extraAllow = 'Bash(bun x *)'
+  const profilePath = writeProfile(dir, profile)
+
+  const r = runNode('scripts/init-gen.js', ['generate', '--root', dir, '--profile', profilePath])
+  assert.strictEqual(r.status, 2,
+    'D1: a string settings.extraAllow is iterable and silently spreads per character into the host permissions allow list at exit 0 (the parent review\'s executed corruption repro) unless a shape check refuses it at exit 2: ' + r.status + ' stderr: ' + r.stderr)
+  assert.match(r.stderr, /settings\.extraAllow/,
+    'AC-1: the refusal must name settings.extraAllow — an unnamed refusal leaves the operator unable to tell which profile field is malformed: ' + r.stderr)
+  assert.match(r.stderr, /must be an array/i,
+    'D1: the message must use the same must-be-an-array shape the required-array loop already uses, or the two refusal classes read as inconsistent: ' + r.stderr)
+  assert.ok(!fs.existsSync(path.join(dir, '.claude/settings.json')),
+    'AC-1: nothing may be written on this refusal — a settings.json appearing here is exactly the twelve-one-char-entry corruption this pin exists to prevent: ' + (fs.existsSync(path.join(dir, '.claude/settings.json')) ? fs.readFileSync(path.join(dir, '.claude/settings.json'), 'utf8') : ''))
+  assert.ok(!fs.existsSync(path.join(dir, '.claude/spec.config.json')),
+    'AC-1: a config file appearing here means generation proceeded past the invalid settings.extraAllow field before the check fired')
+})
+
+test('AC-20260823-02-2: a settings.extraDeny that is the number 42 exits 2 naming settings.extraDeny as must-be-an-array, never dying with Node\'s bare "is not iterable" TypeError at exit 1', () => {
+  const dir = newHost('init-gen-generate')
+  const profile = baseProfile()
+  profile.settings.extraDeny = 42
+  const profilePath = writeProfile(dir, profile)
+
+  const r = runNode('scripts/init-gen.js', ['generate', '--root', dir, '--profile', profilePath])
+  assert.strictEqual(r.status, 2,
+    'D1: a numeric settings.extraDeny is not iterable and currently throws uncaught inside mergeSettings (a spread of 42) before the exit-4 boundary even starts, colliding with the documented manifest-check-red exit 1 — a shape check must refuse it at exit 2 instead: ' + r.status + ' stderr: ' + r.stderr)
+  assert.match(r.stderr, /settings\.extraDeny/,
+    'AC-2: the refusal must name settings.extraDeny — an unnamed refusal leaves the operator unable to tell which profile field is malformed: ' + r.stderr)
+  assert.doesNotMatch(r.stderr, /is not iterable/,
+    'AC-2: a raw "is not iterable" TypeError in stderr means the bare Node crash still reached the operator instead of a matched remedy: ' + r.stderr)
+  assert.ok(!fs.existsSync(path.join(dir, '.claude/spec.config.json')),
+    'AC-2: a config file appearing here means generation proceeded past the invalid settings.extraDeny field before the check fired')
+})
+
+test('AC-20260823-02-3: a config.agentMap that is the number 42 exits 2 naming config.agentMap as must-be-an-object with the profile-schema remedy, never throwing "Cannot use \'in\' operator" at exit 1', () => {
+  const dir = newHost('init-gen-generate')
+  const profile = baseProfile()
+  profile.config.agentMap = 42
+  const profilePath = writeProfile(dir, profile)
+
+  const r = runNode('scripts/init-gen.js', ['generate', '--root', dir, '--profile', profilePath])
+  assert.strictEqual(r.status, 2,
+    'D2: `\'tests\' in 42` throws a bare TypeError today at Node\'s implicit exit 1 — a plain-object guard ahead of the `in`-operator loop must catch this and refuse at exit 2 instead: ' + r.status + ' stderr: ' + r.stderr)
+  assert.match(r.stderr, /config\.agentMap/,
+    'AC-3: the refusal must name config.agentMap — an unnamed refusal leaves the operator unable to tell which profile field is malformed: ' + r.stderr)
+  assert.match(r.stderr, /must be an object/i,
+    'D2: the message must say config.agentMap must be an object, or the operator gets no actionable remedy for the shape it actually has: ' + r.stderr)
+  assert.doesNotMatch(r.stderr, /Cannot use 'in' operator/,
+    'AC-3: a raw "Cannot use \'in\' operator" TypeError in stderr means the bare Node crash still reached the operator instead of a matched remedy: ' + r.stderr)
+  assert.ok(!fs.existsSync(path.join(dir, '.claude/spec.config.json')),
+    'AC-3: a config file appearing here means generation proceeded past the invalid config.agentMap field before the check fired')
+})
+
+test('AC-20260823-02-4: a rules.sections that is the string "x" exits 2 naming rules.sections as must-be-an-object, never throwing at exit 1', () => {
+  const dir = newHost('init-gen-generate')
+  const profile = baseProfile()
+  profile.rules.sections = 'x'
+  const profilePath = writeProfile(dir, profile)
+
+  const r = runNode('scripts/init-gen.js', ['generate', '--root', dir, '--profile', profilePath])
+  assert.strictEqual(r.status, 2,
+    'D2: `\'Risk Tiers\' in "x"` throws a bare TypeError today at Node\'s implicit exit 1 — a plain-object guard ahead of the `in`-operator loop must catch this and refuse at exit 2 instead: ' + r.status + ' stderr: ' + r.stderr)
+  assert.match(r.stderr, /rules\.sections/,
+    'AC-4: the refusal must name rules.sections — an unnamed refusal leaves the operator unable to tell which profile field is malformed: ' + r.stderr)
+  assert.match(r.stderr, /must be an object/i,
+    'D2: the message must say rules.sections must be an object, or the operator gets no actionable remedy for the shape it actually has: ' + r.stderr)
+  assert.doesNotMatch(r.stderr, /Cannot use 'in' operator/,
+    'AC-4: a raw "Cannot use \'in\' operator" TypeError in stderr means the bare Node crash still reached the operator instead of a matched remedy: ' + r.stderr)
+  assert.ok(!fs.existsSync(path.join(dir, '.claude/spec.config.json')),
+    'AC-4: a config file appearing here means generation proceeded past the invalid rules.sections field before the check fired')
+})
+
+test('AC-20260823-02-5: an existing .claude/settings.json path that is a directory exits 2 naming it a directory and does NOT tell the operator to chmod it, writing nothing', () => {
+  const dir = newHost('init-gen-generate')
+  const settingsPath = path.join(dir, '.claude/settings.json')
+  fs.mkdirSync(settingsPath, { recursive: true })
+  const profile = baseProfile()
+  const profilePath = writeProfile(dir, profile)
+
+  const r = runNode('scripts/init-gen.js', ['generate', '--root', dir, '--profile', profilePath])
+  assert.strictEqual(r.status, 2,
+    'D4: a directory-shaped .claude/settings.json must still refuse at exit 2 via the unreadable-settings pre-flight arm: ' + r.status + ' stderr: ' + r.stderr)
+  assert.match(r.stderr, /\.claude[/\\]settings\.json/,
+    'AC-5: the refusal must name .claude/settings.json — an unnamed refusal leaves the operator unable to tell which path is the problem: ' + r.stderr)
+  assert.match(r.stderr, /directory/i,
+    'AC-5/D4: the refusal must say the path is a directory, or the operator has no way to distinguish this cause from a permissions error: ' + r.stderr)
+  assert.doesNotMatch(r.stderr, /chmod/i,
+    'AC-5: the red edge — Node\'s current EISDIR message happens to contain the word "directory" already, but the fix must stop prescribing `chmod`, which cannot turn a directory into a file: ' + r.stderr)
+  assert.ok(fs.statSync(settingsPath).isDirectory(),
+    'AC-5: the settings path must be left untouched on this refusal — anything other than a directory here means generate wrote into or replaced it before refusing')
+  assert.ok(!fs.existsSync(path.join(dir, '.claude/spec.config.json')),
+    'AC-5: a config file appearing here means generation proceeded past the unreadable-settings pre-flight before the check fired')
 })

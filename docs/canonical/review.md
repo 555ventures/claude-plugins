@@ -52,6 +52,17 @@
   reader union-merges `spec-runs*.jsonl`, and the rows are drained into the tracked ledger —
   positioned before the close row — when that spec later closes CLEAN, in-place or via merge
   promotion. (specs/20260821/04-stopped-row-durability.md)
+
+  A third `fix-applied` (the iteration cap) appends an **escalate row** at the moment of the
+  refusal: an honestly-derived non-CLEAN verdict carrying `escalated: true`, minted by
+  `verdict.js` behind `--escalated` with `--fixDispatched 0` (the dispatched fix never landed;
+  a derived CLEAN under `--escalated` is refused as evidence drift — never printed). In a
+  worktree it lands durably in the main root's gitignored `spec-runs.stopped.jsonl` exactly
+  like a hard-stop row, drains into the tracked ledger at close/promotion, and is permanent
+  evidence — a capped attempt is never invisible. The waive/reject exit still closes normally;
+  its close row lands after the escalate row and remains the observation join's key.
+  (specs/20260822/01-escalate-ledger-row.md)
+
   `/spec:escape` derives `killedMatch` from it. (amended by specs/20260820/07-review-driver.md,
   2026-08-21) Plan locks
   append a `stage:"plan"` ledger row of executed facts (spike count, promise-sweep

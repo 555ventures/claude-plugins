@@ -1,6 +1,6 @@
 ---
 date: 2026-08-22
-status: implementing
+status: done
 diff_base: 909bd30a126fbe9fab7632909fcc0b36fabeacdf
 open_markers: 0
 spiked: 2026-08-22

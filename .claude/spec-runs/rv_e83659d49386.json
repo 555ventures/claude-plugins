@@ -1,0 +1,91 @@
+{
+  "runId": "rv_e83659d49386",
+  "ts": "2026-08-23T15:57:47.468Z",
+  "spec": "specs/20260822/02-init-generation-script.md",
+  "tier": "standard           # additive spec-paths key follows 20260819/02 + 20260820/05 + 20260821/01 precedent; scope-reconcile.js (critical-named) gets one additive read-only flag, no behavioral edit to existing modes (pinned by AC-12); init runs only at bootstrap — worst failure is a broken bootstrap in a fresh host, recoverable by re-run",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 2,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      }
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 277
+      }
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      }
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 14,
+        "carried": 13,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "A non-array profile.settings.extraAllow/extraDeny crashes generate with an unhandled TypeError at exit 1 (no remedy, no init-gen: prefix), outside the exit-4 boundary - the same 'settings-derived throw collides with a documented exit code' class round 2 was built to close, for a field its own array-shape sweep omitted.",
+        "file": "spec/scripts/init-gen.js",
+        "line": 505,
+        "impact": "A malformed profile field the schema documents as an array crashes the bootstrap with a raw, unlabeled stack trace that looks exactly like a manifest-check failure, instead of a clean, remedy-bearing refusal.",
+        "evidence": "Executed: node spec/scripts/init-gen.js generate --root <host> --profile <profile w/ settings.extraAllow: 5> -> TypeError: (p.settings.extraAllow || []) is not iterable at mergeSettings (spec/scripts/init-gen.js:505:93) ... Node.js v26.0.0 ... exit 1 (no init-gen: prefix, no remedy). Confirmed the throw site (505/513) runs at line 563, before the try block starts at line 570; a scratch mutant with the try/catch stripped confirmed the boundary works for the EISDIR case but does not cover this call site. Nothing is written on disk in this repro (no data loss)."
+      },
+      {
+        "severity": "soft",
+        "claim": "The unreadable-settings pre-flight remedy always says 'Fix the file's permissions (chmod u+r ...)' even when the read failure is EISDIR (settings.json is a directory), which chmod cannot fix.",
+        "file": "spec/scripts/init-gen.js",
+        "line": 547,
+        "impact": "An operator whose settings.json got replaced by a directory is told to fix file permissions, which does not address the actual problem.",
+        "evidence": "Executed: made .claude/settings.json a directory, ran generate -> 'init-gen: cannot read existing .../.claude/settings.json (EISDIR: illegal operation on a directory, read) ... Fix the file's permissions (e.g. chmod u+r ...) and re-run generate.' Exit code (2) and no-write guarantee are correct; only the remedy wording is mismatched to the cause."
+      }
+    ],
+    "killed": [],
+    "reviewerCount": 1,
+    "scope": "fix-delta",
+    "tokens": 130146
+  }
+}

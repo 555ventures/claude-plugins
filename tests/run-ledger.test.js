@@ -48,9 +48,12 @@ test('AC-20260820-07-13: review never hand-writes the verdict word — verdict.j
     'the ledger row must be the verbatim verdict.js --ledger line, never hand-assembled')
 })
 
-test('init sets the union merge driver for the ledger', () => {
-  assert.match(read('commands/init.md'), /\.claude\/spec-runs\.jsonl merge=union/)
-})
+// specs/20260822/02-init-generation-script.md D12: the prose pin over init.md this test used to
+// carry is retired — init-gen.js (D1/D2) becomes the sole writer of the gitattributes union
+// line, and the behavioral test in tests/init-gen/generate.test.js (generate -> .gitattributes
+// contains the line, idempotently) is the pin's new home. Regexes over prose are
+// not tests (§ Test Rules) once an executable oracle exists; the merge-mechanics test below is
+// unchanged.
 
 test('union driver resolves concurrent worktree appends under squash merge', () => {
   const root = fs.realpathSync(tmpdir('ledger'))

@@ -12,6 +12,13 @@ const { tmpdir, runNode, gitRepo } = require('./helpers')
 // find and RUN those suites instead of relying on a reviewer to notice by hand. These tests pin
 // AC-20260815-02-1 through AC-20260815-02-5 — every one of them fails on current code because
 // scope-reconcile.js does not emit an `atRisk` field at all yet.
+//
+// specs/20260822/02-init-generation-script.md D9/D10 (AC-20260822-02-12): D9 adds an additive
+// `--probe-at-risk` mode to this same script, reusing this file's existing `--json` derivation
+// in place — never a second implementation. D10 requires the existing `--json`/`--dirs` modes to
+// emit byte-identical output on these exact fixtures after that addition lands, so every test
+// below is retagged (name only, no assertion changed or weakened) as the regression pin D10 and
+// AC-20260822-02-12 call for.
 
 const SCRIPT = 'scripts/scope-reconcile.js'
 
@@ -29,7 +36,7 @@ function specWithFilePlan(dir, relPath, rows) {
   return relPath
 }
 
-test('AC-20260815-02-1: a changed source file whose stem appears in a test file outside the File Plan tests rows is listed in atRisk with its refs', () => {
+test('AC-20260815-02-1 [AC-20260822-02-12 regression pin]: a changed source file whose stem appears in a test file outside the File Plan tests rows is listed in atRisk with its refs', () => {
   const dir = tmpdir('scope-reconcile-at-risk')
   const g = gitRepo(dir)
 
@@ -58,7 +65,7 @@ test('AC-20260815-02-1: a changed source file whose stem appears in a test file 
     'old return value can go red without review ever running it: ' + JSON.stringify(out))
 })
 
-test('AC-20260815-02-2: a referencing test file resolved by a File Plan tests row (glob) is excluded from atRisk', () => {
+test('AC-20260815-02-2 [AC-20260822-02-12 regression pin]: a referencing test file resolved by a File Plan tests row (glob) is excluded from atRisk', () => {
   const dir = tmpdir('scope-reconcile-at-risk')
   const g = gitRepo(dir)
 
@@ -85,7 +92,7 @@ test('AC-20260815-02-2: a referencing test file resolved by a File Plan tests ro
     'review would have to waive every run: ' + JSON.stringify(out))
 })
 
-test('AC-20260815-02-3: when no candidate test file contains any changed file\'s stem, atRisk is empty and existing fields/exit codes are unchanged', () => {
+test('AC-20260815-02-3 [AC-20260822-02-12 regression pin]: when no candidate test file contains any changed file\'s stem, atRisk is empty and existing fields/exit codes are unchanged', () => {
   const dir = tmpdir('scope-reconcile-at-risk')
   const g = gitRepo(dir)
 
@@ -114,7 +121,7 @@ test('AC-20260815-02-3: when no candidate test file contains any changed file\'s
     'exit here with an empty outOfPlan means atRisk broke exit-code byte-compatibility: ' + r.stderr)
 })
 
-test('AC-20260815-02-4: a changed file that is itself test-classified per testGlobs contributes no stems and is never listed in atRisk', () => {
+test('AC-20260815-02-4 [AC-20260822-02-12 regression pin]: a changed file that is itself test-classified per testGlobs contributes no stems and is never listed in atRisk', () => {
   const dir = tmpdir('scope-reconcile-at-risk')
   const g = gitRepo(dir)
 
@@ -158,7 +165,7 @@ test('AC-20260815-02-4: a changed file that is itself test-classified per testGl
 // degeneracy the D1 guard was meant to prevent, just via a different form. Both must FAIL against
 // current stemsFor() and PASS once it stops emitting empty stems and bare single-segment stems.
 
-test('AC-20260815-02-15: a changed root-level dotfile whose noExt form is empty does not flag every candidate test file as at-risk', () => {
+test('AC-20260815-02-15 [AC-20260822-02-12 regression pin]: a changed root-level dotfile whose noExt form is empty does not flag every candidate test file as at-risk', () => {
   const dir = tmpdir('scope-reconcile-at-risk')
   const g = gitRepo(dir) // gitRepo's init commit already seeds and commits a root .gitignore
 
@@ -186,7 +193,7 @@ test('AC-20260815-02-15: a changed root-level dotfile whose noExt form is empty 
     JSON.stringify(out))
 })
 
-test('AC-20260815-02-15: a changed root-level file whose bare noExt basename is a common word does not flag unrelated test files as at-risk', () => {
+test('AC-20260815-02-15 [AC-20260822-02-12 regression pin]: a changed root-level file whose bare noExt basename is a common word does not flag unrelated test files as at-risk', () => {
   const dir = tmpdir('scope-reconcile-at-risk')
   const g = gitRepo(dir)
 
@@ -221,7 +228,7 @@ test('AC-20260815-02-15: a changed root-level file whose bare noExt basename is 
     'guard was meant to prevent: ' + JSON.stringify(out))
 })
 
-test('AC-20260815-02-5: a stem match that exists only under node_modules/ is never listed in atRisk (the walk never enters node_modules)', () => {
+test('AC-20260815-02-5 [AC-20260822-02-12 regression pin]: a stem match that exists only under node_modules/ is never listed in atRisk (the walk never enters node_modules)', () => {
   const dir = tmpdir('scope-reconcile-at-risk')
   const g = gitRepo(dir)
 

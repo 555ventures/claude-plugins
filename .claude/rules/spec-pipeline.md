@@ -145,6 +145,8 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
   `node --test 'tests/<scope>/*.test.js'` actually runs the files. Resolve `{testDirs}` to the
   glob on every scoped gate run. (specs/20260801/02-session-runner.md — the build hit this
   resolving its own gate command.)
+- `[plugin]` Frontmatter values are read with a plain `^key:\s*(.+)$` regex — **inline `#` comments are NOT stripped**. A note appended to `tier:` is harmless (the value is only compared to `critical`), but the same habit applied to `build_base:` makes the whole comment part of the ref, and every consumer that resolves it dies: `/spec:review`'s driver refused to start with `fatal: invalid object name` and `bash: line 1: main: command not found` from scope-reconcile's shell interpolation. Put the note on its own `#` line ABOVE the key. (specs/20260822/02-init-generation-script.md — the build-close correction blocked its own review the next morning; rv_e83659d49386.)
+- `[plugin]` `red-check.js` derives carried-AC expectation from **AC-ID occurrence anywhere in the file**, comments included. An edit-only File Plan row that mentions another AC's new behavioral home in a comment (`// ... AC-20260822-02-3 now lives in ...`) forces a false red expectation onto a file whose only change is a deletion, and the build stops at `unsanctioned-green`. Name the file, not the ID — the removal fix, never an invented ID. (specs/20260822/02-init-generation-script.md — tests/run-ledger.test.js during build.)
 <!-- One line per entry; every entry cites a ledger row (spec path + runId) or a dated
 incident, and carries a provenance tag: [host] (this repo/stack) or [plugin] (traces to a
 spec-plugin template/command/generated artifact). Writers: /spec:review close and

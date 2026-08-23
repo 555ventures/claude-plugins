@@ -92,6 +92,13 @@
   measured to fail: shipped 2026-08-19, due at 5 reviews, skipped through 12+ reviews in ~48
   hours.
   A sustained miss-rate is the evidence that reopens the second-reviewer question.
+  The scratch worktree lives at `<root>/.claude/worktrees/replay-<id>` — inside the repo, so
+  agent edits are auto-approved and the scheduled replay runs unattended (an out-of-repo scratch
+  tree is denied Edit/Write by the permission classifier, which blocked the mutation worker on
+  both live runs of 2026-08-23). It stays invisible to `git status` via an ignore line
+  `--setup` self-provisions into `info/exclude` when the host repo lacks it. Isolation comes
+  from the detached worktree, that ignore line, and the private-git-dir marker — not from living
+  outside the repo; a `--dir` outside the repo remains the manual fallback.
   The mutation worker's writes are sanctioned by the cross-worktree write guard: a write is
   allowed when the TARGET tree carries the `replay-worktree` marker, honoured only when that
   marker sits in a linked worktree's private git dir. The scratch tree is a sink, never a
@@ -99,9 +106,15 @@
   git metadata is attributed to its owning worktree and blocked unless that owner is the
   writing session's own tree, so the marker cannot be forged through the tool surface the
   guard governs.
+  `--select` emits a pinned, ancestry-validated sha as the replay's diff base — a spec's
+  symbolic `build_base` is stale the moment the review's own merge lands — sourced from the
+  `diff_base` the review driver stamps into the spec frontmatter at every `status: done` flip.
+  A spec closed before stamping existed, whose base no longer validates, is refused (exit 4)
+  rather than measured against a distorted diff.
   (specs/20260819/02-mutation-replay.md, specs/20260819/03-replay-first-run-fixes.md,
   specs/20260820/02-replay-scratch-write-access.md,
-  specs/20260821/02-replay-review-phase.md)
+  specs/20260821/02-replay-review-phase.md,
+  specs/20260823/05-replay-unattended-hardening.md)
 
 - `ac-matrix`'s coverage denominator fails closed: an AC bullet no ID grammar can parse counts
   as **uncovered** — unparseable = unknown, never absent — in both drift modes, since a host

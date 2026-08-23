@@ -26,10 +26,12 @@
 // Exit codes:
 //   generate: 0 = generated, manifest-check green, config stamped
 //             1 = manifest-check red — nothing stamped
-//             2 = usage error / invalid or incomplete profile (missing or non-array field
-//                 named + remedy) / unparseable Worker Contract (grounding-contract.md
-//                 heading drifted, D6/A7) / existing .claude/settings.json unreadable,
-//                 invalid JSON, or not a JSON object (D5 merge impossible — nothing written)
+//             2 = usage error / invalid or incomplete profile (missing field, a required- or
+//                 optional-when-present array field that isn't an array, or a field that must
+//                 be a plain object but isn't, named + remedy) / unparseable Worker Contract
+//                 (grounding-contract.md heading drifted, D6/A7) / existing
+//                 .claude/settings.json unreadable, a directory, invalid JSON, or not a JSON
+//                 object (D5 merge impossible — nothing written)
 //             3 = an existing target differs from what the profile would produce and
 //                 --refresh was not given — every target left byte-identical, nothing written
 //             4 = unexpected internal error (uncaught throw) — the host tree may be
@@ -168,6 +170,23 @@ function has(obj, dotted) {
   return cur !== undefined && cur !== null
 }
 
+// D1/D2: the two refusal shapes every optional-array and required-object field share. Kept as
+// named helpers so every caller prints the identical message shape (round-3 ruling: a
+// non-array/non-object is a shape refusal, never an enumeration).
+function mustBeArray(field, v) {
+  if (!Array.isArray(v)) {
+    console.error(`init-gen: profile field "${field}" must be an array — fix the profile JSON per the Contracts profile schema in specs/20260822/02-init-generation-script.md before running generate again`)
+    process.exit(2)
+  }
+}
+
+function mustBeObject(field, v) {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) {
+    console.error(`init-gen: profile field "${field}" must be an object — fix the profile JSON per the Contracts profile schema in specs/20260822/02-init-generation-script.md before running generate again`)
+    process.exit(2)
+  }
+}
+
 function validateProfile(p) {
   const required = [
     'config.gateCommand', 'config.testCommand', 'config.setupCommand', 'config.patternsScript',
@@ -184,10 +203,24 @@ function validateProfile(p) {
     'probeOutcomes.testCommand', 'probeOutcomes.atRisk',
   ]
   for (const field of required) if (!has(p, field)) fieldMissing(field)
-  if (p.config && p.config.agentMap) {
+  // D1: extraAllow/extraDeny are optional (the `|| []` default in mergeSettings stands when
+  // absent) — but a *present* non-array silently spreads per character (a string) or throws
+  // "is not iterable" (a number/object) inside mergeSettings, so a present value gets the same
+  // shape check as a required array, before generate ever reaches the merge.
+  if (p.settings) {
+    for (const f of ['extraAllow', 'extraDeny']) {
+      if (p.settings[f] !== undefined && p.settings[f] !== null) mustBeArray(`settings.${f}`, p.settings[f])
+    }
+  }
+  // D2: `'k' in v` throws a bare TypeError for any primitive `v` (42, "x", ...) — a plain-object
+  // guard ahead of each `in`-operator loop turns that crash into the same named exit-2 refusal
+  // the missing-field case already uses.
+  if (p.config) {
+    mustBeObject('config.agentMap', p.config.agentMap)
     for (const k of ['tests', 'default']) if (!(k in p.config.agentMap)) fieldMissing(`config.agentMap.${k}`)
   }
-  if (p.rules && p.rules.sections) {
+  if (p.rules) {
+    mustBeObject('rules.sections', p.rules.sections)
     for (const s of ['Risk Tiers', 'Planning', 'Build', 'Worker Rules', 'Test Rules', 'Review Checks']) {
       if (!(s in p.rules.sections)) fieldMissing(`rules.sections["${s}"]`)
     }
@@ -197,10 +230,7 @@ function validateProfile(p) {
   // for-of gets an explicit array-shape check with a matched remedy.
   for (const field of ['rules.paths', 'conventionRules', 'agents', 'patternSweeps', 'manifestExtras']) {
     const v = field.split('.').reduce((o, k) => o && o[k], p)
-    if (!Array.isArray(v)) {
-      console.error(`init-gen: profile field "${field}" must be an array — fix the profile JSON per the Contracts profile schema in specs/20260822/02-init-generation-script.md before running generate again`)
-      process.exit(2)
-    }
+    mustBeArray(field, v)
   }
 }
 
@@ -533,10 +563,12 @@ function computeContractHash() {
 // non-object existing file makes the merge impossible rather than emptyable. Read, parsed, and
 // shape-checked once, here, pre-flight, before any target is written (both modes: --refresh's
 // overwrite semantics apply only to script-owned targets, and settings.json is explicitly not
-// one). The merge itself is also computed here, pre-flight (D5 round 2): a value that parses as
-// valid JSON but isn't a usable object — `null`, a top-level array — used to pass this block and
-// only blow up inside mergeSettings, after every other target was already written to disk. No
-// settings-derived throw can follow a write now.
+// one). D3 (round 3): the merge computation itself moved OFF this pre-flight block and into the
+// try boundary below, as its first statement — still ahead of buildFileTargets and every write,
+// so no settings-derived throw can follow a write; a value that parses as valid JSON but isn't a
+// usable object (`null`, a top-level array) is still caught right here by the shape check below,
+// and any other residual throw inside mergeSettings is now caught by that same boundary as
+// exit 4, never a bare Node crash.
 const existingSettingsPath = path.join(root, '.claude', 'settings.json')
 let existingSettings = {}
 if (fs.existsSync(existingSettingsPath)) {
@@ -544,6 +576,13 @@ if (fs.existsSync(existingSettingsPath)) {
   try {
     rawSettings = fs.readFileSync(existingSettingsPath, 'utf8')
   } catch (e) {
+    // D4: EISDIR (A2: observed on darwin) is its own remedy — a directory can't be chmod'd into
+    // a file, so the generic permissions message would send the operator down a dead end. Every
+    // other read failure (permissions, ...) keeps the existing chmod remedy verbatim.
+    if (e.code === 'EISDIR') {
+      console.error(`init-gen: existing ${existingSettingsPath} is a directory, not a file — settings.json is always merge-preserved per D5, so generate refuses rather than guess; nothing written. Remove or replace the directory with a JSON file (e.g. \`rm -r ${existingSettingsPath}\`) and re-run generate.`)
+      process.exit(2)
+    }
     console.error(`init-gen: cannot read existing ${existingSettingsPath} (${e.message}) — settings.json is always merge-preserved per D5, so generate refuses rather than risk dropping entries it cannot see; nothing written. Fix the file's permissions (e.g. \`chmod u+r ${existingSettingsPath}\`) and re-run generate.`)
     process.exit(2)
   }
@@ -559,8 +598,6 @@ if (fs.existsSync(existingSettingsPath)) {
     process.exit(2)
   }
 }
-// D5 round 2: the merge is COMPUTED here, pre-flight — no settings-derived throw can follow a write.
-const merged = mergeSettings(root, existingSettings, profile)
 
 // D6.4 round 2: everything below can hit an unforeseen host filesystem state (a confirmed repro:
 // .gitignore is a directory, so ensureGitignore's read throws EISDIR after all targets are
@@ -568,6 +605,11 @@ const merged = mergeSettings(root, existingSettings, profile)
 // wrapped — any uncaught throw here becomes an unmistakable exit 4, never a collision with the
 // documented 0/1/2/3 verdicts. process.exit() calls inside do not throw, so they pass through.
 try {
+  // D3 (round 3): the merge is computed here, INSIDE the boundary, as its first statement — still
+  // ahead of buildFileTargets and every write (round 2's no-settings-throw-after-a-write ordering
+  // holds), and now also covered by this same exit-4 boundary for the unenumerable residue A1
+  // describes (JSON-representable inputs no longer reach a throw here after D1/D2's shape checks).
+  const merged = mergeSettings(root, existingSettings, profile)
   const fileTargets = buildFileTargets(profile)
   const manifestObj = buildManifestObject(root, profile)
   const targets = [...fileTargets, { rel: '.claude/spec-manifest.json', kind: 'json', obj: manifestObj }]

@@ -30,8 +30,18 @@
   kept, an existing deny covering a would-be allow kept and reported, never overridden. A
   settings file that cannot be read, is not valid JSON, or parses to anything other than a
   JSON object makes the merge impossible — `generate` refuses in pre-flight at exit 2 with a
-  remedy matched to the cause, writing nothing anywhere. The merge is computed before the
-  write phase, so no settings-derived failure can land after files are on disk.
+  remedy matched to the cause, writing nothing anywhere. The unreadable arm names a directory
+  as a directory (remedy: remove or replace it with a JSON file); the `chmod u+r` remedy is
+  reserved for genuine permission errors. The merge is computed inside the exit-4 boundary and
+  still ahead of every write, so no settings-derived failure can land after files are on disk
+  and any residual settings-derived throw is an exit 4, never a bare Node exit 1.
+- **Profile shape is validated in pre-flight, never trusted at use.** Beyond the required
+  fields, `settings.extraAllow` and `settings.extraDeny` must be arrays when present (absent is
+  fine), and `config.agentMap` and `rules.sections` must be plain objects — not arrays, not
+  primitives. Each failure exits 2 with the profile-schema remedy, nothing written. A string
+  where an array belongs would otherwise spread per character into the host's permission list
+  at exit 0, and a primitive where an object belongs would die as a bare TypeError outside
+  every error boundary.
 - **Idempotency is probed, not assumed.** Ignore-entry detection probes a child path
   (`git check-ignore -q .claude/worktrees/x`), never the bare directory — the bare form exits
   1 on a fresh host even when the entry exists, so it re-appends forever. gitattributes

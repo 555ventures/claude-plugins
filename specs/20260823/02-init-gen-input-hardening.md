@@ -1,6 +1,6 @@
 ---
 date: 2026-08-23
-status: hardened
+status: done
 open_markers: 0
 tier: standard
 area: bootstrap
@@ -9,6 +9,7 @@ breaking: false
 depends_on: ["specs/20260822/02-init-generation-script.md"]
 depended_on_by: []
 brief: n/a
+build_base: main
 ---
 
 # Init-gen input hardening — the four defect sites waived at review rv_e83659d49386

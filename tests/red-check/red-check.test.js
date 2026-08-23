@@ -17,6 +17,27 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // missing-test-file, invalid-pre-green) are the reconciliation table this file exists to prove.
 // AC-20260821-01-1 additionally pins lib/spec-sections.js's parseAcBullets `preGreen` field and
 // PRE_GREEN_REASONS export directly (a plain require()able library, unlike a workflow script).
+//
+// specs/20260823/03-silent-drop-hardening.md D1/D2 (2026-08-23, the 2026-08-21..23 upwell
+// silent-drop incident): a carried AC's `[pre-green: <reason>]` tag, when it ends the bullet
+// backticked, is refused as a declaration by lib/spec-sections.js's bare-only trailing rule
+// (escape rv_640c582f4902) — today that refusal misreports as a plain `unsanctioned-green`
+// finding with no hint that a refused pre-green tag is the actual cause. AC-20260823-03-3 pins
+// the loud replacement: `rejected-trailing-tag`, naming the AC-ID and remedy, in place of
+// `unsanctioned-green`, whenever the refusal is causally relevant (the carried AC's bullet is the
+// one whose refused tag would have sanctioned the finding). Confirmed RED at HEAD by executed
+// run: today's red-check.js reports `class: 'unsanctioned-green'` for this exact fixture.
+
+// D11 amendment (build-time, JJ-approved 2026-08-23, supersedes D8's rationale and D2's predicate
+// formula): AC-20260823-03-3 above pins the TRUE-end backticked shape; live evidence
+// (specs/20260823/01 AC-20260823-01-18/-20, review row rv_6825fa48c98d) showed a genuine
+// declaration written just before the bullet's final `→ tests/…` reference is ALSO silently
+// dropped — neither the bare-only rule nor D2's null-test formula saw it, so it neither parsed nor
+// set trailingRejected. AC-20260823-03-17 below pins that not-at-end shape end-to-end through this
+// same red-check.js consumer: a NEW fixture (D8's build-time ruling that AC-3's own fixture must
+// sit at the true end stands — this is a sibling AC, not a retarget of AC-3's). RED at HEAD:
+// lib/spec-sections.js's tolerant run does not yet tolerate a trailing → reference suffix, so
+// b.trailingRejected is null for this shape and red-check.js falls through to unsanctioned-green.
 
 const { parseAcBullets, PRE_GREEN_REASONS } = require('../../spec/scripts/lib/spec-sections')
 
@@ -87,6 +108,60 @@ test('AC-20260821-01-3: a tests-layer file whose only carried AC is unsanctioned
   assert.ok(out.findings.some(f => f.class === 'unsanctioned-green' && f.path === 'tests/x3.test.js' &&
     Array.isArray(f.acs) && f.acs.includes('AC-20260821-93-1')),
     `the finding must name both the file and its carried AC-ID so a human can diagnose which pin is vacuous — got ${JSON.stringify(out.findings)}`)
+})
+
+test('AC-20260823-03-3: WHEN red-check finds an expected-red file observed green and a carried AC\'s bullet ends in a backticked pre-green tag THE SYSTEM emits rejected-trailing-tag (not unsanctioned-green), naming the AC-ID and remedy', () => {
+  const { dir, base } = newHost('rtt3')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/x3.test.js'),
+    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260823-33-1: vacuously true, no implementation required', () => { assert.ok(true) })\n")
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260823-33-1**: WHEN x THE SYSTEM SHALL y `[pre-green: absence-invariant]`'],
+    ['| tests/x3.test.js | CREATE | tests | carried AC\'s bullet ends in a backticked pre-green tag, refused as a declaration |']))
+  const res = run(spec, dir, base, ['--json'])
+  assert.strictEqual(res.status, 1,
+    `a carried AC whose only pre-green sanction was refused for being backticked must still exit 1 — the finding CLASS changes, severity does not (stderr: ${res.stderr})`)
+  const out = findings(res)
+  assert.ok(!out.findings.some(f => f.class === 'unsanctioned-green' && f.path === 'tests/x3.test.js'),
+    `D1: rejected-trailing-tag REPLACES unsanctioned-green — never both for the same file/AC. A surviving unsanctioned-green finding here means the refusal's cause is still hidden, the exact silent misreport this spec fixes — got ${JSON.stringify(out.findings)}`)
+  const f = out.findings.find(x => x.class === 'rejected-trailing-tag' && x.path === 'tests/x3.test.js')
+  assert.ok(f, `tests/x3.test.js's carried AC-20260823-33-1 has a refused trailing [pre-green:] tag and passes vacuously against the pre-image — it must produce a rejected-trailing-tag finding naming the file — got ${JSON.stringify(out.findings)}`)
+  assert.ok(f.detail.includes('AC-20260823-33-1'),
+    `the finding's detail must name the AC-ID so a human can find the offending bullet — got detail "${f.detail}"`)
+  assert.match(f.detail, /\[pre-green:\s*absence-invariant\]/,
+    `the detail must name the refused tag's literal text — got detail "${f.detail}"`)
+  assert.match(f.detail, /backtick/i,
+    `the detail must explain the refusal was due to the tag being backticked (the bare-only trailing rule, rv_640c582f4902) — got detail "${f.detail}"`)
+  assert.match(f.detail, /declaration slot/i,
+    `the detail must name the declaration-slot remedy — got detail "${f.detail}"`)
+})
+
+test('AC-20260823-03-17: WHEN red-check finds an expected-red file observed green and the carried AC\'s bullet carries a refused pre-green tag before its final → reference THE SYSTEM emits rejected-trailing-tag (not unsanctioned-green), whose detail carries the not-at-end remedy', () => {
+  const { dir, base } = newHost('rtt17')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/x3.test.js'),
+    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260823-34-1: vacuously true, no implementation required', () => { assert.ok(true) })\n")
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260823-34-1**: WHEN x THE SYSTEM SHALL y `[pre-green: absence-invariant]` → tests/x3.test.js'],
+    ['| tests/x3.test.js | CREATE | tests | carried AC\'s bullet carries a refused pre-green tag before its final → reference — the not-at-end shape |']))
+  const res = run(spec, dir, base, ['--json'])
+  assert.strictEqual(res.status, 1,
+    `a carried AC whose only pre-green sanction sits before the bullet's final → reference — never a recognized declaration position — must still exit 1; the finding CLASS changes, severity does not (stderr: ${res.stderr})`)
+  const out = findings(res)
+  assert.ok(!out.findings.some(f => f.class === 'unsanctioned-green' && f.path === 'tests/x3.test.js'),
+    `D1/D11: rejected-trailing-tag REPLACES unsanctioned-green for the not-at-end shape too — a surviving unsanctioned-green here means the refusal's cause is still hidden, exactly the silent misreport specs/20260823/01's AC-20260823-01-18/-20 suffered — got ${JSON.stringify(out.findings)}`)
+  const f = out.findings.find(x => x.class === 'rejected-trailing-tag' && x.path === 'tests/x3.test.js')
+  assert.ok(f, `tests/x3.test.js's carried AC-20260823-34-1 has a refused not-at-end [pre-green:] tag and passes vacuously against the pre-image — it must produce a rejected-trailing-tag finding naming the file — got ${JSON.stringify(out.findings)}`)
+  assert.ok(f.detail.includes('AC-20260823-34-1'),
+    `the finding's detail must name the AC-ID so a human can find the offending bullet — got detail "${f.detail}"`)
+  assert.ok(!f.detail.includes('remove the backticks'),
+    `D11: the not-at-end remedy must never say "remove the backticks" — removing them alone would not make this tag parse, since it still sits before the bullet's final → reference, not a recognized declaration position — a wrong remedy here sends the host chasing the wrong fix — got detail "${f.detail}"`)
+  assert.match(f.detail, /declaration slot/i,
+    `the not-at-end detail must still name the move-into-the-declaration-slot remedy — got detail "${f.detail}"`)
 })
 
 test('AC-20260821-01-4: a fixture spec whose SHALL-CONTINUE-TO file passes AND whose unsanctioned file fails BOTH matches their expected colour, so red-check exits 0', () => {

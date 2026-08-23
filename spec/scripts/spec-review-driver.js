@@ -76,6 +76,9 @@ const { spawnSync } = require('child_process')
 // The repo's ONE ledger reader (live + year archives, in read order) — REPLAY counts
 // stage:"replay" rows through it rather than opening the ledger a second way.
 const { readLedgerRows } = require('./lib/observation')
+// D4 (specs/20260823/03-silent-drop-hardening.md): the one shared frontmatter-value reader,
+// replacing this driver's own local copy (rv_e83659d49386).
+const { fmVal: fmValLib } = require('./lib/frontmatter')
 
 // D1-D6 (specs/20260821/04-stopped-row-durability.md): a worktree review's RED_BLOCKING hard-stop
 // durably appends here, at the MAIN root, instead of the worktree's own (destructible)
@@ -149,13 +152,11 @@ const resolvedSpecPath = path.resolve(specPath)
 const specText = fs.readFileSync(resolvedSpecPath, 'utf8')
 const fmMatch = /^---\n([\s\S]*?)\n---/.exec(specText)
 const fmRaw = fmMatch ? fmMatch[1] : ''
-const fmVal = (k) => {
-  const m = new RegExp('^' + k + ':\\s*(.+)$', 'm').exec(fmRaw)
-  if (!m) return ''
-  const v = m[1].trim()
-  const q = /^(["'])([\s\S]*)\1$/.exec(v)
-  return q ? q[2] : v
-}
+// D4 (specs/20260823/03-silent-drop-hardening.md, rv_e83659d49386): the local fmVal this replaced
+// captured everything after `key:` verbatim, inline comment included — the mechanism that
+// polluted seven live review ledger rows' `tier` fields and once broke `build_base:` outright.
+// lib/frontmatter.js's fmVal is quote-aware and strips a whitespace-preceded `#` comment.
+const fmVal = (k) => fmValLib(fmRaw, k)
 
 let status = fmVal('status')
 const tier = fmVal('tier') || 'standard'

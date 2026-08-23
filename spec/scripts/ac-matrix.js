@@ -73,12 +73,48 @@
 // silently laundering uncovered-ac. Fixed by replacing the bare .includes with
 // lib/spec-sections.js's exported acIdOccurs, a full-token occurrence check - the single
 // authority also used by red-check.js's carried-AC classifier.
+//
+// specs/20260823/03-silent-drop-hardening.md D1 (2026-08-23, the 2026-08-21..23 upwell
+// silent-drop incident): lib/spec-sections.js's bare-only trailing-tag rule (rv_640c582f4902)
+// refuses a backticked trailing tag silently — an AC whose bullet genuinely declares its
+// `[oracle:]`/`[env:]` backticked at the trailing position used to misreport as a plain
+// `uncovered-ac`/`unsanctioned-skip` with no hint the refusal is the actual cause (upwell saw 17
+// of these). Loud-when-it-bites, never unconditional: when a bullet has zero test coverage AND
+// its trailingRejected string names `[oracle:` (step 5), or a mapped skip's AC bullet has no
+// [env:] AND its trailingRejected string names `[env:` (step 6, both the current-spec and
+// owning-spec branches), the new hard finding `rejected-trailing-tag` REPLACES the generic
+// finding for that one AC — never both. An AC whose bullet ends in a backticked tag but is
+// otherwise clean (covered, or not a mapped skip) stays silent — the refusal never changes any
+// verdict there, so nothing is said.
+//
+// D9 (2026-08-23, same spec, executed repro during build): the two manifest leg exits
+// (`ac-matrix`, `skip-reconcile`) were derived by testing each finding's `class` against two
+// class sets — adding `rejected-trailing-tag` to BOTH (it is emitted from both loops above) meant
+// an emission from EITHER loop reddened BOTH legs. Repro: a spec with one uncovered AC carrying a
+// refused trailing `[oracle:]` and ZERO skip lines wrote
+// `{"leg":"skip-reconcile","exit":1,"observed":{"skipped":0,"sanctioned":0}}` — a leg reporting
+// red having observed nothing, silently misreporting into the very evidence manifest verdict.js
+// reads. Fixed: `rejected-trailing-tag` is removed from both class sets; each of the three
+// emission sites instead records its own leg's origin (`acMatrixOrigin`/`skipOrigin`, plain Sets
+// keyed by object reference into `findings`, never a key on the finding object itself), and the
+// two exits OR the class test with the origin test. `--json`'s findings array and each finding's
+// own key set (`ac`,`class`,`detail`,`severity`) stay byte-identical — origin is internal
+// bookkeeping, never an emitted field.
+//
+// D10 (2026-08-23, same spec): the `rejected-trailing-tag` remedy-text builder used to be a local
+// copy of `rejectedTrailingTagDetail` here, byte-identical to red-check.js's own copy — the exact
+// two-identical-copies shape D4 (this spec) exists to eliminate. It now lives in and is imported
+// from lib/spec-sections.js, beside the refusal predicate (D2) it explains; message bytes are
+// unchanged (pinned by the AC-20260823-03-1/-2 detail assertions).
 
 const fs = require('fs')
 const path = require('path')
 const { parseFilePlanRows } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
-const { AC_ID_RE, AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, extractSection, parseAcBullets, acIdOccurs } = require('./lib/spec-sections')
+const {
+  AC_ID_RE, AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, extractSection, parseAcBullets, acIdOccurs,
+  rejectedTrailingTagDetail,
+} = require('./lib/spec-sections')
 
 function usage() {
   console.error('usage: ac-matrix.js --spec <path> --root <dir> --manifest <path> ' +
@@ -123,6 +159,22 @@ const acById = new Map(wellFormed.map(b => [b.id, b]))
 
 const findings = []
 const warnings = []
+
+// D9 (2026-08-23): emission-SITE tracking for `rejected-trailing-tag`, the one finding class this
+// file emits from BOTH the coverage loop (step 5) and the skip-reconciliation loop (step 6, both
+// branches) — the two Sets below record, by OBJECT REFERENCE into `findings`, which loop actually
+// produced a given rejected-trailing-tag finding. This is internal bookkeeping only: it is never
+// read back off the finding object itself (no key is added to the pushed object — AC-20260823-03-
+// 13a pins the finding's key set stays exactly ['ac','class','detail','severity']) and never
+// serialized; it exists solely to let the exit derivation below partition by the loop that
+// actually observed something, not by class membership across two loops that share one class.
+const acMatrixOrigin = new Set()
+const skipOrigin = new Set()
+
+// D10: `rejectedTrailingTagDetail` (the `rejected-trailing-tag` remedy-text builder, used by all
+// three call sites in this file — step 5's coverage loop, step 6's skip-reconciliation loop's two
+// branches) is imported from lib/spec-sections.js, the one authority, rather than defined here —
+// see that module's own comment above the function for why it lives there.
 
 // D1: unparseable = unknown = uncovered. `uncovered` is declared here (before both the
 // malformed loop below and step 5's well-formed coverage loop) so a malformed bullet
@@ -276,10 +328,22 @@ if (!hasDriftScript) {
       }
     } else {
       uncovered++
-      findings.push({
-        severity: 'hard', class: 'uncovered-ac', ac: b.id,
-        detail: `${b.id}: zero hits across File Plan tests rows`,
-      })
+      // D1: a refused trailing [oracle:] tag replaces uncovered-ac — the refusal is causally
+      // relevant (zero coverage plus a would-be oracle declaration that never registered).
+      if (b.trailingRejected && b.trailingRejected.includes('[oracle:')) {
+        const f = {
+          severity: 'hard', class: 'rejected-trailing-tag', ac: b.id,
+          detail: rejectedTrailingTagDetail(b.id, b.trailingRejected, b.trailingRejectedCause,
+            'no executed coverage for this AC'),
+        }
+        findings.push(f)
+        acMatrixOrigin.add(f) // D9: this loop is the ac-matrix leg
+      } else {
+        findings.push({
+          severity: 'hard', class: 'uncovered-ac', ac: b.id,
+          detail: `${b.id}: zero hits across File Plan tests rows`,
+        })
+      }
     }
   }
 }
@@ -432,6 +496,16 @@ for (const line of skipLines) {
     if (bullet.env) {
       sanctioned++
       warnings.push(`${primary}: skipped test sanctioned by [env: ${bullet.env}]`)
+    } else if (bullet.trailingRejected && bullet.trailingRejected.includes('[env:')) {
+      // D1: a refused trailing [env:] tag on the owning (here: current-spec) bullet replaces
+      // unsanctioned-skip — the refusal is causally relevant (this skip's only sanction attempt).
+      const f = {
+        severity: 'hard', class: 'rejected-trailing-tag', ac: primary,
+        detail: rejectedTrailingTagDetail(primary, bullet.trailingRejected, bullet.trailingRejectedCause,
+          'an unsanctioned skip for this AC'),
+      }
+      findings.push(f)
+      skipOrigin.add(f) // D9: this loop is the skip-reconcile leg
     } else {
       findings.push({
         severity: 'hard', class: 'unsanctioned-skip', ac: primary,
@@ -453,6 +527,16 @@ for (const line of skipLines) {
     // D3: an owning-spec sanction counts and reports like a same-spec sanction, naming the source.
     sanctioned++
     warnings.push(`${primary}: skipped test sanctioned by [env: ${owning.bullet.env}] (declared in ${owning.path})`)
+  } else if (owning.bullet.trailingRejected && owning.bullet.trailingRejected.includes('[env:')) {
+    // D1: a refused trailing [env:] tag on the OWNING spec's bullet replaces unsanctioned-skip —
+    // same relevance gate as the current-spec branch above, applied to the cross-spec lookup.
+    const f = {
+      severity: 'hard', class: 'rejected-trailing-tag', ac: primary,
+      detail: rejectedTrailingTagDetail(primary, owning.bullet.trailingRejected, owning.bullet.trailingRejectedCause,
+        `an unsanctioned skip for this AC (owning spec ${owning.path})`),
+    }
+    findings.push(f)
+    skipOrigin.add(f) // D9: this loop is the skip-reconcile leg
   } else {
     findings.push({
       severity: 'hard', class: 'unsanctioned-skip', ac: primary,
@@ -470,10 +554,14 @@ for (const line of skipLines) {
 const acMatrixObserved = { uncovered, oracle: oracleCovered, preGreen }
 const skipReconcileObserved = { skipped: skipLines.length, sanctioned }
 
+// D9: rejected-trailing-tag is deliberately absent from BOTH sets — it is emitted from both
+// loops, so class membership alone cannot tell which leg actually observed it (that was the bug:
+// adding it to both sets reddened both legs from a single-loop emission). The exit derivation
+// below ORs each set's class test with the corresponding emission-site origin Set instead.
 const ACM_FINDING_CLASSES = new Set(['malformed-ac', 'uncovered-ac', 'oracle-red-or-absent', 'missing-test-file', 'invalid-pre-green'])
 const SKIP_FINDING_CLASSES = new Set(['unsanctioned-skip', 'unmapped-skip'])
-const acMatrixExit = findings.some(f => ACM_FINDING_CLASSES.has(f.class)) ? 1 : 0
-const skipReconcileExit = findings.some(f => SKIP_FINDING_CLASSES.has(f.class)) ? 1 : 0
+const acMatrixExit = findings.some(f => ACM_FINDING_CLASSES.has(f.class) || acMatrixOrigin.has(f)) ? 1 : 0
+const skipReconcileExit = findings.some(f => SKIP_FINDING_CLASSES.has(f.class) || skipOrigin.has(f)) ? 1 : 0
 
 const manifestLines =
   JSON.stringify({ leg: 'ac-matrix', exit: acMatrixExit, observed: acMatrixObserved }) + '\n' +

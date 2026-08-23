@@ -15,6 +15,13 @@ const { tmpdir, runNode, runBash, gitRepo } = require('../helpers')
 // runNode with cwd), never poke at internals, and are written BEFORE the driver exists —
 // every test here fails on a missing/inert spec-review-driver.js and must go green only
 // once the state machine genuinely does what its AC names. AC-20260820-07-1 … -12 below.
+//
+// specs/20260823/03-silent-drop-hardening.md D4/AC-20260823-03-11 (2026-08-23, rv_e83659d49386):
+// this driver's local `fmVal` (line 152) propagates everything after `tier:` verbatim, including
+// an inline `#` comment — the exact mechanism that polluted seven live review ledger rows'
+// `tier` fields. D4 replaces the local copy with the new shared lib/frontmatter.js. Confirmed RED
+// at HEAD by executed run: `fmVal('tier: standard   # any note')` returns
+// `"standard   # any note"` verbatim today (only leading/trailing whitespace is trimmed).
 
 const DRIVER = 'scripts/spec-review-driver.js'
 
@@ -255,6 +262,45 @@ test('AC-20260820-07-6: WHEN a clean run reaches CLOSE (0 survivors, disposition
     'the CLOSE step\'s hygiene listing must name .claude/spec-runs/*.json as an EXPECTED artifact — omitting it invites deleting durable evidence as reviewer scratch: ' + r.stdout)
   assert.match(r.stdout, /EXPECTED/, 'the hygiene listing must mark expected artifacts (retained evidence + sidecar) as EXPECTED, not stray paths to clean up: ' + r.stdout)
   assert.match(r.stdout, /close[- ]commit/i, 'the CLOSE step must print the close-commit instruction: ' + r.stdout)
+})
+
+test('AC-20260823-03-11: WHEN the review driver processes a spec whose frontmatter reads "tier: standard   # any note" THE SYSTEM passes exactly "standard" as --tier, so the ledger row it produces carries "tier":"standard" with no "#" (rv_e83659d49386, the same inline-comment mechanism that polluted seven live ledger rows)', () => {
+  const root = fs.realpathSync(tmpdir('rvdrv-fm11'))
+  const g = gitRepo(root)
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({
+    gateCommand: 'node --test {testDirs}',
+    testCommand: 'node --test',
+    runtime: { inert: 'plugin repo — nothing boots' },
+    capabilities: { forge: 'none', skipReportPattern: 'none' },
+  }))
+  fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 41\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const diffBase = g('rev-parse', 'HEAD').trim()
+  fs.mkdirSync(path.join(root, 'specs/20260820'), { recursive: true })
+  const spec = path.join(root, 'specs/20260820/99-drv-fm11.md')
+  fs.writeFileSync(spec, specBody({ diffBase, tier: 'standard   # any note', acId: 'AC-20260820-99-3' }))
+  fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 42\n')
+  fs.writeFileSync(path.join(root, 'tests/foo.test.js'), GREEN_TEST.replace('AC-20260820-99-1', 'AC-20260820-99-3'))
+  g('add', '-A'); g('commit', '-q', '-m', 'implement')
+
+  toReviewer({ root, spec })
+  const returnFile = returnFileWith('rvdrv-fm11-clean', CLEAN_RETURN)
+  run(root, spec, '--mark', 'reviewer-returned', '--file', returnFile)
+  assert.strictEqual(stateOf(root, spec), 'DISPOSITIONS', 'setup: a returned CLEAN, zero-survivor result must land DISPOSITIONS')
+
+  const ledger = path.join(root, '.claude/spec-runs.jsonl')
+  const r = run(root, spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(r.status, 0, 'a zero-survivor, zero-finding disposition must be accepted even when tier carries a comment: ' + r.stdout + r.stderr)
+
+  const rows = fs.readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l))
+  const row = rows[rows.length - 1]
+  assert.strictEqual(row.tier, 'standard',
+    'the driver reads tier via fmVal and passes it verbatim as --tier to verdict.js — a frontmatter value carrying an inline comment must be stripped to exactly "standard" before it reaches the ledger row, or the comment text becomes part of the durable tier field, exactly rv_e83659d49386\'s mechanism: got ' + JSON.stringify(row.tier))
+  assert.ok(!row.tier.includes('#'),
+    'the ledger row\'s tier field must never carry a "#" — a surviving comment fragment here corrupts every downstream tier===\'critical\' comparison and tier-economics derivation reading this row: got ' + JSON.stringify(row.tier))
 })
 
 test('AC-20260820-07-7: WHEN --mark closed is passed while the tree is dirty beyond the sidecar THE SYSTEM exits 2 naming the unexpected paths', () => {

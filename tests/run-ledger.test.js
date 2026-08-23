@@ -133,7 +133,7 @@ test('AC-20260821-02-9: core § Feedback Loop names the driver\'s REPLAY state a
 // is the whole fix: no memory-review gate, no write hook, no lint (unearned under core § Incident
 // Policy at recurrence count 1).
 
-test('AC-20260821-02-10: agent memory is a disposed artifact, never a silent improvement carrier — review.md\'s close gives every touched memory file one stated fate, and core § Feedback Loop says why', () => {
+test('AC-20260821-02-10 / AC-20260823-06-9: agent memory is a disposed artifact, never a silent improvement carrier — review.md\'s close gives every touched memory file one stated fate, and core § Feedback Loop says why', () => {
   const review = squash(read('commands/review.md'))
   assert.match(review, /agent-memory/,
     'review.md\'s close step must name .claude/agent-memory/ as something the session disposes — ' +

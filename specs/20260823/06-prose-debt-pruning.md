@@ -1,6 +1,7 @@
 ---
 date: 2026-08-23
-status: hardened
+status: implementing
+diff_base: 9e626d2da2960587418c1ce0e30f5a1f8168aa87
 tier: standard            # additive spec-paths keys follow 20260823/01's precedent; no critical-trigger file gets a behavioral edit; worst failure is a false exit 1 at review close, repaired by re-running the script
 area: scripts
 design: false
@@ -44,6 +45,7 @@ note can no longer outlive its subject silently.
 | D11 | `spec/bin/spec-paths` gains keys `prose-cap`, `memory-sweep` (AC-20260823-06-10) | Doctrine invokes scripts only via spec-paths; additive key edits shipped standard-tier in 20260819/02, 20260820/05, 20260823/01 |
 | D12 | Version bump: spec plugin → next free 7.x (target 7.24.0 — a target, not a pin, per the version-race gotcha) with `description` changelog line `[no-ac: enforced by host Review Checks — doctrine change without a bump is a hard finding]` | Standing discipline |
 | D13 | This spec reopens and partially reverses 20260821/02 D10's "no memory lint" ruling: the sweep is a **disposition-trigger widener**, never a verdict input — it exits 0 whenever it ran, findings or not, and nothing feeds `verdict.js` (AC-20260823-06-8) | D10's rejection was correct at recurrence count 1; the reopen condition (a second false-memory incident) was met 2026-08-23 when a note was falsified by the same diff that shipped it; the admission bar is filled in § Rationale |
+| D14 | **Build ruling (JJ, 2026-08-23):** `spec/entrypoints.json` joins the File Plan — the two new scripts each get a declaration row (`prose-cap.js` → `spec/commands/review.md`, `spec/commands/escape.md`; `memory-sweep.js` → `spec/commands/review.md`) `[no-ac: the existing entry-point conformance guard `tests/consistency/entrypoints.test.js` is the covering test — it goes red on an undeclared script]` | The § Rationale collision-closure waive assumed the guard auto-inventories new scripts; it inventories scripts by location but diffs them against hand-maintained declarations, so an undeclared script is red (`docs/canonical/gate-integrity.md`: "Adding, deleting, or renaming a script must update the manifest in the same diff"). Options put to JJ: add to scope / file separately / pause — add chosen |
 
 ## File Plan
 
@@ -61,6 +63,7 @@ note can no longer outlive its subject silently.
 | .claude/rules/spec-pipeline.md | MODIFY | other | D9: apply the § Behavior triage table verbatim (7 deletes, 6 removals-after-merge, 10 keeps; section comment gains one line naming the cap and prose-cap.js) |
 | docs/canonical/scripts.md | CREATE | other | D9/D10: the six merged truths, rewritten per D10's contract |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D12: semver bump + description changelog |
+| spec/entrypoints.json | MODIFY | other | D14: declare the two new scripts and their call sites |
 
 ## Contracts
 

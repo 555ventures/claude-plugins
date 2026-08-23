@@ -124,11 +124,19 @@ defective file — that is the only unrecoverable input.
    only one): by `preventedBy` value —
    - `doctrine` → **draft the one-line Gotchas entry verbatim from session context**
      (pipeline rules § Gotchas; cite this escape row; tag `[host]` or `[plugin]` by where
-     the wrong assumption came from) and present it in ONE dedicated `AskUserQuestion`
+     the wrong assumption came from). Check whether the target section is at cap:
+     `node "$(spec-paths prose-cap)" --file <host pipelineRules> --section Gotchas`; exit 1
+     means it is — evict before appending, naming one of exactly three fates: **delete**
+     (wrong, dead-cited, or mechanized), **merge** (durable engineering truth →
+     `docs/canonical/{area}.md`), or **mechanize** (a recurring class → a script). At cap,
+     present the drafted entry **together with the eviction it displaces** in the same
+     severable `AskUserQuestion`; below cap, present the drafted entry alone. Either way the
+     ask runs in ONE dedicated `AskUserQuestion`
      after the row's classification settles — **the line's approval is severable from the
-     row's**: it runs whether `preventedBy` was derived or arrived by correction, and
-     declining the line never unwinds the row. Accepted → append it; declined → the row
-     stands and `/spec:doctor` lists it as an open repair.
+     row's**, and from the eviction's when one is present: declining the entry or the
+     eviction leaves the section unchanged, and declining either never unwinds the row.
+     Accepted → append the entry (and apply the eviction when one was displaced); declined →
+     the row stands and `/spec:doctor` lists it as an open repair.
    - `enforcer` → recommend `/spec:enforce` (name the rule category the defect implies).
    - `review-check` → draft the one-line § Review Checks severity row the same way, same
      Gotchas discipline, same severable approval ask.

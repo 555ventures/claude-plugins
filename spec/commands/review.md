@@ -121,12 +121,24 @@ Run `node "$(spec-paths report-render)" --slots <file>` and print its output ver
 - **Close (the CLOSE step).** Apply the spec's Canonical Delta to `docs/canonical/{area}.md`.
   Fold the deviations sidecar if one exists: recurring-shaped deviations become one-line
   entries in the host rules' Gotchas section (tagged `[host]`/`[plugin]` by provenance);
-  one-offs go to the spec's Rationale; delete the sidecar. **Dispose every
+  one-offs go to the spec's Rationale; delete the sidecar. After the deviations fold, run
+  `node "$(spec-paths prose-cap)" --file <host pipelineRules> --section Gotchas`; exit 1
+  means the section is at or over cap — evict before the close commit, choosing one of
+  exactly three fates per evicted entry: **delete** (wrong, dead-cited, or mechanized — the
+  owning script's header keeps the history), **merge** (durable engineering truth →
+  `docs/canonical/{area}.md`), or **mechanize** (a recurring class → a script per core §
+  Incident Policy, and the prose dies). Record each eviction as one Rationale line in the
+  spec under review. **Dispose every
   `.claude/agent-memory/` file this spec's diff touched** — one stated fate each: carry, correct,
   or delete. Judge what each teaches, not that a worker wrote it; a memory attributing observed
   work to an unnamed "concurrent process", or concluding an assignment was already done and could
   be stood down from, is corrected or dropped, never carried. Nothing derives these files and no
   gate can see their effect, so an undisposed one becomes standing worker guidance by default.
+  The disposal trigger widens: run `node "$(spec-paths memory-sweep)" --root <root> --diff
+  <file listing the spec's changed paths>` and dispose the union of the diff-touched files
+  above and the notes the sweep surfaces — the sweep is advisory, exiting 0 with or without
+  findings and never feeding the verdict. A **carry** disposition now also writes
+  `reviewed: YYYY-MM-DD` into the note's `metadata:` block, resetting its TTL.
   Adjudicate the driver's printed
   hygiene listing — everything it doesn't mark EXPECTED is a stray to explain or clean before
   marking `closed`; never blind-`git add -A` past an unadjudicated path. Commit everything

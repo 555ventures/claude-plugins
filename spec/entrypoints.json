@@ -64,6 +64,9 @@
       "spec/scripts/release-legs.js"
     ]
   },
+  "spec/scripts/memory-sweep.js": {
+    "entryPoints": ["spec/commands/review.md"]
+  },
   "spec/scripts/merge-back.sh": {
     "entryPoints": [
       "spec/commands/doctor.md",
@@ -73,6 +76,9 @@
   },
   "spec/scripts/promise-sweep.js": {
     "entryPoints": ["spec/commands/plan.md", "spec/scripts/review-legs.js"]
+  },
+  "spec/scripts/prose-cap.js": {
+    "entryPoints": ["spec/commands/review.md", "spec/commands/escape.md"]
   },
   "spec/scripts/question-style-gate.js": {
     "entryPoints": ["spec/hooks/hooks.json"]

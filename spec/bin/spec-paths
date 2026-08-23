@@ -43,6 +43,8 @@ case "${1:-root}" in
   ci-gate-parity) echo "$ROOT/scripts/ci-gate-parity.js" ;;
   replay)         echo "$ROOT/scripts/replay.js" ;;
   fleet-reader)   echo "$ROOT/scripts/fleet-reader.js" ;;
+  prose-cap)      echo "$ROOT/scripts/prose-cap.js" ;;
+  memory-sweep)   echo "$ROOT/scripts/memory-sweep.js" ;;
   shared)         echo "$ROOT/doctrine/core.md" ;;
   shared-design)  echo "$ROOT/doctrine/design.md" ;;
   shared-genesis) echo "$ROOT/doctrine/genesis.md" ;;

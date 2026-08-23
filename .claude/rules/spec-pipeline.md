@@ -126,60 +126,13 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
   attempts that "passed" this guard were all inside its fixture envelope, and two independent
   evasions sat just outside it. (specs/20260820/04-entrypoint-conformance.md — found at review,
   fixed in the same session; executed repro in the deviations record.)
-- `[host]` A poll/retry loop driven by an **injected** transport has no I/O to pace it: if the
-  fake resolves synchronously, `while (running) { await fake() }` recurses on microtasks only,
-  never yields to the macrotask queue, and OOMs the test run instead of failing. Any such loop
-  needs an explicit `await new Promise(r => setImmediate(r))` per iteration — harmless against
-  the real API, which blocks server-side. (specs/20260801/01-telegram-adapter.md — the
-  `getUpdates` long-poll loop hit this during build.)
-- `[host]` A `flush()`-style microtask/`setImmediate` drain cannot observe anything gated on a
-  **real child process**: spawning `node`/a shell and waiting on its stdout costs ~40–80ms of OS
-  time no matter how the code is written, so an AC asserting on output that follows a spawn must
-  use a bounded real-time `waitFor(predicate, 2000)` poll instead. Writing the assertion against
-  `flush()` alone reads as an implementation defect and invites "fixing" correct code — the order
-  under test (fully await the spawn, then post) is the only correct one.
-  (specs/20260801/03-lane-engine.md — AC-2's checkpoint-ask assertion; fixed in the test.)
-- `[plugin]` The gate's `{testDirs}` placeholder invites a directory, but `node --test <dir>`
-  fails on Node 26 in this repo — with or without a trailing slash it reports
-  `test at tests/status:1:1 ✖` and `MODULE_NOT_FOUND`. Only the glob form
-  `node --test 'tests/<scope>/*.test.js'` actually runs the files. Resolve `{testDirs}` to the
-  glob on every scoped gate run. (specs/20260801/02-session-runner.md — the build hit this
-  resolving its own gate command.)
-- `[plugin]` Frontmatter values are read with a plain `^key:\s*(.+)$` regex — **inline `#`
-  comments are NOT stripped**, and the risk model this entry used to teach was wrong: a note
-  appended to `tier:` is NOT harmless. It corrupts the run ledger row's `tier` field — the whole
-  comment sentence lands inside it — and `fleet-reader` then EXCLUDES that row under the reason
-  `pre-v7-tier`, which is misleading: the row isn't pre-v7, it's comment-polluted, so the
-  corruption is invisible AND mislabelled at the fleet-evidence boundary (measured: seven live
-  review ledger rows carried a whole sentence inside `tier`). The same habit applied to
-  `build_base:` makes the whole comment part of the ref, and every consumer that resolves it
-  dies: `/spec:review`'s driver refused to start with `fatal: invalid object name` and `bash:
-  line 1: main: command not found` from scope-reconcile's shell interpolation. Put the note on
-  its own `#` line ABOVE the key — that habit remains good style regardless.
-  (specs/20260822/02-init-generation-script.md — the build-close correction blocked its own
-  review the next morning; rv_e83659d49386.) **Closed 2026-08-23** by specs/20260823/03 (the
-  first two drivers) and widened by specs/20260823/04 (rv_6825fa48c98d) to all four JS
-  frontmatter readers: `spec/scripts/lib/frontmatter.js` is now the sole derivation for
-  `spec-review-driver.js`, `spec-design-driver.js`, `spec-status.js`, and `replay.js` alike, and
-  the seven polluted ledger `tier` rows are repaired in place. Correction to spec 03's own note:
-  `spec-status.js`'s prior reader was NOT "always correct" — its private kv loop stripped at ANY
-  `#`, corrupting an unspaced value such as a `design_source:` URL fragment, and that bug closes
-  with the same fix.
 - `[plugin]` `red-check.js` derives carried-AC expectation from **AC-ID occurrence anywhere in the file**, comments included. An edit-only File Plan row that mentions another AC's new behavioral home in a comment (`// ... AC-20260822-02-3 now lives in ...`) forces a false red expectation onto a file whose only change is a deletion, and the build stops at `unsanctioned-green`. Name the file, not the ID — the removal fix, never an invented ID. (specs/20260822/02-init-generation-script.md — tests/run-ledger.test.js during build.)
 <!-- One line per entry; every entry cites a ledger row (spec path + runId) or a dated
 incident, and carries a provenance tag: [host] (this repo/stack) or [plugin] (traces to a
 spec-plugin template/command/generated artifact). Writers: /spec:review close and
 /spec:escape only. /spec:doctor prunes dead citations and rolls [plugin] entries up as an
-upstream bug list. -->
-- `[host]` Plain `git status --porcelain` collapses a wholly-untracked directory to one
-  `?? dir/` line — file-level consumers need `--untracked-files=all` or every file inside a
-  new directory is invisible to them. (specs/20260805/01-review-scope-reconciliation.md —
-  scope-reconcile.js hit this on AC-4's fixture during build.)
-- `[host]` A test that spawns a CLI against an **in-process** stub server must use async
-  `spawn`, never `spawnSync` — spawnSync blocks the parent's event loop for the child's whole
-  lifetime, so the stub can never answer and every such test hangs to its timeout
-  (status=null/SIGTERM). (specs/20260808/01-autopilot-enroll.md — every stub-reaching AC hung
-  in build repair round 1; fixed by switching the helper to awaited `spawn`.)
+upstream bug list. Entries are capped at 15, enforced by prose-cap.js at review close and in
+this repo's suite; appending at cap requires an eviction (delete / merge / mechanize). -->
 - `[host]` A spec Decision naming a literal version-bump target can be stale by build time —
   concurrent sessions in this repo race the same semver (specs/20260810/02 D11: 6.50.0 was
   already taken at HEAD before the batch ran; the worker bumped to 6.51.0 with the same
@@ -213,32 +166,6 @@ upstream bug list. -->
   incident — a malformed bullet silently dropped from the coverage denominator, so the amended
   AC's test could be deleted and review still report full coverage — was closed by
   specs/20260815/03: unparseable now counts as uncovered in both drift modes.)
-- `[host]` A spec that turns an INTAKE pin green makes `.claude/suite-baseline.json` an
-  **out-of-plan** change every time: the pin's sanctioned-red row must come off the list, which
-  `suite-baseline.js --check` reports as `fixedNotRemoved>0` with the `--update` remedy, and
-  specs/20260814/03's Contracts block says that update rides the landing batch. Review's
-  scope-reconcile then raises a hard out-of-plan finding on a file the contract required the
-  build to touch. It is a five-second waive citing 20260814/03 Contracts — plan it into the
-  File Plan up front on any defect-fix spec that closes a pin, and the finding never fires.
-  (specs/20260815/03-ac-matrix-fail-closed.md — waived at review 2026-08-16.)
-- `[plugin]` **CLOSED 2026-08-16 by specs/20260815/03** — `ac-matrix.js`'s skipped-test
-  reconciliation once read `[env: VAR]` from only the spec under review, so a test env-gated in
-  a *different* spec was a perpetual unsanctioned-skip hard finding. It now derives the owning
-  spec from the AC-ID and reads the declaration there, failing closed at every edge. Kept as a
-  worked example of the class: a check whose declaration lookup is narrower than the scope it
-  audits cries wolf forever, and waiving is not a fix. (Original hit:
-  specs/20260814/04-lock-signal-window.md review 2026-08-15 — `AC-20260808-01-12`, declared
-  `[env: AUTOPILOT_ENROLL_LIVE]` in specs/20260808/01.)
-- `[host]` Two former `[plugin]` gotchas were closed at intake 2026-08-15 as already covered by
-  plan lock's obligation→carrier sweep (spec 6.62.0), whose anchor list explicitly is not closed:
-  a Decision recording a class-level item "in spec/INTAKE.md, doctrine-only" owes the citation or
-  failing test that INTAKE's `Pinned by` contract requires (specs/20260801/04 D8), and a Decision
-  pinning a non-default `model:` on a workflow seat owes the seat's **call mechanism** too —
-  `dispatch()`'s model fallback only reaches calls routed through it, so a bare `agent()` call
-  leaves the seat with no recovery path (specs/20260813/09 D2). Both obligations are stated in
-  their Decisions' own text, which is what the sweep reads; keep them as worked examples, not as
-  new anchors. Contrast JJ-20260815-03, whose obligation is stated nowhere and therefore is not
-  covered.
 - `[plugin]` A test worker editing a File Plan row that carries **no AC** still reaches for the
   spec template's AC-ID shape and writes the literal placeholder (`AC-<date>-NN-N`) into the test
   name and assert message. The token is not a valid AC-ID under `ac-matrix.js`'s grammar, so it
@@ -248,19 +175,6 @@ upstream bug list. -->
   ID to fill it. (specs/20260815/05-env-preflight.md build 2026-08-16 —
   `tests/terminal-observable-acs.test.js`, caught by the orchestrator, logged in that spec's
   deviations sidecar.)
-- `[plugin]` `suite-baseline.js --snapshot` / `--check --pre` binds the pre-image to a single
-  instant and so assumes exclusive repo access for the whole build. Concurrent sessions are
-  normal here (there is already a `[host]` entry for them racing the same semver), so a sibling
-  session landing its own TDD red pins mid-build reports them as `preNewFailing` — a nominally
-  BLOCKING result whose only honest resolution is out-of-band attribution work, since
-  "repairing" it would mean implementing an unrelated INTAKE item. Attribute by execution
-  (restore the pre-change file, re-run the pins, compare creation times against the snapshot),
-  record it, and do not weaken or retag the sibling's pins. A cheap closure would be for
-  `--check --pre` to subtract rows whose test file did not exist at snapshot time, or rows the
-  checked-in `.claude/suite-baseline.json` sanctions and the pre-image predates.
-  (specs/20260816/03-file-plan-table-scoped-parsing.md build 2026-08-17 —
-  `tests/ac-matrix-duplicate-id.test.js`, JJ-20260817-01's pins, logged in that spec's
-  deviations sidecar.)
 - `[plugin]` `diff_base` is written once at build Phase 0 and is documented as never rewritten,
   but a concurrent session committing between that capture and the build's own commit makes the
   recorded sha a stale pre-image — review then diffs the sibling's unrelated commit into this
@@ -268,32 +182,6 @@ upstream bug list. -->
   departure; review inherits the corrected value with no special handling.
   (specs/20260816/03-file-plan-table-scoped-parsing.md — `c467bc3` corrected to `f85d07a` at
   build close 2026-08-17.)
-- `[host]` A script that wraps a child process must never hand `spawnSync`'s `status` straight
-  to `process.exit`: `status` is `null` when the child is killed by a signal, fails to spawn, or
-  overflows `maxBuffer`, and `process.exit(null)` exits **0** — a fail-open in exactly the place
-  a gate wrapper must fail closed. Two neighbours of the same class: Node's default `maxBuffer`
-  is 1MB, and a `node:test` run's `✖ failing tests:` trailer prints LAST, so a verbose red run
-  loses the trailer first and reads as unparseable; and `process.stdout.write()` immediately
-  before `process.exit()` truncates to 64KB when stdout is a pipe (async write, buffer cut before
-  it drains) — use `fs.writeSync(1, …)` when the whole payload matters. Pin the null branch
-  explicitly; every no-exit-code death is an unrun check, never a pass.
-  (specs/20260816/01-gate-baseline-reconcile.md review 2026-08-17, runId `wf_28d80534-707` —
-  `suite-baseline.js --gate` reported exit 0 for a signal-killed child and for a genuinely
-  failing child that printed 2MB before its trailer; the sibling `observedFailing()` in the same
-  file had always failed closed, and the new mode reimplemented its tail without that arm.)
-- `[host]` A doctrine regex pin that requires a **contiguous** sentence cannot see text a worker
-  split across two concatenated string literals — the file reads correctly, the prompt renders
-  correctly, and the pin is red for a reason no diff review surfaces. When pinning prompt text
-  that lives inside `fragments/*.frag` template literals, keep the pinned sentence whole in a
-  single literal and append additions as separate segments.
-  (specs/20260816/01-gate-baseline-reconcile.md — the D7 sentence landed split across two
-  segments at build and AC-20260816-01-11 could not match it; recurred as a near-miss at review
-  when the same fragment gained its anchoring sentence.)
-- `[plugin]` The vacuous-pre-implementation-pin class (six recorded instances, 2026-08-17
-  through 2026-08-20 — unknown-leg, rejection-fallback, absence-invariant, and hardcoded-literal
-  sub-shapes) is now a mechanized guard, not a doctrine paragraph: see `spec/scripts/red-check.js`'s
-  incident header and `tests/red-check/red-check.test.js` for the class history. (specs/20260821/01-red-check.md
-  — JJ approved this deletion 2026-08-21.)
 - `[plugin]` **`orchestrator-compensation-during-live-worker`** (class stands at 1; grep this slug
   to count recurrences). The harness fired completion notifications for two `/spec:build` workers
   while they were still executing; the orchestrator read those as returns-with-no-work and began

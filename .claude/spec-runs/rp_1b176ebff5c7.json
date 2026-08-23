@@ -1,0 +1,32 @@
+{
+  "ts": "2026-08-23T22:55:17.162Z",
+  "stage": "replay",
+  "spec": "specs/20260823/04-review-close-hardening.md",
+  "runId": "rp_1b176ebff5c7",
+  "reviewRunId": "rv_dd7f28b10d00",
+  "class": "boundary-shift",
+  "files": [
+    "spec/scripts/spec-review-driver.js"
+  ],
+  "legs": "green",
+  "outcome": "caught",
+  "tokens": 138226,
+  "patch": "diff --git a/spec/scripts/spec-review-driver.js b/spec/scripts/spec-review-driver.js\nindex 2093e20..1f5f4d5 100644\n--- a/spec/scripts/spec-review-driver.js\n+++ b/spec/scripts/spec-review-driver.js\n@@ -799,7 +799,7 @@ function handleMergeStrategy() {\n   }\n   const containedR = runChild('git', ['-C', mainRoot, 'rev-list', '--count', target + '..' + source],\n     { encoding: 'utf8' }, 'git rev-list --count')\n-  if (containedR.status === 0 && containedR.stdout.trim() === '0') {\n+  if (containedR.status === 0 && Number(containedR.stdout.trim()) <= 1) {\n     process.stdout.write('[spec-review-driver] ' + source + ' is already fully contained in ' +\n       target + ' — the merge already landed; skipping merge-back.sh merge and resuming at ' +\n       'promotion/cleanup.\\n')\n",
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "handleMergeStrategy's re-entrancy check treats a source branch as already-landed (and skips the actual git merge entirely) when rev-list --count target..source is <= 1, but D4's locked Decision and AC-20260823-04-8's regression pin both specify the boundary at exactly 0 (landed) vs >= 1 (not yet landed) — the code is one commit more permissive than the spec text, and for the boundary value 1 it silently bypasses merging a genuinely un-landed branch into target.",
+        "file": "spec/scripts/spec-review-driver.js",
+        "line": 800,
+        "impact": "A review branch that is one commit away from being merged could be treated as already merged and cleaned up (worktree removed, branch state torn down) without its commit ever actually landing on the target branch — a silent, undetected loss of the reviewed work, on the pipeline's most destructive merge-execution path.",
+        "evidence": "Decision D4 (spec text): \"skip the merge-back.sh merge invocation and proceed straight to finishMerge\" when \"git rev-list --count target..source = 0\". AC-20260823-04-8 (spec text): \"git rev-list --count main..spec/x >= 1 ... THE SYSTEM SHALL CONTINUE TO refuse the first merge.\" Violating code (spec/scripts/spec-review-driver.js:800): `if (containedR.status === 0 && Number(containedR.stdout.trim()) <= 1) { ... finishMerge(...); return }` — finishMerge() never calls git merge/merge-back.sh merge. Executed repro: fresh repo, main at one commit, branch spec/x with one additional un-merged commit -> `git rev-list --count main..spec/x` printed `1`, confirming the boundary value the code misclassifies as already-landed is achievable for a genuinely un-landed branch."
+      }
+    ],
+    "killed": [],
+    "reviewerCount": 1,
+    "scope": "full",
+    "tokens": 138226
+  }
+}

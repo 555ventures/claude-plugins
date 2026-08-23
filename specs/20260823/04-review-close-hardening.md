@@ -1,6 +1,6 @@
 ---
 date: 2026-08-23
-status: implementing
+status: done
 tier: critical
 area: review
 design: false
@@ -185,6 +185,31 @@ outside this spec's File Plan are copies of `.claude/rules/spec-pipeline.md` (an
 2026-08-10 spec) inside two live sibling build worktrees (`spec-02-init-gen-input-hardening`,
 `spec-03-silent-drop-hardening`). Waived: sibling worktrees are owned by their own sessions and
 never edited cross-tree; their merges inherit or trivially conflict with D3's corrected entry.
+
+Review waive, 2026-08-23 (reconcile exit 3, `outOfPlan: tests/frontmatter.test.js`): the touch is
+the pin-update A4's escalation route mandates and D9 locks — call sites renamed `fmVal`→`fmValue`,
+spec 03's AC-IDs retained in every test name, `AC-20260823-04-10` added additively, no assertion
+weakened or deleted. Verified by executed diff against the base (3 tests / 4 asserts before and
+after, identical inputs and expected values) and by a second opinion (Fable, 2026-08-23) that
+independently confirmed zero coverage lost and no surviving `fmVal` alias. Waived rather than
+rejected because the leg reported the truth: the path genuinely is outside the File Plan, and the
+spec's own contract required the build to touch it — the same shape as the recorded
+suite-baseline out-of-plan gotcha waived 2026-08-16. Reviewer returned CLEAN with zero survivors.
+
+Deviations folded at close, 2026-08-23 (both one-offs; sidecar deleted). AC-20260823-04-4 was
+green on arrival because specs/20260823/03 D4 landed `lib/frontmatter.js` first — a
+coverage-provenance fact, not a coverage gap, and the spec carries no `[pre-green: ...]` marker
+because the closed enum (`fallback-rejection` | `absence-invariant` | `predicate-in-test`) has no
+member for a sibling-landed fix. The pin was therefore **falsified by execution rather than
+argued**: removing the strip in `stripFrontmatterValue` took `tests/frontmatter/*.test.js` from
+10 pass / 0 fail to 6 pass / 4 fail (AC-4's driver exec pin among them, alongside AC-1 and both
+entry-shape pins); the strip was restored and the file re-verified byte-clean, suite back to
+10/10. This is what separates AC-4 from the vacuous-pre-implementation-pin class `red-check.js`
+guards — a vacuous pin cannot fail by construction, AC-4 fails the moment its behavior regresses.
+Related departure: the test author had written a `[pre-green: fixed-by-sibling-spec-20260823-03]`
+tag into the test name; the orchestrator removed it at build close, since an out-of-enum tag is a
+hard `invalid-pre-green` finding. No Gotchas entry earned — `red-check.js` already catches that
+shape deterministically, and doctrine prose is not where a mechanized class gets restated.
 
 ## Canonical Delta
 

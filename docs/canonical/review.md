@@ -202,3 +202,23 @@
   a `done` spec whose sidecar lacks this run's own `closeRunId` is refused naming `/spec:escape`,
   the command that exists for defects escaping a review that already passed.
   (specs/20260820/07-review-driver.md, done 2026-08-21)
+
+- **The merge step is re-entrant, and promotion leaves the worktree clean.** A worktree
+  review's merge-back sequence can fail mid-promotion; the retry must not deadlock on its own
+  landed work. The driver therefore derives containment before acting — when the source branch
+  is already fully contained in the target (`git rev-list --count target..source` = 0, or the
+  branch is already gone) it skips the `merge-back.sh merge` invocation entirely and resumes at
+  promotion/cleanup, both of which are idempotent. `assert_clean_root` and the first-merge path
+  are untouched: promotion dirties the main root BY DESIGN (the promoted evidence is committed
+  later, at the session's close), so re-running the clean-root assert after a landed merge
+  asserts against a state the design guarantees. Evidence promotion likewise **restores** the
+  tracked worktree copies (`git -C <wt> checkout -- <path>` after promoting the delta) instead
+  of deleting them — a deleted tracked file makes `git worktree remove` refuse (exit 128,
+  spiked), which is precisely what set up the deadlock; untracked promoted paths are still
+  removed outright. `.claude/agent-memory/**` is pipeline-excluded from scope reconciliation:
+  no File Plan can enumerate the memories a worker will write, and review CLOSE's per-file
+  content disposal (carry / correct / delete, one stated fate each) is strictly stronger than a
+  path flag. Known consequence: collision-closure's repo walk prunes memory files too, so a
+  stale literal inside a worker memory is no longer swept — acceptable only because CLOSE reads
+  every touched memory on content.
+  (specs/20260823/04-review-close-hardening.md, done 2026-08-23)

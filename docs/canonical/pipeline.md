@@ -50,3 +50,18 @@ restart rode two CLEAN reviews). The runtime leg therefore sends the host's decl
 defaults (30 seconds, `[0]`). A hung or unclean shutdown fails the leg exactly as a boot
 failure does. Declared-inert hosts stay exempt: the shutdown check never runs when there is
 nothing to boot. (specs/20260815/04-runtime-shutdown-leg.md, 2026-08-16)
+
+## Frontmatter has one reader, and it strips comments at the source
+
+Spec frontmatter is read through `spec/scripts/lib/frontmatter.js` — the sole derivation, used
+by `spec-review-driver.js`, `spec-design-driver.js`, `spec-status.js`, and `replay.js` alike.
+Inline `#` comments on key lines are stripped per YAML unquoted-scalar semantics (cut at the
+first whitespace-preceded `#`; quoted values unwrap and never strip), so a trailing note on
+`tier:` or `build_base:` is cosmetic, not corrupting. Four independent copies of the same
+`^key:\s*(.+)$` regex is how the class recurred, and the naive `.replace(/\s*#.*$/, '')`
+variant was worse than none — stripping at ANY `#` corrupts an unspaced value such as a URL
+fragment. Strip-not-reject was the conservative reading: tolerance is additive and reversible,
+refusing a habit the format itself permits breaks existing hosts loudly. The corruption is
+healed at its one source rather than validated downstream — a tier-enum check inside
+`verdict.js`, the highest-blast-radius file in the repo, would widen that contract for a route
+already closed. (specs/20260823/04-review-close-hardening.md, done 2026-08-23)

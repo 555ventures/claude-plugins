@@ -1,6 +1,6 @@
 ---
 date: 2026-08-23
-status: implementing
+status: done
 tier: standard
 area: scripts
 design: false
@@ -294,6 +294,60 @@ gate-scripts agent-memory note asserts the "all 8" census as a this-repo observa
 which stays TRUE after D3's rescope (only the grammar framing changes): waived. The
 `.claude/worktrees/spec-01-release-legs/**` copies belong to the in-flight spec-01
 worktree and reconcile at its own merge-back: waived.
+
+**Review waive (2026-08-23, JJ):** reconcile exit=3, `outOfPlan:6` — all six paths are
+`.claude/agent-memory/**` worker-memory writes (four lesson notes plus the two persona
+`MEMORY.md` index lines pointing at them). Worker memory is a build side-effect, never a
+File Plan deliverable, and CLOSE's own disposition duty — not the File Plan — is its
+governing surface; planning it into the File Plan would require predicting at lock which
+lessons workers will learn. **Waived.** Disposition executed at close after a Fable consult:
+`leg-exit-origin-tracking-not-class-set` and `predicate-widening-no-collision-proof`
+**carried** (both teach a trap that generalizes past this diff — a finding class emitted from
+two loops reddening both leg exits, and hand-tracing an amended regex against every
+pre-existing fixture before claiming no collision); `d11-said-vs-parsed-trailing-tag-widening`
+and `trailing-tag-anchor-vs-arrow-suffix` **deleted** (the first restates shipped code in a
+named file, which git and the suite already hold and which drifts on the next edit to it; the
+second's central claim — a tag before a `→ {test file}` suffix can never be recognized as
+trailing — was falsified by D11 inside this same diff). The rule the split derives, offered
+as a candidate CLOSE default and NOT adopted as doctrine here: a note describing shipped code
+never carries, because the repo is already that memory; a note teaching a generalizing trap
+can. Noted for a future guard, deliberately unbuilt (core § Incident Policy — count 1): the
+per-persona memory corpus (11 and 17 notes) accretes with no eviction and no gate that can
+observe whether a note ever helped, and this spec supplies the first recorded instance of a
+memory falsified inside its own build.
+
+**Deviations fold (close, 2026-08-23 — sidecar deleted; one entry promoted to pipeline rules
+§ Gotchas as `[plugin]`, the rest recorded here as one-offs):**
+
+- *Colliding test pin retagged in place.* `tests/ac-matrix/ac-matrix.test.js` carried a third,
+  unlisted pin on the fixture D1 retires (`AC-20260822-71-1`, zero literal test hits, bullet
+  ending in a backticked `[oracle:]`): it asserted `uncovered-ac`, which D1 replaces with
+  `rejected-trailing-tag`, so it would have flipped from correct-green to false-red with no File
+  Plan row authorized to fix it. Updated in place and retagged to AC-20260823-03-1 per the
+  standing Gotchas convention; no assertion weakened — the expected class changed because D1
+  changes the correct behavior for that fixture shape. No new Gotcha: the existing entry already
+  states this convention and carried the resolution unaided.
+- *Trailing-tag position vs the `→ {test file}` suffix (the D8 → D11 arc).* A declaration placed
+  just before the AC grammar's own reference suffix sits at neither recognized position and
+  parsed as nothing. D8 ruled the fixture retargeted and the anchor frozen; D11 (JJ-approved
+  amendment) then found two LIVE instances in specs/20260823/01 whose own review had recorded
+  `preGreen:0`, widened the tolerant side only, generalized the refusal predicate to
+  said-vs-parsed, and forked the remedy text on `trailingRejectedCause` so "remove the backticks"
+  is never emitted where it is false. Corpus evidence: all 843 AC bullets in `specs/`, exactly
+  the 2 known drops fire, zero false positives; both live bullets repaired in this diff.
+  **Deliberately no Gotcha entry** — the trap now announces itself at the moment it bites,
+  naming the AC, the refused tag, and the move-into-the-declaration-slot remedy. A prose twin of
+  a self-naming deterministic mechanism is the additive incident-memory text core § Incident
+  Policy bans, and it would become a second source of truth about parser positions that diverges
+  the day anyone touches the anchor. Residual gap, noted and unaddressed: findings fire on
+  instances, so a future session evolving the AC grammar or the spec template itself gets no
+  signal at design time; if that is ever worth closing, the carrier is one in-place sentence in
+  the template's own declaration-slot text, never a Gotchas paragraph.
+- *`rejectedTrailingTagDetail` extraction (D10).* Two byte-identical copies in `ac-matrix.js` and
+  `red-check.js` moved into `lib/spec-sections.js`, which already owns the refusal predicate the
+  remedy text explains. Pure move — no body line edited, message bytes unchanged and still pinned
+  by the AC-1/-2/-3 detail assertions; both scripts' header comments corrected where they called
+  the builder local. Recorded for accounting only; there is no lesson here.
 
 ## Canonical Delta
 

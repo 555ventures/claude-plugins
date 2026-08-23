@@ -27,8 +27,6 @@ must see zero difference.
 exits/legs by class-set membership, check whether the class can be emitted from more than one
 partition's code path. If so, do not add it to more than one set — track origin externally (a
 `Set` keyed by object reference is the zero-dependency, zero-schema-change way) rather than
-widening set membership, which silently couples two independently-meant signals. See also
-[[trailing-tag-anchor-vs-arrow-suffix]] for the sibling D2/D8 episode in the same spec (a
-test-fixture-vs-locked-Contract mismatch, resolved by retargeting the fixture rather than
-loosening the Contract — the same "don't widen the mechanism to fit one caller" instinct applies
-to both).
+widening set membership, which silently couples two independently-meant signals. The sibling
+instinct from the same spec: when a fixture and a locked Contract disagree, retarget the fixture
+rather than loosening the mechanism to fit one caller.

@@ -145,7 +145,7 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
   `node --test 'tests/<scope>/*.test.js'` actually runs the files. Resolve `{testDirs}` to the
   glob on every scoped gate run. (specs/20260801/02-session-runner.md — the build hit this
   resolving its own gate command.)
-- `[plugin]` Frontmatter values are read with a plain `^key:\s*(.+)$` regex — **inline `#` comments are NOT stripped**. A note appended to `tier:` is harmless (the value is only compared to `critical`), but the same habit applied to `build_base:` makes the whole comment part of the ref, and every consumer that resolves it dies: `/spec:review`'s driver refused to start with `fatal: invalid object name` and `bash: line 1: main: command not found` from scope-reconcile's shell interpolation. Put the note on its own `#` line ABOVE the key. (specs/20260822/02-init-generation-script.md — the build-close correction blocked its own review the next morning; rv_e83659d49386.)
+- `[plugin]` Frontmatter values are read with a plain `^key:\s*(.+)$` regex — **inline `#` comments are NOT stripped**. A note appended to `tier:` is harmless (the value is only compared to `critical`), but the same habit applied to `build_base:` makes the whole comment part of the ref, and every consumer that resolves it dies: `/spec:review`'s driver refused to start with `fatal: invalid object name` and `bash: line 1: main: command not found` from scope-reconcile's shell interpolation. Put the note on its own `#` line ABOVE the key. (specs/20260822/02-init-generation-script.md — the build-close correction blocked its own review the next morning; rv_e83659d49386.) **Closed for driver-read keys 2026-08-23 by specs/20260823/03** (shared `lib/frontmatter.js` strips whitespace-preceded comments; seven polluted ledger `tier` rows repaired). The own-line-comment habit remains good style; `spec-status.js` always stripped.
 - `[plugin]` `red-check.js` derives carried-AC expectation from **AC-ID occurrence anywhere in the file**, comments included. An edit-only File Plan row that mentions another AC's new behavioral home in a comment (`// ... AC-20260822-02-3 now lives in ...`) forces a false red expectation onto a file whose only change is a deletion, and the build stops at `unsanctioned-green`. Name the file, not the ID — the removal fix, never an invented ID. (specs/20260822/02-init-generation-script.md — tests/run-ledger.test.js during build.)
 <!-- One line per entry; every entry cites a ledger row (spec path + runId) or a dated
 incident, and carries a provenance tag: [host] (this repo/stack) or [plugin] (traces to a
@@ -300,3 +300,13 @@ upstream bug list. -->
   `tests/fleet-reader/review-fixes.test.js` pinned `configPathFor` at both the source and export
   boundary while D7/D8 retired it; the leg had swept `d10-predicate-v1`, `DISPLAY_JOIN_EXEMPT`, and
   `display-join` instead. Updated in place and retagged to AC-20260820-08-8, never weakened.)
+- `[plugin]` A script that derives two or more manifest leg exits by testing a finding's `class`
+  against per-leg `Set`s of class names silently couples them the moment one class can be emitted
+  from more than one code path: a single emission reddens BOTH legs, and the innocent leg reports
+  `exit:1` having observed nothing. Partition by emission SITE — at each push site add the finding
+  OBJECT (by reference) to a small per-leg `Set` and OR that membership into the exit derivation —
+  never by widening class-set membership, and never by a provenance key on the finding itself (the
+  emitted key set is AC-pinned and `--json` consumers must see zero delta). (specs/20260823/03-silent-drop-hardening.md
+  D9, build 2026-08-23 — `rejected-trailing-tag` added to both `ACM_FINDING_CLASSES` and
+  `SKIP_FINDING_CLASSES` wrote `{"leg":"skip-reconcile","exit":1,"observed":{"skipped":0,"sanctioned":0}}`
+  for a spec with zero skip lines; executed repro in that spec's deviations record.)

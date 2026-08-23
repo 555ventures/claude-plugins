@@ -83,7 +83,7 @@
     {
       "claim": "worktree/design-sidecar gitignore rules present",
       "kind": "exec",
-      "target": "git check-ignore -q .claude/worktrees && git check-ignore -q specs/00000000/00-x.design/x"
+      "target": "git check-ignore -q .claude/worktrees/x && git check-ignore -q specs/00000000/00-x.design/x"
     },
     {
       "claim": "run-ledger union merge driver declared",

@@ -39,11 +39,18 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // missing key breaks /spec:review's driver invocation silently (§ Risk Tiers, spec-paths).
 // This row carries no AC — it is a key-resolution addition following the pattern above.
 
+// AC-20260822-02-13: specs/20260822/02-init-generation-script.md D11 adds spec/scripts/init-gen.js
+// to the bundle (spec/commands/init.md's sole invocation of the new generate/probe script) — like
+// every other bundled script it needs a spec-paths key, or init.md resolves nothing. This is the
+// fifth recurrence of the known spec-paths additive-collision class (JJ-20260814-01): the key
+// list below is updated in place (pre-image: `spec-paths init-gen` exits 1 on the unknown key,
+// executed 2026-08-22), never a parallel exhaustive pin.
+
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-design', 'wf-enforce',
     'wf-panel', 'wf-research', 'dc-extract', 'design-atlas', 'skeletons-check', 'merge-back',
-    'smoke', 'manifest-check', 'spec-status', 'scope-reconcile', 'verdict', 'ci-query', 'review-legs',
+    'smoke', 'manifest-check', 'spec-status', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
     'review-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'shared', 'shared-genesis',
     'template', 'templates', 'contract']) {
     const p = run(key).trim()
@@ -150,4 +157,14 @@ test('AC-20260821-01-11: spec-paths red-check resolves to spec/scripts/red-check
     'build.md\'s `node "$(spec-paths red-check)"` invocation silently (§ Risk Tiers, spec-paths: "a wrong ' +
     'key breaks commands silently")')
   assert.ok(fs.existsSync(redCheckPath), 'the resolved red-check.js path must actually exist on disk: ' + redCheckPath)
+})
+
+test('AC-20260822-02-13: spec-paths init-gen resolves to spec/scripts/init-gen.js, an existing path', () => {
+  const fs = require('node:fs')
+  const initGenPath = run('init-gen').trim()
+  assert.strictEqual(initGenPath, path.join(SPEC, 'scripts/init-gen.js'),
+    'D11: `spec-paths init-gen` must resolve to spec/scripts/init-gen.js — a wrong or missing key breaks ' +
+    'spec/commands/init.md\'s invocation of the generation script silently (§ Risk Tiers, spec-paths: "a ' +
+    'wrong key breaks commands silently")')
+  assert.ok(fs.existsSync(initGenPath), 'the resolved init-gen.js path must actually exist on disk: ' + initGenPath)
 })

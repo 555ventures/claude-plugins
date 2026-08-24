@@ -3,7 +3,7 @@ name: regression-pin-prove-against-reconstructed-old-code
 description: When a dispatch asks for a regression pin closing a defect that escaped a green suite, reconstruct the old/broken behavior in scratch and run the new assert against it — don't just assert the pin "would" have caught it.
 metadata:
   type: feedback
-  reviewed: 2026-08-23
+  reviewed: 2026-08-24
 ---
 
 When a fix-iteration dispatch says a defect escaped because "no test ever asserted X," the

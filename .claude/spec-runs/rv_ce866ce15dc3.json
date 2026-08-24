@@ -1,0 +1,74 @@
+{
+  "runId": "rv_ce866ce15dc3",
+  "ts": "2026-08-24T18:19:05.647Z",
+  "spec": "specs/20260823/09-replay-baseline-attribution.md",
+  "tier": "standard",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      }
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 191
+      }
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      }
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 8,
+        "carried": 7,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [],
+    "reviewerCount": 1,
+    "scope": "fix-delta",
+    "tokens": 58000
+  }
+}

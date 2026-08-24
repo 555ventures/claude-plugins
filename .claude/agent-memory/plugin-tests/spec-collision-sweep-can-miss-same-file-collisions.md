@@ -3,7 +3,7 @@ name: spec-collision-sweep-can-miss-same-file-collisions
 description: A spec's Assumptions can enumerate collisions to retag but miss a third one created by the same Decision, inside the very file being edited — verify empirically against the pre-image script, don't trust the assumption's list as exhaustive.
 metadata:
   type: feedback
-  reviewed: 2026-08-23
+  reviewed: 2026-08-24
 ---
 
 specs/20260819/03-replay-first-run-fixes.md's Assumption A4 named exactly two collision classes

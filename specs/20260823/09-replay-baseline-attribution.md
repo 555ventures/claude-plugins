@@ -1,6 +1,6 @@
 ---
 date: 2026-08-23
-status: implementing
+status: done
 diff_base: 6cf9ce162902be2faffc0e3aa1f035e9cb3e2fc5
 open_markers: 0
 tier: standard
@@ -123,7 +123,7 @@ is byte-identical to today (`--legs green`).
   tests/review/review-driver.test.js
 - **AC-20260823-09-8**: WHEN the driver parses a five-token selection line with no baseline
   tokens THE SYSTEM SHALL CONTINUE TO enter the REPLAY state and print the step (fields
-  absent, never a parse `die`) `[pre-green: absence-invariant]` → tests/review/review-driver.test.js
+  absent, never a parse `die`) `[pre-green: absence-invariant]` → tests/parse-selection/parse-selection.test.js
 - **AC-20260823-09-9**: WHEN replay.md Phase 1 step 7 is read THE SYSTEM SHALL state, in
   step 7's own text: the newly-red keying, the reconcile exemption with its File-Plan ground,
   and the unattributable-leg `AskUserQuestion` with dismissed → `unresolved` via the
@@ -193,6 +193,30 @@ only the attribution of pre-existing reds changes); `docs/canonical/review.md` (
 this spec's own Canonical Delta at review close, never edited at build);
 `tests/run-ledger.test.js` (its pins assert review.md/core.md *point at* replay.md, not
 step-7 prose — closed pins, unaffected).
+
+Build deviations (folded at review close 2026-08-24; both are single occurrences of classes
+the host rules § Gotchas already records, so neither earns a new entry):
+
+- D8's literal version target `7.29.0` was already at HEAD; the build bumped to `7.30.0`
+  per the version-race gotcha (a Decision's literal semver is a target, not a pin).
+- `diff_base` was corrected at build close from `71dad74` to `6cf9ce1`. A concurrent session
+  committed `6cf9ce1` (`fix(merge-back): cleanup deletes a squash-merged branch instead of
+  dying on it`) between this build's Phase 0 base capture and its own commit, making the
+  recorded sha a stale pre-image that would have diffed an unrelated sibling commit into this
+  spec's review panel. Corrected to the true pre-image per the specs/20260816/03 precedent;
+  review inherited the corrected value with no special handling.
+
+Review disposition (2026-08-24, run `rv_ce866ce15dc3`): one hard finding, fixed. The test
+cited by AC-20260823-09-8 as proof of the five-token (baseline-tokens-absent) parse path
+could never exercise it — its fixture drives the real `replay.js`, whose `--select` appends
+both tokens unconditionally (`unknown` is a value, never an omission), so the fixture can
+only ever emit a seven-token line and the test's assertions passed vacuously. `parseSelection`
+was extracted byte-identically to `spec/scripts/lib/parse-selection.js` (the established
+`file-plan.js`/`frontmatter.js`/`observation.js` precedent) and proved directly by
+`tests/parse-selection/parse-selection.test.js` against all three shapes; the old exec test
+was retargeted to what it actually proves and stripped of the AC-ID it could not honour.
+Falsification confirmed at review: making the two capture groups non-optional turns the new
+AC-8 test red. No code behavior changed.
 
 ## Canonical Delta
 

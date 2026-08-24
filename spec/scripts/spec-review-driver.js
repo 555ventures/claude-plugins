@@ -93,6 +93,11 @@ const { readLedgerRows } = require('./lib/observation')
 // fmVal renamed fmValue (D8/D9 — no alias survives); fmBlock replaces this file's own
 // `/^---\n([\s\S]*?)\n---/` block regex below.
 const { fmBlock, fmValue } = require('./lib/frontmatter')
+// The one --select stdout parser, shared with parse-selection.js's own direct tests (2026-08-24
+// review of specs/20260823/09-replay-baseline-attribution.md: kept here as a local copy, this
+// driver's exec-fixture test could never produce a genuine five-token line to prove the absence
+// branch against).
+const { parseSelection } = require('./lib/parse-selection')
 
 // D1-D6 (specs/20260821/04-stopped-row-durability.md): a worktree review's RED_BLOCKING hard-stop
 // durably appends here, at the MAIN root, instead of the worktree's own (destructible)
@@ -675,20 +680,6 @@ function printDoneNow(note, harnessLine) {
 function countReplayRowsFor(reviewRunId) {
   return readLedgerRows(repoRoot)
     .filter((r) => r.stage === 'replay' && r.reviewRunId === reviewRunId).length
-}
-
-// D6 (specs/20260823/09-replay-baseline-attribution.md): replay.js --select's D1 now appends two
-// tokens (baselineRed=/baselineLegs=) after the five this driver already parses — step 7's
-// attribution baseline. Captured OPTIONALLY (each group's own trailing `?`, matching only when the
-// literal key= is present) so a five-token line from an old sidecar resumed mid-flight against a
-// pre-D1 replay.js still parses cleanly: absent -> null, never a parse failure (AC-8).
-function parseSelection(out) {
-  const m = /spec=(\S+)\s+reviewRunId=(\S+)\s+commit=(\S+)\s+parent=(\S+)\s+diffBase=(\S+)(?:\s+baselineRed=(\S+))?(?:\s+baselineLegs=(\S+))?/.exec(out)
-  if (!m) return null
-  return {
-    spec: m[1], reviewRunId: m[2], commit: m[3], parent: m[4], diffBase: m[5],
-    baselineRed: m[6] || null, baselineLegs: m[7] || null,
-  }
 }
 
 function replayStepBody(t) {

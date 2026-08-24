@@ -3,7 +3,7 @@ name: replay-js-mode-flag-dispatch
 description: replay.js's pattern for a single script with mutually-exclusive boolean mode flags (--due/--select/--setup/...) instead of a subcommand positional — worked cleanly against the spec's tests
 metadata:
   type: project
-  reviewed: 2026-08-23
+  reviewed: 2026-08-24
 ---
 
 specs/20260819/02-mutation-replay.md (D1) asked for one script (`spec/scripts/replay.js`) owning

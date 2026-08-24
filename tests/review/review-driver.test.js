@@ -905,8 +905,10 @@ test('AC-20260821-02-2: WHEN due and --select yields an eligible CLEAN row THE S
 // specs/20260823/09-replay-baseline-attribution.md D6 (2026-08-23): replay.js --select gains two
 // tokens (baselineRed/baselineLegs) appended after the five this driver already parses — the
 // baseline step 7 attributes red legs against. parseSelection must capture them when present
-// (AC-7) and tolerate their absence without dying, since an old sidecar resumed mid-flight against
-// a pre-D1 replay.js must keep working exactly as today (AC-8).
+// (AC-7, proven below via the real replay.js's actual seven-token output) and tolerate their
+// absence without dying (AC-8) — but the real replay.js NEVER omits those tokens, so AC-8's
+// absent-token case cannot be reached through this exec fixture at all; it's proven directly in
+// tests/parse-selection/parse-selection.test.js instead (2026-08-24 review finding).
 test('AC-20260823-09-7: WHEN --select prints the two new baseline tokens THE SYSTEM prints baselineRed: and baselineLegs: lines in the REPLAY step body, inlining --select\'s own attribution baseline for step 7 to read', () => {
   const host = makeReplayHost('rvdrvreplaybaseline', { acId: 'AC-20260820-99-17', seedRows: fiveSeedReviews })
   driveToClose(host, 'rvdrv-replay-baseline-ret')
@@ -926,20 +928,29 @@ test('AC-20260823-09-7: WHEN --select prints the two new baseline tokens THE SYS
     'not just which of them were red: ' + r.stdout)
 })
 
-test('AC-20260823-09-8: WHEN the driver parses a five-token selection line carrying neither baseline token THE SYSTEM SHALL CONTINUE TO enter the REPLAY state and print the step with the fields simply absent, never a parse die, so an old sidecar resumed mid-flight against a pre-D1 replay.js keeps working', () => {
+// 2026-08-24 review of specs/20260823/09-replay-baseline-attribution.md: this test previously
+// claimed AC-20260823-09-8 (a FIVE-token line, neither baseline token present) but its fixture —
+// makeReplayHost driving the REAL spec/scripts/replay.js — can never produce one: replay.js:340
+// unconditionally prints both baselineRed=/baselineLegs= as VALUES, never omits the keys. So this
+// exec test always exercised the seven-token shape and its two assertions passed trivially
+// regardless of whether the regex's absence fallback worked. AC-8's actual coverage (the five-token
+// / absent-token shape) now lives in tests/parse-selection/parse-selection.test.js, which drives
+// the extracted parser directly with a hand-built five-token string — the only way to reach that
+// branch. This test is retargeted to what its exec fixture genuinely proves: a seven-token line
+// (today's real replay.js output) still enters REPLAY without dying.
+test('WHEN the driver parses a seven-token selection line carrying both baseline tokens (replay.js\'s real output shape) THE SYSTEM enters the REPLAY state and prints the step, never a parse die', () => {
   const host = makeReplayHost('rvdrvreplaynobaseline', { acId: 'AC-20260820-99-18', seedRows: fiveSeedReviews })
   driveToClose(host, 'rvdrv-replay-nobaseline-ret')
   commitClose(host)
   const r = run(host.root, host.spec, '--mark', 'closed')
   assert.strictEqual(r.status, 0,
-    'D6: a five-token selection line (today\'s replay.js shape) must still be ACCEPTED — parseSelection must ' +
-    'treat the two new tokens as optional, never required: ' + r.stdout + r.stderr)
+    'a seven-token selection line — the only shape the real replay.js binary emits — must be ACCEPTED: ' +
+    r.stdout + r.stderr)
   assert.strictEqual(stateOf(host.root, host.spec), 'REPLAY',
-    'D6: absence of the baseline tokens must never abort entry to REPLAY — a resumed mid-flight sidecar ' +
-    'against an old replay.js must keep parking here exactly as before: ' + r.stdout)
+    'a close with a selected target carrying both baseline tokens must park at REPLAY exactly like any ' +
+    'other selected close: ' + r.stdout)
   assert.doesNotMatch(r.stdout, /\bdie\b|parse.*fail|cannot parse/i,
-    'D6: a five-token line must never be treated as a parse failure — the regex\'s two new capture groups ' +
-    'must be OPTIONAL, defaulting to absent/null rather than making the whole match fail: ' + r.stdout)
+    'a well-formed seven-token line must never be treated as a parse failure: ' + r.stdout)
 })
 
 test('AC-20260821-02-3: WHEN due but --select resolves no usable CLEAN target THE SYSTEM transitions to DONE printing the harness\'s own advisory — a due-but-unmeasurable close is never parked', () => {

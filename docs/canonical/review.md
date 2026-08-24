@@ -111,10 +111,19 @@
   `diff_base` the review driver stamps into the spec frontmatter at every `status: done` flip.
   A spec closed before stamping existed, whose base no longer validates, is refused (exit 4)
   rather than measured against a distorted diff.
+  Replay attributes red legs against the originating review's own recorded baseline
+  (`--select` emits `baselineRed`/`baselineLegs` from the selected row; zero extra leg runs).
+  Only newly-red legs trigger the authoring retry and `leg-caught`; reconcile is
+  deterministically exempt (mutations are File-Plan-confined; reconcile redness is
+  definitionally out-of-plan). The record grammar carries the truth:
+  `baseline-red:<leg>[,<leg>]` on caught/missed/unresolved rows whose target closed with
+  sanctioned red legs; an unattributable red leg is a user question, and its dismissal
+  records `unresolved` via the workflow-refusing `red:<leg>` arm.
   (specs/20260819/02-mutation-replay.md, specs/20260819/03-replay-first-run-fixes.md,
   specs/20260820/02-replay-scratch-write-access.md,
   specs/20260821/02-replay-review-phase.md,
-  specs/20260823/05-replay-unattended-hardening.md)
+  specs/20260823/05-replay-unattended-hardening.md,
+  specs/20260823/09-replay-baseline-attribution.md)
 
 - `ac-matrix`'s coverage denominator fails closed: an AC bullet no ID grammar can parse counts
   as **uncovered** — unparseable = unknown, never absent — in both drift modes, since a host

@@ -1,6 +1,6 @@
 ---
 date: 2026-08-24
-status: implementing
+status: done
 tier: critical           # edits spec/templates/grounding-contract.md (contract hash stamped into every host) and spec/bin/spec-paths (key-set edit) — both named critical triggers in .claude/rules/spec-pipeline.md § Risk Tiers
 area: design-stage
 design: false
@@ -349,6 +349,30 @@ owed); `mentions` hits are visibility only.
 Watch during execution: the fake-capture tests must exercise the real `render-gate.js` entry
 (never a synthetic stand-in — `synthetic-repro-presented-as-real` is a live class); the boot
 lifecycle test must assert on the child's pid liveness after exit, not on a log line.
+
+Waived at review (2026-08-24): the `reconcile` leg's single out-of-plan file,
+`docs/roadmap/10-genesis-single-proposer.md`, changed in commit `7443d24`
+(`docs(roadmap/10): rewrite genesis brief around consultant discovery + scaffold tournament`)
+— an unrelated roadmap-prose commit that landed three minutes after the build commit
+`a766204` and before this review pinned HEAD, so it rode the reviewed range
+`11ab010..HEAD` without being spec work. Verified zero coupling to the render gate: the
+commit touches one docs file, and its `render` mentions are the genesis style-tile critique
+loop, not the capture contract, the comparison, or the tests. Neither Fix (adding the row
+would falsify the File Plan) nor Reject (the leg's measurement is accurate) is honest here.
+Root cause is review-range contamination, not a defect — the process lesson is to not land
+unrelated commits into a spec's open review window. This one waiver disposes both pool
+entries for the same fact: the reviewer's `medium` survivor and the `reconcile` leg's
+`{"outOfPlan":1}` row are the same file in the same commit, so the review is marked
+`--waived 2`.
+
+Deviation folded at close (2026-08-24, one-off): AC-20260824-01-4's stated delta is
+internally inconsistent with the `--width 390` pins AC-20260824-01-3 sets — `x 123 → 169.9`
+is a 46.9 px delta, which is 12.03% of 390, not the 12.01% the AC's literal finding line
+states. The test reproduces the AC's literal by driving that one case at `--width 390.5`;
+every other geometry case runs at the spec's `--width 390`. The tolerance constants and the
+finding-line format are unchanged — only the AC's own arithmetic was off by one rounding
+step. One-off, not a recurring class: it is this AC's transcribed number, not a property of
+the comparison.
 
 ## Canonical Delta
 

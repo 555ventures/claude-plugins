@@ -3,6 +3,7 @@ name: spec-sections-tag-anchoring
 description: parseAcBullets' oracle/env/pre-green tags are position-anchored (declaration slot backticked-or-bare, trailing BARE-only) and multi-tag-aware; red-check.js's SHALL CONTINUE TO pin check normalizes (strip code spans, collapse whitespace) before matching
 metadata:
   type: project
+  reviewed: 2026-08-24
 ---
 
 `spec/scripts/lib/spec-sections.js`'s `parseAcBullets` (`extractTag` helper, built on `slotRun`/

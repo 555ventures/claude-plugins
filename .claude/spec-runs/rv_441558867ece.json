@@ -1,0 +1,105 @@
+{
+  "runId": "rv_441558867ece",
+  "ts": "2026-08-24T21:38:48.236Z",
+  "spec": "specs/20260824/01-render-gate.md",
+  "tier": "critical",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 2,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 3,
+      "observed": {
+        "outOfPlan": 1
+      }
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      }
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 276
+      }
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": {
+        "matches": 10
+      }
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": {
+        "files": 19,
+        "testsExecuted": 247
+      }
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      }
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 18,
+        "carried": 15,
+        "sanctioned": 3,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "medium",
+        "claim": "The diff range for this review (11ab010..HEAD) includes an unrelated later commit rewriting docs/roadmap/10-genesis-single-proposer.md (166 insertions/44 deletions), which is not a row in spec 01-render-gate's File Plan and is not documented in specs/20260824/01-render-gate.deviations.md or waived in review-state.json.",
+        "file": "docs/roadmap/10-genesis-single-proposer.md",
+        "line": 1,
+        "impact": "An unrelated 210-line roadmap-brief rewrite is riding inside this critical-tier spec's reviewed diff with no File Plan coverage and no recorded waiver, so the scope boundary the reconcile leg exists to enforce is currently unaddressed for this file.",
+        "evidence": "manifest-1.jsonl: {\"leg\":\"reconcile\",\"exit\":3,\"observed\":{\"outOfPlan\":1}}; legs-1/reconcile.json: \"outOfPlan\": [\"docs/roadmap/10-genesis-single-proposer.md\"]; git log shows this file changed only in commit 7443d24 (docs(roadmap/10): rewrite genesis brief...), a separate commit from a766204 (build(20260824/01): render gate...); specs/20260824/01-render-gate.md's File Plan table (lines 57-71) lists 12 rows, none naming docs/roadmap/10-genesis-single-proposer.md; specs/20260824/01-render-gate.deviations.md contains only the AC-4 arithmetic note, no mention of this file."
+      }
+    ],
+    "killed": [],
+    "reviewerCount": 1,
+    "scope": "full",
+    "tokens": 116453
+  }
+}

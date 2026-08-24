@@ -54,11 +54,20 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // recurrence of the additive-collision class (JJ-20260814-01), and the first that also RETIRES
 // a key: the key list below is updated in place, never a parallel exhaustive pin.
 
+// specs/20260823/08-derived-session-queue.md D12 (spec/bin/spec-paths row): the new
+// spec-queue.js script needs a spec-paths key like every other bundled script — a missing key
+// breaks /spec:queue's invocation and the D8 SessionStart hook's `spec-queue.js hello` delegation
+// silently (§ Risk Tiers, spec-paths). D12 marks this row [no-ac]: it is enforced fail-closed by
+// this existing suite guard (and by tests/consistency/{plugin-version,entrypoints,red-fixture-
+// coverage}.test.js), so it carries no AC-ID of its own — this is the seventh recurrence of the
+// spec-paths additive-collision class (JJ-20260814-01): the key list below is updated in place,
+// never a parallel exhaustive pin.
+
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-design', 'wf-enforce',
     'wf-panel', 'wf-research', 'dc-extract', 'design-atlas', 'skeletons-check', 'merge-back',
-    'smoke', 'manifest-check', 'spec-status', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
+    'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
     'review-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'shared', 'shared-genesis',
     'template', 'templates', 'contract']) {
     const p = run(key).trim()
@@ -96,7 +105,7 @@ test('shared-for: every mapped section name still exists as a core.md or design.
 // that spec's File Plan.
 test('shared-for: scoped output carries its sections and is smaller than the full doc (incl. AC-20260820-05-17: escape keeps serving Incident Policy; AC-20260823-01-19: release keeps Release Stage/Runtime Verification and drops Feedback Loop)', () => {
   const full = run('shared-for', 'no-such-command')
-  for (const cmd of ['plan', 'design', 'build', 'review', 'release', 'enforce', 'atlas', 'sketch', 'escape', 'doctor', 'replay']) {
+  for (const cmd of ['plan', 'design', 'build', 'review', 'release', 'enforce', 'atlas', 'sketch', 'escape', 'doctor', 'replay', 'queue']) {
     const out = run('shared-for', cmd)
     assert.ok(out.length < full.length, cmd + ' output should be a strict subset')
     assert.match(out, /## Host Grounding/, cmd + ' must keep Host Grounding')
@@ -145,6 +154,15 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
   assert.match(run('shared-for', 'replay'), /## Feedback Loop/,
     'replay reads the cadence policy (D12) from Feedback Loop — without this section the command has no ' +
     'doctrine source for "every 5th review" at all')
+  // D12: /spec:queue's shared-for section list (Host Grounding|State Machine|Question Style|
+  // Console Output Style) — a missing map entry means the command reads no doctrine at all for
+  // its predicate vocabulary (State Machine) or its hello/veto-notice wording conventions.
+  assert.match(run('shared-for', 'queue'), /## State Machine/,
+    'D12: /spec:queue must be served § State Machine — the queue\'s strict-sequence item semantics (D3) live there')
+  assert.match(run('shared-for', 'queue'), /## Question Style/,
+    'D12: /spec:queue must be served § Question Style — any AskUserQuestion it raises (e.g. an ambiguous <ref>) must follow the same doctrine as every other command')
+  assert.match(run('shared-for', 'queue'), /## Console Output Style/,
+    'D12: /spec:queue must be served § Console Output Style — the list/hello glyph conventions (✅▶○🅰, veto/accept lines) must follow the shared narration doctrine')
 })
 
 test('AC-20260819-02-10: spec-paths replay and spec-paths replay-corpus resolve to the D14 script and corpus paths', () => {

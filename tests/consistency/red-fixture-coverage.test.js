@@ -478,11 +478,31 @@ function hookCrossWorktree() {
     'the blocked case must print the BLOCKED: diagnostic on stderr: ' + crossTree.stderr)
 }
 
+// session-queue.sh (specs/20260823/08-derived-session-queue.md D8): a queue file's top item
+// must actually surface when the SessionStart hook fires — a stub that silently exits 0 in every
+// repo (indistinguishable from "no queue file" per AC-11) would pass every OTHER check in this
+// suite while never engaging spec-queue.js hello at all. The planted item's own payload text is
+// the evidence the check engaged, never a generic non-empty-stdout precondition.
+function hookSessionQueue() {
+  const dir = fs.realpathSync(tmpdir('rfc-hook-queue'))
+  gitRepo(dir)
+  fs.writeFileSync(path.join(dir, '.git/spec-queue.json'), JSON.stringify({
+    version: 1, seq: 1,
+    items: [{ id: 'q1', kind: 'prompt', payload: 'RED_FIXTURE_QUEUE_TOP_ITEM', added: '2026-08-23T10:00:00Z' }],
+  }))
+  const r = runBash('scripts/session-queue.sh', [], { cwd: dir })
+  assert.strictEqual(r.status, 0,
+    'a queue file with a pending top item must exit 0 at session start, never blocking the session: ' + r.stdout + r.stderr)
+  assert.match(r.stdout, /RED_FIXTURE_QUEUE_TOP_ITEM/,
+    'evidence the check engaged: stdout must carry the planted top item\'s own payload text, proving the hook actually read the queue file and delegated to spec-queue.js hello rather than reporting a precondition pass with nothing printed: ' + r.stdout)
+}
+
 const HOOK_HANDLERS = {
   'spec-state-gate.sh': hookSpecState,
   'genesis-state-gate.sh': hookGenesisState,
   'question-style-gate.js': hookQuestionStyle,
   'block-cross-worktree-writes.sh': hookCrossWorktree,
+  'session-queue.sh': hookSessionQueue,
 }
 
 for (const hookPath of HOOK_PATHS) {

@@ -12,9 +12,11 @@ stored. The derivation (shared verbatim with `/spec:doctor` check 14 and `/spec:
 preflight, implemented once in the script): a brief with no spec stamped `brief: NN` is
 **unplanned**; any matching spec not `done` makes it **in-flight**; all matching specs
 `done` makes it **done**. The one edit this command may ever offer is the hand-tracked
-column strip named at the end — everything else is display. If you want the full
-grounding-layer drift audit, that's `/spec:doctor`; this is the glanceable subset you run
-between sessions.
+column strip named at the end — everything else is display. When a session queue file
+exists (`/spec:queue`), the `--next` ordering it embeds is queue-aware: queue position can
+jump a brief ahead of the closest-to-done default and prompt items appear inline; no queue
+file means the ordering is unchanged. If you want the full grounding-layer drift audit,
+that's `/spec:doctor`; this is the glanceable subset you run between sessions.
 
 **Intended model: any.** Run `spec-paths shared-for status` and read what it prints. No
 judgment happens here — the script derives, you render.
@@ -68,6 +70,14 @@ thing the script can't: narration.
    - `skipped-spec` — the unfinished dependency is the work item: point at its line in
      the dashboard's 🎯 Next section (its entry already carries the command — usually
      `/spec:review`), never re-derive it here.
+   - `queue-auto-placed` — the session queue's reconciliation stamped this item in
+     automatically from on-disk brief provenance; narrate the notice and name the veto
+     command the anomaly's detail carries (`spec-queue bump <ref>`, or `spec-queue ok <ref>`
+     to accept the placement) — never clear the stamp yourself.
+   - `queue-orphan` — a queue item points at a brief file that no longer exists; point at
+     the fix (`spec-queue done <ref>` if the brief shipped under a new number, `spec-queue
+     defer <ref>` otherwise) — advice about a *pointer*, not a status change this command
+     performs.
    - `hand-tracked-status` — see below.
 
    An empty anomaly list is worth saying out loud: it's the "you didn't forget anything"

@@ -1,6 +1,7 @@
 ---
 date: 2026-08-23
-status: hardened
+status: implementing
+diff_base: 89978d3a85682e2169c33069948d0a981557c38e
 tier: critical           # edits spec-status.js (frozen --next surface) and adds a hook surface (process boundary) — both named critical triggers in .claude/rules/spec-pipeline.md § Risk Tiers
 area: session-queue
 design: false

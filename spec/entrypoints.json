@@ -120,6 +120,9 @@
   "spec/scripts/scope-reconcile.js": {
     "entryPoints": ["spec/commands/build.md", "spec/scripts/review-legs.js", "spec/scripts/init-gen.js"]
   },
+  "spec/scripts/session-queue.sh": {
+    "entryPoints": ["spec/hooks/hooks.json"]
+  },
   "spec/scripts/skeletons-check.js": {
     "entryPoints": ["spec/scripts/spec-design-driver.js"]
   },
@@ -132,6 +135,9 @@
   },
   "spec/scripts/spec-design-driver.js": {
     "entryPoints": ["spec/commands/design.md"]
+  },
+  "spec/scripts/spec-queue.js": {
+    "entryPoints": ["spec/commands/queue.md", "spec/scripts/session-queue.sh"]
   },
   "spec/scripts/spec-review-driver.js": {
     "entryPoints": ["spec/commands/review.md"]

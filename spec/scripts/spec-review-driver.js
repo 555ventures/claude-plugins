@@ -174,6 +174,19 @@ const fmVal = (k) => fmValue(fmRaw, k)
 let status = fmVal('status')
 const tier = fmVal('tier') || 'standard'
 const area = fmVal('area') || '{area}'
+// The CLOSE step's canonical target: the spec's own Canonical Delta section is authoritative and
+// `area:` is only the fallback. Deriving `docs/canonical/${area}.md` unconditionally printed a
+// wrong instruction for every spec whose area names no canonical doc — specs/20260823/08 carried
+// `area: session-queue` while its Canonical Delta names `docs/canonical/status.md`, and the close
+// nearly fragmented the canonical layer by creating a second file (caught by an audit 2026-08-24,
+// after that review had already closed CLEAN). First `docs/canonical/<name>.md` mentioned in the
+// section wins; a section naming none falls back to the area-derived name as before.
+const canonicalTarget = (() => {
+  const after = specText.split(/^##\s+Canonical Delta\s*$/m)[1]
+  if (after === undefined) return `docs/canonical/${area}.md`
+  const hit = after.split(/^##\s/m)[0].match(/docs\/canonical\/[A-Za-z0-9._-]+\.md/)
+  return hit ? hit[0] : `docs/canonical/${area}.md`
+})()
 const buildBase = fmVal('build_base')
 const diffBaseFm = fmVal('diff_base')
 const designFlag = fmVal('design') === 'true'
@@ -1313,7 +1326,7 @@ const STEPS = {
       `verdict: ${marks.dispositions.word}   runId: ${marks.closeRunId}   ` +
       `retained: .claude/spec-runs/${marks.closeRunId}.json\n` +
       waivedWarn +
-      `1. Apply the spec's Canonical Delta to docs/canonical/${area}.md.\n` +
+      `1. Apply the spec's Canonical Delta to ${canonicalTarget}.\n` +
       `2. Fold the deviations sidecar if one exists (recurring -> Gotchas [host]/[plugin]; one-offs ` +
       `-> the spec's Rationale); delete the sidecar.\n` +
       deviationsEnumBlock() +

@@ -217,15 +217,19 @@ this repo's suite; appending at cap requires an eviction (delete / merge / mecha
   D9, build 2026-08-23 — `rejected-trailing-tag` added to both `ACM_FINDING_CLASSES` and
   `SKIP_FINDING_CLASSES` wrote `{"leg":"skip-reconcile","exit":1,"observed":{"skipped":0,"sanctioned":0}}`
   for a spec with zero skip lines; executed repro in that spec's deviations record.)
-- `[plugin]` The collision-closure literals leg misses literals a spec **ADDS to an exhaustive
-  set**, the mirror of the retired-name gap two entries above. A test that pins a complete
-  inventory ("exactly the four hooks.json script paths") is invalidated by any addition, but the
-  added name is in neither the spec's inherited nor its retired literal set, so no leg looks for
-  it and the row lands out-of-File-Plan at review. At lock, read every Decision that ADDS a member
-  to a registry, hook table, or key set and grep `tests/` for the exhaustive pin that counts them.
-  (specs/20260823/08-derived-session-queue.md D8 — `tests/consistency/entrypoints.test.js`
-  AC-20260820-04-5 updated four→five in place, never weakened; waived at review 2026-08-23, the
-  fourth recurrence of the exhaustive-pin-outside-the-File-Plan class.)
+- `[plugin]` A spec that **ADDS a member to an exhaustive live-file pin** (a test asserting the
+  complete set of hooks.json script paths, spec-paths keys, or entrypoints rows) invalidates that
+  pin by construction, and the row lands out-of-File-Plan at review. **The collision-closure paths
+  leg already catches this** — it is not a detection gap. The gap is that its `likely` tier is
+  advisory (specs/20260814/05) and nothing consumes its exit 1, so the signal is available at lock
+  and routinely unread. Run `node "$(spec-paths collision-closure)" --spec <spec>` at lock and give
+  every `likely` hit either a File Plan row or an explicit waive line in the spec — the script's own
+  remedy line says exactly this. (specs/20260823/08-derived-session-queue.md D8 —
+  `tests/consistency/entrypoints.test.js` AC-20260820-04-5 updated four→five in place, never
+  weakened; waived at review 2026-08-23, the fourth recurrence. Executed 2026-08-24 against that
+  spec: exit 1, with that file the sole `likely` hit under four separate File Plan paths — the
+  detection was there and unread. An earlier revision of this entry claimed "no leg looks for it"
+  and prescribed hand-grepping; that claim was written without running the leg and is retracted.)
 - `[plugin]` `console.log(...)` immediately followed by `process.exit(0)` **silently truncates at
   the 64 KiB pipe buffer while still exiting 0** — Node's stdout write to a pipe is async, and
   `process.exit` tears the process down mid-flush. Latent for as long as nothing consumes the

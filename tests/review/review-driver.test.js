@@ -32,11 +32,11 @@ const foo = require('../src/foo.js')
 test('AC-20260820-99-1: foo() returns 42', () => { assert.strictEqual(foo(), 42) })
 `
 
-function specBody({ status = 'implementing', tier = 'standard', diffBase, acId = 'AC-20260820-99-1' }) {
+function specBody({ status = 'implementing', tier = 'standard', diffBase, acId = 'AC-20260820-99-1', area = null, canonicalDelta = null }) {
   return `---
 status: ${status}
 tier: ${tier}
-diff_base: ${diffBase}
+diff_base: ${diffBase}${area ? `\narea: ${area}` : ''}
 ---
 # Driver Test Spec
 
@@ -56,10 +56,14 @@ diff_base: ${diffBase}
 ## Acceptance Criteria
 
 - **${acId}**: foo() returns 42.
-`
+${canonicalDelta === null ? '' : `
+## Canonical Delta
+
+${canonicalDelta}
+`}`
 }
 
-function makeHost({ gateFails = false } = {}) {
+function makeHost({ gateFails = false, specOpts = {} } = {}) {
   const root = fs.realpathSync(tmpdir('rvdrv'))
   const g = gitRepo(root)
   fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
@@ -76,7 +80,7 @@ function makeHost({ gateFails = false } = {}) {
   const diffBase = g('rev-parse', 'HEAD').trim()
   fs.mkdirSync(path.join(root, 'specs/20260820'), { recursive: true })
   const spec = path.join(root, 'specs/20260820/99-drv-test.md')
-  fs.writeFileSync(spec, specBody({ diffBase }))
+  fs.writeFileSync(spec, specBody({ diffBase, ...specOpts }))
   fs.writeFileSync(path.join(root, 'src/foo.js'), gateFails ? 'module.exports = () => 0\n' : 'module.exports = () => 42\n')
   fs.writeFileSync(path.join(root, 'tests/foo.test.js'), GREEN_TEST)
   g('add', '-A'); g('commit', '-q', '-m', 'implement')
@@ -262,6 +266,35 @@ test('AC-20260820-07-6: WHEN a clean run reaches CLOSE (0 survivors, disposition
     'the CLOSE step\'s hygiene listing must name .claude/spec-runs/*.json as an EXPECTED artifact — omitting it invites deleting durable evidence as reviewer scratch: ' + r.stdout)
   assert.match(r.stdout, /EXPECTED/, 'the hygiene listing must mark expected artifacts (retained evidence + sidecar) as EXPECTED, not stray paths to clean up: ' + r.stdout)
   assert.match(r.stdout, /close[- ]commit/i, 'the CLOSE step must print the close-commit instruction: ' + r.stdout)
+})
+
+// Escape caught by audit 2026-08-24, after specs/20260823/08-derived-session-queue.md had already
+// closed CLEAN: the CLOSE step rendered `docs/canonical/${area}.md` straight from frontmatter, so a
+// spec carrying `area: session-queue` whose Canonical Delta names `docs/canonical/status.md` was
+// told to write a canonical doc that does not exist. Following the printed instruction would have
+// fragmented the canonical layer into a second file the spec never named.
+test('the CLOSE step names the canonical doc the spec\'s own Canonical Delta section names, not one derived from frontmatter area, when the two differ', () => {
+  const host = makeHost({ specOpts: { area: 'session-queue', canonicalDelta: 'docs/canonical/status.md gains one paragraph about the overlay.' } })
+  toReviewer(host)
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('rvdrv-canon', CLEAN_RETURN))
+  const r = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE', 'setup: a zero-survivor disposition must land CLOSE: ' + r.stdout + r.stderr)
+  assert.match(r.stdout, /Apply the spec's Canonical Delta to docs\/canonical\/status\.md\./,
+    'the close instruction must name the doc the spec itself names — a session following an area-derived path writes a canonical doc the spec never named, splitting the canonical layer in two: ' + r.stdout)
+  assert.doesNotMatch(r.stdout, /docs\/canonical\/session-queue\.md/,
+    'the area-derived filename must not appear at all once the Canonical Delta names its own target — printing both leaves the session to guess which is authoritative: ' + r.stdout)
+})
+
+test('the CLOSE step falls back to the area-derived canonical filename when the spec has no Canonical Delta section naming one', () => {
+  const host = makeHost({ specOpts: { area: 'review' } })
+  toReviewer(host)
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('rvdrv-canon-fb', CLEAN_RETURN))
+  const r = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE', 'setup: a zero-survivor disposition must land CLOSE: ' + r.stdout + r.stderr)
+  assert.match(r.stdout, /Apply the spec's Canonical Delta to docs\/canonical\/review\.md\./,
+    'a spec whose Canonical Delta names no path must still get the area-derived target — losing the fallback would leave the close step with no canonical instruction at all: ' + r.stdout)
 })
 
 test('AC-20260823-03-11: WHEN the review driver processes a spec whose frontmatter reads "tier: standard   # any note" THE SYSTEM passes exactly "standard" as --tier, so the ledger row it produces carries "tier":"standard" with no "#" (rv_e83659d49386, the same inline-comment mechanism that polluted seven live ledger rows)', () => {

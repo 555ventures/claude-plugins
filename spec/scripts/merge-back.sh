@@ -253,8 +253,32 @@ case "$SUB" in
       fi
     fi
     if git -C "$ROOT" rev-parse --verify -q "$SOURCE" >/dev/null; then
-      git -C "$ROOT" branch -d "$SOURCE" && note "deleted branch $SOURCE" \
-        || die "branch -d '$SOURCE' refused (not fully merged?) — verify, then 'git -C $ROOT branch -D $SOURCE' only if intended"
+      if git -C "$ROOT" branch -d "$SOURCE"; then
+        note "deleted branch $SOURCE"
+      else
+        # `branch -d` proves containment by ANCESTRY, which a squash merge deliberately does not
+        # create: it copies the tree into one new commit and links nothing. So the recommended
+        # strategy for a many-commit spec (see RECOMMEND above) made this step fail 100% of the
+        # time, and the failure landed BEFORE the driver could record the merge as concluded —
+        # so a caller following the protocol's own "re-run the driver" instruction re-ran the
+        # legs and demanded a fresh reviewer for an already-closed review, appending a duplicate
+        # ledger row to the surface the replay schedule and catch-rate denominator are read from.
+        #
+        # Fall back to containment by CONTENT, which is what a squash actually guarantees: if the
+        # target's tree already equals the source's tree, every byte of the branch is on the
+        # target and nothing can be lost by deleting it. That check is strictly stronger than the
+        # thing `-d` was protecting (it compares the whole tree, not one merge-base walk), so the
+        # safety property is preserved — a branch carrying ANY content the target lacks still
+        # falls through to the refusal below, untouched.
+        CLEAN_TARGET="$(git -C "$ROOT" symbolic-ref --short -q HEAD || true)"
+        if [ -n "$CLEAN_TARGET" ] && git -C "$ROOT" diff --quiet "$CLEAN_TARGET" "$SOURCE" -- 2>/dev/null; then
+          git -C "$ROOT" branch -D "$SOURCE" \
+            || die "branch -D '$SOURCE' failed after its content was verified identical to $CLEAN_TARGET — inspect 'git -C $ROOT branch -vv' manually"
+          note "deleted branch $SOURCE (squash-merged: no ancestry link, but its tree is identical to $CLEAN_TARGET)"
+        else
+          die "branch -d '$SOURCE' refused and its tree is NOT identical to the target — the branch still carries unmerged content; verify with 'git -C $ROOT diff ${CLEAN_TARGET:-HEAD} $SOURCE', then 'git -C $ROOT branch -D $SOURCE' only if intended"
+        fi
+      fi
     else
       note "branch '$SOURCE' already gone"
     fi

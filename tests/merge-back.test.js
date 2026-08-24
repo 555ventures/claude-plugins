@@ -162,3 +162,68 @@ test('create refuses on an un-gitignored worktree dir and an unborn HEAD', () =>
   assert.strictEqual(r2.status, 2)
   assert.match(r2.stderr, /no commits yet/)
 })
+
+// 2026-08-24, upwell review of specs/20260823/02-room-mechanics.md: `cleanup` deleted the finished
+// branch with `git branch -d`, which proves containment by ANCESTRY. A squash merge deliberately
+// creates none — it copies the tree into one new commit and links nothing — so cleanup failed on
+// 100% of squash merges, i.e. on the exact strategy `inspect` RECOMMENDs for a many-commit spec.
+// The failure landed before spec-review-driver could record the merge as concluded, so a caller
+// following the protocol's own "re-run the driver" instruction re-ran the legs and demanded a
+// fresh reviewer for an already-closed review — appending a duplicate row to the ledger the
+// replay schedule and the catch-rate denominator are both read from. The fix falls back to
+// containment by CONTENT (target tree === source tree), which is what a squash actually
+// guarantees and is strictly stronger than the merge-base walk `-d` performs.
+
+test('cleanup deletes a squash-merged branch, whose content is on the target but whose ancestry is not', () => {
+  const dir = tmpdir('mbsqc')
+  const g = gitRepo(dir)
+  g('checkout', '-q', '-b', 'spec/sq')
+  fs.writeFileSync(path.join(dir, 'one.txt'), '1\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'first')
+  fs.writeFileSync(path.join(dir, 'two.txt'), '2\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'second')
+  g('checkout', '-q', 'main')
+
+  const merge = runBash(SCRIPT, ['merge', '--root', dir, '--target', 'main', '--source', 'spec/sq',
+    '--strategy', 'squash'])
+  assert.strictEqual(merge.status, 0, merge.stderr)
+  assert.ok(fs.existsSync(path.join(dir, 'two.txt')), 'the squash landed the branch content on main')
+
+  // The precondition that made this fail: git itself still considers the branch unmerged.
+  const unmerged = require('child_process').execFileSync('git',
+    ['-C', dir, 'branch', '--no-merged', 'main'], { encoding: 'utf8' })
+  assert.match(unmerged, /spec\/sq/,
+    'precondition — after a squash git reports the source as NOT merged, which is exactly what ' +
+    '`branch -d` refuses on; if this stops holding the regression this test pins is gone')
+
+  const cleanup = runBash(SCRIPT, ['cleanup', '--root', dir, '--source', 'spec/sq'], { cwd: dir })
+  assert.strictEqual(cleanup.status, 0,
+    'cleanup must succeed after a squash merge — the recommended strategy for a many-commit ' +
+    'spec must not leave the caller to finish the merge by hand: ' + cleanup.stderr)
+  assert.match(cleanup.stdout, /squash-merged/,
+    'the success line must say WHY the safe delete was bypassed, so a reader of the log can tell ' +
+    'a sanctioned squash cleanup from a blind force-delete: ' + cleanup.stdout)
+  const branches = require('child_process').execFileSync('git',
+    ['-C', dir, 'branch', '--list', 'spec/sq'], { encoding: 'utf8' })
+  assert.strictEqual(branches.trim(), '', 'the branch is actually gone')
+})
+
+test('cleanup still refuses a branch carrying content the target does not have', () => {
+  const dir = tmpdir('mbunm')
+  const g = gitRepo(dir)
+  g('checkout', '-q', '-b', 'spec/unmerged')
+  fs.writeFileSync(path.join(dir, 'only-here.txt'), 'x\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'never merged')
+  g('checkout', '-q', 'main')
+
+  const cleanup = runBash(SCRIPT, ['cleanup', '--root', dir, '--source', 'spec/unmerged'], { cwd: dir })
+  assert.strictEqual(cleanup.status, 2,
+    'the content-containment fallback must NOT become a blanket force-delete — a branch with ' +
+    'unmerged work still has to refuse, or the fix trades a papercut for data loss: ' + cleanup.stdout)
+  assert.match(cleanup.stderr, /NOT identical/,
+    'the refusal must name the real reason (content differs), not the ancestry wording that ' +
+    'sent the caller down the wrong path: ' + cleanup.stderr)
+  const branches = require('child_process').execFileSync('git',
+    ['-C', dir, 'branch', '--list', 'spec/unmerged'], { encoding: 'utf8' })
+  assert.match(branches, /spec\/unmerged/, 'the unmerged branch survives')
+})

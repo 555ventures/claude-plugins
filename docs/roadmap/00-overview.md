@@ -20,7 +20,7 @@ fences off belongs to its owning brief.
 | 05 | hotspot-audit *(superseded by v7)* |
 | 06 | mechanized-prose-checks *(delivered by v7)* |
 | 07 | suite-baseline *(superseded by v7)* |
-| 08 | design-thinning |
+| 08 | design-thinning → render-gated redesign (ADR-0002) |
 | 09 | promise-sweep-leg |
 | 10 | genesis-single-proposer |
 | 11 | init-thinning |

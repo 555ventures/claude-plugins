@@ -1,6 +1,6 @@
 # Render-gate spike — 2026-08-24 (salon-os contact-vault)
 
-Copied verbatim from the throwaway worktree `salon-os@spike/render-gate` (`spike/REPORT.md`); scripts `spike/render-gate.mjs` + `spike/compare.mjs` live on that branch. Companion field evidence: `design-stage-field-eval.md`. Consumed by roadmap brief 08a.
+Copied verbatim from the throwaway worktree `salon-os@spike/render-gate` (`spike/REPORT.md`); scripts `spike/render-gate.mjs` + `spike/compare.mjs` live on that branch. Companion field evidence: `design-stage-field-eval.md`. Consumed by roadmap brief 08 and ADR-0002.
 
 
 Subject: the contact-vault surface (`specs/20260821/04-contact-vault.md`).

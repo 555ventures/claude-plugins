@@ -25,13 +25,30 @@ no architecture-decision-specific benchmark exists; hence the proof condition be
   before the user judges them.
 - Resolves brief 08's open question on wf-panel's fate; sequence with 08 so the design-family
   thinning and this collapse touch the frozen workflow files once, not twice.
+- **`genesis-explore` becomes optional — a bring-your-own-design entry.** Today the funnel is
+  skippable only when the archetype has no design stage; a design-capable project must run
+  the rendered-candidate rounds before `genesis-design` will ratify anything. Sometimes the
+  direction is already designed elsewhere (a Claude Design export, or any local mock
+  bundle). Add a third `explore` state alongside `picked`/`skipped` — `external` — recorded
+  when the user points at a supplied candidate instead of running the funnel. The state gate
+  admits it; `genesis-design` ratifies the supplied candidate the same way it ratifies a
+  funnel winner (its tokens are the canon, `dc-extract` harvests literals when there is no
+  token block — memory `claude-design-export-format-reality`); the proposer's
+  render-screenshot-critique loop runs over that one candidate so executed grounding still
+  applies — the user simply never judged a gallery. Architect's chain bullet and `next`
+  name both routes. Explore's fresh UX research is not owed on this path: the user already
+  decided.
 
 **Proof condition to plan:** one greenfield prompt run both ways — single-proposer decision
 record judged no weaker than the panel's, and its scaffold boots.
 
 ## Out of scope
 
-- The genesis user-facing surface (interview flow, ADR record shape, funnel stages).
+- The genesis user-facing surface (interview flow, ADR record shape, funnel stages) — except
+  the explore-optional entry above, which adds one state and one ratification input, not a
+  new stage.
+- Extending the supplied-candidate route to `/spec:sketch` or `/spec:design` — the Claude
+  Design escape hatch there already exists (design.md § Claude Design as a source).
 
 ## Grounding
 

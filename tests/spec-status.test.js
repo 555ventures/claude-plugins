@@ -227,8 +227,13 @@ test('roadmap-less host still reports open specs, no crash', () => {
 // doctrine produced it, so it contradicted /spec:status (incident: a spec with `designed:`
 // set kept being routed back to /spec:design). The mapping now lives in the script; command
 // epilogues print its output verbatim.
+//
+// AC-20260824-02-4 (specs/20260824/02-design-stage-on-render-gate.md D16, tagged in place):
+// specs/20260824/02 replaces the design stage's interior (driver, wf-design, skeletons-check)
+// but keeps its seat in the state machine — this routing must stay observed unchanged, a
+// SHALL-CONTINUE-TO regression pin that is green at HEAD by design, not a new behavior.
 
-test('--next routes hardened+design to /spec:design only until designed: is stamped', () => {
+test('AC-20260824-02-4: --next routes hardened+design to /spec:design only until designed: is stamped', () => {
   const dir = host({
     briefs: {},
     specs: {

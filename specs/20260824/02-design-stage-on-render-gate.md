@@ -1,9 +1,10 @@
 ---
 date: 2026-08-24
-status: hardened
+status: implementing
 tier: critical           # removes spec-paths keys (key-set edit — critical trigger per .claude/rules/spec-pipeline.md § Risk Tiers, precedent specs/20260823/01) and retires spec-design-driver.js, the state machine behind a pipeline stage
 area: design-stage
 design: false
+diff_base: 592e4728e4ae2251ffb144e62f7c719cbe001275
 breaking: false
 depends_on: [specs/20260824/01-render-gate.md]
 depended_on_by: [specs/20260824/03-mock-states-hygiene.md]
@@ -57,6 +58,7 @@ and reaches `designed:` through gates it can observe, with every step re-derivab
 | spec/scripts/lib/host-config.js | MODIFY | scripts | Header comment: replace the `spec-design-driver.js` example with `render-gate.js` |
 | spec/scripts/lib/frontmatter.js | MODIFY | scripts | Header comment: the incident history names the driver as a former reader — mark it retired (comment only) |
 | spec/scripts/components-check.js | MODIFY | scripts | Header comment: callers are `/spec:genesis-design` (fail-closed) and `/spec:design` preflight (advisory); `wf-design grounding` → design workers (comment only) |
+| spec/scripts/render-gate.js | MODIFY | scripts | AC-20260824-02-2 — the `design.render`-missing exit-2 remedy names `/spec:design` alongside the config keys, so the command's STOP and the script's STOP are one message (orchestrator scope addition at build, 2026-08-24: the AC demands a script-side change the File Plan had no row for) |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | Version bump (target 7.32.0, next-free rule) + changelog paragraph; the description's `the design-driver pattern` phrase → `driver-stepped` |
 | tests/spec-paths.test.js | MODIFY | tests | AC-20260824-02-1 (negative key pin) + remove the three keys from the resolve-all list |
 | tests/env-preflight.test.js | MODIFY | tests | AC-20260824-02-3 — retag AC-20260815-05-8's design pin in place to the new body's step wording |

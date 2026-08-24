@@ -17,7 +17,11 @@ const { read, tmpdir, runNode, gitRepo } = require('../helpers')
 // today — the correct red for a contract-widening pin per this repo's Test Rules. Per D9, this
 // file does NOT restate spec 03's scalar-stripping pins (those live in tests/frontmatter.test.js,
 // retagged in place) — it pins only the surface D1/D8 add: full-document entry, fmBlock, fmMap,
-// the driver's exec-level build_base path (AC-4), and the four-script routing sweep (AC-10).
+// the driver's exec-level build_base path (AC-4), and the routing sweep (AC-10). The sweep
+// originally covered four scripts; specs/20260824/02-design-stage-on-render-gate.md D2 retires
+// spec-design-driver.js with the rest of the design-driver state machine, so the sweep below is
+// retagged to AC-20260824-02-6 and reduced to the three surviving scripts (D16: "the frozen v7.0
+// surface must be observed unchanged by tests, not assumed").
 
 const { fmBlock, fmValue, fmMap } = require('../../spec/scripts/lib/frontmatter')
 
@@ -185,11 +189,11 @@ test('AC-20260823-04-4: WHEN the review driver reads a spec whose build_base: li
     'the commented and comment-free fixtures are otherwise identical (same commit history, same source, same tests) — if build_base resolution genuinely strips the comment the same way, both must derive the SAME state; a divergence here means the two fixtures resolved different bases: control=' + controlState + ' treatment=' + treatmentState)
 })
 
-// ---- AC-20260823-04-10: routing sweep — all four scripts route through lib/frontmatter.js ------
+// ---- AC-20260823-04-10 / AC-20260824-02-6: routing sweep — the three surviving scripts route
+// ---- through lib/frontmatter.js (spec-design-driver.js retired by specs/20260824/02 D2) ------
 
-const FOUR_SCRIPTS = [
+const THREE_SCRIPTS = [
   'scripts/spec-review-driver.js',
-  'scripts/spec-design-driver.js',
   'scripts/spec-status.js',
   'scripts/replay.js',
 ]
@@ -205,8 +209,8 @@ const BUGGY_ANY_HASH_STRIP = '\\s*#.*$'
 // a local re-derivation of exactly what fmMap now owns.
 const BUGGY_KV_LINE = '/^([A-Za-z_]+):\\s*(.*)$/'
 
-test('AC-20260823-04-10: EACH of spec-review-driver.js, spec-design-driver.js, spec-status.js, and replay.js requires lib/frontmatter.js and carries no surviving local per-key or per-line frontmatter-parsing construction', () => {
-  for (const rel of FOUR_SCRIPTS) {
+test('AC-20260823-04-10 / AC-20260824-02-6: EACH of spec-review-driver.js, spec-status.js, and replay.js requires lib/frontmatter.js and carries no surviving local per-key or per-line frontmatter-parsing construction', () => {
+  for (const rel of THREE_SCRIPTS) {
     const src = read('spec/' + rel)
     assert.ok(src.includes("require('./lib/frontmatter')"),
       rel + ' must require lib/frontmatter.js — a script that parses spec frontmatter without ' +

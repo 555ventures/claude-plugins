@@ -25,9 +25,16 @@ function gate(prompt, specContent) {
 
 const SPEC_MD = (status, body = '') => `---\nstatus: ${status}\n---\n# Spec\n${body}\n`
 
-test('state machine: right status passes, wrong status blocks', () => {
-  assert.strictEqual(gate('/spec:design', SPEC_MD('hardened')).status, 0)
-  assert.strictEqual(gate('/spec:design', SPEC_MD('draft')).status, 2)
+// AC-20260824-02-5 (specs/20260824/02-design-stage-on-render-gate.md D16, tagged in place):
+// the design stage keeps its frozen seat in the state machine (hardened admits, draft blocks)
+// while specs/20260824/02 replaces its interior (driver, wf-design, skeletons-check all
+// retired) — this pair of assertions is the SHALL-CONTINUE-TO regression pin, green at HEAD by
+// design, not a new behavior.
+test('AC-20260824-02-5: state machine: right status passes, wrong status blocks', () => {
+  assert.strictEqual(gate('/spec:design', SPEC_MD('hardened')).status, 0,
+    'AC-20260824-02-5/D16: the design stage keeps its frozen seat in the state machine — a hardened spec must still be admitted to /spec:design even though the stage\'s interior (driver, wf-design, skeletons-check) is being replaced')
+  assert.strictEqual(gate('/spec:design', SPEC_MD('draft')).status, 2,
+    'AC-20260824-02-5/D16: the design stage keeps its frozen seat in the state machine — a draft spec must still be blocked from /spec:design even though the stage\'s interior (driver, wf-design, skeletons-check) is being replaced')
   assert.strictEqual(gate('/spec:build', SPEC_MD('hardened')).status, 0)
   assert.strictEqual(gate('/spec:build', SPEC_MD('implementing')).status, 0)
   assert.strictEqual(gate('/spec:build', SPEC_MD('done')).status, 2)

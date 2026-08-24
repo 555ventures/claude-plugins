@@ -74,8 +74,8 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
-  for (const key of ['root', 'workflows', 'wf-design', 'wf-enforce',
-    'wf-panel', 'wf-research', 'dc-extract', 'design-atlas', 'skeletons-check', 'merge-back',
+  for (const key of ['root', 'workflows', 'wf-enforce',
+    'wf-panel', 'wf-research', 'dc-extract', 'design-atlas', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
     'review-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'render-gate', 'render-compare',
     'render-inventory', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
@@ -187,6 +187,43 @@ test('AC-20260819-02-10: spec-paths replay and spec-paths replay-corpus resolve 
     'D14: `spec-paths replay-corpus` must resolve to spec/doctrine/replay-corpus.md — the corpus is served ' +
     'to /spec:replay through this key, and a wrong key means the command can never find its own corpus')
   assert.ok(fs.existsSync(corpusPath), 'the resolved replay-corpus.md path must actually exist on disk: ' + corpusPath)
+})
+
+// AC-20260824-02-1: specs/20260824/02-design-stage-on-render-gate.md D2 retires
+// spec/scripts/spec-design-driver.js, spec/workflows/wf-design.js, and
+// spec/scripts/skeletons-check.js along with their tests — the driver's 561 lines sequenced
+// extract/skeleton/workflow/iterate artifacts that no longer exist once the design stage runs
+// on the render gate (D1). Like AC-20260823-01-16's `feedback-template` retirement, a spec-paths
+// key that still resolves after its script is deleted "breaks commands silently" (§ Risk Tiers,
+// spec-paths) in the other direction: a caller would get a path to a file that is not there.
+// Both halves are pinned together — the keys must refuse, and the files must be gone.
+test('AC-20260824-02-1: spec-paths design-driver, wf-design, and skeletons-check are refused now that D2 retires the keys, and their scripts no longer exist on disk', () => {
+  const fs = require('node:fs')
+  for (const key of ['design-driver', 'wf-design', 'skeletons-check']) {
+    let threw = false
+    let output = ''
+    try {
+      run(key)
+    } catch (e) {
+      threw = true
+      output = String(e.stdout || '') + String(e.stderr || '')
+    }
+    assert.ok(threw,
+      'D2: `spec-paths ' + key + '` must exit non-zero now that the key is retired (its script ' +
+      'is deleted) — a still-resolving key means a caller gets a path to a file that no longer ' +
+      'exists instead of a discoverable error')
+    assert.match(output, /usage: spec-paths/,
+      '`spec-paths ' + key + '` must print the usage line on refusal, the same way any other ' +
+      'unknown key does: ' + output)
+  }
+
+  for (const rel of ['scripts/spec-design-driver.js', 'workflows/wf-design.js', 'scripts/skeletons-check.js']) {
+    const p = path.join(SPEC, rel)
+    assert.ok(!fs.existsSync(p),
+      'D2: ' + rel + ' must be deleted with the design-driver state machine it belonged to — its ' +
+      'continued presence means the retired mechanism is still reachable even though its ' +
+      'spec-paths key is gone: ' + p)
+  }
 })
 
 test('AC-20260821-01-11: spec-paths red-check resolves to spec/scripts/red-check.js, an existing path', () => {

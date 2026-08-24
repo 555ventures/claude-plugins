@@ -12,14 +12,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 case "${1:-root}" in
   root)        echo "$ROOT" ;;
   workflows)   echo "$ROOT/workflows" ;;
-  wf-design)   echo "$ROOT/workflows/wf-design.js" ;;
   wf-enforce)  echo "$ROOT/workflows/wf-enforce.js" ;;
   wf-panel)    echo "$ROOT/workflows/wf-panel.js" ;;
   wf-research) echo "$ROOT/workflows/wf-research.js" ;;
   dc-extract)  echo "$ROOT/scripts/dc-extract.js" ;;
   design-atlas) echo "$ROOT/scripts/design-atlas.js" ;;
-  design-driver) echo "$ROOT/scripts/spec-design-driver.js" ;;
-  skeletons-check) echo "$ROOT/scripts/skeletons-check.js" ;;
   fidelity-check) echo "$ROOT/scripts/fidelity-check.js" ;;
   components-check) echo "$ROOT/scripts/components-check.js" ;;
   render-gate) echo "$ROOT/scripts/render-gate.js" ;;
@@ -104,7 +101,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-design|wf-enforce|wf-panel|wf-research|dc-extract|design-atlas|design-driver|skeletons-check|fidelity-check|components-check|render-gate|render-compare|render-inventory|merge-back|smoke|manifest-check|env-preflight|citations-check|review-legs|release-legs|review-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|collision-closure|ci-query|ci-gate-parity|replay|fleet-reader|shared|shared-design|shared-for <command>|shared-genesis|replay-corpus|template|templates|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-enforce|wf-panel|wf-research|dc-extract|design-atlas|fidelity-check|components-check|render-gate|render-compare|render-inventory|merge-back|smoke|manifest-check|env-preflight|citations-check|review-legs|release-legs|review-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|collision-closure|ci-query|ci-gate-parity|replay|fleet-reader|shared|shared-design|shared-for <command>|shared-genesis|replay-corpus|template|templates|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

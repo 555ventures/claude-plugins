@@ -4,7 +4,7 @@
 // top-level key).
 //
 // specs/20260823/03-silent-drop-hardening.md D4 (2026-08-23, rv_e83659d49386): spec-review-driver.js
-// and spec-design-driver.js each carried an IDENTICAL local `fmVal` whose `^key:\s*(.+)$` regex
+// and spec-design-driver.js (retired 2026-08-24, specs/20260824/02) each carried an IDENTICAL local `fmVal` whose `^key:\s*(.+)$` regex
 // captured everything after `key:` to end of line, inline `#` comment included. For `tier:` this
 // only polluted a value compared solely against the literal `critical` — cosmetic until it wasn't:
 // seven live review ledger rows now carry a whole sentence inside `tier`. For `build_base:` the

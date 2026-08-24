@@ -85,7 +85,8 @@ const renderConfig = config.design && config.design.render
 if (!renderConfig || typeof renderConfig.capture !== 'string' || !renderConfig.capture.trim() ||
     typeof renderConfig.url !== 'string' || !renderConfig.url.trim()) {
   die(2, 'no usable design.render block in ' + path.join(root, CONFIG_RELPATH) + ' — declare ' +
-    'design.render.capture and design.render.url (see spec/templates/grounding-contract.md)')
+    'design.render.capture and design.render.url (see spec/templates/grounding-contract.md) ' +
+    '— this is the same precondition /spec:design stops on at preflight')
 }
 
 const targetsPath = path.join(root, 'design/targets.json')

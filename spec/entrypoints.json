@@ -34,13 +34,12 @@
     "entryPoints": [
       "spec/commands/genesis-design.md",
       "spec/doctrine/design.md",
-      "spec/scripts/spec-design-driver.js"
+      "spec/commands/design.md"
     ]
   },
   "spec/scripts/dc-extract.js": {
     "entryPoints": [
-      "spec/doctrine/design.md",
-      "spec/scripts/spec-design-driver.js"
+      "spec/doctrine/design.md"
     ]
   },
   "spec/scripts/design-atlas.js": {
@@ -62,8 +61,7 @@
   },
   "spec/scripts/fidelity-check.js": {
     "entryPoints": [
-      "spec/doctrine/design.md",
-      "spec/scripts/spec-design-driver.js"
+      "spec/doctrine/design.md"
     ]
   },
   "spec/scripts/fleet-reader.js": {
@@ -135,7 +133,8 @@
   },
   "spec/scripts/render-gate.js": {
     "entryPoints": [
-      "spec/commands/review.md"
+      "spec/commands/review.md",
+      "spec/commands/design.md"
     ]
   },
   "spec/scripts/render-inventory.browser.js": {
@@ -189,21 +188,11 @@
       "spec/hooks/hooks.json"
     ]
   },
-  "spec/scripts/skeletons-check.js": {
-    "entryPoints": [
-      "spec/scripts/spec-design-driver.js"
-    ]
-  },
   "spec/scripts/smoke.sh": {
     "entryPoints": [
       "spec/templates/grounding-contract.md",
       "spec/scripts/review-legs.js",
       "spec/scripts/manifest-check.sh"
-    ]
-  },
-  "spec/scripts/spec-design-driver.js": {
-    "entryPoints": [
-      "spec/commands/design.md"
     ]
   },
   "spec/scripts/spec-queue.js": {
@@ -238,11 +227,6 @@
     "entryPoints": [
       "spec/scripts/spec-review-driver.js",
       "spec/scripts/release-legs.js"
-    ]
-  },
-  "spec/workflows/wf-design.js": {
-    "entryPoints": [
-      "spec/scripts/spec-design-driver.js"
     ]
   },
   "spec/workflows/wf-enforce.js": {

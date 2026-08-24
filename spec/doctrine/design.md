@@ -453,20 +453,17 @@ Generation is **zero-token**: a script walk, never a model pass.
 
 ## Workflows Encode Shape, Not Judgment
 
-The plugin's `wf-build.js`, `wf-design.js`, `wf-review.js`, and `wf-enforce.js` (and the genesis
+The plugin's `wf-build.js`, `wf-review.js`, and `wf-enforce.js` (and the genesis
 `wf-panel.js` / `wf-research.js`) own ordering, schemas, retry caps, and kill rules — deterministic control flow.
 Judgment (what's blocked, what's waived, what escalates, what a finding means) stays in the main
-loop. In the design stage `wf-design.js` runs one gate-verifiable **workflow** pass — the unified
-**author** pass (foundation + components + catalog entries in one ordered run behind a single
-typecheck+lint gate) — and **planned component authoring DOES enter the workflow** (it is
-gate-verifiable: workers EXPAND the on-disk `skeletons.json`). Comprehend is now a deterministic
-**`dc-extract` script** (deterministic, no model — fail-closed on unparseable mocks) and reconcile a **direct inline dispatch** (a Sonnet
-update + a Haiku structural re-read — two serial agents earn no cold boot); neither is a `wf-design`
-stage. What never enters any of it is the **taste**: the skeletons themselves (what to build, which tokens, how
-surfaces map), fork adjudication, the iteration loop's rulings, and the visual review all stay in
-the `/spec:design` session. Never add JS branches that decide design questions or adjudicate a
-fork, and never prompt-engineer findings into existence (no "empty output = you missed something"
-framings — an empty findings list is always a valid outcome).
+loop. Design-stage component authoring is **direct dispatch** now — the same inversion
+`/spec:build` and `/spec:review` already took (specs/20260824/02) — so no workflow script owns
+it; a warm Sonnet per surface authors against the mock in context behind the host gate and the
+render gate. What never enters any workflow is the **taste**: fork adjudication, the iteration
+loop's rulings, and the visual review all stay in the `/spec:design` session. Never add JS
+branches that decide design questions or adjudicate a fork, and never prompt-engineer findings
+into existence (no "empty output = you missed something" framings — an empty findings list is
+always a valid outcome).
 
 **No free text in `args`.** A workflow's `args` is a control channel — paths, ids, enums,
 booleans, and the host gate command only. Never inline human/spec prose (per-file summaries,
@@ -485,10 +482,5 @@ genesis stage follows the same spine with its own artifact roster (`.claude/gene
 (`specs/`). Non-durable artifacts — fetched mockup markup, scratch intermediates a single
 invocation consumes — go to the **session scratchpad** (a path outside the repo), never under
 `specs/`. Location, not a remembered cleanup, is the leak guarantee: a transient written outside
-the repo cannot clutter the tracked dir even if its delete is skipped on an error path. The
-`/spec:design` sidecar dir (`specs/YYYYMMDD/##-name.design/` — `extract.json`, per-surface
-`slice-*.html`, and `skeletons.json`) is a middle category — **durable across sessions** (it must
-survive a cross-session resume, so it lives in `specs/`, not scratchpad) yet a within-run artifact,
-deleted **deterministically at the reconcile seam** (the design driver's RECONCILE step) once
-`/spec:design` has folded its content into the spec.
+the repo cannot clutter the tracked dir even if its delete is skipped on an error path.
 

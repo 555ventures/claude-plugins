@@ -1,206 +1,200 @@
 ---
-description: Optional UI design stage, driver-stepped — the expensive model authors skeletons and judges; Sonnet expands them via wf-design; the user iterates in the catalog; spec reconciled to the approved design
-argument-hint: <spec path> [claude.ai/design URL | local mockup file/dir]
+description: Optional UI design stage — direct Sonnet dispatch authors real, kept components per surface, gated by the host gate and the render gate, a blocking human catalog look once both are green, then the spec reconciled and stamped designed:
+argument-hint: <spec path>
 ---
 
-# Spec Design: Driver-Stepped Plan + Implement + Catalog Iteration
+# Spec Design
 
 For UI-bearing specs (`design: true`) in hosts whose config declares a `design` block (component
-catalog — shared § Design Canon). Sits between `/spec:plan` and `/spec:build`: authors the
-foundation + real, **kept** stateless components + catalog entries by **expanding pre-authored
-skeletons**, lets the user iterate in the running catalog, then reconciles the spec and sets
-`designed: YYYY-MM-DD`. Build treats these components as done inputs.
-
-**Intended model: mock-always (v6) — the fork is where the mock comes from, not whether one
-exists.**
-- **Mock-bound** (a `design_source` — a bound mock — exists, usually under `design/mocks/`):
-  **Sonnet session.** Against a
-  bound region, skeleton authoring is grounded transcription, not taste — the taste was already
-  spent upstream, in the mock. Consult the **Fable retainer** (`Agent {model:"fable"}`, Opus
-  fallback; continue the SAME agent via SendMessage across the session rather than re-spawning)
-  ONLY at judgment points: component-boundary/reuse decisions against the existing component
-  catalog, blocked or ambiguous bindings, any `deltas.json` proposal, and family furniture
-  asymmetry (a shell-level element present in some sibling mocks and absent in others — see the
-  sibling-grounding rule below).
-- **No mock yet:** author it first — the **mock-authoring preamble** below — then proceed
-  mock-bound. On roadmap-derived specs the preamble runs on **Sonnet + the Fable retainer**
-  (direction-level questions escalate to the atlas, where roadmap taste lives); on standalone
-  no-roadmap specs it runs on the **session model** — the user picked the seat at invocation
-  (Opus default, Fable when the surface warrants it; shared § Model Placement).
-
-Either way the expensive seat **writes no framework code**; Sonnet expands 100% of components
-via `wf-design`.
-
-**Mock-authoring preamble (no `design_source` anywhere).** Taste is spent here, in a file
-cheap to iterate — never directly in framework code. Author `design/mocks/<label>.html` for
-each of the spec's UI surfaces under the **design harness** (shared § Design Canon): plain
-HTML consuming `design/tokens.css` by role, root `data-screen-label` per surface, real copy in
-its final register (it becomes the fidelity contract), grounded in the spec's UI section +
-doctrine + `docs/design/research-brief.md` (when present). If `design/targets.json` is missing,
-create it first (archetype-derived defaults from the `design-targets.json` template, one
-confirm with the user). Then the staged loop — **matrix-at-approval** (shared § Design Canon),
-which is what keeps iteration cheap:
-
-1. **Draft to direction approval.** Draft the mock on the **draft framing** — the
-   most-constrained declared viewport, light theme. Run the deterministic check
-   (`spec-paths design-atlas` → `node <atlas> check design/mocks/<label>.html`) and the
-   render→screenshot→critique loop, then the **rule-checklist pass** (a Sonnet checker walks
-   the research-brief's admitted rules against the screen, citing rule IDs — shared § Design
-   Canon). Iterate with the user — serve the file or point at the atlas — to direction
-   approval.
-2. **Matrix expansion pass** (only once the direction is approved). Media queries + viewport
-   meta, dark via the tokens.css theme block, one responsive file, never per-device variants —
-   gated by `check --matrix`, with matrix screenshots (each viewport, both themes on the draft
-   framing) shown to the user for the **fast matrix confirm**.
-3. **Stamp and bind.** Only then set `data-status="approved"` (approval is two-step by
-   doctrine, and the check enforces the matrix on approved mocks, so the stamp can't precede
-   either half), persist the path as `design_source:` frontmatter, and hand over to the
-   ordinary mock-bound flow below.
-
-(The Claude Design escape hatch — designing the surface at `claude.ai/design` and passing its
-URL — remains supported and follows the identical mock-bound flow after fetch.)
+catalog — shared § Design Canon). Sits between `/spec:plan` and `/spec:build`. Six steps, in order:
+**preflight → author → host gate → render gate → your look → reconcile + stamp** — step position
+is derived from disk on every invocation (Resume, below), never from a state file or a driver.
+Build treats the landed components as done inputs.
 
 **Setup:** run `spec-paths shared-for design` and read its output (the shared invariants scoped
-to this command). Read the host's `.claude/spec.config.json` and its pipeline rules file. Then
-run `spec-paths design-driver` once and keep the printed path — it is `{driver}` below.
+to this command). Read the host's `.claude/spec.config.json` and its pipeline rules file. Either
+missing → STOP: run `/spec:init` first.
 
 ## Input
 
-`$ARGUMENTS` — path to a spec with `status: hardened` (hook-enforced), plus an optional second
-arg: a **design source** — either a `claude.ai/design` mockup URL, or a **local path** (a single
-exported HTML file, or a handoff-bundle directory of HTML screens + optional per-screen
-`*.prompt.md` notes). On the first invocation, if a source is passed and frontmatter has no
-`design_source`, persist it into frontmatter, then proceed — thereafter frontmatter is
-authoritative. No `design_source` anywhere → run the mock-authoring preamble first (above),
-which produces one. A local source is extracted directly by `dc-extract --bundle` (no DesignSync
-fetch); a URL is fetched read-only via DesignSync (the escape hatch — recommend `/design-sync`
-seeding once per project on that path, so the mock arrives speaking the repo's tokens).
+`$ARGUMENTS` — path to a spec with `status: hardened` (hook-enforced).
 
-## Protocol — the driver owns the state machine
+## Resume — derived from disk, evaluated top-down, every invocation
 
-Loop until the driver prints `DONE`:
+| On disk | Step |
+|---------|------|
+| `designed:` set | DONE — report, `next: /spec:build <spec>` |
+| ledger claim for every surface with `stories` for every state, both gates green this invocation | Step 5 — your look |
+| ledger claim present, some state without a story id, or components absent | Step 2 — author |
+| no ledger claim for a surface | Step 1 — preflight → Step 2 — author |
 
-1. Run `node {driver} <spec path>`. It inspects the on-disk state (frontmatter, the
-   `##-name.design/` sidecar, progress marks) and prints the **current step's instructions** —
-   fetch/extract, skeleton authoring, the `wf-design` invocation, visual review, the human
-   iteration loop, reconcile.
-2. Execute exactly that step. Record progress the way the step says
-   (`node {driver} <spec> --mark <mark>` after a step completes green).
-3. Re-run the driver. It verifies the step's artifacts actually exist before advancing — never
-   skip ahead of it, and never re-do a step it reports complete.
+A session that dies mid-round re-derives its step from this table on the next invocation —
+never from conversation memory. Everything the next step needs is already on disk: components,
+story ids, the coverage-ledger claim, and gate reports (the scratchpad or
+`.claude/spec-runs/render/`).
 
-Re-entrancy is the driver's job: a fresh session (or a session resuming days later) runs step 1
-and lands exactly where the work stopped. All state is on disk; nothing depends on this
-conversation. The iteration loop is deliberately **cold between rounds** — the sidecar's
-`design-log.md` carries each round's rulings, so no expensive session idles while the user looks
-at the catalog.
+## Step 1 — Preflight
 
-When the driver prints `DONE`, report (rationale: shared § Console Output Style). Assemble
-the slots — `outcome`: ✅ `designed — {N} components kept, manifest extended, spec
-reconciled`; `warns`: anything that changes the user's next step (drop when nothing does);
-`next`: `{kind: 'command', text: '/spec:build {specPath}'}`. Run
-`node "$(spec-paths report-render)" --slots <file>` and print its output verbatim.
+In order:
+
+1. `design.render` declared in `.claude/spec.config.json` — else STOP printing the exact JSON
+   to add (sub-keys per `spec/templates/grounding-contract.md`):
+   ```jsonc
+   "design": {
+     "render": {
+       "capture": "<host command turning one --url into an inventory JSON>",   // REQUIRED
+       "url": "<component render URL, {story}/{theme}/{width}/{height}/{state} placeholders>", // REQUIRED
+       "ready": "<optional: command exiting 0 once the render server serves>",
+       "boot": "<optional: command that starts the render server, killed on exit>",
+       "readyTimeout": 120   // optional, seconds, default 120
+     }
+   }
+   ```
+2. `node "$(spec-paths env-preflight)" --root .` — exit 1 is a provisioning STOP: print its
+   output verbatim and STOP. This precedes every author dispatch (Step 2) and carries
+   AC-20260815-05-8's incident forward — an unprovisioned environment must never enter a
+   gate-repair loop, because the gate cannot distinguish wrong code from a missing variable,
+   and a repair dispatch structurally cannot fix the second.
+3. Spec `status: hardened` (hook-enforced).
+4. `design_source` resolves to mock file(s) whose `data-status` is `ratified` or `approved` —
+   else STOP naming the exact next command: `/spec:sketch <brief>` for a roadmap brief's
+   surface, or the **standalone preamble** (below) for a spec with no brief.
+5. `node "$(spec-paths design-atlas)" check <mocks>` — fail-closed (shared § Design Canon).
+6. `node "$(spec-paths components-check)" design/components.json` — advisory.
+7. Derive the **surfaces** (the mocks' `data-screen-label` values) and each surface's
+   **states** (its `data-state-btn` values; a mock with none has the single state `default`).
+
+## Standalone preamble (D10) — no `design_source` anywhere, no brief
+
+Five lines, then continue at Step 1:
+
+1. Author `design/mocks/<label>.html` for each of the spec's UI surfaces under the design
+   harness (shared § Design Canon): draft framing first (the most-constrained declared viewport,
+   light theme), checked by `node "$(spec-paths design-atlas)" check design/mocks/<label>.html`.
+2. Iterate to direction approval with the user, then run the **matrix expansion pass** (media
+   queries + the tokens dark block, one responsive file, never per-device variants), gated by
+   `check --matrix`.
+3. Stamp `data-status="approved"` on the mock's root — approval is two-step (direction, then
+   the matrix confirm), so the check enforces the matrix on `approved` mocks.
+4. Persist the mock path as `design_source:` frontmatter.
+5. Continue at Step 1 — preflight now finds a `design_source`.
+
+Roadmap specs never take this path — `/spec:sketch` owns their mocks. A spec with a brief but
+no ratified mock STOPs at Step 1 naming `/spec:sketch <brief>` instead of running this preamble.
+
+## Step 2 — Author (direct dispatch)
+
+One `Agent {model: "sonnet"}` per surface — sequential when surfaces share chrome (same mock
+family, so a later dispatch can cite the earlier one's output as an exemplar), parallel
+otherwise. `subagent_type` = the host `agentMap` entry for the layer whose `routing` globs
+match the component directory the spec's UI section names, else `agentMap.default`.
+
+**Inputs are paths only** (shared § Model Placement — orchestrators pass paths, never file contents):
+the spec, the mock file, `design/tokens.css`, the host's design doctrine doc
+(`design.doctrine`), `design/components.json`, `design/targets.json`, the derived states list,
+and `design.storyFormat`. The mock in context IS the binding map.
+
+Worker dispatch envelope: `{spec, mock, tokens, doctrine, manifest, targets, states:
+["default"|…], storyFormat, componentDir}`. Worker return (receipts): `{files: [...],
+components: [{name, decision: "bind"|"author", nearest, why}], stories: {"<state>": "<story
+id>"}, blocked?: {kind, detail, options, recommendation}}`.
+
+**Story rule (D5).** The story bound to a state renders exactly the values the mock illustrates
+for that state — the mock's values are the source, never a paraphrase. A story exercising
+extra branches is a separate, unbound story. The render gate is the drift detector; its
+`text-missing`/`text-extra` findings name the story to fix.
+
+**Base-primitive fork (D12).** A mock region needing an absent base primitive
+(Sheet/Dialog/Popover/Drawer/AppShell/Toast host — shared § Design Authoring Contracts) is a fork: the
+worker returns `blocked {kind: "design-fork"}`, never a per-surface improvisation. Ask — author
+as foundation (Recommended when there is no near-match) / reuse the near-match.
+
+After a green author round, write the returned story ids into the coverage-ledger claim
+(`.claude/design-coverage.json`, the claim's `stories` map) plus the claim's `spec`/`at` (D6);
+checkpoint-commit the ledger together with the components. Workers never run git — the session
+owns every commit.
+
+## Step 3 — Host gate
+
+`design.gateCommand` when declared, else the host `gateCommand` with `{testDirs}` substituted
+by the directories the author touched (the same substitution `/spec:build` applies). Red →
+re-dispatch that surface's worker with the gate output path, at most 3 rounds, then STOP.
+
+## Step 4 — Render gate
+
+`node "$(spec-paths render-gate)" --spec <spec> --out <report dir>` (default report dir: the
+session scratchpad, else `.claude/spec-runs/render/<spec-stem>/`).
+
+- **Exit 0** — pass; proceed to Step 5.
+- **Exit 1** — findings (per-surface `text-missing`/`text-extra`/order/role/positioning/
+  geometry, or an unbound-state line): re-dispatch the failing surface's worker with the
+  report path — the findings ARE the instruction — at most 3 rounds, then STOP with the
+  report.
+- **Exit 2 or 3** — a precondition or capture-family failure: STOP printing the script's
+  remedy verbatim, never a stamp. A capture failure is never green.
+
+## Step 5 — Your look (blocking)
+
+Only after BOTH gates are green. Print the catalog command (`design.command`), the story ids,
+and the gate report path. Then `AskUserQuestion` (shared § Question Style — wording is hook-gated):
+**approve** (Recommended — the gates already measured what a human cannot overlay) / **change**
+(free-text notes).
+
+A change round: one `Agent {model: "sonnet"}` edit dispatch per affected surface, then Step 3
+and Step 4 again, then this question again. The session is cold between rounds — all state on
+disk.
+
+`AskUserQuestion` dismissed → STOP. State is safely on disk; re-invoke to continue.
+
+## Step 6 — Reconcile + stamp
+
+1. Extend `design/components.json` with every component this run created or newly bound:
+   `name`, `purpose`, `props`, `mockRefs`, and — for every `author` decision —
+   `authorJustification` copied verbatim from the receipt.
+2. One `Agent {model: "sonnet"}` dispatch updates the spec's UI section to the final component
+   APIs and states, and folds every excused static→link role line into a Decision row.
+3. **Affordance ↔ contract reconcile (blocking).** Before `designed:` is set, check every
+   interactive affordance of every approved component (each event prop × each visual state it
+   renders in) against a server-accepted transition in the spec's Contracts/Behavior sections.
+   An affordance the server would reject is a fork, not a styling choice —
+   `AskUserQuestion` (change the component / change the contract via a spec Decision), never
+   pass it through to build.
+4. Stamp `designed: YYYY-MM-DD` in the spec's frontmatter. `/spec:design` never moves
+   `status` — it sets `designed:` only.
+5. Checkpoint-commit: spec, ledger, manifest, components, stories.
+
+## Report
+
+Assemble slots and render via `node "$(spec-paths report-render)" --slots <file>`, printed
+verbatim. `outcome`: ✅ `designed — {N} components kept, manifest extended, spec reconciled`;
+`bullets`: one line per excused static→link role; `warns`: anything that changes the user's
+next step; `next`: `{kind: 'command', text: '/spec:build <spec path>'}`.
 
 ```report
 ✅ **designed — 4 components kept, manifest extended, spec reconciled**
-⚠️ two bound regions still need the sibling-asymmetry ruling — see design-log.md
+⚠️ two auto-excused static→link roles — see spec Decisions
 
-Next: /spec:build specs/20260813/09-example.md
+Next: /spec:build specs/20260824/02-example.md
 ```
 
-## Rules (session-binding — the driver cannot enforce these)
+## Rules
 
-- **Preflight the environment before invoking `wf-design`.** `wf-design` splices the same
-  gate-repair loop `wf-build` does — before executing the driver's `wf-design` invocation
-  step, run `node "$(spec-paths env-preflight)" --root .`. Exit 1 is a provisioning
-  STOP: print the script's output verbatim and STOP — an unprovisioned environment must
-  never enter design's gate-repair loop either, same incident class as build (INTAKE
-  JJ-20260815-08).
-- **The expensive model writes no framework code.** It authors `skeletons.json`, adjudicates
-  forks, issues visual-review notes and iteration rulings; Sonnet/Haiku apply every edit (sole
-  exception: the driver's micro-edit rule for one-line exact-string changes).
-- **Gate-green ≠ visually right.** A green author is structural (skeleton-expanded) only; the
-  unified exit fidelity review (`FIDELITY_REVIEW` state, fires whenever the host has a render
-  path — mock-bound render-vs-mock, no-mock render critique; shared § Design Binding Pipeline)
-  or the human catalog loop is the visual gate. Never show the user output you have not at
-  least gated.
-- **With a mock bound, the mock is a contract, not an influence — bound region by region.** A
-  canvas export is a whole screen; the spec binds only the REGIONS it builds
-  (`regionRef: "<surface>#<region>"`, from the driver's feasibility report), and the bound
-  region's slice is the binding authority for structure, copy, element order, and layout;
-  skeletons carry judgment only (a binding map: token mapping over the literal harvest, props,
-  states, forks, variant confirmations — no tree). The driver checks each bound region
-  **fail-closed** at `author-green` and `round-green`, by string class: copy passes verbatim in
-  code **or as a declared copy-catalog value** (the i18n home); `{{ }}` bindings render from
-  props; sc-for sample rows live in story fixtures. Unbound regions are notes — the repo-level
-  coverage ledger (written at `approved`) hands them to later briefs. A refused mark lists the
-  divergences. The ONLY sanctioned divergence is an evidence-gated `deltas.json` row (verbatim
-  slice quote, verified mechanically, plus an impossibility proof) — a taste rationale is never
-  valid evidence; taste yields to the mock (shared § mock supremacy). A delta is a two-sided
-  contract the gate holds both ways: the mock string must be ABSENT from the pass (a row over a
-  string that still renders fails) and the row must have excused a real failing obligation (a row
-  that excuses nothing is a dead exemption and fails). Comments never satisfy copy — the one
-  exception is a `mock authority:`-marked carrier comment beside an indirected render; unmarked
-  comments quoting the mock are stripped from the haystack as narration. Fold delta rows into
-  spec Decisions at reconcile.
-- **Name a partial-binding screen skeleton for the subset, not the surface.** Name a
-  skeleton binding a SUBSET of a surface's regions distinctly (e.g. `<surface>-screen`) — a
-  bare-surface ref claims every region including chrome, and the fidelity gate now names that
-  over-claim directly.
-- **Sibling mocks ground asymmetry detection — never transcription.** When the bound surface
-  belongs to a mock family (other mocks of the same route group or shared entry frame), the
-  session seat reads the siblings' **extract inventories** (region labels + furniture from the
-  dc-extract slices — never raw sibling mock HTML; detection needs "signup has a disclaimer bar
-  region, signin doesn't", not markup) before authoring skeletons. **Furniture** here is
-  shell-level chrome — legal/disclaimer bars, header marks, footer cross-links — not content.
-  Furniture present in some siblings and absent in others is a **judgment point, never a silent
-  transcription**: if the divergent furniture carries `grounded`-category copy (legal, a11y,
-  destructive-action safety), consult the retainer and surface the question — a mock's
-  *omission* is not evidence against a grounded ruling (shared § mock supremacy); otherwise
-  honor each mock and record the asymmetry as a one-line doctrine note at reconcile. Siblings
-  ground **questions**, never **bindings**: workers never see sibling material, and copy,
-  structure, and order still bind only to the surface's own region — this rule creates asks,
-  never unification.
-- **A variant screen is not a second contract.** The extract's `variantProposals` (heavy copy
-  overlap = same screen re-themed / re-laid-out) resolve to token-pair (theme) or responsive
-  (breakpoint) obligations on the SAME skeletons — never a duplicate string binding.
-- Tokens and the design doctrine are **binding canon** — extending is normal, contradicting is a
-  fork, adjudicated via the driver's steps, never silently overridden.
-- Components built here are **real and kept**; `/spec:build` wires them, never rebuilds them.
-- **Component manifest discipline (shared § Design Authoring Contracts).** Read `design/components.json` at
-  preflight, before any bind-vs-author decision. Every `author` decision records the nearest
-  existing manifest entry and one line on why it fails — a missing justification is a gate
-  failure; `/spec:review`'s component-manifest check verifies its content against the manifest.
-  At reconcile, extend the manifest with every component this run created or newly bound
-  (`name`, `purpose`, `props`, `mockRefs`, and — for `author` decisions — `authorJustification`,
-  copied verbatim from the binding map: the sidecar is deleted at reconcile, so the manifest is
-  where the justification survives for review). Creating must cost more than reusing — that gradient is the anti-duplication
-  mechanism, not anyone's memory. A **commitment entry** (name+purpose+optional `boundaries`,
-  no `props`/`mockRefs` yet — shared § Design Authoring Contracts) is binding canon exactly like
-  a token role: workers read it via the `componentManifestPath` grounding, bind/import or author
-  to fulfil it, never re-invent a lookalike, and a `boundaries` contradiction is a fork, same
-  standing as a token-value contradiction (`blocked {kind: "design-fork"}`). An `author`
-  decision that fulfils a commitment entry cites that entry, by name, as its nearest-manifest
-  justification.
-- **A `built` surface re-entering design re-syncs its mock first** (mock authority expired at
-  `built` — shared § mock-authority lifecycle): refresh the mock to current shipped reality
-  (screenshot the live screen, update the file), then design the change on top. Never design
-  against a stale contract, and never treat post-`built` staleness discovered here as a defect —
-  it was permitted.
-- Design changes propagate **forward into the spec at reconcile** — never left for build to discover.
-- **Affordance ↔ contract reconcile (blocking, at reconcile).** Before `designed:` is set,
-  build the matrix: every interactive affordance of every approved component (each event
-  prop × each visual state it renders in) maps to a server-accepted transition in the spec's
-  Contracts/Behavior sections. An affordance the server would reject is a **fork**, not a
-  styling choice — `AskUserQuestion` (change the component / change the contract via a spec
-  Decision), never pass it through to build (measured: UpWell spec 03 — a designed card
-  rendered a re-confirm affordance on declined items through the same handler as proposed
-  ones; the server throws `VALIDATION` on that transition; build wired it as-is *because the
-  component's shape said to*). Design output enters build with a spec's authority; this
-  matrix is where it earns a spec's scrutiny.
-- Workers never run git; the session owns every checkpoint-commit. The coverage ledger
-  (`.claude/design-coverage.json`, written by the driver at `--mark approved`) is durable repo
-  state — include it in that checkpoint-commit; it must survive the sidecar deletion.
-- **Never Read `wf-design.js`** — the AUTHOR step prints the full `args` contract; the workflow
-  is invoked by `scriptPath` and its source is never session context.
-- `AskUserQuestion` dismissed → STOP (state is safely on disk; re-invoke to continue).
+- **Decisions table is authoritative** — apply it verbatim, never override, never invent
+  entries; an unlocked fork is a `blocked` return, not a guess.
+- **Workers never run git and never query MCPs**; read-only and generated surfaces change only
+  via their declared tools.
+- **Component manifest discipline** (shared § Design Authoring Contracts) — every `author` decision
+  records the nearest existing manifest entry and one line on why it fails; a missing
+  justification is a gate failure. Commitment entries bind exactly like token roles.
+- **Tokens and the design doctrine are binding canon** (shared § Design Canon) — extending is normal,
+  contradicting is a fork, never silently overridden.
+- **Components built here are real and kept** — `/spec:build` wires them, never rebuilds them.
+- **Mock supremacy** (shared § Design Authoring Contracts) governs every authoring dispatch; **a
+  `built` surface re-entering design re-syncs its mock first** (screenshot the live screen,
+  update the file) before designing the change on top — post-`built` staleness discovered here
+  was permitted, never a defect.
+- **Affordance ↔ contract reconcile is blocking** — the Step 6 matrix runs before `designed:`
+  lands; an affordance the server would reject is a fork, never passed through to build.
+- The `.design/` sidecar is **not created by this command** (D13); an existing host sidecar is
+  inert and removed only by the host's next `/spec:doctor --fix`.
+- `AskUserQuestion` dismissed → STOP.

@@ -3,8 +3,8 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { execFileSync } = require('node:child_process')
-const { tmpdir, runNode, gitRepo } = require('../helpers')
+const { execFileSync, spawn } = require('node:child_process')
+const { tmpdir, runNode, gitRepo, SPEC } = require('../helpers')
 
 // specs/20260823/08-derived-session-queue.md (2026-08-23): the queue this spec exists for —
 // JJ's intended work order plus free-text items and their done-when predicates — lives in ONE
@@ -222,4 +222,63 @@ test('AC-20260823-08-10: spec-queue bump moves an auto_placed item to position 1
   const item = q.items.find((i) => i.brief === '08')
   assert.ok(!('auto_placed' in item),
     'D6: bump must remove the auto_placed stamp — the veto has now been exercised, so the item must never again print an "auto-queued" notice: ' + JSON.stringify(item))
+})
+
+// 2026-08-23 /spec:review of specs/20260823/08-derived-session-queue.md, second repair round:
+// writeQueue's atomic temp-file+rename fix (see its header comment in spec-queue.js) stays, but
+// this test's own evidence claim was overstated and is corrected here. It does NOT discriminate a
+// plain-fs.writeFileSync revert: a second review repro reconstructed the real pre-fix writeQueue
+// (plus its full lib/ + spec-status.js dependency set) and raced it ~250 times — this test's own
+// 12-way x 6-trial config, 200 trials at 12-way, and 25 trials at 48-way, all at realistic ~196KB
+// payloads — with ZERO corruptions on macOS/APFS (this repo's own test filesystem). A tearing
+// defect at this queue file's realistic size is not reachable on this filesystem, so a revert to
+// the unsafe single-write would still pass this test green here. What this test DOES discriminate:
+// (1) a regression to a FIXED (non-pid-discriminated) temp filename, where two writers cross-rename
+// each other's half-written temp file into place; (2) a temp file placed on a different filesystem
+// than QUEUE_PATH (rename across filesystems is never atomic, and would surface as ENOTEMPTY/EXDEV
+// failures or a missing/malformed final file under this same concurrent load); (3) lockfile- or
+// EEXIST-style concurrency crashes that leave the file missing or malformed; and (4) the original
+// tearing defect itself, on any future CI runner or filesystem where the >196KB threshold IS
+// reachable. Read this as a concurrent-invocation safety pin, not a corruption regression pin.
+test('AC-20260823-08-review-concurrent-writer-safety: N concurrent spec-queue invocations racing writes against one shared queue file all succeed and never leave it unparseable', async () => {
+  const CONCURRENCY = 12
+  const TRIALS = 6
+  const SCRIPT_PATH = path.join(SPEC, 'scripts/spec-queue.js')
+
+  const items = Array.from({ length: CONCURRENCY }, (_, i) => ({
+    id: `q${i + 1}`, kind: 'prompt', payload: `race item ${i + 1}`, added: '2026-08-23T10:00:00Z',
+  }))
+  const dirPath = fs.realpathSync(tmpdir('spec-queue-race'))
+  gitRepo(dirPath)
+  fs.writeFileSync(path.join(dirPath, '.git/spec-queue.json'),
+    JSON.stringify({ version: 1, seq: items.length, items }, null, 2))
+
+  function spawnOne(id) {
+    return new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [SCRIPT_PATH, 'bump', id], { cwd: dirPath })
+      let stderr = ''
+      child.stderr.on('data', (d) => { stderr += d })
+      child.on('error', reject)
+      child.on('exit', (code) => resolve({ id, code, stderr }))
+    })
+  }
+
+  for (let t = 0; t < TRIALS; t++) {
+    // Launch all CONCURRENCY processes together (spawn, not spawnSync) so their writes genuinely
+    // overlap in wall-clock time — a sequential loop of spawnSync calls would never race.
+    const results = await Promise.all(items.map((it) => spawnOne(it.id)))
+
+    const failed = results.filter((r) => r.code !== 0)
+    assert.strictEqual(failed.length, 0,
+      `trial ${t}: every concurrent \`bump\` child must exit 0 — a nonzero exit is the most likely symptom of a torn read under real tearing (a child observing a partial file and exiting 2), and a test that only checks the FINAL file's shape would still pass green while children were silently failing: ${JSON.stringify(failed)}`)
+
+    const raw = fs.readFileSync(path.join(dirPath, '.git/spec-queue.json'), 'utf8')
+    let parsed
+    assert.doesNotThrow(() => { parsed = JSON.parse(raw) },
+      `trial ${t}: ${CONCURRENCY} concurrent writers left spec-queue.json unparseable — writeQueue's temp-file+rename must guarantee a reader never observes a partial write: ${raw}`)
+    assert.ok(parsed && Array.isArray(parsed.items) && typeof parsed.seq === 'number',
+      `trial ${t}: the queue file must still match the {version, seq, items} shape after concurrent writes, or every spec-queue subcommand and the SessionStart hook starts exiting 2: ${raw}`)
+    assert.strictEqual(parsed.items.length, CONCURRENCY,
+      `trial ${t}: concurrent bumps must never drop or duplicate items — only reorder them (last-writer-safe, not last-writer-lossy): ${raw}`)
+  }
 })

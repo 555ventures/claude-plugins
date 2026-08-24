@@ -108,8 +108,32 @@ function loadQueue() {
   return data
 }
 
+// Written atomically (temp file + rename), adapted from spec/scripts/verdict.js's
+// writeRetainedArtifact — 2026-08-23 /spec:review of this spec found a CONTRACT
+// CONTRADICTION, not an observed corruption in this code: the spec's Behavior section
+// promises a lost insert self-heals ("reappears on the next invocation") but nowhere
+// tolerates a torn file, and loadQueue() exits 2 on one — bricking every spec-queue
+// subcommand and the SessionStart hook until a human deletes the file by hand. The review's
+// first repro (a synthetic script doing a raw fs.writeFileSync with a ~625KB payload, ~150x
+// a realistic queue file, NOT this function) tore in 1/40 trials; a second repro
+// reconstructing the REAL pre-fix writeQueue (plus its full lib/ + spec-status.js dependency
+// set) and racing it ~250 times — this test's own 12-way x 6-trial config, 200 trials at
+// 12-way, and 25 trials at 48-way, all at realistic ~196KB payloads — produced ZERO
+// corruptions on macOS/APFS (this repo's own test filesystem; no CI config exists here). The
+// fix stands on the contract contradiction and on host-filesystem portability, not on an
+// observed defect in the real code: the >196KB tearing threshold measured above is a
+// property of ONE filesystem, and this plugin ships to arbitrary host machines. The temp
+// file lives in the SAME directory as QUEUE_PATH (rename is only atomic within one
+// filesystem) and is discriminated by process.pid ALONE — unlike writeRetainedArtifact's
+// runId + process.pid + crypto.randomBytes(4) — because synchronous fs calls mean a single
+// process only ever has one writeQueue call in flight at a time, so two simultaneously-live
+// pids can never collide on the same temp path, and pid reuse only ever overwrites a stale
+// temp abandoned by a long-dead process.
 function writeQueue(data) {
-  fs.writeFileSync(QUEUE_PATH, JSON.stringify({ version: 1, seq: data.seq, items: data.items }, null, 2) + '\n')
+  const dir = path.dirname(QUEUE_PATH)
+  const tmpPath = path.join(dir, `.spec-queue.${process.pid}.tmp`)
+  fs.writeFileSync(tmpPath, JSON.stringify({ version: 1, seq: data.seq, items: data.items }, null, 2) + '\n')
+  fs.renameSync(tmpPath, QUEUE_PATH)
 }
 
 function nowIso() { return new Date().toISOString() }

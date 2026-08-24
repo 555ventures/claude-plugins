@@ -3,6 +3,7 @@ name: queue-overlay-shared-lib-scope
 description: What belongs in a lib/*.js shared between a write-path CLI and a read-only overlay inside another script — doneness AND placement algorithms, not path/roadmap parsing
 metadata:
   type: feedback
+  reviewed: 2026-08-23
 ---
 
 When a spec requires the SAME derivation to run twice — once for real with writes (a

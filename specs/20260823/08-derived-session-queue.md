@@ -1,6 +1,6 @@
 ---
 date: 2026-08-23
-status: implementing
+status: done
 diff_base: 89978d3a85682e2169c33069948d0a981557c38e
 tier: critical           # edits spec-status.js (frozen --next surface) and adds a hook surface (process boundary) — both named critical triggers in .claude/rules/spec-pipeline.md § Risk Tiers
 area: session-queue
@@ -285,6 +285,41 @@ hook matcher (mid-task refresh, not a session opening — printing the global po
 recreates the worktree hazard in time instead of space). The `lib/queue.js` doneness
 evaluator is deliberately shared by both scripts so item-doneness never has two
 derivations — the repo's hard-finding rule for duplicate algorithms.
+
+**Waived at review 2026-08-23 (JJ):** the reconcile leg's single out-of-plan file,
+`tests/consistency/entrypoints.test.js`. D12 named it as an enforcing guard, not a File Plan
+row, but the guard is an exhaustive live-file pin — it asserts the complete set of
+`hooks.json` script paths, so registering `session-queue.sh` forces an in-place edit there by
+construction. Updated in place (count four→five, both the test name and the
+consequence-of-failure message), never weakened, and its original `AC-20260820-04-5` tag kept
+because the pin belongs to that spec's oracle, not this one. This is the fourth recurrence of
+the exhaustive-pin-outside-the-File-Plan class already recorded in the host rules' Gotchas.
+
+### Build deviations folded at close (2026-08-23)
+
+- **Version target moved 7.28.0 → 7.29.0.** D12's literal was already taken at HEAD by a
+  same-day incident fix. Bumped to the next free version, same changelog paragraph, oldest
+  (7.26.0) entry dropped per the last-3 rolling window. An instance of the version-target
+  staleness class already in the host rules' Gotchas — no new entry earned.
+- **D6's "reconcile on every invocation (writes)" resolved to a write/read split.**
+  `next/add/bump/defer/done/ok` reconcile-and-persist before acting; `list`/`hello` never write
+  or reconcile-insert. No AC forced either reading, and a SessionStart hook mutating the shared
+  common-dir file as a side effect of a passive read was the wrong default — D8's "the hook
+  never creates the file" extended in spirit to "never writes at all".
+- **D6's reconcile inherits D7's non-done filter.** The spec states it only for seeding. Without
+  it, every completed brief would be auto-placed as a perpetual `auto_placed` item and earn an
+  unvetoable `queue-auto-placed` anomaly forever.
+- **Superseded briefs are detected by blockquote marker, not a machine-readable stamp.** D6
+  excludes them, but no such stamp exists — the roadmap overview's "*(superseded by v7)*" is
+  prose in a Name column. `lib/queue.js`'s `isSupersededBriefText` reads the
+  `> **Superseded by …**` marker every currently-superseded roadmap file (01, 05, 07) already
+  opens its "Why" section with, verified by direct read. Without it those three dead briefs
+  would seed into every fresh queue in this repo.
+- **Two pipe-truncation regression pins landed out-of-File-Plan** in
+  `tests/queue/queue-overlay.test.js`, carrying no AC-ID (a defect regression, not an acceptance
+  criterion — this repo's convention forbids inventing placeholder IDs). Each builds a synthetic
+  host whose JSON measurably exceeds the 64 KiB pipe buffer and was verified red against the
+  pre-fix script. The underlying trap is now a Gotchas entry.
 
 ## Canonical Delta
 

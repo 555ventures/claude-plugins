@@ -217,3 +217,34 @@ this repo's suite; appending at cap requires an eviction (delete / merge / mecha
   D9, build 2026-08-23 — `rejected-trailing-tag` added to both `ACM_FINDING_CLASSES` and
   `SKIP_FINDING_CLASSES` wrote `{"leg":"skip-reconcile","exit":1,"observed":{"skipped":0,"sanctioned":0}}`
   for a spec with zero skip lines; executed repro in that spec's deviations record.)
+- `[plugin]` The collision-closure literals leg misses literals a spec **ADDS to an exhaustive
+  set**, the mirror of the retired-name gap two entries above. A test that pins a complete
+  inventory ("exactly the four hooks.json script paths") is invalidated by any addition, but the
+  added name is in neither the spec's inherited nor its retired literal set, so no leg looks for
+  it and the row lands out-of-File-Plan at review. At lock, read every Decision that ADDS a member
+  to a registry, hook table, or key set and grep `tests/` for the exhaustive pin that counts them.
+  (specs/20260823/08-derived-session-queue.md D8 — `tests/consistency/entrypoints.test.js`
+  AC-20260820-04-5 updated four→five in place, never weakened; waived at review 2026-08-23, the
+  fourth recurrence of the exhaustive-pin-outside-the-File-Plan class.)
+- `[plugin]` `console.log(...)` immediately followed by `process.exit(0)` **silently truncates at
+  the 64 KiB pipe buffer while still exiting 0** — Node's stdout write to a pipe is async, and
+  `process.exit` tears the process down mid-flush. Latent for as long as nothing consumes the
+  output programmatically; the first `--json` consumer surfaces it as unparseable output, not as a
+  crash. Any script that prints a payload and exits routes through a synchronous writer
+  (`fs.writeSync` on fd 1, looped for partial writes, retried on EAGAIN). (specs/20260823/08 repair
+  round — `spec/scripts/spec-status.js` truncated its ~75 KB dashboard JSON at exactly 65536 bytes,
+  present since `89978d3a`; pinned by two discriminating tests in `tests/queue/queue-overlay.test.js`
+  verified red against the pre-fix script.)
+- `[plugin]` **`synthetic-repro-presented-as-real`** (class stands at 1; grep this slug to count
+  recurrences). A review repro that exercises a SYNTHETIC stand-in rather than the real entrypoint,
+  whose measured numbers are then transcribed into permanent code or test comments as if the real
+  code path had been observed failing. A review finding may still be true on contract reading alone
+  — but the comment it leaves behind must cite the basis it actually has. Reopen/recurrence
+  condition (grep-answerable): any code or test comment citing a repro's numbers where the repro did
+  not invoke the real entrypoint under the conditions the finding claims. A guard is deliberately
+  unbuilt — Generality and Materiality are unfillable at count 1 (core § Incident Policy).
+  (specs/20260823/08-derived-session-queue.md review 2026-08-23 — `writeQueue`'s "unparseable in
+  1/40 trials" came from a raw `fs.writeFileSync` script at ~625KB, ~150× a realistic queue file;
+  an independent reconstruction of the real pre-fix code raced ~250 times up to 48-way produced zero
+  corruptions on APFS. The atomic-write fix stands on contract contradiction plus host-filesystem
+  portability; both comments were corrected in the same session.)

@@ -155,6 +155,81 @@ test('AC-20260823-08-14: spec-status --root pointed at a linked worktree ignores
 // D10's rationale states escape supremacy is "the one exception, inherited unchanged" from
 // specs/20260805/03 D5, so this pin is green both before and after the overlay lands, same as
 // this file's AC-20260823-08-3 sibling.
+// Regression, found 2026-08-23 by the user on the first real `spec-queue next` run against
+// this repo's own ~75 KB dashboard JSON: spec-status.js printed its JSON with console.log()
+// and called process.exit() on the very next line. console.log() to a PIPE is asynchronous in
+// Node — exactly the case for every programmatic caller (spawnSync/exec, e.g. spec-queue.js's
+// `--next --json` consumer) — so process.exit() tore the process down before the pipe drained:
+// stdout silently truncated at the 64 KiB pipe buffer while the exit code still read 0. The
+// spec's fix (specs/20260823/08-derived-session-queue.md repair) replaced every console.log()-
+// then-process.exit() JSON emission site with a synchronous fs.writeSync loop. This pins that
+// fix behaviorally, at a fixture size independently proven (via a synchronous file-redirect
+// run of the SAME invocation) to exceed the 64 KiB pipe buffer, so the test can never silently
+// stop exercising the defect — a fixture that shrinks below that threshold would make it
+// vacuous, which is exactly the failure mode this guards against.
+function bigQueueHost() {
+  const dir = fs.realpathSync(tmpdir('queue-overlay-pipe'))
+  gitRepo(dir)
+  fs.mkdirSync(path.join(dir, 'docs/roadmap'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'docs/roadmap/00-overview.md'), overviewHeader())
+  const N = 320
+  for (let i = 1; i <= N; i++) {
+    const id = String(i).padStart(2, '0')
+    fs.writeFileSync(path.join(dir, `docs/roadmap/${id}-brief.md`),
+      `# ${id} — Brief number ${id} with a reasonably long descriptive name for bulk padding\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n`)
+    const specDir = path.join(dir, 'specs/20260701')
+    fs.mkdirSync(specDir, { recursive: true })
+    const rows = Array.from({ length: 6 }, (_, k) =>
+      `| spec/scripts/some-file-${id}-${k}.js | MODIFY | one-line summary describing what changed in this file for bulk padding purposes |`).join('\n')
+    fs.writeFileSync(path.join(specDir, `${id}-spec.md`),
+      `---\ndate: 2026-07-01\nstatus: hardened\nbrief: ${id}\n---\n\n# spec ${id}\n\n## File Plan\n\n| Files | Action | Notes |\n|---|---|---|\n${rows}\n`)
+  }
+  return dir
+}
+
+// Runs `spec-status.js --root <dir> <jsonArgs>` two ways over the same synthetic host: once
+// with stdout redirected to a file (a synchronous write — the ground-truth full payload, per
+// the diagnosis: "a file redirect gets the full 74965 bytes — file writes are synchronous"),
+// and once through a real spawned pipe (the async-drain hazard every programmatic caller hits).
+// Returns both so the caller can assert the pipe run lost nothing.
+function runJsonOverPipeAndFile(dir, jsonArgs) {
+  const outFile = path.join(dir, '_redirect.json')
+  const fd = fs.openSync(outFile, 'w')
+  const fileRun = runNode(SCRIPT, ['--root', dir, ...jsonArgs], { stdio: ['ignore', fd, 'ignore'] })
+  fs.closeSync(fd)
+  assert.strictEqual(fileRun.status, 0,
+    'the ground-truth file-redirect run must itself succeed, or this test cannot establish the full emitted payload size to compare the piped run against')
+  const fullBytes = fs.readFileSync(outFile)
+  const pipeRun = runNode(SCRIPT, ['--root', dir, ...jsonArgs], { encoding: null })
+  return { fullBytes, pipeRun }
+}
+
+test('spec-status.js --json survives a real pipe intact at a fixture size proven to exceed the 64 KiB pipe buffer, never silently truncating stdout while still exiting 0', () => {
+  const dir = bigQueueHost()
+  const { fullBytes, pipeRun } = runJsonOverPipeAndFile(dir, ['--json'])
+  assert.ok(fullBytes.length > 65536,
+    'this fixture must emit a JSON payload larger than the 64 KiB pipe buffer or this test cannot exercise the truncation defect at all — a shrunk fixture would make this pin vacuous: got ' + fullBytes.length + ' bytes')
+  assert.strictEqual(pipeRun.status, 0, (pipeRun.stderr || Buffer.alloc(0)).toString())
+  assert.strictEqual(pipeRun.stdout.length, fullBytes.length,
+    'piped stdout must carry every byte the synchronous file-redirect run emitted for the identical invocation — a short read here IS the pipe-buffer truncation this test pins (found 2026-08-23, spec-status.js console.log()-then-process.exit()): got ' + pipeRun.stdout.length + ' of ' + fullBytes.length + ' bytes')
+  const parsed = JSON.parse(pipeRun.stdout.toString('utf8'))
+  assert.deepStrictEqual(Object.keys(parsed).sort(), ['anomalies', 'briefs', 'specs', 'superseded'],
+    'the parsed dashboard JSON received over the pipe must carry all four documented top-level keys — a truncated payload would either fail JSON.parse above or land here missing keys: ' + Object.keys(parsed).join(','))
+})
+
+test('spec-status.js --next --json survives a real pipe intact at a fixture size proven to exceed the 64 KiB pipe buffer, never silently truncating stdout while still exiting 0', () => {
+  const dir = bigQueueHost()
+  const { fullBytes, pipeRun } = runJsonOverPipeAndFile(dir, ['--next', '--json'])
+  assert.ok(fullBytes.length > 65536,
+    'this fixture must emit a --next --json payload larger than the 64 KiB pipe buffer or this test cannot exercise the truncation defect at all — a shrunk fixture would make this pin vacuous: got ' + fullBytes.length + ' bytes')
+  assert.strictEqual(pipeRun.status, 0, (pipeRun.stderr || Buffer.alloc(0)).toString())
+  assert.strictEqual(pipeRun.stdout.length, fullBytes.length,
+    'piped stdout must carry every byte the synchronous file-redirect run emitted for the identical --next --json invocation — a short read here IS the pipe-buffer truncation this test pins, and is exactly what would break spec-queue.js\'s JSON.parse of this same command\'s output (found 2026-08-23): got ' + pipeRun.stdout.length + ' of ' + fullBytes.length + ' bytes')
+  const parsed = JSON.parse(pipeRun.stdout.toString('utf8'))
+  assert.ok(Array.isArray(parsed.next),
+    'the parsed --next JSON received over the pipe must carry its documented top-level "next" array — a truncated payload would either fail JSON.parse above or land here without it: ' + JSON.stringify(parsed))
+})
+
 test('AC-20260823-08-15: a red-observation escape entry keeps rank supremacy above every queue position', () => {
   const dir = fs.realpathSync(tmpdir('queue-escape'))
   gitRepo(dir)

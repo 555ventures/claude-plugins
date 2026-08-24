@@ -60,6 +60,28 @@
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
+// Node's console.log() to stdout is ASYNCHRONOUS when stdout is a pipe — exactly the case for
+// every programmatic caller (spawnSync/exec), e.g. spec-queue.js's `--next --json` consumer.
+// process.exit() tears the process down immediately, before the pipe drains, so a large payload
+// silently truncates at the 64 KiB pipe buffer while the exit code still reads 0 — a truncation
+// with no error anywhere. Found 2026-08-23: the first real `spec-queue next` run against this
+// repo's ~75 KB dashboard JSON lost its last ~9 KB and spec-queue.js's JSON.parse failed on the
+// truncated tail (specs/20260823/08-derived-session-queue.md repair). Every site that prints and
+// then calls process.exit() must go through this synchronous helper instead of console.log.
+// fs.writeSync can still return fewer bytes than given on a pipe, so this loops — and retries on
+// EAGAIN — until the whole buffer is actually flushed.
+function writeOut(str) {
+  const buf = Buffer.from(str + '\n', 'utf8')
+  let off = 0
+  while (off < buf.length) {
+    try {
+      off += fs.writeSync(1, buf, off, buf.length - off)
+    } catch (e) {
+      if (e.code === 'EAGAIN') continue
+      throw e
+    }
+  }
+}
 const { parseFilePlan } = require('./lib/file-plan')
 const { readLedgerRows, qualifyingObservation } = require('./lib/observation')
 const {
@@ -533,7 +555,7 @@ if (nextMode) {
     // decoration — it never took part in the parallel-annotation loop above (no brief to
     // claim against), so the generic augmentation is skipped for it, never applied then
     // nulled out.
-    console.log(JSON.stringify({
+    writeOut(JSON.stringify({
       next: entries.map(({ rank, parallelReason, __queuePos, ...e }) =>
         e.queue ? e : { ...e, parallel: e.parallel === undefined ? null : e.parallel, parallel_reason: parallelReason || null }),
     }, null, 2))
@@ -549,7 +571,7 @@ if (nextMode) {
     top.blockers.forEach((b, i) =>
       out.push(`   ${i === top.blockers.length - 1 ? '└─' : '├─'} ⏳ ${b}`))
   }
-  console.log(out.join('\n'))
+  writeOut(out.join('\n'))
   process.exit(0)
 }
 
@@ -590,7 +612,7 @@ if (json) {
   // `superseded` (the brief-level flag, internal-only per its own comment above) is
   // stripped here alongside `specs: ss` — this dashboard JSON shape is unchanged by
   // specs/20260823/08.
-  console.log(JSON.stringify({ briefs: briefs.map(({ specs: ss, superseded, ...b }) => ({ ...b, specs: ss.map(s => ({ path: s.path, status: s.status })) })), specs, superseded: retired.map(s => ({ path: s.path, superseded_by: s.superseded_by })), anomalies }, null, 2))
+  writeOut(JSON.stringify({ briefs: briefs.map(({ specs: ss, superseded, ...b }) => ({ ...b, specs: ss.map(s => ({ path: s.path, status: s.status })) })), specs, superseded: retired.map(s => ({ path: s.path, superseded_by: s.superseded_by })), anomalies }, null, 2))
   process.exit(0)
 }
 

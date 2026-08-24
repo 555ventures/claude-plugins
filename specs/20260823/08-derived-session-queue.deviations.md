@@ -40,3 +40,33 @@
   position; AC-20260820-04-5's provenance kept (no invented AC-ID), assertion strengthened not
   weakened. This is the repo's recorded retired/added-literal collision class — the collision-closure
   leg does not sweep literals a spec ADDS to an exhaustive set, only ones it inherits.
+
+- Repair round (2026-08-23), out-of-File-Plan: `node spec/scripts/spec-queue.js next` failed with
+  "spec-status.js --json produced unparseable output" against this repo's live ~75 KB dashboard
+  JSON. Root cause was a PRE-EXISTING latent defect in `spec/scripts/spec-status.js`, not a bug
+  introduced by this spec — `console.log(...)` immediately followed by `process.exit(0)` is unsafe
+  because Node's stdout write is asynchronous to a pipe, so `process.exit` tore the process down
+  mid-flush and silently truncated output at the 64 KiB pipe buffer while still exiting 0 (confirmed
+  present in the pre-spec commit `89978d3a85682e2169c33069948d0a981557c38e`). It was latent because
+  no programmatic `--json` consumer of spec-status.js existed since the autopilot lane's deletion
+  (this spec's own assumption A4) — spec-queue.js is the first one, so this spec's new consumer
+  surfaced a dormant defect rather than causing it. Fixed by adding a synchronous `writeOut()`
+  helper (`fs.writeSync` on fd 1, looped for partial writes, retried on EAGAIN) and routing the
+  three `process.exit(0)`-adjacent `console.log` sites (`--next --json`, `--next` human, dashboard
+  `--json`) through it; JSON content, key order, and the `--root/--next/--json` CLI shape are
+  byte-identical (D11 frozen-API constraint honored). Verified: the reproducer now reports the full
+  74,965-byte payload (was truncated at 65,536) and parses; `spec-queue.js next` completes; the seeded
+  `.git/spec-queue.json` was deleted after verification; `tests/status/*`, `tests/spec-status.test.js`,
+  `tests/queue/*`, and the full `npm test` (717 tests) are green.
+
+- Out-of-File-Plan, incident regression pin: added two tests to `tests/queue/queue-overlay.test.js`
+  ("spec-status.js --json survives a real pipe intact..." and its `--next --json` twin) pinning
+  the console.log()-then-process.exit() pipe-truncation fix from the repair round above. No
+  AC-ID — this is a defect regression, not an acceptance criterion, per this repo's convention
+  against inventing placeholder AC-IDs for non-AC pins. Each builds a synthetic host large enough
+  (320 briefs/specs with File Plan tables) that the emitted JSON measurably exceeds the 64 KiB
+  pipe buffer, verified via a synchronous file-redirect run as ground truth against a real piped
+  child-process run. Empirically verified both tests fail against the pre-fix script (reconstructed
+  from commit `89978d3a85682e2169c33069948d0a981557c38e` plus its sibling `lib/*.js` files at that
+  commit) — piped stdout truncates at exactly 65536 bytes of 283788/80362 full bytes, and
+  `JSON.parse` fails on the truncated tail — confirming the pins discriminate.

@@ -3,7 +3,7 @@
 // verdict.js --manifest <path> [--workflow <path>] [--waived N] [--rejected N] [--fixDispatched N]
 //   [--escalated]
 //   [--ledger [--spec <path>] [--tier <T>] [--diff-loc N] [--iteration N] [--run-id <id>]
-//     [--retain <dir>]]
+//     [--retain <dir>] [--base-sha <40hex>] [--head-sha <40hex>] [--dirty]]
 //   [--profile release [--milestone <string>] [--briefs N,N,...]] [--require <leg> ...]
 //
 // Incident (2026-08-05, spec review-evidence-manifest): /spec:review could print CLEAN with
@@ -133,6 +133,19 @@
 // self-contradictory CLEAN+escalated:true row in the one file that must never wrongly say CLEAN
 // is the worst possible output, so this is a correctness guard, not belt-and-braces).
 //
+// specs/20260824/06-review-range-identity.md (D1-D3, 2026-08-24): no review row named the code it
+// judged — 0 of 118 rows on record carried a commit range, only `diff.loc`. --base-sha/--head-sha
+// (review profile only) copy the caller's resolved base/HEAD verbatim into the printed row's
+// `diff` object (key order fixed: loc, base, head, dirty — loc omitted with no --diff-loc) and the
+// retained artifact's top-level `diff` (inserted immediately after `dispositions`); --dirty marks
+// uncommitted tracked edits at pass time. Refused (exit 2, arg-parse time, before the manifest is
+// even read, no verdict word or ledger line printed) on a value that is not exactly 40 lowercase
+// hex characters, one flag without the other, --dirty without the pair, or either flag with
+// --profile release (a release row carries no diff at all) — every refusal names the resolution
+// remedy `git rev-parse --verify <ref>^{commit}` (D2: a symbolic or abbreviated ref landing in a
+// durable row is the replay moving-ref defect, rv_387d84a3b424, reintroduced). The 40-hex check is
+// the whole validation — no ancestry, no repo access — so this stays a pure function of its flags.
+//
 // Exit codes: 0 = derived CLEAN · 1 = derived other non-CLEAN word
 // (still printed on stdout line 1) · 2 = usage error, missing/unreadable --manifest or
 // --workflow file, a disposition contradiction (--waived + --rejected + --fixDispatched
@@ -146,7 +159,12 @@
 // --escalated passed with --fixDispatched > 0 (message names "dispatched fix never landed"),
 // --escalated passed with --profile release (message names "drop --escalated"), or --escalated
 // whose derivation reaches CLEAN (message names "derived CLEAN under --escalated" — evidence
-// drift; no verdict word or ledger line is printed)
+// drift; no verdict word or ledger line is printed), or (D1-D3, specs/20260824/06-review-range-
+// identity.md, checked at arg-parse time before the manifest is read, no verdict word or ledger
+// line printed) a --base-sha/--head-sha value that is not exactly 40 lowercase hex characters, one
+// of the pair passed without the other, --dirty passed without the pair, or either flag passed
+// with --profile release — every one of these names `git rev-parse --verify <ref>^{commit}` as the
+// remedy
 
 const fs = require('fs')
 const path = require('path')
@@ -155,13 +173,14 @@ const crypto = require('crypto')
 function usage() {
   console.error('usage: verdict.js --manifest <path> [--workflow <path>] [--waived N] [--rejected N] ' +
     '[--fixDispatched N] [--escalated] [--ledger [--spec <path>] [--tier <T>] [--diff-loc N] ' +
-    '[--iteration N] [--run-id <id>] [--retain <dir>]] [--profile release [--milestone <string>] ' +
-    '[--briefs N,N,...]] [--require <leg> ...]')
+    '[--iteration N] [--run-id <id>] [--retain <dir>] [--base-sha <40hex>] [--head-sha <40hex>] ' +
+    '[--dirty]] [--profile release [--milestone <string>] [--briefs N,N,...]] [--require <leg> ...]')
 }
 
 let manifestPath = null, workflowPath = null, waived = 0, rejected = 0, fixDispatched = 0
 let ledger = false, specArg = null, tier = null, diffLoc = null, iteration = null, profile = 'review'
 let runId = null, milestone = null, briefsArg = null, retainDir = null, escalated = false
+let baseShaArg = null, headShaArg = null, dirtyFlag = false
 const requireLegs = []
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
@@ -183,6 +202,9 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--briefs') briefsArg = argv[++i]
   else if (a === '--require') requireLegs.push(argv[++i])
   else if (a === '--retain') retainDir = argv[++i]
+  else if (a === '--base-sha') baseShaArg = argv[++i]
+  else if (a === '--head-sha') headShaArg = argv[++i]
+  else if (a === '--dirty') dirtyFlag = true
   else { usage(); process.exit(2) }
 }
 if (!manifestPath) { usage(); process.exit(2) }
@@ -228,6 +250,41 @@ if (ledger && workflowPath && profile !== 'release' && !retainDir) {
   console.error('verdict.js: authoritative review rows (--ledger + --workflow) must retain evidence ' +
     '— add --retain .claude/spec-runs')
   process.exit(2)
+}
+
+// ---- --base-sha/--head-sha/--dirty refusal matrix (D1-D3, specs/20260824/06-review-range-
+// identity.md) ---------------------------------------------------------------------------------
+// Checked purely on flag presence/shape, before the manifest/workflow files are even read — the
+// same flag-presence-first pattern as the --escalated/--retain matrices above. A symbolic or
+// abbreviated ref landing in a durable ledger row is the replay moving-ref defect (rv_387d84a3b424)
+// reintroduced, so the 40-hex check is the whole validation: no ancestry, no repo access, a pure
+// function of the flag values themselves. Every branch names `git rev-parse --verify` as the
+// remedy (D2's blanket requirement) — the release-profile message below extends the Contracts
+// table's illustrative text with that phrase, verbatim as a prefix, to satisfy that requirement
+// (logged as a deviation).
+const SHA40_RE = /^[0-9a-f]{40}$/
+if (profile === 'release' && (baseShaArg !== null || headShaArg !== null)) {
+  console.error('verdict.js: --base-sha/--head-sha are not valid with --profile release — a ' +
+    'release row describes a milestone, not a diff (git rev-parse --verify <ref>^{commit})')
+  process.exit(2)
+}
+if (dirtyFlag && !(baseShaArg !== null && headShaArg !== null)) {
+  console.error('verdict.js: --dirty requires --base-sha and --head-sha — pass all three ' +
+    '(git rev-parse --verify <ref>^{commit} resolves the pair) or none')
+  process.exit(2)
+}
+if ((baseShaArg !== null) !== (headShaArg !== null)) {
+  console.error('verdict.js: --base-sha and --head-sha travel together — pass both ' +
+    '(git rev-parse --verify <ref>^{commit}) or neither')
+  process.exit(2)
+}
+if (baseShaArg !== null && headShaArg !== null) {
+  const badSha = !SHA40_RE.test(baseShaArg) ? baseShaArg : (!SHA40_RE.test(headShaArg) ? headShaArg : null)
+  if (badSha !== null) {
+    console.error(`verdict.js: --base-sha/--head-sha must be a full 40-hex commit sha, got "${badSha}" ` +
+      '— resolve it with git rev-parse --verify <ref>^{commit}')
+    process.exit(2)
+  }
 }
 
 // ---- manifest: JSONL rows, one per leg; last-in-file wins, insertion order preserved ------
@@ -493,7 +550,18 @@ if (ledger) {
   } else {
     if (workflow) row.scope = workflow.scope
     if (iteration !== null) row.iteration = iteration
-    if (diffLoc !== null) row.diff = { loc: diffLoc }
+    // D1/D3: diff's key order is fixed loc, base, head, dirty — loc is assigned first (when
+    // present) so a subsequent base/head/dirty assignment never reorders it; neither flag set
+    // leaves row.diff unset entirely (byte-identical to today's row).
+    let diffObj = null
+    if (diffLoc !== null) diffObj = { loc: diffLoc }
+    if (baseShaArg !== null && headShaArg !== null) {
+      diffObj = diffObj || {}
+      diffObj.base = baseShaArg
+      diffObj.head = headShaArg
+      diffObj.dirty = dirtyFlag
+    }
+    if (diffObj) row.diff = diffObj
     const smoke = deriveSmoke(legRows.get('smoke'))
     if (smoke) row.smoke = smoke
     row.testsSkipped = deriveTestsSkipped(legRows.get('gate'), legRows.get('skip-reconcile'))
@@ -527,9 +595,13 @@ if (ledger) {
       scope: workflow ? workflow.scope : null,
       verdict: word,
       dispositions: { waived, rejected, fixDispatched },
-      legs: [...legRows.values()], // verbatim manifest rows — observed UNTRUNCATED (D1)
-      reviewer: workflow, // the --workflow file's parsed JSON verbatim, or null (D2)
     }
+    // D3/D9: diff is inserted immediately after dispositions, equal to the printed row's diff
+    // object verbatim — but ONLY when the sha pair was passed. diff.loc alone is a ledger-row-only
+    // field (today's shape) and must never be promoted onto the artifact by itself.
+    if (baseShaArg !== null && headShaArg !== null) artifact.diff = row.diff
+    artifact.legs = [...legRows.values()] // verbatim manifest rows — observed UNTRUNCATED (D1)
+    artifact.reviewer = workflow // the --workflow file's parsed JSON verbatim, or null (D2)
     writeRetainedArtifact(retainDir, row.runId, artifact)
   }
 }

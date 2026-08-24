@@ -153,11 +153,13 @@ test('AC-20260820-07-1: WHEN the driver runs on an implementing spec whose legs 
   assert.strictEqual(stateOf(root, spec), 'REVIEWER', 'the derived state after a green legs run must be REVIEWER: ' + r.stdout)
 })
 
-test('AC-20260820-07-2 (also AC-20260821-04-8, SHALL CONTINUE TO): WHEN the synthetic gate fails THE SYSTEM appends exactly one GATE_RED ledger line byte-equal to verdict.js\'s own line, prints the red leg + remedy, and reports state STOPPED — the reviewer step is never printed', () => {
+test('AC-20260820-07-2 (also AC-20260821-04-8, SHALL CONTINUE TO) / AC-20260824-06-5: WHEN the synthetic gate fails THE SYSTEM appends exactly one GATE_RED ledger line byte-equal to verdict.js\'s own line, whose diff.base/diff.head/diff.dirty name the reviewed range, prints the red leg + remedy, and reports state STOPPED — the reviewer step is never printed', () => {
   const { root, spec, sidecar } = makeHost({ gateFails: true })
   const ledger = path.join(root, '.claude/spec-runs.jsonl')
   const before = fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8') : ''
+  const expectedBase = /^diff_base:\s*(\S+)/m.exec(fs.readFileSync(spec, 'utf8'))[1]
   const r = run(root, spec)
+  const expectedHead = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
   assert.strictEqual(stateOf(root, spec), 'STOPPED',
     'a red blocking leg must land the driver in the terminal state STOPPED, never proceed as if the substrate were clean: ' + r.stdout + r.stderr)
   assert.doesNotMatch(r.stdout, /reviewer dispatch|dispatch.*reviewer/i,
@@ -172,16 +174,34 @@ test('AC-20260820-07-2 (also AC-20260821-04-8, SHALL CONTINUE TO): WHEN the synt
   assert.strictEqual(appended.verdict, 'GATE_RED', 'the appended ledger row must carry verdict GATE_RED: ' + JSON.stringify(appended))
   assert.ok(appended.runId, 'the appended row must carry a runId — /spec:escape needs a backlink on every row: ' + JSON.stringify(appended))
 
+  // AC-20260824-06-5: the hard-stop row must name the range it hard-stopped on.
+  assert.match((appended.diff && appended.diff.base) || '', /^[0-9a-f]{40}$/,
+    'AC-20260824-06-5: the appended GATE_RED row\'s diff.base must be a 40-hex commit sha — D4 resolves the ' +
+    'spec\'s base ref once via git rev-parse --verify before the first leg ever runs: ' + JSON.stringify(appended))
+  assert.strictEqual(appended.diff.base, expectedBase,
+    'AC-20260824-06-5: diff.base must equal git rev-parse --verify <resolved base>^{commit} of the fixture — a ' +
+    'mismatch means the driver resolved a different ref than the spec\'s own diff_base frontmatter: ' + JSON.stringify(appended))
+  assert.strictEqual(appended.diff.head, expectedHead,
+    'AC-20260824-06-5: diff.head must equal git rev-parse HEAD of the fixture at the moment of this hard-stop ' +
+    'pass — the row\'s head is the tree the red leg actually ran on: ' + JSON.stringify(appended))
+  assert.strictEqual(appended.diff.dirty, false,
+    'AC-20260824-06-5: the fixture tree carries no uncommitted edits at hard-stop time — diff.dirty must be ' +
+    'false, never true or absent, once the sha pair is threaded onto the hard-stop pass: ' + JSON.stringify(appended))
+
   // Reproducibility check for "byte-equal to verdict.js's stdout line 2": feeding verdict.js the
-  // SAME manifest with the exact tier/diff/iteration/runId the driver's own row recorded must
-  // reproduce an identical row (every field but the call-time timestamp) — proving the driver
-  // appended verdict.js's own printed line rather than hand-composing one.
+  // SAME manifest with the exact tier/diff/iteration/runId/base-sha/head-sha/dirty the driver's
+  // own row recorded must reproduce an identical row (every field but the call-time timestamp) —
+  // proving the driver appended verdict.js's own printed line rather than hand-composing one.
   const manifestPath = path.join(sidecar, 'manifest-1.jsonl')
   assert.ok(fs.existsSync(manifestPath), 'a STOPPED run must still have written manifest-1.jsonl before hard-stopping: ' + r.stdout)
   assert.ok(appended.spec && appended.tier, 'the ledger row must carry --spec and --tier so a GATE_RED run is attributable: ' + JSON.stringify(appended))
   const reArgs = ['--manifest', manifestPath, '--ledger', '--spec', appended.spec, '--tier', appended.tier, '--run-id', appended.runId]
   if (appended.diff && typeof appended.diff.loc === 'number') reArgs.push('--diff-loc', String(appended.diff.loc))
   if (appended.iteration !== undefined) reArgs.push('--iteration', String(appended.iteration))
+  if (appended.diff && typeof appended.diff.base === 'string') {
+    reArgs.push('--base-sha', appended.diff.base, '--head-sha', appended.diff.head)
+    if (appended.diff.dirty) reArgs.push('--dirty')
+  }
   const reRun = runNode('scripts/verdict.js', reArgs)
   const reRunLine = reRun.stdout.trim().split('\n')[1]
   assert.ok(reRunLine, 'verdict.js must print a ledger line when re-invoked with the driver\'s own recorded flags against the same manifest: ' + reRun.stdout + reRun.stderr)
@@ -266,6 +286,124 @@ test('AC-20260820-07-6: WHEN a clean run reaches CLOSE (0 survivors, disposition
     'the CLOSE step\'s hygiene listing must name .claude/spec-runs/*.json as an EXPECTED artifact — omitting it invites deleting durable evidence as reviewer scratch: ' + r.stdout)
   assert.match(r.stdout, /EXPECTED/, 'the hygiene listing must mark expected artifacts (retained evidence + sidecar) as EXPECTED, not stray paths to clean up: ' + r.stdout)
   assert.match(r.stdout, /close[- ]commit/i, 'the CLOSE step must print the close-commit instruction: ' + r.stdout)
+})
+
+// specs/20260824/06-review-range-identity.md D3/D4 (2026-08-24): the close row is written by
+// doCloseWork() BEFORE the close commit exists — fix-worker edits may still be uncommitted tracked
+// changes at pass time, so `dirty:true` tells a later reader the range's true upper bound is the
+// close commit that follows, never `head` alone. Untracked files (the sidecar, scratch artifacts)
+// never count — `git status --porcelain --untracked-files=no` is the exact command D4 pins.
+test('AC-20260824-06-6: WHEN a clean run reaches CLOSE with one uncommitted tracked-file edit in the fixture tree THE SYSTEM appends a close row with diff.dirty:true and diff.head equal to the fixture\'s HEAD before the close commit, and a retained artifact whose diff deep-equals the row\'s; WHEN the tree is clean apart from untracked files THE SYSTEM records diff.dirty:false', () => {
+  const dirtyHost = makeHost()
+  toReviewer(dirtyHost)
+  run(dirtyHost.root, dirtyHost.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('rvdrv-dirty-clean', CLEAN_RETURN))
+  assert.strictEqual(stateOf(dirtyHost.root, dirtyHost.spec), 'DISPOSITIONS', 'setup: a returned CLEAN, zero-survivor result must land DISPOSITIONS')
+  fs.writeFileSync(path.join(dirtyHost.root, 'src/foo.js'), 'module.exports = () => 42 // uncommitted fix-worker edit\n')
+  const expectedHeadDirty = execFileSync('git', ['-C', dirtyHost.root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const dClose = run(dirtyHost.root, dirtyHost.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(dClose.status, 0, 'a zero-survivor disposition must still close even with an uncommitted tracked edit present: ' + dClose.stdout + dClose.stderr)
+  const ledgerDirtyLines = fs.readFileSync(path.join(dirtyHost.root, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n').filter(Boolean)
+  const rowDirty = JSON.parse(ledgerDirtyLines[ledgerDirtyLines.length - 1])
+  assert.strictEqual(rowDirty.diff && rowDirty.diff.dirty, true,
+    'AC-20260824-06-6: a modified TRACKED file uncommitted at close-pass time must record diff.dirty:true — ' +
+    'without this a reader cannot tell the close commit that follows is still part of the judged range: ' + JSON.stringify(rowDirty))
+  assert.strictEqual(rowDirty.diff.head, expectedHeadDirty,
+    'AC-20260824-06-6: diff.head must equal the fixture\'s HEAD BEFORE the close commit (the driver never ' +
+    'commits itself) — the close row\'s head is the tree the authoritative pass actually judged: ' + JSON.stringify(rowDirty))
+  const artifactDirty = JSON.parse(fs.readFileSync(path.join(dirtyHost.root, '.claude/spec-runs', rowDirty.runId + '.json'), 'utf8'))
+  assert.deepStrictEqual(artifactDirty.diff, rowDirty.diff,
+    'AC-20260824-06-6: the retained artifact\'s diff must deep-equal the close row\'s diff object: ' +
+    JSON.stringify({ row: rowDirty.diff, artifact: artifactDirty.diff }))
+
+  const cleanHost = makeHost()
+  toReviewer(cleanHost)
+  run(cleanHost.root, cleanHost.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('rvdrv-untracked-clean', CLEAN_RETURN))
+  assert.strictEqual(stateOf(cleanHost.root, cleanHost.spec), 'DISPOSITIONS')
+  fs.writeFileSync(path.join(cleanHost.root, 'scratch.txt'), 'an untracked scratch file, never git add-ed\n')
+  const cClose = run(cleanHost.root, cleanHost.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(cClose.status, 0, 'a zero-survivor disposition must close normally with only an untracked file present: ' + cClose.stdout + cClose.stderr)
+  const ledgerCleanLines = fs.readFileSync(path.join(cleanHost.root, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n').filter(Boolean)
+  const rowClean = JSON.parse(ledgerCleanLines[ledgerCleanLines.length - 1])
+  assert.strictEqual(rowClean.diff && rowClean.diff.dirty, false,
+    'AC-20260824-06-6: an untracked file alone (e.g. a scratch artifact) must never count as dirty — ' +
+    '`git status --porcelain --untracked-files=no` reports nothing for it, so diff.dirty must be false: ' +
+    JSON.stringify(rowClean))
+})
+
+function unresolvableBaseSpecBody(acId) {
+  return `---
+status: implementing
+tier: standard
+build_base: no-such-branch-xyz
+---
+# Driver Test Spec (unresolvable base)
+
+## Decisions
+
+| ID | Decision | One-line rationale |
+|----|----------|--------------------|
+| D1 | foo() returns 42 (${acId}) | why |
+
+## File Plan
+
+| File | Action | Layer |
+|---|---|---|
+| src/foo.js | edit | scripts |
+| tests/foo.test.js | create | tests |
+
+## Acceptance Criteria
+
+- **${acId}**: foo() returns 42.
+`
+}
+
+// specs/20260824/06-review-range-identity.md D4/AC-12 (2026-08-24): resolveBaseSha() runs once,
+// right after resolveBase(), at driver startup — so an unresolvable base must die before the
+// first manifest or leg ever runs, never mid-leg or at the first verdict pass.
+test('AC-20260824-06-12: WHEN the spec\'s base ref does not resolve to a commit THE SYSTEM exits 2 before any leg or verdict pass runs, naming diff_base and git rev-parse --verify on stderr, and appends no ledger line and writes no manifest', () => {
+  const root = fs.realpathSync(tmpdir('rvdrv-badbase'))
+  const g = gitRepo(root)
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({
+    gateCommand: 'node --test {testDirs}',
+    testCommand: 'node --test',
+    runtime: { inert: 'plugin repo — nothing boots' },
+    capabilities: { forge: 'none', skipReportPattern: 'none' },
+  }))
+  fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 41\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  fs.mkdirSync(path.join(root, 'specs/20260820'), { recursive: true })
+  const spec = path.join(root, 'specs/20260820/99-drv-badbase.md')
+  const acId = 'AC-20260820-99-17'
+  fs.writeFileSync(spec, unresolvableBaseSpecBody(acId))
+  fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 42\n')
+  fs.writeFileSync(path.join(root, 'tests/foo.test.js'), GREEN_TEST.replace('AC-20260820-99-1', acId))
+  g('add', '-A'); g('commit', '-q', '-m', 'implement')
+  const sidecar = spec.replace(/\.md$/, '.review')
+
+  const ledger = path.join(root, '.claude/spec-runs.jsonl')
+  const before = fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8') : null
+
+  const r = run(root, spec)
+  assert.strictEqual(r.status, 2,
+    'AC-20260824-06-12: an unresolvable base ref must exit 2 before any leg runs — proceeding would diff ' +
+    'every leg against a ref that does not exist: ' + r.stdout + r.stderr)
+  assert.match(r.stderr, /diff_base/,
+    'AC-20260824-06-12: stderr must name diff_base as the remedy (add diff_base: <sha> to the spec ' +
+    'frontmatter) — a generic git error here leaves the fix undiscoverable: ' + r.stderr)
+  assert.match(r.stderr, /git rev-parse --verify/,
+    'AC-20260824-06-12: stderr must name the resolution command git rev-parse --verify so the remedy is ' +
+    'directly runnable: ' + r.stderr)
+
+  const after = fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8') : null
+  assert.strictEqual(after, before,
+    'AC-20260824-06-12: .claude/spec-runs.jsonl must be byte-unchanged — the base must die BEFORE the first ' +
+    'manifest or leg, not after a hard-stop row was already appended: ' + JSON.stringify({ before, after }))
+  assert.ok(!fs.existsSync(path.join(sidecar, 'manifest-1.jsonl')),
+    'AC-20260824-06-12: no manifest-1.jsonl may exist — review-legs.js must never be invoked once the base ' +
+    'fails to resolve: ' + sidecar)
 })
 
 // Escape caught by audit 2026-08-24, after specs/20260823/08-derived-session-queue.md had already
@@ -1192,7 +1330,7 @@ function makeNoDiffBaseHost() {
   return { root, spec, sidecar: spec.replace(/\.md$/, '.review') }
 }
 
-test('AC-20260823-05-7: WHEN the driver flips a spec whose frontmatter has build_base but no diff_base to status: done THE SYSTEM stamps diff_base: <sha> (the base ref resolved at flip time) into the frontmatter in the same edit, directly after build_base, with no inline comment', () => {
+test('AC-20260823-05-7 / AC-20260824-06-11: WHEN the driver flips a spec whose frontmatter has build_base but no diff_base to status: done THE SYSTEM stamps diff_base: <sha> (the base ref resolved at flip time) into the frontmatter in the same edit, directly after build_base, with no inline comment, and that sha equals the close row\'s diff.base', () => {
   const host = makeNoDiffBaseHost()
   toReviewer(host)
   const beforeText = fs.readFileSync(host.spec, 'utf8')
@@ -1227,6 +1365,13 @@ test('AC-20260823-05-7: WHEN the driver flips a spec whose frontmatter has build
     'D3: the stamped value must be EXACTLY "diff_base: <sha>" with no inline comment (the Contracts\' own ' +
     'comment is illustrative, never emitted) and no trailing text — the sha must be the review\'s own base ' +
     'ref (main) resolved at flip time: ' + JSON.stringify(lines[diffIdx]))
+
+  const closeLedgerLines = fs.readFileSync(path.join(host.root, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n').filter(Boolean)
+  const closeRow = JSON.parse(closeLedgerLines[closeLedgerLines.length - 1])
+  assert.strictEqual(closeRow.diff && closeRow.diff.base, expectedSha,
+    'AC-20260824-06-11: the close row\'s diff.base must equal the freshly-stamped diff_base sha — one ' +
+    'resolution, two carriers (D4): a mismatch would mean the driver resolved the same base ref twice and ' +
+    'got two different answers: ' + JSON.stringify(closeRow))
 })
 
 test('AC-20260823-05-7: WHEN the driver flips a spec whose frontmatter already carries a diff_base THE SYSTEM leaves that value byte-identical, never overwriting it', () => {

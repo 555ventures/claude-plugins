@@ -1218,3 +1218,156 @@ test('AC-20260819-01-7: retention CONTINUES TO print exactly the verdict word as
   assert.match(r.stdout.trim().split('\n')[0], VERDICT_WORDS,
     'line 1 must still be a bare verdict word, never prose or a path: ' + JSON.stringify(r.stdout))
 })
+
+// --- specs/20260824/06-review-range-identity.md (D1-D3, D5, 2026-08-24): closing
+// specs/20260824/01's CLEAN-with-2-waived review traced its one survivor to an unrelated commit
+// that rode into the range three minutes after the build commit — but the row that recorded the
+// CLEAN verdict named no range at all (0 of 118 historical rows carry one), and the reconcile
+// leg's out-of-plan finding survived only because the reviewer quoted it in prose. `verdict.js`
+// gains --base-sha/--head-sha/--dirty (review profile only): a validated 40-hex pair (plus an
+// optional --dirty) lands in the printed row's `diff` object (key order loc, base, head, dirty)
+// and the retained artifact's top-level `diff`, refused (exit 2, before the manifest is even
+// read) on anything but a full 40-hex pair, one flag without the other, or either flag on
+// --profile release. AC-20260824-06-1 .. -4, -10 below; -5 .. -7, -11, -12 live in the driver/
+// escalate/durability suites (D4/D7 thread the identity through spec-review-driver.js).
+
+const BASE_40 = '354e2c1c6e236518b3d9fc7e4191e9cbc8507e24'
+const HEAD_40 = '9b1d0c4e7a2f5b3c8d6e1f0a4b7c2d9e8f3a6b5c'
+
+test('AC-20260824-06-1: WHEN verdict.js --ledger --retain runs with --base-sha/--head-sha/--diff-loc against a green manifest THE SYSTEM prints a row whose diff deep-equals {loc,base,head,dirty} in that key order and writes the same object into the retained artifact; --dirty flips dirty true; omitting --diff-loc drops loc and keeps key order base,head,dirty', () => {
+  const dir = tmpdir('verdict-range-1')
+  const manifest = writeManifest(dir, SIX_GREEN)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+
+  const withLoc = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir,
+    '--base-sha', BASE_40, '--head-sha', HEAD_40, '--diff-loc', '12'])
+  assert.strictEqual(withLoc.status, 0, 'D1: a green manifest with the sha pair present must still reach CLEAN exit 0: ' + withLoc.stdout + withLoc.stderr)
+  const rowWithLoc = JSON.parse(withLoc.stdout.trim().split('\n')[1])
+  assert.deepStrictEqual(rowWithLoc.diff, { loc: 12, base: BASE_40, head: HEAD_40, dirty: false },
+    'D1: with the sha pair and --diff-loc present, diff must deep-equal {"loc":12,"base":BASE,"head":HEAD,' +
+    '"dirty":false} — a missing/extra/wrong-value field here breaks the range identity /spec:escape reads: ' +
+    JSON.stringify(rowWithLoc))
+  assert.deepStrictEqual(Object.keys(rowWithLoc.diff), ['loc', 'base', 'head', 'dirty'],
+    'D1: diff\'s key order is fixed as loc, base, head, dirty — a reordering here is a silent contract change ' +
+    'even though deepStrictEqual on the values alone would not catch it: ' + JSON.stringify(Object.keys(rowWithLoc.diff)))
+  const artifactWithLoc = JSON.parse(fs.readFileSync(path.join(dir, rowWithLoc.runId + '.json'), 'utf8'))
+  assert.deepStrictEqual(artifactWithLoc.diff, rowWithLoc.diff,
+    'D3: the retained artifact\'s top-level diff must equal the printed row\'s diff object verbatim: ' +
+    JSON.stringify({ row: rowWithLoc.diff, artifact: artifactWithLoc.diff }))
+
+  const withDirty = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir,
+    '--base-sha', BASE_40, '--head-sha', HEAD_40, '--diff-loc', '12', '--dirty'])
+  const rowWithDirty = JSON.parse(withDirty.stdout.trim().split('\n')[1])
+  assert.deepStrictEqual(rowWithDirty.diff, { loc: 12, base: BASE_40, head: HEAD_40, dirty: true },
+    'D3: --dirty present must flip diff.dirty to true, every other field unchanged: ' + JSON.stringify(rowWithDirty))
+
+  const noLoc = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir,
+    '--base-sha', BASE_40, '--head-sha', HEAD_40])
+  const rowNoLoc = JSON.parse(noLoc.stdout.trim().split('\n')[1])
+  assert.deepStrictEqual(rowNoLoc.diff, { base: BASE_40, head: HEAD_40, dirty: false },
+    'D1: with the pair but no --diff-loc, diff must be exactly {"base":…,"head":…,"dirty":false} — loc must be ' +
+    'omitted entirely, never a fabricated 0 or null: ' + JSON.stringify(rowNoLoc))
+  assert.deepStrictEqual(Object.keys(rowNoLoc.diff), ['base', 'head', 'dirty'],
+    'D1: with loc omitted, the remaining keys must still appear in order base, head, dirty: ' +
+    JSON.stringify(Object.keys(rowNoLoc.diff)))
+})
+
+test('AC-20260824-06-2: WHEN verdict.js receives an invalid --base-sha/--head-sha/--dirty combination or either flag on --profile release THE SYSTEM exits 2 with stderr naming git rev-parse --verify and prints neither a verdict word nor a ledger line', () => {
+  const dir = tmpdir('verdict-range-2')
+  const manifest = writeManifest(dir, SIX_GREEN)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const releaseManifest = writeManifest(dir, RELEASE_SEVEN_LEGS)
+
+  const cases = [
+    { name: '--base-sha main (not 40-hex)', extra: ['--manifest', manifest, '--workflow', workflow, '--base-sha', 'main', '--head-sha', HEAD_40] },
+    { name: '--base-sha abbreviated 354e2c1', extra: ['--manifest', manifest, '--workflow', workflow, '--base-sha', '354e2c1', '--head-sha', HEAD_40] },
+    { name: '--base-sha alone, no --head-sha', extra: ['--manifest', manifest, '--workflow', workflow, '--base-sha', BASE_40] },
+    { name: '--dirty with neither sha flag', extra: ['--manifest', manifest, '--workflow', workflow, '--dirty'] },
+    { name: '--profile release with both sha flags', extra: ['--manifest', releaseManifest, '--profile', 'release', '--base-sha', BASE_40, '--head-sha', HEAD_40] },
+  ]
+  for (const c of cases) {
+    const r = runNode(SCRIPT, c.extra)
+    assert.strictEqual(r.status, 2,
+      `AC-20260824-06-2 (${c.name}): a refused sha-flag combination must exit 2, never proceed to derive a ` +
+      `verdict on identity the caller could have gotten wrong: ${r.stdout} / ${r.stderr}`)
+    assert.strictEqual(r.stdout, '',
+      `AC-20260824-06-2 (${c.name}): stdout must be exactly empty — a refusal that still prints a verdict word ` +
+      `lets a caller reading stdout without checking the exit code see a fabricated result: ${JSON.stringify(r.stdout)}`)
+    assert.match(r.stderr, /git rev-parse --verify/,
+      `AC-20260824-06-2 (${c.name}): stderr must name the resolution remedy "git rev-parse --verify" so the ` +
+      `caller can fix the value directly: ${r.stderr}`)
+  }
+})
+
+test('AC-20260824-06-3: WHEN the retained artifact is written with the sha pair present THE SYSTEM places diff immediately after dispositions in key order, and WHEN written without the pair and without --diff-loc THE SYSTEM writes no diff key at all', () => {
+  const dir = tmpdir('verdict-range-3')
+  const manifest = writeManifest(dir, SIX_GREEN)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+
+  const withPair = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir,
+    '--base-sha', BASE_40, '--head-sha', HEAD_40])
+  const rowWithPair = JSON.parse(withPair.stdout.trim().split('\n')[1])
+  const artifactWithPair = JSON.parse(fs.readFileSync(path.join(dir, rowWithPair.runId + '.json'), 'utf8'))
+  const keysWithPair = Object.keys(artifactWithPair)
+  const dispositionsIdx = keysWithPair.indexOf('dispositions')
+  assert.notStrictEqual(dispositionsIdx, -1,
+    'sanity: the retained artifact must carry a dispositions key at all: ' + JSON.stringify(keysWithPair))
+  assert.strictEqual(keysWithPair[dispositionsIdx + 1], 'diff',
+    'D3: diff must be inserted immediately after dispositions in the artifact\'s key order — anywhere else ' +
+    'deviates from the Contracts\' pinned insertion point: ' + JSON.stringify(keysWithPair))
+
+  const withoutPair = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
+  const rowWithoutPair = JSON.parse(withoutPair.stdout.trim().split('\n')[1])
+  const artifactWithoutPair = JSON.parse(fs.readFileSync(path.join(dir, rowWithoutPair.runId + '.json'), 'utf8'))
+  assert.deepStrictEqual(Object.keys(artifactWithoutPair),
+    ['runId', 'ts', 'spec', 'tier', 'iteration', 'scope', 'verdict', 'dispositions', 'legs', 'reviewer'],
+    'D9: without the sha pair and without --diff-loc, the artifact must carry exactly today\'s ten keys in ' +
+    'today\'s order — no diff key at all: ' + JSON.stringify(Object.keys(artifactWithoutPair)))
+})
+
+test('AC-20260824-06-4: WHEN verdict.js --ledger runs with neither --base-sha nor --head-sha THE SYSTEM SHALL CONTINUE TO print a row whose diff is exactly {"loc":N} when --diff-loc N is passed and which has no diff key otherwise, and whose retained artifact has no diff key', () => {
+  const dir = tmpdir('verdict-range-4')
+  const manifest = writeManifest(dir, SIX_GREEN)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+
+  const withLoc = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir, '--diff-loc', '3166'])
+  const rowWithLoc = JSON.parse(withLoc.stdout.trim().split('\n')[1])
+  assert.deepStrictEqual(rowWithLoc.diff, { loc: 3166 },
+    'D9 (e.g. today\'s rv_441558867ece flag set): with no sha pair, --diff-loc 3166 must still derive diff ' +
+    'exactly {"loc":3166}, byte-identical to today\'s shape: ' + JSON.stringify(rowWithLoc))
+  const artifactWithLoc = JSON.parse(fs.readFileSync(path.join(dir, rowWithLoc.runId + '.json'), 'utf8'))
+  assert.ok(!('diff' in artifactWithLoc),
+    'D9: the retained artifact must carry no diff key at all when the sha pair is absent, even though the row ' +
+    'itself carries diff.loc — diff.loc alone is a ledger-row-only field, never promoted onto the artifact: ' +
+    JSON.stringify(artifactWithLoc))
+
+  const noLoc = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
+  const rowNoLoc = JSON.parse(noLoc.stdout.trim().split('\n')[1])
+  assert.ok(!('diff' in rowNoLoc),
+    'D9: with neither the sha pair nor --diff-loc, the row must carry no diff key at all: ' + JSON.stringify(rowNoLoc))
+  const artifactNoLoc = JSON.parse(fs.readFileSync(path.join(dir, rowNoLoc.runId + '.json'), 'utf8'))
+  assert.ok(!('diff' in artifactNoLoc),
+    'D9: the retained artifact must likewise carry no diff key: ' + JSON.stringify(artifactNoLoc))
+})
+
+test('AC-20260824-06-10: WHEN a manifest\'s reconcile row is {"exit":3,"observed":{"outOfPlan":2,"files":["a.js","b.js","c.js"]}} (a deliberately mismatched count) THE SYSTEM SHALL CONTINUE TO count exactly 2 leg findings — --waived 2 derives CLEAN and --waived 3 exits 2 on the contradiction check', () => {
+  const dir = tmpdir('verdict-range-10')
+  const rows = SIX_GREEN.map(r => (r.leg === 'reconcile'
+    ? { leg: 'reconcile', exit: 3, observed: { outOfPlan: 2, files: ['a.js', 'b.js', 'c.js'] } } : r))
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+
+  const waivedTwo = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '2'])
+  assert.strictEqual(waivedTwo.stdout.split('\n')[0], 'CLEAN',
+    'D5: countLegFinding reads observed.outOfPlan (2), never files.length (3) — waiving 2 must fully ' +
+    'disposition the pool and reach CLEAN: ' + waivedTwo.stdout + ' / ' + waivedTwo.stderr)
+  assert.strictEqual(waivedTwo.status, 0, 'CLEAN reached via full disposition must exit 0: ' + waivedTwo.stderr)
+
+  const waivedThree = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--waived', '3'])
+  assert.strictEqual(waivedThree.status, 2,
+    'D5: waiving 3 exceeds the true 2-count legFindings pool derived from outOfPlan, not the 3-element files ' +
+    'array — the contradiction guard must still exit 2 here, proving files never substitutes for outOfPlan in ' +
+    'the count: ' + waivedThree.stdout + ' / ' + waivedThree.stderr)
+  assert.ok(!VERDICT_WORDS.test((waivedThree.stdout.split('\n')[0] || '').trim()),
+    'no verdict word may print on the contradictory --waived 3 run: ' + JSON.stringify(waivedThree.stdout))
+})

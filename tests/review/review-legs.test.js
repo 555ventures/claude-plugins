@@ -162,8 +162,10 @@ test('AC-20260820-03-2: a green synthetic host produces every required leg row, 
   assert.deepStrictEqual(byLeg.get('ci').observed, { unavailable: 'no-adapter' },
     'capabilities.forge "none" must short-circuit the ci leg to an honest typed unavailable, never a probe: ' +
     JSON.stringify(byLeg.get('ci')))
-  assert.deepStrictEqual(byLeg.get('reconcile').observed, { outOfPlan: 0 },
-    'both changed files are File Plan rows, so reconcile must report {"outOfPlan":0}: ' + JSON.stringify(byLeg.get('reconcile')))
+  assert.deepStrictEqual(byLeg.get('reconcile').observed, { outOfPlan: 0, files: [] },
+    'AC-20260824-06-8 (retag of this pin\'s reconcile-shape half): both changed files are File Plan rows, so ' +
+    'reconcile must report {"outOfPlan":0,"files":[]} — files stays present (empty array), never omitted, even ' +
+    'when nothing is out of plan (D5): ' + JSON.stringify(byLeg.get('reconcile')))
   assert.strictEqual(byLeg.get('ac-matrix').exit, 0,
     'the one AC is cited by the test file, so ac-matrix must report full coverage: ' + JSON.stringify(byLeg.get('ac-matrix')))
   assert.strictEqual(r.status, 0,
@@ -209,6 +211,82 @@ test('--fix-delta skips reconcile/at-risk and still records the re-executed legs
     `--fix-delta run must still emit a green promise-sweep row, not skip it alongside reconcile/at-risk: ` +
     `${JSON.stringify(byLeg.get('promise-sweep'))}`)
   assert.strictEqual(r.status, 0, 'green fix-delta legs must exit 0: ' + r.stdout + r.stderr)
+})
+
+// specs/20260824/06-review-range-identity.md D5 (2026-08-24): closing specs/20260824/01's CLEAN-
+// with-waivers review, the reconcile leg's out-of-plan finding survived only because the reviewer
+// quoted the filename in prose — the manifest row reduced it to a bare integer at emission. The
+// reconcile row now carries `files` (scope-reconcile's outOfPlan array verbatim and in order,
+// always present, capped at 40 with a `filesOmitted` count above the cap). `makeHostWithOutOfPlan`
+// mirrors `makeHost` but adds N stray committed files outside the File Plan, isolating the
+// reconcile row's own out-of-plan shape from the green-host fixture above.
+function makeHostWithOutOfPlan(strayFiles) {
+  const dir = tmpdir('review-legs-oop')
+  const g = gitRepo(dir)
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify({
+    gateCommand: 'node --test {testDirs}',
+    testCommand: 'node --test',
+    runtime: { inert: 'plugin repo — nothing boots' },
+    capabilities: { forge: 'none', skipReportPattern: 'ℹ skipped (\\d+)' },
+  }))
+  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 41\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const base = g('rev-parse', 'HEAD').trim()
+  fs.mkdirSync(path.join(dir, 'specs/20260817'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'specs/20260817/99-test.md'), SPEC_BODY)
+  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 42\n')
+  fs.writeFileSync(path.join(dir, 'tests/foo.test.js'), GREEN_TEST)
+  for (const f of strayFiles) {
+    fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true })
+    fs.writeFileSync(path.join(dir, f), '// out of plan\n')
+  }
+  g('add', '-A'); g('commit', '-q', '-m', 'implement')
+  return { dir, base }
+}
+
+test('AC-20260824-06-8: WHEN review-legs.js runs full scope against a host where one changed file src/stray.js is outside the File Plan THE SYSTEM appends {"leg":"reconcile","exit":3,"observed":{"outOfPlan":1,"files":["src/stray.js"]}}', () => {
+  const { dir, base } = makeHostWithOutOfPlan(['src/stray.js'])
+  const { r, byLeg } = run(dir, base)
+  assert.strictEqual(byLeg.get('reconcile').exit, 3,
+    'a lone out-of-plan changed file must redden the reconcile row (exit 3): ' + r.stdout + r.stderr)
+  assert.deepStrictEqual(byLeg.get('reconcile').observed, { outOfPlan: 1, files: ['src/stray.js'] },
+    'D5: the reconcile row must carry both the count AND the path array — a reviewer reading only ' +
+    '{"outOfPlan":1} cannot name the file without re-running scope-reconcile.js by hand: ' +
+    JSON.stringify(byLeg.get('reconcile')))
+})
+
+test('AC-20260824-06-9: WHEN 41 changed files are outside the File Plan THE SYSTEM emits files of length 40 holding the first 40 of scope-reconcile\'s outOfPlan array in its order, outOfPlan:41, and filesOmitted:1', () => {
+  const strays = Array.from({ length: 41 }, (_, i) => `src/stray${String(i).padStart(2, '0')}.js`)
+  const { dir, base } = makeHostWithOutOfPlan(strays)
+  const { r, byLeg } = run(dir, base)
+  const observed = byLeg.get('reconcile').observed
+  assert.strictEqual(observed.outOfPlan, 41,
+    'the true out-of-plan count must stay 41 even though files is capped: ' + r.stdout + r.stderr + JSON.stringify(observed))
+  assert.strictEqual(observed.files.length, 40,
+    'D5: files must be capped at exactly 40 entries when outOfPlan exceeds the cap: ' + JSON.stringify(observed))
+  assert.deepStrictEqual(observed.files, [...strays].sort().slice(0, 40),
+    'D5: files must hold the FIRST 40 of scope-reconcile\'s outOfPlan array IN ITS ORDER (scope-reconcile sorts ' +
+    'outOfPlan lexically) — a differently-ordered or differently-sliced set here misleads a reviewer scanning ' +
+    'for a specific stray file: ' + JSON.stringify(observed.files))
+  assert.strictEqual(observed.filesOmitted, 1,
+    'D5: with 41 out-of-plan files and a 40-entry cap, filesOmitted must be exactly 1 (41-40): ' + JSON.stringify(observed))
+})
+
+test('AC-20260824-06-9 (exactly 40): WHEN exactly 40 changed files are outside the File Plan THE SYSTEM emits all 40 and no filesOmitted key', () => {
+  const strays = Array.from({ length: 40 }, (_, i) => `src/stray${String(i).padStart(2, '0')}.js`)
+  const { dir, base } = makeHostWithOutOfPlan(strays)
+  const { r, byLeg } = run(dir, base)
+  const observed = byLeg.get('reconcile').observed
+  assert.strictEqual(observed.outOfPlan, 40,
+    'the true out-of-plan count must be 40: ' + r.stdout + r.stderr + JSON.stringify(observed))
+  assert.deepStrictEqual(observed.files, [...strays].sort(),
+    'D5: at exactly the cap, files must hold all 40 entries in scope-reconcile\'s order: ' + JSON.stringify(observed))
+  assert.ok(!('filesOmitted' in observed),
+    'D5: filesOmitted must be present ONLY when outOfPlan exceeds 40 — at exactly 40, no entries were omitted ' +
+    'and the key must not appear at all: ' + JSON.stringify(observed))
 })
 
 test('a missing spec or config is a precondition failure: exit 2, no manifest rows', () => {

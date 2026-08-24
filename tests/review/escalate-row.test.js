@@ -311,6 +311,33 @@ test('AC-20260822-01-5: WHEN the third fix-applied mark is refused in an in-plac
     'the sidecar must record escalateRunId equal to the appended row\'s runId — this is the idempotency guard a bare re-invocation checks before ever writing again: ' + JSON.stringify(sidecar))
 })
 
+// specs/20260824/06-review-range-identity.md D4/AC-7 (2026-08-24): writeEscalateRow() mirrors
+// runHardStopVerdict()'s D4 threading exactly — the capped run's escalate row must name the range
+// it burned its fix loop against, same as the hard-stop and close rows.
+test('AC-20260824-06-7: WHEN a third fix-applied lands ESCALATE THE SYSTEM writes an escalate row carrying diff.base and diff.head as 40-hex shas and diff.dirty as a boolean', () => {
+  const host = makeHost('esc-ac7-range')
+  driveToCapEdge(host.root, host.spec)
+  const thirdFix = run(host.root, host.spec, '--mark', 'fix-applied')
+  assert.strictEqual(thirdFix.status, 2,
+    'setup: a third fix-applied must still be refused so the escalate row gets written: ' + thirdFix.stdout + thirdFix.stderr)
+
+  const rows = readJsonl(path.join(host.root, '.claude/spec-runs.jsonl'))
+  const escalateRows = rows.filter((r) => r.spec === host.specRel && r.escalated === true)
+  assert.strictEqual(escalateRows.length, 1,
+    'setup: exactly one escalated:true row must exist for this spec before the range fields can be checked: ' +
+    JSON.stringify(rows))
+  const row = escalateRows[0]
+  assert.match((row.diff && row.diff.base) || '', /^[0-9a-f]{40}$/,
+    'AC-20260824-06-7: the escalate row\'s diff.base must be a 40-hex commit sha — D4 threads the resolved ' +
+    'base sha onto all three ledger passes, escalate included: ' + JSON.stringify(row))
+  assert.match((row.diff && row.diff.head) || '', /^[0-9a-f]{40}$/,
+    'AC-20260824-06-7: the escalate row\'s diff.head must be a 40-hex commit sha — HEAD is re-read fresh at ' +
+    'this pass, after the two real fix cycles: ' + JSON.stringify(row))
+  assert.strictEqual(typeof (row.diff && row.diff.dirty), 'boolean',
+    'AC-20260824-06-7: the escalate row\'s diff.dirty must be a boolean — an absent or non-boolean value here ' +
+    'means the driver never threaded the flag onto writeEscalateRow()\'s verdict.js invocation: ' + JSON.stringify(row))
+})
+
 test('AC-20260822-01-6: WHEN the refused third fix-applied mark is repeated THE SYSTEM SHALL still have exactly one escalated:true row for the spec — the write is idempotent on the persisted escalateRunId mark, never a second append', () => {
   const host = makeHost('esc-ac6')
   driveToCapEdge(host.root, host.spec)

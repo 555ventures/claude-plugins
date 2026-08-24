@@ -153,12 +153,14 @@ function makeWorktreeHost({ name, acId, gateFails = false, ignoreStopped = false
 const readJsonl = (file) =>
   fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []
 
-test('AC-20260821-04-1: WHEN a review running in a linked worktree hard-stops on RED_BLOCKING THE SYSTEM appends verdict.js\'s ledger line to <mainRoot>/.claude/spec-runs.stopped.jsonl and never to the worktree\'s own .claude/spec-runs.jsonl', () => {
+test('AC-20260821-04-1 / AC-20260824-06-5 (worktree carrier): WHEN a review running in a linked worktree hard-stops on RED_BLOCKING THE SYSTEM appends verdict.js\'s ledger line — whose diff.base/diff.head/diff.dirty name the reviewed range — to <mainRoot>/.claude/spec-runs.stopped.jsonl and never to the worktree\'s own .claude/spec-runs.jsonl', () => {
   const host = makeWorktreeHost({ name: 'sr-durability-ac1', acId: 'AC-20260820-99-31', gateFails: true, ignoreStopped: true })
   const wtLedger = path.join(host.wt, '.claude/spec-runs.jsonl')
   const wtLedgerBefore = fs.existsSync(wtLedger) ? fs.readFileSync(wtLedger, 'utf8') : null
+  const expectedBase = /^build_base:\s*(\S+)/m.exec(fs.readFileSync(host.spec, 'utf8'))[1]
 
   const r = run(host.wt, host.spec)
+  const expectedHead = execFileSync('git', ['-C', host.wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
   assert.strictEqual(stateOf(host.wt, host.spec), 'STOPPED',
     'setup precondition: the gate-failing fixture must hard-stop before this AC can be exercised: ' + r.stdout + r.stderr)
 
@@ -174,10 +176,26 @@ test('AC-20260821-04-1: WHEN a review running in a linked worktree hard-stops on
   assert.strictEqual(wtLedgerAfter, wtLedgerBefore,
     'the worktree\'s own .claude/spec-runs.jsonl must stay byte-unchanged — a row appended there too means the durability fix only ADDED a copy instead of relocating the authoritative write: ' + JSON.stringify({ before: wtLedgerBefore, after: wtLedgerAfter }))
 
+  // AC-20260824-06-5: the durable hard-stop row must name the range it hard-stopped on.
+  const appendedForRange = rows[0]
+  assert.match((appendedForRange.diff && appendedForRange.diff.base) || '', /^[0-9a-f]{40}$/,
+    'AC-20260824-06-5: the durable GATE_RED row\'s diff.base must be a 40-hex commit sha — D4 resolves the ' +
+    'spec\'s base ref once via git rev-parse --verify before the first leg ever runs, worktree or in-place ' +
+    'alike: ' + JSON.stringify(appendedForRange))
+  assert.strictEqual(appendedForRange.diff.base, expectedBase,
+    'AC-20260824-06-5: diff.base must equal git rev-parse --verify <resolved base>^{commit} of the fixture — a ' +
+    'mismatch means the driver resolved a different ref than the spec\'s own build_base frontmatter: ' + JSON.stringify(appendedForRange))
+  assert.strictEqual(appendedForRange.diff.head, expectedHead,
+    'AC-20260824-06-5: diff.head must equal git rev-parse HEAD of the worktree at the moment of this hard-stop ' +
+    'pass — the row\'s head is the tree the red leg actually ran on: ' + JSON.stringify(appendedForRange))
+  assert.strictEqual(appendedForRange.diff.dirty, false,
+    'AC-20260824-06-5: the worktree carries no uncommitted edits at hard-stop time — diff.dirty must be false, ' +
+    'never true or absent, once the sha pair is threaded onto the hard-stop pass: ' + JSON.stringify(appendedForRange))
+
   // Reproducibility: feeding verdict.js the same manifest with the driver's own recorded
-  // tier/diff/iteration/runId must reproduce an identical row (aside from ts) — proving the
-  // durable line is verdict.js's own printed line, not a hand-composed one (mirrors
-  // AC-20260820-07-2's proof for the in-place path).
+  // tier/diff/iteration/runId/base-sha/head-sha/dirty must reproduce an identical row (aside
+  // from ts) — proving the durable line is verdict.js's own printed line, not a hand-composed
+  // one (mirrors AC-20260820-07-2's proof for the in-place path).
   const appended = rows[0]
   const manifestPath = path.join(host.sidecar, 'manifest-1.jsonl')
   assert.ok(fs.existsSync(manifestPath), 'a STOPPED run must still have written manifest-1.jsonl before hard-stopping: ' + r.stdout)
@@ -185,6 +203,10 @@ test('AC-20260821-04-1: WHEN a review running in a linked worktree hard-stops on
   const reArgs = ['--manifest', manifestPath, '--ledger', '--spec', appended.spec, '--tier', appended.tier, '--run-id', appended.runId]
   if (appended.diff && typeof appended.diff.loc === 'number') reArgs.push('--diff-loc', String(appended.diff.loc))
   if (appended.iteration !== undefined) reArgs.push('--iteration', String(appended.iteration))
+  if (appended.diff && typeof appended.diff.base === 'string') {
+    reArgs.push('--base-sha', appended.diff.base, '--head-sha', appended.diff.head)
+    if (appended.diff.dirty) reArgs.push('--dirty')
+  }
   const reRun = runNode('scripts/verdict.js', reArgs)
   const reRunLine = reRun.stdout.trim().split('\n')[1]
   assert.ok(reRunLine, 'verdict.js must print a ledger line when re-invoked with the driver\'s own recorded flags against the same manifest: ' + reRun.stdout + reRun.stderr)

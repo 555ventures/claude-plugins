@@ -43,6 +43,21 @@
 // exists because spec 04's own A6 assumed a durable-write loss would be observed, when by
 // construction it is silent (a dead worktree's durable file simply no longer has the row).
 //
+// specs/20260824/06-review-range-identity.md (D4, 2026-08-24): every ledger row this driver
+// appends now names the commit range it judged. resolveBaseSha() resolves resolveBase()'s own
+// build_base -> diff_base -> merge-base result to a full sha via `git rev-parse --verify
+// <base>^{commit}` ONCE, at startup, right after resolveBase() returns — a base that cannot
+// resolve now dies before the first manifest or leg (previously, stampDiffBaseIfAbsent's own
+// separate resolution would warn and continue, leaving diff_base unstamped and every leg's diff
+// silently wrong all run). stampDiffBaseIfAbsent reuses this same resolved sha — one resolution,
+// two carriers (AC-11) — and its former warn-and-continue branch is removed outright. headSha()
+// re-reads `git rev-parse HEAD` fresh at each of the three verdict.js passes (hard-stop, escalate,
+// authoritative close) — fix iterations can add commits between passes — and treeDirty() runs
+// `git status --porcelain --untracked-files=no` in repoRoot at the same three points (untracked
+// files, e.g. the deviations sidecar, never count as dirty). All three (--base-sha/--head-sha/
+// [--dirty]) are threaded into every verdict.js invocation runHardStopVerdict, writeEscalateRow,
+// and doCloseWork make.
+//
 // specs/20260823/07-deviations-sidecar-backstop.md (D1-D6, 2026-08-23): the deviations sidecar
 // (<spec>.deviations.md) was pure convention — build sessions appended departure entries by hand,
 // review folded and deleted the file by hand, and nothing caught a skipped fold or an entry written
@@ -78,7 +93,11 @@
 // row for the sidecar target's reviewRunId, or replay.js --select exiting 0 while printing no
 // parseable selection line, `--mark closed` while the deviations sidecar still exists on disk
 // (fold-then-delete-then-commit remedy), or while the last persisted deviations observation
-// recorded a malformed line even after the sidecar's own deletion (restore-then-repair remedy)).
+// recorded a malformed line even after the sidecar's own deletion (restore-then-repair remedy), a
+// resolved base ref that `git rev-parse --verify <ref>^{commit}` cannot turn into a commit —
+// resolveBaseSha() dies at startup, before the first manifest or leg, naming `diff_base` and the
+// remedy command (specs/20260824/06-review-range-identity.md D4, AC-12) — or `git rev-parse HEAD`
+// printing no parseable 40-hex sha at any of the three verdict passes).
 
 'use strict'
 const fs = require('fs')
@@ -334,6 +353,45 @@ function resolveBase() {
 }
 const base = resolveBase()
 
+// ---- D4 (specs/20260824/06-review-range-identity.md): resolve base to a full sha ONCE, at ------
+// startup, right after resolveBase() — so an unresolvable base dies before the first manifest or
+// leg (AC-12), not at the first verdict pass. stampDiffBaseIfAbsent() below reuses this exact sha
+// (one resolution, two carriers, AC-11) instead of running its own rev-parse; its former
+// warn-and-continue branch is removed — a base that cannot resolve already broke every leg's diff,
+// so the row must not pretend otherwise.
+const SHA40_RE = /^[0-9a-f]{40}$/
+function resolveBaseSha() {
+  const r = runChild('git', ['-C', repoRoot, 'rev-parse', '--verify', base + '^{commit}'],
+    { encoding: 'utf8' }, 'git rev-parse --verify (base resolution)')
+  const sha = (r.stdout || '').trim()
+  if (r.status !== 0 || !SHA40_RE.test(sha)) {
+    die('base "' + base + '" does not resolve to a commit — add diff_base: <sha> to the spec ' +
+      'frontmatter (git rev-parse --verify <ref>^{commit})')
+  }
+  return sha
+}
+const baseSha = resolveBaseSha()
+
+// ---- D4: HEAD is re-read fresh at each verdict pass (fix iterations can add commits between -----
+// passes) and the tree's dirty state is checked the same way — --untracked-files=no is deliberate,
+// the deviations sidecar and scratch artifacts are always on disk at every pass.
+function headSha() {
+  const r = runChild('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' },
+    'git rev-parse HEAD')
+  const sha = (r.stdout || '').trim()
+  if (r.status !== 0 || !SHA40_RE.test(sha)) {
+    die('git rev-parse HEAD in ' + repoRoot + ' did not print a 40-hex commit sha (got ' +
+      JSON.stringify(sha) + ') — confirm ' + repoRoot + ' is a valid git checkout with at least ' +
+      'one commit')
+  }
+  return sha
+}
+function treeDirty() {
+  const r = runChild('git', ['-C', repoRoot, 'status', '--porcelain', '--untracked-files=no'],
+    { encoding: 'utf8' }, 'git status --porcelain --untracked-files=no')
+  return r.status === 0 && r.stdout.split('\n').some((l) => l.trim())
+}
+
 // ---- manifest helpers ---------------------------------------------------------------------------
 function manifestPathFor(n) { return path.join(sidecarDir, `manifest-${n}.jsonl`) }
 function outDirFor(n) { return path.join(sidecarDir, `legs-${n}`) }
@@ -478,7 +536,9 @@ function runHardStopVerdict(n) {
   const runId = ensureRunId()
   const diffLoc = computeDiffLoc()
   const args = ['--manifest', manifestPathFor(n), '--ledger', '--spec', specRel, '--tier', tier,
-    '--diff-loc', String(diffLoc), '--iteration', String(n), '--run-id', runId]
+    '--diff-loc', String(diffLoc), '--iteration', String(n), '--run-id', runId,
+    '--base-sha', baseSha, '--head-sha', headSha()]
+  if (treeDirty()) args.push('--dirty')
   const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
     'verdict.js (hard-stop pass)')
   if (r.status === 2) die('verdict.js (hard-stop pass) failed: ' + (r.stdout + r.stderr).trim())
@@ -531,7 +591,9 @@ function writeEscalateRow(n) {
   const args = ['--manifest', manifestPathFor(n), '--workflow', marks.reviewerReturnFile,
     '--waived', String(d.waived), '--rejected', String(d.rejected), '--fixDispatched', '0',
     '--escalated', '--ledger', '--spec', specRel, '--tier', tier, '--diff-loc', String(diffLoc),
-    '--iteration', String(n), '--run-id', runId, '--retain', path.join(repoRoot, '.claude/spec-runs')]
+    '--iteration', String(n), '--run-id', runId, '--retain', path.join(repoRoot, '.claude/spec-runs'),
+    '--base-sha', baseSha, '--head-sha', headSha()]
+  if (treeDirty()) args.push('--dirty')
   const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
     'verdict.js (escalate pass)')
   if (r.status === 2) return { ok: false, error: (r.stdout + r.stderr).trim() }
@@ -566,14 +628,10 @@ function writeEscalateRow(n) {
 // a spec closed once already keeps its original pin byte-identical forever).
 function stampDiffBaseIfAbsent(text) {
   if (diffBaseFm) return text // already stamped (or hand-authored) — never overwritten
-  const shaR = runChild('git', ['-C', repoRoot, 'rev-parse', '--verify', base + '^{commit}'],
-    { encoding: 'utf8' }, 'git rev-parse --verify (diff_base stamp)')
-  if (shaR.status !== 0 || !shaR.stdout.trim()) {
-    process.stderr.write('spec-review-driver: could not resolve base "' + base + '" as a commit to stamp ' +
-      'diff_base — leaving diff_base unstamped; the next replay --select falls back to build_base\n')
-    return text
-  }
-  const sha = shaR.stdout.trim()
+  // D4: reuses baseSha, resolved once at startup (die() already ran there on failure) — never a
+  // second rev-parse, and never a warn-and-continue: a base that cannot resolve already broke
+  // every leg's diff this run, so the stamp must not pretend otherwise.
+  const sha = baseSha
   const m = /^---\n([\s\S]*?)\n---/.exec(text)
   if (!m) return text // no frontmatter fence to stamp into — should not happen for a valid spec
   const lines = m[1].split('\n')
@@ -600,7 +658,9 @@ function doCloseWork(n) {
   const args = ['--manifest', manifestPathFor(n), '--workflow', marks.reviewerReturnFile,
     '--waived', String(d.waived), '--rejected', String(d.rejected), '--fixDispatched', String(d.fixDispatched),
     '--ledger', '--spec', specRel, '--tier', tier, '--diff-loc', String(diffLoc),
-    '--iteration', String(n), '--run-id', runId, '--retain', retainDir]
+    '--iteration', String(n), '--run-id', runId, '--retain', retainDir,
+    '--base-sha', baseSha, '--head-sha', headSha()]
+  if (treeDirty()) args.push('--dirty')
   const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
     'verdict.js (authoritative pass)')
   if (r.status === 2) die('verdict.js (authoritative pass) failed: ' + (r.stdout + r.stderr).trim())

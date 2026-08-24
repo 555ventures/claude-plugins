@@ -14,7 +14,12 @@
 // Legs and row shapes (verdict.js's REVIEW_LEGS; observed is always a typed JSON object per
 // specs/20260820/06-typed-evidence-manifest.md D1/D2 — the Contracts block there is the closed
 // set, reproduced here for orientation):
-//   reconcile      {"leg":"reconcile","exit":<0|3>,"observed":{"outOfPlan":N}}
+//   reconcile      {"leg":"reconcile","exit":<0|3>,"observed":{"outOfPlan":N,"files":[…],
+//                  "filesOmitted":M?}} — files is scope-reconcile's outOfPlan path array VERBATIM
+//                  and in its order, always present ([] when N is 0), capped at 40 entries;
+//                  filesOmitted is added only when N > 40 (specs/20260824/06-review-range-
+//                  identity.md D5). verdict.js's countLegFinding reads outOfPlan only, never
+//                  files.length.
 //   gate           {"leg":"gate","exit":<code>,"observed":{"skips":N,"todos":N,"testsExecuted":N|
 //                  {"unavailable":"pattern-no-match"|"no-format-declared"}}} — skips itself takes
 //                  the same {"unavailable":...} shape (then no "todos" key) when skipReportPattern
@@ -214,8 +219,13 @@ async function main() {
       if (r.code === 2) { console.error(`review-legs.js: scope-reconcile precondition failure:\n${r.err || r.out}`); process.exit(2) }
       fs.writeFileSync(reconcilePath, r.out)
       try { reconcileJson = JSON.parse(r.out) } catch { reconcileJson = null }
-      const n = reconcileJson ? reconcileJson.outOfPlan.length : 0
-      appendRow('reconcile', r.code, { outOfPlan: n })
+      // D5 (specs/20260824/06-review-range-identity.md): files is scope-reconcile's outOfPlan
+      // array verbatim and in its order, always present ([] when N is 0), capped at 40; an
+      // unparseable scope-reconcile JSON keeps today's n=0 path and emits files:[].
+      const paths = reconcileJson ? reconcileJson.outOfPlan : []
+      const n = paths.length
+      appendRow('reconcile', r.code,
+        { outOfPlan: n, files: paths.slice(0, 40), ...(n > 40 ? { filesOmitted: n - 40 } : {}) })
     }))
   }
 

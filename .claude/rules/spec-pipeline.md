@@ -219,17 +219,18 @@ this repo's suite; appending at cap requires an eviction (delete / merge / mecha
   for a spec with zero skip lines; executed repro in that spec's deviations record.)
 - `[plugin]` A spec that **ADDS a member to an exhaustive live-file pin** (a test asserting the
   complete set of hooks.json script paths, spec-paths keys, or entrypoints rows) invalidates that
-  pin by construction, and the row lands out-of-File-Plan at review. **The collision-closure paths
-  leg already catches this** — it is not a detection gap. The gap is that its `likely` tier is
-  advisory (specs/20260814/05) and nothing consumes its exit 1, so the signal is available at lock
-  and routinely unread. Run `node "$(spec-paths collision-closure)" --spec <spec>` at lock and give
-  every `likely` hit either a File Plan row or an explicit waive line in the spec — the script's own
-  remedy line says exactly this. (specs/20260823/08-derived-session-queue.md D8 —
-  `tests/consistency/entrypoints.test.js` AC-20260820-04-5 updated four→five in place, never
-  weakened; waived at review 2026-08-23, the fourth recurrence. Executed 2026-08-24 against that
-  spec: exit 1, with that file the sole `likely` hit under four separate File Plan paths — the
-  detection was there and unread. An earlier revision of this entry claimed "no leg looks for it"
-  and prescribed hand-grepping; that claim was written without running the leg and is retracted.)
+  pin by construction, and the row lands out-of-File-Plan at review. **This is caught at build**
+  (spec 20260814/03 D10's whole-suite check) and costs one review waive line; a lock-time guard for
+  it was measured and rejected 2026-08-24 — do not re-propose one. Measured against the 38 done
+  specs of 2026-08-15..23, each at its pre-build corpus: collision-closure's `likely` tier fired on
+  30 of 38 specs, 71 hits, 2 real (3%); the class itself occurred 7 times, `likely` caught 1, and
+  the build caught all 7. Five sharper lexical rules (File Plan action, `ROOT`/`read(` on the
+  mention line, live-repo reads anywhere) all landed at 1–3% precision, ≤29% recall. Spec
+  20260814/05 D6/D12's "advisory, never blocks" stands; a `likely` hit at lock owes no waive line.
+  (specs/20260823/08-derived-session-queue.md D8 — `tests/consistency/entrypoints.test.js`
+  AC-20260820-04-5 updated four→five in place, never weakened; waived at review 2026-08-23, the
+  fourth recurrence. An earlier revision of this entry prescribed running the leg at lock and
+  waiving every `likely` hit; that instruction was written before the measurement and is retracted.)
 - `[plugin]` `console.log(...)` immediately followed by `process.exit(0)` **silently truncates at
   the 64 KiB pipe buffer while still exiting 0** — Node's stdout write to a pipe is async, and
   `process.exit` tears the process down mid-flush. Latent for as long as nothing consumes the

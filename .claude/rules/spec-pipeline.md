@@ -149,13 +149,13 @@ this repo's suite; appending at cap requires an eviction (delete / merge / mecha
   spec 03 D10's blocking whole-suite check at build Phase 4 catches the behavioral variant a
   naming closure cannot reach. Mid-build a colliding test pin is updated in place and retagged
   with the new AC-ID (never weakened, never left red).
-  (specs/20260813/07-command-report-conformance.md D8 — the 🔍→📦 retirement broke
-  `tests/review/smell-lens.test.js` AC-20260812-01-6 during build, the second such collision in
-  one spec; specs/20260813/09-model-placement-mechanics.md D4 — the "uncorrelated model"
-  narrowing enumerated both shared.md loci but missed the paraphrased restatement at
-  spec/commands/review.md:14, caught at review time by corpus stem-grep; specs/20260814/01-ac-matrix-script.md
-  — the `spec-paths` key-set collision landed out-of-plan and had to be waived at review, the
-  third recurrence and this spec's own trigger.)
+  (specs/20260813/07-command-report-conformance.md D8 — the 🔍→📦 retirement broke a smell-lens
+  prose pin, AC-20260812-01-6, in a review test since deleted in the v7 layer purge (61e2e5a),
+  the second such collision in one spec; specs/20260813/09-model-placement-mechanics.md D4 — the
+  "uncorrelated model" narrowing enumerated both shared.md loci but missed the paraphrased
+  restatement at spec/commands/review.md:14, caught at review time by corpus stem-grep;
+  specs/20260814/01-ac-matrix-script.md — the `spec-paths` key-set collision landed out-of-plan
+  and had to be waived at review, the third recurrence and this spec's own trigger.)
 - `[plugin]` `ac-matrix.js` parses AC bullets as `^- \*\*(token)\*\*` and requires the token to
   fully match `AC-\d{8}-\d{2}[a-z]?-\d+`. A build-time amendment written the way the Decisions
   table writes one — a prime-suffixed successor (`AC-…-3′`) plus the superseded original left as
@@ -172,9 +172,9 @@ this repo's suite; appending at cap requires an eviction (delete / merge / mecha
   is silently invisible to the coverage matrix rather than caught — a placeholder that looks like
   coverage and is not. Collision-sweep rows (an exhaustive key-set pin updated in place) are the
   usual carrier, since they are edit-only by construction. The fix is removal, never inventing an
-  ID to fill it. (specs/20260815/05-env-preflight.md build 2026-08-16 —
-  `tests/terminal-observable-acs.test.js`, caught by the orchestrator, logged in that spec's
-  deviations sidecar.)
+  ID to fill it. (specs/20260815/05-env-preflight.md build 2026-08-16 — a terminal-observable-ACs
+  prose-pin test since deleted in the v7 layer purge (61e2e5a); caught by the orchestrator,
+  logged in that spec's deviations sidecar.)
 - `[plugin]` `diff_base` is written once at build Phase 0 and is documented as never rewritten,
   but a concurrent session committing between that capture and the build's own commit makes the
   recorded sha a stale pre-image — review then diffs the sibling's unrelated commit into this

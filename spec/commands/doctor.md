@@ -102,11 +102,11 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     - an orphaned design sidecar (`specs/**/*.design/` with no sibling spec mid-design) is
       leftover transient state — recommend removing it.
 12. **Run ledger hygiene** (only if `.claude/spec-runs.jsonl` exists) — script passes
-    (`jq`/`awk`), never read the ledger into context. Every line parses as JSON with `stage`
-    ∈ `build | review | escape | observe | release` (`observe` rows are a retired v6 class —
-    valid history, no longer written). Field expectations are per-class: v7 build and review
-    rows carry no `runId` (older rows may; a `runId`-bearing row is history, never a flag);
-    escape and release rows carry their own field sets. The file is tracked by git, and
+    (`jq`/`awk`), never read the ledger into context. Every line parses as JSON with `stage` ∈
+    `plan | build | review | replay | escape | observe | release` (`observe` rows are a retired
+    v6 class — valid history, no longer written). Field expectations are per-class: v7 build
+    and review rows carry no `runId` (older rows may; a `runId`-bearing row is history, never a
+    flag); escape and release rows carry their own field sets. The file is tracked by git, and
     `git check-attr merge -- .claude/spec-runs.jsonl` reports `union` (without it, parallel
     worktree builds conflict at merge-back — init sets the `.gitattributes` entry). A line
     over ~1000 chars is an advisory tripwire ("long but well-formed — inspect for prose

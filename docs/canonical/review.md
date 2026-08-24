@@ -53,6 +53,22 @@
   positioned before the close row — when that spec later closes CLEAN, in-place or via merge
   promotion. (specs/20260821/04-stopped-row-durability.md)
 
+  Every review row names the code it judged (specs/20260824/06-review-range-identity.md, done
+  2026-08-24): `spec-review-driver.js` resolves its base ref to a full sha once (a base that
+  does not resolve is a `die` naming the `diff_base` remedy — never a warn-and-continue) and
+  re-reads `HEAD` at every verdict pass, passing `--base-sha`/`--head-sha`/`--dirty` to all
+  three ledger passes; `verdict.js` copies the pair into the row's `diff` object
+  (`{loc, base, head, dirty}`, key order fixed) and the retained artifact's top-level `diff`,
+  refusing (exit 2, before any derivation) anything but a 40-hex pair, one flag without the
+  other, or either on the release profile. `dirty: true` means uncommitted tracked edits were
+  present at pass time, so the close commit that follows completes the range. The reconcile
+  leg's row carries its out-of-plan paths beside the count — `{"outOfPlan":N,"files":[…]}`,
+  verbatim from `scope-reconcile.js`, capped at 40 with `filesOmitted` when the cap bites —
+  and `countLegFinding` still reads the number. Rows and artifacts from before this landed are
+  never backfilled; `/spec:escape` reads the range when present and proceeds as before when
+  absent. No waive cap exists by ruling: CLEAN stays derivable at any user-adjudicated waive
+  count, and high-waive surfacing waits for an escape row that correlates with one.
+
   A third `fix-applied` (the iteration cap) appends an **escalate row** at the moment of the
   refusal: an honestly-derived non-CLEAN verdict carrying `escalated: true`, minted by
   `verdict.js` behind `--escalated` with `--fixDispatched 0` (the dispatched fix never landed;

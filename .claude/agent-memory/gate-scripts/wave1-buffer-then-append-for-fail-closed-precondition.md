@@ -3,6 +3,7 @@ name: wave1-buffer-then-append-for-fail-closed-precondition
 description: when a spec wants N legs to run in parallel (Promise.all) but one of them can hard-abort the whole run with zero appended rows, buffer all N results and only write manifest rows after checking the abort condition — writing rows as each promise resolves races the abort
 metadata:
   type: feedback
+  reviewed: 2026-08-24
 ---
 
 Built in specs/20260823/01-release-legs.md (D2/D3): `stage`'s wave 1 runs `substrate` + `ci` +

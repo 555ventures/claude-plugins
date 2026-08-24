@@ -1,6 +1,6 @@
 ---
 date: 2026-08-24
-status: implementing
+status: done
 tier: critical
 area: review
 design: false
@@ -199,6 +199,16 @@ flags are threaded (A6) — that is the intended collision, update in place. The
 resolution moving from warn to die (D4) changes one error path's shape; AC-11 pins it. No
 `SHALL CONTINUE TO` pin is needed on the release profile beyond AC-2's refusal: the release
 row's shape is untouched.
+
+**Deviation folded at close (2026-08-24, one-off).** The Contracts "verdict.js flag matrix"
+table quoted an exact stderr message for the "either flag with `--profile release`" row that
+did not itself contain `git rev-parse --verify`, while D2 and AC-20260824-06-2 require every
+`--base-sha`/`--head-sha` refusal — that row included — to name that remedy. The two could not
+both be satisfied verbatim, so the shipped message keeps the table's string as an exact prefix
+and appends `(git rev-parse --verify <ref>^{commit})`. Reviewed and accepted as a disclosed
+resolution of a spec-internal conflict, not a rule violation. One-off: an illustrative quoted
+string drifting from its own Decision's blanket rule is a per-spec authoring slip, not a
+recurring class.
 
 ## Canonical Delta
 

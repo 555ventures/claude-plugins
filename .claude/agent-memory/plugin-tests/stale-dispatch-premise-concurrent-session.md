@@ -3,6 +3,7 @@ name: stale-dispatch-premise-concurrent-session
 description: A dispatching agent's framing of "this is RED today" can go stale mid-task if a concurrent session lands the fix while this task is running — verify against current git log, not the conversation-start git status snapshot or the prompt's own framing
 metadata:
   type: feedback
+  reviewed: 2026-08-24
 ---
 
 This repo's spec pipeline runs autonomously and concurrently — other sessions (or background
@@ -49,3 +50,10 @@ concurrent editor can land between the read and the test run, not just between c
 turns. Report the true state honestly (pins passing, fix already landed) rather than asserting
 they were proven red, and re-diff the source at report time if the claim "this is the fix"
 matters to the write-up.
+
+**Correction applied at review close (2026-08-24).** Every claim in this note names and cites
+the concurrent editor (commits `ecf520b`/`a4aeb97`/`6a1cb1e`; the same-tree `gate-scripts`
+sibling) — an unnamed "concurrent process" is never an acceptable attribution, and finding
+that work already landed never licenses standing down from an assignment. Re-derive, report
+the true state, and let the orchestrator adjudicate. See
+[[concurrent-worker-file-collision-select-tiebreak]] for the corrected sibling case.

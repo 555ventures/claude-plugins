@@ -3,6 +3,7 @@ name: spec-20260824-06-range-identity-pin-pattern
 description: Multi-file red-pin pattern for a Decision that threads new identity fields (base/head/dirty sha) through three existing exec-a-script pin sites at once.
 metadata:
   type: project
+  reviewed: 2026-08-24
 ---
 
 Spec 20260824/06 (review-range-identity) required updating 3 SEPARATE existing byte-equal

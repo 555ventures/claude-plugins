@@ -90,6 +90,23 @@
 // nothing qualifies is now a named exit-4 refusal (stale-base cause + the stamped-at-close
 // remedy, spec-review-driver.js's diff_base stamp) rather than a silently wrong diff base.
 //
+// Incident (2026-08-23, specs/20260823/09-replay-baseline-attribution.md, rp_1b176ebff5c7): the
+// harness treated every red review leg as evidence about the planted defect, but ~1 in 4 selectable
+// CLEAN rows closes with a leg legitimately red for pre-existing, sanctioned reasons (measured: 17
+// of 63) — this run's own sanctioned red reconcile leg forced a `--legs green` misrecord, since the
+// old matrix offered no honest word for "the reviewer ran and caught it, but a leg was also red for
+// an unrelated reason". (D1) --select now derives a baseline straight from the selected review row's
+// OWN `legs` array (zero extra leg runs) and appends `baselineRed=<comma-list>|none` and
+// `baselineLegs=<comma-list>` after the five existing tokens — `unknown` for both when the row
+// carries no (or an empty) legs array. Red follows review-legs.js's own definition (`exit !== 0`,
+// except `smoke` at exit 4, which is inert). (D2/D3) --record's --legs grammar gains
+// `baseline-red:<leg>[,<leg>]`, valid for caught/missed/unresolved alongside `green` — the row's
+// `legs` field now states the literal truth instead of collapsing to `green`. `unresolved` becomes
+// two-armed on the `--legs` shape: `green`/`baseline-red:*` still requires --patch + --workflow (the
+// reviewer ran, a Phase 3 dismissal); `red:<leg>` requires --patch and REFUSES --workflow (the
+// reviewer never ran, a step-7 dismissal) — riding a --workflow value there would fabricate reviewer
+// evidence that was never produced.
+//
 // What this deliberately does NOT do: derive review-legs verdicts, touch the main working tree
 // (--setup/--apply/--teardown only ever act on a --dir the caller supplies; --setup refuses one
 // that resolves inside the repo root, and --teardown refuses one whose private git dir carries no
@@ -109,8 +126,13 @@
 // names the harness, the defect class, or the mutation class value / --apply missing --patch-out /
 // --score --workflow is not a CLEAN verdict with a survivors array / --score --patch parses to zero
 // hunks / any --record D7 validation-matrix refusal (an --outcome outside the five-value enum, a
-// malformed --legs, a missing --patch/--workflow for caught|missed|unresolved, a missing --patch or
-// a non-`red:`-shaped --legs for leg-caught, or setup-failed riding with --class/--patch/--workflow)
+// malformed --legs — including a near-miss on the widened `baseline-red:<leg>[,<leg>]` shape (a bare
+// `baseline-red` with no colon, or `baseline-red:` with an empty leg) — a missing --patch/--workflow
+// or a legs value outside green|baseline-red:<leg> for caught|missed, unresolved's green/baseline-
+// red:<leg> arm missing --patch or --workflow, unresolved's red:<leg> arm missing --patch or
+// refusing a --workflow that rides along (a step-7 dismissal never ran the reviewer), a missing
+// --patch or a non-`red:`-shaped --legs for leg-caught, or setup-failed riding with
+// --class/--patch/--workflow)
 // · 3 = safety refusal (--setup --dir resolves inside the repo root but NOT inside
 // <root>/.claude/worktrees/ — specs/20260823/05 D1 narrows this population, the worktrees/ arm
 // itself now succeeds; --apply --patch-out resolves inside --dir, refused before the patch is
@@ -138,7 +160,7 @@ function usage() {
   console.error('usage: replay.js --due | --select | --setup --commit <sha> --dir <path> | ' +
     '--apply --dir <path> --patch <file> --patch-out <file> --class <id> [--subject <text>] | ' +
     '--score --workflow <file> --patch <file> | ' +
-    '--record --spec <path> --review-run-id <id> --legs green|red:<leg>|none ' +
+    '--record --spec <path> --review-run-id <id> --legs green|red:<leg>|baseline-red:<leg>[,<leg>]|none ' +
     '--outcome caught|missed|leg-caught|unresolved|setup-failed [--class <id>] [--patch <file>] ' +
     '[--workflow <file>] [--tokens N] | --stats | --teardown --dir <path>')
 }
@@ -205,6 +227,26 @@ function cmdDue() {
 // ---- --select: among CLEAN review rows with a runId in the same D5 window as --due, prefer ------
 // ---- tier:"critical", tie -> latest (read-order); target commit = the close commit for the ------
 // ---- selected spec's OWN path. ---------------------------------------------------------------------
+
+// D1 (specs/20260823/09): review-legs.js's own red definition — exit !== 0, except a `smoke` leg
+// at exit 4, which is sanctioned inert-green, never red. Mirrors spec-review-driver.js's
+// isRedBlocking(), a separate derivation by construction (that one is scoped to BLOCKING_LEGS for
+// the hard-stop check; this one reads every leg the row recorded, for attribution).
+function isBaselineLegRed(leg) {
+  return leg.leg === 'smoke' ? (leg.exit !== 0 && leg.exit !== 4) : leg.exit !== 0
+}
+
+// D1: derive {baselineRed, baselineLegs} straight from the selected review row's OWN `legs` array
+// — zero extra leg runs. Absent or empty array -> 'unknown' for both (no baseline was ever
+// recorded). Otherwise baselineLegs lists every leg name in the array's own order verbatim, and
+// baselineRed lists the red ones (comma-joined) or 'none' when none are red.
+function deriveBaseline(row) {
+  if (!Array.isArray(row.legs) || row.legs.length === 0) return { baselineRed: 'unknown', baselineLegs: 'unknown' }
+  const baselineLegs = row.legs.map((l) => l.leg).join(',')
+  const redNames = row.legs.filter(isBaselineLegRed).map((l) => l.leg)
+  const baselineRed = redNames.length ? redNames.join(',') : 'none'
+  return { baselineRed, baselineLegs }
+}
 
 function cmdSelect() {
   const rows = readLedgerRows(root)
@@ -293,7 +335,9 @@ function cmdSelect() {
       '(spec-review-driver.js), so the next review\'s replay selects cleanly')
     process.exit(4)
   }
-  console.log(`spec=${specPath} reviewRunId=${best.r.runId} commit=${commitSha} parent=${parent} diffBase=${diffBase}`)
+  const { baselineRed, baselineLegs } = deriveBaseline(best.r)
+  console.log(`spec=${specPath} reviewRunId=${best.r.runId} commit=${commitSha} parent=${parent} ` +
+    `diffBase=${diffBase} baselineRed=${baselineRed} baselineLegs=${baselineLegs}`)
   process.exit(0)
 }
 
@@ -574,11 +618,18 @@ function cmdScore() {
   process.exit(0)
 }
 
-// ---- --record (D7): validation matrix per --outcome, then appends one Contracts-shaped ledger ----
-// ---- row with a fresh rp_ runId (files DERIVED from --patch, never hand-passed) and writes the ----
-// ---- full-fidelity evidence artifact (patch verbatim or null, reviewer verbatim or null). ---------
+// ---- --record (D7 successor D2/D3, specs/20260823/09): validation matrix per --outcome, now -----
+// ---- widened with `baseline-red:<leg>[,<leg>]` — the truthful variant of `green` for a run whose --
+// ---- target closed with sanctioned red legs, replacing the false `--legs green` the 2026-08-23 ----
+// ---- rp_1b176ebff5c7 misrecord wrote — and `unresolved`'s two-armed shape: `green`/`baseline- -----
+// ---- red:*` requires --patch + --workflow (the reviewer ran, a Phase 3 dismissal); `red:<leg>` ----
+// ---- requires --patch and REFUSES --workflow (the reviewer never ran, a step-7 dismissal). Then ---
+// ---- appends one Contracts-shaped ledger row with a fresh rp_ runId (files DERIVED from --patch, --
+// ---- never hand-passed) and writes the full-fidelity evidence artifact (patch verbatim or null, ---
+// ---- reviewer verbatim or null). -------------------------------------------------------------------
 
 const RECORD_OUTCOMES = ['caught', 'missed', 'leg-caught', 'unresolved', 'setup-failed']
+const BASELINE_RED_RE = /^baseline-red:.+/
 
 function cmdRecord() {
   if (!specArg || !reviewRunId || !legs || !outcome) { usage(); process.exit(2) }
@@ -586,12 +637,12 @@ function cmdRecord() {
     console.error(`replay.js: --outcome must be one of ${RECORD_OUTCOMES.join('|')}, got '${outcome}'`)
     process.exit(2)
   }
-  if (legs !== 'green' && legs !== 'none' && !/^red:.+/.test(legs)) {
-    console.error(`replay.js: --legs must be 'green', 'red:<leg>', or 'none', got '${legs}'`)
+  if (legs !== 'green' && legs !== 'none' && !/^red:.+/.test(legs) && !BASELINE_RED_RE.test(legs)) {
+    console.error(`replay.js: --legs must be 'green', 'red:<leg>', 'baseline-red:<leg>[,<leg>]', or 'none', got '${legs}'`)
     process.exit(2)
   }
-  // D7 validation matrix.
-  if (outcome === 'caught' || outcome === 'missed' || outcome === 'unresolved') {
+  // D2/D3 validation matrix.
+  if (outcome === 'caught' || outcome === 'missed') {
     if (!patch) {
       console.error(`replay.js: --outcome ${outcome} requires --patch`)
       process.exit(2)
@@ -600,8 +651,34 @@ function cmdRecord() {
       console.error(`replay.js: --outcome ${outcome} requires --workflow`)
       process.exit(2)
     }
-    if (legs !== 'green') {
-      console.error(`replay.js: --outcome ${outcome} requires --legs green, got '${legs}'`)
+    if (legs !== 'green' && !BASELINE_RED_RE.test(legs)) {
+      console.error(`replay.js: --outcome ${outcome} requires --legs green or baseline-red:<leg>[,<leg>], got '${legs}'`)
+      process.exit(2)
+    }
+  } else if (outcome === 'unresolved') {
+    // D3: two-armed on the --legs shape. green/baseline-red:* = Phase 3 dismissal (the reviewer
+    // ran) -> requires --patch + --workflow, same as caught/missed. red:<leg> = step-7 dismissal
+    // (the reviewer never ran) -> requires --patch and REFUSES --workflow.
+    if (!patch) {
+      console.error('replay.js: --outcome unresolved requires --patch')
+      process.exit(2)
+    }
+    const isGreenOrBaseline = legs === 'green' || BASELINE_RED_RE.test(legs)
+    const isRedLeg = /^red:.+/.test(legs)
+    if (!isGreenOrBaseline && !isRedLeg) {
+      console.error(`replay.js: --outcome unresolved requires --legs green, baseline-red:<leg>[,<leg>], ` +
+        `or red:<leg>, got '${legs}'`)
+      process.exit(2)
+    }
+    if (isGreenOrBaseline && !workflowPath) {
+      console.error('replay.js: --outcome unresolved with --legs green or baseline-red:<leg> requires ' +
+        '--workflow (the reviewer ran — a Phase 3 dismissal)')
+      process.exit(2)
+    }
+    if (isRedLeg && workflowPath) {
+      console.error('replay.js: --outcome unresolved with --legs red:<leg> refuses --workflow — a step-7 ' +
+        'dismissal means the reviewer never ran; a --workflow value here would fabricate reviewer evidence ' +
+        'that was never produced — omit --workflow')
       process.exit(2)
     }
   } else if (outcome === 'leg-caught') {

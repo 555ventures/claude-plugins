@@ -38,8 +38,12 @@ asked.
    `reviewsSince=N` as an advisory ("not due yet — N/5 reviews since the last replay") and STOP;
    no further phases run. Exit 0 → continue.
 2. Run `node "$(spec-paths replay)" --select` and parse `spec=… reviewRunId=… commit=…
-   parent=… diffBase=…` from its stdout. A non-zero exit (no eligible CLEAN row in the window)
-   → report advisory, STOP.
+   parent=… diffBase=… baselineRed=… baselineLegs=…` from its stdout — `{baselineRed}` names the
+   selected review row's own pre-existing red legs (`none` when it closed all-green,
+   `unknown` when the row carries no `legs` array); `{baselineLegs}` names every leg the row
+   recorded (`unknown` exactly when `{baselineRed}` is). Both are step 7's attribution baseline —
+   zero extra leg runs. A non-zero exit (no eligible CLEAN row in the window) → report advisory,
+   STOP.
 
 ## Phase 1 — Mutation authoring
 
@@ -106,14 +110,37 @@ asked.
    `node "$(spec-paths review-legs)" --root {dir} --spec {spec} --base {diffBase} --manifest
    {manifestPath}` — the sole leg derivation (pipeline rules § Risk Tiers); replay never
    re-derives legs.
-7. **Red legs → one retry of authoring, not of the whole run:** if any leg is red, that's either
-   the class catching itself (leg-caught) or an authoring miss on a class the corpus promises
-   stays leg-invisible. Tear the worktree down (`--teardown --dir {dir}`), `--setup` a fresh one
-   at the same `{parent}`, and re-dispatch the mutation-authoring worker **once** for the same
-   class, telling it which leg the first attempt tripped and to pick a different site inside the
-   recipe. Re-run steps 5–6. If legs are STILL red after the retry, this run's outcome is
-   `leg-caught` — skip Phase 2 (the reviewer is never dispatched) and go straight to Phase 3 with
-   `--legs red:<leg>`.
+7. **Red legs → attribute against the baseline, retry only what's newly-red:** for each red leg
+   `L` in the manifest, attribute it against `{baselineRed}`/`{baselineLegs}` (step 2's tokens)
+   in this order:
+   1. `L == reconcile` → explained. This is a deterministic exemption, not a judgment call: the
+      mutation is File-Plan-confined by step 4's worker contract, and reconcile redness is
+      definitionally about a path *outside* the File Plan — so it can never be mutation-caused.
+      (A canonical patch that names an out-of-plan file is a failed authoring attempt under step
+      4's existing rule; this exemption never applies to that case — that failure is handled
+      there, not here.)
+   2. `L ∈ {baselineRed}` → explained. The review that closed this target already recorded `L`
+      red for a sanctioned, pre-existing reason.
+   3. Otherwise, if `L ∈ {baselineLegs}` → **newly red**: `L` was green at the original review and
+      is red now, so the mutation is the suspect — either the class catching itself (leg-caught)
+      or an authoring miss on a class the corpus promises stays leg-invisible. Tear the worktree
+      down (`--teardown --dir {dir}`), `--setup` a fresh one at the same `{parent}`, and
+      re-dispatch the mutation-authoring worker **once** for the same class, telling it which leg
+      the first attempt tripped and to pick a different site inside the recipe. Re-run steps 5–6.
+      If legs are STILL red after the retry, this run's outcome is `leg-caught` — skip Phase 2
+      (the reviewer is never dispatched) and go straight to Phase 3 with `--legs red:<leg>` (the
+      newly-red meaning, never the baseline-red one).
+   4. Otherwise (`L ∉ {baselineLegs}`, or the baseline is `unknown`) → unattributable: one
+      `AskUserQuestion` showing `L`'s failure output beside the recorded baseline — is this leg's
+      redness pre-existing or caused by the mutation? "pre-existing" resolves it explained, same
+      as (1)/(2) above. "mutation-caused" resolves it newly-red, same as (3) — retry once, then
+      `leg-caught` if still red after the retry. A **dismissed** question resolves the run's
+      outcome to `unresolved`, recorded via D3's workflow-refusing `red:<leg>` arm — `--workflow`
+      is never passed on that record, since the reviewer never ran — and teardown still runs.
+
+   A run whose every red leg attributes to (1) or (2) is fully explained: it proceeds to Phase 2
+   exactly as an all-green run does, and its Phase 4 record carries `--legs baseline-red:<L>[,<L>]`
+   in place of `green`.
 
 ## Phase 2 — Blind reviewer dispatch (skipped on `leg-caught`)
 
@@ -148,12 +175,25 @@ tipped-off reviewer measures nothing (D10's rationale).
 ## Phase 4 — Record & teardown
 
 1. Run `node "$(spec-paths replay)" --record --spec {spec} --review-run-id {reviewRunId}
-   --legs green|red:<leg> --outcome caught|missed|leg-caught|unresolved [--class {classId}]
-   [--patch {patchOutFile}] [--workflow {workflowReturnFile}] --tokens {N}` — D7's validation
-   matrix: `caught`/`missed`/`unresolved` require `--patch` + `--workflow` and `--legs green`;
-   `leg-caught` requires `--patch` and `--legs red:<leg>` (`--workflow` omitted — no reviewer
-   ran). `setup-failed` is recorded and torn down in Phase 1 step 2 — it never reaches this
-   phase.
+   --legs green|baseline-red:<leg>[,<leg>]|red:<leg>|none --outcome
+   caught|missed|leg-caught|unresolved|setup-failed [--class {classId}] [--patch {patchOutFile}]
+   [--workflow {workflowReturnFile}] --tokens {N}` — D2/D3's restated validation matrix:
+
+   | `--outcome` | `--legs` accepted | `--patch` | `--workflow` |
+   |---|---|---|---|
+   | caught / missed | `green` \| `baseline-red:<leg>[,<leg>]` | required | required |
+   | unresolved | `green` \| `baseline-red:<leg>[,<leg>]` | required | required |
+   | unresolved | `red:<leg>` | required | **refused** |
+   | leg-caught | `red:<leg>` (newly-red only — doctrine-enforced) | required | not required (unchanged) |
+   | setup-failed | `none` | refused | refused |
+
+   `caught`/`missed` and Phase 3's `unresolved` (the reviewer ran) accept `green` or step 7's
+   explained-red case, `baseline-red:<leg>[,<leg>]`, and require `--patch` + `--workflow`. Step
+   7's dismissed-question `unresolved` (the reviewer never ran) instead carries `red:<leg>`,
+   requires `--patch`, and **refuses** `--workflow` — passing it there would fabricate reviewer
+   evidence that was never produced. `leg-caught` keeps `red:<leg>`, newly-red only, requiring
+   `--patch` with `--workflow` still not required. `setup-failed` is recorded and torn down in
+   Phase 1 step 2 — it never reaches this phase.
 2. Run `node "$(spec-paths replay)" --teardown --dir {dir}` — the worktree is removed
    unconditionally at this point, success or failure; the main tree was never touched at any
    point in this command.

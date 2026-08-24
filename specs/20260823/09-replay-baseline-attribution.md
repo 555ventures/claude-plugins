@@ -1,6 +1,7 @@
 ---
 date: 2026-08-23
-status: hardened
+status: implementing
+diff_base: 71dad7425d3244f63af282885c30a56d7974ac96
 open_markers: 0
 tier: standard
 area: review

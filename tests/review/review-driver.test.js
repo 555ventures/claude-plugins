@@ -902,6 +902,46 @@ test('AC-20260821-02-2: WHEN due and --select yields an eligible CLEAN row THE S
     'D8: the retired advisory line must not survive into the REPLAY step either: ' + r.stdout)
 })
 
+// specs/20260823/09-replay-baseline-attribution.md D6 (2026-08-23): replay.js --select gains two
+// tokens (baselineRed/baselineLegs) appended after the five this driver already parses — the
+// baseline step 7 attributes red legs against. parseSelection must capture them when present
+// (AC-7) and tolerate their absence without dying, since an old sidecar resumed mid-flight against
+// a pre-D1 replay.js must keep working exactly as today (AC-8).
+test('AC-20260823-09-7: WHEN --select prints the two new baseline tokens THE SYSTEM prints baselineRed: and baselineLegs: lines in the REPLAY step body, inlining --select\'s own attribution baseline for step 7 to read', () => {
+  const host = makeReplayHost('rvdrvreplaybaseline', { acId: 'AC-20260820-99-17', seedRows: fiveSeedReviews })
+  driveToClose(host, 'rvdrv-replay-baseline-ret')
+  commitClose(host)
+  const r = run(host.root, host.spec, '--mark', 'closed')
+  assert.strictEqual(r.status, 0,
+    'D6: a due close with a selected target carrying baseline tokens must still be accepted into REPLAY: ' + r.stdout + r.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REPLAY',
+    'setup precondition: the fixture must park at REPLAY before the baseline-token printing can be exercised: ' + r.stdout)
+  assert.match(r.stdout, /baselineRed:\s*\S+/,
+    'D6/AC-7: the REPLAY step body must print a baselineRed: line — omitting it leaves replay.md\'s step 7 ' +
+    'with no baseline to attribute red legs against, forcing the exact rp_1b176ebff5c7 falsification this ' +
+    'spec exists to stop: ' + r.stdout)
+  assert.match(r.stdout, /baselineLegs:\s*\S+/,
+    'D6/AC-7: the REPLAY step body must print a baselineLegs: line alongside baselineRed — step 7\'s D4 ' +
+    'reconcile exemption and D5 question seam both need to know which legs the baseline recorded at all, ' +
+    'not just which of them were red: ' + r.stdout)
+})
+
+test('AC-20260823-09-8: WHEN the driver parses a five-token selection line carrying neither baseline token THE SYSTEM SHALL CONTINUE TO enter the REPLAY state and print the step with the fields simply absent, never a parse die, so an old sidecar resumed mid-flight against a pre-D1 replay.js keeps working', () => {
+  const host = makeReplayHost('rvdrvreplaynobaseline', { acId: 'AC-20260820-99-18', seedRows: fiveSeedReviews })
+  driveToClose(host, 'rvdrv-replay-nobaseline-ret')
+  commitClose(host)
+  const r = run(host.root, host.spec, '--mark', 'closed')
+  assert.strictEqual(r.status, 0,
+    'D6: a five-token selection line (today\'s replay.js shape) must still be ACCEPTED — parseSelection must ' +
+    'treat the two new tokens as optional, never required: ' + r.stdout + r.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REPLAY',
+    'D6: absence of the baseline tokens must never abort entry to REPLAY — a resumed mid-flight sidecar ' +
+    'against an old replay.js must keep parking here exactly as before: ' + r.stdout)
+  assert.doesNotMatch(r.stdout, /\bdie\b|parse.*fail|cannot parse/i,
+    'D6: a five-token line must never be treated as a parse failure — the regex\'s two new capture groups ' +
+    'must be OPTIONAL, defaulting to absent/null rather than making the whole match fail: ' + r.stdout)
+})
+
 test('AC-20260821-02-3: WHEN due but --select resolves no usable CLEAN target THE SYSTEM transitions to DONE printing the harness\'s own advisory — a due-but-unmeasurable close is never parked', () => {
   // The exit-1 arm ("no eligible CLEAN row in the window") is structurally unreachable from
   // REPLAY: the driver's own close appends a CLEAN review row with a runId moments earlier, so a

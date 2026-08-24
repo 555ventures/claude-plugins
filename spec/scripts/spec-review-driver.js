@@ -677,10 +677,18 @@ function countReplayRowsFor(reviewRunId) {
     .filter((r) => r.stage === 'replay' && r.reviewRunId === reviewRunId).length
 }
 
+// D6 (specs/20260823/09-replay-baseline-attribution.md): replay.js --select's D1 now appends two
+// tokens (baselineRed=/baselineLegs=) after the five this driver already parses — step 7's
+// attribution baseline. Captured OPTIONALLY (each group's own trailing `?`, matching only when the
+// literal key= is present) so a five-token line from an old sidecar resumed mid-flight against a
+// pre-D1 replay.js still parses cleanly: absent -> null, never a parse failure (AC-8).
 function parseSelection(out) {
-  const m = /spec=(\S+)\s+reviewRunId=(\S+)\s+commit=(\S+)\s+parent=(\S+)\s+diffBase=(\S+)/.exec(out)
+  const m = /spec=(\S+)\s+reviewRunId=(\S+)\s+commit=(\S+)\s+parent=(\S+)\s+diffBase=(\S+)(?:\s+baselineRed=(\S+))?(?:\s+baselineLegs=(\S+))?/.exec(out)
   if (!m) return null
-  return { spec: m[1], reviewRunId: m[2], commit: m[3], parent: m[4], diffBase: m[5] }
+  return {
+    spec: m[1], reviewRunId: m[2], commit: m[3], parent: m[4], diffBase: m[5],
+    baselineRed: m[6] || null, baselineLegs: m[7] || null,
+  }
 }
 
 function replayStepBody(t) {
@@ -694,6 +702,8 @@ function replayStepBody(t) {
     `  commit:      ${t.commit}\n` +
     `  parent:      ${t.parent}\n` +
     `  diffBase:    ${t.diffBase}\n` +
+    `  baselineRed: ${t.baselineRed}\n` +
+    `  baselineLegs:${t.baselineLegs}\n` +
     `Phase 4 records the outcome via replay.js --record --review-run-id ${t.reviewRunId}. ANY ` +
     `outcome concludes this review; a non-measurement outcome (unresolved/setup-failed) leaves ` +
     `the harness due, so the NEXT review retries rather than this one.\n` +
@@ -1090,8 +1100,8 @@ function handleReplayRecorded() {
       'since REPLAY was entered (' + t.rowsAtEntry + ' then, ' + now + ' now) — run ' +
       'spec/commands/replay.md Phases 1-5 against that target and record the outcome first: ' +
       'node ' + replayBin + ' --record --spec ' + t.spec + ' --review-run-id ' + t.reviewRunId +
-      ' --legs <green|red:leg|none> --outcome <caught|missed|leg-caught|unresolved|setup-failed> ' +
-      '[--class <id>] [--patch <f>] [--workflow <f>]')
+      ' --legs <green|red:leg|baseline-red:leg[,leg]|none> --outcome ' +
+      '<caught|missed|leg-caught|unresolved|setup-failed> [--class <id>] [--patch <f>] [--workflow <f>]')
   }
   marks.replayTarget = null
   marks.replayRecorded = { reviewRunId: t.reviewRunId, rows: now }

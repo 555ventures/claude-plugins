@@ -543,7 +543,7 @@ test('AC-20260820-07-12 (also AC-20260821-04-9 and AC-20260823-07-6, SHALL CONTI
   const gw = (...a) => execFileSync('git', ['-C', wt, ...a], { encoding: 'utf8' })
   gw('add', '-A'); gw('commit', '-q', '-m', 'implement')
 
-  const sidecar = spec.replace(/\.md$/, '.review')
+  const sidecarName = path.basename(spec).replace(/\.md$/, '.review')
 
   run(wt, spec)
   assert.strictEqual(stateOf(wt, spec), 'REVIEWER', 'setup: the two-branch fixture must reach REVIEWER on green legs')
@@ -576,6 +576,8 @@ test('AC-20260820-07-12 (also AC-20260821-04-9 and AC-20260823-07-6, SHALL CONTI
     'cleanup must remove the build worktree — the sidecar living inside it dies with it, per D10\'s "dies with the worktree at cleanup, by design"')
   assert.match(fs.readFileSync(path.join(root, 'specs/20260820/99-drv-merge.md'), 'utf8'), /status:\s*done/,
     'the merge must fast-forward the close commit into the main root — the root\'s own copy of the spec must now read status: done')
+  assert.ok(!fs.existsSync(path.join(root, 'specs/20260820', sidecarName)),
+    'the sidecar must never reach the main root through the merge — it is working state the close commit deliberately excludes (D10), and a copy landing here would be committed review scratch that survives the worktree it was supposed to die with')
 
   const status = runNode('scripts/spec-status.js', ['--root', root, '--next'])
   assert.strictEqual(status.status, 0, 'spec-status.js --next must succeed against the post-merge root: ' + status.stdout + status.stderr)

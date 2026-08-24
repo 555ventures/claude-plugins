@@ -98,6 +98,11 @@ const { fmBlock, fmValue } = require('./lib/frontmatter')
 // driver's exec-fixture test could never produce a genuine five-token line to prove the absence
 // branch against).
 const { parseSelection } = require('./lib/parse-selection')
+// specs/20260824/01-render-gate.md D16: the REVIEWER step's printed text names the advisory
+// render-gate run when the host config declares design.render — text only, this driver never
+// runs the gate itself (review.md's own dispatch line does). readConfig degrades to {} on an
+// absent/unreadable config, which reads as "not declared" here, same as every other caller.
+const { readConfig } = require('./lib/host-config')
 
 // D1-D6 (specs/20260821/04-stopped-row-durability.md): a worktree review's RED_BLOCKING hard-stop
 // durably appends here, at the MAIN root, instead of the worktree's own (destructible)
@@ -196,6 +201,11 @@ const buildBase = fmVal('build_base')
 const diffBaseFm = fmVal('diff_base')
 const designFlag = fmVal('design') === 'true'
 const designSource = fmVal('design_source')
+// D16: read once, at entry — repoRoot is already resolved above, and this is a pure text-only
+// read (no state written), so it is safe to compute unconditionally rather than only inside the
+// REVIEWER step closure.
+const hostDesignConfig = readConfig(repoRoot).design
+const renderGateDeclared = !!(hostDesignConfig && hostDesignConfig.render)
 
 if (!['implementing', 'done'].includes(status)) {
   die('spec status is "' + (status || '<missing>') + '" — spec-review-driver requires ' +
@@ -1257,7 +1267,11 @@ const STEPS = {
     `  manifest: ${manifestPath}\n  outputs: ${outDir}\n` +
     (designFlag || designSource
       ? '  design specs also get two parallel Sonnet design-leg agents (rule-checklist + ' +
-        'component-manifest audit) alongside the reviewer.\n'
+        'component-manifest audit) alongside the reviewer' +
+        (renderGateDeclared
+          ? '; also run the advisory render gate review.md names (design.render is declared) ' +
+            'and hand its report path to the reviewer as evidence.\n'
+          : ' (design.render is not declared — skip the advisory render-gate run).\n')
       : '') +
     `Write its structured return ({verdict, survivors, killed, reviewerCount, scope, tokens}) to ` +
     `a file, then:\n  node ${__filename} ${specPath} --mark reviewer-returned --file <return.json>\n` +

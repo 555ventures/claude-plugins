@@ -1,21 +1,34 @@
 {
   "spec/scripts/ac-matrix.js": {
-    "entryPoints": ["spec/scripts/review-legs.js"]
+    "entryPoints": [
+      "spec/scripts/review-legs.js"
+    ]
   },
   "spec/scripts/block-cross-worktree-writes.sh": {
-    "entryPoints": ["spec/hooks/hooks.json"]
+    "entryPoints": [
+      "spec/hooks/hooks.json"
+    ]
   },
   "spec/scripts/ci-gate-parity.js": {
-    "entryPoints": ["spec/commands/doctor.md"]
+    "entryPoints": [
+      "spec/commands/doctor.md"
+    ]
   },
   "spec/scripts/ci-query.js": {
-    "entryPoints": ["spec/scripts/review-legs.js", "spec/scripts/release-legs.js"]
+    "entryPoints": [
+      "spec/scripts/review-legs.js",
+      "spec/scripts/release-legs.js"
+    ]
   },
   "spec/scripts/citations-check.js": {
-    "entryPoints": ["spec/commands/doctor.md"]
+    "entryPoints": [
+      "spec/commands/doctor.md"
+    ]
   },
   "spec/scripts/collision-closure.js": {
-    "entryPoints": ["spec/commands/plan.md"]
+    "entryPoints": [
+      "spec/commands/plan.md"
+    ]
   },
   "spec/scripts/components-check.js": {
     "entryPoints": [
@@ -25,7 +38,10 @@
     ]
   },
   "spec/scripts/dc-extract.js": {
-    "entryPoints": ["spec/doctrine/design.md", "spec/scripts/spec-design-driver.js"]
+    "entryPoints": [
+      "spec/doctrine/design.md",
+      "spec/scripts/spec-design-driver.js"
+    ]
   },
   "spec/scripts/design-atlas.js": {
     "entryPoints": [
@@ -45,16 +61,25 @@
     ]
   },
   "spec/scripts/fidelity-check.js": {
-    "entryPoints": ["spec/doctrine/design.md", "spec/scripts/spec-design-driver.js"]
+    "entryPoints": [
+      "spec/doctrine/design.md",
+      "spec/scripts/spec-design-driver.js"
+    ]
   },
   "spec/scripts/fleet-reader.js": {
-    "entryPoints": ["spec/doctrine/core.md"]
+    "entryPoints": [
+      "spec/doctrine/core.md"
+    ]
   },
   "spec/scripts/genesis-state-gate.sh": {
-    "entryPoints": ["spec/hooks/hooks.json"]
+    "entryPoints": [
+      "spec/hooks/hooks.json"
+    ]
   },
   "spec/scripts/init-gen.js": {
-    "entryPoints": ["spec/commands/init.md"]
+    "entryPoints": [
+      "spec/commands/init.md"
+    ]
   },
   "spec/scripts/manifest-check.sh": {
     "entryPoints": [
@@ -65,7 +90,9 @@
     ]
   },
   "spec/scripts/memory-sweep.js": {
-    "entryPoints": ["spec/commands/review.md"]
+    "entryPoints": [
+      "spec/commands/review.md"
+    ]
   },
   "spec/scripts/merge-back.sh": {
     "entryPoints": [
@@ -75,19 +102,52 @@
     ]
   },
   "spec/scripts/promise-sweep.js": {
-    "entryPoints": ["spec/commands/plan.md", "spec/scripts/review-legs.js"]
+    "entryPoints": [
+      "spec/commands/plan.md",
+      "spec/scripts/review-legs.js"
+    ]
   },
   "spec/scripts/prose-cap.js": {
-    "entryPoints": ["spec/commands/review.md", "spec/commands/escape.md"]
+    "entryPoints": [
+      "spec/commands/review.md",
+      "spec/commands/escape.md"
+    ]
   },
   "spec/scripts/question-style-gate.js": {
-    "entryPoints": ["spec/hooks/hooks.json"]
+    "entryPoints": [
+      "spec/hooks/hooks.json"
+    ]
   },
   "spec/scripts/red-check.js": {
-    "entryPoints": ["spec/commands/build.md"]
+    "entryPoints": [
+      "spec/commands/build.md"
+    ]
+  },
+  "spec/scripts/release-legs.js": {
+    "entryPoints": [
+      "spec/commands/release.md"
+    ]
+  },
+  "spec/scripts/render-compare.js": {
+    "entryPoints": [
+      "spec/scripts/render-gate.js"
+    ]
+  },
+  "spec/scripts/render-gate.js": {
+    "entryPoints": [
+      "spec/commands/review.md"
+    ]
+  },
+  "spec/scripts/render-inventory.browser.js": {
+    "entryPoints": [
+      "spec/scripts/render-gate.js"
+    ]
   },
   "spec/scripts/replay.js": {
-    "entryPoints": ["spec/commands/replay.md", "spec/scripts/spec-review-driver.js"]
+    "entryPoints": [
+      "spec/commands/replay.md",
+      "spec/scripts/spec-review-driver.js"
+    ]
   },
   "spec/scripts/report-render.js": {
     "entryPoints": [
@@ -111,20 +171,28 @@
       "git/commands/commit.md"
     ]
   },
-  "spec/scripts/release-legs.js": {
-    "entryPoints": ["spec/commands/release.md"]
-  },
   "spec/scripts/review-legs.js": {
-    "entryPoints": ["spec/commands/replay.md", "spec/scripts/spec-review-driver.js"]
+    "entryPoints": [
+      "spec/commands/replay.md",
+      "spec/scripts/spec-review-driver.js"
+    ]
   },
   "spec/scripts/scope-reconcile.js": {
-    "entryPoints": ["spec/commands/build.md", "spec/scripts/review-legs.js", "spec/scripts/init-gen.js"]
+    "entryPoints": [
+      "spec/commands/build.md",
+      "spec/scripts/review-legs.js",
+      "spec/scripts/init-gen.js"
+    ]
   },
   "spec/scripts/session-queue.sh": {
-    "entryPoints": ["spec/hooks/hooks.json"]
+    "entryPoints": [
+      "spec/hooks/hooks.json"
+    ]
   },
   "spec/scripts/skeletons-check.js": {
-    "entryPoints": ["spec/scripts/spec-design-driver.js"]
+    "entryPoints": [
+      "spec/scripts/spec-design-driver.js"
+    ]
   },
   "spec/scripts/smoke.sh": {
     "entryPoints": [
@@ -134,16 +202,25 @@
     ]
   },
   "spec/scripts/spec-design-driver.js": {
-    "entryPoints": ["spec/commands/design.md"]
+    "entryPoints": [
+      "spec/commands/design.md"
+    ]
   },
   "spec/scripts/spec-queue.js": {
-    "entryPoints": ["spec/commands/queue.md", "spec/scripts/session-queue.sh"]
+    "entryPoints": [
+      "spec/commands/queue.md",
+      "spec/scripts/session-queue.sh"
+    ]
   },
   "spec/scripts/spec-review-driver.js": {
-    "entryPoints": ["spec/commands/review.md"]
+    "entryPoints": [
+      "spec/commands/review.md"
+    ]
   },
   "spec/scripts/spec-state-gate.sh": {
-    "entryPoints": ["spec/hooks/hooks.json"]
+    "entryPoints": [
+      "spec/hooks/hooks.json"
+    ]
   },
   "spec/scripts/spec-status.js": {
     "entryPoints": [
@@ -158,16 +235,26 @@
     ]
   },
   "spec/scripts/verdict.js": {
-    "entryPoints": ["spec/scripts/spec-review-driver.js", "spec/scripts/release-legs.js"]
+    "entryPoints": [
+      "spec/scripts/spec-review-driver.js",
+      "spec/scripts/release-legs.js"
+    ]
   },
   "spec/workflows/wf-design.js": {
-    "entryPoints": ["spec/scripts/spec-design-driver.js"]
+    "entryPoints": [
+      "spec/scripts/spec-design-driver.js"
+    ]
   },
   "spec/workflows/wf-enforce.js": {
-    "entryPoints": ["spec/commands/enforce.md"]
+    "entryPoints": [
+      "spec/commands/enforce.md"
+    ]
   },
   "spec/workflows/wf-panel.js": {
-    "entryPoints": ["spec/commands/genesis-architect.md", "spec/commands/genesis-design.md"]
+    "entryPoints": [
+      "spec/commands/genesis-architect.md",
+      "spec/commands/genesis-design.md"
+    ]
   },
   "spec/workflows/wf-research.js": {
     "entryPoints": [

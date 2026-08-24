@@ -63,13 +63,22 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // spec-paths additive-collision class (JJ-20260814-01): the key list below is updated in place,
 // never a parallel exhaustive pin.
 
+// specs/20260824/01-render-gate.md D17 (spec/bin/spec-paths row): the new render-gate.js,
+// render-compare.js, and render-inventory.browser.js scripts need spec-paths keys like every
+// other bundled script — a missing key breaks review.md's render-gate advisory leg (D16) and
+// render-gate.js's own resolution of render-compare/render-inventory silently (§ Risk Tiers,
+// spec-paths). D17 marks this row [no-ac]: it is enforced fail-closed by this existing suite
+// guard (and by tests/consistency/entrypoints.test.js) — this is the eighth recurrence of the
+// spec-paths additive-collision class (JJ-20260814-01): the key list below is updated in place,
+// never a parallel exhaustive pin.
+
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-design', 'wf-enforce',
     'wf-panel', 'wf-research', 'dc-extract', 'design-atlas', 'skeletons-check', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
-    'review-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'shared', 'shared-genesis',
-    'template', 'templates', 'contract']) {
+    'review-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'render-gate', 'render-compare',
+    'render-inventory', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }

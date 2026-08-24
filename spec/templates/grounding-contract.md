@@ -15,7 +15,8 @@ only when the contract genuinely changes, and never edit it for wording alone.
 `testEnv` (array of `{"var": "<NAME>", "provision": "<command>"}` rows — suite-gating
 environment variables, checked by `env-preflight.js` before `/spec:build`'s and
 `/spec:design`'s gate/repair paths run; absent = legacy mode, no preflight), `design`
-(`tool`/`command`/`storyFormat`/`doctrine`, optional `screenshot`, optional `rulesManifest`),
+(`tool`/`command`/`storyFormat`/`doctrine`, optional `screenshot`, optional `rulesManifest`,
+optional `render` — see below),
 `release` (see § Release), `capabilities` (see § Capabilities), the rule-enforcement keys
 `enforcementManifest` and `rulesEnforcementHash` (see § Rule enforcement), and the
 genesis-handoff keys `genesisStackDescriptor` and `designRulesHash` (see § Genesis handoff).
@@ -23,6 +24,15 @@ genesis-handoff keys `genesisStackDescriptor` and `designRulesHash` (see § Gene
 block present and the repo has an i18n dependency) — the `/spec:design` fidelity gate accepts
 mock copy only as catalog values, and without this key it would demand literals the host's
 i18n lint forbids.
+
+`design.render` is optional — present when the host wants `render-gate.js`'s mock↔component
+fidelity check, which `/spec:review` runs as an advisory evidence leg on designed specs. The
+host declares how a URL becomes an inventory; the plugin never launches a browser. Sub-keys:
+`capture` (REQUIRED) — the host's command that turns one `--url` into an inventory JSON, invoked
+once per side × state × theme × viewport; `url` (REQUIRED) — the component render URL, with
+`{story}`/`{theme}`/`{width}`/`{height}`/`{state}` placeholders; `ready` (optional) — a command
+that exits 0 once the render server serves; `boot` (optional) — started detached when `ready`
+fails, killed on exit; `readyTimeout` (optional, seconds, default 120).
 
 ## Runtime verification (required)
 

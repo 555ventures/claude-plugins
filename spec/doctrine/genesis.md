@@ -208,9 +208,12 @@ The output is `docs/design/research-brief.md` (template: `ux-research-brief.md` 
 
 Mechanizable rules flow into `design-rules.json` categories at `/spec:genesis-design`; the rest
 bind the explore candidates, the persona walkthroughs, and every later mock-authoring session —
-not by being read and remembered, but through the **rule-checklist pass** (shared § Design
-Canon): a checker walks the admitted rules against every mock before direction approval and at
-review, citing rule IDs. The falsifiable phrasing above is what makes that checker possible.
+not by being read and remembered, but by being checked. A rule that carries a `renderCheck`
+is executed by `render-rules.js` over the render inventory (shared § Design Canon), never walked
+by a model; the **rule-checklist pass** survives only at the explore stage, which precedes
+`design-rules.json` and so has no manifest to execute: a checker walks the admitted rules
+against each candidate before the direction pick, citing rule IDs. The falsifiable phrasing
+above is what makes both possible.
 
 ## Genesis: Explore Stage (the taste funnel)
 

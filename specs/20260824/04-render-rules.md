@@ -37,6 +37,7 @@ dropped.
 | D7 | The mock-side color-literal grep in `design-atlas.js check` stays (authoring-time hygiene); `/spec:enforce`'s source-side `color` category is untouched — the enforce inversion is brief 10's [no-ac: absence of change] | 📌 Auto-picked: the brief's "replacing the source-side hex grep" is honored at the gate (palette check on the render); the enforce-side grep is a different owner (veto anytime) |
 | D8 | `spec/templates/design-rules.json` gains `renderCheck` on its examples (`min-target-size`-style `target-size {min: 44}`, a `cta-count {max: 1, tokens: ["--accent"]}` example, `contrast {min: 4.5, minLarge: 3}`, `palette {}` on `no-raw-color`); hosts add `renderCheck` to their own rules by hand — `/spec:doctor` warns nothing about it (out of scope, brief 11) [no-ac: template data; genesis authors from it] | The template is what greenfield copies; brownfield edits one field per rule |
 | D9 | New-surface checklist: `spec-paths` key `render-rules` + usage line; `entrypoints.json` row (`render-rules.js` ← `spec/scripts/render-gate.js`); plugin.json bump to next free 7.34.x [no-ac: suite guards] | — |
+| D10 | `spec/doctrine/genesis.md`'s rules paragraph drops its now-false claim that the checklist walk also runs **at review** (this build retired that walk) and states that a rule carrying a `renderCheck` is executed by `render-rules.js`, the checklist surviving only at the explore stage, which precedes `design-rules.json` and so has no manifest to execute [no-ac: prose] | JJ ruling 2026-08-25: the waiver covered explore's *use* of the walk, not a doctrine sentence asserting a behavior this spec deleted; brief 10 still owns adopting `render-gate --mocks` for explore candidates |
 
 ## File Plan
 
@@ -52,6 +53,7 @@ dropped.
 | spec/commands/review.md | MODIFY | doctrine | Design legs: drop the Sonnet rule-checklist walk; the advisory render-gate run carries the rules (D6) |
 | spec/scripts/spec-review-driver.js | MODIFY | scripts | REVIEWER step printed text: `two parallel Sonnet design-leg agents (rule-checklist + …)` → the manifest audit alone plus the render-gate run (D6) — text only |
 | spec/doctrine/design.md | MODIFY | doctrine | § Design Canon harness paragraph: "rule-checklist pass" sentence → the render rules run (this paragraph only; spec 05 rewrites the file) |
+| spec/doctrine/genesis.md | MODIFY | doctrine | Rules paragraph: drop the retired at-review checklist claim; name `render-rules.js` (D10) — this paragraph only |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | Version bump (target 7.34.0, next-free rule) + changelog |
 | tests/render/render-rules.test.js | CREATE | tests | AC-20260824-04-1, AC-20260824-04-2, AC-20260824-04-3, AC-20260824-04-4, AC-20260824-04-5, AC-20260824-04-6, AC-20260824-04-7 |
 | tests/render/render-inventory.test.js | MODIFY | tests | AC-20260824-04-8 |
@@ -172,7 +174,9 @@ Collision-closure at lock (2026-08-24): `likely` = `tests/consistency/entrypoint
 02 without a checklist step; `spec/commands/genesis-explore.md` and `spec/doctrine/genesis.md`
 run the checklist over explore candidates before a direction pick — the genesis family is
 brief 10's and is **waived** here (brief 10 should adopt `render-gate --mocks` for candidate
-tiles; noted in the plan report).
+tiles; noted in the plan report). Narrowed at build (D10): the waiver covers explore's *use*
+of the walk, not `genesis.md`'s sentence asserting the walk also runs **at review** — a
+behavior this spec deletes — so that clause is corrected in scope.
 
 Rejected: reading rule thresholds out of `intent` prose with a regex (fragile, and the model
 that wrote the prose can write the field); per-surface rule excuses (a rule is amended or it

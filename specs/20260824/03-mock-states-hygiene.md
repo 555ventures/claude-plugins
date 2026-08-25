@@ -1,7 +1,7 @@
 ---
 date: 2026-08-24
 diff_base: 5670f33863eda2f9d33c2433b4377c2f9eb8750b
-status: implementing
+status: done
 tier: standard           # additive checks in design-atlas.js (not a critical-named surface), sketch.md prose, one doctrine paragraph
 area: design-stage
 design: false
@@ -126,6 +126,15 @@ plus this spec's template row; `matrix-at-approval` mentions in `spec/doctrine/g
 `spec/commands/genesis-explore.md` describe the explore stage's draft-on-one-framing economy,
 which this spec does not change (genesis prose is brief 10's) — **waived**; `design-atlas.js`'s
 own comment is updated in its row.
+
+Deviation folded at close (2026-08-24): D6 named `7.33.0` as the plugin.json bump target;
+both `7.33.0` and `7.33.1` were already taken at build time, so the bump landed on `7.33.2`
+carrying D6's changelog paragraph — the documented stale-literal-version class (pipeline rules
+§ Gotchas: the spec's literal number is a target, not a pin).
+
+Agent-memory disposition (2026-08-24): `.claude/agent-memory/doctrine-author/repo_naming_shared_vs_core.md`
+— **carry** (re-verified against `ls spec/doctrine/`: still `core.md`/`design.md`/`genesis.md`/`replay-corpus.md`,
+no `shared.md`); `reviewed: 2026-08-24` already current.
 
 Rejected: a real CSS parser (dependency); rendering the mock to detect frames or leading
 (that is the gate's job, downstream); a `data-positioned` static check (undetectable without

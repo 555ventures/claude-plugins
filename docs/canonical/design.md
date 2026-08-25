@@ -51,3 +51,15 @@ disabled, auto-excuses static-control→link with a `📌` line, and never compu
 Story ids per mock state live in `.claude/design-coverage.json` claims (`stories`). The
 matrix is `design/targets.json`, fail-closed when absent. `/spec:review` runs the gate as an
 advisory evidence leg on designed specs when `design.render` is declared.
+
+## Mock hygiene and marks (2026-08-24, specs/20260824/03)
+
+At `ratified`/`approved` (equivalent for every consumer), `design-atlas.js check` enforces a
+universal `border-box` reset, a declared `line-height` wherever a block declares `font-size`,
+no `border`/`border-radius` on the `[data-screen-label]` root, and state controls placed
+outside the contract — plus the matrix rules (viewport meta, dark block). The mark vocabulary
+a mock declares is `data-screen-label` (root, one per file), `data-status`,
+`data-state-btn="<state>"`, `data-contract="none"` (non-contract subtree), and
+`data-positioned` (children placed from data). The matrix expansion runs at `/spec:sketch`
+exit — expand, `check --matrix`, render the matrix screenshots, then ratify — so ratification
+is the single stamp that makes a mock render-gate-ready.

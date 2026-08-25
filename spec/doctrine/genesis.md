@@ -39,15 +39,19 @@ non-goals; the session authors these) or **research-backed** (stack, framework, 
 visual-trend — the option menu is researched **live** from the user's last answer). A
 research-backed round:
 
-1. The user's last answer opens one or more dimensions. The command calls **`wf-research`** (the
-   light sibling of `wf-panel` — research agents only, **no proposers, no panel**) with `args` =
-   paths/keys/booleans (`stage`, `dimensionKeys`, `briefPath`, `contextPaths`, `verifyKeys`). Batch
-   every dimension one answer opens into a single parallel call.
+1. The user's last answer opens one or more dimensions. The command calls **`wf-research`** —
+   research agents only, no proposers — with `args` = paths/keys/booleans (`stage`,
+   `dimensionKeys`, `briefPath`, `contextPaths`, `verifyKeys`). Batch every dimension one answer
+   opens into a single parallel call. Cross-cutting angles available to any archetype —
+   `scope-discipline` (what to include vs deliberately exclude), `competitive-teardown`,
+   `accessibility`, and the locale bundle (`i18n-rtl`, `locale-formatting`, `cultural-color`,
+   `locale-norms`) — are switched on by the audience scope, not the archetype, and fold into the
+   same call.
 2. It returns one **option menu per dimension** — 2–4 current options, ranked recommended-first,
    each with an honest tradeoff, a recency stamp grounded in sources, an `is_minority` flag
-   preserving any contrarian option (MAINTAINED DISSENT, mirrored from the panel), and a required
-   `why_recommended` (one line: why rank 1 wins for THIS project — the stated reason behind the
-   ranking, not just the ranking itself).
+   preserving any contrarian option (MAINTAINED DISSENT — carried forward into `## Dissents` at
+   decision time), and a required `why_recommended` (one line: why rank 1 wins for THIS project —
+   the stated reason behind the ranking, not just the ranking itself).
 3. The command writes each menu to `.claude/genesis/interview-research/{dimension}.json` (stamping
    `fetchedAt` itself — the workflow can't), then presents an `AskUserQuestion` built **from the
    menu**: options recommended-first, the tradeoff + "current as of `<fetchedAt>`" in each
@@ -67,68 +71,52 @@ holds the pipeline doctrine: Sonnet research, Haiku narrow lookup, Opus session/
 intake answers and flows into the ADR rationale/citations. A research call that returns nothing in
 good time falls back to a model-knowledge menu stamped `unverified` — the loop never blocks.
 
-**Discovery↔Panel bridge (no redundancy).** Split by reversibility: `wf-research` *elicits*
-(today's options, so the user picks informed); `wf-panel` *adjudicates* the hard-to-reverse forks
-(the MoA panel). A dimension settled in the woven loop is written **`constrained`** in
-`## Open Dimensions` — the existing `runProposers: false` selective-skip signal — and its
-`interview-research/*.json` is passed to the panel via `contextPaths` so research isn't repeated.
-The panel may attach a `minority_position` to that dimension's ADR but never reopens it as a
-`hard_fork`.
+**Discovery→Decision bridge (no redundancy).** Split by reversibility: `wf-research` *elicits*
+(today's options, so the user picks informed); the Decision Record (§ Genesis: Decision Record
+(one proposer)) *decides* the hard-to-reverse forks directly, from the same menus, no second
+reader. A dimension settled in the woven loop is written **`constrained`** in `## Open Dimensions`,
+and its `interview-research/*.json` is reused as `contextPaths` for any later dimension instead of
+being re-researched. A settled dimension's ADR may still carry a `minority_position` sourced from
+the menu's non-picked ranks, but it is never reopened as a hard fork.
 
 **Discovery is product / user / business / legal only — never organizational.** Team skill,
 headcount, ownership, ops staffing are never asked: Claude is always the implementer. "Team skill"
 (the real-world #1 stack driver) collapses to a silent default — favor boring, typed, testable
 stacks Claude implements reliably — applied as a Phase-2 tiebreaker, not a question.
 
-## Genesis: Session ↔ Workflow Loop (how interactivity mixes with the workflow)
+## Genesis: Decision Record (one proposer)
 
-`AskUserQuestion` **cannot run inside a workflow**. So the commands do not nest it — they
-**interleave**: the command (session) owns every question and every file write; the `wf-panel`
-workflow is a callable subroutine that does the deterministic batch work (research fan-out → panel)
-and returns a decision package. One round:
+`AskUserQuestion` **cannot run inside a workflow**, so the commands never nest it — the session
+owns every question and every file write; `wf-research` is a callable subroutine that returns
+research only, never a decision.
 
-1. Command writes/updates `.claude/genesis/brief.md`, derives the research + role + dimension keys.
-2. Command invokes `wf-panel` (`Workflow` tool) with `args` = paths + keys + booleans.
-3. Workflow returns the aggregator package; command writes `panel-results-{stage}.json`.
-4. Command runs `AskUserQuestion` on the `hard_fork_list` (conflicting positions **verbatim**, each
-   option's `consequence` in its description, `recommended_first` first labeled "(Recommended)"
-   with `recommended_first_reason` as the stated reason), records rulings + every
-   `minority_position` to disk.
-5. If `research_gaps` remain, or the user's choice opens a deeper dimension, the command starts
-   a **fresh** `wf-panel` round researching only the new angles (prior results passed via
-   `contextPaths`). No reliance on workflow resume — fresh-call-per-round avoids brief-content
-   cache staleness. Repeat until no open hard forks remain.
+The session is the proposer. Input: every `interview-research/{dimension}.json` on disk (plus any
+partitioned second leg, below); output: one ADR per hard-to-reverse dimension, `## Options
+considered` copied from the menu's ranked options, `## Decision` the pick, `## Dissents` per the
+rule below.
 
-## Genesis: The MoA Panel (research-backed; do not "improve" into a debate)
+A hard fork — two menu options within one rank of each other, or a user hesitation signal — is an
+`AskUserQuestion`: options verbatim from the menu, `tradeoff` in each description, rank 1 first
+labeled "(Recommended)" with `why_recommended` as the reason. Dismissed → STOP (shared § Decisions),
+never invent the declined answer.
 
-The panel is a **Mixture-of-Agents**, deliberately *not* a multi-round debate:
+`## Dissents` carries every non-picked ranked option, every `is_minority` option, and every
+user-rejected option — MAINTAINED DISSENT survives the collapse: a correct minority view is
+recorded, never silently dropped.
 
-- **Research fan-out** — parallel Sonnet agents, one per selected research-angle key, web-enabled.
-- **Proposers** — exactly **3 Sonnet** agents, distinct role personas, **parallel, blind to each
-  other, ZERO rebuttal rounds**. No Haiku proposers (a quality gap suppresses minority views in
-  the aggregator). Cross-agent visibility causes conformity to begin at round 2 — so there is no
-  round 2.
-- **Aggregator** — one **Opus** agent → `decision_matrix`, `hard_fork_list`, `minority_positions`,
-  `original_goal` (verbatim, anti-drift), `research_gaps`.
-
-**Selective triggering.** A pre-panel Opus pass (in the command) classifies each hard-to-reverse
-dimension as *constrained* (the user already specified it) or *open*. If **all** are constrained
-and there are no hesitation signals, set `runProposers: false` — research still runs, the
-aggregator validates the constrained choices and fills defaults, no proposer round. Research is
-**not** skippable when open design/UX questions exist (latest practice and audience taste still
-need researching even when the stack is fixed).
-
-**MAINTAINED DISSENT.** A correct minority view must never be silently averaged away. Every ADR
-and the design doctrine carry a `## Dissents` section that is non-empty or the literal
-"None: all proposers agreed on {dimension}." The genesis state gate and `/spec:doctor` check
-the section's **presence** (a grep, not a judgment).
+A second perspective on a hard fork is a second `wf-research` call with a **different**
+`dimensionKeys` slice (e.g. `hosting-cost-shape` beside `hosting`) — a *partitioned-evidence*
+research leg, never a second agent reading the same brief. Deliberation over identical evidence
+herds; partitioned evidence is the shape that measured gains.
 
 ## Genesis: Hard-to-Reverse Dimensions (always escalate via AskUserQuestion)
 
-A two-proposer disagreement on any of these is a **mandatory** `AskUserQuestion` (verbatim,
-recommended first), never synthesized away. Constrained ones (user already chose) skip proposers.
+A hard fork on any of these — two menu options within one rank of each other, or a user hesitation
+signal — is a **mandatory** `AskUserQuestion` (verbatim, recommended first), never synthesized
+away. Constrained dimensions (user already chose, or settled in the Phase-1 research-woven loop)
+skip the fork.
 
-- **architect:** persistence model · rendering strategy · monorepo topology · primary
+- **architect:** persistence model · framework · monorepo topology · primary
   language/runtime · auth approach · component library · deployment target.
 - **design:** component library · token tier count · accessibility baseline · doctrine
   adjective conflicts (the core taste direction) · **navigation shell** (sidebar / top-nav /
@@ -137,40 +125,27 @@ recommended first), never synthesized away. Constrained ones (user already chose
 
 ## Genesis: Archetype Registry (the master variable)
 
-The project **archetype** conditions stack candidates, research angles, role personas, language
-choice, and **whether/what kind of design stage runs**. Establish it (and the locale/audience
-scope) first in architect intake. Locale composes *on top* of archetype (a Japanese mobile app
-and a Japanese web app share locale angles, differ in surface). Illustrative — verify candidates
-against current ecosystems at research time:
+The project **archetype** conditions the hard-to-reverse dimension floor, research angles, and
+**whether/what kind of design stage runs**. Establish it (and the locale/audience scope) first in
+architect intake. Locale composes *on top* of archetype (a Japanese mobile app and a Japanese web
+app share locale angles, differ in surface). Illustrative — dimension keys are the fixed floor;
+research candidates within each key are verified against current ecosystems at research time,
+never named here:
 
-| Archetype | Candidate stacks / languages | Research angles (keys) | Design stage / catalog |
-|---|---|---|---|
-| `web-app` | Next/Remix/SvelteKit + API, TS | `frameworks` `ui-ux-category` `perf` `seo` | full · `storybook` |
-| `mobile-app` | Flutter · RN/Expo · native Swift/Kotlin | `mobile-frameworks` `platform-hig` `app-store` `locale-typography` | full · `widgetbook`/platform |
-| `conversational-bot` | Python/Node, LLM orchestration; channel or voice | `bot-frameworks` `conversation-ux` `channel-conventions` `prompt-persona` `safety` | voice/persona guidelines · `none` |
-| `backend-api` | Go/Rust/Node/Python by perf needs | `api-frameworks` `api-ergonomics` `contract-design` | skipped (or API-doctrine) |
-| `realtime-trading` | low-latency backend (Go/Rust) + data-dense web | `realtime-stack` `realtime-ux` `data-viz` `determinism` | full · `storybook` + density doctrine |
-| `cli-devtool` | Go/Rust/Node | `cli-frameworks` `tui-conventions` | TUI doctrine · `none` |
-| `data-ml` | Python | `ml-stack` `pipeline-orchestration` | skipped |
-| `desktop-app` | Tauri/Electron/native | `desktop-frameworks` `desktop-hig` | full · `storybook`/platform |
+| Archetype | Hard-to-reverse dimension keys (floor) | Design stage |
+|---|---|---|
+| `web-app` | `language-runtime` `framework` `persistence` `auth` `component-library` `hosting` `monorepo-topology` | full |
+| `mobile-app` | `language-runtime` `framework` `persistence` `auth` `hosting` | full |
+| `conversational-bot` | `language-runtime` `framework` `persistence` `auth` `hosting` | voice/persona guidelines |
+| `backend-api` | `language-runtime` `framework` `persistence` `auth` `hosting` | skipped |
+| `realtime-trading` | `language-runtime` `framework` `persistence` `auth` `component-library` `hosting` `monorepo-topology` | full · density doctrine |
+| `cli-devtool` | `language-runtime` `framework` `persistence` `hosting` | TUI doctrine |
+| `data-ml` | `language-runtime` `framework` `persistence` `hosting` | skipped |
+| `desktop-app` | `language-runtime` `framework` `persistence` `auth` `component-library` `hosting` | full |
 
 When the design stage is `none`/`skipped` for an archetype, `/spec:genesis-explore` records
 `explore: skipped`, `/spec:genesis-design` records `design: skipped`, and `/spec:init` writes no
 `design` block.
-
-## Genesis: Research-Angle & Role Menus
-
-Research-angle and panel-role definitions live in the **brief** (the command expands the selected
-keys into focus paragraphs there). `args` carries only the keys. Cross-cutting angles available to
-any archetype: `scope-discipline` (what to include vs deliberately exclude), `competitive-teardown`,
-`accessibility`, and the locale bundle (`i18n-rtl`, `locale-formatting`, `cultural-color`,
-`locale-norms`) — switched on by the audience scope, not the archetype.
-
-Role-persona menus (the command picks 3 per stage, archetype-relevant):
-- **architect:** Backend-systems · Frontend-UI · Infra-DevOps · Cost/Pragmatism-skeptic ·
-  Security · Mobile-first · Data-intensive.
-- **design:** UX-researcher · Visual-brand · Accessibility-advocate · FE-implementation-pragmatist ·
-  Target-audience-persona.
 
 ## Genesis: Fresh UX Research (method fixed, content researched)
 
@@ -363,10 +338,10 @@ Encode Shape): every cross-stage handoff is a **file**, never conversation conte
 re-invocation of a genesis command was never in the originating conversation; it Reads files only.
 The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/adr/` (durable):
 
-- **`.claude/genesis/brief.md`** — the project description + intake answers, plus three
+- **`.claude/genesis/brief.md`** — the project description + intake answers, plus two
   machine-keyed sections the workflow agents read: `## Research Angles` (key → focus),
-  `## Panel Roles` (key → persona), `## Open Dimensions` (each marked hard-to-reverse or not). The
-  command writes this; the workflow's `args` only ever carries the *keys*.
+  `## Open Dimensions` (each marked hard-to-reverse or not). The command writes this; the
+  workflow's `args` only ever carries the *keys*.
 - **`.claude/genesis/status.json`** — the genesis state machine (§ Genesis: State Machine).
 - **`.claude/genesis/stack-descriptor.json`** — architect's output (template via `spec-paths templates`).
 - **`.claude/genesis/design-pick.json`** — explore's output: the picked candidate, grafts, and
@@ -381,8 +356,6 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
   with the base primitives, extended by every `/spec:design` reconcile (shared § Design
   Authoring Contracts, component manifest).
 - **`.claude/genesis/design-rules.json`** — design's output: category-only enforcement rules.
-- **`.claude/genesis/panel-results-{stage}.json`** — the aggregator's last decision package
-  (written by the command from the workflow return value, **before** the AskUserQuestion round).
 - **`.claude/genesis/interview-research/{dimension}.json`** — the woven-loop option menus.
 - **`docs/adr/NNNN-*.md`** — architecture/design decision records (template via `spec-paths templates`).
 - **`docs/roadmap/`** (durable) — the decomposition that makes the pipeline invocable after
@@ -403,5 +376,3 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
 The shared Decisions rule (`shared.md` § Decisions) holds for genesis too: a dismissed genesis
 `AskUserQuestion` STOPS the run — never invent the declined answer; state is safely on disk,
 re-invoke to continue. Genuine hard-to-reverse forks always go to the user, never silently decided.
-</content>
-</invoke>

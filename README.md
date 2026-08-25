@@ -43,10 +43,11 @@ build resumes instead of restarting.
 /spec:init
 ```
 
-Genesis researches live (web agents), has a blind proposer panel argue the stack in front of
-you, and brings every hard-to-reverse fork back to you as a question — nothing is silently
-averaged away. It ends with a scaffolded repo and `docs/roadmap/` briefs, so setup never ends
-without a next command. Existing repos skip it entirely.
+Genesis researches live (web agents), has one proposer — the planning session itself — write
+the decision record from that research, and brings every hard-to-reverse fork back to you as a
+question — nothing is silently decided without you. It ends with a scaffolded repo and
+`docs/roadmap/` briefs, so setup never ends without a next command. Existing repos skip it
+entirely.
 
 Until `/spec:init` has run, every other `spec` command refuses to start.
 
@@ -127,8 +128,9 @@ elsewhere:
   keeps score on its own review process.
 - **Model economics are encoded.** Expensive model authors and judges, cheap models type behind
   deterministic gates, an uncorrelated model reviews. Others are single-model or model-agnostic.
-- **Genesis argues in front of you.** Live-researched, blind-proposer stack and design panels
-  with hard forks surfaced as questions — not a template questionnaire.
+- **Genesis writes the record in front of you.** Live-researched stack and design decisions,
+  authored by one proposer — the session itself — with hard forks surfaced as questions — not
+  a template questionnaire.
 - **It's shaped by daily production use.** 555 Ventures LLC runs this pipeline internally every
   day across multiple projects. Features here were promoted or retired on evidence from real
   builds — the v7.0 redesign deleted every guard that stopped earning its keep.

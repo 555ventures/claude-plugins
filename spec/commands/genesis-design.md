@@ -1,5 +1,5 @@
 ---
-description: Greenfield design genesis — research+panel-driven UX/visual/voice canon for the project's archetype and audience, authored as the design doctrine + tokens + category-only enforcement rules that /spec:enforce later mechanizes
+description: Greenfield design genesis — research-driven UX/visual/voice canon for the project's archetype and audience, authored as the design doctrine + tokens + category-only enforcement rules that /spec:enforce later mechanizes
 argument-hint: <project idea — same as architect>
 ---
 
@@ -13,17 +13,18 @@ the one-page doctrine, the scheme mirror, the framework-native consumption surfa
 primitives, and `design-rules.json` (category-only enforcement intent that `/spec:enforce` turns
 into actual lint/contracts). **Legacy mode:** with no pick on disk (a pre-explore genesis, or a
 legacy `status.json` without the `explore` field), it runs the original direction interview +
-MoA panel below. Either way — **one canon, not two**. Same interactive shape as architect:
-the session owns `AskUserQuestion` and writes; `wf-panel` does research + panel.
+decision record below. Either way — **one canon, not two**. Same interactive shape as architect:
+the session owns `AskUserQuestion` and writes, and is itself the proposer over the research
+fan-out.
 
 **Intended model: Opus** (taste IS the work — the design-stage exception; shared invariants
 § Model Placement, which keeps genesis design-doctrine authoring an Opus seat).
 
 **Setup:** run `spec-paths shared-for genesis-design` and read its output (the shared
 invariants scoped to this command), then run `spec-paths shared-genesis` and
-Read that too (the genesis-stage supplement — discovery interview, panel doctrine, enforcement
-handoff). Also run `spec-paths wf-panel` and
-`spec-paths wf-research` once and keep the printed absolute paths — they are the `scriptPath` for
+Read that too (the genesis-stage supplement — discovery interview, decision-record doctrine,
+enforcement handoff). Also run
+`spec-paths wf-research` once and keep the printed absolute path — it is the `scriptPath` for
 the `Workflow` calls below. The state gate blocks this command until `architect: scaffold-complete`
 AND `explore: picked`/`skipped` (legacy status files without an `explore` field pass with a
 warning); also verify `.claude/genesis/stack-descriptor.json` exists.
@@ -71,28 +72,26 @@ Probe a thin taste answer with one pre-laddered follow-up (which reference / whi
 each menu to `.claude/genesis/interview-research/{dimension}.json` (stamp `fetchedAt`) and record
 the pick + `sources` to the brief. Read back the design intent for sign-off, then finalize the brief.
 
-## Phase 2 — Derive the research plan (Opus pass)
+## Phase 2 — Decide (one proposer)
 
 Select UX research-angle keys from the archetype + audience (e.g. `ui-ux-category`,
 `competitive-teardown`, `accessibility`, and the locale bundle — `cultural-color`,
-`locale-typography`, `locale-formatting` — for non-global audiences). Pick **3 design role keys**
-(UX-researcher / Visual-brand / Accessibility-advocate / FE-implementation-pragmatist /
-Target-audience-persona). List the design hard-to-reverse dimensions (component library, token
-tier count, accessibility baseline, doctrine adjectives, navigation shell, layout system,
-color schemes — genesis.md § Genesis: Hard-to-Reverse Dimensions) under `## Open Dimensions`, marked
-constrained/open. Selective: `runProposers: false` only if all are constrained.
-
-## Phase 3 — Research + panel loop (session ↔ workflow)
-
-Same loop as architect Phase 3, `stage: "design"`, passing the stack-descriptor in `contextPaths`
-so proposers stay within the chosen framework/component library:
-
-1. Invoke `wf-panel` (`Workflow {scriptPath: <spec-paths wf-panel output>}`); write
-   `.claude/genesis/panel-results-design.json`.
-2. `AskUserQuestion` on `hard_fork_list` (verbatim, each option's `consequence` in its description,
-   recommended first labeled "(Recommended)" with `recommended_first_reason` as the stated
-   reason); record rulings + every `minority_position`. Dismissed → STOP.
-3. Fresh round on remaining `research_gaps` / newly-opened dimensions.
+`locale-typography`, `locale-formatting` — for non-global audiences) and call `wf-research`
+(`stage: "design"`) for each still-open dimension, passing `.claude/genesis/stack-descriptor.json`
+in `contextPaths` so the menus stay within the chosen framework/component library. List the
+design hard-to-reverse dimensions (component library, token tier count, accessibility baseline,
+doctrine adjectives, navigation shell, layout system, color schemes — genesis.md § Genesis:
+Hard-to-Reverse Dimensions) under `## Open Dimensions`, marked constrained/open. The session is
+the proposer (genesis.md § Genesis: Decision Record (one proposer)): it reads each open
+dimension's `interview-research/{dimension}.json` and writes the decision directly into that
+dimension's ADR (`## Options considered` from the menu's ranked options, `## Decision` the pick);
+a hard fork — two menu options within one rank of each other, or a user hesitation signal — is an
+`AskUserQuestion` (options verbatim, `tradeoff` in each description, rank 1 first labeled
+"(Recommended)" with `why_recommended` as the reason), and every non-picked ranked option, every
+`is_minority` option, and every user rejection is recorded into the brief's decisions notes (they
+become ADR `## Dissents`). Dismissed → STOP. A ruling that opens a deeper dimension starts a
+**fresh** `wf-research` round scoped to only the new `dimensionKeys` (prior results via
+`contextPaths`) before this loop resumes.
 
 ## Phase 4 — Author the canon (Opus)
 
@@ -192,7 +191,7 @@ Author directly (taste exception — not delegated to Sonnet):
    **Also seed the component vocabulary:** for every building block the ratified direction /
    doctrine / winner mocks commit the product to — in ratification mode, sourced from the
    winner's position brief, doctrine rulings, and signature screens; in legacy mode, from the
-   panel outcome + doctrine — add a **commitment entry** (`name`, `purpose`, `boundaries`) to the
+   decision record + doctrine — add a **commitment entry** (`name`, `purpose`, `boundaries`) to the
    same manifest, visual archetypes only (shared § Design Authoring Contracts, component
    vocabulary). These are additional rows alongside the base-primitive entries, distinguished by
    absent `props`/`mockRefs`.
@@ -246,10 +245,9 @@ Next: /spec:atlas (sweep + holistic review of the genesis mocks) → /spec:init 
 
 ## Rules
 
-- **Never Read `wf-panel.js` or `wf-research.js`.** The `args` are `stage: "design"` variants of
-  the contracts documented in `/spec:genesis-architect` (Phase 1 `wf-research`, Phase 3
-  `wf-panel`) — this command reuses them ("Same loop as architect"). Invoke each by `scriptPath`
-  and act on its return; their sources are never orchestrator context.
+- **Never Read `wf-research.js`.** Its `args` is the `stage: "design"` variant of the contract
+  documented in `/spec:genesis-architect` Phase 1 — this command reuses it. Invoke it by
+  `scriptPath` and act on its return; its source is never orchestrator context.
 - One canon: this supersedes `/spec:init`'s greenfield design sketch; init reads this, never
   re-prompts adopt/craft when `design: rules-locked`.
 - **Ratification never re-opens the pick.** A direction-level regret at this stage goes back to
@@ -260,5 +258,5 @@ Next: /spec:atlas (sweep + holistic review of the genesis mocks) → /spec:init 
   backing token is the defect this command guards against.
 - Doctrine stays one page — promote generalizable taste, keep one-offs in the spec layer later.
 - `AskUserQuestion` dismissed → STOP. Hard-to-reverse forks always go to the user.
-- Explicit `model:` everywhere (Opus session/doctrine, Fable-first aggregator with an Opus
-  fallback — shared § Model Placement — Sonnet research/proposers).
+- Explicit `model:` everywhere (Opus session/doctrine is the sole proposer — shared § Model
+  Placement — Sonnet research).

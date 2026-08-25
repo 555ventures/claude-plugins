@@ -1,24 +1,25 @@
 ---
-description: Greenfield architecture genesis — research+panel-driven stack/structure decisions, recorded as ADRs, then scaffold the project and hand off to /spec:init
+description: Greenfield architecture genesis — research-driven stack/structure decisions, recorded as ADRs, then scaffold the project and hand off to /spec:init
 argument-hint: <project idea — what you want to build, for whom>
 ---
 
 # Genesis Architect: Decide the Stack, Scaffold the Project
 
 The first greenfield stage. Establishes the project **archetype** and **audience**, runs a
-research-backed MoA panel over the hard-to-reverse architecture decisions, records them as ADRs,
-and scaffolds a compiling skeleton with a runnable gate — so `/spec:init` has a real repo to
-ground. Heavily interactive: the session owns every `AskUserQuestion` and every file write; the
-`wf-panel` workflow does the parallel research + panel (see genesis.md § Genesis: Session ↔ Workflow Loop).
+research-backed decision record over the hard-to-reverse architecture decisions, records them as
+ADRs, and scaffolds a compiling skeleton with a runnable gate — so `/spec:init` has a real repo to
+ground. Heavily interactive: the session owns every `AskUserQuestion` and every file write and is
+itself the proposer over the research fan-out (see genesis.md § Genesis: Decision Record (one
+proposer)).
 
 **Intended model: Opus** (the genesis judgment concentration point).
 
 **Setup:** run `spec-paths shared-for genesis-architect` and read its output (the shared
 invariants scoped to this command), then run
 `spec-paths shared-genesis` and Read that too — the genesis-stage supplement covers the archetype
-registry, panel doctrine, discovery interview, the genesis state machine and on-disk handoff. Also
-run `spec-paths wf-panel` and `spec-paths wf-research` once and keep the printed absolute paths — they
-are the `scriptPath` for the `Workflow` calls below. v1 is **greenfield-only**: if the target
+registry, the decision-record doctrine, discovery interview, the genesis state machine and
+on-disk handoff. Also run `spec-paths wf-research` once and keep the printed absolute path — it
+is the `scriptPath` for the `Workflow` calls below. v1 is **greenfield-only**: if the target
 directory already has a real codebase (source files beyond config/scaffold), STOP and tell the user
 to run `/spec:init` directly — genesis is for new projects.
 
@@ -83,7 +84,7 @@ dimension a prior answer opens:
    with the menu's `why_recommended` as the stated reason. **Drop or demote** any option the Haiku
    pass marked `still_current: false`.
 4. Record the pick **and its `sources`** to the brief, and mark that dimension **constrained** — it
-   then skips the Phase-3 panel (genesis.md § Genesis: Discovery Interview — Discovery↔Panel bridge).
+   then skips the Phase-3 hard-fork ask (genesis.md § Genesis: Discovery Interview — Discovery→Decision bridge).
 
 **Probe once.** When a batch returns "Other / not sure" or an answer is too thin to drive research,
 fire **one** focused follow-up batch whose options are the pre-laddered "why does that matter /
@@ -92,11 +93,11 @@ returns nothing in good time, fall back to a model-knowledge menu stamped `unver
 the interview.
 
 **Read back for sign-off.** Assemble the answers into a short discovery brief and run a final
-confirm `AskUserQuestion` (the read-back gate) before the Phase-3 panel runs. Write
+confirm `AskUserQuestion` (the read-back gate) before Phase 3 decides. Write
 `.claude/genesis/brief.md` incrementally as the interview proceeds and finalize it here: the goal
 (verbatim from the confirmed restatement, for anti-drift), the intake answers, the recorded
-non-goals, **each research-backed pick with its `sources` and `fetchedAt`**, and the three
-machine-keyed sections — `## Research Angles`, `## Panel Roles`, `## Open Dimensions` — populated in
+non-goals, **each research-backed pick with its `sources` and `fetchedAt`**, and the two
+machine-keyed sections — `## Research Angles`, `## Open Dimensions` — populated in
 Phase 2. Initialize `.claude/genesis/status.json` (`architect: pending`, archetype, localeScope)
 from `$(spec-paths templates)/status.json`.
 
@@ -105,41 +106,40 @@ staffing are never asked — Claude is always the implementer, so "team skill" c
 default (favor boring, typed, testable stacks Claude implements reliably; a Phase-2 tiebreaker, not
 a question).
 
-## Phase 2 — Derive the research plan (Opus pass)
+## Phase 2 — Derive the dimension set (Opus pass)
 
 From the archetype registry + audience scope:
 
 - Select the **research-angle keys** (archetype angles + cross-cutting `scope-discipline`,
   `competitive-teardown`, `accessibility`, and the locale bundle if non-global). Expand each into
   a focus paragraph under `## Research Angles` in the brief.
-- Select **3 proposer role keys** relevant to the archetype; write their personas under
-  `## Panel Roles`.
 - List the **hard-to-reverse dimensions** (shared list) under `## Open Dimensions`, each marked
   *constrained* (user pre-decided **or settled in the Phase-1 research-woven loop**) or *open*, and
   flagged hard-to-reverse. A dimension the user picked from a research-backed menu is constrained —
-  the panel may add a `minority_position` to its ADR but never reopens it as a `hard_fork`.
-- Pass the Phase-1 `.claude/genesis/interview-research/*.json` files to `wf-panel` via
-  `contextPaths` so the panel's research agents build on them instead of re-fetching.
-- **Selective panel:** if every hard-to-reverse dimension is constrained and there are no
-  hesitation signals, set `runProposers: false` (research still runs). A well-researched interview
-  makes this the common case.
+  its ADR may carry a `minority_position` sourced from the menu's non-picked ranks but is never
+  reopened as a hard fork.
+- For each still-*open* dimension, keep the Phase-1 `.claude/genesis/interview-research/*.json`
+  files on hand as `contextPaths` — Phase 3's decision record reads them directly, and any second
+  perspective on a hard fork is a fresh `wf-research` call over a **different** `dimensionKeys`
+  slice (partitioned evidence) passing them so the new call builds on prior research instead of
+  re-fetching.
 
-## Phase 3 — Research + panel loop (session ↔ workflow)
+## Phase 3 — Decide (one proposer)
 
-Repeat until no open hard forks remain:
+The session is the proposer (genesis.md § Genesis: Decision Record (one proposer)). Repeat until
+no open hard forks remain:
 
-1. Invoke the `wf-panel` workflow (`Workflow {scriptPath: <spec-paths wf-panel output>}`) with
-   `args`: `{stage: "architect", briefPath: ".claude/genesis/brief.md", researchKeys: [...],
-   roleKeys: [...], runProposers: <bool>, contextPaths: [<prior panel-results + research>]}`.
-   **`args` is paths/keys/booleans only** — never inline prose.
-2. On return, write `.claude/genesis/panel-results-architect.json`.
-3. `AskUserQuestion` on `hard_fork_list` — conflicting positions **verbatim**, each option's
-   description carrying its `consequence`; `recommended_first` first, labeled "(Recommended)" with
-   `recommended_first_reason` as the stated reason. Record each ruling and **every
-   `minority_position`** into the brief's decisions notes (they become ADR `## Dissents`).
-   Dismissed → STOP.
-4. If `research_gaps` remain or a ruling opens a deeper dimension, start a **fresh** round with
-   only the new `researchKeys` (prior results via `contextPaths`).
+1. Read every open dimension's `.claude/genesis/interview-research/{dimension}.json` (plus any
+   partitioned second leg) and write the decision record directly into that dimension's ADR:
+   `## Options considered` copied from the menu's ranked options, `## Decision` the pick.
+2. For each dimension that is a **hard fork** — two menu options within one rank of each other, or
+   a user hesitation signal — run `AskUserQuestion`: options **verbatim** from the menu, each
+   option's `tradeoff` in its description, rank 1 first labeled "(Recommended)" with
+   `why_recommended` as the stated reason. Record the ruling and every non-picked ranked option,
+   every `is_minority` option, and the user's rejection into the brief's decisions notes (they
+   become ADR `## Dissents`). Dismissed → STOP.
+3. If a ruling opens a deeper dimension, start a **fresh** `wf-research` round scoped to only the
+   new `dimensionKeys` (prior results via `contextPaths`) before resuming this loop.
 
 ## Phase A — Decide & commit (reversible)
 
@@ -173,7 +173,7 @@ Repeat until no open hard forks remain:
    git, the sanctioned secret store), **CI** (the gate runs on every push — wired in Phase B),
    **background/async work** (in-process, queue, or none-in-v1), and **success-metric
    instrumentation** (the Phase 1 measurement pick — the analytics seam, or "not measured in v1").
-   These are boring-default rows the aggregator fills from the research; `AskUserQuestion` only on
+   These are boring-default rows the session fills from the research; `AskUserQuestion` only on
    a genuine fork (e.g. a paid observability vendor, or the concrete id scheme — ULID vs nanoid
    and the prefix table are a product-owner pick; that one generator module exists is not). A
    DECIDED row in a category `/spec:enforce` can mechanize is stated **checker-enforceable** — no
@@ -226,8 +226,8 @@ Repeat until no open hard forks remain:
 
 ## Phase C — Roadmap: decompose into planning briefs
 
-Runs immediately after the zero-day gate is green, **while the interview, panel, and ADR context
-is still hot** — this decomposition is half-formed in the session already; a later session would
+Runs immediately after the zero-day gate is green, **while the interview, decision, and ADR
+context is still hot** — this decomposition is half-formed in the session already; a later session would
 pay full price to reconstruct it worse. The roadmap is what makes the pipeline invocable after
 setup: without it, genesis ends and the user has no unit to hand `/spec:plan`.
 
@@ -303,13 +303,12 @@ Next: /spec:genesis-explore a trading simulator for solo creators
 
 ## Rules
 
-- **Never Read `wf-panel.js` or `wf-research.js`.** Both `args` contracts are in the phases that
-  invoke them — `wf-research` `{stage, dimensionKeys, briefPath, contextPaths, verifyKeys}` and
-  `wf-panel` `{stage, briefPath, researchKeys, roleKeys, runProposers, contextPaths}`. Invoke each
-  by `scriptPath` and act on its return; their sources are never orchestrator context.
+- **Never Read `wf-research.js`.** Its `args` contract is in the phase that invokes it —
+  `{stage, dimensionKeys, briefPath, contextPaths, verifyKeys}`. Invoke it by `scriptPath` and act
+  on its return; its source is never orchestrator context.
 - Greenfield-only (v1): a populated repo → STOP, point to `/spec:init`.
 - `AskUserQuestion` dismissed → STOP; never invent the declined answer.
 - Hard-to-reverse forks always go to the user; never synthesized away.
-- `args` to `wf-panel`/`wf-research` is a control channel — paths, enum keys, booleans only.
-- Every `Agent`/workflow `model:` is explicit (Opus session, Fable-first aggregator with an Opus
-  fallback — shared § Model Placement — Sonnet research/proposers).
+- `args` to `wf-research` is a control channel — paths, enum keys, booleans only.
+- Every `Agent`/workflow `model:` is explicit (Opus session is the sole proposer — shared §
+  Model Placement — Sonnet research).

@@ -90,7 +90,7 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-enforce',
-    'wf-panel', 'wf-research', 'design-atlas', 'merge-back',
+    'wf-research', 'design-atlas', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
     'review-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'render-gate', 'render-compare',
     'render-inventory', 'render-rules', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {

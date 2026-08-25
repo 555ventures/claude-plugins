@@ -515,8 +515,8 @@ test('AC-20260820-04-1: every executable in spec/scripts/*.js|*.sh and spec/work
     'spec exists to close, third recurrence: env-preflight)')
 
   const executables = scanExecutables(ROOT)
-  assert.ok(executables.includes('spec/workflows/wf-panel.js'),
-    'the inventory glob must include spec/workflows/*.js — a scan that misses wf-panel.js ' +
+  assert.ok(executables.includes('spec/workflows/wf-research.js'),
+    'the inventory glob must include spec/workflows/*.js — a scan that misses wf-research.js ' +
     'would leave the design/enforce workflow family entirely uncovered by this guard, the ' +
     'largest upcoming rewrite this spec is deliberately sized to watch')
   assert.ok(!executables.includes('spec/scripts/lib/host-config.js'),

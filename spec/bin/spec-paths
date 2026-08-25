@@ -13,7 +13,6 @@ case "${1:-root}" in
   root)        echo "$ROOT" ;;
   workflows)   echo "$ROOT/workflows" ;;
   wf-enforce)  echo "$ROOT/workflows/wf-enforce.js" ;;
-  wf-panel)    echo "$ROOT/workflows/wf-panel.js" ;;
   wf-research) echo "$ROOT/workflows/wf-research.js" ;;
   design-atlas) echo "$ROOT/scripts/design-atlas.js" ;;
   components-check) echo "$ROOT/scripts/components-check.js" ;;
@@ -100,7 +99,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-enforce|wf-panel|wf-research|design-atlas|components-check|render-gate|render-compare|render-inventory|render-rules|merge-back|smoke|manifest-check|env-preflight|citations-check|review-legs|release-legs|review-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|collision-closure|ci-query|ci-gate-parity|replay|fleet-reader|shared|shared-design|shared-for <command>|shared-genesis|replay-corpus|template|templates|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|design-atlas|components-check|render-gate|render-compare|render-inventory|render-rules|merge-back|smoke|manifest-check|env-preflight|citations-check|review-legs|release-legs|review-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|collision-closure|ci-query|ci-gate-parity|replay|fleet-reader|shared|shared-design|shared-for <command>|shared-genesis|replay-corpus|template|templates|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

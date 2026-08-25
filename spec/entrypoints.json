@@ -231,12 +231,6 @@
       "spec/commands/enforce.md"
     ]
   },
-  "spec/workflows/wf-panel.js": {
-    "entryPoints": [
-      "spec/commands/genesis-architect.md",
-      "spec/commands/genesis-design.md"
-    ]
-  },
   "spec/workflows/wf-research.js": {
     "entryPoints": [
       "spec/commands/genesis-explore.md",

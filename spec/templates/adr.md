@@ -3,7 +3,7 @@
 - Status: {proposed | accepted | superseded by ADR-{NNNN}}
 - Date: {YYYY-MM-DD}
 - Archetype: {archetype} · Audience: {localeScope}
-- Deciders: {user} + genesis panel
+- Deciders: {user} + session (one proposer over live research)
 
 ## Context
 
@@ -12,7 +12,7 @@ decision is needed now and what is irreversible-ish about it.}
 
 ## Options considered
 
-- **{Option A}** — {one-line characterization, with the evidence the panel surfaced}
+- **{Option A}** — {one-line characterization, with the evidence the research surfaced}
 - **{Option B}** — {one-line characterization}
 
 ## Decision
@@ -39,8 +39,8 @@ successor here. /spec:doctor audits both link directions.}
 
 ## Dissents
 
-{REQUIRED — must be non-empty, or the literal line: "None: all proposers agreed on {dimension}."
-Record any minority position the panel surfaced — verbatim option + its core rationale — even
-though it was not chosen, so the ADR preserves the option space and reasoning available at
-decision time, not just the winner. The genesis state gate and /spec:doctor check that this
-section is present.}
+{REQUIRED — must be non-empty, or the literal line: "None: no minority option surfaced for
+{dimension}." Record any minority position the research menu or a user rejection surfaced —
+verbatim option + its core rationale — even though it was not chosen, so the ADR preserves the
+option space and reasoning available at decision time, not just the winner. The genesis state
+gate and /spec:doctor check that this section is present.}

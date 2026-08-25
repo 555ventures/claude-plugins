@@ -142,8 +142,8 @@ briefs' `## Surfaces` blocks, `.claude/design-coverage.json`, and spec frontmatt
 
 ## Workflows Encode Shape, Not Judgment
 
-The plugin's `wf-build.js`, `wf-review.js`, `wf-enforce.js` (and genesis `wf-panel.js`/
-`wf-research.js`) own ordering, schemas, retry caps, kill rules — deterministic control flow.
+The plugin's `wf-build.js`, `wf-review.js`, `wf-enforce.js` (and genesis `wf-research.js`) own
+ordering, schemas, retry caps, kill rules — deterministic control flow.
 Judgment stays in the main loop. Design-stage component authoring is **direct dispatch**: a
 warm Sonnet per surface authors against the mock behind the host gate and the render gate — no
 workflow owns it, and taste (fork adjudication, iteration rulings, visual review) never enters

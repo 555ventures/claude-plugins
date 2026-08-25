@@ -61,7 +61,12 @@ function globMatch(glob, filePath) {
 // The additive pipeline-noise baseline — always excluded regardless of host config.
 // `.claude/agent-memory/**` (D6, specs/20260823/04-review-close-hardening.md): worker memory
 // writes are structurally out-of-plan on every dispatching build; see the header above.
-const BASELINE_GLOBS = ['specs/**', '.claude/spec-runs.jsonl', '.claude/agent-memory/**']
+// `.claude/spec-runs/**` (2026-08-24): the retained-evidence directory the review driver itself
+// writes via its mandatory `--retain` on every hard-stop/escalation/close (and render-gate.js's
+// default `--out` fallback) — core.md § Feedback Loop names it a pipeline carrier. Same class as
+// the agent-memory omission, one directory over; observed as four spurious out-of-plan waives
+// closing UpWell spec 20260823/04.
+const BASELINE_GLOBS = ['specs/**', '.claude/spec-runs.jsonl', '.claude/spec-runs/**', '.claude/agent-memory/**']
 
 // Baseline + the host config's additive `pipelineOwnedPaths` (absent/unparseable config → baseline
 // only). The config read itself moved to lib/host-config.js on 2026-08-14, once two more scripts

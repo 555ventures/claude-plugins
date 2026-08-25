@@ -160,6 +160,30 @@ test('AC-20260823-04-7: a changed .claude/agent-memory/ file absent from the Fil
     'out-of-plan finding on its own memory write every single time: ' + JSON.stringify(out))
 })
 
+test('retained review evidence under .claude/spec-runs/ absent from the File Plan lands in excluded (never outOfPlan) — the driver writes it via its own --retain', () => {
+  const dir = tmpdir('scope-reconcile-glob')
+  const g = gitRepo(dir)
+  const base = g('rev-parse', 'HEAD').trim()
+  const specRel = specWithEmptyPlan(dir, 'specs/20260824/07-z.md')
+  fs.mkdirSync(path.join(dir, '.claude/spec-runs/render/07-z'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude/spec-runs/rev-abc123.json'), '{"runId":"rev-abc123"}\n')
+  fs.writeFileSync(path.join(dir, '.claude/spec-runs/render/07-z/report.json'), '{}\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'retained evidence write')
+
+  const r = runNode(SCRIPT, ['--root', dir, '--base', base, '--spec', specRel, '--json'])
+  const out = JSON.parse(r.stdout)
+  assert.ok(out.excluded.includes('.claude/spec-runs/rev-abc123.json'),
+    'spec-review-driver.js retains every hard-stop/escalation/close artifact under .claude/spec-runs/ ' +
+    'via its mandatory --retain — no File Plan can enumerate them, so .claude/spec-runs/** must be a ' +
+    'BASELINE_GLOBS exclusion exactly like .claude/spec-runs.jsonl already is: ' + JSON.stringify(out))
+  assert.ok(out.excluded.includes('.claude/spec-runs/render/07-z/report.json'),
+    'render-gate.js\'s default --out fallback writes under .claude/spec-runs/render/ — the same glob ' +
+    'must cover nested paths: ' + JSON.stringify(out))
+  assert.deepStrictEqual(out.outOfPlan, [],
+    'without the glob every host review flags its own retained evidence as out-of-plan after any ' +
+    'hard-stop or escalation (UpWell 2026-08-24: four such files forced a waive): ' + JSON.stringify(out))
+})
+
 test('AC-20260823-04-9 (CONTINUE TO) [pre-green: predicate-in-test]: a changed file outside every exclusion and every File Plan row still lands in outOfPlan', () => {
   const dir = tmpdir('scope-reconcile-glob')
   const g = gitRepo(dir)

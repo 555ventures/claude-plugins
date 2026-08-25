@@ -114,8 +114,9 @@ async function dispatch(prompt, opts) {
 
 // 2026-08-13 spec 06 D6: a named top-level function (not inlined into the Propose phase below)
 // so tests can extract and evaluate it standalone via evalFns, matching the guard-function
-// convention this workflow set already uses (wf-build's assertGateArgs, wf-design's
-// assertBatchKinds). The panel doctrine's 3-proposer floor (genesis.md § The MoA Panel) is
+// convention this workflow set already uses (wf-build's assertGateArgs; wf-design's
+// assertBatchKinds was the other example until wf-design.js was deleted 2026-08-24,
+// specs/20260824/02). The panel doctrine's 3-proposer floor (genesis.md § The MoA Panel) is
 // enforced at runtime, not just by the trust-boundary arg check above: fewer than 3 surviving
 // proposals loses the minority-view texture the aggregator needs, so this throws
 // pre-aggregation, naming the degraded count, instead of quietly synthesizing from a

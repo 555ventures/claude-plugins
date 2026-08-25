@@ -63,3 +63,20 @@ a mock declares is `data-screen-label` (root, one per file), `data-status`,
 `data-positioned` (children placed from data). The matrix expansion runs at `/spec:sketch`
 exit — expand, `check --matrix`, render the matrix screenshots, then ratify — so ratification
 is the single stamp that makes a mock render-gate-ready.
+
+## Executable design rules (2026-08-24, specs/20260824/04)
+
+`design-rules.json` entries may carry a `renderCheck` object with a closed `kind` set —
+`target-size {min}`, `cta-count {max, tokens[]}`, `contrast {min, minLarge}`, `palette {}`;
+an unknown kind is a manifest error, and entries without one are counted as `source-side=<n>`,
+never silently dropped. `render-rules.js` (`spec-paths render-rules`) executes them over render
+inventories against a palette resolved from `tokens.css` (hex / `rgb()` / one-level `var()`,
+both the light and `[data-theme="dark"]` blocks; anything else is one advisory `unresolvable`
+line). `render-inventory.browser.js` supplies `effectiveBackground` (nearest non-transparent
+ancestor-or-self background) and `fontWeight` at `schemaVersion` 1. `render-gate.js` runs the
+rules over every component inventory when the host declares `design.rulesManifest` — findings
+print under the cell and fail the gate; no manifest prints one skip line — and its
+`--mocks <mock>…` mode captures mocks only (no ledger, no comparison) so `/spec:sketch` exit
+runs the same rules over the mock render. The Sonnet rule-checklist walk is retired from sketch
+exit, the design gate, and `/spec:review`'s design leg; the checklist survives only at the
+explore stage, which precedes `design-rules.json` and so has no manifest to execute.

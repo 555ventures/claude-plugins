@@ -1,6 +1,6 @@
 ---
 date: 2026-08-24
-status: implementing
+status: done
 diff_base: ecec5570e8e06d069e2fd78fea88b8212093181d
 tier: standard           # additive script + additive field on design-rules.json; render-gate.js gains a mode (not a critical-named surface); no contract edit
 area: design-stage
@@ -177,6 +177,18 @@ brief 10's and is **waived** here (brief 10 should adopt `render-gate --mocks` f
 tiles; noted in the plan report). Narrowed at build (D10): the waiver covers explore's *use*
 of the walk, not `genesis.md`'s sentence asserting the walk also runs **at review** — a
 behavior this spec deletes — so that clause is corrected in scope.
+
+Deviation folded at close (2026-08-24, one-off): the File Plan's `spec/entrypoints.json` row
+for `render-rules.js` named only "reached from `spec/scripts/render-gate.js`", but sibling
+workers in the same doctrine+scripts wave had already landed the real `spec-paths render-gate`
+call site in `spec/commands/sketch.md` (D6) and the `spec-paths render-rules` call site in
+`spec/doctrine/design.md` (D6), so `tests/consistency/entrypoints.test.js`'s
+forward-completeness pin (AC-20260820-04-6) went red on two undeclared call sites. The worker
+added both `entryPoints` rows inside the file the row already assigned to this batch rather
+than returning blocked — correct, since the declaration follows the call site by construction.
+Recorded here, not in § Gotchas: first observed instance of this shape (a cross-batch pin
+flipping from a sibling worker's concurrent landing within one wave); the standing guard is
+owed at the third recurrence, and it would be a script, not prose.
 
 Rejected: reading rule thresholds out of `intent` prose with a regex (fragile, and the model
 that wrote the prose can write the field); per-surface rule excuses (a rule is amended or it

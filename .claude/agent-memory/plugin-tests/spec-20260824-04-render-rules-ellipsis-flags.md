@@ -3,6 +3,7 @@ name: spec-20260824-04-render-rules-ellipsis-flags
 description: Contract prose using "<x>…" after a flag (render-rules.js --inventory <json>…, render-gate.js --mocks <mock>…) means repeated --flag value pairs, not one flag with N trailing tokens — and how to build a genuinely discriminating var()-resolution fixture.
 metadata:
   type: feedback
+  reviewed: 2026-08-24
 ---
 
 specs/20260824/04-render-rules.md's Contracts gave `--inventory <json>…` and `--mocks <mock>…`

@@ -3,7 +3,7 @@ name: scope-reconcile-degenerate-stems
 description: gitRepo() pre-seeds a committed root .gitignore, and node --test --test-name-pattern lets a mutant-direction proof run without duplicating fixtures into a second file
 metadata:
   type: feedback
-  reviewed: 2026-08-23
+  reviewed: 2026-08-25
 ---
 
 `tests/helpers.js`'s `gitRepo(dir)` (default, `opts.empty` unset) already writes AND commits a
@@ -19,6 +19,14 @@ gitRepo's existing behavior.
 
 **How to apply:** when a fixture's "changed file" is `.gitignore` (or any file gitRepo already
 seeds), build on the existing seed rather than re-creating it.
+
+**Corrected 2026-08-25 (review of specs/20260825/01):** prefer the scratchpad variant below —
+copy the real source AND an extracted copy of the assertion code into the session scratchpad,
+mutate the *copy*, and run the extracted code against real (must pass) and mutant (must throw).
+It never touches a tracked file, so it cannot strand a `.mutant.js` or a swapped `SCRIPT` const if
+the run dies mid-way. See [[banned-literal-loop-dedup-and-blind-spot-sweep]]. The in-tree variant
+below is retained only for the case where the test's `SCRIPT` indirection genuinely cannot be
+extracted; it carries the stray-file risk the scratchpad variant removes.
 
 Mutation-proof technique for a single spec-pipeline worker without a scratch test file: `cp` the
 real script to `<name>.mutant.js` beside it, apply the reviewer-described mutation with a small

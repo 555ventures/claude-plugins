@@ -269,14 +269,15 @@ it.
 
 ## Genesis: Executed Assumptions (dependency-adjudicated claims never lock by argument)
 
-Genesis decisions are verified by argument — research citations, panel scrutiny, user
-rulings. That is the right bar for taste and architecture forks, and the **wrong** bar for
-any claim a third-party dependency adjudicates: naming/format conventions the dependency
-validates, cron/schedule strings, config keys, DSL fragments, version-pinned API shapes.
+Genesis decisions are verified by argument — research citations, the session's own reading
+of the research menus on disk, user rulings. That is the right bar for taste and
+architecture forks, and the **wrong** bar for any claim a third-party dependency
+adjudicates: naming/format conventions the dependency validates, cron/schedule strings,
+config keys, DSL fragments, version-pinned API shapes.
 Those are falsifiable in one executed line, and no volume of reading substitutes (measured:
 UpWell's ADR-0006 bound a `domain:action` queue convention the same-day-pinned dependency
-rejects in its own `assertObjectName` — panel-reviewed, research-backed, and wrong; the app
-could never boot).
+rejects in its own `assertObjectName` — argued through and research-backed, and wrong; the
+app could never boot).
 
 **Rule: before an ADR locks, every dependency-adjudicated convention it binds is executed
 once against the pinned dependency** — a scratch file in the scaffold (or a throwaway

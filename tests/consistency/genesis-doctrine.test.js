@@ -45,6 +45,21 @@ test('AC-20260825-01-1: spec-paths wf-panel is refused now that D1 retires the k
     'call site for a file that no longer exists: ' + JSON.stringify(Object.keys(manifest)))
 })
 
+// File-local helper: AC-2/AC-4/AC-5 each carried the same
+// `for (const [re, label] of banned) { assert.ok(!re.test(src), ...) }` loop over their own
+// banned-literal list (review finding, .claude/rules/spec-pipeline.md § Review Checks — three or
+// more near-identical blocks in one diff names the extraction). Not lifted into tests/helpers.js:
+// `grep -rn 'for (const \[re' tests/` shows this file is the only consumer, and
+// tests/consistency/design-doctrine.test.js's banned-literal shape is `!src.includes(literal)`
+// over plain strings, not regexes — a shared export would widen a single-caller helper into
+// cross-file surface for no second caller. msgFor(label) still builds each call site's own
+// specific, worked-example failure message; only the loop mechanics are shared.
+function assertNoBannedLiterals (src, banned, msgFor) {
+  for (const [re, label] of banned) {
+    assert.ok(!re.test(src), msgFor(label))
+  }
+}
+
 // ---------------------------------------------------------------------------
 // AC-20260825-01-2
 // ---------------------------------------------------------------------------
@@ -66,15 +81,21 @@ test('AC-20260825-01-2: genesis.md carries the new Decision Record heading and n
     [/panel-results/, 'panel-results'],
     [/roleKeys/, 'roleKeys'],
     [/runProposers/, 'runProposers'],
-    [/Session\s+↔\s+Workflow\s+Loop/, 'Session ↔ Workflow Loop']
+    [/Session\s+↔\s+Workflow\s+Loop/, 'Session ↔ Workflow Loop'],
+    // Every pattern above requires "panel" adjacent to another word — that gap is exactly what
+    // let a live present-tense doctrine sentence ("verified by argument — research citations,
+    // panel scrutiny, user rulings") stay green through a full review. Ban the bare word too.
+    [/\bpanel\b/i, 'panel']
   ]
-  for (const [re, label] of banned) {
-    assert.ok(!re.test(src),
-      'D2 bans the literal "' + label + '" from genesis.md — its presence means the retired ' +
+  assertNoBannedLiterals(src, banned, (label) => label === 'panel'
+    ? 'D2 bans the bare literal "panel" from genesis.md — every other entry in this list requires ' +
+      '"panel" adjacent to another word, which is exactly the hole that let the live sentence ' +
+      '"verified by argument — research citations, panel scrutiny, user rulings" stay green ' +
+      'through a full review; a surviving bare "panel" means that hole is still open'
+    : 'D2 bans the literal "' + label + '" from genesis.md — its presence means the retired ' +
       'panel/aggregator/role-menu mechanism is still documented as though it exists, e.g. a ' +
       'surviving `runProposers: false` would mean a stale control flag from the deleted panel ' +
       'is still part of the doctrine contract')
-  }
 })
 
 // ---------------------------------------------------------------------------
@@ -139,12 +160,10 @@ test('AC-20260825-01-4: genesis-architect.md and genesis-design.md name none of 
   ]
   for (const rel of ['spec/commands/genesis-architect.md', 'spec/commands/genesis-design.md']) {
     const src = read(rel)
-    for (const [re, label] of banned) {
-      assert.ok(!re.test(src),
-        'D5/D6: ' + rel + ' must not name the retired literal "' + label + '" — e.g. ' +
-        'architect.md still containing `Workflow {scriptPath: <spec-paths wf-panel output>}` ' +
-        'would mean the command still invokes a workflow this spec deletes')
-    }
+    assertNoBannedLiterals(src, banned, (label) =>
+      'D5/D6: ' + rel + ' must not name the retired literal "' + label + '" — e.g. ' +
+      'architect.md still containing `Workflow {scriptPath: <spec-paths wf-panel output>}` ' +
+      'would mean the command still invokes a workflow this spec deletes')
     assert.match(src, /wf-research/,
       'D5/D6: ' + rel + ' must still name wf-research — the research fan-out is retained, only ' +
       'the panel that read its output is removed; its absence would mean the command lost its ' +
@@ -164,13 +183,31 @@ test('AC-20260825-01-5: README.md and design.md name no wf-panel and no proposer
   ]
   for (const rel of ['README.md', 'spec/doctrine/design.md']) {
     const src = read(rel)
-    for (const [re, label] of banned) {
-      assert.ok(!re.test(src),
-        'D8: ' + rel + ' must not name "' + label + '" — e.g. the README line "has a blind ' +
-        'proposer panel argue the stack" would mean the plugin\'s own public description still ' +
-        'describes a mechanism this spec deletes')
-    }
+    assertNoBannedLiterals(src, banned, (label) =>
+      'D8: ' + rel + ' must not name "' + label + '" — e.g. the README line "has a blind ' +
+      'proposer panel argue the stack" would mean the plugin\'s own public description still ' +
+      'describes a mechanism this spec deletes')
   }
+
+  // spec/workflows/wf-research.js is invisible to both automatic sweeps: .claude/spec.config.json's
+  // pipelineOwnedPaths lists "spec/workflows/wf-*.js", and pipelineOwnedGlobs prunes that pattern
+  // from collision-closure's literals leg and from scope-reconcile — so this enumerated-file test
+  // is the ONLY gate that can see a stale panel/proposer/aggregator reference left inside it. Do
+  // not "simplify" this block away as redundant with the loop above: it is the other sweeps' blind
+  // spot, not a duplicate check, and it deliberately bans a stricter list than README/design.md do
+  // (those two files legitimately keep "one proposer" as the spec's new vocabulary).
+  const wfResearchBanned = [
+    [/wf-panel/, 'wf-panel'],
+    [/\bpanel\b/i, 'panel'],
+    [/proposer/i, 'proposer'],
+    [/aggregator/i, 'aggregator']
+  ]
+  const wfResearchSrc = read('spec/workflows/wf-research.js')
+  assertNoBannedLiterals(wfResearchSrc, wfResearchBanned, (label) =>
+    'D8: spec/workflows/wf-research.js must not name "' + label + '" — this file is pruned from ' +
+    'both pipelineOwnedGlobs sweeps (collision-closure\'s literals leg and scope-reconcile) by ' +
+    '.claude/spec.config.json\'s pipelineOwnedPaths, so a surviving panel/proposer/aggregator ' +
+    'reference here would ship invisibly to every other gate this repo runs')
 })
 
 // ---------------------------------------------------------------------------

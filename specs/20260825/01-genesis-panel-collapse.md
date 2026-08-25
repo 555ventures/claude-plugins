@@ -1,7 +1,7 @@
 ---
 date: 2026-08-25
 diff_base: 47eb2cb54f66cfe7e97f2a2b05c2cbc30335fbfb
-status: implementing
+status: done
 tier: critical           # removes a spec-paths key (key-set edit — critical trigger, precedent specs/20260823/01, specs/20260824/05)
 area: genesis
 design: false
@@ -207,6 +207,67 @@ the build's whole-suite check adjudicates); literals leg — `docs/adr/0001` (hi
 "proposer" in a dated ADR), `docs/roadmap/`, `docs/audit/`, `specs/` waived by location;
 `tests/consistency/entrypoints.test.js` synthetic fixtures waived (fixture literals, not
 live-file assertions); every plugin-file hit is a File Plan row.
+
+### Review dispositions (2026-08-25)
+
+**Fixed — the retired-literal sweep's blind spot.** The lock-time sweep above claimed "every
+plugin-file hit is a File Plan row". That was true only of the files the sweep can *see*:
+`.claude/spec.config.json`'s `pipelineOwnedPaths` contains `spec/workflows/wf-*.js`, and
+`pipelineOwnedGlobs` (`spec/scripts/lib/glob-match.js`) feeds both collision-closure's
+`walkForLiterals` prune and scope-reconcile's exclusion set — so `spec/workflows/wf-research.js`
+was structurally invisible to both legs despite carrying two of the four swept stems. It kept
+`meta.description` = "…the light sibling of wf-panel" (user-visible: it is the `spec:wf-research`
+skill description served in every host) and a comment attributing the `is_minority` flag to the
+deleted panel. Both cleared. `spec/doctrine/genesis.md` § Genesis: Executed Assumptions likewise
+kept live present-tense "panel scrutiny" and past-tense "panel-reviewed"; both re-worded. The
+review-fix edit to `wf-research.js` is a **deviation**: the file is a frozen workflow script and
+not a File Plan row — sanctioned because this spec's Goal, D2 and D5 name it, recorded here rather
+than silently.
+
+**Fixed — the ban list that could not see it.** AC-20260825-01-2's nine patterns all required
+"panel" to be adjacent to another word (`proposer panel`, `Panel Roles`, `panel-results`), so a
+bare "panel scrutiny" sentence passed a full review green. The list gains `/\bpanel\b/i`, and
+AC-20260825-01-5's sweep is extended to `spec/workflows/wf-research.js` under a stricter list
+(`wf-panel`, bare `panel`, `proposer`, `aggregator`) — README.md and design.md keep the looser
+list because "one proposer" is this spec's intended new vocabulary. Both new checks were tripped
+deliberately against mutated copies before landing. Per core § Rule Enforcement this enumerated-file
+test is the *only* gate that can see `wf-research.js`; the comment above the block says so, so a
+later reader does not simplify it away. The three duplicated banned-literal loops (§ Review Checks:
+three near-identical blocks is a finding) collapse to one file-local helper — deliberately not
+promoted to `tests/helpers.js`, which would widen the shared surface for a single consumer whose
+only sibling (`design-doctrine.test.js`) uses a different assertion shape.
+
+**Waived — scope-reconcile `outOfPlan` = 8 (JJ, 2026-08-25).** `docs/roadmap/00-overview.md`,
+`docs/roadmap/10a-genesis-tournament-conventions.md`, `spec/commands/escape.md`,
+`spec/commands/review.md`, `spec/scripts/prose-cap.js`, `spec/scripts/spec-review-driver.js`,
+`tests/prose-debt/prose-cap.test.js`, `tests/review/review-driver.test.js`. All eight trace to two
+commits that landed on `main` *after* this spec's build commit `9799365` — `c972c38` (the plan
+commit for specs/20260825/02–04) and `89f1d41` (the prose-cap ratchet build); `git log
+47eb2cb..HEAD` shows only those three commits, so `diff_base` is the true pre-image and needs no
+correction. This spec's own commit touched exactly its File Plan. Narrowing the leg to the build
+commit was considered and **rejected**: `scope-reconcile.js`'s header records the whole-changed-set
+design as the fix for a confirmed escape (an out-of-plan edit rode a CLEAN because review diffed
+only planned directories), so scoping to one commit reopens that hole. The real lesson is timing —
+review promptly after build, or build in the worktree flow.
+
+**Agent-memory disposal (close, 2026-08-25).** Sweep surfaced five notes; all **carried** with
+`reviewed: 2026-08-25`, one corrected. Carried: `plugin-tests/banned-literal-loop-dedup-and-blind-spot-sweep`
+(new this dispatch — the helper-locality bar and the `pipelineOwnedPaths` blind spot, both verified
+here), `doctrine-author/repo_naming_shared_vs_core` (re-verified: `spec/doctrine/` holds
+core/design/genesis/replay-corpus, no `shared.md`), `doctrine-author/feedback_pinned_sentence_hardwrap`,
+`plugin-tests/git-committer-date-iso-z-roundtrips`. **Corrected:**
+`plugin-tests/scope-reconcile-degenerate-stems` — its `gitRepo()` seed claim re-verified against
+`tests/helpers.js`, but its mutation-proof recipe (copy the script to `<name>.mutant.js` *beside the
+original* and sed-swap the tracked test's `SCRIPT` const) can strand a stray mutant or a swapped
+pointer if the run dies mid-way; the note now leads with the scratchpad variant this review used
+instead, and keeps the in-tree recipe only for tests whose `SCRIPT` indirection cannot be extracted.
+
+**Not adopted (open question for JJ, not a finding).** `pipelineOwnedPaths`'s
+`spec/workflows/wf-*.js` entry makes an out-of-plan edit to a frozen workflow script invisible to
+review's reconcile leg as well as to collision-closure — which sits oddly beside the frozen-scripts
+rule that such files are edited only under a spec that names them. Widening or splitting that glob
+is a config-policy change with its own blast radius; it is recorded here and in
+`docs/canonical/genesis.md` rather than patched inside this review.
 
 ## Canonical Delta
 

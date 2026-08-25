@@ -1,6 +1,6 @@
 export const meta = {
   name: 'wf-research',
-  description: 'Live option-menu research for the discovery interview: parallel Sonnet web agents build a ranked, recency-stamped option set per opened dimension; an optional Haiku pass verifies currency on version-bearing dimensions. No proposers, no panel — the light sibling of wf-panel.',
+  description: 'Live option-menu research for the discovery interview: parallel Sonnet web agents build a ranked, recency-stamped option set per opened dimension; an optional Haiku pass verifies currency on version-bearing dimensions. Independent per-dimension research only — no synthesis, no debate, no vote.',
   whenToUse: 'Invoked between AskUserQuestion rounds by /spec:genesis-architect and /spec:genesis-design to turn the user\'s last answer into research-backed option menus',
   phases: [
     { title: 'Research', detail: 'one Sonnet web agent per opened dimension → ranked option menu' },
@@ -63,7 +63,8 @@ const ctxLine = ctx.length
 
 // The menu a single Sonnet agent builds for one dimension: 2–4 current options, ranked
 // recommended-first, each with an honest tradeoff, a recency stamp drawn from sources, and a flag
-// preserving any deliberately-contrarian option (MAINTAINED DISSENT, mirrored from the panel).
+// preserving any deliberately-contrarian option (MAINTAINED DISSENT: a genuinely credible
+// underdog option research surfaced, kept and flagged `is_minority` rather than averaged away).
 const OPTION_SET_SCHEMA = {
   type: 'object', additionalProperties: false,
   required: ['dimension', 'options', 'version_bearing', 'why_recommended'],

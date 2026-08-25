@@ -1,0 +1,40 @@
+{
+  "ts": "2026-08-25T00:23:44.926Z",
+  "stage": "replay",
+  "spec": "specs/20260824/02-design-stage-on-render-gate.md",
+  "runId": "rp_80dc83d6d050",
+  "reviewRunId": "rv_b47fbc9e5781",
+  "class": "dead-wiring",
+  "files": [
+    "spec/scripts/render-gate.js"
+  ],
+  "legs": "baseline-red:reconcile",
+  "outcome": "caught",
+  "tokens": 95779,
+  "patch": "diff --git a/spec/scripts/render-gate.js b/spec/scripts/render-gate.js\nindex 5d7e5ff..c034c8c 100644\n--- a/spec/scripts/render-gate.js\n+++ b/spec/scripts/render-gate.js\n@@ -248,8 +248,9 @@ function probeReady(cmd) {\n async function ensureReady() {\n   if (!renderConfig.ready) return // Behavior: neither ready nor boot declared -> assume up\n   if (probeReady(renderConfig.ready)) return\n-  if (renderConfig.boot && !noBoot) {\n-    bootChild = spawn('bash', ['-c', renderConfig.boot], { cwd: root, detached: true, stdio: 'ignore' })\n+  if (renderConfig.boot) {\n+    bootChild = spawn('bash', ['-c', renderConfig.boot], { cwd: root, detached: true, stdio: 'ignore',\n+      env: { ...process.env, RENDER_GATE_NO_BOOT: noBoot ? '1' : '0' } })\n     bootChild.unref()\n   }\n   const timeoutMs = (Number(renderConfig.readyTimeout) || 120) * 1000\n",
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "render-gate.js's --no-boot CLI flag was silently broken: the guard renderConfig.boot && !noBoot was changed to renderConfig.boot unconditionally, so boot always spawns regardless of --no-boot, while a new RENDER_GATE_NO_BOOT env var is threaded into the child that nothing reads.",
+        "file": "spec/scripts/render-gate.js",
+        "line": 250,
+        "impact": "A CLI flag documented in the render gate's own usage line and contracted by the sibling spec now silently does nothing.",
+        "evidence": "Executed repro: synthetic host with design.render.boot = 'touch boot-was-spawned.marker', ready='false', readyTimeout 1s; ran render-gate.js --no-boot; marker file WAS created despite --no-boot. grep -rn RENDER_GATE_NO_BOOT returns zero matches outside the write site."
+      },
+      {
+        "severity": "soft",
+        "claim": "spec/workflows/wf-panel.js's comment referencing wf-design's assertBatchKinds now points at a deleted file/function.",
+        "file": "spec/workflows/wf-panel.js",
+        "line": 117,
+        "impact": "A code comment cites a convention example that no longer exists on disk.",
+        "evidence": "wf-panel.js:117 cites wf-design's assertBatchKinds; wf-design.js is deleted by D2 and this site is not in the File Plan nor the waived-literals list."
+      }
+    ],
+    "killed": [],
+    "reviewerCount": 1,
+    "scope": "full",
+    "tokens": 95779
+  }
+}

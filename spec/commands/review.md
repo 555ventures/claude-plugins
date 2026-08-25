@@ -80,15 +80,16 @@ Run `node "$(spec-paths report-render)" --slots <file>` and print its output ver
   its frozen worktree), the pipeline-rules path, and the evidence paths the driver's step
   prints. Blind to the build session — it gets no build narrative, only artifacts on disk.
   **Design legs** (specs with `design: true` or `design_source` only): alongside the reviewer,
-  dispatch the two design checks as parallel Sonnet agents — the rule-checklist walk
-  (`docs/design/research-brief.md` rule IDs against the built screens; skip with a note when
-  no brief exists) and the component-manifest audit (`design/components.json`
+  dispatch the component-manifest audit as a parallel Sonnet agent (`design/components.json`
   `authorJustification` entries — a missing justification or a near-duplicate of an existing
-  entry is a finding). Non-UI specs skip both silently. When the host config declares
+  entry is a finding). Non-UI specs skip it silently. When the host config declares
   `design.render`, also run `node "$(spec-paths render-gate)" --spec <spec> --out <evidence
-  dir>` and hand its report path to the reviewer as evidence; when `design.render` is absent,
-  print one skip line naming the key. This leg is advisory — never a `verdict.js` leg, and its
-  findings never block the verdict on their own. Write the reviewer's structured return
+  dir>` and hand its report path to the reviewer as evidence — this advisory run now carries
+  the design rules genesis wrote as `renderCheck` entries against the built screens, in place
+  of the Sonnet rule-checklist walk it replaced (shared § Design Canon: a rule a script can
+  check is never checked by an LLM at runtime); when `design.render` is absent, print one skip
+  line naming the key. This leg is advisory — never a `verdict.js` leg, and its findings never
+  block the verdict on their own. Write the reviewer's structured return
   to the file the driver's step names: `{verdict: "CLEAN"|"REVIEWER_FAILED", survivors:
   [{severity, claim, file, line, impact, evidence}], killed: [], reviewerCount: 1, scope:
   "full"|"fix-delta", tokens: <n>}`, then mark `reviewer-returned --file <json>`.

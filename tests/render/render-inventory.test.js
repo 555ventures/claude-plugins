@@ -190,3 +190,39 @@ test('AC-20260824-01-13: the shipped in-page walker uppercases painted text via 
   assert.strictEqual(domB.otherBtn._clicked, false,
     'D11: only the matching data-state-btn control is clicked — the "other" control must stay untouched')
 })
+
+// specs/20260824/04-render-rules.md (2026-08-24, D4): render-inventory.browser.js gains
+// effectiveBackground (the nearest ancestor-or-self computed background-color whose alpha is
+// non-zero, else the document's) and fontWeight per entry — the render-rules.js contrast check
+// (AC-20260824-04-4) has no denominator to compare against a fully transparent own background.
+// Builds a small DOM apart from buildDom() above: a text element whose own backgroundColor is
+// fully transparent, nested under an ancestor carrying an opaque backgroundColor.
+function buildEffectiveBgDom() {
+  const root = el('div', { 'data-screen-label': 'Screen' })
+  const ancestor = el('div', {}, { backgroundColor: 'rgb(16, 16, 16)' })
+  const inkText = el('div', {}, { backgroundColor: 'rgba(0, 0, 0, 0)', fontWeight: '700' })
+  append(inkText, textNode('Ink'))
+  append(ancestor, inkText)
+  append(root, ancestor)
+
+  const documentElement = el('html')
+  const document = {
+    documentElement,
+    body: root,
+    querySelector(sel) { return queryAll(root, sel)[0] || null },
+    querySelectorAll(sel) { return queryAll(root, sel) },
+  }
+  return { document, documentElement, root, ancestor, inkText }
+}
+
+test('AC-20260824-04-8: a text element whose own backgroundColor is rgba(0, 0, 0, 0) under an ancestor with rgb(16, 16, 16) records effectiveBackground "rgb(16, 16, 16)" and the element\'s own fontWeight', () => {
+  const walk = loadWalker()
+  const dom = buildEffectiveBgDom()
+  const inv = withGlobals(dom, () => walk({ theme: 'light', state: '-' }))
+  const entry = inv.entries.find((e) => e.text === 'Ink')
+  assert.ok(entry, 'a text element under a fully transparent own background must still enter the inventory: ' + JSON.stringify(inv.entries))
+  assert.strictEqual(entry.effectiveBackground, 'rgb(16, 16, 16)',
+    'D4: when an element\'s own computed backgroundColor has zero alpha, effectiveBackground must walk up to the nearest ancestor-or-self opaque backgroundColor — without this, render-rules.js\'s contrast check (AC-20260824-04-4) has no real background to compare color against: got ' + JSON.stringify(entry))
+  assert.strictEqual(entry.fontWeight, '700',
+    'D4: the entry must also record its own computed fontWeight — render-rules.js\'s contrast check reads fontWeight>=700 (with fontSize>=18.66px) as an alternate minLarge trigger, and a missing field means that branch can never fire: got ' + JSON.stringify(entry))
+})

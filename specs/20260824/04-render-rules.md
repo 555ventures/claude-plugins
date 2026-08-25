@@ -1,6 +1,7 @@
 ---
 date: 2026-08-24
-status: hardened
+status: implementing
+diff_base: ecec5570e8e06d069e2fd78fea88b8212093181d
 tier: standard           # additive script + additive field on design-rules.json; render-gate.js gains a mode (not a critical-named surface); no contract edit
 area: design-stage
 design: false

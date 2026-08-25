@@ -1326,11 +1326,11 @@ const STEPS = {
     `diff base ${base}, root ${repoRoot}, and this run's evidence:\n` +
     `  manifest: ${manifestPath}\n  outputs: ${outDir}\n` +
     (designFlag || designSource
-      ? '  design specs also get two parallel Sonnet design-leg agents (rule-checklist + ' +
-        'component-manifest audit) alongside the reviewer' +
+      ? '  design specs also get the component-manifest audit agent alongside the reviewer' +
         (renderGateDeclared
-          ? '; also run the advisory render gate review.md names (design.render is declared) ' +
-            'and hand its report path to the reviewer as evidence.\n'
+          ? '; also run the advisory render gate review.md names (design.render is declared — its ' +
+            'run now carries the design-rules.json renderCheck pass too) and hand its report path ' +
+            'to the reviewer as evidence.\n'
           : ' (design.render is not declared — skip the advisory render-gate run).\n')
       : '') +
     `Write its structured return ({verdict, survivors, killed, reviewerCount, scope, tokens}) to ` +

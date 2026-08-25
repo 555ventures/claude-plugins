@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict'
-// render-gate.js --spec <spec.md> [--root <dir>] [--out <dir>] [--json] [--no-boot]
+// render-gate.js (--spec <spec.md> | --mocks <mock>…) [--root <dir>] [--out <dir>] [--json] [--no-boot]
 //
 // WHY: specs/20260824/01-render-gate.md (2026-08-24, ADR-0002) — the render gate's driver. Two
 // prax/salon-os spikes measured that fidelity between a mock and its built component can only be
@@ -13,19 +13,32 @@
 // a sentinel-terminated verdict `/spec:review` (or any script consumer) can trust without
 // reading prose.
 //
+// specs/20260824/04-render-rules.md (2026-08-24, D5): when the host config declares
+// `design.rulesManifest`, every COMPONENT inventory (never the mock side, in --spec mode) is
+// also run through render-rules.js after comparison — a rule finding prints under its cell
+// (`rule <id> <kind> …`) and fails the gate exactly like a fidelity finding. No manifest
+// declared prints one line (`rules: no design.rulesManifest declared — skipped`) and changes
+// nothing else. The new `--mocks <mock>…` mode captures mock(s) only — no --spec, no ledger
+// read, no component URL, no comparison — so /spec:sketch's exit can run the same rules over a
+// brief's mocks before any component exists to compare against.
+//
 // What this deliberately does NOT do: compute or diff pixels (D7 — the capture contract this
 // script issues has no screenshot flag, ever); pick a per-host geometry tolerance (D4's
 // thresholds live in render-compare.js only); touch a process it did not itself spawn (D13's
 // "a process it did not start is never touched" — the boot lifecycle below tracks its OWN child
 // only); read anything outside the host's declared render config, targets.json, the resolved
-// mock file(s), and the coverage ledger's own claims.
+// mock file(s), and the coverage ledger's own claims (--spec mode only — --mocks mode reads no
+// ledger); interpret a renderCheck itself (render-rules.js owns that reading, this script only
+// shells out to it per cell and folds its findings into its own output).
 //
-// Exit codes: 0 = pass (__RENDER_GATE_PASS__) · 1 = findings, including any unbound-state
-// (__RENDER_GATE_FAIL__) · 2 = precondition failure (missing design.render, targets.json,
-// design_source, mock file, or ledger claim — stderr names the remedy) · 3 = capture-family
-// failure (a capture command exiting non-zero, an unparsable inventory, or a readiness timeout —
-// stderr names the failed command/config key; never a pass and never printed alongside either
-// sentinel).
+// Exit codes: 0 = pass (__RENDER_GATE_PASS__) · 1 = findings, including any unbound-state and
+// any render-rules finding (__RENDER_GATE_FAIL__) · 2 = precondition failure (missing
+// design.render, targets.json, design_source/--mocks file, ledger claim in --spec mode, a
+// malformed design.rulesManifest per render-rules.js's own exit 2, or neither/both of --spec and
+// --mocks given — stderr names the remedy) · 3 = capture-family failure (a capture command
+// exiting non-zero, an unparsable inventory or render-rules --json payload, or a readiness
+// timeout — stderr names the failed command/config key; never a pass and never printed alongside
+// either sentinel).
 
 const fs = require('fs')
 const path = require('path')
@@ -36,6 +49,7 @@ const { fmBlock, fmValue } = require('./lib/frontmatter')
 
 const RENDER_COMPARE = path.join(__dirname, 'render-compare.js')
 const RENDER_INVENTORY = path.join(__dirname, 'render-inventory.browser.js')
+const RENDER_RULES = path.join(__dirname, 'render-rules.js')
 
 function die(code, msg) {
   process.stderr.write('render-gate: ' + msg + '\n')
@@ -66,18 +80,34 @@ function flagVal(name) {
   const i = argv.indexOf(name)
   return i > -1 ? argv[i + 1] : undefined
 }
+// D5: --mocks is a variable-arity flag — this repo's Worker Rules ban an arg-parsing library, so a
+// repeated `--flag value` pair per mock (never a bare multi-token tail) is the hand-rolled shape.
+function flagVals(name) {
+  const out = []
+  for (let i = 0; i < argv.length; i++) if (argv[i] === name) out.push(argv[i + 1])
+  return out
+}
 const specPath = flagVal('--spec')
-if (!specPath) die(2, 'usage: render-gate.js --spec <spec.md> [--root <dir>] [--out <dir>] [--json] [--no-boot]')
+const mocksArgVals = flagVals('--mocks')
+if (!specPath && !mocksArgVals.length) {
+  die(2, 'usage: render-gate.js (--spec <spec.md> | --mocks <mock>…) [--root <dir>] [--out <dir>] [--json] [--no-boot]')
+}
+if (specPath && mocksArgVals.length) {
+  die(2, 'render-gate.js takes exactly one of --spec or --mocks, not both')
+}
+const mode = specPath ? 'spec' : 'mocks'
 const root = path.resolve(flagVal('--root') || process.cwd())
 const asJson = argv.includes('--json')
 const noBoot = argv.includes('--no-boot')
 const outFlag = flagVal('--out')
 
-if (!fs.existsSync(specPath)) die(2, 'spec not found: ' + specPath + ' — pass --spec <path to a spec.md>')
-const specText = fs.readFileSync(specPath, 'utf8')
-const fm = fmBlock(specText)
-const fmVal = (k) => fmValue(fm, k)
-const designSource = fmVal('design_source')
+let designSource = null
+if (mode === 'spec') {
+  if (!fs.existsSync(specPath)) die(2, 'spec not found: ' + specPath + ' — pass --spec <path to a spec.md>')
+  const specText = fs.readFileSync(specPath, 'utf8')
+  const fm = fmBlock(specText)
+  designSource = fmValue(fm, 'design_source')
+}
 
 // ---- preconditions (exit 2, remedy named) ---------------------------------------------------------
 const config = readConfig(root)
@@ -103,24 +133,33 @@ if (!Array.isArray(targets.themes) || !targets.themes.length ||
     'viewports[] arrays — copy design-targets.json (the template) as a starting point')
 }
 
-if (!designSource || !designSource.trim()) {
-  die(2, specPath + ' frontmatter has no design_source — the render gate needs a mock file or a ' +
-    'directory of mock files under design/')
-}
-const designSourceAbs = path.resolve(root, designSource)
-if (!fs.existsSync(designSourceAbs)) {
-  die(2, 'design_source ' + designSource + ' does not exist under ' + root + ' — fix the spec ' +
-    'frontmatter or restore the mock')
-}
+// D5: --mocks mode takes its mock file list straight from argv — no design_source frontmatter to
+// resolve, since there is no spec.
 let mockFiles
-if (fs.statSync(designSourceAbs).isDirectory()) {
-  mockFiles = fs.readdirSync(designSourceAbs).filter((f) => f.endsWith('.html')).sort()
-    .map((f) => path.join(designSourceAbs, f))
+if (mode === 'spec') {
+  if (!designSource || !designSource.trim()) {
+    die(2, specPath + ' frontmatter has no design_source — the render gate needs a mock file or a ' +
+      'directory of mock files under design/')
+  }
+  const designSourceAbs = path.resolve(root, designSource)
+  if (!fs.existsSync(designSourceAbs)) {
+    die(2, 'design_source ' + designSource + ' does not exist under ' + root + ' — fix the spec ' +
+      'frontmatter or restore the mock')
+  }
+  if (fs.statSync(designSourceAbs).isDirectory()) {
+    mockFiles = fs.readdirSync(designSourceAbs).filter((f) => f.endsWith('.html')).sort()
+      .map((f) => path.join(designSourceAbs, f))
+  } else {
+    mockFiles = [designSourceAbs]
+  }
+  if (!mockFiles.length) {
+    die(2, 'design_source ' + designSource + ' resolves to a directory with no .html mock files under ' + root)
+  }
 } else {
-  mockFiles = [designSourceAbs]
-}
-if (!mockFiles.length) {
-  die(2, 'design_source ' + designSource + ' resolves to a directory with no .html mock files under ' + root)
+  mockFiles = mocksArgVals.map((m) => path.resolve(root, m))
+  for (const p of mockFiles) {
+    if (!fs.existsSync(p)) die(2, '--mocks ' + p + ' does not exist under ' + root + ' — pass a real mock file path')
+  }
 }
 
 const LABEL_RE = /data-screen-label\s*=\s*"([^"]+)"/
@@ -137,8 +176,12 @@ function extractStates(html) {
 }
 
 const designDir = path.join(root, 'design')
+// D5: --mocks mode reads no ledger at all — there is no component side to bind states to, so a
+// coverage-ledger claim is not a precondition (Contracts: "no ledger read").
 let ledger = null
-try { ledger = JSON.parse(fs.readFileSync(path.join(root, '.claude/design-coverage.json'), 'utf8')) } catch { /* handled below */ }
+if (mode === 'spec') {
+  try { ledger = JSON.parse(fs.readFileSync(path.join(root, '.claude/design-coverage.json'), 'utf8')) } catch { /* handled below */ }
+}
 
 const mocks = mockFiles.map((absPath) => {
   const html = fs.readFileSync(absPath, 'utf8')
@@ -149,14 +192,17 @@ const mocks = mockFiles.map((absPath) => {
   }
   const rootRelPath = path.relative(root, absPath).split(path.sep).join('/')
   const designRelPath = path.relative(designDir, absPath).split(path.sep).join('/')
-  const claim = ledger && ledger.sources && ledger.sources[rootRelPath] &&
-    ledger.sources[rootRelPath].regions && ledger.sources[rootRelPath].regions[label]
-  if (!claim) {
-    die(2, 'no coverage-ledger claim for ' + rootRelPath + ' region "' + label + '" in ' +
-      path.join(root, '.claude/design-coverage.json') + ' — bind this surface (with its story ' +
-      'ids) before running the render gate')
+  let stories = {}
+  if (mode === 'spec') {
+    const claim = ledger && ledger.sources && ledger.sources[rootRelPath] &&
+      ledger.sources[rootRelPath].regions && ledger.sources[rootRelPath].regions[label]
+    if (!claim) {
+      die(2, 'no coverage-ledger claim for ' + rootRelPath + ' region "' + label + '" in ' +
+        path.join(root, '.claude/design-coverage.json') + ' — bind this surface (with its story ' +
+        'ids) before running the render gate')
+    }
+    stories = (claim.stories && typeof claim.stories === 'object') ? claim.stories : {}
   }
-  const stories = (claim.stories && typeof claim.stories === 'object') ? claim.stories : {}
   const rawStates = extractStates(html)
   const states = rawStates.length
     ? rawStates.map((name) => ({ name, captureArg: name }))
@@ -165,13 +211,17 @@ const mocks = mockFiles.map((absPath) => {
 })
 
 // ---- D11/D10: bound vs unbound states, cell derivation --------------------------------------------
+// D5: --mocks mode has no stories to bind against (mock.stories is always {}), so the
+// unbound-state gate below is --spec-mode-only — every declared state is captured directly.
 const unboundFindings = []
 const cells = []
 for (const mock of mocks) {
-  const unbound = mock.states.filter((s) => mock.stories[s.name] === undefined)
-  if (unbound.length) {
-    for (const s of unbound) unboundFindings.push('unbound-state "' + mock.label + '" "' + s.name + '"')
-    continue // D10: no capture for the WHOLE surface, not just its unbound state(s)
+  if (mode === 'spec') {
+    const unbound = mock.states.filter((s) => mock.stories[s.name] === undefined)
+    if (unbound.length) {
+      for (const s of unbound) unboundFindings.push('unbound-state "' + mock.label + '" "' + s.name + '"')
+      continue // D10: no capture for the WHOLE surface, not just its unbound state(s)
+    }
   }
   for (const state of mock.states) {
     for (const theme of targets.themes) {
@@ -183,7 +233,7 @@ for (const mock of mocks) {
 }
 
 // ---- --out (default: session scratchpad, else <root>/.claude/spec-runs/render/<spec-stem>/) -------
-const specStem = path.basename(specPath, '.md')
+const specStem = mode === 'spec' ? path.basename(specPath, '.md') : 'mocks'
 const outDir = outFlag
   ? path.resolve(outFlag)
   : (process.env.CLAUDE_SCRATCHPAD || path.join(root, '.claude/spec-runs/render', specStem))
@@ -307,6 +357,29 @@ function runCapture(url, width, height, theme, stateArg, outPath) {
   })
 }
 
+// ---- D5 (specs/20260824/04-render-rules.md): render-rules.js pass over one inventory ------------
+// Shelled out exactly like runCompare() below — this script never interprets a renderCheck itself,
+// it only hands render-rules.js a single inventory (D2: cta-count is "counted per inventory", so
+// one call per cell keeps that arithmetic scoped correctly) and folds the findings it returns into
+// this cell's own report. render-rules.js's own exit 2 (a malformed manifest — an unknown
+// renderCheck.kind) is a precondition problem discovered late, not a findings run, so it maps to
+// this script's own exit 2 rather than 1 or 3.
+function runRules(inventoryPaths, rulesManifestAbs, tokensAbs) {
+  const args = [RENDER_RULES, '--rules', rulesManifestAbs]
+  for (const p of inventoryPaths) args.push('--inventory', p)
+  args.push('--tokens', tokensAbs, '--json')
+  const r = spawnSync(process.execPath, args, { encoding: 'utf8' })
+  if (r.status === 2) {
+    die(2, 'render-rules.js rejected ' + rulesManifestAbs + ': ' + (r.stdout + r.stderr).trim() +
+      ' — fix the manifest (spec-paths templates has design-rules.json) and re-run')
+  }
+  try {
+    return JSON.parse(r.stdout)
+  } catch (e) {
+    die(3, 'render-rules.js produced unparsable --json output for ' + rulesManifestAbs + ' (' + e.message + ')')
+  }
+}
+
 function runCompare(mockOut, compOut, width) {
   const r = spawnSync(process.execPath, [RENDER_COMPARE, '--mock', mockOut, '--comp', compOut,
     '--width', String(width), '--json'], { encoding: 'utf8' })
@@ -323,10 +396,17 @@ function runCompare(mockOut, compOut, width) {
 }
 
 // ---- main ---------------------------------------------------------------------------------------
+// D5: design.rulesManifest resolution is shared by both modes — a declared manifest is run per
+// cell over the COMPONENT inventory in --spec mode (never the mock side) or the mock inventory
+// itself in --mocks mode (there is no other side); an absent manifest prints the one skip line
+// and changes nothing else.
 async function main() {
   const cellReports = []
   const excusedSeen = new Set()
   const excusedLines = []
+  const rulesManifestRel = config.design && config.design.rulesManifest
+  const rulesManifestAbs = rulesManifestRel ? path.join(root, rulesManifestRel) : null
+  const tokensAbs = path.join(designDir, 'tokens.css')
 
   if (cells.length) {
     const server = await startMockServer()
@@ -337,12 +417,27 @@ async function main() {
       const vpLabel = viewportLabel(cell.viewport)
       const base = cell.mock.label + '.' + cell.state.name + '.' + cell.theme + '.' + vpLabel
       const mockOut = path.join(outDir, base + '.mock.json')
-      const compOut = path.join(outDir, base + '.comp.json')
 
       const mockUrl = 'http://127.0.0.1:' + port + '/' + cell.mock.designRelPath
       const mockResult = await runCapture(mockUrl, cell.viewport.width, cell.viewport.height, cell.theme, cell.state.captureArg, mockOut)
       if (!mockResult.ok) die(3, mockResult.message)
 
+      if (mode === 'mocks') {
+        let ruleFindings = []
+        let rulePass = true
+        if (rulesManifestAbs) {
+          const rr = runRules([mockOut], rulesManifestAbs, tokensAbs)
+          ruleFindings = rr.findings || []
+          rulePass = rr.exit === 0
+        }
+        cellReports.push({
+          label: cell.mock.label, state: cell.state.name, theme: cell.theme, viewport: vpLabel,
+          findings: ruleFindings, counts: {}, pass: rulePass,
+        })
+        continue
+      }
+
+      const compOut = path.join(outDir, base + '.comp.json')
       const story = cell.mock.stories[cell.state.name]
       const compUrl = substituteUrl(renderConfig.url,
         { story, theme: cell.theme, width: cell.viewport.width, height: cell.viewport.height, state: cell.state.name })
@@ -355,9 +450,19 @@ async function main() {
       for (const line of cmp.excused || []) {
         if (!excusedSeen.has(line)) { excusedSeen.add(line); excusedLines.push(line) }
       }
+
+      let ruleFindings = []
+      let rulePass = true
+      if (rulesManifestAbs) {
+        const rr = runRules([compOut], rulesManifestAbs, tokensAbs)
+        ruleFindings = rr.findings || []
+        rulePass = rr.exit === 0
+      }
+
       cellReports.push({
         label: cell.mock.label, state: cell.state.name, theme: cell.theme, viewport: vpLabel,
-        findings: cmp.findings || [], counts: cmp.counts || {}, pass: cmp.exit === 0,
+        findings: [...(cmp.findings || []), ...ruleFindings], counts: cmp.counts || {},
+        pass: cmp.exit === 0 && rulePass,
       })
     }
     server.close()
@@ -366,10 +471,12 @@ async function main() {
   const anyUnbound = unboundFindings.length > 0
   const anyDirtyCell = cellReports.some((c) => !c.pass)
   const exitCode = (anyUnbound || anyDirtyCell) ? 1 : 0
+  const rulesSkipLine = rulesManifestRel ? null : 'rules: no design.rulesManifest declared — skipped'
 
   if (asJson) {
     writeOut(JSON.stringify({
-      cells: cellReports, unboundStates: unboundFindings, excused: excusedLines, exit: exitCode,
+      cells: cellReports, unboundStates: unboundFindings, excused: excusedLines,
+      rulesDeclared: !!rulesManifestRel, exit: exitCode,
     }))
     process.exit(exitCode)
   }
@@ -377,15 +484,18 @@ async function main() {
   const lines = []
   for (const c of cellReports) {
     const counts = c.counts
-    const summary = 'matched=' + (counts.matched || 0) + ' missing=' + (counts.missing || 0) +
-      ' extra=' + (counts.extra || 0) + ' order=' + (counts.order || 0) + ' role=' + (counts.role || 0) +
-      ' positioning=' + (counts.positioning || 0) + ' geometry=' + (counts.geometry || 0) +
-      ' excused=' + (counts.excused || 0)
-    lines.push((c.pass ? '✅' : '❌') + ' ' + c.label + ' ' + c.state + ' ' + c.theme + ' ' + c.viewport + ': ' + summary)
+    const summary = mode === 'spec'
+      ? ': matched=' + (counts.matched || 0) + ' missing=' + (counts.missing || 0) +
+        ' extra=' + (counts.extra || 0) + ' order=' + (counts.order || 0) + ' role=' + (counts.role || 0) +
+        ' positioning=' + (counts.positioning || 0) + ' geometry=' + (counts.geometry || 0) +
+        ' excused=' + (counts.excused || 0)
+      : ''
+    lines.push((c.pass ? '✅' : '❌') + ' ' + c.label + ' ' + c.state + ' ' + c.theme + ' ' + c.viewport + summary)
   }
   for (const f of unboundFindings) lines.push(f)
   for (const c of cellReports) for (const f of c.findings) lines.push(f)
   for (const e of excusedLines) lines.push(e)
+  if (rulesSkipLine) lines.push(rulesSkipLine)
   lines.push(exitCode === 0 ? '__RENDER_GATE_PASS__' : '__RENDER_GATE_FAIL__')
   writeOut(lines.join('\n'))
   process.exit(exitCode)

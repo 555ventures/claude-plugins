@@ -140,13 +140,14 @@ out-render blind generation), skipped with an explicit note when no such capabil
 Draft rounds render the draft framing only (the most-constrained viewport, above); the
 **expansion pass** (media queries + consuming the tokens dark block, no new taste) renders the
 matrix — screenshot each declared viewport, and each theme at minimum on the draft framing — so
-neither the `ratified` nor the `approved` stamp ever lands on a one-framing look. **Rule-checklist
-pass (enforcement, not memory):** before any mock's direction
-approval, a **Sonnet checker walks the research-brief's admitted rules as an explicit checklist**
-against the screen — the rules were authored falsifiable with numeric ALWAYS/NEVER thresholds
-precisely so a checker who wasn't in the room can verify them — and files violations citing rule
-IDs ("UX-7: max one primary CTA; this screen has three"). Doctrine taste that never became a
-checkable rule, token, or lint is advisory by definition; relying on an authoring session to
+neither the `ratified` nor the `approved` stamp ever lands on a one-framing look. **Render rules
+pass (enforcement, not memory):** before any mock's direction approval, `render-rules.js`
+(`spec-paths render-rules`) executes every design-rules-genesis rule that carries a
+`renderCheck` — `target-size`, `cta-count`, `contrast`, `palette` — as a script over the render
+inventory (at `/spec:sketch` exit via `render-gate.js --mocks`, and inside the render gate over
+the component render), filing findings against a measured number instead of a walked checklist
+("rule one-primary-cta cta-count 2 > 1"). Doctrine taste that never became a checkable
+`renderCheck`, token, or lint is advisory by definition; relying on an authoring session to
 *remember* psychology is not an enforcement mechanism. Any mock-authoring or mock-editing
 pass, in any command, also applies § Design Authoring Contracts, its grounded-vs-taste rules,
 at authoring time: a `grounded` doctrine ruling (a11y/contrast, legal/brand, destructive-action

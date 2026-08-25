@@ -27,6 +27,15 @@
 //
 // Exit codes: n/a — not an entrypoint. The host's capture command owns exit 0/non-zero for the
 // process that evaluates this file; this expression only ever returns a document or throws.
+//
+// specs/20260824/04-render-rules.md (2026-08-24, D4): every entry also carries
+// `effectiveBackground` (the nearest ancestor-or-self computed background-color whose alpha is
+// non-zero, else the document's) and `fontWeight` — render-rules.js's contrast check has no
+// denominator to compare against a fully transparent own background. `effectiveBackground`
+// inherits DOWNWARD through the same recursive walk as `fixed`/`outOfFlow`/`dataPositioned`
+// (never an upward `parentElement` walk from the leaf) — the stub-DOM surface this file's own
+// entry rules above are written against guarantees no ancestor-lookup API per element, only
+// `children` for descending. `schemaVersion` stays 1 (additive keys).
 
 (function (opts) {
   var theme = opts && opts.theme
@@ -145,6 +154,17 @@
     return Math.round(n * 100) / 100
   }
 
+  // D4: zero-alpha detection for effectiveBackground's inheritance below — an unset/absent value
+  // and the `transparent` keyword both count as zero alpha (CSS's own default), a bare rgb()
+  // (no alpha channel) is always opaque, and an rgba() with alpha 0 is the explicit case D4 names.
+  function isTransparentBg(bg) {
+    if (!bg) return true
+    if (bg === 'transparent') return true
+    var m = /^rgba\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*,\s*([\d.]+)\s*\)$/.exec(bg)
+    if (m) return parseFloat(m[1]) === 0
+    return false
+  }
+
   // Page-coordinate box (viewport rect + scroll), 2 dp — the geometry contract render-compare.js
   // reads verbatim.
   function boxOf(el) {
@@ -164,17 +184,23 @@
 
   // Flags inherit downward (D2/D3): fixed/sticky, outOfFlow (absolute), dataPositioned all union
   // the parent's own flags with this element's own contribution — a child of a data-positioned
-  // ancestor is dataPositioned even when it carries no attribute of its own.
+  // ancestor is dataPositioned even when it carries no attribute of its own. D4: `background`
+  // rides the same downward carry — this element's own opaque backgroundColor wins, else the
+  // inherited value (itself already resolved to the nearest ancestor-or-self opaque color, or the
+  // document's own background at the root) passes straight through.
   function walk(el, inherited) {
     if (!el || el.nodeType !== 1) return
     if (isPruned(el)) return
 
     var style = computedStyleOf(el)
     var position = style.position || 'static'
+    var ownBgOpaque = !isTransparentBg(style.backgroundColor)
+    var effectiveBg = ownBgOpaque ? style.backgroundColor : inherited.background
     var flags = {
       fixed: inherited.fixed || position === 'fixed' || position === 'sticky',
       outOfFlow: inherited.outOfFlow || position === 'absolute',
       dataPositioned: inherited.dataPositioned || hasAttr(el, 'data-positioned'),
+      background: effectiveBg,
     }
 
     var role = roleOf(el)
@@ -205,7 +231,9 @@
         dataPositioned: flags.dataPositioned,
         color: style.color || null,
         background: style.backgroundColor || null,
+        effectiveBackground: effectiveBg || null,
         fontSize: style.fontSize || null,
+        fontWeight: style.fontWeight || null,
         lineHeight: style.lineHeight || null,
       })
     }
@@ -218,7 +246,13 @@
   var rootEl = labeledRoot || bodyEl
   var rootSelector = labeledRoot ? '[data-screen-label]' : 'body'
 
-  walk(rootEl, { fixed: false, outOfFlow: false, dataPositioned: false })
+  // D4: the root-level fallback — "the document's" own computed background — seeds `inherited
+  // .background` before the walk starts, so an element whose entire ancestor chain (down to the
+  // walked root) is transparent still resolves to SOMETHING rather than null.
+  var docStyle = computedStyleOf((document && document.documentElement) || bodyEl)
+  var documentBackground = (docStyle && docStyle.backgroundColor) || null
+
+  walk(rootEl, { fixed: false, outOfFlow: false, dataPositioned: false, background: documentBackground })
 
   return {
     schemaVersion: 1,

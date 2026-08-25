@@ -134,12 +134,19 @@
   "spec/scripts/render-gate.js": {
     "entryPoints": [
       "spec/commands/review.md",
-      "spec/commands/design.md"
+      "spec/commands/design.md",
+      "spec/commands/sketch.md"
     ]
   },
   "spec/scripts/render-inventory.browser.js": {
     "entryPoints": [
       "spec/scripts/render-gate.js"
+    ]
+  },
+  "spec/scripts/render-rules.js": {
+    "entryPoints": [
+      "spec/scripts/render-gate.js",
+      "spec/doctrine/design.md"
     ]
   },
   "spec/scripts/replay.js": {

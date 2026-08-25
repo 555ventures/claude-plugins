@@ -72,13 +72,21 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // spec-paths additive-collision class (JJ-20260814-01): the key list below is updated in place,
 // never a parallel exhaustive pin.
 
+// specs/20260824/04-render-rules.md D9 (spec/bin/spec-paths row): the new render-rules.js script
+// needs a spec-paths key like every other bundled script — a missing key breaks render-gate.js's
+// own resolution of render-rules.js (D5) silently (§ Risk Tiers, spec-paths). D9 marks this row
+// [no-ac: suite guards]: it is enforced fail-closed by this existing suite guard (and by
+// tests/consistency/entrypoints.test.js) — the ninth recurrence of the spec-paths
+// additive-collision class (JJ-20260814-01): the key list below is updated in place, never a
+// parallel exhaustive pin.
+
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-enforce',
     'wf-panel', 'wf-research', 'dc-extract', 'design-atlas', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
     'review-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'render-gate', 'render-compare',
-    'render-inventory', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
+    'render-inventory', 'render-rules', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }

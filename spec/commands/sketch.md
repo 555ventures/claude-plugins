@@ -108,7 +108,13 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    **expansion pass** (shared § Design Canon: media queries + the
    tokens dark block, one responsive file, no new taste) on each of the brief's `sketch` mocks,
    run `node {atlas} check --matrix`, and render the matrix screenshots — each declared viewport, each
-   theme at minimum on the draft framing — for one fast confirm look. Only then `AskUserQuestion`,
+   theme at minimum on the draft framing — for one fast confirm look. Then run
+   `node "$(spec-paths render-gate)" --mocks <the brief's sketch mocks>` — this replaces the
+   Sonnet rule-checklist pass with the design rules genesis wrote as `renderCheck` entries,
+   executed as a script (shared § Design Canon: a rule a script can check is never checked by an
+   LLM at runtime). A rule finding blocks ratification until the mock is fixed or the rule is
+   amended — never excused per surface; a `severity: "warn"` rule prints its finding prefixed
+   `⚠️` and does not block. Only then `AskUserQuestion`,
    glossed in plain English with a consequence per option: "ratify this brief's sketches now?
    (Recommended when the readout found no open flags and the matrix confirm looked right:
    `/spec:plan` can then proceed on a brief whose mocks already agree with it and pass the render

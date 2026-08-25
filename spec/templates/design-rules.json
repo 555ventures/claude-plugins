@@ -11,7 +11,41 @@
       "exemptGlobs": ["**/tokens/**", "**/*.stories.*"],
       "severity": "error",
       "grounding": "grounded",
-      "rationale": "Single source of truth for theme; enables dark mode and audience-specific theming."
+      "rationale": "Single source of truth for theme; enables dark mode and audience-specific theming.",
+      "renderCheck": { "kind": "palette" }
+    },
+    {
+      "id": "min-target-size",
+      "intent": "Interactive controls must meet the minimum touch-target size — no undersized buttons, links, or form controls.",
+      "targetCategory": "density",
+      "appliesTo": ["src/**/*.{ts,tsx,css}"],
+      "exemptGlobs": ["**/tokens/**", "**/*.stories.*"],
+      "severity": "error",
+      "grounding": "grounded",
+      "rationale": "WCAG 2.2 AA target-size baseline; undersized targets are the most common mobile a11y failure.",
+      "renderCheck": { "kind": "target-size", "min": 44 }
+    },
+    {
+      "id": "one-primary-cta",
+      "intent": "A screen shows at most one primary call-to-action — no competing accent-styled buttons.",
+      "targetCategory": "layout",
+      "appliesTo": ["src/**/*.{ts,tsx,css}"],
+      "exemptGlobs": ["**/tokens/**", "**/*.stories.*"],
+      "severity": "error",
+      "grounding": "taste",
+      "rationale": "Multiple primary CTAs dilute the intended action and read as unstyled/uncurated.",
+      "renderCheck": { "kind": "cta-count", "max": 1, "tokens": ["--accent"] }
+    },
+    {
+      "id": "text-contrast-aa",
+      "intent": "Text must meet WCAG 2.x AA contrast against its effective background — no low-contrast copy.",
+      "targetCategory": "a11y",
+      "appliesTo": ["src/**/*.{ts,tsx,css}"],
+      "exemptGlobs": ["**/tokens/**", "**/*.stories.*"],
+      "severity": "error",
+      "grounding": "grounded",
+      "rationale": "WCAG 2.2 AA text-contrast baseline (1.4.3) — the a11y anchor a taste ruling can't override.",
+      "renderCheck": { "kind": "contrast", "min": 4.5, "minLarge": 3 }
     },
     {
       "id": "no-off-scale-text",

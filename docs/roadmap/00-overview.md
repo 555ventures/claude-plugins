@@ -23,6 +23,7 @@ fences off belongs to its owning brief.
 | 08 | design-thinning → render-gated redesign (ADR-0002) |
 | 09 | promise-sweep-leg |
 | 10 | genesis-single-proposer |
+| 10a | genesis-tournament-conventions *(successor: units C + D′ of 10)* |
 | 11 | init-thinning |
 | 12 | release-legs |
 | 13 | deviations-sidecar-mechanization |

@@ -166,3 +166,40 @@ test('AC-20260823-06-10: spec-paths prints an existing file path for both prose-
       'on disk, or every doctrine invocation via this key fails at runtime with no earlier warning')
   }
 })
+
+// 2026-08-25 ratchet mode (direct fix, core § Incident Policy — same session as understood):
+// the cap postdated the debt on every adopting host (Upwell 138, Prax 169 against 15), so the
+// first close met an unmeetable eviction duty and Prax closed with the cap "recorded as unmet".
+// --baseline N admits an over-cap section iff it is strictly smaller than N — every close must
+// net-shrink the section by one entry, so the debt converges with no flag day.
+test('ratchet: an over-cap section strictly below --baseline exits 0 and names the ratchet', () => {
+  const dir = tmpdir('prose-cap-ratchet-pass')
+  const entries = []
+  for (let i = 1; i <= 40; i++) entries.push(bullet(i))
+  const file = writeFixture(dir, entries)
+  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas', '--cap', '15', '--baseline', '41'])
+  assert.strictEqual(r.status, 0, (r.stderr || '') +
+    ' — 40 entries against a baseline of 41 is a net eviction; refusing it is the flag-day gate that made Prax close with the cap unmet')
+  assert.match(r.stdout || '', /ratchet: 40 < baseline 41/,
+    'stdout must say the baseline, not the cap, admitted the pass — otherwise a reader believes the section is under cap')
+})
+
+test('ratchet: an over-cap section at or above --baseline exits 1 naming the baseline', () => {
+  const dir = tmpdir('prose-cap-ratchet-fail')
+  const entries = []
+  for (let i = 1; i <= 40; i++) entries.push(bullet(i))
+  const file = writeFixture(dir, entries)
+  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas', '--cap', '15', '--baseline', '40'])
+  assert.strictEqual(r.status, 1, 'equal to baseline is no shrink — a pass here lets an over-cap section grow forever behind the ratchet')
+  assert.match(r.stderr || '', /baseline 40/, 'stderr must name the baseline the count failed against')
+})
+
+test('ratchet: at or under cap the baseline is ignored and the hard cap rules', () => {
+  const dir = tmpdir('prose-cap-undercap')
+  const entries = []
+  for (let i = 1; i <= 15; i++) entries.push(bullet(i))
+  const file = writeFixture(dir, entries)
+  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas', '--cap', '15', '--baseline', '10'])
+  assert.strictEqual(r.status, 0, 'a section at cap passes regardless of a lower baseline — the ratchet only governs the over-cap regime')
+  assert.doesNotMatch(r.stdout || '', /ratchet:/, 'no ratchet note when the cap itself admitted the pass')
+})

@@ -63,18 +63,25 @@ ${canonicalDelta}
 `}`
 }
 
-function makeHost({ gateFails = false, specOpts = {} } = {}) {
+// gotchas: when a number, the host declares pipelineRules and ships a rules file holding that
+// many Gotchas entries BEFORE the diff base (so reconcile never sees it as out-of-plan).
+function makeHost({ gateFails = false, specOpts = {}, gotchas = null } = {}) {
   const root = fs.realpathSync(tmpdir('rvdrv'))
   const g = gitRepo(root)
   fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
   fs.mkdirSync(path.join(root, 'src'), { recursive: true })
   fs.mkdirSync(path.join(root, 'tests'), { recursive: true })
-  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({
+  const cfg = {
     gateCommand: 'node --test {testDirs}',
     testCommand: 'node --test',
     runtime: { inert: 'plugin repo — nothing boots' },
     capabilities: { forge: 'none', skipReportPattern: 'none' },
-  }))
+  }
+  if (gotchas !== null) {
+    cfg.pipelineRules = '.claude/rules/spec-pipeline.md'
+    rulesWithGotchas(root, gotchas)
+  }
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify(cfg))
   fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 41\n')
   g('add', '-A'); g('commit', '-q', '-m', 'base')
   const diffBase = g('rev-parse', 'HEAD').trim()
@@ -1396,4 +1403,58 @@ test('AC-20260823-05-7: WHEN the driver flips a spec whose frontmatter already c
     'D3: an existing diff_base value must be left BYTE-IDENTICAL by the close flip — overwriting it would ' +
     'silently repoint a review\'s pinned diff base after the fact: before=' + JSON.stringify(beforeMatch[0]) +
     ' after=' + JSON.stringify(afterMatches[0]))
+})
+
+// 2026-08-25 Gotchas ratchet (direct fix, core § Incident Policy): the CLOSE step's prose-cap
+// duty was a sentence nothing executed — Prax closed 2026-08-25 at 169/15 with the cap "recorded
+// as unmet". The driver now records the count on the review row and refuses --mark closed unless
+// prose-cap passes in ratchet mode against that count.
+function rulesWithGotchas(root, n) {
+  const dir = path.join(root, '.claude/rules')
+  fs.mkdirSync(dir, { recursive: true })
+  const entries = []
+  for (let i = 1; i <= n; i++) entries.push(`- \`[host]\` fixture gotcha ${i}`)
+  fs.writeFileSync(path.join(dir, 'spec-pipeline.md'),
+    '# Rules\n\n## Review Checks\n\n- none\n\n## Gotchas (evidence-cited)\n\n' + entries.join('\n') + '\n')
+}
+function makeGotchasHost(n) {
+  const host = makeHost({ gotchas: n })
+  const g = (...a) => execFileSync('git', ['-C', host.root, ...a], { encoding: 'utf8' })
+  toReviewer(host)
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('rvdrv-gotchas-' + n, CLEAN_RETURN))
+  const d = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE', 'setup precondition: dispositions must reach CLOSE: ' + d.stdout + d.stderr)
+  return { ...host, g }
+}
+
+test('gotchas ratchet: the review row records the Gotchas count observed at verdict time, and an over-cap section that did not shrink refuses --mark closed', () => {
+  const host = makeGotchasHost(20)
+  const rows = fs.readFileSync(path.join(host.root, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n').map(l => JSON.parse(l))
+  const row = rows[rows.length - 1]
+  assert.strictEqual(row.stage, 'review')
+  assert.strictEqual(row.gotchas, 20,
+    'the review row must carry the derived Gotchas count — the ratchet baseline is derived from this observation, never attested: ' + JSON.stringify(row))
+  const r = run(host.root, host.spec, '--mark', 'closed')
+  assert.strictEqual(r.status, 2,
+    'an over-cap section unchanged since the verdict must refuse the close — the prose-only duty is exactly what Prax skipped at 169/15: ' + r.stdout + r.stderr)
+  assert.match(r.stdout + r.stderr, /20\/15/, 'the refusal must name the count and cap: ' + r.stdout + r.stderr)
+  assert.match(r.stdout + r.stderr, /evict/i, 'the refusal must name the eviction remedy')
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE')
+})
+
+test('gotchas ratchet: an over-cap section that lost one net entry since the verdict closes — no flag-day eviction', () => {
+  const host = makeGotchasHost(20)
+  rulesWithGotchas(host.root, 19)
+  host.g('add', '-A'); host.g('commit', '-q', '-m', 'evict one')
+  const r = run(host.root, host.spec, '--mark', 'closed')
+  assert.strictEqual(r.status, 0,
+    '19 entries against 20 at verdict is a net eviction and must close — refusing it reinstates the unmeetable gate: ' + r.stdout + r.stderr)
+  assert.notStrictEqual(stateOf(host.root, host.spec), 'CLOSE', 'a ratchet-admitted close advances past CLOSE: ' + r.stdout)
+})
+
+test('gotchas ratchet: the CLOSE step names the over-cap count and the shrink requirement before the session folds', () => {
+  const host = makeGotchasHost(20)
+  const r = run(host.root, host.spec)
+  assert.match(r.stdout, /Gotchas cap: 20\/15 at verdict — OVER CAP/,
+    'the printed CLOSE step must carry the number the close will be judged against — a session that learns it only from the refusal folds first and evicts second: ' + r.stdout)
 })

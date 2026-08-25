@@ -257,6 +257,50 @@ function saveSidecar() {
   fs.writeFileSync(stateFile, JSON.stringify(marks, null, 2) + '\n')
 }
 
+// ---- Gotchas cap (prose-cap.js, specs/20260823/06 + 2026-08-25 ratchet) ------------------------
+// The cap used to be a CLOSE-step sentence in review.md that nothing executed: Prax closed
+// 2026-08-25 at 169/15 with the cap "recorded as unmet" — the fail-open shape core § Rule
+// Enforcement forbids. The driver now (a) observes the count when the verdict runs and records
+// it on the review row as `gotchas` (derived, never attested), and (b) refuses `--mark closed`
+// unless prose-cap passes in ratchet mode against that entry count: at/under cap → hard cap;
+// over cap → the section must be strictly smaller than it was at verdict time. A host with no
+// declared/readable pipelineRules file is skipped with a printed note (the state-gate hook is the
+// grounding gate, not this driver); a rules file with no Gotchas section is a hard refusal.
+const proseCapBin = path.join(__dirname, 'prose-cap.js')
+const pipelineRulesPath = (() => {
+  const rel = readConfig(repoRoot).pipelineRules
+  if (!rel || typeof rel !== 'string') return null
+  const abs = path.resolve(repoRoot, rel)
+  return fs.existsSync(abs) ? abs : null
+})()
+
+function runProseCap(extra) {
+  const r = runChild(process.execPath,
+    [proseCapBin, '--file', pipelineRulesPath, '--section', 'Gotchas', ...extra],
+    { encoding: 'utf8' }, 'prose-cap.js')
+  if (r.status === 2) die('prose-cap.js could not measure the Gotchas section of ' + pipelineRulesPath + ': ' + (r.stdout + r.stderr).trim())
+  const m = /^(\d+)\/(\d+) entries/.exec(r.stdout)
+  return { status: r.status, count: m ? Number(m[1]) : null, cap: m ? Number(m[2]) : null, out: (r.stdout + r.stderr).trim() }
+}
+
+function observeGotchas() {
+  if (!pipelineRulesPath) return null
+  const r = runProseCap([])
+  marks.gotchasAtVerdict = r.count
+  return r.count
+}
+
+function refuseUnlessGotchasRatchet() {
+  if (!pipelineRulesPath) return
+  const baseline = Number.isFinite(marks.gotchasAtVerdict) ? marks.gotchasAtVerdict : null
+  const r = runProseCap(baseline === null ? [] : ['--baseline', String(baseline)])
+  if (r.status === 0) return
+  die('Gotchas section of ' + pipelineRulesPath + ' is over cap and did not shrink this close — ' + r.out +
+    '\nEvict at least one entry (delete / merge into docs/canonical/ / mechanize — one Rationale line ' +
+    'each in the spec), commit, then re-run `node ' + __filename + ' ' + specPath + ' --mark closed`' +
+    (baseline === null ? '' : ' (ratchet: ' + r.count + ' entries now, ' + baseline + ' when the verdict ran; over cap the count must be strictly lower)'))
+}
+
 // ---- D2/D5: deviations sidecar observation (specs/20260823/07-deviations-sidecar-backstop.md) --
 // Classifies every line of the deviations sidecar per the bullets-only entry grammar (Contracts):
 // blank/`#`-header/`- `-bullet are always allowed; a whitespace-indented continuation is allowed
@@ -665,6 +709,14 @@ function doCloseWork(n) {
     'verdict.js (authoritative pass)')
   if (r.status === 2) die('verdict.js (authoritative pass) failed: ' + (r.stdout + r.stderr).trim())
   const lines = r.stdout.split('\n')
+  // Gotchas count rides the review row only when a rules file was observed — a host without one
+  // keeps verdict.js's line byte-identical.
+  const gotchas = observeGotchas()
+  if (gotchas !== null) {
+    const row = JSON.parse(lines[1])
+    row.gotchas = gotchas
+    lines[1] = JSON.stringify(row)
+  }
   appendLedger(lines[1])
 
   const newSpecText = specText.replace(/^status:\s*.*$/m, 'status: done')
@@ -946,6 +998,7 @@ function handleClosed() {
       'it re-observes clean, fold, delete, and re-commit before re-marking closed:\n' +
       '  git checkout <ref> -- ' + deviationsPath + '\n' + malformedLines(dev.malformed).join('\n'))
   }
+  refuseUnlessGotchasRatchet()
   const dirty = gitStatusPaths(repoRoot)
   const unexpected = dirty.filter((p) =>
     !(p === sidecarRel || p.startsWith(sidecarRel + '/') ||
@@ -958,6 +1011,20 @@ function handleClosed() {
   marks.closed = true
   saveSidecar()
   return null
+}
+
+function gotchasCapLine() {
+  if (!pipelineRulesPath) return ''
+  const n = marks.gotchasAtVerdict
+  const cap = 15
+  if (!Number.isFinite(n)) return ''
+  if (n <= cap) {
+    return `   Gotchas cap: ${n}/${cap} at verdict — after the fold the section must still hold <= ${cap} ` +
+      `entries (--mark closed refuses otherwise).\n`
+  }
+  return `   Gotchas cap: ${n}/${cap} at verdict — OVER CAP. --mark closed refuses unless the section ends ` +
+    `this close with fewer than ${n} entries (ratchet: evict at least one net entry — delete / merge ` +
+    `into docs/canonical/ / mechanize — one Rationale line each; full pruning is separate direct work).\n`
 }
 
 function handleMergeStrategy() {
@@ -1405,6 +1472,7 @@ const STEPS = {
       `2. Fold the deviations sidecar if one exists (recurring -> Gotchas [host]/[plugin]; one-offs ` +
       `-> the spec's Rationale); delete the sidecar.\n` +
       deviationsEnumBlock() +
+      gotchasCapLine() +
       `3. Hygiene listing — everything not marked EXPECTED below is a stray to explain or clean:\n` +
       `   EXPECTED   ${sidecarRel}/            (never committed — deleted at DONE)\n` +
       `   EXPECTED   .claude/spec-runs/*.json  (retained review evidence)\n` +

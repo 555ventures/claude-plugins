@@ -129,7 +129,9 @@ defective file — that is the only unrecoverable input.
      (pipeline rules § Gotchas; cite this escape row; tag `[host]` or `[plugin]` by where
      the wrong assumption came from). Check whether the target section is at cap:
      `node "$(spec-paths prose-cap)" --file <host pipelineRules> --section Gotchas`; exit 1
-     means it is — evict before appending, naming one of exactly three fates: **delete**
+     means it is — evict before appending (on a legacy over-cap host the next review close
+     is ratcheted against its verdict-time count, so the append must be paired with at least
+     one eviction here, never a net growth), naming one of exactly three fates: **delete**
      (wrong, dead-cited, or mechanized), **merge** (durable engineering truth →
      `docs/canonical/{area}.md`), or **mechanize** (a recurring class → a script). At cap,
      present the drafted entry **together with the eviction it displaces** in the same

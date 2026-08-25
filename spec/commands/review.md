@@ -132,13 +132,19 @@ Run `node "$(spec-paths report-render)" --slots <file>` and print its output ver
   the sidecar still exists on disk, or while the last persisted observation records a
   malformed — flush-left, count-invisible — line even after the file's deletion. After the
   deviations fold, run
-  `node "$(spec-paths prose-cap)" --file <host pipelineRules> --section Gotchas`; exit 1
-  means the section is at or over cap — evict before the close commit, choosing one of
-  exactly three fates per evicted entry: **delete** (wrong, dead-cited, or mechanized — the
-  owning script's header keeps the history), **merge** (durable engineering truth →
+  `node "$(spec-paths prose-cap)" --file <host pipelineRules> --section Gotchas --baseline
+  <the review row's gotchas count>`; exit 1 means the section is over cap and no smaller than
+  it was when the verdict ran — evict before the close commit, choosing one of exactly three
+  fates per evicted entry: **delete** (wrong, dead-cited, or mechanized — the owning script's
+  header keeps the history), **merge** (durable engineering truth →
   `docs/canonical/{area}.md`), or **mechanize** (a recurring class → a script per core §
   Incident Policy, and the prose dies). Record each eviction as one Rationale line in the
-  spec under review. **Dispose every
+  spec under review. The cap is a **ratchet**, not a flag day: the driver records the count
+  observed at verdict time on the review row (`gotchas`) and prints it in this step, and
+  `--mark closed` refuses (exit 2) while an over-cap section has not ended the close strictly
+  below that number — one net eviction per close satisfies it; a section at or under cap must
+  simply stay there. Bulk pruning of a legacy over-cap section is separate host work (direct, gated by
+  prose-cap), never this step's duty. **Dispose every
   `.claude/agent-memory/` file this spec's diff touched** — one stated fate each: carry, correct,
   or delete. Judge what each teaches, not that a worker wrote it; a memory attributing observed
   work to an unnamed "concurrent process", or concluding an assignment was already done and could

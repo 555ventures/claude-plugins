@@ -51,26 +51,33 @@ warning); also verify `.claude/genesis/stack-descriptor.json` exists.
 
 ## Phase 1 — Discovery interview (interactive)
 
-Same discovery posture as architect (genesis.md § Genesis: Discovery Interview), narrowed to design:
-reflect back the design intent first, then batch broad → narrow, every batch lens-tagged and
-escape-hatched, each marked **cold** or **research-backed**.
+Same adaptive, consultant-style posture as architect (genesis.md § Genesis: Discovery
+Interview), narrowed to design: reflect back the design intent first, then follow the answer —
+no probe cap. After every answer, rewrite `.claude/genesis/brief.md` and print its `## What I
+think you're building` + `## Coverage` sections to the console verbatim; a correction is an
+edit to the page, never a separate sign-off question.
 
-1. **[Brand lens] — research-backed.** taste / voice direction — run the **research-woven loop**
-   (genesis.md § Genesis: Discovery Interview) on the visual-trend dimension: `wf-research` with
-   `{stage: "design", dimensionKeys: ["visual-trend", ...], briefPath, contextPaths:
+1. **Reflect back.** Restate the design intent in your own words — the feeling, the audience,
+   any references already named — and run one `AskUserQuestion` to confirm/correct.
+2. **Taste direction — research-backed.** Run the **research-woven loop** (genesis.md § Genesis:
+   Discovery Interview) on the visual-trend dimension: `wf-research` with `{stage: "design",
+   dimensionKeys: ["visual-trend", ...], briefPath, contextPaths:
    [".claude/genesis/stack-descriptor.json", <prior interview-research/*.json>], verifyKeys: []}`
-   (taste is not version-bearing → no Haiku pass). Present the current aesthetic/voice directions for
-   this archetype + audience as the options, recommended-first and labeled "(Recommended)" with the
-   menu's `why_recommended` as the stated reason, recency-stamped; the user picks the feeling,
-   references in vs. out.
-2. **[User lens] — cold.** a **research-assumption** check — "has real user research been done?" If
-   no, the doctrine records a *hypothesized* user model with explicit TODO stubs (no research gate
-   for solo/MVP).
-3. **[Scope lens] — cold.** design non-goals — surfaces or states deliberately out of scope for v1.
+   (taste is not version-bearing → no Haiku pass). Present the current aesthetic/voice directions
+   for this archetype + audience as the options — each description built as `tradeoff` ·
+   `because` · `priced` · "current as of `<fetchedAt>`" — recommended-first and labeled
+   "(Recommended)" with the menu's `why_recommended` as the stated reason; the user picks the
+   feeling, references in vs. out.
+3. **Research-assumption check — cold.** "has real user research been done?" If no, the
+   doctrine records a *hypothesized* user model with explicit TODO stubs (no research gate for
+   solo/MVP).
+4. **Design non-goals — cold.** surfaces or states deliberately out of scope for v1, recorded
+   into `## Non-goals` as they surface.
 
-Probe a thin taste answer with one pre-laddered follow-up (which reference / which feeling). Write
-each menu to `.claude/genesis/interview-research/{dimension}.json` (stamp `fetchedAt`) and record
-the pick + `sources` to the brief. Read back the design intent for sign-off, then finalize the brief.
+A thin taste answer earns one follow-up (which reference / which feeling) — depth is earned by
+signal, never capped at a fixed round. Write each menu to
+`.claude/genesis/interview-research/{dimension}.json` (stamp `fetchedAt`) and record the pick +
+`sources` + `because`/`priced` to the brief's `## Picks`.
 
 ## Phase 2 — Decide (one proposer)
 
@@ -113,9 +120,11 @@ Phase 4 changes shape at three points, everything else below applies unchanged:
   `design-pick.json` (candidate, reason, salvage) — a rejected direction is a recorded minority
   position.
 - **Prune after lock.** Once `rules-locked` is committed, delete the non-winning
-  `design/explore/r*-*/` dirs (salvage noted in the pick record survives in Dissents); keep
-  `positions.md`, the winner's dir having been promoted into `design/tokens.css` +
-  `design/mocks/` (move its signature screens there, `data-status="approved"`).
+  `design/explore/r*-*/` dirs (salvage noted in the pick record survives in Dissents) and the
+  throwaway `.claude/genesis/sketch.html` (genesis.md § Genesis: Discovery Interview, § Genesis:
+  On-disk Handoff — a throwaway artifact, never durable); keep `positions.md`, the winner's dir
+  having been promoted into `design/tokens.css` + `design/mocks/` (move its signature screens
+  there, `data-status="approved"`).
 
 Author directly (taste exception — not delegated to Sonnet):
 

@@ -233,3 +233,159 @@ test('AC-20260825-01-6: spec-paths wf-research continues to resolve to an existi
     'by this spec\'s doctrine edits would mean the command reads no grounding doctrine at all: ' +
     sharedFor.stdout)
 })
+
+// specs/20260825/02-genesis-consultant-discovery.md (2026-08-25) adds three more ACs to this
+// same doctrine-pin file. D1/D2 rewrite the panel-era § Genesis: Discovery Interview posture: out
+// go the fixed Product/User/Scope/Architect lens batches, the scripted "Probe once" / "One probe
+// round, never a recursion" / "Reflect back, twice" sentences, and the read-back sign-off gate;
+// in comes an adaptive interview gated by a silent ten-key coverage audit, whose keys (plus D5's
+// six derived dimension keys) must now be named in genesis.md (AC-1). D3 introduces the brief
+// template `spec/templates/genesis-brief.md`: six fixed `## ` headings in order and a ten-line,
+// all-`dark` `## Coverage` skeleton (AC-2). D3/D4 add an On-disk Handoff roster line naming that
+// template as `brief.md`'s source and the throwaway `.claude/genesis/sketch.html`, pruned by
+// `/spec:genesis-design` (AC-3). None of AC-1..AC-3 can pass yet — the old lens/probe/read-back
+// literals are still live, the template file does not exist, and the roster names neither
+// artifact (TDD red, 2026-08-25).
+
+// Build a regex matching a multi-word phrase with `\s+` between words instead of a literal space,
+// so a doctrine file that hard-wraps the phrase across two lines still gets caught (memory:
+// doctrine-regex-linewrap — a literal-space pin can pass on a wrapped file while the banned
+// phrase is still live).
+function wordsRe (phrase) {
+  const words = phrase.split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  return new RegExp(words.join('\\s+'))
+}
+
+// ---------------------------------------------------------------------------
+// AC-20260825-02-1
+// ---------------------------------------------------------------------------
+
+test("AC-20260825-02-1: genesis.md, genesis-architect.md, and genesis-design.md carry none of the retired scripted-interview literals, and genesis.md names every coverage key and every D5 derived dimension key", () => {
+  const banned = [
+    [wordsRe('Probe once'), 'Probe once'],
+    [wordsRe('One probe round'), 'One probe round'],
+    [wordsRe('never a recursion'), 'never a recursion'],
+    [wordsRe('read-back gate'), 'read-back gate'],
+    [wordsRe('Reflect back, twice'), 'Reflect back, twice'],
+    [/\[Product lens\]/, '[Product lens]'],
+    [/\[User lens\]/, '[User lens]'],
+    [/\[Scope lens\]/, '[Scope lens]'],
+    [/\[Architect lens\]/, '[Architect lens]']
+  ]
+  const files = [
+    'spec/doctrine/genesis.md',
+    'spec/commands/genesis-architect.md',
+    'spec/commands/genesis-design.md'
+  ]
+  for (const rel of files) {
+    const src = read(rel)
+    assertNoBannedLiterals(src, banned, (label) =>
+      'D1: ' + rel + ' must not contain the retired scripted-interview literal "' + label + '" — ' +
+      'e.g. a surviving "One probe round, never a recursion" means the fixed lens-batch / probe / ' +
+      'read-back script this spec deletes is still the documented interview posture instead of ' +
+      'the adaptive, coverage-audited one D1 requires')
+  }
+
+  const genesisSrc = read('spec/doctrine/genesis.md')
+  const requiredKeys = [
+    'payer', 'tenancy', 'data-sensitivity', 'residency', 'ai-use', 'unattended',
+    'integrations', 'scale-outage', 'vendor-budget', 'offline-mobile',
+    'tenancy-model', 'data-residency', 'llm-provider', 'background-jobs',
+    'observability', 'api-versioning'
+  ]
+  for (const key of requiredKeys) {
+    assert.ok(genesisSrc.includes(key),
+      'D1/D5: genesis.md must name the key "' + key + '" — its absence means either the D2 ' +
+      'coverage audit or the D5 derived-dimension table is missing from the doctrine, and the ' +
+      'session has no fixed structure left to run the interview against')
+  }
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260825-02-2
+// ---------------------------------------------------------------------------
+
+test('AC-20260825-02-2: spec/templates/genesis-brief.md exists with the six D3 headings in order and a ten-line all-dark Coverage block', () => {
+  const templatePath = path.join(SPEC, 'templates/genesis-brief.md')
+  assert.ok(fs.existsSync(templatePath),
+    'D3: spec/templates/genesis-brief.md must exist — its absence means the brief-as-interface ' +
+    'template this spec introduces was never created, and neither genesis command has a skeleton ' +
+    'to author .claude/genesis/brief.md from: ' + templatePath)
+
+  const src = fs.readFileSync(templatePath, 'utf8')
+  const headings = [...src.matchAll(/^## (.+)$/gm)].map((m) => m[1].trim())
+  const expectedHeadings = [
+    "What I think you're building", 'Coverage', 'Non-goals',
+    'Open Dimensions', 'Research Angles', 'Picks'
+  ]
+  assert.deepStrictEqual(headings, expectedHeadings,
+    'D3: genesis-brief.md must contain exactly these six `## ` headings in this order — a ' +
+    'missing, renamed, reordered, or extra heading means the brief-as-interface contract (the ' +
+    'fixed page shape every genesis command reads and re-renders) is not what D3 locked: got ' +
+    JSON.stringify(headings))
+
+  // `m` makes `$` match before every line terminator, not just end-of-string — so a
+  // trailing `\n?$` alternative in the lookahead let the lazy `[\s\S]*?` stop after the
+  // FIRST coverage line every time. `(?![\s\S])` asserts true end-of-string regardless
+  // of the `m` flag, so the capture only stops at the next `## ` heading or real EOF.
+  const coverageMatch = src.match(/^## Coverage\n([\s\S]*?)(?=\n## |(?![\s\S]))/m)
+  assert.ok(coverageMatch,
+    'D3: a `## Coverage` section must be findable in genesis-brief.md to check its ten-line ' +
+    'skeleton against')
+  const coverageLines = coverageMatch[1].split('\n').map((l) => l.trim()).filter(Boolean)
+  assert.strictEqual(coverageLines.length, 10,
+    'D2/D3: the template\'s `## Coverage` block must pre-fill exactly the ten coverage keys, one ' +
+    'line each — a count other than ten means the fixed audit structure the interview depends on ' +
+    'is incomplete or padded in the shipped template: found ' + coverageLines.length + ' lines: ' +
+    JSON.stringify(coverageLines))
+
+  const grammar = /^- (payer|tenancy|data-sensitivity|residency|ai-use|unattended|integrations|scale-outage|vendor-budget|offline-mobile): (covered|dark|n\/a)( — .+)?$/
+  for (const line of coverageLines) {
+    assert.match(line, grammar,
+      'D2: coverage line "' + line + '" does not match the grammar `^- <key>: covered|dark|n/a( ' +
+      '— <reason>)?$` — a line outside this grammar means the driver spec\'s later parser (spec ' +
+      '03/04) has no fixed shape to read the audit from')
+    assert.match(line, /: dark$/,
+      'D3: every coverage line in the pristine (freshly-copied) template must read exactly ' +
+      '"dark" with no trailing reason — a template that ships any key pre-marked covered/n-a ' +
+      'means the audit starts already-answered instead of silently dark: ' + JSON.stringify(line))
+  }
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260825-02-3
+// ---------------------------------------------------------------------------
+
+test("AC-20260825-02-3: genesis.md's On-disk Handoff roster names genesis-brief.md as brief.md's template and sketch.html as the throwaway artifact pruned at /spec:genesis-design", () => {
+  const src = read('spec/doctrine/genesis.md')
+  const headingMatch = src.match(/^## Genesis: On-disk Handoff.*$/m)
+  assert.ok(headingMatch,
+    'the "## Genesis: On-disk Handoff" heading must still exist — without it there is no section ' +
+    'boundary to check the artifact roster from')
+  const afterHeading = src.slice(headingMatch.index + headingMatch[0].length)
+  const nextHeading = afterHeading.match(/^## /m)
+  const section = nextHeading ? afterHeading.slice(0, nextHeading.index) : afterHeading
+
+  const briefBulletIdx = section.indexOf('`.claude/genesis/brief.md`')
+  assert.ok(briefBulletIdx !== -1,
+    'the `.claude/genesis/brief.md` roster bullet must still exist in § On-disk Handoff')
+  const briefWindow = section.slice(briefBulletIdx, briefBulletIdx + 400)
+  assert.match(briefWindow, /genesis-brief\.md/,
+    'D3: the brief.md roster bullet must name genesis-brief.md as the template it is authored ' +
+    'from (e.g. "template via `spec-paths templates`") — its absence means the template ' +
+    'introduced by this spec is undocumented as brief.md\'s source: ' + JSON.stringify(briefWindow))
+
+  const sketchIdx = section.indexOf('sketch.html')
+  assert.ok(sketchIdx !== -1,
+    'D4: § On-disk Handoff must name .claude/genesis/sketch.html — its absence means the ' +
+    'throwaway core-screen sketch this spec introduces has no roster entry at all')
+  const sketchWindow = section.slice(Math.max(0, sketchIdx - 300), sketchIdx + 300)
+  assert.match(sketchWindow, /prune/i,
+    'D4: the sketch.html roster entry must say it is deleted at a prune step — its absence means ' +
+    'the roster does not document that this is a throwaway artifact, not a durable one: ' +
+    JSON.stringify(sketchWindow))
+  assert.match(sketchWindow, /genesis-design/,
+    'D4: the sketch.html roster entry must name /spec:genesis-design as the command whose prune ' +
+    'step deletes it — its absence means the roster does not say WHEN the throwaway artifact ' +
+    'goes away: ' + JSON.stringify(sketchWindow))
+})

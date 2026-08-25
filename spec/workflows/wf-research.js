@@ -65,32 +65,49 @@ const ctxLine = ctx.length
 // recommended-first, each with an honest tradeoff, a recency stamp drawn from sources, and a flag
 // preserving any deliberately-contrarian option (MAINTAINED DISSENT: a genuinely credible
 // underdog option research surfaced, kept and flagged `is_minority` rather than averaged away).
-const OPTION_SET_SCHEMA = {
-  type: 'object', additionalProperties: false,
-  required: ['dimension', 'options', 'version_bearing', 'why_recommended'],
-  properties: {
-    dimension: { type: 'string' },
-    why_recommended: { type: 'string', description: 'why rank 1 wins for THIS project, one line' },
-    options: {
-      type: 'array',
-      description: '2–4 current options, ranked, rank 1 = recommended first',
-      items: {
-        type: 'object', additionalProperties: false,
-        required: ['label', 'tradeoff', 'recency', 'rank'],
-        properties: {
-          label: { type: 'string', description: 'the choice, terse and neutral (no leading language)' },
-          tradeoff: { type: 'string', description: 'one honest line — what you give up by choosing this' },
-          recency: { type: 'string', description: 'how current, grounded in sources — e.g. "stable as of 2026-05" or a version number; "unverified — model knowledge" if no source' },
-          sources: { type: 'array', items: { type: 'string' } },
-          rank: { type: 'integer', description: '1 = recommended first; ascending' },
-          is_minority: { type: 'boolean', description: 'true for a deliberately-preserved contrarian/underdog option research surfaced' },
+//
+// specs/20260825/02 D6: `because` (the coverage keys/answers that drove this option's rank) and
+// `priced` (a consequence priced at the brief's stated scale, or the literal "n/a — no number in
+// the brief") are REQUIRED string fields — a schema requirement the harness enforces on the
+// agent's return, not a prompt suggestion the agent can silently skip.
+//
+// A named top-level function (not a bare top-level const) so tests/genesis/research-menu.test.js
+// can extract it standalone via evalFns. LAYOUT REQUIREMENT (test-mode constraint, per
+// capOptions' precedent below and spec 20260825/02 Assumption A1): the schema is a single
+// `return {…}` — tests/helpers.js extractFn brace-matches a single named top-level function with
+// no mode for adjacent top-level consts, so nothing this function needs may live outside its own
+// braces.
+function optionSetSchema() {
+  return {
+    type: 'object', additionalProperties: false,
+    required: ['dimension', 'options', 'version_bearing', 'why_recommended'],
+    properties: {
+      dimension: { type: 'string' },
+      why_recommended: { type: 'string', description: 'why rank 1 wins for THIS project, one line' },
+      options: {
+        type: 'array',
+        description: '2–4 current options, ranked, rank 1 = recommended first',
+        items: {
+          type: 'object', additionalProperties: false,
+          required: ['label', 'tradeoff', 'recency', 'rank', 'because', 'priced'],
+          properties: {
+            label: { type: 'string', description: 'the choice, terse and neutral (no leading language)' },
+            tradeoff: { type: 'string', description: 'one honest line — what you give up by choosing this' },
+            recency: { type: 'string', description: 'how current, grounded in sources — e.g. "stable as of 2026-05" or a version number; "unverified — model knowledge" if no source' },
+            sources: { type: 'array', items: { type: 'string' } },
+            rank: { type: 'integer', description: '1 = recommended first; ascending' },
+            is_minority: { type: 'boolean', description: 'true for a deliberately-preserved contrarian/underdog option research surfaced' },
+            because: { type: 'string', description: 'the coverage keys and answers that drove this rank, e.g. "because residency=EU-only and tenancy=organisations"' },
+            priced: { type: 'string', description: 'one concrete consequence at the brief\'s stated scale — a monthly figure and where it jumps, a migration cost, or the literal "n/a — no number in the brief"' },
+          },
         },
       },
+      watch_outs: { type: 'array', items: { type: 'string' }, description: 'pitfalls / things to deliberately exclude' },
+      version_bearing: { type: 'boolean', description: 'true if any option carries a library/framework/runtime version whose staleness would corrupt the choice' },
     },
-    watch_outs: { type: 'array', items: { type: 'string' }, description: 'pitfalls / things to deliberately exclude' },
-    version_bearing: { type: 'boolean', description: 'true if any option carries a library/framework/runtime version whose staleness would corrupt the choice' },
-  },
+  }
 }
+const OPTION_SET_SCHEMA = optionSetSchema()
 
 const RECENCY_VERDICT_SCHEMA = {
   type: 'object', additionalProperties: false,
@@ -121,17 +138,24 @@ const menusRaw = await parallel(args.dimensionKeys.map(key => () =>
   agent(
     'You are the option-research agent for the "' + key + '" dimension of a ' + args.stage +
     ' discovery interview. Read the brief at ' + briefPath + ' for this project\'s goal, archetype, ' +
-    'audience/locale, and the focus paragraph for "' + key + '" under "## Research Angles" (if present). ' +
-    ctxLine + ' Research the CURRENT trend / best practice / industry standard for this dimension — use ' +
-    'WebSearch/WebFetch if available; if not, rely on your knowledge and stamp those options ' +
-    '"unverified — model knowledge". Return 2–4 genuinely current options the user should choose ' +
-    'between, ranked recommended-first FOR THIS PROJECT (its archetype, audience, goals). Each option ' +
-    'gets an honest one-line tradeoff and a recency stamp grounded in a source. Phrase labels ' +
-    'neutrally; the ranking and `why_recommended` carry the recommendation — the interview shows ' +
-    'rank 1 as (Recommended) with your reason. Set why_recommended to one line: why rank 1 wins for ' +
-    'THIS project. If research surfaces a credible contrarian/underdog option, include it and set ' +
-    'is_minority (never average it away). Set version_bearing=true if any option carries a ' +
-    'library/framework/runtime version whose staleness would corrupt the choice.',
+    'audience/locale, its "## Coverage" section (the ten business/legal/product answers — payer, ' +
+    'tenancy, data-sensitivity, residency, ai-use, unattended, integrations, scale-outage, ' +
+    'vendor-budget, offline-mobile), and the focus paragraph for "' + key + '" under "## Research ' +
+    'Angles" (if present). ' + ctxLine + ' Research the CURRENT trend / best practice / industry ' +
+    'standard for this dimension — use WebSearch/WebFetch if available; if not, rely on your ' +
+    'knowledge and stamp those options "unverified — model knowledge". Return 2–4 genuinely current ' +
+    'options the user should choose between, ranked recommended-first FOR THIS PROJECT (its ' +
+    'archetype, audience, goals). Each option gets an honest one-line tradeoff and a recency stamp ' +
+    'grounded in a source. Phrase labels neutrally; the ranking and `why_recommended` carry the ' +
+    'recommendation — the interview shows rank 1 as (Recommended) with your reason. Set ' +
+    'why_recommended to one line: why rank 1 wins for THIS project. Each option also gets `because` ' +
+    '(the "## Coverage" keys and answers that drove ITS rank, e.g. "because residency=EU-only and ' +
+    'tenancy=organisations") and `priced` (one concrete consequence at the brief\'s stated scale, ' +
+    'priced against the "## Coverage" answers for scale-outage and vendor-budget — a monthly figure ' +
+    'and where it jumps, or a migration cost; if the brief states no number, use the literal ' +
+    '"n/a — no number in the brief"). If research surfaces a credible contrarian/underdog option, ' +
+    'include it and set is_minority (never average it away). Set version_bearing=true if any option ' +
+    'carries a library/framework/runtime version whose staleness would corrupt the choice.',
     { label: 'menu:' + key, phase: 'Research', model: 'sonnet', effort: 'medium', agentType: 'general-purpose', schema: OPTION_SET_SCHEMA }
   )
 ))

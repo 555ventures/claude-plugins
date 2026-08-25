@@ -1,6 +1,6 @@
 ---
 date: 2026-08-25
-status: hardened
+status: implementing
 tier: standard
 area: genesis
 design: false
@@ -8,6 +8,7 @@ breaking: false
 depends_on: [specs/20260825/01-genesis-panel-collapse.md]
 depended_on_by: [specs/20260825/03-genesis-currency-executed.md]
 brief: 10
+diff_base: c2fc1be71c1954c1cb6bb4e5d7717e683c4cac7c
 open_markers: 0
 ---
 

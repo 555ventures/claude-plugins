@@ -9,67 +9,92 @@ Genesis-stage supplement — read by `/spec:genesis-architect`, `/spec:genesis-e
 
 ## Genesis: Discovery Interview (the intake posture)
 
-Genesis Phase 1 intake is a **structured discovery interview**, not a form — both genesis stages run
-it this way. The AI is the interviewer, the user is the client; questions ship as `AskUserQuestion`
-batches (a BABOK *structured-interview / survey* hybrid), so open-conversation techniques don't
-translate verbatim — their *intent* is preserved through structure:
+Genesis Phase 1 intake is an **adaptive, consultant-style interview**, not a form and not a
+scripted question list — both genesis stages run it this way. The AI is the interviewer, the
+user is the client. Open with a reflect-back of `$ARGUMENTS` — what you think is being built,
+for whom, the core job it does — then follow the answer: depth is earned by signal (hesitation,
+vagueness, a high-stakes area), never spent on a fixed script. There is no probe cap and no
+fixed batch list; order, depth, and follow-ups are the session's judgment, round by round.
 
-- **Funnel shape (broad → narrow).** Vision and the job-to-be-done first, hard constraints and
-  detail last — closed/narrowing questions sit at the tail so early framing isn't primed.
-- **Lenses, coverage-auditable.** Every batch is tagged to one — **Product** (the job /
-  outcome-not-output / success), **User** (audience, needs, locale), **Scope** (non-goals),
-  **Architect** (archetype, NFR-style constraints, pre-decided pieces). Tagging makes coverage
-  checkable; it does **not** add roles to ask staffing about.
-- **Reflect back, twice.** Open with a restatement of the idea for confirm/correct (active
-  listening); close with a read-back of the assembled brief for sign-off before any research runs
-  (BABOK Requirements Validation). The confirmed restatement seeds the verbatim goal — anti-drift.
-- **Probe thin / "Other" answers once.** A live "why?" (laddering / 5-Whys) can't be delivered
-  closed, so pre-author the rungs: a thin or escape-hatch answer fires one focused follow-up batch
-  of "why does that matter / which specifically" options. One probe round, never a recursion.
-- **Escape hatch on every batch.** "Other / not sure" is the one open lane (and the tool's
-  free-text channel) — it counters closed-set option bias and is the signal that triggers a probe.
-  Phrase every option neutrally; no leading or double-barreled options.
-- **Non-goals are recorded, not parked.** A Scope batch presents plausible adjacent features; the
-  user marks each In / Later / Won't-this-time. Written exclusions focus the build — unwritten ones
-  get assumed in.
+**The coverage audit is the one fixed structure.** Ten keys the model cannot derive because
+they are invisible unless asked — `payer`, `tenancy`, `data-sensitivity`, `residency`,
+`ai-use`, `unattended`, `integrations`, `scale-outage`, `vendor-budget`, `offline-mobile` —
+each recorded in `.claude/genesis/brief.md`'s `## Coverage` block as `- <key>: covered | dark |
+n/a — <one line in the user's words>`. The session audits silently after every answer (an
+answer can close a key nobody asked about directly) and asks the highest-stakes still-`dark`
+key next, phrased in plain language that passes core § Question Style's ten-second cold test —
+never the key's identifier. Discovery ends when no key is `dark`; a user who declines a key is
+recorded `n/a — declined: <reason>`, which counts as closed. A key a coverage answer already
+closes ("must use <vendor>") is written `constrained` in `## Open Dimensions` and never asked
+again as a fork (§ Genesis: Hard-to-Reverse Dimensions).
 
-**The woven loop (research-backed batches).** The interview is *not* "user provides everything, AI
-summarizes." Batches are tagged **cold** (user-contextual — the problem, audience, taste,
-non-goals; the session authors these) or **research-backed** (stack, framework, component library,
+**The brief is the interface.** `.claude/genesis/brief.md` is authored from the template
+`genesis-brief.md` (`$(spec-paths templates)/genesis-brief.md`) with exactly six `## ` sections
+in order: `What I think you're building`, `Coverage`, `Non-goals`, `Open Dimensions`,
+`Research Angles`, `Picks`. After **every** `AskUserQuestion` round the session rewrites the
+file and prints its `What I think you're building` + `Coverage` sections to the console
+verbatim — the running, readable record of what Claude understands, corrected in place as the
+user answers. There is no separate sign-off question: the finished page IS the discovery
+brief, because it has already been re-rendered and corrected after every answer a dedicated
+sign-off would only repeat.
+
+**Throwaway sketch.** Once `## What I think you're building` names a core screen, the session
+authors one throwaway `.claude/genesis/sketch.html` (plain HTML, inline CSS permitted, root
+`data-screen-label` + `data-status="sketch"`, the `frontend-design` instructional layer when
+installed) and tells the user to open it; "is this roughly it?" folds into the next round
+rather than a separate approval step. A correction edits the brief page first, then the
+sketch. The sketch predates tokens and runs no `design-atlas.js check`; it is pruned by
+`/spec:genesis-design`'s prune step (§ Genesis: On-disk Handoff) — never a durable artifact.
+
+- **Escape hatch on every round.** "Other / not sure" is the one open lane (and the tool's
+  free-text channel) — it counters closed-set option bias and is the signal that earns a
+  follow-up. Phrase every option neutrally; no leading or double-barreled options.
+- **Non-goals are recorded, not parked.** Adjacent features the user rules out go into `##
+  Non-goals` as soon as they surface, marked In / Later / Won't-this-time — written exclusions
+  focus the build; unwritten ones get assumed in.
+
+**The woven loop (research-backed rounds).** The interview is *not* "user provides everything, AI
+summarizes." A round is **cold** (user-contextual — the coverage audit, non-goals, taste; the
+session authors these itself) or **research-backed** (stack, framework, component library,
 visual-trend — the option menu is researched **live** from the user's last answer). A
 research-backed round:
 
-1. The user's last answer opens one or more dimensions. The command calls **`wf-research`** —
-   research agents only, no proposers — with `args` = paths/keys/booleans (`stage`,
-   `dimensionKeys`, `briefPath`, `contextPaths`, `verifyKeys`). Batch every dimension one answer
-   opens into a single parallel call. Cross-cutting angles available to any archetype —
+1. The user's last answer, or a coverage answer, opens one or more dimensions. The command calls
+   **`wf-research`** — research agents only, no proposers — with `args` = paths/keys/booleans
+   (`stage`, `dimensionKeys`, `briefPath`, `contextPaths`, `verifyKeys`). Batch every dimension
+   one answer opens into a single parallel call. Cross-cutting angles available to any archetype —
    `scope-discipline` (what to include vs deliberately exclude), `competitive-teardown`,
    `accessibility`, and the locale bundle (`i18n-rtl`, `locale-formatting`, `cultural-color`,
    `locale-norms`) — are switched on by the audience scope, not the archetype, and fold into the
    same call.
 2. It returns one **option menu per dimension** — 2–4 current options, ranked recommended-first,
-   each with an honest tradeoff, a recency stamp grounded in sources, an `is_minority` flag
-   preserving any contrarian option (MAINTAINED DISSENT — carried forward into `## Dissents` at
-   decision time), and a required `why_recommended` (one line: why rank 1 wins for THIS project —
-   the stated reason behind the ranking, not just the ranking itself).
+   each carrying an honest `tradeoff`, a `because` (the coverage keys and answers that drove this
+   option's rank), a `priced` consequence at the brief's stated scale (a concrete monthly figure
+   and its jump point, a migration cost, or the honest `n/a — no number in the brief`), a recency
+   stamp grounded in sources, an `is_minority` flag preserving any contrarian option (MAINTAINED
+   DISSENT — carried forward into `## Dissents` at decision time), and a required
+   `why_recommended` (one line: why rank 1 wins for THIS project — the stated reason behind the
+   ranking, not just the ranking itself).
 3. The command writes each menu to `.claude/genesis/interview-research/{dimension}.json` (stamping
    `fetchedAt` itself — the workflow can't), then presents an `AskUserQuestion` built **from the
-   menu**: options recommended-first, the tradeoff + "current as of `<fetchedAt>`" in each
-   description, neutral phrasing, the escape hatch, rank 1 labeled "(Recommended)" with
-   `why_recommended` as the stated reason. The user reacts to an informed menu, never a
-   blank field; the pick seeds the next round.
+   menu**: options recommended-first, each description built as `tradeoff` · `because` · `priced`
+   · "current as of `<fetchedAt>`", neutral phrasing, the escape hatch, rank 1 labeled
+   "(Recommended)" with `why_recommended` as the stated reason. The user reacts to an informed,
+   priced menu, never a blank field; the pick seeds the next round.
 
-**Model placement in the loop:** **Sonnet** builds the menu (research + option synthesis);
-**Haiku** verifies currency on version-bearing dimensions — those the command flags (`verifyKeys`:
-stacks, libraries, runtimes, where a stale stamp corrupts the choice) plus any the researcher
-itself marks `version_bearing` — never on taste/UX; **Opus** (the session)
-curates which 2–4 options ship, orders them, enforces neutral phrasing, and owns the write. This
-holds the pipeline doctrine: Sonnet research, Haiku narrow lookup, Opus session/curation.
+**Model placement in the loop:** **Sonnet** builds the menu (research + option synthesis, incl.
+`because`/`priced`); **Haiku** verifies currency on version-bearing dimensions — those the
+command flags (`verifyKeys`: stacks, libraries, runtimes, where a stale stamp corrupts the
+choice) plus any the researcher itself marks `version_bearing` — never on taste/UX; **Opus**
+(the session) curates which 2–4 options ship, orders them, enforces neutral phrasing, and owns
+the write. This holds the pipeline doctrine: Sonnet research, Haiku narrow lookup, Opus
+session/curation.
 
 **Provenance.** Every shipped option's `sources` + `fetchedAt` live in
-`interview-research/{dimension}.json`; the *picked* option's provenance is copied into the brief's
-intake answers and flows into the ADR rationale/citations. A research call that returns nothing in
-good time falls back to a model-knowledge menu stamped `unverified` — the loop never blocks.
+`interview-research/{dimension}.json`; the *picked* option's provenance is copied into the
+brief's `## Picks` and flows into the ADR rationale/citations. A research call that returns
+nothing in good time falls back to a model-knowledge menu stamped `unverified` — `because` and
+`priced` are then the session's own lines, marked `(unverified)` — the loop never blocks.
 
 **Discovery→Decision bridge (no redundancy).** Split by reversibility: `wf-research` *elicits*
 (today's options, so the user picks informed); the Decision Record (§ Genesis: Decision Record
@@ -122,6 +147,23 @@ skip the fork.
   adjective conflicts (the core taste direction) · **navigation shell** (sidebar / top-nav /
   tabs — the app's structural skeleton) · **layout system** (breakpoints, grid, container
   widths) · **color schemes** (light / dark / system — token structure is hard to retrofit).
+
+### Derived dimensions (from coverage answers)
+
+The registry floor (§ Genesis: Archetype Registry) always applies; the rows below are **added
+on top of it**, never substituted for it, mapped directly from the coverage audit's answers
+(§ Genesis: Discovery Interview). A dimension a coverage answer already closes ("must use
+`<vendor>`") is written `constrained` in `## Open Dimensions` and never asked as a fork.
+
+| Coverage answer | Derived dimension key(s) |
+|---|---|
+| `tenancy` = organisations | `tenancy-model` |
+| `residency` ≠ global, or `data-sensitivity` = regulated | `data-residency` |
+| `ai-use` = yes | `llm-provider`, `vector-store`, `eval-harness` |
+| `ai-use` = yes AND customer data is used | `data-in-training` |
+| `unattended` = yes | `background-jobs` |
+| `scale-outage` any answer | `observability` |
+| `integrations` names a versioned external API | `api-versioning` |
 
 ## Genesis: Archetype Registry (the master variable)
 
@@ -339,10 +381,16 @@ Encode Shape): every cross-stage handoff is a **file**, never conversation conte
 re-invocation of a genesis command was never in the originating conversation; it Reads files only.
 The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/adr/` (durable):
 
-- **`.claude/genesis/brief.md`** — the project description + intake answers, plus two
-  machine-keyed sections the workflow agents read: `## Research Angles` (key → focus),
-  `## Open Dimensions` (each marked hard-to-reverse or not). The command writes this; the
-  workflow's `args` only ever carries the *keys*.
+- **`.claude/genesis/brief.md`** — authored from the template `genesis-brief.md`
+  (`$(spec-paths templates)/genesis-brief.md`, § Genesis: Discovery Interview): `## What I
+  think you're building`, `## Coverage` (the ten-key audit), `## Non-goals`, `## Open
+  Dimensions` and `## Research Angles` (the two machine-keyed sections the workflow agents
+  read — key → focus, and each marked hard-to-reverse or not), `## Picks`. The command writes
+  and re-renders this after every answer; the workflow's `args` only ever carries the *keys*.
+- **`.claude/genesis/sketch.html`** (throwaway) — the one core-screen sketch authored as soon
+  as `## What I think you're building` names a screen (§ Genesis: Discovery Interview); it
+  predates tokens and is never atlas-checked. Deleted at `/spec:genesis-design`'s prune step,
+  alongside the non-winning explore candidate dirs — never a durable artifact.
 - **`.claude/genesis/status.json`** — the genesis state machine (§ Genesis: State Machine).
 - **`.claude/genesis/stack-descriptor.json`** — architect's output (template via `spec-paths templates`).
 - **`.claude/genesis/design-pick.json`** — explore's output: the picked candidate, grafts, and

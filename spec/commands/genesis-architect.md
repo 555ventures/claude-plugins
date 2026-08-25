@@ -38,36 +38,48 @@ being resumed. The roadmap has no status enum of its own: `architect: scaffold-c
 
 ## Phase 1 — Discovery interview (interactive)
 
-Run intake as a **structured discovery interview**, not a form (genesis.md § Genesis: Discovery
-Interview): funnel-shaped (broad vision → narrow constraints), every `AskUserQuestion` batch
-lens-tagged and carrying an **"Other / not sure"** escape hatch (your one open
-lane). The exception: vision/taste dimensions may stay neutral — everywhere else the derived pick
-leads (the research-woven loop's recommended-first rule below governs).
+Run intake as an **adaptive, consultant-style interview**, not a form (genesis.md § Genesis:
+Discovery Interview): reflect back, then follow the answer — depth earned by signal, no fixed
+batch list and no probe cap. The one fixed structure is the ten-key **coverage audit**; the
+brief (`.claude/genesis/brief.md`, authored from `$(spec-paths templates)/genesis-brief.md`) is
+the interview's running record, re-rendered and re-printed to the console after every answer.
 
-0. **Reflect back first.** Restate `$ARGUMENTS` in your words — what you think is being built, for
-   whom, the core job it does — and run one `AskUserQuestion` to confirm/correct *before* any
-   elicitation. The confirmed restatement seeds the verbatim goal (anti-drift).
-
-Then batch, broad → narrow — each batch tagged **cold** (user-contextual; the options are yours to
-author) or **research-backed** (options built live by `wf-research`):
-
-1. **[Product lens] — cold.** the job & success — the problem solved, and what success looks like in
-   ~6 months as an **outcome** (a named behavior change, not a feature). Never embed a metric or
-   solution in an option. **Close the measurement loop:** once the outcome is named, one follow-up
-   option set — how will we know? (product analytics / a manual proxy / "not measured in v1") — the
-   answer is a recorded decision either way; an unmeasured outcome must be chosen, not defaulted
-   into. A measured pick becomes an ops-conventions row in Phase A.
-2. **[User lens] — cold.** audience & locale scope — global / region / single-country (+ primary
-   locale), and the primary user's core need. Sets the locale research context for later batches.
-3. **[Scope lens] — cold.** non-goals — present plausible adjacent features; the user marks each
-   **In / Later / Won't-this-time**. Recorded exclusions are a focusing device, not a parking lot.
-4. **[Architect lens] — archetype cold, the stack research-backed.** First settle the archetype
-   (genesis.md § Genesis: Archetype Registry — web-app / mobile-app / conversational-bot / backend-api /
-   realtime-trading / cli-devtool / data-ml / desktop-app; for `web-app` the FE/BE/fullstack split),
-   hard constraints (must-use services, compliance, performance/budget targets — **never staffing**),
-   and any pre-decided pieces — all structural and user-owned. Then run the **research-woven loop**
-   over every still-open stack dimension the archetype opens (framework, persistence, component
-   library, hosting, …): the options are the current menu, not your prior.
+1. **Reflect back first.** Restate `$ARGUMENTS` in your own words — what you think is being
+   built, for whom, the core job it does — as the seed of `## What I think you're building`.
+   Run one `AskUserQuestion` to confirm/correct before any further elicitation; the confirmed
+   restatement seeds the verbatim goal (anti-drift).
+2. **Adaptive loop.** After every answer: rewrite `brief.md`, print its `## What I think you're
+   building` + `## Coverage` sections to the console verbatim, silently audit coverage against
+   the ten keys (`payer`, `tenancy`, `data-sensitivity`, `residency`, `ai-use`, `unattended`,
+   `integrations`, `scale-outage`, `vendor-budget`, `offline-mobile`), and ask next: the
+   highest-stakes still-`dark` key (phrased in plain language, never the key's identifier —
+   core § Question Style's ten-second cold test), or a follow-up the last answer itself earned
+   (hesitation, vagueness, a high-stakes area). A user who declines a key is recorded `n/a —
+   declined: <reason>`, which counts as closed. Continue until no key is `dark`. Non-goals
+   surface into `## Non-goals` as soon as they come up (adjacent features the user marks In /
+   Later / Won't-this-time), never held for a separate round. **Close the measurement loop:**
+   once a success outcome is named, one follow-up — how will we know? (product analytics / a
+   manual proxy / "not measured in v1") — is a recorded decision either way; an unmeasured
+   outcome must be chosen, not defaulted into. A measured pick becomes an ops-conventions row in
+   Phase A.
+3. **Archetype, audience, and stack.** Once product/business shape is clear enough, settle the
+   archetype (genesis.md § Genesis: Archetype Registry — web-app / mobile-app /
+   conversational-bot / backend-api / realtime-trading / cli-devtool / data-ml / desktop-app;
+   for `web-app` the FE/BE/fullstack split), the audience/locale scope (global / region /
+   single-country + primary locale — sets the locale research context for later dimensions),
+   hard constraints (must-use services, compliance, performance/budget targets — **never
+   staffing**), and any pre-decided pieces — all structural and user-owned. Initialize
+   `.claude/genesis/status.json` (`architect: pending`, archetype, localeScope) from
+   `$(spec-paths templates)/status.json`. Then run the **research-woven loop** over every still-
+   open stack dimension the archetype and the coverage answers open (framework, persistence,
+   component library, hosting, …): the options are the current menu, not your prior.
+4. **Throwaway sketch.** Once `## What I think you're building` names a core screen, author one
+   throwaway `.claude/genesis/sketch.html` (plain HTML, inline CSS permitted, root
+   `data-screen-label` + `data-status="sketch"`, the `frontend-design` instructional layer when
+   installed), tell the user to open it, and fold "is this roughly it?" into the next round
+   rather than a separate approval step. A correction edits the brief page first, then the
+   sketch. No `design-atlas.js check` (throwaway tier, predates tokens); deleted by
+   `/spec:genesis-design`'s prune step.
 
 **Research-woven loop** (genesis.md § Genesis: Discovery Interview — the woven loop). For each open
 dimension a prior answer opens:
@@ -78,28 +90,18 @@ dimension a prior answer opens:
    paths/keys/booleans only. Batch all dimensions one answer opens into a single call.
 2. On return, write each menu to `.claude/genesis/interview-research/{dimension}.json`, **stamping
    `fetchedAt`** yourself (the workflow can't — read the date via Bash `date`).
-3. Present an `AskUserQuestion` built from the menu: 2–4 options recommended-first by `rank`, each
-   option's `tradeoff` + recency in its description ("current as of `<fetchedAt>`"), neutral
-   phrasing, the **"Other / not sure"** escape hatch; the rank-1 option is labeled "(Recommended)"
-   with the menu's `why_recommended` as the stated reason. **Drop or demote** any option the Haiku
-   pass marked `still_current: false`.
-4. Record the pick **and its `sources`** to the brief, and mark that dimension **constrained** — it
-   then skips the Phase-3 hard-fork ask (genesis.md § Genesis: Discovery Interview — Discovery→Decision bridge).
-
-**Probe once.** When a batch returns "Other / not sure" or an answer is too thin to drive research,
-fire **one** focused follow-up batch whose options are the pre-laddered "why does that matter /
-which specifically" rungs for that pick. One probe round, never a recursion. If a research call
-returns nothing in good time, fall back to a model-knowledge menu stamped `unverified` — never block
-the interview.
-
-**Read back for sign-off.** Assemble the answers into a short discovery brief and run a final
-confirm `AskUserQuestion` (the read-back gate) before Phase 3 decides. Write
-`.claude/genesis/brief.md` incrementally as the interview proceeds and finalize it here: the goal
-(verbatim from the confirmed restatement, for anti-drift), the intake answers, the recorded
-non-goals, **each research-backed pick with its `sources` and `fetchedAt`**, and the two
-machine-keyed sections — `## Research Angles`, `## Open Dimensions` — populated in
-Phase 2. Initialize `.claude/genesis/status.json` (`architect: pending`, archetype, localeScope)
-from `$(spec-paths templates)/status.json`.
+3. Present an `AskUserQuestion` built from the menu: 2–4 options recommended-first by `rank`,
+   each option's description built as `tradeoff` · `because` (the coverage keys/answers that
+   drove this rank) · `priced` (a consequence at the brief's stated scale) · recency ("current
+   as of `<fetchedAt>`"), neutral phrasing, the **"Other / not sure"** escape hatch; the rank-1
+   option is labeled "(Recommended)" with the menu's `why_recommended` as the stated reason.
+   **Drop or demote** any option the Haiku pass marked `still_current: false`.
+4. Record the pick, its `sources`, and its `because`/`priced` to the brief's `## Picks`, and
+   mark that dimension **constrained** in `## Open Dimensions` — it then skips the Phase-3
+   hard-fork ask (genesis.md § Genesis: Discovery Interview — Discovery→Decision bridge). A
+   research call that returns nothing in good time falls back to a model-knowledge menu stamped
+   `unverified`, with `because`/`priced` as the session's own lines marked `(unverified)` —
+   never blocks the interview.
 
 **Discovery is product / user / business / legal only.** Team skill, headcount, ownership, ops
 staffing are never asked — Claude is always the implementer, so "team skill" collapses to a silent
@@ -113,11 +115,13 @@ From the archetype registry + audience scope:
 - Select the **research-angle keys** (archetype angles + cross-cutting `scope-discipline`,
   `competitive-teardown`, `accessibility`, and the locale bundle if non-global). Expand each into
   a focus paragraph under `## Research Angles` in the brief.
-- List the **hard-to-reverse dimensions** (shared list) under `## Open Dimensions`, each marked
-  *constrained* (user pre-decided **or settled in the Phase-1 research-woven loop**) or *open*, and
-  flagged hard-to-reverse. A dimension the user picked from a research-backed menu is constrained —
-  its ADR may carry a `minority_position` sourced from the menu's non-picked ranks but is never
-  reopened as a hard fork.
+- List the **hard-to-reverse dimensions** — the archetype registry floor plus any key the
+  coverage answers derive (genesis.md § Genesis: Hard-to-Reverse Dimensions — Derived
+  dimensions) — under `## Open Dimensions`, each marked *constrained* (user pre-decided, a
+  coverage answer already closed it, **or settled in the Phase-1 research-woven loop**) or
+  *open*, and flagged hard-to-reverse. A dimension the user picked from a research-backed menu
+  is constrained — its ADR may carry a `minority_position` sourced from the menu's non-picked
+  ranks but is never reopened as a hard fork.
 - For each still-*open* dimension, keep the Phase-1 `.claude/genesis/interview-research/*.json`
   files on hand as `contextPaths` — Phase 3's decision record reads them directly, and any second
   perspective on a hard fork is a fresh `wf-research` call over a **different** `dimensionKeys`

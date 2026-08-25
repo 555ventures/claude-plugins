@@ -1,6 +1,6 @@
 ---
 date: 2026-08-24
-status: implementing
+status: done
 tier: critical           # removes spec-paths keys (key-set edit — critical trigger per .claude/rules/spec-pipeline.md § Risk Tiers, precedent specs/20260823/01) and retires spec-design-driver.js, the state machine behind a pipeline stage
 area: design-stage
 design: false
@@ -59,6 +59,9 @@ and reaches `designed:` through gates it can observe, with every step re-derivab
 | spec/scripts/lib/frontmatter.js | MODIFY | scripts | Header comment: the incident history names the driver as a former reader — mark it retired (comment only) |
 | spec/scripts/components-check.js | MODIFY | scripts | Header comment: callers are `/spec:genesis-design` (fail-closed) and `/spec:design` preflight (advisory); `wf-design grounding` → design workers (comment only) |
 | spec/scripts/render-gate.js | MODIFY | scripts | AC-20260824-02-2 — the `design.render`-missing exit-2 remedy names `/spec:design` alongside the config keys, so the command's STOP and the script's STOP are one message (orchestrator scope addition at build, 2026-08-24: the AC demands a script-side change the File Plan had no row for) |
+| spec/scripts/spec-design-driver.js | DELETE | scripts | Orchestrator `git rm` before the scripts batch runs (D2) — the state machine the six-step body replaces |
+| spec/workflows/wf-design.js | DELETE | scripts | Orchestrator `git rm` before the scripts batch runs (D2) — the workflow held no judgment |
+| spec/scripts/skeletons-check.js | DELETE | scripts | Orchestrator `git rm` before the scripts batch runs (D2) — its sole entrypoint was the driver |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | Version bump (target 7.32.0, next-free rule) + changelog paragraph; the description's `the design-driver pattern` phrase → `driver-stepped` |
 | tests/spec-paths.test.js | MODIFY | tests | AC-20260824-02-1 (negative key pin) + remove the three keys from the resolve-all list |
 | tests/env-preflight.test.js | MODIFY | tests | AC-20260824-02-3 — retag AC-20260815-05-8's design pin in place to the new body's step wording |
@@ -66,11 +69,12 @@ and reaches `designed:` through gates it can observe, with every step re-derivab
 | tests/state-gates.test.js | MODIFY | tests | AC-20260824-02-5 — tag the existing `/spec:design requires hardened` assertions (edit-only) |
 | tests/frontmatter/frontmatter.test.js | MODIFY | tests | AC-20260824-02-6 — `FOUR_SCRIPTS` → the three survivors, test name retagged in place |
 | tests/render/render-gate.test.js | MODIFY | tests | AC-20260824-02-2 — the precondition remedies the command prints are the script's own (one added assertion on the `design.render`-missing stderr naming `/spec:design`) |
+| tests/design-driver.test.js | DELETE | tests | Orchestrator `git rm` before the scripts batch runs (D2) — suite for the retired driver |
+| tests/skeletons-check.test.js | DELETE | tests | Orchestrator `git rm` before the scripts batch runs (D2) — suite for the retired binding-map checker |
 
-Orchestrator duties outside the table (no worker touches these): `git rm`
-`spec/scripts/spec-design-driver.js`, `spec/workflows/wf-design.js`,
-`spec/scripts/skeletons-check.js`, `tests/design-driver.test.js`, `tests/skeletons-check.test.js`
-before the scripts batch runs, so the entrypoints and spec-paths pins see the final tree.
+No worker touches the five DELETE rows above: the orchestrator runs `git rm` on all
+five before the scripts batch runs, so the entrypoints and spec-paths pins see the
+final tree.
 
 ## Contracts
 
@@ -181,6 +185,23 @@ Canonical Delta.
 Watch: the `env-preflight` pin retag must keep its STOP semantics; the retired-literal sweep
 (driver, `wf-design`, `skeletons`) was done by hand at lock — the closure leg does not sweep
 retired names.
+
+2026-08-24 (review): the five `git rm` deletions moved from prose into the File Plan table as
+`DELETE` rows — `scope-reconcile.js` reads only column 1 of the table, so a prose-only sanction
+below it is invisible to the reconcile leg and reports as out-of-plan.
+
+2026-08-24 (build deviations, folded at close): **File Plan scope addition —
+`spec/scripts/render-gate.js`.** AC-20260824-02-2 requires the script's exit-2
+`design.render`-missing stderr to name `/spec:design`, but the File Plan carried only the
+*test* row, phrased as though the script already named the command; it did not. The AC was
+unsatisfiable without a one-line change to the remedy string, so the row was added to the
+scripts wave rather than stalling the build on a clerical omission; the change is confined to
+the error message and leaves every other asserted substring intact. **Version bump target —
+7.33.0, not the spec's `7.32.x`.** Both 7.32.0 and 7.32.1 were at HEAD by build time (7.32.1
+landed as a concurrent prose-only doctor fix), so the literal target was taken; this repo's
+`[host]` next-free-version Gotcha makes a spec's number a target rather than a pin, and this
+change — three scripts and two test files deleted, a command body rewritten, three `spec-paths`
+keys retired — is a behavior change, not the prose-only class that earns a patch bump.
 
 ## Canonical Delta
 

@@ -3,6 +3,7 @@ name: predicate-widening-no-collision-proof
 description: When a spec amendment (D11-style) widens an existing predicate/regex and the dispatch says "retag in place if you find a collision", prove no-collision by hand-tracing the new formula against every existing fixture's exact string, then confirm with a full scoped node --test run — don't just assert it in prose.
 metadata:
   type: feedback
+  reviewed: 2026-08-24
 ---
 
 specs/20260823/03-silent-drop-hardening.md D11 widened `lib/spec-sections.js`'s trailing-tag

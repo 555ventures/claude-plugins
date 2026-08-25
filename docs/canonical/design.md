@@ -16,18 +16,21 @@ contradiction. `/spec:review`'s component-manifest check includes commitment ent
 near-duplicate comparison, and an `author` decision fulfilling a commitment entry cites it
 as its justification.
 
-## Exit fidelity review (2026-08-10, same spec) — superseded by the render gate
+## Design stage (2026-08-24, specs/20260824/02)
 
-**Superseded by the render gate** (2026-08-24, specs/20260824/01); its driver state is
-retired by spec 02.
-
-After the design gate returns green (`author-green`), one expensive-seat review moment —
-driver state `FIDELITY_REVIEW`, mark `fidelity-reviewed` — fires whenever the host has any
-render path (`design.screenshot` OR `design.command`). With a `design_source` it compares
-bound-region screenshots against ratified mock slices; without one it critiques the render
-against skeletons + doctrine. Findings route into the iteration loop as rulings — never a
-fail-closed gate, never a script. It replaced the `VISUAL` state and the advisory
-vision-review consult (ruled 2026-08-10); a legacy sidecar's `visual-done` mark satisfies it.
+`/spec:design` is a six-step command body, not a driver: **preflight** → **author** →
+**host gate** → **render gate** → **your look** (blocking) → **reconcile + `designed:`**.
+Step position is derived from disk on every invocation — there is no state file, no
+`.design/` sidecar lifecycle, and no workflow. Authoring is direct Sonnet dispatch, one
+warm worker per surface with the mock HTML in context and `design/components.json` as
+canon; the mock IS the binding map, so the skeleton paraphrase hop and its checker are
+gone. The story bound to a mock state renders exactly the values the mock illustrates for
+that state (a story exercising extra branches is a separate, unbound story), and the
+render gate is the drift detector for that rule. Story ids land in the coverage ledger's
+claims. The user's Storybook look is kept and blocking after both gates are green — the
+gates measure what a human cannot overlay, not the reverse. Retired with the driver:
+`spec-design-driver.js`, `wf-design.js`, `skeletons-check.js`, the Haiku match pass, the
+Fable retainer, the vision consult, and the `ITERATE` catalog loop.
 
 ## Atlas gap sweep dispatch (2026-08-10, same spec)
 

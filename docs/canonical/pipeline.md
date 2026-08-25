@@ -54,7 +54,8 @@ nothing to boot. (specs/20260815/04-runtime-shutdown-leg.md, 2026-08-16)
 ## Frontmatter has one reader, and it strips comments at the source
 
 Spec frontmatter is read through `spec/scripts/lib/frontmatter.js` — the sole derivation, used
-by `spec-review-driver.js`, `spec-design-driver.js`, `spec-status.js`, and `replay.js` alike.
+by `spec-review-driver.js`, `spec-status.js`, and `replay.js` alike (`spec-design-driver.js`
+was a fourth reader until it was retired 2026-08-24, specs/20260824/02).
 Inline `#` comments on key lines are stripped per YAML unquoted-scalar semantics (cut at the
 first whitespace-preceded `#`; quoted values unwrap and never strip), so a trailing note on
 `tier:` or `build_base:` is cosmetic, not corrupting. Four independent copies of the same

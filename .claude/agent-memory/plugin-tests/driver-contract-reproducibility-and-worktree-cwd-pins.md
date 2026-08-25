@@ -7,8 +7,10 @@ metadata:
 ---
 
 Two reusable patterns from authoring tests/review/review-driver.test.js
-(specs/20260820/07-review-driver.md, 2026-08-21) for a spec-design-driver.js-shaped stage
-driver that owns ledger appends and merge-back:
+(specs/20260820/07-review-driver.md, 2026-08-21) for a stage driver that owns ledger appends
+and merge-back. `spec-review-driver.js` is now the only such driver in this repo —
+`spec-design-driver.js` was retired 2026-08-24 (specs/20260824/02) and `/spec:design` derives
+its step from disk with no driver at all, so treat these as review-driver patterns:
 
 **"Byte-equal to X.js's own stdout line" AC pins** (e.g. AC-20260820-07-2/-6: the driver's
 GATE_RED/CLEAN ledger row must be byte-equal to verdict.js's own printed line, never

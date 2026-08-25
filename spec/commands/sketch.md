@@ -102,14 +102,22 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
 6. **Exit — ratification.** When the user says done (or asks "where are we"): produce the
    **coherence readout** — one line per declared surface: what the mock shows vs what
    Scope/`surfaces` claim, plus any unresolved architecture flags. Fix what the readout catches
-   (same triage). Then `AskUserQuestion`, glossed in plain English with a consequence per option:
-   "ratify this brief's sketches now? (Recommended when the readout found no open flags:
-   `/spec:plan` can then proceed on a brief that already agrees with its mocks) or keep iterating
-   (nothing changes on disk, but planning stays behind the un-ratified-UI warning until you come
-   back)." On yes, set `data-status="ratified"` on each
+   (same triage). The marks a mock declares — `data-screen-label`, `data-status`,
+   `data-state-btn`, `data-contract="none"`, `data-positioned` — are documented in shared
+   § Design Canon; this is where they get checked, not where they get defined. Then run the
+   **expansion pass** (shared § Design Canon: media queries + the
+   tokens dark block, one responsive file, no new taste) on each of the brief's `sketch` mocks,
+   run `node {atlas} check --matrix`, and render the matrix screenshots — each declared viewport, each
+   theme at minimum on the draft framing — for one fast confirm look. Only then `AskUserQuestion`,
+   glossed in plain English with a consequence per option: "ratify this brief's sketches now?
+   (Recommended when the readout found no open flags and the matrix confirm looked right:
+   `/spec:plan` can then proceed on a brief whose mocks already agree with it and pass the render
+   gate's hygiene bar) or keep iterating (nothing changes on disk, but planning stays behind the
+   un-ratified-UI warning until you come back)." On yes, set `data-status="ratified"` on each
    of the brief's `sketch` mocks (`approved`+ mocks are untouched) and rebuild the atlas.
-   **Ratified** = direction approved at roadmap level, brief and mocks agree; the matrix and
-   polish are still owed later at `/spec:design` promotion. On no — state is on disk; re-invoke
+   **Ratified = approved, one stamp:** direction confirmed at roadmap level, brief and mocks
+   agree, matrix already confirmed in this step — `ratified` carries the same check enforcement
+   `approved` does from here on (shared § Design Canon). On no — state is on disk; re-invoke
    to continue. `AskUserQuestion` dismissed → STOP.
 7. **Report.** Assemble the slots (rationale: shared § Console Output Style) — `outcome`:
    ✅ `ratified {N} of {M} surfaces — {brief}`; `warns`: one line per un-ratified surface or

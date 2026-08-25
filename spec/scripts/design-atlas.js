@@ -3,9 +3,15 @@
 //
 //   design-atlas.js check <file|dir> [...more] [--matrix]
 //                                                  harness gate: labels, tokens link, no off-token
-//                                                  colors; with design/targets.json: viewport meta
-//                                                  + dark tokens block, enforced on approved mocks
-//                                                  (drafts iterate one framing; --matrix forces)
+//                                                  colors; at data-status ratified|approved (or
+//                                                  --matrix, which also forces the matrix checks
+//                                                  below onto drafts): border-box reset, declared
+//                                                  line-heights, no root device frame, state
+//                                                  controls outside the contract — plus, with
+//                                                  design/targets.json: viewport meta + dark tokens
+//                                                  block. ratified and approved are equivalent for
+//                                                  every check (specs/20260824/03 D2); sketch mocks
+//                                                  are free of all of the above.
 //   design-atlas.js gallery <dir> [--out <file>]   comparison gallery over candidate subdirs (explore rounds)
 //   design-atlas.js build [--root <repo>] [--out <file>]
 //                                                  the atlas: mocks × roadmap `surfaces` blocks ×
@@ -64,6 +70,85 @@ function loadTargets(fromPath) {
   }
 }
 
+// ---- hygiene checks (specs/20260824/03 D1/D5) -----------------------------------------------------
+// Four measured false-positive classes the render gate can't see for itself, each a regex read over
+// the mock's own <style> blocks — same discipline as the color-literal check above (no CSS parser,
+// no dependency). A <style> whose braces don't balance is fail-closed (D5): named as a violation and
+// excluded from rule parsing, never silently skipped. Bound at ratified|approved|--matrix by the
+// caller. Check (a) binds on EVERY bound file, including one with no <style> block of its own:
+// D1(a) owes the reset in the file's own <style>, and a mock that externalizes its CSS is invisible
+// to (b) and (c) as well, so (a)'s violation is the only signal an author gets that the stylesheet
+// the gate reads is not the stylesheet they wrote. Exempting style-less files was the fail-open
+// D5's unbalanced-braces rule exists to forbid one case over.
+const styleBlocksOf = (html) => [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(m => m[1])
+// Flat `selector { declarations }` pairs — @media and nested rules are out of scope by design (D5).
+const cssRulesOf = (css) => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(m => ({ selector: m[1].trim(), decls: m[2] }))
+
+function hygieneViolations(f, html) {
+  const out = []
+  const styleBlocks = styleBlocksOf(html)
+  let rules = []
+  for (const css of styleBlocks) {
+    const open = (css.match(/\{/g) || []).length
+    const close = (css.match(/\}/g) || []).length
+    if (open !== close) { out.push(f + ': unbalanced braces in <style> — fix the stylesheet before ratifying'); continue }
+    rules = rules.concat(cssRulesOf(css))
+  }
+
+  // (a) a universal box-sizing: border-box rule, owed by every bound file (see the note above).
+  const hasReset = rules.some(r =>
+    r.selector.split(',').some(s => /^\*(\b|::?|\s|$)/.test(s.trim())) &&
+    /box-sizing\s*:\s*border-box/.test(r.decls))
+  if (!hasReset) {
+    out.push(f + ": no universal box-sizing: border-box rule — bordered elements measure 2px larger than the component's border-box")
+  }
+
+  // (b) every block declaring font-size also declares line-height, in the same block.
+  let fsCount = 0
+  let firstSel = null
+  for (const r of rules) {
+    if (/font-size\s*:/.test(r.decls) && !/line-height\s*:/.test(r.decls)) {
+      fsCount++
+      if (firstSel === null) firstSel = r.selector
+    }
+  }
+  if (fsCount) {
+    out.push(f + ': ' + fsCount + ' CSS block(s) declare font-size without line-height (first: ' +
+      firstSel + ') — undeclared leading is up to 13% height error the gate cannot see')
+  }
+
+  // (c)/(d) both key off the [data-screen-label] root's opening tag.
+  const rootTag = html.match(/<[a-zA-Z][\w-]*\b[^>]*\bdata-screen-label="[^"]*"[^>]*>/)
+  if (rootTag) {
+    // (c) the rule(s) matching the root's own class(es) declare neither border nor border-radius.
+    const classAttr = rootTag[0].match(/\bclass="([^"]+)"/)
+    const classes = classAttr ? classAttr[1].split(/\s+/).filter(Boolean) : []
+    for (const cls of classes) {
+      for (const r of rules) {
+        const tokens = r.selector.split(',').map(s => s.trim())
+        if (tokens.includes('.' + cls) && /\bborder\s*:|\bborder-radius\s*:/.test(r.decls)) {
+          out.push(f + ': root rule .' + cls + ' declares border/border-radius — a device frame shifts every measured box by the frame width')
+        }
+      }
+    }
+
+    // (d) every data-state-btn sits before the root's opening tag, or inside a data-contract="none"
+    // ancestor — state switchers are tooling, never contract.
+    const rootStart = rootTag.index
+    const contractNoneRanges = [...html.matchAll(/<([a-zA-Z][\w-]*)\b[^>]*\bdata-contract="none"[^>]*>[\s\S]*?<\/\1>/g)]
+      .map(m => [m.index, m.index + m[0].length])
+    for (const m of html.matchAll(/<[a-zA-Z][\w-]*\b[^>]*\bdata-state-btn="[^"]*"[^>]*>/g)) {
+      if (m.index < rootStart) continue
+      const shielded = contractNoneRanges.some(([s, e]) => m.index >= s && m.index < e)
+      if (!shielded) {
+        out.push(f + ': data-state-btn control inside the [data-screen-label] root without a data-contract="none" ancestor — state switchers are tooling, never contract')
+      }
+    }
+  }
+
+  return out
+}
+
 // ---- check ---------------------------------------------------------------------------------------
 // The deterministic half of the design harness: every mock/tile/prototype passes this before a
 // human (or a critique round) sees it. Colors live in tokens.css and are consumed as var(--role);
@@ -89,13 +174,18 @@ function cmdCheck(argv) {
         const m = body.match(re)
         if (m) violations.push(f + ': ' + m.length + ' off-token color literal(s) (' + m[0] + '…) — consume var(--role) from tokens.css')
       }
+      // Hygiene (a)-(d) and the matrix checks below bind at the same stamp: ratified or approved
+      // (equivalent, D2), or under --matrix (forces both onto drafts, e.g. a post-ratify expansion
+      // pass). sketch mocks iterate on one framing and skip both families for free.
+      const status = statusOf(html)
+      const boundNow = forceMatrix || status === 'ratified' || status === 'approved'
+      if (boundNow) violations.push(...hygieneViolations(f, html))
+
       // declared matrix (design/targets.json): mocks are RESPONSIVE SINGLE FILES — one file per
       // surface across every declared viewport; dark/light lives in tokens.css, never in per-theme
-      // mock variants. Matrix-at-approval: drafts iterate on one framing, so these checks bind
-      // only at data-status="approved" (or under --matrix, for post-approval expansion passes).
-      // Absent targets = no matrix checks (legacy repos keep passing).
+      // mock variants. Absent targets = no matrix checks (legacy repos keep passing).
       const targets = loadTargets(f)
-      if (targets && (forceMatrix || statusOf(html) === 'approved')) {
+      if (targets && boundNow) {
         if ((targets.viewports || []).length > 1 && !/<meta[^>]+name="viewport"/.test(html)) {
           violations.push(f + ': no <meta name="viewport"> — targets.json declares ' +
             targets.viewports.length + ' viewports; each mock is one responsive file')

@@ -121,18 +121,27 @@ journey from the stable layer.
 
 **Design harness (how any mock gets authored).** Every mock/tile/prototype authoring pass —
 explore candidates, atlas gap-sweeps, `/spec:design` sketch authoring — follows the same loop:
-author against the research brief (`docs/design/research-brief.md`) + doctrine + `tokens.css`;
+author against the research brief (`docs/design/research-brief.md`) + doctrine + `tokens.css`,
+declaring the marks the gate reads as it goes — `data-screen-label` (root; one per file),
+`data-status`, `data-state-btn="<state>"` (state controls, outside the root),
+`data-contract="none"` (non-contract subtree: device chrome, proto strips, annotations),
+`data-positioned` (a container whose children are placed from data — chart plots, timelines);
 run the deterministic check (`design-atlas.js check` via `spec-paths design-atlas`: labels
 present, tokens linked, no off-token hex/px literals, and — when `design/targets.json` declares
 a matrix — a viewport meta plus a dark block in the linked tokens.css, **enforced at
-`data-status="approved"` or under `--matrix`** (matrix-at-approval, above) — fail-closed); then
+`data-status` `ratified` or `approved`, or under `--matrix`** — fail-closed). **Matrix at sketch
+exit; ratified = approved, one stamp:** for roadmap-derived mocks the expansion pass and the
+matrix confirm both run at `/spec:sketch`'s exit, before the `ratified` stamp lands, so `ratified`
+carries the same check enforcement `approved` does from then on — this replaces
+matrix-at-approval at `/spec:design` promotion for those mocks. Then
 **render → screenshot → critique → edit** at least once when a browser/screenshot capability is
 available (the model must see its own work — this loop is most of why dedicated design tools
 out-render blind generation), skipped with an explicit note when no such capability exists.
 Draft rounds render the draft framing only (the most-constrained viewport, above); the
-**post-approval expansion pass** renders the matrix — screenshot each declared viewport, and
-each theme at minimum on the draft framing — so the `approved` stamp never lands on a
-one-framing look. **Rule-checklist pass (enforcement, not memory):** before any mock's direction
+**expansion pass** (media queries + consuming the tokens dark block, no new taste) renders the
+matrix — screenshot each declared viewport, and each theme at minimum on the draft framing — so
+neither the `ratified` nor the `approved` stamp ever lands on a one-framing look. **Rule-checklist
+pass (enforcement, not memory):** before any mock's direction
 approval, a **Sonnet checker walks the research-brief's admitted rules as an explicit checklist**
 against the screen — the rules were authored falsifiable with numeric ALWAYS/NEVER thresholds
 precisely so a checker who wasn't in the room can verify them — and files violations citing rule

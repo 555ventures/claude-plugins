@@ -1,6 +1,7 @@
 ---
 date: 2026-08-24
-status: hardened
+diff_base: 5670f33863eda2f9d33c2433b4377c2f9eb8750b
+status: implementing
 tier: standard           # additive checks in design-atlas.js (not a critical-named surface), sketch.md prose, one doctrine paragraph
 area: design-stage
 design: false

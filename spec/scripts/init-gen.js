@@ -17,6 +17,9 @@
 // suite outside the spec's own File Plan tests rows, undetected until much later — D8/D9 make
 // the vacuous-pass and inert-at-risk-leg classes visible at the one moment (init) they're cheap
 // to fix.
+// (3) 2026-08-24 (specs/20260824/05-design-doctrine-cut.md, D6): generate no longer writes a
+// `specs/**/*.design/` gitignore line — the render gate never wrote that sidecar, so init must
+// not provision it either. The `.claude/worktrees/` entry is unaffected.
 //
 // What this deliberately does NOT do: profile the repo, interview the user, author judgment
 // content (agent personas, rule bodies, convention text — all travel as profile fields),
@@ -481,7 +484,6 @@ function writeTarget(hostRoot, t) {
 // init.md's locked prose (A5). Each entry carries a representative descendant path to probe.
 const IGNORE_ENTRIES = [
   { line: '.claude/worktrees/', sample: '.claude/worktrees/x' },
-  { line: 'specs/**/*.design/', sample: 'specs/x/y.design/z' },
 ]
 
 function ensureGitignore(hostRoot) {

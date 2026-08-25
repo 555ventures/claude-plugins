@@ -1,6 +1,7 @@
 ---
 date: 2026-08-24
-status: hardened
+status: implementing
+diff_base: 6f3b4ec9a557efed651fa48e8f2647e6bee97bfb
 tier: critical           # removes spec-paths keys (key-set edit — critical trigger, precedent specs/20260823/01) and edits spec/templates/grounding-contract.md (contract hash)
 area: design-stage
 design: false

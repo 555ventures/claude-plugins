@@ -37,11 +37,6 @@
       "spec/commands/design.md"
     ]
   },
-  "spec/scripts/dc-extract.js": {
-    "entryPoints": [
-      "spec/doctrine/design.md"
-    ]
-  },
   "spec/scripts/design-atlas.js": {
     "entryPoints": [
       "spec/commands/sketch.md",
@@ -57,11 +52,6 @@
       "spec/commands/build.md",
       "spec/commands/design.md",
       "spec/scripts/review-legs.js"
-    ]
-  },
-  "spec/scripts/fidelity-check.js": {
-    "entryPoints": [
-      "spec/doctrine/design.md"
     ]
   },
   "spec/scripts/fleet-reader.js": {

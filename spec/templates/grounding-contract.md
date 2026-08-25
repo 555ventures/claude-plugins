@@ -15,15 +15,14 @@ only when the contract genuinely changes, and never edit it for wording alone.
 `testEnv` (array of `{"var": "<NAME>", "provision": "<command>"}` rows — suite-gating
 environment variables, checked by `env-preflight.js` before `/spec:build`'s and
 `/spec:design`'s gate/repair paths run; absent = legacy mode, no preflight), `design`
-(`tool`/`command`/`storyFormat`/`doctrine`, optional `screenshot`, optional `rulesManifest`,
-optional `render` — see below),
+(`tool`/`command`/`storyFormat`/`doctrine`/`render` — see § Render gate; optional
+`rulesManifest`, `atlasRoutes`, `gateCommand`; legacy-tolerated and unread: `copyCatalogs`,
+`screenshot`),
 `release` (see § Release), `capabilities` (see § Capabilities), the rule-enforcement keys
 `enforcementManifest` and `rulesEnforcementHash` (see § Rule enforcement), and the
 genesis-handoff keys `genesisStackDescriptor` and `designRulesHash` (see § Genesis handoff).
-`design.copyCatalogs` is REQUIRED when the host routes copy through an i18n stack (`design`
-block present and the repo has an i18n dependency) — the `/spec:design` fidelity gate accepts
-mock copy only as catalog values, and without this key it would demand literals the host's
-i18n lint forbids.
+
+## Render gate
 
 `design.render` is optional — present when the host wants `render-gate.js`'s mock↔component
 fidelity check, which `/spec:review` runs as an advisory evidence leg on designed specs. The

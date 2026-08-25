@@ -98,9 +98,7 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
       by `node $(spec-paths merge-back) branch-for <spec path>` — does not exist (in-place
       builds, `build_base` absent, are skipped);
     - a `hardened`/`implementing`/`done` spec containing a live `[NEEDS CLARIFICATION:`
-      marker (colon form) is broken;
-    - an orphaned design sidecar (`specs/**/*.design/` with no sibling spec mid-design) is
-      leftover transient state — recommend removing it.
+      marker (colon form) is broken.
 12. **Run ledger hygiene** (only if `.claude/spec-runs.jsonl` exists) — script passes
     (`jq`/`awk`), never read the ledger into context. Every line parses as JSON with `stage` ∈
     `plan | build | review | replay | escape | observe | release` (`observe` rows are a retired

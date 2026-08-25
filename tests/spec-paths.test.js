@@ -80,10 +80,17 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // additive-collision class (JJ-20260814-01): the key list below is updated in place, never a
 // parallel exhaustive pin.
 
+// specs/20260824/05-design-doctrine-cut.md D5: dc-extract.js and fidelity-check.js (and their
+// spec-paths keys) are deleted with the source-grep fidelity gate they served — a still-
+// resolving key here would mean the retirement never actually landed. `dc-extract` is removed
+// from this exhaustive resolve-all pin (the refusal itself is pinned behaviorally by
+// AC-20260824-05-4 in tests/consistency/design-doctrine.test.js); `fidelity-check` was never a
+// member of this list.
+
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-enforce',
-    'wf-panel', 'wf-research', 'dc-extract', 'design-atlas', 'merge-back',
+    'wf-panel', 'wf-research', 'design-atlas', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
     'review-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'render-gate', 'render-compare',
     'render-inventory', 'render-rules', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
@@ -120,29 +127,32 @@ test('shared-for: every mapped section name still exists as a core.md or design.
 // `run('shared-for', 'escape')` / Incident Policy assert below is the oracle that `shared-for
 // escape` keeps serving that section after D7 lands — tagged here rather than duplicated, per
 // that spec's File Plan.
-test('shared-for: scoped output carries its sections and is smaller than the full doc (incl. AC-20260820-05-17: escape keeps serving Incident Policy; AC-20260823-01-19: release keeps Release Stage/Runtime Verification and drops Feedback Loop)', () => {
+test('shared-for: scoped output carries its sections and is smaller than the full doc (incl. AC-20260820-05-17: escape keeps serving Incident Policy; AC-20260823-01-19: release keeps Release Stage/Runtime Verification and drops Feedback Loop; AC-20260824-05-6: design continues to include Design Canon and Design Atlas, stays a strict subset of full doctrine, and now serves Design Render Gate instead of Design Binding Pipeline)', () => {
   const full = run('shared-for', 'no-such-command')
   for (const cmd of ['plan', 'design', 'build', 'review', 'release', 'enforce', 'atlas', 'sketch', 'escape', 'doctor', 'replay', 'queue']) {
     const out = run('shared-for', cmd)
     assert.ok(out.length < full.length, cmd + ' output should be a strict subset')
     assert.match(out, /## Host Grounding/, cmd + ' must keep Host Grounding')
   }
-  assert.match(run('shared-for', 'design'), /## Design Canon/)
+  assert.match(run('shared-for', 'design'), /## Design Canon/,
+    'AC-20260824-05-6: design must continue to be served Design Canon')
   assert.match(run('shared-for', 'design'), /## Design Authoring Contracts/)
-  assert.match(run('shared-for', 'design'), /## Design Binding Pipeline/)
-  assert.match(run('shared-for', 'design'), /## Design Atlas/)
+  assert.match(run('shared-for', 'design'), /## Design Render Gate/,
+    'D1 renames Design Binding Pipeline to Design Render Gate — design must be served the section under its new name')
+  assert.match(run('shared-for', 'design'), /## Design Atlas/,
+    'AC-20260824-05-6: design must continue to be served Design Atlas')
   assert.match(run('shared-for', 'atlas'), /## Design Atlas/)
   assert.match(run('shared-for', 'atlas'), /## Design Canon/,
     'atlas consumes bound/approved semantics — the ledger definition lives in Design Canon')
-  assert.ok(!/## Design Binding Pipeline/.test(run('shared-for', 'atlas')),
-    'atlas must not pay for the binding pipeline — design-only doctrine')
-  assert.ok(!/## Design (Binding Pipeline|Authoring Contracts)/.test(run('shared-for', 'genesis-explore')),
+  assert.ok(!/## Design Render Gate/.test(run('shared-for', 'atlas')),
+    'atlas must not pay for the render gate — design-only doctrine')
+  assert.ok(!/## Design (Render Gate|Authoring Contracts)/.test(run('shared-for', 'genesis-explore')),
     'genesis-explore loads only Design Canon of the design sections')
   assert.match(run('shared-for', 'genesis-design'), /## Design Authoring Contracts/)
-  assert.ok(!/## Design Binding Pipeline/.test(run('shared-for', 'genesis-design')),
+  assert.ok(!/## Design Render Gate/.test(run('shared-for', 'genesis-design')),
     'genesis-design authors canon, never binds specs')
   assert.match(run('shared-for', 'build'), /## Worker Git Ban/)
-  assert.ok(!/## Design (Canon|Authoring Contracts|Binding Pipeline)/.test(run('shared-for', 'review')),
+  assert.ok(!/## Design (Canon|Authoring Contracts|Render Gate)/.test(run('shared-for', 'review')),
     'review must not pay for design doctrine')
   assert.match(run('shared-for', 'review'), /## Runtime Verification/,
     'review pays for the boot-leg doctrine — CLEAN requires it')
@@ -157,7 +167,7 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
     'escape IS the Emit leg — it writes preventedBy rows and Gotchas tags')
   assert.match(run('shared-for', 'escape'), /## Incident Policy/,
     'escape derives its defect-class and recurrence rules from Incident Policy — shared-for filtering silently drops a mismatched section, so escape would run without the policy it is supposed to apply (AC-20260820-05-17)')
-  assert.ok(!/## Design (Canon|Authoring Contracts|Binding Pipeline)/.test(run('shared-for', 'doctor')),
+  assert.ok(!/## Design (Canon|Authoring Contracts|Render Gate)/.test(run('shared-for', 'doctor')),
     'doctor must not pay for design doctrine — check 8 only verifies design files exist')
   assert.match(run('shared-for', 'doctor'), /## Grounding Drift/)
   assert.match(run('shared-for', 'doctor'), /## Rule Enforcement/)
@@ -180,6 +190,28 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
     'D12: /spec:queue must be served § Question Style — any AskUserQuestion it raises (e.g. an ambiguous <ref>) must follow the same doctrine as every other command')
   assert.match(run('shared-for', 'queue'), /## Console Output Style/,
     'D12: /spec:queue must be served § Console Output Style — the list/hello glyph conventions (✅▶○🅰, veto/accept lines) must follow the shared narration doctrine')
+})
+
+// AC-20260824-05-3: specs/20260824/05-design-doctrine-cut.md D4 renames the design shared-for
+// SECTIONS map entry from "Design Binding Pipeline" to "Design Render Gate" (D1 renames the
+// underlying design.md heading) and drops "Workflows Encode Shape, Not Judgment" from the
+// design-command list specifically (genesis-design keeps it, per D4) — a stale map entry would
+// mean `shared-for` "silently drops mismatches" (§ Review Checks) and /spec:design would read
+// no doctrine at all for the render gate it now runs on.
+test('AC-20260824-05-3: spec-paths shared-for design emits ## Design Render Gate, never ## Design Binding Pipeline, and no longer emits Workflows Encode Shape, Not Judgment', () => {
+  const out = run('shared-for', 'design')
+  assert.match(out, /## Design Render Gate/,
+    'D1/D4: design.md\'s renamed section must be served under its new heading — a shared-for map ' +
+    'still pointing at the old name means /spec:design reads no doctrine at all for the render ' +
+    'gate it now runs on (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently")')
+  assert.ok(!/## Design Binding Pipeline/.test(out),
+    'the old heading name must never be emitted again once D1 renames the section — a surviving ' +
+    'citation here means the map still points at a heading that no longer exists in design.md, ' +
+    'which shared-for "silently drops" rather than erroring on (§ Review Checks)')
+  assert.ok(!/## Workflows Encode Shape, Not Judgment/.test(out),
+    'D4: the design SECTIONS list drops Workflows Encode Shape, Not Judgment specifically for ' +
+    '/spec:design — a surviving citation here means the command still pays for doctrine its own ' +
+    'section map was supposed to stop serving it (genesis-design keeps this section unchanged)')
 })
 
 test('AC-20260819-02-10: spec-paths replay and spec-paths replay-corpus resolve to the D14 script and corpus paths', () => {

@@ -10,7 +10,7 @@ depended_on_by: []
 # brief: NN              # roadmap-planned specs only: the docs/roadmap/NN-*.md brief this spec hydrates; /spec:status (and /spec:doctor check 14) derive roadmap status from this stamp
 # spiked: YYYY-MM-DD     # only if a spike ran during /spec:plan
 # designed: YYYY-MM-DD   # set by /spec:design on user approval (design-capable hosts)
-# design_source: https://claude.ai/design/p/<id>?file=<Name>.dc.html  # optional, single path/URL: Claude Design mockup or local bundle dir, made read-first binding canon by /spec:design
+# design_source: design/mocks/<label>.html  # optional, single path/URL: the repo's local mock (or a Claude Design escape-hatch URL) — read-first binding canon the render gate resolves directly
 # build_base: <branch>   # set by /git:enter-worktree; read by /spec:review as the merge-back target
 # diff_base: <sha>       # set by /spec:build for in-place builds; read by /spec:review as the diff base when build_base is absent
 # The host's pipeline rules may declare extra flags (e.g. migration: true) — include them when they apply.
@@ -60,11 +60,11 @@ depended_on_by: []
 
 { Screens, components, dialogs; their props and states (empty / loading / error / edge).
   Embed Component API References here — registry + library excerpts gathered at plan time.
-  In /spec:design this section is the component inventory the skeleton-author reads; the
-  authoring plan itself is ALWAYS the on-disk skeletons.json (mockup path and no-mockup path
-  alike), and Phase 4 reconciles this section to the approved design (final APIs + states).
-  Sonnet workers (and /spec:build) build from the spec + skeletons and never query MCPs.
-  Omit section if no UI changes (then design: false). }
+  In /spec:design this section is the component inventory workers author against; the mock
+  (`design_source`) is the authored canon, held to by the render gate, and the reconcile step
+  folds this section to the approved design (final APIs + states). Sonnet workers (and
+  /spec:build) build from the spec + mock and never query MCPs. Omit section if no UI changes
+  (then design: false). }
 
 ## Data Model
 

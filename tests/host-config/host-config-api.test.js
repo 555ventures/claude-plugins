@@ -12,10 +12,16 @@ const { tmpdir, runNode } = require('../helpers')
 // pure presence probe (fs.existsSync — never opens, reads, or parses). `CONFIG_RELPATH` is the
 // literal `.claude/spec.config.json`, for user-facing remedy text only. AC-20260820-08-5 pins
 // configPath, AC-20260820-08-6 pins configExists, AC-20260820-08-9 pins the seven remedy strings
-// behaviorally (two of the seven, in review-legs.js and fidelity-check.js, are executed here
-// against a synthetic host), and AC-20260820-08-12 re-pins readConfig/readConfigStrict/
-// declaredForge as an untouched regression (SHALL CONTINUE TO — this spec's Contracts block
-// states their behavior is byte-for-byte unchanged).
+// behaviorally (one of the seven, in review-legs.js, is executed here against a synthetic
+// host), and AC-20260820-08-12 re-pins readConfig/readConfigStrict/declaredForge as an
+// untouched regression (SHALL CONTINUE TO — this spec's Contracts block states their behavior
+// is byte-for-byte unchanged).
+//
+// specs/20260824/05-design-doctrine-cut.md retires fidelity-check.js (the source-grep fidelity
+// gate) along with its own test file, tests/fidelity-check.test.js — the sibling AC-20260820-08-9
+// test that executed fidelity-check.js's remedy string against a synthetic host is removed here
+// for the same reason: its subject no longer exists. review-legs.js is now the sole executed
+// leg pinning this AC in this file.
 
 test('AC-20260820-08-5: configPath(root) returns the joined path <root>/.claude/spec.config.json', () => {
   const { configPath } = require('../../spec/scripts/lib/host-config')
@@ -88,32 +94,4 @@ test('AC-20260820-08-9: review-legs.js exits with a remedy naming .claude/spec.c
     'a --root with no config and so no gateCommand must be a usage/precondition failure (exit 2), not a leg run: ' + r.stdout + r.stderr)
   assert.match(r.stderr, /\.claude\/spec\.config\.json/,
     'review-legs.js\'s remedy for a missing gateCommand must render the path .claude/spec.config.json (via CONFIG_RELPATH) so an operator knows exactly which file to create — a bare "spec.config.json" or an interpolation bug silently makes the remedy less actionable: ' + r.stderr)
-})
-
-test('AC-20260820-08-9: fidelity-check.js reports an unreadable declared copy catalog by naming .claude/spec.config.json design.copyCatalogs', () => {
-  const root = tmpdir('host-config-api-fidelity-root')
-  const sidecar = path.join(root, 'spec.design')
-  fs.mkdirSync(sidecar, { recursive: true })
-  fs.writeFileSync(path.join(sidecar, 'slice-s1.html'), '<div><span>Hi</span></div>')
-  fs.writeFileSync(path.join(sidecar, 'extract.json'), JSON.stringify({
-    schemaVersion: 2,
-    surfaces: [{ id: 's1', sliceFile: 'slice-s1.html', strings: ['Hi'], layout: [] }],
-  }))
-  fs.writeFileSync(path.join(sidecar, 'skeletons.json'), JSON.stringify({
-    skeletons: [{ id: 's1', decision: 'author', componentPath: 'src/S1.tsx',
-      sliceRef: 'slice-s1.html', states: ['default'], tokens: ['surface'] }],
-  }))
-  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
-  // Declares a copy catalog that does not exist on disk — the declared-but-unreadable case D9/D10
-  // migrate the remedy for.
-  fs.writeFileSync(path.join(root, '.claude', 'spec.config.json'),
-    JSON.stringify({ design: { copyCatalogs: ['app/messages/en.json'] } }))
-  fs.mkdirSync(path.join(root, 'src'), { recursive: true })
-  fs.writeFileSync(path.join(root, 'src', 'S1.tsx'), 'Hi')
-
-  const r = runNode('scripts/fidelity-check.js', [sidecar, '--repo-root', root])
-  assert.strictEqual(r.status, 1,
-    'an undeclared-on-disk copy catalog must be an unexcused finding (exit 1), not a silent pass: ' + r.stdout + r.stderr)
-  assert.match(r.stderr, /\.claude\/spec\.config\.json design\.copyCatalogs/,
-    'fidelity-check.js\'s remedy for an unreadable declared catalog must render ".claude/spec.config.json design.copyCatalogs" (via CONFIG_RELPATH) so an operator knows both which file declares the catalog and which key to fix — D10 adds the .claude/ prefix that was missing before: ' + r.stderr)
 })

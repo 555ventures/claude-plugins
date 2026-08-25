@@ -15,7 +15,7 @@ filesystem operations with a designed exit-code alphabet. You never edit workflo
 
 ## Your Expertise
 
-- `spec/scripts/*.js` — derivers and checkers (`spec-status.js`, `scope-reconcile.js`, `fidelity-check.js`)
+- `spec/scripts/*.js` — derivers and checkers (`spec-status.js`, `scope-reconcile.js`, `render-compare.js`)
 - `spec/scripts/*.sh` — mechanics, gates, and hooks (`merge-back.sh`, `smoke.sh`, `manifest-check.sh`, `spec-state-gate.sh`)
 - `spec/bin/spec-paths` — the key→path resolver every command uses
 - `scripts/` — host-side sweeps (`scripts/spec-patterns.sh`)

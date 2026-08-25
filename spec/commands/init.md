@@ -286,8 +286,8 @@ describes:
 
 Field-by-field, tracing each back to the phase that grounds it:
 
-- **`config`** — Phase 1's stack/toolchain/runtime findings; Phase 6's `design`/`copyCatalogs`
-  block on design-capable hosts. Same authoring bar as ever: real paths, real commands, no
+- **`config`** — Phase 1's stack/toolchain/runtime findings; Phase 6's `design` block on
+  design-capable hosts. Same authoring bar as ever: real paths, real commands, no
   invented references — the script validates required keys and exits 2 naming the first
   missing one, but a *wrong* value is never caught for you.
 - **`rules.sections`** — the six judgment sections (Risk Tiers / Planning / Build / Worker

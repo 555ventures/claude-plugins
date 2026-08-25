@@ -1,7 +1,6 @@
 node_modules/
 .claude/worktrees/
 .claude/settings.local.json
-specs/**/*.design/
 .claude/spec-preimage/
 .claude/spec-runs.stopped.jsonl
 .playwright-mcp/

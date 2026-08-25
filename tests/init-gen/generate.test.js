@@ -153,7 +153,12 @@ test('AC-20260822-02-2: a manifest that fails manifest-check.sh exits 1 and leav
     'D3: the config must be left WITHOUT contractHash when manifest-check is red, for the same reason: ' + JSON.stringify(cfg))
 })
 
-test('AC-20260822-02-3: running generate twice — the second time with --refresh and an identical profile — leaves exactly one gitignore entry each for .claude/worktrees/ and specs/**/*.design/, and one gitattributes union line', () => {
+// AC-20260824-05-5 (specs/20260824/05-design-doctrine-cut.md D6/D10): the .design/ sidecar is
+// retired everywhere it is still written or checked, including here — init-gen.js must stop
+// emitting the specs/**/*.design/ gitignore line entirely (zero, not one) while continuing to
+// write exactly one .claude/worktrees/ line, updated in place on AC-20260822-02-3's test per
+// that spec's Assumption/D10 instruction, never weakened.
+test('AC-20260822-02-3/AC-20260824-05-5: running generate twice — the second time with --refresh and an identical profile — leaves exactly one gitignore entry for .claude/worktrees/, zero for specs/**/*.design/ (D6 retires the sidecar entirely), and one gitattributes union line', () => {
   const dir = newHost('init-gen-generate')
   const profile = baseProfile()
   const profilePath = writeProfile(dir, profile)
@@ -168,8 +173,9 @@ test('AC-20260822-02-3: running generate twice — the second time with --refres
   const designHits = gitignore.split('\n').filter((l) => l.trim() === 'specs/**/*.design/').length
   assert.strictEqual(worktreeHits, 1,
     'two generate runs must never produce a duplicate .claude/worktrees/ ignore line — the retired bare-directory idempotency check re-appended forever on every fresh host (D4): ' + gitignore)
-  assert.strictEqual(designHits, 1,
-    'two generate runs must never produce a duplicate specs/**/*.design/ ignore line: ' + gitignore)
+  assert.strictEqual(designHits, 0,
+    'D6/AC-20260824-05-5: init-gen.js must no longer emit the specs/**/*.design/ gitignore line ' +
+    'at all, not even once — a sidecar nothing writes must not be provisioned by init: ' + gitignore)
 
   const gitattributes = fs.readFileSync(path.join(dir, '.gitattributes'), 'utf8')
   const unionHits = gitattributes.split('\n').filter((l) => l.trim() === '.claude/spec-runs.jsonl merge=union').length

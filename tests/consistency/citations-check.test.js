@@ -108,12 +108,18 @@ test('AC-20260810-09-2: citations-check.js counts an unresolvable file reference
 // AC-20260810-09-3
 // ---------------------------------------------------------------------------
 
-test('AC-20260810-09-3: citations-check.js run against this live repo after the sweep reports MISS=0', () => {
+// AC-20260824-05-7 (specs/20260824/05-design-doctrine-cut.md D10, Assumption A3): this test
+// already existed at that spec's lock as the live-corpus zero-miss regression pin — tagged here
+// rather than duplicated, per A3's "if one exists, tag it instead of creating one."
+test('AC-20260810-09-3/AC-20260824-05-7: citations-check.js run against this live repo after the sweep reports MISS=0', () => {
   const r = runNode('scripts/citations-check.js', [], { cwd: ROOT })
   assert.match(r.stdout, /MISS=0/,
     'a clean self-application run is D7\'s executed proof that every broken citation in the ' +
     'live doctrine corpus was actually repointed or reworded, not just the audit\'s six hand-' +
-    'picked instances: ' + (r.stdout || r.stderr || 'script produced no output'))
+    'picked instances; AC-20260824-05-7/D10 requires this to CONTINUE TO hold across the ' +
+    'design-doctrine rewrite (the five renamed/removed headings and their citing commands) — ' +
+    'a MISS here means the rewrite left a live § citation pointing at a heading that moved or ' +
+    'disappeared: ' + (r.stdout || r.stderr || 'script produced no output'))
 })
 
 // ---------------------------------------------------------------------------

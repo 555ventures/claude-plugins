@@ -195,6 +195,6 @@ Next: /spec:build specs/20260824/02-example.md
   was permitted, never a defect.
 - **Affordance ↔ contract reconcile is blocking** — the Step 6 matrix runs before `designed:`
   lands; an affordance the server would reject is a fork, never passed through to build.
-- The `.design/` sidecar is **not created by this command** (D13); an existing host sidecar is
-  inert and removed only by the host's next `/spec:doctor --fix`.
+- The `.design/` sidecar is **not created, read, or audited anywhere in the pipeline** (D13); a
+  leftover one on a host is inert and safe to delete by hand.
 - `AskUserQuestion` dismissed → STOP.

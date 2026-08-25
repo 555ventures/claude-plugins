@@ -3,14 +3,14 @@ name: doctrine-regex-linewrap
 description: Doctrine regex pins must use \s+ (not a literal space) between words that can straddle a hard-wrapped markdown line break
 metadata:
   type: feedback
-  reviewed: 2026-08-23
+  reviewed: 2026-08-25
 ---
 
 Doctrine `.md` files in this repo hard-wrap prose at ~85-90 chars. A regex pin like
 `/reachability is (never|not) exempt/i` (literal space between words) will silently
 false-negative on any file where that exact phrase happens to fall across a wrapped line
 break (e.g. `spec/templates/spec.md` wraps "reachability is\n     never exempt" while
-`build.md`, `shared.md`, `init.md` happen to keep the same phrase on one line). The fix is
+`build.md`, `core.md`, `init.md` happen to keep the same phrase on one line). The fix is
 `\s+` between words spanning more than a couple tokens, not a literal space — this is not a
 weakening, it's correcting a false negative caused by markdown reflow that has nothing to do
 with the doctrine's substance.

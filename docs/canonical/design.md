@@ -1,5 +1,9 @@
 # Design — canonical decisions
 
+*Retired 2026-08-24 (specs/20260824/05): the source-grep fidelity gate, `dc-extract`, the
+`.design/` sidecar, skeleton binding maps, delta rows, the Fable retainer, the vision
+consult, the exit fidelity review, and `copyCatalogs` as a required key.*
+
 ## Component vocabulary (2026-08-10, specs/20260810/01-design-path-model-placement.md)
 
 The product's committed building blocks live as **commitment entries** in

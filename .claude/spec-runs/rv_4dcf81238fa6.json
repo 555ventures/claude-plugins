@@ -1,0 +1,89 @@
+{
+  "runId": "rv_4dcf81238fa6",
+  "ts": "2026-08-25T16:04:09.388Z",
+  "spec": "specs/20260824/05-design-doctrine-cut.md",
+  "tier": "critical",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 3533,
+    "base": "6f3b4ec9a557efed651fa48e8f2647e6bee97bfb",
+    "head": "6973c286b9f490dd583832743e32df71778f000b",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      }
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 293
+      }
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      }
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 11,
+        "carried": 5,
+        "sanctioned": 6,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "severity": "hard",
+        "claim": "spec/commands/design.md:198-199 pointed at a /spec:doctor --fix cleanup mechanism for the .design/ sidecar that this same build's D6 deletes.",
+        "file": "spec/commands/design.md",
+        "line": 198,
+        "status": "fixed",
+        "note": "Bullet rewritten to 'not created, read, or audited anywhere in the pipeline ... safe to delete by hand'; verified by corpus-wide grep for .design/ and by doctor.md no longer mentioning 'sidecar'; citations-check.js live run MISS=0; consistency suite 61/61 plus spec-paths/design-doctrine/init-gen suites pass."
+      }
+    ],
+    "reviewerCount": 1,
+    "scope": "fix-delta",
+    "tokens": 59875
+  }
+}

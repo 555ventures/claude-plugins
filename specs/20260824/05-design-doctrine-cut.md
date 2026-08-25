@@ -1,6 +1,6 @@
 ---
 date: 2026-08-24
-status: implementing
+status: done
 diff_base: 6f3b4ec9a557efed651fa48e8f2647e6bee97bfb
 tier: critical           # removes spec-paths keys (key-set edit — critical trigger, precedent specs/20260823/01) and edits spec/templates/grounding-contract.md (contract hash)
 area: design-stage
@@ -179,6 +179,31 @@ Watch: the retired-literal sweep across `tests/` was done by hand at lock (the c
 sweeps inherited literals only); `host-config-api.test.js` AC-9 and `init-gen` AC-3 are the
 two behavioral pins that assert on deleted mechanisms and are updated in place, never
 weakened.
+
+Deviations folded at review close (2026-08-25) — both one-offs, neither recurring-shaped:
+
+- D7's target text cites `§ Render gate` in `grounding-contract.md`, but no `## Render gate`
+  heading existed there (the `design.render` paragraph sat un-headinged under `## Required
+  config keys`). Added a `## Render gate` heading immediately above that paragraph (text
+  unchanged) so the citation resolves; verified with
+  `node "$(spec-paths citations-check)" --root .` → MISS=0.
+- The doctrine rewrite rendered D7's `render` parenthetical as `(REQUIRED — § Render gate)`,
+  contradicting the `grounding-contract.md` paragraph it cites (`design.render` is optional,
+  spec 01 D15, which D7 leaves unchanged). Corrected `spec/doctrine/design.md` to a plain
+  `(§ Render gate, `grounding-contract.md`)` citation; the spec's Contracts block never said
+  REQUIRED.
+
+Review finding, fixed in-session (2026-08-25) — A2's escalation trigger fired as written:
+
+- `spec/commands/design.md` still told readers a leftover `.design/` sidecar was "inert and
+  removed only by the host's next `/spec:doctor --fix`", while D6 deleted the only doctor
+  check that ever detected it. A2 pre-registered exactly this ("if false at build (a live
+  plugin file hit): add the row, never a stale reference"); the lock-time literals sweep did
+  flag the file under `sidecar`, but the Rationale's waived-by-meaning group covered the
+  unrelated deviations/review sidecar and this hit was folded into it by mistake. Bullet
+  rewritten to "not created, read, or audited anywhere in the pipeline … safe to delete by
+  hand". Verified: `grep -in sidecar spec/commands/doctor.md` returns nothing,
+  `citations-check.js --root .` → MISS=0, consistency suite 61/61.
 
 ## Canonical Delta
 

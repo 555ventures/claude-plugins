@@ -1,6 +1,6 @@
 {
-  "generatedBy": "spec@7.32.1",
-  "contractHash": "bca504ae36d9",
+  "generatedBy": "spec@7.38.0",
+  "contractHash": "de097e35e730",
   "gateCommand": "node --test {testDirs}",
   "testCommand": "node --test",
   "setupCommand": "npm install",

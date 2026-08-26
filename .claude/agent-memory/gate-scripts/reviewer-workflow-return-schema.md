@@ -3,10 +3,12 @@ name: reviewer-workflow-return-schema
 description: the raw reviewer workflow-return object's verdict field is only ever "CLEAN"|"REVIEWER_FAILED" — findings live separately in survivors, so "CLEAN" means "ran successfully" not "no findings"
 metadata:
   type: project
-  reviewed: 2026-08-24
+  reviewed: 2026-08-26
 ---
 
-`spec/commands/review.md` (around the Phase 1 dispatch contract) documents the reviewer agent's
+**Corrected 2026-08-26 (review close, specs/20260826/01):** the citation below said "`spec/commands/review.md` (around the Phase 1 dispatch contract)". `/spec:review` is now driver-stepped and has no numbered phases — the same contract lives in its Rules bullet **Reviewer dispatch (the REVIEWER step)**. The schema itself is unchanged.
+
+`spec/commands/review.md` (Rules § Reviewer dispatch) documents the reviewer agent's
 raw workflow-return shape as `{verdict: "CLEAN"|"REVIEWER_FAILED", survivors: [{severity, claim,
 file, line, impact, ...}]}`. `verdict` is a two-value enum for "did the reviewer complete" — it is
 NOT a findings-count word like the derived FINDINGS/HARD_FINDINGS/CLEAN verdict that

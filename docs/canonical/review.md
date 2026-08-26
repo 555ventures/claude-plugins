@@ -108,15 +108,27 @@
   measured to fail: shipped 2026-08-19, due at 5 reviews, skipped through 12+ reviews in ~48
   hours.
   A sustained miss-rate is the evidence that reopens the second-reviewer question.
-  The scratch worktree lives at `<root>/.claude/worktrees/replay-<id>` — inside the repo, so
-  agent edits are auto-approved and the scheduled replay runs unattended (an out-of-repo scratch
-  tree is denied Edit/Write by the permission classifier, which blocked the mutation worker on
-  both live runs of 2026-08-23). It stays invisible to `git status` via an ignore line
+  The scratch worktree lives at `<root>/.claude/worktrees/spec-<stem>-<6hex>` — a path
+  `replay.js --setup --spec` derives from the target spec (the build-worktree naming rule
+  `merge-back.sh branch-for` owns, `/`→`-`, plus a random suffix because the spec's own build
+  worktree may still be registered), never a name a session supplies. `--setup` refuses a
+  caller `--dir` whose basename opens with `replay`. Inside the repo, so agent edits are
+  auto-approved and the scheduled replay runs unattended (an out-of-repo scratch tree is denied
+  Edit/Write by the permission classifier, which blocked the mutation worker on both live runs
+  of 2026-08-23); a neutral-named `--dir` outside the repo remains the manual fallback.
+  It stays invisible to `git status` via an ignore line
   `--setup` self-provisions into `info/exclude` when the host repo lacks it. Isolation comes
   from the detached worktree, that ignore line, and the private-git-dir marker — not from living
-  outside the repo; a `--dir` outside the repo remains the manual fallback.
+  outside the repo.
+  Blindness surfaces enumerated and closed to date: file contents, prompt text, branch name
+  (detached), commit subject (`--apply` refusal), the worktree **path** handed to the reviewer
+  as its root, and the marker filename in the tree's private git dir — the last two closed by
+  specs/20260826/01-replay-scratch-path-blindness.md. Catch-rate rows dated before that spec's
+  close (`rp_048e28386da8` through `rp_02b3f1ee52f1`) were measured under a path tell and stand
+  as observations, not as proof of blind review; the defensible catch rate starts at the first
+  row after it.
   The mutation worker's writes are sanctioned by the cross-worktree write guard: a write is
-  allowed when the TARGET tree carries the `replay-worktree` marker, honoured only when that
+  allowed when the TARGET tree carries the `scratch-worktree` marker, honoured only when that
   marker sits in a linked worktree's private git dir. The scratch tree is a sink, never a
   source — scratch-anchored writes outward stay blocked — and a write into this repo's own
   git metadata is attributed to its owning worktree and blocked unless that owner is the
@@ -139,7 +151,8 @@
   specs/20260820/02-replay-scratch-write-access.md,
   specs/20260821/02-replay-review-phase.md,
   specs/20260823/05-replay-unattended-hardening.md,
-  specs/20260823/09-replay-baseline-attribution.md)
+  specs/20260823/09-replay-baseline-attribution.md,
+  specs/20260826/01-replay-scratch-path-blindness.md)
 
 - `ac-matrix`'s coverage denominator fails closed: an AC bullet no ID grammar can parse counts
   as **uncovered** — unparseable = unknown, never absent — in both drift modes, since a host

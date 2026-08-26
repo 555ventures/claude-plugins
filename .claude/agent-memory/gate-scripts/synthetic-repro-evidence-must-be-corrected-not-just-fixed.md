@@ -3,7 +3,7 @@ name: synthetic-repro-evidence-must-be-corrected-not-just-fixed
 description: when a review round's fix is correct but its cited repro numbers came from a synthetic stand-in rather than the real entrypoint, the fix stays and only the evidence sentence in code/test comments gets corrected — recorded as a grep-able deviations-class count, no doctrine edit
 metadata:
   type: feedback
-  reviewed: 2026-08-23
+  reviewed: 2026-08-26
 ---
 
 A repair round can find that a prior round's *fix* was right but its *evidence* was wrong: the

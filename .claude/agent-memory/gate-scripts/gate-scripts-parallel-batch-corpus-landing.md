@@ -3,7 +3,7 @@ name: gate-scripts-parallel-batch-corpus-landing
 description: /spec:build dispatches workers in parallel within a layer wave — a script-layer AC that depends on a doctrine-layer file (e.g. a corpus the script's --class values must match) can go green without this worker touching that file, because a sibling worker lands it concurrently
 metadata:
   type: project
-  reviewed: 2026-08-24
+  reviewed: 2026-08-26
 ---
 
 **Corrected 2026-08-23 (review close, specs/20260823/06):** this note originally named `wf-build`

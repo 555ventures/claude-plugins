@@ -1,6 +1,6 @@
 ---
 date: 2026-08-26
-status: implementing
+status: done
 tier: critical
 area: review
 design: false
@@ -257,6 +257,14 @@ subject already had; D4 leaves doctrine describing the derivation, not supplying
 vocabulary is not the leak, provenance is — applies to the path: a random or neutral name is
 itself an anomaly in a directory that otherwise holds `spec-<stem>` build worktrees. The
 random suffix is unavoidable (A2/A3) and is the least-anomalous shape available.
+
+**Waived 2026-08-26 — out-of-plan file `.claude/spec.config.json`.** The review's File Plan
+reconcile leg flagged the two-line grounding re-stamp (`generatedBy` 7.32.1→7.38.0,
+`contractHash`) that landed as its own `chore(doctor)` commit inside the review window. It is a
+downstream consequence of D6's plugin version bump — `/spec:doctor` keeping the host's grounding
+stamp aligned with the installed plugin — not spec implementation work; reverting it would leave
+the config naming a version that no longer exists. Waived by JJ; no behavior in this spec's diff
+depends on it.
 
 **Accepted residuals.** Detached HEAD is a mild anomaly a reviewer could notice; fixing it means
 inventing a branch name, which reopens the naming problem. In this self-hosting repo the

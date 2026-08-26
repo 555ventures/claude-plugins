@@ -106,9 +106,12 @@ test('AC-20260825-02-5: the wf-research.js research prompt instructs reading Cov
 
 // ---------------------------------------------------------------------------
 // AC-20260825-02-6 (regression pin — SHALL CONTINUE TO, sanctioned green pre-change)
+// The checkWorkflowSyntax/capOptions test just below is spec 03's AC-20260825-03-8 — the same
+// test, retagged in place per that spec's D10 (never weakened, never rewritten). The
+// shared-for/Question Style test after it stays tagged AC-20260825-02-6; spec 03 does not touch it.
 // ---------------------------------------------------------------------------
 
-test('AC-20260825-02-6: wf-research.js continues to pass checkWorkflowSyntax and capOptions continues to cut a 6-option menu to 4 preserving the is_minority option', () => {
+test('AC-20260825-03-8: wf-research.js continues to pass checkWorkflowSyntax and capOptions continues to cut a 6-option menu to 4 preserving the is_minority option', () => {
   assert.doesNotThrow(() => checkWorkflowSyntax('spec/workflows/wf-research.js'),
     'D9: wf-research.js must continue to parse as a valid workflow sandbox body — a throw here ' +
     'means the D6 schema/prompt edit broke the script\'s syntax, not just its schema shape')
@@ -142,4 +145,76 @@ test('AC-20260825-02-6: spec-paths shared-for genesis-architect continues to ser
     'D9: genesis-architect must continue to be served § Question Style — its absence means the ' +
     'command that raises every AskUserQuestion in the discovery interview (D1/D2/D8) no longer ' +
     'reads the doctrine governing how those questions must be phrased: ' + r.stdout)
+})
+
+// specs/20260825/03-genesis-currency-executed.md (2026-08-25) D6 deletes wf-research.js's Verify
+// phase outright: the Haiku "still current?" pass was an opinion, never told to pin to release
+// pages, replaced by spec/scripts/registry-check.js's deterministic registry GET (this spec's own
+// script, pinned separately in tests/genesis/registry-check.test.js). RECENCY_VERDICT_SCHEMA,
+// verifyKeys, toVerify, verifyFailed, still_current, verify_note, and every `haiku` seat are
+// deleted; meta.phases drops to one entry; optionSetSchema() gains a REQUIRED `packages` array per
+// option. AC-20260825-03-7 cannot pass yet — as of 2026-08-26 the Verify phase, RECENCY_VERDICT_
+// SCHEMA, verifyKeys, still_current, and the haiku model seat are all still live in the file, and
+// optionSetSchema()'s option items do not require `packages` (TDD red).
+
+// Extract the top-level `export const meta = {...}` object literal and evaluate it, mirroring
+// checkWorkflowSyntax's own strip pattern (helpers.js) — meta is a bare const, not a named
+// function, so evalFns/extractFn (which brace-match a `function name(` signature) cannot reach it.
+function extractMeta(src) {
+  const m = src.match(/^export const meta = (\{[\s\S]*?\n\})\n/)
+  if (!m) throw new Error('export const meta = {...} not found')
+  // eslint-disable-next-line no-new-func
+  return new Function('return (' + m[1] + ')')()
+}
+
+// ---------------------------------------------------------------------------
+// AC-20260825-03-7
+// ---------------------------------------------------------------------------
+
+test("AC-20260825-03-7: optionSetSchema(), extracted from wf-research.js via evalFns, requires packages per option with registry/name/version items, the source contains none of RECENCY_VERDICT_SCHEMA, verifyKeys, still_current, or 'haiku', and meta.phases has length 1", () => {
+  const src = read('spec/workflows/wf-research.js')
+  const { optionSetSchema } = evalFns(src, ['optionSetSchema'])
+  const schema = optionSetSchema()
+
+  const itemSchema = schema && schema.properties && schema.properties.options && schema.properties.options.items
+  const required = itemSchema && itemSchema.required
+  assert.ok(Array.isArray(required) && required.includes('packages'),
+    'D6: optionSetSchema()\'s option-item `required` array must include "packages" — its absence ' +
+    'means the harness would accept an agent-returned option with no package to check, and ' +
+    'registry-check.js (this spec\'s replacement for the deleted Haiku pass) would have nothing to ' +
+    'resolve: ' + JSON.stringify(required))
+
+  const packagesSchema = itemSchema && itemSchema.properties && itemSchema.properties.packages
+  assert.strictEqual(packagesSchema && packagesSchema.type, 'array',
+    'D6: `properties.options.items.properties.packages` must be declared `type: "array"` — a ' +
+    'missing or wrong type means the schema does not actually constrain the field registry-check.js ' +
+    'depends on: ' + JSON.stringify(packagesSchema))
+  const pkgItemRequired = packagesSchema && packagesSchema.items && packagesSchema.items.required
+  for (const key of ['registry', 'name', 'version']) {
+    assert.ok(Array.isArray(pkgItemRequired) && pkgItemRequired.includes(key),
+      'D6: each packages[] item must require "' + key + '" — its absence means an agent could ' +
+      'return a package entry registry-check.js cannot resolve (e.g. a name with no version), and ' +
+      'the mechanical fake-major guard this spec introduces would silently have nothing to check: ' +
+      JSON.stringify(pkgItemRequired))
+  }
+
+  const banned = [
+    [/RECENCY_VERDICT_SCHEMA/, 'RECENCY_VERDICT_SCHEMA'],
+    [/verifyKeys/, 'verifyKeys'],
+    [/still_current/, 'still_current'],
+    [/'haiku'/, "'haiku'"],
+    [/phase\('Verify'\)/, "phase('Verify')"]
+  ]
+  for (const [re, label] of banned) {
+    assert.ok(!re.test(src),
+      'D6: wf-research.js must not contain the retired literal "' + label + '" — e.g. a surviving ' +
+      "model: 'haiku' seat means the opinion pass this spec replaces with a deterministic registry " +
+      'check is still wired into the workflow, not actually deleted: ' + JSON.stringify(label))
+  }
+
+  const meta = extractMeta(src)
+  assert.ok(Array.isArray(meta.phases) && meta.phases.length === 1,
+    'D6: meta.phases must have exactly one entry ("Research") now that the Verify phase is ' +
+    'deleted — a surviving second phase means the workflow still advertises a currency-check step ' +
+    'this spec retires: ' + JSON.stringify(meta.phases))
 })

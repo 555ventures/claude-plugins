@@ -86,16 +86,22 @@ dimension a prior answer opens:
 
 1. Call `wf-research` (`Workflow {scriptPath: <spec-paths wf-research output>}`) with `args` =
    `{stage: "architect", dimensionKeys: [...], briefPath: ".claude/genesis/brief.md", contextPaths:
-   [<prior interview-research/*.json>], verifyKeys: [<the version-bearing subset>]}` —
+   [<prior interview-research/*.json>]}` —
    paths/keys/booleans only. Batch all dimensions one answer opens into a single call.
 2. On return, write each menu to `.claude/genesis/interview-research/{dimension}.json`, **stamping
-   `fetchedAt`** yourself (the workflow can't — read the date via Bash `date`).
-3. Present an `AskUserQuestion` built from the menu: 2–4 options recommended-first by `rank`,
-   each option's description built as `tradeoff` · `because` (the coverage keys/answers that
-   drove this rank) · `priced` (a consequence at the brief's stated scale) · recency ("current
-   as of `<fetchedAt>`"), neutral phrasing, the **"Other / not sure"** escape hatch; the rank-1
-   option is labeled "(Recommended)" with the menu's `why_recommended` as the stated reason.
-   **Drop or demote** any option the Haiku pass marked `still_current: false`.
+   `fetchedAt`** yourself (the workflow can't — read the date via Bash `date`), then run
+   `node "$(spec-paths registry-check)" --menu .claude/genesis/interview-research/{dimension}.json
+   --write` for each menu just written. Exit 1 → print one `📌 dropped for currency: "<label>" —
+   <registry>:<name>@<version> not on the registry` line per dropped option; exit 3 → print
+   `⚠️ registries unreachable — menu stamped unverified, continuing`; exit 2 → re-run the research
+   round for that dimension — never present a malformed menu.
+3. Present an `AskUserQuestion` built from the menu: the **rewritten** file `registry-check.js`
+   just wrote — 2–4 options recommended-first by `rank`, each option's description built as
+   `tradeoff` · `because` (the
+   coverage keys/answers that drove this rank) · `priced` (a consequence at the brief's stated
+   scale) · recency ("current as of `<fetchedAt>`"), neutral phrasing, the **"Other / not sure"**
+   escape hatch; the rank-1 option is labeled "(Recommended)" with the menu's `why_recommended`
+   as the stated reason.
 4. Record the pick, its `sources`, and its `because`/`priced` to the brief's `## Picks`, and
    mark that dimension **constrained** in `## Open Dimensions` — it then skips the Phase-3
    hard-fork ask (genesis.md § Genesis: Discovery Interview — Discovery→Decision bridge). A
@@ -308,8 +314,9 @@ Next: /spec:genesis-explore a trading simulator for solo creators
 ## Rules
 
 - **Never Read `wf-research.js`.** Its `args` contract is in the phase that invokes it —
-  `{stage, dimensionKeys, briefPath, contextPaths, verifyKeys}`. Invoke it by `scriptPath` and act
-  on its return; its source is never orchestrator context.
+  `{stage, dimensionKeys, briefPath, contextPaths}`. Invoke it by `scriptPath` and act
+  on its return; its source is never orchestrator context. Currency is executed separately by
+  `node "$(spec-paths registry-check)" --menu <file> --write` after each menu is written.
 - Greenfield-only (v1): a populated repo → STOP, point to `/spec:init`.
 - `AskUserQuestion` dismissed → STOP; never invent the declined answer.
 - Hard-to-reverse forks always go to the user; never synthesized away.

@@ -56,8 +56,15 @@ atlas sweeps and `/spec:design` still degrade gracefully with a note when headle
    `ux-psychology-current`, `ui-practice-current`, `domain-patterns`, `dark-pattern-law`,
    plus the locale bundle for non-global audiences). Invoke `wf-research`
    (`Workflow {scriptPath: <spec-paths wf-research output>}`) with `{stage: "explore",
-   dimensionKeys, briefPath, contextPaths: [stack-descriptor, genesis brief], verifyKeys: []}` —
-   paths/keys/booleans only, never prose.
+   dimensionKeys, briefPath, contextPaths: [stack-descriptor, genesis brief]}` —
+   paths/keys/booleans only, never prose. Then run
+   `node "$(spec-paths registry-check)" --menu <file> --write` for each menu written (a UX
+   dimension typically carries `packages: []` and stamps `unverified` with no request made).
+   Exit 1 → print one `📌 dropped for currency: "<label>" — <registry>:<name>@<version> not on
+   the registry` line per dropped option; exit 3 → print `⚠️ registries unreachable — menu
+   stamped unverified, continuing`; exit 2 → re-run the research round for that dimension —
+   never present a malformed menu. The resulting `AskUserQuestion` (where used) is built from
+   the rewritten menu file.
 2. Author `docs/design/research-brief.md` from the `ux-research-brief.md` template
    (`spec-paths templates`), holding every admitted principle to the method bar: falsifiable
    rule, evidence tier, archetype/screen conditions, `predicts:` observable, the ethics floor,

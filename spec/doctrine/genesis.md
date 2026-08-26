@@ -61,7 +61,7 @@ research-backed round:
 
 1. The user's last answer, or a coverage answer, opens one or more dimensions. The command calls
    **`wf-research`** — research agents only, no proposers — with `args` = paths/keys/booleans
-   (`stage`, `dimensionKeys`, `briefPath`, `contextPaths`, `verifyKeys`). Batch every dimension
+   (`stage`, `dimensionKeys`, `briefPath`, `contextPaths`). Batch every dimension
    one answer opens into a single parallel call. Cross-cutting angles available to any archetype —
    `scope-discipline` (what to include vs deliberately exclude), `competitive-teardown`,
    `accessibility`, and the locale bundle (`i18n-rtl`, `locale-formatting`, `cultural-color`,
@@ -83,12 +83,11 @@ research-backed round:
    priced menu, never a blank field; the pick seeds the next round.
 
 **Model placement in the loop:** **Sonnet** builds the menu (research + option synthesis, incl.
-`because`/`priced`); **Haiku** verifies currency on version-bearing dimensions — those the
-command flags (`verifyKeys`: stacks, libraries, runtimes, where a stale stamp corrupts the
-choice) plus any the researcher itself marks `version_bearing` — never on taste/UX; **Opus**
-(the session) curates which 2–4 options ship, orders them, enforces neutral phrasing, and owns
-the write. This holds the pipeline doctrine: Sonnet research, Haiku narrow lookup, Opus
-session/curation.
+`because`/`priced`); currency is executed by `registry-check.js` (`spec-paths registry-check`)
+over each option's `packages` — a version absent from its registry never enters a menu;
+unreachable registries stamp `unverified`, never block; **Opus** (the session) curates which
+2–4 options ship, orders them, enforces neutral phrasing, and owns the write. This holds the
+pipeline doctrine: Sonnet research, a deterministic registry check, Opus session/curation.
 
 **Provenance.** Every shipped option's `sources` + `fetchedAt` live in
 `interview-research/{dimension}.json`; the *picked* option's provenance is copied into the
@@ -405,7 +404,9 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
   with the base primitives, extended by every `/spec:design` reconcile (shared § Design
   Authoring Contracts, component manifest).
 - **`.claude/genesis/design-rules.json`** — design's output: category-only enforcement rules.
-- **`.claude/genesis/interview-research/{dimension}.json`** — the woven-loop option menus.
+- **`.claude/genesis/interview-research/{dimension}.json`** — the woven-loop option menus,
+  each surviving option stamped with a `currency` block and each menu carrying any
+  `droppedForCurrency` entries `registry-check.js` (`spec-paths registry-check`) removed.
 - **`docs/adr/NNNN-*.md`** — architecture/design decision records (template via `spec-paths templates`).
 - **`docs/roadmap/`** (durable) — the decomposition that makes the pipeline invocable after
   setup: `00-overview.md` (sequence table, milestone gates, ops track, parking lot) plus one

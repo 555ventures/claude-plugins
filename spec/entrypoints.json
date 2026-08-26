@@ -111,6 +111,14 @@
       "spec/commands/build.md"
     ]
   },
+  "spec/scripts/registry-check.js": {
+    "entryPoints": [
+      "spec/doctrine/genesis.md",
+      "spec/commands/genesis-architect.md",
+      "spec/commands/genesis-design.md",
+      "spec/commands/genesis-explore.md"
+    ]
+  },
   "spec/scripts/release-legs.js": {
     "entryPoints": [
       "spec/commands/release.md"

@@ -1,6 +1,7 @@
 ---
 date: 2026-08-25
-status: hardened
+status: implementing
+diff_base: b1c140ef0b16ea1a4c554b8938780f407613ec80
 tier: critical           # adds a spec-paths key (key-set edit — critical trigger, precedent specs/20260823/01, specs/20260824/05)
 area: genesis
 design: false

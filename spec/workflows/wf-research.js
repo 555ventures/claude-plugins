@@ -1,10 +1,9 @@
 export const meta = {
   name: 'wf-research',
-  description: 'Live option-menu research for the discovery interview: parallel Sonnet web agents build a ranked, recency-stamped option set per opened dimension; an optional Haiku pass verifies currency on version-bearing dimensions. Independent per-dimension research only — no synthesis, no debate, no vote.',
-  whenToUse: 'Invoked between AskUserQuestion rounds by /spec:genesis-architect and /spec:genesis-design to turn the user\'s last answer into research-backed option menus',
+  description: 'Live option-menu research for the discovery interview: parallel Sonnet web agents build a ranked, recency-stamped option set per opened dimension, each option\'s packages resolvable by registry-check.js. Independent per-dimension research only — no synthesis, no debate, no vote.',
+  whenToUse: 'Invoked between AskUserQuestion rounds by the genesis commands to turn the user\'s last answer into research-backed option menus',
   phases: [
     { title: 'Research', detail: 'one Sonnet web agent per opened dimension → ranked option menu' },
-    { title: 'Verify', detail: 'Haiku currency check on version-bearing dimensions only (skipped otherwise)' },
   ],
 }
 
@@ -51,12 +50,10 @@ if (!args || typeof args !== 'object' || !Array.isArray(args.dimensionKeys) || !
 //   dimensionKeys: [string],   // dimensions THIS answer opened (menu in genesis.md); batched parallel
 //   briefPath: string,         // .claude/genesis/brief.md — goal + intake + Research Angles focus; Read
 //   contextPaths: [string],    // prior interview-research/*.json + descriptors to Read; []
-//   verifyKeys: [string],      // subset of dimensionKeys that are version-bearing → Haiku check; []
 // }
 
 const briefPath = args.briefPath
 const ctx = Array.isArray(args.contextPaths) ? args.contextPaths : []
-const verifyKeys = Array.isArray(args.verifyKeys) ? args.verifyKeys : []
 const ctxLine = ctx.length
   ? 'Also Read this prior context (earlier interview rounds + descriptors): ' + ctx.join(', ') + '.'
   : 'There is no prior interview context this round.'
@@ -70,6 +67,13 @@ const ctxLine = ctx.length
 // `priced` (a consequence priced at the brief's stated scale, or the literal "n/a — no number in
 // the brief") are REQUIRED string fields — a schema requirement the harness enforces on the
 // agent's return, not a prompt suggestion the agent can silently skip.
+//
+// specs/20260825/03 D6: `packages` is a REQUIRED array per option (an empty array is legal, for
+// taste/UX dimensions with nothing to resolve) — each entry names a registry package
+// {registry, name, version} that registry-check.js (this spec's deterministic replacement for
+// the deleted Haiku "still current?" pass) resolves by one GET against that registry's own
+// per-version JSON endpoint. The check is only as good as this input: an option that names no
+// package is honestly `unverified`; an option that names one is verified or gone.
 //
 // A named top-level function (not a bare top-level const) so tests/genesis/research-menu.test.js
 // can extract it standalone via evalFns. LAYOUT REQUIREMENT (test-mode constraint, per
@@ -89,7 +93,7 @@ function optionSetSchema() {
         description: '2–4 current options, ranked, rank 1 = recommended first',
         items: {
           type: 'object', additionalProperties: false,
-          required: ['label', 'tradeoff', 'recency', 'rank', 'because', 'priced'],
+          required: ['label', 'tradeoff', 'recency', 'rank', 'because', 'priced', 'packages'],
           properties: {
             label: { type: 'string', description: 'the choice, terse and neutral (no leading language)' },
             tradeoff: { type: 'string', description: 'one honest line — what you give up by choosing this' },
@@ -99,6 +103,19 @@ function optionSetSchema() {
             is_minority: { type: 'boolean', description: 'true for a deliberately-preserved contrarian/underdog option research surfaced' },
             because: { type: 'string', description: 'the coverage keys and answers that drove this rank, e.g. "because residency=EU-only and tenancy=organisations"' },
             priced: { type: 'string', description: 'one concrete consequence at the brief\'s stated scale — a monthly figure and where it jumps, a migration cost, or the literal "n/a — no number in the brief"' },
+            packages: {
+              type: 'array',
+              description: 'registry packages this option names, for registry-check.js to resolve; [] for a taste/UX dimension with nothing to check',
+              items: {
+                type: 'object', additionalProperties: false,
+                required: ['registry', 'name', 'version'],
+                properties: {
+                  registry: { type: 'string', description: 'npm | pypi | crates | endoflife' },
+                  name: { type: 'string' },
+                  version: { type: 'string' },
+                },
+              },
+            },
           },
         },
       },
@@ -108,26 +125,6 @@ function optionSetSchema() {
   }
 }
 const OPTION_SET_SCHEMA = optionSetSchema()
-
-const RECENCY_VERDICT_SCHEMA = {
-  type: 'object', additionalProperties: false,
-  required: ['dimension', 'verdicts'],
-  properties: {
-    dimension: { type: 'string' },
-    verdicts: {
-      type: 'array',
-      items: {
-        type: 'object', additionalProperties: false,
-        required: ['label', 'still_current'],
-        properties: {
-          label: { type: 'string' },
-          still_current: { type: 'boolean' },
-          note: { type: 'string', description: 'e.g. "superseded by X as of 2026-04" or "latest stable is N, not what was cited"' },
-        },
-      },
-    },
-  },
-}
 
 phase('Research')
 // Keys are carried BY INDEX from here on: the parallel() result is index-aligned with
@@ -155,7 +152,13 @@ const menusRaw = await parallel(args.dimensionKeys.map(key => () =>
     'and where it jumps, or a migration cost; if the brief states no number, use the literal ' +
     '"n/a — no number in the brief"). If research surfaces a credible contrarian/underdog option, ' +
     'include it and set is_minority (never average it away). Set version_bearing=true if any option ' +
-    'carries a library/framework/runtime version whose staleness would corrupt the choice.',
+    'carries a library/framework/runtime version whose staleness would corrupt the choice. For ' +
+    'each option, name the registry package and the EXACT version you cite in `packages` — ' +
+    '{registry: "npm"|"pypi"|"crates"|"endoflife", name, version} — sourced from a release page ' +
+    'or the registry itself, never a blog roundup (a fake major like "Bun 2.0" or "Deno 3.0" ' +
+    'must never be cited as if it shipped). A version you cannot source this way gets NO package ' +
+    'entry and `recency` set to "unverified — model knowledge"; a taste/UX option with nothing to ' +
+    'check gets `packages: []`.',
     { label: 'menu:' + key, phase: 'Research', model: 'sonnet', effort: 'medium', agentType: 'general-purpose', schema: OPTION_SET_SCHEMA }
   )
 ))
@@ -165,8 +168,8 @@ let menus = menusRaw
 
 // 2026-08-13 spec 06 D6, amended 06a D5: enforce the 2–4 cap HERE — a researcher may return more
 // than 4 options despite the schema's guidance, and nothing previously trimmed it. Cut before the
-// Haiku verify pass (no point spending a currency check on an option about to be dropped).
-// Minority-preserving: an `is_minority: true` option is a deliberately-preserved contrarian pick
+// registry-check.js currency pass the command runs on the written file (no point resolving
+// packages for an option about to be dropped). Minority-preserving: an `is_minority: true` option is a deliberately-preserved contrarian pick
 // the research prompt orders kept ("never average it away") — cut only when minority options
 // alone exceed the cap. Cut order per group: ascending-rank STABLE sort (ties keep researcher
 // order), then cut worst-(highest-)rank-first from the end; the non-minority group is exhausted
@@ -197,44 +200,9 @@ const capResult = capOptions(menus)
 menus = capResult.menus
 const alsoConsidered = capResult.alsoConsidered
 
-// Haiku currency check for version-bearing dimensions. Triggered by the UNION of the command's
-// verifyKeys flag and the researcher's own version_bearing discovery — the command knows which
-// dimensions are stacks/libraries up front, but a researcher can legitimately surface versioned
-// options on a dimension the command didn't anticipate; either signal alone suffices.
-const toVerify = menus.filter(m => verifyKeys.includes(m.dimension) || m.version_bearing)
-// 2026-08-13 spec 06 D6: true when at least one currency verifier died — a stale-versus-current
-// stamp on those options was never actually confirmed, and it must not silently read as fresh.
-let verifyFailed = false
-if (toVerify.length) {
-  phase('Verify')
-  const verdicts = await parallel(toVerify.map(m => () =>
-    agent(
-      'Narrow currency check. For the "' + m.dimension + '" dimension, verify whether each option below ' +
-      'is STILL CURRENT or has been superseded/deprecated. Use WebSearch/WebFetch for latest stable ' +
-      'versions and maintenance status; do not re-rank or editorialize — only report still_current and a ' +
-      'terse note where it changed. Keep each verdict\'s `label` EXACTLY as given, in the SAME order.\n\nOPTIONS:\n' +
-      JSON.stringify(m.options.map(o => ({ label: o.label, recency: o.recency }))),
-      { label: 'verify:' + m.dimension, phase: 'Verify', model: 'haiku', agentType: 'general-purpose', schema: RECENCY_VERDICT_SCHEMA, effort: 'low' }
-    )
-  ))
-  verifyFailed = verdicts.some(v => !v)
-  // Merge BY INDEX (toVerify[i] ↔ verdicts[i]); within a menu, match options by exact label echo
-  // with a positional fallback so a paraphrased label degrades to positional, never to silence.
-  const verdictFor = new Map(toVerify.map((m, i) => [m, verdicts[i]]))
-  menus = menus.map(m => {
-    const v = verdictFor.get(m)
-    if (!v) return m
-    const options = m.options.map((o, oi) => {
-      const vd = v.verdicts.find(x => x.label === o.label) || v.verdicts[oi]
-      if (!vd) return o
-      return { ...o, still_current: vd.still_current, verify_note: vd.note || '' }
-    })
-    return { ...m, options, verified: true }
-  })
-}
-
 // One option set per opened dimension. The command writes each to interview-research/{dimension}.json
-// (stamping fetchedAt), curates from the (already ≤4) menu into a recommended-first
-// AskUserQuestion, and records the pick + sources to the brief. Stale options
-// (still_current === false) should be demoted or dropped there.
-return { stage: args.stage, menus, verifyFailed: verifyFailed, alsoConsidered: alsoConsidered, tokens: budget.spent() }
+// (stamping fetchedAt), then runs registry-check.js --write over the file — this spec's
+// deterministic replacement for the deleted Haiku currency pass — before curating from the
+// (already ≤4, now currency-checked) menu into a recommended-first AskUserQuestion and recording
+// the pick + sources to the brief.
+return { stage: args.stage, menus, alsoConsidered: alsoConsidered, tokens: budget.spent() }

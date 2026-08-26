@@ -62,9 +62,14 @@ edit to the page, never a separate sign-off question.
 2. **Taste direction — research-backed.** Run the **research-woven loop** (genesis.md § Genesis:
    Discovery Interview) on the visual-trend dimension: `wf-research` with `{stage: "design",
    dimensionKeys: ["visual-trend", ...], briefPath, contextPaths:
-   [".claude/genesis/stack-descriptor.json", <prior interview-research/*.json>], verifyKeys: []}`
-   (taste is not version-bearing → no Haiku pass). Present the current aesthetic/voice directions
-   for this archetype + audience as the options — each description built as `tradeoff` ·
+   [".claude/genesis/stack-descriptor.json", <prior interview-research/*.json>]}`, then
+   `node "$(spec-paths registry-check)" --menu <file> --write` for each menu written (taste
+   dimensions carry `packages: []` and stamp `unverified` with no request made). Exit 1 → print
+   one `📌 dropped for currency: "<label>" — <registry>:<name>@<version> not on the registry`
+   line per dropped option; exit 3 → print `⚠️ registries unreachable — menu stamped unverified,
+   continuing`; exit 2 → re-run the research round for that dimension — never present a
+   malformed menu. Present the current aesthetic/voice directions for this archetype + audience
+   as the options, built from the rewritten menu file — each description built as `tradeoff` ·
    `because` · `priced` · "current as of `<fetchedAt>`" — recommended-first and labeled
    "(Recommended)" with the menu's `why_recommended` as the stated reason; the user picks the
    feeling, references in vs. out.

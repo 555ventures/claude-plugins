@@ -87,13 +87,20 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // AC-20260824-05-4 in tests/consistency/design-doctrine.test.js); `fidelity-check` was never a
 // member of this list.
 
+// specs/20260825/03-genesis-currency-executed.md D9 (spec/bin/spec-paths row): the new
+// registry-check.js script needs a spec-paths key like every other bundled script — a missing key
+// breaks all three genesis commands' D7 menu step (`node "$(spec-paths registry-check)" --menu
+// <file> --write`) silently (§ Risk Tiers, spec-paths). This row carries no AC of its own — like
+// the spec-review-driver.js and spec-queue.js additions above, it is enforced fail-closed by this
+// existing suite guard: the key list below is updated in place, never a parallel exhaustive pin.
+
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-enforce',
     'wf-research', 'design-atlas', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
     'review-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'render-gate', 'render-compare',
-    'render-inventory', 'render-rules', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
+    'render-inventory', 'render-rules', 'registry-check', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }

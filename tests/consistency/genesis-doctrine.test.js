@@ -389,3 +389,41 @@ test("AC-20260825-02-3: genesis.md's On-disk Handoff roster names genesis-brief.
     'step deletes it — its absence means the roster does not say WHEN the throwaway artifact ' +
     'goes away: ' + JSON.stringify(sketchWindow))
 })
+
+// specs/20260825/03-genesis-currency-executed.md (2026-08-25): D8 replaces the model-placement
+// paragraph's Haiku-currency sentence in genesis.md with one naming registry-check.js
+// (`spec-paths registry-check`) as the mechanism, and D7 wires the same script into all three
+// genesis commands' menu steps. AC-20260825-03-9 cannot pass yet — as of 2026-08-26 none of the
+// four files name `registry-check`, and genesis.md/genesis-architect.md/genesis-design.md still
+// carry `verifyKeys`/`Haiku pass` (grep confirmed at authoring time; TDD red).
+
+// ---------------------------------------------------------------------------
+// AC-20260825-03-9
+// ---------------------------------------------------------------------------
+
+test('AC-20260825-03-9: genesis.md and all three genesis command files name registry-check, and none of them carry still_current, Haiku pass, Haiku currency, or verifyKeys', () => {
+  const banned = [
+    [/still_current/, 'still_current'],
+    [wordsRe('Haiku pass'), 'Haiku pass'],
+    [wordsRe('Haiku currency'), 'Haiku currency'],
+    [/verifyKeys/, 'verifyKeys']
+  ]
+  const files = [
+    'spec/doctrine/genesis.md',
+    'spec/commands/genesis-architect.md',
+    'spec/commands/genesis-design.md',
+    'spec/commands/genesis-explore.md'
+  ]
+  for (const rel of files) {
+    const src = read(rel)
+    assert.match(src, /registry-check/,
+      'D7/D8: ' + rel + ' must name registry-check — its absence means this file was never ' +
+      'updated to invoke or document the deterministic script that replaces the retired Haiku ' +
+      'currency pass, leaving no currency mechanism named at all')
+    assertNoBannedLiterals(src, banned, (label) =>
+      'D6/D7/D8: ' + rel + ' must not contain the retired literal "' + label + '" — e.g. ' +
+      'genesis-architect.md keeping `verifyKeys: [<the version-bearing subset>]` in its ' +
+      'workflow-call step means the deleted Haiku opinion seat and its args plumbing are still ' +
+      'documented as though they exist, even though D6 deletes them from wf-research.js itself')
+  }
+})

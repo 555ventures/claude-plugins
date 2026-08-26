@@ -21,7 +21,7 @@
 # the whole point of the tool, not pollution. The first live run blocked it and the
 # worker tunneled the same write through Bash instead, tripping an Auto-Mode Bypass
 # warning. The fix: allow when the TARGET tree's PRIVATE git dir (outside the working
-# tree, so the blind reviewer never sees it) carries a `replay-worktree` marker file,
+# tree, so the blind reviewer never sees it) carries a `scratch-worktree` marker file,
 # planted only by `replay.js --setup` and gone after `--teardown` / `git worktree
 # remove`. The scratch tree is a sink, never a source: the allow keys on the TARGET
 # only, so a session anchored inside the marker-carrying tree writing OUT to the main
@@ -31,7 +31,7 @@
 # target inside a repo's `.git`-internal paths made `rev-parse --show-toplevel` exit
 # 128 (not inside any working tree), and the old `[ -n "$tgt_top" ] || exit 0` read
 # that as "not our concern" and allowed it — including writes that PLANT a
-# `replay-worktree` file where none belongs, permanently disarming the guard for
+# `scratch-worktree` file where none belongs, permanently disarming the guard for
 # that tree. Fixed by attributing any target inside THIS repo's git metadata to its
 # owning tree (main checkout, or the linked tree named by a `worktrees/<name>`
 # segment) and blocking unless that owner is the cwd's own git dir — this runs
@@ -45,7 +45,7 @@
 #   - target is inside THIS repo's git metadata, owned by a
 #     tree other than cwd's own                               -> BLOCK (marker forgery)
 #   - target is a same-repo LINKED tree whose PRIVATE git
-#     dir carries the `replay-worktree` marker (TARGET only)  -> ALLOW (replay sink)
+#     dir carries the `scratch-worktree` marker (TARGET only)  -> ALLOW (replay sink)
 #   - target is in a DIFFERENT repo, or outside any repo      -> ALLOW
 #
 # Correct for every nesting: a worktree spawned from another worktree, or a spec
@@ -167,7 +167,7 @@ tgt_gitdir_raw="$(git -C "$probe" rev-parse --git-dir 2>/dev/null)" && [ -n "$tg
   # `worktrees` segment, so a legitimate marker is always a LINKED tree's marker —
   # a marker sitting at a main checkout's top-level `.git` is never legitimate.
   case "$tgt_gitdir" in
-    */worktrees/*) [ -f "$tgt_gitdir/replay-worktree" ] && exit 0 ;;
+    */worktrees/*) [ -f "$tgt_gitdir/scratch-worktree" ] && exit 0 ;;
   esac
 }
 

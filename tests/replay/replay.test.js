@@ -82,6 +82,23 @@ const { SPEC, read, tmpdir, runNode, gitRepo } = require('../helpers')
 // test (critical-tier priority, latest-wins tie-break, setup-failed retry targeting) are unchanged,
 // only the base value's shape is. The old build_base-wins-over-diff_base sub-case is retired outright
 // (superseded by D4's reordering) and its coverage folds into the new AC-20260823-05-5 test.
+//
+// specs/20260826/01-replay-scratch-path-blindness.md (2026-08-26, rv_6229b7af0d0b's due replay,
+// rp_02b3f1ee52f1): the scratch worktree root handed to the blind reviewer, and the marker in its
+// private git dir, both named the harness itself — `.claude/worktrees/replay-<hex>` (copied from
+// a doctrine example) and `replay-worktree`, the latter one `ls "$(git rev-parse --git-dir)"`
+// away from inside the tree. D1 has `--setup` derive a build-shaped `{dir}` from the target spec
+// itself via `merge-back.sh branch-for` (the sole owner of the build-worktree naming rule) plus a
+// random suffix (A2: git refuses `worktree add` onto an existing non-empty dir); D2 refuses a
+// caller `--dir` whose basename opens with "replay" (exit 3), mirroring `--apply --subject`'s
+// existing structural refusal; D3 renames the marker `replay-worktree` -> `scratch-worktree` at
+// every reading site, with no grandfathering in `--teardown` (A4: no marked tree existed at build
+// time). AC-1..AC-4 below are new tests pinning the derivation, the refusal, and the rename;
+// AC-20260823-05-6 and AC-20260819-02-8 further below are retagged AC-20260826-01-6 (SHALL
+// CONTINUE TO) since D1/D2 narrow --setup's caller-supplied-`--dir` population without touching
+// the outside-repo manual-fallback or unmarked-teardown-refusal arms they already pin; the four
+// `replay-*`-basename in-repo `--dir` fixtures above (AC-20260823-05-1/-3/-4) are renamed
+// `scratch-*` in place so they keep exercising the in-repo allow arm instead of tripping D2.
 
 const SCRIPT = 'scripts/replay.js'
 
@@ -105,14 +122,16 @@ function isIgnored(root, rel) {
   return spawnSync('git', ['-C', root, 'check-ignore', '-q', rel]).status === 0
 }
 
-// D4 (fix iteration 2): the marker lives at `<git -C <dir> rev-parse --git-dir>/replay-worktree` —
-// the worktree's PRIVATE git dir, never its working tree. Both AC-3 and AC-8 resolve the marker's
-// real location through this helper rather than guessing a path, so a future relocation of the
-// marker breaks this helper in one place instead of desyncing every test that hardcodes it.
+// D4 (fix iteration 2, 2026-08-19): the marker lives at `<git -C <dir> rev-parse --git-dir>/
+// scratch-worktree` — the worktree's PRIVATE git dir, never its working tree. D3
+// (specs/20260826/01-replay-scratch-path-blindness.md) renamed the filename itself from
+// `replay-worktree` to `scratch-worktree`; both AC-3 and AC-8 resolve the marker's real location
+// through this helper rather than guessing a path, so a future relocation of the marker breaks
+// this helper in one place instead of desyncing every test that hardcodes it.
 function markerPath(dir) {
   const gitDirRaw = execFileSync('git', ['-C', dir, 'rev-parse', '--git-dir'], { encoding: 'utf8' }).trim()
   const gitDirAbs = path.isAbsolute(gitDirRaw) ? gitDirRaw : path.resolve(dir, gitDirRaw)
-  return path.join(gitDirAbs, 'replay-worktree')
+  return path.join(gitDirAbs, 'scratch-worktree')
 }
 
 function writeLedger(root, rows) {
@@ -520,11 +539,14 @@ test('AC-20260823-05-1: --setup accepts a --dir inside <root>/.claude/worktrees/
   const root = fs.realpathSync(tmpdir('replay-setup-wt-ok'))
   gitRepo(root) // gitRepo()'s own fixture .gitignore already covers .claude/worktrees/
   const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
-  assert.ok(isIgnored(root, '.claude/worktrees/replay-x'),
+  // D2 (specs/20260826/01): renamed from replay-x — a basename opening with "replay" now trips
+  // the new D2 refusal, which would sink this test's own AC-1 in-repo-allow claim under the wrong
+  // arm entirely.
+  assert.ok(isIgnored(root, '.claude/worktrees/scratch-x'),
     'sanity: this fixture\'s .gitignore must already cover .claude/worktrees/ — otherwise this test does ' +
     'not exercise the "already ignored" arm AC-1 names, it exercises D2\'s provisioning arm instead')
 
-  const dir = path.join(root, '.claude/worktrees/replay-x')
+  const dir = path.join(root, '.claude/worktrees/scratch-x')
   const r = runNode(SCRIPT, ['--setup', '--commit', sha, '--dir', dir], { cwd: root })
   assert.strictEqual(r.status, 0,
     'D1: a --dir resolving inside <root>/.claude/worktrees/ must now be ACCEPTED — refusing it is exactly ' +
@@ -536,9 +558,9 @@ test('AC-20260823-05-1: --setup accepts a --dir inside <root>/.claude/worktrees/
 
   const marker = markerPath(dir)
   assert.ok(fs.existsSync(marker),
-    'D1: the accepted in-repo worktree must still carry the replay-worktree marker at its resolved private ' +
-    'git dir path, exactly like the outside-repo path — --teardown\'s marker guard must work identically here: ' +
-    marker)
+    'D1/D3: the accepted in-repo worktree must still carry the scratch-worktree marker at its resolved ' +
+    'private git dir path, exactly like the outside-repo path — --teardown\'s marker guard must work ' +
+    'identically here: ' + marker)
 
   const teardown = runNode(SCRIPT, ['--teardown', '--dir', dir], { cwd: root })
   assert.strictEqual(teardown.status, 0,
@@ -593,12 +615,14 @@ test('AC-20260823-05-3: --setup targets <root>/.claude/worktrees/<name> in a rep
   execFileSync('git', ['-C', root, 'commit', '-q', '-m', 'init'])
   const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
 
-  assert.ok(!isIgnored(root, '.claude/worktrees/replay-y'),
+  // D2 (specs/20260826/01): renamed from replay-y for the same reason as the replay-x rename
+  // above — a "replay"-opening basename now trips the new D2 refusal.
+  assert.ok(!isIgnored(root, '.claude/worktrees/scratch-y'),
     'sanity: this fixture must NOT already ignore .claude/worktrees/ — otherwise this test does not exercise ' +
     'D2\'s provisioning arm at all')
   const excludePath = path.join(root, '.git/info/exclude')
 
-  const dir = path.join(root, '.claude/worktrees/replay-y')
+  const dir = path.join(root, '.claude/worktrees/scratch-y')
   const r = runNode(SCRIPT, ['--setup', '--commit', sha, '--dir', dir], { cwd: root })
   assert.strictEqual(r.status, 0,
     'D2: --setup must self-provision the ignore line and succeed even on a host whose .gitignore never ' +
@@ -608,7 +632,7 @@ test('AC-20260823-05-3: --setup targets <root>/.claude/worktrees/<name> in a rep
   assert.ok(excludeAfter.includes('.claude/worktrees/'),
     'D2: info/exclude must now carry the .claude/worktrees/ line — without it the worktree stays visible to ' +
     'git status on every host that lacks the line in its own .gitignore: ' + JSON.stringify(excludeAfter))
-  assert.ok(isIgnored(root, '.claude/worktrees/replay-y'),
+  assert.ok(isIgnored(root, '.claude/worktrees/scratch-y'),
     'D2: after provisioning, git check-ignore -q must exit 0 for the worktree path — this is the AC\'s own ' +
     'stated check for success')
   const status = execFileSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' })
@@ -625,11 +649,13 @@ test('AC-20260823-05-4: WHEN the repo\'s info/exclude already carries the .claud
   execFileSync('git', ['-C', root, 'commit', '-q', '-m', 'init'])
   const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
 
-  const dir1 = path.join(root, '.claude/worktrees/replay-first')
+  // D2 (specs/20260826/01): renamed from replay-first/replay-second — a "replay"-opening
+  // basename now trips the new D2 refusal, same reason as the replay-x/-y renames above.
+  const dir1 = path.join(root, '.claude/worktrees/scratch-first')
   const r1 = runNode(SCRIPT, ['--setup', '--commit', sha, '--dir', dir1], { cwd: root })
   assert.strictEqual(r1.status, 0, 'fixture setup: the first --setup must succeed and provision the ignore line: ' + r1.stderr)
 
-  const dir2 = path.join(root, '.claude/worktrees/replay-second')
+  const dir2 = path.join(root, '.claude/worktrees/scratch-second')
   const r2 = runNode(SCRIPT, ['--setup', '--commit', sha, '--dir', dir2], { cwd: root })
   assert.strictEqual(r2.status, 0, 'D2: a second --setup on an already-provisioned host must still succeed: ' + r2.stderr)
 
@@ -641,7 +667,225 @@ test('AC-20260823-05-4: WHEN the repo\'s info/exclude already carries the .claud
     JSON.stringify(excludeContent))
 })
 
-test('AC-20260823-05-6 (retagged from AC-20260819-02-3, SHALL CONTINUE TO): --setup builds a marker-carrying detached worktree at an outside --dir that leaves the host repo byte-identical', () => {
+// specs/20260826/01-replay-scratch-path-blindness.md D1/D2/D3 (2026-08-26): the four tests below
+// pin the new --setup --spec derivation, the D2 basename refusal, and the D3 marker rename. Every
+// derived name is computed by actually invoking merge-back.sh's `branch-for` subcommand — the
+// sole owner of the `spec/<stem>` naming rule (pipeline rules § Risk Tiers) — rather than
+// hardcoding the transform, so a future change to that rule cannot silently desync this file.
+
+test('AC-20260826-01-1: --setup --commit <sha> --spec <spec path> with no --dir exits 0, prints exactly one stdout line "setup dir=<abs> commit=<sha>" where <abs> is R/.claude/worktrees/<name>-<6 lowercase hex> and <name> is merge-back.sh branch-for <spec path> with "/" -> "-", registers a detached worktree there carrying scratch-worktree, and leaves the host repo\'s git status --porcelain empty', () => {
+  const root = fs.realpathSync(tmpdir('replay-setup-derived'))
+  gitRepo(root) // gitRepo()'s own fixture .gitignore already covers .claude/worktrees/
+  const relSpec = 'specs/20260825/02-genesis-consultant-discovery.md'
+  const specFull = path.join(root, relSpec)
+  fs.mkdirSync(path.dirname(specFull), { recursive: true })
+  fs.writeFileSync(specFull, '---\nstatus: implementing\n---\n# genesis consultant discovery\n')
+  execFileSync('git', ['-C', root, 'add', '-A'])
+  execFileSync('git', ['-C', root, 'commit', '-q', '-m', 'add spec'])
+  const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const statusBefore = execFileSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' })
+
+  // D1: <name> is derived by ACTUALLY invoking branch-for, never by re-deriving the rule inline —
+  // branch-for is the sole owner of the stem rule (merge-back.sh header, pipeline rules).
+  const branch = execFileSync('bash', [path.join(SPEC, 'scripts/merge-back.sh'), 'branch-for', relSpec], { encoding: 'utf8' }).trim()
+  const expectedName = branch.replace(/\//g, '-')
+  assert.ok(!/^replay/i.test(expectedName),
+    'sanity: this fixture\'s derived name must not itself open with "replay" — otherwise D2\'s refusal would ' +
+    'fire on the harness\'s own derivation and this test would prove nothing about D1')
+
+  const r = runNode(SCRIPT, ['--setup', '--commit', sha, '--spec', relSpec], { cwd: root })
+  assert.strictEqual(r.status, 0,
+    'D1: a derived --setup with a readable --spec and no --dir must succeed — deriving the build-shaped ' +
+    'path from the target spec itself is the whole point of this Decision: ' + r.stderr)
+
+  const stdoutLines = r.stdout.split('\n').filter(Boolean)
+  assert.strictEqual(stdoutLines.length, 1,
+    'D1: --setup must print EXACTLY one stdout line — extra output here would corrupt any caller (replay.md ' +
+    'Phase 1 step 1) that parses dir= off the printed line: ' + JSON.stringify(r.stdout))
+
+  const expectedPrefix = path.join(root, '.claude', 'worktrees', expectedName)
+  const re = new RegExp('^setup dir=(' + expectedPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '-[0-9a-f]{6}) commit=' + sha + '$')
+  const m = stdoutLines[0].match(re)
+  assert.ok(m,
+    'D1: the printed dir= must be exactly R/.claude/worktrees/<name>-<6 lowercase hex>, where <name> comes ' +
+    'from merge-back.sh branch-for with "/" -> "-" — a differently-shaped path here means the derivation ' +
+    'diverged from the single owner of build-worktree naming, which is what let the path leak into a ' +
+    'doctrine example in the first place: ' + JSON.stringify(r.stdout))
+  const dir = m[1]
+
+  const gitDirRaw = execFileSync('git', ['-C', dir, 'rev-parse', '--git-dir'], { encoding: 'utf8' }).trim()
+  const gitDirAbs = path.isAbsolute(gitDirRaw) ? gitDirRaw : path.resolve(dir, gitDirRaw)
+  assert.ok(fs.existsSync(path.join(gitDirAbs, 'scratch-worktree')),
+    'D1/D3: the derived worktree must carry the scratch-worktree marker at its resolved private git dir, ' +
+    'exactly like every other --setup arm: ' + gitDirAbs)
+
+  const list = execFileSync('git', ['-C', root, 'worktree', 'list'], { encoding: 'utf8' })
+  assert.ok(list.includes(dir),
+    'D1: the derived worktree must be registered as a detached worktree in git\'s own list — a missing entry ' +
+    'means the printed dir= does not actually correspond to a real worktree: ' + list)
+
+  const statusAfter = execFileSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' })
+  assert.strictEqual(statusAfter, statusBefore,
+    'D1: a derived --setup must leave the host repo exactly as clean as before it ran — the .claude/' +
+    'worktrees/ ignore already covers this location, and any drift here means the derivation leaked into ' +
+    'the tracked tree: ' + JSON.stringify({ before: statusBefore, after: statusAfter }))
+})
+
+test('AC-20260826-01-2: two derived --setup --spec runs for the same spec coexist as distinct suffixed siblings alongside the spec\'s real un-suffixed build worktree (left untouched, still on its own branch), and --setup with neither --spec nor --dir exits 2 naming both flags with nothing registered', () => {
+  const root = fs.realpathSync(tmpdir('replay-setup-derived-twice'))
+  gitRepo(root)
+  const relSpec = 'specs/20260825/02-genesis-consultant-discovery.md'
+  const specFull = path.join(root, relSpec)
+  fs.mkdirSync(path.dirname(specFull), { recursive: true })
+  fs.writeFileSync(specFull, '---\nstatus: implementing\n---\n# x\n')
+  execFileSync('git', ['-C', root, 'add', '-A'])
+  execFileSync('git', ['-C', root, 'commit', '-q', '-m', 'add spec'])
+  const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+
+  const branch = execFileSync('bash', [path.join(SPEC, 'scripts/merge-back.sh'), 'branch-for', relSpec], { encoding: 'utf8' }).trim()
+  const name = branch.replace(/\//g, '-')
+  // The spec's REAL build worktree, built exactly as merge-back.sh create builds it — un-suffixed,
+  // on its own branch named by the same branch-for rule.
+  const buildDir = path.join(root, '.claude/worktrees', name)
+  execFileSync('git', ['-C', root, 'worktree', 'add', '-b', branch, buildDir, sha])
+
+  const first = runNode(SCRIPT, ['--setup', '--commit', sha, '--spec', relSpec], { cwd: root })
+  assert.strictEqual(first.status, 0,
+    'D1/A2: a derived --setup must succeed at a random-suffixed sibling even while the spec\'s own ' +
+    'un-suffixed build worktree is registered — the suffix exists exactly because A2 confirmed `git ' +
+    'worktree add` refuses an existing non-empty dir: ' + first.stderr)
+  const second = runNode(SCRIPT, ['--setup', '--commit', sha, '--spec', relSpec], { cwd: root })
+  assert.strictEqual(second.status, 0,
+    'D1/AC-2: a SECOND derived --setup for the same spec must also succeed, at its OWN distinct suffix — two ' +
+    'consecutive derived setups for the same spec must coexist: ' + second.stderr)
+
+  const firstDir = first.stdout.match(/dir=(\S+)/)[1]
+  const secondDir = second.stdout.match(/dir=(\S+)/)[1]
+  assert.notStrictEqual(firstDir, secondDir,
+    'D1/AC-2: the two derived setups must land at DISTINCT suffixed paths — a colliding path means one ' +
+    'silently reused (or clobbered) the other\'s worktree: ' + JSON.stringify({ firstDir, secondDir }))
+
+  const list = execFileSync('git', ['-C', root, 'worktree', 'list'], { encoding: 'utf8' })
+  const worktreeEntries = list.trim().split('\n').filter((l) => l.includes('.claude/worktrees/'))
+  assert.strictEqual(worktreeEntries.length, 3,
+    'D1/AC-2: git worktree list must carry exactly 3 entries under .claude/worktrees/ — the spec\'s own ' +
+    'build worktree plus the two derived setups — after two derived setups for one spec: ' + list)
+
+  const buildBranch = execFileSync('git', ['-C', buildDir, 'branch', '--show-current'], { encoding: 'utf8' }).trim()
+  assert.strictEqual(buildBranch, branch,
+    'D1/AC-2: the spec\'s real build worktree must remain on its own branch, untouched by either derived ' +
+    'setup: ' + buildBranch)
+
+  const neitherRoot = fs.realpathSync(tmpdir('replay-setup-neitherflag'))
+  gitRepo(neitherRoot)
+  const shaNeither = execFileSync('git', ['-C', neitherRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const listBefore = execFileSync('git', ['-C', neitherRoot, 'worktree', 'list'], { encoding: 'utf8' })
+  const neither = runNode(SCRIPT, ['--setup', '--commit', shaNeither], { cwd: neitherRoot })
+  assert.strictEqual(neither.status, 2,
+    'D1: --setup with NEITHER --spec nor --dir must exit 2 as a usage error — there is nothing to derive a ' +
+    'path from and no explicit path either: ' + JSON.stringify({ status: neither.status, stdout: neither.stdout }))
+  const setupSegment = (neither.stderr.split(' | ').find((seg) => seg.includes('--setup'))) || ''
+  assert.match(setupSegment, /--spec/,
+    'D1: the --setup usage segment must NAME --spec as one of the two accepted ways to supply a path — the ' +
+    'old usage line only ever mentioned --dir for --setup, which under-informs a caller now that --spec is ' +
+    'a valid alternative (a bare grep for "--spec" anywhere in stderr would pass vacuously off --record\'s ' +
+    'own --spec flag, so this checks the --setup segment specifically): ' + JSON.stringify(neither.stderr))
+  assert.match(setupSegment, /--dir/,
+    'D1: the --setup usage segment must also NAME --dir alongside --spec, matching the Decision\'s "naming ' +
+    'both flags": ' + JSON.stringify(neither.stderr))
+  const listAfter = execFileSync('git', ['-C', neitherRoot, 'worktree', 'list'], { encoding: 'utf8' })
+  assert.strictEqual(listAfter, listBefore,
+    'D1: a usage-error --setup must register nothing: ' + JSON.stringify({ before: listBefore, after: listAfter }))
+})
+
+test('AC-20260826-01-3: --setup --dir refuses a basename matching /^replay/i with exit 3, creates no directory and registers no worktree, and prints a stderr remedy naming --spec, while a basename that merely CONTAINS replay (not opening with it) is accepted', () => {
+  const root = fs.realpathSync(tmpdir('replay-setup-basename-refusal'))
+  gitRepo(root)
+  const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+
+  const inRepoDir = path.join(root, '.claude/worktrees/replay-x')
+  const listBefore = execFileSync('git', ['-C', root, 'worktree', 'list'], { encoding: 'utf8' })
+  const inRepo = runNode(SCRIPT, ['--setup', '--commit', sha, '--dir', inRepoDir], { cwd: root })
+  assert.strictEqual(inRepo.status, 3,
+    'D2: an in-repo --dir under .claude/worktrees/ whose basename opens with "replay" must be refused with ' +
+    'exit 3 even though specs/20260823/05 D1 already allows that location — the D2 basename refusal runs ' +
+    'before the D1 location allow ever gets a say: ' + JSON.stringify({ status: inRepo.status, stdout: inRepo.stdout }))
+  assert.ok(!fs.existsSync(inRepoDir), 'D2: the refused --dir must not be created: ' + inRepoDir)
+  assert.match(inRepo.stderr, /--spec/,
+    'D2: the refusal\'s remedy must name --spec as the alternative — telling a caller only "omit --dir" with ' +
+    'no alternative flag leaves no path forward: ' + inRepo.stderr)
+  const listAfterInRepo = execFileSync('git', ['-C', root, 'worktree', 'list'], { encoding: 'utf8' })
+  assert.strictEqual(listAfterInRepo, listBefore,
+    'D2: a refused --setup must register nothing in git\'s own worktree list: ' +
+    JSON.stringify({ before: listBefore, after: listAfterInRepo }))
+
+  const outsideDir = path.join(fs.realpathSync(tmpdir('replay-setup-basename-outside')), 'Replay-abc')
+  const outside = runNode(SCRIPT, ['--setup', '--commit', sha, '--dir', outsideDir], { cwd: root })
+  assert.strictEqual(outside.status, 3,
+    'D2: the basename refusal is case-insensitive and applies outside the repo too, exactly like --apply ' +
+    '--subject\'s existing structural refusal — "Replay-abc" must be refused just as "replay-x" is: ' +
+    JSON.stringify({ status: outside.status, stdout: outside.stdout }))
+  assert.ok(!fs.existsSync(outsideDir), 'D2: the refused outside-repo --dir must not be created either: ' + outsideDir)
+
+  const acceptedDir = path.join(root, '.claude/worktrees/spec-02-mutation-replay-a1b2c3')
+  const accepted = runNode(SCRIPT, ['--setup', '--commit', sha, '--dir', acceptedDir], { cwd: root })
+  assert.strictEqual(accepted.status, 0,
+    'D2: a basename that merely CONTAINS "replay" without OPENING with it (spec-02-mutation-replay-a1b2c3, ' +
+    'the harness\'s own real derived name for its own spec, per A5) must be ACCEPTED — a vocabulary blocklist ' +
+    'here would refuse the harness on its own spec, exactly the false positive A5 was executed to rule out: ' +
+    accepted.stderr)
+})
+
+test('AC-20260826-01-4: --setup plants exactly scratch-worktree (never replay-worktree or .replay-worktree, in the private git dir or the working tree) and --teardown removes a scratch-worktree-marked dir cleanly but refuses (exit 3, deletes nothing) a linked worktree whose private git dir carries only the retired replay-worktree name', () => {
+  const root = fs.realpathSync(tmpdir('replay-setup-marker-rename'))
+  gitRepo(root)
+  const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+
+  const dir = path.join(fs.realpathSync(tmpdir('replay-setup-marker-rename-wt')), 'wt')
+  const setup = runNode(SCRIPT, ['--setup', '--commit', sha, '--dir', dir], { cwd: root })
+  assert.strictEqual(setup.status, 0, 'fixture setup: --setup must succeed: ' + setup.stderr)
+
+  const gitDirRaw = execFileSync('git', ['-C', dir, 'rev-parse', '--git-dir'], { encoding: 'utf8' }).trim()
+  const gitDirAbs = path.isAbsolute(gitDirRaw) ? gitDirRaw : path.resolve(dir, gitDirRaw)
+
+  assert.ok(fs.existsSync(path.join(gitDirAbs, 'scratch-worktree')),
+    'D3: --setup must plant the scratch-worktree marker at the resolved private git dir — the marker\'s new ' +
+    'neutral name is D3\'s whole point: ' + gitDirAbs)
+  assert.ok(!fs.existsSync(path.join(gitDirAbs, 'replay-worktree')),
+    'D3: --setup must NEVER plant the retired replay-worktree name in the private git dir — no grandfathered ' +
+    'second name may exist alongside the new one: ' + gitDirAbs)
+  assert.ok(!fs.existsSync(path.join(dir, 'replay-worktree')) && !fs.existsSync(path.join(dir, '.replay-worktree')),
+    'D3: neither replay-worktree nor .replay-worktree may exist in the WORKING TREE either: ' + dir)
+  assert.ok(!fs.existsSync(path.join(dir, 'scratch-worktree')) && !fs.existsSync(path.join(dir, '.scratch-worktree')),
+    'D3: the marker must live ONLY in the private git dir, never in the working tree under either name — a ' +
+    'copy in the working tree is exactly what --apply\'s `git add -A`-shaped commands could sweep in: ' + dir)
+
+  const teardown = runNode(SCRIPT, ['--teardown', '--dir', dir], { cwd: root })
+  assert.strictEqual(teardown.status, 0,
+    'D3: a --setup-created worktree carrying the scratch-worktree marker must be removable by --teardown ' +
+    'exactly like before the rename: ' + teardown.stderr)
+  assert.ok(!fs.existsSync(dir), 'D3: teardown must remove the worktree directory: ' + dir)
+
+  // A4/D3: "no grandfathering of the old name in --teardown" — a linked worktree carrying ONLY the
+  // retired replay-worktree marker must be refused as unmarked, never accepted as a legacy form.
+  const legacyDir = path.join(fs.realpathSync(tmpdir('replay-teardown-legacy')), 'wt')
+  execFileSync('git', ['-C', root, 'worktree', 'add', '--detach', legacyDir, sha])
+  const legacyGitDirRaw = execFileSync('git', ['-C', legacyDir, 'rev-parse', '--git-dir'], { encoding: 'utf8' }).trim()
+  const legacyGitDirAbs = path.isAbsolute(legacyGitDirRaw) ? legacyGitDirRaw : path.resolve(legacyDir, legacyGitDirRaw)
+  fs.writeFileSync(path.join(legacyGitDirAbs, 'replay-worktree'), '')
+
+  const legacyTeardown = runNode(SCRIPT, ['--teardown', '--dir', legacyDir], { cwd: root })
+  assert.strictEqual(legacyTeardown.status, 3,
+    'D3: a linked worktree carrying ONLY the retired replay-worktree marker must be refused as unmarked — ' +
+    'the old name grants nothing post-rename (A4: no marked tree existed at build time, so no grandfathering ' +
+    'arm was ever added): ' + JSON.stringify({ status: legacyTeardown.status, stdout: legacyTeardown.stdout }))
+  assert.ok(fs.existsSync(legacyDir), 'D3: the refused teardown must delete nothing: ' + legacyDir)
+  const list = execFileSync('git', ['-C', root, 'worktree', 'list'], { encoding: 'utf8' })
+  assert.ok(list.includes(legacyDir),
+    'D3: git\'s own worktree registry must still list the refused (undeleted) directory: ' + list)
+})
+
+test('AC-20260823-05-6 / AC-20260826-01-6 (retagged from AC-20260819-02-3, SHALL CONTINUE TO): --setup builds a marker-carrying detached worktree at an outside --dir that leaves the host repo byte-identical', () => {
   const root = fs.realpathSync(tmpdir('replay-setup'))
   gitRepo(root)
   const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
@@ -667,11 +911,11 @@ test('AC-20260823-05-6 (retagged from AC-20260819-02-3, SHALL CONTINUE TO): --se
     'path segment), not the shared common git dir and not the working tree — this is what makes the marker ' +
     'get deleted for free by `git worktree remove`: ' + marker)
   assert.ok(fs.existsSync(marker),
-    'D4: the created worktree must carry the replay-worktree marker at its resolved PRIVATE git dir path ' +
-    '(`git -C <dir> rev-parse --git-dir` + "replay-worktree") — --teardown\'s refusal-without-marker guard ' +
+    'D4/D3: the created worktree must carry the scratch-worktree marker at its resolved PRIVATE git dir path ' +
+    '(`git -C <dir> rev-parse --git-dir` + "scratch-worktree") — --teardown\'s refusal-without-marker guard ' +
     'resolves this exact same path to decide whether to refuse: ' + marker)
-  assert.ok(!fs.existsSync(path.join(outsideDir, 'replay-worktree')) && !fs.existsSync(path.join(outsideDir, '.replay-worktree')),
-    'D4: nothing named replay-worktree (with or without a leading dot) may exist in the worktree\'s own ' +
+  assert.ok(!fs.existsSync(path.join(outsideDir, 'scratch-worktree')) && !fs.existsSync(path.join(outsideDir, '.scratch-worktree')),
+    'D4: nothing named scratch-worktree (with or without a leading dot) may exist in the worktree\'s own ' +
     'WORKING TREE — a marker there is exactly what could be swept into `git add -A` by --apply, which is the ' +
     'defect class this marker relocation exists to make structurally impossible: ' + outsideDir)
 
@@ -692,7 +936,7 @@ test('AC-20260823-05-6 (retagged from AC-20260819-02-3, SHALL CONTINUE TO): --se
     'the maintainer actually works in: ' + JSON.stringify({ before: statusBefore, after: statusAfter }))
 })
 
-test('AC-20260819-02-4: --setup composed with --apply commits the mutation on base..HEAD without leaking the .replay-worktree marker into the diff or git status, subject defaulting to "build: follow-up" or landing verbatim', () => {
+test('AC-20260819-02-4: --setup composed with --apply commits the mutation on base..HEAD without leaking the .scratch-worktree marker into the diff or git status, subject defaulting to "build: follow-up" or landing verbatim', () => {
   const { root, baseSha, patchFile } = initApplyFixture('replay-apply')
 
   // F1 regression pin: the worktree comes from --setup itself (marker excluded via
@@ -716,11 +960,12 @@ test('AC-20260819-02-4: --setup composed with --apply commits the mutation on ba
   assert.match(nameStatus, /lib\/x\.js/,
     'D5: base..HEAD must contain the mutated file — this is the diff surface review-legs.js and the ' +
     'reviewer both actually read: ' + nameStatus)
-  assert.ok(!nameStatus.includes('.replay-worktree'),
-    'F1 regression pin (2026-08-19 review): .replay-worktree must NEVER appear in `git diff base..HEAD ' +
-    '--name-status` — this is the exact defect that shipped undetected because the prior test built its ' +
-    'worktree with a raw `git worktree add` instead of going through --setup, so there was no marker for ' +
-    '--apply\'s `git add -A` to sweep in, and the leak was invisible to a green suite: ' + nameStatus)
+  assert.ok(!nameStatus.includes('.scratch-worktree'),
+    'F1 regression pin (2026-08-19 review; marker renamed by specs/20260826/01 D3): .scratch-worktree must ' +
+    'NEVER appear in `git diff base..HEAD --name-status` — this is the exact defect that shipped undetected ' +
+    'because the prior test built its worktree with a raw `git worktree add` instead of going through ' +
+    '--setup, so there was no marker for --apply\'s `git add -A` to sweep in, and the leak was invisible to ' +
+    'a green suite: ' + nameStatus)
 
   const statusDefault = execFileSync('git', ['-C', wtDefault, 'status', '--porcelain'], { encoding: 'utf8' })
   assert.strictEqual(statusDefault.trim(), '',
@@ -1519,7 +1764,7 @@ test('AC-20260823-09-10: --stats SHALL CONTINUE TO count a legs:"baseline-red:re
     'D7: the caught total (1) must include the baseline-red row among the per-outcome totals: ' + r.stdout)
 })
 
-test('AC-20260819-02-8: --teardown refuses a --dir whose private git dir carries no replay-worktree marker with exit 3 and deletes nothing, and removes a --setup-created worktree cleanly', () => {
+test('AC-20260819-02-8 / AC-20260826-01-6: --teardown refuses a --dir whose private git dir carries no scratch-worktree marker with exit 3 and deletes nothing, and removes a --setup-created worktree cleanly', () => {
   const root = fs.realpathSync(tmpdir('replay-teardown-repo'))
   gitRepo(root)
   const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
@@ -1528,7 +1773,7 @@ test('AC-20260819-02-8: --teardown refuses a --dir whose private git dir carries
   fs.mkdirSync(plainDir, { recursive: true })
   const refuse = runNode(SCRIPT, ['--teardown', '--dir', plainDir], { cwd: root })
   assert.strictEqual(refuse.status, 3,
-    'D4: a --dir that is not a linked worktree (so its private git dir can carry no replay-worktree marker) ' +
+    'D4: a --dir that is not a linked worktree (so its private git dir can carry no scratch-worktree marker) ' +
     'must be refused with exit 3 — the marker guard means teardown can only ever delete a directory THIS ' +
     'harness created: ' + refuse.stderr)
   assert.ok(fs.existsSync(plainDir),
@@ -1540,9 +1785,9 @@ test('AC-20260819-02-8: --teardown refuses a --dir whose private git dir carries
   assert.strictEqual(setup.status, 0, 'fixture setup: --setup must succeed to produce a teardown-eligible worktree: ' + setup.stderr)
   const marker = markerPath(setupDir)
   assert.ok(fs.existsSync(marker),
-    'D4: this fixture must produce a worktree carrying the replay-worktree marker in its PRIVATE git dir ' +
+    'D3/D4: this fixture must produce a worktree carrying the scratch-worktree marker in its PRIVATE git dir ' +
     'BEFORE teardown runs, at the exact path --teardown itself resolves (`git -C <dir> rev-parse --git-dir` ' +
-    '+ "replay-worktree") — otherwise this test is not actually exercising the marker guard it claims to: ' + marker)
+    '+ "scratch-worktree") — otherwise this test is not actually exercising the marker guard it claims to: ' + marker)
 
   const teardown = runNode(SCRIPT, ['--teardown', '--dir', setupDir], { cwd: root })
   assert.strictEqual(teardown.status, 0,
@@ -1623,8 +1868,8 @@ test('AC-20260819-02-11: spec-status.js SHALL CONTINUE TO exit 0 with zero anoma
 // cannot remove files setupCommand *creates* (that run's own first-run stray root
 // package-lock.json), so the setup gate needs `git clean -fd` after the restore. D5 — the
 // mutation worker's Edit/Write into `{dir}` now passes the cross-worktree write guard via the
-// `replay-worktree` marker allow (spec 20260820/02's own D1/D2, pinned in
-// tests/worktree-hook.test.js); replay.md must say so, and say that reaching for Bash instead
+// `scratch-worktree` marker allow (spec 20260820/02's own D1/D2, marker renamed by specs/20260826/01
+// D3, pinned in tests/worktree-hook.test.js); replay.md must say so, and say that reaching for Bash instead
 // (the actual 2026-08-20 incident shape) is a contract violation, not an improvisation.
 test('AC-20260820-02-6: replay.md\'s Phase 1 setup gate appends "git -C {dir} clean -fd" after the checkout restore, and the worker-dispatch step states the marker-guard write path with Bash-as-violation', () => {
   const replayMdPath = path.join(SPEC, 'commands/replay.md')

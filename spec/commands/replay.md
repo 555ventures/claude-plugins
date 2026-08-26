@@ -47,14 +47,20 @@ asked.
 
 ## Phase 1 — Mutation authoring
 
-1. **Setup:** `{dir}` = a fresh, uniquely-named path under `<root>/.claude/worktrees/` (e.g.
-   `.claude/worktrees/replay-<random>`) — `--setup` self-provisions the host's ignore line when
-   it's missing, so the worktree stays invisible to `git status` in the main tree. An in-repo
-   `--dir` that resolves outside `.claude/worktrees/` keeps the exit-3 refusal unchanged; a
-   `--dir` outside the repo (e.g. `mktemp -d`) remains an accepted manual fallback. Run
-   `node "$(spec-paths replay)" --setup --commit {parent} --dir {dir}` — the worktree stands up
-   at the close commit's **parent**, never the close commit itself, so the tree the mutation
-   lands on is the one the original review actually judged.
+1. **Setup:** run `node "$(spec-paths replay)" --setup --commit {parent} --spec {spec}` and read
+   `{dir}` from the `dir=` value it prints — the worktree stands up at the close commit's
+   **parent**, never the close commit itself, so the tree the mutation lands on is the one the
+   original review actually judged. `--setup` derives `{dir}` itself from `{spec}` (a
+   build-shaped name under `<root>/.claude/worktrees/`, random-suffixed so it coexists with the
+   spec's own build worktree if one is still registered) and self-provisions the host's ignore
+   line when it's missing, so the worktree stays invisible to `git status` in the main tree.
+   Doctrine names how the path is derived, never a path a session could copy — that is exactly
+   the leak this command's Rules § Blindness now closes. `--dir <path>` is the manual
+   out-of-repo fallback (e.g. `mktemp -d`) for when no `{spec}` is available to derive from; it
+   wins verbatim over derivation when both are given, and it is refused with exit 3 when its
+   basename opens with `replay` (case-insensitive) — the remedy is to omit `--dir` and pass
+   `--spec` so the harness derives a build-shaped name instead. An in-repo `--dir` that resolves
+   outside `.claude/worktrees/` keeps its own exit-3 refusal unchanged.
 2. **Setup gate (D4):** read the host's `setupCommand` from `.claude/spec.config.json` and run
    it inside `{dir}`. Non-zero exit → run `node "$(spec-paths replay)" --record --spec {spec}
    --review-run-id {reviewRunId} --legs none --outcome setup-failed`, then
@@ -66,7 +72,7 @@ asked.
    (D10), then run `git -C {dir} clean -fd` — `git checkout -- .` alone restores tracked files
    but cannot remove files `setupCommand` *creates* (the 2026-08-20 first live run left an
    untracked root `package-lock.json` that would have polluted the blind reviewer's tree), and
-   `clean -fd` cannot touch the `replay-worktree` marker, which lives in the worktree's private
+   `clean -fd` cannot touch the `scratch-worktree` marker, which lives in the worktree's private
    git dir outside the working tree — order is load-bearing: checkout first, then clean — then
    continue to class selection.
 3. **Pick a corpus class:** run `node "$(spec-paths replay)" --stats`, read the per-class
@@ -84,7 +90,7 @@ asked.
    sites actually live in: two files on a stack that keeps tests apart from code, or one file on
    a stack that co-locates them (Rust `#[cfg(test)] mod tests`, Elixir, doctests) — and returns
    the edited path(s), no line number; D9's canonical patch carries the positions. Its Edit/Write
-   into `{dir}` passes the cross-worktree write guard via the `replay-worktree` marker allow
+   into `{dir}` passes the cross-worktree write guard via the `scratch-worktree` marker allow
    (`block-cross-worktree-writes.sh`); mutating files through Bash instead remains a contract
    violation, treated as a failed authoring attempt rather than an improvisation. A worker that
    cannot find a File-Plan-scoped site satisfying the recipe returns `blocked` naming why; pick a
@@ -224,13 +230,18 @@ Next: {spec-status --next, verbatim}
 ## Rules
 
 - **Blindness is the measurement's validity.** Nothing dispatched to the reviewer, directly or
-  transitively (file contents at `{dir}`, prompt text, worktree branch name), may reveal that a
-  replay is in progress. The same bar covers everything the harness itself creates inside
-  `{dir}`: no artifact it produces — commit subject, tracked file, `git status` entry, log
-  line — may carry the harness's own name, a corpus term, or a class id into anything readable
-  from that tree. `--setup` and `--apply` excluding their own markers and subjects from the diff
-  and the commit log are this invariant's enforcement, not the invariant itself — a new leak
-  surface is still a blindness violation even where no flag polices it yet.
+  transitively (file contents at `{dir}`, prompt text, worktree branch name, the worktree
+  **path** handed to the reviewer as its root, the marker filename in the tree's private git
+  dir), may reveal that a replay is in progress. The same bar covers everything the harness
+  itself creates inside `{dir}`: no artifact it produces — commit subject, tracked file, `git
+  status` entry, log line — may carry the harness's own name, a corpus term, or a class id into
+  anything readable from that tree. `--setup` and `--apply` excluding their own markers and
+  subjects from the diff and the commit log are this invariant's enforcement, not the invariant
+  itself — a new leak surface is still a blindness violation even where no flag polices it yet.
+  The path and the marker were the two surfaces that bit on 2026-08-26
+  (specs/20260826/01-replay-scratch-path-blindness.md): `--setup` now derives the path from the
+  target spec instead of a doctrine example a session could copy, and the marker carries the
+  neutral name `scratch-worktree`.
 - **The main tree is never in scope.** Every mutating step runs inside `{dir}`, a detached
   worktree isolated by three mechanisms together — the worktree itself, the ignore line
   `--setup` self-provisions when the host lacks it, and the `--setup`/`--teardown` marker guard

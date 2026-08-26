@@ -13,7 +13,7 @@ const { spawnSync, execFileSync } = require('node:child_process')
 // replay scratch tree. The worker tunneled the same write through Bash instead, tripping an
 // Auto-Mode Bypass warning. D1/D2 add a target-marker allow (never a source-side one — a
 // scratch-anchored session writing OUT to the main checkout must stay blocked, D2) scoped to
-// trees carrying the `replay-worktree` marker replay.js's --setup already plants in the
+// trees carrying the `scratch-worktree` marker replay.js's --setup already plants in the
 // target's PRIVATE git dir. AC-20260820-02-1/-2 below are the new cases; AC-20260820-02-3/-4/-5
 // tag the pre-existing regression pins that prove how little else moved.
 //
@@ -23,6 +23,14 @@ const { spawnSync, execFileSync } = require('node:child_process')
 // through -02-11 pin the fix — a target inside THIS repo's own common git dir is now attributed
 // to its owning worktree and blocked cross-owner, before the old fail-open ever runs — and the
 // narrower D1 marker-allow condition (linked-worktree git dirs only) it depends on.
+//
+// specs/20260826/01-replay-scratch-path-blindness.md D3/D5 (2026-08-26): the marker itself named
+// the harness (`replay-worktree`), one `ls "$(git rev-parse --git-dir)"` away from inside the
+// tree — closed by renaming it `scratch-worktree` at every reading site, this hook's allow arm
+// included, with no grandfathering of the old name (D3). AC-20260820-02-1's test name/asserts and
+// `markedFixture()` below now use the new name; AC-20260820-02-3/-4/-9 (regression pins on the
+// still-blocked shapes) are retagged AC-20260826-01-7; a new AC-20260826-01-5 test proves the old
+// name grants nothing post-rename.
 
 const HOOK = path.join(SPEC, 'scripts/block-cross-worktree-writes.sh')
 
@@ -39,11 +47,26 @@ function fixture() {
   return { root, wt }
 }
 
-// Builds a second worktree of the same repo and plants the `replay-worktree` marker in its
-// PRIVATE git dir the same way replay.js --setup does (Contracts: `git -C "$probe" rev-parse
-// --git-dir`, absolutized against the worktree dir — never written into the working tree).
+// Builds a second worktree of the same repo and plants the `scratch-worktree` marker (renamed
+// from `replay-worktree` by specs/20260826/01 D3) in its PRIVATE git dir the same way replay.js
+// --setup does (Contracts: `git -C "$probe" rev-parse --git-dir`, absolutized against the
+// worktree dir — never written into the working tree).
 function markedFixture() {
   const root = fs.realpathSync(tmpdir('xwt-marked'))
+  gitRepo(root)
+  const rt = path.join(root, '.claude/worktrees/rt')
+  execFileSync('git', ['-C', root, 'worktree', 'add', '-q', '-b', 'rt', rt, 'HEAD'])
+  const gitDirRaw = execFileSync('git', ['-C', rt, 'rev-parse', '--git-dir'], { encoding: 'utf8' }).trim()
+  const gitDir = path.isAbsolute(gitDirRaw) ? gitDirRaw : path.resolve(rt, gitDirRaw)
+  fs.writeFileSync(path.join(gitDir, 'scratch-worktree'), '')
+  return { root, rt }
+}
+
+// D3/D5 (specs/20260826/01): plants ONLY the retired `replay-worktree` name — proving the rename
+// actually CLOSES the surface rather than merely adding `scratch-worktree` as a second accepted
+// name alongside the old one.
+function legacyMarkedFixture() {
+  const root = fs.realpathSync(tmpdir('xwt-legacy-marked'))
   gitRepo(root)
   const rt = path.join(root, '.claude/worktrees/rt')
   execFileSync('git', ['-C', root, 'worktree', 'add', '-q', '-b', 'rt', rt, 'HEAD'])
@@ -53,7 +76,7 @@ function markedFixture() {
   return { root, rt }
 }
 
-test('AC-20260820-02-1: a write whose TARGET is a same-repo sibling worktree carrying the replay-worktree marker in its private git dir is allowed with exit 0 and empty stderr', () => {
+test('AC-20260820-02-1: a write whose TARGET is a same-repo sibling worktree carrying the scratch-worktree marker in its private git dir is allowed with exit 0 and empty stderr', () => {
   const { root, rt } = markedFixture()
   const res = run({ cwd: root, tool_input: { file_path: path.join(rt, 'README.md') } })
   assert.strictEqual(res.status, 0,
@@ -63,6 +86,20 @@ test('AC-20260820-02-1: a write whose TARGET is a same-repo sibling worktree car
   assert.strictEqual(res.stderr, '',
     'D1: an allowed write must print nothing on stderr — leftover BLOCKED text here would mislead a caller ' +
     'that inspects stderr regardless of exit code: ' + JSON.stringify(res.stderr))
+})
+
+test('AC-20260826-01-5: a write whose TARGET is a same-repo linked worktree whose private git dir carries ONLY the retired replay-worktree name is blocked with exit 2 and a stderr line opening BLOCKED:, since the D3 rename grants the old marker name nothing', () => {
+  const { root, rt } = legacyMarkedFixture()
+  const res = run({ cwd: root, tool_input: { file_path: path.join(rt, 'README.md') } })
+  assert.strictEqual(res.status, 2,
+    'D3/D5: the retired replay-worktree name must grant no allow post-rename — accepting it here would mean ' +
+    'the marker rename only ADDED scratch-worktree as a second accepted name instead of actually retiring ' +
+    'replay-worktree, leaving the blindness surface this spec closes just as readable as it was before: ' +
+    res.stderr)
+  assert.match(res.stderr, /^BLOCKED:/,
+    'D3/D5: the blocked write must print a stderr line OPENING with "BLOCKED:", exactly like every other ' +
+    'block path in this hook — a differently-shaped or missing diagnostic here leaves the caller with no ' +
+    'remedy text: ' + JSON.stringify(res.stderr))
 })
 
 test('AC-20260820-02-2: a write anchored INSIDE the marker-carrying scratch tree that targets the main checkout stays blocked, since the allow keys on the target only', () => {
@@ -77,7 +114,7 @@ test('AC-20260820-02-2: a write anchored INSIDE the marker-carrying scratch tree
     'a scratch-anchored escape with no remedy text: ' + res.stderr)
 })
 
-test('AC-20260820-02-4/AC-20260820-02-3: same-worktree write allows; cross-worktree write WITHOUT the replay-worktree marker still blocks', () => {
+test('AC-20260820-02-4/AC-20260820-02-3 / AC-20260826-01-7 (SHALL CONTINUE TO): same-worktree write allows; cross-worktree write WITHOUT the scratch-worktree marker still blocks', () => {
   const { root, wt } = fixture()
   assert.strictEqual(run({ cwd: wt, tool_input: { file_path: path.join(wt, 'ok.txt') } }).status, 0)
   const res = run({ cwd: wt, tool_input: { file_path: path.join(root, 'escape.txt') } })
@@ -129,9 +166,9 @@ test('AC-20260820-02-8: the main checkout writing into a DIFFERENT linked worktr
     'D8: the sibling-tree attribution block must print the BLOCKED: diagnostic, matching every other block path in this hook: ' + res.stderr)
 })
 
-test('AC-20260820-02-9: a replay-worktree marker planted out-of-band at a NON-linked git dir grants no allow — an unrelated cross-worktree write still blocks', () => {
+test('AC-20260820-02-9 / AC-20260826-01-7 (SHALL CONTINUE TO): a scratch-worktree marker planted out-of-band at a NON-linked git dir grants no allow — an unrelated cross-worktree write still blocks', () => {
   const { root, wt } = fixture()
-  fs.writeFileSync(path.join(root, '.git', 'replay-worktree'), '')
+  fs.writeFileSync(path.join(root, '.git', 'scratch-worktree'), '')
   const res = run({ cwd: wt, tool_input: { file_path: path.join(root, 'README.md') } })
   assert.strictEqual(res.status, 2,
     'D1: the marker allow requires the marker\'s own git dir to have a /worktrees/ segment — a marker sitting at the main checkout\'s top-level .git (planted out-of-band with a filesystem touch, bypassing the hook entirely) must grant nothing, or the linked-only narrowing this AC pins is not actually enforced: ' + res.stderr)

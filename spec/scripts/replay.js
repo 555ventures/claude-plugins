@@ -108,12 +108,14 @@
 // evidence that was never produced.
 //
 // What this deliberately does NOT do: derive review-legs verdicts, touch the main working tree
-// (--setup/--apply/--teardown only ever act on a --dir the caller supplies; --setup refuses one
-// that resolves inside the repo root, and --teardown refuses one whose private git dir carries no
-// replay-worktree marker — the marker guard means teardown can only ever delete a directory THIS
-// harness created), write anything into a worktree's working tree (the marker lives in the
-// worktree's private git dir, never in the tree under review), retry/poll anything, or run an
-// automated ambiguity judge (an `unresolved` row is retained evidence for a human, never scored).
+// (--setup/--apply/--teardown only ever act on a --dir the caller supplies, or one --setup derives
+// itself from --spec (D1, specs/20260826/01) — --setup refuses a caller --dir that resolves inside
+// the repo root outside <root>/.claude/worktrees/, and refuses one whose basename announces the
+// harness (D2); --teardown refuses a --dir whose private git dir carries no scratch-worktree
+// marker — the marker guard means teardown can only ever delete a directory THIS harness created),
+// write anything into a worktree's working tree (the marker lives in the worktree's private git
+// dir, never in the tree under review), retry/poll anything, or run an automated ambiguity judge
+// (an `unresolved` row is retained evidence for a human, never scored).
 //
 // Root resolution: every ledger/git-reading mode (--select/--setup/--teardown use git; --due/
 // --record/--stats read the ledger) resolves against `process.cwd()` — there is no --root flag,
@@ -133,17 +135,34 @@
 // refusing a --workflow that rides along (a step-7 dismissal never ran the reviewer), a missing
 // --patch or a non-`red:`-shaped --legs for leg-caught, or setup-failed riding with
 // --class/--patch/--workflow)
-// · 3 = safety refusal (--setup --dir resolves inside the repo root but NOT inside
-// <root>/.claude/worktrees/ — specs/20260823/05 D1 narrows this population, the worktrees/ arm
-// itself now succeeds; --apply --patch-out resolves inside --dir, refused before the patch is
-// applied; --teardown --dir does not exist, is not a linked worktree, or its private git dir
-// carries no replay-worktree marker) · 4 = a git operation (worktree add/remove, apply, commit,
-// log, git-dir resolution, info/exclude provisioning, or --apply's canonical --patch-out
-// re-emission) failed, --setup's --dir resolves to a git-dir with no `worktrees` path segment (not
-// a linked worktree), or --select's target spec (read at the CLOSE commit, specs/20260823/05 D4)
-// carries no diff_base/build_base candidate that resolves to a validated ancestor of the close
-// commit's parent distinct from it — widened by D4 to also cover a stale (moving-ref) candidate,
-// not just an absent one.
+// · 3 = safety refusal (--setup --dir's basename matches /^replay/i — specs/20260826/01 D2, refused
+// before any filesystem or git side effect, in-repo or out-of-repo alike; --setup --dir resolves
+// inside the repo root but NOT inside <root>/.claude/worktrees/ — specs/20260823/05 D1 narrows this
+// population, the worktrees/ arm itself now succeeds; --apply --patch-out resolves inside --dir,
+// refused before the patch is applied; --teardown --dir does not exist, is not a linked worktree, or
+// its private git dir carries no scratch-worktree marker — the retired replay-worktree name grants
+// nothing, specs/20260826/01 D3) · 4 = a git operation (worktree add/remove, apply, commit, log,
+// git-dir resolution, info/exclude provisioning, or --apply's canonical --patch-out re-emission)
+// failed, --setup's --dir resolves to a git-dir with no `worktrees` path segment (not a linked
+// worktree), --setup's --spec-derived path fails because `merge-back.sh branch-for` errors or does
+// not print a `spec/<stem>` line (specs/20260826/01 D1), or --select's target spec (read at the
+// CLOSE commit, specs/20260823/05 D4) carries no diff_base/build_base candidate that resolves to a
+// validated ancestor of the close commit's parent distinct from it — widened by D4 to also cover a
+// stale (moving-ref) candidate, not just an absent one.
+//
+// Incident (2026-08-26, specs/20260826/01-replay-scratch-path-blindness.md): the scratch worktree's
+// root path was a doctrine EXAMPLE (`.claude/worktrees/replay-<random>`) that every session
+// paraphrased when running /spec:replay by hand, so the harness's own name and a corpus-adjacent
+// vocabulary leaked into the one surface — the reviewer's working-tree root — that the blindness
+// rule most needs to stay silent. A value whose correctness is load-bearing for a measurement's
+// validity must be derived by a script, never asserted in prose a session copies (core § Incident
+// Policy). D1 moves ownership of the path into --setup itself, deriving a build-shaped name via
+// `merge-back.sh branch-for` (the sole owner of that stem rule) plus a random suffix — build-shaped
+// because a bland or random name is itself an anomaly next to the `spec-<stem>` build worktrees that
+// share its directory (replay.md's own "vocabulary is not the leak, provenance is" argument for the
+// commit subject applies equally to the path). D2 adds the structural refusal a caller-supplied
+// --dir needs so a hand-typed path can never reintroduce the leak `--apply --subject` already closed
+// for commit subjects.
 
 const fs = require('fs')
 const path = require('path')
@@ -157,7 +176,7 @@ const { readLedgerRows } = require('./lib/observation')
 const { fmMap } = require('./lib/frontmatter')
 
 function usage() {
-  console.error('usage: replay.js --due | --select | --setup --commit <sha> --dir <path> | ' +
+  console.error('usage: replay.js --due | --select | --setup --commit <sha> (--spec <path>|--dir <path>) | ' +
     '--apply --dir <path> --patch <file> --patch-out <file> --class <id> [--subject <text>] | ' +
     '--score --workflow <file> --patch <file> | ' +
     '--record --spec <path> --review-run-id <id> --legs green|red:<leg>|baseline-red:<leg>[,<leg>]|none ' +
@@ -373,16 +392,62 @@ function provisionWorktreesIgnore(resolvedRoot, resolvedDir) {
   }
 }
 
-// ---- --setup: refuse a --dir that resolves inside the repo root UNLESS it resolves inside --------
-// ---- <root>/.claude/worktrees/ (D1, specs/20260823/05) — exit 3, creates nothing for every other --
-// ---- in-repo path; otherwise self-provision the ignore line (D2) then `git worktree add --detach` -
-// ---- and drop a replay-worktree marker into the new worktree's own private git dir — never into ---
-// ---- its working tree. -----------------------------------------------------------------------------
+// ---- D1: {dir} for a derived setup — build-shaped, spec-derived, random-suffixed. -----------------
+// ---- branch-for is the SOLE owner of the stem rule (merge-back.sh header); never re-derive it here.
+
+function deriveScratchDir(resolvedRoot, specPath) {
+  let branch
+  try {
+    branch = execFileSync('bash', [path.join(__dirname, 'merge-back.sh'), 'branch-for', specPath],
+      { encoding: 'utf8' }).trim()
+  } catch (e) {
+    console.error(`replay.js: merge-back.sh branch-for ${specPath} failed — branch-for is the sole owner of ` +
+      `the build-worktree stem rule and must succeed before a scratch dir can be derived: ${e.message}`)
+    process.exit(4)
+  }
+  if (!/^spec\//.test(branch)) {
+    console.error(`replay.js: merge-back.sh branch-for ${specPath} printed '${branch}', not a 'spec/<stem>' ` +
+      'line — refusing to derive a scratch dir from output the stem-rule owner did not actually produce')
+    process.exit(4)
+  }
+  const name = branch.replace(/\//g, '-') // "spec-<stem>"
+  const suffix = crypto.randomBytes(3).toString('hex') // 6 lowercase hex
+  return path.join(resolvedRoot, '.claude', 'worktrees', `${name}-${suffix}`)
+}
+
+// ---- --setup: derives {dir} from --spec via deriveScratchDir when --dir is omitted (D1); refuses --
+// ---- a caller-supplied --dir whose basename announces the harness (D2, exit 3, before any side -----
+// ---- effect); otherwise refuses a --dir that resolves inside the repo root UNLESS it resolves ------
+// ---- inside <root>/.claude/worktrees/ (specs/20260823/05) — exit 3, creates nothing for every other-
+// ---- in-repo path; otherwise self-provisions the ignore line then `git worktree add --detach` and --
+// ---- drops a scratch-worktree marker into the new worktree's own private git dir — never into its --
+// ---- working tree. ----------------------------------------------------------------------------------
 
 function cmdSetup() {
-  if (!commit || !dir) { usage(); process.exit(2) }
+  if (!commit || (!dir && !specArg)) { usage(); process.exit(2) }
   const resolvedRoot = path.resolve(root)
-  const resolvedDir = path.resolve(dir)
+  let resolvedDir
+  if (dir) {
+    resolvedDir = path.resolve(dir)
+    // D2: a caller-supplied --dir whose basename announces the harness is refused BEFORE any
+    // filesystem or git side effect — in-repo or out-of-repo alike. A basename that merely
+    // contains "replay" (e.g. this harness's own derived name for its own spec, A5) is not refused.
+    if (/^replay/i.test(path.basename(resolvedDir))) {
+      console.error(`replay.js: --dir ${dir} basename announces the harness — refusing to create it; omit ` +
+        '--dir and pass --spec <path> so the harness derives a build-shaped name')
+      process.exit(3)
+    }
+  } else {
+    // D1: --spec supplied, no --dir — read it, then derive a build-shaped path.
+    const resolvedSpec = path.resolve(root, specArg)
+    try {
+      fs.accessSync(resolvedSpec, fs.constants.R_OK)
+    } catch (e) {
+      console.error(`replay.js: --spec ${specArg} is not readable relative to ${root} — confirm the path: ${e.message}`)
+      process.exit(2)
+    }
+    resolvedDir = deriveScratchDir(resolvedRoot, specArg)
+  }
   const rel = path.relative(resolvedRoot, resolvedDir)
   const isInsideRepo = rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
   if (isInsideRepo) {
@@ -428,9 +493,9 @@ function cmdSetup() {
     process.exit(4)
   }
   try {
-    fs.writeFileSync(path.join(gitDirAbs, 'replay-worktree'), '')
+    fs.writeFileSync(path.join(gitDirAbs, 'scratch-worktree'), '')
   } catch (e) {
-    console.error(`replay.js: failed to write the replay-worktree marker in ${gitDirAbs} — the worktree is ` +
+    console.error(`replay.js: failed to write the scratch-worktree marker in ${gitDirAbs} — the worktree is ` +
       `registered but unusable; remove it with git -C ${root} worktree remove --force ${resolvedDir}: ${e.message}`)
     process.exit(4)
   }
@@ -778,9 +843,10 @@ function cmdStats() {
   process.exit(0)
 }
 
-// ---- --teardown: refuse a --dir whose private git dir carries no replay-worktree marker ----------
-// ---- (exit 3, deletes nothing); otherwise `git worktree remove --force` so git's own registry -----
-// ---- is pruned too, taking the marker with it. -----------------------------------------------------
+// ---- --teardown: refuse a --dir whose private git dir carries no scratch-worktree marker ----------
+// ---- (exit 3, deletes nothing) — the retired replay-worktree name is NOT grandfathered (D3, A4: no
+// ---- tree carrying only that name existed at build time); otherwise `git worktree remove --force` --
+// ---- so git's own registry is pruned too, taking the marker with it. -------------------------------
 
 function cmdTeardown() {
   if (!dir) { usage(); process.exit(2) }
@@ -806,11 +872,12 @@ function cmdTeardown() {
       `really is a stale replay worktree, remove it manually with git -C ${root} worktree remove --force ${dir}`)
     process.exit(3)
   }
-  const marker = path.join(gitDirAbs, 'replay-worktree')
+  const marker = path.join(gitDirAbs, 'scratch-worktree')
   if (!fs.existsSync(marker)) {
-    console.error(`replay.js: ${gitDirAbs} carries no replay-worktree marker — refusing to remove a ` +
-      'directory this harness did not create; if this really is a stale replay worktree, remove it ' +
-      `manually with git -C ${root} worktree remove --force ${dir}`)
+    console.error(`replay.js: ${gitDirAbs} carries no scratch-worktree marker — refusing to remove a ` +
+      'directory this harness did not create (the retired replay-worktree name is not grandfathered); if ' +
+      `this really is a stale replay worktree, remove it manually with git -C ${root} worktree remove ` +
+      `--force ${dir}`)
     process.exit(3)
   }
   try {

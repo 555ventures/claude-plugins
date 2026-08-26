@@ -1,6 +1,6 @@
 ---
 date: 2026-08-25
-status: implementing
+status: done
 tier: standard
 area: genesis
 design: false
@@ -210,6 +210,25 @@ Collision-closure at lock (2026-08-25, `--literal "Probe once" --literal read-ba
 "lens]"`): paths leg `likely` = 0; literals leg — every plugin-file hit
 (`genesis-architect.md`, `genesis-design.md`, `genesis.md`) is a File Plan row;
 `docs/adr/0001` and `docs/roadmap/10` are history, waived by location.
+
+Build deviation (one-off, folded 2026-08-26 — first instance of its class, so no Gotchas entry
+per core § Incident Policy): AC-20260825-02-2's test was authored with a defective `## Coverage`
+extraction regex (`/^## Coverage\n([\s\S]*?)(?=\n## |\n?$)/m`) — under the `m` flag `$` matches
+before every line terminator, so the lazy capture always stopped after the section's first line
+and the ten-line count assertion was unsatisfiable for any file content. Found at build when the
+doctrine worker returned `blocked` against a template authored verbatim to Contracts; reproduced
+by the orchestrator (`node -e` against the real template returned only `"- payer: dark"`), then
+repaired in the tests wave — the lookahead alternative became `(?![\s\S])` (true end-of-string,
+unaffected by `m`), with an inline comment recording why the naive form was wrong. Assertion
+strength unchanged: still exactly ten lines, still the full Contracts grammar, still `dark` on
+every line, verified discriminating against 9-line, 11-line, and section-bleed mutants of the
+template string.
+
+Review disposition (2026-08-26, runId `rv_6229b7af0d0b`): the reviewer's one soft survivor — D9
+names three regression pins but AC-20260825-02-6 and its test encoded only two, leaving
+`spec-paths shared-for genesis-architect` serving `## Question Style` unpinned — was dispositioned
+**fix** by the user. A sibling test citing the same AC-ID now executes the script and asserts the
+section, proven red against a bogus section name and green against the real one.
 
 No `SHALL CONTINUE TO` neighbor beyond AC-6 needs pinning: the woven-loop mechanics
 (`wf-research` args, `interview-research/*.json`, `fetchedAt` stamping) are untouched and

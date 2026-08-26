@@ -1,7 +1,7 @@
 'use strict'
 const { test } = require('node:test')
 const assert = require('node:assert')
-const { read, evalFns, checkWorkflowSyntax } = require('../helpers')
+const { read, evalFns, checkWorkflowSyntax, runBash } = require('../helpers')
 
 // specs/20260825/02-genesis-consultant-discovery.md (2026-08-25): D6 turns
 // spec/workflows/wf-research.js's OPTION_SET_SCHEMA top-level const into a named top-level
@@ -12,13 +12,16 @@ const { read, evalFns, checkWorkflowSyntax } = require('../helpers')
 // read the brief's `## Coverage` section and fill both fields, and genesis-architect.md's menu
 // step must name both as description parts (D7).
 //
-// AC-20260825-02-4 and AC-20260825-02-5 are RED right now: `optionSetSchema` does not exist yet
-// (OPTION_SET_SCHEMA is still a bare top-level const, so evalFns can't extract it), and neither
-// `because`/`priced` nor `## Coverage` appear anywhere in the research prompt or in
-// genesis-architect.md's menu-build step. AC-20260825-02-6 is a D9 `SHALL CONTINUE TO` regression
-// pin and is GREEN right now — wf-research.js already parses under checkWorkflowSyntax, and
-// capOptions already caps a 6-option menu to 4 while preserving the is_minority option; this
-// spec's schema/prompt edit must not break either.
+// AC-20260825-02-4 and AC-20260825-02-5 were authored RED against the pre-D6 file
+// (OPTION_SET_SCHEMA was still a bare top-level const, so evalFns could not extract it, and
+// neither `because`/`priced` nor `## Coverage` appeared in the research prompt or in
+// genesis-architect.md's menu-build step); D6/D7 landed both and they are green.
+// AC-20260825-02-6 is D9's `SHALL CONTINUE TO` regression pin, green throughout: it holds
+// wf-research.js parsing under checkWorkflowSyntax, capOptions still capping a 6-option menu to
+// 4 while preserving the is_minority option, and `spec-paths shared-for genesis-architect` still
+// serving `## Question Style` (that third pin was added at review close 2026-08-26 — D9 named it
+// but the original test covered only the first two); this spec's schema/prompt edit must not
+// break any of them.
 
 // ---------------------------------------------------------------------------
 // AC-20260825-02-4
@@ -127,4 +130,16 @@ test('AC-20260825-02-6: wf-research.js continues to pass checkWorkflowSyntax and
     'option (rank 5) and cutting worst-rank-first from the non-minority group before the minority ' +
     'group is touched at all — got survivor ranks ' + JSON.stringify(survivorRanks) +
     ' instead of [1, 2, 3, 5]')
+})
+
+test('AC-20260825-02-6: spec-paths shared-for genesis-architect continues to serve the ## Question Style section', () => {
+  const r = runBash('bin/spec-paths', ['shared-for', 'genesis-architect'])
+  assert.strictEqual(r.status, 0,
+    'D9: `spec-paths shared-for genesis-architect` must continue to exit 0 — a non-zero exit here ' +
+    'means this spec\'s D6 schema/prompt edit or D8 Phase 1 rewrite broke the scoped-doctrine ' +
+    'resolver itself, not just the section it serves: ' + r.stderr)
+  assert.match(r.stdout, /## Question Style/,
+    'D9: genesis-architect must continue to be served § Question Style — its absence means the ' +
+    'command that raises every AskUserQuestion in the discovery interview (D1/D2/D8) no longer ' +
+    'reads the doctrine governing how those questions must be phrased: ' + r.stdout)
 })

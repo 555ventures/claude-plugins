@@ -62,7 +62,7 @@ test('AC-20260825-02-4: optionSetSchema(), extracted from wf-research.js via eva
 // AC-20260825-02-5
 // ---------------------------------------------------------------------------
 
-test('AC-20260825-02-5: the wf-research.js research prompt instructs reading Coverage and filling because/priced, and genesis-architect.md names both as menu description parts', () => {
+test('AC-20260825-02-5: the wf-research.js research prompt instructs reading Coverage and filling because/priced, and genesis.md names both as menu description parts', () => {
   const src = read('spec/workflows/wf-research.js')
 
   // Isolate the literal prompt string handed to the research agent() call — from its opening
@@ -87,19 +87,27 @@ test('AC-20260825-02-5: the wf-research.js research prompt instructs reading Cov
     'schema requires the field but the prompt never tells the agent to price a consequence at the ' +
     'brief\'s stated scale')
 
-  const architectSrc = read('spec/commands/genesis-architect.md')
-  const menuStepMatch = architectSrc.match(/Present an `AskUserQuestion` built from the menu:[\s\S]*?(?=\n\d+\.|\n\n)/)
+  // specs/20260825/04-genesis-driver.md D11 retired spec/commands/genesis-architect.md and made
+  // /spec:genesis a thin shell over genesis-driver.js; the menu-build step this AC pins is now
+  // documented in spec/doctrine/genesis.md's woven-loop section, which every genesis command
+  // reads via `spec-paths shared-genesis`. Same invariant, new binding home — the assertion is
+  // updated in place, never weakened (rules § Gotchas, retired-literal collisions).
+  const doctrineSrc = read('spec/doctrine/genesis.md')
+  // The doctrine prose hard-wraps mid-phrase (`built **from the` / `menu**:` on consecutive
+  // lines), so the anchor tolerates the line break rather than assuming a single-line phrase —
+  // the exact false-negative shape rules § Gotchas records for corpus literal pins.
+  const menuStepMatch = doctrineSrc.match(/presents an `AskUserQuestion` built \*\*from the\s+menu\*\*:[\s\S]*?(?=\n\n)/)
   assert.ok(menuStepMatch,
-    'genesis-architect.md\'s Phase 1 menu-build step ("Present an `AskUserQuestion` built from ' +
-    'the menu: …") must still exist — without it there is no step left to check for D7\'s ' +
+    'spec/doctrine/genesis.md\'s woven-loop menu-build step ("presents an `AskUserQuestion` built ' +
+    '**from the** menu: …") must still exist — without it there is no step left to check for D7\'s ' +
     'because/priced description parts')
   const menuStep = menuStepMatch[0]
   assert.match(menuStep, /\bbecause\b/,
-    'D7: genesis-architect.md\'s menu-build step must name `because` as a description part — its ' +
+    'D7: the doctrine menu-build step must name `because` as a description part — its ' +
     'absence means the AskUserQuestion the session actually presents drops the reason behind an ' +
     'option\'s rank even though the schema now requires the research agent to supply one')
   assert.match(menuStep, /\bpriced\b/,
-    'D7: genesis-architect.md\'s menu-build step must name `priced` as a description part — its ' +
+    'D7: the doctrine menu-build step must name `priced` as a description part — its ' +
     'absence means the user-facing menu still shows generic tradeoff prose instead of the priced ' +
     'consequence D6/D7 require')
 })
@@ -135,14 +143,18 @@ test('AC-20260825-03-8: wf-research.js continues to pass checkWorkflowSyntax and
     ' instead of [1, 2, 3, 5]')
 })
 
-test('AC-20260825-02-6: spec-paths shared-for genesis-architect continues to serve the ## Question Style section', () => {
-  const r = runBash('bin/spec-paths', ['shared-for', 'genesis-architect'])
+// specs/20260825/04-genesis-driver.md D13 renamed the `shared-for` section list from
+// `genesis-architect` to `genesis` with an identical section set; the pin follows the key in
+// place — the invariant (the command that raises every discovery question is served § Question
+// Style) is unchanged.
+test('AC-20260825-02-6: spec-paths shared-for genesis continues to serve the ## Question Style section', () => {
+  const r = runBash('bin/spec-paths', ['shared-for', 'genesis'])
   assert.strictEqual(r.status, 0,
-    'D9: `spec-paths shared-for genesis-architect` must continue to exit 0 — a non-zero exit here ' +
+    'D9: `spec-paths shared-for genesis` must continue to exit 0 — a non-zero exit here ' +
     'means this spec\'s D6 schema/prompt edit or D8 Phase 1 rewrite broke the scoped-doctrine ' +
     'resolver itself, not just the section it serves: ' + r.stderr)
   assert.match(r.stdout, /## Question Style/,
-    'D9: genesis-architect must continue to be served § Question Style — its absence means the ' +
+    'D9: /spec:genesis must continue to be served § Question Style — its absence means the ' +
     'command that raises every AskUserQuestion in the discovery interview (D1/D2/D8) no longer ' +
     'reads the doctrine governing how those questions must be phrased: ' + r.stdout)
 })

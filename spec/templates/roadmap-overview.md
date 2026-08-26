@@ -1,7 +1,7 @@
 # { Project } Implementation Roadmap — Overview
 
-<!-- Authored by /spec:genesis-architect Phase C (or hand-authored from this template in
-     brownfield repos). Each numbered file in this directory is one planning brief:
+<!-- Authored by /spec:genesis (its driver's ROADMAP state — or hand-authored from this
+     template in brownfield repos). Each numbered file in this directory is one planning brief:
      one brief → one /spec:plan session → 1–4 sibling specs wired via depends_on.
      Briefs are stable intent; specs are perishable execution detail — briefs are hydrated
      into specs lazily, one at a time, when "Current state" can be written against real code.

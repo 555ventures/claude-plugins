@@ -23,11 +23,14 @@
 { hard-to-reverse dimension keys — the archetype registry floor (genesis.md § Genesis:
   Archetype Registry) plus any key a coverage answer derives (genesis.md § Genesis:
   Hard-to-Reverse Dimensions — Derived dimensions) — each marked `constrained` (already
-  decided) or `open` }
+  decided) or `open`. One line per key, machine-read by genesis-driver.js:
+  `- <key>: open|constrained [— note]` }
 
 ## Research Angles
 { research-angle keys the archetype + audience scope open, one focus paragraph each }
 
 ## Picks
 { each research-backed pick, its `sources`, its `because`/`priced`, and `fetchedAt`, once
-  decided }
+  decided. The pick line itself is machine-read by genesis-driver.js and must be
+  `- <key>: <label>`, the key matching its `## Open Dimensions` entry; provenance follows
+  on indented continuation lines }

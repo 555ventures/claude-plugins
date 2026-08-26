@@ -59,6 +59,11 @@
       "spec/doctrine/core.md"
     ]
   },
+  "spec/scripts/genesis-driver.js": {
+    "entryPoints": [
+      "spec/commands/genesis.md"
+    ]
+  },
   "spec/scripts/genesis-state-gate.sh": {
     "entryPoints": [
       "spec/hooks/hooks.json"
@@ -113,8 +118,7 @@
   },
   "spec/scripts/registry-check.js": {
     "entryPoints": [
-      "spec/doctrine/genesis.md",
-      "spec/commands/genesis-architect.md",
+      "spec/scripts/genesis-driver.js",
       "spec/commands/genesis-design.md",
       "spec/commands/genesis-explore.md"
     ]
@@ -164,7 +168,7 @@
       "spec/commands/atlas.md",
       "spec/commands/genesis-design.md",
       "spec/commands/build.md",
-      "spec/commands/genesis-architect.md",
+      "spec/commands/genesis.md",
       "spec/commands/enforce.md",
       "spec/commands/design.md",
       "spec/commands/escape.md",
@@ -242,7 +246,7 @@
   "spec/workflows/wf-research.js": {
     "entryPoints": [
       "spec/commands/genesis-explore.md",
-      "spec/commands/genesis-architect.md",
+      "spec/commands/genesis.md",
       "spec/commands/genesis-design.md"
     ]
   }

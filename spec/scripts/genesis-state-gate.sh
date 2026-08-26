@@ -15,13 +15,13 @@ PROMPT=$(printf '%s' "$INPUT" | jq -r '.prompt // empty' 2>/dev/null)
 [ -z "$PROMPT" ] && exit 0
 
 case "$PROMPT" in
-  /spec:genesis-architect*|/spec:genesis-explore*|/spec:genesis-design*|/spec:init*) ;;
+  "/spec:genesis "*|"/spec:genesis"|/spec:genesis-explore*|/spec:genesis-design*|/spec:init*) ;;
   *) exit 0 ;;
 esac
 
-# /spec:genesis-architect is the entry point — it owns its own re-entry; never gated here.
+# /spec:genesis is the entry point — it owns its own re-entry; never gated here.
 case "$PROMPT" in
-  /spec:genesis-architect*) exit 0 ;;
+  "/spec:genesis "*|"/spec:genesis") exit 0 ;;
 esac
 
 ROOT="${CLAUDE_PROJECT_DIR:-.}"
@@ -36,11 +36,11 @@ DESC=$(jq -r '.stackDescriptorPath // ".claude/genesis/stack-descriptor.json"' "
 require_scaffold() {
   # $1 = command name for the message
   if [ "$ARCH" != "scaffold-complete" ]; then
-    echo "Genesis state gate: $1 requires architect: scaffold-complete — .claude/genesis/status.json has architect: ${ARCH:-<missing>}. Finish /spec:genesis-architect first (decisions recorded, project scaffolded, zero-day gate green)." >&2
+    echo "Genesis state gate: $1 requires architect: scaffold-complete — .claude/genesis/status.json has architect: ${ARCH:-<missing>}. Finish /spec:genesis first (decisions recorded, project scaffolded, zero-day gate green)." >&2
     exit 2
   fi
   if [ ! -f "$ROOT/$DESC" ] && [ ! -f "$DESC" ]; then
-    echo "Genesis state gate: status says architect: scaffold-complete but the stack descriptor ($DESC) is missing — the scaffold state is inconsistent. Re-run /spec:genesis-architect to reconcile before continuing." >&2
+    echo "Genesis state gate: status says architect: scaffold-complete but the stack descriptor ($DESC) is missing — the scaffold state is inconsistent. Re-run /spec:genesis to reconcile before continuing." >&2
     exit 2
   fi
 }

@@ -37,7 +37,7 @@ build resumes instead of restarting.
 **Brand-new project** (no code yet) — run genesis first, then init:
 
 ```
-/spec:genesis-architect "a trading simulator for retail traders in Japan"  # stack + scaffold + roadmap briefs
+/spec:genesis         "a trading simulator for retail traders in Japan"  # stack + scaffold + roadmap briefs
 /spec:genesis-explore   "..."   # rendered design candidates in your browser → your pick
 /spec:genesis-design    "..."   # ratifies the pick into tokens + design canon
 /spec:init
@@ -97,7 +97,7 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
 
 | Command | What it does | When |
 |---|---|---|
-| `/spec:genesis-architect` / `-explore` / `-design` | Stack + scaffold + roadmap; design funnel; ratify the pick | Greenfield only, before init |
+| `/spec:genesis` / `-explore` / `-design` | Stack + scaffold + roadmap; design funnel; ratify the pick | Greenfield only, before init |
 | `/spec:init` | Profile the repo, generate the grounding layer, run enforce | Once per repo |
 | `/spec:sketch` | Mock + brainstorm one roadmap brief; ratify mock↔brief agreement | Before planning a UI-bearing brief |
 | `/spec:plan` | Author + adversarially harden a spec | Per feature |

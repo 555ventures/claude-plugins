@@ -260,8 +260,9 @@ Next: /spec:atlas (sweep + holistic review of the genesis mocks) → /spec:init 
 ## Rules
 
 - **Never Read `wf-research.js`.** Its `args` is the `stage: "design"` variant of the contract
-  documented in `/spec:genesis-architect` Phase 1 — this command reuses it. Invoke it by
-  `scriptPath` and act on its return; its source is never orchestrator context.
+  documented in genesis.md § Genesis: Discovery Interview (the woven loop) — this command
+  reuses it. Invoke it by `scriptPath` and act on its return; its source is never orchestrator
+  context.
 - One canon: this supersedes `/spec:init`'s greenfield design sketch; init reads this, never
   re-prompts adopt/craft when `design: rules-locked`.
 - **Ratification never re-opens the pick.** A direction-level regret at this stage goes back to

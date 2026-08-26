@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "architect": "pending",
   "explore": "pending",
   "design": "pending",
@@ -8,5 +8,9 @@
   "stackDescriptorPath": ".claude/genesis/stack-descriptor.json",
   "designManifestPath": ".claude/genesis/design-rules.json",
   "gateCommand": null,
-  "lastUpdated": null
+  "lastUpdated": null,
+  "marks": {},
+  "menus": {},
+  "scaffold": null,
+  "zeroDayGate": null
 }

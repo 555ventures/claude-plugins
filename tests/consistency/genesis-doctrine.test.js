@@ -149,7 +149,7 @@ test('AC-20260825-01-3: the Archetype Registry table has exactly three columns a
 // AC-20260825-01-4
 // ---------------------------------------------------------------------------
 
-test('AC-20260825-01-4: genesis-architect.md and genesis-design.md name none of the retired panel literals and still name wf-research', () => {
+test('AC-20260825-01-4: genesis.md and genesis-design.md name none of the retired panel literals and still name wf-research', () => {
   const banned = [
     [/wf-panel/, 'wf-panel'],
     [/panel-results/, 'panel-results'],
@@ -158,11 +158,14 @@ test('AC-20260825-01-4: genesis-architect.md and genesis-design.md name none of 
     [/runProposers/, 'runProposers'],
     [/aggregator/i, 'aggregator']
   ]
-  for (const rel of ['spec/commands/genesis-architect.md', 'spec/commands/genesis-design.md']) {
+  // specs/20260825/04-genesis-driver.md D11: genesis-architect.md is retired and /spec:genesis
+  // (spec/commands/genesis.md) is the greenfield entry point. The banned-literal pin follows the
+  // command to its new file in place — never weakened, never dropped.
+  for (const rel of ['spec/commands/genesis.md', 'spec/commands/genesis-design.md']) {
     const src = read(rel)
     assertNoBannedLiterals(src, banned, (label) =>
       'D5/D6: ' + rel + ' must not name the retired literal "' + label + '" — e.g. ' +
-      'architect.md still containing `Workflow {scriptPath: <spec-paths wf-panel output>}` ' +
+      'the genesis entry point still containing `Workflow {scriptPath: <spec-paths wf-panel output>}` ' +
       'would mean the command still invokes a workflow this spec deletes')
     assert.match(src, /wf-research/,
       'D5/D6: ' + rel + ' must still name wf-research — the research fan-out is retained, only ' +
@@ -214,7 +217,7 @@ test('AC-20260825-01-5: README.md and design.md name no wf-panel and no proposer
 // AC-20260825-01-6 (regression pin — SHALL CONTINUE TO, sanctioned green pre-change)
 // ---------------------------------------------------------------------------
 
-test('AC-20260825-01-6: spec-paths wf-research continues to resolve to an existing path and shared-for genesis-architect continues to emit Host Grounding', () => {
+test('AC-20260825-01-6: spec-paths wf-research continues to resolve to an existing path and shared-for genesis continues to emit Host Grounding', () => {
   const wfResearch = runBash('bin/spec-paths', ['wf-research'])
   assert.strictEqual(wfResearch.status, 0,
     'D9: the retained research fan-out must keep resolving through spec-paths after the panel ' +
@@ -224,12 +227,14 @@ test('AC-20260825-01-6: spec-paths wf-research continues to resolve to an existi
   assert.ok(fs.existsSync(wfResearchPath),
     'the resolved wf-research.js path must actually exist on disk: ' + wfResearchPath)
 
-  const sharedFor = runBash('bin/spec-paths', ['shared-for', 'genesis-architect'])
+  // specs/20260825/04-genesis-driver.md D13 renamed this `shared-for` section list from
+  // `genesis-architect` to `genesis` with an identical section set; the pin follows the key.
+  const sharedFor = runBash('bin/spec-paths', ['shared-for', 'genesis'])
   assert.strictEqual(sharedFor.status, 0,
-    'D9: `spec-paths shared-for genesis-architect` must continue to succeed after the panel ' +
+    'D9: `spec-paths shared-for genesis` must continue to succeed after the panel ' +
     'collapse: ' + JSON.stringify(sharedFor))
   assert.match(sharedFor.stdout, /## Host Grounding/,
-    'D9: genesis-architect must continue to be served § Host Grounding — a section map broken ' +
+    'D9: /spec:genesis must continue to be served § Host Grounding — a section map broken ' +
     'by this spec\'s doctrine edits would mean the command reads no grounding doctrine at all: ' +
     sharedFor.stdout)
 })
@@ -260,7 +265,7 @@ function wordsRe (phrase) {
 // AC-20260825-02-1
 // ---------------------------------------------------------------------------
 
-test("AC-20260825-02-1: genesis.md, genesis-architect.md, and genesis-design.md carry none of the retired scripted-interview literals, and genesis.md names every coverage key and every D5 derived dimension key", () => {
+test("AC-20260825-02-1: genesis.md (doctrine), genesis.md (command), and genesis-design.md carry none of the retired scripted-interview literals, and genesis.md names every coverage key and every D5 derived dimension key", () => {
   const banned = [
     [wordsRe('Probe once'), 'Probe once'],
     [wordsRe('One probe round'), 'One probe round'],
@@ -274,7 +279,7 @@ test("AC-20260825-02-1: genesis.md, genesis-architect.md, and genesis-design.md 
   ]
   const files = [
     'spec/doctrine/genesis.md',
-    'spec/commands/genesis-architect.md',
+    'spec/commands/genesis.md',
     'spec/commands/genesis-design.md'
   ]
   for (const rel of files) {
@@ -401,16 +406,20 @@ test("AC-20260825-02-3: genesis.md's On-disk Handoff roster names genesis-brief.
 // AC-20260825-03-9
 // ---------------------------------------------------------------------------
 
-test('AC-20260825-03-9: genesis.md and all three genesis command files name registry-check, and none of them carry still_current, Haiku pass, Haiku currency, or verifyKeys', () => {
+test('AC-20260825-03-9: genesis.md, genesis-driver.js, and both remaining genesis command files name registry-check, and none of them carry still_current, Haiku pass, Haiku currency, or verifyKeys', () => {
   const banned = [
     [/still_current/, 'still_current'],
     [wordsRe('Haiku pass'), 'Haiku pass'],
     [wordsRe('Haiku currency'), 'Haiku currency'],
     [/verifyKeys/, 'verifyKeys']
   ]
+  // specs/20260825/04-genesis-driver.md D4/D13: the architect stage's menu step no longer
+  // narrates the registry check — genesis-driver.js RUNS it on `--mark menu-written`. The pin
+  // follows the mechanism to its new home in place; the invariant (every file that owns a menu
+  // step names the deterministic currency script) is unchanged.
   const files = [
     'spec/doctrine/genesis.md',
-    'spec/commands/genesis-architect.md',
+    'spec/scripts/genesis-driver.js',
     'spec/commands/genesis-design.md',
     'spec/commands/genesis-explore.md'
   ]
@@ -422,8 +431,97 @@ test('AC-20260825-03-9: genesis.md and all three genesis command files name regi
       'currency pass, leaving no currency mechanism named at all')
     assertNoBannedLiterals(src, banned, (label) =>
       'D6/D7/D8: ' + rel + ' must not contain the retired literal "' + label + '" — e.g. ' +
-      'genesis-architect.md keeping `verifyKeys: [<the version-bearing subset>]` in its ' +
+      'a genesis file keeping `verifyKeys: [<the version-bearing subset>]` in its ' +
       'workflow-call step means the deleted Haiku opinion seat and its args plumbing are still ' +
       'documented as though they exist, even though D6 deletes them from wf-research.js itself')
   }
+})
+
+// specs/20260825/04-genesis-driver.md (2026-08-26): the architect stage becomes driver-stepped.
+// `/spec:genesis-architect` is retired and replaced by a thin `spec/commands/genesis.md` looping
+// on `spec/scripts/genesis-driver.js`; the ops-conventions ADR paragraph, the day-zero skeleton
+// list, and the roadmap decomposition rules move verbatim out of the command into three new
+// `spec/doctrine/genesis.md` sections; the `shared-for` section list is rekeyed
+// genesis-architect -> genesis. AC-20260825-04-9 is the conformance pin over all of it, plus the
+// D15 regression that genesis-explore keeps being served § Design Canon. TDD red at authoring
+// time: neither genesis.md (command) nor genesis-driver.js existed.
+
+// ---------------------------------------------------------------------------
+// AC-20260825-04-9
+// ---------------------------------------------------------------------------
+
+test('AC-20260825-04-9: spec-paths resolves genesis-driver and shared-for genesis, the retired command file is gone, genesis.md is a thin shell, the three migrated doctrine sections exist, and no swept file names genesis-architect', () => {
+  const driver = runBash('bin/spec-paths', ['genesis-driver'])
+  assert.strictEqual(driver.status, 0,
+    'D13: `spec-paths genesis-driver` must exit 0 — /spec:genesis resolves the driver it loops ' +
+    'on through this key, so a missing key strands the one greenfield entry point silently ' +
+    '(rules § Risk Tiers, spec-paths): ' + driver.stderr)
+  const driverPath = driver.stdout.trim()
+  assert.ok(fs.existsSync(driverPath),
+    'D13: the resolved genesis-driver.js path must actually exist on disk — a key that resolves ' +
+    'to nothing fails at the moment the user runs /spec:genesis, not here: ' + driverPath)
+
+  const sharedFor = runBash('bin/spec-paths', ['shared-for', 'genesis'])
+  assert.strictEqual(sharedFor.status, 0,
+    'D13: `spec-paths shared-for genesis` must exit 0 — without it the one greenfield command ' +
+    'reads no scoped doctrine at all: ' + sharedFor.stderr)
+  for (const section of ['## Host Grounding', '## Question Style']) {
+    assert.ok(sharedFor.stdout.includes(section),
+      'D13: `shared-for genesis` must serve ' + section + ' — shared-for filtering silently ' +
+      'DROPS a section whose name does not match, so its absence means the command runs the ' +
+      'whole greenfield interview without the doctrine that governs it')
+  }
+
+  assert.strictEqual(fs.existsSync(path.join(SPEC, 'commands/genesis-architect.md')), false,
+    'D11: spec/commands/genesis-architect.md must be deleted — leaving it on disk means two ' +
+    'greenfield entry points ship at once, one of them narrating a phase choreography the ' +
+    'driver now owns')
+
+  const cmdPath = path.join(SPEC, 'commands/genesis.md')
+  assert.ok(fs.existsSync(cmdPath),
+    'D11: spec/commands/genesis.md must exist — it is the entry point the state gate now admits ' +
+    'and the only command that loops on the driver')
+  const cmdLines = read('spec/commands/genesis.md').split('\n').length
+  assert.ok(cmdLines <= 120,
+    'D11: spec/commands/genesis.md must be at most 120 lines, found ' + cmdLines + ' — the whole ' +
+    'point of the driver is that the command stops re-reading phase prose into context; a command ' +
+    'that grows back past this bound has silently reabsorbed the choreography the driver owns')
+
+  const doctrine = read('spec/doctrine/genesis.md')
+  for (const heading of [
+    '## Genesis: Ops Conventions ADR',
+    '## Genesis: Day-Zero Skeleton',
+    '## Genesis: Roadmap Decomposition',
+  ]) {
+    assert.ok(doctrine.includes(heading),
+      'D11: spec/doctrine/genesis.md must carry the migrated heading "' + heading + '" — its ' +
+      'absence means that block of judgment guidance was lost with the deleted command rather ' +
+      'than moved, and the driver would print a step no doctrine explains')
+  }
+
+  for (const rel of [
+    'README.md',
+    'spec/doctrine/core.md',
+    'spec/doctrine/genesis.md',
+    'spec/commands/genesis-explore.md',
+    'spec/commands/genesis-design.md',
+    'spec/templates/roadmap-overview.md',
+  ]) {
+    assert.ok(!read(rel).includes('genesis-architect'),
+      'D14: ' + rel + ' must not name `genesis-architect` — a surviving mention points the ' +
+      'reader (or a future session) at a command that no longer exists, which is exactly the ' +
+      'stale-reference class the one-binding-home rule exists to prevent')
+  }
+
+  // D15 regression pin: rekeying genesis-architect -> genesis must not disturb the sibling
+  // section lists in spec-paths' shared-for map.
+  const exploreShared = runBash('bin/spec-paths', ['shared-for', 'genesis-explore'])
+  assert.strictEqual(exploreShared.status, 0,
+    'D15: `spec-paths shared-for genesis-explore` must continue to exit 0 — the explore stage is ' +
+    'untouched by this spec and a non-zero exit means the rekey broke the resolver itself: ' +
+    exploreShared.stderr)
+  assert.match(exploreShared.stdout, /## Design Canon/,
+    'D15: genesis-explore must continue to be served § Design Canon — its absence means the ' +
+    'taste funnel lost the doctrine governing the target matrix and matrix-at-approval, a ' +
+    'regression this spec never intended to cause')
 })

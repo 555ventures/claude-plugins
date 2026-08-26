@@ -87,6 +87,10 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // AC-20260824-05-4 in tests/consistency/design-doctrine.test.js); `fidelity-check` was never a
 // member of this list.
 
+// specs/20260825/04-genesis-driver.md D13 (spec/bin/spec-paths row): `genesis-driver` joins the
+// list below for the same fail-closed reason — /spec:genesis resolves the driver it loops on
+// through this key, and a missing key strands the one greenfield entry point silently.
+//
 // specs/20260825/03-genesis-currency-executed.md D9 (spec/bin/spec-paths row): the new
 // registry-check.js script needs a spec-paths key like every other bundled script — a missing key
 // breaks all three genesis commands' D7 menu step (`node "$(spec-paths registry-check)" --menu
@@ -100,7 +104,7 @@ test('every documented key resolves to an existing path', () => {
     'wf-research', 'design-atlas', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
     'review-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'render-gate', 'render-compare',
-    'render-inventory', 'render-rules', 'registry-check', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
+    'render-inventory', 'render-rules', 'registry-check', 'genesis-driver', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }

@@ -4,7 +4,7 @@ description: Genesis-stage supplement to the spec pipeline's shared invariants �
 
 # Spec Pipeline: Genesis-Stage Supplement
 
-Genesis-stage supplement — read by `/spec:genesis-architect`, `/spec:genesis-explore`, and
+Genesis-stage supplement — read by `/spec:genesis`, `/spec:genesis-explore`, and
 `/spec:genesis-design` in addition to `shared.md`.
 
 ## Genesis: Discovery Interview (the intake posture)
@@ -83,7 +83,7 @@ research-backed round:
    priced menu, never a blank field; the pick seeds the next round.
 
 **Model placement in the loop:** **Sonnet** builds the menu (research + option synthesis, incl.
-`because`/`priced`); currency is executed by `registry-check.js` (`spec-paths registry-check`)
+`because`/`priced`); currency is executed by `registry-check.js`, which the driver runs on every accepted menu,
 over each option's `packages` — a version absent from its registry never enters a menu;
 unreachable registries stamp `unverified`, never block; **Opus** (the session) curates which
 2–4 options ship, orders them, enforces neutral phrasing, and owns the write. This holds the
@@ -132,6 +132,56 @@ A second perspective on a hard fork is a second `wf-research` call with a **diff
 `dimensionKeys` slice (e.g. `hosting-cost-shape` beside `hosting`) — a *partitioned-evidence*
 research leg, never a second agent reading the same brief. Deliberation over identical evidence
 herds; partitioned evidence is the shape that measured gains.
+
+## Genesis: Ops Conventions ADR
+
+Write the ops-conventions ADR (`docs/adr/NNNN-operational-conventions.md`, one ADR, one table).
+Robust software is mostly conventions-under-load, and in a greenfield repo nobody else ever
+decides them — `/spec:init` can only extract what exists. Rows (a floor, not a ceiling — add
+any convention-under-load the research surfaces): **error taxonomy** (the error shape/base
+classes and user-facing vs internal split — binding for **every process entrypoint** (workers,
+queue handlers, seeds, scheduled/sync tasks), never only the serving path, and exception text
+persisted anywhere — DB columns, event payloads, stdout — goes through the taxonomy, never a
+raw exception string; measured 3-for-3 across audited hosts: the request path got the
+discipline, every background path hand-rolled its own), **logging** (structured or not, shape,
+what is never logged — same every-entrypoint scope: a worker or seed script rolling its own
+logger without the redaction list violates this row, it is not a local style choice),
+**naming & identifiers** (casing and plurality for tables/columns/indexes/
+constraints; primary-key strategy AND id-minting — one generator module + prefix registry;
+per-surface casing ownership — DB vs wire vs logs vs analytics tags — with the boundary
+stated, and per surface the file globs that constitute it plus its decided spelling
+exemplars, so a later reader can tell a boundary crossing from a typo),
+**wire representations** (decided once at the contracts seam: non-JSON-native types
+such as bigint/decimal money, timestamp form on the wire — UTC-only vs offsets tolerated —
+and the discriminator field name), **cross-plane constants** (any literal referenced on
+both sides of a language/process seam — env var names, header and auth-scheme names,
+queue/topic names, redaction key lists — lives in the generated contracts surface or
+carries a test that pins both sides to one source; a value mirrored by hand and "kept in
+sync by comment" is a silent-outage class, banned; checker-enforceable — the same seam the wire row decides,
+applied to identifiers instead of types), **env/config management** (file layout, secrets never in
+git, the sanctioned secret store), **CI** (the gate runs on every push — wired at scaffold time,
+§ Genesis: Day-Zero Skeleton), **background/async work** (in-process, queue, or none-in-v1), and
+**success-metric instrumentation** (the discovery measurement pick — the analytics seam, or "not
+measured in v1"). These are boring-default rows the session fills from the research;
+`AskUserQuestion` only on a genuine fork (e.g. a paid observability vendor, or the concrete id
+scheme — ULID vs nanoid and the prefix table are a product-owner pick; that one generator module
+exists is not). A DECIDED row in a category `/spec:enforce` can mechanize is stated
+**checker-enforceable** — no taste clauses ("strict plural", never "plural where natural reads
+better"); the rejected taste variant goes in Dissents. Each row is DECIDED or DEFERRED-with-reason —
+same ledger discipline as the design canon. The rows above are samples of one **generating question**
+— *"what will two context-free executors, weeks apart, decide differently unless a row
+decides it now: every value class crossing a surface boundary, every name a second writer
+will mint, every operational behavior a spec will assume but never state?"* After filling
+the dictated rows, run one **derive pass** against that question — walk the research and
+the archetype's value-crossing boundaries (its API seams, storage, logs, external
+integrations: the same axis the casing-ownership row enumerates) and propose rows the
+floor missed; derived rows follow the same fill discipline as dictated ones (boring
+defaults, `AskUserQuestion` only on a genuine fork). Then the **coverage check**: a
+second same-session read of the finished table against the generating question, whose
+only outputs are added rows or nothing — it writes no certification and asks nothing
+new. Both passes are **advisory** — the coverage checker shares the deriver's blind
+spots (same-model correlation, the reason review doctrine forbids same-context
+verification), so derivation can add rows but its silence never certifies completeness.
 
 ## Genesis: Hard-to-Reverse Dimensions (always escalate via AskUserQuestion)
 
@@ -348,20 +398,53 @@ end of bootstrap). The contract:
 - `/spec:doctor` warns when a design-rules category has **no enforcer** on the current stack (the
   early-detection benefit), and recommends `/spec:enforce` — without any plugin file naming a tool.
 
+## Genesis: Day-Zero Skeleton
+
+Land the test + CI skeleton — the enforcement half of the ops ADR, day zero:
+
+- one **example test per declared layer** (trivial but real — it exercises the runner and
+  shows the convention the `tests`-kind agent will follow), and the **e2e harness stub** when
+  the archetype warrants one (web/mobile/desktop): installed, one smoke test, wired into a
+  script — so `/spec:build`'s TDD never meets a repo where the harness itself is missing;
+- a **CI workflow** for the repo's forge (detect from the remote; **no remote → ask the
+  user now**: connect one, or explicitly record CI-inert in the descriptor — a written
+  workflow with no remote executes zero times, and "authored but never activated" is the
+  failure class this stage must not seed; `/spec:init`'s manifest check verifies whichever
+  was chosen) that runs `setupCommand` then `gateCommand` on every push/PR. An enforcement
+  rule that only runs on a developer's machine is advisory, not enforced;
+- the **runtime substrate the archetype implies** — a health/liveness route (bootable
+  archetypes), a seed entry point stub, and local service provisioning (compose file or
+  script) wherever the scaffold's `.env.example` references services nothing creates. These
+  are what `/spec:init`'s runtime block, verify skill, and smoke leg will bind to — cheaper
+  to land here, while the scaffold tool's conventions are hot, than to retrofit at init.
+
 ## Genesis: State Machine
 
-`.claude/genesis/status.json` (template via `spec-paths templates`). Owned by the genesis
-commands; the `genesis-state-gate.sh` hook (UserPromptSubmit) enforces it coarsely at the command
-boundary.
+`.claude/genesis/status.json` (template via `spec-paths templates`, schemaVersion 2). The
+architect stage is now driver-owned: `genesis-driver.js` (resolved by `/spec:genesis`) derives
+the current state on **every invocation** from `status.json` plus the artifacts actually on
+disk — never from the enum alone; a mark whose named artifact vanished is demanded again. The
+states: `DISCOVERY` → `MENUS` → `DECIDE` → `SCAFFOLD` (driver-only) → `SKELETON` → `GATE`
+(driver-only) → `GATE_RED` | `ROADMAP` → `HANDOFF` (terminal for this stage). No `status.json`
+on disk → the driver creates it from the template and prints `DISCOVERY`; no `brief.md` on disk
+→ the DISCOVERY step names `genesis-brief.md` (`$(spec-paths templates)/genesis-brief.md`) as
+the source.
 
-- `architect`: `pending → decisions-recorded → scaffold-complete`
+**Checkpoint contract.** Every accepted `--mark` prints, as its last line, `✅ checkpoint —
+genesis state saved (<prev> → <next>); safe to /clear and re-run /spec:genesis`; every step's
+text opens with `Read only:` followed by the files that step needs — never the whole
+`.claude/genesis/` directory. This is what makes a full genesis safe to run across as many
+`/clear`s as it needs: state lives on disk, never in chat context.
+
+- `architect`: `pending → decisions-recorded → scaffold-complete` (driven by the marks above,
+  never a command's own phase tracking)
 - `explore`: `pending → research-done → positions-authored → tiles-culled → picked` (or `skipped`)
 - `design`: `pending → doctrine-drafted → tokens-landed → rules-locked` (or `skipped`)
 
-The roadmap (architect Phase C) deliberately has **no enum value**: nothing downstream gates on
-it (design and init don't depend on it), so it is verified by artifact existence only —
-`architect: scaffold-complete` with no `docs/roadmap/00-overview.md` means the architect command
-resumes at its roadmap phase.
+The roadmap (the driver's `ROADMAP` state, § Genesis: Roadmap Decomposition) deliberately has
+**no enum value of its own**: nothing downstream gates on it (design and init don't depend on
+it), so it is verified by artifact existence only — `architect: scaffold-complete` with no
+`docs/roadmap/00-overview.md` means the driver resumes at `ROADMAP`.
 
 `/spec:genesis-explore` is blocked until `architect: scaffold-complete`. `/spec:genesis-design`
 is blocked until `architect: scaffold-complete` AND `explore: picked` (or `skipped`) — the pick
@@ -373,6 +456,48 @@ when the design canon is **partial** (`doctrine-drafted`/`tokens-landed`); it pr
 verifies the named artifacts physically exist — never trust the phase enum alone** (a phase can be
 set while a side-effect was rolled back).
 
+## Genesis: Roadmap Decomposition
+
+Runs immediately after the zero-day gate is green, **while the interview, decision, and ADR
+context is still hot** — this decomposition is half-formed in the session already; a later
+session would pay full price to reconstruct it worse. The roadmap is what makes the pipeline
+invocable after setup: without it, genesis ends and the user has no unit to hand `/spec:plan`.
+
+The two format contracts are templates: `$(spec-paths templates)/roadmap-overview.md` and
+`$(spec-paths templates)/roadmap-brief.md` — Read both first. The governing principle: **briefs
+are stable intent; specs are perishable execution detail.** Briefs cite ADRs (also stable) and
+are hydrated into specs lazily, one `/spec:plan` session at a time, when "Current state" can be
+written against real code. Never pre-plan the whole roadmap into specs.
+
+1. **Decompose.** Slice the confirmed goal + ADRs into ordered briefs, each sized to one
+   planning session (1–4 specs; a brief whose Scope can't be told in ~1 page splits). Slice by
+   **landing unit** (each brief leaves the system green and demonstrable), never by layer.
+   **An ops-conventions row records a choice, never scaffolds its mechanism:** the
+   facade/runtime an ops decision implies (queue wrapper, enqueue helper, analytics seam)
+   lands in the same brief as its **first consumer** — never as a standalone infrastructure
+   brief, and never wired into boot for an empty registry (measured: two audited hosts each
+   carried a well-tested dead queue facade every review re-flagged).
+   Wire `depends_on` as a DAG; assign phases (P0 = walking skeleton → first milestone → …);
+   derive milestone gates from the discovery success outcome (observable states, not feature
+   lists). Design column: `yes` only for user-facing briefs in archetypes whose design stage
+   isn't `none` — and every `yes` brief carries a `## Surfaces` fenced block (screen labels +
+   journey edges, names and arrows only; the template documents the grammar) so the design
+   atlas can render the whole-product journey and its gaps. Seed the **ops track** with external clocks (OAuth registrations, hosting
+   provisioning, partner asks) and the **parking lot** with the "Later / Won't-this-time"
+   answers from discovery — recorded so they stop leaking into briefs; promotion out requires an amendment
+   ADR applying to the receiving brief.
+2. **Confirm the sequence.** One `AskUserQuestion` round presenting the proposed sequence table
+   (brief names, phases, dependencies, milestone gates) before writing files. Dismissed → STOP.
+3. **Write** `docs/roadmap/00-overview.md` + one `NN-{kebab}.md` per brief. Post-genesis
+   product-shape decisions are amendment ADRs whose effects are edited into the briefs they
+   name at decision time (the overview states the rule; adr.md template § Applies to) — no
+   side-channel amendment dir exists. **Never write a status column** —
+   per-brief status is derived from specs' `brief:` frontmatter (`/spec:status`), not tracked.
+4. **Self-check (checklist, not a workflow):** no `depends_on` cycles; every ADR is carried by
+   ≥1 brief's Grounding or is genuinely cross-cutting (note which); no two briefs claim the same
+   scope; each milestone gate is satisfiable by the briefs sequenced before it; brief 01 depends
+   on nothing and is plannable immediately after `/spec:init` + `/spec:enforce`.
+
 ## Genesis: On-disk Handoff (the genesis artifacts)
 
 Genesis follows the same on-disk-handoff spine as the per-feature pipeline (shared § Workflows
@@ -382,10 +507,14 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
 
 - **`.claude/genesis/brief.md`** — authored from the template `genesis-brief.md`
   (`$(spec-paths templates)/genesis-brief.md`, § Genesis: Discovery Interview): `## What I
-  think you're building`, `## Coverage` (the ten-key audit), `## Non-goals`, `## Open
-  Dimensions` and `## Research Angles` (the two machine-keyed sections the workflow agents
-  read — key → focus, and each marked hard-to-reverse or not), `## Picks`. The command writes
-  and re-renders this after every answer; the workflow's `args` only ever carries the *keys*.
+  think you're building`, `## Coverage` (the ten-key audit — grammar per § Genesis: Discovery
+  Interview), `## Non-goals`, `## Open Dimensions` (each line `- <key>: open|constrained [—
+  note]`) and `## Research Angles` (the two machine-keyed sections the workflow agents read —
+  key → focus, and each marked hard-to-reverse or not), `## Picks` (each line `- <key>:
+  <label>`). These are the grammars `genesis-driver.js` parses mechanically at its
+  `discovery-done`, `menu-written`, and `menus-done` marks — write what the driver can read.
+  The command writes and re-renders this after every answer; the workflow's `args` only ever
+  carries the *keys*.
 - **`.claude/genesis/sketch.html`** (throwaway) — the one core-screen sketch authored as soon
   as `## What I think you're building` names a screen (§ Genesis: Discovery Interview); it
   predates tokens and is never atlas-checked. Deleted at `/spec:genesis-design`'s prune step,
@@ -406,7 +535,7 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
 - **`.claude/genesis/design-rules.json`** — design's output: category-only enforcement rules.
 - **`.claude/genesis/interview-research/{dimension}.json`** — the woven-loop option menus,
   each surviving option stamped with a `currency` block and each menu carrying any
-  `droppedForCurrency` entries `registry-check.js` (`spec-paths registry-check`) removed.
+  `droppedForCurrency` entries `registry-check.js` removed.
 - **`docs/adr/NNNN-*.md`** — architecture/design decision records (template via `spec-paths templates`).
 - **`docs/roadmap/`** (durable) — the decomposition that makes the pipeline invocable after
   setup: `00-overview.md` (sequence table, milestone gates, ops track, parking lot) plus one

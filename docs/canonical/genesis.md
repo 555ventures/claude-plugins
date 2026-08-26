@@ -28,3 +28,15 @@
   + keys derived from coverage answers. Every `wf-research` option carries `because` (the
   answers behind its rank) and `priced` (a consequence at the stated scale).
   (specs/20260825/02-genesis-consultant-discovery.md, done 2026-08-26)
+
+## Currency (executed)
+
+- Since specs/20260825/03 every research menu option carries
+  `packages: [{registry, name, version}]` and is resolved by `registry-check.js`
+  (`spec-paths registry-check`) against the registry's per-version JSON endpoint — npm, PyPI,
+  crates.io — and endoflife.date's cycle list for runtimes. A `missing` option is dropped into
+  `droppedForCurrency` before the user sees the menu; survivors carry a `currency` block;
+  unreachable registries stamp `unverified` and never block (exit 3). The Haiku recency pass,
+  `verifyKeys`, and `still_current` are retired. Exit codes: 0 ok · 1 dropped · 2 malformed ·
+  3 unreachable; sentinels `__REGISTRY_OK__`, `__REGISTRY_DROPPED__ n=<k>`,
+  `__REGISTRY_UNREACHABLE__`. (specs/20260825/03-genesis-currency-executed.md, done 2026-08-26)

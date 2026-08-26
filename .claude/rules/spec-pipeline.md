@@ -253,3 +253,15 @@ this repo's suite; appending at cap requires an eviction (delete / merge / mecha
   an independent reconstruction of the real pre-fix code raced ~250 times up to 48-way produced zero
   corruptions on APFS. The atomic-write fix stands on contract contradiction plus host-filesystem
   portability; both comments were corrected in the same session.)
+- `[plugin]` `tests/helpers.js`'s `runNode` is `spawnSync`, which blocks the parent Node event
+  loop for the child's whole lifetime — so a test that stands up an **in-process**
+  `http.createServer` stub and then `runNode`s the script under test against it can never
+  service the child's request: it hangs to the spawn timeout (ETIMEDOUT) instead of returning the
+  stubbed response. Any exec-a-script test whose subject makes a network call to a fixture living
+  in the same process needs a file-local `async child_process.spawn` runner (still the real
+  script, still real argv — a harness-level swap, not a weakening of the test); alternatively
+  bind the server, read its port, and close it *before* the run when the case only needs an
+  unreachable port. (specs/20260825/03-genesis-currency-executed.md — registry-check.js's
+  reachable-registry fixtures, deviation recorded at build, second recurrence; first was
+  `tests/release-legs/release-legs.test.js`, which routes around it with a real child-process
+  server and carries the dated comment naming the same deadlock.)

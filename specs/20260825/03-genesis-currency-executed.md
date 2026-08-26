@@ -1,6 +1,6 @@
 ---
 date: 2026-08-25
-status: implementing
+status: done
 diff_base: b1c140ef0b16ea1a4c554b8938780f407613ec80
 tier: critical           # adds a spec-paths key (key-set edit — critical trigger, precedent specs/20260823/01, specs/20260824/05)
 area: genesis
@@ -209,6 +209,16 @@ Retired-literal sweep at lock (by hand): `still_current`, `verifyKeys`, `verifyF
 `RECENCY_VERDICT_SCHEMA` across `tests/` → no hits (A6); `Haiku` in `genesis.md` → the one
 model-placement sentence (D8). `SHALL CONTINUE TO` pins: AC-8 (workflow body + cap); the
 entrypoints live pin is the oracle for the new row.
+
+Deviation folded at review close (2026-08-26, one-off): `spec/entrypoints.json`'s
+`spec/scripts/registry-check.js` row declares a fourth entry point,
+`spec/doctrine/genesis.md`, beyond D9's enumeration of the three genesis commands. D8 requires
+genesis.md to name the script through its resolver (`` `spec-paths registry-check` ``), and the
+exhaustive live entrypoints pin (AC-20260820-04-6, `tests/consistency/entrypoints.test.js`) —
+named by D10 as the oracle for the new row — reads that mention as an invocation site. The
+manifest follows the oracle; the added member is a consequence of D8 inside this same spec, not
+a widening of scope. Orchestrator edit at build Phase 3 (shared wiring surface, never a parallel
+worker's).
 
 ## Canonical Delta
 

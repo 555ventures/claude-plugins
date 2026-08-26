@@ -3,7 +3,7 @@ name: pipe-truncation-file-redirect-ground-truth
 description: Pinning a console.log()-then-process.exit() async-pipe truncation fix — build the fixture large via File Plan table padding, get ground truth via a synchronous file-redirect run, compare byte-for-byte against a real piped run.
 metadata:
   type: feedback
-  reviewed: 2026-08-23
+  reviewed: 2026-08-26
 ---
 
 Pinning "does `--json` output survive a pipe intact" needs TWO runs of the same invocation, not

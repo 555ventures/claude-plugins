@@ -499,6 +499,12 @@ test('AC-20260825-04-9: spec-paths resolves genesis-driver and shared-for genesi
       'than moved, and the driver would print a step no doctrine explains')
   }
 
+  // 2026-08-26 debt closure (Fable consult): the hook joins D14's sweep. It carried the retired
+  // literal five times — the two `case` arms, the entry-point comment, and BOTH user-facing
+  // remedy strings — so this is stale-reference closure over an executable's source, not a prose
+  // regex standing in for behavioral proof: the remedy strings' behavior is pinned behaviorally
+  // in tests/genesis-gate.test.js, and this sweep catches the three occurrences no exit code can
+  // observe.
   for (const rel of [
     'README.md',
     'spec/doctrine/core.md',
@@ -506,6 +512,7 @@ test('AC-20260825-04-9: spec-paths resolves genesis-driver and shared-for genesi
     'spec/commands/genesis-explore.md',
     'spec/commands/genesis-design.md',
     'spec/templates/roadmap-overview.md',
+    'spec/scripts/genesis-state-gate.sh',
   ]) {
     assert.ok(!read(rel).includes('genesis-architect'),
       'D14: ' + rel + ' must not name `genesis-architect` — a surviving mention points the ' +

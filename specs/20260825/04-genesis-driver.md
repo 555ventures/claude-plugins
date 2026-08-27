@@ -1,6 +1,6 @@
 ---
 date: 2026-08-25
-status: implementing
+status: done
 diff_base: c15b711b87ba983a418da217cc489a11940894da
 tier: critical           # edits the genesis-state-gate.sh hook (process boundary) and adds a spec-paths key
 area: genesis
@@ -271,6 +271,114 @@ an arm D12 leaves byte-identical; **waived**, AC-8's pin is the oracle),
 literals leg — `specs/`, `docs/roadmap/`, `docs/audit/` waived by location;
 `spec/templates/grounding-contract.md` waived per D14; every other plugin-file hit is a File
 Plan row or an earlier sibling's.
+
+Review dispositions (2026-08-26, review of this spec):
+
+- **Waived** — the changed-set reconcile leg's five out-of-plan files. Three are named by this
+  spec's own File Plan prose ("Orchestrator duties outside the table"):
+  `spec/commands/genesis-architect.md` (the `git rm`), `tests/spec-paths.test.js`, and
+  `tests/consistency/genesis-doctrine.test.js`. The other two are recorded in the deviations
+  sidecar against their falsified assumptions: `spec/templates/genesis-brief.md` (A4 partly
+  falsified — the template's section comments did not carry the line grammars the driver parses,
+  and A4's own remedy was "amend the template comment, never fork the grammar") and
+  `tests/genesis/research-menu.test.js` (A6 falsified — two retired-literal test pins updated in
+  place, each keeping its original AC-ID). No file in the set is unaccounted for.
+- **Waived** — the AC coverage leg's `uncovered-ac` finding on `AC-20260825-04-9`. The leg
+  counts hits across File Plan **tests rows** only, and this spec deliberately routed the AC-9
+  test into `tests/consistency/genesis-doctrine.test.js` as an orchestrator duty outside the
+  table rather than invent a row. The test exists, is substantive (it pins the `spec-paths`
+  key, the `shared-for genesis` section set, the retired command file's absence, the thin
+  shell's line bound, the three migrated doctrine headings, and the retired-literal sweep), and
+  passes. The waive is bookkeeping, not coverage: the durable close is a process rule that every
+  test file a build touches gets an edit-only File Plan row, which would satisfy this leg and the
+  reconcile leg at once — staged as follow-up work, not amended into this locked plan.
+
+Build deviations, folded at close (2026-08-26). All three are one-offs, recorded here rather
+than in the host rules' Gotchas: the recurring class the first would otherwise document —
+a retired literal surviving in a file no enumerated sweep looked at — is now mechanized by
+this spec's own repo-wide sweep (core § Incident Policy: deterministic enforcement, never
+prose).
+
+- A6 falsified at build: the assumption's executed sweep covered `spec/`, `README.md`, and
+  `docs/canonical` but not `tests/`, and two test files pin the retired command name in eleven
+  places. Per A6's own remedy ("add the row; never a stale reference") the orchestrator updated
+  them in place: `tests/consistency/genesis-doctrine.test.js` (AC-20260825-01-4's file list,
+  AC-20260825-01-6's `shared-for` key, AC-20260825-02-1's file list, AC-20260825-03-9's file list
+  — the currency mechanism moved from the command into the driver, so the pin follows it to
+  `spec/scripts/genesis-driver.js`) and `tests/genesis/research-menu.test.js`
+  (AC-20260825-02-5's menu-build pin, whose binding home is now `spec/doctrine/genesis.md`'s
+  woven-loop step, and AC-20260825-02-6's `shared-for` key). Every pin kept its original AC-ID —
+  the invariants belong to specs 01/02/03 and only their file moved; none was weakened or dropped.
+- A4 partly falsified: the assumption states that `genesis-brief.md`'s section comments carry the
+  `## Open Dimensions` and `## Picks` line grammars, and they do not — the shipped template
+  describes them only in prose. A4's remedy ("the driver follows the template on disk; amend the
+  template comment, never fork the grammar") was applied: `spec/templates/genesis-brief.md`, a
+  file outside the File Plan, gained one grammar line in each of those two section comments. The
+  `## Coverage` block was left byte-identical because AC-20260825-02-2 counts its non-blank lines.
+- D12 says "nothing else changes" and D15 pins the other three arms "byte-identical", but the
+  hook's two user-facing remedy strings could not stay byte-identical: both live in the shared
+  `require_scaffold` helper and both named `/spec:genesis-architect`, so leaving them would have
+  sent every blocked explore/design user to a command this spec deletes. The orchestrator
+  directed the worker to update them. Executed both ways 2026-08-26 (pre-image `b53fd97~1` vs
+  post-image): stderr on the blocked path goes from `Finish /spec:genesis-architect first` to
+  `Finish /spec:genesis first`, exit 2 unchanged in both. This is D12's ONLY pre-image-red
+  observable — the AC's admit half (`/spec:genesis` exits 0) was already green pre-change,
+  because the hook is allow-by-default and the new entry-point arm is behaviorally redundant.
+  AC-20260825-04-8 was therefore mis-specified at lock: its admit half should have read
+  `SHALL CONTINUE TO exit 0`, and the remedy strings should have been named as the observable.
+  Closed at build (Fable consult 2026-08-26) with three tests-only edits rather than a spec
+  amendment: a remedy-string test falsified against the pre-image, the hook added to D14's
+  retired-literal sweep, and the admit pins relabelled in place as forward-only pins.
+
+Review rounds (2026-08-26, runId `rv_55877878203b`, verdict CLEAN). Six findings were
+dispositioned across two fix rounds; three were defects in this spec's own executed path, and
+all three shared one root cause — **nothing sized the executed legs against real-world
+magnitudes**, so every probe stayed inside the fixtures' toy envelope (the corollary this
+repo's § Gotchas already records for the entry-point guard):
+
+- **F6 (hard, Fable consult, reproduced independently).** `runShell` piped the
+  `scaffoldCommand`/`gateCommand` child through `spawnSync`'s default 1 MiB `maxBuffer`. A real
+  scaffold (`create-next-app` plus an install) exceeds that routinely: the child was SIGTERM'd
+  with ENOBUFS **mid-run** — truncated, not merely unlogged — `runChild` fail-closed to exit 2,
+  nothing was recorded, no log was written, and the printed remedy ("fix the cause and re-run")
+  hit the identical wall forever. Genesis was permanently bricked for that project; the gate leg
+  had the same anatomy, so a red zero-day gate could not report its own log. Fixed by streaming
+  to the log fd (`stdio: ['ignore', fd, fd]`), the half of `smoke.sh`'s in-bash-redirect
+  precedent this script had dropped. `runChild`'s fail-closed semantics are unchanged.
+- **F7 (hard, found in the fix-delta pass).** F6's repair moved the wall one layer up rather
+  than removing it: `logTail` bounded the excerpt it embeds in the `GATE_RED`/scaffold-red step
+  text by **line count only**, so a gate emitting one unbroken multi-megabyte line (realistic
+  for `\r`-based progress output — the exact class F6 targets) made the whole file "the last 20
+  lines", which the driver printed to its own stdout, killing any caller capturing it with a
+  default buffer. Fixed with `LOGTAIL_MAX_BYTES`, a trailing-window read, and a truncation
+  marker. An intermediate version of that fix prepended the marker **before** the line slice, so
+  it was silently sliced away on any ordinary large multi-line log — caught and corrected in the
+  same round. The lesson, now in the script header: bounding a printed excerpt by line count
+  alone is not a bound, because a caller's buffer is measured in bytes.
+- **F1 (hard).** D4's locked promise that a `registryExit === 1` re-print "names the dropped
+  labels" was unimplemented — the step pointed at the menu file instead. Fixed with
+  `droppedLabelsFor()`, degrading to the generic wording on any read/parse failure.
+- **F3 / F8 (soft).** `--state`, contracted as "prints the state name only", routed through the
+  same derivation that executed the project's scaffold and gate commands; a status poll that
+  runs arbitrary project-mutating shell is indefensible regardless of wording, and with F6 in
+  view it could exit 2 after half-running a truncated scaffold. Now a read-only peek that may
+  report the transient `SCAFFOLD`/`GATE` names — both already in D2's enum, so inside the locked
+  state model. The header's summary of that guarantee was then corrected to carry
+  `loadStatus()`'s cold-root creation, which `--state` does and must still perform.
+- **F2 (hard).** The repo-root `.claude-plugin/marketplace.json` — the public marketplace
+  listing, the first thing a new installer reads — still advertised the deleted
+  `/spec:genesis-architect` as the greenfield entry point. Text fixed. Per JJ's ruling
+  (2026-08-26), AC-20260825-04-9's stale-name sweep was **inverted**: it was an enumerated list
+  of files to check, which had already missed twice on this single rename (`tests/`, caught at
+  build; `.claude-plugin/`, caught at review). It now walks the whole repo and asserts emptiness
+  minus an explicit, justified waive-list, classifying by **location** only — the correction
+  § Gotchas prescribes for the evadable-guard class.
+
+Every fix carries a behavioral test falsified against a pre-fix build of the driver; the F6
+fixture is sized past 1 MiB and the F7 fixtures cover all three log shapes (one unbroken
+multi-megabyte line, many short lines past the window, a short complete log), each asserting the
+driver's **own stdout** stays small — not merely that the log on disk is right, which would not
+catch a recurrence.
 
 ## Canonical Delta
 

@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { SPEC, read, runBash } = require('../helpers')
+const { ROOT, SPEC, read, runBash } = require('../helpers')
 
 // specs/20260825/01-genesis-panel-collapse.md (2026-08-25): deletes the genesis MoA panel
 // (wf-panel.js: three blind Sonnet proposers + a Fable aggregator) and replaces it with one
@@ -445,12 +445,22 @@ test('AC-20260825-03-9: genesis.md, genesis-driver.js, and both remaining genesi
 // genesis-architect -> genesis. AC-20260825-04-9 is the conformance pin over all of it, plus the
 // D15 regression that genesis-explore keeps being served § Design Canon. TDD red at authoring
 // time: neither genesis.md (command) nor genesis-driver.js existed.
+//
+// 2026-08-26 review ruling: the stale-name sweep below used to be a hand-enumerated file list,
+// and it was wrong twice on this one rename — it missed tests/ (caught during the build, see
+// specs/20260825/04-genesis-driver.deviations.md) and it missed the repo-root
+// .claude-plugin/marketplace.json, the public marketplace listing, which was still advertising
+// the deleted command as the greenfield entry point until this review caught it. Per this repo's
+// own rules § Gotchas, a conformance guard that decides what to inspect by name-shape is a hole
+// evadable by the exact thing it guards. The sweep is inverted: walk the whole repo from ROOT and
+// read everything, then subtract an explicit, justified waive-list — never enumerate what to
+// check.
 
 // ---------------------------------------------------------------------------
 // AC-20260825-04-9
 // ---------------------------------------------------------------------------
 
-test('AC-20260825-04-9: spec-paths resolves genesis-driver and shared-for genesis, the retired command file is gone, genesis.md is a thin shell, the three migrated doctrine sections exist, and no swept file names genesis-architect', () => {
+test('AC-20260825-04-9: spec-paths resolves genesis-driver and shared-for genesis, the retired command file is gone, genesis.md is a thin shell, the three migrated doctrine sections exist, and no file in the repo outside an explicit, justified waive-list names genesis-architect', () => {
   const driver = runBash('bin/spec-paths', ['genesis-driver'])
   assert.strictEqual(driver.status, 0,
     'D13: `spec-paths genesis-driver` must exit 0 — /spec:genesis resolves the driver it loops ' +
@@ -499,26 +509,55 @@ test('AC-20260825-04-9: spec-paths resolves genesis-driver and shared-for genesi
       'than moved, and the driver would print a step no doctrine explains')
   }
 
-  // 2026-08-26 debt closure (Fable consult): the hook joins D14's sweep. It carried the retired
-  // literal five times — the two `case` arms, the entry-point comment, and BOTH user-facing
-  // remedy strings — so this is stale-reference closure over an executable's source, not a prose
-  // regex standing in for behavioral proof: the remedy strings' behavior is pinned behaviorally
-  // in tests/genesis-gate.test.js, and this sweep catches the three occurrences no exit code can
-  // observe.
-  for (const rel of [
-    'README.md',
-    'spec/doctrine/core.md',
-    'spec/doctrine/genesis.md',
-    'spec/commands/genesis-explore.md',
-    'spec/commands/genesis-design.md',
-    'spec/templates/roadmap-overview.md',
-    'spec/scripts/genesis-state-gate.sh',
-  ]) {
-    assert.ok(!read(rel).includes('genesis-architect'),
-      'D14: ' + rel + ' must not name `genesis-architect` — a surviving mention points the ' +
-      'reader (or a future session) at a command that no longer exists, which is exactly the ' +
-      'stale-reference class the one-binding-home rule exists to prevent')
+  // D14, inverted 2026-08-26: waived by explicit path (never by name-shape or extension), each
+  // entry justified. Re-verify a waived entry's own hit before trusting it — a fix landing
+  // concurrently can remove the very mention it waives.
+  const waivedPaths = [
+    // D14 waives it by name: a wording edit re-stamps every host repo's grounding as stale
+    // (rules § Risk Tiers), and the contract hash is not paid for a word.
+    'spec/templates/grounding-contract.md',
+    // its `description` is the changelog surface; historical entries legitimately record that
+    // the command was deleted.
+    'spec/.claude-plugin/plugin.json',
+    // its header comment states the incident history (the choreography it replaced).
+    'spec/scripts/genesis-driver.js',
+    // this file's own header/body names the retired literal as the string under test.
+    'tests/consistency/genesis-doctrine.test.js',
+    // dated incident-header comments recording the rename (Test Rules require those headers).
+    'tests/genesis-gate.test.js',
+    'tests/genesis/research-menu.test.js',
+  ]
+  const waivedPrefixes = [
+    // dated historical records — a spec that renamed a command must keep naming it.
+    'specs/',
+    'docs/roadmap/',
+    'docs/audit/',
+  ]
+  function isWaived(rel) {
+    return waivedPaths.includes(rel) || waivedPrefixes.some(p => rel.startsWith(p))
   }
+  function walk(dir, acc) {
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (ent.name === '.git' || ent.name === 'node_modules') continue
+      const abs = path.join(dir, ent.name)
+      if (ent.isDirectory()) walk(abs, acc)
+      else if (ent.isFile()) acc.push(abs)
+    }
+    return acc
+  }
+  const offenders = []
+  for (const abs of walk(ROOT, [])) {
+    const rel = path.relative(ROOT, abs).split(path.sep).join('/')
+    if (isWaived(rel)) continue
+    if (fs.readFileSync(abs, 'utf8').includes('genesis-architect')) offenders.push(rel)
+  }
+  assert.deepStrictEqual(offenders, [],
+    'D14: these files outside the waive-list still name the retired `genesis-architect` command: ' +
+    offenders.join(', ') + ' — a surviving mention points a reader, or a future session, at a ' +
+    'command that no longer exists, which is exactly the stale-reference class the ' +
+    'one-binding-home rule exists to prevent. A repo-wide sweep replaces the old hand-enumerated ' +
+    'file list because that list missed tests/ and .claude-plugin/marketplace.json on this same ' +
+    'rename (rules § Gotchas: classify by location, never by name-shape)')
 
   // D15 regression pin: rekeying genesis-architect -> genesis must not disturb the sibling
   // section lists in spec-paths' shared-for map.

@@ -18,9 +18,19 @@
 //
 // Every child process this driver spawns (registry-check.js, the descriptor's scaffoldCommand,
 // the descriptor's gateCommand) is routed through one fail-closed helper, runChild: spawnSync's
-// `status` is null when a child dies by signal, never spawns, or overflows maxBuffer — treating
-// that null as a pass (or reading `.stdout` off a child that never ran) is the exact
-// silent-success failure this driver exists to prevent.
+// `status` is null when a child dies by signal, never spawns, or overflows maxBuffer (still true
+// of any caller that captures output through a pipe via `encoding`, e.g. the registry-check.js
+// call) — treating that null as a pass (or reading `.stdout` off a child that never ran) is the
+// exact silent-success failure this driver exists to prevent. scaffoldCommand/gateCommand run
+// through runShell, which streams the child's stdout+stderr straight to the log file's own fd
+// instead of buffering it through a Node pipe: a real scaffold (create-next-app plus an install)
+// routinely emits well over spawnSync's 1 MiB default maxBuffer, and a Node pipe at that ceiling
+// SIGTERM-kills the child mid-run (ENOBUFS) before a single byte reaches the log — permanently
+// bricking genesis on that project, since the truncated scaffold never completes and every re-run
+// hits the identical wall (incident 2026-08-26, found at review of
+// specs/20260825/04-genesis-driver.md). Streamed output can never overflow a buffer that no
+// longer exists in the parent; runChild's fail-closed guard for a genuine signal death or spawn
+// failure is unchanged.
 //
 // What this deliberately does NOT do:
 //   - hold the interview, write the picks, author the ADRs, land the skeleton, or decompose the
@@ -30,10 +40,28 @@
 //     is named somewhere, a roadmap has no cycle), never opinions on their content.
 //   - relocate the session CWD, or touch any file outside `--root`'s `.claude/genesis/`,
 //     `docs/roadmap/`, and whatever `scaffoldCommand`/`gateCommand` themselves write.
+//   - run scaffoldCommand/gateCommand, or write status.json beyond `loadStatus()`'s own cold-root
+//     creation, for a `--state` invocation: `--state` is a read-only peek at the derived state, so
+//     it may report the transient driver-only states `SCAFFOLD`/`GATE` (D2's enum) that a bare
+//     invocation never leaves standing, instead of running the command a bare invocation would.
+//
+// Fixing that overflow only at the child's own capture wasn't enough: `logTail`, which builds the
+// SCAFFOLD_RED/GATE_RED excerpt embedded in the driver's OWN stdout, used to bound its excerpt by
+// line count alone (`text.split('\n').slice(-n)`). A caller's buffer is measured in BYTES, not
+// lines — a single unbroken multi-megabyte line (realistic `\r`-driven install/progress output,
+// exactly the class the streaming fix above targets) makes "the last 20 lines" the WHOLE file, and
+// a caller capturing the driver's own stdout through a pipe (e.g. a test's default 1 MiB
+// maxBuffer) hits the identical ENOBUFS one layer up. `logTail` now reads only the last
+// LOGTAIL_MAX_BYTES of the file via `fs.openSync`/`fs.readSync`, never the whole thing, and marks
+// the excerpt as truncated when it is (incident 2026-08-26, found in the fix-delta pass of the
+// review of specs/20260825/04-genesis-driver.md — bounding a printed excerpt by line count alone
+// is not a bound, because a caller's buffer is measured in bytes).
 //
 // Exit codes:
-//   0  a bare invocation printed the current step (or `--state` printed the state name), or an
-//      accepted `--mark` recorded its result and printed the checkpoint line.
+//   0  a bare invocation printed the current step (or `--state` printed the state name — a
+//      read-only derivation that never executes scaffoldCommand/gateCommand, and never writes
+//      status.json beyond `loadStatus()`'s own cold-root creation), or an accepted `--mark`
+//      recorded its result and printed the checkpoint line.
 //   2  a precondition failure or a refused mark — stderr names the missing/invalid artifact and
 //      the remedy command — or a wrapped child process dying with no exit code (runChild's
 //      fail-closed refusal: signal-killed, never spawned, or maxBuffer-overflowed).
@@ -208,6 +236,22 @@ function allDimensionKeys() { return Object.keys(openDimensions()) }
 function openDimensionKeys() { const d = openDimensions(); return Object.keys(d).filter((k) => d[k] === 'open') }
 function picks() { const t = briefText(); return t === null ? {} : parsePicks(t) }
 function hasMenuFile(key) { return fs.existsSync(path.join(genesisDir, 'interview-research', key + '.json')) }
+
+// D4: on registryExit === 1 the step re-print names the dropped labels, read from the menu
+// file's `droppedForCurrency` (registry-check.js --write's shape: [{label, packages: [...]}]).
+// Read defensively — a missing/unparseable menu file or an absent/empty array degrades to null
+// so the caller falls back to the generic wording; it must never throw.
+function droppedLabelsFor(key) {
+  try {
+    const menuPath = path.join(genesisDir, 'interview-research', key + '.json')
+    const menu = JSON.parse(fs.readFileSync(menuPath, 'utf8'))
+    const dropped = Array.isArray(menu.droppedForCurrency) ? menu.droppedForCurrency : []
+    const labels = dropped.map((d) => d && d.label).filter((l) => typeof l === 'string' && l)
+    return labels.length ? labels : null
+  } catch (e) {
+    return null
+  }
+}
 
 // ---------------------------------------------------------------------------
 // DISCOVERY (D3): the coverage-audit gate.
@@ -385,9 +429,24 @@ function scaffoldLogPath() { return path.join(genesisDir, 'scaffold.log') }
 function gateLogPath() { return path.join(genesisDir, 'gate.log') }
 
 function runShell(cmd, logPath) {
-  const r = runChild('bash', ['-c', cmd], { cwd: root, encoding: 'utf8' }, 'shell command "' + cmd + '"')
+  // The log fd is opened and truncated BEFORE the child spawns, then handed straight to
+  // spawnSync's stdio for both stdout and stderr — the child's output never transits a Node
+  // pipe, so it can never overflow one (see the header's runChild paragraph). Closed on every
+  // path, including a die() inside runChild (the process is exiting anyway; the OS reclaims it).
   fs.mkdirSync(path.dirname(logPath), { recursive: true })
-  fs.writeFileSync(logPath, (r.stdout || '') + (r.stderr || ''))
+  let fd
+  try {
+    fd = fs.openSync(logPath, 'w')
+  } catch (e) {
+    die('could not open log file ' + logPath + ' for writing (' + e.message + ') — check the ' +
+      'directory is writable and re-run')
+  }
+  let r
+  try {
+    r = runChild('bash', ['-c', cmd], { cwd: root, stdio: ['ignore', fd, fd] }, 'shell command "' + cmd + '"')
+  } finally {
+    try { fs.closeSync(fd) } catch (e) { /* already closed */ }
+  }
   return r
 }
 
@@ -426,10 +485,50 @@ function handleSkeletonLanded() {
   return { prev: 'SKELETON', next: g.exit === 0 ? 'ROADMAP' : 'GATE_RED' }
 }
 
+// Caps the byte window logTail reads off disk before it ever looks at lines. A few KB is enough
+// to show a failing gate's last output; it is far below any caller's stdout-capture buffer (a
+// test's default 1 MiB spawnSync maxBuffer among them) — see the header's F7 paragraph.
+const LOGTAIL_MAX_BYTES = 4096
+
 function logTail(p, n) {
+  let fd
+  try {
+    fd = fs.openSync(p, 'r')
+  } catch {
+    return ''
+  }
   let text = ''
-  try { text = fs.readFileSync(p, 'utf8') } catch { text = '' }
-  return text.split('\n').slice(-(n || 20)).join('\n')
+  let byteTruncated = false
+  try {
+    const size = fs.fstatSync(fd).size
+    const readLen = Math.min(size, LOGTAIL_MAX_BYTES)
+    const buf = Buffer.alloc(readLen)
+    if (readLen > 0) fs.readSync(fd, buf, 0, readLen, size - readLen)
+    text = buf.toString('utf8')
+    // A byte-offset cut can land mid-character; Node's UTF-8 decoder renders the resulting
+    // partial sequence at the start of the string as one or more U+FFFD, never a throw. Strip
+    // them so the excerpt doesn't open with visible mojibake.
+    while (text.length && text.charCodeAt(0) === 0xfffd) text = text.slice(1)
+    byteTruncated = size > readLen
+  } catch {
+    text = ''
+  } finally {
+    try { fs.closeSync(fd) } catch { /* already closed */ }
+  }
+  // The line slice runs BEFORE the truncation marker is attached, never after: prepending the
+  // marker and then slicing the last N lines (the original shape of this fix) makes the marker
+  // itself a slice candidate — on any byte window holding more than N lines (the ordinary
+  // large multi-line failing-gate log, not just the single-giant-line case), the marker sits far
+  // enough back in the window that the line slice discards it, and the reader sees a plain,
+  // confident-looking excerpt with no sign it's partial (defect found in review of this same
+  // fix, 2026-08-26). A line dropped by the slice is exactly as much "there is more, on disk" as
+  // a byte dropped by the read window, so either condition attaches the marker to the final text.
+  const lines = text.split('\n')
+  const wanted = n || 20
+  const tail = lines.slice(-wanted)
+  const lineTruncated = tail.length < lines.length
+  const body = tail.join('\n')
+  return (byteTruncated || lineTruncated) ? '… truncated, full log at ' + p + ' …\n' + body : body
 }
 
 // ---------------------------------------------------------------------------
@@ -513,11 +612,19 @@ function handleRoadmapWritten() {
 }
 
 // ---------------------------------------------------------------------------
-// deriveState (D2) — side-effecting: runs the driver-only SCAFFOLD/GATE stages as needed,
-// idempotent on scaffold.exit === 0; every check re-reads the artifacts, never trusts a mark
-// whose backing file has vanished or regressed.
+// deriveState (D2) — side-effecting by default: runs the driver-only SCAFFOLD/GATE stages as
+// needed, idempotent on scaffold.exit === 0; every check re-reads the artifacts, never trusts a
+// mark whose backing file has vanished or regressed.
+//
+// `{ peek: true }` (used only by `--state`, F3) derives the SAME state without ever invoking
+// runScaffoldIfDue/runGateIfDue or writing status.json: it reads back whatever scaffold/gate
+// result is already on disk instead of running the command. When no result is on disk yet, it
+// reports the transient driver-only name (`SCAFFOLD`/`GATE`, both in D2's state enum) that a
+// bare invocation would immediately resolve by running the command — never runs it itself.
 // ---------------------------------------------------------------------------
-function deriveState() {
+function deriveState(opts) {
+  const peek = !!(opts && opts.peek)
+
   const disc = discoveryCheck()
   if (!status.marks.discoveryDone || !disc.ok) return 'DISCOVERY'
 
@@ -528,12 +635,14 @@ function deriveState() {
   if (!status.marks.decided || !decide.ok) return 'DECIDE'
 
   if (!(status.scaffold && status.scaffold.exit === 0)) {
+    if (peek) return status.scaffold ? 'SCAFFOLD_RED' : 'SCAFFOLD'
     const s = runScaffoldIfDue()
     return s.exit === 0 ? 'SKELETON' : 'SCAFFOLD_RED'
   }
 
   if (status.architect !== 'scaffold-complete') {
     if (!status.marks.skeletonLanded) return 'SKELETON'
+    if (peek) return status.zeroDayGate ? 'GATE_RED' : 'GATE'
     const g = runGateIfDue()
     return g.exit === 0 ? 'ROADMAP' : 'GATE_RED'
   }
@@ -591,7 +700,12 @@ const STEPS = {
     for (const k of openKeys) {
       const rec = status.menus[k]
       if (!rec) continue
-      if (rec.registryExit === 1) lines.push(k + ': some option(s) dropped for currency — see the menu file\'s droppedForCurrency')
+      if (rec.registryExit === 1) {
+        const labels = droppedLabelsFor(k)
+        lines.push(labels
+          ? k + ': dropped for currency — ' + labels.join(', ') + ' (see the menu file\'s droppedForCurrency)'
+          : k + ': some option(s) dropped for currency — see the menu file\'s droppedForCurrency')
+      }
       if (rec.registryExit === 3) lines.push('⚠️ unverified: ' + k + ' (registry unreachable — options kept, currency unconfirmed)')
     }
     lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark menu-written --file <menu.json>' +
@@ -704,9 +818,13 @@ function handleMark() {
 // ---- run -------------------------------------------------------------------------------------
 if (MARK) {
   handleMark()
+} else if (STATE_ONLY) {
+  // Read-only peek (F3, D1/Behavior): never runs scaffoldCommand/gateCommand, never writes
+  // status.json beyond loadStatus()'s own cold-root creation.
+  writeOut(1, deriveState({ peek: true }))
+  process.exit(0)
 } else {
   const state = deriveState()
-  if (STATE_ONLY) { writeOut(1, state); process.exit(0) }
   writeOut(1, renderFull(state))
   process.exit(0)
 }

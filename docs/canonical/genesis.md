@@ -40,3 +40,19 @@
   `verifyKeys`, and `still_current` are retired. Exit codes: 0 ok · 1 dropped · 2 malformed ·
   3 unreachable; sentinels `__REGISTRY_OK__`, `__REGISTRY_DROPPED__ n=<k>`,
   `__REGISTRY_UNREACHABLE__`. (specs/20260825/03-genesis-currency-executed.md, done 2026-08-26)
+
+## Driver (architect stage)
+
+- Since specs/20260825/04 `/spec:genesis "<idea>"` is the greenfield entry point, looping on
+  `genesis-driver.js` (`spec-paths genesis-driver`): states DISCOVERY → MENUS → DECIDE →
+  SCAFFOLD → SKELETON → GATE → ROADMAP → HANDOFF, derived from `status.json` (schemaVersion 2)
+  plus on-disk artifacts on every invocation. The driver runs the coverage-audit gate, the
+  registry check per menu, the decision-record closure check, the scaffold command, the
+  zero-day gate, and the roadmap closure check; the session holds the interview, the picks, the
+  ADRs, the skeleton, and the roadmap decomposition. Every accepted mark prints
+  `✅ checkpoint — … safe to /clear`. The former separate architect command is retired (its
+  file deleted, its name swept from every live surface); `/spec:genesis-explore` and
+  `/spec:genesis-design` follow after HANDOFF until brief 10a folds them in. Child output from `scaffoldCommand`/`gateCommand` streams straight to
+  `.claude/genesis/scaffold.log`/`gate.log` via the log fd — never through a Node pipe — and the
+  excerpt the driver prints back is bounded in **bytes** (`LOGTAIL_MAX_BYTES`), not lines.
+  (specs/20260825/04-genesis-driver.md, done 2026-08-26)

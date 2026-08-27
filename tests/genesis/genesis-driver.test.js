@@ -355,3 +355,169 @@ test('AC-20260825-04-7: roadmap-written refuses a Depends-on cycle by naming it 
   assert.match(sbHandoff.stdout, /next: \/spec:genesis-explore/, 'a project with a design catalog must hand off into design genesis before /spec:init')
   assert.doesNotMatch(sbHandoff.stdout, /next: \/spec:init\b/, 'designCatalog: "storybook" must not also print the /spec:init handoff — HANDOFF names exactly one next command')
 })
+
+// Review findings F1, F3, F6 (specs/20260825/04-genesis-driver.md review, 2026-08-26): three
+// defects caught after the spec's own AC-1..AC-7 above were already green — one by the spec
+// reviewer (F3), two by a Fable consult (F1, F6) — and already fixed in genesis-driver.js by the
+// time this file was written, so these are regression pins on shipped fixes, not TDD-red ACs (no
+// AC-ID fabricated; per this repo's review-finding convention, named "review finding <id>").
+// F6 (highest value): the old runShell piped scaffoldCommand/gateCommand output through
+// spawnSync's default 1 MiB maxBuffer; a real scaffold (create-next-app plus an install)
+// routinely exceeds that, SIGTERM-killing the child mid-run (ENOBUFS) before a byte reached the
+// log — genuinely truncating the scaffold, not merely failing to log it — and permanently
+// bricking the project, since every re-run hit the identical wall. The fix streams the child's
+// output straight to the log file's own fd instead of a Node pipe. D16's own test design used
+// one-line fake commands, which is exactly why no prior test could see this — the fixtures below
+// are deliberately sized past 1 MiB. F1 (D4): a dropped registry option's label was never printed
+// on screen, only a pointer at the menu file. F3 (D1): --state routed through the same
+// deriveState() that executes scaffoldCommand/gateCommand, so a "read-only" peek could run a real
+// side-effecting shell command.
+
+test('review finding F6: a scaffoldCommand emitting well past spawnSync\'s 1 MiB default maxBuffer runs to completion, is captured in full by scaffold.log, and records scaffold.exit 0, instead of being SIGTERM\'d mid-run by a Node-pipe-buffered runShell', () => {
+  const dir = tmpdir('gdrv-f6-scaffold')
+  const bigScaffoldCmd = "yes x | head -c 2000000; touch DID_NOT_BRICK.txt"
+  const scaffolded = advanceThroughScaffold(dir, { scaffoldCommand: bigScaffoldCmd })
+  assert.strictEqual(scaffolded.status, 0, 'this fixture is the size of a real create-next-app-plus-install run; a nonzero driver exit here means genesis dies on the FIRST real project it touches, with a remedy (fix the command, re-run) that can never succeed because the wall is structural, not the command')
+  const markerPath = path.join(dir, 'DID_NOT_BRICK.txt')
+  assert.ok(fs.existsSync(markerPath), 'the trailing touch only runs if the child was allowed to finish — its absence means runShell\'s 1 MiB Node pipe SIGTERM\'d the child mid-stream (ENOBUFS) before its own last line ran, the exact truncation this test pins')
+  const logPath = path.join(dir, '.claude/genesis/scaffold.log')
+  assert.ok(fs.existsSync(logPath), 'scaffold.log must exist even when the command emits megabytes of output — a missing log after a >1 MiB scaffold means the fd was never wired up to capture streamed output')
+  const logSize = fs.statSync(logPath).size
+  assert.ok(logSize >= 2000000, 'scaffold.log is only ' + logSize + ' bytes, short of the 2,000,000 the command emitted — a log truncated at the old 1 MiB ceiling is the diagnostic a bricked genesis project would be left with, silently useless past the actual failure point')
+  const st = statusOf(dir)
+  assert.strictEqual(st.scaffold.exit, 0, 'status.json must record the real exit of a scaffold that ran to completion, not the SIGTERM the old 1 MiB-buffered runShell substituted for it')
+  assert.match(scaffolded.stdout, /SKELETON/, 'a scaffold that truly completed must advance the driver to SKELETON — stalling here after a genuinely successful run means every re-invocation hits the identical wall forever')
+})
+
+test('review finding F6 (gate leg): a gateCommand emitting well past 1 MiB and then exiting 1 still records zeroDayGate.exit 1 and prints GATE_RED with its own log, instead of dying with no recorded status', () => {
+  const dir = tmpdir('gdrv-f6-gate')
+  // Newline-delimited filler (not a single 2,000,000-byte line): GATE_RED's step text embeds
+  // gate.log's own tail via logTail() (last 20 lines), which this test's OUTER runNode call
+  // captures through its own pipe — a single giant line here would blow up THAT unrelated
+  // buffer and fail for a reason that has nothing to do with the runShell fix under test.
+  const bigRedGateCmd = 'yes x | head -c 2000000; exit 1'
+  advanceThroughScaffold(dir, { gateCommand: bigRedGateCmd })
+  const landed = mark(dir, 'skeleton-landed')
+  assert.strictEqual(landed.status, 0, 'skeleton-landed is a valid mark regardless of the gate\'s own outcome — a refused mark here means the >1 MiB gate output killed the child via the same Node-pipe ceiling before it could even reach its own exit 1: ' + landed.stderr)
+  const st = statusOf(dir)
+  assert.strictEqual(st.zeroDayGate.exit, 1, 'a red zero-day gate that emitted megabytes of output must still report its true exit code — recording anything else means the driver can no longer tell a genuine gate failure from a pipe-killed child')
+  assert.match(landed.stdout, /GATE_RED/, 'a failing gate this size must still reach GATE_RED — the one state whose remedy tells the session to fix scaffold-level issues and re-run')
+  const gateLogPath = path.join(dir, '.claude/genesis/gate.log')
+  assert.ok(fs.existsSync(gateLogPath), 'gate.log must exist so a red gate this size can be diagnosed from its own log instead of leaving the session with no record of what the command printed')
+  const gateLogSize = fs.statSync(gateLogPath).size
+  assert.ok(gateLogSize >= 2000000, 'gate.log is only ' + gateLogSize + ' bytes — a log truncated below the command\'s real output throws away the very evidence a red gate needs a session to read in order to fix it')
+})
+
+test('review finding F1 (D4): once registry-check.js drops an option for currency, the MENUS step re-print names the dropped option\'s label, and degrades to the generic wording without throwing when the menu file is unparseable', () => {
+  // Hermetic per this file's own established pattern (see the header comment above AC-3): seed
+  // status.json's recorded menus[key] state directly instead of driving a fabricated npm package
+  // name through the live registry-check.js network path, so this suite stays network-free.
+  const dir = tmpdir('gdrv-f1-labels')
+  advanceToMenus(dir)
+  const droppedLabel = 'zzz-fabricated-nonexistent-npm-package-9182'
+  writeJSON(path.join(dir, '.claude/genesis/interview-research', DIM + '.json'), {
+    dimension: DIM,
+    options: [{ label: 'AWS', packages: [] }],
+    droppedForCurrency: [{ label: droppedLabel, packages: [droppedLabel] }],
+  })
+  const seeded = statusOf(dir)
+  seeded.menus[DIM] = { registryExit: 1, at: new Date().toISOString() }
+  writeJSON(path.join(dir, '.claude/genesis/status.json'), seeded)
+
+  const step = bare(dir)
+  assert.match(step.stdout, new RegExp(droppedLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), 'a session reading only "see the menu file\'s droppedForCurrency" without the label in front of it has to open a second file mid-interview just to learn which option was dropped — the step text itself must name the label')
+
+  // Same dimension, corrupted menu file: the defensive read must degrade, never throw.
+  fs.writeFileSync(path.join(dir, '.claude/genesis/interview-research', DIM + '.json'), 'not json{{{')
+  const degraded = bare(dir)
+  assert.strictEqual(degraded.status, 0, 'a corrupt menu file must never crash the driver mid-step — a session that hit this would be left with no step text at all instead of a degraded-but-readable one: ' + degraded.stderr)
+  assert.match(degraded.stdout, /some option\(s\) dropped for currency/, 'reading an unparseable menu file must fall back to the generic wording so the session still learns something was dropped, even without a label to show')
+})
+
+test('review finding F3 (D1): --state at the post-decided state prints SCAFFOLD without executing scaffoldCommand, writing scaffold.log, or touching status.json, and a later bare invocation still runs the scaffold correctly', () => {
+  const dir = tmpdir('gdrv-f3-peek')
+  advanceToDecide(dir)
+  writeValidDecideArtifacts(dir, { scaffoldCommand: 'touch SIDE_EFFECT_MARKER.txt' })
+  const decided = mark(dir, 'decided')
+  assert.strictEqual(decided.status, 0, 'test setup requires decided to be accepted: ' + decided.stderr)
+
+  const statusPath = path.join(dir, '.claude/genesis/status.json')
+  const mtimeBefore = fs.statSync(statusPath).mtimeMs
+
+  const peek = state(dir)
+  assert.strictEqual(peek.stdout, 'SCAFFOLD\n', '--state is documented as a read-only peek that prints the state name and a newline only — anything else here means it executed driver logic instead of just reporting on it')
+
+  const markerPath = path.join(dir, 'SIDE_EFFECT_MARKER.txt')
+  assert.strictEqual(fs.existsSync(markerPath), false, '--state must never execute scaffoldCommand — a marker file appearing here is the exact incident this test pins: a documented "read-only" peek that ran a real side-effecting shell command')
+  assert.strictEqual(fs.existsSync(path.join(dir, '.claude/genesis/scaffold.log')), false, '--state must not write scaffold.log — its presence means the peek ran the scaffold step instead of only deriving state from what is already on disk')
+  const statusAfterPeek = statusOf(dir)
+  assert.strictEqual(statusAfterPeek.scaffold, null, '--state must leave status.json\'s scaffold field unset — a recorded scaffold result means the peek executed and persisted a real run')
+  const mtimeAfterPeek = fs.statSync(statusPath).mtimeMs
+  assert.strictEqual(mtimeAfterPeek, mtimeBefore, 'status.json must not be rewritten by a peek — any mtime change means --state took the same save-status side effect a bare invocation takes, defeating its purpose as a peek safe to call at any time')
+
+  const scaffoldRun = bare(dir)
+  assert.ok(fs.existsSync(markerPath), 'a subsequent bare invocation must still actually run the scaffold — the earlier peek must not have consumed or short-circuited the real work')
+  assert.match(scaffoldRun.stdout, /SKELETON/, 'once the scaffold genuinely runs, the bare invocation must advance to SKELETON exactly as it would have without the earlier peek')
+})
+
+// logTail excerpt-size regression (found 2026-08-26 in the fix-delta pass of the review of
+// specs/20260825/04-genesis-driver.md, already fixed in genesis-driver.js by the time this file
+// was written — no AC-ID and no F-id: this defect was found against the F6 fix itself, one
+// review pass later, so per this repo's review-finding convention these are named by the
+// invariant, with no id token to fabricate). F6 (above) stopped runShell from piping
+// scaffoldCommand/gateCommand through spawnSync's 1 MiB maxBuffer by streaming straight to the
+// log fd, correctly letting a log grow past 1 MiB. But logTail — which quotes the log back
+// inside the GATE_RED/SCAFFOLD_RED step text embedded in the driver's OWN stdout — bounded its
+// excerpt by LINE COUNT ONLY (`text.split('\n').slice(-n)`). A gate command emitting one
+// unbroken multi-megabyte line with no newline (realistic `\r`-driven progress output) makes
+// "the last 20 lines" the WHOLE file, so the driver's own stdout inherits the size the F6 fix
+// existed to remove — any caller capturing that stdout with a default-sized buffer (this file's
+// own `mark()`/`bare()` helpers included) dies with the identical ENOBUFS-class failure one layer
+// up. The fix reads only a trailing LOGTAIL_MAX_BYTES (4096) window off disk before ever slicing
+// lines, and attaches a "truncated" marker naming the full log's path whenever either the byte
+// window or the line slice dropped content — proven below by a third test asserting the
+// marker's ABSENCE on a log that fits inside both bounds, since a marker that never disappears
+// means nothing when it does appear.
+
+test('a gateCommand emitting one unbroken multi-megabyte line with no newline still keeps the driver\'s own stdout small and the log on disk complete, instead of embedding the whole file into GATE_RED\'s excerpt and overflowing a caller\'s default maxBuffer', () => {
+  const dir = tmpdir('gdrv-logtail-oneline')
+  // head/tr, not node -e "process.stdout.write(...)" — the latter self-truncates at the 64 KiB
+  // async pipe-flush ceiling this file's writeOut() comment already documents, before the bytes
+  // ever reach the driver; coreutils piped through bash -c has no such ceiling.
+  const bigLineGateCmd = "head -c 3000000 /dev/zero | tr '\\0' 'x'; exit 1"
+  advanceThroughScaffold(dir, { gateCommand: bigLineGateCmd })
+  const landed = mark(dir, 'skeleton-landed')
+  assert.strictEqual(landed.error, undefined, 'the outer runNode call must not itself fail to spawn or read its child — an error here means the driver\'s own stdout already overflowed this test\'s default maxBuffer, the exact wall one layer up that the F6 fix was supposed to remove')
+  assert.strictEqual(landed.status, 0, 'skeleton-landed is a valid mark regardless of the gate\'s own outcome; a null status here means the OUTER runNode call was ENOBUFS-killed reading the driver\'s stdout, not that the mark was refused: ' + landed.stderr)
+  assert.ok(landed.stdout.length < 50 * 1024, 'the driver\'s own stdout is ' + landed.stdout.length + ' bytes — a bound-by-line-count logTail turns "the last 20 lines" into the whole 3,000,000-byte file when the log has no newlines, so any caller capturing this stdout through a default-sized pipe buffer dies the same ENOBUFS death the F6 fix existed to prevent, just one layer up')
+  const gateLogPath = path.join(dir, '.claude/genesis/gate.log')
+  const gateLogSize = fs.statSync(gateLogPath).size
+  assert.ok(gateLogSize >= 3000000, 'gate.log is only ' + gateLogSize + ' bytes, short of the 3,000,000 the command emitted — the streamed log itself must stay complete even after logTail\'s excerpt is bounded, or the byte-window fix silently regressed the F6 guarantee it sits beside')
+  assert.strictEqual(statusOf(dir).zeroDayGate.exit, 1, 'the true failing exit code must still be recorded even when the gate\'s output is one enormous unbroken line')
+  assert.match(landed.stdout, /GATE_RED/, 'a failing gate this size must still reach GATE_RED — the state a session needs the printed step for')
+  assert.match(landed.stdout, /truncated, full log at/, 'the excerpt for a log this large must carry the truncation marker — its absence would tell the reader a 3,000,000-byte single-line log is the log\'s complete content')
+})
+
+test('a gate log spanning many short lines past the byte window still carries the truncated marker naming the full log\'s path, because the byte-window slice runs before the line slice rather than after it', () => {
+  const dir = tmpdir('gdrv-logtail-manylines')
+  // 4000 lines of 33 bytes each (32 chars + \n) = 132,000 bytes — comfortably past the 4096-byte
+  // window and the 20-line tail, so both truncation conditions this fix ORs together are live.
+  const manyLinesGateCmd = "yes 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' | head -n 4000; exit 1"
+  advanceThroughScaffold(dir, { gateCommand: manyLinesGateCmd })
+  const landed = mark(dir, 'skeleton-landed')
+  assert.strictEqual(landed.status, 0, 'skeleton-landed must be accepted regardless of the gate\'s own outcome: ' + landed.stderr)
+  const gateLogPath = path.join(dir, '.claude/genesis/gate.log')
+  assert.strictEqual(fs.statSync(gateLogPath).size, 132000, 'the fixture must land exactly 132,000 bytes across 4,000 lines, or the byte-window-vs-line-bound arithmetic this test pins is not actually being exercised')
+  assert.match(landed.stdout, /truncated, full log at [^\n]*gate\.log/, 'prepending the marker and THEN slicing the last N lines lets the line slice discard the marker itself on any window holding more than N lines — the exact defect this test pins, where the reader sees a plausible-looking excerpt with no sign it is partial or that a full log exists')
+  assert.ok(landed.stdout.length < 50 * 1024, 'the driver\'s own stdout is ' + landed.stdout.length + ' bytes — the excerpt must stay bounded to the byte window even for a many-line log, not grow with the full 132,000-byte file')
+})
+
+test('a gate log that fits inside both the byte window and the line bound renders in full with no truncation marker, so the marker means something when it does appear', () => {
+  const dir = tmpdir('gdrv-logtail-short')
+  const shortGateCmd = 'echo short-gate-output-line; exit 1'
+  advanceThroughScaffold(dir, { gateCommand: shortGateCmd })
+  const landed = mark(dir, 'skeleton-landed')
+  assert.strictEqual(landed.status, 0, 'skeleton-landed must be accepted regardless of the gate\'s own outcome: ' + landed.stderr)
+  assert.match(landed.stdout, /short-gate-output-line/, 'a log that fits inside both bounds must still render its actual content — a step text with no content here means the driver is hiding a log that had room to show')
+  assert.doesNotMatch(landed.stdout, /truncated, full log at/, 'a marker on a complete excerpt would train the reader to ignore it — the marker must appear only when content was actually dropped, which a short single-line log never triggers')
+})

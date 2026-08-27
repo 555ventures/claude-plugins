@@ -62,7 +62,10 @@ asked.
    `--spec` so the harness derives a build-shaped name instead. An in-repo `--dir` that resolves
    outside `.claude/worktrees/` keeps its own exit-3 refusal unchanged.
 2. **Setup gate (D4):** read the host's `setupCommand` from `.claude/spec.config.json` and run
-   it inside `{dir}`. Non-zero exit → run `node "$(spec-paths replay)" --record --spec {spec}
+   it inside `{dir}` **without relocating the session** — a subshell (`(cd {dir} && <setupCommand>)`)
+   or the tool's own directory flag, never a bare `cd`, since a session shell that stays inside
+   `{dir}` silently redirects every later cwd-defaulted harness step into the tree teardown is
+   about to delete (Rules § The session never leaves the main root). Non-zero exit → run `node "$(spec-paths replay)" --record --spec {spec}
    --review-run-id {reviewRunId} --legs none --outcome setup-failed`, then
    `node "$(spec-paths replay)" --teardown --dir {dir}`, render Phase 5's `setup-failed` report,
    and STOP — no class is picked, no patch is authored, nothing was measured, and the harness
@@ -247,6 +250,14 @@ Next: {spec-status --next, verbatim}
   `--setup` self-provisions when the host lacks it, and the `--setup`/`--teardown` marker guard
   in its private git dir — never by living outside the repo, which is now only the manual
   fallback's isolation story.
+- **The session never leaves the main root.** Every step of this command runs with the session's
+  working directory in the repo whose ledger the run belongs to; `{dir}` is reached only by
+  naming it (`--dir {dir}`, `git -C {dir}`, a subshell), never by relocating the shell into it.
+  `replay.js` takes `--root <path>` for a caller that cannot honour this — the ledger-reading and
+  ledger-appending modes (`--due`, `--select`, `--setup`, `--record`, `--stats`, `--teardown`)
+  otherwise resolve the repo from the current directory, so a relocated shell writes the
+  measurement row into the scratch worktree and loses it at teardown (observed 2026-08-27,
+  review of specs/20260827/01).
 - **Mutation authoring is model work; scoring and recording are not.** The worker picks the site
   and writes the patch; every other step is a deterministic `replay.js` mode — the orchestrating
   session never hand-derives due/select/score/record itself.

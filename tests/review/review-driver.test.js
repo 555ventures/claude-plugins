@@ -1458,3 +1458,31 @@ test('gotchas ratchet: the CLOSE step names the over-cap count and the shrink re
   assert.match(r.stdout, /Gotchas cap: 20\/15 at verdict — OVER CAP/,
     'the printed CLOSE step must carry the number the close will be judged against — a session that learns it only from the refusal folds first and evicts second: ' + r.stdout)
 })
+
+// 2026-08-27 (direct fix, no spec — the CWD-relocation trap): the driver's own replay.js calls were
+// never vulnerable (they pass cwd: repoRoot explicitly), but the step it PRINTS hands the executing
+// session every other --select value and left the root to be inferred from wherever the shell
+// happened to stand. During the review of specs/20260827/01 that shell was inside the replay's own
+// scratch worktree, so the measurement row was appended into a tree --teardown deleted seconds
+// later. replay.js now takes --root; this pin makes the driver name the value so the session
+// executing replay.md's phases has it in hand rather than reconstructing it.
+test('replay-root-4: the REPLAY execution step inlines the repo root alongside the other --select values, so the session executing replay.md never has to infer the ledger\'s home from its own working directory', () => {
+  const host = makeReplayHost('rvdrvreplayroot', { acId: 'AC-20260820-99-9', seedRows: fiveSeedReviews })
+  driveToClose(host, 'rvdrv-replay-root-ret')
+  commitClose(host)
+  const r = run(host.root, host.spec, '--mark', 'closed')
+  assert.strictEqual(r.status, 0,
+    'a due CLEAN close must still be accepted: ' + r.stdout + r.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REPLAY',
+    'the run must park at REPLAY for this pin to be about the execution step at all: ' + r.stdout)
+  assert.match(r.stdout, /root:\s+\S/,
+    'the step must carry a root: value beside spec/reviewRunId/commit/parent/diffBase — every other ' +
+    'selection value is inlined precisely so the session never re-derives, and the root is the one whose ' +
+    'silent re-derivation cost a measurement on 2026-08-27: ' + r.stdout)
+  assert.ok(r.stdout.includes(fs.realpathSync(host.root)) || r.stdout.includes(host.root),
+    'the printed root must be the actual repo root the driver resolved, not a placeholder: ' +
+    JSON.stringify({ root: host.root, stdout: r.stdout }))
+  assert.match(r.stdout, /--root/,
+    'the step must name the flag the value feeds — a bare path with no flag beside it is a fact, not an ' +
+    'instruction, and the incident happened because the instruction was missing: ' + r.stdout)
+})

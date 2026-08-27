@@ -10,6 +10,7 @@
 //                     [--class <id>] [--patch <file>] [--workflow <file>] [--tokens N]
 //         | --stats
 //         | --teardown --dir <path>
+//         [--root <path>]  # repo root for every ledger/git read+append; defaults to cwd
 //
 // Incident (2026-08-18, specs/20260819/01-review-evidence-retention.md's Fable retainer pass):
 // a known defect was hand-dropped into a just-CLEANed spec's tree and the standard reviewer was
@@ -118,8 +119,11 @@
 // (an `unresolved` row is retained evidence for a human, never scored).
 //
 // Root resolution: every ledger/git-reading mode (--select/--setup/--teardown use git; --due/
-// --record/--stats read the ledger) resolves against `process.cwd()` — there is no --root flag,
-// matching spec-status.js's own cwd-default shape. --apply and --score take their target as
+// --record/--stats read the ledger) resolves against `--root <path>`, defaulting to
+// `process.cwd()` when the flag is absent (spec-status.js's cwd-default shape). Pass --root
+// whenever the caller's shell may not be standing in the repo whose ledger is being read or
+// appended — notably any step taken while a scratch worktree is live, since an inherited CWD
+// inside that worktree would otherwise write the row into a tree teardown is about to delete. --apply and --score take their target as
 // explicit flags (--dir/--patch/--patch-out, --workflow/--patch) and never consult cwd at all.
 //
 // Exit codes: 0 = mode succeeded (--due: due; --select: printed a selection; --score: printed a
@@ -176,7 +180,7 @@ const { readLedgerRows } = require('./lib/observation')
 const { fmMap } = require('./lib/frontmatter')
 
 function usage() {
-  console.error('usage: replay.js --due | --select | --setup --commit <sha> (--spec <path>|--dir <path>) | ' +
+  console.error('usage: replay.js [--root <path>] --due | --select | --setup --commit <sha> (--spec <path>|--dir <path>) | ' +
     '--apply --dir <path> --patch <file> --patch-out <file> --class <id> [--subject <text>] | ' +
     '--score --workflow <file> --patch <file> | ' +
     '--record --spec <path> --review-run-id <id> --legs green|red:<leg>|baseline-red:<leg>[,<leg>]|none ' +
@@ -192,6 +196,7 @@ const MODE_FLAGS = {
 let mode = null
 let commit = null, dir = null, patch = null, cls = null, workflowPath = null, patchOut = null
 let specArg = null, reviewRunId = null, legs = null, outcome = null, tokensArg = null, subjectArg = null
+let rootArg = null
 
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
@@ -212,11 +217,25 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--outcome') outcome = argv[++i]
   else if (a === '--tokens') tokensArg = argv[++i]
   else if (a === '--subject') subjectArg = argv[++i]
+  else if (a === '--root') rootArg = argv[++i]
   else { usage(); process.exit(2) }
 }
 if (!mode) { usage(); process.exit(2) }
 
-const root = process.cwd()
+// ---- Root resolution: named, never inferred. The cwd default is a convenience for an operator -----
+// ---- standing in the repo; every step run from a scratch worktree passes --root explicitly, so ----
+// ---- a relocated shell can no longer silently redirect a ledger append into a directory that is ---
+// ---- about to be torn down (2026-08-27, review of specs/20260827/01: --record ran with an -------
+// ---- inherited CWD inside the replay's own scratch worktree and the row died with it). ------------
+const root = (() => {
+  if (rootArg === null) return process.cwd()
+  const resolved = path.resolve(rootArg)
+  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
+    console.error('replay.js: --root ' + rootArg + ' is not an existing directory')
+    process.exit(2)
+  }
+  return resolved
+})()
 
 // ---- D5: a "measurement" replay row is one whose outcome actually answers caught/missed/scores --
 // ---- the reviewer against a real leg (leg-caught) — unresolved/setup-failed never reset the -----

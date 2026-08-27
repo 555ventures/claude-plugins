@@ -817,6 +817,8 @@ function replayStepBody(t) {
     `  diffBase:    ${t.diffBase}\n` +
     `  baselineRed: ${t.baselineRed}\n` +
     `  baselineLegs:${t.baselineLegs}\n` +
+    `  root:        ${repoRoot}   (pass as replay.js --root — the harness otherwise resolves the ` +
+    `ledger from the session's cwd, which the scratch worktree can capture)\n` +
     `Phase 4 records the outcome via replay.js --record --review-run-id ${t.reviewRunId}. ANY ` +
     `outcome concludes this review; a non-measurement outcome (unresolved/setup-failed) leaves ` +
     `the harness due, so the NEXT review retries rather than this one.\n` +

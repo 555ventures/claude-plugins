@@ -1999,3 +1999,101 @@ test('AC-20260823-09-9: replay.md\'s Phase 1 step 7 re-keys red-leg attribution 
     'means the reviewer never ran, so recording green or baseline-red here would fabricate reviewer evidence ' +
     'that does not exist: ' + JSON.stringify(step7Match[0]))
 })
+
+// ---- 2026-08-27 incident (direct fix, no spec): the CWD-relocation trap. ------------------------
+// During the review of specs/20260827/01 the session followed Phase 1 step 2's "run it inside
+// {dir}" with a bare `cd`, and the Bash tool's working directory persisted. Every later
+// cwd-defaulting harness mode therefore resolved the repo to the scratch worktree: --record
+// printed a runId and appended the measurement row into a tree --teardown deleted seconds later,
+// leaving the replay silently unrecorded and permanently overdue. It was recovered only because
+// the patch and the reviewer return happened to live outside the copy, and it was NOTICED only
+// because spec-review-driver.js's `replay-recorded` mark already verifies the row landed (that
+// half of the fix was in place — this is the other half). Second working-directory relocation
+// trap on record in this pipeline (the first is the worktree merge-back CWD trap), so per core §
+// Incident Policy this is an in-place fix with a behavioural pin, not a standing guard.
+//
+// The two pins below are the fix's two halves: replay.js resolves its root from a NAMED --root
+// rather than inferring one from wherever the shell stands, and replay.md's setup gate stops
+// telling the session to relocate in the first place. Both are discriminating against the
+// pre-image: the old arg loop falls through to usage()/exit 2 on an unrecognized --root, and the
+// old step-2 text contains none of the asserted strings.
+
+test('replay-root-1: --record --root <repo> appends the measurement row into <repo>/.claude/spec-runs.jsonl even when the process cwd is an unrelated directory, so a session standing inside the scratch worktree can no longer redirect the row into a tree teardown is about to delete', () => {
+  const repo = fs.realpathSync(tmpdir('replay-root-repo'))
+  const elsewhere = fs.realpathSync(tmpdir('replay-root-elsewhere'))
+  const patchFile = path.join(elsewhere, 'mutation.patch')
+  fs.writeFileSync(patchFile, '--- a/lib/x.js\n+++ b/lib/x.js\n@@ -1 +1 @@\n-a\n+B\n')
+  const workflowFile = path.join(elsewhere, 'workflow.json')
+  fs.writeFileSync(workflowFile, JSON.stringify({ verdict: 'CLEAN', survivors: [] }))
+
+  const r = runNode(SCRIPT, ['--record', '--root', repo,
+    '--spec', 'specs/x.md', '--review-run-id', 'rv_cccccccccccc',
+    '--class', 'silent-fallback', '--legs', 'green', '--outcome', 'caught',
+    '--patch', patchFile, '--workflow', workflowFile,
+  ], { cwd: elsewhere })
+  assert.strictEqual(r.status, 0,
+    '--record --root must succeed against a repo the shell is not standing in — the whole point of the flag ' +
+    'is that the caller names the ledger\'s home instead of the harness inferring it: ' +
+    JSON.stringify({ status: r.status, stdout: r.stdout, stderr: r.stderr }))
+
+  const ledger = path.join(repo, '.claude/spec-runs.jsonl')
+  assert.ok(fs.existsSync(ledger),
+    'the row must land under --root, not under cwd — landing under cwd is exactly the 2026-08-27 incident, ' +
+    'where the ledger followed the session into the scratch worktree and died at teardown: ' + repo)
+  const rows = fs.readFileSync(ledger, 'utf8').trim().split('\n').map(JSON.parse)
+  assert.strictEqual(rows.length, 1, 'exactly one row: ' + JSON.stringify(rows))
+  assert.strictEqual(rows[0].stage, 'replay', 'the row must be the replay stage row: ' + JSON.stringify(rows[0]))
+  assert.strictEqual(rows[0].outcome, 'caught', 'the recorded outcome must survive the relocation: ' + JSON.stringify(rows[0]))
+
+  assert.ok(!fs.existsSync(path.join(elsewhere, '.claude')),
+    'NOTHING may be written under the process cwd when --root names a different repo — a row written to both ' +
+    'places would double-count in --stats and still lose the copy inside a torn-down worktree: ' + elsewhere)
+
+  // The retained evidence artifact follows the row, not the shell — losing it was half the 2026-08-27
+  // damage (the score had to be re-derived from files that happened to live outside the copy).
+  assert.ok(fs.existsSync(path.join(repo, '.claude/spec-runs')),
+    'the retained per-run artifact directory must sit under --root alongside the ledger it indexes: ' + repo)
+})
+
+test('replay-root-2: --root naming a path that is not an existing directory is refused with exit 2 before anything is appended, so a typo\'d root can never silently create a ledger in a stray location', () => {
+  const repo = fs.realpathSync(tmpdir('replay-root-badroot'))
+  const missing = path.join(repo, 'no', 'such', 'dir')
+  const r = runNode(SCRIPT, ['--stats', '--root', missing], { cwd: repo })
+  assert.strictEqual(r.status, 2,
+    'a --root that does not exist is a usage error, not a directory to create — silently mkdir-ing it would ' +
+    'reproduce the incident with an extra step: ' + JSON.stringify({ status: r.status, stderr: r.stderr }))
+  assert.match(r.stderr, /--root/,
+    'the refusal must name the offending flag so the caller knows which path to correct: ' + r.stderr)
+  assert.ok(!fs.existsSync(missing),
+    'a refused --root must not be brought into existence: ' + missing)
+})
+
+test('replay-root-3: replay.md\'s setup gate instructs the session to run setupCommand inside {dir} WITHOUT relocating its own shell, and Rules carries the standing root invariant naming --root as the escape hatch — the doctrine half of the 2026-08-27 fix', () => {
+  const src = read('spec/commands/replay.md')
+
+  const stepMatch = src.match(/2\. \*\*Setup gate \(D4\):\*\*[\s\S]*?(?=\n3\. )/)
+  assert.ok(stepMatch, 'Phase 1 step 2 (the setup gate) must still be locatable — the fix lives inside it')
+  const step = stepMatch[0]
+  assert.match(step, /without relocating the session/i,
+    'the setup gate must say in so many words that the session is not relocated — "run it inside {dir}" alone ' +
+    'is what a session reasonably executes as a bare `cd`, and every other step in this file names its target ' +
+    'explicitly instead (git -C {dir}, --dir {dir}): ' + JSON.stringify(step))
+  assert.match(step, /subshell/i,
+    'the gate must name the concrete non-relocating mechanism, not just forbid the outcome — an instruction ' +
+    'that says what not to do without saying what to do instead gets improvised past: ' + JSON.stringify(step))
+  assert.match(step, /\bcd\b/,
+    'the gate must name the bare `cd` it is ruling out — the incident was a session doing exactly that in ' +
+    'good faith against the old wording: ' + JSON.stringify(step))
+
+  const ruleMatch = src.match(/- \*\*The session never leaves the main root\.\*\*[\s\S]*?(?=\n- )/)
+  assert.ok(ruleMatch,
+    'Rules must carry the standing invariant as its own bullet — folded into step 2 alone it binds one step, ' +
+    'while the trap applies to every cwd-defaulting harness mode in every phase')
+  const rule = ruleMatch[0]
+  assert.match(rule, /--root/,
+    'the invariant must name --root as the escape hatch for a caller that cannot honour it — an invariant with ' +
+    'no stated remedy is advice: ' + JSON.stringify(rule))
+  assert.match(rule, /teardown/i,
+    'the invariant must state the consequence (the row is lost at teardown), not just the rule — the grounding ' +
+    'is what keeps it from being dropped at the next edit: ' + JSON.stringify(rule))
+})

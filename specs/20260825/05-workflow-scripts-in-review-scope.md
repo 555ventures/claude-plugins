@@ -1,6 +1,6 @@
 ---
 date: 2026-08-25
-status: implementing
+status: done
 diff_base: 8ac188c818e079a3ec82318e1e3d879409d5d225
 tier: standard
 area: review
@@ -295,6 +295,17 @@ prose that makes no claim about this repo's entry: `pipelineOwnedPaths` in
 `likely` hits on `.claude/spec.config.json` (`red-fixture-coverage`, `config-read`,
 `host-config-api`, `review-legs` tests) contain no `pipelineOwned`/`workflows` reference
 (grep-verified) and owe no waive line per § Gotchas (measured 3% precision, 2026-08-24).
+
+**Deviation folded at review close (2026-08-27, one-off).** D7's literal version target
+`7.37.2` was stale at build time — the manifest was already at `7.39.1` (concurrent sessions
+landed 7.38.x/7.39.x after the spec was hardened). Per orchestrator ruling and pipeline rules
+§ Gotchas ("a spec Decision naming a literal version-bump target can be stale by build time"),
+the build bumped to the next free version `7.39.2`, changing only the changelog paragraph's
+leading version token from `7.37.2` to `7.39.2` and keeping every other word verbatim
+(including the correct, unrenumbered reference to "7.37.1"). Changelog window is `7.39.2` +
+`7.39.1` + `7.39.0` (last-3 form); `7.38.1` rolled off instead of D7's stale `7.36.0`. Folded
+as a one-off: the recurring class already carries a `[host]` Gotchas entry, so no new prose
+was added there.
 
 ## Canonical Delta
 

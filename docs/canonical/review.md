@@ -4,6 +4,14 @@
   `scope-reconcile.js` reconciles it against the File Plan; out-of-plan files are hard
   findings and reviewed content; `pipelineOwnedPaths` (config, additive over `specs/**` +
   the run ledger) is the only sanctioned exclusion. (specs/20260805/01-review-scope-reconciliation.md)
+- `pipelineOwnedPaths` is for generated surfaces only. This repo's own entry for
+  `spec/workflows/wf-*.js` outlived its generator (`build-workflows.js`, deleted in `61e2e5a`
+  2026-08-17) and hid an unplanned edit to a frozen workflow script from scope-reconcile — and
+  pruned the file from collision-closure's literals leg — through a CLEAN review; it is retired.
+  A hand-authored file, frozen or not, is never pipeline-owned: the Frozen-scripts rule is
+  enforced by scope-reconcile's out-of-plan finding, and a spec that edits a workflow script
+  gives it a File Plan row. Three tests exercise this repo's real config through the real
+  entrypoints so a reintroduced entry goes red. (specs/20260825/05-workflow-scripts-in-review-scope.md)
 - A rename's new path is in-plan only when its old path was planned (or pipeline-owned);
   an unplanned file's rename is an ordinary out-of-plan hard finding, still reported in
   `renamed` for visibility. (same spec, review fix 2026-08-06, AC-20260805-01-9)

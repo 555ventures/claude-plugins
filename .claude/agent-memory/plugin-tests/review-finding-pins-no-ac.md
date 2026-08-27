@@ -3,7 +3,7 @@ name: review-finding-pins-no-ac
 description: Pinning already-shipped review findings (no AC-ID) as regression tests — naming convention, and the two mechanical traps that make such pins vacuous
 metadata:
   type: feedback
-  reviewed: 2026-08-24
+  reviewed: 2026-08-27
 ---
 
 When a dispatch asks for regression pins on defects found and fixed during a spec's `/spec:review`

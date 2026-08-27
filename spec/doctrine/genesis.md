@@ -108,6 +108,57 @@ headcount, ownership, ops staffing are never asked: Claude is always the impleme
 (the real-world #1 stack driver) collapses to a silent default — favor boring, typed, testable
 stacks Claude implements reliably — applied as a Phase-2 tiebreaker, not a question.
 
+## Genesis: Tournament of Scaffolds
+
+Between `MENUS` and `DECIDE`, **tournament archetypes** (`web-app`, `realtime-trading`,
+`backend-api`, `mobile-app`, `desktop-app`) race real finalist stacks instead of deciding on
+argument alone: `FINALISTS` → `RACE` (driver-only) → `PROBE` → `PICK`. Every other archetype
+derives `MENUS → DECIDE` unchanged and writes no `.claude/genesis/tournament/`; a skipped race
+(`--mark finalists-skipped`) records `tournament.skipped` and advances the same way.
+
+**FINALISTS.** The session composes 2–3 finalist stack combinations from the menus (a
+finalist is a combination the session composes, never a single option); at least one must
+equal the brief's current `## Picks` on every key it names (the incumbent), so the race stays
+consistent with the pick already in view. The step is a go/no-go line, printed before any
+spend: the archetype's probe tasks — their table lives in the driver
+(`genesis-driver.js`), never restated here, so the two can't drift apart — the two-retry cap,
+and `cost: roughly one mini-build per finalist (scaffold + gate + boot + probe slice)`, plus
+the last measured token figure once one exists.
+
+**RACE (driver-only).** For each named finalist the driver scaffolds it for real into
+`.claude/genesis/tournament/finalists/<name>/`, runs its zero-day gate, and boots it to
+readiness through `smoke.sh`'s existing boot contract, recording exit codes and the boot
+sentinel. A finalist whose scaffold fails is recorded and spent no further; a finalist with a
+recorded race is never re-raced.
+
+**PROBE.** The session builds one thin probe slice per surviving finalist with Sonnet workers,
+under a hard two-retry cap per task, and records `tournament/evidence/<name>/probe.json`
+(tokens are the harness-reported figure the session copies in, never estimated). `--mark
+probe-done` triggers the driver to re-run gate + boot for each finalist post-probe and
+assemble `tournament/benchmark.json`/`benchmark.md` (the finalists side by side: scaffold/gate
+/boot pre and post, probe pass rate, retries, tokens, screenshots) and
+`tournament/gallery.html`.
+
+**PICK.** **Executed evidence informs the user's pick; it never makes it** — two finalists
+that both pass are ranked by the coverage answers, stated, never by the numbers alone. The
+user picks by rewriting the brief's `## Picks` to the winner's labels; `--mark picked` matches
+it against exactly one finalist's picks.
+
+**Re-scaffold clean.** The probe slice is benchmark code, built under retry caps with no spec
+and no review — it must never become the foundation everything later inherits. `decided`
+re-scaffolds the winner clean into the project root (its `scaffoldCommand` run exactly as a
+non-tournament `SCAFFOLD` would) and deletes the raced copies (`tournament/finalists/`,
+`tournament/logs/`) once an ADR cites `tournament/benchmark.md` as evidence; `benchmark.json`,
+`benchmark.md`, `gallery.html`, and `evidence/` survive as the decision record's evidence
+appendix.
+
+**Artifacts.** `spec/templates/finalists.json` (the template the session composes a run's
+`finalists.json` from — 2–3 entries, each `{name, picks, scaffoldCommand, gateCommand,
+bootCommand, readyCheck}`); `tournament/evidence/<name>/probe.json` (session-written, one
+entry per expected task); `tournament/benchmark.json`/`.md` and `tournament/gallery.html`
+(driver-written). § Genesis: On-disk Handoff lists the full roster alongside the
+`tournament/` directory.
+
 ## Genesis: Decision Record (one proposer)
 
 `AskUserQuestion` **cannot run inside a workflow**, so the commands never nest it — the session
@@ -424,11 +475,12 @@ Land the test + CI skeleton — the enforcement half of the ops ADR, day zero:
 architect stage is now driver-owned: `genesis-driver.js` (resolved by `/spec:genesis`) derives
 the current state on **every invocation** from `status.json` plus the artifacts actually on
 disk — never from the enum alone; a mark whose named artifact vanished is demanded again. The
-states: `DISCOVERY` → `MENUS` → `DECIDE` → `SCAFFOLD` (driver-only) → `SKELETON` → `GATE`
-(driver-only) → `GATE_RED` | `ROADMAP` → `HANDOFF` (terminal for this stage). No `status.json`
-on disk → the driver creates it from the template and prints `DISCOVERY`; no `brief.md` on disk
-→ the DISCOVERY step names `genesis-brief.md` (`$(spec-paths templates)/genesis-brief.md`) as
-the source.
+states: `DISCOVERY` → `MENUS` → [`FINALISTS` → `RACE` (driver-only) → `PROBE` → `PICK`,
+tournament archetypes only, § Genesis: Tournament of Scaffolds] → `DECIDE` → `SCAFFOLD`
+(driver-only) → `SKELETON` → `GATE` (driver-only) → `GATE_RED` | `ROADMAP` → `HANDOFF`
+(terminal for this stage). No `status.json` on disk → the driver creates it from the template
+and prints `DISCOVERY`; no `brief.md` on disk → the DISCOVERY step names `genesis-brief.md`
+(`$(spec-paths templates)/genesis-brief.md`) as the source.
 
 **Checkpoint contract.** Every accepted `--mark` prints, as its last line, `✅ checkpoint —
 genesis state saved (<prev> → <next>); safe to /clear and re-run /spec:genesis`; every step's
@@ -519,7 +571,13 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
   as `## What I think you're building` names a screen (§ Genesis: Discovery Interview); it
   predates tokens and is never atlas-checked. Deleted at `/spec:genesis-design`'s prune step,
   alongside the non-winning explore candidate dirs — never a durable artifact.
-- **`.claude/genesis/status.json`** — the genesis state machine (§ Genesis: State Machine).
+- **`.claude/genesis/status.json`** — the genesis state machine (§ Genesis: State Machine),
+  carrying `tournament` (null for a non-tournament archetype or a skipped race).
+- **`.claude/genesis/tournament/`** (tournament archetypes only, § Genesis: Tournament of
+  Scaffolds) — `finalists/<name>/` and `logs/` (deleted once `decided`), `evidence/<name>/
+  probe.json` (session-written), `benchmark.json`/`benchmark.md`/`gallery.html`
+  (driver-written, survive `decided`). Template: `spec/templates/finalists.json`, the shape
+  the session composes a run's `finalists.json` from.
 - **`.claude/genesis/stack-descriptor.json`** — architect's output (template via `spec-paths templates`).
 - **`.claude/genesis/design-pick.json`** — explore's output: the picked candidate, grafts, and
   rejected directions with salvage notes (template via `spec-paths templates`).

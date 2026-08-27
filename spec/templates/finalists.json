@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "finalists": [
+    {
+      "name": "next-bun",
+      "picks": { "framework": "Next.js 15 (App Router)", "language-runtime": "Bun 1.x" },
+      "scaffoldCommand": "bunx create-next-app@latest . --typescript --app --yes",
+      "gateCommand": "bun run lint && bun run build",
+      "bootCommand": "bun run dev",
+      "readyCheck": "curl -sf http://127.0.0.1:3000/ >/dev/null",
+      "readyTimeout": 120
+    },
+    {
+      "name": "tanstack-node",
+      "picks": { "framework": "TanStack Start", "language-runtime": "Node 24 LTS" },
+      "scaffoldCommand": "npx create-tsrouter-app@latest . --template file-router",
+      "gateCommand": "npm run lint && npm run build",
+      "bootCommand": "npm run dev",
+      "readyCheck": "curl -sf http://127.0.0.1:3000/ >/dev/null"
+    }
+  ]
+}

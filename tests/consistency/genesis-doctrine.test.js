@@ -571,3 +571,69 @@ test('AC-20260825-04-9: spec-paths resolves genesis-driver and shared-for genesi
     'taste funnel lost the doctrine governing the target matrix and matrix-at-approval, a ' +
     'regression this spec never intended to cause')
 })
+
+// specs/20260827/01-genesis-tournament.md (2026-08-27): D10 deletes spec/commands/genesis.md's
+// own "## Per-state judgment pointers" section — the driver now prints a Doctrine: line per
+// state instead (the behavioral half of AC-20260827-01-8, pinned by step-text assertions in
+// tests/genesis/tournament.test.js) — and D11 adds spec/doctrine/genesis.md's
+// "## Genesis: Tournament of Scaffolds" section. D1 adds the `tournament` key to
+// spec/templates/status.json, and D3 introduces spec/templates/finalists.json. None of this can
+// pass yet: as of 2026-08-27 genesis.md (command) still carries the pointer section,
+// genesis.md (doctrine) has no Tournament of Scaffolds heading, status.json has no `tournament`
+// key, and spec/templates/finalists.json does not exist (TDD red).
+
+// ---------------------------------------------------------------------------
+// AC-20260827-01-8 (file-level half; the step-text half lives in tournament.test.js)
+// ---------------------------------------------------------------------------
+
+test('AC-20260827-01-8: spec/commands/genesis.md drops its per-state pointer section and stays within the 120-line pin, spec/doctrine/genesis.md gains the Tournament of Scaffolds section, status.json carries a tournament key, and finalists.json parses as exactly two finalists each carrying the four command keys', () => {
+  const cmdSrc = read('spec/commands/genesis.md')
+  assert.ok(!cmdSrc.includes('## Per-state judgment pointers'),
+    'D10: spec/commands/genesis.md must not contain "## Per-state judgment pointers" — the ' +
+    'driver now prints a Doctrine: line per state (AC-20260827-01-8\'s step-text half in ' +
+    'tournament.test.js), and a surviving pointer section means the command still carries the ' +
+    'choreography prose D10 moves out of it, leaving two binding homes instead of one')
+  const cmdLines = cmdSrc.split('\n').length
+  assert.ok(cmdLines <= 120,
+    'D10: spec/commands/genesis.md must stay at most 120 lines (AC-20260825-04-9\'s own pin) — ' +
+    'found ' + cmdLines + '. The command sat at 119 of 120 before this spec; three new states ' +
+    '(FINALISTS, PROBE, PICK) could not land as prose here at all, which is exactly why D10 ' +
+    'deletes the pointer section rather than growing it — a line count back over the pin means ' +
+    'the choreography crept back in')
+
+  const doctrineSrc = read('spec/doctrine/genesis.md')
+  assert.match(doctrineSrc, /^## Genesis: Tournament of Scaffolds$/m,
+    'D11: spec/doctrine/genesis.md must carry a "## Genesis: Tournament of Scaffolds" heading — ' +
+    'its absence means the states, the probe-task table\'s home, the evidence-informs-never-' +
+    'decides rule, the cost line, the retry cap, the re-scaffold-clean rule, and the ' +
+    'finalists.json/probe.json/benchmark.json roster this spec introduces have no doctrine home ' +
+    'at all, even though the driver (spec/scripts/genesis-driver.js) already cites the section ' +
+    'from every tournament-state step text')
+
+  const statusTemplate = JSON.parse(read('spec/templates/status.json'))
+  assert.ok(Object.prototype.hasOwnProperty.call(statusTemplate, 'tournament'),
+    'D1: spec/templates/status.json must carry the key `tournament` — its absence means a fresh ' +
+    'project\'s status.json template has no field for the driver to record tournament.finalists/' +
+    'race/post/winner/skipped into, contradicting the Contracts section\'s own status.tournament ' +
+    'shape: ' + JSON.stringify(Object.keys(statusTemplate)))
+
+  const finalistsPath = path.join(SPEC, 'templates/finalists.json')
+  assert.ok(fs.existsSync(finalistsPath),
+    'D3: spec/templates/finalists.json must exist — its absence means the template the FINALISTS ' +
+    'step points a session at (to compose finalists.json\'s shape from) was never created: ' +
+    finalistsPath)
+  const finalistsTemplate = JSON.parse(fs.readFileSync(finalistsPath, 'utf8'))
+  assert.ok(Array.isArray(finalistsTemplate.finalists) && finalistsTemplate.finalists.length === 2,
+    'D3: the shipped finalists.json template must carry exactly two finalists — the Contracts ' +
+    'section\'s own worked example is two, and a template outside the driver\'s own 2-3 range ' +
+    'would demonstrate an invalid shape to every session that copies it: ' +
+    JSON.stringify(finalistsTemplate.finalists))
+  for (const f of finalistsTemplate.finalists) {
+    for (const key of ['scaffoldCommand', 'gateCommand', 'bootCommand', 'readyCheck']) {
+      assert.ok(typeof f[key] === 'string' && f[key].trim(),
+        'D3: each finalist in the shipped finalists.json template must carry a non-empty "' +
+        key + '" — its absence in the finalist named "' + f.name + '" means the template ' +
+        'demonstrates an incomplete finalist shape to every session that copies it')
+    }
+  }
+})

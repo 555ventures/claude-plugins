@@ -33,4 +33,7 @@
 { each research-backed pick, its `sources`, its `because`/`priced`, and `fetchedAt`, once
   decided. The pick line itself is machine-read by genesis-driver.js and must be
   `- <key>: <label>`, the key matching its `## Open Dimensions` entry; provenance follows
-  on indented continuation lines }
+  on indented continuation lines. `--mark menus-done` additionally requires one
+  `- archetype: <key>` line, `<key>` one of the eight registry keys: `web-app` `mobile-app`
+  `conversational-bot` `backend-api` `realtime-trading` `cli-devtool` `data-ml`
+  `desktop-app` (genesis.md § Genesis: Archetype Registry) }

@@ -87,7 +87,17 @@ function advanceToMenus(dir) {
 }
 
 // Drives from MENUS through the registry-check menu write and the picks gate to DECIDE.
-function advanceToDecide(dir) {
+//
+// specs/20260827/01-genesis-tournament.md D2/D15 (AC-20260827-01-9): --mark menus-done now also
+// requires a `- archetype: <key>` line in ## Picks. `archetype` defaults to the non-tournament
+// key `data-ml` — D15 (orchestrator ruling, 2026-08-27) is explicit that this shared fixture
+// must NOT default to a tournament archetype (e.g. web-app): every caller of this helper
+// (AC-20260825-04-4/-5/-6/-7 and the F1/F3/F6/logtail regressions below) asserts DECIDE straight
+// after menus-done and then drives on into SCAFFOLD/GATE, and a tournament archetype would stop
+// them at FINALISTS instead, forcing those existing pins to be rewritten — exactly what the
+// worker contract forbids. Only AC-20260825-04-3 below passes a different archetype, to exercise
+// D1's tournament routing itself.
+function advanceToDecide(dir, archetype = 'data-ml') {
   advanceToMenus(dir)
   writeJSON(path.join(dir, '.claude/genesis/interview-research', DIM + '.json'), {
     dimension: DIM,
@@ -95,9 +105,9 @@ function advanceToDecide(dir) {
   })
   const written = mark(dir, 'menu-written', 'interview-research/' + DIM + '.json')
   assert.strictEqual(written.status, 0, 'test setup requires menu-written to be accepted on a zero-package menu: ' + written.stderr)
-  writeBrief(dir, { picks: ['- ' + DIM + ': AWS'] })
+  writeBrief(dir, { picks: ['- archetype: ' + archetype, '- ' + DIM + ': AWS'] })
   const done = mark(dir, 'menus-done')
-  assert.strictEqual(done.status, 0, 'test setup requires menus-done to be accepted once every open dimension has a pick: ' + done.stderr)
+  assert.strictEqual(done.status, 0, 'test setup requires menus-done to be accepted once every open dimension has a pick and a valid archetype: ' + done.stderr)
   return done
 }
 
@@ -201,7 +211,7 @@ test('AC-20260825-04-2: --mark discovery-done refuses a dark coverage key by nam
   assert.match(stepLines[stepHeadingIdx + 1], /^Read only:/, 'D9 requires every step body to open with a Read only: file list so the session never re-reads the whole .claude/genesis/ directory')
 })
 
-test('AC-20260825-04-3: MENUS lists an undiscovered open dimension, menu-written records a zero-package registry pass, and menus-done gates on the picks list', () => {
+test('AC-20260825-04-3, AC-20260827-01-9: MENUS lists an undiscovered open dimension, menu-written records a zero-package registry pass, and menus-done gates on the picks list and (D15) continues to reach DECIDE straight from MENUS for the non-tournament archetype data-ml', () => {
   const dir = tmpdir('gdrv-ac3')
   advanceToMenus(dir)
   writeBrief(dir, { dims: { [DIM]: 'open', persistence: 'constrained' } })
@@ -223,10 +233,10 @@ test('AC-20260825-04-3: MENUS lists an undiscovered open dimension, menu-written
   assert.strictEqual(tooEarly.status, 2, 'menus-done must be refused while hosting has a menu but no pick line under ## Picks — the interview is not finished')
   assert.match(tooEarly.stderr, /hosting/, 'the refusal must name the dimension missing its pick so the session knows what to ask')
 
-  writeBrief(dir, { dims: { [DIM]: 'open', persistence: 'constrained' }, picks: ['- ' + DIM + ': AWS'] })
+  writeBrief(dir, { dims: { [DIM]: 'open', persistence: 'constrained' }, picks: ['- archetype: data-ml', '- ' + DIM + ': AWS'] })
   const done = mark(dir, 'menus-done')
-  assert.strictEqual(done.status, 0, 'menus-done must be accepted once every open dimension has both a menu and a pick line: ' + done.stderr)
-  assert.strictEqual(state(dir).stdout, 'DECIDE\n', 'a completed menus-done must advance the derived state to DECIDE')
+  assert.strictEqual(done.status, 0, 'menus-done must be accepted once every open dimension has both a menu and a pick line, and a valid archetype line is present (D2): ' + done.stderr)
+  assert.strictEqual(state(dir).stdout, 'DECIDE\n', 'AC-20260827-01-9/D15: a completed menus-done for the non-tournament archetype data-ml must CONTINUE TO advance the derived state straight to DECIDE, exactly as before this spec — a state other than DECIDE here means D1\'s tournament routing wrongly caught a non-tournament archetype')
 })
 
 test('AC-20260825-04-4: --mark decided refuses each of a missing scaffoldCommand, an empty Dissents section, and an unnamed open dimension by name, and accepts once all three hold', () => {
@@ -284,7 +294,7 @@ No minority option surfaced.
   assert.doesNotMatch(next.stdout, /state: (DISCOVERY|MENUS|DECIDE)\b/, 'the invocation after a successful decided mark must have moved past DECIDE into the driver-owned scaffold/gate stages')
 })
 
-test('AC-20260825-04-5: SCAFFOLD executes scaffoldCommand exactly once, records scaffold.exit, writes scaffold.log, and reprints SKELETON', () => {
+test('AC-20260825-04-5, AC-20260827-01-9: SCAFFOLD executes scaffoldCommand exactly once, records scaffold.exit, writes scaffold.log, and reprints SKELETON, and (D15) a second bare invocation continues to not re-execute scaffoldCommand once it has already gone green', () => {
   const dir = tmpdir('gdrv-ac5')
   advanceToDecide(dir)
   writeValidDecideArtifacts(dir, { scaffoldCommand: 'touch scaffolded.txt' })
@@ -301,7 +311,7 @@ test('AC-20260825-04-5: SCAFFOLD executes scaffoldCommand exactly once, records 
 
   fs.unlinkSync(scaffoldedFile)
   bare(dir)
-  assert.strictEqual(fs.existsSync(scaffoldedFile), false, 'a second bare invocation must NOT re-execute scaffoldCommand once scaffold.exit === 0 is already recorded — idempotence is what makes /clear safe here')
+  assert.strictEqual(fs.existsSync(scaffoldedFile), false, 'AC-20260827-01-9: a second bare invocation must CONTINUE TO NOT re-execute scaffoldCommand once scaffold.exit === 0 is already recorded — idempotence is what makes /clear safe here, and the tournament\'s new FINALISTS/RACE states must not have disturbed it')
 })
 
 test('AC-20260825-04-6: skeleton-landed runs the zero-day gate, recording GATE_RED on a failing command and scaffold-complete plus a copied gateCommand on a green one', () => {

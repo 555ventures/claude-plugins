@@ -45,6 +45,33 @@
 //     it may report the transient driver-only states `SCAFFOLD`/`GATE` (D2's enum) that a bare
 //     invocation never leaves standing, instead of running the command a bare invocation would.
 //
+// specs/20260827/01-genesis-tournament.md (2026-08-27): between MENUS and DECIDE, five archetypes
+// (web-app, realtime-trading, backend-api, mobile-app, desktop-app) gain a tournament —
+// FINALISTS -> RACE (driver-only) -> PROBE -> PICK. The driver races 2-3 session-composed
+// finalist stacks for real (scaffold, zero-day gate, boot through smoke.sh's own contract) into
+// `.claude/genesis/tournament/finalists/<name>/`, hands the session one probe slice per finalist
+// to build under a two-retry cap, re-runs gate+boot once the slice lands, and assembles a
+// benchmark table + screenshot gallery. Executed evidence INFORMS the pick; `--mark picked`
+// records whichever finalist the brief's own `## Picks` already names — the driver never ranks
+// or chooses. The winner is re-scaffolded clean into the project root on `decided` (JJ ruling
+// 2026-08-27): the probe slice was built under retry caps with no spec and no review, and must
+// never become the project's foundation — `tournament/finalists/` and `tournament/logs/` are
+// deleted once the decision record cites `benchmark.md`; `benchmark.json/.md`, `gallery.html`,
+// and `evidence/` survive as the ADR's cited evidence. Every other archetype's MENUS -> DECIDE
+// path is untouched and never creates `.claude/genesis/tournament/` at all.
+//
+// What the tournament deliberately does NOT do:
+//   - render a screenshot itself, or judge a probe slice's quality — `probe.json` is
+//     session-written; the driver only validates its shape (task coverage, retry cap, tokens)
+//     and re-runs gate/boot as an executed fact.
+//   - promote the raced copy under `tournament/finalists/<name>/` into the project root — the
+//     winner's `scaffoldCommand` runs fresh in `--root` on `decided`; the raced directory is
+//     always deleted, never moved.
+//   - pick a winner from the benchmark numbers — `--mark picked` reads the winner off the
+//     brief's own `## Picks`, matched against each finalist's `picks`; a benchmark with a clear
+//     leader and a `## Picks` that names the other finalist still records THAT finalist as the
+//     winner.
+//
 // Fixing that overflow only at the child's own capture wasn't enough: `logTail`, which builds the
 // SCAFFOLD_RED/GATE_RED excerpt embedded in the driver's OWN stdout, used to bound its excerpt by
 // line count alone (`text.split('\n').slice(-n)`). A caller's buffer is measured in BYTES, not
@@ -337,6 +364,16 @@ function handleMenuWritten() {
   return { prev: 'MENUS', next: 'MENUS' }
 }
 
+// specs/20260827/01-genesis-tournament.md D2: the eight registry archetype keys — the grammar
+// `--mark menus-done` now requires a `- archetype: <key>` ## Picks line to name. D1: five of the
+// eight are TOURNAMENT archetypes; every other archetype's MENUS -> DECIDE path is unchanged.
+const REGISTRY_KEYS = [
+  'web-app', 'mobile-app', 'conversational-bot', 'backend-api',
+  'realtime-trading', 'cli-devtool', 'data-ml', 'desktop-app',
+]
+const TOURNAMENT_ARCHETYPES = ['web-app', 'realtime-trading', 'backend-api', 'mobile-app', 'desktop-app']
+function isTournamentArchetype(a) { return TOURNAMENT_ARCHETYPES.includes(a) }
+
 function handleMenusDone() {
   if (!status.marks.discoveryDone) die('discovery-done has not been marked yet — mark discovery-done first')
   const check = menusCheck()
@@ -344,9 +381,374 @@ function handleMenusDone() {
     die('open dimension(s) missing a menu file or a ## Picks line: ' + check.missing.join(', ') +
       ' — finish the interview, then re-mark menus-done')
   }
+  const archetype = picks().archetype
+  if (!archetype) {
+    die('brief.md ## Picks is missing a `- archetype: <key>` line — add one of: ' +
+      REGISTRY_KEYS.join(', ') + ', then re-mark menus-done')
+  }
+  if (!REGISTRY_KEYS.includes(archetype)) {
+    die('brief.md ## Picks names an unknown archetype "' + archetype + '" — pick one of: ' +
+      REGISTRY_KEYS.join(', ') + ', then re-mark menus-done')
+  }
   status.marks.menusDone = true
+  status.archetype = archetype
   saveStatus()
-  return { prev: 'MENUS', next: 'DECIDE' }
+  return { prev: 'MENUS', next: isTournamentArchetype(archetype) ? 'FINALISTS' : 'DECIDE' }
+}
+
+// ---------------------------------------------------------------------------
+// FINALISTS / RACE / PROBE / PICK (specs/20260827/01 D1, D3-D9): the tournament of scaffolds,
+// entered only for TOURNAMENT_ARCHETYPES. RACE is driver-only (D5): a bare invocation races every
+// not-yet-raced finalist for real — scaffold, then (if scaffold is green) gate, then boot through
+// spec/scripts/smoke.sh's own contract, unchanged (Assumption A1). PROBE is a session-judgment
+// step whose closure (`probe-done`) re-runs gate+boot per finalist and assembles the benchmark
+// (D7). PICK (`picked`) never ranks finalists itself — it matches the brief's own ## Picks
+// against each finalist's `picks` (D8).
+// ---------------------------------------------------------------------------
+const PROBE_TASKS = {
+  'web-app': ['authed-crud-screen', 'background-job', 'style-tile'],
+  'realtime-trading': ['authed-crud-screen', 'background-job', 'style-tile'],
+  'backend-api': ['authed-crud-resource', 'background-job'],
+  'mobile-app': ['authed-list-detail-screen', 'async-task', 'style-tile'],
+  'desktop-app': ['authed-list-detail-screen', 'async-task', 'style-tile'],
+}
+
+function tournamentDir() { return path.join(genesisDir, 'tournament') }
+function finalistsRootDir() { return path.join(tournamentDir(), 'finalists') }
+function finalistDir(name) { return path.join(finalistsRootDir(), name) }
+function tournamentLogsDir() { return path.join(tournamentDir(), 'logs') }
+function tournamentEvidenceDir(name) { return path.join(tournamentDir(), 'evidence', name) }
+function benchmarkJsonPath() { return path.join(tournamentDir(), 'benchmark.json') }
+function benchmarkMdPath() { return path.join(tournamentDir(), 'benchmark.md') }
+function galleryPath() { return path.join(tournamentDir(), 'gallery.html') }
+function sketchPath() { return path.join(genesisDir, 'sketch.html') }
+
+// D6: the sketch is this spec's only tile source — when it does not exist, style-tile is dropped
+// from the expected task set entirely (never listed, never required by probe-done).
+function expectedTasksFor(archetype) {
+  const all = PROBE_TASKS[archetype] || []
+  return fs.existsSync(sketchPath()) ? all.slice() : all.filter((t) => t !== 'style-tile')
+}
+
+// D4: "last measured" reads an existing tournament/benchmark.json's average tokens/finalist, or
+// falls back to "no figure yet" — a session must never see a fabricated cost figure.
+function lastMeasuredLine() {
+  try {
+    const b = JSON.parse(fs.readFileSync(benchmarkJsonPath(), 'utf8'))
+    const rows = (b.finalists || []).filter((f) => typeof f.tokens === 'number')
+    if (!rows.length) return 'last measured: no figure yet'
+    const avg = Math.round(rows.reduce((s, f) => s + f.tokens, 0) / rows.length)
+    return 'last measured: ' + avg + ' tokens/finalist'
+  } catch (e) {
+    return 'last measured: no figure yet'
+  }
+}
+
+function finalistMatchesCurrentPicks(f) {
+  const p = (f && f.picks) || {}
+  const current = picks()
+  return Object.keys(p).every((k) => current[k] === p[k])
+}
+
+function handleFinalistsSkipped() {
+  if (!status.marks.menusDone) die('menus-done has not been marked yet — mark menus-done first')
+  if (!isTournamentArchetype(status.archetype)) {
+    die('archetype "' + status.archetype + '" is not a tournament archetype (' +
+      TOURNAMENT_ARCHETYPES.join(', ') + ') — finalists-skipped only applies once a tournament archetype has reached FINALISTS')
+  }
+  status.tournament = Object.assign({}, status.tournament, { skipped: true, at: new Date().toISOString() })
+  saveStatus()
+  return { prev: 'FINALISTS', next: 'DECIDE' }
+}
+
+function handleFinalistsWritten() {
+  if (!status.marks.menusDone) die('menus-done has not been marked yet — mark menus-done first')
+  if (!isTournamentArchetype(status.archetype)) {
+    die('archetype "' + status.archetype + '" is not a tournament archetype (' +
+      TOURNAMENT_ARCHETYPES.join(', ') + ') — finalists-written only applies once a tournament archetype has reached FINALISTS')
+  }
+  if (!FILE) die('--mark finalists-written needs --file <finalists.json> (relative to .claude/genesis/, or an absolute path)')
+  const resolved = path.isAbsolute(FILE) ? FILE : path.join(genesisDir, FILE)
+  if (!fs.existsSync(resolved)) {
+    die('--file ' + FILE + ' does not exist at ' + resolved + ' — write the finalists file, then re-mark finalists-written')
+  }
+  let parsed
+  try {
+    parsed = JSON.parse(fs.readFileSync(resolved, 'utf8'))
+  } catch (e) {
+    die(resolved + ' is not valid JSON (' + e.message + ') — fix it and re-mark finalists-written')
+    return null // unreachable
+  }
+  const list = Array.isArray(parsed.finalists) ? parsed.finalists : null
+  if (!list) die(resolved + ' must have a top-level "finalists" array — fix it and re-mark finalists-written')
+  if (list.length < 2) die(resolved + ' names ' + list.length + ' finalist(s) — at least 2 finalists are required for a comparison')
+  if (list.length > 3) die(resolved + ' names ' + list.length + ' finalist(s) — at most 3 finalists are allowed (the brief caps the race\'s cost)')
+
+  const openKeys = new Set(allDimensionKeys())
+  const seenNames = new Set()
+  for (const f of list) {
+    const label = (f && typeof f.name === 'string' && f.name) ? f.name : '(unnamed finalist)'
+    if (!f || typeof f.name !== 'string' || !/^[a-z0-9-]+$/.test(f.name)) {
+      die('finalist "' + label + '" has an invalid or missing "name" (must match /^[a-z0-9-]+$/) — fix it and re-mark finalists-written')
+    }
+    if (seenNames.has(f.name)) die('finalist "' + f.name + '" is a duplicate name — finalist names must be unique')
+    seenNames.add(f.name)
+    for (const key of ['scaffoldCommand', 'gateCommand', 'bootCommand', 'readyCheck']) {
+      if (typeof f[key] !== 'string' || !f[key].trim()) {
+        die('finalist "' + f.name + '" is missing a non-empty "' + key + '" — fix it and re-mark finalists-written')
+      }
+    }
+    if (f.picks !== undefined && (typeof f.picks !== 'object' || f.picks === null || Array.isArray(f.picks))) {
+      die('finalist "' + f.name + '" has a "picks" that is not an object')
+    }
+    for (const k of Object.keys(f.picks || {})) {
+      if (!openKeys.has(k)) {
+        die('finalist "' + f.name + '" picks names unknown dimension "' + k + '" — dimension keys must be a subset of ## Open Dimensions')
+      }
+    }
+  }
+  const hasIncumbent = list.some(finalistMatchesCurrentPicks)
+  if (!hasIncumbent) {
+    die('no finalist\'s picks matches the brief\'s current ## Picks on every key it names — at least one finalist must be the incumbent; add one and re-mark finalists-written')
+  }
+
+  status.tournament = Object.assign({}, status.tournament, {
+    finalists: list.map((f) => f.name),
+    finalistDefs: list,
+    at: new Date().toISOString(),
+  })
+  saveStatus()
+  return { prev: 'FINALISTS', next: 'RACE' }
+}
+
+// D5: races every finalist in `status.tournament.finalistDefs` that has no `race[name]` yet, in
+// file order. A finalist whose scaffold fails records `race[name] = {scaffold, at}` and spends
+// nothing further — no gate, no boot. Persisted after every finalist so a crash mid-race never
+// re-spends an already-recorded step. Driver-only: called from deriveState on a bare (non-peek)
+// invocation reaching RACE, never from `--state`.
+function runRace() {
+  fs.mkdirSync(tournamentDir(), { recursive: true })
+  const gitignorePath = path.join(tournamentDir(), '.gitignore')
+  if (!fs.existsSync(gitignorePath)) fs.writeFileSync(gitignorePath, 'finalists/\nlogs/\n')
+
+  const defs = (status.tournament && status.tournament.finalistDefs) || []
+  const smokeSh = path.join(__dirname, 'smoke.sh')
+  for (const f of defs) {
+    const race = (status.tournament && status.tournament.race) || {}
+    if (race[f.name]) continue
+    const fDir = finalistDir(f.name)
+    fs.mkdirSync(fDir, { recursive: true })
+
+    const scaffoldLog = path.join(tournamentLogsDir(), f.name + '.scaffold.log')
+    const sResult = runShell(f.scaffoldCommand, scaffoldLog, { cwd: fDir })
+    if (sResult.status !== 0) {
+      race[f.name] = { scaffold: { exit: sResult.status }, at: new Date().toISOString() }
+      status.tournament = Object.assign({}, status.tournament, { race })
+      saveStatus()
+      continue
+    }
+
+    const gateLog = path.join(tournamentLogsDir(), f.name + '.gate.log')
+    const gResult = runShell(f.gateCommand, gateLog, { cwd: fDir })
+
+    const smokeConfigPath = path.join(fDir, '.genesis-smoke.json')
+    fs.writeFileSync(smokeConfigPath, JSON.stringify({
+      runtime: {
+        bootCommand: f.bootCommand,
+        readyCheck: f.readyCheck,
+        readyTimeout: f.readyTimeout || 120,
+        stopExitCodes: [0, 143],
+      },
+    }, null, 2) + '\n')
+    const bootLog = path.join(tournamentLogsDir(), f.name + '.boot.log')
+    const bResult = runLogged('bash', [smokeSh, '--config', smokeConfigPath], bootLog,
+      { cwd: fDir, what: 'smoke.sh boot for finalist ' + f.name })
+    const sentinelMatch = /^__SMOKE_.*$/m.exec(safeReadFile(bootLog))
+
+    race[f.name] = {
+      scaffold: { exit: sResult.status },
+      gate: { exit: gResult.status },
+      boot: { exit: bResult.status, sentinel: sentinelMatch ? sentinelMatch[0] : null },
+      at: new Date().toISOString(),
+    }
+    status.tournament = Object.assign({}, status.tournament, { race })
+    saveStatus()
+  }
+}
+
+function safeReadFile(p) { try { return fs.readFileSync(p, 'utf8') } catch (e) { return '' } }
+
+// D7: probe-done validates every finalist that reached a green scaffold, then re-runs its gate
+// and boot as an executed fact (never trusted from the race's own earlier run) before assembling
+// the benchmark. A finalist whose scaffold failed owes no probe.json — D5's "nothing further is
+// spent" extends through PROBE.
+function handleProbeDone() {
+  if (!(status.tournament && status.tournament.finalists)) die('the finalists have not been raced yet — reach RACE/PROBE first')
+  const race = status.tournament.race || {}
+  const archetype = status.archetype
+  const expected = expectedTasksFor(archetype)
+  const finalistDefs = status.tournament.finalistDefs || []
+  const post = Object.assign({}, status.tournament.post || {})
+  const smokeSh = path.join(__dirname, 'smoke.sh')
+
+  for (const name of status.tournament.finalists) {
+    const r = race[name]
+    if (!r || r.scaffold.exit !== 0) continue // never spent further at RACE — owes no probe.json
+
+    const probePath = path.join(tournamentEvidenceDir(name), 'probe.json')
+    if (!fs.existsSync(probePath)) {
+      die('finalist "' + name + '" is missing ' + genesisRel('tournament/evidence/' + name + '/probe.json') +
+        ' — build the probe slice and write it, then re-mark probe-done')
+    }
+    let parsed
+    try {
+      parsed = JSON.parse(fs.readFileSync(probePath, 'utf8'))
+    } catch (e) {
+      die('finalist "' + name + '"\'s probe.json is not valid JSON (' + e.message + ') — fix it and re-mark probe-done')
+      return null // unreachable
+    }
+    const tasks = Array.isArray(parsed.tasks) ? parsed.tasks : null
+    if (!tasks) die('finalist "' + name + '"\'s probe.json must have a top-level "tasks" array')
+
+    const seen = new Set()
+    for (const t of tasks) {
+      if (!t || typeof t.task !== 'string' || !expected.includes(t.task)) {
+        die('finalist "' + name + '"\'s probe.json names an unexpected task "' + (t && t.task) +
+          '" — the expected task set for ' + archetype + ' is: ' + expected.join(', '))
+      }
+      if (seen.has(t.task)) die('finalist "' + name + '"\'s probe.json has a duplicate task "' + t.task + '"')
+      seen.add(t.task)
+      if (typeof t.passed !== 'boolean') {
+        die('finalist "' + name + '"\'s probe.json task "' + t.task + '" is missing a boolean "passed"')
+      }
+      if (!Number.isInteger(t.retries) || t.retries < 0 || t.retries > 2) {
+        die('finalist "' + name + '"\'s probe.json task "' + t.task + '" has an out-of-range "retries" (' +
+          t.retries + ') — the retry cap is 2 per task')
+      }
+      if (!Number.isInteger(t.tokens) || t.tokens < 0) {
+        die('finalist "' + name + '"\'s probe.json task "' + t.task + '" has an invalid "tokens" (must be an integer >= 0)')
+      }
+      if (t.screenshot !== null) {
+        const shotAbs = path.isAbsolute(t.screenshot) ? t.screenshot : path.join(root, String(t.screenshot))
+        if (typeof t.screenshot !== 'string' || !fs.existsSync(shotAbs)) {
+          die('finalist "' + name + '"\'s probe.json task "' + t.task + '" has a "screenshot" that is neither null nor an existing file')
+        }
+      }
+    }
+    const missing = expected.filter((e) => !seen.has(e))
+    if (missing.length) {
+      die('finalist "' + name + '"\'s probe.json is missing task(s): ' + missing.join(', ') +
+        ' — build the missing probe slice(s), then re-mark probe-done')
+    }
+
+    const def = finalistDefs.find((fd) => fd.name === name) || {}
+    const fDir = finalistDir(name)
+    const gatePostLog = path.join(tournamentLogsDir(), name + '.gate.post.log')
+    const gPost = runShell(def.gateCommand, gatePostLog, { cwd: fDir })
+    const smokeConfigPath = path.join(fDir, '.genesis-smoke.json')
+    const bootPostLog = path.join(tournamentLogsDir(), name + '.boot.post.log')
+    const bPost = runLogged('bash', [smokeSh, '--config', smokeConfigPath], bootPostLog,
+      { cwd: fDir, what: 'smoke.sh post-probe boot for finalist ' + name })
+    const sentinelMatch = /^__SMOKE_.*$/m.exec(safeReadFile(bootPostLog))
+
+    post[name] = {
+      gate: { exit: gPost.status },
+      boot: { exit: bPost.status, sentinel: sentinelMatch ? sentinelMatch[0] : null },
+      tasks,
+      at: new Date().toISOString(),
+    }
+  }
+
+  status.tournament = Object.assign({}, status.tournament, { post })
+  saveStatus()
+  writeBenchmark()
+  return { prev: 'PROBE', next: 'PICK' }
+}
+
+function benchmarkRows() {
+  const t = status.tournament || {}
+  const race = t.race || {}
+  const post = t.post || {}
+  return (t.finalists || []).map((name) => {
+    const r = race[name] || {}
+    const p = post[name] || null
+    const tasks = p ? p.tasks || [] : []
+    return {
+      name,
+      scaffold: r.scaffold ? r.scaffold.exit : null,
+      gatePre: r.gate ? r.gate.exit : null,
+      bootPre: r.boot ? r.boot.exit : null,
+      gatePost: p ? p.gate.exit : null,
+      bootPost: p ? p.boot.exit : null,
+      probePassed: p ? tasks.filter((tk) => tk.passed).length : null,
+      probeTotal: p ? tasks.length : null,
+      retries: p ? tasks.reduce((s, tk) => s + tk.retries, 0) : null,
+      tokens: p ? tasks.reduce((s, tk) => s + tk.tokens, 0) : null,
+      screenshots: tasks.filter((tk) => tk.screenshot).map((tk) => tk.screenshot),
+    }
+  })
+}
+
+function renderBenchmarkMd(rows) {
+  const dash = (v) => (v === null || v === undefined ? '—' : v)
+  const header = '| finalist | scaffold exit | gate pre/post | booted pre/post | probe passed | retries | tokens | screenshots |\n' +
+    '|---|---|---|---|---|---|---|---|\n'
+  const body = rows.map((r) => {
+    const probe = r.probeTotal === null ? '—' : (r.probePassed + '/' + r.probeTotal)
+    const shots = r.screenshots.length ? r.screenshots.join(', ') : '—'
+    return '| ' + r.name + ' | ' + dash(r.scaffold) + ' | ' + dash(r.gatePre) + '/' + dash(r.gatePost) +
+      ' | ' + dash(r.bootPre) + '/' + dash(r.bootPost) + ' | ' + probe + ' | ' + dash(r.retries) +
+      ' | ' + dash(r.tokens) + ' | ' + shots + ' |'
+  }).join('\n')
+  return header + body + '\n'
+}
+
+function renderGalleryHtml(rows) {
+  const post = (status.tournament && status.tournament.post) || {}
+  const taskOrder = []
+  const seen = new Set()
+  for (const r of rows) {
+    const tasks = (post[r.name] && post[r.name].tasks) || []
+    for (const t of tasks) {
+      if (t.screenshot && !seen.has(t.task)) { seen.add(t.task); taskOrder.push(t.task) }
+    }
+  }
+  const names = rows.map((r) => r.name)
+  let html = '<!doctype html>\n<html><head><meta charset="utf-8"><title>Tournament gallery</title></head><body>\n' +
+    '<table border="1">\n<tr><th>task</th>' + names.map((n) => '<th>' + n + '</th>').join('') + '</tr>\n'
+  for (const task of taskOrder) {
+    html += '<tr><td>' + task + '</td>'
+    for (const name of names) {
+      const tasks = (post[name] && post[name].tasks) || []
+      const t = tasks.find((x) => x.task === task)
+      html += '<td>' + (t && t.screenshot ? '<img src="' + t.screenshot + '">' : '') + '</td>'
+    }
+    html += '</tr>\n'
+  }
+  html += '</table>\n</body></html>\n'
+  return html
+}
+
+function writeBenchmark() {
+  const rows = benchmarkRows()
+  fs.mkdirSync(tournamentDir(), { recursive: true })
+  fs.writeFileSync(benchmarkJsonPath(), JSON.stringify({ finalists: rows, at: new Date().toISOString() }, null, 2) + '\n')
+  fs.writeFileSync(benchmarkMdPath(), renderBenchmarkMd(rows))
+  fs.writeFileSync(galleryPath(), renderGalleryHtml(rows))
+}
+
+// D8: the driver never ranks finalists — it matches the brief's CURRENT ## Picks against each
+// finalist's own `picks`. Exactly one match records the winner; zero or several is refused.
+function handlePicked() {
+  if (!(status.tournament && status.tournament.finalists)) die('the tournament has not reached PICK yet')
+  const finalistDefs = status.tournament.finalistDefs || []
+  const matches = finalistDefs.filter(finalistMatchesCurrentPicks)
+  if (matches.length !== 1) {
+    die('## Picks matches ' + matches.length + ' finalist(s) — exactly 1 match is required to record a winner; rewrite ## Picks to the winner\'s labels, then re-mark picked')
+  }
+  status.tournament = Object.assign({}, status.tournament, { winner: matches[0].name, at: new Date().toISOString() })
+  saveStatus()
+  return { prev: 'PICK', next: 'DECIDE' }
 }
 
 // ---------------------------------------------------------------------------
@@ -399,7 +801,7 @@ function decideCheck() {
   for (const key of allDimensionKeys()) {
     if (!combined.includes('`' + key + '`')) return { ok: false, reason: 'dim-unnamed', detail: key }
   }
-  return { ok: true, descriptor: desc }
+  return { ok: true, descriptor: desc, adrTexts }
 }
 
 function describeDecideGap(check) {
@@ -411,12 +813,34 @@ function describeDecideGap(check) {
   return 'the decision record is not yet closed'
 }
 
+// specs/20260827/01-genesis-tournament.md D9: once a tournament winner is recorded, `decided`
+// gains two more checks on top of the base decideCheck() closure: the descriptor's
+// scaffoldCommand must be the winner's own (the descriptor must scaffold exactly what the race
+// validated, never something the race never touched), and at least one listed ADR must cite the
+// literal `.claude/genesis/tournament/benchmark.md` path (the durable link back to the executed
+// evidence). On success the raced `finalists/` and `logs/` are deleted (A3) — scratch race
+// output, never durable evidence; `benchmark.json/.md`, `gallery.html`, and `evidence/` survive.
 function handleDecided() {
   if (!status.marks.menusDone) die('menus-done has not been marked yet — mark menus-done first')
   const check = decideCheck()
   if (!check.ok) die(describeDecideGap(check) + ' — fix it, then re-mark decided')
+  if (status.tournament && status.tournament.winner) {
+    const winnerDef = (status.tournament.finalistDefs || []).find((f) => f.name === status.tournament.winner)
+    if (winnerDef && check.descriptor.scaffoldCommand !== winnerDef.scaffoldCommand) {
+      die('stack-descriptor.json\'s scaffoldCommand does not match the tournament winner\'s ("' +
+        status.tournament.winner + '") scaffoldCommand — set scaffoldCommand to exactly the winner\'s value, then re-mark decided')
+    }
+    const combined = (check.adrTexts || []).join('\n')
+    if (!combined.includes('.claude/genesis/tournament/benchmark.md')) {
+      die('no listed decision record cites `.claude/genesis/tournament/benchmark.md` — add the citation to at least one ADR, then re-mark decided')
+    }
+  }
   status.marks.decided = true
   status.architect = 'decisions-recorded'
+  if (status.tournament && status.tournament.winner) {
+    try { fs.rmSync(finalistsRootDir(), { recursive: true, force: true }) } catch (e) { /* already gone */ }
+    try { fs.rmSync(tournamentLogsDir(), { recursive: true, force: true }) } catch (e) { /* already gone */ }
+  }
   saveStatus()
   return { prev: 'DECIDE', next: 'SCAFFOLD' }
 }
@@ -428,7 +852,11 @@ function handleDecided() {
 function scaffoldLogPath() { return path.join(genesisDir, 'scaffold.log') }
 function gateLogPath() { return path.join(genesisDir, 'gate.log') }
 
-function runShell(cmd, logPath) {
+// specs/20260827/01-genesis-tournament.md A5: `cwd` is an ADDITIVE option (default `root`,
+// byte-identical to the pre-spec behavior) — the tournament's RACE/PROBE legs run every finalist
+// command inside its own `tournament/finalists/<name>/`, never in `--root` itself.
+function runLogged(cmd, args, logPath, opts) {
+  const cwd = (opts && opts.cwd) || root
   // The log fd is opened and truncated BEFORE the child spawns, then handed straight to
   // spawnSync's stdio for both stdout and stderr — the child's output never transits a Node
   // pipe, so it can never overflow one (see the header's runChild paragraph). Closed on every
@@ -443,11 +871,16 @@ function runShell(cmd, logPath) {
   }
   let r
   try {
-    r = runChild('bash', ['-c', cmd], { cwd: root, stdio: ['ignore', fd, fd] }, 'shell command "' + cmd + '"')
+    const what = (opts && opts.what) || ('command "' + [cmd].concat(args).join(' ') + '"')
+    r = runChild(cmd, args, { cwd, stdio: ['ignore', fd, fd] }, what)
   } finally {
     try { fs.closeSync(fd) } catch (e) { /* already closed */ }
   }
   return r
+}
+
+function runShell(cmd, logPath, opts) {
+  return runLogged('bash', ['-c', cmd], logPath, Object.assign({ what: 'shell command "' + cmd + '"' }, opts))
 }
 
 function runScaffoldIfDue() {
@@ -631,6 +1064,29 @@ function deriveState(opts) {
   const menus = menusCheck()
   if (!status.marks.menusDone || !menus.ok) return 'MENUS'
 
+  // specs/20260827/01-genesis-tournament.md D1: FINALISTS -> RACE -> PROBE -> PICK sits between
+  // MENUS and DECIDE for a tournament archetype that hasn't been skipped or resolved yet. Once
+  // skipped (tournament.skipped) or resolved (tournament.winner), fall straight through to the
+  // unchanged decideCheck() derivation below — a non-tournament archetype never enters this block
+  // at all (status.archetype stays outside TOURNAMENT_ARCHETYPES).
+  if (isTournamentArchetype(status.archetype) &&
+      !(status.tournament && (status.tournament.skipped || status.tournament.winner))) {
+    const t = status.tournament || {}
+    if (!t.finalists) return 'FINALISTS'
+    const race = t.race || {}
+    const allRaced = t.finalists.every((n) => race[n])
+    if (!allRaced) {
+      if (peek) return 'RACE'
+      runRace()
+      return 'PROBE'
+    }
+    const post = t.post || {}
+    const activeFinalists = t.finalists.filter((n) => race[n] && race[n].scaffold.exit === 0)
+    const allProbed = activeFinalists.every((n) => post[n])
+    if (!allProbed) return 'PROBE'
+    return 'PICK'
+  }
+
   const decide = decideCheck()
   if (!status.marks.decided || !decide.ok) return 'DECIDE'
 
@@ -671,9 +1127,11 @@ const STEPS = {
     const lines = ['## Step: run (or continue) the discovery interview']
     if (!exists) {
       lines.push('Read only: ' + TEMPLATE_BRIEF_PATH)
+      lines.push('Doctrine: spec/doctrine/genesis.md § Genesis: Discovery Interview')
       lines.push(genesisRel('brief.md') + ' does not exist yet — start from the template above.')
     } else {
       lines.push('Read only: ' + genesisRel('brief.md') + ' (## Coverage)')
+      lines.push('Doctrine: spec/doctrine/genesis.md § Genesis: Discovery Interview')
       const check = discoveryCheck()
       if (check.reason === 'unparseable') lines.push('unparseable coverage line(s): ' + check.detail.join('; '))
       if (check.reason === 'missing') lines.push('missing coverage key(s): ' + check.detail.join(', '))
@@ -694,7 +1152,8 @@ const STEPS = {
     }
     const readFiles = [genesisRel('brief.md') + ' (## Open Dimensions, ## Picks)']
       .concat(openKeys.filter(hasMenuFile).map((k) => genesisRel('interview-research/' + k + '.json')))
-    const lines = ['## Step: research and pick the open dimensions', 'Read only: ' + readFiles.join(', ')]
+    const lines = ['## Step: research and pick the open dimensions', 'Read only: ' + readFiles.join(', '),
+      'Doctrine: spec/doctrine/genesis.md § Genesis: Discovery Interview']
     if (noMenu.length) lines.push('open, no menu yet: ' + noMenu.join(', '))
     if (noPick.length) lines.push('open, menu written, no pick: ' + noPick.join(', '))
     for (const k of openKeys) {
@@ -718,10 +1177,93 @@ const STEPS = {
     const lines = [
       '## Step: record the stack descriptor and decision records',
       'Read only: ' + genesisRel('brief.md') + ' (## Open Dimensions), ' + descriptorRelPath(),
+      'Doctrine: spec/doctrine/genesis.md § Genesis: Decision Record (one proposer)',
     ]
     if (!check.ok) lines.push(describeDecideGap(check) + '.')
     lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark decided')
     return lines.join('\n')
+  },
+
+  // specs/20260827/01-genesis-tournament.md D4: the go/no-go line — the archetype's probe tasks
+  // (D6), the retry cap, the cost estimate, and the last-measured tokens/finalist figure (or "no
+  // figure yet" when tournament/benchmark.json does not exist yet).
+  FINALISTS: () => {
+    const archetype = status.archetype
+    const tasks = expectedTasksFor(archetype)
+    return [
+      '## Step: name the finalists to race (or skip the race)',
+      'Read only: ' + genesisRel('brief.md') + ' (## Open Dimensions, ## Picks), ' + genesisRel('interview-research/*.json'),
+      'Doctrine: spec/doctrine/genesis.md § Genesis: Tournament of Scaffolds',
+      'probe tasks (' + archetype + '): ' + tasks.join(', ') + ' · retry cap: 2 per task',
+      'cost: roughly one mini-build per finalist (scaffold + gate + boot + probe slice)',
+      lastMeasuredLine(),
+      'Then:\n  node ' + __filename + ' --root ' + root + ' --mark finalists-written --file <finalists.json>' +
+        '\n  node ' + __filename + ' --root ' + root + ' --mark finalists-skipped',
+    ].join('\n')
+  },
+
+  // RACE is driver-only (D5): a bare invocation runs it and lands directly on PROBE, so this
+  // entry is only ever rendered by acceptedOutput() right after finalists-written accepts —
+  // never by deriveState() itself (which resolves RACE before returning, exactly like the
+  // existing SCAFFOLD entry below resolves SCAFFOLD before returning).
+  RACE: () => [
+    '## Step: race the finalists',
+    'Read only: ' + genesisRel('tournament/'),
+    'Doctrine: spec/doctrine/genesis.md § Genesis: Tournament of Scaffolds',
+    'The driver races every finalist (scaffold, then gate + boot on a green scaffold) on the next invocation — no session action needed.',
+    'Then:\n  node ' + __filename + ' --root ' + root,
+  ].join('\n'),
+
+  // D6: race results per finalist (a failed scaffold prints "failed at scaffold — spent no
+  // further" and owes no probe.json), the expected task set (sketch-conditioned, D6), the
+  // style-tile source path when style-tile is expected, the retry cap, each raced finalist's
+  // evidence dir, and the probe.json shape.
+  PROBE: () => {
+    const archetype = status.archetype
+    const expected = expectedTasksFor(archetype)
+    const t = status.tournament || {}
+    const race = t.race || {}
+    const names = t.finalists || []
+    const lines = [
+      '## Step: build one probe slice per finalist',
+      'Read only: ' + genesisRel('tournament/'),
+      'Doctrine: spec/doctrine/genesis.md § Genesis: Tournament of Scaffolds',
+    ]
+    for (const name of names) {
+      const r = race[name]
+      if (!r) continue
+      lines.push(r.scaffold.exit !== 0
+        ? name + ': failed at scaffold — spent no further'
+        : name + ': scaffold ok, gate ' + r.gate.exit + ', boot ' + r.boot.exit +
+          (r.boot.sentinel ? ' (' + r.boot.sentinel + ')' : ''))
+    }
+    lines.push('expected tasks: ' + expected.join(', '))
+    if (expected.includes('style-tile')) {
+      lines.push('style-tile source: ' + genesisRel('sketch.html') + ' (render inside the finalist, with its own real component library)')
+    }
+    lines.push('retry cap: 2 per task')
+    for (const name of names) {
+      const r = race[name]
+      if (r && r.scaffold.exit === 0) lines.push('evidence dir: ' + genesisRel('tournament/evidence/' + name + '/'))
+    }
+    lines.push('probe.json shape: {"tasks": [{"task", "passed", "retries", "tokens", "screenshot"}]}')
+    lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark probe-done')
+    return lines.join('\n')
+  },
+
+  // D8: benchmark.md printed verbatim (never paraphrased — reading it verbatim is the whole
+  // point of not making the session open a second file mid-decision) plus the evidence-informs
+  // line, so a session cannot read this step and think a benchmark number decides anything.
+  PICK: () => {
+    const benchmarkMd = fs.existsSync(benchmarkMdPath()) ? fs.readFileSync(benchmarkMdPath(), 'utf8').trimEnd() : '(no benchmark.md yet)'
+    return [
+      '## Step: pick the winner',
+      'Read only: ' + genesisRel('tournament/benchmark.md') + ', ' + genesisRel('brief.md') + ' (## Picks)',
+      'Doctrine: spec/doctrine/genesis.md § Genesis: Tournament of Scaffolds',
+      benchmarkMd,
+      'executed evidence informs the pick; it never makes it — two finalists that both pass are ranked by the coverage answers, stated',
+      'Then:\n  node ' + __filename + ' --root ' + root + ' --mark picked',
+    ].join('\n')
   },
 
   SCAFFOLD: () => {
@@ -738,6 +1280,7 @@ const STEPS = {
   SKELETON: () => [
     '## Step: land the day-zero skeleton',
     'Read only: ' + descriptorRelPath() + ', ' + genesisRel('scaffold.log'),
+    'Doctrine: spec/doctrine/genesis.md § Genesis: Day-Zero Skeleton',
     'See spec/doctrine/genesis.md § Genesis: Day-Zero Skeleton for what to land (tests, CI, runtime substrate).',
     'Then:\n  node ' + __filename + ' --root ' + root + ' --mark skeleton-landed',
   ].join('\n'),
@@ -761,6 +1304,7 @@ const STEPS = {
   ROADMAP: () => [
     '## Step: decompose the roadmap',
     'Read only: ' + descriptorRelPath() + ', docs/roadmap/',
+    'Doctrine: spec/doctrine/genesis.md § Genesis: Roadmap Decomposition',
     'Write docs/roadmap/00-overview.md plus one or more docs/roadmap/NN-*.md briefs, each with ' +
       'Phase: and Depends on: header lines before its first ## heading, acyclic. See ' +
       'spec/doctrine/genesis.md § Genesis: Roadmap Decomposition.',
@@ -803,11 +1347,16 @@ function handleMark() {
     case 'discovery-done': result = handleDiscoveryDone(); break
     case 'menu-written': result = handleMenuWritten(); break
     case 'menus-done': result = handleMenusDone(); break
+    case 'finalists-written': result = handleFinalistsWritten(); break
+    case 'finalists-skipped': result = handleFinalistsSkipped(); break
+    case 'probe-done': result = handleProbeDone(); break
+    case 'picked': result = handlePicked(); break
     case 'decided': result = handleDecided(); break
     case 'skeleton-landed': result = handleSkeletonLanded(); break
     case 'roadmap-written': result = handleRoadmapWritten(); break
     default:
       die('unknown mark "' + MARK + '" (discovery-done | menu-written --file <f> | menus-done | ' +
+        'finalists-written --file <f> | finalists-skipped | probe-done | picked | ' +
         'decided | skeleton-landed | roadmap-written)')
       return
   }

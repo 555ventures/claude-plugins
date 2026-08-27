@@ -36,7 +36,8 @@ DISCOVERY step fills the gaps.
 
 1. Run `node {driver} --root .`. It prints the current state and exactly one step, opening
    with a `Read only:` file list — never the whole `.claude/genesis/` directory.
-2. Do that one step. The per-state pointers below name the doctrine governing the judgment.
+2. Do that one step. Its printed `Doctrine:` line names the section of `spec/doctrine/genesis.md`
+   governing the judgment.
 3. Record it with the step's own printed `--mark …` line. The driver verifies the step's
    artifacts before advancing; a missing or malformed one is refused and demanded again.
 4. Re-run `node {driver} --root .`. Repeat until it prints `HANDOFF`.
@@ -46,28 +47,6 @@ already safe on disk. Every accepted mark prints `✅ checkpoint — genesis sta
 (<prev> → <next>); safe to /clear and re-run /spec:genesis` as its last line: the session may
 `/clear` after any checkpoint and re-invoke `/spec:genesis` cold — it re-derives everything
 from disk, never from chat context.
-
-## Per-state judgment pointers
-
-- **DISCOVERY** — run the adaptive interview and the coverage audit; author/rewrite
-  `.claude/genesis/brief.md` (genesis.md § Genesis: Discovery Interview).
-- **MENUS** — for each dimension the step lists, run the research-woven loop and record the
-  pick (genesis.md § Genesis: Discovery Interview, the woven loop).
-- **DECIDE** — write ADRs and resolve hard forks as the sole proposer (genesis.md § Genesis:
-  Decision Record (one proposer)); the dimension floor is genesis.md § Genesis:
-  Hard-to-Reverse Dimensions, and the ops-conventions ADR is genesis.md § Genesis: Ops
-  Conventions ADR.
-- **SKELETON** — land the test/CI/runtime-substrate skeleton the driver's scaffold made room
-  for (genesis.md § Genesis: Day-Zero Skeleton).
-- **ROADMAP** — decompose the confirmed goal + ADRs into planning briefs (genesis.md § Genesis:
-  Roadmap Decomposition).
-- **HANDOFF** — assemble and print the report below; no further doctrine read.
-- **SCAFFOLD_RED** — the descriptor's `scaffoldCommand` failed; fix it against the decision
-  record it was written from (genesis.md § Genesis: Decision Record (one proposer)), never
-  against a re-litigated fork.
-- **GATE_RED** — the zero-day gate failed; fix scaffold-level issues only, against the skeleton
-  doctrine that named the gate (genesis.md § Genesis: Day-Zero Skeleton) — the gate re-executes,
-  the scaffold does not.
 
 ## HANDOFF report
 

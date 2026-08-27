@@ -5,6 +5,7 @@
   "design": "pending",
   "archetype": null,
   "localeScope": null,
+  "tournament": null,
   "stackDescriptorPath": ".claude/genesis/stack-descriptor.json",
   "designManifestPath": ".claude/genesis/design-rules.json",
   "gateCommand": null,

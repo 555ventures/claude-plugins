@@ -10,11 +10,14 @@
   key, `## Panel Roles`, and `panel-results-*.json` are retired. The archetype registry names
   dimension keys only — no framework, language, runtime, or catalog product appears in
   doctrine. (specs/20260825/01-genesis-panel-collapse.md, done 2026-08-25)
-- A workflow script under a `pipelineOwnedPaths` glob (`spec/workflows/wf-*.js`) is pruned from
-  both collision-closure's literals leg and scope-reconcile, so neither automatic sweep can see
-  a stale literal inside it; an enumerated-file doctrine test is its only gate. Coverage for
-  such a file carries a stricter banned list than its siblings in the same test and a comment
-  naming the blind spot. (same spec, review fix 2026-08-25)
+- Workflow scripts (`spec/workflows/wf-*.js`) are ordinary review surface: this repo's
+  `pipelineOwnedPaths` entry for them — written for a code generator deleted in `61e2e5a`
+  (2026-08-17) — is retired, so an unplanned edit is an out-of-plan finding at review and
+  collision-closure's literals leg can see inside them at plan lock. A spec that edits one
+  gives it a File Plan row. `wf-research.js` additionally keeps a standing banned-literal
+  sweep in `tests/consistency/genesis-doctrine.test.js` with a stricter list than its
+  doctrine siblings, because that sweep runs on every test run while the literals leg runs
+  only at lock. (specs/20260825/05-workflow-scripts-in-review-scope.md)
 
 ## Discovery (consultant posture)
 

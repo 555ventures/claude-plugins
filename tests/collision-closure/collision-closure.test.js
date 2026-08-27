@@ -82,7 +82,7 @@ test('AC-20260814-05-3: --literal matches case-insensitively in both directions 
     'passed stem "Widget": ' + r.stdout)
 })
 
-test('AC-20260814-05-4: literals-leg exclusions drop the spec corpus, the run ledger, and pipelineOwnedPaths hits, and the script imports its glob matcher rather than re-deriving one', () => {
+test('AC-20260814-05-4 / AC-20260825-05-4 (CONTINUE TO): literals-leg exclusions drop the spec corpus, the run ledger, and pipelineOwnedPaths hits, and the script imports its glob matcher rather than re-deriving one', () => {
   const dir = tmpdir('cc4')
   fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
   fs.mkdirSync(path.join(dir, 'specs', '20260814'), { recursive: true })

@@ -98,7 +98,7 @@ test('AC-20260813-03-5 / PRAX-20260813-05 / AC-20260815-02-11 (CONTINUE TO): a F
 // non-excluded changed file matches the row at all. Refuter finding folded into D2: without the
 // excludedSet subtraction, this excluded file would fake the row's realization and hide a
 // codegen output File Plan row that no real reviewer-visible file ever touched.
-test('AC-20260813-03-5 (excluded-overlap facet) / AC-20260815-02-11 (CONTINUE TO): a File Plan glob row matched ONLY by a pipeline-owned (excluded) changed file stays unrealized, and the excluded file stays out of outOfPlan', () => {
+test('AC-20260813-03-5 (excluded-overlap facet) / AC-20260815-02-11 (CONTINUE TO) / AC-20260825-05-4 (CONTINUE TO): a File Plan glob row matched ONLY by a pipeline-owned (excluded) changed file stays unrealized, and the excluded file stays out of outOfPlan', () => {
   const dir = tmpdir('scope-reconcile-glob')
   const g = gitRepo(dir)
   fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })

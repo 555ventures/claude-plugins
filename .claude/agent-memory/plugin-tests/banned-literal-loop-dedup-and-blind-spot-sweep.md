@@ -28,15 +28,15 @@ Resolution pattern:
   word; a live doctrine sentence ("...panel scrutiny...") slipped through a full review because
   of exactly that gap. Fix was one bare `[/\bpanel\b/i, 'panel']` entry.
 
-Second, independent pattern in the same dispatch: `.claude/spec.config.json`'s
-`pipelineOwnedPaths` (e.g. `"spec/workflows/wf-*.js"`) is pruned from BOTH
-collision-closure's literals leg AND scope-reconcile — meaning a workflow script is invisible
-to both of this repo's automatic literal sweeps. An enumerated-file doctrine test (one that
-`read()`s a fixed file list, like AC-5's README.md/design.md loop) is the *only* gate that can
-see stale literals inside such a file. When adding coverage for one, give it a stricter/different
-banned list than the sibling files in the same test (README.md legitimately keeps "one proposer"
-as new vocabulary; wf-research.js should ban `proposer` outright) and leave a comment stating the
-blind-spot reasoning so a future reader doesn't "simplify" the seemingly-redundant block away.
+Second pattern from the same dispatch, since CORRECTED (specs/20260825/05, 2026-08-25): at the
+time, `.claude/spec.config.json`'s `pipelineOwnedPaths` excluded `spec/workflows/wf-*.js` from
+both collision-closure's literals leg and scope-reconcile, so an enumerated-file doctrine test
+was the only gate that could see a stale literal inside a workflow script. That exclusion is
+retired — workflow scripts are ordinary review surface now. The durable lesson is narrower: an
+enumerated-file banned-literal test is a STANDING gate (every `npm test`), while
+collision-closure's literals leg runs only at plan lock for planner-named stems — so keep the
+enumerated sweep for a file whose stale vocabulary is user-visible, give it a stricter list
+than siblings that legitimately keep the new vocabulary, and say so in a comment.
 
 Proof technique for a new banned-literal check: don't just assert it would fail — actually run
 it. Copy the real doctrine/source file to a scratchpad path, append/inject the offending literal

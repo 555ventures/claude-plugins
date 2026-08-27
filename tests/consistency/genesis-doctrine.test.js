@@ -192,13 +192,14 @@ test('AC-20260825-01-5: README.md and design.md name no wf-panel and no proposer
       'describes a mechanism this spec deletes')
   }
 
-  // spec/workflows/wf-research.js is invisible to both automatic sweeps: .claude/spec.config.json's
-  // pipelineOwnedPaths lists "spec/workflows/wf-*.js", and pipelineOwnedGlobs prunes that pattern
-  // from collision-closure's literals leg and from scope-reconcile — so this enumerated-file test
-  // is the ONLY gate that can see a stale panel/proposer/aggregator reference left inside it. Do
-  // not "simplify" this block away as redundant with the loop above: it is the other sweeps' blind
-  // spot, not a duplicate check, and it deliberately bans a stricter list than README/design.md do
-  // (those two files legitimately keep "one proposer" as the spec's new vocabulary).
+  // spec/workflows/wf-research.js gets its own, stricter sweep than README/design.md above.
+  // This block is a STANDING invariant — it runs on every `npm test` — whereas
+  // collision-closure's literals leg runs only at plan lock, and only for the stems a
+  // planner names. (Until specs/20260825/05, `.claude/spec.config.json` also excluded
+  // `spec/workflows/wf-*.js` from both automatic sweeps, so this block was the only gate
+  // that could see the file at all; that exclusion is gone, but the standing ban stays.)
+  // The stricter list is deliberate: README/design.md legitimately keep "one proposer" as
+  // the spec's new vocabulary; wf-research.js has no reason to say any of these.
   const wfResearchBanned = [
     [/wf-panel/, 'wf-panel'],
     [/\bpanel\b/i, 'panel'],
@@ -207,10 +208,9 @@ test('AC-20260825-01-5: README.md and design.md name no wf-panel and no proposer
   ]
   const wfResearchSrc = read('spec/workflows/wf-research.js')
   assertNoBannedLiterals(wfResearchSrc, wfResearchBanned, (label) =>
-    'D8: spec/workflows/wf-research.js must not name "' + label + '" — this file is pruned from ' +
-    'both pipelineOwnedGlobs sweeps (collision-closure\'s literals leg and scope-reconcile) by ' +
-    '.claude/spec.config.json\'s pipelineOwnedPaths, so a surviving panel/proposer/aggregator ' +
-    'reference here would ship invisibly to every other gate this repo runs')
+    'D8: spec/workflows/wf-research.js must not name "' + label + '" — a surviving ' +
+    'panel/proposer/aggregator reference here would ship in every host as the ' +
+    '`spec:wf-research` description; this standing sweep is the gate that sees it on every run')
 })
 
 // ---------------------------------------------------------------------------

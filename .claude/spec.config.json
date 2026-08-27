@@ -17,9 +17,6 @@
     }
   },
   "patternsScript": "scripts/spec-patterns.sh",
-  "pipelineOwnedPaths": [
-    "spec/workflows/wf-*.js"
-  ],
   "layerGroups": [
     [
       "doctrine",

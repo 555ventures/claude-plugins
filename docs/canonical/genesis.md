@@ -59,3 +59,17 @@
   `.claude/genesis/scaffold.log`/`gate.log` via the log fd — never through a Node pipe — and the
   excerpt the driver prints back is bounded in **bytes** (`LOGTAIL_MAX_BYTES`), not lines.
   (specs/20260825/04-genesis-driver.md, done 2026-08-26)
+
+- Since specs/20260827/01 the driver races finalists between `MENUS` and `DECIDE` for tournament
+  archetypes (`web-app`, `realtime-trading`, `backend-api`, `mobile-app`, `desktop-app`): states
+  `FINALISTS` → `RACE` (driver-only: scaffold into
+  `.claude/genesis/tournament/finalists/<name>/`, zero-day gate, boot through `smoke.sh` with a
+  per-finalist `.genesis-smoke.json`) → `PROBE` (the session builds one probe slice per finalist
+  with Sonnet workers, two retries per task, recording `tournament/evidence/<name>/probe.json`
+  with harness-reported tokens) → `PICK` (the driver re-runs gate + boot, writes
+  `tournament/benchmark.json`/`.md` and `gallery.html`; the user picks by rewriting `## Picks`).
+  `--mark menus-done` requires `- archetype: <registry key>` in `## Picks` and stores
+  `status.archetype`. `decided` requires the descriptor's `scaffoldCommand` to be the winner's
+  and an ADR to cite `benchmark.md`, then deletes the raced copies; the winner is re-scaffolded
+  clean into the root. Every step text prints a `Doctrine:` pointer; the command no longer
+  carries per-state pointers. (specs/20260827/01-genesis-tournament.md, done 2026-08-27)

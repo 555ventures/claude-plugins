@@ -3,7 +3,7 @@ name: path-stub-binaries-for-cli-retry-loops
 description: Technique for testing a spawnSync'd CLI's retry/poll loop against an external binary (curl, gh) — PATH-stubbed executables with invocation-counter files, plus a REAL child-process HTTP server (never in-process) for reachable-URL legs.
 metadata:
   type: feedback
-  reviewed: 2026-08-24
+  reviewed: 2026-08-27
 ---
 
 When a gate script under test shells out to a real external binary in a retry/poll loop (e.g.

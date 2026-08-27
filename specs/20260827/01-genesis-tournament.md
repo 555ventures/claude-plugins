@@ -1,6 +1,6 @@
 ---
 date: 2026-08-27
-status: implementing
+status: done
 diff_base: f5e393b5f6a4c60941f937ec54c72d0796e34a98
 tier: standard           # driver + templates + doctrine; no hook, no frozen script, no contract edit
 area: genesis
@@ -292,6 +292,15 @@ extending `wf-research`'s option schema with scaffold/boot commands (finalists a
 screenshot gallery (A7); a token *cap* per finalist (the brief's cap is retries; tokens are
 observed and reported, never budgeted — a cap would make the session stop a build on a number
 it cannot see mid-dispatch).
+
+**Deviation folded at review close (2026-08-27, one-off):** FINALISTS' step text (D4) prints
+`cost: roughly one mini-build per finalist (scaffold + gate + boot + probe slice)` and the
+`last measured: …` line as two SEPARATE lines, not the single " · "-joined line shown in the
+Contracts section's step-text excerpt. AC-20260827-01-1 pins both
+`/^cost: roughly one mini-build per finalist/m` and `/^last measured: no figure yet/m` — with
+`m`-flag `^` anchoring to a real line start, the excerpt's single-line rendering can never
+satisfy the second regex. The tests are the executable contract per this repo's Test Rules;
+the Contracts excerpt is illustrative prose. No other step-text wording changed.
 
 Collision-closure at lock (2026-08-27, `--literal "Per-state judgment pointers"`,
 `unplanned=3 likely=0`): paths leg `likely` — `tests/consistency/genesis-doctrine.test.js`

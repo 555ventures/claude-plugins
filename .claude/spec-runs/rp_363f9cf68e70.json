@@ -1,0 +1,32 @@
+{
+  "ts": "2026-08-27T18:57:46.930Z",
+  "stage": "replay",
+  "spec": "specs/20260825/04-genesis-driver.md",
+  "runId": "rp_363f9cf68e70",
+  "reviewRunId": "rv_55877878203b",
+  "class": "promise-carried-not-delivered",
+  "files": [
+    "spec/scripts/genesis-driver.js"
+  ],
+  "legs": "baseline-red:ac-matrix",
+  "outcome": "caught",
+  "tokens": 229149,
+  "patch": "diff --git a/spec/scripts/genesis-driver.js b/spec/scripts/genesis-driver.js\nindex 9d11382..c45c6bd 100644\n--- a/spec/scripts/genesis-driver.js\n+++ b/spec/scripts/genesis-driver.js\n@@ -583,8 +583,7 @@ const STEPS = {\n       if (!hasMenuFile(k)) noMenu.push(k)\n       else if (!(k in pks)) noPick.push(k)\n     }\n-    const readFiles = [genesisRel('brief.md') + ' (## Open Dimensions, ## Picks)']\n-      .concat(openKeys.filter(hasMenuFile).map((k) => genesisRel('interview-research/' + k + '.json')))\n+    const readFiles = openKeys.length ? [genesisRel('')] : [genesisRel('brief.md') + ' (## Open Dimensions, ## Picks)']\n     const lines = ['## Step: research and pick the open dimensions', 'Read only: ' + readFiles.join(', ')]\n     if (noMenu.length) lines.push('open, no menu yet: ' + noMenu.join(', '))\n     if (noPick.length) lines.push('open, menu written, no pick: ' + noPick.join(', '))\n",
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "genesis-driver.js's MENUS step prints `Read only: .claude/genesis/` (the whole directory) whenever at least one open dimension exists — the normal case — violating Decision D9's explicit ban and the spec's own Contract example for this exact state.",
+        "file": "spec/scripts/genesis-driver.js",
+        "line": 586,
+        "impact": "The one guardrail meant to keep each genesis step's context small is defeated in the MENUS step — the session is told to read the entire .claude/genesis/ directory instead of the specific brief/menu files the step actually needs.",
+        "evidence": "Code: `const readFiles = openKeys.length ? [genesisRel('')] : [...]` where genesisRel('') === '.claude/genesis/'. Executed repro against a synthetic root with one open dimension printed `Read only: .claude/genesis/` verbatim. Spec D9 bans exactly this. The only guarding test asserts /^Read only:/ (prefix match) which passes vacuously."
+      }
+    ],
+    "killed": [],
+    "reviewerCount": 1,
+    "scope": "full",
+    "tokens": 130605
+  }
+}

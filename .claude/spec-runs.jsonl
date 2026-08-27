@@ -283,3 +283,4 @@
 {"ts":"2026-08-27T18:01:20Z","stage":"plan","spec":"specs/20260827/02-genesis-explore-state.md","tier":"critical","brief":"10a","spikes":2,"promiseSweep":{"rows":14,"carried":12,"sanctioned":2,"orphans":0},"collisions":{"hits":19,"waived":7},"verdict":"locked"}
 {"ts":"2026-08-27T18:01:20Z","stage":"plan","spec":"specs/20260827/03-genesis-design-state.md","tier":"critical","brief":"10a","spikes":2,"promiseSweep":{"rows":11,"carried":9,"sanctioned":2,"orphans":0},"collisions":{"hits":20,"waived":8},"verdict":"locked"}
 {"ts":"2026-08-27T18:01:20Z","stage":"plan","spec":"specs/20260827/04-genesis-conventions-handoff.md","tier":"standard","brief":"10a","spikes":1,"promiseSweep":{"rows":10,"carried":8,"sanctioned":2,"orphans":0},"collisions":{"hits":10,"waived":0},"verdict":"locked"}
+{"ts":"2026-08-27T19:42:00Z","spec":"specs/20260827/01-genesis-tournament.md","stage":"build","tier":"standard","diff":{"files":16,"loc":2518},"gate":{"finalRounds":1},"deviations":1}

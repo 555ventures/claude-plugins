@@ -56,13 +56,13 @@ render authority; commands assemble slots and print its output verbatim):
 - `outcome`: `✅ architected — scaffold green, {N} ADRs, roadmap of {M} briefs`.
 - `bullets`: `{archetype} for {audience}; gate: {resolved gate command}`; one
   `{decision made — ADR path}` entry per decision; a `Chain: /spec:genesis →
-  genesis-explore → genesis-design → /spec:atlas sweep + your holistic atlas review →
+  /spec:genesis-design → /spec:atlas sweep + your holistic atlas review →
   /spec:init → /spec:enforce → /spec:plan docs/roadmap/01-*.md` entry, rendered above the
   close so the whole sequence is visible before the one recommended next step. For an
   archetype whose design stage is `none` the chain bullet shrinks to `Chain: /spec:genesis →
   /spec:init → /spec:enforce → /spec:plan docs/roadmap/01-*.md`.
 - `warns`: one `dissent recorded: {one-phrase summary}` entry per dissent (drop if none).
-- `next`: `{kind: 'command', text: '/spec:genesis-explore {same idea}'}` — for a design-stage-
+- `next`: `{kind: 'command', text: '/spec:genesis-design {same idea}'}` — for a design-stage-
   `none` archetype, `{kind: 'command', text: '/spec:init'}` instead; the driver's own HANDOFF
   step names which.
 
@@ -74,10 +74,10 @@ verbatim. Filled example:
 - web-app for solo creators; gate: npm run typecheck && npm run lint && npm test
 - framework: Next.js 15 (App Router) — docs/adr/0001-framework.md
 - persistence: Postgres via Neon — docs/adr/0002-persistence.md
-- Chain: /spec:genesis → genesis-explore → genesis-design → /spec:atlas sweep + your holistic atlas review → /spec:init → /spec:enforce → /spec:plan docs/roadmap/01-*.md
+- Chain: /spec:genesis → /spec:genesis-design → /spec:atlas sweep + your holistic atlas review → /spec:init → /spec:enforce → /spec:plan docs/roadmap/01-*.md
 ⚠️ dissent recorded: SQLite rejected — no managed backup story for a solo operator
 
-Next: /spec:genesis-explore a trading simulator for solo creators
+Next: /spec:genesis-design a trading simulator for solo creators
 ```
 
 ## Rules

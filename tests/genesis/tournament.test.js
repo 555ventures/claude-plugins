@@ -281,9 +281,39 @@ test('AC-20260827-01-4: a bare invocation in RACE scaffolds, gates, and boots a 
   assert.strictEqual(peek.stdout, 'PROBE\n', '--state must report PROBE for the driver-only RACE state exactly like the existing SCAFFOLD/GATE peek contract (F3) — a --state call that races or reports something else breaks the read-only peek invariant this driver already guarantees elsewhere')
 })
 
+// specs/20260827/02-genesis-explore-state.md D7 (2026-08-27): tile source derivation replaces
+// this spec's own D6 sketch source — the style-tile task's tiles are now `explore.finalists`
+// (a position's tile.html + tokens.css, or an external candidate's dir), never
+// .claude/genesis/sketch.html. web-app is also one of D1's four VISUAL archetypes, so it must
+// now resolve the new EXPLORE state (between MENUS and FINALISTS) before it can ever reach
+// FINALISTS at all — advanceToFinalists()'s "menus-done reaches FINALISTS straight away"
+// contract no longer holds for web-app specifically (it still holds for every archetype used
+// elsewhere in this file, all of which are the non-visual backend-api). This test's own
+// "sketch-tile" setup is retargeted in place to resolve EXPLORE via `--mark external` — the
+// funnel-skipping path D6 introduces — and merges the old two-directory noSketch/withSketch
+// shape into one flow that ALSO writes a decoy sketch.html, so the pin gets STRICTLY stronger:
+// it now proves sketch.html is ignored even when present on disk, not merely when absent. Never
+// weakened, no new AC-ID (this row carries none per the File Plan).
 test('AC-20260827-01-5: PROBE lists the archetype\'s task set and the tile source, dropping style-tile when no sketch.html exists, and probe-done refuses a task over the retry cap and a probe.json missing an expected task before accepting a valid one that re-executes the finalist\'s gate, writes the benchmark and gallery, and advances to PICK', () => {
-  function raceWebApp(dir) {
-    advanceToFinalists(dir, 'web-app')
+  function raceWebAppViaExternal(dir) {
+    advanceToMenusReady(dir)
+    writeBrief(dir, { picks: ['- archetype: web-app', '- ' + DIM + ': AWS'] })
+    const done = mark(dir, 'menus-done')
+    assert.strictEqual(done.status, 0, 'test setup requires menus-done to be accepted: ' + done.stderr)
+    assert.match(done.stdout, /state: EXPLORE/, 'specs/20260827/02 D1: menus-done for the visual archetype web-app must now reach EXPLORE, not FINALISTS — this test\'s own setup must track that routing change or every assertion below is exercising a state the driver would never actually reach')
+
+    // A decoy sketch.html PROVES D7's "sketch.html is never a tile source" claim: it must never
+    // be named by PROBE even though it genuinely exists on disk.
+    writeFile(path.join(dir, '.claude/genesis/sketch.html'), '<html><body>decoy sketch.html — must never be named by PROBE</body></html>')
+    writeFile(path.join(dir, 'design/explore/external/mine/index.html'),
+      '<html><body><div data-screen-label="mine"></div></body></html>')
+    writeJSON(path.join(dir, 'design/targets.json'), { themes: ['light'], viewports: [{ name: 'mobile', width: 390, height: 844 }] })
+    const external = mark(dir, 'external', 'design/explore/external/mine')
+    assert.strictEqual(external.status, 0, 'test setup requires --mark external to be accepted: ' + external.stderr)
+
+    const finalistsStep = bare(dir)
+    assert.match(finalistsStep.stdout, /state: FINALISTS/, 'test setup requires explore: external to hand EXPLORE off to FINALISTS: ' + finalistsStep.stdout)
+
     writeJSON(path.join(dir, '.claude/genesis/finalists.json'), {
       finalists: [
         finalist('stack-a', { hosting: 'AWS' }, {
@@ -303,19 +333,13 @@ test('AC-20260827-01-5: PROBE lists the archetype\'s task set and the tile sourc
     return raced
   }
 
-  const noSketch = tmpdir('tourn-ac5-nosketch')
-  const stepNoSketch = raceWebApp(noSketch)
-  assert.match(stepNoSketch.stdout, /authed-crud-screen/, 'D6: web-app\'s PROBE step must list authed-crud-screen — its absence means the probe-task table is not actually wired to the printed step')
-  assert.match(stepNoSketch.stdout, /background-job/, 'D6: web-app\'s PROBE step must list background-job')
-  assert.doesNotMatch(stepNoSketch.stdout, /style-tile/, 'D6: with no .claude/genesis/sketch.html on disk, style-tile must be DROPPED from the printed task set — listing it here would send a probe worker to render a tile from a source that does not exist')
-
-  const withSketch = tmpdir('tourn-ac5-sketch')
-  writeFile(path.join(withSketch, '.claude/genesis/sketch.html'), '<html><body>sketch</body></html>')
-  const stepWithSketch = raceWebApp(withSketch)
-  assert.match(stepWithSketch.stdout, /authed-crud-screen/, 'D6: web-app\'s PROBE step must still list authed-crud-screen when a sketch exists')
-  assert.match(stepWithSketch.stdout, /background-job/, 'D6: web-app\'s PROBE step must still list background-job when a sketch exists')
-  assert.match(stepWithSketch.stdout, /style-tile/, 'D6: with .claude/genesis/sketch.html present, style-tile must be listed as an expected task — its absence means a real tile source is being silently dropped')
-  assert.match(stepWithSketch.stdout, /sketch\.html/, 'D6: the PROBE step must print the sketch.html path itself as the style-tile task\'s tile source — a session that has to go find the source file on its own defeats the point of the printed step')
+  const dir = tmpdir('tourn-ac5-external')
+  const probeStep = raceWebAppViaExternal(dir)
+  assert.match(probeStep.stdout, /authed-crud-screen/, 'D6: web-app\'s PROBE step must list authed-crud-screen — its absence means the probe-task table is not actually wired to the printed step')
+  assert.match(probeStep.stdout, /background-job/, 'D6: web-app\'s PROBE step must list background-job')
+  assert.match(probeStep.stdout, /style-tile/, 'specs/20260827/02 D7: once explore has resolved to an external candidate, style-tile must be listed as an expected task — its absence means a real tile source is being silently dropped')
+  assert.match(probeStep.stdout, /design\/explore\/external\/mine/, 'specs/20260827/02 D7: the PROBE step must print the external candidate\'s own dir as the style-tile task\'s tile source — a session that has to go find the source on its own defeats the point of the printed step')
+  assert.doesNotMatch(probeStep.stdout, /sketch\.html/, 'specs/20260827/02 D7: "sketch.html is never a tile source" — its mention here would mean the retired spec 01 D6 mechanism is still being read even though a decoy sketch.html exists on disk and an external candidate was properly marked')
 
   function probeJsonPath(dir) {
     return path.join(dir, '.claude/genesis/tournament/evidence/stack-a/probe.json')
@@ -328,57 +352,57 @@ test('AC-20260827-01-5: PROBE lists the archetype\'s task set and the tile sourc
     return rel
   }
 
-  // over-cap retries — reuses the withSketch dir: a refused mark records nothing, so PROBE
+  // over-cap retries — reuses the same dir: a refused mark records nothing, so PROBE
   // is still the derived state for the next attempt.
-  writeJSON(probeJsonPath(withSketch), {
+  writeJSON(probeJsonPath(dir), {
     tasks: [
       { task: 'authed-crud-screen', passed: true, retries: 3, tokens: 100, screenshot: null },
       { task: 'background-job', passed: true, retries: 0, tokens: 200, screenshot: null },
-      { task: 'style-tile', tile: 'sketch', passed: true, retries: 0, tokens: 50, screenshot: null },
+      { task: 'style-tile', tile: 'external/mine', passed: true, retries: 0, tokens: 50, screenshot: null },
     ],
   })
-  const r1 = mark(withSketch, 'probe-done')
+  const r1 = mark(dir, 'probe-done')
   assert.strictEqual(r1.status, 2, 'D7: retries must be capped at 2 per task (D6\'s "retry cap: 2 per task") — a probe.json claiming 3 retries on authed-crud-screen must be refused, not silently accepted as evidence: ' + JSON.stringify(r1))
   assert.match(r1.stderr, /stack-a/, 'the refusal must name the offending finalist "stack-a"')
   assert.match(r1.stderr, /retries/, 'the refusal must name the offending field "retries" so the session knows exactly what is out of range')
 
   // missing background-job
-  writeJSON(probeJsonPath(withSketch), {
+  writeJSON(probeJsonPath(dir), {
     tasks: [
       { task: 'authed-crud-screen', passed: true, retries: 0, tokens: 100, screenshot: null },
-      { task: 'style-tile', tile: 'sketch', passed: true, retries: 0, tokens: 50, screenshot: null },
+      { task: 'style-tile', tile: 'external/mine', passed: true, retries: 0, tokens: 50, screenshot: null },
     ],
   })
-  const r2 = mark(withSketch, 'probe-done')
+  const r2 = mark(dir, 'probe-done')
   assert.strictEqual(r2.status, 2, 'D7: probe.json must cover exactly the expected task set — a probe.json missing background-job must be refused, not accepted as if the missing task were simply skipped: ' + JSON.stringify(r2))
   assert.match(r2.stderr, /background-job/, 'the refusal must name the missing task "background-job" so the session knows exactly which probe slice still needs building')
 
   // valid
-  const shot1 = shotAt(withSketch, 'authed-crud-screen.png')
-  const shot3 = shotAt(withSketch, 'style-tile.sketch.png')
-  writeJSON(probeJsonPath(withSketch), {
+  const shot1 = shotAt(dir, 'authed-crud-screen.png')
+  const shot3 = shotAt(dir, 'style-tile.external.png')
+  writeJSON(probeJsonPath(dir), {
     tasks: [
       { task: 'authed-crud-screen', passed: true, retries: 1, tokens: 100, screenshot: shot1 },
       { task: 'background-job', passed: true, retries: 0, tokens: 200, screenshot: null },
-      { task: 'style-tile', tile: 'sketch', passed: true, retries: 0, tokens: 50, screenshot: shot3 },
+      { task: 'style-tile', tile: 'external/mine', passed: true, retries: 0, tokens: 50, screenshot: shot3 },
     ],
   })
-  const r3 = mark(withSketch, 'probe-done')
+  const r3 = mark(dir, 'probe-done')
   assert.strictEqual(r3.status, 0, 'a probe.json covering exactly the expected tasks, with retries and screenshots inside the contract, must be accepted: ' + r3.stderr)
   assert.match(r3.stdout, /state: PICK/, 'D7: a successful probe-done must advance the driver to PICK — anything else means the benchmark assembly this mark owns never actually ran')
 
-  const gateRunsPath = path.join(withSketch, '.claude/genesis/tournament/finalists/stack-a/gate-runs.txt')
+  const gateRunsPath = path.join(dir, '.claude/genesis/tournament/finalists/stack-a/gate-runs.txt')
   const gateRunsLines = fs.readFileSync(gateRunsPath, 'utf8').trim().split('\n')
   assert.strictEqual(gateRunsLines.length, 2, 'D7: probe-done must re-execute the finalist\'s gateCommand once more on top of the race\'s own run — one line in gate-runs.txt means the post-probe gate never actually ran, leaving the benchmark\'s "gate: post" column reporting a fact nobody observed')
 
-  const benchmark = JSON.parse(fs.readFileSync(path.join(withSketch, '.claude/genesis/tournament/benchmark.json'), 'utf8'))
+  const benchmark = JSON.parse(fs.readFileSync(path.join(dir, '.claude/genesis/tournament/benchmark.json'), 'utf8'))
   const row = benchmark.finalists.find((f) => f.name === 'stack-a')
   assert.ok(row, 'D7: benchmark.json must carry a row for stack-a — its absence means the one finalist that actually reached PROBE has no recorded benchmark evidence at all')
   assert.strictEqual(row.tokens, 350, 'D7: tokens must be summed from probe.json (100 + 200 + 50 = 350) — any other figure means tokens were estimated or mis-summed instead of read straight from the harness-reported values A4 documents')
   assert.strictEqual(row.probePassed, 3, 'D7: probePassed must count the 3 passing tasks in probe.json')
   assert.strictEqual(row.probeTotal, 3, 'D7: probeTotal must count all 3 expected tasks')
-  assert.ok(fs.existsSync(path.join(withSketch, '.claude/genesis/tournament/benchmark.md')), 'D7: benchmark.md must be written as the human-readable render of benchmark.json — its absence leaves PICK (D8) with no table to print verbatim')
-  const gallery = fs.readFileSync(path.join(withSketch, '.claude/genesis/tournament/gallery.html'), 'utf8')
+  assert.ok(fs.existsSync(path.join(dir, '.claude/genesis/tournament/benchmark.md')), 'D7: benchmark.md must be written as the human-readable render of benchmark.json — its absence leaves PICK (D8) with no table to print verbatim')
+  const gallery = fs.readFileSync(path.join(dir, '.claude/genesis/tournament/gallery.html'), 'utf8')
   assert.ok(gallery.includes(shot1), 'D7: gallery.html must contain the recorded authed-crud-screen screenshot\'s path — its absence means the gallery is missing an <img> cell for evidence that was actually captured')
   assert.ok(gallery.includes(shot3), 'D7: gallery.html must contain the recorded style-tile screenshot\'s path')
 })

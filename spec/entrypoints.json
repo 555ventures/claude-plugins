@@ -41,7 +41,6 @@
     "entryPoints": [
       "spec/commands/sketch.md",
       "spec/commands/atlas.md",
-      "spec/commands/genesis-explore.md",
       "spec/commands/design.md",
       "spec/doctrine/design.md"
     ]
@@ -119,8 +118,7 @@
   "spec/scripts/registry-check.js": {
     "entryPoints": [
       "spec/scripts/genesis-driver.js",
-      "spec/commands/genesis-design.md",
-      "spec/commands/genesis-explore.md"
+      "spec/commands/genesis-design.md"
     ]
   },
   "spec/scripts/release-legs.js": {
@@ -159,7 +157,6 @@
   },
   "spec/scripts/report-render.js": {
     "entryPoints": [
-      "spec/commands/genesis-explore.md",
       "spec/commands/doctor.md",
       "spec/commands/sketch.md",
       "spec/commands/replay.md",
@@ -245,7 +242,6 @@
   },
   "spec/workflows/wf-research.js": {
     "entryPoints": [
-      "spec/commands/genesis-explore.md",
       "spec/commands/genesis.md",
       "spec/commands/genesis-design.md"
     ]

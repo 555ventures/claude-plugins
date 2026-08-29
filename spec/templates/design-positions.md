@@ -3,7 +3,7 @@
 Signature screen: **{signature-screen-name}** · Research brief: `docs/design/research-brief.md`
 
 <!-- Positions are session-authored (the taste seat), never Sonnet — genesis.md § Genesis:
-     Explore Stage / D1-D3. Each position below is a genuinely distinct psychological/aesthetic
+     Explore State / D1-D3. Each position below is a genuinely distinct psychological/aesthetic
      stance; a position missing any mandatory field is not built (spec 20260807/05,
      AC-20260807-05-4). The starter tokens.css this brief points to is authored by the same
      session, before the builder fan-out, and committed together with this file

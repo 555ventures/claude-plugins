@@ -157,8 +157,16 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
     'atlas consumes bound/approved semantics — the ledger definition lives in Design Canon')
   assert.ok(!/## Design Render Gate/.test(run('shared-for', 'atlas')),
     'atlas must not pay for the render gate — design-only doctrine')
-  assert.ok(!/## Design (Render Gate|Authoring Contracts)/.test(run('shared-for', 'genesis-explore')),
-    'genesis-explore loads only Design Canon of the design sections')
+  // specs/20260827/02-genesis-explore-state.md D10 (2026-08-27): the retired explore command's
+  // own shared-for entry is deleted and `genesis` gains Design Canon instead (the driver now
+  // runs the taste funnel end-to-end from the entry point). This pin used to exercise the
+  // retired command's own scoped section list directly; retargeted to `genesis` in place,
+  // retagged AC-20260827-02-8, never weakened — a call scoped to the retired command now falls
+  // back to the FULL doctrine (AC-20260827-02-8's own test in genesis-doctrine.test.js pins that).
+  assert.match(run('shared-for', 'genesis'), /## Design Canon/,
+    'AC-20260827-02-8/D10: /spec:genesis must now be served § Design Canon directly — its absence means the entry point lost the doctrine governing the taste funnel it now runs end-to-end')
+  assert.ok(!/## Design (Render Gate|Authoring Contracts)/.test(run('shared-for', 'genesis')),
+    'AC-20260827-02-8/D10: genesis gains Design Canon but must still not load Design Render Gate or Design Authoring Contracts — D10 folds only Design Canon into genesis\'s section list, not the render-gate or authoring-contract doctrine')
   assert.match(run('shared-for', 'genesis-design'), /## Design Authoring Contracts/)
   assert.ok(!/## Design Render Gate/.test(run('shared-for', 'genesis-design')),
     'genesis-design authors canon, never binds specs')

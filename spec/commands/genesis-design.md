@@ -5,8 +5,8 @@ argument-hint: <project idea — same as architect>
 
 # Genesis Design: Ratify the Pick, Author the Canon
 
-The third greenfield stage. **Ratification mode (the v6 main path):** when `/spec:genesis-explore`
-has recorded a pick (`.claude/genesis/design-pick.json`), the direction is already chosen and
+The third greenfield stage. **Ratification mode (the v6 main path):** when the genesis explore
+state has recorded a pick (`.claude/genesis/design-pick.json`), the direction is already chosen and
 judged on rendered candidates — this command **ratifies the winner's `tokens.css` verbatim as
 canon** (no extraction, no re-authoring of values) and authors only what a mock cannot carry:
 the one-page doctrine, the scheme mirror, the framework-native consumption surface, base
@@ -44,7 +44,7 @@ warning); also verify `.claude/genesis/stack-descriptor.json` exists.
    *TUI* guidelines (no visual token files); adapt Phase 4 accordingly.
 3. **Mode resolution:** if `.claude/genesis/design-pick.json` exists AND the winner's candidate
    dir + `tokens.css` physically exist → **ratification mode**: skip Phases 1–3 entirely (the
-   direction was researched, rendered, walked through, and picked in `/spec:genesis-explore`;
+   direction was researched, rendered, and picked in the genesis explore state;
    re-interviewing it would re-litigate a made decision) and run Phase 4 in its ratification
    variant. Read the pick, the winner's files, and `docs/design/research-brief.md` first.
    Otherwise → **legacy mode**: Phases 1–4 as written.
@@ -266,7 +266,7 @@ Next: /spec:atlas (sweep + holistic review of the genesis mocks) → /spec:init 
 - One canon: this supersedes `/spec:init`'s greenfield design sketch; init reads this, never
   re-prompts adopt/craft when `design: rules-locked`.
 - **Ratification never re-opens the pick.** A direction-level regret at this stage goes back to
-  `/spec:genesis-explore` (a fresh round), never a silent re-theme of the winner's tokens.
+  the genesis explore state (a fresh round), never a silent re-theme of the winner's tokens.
 - Design rules are category-only; tool selection is `/spec:enforce`'s job (runtime, per stack).
 - **Encodable dimensions are closed:** every dimension that names values produces a token family
   AND a consume-by-name rule; doctrine carries posture, never values. A value in doctrine with no

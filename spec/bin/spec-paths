@@ -69,8 +69,7 @@ case "${1:-root}" in
       review)  SECTIONS="Host Grounding|Tiers|State Machine|Runtime Verification|Model Placement|Incident Policy|Decisions|Question Style|Console Output Style|Worker Git Ban|Read-Only Surfaces|Canonical Docs Loop" ;;
       release) SECTIONS="Host Grounding|Runtime Verification|Release Stage|Model Placement|Decisions|Question Style|Console Output Style|Canonical Docs Loop" ;;
       enforce) SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Model Placement|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment" ;;
-      genesis)           SECTIONS="Host Grounding|Pipeline Entry|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban|MCP Policy" ;;
-      genesis-explore)   SECTIONS="Design Canon|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban" ;;
+      genesis)           SECTIONS="Host Grounding|Pipeline Entry|Design Canon|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban|MCP Policy" ;;
       genesis-design)    SECTIONS="Design Canon|Design Authoring Contracts|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment" ;;
       status)  SECTIONS="Host Grounding|State Machine|Question Style|Console Output Style" ;;
       queue)   SECTIONS="Host Grounding|State Machine|Question Style|Console Output Style" ;;

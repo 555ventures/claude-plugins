@@ -1,6 +1,6 @@
 ---
 date: 2026-08-27
-status: hardened
+status: implementing
 tier: critical           # edits the genesis-state-gate.sh hook (process boundary) and spec/bin/spec-paths
 area: genesis
 design: false
@@ -9,6 +9,7 @@ depends_on: [specs/20260827/01-genesis-tournament.md]
 depended_on_by: [specs/20260827/03-genesis-design-state.md]
 brief: 10a
 spiked: 2026-08-27
+diff_base: 0eb4ddf6dcf699cd7f3c8035ca2a65435075ed13
 open_markers: 0
 ---
 

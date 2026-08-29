@@ -27,8 +27,8 @@ own tokens, never an external-tool export:
 - **`mocks/<label>.html`** — one screen per file, root `data-screen-label="<label>"`. IS the
   `design_source` — the render gate resolves it directly, no extraction. `data-status`:
   `sketch` (default) | `ratified` | `approved`.
-- **`explore/`** — genesis-explore candidates, pruned once locked; **`atlas/`** — generated
-  output (§ Design Atlas), never hand-edited.
+- **`explore/`** — genesis explore-state candidates, pruned once locked; **`atlas/`** —
+  generated output (§ Design Atlas), never hand-edited.
 
 **Mock authority has a lifecycle — it expires at `built`.** Sketch → ratified → approved →
 bound: the mock is authority, code is held to it. Once the claiming spec is `done`,

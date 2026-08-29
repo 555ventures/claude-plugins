@@ -354,7 +354,11 @@ test('AC-20260825-04-7: roadmap-written refuses a Depends-on cycle by naming it 
   assert.strictEqual(noneAccepted.status, 0, 'an acyclic roadmap with an overview file must be accepted: ' + noneAccepted.stderr)
   const noneHandoff = bare(noneCatalog)
   assert.match(noneHandoff.stdout, /next: \/spec:init/, 'a headless/no-catalog descriptor must hand off straight to /spec:init — there is no design stage to run')
-  assert.doesNotMatch(noneHandoff.stdout, /next: \/spec:genesis-explore/, 'designCatalog: "none" must never print the design-genesis handoff — that would send the user into a stage this project has no use for')
+  // specs/20260827/02-genesis-explore-state.md D10 (2026-08-27): genesis-explore is deleted and
+  // the driver's HANDOFF next: line now points at /spec:genesis-design directly (explore folded
+  // into the driver itself; genesis-design is still the separate command until spec 03). This
+  // AC-20260825-04-7 pin is updated in place and retagged, never weakened.
+  assert.doesNotMatch(noneHandoff.stdout, /next: \/spec:genesis-design/, 'designCatalog: "none" must never print the design-genesis handoff — that would send the user into a stage this project has no use for')
 
   const storybookCatalog = tmpdir('gdrv-ac7-storybook')
   advanceToRoadmap(storybookCatalog, { designCatalog: 'storybook' })
@@ -362,7 +366,7 @@ test('AC-20260825-04-7: roadmap-written refuses a Depends-on cycle by naming it 
   const sbAccepted = mark(storybookCatalog, 'roadmap-written')
   assert.strictEqual(sbAccepted.status, 0, 'an acyclic roadmap with an overview file must be accepted: ' + sbAccepted.stderr)
   const sbHandoff = bare(storybookCatalog)
-  assert.match(sbHandoff.stdout, /next: \/spec:genesis-explore/, 'a project with a design catalog must hand off into design genesis before /spec:init')
+  assert.match(sbHandoff.stdout, /next: \/spec:genesis-design/, 'AC-20260825-04-7/D10: a project with a design catalog must hand off straight into /spec:genesis-design — the explore funnel is now a driver state, not a separate command the HANDOFF line names')
   assert.doesNotMatch(sbHandoff.stdout, /next: \/spec:init\b/, 'designCatalog: "storybook" must not also print the /spec:init handoff — HANDOFF names exactly one next command')
 })
 

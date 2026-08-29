@@ -417,11 +417,15 @@ test('AC-20260825-03-9: genesis.md, genesis-driver.js, and both remaining genesi
   // narrates the registry check — genesis-driver.js RUNS it on `--mark menu-written`. The pin
   // follows the mechanism to its new home in place; the invariant (every file that owns a menu
   // step names the deterministic currency script) is unchanged.
+  //
+  // specs/20260827/02-genesis-explore-state.md D10 (2026-08-27): spec/commands/genesis-explore.md
+  // is deleted — read()ing it here would throw once the file is gone. Dropped from this list in
+  // place (its own deletion is pinned separately, in this file's new AC-20260827-02-8 test); the
+  // three remaining files still carry the invariant unchanged.
   const files = [
     'spec/doctrine/genesis.md',
     'spec/scripts/genesis-driver.js',
     'spec/commands/genesis-design.md',
-    'spec/commands/genesis-explore.md'
   ]
   for (const rel of files) {
     const src = read(rel)
@@ -559,17 +563,21 @@ test('AC-20260825-04-9: spec-paths resolves genesis-driver and shared-for genesi
     'file list because that list missed tests/ and .claude-plugin/marketplace.json on this same ' +
     'rename (rules § Gotchas: classify by location, never by name-shape)')
 
-  // D15 regression pin: rekeying genesis-architect -> genesis must not disturb the sibling
-  // section lists in spec-paths' shared-for map.
-  const exploreShared = runBash('bin/spec-paths', ['shared-for', 'genesis-explore'])
-  assert.strictEqual(exploreShared.status, 0,
-    'D15: `spec-paths shared-for genesis-explore` must continue to exit 0 — the explore stage is ' +
-    'untouched by this spec and a non-zero exit means the rekey broke the resolver itself: ' +
-    exploreShared.stderr)
-  assert.match(exploreShared.stdout, /## Design Canon/,
-    'D15: genesis-explore must continue to be served § Design Canon — its absence means the ' +
-    'taste funnel lost the doctrine governing the target matrix and matrix-at-approval, a ' +
-    'regression this spec never intended to cause')
+  // D15 regression pin, retargeted specs/20260827/02-genesis-explore-state.md D10 (2026-08-27):
+  // the explore stage is no longer untouched by a later spec — D10 deletes genesis-explore's own
+  // `shared-for` map entry outright and folds Design Canon into `genesis` instead (the driver now
+  // runs the taste funnel end-to-end from the entry point). AC-20260825-04-9's own sibling-list
+  // regression pin is retargeted in place from `genesis-explore` to `genesis`, never weakened;
+  // AC-20260827-02-8's own test below pins genesis-explore's NEW fall-through-to-full-doctrine
+  // behavior.
+  const genesisShared = runBash('bin/spec-paths', ['shared-for', 'genesis'])
+  assert.strictEqual(genesisShared.status, 0,
+    'D10: `spec-paths shared-for genesis` must continue to exit 0 — a non-zero exit here means ' +
+    'folding Design Canon into genesis\'s own section list broke the resolver itself: ' +
+    genesisShared.stderr)
+  assert.match(genesisShared.stdout, /## Design Canon/,
+    'D10: /spec:genesis must now be served § Design Canon directly — its absence means the entry ' +
+    'point lost the doctrine governing the taste funnel it now runs end-to-end')
 })
 
 // specs/20260827/01-genesis-tournament.md (2026-08-27): D10 deletes spec/commands/genesis.md's
@@ -636,4 +644,136 @@ test('AC-20260827-01-8: spec/commands/genesis.md drops its per-state pointer sec
         'demonstrates an incomplete finalist shape to every session that copies it')
     }
   }
+})
+
+// specs/20260827/02-genesis-explore-state.md (2026-08-27): explore's Round 0 folds into the
+// driver as states between MENUS and FINALISTS; `/spec:genesis-explore` and its hook arm are
+// deleted, and the name is swept from every live surface. D11 gains this file's own standing
+// repo-wide emptiness sweep for the retired literal, on the AC-20260825-04-9 pattern just above
+// (same inverted walk-then-waive shape, its own justified waive-list — narrower than
+// AC-20260825-04-9's, since fewer files legitimately still need the retired name). None of this
+// can pass yet: as of 2026-08-27 spec/commands/genesis-explore.md still exists, spec/entrypoints.json
+// still names it in four rows, spec/doctrine/genesis.md still carries "## Genesis: Explore Stage"
+// (not "## Genesis: Explore State"), and `spec-paths shared-for genesis` does not yet serve
+// § Design Canon (TDD red, grep/run confirmed at authoring time 2026-08-29).
+
+// ---------------------------------------------------------------------------
+// AC-20260827-02-8
+// ---------------------------------------------------------------------------
+
+test('AC-20260827-02-8: spec-paths shared-for genesis serves Design Canon and continues to serve Host Grounding, shared-for genesis-explore falls back to the full doctrine, the retired command file and its entrypoints.json rows are gone, genesis.md doctrine carries the new heading and not the old one, and no file outside a justified waive-list names genesis-explore', () => {
+  const genesisShared = runBash('bin/spec-paths', ['shared-for', 'genesis'])
+  assert.strictEqual(genesisShared.status, 0,
+    'D10: `spec-paths shared-for genesis` must exit 0 — a non-zero exit here means folding Design Canon into genesis\'s own section list broke the resolver itself: ' + genesisShared.stderr)
+  assert.match(genesisShared.stdout, /## Design Canon/,
+    'D10: /spec:genesis must be served § Design Canon — its absence means the entry point runs the taste funnel end-to-end with no doctrine governing it')
+  assert.match(genesisShared.stdout, /## Host Grounding/,
+    'AC-20260827-02-8 SHALL CONTINUE TO: /spec:genesis must keep being served § Host Grounding — D10 only ADDS Design Canon to the section list, it never drops the grounding doctrine every command carries')
+
+  // D10: the retired command's own shared-for map entry is gone entirely — a scoped call now
+  // falls back to the `*)` arm (full doctrine), which the OLD scoped list never served
+  // (## Design Render Gate is design-family doctrine the old genesis-explore SECTIONS list
+  // deliberately excluded, per spec-paths.test.js's own prior pin).
+  const exploreFallback = runBash('bin/spec-paths', ['shared-for', 'genesis-explore'])
+  assert.strictEqual(exploreFallback.status, 0,
+    'D10: `spec-paths shared-for genesis-explore` must still exit 0 even with its map entry gone — the `*)` fallback arm (A5) serves the full doctrine rather than erroring: ' + exploreFallback.stderr)
+  assert.match(exploreFallback.stdout, /## Design Render Gate/,
+    'AC-20260827-02-8/D10: a genesis-explore call must now fall back to the FULL doctrine, which contains § Design Render Gate — a scoped output still narrower than the full doc here means the map entry was not actually removed')
+
+  assert.strictEqual(fs.existsSync(path.join(SPEC, 'commands/genesis-explore.md')), false,
+    'D10: spec/commands/genesis-explore.md must be deleted (worker file deletion, no git) — its continued presence means the retired command is still reachable even though its hook arm and shared-for entry are gone')
+
+  const entrypoints = JSON.parse(read('spec/entrypoints.json'))
+  const entrypointOffenders = []
+  function walkEntrypoints(node) {
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        if (typeof item === 'string' && item.includes('genesis-explore')) entrypointOffenders.push(item)
+        else walkEntrypoints(item)
+      }
+    } else if (node && typeof node === 'object') {
+      for (const v of Object.values(node)) walkEntrypoints(v)
+    }
+  }
+  walkEntrypoints(entrypoints)
+  assert.deepStrictEqual(entrypointOffenders, [],
+    'D10: spec/entrypoints.json must name spec/commands/genesis-explore.md in no row — a surviving row means the entry-point manifest still documents a call site for a deleted command: ' +
+    JSON.stringify(entrypointOffenders))
+
+  const genesisDoctrine = read('spec/doctrine/genesis.md')
+  assert.match(genesisDoctrine, /^## Genesis: Explore State$/m,
+    'D11: spec/doctrine/genesis.md must carry the "## Genesis: Explore State" heading — its absence means the rewritten § Explore Stage section (states, marks, external candidate, tile fold, driver-vs-session split) was never landed')
+  assert.ok(!genesisDoctrine.includes('## Genesis: Explore Stage'),
+    'D11: spec/doctrine/genesis.md must NOT carry the old "## Genesis: Explore Stage" heading — a surviving old heading alongside the new one means the section was duplicated rather than rewritten in place, and any `§ Genesis: Explore Stage` citation elsewhere (e.g. spec/templates/design-positions.md) would still resolve')
+
+  // D11/§ Gotchas: classify by location (a repo-wide walk), never by name-shape — a narrower,
+  // hand-enumerated file list is the exact hole a prior incident on this same pattern (the
+  // genesis-architect sweep above) was built to close. Waived by explicit path/prefix, each
+  // entry justified; re-verify a waived entry's own hit before trusting it (a concurrent fix
+  // can remove the very mention it waives).
+  const waivedPaths = [
+    // this test file's own header/body names the retired literal as the string under test.
+    'tests/consistency/genesis-doctrine.test.js',
+    // its `description` is the changelog surface; the changelog paragraph names the retired
+    // command by design (D14) — a historical record, not a stale reference.
+    'spec/.claude-plugin/plugin.json',
+    // its header comment states the incident history this spec adds to (the funnel-to-driver
+    // fold) — a dated record of what changed, not a live pointer at the deleted command.
+    'spec/scripts/genesis-driver.js',
+    // D14 waives it by name: a wording edit re-stamps every host repo's grounding as stale
+    // (rules § Risk Tiers), and the contract hash is not paid for a word.
+    'spec/templates/grounding-contract.md',
+    // append-only run ledger: /spec:plan's own lock-stage row for THIS spec records its path
+    // verbatim (verified 2026-08-29: `{"stage":"plan","spec":"specs/20260827/02-genesis-explore-
+    // state.md",...,"verdict":"locked"}`, committed 2026-08-27) — a dated historical record of
+    // the same kind `specs/` itself is, never a live pointer at the deleted command. Ledger rows
+    // are never rewritten, so omitting this waiver would make this sweep permanently red.
+    '.claude/spec-runs.jsonl',
+    // "the three sibling specs' dated headers in tests/": THIS spec's own filename
+    // (specs/20260827/02-genesis-explore-state.md) is the one of the three (01-genesis-
+    // tournament.md, 02-genesis-explore-state.md, 03-genesis-design-state.md) whose filename
+    // contains the literal substring "genesis-explore" — every test file below carries only a
+    // dated header comment citing that filename as provenance (never a live pointer at the
+    // deleted /spec:genesis-explore command); each is also this file's own File Plan sibling row
+    // (verified empirically 2026-08-29 via a standalone repo walk — omitting any of these six
+    // would make this sweep permanently red once the rest of the spec lands, since dated header
+    // citations are never retroactively edited):
+    'tests/genesis-gate.test.js',
+    'tests/consistency/red-fixture-coverage.test.js',
+    'tests/genesis/genesis-driver.test.js',
+    'tests/genesis/tournament.test.js',
+    'tests/genesis/explore-states.test.js',
+    'tests/spec-paths.test.js',
+  ]
+  const waivedPrefixes = [
+    // dated historical records — a spec that retires a command must keep naming it in its own
+    // (and its siblings') spec documents and the roadmap/audit trail.
+    'specs/',
+    'docs/roadmap/',
+    'docs/audit/',
+    'docs/adr/',
+  ]
+  function isWaived(rel) {
+    return waivedPaths.includes(rel) || waivedPrefixes.some((p) => rel.startsWith(p))
+  }
+  function walk(dir, acc) {
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (ent.name === '.git' || ent.name === 'node_modules') continue
+      const abs = path.join(dir, ent.name)
+      if (ent.isDirectory()) walk(abs, acc)
+      else if (ent.isFile()) acc.push(abs)
+    }
+    return acc
+  }
+  const offenders = []
+  for (const abs of walk(ROOT, [])) {
+    const rel = path.relative(ROOT, abs).split(path.sep).join('/')
+    if (isWaived(rel)) continue
+    if (fs.readFileSync(abs, 'utf8').includes('genesis-explore')) offenders.push(rel)
+  }
+  assert.deepStrictEqual(offenders, [],
+    'D11: these files outside the waive-list still name the retired `genesis-explore` command: ' +
+    offenders.join(', ') + ' — one binding home for the command name means every live surface ' +
+    '(doctrine, commands, README, marketplace listing, canonical docs) must be swept in the same ' +
+    'spec that deletes the command, not left for a later pass to discover')
 })

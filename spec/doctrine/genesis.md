@@ -4,8 +4,8 @@ description: Genesis-stage supplement to the spec pipeline's shared invariants �
 
 # Spec Pipeline: Genesis-Stage Supplement
 
-Genesis-stage supplement — read by `/spec:genesis`, `/spec:genesis-explore`, and
-`/spec:genesis-design` in addition to `shared.md`.
+Genesis-stage supplement — read by `/spec:genesis` (whose driver loop owns the `EXPLORE` state
+end to end) and `/spec:genesis-design`, in addition to `shared.md`.
 
 ## Genesis: Discovery Interview (the intake posture)
 
@@ -285,9 +285,9 @@ never named here:
 | `data-ml` | `language-runtime` `framework` `persistence` `hosting` | skipped |
 | `desktop-app` | `language-runtime` `framework` `persistence` `auth` `component-library` `hosting` | full |
 
-When the design stage is `none`/`skipped` for an archetype, `/spec:genesis-explore` records
-`explore: skipped`, `/spec:genesis-design` records `design: skipped`, and `/spec:init` writes no
-`design` block.
+When the design stage is `none`/`skipped` for an archetype, the driver records `explore:
+"skipped"` on the first derivation past `MENUS` (§ Genesis: Explore State), `/spec:genesis-design`
+records `design: skipped`, and `/spec:init` writes no `design` block.
 
 ## Genesis: Fresh UX Research (method fixed, content researched)
 
@@ -324,90 +324,134 @@ The output is `docs/design/research-brief.md` (template: `ux-research-brief.md` 
   with the generation.
 
 Mechanizable rules flow into `design-rules.json` categories at `/spec:genesis-design`; the rest
-bind the explore candidates, the persona walkthroughs, and every later mock-authoring session —
-not by being read and remembered, but by being checked. A rule that carries a `renderCheck`
-is executed by `render-rules.js` over the render inventory (shared § Design Canon), never walked
-by a model; the **rule-checklist pass** survives only at the explore stage, which precedes
-`design-rules.json` and so has no manifest to execute: a checker walks the admitted rules
-against each candidate before the direction pick, citing rule IDs. The falsifiable phrasing
-above is what makes both possible.
+bind the explore candidates and every later mock-authoring session — not by being read and
+remembered, but by being checked. A rule that carries a `renderCheck` is executed by
+`render-rules.js` over the render inventory (shared § Design Canon), never walked by a model;
+the **rule-checklist pass** survives only at the `EXPLORE` state (§ Genesis: Explore State),
+which precedes `design-rules.json` and so has no manifest to execute: a checker walks the
+admitted rules against each candidate before the cull, citing rule IDs. The falsifiable
+phrasing above is what makes both possible.
 
-## Genesis: Explore Stage (the taste funnel)
+## Genesis: Explore State
 
-`/spec:genesis-explore` sits between architect and design **because the pick must precede the
-lock**: `/spec:genesis-design` ratifies tokens and canon, and taste judged after the lock is
-re-work. The stage exists so the user judges *rendered candidates*, never prose descriptions of
-a direction — and so divergence is explored while it is still cheap. That principle governs the
-research-brief sign-off too: the brief is a **constraints floor** (evidence rules plus the
-ethics/legal floor), not a direction, and its gate must be framed that way — the user is
-confirming constraints they can skim, not committing taste they haven't seen; direction is
-judged only on rendered tiles, and a brief edit at the cull invalidates only candidates that
-leaned on the changed rule. Before the funnel starts,
-explore declares the **target matrix** (`design/targets.json`, shared § Design Canon): which
-themes (light/dark) and viewports (mobile/tablet/desktop) this product owes, derived from the
-archetype and confirmed with the user. The whole funnel then runs **matrix-at-approval**
-(shared § Design Canon): every candidate is built and judged on the **draft framing** — the
-most-constrained declared viewport, light theme — and the matrix is expanded onto the **winner
-alone, after the pick**. Drafting under constraint is what makes the expansion mechanical;
-drafting on desktop and compressing later is how a pick gets invalidated. Two rounds, a funnel:
+`EXPLORE` sits between `MENUS` and `FINALISTS` in the driver loop **because the pick must
+precede the lock**: `/spec:genesis-design` ratifies tokens and canon, and taste judged after the
+lock is re-work. It is not a command — the driver enters it directly for **visual archetypes**
+(`web-app`, `mobile-app`, `realtime-trading`, `desktop-app`); every other archetype has the
+driver write `explore: "skipped"` on the first derivation past `MENUS` and continue straight to
+`FINALISTS` (§ Genesis: Archetype Registry). The state exists so the user judges *rendered
+candidates*, never prose descriptions of a direction — and so divergence is explored while it is
+still cheap. That principle governs the research-brief sign-off too: the brief is a
+**constraints floor** (evidence rules plus the ethics/legal floor), not a direction, and its
+gate must be framed that way — the user is confirming constraints they can skim, not committing
+taste they haven't seen; direction is judged only on rendered tiles, and a brief edit at the cull
+invalidates only candidates that leaned on the changed rule. Before the funnel starts, `EXPLORE`
+declares the **target matrix** (`design/targets.json`, shared § Design Canon): which themes
+(light/dark) and viewports (mobile/tablet/desktop) this product owes, derived from the archetype
+and confirmed with the user. The funnel then runs **matrix-at-approval** (shared § Design
+Canon): every tile is built and judged on the **draft framing** — the most-constrained declared
+viewport, light theme — and the matrix is expanded onto the **winner alone**, later, at
+`/spec:genesis-design`'s ratification (genesis-design.md Phase 4). Drafting under constraint is
+what makes the expansion mechanical; drafting on desktop and compressing later is how a pick
+gets invalidated.
 
-- **Round 0 — style tiles.** 6–8 one-screen tiles of the same signature screen, each committing
-  to a genuinely different position (instrument vs. guide vs. ambient vs. dense-professional …).
-  The session (Fable seat — taste authors the contract) writes one **position brief** per tile,
-  authored from the `design-positions.md` template (`spec-paths templates`): the psychological
-  stance, its research-brief rules, its anti-defaults, a named reference direction, motion
-  character, and density & layout intent — a position missing a mandatory field is not built.
-  The session then authors each position's **starter `tokens.css`** — palette recipe, type
-  pairing + scale, spacing rhythm, radii, shadow/elevation language — written **before** the
-  builder fan-out and committed together with `positions.md` (`explore: positions-authored`);
+**States, mark-driven** (`status.explore`): `research-done` → `positions-authored` →
+`tiles-built` → `tiles-culled`, or `external` in place of the whole funnel; then `picked`, once
+the tournament's `PICK` step (§ Genesis: Tournament of Scaffolds) names a winner; `skipped` for
+non-visual archetypes.
+
+- **`--mark research-done`.** The session writes `docs/design/research-brief.md` (§ Genesis:
+  Fresh UX Research) and declares `design/targets.json`'s matrix. The driver checks: the brief
+  exists, is non-empty, and carries ≥1 `## ` heading; `targets.json` parses with non-empty
+  `themes` and `viewports` arrays, each viewport `{name, width, height}` — a missing file or
+  empty array is refused by name. Explore's own research menus (component-library,
+  visual-trend, and any audience-scope angle) still go through the ordinary
+  `--mark menu-written` currency check (`registry-check.js`, run by the driver) — no separate
+  currency path for explore.
+- **`--mark positions-authored`.** 6–8 one-screen tiles of the same signature screen, each
+  committing to a genuinely different position (instrument vs. guide vs. ambient vs.
+  dense-professional …). The session (Fable seat — taste authors the contract) writes one
+  **position brief** per tile in `design/explore/positions.md`, authored from the
+  `design-positions.md` template (`spec-paths templates`): `## Position: <kebab>` carrying the
+  seven labels — stance, rules cited, anti-defaults, reference direction, motion character,
+  density & layout intent, starter tokens — a position missing a mandatory field is not built.
+  The session then authors each position's starter `design/explore/r0-<kebab>/tokens.css`
+  (palette recipe, type pairing + scale, spacing rhythm, radii, shadow/elevation language) —
   this is the taste-transfer channel, since tokens are already the pipeline's canonical taste
-  carrier and prose paraphrase was the lossy step. Parallel **Sonnet** agents build the tiles
-  under the design harness (shared § Design Canon) against that starter `tokens.css` — consuming
-  it by role, appending missing role tokens, never changing an authored value (a `git diff`
-  against the positions-authored commit must show additions only); each candidate is
-  self-contained in `design/explore/r0-<position>/`, so the eventual winner's tokens ARE the
-  canon (ratified, never extracted). Tiles are auto-gated (`design-atlas.js check`,
-  deterministic), then run an **unconditional** render → screenshot → session critique leg
-  (no browser-availability conditional in explore — Setup's render-capability precondition
-  guarantees the capability) before the user sees anything, then are presented as one comparison
-  gallery (`design-atlas.js gallery`). Tiles are cheap on purpose: built for the **draft framing
-  only** (most-constrained viewport, light) — the matrix bill comes due only after the pick. The
-  user culls to 2.
-- **Round 1 — interactive prototypes.** The two finalists become multi-screen interactive
-  prototypes of the signature set (core loop, highest-consequence moment, first-run) in
-  `design/explore/r1-<position>/` — interactive because motion, streaming, and latency-feel are
-  half of what is being judged and a static board cannot show them. Finalists still render the
-  **draft framing only** (matrix-at-approval, shared § Design Canon) — the pick judges
-  direction, and only the winner pays the matrix bill — with one exception: **each finalist gets
-  a single dark render** (a minimal dark block in its `tokens.css`, one screenshot) before the
-  pick. Dark is the one framing that can invalidate a *palette* rather than a layout
-  (shadow-built depth, vibrant-on-white schemes), and at n=2 the insurance is nearly free
-  against picking a winner whose palette can't invert. Before the user reviews,
-  **persona walkthroughs** run: agents primed with the brief's behavioral archetypes attempt the
-  declared journeys cold and file friction findings (LLM heuristic evaluation is measurably good
-  per-screen and weak cross-screen — the atlas covers the cross-screen half later).
-- **The pick, then the matrix.** The user picks a winner, with grafts; grafts and the **matrix
-  expansion pass** (responsive across every declared viewport, full dark block in `tokens.css` —
-  mechanical Sonnet work, `design-atlas.js check --matrix` gated, matrix screenshots critiqued,
-  then shown to the user for the **fast matrix confirm** — approval is two-step, shared § Design
-  Canon) are applied to the winner only. The pick is recorded to
-  `.claude/genesis/design-pick.json` (template via `spec-paths templates`): `winner`,
-  `grafts: [{from, what}]`, `rejected: [{candidate, reason, salvage}]`. Rejections feed
-  `/spec:genesis-design`'s `## Dissents` — a rejected direction is a recorded minority position,
-  not deleted work. Non-winning candidate dirs are kept until genesis-design locks, then pruned
-  (salvageable pieces are named in the pick record first).
+  carrier and prose paraphrase was the lossy step. The driver checks the position count (6–8),
+  each position's seven labels, and each `tokens.css`'s existence, then copies each to
+  `.claude/genesis/explore/authored/<kebab>.css` — the additions-only baseline the next mark
+  enforces against (an on-disk copy replaces the mid-stage `git diff` the old command needed).
+- **`--mark tiles-built`.** Parallel **Sonnet** agents build each position's tile
+  (`design/explore/r0-<kebab>/tile.html`) under the design harness (shared § Design Canon)
+  against its starter `tokens.css` — consuming it by role, appending missing role tokens, never
+  changing an authored value. Before this mark, the session runs the render → screenshot →
+  critique leg on every tile — **unconditional** (no browser-availability conditional in
+  explore; Setup's render-capability precondition guarantees it) — and names the
+  two-retries-then-drop rule; the driver never renders. The driver's own checks:
+  `design-atlas.js check` per tile dir (a failure is refused naming the dir and the check's own
+  output — no partial gallery); each current `tokens.css` `startsWith` its authored copy (a
+  changed or removed authored line is refused naming the file — `builders append, never
+  alter`). Once every tile passes, the driver builds `design/explore/gallery.html`
+  (`design-atlas.js gallery`) and writes `explore: "tiles-built"`. Tiles are cheap on purpose:
+  built for the **draft framing only** — the matrix bill comes due only after the winner is
+  ratified.
+- **`--mark tiles-culled`.** The user opens the gallery and culls to exactly two, recording a
+  `- **<kebab>** — culled: <reason>` line per rejected position in `positions.md`'s `## Cull
+  record`. The driver checks the survivor count is exactly two (zero, one, or ≥3 is refused
+  naming the count) and writes `status.exploreRecord.finalists` as the two survivors, in
+  position order.
+- **`--mark external --file design/explore/external/<name>`** replaces the whole funnel with a
+  design the user already made — a Claude Design export or any local mock bundle. The driver
+  checks the dir is under `design/explore/external/`, exists, and holds ≥1 `.html` file each
+  carrying a `data-screen-label`; `design/targets.json` is still required (the matrix is a
+  declaration, not research), but `docs/design/research-brief.md` is **not owed**. The bundle's
+  own literals are what `/spec:genesis-design` authors tokens from later — no extraction script
+  (`dc-extract` is gone). `exploreRecord.finalists` records `["external/<name>"]` and
+  `explore: "external"`. The external mark may be made any time before `research-done`; once
+  any funnel mark exists it is refused (`the funnel has started — finish it or delete
+  design/explore/ and re-mark`), and once external, the funnel marks are themselves refused
+  (`explore is external — no funnel`).
+
+**The tile fold.** The two culled positions (or the external candidate) are not judged in
+isolation — they render **inside each racing finalist's own scaffold and component library**,
+as the tournament's `style-tile` probe task (§ Genesis: Tournament of Scaffolds): one
+`tile.html` + `tokens.css` pair per finalist per tile (or the external dir), one `probe.json`
+entry per tile. `sketch.html` is never a tile source. This is what dissolves the old
+explore/architect boundary — the user judges stack and look together, in one gallery, rather
+than a throwaway HTML round that never touches the real stack. When `explore: skipped`, the
+`style-tile` task drops from the expected probe set entirely. `--mark picked` (the tournament's
+`PICK` step) additionally requires, whenever `exploreRecord.finalists` is non-empty:
+`.claude/genesis/design-pick.json` names a `winner` equal to one tile source
+(`design/explore/r0-<kebab>` or `design/explore/external/<name>`), every other tile appears in
+`rejected[]` with a non-empty `reason`, and the driver writes `explore: "picked"` alongside
+`tournament.winner` — for the external path, `winner` must equal it (it is the pick by
+construction). Rejections feed `/spec:genesis-design`'s `## Dissents` — a rejected direction is
+a recorded minority position, not deleted work. Non-winning candidate dirs are kept until
+genesis-design locks, then pruned (salvageable pieces are named in the pick record first).
+
+**What the driver checks vs. what the session judges.** Every explore mark's admission test is
+deterministic: file existence, heading/label counts, the `startsWith` token-append check, the
+survivor count, the pick's shape. Taste is never mechanized — the position briefs, the starter
+tokens, the render → screenshot → critique leg, the cull, and the pick are the session's own
+judgment against rendered evidence, never scored by a script.
+
+**Round-1 interactive prototypes and persona walkthroughs are retired** (JJ, 2026-08-27): each
+finalist is booted with the two culled looks rendered in its real component library — that boot
+*is* the interactive candidate a throwaway-HTML prototype round would only approximate, one more
+round of attention for no material gain.
 
 Model placement holds the pipeline rule: Fable authors position briefs **and each position's
-starter `tokens.css`**, and judges critique rounds (roadmap-level taste — its one resident
-seat); Sonnet builds every tile and prototype HTML — never candidate HTML from the session, and
+starter `tokens.css`**, and judges the tile critique leg (roadmap-level taste — its one
+resident seat); Sonnet builds every tile HTML — never candidate HTML from the session, and
 Sonnet builders never alter an authored token value; deterministic checks gate before any human
 look. For archetypes whose design stage is `none`/`skipped`, explore is `skipped` — same
 applicability gate as genesis-design.
 
 **Claude Design is the escape hatch, not the path.** The user may still produce a candidate in
-Claude Design (`claude.ai/design`) and drop its export into `design/explore/` as one more
-candidate — it competes in the same gallery under the same gates. Nothing in explore depends on
-it.
+Claude Design (`claude.ai/design`) and drop its export into `design/explore/external/` as the
+external candidate — it competes in the same gallery under the same gates. Nothing in explore
+depends on it.
 
 ## Genesis: Executed Assumptions (dependency-adjudicated claims never lock by argument)
 
@@ -475,12 +519,13 @@ Land the test + CI skeleton — the enforcement half of the ops ADR, day zero:
 architect stage is now driver-owned: `genesis-driver.js` (resolved by `/spec:genesis`) derives
 the current state on **every invocation** from `status.json` plus the artifacts actually on
 disk — never from the enum alone; a mark whose named artifact vanished is demanded again. The
-states: `DISCOVERY` → `MENUS` → [`FINALISTS` → `RACE` (driver-only) → `PROBE` → `PICK`,
-tournament archetypes only, § Genesis: Tournament of Scaffolds] → `DECIDE` → `SCAFFOLD`
-(driver-only) → `SKELETON` → `GATE` (driver-only) → `GATE_RED` | `ROADMAP` → `HANDOFF`
-(terminal for this stage). No `status.json` on disk → the driver creates it from the template
-and prints `DISCOVERY`; no `brief.md` on disk → the DISCOVERY step names `genesis-brief.md`
-(`$(spec-paths templates)/genesis-brief.md`) as the source.
+states: `DISCOVERY` → `MENUS` → [`EXPLORE`, visual archetypes only, § Genesis: Explore State] →
+[`FINALISTS` → `RACE` (driver-only) → `PROBE` → `PICK`, tournament archetypes only, § Genesis:
+Tournament of Scaffolds] → `DECIDE` → `SCAFFOLD` (driver-only) → `SKELETON` → `GATE`
+(driver-only) → `GATE_RED` | `ROADMAP` → `HANDOFF` (terminal for this stage). No `status.json`
+on disk → the driver creates it from the template and prints `DISCOVERY`; no `brief.md` on disk
+→ the DISCOVERY step names `genesis-brief.md` (`$(spec-paths templates)/genesis-brief.md`) as
+the source.
 
 **Checkpoint contract.** Every accepted `--mark` prints, as its last line, `✅ checkpoint —
 genesis state saved (<prev> → <next>); safe to /clear and re-run /spec:genesis`; every step's
@@ -490,7 +535,8 @@ text opens with `Read only:` followed by the files that step needs — never the
 
 - `architect`: `pending → decisions-recorded → scaffold-complete` (driven by the marks above,
   never a command's own phase tracking)
-- `explore`: `pending → research-done → positions-authored → tiles-culled → picked` (or `skipped`)
+- `explore`: `pending → research-done → positions-authored → tiles-built → tiles-culled →
+  picked` (or `external → picked`, or `skipped`)
 - `design`: `pending → doctrine-drafted → tokens-landed → rules-locked` (or `skipped`)
 
 The roadmap (the driver's `ROADMAP` state, § Genesis: Roadmap Decomposition) deliberately has
@@ -498,11 +544,13 @@ The roadmap (the driver's `ROADMAP` state, § Genesis: Roadmap Decomposition) de
 it), so it is verified by artifact existence only — `architect: scaffold-complete` with no
 `docs/roadmap/00-overview.md` means the driver resumes at `ROADMAP`.
 
-`/spec:genesis-explore` is blocked until `architect: scaffold-complete`. `/spec:genesis-design`
-is blocked until `architect: scaffold-complete` AND `explore: picked` (or `skipped`) — the pick
-precedes the lock. A legacy `status.json` with **no `explore` field** predates the explore stage:
-the gate warns and allows (genesis-design then runs its pre-v6 direction interview instead of
-ratifying a pick). `/spec:init` is blocked
+The driver enters `EXPLORE` itself (§ Genesis: Explore State) on the first derivation past
+`MENUS` for visual archetypes — no separate command gates it. `/spec:genesis-design` is blocked
+until `architect: scaffold-complete` AND `explore: picked` (or `skipped`) — the pick precedes
+the lock, and both conditions already hold by the time this same `/spec:genesis` run reaches
+`HANDOFF`, since `EXPLORE` closes before `DECIDE`/`SCAFFOLD` runs. A legacy `status.json` with
+**no `explore` field** predates the `EXPLORE` state: the gate warns and allows (genesis-design
+then runs its pre-v6 direction interview instead of ratifying a pick). `/spec:init` is blocked
 when the design canon is **partial** (`doctrine-drafted`/`tokens-landed`); it proceeds on
 `rules-locked` or `skipped`, and is merely warned when design is still `pending`. **Re-entry
 verifies the named artifacts physically exist — never trust the phase enum alone** (a phase can be
@@ -579,14 +627,17 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
   (driver-written, survive `decided`). Template: `spec/templates/finalists.json`, the shape
   the session composes a run's `finalists.json` from.
 - **`.claude/genesis/stack-descriptor.json`** — architect's output (template via `spec-paths templates`).
-- **`.claude/genesis/design-pick.json`** — explore's output: the picked candidate, grafts, and
-  rejected directions with salvage notes (template via `spec-paths templates`).
-- **`docs/design/research-brief.md`** (durable) — explore's fresh UX research brief
-  (§ Genesis: Fresh UX Research); read again at `/spec:design` preflight and by the atlas sweep.
-- **`design/targets.json`** (durable) — explore's declared theme × viewport matrix (shared §
+- **`.claude/genesis/design-pick.json`** — the tournament `PICK` step's output whenever
+  `exploreRecord.finalists` is non-empty: the picked candidate and rejected directions with
+  salvage notes (template via `spec-paths templates`).
+- **`docs/design/research-brief.md`** (durable) — `EXPLORE`'s fresh UX research brief
+  (§ Genesis: Fresh UX Research); not owed for the external candidate. Read again at
+  `/spec:design` preflight and by the atlas sweep.
+- **`design/targets.json`** (durable) — `EXPLORE`'s declared theme × viewport matrix (shared §
   Design Canon; viewports most-constrained-first — the first entry is the draft framing).
-- **`design/explore/`** (durable until design locks) — the candidate dirs, each self-contained
-  with its own `tokens.css` (§ Genesis: Explore Stage).
+- **`design/explore/`** (durable until design locks) — `positions.md`, `gallery.html`, each
+  candidate dir `r0-<kebab>/` self-contained with its own `tokens.css`, and `external/<name>/`
+  for a supplied candidate bundle (§ Genesis: Explore State).
 - **`design/components.json`** (durable) — the component manifest, seeded by genesis-design
   with the base primitives, extended by every `/spec:design` reconcile (shared § Design
   Authoring Contracts, component manifest).

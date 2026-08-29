@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # UserPromptSubmit hook: enforce the genesis state machine at the command boundary.
-#   /spec:genesis-explore requires architect: scaffold-complete (and the stack descriptor to exist)
-#   /spec:genesis-design  requires the same, PLUS explore: picked|skipped (legacy status files
-#                         with no explore field pass with an injected warning — pre-v6 genesis)
+#   /spec:genesis-design  requires architect: scaffold-complete (and the stack descriptor to
+#                         exist), PLUS explore: picked|skipped (legacy status files with no
+#                         explore field pass with an injected warning — pre-v6 genesis)
 #   /spec:init            when a .claude/genesis/ exists: BLOCK on a partial design canon; warn on gaps
 # Coarse gate only — the commands themselves do artifact-level re-entry verification.
 # The hook is inert unless a .claude/genesis/status.json is present, so brownfield /spec:init runs
@@ -15,7 +15,7 @@ PROMPT=$(printf '%s' "$INPUT" | jq -r '.prompt // empty' 2>/dev/null)
 [ -z "$PROMPT" ] && exit 0
 
 case "$PROMPT" in
-  "/spec:genesis "*|"/spec:genesis"|/spec:genesis-explore*|/spec:genesis-design*|/spec:init*) ;;
+  "/spec:genesis "*|"/spec:genesis"|/spec:genesis-design*|/spec:init*) ;;
   *) exit 0 ;;
 esac
 
@@ -46,20 +46,16 @@ require_scaffold() {
 }
 
 case "$PROMPT" in
-  /spec:genesis-explore*)
-    require_scaffold "/spec:genesis-explore"
-    exit 0
-    ;;
   /spec:genesis-design*)
     require_scaffold "/spec:genesis-design"
     case "$EXPL" in
       picked|skipped) ;;
       ABSENT)
         # legacy status.json predating the explore stage — allow, but say why it passed
-        echo "Genesis note: this status.json predates /spec:genesis-explore (no explore field) — genesis-design will run its legacy direction interview instead of ratifying a pick. New projects should run /spec:genesis-explore first."
+        echo "Genesis note: this status.json predates the genesis explore state (no explore field) — genesis-design will run its legacy direction interview instead of ratifying a pick. New projects run the explore state as part of /spec:genesis first."
         ;;
       *)
-        echo "Genesis state gate: /spec:genesis-design requires explore: picked (or skipped) — the pick precedes the lock. status.json has explore: ${EXPL:-pending}. Finish /spec:genesis-explore first (research brief signed off, candidates rendered, design-pick.json recorded)." >&2
+        echo "Genesis state gate: /spec:genesis-design requires explore: picked (or skipped) — the pick precedes the lock. status.json has explore: ${EXPL:-pending}. Finish the genesis explore state first (research brief signed off, candidates rendered, design-pick.json recorded)." >&2
         exit 2
         ;;
     esac

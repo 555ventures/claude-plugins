@@ -72,6 +72,27 @@
 //     leader and a `## Picks` that names the other finalist still records THAT finalist as the
 //     winner.
 //
+// specs/20260827/02-genesis-explore-state.md (2026-08-27): between MENUS and the tournament's
+// FINALISTS, four VISUAL archetypes (web-app, mobile-app, realtime-trading, desktop-app) gain an
+// EXPLORE state — Round 0 of the taste funnel that used to be its own command
+// (/spec:genesis-explore, now deleted). Marks progress research-done -> positions-authored ->
+// tiles-built -> tiles-culled, or `external --file <dir>` for a design the session already has.
+// The two culled looks (or the one external candidate) become the tournament's `style-tile`
+// task's tile sources, rendered inside each finalist with its real component library — replacing
+// spec 01 D6's `.claude/genesis/sketch.html`, which is never a tile source again. Every other
+// archetype gets `explore: "skipped"` recorded the moment menus-done resolves it, and is never
+// routed through EXPLORE at all.
+//
+// What EXPLORE deliberately does NOT do:
+//   - render a tile, screenshot it, or judge a position's quality — `design-atlas.js check` is
+//     the only deterministic gate; the render -> screenshot -> critique loop, and the cull to
+//     two, are the session's.
+//   - extract literals out of an external candidate — no `dc-extract` (deleted 20260824/05); the
+//     bundle's own literals are what the later design state authors tokens from.
+//   - trust a builder-edited tokens.css: `tiles-built` diffs the CURRENT file against the
+//     `.claude/genesis/explore/authored/<kebab>.css` snapshot `positions-authored` wrote, via
+//     `startsWith` (additions-only, no git in play — Assumption A2).
+//
 // Fixing that overflow only at the child's own capture wasn't enough: `logTail`, which builds the
 // SCAFFOLD_RED/GATE_RED excerpt embedded in the driver's OWN stdout, used to bound its excerpt by
 // line count alone (`text.split('\n').slice(-n)`). A caller's buffer is measured in BYTES, not
@@ -374,6 +395,14 @@ const REGISTRY_KEYS = [
 const TOURNAMENT_ARCHETYPES = ['web-app', 'realtime-trading', 'backend-api', 'mobile-app', 'desktop-app']
 function isTournamentArchetype(a) { return TOURNAMENT_ARCHETYPES.includes(a) }
 
+// specs/20260827/02-genesis-explore-state.md D1: the four VISUAL archetypes are every tournament
+// archetype except backend-api (headless — no UI, no taste funnel). Every other archetype (the
+// three TOURNAMENT_ARCHETYPES are a superset check, not a subset — data-ml/cli-devtool/
+// conversational-bot are neither tournament nor visual) gets explore: "skipped" the moment
+// menus-done resolves it and is never routed through EXPLORE.
+const VISUAL_ARCHETYPES = ['web-app', 'realtime-trading', 'mobile-app', 'desktop-app']
+function isVisualArchetype(a) { return VISUAL_ARCHETYPES.includes(a) }
+
 function handleMenusDone() {
   if (!status.marks.discoveryDone) die('discovery-done has not been marked yet — mark discovery-done first')
   const check = menusCheck()
@@ -392,8 +421,246 @@ function handleMenusDone() {
   }
   status.marks.menusDone = true
   status.archetype = archetype
+  // D1: every non-visual archetype's explore stays "skipped" — recorded here, on the FIRST
+  // derivation past MENUS, so a session (or the hook, per A3) has a durable record that this
+  // project was never offered the taste funnel.
+  if (!isVisualArchetype(archetype)) status.explore = 'skipped'
   saveStatus()
-  return { prev: 'MENUS', next: isTournamentArchetype(archetype) ? 'FINALISTS' : 'DECIDE' }
+  let next
+  if (isVisualArchetype(archetype)) next = 'EXPLORE'
+  else if (isTournamentArchetype(archetype)) next = 'FINALISTS'
+  else next = 'DECIDE'
+  return { prev: 'MENUS', next }
+}
+
+// D1/D6: EXPLORE resolves to tiles-culled (the funnel) or external (a supplied design); once
+// picked, both read as resolved too (PICK has already recorded the winning tile source).
+function exploreResolved() {
+  return status.explore === 'tiles-culled' || status.explore === 'external' ||
+    status.explore === 'picked' || status.explore === 'skipped'
+}
+
+function tileSourcesFor() {
+  const rec = status.exploreRecord
+  return (rec && Array.isArray(rec.finalists)) ? rec.finalists : []
+}
+
+// ---------------------------------------------------------------------------
+// EXPLORE (specs/20260827/02-genesis-explore-state.md D1-D6): the taste funnel's Round 0, folded
+// into the driver as mark-driven internal progression (research-done -> positions-authored ->
+// tiles-built -> tiles-culled), or `external --file <dir>` for a design the session already has.
+// Entered only for VISUAL_ARCHETYPES; every other archetype never reaches this block at all
+// (handleMenusDone already wrote explore: "skipped" and routed past it).
+// ---------------------------------------------------------------------------
+const EXPLORE_FUNNEL_MARKS = ['research-done', 'positions-authored', 'tiles-built', 'tiles-culled']
+
+function targetsPath() { return path.join(root, 'design/targets.json') }
+function researchBriefPath() { return path.join(root, 'docs/design/research-brief.md') }
+function positionsPath() { return path.join(root, 'design/explore/positions.md') }
+function positionDir(kebab) { return path.join(root, 'design/explore/r0-' + kebab) }
+function exploreAuthoredDir() { return path.join(genesisDir, 'explore/authored') }
+function exploreGalleryPath() { return path.join(root, 'design/explore/gallery.html') }
+
+// D2: design/targets.json parses with non-empty themes/viewports arrays, each viewport a
+// {name, width, height} object. Shared by research-done and external (D6 owes it too).
+function checkExploreTargets() {
+  const p = targetsPath()
+  if (!fs.existsSync(p)) return { ok: false, msg: 'design/targets.json does not exist' }
+  let parsed
+  try {
+    parsed = JSON.parse(fs.readFileSync(p, 'utf8'))
+  } catch (e) {
+    return { ok: false, msg: 'design/targets.json is not valid JSON (' + e.message + ')' }
+  }
+  if (!Array.isArray(parsed.themes) || parsed.themes.length === 0) {
+    return { ok: false, msg: 'design/targets.json has an empty or missing "themes" array' }
+  }
+  if (!Array.isArray(parsed.viewports) || parsed.viewports.length === 0) {
+    return { ok: false, msg: 'design/targets.json has an empty or missing "viewports" array' }
+  }
+  for (const v of parsed.viewports) {
+    if (!v || typeof v.name !== 'string' || typeof v.width !== 'number' || typeof v.height !== 'number') {
+      return { ok: false, msg: 'design/targets.json has a viewport missing name/width/height' }
+    }
+  }
+  return { ok: true }
+}
+
+// D6: the external path is only refused once a FUNNEL mark has actually recorded progress —
+// "the funnel has started". A prior "skipped"/"pending" explore value never blocks it.
+function funnelStarted() { return EXPLORE_FUNNEL_MARKS.includes(status.explore) }
+
+function handleResearchDone() {
+  if (status.explore === 'external') die('explore is external — no funnel — the external candidate skips research-done entirely')
+  const t = checkExploreTargets()
+  if (!t.ok) die(t.msg + ' — write it, then re-mark research-done')
+  const briefP = researchBriefPath()
+  if (!fs.existsSync(briefP)) {
+    die('docs/design/research-brief.md does not exist — write it (ux-research-brief.md template) with at least one ## heading, then re-mark research-done')
+  }
+  const text = fs.readFileSync(briefP, 'utf8')
+  if (!text.trim()) die('docs/design/research-brief.md is empty — write it, then re-mark research-done')
+  if (!/^##\s/m.test(text)) die('docs/design/research-brief.md has no "## " heading — add one, then re-mark research-done')
+  status.explore = 'research-done'
+  saveStatus()
+  return { prev: 'EXPLORE', next: 'EXPLORE' }
+}
+
+// positions.md's `## Position: <kebab>` blocks (D3). Reused by positions-authored, tiles-built,
+// and tiles-culled — always re-read from disk, never cached in status.json.
+const POSITION_LABELS = [
+  'Stance', 'Rules cited', 'Anti-defaults', 'Reference direction',
+  'Motion character', 'Density & layout intent', 'Starter tokens',
+]
+
+function readPositionsMd() {
+  try { return fs.readFileSync(positionsPath(), 'utf8') } catch (e) { return null }
+}
+
+function parsePositions(text) {
+  const starts = []
+  const re = /^## Position: ([a-z0-9-]+)\s*$/gm
+  let m
+  while ((m = re.exec(text))) starts.push({ kebab: m[1], index: m.index, headerEnd: m.index + m[0].length })
+  return starts.map((s, i) => ({
+    kebab: s.kebab,
+    body: text.slice(s.headerEnd, i + 1 < starts.length ? starts[i + 1].index : text.length),
+  }))
+}
+
+function handlePositionsAuthored() {
+  if (status.explore === 'external') die('explore is external — no funnel — the external candidate skips positions-authored entirely')
+  if (status.explore !== 'research-done') die('research-done has not been marked yet — mark research-done first')
+  const text = readPositionsMd()
+  if (text === null) die('design/explore/positions.md does not exist — author 6-8 ## Position: <kebab> blocks, then re-mark positions-authored')
+  const blocks = parsePositions(text)
+  if (blocks.length < 6 || blocks.length > 8) {
+    die('design/explore/positions.md has ' + blocks.length + ' position block(s) — the floor is 6 (6-8 complete positions are required), then re-mark positions-authored')
+  }
+  for (const b of blocks) {
+    for (const label of POSITION_LABELS) {
+      if (!b.body.includes('**' + label + ':**')) {
+        die('position "' + b.kebab + '" is missing the "**' + label + ':**" label — add it, then re-mark positions-authored')
+      }
+    }
+  }
+  for (const b of blocks) {
+    const tokensPath = path.join(positionDir(b.kebab), 'tokens.css')
+    if (!fs.existsSync(tokensPath) || !fs.readFileSync(tokensPath, 'utf8').trim()) {
+      die(tokensPath + ' does not exist or is empty — write it, then re-mark positions-authored')
+    }
+  }
+  fs.mkdirSync(exploreAuthoredDir(), { recursive: true })
+  for (const b of blocks) {
+    fs.copyFileSync(path.join(positionDir(b.kebab), 'tokens.css'), path.join(exploreAuthoredDir(), b.kebab + '.css'))
+  }
+  status.explore = 'positions-authored'
+  saveStatus()
+  return { prev: 'EXPLORE', next: 'EXPLORE' }
+}
+
+// D4: each tile passes design-atlas.js check, each current tokens.css still startsWith its
+// authored baseline (A2 — additions-only, no git), then the gallery is built. Refused as a whole
+// on the first failure — no partial gallery.
+function handleTilesBuilt() {
+  if (status.explore === 'external') die('explore is external — no funnel — the external candidate skips tiles-built entirely')
+  if (status.explore !== 'positions-authored') die('positions-authored has not been marked yet — mark positions-authored first')
+  const text = readPositionsMd()
+  const blocks = parsePositions(text || '')
+  const designAtlasBin = path.join(__dirname, 'design-atlas.js')
+  for (const b of blocks) {
+    const dir = positionDir(b.kebab)
+    const tokensPath = path.join(dir, 'tokens.css')
+    const authoredPath = path.join(exploreAuthoredDir(), b.kebab + '.css')
+    let current
+    try {
+      current = fs.readFileSync(tokensPath, 'utf8')
+    } catch (e) {
+      die(tokensPath + ' does not exist — write it, then re-mark tiles-built')
+      return null // unreachable
+    }
+    const authored = (() => { try { return fs.readFileSync(authoredPath, 'utf8') } catch (e) { return '' } })()
+    if (!current.startsWith(authored)) {
+      die(tokensPath + ' no longer starts with its authored baseline at ' + authoredPath +
+        ' — builders append, never alter; restore the authored lines and only add after them, then re-mark tiles-built')
+    }
+    if (!fs.existsSync(path.join(dir, 'tile.html'))) {
+      die(path.join(dir, 'tile.html') + ' does not exist — build the tile, then re-mark tiles-built')
+    }
+    const r = runChild(process.execPath, [designAtlasBin, 'check', dir], { encoding: 'utf8' }, 'design-atlas.js check (' + dir + ')')
+    if (r.status !== 0) {
+      die('design-atlas.js check failed for ' + dir + ': ' + (r.stdout || r.stderr || '').trim())
+    }
+  }
+  const g = runChild(process.execPath,
+    [designAtlasBin, 'gallery', path.join(root, 'design/explore'), '--out', exploreGalleryPath()],
+    { encoding: 'utf8' }, 'design-atlas.js gallery (design/explore)')
+  if (g.status !== 0) die('design-atlas.js gallery failed: ' + (g.stdout || g.stderr || '').trim())
+  status.explore = 'tiles-built'
+  saveStatus()
+  return { prev: 'EXPLORE', next: 'EXPLORE' }
+}
+
+// D5: positions.md's `## Cull record` names every position EXCEPT exactly two survivors, which
+// are recorded (in position order) as exploreRecord.finalists — PROBE's tile source list (D7).
+function handleTilesCulled() {
+  if (status.explore === 'external') die('explore is external — no funnel — the external candidate skips tiles-culled entirely')
+  if (status.explore !== 'tiles-built') die('tiles-built has not been marked yet — mark tiles-built first')
+  const text = readPositionsMd() || ''
+  const blocks = parsePositions(text)
+  const cullSection = section(text, 'Cull record')
+  const culled = new Set()
+  if (cullSection) {
+    const re = /^-\s+\*\*([a-z0-9-]+)\*\*\s+—\s+culled:/gm
+    let m
+    while ((m = re.exec(cullSection))) culled.add(m[1])
+  }
+  for (const k of culled) {
+    if (!fs.existsSync(positionDir(k))) {
+      die('## Cull record names "' + k + '" but ' + positionDir(k) + ' does not exist — fix the cull record, then re-mark tiles-culled')
+    }
+  }
+  const survivors = blocks.filter((b) => !culled.has(b.kebab)).map((b) => b.kebab)
+  if (survivors.length !== 2) {
+    die('## Cull record leaves ' + survivors.length + ' survivor(s) (' + (survivors.join(', ') || 'none') +
+      ') — exactly 2 are required, then re-mark tiles-culled')
+  }
+  status.exploreRecord = Object.assign({}, status.exploreRecord, { finalists: survivors, culledAt: new Date().toISOString() })
+  status.explore = 'tiles-culled'
+  saveStatus()
+  return { prev: 'EXPLORE', next: 'FINALISTS' }
+}
+
+// D6: a supplied design skips the funnel entirely — location plus a root data-screen-label per
+// file is admission; targets.json is still owed (the matrix is a declaration, not research), but
+// docs/design/research-brief.md is never owed. Markable at any point before a funnel mark starts;
+// refused afterwards.
+function handleExternal() {
+  if (funnelStarted()) die('the funnel has started — finish it or delete design/explore/ and re-mark')
+  if (!FILE) die('--mark external needs --file <dir> (relative to the project root, or an absolute path)')
+  const resolved = path.isAbsolute(FILE) ? FILE : path.join(root, FILE)
+  const externalRoot = path.join(root, 'design/explore/external') + path.sep
+  if (!(resolved + path.sep).startsWith(externalRoot) || resolved + path.sep === externalRoot) {
+    die('--file ' + FILE + ' must be a directory under design/explore/external/ — fix the path and re-mark external')
+  }
+  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
+    die('--file ' + FILE + ' does not exist at ' + resolved + ' — create the dir with your design bundle, then re-mark external')
+  }
+  const htmlFiles = fs.readdirSync(resolved).filter((f) => f.endsWith('.html')).map((f) => path.join(resolved, f))
+  if (!htmlFiles.length) die(resolved + ' holds no .html file — add at least one labelled screen, then re-mark external')
+  for (const f of htmlFiles) {
+    const html = fs.readFileSync(f, 'utf8')
+    if (!/data-screen-label\s*=\s*"[^"]*"/.test(html)) {
+      die(f + ' has no data-screen-label attribute — every screen must carry one, then re-mark external')
+    }
+  }
+  const t = checkExploreTargets()
+  if (!t.ok) die(t.msg + ' — write it, then re-mark external')
+  const name = path.basename(resolved)
+  status.exploreRecord = Object.assign({}, status.exploreRecord, { finalists: ['external/' + name], authoredAt: new Date().toISOString() })
+  status.explore = 'external'
+  saveStatus()
+  return { prev: 'EXPLORE', next: 'FINALISTS' }
 }
 
 // ---------------------------------------------------------------------------
@@ -421,13 +688,15 @@ function tournamentEvidenceDir(name) { return path.join(tournamentDir(), 'eviden
 function benchmarkJsonPath() { return path.join(tournamentDir(), 'benchmark.json') }
 function benchmarkMdPath() { return path.join(tournamentDir(), 'benchmark.md') }
 function galleryPath() { return path.join(tournamentDir(), 'gallery.html') }
-function sketchPath() { return path.join(genesisDir, 'sketch.html') }
 
-// D6: the sketch is this spec's only tile source — when it does not exist, style-tile is dropped
-// from the expected task set entirely (never listed, never required by probe-done).
+// specs/20260827/02-genesis-explore-state.md D7: tile source derivation replaces spec 01 D6's
+// sketch source — `.claude/genesis/sketch.html` is never a tile source again. style-tile's tiles
+// are `exploreRecord.finalists` (tileSourcesFor()); when that list is empty (explore: "skipped",
+// or a visual archetype that hasn't resolved EXPLORE yet), style-tile is dropped from the
+// expected task set entirely — never listed, never required by probe-done.
 function expectedTasksFor(archetype) {
   const all = PROBE_TASKS[archetype] || []
-  return fs.existsSync(sketchPath()) ? all.slice() : all.filter((t) => t !== 'style-tile')
+  return tileSourcesFor().length ? all.slice() : all.filter((t) => t !== 'style-tile')
 }
 
 // D4: "last measured" reads an existing tournament/benchmark.json's average tokens/finalist, or
@@ -450,12 +719,23 @@ function finalistMatchesCurrentPicks(f) {
   return Object.keys(p).every((k) => current[k] === p[k])
 }
 
+// specs/20260827/02-genesis-explore-state.md D1: a visual archetype must resolve EXPLORE before
+// it can ever reach FINALISTS — deriveState() already gates the bare-invocation path, but these
+// two marks are invoked directly and must refuse the same way if called early.
+function requireExploreResolvedForFinalists() {
+  if (isVisualArchetype(status.archetype) && !exploreResolved()) {
+    die('the explore taste funnel has not resolved yet (research-done → positions-authored → ' +
+      'tiles-built → tiles-culled, or external) — finish EXPLORE first')
+  }
+}
+
 function handleFinalistsSkipped() {
   if (!status.marks.menusDone) die('menus-done has not been marked yet — mark menus-done first')
   if (!isTournamentArchetype(status.archetype)) {
     die('archetype "' + status.archetype + '" is not a tournament archetype (' +
       TOURNAMENT_ARCHETYPES.join(', ') + ') — finalists-skipped only applies once a tournament archetype has reached FINALISTS')
   }
+  requireExploreResolvedForFinalists()
   status.tournament = Object.assign({}, status.tournament, { skipped: true, at: new Date().toISOString() })
   saveStatus()
   return { prev: 'FINALISTS', next: 'DECIDE' }
@@ -467,6 +747,7 @@ function handleFinalistsWritten() {
     die('archetype "' + status.archetype + '" is not a tournament archetype (' +
       TOURNAMENT_ARCHETYPES.join(', ') + ') — finalists-written only applies once a tournament archetype has reached FINALISTS')
   }
+  requireExploreResolvedForFinalists()
   if (!FILE) die('--mark finalists-written needs --file <finalists.json> (relative to .claude/genesis/, or an absolute path)')
   const resolved = path.isAbsolute(FILE) ? FILE : path.join(genesisDir, FILE)
   if (!fs.existsSync(resolved)) {
@@ -610,14 +891,28 @@ function handleProbeDone() {
     const tasks = Array.isArray(parsed.tasks) ? parsed.tasks : null
     if (!tasks) die('finalist "' + name + '"\'s probe.json must have a top-level "tasks" array')
 
-    const seen = new Set()
+    // specs/20260827/02-genesis-explore-state.md D7: style-tile is no longer a single task — it
+    // is ONE entry per tile source (exploreRecord.finalists), keyed `tile: "<kebab>"` or
+    // `"external/<name>"`. Every other task keeps the old single-entry-per-task contract.
+    const tileSources = tileSourcesFor()
+    const seenTasks = new Set()
+    const seenTiles = new Set()
     for (const t of tasks) {
       if (!t || typeof t.task !== 'string' || !expected.includes(t.task)) {
         die('finalist "' + name + '"\'s probe.json names an unexpected task "' + (t && t.task) +
           '" — the expected task set for ' + archetype + ' is: ' + expected.join(', '))
       }
-      if (seen.has(t.task)) die('finalist "' + name + '"\'s probe.json has a duplicate task "' + t.task + '"')
-      seen.add(t.task)
+      if (t.task === 'style-tile') {
+        if (typeof t.tile !== 'string' || !tileSources.includes(t.tile)) {
+          die('finalist "' + name + '"\'s probe.json has a style-tile entry with an unexpected "tile" (' +
+            (t && t.tile) + ') — expected one of: ' + tileSources.join(', '))
+        }
+        if (seenTiles.has(t.tile)) die('finalist "' + name + '"\'s probe.json has a duplicate style-tile entry for tile "' + t.tile + '"')
+        seenTiles.add(t.tile)
+      } else {
+        if (seenTasks.has(t.task)) die('finalist "' + name + '"\'s probe.json has a duplicate task "' + t.task + '"')
+        seenTasks.add(t.task)
+      }
       if (typeof t.passed !== 'boolean') {
         die('finalist "' + name + '"\'s probe.json task "' + t.task + '" is missing a boolean "passed"')
       }
@@ -635,9 +930,11 @@ function handleProbeDone() {
         }
       }
     }
-    const missing = expected.filter((e) => !seen.has(e))
+    const missingTasks = expected.filter((e) => e !== 'style-tile' && !seenTasks.has(e))
+    const missingTiles = expected.includes('style-tile') ? tileSources.filter((s) => !seenTiles.has(s)) : []
+    const missing = missingTasks.concat(missingTiles)
     if (missing.length) {
-      die('finalist "' + name + '"\'s probe.json is missing task(s): ' + missing.join(', ') +
+      die('finalist "' + name + '"\'s probe.json is missing task(s)/tile(s): ' + missing.join(', ') +
         ' — build the missing probe slice(s), then re-mark probe-done')
     }
 
@@ -703,6 +1000,11 @@ function renderBenchmarkMd(rows) {
   return header + body + '\n'
 }
 
+// specs/20260827/02-genesis-explore-state.md D7: style-tile can carry several entries per
+// finalist (one per tile source), so the gallery row key is task+tile, never task alone — task
+// alone would collapse every style-tile entry but the first onto one row.
+function taskRowKey(t) { return t.task + (t.tile ? ':' + t.tile : '') }
+
 function renderGalleryHtml(rows) {
   const post = (status.tournament && status.tournament.post) || {}
   const taskOrder = []
@@ -710,7 +1012,8 @@ function renderGalleryHtml(rows) {
   for (const r of rows) {
     const tasks = (post[r.name] && post[r.name].tasks) || []
     for (const t of tasks) {
-      if (t.screenshot && !seen.has(t.task)) { seen.add(t.task); taskOrder.push(t.task) }
+      const key = taskRowKey(t)
+      if (t.screenshot && !seen.has(key)) { seen.add(key); taskOrder.push(key) }
     }
   }
   const names = rows.map((r) => r.name)
@@ -720,7 +1023,7 @@ function renderGalleryHtml(rows) {
     html += '<tr><td>' + task + '</td>'
     for (const name of names) {
       const tasks = (post[name] && post[name].tasks) || []
-      const t = tasks.find((x) => x.task === task)
+      const t = tasks.find((x) => taskRowKey(x) === task)
       html += '<td>' + (t && t.screenshot ? '<img src="' + t.screenshot + '">' : '') + '</td>'
     }
     html += '</tr>\n'
@@ -739,6 +1042,13 @@ function writeBenchmark() {
 
 // D8: the driver never ranks finalists — it matches the brief's CURRENT ## Picks against each
 // finalist's own `picks`. Exactly one match records the winner; zero or several is refused.
+// specs/20260827/02-genesis-explore-state.md D8: when explore has left tile sources
+// (exploreRecord.finalists non-empty), picked ALSO requires .claude/genesis/design-pick.json —
+// its "winner" must equal one tile source path and every other tile must appear in rejected[]
+// with a non-empty reason. Stack and design are picked together: success writes
+// explore: "picked" alongside tournament.winner.
+function tileSourcePath(s) { return s.startsWith('external/') ? 'design/explore/' + s : 'design/explore/r0-' + s }
+
 function handlePicked() {
   if (!(status.tournament && status.tournament.finalists)) die('the tournament has not reached PICK yet')
   const finalistDefs = status.tournament.finalistDefs || []
@@ -746,7 +1056,38 @@ function handlePicked() {
   if (matches.length !== 1) {
     die('## Picks matches ' + matches.length + ' finalist(s) — exactly 1 match is required to record a winner; rewrite ## Picks to the winner\'s labels, then re-mark picked')
   }
+
+  const tileSources = tileSourcesFor()
+  if (tileSources.length) {
+    const pickPath = path.join(genesisDir, 'design-pick.json')
+    if (!fs.existsSync(pickPath)) {
+      die('.claude/genesis/design-pick.json does not exist — record the design pick (winner + rejected[] with reasons), then re-mark picked')
+    }
+    let pick
+    try {
+      pick = JSON.parse(fs.readFileSync(pickPath, 'utf8'))
+    } catch (e) {
+      die('.claude/genesis/design-pick.json is not valid JSON (' + e.message + ') — fix it and re-mark picked')
+      return null // unreachable
+    }
+    const expectedPaths = tileSources.map(tileSourcePath)
+    if (typeof pick.winner !== 'string' || !expectedPaths.includes(pick.winner)) {
+      die('design-pick.json "winner" (' + pick.winner + ') is not one of the tile sources (' +
+        expectedPaths.join(', ') + ') — fix winner, then re-mark picked')
+    }
+    const rejected = Array.isArray(pick.rejected) ? pick.rejected : []
+    const rejectedWithReason = new Set(rejected
+      .filter((r) => r && typeof r.reason === 'string' && r.reason.trim())
+      .map((r) => r.candidate))
+    const missingRejected = expectedPaths.filter((p) => p !== pick.winner && !rejectedWithReason.has(p))
+    if (missingRejected.length) {
+      die('design-pick.json "rejected[]" is missing a non-empty reason for: ' + missingRejected.join(', ') +
+        ' — fix it, then re-mark picked')
+    }
+  }
+
   status.tournament = Object.assign({}, status.tournament, { winner: matches[0].name, at: new Date().toISOString() })
+  if (tileSources.length) status.explore = 'picked'
   saveStatus()
   return { prev: 'PICK', next: 'DECIDE' }
 }
@@ -1064,6 +1405,12 @@ function deriveState(opts) {
   const menus = menusCheck()
   if (!status.marks.menusDone || !menus.ok) return 'MENUS'
 
+  // specs/20260827/02-genesis-explore-state.md D1: EXPLORE sits between MENUS and FINALISTS for
+  // the four VISUAL archetypes, until the taste funnel (or the external path) resolves it.
+  // handleMenusDone already wrote explore: "skipped" for every other archetype, so this never
+  // fires for them.
+  if (isVisualArchetype(status.archetype) && !exploreResolved()) return 'EXPLORE'
+
   // specs/20260827/01-genesis-tournament.md D1: FINALISTS -> RACE -> PROBE -> PICK sits between
   // MENUS and DECIDE for a tournament archetype that hasn't been skipped or resolved yet. Once
   // skipped (tournament.skipped) or resolved (tournament.winner), fall straight through to the
@@ -1112,11 +1459,14 @@ function deriveState(opts) {
 // ---------------------------------------------------------------------------
 // Step text per state (D9: every step opens with a Read only: file list).
 // ---------------------------------------------------------------------------
+// specs/20260827/02-genesis-explore-state.md D10: /spec:genesis-explore is deleted — the explore
+// funnel is now a driver state this session already ran, not a separate command HANDOFF hands
+// off into. The next command is /spec:genesis-design directly (still separate until spec 03).
 function nextCommandLine() {
   const desc = readStackDescriptor() || {}
   const catalog = desc.designCatalog
   if (catalog && catalog !== 'none') {
-    return 'next: /spec:genesis-explore <the project idea — see ' + genesisRel('brief.md') + '>'
+    return 'next: /spec:genesis-design <the project idea — see ' + genesisRel('brief.md') + '>'
   }
   return 'next: /spec:init'
 }
@@ -1172,6 +1522,52 @@ const STEPS = {
     return lines.join('\n')
   },
 
+  // specs/20260827/02-genesis-explore-state.md D1/D9: the taste funnel's own mark-driven
+  // progression, rendered per status.explore substate. `nothing marked yet` matches the Contracts
+  // step-text excerpt verbatim (funnel/external inline, no separate Then: block needed there —
+  // both marks are already spelled out on their own lines).
+  EXPLORE: () => {
+    const doctrineLine = 'Doctrine: spec/doctrine/genesis.md § Genesis: Explore State'
+    const lines = []
+    switch (status.explore) {
+      case 'research-done':
+        lines.push('## Step: author 6-8 explore positions')
+        lines.push('Read only: docs/design/research-brief.md, design/targets.json')
+        lines.push(doctrineLine)
+        lines.push('write design/explore/positions.md with 6-8 `## Position: <kebab>` blocks (Stance, ' +
+          'Rules cited, Anti-defaults, Reference direction, Motion character, Density & layout intent, ' +
+          'Starter tokens) and each design/explore/r0-<kebab>/tokens.css')
+        lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark positions-authored')
+        break
+      case 'positions-authored':
+        lines.push('## Step: build and check the tiles')
+        lines.push('Read only: design/explore/positions.md, .claude/genesis/explore/authored/')
+        lines.push(doctrineLine)
+        lines.push('build each design/explore/r0-<kebab>/tile.html rendering the position\'s tokens — ' +
+          'builders append tokens.css, never alter the authored baseline')
+        lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark tiles-built')
+        break
+      case 'tiles-built':
+        lines.push('## Step: open the gallery and cull to two')
+        lines.push('Read only: design/explore/gallery.html')
+        lines.push(doctrineLine)
+        lines.push('open the gallery, then record a `## Cull record` in design/explore/positions.md ' +
+          'leaving exactly two survivors')
+        lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark tiles-culled')
+        break
+      default:
+        lines.push('## Step: research the constraints floor and declare the matrix')
+        lines.push('Read only: ' + genesisRel('brief.md') + ' (## What I think you\'re building, ## Research Angles), ' +
+          genesisRel('stack-descriptor.json') + ' (absent — the stack is not decided yet; archetype from status.json)')
+        lines.push(doctrineLine)
+        lines.push('funnel: write docs/design/research-brief.md (ux-research-brief.md template) and design/targets.json, then --mark research-done')
+        lines.push('external: a design you already have → --mark external --file design/explore/external/<name>')
+        lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark research-done' +
+          '\n  node ' + __filename + ' --root ' + root + ' --mark external --file design/explore/external/<name>')
+    }
+    return lines.join('\n')
+  },
+
   DECIDE: () => {
     const check = decideCheck()
     const lines = [
@@ -1214,10 +1610,11 @@ const STEPS = {
     'Then:\n  node ' + __filename + ' --root ' + root,
   ].join('\n'),
 
-  // D6: race results per finalist (a failed scaffold prints "failed at scaffold — spent no
-  // further" and owes no probe.json), the expected task set (sketch-conditioned, D6), the
-  // style-tile source path when style-tile is expected, the retry cap, each raced finalist's
-  // evidence dir, and the probe.json shape.
+  // D6/D7: race results per finalist (a failed scaffold prints "failed at scaffold — spent no
+  // further" and owes no probe.json), the expected task set (tile-source-conditioned, D7), one
+  // style-tile source line per tile (a position's tile.html, or an external candidate's dir —
+  // never sketch.html, per specs/20260827/02 D7), the retry cap, each raced finalist's evidence
+  // dir, and the probe.json shape.
   PROBE: () => {
     const archetype = status.archetype
     const expected = expectedTasksFor(archetype)
@@ -1239,7 +1636,10 @@ const STEPS = {
     }
     lines.push('expected tasks: ' + expected.join(', '))
     if (expected.includes('style-tile')) {
-      lines.push('style-tile source: ' + genesisRel('sketch.html') + ' (render inside the finalist, with its own real component library)')
+      for (const src of tileSourcesFor()) {
+        const p = src.startsWith('external/') ? 'design/explore/' + src + '/' : 'design/explore/r0-' + src + '/tile.html'
+        lines.push('style-tile source (' + src + '): ' + p + ' (render inside the finalist, with its own real component library)')
+      }
     }
     lines.push('retry cap: 2 per task')
     for (const name of names) {
@@ -1347,6 +1747,11 @@ function handleMark() {
     case 'discovery-done': result = handleDiscoveryDone(); break
     case 'menu-written': result = handleMenuWritten(); break
     case 'menus-done': result = handleMenusDone(); break
+    case 'research-done': result = handleResearchDone(); break
+    case 'positions-authored': result = handlePositionsAuthored(); break
+    case 'tiles-built': result = handleTilesBuilt(); break
+    case 'tiles-culled': result = handleTilesCulled(); break
+    case 'external': result = handleExternal(); break
     case 'finalists-written': result = handleFinalistsWritten(); break
     case 'finalists-skipped': result = handleFinalistsSkipped(); break
     case 'probe-done': result = handleProbeDone(); break
@@ -1356,6 +1761,7 @@ function handleMark() {
     case 'roadmap-written': result = handleRoadmapWritten(); break
     default:
       die('unknown mark "' + MARK + '" (discovery-done | menu-written --file <f> | menus-done | ' +
+        'research-done | positions-authored | tiles-built | tiles-culled | external --file <dir> | ' +
         'finalists-written --file <f> | finalists-skipped | probe-done | picked | ' +
         'decided | skeleton-landed | roadmap-written)')
       return

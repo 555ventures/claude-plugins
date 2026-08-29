@@ -415,18 +415,25 @@ function hookSpecState() {
     'message here would mean the gate never actually read the frontmatter: ' + r.stderr)
 }
 
-// genesis-state-gate.sh: architect: pending must block /spec:genesis-explore.
+// genesis-state-gate.sh: architect: pending must block /spec:genesis-design.
+//
+// specs/20260827/02-genesis-explore-state.md D9/A6 (2026-08-27): /spec:genesis-explore's own
+// hook arm is deleted — the command now falls through untouched at every state (AC-20260827-02-7),
+// so it can no longer serve as this handler's blocked-prompt vehicle. Per Assumption A6, this
+// fixture only needs *a* prompt the hook blocks at architect: pending; /spec:genesis-design is
+// blocked at that state by the same require_scaffold helper, byte-identically. Retargeted in
+// place, never weakened — the hook's own require_scaffold gate is untouched by this spec.
 function hookGenesisState() {
   const dir = tmpdir('rfc-hook-genesis')
   fs.mkdirSync(path.join(dir, '.claude/genesis'), { recursive: true })
   fs.writeFileSync(path.join(dir, '.claude/genesis/status.json'), JSON.stringify({ architect: 'pending' }))
   const r = runBash('scripts/genesis-state-gate.sh', [], {
-    input: JSON.stringify({ prompt: '/spec:genesis-explore' }),
+    input: JSON.stringify({ prompt: '/spec:genesis-design' }),
     cwd: dir,
     env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
   })
   assert.strictEqual(r.status, 2,
-    'status.json declaring architect: pending must block /spec:genesis-explore: ' + r.stdout + r.stderr)
+    'status.json declaring architect: pending must block /spec:genesis-design: ' + r.stdout + r.stderr)
   assert.match(r.stderr, /architect: pending/,
     'evidence the check engaged: stderr must echo the exact planted architect value ("pending") — a generic ' +
     'block message here would mean the gate never actually read status.json: ' + r.stderr)

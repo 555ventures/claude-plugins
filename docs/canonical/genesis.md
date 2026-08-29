@@ -47,15 +47,19 @@
 ## Driver (architect stage)
 
 - Since specs/20260825/04 `/spec:genesis "<idea>"` is the greenfield entry point, looping on
-  `genesis-driver.js` (`spec-paths genesis-driver`): states DISCOVERY → MENUS → DECIDE →
-  SCAFFOLD → SKELETON → GATE → ROADMAP → HANDOFF, derived from `status.json` (schemaVersion 2)
-  plus on-disk artifacts on every invocation. The driver runs the coverage-audit gate, the
+  `genesis-driver.js` (`spec-paths genesis-driver`): states DISCOVERY → MENUS → EXPLORE →
+  DECIDE → SCAFFOLD → SKELETON → GATE → ROADMAP → HANDOFF, derived from `status.json`
+  (schemaVersion 2) plus on-disk artifacts on every invocation. The driver runs the coverage-audit gate, the
   registry check per menu, the decision-record closure check, the scaffold command, the
   zero-day gate, and the roadmap closure check; the session holds the interview, the picks, the
   ADRs, the skeleton, and the roadmap decomposition. Every accepted mark prints
   `✅ checkpoint — … safe to /clear`. The former separate architect command is retired (its
-  file deleted, its name swept from every live surface); `/spec:genesis-explore` and
-  `/spec:genesis-design` follow after HANDOFF until brief 10a folds them in. Child output from `scaffoldCommand`/`gateCommand` streams straight to
+  file deleted, its name swept from every live surface); since specs/20260827/02 the taste
+  funnel — style tiles rendered locally and judged in the browser — is folded into the driver
+  as an `EXPLORE` state between `MENUS` and `FINALISTS`, mark-driven `research-done` →
+  `positions-authored` → `tiles-built` → `tiles-culled`, or `external --file <dir>` for a
+  design the user already has, then `picked`; `/spec:genesis-design` remains a separate
+  command that follows HANDOFF. Child output from `scaffoldCommand`/`gateCommand` streams straight to
   `.claude/genesis/scaffold.log`/`gate.log` via the log fd — never through a Node pipe — and the
   excerpt the driver prints back is bounded in **bytes** (`LOGTAIL_MAX_BYTES`), not lines.
   (specs/20260825/04-genesis-driver.md, done 2026-08-26)

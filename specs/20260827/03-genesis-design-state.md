@@ -1,6 +1,6 @@
 ---
 date: 2026-08-27
-status: implementing
+status: done
 tier: critical           # edits the genesis-state-gate.sh hook (process boundary) and spec/bin/spec-paths
 area: genesis
 design: false
@@ -243,6 +243,33 @@ inside the hook, and named in `tests/genesis-gate.test.js` (row). The `tests/spe
 AC-20260824-05-3 message text "genesis-design keeps this section unchanged" is a comment on a
 design-command assertion, updated in place. `SHALL CONTINUE TO` pins: AC-6 (init arm), AC-7
 (shared-for genesis).
+
+**Waived at review 2026-08-29** — one out-of-plan file, `tests/genesis/explore-states.test.js`:
+a single assert *message* on an unchanged assertion (AC-20260827-02-6) still narrated the retired
+`/spec:genesis-design` as hook-admitted, and D8's repo-wide emptiness sweep reddens on it. The
+retired-literal Gotcha's exact class (a locked Decision retiring a literal leaves a live mention
+outside the File Plan, in a test); the message was retargeted in place to the driver state and D6's
+arm removal, never weakened. Reverting it was verified red at review.
+
+**Deviations folded at review close 2026-08-29** (sidecar deleted; the recurring-shaped entry —
+a Canonical Delta paragraph that spells the literal its own spec retires — became a `[host]`
+Gotchas line, since the obvious fix, waiving `docs/canonical/` by prefix, would blind a live
+reference surface forever). The one-offs:
+
+- The new AC-7 repo-wide sweep needed two `waivedPaths` beyond AC-7's own representative
+  waive-list text, both for the reason its sibling sweep already waives `tests/genesis-gate.test.js`
+  — the retired command string is the *input under test*, not a stale reference:
+  `tests/genesis/design-state.test.js` (AC-1/-5 assert the driver reaches `DESIGN` and that
+  HANDOFF/the chain bullet no longer name the retired command) and `tests/genesis-gate.test.js`
+  (AC-6 asserts the hook now falls through that prompt untouched).
+- The same reasoning forced one addition to the **existing** spec 02 sweep's `waivedPaths`
+  (AC-20260827-02-8): `tests/genesis/design-state.test.js` also asserts the chain bullet no longer
+  names spec 02's retired command, so its own test text carries that literal too.
+- D6 deletes `require_scaffold` from `spec/scripts/genesis-state-gate.sh`, which was the sole
+  caller of the `ARCH`, `EXPL`, and `DESC` assignments (each a `jq` read off `$STATUS`). D6 names
+  the helper but not the three now-callerless reads; they were removed with it rather than left as
+  dead reads in a critical-tier hook. `DES` (still read by the surviving `/spec:init` arm) is
+  untouched.
 
 ## Canonical Delta
 

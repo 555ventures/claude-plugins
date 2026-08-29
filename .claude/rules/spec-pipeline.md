@@ -265,3 +265,14 @@ this repo's suite; appending at cap requires an eviction (delete / merge / mecha
   reachable-registry fixtures, deviation recorded at build, second recurrence; first was
   `tests/release-legs/release-legs.test.js`, which routes around it with a real child-process
   server and carries the dated comment naming the same deadlock.)
+- `[host]` A spec that retires a command name must keep that name out of its own **Canonical
+  Delta** prose too. `docs/canonical/` is live surface the repo-wide retired-name sweep walks, and
+  the sweep's `waivedPrefixes` deliberately cover only `specs/`, `docs/roadmap/`, `docs/audit/`,
+  `docs/adr/` — so applying a Delta paragraph that narrates the retirement byte-for-byte at review
+  close reddens the spec's own sweep, at the close commit, after the last green run. Land the same
+  substance with the retired name elided ("the command is deleted, its hook arm removed"): the
+  Delta is a contract on content, not on bytes. Do **not** take the obvious-looking fix of adding
+  `docs/canonical/` to `waivedPrefixes` — that blinds a live reference surface to every future
+  regression of the name, permanently, to save one reworded sentence.
+  (specs/20260827/03-genesis-design-state.md — caught at build 2026-08-29, recorded in that
+  spec's deviations record and folded here at review close.)

@@ -54,12 +54,7 @@
   zero-day gate, and the roadmap closure check; the session holds the interview, the picks, the
   ADRs, the skeleton, and the roadmap decomposition. Every accepted mark prints
   `✅ checkpoint — … safe to /clear`. The former separate architect command is retired (its
-  file deleted, its name swept from every live surface); since specs/20260827/02 the taste
-  funnel — style tiles rendered locally and judged in the browser — is folded into the driver
-  as an `EXPLORE` state between `MENUS` and `FINALISTS`, mark-driven `research-done` →
-  `positions-authored` → `tiles-built` → `tiles-culled`, or `external --file <dir>` for a
-  design the user already has, then `picked`; `/spec:genesis-design` remains a separate
-  command that follows HANDOFF. Child output from `scaffoldCommand`/`gateCommand` streams straight to
+  file deleted, its name swept from every live surface). Child output from `scaffoldCommand`/`gateCommand` streams straight to
   `.claude/genesis/scaffold.log`/`gate.log` via the log fd — never through a Node pipe — and the
   excerpt the driver prints back is bounded in **bytes** (`LOGTAIL_MAX_BYTES`), not lines.
   (specs/20260825/04-genesis-driver.md, done 2026-08-26)
@@ -77,3 +72,16 @@
   and an ADR to cite `benchmark.md`, then deletes the raced copies; the winner is re-scaffolded
   clean into the root. Every step text prints a `Doctrine:` pointer; the command no longer
   carries per-state pointers. (specs/20260827/01-genesis-tournament.md, done 2026-08-27)
+
+- Since specs/20260827/02 the explore funnel is a driver state (`EXPLORE`, between `MENUS` and
+  `FINALISTS`) for visual archetypes: marks `research-done` (research brief +
+  `design/targets.json`) → `positions-authored` (6–8 complete position briefs, session-authored
+  starter `tokens.css` snapshotted to `.claude/genesis/explore/authored/`) → `tiles-built` (the
+  driver runs `design-atlas.js check` per tile, enforces additions-only tokens by prefix, builds
+  the gallery) → `tiles-culled` (exactly two survivors); or `external --file
+  design/explore/external/<name>` for a supplied design (no research owed). The two culled looks
+  are the tournament's `style-tile` task, rendered inside each finalist; `picked` records stack
+  and design together (`design-pick.json`). Round-1 prototypes and persona walkthroughs are
+  retired. The separate explore command is deleted and its hook arm removed;
+  `/spec:genesis-design` still follows HANDOFF until spec 03.
+  (specs/20260827/02, done 2026-08-29)

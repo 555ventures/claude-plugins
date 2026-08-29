@@ -746,6 +746,12 @@ test('AC-20260827-02-8: spec-paths shared-for genesis serves Design Canon and co
     'tests/spec-paths.test.js',
   ]
   const waivedPrefixes = [
+    // driver-written retained review evidence: spec-review-driver.js writes one
+    // .claude/spec-runs/<runId>.json per review pass recording the spec path verbatim, and
+    // never rewrites it — the same dated-record class as .claude/spec-runs.jsonl above, and
+    // structurally incapable of being a live pointer at the deleted command (it is a machine
+    // artifact keyed by run id, read by the fleet reader, never by a human looking for a command).
+    '.claude/spec-runs/',
     // dated historical records — a spec that retires a command must keep naming it in its own
     // (and its siblings') spec documents and the roadmap/audit trail.
     'specs/',

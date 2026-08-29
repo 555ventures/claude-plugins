@@ -3,7 +3,7 @@ name: concurrent-worker-file-collision-select-tiebreak
 description: Edit tool's "modified on disk since you last read it" warning means STOP and re-Read in full before trusting your own draft — the concurrent editor is usually the ORCHESTRATOR that dispatched you (its completion notification can fire early), so report what you found and never stand down as "already done"; also, replay.js --select's own tie-break means a driver CLOSE's own just-appended CLEAN+runId row is always a self-selectable candidate
 metadata:
   type: feedback
-  reviewed: 2026-08-27
+  reviewed: 2026-08-29
 ---
 
 Dispatched 2026-08-21 to author tests/review/review-driver.test.js (AC-20260821-02-1..7) and

@@ -3,6 +3,7 @@ name: citations-check-word-before-section
 description: citations-check.js resolves a § citation's target file from the ONE WORD immediately before the §, not just from filename tokens — a coincidental match against another scanned doctrine file's basename (design, core, genesis, review, build, plan...) causes a false MISS
 metadata:
   type: feedback
+  reviewed: 2026-08-29
 ---
 
 When writing a `§ Section Name` citation in doctrine/command prose, the word immediately

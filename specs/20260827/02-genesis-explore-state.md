@@ -1,6 +1,6 @@
 ---
 date: 2026-08-27
-status: implementing
+status: done
 tier: critical           # edits the genesis-state-gate.sh hook (process boundary) and spec/bin/spec-paths
 area: genesis
 design: false
@@ -276,6 +276,41 @@ that a canonical doc naming a dead command is a catch, not a waive — edited at
 at review). The lowercase "explore stage" phrases in `docs/canonical/design.md` and the hook's
 legacy-note comment are generic prose, not citations — **waived**. `SHALL CONTINUE TO` pins:
 AC-7 (hook arms), AC-8 (shared-for genesis).
+
+**Deviations folded at review close (2026-08-29, CLEAN — all one-offs; none earned a Gotchas
+entry because the structural fix is already scheduled, see below):**
+
+1. AC-20260827-02-8's waive-list was extended past D11's enumeration. This spec's own filename
+   contains the retired literal, so every dated provenance header citing it — six `tests/`
+   files, plus the append-only run ledger's `plan` row and the driver-written retained review
+   evidence under `.claude/spec-runs/` — is a citation of the record of the kill, not a live
+   pointer at the dead command. Without the waives the sweep is permanently red regardless of
+   implementation. The last two were discovered at close, when the Canonical Delta's own dated
+   attribution reddened the sweep it had just certified.
+2. `tests/genesis-gate.test.js` fragments the retired literal at runtime
+   (`'/spec:genesis-' + 'explore'`) so the file stays out of its own sweep. This is inert — the
+   file is already on the waive-list — and is condemned by the cleanup below.
+3. Two files outside the File Plan were edited: the doctrine-author agent's memory index and a
+   new memory recording the `citations-check.js` near-word resolution trap. The memory cited
+   this spec by full slug and reddened the sweep; the citation was shortened, no other word
+   changed.
+
+**Scheduled structural fix** (Fable consult, 2026-08-29, JJ approved): all three deviations are
+one class — the sweep cannot distinguish "cites the spec that killed the command" from "still
+points at the dead command". The fix is **citation-subtraction**: a file-local
+`sweepRetiredLiteral(literal, {citations, waivedPaths, waivedPrefixes})` in
+`tests/consistency/genesis-doctrine.test.js` that deletes the retiring spec's own path tokens
+from each file's content before testing for the literal, with the helper asserting each
+citation strictly contains and exceeds the literal so nobody can hollow the sweep by passing the
+bare name. Exact strings only — never a "looks like a path" shape rule, which is the evadable-
+guard class § Gotchas bans. Both existing sweeps refactor onto it, most per-file waives
+evaporate, and the fragmented literals in item 2 revert to plain strings. **Not a standing guard
+under core § Incident Policy** — sharing two sweeps' directory walk is ordinary refactoring, not
+a new guard, so the five-test admission bar does not apply. Landing directly (it fails both
+Pipeline Entry triggers: no delegation, no durability) in the gap before specs/20260827/03
+builds, proven by deliberately tripping each sweep; spec 03's D8 then needs one sentence
+changed, from "on the AC-20260825-04-9 pattern" to the shared helper, so it never writes a third
+inline copy.
 
 ## Canonical Delta
 

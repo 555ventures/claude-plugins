@@ -37,8 +37,7 @@ build resumes instead of restarting.
 **Brand-new project** (no code yet) — run genesis first, then init:
 
 ```
-/spec:genesis         "a trading simulator for retail traders in Japan"  # stack + scaffold + roadmap briefs; rendered design candidates in your browser → your pick
-/spec:genesis-design    "..."   # ratifies the pick into tokens + design canon
+/spec:genesis         "a trading simulator for retail traders in Japan"  # stack + scaffold + roadmap briefs; rendered design candidates in your browser → your pick, ratified into tokens + design canon
 /spec:init
 ```
 

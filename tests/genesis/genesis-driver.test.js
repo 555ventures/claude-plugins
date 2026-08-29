@@ -334,7 +334,7 @@ test('AC-20260825-04-6: skeleton-landed runs the zero-day gate, recording GATE_R
   assert.match(green.stdout, /ROADMAP/, 'a green gate must advance to ROADMAP')
 })
 
-test('AC-20260825-04-7: roadmap-written refuses a Depends-on cycle by naming it and, once acyclic, prints HANDOFF with the designCatalog-conditioned next command', () => {
+test('AC-20260825-04-7: roadmap-written refuses a Depends-on cycle by naming it and, once acyclic, prints HANDOFF with next: /spec:init for both designCatalog values', () => {
   const cyclic = tmpdir('gdrv-ac7-cycle')
   advanceToRoadmap(cyclic)
   writeRoadmap(cyclic, [
@@ -354,20 +354,22 @@ test('AC-20260825-04-7: roadmap-written refuses a Depends-on cycle by naming it 
   assert.strictEqual(noneAccepted.status, 0, 'an acyclic roadmap with an overview file must be accepted: ' + noneAccepted.stderr)
   const noneHandoff = bare(noneCatalog)
   assert.match(noneHandoff.stdout, /next: \/spec:init/, 'a headless/no-catalog descriptor must hand off straight to /spec:init — there is no design stage to run')
-  // specs/20260827/02-genesis-explore-state.md D10 (2026-08-27): the explore command is deleted and
-  // the driver's HANDOFF next: line now points at /spec:genesis-design directly (explore folded
-  // into the driver itself; genesis-design is still the separate command until spec 03). This
-  // AC-20260825-04-7 pin is updated in place and retagged, never weakened.
-  assert.doesNotMatch(noneHandoff.stdout, /next: \/spec:genesis-design/, 'designCatalog: "none" must never print the design-genesis handoff — that would send the user into a stage this project has no use for')
 
+  // specs/20260827/03-genesis-design-state.md D5/D9 (2026-08-29): the design lock this pin used
+  // to name as a separate handoff target is deleted — it is now a driver state (DESIGN) entered
+  // from ROADMAP for a visual archetype, and this shared fixture's archetype (advanceToDecide's
+  // default, data-ml — never overridden by writeValidDecideArtifacts' own descriptor.archetype
+  // field, which deriveState() never reads) is non-visual, so design: "skipped" writes straight
+  // through to HANDOFF regardless of designCatalog. nextCommandLine() no longer branches on
+  // designCatalog at all: every archetype's HANDOFF names /spec:init. This AC-20260825-04-7 pin
+  // is updated in place and retagged again, never weakened.
   const storybookCatalog = tmpdir('gdrv-ac7-storybook')
   advanceToRoadmap(storybookCatalog, { designCatalog: 'storybook' })
   writeRoadmap(storybookCatalog, [{ name: '01-a.md', dependsOn: '—' }])
   const sbAccepted = mark(storybookCatalog, 'roadmap-written')
   assert.strictEqual(sbAccepted.status, 0, 'an acyclic roadmap with an overview file must be accepted: ' + sbAccepted.stderr)
   const sbHandoff = bare(storybookCatalog)
-  assert.match(sbHandoff.stdout, /next: \/spec:genesis-design/, 'AC-20260825-04-7/D10: a project with a design catalog must hand off straight into /spec:genesis-design — the explore funnel is now a driver state, not a separate command the HANDOFF line names')
-  assert.doesNotMatch(sbHandoff.stdout, /next: \/spec:init\b/, 'designCatalog: "storybook" must not also print the /spec:init handoff — HANDOFF names exactly one next command')
+  assert.match(sbHandoff.stdout, /next: \/spec:init/, 'AC-20260825-04-7/D5/D9: a project with a design catalog must ALSO hand off to /spec:init now — the design lock this pin used to name a separate handoff for is folded into the driver, so nextCommandLine() no longer branches on designCatalog at all')
 })
 
 // Review findings F1, F3, F6 (specs/20260825/04-genesis-driver.md review, 2026-08-26): three

@@ -44,7 +44,7 @@
   3 unreachable; sentinels `__REGISTRY_OK__`, `__REGISTRY_DROPPED__ n=<k>`,
   `__REGISTRY_UNREACHABLE__`. (specs/20260825/03-genesis-currency-executed.md, done 2026-08-26)
 
-## Driver (architect stage)
+## Driver (the whole greenfield path)
 
 - Since specs/20260825/04 `/spec:genesis "<idea>"` is the greenfield entry point, looping on
   `genesis-driver.js` (`spec-paths genesis-driver`): states DISCOVERY → MENUS → EXPLORE →
@@ -82,6 +82,16 @@
   design/explore/external/<name>` for a supplied design (no research owed). The two culled looks
   are the tournament's `style-tile` task, rendered inside each finalist; `picked` records stack
   and design together (`design-pick.json`). Round-1 prototypes and persona walkthroughs are
-  retired. The separate explore command is deleted and its hook arm removed;
-  `/spec:genesis-design` still follows HANDOFF until spec 03.
+  retired. The separate explore command is deleted and its hook arm removed.
   (specs/20260827/02-genesis-explore-state.md, done 2026-08-29)
+
+- Since specs/20260827/03 the design lock is a driver state (`DESIGN`, between `ROADMAP` and
+  `HANDOFF`): marks `doctrine-drafted` (one-page doctrine, Dissents carrying every rejected
+  direction) → `tokens-landed` (visual only: `design/tokens.css` starts with the winner's file
+  verbatim, an approved matrix-expanded mock passes `design-atlas.js check --matrix`,
+  `design/components.json` exists) → `rules-locked` (`design-rules.json` category/grounding
+  enums valid, `components-check.js` green, then the driver prunes the losing candidates, the
+  gallery, the sketch, and the authored-tokens snapshot). `backend-api`/`data-ml` are written
+  `design: skipped`; non-visual archetypes skip the tokens mark. HANDOFF always hands to
+  `/spec:init`. The command is deleted, its hook arm removed; the genesis hook now gates only
+  `/spec:init` on a partial canon. (specs/20260827/03-genesis-design-state.md, done 2026-08-29)

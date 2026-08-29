@@ -93,6 +93,28 @@
 //     `.claude/genesis/explore/authored/<kebab>.css` snapshot `positions-authored` wrote, via
 //     `startsWith` (additions-only, no git in play — Assumption A2).
 //
+// specs/20260827/03-genesis-design-state.md (2026-08-29): between ROADMAP and HANDOFF, every
+// archetype except backend-api/data-ml gains a DESIGN state — the design lock that used to be its
+// own retired command. Marks progress doctrine-drafted (one-page
+// `docs/design/doctrine.md`, `## Dissents` naming every rejected direction from
+// `.claude/genesis/design-pick.json`) -> [tokens-landed, visual archetypes only:
+// `design/tokens.css` ratified verbatim from the winner's, an approved matrix-clean mock in
+// `design/mocks/`, `design/components.json` seeded] -> rules-locked
+// (`.claude/genesis/design-rules.json`'s category/grounding enums valid, `components-check.js`
+// green on `design/components.json` for visual archetypes). `backend-api`/`data-ml` are recorded
+// `design: "skipped"` by `handleRoadmapWritten` the moment `roadmap-written` is accepted and never
+// enter DESIGN; non-visual archetypes (`conversational-bot`, `cli-devtool`) enter DESIGN but skip
+// the tokens mark entirely (refused: "no tokens step"). HANDOFF's `next:` is always `/spec:init`
+// now — there is no separate command left to hand off into for any archetype or designCatalog.
+//
+// What DESIGN deliberately does NOT do:
+//   - author the doctrine, ratify the tokens, promote the signature screen, or write the
+//     design-rules manifest itself — those stay session judgment; the driver only closes each
+//     mark once the artifact exists and validates.
+//   - judge a design decision's taste — its checks are closure checks (a line count, a non-empty
+//     section, a byte-for-byte prefix, a closed enum, a green child process), never opinions on
+//     which direction won.
+//
 // Fixing that overflow only at the child's own capture wasn't enough: `logTail`, which builds the
 // SCAFFOLD_RED/GATE_RED excerpt embedded in the driver's OWN stdout, used to bound its excerpt by
 // line count alone (`text.split('\n').slice(-n)`). A caller's buffer is measured in BYTES, not
@@ -402,6 +424,12 @@ function isTournamentArchetype(a) { return TOURNAMENT_ARCHETYPES.includes(a) }
 // menus-done resolves it and is never routed through EXPLORE.
 const VISUAL_ARCHETYPES = ['web-app', 'realtime-trading', 'mobile-app', 'desktop-app']
 function isVisualArchetype(a) { return VISUAL_ARCHETYPES.includes(a) }
+
+// specs/20260827/03-genesis-design-state.md D1: backend-api/data-ml never enter DESIGN at all —
+// design: "skipped" is written by handleRoadmapWritten the moment roadmap-written is accepted for
+// them (the "first derivation past ROADMAP"). Every other archetype (visual or not) enters DESIGN.
+const DESIGN_SKIPPED_ARCHETYPES = ['backend-api', 'data-ml']
+function isDesignSkipped(a) { return DESIGN_SKIPPED_ARCHETYPES.includes(a) }
 
 function handleMenusDone() {
   if (!status.marks.discoveryDone) die('discovery-done has not been marked yet — mark discovery-done first')
@@ -1110,13 +1138,19 @@ function readStackDescriptor() {
 }
 function resolveAdrPath(p) { return path.isAbsolute(p) ? p : path.join(root, p) }
 
-function dissentsNonEmpty(text) {
+// specs/20260827/03-genesis-design-state.md D2 reuses this section extraction against
+// docs/design/doctrine.md's own ## Dissents heading (same grammar as an ADR's).
+function dissentsBody(text) {
   const m = /^##\s+Dissents\s*$/m.exec(text)
-  if (!m) return false
+  if (!m) return null
   const rest = text.slice(m.index + m[0].length)
   const next = rest.search(/^##\s/m)
-  const body = next === -1 ? rest : rest.slice(0, next)
-  return body.split('\n').some((l) => l.trim().length > 0)
+  return next === -1 ? rest : rest.slice(0, next)
+}
+
+function dissentsNonEmpty(text) {
+  const body = dissentsBody(text)
+  return body !== null && body.split('\n').some((l) => l.trim().length > 0)
 }
 
 function decideCheck() {
@@ -1381,8 +1415,253 @@ function handleRoadmapWritten() {
     }
   }
   status.marks.roadmapWritten = true
+  // specs/20260827/03-genesis-design-state.md D1: this IS "the first derivation past ROADMAP" —
+  // backend-api/data-ml are recorded design: "skipped" right here and never routed through
+  // DESIGN; every other archetype is handed the new DESIGN state next instead of HANDOFF.
+  const designSkip = isDesignSkipped(status.archetype)
+  if (designSkip) status.design = 'skipped'
   saveStatus()
-  return { prev: 'ROADMAP', next: 'HANDOFF' }
+  return { prev: 'ROADMAP', next: designSkip ? 'HANDOFF' : 'DESIGN' }
+}
+
+// ---------------------------------------------------------------------------
+// DESIGN (specs/20260827/03-genesis-design-state.md D1-D4): the design lock's own mark-driven
+// progression, folded from the retired design-lock command — doctrine-drafted (one-page
+// doctrine, Dissents naming every rejected direction) -> [tokens-landed, visual only: the
+// winner's tokens.css ratified verbatim, an approved matrix-clean mock, design/components.json
+// seeded] -> rules-locked (design-rules.json category/grounding enums valid, components-check.js
+// green on design/components.json for visual archetypes, then the prune of the losing
+// candidates/gallery/sketch/authored-snapshot). Entered only for archetypes NOT in
+// DESIGN_SKIPPED_ARCHETYPES — handleRoadmapWritten already wrote design: "skipped" and routed
+// past it for backend-api/data-ml.
+// ---------------------------------------------------------------------------
+const DOCTRINE_LINE_CAP = 120
+const DESIGN_RULE_CATEGORIES = ['color', 'typography', 'i18n', 'structure', 'a11y', 'density', 'layout']
+
+function doctrinePath() { return path.join(root, 'docs/design/doctrine.md') }
+function designPickPath() { return path.join(genesisDir, 'design-pick.json') }
+function readDesignPick() {
+  try { return JSON.parse(fs.readFileSync(designPickPath(), 'utf8')) } catch (e) { return null }
+}
+function mocksDir() { return path.join(root, 'design/mocks') }
+function tokensCssPath() { return path.join(root, 'design/tokens.css') }
+function componentsJsonPath() { return path.join(root, 'design/components.json') }
+function designRulesPath() { return path.join(genesisDir, 'design-rules.json') }
+
+// D2: design-pick.json's rejected[].candidate paths are `design/explore/r0-<kebab>` (or an
+// external dir) — Dissents is authored against the bare kebab throughout the funnel (Cull
+// record, positions.md), never against the `r0-` directory prefix, so the prefix is stripped
+// before matching against the doctrine's Dissents body.
+function candidateKebab(candidate) {
+  const base = path.basename(String(candidate || ''))
+  return base.startsWith('r0-') ? base.slice(3) : base
+}
+
+function hasApprovedMock() {
+  const dir = mocksDir()
+  if (!fs.existsSync(dir)) return false
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.html'))
+  return files.some((f) => {
+    try { return /data-status\s*=\s*"approved"/.test(fs.readFileSync(path.join(dir, f), 'utf8')) } catch (e) { return false }
+  })
+}
+
+// D2: `docs/design/doctrine.md` exists, ≤ DOCTRINE_LINE_CAP lines, with a non-empty ## Dissents
+// naming every rejected candidate the current design-pick.json (if any) records.
+function handleDoctrineDrafted() {
+  if (!status.marks.roadmapWritten) die('roadmap-written has not been marked yet — mark roadmap-written first')
+  if (isDesignSkipped(status.archetype)) {
+    die('archetype "' + status.archetype + '" never enters the design state — doctrine-drafted does not apply')
+  }
+  const p = doctrinePath()
+  if (!fs.existsSync(p)) {
+    die('docs/design/doctrine.md does not exist — draft the one-page doctrine with a ## Dissents ' +
+      'section naming every rejected direction, then re-mark doctrine-drafted')
+  }
+  const text = fs.readFileSync(p, 'utf8')
+  const lineCount = text.split('\n').length
+  if (lineCount > DOCTRINE_LINE_CAP) {
+    die('docs/design/doctrine.md is ' + lineCount + ' lines — the one-page cap is ' + DOCTRINE_LINE_CAP +
+      ' lines — trim it, then re-mark doctrine-drafted')
+  }
+  if (!dissentsNonEmpty(text)) {
+    die('docs/design/doctrine.md ## Dissents has no non-blank line — record every rejected ' +
+      'direction there, then re-mark doctrine-drafted')
+  }
+  const pick = readDesignPick()
+  if (pick && Array.isArray(pick.rejected)) {
+    const body = dissentsBody(text) || ''
+    for (const r of pick.rejected) {
+      const kebab = candidateKebab(r && r.candidate)
+      if (kebab && !body.includes(kebab)) {
+        die('docs/design/doctrine.md ## Dissents does not name rejected candidate "' + kebab +
+          '" — add it, then re-mark doctrine-drafted')
+      }
+    }
+  }
+  status.design = 'doctrine-drafted'
+  saveStatus()
+  return { prev: 'DESIGN', next: 'DESIGN' }
+}
+
+// D3 (visual only — refused for non-visual, "no tokens step"): design/tokens.css ratified
+// verbatim from the winner's tokens.css (no prefix rule for an external winner), an approved
+// mock in design/mocks/ passing design-atlas.js check --matrix, and design/components.json
+// present.
+function handleTokensLanded() {
+  if (!isVisualArchetype(status.archetype)) {
+    die('no tokens step for ' + status.archetype + ' — non-visual archetypes skip tokens-landed ' +
+      'entirely and mark rules-locked directly')
+  }
+  if (status.design !== 'doctrine-drafted') die('doctrine-drafted has not been marked yet — mark doctrine-drafted first')
+
+  const tokensPath = tokensCssPath()
+  if (!fs.existsSync(tokensPath)) {
+    die('design/tokens.css does not exist — ratify the winner\'s tokens.css verbatim, then re-mark tokens-landed')
+  }
+  const pick = readDesignPick()
+  const winner = pick && typeof pick.winner === 'string' ? pick.winner : null
+  if (winner && winner.startsWith('design/explore/r0-')) {
+    const winnerPath = path.join(root, winner, 'tokens.css')
+    let winnerTokens
+    try {
+      winnerTokens = fs.readFileSync(winnerPath, 'utf8')
+    } catch (e) {
+      die(winnerPath + ' does not exist — the winning candidate\'s tokens.css is missing; restore it, then re-mark tokens-landed')
+      return null // unreachable
+    }
+    const current = fs.readFileSync(tokensPath, 'utf8')
+    if (!current.startsWith(winnerTokens)) {
+      die('design/tokens.css does not start with the winner\'s tokens.css (' + winnerPath +
+        ') verbatim — ratify the winner\'s file byte-for-byte, then re-mark tokens-landed')
+    }
+  }
+
+  if (!hasApprovedMock()) {
+    die('design/mocks/ holds no .html with data-status="approved" — promote and approve the ' +
+      'winner\'s signature screen, then re-mark tokens-landed')
+  }
+
+  const designAtlasBin = path.join(__dirname, 'design-atlas.js')
+  const r = runChild(process.execPath, [designAtlasBin, 'check', '--matrix', mocksDir()],
+    { encoding: 'utf8' }, 'design-atlas.js check --matrix (design/mocks)')
+  if (r.status !== 0) {
+    die('design-atlas.js check --matrix failed for design/mocks: ' + (r.stdout || r.stderr || '').trim())
+  }
+
+  if (!fs.existsSync(componentsJsonPath())) {
+    die('design/components.json does not exist — seed the component vocabulary, then re-mark tokens-landed')
+  }
+
+  status.design = 'tokens-landed'
+  saveStatus()
+  return { prev: 'DESIGN', next: 'DESIGN' }
+}
+
+// D4: after the prerequisite mark (tokens-landed for visual, doctrine-drafted for non-visual —
+// tokens-landed never applies to it), design-rules.json's rules[] must carry only the seven
+// closed targetCategory values and grounding ∈ grounded|taste (an empty rules array is valid for
+// a non-visual archetype); visual archetypes additionally run components-check.js on
+// design/components.json. Success prunes the losing explore candidates — never on a refusal.
+function designRulesCheck() {
+  let parsed
+  try {
+    parsed = JSON.parse(fs.readFileSync(designRulesPath(), 'utf8'))
+  } catch (e) {
+    return { ok: false, reason: 'unreadable', detail: e.message }
+  }
+  if (!Array.isArray(parsed.rules)) return { ok: false, reason: 'no-rules-array' }
+  for (const rule of parsed.rules) {
+    if (!rule || typeof rule.id !== 'string' || !rule.id.trim()) return { ok: false, reason: 'bad-id', rule }
+    if (!DESIGN_RULE_CATEGORIES.includes(rule.targetCategory)) return { ok: false, reason: 'bad-category', rule }
+    if (rule.grounding !== 'grounded' && rule.grounding !== 'taste') return { ok: false, reason: 'bad-grounding', rule }
+    if (typeof rule.severity !== 'string' || !rule.severity.trim()) return { ok: false, reason: 'bad-severity', rule }
+    if (!Array.isArray(rule.appliesTo)) return { ok: false, reason: 'bad-appliesto', rule }
+  }
+  return { ok: true }
+}
+
+// D4: delete every losing design/explore/r0-*  and design/explore/external/* dir except the
+// winner's, plus the explore gallery, a legacy sketch.html, and the authored-tokens snapshot —
+// positions.md and the winner's own dir are never touched.
+function pruneDesignExplore() {
+  const pick = readDesignPick()
+  const winner = pick && typeof pick.winner === 'string' ? pick.winner : null
+  const exploreDir = path.join(root, 'design/explore')
+  if (fs.existsSync(exploreDir)) {
+    for (const e of fs.readdirSync(exploreDir)) {
+      if (e.startsWith('r0-') && 'design/explore/' + e !== winner) {
+        fs.rmSync(path.join(exploreDir, e), { recursive: true, force: true })
+      }
+    }
+    const externalDir = path.join(exploreDir, 'external')
+    if (fs.existsSync(externalDir)) {
+      for (const e of fs.readdirSync(externalDir)) {
+        if ('design/explore/external/' + e !== winner) {
+          fs.rmSync(path.join(externalDir, e), { recursive: true, force: true })
+        }
+      }
+    }
+  }
+  fs.rmSync(exploreGalleryPath(), { force: true })
+  fs.rmSync(path.join(genesisDir, 'sketch.html'), { force: true })
+  fs.rmSync(exploreAuthoredDir(), { recursive: true, force: true })
+}
+
+function handleRulesLocked() {
+  if (isDesignSkipped(status.archetype)) {
+    die('archetype "' + status.archetype + '" never enters the design state — rules-locked does not apply')
+  }
+  if (isVisualArchetype(status.archetype)) {
+    if (status.design !== 'tokens-landed') die('tokens-landed has not been marked yet — mark tokens-landed first')
+  } else if (status.design !== 'doctrine-drafted') {
+    die('doctrine-drafted has not been marked yet — mark doctrine-drafted first')
+  }
+
+  const check = designRulesCheck()
+  if (!check.ok) {
+    if (check.reason === 'unreadable') {
+      die('.claude/genesis/design-rules.json does not exist or is not valid JSON (' + check.detail +
+        ') — write it, then re-mark rules-locked')
+    }
+    if (check.reason === 'no-rules-array') {
+      die('.claude/genesis/design-rules.json has no "rules" array — write it (an empty array is ' +
+        'valid for a non-visual archetype), then re-mark rules-locked')
+    }
+    if (check.reason === 'bad-id') {
+      die('.claude/genesis/design-rules.json has a rule with a missing or empty "id" — fix it, then re-mark rules-locked')
+    }
+    if (check.reason === 'bad-category') {
+      die('.claude/genesis/design-rules.json rule "' + check.rule.id + '" has targetCategory "' +
+        check.rule.targetCategory + '" — must be one of: ' + DESIGN_RULE_CATEGORIES.join(', ') +
+        ' — fix it, then re-mark rules-locked')
+    }
+    if (check.reason === 'bad-grounding') {
+      die('.claude/genesis/design-rules.json rule "' + check.rule.id + '" has grounding "' +
+        check.rule.grounding + '" — must be "grounded" or "taste" — fix it, then re-mark rules-locked')
+    }
+    if (check.reason === 'bad-severity') {
+      die('.claude/genesis/design-rules.json rule "' + check.rule.id + '" has a missing or empty ' +
+        '"severity" — fix it, then re-mark rules-locked')
+    }
+    if (check.reason === 'bad-appliesto') {
+      die('.claude/genesis/design-rules.json rule "' + check.rule.id + '" has no "appliesTo" array — fix it, then re-mark rules-locked')
+    }
+  }
+
+  if (isVisualArchetype(status.archetype)) {
+    const componentsCheckBin = path.join(__dirname, 'components-check.js')
+    const r = runChild(process.execPath, [componentsCheckBin, componentsJsonPath()],
+      { encoding: 'utf8' }, 'components-check.js (design/components.json)')
+    if (r.status !== 0) {
+      die('components-check.js failed for design/components.json: ' + (r.stdout || r.stderr || '').trim())
+    }
+  }
+
+  status.design = 'rules-locked'
+  saveStatus()
+  pruneDesignExplore() // D4: only after the components check passes and the rules validate — a refused mark deletes nothing
+  return { prev: 'DESIGN', next: 'HANDOFF' }
 }
 
 // ---------------------------------------------------------------------------
@@ -1453,6 +1732,12 @@ function deriveState(opts) {
   const rm = roadmapCheck()
   if (!status.marks.roadmapWritten || !rm.ok) return 'ROADMAP'
 
+  // specs/20260827/03-genesis-design-state.md D1: DESIGN sits between ROADMAP and HANDOFF for
+  // every archetype except backend-api/data-ml, which handleRoadmapWritten already recorded
+  // design: "skipped" for and which never enter DESIGN at all.
+  if (isDesignSkipped(status.archetype)) return 'HANDOFF'
+  if (status.design !== 'rules-locked') return 'DESIGN'
+
   return 'HANDOFF'
 }
 
@@ -1461,13 +1746,10 @@ function deriveState(opts) {
 // ---------------------------------------------------------------------------
 // specs/20260827/02-genesis-explore-state.md D10: /spec:genesis-explore is deleted — the explore
 // funnel is now a driver state this session already ran, not a separate command HANDOFF hands
-// off into. The next command is /spec:genesis-design directly (still separate until spec 03).
+// off into. specs/20260827/03-genesis-design-state.md D5: the design lock folds into the driver
+// too (the DESIGN state) — there is no separate command left to hand off into for ANY archetype
+// or designCatalog; HANDOFF's next command is always /spec:init.
 function nextCommandLine() {
-  const desc = readStackDescriptor() || {}
-  const catalog = desc.designCatalog
-  if (catalog && catalog !== 'none') {
-    return 'next: /spec:genesis-design <the project idea — see ' + genesisRel('brief.md') + '>'
-  }
   return 'next: /spec:init'
 }
 
@@ -1711,6 +1993,62 @@ const STEPS = {
     'Then:\n  node ' + __filename + ' --root ' + root + ' --mark roadmap-written',
   ].join('\n'),
 
+  // specs/20260827/03-genesis-design-state.md D1/D9: the design lock's own mark-driven
+  // progression, rendered per status.design substate — same pattern as EXPLORE above. The
+  // "nothing marked" case matches the Contracts step-text excerpt for a visual archetype
+  // verbatim; a non-visual archetype (no tokens step) gets an adapted Read only: list, since it
+  // never runs the taste funnel and so has no design-pick.json/positions.md/research-brief.md to
+  // read.
+  DESIGN: () => {
+    const doctrineLine = 'Doctrine: spec/doctrine/genesis.md § Genesis: Design State'
+    const visual = isVisualArchetype(status.archetype)
+    const pick = readDesignPick()
+    const winnerDir = (pick && typeof pick.winner === 'string') ? pick.winner : '<winner dir>'
+    const lines = []
+    switch (status.design) {
+      case 'doctrine-drafted':
+        if (visual) {
+          lines.push('## Step: ratify the tokens and promote the signature screen')
+          lines.push('Read only: ' + winnerDir + '/tokens.css, design/targets.json, docs/design/doctrine.md')
+          lines.push(doctrineLine)
+          lines.push('ratify design/tokens.css verbatim from the winner\'s tokens.css, promote the winner\'s ' +
+            'signature screen to design/mocks/ (data-status="approved") expanded across design/targets.json\'s ' +
+            'declared matrix, and seed design/components.json')
+          lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark tokens-landed')
+        } else {
+          lines.push('## Step: lock the category-only design rules')
+          lines.push('Read only: docs/design/doctrine.md')
+          lines.push(doctrineLine)
+          lines.push('write .claude/genesis/design-rules.json (id/targetCategory/grounding/severity/appliesTo per ' +
+            'rule; an empty rules array is valid — this archetype has no tokens step)')
+          lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark rules-locked')
+        }
+        break
+      case 'tokens-landed':
+        lines.push('## Step: lock the category-only design rules')
+        lines.push('Read only: docs/design/doctrine.md, design/components.json')
+        lines.push(doctrineLine)
+        lines.push('write .claude/genesis/design-rules.json (id/targetCategory/grounding/severity/appliesTo ' +
+          'per rule) — components-check.js must pass on design/components.json')
+        lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark rules-locked')
+        break
+      default:
+        if (visual) {
+          lines.push('## Step: ratify the pick — doctrine first')
+          lines.push('Read only: .claude/genesis/design-pick.json, design/explore/positions.md, ' +
+            'docs/design/research-brief.md, ' + winnerDir + '/tokens.css')
+        } else {
+          lines.push('## Step: distill the design doctrine')
+          lines.push('Read only: ' + genesisRel('brief.md'))
+        }
+        lines.push(doctrineLine)
+        lines.push('distill docs/design/doctrine.md (one page, ## Dissents naming every rejected direction)' +
+          (visual ? '' : ' — no tokens step for this archetype; doctrine-drafted advances straight to rules-locked'))
+        lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark doctrine-drafted')
+    }
+    return lines.join('\n')
+  },
+
   HANDOFF: () => {
     const desc = readStackDescriptor() || {}
     const adrCount = Array.isArray(desc.decisionRecords) ? desc.decisionRecords.length : 0
@@ -1759,11 +2097,14 @@ function handleMark() {
     case 'decided': result = handleDecided(); break
     case 'skeleton-landed': result = handleSkeletonLanded(); break
     case 'roadmap-written': result = handleRoadmapWritten(); break
+    case 'doctrine-drafted': result = handleDoctrineDrafted(); break
+    case 'tokens-landed': result = handleTokensLanded(); break
+    case 'rules-locked': result = handleRulesLocked(); break
     default:
       die('unknown mark "' + MARK + '" (discovery-done | menu-written --file <f> | menus-done | ' +
         'research-done | positions-authored | tiles-built | tiles-culled | external --file <dir> | ' +
         'finalists-written --file <f> | finalists-skipped | probe-done | picked | ' +
-        'decided | skeleton-landed | roadmap-written)')
+        'decided | skeleton-landed | roadmap-written | doctrine-drafted | tokens-landed | rules-locked)')
       return
   }
   writeOut(1, acceptedOutput(result))

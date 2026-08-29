@@ -54,7 +54,8 @@ showcase catalog (composes every landed spec's surfaces, drift visible with zero
 
 ## Design Authoring Contracts
 
-Consumed by `/spec:design` and `/spec:genesis-design`, authored against § Design Canon.
+Consumed by `/spec:design` and the genesis design state (genesis.md § Genesis: Design State),
+authored against § Design Canon.
 **Grounded vs taste (mock supremacy):** each ruling carries its **grounding**: `grounded`
 (externally anchored — contrast/a11y, legal/brand, destructive-action safety) or `taste`
 (aesthetic), **authored into the rule, not judged per conflict**; an untagged legacy ruling
@@ -77,15 +78,16 @@ prose is not enforcement. **`design/components.json`** (`name`, `purpose`, `prop
 plus `authorJustification` for `author` decisions) is extended at reconcile from each worker's
 receipt, read at preflight before any bind-vs-author call. Every **`author` decision** must
 return the **nearest manifest entry and why it fails** — absence is a gate failure (base
-primitives, seeded directly by `/spec:genesis-design`, owe none) — verified by `/spec:review`'s
+primitives, seeded directly by the genesis design state, owe none) — verified by `/spec:review`'s
 component-manifest check. Creating a component must cost strictly more than reusing one.
 
-**Component vocabulary (commitment entries).** `/spec:genesis-design` also seeds
+**Component vocabulary (commitment entries).** The genesis design state also seeds
 `design/components.json` with **commitment entries** — `name`, `purpose`, optional
 `boundaries` — distinguished from a landed entry by having no `props`/`mockRefs` yet.
 `spec/scripts/components-check.js` (`spec-paths components-check`) is the manifest's schema
 authority (`name`+`purpose` required, `boundaries` an array when present, no duplicate
-`name`s) — fail-closed at genesis-design's commit, advisory at `/spec:design` preflight.
+`name`s) — fail-closed at the genesis design state's `rules-locked` mark, advisory at
+`/spec:design` preflight.
 Authoring dispatches read it as binding canon like tokens: bind/import or author to fulfil an
 entry, never re-invent a lookalike; a `boundaries` contradiction is a fork, and `/spec:review`
 treats commitment entries as first-class near-duplicate targets.

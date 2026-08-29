@@ -449,6 +449,6 @@ test('AC-20260827-02-6: PROBE lists style-tile with both culled tile.html paths 
   })
   const picked = mark(dir, 'picked')
   assert.strictEqual(picked.status, 0, 'a design-pick.json whose winner matches a raced finalist\'s tile and whose rejected[] carries the other tile with a non-empty reason must be accepted: ' + picked.stderr)
-  assert.strictEqual(statusOf(dir).explore, 'picked', 'D8: a successful picked must record explore: "picked" so /spec:genesis-design is admitted by the hook (A3)')
+  assert.strictEqual(statusOf(dir).explore, 'picked', 'D8: a successful picked must record explore: "picked" so the genesis design state can proceed once entered — the hook no longer admits or gates it at all (specs/20260827/03 D6 retires that arm entirely)')
   assert.strictEqual(statusOf(dir).tournament.winner, 'stack-a', 'D8: picked must ALSO record spec 01\'s tournament.winner alongside explore: "picked" — stack and design are picked together, never as two separate decisions')
 })

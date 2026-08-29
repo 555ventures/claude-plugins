@@ -210,7 +210,11 @@ test('AC-20260825-01-4: genesis.md and genesis-design.md name none of the retire
   // specs/20260825/04-genesis-driver.md D11: genesis-architect.md is retired and /spec:genesis
   // (spec/commands/genesis.md) is the greenfield entry point. The banned-literal pin follows the
   // command to its new file in place — never weakened, never dropped.
-  for (const rel of ['spec/commands/genesis.md', 'spec/commands/genesis-design.md']) {
+  // specs/20260827/03-genesis-design-state.md D7 (2026-08-29): spec/commands/genesis-design.md is
+  // deleted — read()ing it here would throw once the file is gone. Dropped from this list in
+  // place (its own deletion is pinned separately by this file's new AC-20260827-03-7 test); the
+  // one remaining file still carries the invariant unchanged.
+  for (const rel of ['spec/commands/genesis.md']) {
     const src = read(rel)
     assertNoBannedLiterals(src, banned, (label) =>
       'D5/D6: ' + rel + ' must not name the retired literal "' + label + '" — e.g. ' +
@@ -326,10 +330,13 @@ test("AC-20260825-02-1: genesis.md (doctrine), genesis.md (command), and genesis
     [/\[Scope lens\]/, '[Scope lens]'],
     [/\[Architect lens\]/, '[Architect lens]']
   ]
+  // specs/20260827/03-genesis-design-state.md D7 (2026-08-29): spec/commands/genesis-design.md is
+  // deleted — read()ing it here would throw once the file is gone. Dropped from this list in
+  // place (its own deletion is pinned separately by this file's new AC-20260827-03-7 test); the
+  // two remaining files still carry the invariant unchanged.
   const files = [
     'spec/doctrine/genesis.md',
     'spec/commands/genesis.md',
-    'spec/commands/genesis-design.md'
   ]
   for (const rel of files) {
     const src = read(rel)
@@ -438,10 +445,18 @@ test("AC-20260825-02-3: genesis.md's On-disk Handoff roster names genesis-brief.
     'D4: the sketch.html roster entry must say it is deleted at a prune step — its absence means ' +
     'the roster does not document that this is a throwaway artifact, not a durable one: ' +
     JSON.stringify(sketchWindow))
-  assert.match(sketchWindow, /genesis-design/,
-    'D4: the sketch.html roster entry must name /spec:genesis-design as the command whose prune ' +
-    'step deletes it — its absence means the roster does not say WHEN the throwaway artifact ' +
-    'goes away: ' + JSON.stringify(sketchWindow))
+  // specs/20260827/03-genesis-design-state.md D4/D8 (2026-08-29): /spec:genesis-design is
+  // deleted and its prune step becomes an act of the driver's own accepted rules-locked mark
+  // (D4) — the sketch-prune sentence is retargeted in place from the retired command to that
+  // mark, never left naming a command that no longer exists.
+  assert.doesNotMatch(sketchWindow, /genesis-design/,
+    'D8: the sketch.html roster entry must no longer name /spec:genesis-design — the command is ' +
+    'deleted, and a surviving mention here would point the session at a dead command: ' +
+    JSON.stringify(sketchWindow))
+  assert.match(sketchWindow, /rules-locked/,
+    'D4/D8: the sketch.html roster entry must name the driver\'s rules-locked mark as what prunes ' +
+    'it — its absence means the roster does not say WHEN the throwaway artifact goes away now ' +
+    'that the prune is a driver act, not a separate command: ' + JSON.stringify(sketchWindow))
 })
 
 // specs/20260825/03-genesis-currency-executed.md (2026-08-25): D8 replaces the model-placement
@@ -455,7 +470,7 @@ test("AC-20260825-02-3: genesis.md's On-disk Handoff roster names genesis-brief.
 // AC-20260825-03-9
 // ---------------------------------------------------------------------------
 
-test('AC-20260825-03-9: genesis.md, genesis-driver.js, and both remaining genesis command files name registry-check, and none of them carry still_current, Haiku pass, Haiku currency, or verifyKeys', () => {
+test('AC-20260825-03-9: genesis.md and genesis-driver.js name registry-check, and neither carries still_current, Haiku pass, Haiku currency, or verifyKeys', () => {
   const banned = [
     [/still_current/, 'still_current'],
     [wordsRe('Haiku pass'), 'Haiku pass'],
@@ -471,10 +486,16 @@ test('AC-20260825-03-9: genesis.md, genesis-driver.js, and both remaining genesi
   // is deleted — read()ing it here would throw once the file is gone. Dropped from this list in
   // place (its own deletion is pinned separately, in this file's new AC-20260827-02-8 test); the
   // three remaining files still carry the invariant unchanged.
+  //
+  // specs/20260827/03-genesis-design-state.md D7 (2026-08-29): spec/commands/genesis-design.md is
+  // now ALSO deleted — the last remaining genesis command file this list ever named is gone, so
+  // the test name above no longer claims "both remaining genesis command files" (there are none
+  // left; genesis.md the command never owned a menu step naming registry-check in the first
+  // place). Dropped from this list in place; the two remaining files still carry the invariant
+  // unchanged.
   const files = [
     'spec/doctrine/genesis.md',
     'spec/scripts/genesis-driver.js',
-    'spec/commands/genesis-design.md',
   ]
   for (const rel of files) {
     const src = read(rel)
@@ -776,6 +797,11 @@ test('AC-20260827-02-8: spec-paths shared-for genesis serves Design Canon and co
       // is the input under test — the honest waive that replaces the runtime string-splitting
       // this file used to carry (condemned 2026-08-29: it evaded a sweep already waiving it).
       'tests/genesis-gate.test.js',
+      // specs/20260827/03-genesis-design-state.md AC-20260827-03-5 (2026-08-29) asserts
+      // spec/commands/genesis.md's chain bullet no longer names genesis-explore either — the
+      // literal is the input under test, the same reason tests/genesis-gate.test.js is waived
+      // just above.
+      'tests/genesis/design-state.test.js',
     ],
     waivedPrefixes: [
       // dated historical records — a spec that retires a command must keep naming it in its own
@@ -788,6 +814,105 @@ test('AC-20260827-02-8: spec-paths shared-for genesis serves Design Canon and co
   })
   assert.deepStrictEqual(offenders, [],
     'D11: these files outside the waive-list still name the retired `genesis-explore` command: ' +
+    offenders.join(', ') + ' — one binding home for the command name means every live surface ' +
+    '(doctrine, commands, README, marketplace listing, canonical docs) must be swept in the same ' +
+    'spec that deletes the command, not left for a later pass to discover')
+})
+
+// specs/20260827/03-genesis-design-state.md (2026-08-29): the design lock stops being a command —
+// /spec:genesis-design and its hook arm are deleted, the driver gains a DESIGN state between
+// ROADMAP and HANDOFF, and the name is swept from every live surface exactly as spec 02 did for
+// genesis-explore (D8 gains this file's third repo-wide emptiness sweep, on the same pattern,
+// via the shared sweepRetiredLiteral helper). None of this can pass yet: as of 2026-08-29
+// spec/commands/genesis-design.md still exists, spec/entrypoints.json still names it in four
+// rows, spec/doctrine/genesis.md has no "## Genesis: Design State" heading, and `spec-paths
+// shared-for genesis` does not yet serve § Design Authoring Contracts (TDD red, grep/run
+// confirmed at authoring time 2026-08-29).
+
+// ---------------------------------------------------------------------------
+// AC-20260827-03-7
+// ---------------------------------------------------------------------------
+
+test('AC-20260827-03-7: spec-paths shared-for genesis serves Design Authoring Contracts and continues to serve Design Canon and Host Grounding, the retired command file and its entrypoints.json rows are gone, genesis.md doctrine carries the new Design State heading, and no file outside a justified waive-list names genesis-design', () => {
+  const genesisShared = runBash('bin/spec-paths', ['shared-for', 'genesis'])
+  assert.strictEqual(genesisShared.status, 0,
+    'D7: `spec-paths shared-for genesis` must exit 0 — a non-zero exit here means folding Design Authoring Contracts into genesis\'s own section list broke the resolver itself: ' + genesisShared.stderr)
+  assert.match(genesisShared.stdout, /## Design Authoring Contracts/,
+    'D7: /spec:genesis must be served § Design Authoring Contracts — its absence means the driver ratifies the design pick with no doctrine section governing it')
+  assert.match(genesisShared.stdout, /## Design Canon/,
+    'AC-20260827-03-7 SHALL CONTINUE TO: /spec:genesis must keep being served § Design Canon — D7 only ADDS Design Authoring Contracts to the section list, it never drops the section spec 02 already added')
+  assert.match(genesisShared.stdout, /## Host Grounding/,
+    'AC-20260827-03-7 SHALL CONTINUE TO: /spec:genesis must keep being served § Host Grounding — a section map broken by this spec\'s doctrine edits would mean the command reads no grounding doctrine at all')
+
+  assert.strictEqual(fs.existsSync(path.join(SPEC, 'commands/genesis-design.md')), false,
+    'D7: spec/commands/genesis-design.md must be deleted (worker file deletion, no git) — its continued presence means the retired command is still reachable even though its hook arm and shared-for entry are gone')
+
+  const entrypoints = JSON.parse(read('spec/entrypoints.json'))
+  const entrypointOffenders = []
+  function walkEntrypoints(node) {
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        if (typeof item === 'string' && item.includes('genesis-design')) entrypointOffenders.push(item)
+        else walkEntrypoints(item)
+      }
+    } else if (node && typeof node === 'object') {
+      for (const v of Object.values(node)) walkEntrypoints(v)
+    }
+  }
+  walkEntrypoints(entrypoints)
+  assert.deepStrictEqual(entrypointOffenders, [],
+    'D7: spec/entrypoints.json must name spec/commands/genesis-design.md in no row — a surviving row means the entry-point manifest still documents a call site for a deleted command: ' +
+    JSON.stringify(entrypointOffenders))
+
+  const genesisDoctrine = read('spec/doctrine/genesis.md')
+  assert.match(genesisDoctrine, /^## Genesis: Design State$/m,
+    'D8: spec/doctrine/genesis.md must carry the "## Genesis: Design State" heading — its absence means the ratification variant of the old Phase 4 (tokens ratified not authored, doctrine distilled, the ledgers, base primitives + component vocabulary, the design-rules closure check, the prune) was never landed')
+
+  // D8/§ Gotchas: classify by location (a repo-wide walk), never by name-shape — the same
+  // pattern the genesis-explore sweep above already uses. Mechanics shared via
+  // sweepRetiredLiteral (2026-08-29).
+  //
+  // `citations` replaces the dated-provenance-header trap the same way the genesis-explore
+  // sweep's citations do: THIS spec's own filename contains the literal, so every dated header
+  // citing it (tests/ provenance comments, the run ledger's plan row) would otherwise redden the
+  // sweep permanently. Each is a citation of the record of the kill, never a live pointer at the
+  // deleted command.
+  const offenders = sweepRetiredLiteral('genesis-design', {
+    citations: [
+      'specs/20260827/03-genesis-design-state.md',
+      '03-genesis-design-state.md',
+    ],
+    waivedPaths: [
+      // this test file's own header/body names the retired literal as the string under test.
+      'tests/consistency/genesis-doctrine.test.js',
+      // its `description` is the changelog surface; the changelog paragraph names the retired
+      // command by design (D11) — a historical record, not a stale reference.
+      'spec/.claude-plugin/plugin.json',
+      // its header comment states the incident history this spec adds to (the design-lock-to-
+      // driver fold) — a dated record of what changed, not a live pointer at the deleted command,
+      // the same reason this file is already waived for the genesis-explore sweep above.
+      'spec/scripts/genesis-driver.js',
+      // D14 waives it by name (specs/20260825/04): a wording edit re-stamps every host repo's
+      // grounding as stale, and the contract hash is not paid for a word.
+      'spec/templates/grounding-contract.md',
+      // AC-20260827-03-6 asserts the hook now IGNORES this exact prompt string, so the literal
+      // is the input under test — the same reason this file is already waived for genesis-explore.
+      'tests/genesis-gate.test.js',
+      // AC-20260827-03-1/-5 assert the driver reaches DESIGN and the HANDOFF/chain-bullet
+      // wording no longer names the retired command — the literal is the input under test.
+      'tests/genesis/design-state.test.js',
+    ],
+    waivedPrefixes: [
+      // dated historical records — a spec that retires a command must keep naming it in its own
+      // (and its siblings') spec documents and the roadmap/audit trail.
+      'specs/',
+      'docs/roadmap/',
+      'docs/audit/',
+      'docs/adr/',
+    ],
+  })
+  assert.deepStrictEqual(offenders, [],
+    'D8: these files outside the waive-list still name the retired `genesis-design` command: ' +
     offenders.join(', ') + ' — one binding home for the command name means every live surface ' +
     '(doctrine, commands, README, marketplace listing, canonical docs) must be swept in the same ' +
     'spec that deletes the command, not left for a later pass to discover')

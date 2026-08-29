@@ -165,11 +165,15 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
   // back to the FULL doctrine (AC-20260827-02-8's own test in genesis-doctrine.test.js pins that).
   assert.match(run('shared-for', 'genesis'), /## Design Canon/,
     'AC-20260827-02-8/D10: /spec:genesis must now be served § Design Canon directly — its absence means the entry point lost the doctrine governing the taste funnel it now runs end-to-end')
-  assert.ok(!/## Design (Render Gate|Authoring Contracts)/.test(run('shared-for', 'genesis')),
-    'AC-20260827-02-8/D10: genesis gains Design Canon but must still not load Design Render Gate or Design Authoring Contracts — D10 folds only Design Canon into genesis\'s section list, not the render-gate or authoring-contract doctrine')
-  assert.match(run('shared-for', 'genesis-design'), /## Design Authoring Contracts/)
-  assert.ok(!/## Design Render Gate/.test(run('shared-for', 'genesis-design')),
-    'genesis-design authors canon, never binds specs')
+  // specs/20260827/03-genesis-design-state.md D7 (2026-08-29): the design lock's own command is
+  // deleted too and its shared-for entry folds into `genesis` alongside Design Canon — the two
+  // asserts this block used to carry, scoped to that now-deleted command, are retargeted in
+  // place to `genesis`, never weakened, since the lock is now ratified inside the driver, not a
+  // separate command with its own scoped section list.
+  assert.match(run('shared-for', 'genesis'), /## Design Authoring Contracts/,
+    'D7: /spec:genesis must now also be served § Design Authoring Contracts — the driver ratifies the design pick itself, folding the old design-lock command\'s own doctrine section into the entry point')
+  assert.ok(!/## Design Render Gate/.test(run('shared-for', 'genesis')),
+    'genesis authors design canon, never binds specs')
   assert.match(run('shared-for', 'build'), /## Worker Git Ban/)
   assert.ok(!/## Design (Canon|Authoring Contracts|Render Gate)/.test(run('shared-for', 'review')),
     'review must not pay for design doctrine')
@@ -214,9 +218,13 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
 // AC-20260824-05-3: specs/20260824/05-design-doctrine-cut.md D4 renames the design shared-for
 // SECTIONS map entry from "Design Binding Pipeline" to "Design Render Gate" (D1 renames the
 // underlying design.md heading) and drops "Workflows Encode Shape, Not Judgment" from the
-// design-command list specifically (genesis-design keeps it, per D4) — a stale map entry would
-// mean `shared-for` "silently drops mismatches" (§ Review Checks) and /spec:design would read
-// no doctrine at all for the render gate it now runs on.
+// design-command list specifically (another command's own list could still keep it, per D4) — a
+// stale map entry would mean `shared-for` "silently drops mismatches" (§ Review Checks) and
+// /spec:design would read no doctrine at all for the render gate it now runs on.
+// specs/20260827/03-genesis-design-state.md D7 (2026-08-29): the parenthetical below used to
+// name the now-deleted design-lock command as the sibling whose own list still kept this
+// section; that command's doctrine surface folds into genesis instead. Updated in place —
+// never a claim this test doesn't itself verify.
 test('AC-20260824-05-3: spec-paths shared-for design emits ## Design Render Gate, never ## Design Binding Pipeline, and no longer emits Workflows Encode Shape, Not Judgment', () => {
   const out = run('shared-for', 'design')
   assert.match(out, /## Design Render Gate/,
@@ -230,7 +238,7 @@ test('AC-20260824-05-3: spec-paths shared-for design emits ## Design Render Gate
   assert.ok(!/## Workflows Encode Shape, Not Judgment/.test(out),
     'D4: the design SECTIONS list drops Workflows Encode Shape, Not Judgment specifically for ' +
     '/spec:design — a surviving citation here means the command still pays for doctrine its own ' +
-    'section map was supposed to stop serving it (genesis-design keeps this section unchanged)')
+    'section map was supposed to stop serving it (this drop is scoped to design\'s own list only)')
 })
 
 test('AC-20260819-02-10: spec-paths replay and spec-paths replay-corpus resolve to the D14 script and corpus paths', () => {

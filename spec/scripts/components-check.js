@@ -13,9 +13,9 @@
 // duplicate `name`s are an error. It does NOT check props/mockRefs/authorJustification shape
 // (unspecified by D2) and does NOT resolve component paths against the filesystem.
 //
-// Callers: /spec:genesis-design Phase 4.5 commit step (fail-closed — a greenfield repo just
-// wrote this file, so a malformed manifest must block the commit); /spec:design's
-// preflight (advisory only — brownfield hosts may hold pre-D2 files).
+// Callers: the genesis design state's `rules-locked` mark (specs/20260827/03-genesis-design-state.md
+// D8; fail-closed — a greenfield repo just wrote this file, so a malformed manifest must refuse
+// the mark); /spec:design's preflight (advisory only — brownfield hosts may hold pre-D2 files).
 //
 // Exit codes: 0 = valid; 1 = findings (one line each, naming the entry and field); 2 = usage
 // error, missing file, or unparseable JSON — stderr names the remedy.

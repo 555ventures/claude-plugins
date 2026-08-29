@@ -9,7 +9,7 @@ argument-hint: "[sweep] (optional fast-path — bare invocation detects everythi
 gates on, or waits for the atlas; `design/atlas/` is regenerated from scratch on every run, so
 there is no staleness to maintain and nothing to "keep updated." Run this when you want to see
 or change the product's design as a whole — the pipeline never asks for it. The one scheduled
-appearance is greenfield: the full sweep + holistic review after `/spec:genesis-design`, before
+appearance is greenfield: the full sweep + holistic review after `/spec:genesis`, before
 the first UI-bearing brief is planned (shared § Design Atlas).
 
 The roadmap-level design view: every mock rendered at device size, arranged by the roadmap's
@@ -89,7 +89,7 @@ user's input; `sweep` as an argument only skips the gap confirmation.
 ## The sweep — fill the gaps at sketch tier
 
 **The full sweep + the user's holistic review is a named pipeline stage on greenfield** (shared
-§ Design Atlas; the genesis hand-off chain places it after genesis-design, before the first UI
+§ Design Atlas; the genesis hand-off chain places it after `/spec:genesis`, before the first UI
 brief is planned): sketches are the product-understanding contract, and this review is where
 the user audits the model's grasp of the whole product at sketch-edit prices. Later invocations
 are incremental gap-filling.

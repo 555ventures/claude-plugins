@@ -9,10 +9,11 @@ consult, the exit fidelity review, and `copyCatalogs` as a required key.*
 The product's committed building blocks live as **commitment entries** in
 `design/components.json` (`name`, `purpose`, `boundaries`) — the same manifest that holds
 landed components; absence of `props`/`mockRefs` is what marks an entry as commitment-only.
-Seeded by `/spec:genesis-design` Phase 4.3 on visual-archetype greenfield. Validated by
-`components-check.js` (spec-paths key `components-check`): **fail-closed** at genesis's
-commit step, **advisory** at the design driver's preflight (brownfield files may predate the
-canonical shape; the legacy `{"components": [...]}` wrapper is tolerated with a warning).
+Seeded by the genesis design state (specs/20260827/03) at its `rules-locked` mark. Validated by
+`components-check.js` (spec-paths key `components-check`): **fail-closed** at the genesis
+design state's `rules-locked` mark, **advisory** at the design driver's preflight (brownfield
+files may predate the canonical shape; the legacy `{"components": [...]}` wrapper is tolerated
+with a warning).
 Consumed as binding canon by `wf-design` workers via the `componentManifestPath` arg — a
 named block is bound or authored to fulfil its entry, never re-invented as a lookalike, and
 a `boundaries` contradiction is a fork (`blocked`), same standing as a token-value

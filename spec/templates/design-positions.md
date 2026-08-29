@@ -26,5 +26,5 @@ Signature screen: **{signature-screen-name}** · Research brief: `docs/design/re
 
 <!-- Filled at Phase 2 step 8, after the gallery cull. One entry per non-finalist position: -->
 
-- **{kebab-name}** — culled: {one-line reason}. {Optional salvage note for genesis-design's
-  `## Dissents`.}
+- **{kebab-name}** — culled: {one-line reason}. {Optional salvage note for the genesis design
+  state's `## Dissents`.}

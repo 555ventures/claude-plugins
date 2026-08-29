@@ -415,27 +415,28 @@ function hookSpecState() {
     'message here would mean the gate never actually read the frontmatter: ' + r.stderr)
 }
 
-// genesis-state-gate.sh: architect: pending must block /spec:genesis-design.
+// genesis-state-gate.sh: a partial design canon (design: doctrine-drafted) must block /spec:init.
 //
-// specs/20260827/02-genesis-explore-state.md D9/A6 (2026-08-27): the retired explore command's own
-// hook arm is deleted — the command now falls through untouched at every state (AC-20260827-02-7),
-// so it can no longer serve as this handler's blocked-prompt vehicle. Per Assumption A6, this
-// fixture only needs *a* prompt the hook blocks at architect: pending; /spec:genesis-design is
-// blocked at that state by the same require_scaffold helper, byte-identically. Retargeted in
-// place, never weakened — the hook's own require_scaffold gate is untouched by this spec.
+// specs/20260827/03-genesis-design-state.md D6 (2026-08-29): the design lock's own hook arm (and
+// the require_scaffold helper it shared with the already-retired explore arm) is deleted —
+// architect: pending no longer blocks anything, since that retired command falls through
+// untouched at every state exactly as the retired explore command already does
+// (AC-20260827-02-7, AC-20260827-03-6), so the old architect: pending fixture this function used
+// to plant no longer blocks at all. The only prompt the hook still gates is /spec:init, on a
+// partial design canon — retargeted in place, never weakened.
 function hookGenesisState() {
   const dir = tmpdir('rfc-hook-genesis')
   fs.mkdirSync(path.join(dir, '.claude/genesis'), { recursive: true })
-  fs.writeFileSync(path.join(dir, '.claude/genesis/status.json'), JSON.stringify({ architect: 'pending' }))
+  fs.writeFileSync(path.join(dir, '.claude/genesis/status.json'), JSON.stringify({ design: 'doctrine-drafted' }))
   const r = runBash('scripts/genesis-state-gate.sh', [], {
-    input: JSON.stringify({ prompt: '/spec:genesis-design' }),
+    input: JSON.stringify({ prompt: '/spec:init' }),
     cwd: dir,
     env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
   })
   assert.strictEqual(r.status, 2,
-    'status.json declaring architect: pending must block /spec:genesis-design: ' + r.stdout + r.stderr)
-  assert.match(r.stderr, /architect: pending/,
-    'evidence the check engaged: stderr must echo the exact planted architect value ("pending") — a generic ' +
+    'status.json declaring design: doctrine-drafted must block /spec:init: ' + r.stdout + r.stderr)
+  assert.match(r.stderr, /doctrine-drafted/,
+    'evidence the check engaged: stderr must echo the exact planted design value ("doctrine-drafted") — a generic ' +
     'block message here would mean the gate never actually read status.json: ' + r.stderr)
 }
 

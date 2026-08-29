@@ -5,9 +5,11 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runBash } = require('./helpers')
 
-// The genesis state machine's coarse hook (v6): explore requires the scaffold; genesis-design
-// requires the pick (or an explicit skip) — the pick precedes the lock. Legacy status files
-// without an explore field pass with an injected note, never a block.
+// The genesis state machine's coarse hook (v7, specs/20260827/03-genesis-design-state.md D6,
+// 2026-08-29): only /spec:init is gated now. The old genesis-explore and genesis-design commands
+// (and the require_scaffold helper they shared) are both retired — their prompts fall through
+// untouched at every state, exit 0, no arm, nothing on stdout or stderr. Legacy status files
+// without an explore field still pass /spec:init with an injected note, never a block.
 
 function gate(prompt, status) {
   const dir = tmpdir('ggate')
@@ -50,43 +52,56 @@ test('AC-20260827-02-7: the retired explore command now falls through the hook u
     'D9: the retired explore command must fall through at every architect state, not just scaffold-complete — the command no longer exists for the hook to gate')
 })
 
-test('genesis-design: blocked while explore is mid-flight; picked and skipped pass', () => {
-  for (const phase of ['pending', 'research-done', 'tiles-culled']) {
-    const res = gate('/spec:genesis-design idea', { architect: 'scaffold-complete', explore: phase })
-    assert.strictEqual(res.status, 2, 'explore: ' + phase + ' must block')
-    assert.match(res.stderr, /the pick precedes the lock/)
-  }
-  assert.strictEqual(gate('/spec:genesis-design idea', { architect: 'scaffold-complete', explore: 'picked' }).status, 0)
-  assert.strictEqual(gate('/spec:genesis-design idea', { architect: 'scaffold-complete', explore: 'skipped' }).status, 0)
+// specs/20260827/03-genesis-design-state.md D6 (2026-08-29): the design lock folds into the
+// driver as the new DESIGN state and genesis-design's own hook arm (plus the now-callerless
+// require_scaffold helper it shared with the retired explore arm) is deleted from both case
+// lists — the prompt now falls through untouched (exit 0, no arm, nothing on stdout or stderr)
+// at every state, exactly as AC-20260827-02-7 already pins for the retired explore command.
+// This test replaces the three old genesis-design tests that pinned the now-deleted gated
+// behavior (blocked while explore mid-flight, the legacy ABSENT note, blocked before
+// scaffold-complete) — none of that behavior exists to pin once the arm is gone.
+// tests/genesis-gate.test.js is waived by path in tests/consistency/genesis-doctrine.test.js's
+// genesis-design sweep (AC-20260827-03-7), the same reason AC-20260827-02-7's assertion is
+// already waived there for genesis-explore: the literal prompt string is the input under test,
+// never a stale reference.
+test('AC-20260827-03-6: /spec:genesis-design now falls through the hook untouched (empty stdout and stderr) at every architect and explore state, since D6 retires the command\'s own arm and the now-callerless require_scaffold helper entirely', () => {
+  const atPending = gate('/spec:genesis-design idea', { architect: 'pending' })
+  assert.strictEqual(atPending.status, 0, 'D6: the genesis-design case arm is removed from both case lists — a nonzero exit here means the retired command is still being gated instead of falling through untouched')
+  assert.strictEqual(atPending.stdout, '', 'D6: a fallen-through prompt must inject nothing onto stdout — any output means some arm still ran for a command that no longer exists')
+  assert.strictEqual(atPending.stderr, '', 'D6: a fallen-through prompt must inject nothing onto stderr either — the retired command has no arm left to warn or block with')
+
+  const midFlight = gate('/spec:genesis-design idea', { architect: 'scaffold-complete', explore: 'tiles-culled' })
+  assert.strictEqual(midFlight.status, 0, 'D6: genesis-design must fall through even while explore is mid-flight (tiles-culled) — the pick-precedes-the-lock gate it used to enforce no longer exists for it to enforce')
+  assert.strictEqual(midFlight.stdout, '', 'D6: a fallen-through prompt must inject nothing onto stdout regardless of explore state')
+  assert.strictEqual(midFlight.stderr, '', 'D6: a fallen-through prompt must inject nothing onto stderr regardless of explore state')
 })
 
-// AC-20260827-02-7/D9: the legacy ABSENT note used to say the retired explore command's own
-// prompt literal — D9 requires it say "the genesis explore state" instead (the command is
-// deleted; the note must never point a user at it). Updated in place, retagged, never weakened.
-test('genesis-design: legacy status without an explore field passes with a note naming "the genesis explore state", never the retired explore command\'s literal', () => {
-  const res = gate('/spec:genesis-design idea', { architect: 'scaffold-complete' })
-  assert.strictEqual(res.status, 0, res.stderr)
-  assert.match(res.stdout, /predates the genesis explore state/,
-    'AC-20260827-02-7/D9: the legacy ABSENT note must say "the genesis explore state", not the retired command\'s literal — a note still pointing a user at a deleted command is exactly the stale-reference class D9 exists to prevent')
-  assert.ok(!res.stdout.includes('genesis-explore'),
-    'AC-20260827-02-7/D9: the legacy ABSENT note must not contain the retired command\'s literal anywhere — the retired command has no binding home left to point at')
-})
+// AC-20260827-03-6's "SHALL CONTINUE TO" half: the /spec:init arm's exit codes per design value
+// are byte-identical (A4) — D6 only removes genesis-design's own arm and require_scaffold, never
+// touching this arm. Tags and extends the pre-existing "init gating unchanged" pin with the
+// pending-note and skipped cases and D6's new no-"genesis-design"-in-messages requirement.
+test('AC-20260827-03-6: init gating SHALL CONTINUE TO block at design: doctrine-drafted and tokens-landed, pass at rules-locked and skipped, note (never block) at pending, and never mention "genesis-design" in any of its messages', () => {
+  const drafted = gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked', design: 'doctrine-drafted' })
+  assert.strictEqual(drafted.status, 2, 'design: doctrine-drafted is a partial canon — /spec:init must still block it')
+  assert.ok(!drafted.stderr.includes('genesis-design'), 'D6: the init arm\'s blocked message at design: doctrine-drafted must replace its "/spec:genesis-design" mention with "the genesis design state (re-run /spec:genesis)" — a surviving mention points the session at a deleted command')
 
-test('genesis-design: still blocked before scaffold-complete regardless of explore', () => {
-  const res = gate('/spec:genesis-design idea', { architect: 'decisions-recorded', explore: 'picked' })
-  assert.strictEqual(res.status, 2)
-  assert.match(res.stderr, /scaffold-complete/)
+  const tokensLanded = gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked', design: 'tokens-landed' })
+  assert.strictEqual(tokensLanded.status, 2, 'design: tokens-landed is still a partial canon — /spec:init must still block it')
+  assert.ok(!tokensLanded.stderr.includes('genesis-design'), 'D6: the init arm\'s blocked message at design: tokens-landed must not mention "genesis-design" either')
+
+  assert.strictEqual(gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked', design: 'rules-locked' }).status, 0, 'design: rules-locked is a closed canon — /spec:init must pass')
+  assert.strictEqual(gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked', design: 'skipped' }).status, 0, 'design: skipped is a legitimate headless archetype — /spec:init must pass')
+
+  const pending = gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked' })
+  assert.strictEqual(pending.status, 0, 'design: pending must never block /spec:init — a headless archetype legitimately has no design stage')
+  assert.match(pending.stdout, /Genesis note/, 'design: pending must still print a note (not a block) so the session knows a design canon is available but unrun')
+  assert.ok(!pending.stdout.includes('genesis-design'), 'D6: the design: pending note must not point the session at the deleted genesis-design command')
 })
 
 test('no genesis status on disk → hook is inert for every genesis command', () => {
   assert.strictEqual(gate(RETIRED_EXPLORE_CMD + ' idea', null).status, 0)
   assert.strictEqual(gate('/spec:genesis-design idea', null).status, 0)
   assert.strictEqual(gate('/spec:init', null).status, 0)
-})
-
-test('init gating unchanged: partial design canon blocks, rules-locked passes', () => {
-  assert.strictEqual(gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked', design: 'tokens-landed' }).status, 2)
-  assert.strictEqual(gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked', design: 'rules-locked' }).status, 0)
 })
 
 // specs/20260825/04-genesis-driver.md D12/D15 (2026-08-26): /spec:genesis-architect is retired
@@ -102,9 +117,11 @@ test('init gating unchanged: partial design canon blocks, rules-locked passes', 
 // plausible mis-implementation of D12 was traced and none of them reddens these two. They are
 // kept deliberately, as FORWARD pins: on a critical-tier hook a standing "must continue to
 // allow" assertion is what catches a future gating arm that over-matches `/spec:genesis*`.
-// D12's own pre-image-red observable is NOT here — it is the remedy-string test below (the
-// blocked path used to send users to a command this spec deletes), plus the source-level
-// retired-literal sweep over this hook in tests/consistency/genesis-doctrine.test.js.
+// D12's own pre-image-red observable is NOT here — it was the remedy-string test that used to
+// follow this one (retired 2026-08-29 once require_scaffold itself was deleted by
+// specs/20260827/03-genesis-design-state.md D6, since a deleted helper owes no remedy string to
+// pin), plus the source-level retired-literal sweep over this hook in
+// tests/consistency/genesis-doctrine.test.js.
 
 test('AC-20260825-04-8: /spec:genesis is the entry point and is never gated, at any architect state', () => {
   const withArg = gate('/spec:genesis idea', { architect: 'pending' })
@@ -121,30 +138,14 @@ test('AC-20260825-04-8: /spec:genesis is the entry point and is never gated, at 
 // AC-20260827-02-7/D9: the retired explore command's own arm is deleted (not merely renamed) —
 // the "byte-identical" claim this test made about it no longer holds by construction, since D9
 // explicitly retires that arm. Updated in place, retagged: the retired-command assertion below
-// now pins the NEW no-arm behavior instead of the old blocked-before-scaffold behavior; the
-// genesis-design and init assertions are untouched (still byte-identical per D9's own promise).
-test('AC-20260825-04-8: the renamed entry-point arm leaves genesis-design and init byte-identical, and AC-20260827-02-7/D9 retires the explore command\'s arm entirely so it falls through instead of blocking', () => {
+// pins the explore no-arm behavior; the init assertion is untouched (still byte-identical).
+// specs/20260827/03-genesis-design-state.md D6 (2026-08-29): the genesis-design assertion this
+// test also carried ("must still block while explore is mid-flight") is a second collision — D6
+// retires genesis-design's own arm the same way D9 retired explore's, so that assertion is
+// updated in place to the new falls-through invariant (also pinned, in full, by the dedicated
+// AC-20260827-03-6 test above) rather than deleted, per this repo's collision convention.
+test('AC-20260825-04-8, AC-20260827-03-6: the renamed entry-point arm leaves init byte-identical, and both the retired explore and genesis-design commands\' arms fall through instead of blocking', () => {
   assert.strictEqual(gate(RETIRED_EXPLORE_CMD + ' idea', { architect: 'pending' }).status, 0, 'AC-20260827-02-7/D9: the retired explore command\'s case arm is removed — a nonzero exit here means the retired command is still gated, the opposite of D9\'s "falls through untouched" contract')
-  assert.strictEqual(gate('/spec:genesis-design idea', { architect: 'scaffold-complete', explore: 'tiles-culled' }).status, 2, 'genesis-design must still block while explore is mid-flight (tiles-culled) — the pick precedes the lock, unchanged by D12 or this spec')
+  assert.strictEqual(gate('/spec:genesis-design idea', { architect: 'scaffold-complete', explore: 'tiles-culled' }).status, 0, 'D6: genesis-design must now fall through even while explore is mid-flight (tiles-culled) — its own arm and the pick-precedes-the-lock gate it used to enforce are both retired by this spec')
   assert.strictEqual(gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked', design: 'rules-locked' }).status, 0, '/spec:init must still pass at design: rules-locked — neither D12 nor this spec touches the init arm')
-})
-
-// 2026-08-26 debt closure (Fable consult): the ONE observable of D12 that was genuinely red
-// against the pre-image. `require_scaffold`'s remedy is shared by the explore and design blocked
-// paths, and it used to read "Finish /spec:genesis-architect first" — a block message directing
-// the user at a command this spec deletes. Executed both ways before authoring: pre-image stderr
-// carries `/spec:genesis-architect`, post-image carries `/spec:genesis`.
-// AC-20260827-02-7/D9: this test used the retired explore command purely as a VEHICLE to
-// exercise require_scaffold's shared remedy string — but D9 retires that command's arm
-// entirely, so it can no longer serve as a "blocked arm" at all (it now always falls through).
-// Retargeted to genesis-design, the other require_scaffold caller, in place — never weakened,
-// never deleted.
-test('AC-20260825-04-8: a blocked arm\'s remedy names /spec:genesis, never the retired genesis-architect', () => {
-  const res = gate('/spec:genesis-design idea', { architect: 'pending' })
-  assert.strictEqual(res.status, 2,
-    'genesis-design at architect: pending must still block — an allow here would mean this remedy assertion is reading a path that never runs, and the test would pass vacuously')
-  assert.match(res.stderr, /Finish \/spec:genesis first/,
-    'a blocked user follows this remedy verbatim, so it must name a command that exists — the pre-change string sent them to the deleted /spec:genesis-architect')
-  assert.ok(!res.stderr.includes('genesis-architect'),
-    'any surviving genesis-architect mention in the hook\'s user-facing stderr strands the one user who is already blocked, which is the stale-reference class D14 exists to prevent')
 })

@@ -354,7 +354,7 @@ test('AC-20260825-04-7: roadmap-written refuses a Depends-on cycle by naming it 
   assert.strictEqual(noneAccepted.status, 0, 'an acyclic roadmap with an overview file must be accepted: ' + noneAccepted.stderr)
   const noneHandoff = bare(noneCatalog)
   assert.match(noneHandoff.stdout, /next: \/spec:init/, 'a headless/no-catalog descriptor must hand off straight to /spec:init — there is no design stage to run')
-  // specs/20260827/02-genesis-explore-state.md D10 (2026-08-27): genesis-explore is deleted and
+  // specs/20260827/02-genesis-explore-state.md D10 (2026-08-27): the explore command is deleted and
   // the driver's HANDOFF next: line now points at /spec:genesis-design directly (explore folded
   // into the driver itself; genesis-design is still the separate command until spec 03). This
   // AC-20260825-04-7 pin is updated in place and retagged, never weakened.

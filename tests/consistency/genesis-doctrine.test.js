@@ -60,6 +60,55 @@ function assertNoBannedLiterals (src, banned, msgFor) {
   }
 }
 
+// Repo-wide retired-name sweep, shared by AC-20260825-04-9 (`genesis-architect`) and
+// AC-20260827-02-8 (`genesis-explore`) — extracted 2026-08-29 per § Review Checks (three or
+// more near-identical blocks names the extraction; the third sweep, for `genesis-design`,
+// arrives with specs/20260827/03 and uses this from day one). File-local for the same reason
+// assertNoBannedLiterals above is: every sweep lives in this file, and a tests/helpers.js
+// export would widen a single-file helper into cross-file surface for no second-file caller.
+//
+// `citations` is the structural answer to the self-reference trap: a spec that retires a
+// command usually has the command's name inside its OWN filename, so every dated provenance
+// header citing that spec (Test Rules require those headers), the run ledger's plan row, and
+// the driver's retained review evidence all contain the banned literal while pointing at the
+// record of the kill rather than at the dead command. Each citation string is DELETED from a
+// file's content before the literal is looked for, so citing the killing spec is always legal
+// and pointing at the command never is. Exact strings only — never a "looks like a path" shape
+// rule, which is the evadable-guard class § Gotchas bans (a live stale reference written as a
+// path would hide behind it). Each citation must strictly contain and exceed the literal, so
+// nobody can hollow the sweep out by passing the bare name as its own citation.
+//
+// Returns offending repo-relative paths; each call site keeps its own assert and its own
+// spec-cited consequence message.
+function sweepRetiredLiteral (literal, { citations = [], waivedPaths = [], waivedPrefixes = [] }) {
+  for (const c of citations) {
+    assert.ok(c.includes(literal) && c.length > literal.length,
+      'sweep misuse: citation "' + c + '" must strictly contain and exceed the literal "' +
+      literal + '" — a citation equal to (or not containing) the literal would subtract every ' +
+      'live mention and silently hollow out the sweep it is supposed to narrow')
+  }
+  const isWaived = (rel) =>
+    waivedPaths.includes(rel) || waivedPrefixes.some((pre) => rel.startsWith(pre))
+  const walk = (dir, acc) => {
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (ent.name === '.git' || ent.name === 'node_modules') continue
+      const abs = path.join(dir, ent.name)
+      if (ent.isDirectory()) walk(abs, acc)
+      else if (ent.isFile()) acc.push(abs)
+    }
+    return acc
+  }
+  const offenders = []
+  for (const abs of walk(ROOT, [])) {
+    const rel = path.relative(ROOT, abs).split(path.sep).join('/')
+    if (isWaived(rel)) continue
+    let content = fs.readFileSync(abs, 'utf8')
+    for (const c of citations) content = content.split(c).join('')
+    if (content.includes(literal)) offenders.push(rel)
+  }
+  return offenders
+}
+
 // ---------------------------------------------------------------------------
 // AC-20260825-01-2
 // ---------------------------------------------------------------------------
@@ -515,46 +564,34 @@ test('AC-20260825-04-9: spec-paths resolves genesis-driver and shared-for genesi
 
   // D14, inverted 2026-08-26: waived by explicit path (never by name-shape or extension), each
   // entry justified. Re-verify a waived entry's own hit before trusting it — a fix landing
-  // concurrently can remove the very mention it waives.
-  const waivedPaths = [
-    // D14 waives it by name: a wording edit re-stamps every host repo's grounding as stale
-    // (rules § Risk Tiers), and the contract hash is not paid for a word.
-    'spec/templates/grounding-contract.md',
-    // its `description` is the changelog surface; historical entries legitimately record that
-    // the command was deleted.
-    'spec/.claude-plugin/plugin.json',
-    // its header comment states the incident history (the choreography it replaced).
-    'spec/scripts/genesis-driver.js',
-    // this file's own header/body names the retired literal as the string under test.
-    'tests/consistency/genesis-doctrine.test.js',
-    // dated incident-header comments recording the rename (Test Rules require those headers).
-    'tests/genesis-gate.test.js',
-    'tests/genesis/research-menu.test.js',
-  ]
-  const waivedPrefixes = [
-    // dated historical records — a spec that renamed a command must keep naming it.
-    'specs/',
-    'docs/roadmap/',
-    'docs/audit/',
-  ]
-  function isWaived(rel) {
-    return waivedPaths.includes(rel) || waivedPrefixes.some(p => rel.startsWith(p))
-  }
-  function walk(dir, acc) {
-    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (ent.name === '.git' || ent.name === 'node_modules') continue
-      const abs = path.join(dir, ent.name)
-      if (ent.isDirectory()) walk(abs, acc)
-      else if (ent.isFile()) acc.push(abs)
-    }
-    return acc
-  }
-  const offenders = []
-  for (const abs of walk(ROOT, [])) {
-    const rel = path.relative(ROOT, abs).split(path.sep).join('/')
-    if (isWaived(rel)) continue
-    if (fs.readFileSync(abs, 'utf8').includes('genesis-architect')) offenders.push(rel)
-  }
+  // concurrently can remove the very mention it waives. Mechanics shared via
+  // sweepRetiredLiteral (2026-08-29); this spec's own filename does not carry the literal, so
+  // it needs no citation subtraction.
+  const offenders = sweepRetiredLiteral('genesis-architect', {
+    waivedPaths: [
+      // D14 waives it by name: a wording edit re-stamps every host repo's grounding as stale
+      // (rules § Risk Tiers), and the contract hash is not paid for a word.
+      'spec/templates/grounding-contract.md',
+      // its `description` is the changelog surface; historical entries legitimately record that
+      // the command was deleted.
+      'spec/.claude-plugin/plugin.json',
+      // its header comment states the incident history (the choreography it replaced).
+      'spec/scripts/genesis-driver.js',
+      // this file's own header/body names the retired literal as the string under test.
+      'tests/consistency/genesis-doctrine.test.js',
+      // dated incident-header comments recording the rename (Test Rules require those headers).
+      'tests/genesis-gate.test.js',
+      'tests/genesis/research-menu.test.js',
+    ],
+    waivedPrefixes: [
+      // dated historical records — a spec that renamed a command must keep naming it.
+      'specs/',
+      'docs/roadmap/',
+      'docs/audit/',
+      // driver-written retained review evidence, keyed by run id; never a human-read pointer.
+      '.claude/spec-runs/',
+    ],
+  })
   assert.deepStrictEqual(offenders, [],
     'D14: these files outside the waive-list still name the retired `genesis-architect` command: ' +
     offenders.join(', ') + ' — a surviving mention points a reader, or a future session, at a ' +
@@ -708,75 +745,47 @@ test('AC-20260827-02-8: spec-paths shared-for genesis serves Design Canon and co
 
   // D11/§ Gotchas: classify by location (a repo-wide walk), never by name-shape — a narrower,
   // hand-enumerated file list is the exact hole a prior incident on this same pattern (the
-  // genesis-architect sweep above) was built to close. Waived by explicit path/prefix, each
-  // entry justified; re-verify a waived entry's own hit before trusting it (a concurrent fix
-  // can remove the very mention it waives).
-  const waivedPaths = [
-    // this test file's own header/body names the retired literal as the string under test.
-    'tests/consistency/genesis-doctrine.test.js',
-    // its `description` is the changelog surface; the changelog paragraph names the retired
-    // command by design (D14) — a historical record, not a stale reference.
-    'spec/.claude-plugin/plugin.json',
-    // its header comment states the incident history this spec adds to (the funnel-to-driver
-    // fold) — a dated record of what changed, not a live pointer at the deleted command.
-    'spec/scripts/genesis-driver.js',
-    // D14 waives it by name: a wording edit re-stamps every host repo's grounding as stale
-    // (rules § Risk Tiers), and the contract hash is not paid for a word.
-    'spec/templates/grounding-contract.md',
-    // append-only run ledger: /spec:plan's own lock-stage row for THIS spec records its path
-    // verbatim (verified 2026-08-29: `{"stage":"plan","spec":"specs/20260827/02-genesis-explore-
-    // state.md",...,"verdict":"locked"}`, committed 2026-08-27) — a dated historical record of
-    // the same kind `specs/` itself is, never a live pointer at the deleted command. Ledger rows
-    // are never rewritten, so omitting this waiver would make this sweep permanently red.
-    '.claude/spec-runs.jsonl',
-    // "the three sibling specs' dated headers in tests/": THIS spec's own filename
-    // (specs/20260827/02-genesis-explore-state.md) is the one of the three (01-genesis-
-    // tournament.md, 02-genesis-explore-state.md, 03-genesis-design-state.md) whose filename
-    // contains the literal substring "genesis-explore" — every test file below carries only a
-    // dated header comment citing that filename as provenance (never a live pointer at the
-    // deleted /spec:genesis-explore command); each is also this file's own File Plan sibling row
-    // (verified empirically 2026-08-29 via a standalone repo walk — omitting any of these six
-    // would make this sweep permanently red once the rest of the spec lands, since dated header
-    // citations are never retroactively edited):
-    'tests/genesis-gate.test.js',
-    'tests/consistency/red-fixture-coverage.test.js',
-    'tests/genesis/genesis-driver.test.js',
-    'tests/genesis/tournament.test.js',
-    'tests/genesis/explore-states.test.js',
-    'tests/spec-paths.test.js',
-  ]
-  const waivedPrefixes = [
-    // driver-written retained review evidence: spec-review-driver.js writes one
-    // .claude/spec-runs/<runId>.json per review pass recording the spec path verbatim, and
-    // never rewrites it — the same dated-record class as .claude/spec-runs.jsonl above, and
-    // structurally incapable of being a live pointer at the deleted command (it is a machine
-    // artifact keyed by run id, read by the fleet reader, never by a human looking for a command).
-    '.claude/spec-runs/',
-    // dated historical records — a spec that retires a command must keep naming it in its own
-    // (and its siblings') spec documents and the roadmap/audit trail.
-    'specs/',
-    'docs/roadmap/',
-    'docs/audit/',
-    'docs/adr/',
-  ]
-  function isWaived(rel) {
-    return waivedPaths.includes(rel) || waivedPrefixes.some((p) => rel.startsWith(p))
-  }
-  function walk(dir, acc) {
-    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (ent.name === '.git' || ent.name === 'node_modules') continue
-      const abs = path.join(dir, ent.name)
-      if (ent.isDirectory()) walk(abs, acc)
-      else if (ent.isFile()) acc.push(abs)
-    }
-    return acc
-  }
-  const offenders = []
-  for (const abs of walk(ROOT, [])) {
-    const rel = path.relative(ROOT, abs).split(path.sep).join('/')
-    if (isWaived(rel)) continue
-    if (fs.readFileSync(abs, 'utf8').includes('genesis-explore')) offenders.push(rel)
-  }
+  // genesis-architect sweep above) was built to close. Mechanics shared via
+  // sweepRetiredLiteral (2026-08-29).
+  //
+  // `citations` replaces eight hand-enumerated waives that existed only because THIS spec's own
+  // filename contains the literal: six tests/ files carrying a dated provenance header citing
+  // it, the append-only run ledger's plan row, and the driver's retained review evidence. Each
+  // is a citation of the record of the kill, never a live pointer at the deleted command, and
+  // subtraction closes the trap structurally — a file added tomorrow that cites this spec by
+  // slug is legal, while any live mention of the command still reddens the sweep.
+  const offenders = sweepRetiredLiteral('genesis-explore', {
+    citations: [
+      'specs/20260827/02-genesis-explore-state.md',
+      'specs/20260827/02-genesis-explore-state.deviations.md',
+      '02-genesis-explore-state.md',
+    ],
+    waivedPaths: [
+      // this test file's own header/body names the retired literal as the string under test.
+      'tests/consistency/genesis-doctrine.test.js',
+      // its `description` is the changelog surface; the changelog paragraph names the retired
+      // command by design (D14) — a historical record, not a stale reference.
+      'spec/.claude-plugin/plugin.json',
+      // its header comment states the incident history this spec adds to (the funnel-to-driver
+      // fold) — a dated record of what changed, not a live pointer at the deleted command.
+      'spec/scripts/genesis-driver.js',
+      // D14 waives it by name: a wording edit re-stamps every host repo's grounding as stale
+      // (rules § Risk Tiers), and the contract hash is not paid for a word.
+      'spec/templates/grounding-contract.md',
+      // AC-20260827-02-7 asserts the hook now IGNORES this exact prompt string, so the literal
+      // is the input under test — the honest waive that replaces the runtime string-splitting
+      // this file used to carry (condemned 2026-08-29: it evaded a sweep already waiving it).
+      'tests/genesis-gate.test.js',
+    ],
+    waivedPrefixes: [
+      // dated historical records — a spec that retires a command must keep naming it in its own
+      // (and its siblings') spec documents and the roadmap/audit trail.
+      'specs/',
+      'docs/roadmap/',
+      'docs/audit/',
+      'docs/adr/',
+    ],
+  })
   assert.deepStrictEqual(offenders, [],
     'D11: these files outside the waive-list still name the retired `genesis-explore` command: ' +
     offenders.join(', ') + ' — one binding home for the command name means every live surface ' +

@@ -15,7 +15,7 @@ happens to equal another doctrine file's basename (most dangerously `design`, si
 file instead of the citing file itself — even though the sentence never intended to reference
 it and even though the "real" target is genesis.md's own heading, one line down.
 
-Concretely hit this on specs/20260827/02: `...external/<name>/ for a
+Concretely hit this on specs/20260827/02-genesis-explore-state.md: `...external/<name>/ for a
 supplied design (§ Genesis: Explore State).` — nearWord resolved to `design`, which matched
 `spec/doctrine/design.md`'s basename, and `design.md` has no `## Genesis: Explore State`
 heading → false MISS. Fix was rewording, not touching the checker: `for a supplied candidate

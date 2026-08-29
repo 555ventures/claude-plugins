@@ -35,7 +35,7 @@ function gate(prompt, status) {
 // exemption, per this repo's established fix for a tracked file whose own job is to assert
 // against the exact string a sweep bans) so this file keeps proving the command is inert
 // without itself becoming a stale-reference hit.
-const RETIRED_EXPLORE_CMD = '/spec:genesis-' + 'explore'
+const RETIRED_EXPLORE_CMD = '/spec:genesis-explore'
 
 // specs/20260827/02-genesis-explore-state.md D9 (2026-08-27): the explore stage folds into the
 // driver and the retired command's own hook arm is deleted from both case lists — the prompt
@@ -68,7 +68,7 @@ test('genesis-design: legacy status without an explore field passes with a note 
   assert.strictEqual(res.status, 0, res.stderr)
   assert.match(res.stdout, /predates the genesis explore state/,
     'AC-20260827-02-7/D9: the legacy ABSENT note must say "the genesis explore state", not the retired command\'s literal — a note still pointing a user at a deleted command is exactly the stale-reference class D9 exists to prevent')
-  assert.ok(!res.stdout.includes('genesis-' + 'explore'),
+  assert.ok(!res.stdout.includes('genesis-explore'),
     'AC-20260827-02-7/D9: the legacy ABSENT note must not contain the retired command\'s literal anywhere — the retired command has no binding home left to point at')
 })
 

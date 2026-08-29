@@ -84,4 +84,4 @@
   and design together (`design-pick.json`). Round-1 prototypes and persona walkthroughs are
   retired. The separate explore command is deleted and its hook arm removed;
   `/spec:genesis-design` still follows HANDOFF until spec 03.
-  (specs/20260827/02, done 2026-08-29)
+  (specs/20260827/02-genesis-explore-state.md, done 2026-08-29)

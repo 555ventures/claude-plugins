@@ -417,7 +417,7 @@ function hookSpecState() {
 
 // genesis-state-gate.sh: architect: pending must block /spec:genesis-design.
 //
-// specs/20260827/02-genesis-explore-state.md D9/A6 (2026-08-27): /spec:genesis-explore's own
+// specs/20260827/02-genesis-explore-state.md D9/A6 (2026-08-27): the retired explore command's own
 // hook arm is deleted — the command now falls through untouched at every state (AC-20260827-02-7),
 // so it can no longer serve as this handler's blocked-prompt vehicle. Per Assumption A6, this
 // fixture only needs *a* prompt the hook blocks at architect: pending; /spec:genesis-design is

@@ -111,6 +111,53 @@ Fly.io was considered and rejected for regional latency — no other minority op
 `)
 }
 
+// specs/20260827/04-genesis-conventions-handoff.md D2/D3 (D11 build ruling, 2026-08-29): `decided`
+// now additionally requires a valid `.claude/genesis/conventions.json` (every row's `adr`
+// existing), and `skeleton-landed` now additionally requires every enforceable DECIDED row's
+// probe file present-and-non-empty plus a <=150-line CLAUDE.md naming the gate command and the
+// test tree. This file's two shared drivers (advanceToRoadmap, advanceToDesignWithFunnel) both
+// cross those two marks — this helper pair is written once, per § Review Checks' three-near-
+// identical-blocks rule. All nine floor rows are DEFERRED: this file's tests exercise the DESIGN
+// state, not conventions.json's own row-shape validation (conventions-handoff.test.js's job), so
+// no row needs a probe file at all.
+function writeAdr0002(dir) {
+  writeFile(path.join(dir, 'docs/adr/0002-operational-conventions.md'), `# 0002. Operational conventions
+
+## Decision
+See .claude/genesis/conventions.json for the row-by-row record.
+
+## Dissents
+None recorded — synthetic fixture for design-state.test.js.
+`)
+}
+
+const CONVENTIONS_FLOOR_KEYS = [
+  'error-taxonomy', 'logging', 'naming-identifiers', 'wire-representations',
+  'cross-plane-constants', 'env-config', 'ci', 'background-async', 'success-metric',
+]
+
+function writeConventionsArtifacts(dir) {
+  writeAdr0002(dir)
+  writeJSON(path.join(dir, '.claude/genesis/conventions.json'), {
+    schemaVersion: 1,
+    testTree: 'tests',
+    rows: CONVENTIONS_FLOOR_KEYS.map((key) => ({
+      key, status: 'DEFERRED', enforceable: false, probe: null,
+      reason: 'not exercised by this design-state fixture', adr: 'docs/adr/0002-operational-conventions.md',
+    })),
+  })
+}
+
+// D3's binding-subset doc: a short CLAUDE.md naming the exact gateCommand this fixture will run
+// at skeleton-landed and the conventions testTree ("tests", matching writeConventionsArtifacts).
+function writeBindingSubset(dir, gateCommand) {
+  writeFile(path.join(dir, 'CLAUDE.md'), [
+    '# Grounding',
+    'Gate command: `' + gateCommand + '`',
+    'Test tree: `tests`',
+  ].join('\n'))
+}
+
 function writeRoadmap(dir, briefs) {
   writeFile(path.join(dir, 'docs/roadmap/00-overview.md'), '# Overview\n\nSee Sequence.\n')
   for (const b of briefs) {
@@ -152,12 +199,14 @@ function advanceToRoadmap(dir, { archetype, visual = false, tournament = false, 
   }
 
   writeValidDecideArtifacts(dir, { archetype, designCatalog })
+  writeConventionsArtifacts(dir)
   const decided = mark(dir, 'decided')
   assert.strictEqual(decided.status, 0, 'test setup requires decided to be accepted: ' + decided.stderr)
 
   const scaffolded = bare(dir)
   assert.match(scaffolded.stdout, /SKELETON/, 'test setup requires the auto-run scaffold to reach SKELETON: ' + scaffolded.stdout)
 
+  writeBindingSubset(dir, 'true')
   const landed = mark(dir, 'skeleton-landed')
   assert.strictEqual(landed.status, 0, 'test setup requires skeleton-landed to be accepted: ' + landed.stderr)
   assert.match(landed.stdout, /ROADMAP/, 'test setup requires a green gateCommand to reach ROADMAP: ' + landed.stdout)
@@ -345,11 +394,13 @@ function advanceToDesignWithFunnel(dir) {
   assert.strictEqual(skipped.status, 0, 'test setup requires finalists-skipped to be accepted: ' + skipped.stderr)
 
   writeValidDecideArtifacts(dir, { archetype: 'web-app', designCatalog: 'storybook' })
+  writeConventionsArtifacts(dir)
   const decided = mark(dir, 'decided')
   assert.strictEqual(decided.status, 0, 'test setup requires decided to be accepted: ' + decided.stderr)
 
   const scaffolded = bare(dir)
   assert.match(scaffolded.stdout, /SKELETON/, 'test setup requires the auto-run scaffold to reach SKELETON: ' + scaffolded.stdout)
+  writeBindingSubset(dir, 'true')
   const landed = mark(dir, 'skeleton-landed')
   assert.strictEqual(landed.status, 0, 'test setup requires skeleton-landed to be accepted: ' + landed.stderr)
   assert.match(landed.stdout, /ROADMAP/, 'test setup requires a green gateCommand to reach ROADMAP: ' + landed.stdout)
@@ -490,19 +541,29 @@ test('AC-20260827-03-4: rules-locked refuses a rule whose targetCategory is "eng
   assert.match(handoff.stdout, /state: HANDOFF/, 'D4: a successful rules-locked must advance the driver straight to HANDOFF on the next invocation')
 })
 
-test('AC-20260827-03-5: HANDOFF prints next: /spec:init and never "genesis-design" for both designCatalog "storybook" and "none", and spec/commands/genesis.md\'s chain bullet reads /spec:genesis → /spec:atlas with no genesis-explore or genesis-design', () => {
+test('AC-20260827-03-5, AC-20260827-04-6: HANDOFF prints a step naming init-profile.json and --mark profile-written (never "genesis-design") for both designCatalog "storybook" and "none", and spec/commands/genesis.md\'s chain bullet reads /spec:genesis → /spec:atlas with no genesis-explore or genesis-design', () => {
+  // Retargeted in place (2026-08-29, specs/20260827/04-genesis-conventions-handoff.md D4/D5,
+  // recorded in that spec's own Rationale as an expected collision): D4 turns HANDOFF from a
+  // terminal state printing "next: /spec:init" into a judgment step that closes with a new mark,
+  // `--mark profile-written`; the new terminal state GROUNDED prints "next: /spec:enforce"
+  // instead (pinned behaviorally, with a real init-gen.js generate run, by
+  // tests/genesis/conventions-handoff.test.js's own AC-20260827-04-3/-4 — never re-asserted here
+  // to avoid duplicating that fixture). This pin keeps everything else it originally asserted —
+  // no "genesis-design" anywhere, and the doctrine's chain bullet — exactly as strict.
   const storybook = tmpdir('design-ac5-storybook')
   const roadmappedSb = advanceToRoadmap(storybook, { archetype: 'data-ml', designCatalog: 'storybook' })
   assert.strictEqual(roadmappedSb.status, 0, 'test setup requires roadmap-written to be accepted: ' + roadmappedSb.stderr)
   const sbHandoff = bare(storybook)
-  assert.match(sbHandoff.stdout, /next: \/spec:init/, 'D5: HANDOFF must print next: /spec:init regardless of designCatalog — the design lock is inside genesis now, so there is no separate command left to hand off into')
+  assert.match(sbHandoff.stdout, /init-profile\.json/, 'AC-20260827-04-6/D4: HANDOFF must now name init-profile.json regardless of designCatalog — the design lock is inside genesis now, and HANDOFF itself is a judgment step ending in --mark profile-written, not a terminal next: /spec:init print')
+  assert.match(sbHandoff.stdout, /--mark profile-written/, 'AC-20260827-04-6/D4: HANDOFF must name --mark profile-written as the command that closes the step')
   assert.doesNotMatch(sbHandoff.stdout, /genesis-design/, 'D5: HANDOFF must never print "genesis-design" for any designCatalog — the command it used to name is deleted')
 
   const none = tmpdir('design-ac5-none')
   const roadmappedNone = advanceToRoadmap(none, { archetype: 'data-ml', designCatalog: 'none' })
   assert.strictEqual(roadmappedNone.status, 0, 'test setup requires roadmap-written to be accepted: ' + roadmappedNone.stderr)
   const noneHandoff = bare(none)
-  assert.match(noneHandoff.stdout, /next: \/spec:init/, 'D5: HANDOFF must print next: /spec:init for designCatalog "none" too — both catalogs share the one remaining next command')
+  assert.match(noneHandoff.stdout, /init-profile\.json/, 'AC-20260827-04-6/D4: HANDOFF must name init-profile.json for designCatalog "none" too')
+  assert.match(noneHandoff.stdout, /--mark profile-written/, 'AC-20260827-04-6/D4: HANDOFF must name --mark profile-written for designCatalog "none" too')
   assert.doesNotMatch(noneHandoff.stdout, /genesis-design/, 'D5: HANDOFF must never print "genesis-design" for designCatalog "none" either')
 
   const chainLine = (read('spec/commands/genesis.md').match(/^- Chain:.*$/m) || [])[0]

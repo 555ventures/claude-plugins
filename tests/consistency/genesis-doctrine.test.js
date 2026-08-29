@@ -917,3 +917,76 @@ test('AC-20260827-03-7: spec-paths shared-for genesis serves Design Authoring Co
     '(doctrine, commands, README, marketplace listing, canonical docs) must be swept in the same ' +
     'spec that deletes the command, not left for a later pass to discover')
 })
+
+// specs/20260827/04-genesis-conventions-handoff.md (2026-08-29): D6 adds a new
+// "## Genesis: Conventions Probe Suite" heading to spec/doctrine/genesis.md; D5 rewrites
+// spec/commands/genesis.md's chain bullet to end at /spec:enforce (greenfield genesis is now
+// init + enforce) and retires its `next`: `{kind: 'command', text: '/spec:init'}` literal along
+// with the plain "next: /spec:init" wording, since HANDOFF is no longer terminal; D7 adds a
+// `handoff` key to spec/templates/status.json; D1 ships spec/templates/conventions.json, the
+// nine-floor-key starting-point template. This test is [no-ac: test-plumbing] for its own file
+// (it adds no new sweep mechanics), but the assertions below are this spec's AC-20260827-04-5
+// coverage. None of them can pass yet: as of 2026-08-29 genesis.md (doctrine) has no Conventions
+// Probe Suite heading, genesis.md (command) still ends its chain at /spec:init and still carries
+// `text: '/spec:init'`, status.json has no handoff key, and spec/templates/conventions.json does
+// not exist (grep/read confirmed at authoring time, 2026-08-29).
+
+// ---------------------------------------------------------------------------
+// AC-20260827-04-5
+// ---------------------------------------------------------------------------
+test('AC-20260827-04-5: spec/doctrine/genesis.md carries the Conventions Probe Suite heading, spec/commands/genesis.md\'s chain bullet names /spec:enforce and names neither retired /spec:init literal, spec/templates/status.json carries handoff, and spec/templates/conventions.json parses with the nine floor keys', () => {
+  const doctrineSrc = read('spec/doctrine/genesis.md')
+  assert.match(doctrineSrc, /^## Genesis: Conventions Probe Suite$/m,
+    'D6: spec/doctrine/genesis.md must carry a "## Genesis: Conventions Probe Suite" heading — ' +
+    'its absence means the probe-suite/binding-subset invariants this spec introduces have no ' +
+    'doctrine home, even though the driver (spec/scripts/genesis-driver.js) already enforces them')
+
+  const cmdSrc = read('spec/commands/genesis.md')
+  const chainLine = (cmdSrc.match(/^- Chain:.*$/m) || [])[0]
+  assert.ok(chainLine,
+    'D5: spec/commands/genesis.md must carry a "- Chain:" bullet naming the commands after ' +
+    'genesis — its absence means the doctrine no longer tells the session what comes next')
+  assert.match(chainLine, /\/spec:enforce/,
+    'D5: the chain bullet must name /spec:enforce — greenfield genesis is now init + enforce, ' +
+    'and a chain bullet that stops at /spec:init leaves the session with no printed pointer to ' +
+    'the enforcement step this spec adds: ' + JSON.stringify(chainLine))
+  assert.doesNotMatch(cmdSrc, /next: \/spec:init/i,
+    'D5: spec/commands/genesis.md must not contain the literal "next: /spec:init" (in any case) ' +
+    '— the driver\'s own HANDOFF step no longer prints it (D4), and a surviving mention here ' +
+    '(including the filled-example\'s "Next: /spec:init") would document a state transition the ' +
+    'driver no longer performs')
+  assert.ok(!cmdSrc.includes("text: '/spec:init'"),
+    'D5: spec/commands/genesis.md must not contain the literal "text: \'/spec:init\'" — the ' +
+    'HANDOFF report\'s own `next` slot must point at /spec:enforce now, since HANDOFF stops ' +
+    'being the terminal state and stops being the report\'s own close')
+
+  const statusTemplate = JSON.parse(read('spec/templates/status.json'))
+  assert.ok(Object.prototype.hasOwnProperty.call(statusTemplate, 'handoff'),
+    'D7: spec/templates/status.json must carry the key "handoff" — its absence means a fresh ' +
+    'project\'s status.json template has no field for the driver to record ' +
+    'handoff.initGenExit/at into, contradicting the Contracts section\'s own status.handoff ' +
+    'shape: ' + JSON.stringify(Object.keys(statusTemplate)))
+
+  const conventionsPath = path.join(SPEC, 'templates/conventions.json')
+  assert.ok(fs.existsSync(conventionsPath),
+    'D1: spec/templates/conventions.json must exist — its absence means the shipped ' +
+    'starting-point template this spec introduces was never created: ' + conventionsPath)
+  const conventions = JSON.parse(fs.readFileSync(conventionsPath, 'utf8'))
+  assert.strictEqual(conventions.schemaVersion, 1,
+    'D1: the shipped conventions.json template must carry schemaVersion 1, per the Contracts ' +
+    'block\'s own shape: ' + JSON.stringify(conventions.schemaVersion))
+  assert.strictEqual(conventions.testTree, 'tests',
+    'D1: the shipped conventions.json template must carry testTree "tests", per the Contracts ' +
+    'block\'s own worked example: ' + JSON.stringify(conventions.testTree))
+  const floorKeys = [
+    'error-taxonomy', 'logging', 'naming-identifiers', 'wire-representations',
+    'cross-plane-constants', 'env-config', 'ci', 'background-async', 'success-metric',
+  ]
+  const rowKeys = Array.isArray(conventions.rows) ? conventions.rows.map((r) => r.key) : []
+  for (const key of floorKeys) {
+    assert.ok(rowKeys.includes(key),
+      'D1: the shipped conventions.json template must carry a row for the floor key "' + key +
+      '" — its absence means the template does not demonstrate the full nine-key floor this ' +
+      'spec requires every genesis project to record: ' + JSON.stringify(rowKeys))
+  }
+})

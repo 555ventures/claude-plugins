@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "testTree": "tests",
+  "rows": [
+    { "key": "error-taxonomy", "status": "DECIDED", "enforceable": true, "probe": "tests/conventions/error-taxonomy.test.ts", "reason": null, "adr": "docs/adr/0002-operational-conventions.md" },
+    { "key": "logging", "status": "DECIDED", "enforceable": true, "probe": "tests/conventions/logging.test.ts", "reason": null, "adr": "docs/adr/0002-operational-conventions.md" },
+    { "key": "naming-identifiers", "status": "DECIDED", "enforceable": true, "probe": "tests/conventions/naming.test.ts", "reason": null, "adr": "docs/adr/0002-operational-conventions.md" },
+    { "key": "wire-representations", "status": "DECIDED", "enforceable": true, "probe": "tests/conventions/wire.test.ts", "reason": null, "adr": "docs/adr/0002-operational-conventions.md" },
+    { "key": "cross-plane-constants", "status": "DECIDED", "enforceable": true, "probe": "tests/conventions/cross-plane.test.ts", "reason": null, "adr": "docs/adr/0002-operational-conventions.md" },
+    { "key": "env-config", "status": "DECIDED", "enforceable": false, "probe": null, "reason": null, "adr": "docs/adr/0002-operational-conventions.md" },
+    { "key": "ci", "status": "DECIDED", "enforceable": false, "probe": null, "reason": null, "adr": "docs/adr/0002-operational-conventions.md" },
+    { "key": "background-async", "status": "DEFERRED", "enforceable": false, "probe": null, "reason": "none-in-v1 — no unattended work in the brief", "adr": "docs/adr/0002-operational-conventions.md" },
+    { "key": "success-metric", "status": "DEFERRED", "enforceable": false, "probe": null, "reason": "not measured in v1", "adr": "docs/adr/0002-operational-conventions.md" }
+  ]
+}

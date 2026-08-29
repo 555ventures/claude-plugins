@@ -89,6 +89,54 @@ function writeHostingMenu(dir) {
   })
 }
 
+// specs/20260827/04-genesis-conventions-handoff.md D2/D3 (D11 build ruling, 2026-08-29): `decided`
+// now additionally requires a valid `.claude/genesis/conventions.json` (every row's `adr`
+// existing), and `skeleton-landed` now additionally requires every enforceable DECIDED row's
+// probe file present-and-non-empty plus a <=150-line CLAUDE.md naming the gate command and the
+// test tree. AC-20260827-01-7's three `decided` calls and AC-20260827-01-8's one `decided` +
+// `skeleton-landed` pair are the only places in this file that cross those two marks — this
+// helper pair is written once, per § Review Checks' three-near-identical-blocks rule, instead of
+// three times inline. All nine floor rows are DEFERRED: this file's tests exercise the tournament
+// state machine, not conventions.json's own row-shape validation (conventions-handoff.test.js's
+// job), so no row needs a probe file at all.
+function writeAdr0002(dir) {
+  writeFile(path.join(dir, 'docs/adr/0002-operational-conventions.md'), `# 0002. Operational conventions
+
+## Decision
+See .claude/genesis/conventions.json for the row-by-row record.
+
+## Dissents
+None recorded — synthetic fixture for tournament.test.js.
+`)
+}
+
+const CONVENTIONS_FLOOR_KEYS = [
+  'error-taxonomy', 'logging', 'naming-identifiers', 'wire-representations',
+  'cross-plane-constants', 'env-config', 'ci', 'background-async', 'success-metric',
+]
+
+function writeConventionsArtifacts(dir) {
+  writeAdr0002(dir)
+  writeJSON(path.join(dir, '.claude/genesis/conventions.json'), {
+    schemaVersion: 1,
+    testTree: 'tests',
+    rows: CONVENTIONS_FLOOR_KEYS.map((key) => ({
+      key, status: 'DEFERRED', enforceable: false, probe: null,
+      reason: 'not exercised by this tournament-state fixture', adr: 'docs/adr/0002-operational-conventions.md',
+    })),
+  })
+}
+
+// D3's binding-subset doc: a short CLAUDE.md naming the exact gateCommand this fixture will run
+// at skeleton-landed and the conventions testTree ("tests", matching writeConventionsArtifacts).
+function writeBindingSubset(dir, gateCommand) {
+  writeFile(path.join(dir, 'CLAUDE.md'), [
+    '# Grounding',
+    'Gate command: `' + gateCommand + '`',
+    'Test tree: `tests`',
+  ].join('\n'))
+}
+
 // Drives from an empty root to a MENUS state whose hosting menu file is already written (the
 // registry-check pass recorded) — everything AC-1/AC-2 need before they exercise the archetype
 // line themselves.
@@ -496,6 +544,11 @@ test('AC-20260827-01-7: decided refuses a descriptor scaffoldCommand that differ
     const picked = mark(dir, 'picked')
     assert.strictEqual(picked.status, 0, 'test setup requires picked to be accepted: ' + picked.stderr)
     assert.strictEqual(statusOf(dir).tournament.winner, 'stack-a', 'test setup requires stack-a to be recorded as the winner')
+
+    // D2: conventionsCheck() runs ahead of D9's own scaffoldCommand-mismatch/benchmark-citation
+    // checks inside handleDecided — every one of this test's three `decided` calls (mismatch,
+    // noCite, ok) needs a valid conventions.json already present to even reach those checks.
+    writeConventionsArtifacts(dir)
   }
 
   function descriptorFor(scaffoldCommand) {
@@ -626,12 +679,14 @@ Race evidence: \`.claude/genesis/tournament/benchmark.md\`.
 ## Dissents
 GCP was considered and rejected — no other minority option surfaced.
 `)
+  writeConventionsArtifacts(dir)
   const decided = mark(dir, 'decided')
   assert.strictEqual(decided.status, 0, 'test setup requires decided to be accepted: ' + decided.stderr)
   const skeletonStep = bare(dir)
   assert.match(skeletonStep.stdout, /SKELETON/, 'test setup requires the post-decided root scaffold to reach SKELETON: ' + skeletonStep.stdout)
   assert.match(skeletonStep.stdout, DOCTRINE_LINE, 'D10: SKELETON must print a Doctrine: line')
 
+  writeBindingSubset(dir, 'exit 0')
   const gateStep = mark(dir, 'skeleton-landed')
   assert.strictEqual(gateStep.status, 0, 'test setup requires skeleton-landed to be accepted: ' + gateStep.stderr)
   assert.match(gateStep.stdout, /ROADMAP/, 'test setup requires a green zero-day gate to reach ROADMAP: ' + gateStep.stdout)

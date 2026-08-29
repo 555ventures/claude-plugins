@@ -5,8 +5,9 @@ description: Core invariants of the spec pipeline — reference doctrine read by
 # Spec Pipeline: Core Invariants
 
 The full lifecycle: an optional **genesis stage** for greenfield repos (`/spec:genesis`) decides
-what to build with and how it should look; `/spec:init` grounds the repo (config, rules, agents; it
-ends by invoking `/spec:enforce`); then the per-feature pipeline: `/spec:plan` →
+what to build with and how it should look, and its `HANDOFF` step grounds the repo itself;
+`/spec:init` grounds brownfield repos the same way (config, rules, agents; it ends by invoking
+`/spec:enforce`); then the per-feature pipeline: `/spec:plan` →
 `/spec:design` (optional, UI specs in design-capable hosts) → `/spec:build` → `/spec:review`
 (the only command that flips `done`; on CLEAN it commits the close and merges back) →
 `/spec:release` (repeatable milestone gate). `/spec:atlas` keeps the whole-product design

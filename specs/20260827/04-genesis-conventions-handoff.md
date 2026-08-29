@@ -1,6 +1,6 @@
 ---
 date: 2026-08-27
-status: hardened
+status: implementing
 tier: standard           # driver + templates + doctrine; no hook, no contract edit; init-gen.js is invoked, not edited
 area: genesis
 design: false
@@ -8,6 +8,7 @@ breaking: false
 depends_on: [specs/20260827/03-genesis-design-state.md]
 depended_on_by: []
 brief: 10a
+diff_base: 42be1a43a753881a65c9276335669c1bc960d814
 spiked: 2026-08-27
 open_markers: 0
 ---
@@ -42,6 +43,7 @@ observed on synthetic hosts, a grounded host carries a stamped config, and the s
 | D8 | Regression pins: `--mark decided` SHALL CONTINUE TO refuse an ADR with an empty `## Dissents`; `--mark skeleton-landed` SHALL CONTINUE TO refuse before a green scaffold; HANDOFF SHALL CONTINUE TO print `archetype:`, `resolved gate:`, `ADR count:`, `brief count:` (AC-20260827-04-6) | The closures are additive — the earlier checks must be observed intact |
 | D9 | Tests: `tests/genesis/conventions-handoff.test.js` (new, real driver; the exit-0 generate case reuses the profile shape of `tests/init-gen/generate.test.js`'s `baseProfile()` against a `gitRepo()` host — Assumptions A1); `tests/genesis/genesis-driver.test.js`'s AC-20260825-04-7 HANDOFF pin gains the profile-step expectation in place; `tests/consistency/genesis-doctrine.test.js` gains AC-5 [no-ac: test-plumbing row] | Behavioral tests; pins tagged onto existing tests |
 | D10 | `spec/.claude-plugin/plugin.json` bumps to the next free 7.40.x with a changelog paragraph naming the conventions closure, the probe suite, the binding subset, and genesis-is-init [no-ac: plugin-version guard] | — |
+| D11 | **Build ruling (2026-08-29, JJ):** D2/D3's new preconditions ripple past the File Plan into two sibling genesis suites whose synthetic hosts traverse `decided`/`skeleton-landed`. Both are added to scope and fixed in place, never weakened: `tests/genesis/tournament.test.js` (fixtures gain `conventions.json`, the probe files, and the binding-subset file) and `tests/genesis/design-state.test.js` (same fixture plumbing, plus AC-20260827-03-5's `next: /spec:init` HANDOFF pin retargeted in place to D4's profile step and retagged `AC-20260827-04-6`). The design-state collision was pre-recorded in this spec's Rationale; the tournament one was not — the whole-suite check caught it, as the § Gotchas entry for this class predicts. [no-ac: collision-sweep rows] | The documented handling for an additive Decision invalidating a live pin: update in place at build, one waive line at review |
 
 ## File Plan
 
@@ -59,6 +61,8 @@ observed on synthetic hosts, a grounded host carries a stamped config, and the s
 | tests/genesis/conventions-handoff.test.js | CREATE | tests | AC-20260827-04-1, AC-20260827-04-2, AC-20260827-04-3, AC-20260827-04-4 |
 | tests/genesis/genesis-driver.test.js | MODIFY | tests | AC-20260827-04-6 (pins tagged onto the AC-20260825-04-4/-6/-7 tests; the -7 HANDOFF fixture expects the profile step) |
 | tests/consistency/genesis-doctrine.test.js | MODIFY | tests | AC-20260827-04-5 |
+| tests/genesis/tournament.test.js | MODIFY | tests | D11 — fixture plumbing for D2/D3's new preconditions |
+| tests/genesis/design-state.test.js | MODIFY | tests | D11 — fixture plumbing; AC-20260827-03-5's HANDOFF pin retargeted in place |
 
 ## Contracts
 

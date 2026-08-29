@@ -336,7 +336,8 @@ Field-by-field, tracing each back to the phase that grounds it:
 
 ## Phase 5 — Generate (`init-gen generate`)
 
-Run:
+On a greenfield repo this phase already ran once, from genesis's own `HANDOFF` step — this
+invocation is the brownfield first-run, or a refresh of a genesis-grounded repo. Run:
 
 ```
 node "$(spec-paths init-gen)" generate --root . --profile <scratchpad profile path> [--refresh]

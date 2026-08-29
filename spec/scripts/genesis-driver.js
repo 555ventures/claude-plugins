@@ -115,6 +115,33 @@
 //     section, a byte-for-byte prefix, a closed enum, a green child process), never opinions on
 //     which direction won.
 //
+// specs/20260827/04-genesis-conventions-handoff.md (2026-08-29): the ops-conventions table
+// stops being ADR paragraph nobody re-runs. `--mark decided` additionally validates
+// `.claude/genesis/conventions.json` — the nine floor keys, each row DECIDED-with-boolean-
+// enforceable or DEFERRED-with-reason, an enforceable row's probe living under the declared
+// testTree, and every row's adr existing. `--mark skeleton-landed` additionally requires every
+// enforceable DECIDED row's probe file to exist and be non-empty, and a root CLAUDE.md or
+// AGENTS.md, capped at 150 lines, naming the descriptor's gateCommand and the testTree as
+// literals — the binding subset agents actually read. HANDOFF stops being terminal: it becomes
+// a judgment step (author `.claude/genesis/init-profile.json`, init.md Phase 4's shape) that
+// closes with the new mark `profile-written --file <f> [--refresh]`, which runs `node
+// init-gen.js generate --root <root> --profile <f> [--refresh]` through the existing runShell
+// idiom (stdout+stderr streamed to `.claude/genesis/init-gen.log`, never a Node pipe). Exit 0
+// records `status.handoff = {initGenExit: 0, at}` and advances to the new terminal state
+// GROUNDED (`next: /spec:enforce`); any other exit refuses the mark (exit 2) with the log tail
+// and a remedy keyed on init-gen's own exit code. Greenfield genesis is now init + enforce;
+// `/spec:init` stays the brownfield entry and the regeneration owner (`--refresh`).
+//
+// What the D2-D4 additions deliberately do NOT do:
+//   - author conventions.json, land a probe file, write CLAUDE.md/AGENTS.md, or author the init
+//     profile itself — those stay session judgment; the driver only closes each gate once the
+//     artifact exists and validates.
+//   - judge whether the gate command actually INCLUDES the probes (a property of the host's own
+//     gateCommand, not checkable from here), or whether CLAUDE.md's content is the right subset
+//     (existence and the two required literals are checked; content is judgment).
+//   - read status.json a second time inside init-gen — the profile itself carries every genesis
+//     artifact init-gen needs (config.genesisStackDescriptor, design.rulesManifest).
+//
 // Fixing that overflow only at the child's own capture wasn't enough: `logTail`, which builds the
 // SCAFFOLD_RED/GATE_RED excerpt embedded in the driver's OWN stdout, used to bound its excerpt by
 // line count alone (`text.split('\n').slice(-n)`). A caller's buffer is measured in BYTES, not
@@ -140,6 +167,7 @@
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
+const { CONFIG_RELPATH } = require('./lib/host-config')
 
 // Node's stdout write to a pipe is ASYNCHRONOUS; process.exit() tears the process down before a
 // large console.log() payload finishes flushing, silently truncating at the 64 KiB pipe buffer
@@ -186,6 +214,7 @@ const root = path.resolve(flag('--root') || process.cwd())
 const MARK = flag('--mark')
 const FILE = flag('--file')
 const STATE_ONLY = argv.includes('--state')
+const REFRESH = argv.includes('--refresh')
 
 if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
   die('--root ' + root + ' is not a directory — pass a real project root, or omit --root to use the current directory')
@@ -209,6 +238,7 @@ function freshStatus() {
     designManifestPath: '.claude/genesis/design-rules.json',
     gateCommand: null, lastUpdated: null,
     marks: {}, menus: {}, scaffold: null, zeroDayGate: null,
+    handoff: null,
   }
 }
 
@@ -1153,6 +1183,67 @@ function dissentsNonEmpty(text) {
   return body !== null && body.split('\n').some((l) => l.trim().length > 0)
 }
 
+// specs/20260827/04-genesis-conventions-handoff.md D1/D2: the nine floor keys every
+// `.claude/genesis/conventions.json` must carry a row for, decided or deferred.
+const CONVENTIONS_FLOOR_KEYS = [
+  'error-taxonomy', 'logging', 'naming-identifiers', 'wire-representations',
+  'cross-plane-constants', 'env-config', 'ci', 'background-async', 'success-metric',
+]
+
+function conventionsPath() { return path.join(genesisDir, 'conventions.json') }
+function readConventions() {
+  try { return JSON.parse(fs.readFileSync(conventionsPath(), 'utf8')) } catch (e) { return null }
+}
+
+// D2: `decided` gains this as an ADDITIONAL gate, run only once the pre-existing decideCheck()
+// below has already passed (D8's regression pin: the ADR/Dissents/dimension checks must keep
+// firing exactly as before, never superseded or reordered away by this new gate). Walks rows in
+// file order and returns the FIRST offender, named by key, per D2's own wording.
+function conventionsCheck() {
+  const conv = readConventions()
+  if (!conv) return { ok: false, reason: 'unreadable' }
+  const testTree = (typeof conv.testTree === 'string' && conv.testTree) ? conv.testTree : null
+  if (!testTree) return { ok: false, reason: 'no-test-tree' }
+  const rows = Array.isArray(conv.rows) ? conv.rows : []
+  const byKey = {}
+  for (const r of rows) { if (r && typeof r.key === 'string') byKey[r.key] = r }
+  for (const floorKey of CONVENTIONS_FLOOR_KEYS) {
+    if (!(floorKey in byKey)) return { ok: false, reason: 'missing-floor-key', detail: floorKey }
+  }
+  for (const r of rows) {
+    if (r.status !== 'DECIDED' && r.status !== 'DEFERRED') {
+      return { ok: false, reason: 'bad-status', detail: r.key }
+    }
+    if (r.status === 'DEFERRED' && (typeof r.reason !== 'string' || !r.reason.trim())) {
+      return { ok: false, reason: 'empty-reason', detail: r.key }
+    }
+    if (r.status === 'DECIDED') {
+      if (typeof r.enforceable !== 'boolean') {
+        return { ok: false, reason: 'bad-enforceable', detail: r.key }
+      }
+      if (r.enforceable === true && (typeof r.probe !== 'string' || !r.probe.startsWith(testTree + '/'))) {
+        return { ok: false, reason: 'bad-probe', detail: r.key, testTree }
+      }
+    }
+    if (typeof r.adr !== 'string' || !r.adr.trim() || !fs.existsSync(resolveAdrPath(r.adr))) {
+      return { ok: false, reason: 'adr-missing', detail: r.key }
+    }
+  }
+  return { ok: true, testTree, rows }
+}
+
+function describeConventionsGap(check) {
+  if (check.reason === 'unreadable') return conventionsPath() + ' does not exist or is not valid JSON'
+  if (check.reason === 'no-test-tree') return conventionsPath() + ' is missing a non-empty "testTree" string'
+  if (check.reason === 'missing-floor-key') return conventionsPath() + ' is missing required floor key "' + check.detail + '"'
+  if (check.reason === 'bad-status') return conventionsPath() + ' row "' + check.detail + '" has a "status" that is not DECIDED or DEFERRED'
+  if (check.reason === 'empty-reason') return conventionsPath() + ' DEFERRED row "' + check.detail + '" has an empty "reason"'
+  if (check.reason === 'bad-enforceable') return conventionsPath() + ' DECIDED row "' + check.detail + '" has a non-boolean "enforceable"'
+  if (check.reason === 'bad-probe') return conventionsPath() + ' row "' + check.detail + '" has an enforceable "probe" that does not begin with "' + check.testTree + '/"'
+  if (check.reason === 'adr-missing') return conventionsPath() + ' row "' + check.detail + '" names an "adr" that does not exist'
+  return conventionsPath() + ' is not valid'
+}
+
 function decideCheck() {
   const desc = readStackDescriptor()
   if (!desc) return { ok: false, reason: 'no-descriptor' }
@@ -1199,6 +1290,11 @@ function handleDecided() {
   if (!status.marks.menusDone) die('menus-done has not been marked yet — mark menus-done first')
   const check = decideCheck()
   if (!check.ok) die(describeDecideGap(check) + ' — fix it, then re-mark decided')
+  // D2: an ADDITIONAL gate, run only once decideCheck() above has already passed — D8's
+  // regression pin requires the pre-existing ADR/Dissents/dimension checks to keep firing
+  // exactly as before, never superseded or reordered away by this new conventions.json gate.
+  const convCheck = conventionsCheck()
+  if (!convCheck.ok) die(describeConventionsGap(convCheck) + ' — fix it, then re-mark decided')
   if (status.tournament && status.tournament.winner) {
     const winnerDef = (status.tournament.finalistDefs || []).find((f) => f.name === status.tournament.winner)
     if (winnerDef && check.descriptor.scaffoldCommand !== winnerDef.scaffoldCommand) {
@@ -1279,6 +1375,61 @@ function runGateIfDue() {
   return status.zeroDayGate
 }
 
+// specs/20260827/04-genesis-conventions-handoff.md D3: every enforceable DECIDED row's probe
+// file must exist and be non-empty, checked at `skeleton-landed` (not at `decided` — probes are
+// landed WITH the skeleton, per Behavior). Re-reads conventions.json fresh, never trusts the
+// `decided` mark's earlier validation alone.
+function probeCheck() {
+  const conv = readConventions()
+  const rows = (conv && Array.isArray(conv.rows)) ? conv.rows : []
+  for (const r of rows) {
+    if (r && r.status === 'DECIDED' && r.enforceable === true) {
+      const p = path.join(root, r.probe)
+      if (!fs.existsSync(p) || !fs.readFileSync(p, 'utf8').trim()) {
+        return { ok: false, key: r.key, probe: r.probe }
+      }
+    }
+  }
+  return { ok: true }
+}
+
+function describeProbeGap(check) {
+  return 'conventions.json row "' + check.key + '" is enforceable but its probe file ' +
+    check.probe + ' does not exist or is empty'
+}
+
+// D3: the binding-subset file (CLAUDE.md, or AGENTS.md when CLAUDE.md is absent) must exist,
+// be <= 150 lines, and name the descriptor's gateCommand and the conventions testTree as
+// literals — the doc agents actually read, not judged on content beyond that.
+const BINDING_SUBSET_LINE_CAP = 150
+
+function bindingSubsetCheck(desc, testTree) {
+  const claudePath = path.join(root, 'CLAUDE.md')
+  const agentsPath = path.join(root, 'AGENTS.md')
+  let file = null
+  let text = null
+  if (fs.existsSync(claudePath)) { file = 'CLAUDE.md'; text = fs.readFileSync(claudePath, 'utf8') }
+  else if (fs.existsSync(agentsPath)) { file = 'AGENTS.md'; text = fs.readFileSync(agentsPath, 'utf8') }
+  if (!file) return { ok: false, reason: 'no-file' }
+  const lineCount = text.split('\n').length
+  if (lineCount > BINDING_SUBSET_LINE_CAP) return { ok: false, reason: 'too-long', file, lineCount }
+  if (typeof desc.gateCommand !== 'string' || !text.includes(desc.gateCommand)) {
+    return { ok: false, reason: 'no-gate-literal', file }
+  }
+  if (!text.includes(testTree)) return { ok: false, reason: 'no-testtree-literal', file }
+  return { ok: true, file }
+}
+
+function describeBindingSubsetGap(check) {
+  if (check.reason === 'no-file') return 'no root CLAUDE.md or AGENTS.md exists'
+  if (check.reason === 'too-long') {
+    return check.file + ' is ' + check.lineCount + ' lines — the binding-subset cap is ' + BINDING_SUBSET_LINE_CAP + ' lines'
+  }
+  if (check.reason === 'no-gate-literal') return check.file + ' does not contain the descriptor\'s gateCommand literal'
+  if (check.reason === 'no-testtree-literal') return check.file + ' does not contain the conventions testTree literal'
+  return 'the binding-subset file is not valid'
+}
+
 function handleSkeletonLanded() {
   if (!status.marks.decided) die('decided has not been recorded yet — mark decided first')
   if (!(status.scaffold && status.scaffold.exit === 0)) {
@@ -1287,6 +1438,13 @@ function handleSkeletonLanded() {
   if (status.architect === 'scaffold-complete') {
     die('the zero-day gate has already passed — nothing to re-run; continue with the ROADMAP step')
   }
+  const desc = readStackDescriptor() || {}
+  const conv = readConventions()
+  const testTree = (conv && typeof conv.testTree === 'string' && conv.testTree) ? conv.testTree : 'tests'
+  const pc = probeCheck()
+  if (!pc.ok) die(describeProbeGap(pc) + ' — land it, then re-mark skeleton-landed')
+  const bc = bindingSubsetCheck(desc, testTree)
+  if (!bc.ok) die(describeBindingSubsetGap(bc) + ' — fix it, then re-mark skeleton-landed')
   status.marks.skeletonLanded = true
   saveStatus()
   const g = runGateIfDue()
@@ -1665,6 +1823,56 @@ function handleRulesLocked() {
 }
 
 // ---------------------------------------------------------------------------
+// HANDOFF -> GROUNDED (specs/20260827/04-genesis-conventions-handoff.md D4): the greenfield
+// grounding closure. `profile-written` is the last mark of the whole genesis driver — it runs
+// init-gen.js generate itself (the way /spec:init's own Phase 5 does) instead of handing off to
+// a separate command, and its acceptance is what reaches the new terminal state GROUNDED.
+// ---------------------------------------------------------------------------
+function initGenLogPath() { return path.join(genesisDir, 'init-gen.log') }
+
+// The exit-code-keyed remedy D4 lists verbatim (1: manifest row, 2: profile field, 3: hand
+// edits differ from what the profile would produce, 4: internal error — never a verdict).
+function remedyForExit(code) {
+  switch (code) {
+    case 1: return 'fix the manifest row init-gen.log names, then re-mark profile-written'
+    case 2: return 'fix the profile field it names, then re-mark profile-written'
+    case 3: return 'fold the hand edits into the profile and re-mark profile-written with --refresh'
+    case 4: return 're-mark profile-written (internal error, never a verdict)'
+    default: return 're-mark profile-written'
+  }
+}
+
+// Bash-quotes a single argument for the shell command string runShell (D4's own idiom) executes
+// via `bash -c` — every path here can contain spaces even though none of the fixtures do.
+function shQuote(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'" }
+
+function handleProfileWritten() {
+  if (!FILE) die('--mark profile-written needs --file <profile.json> (relative to the project root, or an absolute path)')
+  const resolved = path.isAbsolute(FILE) ? FILE : path.join(root, FILE)
+  if (!fs.existsSync(resolved)) {
+    die('--file ' + FILE + ' does not exist at ' + resolved + ' — write the init profile ' +
+      '(init.md Phase 4\'s shape), then re-mark profile-written')
+  }
+  try {
+    JSON.parse(fs.readFileSync(resolved, 'utf8'))
+  } catch (e) {
+    die(resolved + ' is not valid JSON (' + e.message + ') — fix it and re-mark profile-written')
+  }
+  const initGenBin = path.join(__dirname, 'init-gen.js')
+  const cmd = [shQuote(process.execPath), shQuote(initGenBin), 'generate', '--root', shQuote(root),
+    '--profile', shQuote(resolved)].concat(REFRESH ? ['--refresh'] : []).join(' ')
+  const logPath = initGenLogPath()
+  const r = runShell(cmd, logPath)
+  if (r.status === 0) {
+    status.handoff = { initGenExit: 0, at: new Date().toISOString() }
+    saveStatus()
+    return { prev: 'HANDOFF', next: 'GROUNDED' }
+  }
+  die('init-gen generate exited ' + r.status + ' — ' + remedyForExit(r.status) + ':\n' +
+    'log: ' + genesisRel('init-gen.log') + '\n' + logTail(logPath))
+}
+
+// ---------------------------------------------------------------------------
 // deriveState (D2) — side-effecting by default: runs the driver-only SCAFFOLD/GATE stages as
 // needed, idempotent on scaffold.exit === 0; every check re-reads the artifacts, never trusts a
 // mark whose backing file has vanished or regressed.
@@ -1735,8 +1943,13 @@ function deriveState(opts) {
   // specs/20260827/03-genesis-design-state.md D1: DESIGN sits between ROADMAP and HANDOFF for
   // every archetype except backend-api/data-ml, which handleRoadmapWritten already recorded
   // design: "skipped" for and which never enter DESIGN at all.
-  if (isDesignSkipped(status.archetype)) return 'HANDOFF'
-  if (status.design !== 'rules-locked') return 'DESIGN'
+  if (!isDesignSkipped(status.archetype) && status.design !== 'rules-locked') return 'DESIGN'
+
+  // specs/20260827/04-genesis-conventions-handoff.md D4: HANDOFF is no longer terminal — once
+  // `profile-written` records a successful init-gen generate run, the derived state advances to
+  // the new terminal state GROUNDED. No `peek` branch is needed here (unlike SCAFFOLD/GATE):
+  // this reads a value status.handoff already persisted, with no side effect either way.
+  if (status.handoff && status.handoff.initGenExit === 0) return 'GROUNDED'
 
   return 'HANDOFF'
 }
@@ -1748,9 +1961,18 @@ function deriveState(opts) {
 // funnel is now a driver state this session already ran, not a separate command HANDOFF hands
 // off into. specs/20260827/03-genesis-design-state.md D5: the design lock folds into the driver
 // too (the DESIGN state) — there is no separate command left to hand off into for ANY archetype
-// or designCatalog; HANDOFF's next command is always /spec:init.
-function nextCommandLine() {
-  return 'next: /spec:init'
+// or designCatalog. specs/20260827/04-genesis-conventions-handoff.md D4/D5: HANDOFF itself stops
+// being terminal and stops printing a next command at all — it is a judgment step that closes
+// with `--mark profile-written`, and only the new terminal state GROUNDED prints `next:
+// /spec:enforce` (nextCommandLine() is retired along with it — greenfield genesis is now
+// init + enforce, with nothing left for /spec:init to hand off into).
+
+// D2/D3/D4 share this count: the enforceable, checker-backed DECIDED rows conventions.json
+// carries — read fresh off disk, never cached in status.json.
+function enforceableProbeCount() {
+  const conv = readConventions()
+  const rows = (conv && Array.isArray(conv.rows)) ? conv.rows : []
+  return rows.filter((r) => r && r.status === 'DECIDED' && r.enforceable === true).length
 }
 
 const STEPS = {
@@ -2049,22 +2271,56 @@ const STEPS = {
     return lines.join('\n')
   },
 
+  // specs/20260827/04-genesis-conventions-handoff.md D4: HANDOFF becomes a judgment step — the
+  // session authors .claude/genesis/init-profile.json (init.md Phase 4's shape) and closes with
+  // `--mark profile-written`, which the driver runs init-gen.js generate for itself. D8's
+  // regression pin still requires archetype/resolved gate/ADR count/brief count to print here —
+  // this step keeps ALL of them, on top of the new profile-authoring instructions.
   HANDOFF: () => {
     const desc = readStackDescriptor() || {}
     const adrCount = Array.isArray(desc.decisionRecords) ? desc.decisionRecords.length : 0
+    const readFiles = [
+      'spec/commands/init.md (Phase 4 — the profile schema)',
+      descriptorRelPath(),
+      genesisRel('conventions.json'),
+    ]
+    if (fs.existsSync(designRulesPath())) readFiles.push(genesisRel('design-rules.json'))
+    readFiles.push('docs/adr/')
     return [
-      '## Step: handoff — genesis\'s architect stage is complete',
-      'Read only: ' + descriptorRelPath() + ', docs/roadmap/00-overview.md',
+      '## Step: handoff — author the init profile; the driver grounds the repo',
+      'Read only: ' + readFiles.join(', '),
+      'Doctrine: spec/doctrine/genesis.md § Genesis: Enforcement Handoff to the spec pipeline',
       'archetype: ' + (status.archetype || desc.archetype || 'unknown'),
       'resolved gate: ' + (status.gateCommand || desc.gateCommand || 'unknown'),
       'ADR count: ' + adrCount,
       'brief count: ' + briefFileNames().length,
-      nextCommandLine(),
+      'Write ' + genesisRel('init-profile.json') + ' (init.md Phase 4\'s shape; ' +
+        'config.genesisStackDescriptor and design.rulesManifest set from the genesis artifacts; ' +
+        'manifestExtras claiming the skeleton\'s substrate and the probe suite), then:',
+      '  node ' + __filename + ' --root ' + root + ' --mark profile-written --file ' + genesisRel('init-profile.json'),
+    ].join('\n')
+  },
+
+  // D4: the terminal state — printed once profile-written records a successful init-gen
+  // generate run. archetype/resolved gate/ADR count/brief count carry over from HANDOFF's own
+  // report inputs; convention probes is new (D4's report-inputs list).
+  GROUNDED: () => {
+    const desc = readStackDescriptor() || {}
+    const adrCount = Array.isArray(desc.decisionRecords) ? desc.decisionRecords.length : 0
+    return [
+      '## Step: grounded — genesis is complete',
+      'Read only: ' + CONFIG_RELPATH + ', docs/roadmap/00-overview.md',
+      'archetype: ' + (status.archetype || desc.archetype || 'unknown') +
+        ' · resolved gate: ' + (status.gateCommand || desc.gateCommand || 'unknown') +
+        ' · ADR count: ' + adrCount +
+        ' · convention probes: ' + enforceableProbeCount() +
+        ' · brief count: ' + briefFileNames().length,
+      'next: /spec:enforce',
     ].join('\n')
   },
 }
 
-const TERMINAL_STATES = new Set(['HANDOFF'])
+const TERMINAL_STATES = new Set(['GROUNDED'])
 
 function renderFull(state) {
   const header = '[genesis-driver] state: ' + state + '  root: ' + root
@@ -2100,11 +2356,13 @@ function handleMark() {
     case 'doctrine-drafted': result = handleDoctrineDrafted(); break
     case 'tokens-landed': result = handleTokensLanded(); break
     case 'rules-locked': result = handleRulesLocked(); break
+    case 'profile-written': result = handleProfileWritten(); break
     default:
       die('unknown mark "' + MARK + '" (discovery-done | menu-written --file <f> | menus-done | ' +
         'research-done | positions-authored | tiles-built | tiles-culled | external --file <dir> | ' +
         'finalists-written --file <f> | finalists-skipped | probe-done | picked | ' +
-        'decided | skeleton-landed | roadmap-written | doctrine-drafted | tokens-landed | rules-locked)')
+        'decided | skeleton-landed | roadmap-written | doctrine-drafted | tokens-landed | ' +
+        'rules-locked | profile-written --file <f> [--refresh])')
       return
   }
   writeOut(1, acceptedOutput(result))

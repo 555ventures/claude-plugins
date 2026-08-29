@@ -40,7 +40,9 @@ DISCOVERY step fills the gaps.
    governing the judgment.
 3. Record it with the step's own printed `--mark …` line. The driver verifies the step's
    artifacts before advancing; a missing or malformed one is refused and demanded again.
-4. Re-run `node {driver} --root .`. Repeat until it prints `HANDOFF`.
+4. Re-run `node {driver} --root .`. Repeat until it prints `GROUNDED` — `HANDOFF` is itself one
+   of the loop's steps (author `.claude/genesis/init-profile.json`, then `--mark
+   profile-written`), not the stop condition.
 
 A dismissed `AskUserQuestion` STOPS the run — never invent the declined answer; state is
 already safe on disk. Every accepted mark prints `✅ checkpoint — genesis state saved
@@ -50,35 +52,44 @@ from disk, never from chat context.
 
 ## HANDOFF report
 
-Assemble the slots object (shared § Console Output Style — `report-render.js` is the sole
-render authority; commands assemble slots and print its output verbatim):
+Printed once the driver reaches `GROUNDED` — the terminal state; `HANDOFF` itself is a
+judgment step handled generically by the loop above, not a report trigger. Assemble the slots
+object (shared § Console Output Style — `report-render.js` is the sole render authority;
+commands assemble slots and print its output verbatim):
 
-- `outcome`: `✅ architected — scaffold green, {N} ADRs, roadmap of {M} briefs`.
+- `outcome`: `✅ architected + grounded — scaffold green, {N} ADRs, {P} convention probes,
+  roadmap of {M} briefs`.
 - `bullets`: `{archetype} for {audience}; gate: {resolved gate command}`; one
   `{decision made — ADR path}` entry per decision; a `Chain: /spec:genesis →
-  /spec:atlas sweep + your holistic atlas review → /spec:init → /spec:enforce →
+  /spec:atlas sweep + your holistic atlas review → /spec:enforce →
   /spec:plan docs/roadmap/01-*.md` entry, rendered above the close so the whole sequence is
   visible before the one recommended next step. For an archetype whose design stage is `none`
   (design written `skipped`) the chain bullet drops the atlas link: `Chain: /spec:genesis →
-  /spec:init → /spec:enforce → /spec:plan docs/roadmap/01-*.md`.
+  /spec:enforce → /spec:plan docs/roadmap/01-*.md`.
 - `warns`: one `dissent recorded: {one-phrase summary}` entry per dissent (drop if none).
-- `next`: `{kind: 'command', text: '/spec:init'}` — every archetype; design is ratified inside
-  this same driver run (`DESIGN` state, spec/doctrine/genesis.md § Genesis: Design State), so
-  HANDOFF always points at `/spec:init` next.
+- `next`: `{kind: 'command', text: '/spec:enforce'}` — every archetype. The `HANDOFF` step
+  (spec/doctrine/genesis.md § Genesis: Conventions Probe Suite) already grounded the repo
+  itself — the driver ran `init-gen.js generate` against the session-authored profile — so
+  this report closes at `GROUNDED` pointing straight at enforcement; there is no separate
+  `/spec:init` step for a repo genesis just grounded.
 
 Write the slots file and run `node "$(spec-paths report-render)" --slots <file>`; print stdout
 verbatim. Filled example:
 
 ```report
-✅ **architected — scaffold green, 3 ADRs, roadmap of 6 briefs**
+✅ **architected + grounded — scaffold green, 3 ADRs, 5 convention probes, roadmap of 6 briefs**
 - web-app for solo creators; gate: npm run typecheck && npm run lint && npm test
 - framework: Next.js 15 (App Router) — docs/adr/0001-framework.md
 - persistence: Postgres via Neon — docs/adr/0002-persistence.md
-- Chain: /spec:genesis → /spec:atlas sweep + your holistic atlas review → /spec:init → /spec:enforce → /spec:plan docs/roadmap/01-*.md
+- Chain: /spec:genesis → /spec:atlas sweep + your holistic atlas review → /spec:enforce → /spec:plan docs/roadmap/01-*.md
 ⚠️ dissent recorded: SQLite rejected — no managed backup story for a solo operator
 
-Next: /spec:init
+Next: /spec:enforce
 ```
+
+`/spec:init` is the brownfield entry, not a step of this chain: re-running it on a
+genesis-grounded repo (`.claude/genesis/status.json` at `GROUNDED`) is a refresh, and it
+passes `--refresh` to `init-gen generate` the same way any other regeneration does.
 
 ## Rules
 

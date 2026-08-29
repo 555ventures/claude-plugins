@@ -483,7 +483,14 @@ distills ADRs into binding doctrine with no downstream re-verification.
 The split is **decide vs implement**: the genesis design state (§ Genesis: Design State)
 *decides* and records design rules; the spec pipeline *implements* them as actual
 lint/contracts/sweeps wired to the gate. One enforcement brain, and it lives downstream —
-`/spec:enforce` (which `/spec:init` invokes at the end of bootstrap). The contract:
+`/spec:enforce` (which `/spec:init` invokes at the end of bootstrap). For a greenfield repo,
+the grounding step this brain depends on runs earlier still: `HANDOFF` (§ Genesis: State
+Machine, § Genesis: Conventions Probe Suite) has the session author
+`.claude/genesis/init-profile.json` and the driver run `init-gen.js generate` against it
+directly — the same generator `/spec:init` Phase 5 runs, invoked here instead of by that
+command — landing the terminal `GROUNDED` state with `next: /spec:enforce`. `/spec:init`
+stays the brownfield entry and the regeneration owner (`--refresh`); re-running it on a
+genesis-grounded repo is a refresh, not first-time bootstrap. The contract:
 
 - `design-rules.json` rules carry a `targetCategory` **enum only** — `color | typography | i18n |
   structure | a11y | density | layout` — **never a tool name** — plus a `grounding` (`grounded` | `taste`, shared
@@ -515,7 +522,34 @@ Land the test + CI skeleton — the enforcement half of the ops ADR, day zero:
   archetypes), a seed entry point stub, and local service provisioning (compose file or
   script) wherever the scaffold's `.env.example` references services nothing creates. These
   are what `/spec:init`'s runtime block, verify skill, and smoke leg will bind to — cheaper
-  to land here, while the scaffold tool's conventions are hot, than to retrofit at init.
+  to land here, while the scaffold tool's conventions are hot, than to retrofit at init;
+- the **conventions probe suite** (§ Genesis: Conventions Probe Suite) — one executable test
+  per checker-enforceable DECIDED ops-conventions row, landed in the same test tree these
+  other skeleton tests exercise, so the gate wired above runs the conventions forever;
+- the **binding subset** (`CLAUDE.md`/`AGENTS.md`, § Genesis: Conventions Probe Suite) — the
+  ≤150-line file naming the gate command and the test tree, the primary artifact a fresh agent
+  actually reads.
+
+## Genesis: Conventions Probe Suite
+
+The ops-conventions table (§ Genesis: Ops Conventions ADR) stops being a paragraph nobody
+re-runs: at `DECIDE` the session records every row into `.claude/genesis/conventions.json`
+(template via `spec-paths templates`, schemaVersion 1) — each row DECIDED or
+DEFERRED-with-reason, naming the ADR that carries its rationale. A checker-enforceable DECIDED
+row (`enforceable: true`) names a `probe` path under the descriptor's `testTree`; at
+`SKELETON` the session lands one **executable test per such row**, at that path, in the host's
+own test tree — the same tree `## Genesis: Day-Zero Skeleton` already wires into the gate, so
+the zero-day gate that runs on every push executes the conventions forever. A `DEFERRED` row
+carries its `reason` in the JSON instead of a probe; deferral is a recorded choice, never a
+silent gap.
+
+The **binding subset** — the root `CLAUDE.md` or `AGENTS.md` a fresh agent actually reads
+before it writes code — is the primary artifact of this closure, and every ops-conventions ADR
+is its rationale appendix (`## Dissents` still required in each). It stays **≤150 lines** and
+names, as literals: the `gateCommand`, the `testTree`, the conventions the landed probes pin,
+and — once `/spec:enforce` has run — the enforcement manifest's path. Admission checks
+existence and size only, never content quality; content is the session's judgment, the same
+decide-vs-mechanize split § Genesis: Enforcement Handoff to the spec pipeline draws.
 
 ## Genesis: State Machine
 
@@ -527,7 +561,10 @@ states: `DISCOVERY` → `MENUS` → [`EXPLORE`, visual archetypes only, § Genes
 [`FINALISTS` → `RACE` (driver-only) → `PROBE` → `PICK`, tournament archetypes only, § Genesis:
 Tournament of Scaffolds] → `DECIDE` → `SCAFFOLD` (driver-only) → `SKELETON` → `GATE`
 (driver-only) → `GATE_RED` | `ROADMAP` → [`DESIGN`, mark-driven, § Genesis: Design State] →
-`HANDOFF` (terminal for this stage). No `status.json`
+`HANDOFF` → `GROUNDED` (terminal for this stage). `HANDOFF` is itself a judgment step — the
+session authors `.claude/genesis/init-profile.json` and the driver runs `init-gen.js generate`
+against it (§ Genesis: Enforcement Handoff to the spec pipeline) — never the terminal print
+itself; `GROUNDED` is reached only once that run exits 0. No `status.json`
 on disk → the driver creates it from the template and prints `DISCOVERY`; no `brief.md` on disk
 → the DISCOVERY step names `genesis-brief.md` (`$(spec-paths templates)/genesis-brief.md`) as
 the source.
@@ -795,6 +832,10 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
   (driver-written, survive `decided`). Template: `spec/templates/finalists.json`, the shape
   the session composes a run's `finalists.json` from.
 - **`.claude/genesis/stack-descriptor.json`** — architect's output (template via `spec-paths templates`).
+- **`.claude/genesis/conventions.json`** — `DECIDE`'s ops-conventions ledger (template via
+  `spec-paths templates`, § Genesis: Conventions Probe Suite): schemaVersion 1, `testTree`,
+  and the DECIDED/DEFERRED rows the driver validates at `decided` and again (probe existence,
+  the binding subset) at `skeleton-landed`.
 - **`.claude/genesis/design-pick.json`** — the tournament `PICK` step's output whenever
   `exploreRecord.finalists` is non-empty: the picked candidate and rejected directions with
   salvage notes (template via `spec-paths templates`).
@@ -826,6 +867,12 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
   the audited version). Brownfield repos (no
   genesis) hand-author from the same templates; a dedicated command exists only if evidence
   demands one.
+- **`.claude/genesis/init-profile.json`** (session-authored) — `HANDOFF`'s judgment artifact:
+  the init profile (`spec/commands/init.md` Phase 4's shape) the driver hands to `init-gen.js
+  generate` at `--mark profile-written` (§ Genesis: Enforcement Handoff to the spec pipeline).
+- **`.claude/genesis/init-gen.log`** (driver-written) — the streamed stdout+stderr of that
+  `generate` run; a refused mark quotes its tail, the full log survives on disk for a deeper
+  read.
 
 ## Genesis: Dismissed Questions
 

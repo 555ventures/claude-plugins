@@ -137,15 +137,68 @@ Fly.io was considered and rejected for regional latency — no other minority op
 `)
 }
 
+// specs/20260827/04-genesis-conventions-handoff.md D2/D3 (D11 build ruling, 2026-08-29): `decided`
+// now additionally requires a valid `.claude/genesis/conventions.json` (plus every row's `adr`
+// existing), and `skeleton-landed` now additionally requires every enforceable DECIDED row's
+// probe file present-and-non-empty plus a <=150-line CLAUDE.md naming the gate command and the
+// test tree. Every helper in this file that drives through those two marks needs this fixture
+// plumbing — added once here (never repeated inline) per § Review Checks' three-near-identical-
+// blocks rule. All nine floor rows are DEFERRED here: this file's tests exercise driver-state
+// transitions, not conventions.json's own row-shape validation (that is
+// tests/genesis/conventions-handoff.test.js's job), so no row needs a probe file at all.
+function writeAdr0002(dir) {
+  writeFile(path.join(dir, 'docs/adr/0002-operational-conventions.md'), `# 0002. Operational conventions
+
+## Decision
+See .claude/genesis/conventions.json for the row-by-row record.
+
+## Dissents
+None recorded — synthetic fixture for genesis-driver.test.js.
+`)
+}
+
+const CONVENTIONS_FLOOR_KEYS = [
+  'error-taxonomy', 'logging', 'naming-identifiers', 'wire-representations',
+  'cross-plane-constants', 'env-config', 'ci', 'background-async', 'success-metric',
+]
+
+function writeConventionsArtifacts(dir) {
+  writeAdr0002(dir)
+  writeJSON(path.join(dir, '.claude/genesis/conventions.json'), {
+    schemaVersion: 1,
+    testTree: 'tests',
+    rows: CONVENTIONS_FLOOR_KEYS.map((key) => ({
+      key, status: 'DEFERRED', enforceable: false, probe: null,
+      reason: 'not exercised by this driver-state fixture', adr: 'docs/adr/0002-operational-conventions.md',
+    })),
+  })
+}
+
+// D3's binding-subset doc: a short CLAUDE.md naming the exact gateCommand this fixture will run
+// at skeleton-landed and the conventions testTree ("tests", matching writeConventionsArtifacts).
+function writeBindingSubset(dir, gateCommand) {
+  writeFile(path.join(dir, 'CLAUDE.md'), [
+    '# Grounding',
+    'Gate command: `' + gateCommand + '`',
+    'Test tree: `tests`',
+  ].join('\n'))
+}
+
 // Drives from an empty root all the way to DECIDE with valid decide-stage artifacts, then
-// accepts \`decided\`, then runs the bare invocation that executes SCAFFOLD (driver-only).
+// accepts \`decided\`, then runs the bare invocation that executes SCAFFOLD (driver-only). Also
+// lands the D3 binding-subset doc (naming this call's own gateCommand) ahead of SKELETON: several
+// callers below mark skeleton-landed directly on the returned host (to observe GATE_RED or the
+// F6/logtail regressions) rather than going through advanceToRoadmap, so the doc is written here,
+// the one place every such caller already passes through.
 function advanceThroughScaffold(dir, opts = {}) {
   advanceToDecide(dir)
   writeValidDecideArtifacts(dir, opts)
+  writeConventionsArtifacts(dir)
   const decided = mark(dir, 'decided')
   assert.strictEqual(decided.status, 0, 'test setup requires decided to be accepted with a complete descriptor and ADR: ' + decided.stderr)
   const scaffolded = bare(dir)
   assert.match(scaffolded.stdout, /SKELETON/, 'test setup requires the auto-run scaffold to reach SKELETON: ' + scaffolded.stdout)
+  writeBindingSubset(dir, opts.gateCommand || 'true')
   return scaffolded
 }
 
@@ -179,9 +232,13 @@ test('AC-20260825-04-1: a cold --root creates status.json schemaVersion 2 with t
   assert.ok(fs.existsSync(statusPath), 'the driver must create .claude/genesis/status.json on first invocation so re-entry has something to derive state from')
   const st = JSON.parse(fs.readFileSync(statusPath, 'utf8'))
   assert.strictEqual(st.schemaVersion, 2, 'a v1 status.json silently starves the driver of marks/menus/scaffold/zeroDayGate — the file must be created as v2')
+  // specs/20260827/04-genesis-conventions-handoff.md D7 (additive, [no-ac: schemaVersion
+  // unchanged]): status.json gains `handoff: null` for the new profile-written mark. Updated in
+  // place per this repo's standing handling for an additive Decision invalidating an exhaustive
+  // key-set pin (§ Gotchas) — never weakened, the other thirteen keys still asserted exactly.
   assert.deepStrictEqual(Object.keys(st).sort(), [
     'architect', 'archetype', 'design', 'designManifestPath', 'explore', 'gateCommand',
-    'lastUpdated', 'localeScope', 'marks', 'menus', 'scaffold', 'schemaVersion',
+    'handoff', 'lastUpdated', 'localeScope', 'marks', 'menus', 'scaffold', 'schemaVersion',
     'stackDescriptorPath', 'zeroDayGate',
   ].sort(), 'a missing or extra key here means the driver and status.json template have drifted apart, breaking every downstream mark that reads a specific key')
   assert.match(r.stdout, /^\[genesis-driver\] state: DISCOVERY/, 'the printed state line is the one thing a re-invoking session reads to know what to do next')
@@ -239,7 +296,7 @@ test('AC-20260825-04-3, AC-20260827-01-9: MENUS lists an undiscovered open dimen
   assert.strictEqual(state(dir).stdout, 'DECIDE\n', 'AC-20260827-01-9/D15: a completed menus-done for the non-tournament archetype data-ml must CONTINUE TO advance the derived state straight to DECIDE, exactly as before this spec — a state other than DECIDE here means D1\'s tournament routing wrongly caught a non-tournament archetype')
 })
 
-test('AC-20260825-04-4: --mark decided refuses each of a missing scaffoldCommand, an empty Dissents section, and an unnamed open dimension by name, and accepts once all three hold', () => {
+test('AC-20260825-04-4, AC-20260827-04-6: --mark decided refuses each of a missing scaffoldCommand, an empty Dissents section, and an unnamed open dimension by name, and accepts once all three hold; D8 pins that the empty-Dissents refusal SHALL CONTINUE TO fire ahead of D2\'s new conventions.json checks', () => {
   const missingScaffold = tmpdir('gdrv-ac4a')
   advanceToDecide(missingScaffold)
   writeValidDecideArtifacts(missingScaffold)
@@ -251,6 +308,10 @@ test('AC-20260825-04-4: --mark decided refuses each of a missing scaffoldCommand
   assert.strictEqual(r1.status, 2, 'a descriptor missing scaffoldCommand can never run the scaffold step, so decided must refuse it')
   assert.match(r1.stderr, /scaffoldCommand/, 'the refusal must name the missing key, not a generic "descriptor invalid" message')
 
+  // AC-20260827-04-6/D8: this sub-case is the regression pin — specs/20260827/04's D2 adds a
+  // NEW conventions.json validation gate to decided, but the pre-existing empty-Dissents refusal
+  // (decideCheck's own ADR check) must keep firing exactly as before, never superseded or
+  // reordered away by the new gate.
   const emptyDissents = tmpdir('gdrv-ac4b')
   advanceToDecide(emptyDissents)
   writeValidDecideArtifacts(emptyDissents)
@@ -266,7 +327,7 @@ AWS chosen for \`${DIM}\`.
 None.
 `)
   const r2 = mark(emptyDissents, 'decided')
-  assert.strictEqual(r2.status, 2, 'an ADR whose Dissents heading is followed by no non-blank line before the next heading loses the recorded minority-option evidence and must refuse the mark')
+  assert.strictEqual(r2.status, 2, 'AC-20260827-04-6/D8: an ADR whose Dissents heading is followed by no non-blank line before the next heading loses the recorded minority-option evidence and must CONTINUE TO refuse the mark, even now that D2 adds its own separate conventions.json validation ahead of this check')
   assert.match(r2.stderr, /0001-hosting\.md/, 'the refusal must name the offending ADR path so the session knows which file to fix')
 
   const unnamedDim = tmpdir('gdrv-ac4c')
@@ -287,6 +348,7 @@ No minority option surfaced.
   const ok = tmpdir('gdrv-ac4d')
   advanceToDecide(ok)
   writeValidDecideArtifacts(ok)
+  writeConventionsArtifacts(ok)
   const r4 = mark(ok, 'decided')
   assert.strictEqual(r4.status, 0, 'a complete descriptor plus a valid, dimension-naming ADR must be accepted: ' + r4.stderr)
   assert.strictEqual(statusOf(ok).architect, 'decisions-recorded', 'a successful decided mark must flip architect to decisions-recorded so downstream hooks/commands see the closure')
@@ -298,6 +360,7 @@ test('AC-20260825-04-5, AC-20260827-01-9: SCAFFOLD executes scaffoldCommand exac
   const dir = tmpdir('gdrv-ac5')
   advanceToDecide(dir)
   writeValidDecideArtifacts(dir, { scaffoldCommand: 'touch scaffolded.txt' })
+  writeConventionsArtifacts(dir)
   const decided = mark(dir, 'decided')
   assert.strictEqual(decided.status, 0, 'test setup requires decided to be accepted: ' + decided.stderr)
 
@@ -314,7 +377,21 @@ test('AC-20260825-04-5, AC-20260827-01-9: SCAFFOLD executes scaffoldCommand exac
   assert.strictEqual(fs.existsSync(scaffoldedFile), false, 'AC-20260827-01-9: a second bare invocation must CONTINUE TO NOT re-execute scaffoldCommand once scaffold.exit === 0 is already recorded — idempotence is what makes /clear safe here, and the tournament\'s new FINALISTS/RACE states must not have disturbed it')
 })
 
-test('AC-20260825-04-6: skeleton-landed runs the zero-day gate, recording GATE_RED on a failing command and scaffold-complete plus a copied gateCommand on a green one', () => {
+test('AC-20260825-04-6, AC-20260827-04-6: skeleton-landed runs the zero-day gate, recording GATE_RED on a failing command and scaffold-complete plus a copied gateCommand on a green one, and (D8) SHALL CONTINUE TO refuse when called before the scaffold has recorded exit: 0', () => {
+  // AC-20260827-04-6/D8 regression pin: this precondition (decideCheck() has passed and
+  // `decided` has already been marked) is unchanged by D3's new probe/binding-subset checks —
+  // skeleton-landed must still refuse outright, before any of those new checks even run, when
+  // the scaffold itself has never completed.
+  const preScaffold = tmpdir('gdrv-ac6-prescaffold')
+  advanceToDecide(preScaffold)
+  writeValidDecideArtifacts(preScaffold)
+  writeConventionsArtifacts(preScaffold)
+  const decided = mark(preScaffold, 'decided')
+  assert.strictEqual(decided.status, 0, 'test setup requires decided to be accepted: ' + decided.stderr)
+  const tooEarly = mark(preScaffold, 'skeleton-landed')
+  assert.strictEqual(tooEarly.status, 2, 'AC-20260827-04-6/D8: skeleton-landed must CONTINUE TO refuse when called before the scaffold has recorded exit: 0 — accepting it here would run the zero-day gate (and now D3\'s probe/CLAUDE.md checks) against a project that was never actually scaffolded')
+  assert.match(tooEarly.stderr, /scaffold/i, 'the refusal must mention the scaffold so the session knows why skeleton-landed was refused, not just that it failed')
+
   const redDir = tmpdir('gdrv-ac6-red')
   advanceThroughScaffold(redDir, { gateCommand: 'exit 1' })
   const red = mark(redDir, 'skeleton-landed')
@@ -334,7 +411,7 @@ test('AC-20260825-04-6: skeleton-landed runs the zero-day gate, recording GATE_R
   assert.match(green.stdout, /ROADMAP/, 'a green gate must advance to ROADMAP')
 })
 
-test('AC-20260825-04-7: roadmap-written refuses a Depends-on cycle by naming it and, once acyclic, prints HANDOFF with next: /spec:init for both designCatalog values', () => {
+test('AC-20260825-04-7, AC-20260827-04-6: roadmap-written refuses a Depends-on cycle by naming it and, once acyclic, prints a HANDOFF that (D8) SHALL CONTINUE TO print archetype/resolved gate/ADR count/brief count and (D4) now names init-profile.json and --mark profile-written instead of a terminal next: /spec:init, for both designCatalog values', () => {
   const cyclic = tmpdir('gdrv-ac7-cycle')
   advanceToRoadmap(cyclic)
   writeRoadmap(cyclic, [
@@ -353,23 +430,39 @@ test('AC-20260825-04-7: roadmap-written refuses a Depends-on cycle by naming it 
   const noneAccepted = mark(noneCatalog, 'roadmap-written')
   assert.strictEqual(noneAccepted.status, 0, 'an acyclic roadmap with an overview file must be accepted: ' + noneAccepted.stderr)
   const noneHandoff = bare(noneCatalog)
-  assert.match(noneHandoff.stdout, /next: \/spec:init/, 'a headless/no-catalog descriptor must hand off straight to /spec:init — there is no design stage to run')
+  for (const literal of ['archetype:', 'resolved gate:', 'ADR count:', 'brief count:']) {
+    assert.ok(noneHandoff.stdout.includes(literal),
+      'AC-20260827-04-6/D8: HANDOFF must CONTINUE TO print "' + literal + '" for designCatalog "none" — its absence means specs/20260827/04\'s D4 rewrite of the HANDOFF step dropped one of the four report fields this spec\'s own D8 pins as unchanged: ' + noneHandoff.stdout)
+  }
+  assert.match(noneHandoff.stdout, /init-profile\.json/, 'specs/20260827/04-genesis-conventions-handoff.md D4: HANDOFF for designCatalog "none" must now name init-profile.json — the terminal "next: /spec:init" this pin used to assert is retired, since HANDOFF is a judgment step ending in --mark profile-written, not a terminal state, anymore')
+  assert.match(noneHandoff.stdout, /--mark profile-written/, 'D4: HANDOFF for designCatalog "none" must now name --mark profile-written as the command that closes the step')
 
   // specs/20260827/03-genesis-design-state.md D5/D9 (2026-08-29): the design lock this pin used
   // to name as a separate handoff target is deleted — it is now a driver state (DESIGN) entered
   // from ROADMAP for a visual archetype, and this shared fixture's archetype (advanceToDecide's
   // default, data-ml — never overridden by writeValidDecideArtifacts' own descriptor.archetype
   // field, which deriveState() never reads) is non-visual, so design: "skipped" writes straight
-  // through to HANDOFF regardless of designCatalog. nextCommandLine() no longer branches on
-  // designCatalog at all: every archetype's HANDOFF names /spec:init. This AC-20260825-04-7 pin
-  // is updated in place and retagged again, never weakened.
+  // through to HANDOFF regardless of designCatalog.
+  //
+  // specs/20260827/04-genesis-conventions-handoff.md D4/D5/D9 (2026-08-29): retargeted again —
+  // HANDOFF stops being terminal and stops printing next: /spec:init at all (D5 also drops
+  // nextCommandLine() itself); it becomes a judgment step ending in --mark profile-written, whose
+  // acceptance is what reaches the new terminal GROUNDED state (with next: /spec:enforce, pinned
+  // in tests/genesis/conventions-handoff.test.js's own AC-20260827-04-4). This AC-20260825-04-7
+  // pin is updated in place and retagged again, never weakened — it still asserts every literal
+  // D8 pins as unchanged, and gains an assertion for the new step in place of the retired one.
   const storybookCatalog = tmpdir('gdrv-ac7-storybook')
   advanceToRoadmap(storybookCatalog, { designCatalog: 'storybook' })
   writeRoadmap(storybookCatalog, [{ name: '01-a.md', dependsOn: '—' }])
   const sbAccepted = mark(storybookCatalog, 'roadmap-written')
   assert.strictEqual(sbAccepted.status, 0, 'an acyclic roadmap with an overview file must be accepted: ' + sbAccepted.stderr)
   const sbHandoff = bare(storybookCatalog)
-  assert.match(sbHandoff.stdout, /next: \/spec:init/, 'AC-20260825-04-7/D5/D9: a project with a design catalog must ALSO hand off to /spec:init now — the design lock this pin used to name a separate handoff for is folded into the driver, so nextCommandLine() no longer branches on designCatalog at all')
+  for (const literal of ['archetype:', 'resolved gate:', 'ADR count:', 'brief count:']) {
+    assert.ok(sbHandoff.stdout.includes(literal),
+      'AC-20260827-04-6/D8: HANDOFF must CONTINUE TO print "' + literal + '" for designCatalog "storybook" too: ' + sbHandoff.stdout)
+  }
+  assert.match(sbHandoff.stdout, /init-profile\.json/, 'D4: HANDOFF for designCatalog "storybook" must also now name init-profile.json — nextCommandLine() no longer exists at all; every archetype/catalog\'s HANDOFF ends in the same profile-authoring step')
+  assert.match(sbHandoff.stdout, /--mark profile-written/, 'D4: HANDOFF for designCatalog "storybook" must also name --mark profile-written')
 })
 
 // Review findings F1, F3, F6 (specs/20260825/04-genesis-driver.md review, 2026-08-26): three
@@ -454,6 +547,7 @@ test('review finding F3 (D1): --state at the post-decided state prints SCAFFOLD 
   const dir = tmpdir('gdrv-f3-peek')
   advanceToDecide(dir)
   writeValidDecideArtifacts(dir, { scaffoldCommand: 'touch SIDE_EFFECT_MARKER.txt' })
+  writeConventionsArtifacts(dir)
   const decided = mark(dir, 'decided')
   assert.strictEqual(decided.status, 0, 'test setup requires decided to be accepted: ' + decided.stderr)
 

@@ -34,11 +34,11 @@ build resumes instead of restarting.
 /spec:init          # profiles the repo, writes config + rules, then runs /spec:enforce for you
 ```
 
-**Brand-new project** (no code yet) — run genesis first, then init:
+**Brand-new project** (no code yet) — run genesis, then enforce:
 
 ```
 /spec:genesis         "a trading simulator for retail traders in Japan"  # stack + scaffold + roadmap briefs; rendered design candidates in your browser → your pick, ratified into tokens + design canon
-/spec:init
+/spec:enforce
 ```
 
 Genesis researches live (web agents), has one proposer — the planning session itself — write

@@ -1,7 +1,7 @@
 ---
 date: 2026-08-30
 diff_base: 83b9383619de1bf79f527d5b122fba4648be0f3b
-status: implementing
+status: done
 tier: standard
 area: collision-closure
 design: false

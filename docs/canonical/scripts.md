@@ -28,6 +28,14 @@ fuller incident write-ups live in each cited spec's history.
   review surfaces. Keep a pinned sentence whole in one literal; append additions as separate
   segments. (specs/20260816/01-gate-baseline-reconcile.md)
 
+- **A path-substring sweep over a test corpus is blind to root-stripped spellings.** When
+  test helpers join script paths against an intermediate root (`path.join(SPEC, 'scripts/x.js')`),
+  no test ever spells the repo-relative path the sweep searches for; measured 77% of
+  test→script execution edges invisible in this repo (2026-08-30). Match the target's
+  two-segment suffix — it subsumes the full spelling and needs no host-specific prefix — and
+  classify runnable targets by extension *or* shebang, never extension alone.
+  (specs/20260830/01-collision-closure-exec-recall.md)
+
 ## Prose budgets
 
 The host rules' § Gotchas section is capped at 15 entries, enforced by `prose-cap.js` (review

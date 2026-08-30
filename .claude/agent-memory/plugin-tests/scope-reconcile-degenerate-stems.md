@@ -3,7 +3,7 @@ name: scope-reconcile-degenerate-stems
 description: gitRepo() pre-seeds a committed root .gitignore, and node --test --test-name-pattern lets a mutant-direction proof run without duplicating fixtures into a second file
 metadata:
   type: feedback
-  reviewed: 2026-08-25
+  reviewed: 2026-08-30
 ---
 
 `tests/helpers.js`'s `gitRepo(dir)` (default, `opts.empty` unset) already writes AND commits a

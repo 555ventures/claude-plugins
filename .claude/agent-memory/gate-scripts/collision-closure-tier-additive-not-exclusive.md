@@ -3,6 +3,7 @@ name: collision-closure-tier-additive-not-exclusive
 description: D3's executes tier is additive on top of likely/mentions, not a runnable/non-runnable branch — the ordering clause and Contracts example are the tell
 metadata:
   type: feedback
+  reviewed: 2026-08-30
 ---
 
 When a spec Decision reads like a clean binary branch ("runnable targets tier X; non-runnable

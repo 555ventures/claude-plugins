@@ -1,0 +1,103 @@
+{
+  "runId": "rv_3cb54be4774b",
+  "ts": "2026-08-30T17:02:32.061Z",
+  "spec": "specs/20260827/04-genesis-conventions-handoff.md",
+  "tier": "standard",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1259,
+    "base": "42be1a43a753881a65c9276335669c1bc960d814",
+    "head": "1f129cc026f16cc8323a024e95643a98b63f1c99",
+    "dirty": false
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 0,
+      "observed": {
+        "outOfPlan": 0,
+        "files": []
+      }
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      }
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 128
+      }
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": {
+        "matches": 10
+      }
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": {
+        "files": 12,
+        "testsExecuted": 112
+      }
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      }
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 11,
+        "carried": 9,
+        "sanctioned": 2,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [],
+    "reviewerCount": 1,
+    "scope": "full",
+    "tokens": 0
+  }
+}

@@ -95,3 +95,14 @@
   `design: skipped`; non-visual archetypes skip the tokens mark. HANDOFF always hands to
   `/spec:init`. The command is deleted, its hook arm removed; the genesis hook now gates only
   `/spec:init` on a partial canon. (specs/20260827/03-genesis-design-state.md, done 2026-08-29)
+
+- Since specs/20260827/04 `decided` also validates `.claude/genesis/conventions.json` (the nine
+  ops floor rows DECIDED or DEFERRED-with-reason; enforceable rows name a probe under
+  `testTree`), `skeleton-landed` requires every enforceable probe file and a ≤150-line
+  `CLAUDE.md`/`AGENTS.md` naming the gate command and the test tree, and `HANDOFF` is a judgment
+  step: the session authors `.claude/genesis/init-profile.json` (init.md Phase 4's shape) and
+  `--mark profile-written` has the driver run `init-gen.js generate` (log at
+  `.claude/genesis/init-gen.log`, remedies keyed on its exit code, `--refresh` passed through),
+  landing the terminal state `GROUNDED` with `next: /spec:enforce`. Greenfield genesis is init +
+  enforce; `/spec:init` is the brownfield entry and the regeneration owner.
+  (specs/20260827/04-genesis-conventions-handoff.md, done 2026-08-30)

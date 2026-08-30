@@ -1,6 +1,6 @@
 ---
 date: 2026-08-27
-status: implementing
+status: done
 tier: standard           # driver + templates + doctrine; no hook, no contract edit; init-gen.js is invoked, not edited
 area: genesis
 design: false
@@ -229,6 +229,28 @@ HANDOFF literal lives in `spec/scripts/genesis-driver.js` (row); it is also asse
 `tests/genesis/design-state.test.js` AC-20260827-03-5 once that spec lands — the build's
 whole-suite check names it and the pin is retargeted in place, never weakened (recorded here so
 the collision is expected, not discovered). Nothing waived. `SHALL CONTINUE TO` pins: AC-6.
+
+**Deviations folded at review close (2026-08-30, both one-offs — each is a recurrence of a
+class § Gotchas already carries, so no new entry was added to a section already at its cap):**
+
+- *Cross-file collision, D2/D3/D7 into out-of-plan exhaustive/helper assertions.* Making
+  `conventions.json` and the binding-subset file preconditions of `decided`/`skeleton-landed`
+  reddened every sibling suite whose shared helpers drive a synthetic host through those marks
+  without the new artifacts (`tests/genesis/genesis-driver.test.js`,
+  `tournament.test.js`, `design-state.test.js`, `explore-states.test.js`), plus
+  `AC-20260825-04-1`'s exhaustive `Object.keys(st)` pin, which did not list the new `handoff`
+  key. Caught at the build's own whole-suite check and fixed by retargeting each colliding
+  helper and pin in place, never by weakening an assertion — the two classes § Gotchas already
+  documents ("a locked Decision that retires or narrows a live assertion outside the File Plan"
+  and "a spec that ADDS a member to an exhaustive live-file pin").
+- *AC-20260827-04-4's `--refresh` sub-case rested on a stale assumption about `init-gen.js`'s
+  diff detection.* The first draft hand-edited `.claude/spec.config.json`'s `generatedBy` and
+  expected `init-gen` exit 3, but `buildFileTargets()` registers that target with
+  `stripKeys: ['generatedBy', 'contractHash']`, so `compareExisting()` deletes both keys from
+  both sides before comparing — a two-run repro exited 0, never 3, and the sub-case proved
+  nothing. Corrected in place to hand-edit `gateCommand` (a field the comparison never strips);
+  the assertion is unchanged in strictness — still exit 2 naming `--refresh`. No
+  implementation gap: `handleProfileWritten()` passes `init-gen`'s real exit code through.
 
 ## Canonical Delta
 

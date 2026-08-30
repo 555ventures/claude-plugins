@@ -14,7 +14,8 @@
   `.claude/agents/*.md`, both skills, the `.claude/settings.json` permissions merge,
   `scripts/spec-patterns.sh`, `.claude/spec-manifest.json`, and the gitignore/gitattributes
   entries. Judgment content travels as structured profile fields, never as prose the session
-  re-performs.
+  re-performs. `generate` is also invoked by `genesis-driver.js` at genesis's HANDOFF
+  (specs/20260827/04) — same profile, same exit codes, same stamp ordering.
 
 ## Invariants
 

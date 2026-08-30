@@ -12,12 +12,24 @@
 // File Plan path against the test corpus; the **literals leg** (--literal, optional, repeatable)
 // joins planner-supplied stems against the whole repo. Advisory listing only — it never blocks.
 //
+// Incident (2026-08-29, spec 20260827/04's build; closed by spec 20260830/01-collision-closure-
+// exec-recall): the paths leg matched a File Plan target as a literal substring, but this repo's
+// test helpers spawn scripts by a root-stripped path (`runNode('scripts/foo.js')`, never
+// `spec/scripts/foo.js`) — two out-of-plan genesis test files (7 tests) spawned
+// `scripts/genesis-driver.js` and were invisible to the leg (measured: 88/115 execution edges,
+// 77%). Targets now key on their last two `/`-segments (subsumes a full-path spelling, no
+// host-specific prefix) and runnable targets (`.js`/`.mjs`/`.cjs`/`.sh`, or a sniffed `#!` on an
+// extensionless file) tier their hits `executes` — a call-graph fact, not a proximity guess —
+// alongside the unchanged `likely`/`mentions` proximity tiering for non-runnable (prose) targets.
+//
 // What this deliberately does NOT do: gate the lock or any build/review stage (spec
 // 20260814/03 D10's blocking whole-suite check owns execution adjudication end-to-end); choose
 // which stems to search for (planner judgment); diff a git changed-set against the File Plan
 // (that is scope-reconcile.js — disjoint inputs, disjoint stage); expand File Plan globs
 // (targets are matched as literal substrings, never as patterns); shell out to grep (BSD/GNU
-// flag divergence — a pure Node walk with directory pruning instead).
+// flag divergence — a pure Node walk with directory pruning instead); distinguish an `executes`
+// hit that merely cites a runnable file from one that truly spawns/loads it at runtime (the
+// build-time suite check adjudicates that, never this script).
 //
 // Exit codes:
 //   0 = every hit is already a File Plan row (or there are no hits)
@@ -30,9 +42,22 @@ const path = require('path')
 const { parseFilePlanRows } = require('./lib/file-plan')
 const { globMatch, pipelineOwnedGlobs } = require('./lib/glob-match')
 
-const HONESTY_LINE = 'tier is a lexical proxy; mentions may contain closed pins; the build-time suite check adjudicates'
-const REMEDY_LINE = "remedy: add each `likely` hit and each literals hit as a File Plan row, or record the waive in the spec's Rationale; `mentions` hits are visibility only and owe no waive line"
+const HONESTY_LINE = 'likely/mentions tier is a lexical proxy; mentions may contain closed pins; an executes hit names a runnable file the test spawns, loads, or cites — not distinguished; the build-time suite check adjudicates'
+const REMEDY_LINE = "remedy: add each literals hit as a File Plan row, or record the waive in the spec's Rationale; an `executes` hit names a test that runs a script you are changing — if the change alters that script's observable behavior, widen the File Plan or plan the fixture repair now; `likely` and `mentions` hits are visibility only and owe no waive line"
 const PROXIMITY_LINES = 25
+
+// ---- D1/D2: match-key derivation and runnable classification, applied once at target
+// construction (no second pass over targets anywhere below). ------------------------------------
+function matchKey(target) {            // D1
+  const seg = target.split('/')
+  return seg.length >= 2 ? seg.slice(-2).join('/') : target
+}
+function isRunnable(target, base) {    // D2
+  if (/\.(js|mjs|cjs|sh)$/.test(target)) return true
+  try { const fd = fs.openSync(path.join(base, target), 'r'); const b = Buffer.alloc(2)
+        fs.readSync(fd, b, 0, 2, 0); fs.closeSync(fd); return b.toString() === '#!' }
+  catch { return false }
+}
 
 function usage() {
   console.error('usage: collision-closure.js --spec <path> [--root <dir>] [--tests <dir>]… [--literal <stem>]… [--json]')
@@ -188,7 +213,13 @@ function isLikely(content, target) {
 
 // ---- paths leg -------------------------------------------------------------------------------
 
-const pathsResult = targets.map(target => ({ target, hits: new Set() }))
+const pathsResult = targets.map(target => ({
+  target,
+  key: matchKey(target),
+  runnable: isRunnable(target, root),
+  hits: new Set(),
+  executes: new Set(),
+}))
 const likelyFiles = new Set()
 let anyPathsHit = false
 
@@ -201,10 +232,15 @@ if (targets.length) {
     const content = readSafe(path.join(root, f))
     if (content === null) continue
     for (const entry of pathsResult) {
-      if (!content.includes(entry.target)) continue
+      if (!content.includes(entry.key)) continue
       entry.hits.add(f)
       anyPathsHit = true
-      if (isLikely(content, entry.target)) likelyFiles.add(f)
+      // D3: executes is additive on top of the unchanged likely/mentions proximity computation —
+      // a runnable target's hit that also sits near a deepStrictEqual tiers BOTH executes and
+      // likely (Contracts: "a file... may appear in both executes and likely"); isLikely runs
+      // unconditionally, exactly as before this spec, keyed on the D1 suffix.
+      if (entry.runnable) entry.executes.add(f)
+      if (isLikely(content, entry.key)) likelyFiles.add(f)
     }
   }
 }
@@ -239,6 +275,12 @@ const unplanned = [...allHits].filter(h => h !== specRel && !plannedSet.has(h)).
 const unplannedSet = new Set(unplanned)
 const likely = [...likelyFiles].filter(f => unplannedSet.has(f)).sort()
 
+// D3: executes = union of per-target executes sets, filtered to unplanned, sorted — the
+// identical derivation `likely` uses above.
+const executesFiles = new Set()
+for (const p of pathsResult) for (const h of p.executes) executesFiles.add(h)
+const executes = [...executesFiles].filter(f => unplannedSet.has(f)).sort()
+
 // ---- output -----------------------------------------------------------------------------------
 
 if (jsonOut) {
@@ -250,6 +292,7 @@ if (jsonOut) {
     literals: literalsResult.map(l => ({ stem: l.stem, hits: [...l.hits].sort() })),
     unplanned,
     likely,
+    executes,
   }, null, 2))
 } else {
   const out = []
@@ -263,8 +306,17 @@ if (jsonOut) {
       continue
     }
     out.push(`  ${p.target}:`)
+    // D3: executes: first, always; likely: is unconditional (a runnable hit that is also
+    // proximate to a deepStrictEqual prints under both); mentions: is the non-runnable catch-all
+    // only — a runnable target's every hit is already accounted for under executes:, so it never
+    // gets a redundant mentions: bucket.
+    const executeHits = [...p.executes].sort()
     const likelyHits = [...p.hits].filter(h => likelyFiles.has(h)).sort()
-    const mentionHits = [...p.hits].filter(h => !likelyFiles.has(h)).sort()
+    const mentionHits = p.runnable ? [] : [...p.hits].filter(h => !likelyFiles.has(h)).sort()
+    if (executeHits.length) {
+      out.push('    executes:')
+      for (const h of executeHits) out.push(`      ${h}`)
+    }
     if (likelyHits.length) {
       out.push('    likely:')
       for (const h of likelyHits) out.push(`      ${h}`)

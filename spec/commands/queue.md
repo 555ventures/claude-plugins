@@ -1,6 +1,6 @@
 ---
-description: The session queue's command surface — wraps spec-queue.js's next/add/bump/defer/done/list/ok/hello subcommands in one script run per invocation; stores the one thing the pipeline cannot derive, JJ's intended work order across briefs plus free-text items and their done-when predicates, so /spec:status's --next stays queue-aware with zero hand reconstruction
-argument-hint: "[subcommand] [args…] — next|add|bump|defer|done|list|ok|hello; bare invocation defaults to next. add takes a payload plus optional --brief NN, --when <type>:<args>, --top | --after <ref>; bump/defer/done/ok take a <ref> (id, brief number, or unique payload substring)"
+description: The session queue's command surface — wraps spec-queue.js's next/add/bump/defer/done/list/ok subcommands in one script run per invocation; stores the one thing the pipeline cannot derive, JJ's intended work order across briefs plus free-text items and their done-when predicates, so /spec:status's --next stays queue-aware with zero hand reconstruction
+argument-hint: "[subcommand] [args…] — next|add|bump|defer|done|list|ok; bare invocation defaults to next. add takes a payload plus optional --brief NN, --when <type>:<args>, --top | --after <ref>; bump/defer/done/ok take a <ref> (id, brief number, or unique payload substring)"
 allowed-tools: Bash(spec-paths:*), Bash(node:*), Read
 ---
 
@@ -28,8 +28,7 @@ verbatim, with `--when <type>:<args>` for a predicate and `--top` / `--after <re
 placement), `bump <ref>` (move to top, clear `auto_placed`), `defer <ref> [--after <ref2>]`
 (move to end or after `<ref2>`, clear `auto_placed`), `done <ref>` (manual tick: stamp
 `ticked`, clear `auto_placed`), `ok [<ref>]` (accept auto-placement — clear the flag, keep
-position), `hello` (hook-mode render; ordinarily fired by the SessionStart hook, not typed by
-hand). Pass everything after the subcommand straight through — never reparse or validate
+position). Pass everything after the subcommand straight through — never reparse or validate
 `<ref>`/`--when` shapes yourself; the script's usage/ambiguity errors already name the fix.
 
 ## Run
@@ -56,7 +55,7 @@ verbatim with no `@path` suffix); an `auto_placed` item still pending veto print
 trailing notice naming both `spec-queue bump <ref>` (reject the automatic placement) and
 `spec-queue ok <ref>` (accept it) — narrate that choice in one sentence, never pick for the
 user. After the block, add only what the script cannot: one sentence naming what changed
-(`add`/`bump`/`defer`/`done`/`ok`) or, for `next`/`list`/`hello`, one sentence naming the top
+(`add`/`bump`/`defer`/`done`/`ok`) or, for `next`/`list`, one sentence naming the top
 pick's relationship to the rest of the pipeline (e.g. "this jumps ahead of the closest-to-done
 ranking because it's queued above it").
 
@@ -72,6 +71,5 @@ ranking because it's queued above it").
   deterministically from on-disk brief provenance (a `Depends on:` list, or a letter-suffix
   parent), and they stay flagged until the user runs `bump`, `defer`, `done`, or `ok` —
   narrate the notice, never clear the flag yourself by editing the file.
-- `hello` exists for the SessionStart hook's own invocation (`session-queue.sh`); typing
-  `/spec:queue hello` by hand is legitimate but rare — prefer `next` or `list` for a session
-  check-in.
+- There is no session-start hook: the queue surfaces only when you invoke this command —
+  `next` or `list` is the session check-in.

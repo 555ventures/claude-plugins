@@ -16,9 +16,9 @@
 // What this deliberately does NOT do: reorder or render spec-status.js's `--next` output
 // itself; write a "done" flag onto a brief item (D4 — brief doneness is always derived
 // live from spec-status.js, never stored); keep a sidecar journal for manual ticks (D14 —
-// the tick stamps the item itself, in this file); seed or reconcile-insert from `list`/
-// `hello` (D7/D8 — those two subcommands are read-only and never write the queue file,
-// even when on-disk briefs have drifted since the last write subcommand ran).
+// the tick stamps the item itself, in this file); seed or reconcile-insert from `list`
+// (D7 — that subcommand is read-only and never writes the queue file, even when on-disk
+// briefs have drifted since the last write subcommand ran).
 //
 // Subcommands:
 //   next                          reconcile+write, print top undone item + notices
@@ -28,15 +28,13 @@
 //   defer <ref> [--after <ref2>]  move to end (or after ref2), clear auto_placed
 //   done <ref>                    manual tick: stamp ticked, clear auto_placed
 //   ok [<ref>]                    accept auto placement(s): clear flag, keep position
-//   hello                         hook mode: silent unless something to say (D8)
 // <ref> resolves against an id, a brief number, or a unique payload substring.
 // --when <type>:<args>: brief-state:NN:STATE · spec-exists:PATH · ledger-count:STAGE:MIN
 //   (baseline is auto-stamped from the CURRENT ledger count at add time, D5) · manual.
 //
 // Exit codes: 0 ok/nothing-to-say · 2 usage, unresolvable <ref>, or a corrupt queue file
 //   (remedy: spec-queue list; or remove .git/spec-queue.json and re-run spec-queue next to
-//   reseed) · 3 not a git repository (remedy: run inside the repo; hello exits 0 silently
-//   instead, per D8 — a SessionStart hook must never surface a session-start error).
+//   reseed) · 3 not a git repository (remedy: run inside the repo).
 
 const fs = require('fs')
 const path = require('path')
@@ -49,14 +47,14 @@ const {
 const SPEC_STATUS = path.join(__dirname, 'spec-status.js')
 
 function usage() {
-  console.error('usage: spec-queue.js <next|list|add|bump|defer|done|ok|hello> [args]')
+  console.error('usage: spec-queue.js <next|list|add|bump|defer|done|ok> [args]')
   console.error('  next | list')
   console.error('  add <payload…> [--brief NN] [--when <type>:<args>] [--top | --after <ref>]')
-  console.error('  bump <ref> | defer <ref> [--after <ref2>] | done <ref> | ok [<ref>] | hello')
+  console.error('  bump <ref> | defer <ref> [--after <ref2>] | done <ref> | ok [<ref>]')
 }
 
 const argv = process.argv.slice(2)
-const SUBS = ['next', 'list', 'add', 'bump', 'defer', 'done', 'ok', 'hello']
+const SUBS = ['next', 'list', 'add', 'bump', 'defer', 'done', 'ok']
 const sub = argv[0]
 if (!SUBS.includes(sub)) { usage(); process.exit(2) }
 const rest = argv.slice(1)
@@ -72,7 +70,6 @@ function resolveCommonDir(dir) {
 
 const common = resolveCommonDir(root)
 if (!common) {
-  if (sub === 'hello') process.exit(0) // D8: the hook must never surface a session-start error
   console.error('spec-queue: not a git repository — the queue lives in the git common directory (remedy: run inside a git repo)')
   process.exit(3)
 }
@@ -153,7 +150,7 @@ function onDiskBriefs(statusJson) {
 // Write-path reconcile (D6/D7): seed an absent file (non-done briefs only, roadmap order,
 // zero auto_placed, one summary line) or insert on-disk non-done briefs missing from an
 // existing file (auto_placed + a veto notice each). Every write subcommand calls this
-// before its own mutation; `list`/`hello` never do.
+// before its own mutation; `list` never does.
 function reconcileForWrite(statusJson) {
   const disk = onDiskBriefs(statusJson).filter(b => b.status !== 'done')
   let data = loadQueue()
@@ -234,18 +231,6 @@ function parseWhen(raw, ctx) {
 }
 
 switch (sub) {
-  case 'hello': {
-    if (!fs.existsSync(QUEUE_PATH)) process.exit(0) // D8: the hook never creates the file
-    const data = loadQueue()
-    const ctx = ctxFor(readSpecStatusJson())
-    const notices = data.items.filter(i => i.kind === 'brief' && i.auto_placed).map(i => autoPlacedNotice(data.items, i))
-    const top = topUndone(data.items, ctx)
-    if (!top && !notices.length) process.exit(0) // D8: nothing to say -> silent
-    if (top) printTopLine(top)
-    notices.forEach(n => console.log(n))
-    process.exit(0)
-  }
-
   case 'list': {
     const data = loadQueue()
     if (!data || !data.items.length) {

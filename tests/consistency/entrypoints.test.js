@@ -553,8 +553,9 @@ test('AC-20260820-04-1 / D11: every spec-paths key resolving under spec/scripts/
 })
 
 // Exhaustive live-file pin: every hooks.json addition updates the expected set here in place
-// (specs/20260823/08 added session-queue.sh — the recorded out-of-File-Plan collision class).
-test('AC-20260820-04-5 / D10 / hole2: parseHookScriptPaths extracts exactly the five live hooks.json script paths (repo-relative, /scripts/-rooted today), proving the parse-based oracle actually fires against the real file', () => {
+// (specs/20260823/08 added session-queue.sh — the recorded out-of-File-Plan collision class;
+// removed 2026-08-30 with the SessionStart queue hook, so the set is back to four).
+test('AC-20260820-04-5 / D10 / hole2: parseHookScriptPaths extracts exactly the four live hooks.json script paths (repo-relative, /scripts/-rooted today), proving the parse-based oracle actually fires against the real file', () => {
   const result = parseHookScriptPaths(ROOT)
   assert.strictEqual(result.ok, true,
     'the live spec/hooks/hooks.json must parse as valid JSON — a parse failure here would fail ' +
@@ -563,10 +564,9 @@ test('AC-20260820-04-5 / D10 / hole2: parseHookScriptPaths extracts exactly the 
     'spec/scripts/block-cross-worktree-writes.sh',
     'spec/scripts/genesis-state-gate.sh',
     'spec/scripts/question-style-gate.js',
-    'spec/scripts/session-queue.sh',
     'spec/scripts/spec-state-gate.sh'
   ],
-    'the parse-based extraction must yield exactly these five repo-relative paths from the live ' +
+    'the parse-based extraction must yield exactly these four repo-relative paths from the live ' +
     'file — this is the executed proof that the oracle change (not a widened regex) actually ' +
     'resolves the measured D10 defect (the old raw-bytes regex returned zero matches here), and ' +
     'that the hole2 path-based extraction (covering /workflows/ too) still returns the correct ' +

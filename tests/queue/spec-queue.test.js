@@ -277,7 +277,7 @@ test('AC-20260823-08-review-concurrent-writer-safety: N concurrent spec-queue in
     assert.doesNotThrow(() => { parsed = JSON.parse(raw) },
       `trial ${t}: ${CONCURRENCY} concurrent writers left spec-queue.json unparseable — writeQueue's temp-file+rename must guarantee a reader never observes a partial write: ${raw}`)
     assert.ok(parsed && Array.isArray(parsed.items) && typeof parsed.seq === 'number',
-      `trial ${t}: the queue file must still match the {version, seq, items} shape after concurrent writes, or every spec-queue subcommand and the SessionStart hook starts exiting 2: ${raw}`)
+      `trial ${t}: the queue file must still match the {version, seq, items} shape after concurrent writes, or every spec-queue subcommand starts exiting 2: ${raw}`)
     assert.strictEqual(parsed.items.length, CONCURRENCY,
       `trial ${t}: concurrent bumps must never drop or duplicate items — only reorder them (last-writer-safe, not last-writer-lossy): ${raw}`)
   }

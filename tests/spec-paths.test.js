@@ -56,8 +56,8 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 
 // specs/20260823/08-derived-session-queue.md D12 (spec/bin/spec-paths row): the new
 // spec-queue.js script needs a spec-paths key like every other bundled script — a missing key
-// breaks /spec:queue's invocation and the D8 SessionStart hook's `spec-queue.js hello` delegation
-// silently (§ Risk Tiers, spec-paths). D12 marks this row [no-ac]: it is enforced fail-closed by
+// breaks /spec:queue's invocation silently (the D8 SessionStart hook and its `hello` delegation
+// were removed 2026-08-30) (§ Risk Tiers, spec-paths). D12 marks this row [no-ac]: it is enforced fail-closed by
 // this existing suite guard (and by tests/consistency/{plugin-version,entrypoints,red-fixture-
 // coverage}.test.js), so it carries no AC-ID of its own — this is the seventh recurrence of the
 // spec-paths additive-collision class (JJ-20260814-01): the key list below is updated in place,
@@ -206,13 +206,13 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
     'doctrine source for "every 5th review" at all')
   // D12: /spec:queue's shared-for section list (Host Grounding|State Machine|Question Style|
   // Console Output Style) — a missing map entry means the command reads no doctrine at all for
-  // its predicate vocabulary (State Machine) or its hello/veto-notice wording conventions.
+  // its predicate vocabulary (State Machine) or its list/veto-notice wording conventions.
   assert.match(run('shared-for', 'queue'), /## State Machine/,
     'D12: /spec:queue must be served § State Machine — the queue\'s strict-sequence item semantics (D3) live there')
   assert.match(run('shared-for', 'queue'), /## Question Style/,
     'D12: /spec:queue must be served § Question Style — any AskUserQuestion it raises (e.g. an ambiguous <ref>) must follow the same doctrine as every other command')
   assert.match(run('shared-for', 'queue'), /## Console Output Style/,
-    'D12: /spec:queue must be served § Console Output Style — the list/hello glyph conventions (✅▶○🅰, veto/accept lines) must follow the shared narration doctrine')
+    'D12: /spec:queue must be served § Console Output Style — the list glyph conventions (✅▶○🅰, veto/accept lines) must follow the shared narration doctrine')
 })
 
 // AC-20260824-05-3: specs/20260824/05-design-doctrine-cut.md D4 renames the design shared-for

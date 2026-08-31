@@ -1,4 +1,4 @@
-# Deviations — 02-close-gate-rerun (tests layer)
+# Deviations — 02-close-gate-rerun
 
 - AC-20260830-02-5's File Plan row named `tests/spec-paths.test.js` as the version/changelog
   pin, conditional on "only if the pin actually lives here." Verified by grep: it does not —

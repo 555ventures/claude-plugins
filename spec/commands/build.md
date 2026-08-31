@@ -93,6 +93,11 @@ in parallel within the wave. Each worker prompt carries only:
   forced-but-unblocking departures to the deviations sidecar
   (`<spec path minus .md>.deviations.md`) as one `- ` bullet per departure, continuations
   indented — flush-left prose is invisible to the ledger count and refused at review close.
+  The sidecar is per-spec and shared by every worker in the build and by review's own fold:
+  its first writer creates it under a spec-scoped header only (`# Deviations — <spec slug>`),
+  never a layer or worker name — a layer-titled header reads to the next worker as another
+  run's log, and the misattributed provenance that invites is the one thing this file exists
+  to make legible.
 
 On a `blocked` return: resolve it against the spec's Rationale/Assumptions when the intent
 is clear; a genuine fork or scope change goes to the user via `AskUserQuestion` with the

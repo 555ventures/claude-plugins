@@ -3,7 +3,7 @@ name: reviewer-workflow-return-schema
 description: the raw reviewer workflow-return object's verdict field is only ever "CLEAN"|"REVIEWER_FAILED" — findings live separately in survivors, so "CLEAN" means "ran successfully" not "no findings"
 metadata:
   type: project
-  reviewed: 2026-08-27
+  reviewed: 2026-08-31
 ---
 
 **Corrected 2026-08-26 (review close, specs/20260826/01):** the citation below said "`spec/commands/review.md` (around the Phase 1 dispatch contract)". `/spec:review` is now driver-stepped and has no numbered phases — the same contract lives in its Rules bullet **Reviewer dispatch (the REVIEWER step)**. The schema itself is unchanged.

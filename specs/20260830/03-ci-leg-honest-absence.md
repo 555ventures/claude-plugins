@@ -1,6 +1,6 @@
 ---
 date: 2026-08-30
-status: implementing
+status: done
 diff_base: 1c0de02b6da33e35a6efe117157a1b0f8bc8526c
 tier: critical
 area: review-legs
@@ -171,6 +171,23 @@ only new vocabulary is `sha-unseen`, emitted only when there is real branch evid
 collision-free). Rejected: a `no-runs` label for "on origin but no runs" — it changes an
 existing pinned path for zero product gain. Fragile: the fallback doubles gh calls only in
 the sha-unseen state; steady-state pushed workflows pay nothing.
+
+**Waived 2026-08-31 (JJ) — `ac-matrix` uncovered-ac on AC-20260830-03-6.** The leg reported
+the AC as having zero hits across File Plan tests rows because its `[oracle: gate]` tag sits
+mid-sentence with trailing prose after it, so the bare-at-end oracle-tag parser never read it
+as a declaration. The AC's substance is met and was verified by hand at review time:
+`spec/.claude-plugin/plugin.json` is at 7.43.0 (≥ the AC's 7.40.0 floor) and its description's
+changelog line names the honest ci absence, with the existing version/changelog consistency
+tests as the oracle exactly as the AC intends. The AC text is unchanged from lock — the spec
+file's only diff hunk is the frontmatter `status`/`diff_base` bump — so this is a spec-wording
+shape, not a build defect. The immediately preceding spec (20260830/02) was waived on the
+identical `uncovered=1 oracle=0` shape.
+
+**Deviation folded at close (one-off — an existing recorded gotcha applied as written).** D6's
+literal version-bump target of 7.40.0 was stale by build time: 7.40.0–7.42.1 were taken by
+concurrent specs 01/02. The build landed 7.43.0 with the same changelog substance D6 calls for,
+per the host rules' standing `[host]` gotcha that a spec Decision naming a literal version-bump
+target is a target and not a pin. No new Gotchas entry — the class is already recorded there.
 
 ## Canonical Delta
 

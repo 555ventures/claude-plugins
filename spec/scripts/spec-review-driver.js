@@ -68,6 +68,24 @@
 // sidecar still exists on disk or while the last observation recorded a malformed line even after
 // deletion — prevention before loss, since same-commit fold forensics measured vacuous (A5).
 //
+// specs/20260830/02-close-gate-rerun.md (D1-D5, 2026-08-30, two salon-os host escapes): CLOSE
+// writes the canonical doc and folds Gotchas into the host's rules file AFTER review-legs.js's own
+// gate leg already ran over the diff, then commits — so the exact files CLOSE itself writes bypass
+// the host's deterministic rule enforcement. handleClosed() now runs the host's resolved
+// gateCommand (cwd = repoRoot, {testDirs}/{scopeDirs} resolved via lib/gate-resolve.js's
+// resolveGate() — the same derivation review-legs.js's gate leg uses) as its LAST refusal check,
+// after the deviations, gotchas-ratchet, and dirty-tree refusals, over the already-committed close
+// tree. A red gate refuses the mark (exit 2) naming the literal phrase "gate red at close", the
+// resolved command, its exit code, the last 40 lines of combined stdout+stderr, and the re-run
+// remedy; marks.closed is never set (a refused mark stays side-effect-free, the existing
+// invariant). An unresolvable gate (resolveGate returns {gate: null} — {testDirs} with no File
+// Plan test rows — or an unreadable host config) refuses the same way rather than silently
+// skipping the check, the vacuous-green class this spec exists to close. The child env has
+// NODE_TEST_CONTEXT scrubbed before spawning, exactly as review-legs.js's sh() and red-check.js
+// already do: this driver is itself invoked from inside `node --test` by its own tests, and a
+// nested `node --test` inheriting that var degrades to a silent child-protocol run (exit 0 over
+// failing tests), which would make this refusal vacuously green.
+//
 // CONTRACT:
 //   spec-review-driver <spec.md>                  -> print current state + ONLY that step
 //   spec-review-driver <spec.md> --mark <mark>    -> verify artifacts, record, print next step
@@ -96,8 +114,12 @@
 // recorded a malformed line even after the sidecar's own deletion (restore-then-repair remedy), a
 // resolved base ref that `git rev-parse --verify <ref>^{commit}` cannot turn into a commit —
 // resolveBaseSha() dies at startup, before the first manifest or leg, naming `diff_base` and the
-// remedy command (specs/20260824/06-review-range-identity.md D4, AC-12) — or `git rev-parse HEAD`
-// printing no parseable 40-hex sha at any of the three verdict passes).
+// remedy command (specs/20260824/06-review-range-identity.md D4, AC-12), `git rev-parse HEAD`
+// printing no parseable 40-hex sha at any of the three verdict passes, or `--mark closed`'s
+// close-time host-gate re-run over the committed close tree exiting non-zero (message names the
+// literal phrase "gate red at close", the resolved command, and the re-run remedy) or resolving to
+// no runnable gate at all (message names the unresolvable-gate reason and the remedy — never a
+// silent skip; specs/20260830/02-close-gate-rerun.md D1/D2/D4).
 
 'use strict'
 const fs = require('fs')
@@ -119,9 +141,15 @@ const { fmBlock, fmValue } = require('./lib/frontmatter')
 const { parseSelection } = require('./lib/parse-selection')
 // specs/20260824/01-render-gate.md D16: the REVIEWER step's printed text names the advisory
 // render-gate run when the host config declares design.render — text only, this driver never
-// runs the gate itself (review.md's own dispatch line does). readConfig degrades to {} on an
-// absent/unreadable config, which reads as "not declared" here, same as every other caller.
-const { readConfig } = require('./lib/host-config')
+// runs the render gate itself (review.md's own dispatch line does; the DESIGN render gate is a
+// distinct, advisory-only surface from the close-time host gateCommand re-run below). readConfig
+// degrades to {} on an absent/unreadable config, which reads as "not declared" here, same as
+// every other caller.
+const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
+// specs/20260830/02-close-gate-rerun.md D1/D3 (2026-08-30, salon-os field report): the close-time
+// host-gate re-run in handleClosed() shares the exact {testDirs}/{scopeDirs} resolution
+// review-legs.js's own gate leg uses — a second, paraphrased copy here would be a drift seam.
+const { resolveGate } = require('./lib/gate-resolve')
 
 // D1-D6 (specs/20260821/04-stopped-row-durability.md): a worktree review's RED_BLOCKING hard-stop
 // durably appends here, at the MAIN root, instead of the worktree's own (destructible)
@@ -968,6 +996,42 @@ function handleFixApplied() {
   return null
 }
 
+// ---- D1/D2/D4: close-time host-gate re-run (specs/20260830/02-close-gate-rerun.md) -------------
+// The gate re-run's LAST refusal check in handleClosed() — see this file's header comment for the
+// incident. Resolves the same {testDirs}/{scopeDirs} form review-legs.js's own gate leg resolves
+// (lib/gate-resolve.js's resolveGate(), D3), runs it with cwd = repoRoot, and refuses (exit 2,
+// side-effect-free — this runs before any mutation in handleClosed()) on either a non-zero exit or
+// an unresolvable gate. NODE_TEST_CONTEXT is scrubbed from the child env exactly as review-legs.js's
+// sh() already does: this driver is itself invoked from inside `node --test` by its own tests, and
+// a nested `node --test` inheriting that var degrades to a silent child-protocol run (exit 0 over
+// failing tests) — which would make this refusal vacuously green.
+function tailLines(text, n) {
+  const lines = text.split('\n')
+  if (lines.length && lines[lines.length - 1] === '') lines.pop()
+  return lines.slice(-n).join('\n')
+}
+function runCloseTimeGate() {
+  const gateConfig = readConfig(repoRoot)
+  const resolved = resolveGate(specText, gateConfig)
+  if (!resolved.gate) {
+    const reason = resolved.reason ||
+      ('no gateCommand declared in ' + CONFIG_RELPATH + ' under ' + repoRoot + ' (host config missing, unreadable, or unparsable)')
+    die('close-time host gate could not be resolved — ' + reason + ' — fix the host config / File ' +
+      'Plan, then re-run `node ' + __filename + ' ' + specPath + ' --mark closed`')
+  }
+  const env = { ...process.env }
+  delete env.NODE_TEST_CONTEXT
+  const r = runChild('bash', ['-c', resolved.gate], { cwd: repoRoot, encoding: 'utf8', env },
+    'close-time host gate (' + resolved.gate + ')')
+  if (r.status !== 0) {
+    const output = (r.stdout || '') + (r.stderr || '')
+    die('gate red at close — ' + resolved.gate + ' exited ' + r.status + ' over the committed ' +
+      'close tree.\nThe files written at CLOSE (canonical doc, rules fold) are inside the host\'s ' +
+      'rule surface; fix them, commit the fix, then re-run `node ' + __filename + ' ' + specPath +
+      ' --mark closed`.\n--- last 40 lines of gate output ---\n' + tailLines(output, 40))
+  }
+}
+
 function handleClosed() {
   if (status !== 'done') {
     die('spec status is not yet "done" — re-run the driver with no mark first so CLOSE\'s ' +
@@ -1010,6 +1074,10 @@ function handleClosed() {
       unexpected.join(', ') + ' — commit or clean them (never git add -A past an unadjudicated ' +
       'path), then re-run this mark')
   }
+  // D1: LAST refusal check — after deviations, gotchas-ratchet, and dirty-tree above — so the gate
+  // observes the exact committed close tree those checks just certified. die()s before any
+  // mutation; a refused mark is always side-effect-free.
+  runCloseTimeGate()
   marks.closed = true
   saveSidecar()
   return null
@@ -1458,14 +1526,16 @@ const STEPS = {
   // dirty-tree tolerance for these exact paths already accounts for both branches unchanged.
   CLOSE: () => {
     const inPlace = repoRoot === mainRoot
+    const gateRerunNote = `   Marking closed re-runs the host gate over the committed close tree — format the ` +
+      `files you wrote in steps 1-2 to the host's rules before committing, or the mark will refuse.\n`
     const closeCommitLine = inPlace
       ? `4. Commit everything still uncommitted on the working branch (never --no-verify) — this ` +
-        `is the close commit.\n`
+        `is the close commit.\n` + gateRerunNote
       : `4. Commit everything still uncommitted on the working branch EXCEPT ${sidecarRel}/, ` +
         `.claude/spec-runs.jsonl, and .claude/spec-runs/ (never --no-verify) — this review is ` +
         `running in a linked worktree (main root: ${mainRoot}), so the ledger and retained ` +
         `evidence are promoted there only once the merge lands, not committed from the worktree ` +
-        `now; this is the close commit.\n`
+        `now; this is the close commit.\n` + gateRerunNote
     return `## Step: close (the driver has already run the authoritative verdict and flipped status: done)\n` +
       `verdict: ${marks.dispositions.word}   runId: ${marks.closeRunId}   ` +
       `retained: .claude/spec-runs/${marks.closeRunId}.json\n` +

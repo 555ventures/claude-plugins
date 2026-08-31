@@ -498,6 +498,113 @@ test('AC-20260820-07-7: WHEN --mark closed is passed while the tree is dirty bey
   assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE', 'a refused closed mark must leave the state at CLOSE')
 })
 
+// specs/20260830/02-close-gate-rerun.md D1/D2/D4 (2026-08-30, salon-os field report): CLOSE
+// writes the canonical doc and folds Gotchas into the host's rules file AFTER the gate leg
+// already ran over the diff, then commits — so the exact files CLOSE itself writes bypass the
+// host's deterministic rule enforcement. `--mark closed` now re-runs the host's resolved
+// gateCommand (cwd = repoRoot) as its LAST refusal check, after the deviations/gotchas/dirty-tree
+// refusals, over the committed close tree. Both fixtures below simulate "the close commit itself
+// broke the gate" by editing the tree BETWEEN reaching CLOSE on a genuinely green legs run and
+// the session's own close commit — exactly where a real canonical-doc/rules-fold write would
+// land — never by starting the whole review on an already-broken gate, which would die before
+// REVIEWER (via review-legs.js's own gate leg) and never reach CLOSE at all. Both tests must fail
+// red today: handleClosed() has no gate-run refusal yet, so `--mark closed` exits 0 on both.
+
+test('AC-20260830-02-1: WHEN --mark closed is invoked with all earlier refusals passing and the resolved host gateCommand exits non-zero THE SYSTEM refuses the mark (exit 2), leaves marks.closed unset (state stays CLOSE), and prints a message naming "gate red at close", the resolved command, and the re-run remedy', () => {
+  const host = makeHost()
+  toReviewer(host)
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('rvdrv-gate1-clean', CLEAN_RETURN))
+  const dispR = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
+    'setup precondition: a clean zero-survivor disposition must reach CLOSE before the close-time gate refusal can be exercised: ' + dispR.stdout + dispR.stderr)
+
+  // Simulate the close commit itself breaking the gate (the salon-os mechanism): an always-red
+  // script the close-time gate now runs, written and committed alongside the spec's own
+  // status:done flip — exactly the class of files CLOSE writes, never a gate broken from the
+  // start (which would have died before REVIEWER instead).
+  fs.writeFileSync(path.join(host.root, 'always-red.sh'), '#!/usr/bin/env bash\necho ALWAYS_RED_MARKER\nexit 1\n')
+  const cfgPath = path.join(host.root, '.claude/spec.config.json')
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
+  cfg.gateCommand = 'bash always-red.sh'
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg))
+  const specRel = path.relative(host.root, host.spec)
+  execFileSync('git', ['-C', host.root, 'add', specRel, '.claude/spec.config.json', 'always-red.sh'], { encoding: 'utf8' })
+  execFileSync('git', ['-C', host.root, 'commit', '-q', '-m', 'close'], { encoding: 'utf8' })
+
+  const r = run(host.root, host.spec, '--mark', 'closed')
+  assert.strictEqual(r.status, 2,
+    'a resolved gateCommand exiting non-zero at close must refuse the mark — accepting it would let files CLOSE itself just wrote (here simulating the canonical doc / rules fold) ride the close commit unenforced, exactly the salon-os escape this spec exists to close: ' + r.stdout + r.stderr)
+  assert.ok(r.stderr.includes('gate red at close — bash always-red.sh exited 1'),
+    'D1/D2: stderr must carry the literal phrase "gate red at close" together with the resolved command and its exit code — the AC\'s own worked example pins this exact substring so a session grepping the refusal always finds the same anchor: ' + r.stderr)
+  assert.match(r.stderr, /last 40 lines of gate output/,
+    'D2: the refusal must label the tail-of-output block so the session knows what follows is the gate\'s own evidence, not driver prose: ' + r.stderr)
+  assert.match(r.stderr, /ALWAYS_RED_MARKER/,
+    'D2: the refusal must include the tail of the gate\'s actual output — omitting it leaves the session guessing why the gate failed instead of reading the evidence inline: ' + r.stderr)
+  assert.match(r.stderr, /re-run/i,
+    'D2: the refusal must name the remedy (fix the flagged files, commit the fix, re-run --mark closed) — an error path without its remedy command is a hard finding under this repo\'s own review rules: ' + r.stderr)
+  assert.match(r.stderr, /--mark closed/,
+    'D2: the remedy must literally name the re-run command `--mark closed` so the session can retry without re-deriving the mark: ' + r.stderr)
+
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
+    'a refused closed mark must leave marks.closed unset and state at CLOSE — advancing here would accept a review whose committed close tree the gate itself rejects: ' + r.stdout + r.stderr)
+})
+
+function specBodyNoTestFilePlanRow({ diffBase, acId }) {
+  return `---
+status: done
+tier: standard
+diff_base: ${diffBase}
+---
+# Driver Test Spec (no File Plan test rows)
+
+## Decisions
+
+| ID | Decision | One-line rationale |
+|----|----------|--------------------|
+| D1 | foo() returns 42 (${acId}) | why |
+
+## File Plan
+
+| File | Action | Layer |
+|---|---|---|
+| src/foo.js | edit | scripts |
+
+## Acceptance Criteria
+
+- **${acId}**: foo() returns 42.
+`
+}
+
+test('AC-20260830-02-4: WHEN --mark closed is invoked and gate resolution returns gate:null (gateCommand contains {testDirs}, the spec has no File Plan test rows) THE SYSTEM refuses the mark (exit 2), naming the unresolvable-gate reason and the remedy — never silently skips the check', () => {
+  const host = makeHost()
+  toReviewer(host)
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('rvdrv-gate4-clean', CLEAN_RETURN))
+  const dispR = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
+    'setup precondition: a clean zero-survivor disposition must reach CLOSE before the unresolvable-gate refusal can be exercised: ' + dispR.stdout + dispR.stderr)
+
+  // The close commit drops the spec's own File Plan test row while gateCommand still reads
+  // 'node --test {testDirs}' (unchanged) — resolution now has nothing to substitute. Per this
+  // spec's own Rationale, a real gate:null review leg is already a red row long before close in
+  // practice; this is the one reachable synthetic shape of D4's defense-in-depth branch.
+  const diffBase = /^diff_base:\s*(\S+)/m.exec(fs.readFileSync(host.spec, 'utf8'))[1]
+  fs.writeFileSync(host.spec, specBodyNoTestFilePlanRow({ diffBase, acId: 'AC-20260820-99-1' }))
+  const specRel = path.relative(host.root, host.spec)
+  execFileSync('git', ['-C', host.root, 'add', specRel], { encoding: 'utf8' })
+  execFileSync('git', ['-C', host.root, 'commit', '-q', '-m', 'close (drop File Plan test row)'], { encoding: 'utf8' })
+
+  const r = run(host.root, host.spec, '--mark', 'closed')
+  assert.strictEqual(r.status, 2,
+    'an unresolvable {testDirs} gate must refuse the mark exactly like a red gate — silently skipping the check here is the vacuous-green class this spec exists to close: ' + r.stdout + r.stderr)
+  assert.match(r.stderr, /no File Plan test rows/,
+    'D4: the refusal must name the unresolvable-gate reason "no File Plan test rows" (lib/gate-resolve.js\'s own reason string) so the session knows exactly why {testDirs} could not be substituted: ' + r.stderr)
+  assert.match(r.stderr, /--mark closed/,
+    'D4: the refusal must still name the re-run remedy (fix the File Plan, then re-run --mark closed) — an error path without its remedy is a hard finding under this repo\'s own review rules: ' + r.stderr)
+
+  assert.strictEqual(stateOf(host.root, host.spec), 'CLOSE',
+    'a refused closed mark must leave marks.closed unset and state at CLOSE — the driver must never silently treat an unresolvable gate as a pass: ' + r.stdout + r.stderr)
+})
+
 // specs/20260822/01-escalate-ledger-row.md D12 (2026-08-22): the cap refusal below is retagged
 // (never weakened) as a SHALL-CONTINUE-TO pin for AC-20260822-01-10 — that spec inserts a
 // writeEscalateRow() call ahead of this same die(), but the refusal itself (exit 2, iteration cap
@@ -660,13 +767,15 @@ test('AC-20260820-07-11: WHEN --state is passed THE SYSTEM prints the bare state
     '--state must print exactly the bare state name and nothing else — a caller scripting against this needs one clean token: ' + JSON.stringify(r.stdout))
 })
 
-test('AC-20260820-07-12 (also AC-20260821-04-9 and AC-20260823-07-6, SHALL CONTINUE TO): WHEN merge-strategy is marked from the main root in a two-branch fixture THE SYSTEM runs merge, cleanup, and verify — promoting the worktree\'s ledger and retained evidence into the main root (exact-line / filename dedup) and leaving the worktree clean for a plain `git worktree remove` — prints spec-status --next verbatim, and lands DONE; the same mark from inside the build worktree is refused with a relocate instruction (AC-20260823-07-6: this closed-success call, on a tree carrying no deviations sidecar, must keep succeeding once the deviations backstop lands)', () => {
+test('AC-20260820-07-12 (also AC-20260821-04-9, AC-20260823-07-6, and AC-20260830-02-2, SHALL CONTINUE TO): WHEN merge-strategy is marked from the main root in a two-branch fixture THE SYSTEM runs merge, cleanup, and verify — promoting the worktree\'s ledger and retained evidence into the main root (exact-line / filename dedup) and leaving the worktree clean for a plain `git worktree remove` — prints spec-status --next verbatim, and lands DONE; the same mark from inside the build worktree is refused with a relocate instruction (AC-20260823-07-6: this closed-success call, on a tree carrying no deviations sidecar, must keep succeeding once the deviations backstop lands; AC-20260830-02-2: the same closed-success call, now also running the close-time host-gate re-run over a green gateCommand "true", must keep succeeding and land MERGE, never refuse a genuinely green gate)', () => {
   const root = fs.realpathSync(tmpdir('rvdrv-merge'))
   const g = gitRepo(root)
   fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
   fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+  // AC-20260830-02-2: gateCommand "true" is the AC's own worked example of a genuinely green
+  // gate — the close-time gate re-run (D1) must observe it pass and never refuse this mark.
   fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({
-    gateCommand: 'node --test {testDirs}',
+    gateCommand: 'true',
     testCommand: 'node --test',
     runtime: { inert: 'plugin repo — nothing boots' },
     capabilities: { forge: 'none', skipReportPattern: 'none' },
@@ -702,8 +811,10 @@ test('AC-20260820-07-12 (also AC-20260821-04-9 and AC-20260823-07-6, SHALL CONTI
   gw('add', 'specs/20260820/99-drv-merge.md')
   gw('commit', '-q', '-m', 'close')
   const closeR = run(wt, spec, '--mark', 'closed')
-  assert.strictEqual(closeR.status, 0, 'setup: closed must succeed once the tree is clean apart from the sidecar: ' + closeR.stdout + closeR.stderr)
-  assert.strictEqual(stateOf(wt, spec), 'MERGE', 'setup: a closed spec must land state MERGE')
+  assert.strictEqual(closeR.status, 0,
+    'AC-20260830-02-2: closed must succeed once the tree is clean apart from the sidecar, INCLUDING the new close-time host-gate re-run over gateCommand "true" — a regression here means D1\'s gate check began refusing a genuinely green gate: ' + closeR.stdout + closeR.stderr)
+  assert.strictEqual(stateOf(wt, spec), 'MERGE',
+    'AC-20260830-02-2: a closed spec whose gate is green must land state MERGE, unchanged by the new close-time gate check')
 
   const refused = run(wt, spec, '--mark', 'merge-strategy', 'ff-only')
   assert.strictEqual(refused.status, 2,

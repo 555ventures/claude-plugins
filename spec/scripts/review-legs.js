@@ -82,7 +82,7 @@ const fs = require('fs')
 const path = require('path')
 const { spawn, spawnSync } = require('child_process')
 const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
-const { parseFilePlan, parseFilePlanRows } = require('./lib/file-plan')
+const { resolveGate } = require('./lib/gate-resolve')
 
 function usage() {
   console.error('usage: review-legs.js --root <dir> --spec <path> --base <ref> --manifest <path> [--skips <file>] [--fix-delta] [--out-dir <dir>]')
@@ -166,28 +166,6 @@ function sh(cmd, opts = {}) {
   })
 }
 
-// Gate resolution: {testDirs}/{scopeDirs} from the spec's File Plan test rows, glob form —
-// a bare directory does not run under `node --test` on Node 26 (JJ-20260815-04).
-function resolveGate(specText) {
-  let gate = config.gateCommand
-  if (!/\{testDirs\}|\{scopeDirs\}/.test(gate)) return { gate }
-  const layerTests = parseFilePlanRows(specText)
-    .filter(r => r.layer && /^tests?$/i.test(r.layer.trim())).flatMap(r => r.paths)
-  const heuristic = parseFilePlan(specText)
-    .filter(f => /(^|\/)tests?\//.test(f) || /\.(test|spec)\.[a-z]+$/.test(f))
-  const testFiles = [...new Set([...layerTests, ...heuristic])]
-  if (!testFiles.length) return { gate: null, reason: 'no File Plan test rows to resolve {testDirs}' }
-  const globs = new Set()
-  for (const f of testFiles) {
-    const dir = path.dirname(f)
-    const m = path.basename(f).match(/(\.[a-z]+)+$/i)
-    const suffix = /\.(test|spec)\./.test(f) ? '*.' + f.split('.').slice(-2).join('.') : (m ? '*' + m[0] : '*')
-    globs.add(`'${dir === '.' ? '' : dir + '/'}${suffix}'`)
-  }
-  const dirsStr = [...globs].join(' ')
-  return { gate: gate.replace(/\{testDirs\}/g, dirsStr).replace(/\{scopeDirs\}/g, [...new Set(testFiles.map(f => path.dirname(f)))].join(' ')) }
-}
-
 async function main() {
   let specText
   try { specText = fs.readFileSync(path.resolve(root, spec), 'utf8') } catch (e) {
@@ -229,7 +207,7 @@ async function main() {
     }))
   }
 
-  const resolved = resolveGate(specText)
+  const resolved = resolveGate(specText, config)
   if (resolved.gate) {
     wave1.push(sh(resolved.gate).then(r => {
       fs.writeFileSync(gateOutPath, r.out + r.err)

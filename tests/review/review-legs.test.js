@@ -132,7 +132,14 @@ test('AC-20260820-03-1: an unset declared testEnv var makes review-legs.js exit 
     'without reading .claude/spec.config.json itself: ' + r.stderr)
 })
 
-test('AC-20260820-03-2: a green synthetic host produces every required leg row, resolves {testDirs} to the glob form, and exits 0', () => {
+// specs/20260830/02-close-gate-rerun.md D3 (2026-08-30): resolveGate() moves out of this script
+// into spec/scripts/lib/gate-resolve.js (resolveGate(specText, config)), imported here byte-
+// identically — one derivation of {testDirs}/{scopeDirs} substitution shared with the driver's
+// new close-time gate re-run. This test drives the real review-legs.js binary end-to-end and
+// already asserts the gate leg executes the resolved glob form and exits 0 (the JJ-20260815-04
+// bare-directory class), so it is the extraction's own regression pin — tagged in place below,
+// never duplicated, never weakened.
+test('AC-20260820-03-2 (also AC-20260830-02-3, SHALL CONTINUE TO): a green synthetic host produces every required leg row, resolves {testDirs} to the glob form via lib/gate-resolve.js\'s resolveGate(), and exits 0', () => {
   const { dir, base } = makeHost({ testBody: GREEN_TEST })
   const { r, byLeg } = run(dir, base)
   for (const leg of ['gate', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk', 'promise-sweep']) {

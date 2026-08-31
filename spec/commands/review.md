@@ -181,8 +181,8 @@ Run `node "$(spec-paths report-render)" --slots <file>` and print its output ver
   because review ran on the originating branch — the driver runs the replay harness's own
   dueness and selection checks itself and either lands `DONE` (not due, or nothing selectable,
   printing the harness's line verbatim) or prints the REPLAY execution step. When it prints
-  that step, execute `spec/commands/replay.md`'s **Phases 1–5** in this session — mutation
-  authoring worker, blind reviewer dispatch, score, record, teardown — with the `--select`
+  that step, execute `spec/commands/replay.md`'s **Phases 1–5** in this session — in-session
+  mutation authoring, blind reviewer dispatch, score, record, teardown — with the `--select`
   values the driver inlined (spec, reviewRunId, commit, parent, diffBase); Phase 0 is the
   driver's own entry work and is never repeated. Those phases live in `replay.md` alone —
   never restate them here. The ambiguous-score adjudication (`AskUserQuestion`) happens in this

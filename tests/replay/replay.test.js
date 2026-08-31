@@ -1064,7 +1064,7 @@ test('AC-20260819-03-14: --apply --patch-out writes unquoted +++ b/<path> header
   execFileSync('git', ['-C', root, 'commit', '-q', '-m', 'add ' + nonAsciiName])
   const baseSha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
 
-  // replay.md captures the worker's raw edit with D9's OWN pinned flags (its stated companion
+  // replay.md captures the raw authoring edit with D9's OWN pinned flags (its stated companion
   // mechanism, not this test's concern) — building the --patch input the same way isolates AC-14's
   // actual claim, which is about --apply's OWN re-emission to --patch-out from HEAD^..HEAD.
   const scratch = path.join(fs.realpathSync(tmpdir('replay-apply-hostile-scratch')), 'scratch')
@@ -1829,7 +1829,7 @@ test('AC-20260819-02-9: the shipped corpus file carries all 6 Contracts class id
     const section = src.slice(start, end)
     assert.match(section, /recipe/i,
       `D11: class "${id}"'s section must carry a recipe — a class with no recipe gives the mutation-` +
-      `authoring worker nothing to follow when /spec:replay picks this class: section began ` +
+      `authoring session nothing to follow when /spec:replay picks this class: section began ` +
       `${JSON.stringify(section.slice(0, 200))}`)
   }
 })
@@ -1867,15 +1867,19 @@ test('AC-20260819-02-11: spec-status.js SHALL CONTINUE TO exit 0 with zero anoma
 // (F1/F2/F3/F4) also left two doctrine gaps in replay.md's Phase 1. D4 — `git checkout -- .`
 // cannot remove files setupCommand *creates* (that run's own first-run stray root
 // package-lock.json), so the setup gate needs `git clean -fd` after the restore. D5 — the
-// mutation worker's Edit/Write into `{dir}` now passes the cross-worktree write guard via the
+// authoring Edit/Write into `{dir}` now passes the cross-worktree write guard via the
 // `scratch-worktree` marker allow (spec 20260820/02's own D1/D2, marker renamed by specs/20260826/01
 // D3, pinned in tests/worktree-hook.test.js); replay.md must say so, and say that reaching for Bash instead
-// (the actual 2026-08-20 incident shape) is a contract violation, not an improvisation.
-test('AC-20260820-02-6: replay.md\'s Phase 1 setup gate appends "git -C {dir} clean -fd" after the checkout restore, and the worker-dispatch step states the marker-guard write path with Bash-as-violation', () => {
+// (the actual 2026-08-20 incident shape) is a contract violation, not an improvisation. Amended
+// 2026-08-31: the mutation is authored in-session (the worker dispatch was refused by hosts'
+// unattended permission layer — salon-os, three refusals — and delegation carries no blindness
+// value), so the step is now "Author the mutation (D2)"; the guard/marker/Bash contract binds
+// the session's own writes identically.
+test('AC-20260820-02-6: replay.md\'s Phase 1 setup gate appends "git -C {dir} clean -fd" after the checkout restore, and the mutation-authoring step states the marker-guard write path with Bash-as-violation', () => {
   const replayMdPath = path.join(SPEC, 'commands/replay.md')
   assert.ok(fs.existsSync(replayMdPath),
     'D4/D5: spec/commands/replay.md must exist — it is the doctrine file both Decisions amend; a missing ' +
-    'file fails this structural check once instead of leaving the setup-gate and worker-dispatch claims ' +
+    'file fails this structural check once instead of leaving the setup-gate and authoring-step claims ' +
     'silently unverifiable: ' + replayMdPath)
   const src = read('spec/commands/replay.md')
 
@@ -1911,11 +1915,11 @@ test('AC-20260820-02-6: replay.md\'s Phase 1 setup gate appends "git -C {dir} cl
     'reintroduce nothing new, but the ORDER is what the Decision pins, not just co-presence: ' +
     JSON.stringify(setupGateMatch[1]))
 
-  // D5: scope the sanctioned-write assertion to the WORKER DISPATCH step specifically (step 4,
+  // D5: scope the sanctioned-write assertion to the AUTHORING step specifically (step 4,
   // up to step 5's capture-and-apply heading).
-  const dispatchMatch = phase1.match(/4\.\s+\*\*Dispatch the mutation-authoring worker \(D2\):\*\*([\s\S]*?)5\.\s+\*\*Capture and apply \(D9\):\*\*/)
+  const dispatchMatch = phase1.match(/4\.\s+\*\*Author the mutation \(D2\):\*\*([\s\S]*?)5\.\s+\*\*Capture and apply \(D9\):\*\*/)
   assert.ok(dispatchMatch,
-    'sanity: step 4, "**Dispatch the mutation-authoring worker (D2):**", must exist between step 3 (Pick a ' +
+    'sanity: step 4, "**Author the mutation (D2):**", must exist between step 3 (Pick a ' +
     'corpus class) and step 5 (Capture and apply) — if this step\'s heading moved or was reworded, the ' +
     'sanctioned-write assertions below are scoped to the wrong text')
   const dispatchNormalized = dispatchMatch[1].replace(/\s+/g, ' ')
@@ -1925,20 +1929,20 @@ test('AC-20260820-02-6: replay.md\'s Phase 1 setup gate appends "git -C {dir} cl
   // splitting D5's sentence across two template fragments or two markdown lines must still pass,
   // since whitespace is already normalized above.
   assert.match(dispatchNormalized, /write guard/i,
-    'D5: the worker-dispatch step must name the cross-worktree WRITE GUARD the worker\'s Edit/Write now passes ' +
-    '— omitting this leaves no doctrine trail explaining why the worker no longer needs Bash to write into ' +
+    'D5: the authoring step must name the cross-worktree WRITE GUARD the session\'s Edit/Write passes ' +
+    '— omitting this leaves no doctrine trail explaining why authoring never needs Bash to write into ' +
     '{dir}: ' + JSON.stringify(dispatchMatch[1]))
   assert.match(dispatchNormalized, /marker/i,
-    'D5: the worker-dispatch step must name the MARKER as the mechanism the write guard passes through — ' +
+    'D5: the authoring step must name the MARKER as the mechanism the write guard passes through — ' +
     'naming a guard with no marker mention leaves the sanctioned path unspecified, which is exactly what let ' +
-    'the 2026-08-20 worker improvise a Bash tunnel instead: ' + JSON.stringify(dispatchMatch[1]))
+    'the 2026-08-20 authoring attempt improvise a Bash tunnel instead: ' + JSON.stringify(dispatchMatch[1]))
   assert.match(dispatchNormalized, /\bBash\b/,
-    'D5: the worker-dispatch step must name BASH specifically as the disallowed path — the 2026-08-20 ' +
-    'incident\'s actual shape was a worker reaching for Bash once Edit/Write was blocked, so the sentence ' +
+    'D5: the authoring step must name BASH specifically as the disallowed path — the 2026-08-20 ' +
+    'incident\'s actual shape was reaching for Bash once Edit/Write was blocked, so the sentence ' +
     'must name that exact escape route, not just gesture at "other tools": ' + JSON.stringify(dispatchMatch[1]))
   assert.match(dispatchNormalized, /contract violation|failed authoring attempt/i,
-    'D5: the worker-dispatch step must state that mutating files through Bash is a CONTRACT VIOLATION treated ' +
-    'as a failed authoring attempt — naming Bash without saying what happens when a worker reaches for it ' +
+    'D5: the authoring step must state that mutating files through Bash is a CONTRACT VIOLATION treated ' +
+    'as a failed authoring attempt — naming Bash without saying what happens when authoring reaches for it ' +
     'anyway leaves the 2026-08-20 bypass shape just as easy to repeat next time: ' + JSON.stringify(dispatchMatch[1]))
 })
 
@@ -1981,7 +1985,7 @@ test('AC-20260823-09-9: replay.md\'s Phase 1 step 7 re-keys red-leg attribution 
     JSON.stringify(step7Match[0]))
   assert.match(step7, /file[- ]plan/i,
     'D4: the reconcile exemption must be grounded in File-Plan confinement (the mutation is File-Plan-' +
-    'confined by step 4\'s worker contract, so reconcile redness — definitionally about out-of-plan paths — ' +
+    'confined by step 4\'s authoring contract, so reconcile redness — definitionally about out-of-plan paths — ' +
     'can never be mutation-caused) — omitting the ground leaves the exemption unexplained doctrine, easy to ' +
     'drop at the next edit: ' + JSON.stringify(step7Match[0]))
   assert.match(step7, /AskUserQuestion/,

@@ -44,6 +44,16 @@ one-reviewer bet falsifiable.
 | D13 | review.md's CLEAN close report gains a `warns` slot line when `replay.js --due` exits 0 (`🧪 reviewer replay due — run /spec:replay`) — advisory, never blocking [no-ac: doctrine choreography, same sanction as D10] | The deterministic reminder that makes "scheduled" real without a scheduler; blocking a CLEAN on a measurement chore would invert priorities |
 | D14 | spec-paths: keys `replay` + `replay-corpus`, usage line updated, `shared-for replay` = Host Grounding, Tiers, Model Placement, Decisions, Question Style, Console Output Style, Feedback Loop (AC-20260819-02-10) | New-surface checklist (Planning rules); Feedback Loop is where the cadence policy lives, so the command must be served it |
 
+**Amended 2026-08-31** (direct fix, spec plugin 7.44.0): D10's "a Sonnet worker authors the
+mutation patch" is superseded — the orchestrating session now authors the mutation itself
+(replay.md Phase 1 step 4, Edit/Write into `{dir}`). A dispatched authoring agent was refused
+by hosts' unattended permission layer (salon-os 2026-08-31, three refusals; same layer as the
+2026-08-23 /private/tmp Edit/Write denial), and the delegation carried no measurement value:
+blindness is a property of the Phase 2 reviewer dispatch, never of who wrote the patch. D10's
+rationale ("mutation authoring is model work, so it lives in the command, not the script")
+survives unchanged — the amendment moves the model work in-session, not into `replay.js`.
+Everything else in D10 (blind reviewer contract, retry, score/record/teardown) stands.
+
 ## File Plan
 
 | Path | Action | Layer | Summary |

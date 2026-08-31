@@ -6,7 +6,7 @@ description: The mutation-replay corpus — 6 hand-authored defect classes /spec
 
 `/spec:replay` (specs/20260819/02-mutation-replay.md, D11) injects one class from this file
 into a just-CLEANed spec's tree per run. Each class below is an id `replay.js --record --class`
-values must match verbatim, a **recipe** the mutation-authoring worker follows to produce a
+values must match verbatim, a **recipe** the authoring session follows to produce a
 concrete patch, a **leg-invisibility requirement** — the property the recipe must hold so the
 mutation reaches the reviewer instead of dying on a red leg — and a **worked example** showing
 the shape in miniature. Every recipe binds two things without exception: the mutation sits

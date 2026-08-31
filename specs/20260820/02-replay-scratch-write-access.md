@@ -99,6 +99,10 @@ under a `/worktrees/<name>/` segment belongs to the main checkout itself.
 - The bypass incident's other half (worker behavior) is closed by contract, not tooling: with
   Edit/Write passing, the worker has no reason to reach for Bash, and D5 makes doing so a
   failed attempt rather than an improvisation.
+- **Amended 2026-08-31** (direct fix, spec plugin 7.44.0): the mutation is now authored by the
+  orchestrating session, not a dispatched worker (see specs/20260819/02's same-day amendment) —
+  D5's guard/marker/Bash contract binds the session's own Edit/Write into `{dir}` identically,
+  and AC-20260820-02-6's pin is rescoped to the renamed "Author the mutation (D2)" step.
 - Threat model, stated plainly (D8): this is guard self-consistency, not a new security
   boundary. Anyone with Bash can still `touch` a marker anywhere — but that route is flagged by
   the harness as an Auto-Mode Bypass, and the Write/Edit route was silent. A PreToolUse guard

@@ -835,7 +835,7 @@ function countReplayRowsFor(reviewRunId) {
 function replayStepBody(t) {
   return `## Step: run the due reviewer replay\n` +
     `The replay window is due and the harness selected a target. Execute ` +
-    `spec/commands/replay.md's Phases 1-5 in THIS session — mutation-authoring worker, blind ` +
+    `spec/commands/replay.md's Phases 1-5 in THIS session — in-session mutation authoring, blind ` +
     `reviewer dispatch, score, record, teardown. Phase 0 is this driver's own entry work above ` +
     `and is never repeated.\n` +
     `  spec:        ${t.spec}\n` +

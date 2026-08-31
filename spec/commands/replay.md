@@ -23,9 +23,9 @@ unchanged here.
 `.claude/spec.config.json` and its `pipelineRules` file. Either missing → STOP: run
 `/spec:init` first.
 
-**Intended model: Sonnet.** Orchestration is mechanical: run the harness's deterministic modes,
-dispatch one mutation-authoring worker and one blind reviewer, adjudicate at most one ambiguous
-score.
+**Intended model: Sonnet** — and the placement covers mutation authoring itself, not just
+orchestration: run the harness's deterministic modes, author one mutation in-session, dispatch
+one blind reviewer, adjudicate at most one ambiguous score.
 
 ## Input
 
@@ -84,26 +84,30 @@ asked.
    over time rather than by whichever one a session happens to reach for. Read
    `spec-paths replay-corpus` and extract that class's own section (id, recipe, leg-invisibility
    requirement, worked example).
-4. **Dispatch the mutation-authoring worker (D2):** one `Agent {model: "sonnet"}` carrying only
-   the selected class's section text, `{dir}`, and the selected spec's File Plan file list (Read
-   from the spec at `{dir}/{spec path}`). It edits the File Plan files the selected class's
-   recipe requires inside `{dir}` directly (Edit/Write only — the worker never runs git, per
-   Worker Git Ban) — one File Plan file for every class except `self-consistent-polarity`, whose
-   recipe binds a matched guard-and-assertion pair that spans whichever File Plan files its two
-   sites actually live in: two files on a stack that keeps tests apart from code, or one file on
-   a stack that co-locates them (Rust `#[cfg(test)] mod tests`, Elixir, doctests) — and returns
-   the edited path(s), no line number; D9's canonical patch carries the positions. Its Edit/Write
+4. **Author the mutation (D2):** this session writes the mutation itself — Edit/Write into the
+   File Plan files the selected class's recipe requires inside `{dir}`, guided only by the
+   selected class's section text and the selected spec's File Plan file list (Read from the spec
+   at `{dir}/{spec path}`). No authoring agent is dispatched: blindness is a property of Phase
+   2's reviewer dispatch, never of who wrote the patch, and a dispatch whose prompt describes
+   authoring a defect is exactly what a host's unattended permission layer may refuse (salon-os
+   2026-08-31, three refusals; the /private/tmp Edit/Write denial of 2026-08-23 was the same
+   layer one level down). One File Plan file for every class except `self-consistent-polarity`,
+   whose recipe binds a matched guard-and-assertion pair that spans whichever File Plan files its
+   two sites actually live in: two files on a stack that keeps tests apart from code, or one file
+   on a stack that co-locates them (Rust `#[cfg(test)] mod tests`, Elixir, doctests). Note no
+   line numbers anywhere; D9's canonical patch carries the positions. The session's Edit/Write
    into `{dir}` passes the cross-worktree write guard via the `scratch-worktree` marker allow
    (`block-cross-worktree-writes.sh`); mutating files through Bash instead remains a contract
-   violation, treated as a failed authoring attempt rather than an improvisation. A worker that
-   cannot find a File-Plan-scoped site satisfying the recipe returns `blocked` naming why; pick a
-   different class and retry once before escalating to the user.
-5. **Capture and apply (D9):** capture the worker's raw edit with the same pinned flags D9's
+   violation, treated as a failed authoring attempt rather than an improvisation, and git stays
+   out of authoring entirely — the first git the mutation meets is step 5's pinned capture. No
+   File-Plan-scoped site satisfying the recipe → note why, pick a different class, and retry
+   once before escalating to the user.
+5. **Capture and apply (D9):** capture the raw authoring edit with the same pinned flags D9's
    re-emission uses —
    `git -C {dir} -c core.quotePath=off -c diff.noprefix=false -c diff.mnemonicPrefix=false
    -c diff.srcPrefix=a/ -c diff.dstPrefix=b/ diff --no-ext-diff --no-color > {patchFile}` —
    then `git -C {dir} checkout -- .` to return the worktree to clean (the mutation must be
-   applied fresh through the harness, not left as the worker's raw edit — AC-20260819-02-4's own
+   applied fresh through the harness, not left as the raw session edit — AC-20260819-02-4's own
    fixture pattern; the retry in step 7 repeats this same pinned capture). Run
    `node "$(spec-paths replay)" --apply --dir {dir} --patch {patchFile} --patch-out {patchOutFile}
    --class {classId} --subject "{subject}"`, where `{patchOutFile}` is a fresh `mktemp` path
@@ -123,7 +127,7 @@ asked.
    `L` in the manifest, attribute it against `{baselineRed}`/`{baselineLegs}` (step 2's tokens)
    in this order:
    1. `L == reconcile` → explained. This is a deterministic exemption, not a judgment call: the
-      mutation is File-Plan-confined by step 4's worker contract, and reconcile redness is
+      mutation is File-Plan-confined by step 4's authoring contract, and reconcile redness is
       definitionally about a path *outside* the File Plan — so it can never be mutation-caused.
       (A canonical patch that names an out-of-plan file is a failed authoring attempt under step
       4's existing rule; this exemption never applies to that case — that failure is handled
@@ -134,8 +138,8 @@ asked.
       is red now, so the mutation is the suspect — either the class catching itself (leg-caught)
       or an authoring miss on a class the corpus promises stays leg-invisible. Tear the worktree
       down (`--teardown --dir {dir}`), `--setup` a fresh one at the same `{parent}`, and
-      re-dispatch the mutation-authoring worker **once** for the same class, telling it which leg
-      the first attempt tripped and to pick a different site inside the recipe. Re-run steps 5–6.
+      re-author the mutation **once** for the same class, avoiding the site whose edit tripped
+      the leg — a different site inside the same recipe. Re-run steps 5–6.
       If legs are STILL red after the retry, this run's outcome is `leg-caught` — skip Phase 2
       (the reviewer is never dispatched) and go straight to Phase 3 with `--legs red:<leg>` (the
       newly-red meaning, never the baseline-red one).
@@ -167,7 +171,7 @@ tipped-off reviewer measures nothing (D10's rationale).
 ## Phase 3 — Score
 
 1. Run `node "$(spec-paths replay)" --score --workflow {workflowReturnFile}
-   --patch {patchOutFile}` (D1: the mutation's own hunk positions, never a worker-reported
+   --patch {patchOutFile}` (D1: the mutation's own hunk positions, never a remembered
    line — `{patchOutFile}` is `--apply`'s canonical re-emission, never `{patchFile}`) →
    `caught` / `ambiguous` / `missed`. Exit 2 covers two distinct unusable-input cases: the
    reviewer return wasn't `verdict: CLEAN` with a `survivors` array (re-dispatch Phase 2's
@@ -258,9 +262,10 @@ Next: {spec-status --next, verbatim}
   otherwise resolve the repo from the current directory, so a relocated shell writes the
   measurement row into the scratch worktree and loses it at teardown (observed 2026-08-27,
   review of specs/20260827/01).
-- **Mutation authoring is model work; scoring and recording are not.** The worker picks the site
-  and writes the patch; every other step is a deterministic `replay.js` mode — the orchestrating
-  session never hand-derives due/select/score/record itself.
+- **Mutation authoring is model work; scoring and recording are not.** The session picks the
+  site and writes the patch itself (step 4 — never a dispatched agent, never a scripted
+  transform: site selection is semantic); every other step is a deterministic `replay.js` mode —
+  the session never hand-derives due/select/score/record itself.
 - `--teardown` always runs, on every exit path (missed, caught, leg-caught, or an
   `AskUserQuestion` dismissal) — a leaked scratch worktree is a defect even when the run stops
   early.

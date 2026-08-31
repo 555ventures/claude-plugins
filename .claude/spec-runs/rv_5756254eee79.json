@@ -1,0 +1,105 @@
+{
+  "runId": "rv_5756254eee79",
+  "ts": "2026-08-31T05:31:03.684Z",
+  "spec": "specs/20260830/02-close-gate-rerun.md",
+  "tier": "standard",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 2,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 532,
+    "base": "0a7f8efb359ef71b09543369f67ebd0046602b47",
+    "head": "276b69b3e0708162d680b306b4d33d4ec3267796",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 3,
+      "observed": {
+        "outOfPlan": 1,
+        "files": [
+          "spec/commands/build.md"
+        ]
+      }
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      }
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 353
+      }
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": {
+        "matches": 10
+      }
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": {
+        "files": 12,
+        "testsExecuted": 101
+      }
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      }
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 1,
+      "observed": {
+        "uncovered": 1,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 6,
+        "carried": 6,
+        "sanctioned": 0,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [],
+    "reviewerCount": 1,
+    "scope": "full",
+    "tokens": 0
+  }
+}

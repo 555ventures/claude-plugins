@@ -1,6 +1,6 @@
 ---
 date: 2026-08-30
-status: implementing
+status: done
 diff_base: 0a7f8efb359ef71b09543369f67ebd0046602b47
 tier: standard
 area: review-close
@@ -112,9 +112,10 @@ host's own definition of "enforced", and close is once per spec.
   tests/review/review-driver.test.js
 - **AC-20260830-02-5**: WHEN this spec lands THE SYSTEM SHALL carry a
   `spec/.claude-plugin/plugin.json` version ≥ 7.39.0 whose description's changelog line
-  names the close-gate re-run `[oracle: gate]` — the repo's existing
-  version/changelog-shape consistency tests are the honest oracle; a new duplicate pin
-  would be a second derivation
+  names the close-gate re-run — no manifest leg that runs in every scope executes the
+  pinning test, so this AC carries no `[oracle:]` declaration and is waived at review with
+  its executed evidence recorded in Rationale (2026-08-30); a new duplicate pin would be a
+  second derivation
 
 ## Assumptions (escalation triggers)
 
@@ -156,6 +157,57 @@ fixture-repair rows; `tests/frontmatter/frontmatter.test.js` and
 `tests/review/escalate-row.test.js` execute the driver but never reach the closed mark —
 waived; review-legs `executes` hits are unaffected by a byte-identical extraction (AC-3 is
 the pin). `likely`/`mentions` hits owe nothing (measured 2026-08-24, host § Gotchas).
+
+Review dispositions (2026-08-30, both waived by JJ; reviewer returned CLEAN with zero
+survivors). **`ac-matrix` uncovered-ac on AC-20260830-02-5** — waived. The AC's authored
+`[oracle: gate]` was unparseable (mid-bullet and backticked; the tag grammar accepts only the
+declaration slot or a bare trailing run) and, had it parsed, substantively false: the `gate`
+leg resolves `{testDirs}` from File Plan test rows (`tests/review/*`, `tests/spec-paths.test.js`)
+and never executes `tests/consistency/plugin-version.test.js`. That test DID execute green in
+this review — manifest-1's `at-risk` leg, exit 0, 101 tests over 12 files, pulled in because the
+diff touches `spec/.claude-plugin/plugin.json` (see `legs-1/reconcile.json` atRisk refs) — and
+the AC's substance is satisfied on disk: version 7.42.1, description carrying the 7.42.0
+changelog line naming the close-gate re-run. No honest `[oracle:]` tag is writable: `at-risk`
+writes no manifest row under `--fix-delta` (`review-legs.js` wave 2 is gated on `!fixDelta`;
+`verdict.js` excludes `reconcile`/`at-risk` from fix-delta's required legs), so declaring it
+would be the coverage-laundering route the template's oracle clause names — a tag whose leg can be
+absent. Rejected alternatives: citing `plugin-version.test.js` from a new File Plan row (it
+asserts changelog shape, not this AC's version floor or its close-gate wording, and adding the
+row would re-resolve `gateCommand`'s `{testDirs}` mid-review), and authoring a dedicated pin
+(the changelog is a rolling three-entry window; the pin reddens by design at ~7.45). The dead
+`[oracle: gate]` text was struck from the AC bullet so it cannot be misread as a live
+declaration or copied as a pattern; the AC stays honestly uncovered.
+**`reconcile` out-of-plan `spec/commands/build.md`** — waived: attribution, not exemption. The
+file belongs to commit `276b69b` ("deviations sidecar carries a spec-scoped header"), separate
+direct doctrine work landed on this branch ~1h after this spec's build commit `171db6e`. That
+commit's full footprint is three files, only one of which reconcile could see: `spec/commands/build.md`
+(out-of-plan, flagged), `spec/.claude-plugin/plugin.json` (7.42.0 → 7.42.1, invisible inside an
+in-plan File Plan row), and this spec's own deviations sidecar (header line only — inert to the
+`^- ` entry count and to `observeDeviations()`'s grammar). The blind reviewer's diff base
+`0a7f8ef` covered `276b69b`'s content and returned CLEAN, so the work is reviewed; the waiver
+records that it is not this spec's promise.
+
+Deviations fold (2026-08-30, sidecar deleted at close; all three one-offs, no new Gotchas
+entry — the section was at its 15-entry cap at verdict and the third deviation is already
+covered by the standing `[host]` concurrent-session semver entry). **(1) The AC-5 pin does not
+live where the File Plan guessed.** That row named `tests/spec-paths.test.js` conditionally
+("only if the pin actually lives here"); grep showed it does not — that file never reads
+`plugin.json`. The generic pins in `tests/consistency/plugin-version.test.js` (semver shape,
+monotonic bump past a floor, changelog-run shape) already validate whatever paragraph the build
+writes, so no test was edited, exactly as the AC's own "a new duplicate pin would be a second
+derivation" clause directs. This is the same fact the ac-matrix waiver above adjudicates.
+**(2) The three fixture-repair rows turned out unnecessary.** The File Plan pre-emptively
+assigned `deviations-backstop`, `merge-reentry`, and `stopped-row-durability` a green
+`gateCommand` so D1's new close-time re-run could not redden them. Reading every host builder
+showed each already sets `gateCommand: 'node --test {testDirs}'` against a File Plan test row
+that genuinely passes; fixtures using `gateFails: true` stop at STOPPED and never reach
+`--mark closed` at all. Since the same command must already have exited 0 for the run to reach
+REVIEWER, and the tree is unchanged between that leg and the close mark, the re-run is a
+deterministic repeat against an unchanged tree. No edit was made to any of the three; the whole
+suite stayed green. **(3) D6's literal 7.39.0 target was stale by build time** — HEAD was
+already at 7.41.0 (concurrent-session semver race, this repo's own `[host]` Gotcha: the spec's
+number is a target, not a pin). Bumped to the next free version, 7.42.0, dropping the oldest
+changelog entry so the run stays at exactly three.
 
 ## Canonical Delta
 

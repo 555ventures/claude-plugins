@@ -484,6 +484,10 @@ function writeTarget(hostRoot, t) {
 // init.md's locked prose (A5). Each entry carries a representative descendant path to probe.
 const IGNORE_ENTRIES = [
   { line: '.claude/worktrees/', sample: '.claude/worktrees/x' },
+  // spec-review-driver.js keeps its re-entry sidecar at specs/<date>/<spec>.review/ for the whole
+  // run (deleted only at DONE) — unignored, a host gate that sweeps the whole tree reds on the
+  // pipeline's own scratch before a reviewer dispatches (hearwell 2026-08-31, prettier --check).
+  { line: 'specs/**/*.review/', sample: 'specs/20260101/01-x.review/review-state.json' },
 ]
 
 function ensureGitignore(hostRoot) {

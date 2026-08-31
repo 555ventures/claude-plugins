@@ -28,7 +28,11 @@
 //                  {"unavailable":"gate-unresolvable","detail":"<reason>"}, exit 1
 //   smoke          {"leg":"smoke","exit":<code>,"observed":{"result":"pass"|"inert"|"fail"}}
 //   ci             {"leg":"ci","exit":<0|1>,"observed":{"conclusion":"<v>"}|{"status":"in-progress"}|
-//                  {"unavailable":"no-adapter"|"transient"}}
+//                  {"unavailable":"no-adapter"|"transient"}|{"unavailable":"sha-unseen","branch":"<v>",
+//                  "branchConclusion":"<v>"}} — the sha-unseen alternative is always exit 0, even
+//                  when branchConclusion is red (specs/20260830/03-ci-leg-honest-absence.md D4:
+//                  ci-query.js's shaUnseen shape for an unpushed HEAD; the 2026-08-30 never-block
+//                  ruling forbids a red origin branch from reddening this leg)
 //   at-risk        {"leg":"at-risk","exit":<code>,"observed":{"files":N,"testsExecuted":N|
 //                  {"unavailable":"pattern-no-match"|"no-format-declared"}}} |
 //                  {"unavailable":"no-test-command"} | {"malformed":{"entries":N,"of":M}} — exit is
@@ -232,7 +236,11 @@ async function main() {
     else {
       try {
         const j = JSON.parse(line)
-        if (!j.available) observed = { unavailable: j.transient ? 'transient' : 'no-adapter' }
+        // D4 (specs/20260830/03-ci-leg-honest-absence.md): shaUnseen maps to an honest observed
+        // row at exit 0 UNCONDITIONALLY — `exit` is never touched here, so a red branchConclusion
+        // can never redden this leg (the 2026-08-30 never-block ruling).
+        if (j.shaUnseen === true) observed = { unavailable: 'sha-unseen', branch: j.branch, branchConclusion: j.branchRun.conclusion }
+        else if (!j.available) observed = { unavailable: j.transient ? 'transient' : 'no-adapter' }
         else if (j.status && j.status !== 'completed') observed = { status: 'in-progress' }
         else { observed = { conclusion: j.conclusion }; exit = /^(failure|timed_out|cancelled)$/.test(j.conclusion) ? 1 : 0 }
       } catch { observed = { unavailable: 'no-adapter' } }

@@ -195,7 +195,10 @@ Phase 4 report — the ledger row's `ci` field is the durable carrier of the obs
    ci verdict — one line each, read off `stage`'s and `append`'s own output}`,
    `- substrate: {rows checked / inert-declared} · production: {verification result}`),
    `warns` (`ci never delivered a verdict on this commit` when the ci leg observed no
-   `conclusion`, plus
+   `conclusion`, plus "CI has not seen this commit; origin `<branch>`'s latest run:
+   `<conclusion>`" when the ci leg observed `sha-unseen` with a `branchConclusion` of
+   `failure`, `timed_out`, or `cancelled` (the leg itself stays exit 0 — this is a
+   report-only warning, never a finding), plus
    `yours / the client's to do: {inert rows, verbatim — one line each}` whenever inert rows
    exist), and `next` — **unconditional, branched by outcome** (never the old
    "(optional)" framing): on CLEAN, the verbatim output of
@@ -210,6 +213,7 @@ Phase 4 report — the ledger row's `ci` field is the durable carrier of the obs
    - observed: {deploy, ready, migrations (pass/fail, when the leg ran), e2e counts, journeys walked with outcomes, ci verdict — one line each}
    - substrate: {rows checked / inert-declared} · production: {verification result}
    ⚠️ ci never delivered a verdict on this commit    (when the ci leg observed no conclusion)
+   ⚠️ CI has not seen this commit; origin `main`'s latest run: `failure`    (when the ci leg observed sha-unseen with a failing/timed-out/cancelled branch conclusion)
    ⚠️ yours / the client's to do: {inert rows, verbatim — one line each}
    Next: {spec-status --next, verbatim}    (or, on 🚫: the remedy for what blocked promotion)
    ```

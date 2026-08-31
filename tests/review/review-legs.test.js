@@ -36,6 +36,19 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // never assumed zero) — the testCountPattern-driven branches (AC-20260820-06-5/6/7) are pinned
 // separately in tests/review/legs-verdict-pair.test.js, the grammar authority (D10). Every
 // `byLeg.get(...).observed` assertion below is retyped in place; none is retagged.
+//
+// specs/20260830/03-ci-leg-honest-absence.md D4 (2026-08-30, salon-os host-escape report): the ci
+// leg previously mapped ci-query.js's `{available:false,transient:false}` for an unpushed HEAD
+// identically to "no CI at all" (`{"unavailable":"no-adapter"}`) — indistinguishable from a host
+// with zero CI tooling, so 23 unpushed commits against a red origin branch read green. ci-query.js
+// now emits a `shaUnseen` shape (this spec's D1/D2/D3, pinned in tests/review/ci-query.test.js)
+// carrying the current branch's own latest origin conclusion; this leg must map THAT shape to
+// `{"unavailable":"sha-unseen","branch":...,"branchConclusion":...}` at exit 0 — a red
+// branchConclusion must never redden the leg (JJ's 2026-08-30 never-block ruling).
+// `makeHostForCiLeg` mirrors `makeHost` but omits `capabilities.forge` (legacy dynamic-probe mode,
+// the same pattern release-legs.test.js's AC-20260823-01-7 already uses) and has no remote at all,
+// so its HEAD is unpushed by construction — a fake `gh` on PATH branching on argv (the
+// ci-query.test.js A5 pattern) answers `--commit` empty and `--branch main` with a real red run.
 
 const SCRIPT = 'scripts/review-legs.js'
 
@@ -304,4 +317,68 @@ test('a missing spec or config is a precondition failure: exit 2, no manifest ro
   assert.strictEqual(r.status, 2,
     'no config under --root must exit 2 naming /spec:init — running legs against an ungrounded repo would ' +
     'produce a manifest whose greenness means nothing: ' + r.stdout + r.stderr)
+})
+
+// AC-20260830-03-2's own fixture: `capabilities.forge` is omitted (legacy dynamic-probe mode) so
+// the ci leg actually shells to `gh`, and the fixture repo carries no remote at all — HEAD is
+// unpushed by construction, exactly the salon-os shape.
+function makeHostForCiLeg() {
+  const dir = tmpdir('review-legs-ci-shaunseen')
+  const g = gitRepo(dir)
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify({
+    gateCommand: 'node --test {testDirs}',
+    testCommand: 'node --test',
+    runtime: { inert: 'plugin repo — nothing boots' },
+    capabilities: { skipReportPattern: 'ℹ skipped (\\d+)' },
+  }))
+  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 41\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const base = g('rev-parse', 'HEAD').trim()
+  fs.mkdirSync(path.join(dir, 'specs/20260817'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'specs/20260817/99-test.md'), SPEC_BODY)
+  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 42\n')
+  fs.writeFileSync(path.join(dir, 'tests/foo.test.js'), GREEN_TEST)
+  g('add', '-A'); g('commit', '-q', '-m', 'implement')
+  return { dir, base }
+}
+
+// A5's branching shim, local to this file (the ci-query.test.js pattern this AC's fallback
+// itself is pinned by): one `gh` answering `--commit` empty and `--branch <name>` with a run.
+function fakeGhBranchingDir(commitBody, branchBody) {
+  const dir = tmpdir('fake-gh-branching')
+  const bin = path.join(dir, 'gh')
+  fs.writeFileSync(bin, '#!/usr/bin/env bash\n' +
+    'if [[ "$*" == *"--commit"* ]]; then\n' + commitBody + '\n' +
+    'elif [[ "$*" == *"--branch"* ]]; then\n' + branchBody + '\n' +
+    'fi\n')
+  fs.chmodSync(bin, 0o755)
+  return dir
+}
+
+test('AC-20260830-03-2: the review ci leg maps ci-query.js\'s shaUnseen shape to {"unavailable":"sha-unseen",branch,branchConclusion} at exit 0, even though the branch conclusion is failure', () => {
+  const { dir, base } = makeHostForCiLeg()
+  const ghDir = fakeGhBranchingDir(
+    "echo '[]'",
+    "echo '[{\"status\":\"completed\",\"conclusion\":\"failure\",\"headSha\":\"abc\",\"url\":\"u\",\"updatedAt\":\"t\"}]'")
+  const manifest = path.join(tmpdir('review-legs-out'), 'manifest.jsonl')
+  const r = runNode(SCRIPT, ['--root', dir, '--spec', 'specs/20260817/99-test.md',
+    '--base', base, '--manifest', manifest],
+    { env: { ...process.env, PATH: ghDir + path.delimiter + process.env.PATH } })
+  const rows = fs.existsSync(manifest)
+    ? fs.readFileSync(manifest, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
+    : []
+  const byLeg = new Map(rows.map(x => [x.leg, x]))
+  assert.deepStrictEqual(byLeg.get('ci'),
+    { leg: 'ci', exit: 0, observed: { unavailable: 'sha-unseen', branch: 'main', branchConclusion: 'failure' } },
+    'D4: an unpushed HEAD whose current branch has a real red origin run must map to the honest sha-unseen ' +
+    'row at exit 0 — mapping it to {"unavailable":"no-adapter"} (today\'s code) hides the exact salon-os ' +
+    'condition this AC exists to surface, and reddening the leg over a red branchConclusion would violate ' +
+    'the 2026-08-30 never-block ruling: ' + JSON.stringify(byLeg.get('ci')) + ' / ' + r.stdout + r.stderr)
+  assert.strictEqual(r.status, 0,
+    'every other blocking leg on this otherwise-green host must pass, so a nonzero exit here can only mean ' +
+    'the red branchConclusion leaked into the leg\'s own exit code, which the never-block ruling forbids: ' +
+    r.stdout + r.stderr)
 })

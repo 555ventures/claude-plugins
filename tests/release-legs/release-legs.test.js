@@ -20,6 +20,16 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 //  - AC-7's poll loop is proven via a PATH-stubbed `gh` that reports in-progress on invocation 1
 //    and conclusion:success from invocation 2 onward, tracked in a counter file (each poll
 //    iteration is a fresh child process, so in-memory state cannot carry the count).
+//
+// specs/20260830/03-ci-leg-honest-absence.md D4 (2026-08-30, salon-os host-escape report):
+// release-legs.js's ci leg copies review-legs.js's ci-query.js -> observed mapping verbatim
+// (D4's own text: "literal row identical to the review pin"), so it inherited the same bug — an
+// unpushed HEAD's shaUnseen shape mapped to `{"unavailable":"no-adapter"}`, indistinguishable
+// from "no CI at all". The AC-20260830-03-4 test below reuses AC-7's `capabilities.forge:
+// undefined` trick (JSON.stringify drops the key, so ci-query.js falls through to its dynamic gh
+// probe instead of the forge:"none" short-circuit) and a PATH-stubbed `gh` branching on argv
+// (--commit empty, --branch <name> a real red run) — the same A5 shim shape ci-query.test.js and
+// review-legs.test.js use to pin the fallback that produces this shape in the first place.
 
 const SCRIPT = 'scripts/release-legs.js'
 
@@ -518,4 +528,34 @@ test('AC-20260823-01-14: record prints CLEAN and appends exactly one row per inv
   assert.strictEqual(rowsAfterSecond.length, 2,
     'a second record invocation must append exactly one MORE row (no hidden dedup) — the ledger ' +
     'is an append-only run history, not a keyed upsert: ' + JSON.stringify(rowsAfterSecond))
+})
+
+test('AC-20260830-03-4: the release ci leg maps ci-query.js\'s shaUnseen shape to the same {"unavailable":"sha-unseen",branch,branchConclusion} row at exit 0 as the review leg', async () => {
+  // capabilities.forge: undefined (JSON.stringify drops it) puts ci-query.js in legacy dynamic-
+  // probe mode, same as AC-20260823-01-7 above; setupWorkingHost's gitRepo(dir) carries no remote
+  // at all, so HEAD is unpushed by construction.
+  const host = await setupWorkingHost('rl-shaunseen', { capabilities: { forge: undefined } })
+  try {
+    const ghScript =
+      '#!/usr/bin/env bash\n' +
+      'if [[ "$*" == *"--commit"* ]]; then\n' +
+      "  echo '[]'\n" +
+      'elif [[ "$*" == *"--branch"* ]]; then\n' +
+      '  echo \'[{"status":"completed","conclusion":"failure","headSha":"abc","url":"u","updatedAt":"t"}]\'\n' +
+      'fi\n'
+    const binDir = makeStubBin(host.dir, 'gh', ghScript)
+    const runManifest = path.join(host.dir, 'run-manifest.jsonl')
+    const r = runNode(SCRIPT, ['stage', '--root', host.dir, '--manifest', runManifest, '--out-dir', path.join(host.dir, 'out')],
+      { env: withStubPath(binDir) })
+    const rows = readRows(runManifest)
+    assert.deepStrictEqual(rowFor(rows, 'ci'),
+      { leg: 'ci', exit: 0, observed: { unavailable: 'sha-unseen', branch: 'main', branchConclusion: 'failure' } },
+      'D4: release-legs.js\'s ci leg must copy review-legs.js\'s exact sha-unseen mapping (D4\'s own literal ' +
+      'row, identical to the review pin) — an unpushed HEAD with a real red origin run must never redden the ' +
+      'release ci leg (the never-block ruling) nor collapse to the pre-spec {"unavailable":"no-adapter"} ' +
+      'label that hides the salon-os condition: ' + JSON.stringify(rowFor(rows, 'ci')) +
+      ' (stage status ' + r.status + ', stderr ' + r.stderr + ')')
+  } finally {
+    host.kill()
+  }
 })

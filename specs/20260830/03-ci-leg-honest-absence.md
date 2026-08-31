@@ -1,6 +1,7 @@
 ---
 date: 2026-08-30
-status: hardened
+status: implementing
+diff_base: 1c0de02b6da33e35a6efe117157a1b0f8bc8526c
 tier: critical
 area: review-legs
 design: false

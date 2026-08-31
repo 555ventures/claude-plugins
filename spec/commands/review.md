@@ -63,12 +63,17 @@ unfinished as a checklist, and re-invocation re-prints the execution step.
 
 When the driver prints `DONE`, report (rationale: core § Console Output Style). Assemble the
 slots — `outcome`: ✅ `CLEAN — merged` (or the driver's one-line note when MERGE was skipped
-because review ran on the originating branch); `next`: the driver's captured
+because review ran on the originating branch); `warns`: one line naming the branch and
+conclusion — "CI has not seen this commit; origin `<branch>`'s latest run: `<conclusion>`" —
+when the ci leg's evidence-manifest row observed `sha-unseen` with a `branchConclusion` of
+`failure`, `timed_out`, or `cancelled` (drop the slot otherwise; the row itself stays exit 0,
+this is a report-only warning, never a finding); `next`: the driver's captured
 `node "$(spec-paths spec-status)" --next`, printed verbatim — never a hand-applied mapping.
 Run `node "$(spec-paths report-render)" --slots <file>` and print its output verbatim.
 
 ```report
 ✅ **CLEAN — merged**
+⚠️ CI has not seen this commit; origin `main`'s latest run: `failure`    (only when the ci leg observed sha-unseen with a failing/timed-out/cancelled branch conclusion)
 {spec-status --next, verbatim}
 ```
 

@@ -20,7 +20,10 @@
 //   {"leg":"deploy","exit":E,"observed":{"result":"pass"|"fail"}}
 //   {"leg":"ready","exit":E,"observed":{"result":"pass"|"fail"}}
 //   {"leg":"migrations","exit":E,"observed":{"result":"pass"|"fail"}}     (only when runnable migrationsCheck)
-//   {"leg":"ci","exit":0|1,"observed":{"conclusion":"<v>"}|{"status":"in-progress"}|{"unavailable":"no-adapter"|"transient"}}
+//   {"leg":"ci","exit":0|1,"observed":{"conclusion":"<v>"}|{"status":"in-progress"}|{"unavailable":"no-adapter"|"transient"}|
+//       {"unavailable":"sha-unseen","branch":"<v>","branchConclusion":"<v>"}}   (sha-unseen is always exit 0, even
+//       when branchConclusion is red — specs/20260830/03-ci-leg-honest-absence.md D4, the identical mapping
+//       review-legs.js's ci leg uses, copied verbatim so the two consumers never drift apart)
 //   {"leg":"e2e","exit":E,"observed":{"passed":N|{"unavailable":R},"failed":M|{"unavailable":R},
 //       "skipped":K|{"unavailable":R}}}   where R = "no-format-declared"|"pattern-no-match"
 //   {"leg":"journeys","exit":0|1,"observed":{"walked":N,"failed":M}}      (append-only)
@@ -194,14 +197,17 @@ function ciQueryOnce(root) {
   const r = spawnSync(process.execPath, [path.join(__dirname, 'ci-query.js'), '--commit', commit, '--root', root],
     { encoding: 'utf8' })
   // D4: review-legs.js's exact output->row mapping, copied verbatim so the two ci consumers can
-  // never drift apart.
+  // never drift apart. specs/20260830/03-ci-leg-honest-absence.md D4 extends it with the
+  // shaUnseen alternative, mapped to exit 0 unconditionally — `exit` is never touched on that
+  // branch, so a red branchConclusion can never redden this leg (the 2026-08-30 never-block ruling).
   let observed = { unavailable: 'no-adapter' }, exit = 0
   const line = ((r.stdout) || '').trim().split('\n').pop() || ''
   if (/^unavailable/.test(line)) observed = { unavailable: 'no-adapter' }
   else {
     try {
       const j = JSON.parse(line)
-      if (!j.available) observed = { unavailable: j.transient ? 'transient' : 'no-adapter' }
+      if (j.shaUnseen === true) observed = { unavailable: 'sha-unseen', branch: j.branch, branchConclusion: j.branchRun.conclusion }
+      else if (!j.available) observed = { unavailable: j.transient ? 'transient' : 'no-adapter' }
       else if (j.status && j.status !== 'completed') observed = { status: 'in-progress' }
       else { observed = { conclusion: j.conclusion }; exit = /^(failure|timed_out|cancelled)$/.test(j.conclusion) ? 1 : 0 }
     } catch { observed = { unavailable: 'no-adapter' } }

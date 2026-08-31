@@ -377,6 +377,26 @@ test('bare run renders verdict, progress-bar roadmap, and collapses unplanned ru
   assert.match(r.stdout, /🎯 Next/, 'embeds the next derivation — no second run needed')
 })
 
+// Owner report 2026-08-31: a long shipped history rendered one row per done brief and filled
+// the screen — done runs now collapse to a range row exactly like unplanned runs, with the
+// spec count preserved so the shipped volume stays visible.
+test('consecutive done briefs collapse to one range row with brief and spec counts', () => {
+  const dir = host({
+    briefs: BRIEFS,
+    specs: {
+      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
+      '20260701/02-auth-ui.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
+      '20260702/01-billing.md': 'date: 2026-07-02\nstatus: done\nbrief: 02',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout, /✅ 01–02.*done \(2 briefs, 3 specs\)/,
+    'a run of fully-done briefs renders one collapsed row instead of filling the screen row-per-brief')
+  assert.ok(!/✅ 01 auth/.test(r.stdout),
+    'the collapsed done run must replace the per-brief rows, not print alongside them')
+})
+
 test('dashboard draws unblocked parallel-ok runner-ups as lanes and sinks serial/blocked', () => {
   const dir = host({
     briefs: {

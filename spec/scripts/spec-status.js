@@ -657,13 +657,19 @@ if (json) {
     const rows = []
     for (let i = 0; i < briefs.length; i++) {
       const b = briefs[i]
+      // Runs of same-status briefs with nothing actionable per row (unplanned = no state yet,
+      // done = all specs green) collapse to one range row — a long shipped history was filling
+      // the screen (owner report 2026-08-31). In-flight briefs never collapse.
       let j = i
-      while (b.status === 'unplanned' && j + 1 < briefs.length && briefs[j + 1].status === 'unplanned') j++
+      while ((b.status === 'unplanned' || b.status === 'done') && j + 1 < briefs.length && briefs[j + 1].status === b.status) j++
       if (j > i) {
         const run = briefs.slice(i, j + 1)
         const phases = [...new Set(run.map(x => x.phase).filter(Boolean))]
         const phase = phases.length > 1 ? `${phases[0]}–${phases[phases.length - 1]}` : phases[0] || '—'
-        rows.push({ icon: '⬜', label: `${b.num}–${briefs[j].num}`, phase, tail: `unplanned (${run.length} briefs)` })
+        const tail = b.status === 'done'
+          ? `done (${run.length} briefs, ${run.reduce((n, x) => n + x.specs.length, 0)} specs)`
+          : `unplanned (${run.length} briefs)`
+        rows.push({ icon: BRIEF_ICON[b.status], label: `${b.num}–${briefs[j].num}`, phase, tail })
         i = j
         continue
       }

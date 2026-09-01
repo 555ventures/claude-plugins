@@ -8,6 +8,7 @@ breaking: false
 depends_on: ["specs/20260901/01-build-driver.md", "specs/20260901/02-run-provenance.md"]
 depended_on_by: []
 brief: 18
+build_base: main
 open_markers: 0
 ---
 

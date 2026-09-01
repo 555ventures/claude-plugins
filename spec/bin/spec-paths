@@ -29,6 +29,7 @@ case "${1:-root}" in
   review-legs)    echo "$ROOT/scripts/review-legs.js" ;;
   release-legs)   echo "$ROOT/scripts/release-legs.js" ;;
   review-driver)  echo "$ROOT/scripts/spec-review-driver.js" ;;
+  build-driver)   echo "$ROOT/scripts/spec-build-driver.js" ;;
   genesis-driver) echo "$ROOT/scripts/genesis-driver.js" ;;
   report-render)  echo "$ROOT/scripts/report-render.js" ;;
   spec-status)    echo "$ROOT/scripts/spec-status.js" ;;
@@ -99,7 +100,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|design-atlas|components-check|render-gate|render-compare|render-inventory|render-rules|registry-check|merge-back|smoke|manifest-check|env-preflight|citations-check|review-legs|release-legs|review-driver|genesis-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|collision-closure|ci-query|ci-gate-parity|replay|fleet-reader|shared|shared-design|shared-for <command>|shared-genesis|replay-corpus|template|templates|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|design-atlas|components-check|render-gate|render-compare|render-inventory|render-rules|registry-check|merge-back|smoke|manifest-check|env-preflight|citations-check|review-legs|release-legs|review-driver|build-driver|genesis-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|collision-closure|ci-query|ci-gate-parity|replay|fleet-reader|shared|shared-design|shared-for <command>|shared-genesis|replay-corpus|template|templates|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

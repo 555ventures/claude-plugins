@@ -8,6 +8,7 @@ breaking: false
 depends_on: ["specs/20260901/01-build-driver.md"]
 depended_on_by: ["specs/20260901/03-unified-build-loop.md"]
 brief: 18
+build_base: main
 open_markers: 0
 ---
 

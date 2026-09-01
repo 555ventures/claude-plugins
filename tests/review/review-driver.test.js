@@ -160,7 +160,15 @@ test('AC-20260820-07-1: WHEN the driver runs on an implementing spec whose legs 
   assert.strictEqual(stateOf(root, spec), 'REVIEWER', 'the derived state after a green legs run must be REVIEWER: ' + r.stdout)
 })
 
-test('AC-20260820-07-2 (also AC-20260821-04-8, SHALL CONTINUE TO) / AC-20260824-06-5: WHEN the synthetic gate fails THE SYSTEM appends exactly one GATE_RED ledger line byte-equal to verdict.js\'s own line, whose diff.base/diff.head/diff.dirty name the reviewed range, prints the red leg + remedy, and reports state STOPPED — the reviewer step is never printed', () => {
+// specs/20260901/01-build-driver.md AC-20260901-01-17 (2026-09-01, brief 18, tagged in place —
+// never weakened): D11 extracts runChild/writeOut/appendLedger/loadSidecar/saveSidecar into the
+// new lib/driver-io.js and this driver imports from it, deleting its own private copies, so the
+// build driver can share the same fail-closed helpers instead of growing a second set. This
+// exact test is the byte-identity regression net for that extraction — a behavior change here
+// (including one introduced while splicing in the shared helpers) would show up as a diff
+// between the driver's appended row and a direct verdict.js re-invocation with the row's own
+// recorded flags.
+test('AC-20260820-07-2 (also AC-20260821-04-8, SHALL CONTINUE TO) / AC-20260824-06-5 / AC-20260901-01-17 (SHALL CONTINUE TO): WHEN the synthetic gate fails THE SYSTEM appends exactly one GATE_RED ledger line byte-equal to verdict.js\'s own line, whose diff.base/diff.head/diff.dirty name the reviewed range, prints the red leg + remedy, and reports state STOPPED — the reviewer step is never printed', () => {
   const { root, spec, sidecar } = makeHost({ gateFails: true })
   const ledger = path.join(root, '.claude/spec-runs.jsonl')
   const before = fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8') : ''

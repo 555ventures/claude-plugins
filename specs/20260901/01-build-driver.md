@@ -1,6 +1,6 @@
 ---
 date: 2026-09-01
-status: hardened
+status: implementing
 tier: critical
 area: build-integrity
 design: false
@@ -8,6 +8,7 @@ breaking: false
 depends_on: []
 depended_on_by: ["specs/20260901/02-run-provenance.md", "specs/20260901/03-unified-build-loop.md"]
 brief: 18
+build_base: main
 open_markers: 0
 ---
 

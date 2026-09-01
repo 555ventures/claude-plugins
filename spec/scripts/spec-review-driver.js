@@ -125,7 +125,13 @@
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
-const { spawnSync } = require('child_process')
+// D11 (specs/20260901/01-build-driver.md): the fail-closed spawn wrapper, the synchronous
+// EAGAIN-retrying stdout writer, the ledger append, and the sidecar load/save pair now live in
+// lib/driver-io.js — spec-build-driver.js needs the identical four shapes for its own
+// <spec>.build/ sidecar, and a second copy here would be the drift seam ci-query.js and
+// lib/gate-resolve.js were each unified over. Local wrappers below (appendLedger/saveSidecar)
+// keep every existing call site in this file unchanged — only the load/save primitives moved.
+const { runChild, writeOut, appendLedger: appendLedgerLib, loadSidecar, saveSidecar: saveSidecarLib } = require('./lib/driver-io')
 // The repo's ONE ledger reader (live + year archives, in read order) — REPLAY counts
 // stage:"replay" rows through it rather than opening the ledger a second way.
 const { readLedgerRows } = require('./lib/observation')
@@ -160,24 +166,9 @@ const STOPPED_LEDGER = '.claude/spec-runs.stopped.jsonl'
 
 function die(msg) { process.stderr.write('spec-review-driver: ' + msg + '\n'); process.exit(2) }
 
-// R9: spawnSync's `status` is null when the child dies by signal, fails to spawn, or overflows
-// maxBuffer — every branch in this file that reads `.status`/`.code` or trusts `.stdout` without
-// checking either used to tolerate that null silently (a SIGKILLed review-legs.js printed
-// `state: REVIEWER` over a manifest that was never written). This is the ONE place that death is
-// handled: every spawnSync call in the file is routed through here, and only a genuine no-exit-
-// code death is fatal — a legitimate non-zero exit (RED_BLOCKING, merge conflicts, a branch that
-// doesn't exist yet) still comes back as a normal result for the caller's own branch to read.
-function runChild(cmd, args, opts, what) {
-  const r = spawnSync(cmd, args, opts)
-  if (r.error || r.status === null) {
-    const reason = r.error ? r.error.message
-      : r.signal ? 'killed by signal ' + r.signal
-      : 'exited with no status (spawn failure)'
-    die(what + ' died without an exit code (' + reason + ') — nothing it was meant to produce can ' +
-      'be trusted; fix the cause and re-run `node ' + __filename + ' ' + (specPath || '<spec.md>') + '`')
-  }
-  return r
-}
+// runChild is now lib/driver-io.js's shared fail-closed spawn wrapper (D11) — every call site
+// below is unchanged (still passes its own `what` label as the 4th arg); only the definition
+// moved.
 
 const argv = process.argv.slice(2)
 const specPath = argv[0]
@@ -274,16 +265,14 @@ const specRel = path.relative(repoRoot, resolvedSpecPath) || resolvedSpecPath
 // sidecarDir) because the file is gone (folded) long before any merge-back relocation could run.
 const deviationsPath = resolvedSpecPath.replace(/\.md$/, '.deviations.md')
 
-let marks = {}
-try { marks = JSON.parse(fs.readFileSync(stateFile, 'utf8')) } catch { marks = {} }
+let marks = loadSidecar(sidecarDir, 'review-state.json')
 // D8/D9: set only when a self-heal attempt (deriveState()'s ESCALATE arm) hits a verdict.js drift
 // refusal — the ESCALATE step text names it in place of the (unset) escalateLedgerPath. Never
 // persisted: a fresh invocation retries the write from scratch rather than trusting a stale error.
 let escalateDriftError = null
-function saveSidecar() {
-  fs.mkdirSync(sidecarDir, { recursive: true })
-  fs.writeFileSync(stateFile, JSON.stringify(marks, null, 2) + '\n')
-}
+// saveSidecar/appendLedger are thin wrappers over lib/driver-io.js's shared primitives (D11) —
+// every existing call site below (`saveSidecar()`, `appendLedger(line)`) is unchanged.
+function saveSidecar() { saveSidecarLib(sidecarDir, path.basename(stateFile), marks) }
 
 // ---- Gotchas cap (prose-cap.js, specs/20260823/06 + 2026-08-25 ratchet) ------------------------
 // The cap used to be a CLOSE-step sentence in review.md that nothing executed: Prax closed
@@ -541,11 +530,7 @@ function computeDiffLoc() {
   return (Number(m[2]) || 0) + (Number(m[3]) || 0)
 }
 
-function appendLedger(jsonLine) {
-  const ledgerPath = path.join(repoRoot, '.claude/spec-runs.jsonl')
-  fs.mkdirSync(path.dirname(ledgerPath), { recursive: true })
-  fs.appendFileSync(ledgerPath, jsonLine + '\n')
-}
+function appendLedger(jsonLine) { appendLedgerLib(repoRoot, jsonLine) }
 
 // D2/D3: is STOPPED_LEDGER ignored at mainRootDir right now? `check-ignore -q` verdicts a
 // not-yet-existing path (A3's executed spike), so this runs before the first durable append ever
@@ -806,12 +791,12 @@ function findWorktreeForBranch(root, branch) {
 // state itself. `--state` is answered before the delete: a state query must not be the thing that
 // tears down the run it is querying.
 function printDoneNow(note, harnessLine) {
-  if (STATE_ONLY) { process.stdout.write('DONE\n'); process.exit(0) }
+  if (STATE_ONLY) { writeOut(1, 'DONE\n'); process.exit(0) }
   fs.rmSync(sidecarDir, { recursive: true, force: true })
   const status2 = runChild(process.execPath, [specStatusBin, '--root', repoRoot, '--next'],
     { encoding: 'utf8' }, 'spec-status.js --next')
   const nextLine = status2.status === 0 ? status2.stdout.trim() : '(spec-status --next unavailable)'
-  process.stdout.write(`[spec-review-driver] state: DONE  spec: ${replaySpecPath}\n` +
+  writeOut(1, `[spec-review-driver] state: DONE  spec: ${replaySpecPath}\n` +
     (note ? note + '\n' : '') +
     (harnessLine ? harnessLine + '\n' : '') +
     '\n## DONE\n' + nextLine + '\n')
@@ -876,8 +861,8 @@ function replayEntry(note) {
   // session appending its own replay row for a different target must not satisfy this mark.
   marks.replayTarget = { ...t, rowsAtEntry: countReplayRowsFor(t.reviewRunId) }
   saveSidecar()
-  if (STATE_ONLY) { process.stdout.write('REPLAY\n'); process.exit(0) }
-  process.stdout.write(`[spec-review-driver] state: REPLAY  spec: ${replaySpecPath}\n` +
+  if (STATE_ONLY) { writeOut(1, 'REPLAY\n'); process.exit(0) }
+  writeOut(1, `[spec-review-driver] state: REPLAY  spec: ${replaySpecPath}\n` +
     (note ? note + '\n' : '') +
     '(re-run this driver after completing the step; it verifies artifacts and prints the next one)\n\n' +
     replayStepBody(marks.replayTarget) + '\n')
@@ -1146,7 +1131,7 @@ function handleMergeStrategy() {
     marks.mergeConflicted = true
     marks.mergeCtx = { mainRoot, target, source, wt: wt || null }
     saveSidecar()
-    process.stdout.write(`[spec-review-driver] state: CONFLICTS  spec: ${specPath}\n\n` +
+    writeOut(1, `[spec-review-driver] state: CONFLICTS  spec: ${specPath}\n\n` +
       '## Step: resolve merge conflicts by intent\n' + (r.stdout + r.stderr).trim() + '\n\n' +
       'Read both sides, resolve by INTENT (never a mechanical pick), `git -C ' + mainRoot +
       ' add` each resolved file, then commit.\nThen: node ' + __filename + ' ' + specPath +
@@ -1400,7 +1385,7 @@ if (MARK) forcedState = handleMark()
 const state = forcedState || deriveState()
 const currentN = listManifestNumbers().length ? Math.max(...listManifestNumbers()) : 0
 
-if (STATE_ONLY) { process.stdout.write(state + '\n'); process.exit(0) }
+if (STATE_ONLY) { writeOut(1, state + '\n'); process.exit(0) }
 
 // ---- step text per state -------------------------------------------------------------------------
 const manifestPath = manifestPathFor(currentN)
@@ -1585,7 +1570,7 @@ const STEPS = {
   REPLAY: () => replayStepBody(marks.replayTarget),
 }
 
-process.stdout.write(`[spec-review-driver] state: ${state}  spec: ${specPath}\n` +
+writeOut(1, `[spec-review-driver] state: ${state}  spec: ${specPath}\n` +
   `(re-run this driver after completing the step; it verifies artifacts and prints the next one)\n\n` +
   STEPS[state]() + '\n')
 process.exit(0)

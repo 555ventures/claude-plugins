@@ -19,10 +19,21 @@
 // out of scope per the spec's Rationale); relax the closed renderCheck.kind set for an unknown
 // kind (D1 — half-checked is worse than an exit-2 refusal naming the rule).
 //
+// specs/20260831/02-viewport-adaptation-rules.md (2026-08-31, D1/D2/D3/D5/D6): the closed
+// renderCheck.kind set gains `no-overflow` (a union of the inventory's page-level
+// scrollWidth/clientWidth comparison and a per-entry box-edge comparison, exempting
+// fixed/outOfFlow/dataPositioned/srOnly entries — mirrors render-compare's own geometry
+// exemptions) and `line-length` (an estimated-character-width check gated silently by
+// `minViewport`, `severity: "warn"` in the template). An inventory document with no usable
+// `page` block fails BOTH new kinds closed with a re-capture finding (D5) rather than passing
+// silently — the exact laundering prax measured (spec 20260823/11: a phone-only mock ratified
+// clean, its non-adaptation later misattributed to components).
+//
 // Exit codes: 0 = no findings · 1 = one or more findings (a `severity: "warn"` rule's own
 // finding is printed but never contributes to this) · 2 = usage, an unreadable/unparsable
 // --rules/--inventory/--tokens file, or a rule's renderCheck.kind outside the closed
-// target-size/cta-count/contrast/palette set (stderr names the offending rule's id).
+// target-size/cta-count/contrast/palette/no-overflow/line-length set (stderr names the
+// offending rule's id).
 
 const fs = require('fs')
 
@@ -102,7 +113,7 @@ try {
 }
 
 // ---- D1: closed renderCheck.kind set, validated before anything runs --------------------------
-const CLOSED_KINDS = ['target-size', 'cta-count', 'contrast', 'palette']
+const CLOSED_KINDS = ['target-size', 'cta-count', 'contrast', 'palette', 'no-overflow', 'line-length']
 for (const rule of manifest.rules) {
   if (rule.renderCheck && !CLOSED_KINDS.includes(rule.renderCheck.kind)) {
     die('rule "' + rule.id + '" declares renderCheck.kind ' + JSON.stringify(rule.renderCheck.kind) +
@@ -273,7 +284,65 @@ function checkPalette(rule) {
   }
 }
 
-const CHECKS = { 'target-size': checkTargetSize, 'cta-count': checkCtaCount, contrast: checkContrast, palette: checkPalette }
+// ---- D2/D3/D5: no-overflow — page leg (scrollWidth vs clientWidth) OR entry leg (box right
+// edge vs clientWidth), a union predicate because overflow-x:hidden masks scrollWidth entirely
+// while getBoundingClientRect still reports the true edge (A1). A document with no usable page
+// block fails closed rather than passing silently (D5) — never treated as "nothing to check".
+function hasUsablePage(doc) {
+  return !!doc.page && typeof doc.page.scrollWidth === 'number' && typeof doc.page.clientWidth === 'number'
+}
+function noPageFinding(rule, kind, doc) {
+  pushFinding(rule, 'rule ' + rule.id + ' ' + kind + ' inventory has no page geometry (theme ' +
+    doc.theme + ' state ' + doc.state + ') — re-capture with the current render-inventory.browser.js')
+}
+
+function checkNoOverflow(rule) {
+  for (const doc of inventories) {
+    if (!hasUsablePage(doc)) { noPageFinding(rule, 'no-overflow', doc); continue }
+    const { scrollWidth, clientWidth } = doc.page
+    if (scrollWidth > clientWidth + 1) {
+      pushFinding(rule, 'rule ' + rule.id + ' no-overflow page scrolls horizontally: scrollWidth ' +
+        scrollWidth + ' > ' + clientWidth)
+    }
+    // D3: fixed/outOfFlow/dataPositioned/srOnly entries are the author's own assertion or
+    // invisible content — mirrors render-compare's own geometry exemptions.
+    for (const e of doc.entries) {
+      if (e.fixed || e.outOfFlow || e.dataPositioned || e.srOnly || !e.box) continue
+      const rightEdge = e.box.x + e.box.w
+      if (rightEdge > clientWidth + 1) {
+        pushFinding(rule, 'rule ' + rule.id + ' no-overflow "' + labelOf(e) + '" right edge ' +
+          rightEdge + ' > ' + clientWidth)
+      }
+    }
+  }
+}
+
+// ---- D5/D6: line-length — viewport-gated estimated-character-width check. The `minViewport`
+// skip is a declared gate, not missing data: SILENT, never a finding of any kind (a missing
+// `page` block is the separate D5 fail-closed case, handled identically to no-overflow above).
+function checkLineLength(rule) {
+  const { maxCh, minViewport } = rule.renderCheck
+  for (const doc of inventories) {
+    if (!hasUsablePage(doc)) { noPageFinding(rule, 'line-length', doc); continue }
+    if (doc.page.clientWidth < minViewport) continue
+    for (const e of doc.entries) {
+      if (!e.text || !e.box || !e.fontSize) continue
+      const fontSize = parseFloat(e.fontSize)
+      if (!fontSize || Number.isNaN(fontSize)) continue
+      const estimatedCh = e.box.w / (0.5 * fontSize)
+      if (estimatedCh > maxCh && e.text.length > maxCh) {
+        const label = e.text.length > 40 ? e.text.slice(0, 40) + '…' : e.text
+        pushFinding(rule, 'rule ' + rule.id + ' line-length "' + label + '" ~' + Math.round(estimatedCh) +
+          'ch > ' + maxCh + 'ch at ' + doc.page.clientWidth + 'px')
+      }
+    }
+  }
+}
+
+const CHECKS = {
+  'target-size': checkTargetSize, 'cta-count': checkCtaCount, contrast: checkContrast, palette: checkPalette,
+  'no-overflow': checkNoOverflow, 'line-length': checkLineLength,
+}
 
 const checkedRules = manifest.rules.filter((r) => r.renderCheck)
 const sourceSideCount = manifest.rules.length - checkedRules.length

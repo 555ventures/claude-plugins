@@ -226,3 +226,41 @@ test('AC-20260824-04-8: a text element whose own backgroundColor is rgba(0, 0, 0
   assert.strictEqual(entry.fontWeight, '700',
     'D4: the entry must also record its own computed fontWeight — render-rules.js\'s contrast check reads fontWeight>=700 (with fontSize>=18.66px) as an alternate minLarge trigger, and a missing field means that branch can never fire: got ' + JSON.stringify(entry))
 })
+
+// specs/20260831/02-viewport-adaptation-rules.md (2026-08-31, D4): render-inventory.browser.js
+// gains a top-level `page: { scrollWidth, clientWidth }` block, read guarded from
+// `document.scrollingElement || document.documentElement`, null when unavailable —
+// render-rules.js's new no-overflow check (specs/20260831/02) has no geometry to compare
+// without it (prax, spec 20260823/11: a phone-only mock ratified clean with no measurement
+// tying it to the viewport). Extends this file's existing stub-DOM surface with
+// `scrollingElement` rather than reaching for any API outside it — per the spec's own
+// Rationale, "the stub-DOM test's surface is the contract".
+function buildPageDom(scrollingElement) {
+  const root = el('div', { 'data-screen-label': 'Screen' })
+  const documentElement = el('html')
+  const document = {
+    documentElement,
+    body: root,
+    scrollingElement,
+    querySelector(sel) { return queryAll(root, sel)[0] || null },
+    querySelectorAll(sel) { return queryAll(root, sel) },
+  }
+  return { document, documentElement, root }
+}
+
+test('AC-20260831-02-1: the walker returns page: { scrollWidth: 900, clientWidth: 390 } from a scrolling element reporting those metrics, and page: { scrollWidth: null, clientWidth: null } without throwing when no scrolling-element metrics are exposed', () => {
+  const walk = loadWalker()
+
+  const domNumeric = buildPageDom({ scrollWidth: 900, clientWidth: 390 })
+  const invNumeric = withGlobals(domNumeric, () => walk({ theme: 'light', state: '-' }))
+  assert.deepStrictEqual(invNumeric.page, { scrollWidth: 900, clientWidth: 390 },
+    'D4: a scrollingElement reporting scrollWidth 900 / clientWidth 390 must surface verbatim at the document\'s top-level page block, or render-rules.js\'s no-overflow page leg has no geometry to compare: ' + JSON.stringify(invNumeric.page))
+
+  const domUnavailable = buildPageDom(undefined)
+  let invUnavailable
+  assert.doesNotThrow(() => {
+    invUnavailable = withGlobals(domUnavailable, () => walk({ theme: 'light', state: '-' }))
+  }, 'D4: an evaluation context exposing no scrolling-element metrics must never throw — a captured page missing this surface would crash the whole capture run rather than degrade to a fail-closed finding')
+  assert.deepStrictEqual(invUnavailable.page, { scrollWidth: null, clientWidth: null },
+    'D4: with no document.scrollingElement and no numeric documentElement metrics, the guarded read must yield explicit nulls (the same discipline as every other optional lookup in this file) — anything else here means D5\'s fail-closed no-overflow finding can never trigger on a genuinely unmeasurable page: ' + JSON.stringify(invUnavailable.page))
+})

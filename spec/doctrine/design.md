@@ -38,14 +38,14 @@ touch. Litmus: a design-contract change goes to the mock first, else code only.
 
 **Design harness.** Every mock-authoring pass declares the marks the gate reads —
 `data-screen-label` (root), `data-status`, `data-state-btn="<state>"`, `data-contract="none"`
-(non-contract subtree), `data-positioned` (data-placed children) — then runs
-`design-atlas.js check` (`spec-paths design-atlas`) fail-closed, enforced at `ratified`/
-`approved` or `--matrix`. **Render rules pass:** before direction approval, `render-rules.js`
-(`spec-paths render-rules`) runs every design-rules-genesis rule carrying a `renderCheck`
-(`target-size`, `cta-count`, `contrast`, `palette`) over the render inventory — a measured
-number, never a walked checklist; an un-mechanized taste rule is advisory only. Every pass
-also applies § Design Authoring Contracts' grounded-vs-taste rules; copy in mocks is the
-contract code is later held to.
+(non-contract subtree), `data-positioned` (data-placed children) — then runs `design-atlas.js
+check` (`spec-paths design-atlas`) fail-closed, enforced at `ratified`/`approved` or `--matrix` —
+its viewport-meta/dark-block checks are static preconditions; `render-gate --mocks` at
+`/spec:sketch`'s exit verifies matrix adaptation. **Render rules pass:** `render-rules.js`
+(`spec-paths render-rules`) runs every design-rules-genesis `renderCheck` rule (`target-size`,
+`cta-count`, `contrast`, `palette`, `no-overflow`, `line-length`) over the render inventory before
+direction approval — measured, taste advisory; § Design Authoring Contracts' grounded-vs-taste
+rules apply too, mocks' copy the contract code is later held to.
 
 **Cross-spec consistency**, strongest first: token/theme files in code (a code-side
 `off-token-color` rule wired by `/spec:enforce`; near-matches reuse, never fork the scale); the

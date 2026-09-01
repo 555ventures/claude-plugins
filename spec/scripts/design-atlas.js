@@ -4,14 +4,22 @@
 //   design-atlas.js check <file|dir> [...more] [--matrix]
 //                                                  harness gate: labels, tokens link, no off-token
 //                                                  colors; at data-status ratified|approved (or
-//                                                  --matrix, which also forces the matrix checks
-//                                                  below onto drafts): border-box reset, declared
-//                                                  line-heights, no root device frame, state
-//                                                  controls outside the contract — plus, with
-//                                                  design/targets.json: viewport meta + dark tokens
-//                                                  block. ratified and approved are equivalent for
-//                                                  every check (specs/20260824/03 D2); sketch mocks
-//                                                  are free of all of the above.
+//                                                  --matrix, which also forces the static matrix
+//                                                  PRECONDITION checks below onto drafts):
+//                                                  border-box reset, declared line-heights, no
+//                                                  root device frame, state controls outside the
+//                                                  contract — plus, with design/targets.json:
+//                                                  viewport meta + dark tokens block. These are
+//                                                  static regex reads over markup, cheap
+//                                                  preconditions for the matrix, never a
+//                                                  measurement that a mock actually adapts at any
+//                                                  declared viewport cell — that verification is
+//                                                  `render-gate --mocks`'s job (render-rules.js's
+//                                                  `no-overflow`/`line-length` kinds) at
+//                                                  /spec:sketch's exit (specs/20260831/02 D9).
+//                                                  ratified and approved are equivalent for every
+//                                                  check (specs/20260824/03 D2); sketch mocks are
+//                                                  free of all of the above.
 //   design-atlas.js gallery <dir> [--out <file>]   comparison gallery over candidate subdirs (explore rounds)
 //   design-atlas.js build [--root <repo>] [--out <file>]
 //                                                  the atlas: mocks × roadmap `surfaces` blocks ×
@@ -183,7 +191,13 @@ function cmdCheck(argv) {
 
       // declared matrix (design/targets.json): mocks are RESPONSIVE SINGLE FILES — one file per
       // surface across every declared viewport; dark/light lives in tokens.css, never in per-theme
-      // mock variants. Absent targets = no matrix checks (legacy repos keep passing).
+      // mock variants. Absent targets = no matrix precondition checks (legacy repos keep passing).
+      // specs/20260831/02 D9: these two regex reads (a viewport meta tag, a dark tokens block) are
+      // static matrix PRECONDITIONS, not adaptation verification — neither one measures whether a
+      // mock's content actually fits or reflows at any declared viewport cell. That measurement is
+      // `render-rules.js`'s `no-overflow`/`line-length` renderCheck kinds, run per cell by
+      // `render-gate --mocks` at /spec:sketch's exit; a mock can pass both checks below and still
+      // fail rendered adaptation there.
       const targets = loadTargets(f)
       if (targets && boundNow) {
         if ((targets.viewports || []).length > 1 && !/<meta[^>]+name="viewport"/.test(html)) {

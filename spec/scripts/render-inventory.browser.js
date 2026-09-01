@@ -36,6 +36,15 @@
 // (never an upward `parentElement` walk from the leaf) — the stub-DOM surface this file's own
 // entry rules above are written against guarantees no ancestor-lookup API per element, only
 // `children` for descending. `schemaVersion` stays 1 (additive keys).
+//
+// specs/20260831/02-viewport-adaptation-rules.md (2026-08-31, D4): the document also carries a
+// top-level `page: { scrollWidth, clientWidth }` block — render-rules.js's new `no-overflow`
+// check (specs/20260831/02) has no geometry to compare a mock against its declared viewport
+// without it (prax, spec 20260823/11: a phone-only mock ratified clean with no measurement tying
+// it to the viewport at all). Read guarded from `document.scrollingElement ||
+// document.documentElement` — the same discipline as every other optional lookup in this file —
+// with `null` values when the surface or its numeric fields are unavailable, never a throw;
+// D5 turns an unmeasurable page into a fail-closed finding downstream, never a crash here.
 
 (function (opts) {
   var theme = opts && opts.theme
@@ -254,11 +263,20 @@
 
   walk(rootEl, { fixed: false, outOfFlow: false, dataPositioned: false, background: documentBackground })
 
+  // D4: guarded page-geometry read — never reach past scrollingElement/documentElement, never
+  // throw when the surface or its fields are missing.
+  var scrollingEl = (document && (document.scrollingElement || document.documentElement)) || null
+  var page = {
+    scrollWidth: (scrollingEl && typeof scrollingEl.scrollWidth === 'number') ? scrollingEl.scrollWidth : null,
+    clientWidth: (scrollingEl && typeof scrollingEl.clientWidth === 'number') ? scrollingEl.clientWidth : null,
+  }
+
   return {
     schemaVersion: 1,
     theme: theme || null,
     state: (rootEl && typeof rootEl.getAttribute === 'function' && rootEl.getAttribute('data-state')) || null,
     root: rootSelector,
+    page: page,
     entries: entries,
   }
 })

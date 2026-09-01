@@ -96,6 +96,28 @@
       "severity": "error",
       "grounding": "grounded",
       "rationale": "Base primitives are system foundation, created once and imported everywhere; re-implementing an overlay shell in a feature file forks the focus-trap/dismiss/portal contract and drifts the design."
+    },
+    {
+      "id": "no-mock-overflow",
+      "intent": "A mock must not scroll or clip horizontally at any declared viewport — no page-level or entry-level overflow past the viewport's clientWidth.",
+      "targetCategory": "layout",
+      "appliesTo": ["src/**/*.{ts,tsx,css}"],
+      "exemptGlobs": ["**/tokens/**", "**/*.stories.*"],
+      "severity": "error",
+      "grounding": "grounded",
+      "rationale": "Adaptation is a rendered property, not an authored one; a mock that only works at its narrowest viewport is exactly the escape the static atlas checks cannot see.",
+      "renderCheck": { "kind": "no-overflow" }
+    },
+    {
+      "id": "line-length",
+      "intent": "Body copy at wide viewports should sit within a comfortable measure — no unbounded line lengths in wide-viewport text blocks.",
+      "targetCategory": "typography",
+      "appliesTo": ["src/**/*.{ts,tsx,css}"],
+      "exemptGlobs": ["**/tokens/**", "**/*.stories.*"],
+      "severity": "warn",
+      "grounding": "taste",
+      "rationale": "A very long measure hurts readability at wide viewports; warn-only until a host observes its false-positive rate in practice.",
+      "renderCheck": { "kind": "line-length", "maxCh": 90, "minViewport": 768 }
     }
   ]
 }

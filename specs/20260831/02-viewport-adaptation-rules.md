@@ -1,6 +1,7 @@
 ---
 date: 2026-08-31
-status: hardened
+status: implementing
+diff_base: e082b9d3fe809d7651de9a8b64f4d58238075c1d
 tier: standard
 area: design-render
 design: false

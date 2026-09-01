@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict'
 // verdict.js --manifest <path> [--workflow <path>] [--waived N] [--rejected N] [--fixDispatched N]
-//   [--escalated]
+//   [--escalated] [--via loop|direct] [--model <id>]
 //   [--ledger [--spec <path>] [--tier <T>] [--diff-loc N] [--iteration N] [--run-id <id>]
 //     [--retain <dir>] [--base-sha <40hex>] [--head-sha <40hex>] [--dirty]]
 //   [--profile release [--milestone <string>] [--briefs N,N,...]] [--require <leg> ...]
@@ -146,6 +146,15 @@
 // durable row is the replay moving-ref defect, rv_387d84a3b424, reintroduced). The 40-hex check is
 // the whole validation — no ancestry, no repo access — so this stays a pure function of its flags.
 //
+// specs/20260901/02-run-provenance.md (D3, 2026-09-01, brief 18): review rows are ledger-
+// answerable only when they name which command shape produced them. --via <loop|direct> (default
+// "direct" when absent) and --model <id> (default null) are review-profile-only flags; the row
+// gains `via` then `model` immediately after `tier`, before `runId`. --via is enum-checked
+// (anything but loop/direct exits 2, naming --via specifically) because the fleet query (brief 19)
+// reads it; --model is a free string with no enum, since the transcript format that supplies it
+// is internal and version-unstable. Both flags exit 2 with --profile release — a release row
+// carries no runId/reviewer return for either to key.
+//
 // Exit codes: 0 = derived CLEAN · 1 = derived other non-CLEAN word
 // (still printed on stdout line 1) · 2 = usage error, missing/unreadable --manifest or
 // --workflow file, a disposition contradiction (--waived + --rejected + --fixDispatched
@@ -164,7 +173,10 @@
 // line printed) a --base-sha/--head-sha value that is not exactly 40 lowercase hex characters, one
 // of the pair passed without the other, --dirty passed without the pair, or either flag passed
 // with --profile release — every one of these names `git rev-parse --verify <ref>^{commit}` as the
-// remedy
+// remedy, or (specs/20260901/02-run-provenance.md D3, checked at arg-parse time before the manifest
+// is read, no verdict word or ledger line printed) a --via value other than "loop"/"direct", or
+// either --via or --model passed with --profile release — the message names --via specifically
+// (never the generic unknown-flag usage line) so a caller can tell the two refusals apart
 
 const fs = require('fs')
 const path = require('path')
@@ -172,15 +184,17 @@ const crypto = require('crypto')
 
 function usage() {
   console.error('usage: verdict.js --manifest <path> [--workflow <path>] [--waived N] [--rejected N] ' +
-    '[--fixDispatched N] [--escalated] [--ledger [--spec <path>] [--tier <T>] [--diff-loc N] ' +
-    '[--iteration N] [--run-id <id>] [--retain <dir>] [--base-sha <40hex>] [--head-sha <40hex>] ' +
-    '[--dirty]] [--profile release [--milestone <string>] [--briefs N,N,...]] [--require <leg> ...]')
+    '[--fixDispatched N] [--escalated] [--via loop|direct] [--model <id>] [--ledger [--spec <path>] ' +
+    '[--tier <T>] [--diff-loc N] [--iteration N] [--run-id <id>] [--retain <dir>] ' +
+    '[--base-sha <40hex>] [--head-sha <40hex>] [--dirty]] ' +
+    '[--profile release [--milestone <string>] [--briefs N,N,...]] [--require <leg> ...]')
 }
 
 let manifestPath = null, workflowPath = null, waived = 0, rejected = 0, fixDispatched = 0
 let ledger = false, specArg = null, tier = null, diffLoc = null, iteration = null, profile = 'review'
 let runId = null, milestone = null, briefsArg = null, retainDir = null, escalated = false
 let baseShaArg = null, headShaArg = null, dirtyFlag = false
+let viaArg = null, modelArg = null
 const requireLegs = []
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
@@ -205,6 +219,8 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--base-sha') baseShaArg = argv[++i]
   else if (a === '--head-sha') headShaArg = argv[++i]
   else if (a === '--dirty') dirtyFlag = true
+  else if (a === '--via') viaArg = argv[++i]
+  else if (a === '--model') modelArg = argv[++i]
   else { usage(); process.exit(2) }
 }
 if (!manifestPath) { usage(); process.exit(2) }
@@ -231,6 +247,25 @@ if (escalated && profile === 'release') {
     '--profile release)')
   process.exit(2)
 }
+
+// ---- --via/--model refusal matrix (D3, specs/20260901/02-run-provenance.md) ------------------
+// Checked purely on flag presence/value, before the manifest/workflow files are even read (ahead
+// of the --retain matrix below, since a via-usage error must be distinguishable from a missing
+// --retain rather than being shadowed by it). --via is enum-checked (the fleet query in sibling
+// 03 reads it); --model is a free string with no enum since the transcript format that supplies
+// it is internal and version-unstable. Every refusal names --via specifically so it can never be
+// confused with the generic unknown-flag usage line.
+if (viaArg !== null && viaArg !== 'loop' && viaArg !== 'direct') {
+  console.error(`verdict.js: --via must be "loop" or "direct", got "${viaArg}"`)
+  process.exit(2)
+}
+if (profile === 'release' && (viaArg !== null || modelArg !== null)) {
+  console.error('verdict.js: --via/--model are not valid with --profile release — a release row ' +
+    'carries no runId and no reviewer return, so via/model have nothing to key; drop --via/--model')
+  process.exit(2)
+}
+const via = viaArg || 'direct'
+const model = modelArg !== null ? modelArg : null
 
 // ---- --retain requiredness matrix (D1-D3, specs/20260819/01-review-evidence-retention.md) ----
 // Checked purely on flag presence, before the manifest/workflow files are even read, so a
@@ -516,6 +551,13 @@ if (ledger) {
   if (specArg) row.spec = specArg
   row.stage = profile === 'release' ? 'release' : 'review'
   if (tier) row.tier = tier
+  // D3 (specs/20260901/02-run-provenance.md): via/model are inserted immediately after tier,
+  // before runId — review profile only (the refusal matrix above makes profile === 'release'
+  // with either flag unreachable, so this never fires on a release row).
+  if (profile !== 'release') {
+    row.via = via
+    row.model = model
+  }
   // D5: review rows always carry runId — the passed --run-id verbatim, else generated here
   // ("rv_" + 12 lowercase hex via crypto.randomBytes) so /spec:escape always has a backlink.
   if (profile !== 'release') row.runId = runId || ('rv_' + crypto.randomBytes(6).toString('hex'))

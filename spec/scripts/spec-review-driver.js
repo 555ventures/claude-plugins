@@ -156,6 +156,10 @@ const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
 // host-gate re-run in handleClosed() shares the exact {testDirs}/{scopeDirs} resolution
 // review-legs.js's own gate leg uses — a second, paraphrased copy here would be a drift seam.
 const { resolveGate } = require('./lib/gate-resolve')
+// D4 (specs/20260901/02-run-provenance.md): model is derived at row-write time (never once at
+// startup) — right after /clear the new transcript has no assistant line yet, and by the time a
+// verdict pass runs the session has spoken many times.
+const { sessionModel } = require('./lib/session-stamp.js')
 
 // D1-D6 (specs/20260821/04-stopped-row-durability.md): a worktree review's RED_BLOCKING hard-stop
 // durably appends here, at the MAIN root, instead of the worktree's own (destructible)
@@ -273,6 +277,14 @@ let escalateDriftError = null
 // saveSidecar/appendLedger are thin wrappers over lib/driver-io.js's shared primitives (D11) —
 // every existing call site below (`saveSidecar()`, `appendLedger(line)`) is unchanged.
 function saveSidecar() { saveSidecarLib(sidecarDir, path.basename(stateFile), marks) }
+
+// D4: --model <sessionModel(repoRoot) or omitted when null> — one shared arg-builder for all
+// three verdict.js passes below, read fresh at each call site (never cached) so a session that
+// has spoken since the last pass gets its current model, not a startup snapshot.
+function viaModelArgs() {
+  const m = sessionModel(repoRoot)
+  return m === null ? ['--via', marks.via] : ['--via', marks.via, '--model', m]
+}
 
 // ---- Gotchas cap (prose-cap.js, specs/20260823/06 + 2026-08-25 ratchet) ------------------------
 // The cap used to be a CLOSE-step sentence in review.md that nothing executed: Prax closed
@@ -398,6 +410,20 @@ if (status === 'done' && !marks.closeRunId) {
   die('spec status is already "done" and ' + sidecarRel + ' does not record this run\'s own ' +
     'close — the authoritative verdict for this spec already ran; use /spec:escape to record a ' +
     'defect that escaped a review that already passed, not another review run')
+}
+
+// ---- D4 (specs/20260901/02-run-provenance.md): --via recorded once, at sidecar creation --------
+// A later invocation naming a different --via is ignored — the run's provenance is fixed at
+// creation, so a resumed session reports the same via the run started with, never re-derived.
+// flag('--via') (A5) reads any --via value present; anything other than exactly "loop" defaults
+// to "direct", mirroring verdict.js's own default (D3) — the driver documents no separate --via
+// usage refusal, so an unrecognized value is treated the same as its absence rather than dying.
+// Placed AFTER the terminal-cold-path short-circuits above (never before them): saving here on a
+// spec already status:"done" with no sidecar would resurrect the very directory printDoneNow just
+// deleted, corrupting a `--state` query on a finished review into a fresh restart attempt.
+if (marks.via === undefined) {
+  marks.via = flag('--via') === 'loop' ? 'loop' : 'direct'
+  saveSidecar()
 }
 
 // ---- base derivation (D2: build_base -> diff_base -> branch) ----------------------------------
@@ -594,7 +620,7 @@ function runHardStopVerdict(n) {
   const diffLoc = computeDiffLoc()
   const args = ['--manifest', manifestPathFor(n), '--ledger', '--spec', specRel, '--tier', tier,
     '--diff-loc', String(diffLoc), '--iteration', String(n), '--run-id', runId,
-    '--base-sha', baseSha, '--head-sha', headSha()]
+    '--base-sha', baseSha, '--head-sha', headSha(), ...viaModelArgs()]
   if (treeDirty()) args.push('--dirty')
   const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
     'verdict.js (hard-stop pass)')
@@ -649,7 +675,7 @@ function writeEscalateRow(n) {
     '--waived', String(d.waived), '--rejected', String(d.rejected), '--fixDispatched', '0',
     '--escalated', '--ledger', '--spec', specRel, '--tier', tier, '--diff-loc', String(diffLoc),
     '--iteration', String(n), '--run-id', runId, '--retain', path.join(repoRoot, '.claude/spec-runs'),
-    '--base-sha', baseSha, '--head-sha', headSha()]
+    '--base-sha', baseSha, '--head-sha', headSha(), ...viaModelArgs()]
   if (treeDirty()) args.push('--dirty')
   const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
     'verdict.js (escalate pass)')
@@ -716,7 +742,7 @@ function doCloseWork(n) {
     '--waived', String(d.waived), '--rejected', String(d.rejected), '--fixDispatched', String(d.fixDispatched),
     '--ledger', '--spec', specRel, '--tier', tier, '--diff-loc', String(diffLoc),
     '--iteration', String(n), '--run-id', runId, '--retain', retainDir,
-    '--base-sha', baseSha, '--head-sha', headSha()]
+    '--base-sha', baseSha, '--head-sha', headSha(), ...viaModelArgs()]
   if (treeDirty()) args.push('--dirty')
   const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
     'verdict.js (authoritative pass)')

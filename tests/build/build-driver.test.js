@@ -666,3 +666,58 @@ test('AC-20260901-01-18 (class coverage: red-attributed): a --mark red-attribute
   assert.strictEqual(fs.readFileSync(path.join(host.sidecar, 'build-state.json'), 'utf8'), before,
     'a refused mark must leave build-state.json byte-unchanged — recording it here would let the RED_ATTRIBUTION judgment step be silently skipped: ' + before)
 })
+
+// specs/20260901/02-run-provenance.md D5 (2026-09-01, brief 18, AC-20260901-02-5): the build
+// driver gains the review driver's own --via flag (D4's sibling), recorded at sidecar creation,
+// and writes via/model onto the build row immediately after tier — model derived at row-write
+// time from lib/session-stamp.js's sessionModel(repoRoot). This test is written before
+// spec-session-stamp.sh / lib/session-stamp.js / the driver's --via support exist (TDD red,
+// 2026-09-01) and must fail until the driver genuinely threads --via through sidecar creation and
+// stamps the row with a real transcript-derived model.
+test('AC-20260901-02-5: a run created with --via loop and a stamp whose transcript ends in an assistant line with model claude-opus-5 appends a build row whose keys after tier begin via, model with "via":"loop","model":"claude-opus-5"; a run created without --via and without a stamp appends via:"direct", model:null', () => {
+  const loopHost = makeHost()
+  const rInit = run(loopHost.root, loopHost.spec, '--via', 'loop')
+  assert.strictEqual(stateOf(loopHost.root, loopHost.spec), 'TESTS',
+    'setup precondition: the FIRST invocation (the one that creates the sidecar) must carry --via loop so D5\'s creation-time recording has something to record: ' + rInit.stdout + rInit.stderr)
+
+  fs.mkdirSync(path.join(loopHost.root, '.claude'), { recursive: true })
+  const transcript = path.join(loopHost.root, 'transcript.jsonl')
+  fs.writeFileSync(transcript, JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-5' } }) + '\n')
+  fs.writeFileSync(path.join(loopHost.root, '.claude/spec-session.json'), JSON.stringify({
+    session_id: 's1', transcript_path: transcript, cwd: loopHost.root, ts: new Date().toISOString()
+  }))
+
+  toCommit(loopHost)
+  fs.writeFileSync(loopHost.spec.replace(/\.md$/, '.deviations.md'), '# Deviations — 99-bd-test\n\n- one departure\n')
+  execFileSync('git', ['-C', loopHost.root, 'add', 'src/foo.js', 'src/bar.js', 'other.txt', 'tests/foo.test.js', path.relative(loopHost.root, loopHost.spec)], { encoding: 'utf8' })
+  execFileSync('git', ['-C', loopHost.root, 'commit', '-q', '-m', 'checkpoint'], { encoding: 'utf8' })
+
+  const ledger = path.join(loopHost.root, '.claude/spec-runs.jsonl')
+  const before = fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean) : []
+  const r = run(loopHost.root, loopHost.spec, '--mark', 'committed')
+  assert.strictEqual(r.status, 0, 'a clean, advanced File Plan must be accepted at COMMIT: ' + r.stdout + r.stderr)
+  const after = fs.readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean)
+  assert.strictEqual(after.length, before.length + 1, 'exactly one ledger line must be appended at DONE: ' + JSON.stringify({ before, after }))
+  const row = JSON.parse(after[after.length - 1])
+  const tierIdx = Object.keys(row).indexOf('tier')
+  assert.deepStrictEqual(Object.keys(row).slice(tierIdx, tierIdx + 3), ['tier', 'via', 'model'],
+    'via and model must be the two keys immediately after tier on the build row: ' + JSON.stringify(row))
+  assert.strictEqual(row.via, 'loop', 'a run created with --via loop must carry via:"loop" on its DONE row: ' + JSON.stringify(row))
+  assert.strictEqual(row.model, 'claude-opus-5',
+    'a run whose stamp names a transcript ending in an assistant line with model claude-opus-5 must carry that model on the DONE row — the model is derived at row-write time, not creation time: ' + JSON.stringify(row))
+
+  const directHost = makeHost()
+  toCommit(directHost)
+  fs.writeFileSync(directHost.spec.replace(/\.md$/, '.deviations.md'), '# Deviations — 99-bd-test\n\n- one departure\n')
+  execFileSync('git', ['-C', directHost.root, 'add', 'src/foo.js', 'src/bar.js', 'other.txt', 'tests/foo.test.js', path.relative(directHost.root, directHost.spec)], { encoding: 'utf8' })
+  execFileSync('git', ['-C', directHost.root, 'commit', '-q', '-m', 'checkpoint'], { encoding: 'utf8' })
+  const directLedger = path.join(directHost.root, '.claude/spec-runs.jsonl')
+  const rDirect = run(directHost.root, directHost.spec, '--mark', 'committed')
+  assert.strictEqual(rDirect.status, 0, 'the no-via, no-stamp run must also reach DONE cleanly: ' + rDirect.stdout + rDirect.stderr)
+  const directRows = fs.readFileSync(directLedger, 'utf8').trim().split('\n').filter(Boolean)
+  const directRow = JSON.parse(directRows[directRows.length - 1])
+  assert.strictEqual(directRow.via, 'direct',
+    'a run created with no --via flag must default to via:"direct" on its DONE row: ' + JSON.stringify(directRow))
+  assert.strictEqual(directRow.model, null,
+    'a run with no .claude/spec-session.json stamp anywhere must carry model:null on its DONE row, never a thrown error or a fabricated value: ' + JSON.stringify(directRow))
+})

@@ -258,6 +258,36 @@ test('AC-20260901-01-13: generate provisions specs/**/*.build/ so git check-igno
     'disk yet: ' + gitignore)
 })
 
+// AC-20260901-02-7: specs/20260901/02-run-provenance.md D6 — the never-blocking spec-session-stamp.sh
+// hook writes a per-session scratch file at <root>/.claude/spec-session.json on every /spec: prompt.
+// A per-session file must never ride a close commit (the 7.45.0 sidecar class, the same reasoning
+// behind the .review/.build sidecar entries above) so init-gen.js's IGNORE_ENTRIES gains this exact
+// bare-file path. Unlike the .review/.build sidecar entries this is a single file, not a directory
+// glob, so the probe is the literal path itself rather than a child-path sample.
+test('AC-20260901-02-7: generate leaves git check-ignore .claude/spec-session.json exiting 0, with the line appearing exactly once across two runs', () => {
+  const dir = newHost('init-gen-generate-session-stamp')
+  const profile = baseProfile()
+  const profilePath = writeProfile(dir, profile)
+
+  const r1 = runNode('scripts/init-gen.js', ['generate', '--root', dir, '--profile', profilePath])
+  assert.strictEqual(r1.status, 0, 'first generate run must succeed cleanly: ' + r1.stderr)
+
+  const probe = spawnSync('git', ['check-ignore', '-q', '.claude/spec-session.json'], { cwd: dir })
+  assert.strictEqual(probe.status, 0,
+    'git must report .claude/spec-session.json as ignored after generate — unignored, the per-session ' +
+    'stamp a concurrent session writes on every /spec: prompt could ride a close commit, the exact ' +
+    '7.45.0 sidecar-class defect D6 exists to prevent: ' + fs.readFileSync(path.join(dir, '.gitignore'), 'utf8'))
+
+  const r2 = runNode('scripts/init-gen.js', ['generate', '--root', dir, '--profile', profilePath, '--refresh'])
+  assert.strictEqual(r2.status, 0, 'a --refresh re-run of an identical profile must still succeed: ' + r2.stderr)
+  const gitignore = fs.readFileSync(path.join(dir, '.gitignore'), 'utf8')
+  const hits = gitignore.split('\n').filter((l) => l.trim() === '.claude/spec-session.json').length
+  assert.strictEqual(hits, 1,
+    'two generate runs must leave exactly one .claude/spec-session.json line — a re-appended duplicate on ' +
+    'every --refresh is the same idempotency defect the .claude/worktrees/ and sidecar entries above were ' +
+    'fixed against: ' + gitignore)
+})
+
 test('AC-20260822-02-5: the Worker Contract section is strictEqual across every generated agent (with selfVerifyExamples substituted verbatim), and only the tests-kind agent carries the Tests-kind addendum bullets', () => {
   const dir = newHost('init-gen-generate')
   const selfVerify = "`node --test 'tests/x/*.test.js'`"

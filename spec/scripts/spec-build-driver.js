@@ -1,12 +1,18 @@
 #!/usr/bin/env node
 // Deterministic state-machine driver for /spec:build.
 //
-// spec-build-driver <spec.md>                          -> print current state + ONLY that step
+// spec-build-driver <spec.md> [--via loop|direct]      -> print current state + ONLY that step
 // spec-build-driver <spec.md> --mark <mark> [args]     -> verify artifacts, record, print next step
 //   marks: tests-authored | red-attributed |
 //          wave-done --wave <label> --workers <n> | integrated |
 //          repair-applied --continued <n> --spawned <n> | committed
 // spec-build-driver <spec.md> --state                  -> print the state name only (scripting)
+//
+// specs/20260901/02-run-provenance.md (D5, 2026-09-01, brief 18): --via <loop|direct> is recorded
+// once, at sidecar creation (default "direct"; a later invocation naming a different value is
+// ignored) and the DONE row gains `via`/`model` immediately after `tier` — model derived at
+// row-write time by lib/session-stamp.js's sessionModel(repoRoot), `null` on a host with no
+// .claude/spec-session.json stamp.
 //
 // States: PREFLIGHT (driver-only) -> TESTS -> RED_CHECK (driver-only) -> RED_FINDINGS? ->
 //   RED_ATTRIBUTION? -> WAVE:<label>... -> INTEGRATION -> GATE (driver-only) ->
@@ -53,6 +59,9 @@ const { fmValue } = require('./lib/frontmatter')
 const { readConfig } = require('./lib/host-config')
 const { resolveGate } = require('./lib/gate-resolve')
 const { parseFilePlanRows } = require('./lib/file-plan')
+// D5 (specs/20260901/02-run-provenance.md): model is derived at row-write time (never once at
+// startup) — the review driver's own sibling reasoning applies here too.
+const { sessionModel } = require('./lib/session-stamp.js')
 
 function die(msg) { process.stderr.write('spec-build-driver: ' + msg + '\n'); process.exit(2) }
 
@@ -208,6 +217,10 @@ if (!STATE_ONLY) {
     }
   }
   if (!hasTestsRows && marks.redCheck === undefined) marks.redCheck = 'none'
+  // D5 (specs/20260901/02-run-provenance.md): --via recorded once, at sidecar creation — a later
+  // invocation naming a different --via is ignored, mirroring the review driver's own D4 (flag()
+  // reads any --via value present, A5-style; anything but exactly "loop" defaults to "direct").
+  if (marks.via === undefined) marks.via = flag('--via') === 'loop' ? 'loop' : 'direct'
   saveSidecar()
 }
 
@@ -486,11 +499,17 @@ function handleCommitted() {
 
   const runId = 'bd_' + crypto.randomBytes(6).toString('hex')
   const workers = sumWorkers()
+  // D5: model is derived HERE, at row-write time (never once at startup) — the review driver's
+  // own D2/D4 reasoning applies here too: right after /clear the new transcript has no assistant
+  // line yet, and by the time COMMIT runs the session has spoken many times.
+  const model = sessionModel(repoRoot)
   const row = {
     ts: new Date().toISOString(),
     spec: specRel,
     stage: 'build',
     tier,
+    via: marks.via || 'direct',
+    model,
     runId,
     diff: { files: diffFiles, loc: diffLoc },
     gate: { finalRounds: (marks.gateRuns || []).length },

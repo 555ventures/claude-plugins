@@ -208,6 +208,11 @@
       "spec/commands/review.md"
     ]
   },
+  "spec/scripts/spec-session-stamp.sh": {
+    "entryPoints": [
+      "spec/hooks/hooks.json"
+    ]
+  },
   "spec/scripts/spec-state-gate.sh": {
     "entryPoints": [
       "spec/hooks/hooks.json"

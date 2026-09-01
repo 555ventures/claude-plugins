@@ -203,10 +203,24 @@ test('AC-20260820-07-2 (also AC-20260821-04-8, SHALL CONTINUE TO) / AC-20260824-
     'AC-20260824-06-5: the fixture tree carries no uncommitted edits at hard-stop time — diff.dirty must be ' +
     'false, never true or absent, once the sha pair is threaded onto the hard-stop pass: ' + JSON.stringify(appended))
 
+  // specs/20260901/02-run-provenance.md D4/A6 (2026-09-01, brief 18, AC-20260901-02-4's sibling
+  // pin): the driver now always passes --via/--model onto every verdict.js pass, so this fixture
+  // (no --via given to the driver, no .claude/spec-session.json stamp anywhere on the host) must
+  // land the default row shape — via:"direct", model:null. This assertion is what makes the
+  // reproducibility re-run below need the two flags at all: without it, a driver that silently
+  // dropped via/model from the row would still pass the byte-identity diff vacuously.
+  assert.strictEqual(appended.via, 'direct',
+    'AC-20260901-02-4/A6: a driver invocation with no --via and no stamp must default the appended row to via:"direct" — via is fixed at sidecar creation, not derived here: ' + JSON.stringify(appended))
+  assert.strictEqual(appended.model, null,
+    'AC-20260901-02-4/A6: a host with no .claude/spec-session.json stamp must derive model:null on the appended row, never a thrown error or a fabricated value: ' + JSON.stringify(appended))
+
   // Reproducibility check for "byte-equal to verdict.js's stdout line 2": feeding verdict.js the
-  // SAME manifest with the exact tier/diff/iteration/runId/base-sha/head-sha/dirty the driver's
-  // own row recorded must reproduce an identical row (every field but the call-time timestamp) —
-  // proving the driver appended verdict.js's own printed line rather than hand-composing one.
+  // SAME manifest with the exact tier/diff/iteration/runId/base-sha/head-sha/dirty/via/model the
+  // driver's own row recorded must reproduce an identical row (every field but the call-time
+  // timestamp) — proving the driver appended verdict.js's own printed line rather than
+  // hand-composing one. A6: --via/--model are taken from the row's OWN recorded via/model
+  // fields, never hardcoded here, so this stays a genuine re-invocation proof rather than an
+  // assumption about what the driver passed.
   const manifestPath = path.join(sidecar, 'manifest-1.jsonl')
   assert.ok(fs.existsSync(manifestPath), 'a STOPPED run must still have written manifest-1.jsonl before hard-stopping: ' + r.stdout)
   assert.ok(appended.spec && appended.tier, 'the ledger row must carry --spec and --tier so a GATE_RED run is attributable: ' + JSON.stringify(appended))
@@ -217,6 +231,8 @@ test('AC-20260820-07-2 (also AC-20260821-04-8, SHALL CONTINUE TO) / AC-20260824-
     reArgs.push('--base-sha', appended.diff.base, '--head-sha', appended.diff.head)
     if (appended.diff.dirty) reArgs.push('--dirty')
   }
+  reArgs.push('--via', appended.via)
+  if (appended.model !== null && appended.model !== undefined) reArgs.push('--model', appended.model)
   const reRun = runNode('scripts/verdict.js', reArgs)
   const reRunLine = reRun.stdout.trim().split('\n')[1]
   assert.ok(reRunLine, 'verdict.js must print a ledger line when re-invoked with the driver\'s own recorded flags against the same manifest: ' + reRun.stdout + reRun.stderr)
@@ -1604,4 +1620,60 @@ test('replay-root-4: the REPLAY execution step inlines the repo root alongside t
   assert.match(r.stdout, /--root/,
     'the step must name the flag the value feeds — a bare path with no flag beside it is a fact, not an ' +
     'instruction, and the incident happened because the instruction was missing: ' + r.stdout)
+})
+
+// specs/20260901/02-run-provenance.md D4 (2026-09-01, brief 18, AC-20260901-02-4): the review
+// driver gains --via loop|direct, recorded in review-state.json at sidecar creation (a later
+// different value is ignored — the run's provenance is fixed at creation), and passes
+// --via <recorded> --model <sessionModel(repoRoot) or omitted when null> on all three verdict.js
+// passes. This test is written before spec-session-stamp.sh / lib/session-stamp.js / the driver's
+// --via support exist (TDD red, 2026-09-01) and must fail until the driver genuinely threads --via
+// through sidecar creation and stamps CLOSE's authoritative row with a real transcript-derived
+// model.
+test('AC-20260901-02-4: a run created with --via loop and later driven to a CLEAN close with a stamp whose transcript ends in an assistant line with model claude-sonnet-5 records via:"loop" in review-state.json at creation and appends a CLEAN row carrying via:"loop", model:"claude-sonnet-5"; a run created without --via and without a stamp appends via:"direct", model:null', () => {
+  const loopHost = makeHost()
+  const rInit = run(loopHost.root, loopHost.spec, '--via', 'loop')
+  assert.strictEqual(stateOf(loopHost.root, loopHost.spec), 'REVIEWER',
+    'setup precondition: the FIRST invocation (the one that creates the sidecar) must carry --via loop so D4\'s creation-time recording has something to record: ' + rInit.stdout + rInit.stderr)
+  const stateAtCreation = JSON.parse(fs.readFileSync(path.join(loopHost.sidecar, 'review-state.json'), 'utf8'))
+  assert.strictEqual(stateAtCreation.via, 'loop',
+    'review-state.json must record via:"loop" at sidecar creation — a resumed session must report the same via the run started with, not re-derive it from a later invocation: ' + JSON.stringify(stateAtCreation))
+
+  fs.mkdirSync(path.join(loopHost.root, '.claude'), { recursive: true })
+  const transcript = path.join(loopHost.root, 'transcript.jsonl')
+  fs.writeFileSync(transcript, JSON.stringify({ type: 'assistant', message: { model: 'claude-sonnet-5' } }) + '\n')
+  fs.writeFileSync(path.join(loopHost.root, '.claude/spec-session.json'), JSON.stringify({
+    session_id: 's1', transcript_path: transcript, cwd: loopHost.root, ts: new Date().toISOString()
+  }))
+
+  const returnFile = returnFileWith('rvdrv-provenance-clean', CLEAN_RETURN)
+  run(loopHost.root, loopHost.spec, '--mark', 'reviewer-returned', '--file', returnFile)
+  assert.strictEqual(stateOf(loopHost.root, loopHost.spec), 'DISPOSITIONS',
+    'setup precondition: a returned zero-survivor CLEAN return must land DISPOSITIONS: ')
+
+  const ledger = path.join(loopHost.root, '.claude/spec-runs.jsonl')
+  const before = fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean) : []
+  const r = run(loopHost.root, loopHost.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(r.status, 0, 'a zero-survivor, zero-finding disposition must be accepted: ' + r.stdout + r.stderr)
+  const after = fs.readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean)
+  assert.strictEqual(after.length, before.length + 1, 'exactly one ledger line must be appended for the authoritative CLOSE pass: ' + JSON.stringify({ before, after }))
+  const row = JSON.parse(after[after.length - 1])
+  assert.strictEqual(row.verdict, 'CLEAN', 'the authoritative pass must still derive CLEAN for a zero-survivor, zero-leg-finding run: ' + JSON.stringify(row))
+  assert.strictEqual(row.via, 'loop', 'the appended CLEAN row must carry the via recorded at sidecar creation: ' + JSON.stringify(row))
+  assert.strictEqual(row.model, 'claude-sonnet-5',
+    'the appended CLEAN row must carry the model derived at row-write time from the stamped transcript\'s last assistant line: ' + JSON.stringify(row))
+
+  const directHost = makeHost()
+  toReviewer(directHost)
+  const directReturnFile = returnFileWith('rvdrv-provenance-direct', CLEAN_RETURN)
+  run(directHost.root, directHost.spec, '--mark', 'reviewer-returned', '--file', directReturnFile)
+  const directLedger = path.join(directHost.root, '.claude/spec-runs.jsonl')
+  const rDirect = run(directHost.root, directHost.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(rDirect.status, 0, 'the no-via, no-stamp run must also close cleanly: ' + rDirect.stdout + rDirect.stderr)
+  const directRows = fs.readFileSync(directLedger, 'utf8').trim().split('\n').filter(Boolean)
+  const directRow = JSON.parse(directRows[directRows.length - 1])
+  assert.strictEqual(directRow.via, 'direct',
+    'a run created with no --via flag must default to via:"direct" on its appended CLOSE row: ' + JSON.stringify(directRow))
+  assert.strictEqual(directRow.model, null,
+    'a run with no .claude/spec-session.json stamp anywhere must carry model:null on its appended CLOSE row: ' + JSON.stringify(directRow))
 })

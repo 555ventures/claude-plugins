@@ -107,3 +107,15 @@ round before executing it, so a fail-closed child left a phantom round that cons
 three and inflated the row's `workers` sums. Derive state from the observation first and consult
 markers only to disambiguate what the observation leaves open, and execute before recording so
 an exit-2 refusal is genuinely state-unchanged.
+
+## Run provenance
+
+Build and review rows carry `via` (`loop` when produced by `/spec:build`'s unified loop,
+`direct` when produced by the stage's own command) and `model` (the session model id, or
+`null`). `via` comes from the invoking command's `--via` flag and is fixed at sidecar creation;
+`model` is derived at row-write time by `lib/session-stamp.js` from the transcript named in
+`.claude/spec-session.json`, a per-root, gitignored, last-writer-wins stamp that the
+never-blocking `spec-session-stamp.sh` prompt hook writes on every `/spec:` prompt. The
+transcript format is internal to Claude Code; the reader fails soft to `null`. The session
+model is deliberately not read at prompt time — the transcript is empty right after a
+`/clear`.

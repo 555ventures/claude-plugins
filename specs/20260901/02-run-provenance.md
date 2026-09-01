@@ -1,6 +1,6 @@
 ---
 date: 2026-09-01
-status: implementing
+status: done
 tier: critical
 area: build-integrity
 design: false
@@ -9,6 +9,7 @@ depends_on: ["specs/20260901/01-build-driver.md"]
 depended_on_by: ["specs/20260901/03-unified-build-loop.md"]
 brief: 18
 build_base: c0113441b316a1de01a42534df0e1f876c7b88dd
+diff_base: c0113441b316a1de01a42534df0e1f876c7b88dd
 open_markers: 0
 ---
 
@@ -156,6 +157,29 @@ appears only when sibling 03's outer loop passes it.
 fallback (`null`). Last-writer-wins per root (D9) can mislabel a row's model when two sessions
 interleave in one root; the `via` axis is unaffected because it comes from the invoking
 command, not the stamp.
+
+**Deviations folded at review close 2026-09-01.** Two entries were recurring-shaped and folded
+into the host rules § Gotchas: D10's `build_base` correction (a moving ref planned as the base
+of a chained sibling series) extends the stale-`diff_base` entry as its second trigger, and
+D11/D12's two exhaustive-live-file-pin collisions (`red-fixture-coverage.test.js`'s
+`HOOK_HANDLERS` guard; `entrypoints.json`'s manifest-vs-executables count, where a
+`spec/scripts/lib/` row is unrepresentable because the executable scan excludes that directory)
+extend the exhaustive-pin entry as its fifth and sixth recurrences. Neither addition changed the
+Gotchas entry count. The remaining three were one-offs, recorded here:
+
+- The test author repaired a fixture defect in `tests/provenance/provenance.test.js` caught by
+  the coordinator's red-attribution pass: `manifestFixture()` wrote a single green `gate` row
+  against a minimal workflow object, missing seven of `verdict.js`'s eight required `REVIEW_LEGS`
+  rows, so the three `status === 0` tests derived `UNVERIFIED` and failed on the verdict word
+  rather than on the `--via`/`--model` contract. Replaced with the eight-leg-green fixture and
+  full workflow shape `tests/review/verdict.test.js` already uses, confirmed by direct execution
+  against an unmodified `verdict.js` that the fixture alone reaches CLEAN.
+- The orchestrator applied D6's one-line `.gitignore` row directly rather than dispatching a
+  `general-purpose` worker for it — the wave's whole file set was one literal line with no design
+  question. Recorded as `--workers 0` on the ledger row so the count stays honest.
+- Agent-memory disposal at this close: the sweep surfaced eight notes by content reference and
+  the spec's own diff touched none. All eight were judged still true against the current scripts
+  and carried, with `reviewed: 2026-09-01` written into each.
 
 ## Canonical Delta
 

@@ -179,9 +179,15 @@ this repo's suite; appending at cap requires an eviction (delete / merge / mecha
   but a concurrent session committing between that capture and the build's own commit makes the
   recorded sha a stale pre-image — review then diffs the sibling's unrelated commit into this
   spec's panel. The build corrects `diff_base` to the true pre-image at close and records the
-  departure; review inherits the corrected value with no special handling.
+  departure; review inherits the corrected value with no special handling. Same class, second
+  trigger: a spec **planned with a moving ref** as its `build_base` (`main`) in a chained sibling
+  series, where the earlier sibling's build has already landed on the branch — `red-check.js`
+  refuses with `pre-image is not pure` naming the sibling's files. Correct the base at build
+  Phase 0 to the sibling's review-close commit (the true pre-image) and record the departure;
+  `merge-back.sh branch-for` derives the merge target independently, so merge-back is unaffected.
   (specs/20260816/03-file-plan-table-scoped-parsing.md — `c467bc3` corrected to `f85d07a` at
-  build close 2026-08-17.)
+  build close 2026-08-17; specs/20260901/02-run-provenance.md D10 — `main` corrected to
+  `c011344`, sibling 01's close, at build Phase 0 2026-09-01.)
 - `[plugin]` **`orchestrator-compensation-during-live-worker`** (class stands at 1; grep this slug
   to count recurrences). The harness fired completion notifications for two `/spec:build` workers
   while they were still executing; the orchestrator read those as returns-with-no-work and began
@@ -227,9 +233,17 @@ this repo's suite; appending at cap requires an eviction (delete / merge / mecha
   the build caught all 7. Five sharper lexical rules (File Plan action, `ROOT`/`read(` on the
   mention line, live-repo reads anywhere) all landed at 1–3% precision, ≤29% recall. Spec
   20260814/05 D6/D12's "advisory, never blocks" stands; a `likely` hit at lock owes no waive line.
+  The pin set includes `tests/consistency/red-fixture-coverage.test.js`'s `HOOK_HANDLERS` guard,
+  which fails closed on an unfixtured hook script rather than skipping it — a new hook arm owes a
+  handler proving the hook ENGAGES on its own contract, which for a never-blocking hook is an
+  observable side effect plus a discriminating non-triggering control, never a block assertion.
   (specs/20260823/08-derived-session-queue.md D8 — `tests/consistency/entrypoints.test.js`
   AC-20260820-04-5 updated four→five in place, never weakened; waived at review 2026-08-23, the
-  fourth recurrence. An earlier revision of this entry prescribed running the leg at lock and
+  fourth recurrence. specs/20260901/02-run-provenance.md D11/D12, build 2026-09-01 — the fifth and
+  sixth: `spec-session-stamp.sh` owed a `HOOK_HANDLERS` handler, and the `entrypoints.json`
+  manifest-vs-executables count pin collided because `spec/scripts/lib/` is excluded from the
+  executable scan, so a `lib/` manifest row is unrepresentable — the row was removed rather than
+  the pin weakened. An earlier revision of this entry prescribed running the leg at lock and
   waiving every `likely` hit; that instruction was written before the measurement and is retracted.)
 - `[plugin]` `console.log(...)` immediately followed by `process.exit(0)` **silently truncates at
   the 64 KiB pipe buffer while still exiting 0** — Node's stdout write to a pipe is async, and

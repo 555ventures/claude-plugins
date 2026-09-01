@@ -40,6 +40,18 @@ truth with a new honest `baseline-red` value.
 | D7 | Historical rows are never rewritten: the 4 existing `stage:"replay"` rows (including `rp_1b176ebff5c7`'s `legs:"green"` misrecord) stand as-is; `--stats` is untouched — it never reads `legs`, and catch-rate math is unchanged (AC-20260823-09-10) | The ledger is append-only evidence; the misrecord is documented here, in Rationale, as the motivating incident |
 | D8 | `spec/.claude-plugin/plugin.json` bumps to 7.29.0 (target, not pin — next free version at build time per Gotchas) with the description changelog updated [no-ac: version-bump discipline is review's own hard check, not a test surface] | Behavior change in a shipped script + command doctrine |
 
+**Amended 2026-08-31** (specs/20260831/01-replay-range-materialization.md D8): D4's step-7
+ladder gains one more rung between rung 3's failed retry and its `leg-caught` record. A leg
+still red after the retry is no longer sufficient on its own — `--overlay`'s baseline
+(specs/20260831/01 D1) is *reproducible*, not *identical*, so a still-red leg can also mean
+environment drift rather than the mutation. Rung 3 now runs a pristine-baseline verification
+first: `git -C {dir} reset --hard HEAD^` (drops exactly the mutation commit), a fresh manifest,
+and a fresh legs run. Green on the pristine tree → `leg-caught` records exactly as this spec
+defines. Still red on the pristine tree → not mutation-caused: falls through to rung 4's
+`AskUserQuestion` seam (this spec's D5) instead of recording `leg-caught`, with both manifests
+presented as evidence. D4's newly-red keying and reconcile exemption, and D5's unattributable-
+leg question seam, are otherwise unchanged.
+
 ## File Plan
 
 | Path | Action | Layer | Summary |

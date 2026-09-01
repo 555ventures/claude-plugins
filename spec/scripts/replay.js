@@ -2,7 +2,7 @@
 'use strict'
 // replay.js --due
 //         | --select
-//         | --setup --commit <sha> --dir <path>
+//         | --setup --commit <sha> (--spec <path>|--dir <path>) [--overlay <closeSha>] [--subject <text>]
 //         | --apply --dir <path> --patch <file> --patch-out <file> --class <id> [--subject <text>]
 //         | --score --workflow <file> --patch <file>
 //         | --record --spec <path> --review-run-id <id> --legs green|red:<leg>|none
@@ -108,6 +108,23 @@
 // reviewer never ran, a step-7 dismissal) — riding a --workflow value there would fabricate reviewer
 // evidence that was never produced.
 //
+// Incident (2026-08-31, specs/20260831/01-replay-range-materialization.md, rv_128f1a459e42/
+// rp_d4b6fcf66c93): a `diff.dirty:true` review row's judged range is completed by the close commit
+// that follows it (range-identity spec 20260824/06 D3/D7) — fix-worker edits uncommitted at pass
+// time ride that commit — but F3's baseline stood at the close commit's PARENT, below the judged
+// range. Legs green over the close-commit tree went red at the bare parent, and replay.md's step 7
+// rung 3 (newly-red -> retry once -> still red) recorded a FALSE leg-caught, polluting the catch
+// rate. (D1-D3) --setup gains --overlay <closeSha>: after standing the worktree up at --commit, it
+// diffs <commit>..<overlay> with --name-status --no-renames, drops every row whose path opens with
+// a D2 meta prefix (specs/, .claude/, docs/canonical/ — the three surfaces a close commit uses to
+// record the review's own outcome), and materializes the rest (A/M via git checkout, D via git rm)
+// as one commit — uniformly, no diff.dirty branch, so a meta-only close degenerates to zero
+// materialized rows and no commit. (D4) --overlay must resolve to a strict descendant of --commit
+// (git merge-base --is-ancestor, equal shas refused too) or the whole call exits 4 before any
+// worktree is created, naming the --select remedy. (D5) --setup's optional --subject (default
+// "build: follow-up") is refused with exit 2 when it opens with "replay" (case-insensitive) — the
+// class-id half of --apply's F2 refusal does not apply here, since no --class exists at setup time.
+// (D7) --setup without --overlay stays byte-identical to today; the overlay is additive.
 // What this deliberately does NOT do: derive review-legs verdicts, touch the main working tree
 // (--setup/--apply/--teardown only ever act on a --dir the caller supplies, or one --setup derives
 // itself from --spec (D1, specs/20260826/01) — --setup refuses a caller --dir that resolves inside
@@ -130,6 +147,8 @@
 // score) · 1 = --due not due, or --select found no eligible CLEAN review row in the window ·
 // 2 = usage error / missing required flag / unreadable or unparseable input / --apply --subject
 // names the harness, the defect class, or the mutation class value / --apply missing --patch-out /
+// --setup --subject opens with "replay" (case-insensitive, D5 — the overlay commit message must be
+// indistinguishable from a real build commit) /
 // --score --workflow is not a CLEAN verdict with a survivors array / --score --patch parses to zero
 // hunks / any --record D7 validation-matrix refusal (an --outcome outside the five-value enum, a
 // malformed --legs — including a near-miss on the widened `baseline-red:<leg>[,<leg>]` shape (a bare
@@ -149,10 +168,12 @@
 // git-dir resolution, info/exclude provisioning, or --apply's canonical --patch-out re-emission)
 // failed, --setup's --dir resolves to a git-dir with no `worktrees` path segment (not a linked
 // worktree), --setup's --spec-derived path fails because `merge-back.sh branch-for` errors or does
-// not print a `spec/<stem>` line (specs/20260826/01 D1), or --select's target spec (read at the
+// not print a `spec/<stem>` line (specs/20260826/01 D1), --select's target spec (read at the
 // CLOSE commit, specs/20260823/05 D4) carries no diff_base/build_base candidate that resolves to a
 // validated ancestor of the close commit's parent distinct from it — widened by D4 to also cover a
-// stale (moving-ref) candidate, not just an absent one.
+// stale (moving-ref) candidate, not just an absent one — or --setup's --overlay does not resolve to
+// a strict descendant of --commit (specs/20260831/01 D4: an unrelated sha, an ancestor, or an equal
+// sha), refused before any worktree is created, naming the --select remedy.
 //
 // Incident (2026-08-26, specs/20260826/01-replay-scratch-path-blindness.md): the scratch worktree's
 // root path was a doctrine EXAMPLE (`.claude/worktrees/replay-<random>`) that every session
@@ -180,7 +201,8 @@ const { readLedgerRows } = require('./lib/observation')
 const { fmMap } = require('./lib/frontmatter')
 
 function usage() {
-  console.error('usage: replay.js [--root <path>] --due | --select | --setup --commit <sha> (--spec <path>|--dir <path>) | ' +
+  console.error('usage: replay.js [--root <path>] --due | --select | --setup --commit <sha> (--spec <path>|--dir <path>) ' +
+    '[--overlay <closeSha>] [--subject <text>] | ' +
     '--apply --dir <path> --patch <file> --patch-out <file> --class <id> [--subject <text>] | ' +
     '--score --workflow <file> --patch <file> | ' +
     '--record --spec <path> --review-run-id <id> --legs green|red:<leg>|baseline-red:<leg>[,<leg>]|none ' +
@@ -196,7 +218,7 @@ const MODE_FLAGS = {
 let mode = null
 let commit = null, dir = null, patch = null, cls = null, workflowPath = null, patchOut = null
 let specArg = null, reviewRunId = null, legs = null, outcome = null, tokensArg = null, subjectArg = null
-let rootArg = null
+let rootArg = null, overlayArg = null
 
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
@@ -218,6 +240,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--tokens') tokensArg = argv[++i]
   else if (a === '--subject') subjectArg = argv[++i]
   else if (a === '--root') rootArg = argv[++i]
+  else if (a === '--overlay') overlayArg = argv[++i]
   else { usage(); process.exit(2) }
 }
 if (!mode) { usage(); process.exit(2) }
@@ -321,9 +344,13 @@ function cmdSelect() {
       'and was actually committed')
     process.exit(4)
   }
-  // F3 (2026-08-19): the worktree must stand up at the CLOSE commit's PARENT, on the spec's
-  // pre-review base — not the close commit itself, which reads status: done and would leak
-  // "already reviewed" into the diff the blind reviewer is handed.
+  // F3 (2026-08-19, completed by specs/20260831/01 D1-D7): the worktree must stand up at the
+  // CLOSE commit's PARENT, on the spec's pre-review base — not the close commit itself, which
+  // reads status: done and would leak "already reviewed" into the diff the blind reviewer is
+  // handed. --select prints `parent=` unchanged (D3: --select is deliberately untouched) — the
+  // range's true upper bound (the close commit itself, per range-identity spec 20260824/06 D3/D7)
+  // is materialized separately by --setup --overlay, which replay.md now always passes alongside
+  // this same `parent=`/`commit=` pair.
   let parent
   try {
     parent = execFileSync('git', ['rev-parse', `${commitSha}^`], { cwd: root, encoding: 'utf8' }).trim()
@@ -434,16 +461,97 @@ function deriveScratchDir(resolvedRoot, specPath) {
   return path.join(resolvedRoot, '.claude', 'worktrees', `${name}-${suffix}`)
 }
 
+// ---- D2 (specs/20260831/01): the meta prefix set — the three surfaces a close commit uses to -----
+// ---- record the review's own outcome (status flip + Decision amendments + retained sidecar; ------
+// ---- ledger + evidence + rules/agent-memory; canonical delta citing the spec). Overlay rows under -
+// ---- any of these are never materialized, keeping the blindness invariant F3 bought. ---------------
+
+const OVERLAY_META_PREFIXES = ['specs/', '.claude/', 'docs/canonical/']
+
+// ---- D1/D3 (specs/20260831/01): materialize <commit>..<overlay>'s non-meta delta into `dir`, ------
+// ---- uniformly (no diff.dirty branch) — `git diff --name-status --no-renames` under --no-renames --
+// ---- only ever prints A/M/D; A/M rows checkout the overlay side, D rows `git rm`. Zero materialized
+// ---- rows means the close commit was meta-only (the degenerate clean-close case) — no commit is ----
+// ---- created and HEAD stays at --commit. Returns the count of materialized rows. --------------------
+
+function materializeOverlay(dirPath, commitSha, overlaySha, subject) {
+  let diffOut
+  try {
+    diffOut = execFileSync('git', ['diff', '--name-status', '--no-renames', commitSha, overlaySha],
+      { cwd: dirPath, encoding: 'utf8' })
+  } catch (e) {
+    console.error(`replay.js: git diff --name-status --no-renames ${commitSha} ${overlaySha} failed in ` +
+      `${dirPath} — confirm both commits exist in the worktree: ${e.message}`)
+    process.exit(4)
+  }
+  const rows = diffOut.split('\n').filter(Boolean).map((line) => {
+    const idx = line.indexOf('\t')
+    return { status: line.slice(0, idx), path: line.slice(idx + 1) }
+  })
+  const materializable = rows.filter((r) => !OVERLAY_META_PREFIXES.some((p) => r.path.startsWith(p)))
+  if (materializable.length === 0) return 0
+  for (const row of materializable) {
+    try {
+      if (row.status === 'D') {
+        execFileSync('git', ['rm', '-q', '--', row.path], { cwd: dirPath, stdio: 'pipe' })
+      } else {
+        execFileSync('git', ['checkout', overlaySha, '--', row.path], { cwd: dirPath, stdio: 'pipe' })
+      }
+    } catch (e) {
+      console.error(`replay.js: overlay materialization failed for ${row.status} ${row.path} in ${dirPath} ` +
+        `— inspect with git -C ${dirPath} status: ${e.message}`)
+      process.exit(4)
+    }
+  }
+  try {
+    execFileSync('git', ['commit', '-q', '-m', subject], { cwd: dirPath, stdio: 'pipe' })
+  } catch (e) {
+    console.error(`replay.js: overlay commit failed in ${dirPath} after materializing ` +
+      `${materializable.length} row(s) — inspect with git -C ${dirPath} status: ${e.message}`)
+    process.exit(4)
+  }
+  return materializable.length
+}
+
 // ---- --setup: derives {dir} from --spec via deriveScratchDir when --dir is omitted (D1); refuses --
 // ---- a caller-supplied --dir whose basename announces the harness (D2, exit 3, before any side -----
 // ---- effect); otherwise refuses a --dir that resolves inside the repo root UNLESS it resolves ------
 // ---- inside <root>/.claude/worktrees/ (specs/20260823/05) — exit 3, creates nothing for every other-
 // ---- in-repo path; otherwise self-provisions the ignore line then `git worktree add --detach` and --
 // ---- drops a scratch-worktree marker into the new worktree's own private git dir — never into its --
-// ---- working tree. ----------------------------------------------------------------------------------
+// ---- working tree. Optional --overlay <closeSha> (specs/20260831/01 D1-D5) then materializes the ---
+// ---- judged range's true upper bound: validated as a strict descendant of --commit (D4, exit 4 -----
+// ---- before any side effect), it re-applies <commit>..<overlay>'s non-meta delta as one commit -----
+// ---- under an optionally-supplied, harness-silent --subject (D5). ----------------------------------
 
 function cmdSetup() {
   if (!commit || (!dir && !specArg)) { usage(); process.exit(2) }
+  // D5: --subject is refused when it opens with "replay" (case-insensitive) — narrower than
+  // --apply's F2 refusal, since no --class exists at setup time to also check against. Checked
+  // first, before any filesystem or git side effect, exactly like D4's descendant check below.
+  const overlaySubject = subjectArg === null ? 'build: follow-up' : subjectArg
+  if (subjectArg !== null && /^\s*replay\b/i.test(overlaySubject)) {
+    console.error(`replay.js: --subject '${overlaySubject}' announces the harness — the overlay commit ` +
+      'message must be indistinguishable from a normal build commit; pass a build-commit-shaped --subject ' +
+      'that does not start with "replay", or omit it to use the default "build: follow-up"')
+    process.exit(2)
+  }
+  // D4: --overlay must resolve to a strict descendant of --commit — an unrelated sha, an ancestor,
+  // or an equal sha are all refused, before any worktree is created.
+  if (overlayArg) {
+    if (overlayArg === commit) {
+      console.error(`replay.js: --overlay ${overlayArg} equals --commit ${commit} — --overlay must be a ` +
+        'strict descendant of --commit; re-run --select and pass its printed commit/parent pair')
+      process.exit(4)
+    }
+    const ancestor = spawnSync('git', ['merge-base', '--is-ancestor', commit, overlayArg], { cwd: root })
+    if (ancestor.status !== 0) {
+      console.error(`replay.js: --overlay ${overlayArg} is not a descendant of --commit ${commit} — confirm ` +
+        `both are valid commits in ${root} and that --overlay comes after --commit; re-run --select and pass ` +
+        'its printed commit/parent pair')
+      process.exit(4)
+    }
+  }
   const resolvedRoot = path.resolve(root)
   let resolvedDir
   if (dir) {
@@ -518,7 +626,12 @@ function cmdSetup() {
       `registered but unusable; remove it with git -C ${root} worktree remove --force ${resolvedDir}: ${e.message}`)
     process.exit(4)
   }
-  console.log(`setup dir=${resolvedDir} commit=${commit}`)
+  let overlaySuffix = ''
+  if (overlayArg) {
+    const overlaid = materializeOverlay(resolvedDir, commit, overlayArg, overlaySubject)
+    overlaySuffix = ` overlay=${overlayArg} overlaid=${overlaid}`
+  }
+  console.log(`setup dir=${resolvedDir} commit=${commit}${overlaySuffix}`)
   process.exit(0)
 }
 

@@ -47,10 +47,16 @@ asked.
 
 ## Phase 1 — Mutation authoring
 
-1. **Setup:** run `node "$(spec-paths replay)" --setup --commit {parent} --spec {spec}` and read
-   `{dir}` from the `dir=` value it prints — the worktree stands up at the close commit's
-   **parent**, never the close commit itself, so the tree the mutation lands on is the one the
-   original review actually judged. `--setup` derives `{dir}` itself from `{spec}` (a
+1. **Setup:** run `node "$(spec-paths replay)" --setup --commit {parent} --overlay {commit} --spec
+   {spec}` and read `{dir}` from the `dir=` value it prints — `--overlay {commit}` materializes
+   the judged range's true upper bound: a `diff.dirty:true` row's judged range is completed by
+   the close commit that follows it (range-identity spec 20260824/06 D3/D7), so the bare parent
+   under-states the range whenever fix-worker edits rode that close commit. `--setup` stands the
+   worktree up at `--commit` (the parent) and then re-applies the close commit's non-meta content
+   as one build-shaped commit, leaving the three review-outcome surfaces (`specs/`, `.claude/`,
+   `docs/canonical/`) at the parent version — the mutation still lands on the same blind tree this
+   command has always used, just materialized out to the close commit instead of truncated at its
+   parent. `--setup` derives `{dir}` itself from `{spec}` (a
    build-shaped name under `<root>/.claude/worktrees/`, random-suffixed so it coexists with the
    spec's own build worktree if one is still registered) and self-provisions the host's ignore
    line when it's missing, so the worktree stays invisible to `git status` in the main tree.
@@ -137,12 +143,21 @@ asked.
    3. Otherwise, if `L ∈ {baselineLegs}` → **newly red**: `L` was green at the original review and
       is red now, so the mutation is the suspect — either the class catching itself (leg-caught)
       or an authoring miss on a class the corpus promises stays leg-invisible. Tear the worktree
-      down (`--teardown --dir {dir}`), `--setup` a fresh one at the same `{parent}`, and
-      re-author the mutation **once** for the same class, avoiding the site whose edit tripped
-      the leg — a different site inside the same recipe. Re-run steps 5–6.
-      If legs are STILL red after the retry, this run's outcome is `leg-caught` — skip Phase 2
-      (the reviewer is never dispatched) and go straight to Phase 3 with `--legs red:<leg>` (the
-      newly-red meaning, never the baseline-red one).
+      down (`--teardown --dir {dir}`), `--setup` a fresh one at the same `{parent}` +
+      `{commit}` overlay, and re-author the mutation **once** for the same class, avoiding the
+      site whose edit tripped the leg — a different site inside the same recipe. Re-run steps 5–6.
+      If legs are STILL red after the retry, run the **pristine-baseline verification** before
+      `leg-caught` is ever recorded: `git -C {dir} reset --hard HEAD^` — this drops exactly the
+      mutation commit (the overlay commit, or the parent when no overlay commit exists, remains)
+      — then a fresh manifest (a new `{manifestPath}`) and a fresh `node
+      "$(spec-paths review-legs)"` run against the now-pristine tree. `L` green on the pristine
+      baseline → this run's outcome is
+      `leg-caught` — skip Phase 2 (the reviewer is never dispatched) and go straight to Phase 3
+      with `--legs red:<leg>` (the newly-red meaning, never the baseline-red one). `L` still red
+      on the pristine baseline → not mutation-caused (environment drift, not the mutation): fall
+      through to rung 4's `AskUserQuestion` seam, presenting both the mutated-tree manifest and
+      the pristine-tree manifest as evidence — never record `leg-caught` from an unverified
+      still-red result.
    4. Otherwise (`L ∉ {baselineLegs}`, or the baseline is `unknown`) → unattributable: one
       `AskUserQuestion` showing `L`'s failure output beside the recorded baseline — is this leg's
       redness pre-existing or caused by the mutation? "pre-existing" resolves it explained, same
@@ -248,7 +263,11 @@ Next: {spec-status --next, verbatim}
   The path and the marker were the two surfaces that bit on 2026-08-26
   (specs/20260826/01-replay-scratch-path-blindness.md): `--setup` now derives the path from the
   target spec instead of a doctrine example a session could copy, and the marker carries the
-  neutral name `scratch-worktree`.
+  neutral name `scratch-worktree`. The `--overlay` materialization (specs/20260831/01) is bound
+  by the same invariant from the other direction: the three meta prefixes (`specs/`, `.claude/`,
+  `docs/canonical/`) — where a close commit records the review's own outcome (status flip,
+  ledger row, canonical delta) — never enter the tree at all, so the "already reviewed" signal
+  those paths would carry stays out of what the blind reviewer can read.
 - **The main tree is never in scope.** Every mutating step runs inside `{dir}`, a detached
   worktree isolated by three mechanisms together — the worktree itself, the ignore line
   `--setup` self-provisions when the host lacks it, and the `--setup`/`--teardown` marker guard

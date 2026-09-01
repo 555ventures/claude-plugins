@@ -100,6 +100,27 @@ const { SPEC, read, tmpdir, runNode, gitRepo } = require('../helpers')
 // `replay-*`-basename in-repo `--dir` fixtures above (AC-20260823-05-1/-3/-4) are renamed
 // `scratch-*` in place so they keep exercising the in-repo allow arm instead of tripping D2.
 
+// specs/20260831/01-replay-range-materialization.md (2026-08-31, rv_128f1a459e42/rp_d4b6fcf66c93):
+// the baseline worktree stood at the close commit's parent (F3), but a diff.dirty:true review
+// row's judged range is completed by the close commit that follows it (range-identity spec
+// 20260824/06 D3/D7) — a leg green over the close-commit tree could go red at the bare parent,
+// and step 7 rung 3's retry-then-leg-caught path recorded a FALSE leg-caught, polluting the
+// catch-rate. D1-D5 give --setup an optional --overlay <closeSha> (paired with the existing
+// --commit <parentSha>): after standing the worktree up at --commit, the overlay diffs
+// <commit>..<overlay>, drops every row under the D2 meta-prefix set (specs/, .claude/,
+// docs/canonical/ — the three surfaces a close commit records the review's own outcome on), and
+// checks out/removes the remaining non-meta rows as one commit (default subject "build:
+// follow-up", refused with exit 2 when a caller-supplied --subject opens with "replay" — D5).
+// --overlay must resolve to a strict descendant of --commit (D4, exit 4 otherwise, naming the
+// --select remedy). --setup without --overlay stays byte-identical to today (D7) —
+// AC-20260831-01-6 below retags the existing --setup tests (AC-20260826-01-1, AC-20260823-05-2)
+// that already pin that exact byte-identical shape, in place, rather than duplicating them. D6
+// adds a pristine-baseline verification to replay.md's own step 7 rung 3 (git reset --hard
+// HEAD^, fresh manifest, re-run legs) before a still-red leg is ever recorded leg-caught — a
+// still-red PRISTINE result routes to rung 4's question seam instead, since it is not
+// mutation-caused. AC-20260831-01-7 pins step 1's --overlay invocation and step 7 rung 3's
+// pristine-verification prose, section-scoped exactly like AC-20260823-09-9 below.
+
 const SCRIPT = 'scripts/replay.js'
 
 // D4 (specs/20260823/05): every --select fixture that supplies a base candidate must use a REAL
@@ -110,6 +131,25 @@ function commitReal(root, relFile, content, msg) {
   const full = path.join(root, relFile)
   fs.mkdirSync(path.dirname(full), { recursive: true })
   fs.writeFileSync(full, content)
+  execFileSync('git', ['-C', root, 'add', '-A'])
+  execFileSync('git', ['-C', root, 'commit', '-q', '-m', msg])
+  return execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+}
+
+// specs/20260831/01: build a commit whose content is exactly the given {path: content|null} map
+// (null = delete a path that must already exist) — used by the --overlay fixtures below to build
+// a parent/close commit pair with a precise, individually-named non-meta/meta delta shape, rather
+// than the two-content-versions-of-one-file shape commitSpecFlow was built for.
+function commitFiles(root, files, msg) {
+  for (const [rel, content] of Object.entries(files)) {
+    const full = path.join(root, rel)
+    if (content === null) {
+      fs.unlinkSync(full)
+    } else {
+      fs.mkdirSync(path.dirname(full), { recursive: true })
+      fs.writeFileSync(full, content)
+    }
+  }
   execFileSync('git', ['-C', root, 'add', '-A'])
   execFileSync('git', ['-C', root, 'commit', '-q', '-m', msg])
   return execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
@@ -579,7 +619,9 @@ test('AC-20260823-05-1: --setup accepts a --dir inside <root>/.claude/worktrees/
 // '.claude/worktrees'))` implementation of D1 (a STRING-prefix check), which would wrongly accept
 // `.claude/worktrees-evil/` — the same guard-by-name-not-location class this repo's own Gotchas
 // record for the entrypoint conformance guard (specs/20260820/04).
-test('AC-20260823-05-2: --setup CONTINUES TO refuse a --dir that resolves inside the repo root but NOT inside <root>/.claude/worktrees/, with exit 3 and nothing created — including a lookalike path that only shares a string prefix with .claude/worktrees/', () => {
+// AC-20260831-01-6 (SHALL CONTINUE TO, specs/20260831/01): --setup without --overlay must keep
+// refusing an in-repo --dir outside .claude/worktrees/ exactly as today — retagged in place.
+test('AC-20260823-05-2 / AC-20260831-01-6: --setup CONTINUES TO refuse a --dir that resolves inside the repo root but NOT inside <root>/.claude/worktrees/, with exit 3 and nothing created — including a lookalike path that only shares a string prefix with .claude/worktrees/', () => {
   const root = fs.realpathSync(tmpdir('replay-setup-inside-notwt'))
   gitRepo(root)
   const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
@@ -673,7 +715,10 @@ test('AC-20260823-05-4: WHEN the repo\'s info/exclude already carries the .claud
 // sole owner of the `spec/<stem>` naming rule (pipeline rules § Risk Tiers) — rather than
 // hardcoding the transform, so a future change to that rule cannot silently desync this file.
 
-test('AC-20260826-01-1: --setup --commit <sha> --spec <spec path> with no --dir exits 0, prints exactly one stdout line "setup dir=<abs> commit=<sha>" where <abs> is R/.claude/worktrees/<name>-<6 lowercase hex> and <name> is merge-back.sh branch-for <spec path> with "/" -> "-", registers a detached worktree there carrying scratch-worktree, and leaves the host repo\'s git status --porcelain empty', () => {
+// AC-20260831-01-6 (SHALL CONTINUE TO, specs/20260831/01): --setup without --overlay must stay
+// byte-identical to today — this test already pins the exact two-token printed line and the
+// marker-carrying worktree that shape produces, so it is retagged in place rather than duplicated.
+test('AC-20260826-01-1 / AC-20260831-01-6: --setup --commit <sha> --spec <spec path> with no --dir exits 0, prints exactly one stdout line "setup dir=<abs> commit=<sha>" where <abs> is R/.claude/worktrees/<name>-<6 lowercase hex> and <name> is merge-back.sh branch-for <spec path> with "/" -> "-", registers a detached worktree there carrying scratch-worktree, and leaves the host repo\'s git status --porcelain empty', () => {
   const root = fs.realpathSync(tmpdir('replay-setup-derived'))
   gitRepo(root) // gitRepo()'s own fixture .gitignore already covers .claude/worktrees/
   const relSpec = 'specs/20260825/02-genesis-consultant-discovery.md'
@@ -883,6 +928,216 @@ test('AC-20260826-01-4: --setup plants exactly scratch-worktree (never replay-wo
   const list = execFileSync('git', ['-C', root, 'worktree', 'list'], { encoding: 'utf8' })
   assert.ok(list.includes(legacyDir),
     'D3: git\'s own worktree registry must still list the refused (undeleted) directory: ' + list)
+})
+
+// specs/20260831/01-replay-range-materialization.md D1-D5 (2026-08-31, rv_128f1a459e42/
+// rp_d4b6fcf66c93): the five tests below pin --setup's new --overlay <closeSha> arm — the overlay
+// algorithm's materialize/skip split (AC-1/AC-2), its degenerate meta-only case (AC-3), the
+// descendant validation (AC-4), and the --subject refusal/acceptance (AC-5). None of these pass
+// today: --overlay is an unrecognized flag, so every invocation below hits the arg-parser's usage
+// exit 2 before ever reaching --setup's mode logic — a genuine assertion-level red, not a crash.
+
+test('AC-20260831-01-1: --setup --overlay materializes exactly the close commit\'s non-meta modify/add/delete as one commit with the default subject, leaving the worktree clean with the marker intact', () => {
+  const root = fs.realpathSync(tmpdir('replay-overlay-materialize'))
+  gitRepo(root)
+  const parent = commitFiles(root, {
+    'lib/a.js': 'a\n',
+    'lib/dead.js': 'dead\n',
+    'specs/01-x.md': '---\nstatus: implementing\n---\n# x\n',
+    '.claude/spec-runs.jsonl': '{"line":1}\n',
+  }, 'parent commit')
+  const close = commitFiles(root, {
+    'lib/a.js': 'A\n',
+    'tests/new.test.js': 'new\n',
+    'lib/dead.js': null,
+    'specs/01-x.md': '---\nstatus: done\n---\n# x\n',
+    '.claude/spec-runs.jsonl': '{"line":1}\n{"line":2}\n',
+  }, 'close commit')
+
+  const statusBeforeMain = execFileSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' })
+
+  const dir = path.join(fs.realpathSync(tmpdir('replay-overlay-materialize-wt')), 'wt')
+  const r = runNode(SCRIPT, ['--setup', '--commit', parent, '--overlay', close, '--dir', dir], { cwd: root })
+  assert.strictEqual(r.status, 0,
+    'D1: a --setup --overlay call whose close commit modifies/adds/deletes non-meta files alongside meta ' +
+    'edits must succeed and materialize the range\'s true upper bound — a nonzero exit here means the false ' +
+    'leg-caught misrecord (rv_128f1a459e42/rp_d4b6fcf66c93) this spec exists to fix is still live: ' + r.stderr)
+
+  const escapedDir = dir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  assert.match(r.stdout, new RegExp('^setup dir=' + escapedDir + ' commit=' + parent + ' overlay=' + close + ' overlaid=3\\n?$'),
+    'D1/Contracts: the existing tokens (dir=/commit=) must stay first, with " overlay=<closeSha> overlaid=<N>" ' +
+    'appended naming exactly 3 materialized non-meta rows — a wrong N or token order here breaks the driver-' +
+    'side prefix-tolerant dir= parse or miscounts the overlay: ' + JSON.stringify(r.stdout))
+
+  const nameStatus = execFileSync('git', ['-C', dir, 'diff', '--name-status', parent, 'HEAD'], { encoding: 'utf8' }).trim()
+  const rows = nameStatus.split('\n').filter(Boolean).sort()
+  assert.deepStrictEqual(rows, ['A\ttests/new.test.js', 'D\tlib/dead.js', 'M\tlib/a.js'].sort(),
+    'D1: git diff --name-status parent..HEAD in the worktree must list EXACTLY the 3 non-meta rows the close ' +
+    'commit carried — any meta row leaking in defeats the blindness guarantee, and a missing non-meta row ' +
+    'means the judged range was not fully materialized: ' + nameStatus)
+
+  const subject = execFileSync('git', ['-C', dir, 'log', '-1', '--format=%s'], { encoding: 'utf8' }).trim()
+  assert.strictEqual(subject, 'build: follow-up',
+    'D5: the overlay commit must carry the default subject "build: follow-up" when --subject is omitted — a ' +
+    'reviewer\'s sanctioned git log read must never see anything else: ' + subject)
+
+  const status = execFileSync('git', ['-C', dir, 'status', '--porcelain'], { encoding: 'utf8' })
+  assert.strictEqual(status.trim(), '',
+    'D1: the worktree must be fully clean after the overlay commit — leftover working-tree changes would ' +
+    'themselves leak into what the reconcile/at-risk legs or the blind reviewer observe: ' + status)
+
+  const marker = markerPath(dir)
+  assert.ok(fs.existsSync(marker),
+    'D1: the scratch-worktree marker must still be present after the overlay commit — the overlay algorithm ' +
+    'must never disturb the marker --teardown\'s refusal-without-marker guard depends on: ' + marker)
+
+  const teardown = runNode(SCRIPT, ['--teardown', '--dir', dir], { cwd: root })
+  assert.strictEqual(teardown.status, 0,
+    'D1: teardown must still succeed and remove an overlay-materialized worktree exactly like any other: ' + teardown.stderr)
+  assert.ok(!fs.existsSync(dir), 'D1: teardown must remove the overlay worktree directory: ' + dir)
+
+  const statusAfterMain = execFileSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' })
+  assert.strictEqual(statusAfterMain, statusBeforeMain,
+    'D1: the overlay materialization must never touch the host repo\'s own working tree: ' +
+    JSON.stringify({ before: statusBeforeMain, after: statusAfterMain }))
+})
+
+test('AC-20260831-01-2: --setup --overlay leaves every meta-prefix path (specs/, .claude/, docs/canonical/) at the --commit version, never materializing a close-added evidence file under .claude/spec-runs/', () => {
+  const root = fs.realpathSync(tmpdir('replay-overlay-meta'))
+  gitRepo(root)
+  const parent = commitFiles(root, {
+    'lib/a.js': 'a\n',
+    'specs/02-y.md': '---\nstatus: implementing\n---\n# y\n',
+    '.claude/spec-runs.jsonl': '{"line":1}\n',
+    'docs/canonical/review.md': 'parent doc\n',
+  }, 'parent commit')
+  const close = commitFiles(root, {
+    'lib/a.js': 'A\n',
+    'specs/02-y.md': '---\nstatus: done\n---\n# y\n',
+    '.claude/spec-runs.jsonl': '{"line":1}\n{"line":2}\n',
+    'docs/canonical/review.md': 'close doc\n',
+    '.claude/spec-runs/rv_deadbeefcafe.json': '{"evidence":true}\n',
+  }, 'close commit')
+
+  const dir = path.join(fs.realpathSync(tmpdir('replay-overlay-meta-wt')), 'wt')
+  const r = runNode(SCRIPT, ['--setup', '--commit', parent, '--overlay', close, '--dir', dir], { cwd: root })
+  assert.strictEqual(r.status, 0,
+    'D2: a close commit carrying one non-meta row alongside four meta rows across all three meta prefixes ' +
+    'must still overlay successfully: ' + r.stderr)
+
+  const specContent = fs.readFileSync(path.join(dir, 'specs/02-y.md'), 'utf8')
+  assert.match(specContent, /status: implementing/,
+    'D2: the spec file at the worktree HEAD must still read status: implementing (the --commit/parent ' +
+    'version) — materializing the close commit\'s status: done flip would leak "already reviewed" straight ' +
+    'into the tree the blind reviewer or legs read: ' + specContent)
+
+  const ledgerContent = fs.readFileSync(path.join(dir, '.claude/spec-runs.jsonl'), 'utf8')
+  assert.strictEqual(ledgerContent, '{"line":1}\n',
+    'D2: the worktree ledger must have no close-time row — it must match the --commit version exactly, never ' +
+    'the close commit\'s appended line: ' + ledgerContent)
+
+  const canonicalContent = fs.readFileSync(path.join(dir, 'docs/canonical/review.md'), 'utf8')
+  assert.strictEqual(canonicalContent, 'parent doc\n',
+    'D2: docs/canonical/ must match the --commit (parent) version — a close-time canonical-delta edit riding ' +
+    'into the worktree would leak the review\'s own outcome prose: ' + canonicalContent)
+
+  assert.ok(!fs.existsSync(path.join(dir, '.claude/spec-runs/rv_deadbeefcafe.json')),
+    'D2: a close-added evidence file under .claude/spec-runs/ must be absent from the worktree — materializing ' +
+    'it would hand the blind reviewer direct proof a review already ran: ' + dir)
+
+  const nameStatus = execFileSync('git', ['-C', dir, 'diff', '--name-status', parent, 'HEAD'], { encoding: 'utf8' }).trim()
+  assert.strictEqual(nameStatus, 'M\tlib/a.js',
+    'D2: the overlay commit must contain ONLY the one non-meta row — any meta path appearing here means D2\'s ' +
+    'prefix filter let a review-outcome surface leak into the diff the reviewer reads: ' + nameStatus)
+})
+
+test('AC-20260831-01-3: --setup --overlay whose close commit changes only meta-prefix paths creates no overlay commit, leaves the worktree HEAD at --commit, and prints overlaid=0', () => {
+  const root = fs.realpathSync(tmpdir('replay-overlay-metaonly'))
+  gitRepo(root)
+  const parent = commitFiles(root, {
+    'lib/a.js': 'a\n',
+    'specs/03-z.md': '---\nstatus: implementing\n---\n# z\n',
+  }, 'parent commit')
+  const close = commitFiles(root, {
+    'specs/03-z.md': '---\nstatus: done\n---\n# z\n',
+    '.claude/spec-runs.jsonl': '{"line":1}\n',
+  }, 'close commit (meta-only)')
+
+  const dir = path.join(fs.realpathSync(tmpdir('replay-overlay-metaonly-wt')), 'wt')
+  const r = runNode(SCRIPT, ['--setup', '--commit', parent, '--overlay', close, '--dir', dir], { cwd: root })
+  assert.strictEqual(r.status, 0,
+    'D1: a meta-only close (the clean-close degenerate case) must still exit 0 — the uniform overlay rule ' +
+    'must degenerate cleanly to today\'s behavior by construction, never refuse or half-apply: ' + r.stderr)
+  assert.match(r.stdout, / overlaid=0(\s|$)/,
+    'D1/Contracts: overlaid=0 must print when every close-commit row is meta-prefixed and none is ' +
+    'materialized: ' + r.stdout)
+
+  const head = execFileSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  assert.strictEqual(head, parent,
+    'D1: zero non-meta rows must mean NO overlay commit is created — the worktree HEAD must stay exactly at ' +
+    '--commit, never gain an empty or meta-only commit: ' + head)
+})
+
+test('AC-20260831-01-4: --setup refuses an --overlay that is not a strict descendant of --commit — an ancestor or an equal sha — with exit 4 before creating any worktree, naming the --select remedy', () => {
+  const root = fs.realpathSync(tmpdir('replay-overlay-nondescendant'))
+  gitRepo(root)
+  const parent = commitFiles(root, { 'lib/a.js': 'a\n' }, 'parent commit')
+  const close = commitFiles(root, { 'lib/a.js': 'A\n' }, 'close commit')
+
+  const listBefore = execFileSync('git', ['-C', root, 'worktree', 'list'], { encoding: 'utf8' })
+
+  const dirSame = path.join(fs.realpathSync(tmpdir('replay-overlay-same-wt')), 'wt')
+  const rSame = runNode(SCRIPT, ['--setup', '--commit', parent, '--overlay', parent, '--dir', dirSame], { cwd: root })
+  assert.strictEqual(rSame.status, 4,
+    'D4: an --overlay EQUAL to --commit must be refused — D4 explicitly refuses equal shas too, not just ' +
+    'non-ancestors: ' + JSON.stringify({ status: rSame.status, stdout: rSame.stdout }))
+  assert.ok(!fs.existsSync(dirSame), 'D4: a refused --overlay must create no worktree directory: ' + dirSame)
+
+  const dirReversed = path.join(fs.realpathSync(tmpdir('replay-overlay-reversed-wt')), 'wt')
+  const rReversed = runNode(SCRIPT, ['--setup', '--commit', close, '--overlay', parent, '--dir', dirReversed], { cwd: root })
+  assert.strictEqual(rReversed.status, 4,
+    'D4: an --overlay that is an ANCESTOR of --commit (a swapped/reversed pair) must be refused exactly like ' +
+    'a non-descendant: ' + JSON.stringify({ status: rReversed.status, stdout: rReversed.stdout }))
+  assert.ok(!fs.existsSync(dirReversed), 'D4: the reversed-pair refusal must also create no worktree directory: ' + dirReversed)
+  assert.match(rReversed.stderr, /--select/,
+    'D4: the refusal must name the remedy — re-running --select and passing its printed commit/parent pair — ' +
+    'or a caller has no path forward after a stale/reversed pair: ' + rReversed.stderr)
+
+  const listAfter = execFileSync('git', ['-C', root, 'worktree', 'list'], { encoding: 'utf8' })
+  assert.strictEqual(listAfter, listBefore,
+    'D4: a refused --setup --overlay must register nothing in git\'s own worktree list: ' +
+    JSON.stringify({ before: listBefore, after: listAfter }))
+})
+
+test('AC-20260831-01-5: --setup --overlay refuses a --subject that opens with "replay" (case-insensitive) with exit 2 naming the constraint, and accepts a build-shaped subject verbatim as the overlay commit\'s own subject', () => {
+  const root = fs.realpathSync(tmpdir('replay-overlay-subject'))
+  gitRepo(root)
+  const parent = commitFiles(root, { 'lib/a.js': 'a\n' }, 'parent commit')
+  const close = commitFiles(root, { 'lib/a.js': 'A\n' }, 'close commit')
+
+  const refusedDir = path.join(fs.realpathSync(tmpdir('replay-overlay-subject-refused-wt')), 'wt')
+  const refused = runNode(SCRIPT, ['--setup', '--commit', parent, '--overlay', close, '--dir', refusedDir,
+    '--subject', 'replay harness check'], { cwd: root })
+  assert.strictEqual(refused.status, 2,
+    'D5: a --subject opening with "replay" (case-insensitive) must be refused — the class-id half of ' +
+    '--apply\'s F2 refusal does not apply at setup time (no class exists yet), but the harness-announcing ' +
+    'half still must: ' + JSON.stringify({ status: refused.status, stdout: refused.stdout }))
+  assert.match(refused.stderr, /replay|announc/i,
+    'D5: the refusal must NAME the constraint being violated, not fail with a generic usage error: ' + refused.stderr)
+  assert.ok(!fs.existsSync(refusedDir),
+    'D5: a refused --subject must create no worktree at all — refusing only the overlay commit after the ' +
+    'worktree already exists would leave a half-built scratch tree behind: ' + refusedDir)
+
+  const acceptedDir = path.join(fs.realpathSync(tmpdir('replay-overlay-subject-accepted-wt')), 'wt')
+  const accepted = runNode(SCRIPT, ['--setup', '--commit', parent, '--overlay', close, '--dir', acceptedDir,
+    '--subject', 'build(20260830/03): ci leg honest absence'], { cwd: root })
+  assert.strictEqual(accepted.status, 0,
+    'D5: a build-shaped --subject (indistinguishable from a real build commit) must be accepted: ' + accepted.stderr)
+  const subject = execFileSync('git', ['-C', acceptedDir, 'log', '-1', '--format=%s'], { encoding: 'utf8' }).trim()
+  assert.strictEqual(subject, 'build(20260830/03): ci leg honest absence',
+    'D5: the accepted --subject must land as the overlay commit\'s subject VERBATIM — any transformation here ' +
+    'would break the "indistinguishable from a real build commit" invariant --apply\'s own --subject already ' +
+    'relies on: ' + subject)
 })
 
 test('AC-20260823-05-6 / AC-20260826-01-6 (retagged from AC-20260819-02-3, SHALL CONTINUE TO): --setup builds a marker-carrying detached worktree at an outside --dir that leaves the host repo byte-identical', () => {
@@ -2002,6 +2257,62 @@ test('AC-20260823-09-9: replay.md\'s Phase 1 step 7 re-keys red-leg attribution 
     'D5: the dismissal must record via the red:<leg> arm (D3\'s workflow-refusing arm) — a step-7 dismissal ' +
     'means the reviewer never ran, so recording green or baseline-red here would fabricate reviewer evidence ' +
     'that does not exist: ' + JSON.stringify(step7Match[0]))
+})
+
+// specs/20260831/01-replay-range-materialization.md D6/D7 (2026-08-31): section-scoped exactly
+// like AC-20260823-09-9 above — a whole-file grep would let a paraphrase living anywhere else in
+// the file satisfy this pin without step 1's own invocation or step 7's own rung 3 ever changing.
+test('AC-20260831-01-7: replay.md states, in Phase 1 step 1, that setup passes --overlay {commit} because the judged range ends at the close commit, and in step 7 rung 3, the pristine-baseline verification (reset --hard HEAD^, fresh manifest, re-run legs) between the failed retry and leg-caught, with red-pristine routing to rung 4\'s seam', () => {
+  const replayMdPath = path.join(SPEC, 'commands/replay.md')
+  assert.ok(fs.existsSync(replayMdPath),
+    'D6/D7: spec/commands/replay.md must exist — it is the doctrine file both Decisions amend; a missing ' +
+    'file fails this structural check once instead of leaving step 1/7\'s claims silently unverifiable: ' + replayMdPath)
+  const src = read('spec/commands/replay.md')
+
+  const phase1Match = src.match(/## Phase 1 — Mutation authoring\n([\s\S]*?)\n## Phase 2 —/)
+  assert.ok(phase1Match,
+    'sanity: Phase 1 — Mutation authoring must exist as its own section ending at Phase 2 — if this heading ' +
+    'moved or was reworded, the step-1/step-7 slices below are scoped to the wrong text region')
+  const phase1 = phase1Match[1]
+
+  // Step 1 is Phase 1's first numbered step, bounded by step 2's own heading.
+  const step1Match = phase1.match(/1\.\s+\*\*Setup:\*\*[\s\S]*?(?=\n2\.\s+\*\*Setup gate)/)
+  assert.ok(step1Match,
+    'sanity: step 1, "**Setup:** ...", must exist as Phase 1\'s first numbered step, bounded by step 2\'s own ' +
+    'heading — if this step moved or was reworded, the assertions below are scoped to the wrong text')
+  const step1 = step1Match[0].replace(/\s+/g, ' ')
+
+  assert.match(step1, /--overlay\s*\{commit\}/,
+    'D7: step 1 must state that setup passes --overlay {commit} — replay.md\'s own invocation must always ' +
+    'materialize the judged range\'s true upper bound, not just stand the tree at the parent: ' + JSON.stringify(step1Match[0]))
+  assert.match(step1, /judged range/i,
+    'D6: step 1 must explain WHY --overlay is passed — the judged range (range-identity spec 20260824/06 ' +
+    'D3/D7) ends at the close commit, not the parent — omitting the ground leaves the flag unexplained ' +
+    'doctrine a future reader could drop: ' + JSON.stringify(step1Match[0]))
+  assert.match(step1, /close commit/i,
+    'D6: step 1 must name the close commit specifically as the range\'s true upper bound: ' + JSON.stringify(step1Match[0]))
+
+  // Step 7 is Phase 1's final numbered step, unbounded above (no numbered sibling below it).
+  const step7Match = phase1.match(/7\.\s+\*\*Red legs[\s\S]*$/)
+  assert.ok(step7Match,
+    'sanity: step 7, "**Red legs → ...**", must exist as Phase 1\'s final numbered step — if this step\'s ' +
+    'heading moved or was reworded, the assertions below are scoped to the wrong text')
+  const step7 = step7Match[0].replace(/\s+/g, ' ')
+
+  assert.match(step7, /reset --hard HEAD\^/,
+    'D6: rung 3 must state the pristine-baseline verification\'s exact command, git reset --hard HEAD^ — ' +
+    'dropping exactly the mutation commit (the overlay commit, or the parent when none exists, remains) — ' +
+    'before leg-caught is ever recorded: ' + JSON.stringify(step7Match[0]))
+  assert.match(step7, /fresh manifest|fresh \{manifestPath\}/i,
+    'D6: rung 3 must state that a FRESH manifest is used for the pristine re-run — reusing the mutation-' +
+    'tainted manifest would misattribute the pristine result: ' + JSON.stringify(step7Match[0]))
+  assert.match(step7, /pristine/i,
+    'D6: rung 3 must name the pristine-baseline verification explicitly — this is the whole mechanism that ' +
+    'stops a false leg-caught from ever being recorded: ' + JSON.stringify(step7Match[0]))
+  assert.match(step7, /rung 4|question seam|AskUserQuestion/i,
+    'D6: rung 3 must state that a STILL-red pristine result routes to rung 4\'s question seam — silently ' +
+    'recording leg-caught (or silently explaining it away) on a pristine-red result would misattribute ' +
+    'environment drift as either mutation-caused or pre-existing: ' + JSON.stringify(step7Match[0]))
 })
 
 // ---- 2026-08-27 incident (direct fix, no spec): the CWD-relocation trap. ------------------------

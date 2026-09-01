@@ -54,6 +54,16 @@ rationale ("mutation authoring is model work, so it lives in the command, not th
 survives unchanged — the amendment moves the model work in-session, not into `replay.js`.
 Everything else in D10 (blind reviewer contract, retry, score/record/teardown) stands.
 
+**Amended 2026-08-31** (specs/20260831/01-replay-range-materialization.md D8): D3's "worktree
+stands at the parent" is completed, not reversed — `--setup` still stands the tree up at
+`--commit` (the parent) first, but now gains `--overlay <closeSha>`, which re-applies the close
+commit's non-meta content as one build-shaped commit before the mutation ever lands. The judged
+range for a `diff.dirty:true` review row is completed by the close commit that follows it
+(range-identity spec 20260824/06 D3/D7), so the bare parent alone under-states the range the
+original review actually judged whenever fix-worker edits rode that close commit. `parent` and
+`diffBase` as D3 derives them are unchanged; `--setup` without `--overlay` stays byte-identical
+to this spec's original behavior (specs/20260831/01 D7) for any caller that omits the flag.
+
 ## File Plan
 
 | Path | Action | Layer | Summary |

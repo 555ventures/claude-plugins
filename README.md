@@ -64,9 +64,9 @@ Until `/spec:init` has run, every other `spec` command refuses to start.
 - `sketch` and `design` only matter for UI-bearing work. Sketch mocks ONE brief before planning
   and triages every brainstorm change into its binding home (mock / brief / scope / ADR); plan
   warns if you skipped it, never blocks.
-- Small specs (one batch, ≤4 files) take a fast path automatically — no workflow machinery.
-- Requirement changed mid-build? Write the ruling into the spec's Decisions table, salt the
-  affected batch's `resolutions` token, resume — finished batches come back from cache.
+- Requirement changed mid-build? Write the ruling into the spec's Decisions table — that is
+  where workers read it — and re-run `/spec:build`; it resumes by skipping File Plan rows the
+  diff already shows landed.
 
 Each stage refuses to run out of order (`draft → hardened → implementing → done` is enforced by
 a hook), so a wrong command costs you an error message, not a mess.
@@ -100,7 +100,7 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
 | `/spec:sketch` | Mock + brainstorm one roadmap brief; ratify mock↔brief agreement | Before planning a UI-bearing brief |
 | `/spec:plan` | Author + adversarially harden a spec | Per feature |
 | `/spec:design` | Mock → components → your catalog approval | UI specs, catalog repos only |
-| `/spec:build` | TDD implementation via gated workflow; fast path for small specs | Per feature |
+| `/spec:build` | Test-first implementation, one Sonnet worker per layer wave behind the host gate; resumable | Per feature |
 | `/spec:review` | Independent executed verification; commits, merges, flips `done` | Per feature |
 | `/spec:release` | Staging deploy → executed checks → confirmed promote | Per milestone |
 | `/spec:atlas` | Whole-product design view + annotation loop | Anytime |

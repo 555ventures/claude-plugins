@@ -1,0 +1,32 @@
+{
+  "ts": "2026-09-01T23:42:08.690Z",
+  "stage": "replay",
+  "spec": "specs/20260901/02-run-provenance.md",
+  "runId": "rp_2eaefc1bb461",
+  "reviewRunId": "rv_b34f1db8299d",
+  "class": "silent-fallback",
+  "files": [
+    "spec/scripts/verdict.js"
+  ],
+  "legs": "green",
+  "outcome": "caught",
+  "tokens": 95335,
+  "patch": "diff --git a/spec/scripts/verdict.js b/spec/scripts/verdict.js\nindex 1b542f6..bc319f9 100644\n--- a/spec/scripts/verdict.js\n+++ b/spec/scripts/verdict.js\n@@ -277,9 +277,8 @@ if (retainDir && profile === 'release') {\n   process.exit(2)\n }\n if (retainDir && !ledger) {\n-  console.error('verdict.js: --retain requires --ledger — retention with no ledger row has no runId ' +\n-    'to key an artifact by; add --ledger or drop --retain')\n-  process.exit(2)\n+  // no ledger row means no runId to key an artifact by — skip retention and continue\n+  retainDir = null\n }\n if (ledger && workflowPath && profile !== 'release' && !retainDir) {\n   console.error('verdict.js: authoritative review rows (--ledger + --workflow) must retain evidence ' +\n",
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "verdict.js silently drops a previously-enforced usage refusal (--retain without --ledger used to exit 2 naming the remedy; now silently discards --retain and continues to derive a verdict word) — an undocumented, un-Decision'd behavior change to the critical-tier verdict-derivation script, with zero test coverage of either the old or new behavior.",
+        "file": "spec/scripts/verdict.js",
+        "line": 244,
+        "impact": "A future caller who passes --retain without --ledger, expecting the previous hard refusal that names the fix, now gets a printed verdict word with the evidence silently never retained — a caller misuse turns into silently-missing review evidence instead of an immediate, actionable error.",
+        "evidence": "node spec/scripts/verdict.js --manifest /tmp/vdtest/manifest.jsonl --retain /tmp/vdtest/retain -> prints 'UNVERIFIED', exit 1 (observed). Pre-diff code at c0113441b316a1de01a42534df0e1f876c7b88dd printed 'verdict.js: --retain requires --ledger ...' and exit 2. Diff hunk: '-  console.error(...--retain requires --ledger...)\\n-  process.exit(2)\\n+  // no ledger row means no runId to key an artifact by — skip retention and continue\\n+  retainDir = null'. Not referenced by any Decision, AC, File Plan row, or the plugin.json changelog paragraph for 7.49.0, nor by specs/20260901/02-run-provenance.deviations.md."
+      }
+    ],
+    "killed": [],
+    "reviewerCount": 1,
+    "scope": "full",
+    "tokens": 95335
+  }
+}

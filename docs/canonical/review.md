@@ -119,7 +119,17 @@
   The scratch worktree lives at `<root>/.claude/worktrees/spec-<stem>-<6hex>` — a path
   `replay.js --setup --spec` derives from the target spec (the build-worktree naming rule
   `merge-back.sh branch-for` owns, `/`→`-`, plus a random suffix because the spec's own build
-  worktree may still be registered), never a name a session supplies. `--setup` refuses a
+  worktree may still be registered), never a name a session supplies.
+  The worktree materializes the judged range's true upper bound: `--setup --commit <parent>
+  --overlay <close>` stands the tree at the close commit's parent, then re-applies the close
+  commit's non-meta content (everything outside `specs/`, `.claude/`, `docs/canonical/`) as
+  one build-shaped commit — a `diff.dirty:true` row's fix-worker edits ride the close commit
+  (range identity, specs/20260824/06), so the parent alone under-states the range and made
+  legs falsely newly-red. Before `leg-caught` is ever recorded, step 7 now verifies the
+  still-red leg against the pristine (mutation-free) baseline via `reset --hard HEAD^` plus a
+  fresh leg run — red there means not mutation-caused and routes to the attribution question
+  seam instead. (specs/20260831/01-replay-range-materialization.md)
+  `--setup` refuses a
   caller `--dir` whose basename opens with `replay`. Inside the repo, so agent edits are
   auto-approved and the scheduled replay runs unattended (an out-of-repo scratch tree is denied
   Edit/Write by the permission classifier, which blocked the mutation worker on both live runs

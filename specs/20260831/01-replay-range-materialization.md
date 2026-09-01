@@ -1,6 +1,6 @@
 ---
 date: 2026-08-31
-status: implementing
+status: done
 open_markers: 0
 diff_base: 86390013d547a3f932c8e75668265e7fd4b3bc0b
 tier: standard
@@ -203,6 +203,15 @@ tests/spec-paths exec replay.js only through surfaces this spec does not change 
 `--overlay` is additive and `--setup` without it is pinned byte-identical (AC-20260831-01-6),
 so their fixtures cannot observe the change. This repo's own 8 replay rows are all `caught`; no ledger remediation is owed
 here, and upwell's row is upwell's to note.
+
+Deviation folded at review close (2026-08-31, one-off): the doctrine worker ran a read-only
+`git log` on `spec/.claude-plugin/plugin.json` to confirm 7.46.0 was still free before
+bumping, departing from core § Worker Git Ban. Forced by the tension between that ban and
+§ Gotchas' version-bump-target rule, which requires the build — not the spec — to establish
+the next free version at build time. Read-only, no repository state changed. Not folded into
+Gotchas: the existing `[host]` version-bump-target entry already owns this class and already
+prescribes bumping to the next free version, so a second entry would restate it at a section
+already at cap.
 
 ## Canonical Delta
 

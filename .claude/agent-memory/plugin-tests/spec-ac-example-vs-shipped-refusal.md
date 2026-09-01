@@ -3,7 +3,7 @@ name: spec-ac-example-vs-shipped-refusal
 description: an AC's illustrative "e.g." text can contradict the very refusal rule it's demonstrating — verify AC worked examples empirically against the shipped script before encoding them as test literals
 metadata:
   type: feedback
-  reviewed: 2026-08-26
+  reviewed: 2026-08-31
 ---
 
 specs/20260819/02-mutation-replay.md's AC-20260819-02-4 gives a worked example: `--subject
@@ -24,7 +24,9 @@ worse, silently passed by accident if the regex happened not to fire.
 a file path) for a case expected to SUCCEED, run it once against the actual current script before
 hardcoding it in a test assertion — don't transcribe example prose on faith. If it contradicts the
 Decision, don't block on it unless the dispatcher's own instructions require that literal text;
-substitute a different compliant example that demonstrates the same clause, and (if dispatched via
-wf-build) still flag the discrepancy in the return so the spec's example text gets corrected later.
+substitute a different compliant example that demonstrates the same clause, and still flag the
+discrepancy in the return to the dispatching orchestrator so the spec's example text gets corrected
+later. (Corrected 2026-08-31, review close specs/20260831/01: this line named `wf-build` as the
+dispatcher; that workflow is retired — `/spec:build` dispatches Sonnet workers directly.)
 See [[stale-dispatch-premise-concurrent-session]] for the related discipline of re-verifying
 dispatch-prompt claims against live repo state rather than trusting the narrative.

@@ -31,6 +31,18 @@
 // measured floors (Decisions D4); `dyRel` is computed for `--json` only and never a finding
 // (prax D9: it is poisoned by unbound-region height).
 //
+// The fixed-pair GEOMETRY exemption is a KNOWN, MEASURED blind spot — kept deliberately
+// (re-litigated 2026-08-31, salon-os 候補選択): a docked CTA at 116px against the mock's 260px
+// and a fixed soft-NG overlay's mis-sized controls passed 18/18 cells across three capture runs
+// with both boxes sitting in the inventories; a human caught it by eye. Admitting dw/dh for
+// both-fixed pairs was tried against every retained salon-os inventory pair the same day and
+// REJECTED on the numbers: 516 dw / 130 dh findings over the accepted (human-approved) corpus —
+// headers filling their bar where the mock's title hugs, buttons legitimately full-width where
+// the mock caps them, text-wrap inflating dh — against ~30 on the known-defective run, with no
+// separating threshold on any axis. Fixed chrome (headers, docked bars, overlays, tab bars) is
+// where mock-vs-component structural liberty concentrates; its size stays human-reviewed
+// (Storybook look), not gated. Reopen only with a corpus that separates.
+//
 // Auto-excuse (D6): a matched pair whose mock role is `button` or `text` and whose component
 // role is `link` prints one veto line and is not a `role` finding — every other role mismatch
 // is.

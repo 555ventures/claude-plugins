@@ -30,3 +30,6 @@ fences off belongs to its owning brief.
 | 14 | reviewer-measurement |
 | 15 | derived-session-queue |
 | 16 | pipeline-spine-as-code |
+| 17 | fleet-evidence-reader |
+| 18 | unified-build *(design → build → review as one re-entrant command)* |
+| 19 | escape-seeded-replay |

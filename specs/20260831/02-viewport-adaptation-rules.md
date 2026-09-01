@@ -1,6 +1,6 @@
 ---
 date: 2026-08-31
-status: implementing
+status: done
 diff_base: e082b9d3fe809d7651de9a8b64f4d58238075c1d
 tier: standard
 area: design-render
@@ -207,6 +207,19 @@ of captured (breaks standalone invocation and makes the inventory non-self-descr
 thresholds in `targets.json` (D8); shrink-only baseline support (D7, JJ ruling);
 `content-measure` as a blocking rule (JJ ruling — warn-only until its false-positive rate is
 observed in a real host).
+
+Deviations folded at review close 2026-08-31 (both one-offs; neither is a new recurring class —
+the first is an application of the existing `[host]` version-bump-staleness Gotchas entry):
+the spec's File Plan named **7.46.0**, but the sibling `build(20260831/01)` landed that bump
+before this build ran, so the build took the next free version **7.47.0** with the same
+last-3-versions changelog paragraph. And D9's design.md edits collided with
+AC-20260824-05-2's 160-line cap: both D9's new sentences (the kind list gaining
+`no-overflow`/`line-length`, `render-gate --mocks` at `/spec:sketch`'s exit named as the
+matrix-adaptation verifier, the static atlas checks named as preconditions) and the
+pre-existing § Design Authoring Contracts cross-reference had to survive, so wording was
+tightened without dropping a claim — the render-rules-pass sentence compressed to "measured,
+taste advisory" and the cross-reference to one clause keeping both halves. Final file 159
+lines; `citations-check.js` reports `MISS=0`.
 
 ## Canonical Delta
 

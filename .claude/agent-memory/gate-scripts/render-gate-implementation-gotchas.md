@@ -3,7 +3,7 @@ name: render-gate-implementation-gotchas
 description: Two non-obvious pitfalls hit building render-compare.js/render-gate.js (specs/20260824/01) — a bare negative test regex colliding with a locked summary literal (fix the probe, never the contract), and spawnSync starving an in-process HTTP server
 metadata:
   type: feedback
-  reviewed: 2026-08-26
+  reviewed: 2026-08-31
 ---
 
 Two implementation traps from building the render gate (specs/20260824/01-render-gate.md),

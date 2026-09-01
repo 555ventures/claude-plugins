@@ -39,9 +39,10 @@
 //                 verbatim), red-check exit 2 (a usage/config failure, not the D7 resume-skip
 //                 case, which is handled without ever invoking red-check), an unresolved gate
 //                 ({gate:null} from lib/gate-resolve.js), a fourth repair-applied past the
-//                 3-round cap (touches <spec>.build/gate-cap), and any wrapped child process
-//                 dying with no exit code (signal-killed, never spawned, or maxBuffer-overflowed)
-//                 via lib/driver-io.js's runChild() fail-closed refusal.
+//                 3-round cap (touches <spec>.build/gate-cap), a mark issued at a state that does
+//                 not print it (stderr names the current state; state unchanged), and any wrapped
+//                 child process dying with no exit code (signal-killed, never spawned, or
+//                 maxBuffer-overflowed) via lib/driver-io.js's runChild() fail-closed refusal.
 
 'use strict'
 const fs = require('fs')
@@ -406,17 +407,23 @@ function handleRepairApplied() {
         'Two exits: edit the tree and delete ' + gateCapPath + ' to re-arm one more round, or ' +
         'delete ' + sidecarDir + ' entirely to restart cold.')
     }
-    // capEverTripped is true and gate-cap has been deleted — a deliberate re-arm: allow exactly
-    // one more round, then re-trip immediately so a further call needs another deletion.
+    // capEverTripped is true and gate-cap has been deleted — a deliberate re-arm: one deletion
+    // buys exactly one more round. The cap re-trips only if that round is still red; a round
+    // that goes green proceeds to COMMIT instead.
+    // Gate runs BEFORE the round is recorded: if the child dies with no exit code, runGate()
+    // exits the process itself, and `repairs` must not have been persisted for a round that
+    // never actually completed (D1 — exit 2 leaves state unchanged).
+    runGate()
     marks.repairs.push({ continued, spawned })
     saveSidecar()
-    runGate()
-    fs.writeFileSync(gateCapPath, '')
+    const reArmed = marks.gateRuns[marks.gateRuns.length - 1]
+    if (reArmed.exit !== 0) fs.writeFileSync(gateCapPath, '')
     return null
   }
+  // Same ordering as the re-arm branch above: gate first, then record.
+  runGate()
   marks.repairs.push({ continued, spawned })
   saveSidecar()
-  runGate()
   return null
 }
 
@@ -447,9 +454,6 @@ function printDoneNow() {
 }
 
 function handleCommitted() {
-  if (deriveState() !== 'COMMIT') {
-    die('committed refused — the state is not COMMIT (the gate must pass first)')
-  }
   // D3: no File Plan path — tests-layer rows included — may appear in `git status --porcelain`.
   const filePlanPaths = filePlanRows.flatMap((r) => r.paths)
   const dirty = gitStatusPaths(repoRoot)
@@ -499,6 +503,34 @@ function handleCommitted() {
   printDoneNow()
 }
 
+// ---- D3 admission: a mark is admissible only at the state that prints it -----------------------
+// Every handler verifies its own artifacts, but a mark whose artifact predicate is trivially true
+// at some OTHER state would otherwise land off-script: `integrated` has no artifact at all, so it
+// re-ran the gate from REPAIR (an uncounted repair round that never trips the cap) and from
+// ESCALATE (laundering the terminal state into COMMIT with gate-cap still on disk);
+// `red-attributed` before TESTS is through pre-records the judgment step so it is never printed.
+// deriveState() is pure, so this reuses the exact derivation the bare invocation prints from —
+// legitimate re-entry (a gate that died without an exit code leaves the state at INTEGRATION and
+// the driver prints `integrated` again) still admits.
+const MARK_STATE = {
+  'tests-authored': (s) => s === 'TESTS',
+  'red-attributed': (s) => s === 'RED_ATTRIBUTION',
+  'wave-done': (s) => s.startsWith('WAVE:'),   // the label match stays in handleWaveDone (AC-6's message)
+  'integrated': (s) => s === 'INTEGRATION',
+  'repair-applied': (s) => s === 'REPAIR',
+  'committed': (s) => s === 'COMMIT',
+}
+function admitMark() {
+  const admits = MARK_STATE[MARK]
+  if (!admits) return // unknown mark — handleMark's default branch names the closed set
+  const s = deriveState()
+  if (!admits(s)) {
+    die('--mark ' + MARK + ' refused — the current state is ' + s + ', which does not print this ' +
+      'mark (state unchanged); re-run `node ' + __filename + ' ' + specPath + '` and execute the ' +
+      'step it prints')
+  }
+}
+
 function handleMark() {
   switch (MARK) {
     case 'tests-authored': return handleTestsAuthored()
@@ -516,11 +548,11 @@ function handleMark() {
 // ---- state derivation (pure — no child processes, no writes) -------------------------------------
 function afterWaves() {
   if (!marks.integrated) return 'INTEGRATION'
-  if (fs.existsSync(gateCapPath)) return 'ESCALATE'
   const runs = marks.gateRuns || []
   const last = runs[runs.length - 1]
   if (!last) return 'INTEGRATION'
-  return last.exit === 0 ? 'COMMIT' : 'REPAIR'
+  if (last.exit === 0) return 'COMMIT'
+  return fs.existsSync(gateCapPath) ? 'ESCALATE' : 'REPAIR'
 }
 function deriveState() {
   if (hasTestsRows) {
@@ -537,7 +569,7 @@ function deriveState() {
 
 // ---- run -------------------------------------------------------------------------------------------
 let forcedState = null
-if (MARK) forcedState = handleMark()
+if (MARK) { admitMark(); forcedState = handleMark() }
 if (!STATE_ONLY) ensureRedCheckAdvanced()
 const state = forcedState || deriveState()
 
@@ -609,7 +641,8 @@ function repairStepBody() {
   const round = runs.length
   const current = runs[runs.length - 1]
   const previous = runs[runs.length - 2]
-  return `## REPAIR — round ${round} of 3\n` +
+  const roundLabel = marks.capEverTripped ? `round ${round} (re-armed past the cap of 3)` : `round ${round} of 3`
+  return `## REPAIR — ${roundLabel}\n` +
     `gate: ${current ? current.log : '(none)'}` +
     (previous ? `\nprevious gate: ${previous.log}` : '') + '\n' +
     `File Plan rows by layer, so failures route to the worker that owns them:\n` +

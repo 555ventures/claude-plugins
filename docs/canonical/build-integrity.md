@@ -14,8 +14,9 @@ export, so the vacuous case is the common case rather than an edge. (Ground trut
 green through a two-reviewer CLEAN panel, because the carrier that should have caught it was
 load-blocked and read as satisfied red.)
 
-Four rules follow (v7: the red-check is an executed step in build.md Phase 1 — the
-wf-build workflow that mechanized them is retired; the rules bind the by-hand check):
+Four rules follow (v7: the red-check is an executed step of the build driver's RED_CHECK
+state — the wf-build workflow that mechanized them is retired; the rules bind the by-hand
+check):
 
 - **Runtime red satisfies a red expectation only when demonstrated.** Each sentinel carries a
   required `assertionsRun` integer — the count of assertions that actually executed in the probe
@@ -57,7 +58,7 @@ stub that itself fails to compile reports still-load-red, which is a consult, ne
 
 ## Mechanized red-check
 
-Build Phase 1's red-check is mechanized by `spec/scripts/red-check.js` (`spec-paths
+The build driver's RED_CHECK state is mechanized by `spec/scripts/red-check.js` (`spec-paths
 red-check`). Expectation derives from `SHALL CONTINUE TO` regression pins and closed-enum
 `[pre-green:]` tags (`fallback-rejection` | `absence-invariant` | `predicate-in-test`);
 observation is per-file `{testCommand}` exit codes against the pre-image, purity-refused when
@@ -76,3 +77,33 @@ example self-tags, and the parser fabricates findings against the very spec that
 without multi-tag runs, template-sanctioned sibling tags (e.g. `[env:]` with `[pre-green:]`)
 silently drop, un-sanctioning a declared skip. Both failure modes manufacture hard findings from
 correct authoring, which is the class the mechanized red-check exists to eliminate.
+
+## Build driver
+
+The build stage is a stepped program. `spec-build-driver.js` (`spec-paths build-driver`)
+re-derives the build's state from spec frontmatter + the `<spec>.build/` sidecar + on-disk
+artifacts on every invocation, executes every deterministic step itself (admission, wave
+derivation from `layerGroups`, gate resolution, env preflight, the `hardened → implementing`
+flip with the absent-only `diff_base` stamp, red-check, the final gate, scope-reconcile, diff
+counts, the `stage:"build"` ledger row), and prints one judgment step at a time. Marks are a
+closed set verified against artifacts before they land, **and each is admissible only at the
+state whose printed step names it** — the same pure derivation the bare invocation prints
+from, run before any handler, so the printed step and the admissible mark cannot drift; a mark
+issued at any other state is exit 2 naming the current state, state unchanged. The repair loop
+is capped at three rounds by the driver, and a fourth `repair-applied` parks the run at
+ESCALATE; deleting `<spec>.build/gate-cap` re-arms one more round per deletion, and that
+round's own gate decides the outcome — green proceeds to COMMIT, still-red re-trips the cap.
+The unsanctioned-green sanction stays in the spec's own carriers — the driver has no accept
+mark. A resume with no sidecar records `redCheck: "skipped-resume"` on the row rather than
+re-running red-check on a post-image tree. Build rows are script-written and carry `runId`
+(`bd_`), `redCheck`, and `workers: {spawned, continued}` alongside the original four fields;
+`build.md` is the judgment shell. Both drivers share `lib/driver-io.js` for the fail-closed
+child runner, the synchronous stdout writer, the ledger append, and sidecar I/O.
+
+**A state marker must never outrank the observation it summarizes.** Two defects in one review
+(2026-09-01) had the same shape: a marker file recording "the re-arm budget is spent" was also
+read as "the state is ESCALATE", burying a gate that had gone green; and a handler recorded its
+round before executing it, so a fail-closed child left a phantom round that consumed one of the
+three and inflated the row's `workers` sums. Derive state from the observation first and consult
+markers only to disambiguate what the observation leaves open, and execute before recording so
+an exit-2 refusal is genuinely state-unchanged.

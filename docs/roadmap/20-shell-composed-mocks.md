@@ -1,4 +1,5 @@
 # 20 — Shell-composed mocks: one canonical app shell, content-only sketches, planning-seat authorship
+Amended by: ADR-0006 (brief 22 — mocks-first genesis)
 
 Phase: P2 · Depends on: none · Amends: 02 (decision D8 of specs/20260810/01 — via ADR-0003)
 

@@ -1,4 +1,5 @@
 # 10 — Executed genesis: consultant discovery, one proposer, a tournament of scaffolds
+Amended by: ADR-0006 (brief 22 — mocks-first genesis)
 
 Phase: P3
 Depends on: 08

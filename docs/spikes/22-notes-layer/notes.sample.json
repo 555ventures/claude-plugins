@@ -1,0 +1,48 @@
+[
+  {
+    "page": "journeys/staff-interview/03-session-live.html",
+    "frame": 1,
+    "state": "read-back pending (one at a time)",
+    "text": "Four equal buttons is right, but Unsure reads as a fifth state. Can Unsure just be a tap on Correct with an empty edit?",
+    "by": "JJ",
+    "id": "N001",
+    "at": "2026-09-02T20:07:37.247Z",
+    "status": "resolved",
+    "resolvedBy": "JJ",
+    "resolvedAt": "2026-09-02T20:09:47.149Z"
+  },
+  {
+    "page": "journeys/staff-interview/03-session-live.html",
+    "frame": 3,
+    "state": "reconnecting (no offline)",
+    "text": "Say how long we wait before giving up. Drivers are in tunnels.",
+    "by": "JJ",
+    "id": "N002",
+    "at": "2026-09-02T20:07:37.254Z",
+    "status": "resolved",
+    "resolvedBy": "JJ",
+    "resolvedAt": "2026-09-02T20:09:46.641Z"
+  },
+  {
+    "page": "journeys/staff-interview/03-session-live.html",
+    "frame": 0,
+    "state": "listening",
+    "text": "End session needs a confirm; too easy to hit.",
+    "by": "JJ",
+    "id": "N003",
+    "at": "2026-09-02T20:07:37.260Z",
+    "status": "resolved",
+    "resolvedBy": "session",
+    "resolvedAt": "2026-09-02T20:07:37.266Z"
+  },
+  {
+    "page": "journeys/staff-interview/03-session-live.html",
+    "frame": 1,
+    "state": "read-back pending (one at a time)",
+    "text": "I think Approve, Correct, Reject, Unsure is not UI/UX friendly...",
+    "by": "JJ",
+    "id": "N004",
+    "at": "2026-09-02T20:11:36.153Z",
+    "status": "open"
+  }
+]

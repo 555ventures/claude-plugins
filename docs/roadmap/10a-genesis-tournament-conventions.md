@@ -1,4 +1,5 @@
 # 10a — Executed genesis, second half: tournament of scaffolds, conventions first
+Amended by: ADR-0006 (brief 22 — mocks-first genesis)
 
 Phase: P3
 Depends on: 10

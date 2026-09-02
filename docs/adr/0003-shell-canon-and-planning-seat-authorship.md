@@ -4,6 +4,7 @@
 - Date: 2026-09-01
 - Archetype: n/a (amendment ADR for this plugin repo) · Audience: n/a
 - Deciders: JJ + session (observation + doctrine audit, no panel)
+- Amended by: ADR-0006 (brief 22) — bootstrap-before-mocks order and Fable-dispatch authorship superseded; drift check kept
 
 ## Context
 

@@ -68,6 +68,7 @@ case "${1:-root}" in
       atlas)   SECTIONS="Host Grounding|Design Canon|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style" ;;
       sketch)  SECTIONS="Host Grounding|State Machine|Design Canon|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style" ;;
       build)   SECTIONS="Host Grounding|Tiers|State Machine|Model Placement|Incident Policy|Decisions|Question Style|Console Output Style|Worker Git Ban|Read-Only Surfaces|MCP Policy|On-Disk Handoff" ;;
+      run)     SECTIONS="Host Grounding|Tiers|State Machine|Runtime Verification|Model Placement|Incident Policy|Decisions|Question Style|Console Output Style|Worker Git Ban|Read-Only Surfaces|MCP Policy|On-Disk Handoff|Canonical Docs Loop" ;;
       review)  SECTIONS="Host Grounding|Tiers|State Machine|Runtime Verification|Model Placement|Incident Policy|Decisions|Question Style|Console Output Style|Worker Git Ban|Read-Only Surfaces|Canonical Docs Loop" ;;
       release) SECTIONS="Host Grounding|Runtime Verification|Release Stage|Model Placement|Decisions|Question Style|Console Output Style|Canonical Docs Loop" ;;
       enforce) SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Model Placement|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment" ;;

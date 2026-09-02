@@ -6,7 +6,8 @@ argument-hint: <spec path>
 # Spec Design
 
 For UI-bearing specs (`design: true`) in hosts whose config declares a `design` block (component
-catalog — shared § Design Canon). Sits between `/spec:plan` and `/spec:build`. Six steps, in order:
+catalog — shared § Design Canon). Sits between `/spec:plan` and the build stage; `/spec:run`
+runs it when due. Six steps, in order:
 **preflight → author → host gate → render gate → your look → reconcile + stamp** — step position
 is derived from disk on every invocation (Resume, below), never from a state file or a driver.
 Build treats the landed components as done inputs.
@@ -23,7 +24,7 @@ missing → STOP: run `/spec:init` first.
 
 | On disk | Step |
 |---------|------|
-| `designed:` set | DONE — report, `next: /spec:build <spec>` |
+| `designed:` set | DONE — report, `next: /spec:run <spec>` |
 | ledger claim for every surface with `stories` for every state, both gates green this invocation | Step 5 — your look |
 | ledger claim present, some state without a story id, or components absent | Step 2 — author |
 | no ledger claim for a surface | Step 1 — preflight → Step 2 — author |
@@ -171,13 +172,13 @@ disk.
 Assemble slots and render via `node "$(spec-paths report-render)" --slots <file>`, printed
 verbatim. `outcome`: ✅ `designed — {N} components kept, manifest extended, spec reconciled`;
 `bullets`: one line per excused static→link role; `warns`: anything that changes the user's
-next step; `next`: `{kind: 'command', text: '/spec:build <spec path>'}`.
+next step; `next`: `{kind: 'command', text: '/spec:run <spec path>'}`.
 
 ```report
 ✅ **designed — 4 components kept, manifest extended, spec reconciled**
 ⚠️ two auto-excused static→link roles — see spec Decisions
 
-Next: /spec:build specs/20260824/02-example.md
+Next: /spec:run specs/20260824/02-example.md
 ```
 
 ## Rules

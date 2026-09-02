@@ -193,13 +193,13 @@ test('lettered ad-hoc briefs (04b between 04 and 05) are first-class brief ids',
   assert.strictEqual(pre.status, 0, 'brief 02 depends on lettered 01b, which is done: ' + pre.stdout)
 })
 
-test('a design: true spec routes to /spec:design in the dashboard', () => {
+test('AC-20260901-10-4: a design: true spec routes to /spec:run in the dashboard, not /spec:design', () => {
   const dir = host({
     briefs: {},
     specs: { '20260701/01-ui.md': 'date: 2026-07-01\nstatus: hardened\ndesign: true' },
   })
   const r = runNode(SCRIPT, ['--root', dir])
-  assert.match(r.stdout, /\/spec:design @specs\/20260701\/01-ui\.md/, 'design: true must surface as the design-stage action')
+  assert.match(r.stdout, /\/spec:run @specs\/20260701\/01-ui\.md/, 'AC-20260901-10-4/D5: design: true must surface as /spec:run — the loop derives design-due itself, so the dashboard no longer names /spec:design as a next-command')
 })
 
 test('flags a done spec whose depends_on spec is not done', () => {
@@ -214,13 +214,13 @@ test('flags a done spec whose depends_on spec is not done', () => {
   assert.match(r.stdout, /skipped-spec/, 'done work atop an unfinished dependency must be flagged')
 })
 
-test('roadmap-less host still reports open specs, no crash', () => {
+test('AC-20260901-10-4: roadmap-less host still reports open specs as /spec:run, no crash', () => {
   const dir = tmpdir('spec-status')
   fs.mkdirSync(path.join(dir, 'specs/20260701'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'specs/20260701/01-a.md'), '---\nstatus: hardened\n---\n# a\n')
   const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, r.stderr)
-  assert.match(r.stdout, /\/spec:build @specs\/20260701\/01-a\.md/, 'open spec surfaces in 🎯 Next without a roadmap')
+  assert.match(r.stdout, /\/spec:run @specs\/20260701\/01-a\.md/, 'AC-20260901-10-4/D5: open spec surfaces in 🎯 Next without a roadmap, as /spec:run')
 })
 
 // --next (2026-07-22): the end-of-run "Next:" line used to be freehand improvisation — no
@@ -233,7 +233,7 @@ test('roadmap-less host still reports open specs, no crash', () => {
 // but keeps its seat in the state machine — this routing must stay observed unchanged, a
 // SHALL-CONTINUE-TO regression pin that is green at HEAD by design, not a new behavior.
 
-test('AC-20260824-02-4: --next routes hardened+design to /spec:design only until designed: is stamped', () => {
+test('AC-20260824-02-4 (SHALL CONTINUE TO) / AC-20260901-10-4: --next routes both design-pending and designed hardened specs to /spec:run, distinguished only by the note', () => {
   const dir = host({
     briefs: {},
     specs: {
@@ -245,12 +245,12 @@ test('AC-20260824-02-4: --next routes hardened+design to /spec:design only until
   assert.strictEqual(r.status, 0, r.stderr)
   const j = JSON.parse(runNode(SCRIPT, ['--root', dir, '--next', '--json']).stdout)
   const by = Object.fromEntries(j.next.map(e => [e.path, e.action]))
-  assert.strictEqual(by['specs/20260719/04-ui.md'], '/spec:design', 'no designed: stamp → design stage first')
-  assert.strictEqual(by['specs/20260719/05-ui.md'], '/spec:build', 'the incident: designed: set → design already ran, never route back to /spec:design')
-  assert.match(j.next.find(e => e.path.endsWith('05-ui.md')).note, /\[designed\]/, 'the note distinguishes designed from design-pending')
+  assert.strictEqual(by['specs/20260719/04-ui.md'], '/spec:run', 'AC-20260901-10-4/D5: no designed: stamp → the loop, which runs design when due, not the narrower /spec:design action')
+  assert.strictEqual(by['specs/20260719/05-ui.md'], '/spec:run', 'AC-20260901-10-4/D5: designed: set → the loop still, never /spec:build — the frozen action set no longer emits stage-specific actions for a hardened spec')
+  assert.match(j.next.find(e => e.path.endsWith('05-ui.md')).note, /\[designed\]/, 'AC-20260824-02-4 (SHALL CONTINUE TO): the note still distinguishes designed from design-pending even though both now derive the same /spec:run action')
 })
 
-test('--next orders closest-to-done first and sinks blocked specs with blockers named', () => {
+test('AC-20260901-10-4: --next orders closest-to-done first (both implementing and hardened as /spec:run) and sinks blocked specs with blockers named', () => {
   const dir = host({
     briefs: {},
     specs: {
@@ -262,19 +262,78 @@ test('--next orders closest-to-done first and sinks blocked specs with blockers 
   })
   const r = runNode(SCRIPT, ['--root', dir, '--next'])
   assert.strictEqual(r.status, 0, r.stderr)
-  assert.strictEqual(r.stdout.trim(), '🎯 Next\n/spec:review @specs/20260701/03-inflight.md',
-    'implementing is closest to done — the lean view prints exactly the top pick')
+  assert.strictEqual(r.stdout.trim(), '🎯 Next\n/spec:run @specs/20260701/03-inflight.md',
+    'AC-20260901-10-4/D5: implementing is closest to done — the lean view prints exactly the top pick, as /spec:run')
   const j = JSON.parse(runNode(SCRIPT, ['--root', dir, '--next', '--json']).stdout)
   assert.deepStrictEqual(j.next.map(e => `${e.action} ${e.path}`), [
-    '/spec:review specs/20260701/03-inflight.md',
-    '/spec:build specs/20260701/02-ready.md',
+    '/spec:run specs/20260701/03-inflight.md',
+    '/spec:run specs/20260701/02-ready.md',
     '/spec:plan specs/20260701/01-draft.md',
-    '/spec:build specs/20260701/04-blocked.md',
-  ], 'closest-to-done first, blocked entry sinks last')
+    '/spec:run specs/20260701/04-blocked.md',
+  ], 'AC-20260901-10-4/D5: closest-to-done first, blocked entry sinks last — implementing and hardened both derive /spec:run now, never /spec:review or /spec:build')
   assert.deepStrictEqual(j.next[3].blockers, ['specs/20260701/03-inflight.md (implementing)'], 'blocker named on the blocked entry')
 })
 
-test('--next falls through to planning the next ready unplanned brief when all specs are done', () => {
+// AC-20260901-10-6 (D5): the --json action set shrinks from five strings to three —
+// /spec:plan | /spec:run | /spec:escape — with /spec:design, /spec:build, and /spec:review
+// never emitted. Two hosts, not one: spec-status.js's own fallback gate (line ~510,
+// `if (readyBriefs.length && !entries.some(e => !e.blockers.length))`) only ever adds a
+// /spec:plan entry when NO other entry is unblocked, and /spec:run/​/spec:escape entries are
+// always unblocked — so /spec:plan can never coexist with /spec:run or /spec:escape in one
+// call. Host A carries a hardened spec, an implementing spec, and an open escape (a
+// red-observation ledger row — D2/qualifyingObservation, spec/scripts/lib/observation.js, an
+// offline read of .claude/spec-runs.jsonl with no git-repo dependency, so this host writes one
+// directly rather than reaching for tests/queue/queue-overlay.test.js's queue-file fixture).
+// Host B carries only a done spec, so the unplanned dependency-met brief 03 is the sole
+// (fallback) pick. Both hosts assert the negative — the forbidden three never appear — and
+// together they cover the positive presence of all three surviving actions.
+test('AC-20260901-10-6: --json emits only /spec:plan | /spec:run | /spec:escape action values, never /spec:design, /spec:build, or /spec:review', () => {
+  const dirA = host({
+    briefs: BRIEFS,
+    specs: {
+      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
+      '20260710/02-billing.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
+      '20260710/03-reports.md': 'date: 2026-07-10\nstatus: implementing\nbrief: n/a',
+    },
+  })
+  const redSpecPath = 'specs/20260701/01-auth-core.md'
+  fs.mkdirSync(path.join(dirA, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(dirA, '.claude/spec-runs.jsonl'), JSON.stringify({
+    ts: '2026-08-20', stage: 'observe', spec: redSpecPath, branch: 'main', ci: 'red',
+    sha: 'deadbee', url: 'https://github.com/x/y/actions/runs/9', runAt: '2026-08-20T09:00:00Z',
+  }) + '\n')
+  const rA = runNode(SCRIPT, ['--root', dirA, '--next', '--json'])
+  assert.strictEqual(rA.status, 0, rA.stderr)
+  const jA = JSON.parse(rA.stdout)
+  const actionsA = new Set(jA.next.map(e => e.action))
+
+  const dirB = host({
+    briefs: BRIEFS,
+    specs: {
+      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
+      '20260710/02-billing.md': 'date: 2026-07-10\nstatus: done\nbrief: 02',
+    },
+  })
+  const rB = runNode(SCRIPT, ['--root', dirB, '--next', '--json'])
+  assert.strictEqual(rB.status, 0, rB.stderr)
+  const jB = JSON.parse(rB.stdout)
+  const actionsB = new Set(jB.next.map(e => e.action))
+
+  for (const [label, actions, j] of [['A', actionsA, jA], ['B', actionsB, jB]]) {
+    for (const forbidden of ['/spec:design', '/spec:build', '/spec:review']) {
+      assert.ok(!actions.has(forbidden), `AC-20260901-10-6/D5: the --json action set must never emit ${forbidden} — the frozen set shrinks to /spec:plan | /spec:run | /spec:escape (host ${label}): ${JSON.stringify([...actions])}`)
+    }
+    for (const a of actions) {
+      assert.ok(['/spec:plan', '/spec:run', '/spec:escape'].includes(a),
+        `AC-20260901-10-6/D5: every --json action value must be one of /spec:plan, /spec:run, or /spec:escape — got ${a} (host ${label}): ${JSON.stringify(j.next)}`)
+    }
+  }
+  assert.ok(actionsA.has('/spec:run'), 'AC-20260901-10-6/D5: the hardened and implementing specs must both surface as /spec:run entries: ' + JSON.stringify(jA.next))
+  assert.ok(actionsA.has('/spec:escape'), 'AC-20260901-10-6/D5: the red-observation ledger row for the done spec must surface as an /spec:escape entry: ' + JSON.stringify(jA.next))
+  assert.ok(actionsB.has('/spec:plan'), 'AC-20260901-10-6/D5: brief 03\'s unplanned, dependency-met status must surface as the fallback /spec:plan pick once every spec is done: ' + JSON.stringify(jB.next))
+})
+
+test('AC-20260901-10-5 (SHALL CONTINUE TO): --next falls through to planning the next ready unplanned brief when all specs are done', () => {
   const dir = host({
     briefs: BRIEFS,
     specs: {
@@ -284,7 +343,7 @@ test('--next falls through to planning the next ready unplanned brief when all s
   })
   const r = runNode(SCRIPT, ['--root', dir, '--next'])
   assert.strictEqual(r.status, 0, r.stderr)
-  assert.match(r.stdout, /^🎯 Next\n\/spec:plan @docs\/roadmap\/03-reports\.md$/m, 'briefs 01+02 done → 03 is ready to plan')
+  assert.match(r.stdout, /^🎯 Next\n\/spec:plan @docs\/roadmap\/03-reports\.md$/m, 'AC-20260901-10-5 (SHALL CONTINUE TO)/D5: an unplanned brief whose dependencies are met must continue to derive /spec:plan, unchanged by this spec')
   const j = JSON.parse(runNode(SCRIPT, ['--root', dir, '--next', '--json']).stdout)
   assert.strictEqual(j.next[0].action, '/spec:plan')
   assert.strictEqual(j.next[0].brief, '03')
@@ -397,7 +456,7 @@ test('consecutive done briefs collapse to one range row with brief and spec coun
     'the collapsed done run must replace the per-brief rows, not print alongside them')
 })
 
-test('dashboard draws unblocked parallel-ok runner-ups as lanes and sinks serial/blocked', () => {
+test('AC-20260901-10-4: dashboard draws unblocked parallel-ok runner-ups as lanes and sinks serial/blocked, both as /spec:run', () => {
   const dir = host({
     briefs: {
       '01-auth.md': BRIEFS['01-auth.md'],
@@ -416,13 +475,13 @@ test('dashboard draws unblocked parallel-ok runner-ups as lanes and sinks serial
   const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.match(r.stdout, /⚡ 2 parallel lanes/, 'top pick + parallel-ok runner-up form the lane group')
-  assert.match(r.stdout, /lanes[^\n]*\n\/spec:build @specs\/20260710\/01-billing\.md\n\/spec:build @specs\/20260710\/03-reports\.md/,
+  assert.match(r.stdout, /lanes[^\n]*\n\/spec:run @specs\/20260710\/01-billing\.md\n\/spec:run @specs\/20260710\/03-reports\.md/,
     'lane lines are bare flush-left commands — top pick first, parallel-ok runner-up second')
-  assert.match(r.stdout, /🕓 after that:\n\/spec:build @specs\/20260710\/02-billing-b\.md\n\s+└─ ⛓️ shared brief 02/,
+  assert.match(r.stdout, /🕓 after that:\n\/spec:run @specs\/20260710\/02-billing-b\.md\n\s+└─ ⛓️ shared brief 02/,
     'serial runner-up sinks below the lanes with its reason on a branch line, command line bare')
-  assert.match(r.stdout, /\/spec:build @specs\/20260710\/05-adhoc\.md\n\s+└─ 🤷 no brief — parallelism unknown/,
+  assert.match(r.stdout, /\/spec:run @specs\/20260710\/05-adhoc\.md\n\s+└─ 🤷 no brief — parallelism unknown/,
     'briefless runner-up gets a no-claim branch, not silently lumped in with the serial ones')
-  assert.match(r.stdout, /⛔ blocked:\n\/spec:build @specs\/20260710\/04-blocked\.md\n\s+└─ ⏳ 01-billing/, 'blocked entries close the section, each blocker a tree branch under its command')
+  assert.match(r.stdout, /⛔ blocked:\n\/spec:run @specs\/20260710\/04-blocked\.md\n\s+└─ ⏳ 01-billing/, 'blocked entries close the section, each blocker a tree branch under its command')
 })
 
 // merge-conflict heads-up (2026-07-31): parallel lanes are independently safe by brief, but
@@ -438,7 +497,7 @@ const PARALLEL_BRIEFS = {
 const planBody = rows => '# spec\n\n## File Plan\n\n| File | Notes |\n|---|---|\n'
   + rows.map(r => `| \`${r}\` | — |\n`).join('')
 
-test('dashboard flags a merge-conflict heads-up when two parallel lanes share a File Plan path', () => {
+test('AC-20260901-10-4: dashboard flags a merge-conflict heads-up when two parallel lanes share a File Plan path, both as /spec:run', () => {
   const dir = host({
     briefs: PARALLEL_BRIEFS,
     specs: {
@@ -457,7 +516,7 @@ test('dashboard flags a merge-conflict heads-up when two parallel lanes share a 
   assert.strictEqual(r.status, 0, r.stderr)
   assert.match(r.stdout, /⚡ 2 parallel lanes/, 'shared File Plan path must NOT demote the verdict')
   assert.match(r.stdout,
-    /\/spec:build @specs\/20260710\/01-billing\.md\n\/spec:build @specs\/20260710\/02-reports\.md\n\s+└─ 🔶 merge-conflict risk: spec\/shared\/util\.js/,
+    /\/spec:run @specs\/20260710\/01-billing\.md\n\/spec:run @specs\/20260710\/02-reports\.md\n\s+└─ 🔶 merge-conflict risk: spec\/shared\/util\.js/,
     'the branch line sits under the lane commands and names the shared file')
 })
 
@@ -526,7 +585,7 @@ test('File Plan compound cells (a + b, comma lists, braces, trailing annotations
     'worker/package.json hides inside a "a + b" compound cell — the splitter must surface it')
 })
 
-test('lane admission is pairwise — a runner-up parallel with the pick but ordered against another lane is demoted', () => {
+test('AC-20260901-10-4: lane admission is pairwise — a runner-up parallel with the pick but ordered against another lane is demoted, both as /spec:run', () => {
   // 03 and 04 are both unrelated to the pick's brief 02, but 04 depends on 03 — vs-top-only
   // checking would draw three "parallel" lanes with a declared ordering inside the fan-out.
   const dir = host({
@@ -547,13 +606,13 @@ test('lane admission is pairwise — a runner-up parallel with the pick but orde
   const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.match(r.stdout, /⚡ 2 parallel lanes/, 'only the mutually-unrelated pair fans out')
-  assert.match(r.stdout, /lanes[^\n]*\n\/spec:build @specs\/20260710\/01-billing\.md\n\/spec:build @specs\/20260710\/02-reports-ui\.md/,
+  assert.match(r.stdout, /lanes[^\n]*\n\/spec:run @specs\/20260710\/01-billing\.md\n\/spec:run @specs\/20260710\/02-reports-ui\.md/,
     'pick + first admissible runner-up form the lanes')
-  assert.match(r.stdout, /🕓 after that:\n\/spec:build @specs\/20260710\/03-exports\.md\n\s+└─ ⛓️ brief 04 depends on 03/,
+  assert.match(r.stdout, /🕓 after that:\n\/spec:run @specs\/20260710\/03-exports\.md\n\s+└─ ⛓️ brief 04 depends on 03/,
     'the vs-top-parallel entry ordered against lane 03 is demoted with the pairwise reason')
 })
 
-test('dashboard states solo out loud when the pick has no parallel lane but other work exists', () => {
+test('AC-20260901-10-4: dashboard states solo out loud when the pick has no parallel lane but other work exists, as /spec:run', () => {
   const dir = host({
     briefs: {
       '01-auth.md': BRIEFS['01-auth.md'],
@@ -568,7 +627,7 @@ test('dashboard states solo out loud when the pick has no parallel lane but othe
   const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.doesNotMatch(r.stdout, /⚡/, 'one lane is not a fan-out')
-  assert.match(r.stdout, /\/spec:build @specs\/20260710\/01-billing\.md\n\s+└─ 🚦 solo/,
+  assert.match(r.stdout, /\/spec:run @specs\/20260710\/01-billing\.md\n\s+└─ 🚦 solo/,
     'the solo pick says it is not parallelable instead of relying on the missing ⚡ header')
 })
 
@@ -632,14 +691,14 @@ test('AC-20260807-01-1: --pretty renders Roadmap, then the anomalies section, th
     'D1: the one-line headline verdict must be the LAST line of output — today it is printed first, so a terminal showing only the tail never sees it')
 })
 
-test('dashboard folds spec-scoped anomalies onto their Next lines instead of a bottom section', () => {
+test('AC-20260901-10-4: dashboard folds spec-scoped anomalies onto their Next lines instead of a bottom section, Next line is /spec:run', () => {
   const dir = host({
     briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
     specs: { '20260701/01-x.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 07' },
   })
   const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, r.stderr)
-  assert.match(r.stdout, /\/spec:build @specs\/20260701\/01-x\.md\s+⚠️ orphan-stamp/,
+  assert.match(r.stdout, /\/spec:run @specs\/20260701\/01-x\.md\s+⚠️ orphan-stamp/,
     'the orphan-stamp rides the spec\'s own Next line as a ⚠️ tag')
   assert.match(r.stdout, /⚠️ 1 anomaly — each tagged ⚠️ on its 🎯 Next line/,
     'all anomalies folded → one summary line, no section repeating the paths')
@@ -661,7 +720,7 @@ test('--pretty is a no-op — pretty is the default render, old call sites keep 
 
 // AC-20260805-01-7 (sanctioned pin exception, green pre-change): --next output must stay
 // byte-identical after the lib extraction (D2).
-test('--next prints only the header and the top pick, @-prefixed', () => {
+test('AC-20260901-10-4: --next prints only the header and the top pick, @-prefixed, as /spec:run', () => {
   const dir = host({
     briefs: {},
     specs: {
@@ -671,11 +730,11 @@ test('--next prints only the header and the top pick, @-prefixed', () => {
   })
   const r = runNode(SCRIPT, ['--root', dir, '--next'])
   assert.strictEqual(r.status, 0, r.stderr)
-  assert.strictEqual(r.stdout.trim(), '🎯 Next\n/spec:build @specs/20260701/02-ready.md',
+  assert.strictEqual(r.stdout.trim(), '🎯 Next\n/spec:run @specs/20260701/02-ready.md',
     'lean view is exactly the header plus the top-pick line — no Then/Blocked, no notes')
 })
 
-test('--next on an all-blocked set still shows the top entry, with its blocker named', () => {
+test('AC-20260901-10-4: --next on an all-blocked set still shows the top entry as /spec:run, with its blocker named', () => {
   const dir = host({
     briefs: {},
     specs: {
@@ -685,7 +744,7 @@ test('--next on an all-blocked set still shows the top entry, with its blocker n
   })
   const r = runNode(SCRIPT, ['--root', dir, '--next'])
   assert.strictEqual(r.status, 0, r.stderr)
-  assert.match(r.stdout, /^🎯 Next\n\/spec:review @specs\/20260701\/01-inflight\.md$/m,
+  assert.match(r.stdout, /^🎯 Next\n\/spec:run @specs\/20260701\/01-inflight\.md$/m,
     'the unblocked implementing spec still wins the top slot over the blocked one')
 })
 

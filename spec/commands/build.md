@@ -1,46 +1,31 @@
 ---
-description: Carry a hardened spec to done — the outer loop derives the next stage from disk and runs design (when due), then the build driver, then the review driver in sequence, each `--via loop`; direct Sonnet worker dispatch per layer wave behind the deterministic gate, driver-stepped — spec-build-driver.js and spec-review-driver.js each own their own sequencing; this session holds every judgment step and the pre-merge checkpoint
+description: Build stage direct entry — direct Sonnet worker dispatch per layer wave behind the deterministic gate, driver-stepped: spec-build-driver.js owns admission, wave derivation, gate resolution, red-check, the final gate, scope-reconcile, and the ledger row; this session holds test-author dispatch, per-wave worker dispatch, and repair; `/spec:run` is the loop that reaches this stage with `--via loop` and continues into review
 argument-hint: <spec path>
 ---
 
-# Spec Build: The Loop
+# Spec Build: The Build Stage
 
-`/spec:build <spec>` is the loop that finishes a feature after `/spec:plan`. Each invocation
-derives the next stage from disk in the order below and executes it in-session, so one
-command carries a spec from `hardened` to `done`. `spec-build-driver.js` and
-`spec-review-driver.js` each own their own stage's sequencing — admission, wave/leg
-derivation, gate resolution, the status flip, the final gate, and the ledger row — executing
-every deterministic step themselves and printing exactly one step at a time for the judgments
-only this session can make. The spec is the contract; the gate is deterministic; surprises go
-to the user with the spec's own language. Orchestrator and workers: Sonnet.
+`/spec:build <spec>` runs the build stage alone — a hardened spec to `implementing` and its
+build to `DONE`. `spec-build-driver.js` owns this stage's sequencing — admission, wave
+derivation, gate resolution, env preflight, red-check, the final gate, scope-reconcile, diff
+counts, and the ledger row — executing every deterministic step itself and printing exactly
+one step at a time for the judgments only this session can make. The spec is the contract; the
+gate is deterministic; surprises go to the user with the spec's own language. `/spec:run` is
+the loop that reaches this same driver with `--via loop` and, on `DONE`, continues straight
+into the review stage in the same invocation — see `spec/commands/run.md`. Orchestrator and
+workers: Sonnet.
 
 **Setup:** run `spec-paths shared-for build` and read its output. Read the host's
 `.claude/spec.config.json` and its `pipelineRules` file. Either missing → STOP: run
 `/spec:init` first. Then run `spec-paths build-driver` once and keep the printed path — it is
-`{driver}` below — and run `spec-paths review-driver` once and keep that printed path too —
-it is `{review-driver}` below.
+`{driver}` below.
 
 ## Input
 
-`$ARGUMENTS` — path to a hardened spec (or one already `implementing` or `done`, to resume the
-loop or a checkpoint). **Worktree isolation is not build's concern** — run
-`/git:enter-worktree <spec>` first to build in isolation; the drivers never create, enter, or
-leave a worktree and never write `build_base`.
-
-## Routing — derived from disk, in this order
-
-1. `status: hardened`, `design: true`, no `designed:` date, and the host config declares a
-   `design` block → execute `spec/commands/design.md`'s steps unchanged in this session, then
-   re-derive from step 1.
-2. `hardened`, or `implementing` with no `<spec>.review/` sidecar → run the **build stage**
-   below (`node {driver} <spec> --via loop`) to `DONE`.
-3. `implementing` or `done` → run the **review stage** below
-   (`node {review-driver} <spec> --via loop`) until it prints a judgment step or `DONE`.
-4. `done` with no review sidecar → the review driver's own cold path prints `DONE` with
-   `spec-status --next` — the loop's no-op resume.
-
-This is `spec-status.js`'s own `deriveNext` order, restated rather than re-derived — never
-skip a rung or guess ahead of what step 1 finds on disk.
+`$ARGUMENTS` — path to a hardened spec (or one already `implementing`, to resume). **Worktree
+isolation is not build's concern** — run `/git:enter-worktree <spec>` first to build in
+isolation; the driver never creates, enters, or leaves a worktree and never writes
+`build_base`.
 
 ## Build stage — the build driver owns this part of the state machine
 
@@ -70,27 +55,6 @@ next mark, never laundered past. A fourth `repair-applied` parks the run at the 
 `ESCALATE` state — the repair loop is capped at 3 rounds — and prints its two exits: edit the
 tree and delete `<spec>.build/gate-cap` to re-arm one more round, or delete the whole sidecar
 to restart cold.
-
-When the build driver prints `DONE`, print the advisory checkpoint —
-`✅ checkpoint — build complete; safe to /clear and re-run /spec:build <spec>` — and continue
-straight into the review stage below in this same invocation; legs and the reviewer dispatch
-need no memory of the build's trade-offs, so clearing here is optional, never required.
-
-## Review stage — the review driver owns this part of the state machine
-
-Run `node {review-driver} <spec> --via loop` the same way: step, execute, mark, re-run, per
-`spec/commands/review.md`'s own Protocol and Rules, which this loop follows unchanged for
-every judgment step (reviewer dispatch, dispositions, close, merge strategy, replay). One
-place the loop stops that is specific to `--via loop`:
-
-- **No stop between the reviewer's return and dispositions.** Independence is the disposer —
-  once the reviewer returns, the loop proceeds straight to DISPOSITIONS and dispatches
-  `spec:disposer` per review.md's DISPOSITIONS rule, on the loop path exactly as on the direct
-  path; there is nothing here for this session to gate.
-- **Pre-merge (unchanged).** The review driver's existing relocation refusal is the pre-merge
-  stop — never a forced `/clear`. `ExitWorktree(action="keep")` when this session entered via
-  `EnterWorktree`, otherwise `cd` the main session to the driver-named root, then re-run; the
-  loop prints the driver's refusal as the step and nothing more.
 
 ## Worker Contract — every dispatch this session makes
 
@@ -134,24 +98,23 @@ failure inside the File Plan routes to the owning worker per the Worker Contract
 
 ## Report
 
-Every stop of the loop — a checkpoint, a judgment step this session must make, or the
-terminal `DONE` — prints one report (rationale: core § Console Output Style). Assemble the
-slots from whichever driver's state produced the stop — `outcome`: the stop's one-line state
-(✅ at a clean stop, ⚠️ when the run needed the user); `bullets`: one line per escalation;
-`next`: the literal re-run command at a checkpoint (`/spec:build <spec>` — this same command
-chains itself, the stage owns where it resumes) or `spec-status --next` verbatim once the
-review driver's own DONE is reached. Run `node "$(spec-paths report-render)" --slots <file>`
-and print its output verbatim.
+Every stop — a judgment step this session must make, or the terminal `DONE` — prints one
+report (rationale: core § Console Output Style). Assemble the slots from the driver's state —
+`outcome`: the stop's one-line state (✅ at `DONE`, ⚠️ when the run needed the user);
+`bullets`: one line per escalation; `next`: the driver's captured
+`node "$(spec-paths spec-status)" --next`, printed verbatim at `DONE` — never a hand-applied
+command. Run `node "$(spec-paths report-render)" --slots <file>` and print its output
+verbatim.
 
 ```report
-✅ **checkpoint — build complete; safe to /clear and re-run /spec:build <spec>**
+✅ **DONE — hardened → implementing, gate green**
 
-Next: /spec:build specs/20260817/01-example.md
+Next: /spec:review specs/20260817/01-example.md
 ```
 
-If in a worktree, stay in it until the pre-merge stop relocates the session — merge-back runs
-outside the worktree and merges on CLEAN. Every ledger row lands in `.claude/spec-runs.jsonl`,
-appended by the driver at each stop — this session never hand-appends a line.
+If in a worktree, stay in it — this stage never relocates the session. Every ledger row lands
+in `.claude/spec-runs.jsonl`, appended by the driver at each stop — this session never
+hand-appends a line.
 
 ## Rules
 

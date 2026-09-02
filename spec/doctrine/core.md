@@ -7,11 +7,11 @@ description: Core invariants of the spec pipeline — reference doctrine read by
 The full lifecycle: an optional **genesis stage** for greenfield repos (`/spec:genesis`) decides
 what to build with and how it should look, and its `HANDOFF` step grounds the repo itself;
 `/spec:init` grounds brownfield repos the same way (config, rules, agents; it ends by invoking
-`/spec:enforce`); then the per-feature pipeline: `/spec:plan` →
-`/spec:design` (optional, UI specs in design-capable hosts) → `/spec:build` → `/spec:review`
-(the only command that flips `done`; on CLEAN it commits the close and merges back) →
-`/spec:release` (repeatable milestone gate). `/spec:atlas` keeps the whole-product design
-picture browsable at every stage.
+`/spec:enforce`); then the per-feature pipeline: `/spec:plan` → `/spec:run` (design when due,
+then build, then review — each stage also has its own direct entry: `/spec:design`,
+`/spec:build`, `/spec:review`, the last the only one that flips `done`; on CLEAN it commits the
+close and merges back) → `/spec:release` (repeatable milestone gate). `/spec:atlas` keeps the
+whole-product design picture browsable at every stage.
 
 This file carries the invariants every command shares. Design-stage doctrine lives in
 `design.md` (via `spec-paths shared-for <design command>`); the genesis supplement is
@@ -193,8 +193,9 @@ build and review slices in dependency order.
 
 `draft → hardened → implementing → done`. Transitions owned by exactly one driver state each:
 `/spec:plan`'s lock → `hardened`; the build driver's preflight → `implementing`; the review
-driver's close → `done`. `/spec:build` runs both drivers in sequence; `/spec:review` remains
-the review driver's direct entry; `superseded` is the terminal retire state. `/spec:design`
+driver's close → `done`. `/spec:run` runs design (when due), then both drivers in sequence;
+`/spec:build` and `/spec:review` remain each driver's direct entry; `superseded` is the
+terminal retire state. `/spec:design`
 never moves `status` — it sets the `designed:` date field only. Enforced by the plugin's
 `spec-state-gate.sh` hook — invoking a stage against a spec in the wrong state is blocked
 before the model sees it.

@@ -55,7 +55,7 @@ thing the script can't: narration.
 1. **After the block, narrate in one or two sentences** what the dashboard means for the
    user's next hour — lead with the main lane, name the fan-out option when parallel lanes
    exist. Tags worth knowing: `[design]` routes through `/spec:design` first; `[designed]`
-   means that stage already ran and the spec goes straight to `/spec:build`; `⛓ serial`
+   means that stage already ran and the Next line is `/spec:run`; `⛓ serial`
    runner-ups must wait for the main lane (the script names why), `⚡` lanes are safe to run
    concurrently in separate worktrees via `/git:enter-worktree`.
 2. **Anomalies** — the dashboard folds any anomaly about a spec that already has a 🎯 Next

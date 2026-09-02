@@ -1,6 +1,6 @@
 ---
 date: 2026-09-01
-status: hardened
+status: implementing
 tier: critical
 area: build-integrity
 design: false
@@ -9,6 +9,8 @@ depends_on: ["specs/20260901/09-disposer-gate.md"]
 depended_on_by: []
 brief: 18b
 open_markers: 0
+build_base: main
+diff_base: 7092cb9aa8700895619394bb93415728fa1c7ee2
 ---
 
 # `/spec:run` is the loop; `/spec:build` is the build stage again

@@ -61,7 +61,8 @@ Write the spec per the template. `status: draft`. While drafting:
 
 - **Never guess — mark it.** Where information is missing, write
   `[NEEDS CLARIFICATION: <question>]` inline instead of something plausible. The state-gate
-  hook blocks `/spec:design`, `/spec:build`, and `/spec:review` while any marker survives.
+  hook blocks `/spec:run`, `/spec:design`, `/spec:build`, and `/spec:review` while any marker
+  survives.
 - **Decomposition cap:** a spec must fit one `/spec:build` run — roughly ≤15 File Plan
   rows, one primary area. Bigger work splits into `##-` siblings sliced by **landing unit**
   (each leaves the system green on its own), never by layer; wire `depends_on`. A facade

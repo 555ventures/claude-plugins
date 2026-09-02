@@ -74,7 +74,7 @@ test('AC-20260823-08-2: a queue ordering brief 08 ahead of brief 05 makes 08\'s 
     'the queue-aware --json top entry must be brief 08, per Behavior: "queue position deliberately OVERRIDES cross-brief closest-to-done": ' + JSON.stringify(j.next))
 })
 
-test('AC-20260823-08-3: with no queue file present, --next output on a non-git host stays byte-identical to today\'s pre-queue derivation', () => {
+test('AC-20260823-08-3 / AC-20260901-10-4: with no queue file present, --next output on a non-git host stays byte-identical to today\'s pre-queue derivation, as /spec:run', () => {
   // Deliberately NOT a git repo at all — the overlay resolution (D1: git rev-parse
   // --git-common-dir) must fail soft with zero stderr noise, matching A5's assumption that
   // existing spec-status tests already exercise non-git tmpdir hosts.
@@ -84,8 +84,8 @@ test('AC-20260823-08-3: with no queue file present, --next output on a non-git h
   fs.writeFileSync(path.join(dir, 'specs/20260701/02-ready.md'), '---\nstatus: hardened\n---\n# b\n')
   const r = runNode(SCRIPT, ['--root', dir, '--next'])
   assert.strictEqual(r.status, 0, r.stderr)
-  assert.strictEqual(r.stdout.trim(), '🎯 Next\n/spec:build @specs/20260701/02-ready.md',
-    'D2/Behavior "Overlay OFF": no queue file (and no git repo at all) must leave --next byte-identical to the pre-queue derivation — this pin must already be green on today\'s code and stay green after the overlay lands')
+  assert.strictEqual(r.stdout.trim(), '🎯 Next\n/spec:run @specs/20260701/02-ready.md',
+    'AC-20260901-10-4/D5: D2/Behavior "Overlay OFF": no queue file (and no git repo at all) must leave --next byte-identical to the pre-queue derivation, updated in place from /spec:build to /spec:run per D5\'s action-string change — this pin must be green after the overlay lands the same as it was green before D5')
   assert.strictEqual(r.stderr, '',
     'a host with no git repository at all must never print overlay-resolution noise to stderr')
 })

@@ -3,7 +3,7 @@ name: driver-descriptor-archetype-vs-status-archetype
 description: genesis-driver.js test fixtures set TWO different "archetype" values — status.json's (from the brief's `## Picks` line, drives isVisualArchetype/isTournamentArchetype branching) and stack-descriptor.json's (a REQUIRED_DESCRIPTOR_KEYS field, cosmetic to deriveState()) — never assume writing one changes the other
 metadata:
   type: feedback
-  reviewed: 2026-08-30
+  reviewed: 2026-09-01
 ---
 
 `genesis-driver.js`'s `deriveState()` branches on `status.archetype` (set once, in

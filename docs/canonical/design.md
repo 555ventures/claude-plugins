@@ -37,12 +37,28 @@ gates measure what a human cannot overlay, not the reverse. Retired with the dri
 `spec-design-driver.js`, `wf-design.js`, `skeletons-check.js`, the Haiku match pass, the
 Fable retainer, the vision consult, and the `ITERATE` catalog loop.
 
-## Atlas gap sweep dispatch (2026-08-10, same spec)
+## Sketch-tier authorship and the shell canon (2026-09-01, specs/20260901/04)
 
-Atlas gap sweeps author **sequentially with exemplar grounding, never parallel
-per-surface** — one warm Sonnet dispatch (chained past ~10 surfaces), citing
-ratified/approved mocks then the sweep's own earlier output as exemplars. Single doctrine
-home: shared.md § Design Atlas.
+Sketch-tier authorship is a planning-seat duty for both `/spec:atlas`'s gap sweep and
+`/spec:sketch`'s scoped sweep (ADR-0003, superseding specs/20260810/01 D8): the session authors
+the journey-central set in-session (≤5, at least one per declared journey); one sequential
+`Agent {model: "fable"}` dispatch (Opus fallback) authors the overflow with those paths as
+exemplars, never one agent per surface; Sonnet takes mechanical edits only. Every author reads
+the picked position brief (`design/explore/positions.md`, the `design-pick.json` winner's
+section) ahead of tokens, and the report names the position and the author split. Single
+doctrine home: design.md § Design Atlas.
+
+Coherence is a shell artifact: `design/shell/<name>.html` (root `data-shell-canon`, named
+`data-slot`s, an empty content slot, non-content slots `data-contract="none"`) plus a linked
+`design/shell/<name>.css`. Page mocks declare `data-shell="<name>"` or `"none"`, own only the
+content slot's inner HTML and an optional `data-active`, and carry the chrome as a
+`data-shell-region` element that `design-atlas.js shell sync` rewrites from canon (built mocks
+skipped unless named). `check` binds a shell family once `design/shell/` exists — undeclared,
+unknown name, region drift (named to the slot), own `<nav>`/`<header>` in content, missing css
+link — as violations at `ratified`/`approved`/`--matrix` and warns at `sketch`.
+`shell adopt` (plan table, then `--apply`) migrates pre-shell mocks. Genesis `tokens-landed`
+requires `design/shell/app.html` passing `check`; `rules-locked` authors `AppShell` from it and
+`/spec:design`'s worker envelope carries `shell`.
 
 ## Render gate (2026-08-24, specs/20260824/01)
 

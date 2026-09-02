@@ -3,7 +3,7 @@ name: synthetic-gate-command-async-stdout-truncates-before-runshell
 description: a synthetic gateCommand/scaffoldCommand written as `node -e "process.stdout.write(...); process.exit(1)"` truncates its own log before the driver ever sees it — use coreutils (head/tr) for large-single-line repro fixtures instead
 metadata:
   type: feedback
-  reviewed: 2026-08-30
+  reviewed: 2026-09-01
 ---
 
 When building a repro fixture that must write N raw bytes with no newline to a file (e.g. to

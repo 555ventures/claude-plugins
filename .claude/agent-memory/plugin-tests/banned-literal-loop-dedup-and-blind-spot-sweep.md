@@ -3,7 +3,7 @@ name: banned-literal-loop-dedup-and-blind-spot-sweep
 description: Pattern for de-duplicating repeated `for (const [re,label] of banned)` assertion loops via a file-local helper, and for adding a pipelineOwnedPaths-blind-spot sweep to an enumerated-file doctrine test.
 metadata:
   type: project
-  reviewed: 2026-08-30
+  reviewed: 2026-09-01
 ---
 
 Spec 20260825/01 (genesis panel collapse) review-fix dispatch, tests/consistency/genesis-doctrine.test.js

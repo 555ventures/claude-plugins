@@ -1,6 +1,6 @@
 ---
 date: 2026-09-01
-status: implementing
+status: done
 tier: standard
 area: design
 design: false
@@ -336,6 +336,20 @@ wording by design and are never edited by a spec. Paths leg: `tests/design-atlas
 `tests/genesis/design-state.test.js` execute the changed scripts and are in the plan; the other
 genesis tests never mark `tokens-landed` (grep-verified), so D7 cannot reach them. No test
 pins the retired literals (hand grep of `tests/` per Gotchas' retired-literal entry).
+
+Build deviations (2026-09-01, folded at review close — one-offs, no Gotchas entry): the genesis
+tokens-landed fixture's hand-typed shell region drifted from the canon literal by indentation,
+which D3's byte equality correctly reported as `(nav slot)` drift; the fixture now splices the
+canon literal itself so it cannot drift again. The driver checks the shell canon with the other
+canon files (after `tokens.css`, before the approved-mock/matrix checks), so the pre-existing
+no-approved-mock sub-case was given a passing canon in place. No assert weakened, no script
+changed; one repair round.
+
+Review disposition (2026-09-01): waived, JJ — the reviewer's one soft finding (a `data-nav`
+element written in self-closing form would receive its `aria-current` marker before the trailing
+`/>` and sync would write malformed markup). Self-closing a non-void `<a>` is not valid HTML, D1's
+contract and every fixture write nav items as `<a>…</a>`, and no AC covers the form; a host that
+authored one would see the drift finding on the next sync rather than silent corruption.
 
 ## Canonical Delta
 

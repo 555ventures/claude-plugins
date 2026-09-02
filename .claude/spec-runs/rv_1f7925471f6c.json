@@ -1,0 +1,112 @@
+{
+  "runId": "rv_1f7925471f6c",
+  "ts": "2026-09-02T03:49:31.903Z",
+  "spec": "specs/20260901/04-shell-composed-mocks.md",
+  "tier": "standard",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 1,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 2077,
+    "base": "8486d309a82b754a67d4931a243371e6f4c45919",
+    "head": "605e8e12c326ab8eaf9ba418a69ba0b3ec968bcb",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 0,
+      "observed": {
+        "outOfPlan": 0,
+        "files": []
+      }
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      }
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 254
+      }
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": {
+        "matches": 10
+      }
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": {
+        "files": 16,
+        "testsExecuted": 143
+      }
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      }
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 1,
+        "preGreen": 1
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 13,
+        "carried": 8,
+        "sanctioned": 5,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "soft",
+        "claim": "expectedRegion()'s active-nav aria-current regex inserts the attribute before a self-closing tag's trailing `/>` instead of before `>`, producing malformed markup for any data-nav element written in self-closing form",
+        "file": "spec/scripts/lib/shell-region.js",
+        "line": 170,
+        "impact": "If a shell canon's nav item is ever authored as a self-closing tag, sync/adopt would write broken HTML into every mock instead of well-formed markup",
+        "evidence": "Executed repro: expectedRegion('<div data-shell-canon=\"app2\" class=\"shell\"><nav data-slot=\"nav\" data-contract=\"none\"><a data-nav=\"x\" href=\"#\"/></nav><main data-slot=\"content\"></main></div>', 'app2', 'CONTENT', 'x') returned '<a data-nav=\"x\" href=\"#\"/ aria-current=\"page\"></nav>' — the `/` lands mid-attribute rather than closing the tag. Not exercised by any spec fixture or AC (the D1 contract's nav items are always `<a>...</a>`, never self-closed, and self-closing a non-void element is not valid HTML to begin with), so this is advisory rather than a defect in the shipped behavior."
+      }
+    ],
+    "killed": [],
+    "reviewerCount": 1,
+    "scope": "full",
+    "tokens": 95000
+  }
+}

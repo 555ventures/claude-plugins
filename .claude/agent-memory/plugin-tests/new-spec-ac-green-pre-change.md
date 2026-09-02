@@ -3,7 +3,7 @@ name: new-spec-ac-green-pre-change
 description: a brand-new spec's AC can be legitimately green pre-implementation when it pins the ABSENCE of a not-yet-built mechanism (an overlay that doesn't exist yet trivially "stays off"/"is suppressed") — tag it as a sanctioned pin exception rather than treating it as a stale-assumption block.
 metadata:
   type: feedback
-  reviewed: 2026-08-29
+  reviewed: 2026-09-01
 ---
 
 specs/20260823/08-derived-session-queue.md added a queue overlay to spec-status.js's --next

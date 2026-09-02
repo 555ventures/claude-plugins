@@ -1,6 +1,6 @@
 ---
 date: 2026-09-02
-status: implementing
+status: done
 build_base: main
 tier: standard
 area: doctrine-governance
@@ -101,6 +101,29 @@ scanner's grammar decidable. Version numbers in Gotchas (`6.50.0 was taken`) bec
 Rejected: leaving `.claude/rules/spec-pipeline.md` for sibling 04 (it is this repo's rules
 layer and the brief's sweep scope names `.claude/rules`); exempting doctrine measurements
 (the number is in the spec; the doctrine sentence needs only the conclusion).
+
+Review waiver (2026-09-02, user): AC-20260902-03-2 stays uncovered by any test — the
+lock-time collision sweep's prediction held (no test quotes a rewritten sentence), so there is
+no retag to pin; the `ac-matrix` uncovered-AC finding is waived rather than satisfied by a
+placeholder test.
+
+Build deviations (folded at review close, 2026-09-02; one-offs, no Gotchas entry):
+- The baseline row `.claude/comment-narration.baseline.json` moved from layer `other` to
+  `tests` at the TESTS step: `red-check.js` refused the pre-image as impure because the test
+  author sets it in Phase 1 by design; as a tests-layer fixture (zero AC-IDs, never executed)
+  it is exempt. D9 corrected D7's count from 2 to 3 (the scan is authoritative, A2).
+- The `other`-layer wave for `.claude/rules/spec-pipeline.md` ran inside the doctrine wave's
+  kept worker (same file list, one worker); the driver's separate wave was marked done
+  without a second dispatch.
+- The Gotchas section held 15 entries at build, not the 13 D3 counted; all 15 collapsed
+  one-for-one (`prose-cap.js` cap 15 stays green; no test asserts the count). At close the
+  two class-slug entries still carried a literal recurrence count the scanner cannot see;
+  it was dropped in the close commit per D3's "no recurrence counts", keeping the
+  grep-answerable reopen condition.
+- `spec/doctrine/design.md` was listed in the File Plan but scanned at zero findings on the
+  true pre-image (A2: the scan is authoritative), so it was left untouched.
+- `plugin.json` bumped to 7.57.3: 7.57.2 was already taken on the base branch (D8's
+  "next free if taken").
 
 Regression pins: AC-2, AC-3, AC-4 are the `SHALL CONTINUE TO` pins on the three surfaces a
 prose edit can break — doctrine-shape tests, citations, read load.

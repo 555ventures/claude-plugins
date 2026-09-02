@@ -174,7 +174,7 @@ upstream bug list. -->
   sibling's review-close commit (the true pre-image) and record the departure;
   `merge-back.sh branch-for` derives the merge target independently, so merge-back is
   unaffected. (specs/20260816/03-file-plan-table-scoped-parsing.md; specs/20260901/02-run-provenance.md D10)
-- `[plugin]` **`orchestrator-compensation-during-live-worker`** (class stands at 1; grep this
+- `[plugin]` **`orchestrator-compensation-during-live-worker`** (grep this
   slug to count recurrences). The harness fired completion notifications for `/spec:build`
   workers still executing; the orchestrator read those as returns-with-no-work and began
   writing the same files itself, making the concurrency real in a tree build deliberately does
@@ -217,7 +217,7 @@ upstream bug list. -->
   not as a crash. Any script that prints a payload and exits routes through a synchronous
   writer (`fs.writeSync` on fd 1, looped for partial writes, retried on EAGAIN).
   (specs/20260823/08-derived-session-queue.md repair round)
-- `[plugin]` **`synthetic-repro-presented-as-real`** (class stands at 1; grep this slug to
+- `[plugin]` **`synthetic-repro-presented-as-real`** (grep this slug to
   count recurrences). A review repro that exercises a SYNTHETIC stand-in rather than the real
   entrypoint, whose measured numbers are then transcribed into permanent code or test comments
   as if the real code path was observed failing. A review finding may still be true on

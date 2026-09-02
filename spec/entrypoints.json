@@ -52,9 +52,16 @@
       "spec/scripts/review-legs.js"
     ]
   },
+  "spec/scripts/escape-row.js": {
+    "entryPoints": [
+      "spec/commands/escape.md"
+    ]
+  },
   "spec/scripts/fleet-reader.js": {
     "entryPoints": [
-      "spec/doctrine/core.md"
+      "spec/doctrine/core.md",
+      "spec/commands/doctor.md",
+      "spec/commands/escape.md"
     ]
   },
   "spec/scripts/genesis-driver.js": {

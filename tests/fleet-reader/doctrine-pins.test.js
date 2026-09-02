@@ -24,8 +24,10 @@ function pin(phrase) {
 const CORE = path.join(ROOT, 'spec/doctrine/core.md')
 const ESCAPE = path.join(ROOT, 'spec/commands/escape.md')
 
-// AC-20260820-05-15
-test('AC-20260820-05-15: core.md Incident Policy adopts the fleet denominator, cites the literal reader invocation, and keeps the degraded-mode sentence', () => {
+// AC-20260820-05-15 / AC-20260901-07-14 (tagged, no assertion change): the three
+// AC-20260820-05-15 phrases must survive specs/20260901/07-escape-class-contract.md D8's edit
+// verbatim. The joined-count wording D8 adds is AC-20260901-07-17's own test below.
+test('AC-20260820-05-15 / AC-20260901-07-14: core.md Incident Policy adopts the fleet denominator, cites the literal reader invocation, and keeps the degraded-mode sentence', () => {
   assert.ok(fs.existsSync(CORE), 'spec/doctrine/core.md must exist for this pin to mean anything')
   const doc = read('spec/doctrine/core.md')
   const policy = doc.match(/## Incident Policy[\s\S]*?(?=\n## )/)
@@ -37,6 +39,22 @@ test('AC-20260820-05-15: core.md Incident Policy adopts the fleet denominator, c
     'D7: the existing "Derived numbers come from the fleet evidence reader" sentence must gain the literal invocation `node "$(spec-paths fleet-reader)" --json` — without a pinned literal, two sessions can derive two different answers')
   assert.match(policy[0], pin("one repo's ledger says so"),
     'D7: the degraded-mode clause ("a bar filled from one repo\'s ledger says so") must be kept verbatim — losing it removes the honest fallback for a host with no readable fleet')
+})
+
+// AC-20260901-07-17: specs/20260901/07-escape-class-contract.md D8 gives the Materiality bullet
+// the joined (row + escape-class amendment) count fleet-reader.js's escapes.byClass actually
+// derives — the bar must cite the number the reader computes, or two sessions derive two counts
+// (spec Rationale).
+test('AC-20260901-07-17: core.md Incident Policy names the joined count in the Materiality bullet via the literal escape-class', () => {
+  assert.ok(fs.existsSync(CORE), 'spec/doctrine/core.md must exist for this pin to mean anything')
+  const doc = read('spec/doctrine/core.md')
+  const policy = doc.match(/## Incident Policy[\s\S]*?(?=\n## )/)
+  assert.ok(policy, 'core.md must still have an "## Incident Policy" section — without it there is nothing to pin against')
+
+  const materiality = policy[0].match(/\*\*Materiality\*\*[\s\S]*?(?=\n- \*\*|\n\nA proposal)/)
+  assert.ok(materiality, 'core.md must still have a Materiality bullet inside Incident Policy — without it there is nothing to check the joined-count wording against')
+  assert.match(materiality[0], /escape-class/,
+    'D8/AC-20260901-07-17: the Materiality bullet must name the joined count via the literal "escape-class" — the recurrence count is escape rows PLUS their escape-class amendments, as fleet-reader\'s escapes.byClass now derives it, or the bar cites a number the reader does not actually compute')
 })
 
 // AC-20260820-05-16

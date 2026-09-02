@@ -1,6 +1,6 @@
 ---
 date: 2026-09-01
-status: hardened
+status: implementing
 tier: standard
 area: feedback-loop
 design: false
@@ -9,6 +9,8 @@ depends_on: []
 depended_on_by: [specs/20260901/08-corpus-derivation-and-kill-match.md]
 brief: 19
 open_markers: 0
+build_base: main
+diff_base: 53da29e06b1fc3146cde390c4f135288bc68b93b
 ---
 
 # Escape class contract — validated classes, append-only amendments, the joined count
@@ -36,7 +38,7 @@ recurrence rule in core § Incident Policy fires on the joined count, and the fl
 | D5 | Drift census routes every `escape` and `escape-class` row through D1's validator; an escape row with no class, no reason, and no amendment lands in `class-missing`; an amendment whose key matches no escape row in the same repo lands in `amendment-unmatched`; the 24 historical rows therefore read as drift **until amended** — 20260820/05 D8's "existing rows stay in-shape" is superseded for the class field (AC-20260901-07-10, AC-20260901-07-12) | Drift is the pressure that makes the backfill happen; a census that keeps calling an unclassed row in-shape is the "nothing validates a class" defect restated; rejected: grandfathering rows older than the field |
 | D6 | `escape.md`: step 4's class bullet becomes registry-first — run `node "$(spec-paths fleet-reader)" --json`, read `.escapes.byClass` keys (minus `unclassed`) plus the corpus's class headings, and pick an existing id whenever the defect shape matches, inventing a new kebab-case id only when none fits; gains the `unclassedReason` bullet (`no-fix-diff` when no diagnosis or fix exists to derive from; `deferred` when the user declines to class at the confirm call; null otherwise); step 5 appends via `node "$(spec-paths escape-row)" --append --root . --row '<json>'` (exit 3 → the step-2 distinct-defect confirm, then `--allow-duplicate`); new `## Backfill mode` section (Behavior); AC-20260820-05-16's three pinned phrases survive verbatim; escape's read-load stays ≤ 500 lines (AC-20260901-07-13) [no-ac for the prose itself: doctrine choreography — the reviewer verifies the file against this row and Behavior] | JJ ruling 2026-09-01: open ids with existing classes shown first — the cheapest-to-reverse answer to count-splitting; rejected: a fixed enum (forces new shapes into wrong buckets) and an alias table (a second stored taxonomy) |
 | D7 | `doctor.md` check 12: the stage enum gains `escape-class`; the Escapes bullets gain one line — when the fleet reader's `escapes.unclassedRows` is non-empty, report `/spec:escape --backfill` as due, naming the count [no-ac: doctrine prose; reviewer verifies against this row] | Without it doctor reports every amendment row as a broken line; the due-line is the second carrier (with D4's render) that keeps the backfill obligation visible — the 20260821/03 D8 lesson (an obligation living only in a `[no-ac]` row slipped) |
-| D8 | `core.md` § Incident Policy, Materiality bullet: the recurrence count is the **joined** count — escape rows plus their `escape-class` amendments, as `fleet-reader --json`'s `escapes.byClass` derives it; the three phrases AC-20260820-05-15 pins stay verbatim (AC-20260901-07-14) | Brief scope 5; the bar must cite the number the reader actually computes, or two sessions derive two counts |
+| D8 | `core.md` § Incident Policy, Materiality bullet: the recurrence count is the **joined** count — escape rows plus their `escape-class` amendments, as `fleet-reader --json`'s `escapes.byClass` derives it; the three phrases AC-20260820-05-15 pins stay verbatim (AC-20260901-07-14, AC-20260901-07-17) | Brief scope 5; the bar must cite the number the reader actually computes, or two sessions derive two counts |
 | D9 | Bump spec plugin to the next free version (target 7.52.0), last-3-versions description [no-ac: changelog surface — enforced by review's version-bump hard check] | Version-bump discipline; the literal is a target, not a pin (host Gotchas) |
 | D10 | `spec-paths` gains key `escape-row`; `tests/spec-paths.test.js`'s exhaustive key list is updated in place (never weakened); `spec/entrypoints.json` gains the script's row — `lib/` files get no row (unrepresentable, host Gotchas) (AC-20260901-07-15) | New-surface checklist (pipeline rules § Planning); the exhaustive-pin collision is the known build-time class, one waive line at most |
 | D11 | The backfill itself is a one-time run, not a build: `/spec:escape --backfill` from this repo, one confirmation table over every `unclassedRows` entry, amendments appended into each repo's own ledger (repos left with one uncommitted ledger line each, named in the report) — recorded as a session-queue item at lock, gated on sibling 08 landing (the derived-corpus fold happens in the same run) [no-ac: operator process — carried by D4's render line, D7's doctor line, and the queue item, never by memory] | JJ ruling 2026-09-01: one fleet-wide run beats six per-repo sessions; the three carriers exist because a `[no-ac: operator process]` row alone has already been measured to slip (20260821/03 D8) |
@@ -60,7 +62,7 @@ recurrence rule in core § Incident Policy fires on the joined count, and the fl
 | tests/fleet-reader/escape-class.test.js | CREATE | tests | AC-20260901-07-8, AC-20260901-07-9, AC-20260901-07-10, AC-20260901-07-16 |
 | tests/fleet-reader/queries.test.js | MODIFY | tests | AC-20260901-07-11 — tag the existing AC-20260820-05-5 test (no assertion change) |
 | tests/fleet-reader/discovery.test.js | MODIFY | tests | AC-20260901-07-12 — tag the existing eight-keys test (no assertion change) |
-| tests/fleet-reader/doctrine-pins.test.js | MODIFY | tests | AC-20260901-07-14 — tag the existing AC-20260820-05-15 test and add one assert for the joined-count wording |
+| tests/fleet-reader/doctrine-pins.test.js | MODIFY | tests | AC-20260901-07-14 — tag the existing AC-20260820-05-15 test (no assertion change); AC-20260901-07-17 — one new test asserting the joined-count wording |
 | tests/spec-paths.test.js | MODIFY | tests | AC-20260901-07-15 — key list gains `escape-row` in place |
 
 Orchestrator duty (outside the table): after the version bump, run the full suite once
@@ -250,9 +252,13 @@ unmatched check against the repo's escape keys.
   read-load budget test in the gate is the oracle
 - **AC-20260901-07-14**: WHEN core.md's Incident Policy is edited THE SYSTEM SHALL CONTINUE TO
   carry `across every readable repo ledger`, the literal `node "$(spec-paths fleet-reader)" --json`
-  invocation, and `one repo's ledger says so`, AND the Materiality bullet SHALL name the joined
-  count via the literal `escape-class` → the existing AC-20260820-05-15 test in
-  `tests/fleet-reader/doctrine-pins.test.js`, tagged and extended by one assert
+  invocation, and `one repo's ledger says so` → the existing AC-20260820-05-15 test in
+  `tests/fleet-reader/doctrine-pins.test.js`, tagged
+- **AC-20260901-07-17**: WHEN core.md's Incident Policy is read THE SYSTEM SHALL name the joined
+  count in the Materiality bullet via the literal `escape-class` → one new test in
+  `tests/fleet-reader/doctrine-pins.test.js` (split from AC-14 at build 2026-09-01: a
+  `SHALL CONTINUE TO` pin is red-check-sanctioned green as a whole, so the new promise needs its
+  own red AC)
 - **AC-20260901-07-15**: WHEN `spec-paths escape-row` runs THE SYSTEM SHALL print a path to an
   existing executable file, and the exhaustive key-list pin includes `escape-row` →
   `tests/spec-paths.test.js` (in place)

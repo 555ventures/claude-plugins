@@ -101,7 +101,7 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
       marker (colon form) is broken.
 12. **Run ledger hygiene** (only if `.claude/spec-runs.jsonl` exists) — script passes
     (`jq`/`awk`), never read the ledger into context. Every line parses as JSON with `stage` ∈
-    `plan | build | review | replay | escape | observe | release` (`observe` rows are a retired
+    `plan | build | review | replay | escape | escape-class | observe | release` (`observe` rows are a retired
     v6 class — valid history, no longer written). Field expectations are per-class: v7 build
     and review rows carry no `runId` (older rows may; a `runId`-bearing row is history, never a
     flag); escape and release rows carry their own field sets. The file is tracked by git, and
@@ -120,7 +120,9 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
       is only meaningful if escapes are being recorded; note when zero escape rows exist;
     - an escape with `"preventedBy":"doctrine"` whose named change has not landed is an
       **open repair** (`--fix` input); `preventedBy:"enforcer"` with no matching
-      enforcement-manifest entry means `/spec:enforce` is due.
+      enforcement-manifest entry means `/spec:enforce` is due;
+    - a non-empty `escapes.unclassedRows` (from `node "$(spec-paths fleet-reader)" --json`)
+      means `/spec:escape --backfill` is due — report it naming the count.
     **Plugin-defect roll-up:** collect `[plugin]`-tagged Gotchas entries into one "upstream
     bug report" block (entry + citation, verbatim).
 13. **Roadmap derivation** (only if `docs/roadmap/00-overview.md` exists) — run

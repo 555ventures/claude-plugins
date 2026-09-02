@@ -100,8 +100,12 @@ test('AC-20260820-05-4: gate08 derives hostSpecsCleaned, clause1Met, inWindowAut
   assert.match(bare.stdout, /43%/, 'Contracts: the human render shows an integer percent, round-half-up — 42.857...% must display as 43%, not 42%')
 })
 
-// AC-20260820-05-5
-test('AC-20260820-05-5: escapes byClass counts explicit class values and folds null/missing class into unclassed, feeding recurrentUnguarded at 3+ recurrences', () => {
+// AC-20260820-05-5 / AC-20260901-07-11 (tagged, no assertion change): specs/20260901/07-escape-
+// class-contract.md D4 teaches byClass to count on the effective (amendment-joined) class; this
+// test's fixture carries zero escape-class rows, so it is the CONTINUE-TO oracle that the
+// unamended path (fold null/missing into "unclassed", recur at 3+) still behaves exactly as
+// before once the join exists.
+test('AC-20260820-05-5 / AC-20260901-07-11: escapes byClass counts explicit class values and folds null/missing class into unclassed, feeding recurrentUnguarded at 3+ recurrences', () => {
   const root = tmpdir('fleet-escapes')
   const base = { stage: 'escape', file: 'x.js', reviewRunId: null, foundBy: 'user', severity: 'soft', killedMatch: null, preventedBy: 'none', via: 'manual' }
   mkRepo(root, 'repo-a', {

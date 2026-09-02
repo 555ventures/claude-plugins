@@ -126,10 +126,11 @@
 // rather than degrading through — ADR-0004), `--mark dispositions` refused while still parked at
 // CHECKPOINT (message names /clear for a same-session park or the restart remedy for a null park),
 // or `--skip-independence-check-because "<reason>"` refused (message names the flag) because the
-// reason is absent/blank after trim, the run is parked with a non-null recorded session id
-// (message also names /clear — the override is not a bypass for the build session), the run is
-// not parked at all (nothing to override), or `via` is `direct`
-// (specs/20260901/05-checkpoint-fail-closed.md D1/D2).
+// reason is absent/blank after trim or is itself another flag token (starts with "--", e.g. a
+// following `--waived` reads as absent, never as the reason — D7), the run is parked with a
+// non-null recorded session id (message also names /clear — the override is not a bypass for the
+// build session), the run is not parked at all (nothing to override), or `via` is `direct`
+// (specs/20260901/05-checkpoint-fail-closed.md D1/D2/D7).
 
 'use strict'
 const fs = require('fs')
@@ -1088,8 +1089,12 @@ function handleDispositions() {
       die('--skip-independence-check-because refused on a same-session park — /clear, then re-run ' +
         '/spec:build ' + specPath + '; the override is not a bypass for the build session')
     }
+    // D7 (specs/20260901/05-checkpoint-fail-closed.md, 2026-09-02): flag() returns the next argv
+    // token unconditionally, so a following flag (e.g. `--waived`) reads as the reason string. A
+    // token starting with "--" is another flag, not a reason — treat it as absent exactly like the
+    // bare-flag-at-end case, never admit it as the recorded override reason.
     const raw = flag('--skip-independence-check-because')
-    const reason = typeof raw === 'string' ? raw.trim() : ''
+    const reason = typeof raw === 'string' && !raw.startsWith('--') ? raw.trim() : ''
     if (!reason) {
       die('--skip-independence-check-because needs a non-blank reason (the reason lands on the review row)')
     }

@@ -76,7 +76,13 @@ driver's preflight → `implementing`, the review driver's close → `done`; the
 admits `/spec:build` on all three and stays a prompt-boundary check. One checkpoint is
 enforced: a loop-driven review parks at CHECKPOINT after the reviewer returns and admits
 DISPOSITIONS only once the session id in `.claude/spec-session.json` has changed (a `/clear`),
-once per run, degrading to a warning when no stamp exists. The pre-merge stop is the
+once per run. A missing stamp parks the same way and names the cause's remedy — restart
+Claude Code, since the plugin hook set that writes the stamp is loaded at session start — and
+lifts when any stamp appears; the only other exit is
+`--skip-independence-check-because "<reason>"` on the dispositions mark. Every loop review
+row records `checkpoint: {outcome}` — `cleared`, `stamp-appeared`, `overridden` (with the
+reason), or `not-reached` — so how often the gate is skipped, and why, is a ledger query
+(specs/20260901/05-checkpoint-fail-closed.md, ADR-0004). The pre-merge stop is the
 worktree step-out, never a forced clear. `/spec:design` and `/spec:review` remain direct entry
 points to the same drivers. The loop is scored by the fleet reader's `cleanByVia`
 (escapes-per-CLEAN by `via`); a `loop` rate above the `direct` rate over 30 fleet reviews

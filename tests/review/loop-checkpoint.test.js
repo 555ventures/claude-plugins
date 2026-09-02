@@ -325,7 +325,7 @@ test('AC-20260901-05-3: WHEN, after a --via loop run\'s no-stamp park with no st
     'AC-20260901-05-3/D3: the CLOSE row must carry checkpoint:{"outcome":"overridden","reason":"' + reason + '"} — checkpointOverride is set, which the driver derives "overridden" from: ' + JSON.stringify(row))
 })
 
-test('AC-20260901-05-4: --skip-independence-check-because is refused (exit 2, stderr naming the flag, state unchanged, no checkpointOverride key) on a same-session park (stderr also names /clear), on a no-stamp park with a blank reason, and on a --via direct run at DISPOSITIONS', () => {
+test('AC-20260901-05-4: --skip-independence-check-because is refused (exit 2, stderr naming the flag, state unchanged, no checkpointOverride key) on a same-session park (stderr also names /clear), on a no-stamp park with a blank reason, on a --via direct run at DISPOSITIONS, and on a no-stamp park where the flag is followed immediately by another flag with no reason value (D7)', () => {
   // (a) same-session (non-null) park: the stamp is unchanged since reviewer-returned.
   const sameSessionHost = makeHost('checkpoint-ac5-4a')
   run(sameSessionHost.root, sameSessionHost.spec, '--via', 'loop')
@@ -383,6 +383,26 @@ test('AC-20260901-05-4: --skip-independence-check-because is refused (exit 2, st
   const stateC = readState(directHost.sidecar)
   assert.strictEqual('checkpointOverride' in stateC, false,
     'AC-20260901-05-4(c): a refused override on a --via direct run must write no checkpointOverride key: ' + JSON.stringify(stateC))
+
+  // (d) no-stamp park, --skip-independence-check-because immediately followed by another flag
+  // with no reason value at all (D7: a flag name is not a reason — reviewer 2026-09-02 found
+  // this admitted with checkpointOverride.reason == "--waived", laundering a false override).
+  const flagHost = makeHost('checkpoint-ac5-4d')
+  run(flagHost.root, flagHost.spec, '--via', 'loop')
+  run(flagHost.root, flagHost.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('checkpoint-ac5-4d-park', CLEAN_RETURN))
+  assert.strictEqual(stateOf(flagHost.root, flagHost.spec), 'CHECKPOINT',
+    'setup precondition (d): a no-stamp reviewer-returned must park at CHECKPOINT before this refusal can be exercised')
+  const rD = run(flagHost.root, flagHost.spec, '--mark', 'dispositions', '--skip-independence-check-because',
+    '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(rD.status, 2,
+    'AC-20260901-05-4(d)/D7: a --skip-independence-check-because with no reason value, immediately followed by another flag, must be refused — treating the next flag\'s name as the reason would launder checkpointOverride.reason == "--waived" onto the ledger: ' + rD.stdout + rD.stderr)
+  assert.match(rD.stderr, /--skip-independence-check-because/,
+    'AC-20260901-05-4(d): the refusal must name --skip-independence-check-because specifically: ' + rD.stderr)
+  assert.strictEqual(stateOf(flagHost.root, flagHost.spec), 'CHECKPOINT',
+    'AC-20260901-05-4(d): a refused override must leave --state unchanged at CHECKPOINT')
+  const stateD = readState(flagHost.sidecar)
+  assert.strictEqual('checkpointOverride' in stateD, false,
+    'AC-20260901-05-4(d): a refused override must write no checkpointOverride key — a flag name (e.g. "--waived") must never be recorded as the reason: ' + JSON.stringify(stateD))
 })
 
 test('AC-20260901-05-10: WHEN a --via loop run\'s synthetic gate fails at iteration 1 THE SYSTEM appends a GATE_RED row carrying checkpoint:{"outcome":"not-reached"}; WHEN a --via direct run\'s gate fails the same way THE SYSTEM appends a GATE_RED row with no checkpoint key', () => {

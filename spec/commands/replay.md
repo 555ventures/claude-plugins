@@ -84,12 +84,10 @@ asked.
    `clean -fd` cannot touch the `scratch-worktree` marker, which lives in the worktree's private
    git dir outside the working tree — order is load-bearing: checkout first, then clean — then
    continue to class selection.
-3. **Pick a corpus class:** run `node "$(spec-paths replay)" --stats`, read the per-class
-   counts, and pick the class with the fewest recorded rows so far (ties broken by the class's
-   order in `spec-paths replay-corpus`) — this is what keeps the six classes exercised evenly
-   over time rather than by whichever one a session happens to reach for. Read
-   `spec-paths replay-corpus` and extract that class's own section (id, recipe, leg-invisibility
-   requirement, worked example).
+3. **Pick a corpus class:** run `node "$(spec-paths replay)" --pick-class` and read `class=` from
+   its stdout — the script owns selection (fewest measurement rows, derived classes breaking ties
+   first) so this step never re-derives it. Read `spec-paths replay-corpus` and extract that
+   class's own section (id, recipe, leg-invisibility requirement, worked example).
 4. **Author the mutation (D2):** this session writes the mutation itself — Edit/Write into the
    File Plan files the selected class's recipe requires inside `{dir}`, guided only by the
    selected class's section text and the selected spec's File Plan file list (Read from the spec

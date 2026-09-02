@@ -1,5 +1,5 @@
 ---
-description: The mutation-replay corpus — 6 hand-authored defect classes /spec:replay injects into a scratch worktree to measure the blind reviewer's real catch rate
+description: The mutation-replay corpus — hand-authored and escape-derived defect classes /spec:replay injects into a scratch worktree to measure the blind reviewer's real catch rate
 ---
 
 # Replay Corpus: Mutation Classes
@@ -19,6 +19,16 @@ This corpus is v1, hand-authored (JJ-confirmed 2026-08-19 over escape-derived �
 ledger holds too few rows today to grow a corpus from). It is refreshed at least once per major
 pipeline version, and a real escape that reveals a genuinely new blind-spot shape folds in as a
 new class rather than as a note on an existing one.
+
+The ledger has since grown enough to derive classes directly: a defect class with `CORPUS_BAR`
+(2, `spec/scripts/lib/replay-corpus.js`) or more fleet recurrences on the joined escape count
+and no section here is a corpus gap — `fleet-reader.js`'s `escapes.corpusGaps` names it. A gap's
+section is authored from the escape's own fix diff, cites its ledger rows (repo · timestamp ·
+spec), and lives under `## Derived classes` below as a `### ` heading rather than a `## ` one —
+`lib/replay-corpus.js`'s `parseCorpus` reads the grammar: a `## ` heading before the `## Derived
+classes` line is hand-authored, a `### ` heading after it is derived. The six hand-authored
+classes below stay until a derived class supersedes one by name, at which point the superseded
+`## ` heading is replaced by a `### ` heading under the derived region — the id appears once.
 
 ## `promise-carried-not-delivered`
 
@@ -130,3 +140,31 @@ branch is changed to exit `1` instead; the header text is left untouched (still 
 Every pinned test only asserts the happy-path's exit `0`, so the suite stays green while the
 script's own documented contract and its real behavior now disagree — only a reviewer or a
 targeted exit-code probe on the refusal branch catches the lie.
+
+## Derived classes
+
+### `prefix-collision-coverage-fail-open`
+
+**Derived from:** claude-plugins escape rows `2026-08-23T18:21:47Z` × 4 (specs 20260808/01,
+20260813/03, 20260815/01, 20260816/01 — `preventedBy: enforcer`); fix specs/20260821/03 D7
+(`acIdOccurs`, landed 2026-08-22).
+
+**Recipe:** Find an identifier match that is full-token today — a boundary-checked helper
+(`acIdOccurs`-style), an `===` on a key, an anchored regex — at a call site inside the target
+spec's File Plan files, whose pinned fixtures never contain a shorter id that is a prefix of a
+longer one. Loosen it to a bare substring test (`includes`, `indexOf(...) !== -1`,
+`startsWith`) so a shorter id matches inside a longer sibling. Mutate a call site, never the
+helper's own unit test.
+
+**Leg-invisibility requirement:** every pinned fixture the loosened site reads must be
+prefix-free (ids of equal length, or fewer than ten per namespace), so the substring match
+returns byte-identical results on every fixture and the suite stays green; the only failing
+input is a prefix-colliding pair no pinned test constructs. If the target's fixtures already
+carry `-1` beside `-12`, this class does not apply to that site — pick another.
+
+**Worked example (the real escape):** `ac-matrix.js` attributed an AC to a test file with
+`readTestFile(f).includes(b.id)`, so `AC-20260808-01-1` matched inside `AC-20260808-01-12`
+and the `uncovered-ac` hard finding was suppressed — four ACs across 78 specs reported covered
+with no test anywhere, and every review passed. Caught only by a paired-fixture probe (`-2`
+beside `-12`); the intended catch is a reviewer reading the coverage grep against the AC-ID
+grammar rather than trusting the green matrix.

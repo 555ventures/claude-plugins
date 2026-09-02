@@ -144,9 +144,14 @@
 // explicit flags (--dir/--patch/--patch-out, --workflow/--patch) and never consult cwd at all.
 //
 // Exit codes: 0 = mode succeeded (--due: due; --select: printed a selection; --score: printed a
-// score) · 1 = --due not due, or --select found no eligible CLEAN review row in the window ·
+// score; --pick-class: printed a selection) · 1 = --due not due, or --select found no eligible
+// CLEAN review row in the window ·
 // 2 = usage error / missing required flag / unreadable or unparseable input / --apply --subject
 // names the harness, the defect class, or the mutation class value / --apply missing --patch-out /
+// --apply/--record --class names a value spec/scripts/lib/replay-corpus.js's parseCorpus(corpusPath())
+// does not carry (specs/20260901/08-corpus-derivation-and-kill-match.md D2 — stderr names the corpus
+// path and the comma-joined valid ids in corpus order; nothing is committed/appended) / --pick-class
+// finds the corpus parses to zero classes (D3) /
 // --setup --subject opens with "replay" (case-insensitive, D5 — the overlay commit message must be
 // indistinguishable from a real build commit) /
 // --score --workflow is not a CLEAN verdict with a survivors array / --score --patch parses to zero
@@ -194,6 +199,10 @@ const path = require('path')
 const crypto = require('crypto')
 const { execFileSync, spawnSync } = require('child_process')
 const { readLedgerRows } = require('./lib/observation')
+// D1 (specs/20260901/08-corpus-derivation-and-kill-match.md, 2026-09-01, brief 19): the one
+// parser for spec/doctrine/replay-corpus.md's class-heading grammar — --apply/--record's --class
+// validation (D2) and --pick-class's selection (D3) both key off it, never a second regex sweep.
+const { corpusPath, parseCorpus } = require('./lib/replay-corpus')
 // D2 (specs/20260823/04-review-close-hardening.md, rv_6825fa48c98d): the local frontmatter() kv
 // loop this replaced stripped a trailing comment at the FIRST "#" regardless of what preceded it,
 // corrupting an unspaced value like `build_base: <sha>#frag` — the sole shared derivation strips
@@ -207,12 +216,13 @@ function usage() {
     '--score --workflow <file> --patch <file> | ' +
     '--record --spec <path> --review-run-id <id> --legs green|red:<leg>|baseline-red:<leg>[,<leg>]|none ' +
     '--outcome caught|missed|leg-caught|unresolved|setup-failed [--class <id>] [--patch <file>] ' +
-    '[--workflow <file>] [--tokens N] | --stats | --teardown --dir <path>')
+    '[--workflow <file>] [--tokens N] | --stats | --pick-class [--root <path>] | --teardown --dir <path>')
 }
 
 const MODE_FLAGS = {
   '--due': 'due', '--select': 'select', '--setup': 'setup', '--apply': 'apply',
   '--score': 'score', '--record': 'record', '--stats': 'stats', '--teardown': 'teardown',
+  '--pick-class': 'pickClass',
 }
 
 let mode = null
@@ -267,6 +277,22 @@ const root = (() => {
 const MEASUREMENT_OUTCOMES = new Set(['caught', 'missed', 'leg-caught'])
 function isMeasurementReplay(r) {
   return r.stage === 'replay' && MEASUREMENT_OUTCOMES.has(r.outcome)
+}
+
+// ---- D2: --apply/--record's --class refusal — a class value absent from the corpus keys ---------
+// ---- --stats' per-class catch-rate; one typo forks a class's history into two rows nobody joins. -
+
+function readCorpusClasses() {
+  return parseCorpus(fs.readFileSync(corpusPath(), 'utf8'))
+}
+
+function validateClass(value) {
+  const ids = readCorpusClasses().map((c) => c.id)
+  if (!ids.includes(value)) {
+    console.error(`replay.js: --class '${value}' is not a class in ${corpusPath()} — valid ids ` +
+      `(corpus order): ${ids.join(', ')}`)
+    process.exit(2)
+  }
 }
 
 // ---- --due: reviewsSince = count of stage:"review" rows in READ order after the last MEASUREMENT -
@@ -642,6 +668,10 @@ function cmdSetup() {
 
 function cmdApply() {
   if (!dir || !patch || !cls) { usage(); process.exit(2) }
+  // D2 (specs/20260901/08-corpus-derivation-and-kill-match.md): refuse a --class the corpus does
+  // not carry BEFORE anything else — earlier than the --patch-out/subject checks below, since a
+  // rejected class must leave the worktree untouched and write nothing.
+  validateClass(cls)
   // D9: --patch-out is required — --apply is now the harness's only patch emitter, so every
   // downstream --score/--record call depends on this file existing.
   if (!patchOut) {
@@ -906,6 +936,10 @@ function cmdRecord() {
       process.exit(2)
     }
   }
+  // D2: validate --class against the corpus AFTER the D7 matrix above (so a matrix violation is
+  // still reported first) but BEFORE any read of --patch/--workflow — a rejected class must
+  // append nothing to the ledger.
+  if (cls) validateClass(cls)
   const tokens = tokensArg === null ? 0 : Number(tokensArg)
   if (!Number.isFinite(tokens)) {
     console.error(`replay.js: --tokens must be a number, got '${tokensArg}'`)
@@ -975,6 +1009,34 @@ function cmdStats() {
   process.exit(0)
 }
 
+// ---- --pick-class (D3): counts MEASUREMENT replay rows (caught/missed/leg-caught) per corpus ----
+// ---- class in <root>'s ledger; picks the class with the fewest rows — every corpus class starts -
+// ---- at 0 even with zero rows recorded for it. Ties resolve derived-first, then corpus file -----
+// ---- order (the array is already in that order, and a tie only replaces `best` when the ---------
+// ---- challenger is derived and `best` is not, so the earliest corpus-order class among equals ---
+// ---- that are otherwise tied stays picked). --------------------------------------------------------
+
+function cmdPickClass() {
+  const classes = readCorpusClasses()
+  if (classes.length === 0) {
+    console.error(`replay.js: ${corpusPath()} parses to zero classes — nothing to pick from; ` +
+      'confirm the corpus file carries at least one `## `id`` heading')
+    process.exit(2)
+  }
+  const rows = readLedgerRows(root).filter(isMeasurementReplay)
+  const rowCounts = new Map()
+  for (const r of rows) rowCounts.set(r.class, (rowCounts.get(r.class) || 0) + 1)
+  let best = null
+  for (const c of classes) {
+    const n = rowCounts.get(c.id) || 0
+    if (!best || n < best.rows || (n === best.rows && c.derived && !best.derived)) {
+      best = { id: c.id, derived: c.derived, rows: n }
+    }
+  }
+  console.log(`class=${best.id} derived=${best.derived} rows=${best.rows}`)
+  process.exit(0)
+}
+
 // ---- --teardown: refuse a --dir whose private git dir carries no scratch-worktree marker ----------
 // ---- (exit 3, deletes nothing) — the retired replay-worktree name is NOT grandfathered (D3, A4: no
 // ---- tree carrying only that name existed at build time); otherwise `git worktree remove --force` --
@@ -1031,6 +1093,7 @@ switch (mode) {
   case 'score': cmdScore(); break
   case 'record': cmdRecord(); break
   case 'stats': cmdStats(); break
+  case 'pickClass': cmdPickClass(); break
   case 'teardown': cmdTeardown(); break
   default: usage(); process.exit(2)
 }

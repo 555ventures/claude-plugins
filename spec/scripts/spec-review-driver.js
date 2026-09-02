@@ -1039,6 +1039,28 @@ function handleReviewerReturned() {
     die('--file ' + file + ' is missing a survivors array — the reviewer return shape must be ' +
       '{verdict, survivors, killed, reviewerCount, scope, tokens}; re-dispatch and write a valid return')
   }
+  // D8 (specs/20260901/08-corpus-derivation-and-kill-match.md, 2026-09-01, brief 19): killed must
+  // be an array, and every entry an object carrying a string claim plus BOTH file (string|null)
+  // and line (number|null) keys PRESENT — explicit null for a process-level claim, never an
+  // omitted key. Extends this same verdict/survivors validation seam; never a second pass, and
+  // nothing is written (no sidecar file, no mark mutation) before every entry checks out.
+  if (!Array.isArray(json.killed)) {
+    die('--file ' + file + ' is missing a killed array — the reviewer return shape must be ' +
+      '{claim, file, line, evidence} per killed entry; re-dispatch and write a valid return')
+  }
+  for (let i = 0; i < json.killed.length; i++) {
+    const k = json.killed[i]
+    const shapeOk = k && typeof k === 'object'
+      && typeof k.claim === 'string'
+      && Object.prototype.hasOwnProperty.call(k, 'file') && (k.file === null || typeof k.file === 'string')
+      && Object.prototype.hasOwnProperty.call(k, 'line') && (k.line === null || typeof k.line === 'number')
+    if (!shapeOk) {
+      die('--file ' + file + ' killed[' + i + '] does not match the required shape ' +
+        '{claim, file, line, evidence} (claim: string, file: string|null, line: number|null, both ' +
+        'keys present) — re-dispatch the reviewer and write a killed entry for every claim it ' +
+        'investigated and dismissed, with an explicit null when the claim carries no location')
+    }
+  }
   const n = listManifestNumbers().length ? Math.max(...listManifestNumbers()) : 0
   fs.mkdirSync(sidecarDir, { recursive: true })
   const dest = path.join(sidecarDir, `reviewer-return-${n}.json`)

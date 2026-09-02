@@ -83,12 +83,11 @@ defective file — that is the only unrecoverable input.
      `/spec:release` prescribes `foundBy: later-spec`, `preventedBy: runtime-leg` for
      defects its staging walkthrough catches (a staging walk is not production).
    - `class` — registry-first: run `node "$(spec-paths fleet-reader)" --json` and read
-     `.escapes.byClass` keys (minus `unclassed`), plus `spec-paths replay-corpus`'s class
-     headings, as the registry; pick an existing id whenever the defect shape matches it,
-     and invent a new kebab-case id (same naming style as replay-corpus.md's classes, e.g.
-     `silent-fallback`) only when none fits — naming what kind of defect this is rather than
-     this incident's specifics. Value is null when underivable — unknown is null, never a
-     guess.
+     `.escapes.registry`'s `class` values (never `unclassed`) as the registry; pick an
+     existing id whenever the defect shape matches it, and invent a new kebab-case id (same
+     naming style as replay-corpus.md's classes, e.g. `silent-fallback`) only when none fits —
+     naming what kind of defect this is rather than this incident's specifics. Value is null
+     when underivable — unknown is null, never a guess.
    - `unclassedReason` — set only when `class` is null: `no-fix-diff` when no diagnosis or
      fix diff exists in session context to derive a class from; `deferred` when the user
      declines to class it at the confirm call; null otherwise (a defect not yet examined
@@ -107,10 +106,11 @@ defective file — that is the only unrecoverable input.
      feedback loop.
    - `killedMatch` — derive from the retained review artifact when step 3 found one;
      user memory is the fallback, used only when no artifact exists. **Artifact path:**
-     compare the defect against the artifact's `killed[]` claims (evidence intact) and
-     derive a match — an entry whose claim/evidence names this defect's file and behavior →
-     `true`; the artifact present with `killed[]` non-empty but nothing matching → `false`;
-     genuinely ambiguous even with the evidence in hand → `null`. It rides as its own
+     compare `file` first — an entry whose `file` equals the defect file is the candidate,
+     with claim/evidence then confirming the match against this defect's behavior → `true`;
+     a `file:null` entry compares by claim/evidence as before; the artifact present with
+     `killed[]` non-empty but nothing matching by file or claim → `false`; genuinely
+     ambiguous even with the evidence in hand → `null`. It rides as its own
      question in the same call, the derived value first and marked "(Recommended)" with its
      reasoning citing the matched claim — the user CONFIRMS or corrects it, same as every
      other field (derive-don't-interview). **Fallback path (no artifact — an older review
@@ -166,7 +166,10 @@ defective file — that is the only unrecoverable input.
      row appended; prevention delta {landed / declined / recommended: <command>}`.
    - `bullets`: one line, `- {N} escape rows now point at this spec`.
    - `warns`: `correlated review said CLEAN — miscalibration signal /spec:doctor aggregates`
-     when the step-3 correlated review row's verdict was CLEAN, else omit.
+     when the step-3 correlated review row's verdict was CLEAN, else omit. After the append,
+     re-run `node "$(spec-paths fleet-reader)" --json` and add `corpus gap: <class> has <N>
+     fleet recurrences and no replay-corpus section — author it in the plugin repo from this
+     fix` when `escapes.corpusGaps` now lists this row's effective class; omit otherwise.
    - `found`: `killedMatch: execution-grounded verification killed a finding that later
      proved real — strongest re-tuning evidence the ledger can hold` when `killedMatch` is
      `true`, else omit.

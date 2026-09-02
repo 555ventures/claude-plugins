@@ -116,7 +116,10 @@ Delta application and the `status` flip — are expected preconditions, never fi
 
 ## Return contract
 
-Return `{verdict, survivors: [{severity, claim, file, line, impact, evidence}], killed: [],
-reviewerCount, scope, tokens}`. `verdict` is exactly one of two words — `CLEAN` or
-`REVIEWER_FAILED` — and nothing else: findings ride `survivors`, never the verdict word, so a
-non-empty `survivors` list is still `CLEAN`.
+Return `{verdict, survivors: [{severity, claim, file, line, impact, evidence}],
+killed: [{claim, file, line, evidence}], reviewerCount, scope, tokens}`. `verdict` is exactly
+one of two words — `CLEAN` or `REVIEWER_FAILED` — and nothing else: findings ride `survivors`,
+never the verdict word, so a non-empty `survivors` list is still `CLEAN`. `killed` carries every
+claim you investigated and dismissed on executed evidence — `file`/`line` name where you checked
+it, explicit `null` (never omitted) for a process-level claim with no location; a return that
+omits either key on any entry is refused at the `reviewer-returned` mark.

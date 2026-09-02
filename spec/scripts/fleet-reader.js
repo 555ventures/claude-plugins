@@ -20,6 +20,11 @@
 // value to zero or drops a parseable row silently (D11) — every such row renders verbatim in
 // its query AND increments a named drift-census reason bucket.
 //
+// D6 (specs/20260901/08-corpus-derivation-and-kill-match.md, 2026-09-01, brief 19): the escapes
+// query gains corpusGaps (classes at or past CORPUS_BAR fleet recurrences with no replay-corpus
+// entry) and registry (every classified class, with its inCorpus flag) — both derived fresh each
+// run from lib/replay-corpus.js's parser against the plugin's own shipped corpus, never stored.
+//
 // Exit codes: 0 = derived (0 repos scanned is still a derived answer — the population block
 //                 carries the absence, never an error)
 //             2 = usage error: unknown flag, missing --repos-root value, --repos-root not a
@@ -31,6 +36,11 @@ const path = require('path')
 const os = require('os')
 const { configExists } = require('./lib/host-config')
 const { validateEscapeRow, validateAmendmentRow, joinAmendments, escapeKey } = require('./lib/escape-row')
+// D6 (specs/20260901/08-corpus-derivation-and-kill-match.md, 2026-09-01, brief 19): corpusGaps
+// and registry cross the joined effective-class count (query 3) against the plugin's OWN replay
+// corpus — corpusPath()/parseCorpus() are lib/replay-corpus.js's one parser (D1), read fresh on
+// every run (this script never stores state, D12 above).
+const { CORPUS_BAR, corpusPath, parseCorpus } = require('./lib/replay-corpus')
 
 const USAGE = 'Usage: node fleet-reader.js [--repos-root <dir>] [--json]'
 
@@ -335,6 +345,25 @@ function computeEscapes(reposList) {
   return { total, killedMatchNull, preventedBy, byClass, recurrentUnguarded, byRepo, amendments: amendmentsCount, unclassedRows }
 }
 
+// D6: cross the joined byClass count against the plugin's own shipped corpus — corpusGaps names
+// every non-unclassed class at or past CORPUS_BAR with no corpus id (class asc); registry lists
+// every non-unclassed class with its inCorpus flag (count desc, then class asc). Read fresh every
+// run — this script never stores a derived value between runs (D12).
+function computeCorpusCrossing(byClass) {
+  const ids = new Set(parseCorpus(fs.readFileSync(corpusPath(), 'utf8')).map((c) => c.id))
+  const corpusGaps = []
+  const registry = []
+  for (const [cls, count] of Object.entries(byClass)) {
+    if (cls === 'unclassed') continue
+    const inCorpus = ids.has(cls)
+    registry.push({ class: cls, count, inCorpus })
+    if (!inCorpus && count >= CORPUS_BAR) corpusGaps.push({ class: cls, count })
+  }
+  corpusGaps.sort((a, b) => a.class.localeCompare(b.class))
+  registry.sort((a, b) => b.count - a.count || a.class.localeCompare(b.class))
+  return { corpusGaps, registry }
+}
+
 // ---- query 4: replayDebt --------------------------------------------------------------------
 // Per repo: replay-row count, review rows with ts after the latest replay row's ts (no replay
 // rows -> all review rows + neverReplayed:true).
@@ -482,6 +511,7 @@ function computeDriftCensus(reposList) {
 const legRecency = computeLegRecency(reposData)
 const gate08 = computeGate08(reposData)
 const escapes = computeEscapes(reposData)
+Object.assign(escapes, computeCorpusCrossing(escapes.byClass))
 const replayDebt = computeReplayDebt(reposData)
 const cleanContradicted = computeCleanContradicted(reposData)
 const cleanByVia = computeCleanByVia(reposData)
@@ -566,6 +596,15 @@ function renderEscapes(esc) {
     lines.push(`  recurrentUnguarded: unclassed: ${esc.byClass.unclassed} — class labels start accruing from escape.md's class field`)
   } else {
     lines.push('  recurrentUnguarded: none')
+  }
+  // D6: corpusGaps — one line per gap, naming the class and its exact fleet-wide count with the
+  // authoring remedy verbatim; "corpusGaps: none" when there is no gap.
+  if (esc.corpusGaps.length) {
+    for (const g of esc.corpusGaps) {
+      lines.push(`  corpusGaps: ${g.class} (${g.count} recurrences) — author its section under ## Derived classes in spec/doctrine/replay-corpus.md`)
+    }
+  } else {
+    lines.push('  corpusGaps: none')
   }
   return lines.join('\n')
 }

@@ -17,6 +17,14 @@ const { tmpdir, runNode, runBash, gitRepo } = require('../helpers')
 // detector). Every test here fails against current code: verdict.js rejects `--escalated` as an
 // unknown flag (usage, exit 2, spike A3) and the driver has no escalate-row mechanism at all.
 // AC-20260822-01-1 .. -9, -12, -13.
+//
+// AC-20260901-08-9 (tagged, no assertion change, specs/20260901/08-corpus-derivation-and-kill-
+// match.md D8): `reviewerReturn()` below carries `killed: []` alongside a `survivors` array, and
+// every `--mark reviewer-returned` call in this file (directly and via `driveToCapEdge()`) feeds
+// that exact shape through the driver and depends on it landing FIX/DISPOSITIONS successfully —
+// D8's new killed[] shape validation must CONTINUE TO accept an empty killed array exactly as it
+// does today, or every escalation test below would break on its own setup before ever reaching
+// the escalate-row behavior it actually pins.
 
 const VERDICT = 'scripts/verdict.js'
 const DRIVER = 'scripts/spec-review-driver.js'
@@ -72,6 +80,10 @@ function returnFileWith(scratchName, body) {
 // filter entirely — those two legs are excluded from fix-delta's required set, and a fix-delta
 // manifest never emits rows for them, so declaring this scope keeps every cycle's dispositions
 // pass a clean, uncomplicated pool of exactly 1).
+// AC-20260901-08-9 (tagged): killed: [] here, riding with a non-empty survivors array, is the
+// exact shape D8's new validation must SHALL CONTINUE TO accept for the reviewer-returned mark —
+// every test below that calls driveToCapEdge() (or marks reviewer-returned directly) depends on
+// this acceptance holding.
 function reviewerReturn() {
   return {
     verdict: 'CLEAN',

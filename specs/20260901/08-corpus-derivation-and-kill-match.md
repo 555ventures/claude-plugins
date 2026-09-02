@@ -1,6 +1,7 @@
 ---
 date: 2026-09-01
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: feedback-loop
 design: false
@@ -9,6 +10,7 @@ depends_on: [specs/20260901/07-escape-class-contract.md]
 depended_on_by: []
 brief: 19
 open_markers: 0
+diff_base: 90a60ab25d10cea09d5b3df97ad92be167aa6b0b
 ---
 
 # Corpus derivation and the kill-match input — replay classes grown from escapes

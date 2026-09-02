@@ -24,13 +24,32 @@
 //   design-atlas.js build [--root <repo>] [--out <file>]
 //                                                  the atlas: mocks × roadmap `surfaces` blocks ×
 //                                                  coverage ledger × spec stamps → one browsable page
+//   design-atlas.js shell sync  [--root <r>] [<mock|dir>…]
+//                                                  specs/20260901/04-shell-composed-mocks.md D5:
+//                                                  rewrite every declaring mock's chrome region
+//                                                  from its shell canon (byte-identical by
+//                                                  mechanism, never by an author hand-copying);
+//                                                  default walk is <root>/design/mocks and skips
+//                                                  `built` mocks unless named explicitly
+//   design-atlas.js shell adopt [--root <r>] [--shell <name>] [--apply]
+//                                                  D6: migrate a pre-shell mock into the canon —
+//                                                  a plan table with no writes, or --apply to
+//                                                  strip detected chrome and wrap the rest as the
+//                                                  content slot
 //
-// Everything here is a file walk + string emit: zero tokens, reproducible output (no timestamps),
-// never edits its inputs. Exit 0 = pass/written, 1 = check violations, 2 = usage/IO error.
+// check/build/gallery are a file walk + string emit: zero tokens, reproducible output (no
+// timestamps), and never edit their inputs. `shell` is the one writer here, and it writes only
+// the region it derives (plus a missing css link, plus the data-shell stamp on adopt) — never a
+// mock's own content. The shell-region mechanics (the depth-counting tag walk, the D3 splice, the
+// D1 canon rule set) live in spec/scripts/lib/shell-region.js, kept outside this file's own
+// entrypoint-conformance surface deliberately (specs/20260901/04 D12 — no new spec-paths key).
+// Exit 0 = pass/written, 1 = check violations or a `shell sync` refusal, 2 = usage/IO error or an
+// ambiguous `shell adopt --apply` with no --shell.
 'use strict'
 const fs = require('node:fs')
 const path = require('node:path')
 const { readConfig } = require('./lib/host-config')
+const shellLib = require('./lib/shell-region')
 
 const die = (msg) => { process.stderr.write('[design-atlas] ' + msg + '\n'); process.exit(2) }
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -167,6 +186,7 @@ function cmdCheck(argv) {
   const paths = argv.filter(a => a !== '--matrix')
   if (!paths.length) die('check: need at least one file or directory')
   const violations = []
+  const warnLines = []
   const darkChecked = new Set()
   let count = 0
   for (const t of paths) {
@@ -174,7 +194,11 @@ function cmdCheck(argv) {
     for (const f of htmlFilesUnder(t)) {
       count++
       const html = fs.readFileSync(f, 'utf8')
-      if (!labelOf(html)) violations.push(f + ': no data-screen-label on any element')
+      // specs/20260901/04 D1: a shell canon file (first labeled root is data-shell-canon) is
+      // never asked for a data-screen-label and is validated under its own rule set below,
+      // instead of D4's mock shell family.
+      const isCanon = shellLib.isCanonFile(html)
+      if (!isCanon && !labelOf(html)) violations.push(f + ': no data-screen-label on any element')
       if (!/<link[^>]+tokens\.css/.test(html)) violations.push(f + ': does not link a tokens.css')
       // strip the tokens link line itself, then flag color literals anywhere in markup/styles
       const body = html.replace(/<link[^>]*>/g, '')
@@ -184,10 +208,30 @@ function cmdCheck(argv) {
       }
       // Hygiene (a)-(d) and the matrix checks below bind at the same stamp: ratified or approved
       // (equivalent, D2), or under --matrix (forces both onto drafts, e.g. a post-ratify expansion
-      // pass). sketch mocks iterate on one framing and skip both families for free.
+      // pass). sketch mocks iterate on one framing and skip both families for free. D1: a shell
+      // canon binds hygiene "as if approved" — it never carries a data-status attribute at all.
       const status = statusOf(html)
-      const boundNow = forceMatrix || status === 'ratified' || status === 'approved'
+      const boundApproved = forceMatrix || status === 'ratified' || status === 'approved'
+      const boundNow = boundApproved || isCanon
       if (boundNow) violations.push(...hygieneViolations(f, html))
+
+      // specs/20260901/04: canon files get D1's own rule set (name match, own css link, content
+      // slot, non-content slots' data-contract="none", off-token colors + hygiene(b) read over
+      // the LINKED css file — invisible to the generic checks above, which only read inline
+      // <style> blocks). Page mocks get D4's shell family instead, bound only when a
+      // design/shell/ dir resolves by walk-up (D4's absence-invariant, AC-20260901-04-6).
+      if (isCanon) {
+        violations.push(...shellLib.checkCanon(f, html))
+      } else {
+        const shellDir = shellLib.resolveShellDir(f)
+        if (shellDir) {
+          const diag = shellLib.diagnoseMock(html, shellDir)
+          for (const fnd of diag.findings) {
+            if (boundApproved) violations.push(f + ': ' + fnd.text)
+            else warnLines.push('  ⚠️ ' + f + ': ' + fnd.text)
+          }
+        }
+      }
 
       // declared matrix (design/targets.json): mocks are RESPONSIVE SINGLE FILES — one file per
       // surface across every declared viewport; dark/light lives in tokens.css, never in per-theme
@@ -222,12 +266,165 @@ function cmdCheck(argv) {
     }
   }
   if (!count) die('check: no .html files under ' + paths.join(', '))
+  for (const w of warnLines) process.stdout.write(w + '\n')
   if (violations.length) {
     process.stdout.write('CHECK FAIL (' + violations.length + ' violation(s) across ' + count + ' file(s)):\n')
     for (const v of violations) process.stdout.write('  - ' + v + '\n')
     process.exit(1)
   }
   process.stdout.write('CHECK PASS (' + count + ' file(s))\n')
+}
+
+// ---- shell sync/adopt (specs/20260901/04 D5/D6) ---------------------------------------------------
+// Insert `<link rel="stylesheet" href="<rel>/<name>.css">` right after the tokens.css link when the
+// mock does not already link its shell's stylesheet. Shared by sync (which never touches an
+// already-linked mock) and adopt --apply (which always needs the link on newly stamped mocks).
+function ensureShellCssLink(html, mockFile, shellDir, name) {
+  const cssRe = new RegExp('shell/' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\.css')
+  if (cssRe.test(html)) return { html, changed: false }
+  const rel = path.relative(path.dirname(mockFile), path.join(shellDir, name + '.css')).split(path.sep).join('/')
+  const inserted = html.replace(/(<link[^>]+tokens\.css[^>]*>\n?)/,
+    '$1<link rel="stylesheet" href="' + rel + '">\n')
+  return { html: inserted, changed: inserted !== html }
+}
+
+function relOf(root, f) { return path.relative(root, f) || f }
+
+// design-atlas.js shell sync [--root <r>] [<mock|dir>…]
+function cmdShellSync(argv) {
+  const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d }
+  const root = path.resolve(arg('--root', '.'))
+  const positional = argv.filter((a, i) => a !== '--root' && argv[i - 1] !== '--root')
+  const explicit = positional.length > 0
+  const targets = explicit ? positional : [path.join(root, 'design/mocks')]
+  const built = shellLib.builtLabels(root)
+
+  const files = []
+  for (const t of targets) {
+    if (!fs.existsSync(t)) die('shell sync: no such path: ' + t)
+    for (const f of htmlFilesUnder(t)) files.push(f)
+  }
+
+  let refused = false
+  for (const f of files) {
+    const rel = relOf(root, f)
+    const html = fs.readFileSync(f, 'utf8')
+    const root0 = shellLib.findElement(html, (t) => /data-screen-label\s*=\s*"[^"]*"/.test(t.raw))
+    if (!root0) { process.stdout.write('skipped (undeclared) ' + rel + '\n'); continue }
+    const shellMatch = root0.openRaw.match(/data-shell\s*=\s*"([^"]*)"/)
+    if (!shellMatch) { process.stdout.write('skipped (undeclared) ' + rel + '\n'); continue }
+    const name = shellMatch[1]
+    if (name === 'none') { process.stdout.write('skipped (no shell) ' + rel + '\n'); continue }
+
+    const labelMatch = root0.openRaw.match(/data-screen-label\s*=\s*"([^"]*)"/)
+    const label = labelMatch ? labelMatch[1] : ''
+    if (!explicit && built.has(label)) { process.stdout.write('skipped (built) ' + rel + '\n'); continue }
+
+    const shellDir = shellLib.resolveShellDir(f)
+    const canonPath = shellDir ? path.join(shellDir, name + '.html') : null
+    if (!canonPath || !fs.existsSync(canonPath)) { process.stdout.write('skipped (no shell) ' + rel + '\n'); continue }
+
+    const actualRegion = html.slice(root0.innerStart, root0.innerEnd)
+    const contentSlot = shellLib.findElement(actualRegion, (t) => /data-slot\s*=\s*"content"/.test(t.raw))
+    if (!contentSlot) {
+      process.stdout.write('cannot sync ' + rel + ': no data-slot="content" inside the root — ' +
+        'run design-atlas.js shell adopt (or wrap the content in data-slot="content")\n')
+      refused = true
+      continue
+    }
+    const contentInner = actualRegion.slice(contentSlot.innerStart, contentSlot.innerEnd)
+    const activeMatch = root0.openRaw.match(/data-active\s*=\s*"([^"]*)"/)
+    const active = activeMatch ? activeMatch[1] : label
+
+    const canonHtml = fs.readFileSync(canonPath, 'utf8')
+    const expected = shellLib.expectedRegion(canonHtml, name, contentInner, active)
+
+    let newHtml = html
+    let changed = false
+    if (expected !== null && actualRegion !== expected) {
+      newHtml = html.slice(0, root0.innerStart) + expected + html.slice(root0.innerEnd)
+      changed = true
+    }
+    const linked = ensureShellCssLink(newHtml, f, shellDir, name)
+    newHtml = linked.html
+    changed = changed || linked.changed
+
+    if (changed) {
+      fs.writeFileSync(f, newHtml)
+      process.stdout.write('synced ' + rel + '\n')
+    } else {
+      process.stdout.write('unchanged ' + rel + '\n')
+    }
+  }
+  if (refused) process.exit(1)
+}
+
+// design-atlas.js shell adopt [--root <r>] [--shell <name>] [--apply]
+function cmdShellAdopt(argv) {
+  const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d }
+  const root = path.resolve(arg('--root', '.'))
+  const apply = argv.includes('--apply')
+  const shellArg = arg('--shell', null)
+  const mocksDir = path.join(root, 'design/mocks')
+  const shellDir = path.join(root, 'design/shell')
+
+  let canonNames = []
+  try { canonNames = fs.readdirSync(shellDir).filter(e => e.endsWith('.html')).map(e => path.basename(e, '.html')).sort() } catch {}
+  const soleCanon = canonNames.length === 1 ? canonNames[0] : null
+  const chosenName = shellArg || soleCanon
+
+  if (!fs.existsSync(mocksDir)) die('shell adopt: no such directory: ' + mocksDir)
+  const candidates = []
+  for (const f of htmlFilesUnder(mocksDir)) {
+    const html = fs.readFileSync(f, 'utf8')
+    const root0 = shellLib.findElement(html, (t) => /data-screen-label\s*=\s*"[^"]*"/.test(t.raw))
+    if (!root0) continue
+    if (/data-shell\s*=\s*"/.test(root0.openRaw)) continue // already declared — not adopt's concern
+    const labelMatch = root0.openRaw.match(/data-screen-label\s*=\s*"([^"]*)"/)
+    const label = labelMatch ? labelMatch[1] : ''
+    const inner = html.slice(root0.innerStart, root0.innerEnd)
+    const children = shellLib.topLevelChildren(inner)
+    const chrome = children.filter(shellLib.isChromeChild)
+    candidates.push({ f, html, root0, label, chrome })
+  }
+
+  if (apply) {
+    const needsName = candidates.some(c => c.chrome.length)
+    if (needsName && !chosenName) {
+      die('shell adopt --apply: more than one shell canon exists (' + canonNames.join(', ') +
+        ') — pass --shell <name> to say which one adopts these mocks')
+    }
+    process.stdout.write('SHELL ADOPT (applied)\n')
+    for (const c of candidates) {
+      if (!c.chrome.length) continue // zero-chrome mocks are never touched, never stamped none
+      const rel = relOf(root, c.f)
+      const canonPath = path.join(shellDir, chosenName + '.html')
+      if (!fs.existsSync(canonPath)) die('shell adopt --apply: design/shell/' + chosenName + '.html does not exist')
+      const canonHtml = fs.readFileSync(canonPath, 'utf8')
+      const inner = c.html.slice(c.root0.innerStart, c.root0.innerEnd)
+      let rest = inner
+      for (const child of [...c.chrome].sort((a, b) => b.start - a.start)) {
+        rest = rest.slice(0, child.start) + rest.slice(child.end)
+      }
+      const expected = shellLib.expectedRegion(canonHtml, chosenName, rest, c.label)
+      const stampedOpen = c.root0.openRaw.replace(/(\/?)>\s*$/, ' data-shell="' + chosenName + '"$1>')
+      let newHtml = c.html.slice(0, c.root0.openStart) + stampedOpen + expected + c.html.slice(c.root0.innerEnd)
+      newHtml = ensureShellCssLink(newHtml, c.f, shellDir, chosenName).html
+      fs.writeFileSync(c.f, newHtml)
+      process.stdout.write(rel + ' adopted into ' + chosenName + '\n')
+    }
+    return
+  }
+
+  process.stdout.write('SHELL ADOPT (plan)\n')
+  for (const c of candidates) {
+    const rel = relOf(root, c.f)
+    const chromeText = c.chrome.length ? c.chrome.map(ch => ch.name).join(', ') : 'none'
+    const proposal = c.chrome.length ? (chosenName || 'ambiguous — pass --shell') : 'undeclared — decide'
+    const drift = c.chrome.length ? 'yes' : '—'
+    process.stdout.write(rel + ' | chrome: ' + chromeText + ' | proposal: ' + proposal +
+      ' | active: ' + c.label + ' | drift: ' + drift + '\n')
+  }
 }
 
 // ---- shared page chrome ----------------------------------------------------------------------------
@@ -448,23 +645,9 @@ function cmdBuild(argv) {
     }
   }
 
-  // coverage ledger: label -> {spec, built}
-  const claims = new Map()
-  try {
-    const ledger = JSON.parse(fs.readFileSync(path.join(root, '.claude/design-coverage.json'), 'utf8'))
-    for (const src of Object.values(ledger.sources || {})) {
-      for (const [ref, v] of Object.entries(src.regions || {})) {
-        const label = ref.split('#')[0]
-        const spec = v && v.spec
-        let built = false
-        if (spec) {
-          try { built = /^status:\s*done\b/m.test(fs.readFileSync(path.join(root, spec), 'utf8')) } catch {}
-        }
-        const prev = claims.get(label)
-        claims.set(label, { spec, built: built || (prev && prev.built) || false })
-      }
-    }
-  } catch {}
+  // coverage ledger: label -> {spec, built}. specs/20260901/04 D5: the single derivation, shared
+  // with `shell sync`'s built-mock skip so the two never drift apart.
+  const claims = shellLib.loadCoverageClaims(root)
 
   // optional built routes: config design.atlasRoutes {label: url}
   const routes = ((readConfig(root).design || {}).atlasRoutes) || {}
@@ -586,4 +769,7 @@ const [cmd, ...rest] = process.argv.slice(2)
 if (cmd === 'check') cmdCheck(rest)
 else if (cmd === 'gallery') cmdGallery(rest)
 else if (cmd === 'build') cmdBuild(rest)
-else die('usage: design-atlas.js <check|gallery|build> …')
+else if (cmd === 'shell' && rest[0] === 'sync') cmdShellSync(rest.slice(1))
+else if (cmd === 'shell' && rest[0] === 'adopt') cmdShellAdopt(rest.slice(1))
+else if (cmd === 'shell') die('usage: design-atlas.js shell <sync|adopt> …')
+else die('usage: design-atlas.js <check|gallery|build|shell> …')

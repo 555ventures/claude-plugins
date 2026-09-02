@@ -19,11 +19,12 @@ around it. **The atlas is the map; `/spec:sketch <brief>` is the workbench** —
 design-brainstorm on one brief's surfaces (mock + brief co-evolve, exit ratification) belongs
 there; the atlas is for seeing the whole product and applying cross-cutting notes.
 
-**Intended model: the session model.** Regeneration and serving are zero-judgment. The sweep
-dispatches Sonnet agents. **Change rounds that are direction-level** (new journey shape, a
-surface's whole posture, cross-screen coherence rulings) are the roadmap-level taste seat —
-recommend the user run them with Fable/Opus (shared § Model Placement); mechanical annotation
-fixes (copy, spacing, a moved element) run on Sonnet dispatch regardless of session model.
+**Intended model: the session model, plus the planning seat for the sweep** (shared § Model
+Placement — sketch-tier authorship is a planning-seat duty). Regeneration and serving are
+zero-judgment. **Change rounds that are direction-level** (new journey shape, a surface's whole
+posture, cross-screen coherence rulings) are the roadmap-level taste seat — recommend the user
+run them with Fable/Opus; mechanical annotation fixes (copy, spacing, a moved element) run on
+Sonnet dispatch regardless of session model.
 
 **Setup:** run `spec-paths shared-for atlas` and read its output. Run `spec-paths design-atlas`
 once and keep the path — `{atlas}` below. Read `.claude/spec.config.json` if present (optional
@@ -39,7 +40,8 @@ user's input; `sweep` as an argument only skips the gap confirmation.
    `node "$(spec-paths report-render)" --slots <file>`, print the script's output verbatim
    (rationale: shared § Console Output Style) — this is the run's terminal report:
    - `outcome`: anchor `✅` text `atlas rebuilt — {N} surfaces ({M} bound, {K} gaps)`.
-   - `bullets`: `- orphan: {mock path} — declare in {owning brief} or delete` (one per orphan).
+   - `bullets`: `- orphan: {mock path} — declare in {owning brief} or delete` (one per orphan);
+     plus the `🎨 position: …` line (shared § Design Atlas) after a sweep authored any mocks.
    - `warns`: `{bound-but-drifted suspicion the user raised}`, when raised.
    - `artifacts`: `design/atlas/index.html`.
    - `next`: two arms (A5) — `{kind:'command', text:'/spec:atlas sweep — fill the {K} gap
@@ -94,16 +96,15 @@ brief is planned): sketches are the product-understanding contract, and this rev
 the user audits the model's grasp of the whole product at sketch-edit prices. Later invocations
 are incremental gap-filling.
 
-For each `gap` surface: one Sonnet agent authors `design/mocks/<label>.html` at **sketch tier**
-(`data-status="sketch"`; structure, real copy register, token roles — no polish pass, no
-screenshot loop) under the harness check, grounded in the owning brief + the research brief
-(`docs/design/research-brief.md`, when present) + doctrine + `design/tokens.css`. **Sequential
-dispatch, exemplar-grounded, never parallel per-surface** (shared § Design Atlas — one warm
-author per pass; chained sequential Sonnet dispatches past ~10 gaps, each receiving the
-previously-authored mock paths as exemplars so late surfaces match early chrome); paths not
-prose. Then rebuild and report — same ```report template as step 1 above, fresh slots from
-the post-sweep build (the whole picture should always exist; polish arrives per-surface at
-`/spec:design`).
+Every `gap` surface is authored at **sketch tier** (`data-status="sketch"`; structure, real
+copy register, token roles — no polish pass, no screenshot loop) under the harness check,
+following the shared authorship + grounding rule **in full** (shared § Design Atlas's
+authorship paragraph — who authors in-session vs. the sequential Fable dispatch, the
+no-shell-canon bootstrap, and the grounding order); paths, not prose, are what a later dispatch
+in the same pass cites. Run `shell sync` on the pass's mocks, then `{atlas} check`. Then
+rebuild and report — same ```report template as step 1 above, fresh slots from the post-sweep
+build, plus the `🎨 position: …` bullet (shared § Design Atlas) — the whole picture should
+always exist; polish arrives per-surface at `/spec:design`.
 
 ## Rules
 

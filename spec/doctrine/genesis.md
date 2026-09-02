@@ -753,17 +753,24 @@ an undelivered token — its enforcement rule will have nothing to bind to. Name
 consumed + doctrine paths so `/spec:init` and `/spec:design` can find them. Before this mark,
 also promote the winner's signature screen(s) into `design/mocks/` and expand the matrix across
 every theme × viewport `design/targets.json` declares (shared § Design Canon,
-matrix-at-approval), stamping each `data-status="approved"`. The driver checks:
-`design/tokens.css` `startsWith` the winner's `tokens.css` verbatim (an external winner has no
-prefix rule — refused naming `design/tokens.css` and `verbatim` otherwise); `design/mocks/`
-holds ≥ 1 `.html` carrying `data-status="approved"`; `design-atlas.js check --matrix
+matrix-at-approval), stamping each `data-status="approved"`; alongside that promotion, the
+session authors the navigation-shell decision's mock-side artifact in-session —
+`design/shell/app.html` + its linked `app.css` (shared § Design Canon) — and syncs the promoted
+mocks against it. The driver checks: `design/tokens.css` `startsWith` the winner's `tokens.css`
+verbatim (an external winner has no prefix rule — refused naming `design/tokens.css` and
+`verbatim` otherwise); `design/mocks/` holds ≥ 1 `.html` carrying `data-status="approved"`;
+`design/shell/app.html` exists and `design-atlas.js check design/shell` exits 0 (refused naming
+the file / carrying the check's own stdout otherwise); `design-atlas.js check --matrix
 design/mocks` exits 0 (a non-zero exit is refused carrying the check's own stdout — no partial
-gallery); and `design/components.json` exists.
+gallery, and now binds the shell family on the approved signature screens too); and
+`design/components.json` exists.
 
 **`--mark rules-locked`.** **Base primitives — seed the standard structural set (visual
 archetypes only).** Scaffold a bounded standard set — the overlay shells **Sheet, Dialog,
-Popover, Drawer**, plus **AppShell** (the decided navigation shell: nav slots + content region,
-no feature content) and **Toast** (the feedback host the feedback-pattern ruling names) — plus a
+Popover, Drawer**, plus **AppShell** (authored from `design/shell/app.html`, shared § Design
+Canon / § Design Authoring Contracts: its nav/header slots become the primitive's slots, its
+content slot the render region — the decided navigation shell, no feature content) and
+**Toast** (the feedback host the feedback-pattern ruling names) — plus a
 **barrel** (`index.*`) into the project's **base dir** (e.g. `src/components/base/`). Each
 overlay carries the backdrop + focus-trap + dismiss + portal contract authored to the doctrine
 and consuming token roles by name — no feature content. **Name the base dir, its barrel, and the

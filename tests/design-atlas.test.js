@@ -28,7 +28,7 @@ function fixture() {
   return dir
 }
 
-test('check: labeled token-consuming mocks pass; label/tokens/color violations fail closed', () => {
+test('check: labeled token-consuming mocks pass; label/tokens/color violations fail closed (AC-20260901-04-6)', () => {
   const dir = fixture()
   const ok = atlas(['check', path.join(dir, 'design/mocks')])
   assert.strictEqual(ok.status, 0, ok.stdout + ok.stderr)
@@ -341,4 +341,279 @@ test("check: unbalanced braces in a ratified mock's <style> fail closed instead 
   assert.strictEqual(good.status, 0, 'balanced braces must not trip the unbalanced-braces check — ' + good.stdout + good.stderr)
   assert.doesNotMatch(good.stdout, /unbalanced braces in <style>/,
     'the unbalanced-braces violation must not fire when the style block is well-formed')
+})
+
+// specs/20260901/04-shell-composed-mocks.md — 2026-09-01. D1 gives design/shell/<name>.html the
+// canon shape (data-shell-canon root, named data-slots, one empty content slot, non-content
+// slots data-contract="none") plus a linked <name>.css; D4 binds a shell family on `check`,
+// tiered warn-at-sketch/violation-at-ratified|approved|--matrix, once a design/shell dir resolves
+// by walk-up from the mock. TDD red (grep-confirmed 2026-09-01): design-atlas.js has zero shell
+// vocabulary today — every fixture below produces no shell finding on the pre-image script, so
+// AC-1..AC-5, AC-7, AC-8 are red until CREATE spec/scripts/lib/shell-region.js and the shell
+// family land in cmdCheck. AC-6 above (tagged, unchanged) is the absence-invariant control: no
+// existing fixture carries a design/shell dir (Assumption A2), so it must stay green throughout.
+//
+// CANON_APP_HTML/SHELL_APP_CSS are the literal D1 Contracts example. expectedInner()/syncedRegion()
+// rebuild D3's splice (content-slot substitution + active-nav aria-current) by exact substring
+// surgery on that same literal, so every "synced" fixture below is byte-consistent with the canon
+// by construction rather than hand-typed and hoped-correct.
+
+const CANON_APP_HTML = '<!doctype html><html><head><meta charset="utf-8">\n' +
+  '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
+  '<link rel="stylesheet" href="../tokens.css">\n' +
+  '<link rel="stylesheet" href="app.css">\n' +
+  '<style>* { box-sizing: border-box; }</style></head><body>\n' +
+  '<div data-shell-canon="app" class="shell">\n' +
+  '  <nav data-slot="nav" data-contract="none" aria-label="Main">\n' +
+  '    <a data-nav="inbox" href="#">Inbox</a>\n' +
+  '    <a data-nav="settings" href="#">Settings</a>\n' +
+  '  </nav>\n' +
+  '  <header data-slot="header" data-contract="none">…</header>\n' +
+  '  <main data-slot="content"></main>\n' +
+  '</div></body></html>\n'
+
+const SHELL_APP_CSS = '.shell { display: flex; gap: 1rem; }\n' +
+  '.shell nav a { color: var(--text-body); font-size: 14px; line-height: 1.4; }\n'
+
+function writeShellDir(dir, { name = 'app', canon = CANON_APP_HTML, css = SHELL_APP_CSS } = {}) {
+  fs.mkdirSync(path.join(dir, 'design/shell'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/shell', name + '.html'), canon)
+  fs.writeFileSync(path.join(dir, 'design/shell', name + '.css'), css)
+}
+
+// D3's splice: canon inner with the content slot's inner replaced, then aria-current="page"
+// appended to the one data-nav anchor matching `active` (stripped everywhere else — there is
+// nowhere else here, since the canon never carries one).
+function expectedInner({ contentInner = '', active = 'inbox' } = {}) {
+  let inner = '\n  <nav data-slot="nav" data-contract="none" aria-label="Main">\n' +
+    '    <a data-nav="inbox" href="#">Inbox</a>\n' +
+    '    <a data-nav="settings" href="#">Settings</a>\n' +
+    '  </nav>\n' +
+    '  <header data-slot="header" data-contract="none">…</header>\n' +
+    '  <main data-slot="content"></main>\n'
+  inner = inner.replace('<main data-slot="content"></main>', '<main data-slot="content">' + contentInner + '</main>')
+  if (active === 'inbox') inner = inner.replace('<a data-nav="inbox" href="#">', '<a data-nav="inbox" href="#" aria-current="page">')
+  if (active === 'settings') inner = inner.replace('<a data-nav="settings" href="#">', '<a data-nav="settings" href="#" aria-current="page">')
+  return inner
+}
+
+function syncedRegion(opts) {
+  return '<div data-shell-region="app" class="shell">' + expectedInner(opts) + '</div>'
+}
+
+// A fully declared, synced (by construction) page mock per D2's Contracts example.
+function mockDeclaring({ label = 'inbox', status = 'ratified', active = 'inbox',
+  contentInner = '<h1>Inbox</h1>' } = {}) {
+  return '<link rel="stylesheet" href="../tokens.css">\n' +
+    '<link rel="stylesheet" href="../shell/app.css">\n' +
+    '<style>* { box-sizing: border-box; }</style>\n' +
+    '<div data-screen-label="' + label + '" data-status="' + status + '" data-shell="app" data-active="' + active + '">' +
+    syncedRegion({ contentInner, active }) +
+    '</div>\n'
+}
+
+test('check: shell — undeclared (AC-20260901-04-1)', () => {
+  const dir = tmpdir('atlas-shell')
+  writeShellDir(dir)
+  const mocks = path.join(dir, 'design/mocks')
+  fs.mkdirSync(mocks, { recursive: true })
+  const mockPath = path.join(mocks, 'inbox.html')
+
+  fs.writeFileSync(mockPath,
+    '<link rel="stylesheet" href="../tokens.css">\n' +
+    '<main data-screen-label="inbox" data-status="sketch">no shell declared</main>\n')
+  const sketch = atlas(['check', mocks])
+  assert.strictEqual(sketch.status, 0,
+    'a sketch-tier mock missing data-shell must still pass check (the finding is advisory only until ratified) — ' +
+    sketch.stdout + sketch.stderr)
+  assert.match(sketch.stdout,
+    /  ⚠️ .*: no data-shell on the \[data-screen-label\] root — declare data-shell="<name>" or data-shell="none"/,
+    'the undeclared-shell finding must print as a warn line before CHECK PASS at sketch tier, or an author gets no signal before ratifying')
+  assert.match(sketch.stdout, /CHECK PASS/, 'a sketch-tier shell finding must never fail the check')
+
+  fs.writeFileSync(mockPath,
+    '<link rel="stylesheet" href="../tokens.css">\n' +
+    '<main data-screen-label="inbox" data-status="ratified">no shell declared</main>\n')
+  const ratified = atlas(['check', mocks])
+  assert.strictEqual(ratified.status, 1,
+    'the same finding must fail check once the mock is ratified — sketch-tier warns exist to graduate into a real gate, not to stay advisory forever — ' +
+    ratified.stdout + ratified.stderr)
+  assert.match(ratified.stdout,
+    /no data-shell on the \[data-screen-label\] root — declare data-shell="<name>" or data-shell="none"/,
+    'the exact D4(a) violation text must be printed under CHECK FAIL')
+})
+
+test('check: shell — unknown name (AC-20260901-04-2)', () => {
+  const dir = tmpdir('atlas-shell')
+  writeShellDir(dir)
+  const mocks = path.join(dir, 'design/mocks')
+  fs.mkdirSync(mocks, { recursive: true })
+  fs.writeFileSync(path.join(mocks, 'admin.html'),
+    '<link rel="stylesheet" href="../tokens.css">\n<style>* { box-sizing: border-box; }</style>\n' +
+    '<main data-screen-label="admin" data-status="ratified" data-shell="admin">x</main>\n')
+
+  const res = atlas(['check', mocks])
+  assert.strictEqual(res.status, 1,
+    'a mock declaring a shell with no matching canon file must fail check — an unknown shell name is silently unenforceable otherwise — ' +
+    res.stdout + res.stderr)
+  assert.match(res.stdout,
+    /declares data-shell="admin" but design\/shell\/admin\.html does not exist — author the shell canon or declare data-shell="none"/,
+    'the exact D4(b) violation text must name the missing canon file')
+})
+
+test('check: shell — drift names the slot (AC-20260901-04-3)', () => {
+  const dir = tmpdir('atlas-shell')
+  writeShellDir(dir)
+  const mocks = path.join(dir, 'design/mocks')
+  fs.mkdirSync(mocks, { recursive: true })
+  const mockPath = path.join(mocks, 'inbox.html')
+
+  fs.writeFileSync(mockPath, mockDeclaring({}))
+  const clean = atlas(['check', mocks])
+  assert.strictEqual(clean.status, 0,
+    'a mock whose region is byte-identical to the derived expected region must pass with zero shell findings — ' +
+    clean.stdout + clean.stderr)
+  assert.doesNotMatch(clean.stdout, /shell region differs from canon/,
+    'a synced mock must never report drift — false drift would make every ratify a coin flip')
+
+  fs.writeFileSync(mockPath, mockDeclaring({}).replace('Settings</a>', 'Preferences</a>'))
+  const navDrift = atlas(['check', mocks])
+  assert.strictEqual(navDrift.status, 1,
+    'an edited nav label must fail check as drift — a hand-edited sidebar in a ratified mock is exactly what this gate exists to catch — ' +
+    navDrift.stdout + navDrift.stderr)
+  assert.match(navDrift.stdout, /shell region differs from canon \(nav slot\) — run design-atlas\.js shell sync/,
+    'the drift finding must name the nav slot as the first differing slot, and the sync remedy command')
+
+  fs.writeFileSync(mockPath, mockDeclaring({}).replace('…</header>', '…<button>x</button></header>'))
+  const headerDrift = atlas(['check', mocks])
+  assert.strictEqual(headerDrift.status, 1,
+    'markup appended inside the header slot must fail check as drift — ' + headerDrift.stdout + headerDrift.stderr)
+  assert.match(headerDrift.stdout, /shell region differs from canon \(header slot\) — run design-atlas\.js shell sync/,
+    'the drift finding must name the header slot, not a generic "differs" message, or an author cannot tell which slot to inspect')
+})
+
+test('check: shell — own chrome (AC-20260901-04-4)', () => {
+  const dir = tmpdir('atlas-shell')
+  writeShellDir(dir)
+  const mocks = path.join(dir, 'design/mocks')
+  fs.mkdirSync(mocks, { recursive: true })
+  const mockPath = path.join(mocks, 'inbox.html')
+
+  fs.writeFileSync(mockPath, mockDeclaring({ contentInner: '<nav>own nav</nav>' }))
+  const bad = atlas(['check', mocks])
+  assert.strictEqual(bad.status, 1,
+    'a <nav> authored inside the content slot must fail check — the shell already owns that chrome — ' +
+    bad.stdout + bad.stderr)
+  assert.match(bad.stdout,
+    /own nav\/header markup inside the content slot — the shell owns chrome; in-content sub-navigation uses role="tablist" or a plain container/,
+    'the exact D4(d) violation text must be printed')
+
+  fs.writeFileSync(mockPath,
+    '<link rel="stylesheet" href="../tokens.css">\n<style>* { box-sizing: border-box; }</style>\n' +
+    '<main data-screen-label="inbox" data-status="ratified" data-shell="none"><nav>own nav</nav></main>\n')
+  const ok = atlas(['check', mocks])
+  assert.strictEqual(ok.status, 0,
+    'the identical <nav> markup in a data-shell="none" mock must produce no shell finding at all — the shell family never binds on an opted-out mock — ' +
+    ok.stdout + ok.stderr)
+})
+
+test('check: shell — css link (AC-20260901-04-5)', () => {
+  const dir = tmpdir('atlas-shell')
+  writeShellDir(dir)
+  const mocks = path.join(dir, 'design/mocks')
+  fs.mkdirSync(mocks, { recursive: true })
+  const mockPath = path.join(mocks, 'inbox.html')
+
+  fs.writeFileSync(mockPath, mockDeclaring({}).replace('<link rel="stylesheet" href="../shell/app.css">\n', ''))
+  const bad = atlas(['check', mocks])
+  assert.strictEqual(bad.status, 1,
+    'a declaring mock that never links its shell stylesheet must fail check — ' + bad.stdout + bad.stderr)
+  assert.match(bad.stdout, /declares data-shell="app" but does not link design\/shell\/app\.css/,
+    'the exact D4(e) violation text must name the missing link')
+
+  fs.writeFileSync(mockPath, mockDeclaring({ status: 'sketch' }).replace('<link rel="stylesheet" href="../shell/app.css">\n', ''))
+  const sketch = atlas(['check', mocks])
+  assert.strictEqual(sketch.status, 0,
+    'the missing-css-link finding must be tiered exactly like undeclared/unknown-shell — a warn at sketch, never a failure — ' +
+    sketch.stdout + sketch.stderr)
+  assert.match(sketch.stdout, /⚠️ .*does not link design\/shell\/app\.css/,
+    'the missing-css-link finding must print as a warn line at sketch tier')
+})
+
+test('check: shell canon rules (AC-20260901-04-7)', () => {
+  const dir = tmpdir('atlas-shell')
+  writeShellDir(dir)
+  const shellDir = path.join(dir, 'design/shell')
+  const canonPath = path.join(shellDir, 'app.html')
+
+  const good = atlas(['check', shellDir])
+  assert.strictEqual(good.status, 0,
+    'a canon meeting every D1 rule must pass check — ' + good.stdout + good.stderr)
+  assert.doesNotMatch(good.stdout, /no data-screen-label/,
+    'check must never demand a data-screen-label on a shell canon file — the canon is chrome, not a labeled surface')
+
+  fs.writeFileSync(canonPath, CANON_APP_HTML.replace('data-shell-canon="app"', 'data-shell-canon="shell"'))
+  const nameBad = atlas(['check', shellDir])
+  assert.strictEqual(nameBad.status, 1,
+    'a data-shell-canon value that does not match the file basename must fail check — ' + nameBad.stdout + nameBad.stderr)
+  assert.match(nameBad.stdout, /data-shell-canon="shell" does not match the file name app — rename one/,
+    'the exact D1 name-mismatch violation text must be printed')
+
+  fs.writeFileSync(canonPath, CANON_APP_HTML.replace('<main data-slot="content"></main>', '<main data-slot="content"><p>x</p></main>'))
+  const contentBad = atlas(['check', shellDir])
+  assert.strictEqual(contentBad.status, 1,
+    'a non-empty content slot in the canon must fail check — the shell carries no feature content — ' + contentBad.stdout + contentBad.stderr)
+  assert.match(contentBad.stdout, /content slot must be empty — the shell carries no feature content/,
+    'the exact D1 empty-content-slot violation text must be printed')
+
+  fs.writeFileSync(canonPath, CANON_APP_HTML.replace('<nav data-slot="nav" data-contract="none" aria-label="Main">', '<nav data-slot="nav" aria-label="Main">'))
+  const slotBad = atlas(['check', shellDir])
+  assert.strictEqual(slotBad.status, 1,
+    'a non-content slot missing data-contract="none" must fail check — ' + slotBad.stdout + slotBad.stderr)
+  assert.match(slotBad.stdout, /slot "nav" must carry data-contract="none" — shell chrome never enters the render gate's comparison/,
+    'the exact D1 slot-contract violation text must name the offending slot')
+  fs.writeFileSync(canonPath, CANON_APP_HTML)
+
+  fs.writeFileSync(path.join(shellDir, 'app.css'), SHELL_APP_CSS + '.x { color: #333; }\n')
+  const cssBad = atlas(['check', shellDir])
+  assert.strictEqual(cssBad.status, 1,
+    'an off-token color literal in the shell stylesheet must fail check exactly like it would in a mock — ' + cssBad.stdout + cssBad.stderr)
+  assert.match(cssBad.stdout, /off-token color literal/,
+    'the canon rule set must reuse the existing off-token-color violation text over the css file')
+  fs.writeFileSync(path.join(shellDir, 'app.css'), SHELL_APP_CSS)
+
+  fs.writeFileSync(path.join(shellDir, 'app.css'), SHELL_APP_CSS + '.y { font-size: 12px; }\n')
+  const hygieneBad = atlas(['check', shellDir])
+  assert.strictEqual(hygieneBad.status, 1,
+    'a font-size rule with no line-height in the shell stylesheet must fail check over that css file — ' + hygieneBad.stdout + hygieneBad.stderr)
+  assert.match(hygieneBad.stdout, /declare font-size without line-height/,
+    'the canon rule set must reuse the existing hygiene(b) violation text over the css file')
+})
+
+test('check/sync: active nav derived (AC-20260901-04-8)', () => {
+  const dir = tmpdir('atlas-shell')
+  writeShellDir(dir)
+  const mocks = path.join(dir, 'design/mocks')
+  fs.mkdirSync(mocks, { recursive: true })
+  const mockPath = path.join(mocks, 'inbox.html')
+
+  fs.writeFileSync(mockPath, mockDeclaring({ active: 'settings' }))
+  const settingsActive = atlas(['check', mocks])
+  assert.strictEqual(settingsActive.status, 0,
+    'the expected region for data-active="settings" must mark only the settings nav item, and a mock matching it must pass unchanged — ' +
+    settingsActive.stdout + settingsActive.stderr)
+
+  fs.writeFileSync(mockPath, mockDeclaring({}).replace(' data-active="inbox"', ''))
+  const defaultLabel = atlas(['check', mocks])
+  assert.strictEqual(defaultLabel.status, 0,
+    'absent data-active must default the active key to the screen label ("inbox"), which matches the inbox nav item here, so this must still pass unchanged — ' +
+    defaultLabel.stdout + defaultLabel.stderr)
+
+  fs.writeFileSync(mockPath, mockDeclaring({}).replace('data-active="inbox"', 'data-active="nowhere"'))
+  const noMatch = atlas(['check', mocks])
+  assert.strictEqual(noMatch.status, 1,
+    'data-active="nowhere" matches no data-nav key, so the expected region carries no aria-current anywhere — this mock still carries one on inbox, so it must now report drift — ' +
+    noMatch.stdout + noMatch.stderr)
+  assert.match(noMatch.stdout, /shell region differs from canon \(nav slot\)/,
+    'the drift must be named to the nav slot, since that is where the stale aria-current sits')
 })

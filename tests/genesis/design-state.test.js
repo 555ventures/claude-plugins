@@ -351,6 +351,74 @@ function mockHtml({ withViewportMeta }) {
     '</div>\n</body></html>\n'
 }
 
+// specs/20260901/04-shell-composed-mocks.md — 2026-09-01, D7/AC-20260901-04-14. tokens-landed
+// additionally requires design/shell/app.html to exist and `design-atlas.js check design/shell`
+// to exit 0. SHELL_CANON_APP/SHELL_APP_CSS are D1's Contracts example verbatim; shellSyncedMock()
+// builds a page mock whose root inner is that same canon inner (content slot filled, no
+// data-active given so the derived active key "home" matches no data-nav — no aria-current
+// anywhere, exactly as the canon itself carries none), so it is byte-synced by construction and
+// never trips D4's drift finding once `check --matrix design/mocks` also validates shell region
+// (Assumption A3: the existing tokens-landed accept fixtures below are updated in place to carry
+// this canon + a declaring, synced mock so they keep passing once D7 lands, never weakened).
+const SHELL_CANON_APP = '<!doctype html><html><head><meta charset="utf-8">\n' +
+  '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
+  '<link rel="stylesheet" href="../tokens.css">\n' +
+  '<link rel="stylesheet" href="app.css">\n' +
+  '<style>* { box-sizing: border-box; }</style></head><body>\n' +
+  '<div data-shell-canon="app" class="shell">\n' +
+  '  <nav data-slot="nav" data-contract="none" aria-label="Main">\n' +
+  '    <a data-nav="inbox" href="#">Inbox</a>\n' +
+  '    <a data-nav="settings" href="#">Settings</a>\n' +
+  '  </nav>\n' +
+  '  <header data-slot="header" data-contract="none">…</header>\n' +
+  '  <main data-slot="content"></main>\n' +
+  '</div></body></html>\n'
+
+const SHELL_APP_CSS = '.shell { display: flex; gap: 1rem; }\n' +
+  '.shell nav a { color: var(--text-body); font-size: 14px; line-height: 1.4; }\n'
+
+function writeShellDir(dir) {
+  fs.mkdirSync(path.join(dir, 'design/shell'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/shell/app.html'), SHELL_CANON_APP)
+  fs.writeFileSync(path.join(dir, 'design/shell/app.css'), SHELL_APP_CSS)
+}
+
+// Repair round 1 (fixture-only fix, scripts untouched): the previous version of this function
+// hand-retyped the canon's wrapper markup at 4/6-space indentation while SHELL_CANON_APP uses
+// 2/4 — D3 is byte equality with zero whitespace tolerance, so that mock always drifted (nav
+// slot) against the real canon and failed acceptTokensLanded()'s check --matrix. Splicing the
+// canon literal itself (same technique as tests/design-shell.test.js's expectedInner()/
+// syncedRegion()) makes the fixture byte-consistent by construction instead of by re-typing.
+function expectedInner({ contentInner = '', active = 'home' } = {}) {
+  let inner = '\n  <nav data-slot="nav" data-contract="none" aria-label="Main">\n' +
+    '    <a data-nav="inbox" href="#">Inbox</a>\n' +
+    '    <a data-nav="settings" href="#">Settings</a>\n' +
+    '  </nav>\n' +
+    '  <header data-slot="header" data-contract="none">…</header>\n' +
+    '  <main data-slot="content"></main>\n'
+  inner = inner.replace('<main data-slot="content"></main>', '<main data-slot="content">' + contentInner + '</main>')
+  if (active === 'inbox') inner = inner.replace('<a data-nav="inbox" href="#">', '<a data-nav="inbox" href="#" aria-current="page">')
+  if (active === 'settings') inner = inner.replace('<a data-nav="settings" href="#">', '<a data-nav="settings" href="#" aria-current="page">')
+  return inner
+}
+
+function syncedRegion(opts) {
+  return '<div data-shell-region="app" class="shell">' + expectedInner(opts) + '</div>'
+}
+
+function shellSyncedMock({ label = 'home', status = 'approved', withViewportMeta = true, contentInner } = {}) {
+  const content = contentInner !== undefined ? contentInner :
+    '<p style="color: var(--role-fg); background: var(--role-bg)">Approved mock</p>'
+  return '<!doctype html>\n<html><head>' +
+    (withViewportMeta ? '<meta name="viewport" content="width=device-width, initial-scale=1">' : '') +
+    '<link rel="stylesheet" href="../tokens.css">\n' +
+    '<link rel="stylesheet" href="../shell/app.css"></head>\n<body>\n' +
+    '<style>* { box-sizing: border-box; }</style>\n' +
+    '<div data-screen-label="' + label + '" data-status="' + status + '" data-shell="app">' +
+    syncedRegion({ contentInner: content, active: label }) +
+    '</div>\n</body></html>\n'
+}
+
 // Drives web-app all the way through the internal tile funnel to ROADMAP -> DESIGN, culling to
 // exactly two survivors (instrument, dense-professional) and skipping the tournament's race
 // entirely via finalists-skipped (D8's picked-mark path is exercised in explore-states.test.js;
@@ -441,6 +509,10 @@ test('AC-20260827-03-3: tokens-landed refuses a design/tokens.css that does not 
   advanceToDesignWithFunnel(noMock)
   acceptDoctrineDrafted(noMock)
   writeFile(path.join(noMock, 'design/tokens.css'), fs.readFileSync(path.join(noMock, 'design/explore/r0-instrument/tokens.css'), 'utf8'))
+  // Repair round 1 (Assumption A3): D7's shell canon check now runs before hasApprovedMock() in
+  // genesis-driver.js, so this sub-case needs a passing canon or its refusal would instead name
+  // design/shell/app.html — a different assertion than the one this sub-case pins.
+  writeShellDir(noMock)
   fs.mkdirSync(path.join(noMock, 'design/mocks'), { recursive: true })
   writeJSON(path.join(noMock, 'design/components.json'), [])
   const noMockRefused = mark(noMock, 'tokens-landed')
@@ -451,6 +523,9 @@ test('AC-20260827-03-3: tokens-landed refuses a design/tokens.css that does not 
   advanceToDesignWithFunnel(failMatrix)
   acceptDoctrineDrafted(failMatrix)
   writeFile(path.join(failMatrix, 'design/tokens.css'), fs.readFileSync(path.join(failMatrix, 'design/explore/r0-instrument/tokens.css'), 'utf8'))
+  // Repair round 1 (Assumption A3): same shell-canon-before-mocks ordering as noMock above — a
+  // passing canon here lets this sub-case's refusal reach the check --matrix output it pins.
+  writeShellDir(failMatrix)
   writeTargets(failMatrix, TWO_VIEWPORTS)
   writeFile(path.join(failMatrix, 'design/mocks/home.html'), mockHtml({ withViewportMeta: false }))
   writeJSON(path.join(failMatrix, 'design/components.json'), [])
@@ -464,7 +539,10 @@ test('AC-20260827-03-3: tokens-landed refuses a design/tokens.css that does not 
   acceptDoctrineDrafted(ok)
   writeFile(path.join(ok, 'design/tokens.css'), fs.readFileSync(path.join(ok, 'design/explore/r0-instrument/tokens.css'), 'utf8'))
   writeTargets(ok, TWO_VIEWPORTS)
-  writeFile(path.join(ok, 'design/mocks/home.html'), mockHtml({ withViewportMeta: true }))
+  // AC-20260901-04-14/Assumption A3: once D7 lands, tokens-landed additionally requires the shell
+  // canon — this fixture carries it (and a declaring, synced mock) so it keeps accepting.
+  writeShellDir(ok)
+  writeFile(path.join(ok, 'design/mocks/home.html'), shellSyncedMock({ withViewportMeta: true }))
   writeJSON(path.join(ok, 'design/components.json'), [])
   const accepted = mark(ok, 'tokens-landed')
   assert.strictEqual(accepted.status, 0, 'a verbatim tokens.css, an approved matrix-clean mock, and an existing components.json must be accepted: ' + accepted.stderr)
@@ -476,7 +554,11 @@ const TARGET_CATEGORIES = ['color', 'typography', 'i18n', 'structure', 'a11y', '
 function acceptTokensLanded(dir) {
   writeFile(path.join(dir, 'design/tokens.css'), fs.readFileSync(path.join(dir, 'design/explore/r0-instrument/tokens.css'), 'utf8'))
   writeTargets(dir, TWO_VIEWPORTS)
-  writeFile(path.join(dir, 'design/mocks/home.html'), mockHtml({ withViewportMeta: true }))
+  // AC-20260901-04-14/Assumption A3: this shared fixture backs the AC-4 rules-locked tests below
+  // too, so it carries the shell canon + a declaring, synced mock the same way the AC-3 "ok" case
+  // does — kept in sync in place, never weakened.
+  writeShellDir(dir)
+  writeFile(path.join(dir, 'design/mocks/home.html'), shellSyncedMock({ withViewportMeta: true }))
   writeJSON(path.join(dir, 'design/components.json'), [])
   const r = mark(dir, 'tokens-landed')
   assert.strictEqual(r.status, 0, 'test setup requires tokens-landed to be accepted: ' + r.stderr)
@@ -571,4 +653,55 @@ test('AC-20260827-03-5, AC-20260827-04-6: HANDOFF prints a step naming init-prof
   assert.match(chainLine, /\/spec:genesis → \/spec:atlas/, 'D5: the chain bullet must read /spec:genesis → /spec:atlas directly — design is folded into genesis, so atlas is the very next named step')
   assert.doesNotMatch(chainLine, /genesis-explore/, 'D5: the chain bullet must not name genesis-explore — that command was deleted by spec 02 and folded into the driver')
   assert.doesNotMatch(chainLine, /genesis-design/, 'D5: the chain bullet must not name genesis-design — that command is deleted by this spec and folded into the driver')
+})
+
+// specs/20260901/04-shell-composed-mocks.md — 2026-09-01, D7. TDD red (grep-confirmed
+// 2026-09-01): handleTokensLanded() in genesis-driver.js has no shell-canon check at all today —
+// it accepts a verbatim tokens.css, an approved matrix-clean mock, and components.json with no
+// mention of design/shell anywhere, so this test is red until D7 lands.
+test('AC-20260901-04-14: tokens-landed requires the shell canon', () => {
+  const noShell = tmpdir('design-ac14-noshell')
+  advanceToDesignWithFunnel(noShell)
+  acceptDoctrineDrafted(noShell)
+  writeFile(path.join(noShell, 'design/tokens.css'), fs.readFileSync(path.join(noShell, 'design/explore/r0-instrument/tokens.css'), 'utf8'))
+  writeTargets(noShell, TWO_VIEWPORTS)
+  writeFile(path.join(noShell, 'design/mocks/home.html'), mockHtml({ withViewportMeta: true }))
+  writeJSON(path.join(noShell, 'design/components.json'), [])
+  const noShellRefused = mark(noShell, 'tokens-landed')
+  assert.strictEqual(noShellRefused.status, 2,
+    'D7: a repo with a verbatim tokens.css, an approved matrix-clean mock, and components.json but no design/shell/app.html must still refuse tokens-landed — the shell canon is now a required artifact of this mark, not an optional one: ' +
+    JSON.stringify(noShellRefused))
+  assert.match(noShellRefused.stderr, /design\/shell\/app\.html/,
+    'the refusal must name "design/shell/app.html" so the session knows exactly which file to author before re-marking')
+  assert.match(noShellRefused.stderr, /re-mark tokens-landed/,
+    'the refusal must name the remedy command "re-mark tokens-landed", consistent with every other refusal this mark already gives')
+
+  const badCanon = tmpdir('design-ac14-badcanon')
+  advanceToDesignWithFunnel(badCanon)
+  acceptDoctrineDrafted(badCanon)
+  writeFile(path.join(badCanon, 'design/tokens.css'), fs.readFileSync(path.join(badCanon, 'design/explore/r0-instrument/tokens.css'), 'utf8'))
+  writeTargets(badCanon, TWO_VIEWPORTS)
+  writeFile(path.join(badCanon, 'design/mocks/home.html'), shellSyncedMock({ withViewportMeta: true }))
+  writeJSON(path.join(badCanon, 'design/components.json'), [])
+  writeFile(path.join(badCanon, 'design/shell/app.html'),
+    SHELL_CANON_APP.replace('<main data-slot="content"></main>', '<main data-slot="content">stray text</main>'))
+  writeFile(path.join(badCanon, 'design/shell/app.css'), SHELL_APP_CSS)
+  const badCanonRefused = mark(badCanon, 'tokens-landed')
+  assert.strictEqual(badCanonRefused.status, 2,
+    'D7: an app.html present but failing design-atlas.js check on its own canon rules (a non-empty content slot here) must refuse the mark rather than accept a broken canon: ' +
+    JSON.stringify(badCanonRefused))
+  assert.match(badCanonRefused.stderr, /design\/shell/,
+    'the refusal must name "design/shell" so the session knows which directory the failing check ran against')
+  assert.match(badCanonRefused.stderr, /content slot must be empty/,
+    'the refusal must carry design-atlas.js check\'s own output naming the specific canon violation, or the session has to re-run the check itself to learn what failed')
+
+  const ok = tmpdir('design-ac14-ok')
+  advanceToDesignWithFunnel(ok)
+  acceptDoctrineDrafted(ok)
+  const accepted = acceptTokensLanded(ok)
+  assert.strictEqual(accepted.status, 0,
+    'a passing shell canon alongside a verbatim tokens.css, an approved matrix-clean mock declaring data-shell="app" and synced, and components.json must be accepted: ' +
+    accepted.stderr)
+  assert.strictEqual(statusOf(ok).design, 'tokens-landed',
+    'a successful tokens-landed with the shell canon present must still record design: "tokens-landed" exactly as it did before D7')
 })

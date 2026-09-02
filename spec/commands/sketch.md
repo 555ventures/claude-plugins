@@ -15,11 +15,10 @@ whole-product map; this command is the per-brief workbench — the atlas's annot
 
 **Never required.** Plan warns on an unratified UI brief and offers this command; it never blocks.
 
-**Intended model: the session model.** This IS the roadmap-level taste seat (shared § Model
-Placement — direction is judged here so `/spec:design` later inherits it): recommend Fable/Opus
-for brainstorm rounds. **The session authors sketch mocks itself** — at sketch tier taste shows
-up in the authored artifact, and one author holding every surface keeps them reading as one
-product; parallel per-surface agents can't see each other's chrome and drift (ruled 2026-08-10).
+**Intended model: the session model, plus the planning seat for scoped-sweep authorship**
+(shared § Model Placement — direction is judged here so `/spec:design` later inherits it):
+recommend Fable/Opus for brainstorm rounds. Scoped-sweep mock authorship follows the shared
+authorship + grounding rule in full (shared § Design Atlas's authorship paragraph, ADR-0003).
 Mechanical mock edits (copy swaps, reorders) may still dispatch Sonnet agents
 (`Agent {model: "sonnet"}`) under the harness check; taste-bearing edits stay in-session.
 
@@ -61,16 +60,15 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    If the requested change targets one, STOP with the shared shape (shared § Console Output
    Style): `🚫 **{surface} is bound — sketch is pre-plan only.**` then `Next: /spec:design —
    reopen the spec that bound this surface.`
-3. **Scoped sweep — single pass, in-session.** The session authors `design/mocks/<label>.html`
-   for every **gap surface of this brief only**, sequentially in one sitting, at sketch tier —
-   same artifact contract as the atlas sweep (shared § Design Atlas: sketch `data-status`, real
-   copy register, token roles, grounded in the brief + research brief + doctrine + tokens),
-   never one-agent-per-surface. Past 5 gap surfaces: author the 5 most journey-central
-   in-session, then one sequential Sonnet dispatch authors the rest with the session-authored
-   mocks cited as exemplars. Existing mocks are never re-authored. When a surface carries capability an
-   out-of-scope brief owns, give that capability its own region rather than folding it into a
-   region the current brief must bind — an unbound region is inherited for free, while
-   future-brief content entangled inside a bound region costs an evidence-gated delta row.
+3. **Scoped sweep — single pass, over this brief's gap surfaces only.** Every gap surface of
+   this brief follows the shared authorship + grounding rule in full (shared § Design Atlas's
+   authorship paragraph): the journey-central set in-session (≤5, ≥1 per declared journey), the
+   rest by one sequential Fable dispatch citing the session-authored paths as exemplars, never
+   one-agent-per-surface; no shell canon yet → author `design/shell/app.html` in-session first.
+   Existing mocks are never re-authored. When a surface carries capability an out-of-scope
+   brief owns, give that capability its own region rather than folding it into a region the
+   current brief must bind — an unbound region is inherited for free, while future-brief
+   content entangled inside a bound region costs an evidence-gated delta row.
 4. **Build & report.** `node {atlas} build`, then report the output path
    (`design/atlas/index.html`) — the user opens the file themselves (e.g. from VS Code); do
    **not** start a server or open a browser. Serve from the repo root only if the user asks or
@@ -107,6 +105,8 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    § Design Canon; this is where they get checked, not where they get defined. Then run the
    **expansion pass** (shared § Design Canon: media queries + the
    tokens dark block, one responsive file, no new taste) on each of the brief's `sketch` mocks,
+   run `{atlas} shell sync` on those mocks (a canon change since authoring never blocks
+   ratification for a mechanical reason — a drift finding that survives sync is real), then
    run `node {atlas} check --matrix`, and render the matrix screenshots — each declared viewport, each
    theme at minimum on the draft framing — for one fast confirm look. Then run
    `node "$(spec-paths render-gate)" --mocks <the brief's sketch mocks>` — this replaces the
@@ -126,14 +126,16 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    `approved` does from here on (shared § Design Canon). On no — state is on disk; re-invoke
    to continue. `AskUserQuestion` dismissed → STOP.
 7. **Report.** Assemble the slots (rationale: shared § Console Output Style) — `outcome`:
-   ✅ `ratified {N} of {M} surfaces — {brief}`; `warns`: one line per un-ratified surface or
-   open question written (drop when none); `artifacts`: the brief path (edited-section
+   ✅ `ratified {N} of {M} surfaces — {brief}`; `bullets`: the `🎨 position: …` line (shared §
+   Design Atlas) when this round authored any mocks; `warns`: one line per un-ratified surface
+   or open question written (drop when none); `artifacts`: the brief path (edited-section
    inventories stay in the brief file — print its path, not the sections); `next`:
    `{kind: 'command', text: '/spec:plan {brief}'}`. Run
    `node "$(spec-paths report-render)" --slots <file>` and print its output verbatim.
 
    ```report
    ✅ **ratified 3 of 4 surfaces — docs/roadmap/09-checkout.md**
+   🎨 position: instrument · authored 4 in-session · 1 fable · 0 sonnet-mechanical
    ⚠️ checkout-confirm still sketch — open question: refund flow ownership
    📦 docs/roadmap/09-checkout.md
 

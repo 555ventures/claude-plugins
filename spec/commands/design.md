@@ -92,10 +92,13 @@ match the component directory the spec's UI section names, else `agentMap.defaul
 **Inputs are paths only** (shared § Model Placement — orchestrators pass paths, never file contents):
 the spec, the mock file, `design/tokens.css`, the host's design doctrine doc
 (`design.doctrine`), `design/components.json`, `design/targets.json`, the derived states list,
-and `design.storyFormat`. The mock in context IS the binding map.
+`design.storyFormat`, and the mock's shell canon path when it declares one. The mock in context
+IS the binding map; the shell canon is what surfaces are built **into** — the primitive, never
+a re-implemented chrome around it (shared § Design Authoring Contracts, § Design Canon).
 
-Worker dispatch envelope: `{spec, mock, tokens, doctrine, manifest, targets, states:
-["default"|…], storyFormat, componentDir}`. Worker return (receipts): `{files: [...],
+Worker dispatch envelope: `{spec, mock, tokens, doctrine, manifest, targets, shell, states:
+["default"|…], storyFormat, componentDir}` — `shell` = `design/shell/<name>.html` for the
+mock's declared shell, `null` for `none`/undeclared. Worker return (receipts): `{files: [...],
 components: [{name, decision: "bind"|"author", nearest, why}], stories: {"<state>": "<story
 id>"}, blocked?: {kind, detail, options, recommendation}}`.
 

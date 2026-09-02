@@ -142,6 +142,14 @@
 //   - read status.json a second time inside init-gen — the profile itself carries every genesis
 //     artifact init-gen needs (config.genesisStackDescriptor, design.rulesManifest).
 //
+// specs/20260901/04-shell-composed-mocks.md D7 (2026-09-01): `--mark tokens-landed` (visual
+// archetypes) additionally requires `design/shell/app.html` to exist and
+// `design-atlas.js check design/shell` to exit 0, refused naming the missing file or carrying the
+// check's own output otherwise — the navigation shell is the mock-side artifact of the same
+// decision `tokens.css` already gates here, checked by the same driver so the mark cannot pass
+// without it. The check runs alongside the tokens.css checks (both validate a CANON file), ahead
+// of the approved-mock/matrix checks that validate the MOCKS.
+//
 // Fixing that overflow only at the child's own capture wasn't enough: `logTail`, which builds the
 // SCAFFOLD_RED/GATE_RED excerpt embedded in the driver's OWN stdout, used to bound its excerpt by
 // line count alone (`text.split('\n').slice(-n)`). A caller's buffer is measured in BYTES, not
@@ -1695,12 +1703,31 @@ function handleTokensLanded() {
     }
   }
 
+  const designAtlasBin = path.join(__dirname, 'design-atlas.js')
+
+  // specs/20260901/04-shell-composed-mocks.md D7: the navigation shell is the mock-side artifact
+  // of the same decision tokens.css already gates here — a repo may not land tokens-landed with a
+  // tokens canon but no chrome canon. `design/shell/app.html` must exist and pass check on its own
+  // canon rules (D1), checked alongside the tokens.css checks above (Rationale: "the shell is the
+  // navigation decision's mock-side artifact exactly as tokens.css is the token canon's") — before
+  // the approved-mock/matrix checks below, which validate the MOCKS rather than the canon itself.
+  const shellCanonPath = path.join(root, 'design/shell/app.html')
+  if (!fs.existsSync(shellCanonPath)) {
+    die('design/shell/app.html does not exist — author the shell canon in-session (data-shell-canon="app" ' +
+      'plus its linked app.css), then re-mark tokens-landed')
+  }
+  const shellR = runChild(process.execPath, [designAtlasBin, 'check', path.join(root, 'design/shell')],
+    { encoding: 'utf8' }, 'design-atlas.js check (design/shell)')
+  if (shellR.status !== 0) {
+    die('design-atlas.js check failed for design/shell: ' + (shellR.stdout || shellR.stderr || '').trim() +
+      ' — fix the shell canon, then re-mark tokens-landed')
+  }
+
   if (!hasApprovedMock()) {
     die('design/mocks/ holds no .html with data-status="approved" — promote and approve the ' +
       'winner\'s signature screen, then re-mark tokens-landed')
   }
 
-  const designAtlasBin = path.join(__dirname, 'design-atlas.js')
   const r = runChild(process.execPath, [designAtlasBin, 'check', '--matrix', mocksDir()],
     { encoding: 'utf8' }, 'design-atlas.js check --matrix (design/mocks)')
   if (r.status !== 0) {

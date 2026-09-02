@@ -73,17 +73,21 @@ After `/spec:plan`, `/spec:build <spec>` derives the stage from disk and runs de
 due), the build driver, and the review driver in sequence, each with `--via loop`. Status
 transitions are owned by driver states, not commands: plan's lock → `hardened`, the build
 driver's preflight → `implementing`, the review driver's close → `done`; the state gate
-admits `/spec:build` on all three and stays a prompt-boundary check. One checkpoint is
-enforced: a loop-driven review parks at CHECKPOINT after the reviewer returns and admits
-DISPOSITIONS only once the session id in `.claude/spec-session.json` has changed (a `/clear`),
-once per run. A missing stamp parks the same way and names the cause's remedy — restart
-Claude Code, since the plugin hook set that writes the stamp is loaded at session start — and
-lifts when any stamp appears; the only other exit is
-`--skip-independence-check-because "<reason>"` on the dispositions mark. Every loop review
-row records `checkpoint: {outcome}` — `cleared`, `stamp-appeared`, `overridden` (with the
-reason), or `not-reached` — so how often the gate is skipped, and why, is a ledger query
-(specs/20260901/05-checkpoint-fail-closed.md, ADR-0004). The pre-merge stop is the
-worktree step-out, never a forced clear. `/spec:design` and `/spec:review` remain direct entry
-points to the same drivers. The loop is scored by the fleet reader's `cleanByVia`
-(escapes-per-CLEAN by `via`); a `loop` rate above the `direct` rate over 30 fleet reviews
-reverts the loop. (specs/20260901/03-unified-build-loop.md, done 2026-09-01)
+admits `/spec:build` on all three and stays a prompt-boundary check. There is no stop
+between the reviewer's return and dispositions. Independence is a fresh-context
+`spec:disposer` agent (read-only, paths only, the session's model) dispatched at
+DISPOSITIONS on both review entries; it returns one grounded recommendation per survivor
+and leg finding, and the review driver refuses `--mark dispositions` on non-empty pools
+without a return that covers every finding exactly once with a non-blank reason. Fix
+recommendations dispatch without a question; waive and reject recommendations go to the
+user, and the user's answer is recorded as `final` with `overriddenBy: "user"`. Every
+review row records `checkpoint: {outcome, overrides}` — `disposer` (with the count of
+recommendations the user overrode), `empty` (nothing to disposition), or `not-reached`
+(the run stopped before dispositions) — so how often the user overrules the independent
+disposer is a ledger query. The session-id checkpoint, its restart remedy, and
+`--skip-independence-check-because` are retired (specs/20260901/09-disposer-gate.md,
+ADR-0005). The pre-merge stop is the worktree step-out, never a forced clear.
+`/spec:design` and `/spec:review` remain direct entry points to the same drivers. The loop
+is scored by the fleet reader's `cleanByVia` (escapes-per-CLEAN by `via`); a `loop` rate
+above the `direct` rate over 30 fleet reviews reverts the loop.
+(specs/20260901/03-unified-build-loop.md, done 2026-09-01)

@@ -90,16 +90,16 @@
 //   spec-review-driver <spec.md>                  -> print current state + ONLY that step
 //   spec-review-driver <spec.md> --mark <mark>    -> verify artifacts, record, print next step
 //     marks: skips-extracted --file <f> | reviewer-returned --file <json> |
-//            dispositions --waived N --rejected N --fix-dispatched N
-//              [--skip-independence-check-because "<reason>"] | fix-applied | closed |
+//            dispositions [--file <disposer return.json>] --waived N --rejected N
+//              --fix-dispatched N | fix-applied | closed |
 //            merge-strategy <merge-commit|ff-only|squash|rebase-ff> (bare token) |
 //            conflicts-resolved | replay-recorded
 //   spec-review-driver <spec.md> --state          -> print the state name only (scripting)
 //
 // States: LEGS (driver-only) -> STOPPED (terminal on RED_BLOCKING) | SKIPS? -> REVIEWER ->
-//   CHECKPOINT (--via loop only, specs/20260901/03-unified-build-loop.md D2; fails closed on a
-//   missing session stamp too, specs/20260901/05-checkpoint-fail-closed.md D1)? -> DISPOSITIONS ->
-//   FIX/ESCALATE(cap 2, terminal)? -> CLOSE -> MERGE/CONFLICTS -> REPLAY? -> DONE (terminal)
+//   DISPOSITIONS (specs/20260901/09-disposer-gate.md D2/D4 — both via values land here directly;
+//   the retired session-change CHECKPOINT no longer exists) -> FIX/ESCALATE(cap 2, terminal)? ->
+//   CLOSE -> MERGE/CONFLICTS -> REPLAY? -> DONE (terminal)
 //
 // Exit codes: 0 = step printed · 2 = precondition failure or refused mark (message names the
 // repair — a missing/malformed artifact, a REVIEWER_FAILED return, dispositions exceeding the
@@ -121,16 +121,19 @@
 // close-time host-gate re-run over the committed close tree exiting non-zero (message names the
 // literal phrase "gate red at close", the resolved command, and the re-run remedy) or resolving to
 // no runnable gate at all (message names the unresolvable-gate reason and the remedy — never a
-// silent skip; specs/20260830/02-close-gate-rerun.md D1/D2/D4), a `--via loop` `reviewer-returned`
-// with no `.claude/spec-session.json` on the host (parks at CHECKPOINT with the restart remedy
-// rather than degrading through — ADR-0004), `--mark dispositions` refused while still parked at
-// CHECKPOINT (message names /clear for a same-session park or the restart remedy for a null park),
-// or `--skip-independence-check-because "<reason>"` refused (message names the flag) because the
-// reason is absent/blank after trim or is itself another flag token (starts with "--", e.g. a
-// following `--waived` reads as absent, never as the reason — D7), the run is parked with a
-// non-null recorded session id (message also names /clear — the override is not a bypass for the
-// build session), the run is not parked at all (nothing to override), or `via` is `direct`
-// (specs/20260901/05-checkpoint-fail-closed.md D1/D2/D7).
+// silent skip; specs/20260830/02-close-gate-rerun.md D1/D2/D4), or (specs/20260901/09-disposer-
+// gate.md D2, the CHECKPOINT/`--skip-independence-check-because` cases above are retired outright)
+// `--mark dispositions` on a non-empty survivor/leg-finding pool with `--file` absent (names
+// `--file` and `spec:disposer`), the named file unreadable or not valid JSON, a disposer return
+// carrying `"verdict":"DISPOSER_FAILED"` (names DISPOSER_FAILED) or a non-array `dispositions`, an
+// entry whose `ref` covers a pool member zero times (names the uncovered ref) or more than once
+// (names the duplicate), an entry whose `ref` matches neither pool (names the unknown ref), a
+// `recommended`/`final` value outside `fix|waive|reject`, a blank `reason`, a `final` that differs
+// from `recommended` with no `overriddenBy:"user"` plus non-blank `overrideReason`, a
+// `--waived`/`--rejected`/`--fix-dispatched` count that does not match the return's
+// `final`-or-`recommended` tallies (names `--fix-dispatched`), or `--skip-independence-check-
+// because` passed at all, on any run (names the flag and ADR-0005 — there is no CHECKPOINT left
+// for it to bypass).
 
 'use strict'
 const fs = require('fs')
@@ -292,56 +295,45 @@ function saveSidecar() { saveSidecarLib(sidecarDir, path.basename(stateFile), ma
 // D4: --model <sessionModel(repoRoot) or omitted when null> — one shared arg-builder for all
 // three verdict.js passes below, read fresh at each call site (never cached) so a session that
 // has spoken since the last pass gets its current model, not a startup snapshot.
-// D3/A7: the ONE shared arg-builder for all three verdict.js driver passes (hard-stop, escalate,
-// close) — appending --checkpoint here, read fresh at each call site (marks mutates between
-// passes: dispositions can clear the checkpoint between the hard-stop pass and the later ones),
-// reaches all three identically and never a via:"direct" run (checkpointOutcome() returns null).
-function viaModelArgs() {
+// D6 (specs/20260901/09-disposer-gate.md): the ONE shared arg-builder for all three verdict.js
+// driver passes (hard-stop, escalate, close) — appending --checkpoint here, read fresh at each
+// call site against the pass's OWN iteration `n` (marks.disposer can be recorded for a different
+// iteration than the one this particular pass is judging — e.g. the hard-stop pass runs before
+// any reviewer return exists at all) — reaches all three identically and both via values alike
+// (the old loop-only restriction is gone, D5).
+function viaModelArgs(n) {
   const m = sessionModel(repoRoot)
   const args = m === null ? ['--via', marks.via] : ['--via', marks.via, '--model', m]
-  const outcome = checkpointOutcome()
-  if (outcome !== null) {
-    args.push('--checkpoint', outcome)
-    if (outcome === 'overridden') args.push('--checkpoint-reason', marks.checkpointOverride.reason)
-  }
+  const outcome = checkpointOutcome(n)
+  args.push('--checkpoint', outcome.outcome)
+  if (outcome.outcome === 'disposer') args.push('--checkpoint-overrides', String(outcome.overrides))
   return args
 }
 
-// ---- D2 (specs/20260901/03-unified-build-loop.md): the CHECKPOINT enforcement ------------------
-// A --via loop run records checkpoint: {sessionId} from readSessionStamp(repoRoot) at
-// reviewer-returned time (handleReviewerReturned); checkpointStillParked() is the single read-only
-// predicate both deriveState() (to return the CHECKPOINT state) and handleDispositions() (to
-// refuse the mark) consult, so the two can never disagree about whether the run is still parked.
-// A via:"direct" run, a never-cleared-yet null-sessionId degrade, or a checkpoint already cleared
-// this run (marks.checkpointCleared, sticky — fires once per run) are all "not parked".
-function checkpointStamp() {
-  const stamp = readSessionStamp(repoRoot)
-  return stamp && typeof stamp.sessionId === 'string' ? stamp.sessionId : null
+// D6: the outcome verdict.js's --checkpoint flag carries on every review verdict pass, derived
+// from marks — never a separate persisted field. A disposer mark recorded for exactly this pass's
+// iteration `n` yields "disposer" (with its overrides count) or "empty" (marks.disposer.empty);
+// anything else — no disposer mark yet, or one recorded for a stale iteration — is "not-reached"
+// (the hard-stop GATE_RED row, always: LEGS runs before REVIEWER, so no disposer mark can exist
+// yet at that pass).
+function checkpointOutcome(n) {
+  const d = marks.disposer
+  if (!d || d.iteration !== n) return { outcome: 'not-reached' }
+  if (d.empty) return { outcome: 'empty' }
+  return { outcome: 'disposer', overrides: d.overrides }
 }
 
-// specs/20260901/05-checkpoint-fail-closed.md D1 (2026-09-01, brief 18a): a no-stamp
-// reviewer-returned used to degrade to a printed warning and admit DISPOSITIONS straight through
-// (ADR-0004: a fail-open gap — both real loop reviews on this machine took it, with no ledger
-// trace). A null-recorded checkpoint (marks.checkpoint.sessionId === null) now parks exactly like
-// a same-session stamp does, and lifts on ANY stamp appearing — there is no recorded id to differ
-// from, and a stamp can only be written by the session-stamp hook (A6), so its mere appearance is
-// the "hooks are running now" signal.
-function checkpointStillParked() {
-  return marks.via === 'loop' && !marks.checkpointCleared && !!marks.checkpoint &&
-    (marks.checkpoint.sessionId === null
-      ? checkpointStamp() === null
-      : checkpointStamp() === marks.checkpoint.sessionId)
-}
-
-// D3: the outcome verdict.js's --checkpoint flag carries on every loop verdict.js pass, derived
-// from marks — never a separate persisted field. null when via !== 'loop' (verdict.js's own
-// arg-builder then omits the flag entirely, keeping a direct run's row untouched).
-function checkpointOutcome() {
-  if (marks.via !== 'loop') return null
-  if (marks.checkpointOverride) return 'overridden'
-  if (marks.checkpointCleared && marks.checkpoint && marks.checkpoint.sessionId !== null) return 'cleared'
-  if (marks.checkpointCleared && marks.checkpoint && marks.checkpoint.sessionId === null) return 'stamp-appeared'
-  return 'not-reached'
+// ---- D2/A5 (specs/20260901/09-disposer-gate.md): the ONE derivation of the two disposition -----
+// pools, shared by the printed DISPOSITIONS step body and handleDispositions()'s own --file
+// verification — never two derivations that could silently disagree about what needs covering.
+// survivors come from the recorded reviewer-return file (0-based `s<i>`); leg findings are the
+// current manifest's non-blocking red rows (`leg:<name>`), mirroring BLOCKING_LEGS exactly as
+// verdict.js's own leg-findings pool does.
+function dispositionPools(n) {
+  let survivors = []
+  try { survivors = JSON.parse(fs.readFileSync(marks.reviewerReturnFile, 'utf8')).survivors || [] } catch { /* ignore */ }
+  const legs = readManifestRows(manifestPathFor(n)).filter((r) => !BLOCKING_LEGS.has(r.leg) && r.exit !== 0)
+  return { survivors, legs }
 }
 
 // ---- Gotchas cap (prose-cap.js, specs/20260823/06 + 2026-08-25 ratchet) ------------------------
@@ -724,7 +716,7 @@ function runHardStopVerdict(n) {
   const diffLoc = computeDiffLoc()
   const args = ['--manifest', manifestPathFor(n), '--ledger', '--spec', specRel, '--tier', tier,
     '--diff-loc', String(diffLoc), '--iteration', String(n), '--run-id', runId,
-    '--base-sha', baseSha, '--head-sha', headSha(), ...viaModelArgs()]
+    '--base-sha', baseSha, '--head-sha', headSha(), ...viaModelArgs(n)]
   if (treeDirty()) args.push('--dirty')
   const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
     'verdict.js (hard-stop pass)')
@@ -779,7 +771,7 @@ function writeEscalateRow(n) {
     '--waived', String(d.waived), '--rejected', String(d.rejected), '--fixDispatched', '0',
     '--escalated', '--ledger', '--spec', specRel, '--tier', tier, '--diff-loc', String(diffLoc),
     '--iteration', String(n), '--run-id', runId, '--retain', path.join(repoRoot, '.claude/spec-runs'),
-    '--base-sha', baseSha, '--head-sha', headSha(), ...viaModelArgs()]
+    '--base-sha', baseSha, '--head-sha', headSha(), ...viaModelArgs(n)]
   if (treeDirty()) args.push('--dirty')
   const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
     'verdict.js (escalate pass)')
@@ -846,7 +838,7 @@ function doCloseWork(n) {
     '--waived', String(d.waived), '--rejected', String(d.rejected), '--fixDispatched', String(d.fixDispatched),
     '--ledger', '--spec', specRel, '--tier', tier, '--diff-loc', String(diffLoc),
     '--iteration', String(n), '--run-id', runId, '--retain', retainDir,
-    '--base-sha', baseSha, '--head-sha', headSha(), ...viaModelArgs()]
+    '--base-sha', baseSha, '--head-sha', headSha(), ...viaModelArgs(n)]
   if (treeDirty()) args.push('--dirty')
   const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
     'verdict.js (authoritative pass)')
@@ -1069,86 +1061,139 @@ function handleReviewerReturned() {
   marks.reviewerReturnIteration = n
   marks.dispositions = null
   marks.dispositionsIteration = null
+  // D4 (specs/20260901/09-disposer-gate.md): reset alongside dispositions — every iteration needs
+  // its own disposer return, so a fix-delta pass's second reviewer-returned must never let a stale
+  // prior-iteration disposer mark satisfy this iteration's --mark dispositions.
+  marks.disposer = null
   marks.pendingFix = false
-  // D1 (specs/20260901/05-checkpoint-fail-closed.md, 2026-09-01): recorded only for --via loop
-  // runs — a via:"direct" run must never write a checkpoint key (AC-20260901-03-5). A no-stamp
-  // host now parks exactly like a same-session stamp does (checkpointStillParked() reads this
-  // null sessionId the same way) rather than degrading to an admit-through warning (ADR-0004).
-  if (marks.via === 'loop') {
-    const sid = checkpointStamp()
-    if (sid === null) {
-      process.stderr.write('spec-review-driver: no session stamp at .claude/spec-session.json — the ' +
-        'loop checkpoint cannot verify a session change, so this run is parked at CHECKPOINT. Restart ' +
-        'Claude Code (a stale plugin hook set is the usual cause: hooks load at session start, /clear ' +
-        'does not reload them), then re-run /spec:build ' + specPath + '. Last resort: --mark ' +
-        'dispositions ... --skip-independence-check-because "<reason>" — the reason lands on the ' +
-        'review row.\n')
-    }
-    marks.checkpoint = { sessionId: sid }
-  }
   saveSidecar()
   return null
 }
 
+// D2/D4 (specs/20260901/09-disposer-gate.md): the driver refuses to advance --mark dispositions
+// on a non-empty pool without a disposer return covering every finding exactly once, each with a
+// non-blank grounded reason. --skip-independence-check-because is retired outright (ADR-0005) —
+// there is no CHECKPOINT left for it to bypass, so it is refused unconditionally, before any
+// pool/file work, never silently ignored. Nothing is mutated (no saveSidecar()) before every
+// check below passes — a refused mark is always side-effect-free, leaving review-state.json
+// byte-identical.
+const RECOMMEND_ENUM = new Set(['fix', 'waive', 'reject'])
 function handleDispositions() {
   if (!marks.reviewerReturnFile) die('no reviewer return recorded yet — mark reviewer-returned first')
-  // D2 (specs/20260901/05-checkpoint-fail-closed.md, 2026-09-01): --skip-independence-check-because
-  // "<reason>" is the one override, admitted ONLY on a no-stamp (null-recorded) park — the one
-  // truly stuck case (a hook present but unable to write the stamp file). Refused everywhere else:
-  // a same-session park has a cheap correct remedy (/clear — admitting a reasoned override there
-  // is exactly the bypass D2 of specs/20260901/03 exists to prevent), a run that is not parked at
-  // all has nothing to override (accepting it would launder a false "overridden" onto the ledger),
-  // and via:"direct" never parks. flag() returns `true` for a bare flag with no following value
-  // (A4) — that reads as "reason absent", not "override granted with no reason".
-  const overridePassed = argv.includes('--skip-independence-check-because')
-  if (overridePassed) {
-    const parked = checkpointStillParked()
-    if (marks.via !== 'loop' || !parked) {
-      die('--skip-independence-check-because refused — this run is not parked at CHECKPOINT, so ' +
-        'there is nothing to override')
-    }
-    if (marks.checkpoint.sessionId !== null) {
-      die('--skip-independence-check-because refused on a same-session park — /clear, then re-run ' +
-        '/spec:build ' + specPath + '; the override is not a bypass for the build session')
-    }
-    // D7 (specs/20260901/05-checkpoint-fail-closed.md, 2026-09-02): flag() returns the next argv
-    // token unconditionally, so a following flag (e.g. `--waived`) reads as the reason string. A
-    // token starting with "--" is another flag, not a reason — treat it as absent exactly like the
-    // bare-flag-at-end case, never admit it as the recorded override reason.
-    const raw = flag('--skip-independence-check-because')
-    const reason = typeof raw === 'string' && !raw.startsWith('--') ? raw.trim() : ''
-    if (!reason) {
-      die('--skip-independence-check-because needs a non-blank reason (the reason lands on the review row)')
-    }
-    marks.checkpointCleared = true
-    marks.checkpointOverride = { reason, ts: new Date().toISOString() }
-  } else if (checkpointStillParked()) {
-    // D2: refused (exit 2, state unchanged) while the run is still parked at CHECKPOINT — the same
-    // remedy the CHECKPOINT step itself prints. Never mutates marks before this check.
-    if (marks.checkpoint.sessionId === null) {
-      die('no session stamp at .claude/spec-session.json — the loop checkpoint cannot verify a ' +
-        'session change, so this run is parked at CHECKPOINT. Restart Claude Code (a stale plugin ' +
-        'hook set is the usual cause: hooks load at session start, /clear does not reload them), ' +
-        'then re-run /spec:build ' + specPath + '. Last resort: --mark dispositions ... ' +
-        '--skip-independence-check-because "<reason>" — the reason lands on the review row.')
-    }
-    die('the session that built this spec must not disposition its review (CHECKPOINT) — ' +
-      '/clear, then re-run /spec:build ' + specPath + '; the driver resumes at DISPOSITIONS')
+  // D4/A4: argv.includes(...) catches the flag whether it is bare (flag() would return `true`) or
+  // carries a value — a stale doctrine copy or memory teaching the retired override must never
+  // silently succeed.
+  if (argv.includes('--skip-independence-check-because')) {
+    die('--skip-independence-check-because is retired (ADR-0005, specs/20260901/09-disposer-gate.md) ' +
+      '— independence is now the disposer agent (spec:disposer), dispatched at DISPOSITIONS on both ' +
+      '/spec:run and /spec:review; drop the flag')
   }
-  // A stamp change past a recorded (non-null) checkpoint, or any stamp appearing past a
-  // null-recorded checkpoint (D1), is what admits this mark for a --via loop run — record it as
-  // cleared, once, before doing the disposition work below. The override branch above already set
-  // this when it ran; this is a no-op then (guarded by !marks.checkpointCleared).
-  if (marks.via === 'loop' && marks.checkpoint && !marks.checkpointCleared) {
-    marks.checkpointCleared = true
-  }
+  const n = marks.reviewerReturnIteration
+  const pools = dispositionPools(n)
+  const poolRefs = [
+    ...pools.survivors.map((_, i) => 's' + i),
+    ...pools.legs.map((r) => 'leg:' + r.leg),
+  ]
   const waivedRaw = flag('--waived'), rejectedRaw = flag('--rejected'), fixRaw = flag('--fix-dispatched')
   const waived = Number(waivedRaw), rejected = Number(rejectedRaw), fixDispatched = Number(fixRaw)
   if (![waived, rejected, fixDispatched].every(Number.isFinite)) {
     die('--mark dispositions needs numeric --waived/--rejected/--fix-dispatched (got ' +
       JSON.stringify({ waivedRaw, rejectedRaw, fixRaw }) + ')')
   }
-  const n = marks.reviewerReturnIteration
+
+  let dest = null
+  let overrides = 0
+  if (poolRefs.length > 0) {
+    const file = flag('--file')
+    if (!file || typeof file !== 'string') {
+      die('--mark dispositions needs --file <disposer return json> — the survivor/leg-finding pools ' +
+        'are non-empty, so dispatch Agent {subagent_type: "spec:disposer"} first and pass the path ' +
+        'it wrote its return to')
+    }
+    let raw
+    try { raw = fs.readFileSync(file, 'utf8') } catch (e) {
+      die('--file ' + file + ' could not be read (' + e.message + ') — re-dispatch spec:disposer and ' +
+        'pass the path it actually wrote its return to')
+    }
+    let ret
+    try { ret = JSON.parse(raw) } catch (e) {
+      die('--file ' + file + ' is not valid JSON (' + e.message + ') — re-dispatch spec:disposer and ' +
+        'write a clean {verdict, dispositions, tokens} return')
+    }
+    if (ret.verdict === 'DISPOSER_FAILED') {
+      die('the disposer returned DISPOSER_FAILED (a failed dispatch, never a disposition) — ' +
+        're-dispatch Agent {subagent_type: "spec:disposer"} and mark dispositions again once it completes')
+    }
+    if (!Array.isArray(ret.dispositions)) {
+      die('--file ' + file + ' is missing a dispositions array — the disposer return shape must be ' +
+        '{verdict, dispositions, tokens}; re-dispatch and write a valid return')
+    }
+    const seen = new Map()
+    for (const entry of ret.dispositions) {
+      const ref = entry && typeof entry.ref === 'string' ? entry.ref : null
+      if (ref === null) {
+        die('--file ' + file + ' has a dispositions entry with no string ref — every entry must name ' +
+          'the survivor (s<i>) or leg finding (leg:<name>) it dispositions')
+      }
+      seen.set(ref, (seen.get(ref) || 0) + 1)
+    }
+    for (const [ref, count] of seen) {
+      if (count > 1) {
+        die('--file ' + file + ' lists ' + ref + ' more than once — every survivor and leg finding ' +
+          'must be covered exactly once')
+      }
+    }
+    for (const ref of poolRefs) {
+      if (!seen.has(ref)) {
+        die('--file ' + file + ' does not cover ' + ref + ' — every survivor and leg finding must ' +
+          'receive exactly one recommendation')
+      }
+    }
+    for (const ref of seen.keys()) {
+      if (!poolRefs.includes(ref)) {
+        die('--file ' + file + ' recommends ' + ref + ', which matches nothing in the survivor or ' +
+          'leg-finding pools for this iteration')
+      }
+    }
+    const tally = { fix: 0, waive: 0, reject: 0 }
+    for (const entry of ret.dispositions) {
+      if (!RECOMMEND_ENUM.has(entry.recommended)) {
+        die('--file ' + file + ' entry ' + entry.ref + ' has recommended ' +
+          JSON.stringify(entry.recommended) + ' — must be one of fix|waive|reject')
+      }
+      if (typeof entry.reason !== 'string' || !entry.reason.trim()) {
+        die('--file ' + file + ' entry ' + entry.ref + ' has a blank reason — every recommendation ' +
+          'must quote the sanctioning spec line or cite an executed check')
+      }
+      let effective = entry.recommended
+      if (entry.final !== undefined) {
+        if (!RECOMMEND_ENUM.has(entry.final)) {
+          die('--file ' + file + ' entry ' + entry.ref + ' has final ' + JSON.stringify(entry.final) +
+            ' — must be one of fix|waive|reject')
+        }
+        if (entry.final !== entry.recommended) {
+          if (entry.overriddenBy !== 'user' || typeof entry.overrideReason !== 'string' ||
+              !entry.overrideReason.trim()) {
+            die('--file ' + file + ' entry ' + entry.ref + ' has final different from recommended with ' +
+              'no overriddenBy:"user" plus a non-blank overrideReason — only the user overrides a ' +
+              'disposition')
+          }
+          overrides++
+        }
+        effective = entry.final
+      }
+      tally[effective]++
+    }
+    if (tally.fix !== fixDispatched || tally.waive !== waived || tally.reject !== rejected) {
+      die('--waived/--rejected/--fix-dispatched (' + waived + '/' + rejected + '/' + fixDispatched +
+        ') do not match the return\'s final-or-recommended tallies (waive:' + tally.waive +
+        ' reject:' + tally.reject + ' fix:' + tally.fix + ') — recount before re-running')
+    }
+    fs.mkdirSync(sidecarDir, { recursive: true })
+    dest = path.join(sidecarDir, `disposer-return-${n}.json`)
+    fs.writeFileSync(dest, raw)
+  }
+
   const args = ['--manifest', manifestPathFor(n), '--workflow', marks.reviewerReturnFile,
     '--waived', String(waived), '--rejected', String(rejected), '--fixDispatched', String(fixDispatched)]
   const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
@@ -1157,6 +1202,11 @@ function handleDispositions() {
   const word = r.stdout.split('\n')[0].trim()
   marks.dispositions = { waived, rejected, fixDispatched, word }
   marks.dispositionsIteration = n
+  // D2: empty pools -> {file:null, iteration, overrides:0, empty:true}; non-empty, accepted ->
+  // {file, iteration, overrides}.
+  marks.disposer = poolRefs.length > 0
+    ? { file: dest, iteration: n, overrides }
+    : { file: null, iteration: n, overrides: 0, empty: true }
   marks.pendingFix = fixDispatched > 0
   if (marks.pendingFix) marks.escalated = false // a fresh fix cycle — any stale escalation no longer applies
   saveSidecar()
@@ -1566,11 +1616,8 @@ function deriveState() {
   const reviewerFresh = marks.reviewerReturnFile && marks.reviewerReturnIteration === n
   if (!reviewerFresh) return 'REVIEWER'
 
-  // D2: the checkpoint — a pure read (checkpointStillParked reads the stamp but writes nothing),
-  // so this is safe under a --state query too. checkpointCleared is set only where DISPOSITIONS
-  // is actually marked (handleDispositions), never here.
-  if (checkpointStillParked()) return 'CHECKPOINT'
-
+  // D4 (specs/20260901/09-disposer-gate.md): CHECKPOINT retired — both via values land
+  // DISPOSITIONS directly after a fresh reviewer return.
   const dispositionsFresh = marks.dispositions && marks.dispositionsIteration === n
   if (!dispositionsFresh) return 'DISPOSITIONS'
 
@@ -1666,25 +1713,6 @@ const STEPS = {
     `path — then:\n` +
     `  node ${__filename} ${specPath} --mark skips-extracted --file <path>`,
 
-  // D1/D2 (specs/20260901/05-checkpoint-fail-closed.md): the enforced checkpoint.
-  // checkpointStillParked() already established this state, so each body is fixed text (no
-  // derived counts to print) plus the exact remedy also named by handleDispositions()'s refusal —
-  // the null-park (no stamp on the host) and same-session-park (stamp unchanged) bodies differ
-  // because their remedies differ (restart vs. /clear).
-  CHECKPOINT: () => {
-    if (marks.checkpoint && marks.checkpoint.sessionId === null) {
-      return `## Step: checkpoint — restart Claude Code, then re-run /spec:build ${specPath}\n` +
-        `No session stamp at .claude/spec-session.json: the loop cannot verify that the session ` +
-        `dispositioning this review is not the one that built it. A stale plugin hook set is the ` +
-        `usual cause (hooks load at session start; /clear does not reload them). Restart Claude ` +
-        `Code, re-run, and the driver resumes at DISPOSITIONS. Last resort, recorded on the ledger:\n` +
-        `  node ${__filename} ${specPath} --mark dispositions ... --skip-independence-check-because "<reason>"`
-    }
-    return `## Step: checkpoint — /clear, then re-run /spec:build ${specPath}\n` +
-      `The session that built this spec must not disposition its review. Clear, re-run, and the ` +
-      `driver resumes at DISPOSITIONS.`
-  },
-
   REVIEWER: () => `## Step: dispatch the reviewer\n` +
     `Legs are green. Dispatch ONE Agent {subagent_type: "spec:reviewer"} with the spec path, ` +
     `diff base ${base}, root ${repoRoot}, and this run's evidence:\n` +
@@ -1701,20 +1729,32 @@ const STEPS = {
     `a file, then:\n  node ${__filename} ${specPath} --mark reviewer-returned --file <return.json>\n` +
     `REVIEWER_FAILED is a failed run, never CLEAN — re-dispatch before marking.`,
 
+  // D2/D3 (specs/20260901/09-disposer-gate.md): dispositionPools(n) is the SAME derivation
+  // handleDispositions()'s own --file verification uses (A5) — this step and that check can never
+  // silently disagree about what needs covering.
   DISPOSITIONS: () => {
-    let survivors = []
-    try { survivors = JSON.parse(fs.readFileSync(marks.reviewerReturnFile, 'utf8')).survivors || [] } catch { /* ignore */ }
-    const legRows = readManifestRows(manifestPath).filter((r) => !BLOCKING_LEGS.has(r.leg) &&
-      r.exit !== 0)
-    return `## Step: dispositions due — judgment on every survivor and leg finding\n` +
+    const { survivors, legs } = dispositionPools(currentN)
+    if (survivors.length === 0 && legs.length === 0) {
+      return `## Step: dispositions due — nothing to disposition\n` +
+        `survivors (0) · leg findings (0). Then:\n` +
+        `  node ${__filename} ${specPath} --mark dispositions --waived 0 --rejected 0 --fix-dispatched 0`
+    }
+    return `## Step: dispositions due — dispatch the disposer, apply its recommendations\n` +
       `survivors (${survivors.length}):\n` +
       survivors.map((s) => `  [${s.severity}] ${s.file}:${s.line} — ${s.claim}`).join('\n') + '\n' +
-      `leg findings (${legRows.length}):\n` +
-      legRows.map((r) => `  ${r.leg} exit=${r.exit} ${JSON.stringify(r.observed)}`).join('\n') + '\n' +
-      `Present each with the spec lines its disposition hinges on, quoted verbatim. Fix -> dispatch ` +
-      `Sonnet workers, mark dispositions --fix-dispatched N. Waive/Reject -> record in the spec's ` +
-      `Rationale (date + reason; only the user waives).\n` +
-      `Then: node ${__filename} ${specPath} --mark dispositions --waived N --rejected N --fix-dispatched N`
+      `leg findings (${legs.length}):\n` +
+      legs.map((r) => `  ${r.leg} exit=${r.exit} ${JSON.stringify(r.observed)}`).join('\n') + '\n' +
+      `Dispatch ONE Agent {subagent_type: "spec:disposer"} with the spec path, diff base ${base}, ` +
+      `root ${repoRoot}, the pipeline-rules path${pipelineRulesPath ? ' (' + pipelineRulesPath + ')' : ' (none declared)'}, ` +
+      `and this iteration's evidence:\n` +
+      `  reviewer return: ${marks.reviewerReturnFile}\n` +
+      `  manifest: ${manifestPath}\n` +
+      `  outputs: ${outDir}\n` +
+      `Fix recommendations dispatch without a question; waive/reject recommendations go to the ` +
+      `user (AskUserQuestion; record the answer as final with overriddenBy:"user" when it differs).\n` +
+      `Write the return to a file, then:\n` +
+      `  node ${__filename} ${specPath} --mark dispositions --file <return.json> --waived N --rejected N --fix-dispatched N\n` +
+      `DISPOSER_FAILED is a failed dispatch, never a disposition — re-dispatch before marking.`
   },
 
   FIX: () => `## Step: dispatch fix workers\n` +

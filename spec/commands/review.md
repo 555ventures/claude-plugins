@@ -24,8 +24,8 @@ is `{driver}` below.
 that already passed.
 
 This command is the review driver's direct entry point (`--via direct`, the default). The
-`/spec:build` loop reaches the same driver with `--via loop` and stops at one additional
-enforced checkpoint before dispositions — see `spec/commands/build.md`.
+`/spec:build` loop reaches the same driver with `--via loop` and runs the same DISPOSITIONS
+protocol below on both entries — see `spec/commands/build.md`.
 
 ## Protocol — the driver owns the state machine
 
@@ -113,14 +113,22 @@ Run `node "$(spec-paths report-render)" --slots <file>` and print its output ver
   findings.
 - **No finding dies by argument.** A finding is dismissed only on executed contrary evidence, a
   quoted spec sanction, or a demonstrated miscitation — presented to the user, never silently.
-- **Dispositions (the DISPOSITIONS step).** Present survivors and leg findings with the spec
-  lines their disposition hinges on quoted verbatim, and recommend the evidence-implied
-  disposition; then `AskUserQuestion` per finding group (≤4 per call, core § Question Style):
-  - **Fix** — dispatch Sonnet workers (routed via the host's `agentMap`), mark
-    `dispositions --fix-dispatched N`; once the worker returns and you mark `fix-applied`, the
-    driver re-runs the fix-delta legs and a fix-delta reviewer pass itself.
-  - **Waive** / **Reject** — recorded in the spec's Rationale with date + reason; only the user
-    waives.
+- **Dispositions (the DISPOSITIONS step).** Dispatch **one** `Agent {subagent_type:
+  'spec:disposer'}` with the paths the driver's step prints (the spec, the diff base, the root,
+  the pipeline-rules path, the reviewer return, the manifest, and the evidence directory for
+  this iteration). It has no memory of the build. For every `fix` recommendation in its return,
+  dispatch Sonnet workers (routed via the host's `agentMap`) with no question — a `fix` is the
+  conservative disposition, reversible and re-reviewed by the fix-delta pass. For every
+  `waive`/`reject` recommendation, present it to the user via `AskUserQuestion` (≤4 per call,
+  core § Question Style), the disposer's reason quoted verbatim, its recommendation first and
+  labelled; record the user's answer as `final` with `overriddenBy: "user"` and
+  `overrideReason` when it differs from the recommendation. The session never changes a
+  recommendation on its own and never asks about a `fix` — it may attach `sessionNote` to an
+  entry (informational; the driver ignores it). Once the worker returns and you mark
+  `fix-applied`, the driver re-runs the fix-delta legs and a fix-delta reviewer pass itself.
+  Waive/Reject rulings still land in the spec's Rationale with date + reason; only the user
+  waives. `DISPOSER_FAILED` (agent died) is a failed dispatch, never a disposition —
+  re-dispatch before marking.
 - **The verdict word is derived by `verdict.js`, never asserted in prose** — the driver runs
   every verdict pass and prints its word; the session never asserts CLEAN itself.
   Never hand-write the word; a CLEAN row with non-zero `survived` records dispositioned

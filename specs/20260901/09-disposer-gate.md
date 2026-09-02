@@ -1,6 +1,6 @@
 ---
 date: 2026-09-01
-status: hardened
+status: implementing
 tier: critical
 area: build-integrity
 design: false
@@ -9,6 +9,8 @@ depends_on: ["specs/20260901/05-checkpoint-fail-closed.md"]
 depended_on_by: ["specs/20260901/10-spec-run-command.md"]
 brief: 18b
 open_markers: 0
+build_base: 931c80c4756ce0e1ef36a2050b1577657bd8a54f
+diff_base: 931c80c4756ce0e1ef36a2050b1577657bd8a54f
 ---
 
 # Independent dispositions — a fresh-context disposer replaces the session-change checkpoint
@@ -55,6 +57,8 @@ covers every finding, and the close row says `checkpoint: {"outcome":"disposer",
 | tests/review/disposer-gate.test.js | CREATE | tests | AC-20260901-09-1, AC-20260901-09-2, AC-20260901-09-3, AC-20260901-09-4, AC-20260901-09-7, AC-20260901-09-8, AC-20260901-09-9, AC-20260901-09-13 |
 | tests/review/review-driver.test.js | MODIFY | tests | AC-20260901-09-5 (tag the clean-close test in place), AC-20260901-09-6 (rewrite the AC-20260901-02-4 test in place, D9) |
 | tests/provenance/provenance.test.js | MODIFY | tests | AC-20260901-09-10, AC-20260901-09-11 (rewrite the 05-6/05-7 tests in place), AC-20260901-09-12 (tag the byte-identity test in place) |
+| tests/review/escalate-row.test.js | MODIFY | tests | Build-time collision (2026-09-01, recorded in deviations): fix-cycle setups supply a disposer return via `--file` (D2) and reproducibility re-runs pass the row's own `checkpoint` back as `--checkpoint`/`--checkpoint-overrides` (D6); updated in place, retagged AC-20260901-09-2 / AC-20260901-09-6, never weakened |
+| tests/review/stopped-row-durability.test.js | MODIFY | tests | Build-time collision (2026-09-01, recorded in deviations): the worktree GATE_RED reproducibility re-run passes the row's `checkpoint` back as `--checkpoint not-reached` (D6); updated in place, retagged AC-20260901-09-13, never weakened |
 
 Orchestrator duty (outside the table): `tests/consistency/read-load.test.js` is the live
 oracle for AC-20260901-09-14 and is not edited. `docs/canonical/pipeline.md` changes only

@@ -1,5 +1,5 @@
 ---
-description: Carry a hardened spec to done — the outer loop derives the next stage from disk and runs design (when due), then the build driver, then the review driver in sequence, each `--via loop`; direct Sonnet worker dispatch per layer wave behind the deterministic gate, driver-stepped — spec-build-driver.js and spec-review-driver.js each own their own sequencing; this session holds every judgment step and the two checkpoints
+description: Carry a hardened spec to done — the outer loop derives the next stage from disk and runs design (when due), then the build driver, then the review driver in sequence, each `--via loop`; direct Sonnet worker dispatch per layer wave behind the deterministic gate, driver-stepped — spec-build-driver.js and spec-review-driver.js each own their own sequencing; this session holds every judgment step and the pre-merge checkpoint
 argument-hint: <spec path>
 ---
 
@@ -35,8 +35,7 @@ leave a worktree and never write `build_base`.
 2. `hardened`, or `implementing` with no `<spec>.review/` sidecar → run the **build stage**
    below (`node {driver} <spec> --via loop`) to `DONE`.
 3. `implementing` or `done` → run the **review stage** below
-   (`node {review-driver} <spec> --via loop`) until it prints `CHECKPOINT`, a judgment step,
-   or `DONE`.
+   (`node {review-driver} <spec> --via loop`) until it prints a judgment step or `DONE`.
 4. `done` with no review sidecar → the review driver's own cold path prints `DONE` with
    `spec-status --next` — the loop's no-op resume.
 
@@ -81,23 +80,13 @@ need no memory of the build's trade-offs, so clearing here is optional, never re
 
 Run `node {review-driver} <spec> --via loop` the same way: step, execute, mark, re-run, per
 `spec/commands/review.md`'s own Protocol and Rules, which this loop follows unchanged for
-every judgment step (reviewer dispatch, dispositions, close, merge strategy, replay). Two
-places the loop stops that are specific to `--via loop`:
+every judgment step (reviewer dispatch, dispositions, close, merge strategy, replay). One
+place the loop stops that is specific to `--via loop`:
 
-- **CHECKPOINT (enforced).** Once the reviewer returns, a loop-driven run parks at
-  `CHECKPOINT` and refuses `--mark dispositions` until the session id in
-  `.claude/spec-session.json` has changed from the one recorded when the reviewer returned —
-  the loop ends the invocation here and reports the re-run command as `next`; the disposing
-  session must have no memory of the build's trade-offs. `/clear`, then re-paste
-  `/spec:build <spec>` — the state gate admits it on `done` as much as on `hardened` or
-  `implementing`, and the loop lands back on the review driver at DISPOSITIONS with the new
-  session id. This fires once per run: a fix cycle's second reviewer pass is judged by the
-  session that dispatched the fix, not gated again. A run with no stamp at all parks the same
-  way, but the remedy is restart Claude Code, not `/clear` — a stale plugin hook set is the
-  usual cause, since hooks load at session start and `/clear` does not reload them; any stamp
-  then appearing admits DISPOSITIONS. Last resort, when the hook genuinely cannot write the
-  stamp: `--skip-independence-check-because "<reason>"` on the dispositions mark, whose reason
-  lands on the review row as `checkpoint.outcome: overridden`.
+- **No stop between the reviewer's return and dispositions.** Independence is the disposer —
+  once the reviewer returns, the loop proceeds straight to DISPOSITIONS and dispatches
+  `spec:disposer` per review.md's DISPOSITIONS rule, on the loop path exactly as on the direct
+  path; there is nothing here for this session to gate.
 - **Pre-merge (unchanged).** The review driver's existing relocation refusal is the pre-merge
   stop — never a forced `/clear`. `ExitWorktree(action="keep")` when this session entered via
   `EnterWorktree`, otherwise `cd` the main session to the driver-named root, then re-run; the

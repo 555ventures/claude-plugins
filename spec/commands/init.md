@@ -29,8 +29,8 @@ any generated file's prose about a **volatile enumerable fact** — routes, tabl
 inventories, token homes — must name the derivation, the command or location that yields the
 fact (e.g. "`ls apps/web/src/routes/` is the surface list"), never inline the enumeration
 itself. A sentence that can go stale independently of the derivation it summarizes is a defect
-at generation time (PRAX-20260813-06: a generated run skill said routes are "currently `/` and
-`/api/health`" while 37 existed).
+at generation time (specs/20260813/04-plan-lock-obligation-carriers.md D4: a generated run
+skill on a host named its routes inline and went stale the moment new ones shipped).
 
 `init-gen generate` is the sole writer of 1–6, 8, and 10 below, from the judgment content you
 author into the profile JSON (Phase 4); 7 and 9 stay session-authored (D2's boundary), and you
@@ -133,10 +133,9 @@ record each item as a `manifestExtras` row (Phase 4) so the manifest still claim
 
 The verify skill, the smoke leg, and any DB-gated test suite all presuppose a runnable
 substrate. Where Phase 1's profiling found gaps, **create the substrate — don't just record
-the gap** (measured cost of not doing this: UpWell shipped 10 days with no seed, no health
-endpoint, no DB provisioning, no remote — "can I run this?" took a full investigation and the
-answer was no). Each item is small, and each is skippable only by an explicit `inert`
-manifest row with a reason:
+the gap**: a host that skips this ships without knowing whether it can even run, and "can I
+run this?" becomes a full investigation instead of a one-line answer. Each item is small,
+and each is skippable only by an explicit `inert` manifest row with a reason:
 
 - **Health endpoint** — if the app serves HTTP and has no cheap liveness route, add one
   (e.g. `/api/health` returning 200 + version). It is the `runtime.readyCheck` target, the
@@ -196,8 +195,8 @@ itself never installs, never asks, never fails on an adverse finding:
   `unavailable` value means detection itself couldn't run (no `claude` CLI, or an unparseable
   `claude plugin list --json` shape) — Phase 3 falls back to asking the user directly.
 - `testCommand.failsLoudOnNoMatch: false` — this repo's test runner exits 0 on a path matching
-  nothing, the exact vacuous-pass class the 2026-08-20 at-risk escape rode in on; Phase 3
-  surfaces it.
+  nothing, the exact vacuous-pass class an escaped defect rode in on (specs/20260822/02-init-generation-script.md
+  D8); Phase 3 surfaces it.
 - `atRisk.refs: 0` — the at-risk review leg's path-substring heuristic found no test
   references among the sampled files; Phase 3 discloses that the leg will likely never fire on
   this host.

@@ -9,6 +9,8 @@ const { ROOT, runNode } = require('../helpers')
 // repository's real tree.
 // Owner: specs/20260902/01-comment-narration-gate.md, AC-20260902-01-13.
 // Owner: specs/20260902/02-plugin-code-sweep.md, AC-20260902-02-1.
+// Owner: specs/20260902/03-plugin-prose-sweep.md, AC-20260902-03-1 (D9: baseline reduced to
+// the grounding contract file alone, at its real scanned count, once the prose sweep lands).
 //
 // This file does not classify any narration itself — it only invokes the scanner with the
 // fleet's host and person literals against the tracked ratchet baseline and asserts the exit
@@ -21,7 +23,7 @@ const HOSTS = 'upwell,prax,salon-os,salon os,hearwell,hiwora,zubu,bwm,cctop,auto
 const PEOPLE = 'JJ,founder'
 const CODE_GROUP_RE = /^(spec\/scripts|spec\/bin|scripts|tests)\//
 
-test('AC-20260902-02-1: the plugin scan over this repository with the fleet host and person literals exits 0 against the tracked baseline, the tracked baseline holds no code-group key, and --json names no code-group finding', () => {
+test('AC-20260902-02-1/AC-20260902-03-1: the plugin scan over this repository with the fleet host and person literals exits 0 against the tracked baseline, the tracked baseline holds no code-group key, and --json names no code-group finding', () => {
   const args = ['--root', ROOT, '--hosts', HOSTS, '--people', PEOPLE]
   if (fs.existsSync(BASELINE_ABS)) args.push('--baseline', BASELINE_ABS)
   const r = runNode('scripts/comment-narration.js', args)

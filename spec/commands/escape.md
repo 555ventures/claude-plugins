@@ -61,8 +61,8 @@ defective file — that is the only unrecoverable input.
    `runId` field. Note the row's `verdict` and `findings.killed` for steps 4–5. When
    `reviewRunId` is set, check for `.claude/spec-runs/<reviewRunId>.json` — if it exists,
    read its `killed[]` claims (evidence strings intact); step 4 derives `killedMatch` from
-   them. When the correlated row carries `diff.base`/`diff.head` (rows from 7.32.0 on),
-   those name the reviewed range and `diff.dirty: true` means the close commit that
+   them. When the correlated row carries `diff.base`/`diff.head` (specs/20260824/06-review-range-identity.md
+   D4), those name the reviewed range and `diff.dirty: true` means the close commit that
    follows the row completes it; older rows carry neither, and this step proceeds exactly
    as today.
 4. **Classify — derive from context, confirm in ONE call.** Derive every field from the

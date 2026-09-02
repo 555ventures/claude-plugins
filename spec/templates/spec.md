@@ -76,7 +76,8 @@ depended_on_by: []
 { Interaction flows, handler/store transitions, edge cases. Free-form — prose, tables,
   whatever the problem needs. This is the one deliberately unstructured section — but any
   testable promise written here must be restated as an Acceptance Criterion; Behavior prose
-  itself is deliberately NOT enumerated by the promise sweep (JJ ruling 2026-08-17). }
+  itself is deliberately NOT enumerated by the promise sweep
+  (specs/20260817/07-promise-sweep-leg.md D8). }
 
 ## Acceptance Criteria
 

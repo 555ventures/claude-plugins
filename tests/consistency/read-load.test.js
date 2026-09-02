@@ -5,6 +5,8 @@
 // design-doctrine.test.js, genesis.md ≤120 in genesis-doctrine.test.js) into one budget per
 // command, measured through the real binary so the number is the load, not a guess — this
 // pins that procedure growth cannot happen silently; a grandfathered ratchet may only shrink.
+// AC-20260902-03-4 (specs/20260902/03-plugin-prose-sweep.md D6): the prose sweep must not
+// grow any command file, so this budget SHALL CONTINUE TO hold with the same caps unchanged.
 const test = require('node:test')
 const assert = require('node:assert')
 const fs = require('fs')
@@ -38,7 +40,7 @@ test('every /spec command has a read-load budget entry (cap or grandfathered rat
 
 for (const cmd of commands) {
   const limit = RATCHET[cmd] || CAP
-  test(`read-load budget: /spec:${cmd} loads ≤ ${limit} lines (command file + shared-for sections)`, () => {
+  test(`AC-20260902-03-4: read-load budget: /spec:${cmd} loads ≤ ${limit} lines (command file + shared-for sections)`, () => {
     const { own, shared, total } = readLoad(cmd)
     assert.ok(total <= limit,
       `/spec:${cmd} loads ${total} lines (own ${own} + shared ${shared}) > ${limit}. ` +

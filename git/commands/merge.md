@@ -88,7 +88,7 @@ If we are inside a worktree (detected in Step 1) OR the source branch had a dedi
    git branch -d <source-branch>
    ```
 
-If the worktree path no longer exists (e.g. already removed), treat cleanup as done — verify with `git worktree list` if unsure.
+If the worktree path is already gone (e.g. already removed), treat cleanup as done — verify with `git worktree list` if unsure.
 
 If the session was NOT entered via `EnterWorktree` (ExitWorktree is a no-op), skip step 1 and do steps 2–3 directly via `git -C <main-repo-path>`. A CWD warning may appear — this is unavoidable in that case.
 

@@ -15,8 +15,8 @@ leaves every leg green **by construction**, not by luck — a class whose recipe
 stay leg-invisible is a broken class, not a hard replay run (D11's rationale: a red leg at
 verify time records `leg-caught` and is corpus feedback, never a corpus fix-up mid-run).
 
-This corpus is v1, hand-authored (JJ-confirmed 2026-08-19 over escape-derived — the escape
-ledger holds too few rows today to grow a corpus from). It is refreshed at least once per major
+This corpus is v1, hand-authored rather than escape-derived — the escape ledger holds too
+few rows to grow a corpus from (specs/20260819/02-mutation-replay.md D11). It is refreshed at least once per major
 pipeline version, and a real escape that reveals a genuinely new blind-spot shape folds in as a
 new class rather than as a note on an existing one.
 
@@ -145,9 +145,8 @@ targeted exit-code probe on the refusal branch catches the lie.
 
 ### `prefix-collision-coverage-fail-open`
 
-**Derived from:** claude-plugins escape rows `2026-08-23T18:21:47Z` × 4 (specs 20260808/01,
-20260813/03, 20260815/01, 20260816/01 — `preventedBy: enforcer`); fix specs/20260821/03 D7
-(`acIdOccurs`, landed 2026-08-22).
+**Derived from:** claude-plugins escape rows × 4 (specs 20260808/01, 20260813/03, 20260815/01,
+20260816/01 — `preventedBy: enforcer`); fix specs/20260821/03 D7 (`acIdOccurs`).
 
 **Recipe:** Find an identifier match that is full-token today — a boundary-checked helper
 (`acIdOccurs`-style), an `===` on a key, an anchored regex — at a call site inside the target

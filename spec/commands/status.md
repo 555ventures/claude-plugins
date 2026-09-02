@@ -74,7 +74,7 @@ thing the script can't: narration.
      automatically from on-disk brief provenance; narrate the notice and name the veto
      command the anomaly's detail carries (`spec-queue bump <ref>`, or `spec-queue ok <ref>`
      to accept the placement) — never clear the stamp yourself.
-   - `queue-orphan` — a queue item points at a brief file that no longer exists; point at
+   - `queue-orphan` — a queue item points at a brief file that does not exist; point at
      the fix (`spec-queue done <ref>` if the brief shipped under a new number, `spec-queue
      defer <ref>` otherwise) — advice about a *pointer*, not a status change this command
      performs.

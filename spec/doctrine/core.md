@@ -80,15 +80,16 @@ trigger upgrades the tier immediately (note it in the spec).
 
 Critical tier adds review capacity only as **narrowly-scoped, non-redundant legs registered
 by name** (host pipeline rules § Review Checks; wired via `verdict.js --require`) — never a
-second general reviewer: reviewer agreement is measurably not a correctness signal (Spearman
-ρ 0.20–0.59, Aug 2026). `promise-sweep` is one such leg and runs at every tier, not only
+second general reviewer: reviewer agreement is measurably not a correctness signal
+(specs/20260817/07-promise-sweep-leg.md D7). `promise-sweep` is one such leg and runs at every tier, not only
 critical; this ruling governs future capacity, not its admission.
 
 ## Runtime Verification
 
 **No verdict may rest on static legs alone.** Typecheck, lint, mocked unit tests, pattern
-sweeps, and citation-checked reviews can all pass on a program that cannot start (UpWell
-2026-07: gate 8/8 green, `GET /` 500 on every commit, two CLEAN reviews). The host config's
+sweeps, and citation-checked reviews can all pass on a program that cannot start (a host once
+had every gate task green while its root route returned 500 on every commit, across two CLEAN
+reviews). The host config's
 required `runtime` block (`bootCommand` + `readyCheck`, or an explicit
 `{"inert": "<reason>"}`) is the contract; the plugin's deterministic `smoke.sh` executes it —
 boot to observed readiness AND a bounded clean stop on the declared signal (shutdown is where
@@ -129,10 +130,8 @@ derives it and nothing reviews it. Every memory file a spec's diff touches is th
 disposed at review close, one stated fate each — carry, correct, or delete — exactly as the
 deviations sidecar is folded. Judge what it teaches, not that it was written: a memory
 attributing observed work to an unnamed "concurrent process", or concluding an assignment
-could be stood down from, is corrected or dropped, never carried. (2026-08-21: one build's
-two memories both misattributed the orchestrator's own concurrent edits to a phantom sibling
-worker and both ended in that stand-down inference; one was deleted at the time, its twin
-rode the same commit unexamined.)
+could be stood down from, is corrected or dropped, never carried
+(specs/20260821/02-replay-review-phase.md build).
 
 The **escape ledger** and the **reviewer replay catch-rate** (brief 14's harness, sibling
 spec specs/20260819/02-mutation-replay.md) are the pipeline's only two ground-truth
@@ -146,9 +145,9 @@ review and at minimum once per major pipeline version, sampling critical-tier ta
 when one is available in the window. Execution is review's own close, never a printed
 reminder: the review driver's REPLAY state (between MERGE and DONE) runs the dueness and
 selection checks itself and refuses to conclude the review until a `stage:"replay"` row for
-the selected target exists. The printed-reminder form was tried and measured to fail — it
-shipped 2026-08-19 and was skipped through 12+ reviews in ~48 hours while printing on every
-CLEAN report. `/spec:replay` remains the manual surface and the retry path after a
+the selected target exists. The printed-reminder form was tried and measured to fail — a
+checklist line printing on every CLEAN report was skipped through 12+ reviews before being
+replaced (specs/20260821/02-replay-review-phase.md D5). `/spec:replay` remains the manual surface and the retry path after a
 non-measurement outcome. A sustained replay miss-rate is the evidence that reopens the
 second-reviewer question core § Tiers currently rules against — not a hunch, not a single bad
 run.

@@ -30,6 +30,11 @@
       "spec/commands/plan.md"
     ]
   },
+  "spec/scripts/comment-narration.js": {
+    "entryPoints": [
+      "spec/commands/doctor.md"
+    ]
+  },
   "spec/scripts/components-check.js": {
     "entryPoints": [
       "spec/doctrine/design.md",

@@ -28,7 +28,7 @@ You never write implementation code.
 
 - Fixed preamble: `'use strict'` → `require('node:test')`/`require('node:assert')` → `require('./helpers')`. Flat `test('...')` calls — no `describe` blocks anywhere in the suite.
 - Test names are full sentences stating the invariant, mechanism included. Every assert carries a third-arg message stating the consequence of failure, not the expectation.
-- Header comment (6–14 lines) after the requires: dated, citing the incident id or host+date the test pins. Pipeline-authored tests additionally reference AC-IDs in test names.
+- Header comment (≤ 6 lines) after the requires: the owner citation the test pins — spec path, AC-ID, or escape row id — in one line; never dates, people, hosts, versions, or prior behavior.
 - Choose the mode by what's under test: exec-a-script in a `tmpdir()` synthetic host via `runNode`/`runBash` (assert on `r.status` with `r.stderr` as the message, `assert.match` on output); doctrine regex pins over `read()` content (guard with `fs.existsSync` so a missing file fails once); workflow shape via `extractFn`/`evalFns` (workflows can't be `require`d).
 - Zero dependencies — `node:` built-ins only. New fixtures only when the input must be a realistic multi-file artifact; everything else is written inline into a tmpdir.
 - Never weaken an existing assertion — tests are pinned doctrine; weakening is a doctrine change and a blocked return.

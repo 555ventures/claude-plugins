@@ -1,6 +1,6 @@
 ---
 date: 2026-09-02
-status: hardened
+status: done
 tier: critical
 area: gate-integrity
 design: false
@@ -10,6 +10,8 @@ depended_on_by: ["specs/20260902/02-plugin-code-sweep.md", "specs/20260902/03-pl
 brief: 21
 open_markers: 0
 spiked: 2026-09-02
+build_base: main
+diff_base: 1f6a7ed5ab1807d241a15374be383934d493a43a
 ---
 
 # Comment narration gate: owner citations, never history
@@ -172,6 +174,17 @@ literals) and 5 waived: `docs/audit/style-audit-2026-08-13.md` and
 `tests/init-gen/generate.test.js` (sibling 02's sweep owns them; they are comments, not
 pins). Paths leg: `spec/bin/spec-paths` is executed by many tests; D8 is additive and no
 test pins an exhaustive key set.
+
+Build deviation (one-off, folded at review close): D11's Applied-to text quoted
+`.claude/agents/gate-scripts.md`'s line-count guidance as "5–12 lines is normal"; the file
+reads "15–35 lines is normal". The on-disk figure was kept — the line count is not part of the
+header-comment sentence D11 rewrites, and D11 forbids changing any other sentence.
+
+Review fixes (rv_86d3458f366f, two fix-delta rounds, both CLEAN): the D2 walk admits
+symlinked files and traverses symlinked directories only when the real target stays inside
+`--root` (a symlink to an off-root file such as `/etc/hosts` is skipped, never read), with a
+visited-set guard against symlink cycles; pinned by two AC-20260902-01-2 tests. D2's
+"walks every file under" now includes symlinked entries by that rule.
 
 ## Canonical Delta
 

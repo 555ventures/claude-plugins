@@ -1,0 +1,116 @@
+{
+  "runId": "rv_ca32d02ed7ac",
+  "ts": "2026-09-02T06:58:09.994Z",
+  "spec": "specs/20260901/09-disposer-gate.md",
+  "tier": "critical",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1851,
+    "base": "931c80c4756ce0e1ef36a2050b1577657bd8a54f",
+    "head": "479977ffa0d6918706ddd0d68969cc947662916f",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 0,
+      "observed": {
+        "outOfPlan": 0,
+        "files": []
+      }
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      }
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 209
+      }
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": {
+        "matches": 10
+      }
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": {
+        "files": 21,
+        "testsExecuted": 251
+      }
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      }
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 1,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 9,
+        "carried": 7,
+        "sanctioned": 2,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "handleDispositions() writes disposer-return-<n>.json to disk before the internal verdict.js dispositions-pass call, which could theoretically exit 2 on a contradiction and leave that artifact written despite a refused mark",
+        "file": "spec/scripts/spec-review-driver.js",
+        "line": 1192,
+        "evidence": "Symbolic analysis: driver's dispositionPools() always produces exactly 1 ref per red non-blocking leg row, while verdict.js's countLegFinding floors every red leg at >=1 (often equal, sometimes higher for reconcile/ac-matrix/skip-reconcile/promise-sweep) — so driver-derived fixDispatched/waived/rejected tallies can never exceed verdict.js's own legFindings+survivors sum, making the exit-2 path structurally unreachable via this call site under the documented pool derivation. Not executed as a live repro; reasoned from code only, so kept as killed rather than a finding."
+      },
+      {
+        "claim": "readSessionStamp is imported but never called directly in spec-review-driver.js after CHECKPOINT removal",
+        "file": "spec/scripts/spec-review-driver.js",
+        "line": 176,
+        "evidence": "Spec D4 explicitly states: \"readSessionStamp stays imported: sessionModel still derives the row's model from the stamp\" — a sanctioned Decision-table trade-off, and no lint config in the repo enforces unused-import errors (confirmed: no .eslintrc/eslint.config.* found)."
+      }
+    ],
+    "reviewerCount": 1,
+    "scope": "full",
+    "tokens": 182919
+  }
+}

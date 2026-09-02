@@ -20,10 +20,16 @@ Section order below; every section appears ONLY when non-empty — a clean small
 2. **🧩 What happened** — the cause and outcome as a short story at concept level, 2-4 sentences. Mechanism in plain terms, no location citations.
 3. **⚖️ Calls I made for you** — every judgment call made on JJ's behalf (defaults picked, edges skipped, designs chosen), one line each with the consequence. This is the veto surface; a call JJ never sees is a call JJ can't override.
 4. **🔍 Verification** — per deliverable, exactly one honest claim: *executed* (ran it, watched it behave), *tested* (suite covers it), or *unverified* (reasoned only). Never blur these.
-5. **🚧 Debt** — every hot patch, smell, or bad practice created OR discovered, ranked worst first. Nothing is silently "out of scope" — each item gets exactly one fate:
-   - 🩹 **follow-up spec** — structural fix warranted: stage the handoff in the 🎯 block (see 📋 rules).
-   - 🔧 **quick fix** — small, no design questions: offer to do it now behind a 📌 default.
-   - 👃 **live with it** — state the condition that changes the answer ("fine until ~5 machines").
+5. **🚧 Debt** — every hot patch, smell, or bad practice created OR discovered, ranked worst first. Nothing is silently "out of scope" — each item opens with a severity glyph, then one clause saying what breaks if left, then exactly one fate:
+   - Severity (the "fix or leave?" signal — read cold, no decoding):
+     - 🔴 **silent wrong result if left** — a user, the ledger, or a verdict ends up wrong with no error. Never gets 👃 without a stated reason.
+     - 🟡 **fails or degrades under a named condition** — name the condition ("fine until ~5 machines").
+     - 🟢 **smell only, no behavior change** — duplication, naming, length. Never earns a spec; quick fix or leave.
+   - Fate:
+     - 🩹 **follow-up spec** — structural fix warranted: stage the handoff in the 🎯 block (see 📋 rules).
+     - 🔧 **quick fix** — small, no design questions: offer to do it now behind a 📌 default.
+     - 👃 **live with it** — state the condition that changes the answer ("fine until ~5 machines").
+   - Shape: `- 🔴 Ledger appenders drop the trailing newline — the next row corrupts the file silently. 🩹 follow-up spec`
 6. **💰 Cost** — one line when the task was materially heavier than its ask (long wall-clock, many repair loops, expensive workflow). Omit when unremarkable.
 7. **🎯 My queue** — every item pre-staged with its payload attached; never a finding, never FYI. Three verbs:
    - 📋 **Paste this** — the exact command, preceded by one plain sentence saying what pasting it does — I should never need to read the payload. For structural fixes: root cause in 1-2 sentences, then the handoff — I invoke `/spec:plan` myself, never pre-stage the plan command. Two cases:
@@ -37,7 +43,7 @@ Section order below; every section appears ONLY when non-empty — a clean small
 
 ## Visual anchors
 - Use emoji generously so messages scan visually — every bullet, status line, and section header starts with one that matches its meaning.
-- Stable core: ✅ done ❌ failed ⚠️ attention · verdicts 🟢🟡🔴 · sections 🧩⚖️🔍🚧💰🗺️📁 · queue 🎯 with 📋 paste 👤 do 📌 decide · debt fates 🩹🔧👃. Beyond these, pick what fits.
+- Stable core: ✅ done ❌ failed ⚠️ attention · verdicts 🟢🟡🔴 · sections 🧩⚖️🔍🚧💰🗺️📁 · queue 🎯 with 📋 paste 👤 do 📌 decide · debt severity 🔴🟡🟢 + fates 🩹🔧👃. Beyond these, pick what fits.
 - The emoji is the visual anchor — the prose after it stays plain.
 
 ## Language

@@ -1643,7 +1643,15 @@ test('replay-root-4: the REPLAY execution step inlines the repo root alongside t
 // --via support exist (TDD red, 2026-09-01) and must fail until the driver genuinely threads --via
 // through sidecar creation and stamps CLOSE's authoritative row with a real transcript-derived
 // model.
-test('AC-20260901-02-4: a run created with --via loop and later driven to a CLEAN close with a stamp whose transcript ends in an assistant line with model claude-sonnet-5 records via:"loop" in review-state.json at creation and appends a CLEAN row carrying via:"loop", model:"claude-sonnet-5"; a run created without --via and without a stamp appends via:"direct", model:null', () => {
+//
+// specs/20260901/05-checkpoint-fail-closed.md D3/AC-20260901-05-5 (2026-09-01, brief 18a,
+// assertion added and tagged in place — never weakened): this fixture already parks the loop
+// run at CHECKPOINT on stamp "s1" and lifts it by rewriting the stamp to "s2" before dispositions
+// close — exactly the AC-20260901-05-5 shape (park on s1, stamp rewritten to s2, dispositions
+// close). The new assertion below pins that the appended CLOSE row also carries
+// checkpoint:{"outcome":"cleared"}; it fails against current code because verdict.js's row never
+// carries a checkpoint key at all yet.
+test('AC-20260901-02-4 (also AC-20260901-05-5, assertion added in place): a run created with --via loop and later driven to a CLEAN close with a stamp whose transcript ends in an assistant line with model claude-sonnet-5 records via:"loop" in review-state.json at creation and appends a CLEAN row carrying via:"loop", model:"claude-sonnet-5", checkpoint:{"outcome":"cleared"}; a run created without --via and without a stamp appends via:"direct", model:null', () => {
   const loopHost = makeHost()
   const rInit = run(loopHost.root, loopHost.spec, '--via', 'loop')
   assert.strictEqual(stateOf(loopHost.root, loopHost.spec), 'REVIEWER',
@@ -1687,6 +1695,8 @@ test('AC-20260901-02-4: a run created with --via loop and later driven to a CLEA
   assert.strictEqual(row.via, 'loop', 'the appended CLEAN row must carry the via recorded at sidecar creation: ' + JSON.stringify(row))
   assert.strictEqual(row.model, 'claude-sonnet-5',
     'the appended CLEAN row must carry the model derived at row-write time from the stamped transcript\'s last assistant line: ' + JSON.stringify(row))
+  assert.deepStrictEqual(row.checkpoint, { outcome: 'cleared' },
+    'AC-20260901-05-5: a loop run that parked on stamp "s1" and was lifted by rewriting the stamp to "s2" before dispositions closed it must carry checkpoint:{"outcome":"cleared"} on its appended CLOSE row — the driver derives "cleared" from checkpointCleared && checkpoint.sessionId !== null, exactly this run\'s shape: ' + JSON.stringify(row))
 
   const directHost = makeHost()
   toReviewer(directHost)

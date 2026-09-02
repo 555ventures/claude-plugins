@@ -1,6 +1,6 @@
 ---
 date: 2026-09-01
-status: implementing
+status: done
 tier: standard
 area: feedback-loop
 design: false
@@ -348,6 +348,15 @@ added to the File Plan as a one-phrase fix. The other 13 hits (`scripts/spec-pat
 `spec-state-gate.sh`, `tests/question-style-gate.test.js`, `docs/roadmap/19-*.md`) use the
 generic token for their own output and never name escape's append — **waived**. `likely` hits
 (4) owe nothing (host Gotchas, measured 2026-08-24).
+
+**Review close (2026-09-01).** One soft finding, dispositioned Fix: `escape-row.js`'s
+`appendLine` appended `JSON + "\n"` without checking that an existing ledger already ended in a
+newline, so a hand-saved newline-less ledger glued two rows into one unparseable line. Fixed with
+the trailing-newline guard replay.js already uses for `info/exclude`, plus two behavioral tests
+(`--append` and `--amend` against a newline-less pre-image). The same guard is absent in
+`replay.js --record` and `release-legs.js`'s ledger appends (outside this File Plan; noted, not
+widened). Memory sweep: six worker notes surfaced (five diff-hit, one TTL-expired), all carried
+as still-accurate; the two dated 2026-08-30 re-stamped `reviewed: 2026-09-01`.
 
 ## Canonical Delta
 

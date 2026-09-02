@@ -94,6 +94,16 @@
   two ground-truth signals; self-reported review quality is subordinate to both.
   (specs/20260819/01-review-evidence-retention.md)
 
+- Every escape row carries a validated defect class or an explicit `unclassedReason`
+  (`no-fix-diff` | `deferred`); `spec/scripts/lib/escape-row.js` is the one validator and
+  `escape-row.js` the one writer (`--append`, duplicate-refusing; `--amend`). A historical row's
+  class is repaired by an append-only `stage:"escape-class"` amendment keyed by the original's
+  `ts`+`spec`+`file`; latest amendment wins. The fleet reader counts recurrences on the joined
+  (row + amendment) class, lists rows still needing a class as `escapes.unclassedRows`, and
+  flags unvalidated rows in the drift census (`class-missing`, `amendment-unmatched`). The
+  third-recurrence bar's Materiality field cites the joined count.
+  (specs/20260901/07-escape-class-contract.md)
+
   Reviewer catch-rate is measured, not assumed: every 5th review (and at least once per
   major version) `/spec:replay` injects one corpus-class defect into the last CLEANed
   spec's tree in a marker-guarded scratch worktree, re-runs the legs, and dispatches the

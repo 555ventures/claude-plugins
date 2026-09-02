@@ -12,7 +12,11 @@
 // --check runs lib/escape-row.js's validator without touching disk, --append is the sole path
 // that puts a NEW escape row into a ledger (duplicate-refusing), and --amend is the sole writer
 // of an append-only `escape-class` amendment that repairs a historical row's class without
-// rewriting it.
+// rewriting it. 2026-09-01 review finding of this spec: appendLine glued a new row onto an
+// existing ledger's last line when that line lacked a trailing newline, corrupting both rows
+// for every fleet-reader; appendLine now checks the existing ledger's last byte and prefixes a
+// separating newline when needed, matching the idiom already used in replay.js's info/exclude
+// append.
 //
 // What this deliberately does NOT do: edit or delete an existing ledger line (D3 — the ledger
 // is append-only fleet-wide; a wrong amendment is superseded by a later one, never rewritten),
@@ -101,7 +105,11 @@ function printReasons(reasons) {
 function appendLine(root, row) {
   const claudeDir = path.join(root, '.claude')
   fs.mkdirSync(claudeDir, { recursive: true })
-  fs.appendFileSync(path.join(claudeDir, 'spec-runs.jsonl'), JSON.stringify(row) + '\n')
+  const ledgerPath = path.join(claudeDir, 'spec-runs.jsonl')
+  let existing = ''
+  try { existing = fs.readFileSync(ledgerPath, 'utf8') } catch { /* absent ledger is a valid start state */ }
+  const sep = existing.length && !existing.endsWith('\n') ? '\n' : ''
+  fs.appendFileSync(ledgerPath, sep + JSON.stringify(row) + '\n')
 }
 
 if (mode === 'check') {

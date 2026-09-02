@@ -116,6 +116,49 @@ test('AC-20260901-07-3: escape-row.js --append creates the ledger and appends ex
     'D2 Contracts: "an invalid row -> exit 1 with reasons and the file untouched" — the ledger must be byte-identical after a rejected append')
 })
 
+// Review fix 2026-09-01 (soft finding on --append): trailing-newline guard
+// A ledger seeded WITHOUT a trailing newline (e.g. by an older writer, or a session `printf`
+// with no `\n`) followed by --append glued the new JSON straight onto the end of the last line,
+// producing one unparseable line. Every fleet-reader / spec-status read silently drops BOTH the
+// original row and the newly appended row from that line — the escaped defect is invisible to
+// every count the pipeline derives from the ledger, with exit 0 masking the corruption.
+test('escape-row.js --append prefixes a newline when the existing ledger does not end in one, so the prior row is never glued to the new one', () => {
+  const root = tmpdir('escape-row-append-no-trailing-newline')
+  const original = validEscapeRow({ spec: 'specs/orig.md', file: 'orig.js' })
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude', 'spec-runs.jsonl'), JSON.stringify(original))
+
+  const second = validEscapeRow({ spec: 'specs/second.md', file: 'second.js' })
+  const r = runNode(SCRIPT, ['--append', '--root', root, '--row', JSON.stringify(second)])
+  assert.strictEqual(r.status, 0, 'appending a valid row to a newline-less ledger must still succeed: ' + r.stderr)
+
+  const content = fs.readFileSync(path.join(root, '.claude', 'spec-runs.jsonl'), 'utf8')
+  assert.ok(content.endsWith('\n'), 'the ledger must end in a newline after --append, or the NEXT append glues onto this one too')
+  const lines = content.split('\n').filter(l => l.length > 0)
+  assert.strictEqual(lines.length, 2, 'the pre-existing row and the newly appended row must be on two separate lines — one glued line silently drops both rows from every fleet-reader / spec-status count that globs this ledger: ' + JSON.stringify(content))
+  assert.deepStrictEqual(JSON.parse(lines[0]), original, 'line 1 must still parse back to the original seeded row untouched — a corrupted merge would lose the original escape row from the fleet count')
+  assert.deepStrictEqual(JSON.parse(lines[1]), second, 'line 2 must parse back to the newly appended row — a corrupted merge would lose the appended escape row from the fleet count')
+})
+
+test('escape-row.js --amend prefixes a newline when the existing ledger does not end in one, so the amendment is never glued onto the row it amends', () => {
+  const root = tmpdir('escape-row-amend-no-trailing-newline')
+  const original = validEscapeRow({ ts: '2026-08-15T00:00:00Z', spec: 'specs/amend-target.md', file: 'amend-target.js', class: null, unclassedReason: null })
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude', 'spec-runs.jsonl'), JSON.stringify(original))
+
+  const r = runNode(SCRIPT, ['--amend', '--root', root, '--escape-ts', original.ts, '--spec', original.spec, '--file', original.file, '--class', 'silent-fallback'])
+  assert.strictEqual(r.status, 0, 'amending a row read out of a newline-less ledger must still succeed: ' + r.stderr)
+
+  const content = fs.readFileSync(path.join(root, '.claude', 'spec-runs.jsonl'), 'utf8')
+  assert.ok(content.endsWith('\n'), 'the ledger must end in a newline after --amend, or the next reader/writer glues onto this amendment')
+  const lines = content.split('\n').filter(l => l.length > 0)
+  assert.strictEqual(lines.length, 2, 'the original escape row and the new escape-class amendment must be on two separate lines — one glued line silently drops both the original row and the amendment from every fleet-reader / spec-status count: ' + JSON.stringify(content))
+  assert.deepStrictEqual(JSON.parse(lines[0]), original, 'line 1 must still parse back to the original seeded escape row untouched')
+  const amended = JSON.parse(lines[1])
+  assert.strictEqual(amended.stage, 'escape-class', 'line 2 must parse as the appended amendment row, carrying stage:"escape-class"')
+  assert.strictEqual(amended.class, 'silent-fallback', 'the appended amendment must carry the requested class')
+})
+
 // AC-20260901-07-4
 test('AC-20260901-07-4: escape-row.js --append refuses a same-spec-and-file duplicate found in the live ledger or a spec-runs-2026.jsonl archive, unless --allow-duplicate', () => {
   const liveRoot = tmpdir('escape-row-dup-live')

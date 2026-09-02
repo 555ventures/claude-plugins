@@ -1,0 +1,87 @@
+{
+  "runId": "rv_368da799bdf9",
+  "ts": "2026-09-02T15:32:27.028Z",
+  "spec": "specs/20260901/10-spec-run-command.md",
+  "tier": "critical",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 537,
+    "base": "7092cb9aa8700895619394bb93415728fa1c7ee2",
+    "head": "f5c8262c9673f183ad110abd1f5f63879a9746ff",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      }
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 219
+      }
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      }
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 2,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 11,
+        "carried": 9,
+        "sanctioned": 2,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "README.md line 6 still named the loop 'plan → build' instead of 'plan → run'",
+        "file": "README.md",
+        "line": 6,
+        "evidence": "git diff -- README.md shows line 6 changed from 'the spec-driven **plan → build** loop per feature' to 'the spec-driven **plan → run** loop per feature', matching D9's prescribed wording and the Goal's naming of /spec:run as the loop; grep for 'plan → build', 'build loop', and loop-meaning '/spec:build' literals across README.md returns only the sanctioned stage-entry table row at line 108 ('/spec:build | Stage entry point... alone), which correctly names the build stage rather than the loop; manifest-2.jsonl legs are all exit 0 except smoke (exit 4, observed inert, its documented non-applicable code)"
+      }
+    ],
+    "reviewerCount": 1,
+    "scope": "fix-delta",
+    "tokens": 24000
+  }
+}

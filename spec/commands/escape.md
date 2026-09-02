@@ -82,10 +82,18 @@ defective file — that is the only unrecoverable input.
      A calling command's prescription is derivation evidence and outranks this table —
      `/spec:release` prescribes `foundBy: later-spec`, `preventedBy: runtime-leg` for
      defects its staging walkthrough catches (a staging walk is not production).
-   - `class` — a stable kebab-case defect-class id derived from the evidence (same naming
-     style as replay-corpus.md's classes, e.g. `silent-fallback`), naming what kind of
-     defect this is rather than this incident's specifics. Value is null when underivable —
-     unknown is null, never a guess.
+   - `class` — registry-first: run `node "$(spec-paths fleet-reader)" --json` and read
+     `.escapes.byClass` keys (minus `unclassed`), plus `spec-paths replay-corpus`'s class
+     headings, as the registry; pick an existing id whenever the defect shape matches it,
+     and invent a new kebab-case id (same naming style as replay-corpus.md's classes, e.g.
+     `silent-fallback`) only when none fits — naming what kind of defect this is rather than
+     this incident's specifics. Value is null when underivable — unknown is null, never a
+     guess.
+   - `unclassedReason` — set only when `class` is null: `no-fix-diff` when no diagnosis or
+     fix diff exists in session context to derive a class from; `deferred` when the user
+     declines to class it at the confirm call; null otherwise (a defect not yet examined
+     enough to classify stays `class: null, unclassedReason: null`, same null-when-
+     underivable rule as `class`).
    - `preventedBy` — the **prevention delta**: what change would have caught this defect
      before it escaped? `doctrine` (a Gotchas/rules line) | `enforcer` (a mechanical check —
      `/spec:enforce` territory) | `review-check` (a § Review Checks severity row) |
@@ -113,16 +121,20 @@ defective file — that is the only unrecoverable input.
      `killed[]` is empty), `killedMatch` is `null` without asking. **Unknown is `null`,
      never a guessed `false`** — a wrong `false` poisons the one signal that tunes
      execution-grounded verification.
-5. **Append exactly ONE line** to `.claude/spec-runs.jsonl` (repo root; `printf '%s\n' '<json>' >>`):
+5. **Append exactly ONE row** via `node "$(spec-paths escape-row)" --append --root . --row
+   '<json>'`:
 
    ```
-   {"ts":"<ISO-8601>","stage":"escape","spec":"<repo-relative spec path>","file":"<repo-relative defect file>","reviewRunId":"<rv_…>"|null,"foundBy":"<user|later-spec|production>","severity":"<hard|soft>","killedMatch":true|false|null,"class":"<kebab-case defect-class id>"|null,"preventedBy":"<doctrine|enforcer|review-check|runtime-leg|none>","via":"commit|manual"}
+   {"ts":"<ISO-8601>","stage":"escape","spec":"<repo-relative spec path>","file":"<repo-relative defect file>","reviewRunId":"<rv_…>"|null,"foundBy":"<user|later-spec|production>","severity":"<hard|soft>","killedMatch":true|false|null,"class":"<kebab-case defect-class id>"|null,"unclassedReason":"no-fix-diff"|"deferred"|null,"preventedBy":"<doctrine|enforcer|review-check|runtime-leg|none>","via":"commit|manual"}
    ```
 
    Fixed shape — paths/enums/booleans only, **never prose or finding text** (the defect
    description belongs in whatever fixes it, not in the ledger). `via` is optional: omit
    it or set `"manual"` when this command was invoked directly; `/git:commit`'s escape
-   check sets `"commit"` when it drove the append.
+   check sets `"commit"` when it drove the append. Exit 3 (a `stage:"escape"` row already
+   in the ledger with this spec+file) → back to step 2's distinct-defect confirm, then
+   re-run with `--allow-duplicate`; exit 1 (validation reasons printed one per line) means a
+   field above was derived wrong — fix it and re-run, never hand-append around the refusal.
 6. **Close the loop on the prevention delta** (the one write beyond the ledger row, and the
    only one): by `preventedBy` value —
    - `doctrine` → **draft the one-line Gotchas entry verbatim from session context**
@@ -174,6 +186,32 @@ defective file — that is the only unrecoverable input.
    ```
 
    Then stop. Fixing the defect is a separate, normal-flow decision.
+
+## Backfill mode
+
+`/spec:escape --backfill [--repos-root <dir>]` is a one-time fleet-wide repair run for the
+historical rows that predate the `class`/`unclassedReason` fields — invoked from this repo,
+written for the planning-seat session, never a per-repo build.
+
+1. Run `node "$(spec-paths fleet-reader)" --json [--repos-root <dir>]`; the work list is
+   `escapes.unclassedRows` verbatim. Empty → report `nothing to backfill` and stop.
+2. Build the registry: `escapes.byClass` keys minus `unclassed`, plus `spec-paths
+   replay-corpus`'s class headings.
+3. Per row, dispatch one Sonnet agent with paths only — the row's repo dir, spec path,
+   defect file, `escapeTs`, the retained artifact at
+   `<repo>/.claude/spec-runs/<reviewRunId>.json` when it exists, the shas of
+   `git -C <repo> log --format=%H --since=<escapeTs date> -- <file>`, and the repo's
+   pipeline-rules path. The agent returns `{class, unclassedReason, evidence}` — an existing
+   registry id whenever the shape matches, a new id only when none fits, `no-fix-diff` when
+   neither a fix commit nor a citing Gotchas line exists.
+4. Print ONE table (repo · spec · file · derived class or reason · evidence), then ONE
+   `AskUserQuestion`: apply all as shown (Recommended) / correct rows first (free text
+   `row N → <id>`). Dismissed → STOP, nothing appended.
+5. Per confirmed row: `node "$(spec-paths escape-row)" --amend --root <repo dir> --escape-ts
+   <ts> --spec <spec> --file <file> (--class <id> | --unclassed-reason <r>) --via backfill`.
+6. Report rows amended per repo and which repos now carry an uncommitted ledger line; then
+   re-run the fleet reader and print query 3's render verbatim (`recurrentUnguarded` now on
+   the joined count).
 
 ## Rules
 

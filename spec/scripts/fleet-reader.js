@@ -30,6 +30,7 @@ const fs = require('fs')
 const path = require('path')
 const os = require('os')
 const { configExists } = require('./lib/host-config')
+const { validateEscapeRow, validateAmendmentRow, joinAmendments, escapeKey } = require('./lib/escape-row')
 
 const USAGE = 'Usage: node fleet-reader.js [--repos-root <dir>] [--json]'
 
@@ -278,29 +279,51 @@ function computeGate08(reposList) {
 // ---- query 3: escapes -----------------------------------------------------------------------
 // total, killedMatch===null count, preventedBy distribution verbatim, byClass (rows without
 // class -> unclassed), recurrentUnguarded per D9, per-repo totals.
+//
+// D4 (specs/20260901/07-escape-class-contract.md): byClass/classLatest/recurrentUnguarded now
+// count on the EFFECTIVE class — joinAmendments(repo.rawRows) gives the latest escape-class
+// amendment per key; an escape row's effective class is the amendment's when one exists, else
+// its own. escapes.unclassedRows lists rows whose effective class AND effective reason are both
+// null (the backfill's own work list); escapes.amendments counts every escape-class row
+// fleet-wide.
+
+function effectiveClassReason(row, amendments) {
+  const amendment = amendments.get(escapeKey(row))
+  if (amendment) return { class: amendment.class, unclassedReason: amendment.unclassedReason }
+  return { class: (row.class !== undefined ? row.class : null), unclassedReason: (row.unclassedReason !== undefined ? row.unclassedReason : null) }
+}
 
 function computeEscapes(reposList) {
   let total = 0
   let killedMatchNull = 0
+  let amendmentsCount = 0
   const preventedBy = {}
   const byClass = {}
   const classLatest = {}
   const byRepo = {}
+  const unclassedRows = []
   for (const repo of reposList) {
     let repoCount = 0
+    const amendments = joinAmendments(repo.rawRows)
     for (const r of repo.rawRows) {
+      if (r.stage === 'escape-class') amendmentsCount++
       if (r.stage !== 'escape') continue
       total++
       repoCount++
       if (r.killedMatch === null) killedMatchNull++
       const pv = r.preventedBy === undefined ? 'missing' : String(r.preventedBy)
       preventedBy[pv] = (preventedBy[pv] || 0) + 1
-      const cls = (typeof r.class === 'string' && r.class) ? r.class : 'unclassed'
+      const effective = effectiveClassReason(r, amendments)
+      const cls = (typeof effective.class === 'string' && effective.class) ? effective.class : 'unclassed'
       byClass[cls] = (byClass[cls] || 0) + 1
       if (typeof r.ts === 'string' && (!classLatest[cls] || r.ts > classLatest[cls])) classLatest[cls] = r.ts
+      if (effective.class === null && effective.unclassedReason === null) {
+        unclassedRows.push({ repo: repo.name, ts: r.ts, spec: r.spec, file: r.file, reviewRunId: r.reviewRunId, preventedBy: r.preventedBy })
+      }
     }
     if (repoCount) byRepo[repo.name] = repoCount
   }
+  unclassedRows.sort((a, b) => a.repo.localeCompare(b.repo) || String(a.ts).localeCompare(String(b.ts)))
   // D9: recurrent-unguarded = a class (excluding the unclassed bucket, which is a
   // missing-data bucket, not a defect class) with >=3 fleet-wide recurrences.
   const recurrentUnguarded = []
@@ -309,7 +332,7 @@ function computeEscapes(reposList) {
     recurrentUnguarded.push({ class: cls, count, latestTs: classLatest[cls] || null })
   }
   recurrentUnguarded.sort((a, b) => a.class.localeCompare(b.class))
-  return { total, killedMatchNull, preventedBy, byClass, recurrentUnguarded, byRepo }
+  return { total, killedMatchNull, preventedBy, byClass, recurrentUnguarded, byRepo, amendments: amendmentsCount, unclassedRows }
 }
 
 // ---- query 4: replayDebt --------------------------------------------------------------------
@@ -409,14 +432,18 @@ function computeCleanByVia(reposList) {
 // failure increments a named reason bucket. Unparseable lines are counted separately (per
 // repo, at parse time) and never reach this classifier.
 
-const STAGES = new Set(['plan', 'build', 'review', 'escape', 'replay', 'observe', 'release'])
-const SPEC_STAGES = new Set(['plan', 'build', 'review', 'escape', 'replay'])
+const STAGES = new Set(['plan', 'build', 'review', 'escape', 'escape-class', 'replay', 'observe', 'release'])
+const SPEC_STAGES = new Set(['plan', 'build', 'review', 'escape', 'escape-class', 'replay'])
 const TIERS = new Set(['standard', 'critical'])
-const PREVENTED_BY = new Set(['doctrine', 'enforcer', 'review-check', 'runtime-leg', 'none'])
-const FOUND_BY = new Set(['user', 'later-spec', 'production'])
-const SEVERITY = new Set(['hard', 'soft'])
 
-function classifyRow(r) {
+// D5 (specs/20260901/07-escape-class-contract.md): the drift census routes every escape and
+// escape-class row through lib/escape-row.js's validator. `escapeKeys` is the set of every
+// escape row's own key in this repo — an escape-class row whose key matches none of them is an
+// orphan amendment (amendment-unmatched), never `stage-unknown` (escape-class IS a known
+// stage). `amendments` is this repo's joinAmendments() map — an escape row whose key is
+// amended is validated with {amended:true} so its own missing class does not double-count as
+// class-missing; the amendment row itself is validated unconditionally.
+function classifyRow(r, { amendments, escapeKeys }) {
   const reasons = []
   if (typeof r.ts !== 'string') reasons.push('missing-ts')
   const stageOk = typeof r.stage === 'string' && STAGES.has(r.stage)
@@ -425,9 +452,12 @@ function classifyRow(r) {
   if (r.tier !== undefined && !TIERS.has(r.tier)) reasons.push('pre-v7-tier')
   if (r.stage === 'review' && typeof r.verdict !== 'string') reasons.push('review-missing-verdict')
   if (r.stage === 'escape') {
-    if (!PREVENTED_BY.has(r.preventedBy)) reasons.push('preventedBy-out-of-enum')
-    if (!FOUND_BY.has(r.foundBy)) reasons.push('foundBy-out-of-enum')
-    if (!SEVERITY.has(r.severity)) reasons.push('severity-out-of-enum')
+    const amended = amendments.has(escapeKey(r))
+    reasons.push(...validateEscapeRow(r, { amended }))
+  }
+  if (r.stage === 'escape-class') {
+    reasons.push(...validateAmendmentRow(r))
+    if (!escapeKeys.has(escapeKey(r))) reasons.push('amendment-unmatched')
   }
   return reasons
 }
@@ -437,8 +467,10 @@ function computeDriftCensus(reposList) {
   for (const repo of reposList) {
     let inShape = 0
     const drift = {}
+    const amendments = joinAmendments(repo.rawRows)
+    const escapeKeys = new Set(repo.rawRows.filter(r => r.stage === 'escape').map(r => escapeKey(r)))
     for (const r of repo.rawRows) {
-      const reasons = classifyRow(r)
+      const reasons = classifyRow(r, { amendments, escapeKeys })
       if (!reasons.length) inShape++
       else for (const reason of reasons) drift[reason] = (drift[reason] || 0) + 1
     }
@@ -520,6 +552,13 @@ function renderEscapes(esc) {
   const lines = [`3. Escapes — ${esc.total} total, ${esc.killedMatchNull} with no kill match`]
   lines.push(`  preventedBy: ${Object.entries(esc.preventedBy).map(([k, v]) => `${k}=${v}`).join(', ') || 'none'}`)
   lines.push(`  byClass: ${Object.entries(esc.byClass).map(([k, v]) => `${k}=${v}`).join(', ') || 'none'}`)
+  // D12: the unclassed-rows line is the first carrier of D11's backfill obligation — printed
+  // only when N > 0 so a clean fleet never shows a false-positive nudge; the amendments line
+  // always prints so the joined count's other half is never invisible.
+  if (esc.unclassedRows.length > 0) {
+    lines.push(`  unclassed rows needing a class: ${esc.unclassedRows.length} — run /spec:escape --backfill`)
+  }
+  lines.push(`  amendments: ${esc.amendments}`)
   if (esc.recurrentUnguarded.length) {
     lines.push('  recurrentUnguarded:')
     for (const r of esc.recurrentUnguarded) lines.push(`    ${r.class}: ${r.count} recurrences, latest ${r.latestTs || 'n/a'}`)

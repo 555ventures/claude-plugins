@@ -105,18 +105,35 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // additive-collision class (JJ-20260814-01): the key list below is updated in place, never a
 // parallel exhaustive pin.
 
+// AC-20260901-07-15: specs/20260901/07-escape-class-contract.md D10 adds spec/scripts/escape-row.js
+// to the bundle (a new `escape-row` key) — like every other bundled script it needs a spec-paths
+// key, or escape.md's D6 `node "$(spec-paths escape-row)" --append/--amend` invocations resolve
+// nothing (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently"). This is the
+// eleventh recurrence of the known spec-paths additive-collision class (JJ-20260814-01): the key
+// list below is updated in place, never a parallel exhaustive pin.
+
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-enforce',
     'wf-research', 'design-atlas', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
     'review-driver', 'build-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'render-gate', 'render-compare',
-    'render-inventory', 'render-rules', 'registry-check', 'genesis-driver', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
+    'render-inventory', 'render-rules', 'registry-check', 'genesis-driver', 'escape-row', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }
   assert.match(run('version').trim(), /^\d+\.\d+\.\d+$/)
   assert.match(run('contract-hash').trim(), /^[0-9a-f]{12}$/)
+})
+
+// AC-20260901-07-15
+test('AC-20260901-07-15: spec-paths escape-row resolves to spec/scripts/escape-row.js, an existing executable file', () => {
+  const fs = require('node:fs')
+  const escapeRowPath = run('escape-row').trim()
+  assert.strictEqual(escapeRowPath, path.join(SPEC, 'scripts/escape-row.js'),
+    'D2/D10: `spec-paths escape-row` must resolve to spec/scripts/escape-row.js — a wrong or missing key breaks escape.md\'s D6 --append/--amend invocations silently (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently")')
+  assert.ok(fs.existsSync(escapeRowPath), 'the resolved escape-row.js path must actually exist on disk: ' + escapeRowPath)
+  assert.ok(fs.statSync(escapeRowPath).isFile(), 'the resolved escape-row.js path must be a regular file, not a directory or missing entirely: ' + escapeRowPath)
 })
 
 test('shared-for: every mapped section name still exists as a core.md or design.md heading', () => {

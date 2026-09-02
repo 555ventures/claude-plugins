@@ -115,7 +115,7 @@ Write the spec per the template. `status: draft`. While drafting:
    Work discovered this session that needs its own spec → write the roadmap brief now, or
    record why not.
 3. **Ledger row:** append exactly ONE row to `.claude/spec-runs.jsonl` (repo root;
-   escape.md's mechanism — `printf '%s\n' '<json>' >>`) recording this lock's executed
+   `printf '%s\n' '<json>' >>`) recording this lock's executed
    facts, before the status flip so an interrupted lock leaves either no row or a complete
    one, never a partial: `spikes` = the count of executed micro-spikes recorded in
    Assumptions; `promiseSweep` = step 2's `promise-sweep.js` printed counters

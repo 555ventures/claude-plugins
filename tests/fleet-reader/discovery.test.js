@@ -153,7 +153,11 @@ test('AC-20260820-05-12: an unknown flag or a non-directory --repos-root exits 2
 // D9 adds an EIGHTH fixed question, cleanByVia, so this exhaustive key-set pin is invalidated by
 // construction — the documented add-a-member-to-an-exhaustive-live-file-pin class (§ Gotchas).
 // The pin stays exhaustive: the new key is added to the expected set, nothing is loosened.
-test('AC-20260820-05-13 / AC-20260901-03-6: --json prints exactly the eight contracted top-level keys; without --json the render is not JSON', () => {
+// AC-20260901-07-12 (tagged, no assertion change): specs/20260901/07-escape-class-contract.md D4
+// enriches the "escapes" and "driftCensus" values with unclassedRows/amendments/new drift
+// buckets, but the CONTRACT is that the top-level key SET stays at exactly eight — this test is
+// the oracle for that.
+test('AC-20260820-05-13 / AC-20260901-03-6 / AC-20260901-07-12: --json prints exactly the eight contracted top-level keys; without --json the render is not JSON', () => {
   const root = tmpdir('fleet-json-shape')
   mkRepo(root, 'repo-a', { config: true, git: 'dir' })
 

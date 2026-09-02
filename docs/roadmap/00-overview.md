@@ -33,3 +33,4 @@ fences off belongs to its owning brief.
 | 17 | fleet-evidence-reader |
 | 18 | unified-build *(design → build → review as one re-entrant command)* |
 | 19 | escape-seeded-replay |
+| 20 | shell-composed-mocks *(amends 02 D8 via ADR-0003; queued before 19)* |

@@ -1,6 +1,6 @@
 ---
 date: 2026-09-01
-status: implementing
+status: done
 tier: critical
 area: build-integrity
 design: false
@@ -9,6 +9,7 @@ depends_on: ["specs/20260901/01-build-driver.md", "specs/20260901/02-run-provena
 depended_on_by: []
 brief: 18
 build_base: 7057642892ac238ec746904aff23b94b44bba42d
+diff_base: 7057642892ac238ec746904aff23b94b44bba42d
 open_markers: 0
 ---
 
@@ -180,6 +181,38 @@ sweep's own waived prefixes, never a live claim. Executes leg for `spec-state-ga
 `tests/state-gates.test.js` is a File Plan row; `tests/consistency/red-fixture-coverage.test.js`
 (the `open_markers` block) and `tests/consistency/entrypoints.test.js` exercise paths D5 does not
 touch and stay green unchanged.
+
+**Deviation, folded at close (2026-09-01) — sibling 02's driver test.**
+`tests/review/review-driver.test.js`'s `AC-20260901-02-4` test (sibling 02, outside this spec's
+File Plan) collides with D2's new CHECKPOINT state: its `loopHost` fixture is created with
+`--via loop`, writes a session stamp, then marks `reviewer-returned` while that stamp is still
+the one on disk — before D2 that landed `DISPOSITIONS` directly; under D2 the same sequence must
+park at `CHECKPOINT` first (AC-20260901-03-2). Updated in place, never weakened: the test asserts
+the `CHECKPOINT` park as an added setup precondition, then rewrites the stamp to a new
+`session_id` (the `/clear` signature) before proceeding, mirroring what a real build session
+does to reach DISPOSITIONS. Its actual assertions (CLEAN row, `via:"loop"`,
+`model:"claude-sonnet-5"`) are unchanged. One-off, not a class.
+
+**Deviation, folded at close (2026-09-01) — why D12 split AC-20260901-03-1.**
+At build Phase 1 the red-check reported `broken-pin`: AC-20260901-03-1 as locked mixed one new
+promise (the state gate admits `/spec:build` on `done`) with four `SHALL CONTINUE TO` clauses in
+one bullet, and `red-check.js` sanctions a file green per AC bullet on a literal
+`SHALL CONTINUE TO` occurrence — so the bullet sanctioned `tests/state-gates.test.js` green while
+the File Plan requires its `done` assertion flipped in place, i.e. genuinely red until D5 lands.
+Resolved against Assumption A2 (which states the `done` admission is new behavior and names the
+pre-D5 exit-2 pin it replaces) by splitting the bullet: AC-20260901-03-1 keeps the new promise
+only, AC-20260901-03-10 carries the `SHALL CONTINUE TO` clauses verbatim. Recorded as D12; the
+File Plan row and the test's tags name both IDs. No promise was added, removed, or weakened —
+the same six admissions are asserted in the same file. One-off, not a class.
+
+**Review waive (2026-09-01).** The reconcile leg reported two out-of-File-Plan files —
+`tests/fleet-reader/discovery.test.js` and `tests/fleet-reader/review-fixes.test.js`. Both are
+exhaustive `--json` key-set pins that D9's new `cleanByVia` key invalidates by construction; each
+was updated in place by adding the key (never weakened — both remain exhaustive, so a missing key
+still fails) and retagged with AC-20260901-03-6. This is the documented
+add-a-member-to-an-exhaustive-live-file-pin class (host rules § Gotchas, seventh recurrence),
+which the rules record as costing exactly one review waive line; a lock-time guard for it was
+measured and rejected 2026-08-24. Waived by JJ.
 
 **Kill condition (brief 18 § Scope 5).** Over the next 30 fleet reviews, if `loop` CLEANs are
 contradicted by escapes at a higher rate than `direct` CLEANs, the loop reverts to three

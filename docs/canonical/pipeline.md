@@ -66,3 +66,18 @@ refusing a habit the format itself permits breaks existing hosts loudly. The cor
 healed at its one source rather than validated downstream — a tier-enum check inside
 `verdict.js`, the highest-blast-radius file in the repo, would widen that contract for a route
 already closed. (specs/20260823/04-review-close-hardening.md, done 2026-08-23)
+
+## One command per feature
+
+After `/spec:plan`, `/spec:build <spec>` derives the stage from disk and runs design (when
+due), the build driver, and the review driver in sequence, each with `--via loop`. Status
+transitions are owned by driver states, not commands: plan's lock → `hardened`, the build
+driver's preflight → `implementing`, the review driver's close → `done`; the state gate
+admits `/spec:build` on all three and stays a prompt-boundary check. One checkpoint is
+enforced: a loop-driven review parks at CHECKPOINT after the reviewer returns and admits
+DISPOSITIONS only once the session id in `.claude/spec-session.json` has changed (a `/clear`),
+once per run, degrading to a warning when no stamp exists. The pre-merge stop is the
+worktree step-out, never a forced clear. `/spec:design` and `/spec:review` remain direct entry
+points to the same drivers. The loop is scored by the fleet reader's `cleanByVia`
+(escapes-per-CLEAN by `via`); a `loop` rate above the `direct` rate over 30 fleet reviews
+reverts the loop. (specs/20260901/03-unified-build-loop.md, done 2026-09-01)

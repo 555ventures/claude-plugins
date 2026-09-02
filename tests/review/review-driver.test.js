@@ -286,12 +286,18 @@ test('AC-20260820-07-5: WHEN --mark dispositions counts exceed the survivor + le
   assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS', 'a refused dispositions mark must leave the state at DISPOSITIONS unchanged')
 })
 
-test('AC-20260820-07-6: WHEN a clean run reaches CLOSE (0 survivors, dispositions 0 0 0) THE SYSTEM runs the authoritative verdict with --retain .claude/spec-runs, appends one ledger line, flips status implementing -> done, and prints the close-step instructions', () => {
+// specs/20260901/03-unified-build-loop.md D2/AC-20260901-03-5 (2026-09-01, brief 18, SHALL
+// CONTINUE TO, tagged in place, never weakened): this host is built with no --via flag, so it
+// defaults to via:"direct" — the new CHECKPOINT state (reached only for via:"loop") must never
+// engage here, and the line below asserting DISPOSITIONS directly after reviewer-returned stays
+// the correct, unweakened pin for the direct-entry path.
+test('AC-20260820-07-6 / AC-20260901-03-5 (SHALL CONTINUE TO): WHEN a clean run reaches CLOSE (0 survivors, dispositions 0 0 0) THE SYSTEM runs the authoritative verdict with --retain .claude/spec-runs, appends one ledger line, flips status implementing -> done, and prints the close-step instructions', () => {
   const host = makeHost()
   toReviewer(host)
   const returnFile = returnFileWith('rvdrv-clean', CLEAN_RETURN)
   run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile)
-  assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS')
+  assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS',
+    'AC-20260901-03-5 (SHALL CONTINUE TO)/D2: a via:"direct" run (no --via flag given) must land DISPOSITIONS directly after reviewer-returned, never CHECKPOINT — CHECKPOINT exists only for via:"loop"')
 
   const ledger = path.join(host.root, '.claude/spec-runs.jsonl')
   const before = fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean) : []
@@ -1648,8 +1654,20 @@ test('AC-20260901-02-4: a run created with --via loop and later driven to a CLEA
 
   const returnFile = returnFileWith('rvdrv-provenance-clean', CLEAN_RETURN)
   run(loopHost.root, loopHost.spec, '--mark', 'reviewer-returned', '--file', returnFile)
+  // specs/20260901/03-unified-build-loop.md D2 (2026-09-01, brief 18, forced-but-unblocking
+  // departure logged in that spec's deviations record): a via:"loop" run whose stamp is
+  // unchanged at reviewer-returned time now parks at CHECKPOINT (AC-20260901-03-2), not
+  // DISPOSITIONS — this fixture's stamp (session_id "s1") was written before this mark and is
+  // still "s1" here, so it must land CHECKPOINT first. Rewriting the stamp to a new session id
+  // (the /clear signature, sibling 02 A4) is what admits DISPOSITIONS, exactly like a real
+  // build-session /clear would.
+  assert.strictEqual(stateOf(loopHost.root, loopHost.spec), 'CHECKPOINT',
+    'setup precondition: a via:"loop" run with its stamp unchanged since reviewer-returned must park at CHECKPOINT (D2) before this AC\'s dispositions-and-close path can proceed: ')
+  fs.writeFileSync(path.join(loopHost.root, '.claude/spec-session.json'), JSON.stringify({
+    session_id: 's2', transcript_path: transcript, cwd: loopHost.root, ts: new Date().toISOString()
+  }))
   assert.strictEqual(stateOf(loopHost.root, loopHost.spec), 'DISPOSITIONS',
-    'setup precondition: a returned zero-survivor CLEAN return must land DISPOSITIONS: ')
+    'setup precondition: a returned zero-survivor CLEAN return, once the checkpoint stamp has changed, must land DISPOSITIONS: ')
 
   const ledger = path.join(loopHost.root, '.claude/spec-runs.jsonl')
   const before = fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean) : []

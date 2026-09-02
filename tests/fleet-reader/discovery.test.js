@@ -149,8 +149,11 @@ test('AC-20260820-05-12: an unknown flag or a non-directory --repos-root exits 2
     'an empty repos-root must report scanned: 0, not omit the population block entirely')
 })
 
-// AC-20260820-05-13
-test('AC-20260820-05-13: --json prints exactly the seven contracted top-level keys; without --json the render is not JSON', () => {
+// AC-20260820-05-13 / AC-20260901-03-6 (updated in place, never weakened): specs/20260901/03
+// D9 adds an EIGHTH fixed question, cleanByVia, so this exhaustive key-set pin is invalidated by
+// construction — the documented add-a-member-to-an-exhaustive-live-file-pin class (§ Gotchas).
+// The pin stays exhaustive: the new key is added to the expected set, nothing is loosened.
+test('AC-20260820-05-13 / AC-20260901-03-6: --json prints exactly the eight contracted top-level keys; without --json the render is not JSON', () => {
   const root = tmpdir('fleet-json-shape')
   mkRepo(root, 'repo-a', { config: true, git: 'dir' })
 
@@ -158,8 +161,9 @@ test('AC-20260820-05-13: --json prints exactly the seven contracted top-level ke
   assert.strictEqual(j.status, 0, j.stderr)
   const out = JSON.parse(j.stdout)
   assert.deepStrictEqual(Object.keys(out).sort(), [
-    'cleanContradicted', 'driftCensus', 'escapes', 'gate08', 'legRecency', 'population', 'replayDebt',
-  ], 'D13: --json must carry exactly the seven contracted top-level keys — an extra or missing key breaks every --json consumer silently')
+    'cleanByVia', 'cleanContradicted', 'driftCensus', 'escapes', 'gate08', 'legRecency', 'population',
+    'replayDebt',
+  ], 'D13: --json must carry exactly the eight contracted top-level keys (cleanByVia added by specs/20260901/03 D9) — an extra or missing key breaks every --json consumer silently')
 
   const bare = runNode(SCRIPT, ['--repos-root', root])
   assert.strictEqual(bare.status, 0, bare.stderr)

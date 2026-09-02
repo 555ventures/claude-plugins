@@ -190,11 +190,13 @@ build and review slices in dependency order.
 
 ## State Machine
 
-`draft → hardened → implementing → done`. Transitions owned by exactly one command each:
-`/spec:plan` → `hardened`, `/spec:build` → `implementing`, `/spec:review` → `done`;
-`superseded` is the terminal retire state. `/spec:design` never moves `status` — it sets the
-`designed:` date field only. Enforced by the plugin's `spec-state-gate.sh` hook — invoking a
-stage against a spec in the wrong state is blocked before the model sees it.
+`draft → hardened → implementing → done`. Transitions owned by exactly one driver state each:
+`/spec:plan`'s lock → `hardened`; the build driver's preflight → `implementing`; the review
+driver's close → `done`. `/spec:build` runs both drivers in sequence; `/spec:review` remains
+the review driver's direct entry; `superseded` is the terminal retire state. `/spec:design`
+never moves `status` — it sets the `designed:` date field only. Enforced by the plugin's
+`spec-state-gate.sh` hook — invoking a stage against a spec in the wrong state is blocked
+before the model sees it.
 
 ## Model Placement
 

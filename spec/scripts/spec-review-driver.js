@@ -96,8 +96,8 @@
 //   spec-review-driver <spec.md> --state          -> print the state name only (scripting)
 //
 // States: LEGS (driver-only) -> STOPPED (terminal on RED_BLOCKING) | SKIPS? -> REVIEWER ->
-//   DISPOSITIONS -> FIX/ESCALATE(cap 2, terminal)? -> CLOSE -> MERGE/CONFLICTS -> REPLAY? ->
-//   DONE (terminal)
+//   CHECKPOINT (--via loop only, specs/20260901/03-unified-build-loop.md D2)? -> DISPOSITIONS ->
+//   FIX/ESCALATE(cap 2, terminal)? -> CLOSE -> MERGE/CONFLICTS -> REPLAY? -> DONE (terminal)
 //
 // Exit codes: 0 = step printed · 2 = precondition failure or refused mark (message names the
 // repair — a missing/malformed artifact, a REVIEWER_FAILED return, dispositions exceeding the
@@ -159,7 +159,7 @@ const { resolveGate } = require('./lib/gate-resolve')
 // D4 (specs/20260901/02-run-provenance.md): model is derived at row-write time (never once at
 // startup) — right after /clear the new transcript has no assistant line yet, and by the time a
 // verdict pass runs the session has spoken many times.
-const { sessionModel } = require('./lib/session-stamp.js')
+const { sessionModel, readSessionStamp } = require('./lib/session-stamp.js')
 
 // D1-D6 (specs/20260821/04-stopped-row-durability.md): a worktree review's RED_BLOCKING hard-stop
 // durably appends here, at the MAIN root, instead of the worktree's own (destructible)
@@ -284,6 +284,24 @@ function saveSidecar() { saveSidecarLib(sidecarDir, path.basename(stateFile), ma
 function viaModelArgs() {
   const m = sessionModel(repoRoot)
   return m === null ? ['--via', marks.via] : ['--via', marks.via, '--model', m]
+}
+
+// ---- D2 (specs/20260901/03-unified-build-loop.md): the CHECKPOINT enforcement ------------------
+// A --via loop run records checkpoint: {sessionId} from readSessionStamp(repoRoot) at
+// reviewer-returned time (handleReviewerReturned); checkpointStillParked() is the single read-only
+// predicate both deriveState() (to return the CHECKPOINT state) and handleDispositions() (to
+// refuse the mark) consult, so the two can never disagree about whether the run is still parked.
+// A via:"direct" run, a never-cleared-yet null-sessionId degrade, or a checkpoint already cleared
+// this run (marks.checkpointCleared, sticky — fires once per run) are all "not parked".
+function checkpointStamp() {
+  const stamp = readSessionStamp(repoRoot)
+  return stamp && typeof stamp.sessionId === 'string' ? stamp.sessionId : null
+}
+
+function checkpointStillParked() {
+  return marks.via === 'loop' && !marks.checkpointCleared &&
+    !!marks.checkpoint && marks.checkpoint.sessionId !== null &&
+    checkpointStamp() === marks.checkpoint.sessionId
 }
 
 // ---- Gotchas cap (prose-cap.js, specs/20260823/06 + 2026-08-25 ratchet) ------------------------
@@ -944,12 +962,35 @@ function handleReviewerReturned() {
   marks.dispositions = null
   marks.dispositionsIteration = null
   marks.pendingFix = false
+  // D2: recorded only for --via loop runs — a via:"direct" run must never write a checkpoint key
+  // (AC-20260901-03-5). No stamp file degrades to a stderr warning and {sessionId: null}, which
+  // checkpointStillParked() treats as "not parked" — DISPOSITIONS is admitted honestly rather than
+  // stalling on evidence the driver cannot obtain.
+  if (marks.via === 'loop') {
+    const sid = checkpointStamp()
+    if (sid === null) {
+      process.stderr.write('spec-review-driver: no session stamp found at .claude/spec-session.json' +
+        ' — the loop checkpoint cannot verify a session change here and admits DISPOSITIONS directly\n')
+    }
+    marks.checkpoint = { sessionId: sid }
+  }
   saveSidecar()
   return null
 }
 
 function handleDispositions() {
   if (!marks.reviewerReturnFile) die('no reviewer return recorded yet — mark reviewer-returned first')
+  // D2: refused (exit 2, state unchanged) while the run is still parked at CHECKPOINT — the same
+  // remedy the CHECKPOINT step itself prints. Never mutates marks before this check.
+  if (checkpointStillParked()) {
+    die('the session that built this spec must not disposition its review (CHECKPOINT) — ' +
+      '/clear, then re-run /spec:build ' + specPath + '; the driver resumes at DISPOSITIONS')
+  }
+  // A stamp change past a recorded (non-null) checkpoint is the one thing that admits this mark
+  // for a --via loop run — record it as cleared, once, before doing the disposition work below.
+  if (marks.via === 'loop' && marks.checkpoint && marks.checkpoint.sessionId !== null && !marks.checkpointCleared) {
+    marks.checkpointCleared = true
+  }
   const waivedRaw = flag('--waived'), rejectedRaw = flag('--rejected'), fixRaw = flag('--fix-dispatched')
   const waived = Number(waivedRaw), rejected = Number(rejectedRaw), fixDispatched = Number(fixRaw)
   if (![waived, rejected, fixDispatched].every(Number.isFinite)) {
@@ -1374,6 +1415,11 @@ function deriveState() {
   const reviewerFresh = marks.reviewerReturnFile && marks.reviewerReturnIteration === n
   if (!reviewerFresh) return 'REVIEWER'
 
+  // D2: the checkpoint — a pure read (checkpointStillParked reads the stamp but writes nothing),
+  // so this is safe under a --state query too. checkpointCleared is set only where DISPOSITIONS
+  // is actually marked (handleDispositions), never here.
+  if (checkpointStillParked()) return 'CHECKPOINT'
+
   const dispositionsFresh = marks.dispositions && marks.dispositionsIteration === n
   if (!dispositionsFresh) return 'DISPOSITIONS'
 
@@ -1468,6 +1514,13 @@ const STEPS = {
     `path::name form is the worked example); use bare names only when the runner reports no ` +
     `path — then:\n` +
     `  node ${__filename} ${specPath} --mark skips-extracted --file <path>`,
+
+  // D2: the enforced checkpoint. checkpointStillParked() already established this state, so this
+  // body is fixed text (no derived counts to print) plus the exact remedy also named by
+  // handleDispositions()'s refusal.
+  CHECKPOINT: () => `## Step: checkpoint — /clear, then re-run /spec:build ${specPath}\n` +
+    `The session that built this spec must not disposition its review. Clear, re-run, and the ` +
+    `driver resumes at DISPOSITIONS.`,
 
   REVIEWER: () => `## Step: dispatch the reviewer\n` +
     `Legs are green. Dispatch ONE Agent {subagent_type: "spec:reviewer"} with the spec path, ` +

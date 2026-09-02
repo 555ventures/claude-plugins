@@ -205,7 +205,8 @@
   },
   "spec/scripts/spec-review-driver.js": {
     "entryPoints": [
-      "spec/commands/review.md"
+      "spec/commands/review.md",
+      "spec/commands/build.md"
     ]
   },
   "spec/scripts/spec-session-stamp.sh": {

@@ -23,6 +23,10 @@ is `{driver}` below.
 (`status: done`) is refused (exit 2) — `/spec:escape` records a defect that escaped a review
 that already passed.
 
+This command is the review driver's direct entry point (`--via direct`, the default). The
+`/spec:build` loop reaches the same driver with `--via loop` and stops at one additional
+enforced checkpoint before dispositions — see `spec/commands/build.md`.
+
 ## Protocol — the driver owns the state machine
 
 Loop until the driver prints `DONE`:

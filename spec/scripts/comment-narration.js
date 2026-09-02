@@ -15,7 +15,8 @@
 // Deliberately does NOT: treat a trailing // after code, a /* */ block, or a * continuation
 // line as a comment (whole-line only); write, regenerate, or otherwise touch a baseline file
 // (hand-maintained, read-only here); judge which finding to fix — that stays with the sweep
-// worker or the session running --code-identical.
+// worker or the session running --code-identical; read a symlink target that resolves
+// outside --root.
 //
 // Exit codes:
 //   0  no findings (baseline given: every scanned file at or under its count) ·
@@ -106,7 +107,7 @@ function classify(line, hostRes, peopleRes) {
 
 // ---- directory walking -----------------------------------------------------
 
-function walkDir(dirAbs, root, results, opts, recursive) {
+function walkDir(dirAbs, root, results, opts, recursive, realRoot, visited) {
   let entries
   try {
     entries = fs.readdirSync(dirAbs, { withFileTypes: true })
@@ -119,17 +120,60 @@ function walkDir(dirAbs, root, results, opts, recursive) {
     const rel = path.relative(root, abs).split(path.sep).join('/')
     if (opts.excludeRel && opts.excludeRel(rel)) continue
     if (e.isDirectory()) {
-      if (recursive) walkDir(abs, root, results, opts, recursive)
+      if (recursive) {
+        let realDir
+        try {
+          realDir = fs.realpathSync(abs)
+        } catch {
+          continue
+        }
+        if (visited.has(realDir)) continue
+        visited.add(realDir)
+        walkDir(abs, root, results, opts, recursive, realRoot, visited)
+      }
     } else if (e.isFile()) {
       if (!opts.filter || opts.filter(rel)) results.push(rel)
+    } else if (e.isSymbolicLink()) {
+      let resolved, realAbs
+      try {
+        resolved = fs.statSync(abs)
+        realAbs = fs.realpathSync(abs)
+      } catch {
+        continue
+      }
+      if (!realRoot || !realAbs.startsWith(realRoot + path.sep)) continue
+      if (resolved.isFile()) {
+        if (!opts.filter || opts.filter(rel)) results.push(rel)
+      } else if (resolved.isDirectory() && recursive) {
+        if (visited.has(realAbs)) continue
+        visited.add(realAbs)
+        walkDir(abs, root, results, opts, recursive, realRoot, visited)
+      }
     }
   }
 }
 
 function collectFiles(root, dirs, opts = {}) {
   const results = []
+  let realRoot
+  try {
+    realRoot = fs.realpathSync(path.resolve(root))
+  } catch {
+    realRoot = null
+  }
+  const visited = new Set()
+  const recursive = opts.recursive !== false
   for (const d of dirs) {
-    walkDir(path.join(root, d), root, results, opts, opts.recursive !== false)
+    const dirAbs = path.join(root, d)
+    let realDir
+    try {
+      realDir = fs.realpathSync(dirAbs)
+    } catch {
+      continue
+    }
+    if (visited.has(realDir)) continue
+    visited.add(realDir)
+    walkDir(dirAbs, root, results, opts, recursive, realRoot, visited)
   }
   return results
 }

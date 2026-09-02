@@ -77,6 +77,61 @@ test('AC-20260902-01-2: a clean tree exits 0, and a trailing // or a proper D11-
     'the summary must report 0 findings across the 2 scanned files: ' + r.stdout)
 })
 
+test('AC-20260902-01-2: the plugin scan follows a symlink that resolves to a regular file as its own scanned entry and skips a symlink whose target is missing', () => {
+  const root = tmpdir('cn-ac2-symlink')
+  writeTree(root, {
+    'spec/scripts/noext.js': ['// 2026-01-01 previously crashed']
+  })
+  fs.mkdirSync(path.join(root, 'scripts'), { recursive: true })
+  fs.symlinkSync(path.join(root, 'spec/scripts/noext.js'), path.join(root, 'scripts/linked.js'))
+  fs.symlinkSync(path.join(root, 'scripts/does-not-exist.js'), path.join(root, 'scripts/dangling.js'))
+
+  const r = runNode(SCRIPT, ['--root', root, '--json'])
+  let parsed
+  assert.doesNotThrow(() => { parsed = JSON.parse(r.stdout) },
+    '--json must print exactly one parseable JSON object even with a symlinked entry in the walk: ' + r.stdout)
+  assert.strictEqual(r.status, 1,
+    'a narrated comment line reached only through a symlink must still fail the scan (exit 1), or the walk is silently blind to symlinked files: ' + r.stderr)
+  assert.deepStrictEqual(parsed.files['spec/scripts/noext.js'], 1,
+    'the real file under spec/scripts must still be scanned and counted once regardless of a symlink pointing at it: ' + JSON.stringify(parsed))
+  assert.deepStrictEqual(parsed.files['scripts/linked.js'], 1,
+    'a symlink under scripts that resolves to a regular file must be admitted and counted as its own scanned entry, or the walk skips every file reached only through a symlink: ' + JSON.stringify(parsed))
+  assert.ok(!('scripts/dangling.js' in parsed.files),
+    'a symlink whose target does not exist must be skipped silently, never crash the walk or surface as a scanned entry: ' + JSON.stringify(parsed))
+  assert.strictEqual(parsed.total, 2,
+    'the total must count exactly the real file and the resolving symlink once each, or the walk is double-counting or under-counting symlinked entries: ' + JSON.stringify(parsed))
+})
+
+test('AC-20260902-01-2: the plugin scan skips a symlink resolving outside --root and traverses a directory symlink inside root without following a symlink cycle', () => {
+  const root = fs.realpathSync(tmpdir('cn-ac2-outside'))
+  const outsideDir = fs.realpathSync(tmpdir('cn-ac2-outside-sibling'))
+  writeTree(outsideDir, {
+    'outside.js': ['// 2026-01-01 previously crashed']
+  })
+  writeTree(root, {
+    'real-scripts/a.js': ['// 2026-01-01 previously crashed']
+  })
+  fs.mkdirSync(path.join(root, 'scripts'), { recursive: true })
+  fs.symlinkSync(path.join(outsideDir, 'outside.js'), path.join(root, 'scripts/pointer.js'))
+  fs.symlinkSync(path.join(root, 'real-scripts'), path.join(root, 'scripts/subdir-link'))
+  fs.symlinkSync(path.join(root, 'scripts'), path.join(root, 'scripts/loop'))
+
+  const r = runNode(SCRIPT, ['--root', root, '--json'])
+  let parsed
+  assert.doesNotThrow(() => { parsed = JSON.parse(r.stdout) },
+    '--json must print exactly one parseable JSON object even with an out-of-root symlink and a directory symlink cycle in the walk: ' + r.stdout)
+  assert.strictEqual(r.status, 1,
+    'the narrated comment reached only through the in-root directory symlink must still fail the scan (exit 1), or a directory symlink is invisible to the gate: ' + r.stderr)
+  assert.deepStrictEqual(parsed.files['scripts/subdir-link/a.js'], 1,
+    'a symlink to a directory inside root must be traversed and its file reported under the in-tree relative path, or the walk cannot see a file reached only through a directory symlink: ' + JSON.stringify(parsed))
+  assert.ok(!('scripts/pointer.js' in parsed.files),
+    'a symlink whose real target resolves outside --root must never be read, or the scan can be pointed at arbitrary files off the host: ' + JSON.stringify(parsed))
+  assert.ok(!Object.keys(parsed.files).some((f) => f.startsWith('scripts/loop/')),
+    'a symlink cycle back to an ancestor directory must not be followed, or the walk never terminates or double-reports entries through the cycle: ' + JSON.stringify(parsed))
+  assert.strictEqual(parsed.total, 1,
+    'only the one file reached through the in-root directory symlink may count — the outside-root symlink and the cycle must each contribute nothing: ' + JSON.stringify(parsed))
+})
+
 test('AC-20260902-01-3: --baseline passes a file at or under its recorded count and fails one over it or absent from the baseline entirely', () => {
   const passRoot = tmpdir('cn-ac3-pass')
   writeTree(passRoot, {

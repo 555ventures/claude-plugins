@@ -41,6 +41,16 @@ rules that replaced it:
   is the distinction between this and the extension filters the Gotchas entry condemns. Accepted
   residual: deliberately split or computed literals and readdir-based discovery still evade, which
   is irreducible without an AST and out of scope for a zero-dependency repo.
+- **Comments cite owners, never history.** `comment-narration.js` classifies every whole-line
+  comment under `spec/scripts`, `spec/bin`, `scripts`, `tests` and every prose line of the
+  plugin's commands, doctrine, agents, templates, and rules against six narration classes —
+  dates, versions, prior-behavior vocabulary, incident-story vocabulary, host names, people —
+  and the suite runs it against a tracked per-file baseline that only shrinks. Provenance lives
+  in git, specs, ledgers, and ADRs; a comment states the current invariant plus one owner id.
+  `--code-identical <ref>` is the oracle for comment-only sweeps (stripped executable text
+  byte-identical per file), and `--rules-mode` is doctor check 16 for hosts' generated rules
+  layers. Admission is by location: symlinks inside a scanned directory are followed only when
+  their real target stays inside the scanned root, symlinked directories are walked cycle-safe.
 - **The gate resolves `{testDirs}` to the glob form** (`node --test 'tests/<scope>/*.test.js'`)
   — a bare directory runs nothing on Node 26.
 

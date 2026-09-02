@@ -42,4 +42,6 @@ The host rules' § Gotchas section is capped at 15 entries, enforced by `prose-c
 CLOSE and this repo's own suite); appending at cap requires an eviction — delete, merge here,
 or mechanize. Agent-memory notes are disposed when a spec's diff touches what they are *about*
 (memory-sweep `diff-hit`) or after 10 undisposed review closes (`ttl-expired`); a carry
-disposition records `reviewed: YYYY-MM-DD` in the note's metadata.
+disposition records `reviewed: YYYY-MM-DD` in the note's metadata. Comment narration is capped
+per file by `.claude/comment-narration.baseline.json` while the sweep runs, and at zero once it
+is deleted.

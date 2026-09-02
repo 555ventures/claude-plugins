@@ -32,8 +32,9 @@ leave a worktree and never write `build_base`.
 1. `status: hardened`, `design: true`, no `designed:` date, and the host config declares a
    `design` block → execute `spec/commands/design.md`'s steps unchanged in this session, then
    re-derive from step 1.
-2. `hardened`, or `implementing` with no `<spec>.review/` sidecar → run the **build stage**
-   below (`node {driver} <spec> --via loop`) to `DONE`.
+2. `hardened`, or `implementing` with no `<spec>.review/` sidecar and no `stage: "build"`
+   ledger row for this spec → run the **build stage** below (`node {driver} <spec> --via loop`)
+   to `DONE`. (A build row means build is already `DONE`; the driver refuses a re-run.)
 3. `implementing` or `done` → run the **review stage** below
    (`node {review-driver} <spec> --via loop`) until it prints a judgment step or `DONE`.
 4. `done` with no review sidecar → the review driver's own cold path prints `DONE` with

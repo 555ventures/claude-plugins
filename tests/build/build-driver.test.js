@@ -721,3 +721,66 @@ test('AC-20260901-02-5: a run created with --via loop and a stamp whose transcri
   assert.strictEqual(directRow.model, null,
     'a run with no .claude/spec-session.json stamp anywhere must carry model:null on its DONE row, never a thrown error or a fabricated value: ' + JSON.stringify(directRow))
 })
+
+// prax field report (2026-09-02, the first full /spec:run loop, ledger rows bd_9fbf227320f3 +
+// rv_f756ae99b428): two reflex traps at the build→review boundary, both closed in the driver.
+test('field report 2026-09-02 (build already DONE): WHEN invoked on a status:implementing spec with no sidecar and a stage:"build" ledger row naming this spec THE SYSTEM exits 2 naming the row and the review driver, creates no sidecar, and leaves the spec byte-identical — a build row for a different spec, or a malformed ledger line, never triggers it', () => {
+  const host = makeHost()
+  const baseHead = execFileSync('git', ['-C', host.root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  fs.writeFileSync(host.spec, specBody({ status: 'implementing', diffBase: baseHead }))
+  const specText = fs.readFileSync(host.spec, 'utf8')
+  const ledger = path.join(host.root, '.claude/spec-runs.jsonl')
+  const specRel = path.relative(host.root, host.spec)
+  const doneRow = { ts: '2026-09-02T10:00:00.000Z', spec: specRel, stage: 'build', tier: 'standard', via: 'loop', model: null, runId: 'bd_9fbf227320f3', diff: { files: 1, loc: 1 }, gate: { finalRounds: 1 }, deviations: 0, redCheck: 'green', workers: { spawned: 1, continued: 0 } }
+
+  // A row for ANOTHER spec plus a malformed line: this spec's build is not done, so the driver
+  // must open a sidecar and print a step exactly as before.
+  fs.writeFileSync(ledger, JSON.stringify({ ...doneRow, spec: 'specs/20260901/00-elsewhere.md' }) + '\nnot json at all\n')
+  const rOther = run(host.root, host.spec)
+  assert.strictEqual(rOther.status, 0, 'a build row for a different spec must not refuse this one: ' + rOther.stdout + rOther.stderr)
+  assert.ok(fs.existsSync(host.sidecar), 'an undone build must still open its sidecar')
+  fs.rmSync(host.sidecar, { recursive: true, force: true })
+
+  // The same row naming THIS spec: the state a finished build leaves behind (implementing, no
+  // sidecar) must route to review, never silently reopen a skipped-resume build.
+  fs.appendFileSync(ledger, JSON.stringify(doneRow) + '\n')
+  for (const args of [[], ['--via', 'loop'], ['--state']]) {
+    const r = run(host.root, host.spec, ...args)
+    assert.strictEqual(r.status, 2, 'a re-run after DONE must refuse (args ' + JSON.stringify(args) + '): ' + r.stdout + r.stderr)
+    assert.match(r.stderr, /build already DONE/, 'the refusal must say the build is already DONE: ' + r.stderr)
+    assert.match(r.stderr, /bd_9fbf227320f3/, 'the refusal must name the ledger row that proves it: ' + r.stderr)
+    assert.match(r.stderr, /spec-review-driver\.js/, 'the remedy must name the review driver: ' + r.stderr)
+    assert.ok(!fs.existsSync(host.sidecar), 'a refused re-run must never open a sidecar — that is the exact skipped-resume trap: ' + JSON.stringify(args))
+  }
+  const rLoop = run(host.root, host.spec, '--via', 'loop')
+  assert.match(rLoop.stderr, /--via loop/, 'the loop path must be handed a --via loop review invocation: ' + rLoop.stderr)
+  assert.strictEqual(fs.readFileSync(host.spec, 'utf8'), specText, 'the spec must be byte-identical after a refusal')
+})
+
+test('field report 2026-09-02 (empty waves): WHEN layerGroups declares groups with no File Plan rows THE SYSTEM skips them at derivation — the first WAVE is the first non-empty group, one printed line names the skipped groups, unlisted layers still trail as other, and no wave-done mark is ever demanded for a skipped group', () => {
+  const host = makeNoTestsHost()
+  const cfgPath = path.join(host.root, '.claude/spec.config.json')
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
+  cfg.layerGroups = [['contracts'], ['doctrine', 'scripts'], ['wiring']]
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg))
+  // Add an unlisted-layer row so the trailing `other` wave is exercised alongside the skips.
+  fs.writeFileSync(host.spec, fs.readFileSync(host.spec, 'utf8').replace(
+    '| src/only.js | MODIFY | scripts |', '| src/only.js | MODIFY | scripts |\n| gate.sh | MODIFY | other |'))
+
+  const r0 = run(host.root, host.spec)
+  assert.strictEqual(r0.status, 0, r0.stdout + r0.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'WAVE:doctrine+scripts',
+    'the empty leading group (contracts) must never become a wave — the first step is the first non-empty group: ' + r0.stdout)
+  assert.match(r0.stdout, /empty wave\(s\) skipped — no File Plan rows: contracts, wiring/,
+    'one line must name every skipped group so the session can see the derivation: ' + r0.stdout)
+  const rWrong = run(host.root, host.spec, '--mark', 'wave-done', '--wave', 'contracts', '--workers', '0')
+  assert.strictEqual(rWrong.status, 2, 'a skipped group is not a wave, so marking it must be refused: ' + rWrong.stdout + rWrong.stderr)
+
+  const r1 = run(host.root, host.spec, '--mark', 'wave-done', '--wave', 'doctrine+scripts', '--workers', '1')
+  assert.strictEqual(r1.status, 0, r1.stdout + r1.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'WAVE:other',
+    'the empty trailing group (wiring) must be skipped straight to the other wave: ' + r1.stdout)
+  const r2 = run(host.root, host.spec, '--mark', 'wave-done', '--wave', 'other', '--workers', '1')
+  assert.strictEqual(r2.status, 0, r2.stdout + r2.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'INTEGRATION', 'no wave remains after other: ' + r2.stdout)
+})

@@ -35,7 +35,9 @@ Loop until the driver prints `DONE`:
    `<spec>.build/` sidecar, artifacts already on disk) and prints the **current step's
    instructions** — running deterministic work itself (admission, the `hardened →
    implementing` flip with the absent-only `diff_base` stamp, wave derivation from
-   `layerGroups`, gate resolution, env preflight, red-check, the final gate, scope-reconcile,
+   `layerGroups` (one wave per group in declared order, layers no group names trailing as one
+   final `other` wave, a group with no File Plan rows skipped with one printed line), gate
+   resolution, env preflight, red-check, the final gate, scope-reconcile,
    diff counts, the `stage:"build"` ledger row) — and printing only the steps that need this
    session's judgment: test-author dispatch, red attribution, per-wave worker dispatch, host
    integration, repair dispatch, and the checkpoint commit.

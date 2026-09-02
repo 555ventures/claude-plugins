@@ -48,7 +48,12 @@
 //                 3-round cap (touches <spec>.build/gate-cap), a mark issued at a state that does
 //                 not print it (stderr names the current state; state unchanged), and any wrapped
 //                 child process dying with no exit code (signal-killed, never spawned, or
-//                 maxBuffer-overflowed) via lib/driver-io.js's runChild() fail-closed refusal.
+//                 maxBuffer-overflowed) via lib/driver-io.js's runChild() fail-closed refusal,
+//                 and a re-run on a status: implementing spec with no sidecar whose build is
+//                 already DONE (a stage:"build" ledger row names this spec) — refused before any
+//                 sidecar is opened, remedy = the review driver (prax field report, 2026-09-02:
+//                 the loop session re-ran this driver by reflex after DONE and it silently opened
+//                 a fresh redCheck:"skipped-resume" sidecar and asked for tests again).
 
 'use strict'
 const fs = require('fs')
@@ -206,6 +211,34 @@ function dirtyNonTestsPaths(base) {
 }
 
 const sidecarExisted = fs.existsSync(sidecarDir)
+
+// ---- build already DONE (prax field report, 2026-09-02) ----------------------------------------
+// The sidecar is deleted at DONE, so "status: implementing, no sidecar" is also the state a
+// finished build leaves behind until the review driver opens its own sidecar. The ledger is the
+// one on-disk fact that tells the two apart: a stage:"build" row is written only at DONE, so its
+// presence for this spec IS the terminal outcome — no extra outcome field is needed. Refused
+// before any sidecar is opened (state unchanged), remedy = the review driver.
+if (!sidecarExisted && !justFlipped) {
+  const doneRow = ledgerBuildRow(repoRoot, specRel)
+  if (doneRow) {
+    die('build already DONE for ' + specRel + ' (ledger row ' + doneRow.runId + ', ' + doneRow.ts +
+      ') — run the review driver: node ' + path.join(PLUGIN, 'scripts/spec-review-driver.js') + ' ' +
+      specPath + (flag('--via') === 'loop' ? ' --via loop' : ''))
+  }
+}
+function ledgerBuildRow(root, rel) {
+  let text = ''
+  try { text = fs.readFileSync(path.join(root, '.claude/spec-runs.jsonl'), 'utf8') } catch { return null }
+  let found = null
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue
+    let row
+    try { row = JSON.parse(line) } catch { continue } // a malformed line never blocks a build
+    if (row && row.stage === 'build' && row.spec === rel) found = row
+  }
+  return found
+}
+
 let marks = loadSidecar(sidecarDir, 'build-state.json')
 let resumeDirtyWarning = ''
 
@@ -260,8 +293,13 @@ function computeWaveOrder() {
   const otherRows = [...rowsByLayer.entries()]
     .filter(([layer]) => !groupedLayers.has(layer)).flatMap(([, rows]) => rows)
   if (otherRows.length) waves.push({ label: 'other', rows: otherRows })
-  return waves
+  // A declared group with no File Plan rows is not a wave (prax field report, 2026-09-02: two
+  // empty groups each printed a dispatch step with no layers and demanded a --workers 0 mark).
+  // Skipped here, at derivation, so no state ever names it; the WAVE step prints the skips once.
+  for (const w of waves) if (!w.rows.length) skippedWaves.push(w.label)
+  return waves.filter((w) => w.rows.length)
 }
+const skippedWaves = []
 const waveOrder = computeWaveOrder()
 function pendingWave() {
   const done = new Set(Object.keys(marks.waves || {}))
@@ -648,7 +686,10 @@ function waveStepBody(label) {
     const agent = agentMap[layer] || agentMap.default || 'general-purpose'
     return `  layer: ${layer}  agent: ${agent}\n` + files.map((f) => '    ' + JSON.stringify(f)).join('\n')
   }).join('\n')
-  return skipNote +
+  const skippedNote = skippedWaves.length
+    ? `empty wave(s) skipped — no File Plan rows: ${skippedWaves.join(', ')}\n`
+    : ''
+  return skipNote + skippedNote +
     `## Step: wave ${label} — spawn one long-lived Agent {model: sonnet} per layer above and KEEP it\n` +
     body + '\n' +
     `spec: ${specPath}\n` +

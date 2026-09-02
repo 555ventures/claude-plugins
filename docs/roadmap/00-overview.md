@@ -36,3 +36,4 @@ fences off belongs to its owning brief.
 | 18b | disposer-and-run *(successor: amends 18 D2 + 18a D1–D3 via ADR-0005; fresh-context disposer, loop renamed /spec:run)* |
 | 19 | escape-seeded-replay |
 | 20 | shell-composed-mocks *(amends 02 D8 via ADR-0003; queued before 19)* |
+| 21 | comment-hygiene *(owner citations, never history: narration gate → plugin sweep → host generators + doctor)* |

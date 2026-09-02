@@ -1,0 +1,89 @@
+{
+  "runId": "rv_a3f310d4042a",
+  "ts": "2026-09-02T05:13:53.401Z",
+  "spec": "specs/20260901/05-checkpoint-fail-closed.md",
+  "tier": "critical",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 560,
+    "base": "53da29e06b1fc3146cde390c4f135288bc68b93b",
+    "head": "4bad4154c23dc3b476f67f018e11b4cd8848e642",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      }
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 204
+      }
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      }
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 7,
+        "carried": 6,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "severity": "medium",
+        "claim": "Prior iteration-1 finding: --skip-independence-check-because with no reason value immediately followed by another flag (e.g. --waived) was admitted, laundering checkpointOverride.reason == \"--waived\" onto the ledger row.",
+        "file": "spec/scripts/spec-review-driver.js",
+        "line": 1103,
+        "impact": "A malformed override invocation could silently record a false, misleading reason on the audit ledger instead of being refused.",
+        "evidence": "Fix verified: flag() returns argv[i+1] unconditionally (spec-review-driver.js:195), so a following '--waived' token used to read as the reason. The new code (spec-review-driver.js ~1100-1103) rejects any raw value starting with '--' by resetting reason to ''. Executed repro: driving a fresh fixture host through --via loop -> reviewer-returned (no stamp) -> --mark dispositions --skip-independence-check-because --waived 0 --rejected 0 --fix-dispatched 0 produced exit status 2, stderr 'spec-review-driver: --skip-independence-check-because needs a non-blank reason...', and review-state.json unchanged with no checkpointOverride key ({\"via\":\"loop\",...,\"checkpoint\":{\"sessionId\":null}} only). The new test case (d) in tests/review/loop-checkpoint.test.js (AC-20260901-05-4) exercises the identical scenario and passes; full targeted suite run (node --test tests/review/*.test.js tests/provenance/*.test.js) is 204/204 green, including the D2 admitted no-stamp-with-reason case (AC-20260901-05-3) and all four unchanged D2-era regression tests (AC-20260901-05-9), confirming no regression."
+      }
+    ],
+    "reviewerCount": 1,
+    "scope": "fix-delta",
+    "tokens": 55000
+  }
+}

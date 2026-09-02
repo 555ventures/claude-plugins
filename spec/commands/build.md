@@ -92,7 +92,12 @@ places the loop stops that are specific to `--via loop`:
   `/spec:build <spec>` — the state gate admits it on `done` as much as on `hardened` or
   `implementing`, and the loop lands back on the review driver at DISPOSITIONS with the new
   session id. This fires once per run: a fix cycle's second reviewer pass is judged by the
-  session that dispatched the fix, not gated again.
+  session that dispatched the fix, not gated again. A run with no stamp at all parks the same
+  way, but the remedy is restart Claude Code, not `/clear` — a stale plugin hook set is the
+  usual cause, since hooks load at session start and `/clear` does not reload them; any stamp
+  then appearing admits DISPOSITIONS. Last resort, when the hook genuinely cannot write the
+  stamp: `--skip-independence-check-because "<reason>"` on the dispositions mark, whose reason
+  lands on the review row as `checkpoint.outcome: overridden`.
 - **Pre-merge (unchanged).** The review driver's existing relocation refusal is the pre-merge
   stop — never a forced `/clear`. `ExitWorktree(action="keep")` when this session entered via
   `EnterWorktree`, otherwise `cd` the main session to the driver-named root, then re-run; the

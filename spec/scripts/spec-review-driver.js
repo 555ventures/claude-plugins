@@ -90,13 +90,15 @@
 //   spec-review-driver <spec.md>                  -> print current state + ONLY that step
 //   spec-review-driver <spec.md> --mark <mark>    -> verify artifacts, record, print next step
 //     marks: skips-extracted --file <f> | reviewer-returned --file <json> |
-//            dispositions --waived N --rejected N --fix-dispatched N | fix-applied | closed |
+//            dispositions --waived N --rejected N --fix-dispatched N
+//              [--skip-independence-check-because "<reason>"] | fix-applied | closed |
 //            merge-strategy <merge-commit|ff-only|squash|rebase-ff> (bare token) |
 //            conflicts-resolved | replay-recorded
 //   spec-review-driver <spec.md> --state          -> print the state name only (scripting)
 //
 // States: LEGS (driver-only) -> STOPPED (terminal on RED_BLOCKING) | SKIPS? -> REVIEWER ->
-//   CHECKPOINT (--via loop only, specs/20260901/03-unified-build-loop.md D2)? -> DISPOSITIONS ->
+//   CHECKPOINT (--via loop only, specs/20260901/03-unified-build-loop.md D2; fails closed on a
+//   missing session stamp too, specs/20260901/05-checkpoint-fail-closed.md D1)? -> DISPOSITIONS ->
 //   FIX/ESCALATE(cap 2, terminal)? -> CLOSE -> MERGE/CONFLICTS -> REPLAY? -> DONE (terminal)
 //
 // Exit codes: 0 = step printed · 2 = precondition failure or refused mark (message names the
@@ -119,7 +121,15 @@
 // close-time host-gate re-run over the committed close tree exiting non-zero (message names the
 // literal phrase "gate red at close", the resolved command, and the re-run remedy) or resolving to
 // no runnable gate at all (message names the unresolvable-gate reason and the remedy — never a
-// silent skip; specs/20260830/02-close-gate-rerun.md D1/D2/D4).
+// silent skip; specs/20260830/02-close-gate-rerun.md D1/D2/D4), a `--via loop` `reviewer-returned`
+// with no `.claude/spec-session.json` on the host (parks at CHECKPOINT with the restart remedy
+// rather than degrading through — ADR-0004), `--mark dispositions` refused while still parked at
+// CHECKPOINT (message names /clear for a same-session park or the restart remedy for a null park),
+// or `--skip-independence-check-because "<reason>"` refused (message names the flag) because the
+// reason is absent/blank after trim, the run is parked with a non-null recorded session id
+// (message also names /clear — the override is not a bypass for the build session), the run is
+// not parked at all (nothing to override), or `via` is `direct`
+// (specs/20260901/05-checkpoint-fail-closed.md D1/D2).
 
 'use strict'
 const fs = require('fs')
@@ -281,9 +291,19 @@ function saveSidecar() { saveSidecarLib(sidecarDir, path.basename(stateFile), ma
 // D4: --model <sessionModel(repoRoot) or omitted when null> — one shared arg-builder for all
 // three verdict.js passes below, read fresh at each call site (never cached) so a session that
 // has spoken since the last pass gets its current model, not a startup snapshot.
+// D3/A7: the ONE shared arg-builder for all three verdict.js driver passes (hard-stop, escalate,
+// close) — appending --checkpoint here, read fresh at each call site (marks mutates between
+// passes: dispositions can clear the checkpoint between the hard-stop pass and the later ones),
+// reaches all three identically and never a via:"direct" run (checkpointOutcome() returns null).
 function viaModelArgs() {
   const m = sessionModel(repoRoot)
-  return m === null ? ['--via', marks.via] : ['--via', marks.via, '--model', m]
+  const args = m === null ? ['--via', marks.via] : ['--via', marks.via, '--model', m]
+  const outcome = checkpointOutcome()
+  if (outcome !== null) {
+    args.push('--checkpoint', outcome)
+    if (outcome === 'overridden') args.push('--checkpoint-reason', marks.checkpointOverride.reason)
+  }
+  return args
 }
 
 // ---- D2 (specs/20260901/03-unified-build-loop.md): the CHECKPOINT enforcement ------------------
@@ -298,10 +318,29 @@ function checkpointStamp() {
   return stamp && typeof stamp.sessionId === 'string' ? stamp.sessionId : null
 }
 
+// specs/20260901/05-checkpoint-fail-closed.md D1 (2026-09-01, brief 18a): a no-stamp
+// reviewer-returned used to degrade to a printed warning and admit DISPOSITIONS straight through
+// (ADR-0004: a fail-open gap — both real loop reviews on this machine took it, with no ledger
+// trace). A null-recorded checkpoint (marks.checkpoint.sessionId === null) now parks exactly like
+// a same-session stamp does, and lifts on ANY stamp appearing — there is no recorded id to differ
+// from, and a stamp can only be written by the session-stamp hook (A6), so its mere appearance is
+// the "hooks are running now" signal.
 function checkpointStillParked() {
-  return marks.via === 'loop' && !marks.checkpointCleared &&
-    !!marks.checkpoint && marks.checkpoint.sessionId !== null &&
-    checkpointStamp() === marks.checkpoint.sessionId
+  return marks.via === 'loop' && !marks.checkpointCleared && !!marks.checkpoint &&
+    (marks.checkpoint.sessionId === null
+      ? checkpointStamp() === null
+      : checkpointStamp() === marks.checkpoint.sessionId)
+}
+
+// D3: the outcome verdict.js's --checkpoint flag carries on every loop verdict.js pass, derived
+// from marks — never a separate persisted field. null when via !== 'loop' (verdict.js's own
+// arg-builder then omits the flag entirely, keeping a direct run's row untouched).
+function checkpointOutcome() {
+  if (marks.via !== 'loop') return null
+  if (marks.checkpointOverride) return 'overridden'
+  if (marks.checkpointCleared && marks.checkpoint && marks.checkpoint.sessionId !== null) return 'cleared'
+  if (marks.checkpointCleared && marks.checkpoint && marks.checkpoint.sessionId === null) return 'stamp-appeared'
+  return 'not-reached'
 }
 
 // ---- Gotchas cap (prose-cap.js, specs/20260823/06 + 2026-08-25 ratchet) ------------------------
@@ -1008,15 +1047,19 @@ function handleReviewerReturned() {
   marks.dispositions = null
   marks.dispositionsIteration = null
   marks.pendingFix = false
-  // D2: recorded only for --via loop runs — a via:"direct" run must never write a checkpoint key
-  // (AC-20260901-03-5). No stamp file degrades to a stderr warning and {sessionId: null}, which
-  // checkpointStillParked() treats as "not parked" — DISPOSITIONS is admitted honestly rather than
-  // stalling on evidence the driver cannot obtain.
+  // D1 (specs/20260901/05-checkpoint-fail-closed.md, 2026-09-01): recorded only for --via loop
+  // runs — a via:"direct" run must never write a checkpoint key (AC-20260901-03-5). A no-stamp
+  // host now parks exactly like a same-session stamp does (checkpointStillParked() reads this
+  // null sessionId the same way) rather than degrading to an admit-through warning (ADR-0004).
   if (marks.via === 'loop') {
     const sid = checkpointStamp()
     if (sid === null) {
-      process.stderr.write('spec-review-driver: no session stamp found at .claude/spec-session.json' +
-        ' — the loop checkpoint cannot verify a session change here and admits DISPOSITIONS directly\n')
+      process.stderr.write('spec-review-driver: no session stamp at .claude/spec-session.json — the ' +
+        'loop checkpoint cannot verify a session change, so this run is parked at CHECKPOINT. Restart ' +
+        'Claude Code (a stale plugin hook set is the usual cause: hooks load at session start, /clear ' +
+        'does not reload them), then re-run /spec:build ' + specPath + '. Last resort: --mark ' +
+        'dispositions ... --skip-independence-check-because "<reason>" — the reason lands on the ' +
+        'review row.\n')
     }
     marks.checkpoint = { sessionId: sid }
   }
@@ -1026,15 +1069,50 @@ function handleReviewerReturned() {
 
 function handleDispositions() {
   if (!marks.reviewerReturnFile) die('no reviewer return recorded yet — mark reviewer-returned first')
-  // D2: refused (exit 2, state unchanged) while the run is still parked at CHECKPOINT — the same
-  // remedy the CHECKPOINT step itself prints. Never mutates marks before this check.
-  if (checkpointStillParked()) {
+  // D2 (specs/20260901/05-checkpoint-fail-closed.md, 2026-09-01): --skip-independence-check-because
+  // "<reason>" is the one override, admitted ONLY on a no-stamp (null-recorded) park — the one
+  // truly stuck case (a hook present but unable to write the stamp file). Refused everywhere else:
+  // a same-session park has a cheap correct remedy (/clear — admitting a reasoned override there
+  // is exactly the bypass D2 of specs/20260901/03 exists to prevent), a run that is not parked at
+  // all has nothing to override (accepting it would launder a false "overridden" onto the ledger),
+  // and via:"direct" never parks. flag() returns `true` for a bare flag with no following value
+  // (A4) — that reads as "reason absent", not "override granted with no reason".
+  const overridePassed = argv.includes('--skip-independence-check-because')
+  if (overridePassed) {
+    const parked = checkpointStillParked()
+    if (marks.via !== 'loop' || !parked) {
+      die('--skip-independence-check-because refused — this run is not parked at CHECKPOINT, so ' +
+        'there is nothing to override')
+    }
+    if (marks.checkpoint.sessionId !== null) {
+      die('--skip-independence-check-because refused on a same-session park — /clear, then re-run ' +
+        '/spec:build ' + specPath + '; the override is not a bypass for the build session')
+    }
+    const raw = flag('--skip-independence-check-because')
+    const reason = typeof raw === 'string' ? raw.trim() : ''
+    if (!reason) {
+      die('--skip-independence-check-because needs a non-blank reason (the reason lands on the review row)')
+    }
+    marks.checkpointCleared = true
+    marks.checkpointOverride = { reason, ts: new Date().toISOString() }
+  } else if (checkpointStillParked()) {
+    // D2: refused (exit 2, state unchanged) while the run is still parked at CHECKPOINT — the same
+    // remedy the CHECKPOINT step itself prints. Never mutates marks before this check.
+    if (marks.checkpoint.sessionId === null) {
+      die('no session stamp at .claude/spec-session.json — the loop checkpoint cannot verify a ' +
+        'session change, so this run is parked at CHECKPOINT. Restart Claude Code (a stale plugin ' +
+        'hook set is the usual cause: hooks load at session start, /clear does not reload them), ' +
+        'then re-run /spec:build ' + specPath + '. Last resort: --mark dispositions ... ' +
+        '--skip-independence-check-because "<reason>" — the reason lands on the review row.')
+    }
     die('the session that built this spec must not disposition its review (CHECKPOINT) — ' +
       '/clear, then re-run /spec:build ' + specPath + '; the driver resumes at DISPOSITIONS')
   }
-  // A stamp change past a recorded (non-null) checkpoint is the one thing that admits this mark
-  // for a --via loop run — record it as cleared, once, before doing the disposition work below.
-  if (marks.via === 'loop' && marks.checkpoint && marks.checkpoint.sessionId !== null && !marks.checkpointCleared) {
+  // A stamp change past a recorded (non-null) checkpoint, or any stamp appearing past a
+  // null-recorded checkpoint (D1), is what admits this mark for a --via loop run — record it as
+  // cleared, once, before doing the disposition work below. The override branch above already set
+  // this when it ran; this is a no-op then (guarded by !marks.checkpointCleared).
+  if (marks.via === 'loop' && marks.checkpoint && !marks.checkpointCleared) {
     marks.checkpointCleared = true
   }
   const waivedRaw = flag('--waived'), rejectedRaw = flag('--rejected'), fixRaw = flag('--fix-dispatched')
@@ -1561,12 +1639,24 @@ const STEPS = {
     `path — then:\n` +
     `  node ${__filename} ${specPath} --mark skips-extracted --file <path>`,
 
-  // D2: the enforced checkpoint. checkpointStillParked() already established this state, so this
-  // body is fixed text (no derived counts to print) plus the exact remedy also named by
-  // handleDispositions()'s refusal.
-  CHECKPOINT: () => `## Step: checkpoint — /clear, then re-run /spec:build ${specPath}\n` +
-    `The session that built this spec must not disposition its review. Clear, re-run, and the ` +
-    `driver resumes at DISPOSITIONS.`,
+  // D1/D2 (specs/20260901/05-checkpoint-fail-closed.md): the enforced checkpoint.
+  // checkpointStillParked() already established this state, so each body is fixed text (no
+  // derived counts to print) plus the exact remedy also named by handleDispositions()'s refusal —
+  // the null-park (no stamp on the host) and same-session-park (stamp unchanged) bodies differ
+  // because their remedies differ (restart vs. /clear).
+  CHECKPOINT: () => {
+    if (marks.checkpoint && marks.checkpoint.sessionId === null) {
+      return `## Step: checkpoint — restart Claude Code, then re-run /spec:build ${specPath}\n` +
+        `No session stamp at .claude/spec-session.json: the loop cannot verify that the session ` +
+        `dispositioning this review is not the one that built it. A stale plugin hook set is the ` +
+        `usual cause (hooks load at session start; /clear does not reload them). Restart Claude ` +
+        `Code, re-run, and the driver resumes at DISPOSITIONS. Last resort, recorded on the ledger:\n` +
+        `  node ${__filename} ${specPath} --mark dispositions ... --skip-independence-check-because "<reason>"`
+    }
+    return `## Step: checkpoint — /clear, then re-run /spec:build ${specPath}\n` +
+      `The session that built this spec must not disposition its review. Clear, re-run, and the ` +
+      `driver resumes at DISPOSITIONS.`
+  },
 
   REVIEWER: () => `## Step: dispatch the reviewer\n` +
     `Legs are green. Dispatch ONE Agent {subagent_type: "spec:reviewer"} with the spec path, ` +

@@ -177,6 +177,17 @@
 // is read, no verdict word or ledger line printed) a --via value other than "loop"/"direct", or
 // either --via or --model passed with --profile release — the message names --via specifically
 // (never the generic unknown-flag usage line) so a caller can tell the two refusals apart
+//
+// specs/20260901/05-checkpoint-fail-closed.md (D3, 2026-09-01, brief 18a): --checkpoint
+// <cleared|stamp-appeared|overridden|not-reached> and --checkpoint-reason <text> are review-
+// profile-only flags; the row gains a `checkpoint` key immediately after `verdict` (before
+// `escalated`) — `{"outcome":<value>}`, or `{"outcome":"overridden","reason":<text>}` for
+// overridden. Absent flags leave the row byte-identical to today (no checkpoint key at all).
+// Refused (exit 2, arg-parse time, before the manifest is read, no verdict word or ledger line
+// printed, message names --checkpoint specifically): a --checkpoint value outside the enum,
+// --checkpoint-reason passed without --checkpoint overridden, --checkpoint overridden with no
+// non-blank --checkpoint-reason, --checkpoint passed with --profile release (no runId to key), or
+// --checkpoint passed with --via direct or no --via at all (the checkpoint is a loop-only fact).
 
 const fs = require('fs')
 const path = require('path')
@@ -184,7 +195,9 @@ const crypto = require('crypto')
 
 function usage() {
   console.error('usage: verdict.js --manifest <path> [--workflow <path>] [--waived N] [--rejected N] ' +
-    '[--fixDispatched N] [--escalated] [--via loop|direct] [--model <id>] [--ledger [--spec <path>] ' +
+    '[--fixDispatched N] [--escalated] [--via loop|direct] [--model <id>] ' +
+    '[--checkpoint <cleared|stamp-appeared|overridden|not-reached> [--checkpoint-reason <text>]] ' +
+    '[--ledger [--spec <path>] ' +
     '[--tier <T>] [--diff-loc N] [--iteration N] [--run-id <id>] [--retain <dir>] ' +
     '[--base-sha <40hex>] [--head-sha <40hex>] [--dirty]] ' +
     '[--profile release [--milestone <string>] [--briefs N,N,...]] [--require <leg> ...]')
@@ -195,6 +208,7 @@ let ledger = false, specArg = null, tier = null, diffLoc = null, iteration = nul
 let runId = null, milestone = null, briefsArg = null, retainDir = null, escalated = false
 let baseShaArg = null, headShaArg = null, dirtyFlag = false
 let viaArg = null, modelArg = null
+let checkpointArg = null, checkpointReasonArg = null
 const requireLegs = []
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
@@ -221,6 +235,8 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--dirty') dirtyFlag = true
   else if (a === '--via') viaArg = argv[++i]
   else if (a === '--model') modelArg = argv[++i]
+  else if (a === '--checkpoint') checkpointArg = argv[++i]
+  else if (a === '--checkpoint-reason') checkpointReasonArg = argv[++i]
   else { usage(); process.exit(2) }
 }
 if (!manifestPath) { usage(); process.exit(2) }
@@ -266,6 +282,36 @@ if (profile === 'release' && (viaArg !== null || modelArg !== null)) {
 }
 const via = viaArg || 'direct'
 const model = modelArg !== null ? modelArg : null
+
+// ---- --checkpoint/--checkpoint-reason refusal matrix (D3, specs/20260901/05-checkpoint-fail-
+// closed.md) -------------------------------------------------------------------------------------
+// Checked purely on flag presence/value, before the manifest/workflow files are even read (same
+// flag-presence-first pattern as every other matrix in this file), so a malformed or contextually
+// invalid checkpoint outcome can never reach the ledger. Every refusal names --checkpoint
+// specifically so it is never confused with the generic unknown-flag usage line.
+const CHECKPOINT_ENUM = new Set(['cleared', 'stamp-appeared', 'overridden', 'not-reached'])
+if (checkpointArg !== null && !CHECKPOINT_ENUM.has(checkpointArg)) {
+  console.error(`verdict.js: --checkpoint must be one of cleared|stamp-appeared|overridden|not-reached, got "${checkpointArg}"`)
+  process.exit(2)
+}
+if (checkpointReasonArg !== null && checkpointArg !== 'overridden') {
+  console.error('verdict.js: --checkpoint-reason is only valid with --checkpoint overridden')
+  process.exit(2)
+}
+if (checkpointArg === 'overridden' && (checkpointReasonArg === null || !checkpointReasonArg.trim())) {
+  console.error('verdict.js: --checkpoint overridden requires a non-blank --checkpoint-reason')
+  process.exit(2)
+}
+if (checkpointArg !== null && profile === 'release') {
+  console.error('verdict.js: --checkpoint is not valid with --profile release — a release row ' +
+    'carries no runId and no reviewer return, so a checkpoint outcome has nothing to key; drop --checkpoint')
+  process.exit(2)
+}
+if (checkpointArg !== null && via !== 'loop') {
+  console.error('verdict.js: --checkpoint requires --via loop — the checkpoint is a loop-only ' +
+    'mechanism; drop --checkpoint (or pass --via loop) on a --via direct or --via-absent pass')
+  process.exit(2)
+}
 
 // ---- --retain requiredness matrix (D1-D3, specs/20260819/01-review-evidence-retention.md) ----
 // Checked purely on flag presence, before the manifest/workflow files are even read, so a
@@ -575,6 +621,16 @@ if (ledger) {
   // ("rv_" + 12 lowercase hex via crypto.randomBytes) so /spec:escape always has a backlink.
   if (profile !== 'release') row.runId = runId || ('rv_' + crypto.randomBytes(6).toString('hex'))
   row.verdict = word
+  // D3 (specs/20260901/05-checkpoint-fail-closed.md): checkpoint is inserted immediately after
+  // verdict, before escalated — sibling 02's AC-20260901-02-3 pins the first seven keys and
+  // AC-20260901-02-6 pins byte-identity when provenance flags are absent, both untouched since
+  // this key is present ONLY when --checkpoint was passed (the refusal matrix above makes that
+  // review-profile + --via loop only).
+  if (checkpointArg !== null) {
+    row.checkpoint = checkpointArg === 'overridden'
+      ? { outcome: checkpointArg, reason: checkpointReasonArg }
+      : { outcome: checkpointArg }
+  }
   // D1: the escalation fact is a typed row field, never a second verdict word — `escalated` is
   // only ever set on the review profile (the D3 refusal above makes profile === 'release'
   // unreachable here).

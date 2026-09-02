@@ -1,6 +1,6 @@
 ---
 date: 2026-09-02
-status: hardened
+status: implementing
 tier: critical
 area: build-integrity
 design: false
@@ -9,6 +9,8 @@ depends_on: ["specs/20260901/03-unified-build-loop.md"]
 depended_on_by: []
 brief: 18a
 open_markers: 0
+build_base: main
+diff_base: 53da29e06b1fc3146cde390c4f135288bc68b93b
 ---
 
 # Loop checkpoint fails closed — no stamp parks the run, one awkward override, outcome on the ledger

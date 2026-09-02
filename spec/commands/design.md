@@ -139,14 +139,30 @@ session scratchpad, else `.claude/spec-runs/render/<spec-stem>/`).
 
 ## Step 5 — Your look (blocking)
 
-Only after BOTH gates are green. Print the catalog command (`design.command`), the story ids,
-and the gate report path. Then `AskUserQuestion` (shared § Question Style — wording is hook-gated):
-**approve** (Recommended — the gates already measured what a human cannot overlay) / **change**
-(free-text notes).
+Only after BOTH gates are green. Hand off with exactly this block, real values, before the
+question — the user runs the catalog command, never this session. Every value is already on
+disk (`design.command`, the coverage-ledger claim's story ids, `design.render.url`, the mock's
+states, the gate report path) — derive them; never ask the user which components to check:
+
+  🎨 **ready for review** — run: `<design.command>`
+  🔗 `<Search Words>` → <deep link> — one line per story bound this run. Lead with the
+     catalog's search keyword (Storybook's Find-components input matches space-separated
+     words, never the slashed title or the export's camelCase: `Chat Thread Empty` for
+     Canon/Chat Thread → Empty), then the deep link substituted from `design.render.url`'s
+     `{story}` placeholder (theme `light`, the most-constrained declared viewport). Deep links
+     are mechanically derivable — derive them, never omit.
+  🆕 <components added or changed this run, one line each with the states it renders>
+  👀 <one line per component: what to look for — the mock's copy and states, any auto-excused
+     static→link role, any Decision row the component exercises>
+  📄 gate report: <path>
+
+Then `AskUserQuestion` (shared § Question Style — wording is hook-gated): **approve**
+(Recommended — the gates already measured what a human cannot overlay) / **change** (free-text
+notes).
 
 A change round: one `Agent {model: "sonnet"}` edit dispatch per affected surface, then Step 3
-and Step 4 again, then this question again. The session is cold between rounds — all state on
-disk.
+and Step 4 again, then this hand-off block and question again — the 🆕 and 🔗 lines name only
+what the round touched. The session is cold between rounds — all state on disk.
 
 `AskUserQuestion` dismissed → STOP. State is safely on disk; re-invoke to continue.
 

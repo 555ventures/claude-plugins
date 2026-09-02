@@ -71,8 +71,10 @@ specific to `--via loop`:
   path; there is nothing here for this session to gate.
 - **Pre-merge (unchanged).** The review driver's existing relocation refusal is the pre-merge
   stop — never a forced `/clear`. `ExitWorktree(action="keep")` when this session entered via
-  `EnterWorktree`, otherwise `cd` the main session to the driver-named root, then re-run; the
-  loop prints the driver's refusal as the step and nothing more.
+  `EnterWorktree`, otherwise `cd` the main session to the driver-named root, then re-run the
+  driver **against the worktree's absolute spec path** — the main root's copy of the spec is
+  still `hardened` until the merge lands, and the driver reads the spec from the path it is
+  given; the loop prints the driver's refusal as the step and nothing more.
 
 ## Report
 

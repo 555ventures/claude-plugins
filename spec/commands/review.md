@@ -189,7 +189,9 @@ Run `node "$(spec-paths report-render)" --slots <file>` and print its output ver
   entered via `EnterWorktree`; otherwise `cd` the main session to the driver-named root — a
   subprocess cannot move the session CWD, and the driver refuses the mark (exit 2, relocate
   instruction) while it is inherited inside the build worktree, since cleanup must never delete
-  the directory the session stands in.
+  the directory the session stands in. After relocating, pass the driver the **worktree's
+  absolute spec path** — it reads the spec from the path given, and the main root's copy is
+  still `hardened` until the merge lands.
 - **The due replay (the REPLAY step).** Once MERGE has concluded — merged back or skipped
   because review ran on the originating branch — the driver runs the replay harness's own
   dueness and selection checks itself and either lands `DONE` (not due, or nothing selectable,

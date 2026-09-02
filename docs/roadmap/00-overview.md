@@ -32,5 +32,6 @@ fences off belongs to its owning brief.
 | 16 | pipeline-spine-as-code |
 | 17 | fleet-evidence-reader |
 | 18 | unified-build *(design → build → review as one re-entrant command)* |
+| 18a | checkpoint-fail-closed *(successor: amends 18 D2 via ADR-0004)* |
 | 19 | escape-seeded-replay |
 | 20 | shell-composed-mocks *(amends 02 D8 via ADR-0003; queued before 19)* |

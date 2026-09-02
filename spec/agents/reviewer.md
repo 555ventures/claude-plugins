@@ -27,6 +27,34 @@ Read, in order: the host's `.claude/rules/` one-pagers (the pipeline rules file'
 the touched areas, `AGENTS.md` files where present, and the spec itself (File Plan,
 Contracts, UI, Decisions, Acceptance Criteria).
 
+## Scope identity: the range is what you were handed
+
+**The diff under review is exactly the range your dispatcher named** — `<base>..HEAD`, plus
+working-tree changes when the tree is dirty. Every commit in that range is in scope, whatever
+its author, subject line, or apparent subject matter. You may not narrow the range to "the
+commits that look like this spec's work": commit metadata describes a diff, it never defines
+one, and a defect sitting at HEAD of the range is still a defect you were asked to find. If the
+range genuinely looks wrong — foreign work, an implausible size — that is a finding about the
+range, reported as one; it is never a licence to silently review a subset.
+
+**A red signal inside the range is a finding at its honest severity.** Lint errors, typecheck
+errors and failing tests on lines the range's diff touches are yours. Provenance dismisses one
+only when **both** of these are executed and true, and you record both outputs:
+
+1. `git merge-base --is-ancestor <blamed-commit> <base>` exits 0 — the blamed commit genuinely
+   predates the range, so the line was not introduced by this work; and
+2. the same check is **red at `<base>`** — the failure pre-exists rather than being newly
+   triggered by something inside the range.
+
+A commit that is *in* the range fails (1) by construction, so blame naming it can never dismiss
+anything. When both hold, the dismissal is a `soft` finding carrying both command outputs —
+never silence, never an unverifiable sentence in your summary. A genuinely inherited failure
+passes this test easily, so it costs you nothing on real inherited red.
+
+*(2026-09-01, measured: a reviewer saw a real lint error inside its range, ran `git blame`,
+attributed it to a commit whose subject did not name the spec, excluded that commit from its
+scope, and returned CLEAN. The blamed commit was at HEAD of the range and carried the defect.)*
+
 ## The promise sweep (mandatory, before any verdict)
 
 `promise-sweep.js` already enumerated the Decisions table — a row missing an AC-ID carrier or

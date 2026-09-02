@@ -1469,6 +1469,13 @@ function makeNoDiffBaseHost() {
   }))
   fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 41\n')
   g('add', '-A'); g('commit', '-q', '-m', 'base')
+  // The work lands on a BRANCH, leaving `main` at the pre-image. Before 2026-09-01 this fixture
+  // committed the implementation onto main itself, which made `build_base: main` resolve to HEAD —
+  // an empty range, the exact defect spec 20260901/01's review uncovered (every diff-scoped leg
+  // reports zero and passes, and the reviewer is handed nothing). The driver now refuses that range
+  // on the way in, so the fixture has to model a real one. The AC under test is unchanged — only
+  // build_base exists, and `rev-parse main` still names the sha the close flip must stamp.
+  g('checkout', '-q', '-b', 'spec/99-drv-stamp')
   fs.mkdirSync(path.join(root, 'specs/20260820'), { recursive: true })
   const spec = path.join(root, 'specs/20260820/99-drv-stamp.md')
   fs.writeFileSync(spec, noDiffBaseSpecBody({ buildBaseRef: 'main', acId: 'AC-20260820-99-16' }))

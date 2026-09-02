@@ -494,6 +494,14 @@ function resolveBaseSha() {
   // at the single point where the range is first known, rather than trusting every future caller to
   // have derived it correctly. Mirrors replay.js:386-391, which already validates its own candidates
   // this way (`sha !== parent` + `merge-base --is-ancestor`).
+  //
+  // SCOPED TO THE JUDGING PHASES. Once `closed` is marked the verdict is already recorded and what
+  // remains is merge mechanics, which run from the MAIN ROOT — where HEAD legitimately still sits
+  // at the base, because the spec's commits are on a branch that has not merged yet. Checking there
+  // refuses every worktree merge-back (executed: it broke 6 merge/promotion/flip tests, all of them
+  // correct). The range is validated on the way IN, which is the only point where a bad range can
+  // still cause a false verdict.
+  if (marks.closed) return sha
   const head = headSha()
   if (sha === head) {
     die('the review range is empty — base and HEAD are the same commit (' + sha.slice(0, 12) +

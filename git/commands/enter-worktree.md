@@ -60,8 +60,18 @@ spec plugin must be installed.
      ## Report) and stop.
    - **Setup:** run the host's `setupCommand` (from `.claude/spec.config.json`) once inside
      `{worktree}` — a fresh worktree has no installed deps.
-   - **Write `build_base`:** write `build_base: {origin}` into the spec frontmatter. This is the
-     sole writer of that field; a fresh create is the only time it runs.
+   - **Write `build_base` — but never over a pin:** write `build_base: {origin}` into the spec
+     frontmatter. This is the sole writer of that field; a fresh create is the only time it runs.
+     **Skip the write entirely** when the spec already carries a `diff_base:` line, or when its
+     `status:` is past `hardened` (`implementing` or `done`) — both mean a build has already
+     pinned the true pre-image, and `{origin}` is a moving ref that will name the wrong tree the
+     moment those commits land on it. Writing it anyway is what produced the 2026-09-01 empty-diff
+     review on spec 20260901/01: the build pinned `diff_base` correctly, this step then layered
+     `build_base: main` on top, and by review time `main` carried the build's own commits, so the
+     judged range was empty and every diff-scoped leg reported zero and green. When skipped, say
+     so in the report and name the pin that won. `spec-review-driver.js` prefers the pin and
+     refuses an empty range regardless — that is the deterministic backstop; this is the ordering
+     guard that keeps the two writers from racing in the first place.
    - Report as **created** (see ## Report).
 
 ## Report

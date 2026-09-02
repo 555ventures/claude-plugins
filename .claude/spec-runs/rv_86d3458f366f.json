@@ -1,0 +1,135 @@
+{
+  "runId": "rv_86d3458f366f",
+  "ts": "2026-09-02T19:04:28.142Z",
+  "spec": "specs/20260902/01-comment-narration-gate.md",
+  "tier": "critical",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1075,
+    "base": "1f6a7ed5ab1807d241a15374be383934d493a43a",
+    "head": "43cf30ce818b3e9d2246b14883d08933af81336e",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      }
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 110
+      }
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      }
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 14,
+        "carried": 12,
+        "sanctioned": 2,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "Iteration-2 survivor s0 (a symlink resolving outside --root was admitted and its off-root content read/classified) is closed: an off-root sibling-file symlink and a /etc/hosts symlink are both now skipped, not read.",
+        "file": "spec/scripts/comment-narration.js",
+        "line": 144,
+        "evidence": "executed repro (fresh, independent of the shipped test): root with scripts/pointer.js -> <root>/../sibling-outside/outside.js (narrated) and scripts/hosts-link -> /etc/hosts; node spec/scripts/comment-narration.js --root <ROOT> --json returned {\"findings\":[],\"files\":{},\"total\":0} for those two paths (only the in-root real file scripts/real-sub/a.js was reported) — neither pointer.js nor hosts-link appear anywhere in the output; exit reflects only the real in-tree finding."
+      },
+      {
+        "claim": "Iteration-2 survivor s1 (a symlinked directory under a scanned code directory was never traversed, hiding its contents from the scan) is closed: a directory reachable only through an in-root symlink is now traversed and reported under the symlink's in-tree relative path.",
+        "file": "spec/scripts/comment-narration.js",
+        "line": 147,
+        "evidence": "executed repro: root/scripts/subdir-link -> root/real-outside-dir (a directory NOT itself under any CODE_DIRS entry, so only reachable via the symlink), containing a.js with a narrated comment; node spec/scripts/comment-narration.js --root <ROOT> --json returned {\"findings\":[{\"file\":\"scripts/subdir-link/a.js\",\"line\":1,\"classes\":[\"date\",\"prior\"],...}],\"files\":{\"scripts/subdir-link/a.js\":1},\"total\":1}, exit=1 — the file is found and reported under the symlink's relative path."
+      },
+      {
+        "claim": "A symlink cycle (scripts/loop -> scripts) terminates without duplicate or infinite traversal.",
+        "file": "spec/scripts/comment-narration.js",
+        "line": 130,
+        "evidence": "tests/comment-narration/comment-narration.test.js's new AC-20260902-01-2 test 'skips a symlink resolving outside --root and traverses a directory symlink inside root without following a symlink cycle' passed (node --test run: 16/16 pass), asserting no key under parsed.files starts with 'scripts/loop/' and total===1; independently re-ran the full targeted suite (node --test 'tests/comment-narration/*.test.js' tests/consistency/comment-narration-live.test.js): 16 tests, 16 pass, 0 fail, command did not hang."
+      },
+      {
+        "claim": "No regression: a --root reached through a symlinked path (e.g. macOS /tmp -> /private/tmp, or an explicit symlink to the root) still scans its own real files — the realRoot bound does not reject the root's own content.",
+        "file": "spec/scripts/comment-narration.js",
+        "line": 158,
+        "evidence": "executed repro: created a real tree under a tmp dir, then made rootlink -> realtree and ran node spec/scripts/comment-narration.js --root <rootlink> --json; output: {\"findings\":[{\"file\":\"spec/scripts/x.js\",\"line\":1,\"classes\":[\"date\",\"prior\"],\"text\":\"// 2026-01-01 previously crashed\"}],\"files\":{\"spec/scripts/x.js\":1},\"total\":1}, exit=1 — the real file was found and reported under its normal relative path (confirmed separately that macOS mktemp -d itself already returns a path under the /var/folders -> /private/var/folders symlink, so every existing test already exercises this case)."
+      },
+      {
+        "claim": "No regression: a real (non-symlink) nested subdirectory is still walked recursively.",
+        "file": "spec/scripts/comment-narration.js",
+        "line": 122,
+        "evidence": "executed repro: root/spec/scripts/nested/deeper/y.js (no symlinks involved) with a narrated comment; node spec/scripts/comment-narration.js --root <ROOT> --json reported both spec/scripts/x.js and spec/scripts/nested/deeper/y.js, total===2, exit=1."
+      },
+      {
+        "claim": "No regression: --rules-mode and --code-identical are unaffected by the walkDir/collectFiles changes.",
+        "file": "spec/scripts/comment-narration.js",
+        "line": 247,
+        "evidence": "executed repro: --rules-mode <hostroot> against a synthetic .claude/rules/spec-pipeline.md with a narrated line returned {\"mode\":\"rules\",...,\"total\":1}, exit=1 as expected; --code-identical <base> against a synthetic gitRepo with an executable-line edit (cap 15->16) returned {\"mode\":\"code-identical\",...,\"differ\":[{\"file\":\"spec/scripts/z.js\",\"reason\":\"code-changed\"}]}, exit=1 as expected — both match pre-existing documented behavior."
+      },
+      {
+        "claim": "The header's new 'does NOT ... read a symlink target that resolves outside --root' line, and the new symlink test block, carry zero narration-class findings themselves.",
+        "file": "spec/scripts/comment-narration.js",
+        "line": 18,
+        "evidence": "ran the live plugin scan (node spec/scripts/comment-narration.js --root . --json) and checked files['spec/scripts/comment-narration.js'] and files['tests/comment-narration/comment-narration.test.js']: both are 0 (absent/None), and neither has a baseline entry, confirming no narration classes fire on either touched file post-edit."
+      },
+      {
+        "claim": "node --test 'tests/comment-narration/*.test.js' tests/consistency/comment-narration-live.test.js is green and the live --baseline scan exits 0.",
+        "file": "tests/comment-narration/comment-narration.test.js",
+        "line": 1,
+        "evidence": "executed exact command: 16 tests, 16 pass, 0 fail, 0 cancelled, duration_ms 1468. Separately ran node spec/scripts/comment-narration.js --root . --hosts <D12 list> --people JJ,founder --baseline .claude/comment-narration.baseline.json --json and observed exit=0."
+      },
+      {
+        "claim": "Full npm test is green with no regressions.",
+        "file": "tests/comment-narration/comment-narration.test.js",
+        "line": 1,
+        "evidence": "executed npm test: 949 tests, 949 pass, 0 fail, 0 cancelled, duration_ms 62622. All deterministic review legs (ac-matrix, gate-output, promise-sweep, smoke in legs-3/) also show 0 findings: ac-matrix uncovered=0 oracle=0 preGreen=0 skipped=0 sanctioned=0; gate-output 110/110 pass; promise-sweep rows=14 carried=12 sanctioned=2 orphans=0 0 finding(s); smoke prints __SMOKE_INERT__ as expected."
+      }
+    ],
+    "reviewerCount": 1,
+    "scope": "fix-delta",
+    "tokens": 48000
+  }
+}

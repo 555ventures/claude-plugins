@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 
-// Escape class contract (specs/20260901/07-escape-class-contract.md, 2026-09-01, brief 19): D4/
+// Escape class contract (specs/20260901/07-escape-class-contract.md, brief 19): D4/
 // D5/D12 teach fleet-reader.js to join `stage:"escape-class"` amendment rows onto the escape
 // rows they repair (latest amendment per escapeTs+spec+file key wins) before counting classes,
 // list rows still needing a class as `escapes.unclassedRows`, route both stages through the D1

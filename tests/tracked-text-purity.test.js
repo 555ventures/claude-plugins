@@ -6,8 +6,9 @@ const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { ROOT } = require('./helpers')
 
-// JJ-20260816-01 (2026-08-16, tracked-text purity): every git-tracked file must be free of raw
-// NUL (0x00) bytes. Two incidents, one class, both from a correct in-memory NUL delimiter
+// Tracked-text purity (see this file's own test name for the pinned incident id): every
+// git-tracked file must be free of raw NUL (0x00) bytes. Two incidents, one class, both from
+// a correct in-memory NUL delimiter
 // spelled as the raw byte instead of the escape '\x00' (behaviorally identical in JS source):
 //   - spec/scripts/fidelity-check.js grew a raw NUL at byte 8449; BSD grep thereafter
 //     classified the file binary and returned SILENT exit-1 "no matches" on four real
@@ -25,7 +26,7 @@ const { ROOT } = require('./helpers')
 //     that check.
 //
 // What this pin deliberately does NOT do:
-//   - No allowlist in v1. Measured 2026-08-16: zero binary files are tracked (all 18
+//   - No allowlist in v1. Measured: zero binary files are tracked (all 18
 //     tests/fixtures files are pure text), so an allowlist would be dead code inviting
 //     exemptions. The first deliberately-binary tracked fixture creates one here, in this
 //     file, with itself as the justifying evidence.

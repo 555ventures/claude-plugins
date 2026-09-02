@@ -5,35 +5,28 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runBash, runNode, SPEC } = require('../helpers')
 
-// specs/20260901/02-run-provenance.md (2026-09-01, brief 18): a review row is ledger-answerable
+// specs/20260901/02-run-provenance.md D1/D2/D3 (brief 18): a review row is ledger-answerable
 // only when it names which command shape produced it (via) and which model held the session
-// (model). Neither exists today — no row carries a model, and the session model is not in the
-// shell environment (measured 2026-09-01, spike A1). This spec adds a never-blocking
-// UserPromptSubmit hook (spec/scripts/spec-session-stamp.sh, D1) that stamps session_id +
-// transcript_path to a per-root file, a library (spec/scripts/lib/session-stamp.js, D2) that
-// derives the session model from that transcript, and --via/--model on verdict.js (D3). These
-// tests are written BEFORE any of the three exist (TDD red, 2026-09-01) — every test here fails
-// on a missing spec-session-stamp.sh / lib/session-stamp.js / unknown-flag verdict.js and must go
-// green only once the mechanism genuinely behaves as D1/D2/D3 and the Behavior table describe.
-// AC-20260901-02-1, -2, -3, -6 below.
+// (model) — a never-blocking UserPromptSubmit hook (spec/scripts/spec-session-stamp.sh, D1)
+// stamps session_id + transcript_path to a per-root file, a library
+// (spec/scripts/lib/session-stamp.js, D2) derives the session model from that transcript, and
+// verdict.js carries --via/--model (D3). AC-20260901-02-1, -2, -3, -6 below.
 //
-// specs/20260901/05-checkpoint-fail-closed.md D3 (2026-09-01, brief 18a): verdict.js gains
-// --checkpoint <cleared|stamp-appeared|overridden|not-reached> and --checkpoint-reason <text>,
+// specs/20260901/05-checkpoint-fail-closed.md D3 (brief 18a): verdict.js gains --checkpoint
+// <cleared|stamp-appeared|overridden|not-reached> and --checkpoint-reason <text>,
 // review-profile only, inserting a `checkpoint` key immediately after `verdict` (before
 // `escalated`) on the printed row. AC-20260901-05-8 tags the pre-existing AC-20260901-02-6
 // byte-identity test in place (D3 requires that test to keep passing untouched — via/model's
 // insertion point is unaffected).
 //
-// specs/20260901/09-disposer-gate.md D5/D9 (2026-09-01, brief 18b): CHECKPOINT is retired and
-// --checkpoint's enum changes to <disposer|empty|not-reached> plus --checkpoint-overrides <N>
-// (only valid with --checkpoint disposer), now accepted with --via loop, --via direct, or --via
-// absent (the old enum's --via-loop-only restriction is gone). The old AC-20260901-05-6 test is
-// rewritten in place to AC-20260901-09-10 and the old AC-20260901-05-7 test to AC-20260901-09-11
-// — every old-enum value (cleared/stamp-appeared/overridden) and --checkpoint-reason are now
-// themselves refused. The AC-20260901-02-6 byte-identity test is tagged AC-20260901-09-12 in
-// place, untouched (D5 changes nothing about the flagless row). Written before verdict.js
-// implements D5 (TDD red, 2026-09-01) — AC-20260901-09-10/-11 fail against current code because
-// --checkpoint still only accepts the old enum and still refuses --via direct/--via absent.
+// specs/20260901/09-disposer-gate.md D5/D9 (brief 18b): CHECKPOINT is retired and
+// --checkpoint's enum is <disposer|empty|not-reached> plus --checkpoint-overrides <N> (only
+// valid with --checkpoint disposer), accepted with --via loop, --via direct, or --via absent.
+// The old AC-20260901-05-6 test is rewritten in place to AC-20260901-09-10 and the old
+// AC-20260901-05-7 test to AC-20260901-09-11 — every old-enum value
+// (cleared/stamp-appeared/overridden) and --checkpoint-reason are refused. The
+// AC-20260901-02-6 byte-identity test is tagged AC-20260901-09-12 in place, untouched (D5
+// changes nothing about the flagless row).
 
 function readStamp(root) {
   return JSON.parse(fs.readFileSync(path.join(root, '.claude/spec-session.json'), 'utf8'))
@@ -203,9 +196,9 @@ test('AC-20260901-02-2: readSessionStamp(root) returns the parsed stamp object, 
 // AC-20260901-02-3 / AC-20260901-02-6 ------------------------------------------------------------
 
 // All eight of verdict.js's REVIEW_LEGS, green — the same shape as tests/review/verdict.test.js's
-// own SIX_GREEN fixture (2026-09-01 fixture-defect repair: the original one-leg, all-fields-absent
-// manifest here derived UNVERIFIED, never CLEAN, so every --status-0 assertion below failed on the
-// verdict word rather than on the via/model contract this file exists to pin).
+// own SIX_GREEN fixture (a one-leg, all-fields-absent manifest derives UNVERIFIED, never CLEAN,
+// so a --status-0 assertion here would fail on the verdict word rather than on the via/model
+// contract this file exists to pin).
 const CLEAN_LEGS = [
   { leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 40 } },
   { leg: 'smoke', exit: 4, observed: { result: 'inert' } },

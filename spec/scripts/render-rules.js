@@ -2,7 +2,7 @@
 'use strict'
 // render-rules.js --rules <manifest> --inventory <json>… --tokens <tokens.css> [--json]
 //
-// WHY: specs/20260824/04-render-rules.md (2026-08-24, D1-D3) — a design-rules.json manifest's
+// WHY: specs/20260824/04-render-rules.md (D1-D3) — a design-rules.json manifest's
 // thresholds (CTA count, touch-target size, contrast, colors within the token palette) were only
 // ever checked by a Sonnet rule-checklist walk at /spec:sketch exit, in the render gate, and in
 // /spec:review's design leg — a rule the manifest can express as a number was still being judged
@@ -19,14 +19,14 @@
 // out of scope per the spec's Rationale); relax the closed renderCheck.kind set for an unknown
 // kind (D1 — half-checked is worse than an exit-2 refusal naming the rule).
 //
-// specs/20260831/02-viewport-adaptation-rules.md (2026-08-31, D1/D2/D3/D5/D6): the closed
+// specs/20260831/02-viewport-adaptation-rules.md (D1/D2/D3/D5/D6): the closed
 // renderCheck.kind set gains `no-overflow` (a union of the inventory's page-level
 // scrollWidth/clientWidth comparison and a per-entry box-edge comparison, exempting
 // fixed/outOfFlow/dataPositioned/srOnly entries — mirrors render-compare's own geometry
 // exemptions) and `line-length` (an estimated-character-width check gated silently by
 // `minViewport`, `severity: "warn"` in the template). An inventory document with no usable
 // `page` block fails BOTH new kinds closed with a re-capture finding (D5) rather than passing
-// silently — the exact laundering prax measured (spec 20260823/11: a phone-only mock ratified
+// silently — the exact laundering measured (spec 20260823/11: a phone-only mock ratified
 // clean, its non-adaptation later misattributed to components).
 //
 // Exit codes: 0 = no findings · 1 = one or more findings (a `severity: "warn"` rule's own
@@ -42,9 +42,8 @@ function die(msg) {
   process.exit(2)
 }
 
-// Worker Rules: a script that prints a payload and exits must route through a synchronous
-// writer — console.log()+process.exit() truncates a large payload at the 64 KiB pipe buffer
-// while still exiting 0 (this repo's 2026-08-23 spec-status.js incident).
+// A script that prints a payload and exits routes through a synchronous writer — see
+// spec/scripts/lib/driver-io.js for the 64 KiB pipe-truncation mechanism this avoids.
 function writeOut(str) {
   const buf = Buffer.from(str + '\n', 'utf8')
   let off = 0

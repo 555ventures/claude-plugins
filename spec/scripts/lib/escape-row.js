@@ -6,7 +6,7 @@
 //
 // Why: specs/20260901/07-escape-class-contract.md D1. Before this module, fleet-reader.js's
 // PREVENTED_BY/FOUND_BY/SEVERITY sets were inline and nothing validated the `class` field at
-// all — a session `printf` could (and on 2026-08-xx did) write `preventedBy:"test"` and
+// all — a session `printf` could write `preventedBy:"test"` and
 // `foundBy:"build"` straight into a fleet ledger, and a null `class` with no excuse was
 // indistinguishable from a deliberately-unclassable row. This module is now the ONE place
 // `escape-row.js` (the CLI writer) and `fleet-reader.js` (the drift census + effective-class

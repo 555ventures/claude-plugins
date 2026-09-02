@@ -6,7 +6,7 @@ const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20260823/07-deviations-sidecar-backstop.md (2026-08-23, brief 13): the deviations
+// specs/20260823/07-deviations-sidecar-backstop.md: the deviations
 // sidecar (<spec minus .md>.deviations.md) was pure convention — build sessions appended
 // departure entries by hand, review folded and deleted the file by hand, and nothing caught a
 // skipped fold or an entry written in a shape the ledger's `^- ` count could never see. This

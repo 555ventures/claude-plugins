@@ -18,8 +18,8 @@
 # Usage: manifest-check.sh [--manifest .claude/spec-manifest.json]
 # Exit 0 = every check passed. Exit 1 = failures (each listed). Exit 5 = missing/invalid manifest.
 # After the human prose summary, prints one machine sentinel line: TOTAL=<n> FAILS=<n> INERT=<n>
-# (release.md's substrate paragraph parses these three counts verbatim — 2026-08-10 fix: the
-# INERT count was previously attributed from prose that never printed it).
+# (release.md's substrate paragraph parses these three counts verbatim — the INERT count is
+# read from this sentinel line, never from prose that never printed it).
 set -u
 
 MANIFEST=".claude/spec-manifest.json"

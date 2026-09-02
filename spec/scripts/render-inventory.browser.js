@@ -2,14 +2,14 @@
 // command evaluates inside a real page (Contracts: `(${fn})(${JSON.stringify({theme, state})})`).
 //
 // WHY this file is a bare JS EXPRESSION, not a module: specs/20260824/01-render-gate.md D1/D2
-// (2026-08-24, ADR-0002) — the plugin never launches a browser (D1: dependency/tool-naming
+// (ADR-0002) — the plugin never launches a browser (D1: dependency/tool-naming
 // cost). The host's own capture command is the only thing that runs inside a page, so this file
 // has to be something a page-evaluate call can hand a value straight to: one expression
 // evaluating to `(opts) => inventoryDocument`. No module wrapper, no shebang, no `require`/
 // `import`, and — per the entry rules below — zero Node APIs; it reads only `document`, ambient
 // `getComputedStyle`, and `window`'s scroll offsets, the surfaces a captured page actually has.
 //
-// WHAT IT MEASURES (D2/D3/D11, prax + salon-os spikes, 2026-08-24 A1): an accessibility-tree-
+// WHAT IT MEASURES (D2/D3/D11, A1): an accessibility-tree-
 // shaped walk of `[data-screen-label]` (or `body`) in document order. Own PAINTED text — text
 // nodes with the element's own computed text-transform applied, never raw textContent — closes
 // the measured `4h`->`4H` false positive. `aria-label` is kept as a separate `name` facet rather
@@ -28,7 +28,7 @@
 // Exit codes: n/a — not an entrypoint. The host's capture command owns exit 0/non-zero for the
 // process that evaluates this file; this expression only ever returns a document or throws.
 //
-// specs/20260824/04-render-rules.md (2026-08-24, D4): every entry also carries
+// specs/20260824/04-render-rules.md (D4): every entry also carries
 // `effectiveBackground` (the nearest ancestor-or-self computed background-color whose alpha is
 // non-zero, else the document's) and `fontWeight` — render-rules.js's contrast check has no
 // denominator to compare against a fully transparent own background. `effectiveBackground`
@@ -37,10 +37,10 @@
 // entry rules above are written against guarantees no ancestor-lookup API per element, only
 // `children` for descending. `schemaVersion` stays 1 (additive keys).
 //
-// specs/20260831/02-viewport-adaptation-rules.md (2026-08-31, D4): the document also carries a
+// specs/20260831/02-viewport-adaptation-rules.md (D4): the document also carries a
 // top-level `page: { scrollWidth, clientWidth }` block — render-rules.js's new `no-overflow`
 // check (specs/20260831/02) has no geometry to compare a mock against its declared viewport
-// without it (prax, spec 20260823/11: a phone-only mock ratified clean with no measurement tying
+// without it (spec 20260823/11: a phone-only mock ratified clean with no measurement tying
 // it to the viewport at all). Read guarded from `document.scrollingElement ||
 // document.documentElement` — the same discipline as every other optional lookup in this file —
 // with `null` values when the surface or its numeric fields are unavailable, never a throw;

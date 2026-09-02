@@ -9,8 +9,8 @@ const { SPEC, tmpdir, gitRepo } = require('./helpers')
 const read = (p) => fs.readFileSync(path.join(SPEC, p), 'utf8')
 
 // The run ledger is ONE repo-wide file (.claude/spec-runs.jsonl), never per-spec files in
-// specs/ — pinned after the clutter objection that shaped the design. v7.0.0 slimmed this
-// file to the behavioral core: row-shape derivation is pinned by execution in
+// specs/ — pinned after the clutter objection that shaped the design. This file pins the
+// behavioral core: row-shape derivation is pinned by execution in
 // tests/review/verdict.test.js, not by regexing command prose.
 
 const LEDGER = '.claude/spec-runs.jsonl'
@@ -48,12 +48,11 @@ test('AC-20260820-07-13: review never hand-writes the verdict word — verdict.j
     'the ledger row must be the verbatim verdict.js --ledger line, never hand-assembled')
 })
 
-// specs/20260822/02-init-generation-script.md D12: the prose pin over init.md this test used to
-// carry is retired — init-gen.js (D1/D2) becomes the sole writer of the gitattributes union
-// line, and the behavioral test in tests/init-gen/generate.test.js (generate -> .gitattributes
-// contains the line, idempotently) is the pin's new home. Regexes over prose are
-// not tests (§ Test Rules) once an executable oracle exists; the merge-mechanics test below is
-// unchanged.
+// specs/20260822/02-init-generation-script.md D12: init-gen.js (D1/D2) is the sole writer of
+// the gitattributes union line, and the behavioral test in tests/init-gen/generate.test.js
+// (generate -> .gitattributes contains the line, idempotently) is the pin's home — never a
+// regex over init.md prose (§ Test Rules) once an executable oracle exists; the merge-mechanics
+// test below is unchanged.
 
 test('union driver resolves concurrent worktree appends under squash merge', () => {
   const root = fs.realpathSync(tmpdir('ledger'))
@@ -77,10 +76,10 @@ test('union driver resolves concurrent worktree appends under squash merge', () 
   assert.deepStrictEqual(lines.sort(), ['{"spec":"b"}', '{"spec":"base"}', '{"spec":"c"}'])
 })
 
-// specs/20260821/02-replay-review-phase.md (2026-08-21, brief 14): the reviewer-replay harness
-// was advisory — review's CLEAN close PRINTED that a replay was due and nothing ran it, and this
-// repo skipped that reminder through 12+ reviews in ~48 hours. Execution moves into the review
-// driver's own REPLAY state (D1-D3); review.md gains the judgment step that executes
+// specs/20260821/02-replay-review-phase.md D1-D5: the reviewer-replay harness is advisory —
+// review's CLEAN close must not merely PRINT that a replay is due while nothing runs it.
+// Execution moves into the review driver's own REPLAY state (D1-D3); review.md gains the
+// judgment step that executes
 // replay.md's phases (D4) and core § Feedback Loop records who executes the cadence (D5). Both
 // pins normalize whitespace first: these files hard-wrap at ~90 columns, so a load-bearing
 // sentence is split across lines and a contiguous-text regex would be red for a reason no diff
@@ -121,23 +120,20 @@ test('AC-20260821-02-9: core § Feedback Loop names the driver\'s REPLAY state a
     'session\'s memory')
 })
 
-// specs/20260821/02-replay-review-phase.md D10 (JJ ruling 2026-08-21, after a Fable 5 consult on
-// this build's own recorded debts): core § Feedback Loop states the pipeline improves "through
-// artifacts — never through anyone's memory" and enumerates carriers that are each either derived
-// or passed through a review disposition. `.claude/agent-memory/` was the one carrier with none:
-// written by dispatched workers, it shapes future worker behaviour before any gate can observe
-// the effect and outlives the session that wrote it. This build proved the gap by shipping a
-// false memory — two entries from one incident both attributed the orchestrator's own concurrent
-// edits to a phantom sibling worker and concluded the assignment could be stood down from; one
-// was deleted, its twin was committed unexamined until the consult found it. The disposition step
-// is the whole fix: no memory-review gate, no write hook, no lint (unearned under core § Incident
-// Policy at recurrence count 1). PARTIALLY REOPENED 2026-08-23 by specs/20260823/06 D13, on the
-// class's second recorded member — a gate-scripts note falsified by the same diff that shipped it,
-// caught only because that diff happened to touch the note's own file. `memory-sweep.js` now
-// WIDENS the disposition trigger from "the diff touched the note file" to "the diff touched what
-// the note is about", plus a TTL of 10 undisposed review closes. It is still not a gate, hook, or
-// lint: it exits 0 with or without findings and nothing feeds verdict.js. The duty pinned below is
-// unchanged — this spec widened who lands on the disposition desk, never what disposition means.
+// specs/20260821/02-replay-review-phase.md D10: core § Feedback Loop states the pipeline
+// improves "through artifacts — never through anyone's memory" and enumerates carriers that are
+// each either derived or passed through a review disposition. `.claude/agent-memory/` was the
+// one carrier with none: written by dispatched workers, it shapes future worker behaviour before
+// any gate can observe the effect and outlives the session that wrote it — a false memory can
+// attribute one session's own edits to a phantom sibling worker and go unexamined until a later
+// consult finds it. The disposition step is the whole fix: no memory-review gate, no write hook,
+// no lint (unearned under core § Incident Policy at recurrence count 1).
+//
+// `memory-sweep.js` (specs/20260823/06-prose-debt-pruning.md D13) widens the disposition trigger
+// from "the diff touched the note file" to "the diff touched what the note is about", plus a TTL
+// of 10 undisposed review closes. It is still not a gate, hook, or lint: it exits 0 with or
+// without findings and nothing feeds verdict.js. The duty pinned below is unchanged — this spec
+// widened who lands on the disposition desk, never what disposition means.
 
 test('AC-20260821-02-10 / AC-20260823-06-9: agent memory is a disposed artifact, never a silent improvement carrier — review.md\'s close gives every touched memory file one stated fate, and core § Feedback Loop says why', () => {
   const review = squash(read('commands/review.md'))

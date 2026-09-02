@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 
-// specs/20260817/07-promise-sweep-leg.md D1/D2 (2026-08-17): the v7 replay eval measured the
+// specs/20260817/07-promise-sweep-leg.md D1/D2: the v7 replay eval measured the
 // single reviewer's one systematic miss class — a spec Decisions row that promises behavior
 // nothing implements, invisible because no test fails to point at it (all five measured misses
 // were Decisions-table rows). This suite pins the deterministic replacement, spec/scripts/
@@ -13,9 +13,9 @@ const { tmpdir, runNode } = require('../helpers')
 // exist yet at HEAD, so every test here is a TDD red pin. It reads ONLY the spec text (no
 // --root, no File Plan, no test-file reads — that half of the chain stays ac-matrix's).
 //
-// specs/20260820/03-review-observation-truth.md D5 (AC-20260820-03-7 .. -03-9, 2026-08-20, Salon
-// OS field report — 52 noise findings that trained bulk-waiving, which shipped escape
-// rv_8b7c4e2e9ec0 inside a 17/17-waive review): the sweep applied retroactively to specs locked
+// specs/20260820/03-review-observation-truth.md D5 (AC-20260820-03-7 .. -03-9 — 52 noise
+// findings that trained bulk-waiving, which shipped escape rv_8b7c4e2e9ec0 inside a
+// 17/17-waive review): the sweep applied retroactively to specs locked
 // before the carrier convention existed. It now gains an applicability cutoff — spec date = the
 // first `specs/<YYYYMMDD>/` path segment, compared against built-in `APPLIES_FROM = '20260817'`
 // (the date specs/20260817/07 shipped the convention). A pre-cutoff spec exits 0 with zero
@@ -24,7 +24,7 @@ const { tmpdir, runNode } = require('../helpers')
 // applies the sweep in full (fail-closed, unchanged behavior) — AC-20260817-07-2's tmpdir-based
 // fixture below already pins that default and is retagged accordingly.
 //
-// specs/20260820/06-typed-evidence-manifest.md D1/D9 (2026-08-20, brief 16's second move): every
+// specs/20260820/06-typed-evidence-manifest.md D1/D9 (brief 16's second move): every
 // manifest row's `observed` field becomes a typed JSON object — promise-sweep's counted row
 // becomes exactly {"rows":N,"carried":C,"sanctioned":S,"orphans":O} and the pre-cutoff row
 // becomes {"notApplicable":{"spec":"YYYYMMDD","appliesFrom":"YYYYMMDD"}}; the packed

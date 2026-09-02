@@ -6,11 +6,11 @@ const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20260901/01-build-driver.md (2026-09-01, brief 18): /spec:build's ~14 hand-performed
+// specs/20260901/01-build-driver.md (brief 18): /spec:build's ~14 hand-performed
 // choreography steps (admission, wave derivation, gate resolution, env preflight, the status
 // flip, red-check, the final gate, scope-reconcile, diff counts, the ledger row) move into
 // spec-build-driver.js on the spec-review-driver.js contract (specs/20260820/07 D1) — a session
-// that only follows printed steps can no longer skip or hand-compose any of them. These tests
+// that only follows printed steps cannot skip or hand-compose any of them. These tests
 // drive the real binary end-to-end against synthetic git hosts (tmpdir() + gitRepo(), runNode
 // with cwd), never poke at internals except the sidecar's own documented build-state.json shape
 // (Contracts block), and are written BEFORE the driver exists — every test here fails on a
@@ -18,7 +18,7 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // what its AC names. AC-20260901-01-1 … -12, -14, -18 below (AC-13/-16/-17 live in
 // tests/init-gen/generate.test.js, tests/spec-paths.test.js, tests/review/review-driver.test.js
 // respectively; AC-15 is the read-load oracle in tests/consistency/read-load.test.js). The
-// AC-18 tests below pin the shared admission gate (`admitMark()`) landed 2026-09-01 against the
+// AC-18 tests below pin the shared admission gate (`admitMark()`) landed against the
 // review finding: `integrated` had no state guard at all (re-issued at ESCALATE it laundered the
 // terminal state into COMMIT with gate-cap still on disk; re-issued at REPAIR it ran an
 // uncounted, uncapped repair round), `red-attributed` was accepted at TESTS pre-recording the
@@ -667,12 +667,12 @@ test('AC-20260901-01-18 (class coverage: red-attributed): a --mark red-attribute
     'a refused mark must leave build-state.json byte-unchanged — recording it here would let the RED_ATTRIBUTION judgment step be silently skipped: ' + before)
 })
 
-// specs/20260901/02-run-provenance.md D5 (2026-09-01, brief 18, AC-20260901-02-5): the build
+// specs/20260901/02-run-provenance.md D5 (brief 18, AC-20260901-02-5): the build
 // driver gains the review driver's own --via flag (D4's sibling), recorded at sidecar creation,
 // and writes via/model onto the build row immediately after tier — model derived at row-write
 // time from lib/session-stamp.js's sessionModel(repoRoot). This test is written before
-// spec-session-stamp.sh / lib/session-stamp.js / the driver's --via support exist (TDD red,
-// 2026-09-01) and must fail until the driver genuinely threads --via through sidecar creation and
+// spec-session-stamp.sh / lib/session-stamp.js / the driver's --via support exist (TDD red)
+// and must fail until the driver genuinely threads --via through sidecar creation and
 // stamps the row with a real transcript-derived model.
 test('AC-20260901-02-5: a run created with --via loop and a stamp whose transcript ends in an assistant line with model claude-opus-5 appends a build row whose keys after tier begin via, model with "via":"loop","model":"claude-opus-5"; a run created without --via and without a stamp appends via:"direct", model:null', () => {
   const loopHost = makeHost()
@@ -722,7 +722,7 @@ test('AC-20260901-02-5: a run created with --via loop and a stamp whose transcri
     'a run with no .claude/spec-session.json stamp anywhere must carry model:null on its DONE row, never a thrown error or a fabricated value: ' + JSON.stringify(directRow))
 })
 
-// prax field report (2026-09-02, the first full /spec:run loop, ledger rows bd_9fbf227320f3 +
+// field report from the first full /spec:run loop (ledger rows bd_9fbf227320f3 +
 // rv_f756ae99b428): two reflex traps at the build→review boundary, both closed in the driver.
 test('field report 2026-09-02 (build already DONE): WHEN invoked on a status:implementing spec with no sidecar and a stage:"build" ledger row naming this spec THE SYSTEM exits 2 naming the row and the review driver, creates no sidecar, and leaves the spec byte-identical — a build row for a different spec, or a malformed ledger line, never triggers it', () => {
   const host = makeHost()
@@ -783,4 +783,33 @@ test('field report 2026-09-02 (empty waves): WHEN layerGroups declares groups wi
   const r2 = run(host.root, host.spec, '--mark', 'wave-done', '--wave', 'other', '--workers', '1')
   assert.strictEqual(r2.status, 0, r2.stdout + r2.stderr)
   assert.strictEqual(stateOf(host.root, host.spec), 'INTEGRATION', 'no wave remains after other: ' + r2.stdout)
+})
+
+// Owner: specs/20260902/02-plugin-code-sweep.md D10 — a tests-layer File Plan row may be a glob,
+// expanded through lib/glob-match.js exactly as red-check.js and scope-reconcile.js expand one.
+// Deliberately carries no AC-ID: red-check reads an AC-ID anywhere in a file, comments included,
+// as a carried-red expectation.
+test('a tests-layer File Plan glob row is satisfied by any matching file on disk, and refused by name when the pattern matches nothing', () => {
+  const host = makeHost()
+  const globbed = fs.readFileSync(host.spec, 'utf8')
+    .replace('| tests/foo.test.js | CREATE | tests |', '| tests/**/*.test.js | CREATE | tests |')
+  fs.writeFileSync(host.spec, globbed)
+  run(host.root, host.spec)
+  const before = fs.readFileSync(path.join(host.sidecar, 'build-state.json'), 'utf8')
+
+  const rNoMatch = run(host.root, host.spec, '--mark', 'tests-authored')
+  assert.strictEqual(rNoMatch.status, 2,
+    'a tests-layer glob matching no file on disk must refuse the mark — accepting it would let a build whose tests were never authored ride through to red-check: ' + rNoMatch.stdout + rNoMatch.stderr)
+  assert.match(rNoMatch.stderr, /tests\/\*\*\/\*\.test\.js/,
+    'the refusal must name the unmatched pattern verbatim, or the session cannot tell which File Plan row is unsatisfied: ' + rNoMatch.stderr)
+  assert.strictEqual(fs.readFileSync(path.join(host.sidecar, 'build-state.json'), 'utf8'), before,
+    'a refused glob mark must leave build-state.json byte-unchanged — a recorded mark cannot be withdrawn')
+
+  fs.mkdirSync(path.join(host.root, 'tests/nested'), { recursive: true })
+  fs.writeFileSync(path.join(host.root, 'tests/nested/foo.test.js'), testFileContent(42))
+  const r = run(host.root, host.spec, '--mark', 'tests-authored')
+  assert.strictEqual(r.status, 0,
+    'one file matching the glob must satisfy the row — treating a pattern as a literal filename blocks every spec that plans its tests by glob: ' + r.stdout + r.stderr)
+  assert.match(fs.readFileSync(path.join(host.sidecar, 'build-state.json'), 'utf8'), /"testsAuthored":\s*true/,
+    'the accepted glob mark must be recorded on the sidecar, or the driver re-demands the step forever')
 })

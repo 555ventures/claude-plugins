@@ -2,7 +2,7 @@
 'use strict'
 // collision-closure.js --spec <path> [--root <dir>] [--tests <dir>]… [--literal <stem>]… [--json]
 //
-// Incident (2026-08-14, spec 20260814/05-collision-closure): two plan-time collateral-damage
+// spec 20260814/05-collision-closure: two plan-time collateral-damage
 // sweeps — find the tests that pin the files a spec is about to change, find the doctrine prose
 // elsewhere that quotes wording a spec is about to retire — have lived as hand-executed prose
 // (a § Gotchas bullet, a /spec:plan sentence) and have missed three times
@@ -12,8 +12,8 @@
 // File Plan path against the test corpus; the **literals leg** (--literal, optional, repeatable)
 // joins planner-supplied stems against the whole repo. Advisory listing only — it never blocks.
 //
-// Incident (2026-08-29, spec 20260827/04's build; closed by spec 20260830/01-collision-closure-
-// exec-recall): the paths leg matched a File Plan target as a literal substring, but this repo's
+// spec 20260830/01-collision-closure-exec-recall: the paths leg matched a File Plan target as
+// a literal substring, but this repo's
 // test helpers spawn scripts by a root-stripped path (`runNode('scripts/foo.js')`, never
 // `spec/scripts/foo.js`) — two out-of-plan genesis test files (7 tests) spawned
 // `scripts/genesis-driver.js` and were invisible to the leg (measured: 88/115 execution edges,
@@ -238,7 +238,7 @@ if (targets.length) {
       // D3: executes is additive on top of the unchanged likely/mentions proximity computation —
       // a runnable target's hit that also sits near a deepStrictEqual tiers BOTH executes and
       // likely (Contracts: "a file... may appear in both executes and likely"); isLikely runs
-      // unconditionally, exactly as before this spec, keyed on the D1 suffix.
+      // unconditionally, keyed on the D1 suffix.
       if (entry.runnable) entry.executes.add(f)
       if (isLikely(content, entry.key)) likelyFiles.add(f)
     }

@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT } = require('../helpers')
 
-// specs/20260823/06-prose-debt-pruning.md (2026-08-23, D3/D4): the § Gotchas entry cap
+// specs/20260823/06-prose-debt-pruning.md (D3/D4): the § Gotchas entry cap
 // (AC-20260823-06-1/2/3) is only half the fix — the two writers that append to it, review's
 // CLOSE step and escape's step-6 `doctrine` branch, must run/name the at-cap eviction duty at
 // append time, or the cap is enforced only retroactively by the suite. D4 closes the eviction

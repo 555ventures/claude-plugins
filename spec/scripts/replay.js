@@ -12,119 +12,92 @@
 //         | --teardown --dir <path>
 //         [--root <path>]  # repo root for every ledger/git read+append; defaults to cwd
 //
-// Incident (2026-08-18, specs/20260819/01-review-evidence-retention.md's Fable retainer pass):
-// a known defect was hand-dropped into a just-CLEANed spec's tree and the standard reviewer was
-// dispatched blind against it — a one-off consult, not a repeatable measurement. spec
-// specs/20260819/02-mutation-replay.md turns that eval into a scheduled, deterministic harness:
-// this script owns every mechanical step (dueness, priority selection, scratch-worktree setup/
-// mutation-apply/teardown, deterministic scoring, ledger recording, catch-rate stats) as flag
-// modes, so /spec:replay's session supplies only the two judgment steps this file deliberately
-// leaves alone — authoring the mutation patch from a corpus recipe, and adjudicating an
-// `ambiguous` score. review-legs.js is the sole leg deriver; this script never re-implements it
-// (D6) — the orchestrating session runs legs itself and passes the verdict in via --record
-// --legs.
+// specs/20260819/02-mutation-replay.md: this script owns every mechanical step of the replay
+// harness (dueness, priority selection, scratch-worktree setup/mutation-apply/teardown,
+// deterministic scoring, ledger recording, catch-rate stats) as flag modes, so /spec:replay's
+// session supplies only the two judgment steps this file deliberately leaves alone — authoring
+// the mutation patch from a corpus recipe, and adjudicating an `ambiguous` score. review-legs.js
+// is the sole leg deriver; this script never re-implements it (D6) — the orchestrating session
+// runs legs itself and passes the verdict in via --record --legs.
 //
-// Incident (2026-08-19, independent review of specs/20260819/02-mutation-replay.md's own build):
-// four defects let the harness leak its own presence into the material the blind reviewer reads.
-// (1) --setup's untracked marker was swept into --apply's `git add -A`, so the reconcile leg
-// flagged it out-of-plan on every run and no run could ever score `caught`/`missed`. An initial
-// fix wrote the marker into the worktree's working tree and tried to exclude it via `git rev-parse
-// --git-path info/exclude` — but info/exclude is NOT per-worktree: it resolves into the shared
-// common git dir (the MAIN repo's `.git/info/exclude`), so every run permanently appended a
-// duplicate line to the maintainer's real local git config and it survived teardown. Fixed for
-// real by writing the marker into the worktree's own private git dir (`git -C <dir> rev-parse
-// --git-dir`, which for a linked worktree resolves under `.git/worktrees/<name>` and is deleted by
-// `git worktree remove`) instead of the working tree at all — this makes the original marker-leak
-// defect structurally impossible rather than merely excluded: `git add -A` cannot sweep a file
-// that was never in the working tree, and `git status` cannot show it.
-// (2) --apply's commit subject named the harness and the defect class, readable via reviewer.md's
-// own sanctioned `git log` — fixed with a --subject flag, structurally rejecting a `replay:`-style
-// subject or any value containing the class id. (3) --select handed the reviewer a ~3-line needle-only
-// diff (worktree stood up at the CLOSE commit) instead of review.md Phase 0's real base-to-HEAD
-// diff — fixed by additionally resolving the close commit's PARENT and that revision's own
-// diff_base/build_base, for the caller to stand the worktree up at. (4) --score classified a
-// crashed or malformed reviewer return as `missed`, permanently deflating the catch rate with
-// evidence that was never produced — fixed by requiring verdict:"CLEAN" plus a survivors array
-// before scoring anything. What this harness must never do, going forward: sign its own work into
-// the tree under review — no marker, message, or diff shape may tell the reviewer it is being
-// tested.
+// The harness must never leak its own presence into the material the blind reviewer reads.
+// --setup's scratch marker lives in the worktree's own private git dir (`git -C <dir> rev-parse
+// --git-dir`, under `.git/worktrees/<name>` for a linked worktree, deleted by `git worktree
+// remove`) — never the working tree, and never `info/exclude` (that path is NOT per-worktree: it
+// resolves into the shared common git dir's `.git/info/exclude`); `git add -A` cannot sweep a
+// file that was never in the working tree, and `git status` cannot show it. --apply's commit
+// subject is caller-supplied via --subject, which structurally rejects a `replay:`-style subject
+// or any value containing the class id, so neither the harness nor the defect class is readable
+// via a sanctioned `git log`. --select resolves the close commit's PARENT plus that revision's
+// own diff_base/build_base, so the reviewer reads review.md Phase 0's real base-to-HEAD diff,
+// never a needle-only diff. --score requires verdict:"CLEAN" plus a survivors array before
+// scoring anything, so a crashed or malformed reviewer return is never scored `missed`. What this
+// harness must never do: sign its own work into the tree under review — no marker, message, or
+// diff shape may tell the reviewer it is being tested.
 //
-// Incident (2026-08-19, specs/20260819/03-replay-first-run-fixes.md — a post-CLEAN consult found
-// four defects before the harness ever executed once, plus a portability sweep found three host-
-// config defects this repo's own git settings hide): (D1) --score scored off a single self-reported
-// --file/--line point; it now takes --patch and scores off EVERY hunk in the mutation's own patch,
-// catching multi-file mutations and misplaced-but-real findings a point score would miss. (D3/D4) a
-// dismissed `ambiguous` adjudication and a failed scratch-worktree `setupCommand` used to record
-// nothing; both now record `unresolved`/`setup-failed` so the run is never silent, and (D5) neither
-// resets the --due/--select measurement window — only a real `caught`/`missed`/`leg-caught` row
-// does, so a broken setup gets retried at the very next review instead of leaving the harness
-// permanently unmeasured. (D6) --stats gained the two new buckets; catch-rate still excludes
-// anything that isn't caught/missed. (D7) --record's --file flag is gone — `files` derives from
-// --patch — and gained a validation matrix per outcome. (D9) host git config (`diff.noprefix`,
-// `diff.mnemonicPrefix`, `core.quotePath`) can make a bare `git diff` produce a patch D1's parser
-// reads as zero hunks, permanently killing the harness on that host — --apply is now the harness's
-// ONLY patch emitter: it re-emits the mutation diff itself under pinned `-c` flags to a REQUIRED
-// --patch-out, and refuses a --patch-out resolving inside --dir (exit 3) before applying anything,
-// since writing the emission into the tree under review would itself be a blindness leak. (D10)
-// --apply now applies with `git apply --index` and commits the index only, never `git add -A` —
-// D4's new setup-gate runs `setupCommand` BEFORE --apply, and any lockfile/generated-code churn it
-// leaves in the working tree must never ride into the diff the blind reviewer reads. (D11) --score
-// normalizes a survivor's path (stripping a leading `./`, matching an absolute path at a path-
-// segment boundary) before comparing it against the patch, since the reviewer contract never pins
-// a path form. What this harness must still never do: sign its own work into the tree under
+// specs/20260819/03-replay-first-run-fixes.md: (D1) --score takes --patch and scores off EVERY
+// hunk in the mutation's own patch — never a single self-reported --file/--line point — catching
+// multi-file mutations and misplaced-but-real findings a point score would miss. (D3/D4) a
+// dismissed `ambiguous` adjudication and a failed scratch-worktree `setupCommand` both record
+// `unresolved`/`setup-failed` so the run is never silent, and (D5) neither resets the
+// --due/--select measurement window — only a real `caught`/`missed`/`leg-caught` row does, so a
+// broken setup gets retried at the very next review instead of leaving the harness permanently
+// unmeasured. (D6) --stats carries the two extra buckets; catch-rate still excludes anything
+// that isn't caught/missed. (D7) `files` derives from --patch and gains a validation matrix per
+// outcome. (D9) host git config (`diff.noprefix`, `diff.mnemonicPrefix`, `core.quotePath`) can
+// make a bare `git diff` produce a patch D1's parser reads as zero hunks — --apply is the
+// harness's ONLY patch emitter: it re-emits the mutation diff itself under pinned `-c` flags to a
+// REQUIRED --patch-out, and refuses a --patch-out resolving inside --dir (exit 3) before applying
+// anything, since writing the emission into the tree under review would itself be a blindness
+// leak. (D10) --apply applies with `git apply --index` and commits the index only, never `git add
+// -A` — D4's setup-gate runs `setupCommand` BEFORE --apply, and any lockfile/generated-code churn
+// it leaves in the working tree must never ride into the diff the blind reviewer reads. (D11)
+// --score normalizes a survivor's path (stripping a leading `./`, matching an absolute path at a
+// path-segment boundary) before comparing it against the patch, since the reviewer contract never
+// pins a path form. What this harness must still never do: sign its own work into the tree under
 // review, or let a run with no truth value enter the catch-rate denominator.
 //
-// Incident (2026-08-23, specs/20260823/05-replay-unattended-hardening.md, rv_387d84a3b424's
-// replay): --setup's blanket in-repo refusal forced every scratch worktree under /private/tmp,
-// where the permission classifier denies every agent Edit/Write — the mutation-authoring worker
-// blocked on manual approval on both live runs that day. (D1/D2) --setup now accepts a --dir
-// inside <root>/.claude/worktrees/ specifically (every other in-repo path keeps refusing, exit 3
-// unchanged) — that directory is already gitignored precedent for agent-editable worktrees (build
-// worktrees live there daily); when a host's own ignore rules don't cover it, --setup
-// self-provisions the line into the shared common git dir's info/exclude (never a host's tracked
-// .gitignore) before creating anything, skipping the append when the line is already present.
-// Separately, --select's diffBase was observed handing the reviewer a moving ref (build_base:
-// main) that goes stale the instant the review's own merge lands. (D4) --select now reads
+// specs/20260823/05-replay-unattended-hardening.md: (D1/D2) --setup accepts a --dir inside
+// <root>/.claude/worktrees/ specifically (every other in-repo path keeps refusing, exit 3) —
+// that directory is already gitignored precedent for agent-editable worktrees (build worktrees
+// live there daily); when a host's own ignore rules don't cover it, --setup self-provisions the
+// line into the shared common git dir's info/exclude (never a host's tracked .gitignore) before
+// creating anything, skipping the append when the line is already present. (D4) --select reads
 // frontmatter at the CLOSE commit (not its parent), tries diff_base before build_base, and emits
 // only a candidate that `git rev-parse --verify` resolves to a full sha which `git merge-base
 // --is-ancestor` confirms is an ancestor of the close commit's parent and not equal to it —
-// nothing qualifies is now a named exit-4 refusal (stale-base cause + the stamped-at-close
-// remedy, spec-review-driver.js's diff_base stamp) rather than a silently wrong diff base.
+// nothing qualifying is a named exit-4 refusal (stale-base cause + the stamped-at-close remedy,
+// spec-review-driver.js's diff_base stamp) rather than a silently wrong diff base.
 //
-// Incident (2026-08-23, specs/20260823/09-replay-baseline-attribution.md, rp_1b176ebff5c7): the
-// harness treated every red review leg as evidence about the planted defect, but ~1 in 4 selectable
-// CLEAN rows closes with a leg legitimately red for pre-existing, sanctioned reasons (measured: 17
-// of 63) — this run's own sanctioned red reconcile leg forced a `--legs green` misrecord, since the
-// old matrix offered no honest word for "the reviewer ran and caught it, but a leg was also red for
-// an unrelated reason". (D1) --select now derives a baseline straight from the selected review row's
-// OWN `legs` array (zero extra leg runs) and appends `baselineRed=<comma-list>|none` and
-// `baselineLegs=<comma-list>` after the five existing tokens — `unknown` for both when the row
-// carries no (or an empty) legs array. Red follows review-legs.js's own definition (`exit !== 0`,
-// except `smoke` at exit 4, which is inert). (D2/D3) --record's --legs grammar gains
-// `baseline-red:<leg>[,<leg>]`, valid for caught/missed/unresolved alongside `green` — the row's
-// `legs` field now states the literal truth instead of collapsing to `green`. `unresolved` becomes
-// two-armed on the `--legs` shape: `green`/`baseline-red:*` still requires --patch + --workflow (the
-// reviewer ran, a Phase 3 dismissal); `red:<leg>` requires --patch and REFUSES --workflow (the
-// reviewer never ran, a step-7 dismissal) — riding a --workflow value there would fabricate reviewer
-// evidence that was never produced.
+// specs/20260823/09-replay-baseline-attribution.md: ~1 in 4 selectable CLEAN rows closes with a
+// leg legitimately red for pre-existing, sanctioned reasons unrelated to the planted defect, so
+// (D1) --select derives a baseline straight from the selected review row's OWN `legs` array (zero
+// extra leg runs) and appends `baselineRed=<comma-list>|none` and `baselineLegs=<comma-list>`
+// after the five existing tokens — `unknown` for both when the row carries no (or an empty) legs
+// array. Red follows review-legs.js's own definition (`exit !== 0`, except `smoke` at exit 4,
+// which is inert). (D2/D3) --record's --legs grammar carries `baseline-red:<leg>[,<leg>]`, valid
+// for caught/missed/unresolved alongside `green` — the row's `legs` field states the literal
+// truth instead of collapsing to `green`. `unresolved` is two-armed on the `--legs` shape:
+// `green`/`baseline-red:*` requires --patch + --workflow (the reviewer ran, a Phase 3 dismissal);
+// `red:<leg>` requires --patch and REFUSES --workflow (the reviewer never ran, a step-7
+// dismissal) — riding a --workflow value there would fabricate reviewer evidence that was never
+// produced.
 //
-// Incident (2026-08-31, specs/20260831/01-replay-range-materialization.md, rv_128f1a459e42/
-// rp_d4b6fcf66c93): a `diff.dirty:true` review row's judged range is completed by the close commit
-// that follows it (range-identity spec 20260824/06 D3/D7) — fix-worker edits uncommitted at pass
-// time ride that commit — but F3's baseline stood at the close commit's PARENT, below the judged
-// range. Legs green over the close-commit tree went red at the bare parent, and replay.md's step 7
-// rung 3 (newly-red -> retry once -> still red) recorded a FALSE leg-caught, polluting the catch
-// rate. (D1-D3) --setup gains --overlay <closeSha>: after standing the worktree up at --commit, it
-// diffs <commit>..<overlay> with --name-status --no-renames, drops every row whose path opens with
-// a D2 meta prefix (specs/, .claude/, docs/canonical/ — the three surfaces a close commit uses to
-// record the review's own outcome), and materializes the rest (A/M via git checkout, D via git rm)
-// as one commit — uniformly, no diff.dirty branch, so a meta-only close degenerates to zero
-// materialized rows and no commit. (D4) --overlay must resolve to a strict descendant of --commit
-// (git merge-base --is-ancestor, equal shas refused too) or the whole call exits 4 before any
-// worktree is created, naming the --select remedy. (D5) --setup's optional --subject (default
-// "build: follow-up") is refused with exit 2 when it opens with "replay" (case-insensitive) — the
-// class-id half of --apply's F2 refusal does not apply here, since no --class exists at setup time.
-// (D7) --setup without --overlay stays byte-identical to today; the overlay is additive.
+// specs/20260831/01-replay-range-materialization.md: a `diff.dirty:true` review row's judged
+// range is completed by the close commit that follows it (range-identity spec 20260824/06
+// D3/D7) — fix-worker edits uncommitted at pass time ride that commit — so a baseline standing at
+// the close commit's PARENT sits below the judged range. (D1-D3) --setup takes --overlay
+// <closeSha>: after standing the worktree up at --commit, it diffs <commit>..<overlay> with
+// --name-status --no-renames, drops every row whose path opens with a D2 meta prefix (specs/,
+// .claude/, docs/canonical/ — the three surfaces a close commit uses to record the review's own
+// outcome), and materializes the rest (A/M via git checkout, D via git rm) as one commit —
+// uniformly, no diff.dirty branch, so a meta-only close degenerates to zero materialized rows and
+// no commit. (D4) --overlay must resolve to a strict descendant of --commit (git merge-base
+// --is-ancestor, equal shas refused too) or the whole call exits 4 before any worktree is
+// created, naming the --select remedy. (D5) --setup's optional --subject (default "build:
+// follow-up") is refused with exit 2 when it opens with "replay" (case-insensitive) — the
+// class-id half of --apply's F2 refusal does not apply here, since no --class exists at setup
+// time. (D7) --setup without --overlay is unaffected; the overlay is additive.
 // What this deliberately does NOT do: derive review-legs verdicts, touch the main working tree
 // (--setup/--apply/--teardown only ever act on a --dir the caller supplies, or one --setup derives
 // itself from --spec (D1, specs/20260826/01) — --setup refuses a caller --dir that resolves inside
@@ -180,26 +153,23 @@
 // a strict descendant of --commit (specs/20260831/01 D4: an unrelated sha, an ancestor, or an equal
 // sha), refused before any worktree is created, naming the --select remedy.
 //
-// Incident (2026-08-26, specs/20260826/01-replay-scratch-path-blindness.md): the scratch worktree's
-// root path was a doctrine EXAMPLE (`.claude/worktrees/replay-<random>`) that every session
-// paraphrased when running /spec:replay by hand, so the harness's own name and a corpus-adjacent
-// vocabulary leaked into the one surface — the reviewer's working-tree root — that the blindness
-// rule most needs to stay silent. A value whose correctness is load-bearing for a measurement's
-// validity must be derived by a script, never asserted in prose a session copies (core § Incident
-// Policy). D1 moves ownership of the path into --setup itself, deriving a build-shaped name via
-// `merge-back.sh branch-for` (the sole owner of that stem rule) plus a random suffix — build-shaped
-// because a bland or random name is itself an anomaly next to the `spec-<stem>` build worktrees that
-// share its directory (replay.md's own "vocabulary is not the leak, provenance is" argument for the
-// commit subject applies equally to the path). D2 adds the structural refusal a caller-supplied
-// --dir needs so a hand-typed path can never reintroduce the leak `--apply --subject` already closed
-// for commit subjects.
+// specs/20260826/01-replay-scratch-path-blindness.md: a value whose correctness is load-bearing
+// for a measurement's validity must be derived by a script, never asserted in prose a session
+// copies (core § Incident Policy) — so the scratch worktree's root path is never a hand-typed or
+// paraphrased string. D1 gives --setup ownership of the path, deriving a build-shaped name via
+// `merge-back.sh branch-for` (the sole owner of that stem rule) plus a random suffix —
+// build-shaped because a bland or random name is itself an anomaly next to the `spec-<stem>`
+// build worktrees that share its directory (replay.md's own "vocabulary is not the leak,
+// provenance is" argument for the commit subject applies equally to the path). D2 adds the
+// structural refusal a caller-supplied --dir needs so a hand-typed path can never reintroduce the
+// leak `--apply --subject` already closed for commit subjects.
 
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
 const { execFileSync, spawnSync } = require('child_process')
 const { readLedgerRows } = require('./lib/observation')
-// D1 (specs/20260901/08-corpus-derivation-and-kill-match.md, 2026-09-01, brief 19): the one
+// D1 (specs/20260901/08-corpus-derivation-and-kill-match.md): the one
 // parser for spec/doctrine/replay-corpus.md's class-heading grammar — --apply/--record's --class
 // validation (D2) and --pick-class's selection (D3) both key off it, never a second regex sweep.
 const { corpusPath, parseCorpus } = require('./lib/replay-corpus')
@@ -257,9 +227,8 @@ if (!mode) { usage(); process.exit(2) }
 
 // ---- Root resolution: named, never inferred. The cwd default is a convenience for an operator -----
 // ---- standing in the repo; every step run from a scratch worktree passes --root explicitly, so ----
-// ---- a relocated shell can no longer silently redirect a ledger append into a directory that is ---
-// ---- about to be torn down (2026-08-27, review of specs/20260827/01: --record ran with an -------
-// ---- inherited CWD inside the replay's own scratch worktree and the row died with it). ------------
+// ---- a relocated shell can never silently redirect a ledger append into a directory that is -------
+// ---- about to be torn down (specs/20260827/01). ----------------------------------------------------
 const root = (() => {
   if (rootArg === null) return process.cwd()
   const resolved = path.resolve(rootArg)
@@ -370,7 +339,7 @@ function cmdSelect() {
       'and was actually committed')
     process.exit(4)
   }
-  // F3 (2026-08-19, completed by specs/20260831/01 D1-D7): the worktree must stand up at the
+  // F3 (specs/20260831/01 D1-D7): the worktree must stand up at the
   // CLOSE commit's PARENT, on the spec's pre-review base — not the close commit itself, which
   // reads status: done and would leak "already reviewed" into the diff the blind reviewer is
   // handed. --select prints `parent=` unchanged (D3: --select is deliberately untouched) — the
@@ -625,7 +594,7 @@ function cmdSetup() {
       `confirm the commit exists (git -C ${root} rev-parse ${commit}) and the --dir's parent is writable: ${e.message}`)
     process.exit(4)
   }
-  // F1 (2026-08-19, corrected): the marker must never touch the worktree's WORKING tree — write
+  // F1 (specs/20260819/02): the marker must never touch the worktree's WORKING tree — write
   // it into the worktree's own private git dir instead, which `git worktree remove` deletes for
   // free. `git -C <dir> rev-parse --git-dir` for a linked worktree resolves under
   // .git/worktrees/<name> in the shared common git dir; info/exclude does NOT have this property
@@ -680,7 +649,7 @@ function cmdApply() {
       're-emitted patch')
     process.exit(2)
   }
-  // F2 (2026-08-19): the commit subject must never let a reviewer's sanctioned `git log` reveal
+  // F2 (specs/20260819/02): the commit subject must never let a reviewer's sanctioned `git log` reveal
   // this is a test, or which defect class to hunt — reject structurally, not by convention. The
   // rejected set is deliberately narrow: the --class value (which names the defect to hunt) and a
   // `replay:`-style subject (the harness announcing itself). A subject derived from the target
@@ -806,7 +775,7 @@ function cmdScore() {
       `return must be written to this path as JSON before scoring: ${e.message}`)
     process.exit(2)
   }
-  // F4 (2026-08-19): a crashed or malformed reviewer return must never be scored as `missed` —
+  // F4 (specs/20260819/02): a crashed or malformed reviewer return must never be scored as `missed` —
   // that converts "the reviewer never ran" into permanent, indistinguishable-from-real evidence.
   if (wf.verdict !== 'CLEAN' || !Array.isArray(wf.survivors)) {
     console.error(`replay.js: --workflow ${workflowPath} has verdict=${JSON.stringify(wf.verdict)} ` +
@@ -845,15 +814,14 @@ function cmdScore() {
   process.exit(0)
 }
 
-// ---- --record (D7 successor D2/D3, specs/20260823/09): validation matrix per --outcome, now -----
+// ---- --record (D7 successor D2/D3, specs/20260823/09): validation matrix per --outcome, ---------
 // ---- widened with `baseline-red:<leg>[,<leg>]` — the truthful variant of `green` for a run whose --
-// ---- target closed with sanctioned red legs, replacing the false `--legs green` the 2026-08-23 ----
-// ---- rp_1b176ebff5c7 misrecord wrote — and `unresolved`'s two-armed shape: `green`/`baseline- -----
-// ---- red:*` requires --patch + --workflow (the reviewer ran, a Phase 3 dismissal); `red:<leg>` ----
-// ---- requires --patch and REFUSES --workflow (the reviewer never ran, a step-7 dismissal). Then ---
-// ---- appends one Contracts-shaped ledger row with a fresh rp_ runId (files DERIVED from --patch, --
-// ---- never hand-passed) and writes the full-fidelity evidence artifact (patch verbatim or null, ---
-// ---- reviewer verbatim or null). -------------------------------------------------------------------
+// ---- target closed with sanctioned red legs — and `unresolved`'s two-armed shape: `green`/ --------
+// ---- `baseline-red:*` requires --patch + --workflow (the reviewer ran, a Phase 3 dismissal); -----
+// ---- `red:<leg>` requires --patch and REFUSES --workflow (the reviewer never ran, a step-7 -------
+// ---- dismissal). Then appends one Contracts-shaped ledger row with a fresh rp_ runId (files -----
+// ---- DERIVED from --patch, never hand-passed) and writes the full-fidelity evidence artifact -----
+// ---- (patch verbatim or null, reviewer verbatim or null). -----------------------------------------
 
 const RECORD_OUTCOMES = ['caught', 'missed', 'leg-caught', 'unresolved', 'setup-failed']
 const BASELINE_RED_RE = /^baseline-red:.+/

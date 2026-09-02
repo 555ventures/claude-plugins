@@ -5,8 +5,8 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runBash } = require('./helpers')
 
-// The genesis state machine's coarse hook (v7, specs/20260827/03-genesis-design-state.md D6,
-// 2026-08-29): only /spec:init is gated now. The old genesis-explore and genesis-design commands
+// The genesis state machine's coarse hook (v7, specs/20260827/03-genesis-design-state.md D6):
+// only /spec:init is gated now. The old genesis-explore and genesis-design commands
 // (and the require_scaffold helper they shared) are both retired — their prompts fall through
 // untouched at every state, exit 0, no arm, nothing on stdout or stderr. Legacy status files
 // without an explore field still pass /spec:init with an injected note, never a block.
@@ -27,7 +27,7 @@ function gate(prompt, status) {
   })
 }
 
-// specs/20260827/02-genesis-explore-state.md D9 (2026-08-27): the driver-fold spec deletes the
+// specs/20260827/02-genesis-explore-state.md D9: the driver-fold spec deletes the
 // retired command's own hook arm entirely — its prompt now falls through untouched (exit 0, no
 // arm) at EVERY architect state, not just scaffold-complete. This file still needs the retired
 // command's literal PROMPT STRING as a test vehicle (proving the hook truly does nothing with
@@ -39,12 +39,10 @@ function gate(prompt, status) {
 // without itself becoming a stale-reference hit.
 const RETIRED_EXPLORE_CMD = '/spec:genesis-explore'
 
-// specs/20260827/02-genesis-explore-state.md D9 (2026-08-27): the explore stage folds into the
+// specs/20260827/02-genesis-explore-state.md D9: the explore stage folds into the
 // driver and the retired command's own hook arm is deleted from both case lists — the prompt
 // now falls through untouched (exit 0, no arm) at EVERY architect state, not just
-// scaffold-complete. This test used to pin the OLD gated behavior (blocked before
-// scaffold-complete); it collides with D9 and is updated in place, retagged
-// AC-20260827-02-7, never weakened or deleted.
+// scaffold-complete.
 test('AC-20260827-02-7: the retired explore command now falls through the hook untouched at every architect state, since D9 retires the command\'s arm entirely', () => {
   assert.strictEqual(gate(RETIRED_EXPLORE_CMD + ' idea', { architect: 'pending' }).status, 0,
     'D9: the explore command\'s case arm is removed from both case lists — a nonzero exit here means the retired command is still being gated instead of falling through untouched')
@@ -52,7 +50,7 @@ test('AC-20260827-02-7: the retired explore command now falls through the hook u
     'D9: the retired explore command must fall through at every architect state, not just scaffold-complete — the command no longer exists for the hook to gate')
 })
 
-// specs/20260827/03-genesis-design-state.md D6 (2026-08-29): the design lock folds into the
+// specs/20260827/03-genesis-design-state.md D6: the design lock folds into the
 // driver as the new DESIGN state and genesis-design's own hook arm (plus the now-callerless
 // require_scaffold helper it shared with the retired explore arm) is deleted from both case
 // lists — the prompt now falls through untouched (exit 0, no arm, nothing on stdout or stderr)
@@ -104,12 +102,12 @@ test('no genesis status on disk → hook is inert for every genesis command', ()
   assert.strictEqual(gate('/spec:init', null).status, 0)
 })
 
-// specs/20260825/04-genesis-driver.md D12/D15 (2026-08-26): /spec:genesis-architect is retired
+// specs/20260825/04-genesis-driver.md D12/D15: /spec:genesis-architect is retired
 // and the entry-point arm becomes "/spec:genesis "*|"/spec:genesis" — the driver owns its own
 // re-entry, so the hook must never gate the one command that loops on it, regardless of the
 // state on disk. D15 pins the other three arms byte-identical: this edit renames one arm only.
 //
-// Honest colour of the two admit assertions below (executed 2026-08-26 against the pre-image,
+// Honest colour of the two admit assertions below (executed against the pre-image,
 // b53fd97~1): they were ALREADY GREEN. This hook is allow-by-default — any prompt not matched by
 // the filter list falls straight through to `exit 0` — so `/spec:genesis idea` and bare
 // `/spec:genesis` exited 0 with empty stderr before D12 too, and the entry-point arm is in fact
@@ -117,11 +115,11 @@ test('no genesis status on disk → hook is inert for every genesis command', ()
 // plausible mis-implementation of D12 was traced and none of them reddens these two. They are
 // kept deliberately, as FORWARD pins: on a critical-tier hook a standing "must continue to
 // allow" assertion is what catches a future gating arm that over-matches `/spec:genesis*`.
-// D12's own pre-image-red observable is NOT here — it was the remedy-string test that used to
-// follow this one (retired 2026-08-29 once require_scaffold itself was deleted by
+// D12's own pre-image-red observable is NOT here — the remedy-string test that once
+// followed this one is retired now that require_scaffold itself is deleted by
 // specs/20260827/03-genesis-design-state.md D6, since a deleted helper owes no remedy string to
-// pin), plus the source-level retired-literal sweep over this hook in
-// tests/consistency/genesis-doctrine.test.js.
+// pin; the source-level retired-literal sweep over this hook in
+// tests/consistency/genesis-doctrine.test.js covers it instead.
 
 test('AC-20260825-04-8: /spec:genesis is the entry point and is never gated, at any architect state', () => {
   const withArg = gate('/spec:genesis idea', { architect: 'pending' })
@@ -136,10 +134,10 @@ test('AC-20260825-04-8: /spec:genesis is the entry point and is never gated, at 
 })
 
 // AC-20260827-02-7/D9: the retired explore command's own arm is deleted (not merely renamed) —
-// the "byte-identical" claim this test made about it no longer holds by construction, since D9
+// the "byte-identical" claim this test made about it does not hold by construction, since D9
 // explicitly retires that arm. Updated in place, retagged: the retired-command assertion below
 // pins the explore no-arm behavior; the init assertion is untouched (still byte-identical).
-// specs/20260827/03-genesis-design-state.md D6 (2026-08-29): the genesis-design assertion this
+// specs/20260827/03-genesis-design-state.md D6: the genesis-design assertion this
 // test also carried ("must still block while explore is mid-flight") is a second collision — D6
 // retires genesis-design's own arm the same way D9 retired explore's, so that assertion is
 // updated in place to the new falls-through invariant (also pinned, in full, by the dedicated

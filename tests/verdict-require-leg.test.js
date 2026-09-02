@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('./helpers')
 
-// specs/20260815/07-release-migrations-leg.md (D4, HEARWELL-20260814-02 / JJ-20260815-09):
+// specs/20260815/07-release-migrations-leg.md (D4):
 // verdict.js gains a repeatable `--require <leg>` flag — each occurrence adds the named leg to
 // the active profile's required set and, on the release profile, its blocking set. This closes
 // the vacuous-green half of the incident: a host's migrations leg absent from the manifest must
@@ -15,13 +15,13 @@ const { tmpdir, runNode } = require('./helpers')
 // entirely must still derive today's word byte-for-byte, since legacy/declined hosts get no new
 // leg and no new flag.
 //
-// specs/20260820/06-typed-evidence-manifest.md D1/D3/D11 (2026-08-20, brief 16's second move):
+// specs/20260820/06-typed-evidence-manifest.md D1/D3/D11 (brief 16's second move):
 // every manifest row's `observed` field becomes a typed JSON object, and the release ledger's
 // `e2e`/`journeys`/`substrate`/`ci` keys now copy that typed object VERBATIM (D3) instead of
 // re-deriving a shape via the deleted `parseCounts`. The two new tests at the end of this file
 // pin AC-20260820-06-11 (never omit the e2e key on a valid typed row) and AC-20260820-06-12
 // (any string-observed row fails the WHOLE manifest closed, release profile included) — both
-// against the pre-image spike-C/A2 defects the spec's Assumptions record executed on 2026-08-20.
+// against the pre-image spike-C/A2 defects the spec's Assumptions record executed.
 // The RELEASE_SEVEN_GREEN fixture below is retyped in place; this file's existing three tests
 // key on `--require`'s presence/redness through exit codes alone and never inspect `observed`,
 // so none of their assertion text changes.

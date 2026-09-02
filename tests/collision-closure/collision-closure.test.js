@@ -5,14 +5,14 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT, tmpdir, runNode, runBash } = require('../helpers')
 
-// specs/20260814/05-collision-closure.md (2026-08-14): the plan-time collateral-damage sweep
+// specs/20260814/05-collision-closure.md: the plan-time collateral-damage sweep
 // (which tests pin the files a spec is about to change; which doctrine prose quotes wording a
 // spec is about to retire) stops being hand-executed prose. This pins
 // spec/scripts/collision-closure.js by execution against synthetic hosts in tmpdir() — the
 // exec-a-script mode, never the script's internals. Registered as `spec-paths collision-closure`
 // (D1). Deliberately advisory (D6): exit 1 lists, never blocks.
 //
-// specs/20260830/01-collision-closure-exec-recall.md (2026-08-30): the paths leg matched File
+// specs/20260830/01-collision-closure-exec-recall.md: the paths leg matched File
 // Plan targets as literal substrings, but this repo's own test helpers spawn scripts by a
 // root-stripped two-segment suffix (`runNode('scripts/foo.js')`, never the full
 // `spec/scripts/foo.js`) — measured 88 of 115 test-to-script execution edges (77%) invisible.

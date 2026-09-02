@@ -3,9 +3,7 @@
 # Boots the host app (config runtime.bootCommand), polls runtime.readyCheck until it passes
 # or times out, then — after readiness (and any --seed run) — sends the declared
 # runtime.stopSignal and requires a bounded, clean exit before tearing the process group down.
-# The stop half was previously only sent from the EXIT trap, where the leg's verdict was
-# already fixed and the observation discarded (INTAKE JJ-20260815-05: a stranded pidfile lock
-# rode two CLEAN reviews on this gap). No model narrates pass/fail: the exit code and the
+# No model narrates pass/fail: the exit code and the
 # __SMOKE_*__ sentinel line are the verdict (same lesson as the gate sentinel). This script
 # deliberately does NOT re-run readyCheck after shutdown (undefined for file-probe hosts —
 # would false-pass) and does NOT add a post-stop probe (deferred, see shared.md).
@@ -33,7 +31,7 @@
 #                                     process from a previous run is likely still answering;
 #                                     stop it (or clean the stale ready state), then re-run.
 #
-# specs/20260821/03-cross-spec-skip-mapping.md D4 (2026-08-21, UpWell defect 2): this script used
+# specs/20260821/03-cross-spec-skip-mapping.md D4: this script used
 # to trust whatever readyCheck answered on the FIRST poll after boot spawn — an orphaned server
 # left over from a crashed prior run (or any other environment whose ready predicate is already
 # true) made readiness look instantaneous, crediting THIS run's boot for a readiness it never

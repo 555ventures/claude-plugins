@@ -2,8 +2,8 @@
 'use strict'
 // render-compare.js --mock <mock.json> --comp <comp.json> --width <viewport px> [--json]
 //
-// WHY: specs/20260824/01-render-gate.md (2026-08-24, ADR-0002) — the render gate's comparison
-// half. Two prax/salon-os spikes measured that a NAIVE mock<->component diff (raw textContent,
+// WHY: specs/20260824/01-render-gate.md (ADR-0002) — the render gate's comparison
+// half. Two host spikes measured that a NAIVE mock<->component diff (raw textContent,
 // raw position deltas, a bare screenshot) false-positives on every correct render: painted-case
 // text differs from textContent (`4h`->`4H`), absolutely-positioned chips reorder harmlessly,
 // data-positioned chart chips shift by design, and static mock controls legitimately render as
@@ -29,13 +29,13 @@
 // side is dataPositioned (D3) — a pair differing on `fixed` is caught by the `positioning`
 // finding instead (D5) and never double-counted here. Thresholds dx>1%, dw>1%, dh>15% are the
 // measured floors (Decisions D4); `dyRel` is computed for `--json` only and never a finding
-// (prax D9: it is poisoned by unbound-region height).
+// (D9: it is poisoned by unbound-region height).
 //
 // The fixed-pair GEOMETRY exemption is a KNOWN, MEASURED blind spot — kept deliberately
-// (re-litigated 2026-08-31, salon-os 候補選択): a docked CTA at 116px against the mock's 260px
+// (re-litigated): a docked CTA at 116px against the mock's 260px
 // and a fixed soft-NG overlay's mis-sized controls passed 18/18 cells across three capture runs
 // with both boxes sitting in the inventories; a human caught it by eye. Admitting dw/dh for
-// both-fixed pairs was tried against every retained salon-os inventory pair the same day and
+// both-fixed pairs was tried against every retained host inventory pair the same day and
 // REJECTED on the numbers: 516 dw / 130 dh findings over the accepted (human-approved) corpus —
 // headers filling their bar where the mock's title hugs, buttons legitimately full-width where
 // the mock caps them, text-wrap inflating dh — against ~30 on the known-defective run, with no
@@ -57,9 +57,8 @@ function die(msg) {
   process.exit(2)
 }
 
-// D14's Worker-Rules-mandated synchronous writer: console.log() + process.exit() truncates a
-// large payload at the 64 KiB pipe buffer while still exiting 0 (this repo's own 2026-08-23
-// spec-status.js incident) — every print-then-exit site routes through this instead.
+// D14: the 64 KiB process.exit stdout truncation this synchronous writer avoids is explained in
+// full at spec/scripts/lib/driver-io.js's writeOut.
 function writeOut(str) {
   const buf = Buffer.from(str, 'utf8')
   let off = 0
@@ -247,7 +246,7 @@ for (const p of allPairs) {
   const dh = denom > 0 ? Math.abs(mb.h - cb.h) / denom : 0
   // dyRel: y-drift RELATIVE to the first GEOMETRY-eligible matched pair (the baseline every
   // subsequent pair's own drift is measured against) — computed for --json only, never a
-  // finding at any value (prax D9: absolute y is poisoned by unbound-region height upstream).
+  // finding at any value (D9: absolute y is poisoned by unbound-region height upstream).
   let dyRel = null
   if (eligible) {
     if (!geometryPairsJson.length) dyRelBaseline = { my: mb.y, cy: cb.y }

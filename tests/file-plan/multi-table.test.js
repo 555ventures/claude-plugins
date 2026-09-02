@@ -5,19 +5,11 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 
-// specs/20260816/03-file-plan-table-scoped-parsing.md — `parseFilePlanRows` resolves its
-// Action/Layer column indices section-wide after its walk, so the LAST header row anywhere in
-// a `## File Plan` section wins for every accumulated row, not the header of the table each
-// row actually belongs to. Escaped from specs/20260814/01-ac-matrix-script.md's review (which
-// only exercised single-table fixtures); host-reported by Salon OS 2026-08-17
-// (specs/20260816/02) — a second `| Path | ... |` table under a `### Landed at design stage`
-// subheading clobbered the section-wide binding, nulled every row's layer, and made
-// `ac-matrix.js` hard-block review on false `uncovered-ac` findings with no host-side
-// workaround. AC-1/2/3/6 pin the fix and are expected RED against pre-fix code (the walker
-// binds indices per-table, resetting at every table boundary, with first-row-only header
-// recognition per Decision D2); AC-4/5 are "SHALL CONTINUE TO" regression pins already GREEN
-// pre-fix (reordered single-table columns, no-Layer-column rows, and `parseFilePlan`'s
-// multi-table path union), included so a fix cannot silently break them.
+// specs/20260816/03-file-plan-table-scoped-parsing.md: `parseFilePlanRows` resolves its
+// Action/Layer column indices per table, resetting at every table boundary with first-row-only
+// header recognition (Decision D2) — a second `## File Plan` table under a subheading never
+// clobbers the section-wide binding or nulls another table's rows. Does not restate
+// specs/20260814/01-ac-matrix-script.md's single-table pins.
 
 const { parseFilePlanRows, parseFilePlan } = require('../../spec/scripts/lib/file-plan')
 

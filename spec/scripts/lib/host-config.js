@@ -1,10 +1,10 @@
 'use strict'
 // lib/host-config.js — the sole reader of the host's `.claude/spec.config.json` for scripts that
-// need one fact out of it. Extracted 2026-08-14 (review advisory on specs/20260813/10's own diff:
+// need one fact out of it. Extracted (review advisory on specs/20260813/10's own diff:
 // ci-query.js and observe-ci.js each grew a byte-identical private readForge block in one diff,
 // while lib/glob-match.js's pipelineOwnedGlobs already carried a third copy of the same
 // read-parse-swallow shape — the identical class this repo already paid down once, on
-// 2026-08-12, when scope-reconcile.js and hotspot.js were deduplicated into glob-match.js).
+// the occasion when scope-reconcile.js and hotspot.js were deduplicated into glob-match.js).
 // Three private readers meant three places for the absent-config contract to drift apart.
 //
 // `readConfig(root)` is the file read; `declaredForge(root)` is the one derivation of the
@@ -28,14 +28,14 @@
 // to before the swap (a non-object throw would have silently rewritten ci-gate-parity's locked
 // exit-0 "inapplicable — no gateCommand" degrade on a scalar config into an exit-2 crash).
 //
-// specs/20260820/08-config-name-ban.md (2026-08-20, D7): `tests/host-config/config-read.test.js`
+// specs/20260820/08-config-name-ban.md D7: `tests/host-config/config-read.test.js`
 // bans naming the literal filename `spec.config.json` (stem `spec.config`) in executable text
 // anywhere under `spec/scripts/`, with exactly three named exemptions: this file (the sole Node
 // reader), and `smoke.sh`/`spec-state-gate.sh` (read via `jq`; bash cannot `require()` this
 // library). This file is therefore where the literal legitimately lives — every other script
 // routes through the exports below instead of spelling the filename itself. `configPath(root)`
 // (the renamed `configPathFor`) and `configExists(root)` (a presence-only probe) are the two
-// sanctioned routes for the two legitimate reasons a script named the file before this spec: a
+// sanctioned routes for the two legitimate reasons a script needs the filename: a
 // presence check and a remedy string (`CONFIG_RELPATH`, for display only, never path-building).
 //
 // Exit codes: n/a (library, not an entrypoint).

@@ -6,10 +6,10 @@ const path = require('node:path')
 const { spawnSync, execFileSync } = require('node:child_process')
 const { ROOT } = require('../helpers')
 
-// specs/20260820/01-autopilot-removal.md (2026-08-20, landed c6e62c1): D1 deleted
+// specs/20260820/01-autopilot-removal.md: D1 deleted
 // autopilot/** and tests/autopilot/** outright ("git history is the archive; an in-repo
 // 'parked' copy invites resurrection"), and D4 deleted every SDK-import/typebox carve-out
-// that used to sanction the daemon's dependency — the dependency-free invariant is now
+// that sanctioned the daemon's dependency — the dependency-free invariant is now
 // absolute, with no footnoted exception anywhere in § Review Checks, § Worker Rules, or
 // gate-scripts.md. These pins guard that end state:
 //   - AC-20260820-01-3: zero tracked references to the SDK package outside specs/** (D5:
@@ -17,7 +17,7 @@ const { ROOT } = require('../helpers')
 //   - AC-20260820-01-4: no autopilot/ directory anywhere in the tracked tree or on disk.
 //   - a structural pin (no AC — see its own test body) generalizes D4's rationale ("a pin
 //     makes silent re-import impossible") from the one dead package to ANY third-party
-//     import, per JJ's 2026-08-20 ruling after a consultation brief.
+//     import.
 // Do not weaken any of these assertions to make a future change pass — tighten the change
 // instead. What this file deliberately does NOT catch:
 //   - vendored third-party source committed as plain files behind relative (`./`-prefixed)
@@ -46,7 +46,7 @@ function gitGrepFiles(pattern) {
 // for the same reason that pin refuses an allowlist: an exemption for this file's own path
 // would fail silent if the fragments were ever rejoined back into a literal by a future
 // edit, whereas keeping the name un-literal here keeps the pin honest about itself. Cost:
-// a plain-text sweep for the whole package name will no longer surface this file — the
+// a plain-text sweep for the whole package name does not surface this file — the
 // AC id and the "dependency-free" filename are how a reader finds it instead.
 const SDK_SCOPE = '@anthropic-ai'
 const SDK_NAME = 'claude-agent-sdk'

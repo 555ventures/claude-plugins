@@ -6,7 +6,7 @@ const path = require('node:path')
 const { execFileSync, spawnSync } = require('node:child_process')
 const { SPEC, tmpdir, runNode, runBash, gitRepo } = require('../helpers')
 
-// specs/20260821/04-stopped-row-durability.md (2026-08-21): closes deferred ruling R3(1) of
+// specs/20260821/04-stopped-row-durability.md: closes deferred ruling R3(1) of
 // specs/20260820/07-review-driver.md. Today a worktree review's RED_BLOCKING hard-stop appends
 // its GATE_RED row to the WORKTREE's own .claude/spec-runs.jsonl, so `git worktree remove
 // --force` (the pipeline's own printed remedy) destroys it permanently and a stopped attempt
@@ -292,7 +292,7 @@ test('AC-20260821-04-4: WHEN the driver prints the STOPPED step THE SYSTEM names
     'the fallback re-invocation must also re-print the worktree ledger path: ' + r2Again.stdout)
 })
 
-// specs/20260822/01-escalate-ledger-row.md D7/D12 (2026-08-22, AC-20260822-01-11): an escalate
+// specs/20260822/01-escalate-ledger-row.md D7/D12 (AC-20260822-01-11): an escalate
 // row (a capped-review row carrying "escalated": true) is drained by the exact same
 // spec-partitioned mechanism as a GATE_RED stopped row — drainStoppedRows() partitions purely on
 // JSON.parse(line).spec (A4), never on verdict word, so it needs zero code changes to also

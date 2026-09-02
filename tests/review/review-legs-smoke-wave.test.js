@@ -5,13 +5,13 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// Incident, 2026-08-21 (UpWell field report, 3/3 runs): review-legs.js wave 2 ran smoke.sh
+// Incident (field report, 3/3 runs): review-legs.js wave 2 ran smoke.sh
 // concurrently with the at-risk test dispatch. A host's at-risk set can include a test that
 // performs a real production build of the app, which clobbers the artifact smoke is booting —
 // observed as smoke exit 2 (ENOTEMPTY inside app/node_modules/.nitro/vite during the concurrent
 // vite build) and exit 1 (readyCheck never passed), while smoke.sh alone passed every time.
 // This is the same collision class the wave-1 comment already documented for the gate
-// (2026-08-17: two boots rm -f'ing each other's ready file) — anything that runs host tests can
+// (two boots rm -f'ing each other's ready file) — anything that runs host tests can
 // boot or build the app, so smoke must serialize behind ALL of it, not just the gate.
 //
 // Second defect from the same report: review-legs.js discarded smoke's stdout/stderr entirely
@@ -82,7 +82,7 @@ function makeHost() {
   fs.mkdirSync(path.join(dir, 'bin'), { recursive: true })
   // Stand-in for a host testCommand whose at-risk run rebuilds the app: it takes real time
   // (the sleep), then drops a marker. If smoke boots during the sleep, the collision window
-  // the UpWell incident hit is open and bin/boot.js records it.
+  // the incident above hit is open and bin/boot.js records it.
   fs.writeFileSync(path.join(dir, 'bin/slow-tests.js'),
     'const fs = require("fs")\n' +
     'setTimeout(() => {\n' +

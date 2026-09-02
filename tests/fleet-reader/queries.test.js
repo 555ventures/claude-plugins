@@ -5,13 +5,11 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 
-// Fleet evidence reader (specs/20260820/05-fleet-evidence-reader.md, 2026-08-20): the five
-// fixed queries this file pins (legRecency, gate08, escapes, replayDebt, cleanContradicted)
-// are what brief 17 exists for — the dead-leg smell (at-risk exits 0-only in some repos while
-// red in others), the brief-08 adoption gate (clause 1: >=5 host CLEANs; clause 2: self-repair
-// share <20%, per docs/roadmap/17-fleet-evidence-reader.md), and CLEAN verdicts a later escape
-// contradicts. spec/scripts/fleet-reader.js does not exist yet (TDD red phase) — every runNode
-// call below fails until D1 ships it.
+// specs/20260820/05-fleet-evidence-reader.md: the five fixed queries this file pins
+// (legRecency, gate08, escapes, replayDebt, cleanContradicted) are what brief 17 exists for —
+// the dead-leg smell (at-risk exits 0-only in some repos while red in others), the brief-08
+// adoption gate (clause 1: >=5 host CLEANs; clause 2: self-repair share <20%, per
+// docs/roadmap/17-fleet-evidence-reader.md), and CLEAN verdicts a later escape contradicts.
 
 const SCRIPT = 'scripts/fleet-reader.js'
 
@@ -178,14 +176,12 @@ test('AC-20260820-05-7: cleanContradicted joins an escape\'s reviewRunId to a CL
   assert.strictEqual(entry.escapesUnjoined, 1, 'the escape with reviewRunId:null must count as unjoined — it must NEVER be folded into contradicted (a false miscalibration signal) or silently dropped (a lost escape)')
 })
 
-// specs/20260901/03-unified-build-loop.md D9 (2026-09-01, brief 18): the seventh fixed query,
-// cleanByVia, buckets CLEAN review rows by their via field (loop/direct/unknown for rows
-// carrying no via at all — pre-sibling-02 rows) and joins escape.reviewRunId to a bucket's CLEAN
-// runIds using the EXACT reviewRunId<->runId join computeCleanContradicted (query 5) already
-// uses, per bucket. This is the reader's answer to the brief 18 kill condition: a loop rate
-// higher than direct's over 30 fleet reviews reverts the loop. Written before fleet-reader.js
-// gains cleanByVia (TDD red, 2026-09-01) — both tests below fail on a missing cleanByVia key /
-// missing render line until D9 ships.
+// specs/20260901/03-unified-build-loop.md D9: the seventh fixed query, cleanByVia, buckets
+// CLEAN review rows by their via field (loop/direct/unknown for rows carrying no via at all —
+// pre-sibling-02 rows) and joins escape.reviewRunId to a bucket's CLEAN runIds using the EXACT
+// reviewRunId<->runId join computeCleanContradicted (query 5) already uses, per bucket. This is
+// the reader's answer to the brief 18 kill condition: a loop rate higher than direct's over 30
+// fleet reviews reverts the loop.
 test('AC-20260901-03-6: cleanByVia buckets CLEAN review rows by via (loop/direct/unknown) and joins escape reviewRunId to each bucket\'s CLEAN runIds using cleanContradicted\'s own join', () => {
   const root = tmpdir('fleet-cleanbyvia')
   mkRepo(root, 'repo-a', {

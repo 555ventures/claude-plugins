@@ -15,7 +15,7 @@
 # Worker Contract's git ban — workers run with cwd = their own worktree, so a
 # parallel worker that writes an absolute path into the root checkout is blocked.
 #
-# One sanctioned exception (2026-08-20, specs/20260820/02): /spec:replay's mutation
+# One sanctioned exception (specs/20260820/02-replay-scratch-write-access.md): /spec:replay's mutation
 # worker is correctly dispatched from a main-anchored session to Edit a disposable
 # scratch worktree that `replay.js --setup` stood up — a cross-worktree write that is
 # the whole point of the tool, not pollution. The first live run blocked it and the

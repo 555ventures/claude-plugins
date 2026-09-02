@@ -12,7 +12,7 @@
 // --check runs lib/escape-row.js's validator without touching disk, --append is the sole path
 // that puts a NEW escape row into a ledger (duplicate-refusing), and --amend is the sole writer
 // of an append-only `escape-class` amendment that repairs a historical row's class without
-// rewriting it. 2026-09-01 review finding of this spec: appendLine glued a new row onto an
+// rewriting it. A review finding of this spec: appendLine glued a new row onto an
 // existing ledger's last line when that line lacked a trailing newline, corrupting both rows
 // for every fleet-reader; appendLine now checks the existing ledger's last byte and prefixes a
 // separating newline when needed, matching the idiom already used in replay.js's info/exclude

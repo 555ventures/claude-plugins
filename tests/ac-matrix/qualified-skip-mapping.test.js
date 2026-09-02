@@ -5,13 +5,12 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 
-// specs/20260821/03-cross-spec-skip-mapping.md D1/D2 (2026-08-21, UpWell defect 1 of 2): the
+// specs/20260821/03-cross-spec-skip-mapping.md D1/D2: the
 // owning-spec `[env:]` sanction specs/20260815/03 shipped is reachable only via routes 1
 // (AC-ID embedded in the skip line) and 2 (content-matched against the spec-under-review's own
 // File Plan files) — a skip OWNED BY AN EARLIER SPEC, reported by a runner that qualifies its
 // skip lines with the file's own path (`<relpath>::<name>`, e.g. pytest), maps to neither route
-// unless that file happens to be part of THIS spec's File Plan (UpWell: the same four env-gated
-// tests were `sanctioned=4` under their OWNING spec, `sanctioned=0` under every other). D1 adds a
+// unless that file happens to be part of THIS spec's File Plan. D1 adds a
 // third route, tried ONLY after both existing routes miss on a line containing `::`: resolve the
 // prefix against `--root` and — if it stays inside root and the file exists — read its
 // full-token AC-ID citations (dedup in file order) into the SAME acById/owning-spec logic. D2:

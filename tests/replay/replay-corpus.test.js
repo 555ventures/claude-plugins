@@ -2,7 +2,7 @@
 const { test } = require('node:test')
 const assert = require('node:assert')
 
-// specs/20260901/08-corpus-derivation-and-kill-match.md D1 (2026-09-01, brief 19): the replay
+// specs/20260901/08-corpus-derivation-and-kill-match.md D1 (brief 19): the replay
 // corpus (spec/doctrine/replay-corpus.md) grows a second, DERIVED region fed by the escape
 // ledger's joined count (sibling spec 07) — a class with >= CORPUS_BAR fleet recurrences and no
 // hand-authored entry earns a `### `id`` section under a new `## Derived classes` heading, while

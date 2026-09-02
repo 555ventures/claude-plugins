@@ -3,7 +3,7 @@
 // review-legs.js --root <dir> --spec <path> --base <ref> --manifest <path>
 //   [--skips <file>] [--fix-delta] [--out-dir <dir>]
 //
-// Why (2026-08-17, v7 redesign): /spec:review Phase 0 was ~2 pages of leg choreography a
+// Why (v7 redesign): /spec:review Phase 0 was ~2 pages of leg choreography a
 // session re-performed by hand every review — resolve the gate, launch five background legs,
 // append JSONL rows, remember which legs feed which. Every step was deterministic; none needed
 // a model. This script IS that phase: it runs every deterministic review leg, appends one JSONL
@@ -31,7 +31,7 @@
 //                  {"unavailable":"no-adapter"|"transient"}|{"unavailable":"sha-unseen","branch":"<v>",
 //                  "branchConclusion":"<v>"}} — the sha-unseen alternative is always exit 0, even
 //                  when branchConclusion is red (specs/20260830/03-ci-leg-honest-absence.md D4:
-//                  ci-query.js's shaUnseen shape for an unpushed HEAD; the 2026-08-30 never-block
+//                  ci-query.js's shaUnseen shape for an unpushed HEAD; the never-block
 //                  ruling forbids a red origin branch from reddening this leg)
 //   at-risk        {"leg":"at-risk","exit":<code>,"observed":{"files":N,"testsExecuted":N|
 //                  {"unavailable":"pattern-no-match"|"no-format-declared"}}} |
@@ -47,7 +47,7 @@
 //   drift          {"summary":"<first stdout line, bounded to 120 chars>"} — recorded when config
 //                  declares driftScript
 //
-// specs/20260820/06-typed-evidence-manifest.md D2/D5 (2026-08-20, brief 16's second move): every
+// specs/20260820/06-typed-evidence-manifest.md D2/D5 (brief 16's second move): every
 // row's `observed` is now a typed JSON object instead of a packed/prefixed string — a string row
 // is manifest-invalid to verdict.js by construction (D1), so this script never emits one. Free-
 // text sub-fields (gate's whole-row `detail`, drift's `summary`) are bounded to 120 chars AT THE
@@ -55,9 +55,10 @@
 // JSON object corrupts it). A new capability, `testCountPattern` (regex over runner output, group
 // 1 = executed-test count, or "none"), is read the same way `skipReportPattern` already is and
 // applied to the gate and at-risk legs' child output, writing `testsExecuted` as a number or a
-// typed `{"unavailable":...}` — absent/"none"/no-match is never assumed zero (UPWELL-20260716-02's
-// lesson, extended). The at-risk leg's exit is forced to 1 when it captured files>0 but a declared
-// testCountPattern observed exactly 0 executed tests — the 2026-08-16 vacuous-green escape
+// typed `{"unavailable":...}` — absent/"none"/no-match is never assumed zero (the
+// never-assumed-zero rule, extended). The at-risk leg's exit is forced to 1 when it captured
+// files>0 but a declared testCountPattern observed exactly 0 executed tests — the vacuous-green
+// escape
 // (files=N, exit=0, runner executed nothing) becomes a same-run red instead of silent decay.
 // --fix-delta skips reconcile/at-risk/patterns (the fix diff is a response to findings) and
 // re-runs everything else in full — a fix-delta pass must re-assert executed state, never
@@ -67,7 +68,7 @@
 // extract skipped-test NAMES from gate output (runner-specific; the session passes --skips
 // when the gate reports skips), or retry/poll anything.
 //
-// Incident (2026-08-20, spec review-observation-truth.md D1, Salon OS field report): env-
+// spec review-observation-truth.md D1: env-
 // preflight.js was authored and wired into build/design/doctor but absent from the review path —
 // the 3rd recurrence of the authored-not-activated class. Before wave 1 (and before any manifest
 // row is appended), this script now runs `env-preflight.js --root <root>` (default mode,
@@ -188,9 +189,9 @@ async function main() {
   // ---- wave 1 (parallel): reconcile, gate, ci ---------------------------------------------
   // smoke deliberately runs AFTER the gate AND after the at-risk/patterns wave (its own wave
   // below): anything that runs host tests can boot or build the app and collide with a
-  // concurrent smoke boot on shared runtime state. Observed twice: 2026-08-17, gate vs smoke
+  // concurrent smoke boot on shared runtime state. Observed twice: gate vs smoke
   // (two boots rm -f'ing each other's ready file, and a SIGTERM landing in the handler-install
-  // window under full-suite load — status 143, shutdown-unclean); 2026-08-21 UpWell, at-risk
+  // window under full-suite load — status 143, shutdown-unclean); at-risk
   // vs smoke (an at-risk test's production build clobbered the artifact smoke was booting —
   // ENOTEMPTY under .nitro/vite, then readyCheck never passed; 3/3 runs, smoke alone green).
   const wave1 = []
@@ -218,7 +219,7 @@ async function main() {
       const output = r.out + r.err
       const skipPat = config.capabilities && config.capabilities.skipReportPattern
       const countPat = config.capabilities && config.capabilities.testCountPattern
-      // No match is honestly unavailable, never assumed-zero (UPWELL-20260716-02's lesson) —
+      // No match is honestly unavailable, never assumed-zero (the never-assumed-zero rule) —
       // runners that print a zero-skip line still match the declared pattern with count 0.
       const observed = { ...computeSkips(output, skipPat), testsExecuted: computeTestsExecuted(output, countPat) }
       appendRow('gate', r.code, observed)
@@ -238,7 +239,7 @@ async function main() {
         const j = JSON.parse(line)
         // D4 (specs/20260830/03-ci-leg-honest-absence.md): shaUnseen maps to an honest observed
         // row at exit 0 UNCONDITIONALLY — `exit` is never touched here, so a red branchConclusion
-        // can never redden this leg (the 2026-08-30 never-block ruling).
+        // can never redden this leg (the never-block ruling).
         if (j.shaUnseen === true) observed = { unavailable: 'sha-unseen', branch: j.branch, branchConclusion: j.branchRun.conclusion }
         else if (!j.available) observed = { unavailable: j.transient ? 'transient' : 'no-adapter' }
         else if (j.status && j.status !== 'completed') observed = { status: 'in-progress' }
@@ -280,7 +281,7 @@ async function main() {
           wroteAtRisk = true
           const testsExecuted = computeTestsExecuted(r.out + r.err, config.capabilities && config.capabilities.testCountPattern)
           // D5: exit is FORCED to 1 when files>0 and testsExecuted===0 STRICTLY (an unavailability
-          // object is not a zero) — the 2026-08-16 vacuous-green escape becomes a same-run red.
+          // object is not a zero) — the vacuous-green escape becomes a same-run red.
           const exit = (testsExecuted === 0) ? 1 : r.code
           appendRow('at-risk', exit, { files: atRisk.length, testsExecuted })
         }))
@@ -308,7 +309,7 @@ async function main() {
   // ---- wave 2b: smoke, ALONE — after every leg that can run host tests or build the app ---
   // (gate in wave 1, at-risk/patterns in wave 2; see the wave-1 comment for both observed
   // collisions). Its full output is retained: a red smoke row with no captured boot log is
-  // undiagnosable and has cost multi-run archaeology (UpWell 2026-08-21).
+  // undiagnosable.
   const smokeR = await sh(`bash ${q(path.join(scriptDir, 'smoke.sh'))}`)
   fs.writeFileSync(path.join(outDir, 'smoke.txt'), smokeR.out + smokeR.err)
   appendRow('smoke', smokeR.code, { result: smokeR.code === 0 ? 'pass' : smokeR.code === 4 ? 'inert' : 'fail' })

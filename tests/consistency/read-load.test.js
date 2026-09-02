@@ -1,14 +1,10 @@
 'use strict'
 // Read-load budget: what a /spec command actually loads into the session before it acts —
 // its own command file plus the doctrine sections `spec-paths shared-for <cmd>` prints.
-//
 // Generalizes the three ad-hoc line caps that already exist (design.md ≤160 in
 // design-doctrine.test.js, genesis.md ≤120 in genesis-doctrine.test.js) into one budget per
-// command, measured through the real binary so the number is the load, not a guess. The
-// Claude Fable 5.1 migration guide (2026-09-01) is explicit that step-by-step scaffolding
-// written for prior models lowers output quality; this pins that procedure growth cannot
-// happen silently. Measured 2026-09-01: every command loads ≤463 lines except init (965),
-// which is grandfathered on a ratchet until its own brief thins it.
+// command, measured through the real binary so the number is the load, not a guess — this
+// pins that procedure growth cannot happen silently; a grandfathered ratchet may only shrink.
 const test = require('node:test')
 const assert = require('node:assert')
 const fs = require('fs')

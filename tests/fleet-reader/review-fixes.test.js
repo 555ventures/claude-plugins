@@ -5,9 +5,9 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT, tmpdir, runNode } = require('../helpers')
 
-// Fleet evidence reader (specs/20260820/05-fleet-evidence-reader.md, 2026-08-20): six defects
+// Fleet evidence reader (specs/20260820/05-fleet-evidence-reader.md): six defects
 // the review of that spec's build found in spec/scripts/fleet-reader.js, fixed in the same
-// review pass (review fix 2026-08-21). None of the six had an acceptance criterion — they are
+// review pass. None of the six had an acceptance criterion — they are
 // review findings, not spec ACs — so this file pins them by finding number, never by a
 // fabricated AC-ID (this repo has a recorded incident where a worker wrote a literal AC-ID
 // placeholder for a test with no underlying AC, producing coverage-shaped output that proved
@@ -40,7 +40,7 @@ function mkRepo(root, name, { config = true, git = 'dir', selfRepair = false, ro
 
 // Strips `//`-to-end-of-line comments so a source pin matches actual call sites, never a
 // mention inside prose. A naive substring check would fail against the CURRENT fixed file,
-// because its own explanatory comment names "process.exit(0)" as the thing it no longer calls.
+// because its own explanatory comment names "process.exit(0)" as the thing it does not call.
 function stripLineComments(src) {
   return src.split('\n').map(line => {
     const idx = line.indexOf('//')
@@ -212,10 +212,10 @@ test('review finding 5: the gate08 percent rounds half up from the two integer c
     'zero in-window authored specs is a 0/0 case for the percent — it must render a defined 0%, never NaN leaking into the human output')
 })
 
-// review fix 6 — retagged AC-20260820-08-8 at build 2026-08-20 (D14, orchestrator collision
+// review fix 6 — retagged AC-20260820-08-8 at build (D14, orchestrator collision
 // ruling): specs/20260820/08-config-name-ban.md D7/D8 retire the `configPathFor` name at the
 // export boundary (it becomes `configExists`/`configPath`) and retire this file's call site along
-// with it, so the literal this test pinned no longer exists to pin. Updated in place per this
+// with it, so the literal this test pinned is gone. Updated in place per this
 // repo's rules § Gotchas prescription for a retired-literal collision outside the retiring spec's
 // own File Plan — never weakened, never left red. The anti-concatenation assertion is unchanged.
 test('AC-20260820-08-8: the config-existence check routes through host-config.js\'s exported configExists, not a re-inlined concatenation', () => {

@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 
-// specs/20260825/04-genesis-driver.md (2026-08-26, TDD red): the architect stage becomes
+// specs/20260825/04-genesis-driver.md (TDD red): the architect stage becomes
 // driver-stepped — one script, spec/scripts/genesis-driver.js, derives state from
 // .claude/genesis/status.json plus on-disk artifacts on every invocation, runs every
 // deterministic check itself (coverage audit, registry check, decision-record closure,
@@ -90,7 +90,7 @@ function advanceToMenus(dir) {
 //
 // specs/20260827/01-genesis-tournament.md D2/D15 (AC-20260827-01-9): --mark menus-done now also
 // requires a `- archetype: <key>` line in ## Picks. `archetype` defaults to the non-tournament
-// key `data-ml` — D15 (orchestrator ruling, 2026-08-27) is explicit that this shared fixture
+// key `data-ml` — D15 (orchestrator ruling) is explicit that this shared fixture
 // must NOT default to a tournament archetype (e.g. web-app): every caller of this helper
 // (AC-20260825-04-4/-5/-6/-7 and the F1/F3/F6/logtail regressions below) asserts DECIDE straight
 // after menus-done and then drives on into SCAFFOLD/GATE, and a tournament archetype would stop
@@ -137,7 +137,7 @@ Fly.io was considered and rejected for regional latency — no other minority op
 `)
 }
 
-// specs/20260827/04-genesis-conventions-handoff.md D2/D3 (D11 build ruling, 2026-08-29): `decided`
+// specs/20260827/04-genesis-conventions-handoff.md D2/D3 (D11 build ruling): `decided`
 // now additionally requires a valid `.claude/genesis/conventions.json` (plus every row's `adr`
 // existing), and `skeleton-landed` now additionally requires every enforceable DECIDED row's
 // probe file present-and-non-empty plus a <=150-line CLAUDE.md naming the gate command and the
@@ -437,14 +437,14 @@ test('AC-20260825-04-7, AC-20260827-04-6: roadmap-written refuses a Depends-on c
   assert.match(noneHandoff.stdout, /init-profile\.json/, 'specs/20260827/04-genesis-conventions-handoff.md D4: HANDOFF for designCatalog "none" must now name init-profile.json — the terminal "next: /spec:init" this pin used to assert is retired, since HANDOFF is a judgment step ending in --mark profile-written, not a terminal state, anymore')
   assert.match(noneHandoff.stdout, /--mark profile-written/, 'D4: HANDOFF for designCatalog "none" must now name --mark profile-written as the command that closes the step')
 
-  // specs/20260827/03-genesis-design-state.md D5/D9 (2026-08-29): the design lock this pin used
+  // specs/20260827/03-genesis-design-state.md D5/D9: the design lock this pin used
   // to name as a separate handoff target is deleted — it is now a driver state (DESIGN) entered
   // from ROADMAP for a visual archetype, and this shared fixture's archetype (advanceToDecide's
   // default, data-ml — never overridden by writeValidDecideArtifacts' own descriptor.archetype
   // field, which deriveState() never reads) is non-visual, so design: "skipped" writes straight
   // through to HANDOFF regardless of designCatalog.
   //
-  // specs/20260827/04-genesis-conventions-handoff.md D4/D5/D9 (2026-08-29): retargeted again —
+  // specs/20260827/04-genesis-conventions-handoff.md D4/D5/D9: retargeted again —
   // HANDOFF stops being terminal and stops printing next: /spec:init at all (D5 also drops
   // nextCommandLine() itself); it becomes a judgment step ending in --mark profile-written, whose
   // acceptance is what reaches the new terminal GROUNDED state (with next: /spec:enforce, pinned
@@ -465,7 +465,7 @@ test('AC-20260825-04-7, AC-20260827-04-6: roadmap-written refuses a Depends-on c
   assert.match(sbHandoff.stdout, /--mark profile-written/, 'D4: HANDOFF for designCatalog "storybook" must also name --mark profile-written')
 })
 
-// Review findings F1, F3, F6 (specs/20260825/04-genesis-driver.md review, 2026-08-26): three
+// Review findings F1, F3, F6 (specs/20260825/04-genesis-driver.md review): three
 // defects caught after the spec's own AC-1..AC-7 above were already green — one by the spec
 // reviewer (F3), two by a Fable consult (F1, F6) — and already fixed in genesis-driver.js by the
 // time this file was written, so these are regression pins on shipped fixes, not TDD-red ACs (no
@@ -570,7 +570,7 @@ test('review finding F3 (D1): --state at the post-decided state prints SCAFFOLD 
   assert.match(scaffoldRun.stdout, /SKELETON/, 'once the scaffold genuinely runs, the bare invocation must advance to SKELETON exactly as it would have without the earlier peek')
 })
 
-// logTail excerpt-size regression (found 2026-08-26 in the fix-delta pass of the review of
+// logTail excerpt-size regression (found in the fix-delta pass of the review of
 // specs/20260825/04-genesis-driver.md, already fixed in genesis-driver.js by the time this file
 // was written — no AC-ID and no F-id: this defect was found against the F6 fix itself, one
 // review pass later, so per this repo's review-finding convention these are named by the

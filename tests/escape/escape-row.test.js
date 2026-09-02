@@ -5,15 +5,12 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 
-// Escape class contract (specs/20260901/07-escape-class-contract.md, 2026-09-01, brief 19): the
-// brief's "nothing validates a class" defect — fleet-reader's enums were inline and no script
-// owned the escape ledger append, so a session `printf` could (and did) write
-// `preventedBy:"test"`/`foundBy:"build"` rows straight into a fleet ledger. D1/D2 give the CLI
-// and its validator module one shared home: `escape-row.js --check/--append/--amend` against
-// `lib/escape-row.js`'s closed reason set. Neither file exists yet (TDD red phase) — every
-// runNode call below currently fails on the missing script, not on the asserted behavior; each
-// assertion is written to fail differently (wrong status, wrong stdout/stderr shape) so a future
-// stub that merely exits non-zero cannot pass by accident.
+// specs/20260901/07-escape-class-contract.md D1/D2: fleet-reader's escape-reason enums were
+// inline and no script owned the escape ledger append, so a session `printf` could write
+// `preventedBy:"test"`/`foundBy:"build"` rows straight into a fleet ledger. `escape-row.js
+// --check/--append/--amend` and its validator module `lib/escape-row.js`'s closed reason set are
+// the one shared home. Each assertion is written to fail differently (wrong status, wrong
+// stdout/stderr shape) so a future stub that merely exits non-zero cannot pass by accident.
 
 const SCRIPT = 'scripts/escape-row.js'
 
@@ -116,12 +113,11 @@ test('AC-20260901-07-3: escape-row.js --append creates the ledger and appends ex
     'D2 Contracts: "an invalid row -> exit 1 with reasons and the file untouched" — the ledger must be byte-identical after a rejected append')
 })
 
-// Review fix 2026-09-01 (soft finding on --append): trailing-newline guard
-// A ledger seeded WITHOUT a trailing newline (e.g. by an older writer, or a session `printf`
-// with no `\n`) followed by --append glued the new JSON straight onto the end of the last line,
-// producing one unparseable line. Every fleet-reader / spec-status read silently drops BOTH the
-// original row and the newly appended row from that line — the escaped defect is invisible to
-// every count the pipeline derives from the ledger, with exit 0 masking the corruption.
+// Trailing-newline guard: a ledger seeded WITHOUT a trailing newline (e.g. by an older writer,
+// or a session `printf` with no `\n`) followed by --append must not glue the new JSON straight
+// onto the end of the last line, producing one unparseable line — every fleet-reader /
+// spec-status read would silently drop BOTH the earlier row and the newly appended row from
+// that line, with exit 0 masking the corruption.
 test('escape-row.js --append prefixes a newline when the existing ledger does not end in one, so the prior row is never glued to the new one', () => {
   const root = tmpdir('escape-row-append-no-trailing-newline')
   const original = validEscapeRow({ spec: 'specs/orig.md', file: 'orig.js' })

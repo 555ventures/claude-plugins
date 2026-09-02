@@ -6,7 +6,7 @@ const path = require('node:path')
 const { tmpdir, SPEC, gitRepo } = require('./helpers')
 const { spawnSync, execFileSync } = require('node:child_process')
 
-// specs/20260820/02-replay-scratch-write-access.md (2026-08-20): the first live /spec:replay
+// specs/20260820/02-replay-scratch-write-access.md: the first live /spec:replay
 // run's mutation worker was correctly dispatched from a main-anchored session to Edit the
 // scratch worktree replay.js stood up — and this hook blocked it, since the pre-fix decision
 // table had no exception for a same-repo cross-worktree write whose TARGET is a disposable
@@ -17,14 +17,14 @@ const { spawnSync, execFileSync } = require('node:child_process')
 // target's PRIVATE git dir. AC-20260820-02-1/-2 below are the new cases; AC-20260820-02-3/-4/-5
 // tag the pre-existing regression pins that prove how little else moved.
 //
-// Amended 2026-08-20 (review-gate finding, D8): the marker allow above turned out to be
+// Amended (review-gate finding, D8): the marker allow above turned out to be
 // forgeable through the hook's own pre-existing fail-open on any path inside a repo's .git
 // (two ordinary Writes could plant a marker and permanently disarm the guard). AC-20260820-02-7
 // through -02-11 pin the fix — a target inside THIS repo's own common git dir is now attributed
 // to its owning worktree and blocked cross-owner, before the old fail-open ever runs — and the
 // narrower D1 marker-allow condition (linked-worktree git dirs only) it depends on.
 //
-// specs/20260826/01-replay-scratch-path-blindness.md D3/D5 (2026-08-26): the marker itself named
+// specs/20260826/01-replay-scratch-path-blindness.md D3/D5: the marker itself named
 // the harness (`replay-worktree`), one `ls "$(git rev-parse --git-dir)"` away from inside the
 // tree — closed by renaming it `scratch-worktree` at every reading site, this hook's allow arm
 // included, with no grandfathering of the old name (D3). AC-20260820-02-1's test name/asserts and

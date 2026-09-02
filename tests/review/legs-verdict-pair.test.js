@@ -5,8 +5,8 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20260820/03-review-observation-truth.md D6 (AC-20260820-03-10, AC-20260820-03-11,
-// 2026-08-20, Salon OS field report): the 11 hand-written "skips=" fixtures in verdict.test.js
+// specs/20260820/03-review-observation-truth.md D6 (AC-20260820-03-10, AC-20260820-03-11):
+// the 11 hand-written "skips=" fixtures in verdict.test.js
 // pin verdict.js's parser against the test author's memory of review-legs.js's emitted grammar,
 // not against the emitter itself — exactly how the D2/D3 defect (an unparseable skip
 // observation silently decaying to testsSkipped.total:0 and a CLEAN verdict) survived
@@ -16,8 +16,8 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // Unit pins in verdict.test.js stay as fast regression checks; this pair test is the contract
 // authority (Rationale).
 //
-// specs/20260820/06-typed-evidence-manifest.md D1/D2/D5/D10 (2026-08-20, brief 16's second
-// move): every emitted manifest row's `observed` field becomes a typed JSON object, and this
+// specs/20260820/06-typed-evidence-manifest.md D1/D2/D5/D10 (brief 16's second move): every
+// emitted manifest row's `observed` field becomes a typed JSON object, and this
 // file — already the grammar authority per D6 above — is EXTENDED (never replaced) to the new
 // typed branches: D10 names it explicitly ("the pair test is extended to the typed gate
 // branches and the at-risk contradiction branch"). The two skip-pattern tests below are

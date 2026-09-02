@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 
-// specs/20260827/01-genesis-tournament.md (2026-08-27, TDD red): genesis-driver.js gains the
+// specs/20260827/01-genesis-tournament.md (TDD red): genesis-driver.js gains the
 // tournament of scaffolds — FINALISTS -> RACE (driver-only) -> PROBE -> PICK between MENUS and
 // DECIDE for the five tournament archetypes (web-app, realtime-trading, backend-api,
 // mobile-app, desktop-app); every other archetype still derives MENUS -> DECIDE unchanged. None
@@ -89,7 +89,7 @@ function writeHostingMenu(dir) {
   })
 }
 
-// specs/20260827/04-genesis-conventions-handoff.md D2/D3 (D11 build ruling, 2026-08-29): `decided`
+// specs/20260827/04-genesis-conventions-handoff.md D2/D3 (D11 build ruling): `decided`
 // now additionally requires a valid `.claude/genesis/conventions.json` (every row's `adr`
 // existing), and `skeleton-landed` now additionally requires every enforceable DECIDED row's
 // probe file present-and-non-empty plus a <=150-line CLAUDE.md naming the gate command and the
@@ -329,13 +329,13 @@ test('AC-20260827-01-4: a bare invocation in RACE scaffolds, gates, and boots a 
   assert.strictEqual(peek.stdout, 'PROBE\n', '--state must report PROBE for the driver-only RACE state exactly like the existing SCAFFOLD/GATE peek contract (F3) — a --state call that races or reports something else breaks the read-only peek invariant this driver already guarantees elsewhere')
 })
 
-// specs/20260827/02-genesis-explore-state.md D7 (2026-08-27): tile source derivation replaces
+// specs/20260827/02-genesis-explore-state.md D7: tile source derivation replaces
 // this spec's own D6 sketch source — the style-tile task's tiles are now `explore.finalists`
 // (a position's tile.html + tokens.css, or an external candidate's dir), never
 // .claude/genesis/sketch.html. web-app is also one of D1's four VISUAL archetypes, so it must
 // now resolve the new EXPLORE state (between MENUS and FINALISTS) before it can ever reach
 // FINALISTS at all — advanceToFinalists()'s "menus-done reaches FINALISTS straight away"
-// contract no longer holds for web-app specifically (it still holds for every archetype used
+// contract does not hold for web-app specifically (it still holds for every archetype used
 // elsewhere in this file, all of which are the non-visual backend-api). This test's own
 // "sketch-tile" setup is retargeted in place to resolve EXPLORE via `--mark external` — the
 // funnel-skipping path D6 introduces — and merges the old two-directory noSketch/withSketch

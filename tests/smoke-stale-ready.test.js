@@ -5,14 +5,14 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runBash } = require('./helpers')
 
-// specs/20260821/03-cross-spec-skip-mapping.md D4 (2026-08-21, UpWell defect 2 of 2): smoke.sh
-// trusted whatever readyCheck answered on the FIRST poll after boot spawn — an orphaned server
-// left over from a crashed prior run (or any other environment whose ready predicate is already
-// true) makes readiness look instantaneous, so the script credits THIS run's boot for a readiness
-// it never produced, then SIGTERMs its own still-building process. A3 (executed red repro,
-// 2026-08-21): config {"bootCommand":"sleep 30","readyCheck":"true"} -> __SMOKE_FAIL__
-// shutdown-unclean: exit status 143, exit 6 — confirmed again here against the untouched HEAD
-// script (2026-08-22): same config, real elapsed ~1s, exit 6, no stale-ready sentinel.
+// specs/20260821/03-cross-spec-skip-mapping.md D4: smoke.sh must not trust whatever readyCheck
+// answers on the FIRST poll after boot spawn — an orphaned server left over from a crashed prior
+// run (or any other environment whose ready predicate is already true) makes readiness look
+// instantaneous, so the script would credit THIS run's boot for a readiness it never produced,
+// then SIGTERM its own still-building process. A3 (executed red repro): config
+// {"bootCommand":"sleep 30","readyCheck":"true"} -> __SMOKE_FAIL__ shutdown-unclean: exit status
+// 143, exit 6 against the untouched script — same config, real elapsed ~1s, exit 6, no
+// stale-ready sentinel.
 //
 // The fix (D4): probe readyCheck ONCE immediately before bootCommand is ever spawned. If it
 // already passes, fail closed as `stale-ready`, a new documented exit code 7, naming the remedy,

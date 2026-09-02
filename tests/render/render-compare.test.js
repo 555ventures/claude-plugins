@@ -5,13 +5,13 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 
-// specs/20260824/01-render-gate.md (2026-08-24, D14/D3/D4/D5/D6): render-compare.js is the
+// specs/20260824/01-render-gate.md (D14/D3/D4/D5/D6): render-compare.js is the
 // standalone comparison half of the render gate — a matched-pair diff over two inventory JSON
 // documents with no filesystem access beyond its own --mock/--comp inputs (D14). These tests pin
-// the exact literal findings and geometry-tolerance deltas the brief's two spikes measured (prax,
-// salon-os): the LCS text/order match, the dx/dw/dh tolerance floors (D4), the fixed/
+// the exact literal findings and geometry-tolerance deltas the brief's two spikes measured across
+// production hosts: the LCS text/order match, the dx/dw/dh tolerance floors (D4), the fixed/
 // dataPositioned/srOnly GEOMETRY exclusions (D3), the positioning class-change finding that
-// catches the salon-os docked-action regression dyRel cannot see (D5), and the static-control
+// catches a docked-action regression dyRel cannot see (D5), and the static-control
 // auto-excuse veto line (D6). AC-20260824-01-1 … AC-20260824-01-6.
 
 const SCRIPT = 'scripts/render-compare.js'
@@ -154,9 +154,9 @@ test('AC-20260824-01-5: a matched pair fixed on the mock side and in-flow on the
 })
 
 test('a matched pair fixed on BOTH sides emits no geometry finding at any size delta — the fixed-pair exemption is a measured decision, not an oversight', () => {
-  // 2026-08-31 re-litigation (salon-os 候補選択): a docked CTA at 116px vs the mock's 260px
+  // Re-litigation: a docked CTA at 116px vs the mock's 260px
   // passed 18/18 cells and was caught by eye. Admitting dw/dh for both-fixed pairs was tried the
-  // same day against every retained salon-os inventory pair and rejected on the numbers: 516 dw /
+  // same day against every retained inventory pair and rejected on the numbers: 516 dw /
   // 130 dh findings over the human-approved corpus (headers filling their fixed bar, buttons
   // legitimately full-width against a capped mock, text-wrap inflating dh) vs ~30 on the
   // known-defective run — no separating threshold on any axis. Fixed-chrome size stays

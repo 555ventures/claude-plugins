@@ -6,7 +6,7 @@ const path = require('node:path')
 const crypto = require('node:crypto')
 const { ROOT, tmpdir, runNode } = require('../helpers')
 
-// Fleet evidence reader (specs/20260820/05-fleet-evidence-reader.md, 2026-08-20): brief 17's
+// Fleet evidence reader (specs/20260820/05-fleet-evidence-reader.md): brief 17's
 // motivating incident is that pipeline questions get answered from whichever repo happens to
 // be open — this repo's ~14% slice of the fleet's ~1,100 rows. discovery.test.js pins D2's
 // scan rule (one level under --repos-root, config-gated, dotfile/node_modules/worktree
@@ -14,7 +14,7 @@ const { ROOT, tmpdir, runNode } = require('../helpers')
 // read-only/exit-code contract, and D13's --json shape. spec/scripts/fleet-reader.js does not
 // exist yet (TDD red phase) — every runNode call below fails until D1 ships it.
 //
-// specs/20260820/08-config-name-ban.md (2026-08-20, D8/AC-20260820-08-8): the discovery probe's
+// specs/20260820/08-config-name-ban.md (D8/AC-20260820-08-8): the discovery probe's
 // config-presence check migrates from a private `fs.existsSync(claudeDir + '/spec.config.json')`
 // (or an equally private path build) to `configExists(dir)` imported from `lib/host-config.js` —
 // the sanctioned route this spec's ban opens for exactly this reason. The five-line comment above

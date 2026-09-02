@@ -2,18 +2,13 @@
 'use strict'
 // memory-sweep.js — surfaces agent-memory notes owed a disposition at review close.
 //
-// specs/20260823/06-prose-debt-pruning.md (2026-08-23, D5/D6/D7/D13): the disposition trigger
-// used to be "the diff happened to touch the note FILE itself" — the wrong subject. A
-// gate-scripts note was falsified by the same diff that shipped it and was caught only because
-// that diff happened to touch the note's own file (specs/20260823/03); a note about the same
-// defect living anywhere else would have ridden through undetected. This script surfaces a note
-// for disposition when the diff touches what the note is ABOUT (diff-hit: a path-shaped token in
-// the note's body matches a changed path or its basename) or when the note has outlived 10
-// undisposed review closes (ttl-expired, oldest-first, capped at 3 per run — diff-hits are never
-// capped). It deliberately does NOT dispose anything itself, does NOT read or require any
-// frontmatter `subjects:` field (relevance is derived by grepping note bodies, per D6 — no
-// note-writing contract change), and NEVER feeds `verdict.js` (D13: a disposition-trigger
-// widener, not a gate) — it exits 0 whenever the sweep ran, findings or not.
+// specs/20260823/06-prose-debt-pruning.md D5/D6/D7/D13: the disposition trigger.
+//
+// It deliberately does NOT trigger merely because a diff touches the note's own file (only
+// diff-hit or ttl-expired, defined below, qualify), does NOT dispose anything itself, does NOT
+// read or require any frontmatter `subjects:` field (relevance is derived by grepping note
+// bodies, per D6 — no note-writing contract change), and NEVER feeds `verdict.js` (D13: a
+// disposition-trigger widener, not a gate) — it exits 0 whenever the sweep ran, findings or not.
 //
 // Usage: node memory-sweep.js --root <repo root> --diff <file with one changed path per line>
 //        [--ledger <path>]   (default: <root>/.claude/spec-runs.jsonl)

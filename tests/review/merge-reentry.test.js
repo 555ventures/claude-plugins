@@ -6,7 +6,7 @@ const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { tmpdir, runNode, runBash, gitRepo } = require('../helpers')
 
-// specs/20260823/04-review-close-hardening.md D4/D5 (2026-08-23, rv_6825fa48c98d): the recorded
+// specs/20260823/04-review-close-hardening.md D4/D5 (rv_6825fa48c98d): the recorded
 // deadlock chain — merge landed -> finishMerge promoted evidence into the main root (dirtying it
 // BY DESIGN) and deleted the worktree's tracked ledger copy (dirtying the WORKTREE) -> `git
 // worktree remove` refused (spiked exit 128) -> the driver died mid-finishMerge -> a retry

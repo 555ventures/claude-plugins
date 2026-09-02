@@ -1,6 +1,6 @@
 ---
 date: 2026-09-02
-status: hardened
+status: implementing
 tier: standard
 area: gate-integrity
 design: false
@@ -9,6 +9,8 @@ depends_on: ["specs/20260902/01-comment-narration-gate.md"]
 depended_on_by: ["specs/20260902/03-plugin-prose-sweep.md"]
 brief: 21
 open_markers: 0
+build_base: main
+diff_base: d63af56912c35f44c6c1763055185cf3456e2c2f
 ---
 
 # Plugin code sweep: comments cite owners, code stays byte-identical
@@ -36,6 +38,7 @@ deleted machinery are corrected.
 | D7 | **Baseline shrinks.** Every code-group path is removed from `.claude/comment-narration.baseline.json`; prose-group entries stay for sibling 03. The test author performs this removal at Phase 1 so the standing test goes red before any sweep edit. (AC-20260902-02-1) | 01 D6: the baseline only shrinks; a code path left in it hides a regression. |
 | D8 | **Tier stays standard, with one upgrade trigger.** Hook scripts and other host § Risk Tiers surfaces are touched comment-only; a `code-changed` oracle result on any of them upgrades the tier to critical immediately (note it in this spec) and stops the build for the user. `[no-ac: process rule — D6 is its mechanism]` | Brief: the sweep is only safe because a code-identical oracle proves no executable line moved. |
 | D9 | `spec/.claude-plugin/plugin.json`: version bump target 7.57.1 (next free if taken); the changelog paragraph names the sweep and the oracle result (last-3 form). `[no-ac: manifest — pinned by tests/consistency/plugin-version.test.js]` | Host § Planning; comment-only, so a patch bump. |
+| D10 | **The build driver expands a tests-layer File Plan glob** (JJ ruling at build): `handleTestsAuthored` checked each tests-layer path with a literal `fs.existsSync`, so the sanctioned glob row `tests/**/*.test.js` could never be marked and this build could not leave `TESTS`. Fixed in-session per core § Incident Policy — the row is expanded through `lib/glob-match.js` (a pattern is satisfied by at least one match, a literal path by its own existence), the same shared matcher `red-check.js` and `scope-reconcile.js` already use — plus one behavioral test in `tests/build/build-driver.test.js`. The identical literal-path assumption was then found in `verifyWaveRows`, which refused `--mark wave-done` for the same reason (`spec/scripts/*.js` is not a filename); the same expansion was applied there under this ruling — a DELETE pattern verifies when nothing matches, a CREATE/MODIFY pattern when at least one file does. Known consequence, accepted by JJ: `spec/scripts/spec-build-driver.js` and `tests/build/build-driver.test.js` are the second and third files D6’s oracle reports `code-changed`, alongside the spec-mandated retag of `tests/consistency/comment-narration-live.test.js`. `[no-ac: build-time ruling; the behavioral test is the pin]` | Two sibling gate scripts already glob-expand File Plan rows; one place not doing so is a defect that blocks every spec planning tests by pattern. |
 
 ## File Plan
 
@@ -71,7 +74,8 @@ finding list, not the directory.
 
 ## Acceptance Criteria
 
-- **AC-20260902-02-1**: WHEN the suite runs THE SYSTEM SHALL observe the plugin scan exit 0 with the tracked baseline holding no code-group path (`node comment-narration.js --root . --hosts … --people … --baseline .claude/comment-narration.baseline.json` → exit 0; `--json` → every `files` key under a code-group directory is absent, i.e. `Object.keys(files).filter(k => /^(spec\/scripts|spec\/bin|scripts|tests)\//.test(k)).length === 0`) → the standing test in tests/consistency/comment-narration-live.test.js, retagged
+- **AC-20260902-02-1**: WHEN the suite runs THE SYSTEM SHALL observe the plugin scan exit 0 with the tracked baseline holding no code-group path (`node comment-narration.js --root . --hosts … --people … --baseline .claude/comment-narration.baseline.json` → exit 0; the tracked baseline holds no key matching `/^(spec\/scripts|spec\/bin|scripts|tests)\//`; `--json` → no finding names a code-group file, i.e. `findings.filter(f => /^(spec\/scripts|spec\/bin|scripts|tests)\//.test(f.file)).length === 0`) → the standing test in tests/consistency/comment-narration-live.test.js, retagged
+  - Superseded at build: the original parenthetical asserted `Object.keys(files).filter(k => /^(spec\/scripts|spec\/bin|scripts|tests)\//.test(k)).length === 0`. `comment-narration.js` builds `files` from the directory walk — one key per scanned file, value = finding count — so the 14 code-group files already at zero findings keep their keys and the clause is unsatisfiable for any non-empty tree. The amended clauses pin what this spec’s Goal states: zero code-group findings, and no code path left in the baseline.
 - **AC-20260902-02-2** `[oracle: gate]`: WHEN the final gate runs after the sweep THE SYSTEM SHALL CONTINUE TO pass the full suite — comment-only edits change no observed behavior (the gate leg is the honest pin; D6's oracle is the executed proof)
 
 ## Assumptions (escalation triggers)

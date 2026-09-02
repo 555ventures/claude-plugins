@@ -25,14 +25,13 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // AC-20260819-02-10: specs/20260819/02-mutation-replay.md D14 adds spec/scripts/replay.js and
 // spec/doctrine/replay-corpus.md to the bundle — like every other bundled script/doctrine file
 // they need spec-paths keys (`replay`, `replay-corpus`), or /spec:replay resolves nothing. This
-// is the third recurrence of the known spec-paths additive-collision class (JJ-20260814-01):
+// is a recurrence of the known spec-paths additive-collision class (specs/20260814/01-ac-matrix-script.md):
 // the key list below is updated in place, never a parallel exhaustive pin.
 
 // AC-20260821-01-11: specs/20260821/01-red-check.md D11 adds spec/scripts/red-check.js to the
 // bundle (build.md's Phase 1 invocation, D8) — like every other bundled script it needs a
-// spec-paths key, or build.md's `node "$(spec-paths red-check)"` line resolves nothing. This is
-// the fourth recurrence of the known spec-paths additive-collision class (JJ-20260814-01): the
-// key list below is updated in place, never a parallel exhaustive pin.
+// spec-paths key, or build.md's `node "$(spec-paths red-check)"` line resolves nothing (same
+// additive-collision class as AC-20260819-02-10 above).
 
 // specs/20260820/07-review-driver.md File Plan (spec/bin/spec-paths row): the new
 // spec-review-driver.js script needs a spec-paths key like every other bundled script — a
@@ -41,44 +40,39 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 
 // AC-20260822-02-13: specs/20260822/02-init-generation-script.md D11 adds spec/scripts/init-gen.js
 // to the bundle (spec/commands/init.md's sole invocation of the new generate/probe script) — like
-// every other bundled script it needs a spec-paths key, or init.md resolves nothing. This is the
-// fifth recurrence of the known spec-paths additive-collision class (JJ-20260814-01): the key
-// list below is updated in place (pre-image: `spec-paths init-gen` exits 1 on the unknown key,
-// executed 2026-08-22), never a parallel exhaustive pin.
+// every other bundled script it needs a spec-paths key, or init.md resolves nothing (same
+// additive-collision class as AC-20260819-02-10 above; pre-image: `spec-paths init-gen` exits 1
+// on the unknown key).
 
 // AC-20260823-01-16: specs/20260823/01-release-legs.md D1/D10 adds spec/scripts/release-legs.js
 // to the bundle (a new `release-legs` key) and retires `feedback-template` (its consumer,
 // /intake, died in v7) — like every other bundled-script addition it needs a spec-paths key or
 // release.md's stage/append/record invocations resolve nothing, and like every other retired
-// key it must fail loudly rather than keep quietly resolving a deleted template. Sixth
-// recurrence of the additive-collision class (JJ-20260814-01), and the first that also RETIRES
-// a key: the key list below is updated in place, never a parallel exhaustive pin.
+// key it must fail loudly rather than keep quietly resolving a deleted template (same
+// additive-collision class as AC-20260819-02-10 above, and the first that also retires a key).
 
 // specs/20260823/08-derived-session-queue.md D12 (spec/bin/spec-paths row): the new
 // spec-queue.js script needs a spec-paths key like every other bundled script — a missing key
 // breaks /spec:queue's invocation silently (the D8 SessionStart hook and its `hello` delegation
-// were removed 2026-08-30) (§ Risk Tiers, spec-paths). D12 marks this row [no-ac]: it is enforced fail-closed by
+// were removed) (§ Risk Tiers, spec-paths). D12 marks this row [no-ac]: it is enforced fail-closed by
 // this existing suite guard (and by tests/consistency/{plugin-version,entrypoints,red-fixture-
-// coverage}.test.js), so it carries no AC-ID of its own — this is the seventh recurrence of the
-// spec-paths additive-collision class (JJ-20260814-01): the key list below is updated in place,
-// never a parallel exhaustive pin.
+// coverage}.test.js), so it carries no AC-ID of its own (same additive-collision class as
+// AC-20260819-02-10 above).
 
 // specs/20260824/01-render-gate.md D17 (spec/bin/spec-paths row): the new render-gate.js,
 // render-compare.js, and render-inventory.browser.js scripts need spec-paths keys like every
 // other bundled script — a missing key breaks review.md's render-gate advisory leg (D16) and
 // render-gate.js's own resolution of render-compare/render-inventory silently (§ Risk Tiers,
 // spec-paths). D17 marks this row [no-ac]: it is enforced fail-closed by this existing suite
-// guard (and by tests/consistency/entrypoints.test.js) — this is the eighth recurrence of the
-// spec-paths additive-collision class (JJ-20260814-01): the key list below is updated in place,
-// never a parallel exhaustive pin.
+// guard (and by tests/consistency/entrypoints.test.js; same additive-collision class as
+// AC-20260819-02-10 above).
 
 // specs/20260824/04-render-rules.md D9 (spec/bin/spec-paths row): the new render-rules.js script
 // needs a spec-paths key like every other bundled script — a missing key breaks render-gate.js's
 // own resolution of render-rules.js (D5) silently (§ Risk Tiers, spec-paths). D9 marks this row
 // [no-ac: suite guards]: it is enforced fail-closed by this existing suite guard (and by
-// tests/consistency/entrypoints.test.js) — the ninth recurrence of the spec-paths
-// additive-collision class (JJ-20260814-01): the key list below is updated in place, never a
-// parallel exhaustive pin.
+// tests/consistency/entrypoints.test.js; same additive-collision class as AC-20260819-02-10
+// above).
 
 // specs/20260824/05-design-doctrine-cut.md D5: dc-extract.js and fidelity-check.js (and their
 // spec-paths keys) are deleted with the source-grep fidelity gate they served — a still-
@@ -101,16 +95,14 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // AC-20260901-01-16: specs/20260901/01-build-driver.md D10 adds spec/scripts/spec-build-driver.js
 // to the bundle (a new `build-driver` key) — like every other bundled script it needs a
 // spec-paths key, or /spec:build's driver invocation resolves nothing (§ Risk Tiers, spec-paths:
-// "a wrong key breaks commands silently"). This is the tenth recurrence of the known spec-paths
-// additive-collision class (JJ-20260814-01): the key list below is updated in place, never a
-// parallel exhaustive pin.
+// "a wrong key breaks commands silently"; same additive-collision class as AC-20260819-02-10
+// above).
 
 // AC-20260901-07-15: specs/20260901/07-escape-class-contract.md D10 adds spec/scripts/escape-row.js
 // to the bundle (a new `escape-row` key) — like every other bundled script it needs a spec-paths
 // key, or escape.md's D6 `node "$(spec-paths escape-row)" --append/--amend` invocations resolve
-// nothing (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently"). This is the
-// eleventh recurrence of the known spec-paths additive-collision class (JJ-20260814-01): the key
-// list below is updated in place, never a parallel exhaustive pin.
+// nothing (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently"; same
+// additive-collision class as AC-20260819-02-10 above).
 
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
@@ -181,19 +173,18 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
     'atlas consumes bound/approved semantics — the ledger definition lives in Design Canon')
   assert.ok(!/## Design Render Gate/.test(run('shared-for', 'atlas')),
     'atlas must not pay for the render gate — design-only doctrine')
-  // specs/20260827/02-genesis-explore-state.md D10 (2026-08-27): the retired explore command's
-  // own shared-for entry is deleted and `genesis` gains Design Canon instead (the driver now
-  // runs the taste funnel end-to-end from the entry point). This pin used to exercise the
-  // retired command's own scoped section list directly; retargeted to `genesis` in place,
-  // retagged AC-20260827-02-8, never weakened — a call scoped to the retired command now falls
-  // back to the FULL doctrine (AC-20260827-02-8's own test in genesis-doctrine.test.js pins that).
+  // specs/20260827/02-genesis-explore-state.md D10: the retired explore command's own
+  // shared-for entry is deleted and `genesis` gains Design Canon instead (the driver runs the
+  // taste funnel end-to-end from the entry point). Retargeted to `genesis` in place, tagged
+  // AC-20260827-02-8, never weakened — a call scoped to the retired command falls back to the
+  // FULL doctrine (AC-20260827-02-8's own test in genesis-doctrine.test.js pins that).
   assert.match(run('shared-for', 'genesis'), /## Design Canon/,
     'AC-20260827-02-8/D10: /spec:genesis must now be served § Design Canon directly — its absence means the entry point lost the doctrine governing the taste funnel it now runs end-to-end')
-  // specs/20260827/03-genesis-design-state.md D7 (2026-08-29): the design lock's own command is
-  // deleted too and its shared-for entry folds into `genesis` alongside Design Canon — the two
-  // asserts this block used to carry, scoped to that now-deleted command, are retargeted in
-  // place to `genesis`, never weakened, since the lock is now ratified inside the driver, not a
-  // separate command with its own scoped section list.
+  // specs/20260827/03-genesis-design-state.md D7: the design lock's own command is deleted too
+  // and its shared-for entry folds into `genesis` alongside Design Canon — the two asserts this
+  // block carried for that deleted command are retargeted in place to `genesis`, never
+  // weakened, since the lock is ratified inside the driver, not a separate command with its own
+  // scoped section list.
   assert.match(run('shared-for', 'genesis'), /## Design Authoring Contracts/,
     'D7: /spec:genesis must now also be served § Design Authoring Contracts — the driver ratifies the design pick itself, folding the old design-lock command\'s own doctrine section into the entry point')
   assert.ok(!/## Design Render Gate/.test(run('shared-for', 'genesis')),
@@ -245,10 +236,10 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
 // design-command list specifically (another command's own list could still keep it, per D4) — a
 // stale map entry would mean `shared-for` "silently drops mismatches" (§ Review Checks) and
 // /spec:design would read no doctrine at all for the render gate it now runs on.
-// specs/20260827/03-genesis-design-state.md D7 (2026-08-29): the parenthetical below used to
-// name the now-deleted design-lock command as the sibling whose own list still kept this
-// section; that command's doctrine surface folds into genesis instead. Updated in place —
-// never a claim this test doesn't itself verify.
+// specs/20260827/03-genesis-design-state.md D7: the parenthetical below names the deleted
+// design-lock command as the sibling whose own list still kept this section; that command's
+// doctrine surface folds into genesis instead. Updated in place — never a claim this test
+// doesn't itself verify.
 test('AC-20260824-05-3: spec-paths shared-for design emits ## Design Render Gate, never ## Design Binding Pipeline, and no longer emits Workflows Encode Shape, Not Judgment', () => {
   const out = run('shared-for', 'design')
   assert.match(out, /## Design Render Gate/,
@@ -283,8 +274,8 @@ test('AC-20260819-02-10: spec-paths replay and spec-paths replay-corpus resolve 
 // AC-20260824-02-1: specs/20260824/02-design-stage-on-render-gate.md D2 retires
 // spec/scripts/spec-design-driver.js, spec/workflows/wf-design.js, and
 // spec/scripts/skeletons-check.js along with their tests — the driver's 561 lines sequenced
-// extract/skeleton/workflow/iterate artifacts that no longer exist once the design stage runs
-// on the render gate (D1). Like AC-20260823-01-16's `feedback-template` retirement, a spec-paths
+// extract/skeleton/workflow/iterate artifacts, all retired once the design stage runs on the
+// render gate (D1). Like AC-20260823-01-16's `feedback-template` retirement, a spec-paths
 // key that still resolves after its script is deleted "breaks commands silently" (§ Risk Tiers,
 // spec-paths) in the other direction: a caller would get a path to a file that is not there.
 // Both halves are pinned together — the keys must refuse, and the files must be gone.

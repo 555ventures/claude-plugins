@@ -1,17 +1,17 @@
 'use strict'
 // lib/gate-resolve.js — the sole derivation of `{testDirs}`/`{scopeDirs}` substitution against a
 // host's declared `gateCommand`. Extracted verbatim from review-legs.js's own local resolveGate()
-// (specs/20260830/02-close-gate-rerun.md D3, 2026-08-30 salon-os field report): the driver's new
+// (specs/20260830/02-close-gate-rerun.md D3): the driver's new
 // close-time gate re-run (spec-review-driver.js's handleClosed()) needs to resolve the exact same
 // command review-legs.js already resolves for the review-time gate leg — a second, paraphrased
-// copy in the driver would be a drift seam (the stated reason ci-query.js was unified 2026-08-05).
+// copy in the driver would be a drift seam (the same reason ci-query.js was unified).
 // Semantics are byte-identical to the function this replaces: only the config source moved, from
 // review-legs.js's module-scope `config` to an explicit second parameter.
 //
 // resolveGate(specText, config) -> { gate: string } | { gate: null, reason: string }
 //   - config.gateCommand without {testDirs}/{scopeDirs} returns { gate: config.gateCommand } as-is
 //   - {testDirs} -> space-joined quoted globs derived from the spec's File Plan test rows (glob
-//     form — `node --test <dir>` does not run files on Node 26, JJ-20260815-04)
+//     form — `node --test <dir>` does not run files on Node 26)
 //   - {scopeDirs} -> space-joined (unquoted) unique directories of those same test files
 //   - no File Plan test rows to resolve either placeholder -> { gate: null, reason: 'no File Plan
 //     test rows to resolve {testDirs}' }

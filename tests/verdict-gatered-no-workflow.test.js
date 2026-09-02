@@ -5,8 +5,9 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('./helpers')
 
-// JJ-20260808-01, found during the 2026-08-08 review of specs/20260807/05-explore-taste-channels.md.
-// review.md Phase 0 step 8 documents the pre-panel hard-stop invocation as: "The stopped attempt
+// Found during review of specs/20260807/05-explore-taste-channels.md (see this file's own test
+// name for the pinned incident id). review.md Phase 0 step 8 documents the pre-panel hard-stop
+// invocation as: "The stopped attempt
 // still runs `node "$(spec-paths verdict)" --manifest {manifestPath} --ledger --spec {spec path}
 // --tier {tier} --diff-loc {diffLoc} --iteration <n>` (no `--workflow` — none exists yet; the
 // derivation reaches `GATE_RED` from the manifest alone before it would need one)". But
@@ -35,7 +36,7 @@ function writeManifest(dir, rows) {
 // to both fixture manifests below so these two pins CONTINUE TO derive GATE_RED / exit 2
 // unweakened; this file carries no new tests, only the retargeted fixtures.
 //
-// specs/20260820/06-typed-evidence-manifest.md D1/D2 (2026-08-20, brief 16's second move): every
+// specs/20260820/06-typed-evidence-manifest.md D1/D2 (brief 16's second move): every
 // manifest row's `observed` field becomes a typed JSON object — the two fixtures below are
 // retyped in place; this file's own assertions (GATE_RED presence, no-workflow-green-manifest
 // usage error) key on `exit` alone and never inspect `observed`, so no assertion text changes.
@@ -69,13 +70,13 @@ test('JJ-20260808-01 / AC-20260813-03-7 (CONTINUE TO AC-20260815-02-9 / AC-20260
     'documented no-workflow contract unimplementable as written: ' + JSON.stringify(r.stdout) + ' / ' + r.stderr)
 })
 
-// JJ-20260808-01 extension (prax is the third corroborating occurrence): the test above pins
+// Extending the incident above (a third corroborating occurrence, on a different host): the test above pins
 // that a GATE_RED review row structurally carries no `runId` — review.md's own documented Phase
 // 0 step 8 hard-stop invocation omits --workflow, and no wf-review run ever happened to mint
 // one. doctor.md check 12's required-field exemption list accounts for observe/fastPath-build/
 // escape/release rows — every one a distinct ROW CLASS with its own field set — but never
 // accounts for a pre-panel GATE_RED review row, which is an ordinary review row that simply
-// never reached the point of having a runId. prax: 5 of 6 GATE_RED rows carried runId:null and
+// never reached the point of having a runId. That host: 5 of 6 GATE_RED rows carried runId:null and
 // all 5 tripped check 12 on a host doing exactly what review.md documents. The correct contract
 // is narrower than a blanket row-class exemption: runId is OPTIONAL on GATE_RED review rows
 // specifically (an in-workflow iteration that goes red legitimately still carries one), never

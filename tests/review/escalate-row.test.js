@@ -6,7 +6,7 @@ const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { tmpdir, runNode, runBash, gitRepo } = require('../helpers')
 
-// specs/20260822/01-escalate-ledger-row.md (2026-08-22): a review that burns its fix loop to the
+// specs/20260822/01-escalate-ledger-row.md: a review that burns its fix loop to the
 // cap (2 iterations) and is then abandoned writes ZERO ledger rows today — the driver's only two
 // append points are the GATE_RED hard-stop and the CLEAN close, and the ESCALATE refusal reaches
 // neither. This file pins verdict.js's new `--escalated` flag (D1-D4: no new verdict word, the
@@ -76,7 +76,7 @@ function returnFileWith(scratchName, body) {
   return file
 }
 
-// specs/20260901/09-disposer-gate.md D2/AC-20260901-09-2 (2026-09-01, brief 18b): --mark
+// specs/20260901/09-disposer-gate.md D2/AC-20260901-09-2 (brief 18b): --mark
 // dispositions on a non-empty pool now refuses without --file <disposer return> — every fix-cycle
 // setup below that dispatches a fix must first write a minimal valid disposer return covering
 // every ref in that pool exactly once (here: always a single "fix" recommendation, since these
@@ -340,7 +340,7 @@ test('AC-20260822-01-5 (also AC-20260901-09-2): WHEN the third fix-applied mark 
     'the sidecar must record escalateRunId equal to the appended row\'s runId — this is the idempotency guard a bare re-invocation checks before ever writing again: ' + JSON.stringify(sidecar))
 })
 
-// specs/20260824/06-review-range-identity.md D4/AC-7 (2026-08-24): writeEscalateRow() mirrors
+// specs/20260824/06-review-range-identity.md D4/AC-7: writeEscalateRow() mirrors
 // runHardStopVerdict()'s D4 threading exactly — the capped run's escalate row must name the range
 // it burned its fix loop against, same as the hard-stop and close rows.
 test('AC-20260824-06-7 (also AC-20260901-09-2): WHEN a third fix-applied lands ESCALATE THE SYSTEM writes an escalate row carrying diff.base and diff.head as 40-hex shas and diff.dirty as a boolean', () => {

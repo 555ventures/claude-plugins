@@ -9,15 +9,11 @@
 // imports from here; every observed string, finding class, and exit code it produces stays
 // byte-identical (tests/ac-matrix/ac-matrix.test.js is the byte-identity pin).
 //
-// ac-matrix.js's header previously claimed a test named `ac-id-lint.test.js` lifts AC_ID_RE from
-// its source — that test does not exist (grep evidence, 2026-08-17); this file is the single
-// authority and no test lifts the regex from anywhere else.
-//
 // What this deliberately does NOT do: parse a spec's `## Decisions` table (promise-sweep.js's
 // row-carrier grammar is its own, with no counterpart here), or read a file — both exports take
 // a string and are pure.
 //
-// specs/20260821/01-red-check.md D1 (2026-08-21): `parseAcBullets` gains a `preGreen` field —
+// specs/20260821/01-red-check.md D1: `parseAcBullets` gains a `preGreen` field —
 // the raw trimmed string inside a sibling `[pre-green: <reason>]` tag, or `null` when untagged —
 // alongside the pre-existing `oracle`/`env` fields. `PRE_GREEN_REASONS` is exported as the SINGLE
 // closed-enum authority (`fallback-rejection` | `absence-invariant` | `predicate-in-test`); this
@@ -27,8 +23,8 @@
 // red-check.js needs it to check for a `SHALL CONTINUE TO` sanctioned-pin phrase, and no existing
 // consumer's shape assertion depended on the object's key set being closed.
 //
-// Hardened 2026-08-22 (specs/20260821/01-red-check.md review finding, reviewer-1.json): the
-// `[oracle:]`/`[env:]`/`[pre-green:]` extractions used to be unanchored substring searches over
+// Hardened (specs/20260821/01-red-check.md review finding, reviewer-1.json): the
+// `[oracle:]`/`[env:]`/`[pre-green:]` extraction ran as an unanchored substring search over
 // the bullet's whole raw text, so an AC bullet that merely ILLUSTRATES the tag syntax in its own
 // prose (documentation-by-example, the pattern spec.md/plan.md themselves encourage) self-tagged
 // — this spec's own AC-20260821-01-1 and AC-20260821-01-2 misparsed as carrying real tags. A tag
@@ -39,7 +35,7 @@
 // backticked. A tag appearing mid-prose anywhere else (inside a parenthetical, inside a code span
 // mid-sentence, describing the grammar by example) parses as `null`.
 //
-// Hardened again 2026-08-22 (same-day regression): the position-anchored regexes above each
+// Hardened again (same-day regression): the position-anchored regexes above each
 // matched at most ONE tag occupying the slot, so a bullet declaring two SIBLING tags in the same
 // position (`spec/templates/spec.md` lines 90-103 sanction `[env:]` and `[pre-green:]` together —
 // only `[oracle:]` alongside a test mapping is forbidden) silently dropped both:
@@ -51,20 +47,20 @@
 // once, then `extractTag` searches within that run for the one named tag. A tag anywhere outside
 // either run still parses `null`.
 //
-// Hardened a third time 2026-08-22 (escape rv_640c582f4902, unanchored-marker-match): the
+// Hardened a third time (escape rv_640c582f4902, unanchored-marker-match): the
 // trailing position still accepted a BACKTICKED tag, so a bullet illustrating the trailing-tag
 // grammar as a worked example (`` … SHALL y `[oracle: gate]` `` — every self-tagging illustration
 // observed in this repo's prose quotes tag grammar inside a code span) still self-tagged there.
 // The trailing position now requires the tag to be BARE (`BARE_TAG_ITEM_SRC`, no surrounding
 // backticks) — the declaration slot is unaffected and keeps accepting backticked-or-bare, since
-// (as of a 2026-08-22 census of THIS REPO's own `specs/` corpus, not a grammar rule — see the
-// 2026-08-23 note below) every genuinely-declared tag observed here sat in the declaration slot,
+// (as of a census of THIS REPO's own `specs/` corpus, not a grammar rule — see the
+// note below) every genuinely-declared tag observed here sat in the declaration slot,
 // and `spec/templates/spec.md`'s own trailing worked example (AC-20260821-99-1) is already bare.
 //
-// specs/20260823/03-silent-drop-hardening.md D2/D3 (2026-08-23, the 2026-08-21..23 upwell
+// specs/20260823/03-silent-drop-hardening.md D2/D3 (the
 // silent-drop incident): the bare-only trailing refusal above is a REFUSAL, not a drop — parsing
 // still had no way to say a trailing tag WAS refused, so a host whose real declarations happen to
-// be backticked (upwell: 17 of them) got a bare parse-null with no trace of why. `parseAcBullets`
+// be backticked got a bare parse-null with no trace of why. `parseAcBullets`
 // now also returns `trailingRejected`: the backtick-tolerant trailing run's text (built from the
 // SAME `TAG_ITEM_SRC` used by `slotRun`, never a re-spelled regex — a second authority here is
 // exactly the fragile spot this hardening exists to avoid) when the bare-only `trailingRun` above
@@ -73,11 +69,11 @@
 // by substring-testing the tag name against this one string, that a refusal was the cause of an
 // otherwise-generic finding. D3 rescopes every "all 8 tags sit in the declaration slot" claim in
 // this file's comments from an implied grammar fact to what it always actually was: a dated
-// census of this repo's own `specs/` corpus as of 2026-08-22 — a host corpus (upwell)
+// census of this repo's own `specs/` corpus — a host corpus
 // demonstrably backticks trailing declarations, so the census was never a rule to build parsing
 // around, only an observation about the fixtures this file happened to be tested against.
 //
-// specs/20260823/03-silent-drop-hardening.md D11 (build-time, JJ-approved 2026-08-23, supersedes
+// specs/20260823/03-silent-drop-hardening.md D11 (build-time, supersedes
 // D8's rationale and D2's predicate formula above): live evidence (specs/20260823/01
 // AC-20260823-01-18/-20, review row rv_6825fa48c98d) showed a genuine declaration written just
 // before the bullet's final `→ tests/…` File-Plan reference sits at NEITHER recognized position —
@@ -95,7 +91,7 @@
 // untouched: `slotRun`/`trailingRun`/`extractTag` keep their exact grammar; only what refusal SAYS
 // widens.
 //
-// specs/20260821/03-cross-spec-skip-mapping.md D7 (2026-08-22 amendment): exports
+// specs/20260821/03-cross-spec-skip-mapping.md D7 (amendment): exports
 // `acIdOccurs(text, id)`, a full-token occurrence check — `id` counts as occurring only at a
 // position whose preceding char is absent or outside `[A-Za-z0-9]` AND whose following char is
 // absent or outside `[0-9A-Za-z]`. Two call sites (ac-matrix.js's coverage grep, red-check.js's
@@ -103,7 +99,7 @@
 // PREFIX of another declared AC's ID (`AC-…-1` inside `AC-…-12`) was credited a phantom hit —
 // ac-matrix failed OPEN (a genuinely untested AC read "covered") and red-check failed CLOSED (a
 // sanctioned-green pin read as a false `unsanctioned-green`, the live hit that stopped
-// specs/20260822/02's build 2026-08-22). This is an `indexOf` scan, not a per-call RegExp — the
+// specs/20260822/02's build). This is an `indexOf` scan, not a per-call RegExp — the
 // same discipline `promise-sweep.js` already applies inline to Decision-row citations, now given
 // one exported authority instead of a third from-scratch spelling.
 
@@ -136,7 +132,7 @@ function acIdOccurs(text, id) {
 const PRE_GREEN_REASONS = ['fallback-rejection', 'absence-invariant', 'predicate-in-test']
 
 // One `[tagname: value]` item, optionally backtick-wrapped. `[a-z][a-z-]*` covers the three
-// known tag names (oracle, env, pre-green) generically — this is only used to consume a run of
+// known tag names (oracle, env, pre-green) generically — this exists only to consume a run of
 // tag-shaped items, never to extract a value, so it need not be tied to one tagName.
 const TAG_ITEM_SRC = '`?\\[[a-z][a-z-]*:\\s*[^\\]]+\\]`?'
 
@@ -151,7 +147,7 @@ const BARE_TAG_ITEM_SRC = '\\[[a-z][a-z-]*:\\s*[^\\]]+\\]'
 // (`spec/templates/spec.md` 90-103 sanctions sibling tags, e.g. `[env:]` + `[pre-green:]`
 // together — only `[oracle:]` alongside a test mapping is forbidden), or null if the first line
 // doesn't have this shape at all. Backticked-or-bare: the declaration slot is never prose, so a
-// backticked tag there is still a real declaration (a 2026-08-22 census of this repo's own
+// backticked tag there is still a real declaration (a census of this repo's own
 // `specs/` corpus found every genuinely-declared tag sitting here — a THIS-REPO observation, not
 // a grammar rule; see the D2/D3 note above the module header).
 function slotRun(firstLine) {
@@ -163,14 +159,14 @@ function slotRun(firstLine) {
 // The trailing run — one or more BARE tag items ending the bullet's full raw text (trailing
 // whitespace ignored), or null if the raw text doesn't end in a bare tag item at all.
 //
-// Hardened 2026-08-22 (escape rv_640c582f4902, unanchored-marker-match): the trailing position
-// used to accept a backticked tag too, so an AC that merely ILLUSTRATES the trailing-tag grammar
+// Hardened (escape rv_640c582f4902, unanchored-marker-match): the trailing position
+// accepted a backticked tag too, so an AC that merely ILLUSTRATES the trailing-tag grammar
 // in its own prose (e.g. `` … SHALL y `[oracle: gate]` `` — a worked example, not a declaration)
 // self-tagged: ac-matrix.js would read the phantom tag as covered-by-declaration or a sanctioned
-// skip, laundering coverage/skips exactly like the original oracle/env/pre-green defect this
+// skip, laundering coverage/skips exactly like the oracle/env/pre-green defect this
 // module was hardened against. Requiring the trailing tag to be BARE closes it without touching
 // the declaration slot (spec.md's own trailing example, AC-20260821-99-1, is bare and keeps
-// parsing) or any tag this repo's own corpus census (2026-08-22, a this-repo observation, not a
+// parsing) or any tag this repo's own corpus census (a this-repo observation, not a
 // grammar rule) found sitting in the declaration slot.
 function trailingRun(raw) {
   const re = new RegExp('((?:' + BARE_TAG_ITEM_SRC + '\\s*)+)$')
@@ -178,7 +174,7 @@ function trailingRun(raw) {
   return m ? m[1] : null
 }
 
-// D2 (2026-08-23): the backtick-TOLERANT sibling of trailingRun above, built from the SAME
+// D2: the backtick-TOLERANT sibling of trailingRun above, built from the SAME
 // TAG_ITEM_SRC slotRun uses — never a re-spelled regex, the one authority both positions share.
 // Used ONLY to detect a REFUSED trailing declaration for `trailingRejected` below; it never
 // extracts a tag value itself and the bare-only ban it annotates stays completely untouched.
@@ -188,7 +184,7 @@ function tolerantTrailingRun(raw) {
   return m ? m[1] : null
 }
 
-// D11 (2026-08-23): the WIDENED tolerant run — same TAG_ITEM_SRC as tolerantTrailingRun above,
+// D11: the WIDENED tolerant run — same TAG_ITEM_SRC as tolerantTrailingRun above,
 // additionally tolerating exactly one final `→ <tail containing no second →>` File-Plan-reference
 // suffix, since a genuine declaration written just before that reference (specs/20260823/01
 // AC-20260823-01-18/-20's actual shape) sits at neither recognized position under the unwidened
@@ -203,7 +199,7 @@ function wideTrailingRun(raw) {
   return m ? m[1].replace(/\s+$/, '') : null
 }
 
-// specs/20260823/03-silent-drop-hardening.md D10 (2026-08-23, amended by D11): the ONE authority
+// specs/20260823/03-silent-drop-hardening.md D10 (amended by D11): the ONE authority
 // for the `rejected-trailing-tag` remedy text — the first implementation landed a byte-identical copy of
 // this function in both ac-matrix.js and red-check.js, the exact two-identical-copies shape D4
 // (this same spec) exists to eliminate elsewhere. It lives here, beside `tolerantTrailingRun` and
@@ -213,7 +209,7 @@ function wideTrailingRun(raw) {
 // for that specific finding — absent coverage, an unsanctioned skip, a green expected-red file)
 // stays a parameter; nothing else about the message differs across callers.
 //
-// D11 (2026-08-23): `cause` (`'backticked-at-end' | 'not-at-end'`) is now a required third
+// D11: `cause` (`'backticked-at-end' | 'not-at-end'`) is now a required third
 // argument, forking the middle sentences. The `backticked-at-end` branch is BYTE-IDENTICAL to
 // D10's original text above — every existing consumer detail assertion (AC-20260823-03-1/-2/-3)
 // depends on that. The `not-at-end` branch names the true problem instead (the tag sits before the

@@ -5,9 +5,9 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20260901/08-corpus-derivation-and-kill-match.md D7/D8 (2026-09-01, brief 19): a reviewer
+// specs/20260901/08-corpus-derivation-and-kill-match.md D7/D8 (brief 19): a reviewer
 // return's `killed[]` entries carry no location contract today — handleReviewerReturned() in
-// spec-review-driver.js validates only `verdict` and `survivors` (measured 2026-08-31 by code
+// spec-review-driver.js validates only `verdict` and `survivors` (measured by code
 // read, spec's Assumption A5) before writing `.claude/spec-runs/<sidecar>/reviewer-return-<n>.json`
 // and updating marks. D8 makes `killed` a validated array: every entry needs a string `claim` and
 // BOTH `file` (string|null) and `line` (number|null) KEYS PRESENT, dying (exit 2, naming

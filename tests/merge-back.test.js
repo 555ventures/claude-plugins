@@ -7,7 +7,7 @@ const { read, tmpdir, runBash, gitRepo } = require('./helpers')
 
 const SCRIPT = 'scripts/merge-back.sh'
 
-// specs/20260814/02-doctor-mergeback-fidelity-mechanics.md (2026-08-14, D2): the `spec/<stem>`
+// specs/20260814/02-doctor-mergeback-fidelity-mechanics.md D2: the `spec/<stem>`
 // build-branch derivation had three prose copies (enter-worktree.md step 1, doctor.md check 11,
 // git/commands/commit.md's reverse parse) all restating the same rule by hand. `branch-for` gives
 // the rule one owner: a print-only subcommand needing no git repo, special-cased before the
@@ -163,16 +163,16 @@ test('create refuses on an un-gitignored worktree dir and an unborn HEAD', () =>
   assert.match(r2.stderr, /no commits yet/)
 })
 
-// 2026-08-24, upwell review of specs/20260823/02-room-mechanics.md: `cleanup` deleted the finished
-// branch with `git branch -d`, which proves containment by ANCESTRY. A squash merge deliberately
-// creates none — it copies the tree into one new commit and links nothing — so cleanup failed on
-// 100% of squash merges, i.e. on the exact strategy `inspect` RECOMMENDs for a many-commit spec.
-// The failure landed before spec-review-driver could record the merge as concluded, so a caller
-// following the protocol's own "re-run the driver" instruction re-ran the legs and demanded a
-// fresh reviewer for an already-closed review — appending a duplicate row to the ledger the
-// replay schedule and the catch-rate denominator are both read from. The fix falls back to
-// containment by CONTENT (target tree === source tree), which is what a squash actually
-// guarantees and is strictly stronger than the merge-base walk `-d` performs.
+// specs/20260823/02-room-mechanics.md: `cleanup` must not rely on `git branch -d`'s ANCESTRY
+// containment check alone — a squash merge deliberately creates none (it copies the tree into
+// one new commit and links nothing), so an ancestry-only check fails on 100% of squash merges,
+// the exact strategy `inspect` RECOMMENDs for a many-commit spec. A cleanup failure there lands
+// before spec-review-driver can record the merge as concluded, so a caller following the
+// protocol's own "re-run the driver" instruction re-runs the legs and demands a fresh reviewer
+// for an already-closed review — appending a duplicate row to the ledger the replay schedule
+// and the catch-rate denominator are both read from. `cleanup` falls back to containment by
+// CONTENT (target tree === source tree), which is what a squash actually guarantees and is
+// strictly stronger than the merge-base walk `-d` performs.
 
 test('cleanup deletes a squash-merged branch, whose content is on the target but whose ancestry is not', () => {
   const dir = tmpdir('mbsqc')

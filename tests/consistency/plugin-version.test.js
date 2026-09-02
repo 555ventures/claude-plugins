@@ -3,16 +3,10 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const { read } = require('../helpers')
 
-// specs/20260820/08-config-name-ban.md (2026-08-20, D15 — orchestrator coverage ruling mid-build):
-// AC-20260820-08-14 cites "the existing version-bump consistency test" as its carrier, but no test
-// in tests/ read spec/.claude-plugin/plugin.json's version before this file (executed sweep, D15).
-// The AC was uncovered and would have been reported so by ac-matrix.js at review. This file is
-// that carrier — pinning the DURABLE invariant (semver shape, monotonic bump, changelog paragraph
-// present and matching the manifest), never the literal version number: this repo's rules § Gotchas
-// records that a spec's literal version-bump target is just that, a target, not a pin, because
-// concurrent sessions in this repo race the same semver and land on the next free number instead.
-// The comparison below is explicitly NUMERIC per component, not lexical/string — `7.9.0` sorting
-// after `7.11.0` as a string is exactly the trap a naive `>` on the raw string falls into.
+// specs/20260820/08-config-name-ban.md AC-20260820-08-14: the carrier for plugin.json's
+// version-bump consistency check — pins the durable invariant (semver shape, monotonic
+// bump, changelog paragraph matching the manifest), never the literal version number; the
+// comparator is numeric per component, never lexical/string.
 
 const PLUGIN_JSON_PATH = 'spec/.claude-plugin/plugin.json'
 const FLOOR = [7, 11, 0] // the version this spec's own D13 target (7.12.0) must exceed
@@ -53,9 +47,6 @@ test('AC-20260820-08-14: spec/.claude-plugin/plugin.json parses as JSON and decl
 })
 
 test('AC-20260820-08-14: the numeric semver comparator sorts 7.9.0 before 7.11.0 (the lexical trap a naive string comparison falls into), and the declared version is strictly greater than 7.11.0', () => {
-  // Self-check the comparator against the exact trap this AC calls out: as strings, "7.9.0" >
-  // "7.11.0" is true (lexical: '9' > '1'), which would let a real regression (a version that
-  // never actually advanced past 7.11.x) read as a pass.
   assert.ok(compareSemver(parseSemver('7.9.0'), parseSemver('7.11.0')) < 0,
     'the comparator must rank 7.9.0 BELOW 7.11.0 numerically (minor 9 < minor 11) — a comparator that instead ranks it above (the lexical string-sort trap) would let a stale or regressed version pass this pin undetected')
 

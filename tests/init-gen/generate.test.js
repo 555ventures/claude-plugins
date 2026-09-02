@@ -11,9 +11,9 @@ const { tmpdir, runNode, runBash, gitRepo, read } = require('../helpers')
 // gitattributes mechanics) becomes one script, spec/scripts/init-gen.js, invoked as
 // `generate --root <dir> --profile <path> [--refresh]`. These tests pin D1-D8/D13-D16 (the
 // generate subcommand) by executing it against a synthetic host in tmpdir() — none of them
-// can pass yet: init-gen.js does not exist on disk at all (TDD red, 2026-08-22). D4/A5 (the
-// 2026-08-22 spike falsifying init.md's bare-directory `.claude/worktrees` ignore check) and
-// the 2026-08-20 at-risk vacuous-pass escape (D8/D9's motivation) are the dated incidents
+// can pass yet: init-gen.js does not exist on disk at all (TDD red). D4/A5 (the
+// spike falsifying init.md's bare-directory `.claude/worktrees` ignore check) and
+// the at-risk vacuous-pass escape (D8/D9's motivation) are the incidents
 // behind AC-4 and AC-15/16 respectively.
 
 // Builds a minimally complete profile per the spec's Contracts block — every required config
@@ -199,7 +199,7 @@ test('AC-20260822-02-4: when the .claude/worktrees ignore entry already exists b
     'A5: `git check-ignore -q .claude/worktrees` exits 1 on a fresh host (entry exists, directory does not) even though the entry is present — a script using that bare-directory form instead of the child-path probe (`.claude/worktrees/x`) re-appends the entry forever: ' + gitignore)
 })
 
-// Direct fix 2026-08-31 (hearwell): spec-review-driver.js parks its re-entry sidecar at
+// Direct fix: spec-review-driver.js parks its re-entry sidecar at
 // specs/<date>/<spec>.review/ for the run's whole lifetime, but init provisioned no ignore entry
 // for it — a host gate sweeping the whole tree (prettier --check .) redded on the pipeline's own
 // scratch and hard-stopped the review before a reviewer dispatched. The pin is executed, not
@@ -260,7 +260,7 @@ test('AC-20260901-01-13: generate provisions specs/**/*.build/ so git check-igno
 
 // AC-20260901-02-7: specs/20260901/02-run-provenance.md D6 — the never-blocking spec-session-stamp.sh
 // hook writes a per-session scratch file at <root>/.claude/spec-session.json on every /spec: prompt.
-// A per-session file must never ride a close commit (the 7.45.0 sidecar class, the same reasoning
+// A per-session file must never ride a close commit (the same sidecar-class reasoning
 // behind the .review/.build sidecar entries above) so init-gen.js's IGNORE_ENTRIES gains this exact
 // bare-file path. Unlike the .review/.build sidecar entries this is a single file, not a directory
 // glob, so the probe is the literal path itself rather than a child-path sample.
@@ -439,7 +439,7 @@ test('AC-20260822-02-16: probeOutcomes.atRisk.applicable false with a reason wri
     'D9: an inapplicable at-risk leg must be recorded as an explicit inert row naming at-risk detection and the interview\'s stated reason — a silent drop here reproduces "indistinguishable from clean," the exact gap D9 exists to close: ' + JSON.stringify(manifest))
 })
 
-// Review finding on specs/20260822/02-init-generation-script.md, found 2026-08-23: generate
+// Review finding on specs/20260822/02-init-generation-script.md: generate
 // silently destroyed a pre-existing host .claude/settings.json when that file failed to parse
 // as JSON — every allow entry, every deny entry, and every unrelated top-level key were
 // replaced by a freshly-derived permissions block, exit 0, no warning. Locked Decision D5
@@ -492,7 +492,7 @@ test('AC-20260822-02-18: --refresh does not bypass the unparseable-settings refu
     'AC-18/D5: the existing settings file must stay byte-identical under --refresh too — any change here reproduces the exact silent clobber this finding was filed against: ' + onDisk)
 })
 
-// Review of specs/20260822/02-init-generation-script.md, round 2, found 2026-08-23: the round-1
+// Review of specs/20260822/02-init-generation-script.md, round 2: the round-1
 // settings pre-flight only caught JSON.parse throwing, never checked the parsed value's shape.
 // A second blind reviewer broke generate again with two shapes JSON.parse accepts: a top-level
 // `null` settings file passed pre-flight, then threw inside the merge AFTER every other target
@@ -648,7 +648,7 @@ test('AC-20260822-02-17: a profile missing a required config field exits 2, name
     'a usage-error exit must write nothing — a partial config here means a later manifest-check would run against an incomplete host')
 })
 
-// Review rv_e83659d49386 (2026-08-23) closed specs/20260822/02-init-generation-script.md CLEAN
+// Review rv_e83659d49386 closed specs/20260822/02-init-generation-script.md CLEAN
 // but waived four executed defect sites into this spec (20260823/02) under the two-iteration fix
 // cap: a string settings.extraAllow/extraDeny spreads per character into the host allow list at
 // exit 0 (spiked: 12 one-char entries — no error boundary can ever catch it, only a shape check
@@ -658,7 +658,7 @@ test('AC-20260822-02-17: a profile missing a required config field exits 2, name
 // directory-shaped settings.json operator to `chmod` a file when the true cause is EISDIR. These
 // five tests pin AC-20260823-02-1 through AC-20260823-02-5 — none can pass yet, since D1
 // (optional-array arm), D2 (object-shape guards), and D4 (EISDIR branch) are not yet implemented
-// in init-gen.js (TDD red, 2026-08-23).
+// in init-gen.js (TDD red).
 
 test('AC-20260823-02-1: a settings.extraAllow that is the string "Bash(bun x *)" exits 2 naming settings.extraAllow as must-be-an-array and writes nothing, never spreading it into twelve one-character allow entries', () => {
   const dir = newHost('init-gen-generate')

@@ -2,7 +2,7 @@
 'use strict'
 // red-check.js --spec <path> --root <dir> --base <sha-or-ref> [--expect-green <path>]... [--json]
 //
-// Incident (2026-08-21, specs/20260821/01-red-check.md): build.md Phase 0 step 2 (classify every
+// specs/20260821/01-red-check.md: build.md Phase 0 step 2 (classify every
 // tests-layer file's expected pre-image colour) and Phase 1's red-check paragraph (execute each
 // file, reconcile observed against expected) were hand-run from prose every build — a leg that
 // drifts per session and per model. Worse, the recurring failure class this reconciliation exists
@@ -34,19 +34,19 @@
 //                 pre-image purity refusal (a non-tests File Plan path already differs from
 //                 --base — tracked or untracked)
 //
-// specs/20260821/03-cross-spec-skip-mapping.md D7 (2026-08-22 amendment): the carried-AC
+// specs/20260821/03-cross-spec-skip-mapping.md D7: the carried-AC
 // classifier below (content.includes(b.id)) was a bare substring test — a tests-layer file
 // citing only a longer AC-ID that shares a shorter red-expected AC's prefix (AC-...-12 sharing
 // AC-...-1's prefix) phantom-carried the shorter id in too, forcing a false red expectation onto
 // a file that never mentions it (observed: a false unsanctioned-green, the live hit that stopped
-// specs/20260822/02's build 2026-08-22). Fixed by replacing the bare .includes with
+// specs/20260822/02's build). Fixed by replacing the bare .includes with
 // lib/spec-sections.js's exported acIdOccurs, a full-token occurrence check — the same authority
-// ac-matrix.js's coverage grep now uses.
+// ac-matrix.js's coverage grep also uses.
 //
-// specs/20260823/03-silent-drop-hardening.md D1 (2026-08-23, the 2026-08-21..23 upwell
+// specs/20260823/03-silent-drop-hardening.md D1 (the
 // silent-drop incident): a carried AC's `[pre-green:]` tag, when it ends the bullet backticked,
 // is refused as a declaration by lib/spec-sections.js's bare-only trailing rule (rv_640c582f4902)
-// — that refusal used to misreport as a plain `unsanctioned-green` with no hint the refusal is
+// — that refusal otherwise misreports as a plain `unsanctioned-green` with no hint the refusal is
 // the actual cause. Loud-when-it-bites, never unconditional: when a red-expected file is observed
 // green AND a carried AC's bullet has a refused trailing tag naming `[pre-green:`, the new hard
 // finding `rejected-trailing-tag` REPLACES `unsanctioned-green` for that file — never both. A
@@ -99,7 +99,7 @@ const bullets = parseAcBullets(acSection)
 const wellFormed = bullets.filter(b => !b.malformed)
 const bulletById = new Map(wellFormed.map(b => [b.id, b]))
 
-// D10 (2026-08-23, same spec): `rejectedTrailingTagDetail` — the `rejected-trailing-tag`
+// D10 (specs/20260823/03-silent-drop-hardening.md): `rejectedTrailingTagDetail` — the `rejected-trailing-tag`
 // remedy-text builder — is imported from lib/spec-sections.js, the one authority, rather than
 // defined here. The first implementation landed a byte-identical local copy in both this file and
 // ac-matrix.js — the exact two-identical-copies shape D4 (this spec) exists to eliminate. See
@@ -108,7 +108,7 @@ const bulletById = new Map(wellFormed.map(b => [b.id, b]))
 
 const filePlanRows = parseFilePlanRows(specText)
 
-// ---- D5: host config read ONLY through lib/host-config.js readConfig (7.12.0 name-ban) --------
+// ---- D5: host config read ONLY through lib/host-config.js readConfig (name-ban) --------
 
 const config = readConfig(root)
 if (!config.testCommand) {
@@ -198,7 +198,7 @@ for (const { p, isDelete } of testsRowEntries) {
 // `[pre-green:]` reason (validated here against PRE_GREEN_REASONS; the parser itself does no
 // enum validation, D1) — plus the invalid-pre-green fail-closed classification -------------------
 //
-// Hardened 2026-08-22 (escape rv_640c582f4902, unanchored-marker-match — the same defect class
+// Hardened (escape rv_640c582f4902, unanchored-marker-match — the same defect class
 // the review just fixed for [oracle:]/[env:]/[pre-green:], left in place for this sibling
 // marker): a literal `SHALL CONTINUE TO` search over the bullet's whole raw text fails OPEN in
 // both directions. A quoted mention inside a backticked code span (an AC discussing the marker,

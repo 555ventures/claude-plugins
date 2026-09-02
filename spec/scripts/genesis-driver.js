@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // genesis-driver.js [--root <dir>] [--mark <mark> [--file <path>]] [--state]
 //
-// WHY: specs/20260825/04-genesis-driver.md — genesis's architect stage used to be three phases
-// of hand-performed choreography inside /spec:genesis-architect: run the coverage-audit gate,
+// WHY: specs/20260825/04-genesis-driver.md — genesis's architect stage was three phases
+// of hand-performed choreography: run the coverage-audit gate,
 // invoke registry-check.js per research menu, close the decision record, run the scaffold
 // command, run the zero-day gate, close the roadmap — each a deterministic check a session could
 // (and, measured, did) skip or fabricate while reporting success. Procedural hallucination is
-// the largest agent-failure class (38.5%, agenticrail.nz 2026-08-08). On the spec-review-driver.js
+// the largest agent-failure class (38.5%, agenticrail.nz). On specs/20260825/04-genesis-driver.md's
 // contract, this script EXECUTES every one of those checks itself and prints only the ONE step
 // that still needs the session's judgment (the interview, the picks, the ADRs, the day-zero
 // skeleton, the roadmap decomposition). State is re-derived from `.claude/genesis/status.json`
@@ -27,10 +27,9 @@
 // routinely emits well over spawnSync's 1 MiB default maxBuffer, and a Node pipe at that ceiling
 // SIGTERM-kills the child mid-run (ENOBUFS) before a single byte reaches the log — permanently
 // bricking genesis on that project, since the truncated scaffold never completes and every re-run
-// hits the identical wall (incident 2026-08-26, found at review of
-// specs/20260825/04-genesis-driver.md). Streamed output can never overflow a buffer that no
-// longer exists in the parent; runChild's fail-closed guard for a genuine signal death or spawn
-// failure is unchanged.
+// hits the identical wall (specs/20260825/04-genesis-driver.md). Streamed output can never
+// overflow a buffer that does not exist in the parent; runChild's fail-closed guard for a
+// genuine signal death or spawn failure is unchanged.
 //
 // What this deliberately does NOT do:
 //   - hold the interview, write the picks, author the ADRs, land the skeleton, or decompose the
@@ -45,7 +44,7 @@
 //     it may report the transient driver-only states `SCAFFOLD`/`GATE` (D2's enum) that a bare
 //     invocation never leaves standing, instead of running the command a bare invocation would.
 //
-// specs/20260827/01-genesis-tournament.md (2026-08-27): between MENUS and DECIDE, five archetypes
+// specs/20260827/01-genesis-tournament.md: between MENUS and DECIDE, five archetypes
 // (web-app, realtime-trading, backend-api, mobile-app, desktop-app) gain a tournament —
 // FINALISTS -> RACE (driver-only) -> PROBE -> PICK. The driver races 2-3 session-composed
 // finalist stacks for real (scaffold, zero-day gate, boot through smoke.sh's own contract) into
@@ -53,8 +52,8 @@
 // to build under a two-retry cap, re-runs gate+boot once the slice lands, and assembles a
 // benchmark table + screenshot gallery. Executed evidence INFORMS the pick; `--mark picked`
 // records whichever finalist the brief's own `## Picks` already names — the driver never ranks
-// or chooses. The winner is re-scaffolded clean into the project root on `decided` (JJ ruling
-// 2026-08-27): the probe slice was built under retry caps with no spec and no review, and must
+// or chooses. The winner is re-scaffolded clean into the project root on `decided`: the probe
+// slice was built under retry caps with no spec and no review, and must
 // never become the project's foundation — `tournament/finalists/` and `tournament/logs/` are
 // deleted once the decision record cites `benchmark.md`; `benchmark.json/.md`, `gallery.html`,
 // and `evidence/` survive as the ADR's cited evidence. Every other archetype's MENUS -> DECIDE
@@ -72,10 +71,10 @@
 //     leader and a `## Picks` that names the other finalist still records THAT finalist as the
 //     winner.
 //
-// specs/20260827/02-genesis-explore-state.md (2026-08-27): between MENUS and the tournament's
+// specs/20260827/02-genesis-explore-state.md: between MENUS and the tournament's
 // FINALISTS, four VISUAL archetypes (web-app, mobile-app, realtime-trading, desktop-app) gain an
-// EXPLORE state — Round 0 of the taste funnel that used to be its own command
-// (/spec:genesis-explore, now deleted). Marks progress research-done -> positions-authored ->
+// EXPLORE state — Round 0 of the taste funnel, folded in rather than left as its own command.
+// Marks progress research-done -> positions-authored ->
 // tiles-built -> tiles-culled, or `external --file <dir>` for a design the session already has.
 // The two culled looks (or the one external candidate) become the tournament's `style-tile`
 // task's tile sources, rendered inside each finalist with its real component library — replacing
@@ -93,9 +92,9 @@
 //     `.claude/genesis/explore/authored/<kebab>.css` snapshot `positions-authored` wrote, via
 //     `startsWith` (additions-only, no git in play — Assumption A2).
 //
-// specs/20260827/03-genesis-design-state.md (2026-08-29): between ROADMAP and HANDOFF, every
-// archetype except backend-api/data-ml gains a DESIGN state — the design lock that used to be its
-// own retired command. Marks progress doctrine-drafted (one-page
+// specs/20260827/03-genesis-design-state.md: between ROADMAP and HANDOFF, every
+// archetype except backend-api/data-ml gains a DESIGN state — a design lock folded in rather
+// than left as its own command. Marks progress doctrine-drafted (one-page
 // `docs/design/doctrine.md`, `## Dissents` naming every rejected direction from
 // `.claude/genesis/design-pick.json`) -> [tokens-landed, visual archetypes only:
 // `design/tokens.css` ratified verbatim from the winner's, an approved matrix-clean mock in
@@ -115,7 +114,7 @@
 //     section, a byte-for-byte prefix, a closed enum, a green child process), never opinions on
 //     which direction won.
 //
-// specs/20260827/04-genesis-conventions-handoff.md (2026-08-29): the ops-conventions table
+// specs/20260827/04-genesis-conventions-handoff.md: the ops-conventions table
 // stops being ADR paragraph nobody re-runs. `--mark decided` additionally validates
 // `.claude/genesis/conventions.json` — the nine floor keys, each row DECIDED-with-boolean-
 // enforceable or DEFERRED-with-reason, an enforceable row's probe living under the declared
@@ -142,7 +141,7 @@
 //   - read status.json a second time inside init-gen — the profile itself carries every genesis
 //     artifact init-gen needs (config.genesisStackDescriptor, design.rulesManifest).
 //
-// specs/20260901/04-shell-composed-mocks.md D7 (2026-09-01): `--mark tokens-landed` (visual
+// specs/20260901/04-shell-composed-mocks.md D7: `--mark tokens-landed` (visual
 // archetypes) additionally requires `design/shell/app.html` to exist and
 // `design-atlas.js check design/shell` to exit 0, refused naming the missing file or carrying the
 // check's own output otherwise — the navigation shell is the mock-side artifact of the same
@@ -150,17 +149,16 @@
 // without it. The check runs alongside the tokens.css checks (both validate a CANON file), ahead
 // of the approved-mock/matrix checks that validate the MOCKS.
 //
-// Fixing that overflow only at the child's own capture wasn't enough: `logTail`, which builds the
-// SCAFFOLD_RED/GATE_RED excerpt embedded in the driver's OWN stdout, used to bound its excerpt by
-// line count alone (`text.split('\n').slice(-n)`). A caller's buffer is measured in BYTES, not
-// lines — a single unbroken multi-megabyte line (realistic `\r`-driven install/progress output,
-// exactly the class the streaming fix above targets) makes "the last 20 lines" the WHOLE file, and
-// a caller capturing the driver's own stdout through a pipe (e.g. a test's default 1 MiB
-// maxBuffer) hits the identical ENOBUFS one layer up. `logTail` now reads only the last
-// LOGTAIL_MAX_BYTES of the file via `fs.openSync`/`fs.readSync`, never the whole thing, and marks
-// the excerpt as truncated when it is (incident 2026-08-26, found in the fix-delta pass of the
-// review of specs/20260825/04-genesis-driver.md — bounding a printed excerpt by line count alone
-// is not a bound, because a caller's buffer is measured in bytes).
+// Fixing that overflow only at the child's own capture is insufficient: `logTail`, which builds the
+// SCAFFOLD_RED/GATE_RED excerpt embedded in the driver's OWN stdout, bounds its excerpt by BYTES,
+// not lines (`text.split('\n').slice(-n)` cannot: a caller's buffer is measured in bytes). A single
+// unbroken multi-megabyte line (realistic `\r`-driven install/progress output, exactly the class
+// the streaming fix above targets) makes "the last 20 lines" the WHOLE file, and a caller capturing
+// the driver's own stdout through a pipe (e.g. a test's default 1 MiB maxBuffer) hits the identical
+// ENOBUFS one layer up. `logTail` reads only the last LOGTAIL_MAX_BYTES of the file via
+// `fs.openSync`/`fs.readSync`, never the whole thing, and marks the excerpt as truncated when it is
+// (specs/20260825/04-genesis-driver.md — bounding a printed excerpt by line count alone is not a
+// bound, because a caller's buffer is measured in bytes).
 //
 // Exit codes:
 //   0  a bare invocation printed the current step (or `--state` printed the state name — a
@@ -957,7 +955,7 @@ function handleProbeDone() {
     const tasks = Array.isArray(parsed.tasks) ? parsed.tasks : null
     if (!tasks) die('finalist "' + name + '"\'s probe.json must have a top-level "tasks" array')
 
-    // specs/20260827/02-genesis-explore-state.md D7: style-tile is no longer a single task — it
+    // specs/20260827/02-genesis-explore-state.md D7: style-tile is not a single task — it
     // is ONE entry per tile source (exploreRecord.finalists), keyed `tile: "<kebab>"` or
     // `"external/<name>"`. Every other task keeps the old single-entry-per-task contract.
     const tileSources = tileSourcesFor()
@@ -1490,13 +1488,13 @@ function logTail(p, n) {
     try { fs.closeSync(fd) } catch { /* already closed */ }
   }
   // The line slice runs BEFORE the truncation marker is attached, never after: prepending the
-  // marker and then slicing the last N lines (the original shape of this fix) makes the marker
-  // itself a slice candidate — on any byte window holding more than N lines (the ordinary
-  // large multi-line failing-gate log, not just the single-giant-line case), the marker sits far
-  // enough back in the window that the line slice discards it, and the reader sees a plain,
-  // confident-looking excerpt with no sign it's partial (defect found in review of this same
-  // fix, 2026-08-26). A line dropped by the slice is exactly as much "there is more, on disk" as
-  // a byte dropped by the read window, so either condition attaches the marker to the final text.
+  // marker and then slicing the last N lines would make the marker itself a slice candidate —
+  // on any byte window holding more than N lines (the ordinary large multi-line failing-gate
+  // log, not just the single-giant-line case), the marker would sit far enough back in the
+  // window that the line slice discards it, and the reader would see a plain, confident-looking
+  // excerpt with no sign it's partial. A line dropped by the slice is exactly as much "there is
+  // more, on disk" as a byte dropped by the read window, so either condition attaches the marker
+  // to the final text.
   const lines = text.split('\n')
   const wanted = n || 20
   const tail = lines.slice(-wanted)
@@ -1972,7 +1970,7 @@ function deriveState(opts) {
   // design: "skipped" for and which never enter DESIGN at all.
   if (!isDesignSkipped(status.archetype) && status.design !== 'rules-locked') return 'DESIGN'
 
-  // specs/20260827/04-genesis-conventions-handoff.md D4: HANDOFF is no longer terminal — once
+  // specs/20260827/04-genesis-conventions-handoff.md D4: HANDOFF is not terminal — once
   // `profile-written` records a successful init-gen generate run, the derived state advances to
   // the new terminal state GROUNDED. No `peek` branch is needed here (unlike SCAFFOLD/GATE):
   // this reads a value status.handoff already persisted, with no side effect either way.

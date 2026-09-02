@@ -17,11 +17,8 @@ const { tmpdir, runNode } = require('../helpers')
 // ac-matrix.js against synthetic host trees. None of this derivation exists at HEAD — every
 // case here is red-first.
 //
-// specs/20260820/06-typed-evidence-manifest.md D2 (2026-08-20, brief 16's second move):
-// ac-matrix.js's `--json` observed.skipReconcile field retires the packed "skipped=N
-// sanctioned=S" string for the typed object {"skipped":N,"sanctioned":S} — every assertion
-// below is retyped in place; the invariant under test (which lookup path sanctioned which skip)
-// is unchanged, so none of these pins are retagged.
+// specs/20260820/06-typed-evidence-manifest.md D2: ac-matrix.js's `--json`
+// observed.skipReconcile field is the typed object {"skipped":N,"sanctioned":S}.
 
 function specMd(acLines, filePlanRows) {
   return '# Test Spec\n\n## Acceptance Criteria\n\n' + acLines.join('\n') + '\n\n' +
@@ -181,16 +178,17 @@ test('AC-20260815-03-6: a current-spec re-declaration without [env:] wins over a
     JSON.stringify(out.observed.skipReconcile))
 })
 
-// Found at review of specs/20260815/03 (2026-08-16): resolveOwningBullet's cache in
-// spec/scripts/ac-matrix.js keys owningSpecCache by date+ordinal (the owning FILE) but stores
-// one AC's { path, bullet } resolution under that key, not the file's parsed contents. Every
-// fixture above gives each AC-ID its own distinct owning spec, so the collision is invisible
-// there. When two skipped tests resolve to two different ACs living in the SAME owning spec,
-// whichever resolves first poisons the cache for the second: gated-first sanctions both
-// (skipped=2 sanctioned=2, zero findings); ungated-first unsanctions both, the second finding's
-// detail falsely claiming the owning spec has no [env:] declaration on the gated AC. The two
-// cases below build one owning spec with both an [env:]-bearing and an env-less AC and run the
-// same two skips in both orders — order-independence is what a correct per-AC cache must give.
+// specs/20260815/03-ac-matrix-fail-closed.md: resolveOwningBullet's cache in
+// spec/scripts/ac-matrix.js keys owningSpecCache by date+ordinal (the owning FILE), so the
+// cache entry must resolve per-AC ({ path, bullet }), never one shared reading of the file's
+// contents. Every fixture above gives each AC-ID its own distinct owning spec, so a per-file
+// cache collision is invisible there. When two skipped tests resolve to two different ACs
+// living in the SAME owning spec, whichever resolves first must never poison the cache for the
+// second: a shared cache would sanction both when the first is gated (masking the ungated
+// second) or unsanction both when the first is ungated (falsely claiming the owning spec has no
+// [env:] declaration on the gated second). The two cases below build one owning spec with both
+// an [env:]-bearing and an env-less AC and run the same two skips in both orders —
+// order-independence is what a correct per-AC cache must give.
 
 function twoAcOwnerHost(dir) {
   const spec = baseHost(dir)

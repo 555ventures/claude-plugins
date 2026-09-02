@@ -5,26 +5,26 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// Escape, 2026-08-20 (found while reviewing host spec upwell/specs/20260820/02-sandbox-safety-
-// activation.md): the at-risk leg never ran a single at-risk test since its mechanization.
+// Escape (found while reviewing a host spec's sandbox-safety-activation work): the at-risk leg
+// never ran a single at-risk test since its mechanization.
 //
-// scope-reconcile.js has emitted `atRisk` as {file, refs} OBJECTS since the field was introduced
-// (specs/20260815/02-at-risk-pins.md D1) — the `refs` provenance is load-bearing and the schema is
-// correct. When v7 (4817a9d, 2026-08-17) transcribed /spec:review's hand-performed Phase 0 into
-// review-legs.js, the at-risk consumer was written as `atRisk.map(q)`, which quotes String(object).
-// The leg therefore invoked `<testCommand> '[object Object]' '[object Object]'` — and `node --test`
-// treats an argument matching no test files as zero tests, exit 0. So the leg recorded `files=N`
-// as a VACUOUS GREEN (observed in 36c2f14's review evidence: files=11 exit=0, runner printed
-// "pass 0" — an observation the leg discarded). Two things made it survive: the adjacent patterns
-// consumer four lines below handles the object form correctly (`typeof f === 'string' ? f :
-// f.file || ''`), so the schema looked consumed; and a green row draws no eyes — nothing
+// scope-reconcile.js emits `atRisk` as {file, refs} OBJECTS (specs/20260815/02-at-risk-pins.md
+// D1) — the `refs` provenance is load-bearing and the schema is correct. review-legs.js's
+// at-risk consumer must never be written as `atRisk.map(q)`, which quotes String(object): the
+// leg would then invoke `<testCommand> '[object Object]' '[object Object]'`, and `node --test`
+// treats an argument matching no test files as zero tests, exit 0 — recording `files=N` as a
+// VACUOUS GREEN (observed in review evidence: files=11 exit=0, runner printed "pass 0" — an
+// observation the leg discarded). Two things make such a defect survive undetected: an adjacent
+// patterns consumer that already handles the object form correctly (`typeof f === 'string' ? f :
+// f.file || ''`), so the schema looks consumed; and a green row draws no eyes — nothing
 // distinguishes "N files passed" from "N garbage paths matched nothing".
 //
 // This is the authored-but-never-executed class: a check that reports a number without looking.
-// Before v7 the step was performed by the session, which plausibly read `.file` correctly, so the
-// mechanically-guaranteed-dead window is v7 onward — earlier runs are unverified, not exonerated.
+// The mechanically-guaranteed-dead window traces to review-legs.js replacing /spec:review's
+// hand-performed Phase 0, which plausibly read `.file` correctly — earlier runs are unverified,
+// not exonerated.
 //
-// specs/20260820/06-typed-evidence-manifest.md D1/D2/D5 (2026-08-20, brief 16's second move):
+// specs/20260820/06-typed-evidence-manifest.md D1/D2/D5:
 // the at-risk leg's `observed` field becomes a typed JSON object — {"files":N,"testsExecuted":
 // N|{"unavailable":"<enum>"}}, or {"malformed":{"entries":N,"of":M}} on a schema-drifted entry.
 // This fixture host declares no `testCountPattern`, so testsExecuted is typed

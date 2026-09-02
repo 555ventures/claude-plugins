@@ -6,7 +6,7 @@ const path = require('node:path')
 const { execFileSync, spawnSync } = require('node:child_process')
 const { SPEC, read, tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20260819/02-mutation-replay.md (brief 14, 2026-08-19): the 2026-08-18 ad-hoc consult
+// specs/20260819/02-mutation-replay.md (brief 14): the ad-hoc consult
 // injection (specs/20260819/01-review-evidence-retention.md's Fable retainer pass) proved a
 // known defect can be dropped into a just-CLEANed spec's tree and the standard reviewer
 // dispatched blind against it — this file pins the deterministic half of that eval turned into
@@ -17,7 +17,7 @@ const { SPEC, read, tmpdir, runNode, gitRepo } = require('../helpers')
 // the main tree is never in scope for this harness by design (D4's marker-guarded teardown
 // pins the mistake this session's own spike made once, accidentally worktreeing inside the repo).
 //
-// 2026-08-19 (independent review, four defects fixed in place — D3/D5/D7 amended): F1 — the old
+// Independent review (four defects fixed in place — D3/D5/D7 amended): F1 — the old
 // AC-4 pin built its worktree with a raw `git worktree add` instead of --setup, so the
 // .replay-worktree marker never existed and its leak into base..HEAD was invisible to a green
 // suite; AC-4 below now composes --setup then --apply and pins the marker's absence directly.
@@ -28,7 +28,7 @@ const { SPEC, read, tmpdir, runNode, gitRepo } = require('../helpers')
 // before scoring anything, so a crashed/malformed reviewer return can never silently become a
 // `missed` data point.
 //
-// 2026-08-19 (fix iteration 2, this same review): F1's fix wrote the marker into the worktree's
+// Fix iteration 2 (this same review): F1's fix wrote the marker into the worktree's
 // working tree and hid it via `git rev-parse --git-path info/exclude` run inside the worktree —
 // but info/exclude is NOT per-worktree, so that call resolved to the MAIN repo's shared
 // .git/info/exclude and the write landed in the HOST repo, surviving teardown and breaking this
@@ -39,7 +39,7 @@ const { SPEC, read, tmpdir, runNode, gitRepo } = require('../helpers')
 // to `<git -C <dir> rev-parse --git-dir>/replay-worktree` (no leading dot) — the worktree's PRIVATE
 // git dir, deleted for free by `git worktree remove` — so nothing enters the working tree at all.
 //
-// 2026-08-19 (specs/20260819/03-replay-first-run-fixes.md, a post-CLEAN consult on the harness
+// specs/20260819/03-replay-first-run-fixes.md (a post-CLEAN consult on the harness
 // above): D1 replaces --score's --file/--line with --patch, scoring off every hunk in the
 // mutation's own patch instead of a single self-reported point (AC-1..AC-4; AC-10 retags the F4
 // malformed-return pins above onto the new --patch invocation). D3/D4 add unresolved/setup-failed
@@ -64,7 +64,7 @@ const { SPEC, read, tmpdir, runNode, gitRepo } = require('../helpers')
 // artifact shape) is unchanged, only its file-derivation mechanism is. Flagged in the build
 // return as a File Plan gap the collision sweep should have caught.
 //
-// specs/20260823/05-replay-unattended-hardening.md (2026-08-23, rv_387d84a3b424's replay): the
+// specs/20260823/05-replay-unattended-hardening.md (rv_387d84a3b424's replay): the
 // scheduled harness could not run unattended, twice over — `--setup` refused every in-repo `--dir`
 // (forcing `/private/tmp`, where agent Edit/Write is classifier-denied) and `--select` emitted a
 // moving-ref `diffBase` that goes stale the instant the review's own merge lands. D1/D2 narrow the
@@ -83,7 +83,7 @@ const { SPEC, read, tmpdir, runNode, gitRepo } = require('../helpers')
 // only the base value's shape is. The old build_base-wins-over-diff_base sub-case is retired outright
 // (superseded by D4's reordering) and its coverage folds into the new AC-20260823-05-5 test.
 //
-// specs/20260826/01-replay-scratch-path-blindness.md (2026-08-26, rv_6229b7af0d0b's due replay,
+// specs/20260826/01-replay-scratch-path-blindness.md (rv_6229b7af0d0b's due replay,
 // rp_02b3f1ee52f1): the scratch worktree root handed to the blind reviewer, and the marker in its
 // private git dir, both named the harness itself — `.claude/worktrees/replay-<hex>` (copied from
 // a doctrine example) and `replay-worktree`, the latter one `ls "$(git rev-parse --git-dir)"`
@@ -100,7 +100,7 @@ const { SPEC, read, tmpdir, runNode, gitRepo } = require('../helpers')
 // `replay-*`-basename in-repo `--dir` fixtures above (AC-20260823-05-1/-3/-4) are renamed
 // `scratch-*` in place so they keep exercising the in-repo allow arm instead of tripping D2.
 
-// specs/20260831/01-replay-range-materialization.md (2026-08-31, rv_128f1a459e42/rp_d4b6fcf66c93):
+// specs/20260831/01-replay-range-materialization.md (rv_128f1a459e42/rp_d4b6fcf66c93):
 // the baseline worktree stood at the close commit's parent (F3), but a diff.dirty:true review
 // row's judged range is completed by the close commit that follows it (range-identity spec
 // 20260824/06 D3/D7) — a leg green over the close-commit tree could go red at the bare parent,
@@ -162,7 +162,7 @@ function isIgnored(root, rel) {
   return spawnSync('git', ['-C', root, 'check-ignore', '-q', rel]).status === 0
 }
 
-// D4 (fix iteration 2, 2026-08-19): the marker lives at `<git -C <dir> rev-parse --git-dir>/
+// D4 (fix iteration 2): the marker lives at `<git -C <dir> rev-parse --git-dir>/
 // scratch-worktree` — the worktree's PRIVATE git dir, never its working tree. D3
 // (specs/20260826/01-replay-scratch-path-blindness.md) renamed the filename itself from
 // `replay-worktree` to `scratch-worktree`; both AC-3 and AC-8 resolve the marker's real location
@@ -195,7 +195,7 @@ function replayLedgerRow(n, extra = {}) {
   }
 }
 
-// F3 (2026-08-19 review): --select must resolve diffBase from the spec's frontmatter AT THE
+// F3 (review): --select must resolve diffBase from the spec's frontmatter AT THE
 // CLOSE COMMIT'S PARENT, not the close commit itself — so every spec fixture below is built as
 // TWO commits (the pre-review tree, then the close), letting a test assert against the parent
 // sha independently of the close sha.
@@ -215,7 +215,7 @@ function commitSpecFlow(root, relPath, parentContent, closeContent) {
 
 function writeWorkflowReturn(dir, name, survivors) {
   const p = path.join(dir, name)
-  // F4 (2026-08-19 review): the reviewer's real return is ALWAYS verdict:"CLEAN" with a
+  // F4 (review): the reviewer's real return is ALWAYS verdict:"CLEAN" with a
   // survivors array — "FINDINGS" is not a shape reviewer.md ever emits; the old fixture's
   // survivors.length-conditional verdict was itself stale and is fixed here, not just at the
   // call sites that read it.
@@ -223,7 +223,7 @@ function writeWorkflowReturn(dir, name, survivors) {
   return p
 }
 
-// F1 (2026-08-19 review): every worktree an AC-4 test composes must come from --setup itself,
+// F1 (review): every worktree an AC-4 test composes must come from --setup itself,
 // never a raw `git worktree add` — that substitution is exactly what let the marker-leak defect
 // ship undetected. This fixture builds the base repo + mutation patch only; the worktree is
 // always stood up by the test via `runNode(SCRIPT, ['--setup', ...])`.
@@ -295,7 +295,7 @@ test('AC-20260819-03-8: --due CONTINUES TO report not due and exit 1 when fewer 
 test('AC-20260819-02-2 (collision fix, specs/20260823/05): --select prints all five fields spec/reviewRunId/commit/parent/diffBase, preferring a critical-tier CLEAN row over a later standard-tier one, and ties resolve to the latest row', () => {
   const root = fs.realpathSync(tmpdir('replay-select'))
   gitRepo(root)
-  // D4 (2026-08-23): every diff_base value below is now a REAL ancestor commit sha — the old
+  // D4: every diff_base value below is now a REAL ancestor commit sha — the old
   // fabricated hex ('aaaa000...aaaa') can never resolve under the new ancestry-validated --select.
   const aAncestor = commitReal(root, 'lib/a-pre.js', 'a\n', 'pre a')
   const a = commitSpecFlow(root, 'specs/a.md',
@@ -366,7 +366,7 @@ test('AC-20260819-02-2 (collision fix, specs/20260823/05): --select prints all f
     'on stdout: ' + JSON.stringify(r4.stdout))
 })
 
-// specs/20260823/09-replay-baseline-attribution.md (2026-08-23, rp_1b176ebff5c7): the harness
+// specs/20260823/09-replay-baseline-attribution.md (rp_1b176ebff5c7): the harness
 // treated every red review leg as evidence about the planted defect, but ~1 in 4 selectable CLEAN
 // rows closes with a leg legitimately red for pre-existing, sanctioned reasons — the live incident
 // recorded `--legs green` on a target whose CLEAN close carried a sanctioned red reconcile leg,
@@ -545,7 +545,7 @@ test('AC-20260823-05-8: --select exits 4 naming the stale-base cause and the sta
 test('AC-20260819-03-9 (collision fix, specs/20260823/05): --select still selects a CLEAN review row when it is followed only by a setup-failed replay row, so the retry targets the same review', () => {
   const root = fs.realpathSync(tmpdir('replay-select-setupfailed'))
   gitRepo(root)
-  // D4 (2026-08-23): a REAL ancestor sha, not a fabricated hex — the new ancestry-validated
+  // D4: a REAL ancestor sha, not a fabricated hex — the new ancestry-validated
   // --select can never resolve a fake sha, and this test's own claim (a successful selection)
   // would otherwise become unreachable.
   const gAncestor = commitReal(root, 'lib/g-pre.js', 'g\n', 'pre g')
@@ -569,7 +569,7 @@ test('AC-20260819-03-9 (collision fix, specs/20260823/05): --select still select
     'exact run and not some other selection: ' + r.stdout)
 })
 
-// specs/20260823/05-replay-unattended-hardening.md D1 (2026-08-23, rv_387d84a3b424): the old
+// specs/20260823/05-replay-unattended-hardening.md D1 (rv_387d84a3b424): the old
 // combined refuse/accept test above split three ways below — AC-1 (new: the .claude/worktrees/
 // allow arm), AC-2 (retagged: the surviving in-repo refusal, now narrowed to non-worktrees paths),
 // AC-6 (retagged verbatim, SHALL CONTINUE TO: the outside-repo accept path with all its
@@ -609,7 +609,7 @@ test('AC-20260823-05-1: --setup accepts a --dir inside <root>/.claude/worktrees/
   assert.ok(!fs.existsSync(dir), 'D1: teardown must remove the in-repo worktree directory: ' + dir)
 })
 
-// Vacuity note (2026-08-23, per this repo's own generalized-third-occurrence vacuous-rejection
+// Vacuity note (per this repo's own generalized-third-occurrence vacuous-rejection
 // class, § Gotchas): this AC's own text says "CONTINUE TO refuse" — and it DOES already pass
 // against today's script, since today refuses every in-repo --dir unconditionally, .claude/
 // worktrees/ included. Kept as the correct post-implementation regression pin (D1 narrows the
@@ -709,7 +709,7 @@ test('AC-20260823-05-4: WHEN the repo\'s info/exclude already carries the .claud
     JSON.stringify(excludeContent))
 })
 
-// specs/20260826/01-replay-scratch-path-blindness.md D1/D2/D3 (2026-08-26): the four tests below
+// specs/20260826/01-replay-scratch-path-blindness.md D1/D2/D3: the four tests below
 // pin the new --setup --spec derivation, the D2 basename refusal, and the D3 marker rename. Every
 // derived name is computed by actually invoking merge-back.sh's `branch-for` subcommand — the
 // sole owner of the `spec/<stem>` naming rule (pipeline rules § Risk Tiers) — rather than
@@ -930,7 +930,7 @@ test('AC-20260826-01-4: --setup plants exactly scratch-worktree (never replay-wo
     'D3: git\'s own worktree registry must still list the refused (undeleted) directory: ' + list)
 })
 
-// specs/20260831/01-replay-range-materialization.md D1-D5 (2026-08-31, rv_128f1a459e42/
+// specs/20260831/01-replay-range-materialization.md D1-D5 (rv_128f1a459e42/
 // rp_d4b6fcf66c93): the five tests below pin --setup's new --overlay <closeSha> arm — the overlay
 // algorithm's materialize/skip split (AC-1/AC-2), its degenerate meta-only case (AC-3), the
 // descendant validation (AC-4), and the --subject refusal/acceptance (AC-5). None of these pass
@@ -1145,7 +1145,7 @@ test('AC-20260823-05-6 / AC-20260826-01-6 (retagged from AC-20260819-02-3, SHALL
   gitRepo(root)
   const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
 
-  // D4 host-unmodified pin (fix iteration 2, 2026-08-19): snapshot the HOST repo's shared
+  // D4 host-unmodified pin (fix iteration 2): snapshot the HOST repo's shared
   // .git/info/exclude (absent is a valid snapshot value — handled below) and `git status
   // --porcelain` BEFORE any --setup call. Iteration 1's fix wrote its exclusion line into exactly
   // this file, resolved from INSIDE the worktree via `git rev-parse --git-path info/exclude` —
@@ -1288,7 +1288,7 @@ test('AC-20260819-02-4: --apply refuses a --subject announcing the harness or co
     'D5: a refused --apply must leave the worktree clean — the patch must never even be applied when the ' +
     'subject check fails first: ' + JSON.stringify(status))
 
-  // The narrowing pin (2026-08-19 review, second pass): an earlier draft of this refusal rejected the
+  // The narrowing pin (review, second pass): an earlier draft of this refusal rejected the
   // words replay/mutation/corpus ANYWHERE in the subject, which refused exactly the subject
   // replay.md mandates — this repo's own build subject for this very spec. D5's rule is provenance,
   // not vocabulary, so a spec-derived subject that merely contains those words must be ACCEPTED.
@@ -1305,7 +1305,7 @@ test('AC-20260819-02-4: --apply refuses a --subject announcing the harness or co
     'D5: the accepted --subject must be the commit subject verbatim: ' + derivedMsg)
 })
 
-// specs/20260901/08-corpus-derivation-and-kill-match.md D2 (2026-09-01, brief 19): --apply and
+// specs/20260901/08-corpus-derivation-and-kill-match.md D2 (brief 19): --apply and
 // --record must refuse a --class value the corpus (spec/scripts/lib/replay-corpus.js's
 // parseCorpus(corpusPath())) does not carry — today's --apply performs no such check at all
 // (verified below: 'not-a-class' commits the mutation exactly like a real corpus id), so a typo'd
@@ -1542,7 +1542,7 @@ test('AC-20260819-03-4: --score exits 2 naming the patch path and the remedy whe
   assert.strictEqual(r.stdout.trim(), '', 'a usage error is not a score — nothing must print on stdout: ' + JSON.stringify(r.stdout))
 })
 
-// Vacuity note (2026-08-19, executed): this AC's own text says "CONTINUE TO exit 2," and it does
+// Vacuity note (executed): this AC's own text says "CONTINUE TO exit 2," and it does
 // pass against the pre-spec-03 script today — but empirically NOT for the CLEAN-verdict check it
 // claims to pin. The old --score usage requires --file/--line, both absent from this --patch-shaped
 // invocation, so the pre-image rejects via its generic missing-required-flag usage error (verified:
@@ -1555,11 +1555,11 @@ test('AC-20260819-03-10: --score CONTINUES TO exit 2 printing no score when the 
   const patchFile = path.join(dir, 'mutation.patch')
   fs.writeFileSync(patchFile, '--- a/lib/x.js\n+++ b/lib/x.js\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n')
 
-  // F4 regression pin (2026-08-19 review of spec 02), retagged here per Assumption A4: the old
+  // F4 regression pin (review of spec 02), retagged here per Assumption A4: the old
   // code classified ANY parseable-but-unusable reviewer return as `missed`, permanently deflating
   // the catch-rate denominator with evidence that was never actually produced. Converted from the
   // retired --file/--line invocation to the new --patch shape; the three sub-assertions below are
-  // unchanged from the original pin.
+  // unchanged from the earlier pin.
   const failedPath = path.join(dir, 'failed.json')
   fs.writeFileSync(failedPath, JSON.stringify({ verdict: 'REVIEWER_FAILED' }))
   const failed = runNode(SCRIPT, ['--score', '--workflow', failedPath, '--patch', patchFile])
@@ -1711,9 +1711,9 @@ test('AC-20260819-02-6 / AC-20260823-09-11 (pre-existing matrix continuity: red:
     'reviewer-graded evidence it is not: ' + JSON.stringify(artifact.reviewer))
 })
 
-// specs/20260901/08-corpus-derivation-and-kill-match.md D2 (2026-09-01, brief 19): --record
+// specs/20260901/08-corpus-derivation-and-kill-match.md D2 (brief 19): --record
 // validates --class before any read of --patch/--workflow beyond the D7 matrix, so a rejected
-// class leaves the ledger untouched. A2 (executed 2026-09-01): today's --record accepts a
+// class leaves the ledger untouched. A2 (executed): today's --record accepts a
 // non-corpus class outright — exit 0, "recorded runId=rp_…", and --stats renders the fabricated
 // class verbatim — which is this test's exact red.
 test('AC-20260901-08-3: --record --class not-a-class exits 2 and appends nothing to the ledger, while --class prefix-collision-coverage-fail-open on the same inputs appends the row', () => {
@@ -1824,7 +1824,7 @@ test('AC-20260819-03-6 / AC-20260823-09-11 (pre-existing matrix continuity: none
     'D4: the artifact\'s reviewer must be null — the reviewer was never dispatched on a setup failure: ' + JSON.stringify(artifact.reviewer))
 })
 
-// Vacuity note (2026-08-19, executed): this AC's own text says "CONTINUE TO exit 2," and it does
+// Vacuity note (executed): this AC's own text says "CONTINUE TO exit 2," and it does
 // pass against the pre-spec-03 script today — but empirically NOT via a 5-value enum check. The
 // pre-image still requires --class/--file (both absent here) for every --record call, so it
 // rejects via its generic missing-required-flag usage error before ever inspecting --outcome
@@ -1834,7 +1834,7 @@ test('AC-20260819-03-6 / AC-20260823-09-11 (pre-existing matrix continuity: none
 // implementation assertion rather than reddened artificially.
 // D2/D3 (specs/20260823/09): --record gains one new --legs value, `baseline-red:<leg>[,<leg>]`,
 // valid for caught/missed/unresolved alongside green — the truthful word for a run whose target
-// closed with sanctioned red legs, replacing the false `--legs green` the 2026-08-23 incident
+// closed with sanctioned red legs, replacing the false `--legs green` an earlier incident
 // recorded. `unresolved` becomes two-armed: green/baseline-red:* still requires --patch+--workflow
 // (Phase 3 dismissal, reviewer ran); red:<leg> requires --patch and REFUSES --workflow (step-7
 // dismissal, reviewer never ran). The three tests below pin the new grammar directly.
@@ -1907,7 +1907,7 @@ test('AC-20260823-09-5: --record --outcome caught --legs red:gate is refused wit
     'a refused --record must append nothing — a partial row here would corrupt --stats\' totals: ' + root)
 })
 
-// Vacuity note (2026-08-23, executed): the noWorkflow sub-case below is fully discriminating — the
+// Vacuity note (executed): the noWorkflow sub-case below is fully discriminating — the
 // pre-image rejects it with exit 2 ("requires --workflow") since --record's old code requires
 // --workflow for every outcome in {caught, missed, unresolved} with no red:<leg> arm. The
 // withWorkflow sub-case's OWN status assertion is NOT discriminating: the pre-image already exits 2
@@ -2005,7 +2005,7 @@ test('AC-20260819-03-11: --record CONTINUES TO exit 2 when --outcome is any valu
     'at all: ' + root)
 })
 
-// Vacuity note (2026-08-19, executed): this test passes against the pre-spec-03 script today, but
+// Vacuity note (executed): this test passes against the pre-spec-03 script today, but
 // empirically NOT via D7's validation matrix. The missingWorkflow/missingPatch sub-cases omit
 // --class/--file (pre-image-required for every --record call), so they reject via the generic
 // missing-required-flag usage error; the setupFailedWithClass sub-case rejects because pre-spec-03
@@ -2056,7 +2056,7 @@ test('AC-20260819-03-13: --record exits 2 naming the violated requirement when -
     'never partially record: ' + root)
 })
 
-// specs/20260901/08-corpus-derivation-and-kill-match.md D3 (2026-09-01, brief 19): --pick-class
+// specs/20260901/08-corpus-derivation-and-kill-match.md D3 (brief 19): --pick-class
 // counts MEASUREMENT replay rows (caught/missed/leg-caught, D5 of 20260819/03) per corpus class
 // and picks the fewest, tying to derived-first then corpus file order; every corpus class starts
 // at 0 even with zero rows recorded for it. This mode does not exist at HEAD (usage/exit 2 on the
@@ -2266,16 +2266,16 @@ test('AC-20260819-02-11: spec-status.js SHALL CONTINUE TO exit 0 with zero anoma
     'host the moment /spec:replay records its first row: ' + JSON.stringify(out.anomalies))
 })
 
-// specs/20260820/02-replay-scratch-write-access.md (2026-08-20): the same live run pinned above
+// specs/20260820/02-replay-scratch-write-access.md: the same live run pinned above
 // (F1/F2/F3/F4) also left two doctrine gaps in replay.md's Phase 1. D4 — `git checkout -- .`
 // cannot remove files setupCommand *creates* (that run's own first-run stray root
 // package-lock.json), so the setup gate needs `git clean -fd` after the restore. D5 — the
 // authoring Edit/Write into `{dir}` now passes the cross-worktree write guard via the
 // `scratch-worktree` marker allow (spec 20260820/02's own D1/D2, marker renamed by specs/20260826/01
 // D3, pinned in tests/worktree-hook.test.js); replay.md must say so, and say that reaching for Bash instead
-// (the actual 2026-08-20 incident shape) is a contract violation, not an improvisation. Amended
-// 2026-08-31: the mutation is authored in-session (the worker dispatch was refused by hosts'
-// unattended permission layer — salon-os, three refusals — and delegation carries no blindness
+// (the actual incident shape) is a contract violation, not an improvisation. Amended
+// later: the mutation is authored in-session (the worker dispatch was refused by hosts'
+// unattended permission layer, three refusals — and delegation carries no blindness
 // value), so the step is now "Author the mutation (D2)"; the guard/marker/Bash contract binds
 // the session's own writes identically.
 test('AC-20260820-02-6: replay.md\'s Phase 1 setup gate appends "git -C {dir} clean -fd" after the checkout restore, and the mutation-authoring step states the marker-guard write path with Bash-as-violation', () => {
@@ -2349,7 +2349,7 @@ test('AC-20260820-02-6: replay.md\'s Phase 1 setup gate appends "git -C {dir} cl
     'anyway leaves the 2026-08-20 bypass shape just as easy to repeat next time: ' + JSON.stringify(dispatchMatch[1]))
 })
 
-// specs/20260823/09-replay-baseline-attribution.md D4/D5 (2026-08-23, rp_1b176ebff5c7): step 7's
+// specs/20260823/09-replay-baseline-attribution.md D4/D5 (rp_1b176ebff5c7): step 7's
 // pre-fix text treats EVERY red leg as mutation evidence — the retry-then-leg-caught path fires no
 // matter WHY a leg is red. D4 re-keys the path to newly-red legs only, with a deterministic
 // reconcile exemption grounded in step 4's File-Plan confinement of the mutation itself. D5 routes
@@ -2407,7 +2407,7 @@ test('AC-20260823-09-9: replay.md\'s Phase 1 step 7 re-keys red-leg attribution 
     'that does not exist: ' + JSON.stringify(step7Match[0]))
 })
 
-// specs/20260831/01-replay-range-materialization.md D6/D7 (2026-08-31): section-scoped exactly
+// specs/20260831/01-replay-range-materialization.md D6/D7: section-scoped exactly
 // like AC-20260823-09-9 above — a whole-file grep would let a paraphrase living anywhere else in
 // the file satisfy this pin without step 1's own invocation or step 7's own rung 3 ever changing.
 test('AC-20260831-01-7: replay.md states, in Phase 1 step 1, that setup passes --overlay {commit} because the judged range ends at the close commit, and in step 7 rung 3, the pristine-baseline verification (reset --hard HEAD^, fresh manifest, re-run legs) between the failed retry and leg-caught, with red-pristine routing to rung 4\'s seam', () => {
@@ -2463,7 +2463,7 @@ test('AC-20260831-01-7: replay.md states, in Phase 1 step 1, that setup passes -
     'environment drift as either mutation-caused or pre-existing: ' + JSON.stringify(step7Match[0]))
 })
 
-// ---- 2026-08-27 incident (direct fix, no spec): the CWD-relocation trap. ------------------------
+// ---- The CWD-relocation trap (direct fix, no spec). ------------------------
 // During the review of specs/20260827/01 the session followed Phase 1 step 2's "run it inside
 // {dir}" with a bare `cd`, and the Bash tool's working directory persisted. Every later
 // cwd-defaulting harness mode therefore resolved the repo to the scratch worktree: --record
@@ -2512,8 +2512,8 @@ test('replay-root-1: --record --root <repo> appends the measurement row into <re
     'NOTHING may be written under the process cwd when --root names a different repo — a row written to both ' +
     'places would double-count in --stats and still lose the copy inside a torn-down worktree: ' + elsewhere)
 
-  // The retained evidence artifact follows the row, not the shell — losing it was half the 2026-08-27
-  // damage (the score had to be re-derived from files that happened to live outside the copy).
+  // The retained evidence artifact follows the row, not the shell — losing it was half the
+  // damage from that incident (the score had to be re-derived from files that happened to live outside the copy).
   assert.ok(fs.existsSync(path.join(repo, '.claude/spec-runs')),
     'the retained per-run artifact directory must sit under --root alongside the ledger it indexes: ' + repo)
 })

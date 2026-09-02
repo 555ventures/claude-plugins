@@ -5,17 +5,14 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { SPEC, tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20260827/04-genesis-conventions-handoff.md (2026-08-29, TDD red): D1/D2 add a machine-
-// readable ops-conventions ledger (`.claude/genesis/conventions.json`) that `--mark decided`
-// validates; D3 makes `--mark skeleton-landed` additionally require every enforceable probe file
-// plus a <=150-line CLAUDE.md/AGENTS.md naming the gate command and the test tree; D4 turns
-// HANDOFF into a judgment step that ends with a new `--mark profile-written --file <f>
-// [--refresh]`, which runs `init-gen.js generate` itself and lands the new terminal state
-// GROUNDED. None of AC-20260827-04-1..4 can pass yet: genesis-driver.js has no conventions.json
-// validation, no probe/binding-subset checks, no `profile-written` mark, and no GROUNDED state
-// (grep confirmed at authoring time, 2026-08-29).
+// specs/20260827/04-genesis-conventions-handoff.md D1/D2/D3/D4: a machine-readable
+// ops-conventions ledger (`.claude/genesis/conventions.json`) that `--mark decided` validates;
+// `--mark skeleton-landed` additionally requires every enforceable probe file plus a
+// <=150-line CLAUDE.md/AGENTS.md naming the gate command and the test tree; HANDOFF is a
+// judgment step that ends with `--mark profile-written --file <f> [--refresh]`, which runs
+// `init-gen.js generate` itself and lands the new terminal state GROUNDED.
 //
-// Assumption A1 (executed micro-spike 2026-08-27, S5): `init-gen.js generate --root <dir>
+// Assumption A1 (executed micro-spike S5): `init-gen.js generate --root <dir>
 // --profile <{}>` exits 2 naming `config.gateCommand`, and `tests/init-gen/generate.test.js`'s
 // `baseProfile()` shape against a `gitRepo()` host generates green — the AC-4 fixture below
 // copies that exact profile shape and the host under test is `gitRepo()`-initialised throughout
@@ -470,13 +467,12 @@ test('AC-20260827-04-4: --mark profile-written --file f run with a valid basePro
   assert.match(next.stdout, /next: \/spec:enforce/, 'D5: GROUNDED must print next: /spec:enforce — greenfield genesis is init + enforce, and a different (or missing) next command strands the session with no printed chain to follow')
   assert.match(next.stdout, /convention probes: 5/, 'GROUNDED must print "convention probes: 5" — this fixture\'s conventions.json carries exactly five enforceable DECIDED rows, and a wrong or missing count means the report is not actually reading the landed probe set')
 
-  // 2026-08-29 repair round: init-gen.js's own diff (buildFileTargets' CONFIG_RELPATH target,
-  // spec/scripts/init-gen.js:376) strips exactly `generatedBy`/`contractHash` from BOTH sides
-  // before comparing (line 465-469) — a hand-edit to either key can never differ from the
-  // profile's own re-derivation, so it could never trigger the exit-3 refresh refusal this
-  // sub-case exists to prove. Hand-editing `gateCommand` instead (a field the diff never strips)
-  // is a real divergence from what the profile would regenerate — the fixture this AC's promise
-  // actually needs.
+  // init-gen.js's own diff (buildFileTargets' CONFIG_RELPATH target, spec/scripts/init-gen.js:376)
+  // strips exactly `generatedBy`/`contractHash` from BOTH sides before comparing (line 465-469) —
+  // a hand-edit to either key can never differ from the profile's own re-derivation, so it could
+  // never trigger the exit-3 refresh refusal this sub-case exists to prove. Hand-editing
+  // `gateCommand` instead (a field the diff never strips) is a real divergence from what the
+  // profile would regenerate — the fixture this AC's promise actually needs.
   const hand = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
   hand.gateCommand = 'hand-edited-for-conventions-handoff-test'
   fs.writeFileSync(cfgPath, JSON.stringify(hand, null, 2))

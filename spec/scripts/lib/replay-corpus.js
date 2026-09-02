@@ -4,7 +4,7 @@
 // (escapes.corpusGaps/registry) both need to know which ids the corpus carries and whether each
 // is hand-authored or derived; before this module existed each would have grown its own regex
 // sweep over the same file, the exact "two sessions derive two answers" shape this repo's own
-// Incident Policy forbids (specs/20260901/08-corpus-derivation-and-kill-match.md D1, 2026-09-01,
+// Incident Policy forbids (specs/20260901/08-corpus-derivation-and-kill-match.md D1,
 // brief 19).
 //
 // Grammar (line-anchored — see the spec's Contracts block for the authoritative statement):

@@ -5,10 +5,10 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT, tmpdir, runNode, runBash } = require('../helpers')
 
-// specs/20260823/06-prose-debt-pruning.md (2026-08-23): the host rules' § Gotchas section
-// accreted 23 entries in 23 days with nothing pruning them — two of them citing machinery
-// (`suite-baseline.js`, `.claude/suite-baseline.json`) deleted at v7.0.0 and unnoticed for
-// six days. `prose-cap.js` converts "should we prune?" into arithmetic: a hard entry cap on
+// specs/20260823/06-prose-debt-pruning.md: the host rules' § Gotchas section
+// accreted 23 entries in 23 days with nothing pruning them — two of them citing removed
+// machinery (`suite-baseline.js`, `.claude/suite-baseline.json`). `prose-cap.js` converts
+// "should we prune?" into arithmetic: a hard entry cap on
 // one named markdown section, checked by count alone (D1/D2). AC-20260823-06-3 below is the
 // standing enforcement — it runs the script against THIS repo's real rules file and is
 // deliberately red until the D9 triage (23 → 10 entries) lands later in this build; do not
@@ -16,19 +16,19 @@ const { ROOT, tmpdir, runNode, runBash } = require('../helpers')
 // (AC-1) both guard the same failure mode: a miscount that either hides a real overage or
 // invents a false one.
 //
-// 2026-08-23 fail-open fix: the original entry regex required a tag-FIRST bullet — a shape
-// only this repo and these self-authored fixtures happened to write. Upwell's real Gotchas
-// section (tag-at-end: `- **Bold claim** … [host]`) held 138 entries and matched 0, so the
-// cap had never fired on any tag-at-end host. The tag-at-end tests below are the regression
-// pin and the deliberate trip in exactly the shape that previously counted 0.
+// The tag-at-end regression fix: the earlier entry regex required a tag-FIRST bullet — a shape
+// only this repo and these self-authored fixtures happened to write. A real host's Gotchas
+// section (tag-at-end: `- **Bold claim** … [host]`) held many entries and matched none, so the
+// cap never fired on any tag-at-end host. The tag-at-end tests below are the regression
+// pin and the deliberate trip in exactly the shape that once counted 0.
 
 function bullet (n) {
   return '- `[host]` fixture entry ' + n + ' citing a synthetic incident, only for AC coverage of prose-cap.js.'
 }
 
-// The real host shape the 2026-08-23 fail-open missed: bold-opening bullet wrapped onto an
-// indented continuation line, bracket tag at the END — mirrors Upwell's rules file, where the
-// original bracket-first regex matched 0 of 138 entries.
+// The real host shape the earlier regex missed: bold-opening bullet wrapped onto an
+// indented continuation line, bracket tag at the END — mirrors a real host's rules file, where
+// that earlier bracket-first regex matched 0 of 138 entries.
 function tagAtEndEntry (n) {
   return [
     '- **Bold claim ' + n + '** fixture entry wrapped onto a',
@@ -167,10 +167,9 @@ test('AC-20260823-06-10: spec-paths prints an existing file path for both prose-
   }
 })
 
-// 2026-08-25 ratchet mode (direct fix, core § Incident Policy — same session as understood):
-// the cap postdated the debt on every adopting host (Upwell 138, Prax 169 against 15), so the
-// first close met an unmeetable eviction duty and Prax closed with the cap "recorded as unmet".
-// --baseline N admits an over-cap section iff it is strictly smaller than N — every close must
+// Ratchet mode (direct fix, core § Incident Policy): the cap can postdate existing debt on an
+// adopting host, so a first close can meet an unmeetable eviction duty and record the cap as
+// "recorded as unmet". --baseline N admits an over-cap section iff it is strictly smaller than N — every close must
 // net-shrink the section by one entry, so the debt converges with no flag day.
 test('ratchet: an over-cap section strictly below --baseline exits 0 and names the ratchet', () => {
   const dir = tmpdir('prose-cap-ratchet-pass')

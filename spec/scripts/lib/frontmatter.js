@@ -3,8 +3,8 @@
 // `---`-delimited frontmatter block: fmBlock (raw block), fmValue (single scalar), fmMap (every
 // top-level key).
 //
-// specs/20260823/03-silent-drop-hardening.md D4 (2026-08-23, rv_e83659d49386): spec-review-driver.js
-// and spec-design-driver.js (retired 2026-08-24, specs/20260824/02) each carried an IDENTICAL local `fmVal` whose `^key:\s*(.+)$` regex
+// specs/20260823/03-silent-drop-hardening.md D4 (rv_e83659d49386): spec-review-driver.js
+// and spec-design-driver.js (retired, specs/20260824/02) each carried an IDENTICAL local `fmVal` whose `^key:\s*(.+)$` regex
 // captured everything after `key:` to end of line, inline `#` comment included. For `tier:` this
 // only polluted a value compared solely against the literal `critical` — cosmetic until it wasn't:
 // seven live review ledger rows now carry a whole sentence inside `tier`. For `build_base:` the
@@ -14,7 +14,7 @@
 // module was the extraction so a third copy was never the next incident — it landed exporting only
 // `fmVal(fmRaw, key)`.
 //
-// specs/20260823/04-review-close-hardening.md D1/D8/D9 (2026-08-23, rv_6825fa48c98d — the SAME
+// specs/20260823/04-review-close-hardening.md D1/D8/D9 (rv_6825fa48c98d — the SAME
 // close's tier field corrupted across seven ledger rows): this build widens the module to close the
 // remaining two copies (spec-status.js and replay.js each carried a byte-identical private
 // `frontmatter()` kv loop whose `.replace(/\s*#.*$/, '')` stripped at ANY `#`, not just a
@@ -23,7 +23,7 @@
 // — no alias survives, because a second name for one derivation is the exact drift this module
 // exists to end (D9 updates tests/frontmatter.test.js's pin to the new name in place, never
 // weakened). Two functions are new: `fmBlock(text)` extracts the raw frontmatter interior (what
-// every caller used to hand-derive with its own `/^---\n([\s\S]*?)\n---/` regex before calling
+// a caller would otherwise hand-derive with its own `/^---\n([\s\S]*?)\n---/` regex before calling
 // fmVal), and `fmMap(text)` derives every top-level key at once (what spec-status.js/replay.js's
 // private kv loops were re-implementing). `fmValue` is additionally widened to accept EITHER full
 // document text (fences, body, and all) or a pre-extracted raw block — every caller can now pass

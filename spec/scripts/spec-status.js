@@ -27,12 +27,11 @@
 // one 📡 line, and becomes the --next top pick as a full oracle-shaped `/spec:escape` entry
 // (unchanged from specs/20260805/03's D5).
 //
-// --next derives the recommended next command per open spec — the mapping that used to
-// live as renderer prose (and, worse, as end-of-run improvisation): draft → /spec:plan;
-// hardened (with or without `design: true`, `designed:` set or not) and implementing both →
-// /spec:run — the loop derives design-due, build, and review from disk itself, so this
-// derivation no longer offers a second, narrower next-command for one state (`/spec:design`,
-// `/spec:build`, and `/spec:review` are never emitted here). Closest-to-done first, blocked entries last,
+// --next derives the recommended next command per open spec: draft → /spec:plan; hardened
+// (with or without `design: true`, `designed:` set or not) and implementing both → /spec:run
+// — the loop derives design-due, build, and review from disk itself, so this derivation offers
+// exactly one next-command per state (`/spec:design`, `/spec:build`, and `/spec:review` are
+// never emitted here). Closest-to-done first, blocked entries last,
 // and when every spec is done the next ready unplanned brief becomes the /spec:plan pick.
 // Unblocked runner-up entries are annotated parallel-ok/serial relative to the top pick:
 // spec-level depends_on can never link two unblocked entries (a non-done dep is a blocker),
@@ -61,16 +60,8 @@
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
-// Node's console.log() to stdout is ASYNCHRONOUS when stdout is a pipe — exactly the case for
-// every programmatic caller (spawnSync/exec), e.g. spec-queue.js's `--next --json` consumer.
-// process.exit() tears the process down immediately, before the pipe drains, so a large payload
-// silently truncates at the 64 KiB pipe buffer while the exit code still reads 0 — a truncation
-// with no error anywhere. Found 2026-08-23: the first real `spec-queue next` run against this
-// repo's ~75 KB dashboard JSON lost its last ~9 KB and spec-queue.js's JSON.parse failed on the
-// truncated tail (specs/20260823/08-derived-session-queue.md repair). Every site that prints and
-// then calls process.exit() must go through this synchronous helper instead of console.log.
-// fs.writeSync can still return fewer bytes than given on a pipe, so this loops — and retries on
-// EAGAIN — until the whole buffer is actually flushed.
+// The 64 KiB process.exit stdout-truncation mechanism this synchronous writer exists to avoid:
+// spec/scripts/lib/driver-io.js.
 function writeOut(str) {
   const buf = Buffer.from(str + '\n', 'utf8')
   let off = 0
@@ -142,10 +133,10 @@ function walkMd(dir, out = []) {
   return out
 }
 
-// File Plan parsing (parseFilePlan/splitPlanCell) now lives in lib/file-plan.js (D2,
-// specs/20260805/01-review-scope-reconciliation.md) — scope-reconcile.js shares the same
-// derivation instead of a second one drifting apart from this one. CLI behavior here is
-// byte-identical (AC-20260805-01-7).
+// File Plan parsing (parseFilePlan/splitPlanCell) lives in lib/file-plan.js (D2,
+// specs/20260805/01-review-scope-reconciliation.md) — scope-reconcile.js shares this derivation
+// rather than carrying a second copy that could drift. CLI behavior here is byte-identical
+// (AC-20260805-01-7).
 
 function parseList(v) {
   if (!v) return []
@@ -176,8 +167,7 @@ for (const file of walkMd(path.join(root, 'specs'))) {
 // leaves the derivation entirely — no brief membership, no Next entry, no anomaly, ever.
 // Silence is the whole point. A retired spec sitting in the repo for a year must never
 // accumulate report lines, and this derivation must never invent an errand to earn that
-// silence — an earlier cut demanded `superseded_by:` resolve to another SPEC and nagged daily
-// at a spec correctly superseded by an ADR, for which no fix existed (2026-08-01).
+// silence.
 // `superseded_by:` is optional provenance: free-form (spec path, ADR path, prose), carried into
 // --json for whoever wants the trail, never validated and never a gate.
 const isRetired = s => s.status === 'superseded'
@@ -238,9 +228,9 @@ const KNOWN_STATUS = new Set(['draft', 'hardened', 'implementing', 'done'])
 // Offline read only — this is a VIEW; the network leg lives solely in observe-ci.js. Absence of
 // the ledger means every done spec resolves to "ok" (silent — a host that has never run
 // observe-ci has never seen a red run, which renders identically to a host that has and stayed
-// green; the retired "pending" state used to distinguish the two and nobody wanted the nag).
-// readLedgerRows/qualifyingObservation (D2 algorithm) now live in lib/observation.js — shared
-// with observe-ci.js instead of a second derivation drifting apart (2026-08-06 review of
+// green — both collapse to the same "ok" render by design).
+// readLedgerRows/qualifyingObservation (D2 algorithm) live in lib/observation.js — shared
+// with observe-ci.js instead of a second derivation drifting apart (D2,
 // specs/20260805/03-done-unobserved-observation.md). CLI behavior here is byte-identical.
 function observationFor(rows, specPath) {
   const row = qualifyingObservation(rows, specPath)
@@ -400,8 +390,8 @@ if (fs.existsSync(overview)) {
 // ---- --next: recommended next command --------------------------------------------------------
 
 // Resolve a depends_on ref against the LIVE specs. A ref naming a retired spec resolves to
-// nothing, and both callers read nothing as non-blocking — which is the intent: you don't get
-// held up by, or scolded about, a dependency that was retired out from under you.
+// nothing, and both callers read nothing as non-blocking — which is the intent: a spec must
+// never block or nag about a dependency that has been retired.
 function specDep(ref) {
   return specByTail.get(path.basename(ref)) || specs.find(x => x.path === ref || x.path.endsWith('/' + ref))
 }
@@ -437,8 +427,8 @@ function deriveNext() {
   const entries = []
   for (const s of specs) {
     if (DONE(s.status) || !KNOWN_STATUS.has(s.status)) continue
-    // hardened (any design state) and implementing both route through the loop now — the loop
-    // derives design-due itself, so this derivation no longer distinguishes them (D5).
+    // hardened (any design state) and implementing both route through the loop — the loop derives
+    // design-due itself, so this derivation treats them identically (D5).
     const action = s.status === 'draft' ? '/spec:plan' : '/spec:run'
     const blockers = []
     for (const d of s.depends_on) {
@@ -617,9 +607,8 @@ if (json) {
 {
   // D1: a terminal shows the TAIL of output, so section order bottom-anchors the actionable
   // content — 🗺️ Roadmap → 📡 red-alarm lines (only when red) → ⚠️ Anomalies → 🎯 Next → the
-  // one-line headline verdict LAST (owner directive 2026-08-07 — "I need to scroll up to see
-  // what's Next"). Content within each section is unchanged; only the order moves, plus the
-  // ⏳/"unobserved" segment dies with the retired `pending` state (D2).
+  // one-line headline verdict LAST. Content within each section is unchanged; only the order
+  // moves, plus the ⏳/"unobserved" segment dies with the retired `pending` state (D2).
   const out = []
   const BRIEF_ICON = { done: '✅', 'in-flight': '🔨', unplanned: '⬜' }
 
@@ -656,8 +645,8 @@ if (json) {
     for (let i = 0; i < briefs.length; i++) {
       const b = briefs[i]
       // Runs of same-status briefs with nothing actionable per row (unplanned = no state yet,
-      // done = all specs green) collapse to one range row — a long shipped history was filling
-      // the screen (owner report 2026-08-31). In-flight briefs never collapse.
+      // done = all specs green) collapse to one range row — avoiding a long run of shipped
+      // history filling the screen. In-flight briefs never collapse.
       let j = i
       while ((b.status === 'unplanned' || b.status === 'done') && j + 1 < briefs.length && briefs[j + 1].status === b.status) j++
       if (j > i) {

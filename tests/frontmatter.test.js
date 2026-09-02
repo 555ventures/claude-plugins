@@ -2,7 +2,7 @@
 const { test } = require('node:test')
 const assert = require('node:assert')
 
-// specs/20260823/03-silent-drop-hardening.md D4 (2026-08-23, rv_e83659d49386): both
+// specs/20260823/03-silent-drop-hardening.md D4 (rv_e83659d49386): both
 // spec-review-driver.js and spec-design-driver.js carried an IDENTICAL local `fmVal` whose
 // `^key:\s*(.+)$` regex captures everything after `key:` to end of line — an inline `#` comment
 // on any frontmatter key rides straight through to the caller. For `tier:` this was merely
@@ -17,7 +17,7 @@ const assert = require('node:assert')
 // unit-level pin on a function's return contract (AC-7/-8/-9/-10 class, per this repo's Test
 // Rules) that targets a file this spec creates from scratch.
 //
-// specs/20260823/04-review-close-hardening.md D8/D9 (2026-08-23): `fmVal` is renamed to
+// specs/20260823/04-review-close-hardening.md D8/D9: `fmVal` is renamed to
 // `fmValue` (no alias survives — one export name per derivation is D2's whole point) and widened
 // to also accept full document text. Per D9 this pin is UPDATED IN PLACE, never weakened or
 // deleted: every call site below moves to `fmValue`, and every test name gains

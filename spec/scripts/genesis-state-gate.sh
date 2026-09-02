@@ -6,7 +6,7 @@
 # (repos that never used the genesis stage) are never touched.
 # Exit 2 blocks the prompt and shows stderr to the user. Exit 0 allows; stdout is injected context.
 #
-# specs/20260827/03-genesis-design-state.md D6 (2026-08-29): the design lock folds into the driver
+# specs/20260827/03-genesis-design-state.md D6: the design lock folds into the driver
 # as the new DESIGN state; the retired design-lock command is deleted, and this hook's own arm for
 # it — shared with the already-retired explore command's arm from
 # specs/20260827/02-genesis-explore-state.md via the same require_scaffold helper — is deleted

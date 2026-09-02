@@ -3,14 +3,14 @@
 // ci-query.js (--branch <name> | --commit <sha>) [--root <dir>] — one normalized `gh` wrapper
 // answering "what did CI just do?", shared by /spec:review's `ci` leg (--commit, per-SHA),
 // /spec:release's `ci` leg (--commit, per-SHA), and spec 20260805/03's observe-ci.js (--branch,
-// trunk latest-run) (2026-08-05, review-evidence-manifest D4, spiked A1; 2026-08-10, per-sha-ci-
+// trunk latest-run) (review-evidence-manifest D4, spiked A1; per-sha-ci-
 // legs D1, spiked A1: `gh run list --commit <sha>` returns `[]` exit 0 for a commit CI never saw
-// — executed against installed gh 2.93.0 in this repo).
+// — executed against the installed `gh` binary).
 //
 // Two independent gh wrappers was the drift seam a refuter flagged from the review side while
 // spec 03 was independently growing its own. This is the one home for the raw-vs-mapped split:
 // gh missing, `gh run list` unable to determine a base repo ("no git remotes found" — spiked
-// against real gh 2026-08-05), or a completed-but-empty run list are all structurally "no CI to
+// against real gh), or a completed-but-empty run list are all structurally "no CI to
 // consult" (available:false, transient:false); gh executing and exiting non-zero for any other
 // reason is a retryable auth/network failure (available:false, transient:true); anything else
 // is a completed or in-progress run, passed through. --branch and --commit are mutually
@@ -22,7 +22,7 @@
 // the current branch, read only inside the sha-unseen fallback below (still --limit 1, never
 // polled or retried).
 //
-// 2026-08-13 (specs/20260813/10-host-capabilities.md D2): a host with no forge adapter (e.g.
+// specs/20260813/10-host-capabilities.md D2: a host with no forge adapter (e.g.
 // GitLab/Bitbucket, or no `gh`) was silently probed as if it were GitHub — `gh` missing already
 // answered `available:false`, but nothing distinguished "this host declares it has no CI forge"
 // from "gh happens to be uninstalled right now." When the host config declares
@@ -31,7 +31,7 @@
 // shape below — a Claude session reads either) and exits 0. `capabilities.forge:"github"` or an
 // absent `capabilities` block (legacy mode) fall through to the unchanged dynamic `gh` probe.
 //
-// 2026-08-30 (specs/20260830/03-ci-leg-honest-absence.md D1/D2/D3, salon-os host-escape report):
+// specs/20260830/03-ci-leg-honest-absence.md D1/D2/D3:
 // an unpushed HEAD's empty --commit run list was indistinguishable from "no CI at all" — origin's
 // branch could be red for days while the leg read green (observed: 23 unpushed local commits,
 // origin red four days, review CLEAN). --commit mode's empty-run-list branch now disambiguates

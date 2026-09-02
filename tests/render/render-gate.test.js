@@ -6,7 +6,7 @@ const path = require('node:path')
 const { spawnSync } = require('node:child_process')
 const { tmpdir, runNode, SPEC } = require('../helpers')
 
-// specs/20260824/01-render-gate.md (2026-08-24, D1/D8-D13, Contracts): render-gate.js is the
+// specs/20260824/01-render-gate.md (D1/D8-D13, Contracts): render-gate.js is the
 // driver — preconditions, the built-in mock server (D8), the per-cell capture loop over mock x
 // state x theme x viewport (D10/D11), readiness/boot lifecycle (D13), and the exit-code alphabet
 // (D12). Per the spec's own "Watch during execution" note, every capture-invoking test here runs
@@ -63,7 +63,7 @@ function writeFakeCapture(root) {
   return p
 }
 
-// specs/20260824/04-render-rules.md (2026-08-24, D5): a fixture capture that writes a CANNED
+// specs/20260824/04-render-rules.md (D5): a fixture capture that writes a CANNED
 // entries array (read from FAKE_CAPTURE_ENTRIES, JSON-encoded) into every inventory it produces,
 // standing in for a host capture whose real page happens to render a specific measured box/color
 // — the render-rules.js pass under test (AC-20260824-04-9/10) needs entries to check, which the
@@ -130,7 +130,7 @@ function gate(specPath, root, outDir, extraArgs = [], opts = {}) {
     { cwd: root, timeout: 30000, ...opts })
 }
 
-// specs/20260824/04-render-rules.md (2026-08-24, D5): the new `--mocks <mock>…` mode — no
+// specs/20260824/04-render-rules.md (D5): the new `--mocks <mock>…` mode — no
 // --spec, no ledger, no component side. Each mock is passed as its own repeated --mocks flag
 // (this repo's Worker Rules: "hand-rolled --flag value arg parsing only", so a variable-arity
 // flag is one repeated `--flag value` pair per mock, never a bare multi-token tail).
@@ -395,7 +395,7 @@ test('AC-20260824-01-12: WHEN ready fails until boot creates the flag file THE S
   assert.match(r2.stderr, /design\.render\.ready/, 'the timeout must name design.render.ready as the stuck config key, or the remedy is undiscoverable: ' + r2.stderr)
 })
 
-// specs/20260824/04-render-rules.md (2026-08-24, D5): render-gate.js runs render-rules.js over
+// specs/20260824/04-render-rules.md (D5): render-gate.js runs render-rules.js over
 // every COMPONENT inventory (never the mock side, in --spec mode) after comparison, when the
 // host config declares design.rulesManifest; findings print under the cell as `rule <id> <kind>
 // …` and fail the gate exactly like a fidelity finding; a root that declares no rulesManifest at
@@ -442,7 +442,7 @@ test('AC-20260824-04-9: a root declaring design.rulesManifest with a target-size
   assert.strictEqual(r2.status, 0, 'D12: a clean comparison with no rules manifest declared must exit 0: ' + r2.stderr)
 })
 
-// specs/20260824/04-render-rules.md (2026-08-24, D5): the new `render-gate.js --mocks <mock>…`
+// specs/20260824/04-render-rules.md (D5): the new `render-gate.js --mocks <mock>…`
 // mode — no --spec, no ledger read, no component URL, no comparison; it captures the mock(s)
 // only and runs render-rules.js over each mock inventory when design.rulesManifest is declared.
 // AC-20260824-04-10.

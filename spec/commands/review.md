@@ -100,8 +100,9 @@ Run `node "$(spec-paths report-render)" --slots <file>` and print its output ver
   line naming the key. This leg is advisory — never a `verdict.js` leg, and its findings never
   block the verdict on their own. Write the reviewer's structured return
   to the file the driver's step names: `{verdict: "CLEAN"|"REVIEWER_FAILED", survivors:
-  [{severity, claim, file, line, impact, evidence}], killed: [], reviewerCount: 1, scope:
-  "full"|"fix-delta", tokens: <n>}`, then mark `reviewer-returned --file <json>`.
+  [{severity, claim, file, line, impact, evidence}], killed: [{claim, file, line, evidence}],
+  reviewerCount: 1, scope: "full"|"fix-delta", tokens: <n>}`, then mark
+  `reviewer-returned --file <json>`.
   `REVIEWER_FAILED` (agent died) is a failed run, never CLEAN — re-dispatch before marking.
 - **The reviewer is read-only**; it may create and delete its own repro file — fixes are always
   separate dispatches; no execution side effects on shared stateful substrates.

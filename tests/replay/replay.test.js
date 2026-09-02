@@ -1305,6 +1305,51 @@ test('AC-20260819-02-4: --apply refuses a --subject announcing the harness or co
     'D5: the accepted --subject must be the commit subject verbatim: ' + derivedMsg)
 })
 
+// specs/20260901/08-corpus-derivation-and-kill-match.md D2 (2026-09-01, brief 19): --apply and
+// --record must refuse a --class value the corpus (spec/scripts/lib/replay-corpus.js's
+// parseCorpus(corpusPath())) does not carry — today's --apply performs no such check at all
+// (verified below: 'not-a-class' commits the mutation exactly like a real corpus id), so a typo'd
+// class silently forks a class's catch-rate history into two rows nobody joins.
+test('AC-20260901-08-2: --apply --class not-a-class exits 2 naming replay-corpus.md and the valid ids, leaves the worktree HEAD unchanged, and writes no --patch-out, while --class silent-fallback on the same inputs still commits the mutation (AC-20260819-02-4\'s existing fixture)', () => {
+  const { root, baseSha, patchFile } = initApplyFixture('replay-apply-classcheck')
+  const setupBad = runNode(SCRIPT, ['--setup', '--commit', baseSha, '--dir', path.join(fs.realpathSync(tmpdir('replay-apply-classcheck-wt1')), 'wt')], { cwd: root })
+  assert.strictEqual(setupBad.status, 0, 'fixture setup: --setup must succeed before --apply can be composed onto it: ' + setupBad.stderr)
+  const wtBad = setupBad.stdout.match(/setup dir=(\S+)/)[1]
+  const patchOutBad = path.join(fs.realpathSync(tmpdir('replay-apply-classcheck-out1')), 'mutation.patch')
+  const headBefore = execFileSync('git', ['-C', wtBad, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+
+  const badClass = runNode(SCRIPT, ['--apply', '--dir', wtBad, '--patch', patchFile,
+    '--patch-out', patchOutBad, '--class', 'not-a-class'])
+  assert.strictEqual(badClass.status, 2,
+    'D2: a --class value absent from the corpus must be refused with exit 2 — nothing in today\'s ' +
+    '--apply validates --class at all, so this currently commits the mutation instead: ' +
+    JSON.stringify({ status: badClass.status, stdout: badClass.stdout }))
+  assert.match(badClass.stderr, /replay-corpus\.md/,
+    'D2: the refusal must name the corpus file (spec/doctrine/replay-corpus.md) so the remedy is on screen: ' + badClass.stderr)
+  assert.match(badClass.stderr, /silent-fallback/,
+    'D2: the refusal must list the valid ids (comma-joined) — a real corpus id like silent-fallback must ' +
+    'appear so the caller can see what a valid --class value looks like: ' + badClass.stderr)
+  const headAfter = execFileSync('git', ['-C', wtBad, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  assert.strictEqual(headAfter, headBefore,
+    'D2: a refused --apply must leave the worktree\'s HEAD exactly where it was — nothing may be committed: ' +
+    JSON.stringify({ headBefore, headAfter }))
+  assert.ok(!fs.existsSync(patchOutBad),
+    'D2: a refused --apply must write no --patch-out — a partial emission here would give --record ' +
+    'something to read for a run that never actually happened: ' + patchOutBad)
+
+  const setupOk = runNode(SCRIPT, ['--setup', '--commit', baseSha, '--dir', path.join(fs.realpathSync(tmpdir('replay-apply-classcheck-wt2')), 'wt')], { cwd: root })
+  assert.strictEqual(setupOk.status, 0, 'fixture setup: second --setup must succeed: ' + setupOk.stderr)
+  const wtOk = setupOk.stdout.match(/setup dir=(\S+)/)[1]
+  const patchOutOk = path.join(fs.realpathSync(tmpdir('replay-apply-classcheck-out2')), 'mutation.patch')
+  const goodClass = runNode(SCRIPT, ['--apply', '--dir', wtOk, '--patch', patchFile,
+    '--patch-out', patchOutOk, '--class', 'silent-fallback'])
+  assert.strictEqual(goodClass.status, 0,
+    'D2: silent-fallback is a real corpus id and must still be accepted — the validation must not over-' +
+    'refuse a genuinely valid class: ' + goodClass.stderr)
+  assert.match(goodClass.stdout, /applied class=silent-fallback/,
+    'D2: a valid --class must still commit the mutation exactly like AC-20260819-02-4\'s existing fixture: ' + goodClass.stdout)
+})
+
 test('AC-20260819-03-14: --apply --patch-out writes unquoted +++ b/<path> headers off HEAD^..HEAD even when the worktree\'s repo config sets diff.noprefix/diff.mnemonicPrefix and core.quotePath is left on, for a mutation touching a non-ASCII path', () => {
   const root = fs.realpathSync(tmpdir('replay-apply-hostile'))
   gitRepo(root)
@@ -1666,6 +1711,60 @@ test('AC-20260819-02-6 / AC-20260823-09-11 (pre-existing matrix continuity: red:
     'reviewer-graded evidence it is not: ' + JSON.stringify(artifact.reviewer))
 })
 
+// specs/20260901/08-corpus-derivation-and-kill-match.md D2 (2026-09-01, brief 19): --record
+// validates --class before any read of --patch/--workflow beyond the D7 matrix, so a rejected
+// class leaves the ledger untouched. A2 (executed 2026-09-01): today's --record accepts a
+// non-corpus class outright — exit 0, "recorded runId=rp_…", and --stats renders the fabricated
+// class verbatim — which is this test's exact red.
+test('AC-20260901-08-3: --record --class not-a-class exits 2 and appends nothing to the ledger, while --class prefix-collision-coverage-fail-open on the same inputs appends the row', () => {
+  const rootBad = fs.realpathSync(tmpdir('replay-record-classcheck-bad'))
+  const patchFileBad = path.join(rootBad, 'mutation.patch')
+  fs.writeFileSync(patchFileBad, '--- a/lib/z.js\n+++ b/lib/z.js\n@@ -1 +1 @@\n-a\n+B\n')
+  const workflowFileBad = path.join(rootBad, 'workflow.json')
+  fs.writeFileSync(workflowFileBad, JSON.stringify({ verdict: 'CLEAN', survivors: [], killed: [] }))
+
+  const badClass = runNode(SCRIPT, ['--record',
+    '--spec', 'specs/20260901/08-corpus-derivation-and-kill-match.md',
+    '--review-run-id', 'rv_dddddddddddd',
+    '--class', 'not-a-class',
+    '--legs', 'green',
+    '--outcome', 'caught',
+    '--patch', patchFileBad,
+    '--workflow', workflowFileBad,
+  ], { cwd: rootBad })
+  assert.strictEqual(badClass.status, 2,
+    'D2: a --class value absent from the corpus must be refused with exit 2 — pre-image A2 (executed ' +
+    '2026-09-01) confirmed today\'s --record accepts this outright with exit 0: ' +
+    JSON.stringify({ status: badClass.status, stdout: badClass.stdout, stderr: badClass.stderr }))
+  assert.ok(!fs.existsSync(path.join(rootBad, '.claude/spec-runs.jsonl')),
+    'D2: a refused --record must append NOTHING — no ledger file may even be created for a class that ' +
+    'was never valid: ' + rootBad)
+
+  const rootOk = fs.realpathSync(tmpdir('replay-record-classcheck-ok'))
+  const patchFileOk = path.join(rootOk, 'mutation.patch')
+  fs.writeFileSync(patchFileOk, '--- a/lib/z.js\n+++ b/lib/z.js\n@@ -1 +1 @@\n-a\n+B\n')
+  const workflowFileOk = path.join(rootOk, 'workflow.json')
+  fs.writeFileSync(workflowFileOk, JSON.stringify({ verdict: 'CLEAN', survivors: [], killed: [] }))
+  const goodClass = runNode(SCRIPT, ['--record',
+    '--spec', 'specs/20260901/08-corpus-derivation-and-kill-match.md',
+    '--review-run-id', 'rv_eeeeeeeeeeee',
+    '--class', 'prefix-collision-coverage-fail-open',
+    '--legs', 'green',
+    '--outcome', 'caught',
+    '--patch', patchFileOk,
+    '--workflow', workflowFileOk,
+  ], { cwd: rootOk })
+  assert.strictEqual(goodClass.status, 0,
+    'D2/D5: prefix-collision-coverage-fail-open is the one derived class shipped past the bar and must ' +
+    'be accepted once D1/D5 land: ' + goodClass.stderr)
+  const lines = fs.readFileSync(path.join(rootOk, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n')
+  assert.strictEqual(lines.length, 1,
+    'D2: a valid --class must still append exactly one ledger row, unchanged from today\'s behavior: ' + lines.length)
+  const row = JSON.parse(lines[0])
+  assert.strictEqual(row.class, 'prefix-collision-coverage-fail-open',
+    'D2: the appended row must record the validated class verbatim: ' + JSON.stringify(row))
+})
+
 test('AC-20260819-03-5 / AC-20260823-09-11 (pre-existing matrix continuity: green riding an unresolved outcome, the same green-legs check caught/missed share): --record --outcome unresolved rides with --patch and --workflow, appends a row with outcome:"unresolved" and files parsed from the patch, and writes the artifact with the reviewer return verbatim', () => {
   const root = fs.realpathSync(tmpdir('replay-record-unresolved'))
   const patchFile = path.join(root, 'mutation.patch')
@@ -1957,6 +2056,50 @@ test('AC-20260819-03-13: --record exits 2 naming the violated requirement when -
     'never partially record: ' + root)
 })
 
+// specs/20260901/08-corpus-derivation-and-kill-match.md D3 (2026-09-01, brief 19): --pick-class
+// counts MEASUREMENT replay rows (caught/missed/leg-caught, D5 of 20260819/03) per corpus class
+// and picks the fewest, tying to derived-first then corpus file order; every corpus class starts
+// at 0 even with zero rows recorded for it. This mode does not exist at HEAD (usage/exit 2 on the
+// unrecognized flag today), so every assertion below is red on MODE_FLAGS not knowing --pick-class.
+test('AC-20260901-08-4: --pick-class picks the fewest-measurement-rows class, tying derived-first then corpus order, and ignores non-measurement rows entirely', () => {
+  const emptyDir = fs.realpathSync(tmpdir('replay-pickclass-empty'))
+  const empty = runNode(SCRIPT, ['--pick-class', '--root', emptyDir])
+  assert.strictEqual(empty.status, 0, 'D3: --pick-class over an empty ledger must succeed: ' + empty.stderr)
+  assert.match(empty.stdout, /^class=prefix-collision-coverage-fail-open derived=true rows=0$/m,
+    'D3/D5: with zero replay rows every corpus class starts at 0, and the tie resolves derived-first ' +
+    '— the shipped corpus\'s one derived class must be picked: ' + empty.stdout)
+
+  const tieDir = fs.realpathSync(tmpdir('replay-pickclass-tie'))
+  writeLedger(tieDir, [
+    replayLedgerRow(1, { class: 'prefix-collision-coverage-fail-open', outcome: 'caught' }),
+    replayLedgerRow(2, { class: 'promise-carried-not-delivered', outcome: 'caught' }),
+    replayLedgerRow(3, { class: 'self-consistent-polarity', outcome: 'caught' }),
+    replayLedgerRow(4, { class: 'silent-fallback', outcome: 'caught' }),
+    replayLedgerRow(5, { class: 'boundary-shift', outcome: 'caught' }),
+    replayLedgerRow(6, { class: 'dead-wiring', outcome: 'caught' }),
+    // doc-contract-lie has zero rows; a setup-failed row for it must not count as a measurement.
+    replayLedgerRow(7, { class: 'doc-contract-lie', outcome: 'setup-failed', legs: 'none' }),
+  ])
+  const tie = runNode(SCRIPT, ['--pick-class', '--root', tieDir])
+  assert.strictEqual(tie.status, 0, 'D3: --pick-class over this ledger must succeed: ' + tie.stderr)
+  assert.match(tie.stdout, /^class=doc-contract-lie derived=false rows=0$/m,
+    'D3/D5: every hand-authored class carries >=1 measurement row except doc-contract-lie (its only ' +
+    'row is setup-failed, a non-measurement outcome that must not count) — it must win outright at 0 ' +
+    'rows, and a setup-failed row recorded for it must never change that answer: ' + tie.stdout)
+
+  const orderDir = fs.realpathSync(tmpdir('replay-pickclass-order'))
+  writeLedger(orderDir, [
+    replayLedgerRow(1, { class: 'prefix-collision-coverage-fail-open', outcome: 'caught' }),
+  ])
+  const order = runNode(SCRIPT, ['--pick-class', '--root', orderDir])
+  assert.strictEqual(order.status, 0, 'D3: --pick-class over this ledger must succeed: ' + order.stderr)
+  assert.match(order.stdout, /^class=promise-carried-not-delivered derived=false rows=0$/m,
+    'D3: once the derived class has 1 measurement row and every hand-authored class still has 0, a ' +
+    'hand-authored class must win the tie (fewest rows is the primary key, derived-first only breaks ' +
+    'ties among equals) — and among the six tied hand-authored classes at 0, corpus file order picks ' +
+    'promise-carried-not-delivered (the first-listed class): ' + order.stdout)
+})
+
 test('AC-20260819-02-7: --stats aggregates replay rows into per-outcome totals, per-class counts, and a catch-rate that excludes leg-caught from the denominator', () => {
   const root = fs.realpathSync(tmpdir('replay-stats'))
   const rows = [
@@ -2061,7 +2204,12 @@ const CORPUS_CLASSES = [
   'boundary-shift', 'dead-wiring', 'doc-contract-lie',
 ]
 
-test('AC-20260819-02-9: the shipped corpus file carries all 6 Contracts class ids, each as its own heading with a recipe section', () => {
+// AC-20260901-08-10 (tagged, specs/20260901/08-corpus-derivation-and-kill-match.md D5): the six
+// 20260819/02 class ids must CONTINUE TO carry their own headings with a recipe once the corpus
+// gains its "## Derived classes" region — this test's own assertion (per-id heading lookup by
+// startsWith, not an exact 6-heading count) already tolerates a 7th heading appearing after them,
+// so no assertion change is needed; only the AC-ID is added.
+test('AC-20260819-02-9 / AC-20260901-08-10: the shipped corpus file carries all 6 Contracts class ids, each as its own heading with a recipe section', () => {
   const corpusPath = path.join(SPEC, 'doctrine/replay-corpus.md')
   assert.ok(fs.existsSync(corpusPath),
     'D11: spec/doctrine/replay-corpus.md must exist — it is the file whose ids --record --class values must ' +

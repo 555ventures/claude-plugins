@@ -136,7 +136,8 @@ this repo's suite; appending at cap requires an eviction (delete / merge / mecha
 - `[host]` A spec Decision naming a literal version-bump target can be stale by build time —
   concurrent sessions in this repo race the same semver (specs/20260810/02 D11: 6.50.0 was
   already taken at HEAD before the batch ran; the worker bumped to 6.51.0 with the same
-  changelog paragraph and logged the deviation). The build bumps to the next free version and
+  changelog paragraph and logged the deviation; specs/20260901/08 D10: 7.53.0 was taken by
+  sibling 07's merge, bumped to 7.54.0). The build bumps to the next free version and
   records the deviation; the spec's literal number is a target, not a pin.
 - `[host]` A locked Decision that retires or narrows a literal glyph, phrase, or claim from
   doctrine prose can leave a live assertion of the retired form **outside** the spec's File

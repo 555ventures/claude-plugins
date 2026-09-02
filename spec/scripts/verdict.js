@@ -320,6 +320,19 @@ if (baseShaArg !== null && headShaArg !== null) {
       '— resolve it with git rev-parse --verify <ref>^{commit}')
     process.exit(2)
   }
+  // Degenerate range (2026-09-01, spec 20260901/01 review): base === head means the row would
+  // claim a verdict over an empty diff. The shape check above cannot see this — rv_31224a17550e
+  // recorded base === head with two well-formed shas and passed. spec-review-driver.js refuses the
+  // same condition at base-derivation time; this is the second backstop, guarding the row that
+  // becomes the durable record, so a caller deriving its own range cannot append one either. Still
+  // a pure function of the flag values: no ancestry check, no repo access.
+  if (baseShaArg === headShaArg) {
+    console.error('verdict.js: --base-sha and --head-sha are the same commit ' +
+      `(${baseShaArg.slice(0, 12)}) — a verdict row cannot describe an empty diff. The base ` +
+      'likely names a moving ref that has caught up with HEAD; resolve the range against the ' +
+      'commit the build started from (git rev-parse --verify <ref>^{commit})')
+    process.exit(2)
+  }
 }
 
 // ---- manifest: JSONL rows, one per leg; last-in-file wins, insertion order preserved ------

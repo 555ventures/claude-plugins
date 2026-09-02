@@ -444,10 +444,23 @@ if (marks.via === undefined) {
   saveSidecar()
 }
 
-// ---- base derivation (D2: build_base -> diff_base -> branch) ----------------------------------
+// ---- base derivation (D2, revised: diff_base -> build_base -> branch) -------------------------
+// A PIN ALWAYS BEATS A REF. `diff_base` is a 40-hex sha written at build start (in-place flow) or
+// at a prior close; `build_base` is conventionally the moving ref `main`, and two different
+// commands write these fields with no ordering guard between them — /git:enter-worktree stamps
+// `build_base: main` whenever it runs, including AFTER a build has already pinned the true
+// pre-image. Preferring the ref over the pin is how a review comes to judge an empty range: on
+// 2026-09-01 (spec 20260901/01) `main` already carried the build's own commits, so `main...HEAD`
+// was empty, every diff-scoped leg reported zero and green (at-risk files:0, reconcile listing all
+// 27 planned files "unrealized"), and the reviewer was handed nothing to review. replay.js:374
+// had already inverted this order for exactly this reason ("build_base is typically the moving
+// ref `main`, stale the instant the review's own merge lands") — the fix landed in that consumer
+// and was never pushed back here. This is that push-back; the non-degenerate-range invariant in
+// resolveBaseSha() below is the backstop for whatever the NEXT base-derivation mistake turns out
+// to be, since precedence alone only fixes the failure mode already seen.
 function resolveBase() {
-  if (buildBase) return buildBase
   if (diffBaseFm) return diffBaseFm
+  if (buildBase) return buildBase
   for (const cand of ['main', 'master']) {
     const r = runChild('git', ['-C', repoRoot, 'merge-base', 'HEAD', cand], { encoding: 'utf8' },
       'git merge-base HEAD ' + cand)
@@ -472,6 +485,31 @@ function resolveBaseSha() {
   if (r.status !== 0 || !SHA40_RE.test(sha)) {
     die('base "' + base + '" does not resolve to a commit — add diff_base: <sha> to the spec ' +
       'frontmatter (git rev-parse --verify <ref>^{commit})')
+  }
+  // ---- non-degenerate-range invariant (2026-09-01, spec 20260901/01 review) -------------------
+  // A review that judges an empty range is not a review, and it fails GREEN: every diff-scoped leg
+  // (at-risk, reconcile, patterns, diffLoc) reports zero and passes, and the reviewer sees nothing.
+  // Nothing downstream objects — verdict.js validates sha SHAPE only, so ledger row rv_31224a17550e
+  // recorded base === head and no leg, no verdict pass and no ledger append noticed. Refuse here,
+  // at the single point where the range is first known, rather than trusting every future caller to
+  // have derived it correctly. Mirrors replay.js:386-391, which already validates its own candidates
+  // this way (`sha !== parent` + `merge-base --is-ancestor`).
+  const head = headSha()
+  if (sha === head) {
+    die('the review range is empty — base and HEAD are the same commit (' + sha.slice(0, 12) +
+      '). The spec\'s base names a moving ref that has caught up with HEAD (build_base: ' +
+      (buildBase || '<unset>') + '), so there is nothing to review and every diff-scoped leg would ' +
+      'report zero and pass. Remedy: set diff_base: <the commit the build started from> in the ' +
+      'spec frontmatter (git log --oneline to find it), or delete a build_base: line that names a ' +
+      'branch rather than a sha')
+  }
+  const anc = runChild('git', ['-C', repoRoot, 'merge-base', '--is-ancestor', sha, head],
+    { encoding: 'utf8' }, 'git merge-base --is-ancestor (base range check)')
+  if (anc.status !== 0) {
+    die('the review base ' + sha.slice(0, 12) + ' is not an ancestor of HEAD ' + head.slice(0, 12) +
+      ' — the base ref has moved past this branch, so the diff would carry foreign reverse hunks ' +
+      'from commits this spec never made. Remedy: set diff_base: <the commit the build started ' +
+      'from> in the spec frontmatter')
   }
   return sha
 }

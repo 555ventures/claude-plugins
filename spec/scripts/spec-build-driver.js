@@ -145,10 +145,17 @@ if (status === 'hardened') {
     process.exit(2)
   }
 
-  // ---- stamp diff_base absent-only (D2/AC-1) — never when build_base already exists ---------
-  const buildBaseFm = fmVal('build_base')
+  // ---- stamp diff_base whenever it is absent (revised 2026-09-01, spec 20260901/01 review) ---
+  // Originally absent-only in BOTH fields: a spec already carrying `build_base` was left unpinned,
+  // on the reasoning that build_base already answered "what is this built against". It does not —
+  // build_base is conventionally the moving ref `main`, and /git:enter-worktree writes it at any
+  // time, including after a build has run. HEAD at build start is the true pre-image in both the
+  // in-place and worktree flows, so pin it unconditionally; `build_base` then means only "merge
+  // target", which is all merge-back.sh branch-for needs of it. Consumers already prefer the pin
+  // (replay.js:374, and now spec-review-driver.js's resolveBase), so an existing build_base must
+  // no longer suppress the one durable fact a later review needs.
   const diffBaseFm = fmVal('diff_base')
-  if (!buildBaseFm && !diffBaseFm) {
+  if (!diffBaseFm) {
     const headR = runChild('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' },
       'git rev-parse HEAD')
     const sha = (headR.stdout || '').trim()

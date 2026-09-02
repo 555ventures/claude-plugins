@@ -1,0 +1,89 @@
+{
+  "runId": "rv_df1f48d26a7a",
+  "ts": "2026-09-02T05:12:53.903Z",
+  "spec": "specs/20260901/07-escape-class-contract.md",
+  "tier": "standard",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 917,
+    "base": "53da29e06b1fc3146cde390c4f135288bc68b93b",
+    "head": "486a1ef0fe77d6548b362ccdfdb85b202405ed37",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      }
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 240
+      }
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      }
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 1,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 12,
+        "carried": 9,
+        "sanctioned": 3,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "severity": "medium",
+        "claim": "appendLine glued a new row onto an existing ledger's last line when that line lacked a trailing newline",
+        "file": "spec/scripts/escape-row.js",
+        "line": 105,
+        "status": "resolved",
+        "evidence": "Executed repro: seeded a tmp root .claude/spec-runs.jsonl with one valid escape row and no trailing newline (verified via od -c, last byte was } not newline), then ran node spec/scripts/escape-row.js --append --root <tmp> --row <second valid row> -> exit 0, stdout appended spec=specs/second.md file=second.js. Result file has 2 lines, both independently JSON.parse-able, each parses back to the exact original object. Repeated for --amend: seeded ledger with one valid escape row and no trailing newline, ran --amend --escape-ts ... --class silent-fallback -> exit 0, result file has 2 lines (stage escape, stage escape-class), both parse independently. Also confirmed AC-20260901-07-3 unaffected: appending to an EMPTY existing file and to a NO-FILE root both still produce exactly JSON.stringify(row) + newline with no leading separator. node --test tests/escape/escape-row.test.js passes all 9 tests including the two new regression tests for this fix."
+      }
+    ],
+    "reviewerCount": 1,
+    "scope": "fix-delta",
+    "tokens": 45000
+  }
+}

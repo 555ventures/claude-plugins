@@ -1,0 +1,134 @@
+{
+  "runId": "rv_20136320e8d4",
+  "ts": "2026-09-02T06:01:45.207Z",
+  "spec": "specs/20260901/08-corpus-derivation-and-kill-match.md",
+  "tier": "standard",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 879,
+    "base": "90a60ab25d10cea09d5b3df97ad92be167aa6b0b",
+    "head": "dd2a14f15976db8d8215dadea5e7d741aa27e5f4",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 0,
+      "observed": {
+        "outOfPlan": 0,
+        "files": []
+      }
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      }
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 286
+      }
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": {
+        "matches": 10
+      }
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": {
+        "files": 23,
+        "testsExecuted": 222
+      }
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      }
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 1,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 11,
+        "carried": 7,
+        "sanctioned": 4,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "D2's --record validates --class before any read of --patch/--workflow content, after the D7 outcome matrix",
+        "file": "spec/scripts/replay.js",
+        "line": 936,
+        "evidence": "validateClass(cls) called at line ~936, immediately after the full outcome/legs matrix block and before patchContent is read (later in cmdRecord) — matches spec Behavior section verbatim"
+      },
+      {
+        "claim": "--pick-class tie-break resolves derived-first then corpus file order correctly",
+        "file": "spec/scripts/replay.js",
+        "line": 1024,
+        "evidence": "cmdPickClass's best-selection only swaps on n < best.rows or (n === best.rows && c.derived && !best.derived); verified against tests/replay/replay.test.js AC-20260901-08-4 (empty ledger picks derived-true at 0, then hand-authored corpus-first at tie) — all 286 tests pass"
+      },
+      {
+        "claim": "D9's escape.md corpus-gap warn and file-first killedMatch changes are wired correctly (doctrine choreography, no test coverage)",
+        "file": "spec/commands/escape.md",
+        "line": 166,
+        "evidence": "read escape.md lines 83-112 and 161-172 against spec Decision D9 text; both the file-first killedMatch compare and the post-append corpus-gap warn using escapes.corpusGaps match the Decision verbatim"
+      },
+      {
+        "claim": "citations-check.js and version-bump discipline are satisfied",
+        "file": "spec/.claude-plugin/plugin.json",
+        "line": 2,
+        "evidence": "ran node spec/scripts/citations-check.js -> TOTAL=175 CHECKED=81 SKIP=94 MISS=0; version bumped 7.53.0->7.54.0 with documented deviation (7.53.0 already taken by sibling 07), last-3-versions changelog form preserved"
+      },
+      {
+        "claim": "full test suite is green post-change",
+        "file": null,
+        "line": null,
+        "evidence": "ran `node --test 'tests/replay/*.test.js' 'tests/fleet-reader/*.test.js' 'tests/review/*.test.js'` -> 286 pass, 0 fail; manifest-1.jsonl legs all exit 0/4 (inert-smoke, expected for this repo)"
+      }
+    ],
+    "reviewerCount": 1,
+    "scope": "full",
+    "tokens": 55000
+  }
+}

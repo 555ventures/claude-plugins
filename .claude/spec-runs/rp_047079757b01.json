@@ -1,0 +1,44 @@
+{
+  "ts": "2026-09-02T06:17:23.250Z",
+  "stage": "replay",
+  "spec": "specs/20260901/05-checkpoint-fail-closed.md",
+  "runId": "rp_047079757b01",
+  "reviewRunId": "rv_a3f310d4042a",
+  "class": "prefix-collision-coverage-fail-open",
+  "files": [
+    "spec/scripts/spec-review-driver.js"
+  ],
+  "legs": "green",
+  "outcome": "caught",
+  "tokens": 86837,
+  "patch": "diff --git a/spec/scripts/spec-review-driver.js b/spec/scripts/spec-review-driver.js\nindex 9407291..dd4764c 100644\n--- a/spec/scripts/spec-review-driver.js\n+++ b/spec/scripts/spec-review-driver.js\n@@ -330,7 +330,7 @@ function checkpointStillParked() {\n   return marks.via === 'loop' && !marks.checkpointCleared && !!marks.checkpoint &&\n     (marks.checkpoint.sessionId === null\n       ? checkpointStamp() === null\n-      : checkpointStamp() === marks.checkpoint.sessionId)\n+      : (checkpointStamp() || '').startsWith(marks.checkpoint.sessionId))\n }\n \n // D3: the outcome verdict.js's --checkpoint flag carries on every loop verdict.js pass, derived\n",
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "checkpointStillParked()'s same-session comparison was silently changed from an exact-match (marks.checkpoint.sessionId === current stamp) to (currentStamp || '').startsWith(marks.checkpoint.sessionId), in a follow-up commit (42fed3b) carrying no comment, no Decision reference, and no test. This contradicts D1's explicit pin ('a non-null park lifts on a differing id exactly as today') and the Contracts block's literal comparison ('checkpointStamp() === marks.checkpoint.sessionId  // same-session park: unchanged'). Any new session id that happens to have the recorded id as a string prefix (e.g. s1 -> s10) now never lifts the checkpoint, permanently blocking --mark dispositions on that host until a session id not sharing the prefix appears.",
+        "file": "spec/scripts/spec-review-driver.js",
+        "line": 333,
+        "impact": "A genuinely new Claude Code session whose id happens to start with the old recorded session id can never clear the review checkpoint -- the loop build gets permanently stuck demanding /clear even though the session already changed, with no documented workaround (the override flag is refused on non-null parks by design).",
+        "evidence": "Executed repro (tests/review/repro-startswith.test.js, deleted after running): a host parks at CHECKPOINT with checkpoint.sessionId='s1' after reviewer-returned; the stamp is then rewritten to session id 's10' (a genuinely different id per the /clear signature). --state still reports CHECKPOINT and `--mark dispositions --waived 0 --rejected 0 --fix-dispatched 0` exits 2, refusing the mark -- assertion failed with actual='CHECKPOINT', expected='DISPOSITIONS'. Spec text quoted: D1 says 'a non-null park lifts on a differing id exactly as today'; Contracts says `checkpointStamp() === marks.checkpoint.sessionId // same-session park: unchanged`. The shipped code instead reads `(checkpointStamp() || '').startsWith(marks.checkpoint.sessionId)`."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "D7 (the argv-flag-as-reason guard in handleDispositions, treating a following '--waived'-shaped token as an absent reason) is undocumented scope creep since the spec's Decisions table only defines D1-D6.",
+        "file": "spec/scripts/spec-review-driver.js",
+        "line": 1093,
+        "evidence": "git show d8c062d shows this was a genuine bug fix landed with its own test (AC-20260901-05-4(d) in tests/review/loop-checkpoint.test.js, extended in place) and a dated comment citing 'reviewer 2026-09-02 found this admitted with checkpointOverride.reason == \"--waived\"'. It tightens (never loosens) the override refusal matrix D2 already specifies, is covered by an executed, discriminating test, and the commit message documents the reasoning. Not a rule violation -- a legitimate in-spec-scope hardening of D2's refusal surface, not scope creep."
+      },
+      {
+        "claim": "Full test suite or scoped suites might be red from this change.",
+        "file": null,
+        "evidence": "node --test 'tests/**/*.test.js' from repo root: 900/900 passing, 0 failing. node --test tests/review/loop-checkpoint.test.js tests/review/review-driver.test.js tests/provenance/provenance.test.js: 67/67 passing. node --test tests/consistency/plugin-version.test.js tests/consistency/read-load.test.js: 21/21 passing."
+      }
+    ],
+    "reviewerCount": 1,
+    "scope": "full",
+    "tokens": 0
+  }
+}

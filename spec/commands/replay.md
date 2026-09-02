@@ -79,11 +79,10 @@ asked.
    files inside `{dir}` (`git -C {dir} checkout -- .`) so nothing `setupCommand` wrote — a
    rewritten lockfile, generated code — reaches the tree the legs and the blind reviewer read
    (D10), then run `git -C {dir} clean -fd` — `git checkout -- .` alone restores tracked files
-   but cannot remove files `setupCommand` *creates* (the 2026-08-20 first live run left an
-   untracked root `package-lock.json` that would have polluted the blind reviewer's tree), and
-   `clean -fd` cannot touch the `scratch-worktree` marker, which lives in the worktree's private
-   git dir outside the working tree — order is load-bearing: checkout first, then clean — then
-   continue to class selection.
+   but cannot remove files `setupCommand` *creates* (specs/20260820/02-replay-scratch-write-access.md
+   D4), and `clean -fd` cannot touch the `scratch-worktree` marker, which lives in the
+   worktree's private git dir outside the working tree — order is load-bearing: checkout first,
+   then clean — then continue to class selection.
 3. **Pick a corpus class:** run `node "$(spec-paths replay)" --pick-class` and read `class=` from
    its stdout — the script owns selection (fewest measurement rows, derived classes breaking ties
    first) so this step never re-derives it. Read `spec-paths replay-corpus` and extract that
@@ -93,9 +92,8 @@ asked.
    selected class's section text and the selected spec's File Plan file list (Read from the spec
    at `{dir}/{spec path}`). No authoring agent is dispatched: blindness is a property of Phase
    2's reviewer dispatch, never of who wrote the patch, and a dispatch whose prompt describes
-   authoring a defect is exactly what a host's unattended permission layer may refuse (salon-os
-   2026-08-31, three refusals; the /private/tmp Edit/Write denial of 2026-08-23 was the same
-   layer one level down). One File Plan file for every class except `self-consistent-polarity`,
+   authoring a defect is exactly what a host's unattended permission layer may refuse
+   (specs/20260819/02-mutation-replay.md). One File Plan file for every class except `self-consistent-polarity`,
    whose recipe binds a matched guard-and-assertion pair that spans whichever File Plan files its
    two sites actually live in: two files on a stack that keeps tests apart from code, or one file
    on a stack that co-locates them (Rust `#[cfg(test)] mod tests`, Elixir, doctests). Note no
@@ -138,7 +136,7 @@ asked.
       there, not here.)
    2. `L ∈ {baselineRed}` → explained. The review that closed this target already recorded `L`
       red for a sanctioned, pre-existing reason.
-   3. Otherwise, if `L ∈ {baselineLegs}` → **newly red**: `L` was green at the original review and
+   3. Otherwise, if `L ∈ {baselineLegs}` → **newly red**: `L` was green at the reviewed run and
       is red now, so the mutation is the suspect — either the class catching itself (leg-caught)
       or an authoring miss on a class the corpus promises stays leg-invisible. Tear the worktree
       down (`--teardown --dir {dir}`), `--setup` a fresh one at the same `{parent}` +
@@ -258,7 +256,7 @@ Next: {spec-status --next, verbatim}
   anything readable from that tree. `--setup` and `--apply` excluding their own markers and
   subjects from the diff and the commit log are this invariant's enforcement, not the invariant
   itself — a new leak surface is still a blindness violation even where no flag polices it yet.
-  The path and the marker were the two surfaces that bit on 2026-08-26
+  The path and the marker were the two surfaces that leaked
   (specs/20260826/01-replay-scratch-path-blindness.md): `--setup` now derives the path from the
   target spec instead of a doctrine example a session could copy, and the marker carries the
   neutral name `scratch-worktree`. The `--overlay` materialization (specs/20260831/01) is bound
@@ -277,8 +275,8 @@ Next: {spec-status --next, verbatim}
   `replay.js` takes `--root <path>` for a caller that cannot honour this — the ledger-reading and
   ledger-appending modes (`--due`, `--select`, `--setup`, `--record`, `--stats`, `--teardown`)
   otherwise resolve the repo from the current directory, so a relocated shell writes the
-  measurement row into the scratch worktree and loses it at teardown (observed 2026-08-27,
-  review of specs/20260827/01).
+  measurement row into the scratch worktree and loses it at teardown
+  (specs/20260827/01-genesis-tournament.md, review).
 - **Mutation authoring is model work; scoring and recording are not.** The session picks the
   site and writes the patch itself (step 4 — never a dispatched agent, never a scripted
   transform: site selection is semantic); every other step is a deterministic `replay.js` mode —

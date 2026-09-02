@@ -51,10 +51,6 @@ anything. When both hold, the dismissal is a `soft` finding carrying both comman
 never silence, never an unverifiable sentence in your summary. A genuinely inherited failure
 passes this test easily, so it costs you nothing on real inherited red.
 
-*(2026-09-01, measured: a reviewer saw a real lint error inside its range, ran `git blame`,
-attributed it to a commit whose subject did not name the spec, excluded that commit from its
-scope, and returned CLEAN. The blamed commit was at HEAD of the range and carried the defect.)*
-
 ## The promise sweep (mandatory, before any verdict)
 
 `promise-sweep.js` already enumerated the Decisions table — a row missing an AC-ID carrier or

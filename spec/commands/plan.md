@@ -112,7 +112,7 @@ Write the spec per the template. `status: draft`. While drafting:
    `node "$(spec-paths collision-closure)" --spec {spec path} --root . --literal <stem>…`
    and enumerates every literals-leg hit in the File Plan as fix or recorded waive;
    `executes` hits are read for fixture repair to plan now; `likely`/`mentions` hits owe
-   nothing (measured 2026-08-24, host § Gotchas).
+   nothing (specs/20260814/05-collision-closure.md D6/D12).
    Work discovered this session that needs its own spec → write the roadmap brief now, or
    record why not.
 3. **Ledger row:** append exactly ONE row to `.claude/spec-runs.jsonl` (repo root;

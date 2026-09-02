@@ -17,6 +17,10 @@ governing rules now:
 - **Citations stay live:** `citations-check.js` is the deterministic sweep over `§` heading
   citations (doctor check 15); a citation that resolves nowhere silently drops at
   `shared-for` render time.
+- **Doctrine cites owners, never history** (specs/20260902/03-plugin-prose-sweep.md): command,
+  doctrine, agent, template, and rules prose states the rule plus one owner id (spec path,
+  AC-ID, D-number, ADR, run id); dates, people, hosts, versions, and prior-behavior narration
+  belong to specs, ledgers, and ADRs, and `comment-narration.js` refuses them in the suite.
 
 Legacy `<!-- enforcedBy: … -->` / `<!-- unenforced: … -->` comments surviving in doctrine
 files are inert annotations, not a maintained registry.

@@ -1,18 +1,3 @@
 {
-  ".claude/rules/spec-pipeline.md": 30,
-  "git/commands/enter-worktree.md": 3,
-  "git/commands/merge.md": 1,
-  "spec/agents/reviewer.md": 1,
-  "spec/commands/doctor.md": 2,
-  "spec/commands/escape.md": 1,
-  "spec/commands/init.md": 3,
-  "spec/commands/plan.md": 1,
-  "spec/commands/queue.md": 1,
-  "spec/commands/replay.md": 6,
-  "spec/commands/status.md": 1,
-  "spec/doctrine/core.md": 6,
-  "spec/doctrine/genesis.md": 3,
-  "spec/doctrine/replay-corpus.md": 3,
-  "spec/templates/grounding-contract.md": 3,
-  "spec/templates/spec.md": 1
+  "spec/templates/grounding-contract.md": 3
 }

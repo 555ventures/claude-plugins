@@ -23,7 +23,7 @@ claim a protection it hasn't observed executing.
 
 ## Input
 
-`$ARGUMENTS` — optional milestone note or version tag (e.g. `v0.4.0` or `briefs 05-07`).
+`$ARGUMENTS` — optional milestone note or version tag (e.g. `milestone-4` or `briefs 05-07`).
 Recorded in the release manifest and tag; never parsed for behavior.
 
 **Releasing is deliberately user-invoked:** no command's Next pointer and no

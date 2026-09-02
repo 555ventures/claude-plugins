@@ -72,9 +72,8 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
    convention rule files, and each generated agent; verify each exists. Extract **bare
    filenames too** (`scaffold-ledger.md`, `helpers.js` — a citation with no directory
    prefix), resolving each against the file set its sentence implies; a path-shaped regex
-   alone silently passes every directory-less reference, which is how a rule citing a file
-   deleted five days earlier survived a full sweep (2026-08-21). Stale citations are the
-   most common drift and are individually patchable.
+   alone silently passes every directory-less reference (specs/20260810/09-stale-reference-sweep.md
+   D7). Stale citations are the most common drift and are individually patchable.
 8. **Design foundation** (only if the config has a `design` block) — `design.doctrine`
    exists and is ~one page; token files and the living-showcase entry it names exist.
 9. **Genesis handoff** (only if `.claude/genesis/status.json` exists) — the consume-side
@@ -102,7 +101,7 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
 12. **Run ledger hygiene** (only if `.claude/spec-runs.jsonl` exists) — script passes
     (`jq`/`awk`), never read the ledger into context. Every line parses as JSON with `stage` ∈
     `plan | build | review | replay | escape | escape-class | observe | release` (`observe` rows are a retired
-    v6 class — valid history, no longer written). Field expectations are per-class: v7 build
+    v6 class — valid history; v7 rows carry structured fields). Field expectations are per-class: v7 build
     and review rows carry no `runId` (older rows may; a `runId`-bearing row is history, never a
     flag); escape and release rows carry their own field sets. The file is tracked by git, and
     `git check-attr merge -- .claude/spec-runs.jsonl` reports `union` (without it, parallel

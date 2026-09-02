@@ -1,5 +1,5 @@
 ---
-description: The session queue's command surface — wraps spec-queue.js's next/add/bump/defer/done/list/ok subcommands in one script run per invocation; stores the one thing the pipeline cannot derive, JJ's intended work order across briefs plus free-text items and their done-when predicates, so /spec:status's --next stays queue-aware with zero hand reconstruction
+description: The session queue's command surface — wraps spec-queue.js's next/add/bump/defer/done/list/ok subcommands in one script run per invocation; stores the one thing the pipeline cannot derive, the user's intended work order across briefs plus free-text items and their done-when predicates, so /spec:status's --next stays queue-aware with zero hand reconstruction
 argument-hint: "[subcommand] [args…] — next|add|bump|defer|done|list|ok; bare invocation defaults to next. add takes a payload plus optional --brief NN, --when <type>:<args>, --top | --after <ref>; bump/defer/done/ok take a <ref> (id, brief number, or unique payload substring)"
 allowed-tools: Bash(spec-paths:*), Bash(node:*), Read
 ---

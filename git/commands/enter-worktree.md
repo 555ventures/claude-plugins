@@ -43,7 +43,7 @@ spec plugin must be installed.
 
 3. **Create path.** Else you are still on the originating branch — provision it:
    - **Capture the origin first, before any entry:** `{origin} = git rev-parse --abbrev-ref HEAD`
-     (Bash). Once a worktree is entered, `HEAD` is the build branch and the origin is no longer
+     (Bash). Once a worktree is entered, `HEAD` is the build branch and the origin stops being
      recoverable from the session.
    - **Create:** `{mergeBack} create --source {source}`. It branches from the current HEAD (=
      origin) and does the `git worktree add`. Capture its **last stdout line** as `{worktree}`
@@ -65,13 +65,11 @@ spec plugin must be installed.
      **Skip the write entirely** when the spec already carries a `diff_base:` line, or when its
      `status:` is past `hardened` (`implementing` or `done`) — both mean a build has already
      pinned the true pre-image, and `{origin}` is a moving ref that will name the wrong tree the
-     moment those commits land on it. Writing it anyway is what produced the 2026-09-01 empty-diff
-     review on spec 20260901/01: the build pinned `diff_base` correctly, this step then layered
-     `build_base: main` on top, and by review time `main` carried the build's own commits, so the
-     judged range was empty and every diff-scoped leg reported zero and green. When skipped, say
-     so in the report and name the pin that won. `spec-review-driver.js` prefers the pin and
-     refuses an empty range regardless — that is the deterministic backstop; this is the ordering
-     guard that keeps the two writers from racing in the first place.
+     moment those commits land on it: writing over a pin turns the judged diff range empty and
+     every diff-scoped leg silently reports green (specs/20260901/01-build-driver.md).
+     When skipped, say so in the report and name the pin that won. `spec-review-driver.js` prefers
+     the pin and refuses an empty range regardless — that is the deterministic backstop; this is
+     the ordering guard that keeps the two writers from racing in the first place.
    - Report as **created** (see ## Report).
 
 ## Report
@@ -102,4 +100,4 @@ Next: nothing needs you — ready, continue whatever stage you were running
   idempotent (re-enter path) and restores cwd to the worktree. `/clear` and `/compact` keep
   cwd, so the common case needs nothing.
 - **Don't rename the spec file after entry** — the slug → worktree path mapping would change and
-  re-entry would no longer find this worktree.
+  re-entry cannot find this worktree.

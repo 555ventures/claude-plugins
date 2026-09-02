@@ -440,7 +440,8 @@ survivor count, the pick's shape. Taste is never mechanized — the position bri
 tokens, the render → screenshot → critique leg, the cull, and the pick are the session's own
 judgment against rendered evidence, never scored by a script.
 
-**Round-1 interactive prototypes and persona walkthroughs are retired** (JJ, 2026-08-27): each
+**Round-1 interactive prototypes and persona walkthroughs are retired**
+(specs/20260827/02-genesis-explore-state.md): each
 finalist is booted with the two culled looks rendered in its real component library — that boot
 *is* the interactive candidate a throwaway-HTML prototype round would only approximate, one more
 round of attention for no material gain.
@@ -464,10 +465,9 @@ of the research menus on disk, user rulings. That is the right bar for taste and
 architecture forks, and the **wrong** bar for any claim a third-party dependency
 adjudicates: naming/format conventions the dependency validates, cron/schedule strings,
 config keys, DSL fragments, version-pinned API shapes.
-Those are falsifiable in one executed line, and no volume of reading substitutes (measured:
-UpWell's ADR-0006 bound a `domain:action` queue convention the same-day-pinned dependency
-rejects in its own `assertObjectName` — argued through and research-backed, and wrong; the
-app could never boot).
+Those are falsifiable in one executed line, and no volume of reading substitutes: a host
+once bound a naming convention its own same-day-pinned dependency rejects at runtime —
+argued through and research-backed, and wrong; the app could never boot.
 
 **Rule: before an ADR locks, every dependency-adjudicated convention it binds is executed
 once against the pinned dependency** — a scratch file in the scaffold (or a throwaway
@@ -828,7 +828,7 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
   carries the *keys*.
 - **`.claude/genesis/sketch.html`** (throwaway) — the one core-screen sketch authored as soon
   as `## What I think you're building` names a screen (§ Genesis: Discovery Interview); it
-  predates tokens and is never atlas-checked. Deleted at the genesis design state's
+  predates tokens and is never atlas-checked. Removed by the genesis design state's
   `rules-locked` prune step (§ Genesis: Design State), alongside the non-winning explore
   candidate dirs — never a durable artifact.
 - **`.claude/genesis/status.json`** — the genesis state machine (§ Genesis: State Machine),

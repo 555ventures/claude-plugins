@@ -9,6 +9,8 @@ const { ROOT, runNode } = require('../helpers')
 // repository's real tree.
 // Owner: specs/20260902/01-comment-narration-gate.md, AC-20260902-01-13.
 // Owner: specs/20260902/02-plugin-code-sweep.md, AC-20260902-02-1.
+// Owner: specs/20260902/03-plugin-prose-sweep.md, AC-20260902-03-1 (D9: baseline reduced to
+// the grounding contract file alone, at its real scanned count, once the prose sweep lands).
 //
 // This file does not classify any narration itself — it only invokes the scanner with the
 // fleet's host and person literals against the tracked ratchet baseline and asserts the exit
@@ -40,6 +42,24 @@ test('AC-20260902-02-1: the plugin scan over this repository with the fleet host
   const codeGroupFindings = parsed.findings.filter((f) => CODE_GROUP_RE.test(f.file))
   assert.strictEqual(codeGroupFindings.length, 0,
     'no finding may name a file under a code-group directory (spec/scripts, spec/bin, scripts, tests) — a surviving finding means unswept narration remains in a code-group file: ' + JSON.stringify(codeGroupFindings.slice(0, 5)))
+})
+
+test('AC-20260902-03-1: the plugin scan over this repository with the fleet host and person literals leaves the tracked baseline equal to exactly the grounding contract entry, and every other prose-group path reports zero findings', () => {
+  const args = ['--root', ROOT, '--hosts', HOSTS, '--people', PEOPLE]
+  if (fs.existsSync(BASELINE_ABS)) args.push('--baseline', BASELINE_ABS)
+
+  const baseline = fs.existsSync(BASELINE_ABS) ? JSON.parse(fs.readFileSync(BASELINE_ABS, 'utf8')) : {}
+  assert.deepStrictEqual(baseline, { 'spec/templates/grounding-contract.md': 3 },
+    'the tracked baseline must hold exactly the grounding contract entry at its real scanned count — a surviving or drifted key means the prose sweep left another prose-group path unswept or the contract count moved without sibling 04 re-hashing it: ' + JSON.stringify(baseline))
+
+  const jr = runNode('scripts/comment-narration.js', [...args, '--json'])
+  assert.strictEqual(jr.status, 0,
+    'the --json run of the plugin scan must exit 0 against the tracked baseline — a nonzero exit means unswept prose-group narration remains, and stderr names the offending file: ' + jr.stderr)
+  const parsed = JSON.parse(jr.stdout)
+  const findingFiles = [...new Set(parsed.findings.map((f) => f.file))]
+  const otherFindingFiles = findingFiles.filter((f) => f !== 'spec/templates/grounding-contract.md')
+  assert.deepStrictEqual(otherFindingFiles, [],
+    'every prose-group path other than the grounding contract must report zero findings once the sweep lands — a surviving file means narration prose was missed: ' + JSON.stringify(otherFindingFiles))
 })
 
 test('AC-20260902-01-13: every path recorded in the tracked comment-narration baseline still exists on disk', () => {

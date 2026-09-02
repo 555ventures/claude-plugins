@@ -1,6 +1,7 @@
 ---
 date: 2026-09-02
-status: hardened
+status: done
+build_base: main
 tier: standard
 area: doctrine-governance
 design: false
@@ -9,6 +10,7 @@ depends_on: ["specs/20260902/02-plugin-code-sweep.md"]
 depended_on_by: ["specs/20260902/04-host-generators-owner-citations.md"]
 brief: 21
 open_markers: 0
+diff_base: 3fe76c32694fae5e23a5801781a3acf7e6452c98
 ---
 
 # Plugin prose sweep: commands, doctrine, agents, rules cite owners
@@ -36,6 +38,7 @@ read-load budget and doctrine pin stays green.
 | D5 | **Doctrine pins move with the prose.** Any test under `tests/` whose assertion quotes a sentence this sweep rewrites is updated in place and retagged `AC-20260902-03-2` (`SHALL CONTINUE TO`), never weakened, never deleted; the lock-time collision sweep (Rationale) lists the files. `§` citations are never edited (only surrounding narration), so `citations-check.js` stays at zero MISS. (AC-20260902-03-2, AC-20260902-03-3) | Host § Gotchas: a retired literal is asserted where the File Plan never looked. |
 | D6 | **Read-load budgets shrink or hold.** No command file grows; `init.md` + `shared-for init` stays ≤ 970 (969 today) and every other command ≤ 500. (AC-20260902-03-4) | `tests/consistency/read-load.test.js` is the pin; a sweep that only deletes cannot break it, and the AC makes that a promise. |
 | D7 | **Baseline shrinks** to exactly `{"spec/templates/grounding-contract.md": 2}` (the count observed at planning; the test author sets it at Phase 1 so the standing test goes red first). (AC-20260902-03-1) | 01 D6; 04 deletes the file. |
+| D9 | **Baseline count follows the scan (A2):** the contract file scans at 3 prose findings at build (planning counted 2; sibling 02 committed the baseline at 3), so D7's target is `{"spec/templates/grounding-contract.md": 3}` — the scan is authoritative for the count, D1 still forbids this spec from touching that file. (AC-20260902-03-1) | A2: the real scan wins over the planning count; sibling 04 deletes the baseline anyway. |
 | D8 | `spec/.claude-plugin/plugin.json`: version bump target 7.57.2 (next free if taken); changelog paragraph names the prose sweep and the Gotchas collapse (last-3 form). `[no-ac: manifest — pinned by tests/consistency/plugin-version.test.js]` | Host § Planning. |
 
 ## File Plan
@@ -48,7 +51,7 @@ read-load budget and doctrine pin stays green.
 | spec/templates/spec.md | MODIFY | doctrine | D2: Behavior section's ruling parenthetical |
 | git/commands/*.md | MODIFY | doctrine | D2/D4: enter-worktree.md, merge.md |
 | .claude/rules/spec-pipeline.md | MODIFY | other | D3: 13 Gotchas entries collapsed; header comment grammar |
-| .claude/comment-narration.baseline.json | MODIFY | other | D7: reduced to the contract entry (test author, Phase 1) |
+| .claude/comment-narration.baseline.json | MODIFY | tests | D7/D9: reduced to the contract entry (test author, Phase 1 — a test fixture, so red-check exempts it from pre-image purity) |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D8: 7.57.2 + changelog paragraph |
 | tests/consistency/comment-narration-live.test.js | MODIFY | tests | AC-20260902-03-1 retag in place |
 | tests/consistency/read-load.test.js | MODIFY | tests | AC-20260902-03-4 tag in place on the existing budget test |
@@ -71,7 +74,7 @@ doctrine-pin tests that quote rewritten sentences, add each as its own `tests/�
 
 ## Acceptance Criteria
 
-- **AC-20260902-03-1**: WHEN the suite runs THE SYSTEM SHALL observe the plugin scan exit 0 with the tracked baseline equal to `{"spec/templates/grounding-contract.md": 2}` (every other prose-group path reports zero findings) → the standing test in tests/consistency/comment-narration-live.test.js, retagged
+- **AC-20260902-03-1**: WHEN the suite runs THE SYSTEM SHALL observe the plugin scan exit 0 with the tracked baseline equal to `{"spec/templates/grounding-contract.md": 3}` (D9; every other prose-group path reports zero findings) → the standing test in tests/consistency/comment-narration-live.test.js, retagged
 - **AC-20260902-03-2**: WHEN a doctrine-pin test quotes a sentence this sweep rewrites THE SYSTEM SHALL CONTINUE TO pass that test with its assertion updated in place to the rewritten sentence (tag in the affected test file; none identified at lock — see Rationale)
 - **AC-20260902-03-3**: WHEN `citations-check.js` runs after the sweep THE SYSTEM SHALL CONTINUE TO report zero MISS lines (`node spec/scripts/citations-check.js --root .` → exit 0, no `MISS`) → the live pin in tests/consistency/citations-check.test.js, tagged
 - **AC-20260902-03-4**: WHEN the read-load budget test runs after the sweep THE SYSTEM SHALL CONTINUE TO observe every command within its cap or ratchet (`init` ≤ 970, all others ≤ 500) → tests/consistency/read-load.test.js, tagged
@@ -98,6 +101,29 @@ scanner's grammar decidable. Version numbers in Gotchas (`6.50.0 was taken`) bec
 Rejected: leaving `.claude/rules/spec-pipeline.md` for sibling 04 (it is this repo's rules
 layer and the brief's sweep scope names `.claude/rules`); exempting doctrine measurements
 (the number is in the spec; the doctrine sentence needs only the conclusion).
+
+Review waiver (2026-09-02, user): AC-20260902-03-2 stays uncovered by any test — the
+lock-time collision sweep's prediction held (no test quotes a rewritten sentence), so there is
+no retag to pin; the `ac-matrix` uncovered-AC finding is waived rather than satisfied by a
+placeholder test.
+
+Build deviations (folded at review close, 2026-09-02; one-offs, no Gotchas entry):
+- The baseline row `.claude/comment-narration.baseline.json` moved from layer `other` to
+  `tests` at the TESTS step: `red-check.js` refused the pre-image as impure because the test
+  author sets it in Phase 1 by design; as a tests-layer fixture (zero AC-IDs, never executed)
+  it is exempt. D9 corrected D7's count from 2 to 3 (the scan is authoritative, A2).
+- The `other`-layer wave for `.claude/rules/spec-pipeline.md` ran inside the doctrine wave's
+  kept worker (same file list, one worker); the driver's separate wave was marked done
+  without a second dispatch.
+- The Gotchas section held 15 entries at build, not the 13 D3 counted; all 15 collapsed
+  one-for-one (`prose-cap.js` cap 15 stays green; no test asserts the count). At close the
+  two class-slug entries still carried a literal recurrence count the scanner cannot see;
+  it was dropped in the close commit per D3's "no recurrence counts", keeping the
+  grep-answerable reopen condition.
+- `spec/doctrine/design.md` was listed in the File Plan but scanned at zero findings on the
+  true pre-image (A2: the scan is authoritative), so it was left untouched.
+- `plugin.json` bumped to 7.57.3: 7.57.2 was already taken on the base branch (D8's
+  "next free if taken").
 
 Regression pins: AC-2, AC-3, AC-4 are the `SHALL CONTINUE TO` pins on the three surfaces a
 prose edit can break — doctrine-shape tests, citations, read load.

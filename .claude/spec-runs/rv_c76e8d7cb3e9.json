@@ -1,0 +1,124 @@
+{
+  "runId": "rv_c76e8d7cb3e9",
+  "ts": "2026-09-02T21:56:05.621Z",
+  "spec": "specs/20260902/02-plugin-code-sweep.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 3373,
+    "base": "d63af56912c35f44c6c1763055185cf3456e2c2f",
+    "head": "f37b82f3597f4da1ec1770e2323956c5c529e291",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      }
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 954
+      }
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      }
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 1,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 10,
+        "carried": 6,
+        "sanctioned": 4,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "reviewerCount": 1,
+    "scope": "fix-delta",
+    "scopeNote": "third fix-delta pass over d63af56..HEAD (f37b82f) plus working tree: the fleet-reader.js/release-legs.js/red-check.js D4 collapse and re-verification of the oracle, tracked scan, and full suite",
+    "tokens": 75362,
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "a sixth site under spec/scripts, spec/bin, scripts, or tests might still restate the 64 KiB process.exit mechanism in full instead of citing driver-io.js",
+        "file": null,
+        "line": null,
+        "evidence": "grep -rn '64KB|64 KiB|64kb' across spec/scripts spec/bin scripts tests: all non-driver-io.js code-site hits are one-line citations (spec-status.js:63, render-compare.js:60, render-gate.js:59, render-rules.js:45, genesis-driver.js:178, registry-check.js:44, fleet-reader.js:516, red-check.js:325, release-legs.js:85); driver-io.js:53-60 alone carries the full explanation; test-file hits are string-literal assert/test-name text or brief non-restating mentions, out of scope under D3."
+      },
+      {
+        "claim": "the three edits (fleet-reader.js, release-legs.js, red-check.js) might not have preserved each file's own local mechanism detail",
+        "file": "spec/scripts/fleet-reader.js",
+        "line": 516,
+        "evidence": "git diff HEAD shows fleet-reader.js keeps 'neither branch below calls process.exit(0)'; red-check.js:325 keeps 'process.exitCode is set instead of calling process.exit()'; release-legs.js:85 keeps 'a single fs.writeSync call can itself return short' — matching the disposer's fix requirement verbatim."
+      },
+      {
+        "claim": "the three edits might not be comment-only, or a fourth file might have moved executable code",
+        "file": "spec/scripts/red-check.js",
+        "line": null,
+        "evidence": "comment-narration.js --root . --code-identical d63af56912c35f44c6c1763055185cf3456e2c2f -> exit 1, exactly 3 code-changed files (spec-build-driver.js, tests/build/build-driver.test.js, tests/consistency/comment-narration-live.test.js), none of which are fleet-reader.js/release-legs.js/red-check.js."
+      },
+      {
+        "claim": "the tracked baseline scan might not exit 0 or might report a code-group finding",
+        "file": null,
+        "line": null,
+        "evidence": "comment-narration.js with the fleet host/person literals and --baseline -> exit 0, 66 findings, all in the 16 prose-group files, zero in any code-group path."
+      },
+      {
+        "claim": "the full suite might not be green after this fix",
+        "file": null,
+        "line": null,
+        "evidence": "node --test 'tests/**/*.test.js' -> 953 tests, 953 pass, 0 fail, 0 skipped, exit 0."
+      },
+      {
+        "claim": "the remaining uncommitted diff might carry an unreviewed change alongside this fix",
+        "file": null,
+        "line": null,
+        "evidence": "Diffed tests/merge-back.test.js, tests/build/build-driver.test.js, registry-check.js, genesis-driver.js and the deviations sidecar against HEAD (f37b82f) and against pass-1/pass-2 evidence: byte-identical to what those passes already reviewed and killed; no new content."
+      },
+      {
+        "claim": "the spec's tier might need upgrading under D8",
+        "file": null,
+        "line": null,
+        "evidence": "No diff since HEAD touches any host § Risk Tiers surface (hooks, merge-back.sh, spec-status.js, scope-reconcile.js, verdict.js, review-legs.js, spec-paths, grounding-contract.md); tier correctly stays standard per D8."
+      }
+    ]
+  }
+}

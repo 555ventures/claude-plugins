@@ -110,7 +110,7 @@ an exit-2 refusal is genuinely state-unchanged.
 
 ## Run provenance
 
-Build and review rows carry `via` (`loop` when produced by `/spec:build`'s unified loop,
+Build and review rows carry `via` (`loop` when produced by `/spec:run`,
 `direct` when produced by the stage's own command) and `model` (the session model id, or
 `null`). `via` comes from the invoking command's `--via` flag and is fixed at sidecar creation;
 `model` is derived at row-write time by `lib/session-stamp.js` from the transcript named in

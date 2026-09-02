@@ -1,6 +1,6 @@
 ---
 date: 2026-09-01
-status: hardened
+status: done
 tier: critical
 area: build-integrity
 design: false
@@ -9,6 +9,8 @@ depends_on: ["specs/20260901/09-disposer-gate.md"]
 depended_on_by: []
 brief: 18b
 open_markers: 0
+build_base: main
+diff_base: 7092cb9aa8700895619394bb93415728fa1c7ee2
 ---
 
 # `/spec:run` is the loop; `/spec:build` is the build stage again
@@ -185,6 +187,18 @@ as the build stage, which stays true — waived, no edit;
 `tests/consistency/red-fixture-coverage.test.js` and `tests/provenance/provenance.test.js`
 use `/spec:build …` as a hook-prompt fixture string that the gate must still block/stamp —
 waived, no edit; `specs/`, `docs/roadmap/`, `docs/adr/` are historical record.
+
+**Deviations folded at review close (2026-09-02, both one-offs).** D7 enumerated no
+`spec-status.js` edge for `build.md`, but `build.md`'s Report now carries the
+`spec-paths spec-status` invocation literal (D2, mirroring `review.md`'s existing edge) and
+`tests/consistency/entrypoints.test.js` refuses an undeclared live invocation, so `build.md`
+was added to `spec-status.js`'s `entryPoints`. AC-20260901-10-6's fixture describes one host
+carrying a hardened spec, an implementing spec, an unplanned dependency-met brief, and an open
+escape, but `spec-status.js`'s existing `/spec:plan` fallback only adds that entry when no
+other entry is already unblocked, and `/spec:run`/`/spec:escape` entries are always unblocked —
+that single host can never surface all three action strings at once, so the test asserts the
+same action-set invariant over two hosts (hardened + implementing + escape; all-done +
+unplanned brief), with the forbidden-set check repeated on both.
 
 ## Canonical Delta
 

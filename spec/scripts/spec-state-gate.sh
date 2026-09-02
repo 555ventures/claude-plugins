@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # UserPromptSubmit hook: enforce the spec state machine at the command boundary.
+#   /spec:run    requires status: hardened, implementing, or done (the loop's resume and
+#                no-op entries — a /clear then re-pasting /spec:run <spec>)
+#   /spec:build  requires status: hardened or implementing (to resume); done resumes only
+#                through /spec:run
 #   /spec:design requires status: hardened
-#   /spec:build  requires status: hardened, implementing, or done (done is the loop's
-#                post-checkpoint resume entry — a /clear then re-pasting /spec:build <spec>)
 #   /spec:review requires status: implementing (or done, for a re-run)
-#   all three    require zero [NEEDS CLARIFICATION] markers in the spec
-# Also warns (stdout → injected context, never a block) on exactly the four gated
-# commands (/spec:plan, /spec:design, /spec:build, /spec:review — the same case
-# pattern below) when the host grounding layer's contractHash stamp no longer
+#   all four      require zero [NEEDS CLARIFICATION] markers in the spec
+# Also warns (stdout → injected context, never a block) on exactly the five gated
+# commands (/spec:plan, /spec:run, /spec:design, /spec:build, /spec:review — the same
+# case pattern below) when the host grounding layer's contractHash stamp no longer
 # matches the plugin's grounding-contract file —
 # fully automatic; no version bookkeeping involved.
 # Exit 2 blocks the prompt and shows stderr to the user. Exit 0 allows.
@@ -18,7 +20,7 @@ PROMPT=$(printf '%s' "$INPUT" | jq -r '.prompt // empty' 2>/dev/null)
 [ -z "$PROMPT" ] && exit 0
 
 case "$PROMPT" in
-  /spec:plan*|/spec:design*|/spec:build*|/spec:review*) ;;
+  /spec:plan*|/spec:run*|/spec:design*|/spec:build*|/spec:review*) ;;
   *) exit 0 ;;
 esac
 
@@ -69,6 +71,13 @@ fi
 STATUS=$(awk '/^---[[:space:]]*$/{f++; next} f==1 && /^status:/{print $2; exit}' "$FILE")
 
 case "$PROMPT" in
+  /spec:run*)
+    case "$STATUS" in
+      hardened|implementing|done) exit 0 ;;
+    esac
+    echo "Spec state gate: /spec:run requires status: hardened, implementing, or done — $SPEC has status: ${STATUS:-<missing>}. Run /spec:plan first." >&2
+    exit 2
+    ;;
   /spec:design*)
     case "$STATUS" in
       hardened) exit 0 ;;
@@ -78,9 +87,9 @@ case "$PROMPT" in
     ;;
   /spec:build*)
     case "$STATUS" in
-      hardened|implementing|done) exit 0 ;;
+      hardened|implementing) exit 0 ;;
     esac
-    echo "Spec state gate: /spec:build requires status: hardened, implementing (to resume), or done (the loop's post-checkpoint resume entry) — $SPEC has status: ${STATUS:-<missing>}. Run /spec:plan first." >&2
+    echo "Spec state gate: /spec:build requires status: hardened (or implementing to resume) — $SPEC has status: ${STATUS:-<missing>}. A done spec resumes through /spec:run <spec>." >&2
     exit 2
     ;;
   /spec:review*)

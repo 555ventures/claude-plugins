@@ -29,9 +29,10 @@
 //
 // --next derives the recommended next command per open spec — the mapping that used to
 // live as renderer prose (and, worse, as end-of-run improvisation): draft → /spec:plan;
-// hardened + design: true without a `designed:` stamp → /spec:design; hardened otherwise →
-// /spec:build (`designed:` set means the design stage already ran — never route back to
-// /spec:design); implementing → /spec:review. Closest-to-done first, blocked entries last,
+// hardened (with or without `design: true`, `designed:` set or not) and implementing both →
+// /spec:run — the loop derives design-due, build, and review from disk itself, so this
+// derivation no longer offers a second, narrower next-command for one state (`/spec:design`,
+// `/spec:build`, and `/spec:review` are never emitted here). Closest-to-done first, blocked entries last,
 // and when every spec is done the next ready unplanned brief becomes the /spec:plan pick.
 // Unblocked runner-up entries are annotated parallel-ok/serial relative to the top pick:
 // spec-level depends_on can never link two unblocked entries (a non-done dep is a blocker),
@@ -436,12 +437,9 @@ function deriveNext() {
   const entries = []
   for (const s of specs) {
     if (DONE(s.status) || !KNOWN_STATUS.has(s.status)) continue
-    // designed: set = the design stage already ran for this spec — never route back to design.
-    const action =
-      s.status === 'draft' ? '/spec:plan'
-      : s.status === 'implementing' ? '/spec:review'
-      : s.design && !s.designed ? '/spec:design'
-      : '/spec:build'
+    // hardened (any design state) and implementing both route through the loop now — the loop
+    // derives design-due itself, so this derivation no longer distinguishes them (D5).
+    const action = s.status === 'draft' ? '/spec:plan' : '/spec:run'
     const blockers = []
     for (const d of s.depends_on) {
       const dep = specDep(d)

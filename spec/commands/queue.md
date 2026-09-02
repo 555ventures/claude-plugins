@@ -50,7 +50,7 @@ named next step; `0` covers both a successful mutation and "nothing to say."
 Print the script's stdout **verbatim**. `list` uses the closed legend
 `✅ done · ▶ top · ○ pending · 🅰 auto-placed` — reproduce it as printed, never rebuilt as a
 markdown table or re-sorted by hand. For `next`, the top line is the paste-ready pick
-(a brief's derived `/spec:plan`/`/spec:build`/`/spec:review` line, or a prompt item's payload
+(a brief's derived `/spec:plan`/`/spec:run` line, or a prompt item's payload
 verbatim with no `@path` suffix); an `auto_placed` item still pending veto prints as a
 trailing notice naming both `spec-queue bump <ref>` (reject the automatic placement) and
 `spec-queue ok <ref>` (accept it) — narrate that choice in one sentence, never pick for the

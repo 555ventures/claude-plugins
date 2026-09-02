@@ -169,6 +169,7 @@
       "spec/commands/release.md",
       "spec/commands/atlas.md",
       "spec/commands/build.md",
+      "spec/commands/run.md",
       "spec/commands/genesis.md",
       "spec/commands/enforce.md",
       "spec/commands/design.md",
@@ -202,7 +203,8 @@
   },
   "spec/scripts/spec-build-driver.js": {
     "entryPoints": [
-      "spec/commands/build.md"
+      "spec/commands/build.md",
+      "spec/commands/run.md"
     ]
   },
   "spec/scripts/spec-queue.js": {
@@ -213,7 +215,7 @@
   "spec/scripts/spec-review-driver.js": {
     "entryPoints": [
       "spec/commands/review.md",
-      "spec/commands/build.md"
+      "spec/commands/run.md"
     ]
   },
   "spec/scripts/spec-session-stamp.sh": {
@@ -234,6 +236,7 @@
       "spec/commands/release.md",
       "spec/commands/plan.md",
       "spec/commands/review.md",
+      "spec/commands/build.md",
       "spec/scripts/spec-review-driver.js",
       "spec/scripts/spec-build-driver.js",
       "spec/doctrine/core.md"

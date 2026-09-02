@@ -24,8 +24,8 @@ is `{driver}` below.
 that already passed.
 
 This command is the review driver's direct entry point (`--via direct`, the default). The
-`/spec:build` loop reaches the same driver with `--via loop` and runs the same DISPOSITIONS
-protocol below on both entries — see `spec/commands/build.md`.
+`/spec:run` loop reaches the same driver with `--via loop` and runs the same DISPOSITIONS
+protocol below on both entries — see `spec/commands/run.md`.
 
 ## Protocol — the driver owns the state machine
 

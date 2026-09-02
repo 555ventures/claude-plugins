@@ -1,6 +1,6 @@
 ---
 date: 2026-09-02
-status: hardened
+status: implementing
 tier: critical
 area: gate-integrity
 design: false
@@ -10,6 +10,8 @@ depended_on_by: ["specs/20260902/02-plugin-code-sweep.md", "specs/20260902/03-pl
 brief: 21
 open_markers: 0
 spiked: 2026-09-02
+build_base: main
+diff_base: 1f6a7ed5ab1807d241a15374be383934d493a43a
 ---
 
 # Comment narration gate: owner citations, never history

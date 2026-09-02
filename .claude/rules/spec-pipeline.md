@@ -60,7 +60,7 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
 ## Build
 
 - Host escalation triggers: any test that must be weakened to pass (tests here are pinned
-  invariants with incident headers — weakening one is a doctrine change, not a fix);
+  invariants with owner citations — weakening one is a doctrine change, not a fix);
   any edit that changes `spec-paths contract-hash` output.
 
 ## Worker Rules
@@ -73,8 +73,9 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
   non-builtin import anywhere is a hard finding, no footnotes.
 - Bash scripts open `#!/usr/bin/env bash` + `set -u` (never `set -e` — failures are explicit
   and carry remedies). JS scripts open `#!/usr/bin/env node` + `'use strict'`.
-- Every script starts with a header comment: usage line, why it exists (dated incident),
-  what it deliberately does NOT do, and an explicit `Exit codes:` list.
+- Every script starts with a header comment: usage line, the one owner citation (spec path,
+  AC-ID, D-number, ADR, run id, pin id) for why it exists, what it deliberately does NOT do,
+  and an explicit `Exit codes:` list — never dates, people, hosts, versions, or prior behavior.
 - Error messages name the remedy command. Machine contracts are sentinel lines
   (`__SMOKE_PASS__`-style) or `--json`; the human render is the only other format.
 - Hand-rolled `--flag value` arg parsing only; no arg-parsing library, ever.
@@ -90,8 +91,8 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
   `runNode`/`runBash`, asserting on status + output. Fixtures (`tests/fixtures/`) only when
   the input must be a realistic multi-file artifact. Regexes over prose are not tests — a rule
   that matters gets a script (core § Incident Policy).
-- Tests reference incident ids / dated escapes in a header comment. Pipeline-authored tests
-  for new specs reference AC-IDs in the test name (`AC-{YYYYMMDD-NN}-1`).
+- Tests cite the owner id they pin in a header comment — spec path, AC-ID, or escape row id;
+  pipeline-authored tests for new specs reference AC-IDs in the test name (`AC-{YYYYMMDD-NN}-1`).
 - Nothing here is exempt from TDD. There are no sanctioned env-gated skips.
 - **Gates are plainly green** (v7): `npm test` exits 0 on untouched code; there is no
   sanctioned-failing baseline and no standing red pins. A red suite is a regression or an

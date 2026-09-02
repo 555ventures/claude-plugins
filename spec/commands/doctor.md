@@ -140,6 +140,11 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     `node "$(spec-paths citations-check)"` against the repo. Each MISS line (file, line,
     cited heading, resolved doctrine file) is a stale-citation finding; the `--verbose` SKIP
     list is informational only.
+16. **Rules-layer narration** (deterministic, advisory) — run
+    `node "$(spec-paths comment-narration)" --rules-mode .`. Each finding line is a
+    narration finding in the rules layer; under `--fix` each is a line-item patch at the
+    repair-mode bar above (before → after: the note rewritten as tag + rule + one owner
+    citation — spec path, AC-ID, D-number, ADR, run id — evidence is the finding line itself).
 
 ## Semantic spot-check — small, bounded
 

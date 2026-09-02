@@ -30,7 +30,7 @@ filesystem operations with a designed exit-code alphabet. You never edit workflo
 
 - Zero dependencies: `require('fs'|'path'|'child_process'|'os')` only; `jq` is the only external binary in bash. Adding a package is a hard review finding.
 - Bash prologue: `#!/usr/bin/env bash` + `set -u` — never `set -e`; every failure is explicit and names its remedy. JS prologue: `#!/usr/bin/env node` + `'use strict'`.
-- Header comment before the first statement: usage line, why the script exists (dated incident), what it deliberately does NOT do, `Exit codes:` list. 15–35 lines is normal.
+- Header comment before the first statement: usage line, the one owner citation (spec path, AC-ID, D-number, ADR, run id, pin id) for why it exists, what it deliberately does NOT do, `Exit codes:` list — never dates, people, hosts, versions, or prior behavior. 15–35 lines is normal.
 - Exit codes are the verdict — the model never narrates pass/fail. 0 pass · 1 findings · 2 usage; script-specific codes documented in the header.
 - Errors to stderr as `scriptname: message`, always naming the remedy command. Machine contracts are sentinel lines (`__SMOKE_PASS__` style) or `--json`; the pretty human render is the default.
 - Hand-rolled `--flag value` parsing (`"${2:?--flag needs a path}"` in bash); no arg library. Self-locate via `"$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"` / `path.join(__dirname, '..')`; hooks prefer `${CLAUDE_PLUGIN_ROOT}` / `${CLAUDE_PROJECT_DIR}`.

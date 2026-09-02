@@ -1,6 +1,6 @@
 ---
 date: 2026-09-01
-status: hardened
+status: done
 tier: critical
 area: build-integrity
 design: false
@@ -9,6 +9,8 @@ depends_on: ["specs/20260901/05-checkpoint-fail-closed.md"]
 depended_on_by: ["specs/20260901/10-spec-run-command.md"]
 brief: 18b
 open_markers: 0
+build_base: 931c80c4756ce0e1ef36a2050b1577657bd8a54f
+diff_base: 931c80c4756ce0e1ef36a2050b1577657bd8a54f
 ---
 
 # Independent dispositions — a fresh-context disposer replaces the session-change checkpoint
@@ -55,6 +57,8 @@ covers every finding, and the close row says `checkpoint: {"outcome":"disposer",
 | tests/review/disposer-gate.test.js | CREATE | tests | AC-20260901-09-1, AC-20260901-09-2, AC-20260901-09-3, AC-20260901-09-4, AC-20260901-09-7, AC-20260901-09-8, AC-20260901-09-9, AC-20260901-09-13 |
 | tests/review/review-driver.test.js | MODIFY | tests | AC-20260901-09-5 (tag the clean-close test in place), AC-20260901-09-6 (rewrite the AC-20260901-02-4 test in place, D9) |
 | tests/provenance/provenance.test.js | MODIFY | tests | AC-20260901-09-10, AC-20260901-09-11 (rewrite the 05-6/05-7 tests in place), AC-20260901-09-12 (tag the byte-identity test in place) |
+| tests/review/escalate-row.test.js | MODIFY | tests | Build-time collision (2026-09-01, recorded in deviations): fix-cycle setups supply a disposer return via `--file` (D2) and reproducibility re-runs pass the row's own `checkpoint` back as `--checkpoint`/`--checkpoint-overrides` (D6); updated in place, retagged AC-20260901-09-2 / AC-20260901-09-6, never weakened |
+| tests/review/stopped-row-durability.test.js | MODIFY | tests | Build-time collision (2026-09-01, recorded in deviations): the worktree GATE_RED reproducibility re-run passes the row's `checkpoint` back as `--checkpoint not-reached` (D6); updated in place, retagged AC-20260901-09-13, never weakened |
 
 Orchestrator duty (outside the table): `tests/consistency/read-load.test.js` is the live
 oracle for AC-20260901-09-14 and is not edited. `docs/canonical/pipeline.md` changes only
@@ -246,6 +250,24 @@ Plan (`escalate-row`, `stopped-row-durability`, `legs-verdict-pair`, `merge-reen
 key set (executed grep 2026-09-01: no `deepStrictEqual(row, …)` or `Object.keys(row)` over a
 review row outside provenance's first-seven pin, which the key's position honours) — D6's
 added `checkpoint` key on direct rows leaves them green; build's whole-suite check adjudicates.
+
+**Deviations folded at close (2026-09-01).** Three one-offs from the build, none a new
+Gotchas class: (1) the `disposer-gate.test.js` carrier for AC-20260901-09-6's second clause
+reaches the CLOSE row through a minimal one-survivor pool (waive recommended, user-overridden
+to reject, zero fix-dispatched) rather than AC-3's own `fixDispatched: 2` return, because
+that return routes through FIX and cannot land a close/escalate row within one mark — the
+pinned observable (`checkpoint` deep-equal `{"outcome":"disposer","overrides":1}`) is
+identical. (2) Sibling 08 merged to main after this branch was cut, so build Phase 0
+fast-forwarded and pinned `build_base`/`diff_base` to the true pre-image
+(931c80c4756ce0e1ef36a2050b1577657bd8a54f) per host § Gotchas; D8's 7.54.0 target was taken by
+08, so the build shipped 7.55.0 with the same changelog paragraph. (3) The whole-suite gate
+reddened 12 out-of-plan tests (`escalate-row.test.js`, `stopped-row-durability.test.js`,
+two in `review-driver.test.js`): fix-cycle setups called `--fix-dispatched 1` on a
+one-survivor pool without `--file`, which D2 now refuses, and reproducibility re-runs
+deep-equal the whole review row, which D6's `checkpoint` key changed — this Rationale's
+"assert fields, never a full review-row key set" prediction was wrong for the reproducibility
+pins. Both files were added to the File Plan as tests rows and the pins updated in place per
+host § Gotchas; no promise changed.
 
 ## Canonical Delta
 

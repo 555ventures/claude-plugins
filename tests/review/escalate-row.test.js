@@ -76,6 +76,19 @@ function returnFileWith(scratchName, body) {
   return file
 }
 
+// specs/20260901/09-disposer-gate.md D2/AC-20260901-09-2 (2026-09-01, brief 18b): --mark
+// dispositions on a non-empty pool now refuses without --file <disposer return> — every fix-cycle
+// setup below that dispatches a fix must first write a minimal valid disposer return covering
+// every ref in that pool exactly once (here: always a single "fix" recommendation, since these
+// fixtures only ever carry one survivor or one injected leg finding) and pass --file <path>.
+function oneFixReturnFile(scratchName, ref) {
+  return returnFileWith(scratchName, {
+    verdict: 'DISPOSED',
+    dispositions: [{ ref, recommended: 'fix', reason: 'D3 of specs/20260901/09-disposer-gate.md: fix is the conservative disposition' }],
+    tokens: 1,
+  })
+}
+
 // One soft survivor, scope fix-delta throughout (sidesteps the reconcile/at-risk required-legs
 // filter entirely — those two legs are excluded from fix-delta's required set, and a fix-delta
 // manifest never emits rows for them, so declaring this scope keeps every cycle's dispositions
@@ -177,7 +190,10 @@ function driveToCapEdge(root, spec) {
   for (let cycle = 1; cycle <= 2; cycle++) {
     const rf = returnFileWith('esc-drive-' + cycle, reviewerReturn())
     run(root, spec, '--mark', 'reviewer-returned', '--file', rf)
-    const d = run(root, spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
+    // AC-20260901-09-2: reviewerReturn()'s single survivor is the whole pool (s0) — cover it with
+    // a minimal "fix" disposer return before --mark dispositions --fix-dispatched 1 is accepted.
+    const dispFile = oneFixReturnFile('esc-drive-disp-' + cycle, 's0')
+    const d = run(root, spec, '--mark', 'dispositions', '--file', dispFile, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
     assert.strictEqual(stateOf(root, spec), 'FIX',
       `setup cycle ${cycle}: fix-dispatched 1 (within the 1-survivor pool) must land FIX: ` + d.stdout + d.stderr)
     const f = run(root, spec, '--mark', 'fix-applied')
@@ -185,7 +201,8 @@ function driveToCapEdge(root, spec) {
   }
   const rf3 = returnFileWith('esc-drive-3', reviewerReturn())
   run(root, spec, '--mark', 'reviewer-returned', '--file', rf3)
-  const d3 = run(root, spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
+  const dispFile3 = oneFixReturnFile('esc-drive-disp-3', 's0')
+  const d3 = run(root, spec, '--mark', 'dispositions', '--file', dispFile3, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
   assert.strictEqual(stateOf(root, spec), 'FIX',
     'setup: the third dispositions --fix-dispatched 1 must land FIX, poised for the capping fix-applied: ' + d3.stdout + d3.stderr)
 }
@@ -294,7 +311,7 @@ test('AC-20260822-01-4: WHEN --escalated derivation reaches CLEAN (spike S1 Case
 
 // ---- driver-level ACs (D5-D10): writeEscalateRow(), self-heal, D10 detector --------------------
 
-test('AC-20260822-01-5: WHEN the third fix-applied mark is refused in an in-place review THE SYSTEM SHALL have appended exactly one row with escalated:true to .claude/spec-runs.jsonl whose runId equals the sidecar\'s own runId and whose iteration equals the final manifest number, and the sidecar SHALL record escalateRunId', () => {
+test('AC-20260822-01-5 (also AC-20260901-09-2): WHEN the third fix-applied mark is refused in an in-place review THE SYSTEM SHALL have appended exactly one row with escalated:true to .claude/spec-runs.jsonl whose runId equals the sidecar\'s own runId and whose iteration equals the final manifest number, and the sidecar SHALL record escalateRunId', () => {
   const host = makeHost('esc-ac5')
   driveToCapEdge(host.root, host.spec)
   const ledgerPath = path.join(host.root, '.claude/spec-runs.jsonl')
@@ -326,7 +343,7 @@ test('AC-20260822-01-5: WHEN the third fix-applied mark is refused in an in-plac
 // specs/20260824/06-review-range-identity.md D4/AC-7 (2026-08-24): writeEscalateRow() mirrors
 // runHardStopVerdict()'s D4 threading exactly — the capped run's escalate row must name the range
 // it burned its fix loop against, same as the hard-stop and close rows.
-test('AC-20260824-06-7: WHEN a third fix-applied lands ESCALATE THE SYSTEM writes an escalate row carrying diff.base and diff.head as 40-hex shas and diff.dirty as a boolean', () => {
+test('AC-20260824-06-7 (also AC-20260901-09-2): WHEN a third fix-applied lands ESCALATE THE SYSTEM writes an escalate row carrying diff.base and diff.head as 40-hex shas and diff.dirty as a boolean', () => {
   const host = makeHost('esc-ac7-range')
   driveToCapEdge(host.root, host.spec)
   const thirdFix = run(host.root, host.spec, '--mark', 'fix-applied')
@@ -350,7 +367,7 @@ test('AC-20260824-06-7: WHEN a third fix-applied lands ESCALATE THE SYSTEM write
     'means the driver never threaded the flag onto writeEscalateRow()\'s verdict.js invocation: ' + JSON.stringify(row))
 })
 
-test('AC-20260822-01-6: WHEN the refused third fix-applied mark is repeated THE SYSTEM SHALL still have exactly one escalated:true row for the spec — the write is idempotent on the persisted escalateRunId mark, never a second append', () => {
+test('AC-20260822-01-6 (also AC-20260901-09-2): WHEN the refused third fix-applied mark is repeated THE SYSTEM SHALL still have exactly one escalated:true row for the spec — the write is idempotent on the persisted escalateRunId mark, never a second append', () => {
   const host = makeHost('esc-ac6')
   driveToCapEdge(host.root, host.spec)
   const ledgerPath = path.join(host.root, '.claude/spec-runs.jsonl')
@@ -366,7 +383,7 @@ test('AC-20260822-01-6: WHEN the refused third fix-applied mark is repeated THE 
     'two refusals of the SAME third fix-applied mark must leave exactly one escalated:true row — a count of 0 means the first write never landed, a count of 2 means idempotency was never checked (pre-image count here is 0, so this pins both presence and idempotency at once): ' + JSON.stringify(rows))
 })
 
-test('AC-20260822-01-7: WHEN the cap is hit in a worktree review whose main root already ignores the stopped ledger THE SYSTEM SHALL append the escalate row to <mainRoot>/.claude/spec-runs.stopped.jsonl and record that absolute path as marks.escalateLedgerPath with escalateFallback:false', () => {
+test('AC-20260822-01-7 (also AC-20260901-09-2): WHEN the cap is hit in a worktree review whose main root already ignores the stopped ledger THE SYSTEM SHALL append the escalate row to <mainRoot>/.claude/spec-runs.stopped.jsonl and record that absolute path as marks.escalateLedgerPath with escalateFallback:false', () => {
   const host = makeWorktreeHost({ name: 'esc-ac7', ignoreStopped: true })
   driveToCapEdge(host.wt, host.spec)
 
@@ -394,7 +411,7 @@ test('AC-20260822-01-7: WHEN the cap is hit in a worktree review whose main root
     'escalateFallback must be false — the durable write succeeded, this was never a fallback: ' + JSON.stringify(sidecar))
 })
 
-test('AC-20260822-01-8: WHEN the driver is invoked bare with marks.escalated set and no escalateRunId THE SYSTEM SHALL self-heal by appending the row then, and print the ESCALATE step', () => {
+test('AC-20260822-01-8 (also AC-20260901-09-2): WHEN the driver is invoked bare with marks.escalated set and no escalateRunId THE SYSTEM SHALL self-heal by appending the row then, and print the ESCALATE step', () => {
   const host = makeHost('esc-ac8')
   driveToCapEdge(host.root, host.spec)
   // Simulate the crash-between-refusal-and-write case directly (D5's own rationale: "the
@@ -426,7 +443,7 @@ test('AC-20260822-01-8: WHEN the driver is invoked bare with marks.escalated set
   assert.ok(sidecar.escalateRunId, 'the self-heal must record escalateRunId once it succeeds, same as the direct write point: ' + JSON.stringify(sidecar))
 })
 
-test('AC-20260822-01-9: WHEN the escalate verdict pass exits 2 because a red leg drifted green between the dispositions pass and the cap (deriving CLEAN) THE SYSTEM SHALL embed the verdict error in the refusal output, append no row, leave escalateRunId unset, and keep marks.escalated true so the next invocation can retry', () => {
+test('AC-20260822-01-9 (also AC-20260901-09-2): WHEN the escalate verdict pass exits 2 because a red leg drifted green between the dispositions pass and the cap (deriving CLEAN) THE SYSTEM SHALL embed the verdict error in the refusal output, append no row, leave escalateRunId unset, and keep marks.escalated true so the next invocation can retry', () => {
   const host = makeHost('esc-ac9')
   const emptyReturn = () => ({ verdict: 'CLEAN', survivors: [], killed: [], reviewerCount: 1, scope: 'fix-delta', tokens: 10 })
 
@@ -442,7 +459,10 @@ test('AC-20260822-01-9: WHEN the escalate verdict pass exits 2 because a red leg
     overrideLeg(path.join(host.sidecar, `manifest-${n}.jsonl`), 'skip-reconcile', 1, { skipped: 1, sanctioned: 0 })
     const rf = returnFileWith('esc-ac9-' + cycle, emptyReturn())
     run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', rf)
-    const d = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
+    // AC-20260901-09-2: the pool here is the injected leg finding (leg:skip-reconcile), not a
+    // survivor — the disposer return's ref must name it exactly.
+    const dispFile = oneFixReturnFile('esc-ac9-disp-' + cycle, 'leg:skip-reconcile')
+    const d = run(host.root, host.spec, '--mark', 'dispositions', '--file', dispFile, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
     assert.strictEqual(stateOf(host.root, host.spec), 'FIX',
       `setup cycle ${cycle}: the injected red skip-reconcile finding must justify fix-dispatched 1: ` + d.stdout + d.stderr)
     const f = run(host.root, host.spec, '--mark', 'fix-applied')
@@ -454,7 +474,8 @@ test('AC-20260822-01-9: WHEN the escalate verdict pass exits 2 because a red leg
   overrideLeg(path.join(host.sidecar, 'manifest-3.jsonl'), 'skip-reconcile', 1, { skipped: 1, sanctioned: 0 })
   const rf3 = returnFileWith('esc-ac9-3', emptyReturn())
   run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', rf3)
-  const d3 = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
+  const dispFile3 = oneFixReturnFile('esc-ac9-disp-3', 'leg:skip-reconcile')
+  const d3 = run(host.root, host.spec, '--mark', 'dispositions', '--file', dispFile3, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
   assert.strictEqual(stateOf(host.root, host.spec), 'FIX',
     'setup: the third dispositions must land FIX, poised for the capping fix-applied: ' + d3.stdout + d3.stderr)
 
@@ -486,7 +507,7 @@ test('AC-20260822-01-9: WHEN the escalate verdict pass exits 2 because a red leg
     'marks.escalated must remain true — the cap refusal itself still stands and must not be undone by the drifted verdict pass: ' + JSON.stringify(sidecar))
 })
 
-test('AC-20260822-01-12: WHEN the driver prints the ESCALATE step THE SYSTEM SHALL name the waive/reject close route, the abandon route, and the absolute ledger path the escalate row landed in', () => {
+test('AC-20260822-01-12 (also AC-20260901-09-2): WHEN the driver prints the ESCALATE step THE SYSTEM SHALL name the waive/reject close route, the abandon route, and the absolute ledger path the escalate row landed in', () => {
   const host = makeHost('esc-ac12')
   driveToCapEdge(host.root, host.spec)
   const thirdFix = run(host.root, host.spec, '--mark', 'fix-applied')
@@ -506,7 +527,7 @@ test('AC-20260822-01-12: WHEN the driver prints the ESCALATE step THE SYSTEM SHA
     'the ESCALATE step must name the absolute path the escalate row actually landed in — a session cannot judge or audit evidence it was never told the location of: ' + r.stdout)
 })
 
-test('AC-20260822-01-13: WHEN the sidecar records a durable escalate ledger path but no row for this spec+runId is readable there THE SYSTEM SHALL print one stderr warning naming the spec, runId, and path, with the exit status and printed step identical to the no-warning run', () => {
+test('AC-20260822-01-13 (also AC-20260901-09-2): WHEN the sidecar records a durable escalate ledger path but no row for this spec+runId is readable there THE SYSTEM SHALL print one stderr warning naming the spec, runId, and path, with the exit status and printed step identical to the no-warning run', () => {
   const host = makeWorktreeHost({ name: 'esc-ac13', ignoreStopped: true })
   driveToCapEdge(host.wt, host.spec)
   const thirdFix = run(host.wt, host.spec, '--mark', 'fix-applied')

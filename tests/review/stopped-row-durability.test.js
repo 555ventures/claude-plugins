@@ -153,7 +153,7 @@ function makeWorktreeHost({ name, acId, gateFails = false, ignoreStopped = false
 const readJsonl = (file) =>
   fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []
 
-test('AC-20260821-04-1 / AC-20260824-06-5 (worktree carrier): WHEN a review running in a linked worktree hard-stops on RED_BLOCKING THE SYSTEM appends verdict.js\'s ledger line — whose diff.base/diff.head/diff.dirty name the reviewed range — to <mainRoot>/.claude/spec-runs.stopped.jsonl and never to the worktree\'s own .claude/spec-runs.jsonl', () => {
+test('AC-20260821-04-1 / AC-20260824-06-5 (worktree carrier) / AC-20260901-09-13: WHEN a review running in a linked worktree hard-stops on RED_BLOCKING THE SYSTEM appends verdict.js\'s ledger line — whose diff.base/diff.head/diff.dirty name the reviewed range — to <mainRoot>/.claude/spec-runs.stopped.jsonl and never to the worktree\'s own .claude/spec-runs.jsonl', () => {
   const host = makeWorktreeHost({ name: 'sr-durability-ac1', acId: 'AC-20260820-99-31', gateFails: true, ignoreStopped: true })
   const wtLedger = path.join(host.wt, '.claude/spec-runs.jsonl')
   const wtLedgerBefore = fs.existsSync(wtLedger) ? fs.readFileSync(wtLedger, 'utf8') : null
@@ -206,6 +206,13 @@ test('AC-20260821-04-1 / AC-20260824-06-5 (worktree carrier): WHEN a review runn
   if (appended.diff && typeof appended.diff.base === 'string') {
     reArgs.push('--base-sha', appended.diff.base, '--head-sha', appended.diff.head)
     if (appended.diff.dirty) reArgs.push('--dirty')
+  }
+  // AC-20260901-09-13/D6: the driver threads a derived --checkpoint onto every review verdict
+  // pass, both via values — a GATE_RED hard-stop row (worktree or in-place alike) is always
+  // "not-reached" (no disposer mark can exist before LEGS even finishes).
+  if (appended.checkpoint) {
+    reArgs.push('--checkpoint', appended.checkpoint.outcome)
+    if (appended.checkpoint.outcome === 'disposer') reArgs.push('--checkpoint-overrides', String(appended.checkpoint.overrides))
   }
   const reRun = runNode('scripts/verdict.js', reArgs)
   const reRunLine = reRun.stdout.trim().split('\n')[1]

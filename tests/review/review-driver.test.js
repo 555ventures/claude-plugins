@@ -136,6 +136,18 @@ function returnFileWith(scratchName, body) {
   fs.writeFileSync(file, JSON.stringify(body))
   return file
 }
+
+// specs/20260901/09-disposer-gate.md D2/AC-20260901-09-2 (2026-09-01, brief 18b): --mark
+// dispositions on a non-empty pool now refuses without --file <disposer return> — every fixture
+// below that dispatches a fix must first write a minimal valid disposer return covering every
+// ref in that pool exactly once and pass --file <path>.
+function oneFixReturnFile(scratchName, ref) {
+  return returnFileWith(scratchName, {
+    verdict: 'DISPOSED',
+    dispositions: [{ ref, recommended: 'fix', reason: 'D3 of specs/20260901/09-disposer-gate.md: fix is the conservative disposition' }],
+    tokens: 1,
+  })
+}
 const CLEAN_RETURN = { verdict: 'CLEAN', survivors: [], killed: [], reviewerCount: 1, scope: 'full', tokens: 10 }
 const SURVIVOR_RETURN = {
   verdict: 'CLEAN',
@@ -168,7 +180,7 @@ test('AC-20260820-07-1: WHEN the driver runs on an implementing spec whose legs 
 // (including one introduced while splicing in the shared helpers) would show up as a diff
 // between the driver's appended row and a direct verdict.js re-invocation with the row's own
 // recorded flags.
-test('AC-20260820-07-2 (also AC-20260821-04-8, SHALL CONTINUE TO) / AC-20260824-06-5 / AC-20260901-01-17 (SHALL CONTINUE TO): WHEN the synthetic gate fails THE SYSTEM appends exactly one GATE_RED ledger line byte-equal to verdict.js\'s own line, whose diff.base/diff.head/diff.dirty name the reviewed range, prints the red leg + remedy, and reports state STOPPED — the reviewer step is never printed', () => {
+test('AC-20260820-07-2 (also AC-20260821-04-8, SHALL CONTINUE TO) / AC-20260824-06-5 / AC-20260901-01-17 (SHALL CONTINUE TO) / AC-20260901-09-13: WHEN the synthetic gate fails THE SYSTEM appends exactly one GATE_RED ledger line byte-equal to verdict.js\'s own line, whose diff.base/diff.head/diff.dirty name the reviewed range, prints the red leg + remedy, and reports state STOPPED — the reviewer step is never printed', () => {
   const { root, spec, sidecar } = makeHost({ gateFails: true })
   const ledger = path.join(root, '.claude/spec-runs.jsonl')
   const before = fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8') : ''
@@ -233,6 +245,14 @@ test('AC-20260820-07-2 (also AC-20260821-04-8, SHALL CONTINUE TO) / AC-20260824-
   }
   reArgs.push('--via', appended.via)
   if (appended.model !== null && appended.model !== undefined) reArgs.push('--model', appended.model)
+  // AC-20260901-09-13/D6: the driver now threads a derived --checkpoint onto every review verdict
+  // pass (both via values) — a GATE_RED hard-stop row is always "not-reached" (no disposer mark
+  // can exist before LEGS even finishes). Omitting this from the re-run would make the deep-equal
+  // below fail on the checkpoint key the driver's own row carries.
+  if (appended.checkpoint) {
+    reArgs.push('--checkpoint', appended.checkpoint.outcome)
+    if (appended.checkpoint.outcome === 'disposer') reArgs.push('--checkpoint-overrides', String(appended.checkpoint.overrides))
+  }
   const reRun = runNode('scripts/verdict.js', reArgs)
   const reRunLine = reRun.stdout.trim().split('\n')[1]
   assert.ok(reRunLine, 'verdict.js must print a ledger line when re-invoked with the driver\'s own recorded flags against the same manifest: ' + reRun.stdout + reRun.stderr)
@@ -291,7 +311,12 @@ test('AC-20260820-07-5: WHEN --mark dispositions counts exceed the survivor + le
 // defaults to via:"direct" — the new CHECKPOINT state (reached only for via:"loop") must never
 // engage here, and the line below asserting DISPOSITIONS directly after reviewer-returned stays
 // the correct, unweakened pin for the direct-entry path.
-test('AC-20260820-07-6 / AC-20260901-03-5 (SHALL CONTINUE TO): WHEN a clean run reaches CLOSE (0 survivors, dispositions 0 0 0) THE SYSTEM runs the authoritative verdict with --retain .claude/spec-runs, appends one ledger line, flips status implementing -> done, and prints the close-step instructions', () => {
+//
+// specs/20260901/09-disposer-gate.md D9/AC-20260901-09-5 (2026-09-01, brief 18b, tagged in
+// place, never weakened): D9 keeps this exact zero-pool CONTINUES-TO-pass shape as the AC-5
+// pin — both pools empty still admits --mark dispositions --waived 0 --rejected 0
+// --fix-dispatched 0 with no --file and lands CLOSE, unaffected by the CHECKPOINT retirement.
+test('AC-20260820-07-6 / AC-20260901-03-5 / AC-20260901-09-5 (SHALL CONTINUE TO): WHEN a clean run reaches CLOSE (0 survivors, dispositions 0 0 0) THE SYSTEM runs the authoritative verdict with --retain .claude/spec-runs, appends one ledger line, flips status implementing -> done, and prints the close-step instructions', () => {
   const host = makeHost()
   toReviewer(host)
   const returnFile = returnFileWith('rvdrv-clean', CLEAN_RETURN)
@@ -640,7 +665,7 @@ test('AC-20260830-02-4: WHEN --mark closed is invoked and gate resolution return
 // writeEscalateRow() call ahead of this same die(), but the refusal itself (exit 2, iteration cap
 // 2, state ESCALATE) must survive byte-for-byte in spirit. The new escalate-row mechanics are
 // pinned separately in tests/review/escalate-row.test.js.
-test('AC-20260820-07-8 (also AC-20260822-01-10, SHALL CONTINUE TO): a dispatched fix cycles FIX -> fix-applied (fresh manifest, legs --fix-delta) -> REVIEWER twice, and a third fix-applied is refused with state ESCALATE naming the iteration cap of 2', () => {
+test('AC-20260820-07-8 (also AC-20260822-01-10, SHALL CONTINUE TO) / AC-20260901-09-2: a dispatched fix cycles FIX -> fix-applied (fresh manifest, legs --fix-delta) -> REVIEWER twice, and a third fix-applied is refused with state ESCALATE naming the iteration cap of 2', () => {
   const host = makeHost()
   run(host.root, host.spec)
   assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER')
@@ -650,7 +675,10 @@ test('AC-20260820-07-8 (also AC-20260822-01-10, SHALL CONTINUE TO): a dispatched
     run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile)
     assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS', `cycle ${cycle}: a returned survivor must land DISPOSITIONS`)
 
-    const dispR = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
+    // AC-20260901-09-2: SURVIVOR_RETURN's single survivor is the whole pool (s0) — cover it with
+    // a minimal "fix" disposer return before --mark dispositions --fix-dispatched 1 is accepted.
+    const dispFile = oneFixReturnFile('rvdrv-fix-disp-' + cycle, 's0')
+    const dispR = run(host.root, host.spec, '--mark', 'dispositions', '--file', dispFile, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
     assert.strictEqual(dispR.status, 0, `cycle ${cycle}: fix-dispatched 1 (within the 1-survivor pool) must be accepted: ` + dispR.stdout + dispR.stderr)
     assert.strictEqual(stateOf(host.root, host.spec), 'FIX', `cycle ${cycle}: fix-dispatched 1 must land FIX`)
 
@@ -664,7 +692,8 @@ test('AC-20260820-07-8 (also AC-20260822-01-10, SHALL CONTINUE TO): a dispatched
 
   const returnFile3 = returnFileWith('rvdrv-fix-3', SURVIVOR_RETURN)
   run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile3)
-  const dispR3 = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
+  const dispFile3 = oneFixReturnFile('rvdrv-fix-disp-3', 's0')
+  const dispR3 = run(host.root, host.spec, '--mark', 'dispositions', '--file', dispFile3, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
   assert.strictEqual(dispR3.status, 0, 'a third dispositions-with-fix-dispatched must still be accepted — the cap applies to fix-applied, not to entering FIX: ' + dispR3.stdout + dispR3.stderr)
   assert.strictEqual(stateOf(host.root, host.spec), 'FIX')
 
@@ -681,12 +710,13 @@ test('AC-20260820-07-8 (also AC-20260822-01-10, SHALL CONTINUE TO): a dispatched
     'a refused fix-applied must create NO new manifest file — a manifest-4.jsonl appearing here means legs re-ran on a mark the driver was supposed to refuse: ' + JSON.stringify({ manifestsBefore, manifestsAfter }))
 })
 
-test('AC-20260820-07-8 (manifest-provable cap): hand-editing the sidecar\'s stored iteration count cannot reach ESCALATE — only manifest-<n>.jsonl files actually present on disk advance the cap', () => {
+test('AC-20260820-07-8 (manifest-provable cap) / AC-20260901-09-2: hand-editing the sidecar\'s stored iteration count cannot reach ESCALATE — only manifest-<n>.jsonl files actually present on disk advance the cap', () => {
   const host = makeHost()
   run(host.root, host.spec)
   const returnFile = returnFileWith('rvdrv-hand-edit', SURVIVOR_RETURN)
   run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile)
-  run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
+  const dispFile1 = oneFixReturnFile('rvdrv-hand-edit-disp', 's0')
+  run(host.root, host.spec, '--mark', 'dispositions', '--file', dispFile1, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
   assert.strictEqual(stateOf(host.root, host.spec), 'FIX')
   const fixR = run(host.root, host.spec, '--mark', 'fix-applied')
   assert.strictEqual(fixR.status, 0, 'setup: one real fix-applied cycle must succeed: ' + fixR.stdout + fixR.stderr)
@@ -706,7 +736,8 @@ test('AC-20260820-07-8 (manifest-provable cap): hand-editing the sidecar\'s stor
   // The real cap must still be reachable normally afterward — the fabricated counter consumed nothing real.
   const returnFile2 = returnFileWith('rvdrv-hand-edit-2', SURVIVOR_RETURN)
   run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile2)
-  run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
+  const dispFile2 = oneFixReturnFile('rvdrv-hand-edit-disp2', 's0')
+  run(host.root, host.spec, '--mark', 'dispositions', '--file', dispFile2, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
   const fixR2 = run(host.root, host.spec, '--mark', 'fix-applied')
   assert.strictEqual(fixR2.status, 0,
     'the hand-edited counter must not have consumed the real cap — the second genuine fix-applied (only manifest-1/2 on disk beforehand) must still succeed: ' + fixR2.stdout + fixR2.stderr)
@@ -1644,14 +1675,15 @@ test('replay-root-4: the REPLAY execution step inlines the repo root alongside t
 // through sidecar creation and stamps CLOSE's authoritative row with a real transcript-derived
 // model.
 //
-// specs/20260901/05-checkpoint-fail-closed.md D3/AC-20260901-05-5 (2026-09-01, brief 18a,
-// assertion added and tagged in place — never weakened): this fixture already parks the loop
-// run at CHECKPOINT on stamp "s1" and lifts it by rewriting the stamp to "s2" before dispositions
-// close — exactly the AC-20260901-05-5 shape (park on s1, stamp rewritten to s2, dispositions
-// close). The new assertion below pins that the appended CLOSE row also carries
-// checkpoint:{"outcome":"cleared"}; it fails against current code because verdict.js's row never
-// carries a checkpoint key at all yet.
-test('AC-20260901-02-4 (also AC-20260901-05-5, assertion added in place): a run created with --via loop and later driven to a CLEAN close with a stamp whose transcript ends in an assistant line with model claude-sonnet-5 records via:"loop" in review-state.json at creation and appends a CLEAN row carrying via:"loop", model:"claude-sonnet-5", checkpoint:{"outcome":"cleared"}; a run created without --via and without a stamp appends via:"direct", model:null', () => {
+// specs/20260901/09-disposer-gate.md D4/D9/AC-20260901-09-6 (2026-09-01, brief 18b, rewritten
+// in place — never left beside a new test): CHECKPOINT is retired, so this test no longer parks
+// on stamp "s1" or rewrites it to "s2" before dispositions can close — a --via loop run now
+// lands DISPOSITIONS directly after reviewer-returned, exactly like a --via direct run. The
+// close row's checkpoint key is asserted deep-equal to {"outcome":"empty"} instead of
+// {"outcome":"cleared"} (D6: a zero-survivor, zero-leg-finding run's disposer mark is recorded
+// empty:true, never a checkpoint-clear fact that no longer exists), for both the --via loop run
+// and the run created without --via.
+test('AC-20260901-02-4 (also AC-20260901-09-6, rewritten in place, D9): a run created with --via loop and later driven to a CLEAN close with a stamp whose transcript ends in an assistant line with model claude-sonnet-5 records via:"loop" in review-state.json at creation and appends a CLEAN row carrying via:"loop", model:"claude-sonnet-5", checkpoint:{"outcome":"empty"}; a run created without --via and without a stamp appends via:"direct", model:null, checkpoint:{"outcome":"empty"}', () => {
   const loopHost = makeHost()
   const rInit = run(loopHost.root, loopHost.spec, '--via', 'loop')
   assert.strictEqual(stateOf(loopHost.root, loopHost.spec), 'REVIEWER',
@@ -1669,20 +1701,11 @@ test('AC-20260901-02-4 (also AC-20260901-05-5, assertion added in place): a run 
 
   const returnFile = returnFileWith('rvdrv-provenance-clean', CLEAN_RETURN)
   run(loopHost.root, loopHost.spec, '--mark', 'reviewer-returned', '--file', returnFile)
-  // specs/20260901/03-unified-build-loop.md D2 (2026-09-01, brief 18, forced-but-unblocking
-  // departure logged in that spec's deviations record): a via:"loop" run whose stamp is
-  // unchanged at reviewer-returned time now parks at CHECKPOINT (AC-20260901-03-2), not
-  // DISPOSITIONS — this fixture's stamp (session_id "s1") was written before this mark and is
-  // still "s1" here, so it must land CHECKPOINT first. Rewriting the stamp to a new session id
-  // (the /clear signature, sibling 02 A4) is what admits DISPOSITIONS, exactly like a real
-  // build-session /clear would.
-  assert.strictEqual(stateOf(loopHost.root, loopHost.spec), 'CHECKPOINT',
-    'setup precondition: a via:"loop" run with its stamp unchanged since reviewer-returned must park at CHECKPOINT (D2) before this AC\'s dispositions-and-close path can proceed: ')
-  fs.writeFileSync(path.join(loopHost.root, '.claude/spec-session.json'), JSON.stringify({
-    session_id: 's2', transcript_path: transcript, cwd: loopHost.root, ts: new Date().toISOString()
-  }))
+  // specs/20260901/09-disposer-gate.md D4: a --via loop run now lands DISPOSITIONS directly
+  // after reviewer-returned — CHECKPOINT no longer exists as a reachable state, so there is no
+  // park to lift and no second stamp write needed before the dispositions-and-close path below.
   assert.strictEqual(stateOf(loopHost.root, loopHost.spec), 'DISPOSITIONS',
-    'setup precondition: a returned zero-survivor CLEAN return, once the checkpoint stamp has changed, must land DISPOSITIONS: ')
+    'setup precondition/AC-20260901-09-1: a --via loop run\'s reviewer-returned mark must land DISPOSITIONS directly, never CHECKPOINT, so this AC\'s dispositions-and-close path can proceed immediately: ')
 
   const ledger = path.join(loopHost.root, '.claude/spec-runs.jsonl')
   const before = fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean) : []
@@ -1695,8 +1718,11 @@ test('AC-20260901-02-4 (also AC-20260901-05-5, assertion added in place): a run 
   assert.strictEqual(row.via, 'loop', 'the appended CLEAN row must carry the via recorded at sidecar creation: ' + JSON.stringify(row))
   assert.strictEqual(row.model, 'claude-sonnet-5',
     'the appended CLEAN row must carry the model derived at row-write time from the stamped transcript\'s last assistant line: ' + JSON.stringify(row))
-  assert.deepStrictEqual(row.checkpoint, { outcome: 'cleared' },
-    'AC-20260901-05-5: a loop run that parked on stamp "s1" and was lifted by rewriting the stamp to "s2" before dispositions closed it must carry checkpoint:{"outcome":"cleared"} on its appended CLOSE row — the driver derives "cleared" from checkpointCleared && checkpoint.sessionId !== null, exactly this run\'s shape: ' + JSON.stringify(row))
+  const keys = Object.keys(row)
+  assert.strictEqual(keys[keys.indexOf('verdict') + 1], 'checkpoint',
+    'AC-20260901-09-6/D5: the checkpoint key must sit immediately after verdict on the close row: ' + JSON.stringify(row))
+  assert.deepStrictEqual(row.checkpoint, { outcome: 'empty' },
+    'AC-20260901-09-6: a zero-survivor, zero-leg-finding --via loop run must carry checkpoint:{"outcome":"empty"} on its close row — no disposer ran because there was nothing to disposition, and D6 must never claim "disposer" when the pools were empty: ' + JSON.stringify(row))
 
   const directHost = makeHost()
   toReviewer(directHost)
@@ -1711,4 +1737,6 @@ test('AC-20260901-02-4 (also AC-20260901-05-5, assertion added in place): a run 
     'a run created with no --via flag must default to via:"direct" on its appended CLOSE row: ' + JSON.stringify(directRow))
   assert.strictEqual(directRow.model, null,
     'a run with no .claude/spec-session.json stamp anywhere must carry model:null on its appended CLOSE row: ' + JSON.stringify(directRow))
+  assert.deepStrictEqual(directRow.checkpoint, { outcome: 'empty' },
+    'AC-20260901-09-6: a run created without --via must ALSO carry checkpoint:{"outcome":"empty"} on its close row — D6 threads the derived outcome onto every review verdict pass for both via values, not just loop: ' + JSON.stringify(directRow))
 })

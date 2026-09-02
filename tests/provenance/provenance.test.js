@@ -20,11 +20,20 @@ const { tmpdir, runBash, runNode, SPEC } = require('../helpers')
 // specs/20260901/05-checkpoint-fail-closed.md D3 (2026-09-01, brief 18a): verdict.js gains
 // --checkpoint <cleared|stamp-appeared|overridden|not-reached> and --checkpoint-reason <text>,
 // review-profile only, inserting a `checkpoint` key immediately after `verdict` (before
-// `escalated`) on the printed row. Written before either flag exists (TDD red, 2026-09-01) —
-// AC-20260901-05-6 and -05-7 below fail against current code because --checkpoint falls through
-// to the generic unknown-flag usage() refusal, and the row never carries the key at all.
-// AC-20260901-05-8 tags the pre-existing AC-20260901-02-6 byte-identity test in place (D3
-// requires that test to keep passing untouched — via/model's insertion point is unaffected).
+// `escalated`) on the printed row. AC-20260901-05-8 tags the pre-existing AC-20260901-02-6
+// byte-identity test in place (D3 requires that test to keep passing untouched — via/model's
+// insertion point is unaffected).
+//
+// specs/20260901/09-disposer-gate.md D5/D9 (2026-09-01, brief 18b): CHECKPOINT is retired and
+// --checkpoint's enum changes to <disposer|empty|not-reached> plus --checkpoint-overrides <N>
+// (only valid with --checkpoint disposer), now accepted with --via loop, --via direct, or --via
+// absent (the old enum's --via-loop-only restriction is gone). The old AC-20260901-05-6 test is
+// rewritten in place to AC-20260901-09-10 and the old AC-20260901-05-7 test to AC-20260901-09-11
+// — every old-enum value (cleared/stamp-appeared/overridden) and --checkpoint-reason are now
+// themselves refused. The AC-20260901-02-6 byte-identity test is tagged AC-20260901-09-12 in
+// place, untouched (D5 changes nothing about the flagless row). Written before verdict.js
+// implements D5 (TDD red, 2026-09-01) — AC-20260901-09-10/-11 fail against current code because
+// --checkpoint still only accepts the old enum and still refuses --via direct/--via absent.
 
 function readStamp(root) {
   return JSON.parse(fs.readFileSync(path.join(root, '.claude/spec-session.json'), 'utf8'))
@@ -278,7 +287,7 @@ test('AC-20260901-02-3: verdict.js --via loop --profile release exits 2 with no 
     'a refused --profile release + --via combination must print no ledger row: ' + r.stdout)
 })
 
-test('AC-20260901-02-6 (also AC-20260901-05-8, SHALL CONTINUE TO): verdict.js run without --via/--model, diffed against the same manifest/workflow WITH --via/--model minus ts and the via/model keys, is byte-identical — every pre-existing field keeps its value and position, and neither pass carries a checkpoint key since neither passes --checkpoint', () => {
+test('AC-20260901-02-6 (also AC-20260901-05-8 / AC-20260901-09-12, SHALL CONTINUE TO): verdict.js run without --via/--model, diffed against the same manifest/workflow WITH --via/--model minus ts and the via/model keys, is byte-identical — every pre-existing field keeps its value and position, and neither pass carries a checkpoint key since neither passes --checkpoint', () => {
   const { manifest, workflow } = manifestFixture()
   const retainDir = fs.realpathSync(tmpdir('verdict-retain-ac6'))
   const argsCommon = ['--manifest', manifest, '--workflow', workflow, '--ledger', '--spec', 'specs/x.md', '--tier', 'standard', '--run-id', 'rv_fixedfixed01', '--retain', retainDir]
@@ -300,57 +309,103 @@ test('AC-20260901-02-6 (also AC-20260901-05-8, SHALL CONTINUE TO): verdict.js ru
     JSON.stringify({ rowWithout, rowWith }))
 })
 
-// AC-20260901-05-6 / AC-20260901-05-7 --------------------------------------------------------
+// AC-20260901-09-10 / AC-20260901-09-11 (rewrite AC-20260901-05-6 / AC-20260901-05-7 in place,
+// D5/D9) ------------------------------------------------------------------------------------
 
-test('AC-20260901-05-6: verdict.js --via loop --checkpoint cleared on a review-profile ledger pass prints a row whose keys carry checkpoint immediately after verdict, deep-equal to {"outcome":"cleared"}; --checkpoint overridden --checkpoint-reason "jq missing" prints checkpoint deep-equal to {"outcome":"overridden","reason":"jq missing"}', () => {
+test('AC-20260901-09-10 (rewrites the former AC-20260901-05-6 test in place, D5): verdict.js --via loop --checkpoint disposer --checkpoint-overrides 2 on a review-profile ledger pass prints a row whose checkpoint key sits immediately after verdict, deep-equal to {"outcome":"disposer","overrides":2}; --checkpoint disposer alone deep-equals {"outcome":"disposer","overrides":0}; --checkpoint empty deep-equals {"outcome":"empty"}; --checkpoint not-reached deep-equals {"outcome":"not-reached"}; and the same --checkpoint disposer pass with --via direct and with --via absent exits 0 carrying the same key', () => {
   const { manifest, workflow } = manifestFixture()
-  const clearedRetain = fs.realpathSync(tmpdir('verdict-checkpoint-cleared'))
-  const rCleared = runNode('scripts/verdict.js', [
-    '--manifest', manifest, '--workflow', workflow, '--ledger', '--spec', 'specs/x.md', '--tier', 'standard',
-    '--retain', clearedRetain, '--via', 'loop', '--checkpoint', 'cleared'
-  ])
-  assert.strictEqual(rCleared.status, 0, 'a clean manifest+workflow with a valid --checkpoint value must still derive CLEAN and exit 0: ' + rCleared.stdout + rCleared.stderr)
-  const lineCleared = rCleared.stdout.trim().split('\n')[1]
-  assert.ok(lineCleared, 'a --ledger pass with --checkpoint cleared must print a second stdout line carrying the row: ' + rCleared.stdout)
-  const rowCleared = JSON.parse(lineCleared)
-  const keysCleared = Object.keys(rowCleared)
-  const verdictIdx = keysCleared.indexOf('verdict')
-  assert.notStrictEqual(verdictIdx, -1, 'the row must carry a verdict key at all: ' + JSON.stringify(rowCleared))
-  assert.strictEqual(keysCleared[verdictIdx + 1], 'checkpoint',
-    'D3: the checkpoint key must be inserted immediately after verdict (before escalated) — a different position would break the fixed key-order sibling AC-20260901-02-3 pins on the first seven keys and would leave escalated ahead of the field that explains why a run reached it: ' + JSON.stringify(rowCleared))
-  assert.deepStrictEqual(rowCleared.checkpoint, { outcome: 'cleared' },
-    'a --checkpoint cleared pass must print row.checkpoint deep-equal to {"outcome":"cleared"} — no reason key belongs on a non-overridden outcome: ' + JSON.stringify(rowCleared))
 
-  const overriddenRetain = fs.realpathSync(tmpdir('verdict-checkpoint-overridden'))
-  const rOverridden = runNode('scripts/verdict.js', [
+  const disposerRetain = fs.realpathSync(tmpdir('verdict-checkpoint-disposer'))
+  const rDisposer = runNode('scripts/verdict.js', [
     '--manifest', manifest, '--workflow', workflow, '--ledger', '--spec', 'specs/x.md', '--tier', 'standard',
-    '--retain', overriddenRetain, '--via', 'loop', '--checkpoint', 'overridden', '--checkpoint-reason', 'jq missing'
+    '--retain', disposerRetain, '--via', 'loop', '--checkpoint', 'disposer', '--checkpoint-overrides', '2'
   ])
-  assert.strictEqual(rOverridden.status, 0, 'a clean manifest+workflow with --checkpoint overridden and a non-blank reason must exit 0: ' + rOverridden.stdout + rOverridden.stderr)
-  const rowOverridden = JSON.parse(rOverridden.stdout.trim().split('\n')[1])
-  assert.deepStrictEqual(rowOverridden.checkpoint, { outcome: 'overridden', reason: 'jq missing' },
-    'a --checkpoint overridden pass must print row.checkpoint deep-equal to {"outcome":"overridden","reason":"jq missing"} — the reason is what makes an overridden row auditable on the ledger: ' + JSON.stringify(rowOverridden))
+  assert.strictEqual(rDisposer.status, 0, 'a clean manifest+workflow with a valid --checkpoint disposer value must still derive CLEAN and exit 0: ' + rDisposer.stdout + rDisposer.stderr)
+  const lineDisposer = rDisposer.stdout.trim().split('\n')[1]
+  assert.ok(lineDisposer, 'a --ledger pass with --checkpoint disposer must print a second stdout line carrying the row: ' + rDisposer.stdout)
+  const rowDisposer = JSON.parse(lineDisposer)
+  const keysDisposer = Object.keys(rowDisposer)
+  const verdictIdx = keysDisposer.indexOf('verdict')
+  assert.notStrictEqual(verdictIdx, -1, 'the row must carry a verdict key at all: ' + JSON.stringify(rowDisposer))
+  assert.strictEqual(keysDisposer[verdictIdx + 1], 'checkpoint',
+    'D5: the checkpoint key must be inserted immediately after verdict (before escalated) — a different position would break the fixed key-order sibling AC-20260901-02-3 pins on the first seven keys and would leave escalated ahead of the field that explains why a run reached it: ' + JSON.stringify(rowDisposer))
+  assert.deepStrictEqual(rowDisposer.checkpoint, { outcome: 'disposer', overrides: 2 },
+    'a --checkpoint disposer --checkpoint-overrides 2 pass must print row.checkpoint deep-equal to {"outcome":"disposer","overrides":2}: ' + JSON.stringify(rowDisposer))
+
+  const disposerNoOverridesRetain = fs.realpathSync(tmpdir('verdict-checkpoint-disposer-default'))
+  const rDisposerDefault = runNode('scripts/verdict.js', [
+    '--manifest', manifest, '--workflow', workflow, '--ledger', '--spec', 'specs/x.md', '--tier', 'standard',
+    '--retain', disposerNoOverridesRetain, '--via', 'loop', '--checkpoint', 'disposer'
+  ])
+  assert.strictEqual(rDisposerDefault.status, 0, '--checkpoint disposer with no --checkpoint-overrides must still exit 0: ' + rDisposerDefault.stdout + rDisposerDefault.stderr)
+  assert.deepStrictEqual(JSON.parse(rDisposerDefault.stdout.trim().split('\n')[1]).checkpoint, { outcome: 'disposer', overrides: 0 },
+    '--checkpoint disposer with no --checkpoint-overrides must default overrides to 0, never an absent key or a non-numeric placeholder')
+
+  const emptyRetain = fs.realpathSync(tmpdir('verdict-checkpoint-empty'))
+  const rEmpty = runNode('scripts/verdict.js', [
+    '--manifest', manifest, '--workflow', workflow, '--ledger', '--spec', 'specs/x.md', '--tier', 'standard',
+    '--retain', emptyRetain, '--via', 'loop', '--checkpoint', 'empty'
+  ])
+  assert.strictEqual(rEmpty.status, 0, '--checkpoint empty must exit 0: ' + rEmpty.stdout + rEmpty.stderr)
+  assert.deepStrictEqual(JSON.parse(rEmpty.stdout.trim().split('\n')[1]).checkpoint, { outcome: 'empty' },
+    '--checkpoint empty must print row.checkpoint deep-equal to {"outcome":"empty"} — no overrides key belongs on a run with nothing dispositioned')
+
+  const notReachedRetain = fs.realpathSync(tmpdir('verdict-checkpoint-not-reached'))
+  const rNotReached = runNode('scripts/verdict.js', [
+    '--manifest', manifest, '--workflow', workflow, '--ledger', '--spec', 'specs/x.md', '--tier', 'standard',
+    '--retain', notReachedRetain, '--via', 'loop', '--checkpoint', 'not-reached'
+  ])
+  assert.strictEqual(rNotReached.status, 0, '--checkpoint not-reached must exit 0: ' + rNotReached.stdout + rNotReached.stderr)
+  assert.deepStrictEqual(JSON.parse(rNotReached.stdout.trim().split('\n')[1]).checkpoint, { outcome: 'not-reached' },
+    '--checkpoint not-reached must print row.checkpoint deep-equal to {"outcome":"not-reached"}')
+
+  // D5: the old enum's --via-loop-only restriction is gone — --checkpoint disposer must now be
+  // accepted with --via direct and with --via absent alike, carrying the same key.
+  const directRetain = fs.realpathSync(tmpdir('verdict-checkpoint-disposer-direct'))
+  const rDirect = runNode('scripts/verdict.js', [
+    '--manifest', manifest, '--workflow', workflow, '--ledger', '--spec', 'specs/x.md', '--tier', 'standard',
+    '--retain', directRetain, '--via', 'direct', '--checkpoint', 'disposer', '--checkpoint-overrides', '1'
+  ])
+  assert.strictEqual(rDirect.status, 0,
+    'AC-20260901-09-10/D5: --checkpoint disposer must be accepted with --via direct — the disposer runs on both entries, so a direct-entry row must be able to carry the same outcome: ' + rDirect.stdout + rDirect.stderr)
+  assert.deepStrictEqual(JSON.parse(rDirect.stdout.trim().split('\n')[1]).checkpoint, { outcome: 'disposer', overrides: 1 },
+    'a --via direct pass with --checkpoint disposer must carry the same checkpoint shape as a --via loop pass')
+
+  const noViaRetain = fs.realpathSync(tmpdir('verdict-checkpoint-disposer-novia'))
+  const rNoVia = runNode('scripts/verdict.js', [
+    '--manifest', manifest, '--workflow', workflow, '--ledger', '--spec', 'specs/x.md', '--tier', 'standard',
+    '--retain', noViaRetain, '--checkpoint', 'disposer', '--checkpoint-overrides', '0'
+  ])
+  assert.strictEqual(rNoVia.status, 0,
+    'AC-20260901-09-10/D5: --checkpoint disposer must be accepted with --via absent — every caller, not just an explicit loop/direct one, can now carry the outcome: ' + rNoVia.stdout + rNoVia.stderr)
+  assert.deepStrictEqual(JSON.parse(rNoVia.stdout.trim().split('\n')[1]).checkpoint, { outcome: 'disposer', overrides: 0 },
+    'a --via-absent pass with --checkpoint disposer must carry the same checkpoint shape as an explicit --via pass')
 })
 
-test('AC-20260901-05-7: verdict.js refuses (exit 2, stderr naming --checkpoint, no ledger row printed) an out-of-enum --checkpoint value, --checkpoint overridden with no --checkpoint-reason, --checkpoint-reason without --checkpoint overridden, --checkpoint with --profile release, and --checkpoint with --via direct or --via absent', () => {
+test('AC-20260901-09-11 (rewrites the former AC-20260901-05-7 test in place, D5): verdict.js refuses (exit 2, stderr naming --checkpoint, no ledger row printed) --checkpoint cleared, --checkpoint stamp-appeared, --checkpoint overridden, an out-of-enum --checkpoint value, --checkpoint-reason with any --checkpoint (retired), --checkpoint-overrides without --checkpoint disposer, --checkpoint disposer with a negative or non-integer --checkpoint-overrides, and --checkpoint empty with --profile release', () => {
   const { manifest, workflow } = manifestFixture()
-  const common = ['--manifest', manifest, '--workflow', workflow, '--ledger', '--spec', 'specs/x.md', '--tier', 'standard']
+  const retainDir = fs.realpathSync(tmpdir('verdict-checkpoint-refusals-retain'))
+  const common = ['--manifest', manifest, '--workflow', workflow, '--ledger', '--spec', 'specs/x.md', '--tier', 'standard', '--retain', retainDir]
 
   const cases = [
-    { name: 'out-of-enum value', args: [...common, '--via', 'loop', '--checkpoint', 'skipped'] },
-    { name: 'overridden with no reason', args: [...common, '--via', 'loop', '--checkpoint', 'overridden'] },
-    { name: 'reason without overridden', args: [...common, '--via', 'loop', '--checkpoint', 'cleared', '--checkpoint-reason', 'x'] },
-    { name: '--profile release', args: [...common, '--profile', 'release', '--checkpoint', 'cleared'] },
-    { name: '--via direct', args: [...common, '--via', 'direct', '--checkpoint', 'cleared'] },
-    { name: 'no --via at all', args: [...common, '--checkpoint', 'cleared'] },
+    { name: 'old enum value cleared', args: [...common, '--via', 'loop', '--checkpoint', 'cleared'] },
+    { name: 'old enum value stamp-appeared', args: [...common, '--via', 'loop', '--checkpoint', 'stamp-appeared'] },
+    { name: 'old enum value overridden', args: [...common, '--via', 'loop', '--checkpoint', 'overridden'] },
+    { name: 'out-of-enum value', args: [...common, '--via', 'loop', '--checkpoint', 'bogus'] },
+    { name: '--checkpoint-reason (retired)', args: [...common, '--via', 'loop', '--checkpoint', 'disposer', '--checkpoint-reason', 'x'] },
+    { name: '--checkpoint-overrides without --checkpoint disposer', args: [...common, '--via', 'loop', '--checkpoint', 'empty', '--checkpoint-overrides', '1'] },
+    { name: '--checkpoint-overrides without --checkpoint at all', args: [...common, '--via', 'loop', '--checkpoint-overrides', '1'] },
+    { name: 'negative --checkpoint-overrides', args: [...common, '--via', 'loop', '--checkpoint', 'disposer', '--checkpoint-overrides', '-1'] },
+    { name: 'non-integer --checkpoint-overrides', args: [...common, '--via', 'loop', '--checkpoint', 'disposer', '--checkpoint-overrides', '1.5'] },
+    { name: '--checkpoint empty with --profile release', args: [...common, '--profile', 'release', '--checkpoint', 'empty'] },
   ]
   for (const c of cases) {
     const r = runNode('scripts/verdict.js', c.args)
     assert.strictEqual(r.status, 2,
-      `AC-20260901-05-7 (${c.name}): must exit 2 — an admitted refusal case here would let a malformed or contextually-invalid checkpoint outcome land on the ledger: ` + r.stdout + r.stderr)
+      `AC-20260901-09-11 (${c.name}): must exit 2 — an admitted refusal case here would let a retired or malformed checkpoint outcome land on the ledger: ` + r.stdout + r.stderr)
     assert.match(r.stderr, /--checkpoint/,
-      `AC-20260901-05-7 (${c.name}): the refusal must name --checkpoint specifically, not fall through to the generic unknown-flag usage line: ` + r.stderr)
+      `AC-20260901-09-11 (${c.name}): the refusal must name --checkpoint specifically, not fall through to the generic unknown-flag usage line: ` + r.stderr)
     assert.strictEqual(r.stdout.trim().split('\n').filter(Boolean).length, 0,
-      `AC-20260901-05-7 (${c.name}): a refused --checkpoint combination must print no verdict word and no ledger row: ` + r.stdout)
+      `AC-20260901-09-11 (${c.name}): a refused --checkpoint combination must print no verdict word and no ledger row: ` + r.stdout)
   }
 })

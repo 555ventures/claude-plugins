@@ -5,12 +5,12 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT, read, tmpdir } = require('../helpers')
 
-// specs/20260815/01-recurrence-carriers.md (2026-08-15, D5/D7): `readConfigStrict(root)` is the
+// specs/20260815/01-recurrence-carriers.md (D5/D7): `readConfigStrict(root)` is the
 // fail-loud sibling of the swallow-to-{} `readConfig`, needed by strict callers that structurally
 // cannot degrade to {}. AC-20260815-01-10 pins its throw contract and its verbatim (no coercion)
 // return; AC-20260815-01-11 pins `readConfig`'s untouched swallow-to-{} regression.
 //
-// specs/20260820/08-config-name-ban.md (2026-08-20, D1): SUPERSEDES the locked ruling
+// specs/20260820/08-config-name-ban.md (D1): SUPERSEDES the locked ruling
 // `d10-predicate-v1` — its four-clause read-detection predicate and its display-join exemption
 // regex are DELETED, not amended: "does this line READ the config?" is undecidable from one line
 // of text. The replacement bans NAMING the config instead — a line is an offender when it

@@ -5,9 +5,9 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 
-// specs/20260820/08-config-name-ban.md (2026-08-20, D7): lib/host-config.js gains three exports
+// specs/20260820/08-config-name-ban.md (D7): lib/host-config.js gains three exports
 // so the config-name ban has a sanctioned route for every legitimate reason a script named the
-// file before this spec — a presence probe and a remedy string. `configPath(root)` is the
+// file — a presence probe and a remedy string. `configPath(root)` is the
 // existing private `configPathFor`, renamed at the export boundary. `configExists(root)` is a
 // pure presence probe (fs.existsSync — never opens, reads, or parses). `CONFIG_RELPATH` is the
 // literal `.claude/spec.config.json`, for user-facing remedy text only. AC-20260820-08-5 pins
@@ -20,7 +20,7 @@ const { tmpdir, runNode } = require('../helpers')
 // specs/20260824/05-design-doctrine-cut.md retires fidelity-check.js (the source-grep fidelity
 // gate) along with its own test file, tests/fidelity-check.test.js — the sibling AC-20260820-08-9
 // test that executed fidelity-check.js's remedy string against a synthetic host is removed here
-// for the same reason: its subject no longer exists. review-legs.js is now the sole executed
+// for the same reason: its subject does not exist. review-legs.js is the sole executed
 // leg pinning this AC in this file.
 
 test('AC-20260820-08-5: configPath(root) returns the joined path <root>/.claude/spec.config.json', () => {

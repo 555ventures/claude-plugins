@@ -5,13 +5,12 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT, tmpdir, runNode } = require('../helpers')
 
-// specs/20260824/04-render-rules.md (2026-08-24, D1-D3, Contracts, A1): render-rules.js is the
-// script that executes a design-rules.json manifest's `renderCheck` entries over one or more
+// specs/20260824/04-render-rules.md D1-D3 (Contracts, A1): render-rules.js is the script that
+// executes a design-rules.json manifest's `renderCheck` entries over one or more
 // render-inventory documents against a resolved `tokens.css` palette — the reader that replaces
-// the Sonnet rule-checklist walk. spec/scripts/render-rules.js does not exist yet (this is the
-// File Plan's CREATE row); every test here execs the real entry via runNode against synthetic
-// fixtures in a tmpdir (never a stand-in reimplementing the four `renderCheck` kinds), so the
-// whole file is RED until the script lands. Contrast arithmetic is A1's pinned pair
+// the Sonnet rule-checklist walk. Every test here execs the real entry via runNode against
+// synthetic fixtures in a tmpdir (never a stand-in reimplementing the four `renderCheck`
+// kinds). Contrast arithmetic is A1's pinned pair
 // (rgb(119,119,119) vs white = 4.48:1, rgb(118,118,118) vs white = 4.54:1). AC-20260824-04-1 …
 // AC-20260824-04-7.
 
@@ -192,15 +191,14 @@ test('AC-20260824-04-7: tokens.css resolves --text: var(--ink) with no "unresolv
     'D3: the advisory unresolvable line must never affect the exit — with the one entry passing palette (matching --ink/--text\'s resolved rgb(17, 17, 17)) and only an advisory finding present, the run must still exit 0: ' + r.stderr)
 })
 
-// specs/20260831/02-viewport-adaptation-rules.md (2026-08-31, D1-D3, D5, D6, D8): render-rules.js
-// gains two renderCheck kinds no manifest could express before — `no-overflow` (a union of the
-// page-level scrollWidth/clientWidth comparison and a per-entry box-edge comparison, D2) and
-// `line-length` (a viewport-gated estimated-character-width check, D6) — closing the measured
-// gap where no `renderCheck` kind related any measurement to the declared viewport (prax, spec
-// 20260823/11: a phone-only mock ratified clean, its non-adaptation later misattributed to
-// components). `no-overflow` findings sit at severity "error" (blocking, D1's manifest example);
-// `line-length` ships severity "warn" in the template (D6, JJ ruling this session: signal at
-// zero blocking risk). AC-20260831-02-2 … AC-20260831-02-6, AC-20260831-02-8.
+// specs/20260831/02-viewport-adaptation-rules.md D1-D3/D5/D6/D8: render-rules.js gains two
+// renderCheck kinds no manifest could express before — `no-overflow` (a union of the page-level
+// scrollWidth/clientWidth comparison and a per-entry box-edge comparison, D2) and `line-length`
+// (a viewport-gated estimated-character-width check, D6) — closing the gap where no
+// `renderCheck` kind related any measurement to the declared viewport. `no-overflow` findings
+// sit at severity "error" (blocking, D1's manifest example); `line-length` ships severity "warn"
+// in the template (D6: signal at zero blocking risk). AC-20260831-02-2 … AC-20260831-02-6,
+// AC-20260831-02-8.
 
 test('AC-20260831-02-2: a no-overflow rule over an inventory with page: { scrollWidth: 900, clientWidth: 390 } exits 1 and prints "rule no-mock-overflow no-overflow page scrolls horizontally: scrollWidth 900 > 390"', () => {
   const r = runRules({

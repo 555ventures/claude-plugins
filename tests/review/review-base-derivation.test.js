@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// 2026-09-01, spec 20260901/01 review (rv_3dfefa4d3d9f): a review judged an EMPTY range and every
+// specs/20260901/01 review (rv_3dfefa4d3d9f): a review judged an EMPTY range and every
 // diff-scoped leg reported zero and green — at-risk files:0/testsExecuted:0, reconcile listing all
 // 27 planned files "unrealized", the reviewer handed nothing to review. Two independent defects
 // combined:

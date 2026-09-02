@@ -5,12 +5,9 @@ const fs = require('fs')
 const path = require('path')
 const { ROOT, read, tmpdir, runNode } = require('../helpers')
 
-// 2026-08-10 stale-reference sweep (spec 20260810/09-stale-reference-sweep): six broken §
-// citations accumulated silently in one audit cycle because nothing scanned the corpus for
-// them. This file pins the new deterministic checker (spec/scripts/citations-check.js, D9) —
-// its scan grammar (two-line window, two-word lookback, loud SKIP accounting), its CLI
-// contract, and its wiring into spec-paths + doctor check 20. The script does not exist yet
-// on current code, so every test below fails until it is built (TDD red phase).
+// specs/20260810/09-stale-reference-sweep.md D9: citations-check.js's scan grammar
+// (two-line window, two-word lookback, SKIP accounting), its CLI contract, and its
+// spec-paths + doctor check 15 wiring.
 
 function writeFixture(root, files) {
   for (const [rel, content] of Object.entries(files)) {

@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 
-// specs/20260901/08-corpus-derivation-and-kill-match.md D6 (2026-09-01, brief 19): fleet-reader.js
+// specs/20260901/08-corpus-derivation-and-kill-match.md D6 (brief 19): fleet-reader.js
 // gains two escapes keys derived from the joined effective-class count (sibling spec 07's
 // byClass) crossed against the plugin's OWN replay corpus (spec/scripts/lib/replay-corpus.js's
 // corpusPath()/parseCorpus(), D1) — `corpusGaps` names every non-unclassed class at or past

@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20260821/01-red-check.md (2026-08-21): build's red-check — classify every tests-layer
+// specs/20260821/01-red-check.md: build's red-check — classify every tests-layer
 // file's expected pre-image colour, execute it, explain every mismatch — was hand-run from
 // prose every build (build.md Phase 0 step 2 + Phase 1), and its recurring failure class (an
 // AC that structurally cannot go red before implementation) lived only in a thrice-amended
@@ -18,8 +18,8 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // AC-20260821-01-1 additionally pins lib/spec-sections.js's parseAcBullets `preGreen` field and
 // PRE_GREEN_REASONS export directly (a plain require()able library, unlike a workflow script).
 //
-// specs/20260823/03-silent-drop-hardening.md D1/D2 (2026-08-23, the 2026-08-21..23 upwell
-// silent-drop incident): a carried AC's `[pre-green: <reason>]` tag, when it ends the bullet
+// specs/20260823/03-silent-drop-hardening.md D1/D2 (the silent-drop incident): a carried AC's
+// `[pre-green: <reason>]` tag, when it ends the bullet
 // backticked, is refused as a declaration by lib/spec-sections.js's bare-only trailing rule
 // (escape rv_640c582f4902) — today that refusal misreports as a plain `unsanctioned-green`
 // finding with no hint that a refused pre-green tag is the actual cause. AC-20260823-03-3 pins
@@ -28,8 +28,8 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // one whose refused tag would have sanctioned the finding). Confirmed RED at HEAD by executed
 // run: today's red-check.js reports `class: 'unsanctioned-green'` for this exact fixture.
 
-// D11 amendment (build-time, JJ-approved 2026-08-23, supersedes D8's rationale and D2's predicate
-// formula): AC-20260823-03-3 above pins the TRUE-end backticked shape; live evidence
+// D11 amendment (supersedes D8's rationale and D2's predicate formula): AC-20260823-03-3
+// above pins the TRUE-end backticked shape; live evidence
 // (specs/20260823/01 AC-20260823-01-18/-20, review row rv_6825fa48c98d) showed a genuine
 // declaration written just before the bullet's final `→ tests/…` reference is ALSO silently
 // dropped — neither the bare-only rule nor D2's null-test formula saw it, so it neither parsed nor
@@ -187,8 +187,8 @@ test('AC-20260821-01-4: a fixture spec whose SHALL-CONTINUE-TO file passes AND w
     `no file diverges from its expected colour, so findings must be empty — got ${JSON.stringify(out.findings)}`)
 })
 
-// 2026-08-22 escape (unanchored-marker-match, specs/20260821/01-red-check.md review passed
-// CLEAN with this present): isSanctioned() tested `/SHALL CONTINUE TO/` unanchored over the
+// Escape (unanchored-marker-match, specs/20260821/01-red-check.md review passed CLEAN with
+// this present): isSanctioned() tested `/SHALL CONTINUE TO/` unanchored over the
 // bullet's raw text, so an AC that merely QUOTES the marker inside backticks while discussing
 // it — exactly how this spec's own AC-20260821-01-4 bullet reads ("a `SHALL CONTINUE TO`
 // pin-carrier file passing AND an unsanctioned file failing") — was wrongly sanctioned: a
@@ -460,13 +460,13 @@ test('AC-20260821-01-14: a tests-row file carrying zero AC-IDs is reported uncla
     `D3: a zero-AC file must never be executed at all — the probe writes its marker the instant node --test loads the file, and the marker's presence would prove it was run despite carrying no AC-ID: ${fs.existsSync(markerPath) ? fs.readFileSync(markerPath, 'utf8') : '(absent, as required)'}`)
 })
 
-// specs/20260821/03-cross-spec-skip-mapping.md D7 (2026-08-22 amendment): the carried-AC
+// specs/20260821/03-cross-spec-skip-mapping.md D7 (amendment): the carried-AC
 // classifier at line ~233 (`wellFormed.filter(b => content.includes(b.id))`) is the SAME
 // bare-substring class as ac-matrix.js's coverage grep (tests/ac-matrix-coverage-holes.test.js's
 // Hole 3) — a shorter red-expected AC-ID phantom-carries into a file that only ever cites a
 // LONGER AC-ID sharing its prefix, forcing a false red expectation onto a file that genuinely
 // carries only a sanctioned pin. The false `unsanctioned-green` this produces is exactly what
-// stopped specs/20260822/02's build on 2026-08-22 (this spec's own D7 provenance note). The fix
+// stopped specs/20260822/02's build (this spec's own D7 provenance note). The fix
 // is the same exported `acIdOccurs(text, id)` full-token check, replacing the bare `.includes` at
 // this one call site.
 test('AC-20260821-03-12: a tests-layer file whose only ACTUAL citation is a longer AC-ID, sharing a shorter red-expected AC-ID\'s prefix, is classified by the full-token citation ALONE — carriedAcs names only the longer id, expected green, zero findings, exit 0 — red-first, since the pre-image bare-substring classifier phantom-carries the shorter red-expected id and reports a false unsanctioned-green, exit 1', () => {

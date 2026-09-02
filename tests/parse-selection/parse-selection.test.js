@@ -2,7 +2,7 @@
 const { test } = require('node:test')
 const assert = require('node:assert')
 
-// specs/20260823/09-replay-baseline-attribution.md AC-20260823-09-8 (2026-08-24 review): the
+// specs/20260823/09-replay-baseline-attribution.md AC-20260823-09-8: the
 // review-driver.test.js fixture for this AC (`makeReplayHost` + `driveToClose` + `commitClose`)
 // invokes the REAL spec/scripts/replay.js, whose --select line unconditionally appends
 // `baselineRed=`/`baselineLegs=` as VALUES — `unknown`, never an omitted key — so that fixture

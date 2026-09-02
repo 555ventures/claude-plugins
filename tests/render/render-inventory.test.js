@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const { read } = require('../helpers')
 
-// specs/20260824/01-render-gate.md (2026-08-24, D2/D3/D11, Assumptions A1/A2): render-inventory
+// specs/20260824/01-render-gate.md (D2/D3/D11, Assumptions A1/A2): render-inventory
 // .browser.js is a JS expression evaluating to `(opts) => inventory` — the in-page measuring
 // script the host's capture command evaluates inside a real page. It cannot be require()d (zero
 // Node APIs, ambient `document`/`getComputedStyle` globals). This test evaluates the file's own
@@ -191,7 +191,7 @@ test('AC-20260824-01-13: the shipped in-page walker uppercases painted text via 
     'D11: only the matching data-state-btn control is clicked — the "other" control must stay untouched')
 })
 
-// specs/20260824/04-render-rules.md (2026-08-24, D4): render-inventory.browser.js gains
+// specs/20260824/04-render-rules.md (D4): render-inventory.browser.js gains
 // effectiveBackground (the nearest ancestor-or-self computed background-color whose alpha is
 // non-zero, else the document's) and fontWeight per entry — the render-rules.js contrast check
 // (AC-20260824-04-4) has no denominator to compare against a fully transparent own background.
@@ -227,11 +227,11 @@ test('AC-20260824-04-8: a text element whose own backgroundColor is rgba(0, 0, 0
     'D4: the entry must also record its own computed fontWeight — render-rules.js\'s contrast check reads fontWeight>=700 (with fontSize>=18.66px) as an alternate minLarge trigger, and a missing field means that branch can never fire: got ' + JSON.stringify(entry))
 })
 
-// specs/20260831/02-viewport-adaptation-rules.md (2026-08-31, D4): render-inventory.browser.js
+// specs/20260831/02-viewport-adaptation-rules.md (D4): render-inventory.browser.js
 // gains a top-level `page: { scrollWidth, clientWidth }` block, read guarded from
 // `document.scrollingElement || document.documentElement`, null when unavailable —
 // render-rules.js's new no-overflow check (specs/20260831/02) has no geometry to compare
-// without it (prax, spec 20260823/11: a phone-only mock ratified clean with no measurement
+// without it (spec 20260823/11: a phone-only mock ratified clean with no measurement
 // tying it to the viewport). Extends this file's existing stub-DOM surface with
 // `scrollingElement` rather than reaching for any API outside it — per the spec's own
 // Rationale, "the stub-DOM test's surface is the contract".

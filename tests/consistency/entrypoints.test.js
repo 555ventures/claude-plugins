@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT, tmpdir } = require('../helpers')
 
-// specs/20260820/04-entrypoint-conformance.md (2026-08-20): the "authored but never
+// specs/20260820/04-entrypoint-conformance.md: the "authored but never
 // activated" class has now recurred three times (env-preflight, absent from review, was the
 // third — 03-review-observation-truth.md closed that instance). D5 locks the checker logic
 // INTO this test file as pure functions over an injectable root — no separate script file —
@@ -19,7 +19,7 @@ const { ROOT, tmpdir } = require('../helpers')
 // (shared, shared-design, shared-genesis, replay-corpus, template, templates, contract,
 // workflows) resolve to doctrine files, templates, or directories, and D4 read literally
 // demanded an unsatisfiable manifest entry for each. (specs/20260823/01-release-legs.md D10,
-// 2026-08-23, retired the ninth — `feedback-template` — along with its dead /intake consumer;
+// retired the ninth — `feedback-template` — along with its dead /intake consumer;
 // this is a comment-accuracy update only, the shape check below never enumerated keys by name.)
 //
 // D9 (orchestrator ruling, same day — A2 FALSIFIED): the forward check's script-to-script
@@ -36,7 +36,7 @@ const { ROOT, tmpdir } = require('../helpers')
 // exact-delimited quoted literal, or the tail of a quoted path) on what remains — see
 // stripCommentLines/matchesScriptInvocation below for the grammar and its false-RED bias.
 //
-// D10 (orchestrator ruling, adversarial sweep at build close 2026-08-20 — A1's hook grammar
+// D10 (orchestrator ruling, adversarial sweep at build close — A1's hook grammar
 // FALSIFIED, then REDIRECTED to an oracle change): the reverse-hooks regex was
 // `CLAUDE_PLUGIN_ROOT\}"?\/scripts\/...` — `}` then an OPTIONAL BARE `"` then `/`. The live
 // spec/hooks/hooks.json's raw bytes are `\"${CLAUDE_PLUGIN_ROOT}\"/scripts/<basename>` (a JSON
@@ -57,14 +57,14 @@ const { ROOT, tmpdir } = require('../helpers')
 // quoting-agnostic — escaped-double-quote, single-quoted, and unquoted forms all collapse to
 // the identical plain string and are handled identically, with no per-style branch. A parse
 // failure is fail-closed (a violation naming the file and the JSON error), never a silent skip
-// and never a fallback to regex. The hooks FORWARD branch (previously
+// and never a fallback to regex. The hooks FORWARD branch (in its raw-bytes form,
 // `epSrc.includes('/scripts/' + basename)`) was checked by the same executed sweep and did NOT
-// share the original regex defect — the substring `/scripts/<basename>` was present verbatim in
+// share the reverse-direction's regex defect — the substring `/scripts/<basename>` was present verbatim in
 // the raw file regardless of what preceded the `/`, so it already matched all four live
 // basenames — but it is now on the same parse-based oracle as the reverse direction for the same
 // durability reason, rather than left as the one remaining raw-bytes match in the file.
-// (Renamed parseHookScriptBasenames -> parseHookScriptPaths at the 2026-08-20b hole2 fix: the
-// function now returns full repo-relative paths across BOTH /scripts/ and /workflows/, not bare
+// (Renamed parseHookScriptBasenames -> parseHookScriptPaths at the hole2 fix: the
+// function returns full repo-relative paths across BOTH /scripts/ and /workflows/, not bare
 // basenames confined to /scripts/ — see the D10/hole2 note near its definition below.)
 //
 // D11 (orchestrator ruling, same sweep): `scanExecutables` was non-recursive and `.js`/`.sh`-
@@ -76,7 +76,7 @@ const { ROOT, tmpdir } = require('../helpers')
 // one of checkInventoryForward/checkInventoryReverse/checkForwardInvocation/
 // checkReverseInvocation return `[]`. scanExecutables is now a recursive walk under
 // spec/scripts/ (still excluding spec/scripts/lib/) and spec/workflows/, admitting every file
-// regardless of extension (see the isExecutableName fix note below dated 2026-08-20b — an
+// regardless of extension (see the isExecutableName fix note below — an
 // extension allowlist was itself found to be a fifth, unlisted evasion after this D11 fix
 // shipped); isExecutableDomainPath is kept in exact shape-agreement (same isExecutableName
 // test, same lib/ exclusion, same two root prefixes) — a divergence between the two is
@@ -88,12 +88,12 @@ const { ROOT, tmpdir } = require('../helpers')
 // Recursion adds zero files against the live repo (spec/scripts/ holds only flat .js/.sh plus
 // lib/; spec/workflows/ only flat .js) — verified by listing both trees before this edit.
 //
-// KNOWN GAPS (accepted at build close 2026-08-20, D12 — adversarial sweep, same day as
+// KNOWN GAPS (accepted at build close, D12 — adversarial sweep, same day as
 // D9-D11): four residual false-green holes deliberately left open. None lets an executable
 // exist with zero callers undetected — the class this guard exists to close — so each was
 // accepted rather than fixed. Read this before adding a fifth epicycle to the checker.
 //
-// CORRECTION (2026-08-20b, adversarial review with executed repros): D12's premise above —
+// CORRECTION (adversarial review with executed repros): D12's premise above —
 // "none lets an executable exist with zero callers undetected" — was itself FALSIFIED. Two
 // holes, neither one of the four listed below, did exactly that or its D4 mirror-image, and
 // both are now fixed (not accepted) as of this correction:
@@ -113,8 +113,8 @@ const { ROOT, tmpdir } = require('../helpers')
 // correction and remain accepted.
 //
 // 1. A command .md entry point satisfies the forward check on ANY prose mention of
-//    `spec-paths <key>`, including a sentence stating the command NO LONGER runs it. Not
-//    closable statically: command files are prose, and "run X" and "no longer run X" are
+//    `spec-paths <key>`, including a sentence that RETRACTS the claim. Not
+//    closable statically: command files are prose, and an assertion and its retraction are
 //    both mentions. The reverse direction still catches the inverse case (an undeclared call
 //    site).
 // 2. `"dynamic": true` (D6) suppresses the invocation check entirely and nothing constrains
@@ -123,7 +123,7 @@ const { ROOT, tmpdir } = require('../helpers')
 // 3. The reverse direction covers spec-paths keys and hooks.json only — there is NO reverse
 //    leg for script-to-script invocation. A genuinely new undeclared script-to-script call
 //    raises nothing, so that edge is never protected by the forward check and can later be
-//    severed silently. This is the original recurrence shape, one hop removed.
+//    severed silently. This is the same recurrence shape, one hop removed.
 // 4. D9's grammar matches a quoted basename anywhere on a non-comment line, including inside
 //    a prose string literal. Constructible but not currently live: all 12 script-to-script
 //    edges match on a genuine invocation line.
@@ -133,7 +133,7 @@ const { ROOT, tmpdir } = require('../helpers')
 // dozen, the correct fix is to stop declaring edges and assert REACHABILITY instead — every
 // executable reachable from a known entry surface — which closes gaps 3 and 4 as a side
 // effect and removes the two-direction bookkeeping entirely. Trade that makes it wrong to do
-// today: reachability no longer reddens on a MOVED call site, and this spec's Rationale
+// today: reachability does not redden on a MOVED call site, and this spec's Rationale
 // deliberately wanted renames to trip the guard. Holds either way: this repo's zero-
 // dependency rule means there is no JS parser available, so script-to-script detection still
 // bottoms out in text matching even under reachability.
@@ -142,7 +142,7 @@ const { ROOT, tmpdir } = require('../helpers')
 // Checker logic (D5): pure functions over an injectable repo root.
 // ---------------------------------------------------------------------------
 
-// D11-hole1 (fix 2026-08-20b, adversarial review executed repro): admits EVERY file — no
+// D11-hole1 (adversarial review executed repro): admits EVERY file — no
 // extension allowlist at all. The prior allowlist ('' | .js/.mjs/.cjs/.sh) was itself the hole:
 // creating spec/scripts/orphan-helper.py (nothing calls it) left the scoped 33/33 suite AND the
 // full npm test green, because '.py' fails the allowlist and the file is simply never scanned —
@@ -150,9 +150,9 @@ const { ROOT, tmpdir } = require('../helpers')
 // the four [known gaps] lets an executable exist with zero callers undetected": this was a
 // FIFTH, unlisted hole that does exactly that). Same repro for spec/scripts/orphan-helper.bash.
 // Domain narrowing (spec/scripts/ minus lib/, spec/workflows/) is already done by the caller's
-// directory walk, so this function no longer needs to look at the name at all — an extension
+// directory walk, so this function never needs to look at the name at all — an extension
 // check here can only ever be a new evasion surface, never a legitimate filter, given both live
-// trees are flat and hold only executables plus lib/ (verified by listing on disk 2026-08-20).
+// trees are flat and hold only executables plus lib/ (verified by listing on disk).
 function isExecutableName(_name) {
   return true
 }
@@ -201,7 +201,7 @@ function readManifest(root) {
 // `feedback-template`, comment-accuracy only), and D4 read literally would demand an
 // unsatisfiable manifest entry for each. Using the on-disk listing instead of the glob shape
 // would also open a hole the shape test closes for free: a spec-paths key whose target matches
-// the glob shape but was deleted from disk (a stale case-table row) still counts as in-domain
+// the glob shape yet is absent from disk (a stale case-table row) still counts as in-domain
 // here, so a corpus call site referencing it still surfaces as a reverse-invocation violation
 // naming the missing script — it is not silently swallowed just because scanExecutables can no
 // longer see the file. (checkInventoryReverse below is the separate, unrelated check for a
@@ -219,7 +219,7 @@ function isExecutableDomainPath(p) {
 }
 
 // A3: spec/bin/spec-paths's case table, shape `  <key>) echo "$ROOT/<relpath>" ;;` with
-// variable inner whitespace (verified 2026-08-20) — key -> repo-relative script path.
+// variable inner whitespace (verified) — key -> repo-relative script path.
 function specPathsKeyMap(root) {
   const src = fs.readFileSync(path.join(root, 'spec/bin/spec-paths'), 'utf8')
   const re = /^\s*([a-z0-9-]+)\)\s+echo "\$ROOT\/([^"]+)"\s*;;/gm
@@ -266,7 +266,7 @@ function collectHookCommandStrings(node, out) {
   return out
 }
 
-// D10/hole2 (fix 2026-08-20b, adversarial review executed repro): once a command string is in
+// D10/hole2 (adversarial review executed repro): once a command string is in
 // hand, JSON's own escaping is already resolved — `\"` is plain `"` — so a single generic
 // extraction is quoting-agnostic: escaped-double-quote, single-quoted, and unquoted
 // `${CLAUDE_PLUGIN_ROOT}` forms all collapse to the identical plain string here. Now covers BOTH
@@ -286,7 +286,7 @@ function scriptPathsFromCommand(cmd) {
 
 // D10's oracle: JSON.parse spec/hooks/hooks.json (never a regex over its raw bytes) and return
 // the set of repo-relative script paths its command strings genuinely invoke, across both
-// /scripts/ and /workflows/ (hole2 fix, 2026-08-20b). A missing hooks.json is simply "no hooks
+// /scripts/ and /workflows/ (hole2 fix). A missing hooks.json is simply "no hooks
 // corpus to check" (`ok: true`, empty set) — unaffected fixtures without a hooks.json continue to
 // see no hooks-direction findings. A PRESENT but invalid-JSON hooks.json is fail-closed
 // (`ok: false`): the caller must surface this as a violation naming the file and the parse error,
@@ -362,7 +362,7 @@ function checkInventoryReverse(root) {
   return dangling
 }
 
-// D9 (retires A2's bare-basename grammar — A2 FALSIFIED at build close 2026-08-20, measured):
+// D9 (retires A2's bare-basename grammar — A2 FALSIFIED at build close, measured):
 // a script-to-script caller's basename must appear, on a NON-comment line, as an
 // exact-delimited quoted literal ('<b>', "<b>") or as the tail of a quoted path (/<b>', /<b>").
 // Executed proof that bare-substring matching is a false-GREEN generator: severing the real
@@ -424,7 +424,7 @@ function checkForwardInvocation(root) {
       } else if (path.basename(ep) === 'hooks.json') {
         // D10/hole2: parse-based oracle, not a raw-bytes match — see parseHookScriptPaths.
         // Matched by full repo-relative path (not basename) so /scripts/ and /workflows/
-        // entries sharing a basename can never collide (fix 2026-08-20b).
+        // entries sharing a basename can never collide (fix).
         const hookResult = parseHookScriptPaths(root)
         if (!hookResult.ok) {
           violations.push(script + ' -> ' + ep + ' (' + hookResult.error + ' — fail-closed, D10)')
@@ -463,7 +463,7 @@ function checkReverseInvocation(root) {
       }
     }
   }
-  // D10/hole2 (fix 2026-08-20b): parse-based oracle, not a raw-bytes regex — see
+  // D10/hole2 (fix): parse-based oracle, not a raw-bytes regex — see
   // parseHookScriptPaths. A present but invalid-JSON hooks.json fails closed (a violation
   // naming the file), never a silent skip. Matched by full repo-relative path across BOTH
   // /scripts/ and /workflows/ (the prior /scripts/-only extraction made a hook invoking a
@@ -554,8 +554,8 @@ test('AC-20260820-04-1 / D11: every spec-paths key resolving under spec/scripts/
 
 // Exhaustive live-file pin: every hooks.json addition updates the expected set here in place
 // (specs/20260823/08 added session-queue.sh — the recorded out-of-File-Plan collision class;
-// removed 2026-08-30 with the SessionStart queue hook, so the set went back to four; specs/
-// 20260901/02-run-provenance.md D1/D7 (AC-20260901-02-8, 2026-09-01) adds a third UserPromptSubmit
+// removed with the SessionStart queue hook, so the set went back to four; specs/
+// 20260901/02-run-provenance.md D1/D7 (AC-20260901-02-8) adds a third UserPromptSubmit
 // arm, spec-session-stamp.sh, so the set is five again).
 test('AC-20260901-02-8 (was AC-20260820-04-5 / D10 / hole2): parseHookScriptPaths extracts exactly the five live hooks.json script paths (repo-relative, /scripts/-rooted today), proving the parse-based oracle actually fires against the real file', () => {
   const result = parseHookScriptPaths(ROOT)
@@ -665,7 +665,7 @@ test('AC-20260820-04-3 (empty entryPoints): an executable script whose manifest 
 })
 
 // ---------------------------------------------------------------------------
-// AC-20260820-04-4: declared entry point that no longer invokes the script (fixture).
+// AC-20260820-04-4: a declared entry point whose invocation is absent (fixture).
 // ---------------------------------------------------------------------------
 
 test('AC-20260820-04-4: a declared entry point whose spec-paths invocation literal was removed fails naming both the entry-point file and the script', () => {
@@ -834,7 +834,7 @@ test('AC-20260820-04-5 / D8: a spec-paths key resolving to a non-executable (a d
 })
 
 // ---------------------------------------------------------------------------
-// D10: hooks.json direction fixtures (both were previously unexercised by any fixture here).
+// D10: hooks.json direction fixtures (both were unexercised by any fixture here).
 // ---------------------------------------------------------------------------
 
 test('AC-20260820-04-5 / D10: hooks.json written in the repo\'s live escaped-quote style invoking an undeclared script raises a reverse-invocation violation', () => {
@@ -958,7 +958,7 @@ test('AC-20260820-04-4 / D10: a manifest declaring hooks.json as an entry point 
 })
 
 // ---------------------------------------------------------------------------
-// hole2 (adversarial review, executed repro 2026-08-20b): the reverse-hooks direction failed
+// hole2 (adversarial review, executed repro): the reverse-hooks direction failed
 // OPEN in two compounding ways — the extraction regex only ever matched /scripts/, and the
 // reverse loop silently `continue`d past a hook-invoked path with no matching manifest entry.
 // ---------------------------------------------------------------------------
@@ -1073,9 +1073,9 @@ test('AC-20260820-04-3 / D11: an extensionless executable and a .mjs executable 
 })
 
 // ---------------------------------------------------------------------------
-// hole1 (adversarial review, executed repro 2026-08-20b): the extension allowlist itself was
+// hole1 (adversarial review, executed repro): the extension allowlist itself was
 // the evasion. A non-allowlisted extension (.py) is a strictly stronger repro than D11's
-// extensionless/.mjs cases above — it proves isExecutableName no longer filters by extension AT
+// extensionless/.mjs cases above — it proves isExecutableName does not filter by extension AT
 // ALL, not merely that it grew a slightly wider allowlist.
 // ---------------------------------------------------------------------------
 

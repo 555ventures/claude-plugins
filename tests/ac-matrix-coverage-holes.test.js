@@ -5,58 +5,17 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('./helpers')
 
-// JJ-20260815-01 / JJ-20260815-02 — two independent holes in spec/scripts/ac-matrix.js's
-// coverage accounting, both surfaced by the self-hosted review of
-// specs/20260814/04-lock-signal-window.md (run wf_e9e438d1-c94, 2026-08-15).
-//
-// Hole 3 (specs/20260821/03-cross-spec-skip-mapping.md D7, 2026-08-22 amendment): the coverage
-// grep at step 6 (`readTestFile(f).includes(b.id)`) is a bare substring test, so a well-formed
-// AC whose ID is a PREFIX of another declared AC's ID (`AC-...-1` inside `AC-...-12`) is credited
-// covered by a test that only ever cites the LONGER id — a phantom hit that suppresses
-// `uncovered-ac` and silently launders a genuinely untested requirement into "covered". Executed
-// red repro at pre-image 090b45a (2026-08-22): a fixture identical except for AC ordinals 1 vs 12
-// reported uncovered 0 / exit 0; the sibling 1,2 fixture correctly reported uncovered 1 / exit 1.
-// The fix is `lib/spec-sections.js`'s exported `acIdOccurs(text, id)` — a full-token occurrence
-// check (preceding/following char absent or non-alphanumeric) — replacing the bare `.includes` at
-// this one call site. AC-20260821-03-11 pins the red-first defect; AC-20260821-03-13 pins the
-// boundary the fix must NOT break (a citation directly after a quote, inside backticks, or as a
-// file's final token all still count — anchoring rejects only alphanumeric neighbours).
-//
-// Hole 1 (malformed-ac fails OPEN on the denominator). parseBullets() matches
-// `^- \*\*(token)\*\*` and requires the token to satisfy AC_ID_RE; a bullet failing either
-// is dropped from `wellFormed`, hence from `acById` AND from the coverage loop. The script
-// does emit a loud `malformed-ac` hard finding, so the NOTATION is caught — but the
-// observed string it writes to the durable manifest row still reads `uncovered=0`, because
-// the unparseable AC left the denominator entirely. The review that found this had its
-// single most load-bearing pin (a signal-handler ordering AC) invisible to the sweep while
-// the row recorded full coverage. Waive the notation finding once and the coverage claim is
-// silently false forever after. Correct behavior: unparseable = unknown = uncovered. Fail
-// closed on the denominator, exactly as the skipped-test reconciliation already does.
-//
-// Hole 2 ([env:] lookup is scoped to the wrong file). The skipped-test reconciliation
-// resolves a skipped test's AC through `acById` — built ONLY from the spec under review —
-// so an `[env: VAR]` declaration living in the spec that OWNS that AC is unreachable. The
-// scoped gate glob, meanwhile, runs every test file in the directory. Result: a correctly
-// declared env-gated suite reports as an unsanctioned skip — a HARD finding — on every
-// review of that area, in perpetuity, with waive as the only remedy. That is the
-// cry-wolf path that ends in a real skipped test being waved through (cf. UPWELL-20260716-02,
-// the founding incident of this very leg, and CROSS-20260813-03, whose 6.61.0 fix added
-// `[env:]` sanctioning but never widened where the declaration is read from — this is that
-// fix's residual hole, not a regression of it).
-//
-// The AC-ID grammar itself carries the lookup: AC-YYYYMMDD-NN[a-z]?-k encodes its owning
-// spec as specs/YYYYMMDD/NN*-*.md. Fail closed when that spec is absent, unreadable, or
-// carries no [env:] — unknown is never sanctioned.
-//
+// specs/20260814/04-lock-signal-window.md; specs/20260821/03-cross-spec-skip-mapping.md D7
+// (AC-20260821-03-11, AC-20260821-03-13); specs/20260820/06-typed-evidence-manifest.md D1/D2.
+// Pins three coverage-accounting holes in spec/scripts/ac-matrix.js: (1) a malformed AC bullet
+// must count toward `uncovered`, never drop out of the denominator as `uncovered=0`; (2) an
+// `[env: VAR]` declaration is read from the spec that OWNS the AC (via the AC-ID's own
+// AC-YYYYMMDD-NN[a-z]?-k -> specs/YYYYMMDD/NN*-*.md grammar), not only the spec under review,
+// and fails closed when that spec is absent, unreadable, or carries no [env:]; (3) AC-ID
+// coverage matching is a full-token occurrence check (`lib/spec-sections.js`'s `acIdOccurs`),
+// so a shorter AC-ID that is a bare prefix of a longer one is never phantom-credited as covered,
+// while a citation after a quote, inside backticks, or as a file's final token still counts.
 // Executed against synthetic host trees, never against script internals.
-//
-// specs/20260820/06-typed-evidence-manifest.md D1/D2 (2026-08-20, brief 16's second move): every
-// manifest row's `observed` field becomes a typed JSON object — the gate/skip-reconcile rows
-// below retire their packed "skips=1 todos=0"/"sanctioned=1" strings for typed objects. The two
-// existing regex-over-string assertions this file's incident predates (`/uncovered=0/.test(...)`,
-// `/sanctioned=1/.test(...)`) are retyped to field reads in place — a regex applied to a
-// stringified object would silently always fail to match, turning a real red pin into a
-// vacuously-true one, exactly the class this migration exists to make impossible.
 
 function specMd(acLines, filePlanRows) {
   return '# Test Spec\n\n## Acceptance Criteria\n\n' + acLines.join('\n') + '\n\n' +

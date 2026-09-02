@@ -5,15 +5,15 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT, SPEC, read, tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20260825/05-workflow-scripts-in-review-scope.md (2026-08-25): this repo's own
+// specs/20260825/05-workflow-scripts-in-review-scope.md: this repo's own
 // `.claude/spec.config.json` carried a `pipelineOwnedPaths` entry for `spec/workflows/wf-*.js`
-// that outlived its generator (`build-workflows.js`, deleted `61e2e5a` 2026-08-17) — it hid an
+// that outlived its generator (`build-workflows.js`, deleted `61e2e5a`) — it hid an
 // unplanned edit to a frozen workflow script from `scope-reconcile.js` and pruned the file from
-// `collision-closure.js`'s literals leg, all the way through a CLEAN review (7.37.1's
+// `collision-closure.js`'s literals leg, all the way through a CLEAN review (the
 // enumerated-file test was the only gate that ever saw the stale `wf-panel` mention it left
 // behind). D1 deletes the key outright. Per D2, these three tests read the repo's REAL tracked
 // config (never a hand-written synthetic one) through the real entrypoints, so a reintroduced
-// entry goes red the same way the original one should have. RED at authoring time (A4): the key
+// entry goes red immediately — the exact gap this incident left. RED at authoring time (A4): the key
 // is still present on disk.
 
 test('AC-20260825-05-1: pipelineOwnedGlobs(ROOT) against this repo\'s real root returns exactly BASELINE_GLOBS, matching neither wf-research.js nor wf-enforce.js', () => {

@@ -5,45 +5,21 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 
-// specs/20260823/03-silent-drop-hardening.md (2026-08-23, the 2026-08-21..23 upwell silent-drop
-// incident): escape rv_640c582f4902 hardened lib/spec-sections.js's trailing-tag grammar to
-// require a BARE trailing tag (a backticked one is refused as a self-tagging illustration), but
-// the refusal itself is silent — a host that genuinely backticks a real trailing declaration
-// (upwell saw 17 of them) gets misreported as a plain uncovered-ac/unsanctioned-skip finding with
-// no hint that a trailing-tag refusal is the actual cause. D1/D2 make the refusal LOUD exactly
-// where it changes a verdict: parseAcBullets exposes `trailingRejected` (D2, AC-7), and
-// ac-matrix.js replaces the generic finding with a new `rejected-trailing-tag` hard finding
-// naming the AC-ID, the refused tag text, and both readings' remedies — but ONLY when the
-// refusal is causally relevant (D1: loud-when-it-bites, never unconditional, AC-4 pins the
-// otherwise-clean case that must stay silent). This suite executes ac-matrix.js against synthetic
-// host trees; the script does not implement D1/D2 yet, so AC-1/-2/-7 are RED at HEAD — AC-4 pins
-// already-true behavior (a covered AC's illustrative trailing tag was always silent) and is GREEN.
-//
-// D9/AC-20260823-03-13 (2026-08-23, orchestrator-executed repro against the scripts worker's D1/D2
-// build): ac-matrix.js derives its two manifest leg exits (`ac-matrix`, `skip-reconcile`) from two
-// class sets, and `rejected-trailing-tag` — emitted from BOTH the coverage loop and the skip loop —
-// was added to BOTH sets, so an emission from either loop reddens both legs. Repro: a spec with one
-// uncovered AC carrying a refused trailing `[oracle:]` and ZERO skip lines wrote
-// `{"leg":"skip-reconcile","exit":1,"observed":{"skipped":0,"sanctioned":0}}` — a leg reporting red
-// having observed nothing, a silent misreport into the evidence manifest verdict.js reads. The two
-// tests below assert on the raw `--manifest` JSONL rows (where the defect lives), each proving one
-// direction of the symmetric contamination, plus that `--json`'s findings array and each finding's
-// field set stay byte-identical (emission-site origin is internal bookkeeping only).
-
-// D11 amendment (build-time, JJ-approved 2026-08-23, supersedes D8's rationale and D2's predicate
-// formula): D2's null-test formula only caught a refusal at the bullet's TRUE end — a genuine
-// declaration written just before the bullet's final `→ tests/…` File-Plan reference (the shape
-// specs/20260823/01 AC-20260823-01-18/-20 actually shipped) sat at NEITHER recognized position, so
-// it neither parsed nor set `trailingRejected`: the same silent-drop class this spec exists to
-// close, discovered live in that spec's own review row (rv_6825fa48c98d, `preGreen:0` with both
-// tags present). D11 widens the tolerant run to tolerate exactly one trailing `→ <tail>` reference
-// suffix and generalizes the predicate to a said-vs-parsed comparison (`wide !== trailingRun(raw)`),
-// adding `trailingRejectedCause` (`'backticked-at-end' | 'not-at-end' | null`) so the remedy never
-// tells a not-at-end host to "remove the backticks" (false there — a bare tag before the arrow
-// still would not parse). AC-14/-16 pin the widened predicate at the parse layer (parseAcBullets);
-// AC-15 pins the forked remedy text at the detail layer (rejectedTrailingTagDetail, gaining `cause`
-// as its third argument). All three are RED at HEAD: lib/spec-sections.js still exports the D2-era
-// 3-arg rejectedTrailingTagDetail and the unwidened tolerant/predicate.
+// specs/20260823/03-silent-drop-hardening.md D1/D2/D9/D11 (escapes rv_640c582f4902,
+// rv_6825fa48c98d): lib/spec-sections.js's trailing-tag grammar requires a BARE trailing tag —
+// a backticked one is refused as a self-tagging illustration — and the refusal is LOUD exactly
+// where it changes a verdict. parseAcBullets exposes `trailingRejected` (AC-7) and
+// `trailingRejectedCause` (`'backticked-at-end' | 'not-at-end' | null`, D11); ac-matrix.js
+// replaces the generic finding with `rejected-trailing-tag`, naming the AC-ID, the refused tag
+// text, and the cause-forked remedy (never telling a not-at-end host to "remove the backticks",
+// since a bare tag placed before the arrow still would not parse) — but ONLY when the refusal is
+// causally relevant (AC-4 pins the otherwise-clean case that stays silent). D11 also widens the
+// tolerant trailing run to tolerate exactly one trailing `→ <tail>` File-Plan reference suffix.
+// ac-matrix.js derives its `ac-matrix` and `skip-reconcile` manifest leg exits from the finding
+// OBJECT emitted at each loop's own site (AC-13), never from class-set membership shared across
+// loops — `rejected-trailing-tag` is emitted from both the coverage loop and the skip loop, so a
+// shared class set would redden both legs from a single emission. Executed against synthetic
+// host trees.
 
 const { parseAcBullets, rejectedTrailingTagDetail } = require('../../spec/scripts/lib/spec-sections')
 
@@ -98,7 +74,7 @@ test('AC-20260823-03-1: WHEN ac-matrix evaluates an AC with no executed coverage
     ['- **AC-20260823-30-1**: WHEN x THE SYSTEM SHALL y `[oracle: gate]`'],
     ['| tests/foo.test.js | CREATE | tests | zero AC-ID hits, bullet ends in a backticked oracle tag |']))
   // A green manifest row for the named leg proves the refused tag does not launder into oracle
-  // coverage either — the same fail-open class rv_640c582f4902 originally closed.
+  // coverage either — guarding against the fail-open class rv_640c582f4902.
   const manifest = writeManifest(dir, [{ leg: 'gate', exit: 0, observed: 'skips=0 todos=0' }])
   const res = run(spec, dir, manifest, ['--json'])
   assert.strictEqual(res.status, 1,

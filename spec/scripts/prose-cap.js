@@ -2,10 +2,10 @@
 'use strict'
 // prose-cap.js — cap lint for one markdown section's entry-bullet count.
 //
-// specs/20260823/06-prose-debt-pruning.md (2026-08-23): the host rules' § Gotchas section
+// specs/20260823/06-prose-debt-pruning.md: the host rules' § Gotchas section
 // accreted 23 entries in 23 days with nothing pruning them, including two citing machinery
-// (`suite-baseline.js`, `.claude/suite-baseline.json`) deleted at v7.0.0 and unnoticed for six
-// days — proof that nothing reads an append-only section once it grows past a skim. This
+// (`suite-baseline.js`, `.claude/suite-baseline.json`) that were removed and went unnoticed for
+// many days — proof that nothing reads an append-only section once it grows past a skim. This
 // script converts "should we prune?" into arithmetic: count entry bullets in one named
 // markdown section, compare to a cap, exit non-zero over. It deliberately does NOT judge
 // which entry to evict, or apply any staleness/age/citation-liveness heuristic — staleness and
@@ -17,18 +17,18 @@
 // continuation lines never count (`^- ` requires column 0). Section = from the first `## `
 // heading containing <heading substring> to the next `## ` heading or EOF.
 //
-// 2026-08-23 fail-open fix: the original entry shape  ^- `?\[  required the bullet to OPEN
+// The entry shape  ^- `?\[  once required the bullet to OPEN
 // with a bracket tag — a position no doctrine ever mandated (entries "carry" `[host]`/`[plugin]`,
-// positionless). Measured against a real host (Upwell's .claude/rules/spec-pipeline.md,
-// tag-at-end entries): 138 entries, 0 matched — the cap had never fired there, while this
-// repo's own tag-first file kept the live-file test green. Broadened same-day (core
+// positionless). Measured against a real host's rules file with
+// tag-at-end entries: 138 entries, 0 matched — the cap had never fired there, while this
+// repo's own tag-first file kept the live-file test green. Broadened (core
 // § Incident Policy) to any top-level bullet — the shape the review driver and build.md's
 // ledger count already use: overcounting fires the cap early, where a human judges at fold
-// time; undercounting was the fail-open.
-// 2026-08-25 ratchet mode (--baseline N): the cap postdated the debt on every host that
-// adopted it — Upwell held 138 entries and Prax 169 against a cap of 15, so the first close
-// after adoption met an unmeetable "evict 150 entries before this commit" duty and closed with
-// the cap recorded as unmet by founder ruling. A duty no session performs is a fail-open rule
+// time; undercounting was the failure mode this closes.
+// Ratchet mode (--baseline N): the cap postdated the debt on every host that
+// adopted it — real hosts held well over a hundred entries against a cap of 15, so the first
+// close after adoption met an unmeetable "evict most of them before this commit" duty and closed
+// with the cap recorded as unmet by explicit ruling. A duty no session performs is a fail-open rule
 // (core § Incident Policy admission bar: portability). With --baseline N (the count observed
 // when the review's verdict ran), an over-cap section passes iff count < N — every close must
 // net-shrink the section by at least one entry, including after the deviations fold — so the

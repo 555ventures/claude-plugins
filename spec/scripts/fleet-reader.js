@@ -5,7 +5,7 @@
 // aggregates, replay debt, CLEAN-contradicted-by-escape, a schema-drift census, and
 // escapes-per-CLEAN by via (loop vs. direct vs. unknown).
 //
-// Why: brief 17 (2026-08-20) found pipeline questions were being answered from whichever repo
+// Why: pipeline questions were being answered from whichever repo
 // happened to be open on this machine — ~14% of the fleet's ~1,100 evidence rows at the time
 // (11 checkouts under ~Projects; this repo alone held 176 of 1,077 rows). A stored repo list
 // rots the moment a checkout moves or a new one clones, so this script re-derives the fleet on
@@ -20,7 +20,7 @@
 // value to zero or drops a parseable row silently (D11) — every such row renders verbatim in
 // its query AND increments a named drift-census reason bucket.
 //
-// D6 (specs/20260901/08-corpus-derivation-and-kill-match.md, 2026-09-01, brief 19): the escapes
+// specs/20260901/08-corpus-derivation-and-kill-match.md D6: the escapes
 // query gains corpusGaps (classes at or past CORPUS_BAR fleet recurrences with no replay-corpus
 // entry) and registry (every classified class, with its inCorpus flag) — both derived fresh each
 // run from lib/replay-corpus.js's parser against the plugin's own shipped corpus, never stored.
@@ -36,10 +36,6 @@ const path = require('path')
 const os = require('os')
 const { configExists } = require('./lib/host-config')
 const { validateEscapeRow, validateAmendmentRow, joinAmendments, escapeKey } = require('./lib/escape-row')
-// D6 (specs/20260901/08-corpus-derivation-and-kill-match.md, 2026-09-01, brief 19): corpusGaps
-// and registry cross the joined effective-class count (query 3) against the plugin's OWN replay
-// corpus — corpusPath()/parseCorpus() are lib/replay-corpus.js's one parser (D1), read fresh on
-// every run (this script never stores state, D12 above).
 const { CORPUS_BAR, corpusPath, parseCorpus } = require('./lib/replay-corpus')
 
 const USAGE = 'Usage: node fleet-reader.js [--repos-root <dir>] [--json]'
@@ -517,12 +513,10 @@ const cleanContradicted = computeCleanContradicted(reposData)
 const cleanByVia = computeCleanByVia(reposData)
 const driftCensus = computeDriftCensus(reposData)
 
-// fs.writeSync(1, …), looped to absorb a partial write, rather than process.stdout.write()
-// followed by process.exit(): stdout.write is async when stdout is a pipe, and process.exit
-// cuts the internal buffer before it drains — a large fleet's JSON silently truncates at 64KB
-// while the process still reports exit 0 (spec-pipeline.md [host] gotcha, reproduced here on a
-// 20-repo synthetic fleet). Falling off the end of the script with nothing else keeping the
-// event loop alive exits 0 on its own, so neither branch below calls process.exit(0).
+// The 64 KiB process.exit stdout truncation this synchronous writer avoids is explained in full
+// at spec/scripts/lib/driver-io.js's writeOut.
+// Local to this script: falling off the end with nothing else keeping the event loop alive exits
+// 0 on its own, so neither branch below calls process.exit(0).
 function writeAll(fd, buf) {
   let written = 0
   while (written < buf.length) written += fs.writeSync(fd, buf, written)

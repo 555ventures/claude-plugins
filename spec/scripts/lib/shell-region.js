@@ -3,8 +3,8 @@
 // `check` shell family (D4) and `shell sync`/`shell adopt` subcommands (D5/D6).
 //
 // WHY: specs/20260901/04-shell-composed-mocks.md D1-D6. Chrome drifts because nothing shares it
-// and nothing checks it: every mock used to hand-copy its nav/header markup, so a sidebar edit in
-// one ratified mock never reached the others and nothing caught the divergence. This module makes
+// and nothing checks it: each mock hand-copying its nav/header markup means a sidebar edit in
+// one ratified mock never reaches the others and nothing catches the divergence. This module makes
 // a page mock's chrome region a DERIVED value (expectedRegion, D3's byte-equality splice) instead
 // of authored prose, and gives `check` a diagnosis (diagnoseMock) and a canon-file rule set
 // (checkCanon, D1) built on the same tag walker. It lives under `lib/` deliberately (D12) — the

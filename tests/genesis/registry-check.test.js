@@ -7,13 +7,12 @@ const http = require('node:http')
 const { spawn } = require('node:child_process')
 const { SPEC, tmpdir, runNode, runBash } = require('../helpers')
 
-// specs/20260825/03-genesis-currency-executed.md (2026-08-25): the Haiku "still current?" pass in
+// specs/20260825/03-genesis-currency-executed.md: the Haiku "still current?" pass in
 // wf-research.js was an opinion, never told to pin to release pages, in a year when blog roundups
 // assert Bun 2.0/Deno 3.0/Storybook 11 — none of which exist (spec Rationale, executed A1/A3).
 // spec/scripts/registry-check.js replaces it: one GET per option package against the registry's own
 // per-version JSON endpoint (npm, PyPI, crates.io) or endoflife.date's cycle list, dropping options
-// that 404 and stamping survivors. None of AC-1..AC-6 can pass yet — spec/scripts/registry-check.js
-// does not exist (TDD red, 2026-08-26).
+// that 404 and stamping survivors.
 //
 // Route choice (deviations record, this spec): the reachable-registry cases run the script through
 // a local async `spawn` wrapper, not helpers.js's `runNode` (spawnSync) — spawnSync blocks the

@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT, read } = require('../helpers')
 
-// specs/20260820/06-typed-evidence-manifest.md (D1/D3, 2026-08-20, brief 16's second move): the
+// specs/20260820/06-typed-evidence-manifest.md (D1/D3, brief 16's second move): the
 // evidence-manifest row's `observed` field becomes a typed JSON object everywhere, and
 // verdict.js's packed-string parser (parseCounts/deriveProduction, plus the regex arms inside
 // countLegFinding and deriveTestsSkipped) is DELETED, not hardened — the Rationale states this
@@ -14,7 +14,7 @@ const { ROOT, read } = require('../helpers')
 // opacity pin ("the reader source contains zero occurrences of the token 'observed'") and
 // extended to the deriver the parser is deleted FROM rather than the reader the parser must
 // never leak INTO. Every one of the nine banned literal stems below is a live regex fragment in
-// verdict.js's pre-image source (grep-verified 2026-08-20) — this test is TDD-red until D3 lands.
+// verdict.js's pre-image source (grep-verified) — this test is TDD-red until D3 lands.
 
 const SCRIPT_PATH = path.join(ROOT, 'spec/scripts/verdict.js')
 

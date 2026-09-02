@@ -2,9 +2,9 @@
 'use strict'
 // spec-queue.js <subcommand> [args] — the sole writer of the per-repo session queue
 // (<git-common-dir>/spec-queue.json). Why: specs/20260823/08-derived-session-queue.md —
-// JJ's intended work order across roadmap briefs, plus free-text work items and their
-// done-when predicates, was being reconstructed by hand every session (the 2026-08-18-
-// style incident this spec exists to end). spec-status.js reads this file read-only, as
+// the session's intended work order across roadmap briefs, plus free-text work items and
+// their done-when predicates, was being reconstructed by hand every session (the recurring
+// incident this spec exists to end). spec-status.js reads this file read-only, as
 // an input overlay to its `--next` derivation (D2) — it never writes it, and this script
 // never re-derives `--next`'s own action/blockers shape; for a `brief` item it delegates
 // the paste line entirely to `spec-status.js --next` (the one frozen next-pointer
@@ -106,7 +106,7 @@ function loadQueue() {
 }
 
 // Written atomically (temp file + rename), adapted from spec/scripts/verdict.js's
-// writeRetainedArtifact — 2026-08-23 /spec:review of this spec found a CONTRACT
+// writeRetainedArtifact — /spec:review of this spec found a CONTRACT
 // CONTRADICTION, not an observed corruption in this code: the spec's Behavior section
 // promises a lost insert self-heals ("reappears on the next invocation") but nowhere
 // tolerates a torn file, and loadQueue() exits 2 on one — bricking every spec-queue

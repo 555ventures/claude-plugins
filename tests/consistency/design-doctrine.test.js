@@ -6,16 +6,12 @@ const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { SPEC, read } = require('../helpers')
 
-// specs/20260824/05-design-doctrine-cut.md (2026-08-24): design.md carried the full v6 shared
-// invariants verbatim (frontmatter said so) long after the render gate (specs 20260824/01-04)
-// replaced the source-grep fidelity gate it documented. D1/D2 rewrite the doctrine to five
-// sections (contracts a script enforces or a worker applies only) capped at 160 lines; D5
-// deletes dc-extract.js and fidelity-check.js, the scripts the old "## Design Binding Pipeline"
-// section existed to document. These tests pin the rewritten shape (AC-1), the size cap and
+// specs/20260824/05-design-doctrine-cut.md D1/D2/D5: spec/doctrine/design.md holds five
+// sections (contracts a script enforces or a worker applies only) capped at 160 lines;
+// dc-extract.js and fidelity-check.js are deleted, the scripts the old "## Design Binding
+// Pipeline" section documented. These tests pin the rewritten shape (AC-1), the size cap and
 // literal ban that is the reopen condition for every retired seat/artifact (AC-2), and the
-// spec-paths refusal + on-disk deletion of both retired scripts (AC-4). None can pass yet —
-// design.md has not been rewritten and dc-extract.js/fidelity-check.js still exist (TDD red,
-// 2026-08-24).
+// spec-paths refusal plus on-disk deletion of both retired scripts (AC-4).
 
 test('AC-20260824-05-1: spec/doctrine/design.md contains exactly the five D1 headings, in that order, and no other top-level heading', () => {
   const src = read('spec/doctrine/design.md')

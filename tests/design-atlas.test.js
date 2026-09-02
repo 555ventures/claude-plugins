@@ -179,10 +179,9 @@ test('build: generated output is byte-stable across runs (no timestamps, sorted 
   assert.strictEqual(a, b)
 })
 
-// specs/20260824/03-mock-states-hygiene.md — 2026-08-24. D1 gives `check` four hygiene rules
-// bound at data-status ratified|approved (or --matrix), each pinned to a measured false-positive
-// class (prax border-box/frame, prax+salon-os undeclared leading, salon-os proto-strip
-// scaffolding). D2 makes `ratified` equivalent to `approved` for every existing check too. These
+// specs/20260824/03-mock-states-hygiene.md D1: `check` gains four hygiene rules bound at
+// data-status ratified|approved (or --matrix), each pinned to a measured false-positive
+// class. D2 makes `ratified` equivalent to `approved` for every existing check too. These
 // checks do not exist on the pre-spec script — every test below is red until cmdCheck grows
 // checks (a)-(d) and statusOf's `approved`-only matrix gate widens to include `ratified`.
 // mockHtml() builds an otherwise-fully-compliant ratified mock so each test isolates exactly one
@@ -222,9 +221,8 @@ test('check: a ratified mock with no universal box-sizing: border-box rule fails
     'the border-box violation must not fire once the universal reset is present')
 
   // A bound mock that externalizes ALL its CSS has no rules for (a)-(c) to read, so (a) is the only
-  // signal the author gets that the stylesheet the gate reads is not the one they wrote. Exempting
-  // style-less files is the fail-open D5 forbids one case over (build 2026-08-24, deviation caught
-  // at Phase 4 and reverted before review).
+  // signal the author gets that the stylesheet the gate reads is not the one they wrote — exempting
+  // style-less files is the fail-open D5 forbids.
   fs.writeFileSync(path.join(dir, 'design/mocks/lobby.html'),
     '<link rel="stylesheet" href="../tokens.css">\n<link rel="stylesheet" href="./ext.css">\n' +
     '<main class="screen" data-screen-label="lobby" data-status="ratified">Lobby</main>\n')
@@ -343,14 +341,11 @@ test("check: unbalanced braces in a ratified mock's <style> fail closed instead 
     'the unbalanced-braces violation must not fire when the style block is well-formed')
 })
 
-// specs/20260901/04-shell-composed-mocks.md — 2026-09-01. D1 gives design/shell/<name>.html the
-// canon shape (data-shell-canon root, named data-slots, one empty content slot, non-content
-// slots data-contract="none") plus a linked <name>.css; D4 binds a shell family on `check`,
-// tiered warn-at-sketch/violation-at-ratified|approved|--matrix, once a design/shell dir resolves
-// by walk-up from the mock. TDD red (grep-confirmed 2026-09-01): design-atlas.js has zero shell
-// vocabulary today — every fixture below produces no shell finding on the pre-image script, so
-// AC-1..AC-5, AC-7, AC-8 are red until CREATE spec/scripts/lib/shell-region.js and the shell
-// family land in cmdCheck. AC-6 above (tagged, unchanged) is the absence-invariant control: no
+// specs/20260901/04-shell-composed-mocks.md D1: design/shell/<name>.html carries the canon
+// shape (data-shell-canon root, named data-slots, one empty content slot, non-content slots
+// data-contract="none") plus a linked <name>.css; D4 binds a shell family on `check`, tiered
+// warn-at-sketch/violation-at-ratified|approved|--matrix, once a design/shell dir resolves by
+// walk-up from the mock. AC-6 above (tagged, unchanged) is the absence-invariant control: no
 // existing fixture carries a design/shell dir (Assumption A2), so it must stay green throughout.
 //
 // CANON_APP_HTML/SHELL_APP_CSS are the literal D1 Contracts example. expectedInner()/syncedRegion()

@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 
-// specs/20260807/01-observation-red-alarm.md (2026-08-07): D2 slims the derived observation
+// specs/20260807/01-observation-red-alarm.md: D2 slims the derived observation
 // sub-state to `n/a`/`ok`/`red` — `pending` is retired, and so is every other resolved-but-
 // non-red string ("green" collapses into "ok" too). Nothing renders for "ok": no ⏳, no
 // "unobserved", no 📡 section unless a spec is red (AC-2). AC-7 and the tie-break half of
@@ -13,8 +13,8 @@ const { tmpdir, runNode } = require('../helpers')
 // runAt-max + red-wins-tie algorithm, and the red-alarm render) — sanctioned pin exceptions,
 // green pre-change, relocated here from tests/status/done-unobserved.test.js (deleted, D2) per
 // this repo's AC-20260805-01-7/AC-20260805-03-7 precedent for retagged invariants. The
-// runAt-max-not-line-order half of AC-10 DOES newly fail: the winning green row used to report
-// observation:"green", now "ok" (D2's contract collapse).
+// runAt-max-not-line-order half of AC-10 DOES newly fail: the winning green row now reports
+// observation:"ok" instead of "green" (D2's contract collapse).
 
 const SCRIPT = 'scripts/spec-status.js'
 
@@ -57,7 +57,7 @@ test('AC-20260807-01-2: a done spec with zero qualifying observe rows reports ob
 // (sanctioned pin exception, green pre-change): D3's rationale states the red path — headline
 // glyph, red line, full oracle-shaped /spec:escape entry — is explicitly unchanged by this
 // spec ("same ledger stage, same escape entry shape, same D8 derive path"). Relocated verbatim
-// from the retired done-unobserved.test.js (formerly AC-20260805-03-6).
+// from the retired done-unobserved.test.js (carried as AC-20260805-03-6 there).
 const BRIEFS_AC7 = {
   '01-auth.md': '# 01 — Auth\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',
   '02-billing.md': '# 02 — Billing\n\nPhase: P0 · Depends on: 01 · Primary workspaces: api\n',

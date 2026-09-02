@@ -5,7 +5,7 @@
 // --json additionally emits `atRisk` (specs/20260815/02-at-risk-pins.md D1): test files outside
 // the spec's File Plan tests rows whose content references a changed file's path stem.
 //
-// Incident (confirmed 2026-08): /spec:review diffed only the File Plan's directories, so an
+// specs/20260805/01-review-scope-reconciliation.md: /spec:review diffed only the File Plan's directories, so an
 // out-of-plan `waitForExit` edit was structurally invisible to review and rode a CLEAN verdict
 // into production. This script inverts the File Plan's role from scope-definer to
 // prediction-under-test: every changed file is seen; the plan's misses (out-of-plan) and
@@ -192,7 +192,7 @@ const unrealized = [
 // ---- at-risk derivation (D1/D2/D5, specs/20260815/02-at-risk-pins.md) ----------------------
 // A Decision that changes what a shared script returns reddens suites the scoped gate never
 // runs, because those suites live outside the spec's own File Plan tests rows (escape
-// wf_e1da0ea6-94c / INTAKE JJ-20260815-03). For each changed file that is neither test-classified
+// wf_e1da0ea6-94c). For each changed file that is neither test-classified
 // (testGlobs), pipeline-owned, nor a rename-from path, derive path stems and substring-scan the
 // repo's test-classified files for them; a hit that is not resolved by the File Plan's
 // tests-layer rows and is not itself in the changed set is at-risk. Additive to outOfPlan/

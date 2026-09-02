@@ -9,8 +9,8 @@
 #   all four      require zero [NEEDS CLARIFICATION] markers in the spec
 # Also warns (stdout → injected context, never a block) on exactly the five gated
 # commands (/spec:plan, /spec:run, /spec:design, /spec:build, /spec:review — the same
-# case pattern below) when the host grounding layer's contractHash stamp no longer
-# matches the plugin's grounding-contract file —
+# case pattern below) when the host grounding layer's contractHash stamp fails to
+# match the plugin's grounding-contract file —
 # fully automatic; no version bookkeeping involved.
 # Exit 2 blocks the prompt and shows stderr to the user. Exit 0 allows.
 set -u

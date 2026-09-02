@@ -5,19 +5,16 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, read } = require('../helpers')
 
-// specs/20260827/03-genesis-design-state.md (2026-08-29, TDD red): the design lock stops being
-// a separate command (/spec:genesis-design) and becomes a driver state, DESIGN, between ROADMAP
-// and HANDOFF — doctrine-drafted (one-page doctrine, Dissents naming every rejected candidate) ->
+// specs/20260827/03-genesis-design-state.md: the design lock is not a separate command
+// (/spec:genesis-design) but a driver state, DESIGN, between ROADMAP and HANDOFF —
+// doctrine-drafted (one-page doctrine, Dissents naming every rejected candidate) ->
 // [tokens-landed, visual only: the winner's tokens.css ratified verbatim, an approved
 // matrix-clean mock, design/components.json] -> rules-locked (design-rules.json category/
 // grounding enums valid, components-check.js green, then the prune). backend-api/data-ml never
 // enter it (design: "skipped"); every other non-visual archetype still enters DESIGN with no
-// tokens step. None of AC-20260827-03-1..5 can pass yet: genesis-driver.js has no DESIGN state,
-// no doctrine-drafted/tokens-landed/rules-locked marks, and roadmap-written always lands HANDOFF
-// unconditionally (grep confirmed at authoring time, 2026-08-29).
+// tokens step.
 //
-// Fixtures follow Assumption A1 (executed micro-spike 2026-08-27, S4; re-verified 2026-08-29
-// against the live design-atlas.js): a data-status="approved" mock that omits <meta
+// Fixtures follow Assumption A1: a data-status="approved" mock that omits <meta
 // name="viewport"> fails `check --matrix` naming the missing meta once design/targets.json
 // declares more than one viewport. This file cannot require() genesis-driver.test.js's or
 // explore-states.test.js's own file-local helpers (no shared module beyond tests/helpers.js) —
@@ -111,9 +108,9 @@ Fly.io was considered and rejected for regional latency — no other minority op
 `)
 }
 
-// specs/20260827/04-genesis-conventions-handoff.md D2/D3 (D11 build ruling, 2026-08-29): `decided`
-// now additionally requires a valid `.claude/genesis/conventions.json` (every row's `adr`
-// existing), and `skeleton-landed` now additionally requires every enforceable DECIDED row's
+// specs/20260827/04-genesis-conventions-handoff.md D2/D3: `decided` additionally requires a
+// valid `.claude/genesis/conventions.json` (every row's `adr` existing), and `skeleton-landed`
+// additionally requires every enforceable DECIDED row's
 // probe file present-and-non-empty plus a <=150-line CLAUDE.md naming the gate command and the
 // test tree. This file's two shared drivers (advanceToRoadmap, advanceToDesignWithFunnel) both
 // cross those two marks — this helper pair is written once, per § Review Checks' three-near-
@@ -351,7 +348,7 @@ function mockHtml({ withViewportMeta }) {
     '</div>\n</body></html>\n'
 }
 
-// specs/20260901/04-shell-composed-mocks.md — 2026-09-01, D7/AC-20260901-04-14. tokens-landed
+// specs/20260901/04-shell-composed-mocks.md D7/AC-20260901-04-14: tokens-landed
 // additionally requires design/shell/app.html to exist and `design-atlas.js check design/shell`
 // to exit 0. SHELL_CANON_APP/SHELL_APP_CSS are D1's Contracts example verbatim; shellSyncedMock()
 // builds a page mock whose root inner is that same canon inner (content slot filled, no
@@ -624,14 +621,13 @@ test('AC-20260827-03-4: rules-locked refuses a rule whose targetCategory is "eng
 })
 
 test('AC-20260827-03-5, AC-20260827-04-6: HANDOFF prints a step naming init-profile.json and --mark profile-written (never "genesis-design") for both designCatalog "storybook" and "none", and spec/commands/genesis.md\'s chain bullet reads /spec:genesis → /spec:atlas with no genesis-explore or genesis-design', () => {
-  // Retargeted in place (2026-08-29, specs/20260827/04-genesis-conventions-handoff.md D4/D5,
-  // recorded in that spec's own Rationale as an expected collision): D4 turns HANDOFF from a
-  // terminal state printing "next: /spec:init" into a judgment step that closes with a new mark,
+  // specs/20260827/04-genesis-conventions-handoff.md D4/D5: D4 turns HANDOFF from a terminal
+  // state printing "next: /spec:init" into a judgment step that closes with a new mark,
   // `--mark profile-written`; the new terminal state GROUNDED prints "next: /spec:enforce"
   // instead (pinned behaviorally, with a real init-gen.js generate run, by
   // tests/genesis/conventions-handoff.test.js's own AC-20260827-04-3/-4 — never re-asserted here
-  // to avoid duplicating that fixture). This pin keeps everything else it originally asserted —
-  // no "genesis-design" anywhere, and the doctrine's chain bullet — exactly as strict.
+  // to avoid duplicating that fixture). This pin keeps everything else it asserts — no
+  // "genesis-design" anywhere, and the doctrine's chain bullet — exactly as strict.
   const storybook = tmpdir('design-ac5-storybook')
   const roadmappedSb = advanceToRoadmap(storybook, { archetype: 'data-ml', designCatalog: 'storybook' })
   assert.strictEqual(roadmappedSb.status, 0, 'test setup requires roadmap-written to be accepted: ' + roadmappedSb.stderr)
@@ -655,10 +651,9 @@ test('AC-20260827-03-5, AC-20260827-04-6: HANDOFF prints a step naming init-prof
   assert.doesNotMatch(chainLine, /genesis-design/, 'D5: the chain bullet must not name genesis-design — that command is deleted by this spec and folded into the driver')
 })
 
-// specs/20260901/04-shell-composed-mocks.md — 2026-09-01, D7. TDD red (grep-confirmed
-// 2026-09-01): handleTokensLanded() in genesis-driver.js has no shell-canon check at all today —
-// it accepts a verbatim tokens.css, an approved matrix-clean mock, and components.json with no
-// mention of design/shell anywhere, so this test is red until D7 lands.
+// specs/20260901/04-shell-composed-mocks.md D7: tokens-landed requires design/shell/app.html
+// to exist and `design-atlas.js check design/shell` to exit 0 — a verbatim tokens.css, an
+// approved matrix-clean mock, and components.json alone do not satisfy the mark.
 test('AC-20260901-04-14: tokens-landed requires the shell canon', () => {
   const noShell = tmpdir('design-ac14-noshell')
   advanceToDesignWithFunnel(noShell)

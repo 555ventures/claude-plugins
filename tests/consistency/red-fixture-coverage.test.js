@@ -7,7 +7,7 @@ const { execFileSync } = require('node:child_process')
 const { SPEC, tmpdir, runNode, runBash, gitRepo } = require('../helpers')
 
 // spec/doctrine/core.md § Incident Policy — same-session incident fix, third recurrence of the
-// class "a verification check runs, matches nothing, and reports success" (2026-08-20):
+// class "a verification check runs, matches nothing, and reports success":
 //   1. review-legs.js's at-risk leg passed {file, refs} objects through `.map(q)`, producing
 //      `node --test '[object Object]'` — Node 26 exits 0 on an unmatched pattern, so the leg
 //      reported at-risk exit=0 files=N across ~10 reviews while executing ZERO tests.
@@ -417,12 +417,11 @@ function hookSpecState() {
 
 // genesis-state-gate.sh: a partial design canon (design: doctrine-drafted) must block /spec:init.
 //
-// specs/20260827/03-genesis-design-state.md D6 (2026-08-29): the design lock's own hook arm (and
+// specs/20260827/03-genesis-design-state.md D6: the design lock's own hook arm (and
 // the require_scaffold helper it shared with the already-retired explore arm) is deleted —
-// architect: pending no longer blocks anything, since that retired command falls through
+// architect: pending does not block anything, since that retired command falls through
 // untouched at every state exactly as the retired explore command already does
-// (AC-20260827-02-7, AC-20260827-03-6), so the old architect: pending fixture this function used
-// to plant no longer blocks at all. The only prompt the hook still gates is /spec:init, on a
+// (AC-20260827-02-7, AC-20260827-03-6). The only prompt the hook still gates is /spec:init, on a
 // partial design canon — retargeted in place, never weakened.
 function hookGenesisState() {
   const dir = tmpdir('rfc-hook-genesis')
@@ -486,7 +485,7 @@ function hookCrossWorktree() {
     'the blocked case must print the BLOCKED: diagnostic on stderr: ' + crossTree.stderr)
 }
 
-// spec-session-stamp.sh: specs/20260901/02-run-provenance.md D1/D12 (2026-09-01, brief 18) —
+// spec-session-stamp.sh: specs/20260901/02-run-provenance.md D1/D12 (brief 18) —
 // this hook is deliberately NOT a gate. It never prints and never blocks; its only exit code is
 // 0 (D1). "Can actually block on a planted violation" is unprovable for a hook with no block
 // path at all, and asserting it would be false — so D12 registers a handler proving the hook

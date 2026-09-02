@@ -3,25 +3,19 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const { read, evalFns, checkWorkflowSyntax, runBash } = require('../helpers')
 
-// specs/20260825/02-genesis-consultant-discovery.md (2026-08-25): D6 turns
+// specs/20260825/02-genesis-consultant-discovery.md D6/D7/D9: turns
 // spec/workflows/wf-research.js's OPTION_SET_SCHEMA top-level const into a named top-level
 // function `optionSetSchema()` (evalFns-extractable, per the capOptions precedent already in
 // this file) and adds two REQUIRED string option fields — `because` (the coverage keys/answers
 // that drove an option's rank) and `priced` (a consequence priced at the brief's stated scale,
-// or the literal "n/a — no number in the brief"). The research prompt must instruct the agent to
-// read the brief's `## Coverage` section and fill both fields, and genesis-architect.md's menu
-// step must name both as description parts (D7).
+// or the literal "n/a — no number in the brief"). The research prompt instructs the agent to
+// read the brief's `## Coverage` section and fill both fields, and genesis.md's menu-build step
+// names both as description parts.
 //
-// AC-20260825-02-4 and AC-20260825-02-5 were authored RED against the pre-D6 file
-// (OPTION_SET_SCHEMA was still a bare top-level const, so evalFns could not extract it, and
-// neither `because`/`priced` nor `## Coverage` appeared in the research prompt or in
-// genesis-architect.md's menu-build step); D6/D7 landed both and they are green.
-// AC-20260825-02-6 is D9's `SHALL CONTINUE TO` regression pin, green throughout: it holds
-// wf-research.js parsing under checkWorkflowSyntax, capOptions still capping a 6-option menu to
-// 4 while preserving the is_minority option, and `spec-paths shared-for genesis-architect` still
-// serving `## Question Style` (that third pin was added at review close 2026-08-26 — D9 named it
-// but the original test covered only the first two); this spec's schema/prompt edit must not
-// break any of them.
+// AC-20260825-02-6 is D9's `SHALL CONTINUE TO` regression pin: it holds wf-research.js parsing
+// under checkWorkflowSyntax, capOptions still capping a 6-option menu to 4 while preserving the
+// is_minority option, and `spec-paths shared-for genesis` still serving `## Question Style`;
+// this spec's schema/prompt edit must not break any of them.
 
 // ---------------------------------------------------------------------------
 // AC-20260825-02-4
@@ -159,15 +153,13 @@ test('AC-20260825-02-6: spec-paths shared-for genesis continues to serve the ## 
     'reads the doctrine governing how those questions must be phrased: ' + r.stdout)
 })
 
-// specs/20260825/03-genesis-currency-executed.md (2026-08-25) D6 deletes wf-research.js's Verify
-// phase outright: the Haiku "still current?" pass was an opinion, never told to pin to release
-// pages, replaced by spec/scripts/registry-check.js's deterministic registry GET (this spec's own
+// specs/20260825/03-genesis-currency-executed.md D6: deletes wf-research.js's Verify phase
+// outright: the Haiku "still current?" pass was an opinion, never told to pin to release pages,
+// replaced by spec/scripts/registry-check.js's deterministic registry GET (this spec's own
 // script, pinned separately in tests/genesis/registry-check.test.js). RECENCY_VERDICT_SCHEMA,
 // verifyKeys, toVerify, verifyFailed, still_current, verify_note, and every `haiku` seat are
-// deleted; meta.phases drops to one entry; optionSetSchema() gains a REQUIRED `packages` array per
-// option. AC-20260825-03-7 cannot pass yet — as of 2026-08-26 the Verify phase, RECENCY_VERDICT_
-// SCHEMA, verifyKeys, still_current, and the haiku model seat are all still live in the file, and
-// optionSetSchema()'s option items do not require `packages` (TDD red).
+// deleted; meta.phases drops to one entry; optionSetSchema() gains a REQUIRED `packages` array
+// per option.
 
 // Extract the top-level `export const meta = {...}` object literal and evaluate it, mirroring
 // checkWorkflowSyntax's own strip pattern (helpers.js) — meta is a bare const, not a named

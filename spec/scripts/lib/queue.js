@@ -38,7 +38,7 @@ function normBrief(v) {
 // D6's "minus superseded briefs, which are derived — never queued": a roadmap brief file is
 // superseded when its body opens a blockquote with "Superseded by" — the same marker the
 // roadmap overview's "*(superseded by v7)*" annotations describe in prose (docs/roadmap/
-// 01-claims-registry.md, 05-hotspot-audit.md, 07-suite-baseline.md, as of 2026-08-23).
+// 01-claims-registry.md, 05-hotspot-audit.md, 07-suite-baseline.md).
 // "Substantially delivered by" (docs/roadmap/06-mechanized-prose-checks.md) deliberately
 // does NOT match — a delivered brief is done, not exempt from ever being queued.
 function isSupersededBriefText(text) {

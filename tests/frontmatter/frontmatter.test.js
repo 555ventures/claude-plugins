@@ -5,23 +5,14 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { read, tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20260823/04-review-close-hardening.md D1/D8/D9 (2026-08-23): two live incidents at one
-// review close (rv_6825fa48c98d, the tier field of seven ledger rows carrying comment text) and
-// (rv_e83659d49386, `build_base:`'s comment breaking /spec:review's driver outright with `fatal:
-// invalid object name`) drove specs/20260823/03 to extract `spec/scripts/lib/frontmatter.js`
-// mid-flight — landing first with an `fmVal(fmRaw, key)` export. D8's orchestrator reconciliation
-// ruling is binding here: this build widens that SAME module to `{ fmBlock, fmValue, fmMap }`
-// (fmValue supersedes fmVal by rename, no alias survives) and additionally accepts full document
-// text, not just a pre-extracted raw block. Every AC-1/-2/-3 assertion below fails at HEAD on
-// TypeError ("fmBlock/fmValue/fmMap is not a function") because the module exports only `fmVal`
-// today — the correct red for a contract-widening pin per this repo's Test Rules. Per D9, this
-// file does NOT restate spec 03's scalar-stripping pins (those live in tests/frontmatter.test.js,
-// retagged in place) — it pins only the surface D1/D8 add: full-document entry, fmBlock, fmMap,
-// the driver's exec-level build_base path (AC-4), and the routing sweep (AC-10). The sweep
-// originally covered four scripts; specs/20260824/02-design-stage-on-render-gate.md D2 retires
-// spec-design-driver.js with the rest of the design-driver state machine, so the sweep below is
-// retagged to AC-20260824-02-6 and reduced to the three surviving scripts (D16: "the frozen v7.0
-// surface must be observed unchanged by tests, not assumed").
+// specs/20260823/04-review-close-hardening.md D1/D8/D9: spec/scripts/lib/frontmatter.js
+// exports `{ fmBlock, fmValue, fmMap }` (fmValue supersedes the retired fmVal by rename, no
+// alias survives) and accepts full document text, not just a pre-extracted raw block. Per D9,
+// this file does NOT restate specs/20260823/03's scalar-stripping pins (tests/frontmatter.test.js
+// owns those) — it pins only the surface D1/D8 add: full-document entry, fmBlock, fmMap, the
+// driver's exec-level build_base path, and the routing sweep, retagged to AC-20260824-02-6 and
+// scoped to the three scripts specs/20260824/02-design-stage-on-render-gate.md D2 leaves
+// standing after retiring spec-design-driver.js.
 
 const { fmBlock, fmValue, fmMap } = require('../../spec/scripts/lib/frontmatter')
 
@@ -90,8 +81,8 @@ test('AC-20260823-04-1/2/3 (fmMap facet): fmMap over full document text returns 
 // specs/20260823/03 D4 already routed spec-review-driver.js's local fmVal through
 // lib/frontmatter.js's (already correctly quote-aware, whitespace-strip) fmVal, and D8 records
 // that this driver's D2 obligation is satisfied by a one-line import rename alone — the
-// substantive bug this build closes is spec-status.js/replay.js's OWN kv-loop (AC-10). Executed
-// spike (2026-08-23, against this exact fixture shape): the driver already resolves
+// substantive bug this build closes is spec-status.js/replay.js's OWN kv-loop (AC-10). An
+// executed spike against this exact fixture shape confirms the driver already resolves
 // `build_base: <sha>   # set by enter-worktree` to bare `<sha>` and reaches state REVIEWER with
 // no `fatal: invalid object name` — this pin is therefore GREEN at HEAD already, kept and logged
 // rather than forced red (a vacuous-but-correct exec pin is a legitimate outcome here, never a
@@ -181,9 +172,9 @@ test('AC-20260823-04-4: WHEN the review driver reads a spec whose build_base: li
     'the same incident\'s second symptom — the comment text reaching a shell interpolation — must also never appear: ' + treatmentRun.stdout + treatmentRun.stderr)
 
   // Real equivalence, not just absence-of-string: the commented fixture must reach the IDENTICAL
-  // derived state as the comment-free control, proving the same base was actually used to diff
-  // and run legs against — a base that silently fell back to something else (e.g. a merge-base
-  // guess) could also avoid the literal error strings above while still being wrong.
+  // derived state as the comment-free control, proving the driver diffed and ran legs against the
+  // same base — a base that silently fell back to something else (e.g. a merge-base guess) could
+  // also avoid the literal error strings above while still being wrong.
   const treatmentState = driverState(treatment.root, treatment.spec)
   assert.strictEqual(treatmentState, controlState,
     'the commented and comment-free fixtures are otherwise identical (same commit history, same source, same tests) — if build_base resolution genuinely strips the comment the same way, both must derive the SAME state; a divergence here means the two fixtures resolved different bases: control=' + controlState + ' treatment=' + treatmentState)

@@ -5,14 +5,10 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT, read } = require('../helpers')
 
-// Fleet evidence reader (specs/20260820/05-fleet-evidence-reader.md, 2026-08-20): two JJ-ruled
-// doctrine changes ride along with the reader (2026-08-20 session, explicit AskUserQuestion,
-// spec Rationale). D7 moves core.md's third-recurrence trigger to the fleet denominator
-// (26 fleet-wide escapes vs at most 13 visible in any one repo, A2) and pins the literal
-// invocation two sessions must derive the same numbers from. D8 gives escape.md's row schema
-// a `class` field so recurrence becomes mechanically countable instead of forever hand-
-// asserted. Neither edit has landed yet (TDD red phase) — both tests below fail until
-// doctrine-author lands D7/D8.
+// specs/20260820/05-fleet-evidence-reader.md D7/D8: core.md's third-recurrence trigger uses
+// the fleet-wide escape denominator (all repos, never one repo's count, A2) and pins the
+// literal invocation two sessions must derive the same numbers from; escape.md's row schema
+// carries a `class` field so recurrence is mechanically countable instead of hand-asserted.
 
 // Literal-phrase pin tolerant of markdown hard-wrap splitting a multi-word phrase across
 // lines (tests/doctrine convention — see .claude/agent-memory/plugin-tests notes on this).

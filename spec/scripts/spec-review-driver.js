@@ -6,8 +6,8 @@
 // base, launch legs, append the GATE_RED ledger line by hand, run three separate verdict.js
 // passes, flip status, drive merge-back's inspect/merge/cleanup/verify sequence. Every one of
 // those steps is deterministic; procedural hallucination — skipping or fabricating a step while
-// reporting success — is the measured largest agent-failure class (38.5%, agenticrail.nz
-// 2026-08-08). This driver, on the spec-design-driver.js contract, EXECUTES every deterministic
+// reporting success — is the measured largest agent-failure class (38.5%, agenticrail.nz).
+// This driver, on specs/20260820/07-review-driver.md's driver-stepped contract, EXECUTES every deterministic
 // step itself (base derivation, the per-iteration manifest lifecycle, review-legs.js, all three
 // verdict.js passes, both ledger appends, the implementing->done flip, the merge-back sequence,
 // REPLAY's own replay --due/--select derivation) and prints ONLY the step that needs this
@@ -28,8 +28,8 @@
 // evidence paths; report assembly stays with the session via report-render.js. It never asserts
 // the verdict word itself (verdict.js is the sole derivation, surfaced through this driver).
 //
-// specs/20260822/01-escalate-ledger-row.md (D5-D10, 2026-08-22): a review that burns its fix loop
-// to the cap and is then abandoned used to write ZERO ledger rows — three leg iterations and three
+// specs/20260822/01-escalate-ledger-row.md (D5-D10): a review that burns its fix loop
+// to the cap and is then abandoned must not write ZERO ledger rows — three leg iterations and three
 // reviewer dispatches left no trace, because the only two append points were the hard-stop and the
 // CLEAN close and the ESCALATE refusal reached neither. writeEscalateRow() is the third write
 // point: called from handleFixApplied()'s cap branch before die() (the refusal is the last
@@ -41,13 +41,13 @@
 // refusal/step text verbatim and retried on the next invocation, so the cap record itself is never
 // lost. The D10 silent-loss detector runs once on every entry, stderr-only, and never blocks — it
 // exists because spec 04's own A6 assumed a durable-write loss would be observed, when by
-// construction it is silent (a dead worktree's durable file simply no longer has the row).
+// construction it is silent (a dead worktree's durable file simply lacks the row).
 //
-// specs/20260824/06-review-range-identity.md (D4, 2026-08-24): every ledger row this driver
+// specs/20260824/06-review-range-identity.md (D4): every ledger row this driver
 // appends now names the commit range it judged. resolveBaseSha() resolves resolveBase()'s own
 // build_base -> diff_base -> merge-base result to a full sha via `git rev-parse --verify
 // <base>^{commit}` ONCE, at startup, right after resolveBase() returns — a base that cannot
-// resolve now dies before the first manifest or leg (previously, stampDiffBaseIfAbsent's own
+// resolve now dies before the first manifest or leg (stampDiffBaseIfAbsent's own
 // separate resolution would warn and continue, leaving diff_base unstamped and every leg's diff
 // silently wrong all run). stampDiffBaseIfAbsent reuses this same resolved sha — one resolution,
 // two carriers (AC-11) — and its former warn-and-continue branch is removed outright. headSha()
@@ -58,7 +58,7 @@
 // [--dirty]) are threaded into every verdict.js invocation runHardStopVerdict, writeEscalateRow,
 // and doCloseWork make.
 //
-// specs/20260823/07-deviations-sidecar-backstop.md (D1-D6, 2026-08-23): the deviations sidecar
+// specs/20260823/07-deviations-sidecar-backstop.md (D1-D6): the deviations sidecar
 // (<spec>.deviations.md) was pure convention — build sessions appended departure entries by hand,
 // review folded and deleted the file by hand, and nothing caught a skipped fold or an entry written
 // in a shape the ledger's own `^- ` bullet count could never see. This driver now classifies the
@@ -68,7 +68,7 @@
 // sidecar still exists on disk or while the last observation recorded a malformed line even after
 // deletion — prevention before loss, since same-commit fold forensics measured vacuous (A5).
 //
-// specs/20260830/02-close-gate-rerun.md (D1-D5, 2026-08-30, two salon-os host escapes): CLOSE
+// specs/20260830/02-close-gate-rerun.md (D1-D5): CLOSE
 // writes the canonical doc and folds Gotchas into the host's rules file AFTER review-legs.js's own
 // gate leg already ran over the diff, then commits — so the exact files CLOSE itself writes bypass
 // the host's deterministic rule enforcement. handleClosed() now runs the host's resolved
@@ -98,7 +98,7 @@
 //
 // States: LEGS (driver-only) -> STOPPED (terminal on RED_BLOCKING) | SKIPS? -> REVIEWER ->
 //   DISPOSITIONS (specs/20260901/09-disposer-gate.md D2/D4 — both via values land here directly;
-//   the retired session-change CHECKPOINT no longer exists) -> FIX/ESCALATE(cap 2, terminal)? ->
+//   there is no session-change CHECKPOINT state) -> FIX/ESCALATE(cap 2, terminal)? ->
 //   CLOSE -> MERGE/CONFLICTS -> REPLAY? -> DONE (terminal)
 //
 // Exit codes: 0 = step printed · 2 = precondition failure or refused mark (message names the
@@ -154,7 +154,7 @@ const { readLedgerRows } = require('./lib/observation')
 // fmVal renamed fmValue (D8/D9 — no alias survives); fmBlock replaces this file's own
 // `/^---\n([\s\S]*?)\n---/` block regex below.
 const { fmBlock, fmValue } = require('./lib/frontmatter')
-// The one --select stdout parser, shared with parse-selection.js's own direct tests (2026-08-24
+// The one --select stdout parser, shared with parse-selection.js's own direct tests (a
 // review of specs/20260823/09-replay-baseline-attribution.md: kept here as a local copy, this
 // driver's exec-fixture test could never produce a genuine five-token line to prove the absence
 // branch against).
@@ -166,7 +166,7 @@ const { parseSelection } = require('./lib/parse-selection')
 // degrades to {} on an absent/unreadable config, which reads as "not declared" here, same as
 // every other caller.
 const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
-// specs/20260830/02-close-gate-rerun.md D1/D3 (2026-08-30, salon-os field report): the close-time
+// specs/20260830/02-close-gate-rerun.md D1/D3: the close-time
 // host-gate re-run in handleClosed() shares the exact {testDirs}/{scopeDirs} resolution
 // review-legs.js's own gate leg uses — a second, paraphrased copy here would be a drift seam.
 const { resolveGate } = require('./lib/gate-resolve')
@@ -244,7 +244,7 @@ const area = fmVal('area') || '{area}'
 // `area:` is only the fallback. Deriving `docs/canonical/${area}.md` unconditionally printed a
 // wrong instruction for every spec whose area names no canonical doc — specs/20260823/08 carried
 // `area: session-queue` while its Canonical Delta names `docs/canonical/status.md`, and the close
-// nearly fragmented the canonical layer by creating a second file (caught by an audit 2026-08-24,
+// nearly fragmented the canonical layer by creating a second file (caught by an audit
 // after that review had already closed CLEAN). First `docs/canonical/<name>.md` mentioned in the
 // section wins; a section naming none falls back to the area-derived name as before.
 const canonicalTarget = (() => {
@@ -270,7 +270,7 @@ if (!['implementing', 'done'].includes(status)) {
 
 // `let`, not `const`: a worktree merge relocates the sidecar into the main root mid-invocation
 // (D8 (b)) — REPLAY runs after `merge-back.sh cleanup` has already deleted the worktree the
-// sidecar used to live in. `replaySpecPath` is the path the REPLAY step tells the session to
+// sidecar lived in. `replaySpecPath` is the path the REPLAY step tells the session to
 // re-invoke with, which after that relocation is the main root's copy of the spec, never the
 // deleted worktree's.
 let sidecarDir = resolvedSpecPath.replace(/\.md$/, '.review')
@@ -336,9 +336,9 @@ function dispositionPools(n) {
   return { survivors, legs }
 }
 
-// ---- Gotchas cap (prose-cap.js, specs/20260823/06 + 2026-08-25 ratchet) ------------------------
-// The cap used to be a CLOSE-step sentence in review.md that nothing executed: Prax closed
-// 2026-08-25 at 169/15 with the cap "recorded as unmet" — the fail-open shape core § Rule
+// ---- Gotchas cap (prose-cap.js, specs/20260823/06 ratchet) ------------------------
+// A CLOSE-step sentence in review.md alone cannot enforce the Gotchas cap — a host can close
+// with the cap already over budget and "recorded as unmet," the fail-open shape core § Rule
 // Enforcement forbids. The driver now (a) observes the count when the verdict runs and records
 // it on the review row as `gotchas` (derived, never attested), and (b) refuses `--mark closed`
 // unless prose-cap passes in ratchet mode against that entry count: at/under cap → hard cap;
@@ -388,7 +388,7 @@ function refuseUnlessGotchasRatchet() {
 // `^- ` count, so a malformed flush-left line is exactly the content that count could never see.
 // Called unconditionally near the top of every invocation (mark or bare) — D5's "on every
 // derivation" — and persists {entries, malformed} into the sidecar state, overwriting any prior
-// observation. Deliberately a no-op when the file is absent: the previously persisted observation
+// observation. Deliberately a no-op when the file is absent: the last persisted observation
 // must survive the file's own deletion (that survival is what makes refusal 2 possible below).
 function observeDeviations() {
   if (!fs.existsSync(deviationsPath)) return
@@ -419,7 +419,7 @@ function malformedLines(malformed) {
 
 // ---- D10: silent-loss detector, run once per invocation, stderr-only, never blocks ------------
 // specs/20260822/01-escalate-ledger-row.md: spec 04's own A6 assumed loss would be "observed", but
-// the loss is silent by construction (a dead worktree's durable file just quietly no longer has the
+// the loss is silent by construction (a dead worktree's durable file just quietly lacks the
 // row) — this is the trigger. Checked only against a DURABLE path (one whose basename isn't the
 // plain tracked ledger — an in-place spec-runs.jsonl append rides normal git history and has no
 // comparable loss mode). Partial by design (a dead worktree's sidecar never speaks at all — this
@@ -482,7 +482,7 @@ if (marks.via === undefined) {
 // commands write these fields with no ordering guard between them — /git:enter-worktree stamps
 // `build_base: main` whenever it runs, including AFTER a build has already pinned the true
 // pre-image. Preferring the ref over the pin is how a review comes to judge an empty range: on
-// 2026-09-01 (spec 20260901/01) `main` already carried the build's own commits, so `main...HEAD`
+// spec 20260901/01: `main` already carried the build's own commits, so `main...HEAD`
 // was empty, every diff-scoped leg reported zero and green (at-risk files:0, reconcile listing all
 // 27 planned files "unrealized"), and the reviewer was handed nothing to review. replay.js:374
 // had already inverted this order for exactly this reason ("build_base is typically the moving
@@ -518,7 +518,7 @@ function resolveBaseSha() {
     die('base "' + base + '" does not resolve to a commit — add diff_base: <sha> to the spec ' +
       'frontmatter (git rev-parse --verify <ref>^{commit})')
   }
-  // ---- non-degenerate-range invariant (2026-09-01, spec 20260901/01 review) -------------------
+  // ---- non-degenerate-range invariant (spec 20260901/01 review) -------------------
   // A review that judges an empty range is not a review, and it fails GREEN: every diff-scoped leg
   // (at-risk, reconcile, patterns, diffLoc) reports zero and passes, and the reviewer sees nothing.
   // Nothing downstream objects — verdict.js validates sha SHAPE only, so ledger row rv_31224a17550e
@@ -859,7 +859,7 @@ function doCloseWork(n) {
   fs.writeFileSync(resolvedSpecPath, stampedText)
 
   // D8: no dueness probe here. A printed "run /spec:replay yourself" reminder was the measured
-  // failure this state machine replaces (shipped 2026-08-19, skipped through 12+ reviews in ~48h);
+  // failure this state machine replaces (specs/20260821/02-replay-review-phase.md D8);
   // REPLAY's own entry --due, once MERGE has concluded, is the single dueness derivation.
   marks.closeRunId = runId
   saveSidecar()
@@ -932,7 +932,7 @@ function printDoneNow(note, harnessLine) {
 // single line here runs, so "blocking" the verdict is not even mechanically available. What it
 // does block is calling the review FINISHED while the measurement it owes is unrun — the review is
 // complete as a verdict and unfinished as a checklist. The advisory form of exactly this reminder
-// shipped 2026-08-19 and was skipped through 12+ reviews in ~48 hours; that is the whole argument
+// is specs/20260821/02-replay-review-phase.md D1's own measured failure; that is the whole argument
 // for a state instead of a print.
 function countReplayRowsFor(reviewRunId) {
   return readLedgerRows(repoRoot)
@@ -1031,7 +1031,7 @@ function handleReviewerReturned() {
     die('--file ' + file + ' is missing a survivors array — the reviewer return shape must be ' +
       '{verdict, survivors, killed, reviewerCount, scope, tokens}; re-dispatch and write a valid return')
   }
-  // D8 (specs/20260901/08-corpus-derivation-and-kill-match.md, 2026-09-01, brief 19): killed must
+  // D8 (specs/20260901/08-corpus-derivation-and-kill-match.md, brief 19): killed must
   // be an array, and every entry an object carrying a string claim plus BOTH file (string|null)
   // and line (number|null) keys PRESENT — explicit null for a process-level claim, never an
   // omitted key. Extends this same verdict/survivors validation seam; never a second pass, and
@@ -1428,7 +1428,7 @@ function handleConflictsResolved() {
 // Shared tail for a concluded merge (whether it went straight through or via CONFLICTS ->
 // conflicts-resolved): cleanup (removes the worktree, taking the sidecar with it per D10) +
 // verify + spec-status --next verbatim, then DONE. Exits the process directly — after cleanup the
-// sidecar this invocation loaded may no longer exist on disk, so nothing here re-reads it.
+// sidecar this invocation loaded may already be gone from disk, so nothing here re-reads it.
 // D10: the ledger + retained evidence were written under the WORKTREE (repoRoot at CLOSE time,
 // wherever the review actually ran) so the main root stays clean for `merge-back.sh merge`'s
 // assert_clean_root/ff-only preconditions. Once the merge has landed, promote them into mainRoot
@@ -1436,7 +1436,7 @@ function handleConflictsResolved() {
 // rv_6825fa48c98d) clear the worktree-local copies by TRACKED STATUS, not by blanket delete: a
 // path tracked in the worktree is restored to its own HEAD content (`git -C <wt> checkout --
 // <path>`), an untracked path is `fs.rmSync`'d exactly as before (A3: the ledger may be tracked or
-// untracked depending on the host, decided per path). Deleting a TRACKED file used to leave it
+// untracked depending on the host, decided per path). Deleting a TRACKED file leaves it
 // "deleted" in `git status`, which made the plain `git worktree remove` below (no --force) refuse
 // at exit 128 (A1, spiked) — the second half of the recorded deadlock. Restoring instead of
 // deleting keeps `git -C <wt> status --porcelain` empty either way, so cleanup's `worktree remove`

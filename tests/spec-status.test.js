@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { read, tmpdir, runNode } = require('./helpers')
 
-// /spec:status derivation (2026-07-19): brief/spec status is never stored, only derived from
+// /spec:status derivation: brief/spec status is never stored, only derived from
 // spec frontmatter per doctor check 14 — this script is the single shared derivation behind
 // /spec:status, doctor check 14, and /spec:plan's Phase 0 dependency preflight. The incident
 // class it exists for: a roadmap brief silently skipped (later briefs planned/built on top of
@@ -128,7 +128,7 @@ test('a wrapped Depends on list does not silently drop dependencies', () => {
   assert.match(r.stdout, /02/, 'names the dependency that wrapped')
 })
 
-// Phantom-blocker incident (2026-08-04): a spec reference on the Depends on: line
+// Phantom-blocker incident: a spec reference on the Depends on: line
 // (`Depends on: spec 20260804/02 at done`) was digit-harvested into brief deps 20260804
 // (can never exist → permanent exit 1) and 02 (binds to an unrelated real brief). The
 // --brief preflight feeds /spec:plan Phase 0's warn-and-confirm, so a false blocker
@@ -223,9 +223,9 @@ test('AC-20260901-10-4: roadmap-less host still reports open specs as /spec:run,
   assert.match(r.stdout, /\/spec:run @specs\/20260701\/01-a\.md/, 'AC-20260901-10-4/D5: open spec surfaces in 🎯 Next without a roadmap, as /spec:run')
 })
 
-// --next (2026-07-22): the end-of-run "Next:" line used to be freehand improvisation — no
+// --next: the end-of-run "Next:" line was freehand improvisation — no
 // doctrine produced it, so it contradicted /spec:status (incident: a spec with `designed:`
-// set kept being routed back to /spec:design). The mapping now lives in the script; command
+// set kept being routed back to /spec:design). The mapping lives in the script; command
 // epilogues print its output verbatim.
 //
 // AC-20260824-02-4 (specs/20260824/02-design-stage-on-render-gate.md D16, tagged in place):
@@ -349,7 +349,7 @@ test('AC-20260901-10-5 (SHALL CONTINUE TO): --next falls through to planning the
   assert.strictEqual(j.next[0].brief, '03')
 })
 
-// --next parallel annotation (2026-07-22): among UNBLOCKED entries a spec-level depends_on
+// --next parallel annotation: among UNBLOCKED entries a spec-level depends_on
 // can never link two of them (a non-done dep already sinks an entry to Blocked), so whether
 // runner-ups can run alongside the top pick is a brief-level question: shared brief = same
 // declared surfaces, a transitive brief dependency path = declared order. Briefless specs
@@ -411,7 +411,7 @@ test('--next makes no parallel claim when a spec has no brief stamp', () => {
     'no brief = no declared surfaces to compare — silence beats a guessed parallel-ok')
 })
 
-// The dashboard (2026-07-22, default render since 6.27.0): the same derivation rendered
+// The dashboard: the same derivation rendered
 // once, deterministically, in the script (verdict line, progress-bar roadmap, parallel
 // lanes, anomalies). Exists so the renderer prints verbatim instead of restyling by hand —
 // the styling-drift sibling of the freehand-Next incident.
@@ -436,7 +436,7 @@ test('bare run renders verdict, progress-bar roadmap, and collapses unplanned ru
   assert.match(r.stdout, /🎯 Next/, 'embeds the next derivation — no second run needed')
 })
 
-// Owner report 2026-08-31: a long shipped history rendered one row per done brief and filled
+// Owner report: a long shipped history rendered one row per done brief and filled
 // the screen — done runs now collapse to a range row exactly like unplanned runs, with the
 // spec count preserved so the shipped volume stays visible.
 test('consecutive done briefs collapse to one range row with brief and spec counts', () => {
@@ -484,7 +484,7 @@ test('AC-20260901-10-4: dashboard draws unblocked parallel-ok runner-ups as lane
   assert.match(r.stdout, /⛔ blocked:\n\/spec:run @specs\/20260710\/04-blocked\.md\n\s+└─ ⏳ 01-billing/, 'blocked entries close the section, each blocker a tree branch under its command')
 })
 
-// merge-conflict heads-up (2026-07-31): parallel lanes are independently safe by brief, but
+// merge-conflict heads-up: parallel lanes are independently safe by brief, but
 // two lanes can still declare the same file in their File Plan tables. The 333-spec corpus
 // audit showed overlap can't DECIDE parallelism (51% of unrelated-brief pairs overlap), so
 // this is a branch-line annotation under the lane list — never a change to the verdict.
@@ -641,7 +641,7 @@ test('dashboard omits the solo branch when the pick is the only open work', () =
   assert.doesNotMatch(r.stdout, /🚦/, 'nothing else exists to be parallel WITH — the branch would be noise')
 })
 
-// brief: n/a (2026-07-22): JJ's ad-hoc specs — work the roadmap missed — carried `brief: n/a`
+// brief: n/a: ad-hoc specs — work the roadmap missed — carried `brief: n/a`
 // and each one earned a bogus orphan-stamp ("no docs/roadmap/n/a-*.md exists"). The spelling
 // is now sanctioned: explicitly briefless, identical to omitting the field, never a pointer.
 
@@ -668,7 +668,7 @@ test('brief: n/a (and none/-) is deliberately briefless — no orphan-stamp, bri
 
 // D1 render inversion (specs/20260807/01-observation-red-alarm.md): a terminal shows the TAIL
 // of output, so the actionable sections must be the last thing printed. Section order flips to
-// Roadmap → anomalies → 🎯 Next → headline verdict LAST (owner directive 2026-08-07 — "I need
+// Roadmap → anomalies → 🎯 Next → headline verdict LAST (owner directive — "I need
 // to scroll up to see what's Next").
 test('AC-20260807-01-1: --pretty renders Roadmap, then the anomalies section, then 🎯 Next, with the headline verdict as the final line', () => {
   const dir = host({
@@ -775,7 +775,7 @@ test('consumers are wired to the one derivation', () => {
     'review close must print --next verbatim — the freehand Next line is the incident this mode kills')
 })
 
-// Fail-closed statuses + sanctioned retirement (2026-08-01): a spec hand-edited to a word
+// Fail-closed statuses + sanctioned retirement: a spec hand-edited to a word
 // outside the lifecycle fell through deriveNext's else-branch to a /spec:build recommendation
 // with zero anomalies. Unknown statuses must be flagged and never routed to an action. The
 // sanctioned retirement spelling — `status: superseded` — must be SILENT (no anomaly, no Next

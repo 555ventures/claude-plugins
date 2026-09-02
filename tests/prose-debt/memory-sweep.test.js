@@ -6,7 +6,7 @@ const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20260823/06-prose-debt-pruning.md (2026-08-23, D13): `.claude/agent-memory/` notes
+// specs/20260823/06-prose-debt-pruning.md D13: `.claude/agent-memory/` notes
 // were disposed only when a spec's diff happened to touch the note FILE itself — the wrong
 // subject. This build's own review caught a note falsified by the same diff that shipped it
 // only because the diff happened to touch that note's own file; a note about the same defect

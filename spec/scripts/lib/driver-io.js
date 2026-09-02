@@ -6,7 +6,7 @@
 // driver (this spec) needs the identical shapes for its own <spec>.build/ sidecar and ledger row,
 // plus a synchronous stdout writer neither driver had a shared copy of. A second, paraphrased copy
 // of any of these in the new driver is the exact drift seam ci-query.js was unified over on
-// 2026-08-05 and lib/gate-resolve.js closed for the two gate resolvers on 2026-08-30.
+// (specs/20260805/02-review-evidence-manifest.md D4) and lib/gate-resolve.js closed for the two gate resolvers (specs/20260830/02-close-gate-rerun.md D3).
 //
 // runChild deliberately takes no caller identity (no __filename/specPath) — those lived in
 // spec-review-driver.js's die() remedy text before this extraction, and a shared library cannot
@@ -32,7 +32,7 @@ const { spawnSync } = require('child_process')
 
 // R9 (spec-review-driver.js's own comment, carried forward): spawnSync's `status` is null when
 // the child dies by signal, fails to spawn, or overflows maxBuffer — every caller that reads
-// `.status`/`.code` or trusts `.stdout` without checking either used to tolerate that null
+// `.status`/`.code` or trusts `.stdout` without checking either would otherwise tolerate that null
 // silently. This is the ONE place death is handled: every spawnSync call in both drivers routes
 // through here, and only a genuine no-exit-code death is fatal — a legitimate non-zero exit (a
 // red gate, RED_BLOCKING, a merge conflict) still comes back as a normal result for the caller's
@@ -83,7 +83,7 @@ function appendLedger(root, jsonLine) {
 
 // object | {} — absent sidecar file reads as {} (a fresh run), same as both drivers' own
 // pre-extraction load. Malformed JSON is NOT swallowed the same way: it dies loudly (exit 2)
-// rather than silently resetting to {}, which used to let a corrupt sidecar quietly restart a run
+// rather than silently resetting to {}, which would otherwise let a corrupt sidecar quietly restart a run
 // from cold with no trace of why. Neither driver's existing test suite ever wrote unparseable
 // JSON into a sidecar expecting the old silent-reset behavior (checked against both suites before
 // this landed), so this is a strict hardening, not an observed behavior change.

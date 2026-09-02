@@ -6,9 +6,9 @@ const path = require('node:path')
 const { spawn } = require('node:child_process')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20260823/01-release-legs.md (2026-08-23): /spec:release's ~10-step prose checklist
-// becomes one script, spec/scripts/release-legs.js (stage/append/record), so a red leg or an
-// abandoned run can no longer leave the ledger silent by omission of a hand-performed step.
+// specs/20260823/01-release-legs.md: /spec:release's ~10-step prose checklist becomes one
+// script, spec/scripts/release-legs.js (stage/append/record), so a red leg or an abandoned
+// run cannot leave the ledger silent by omission of a hand-performed step.
 // Pins AC-20260823-01-1 through -14 by executing the real script against synthetic host trees.
 //
 // Route choices (Gotchas: async spawn vs spawnSync for a stub the CLI must reach):
@@ -21,8 +21,8 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 //    and conclusion:success from invocation 2 onward, tracked in a counter file (each poll
 //    iteration is a fresh child process, so in-memory state cannot carry the count).
 //
-// specs/20260830/03-ci-leg-honest-absence.md D4 (2026-08-30, salon-os host-escape report):
-// release-legs.js's ci leg copies review-legs.js's ci-query.js -> observed mapping verbatim
+// specs/20260830/03-ci-leg-honest-absence.md D4 (host-escape report): release-legs.js's ci
+// leg copies review-legs.js's ci-query.js -> observed mapping verbatim
 // (D4's own text: "literal row identical to the review pin"), so it inherited the same bug — an
 // unpushed HEAD's shaUnseen shape mapped to `{"unavailable":"no-adapter"}`, indistinguishable
 // from "no CI at all". The AC-20260830-03-4 test below reuses AC-7's `capabilities.forge:

@@ -2,8 +2,8 @@
 'use strict'
 // render-gate.js (--spec <spec.md> | --mocks <mock>…) [--root <dir>] [--out <dir>] [--json] [--no-boot]
 //
-// WHY: specs/20260824/01-render-gate.md (2026-08-24, ADR-0002) — the render gate's driver. Two
-// prax/salon-os spikes measured that fidelity between a mock and its built component can only be
+// WHY: specs/20260824/01-render-gate.md (ADR-0002) — the render gate's driver. Two
+// host spikes measured that fidelity between a mock and its built component can only be
 // judged AT THE RENDER (painted text, in-flow order, bound-region geometry) — never from source
 // diffing. This script is the one place that judgment runs mechanically: it derives the host's
 // (mock x component) matrix from `design/targets.json` and the mock's own declared states,
@@ -13,7 +13,7 @@
 // a sentinel-terminated verdict `/spec:review` (or any script consumer) can trust without
 // reading prose.
 //
-// specs/20260824/04-render-rules.md (2026-08-24, D5): when the host config declares
+// specs/20260824/04-render-rules.md (D5): when the host config declares
 // `design.rulesManifest`, every COMPONENT inventory (never the mock side, in --spec mode) is
 // also run through render-rules.js after comparison — a rule finding prints under its cell
 // (`rule <id> <kind> …`) and fails the gate exactly like a fidelity finding. No manifest
@@ -56,9 +56,8 @@ function die(code, msg) {
   process.exit(code)
 }
 
-// Worker Rules: a script that prints a payload and exits must route through a synchronous
-// writer — console.log()+process.exit() truncates a large payload at the 64 KiB pipe buffer
-// while still exiting 0 (this repo's 2026-08-23 spec-status.js incident).
+// A script that prints a payload and exits routes through a synchronous writer — see
+// spec/scripts/lib/driver-io.js for the 64 KiB pipe-truncation mechanism this avoids.
 function writeOut(str) {
   const buf = Buffer.from(str + '\n', 'utf8')
   let off = 0

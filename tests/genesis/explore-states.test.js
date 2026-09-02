@@ -5,17 +5,13 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 
-// specs/20260827/02-genesis-explore-state.md (2026-08-27, TDD red): the explore stage stops
-// being a command and becomes driver states between MENUS and FINALISTS — research-done ->
-// positions-authored -> tiles-built -> tiles-culled, or external -- for the four VISUAL
-// archetypes (web-app, mobile-app, realtime-trading, desktop-app); every other archetype gets
-// explore: "skipped" on the first derivation past MENUS and continues unchanged. None of
-// AC-20260827-02-1..6 can pass yet: genesis-driver.js has no EXPLORE state, no research-done/
-// positions-authored/tiles-built/tiles-culled/external marks, and status.json has no
-// exploreRecord field (grep confirmed at authoring time, 2026-08-29).
+// specs/20260827/02-genesis-explore-state.md: the explore stage is not a command but driver
+// states between MENUS and FINALISTS — research-done -> positions-authored -> tiles-built ->
+// tiles-culled, or external -- for the four VISUAL archetypes (web-app, mobile-app,
+// realtime-trading, desktop-app); every other archetype gets explore: "skipped" on the first
+// derivation past MENUS and continues unchanged.
 //
-// Tile fixtures follow Assumption A1 (executed micro-spike 2026-08-27, S4; re-verified at
-// authoring time 2026-08-29 against the live design-atlas.js): a tile.html linking ./tokens.css
+// Tile fixtures follow Assumption A1: a tile.html linking ./tokens.css
 // with a root data-screen-label and only var(--role) colors passes `design-atlas.js check`; an
 // off-token color literal or a missing tokens.css link fails it naming the file. This file
 // cannot require() genesis-driver.test.js's or tournament.test.js's own file-local helpers (no
@@ -257,8 +253,8 @@ test('AC-20260827-02-3, AC-20260827-02-4: tiles-built refuses a tokens.css whose
   const changedLine = tmpdir('expl-ac3b-changed')
   setupThroughPositions(changedLine)
   for (const k of EXPLORE_KEBABS) writeValidTile(changedLine, k)
-  // Mutate one tokens.css AFTER the authored baseline was snapshotted, so it no longer
-  // startsWith its own baseline — A2's additions-only carrier without git.
+  // Mutate one tokens.css after the authored baseline is snapshotted, so it diverges from
+  // (never startsWith) its own baseline — A2's additions-only carrier without git.
   fs.writeFileSync(path.join(changedLine, 'design/explore/r0-instrument/tokens.css'),
     ':root {\n  --role-bg: #000000;\n}\n')
   const changedRefused = mark(changedLine, 'tiles-built')

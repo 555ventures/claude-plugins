@@ -11,8 +11,7 @@
 // ten-second cold test — could a non-technical product owner who has never seen this
 // repo answer correctly from the question text alone? The judge also screens for
 // questions the codebase/session/ledger could answer without the user (verdict
-// "derive"). Concept load is a judgment property no regex measures — the 2026-07-21
-// incident shipped an all-mechanism question round with zero backticked identifiers.
+// "derive"). Concept load is a judgment property no regex measures.
 // The judge fails open on every error path (no CLI, timeout, unparseable output) and
 // is disabled with SPEC_QUESTION_JUDGE=off.
 //

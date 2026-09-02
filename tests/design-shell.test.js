@@ -7,10 +7,10 @@ const { tmpdir, runNode } = require('./helpers')
 
 const atlas = (argv, opts) => runNode('scripts/design-atlas.js', argv, opts)
 
-// specs/20260901/04-shell-composed-mocks.md — 2026-09-01. D5 gives `design-atlas.js shell sync`
+// specs/20260901/04-shell-composed-mocks.md. D5 gives `design-atlas.js shell sync`
 // (rewrite every declaring mock's region from canon, skip built mocks unless named, refuse a
 // slot-less mock without stopping the run) and D6 gives `shell adopt` (plan table, then --apply
-// migrates pre-shell mocks into the canon). TDD red (grep-confirmed 2026-09-01): design-atlas.js
+// migrates pre-shell mocks into the canon). TDD red: design-atlas.js
 // has no `shell` subcommand at all today — `cmd === 'shell'` falls through to the usage die(),
 // so every test below is red until CREATE spec/scripts/lib/shell-region.js and the `shell
 // sync`/`shell adopt` subcommands land. AC-20260901-04-16 is the one exception

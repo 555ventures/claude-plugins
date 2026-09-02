@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict'
-// lib/file-plan.js — the sole parser for a spec's `## File Plan` table (v6.20.0 rule
-// generalized, 2026-08-05). Extracted verbatim from spec-status.js (D2,
+// lib/file-plan.js — the sole parser for a spec's `## File Plan` table. Extracted verbatim
+// from spec-status.js (D2,
 // specs/20260805/01-review-scope-reconciliation.md) so spec-status.js and
 // scope-reconcile.js share one derivation instead of drifting apart. This module has no CLI
 // of its own — it exports parseFilePlan/splitPlanCell for both consumers.
@@ -15,7 +15,7 @@
 // lanes annotation in spec-status.js) needs to know which files two parallel specs both intend
 // to touch. Zero rows parsed is the sanctioned no-op, never an error: a missing/malformed
 // section just means "nothing to cross-check" for that spec. Grammar pinned by a 333-spec
-// corpus audit (2026-07-31): every real File Plan is a `## File Plan` table with the path in
+// corpus audit: every real File Plan is a `## File Plan` table with the path in
 // column 1; the only observed variance is compound cells (`a + b`, comma lists, `{a,b}.ext`
 // braces, trailing `(generated)` annotations) at ~1% — split those, and add nothing
 // speculative beyond them.
@@ -93,9 +93,9 @@ function parseFilePlan(text) {
 // `Action`/`Layer`, any column order), so a table with a different column order still resolves,
 // and a table with no Layer column yields `layer: null` on every row of THAT table (not the
 // whole section) rather than misreading an unrelated column or inheriting a sibling table's
-// binding. Escaped once (Salon OS 2026-08-17, specs/20260816/03-file-plan-table-scoped-parsing.md):
+// binding. Escaped once (specs/20260816/03-file-plan-table-scoped-parsing.md):
 // a second `| Path | ... |` status table under a `### Landed at design stage` subheading
-// clobbered the section-wide index binding this function used to compute after its walk, so
+// clobbered the section-wide index binding computed after this function's walk, so
 // every row in the section — including the first table's real tests-layer rows — read back
 // `layer: null`; fixed by routing both this function and `parseFilePlan` through the shared,
 // table-scoped `walkFilePlanTables` walker (D1) instead of two hand-duplicated section walks.

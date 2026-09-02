@@ -1,10 +1,6 @@
 #!/usr/bin/env node
-// Deterministic CI-gate parity check for doctor.md check 19.
-//
-// WHY THIS EXISTS: local-green/CI-red drift (Prax, 2026-08-10) — a host's CI workflow silently
-// stopped invoking the configured `gateCommand`, so a red gate only surfaced on the CI dashboard,
-// never locally. doctor.md check 19 used to hand-execute a split/trim/floor/substring algorithm
-// in prose; that algorithm now lives here once (spec 20260814/02 D1) and check 19 only invokes it.
+// Usage: node ci-gate-parity.js --root <dir>
+// Owner: specs/20260814/02-doctor-mergeback-fidelity-mechanics.md D1 (doctor.md check 14 invokes this).
 //
 // ALGORITHM (locked): read `.claude/spec.config.json`'s `gateCommand`, split it on /\{[^}]*\}/g
 // (placeholder tokens like {testDirs}), trim each piece, and keep pieces of >=10 chars — those are
@@ -17,7 +13,6 @@
 // drift class and needs no YAML dependency); it never inspects which JOB or STEP runs the command,
 // only that the literal text appears somewhere in the workflow directory.
 //
-// CONTRACT: `node ci-gate-parity.js --root <dir>`
 // Exit codes:
 //   0  parity — every kept segment found in the workflows, OR one of the two advisory sentinels:
 //        "inapplicable — no .github/workflows" (no workflow dir to check against)

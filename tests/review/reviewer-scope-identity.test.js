@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { SPEC } = require('../helpers')
 
-// 2026-09-01, measured by the mutation-replay harness: a reviewer was handed a range, saw a real
+// Measured by the mutation-replay harness: a reviewer was handed a range, saw a real
 // eslint error on a line inside that range's diff, ran `git blame`, found a commit whose subject
 // did not name the spec under review, declared it "unrelated out-of-scope", and returned CLEAN.
 // The blamed commit was at HEAD of the range and carried the injected defect — it is precisely the

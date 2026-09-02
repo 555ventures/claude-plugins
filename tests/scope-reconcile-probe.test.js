@@ -10,11 +10,10 @@ const { tmpdir, runNode } = require('./helpers')
 // at-risk-applicability probe — `<file>` is a newline-separated list of repo-relative source
 // paths (init-gen samples up to 20 tracked non-test files), and the mode REUSES the existing
 // stemsFor derivation and test-file content scan in place (the sole-derivation rule: a second
-// stem implementation anywhere is a hard violation). This test pins AC-11 and FAILS on current
-// code: scope-reconcile.js has no --probe-at-risk flag at all yet (TDD red, 2026-08-22). The
-// motivating incident is the 2026-08-20 at-risk escape this same derivation was built to close
-// (specs/20260815/02) — D9's point is that a Python-shaped (dotted-import) host is silently
-// indistinguishable from "clean" unless the probe surfaces refs:0 at init time.
+// stem implementation anywhere is a hard violation). This test pins AC-11. The motivating
+// incident is the at-risk escape this same derivation was built to close (specs/20260815/02)
+// — D9's point is that a Python-shaped (dotted-import) host is silently indistinguishable
+// from "clean" unless the probe surfaces refs:0 at init time.
 
 const SCRIPT = 'scripts/scope-reconcile.js'
 

@@ -8,7 +8,7 @@ const { tmpdir, runBash } = require('./helpers')
 // specs/20260815/04-runtime-shutdown-leg.md — the runtime leg sends `runtime.stopSignal`
 // (already true, in the EXIT trap) but never observes whether the process actually stopped
 // cleanly: the signal is spent and the observation discarded before the leg's verdict is
-// fixed. JJ-20260815-05 named this as the gate that should have caught a stranded pidfile
+// fixed — the gate that should have caught a stranded pidfile
 // lock (wf_1d6e7652-ec3) that rode two CLEAN reviews. This file pins the new shutdown
 // observation (D1/D2): after readiness, smoke.sh sends the stop signal, waits up to
 // `runtime.stopTimeout`, and requires an exit status in `runtime.stopExitCodes` (default
@@ -83,7 +83,7 @@ test('AC-20260815-04-3: smoke.sh accepts a declared stopExitCodes value as a cle
     `a reviewer can see what "clean" meant for this host; got stdout=${res.stdout}`)
 })
 
-// specs/20260821/03-cross-spec-skip-mapping.md AC-20260821-03-10 (2026-08-21, D4's covering
+// specs/20260821/03-cross-spec-skip-mapping.md AC-20260821-03-10 (D4's covering
 // pin): this fixture's readyCheck (`test -f $dir/up`) is false until bootCommand itself creates
 // the marker, so D4's new pre-boot staleness probe never fires here — the pin stays green,
 // tagged in place per this spec's Decisions (never duplicated, never weakened).

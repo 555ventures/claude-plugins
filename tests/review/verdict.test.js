@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 
-// specs/20260810/07-per-sha-ci-legs.md (D3/D4, 2026-08-10, Prax stale-CI-review incident): ci
+// specs/20260810/07-per-sha-ci-legs.md (D3/D4, stale-CI-review incident): ci
 // stays a REVIEW_BLOCKING leg (a completed red run on the exact reviewed commit must still
 // derive GATE_RED), and RELEASE_LEGS grows to include `ci` — release gains the authoritative
 // per-SHA CI check the review leg's re-key (D2) intentionally does not carry across to
@@ -13,18 +13,18 @@ const { tmpdir, runNode } = require('../helpers')
 // per the spec's refuter-demonstrated fixture regression (a six-leg release fixture goes stale
 // the moment RELEASE_LEGS grows to seven).
 //
-// v7.0.0 (2026-08-17): CLEAN-with-qualifier and the sanctionedReds suffix are retired with the
+// CLEAN-with-qualifier and the sanctionedReds suffix are retired with the
 // sanctioned-red baseline apparatus — the verdict enum is CLEAN|FINDINGS|HARD_FINDINGS|
 // REVIEWER_FAILED|UNVERIFIED|GATE_RED, an `unavailable` observation leg derives plain CLEAN
-// (recorded in the leg row, never a distinct word). Ledger legs rows are NO LONGER {leg,exit}
+// (recorded in the leg row, never a distinct word). Ledger legs rows are not {leg,exit}
 // only — specs/20260818/01-ledger-truth.md below widens them to {leg,exit,observed}.
 //
-// specs/20260818/01-ledger-truth.md (D1-D7, 2026-08-18, Fable retainer consult on v7's first
+// specs/20260818/01-ledger-truth.md (D1-D7, Fable retainer consult on v7's first
 // full pipeline run): a red findings leg (reconcile/ac-matrix/skip-reconcile/promise-sweep/
 // at-risk/drift/patterns) now contributes to the SAME undispositioned pool as reviewer
 // survivors — legFindings = Σ over red non-blocking manifest rows, parsed by the pinned
 // observed grammar and floored at 1 — so CLEAN is unreachable while any leg finding sits
-// undispositioned (previously a red findings leg with zero survivors and zero dispositions
+// undispositioned (a red findings leg with zero survivors and zero dispositions
 // derived CLEAN, a demonstrated fail-open). The disposition-contradiction guard widens to
 // `waived+rejected+fixDispatched <= survivors+legFindings`. Ledger legs rows keep `observed`
 // (sliced to 120 chars) in both profiles, review rows always carry `runId` (passed verbatim
@@ -43,10 +43,10 @@ const { tmpdir, runNode } = require('../helpers')
 // order). This file pins verdict.js's derivation contract directly by execution; review.md's
 // wiring of the script is pinned in verdict-doctrine.test.js.
 //
-// specs/20260820/03-review-observation-truth.md (D2-D4, D6, 2026-08-20, Salon OS field report):
+// specs/20260820/03-review-observation-truth.md (D2-D4, D6, field report):
 // a gate row whose `observed` is unparseable by the pinned "skips=N todos=M" grammar was
 // silently decaying to `testsSkipped: {total:0,...}` and a CLEAN verdict — a fabricated
-// zero-skip measurement no run ever made, violating UPWELL-20260716-02's never-assumed-zero
+// zero-skip measurement no run ever made, violating this spec's never-assumed-zero
 // rule. `deriveTestsSkipped` now types any `observed` starting with "unavailable" as exactly
 // `{"unavailable":true}` (D2); a gate row whose observed is EXACTLY
 // "unavailable — skip format did not match gate output" (exit 0) additionally contributes 1 leg
@@ -58,7 +58,7 @@ const { tmpdir, runNode } = require('../helpers')
 // either variant. New tests below key on the exact did-not-match literal so none of SIX_GREEN's
 // ~30 other reuses redden (Fragile Spots).
 //
-// specs/20260819/01-review-evidence-retention.md (D1-D4, D9, 2026-08-19, brief 14 — the
+// specs/20260819/01-review-evidence-retention.md (D1-D4, D9, brief 14 — the
 // reviewer's return lived only in a mktemp file the Phase 3 hygiene sweep deleted): verdict.js
 // gains --retain <dir>, REQUIRED on the review profile whenever both --ledger and --workflow are
 // passed, writing <dir>/<runId>.json with the manifest legs' observed UNTRUNCATED and the
@@ -69,7 +69,7 @@ const { tmpdir, runNode } = require('../helpers')
 // --ledger+--workflow invocation below in place, per the standing colliding-pin Gotcha — none
 // retagged, none weakened, none left red.
 
-// specs/20260820/06-typed-evidence-manifest.md (D1-D11, 2026-08-20, brief 16's second move):
+// specs/20260820/06-typed-evidence-manifest.md (D1-D11, brief 16's second move):
 // every manifest row's `observed` field becomes a typed JSON object from the Contracts' closed
 // set; `verdict.js` stops regex-parsing packed strings — `parseCounts`/`deriveProduction` are
 // deleted, `countLegFinding`/`deriveTestsSkipped` read typed fields, and release ledger keys
@@ -100,7 +100,7 @@ function writeWorkflow(dir, obj) {
 // specs/20260813/10-host-capabilities.md D4: the ci row carries a real `conclusion=` observation,
 // not `unavailable`. Every test below that reuses this fixture pins a subject OTHER than the
 // qualifier word (leg presence, disposition counting, ledger row shape) and states "every leg is
-// green" — since D4, an `unavailable` ci leg is no longer a plain-CLEAN input, so leaving it here
+// green" — since D4, an `unavailable` ci leg is not a plain-CLEAN input, so leaving it here
 // would silently turn all of them into qualifier tests asserting the wrong subject. The
 // unavailable-ci case has its own dedicated pin below.
 //
@@ -198,7 +198,7 @@ test('AC-20260805-02-3 / AC-20260810-07-8: a red ci leg derives GATE_RED and exi
   assert.strictEqual(r.status, 1, 'GATE_RED must exit 1 so the close step is mechanically unreachable: ' + r.stderr)
 })
 
-// v7.0.0 retag: the SUBSTANCE — an unavailable ci leg must never BLOCK, since exit 0 satisfies
+// AC-20260813-10-8 retag: the SUBSTANCE — an unavailable ci leg must never BLOCK, since exit 0 satisfies
 // the leg requirement — survives byte-for-byte. The qualifier word is retired: an unavailable
 // observation derives plain CLEAN with the observation recorded in the leg row.
 test('AC-20260813-10-8 (retag of AC-20260813-02-8): a review-profile run whose ci leg is observed unavailable derives plain CLEAN and exit 0 — the leg never blocks the close', () => {
@@ -300,7 +300,7 @@ test('AC-20260818-01-6 (retag of AC-20260805-02-5/AC-20260816-02-8\'s legs-shape
     'makes "CI passed" distinguishable from "no CI exists": ' + JSON.stringify(row.legs))
 })
 
-// 2026-08-06 review-fix findings (prev-findings.json): verdict.js's --ledger row was missing
+// AC-20260805-02-5 review-fix findings (prev-findings.json): verdict.js's --ledger row was missing
 // runId/smoke/testsSkipped entirely and flattened the disposition counts, contradicting D2's
 // "smoke and testsSkipped are derived FROM manifest rows" and review.md:229's documented
 // runId/findings-nested shape; the release profile's row carried only {ts,stage,verdict,legs},
@@ -478,7 +478,7 @@ test('AC-20260820-06-4 (retag of AC-20260820-03-6): an all-green manifest whose 
     'this row raises no finding of its own: ' + JSON.stringify(row))
 })
 
-// specs/20260816/01-gate-baseline-reconcile.md D10 (retainer ruling, 2026-08-17, tdd-red-check
+// specs/20260816/01-gate-baseline-reconcile.md D10 (retainer ruling, tdd-red-check
 // consult): AC-20260816-01-12 is a sanctioned-green regression pin, standalone (never folded
 // onto AC-8's testsSkipped-total test, which pins a different observable — see D10's rationale).
 // The verdict word derives from leg exit codes alone (derive()/legIsRed reads row.exit, never
@@ -547,10 +547,10 @@ test('AC-20260813-02-2: a skip-reconcile typed observed object carrying only {"s
 })
 
 // specs/20260818/01-ledger-truth.md D8 (build-time addendum to D7, found by the red gate
-// 2026-08-18 — a sixth colliding pin this pass's own collision sweep missed): the surviving
+// — a sixth colliding pin this pass's own collision sweep missed): the surviving
 // half (counts nested under `findings`, never flat at top level) continues; the exhaustive
 // six-key `deepStrictEqual` is the defect — D4 adds a seventh key (`legFindings`) to
-// `row.findings`, so the old six-key object is no longer what the script emits. Updated in
+// `row.findings`, so the old six-key object is not what the script emits. Updated in
 // place and retagged to AC-20260818-01-2, never weakened to a subset/partial match.
 test('AC-20260818-01-2 (retag of AC-20260805-02-8): the review ledger row nests survived/killed/waived/rejected/fixDispatched/reviewerCount/legFindings under findings and carries none of them flat at the top level', () => {
   const dir = tmpdir('verdict')
@@ -576,7 +576,7 @@ test('AC-20260818-01-2 (retag of AC-20260805-02-8): the review ledger row nests 
   }
 })
 
-// 2026-08-06 review-fix: real wf-review returns workflow.killed as an ARRAY of killed-finding
+// AC-20260805-02-8 review-fix: real wf-review returns workflow.killed as an ARRAY of killed-finding
 // objects (not the plain count cleanWorkflow()'s stub used above) and workflow.tokens as a
 // plain number — two shapes verdict.js's --ledger row was passing through unnormalized instead
 // of converting to the documented review.md:229 template (findings.killed = a count,
@@ -1219,7 +1219,7 @@ test('AC-20260819-01-7: retention CONTINUES TO print exactly the verdict word as
     'line 1 must still be a bare verdict word, never prose or a path: ' + JSON.stringify(r.stdout))
 })
 
-// --- specs/20260824/06-review-range-identity.md (D1-D3, D5, 2026-08-24): closing
+// --- specs/20260824/06-review-range-identity.md (D1-D3, D5): closing
 // specs/20260824/01's CLEAN-with-2-waived review traced its one survivor to an unrelated commit
 // that rode into the range three minutes after the build commit — but the row that recorded the
 // CLEAN verdict named no range at all (0 of 118 historical rows carry one), and the reconcile

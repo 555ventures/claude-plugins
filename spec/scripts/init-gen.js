@@ -4,20 +4,20 @@
 // init-gen.js generate --root <dir> --profile <path> [--refresh]
 //
 // specs/20260822/02-init-generation-script.md: the review-legs.js inversion applied to
-// /spec:init. init.md used to hand-perform every deterministic file-generation phase as prose
+// /spec:init: file-generation phases are generated deterministically — never hand-performed as prose
 // re-executed by a model each bootstrap — config, rules, agents, skills, settings merge,
 // patterns harness, manifest, gitignore/gitattributes mechanics. That drifts per session/model
 // exactly the way review-legs.js's prose predecessor did. `generate` is now the SOLE WRITER of
 // the grounding-layer deliverables from a session-authored JSON profile; `probe` reports
 // read-only findings the interview adjudicates. Two dated incidents behind this shape:
-// (1) 2026-08-22 spike: the locked init.md idempotency check `git check-ignore -q
+// (1) the locked init.md idempotency check `git check-ignore -q
 // .claude/worktrees` exits 1 on a fresh host even when the ignore entry exists (dir-only
 // pattern, path not yet on disk) — D4 retires it for a child-path probe (`.../worktrees/x`).
-// (2) the 2026-08-20 at-risk escape: a shared script's return value changed and reddened a
+// (2) an at-risk escape: a shared script's return value changed and reddened a
 // suite outside the spec's own File Plan tests rows, undetected until much later — D8/D9 make
 // the vacuous-pass and inert-at-risk-leg classes visible at the one moment (init) they're cheap
 // to fix.
-// (3) 2026-08-24 (specs/20260824/05-design-doctrine-cut.md, D6): generate no longer writes a
+// (3) specs/20260824/05-design-doctrine-cut.md D6: generate does not write a
 // `specs/**/*.design/` gitignore line — the render gate never wrote that sidecar, so init must
 // not provision it either. The `.claude/worktrees/` entry is unaffected.
 //
@@ -107,7 +107,7 @@ function probeFrontendDesign() {
 }
 
 // D8: executes `<cmd> <generated nonexistent path>` in the host root. exit 0 means the runner
-// vacuously "passed" against a path that matches nothing (the 2026-08-20 escape's class);
+// vacuously "passed" against a path that matches nothing (the at-risk escape's class);
 // exit != 0 means it fails loud, which is the safe/expected shape. A spawn failure (runner not
 // found) reports failsLoud:true too — a runner that can't even be invoked cannot be trusted to
 // pass silently.
@@ -228,7 +228,7 @@ function validateProfile(p) {
       if (!(s in p.rules.sections)) fieldMissing(`rules.sections["${s}"]`)
     }
   }
-  // conventionRules was previously required-but-unchecked-for-shape (dereferenced at ~332/350
+  // conventionRules needs an explicit shape check too (an unchecked dereference at ~332/350
   // with no validation, uncaught TypeError at exit 1); now every field the script iterates with
   // for-of gets an explicit array-shape check with a matched remedy.
   for (const field of ['rules.paths', 'conventionRules', 'agents', 'patternSweeps', 'manifestExtras']) {
@@ -486,15 +486,15 @@ const IGNORE_ENTRIES = [
   { line: '.claude/worktrees/', sample: '.claude/worktrees/x' },
   // spec-review-driver.js keeps its re-entry sidecar at specs/<date>/<spec>.review/ for the whole
   // run (deleted only at DONE) — unignored, a host gate that sweeps the whole tree reds on the
-  // pipeline's own scratch before a reviewer dispatches (hearwell 2026-08-31, prettier --check).
+  // pipeline's own scratch before a reviewer dispatches (a host lint/format gate, e.g. prettier --check).
   { line: 'specs/**/*.review/', sample: 'specs/20260101/01-x.review/review-state.json' },
   // specs/20260901/01-build-driver.md D5: spec-build-driver.js keeps its own re-entry sidecar at
   // specs/<date>/<spec>.build/ for the build run's whole lifetime (deleted only at DONE) — the
-  // same hearwell 2026-08-31 mechanism as the .review/ entry above, closed here for build.
+  // same host-gate mechanism as the .review/ entry above, closed here for build.
   { line: 'specs/**/*.build/', sample: 'specs/20260101/01-x.build/build-state.json' },
   // specs/20260901/02-run-provenance.md D6: spec-session-stamp.sh writes a per-session scratch
   // file at .claude/spec-session.json on every /spec: prompt — a per-session file must never ride
-  // a close commit (the 7.45.0 sidecar class). A single bare file, not a directory glob, so the
+  // a close commit (the same sidecar-scratch class as above). A single bare file, not a directory glob, so the
   // probe is the literal path itself rather than a child-path sample.
   { line: '.claude/spec-session.json', sample: '.claude/spec-session.json' },
 ]
@@ -623,7 +623,7 @@ try {
   // D3 (round 3): the merge is computed here, INSIDE the boundary, as its first statement — still
   // ahead of buildFileTargets and every write (round 2's no-settings-throw-after-a-write ordering
   // holds), and now also covered by this same exit-4 boundary for the unenumerable residue A1
-  // describes (JSON-representable inputs no longer reach a throw here after D1/D2's shape checks).
+  // describes (D1/D2's shape checks keep JSON-representable inputs clear of a throw here).
   const merged = mergeSettings(root, existingSettings, profile)
   const fileTargets = buildFileTargets(profile)
   const manifestObj = buildManifestObject(root, profile)

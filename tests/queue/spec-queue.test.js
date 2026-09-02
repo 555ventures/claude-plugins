@@ -6,8 +6,8 @@ const path = require('node:path')
 const { execFileSync, spawn } = require('node:child_process')
 const { tmpdir, runNode, gitRepo, SPEC } = require('../helpers')
 
-// specs/20260823/08-derived-session-queue.md (2026-08-23): the queue this spec exists for —
-// JJ's intended work order plus free-text items and their done-when predicates — lives in ONE
+// specs/20260823/08-derived-session-queue.md: the queue this spec exists for —
+// the intended work order plus free-text items and their done-when predicates — lives in ONE
 // file, `spec-queue.json`, resolved via `git -C <root> rev-parse --git-common-dir` so every
 // linked worktree of a repo shares it and it never appears in `git status` (D1, executed spike
 // A1). All writes to that file are owned by `spec/scripts/spec-queue.js`; doneness for both item
@@ -224,7 +224,7 @@ test('AC-20260823-08-10: spec-queue bump moves an auto_placed item to position 1
     'D6: bump must remove the auto_placed stamp — the veto has now been exercised, so the item must never again print an "auto-queued" notice: ' + JSON.stringify(item))
 })
 
-// 2026-08-23 /spec:review of specs/20260823/08-derived-session-queue.md, second repair round:
+// A /spec:review of specs/20260823/08-derived-session-queue.md, second repair round:
 // writeQueue's atomic temp-file+rename fix (see its header comment in spec-queue.js) stays, but
 // this test's own evidence claim was overstated and is corrected here. It does NOT discriminate a
 // plain-fs.writeFileSync revert: a second review repro reconstructed the real pre-fix writeQueue
@@ -237,7 +237,7 @@ test('AC-20260823-08-10: spec-queue bump moves an auto_placed item to position 1
 // each other's half-written temp file into place; (2) a temp file placed on a different filesystem
 // than QUEUE_PATH (rename across filesystems is never atomic, and would surface as ENOTEMPTY/EXDEV
 // failures or a missing/malformed final file under this same concurrent load); (3) lockfile- or
-// EEXIST-style concurrency crashes that leave the file missing or malformed; and (4) the original
+// EEXIST-style concurrency crashes that leave the file missing or malformed; and (4) the pre-fix
 // tearing defect itself, on any future CI runner or filesystem where the >196KB threshold IS
 // reachable. Read this as a concurrent-invocation safety pin, not a corruption regression pin.
 test('AC-20260823-08-review-concurrent-writer-safety: N concurrent spec-queue invocations racing writes against one shared queue file all succeed and never leave it unparseable', async () => {

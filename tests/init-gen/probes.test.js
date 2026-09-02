@@ -9,8 +9,8 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // [--test-command "<cmd>"] [--sample <n>]` reports read-only findings and always exits 0 —
 // adverse findings are data, never a probe failure. These tests pin AC-8/9/10 against PATH-shim
 // fixtures (no real `claude` CLI or test runner dependency, per the File Plan's own note) and
-// all FAIL on current code: init-gen.js does not exist yet (TDD red, 2026-08-22). AC-8 pins the
-// testCommand no-match probe (D8) — the exact vacuous-pass class the 2026-08-20 at-risk escape
+// all FAIL on current code: init-gen.js does not exist yet (TDD red). AC-8 pins the
+// testCommand no-match probe (D8) — the exact vacuous-pass class the at-risk escape
 // was built on. AC-9/AC-10 pin the frontend-design detection probe (D7/A1), including the typed
 // `no-claude-cli` unavailability arm.
 

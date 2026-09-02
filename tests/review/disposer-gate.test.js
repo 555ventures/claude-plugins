@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20260901/09-disposer-gate.md (2026-09-01, brief 18b): the session-change CHECKPOINT
+// specs/20260901/09-disposer-gate.md (brief 18b): the session-change CHECKPOINT
 // (specs/20260901/03 D2, hardened by 05 D1-D3) is retired — walked past in 2 of 2 real loop
 // runs before 18a and, after 18a, converted into a restart ceremony. Independence moves to a
 // fresh-context `spec:disposer` agent whose return the driver refuses to advance `--mark
@@ -15,7 +15,7 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // tests/review/loop-checkpoint.test.js (deleted, D9 — every test there pinned the retired
 // mechanism) and reuses that file's makeHost/writeStamp fixture vocabulary plus
 // review-driver.test.js's toReviewer/returnFileWith idiom (A6). Written before
-// spec-review-driver.js/verdict.js implement any of D1-D6 (TDD red, 2026-09-01) — every test
+// spec-review-driver.js/verdict.js implement any of D1-D6 (TDD red) — every test
 // below fails against current code because CHECKPOINT still exists and DISPOSER_FAILED/--file
 // verification does not.
 
@@ -416,7 +416,7 @@ test('AC-20260901-09-9: WHEN review-state.json (as 7.53.0 wrote it) carries "che
   writeStamp(host.root, 's1')
   run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('disposer-ac9-return', CLEAN_RETURN))
 
-  // Hand-write the legacy 7.53.0 shape onto the sidecar the current run already created — the
+  // Hand-write the legacy pre-D4 sidecar shape onto the sidecar the current run already created — the
   // driver must never consult these keys once D4 lands.
   const statePath = path.join(host.sidecar, 'review-state.json')
   const state = JSON.parse(fs.readFileSync(statePath, 'utf8'))

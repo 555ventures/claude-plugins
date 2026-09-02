@@ -6,7 +6,7 @@ const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20260823/08-derived-session-queue.md (2026-08-23): D2 keeps `--next` the sole
+// specs/20260823/08-derived-session-queue.md: D2 keeps `--next` the sole
 // next-pointer surface (every live consumer captures spec-status --next stdout verbatim) by
 // landing the queue as a READ-ONLY overlay inside deriveNext() rather than a post-processing
 // sibling script. This file pins that overlay boundary directly against spec/scripts/spec-status.js:
@@ -155,13 +155,10 @@ test('AC-20260823-08-14: spec-status --root pointed at a linked worktree ignores
 // D10's rationale states escape supremacy is "the one exception, inherited unchanged" from
 // specs/20260805/03 D5, so this pin is green both before and after the overlay lands, same as
 // this file's AC-20260823-08-3 sibling.
-// Regression, found 2026-08-23 by the user on the first real `spec-queue next` run against
-// this repo's own ~75 KB dashboard JSON: spec-status.js printed its JSON with console.log()
-// and called process.exit() on the very next line. console.log() to a PIPE is asynchronous in
-// Node — exactly the case for every programmatic caller (spawnSync/exec, e.g. spec-queue.js's
-// `--next --json` consumer) — so process.exit() tore the process down before the pipe drained:
-// stdout silently truncated at the 64 KiB pipe buffer while the exit code still read 0. The
-// spec's fix (specs/20260823/08-derived-session-queue.md repair) replaced every console.log()-
+// Regression, found by the user on the first real `spec-queue next` run against this repo's
+// own ~75 KB dashboard JSON. The 64 KiB `process.exit` stdout truncation (async pipe write) is
+// explained in spec/scripts/lib/driver-io.js. The spec's fix
+// (specs/20260823/08-derived-session-queue.md repair) replaced every console.log()-
 // then-process.exit() JSON emission site with a synchronous fs.writeSync loop. This pins that
 // fix behaviorally, at a fixture size independently proven (via a synchronous file-redirect
 // run of the SAME invocation) to exceed the 64 KiB pipe buffer, so the test can never silently

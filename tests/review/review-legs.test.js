@@ -5,12 +5,12 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// v7.0.0 (2026-08-17): review-legs.js replaces /spec:review's hand-performed Phase 0 — it runs
-// every deterministic review leg (reconcile, gate w/ resolved {testDirs}, smoke, ci, at-risk,
-// ac-matrix + skip-reconcile), appends one JSONL row per leg to the evidence manifest verdict.js
-// derives from, and exits 1 only when a blocking leg (gate/smoke/ci) is red. These tests drive
-// it end-to-end against a synthetic git host — the same manifest then feeds verdict.js, pinning
-// the two scripts' row-shape contract in one place.
+// review-legs.js replaces /spec:review's hand-performed Phase 0 — it runs every deterministic
+// review leg (reconcile, gate w/ resolved {testDirs}, smoke, ci, at-risk, ac-matrix +
+// skip-reconcile), appends one JSONL row per leg to the evidence manifest verdict.js derives
+// from, and exits 1 only when a blocking leg (gate/smoke/ci) is red. These tests drive it
+// end-to-end against a synthetic git host — the same manifest then feeds verdict.js, pinning the
+// two scripts' row-shape contract in one place.
 //
 // specs/20260817/07-promise-sweep-leg.md D4 (AC-20260817-07-9, AC-20260817-07-10): review-legs.js
 // gains an eighth leg, promise-sweep, run in every scope including --fix-delta. The synthetic
@@ -18,33 +18,32 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // (per the spec's own Fragile Spots note) so the green-host test's exit-0 assertions keep
 // meaning "every leg genuinely passed" rather than "promise-sweep honestly reported an orphan".
 //
-// specs/20260820/03-review-observation-truth.md D1 (AC-20260820-03-1, AC-20260820-03-2,
-// 2026-08-20, Salon OS field report): env-preflight.js was authored and wired into
-// build/design/doctor but absent from the review path (the 3rd recurrence of the
-// authored-not-activated class) — review-legs.js now runs `env-preflight.js --root <root>`
-// (default mode) as a precondition before wave 1; a preflight exit 1 (an unset declared
+// specs/20260820/03-review-observation-truth.md D1 (AC-20260820-03-1, AC-20260820-03-2):
+// env-preflight.js is authored and wired into build/design/doctor and now also the review path
+// (closing the authored-not-activated class) — review-legs.js runs `env-preflight.js --root
+// <root>` (default mode) as a precondition before wave 1; a preflight exit 1 (an unset declared
 // `testEnv` var) becomes review-legs.js exit 2, stderr naming the unset var(s) and their
 // provision command(s), with NO manifest row appended for any leg. `makeHost` below grows an
 // optional `testEnv` param so the one new test can declare an unset gating var without
 // disturbing every other fixture in this file, which omit it and so see zero behavior change
 // (AC-2 — the existing green-host test, tagged below).
 //
-// specs/20260820/06-typed-evidence-manifest.md D1/D2/D5 (2026-08-20, brief 16's second move):
-// every leg row's `observed` field becomes a typed JSON object. This host declares no
-// `testCountPattern`, so the gate row's `testsExecuted` typed sub-field is
-// {"unavailable":"no-format-declared"} throughout (D5: pattern absent -> typed unavailability,
-// never assumed zero) — the testCountPattern-driven branches (AC-20260820-06-5/6/7) are pinned
-// separately in tests/review/legs-verdict-pair.test.js, the grammar authority (D10). Every
+// specs/20260820/06-typed-evidence-manifest.md D1/D2/D5: every leg row's `observed` field is a
+// typed JSON object. This host declares no `testCountPattern`, so the gate row's
+// `testsExecuted` typed sub-field is {"unavailable":"no-format-declared"} throughout (D5:
+// pattern absent -> typed unavailability, never assumed zero) — the testCountPattern-driven
+// branches (AC-20260820-06-5/6/7) are pinned separately in
+// tests/review/legs-verdict-pair.test.js, the grammar authority (D10). Every
 // `byLeg.get(...).observed` assertion below is retyped in place; none is retagged.
 //
-// specs/20260830/03-ci-leg-honest-absence.md D4 (2026-08-30, salon-os host-escape report): the ci
-// leg previously mapped ci-query.js's `{available:false,transient:false}` for an unpushed HEAD
-// identically to "no CI at all" (`{"unavailable":"no-adapter"}`) — indistinguishable from a host
-// with zero CI tooling, so 23 unpushed commits against a red origin branch read green. ci-query.js
-// now emits a `shaUnseen` shape (this spec's D1/D2/D3, pinned in tests/review/ci-query.test.js)
-// carrying the current branch's own latest origin conclusion; this leg must map THAT shape to
-// `{"unavailable":"sha-unseen","branch":...,"branchConclusion":...}` at exit 0 — a red
-// branchConclusion must never redden the leg (JJ's 2026-08-30 never-block ruling).
+// specs/20260830/03-ci-leg-honest-absence.md D4: the ci leg must not map ci-query.js's
+// `{available:false,transient:false}` for an unpushed HEAD identically to "no CI at all"
+// (`{"unavailable":"no-adapter"}`) — that reading is indistinguishable from a host with zero CI
+// tooling, so unpushed commits against a red origin branch would read green. ci-query.js emits a
+// `shaUnseen` shape (specs/20260830/03-ci-leg-honest-absence.md D1/D2/D3, pinned in
+// tests/review/ci-query.test.js) carrying the current branch's own latest origin conclusion;
+// this leg maps THAT shape to `{"unavailable":"sha-unseen","branch":...,"branchConclusion":...}`
+// at exit 0 — a red branchConclusion must never redden the leg (the never-block ruling).
 // `makeHostForCiLeg` mirrors `makeHost` but omits `capabilities.forge` (legacy dynamic-probe mode,
 // the same pattern release-legs.test.js's AC-20260823-01-7 already uses) and has no remote at all,
 // so its HEAD is unpushed by construction — a fake `gh` on PATH branching on argv (the
@@ -145,13 +144,13 @@ test('AC-20260820-03-1: an unset declared testEnv var makes review-legs.js exit 
     'without reading .claude/spec.config.json itself: ' + r.stderr)
 })
 
-// specs/20260830/02-close-gate-rerun.md D3 (2026-08-30): resolveGate() moves out of this script
-// into spec/scripts/lib/gate-resolve.js (resolveGate(specText, config)), imported here byte-
+// specs/20260830/02-close-gate-rerun.md D3: resolveGate() moves out of this script into
+// spec/scripts/lib/gate-resolve.js (resolveGate(specText, config)), imported here byte-
 // identically — one derivation of {testDirs}/{scopeDirs} substitution shared with the driver's
-// new close-time gate re-run. This test drives the real review-legs.js binary end-to-end and
-// already asserts the gate leg executes the resolved glob form and exits 0 (the JJ-20260815-04
-// bare-directory class), so it is the extraction's own regression pin — tagged in place below,
-// never duplicated, never weakened.
+// close-time gate re-run. This test drives the real review-legs.js binary end-to-end and already
+// asserts the gate leg executes the resolved glob form and exits 0 (the bare-directory class),
+// so it is the extraction's own regression pin — tagged in place below, never duplicated, never
+// weakened.
 test('AC-20260820-03-2 (also AC-20260830-02-3, SHALL CONTINUE TO): a green synthetic host produces every required leg row, resolves {testDirs} to the glob form via lib/gate-resolve.js\'s resolveGate(), and exits 0', () => {
   const { dir, base } = makeHost({ testBody: GREEN_TEST })
   const { r, byLeg } = run(dir, base)
@@ -233,11 +232,11 @@ test('--fix-delta skips reconcile/at-risk and still records the re-executed legs
   assert.strictEqual(r.status, 0, 'green fix-delta legs must exit 0: ' + r.stdout + r.stderr)
 })
 
-// specs/20260824/06-review-range-identity.md D5 (2026-08-24): closing specs/20260824/01's CLEAN-
-// with-waivers review, the reconcile leg's out-of-plan finding survived only because the reviewer
-// quoted the filename in prose — the manifest row reduced it to a bare integer at emission. The
-// reconcile row now carries `files` (scope-reconcile's outOfPlan array verbatim and in order,
-// always present, capped at 40 with a `filesOmitted` count above the cap). `makeHostWithOutOfPlan`
+// specs/20260824/06-review-range-identity.md D5: the reconcile leg's out-of-plan finding must
+// never survive only because the reviewer quotes the filename in prose while the manifest row
+// reduces it to a bare integer at emission. The reconcile row carries `files` (scope-reconcile's
+// outOfPlan array verbatim and in order, always present, capped at 40 with a `filesOmitted`
+// count above the cap). `makeHostWithOutOfPlan`
 // mirrors `makeHost` but adds N stray committed files outside the File Plan, isolating the
 // reconcile row's own out-of-plan shape from the green-host fixture above.
 function makeHostWithOutOfPlan(strayFiles) {
@@ -321,7 +320,7 @@ test('a missing spec or config is a precondition failure: exit 2, no manifest ro
 
 // AC-20260830-03-2's own fixture: `capabilities.forge` is omitted (legacy dynamic-probe mode) so
 // the ci leg actually shells to `gh`, and the fixture repo carries no remote at all — HEAD is
-// unpushed by construction, exactly the salon-os shape.
+// unpushed by construction, matching an unpushed-HEAD host shape.
 function makeHostForCiLeg() {
   const dir = tmpdir('review-legs-ci-shaunseen')
   const g = gitRepo(dir)

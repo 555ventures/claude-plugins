@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
-# UserPromptSubmit hook (D1, specs/20260901/02-run-provenance.md, 2026-09-01): on a prompt whose
-# text starts with /spec: this stamps <cwd>/.claude/spec-session.json = {session_id,
-# transcript_path, cwd, ts}, written atomically (temp file + mv).
-#
-# Incident (2026-09-01, spec run-provenance): no ledger row could name which model held the
-# session that produced it — the session model is not in the shell environment (executed spike
-# A1), and the only carriers are a hook's stdin (session_id, transcript_path) and the transcript
-# itself. This hook is the sole route from a hook's stdin to a driver subprocess that has neither.
-# lib/session-stamp.js later reads this file plus the named transcript to derive the model at
-# ledger-row-write time (never here — this hook only files the two strings verbatim).
+# UserPromptSubmit hook (D1, specs/20260901/02-run-provenance.md): on a prompt whose text starts
+# with /spec: this stamps <cwd>/.claude/spec-session.json = {session_id, transcript_path, cwd,
+# ts}, written atomically (temp file + mv). No ledger row could otherwise name which model held
+# the session that produced it — the session model is not in the shell environment (executed
+# spike A1), and the only carriers are a hook's stdin (session_id, transcript_path) and the
+# transcript itself. This hook is the sole route from a hook's stdin to a driver subprocess that
+# has neither. lib/session-stamp.js later reads this file plus the named transcript to derive the
+# model at ledger-row-write time (never here — this hook only files the two strings verbatim).
 #
 # What this deliberately does NOT do: print anything on a non-empty stdout (a UserPromptSubmit
 # hook's stdout is injected into the model's context on every single /spec: prompt), validate the

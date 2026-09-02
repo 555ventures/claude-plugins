@@ -31,8 +31,8 @@ const SPEC_MD = (status, body = '') => `---\nstatus: ${status}\n---\n# Spec\n${b
 // retired) — this pair of assertions is the SHALL-CONTINUE-TO regression pin, green at HEAD by
 // design, not a new behavior.
 //
-// specs/20260901/10-spec-run-command.md D4/AC-20260901-10-2 (2026-09-01, brief 18b): the loop
-// takes its own name, /spec:run, so /spec:build loses the `done` admission it was given for
+// specs/20260901/10-spec-run-command.md D4/AC-20260901-10-2: the loop takes its own name,
+// /spec:run, so /spec:build loses the `done` admission it was given for
 // brief 18's now-retired post-checkpoint resume (03 D5) — the `done` assertion below is flipped
 // in place from AC-20260901-03-1's exit-0 pin back to exit 2, stderr naming /spec:run as the
 // resume entry. That flip is this test's reason to be red at build.
@@ -66,12 +66,9 @@ test('AC-20260901-10-2 / AC-20260901-10-3 / AC-20260824-02-5 (SHALL CONTINUE TO)
 })
 
 // AC-20260901-10-1 (D4): /spec:run is the loop's own state-gate arm — admitted on hardened,
-// implementing, and done (the loop's resume and cold-DONE no-op entries), refused elsewhere
-// with a remedy naming /spec:plan, and subject to the same marker gate as the other three
-// commands. Executed 2026-09-01 (spec Assumption A1): today /spec:run matches none of the
-// case arms at line 21 of spec-state-gate.sh, so it falls through to the unconditional `exit 0`
-// for unrecognised prompts — the draft and open_markers clauses below are red at HEAD because
-// nothing blocks them yet.
+// implementing, and done (the loop's resume and cold-DONE no-op entries), refused elsewhere with
+// a remedy naming /spec:plan, and subject to the same marker gate as the other three commands
+// (spec Assumption A1).
 test('AC-20260901-10-1: state machine: /spec:run admits hardened, implementing, and done; refuses draft naming /spec:run and /spec:plan; and is subject to the marker gate', () => {
   assert.strictEqual(gate('/spec:run', SPEC_MD('hardened')).status, 0,
     'AC-20260901-10-1/D4: /spec:run against hardened must be admitted — the loop starts (or restarts) the design/build/review sequence from here')

@@ -3,7 +3,7 @@
 // citations-check.js [--root <dir>] [--verbose] — the § citation checker.
 //
 // Six broken `§ Heading` citations accumulated silently in doctrine across one audit cycle
-// (2026-08-10 command-surface audit, specs/20260810/09-stale-reference-sweep.md D9) because
+// (specs/20260810/09-stale-reference-sweep.md D9) because
 // nothing verified that a `§ Name` citation actually names a `## ` heading in the file it
 // points at — `shared-for` filtering just silently drops a mismatched section, so a broken
 // citation reads as valid doctrine forever. This is the enumerator: it scans every citation
@@ -21,7 +21,7 @@
 // is needed.
 //
 // Deliberately does NOT check: file-path references without `§` (doctor check 7 owns those),
-// or claims/line-count content (claims-lint.js owns that) — this is `§` citations only.
+// or claims/line-count content (unchecked — the claims registry is retired) — this is `§` citations only.
 //
 // Usage: citations-check.js [--root <dir>] [--verbose]
 // Exit codes: 0 = scan completed (advisory — misses are reported, not a failure) · 2 = usage error
@@ -44,7 +44,7 @@ for (let i = 0; i < argv.length; i++) {
 }
 
 const SCANNED_DIRS = ['spec/commands', 'spec/doctrine', 'spec/agents', 'git/commands']
-// v7.0.0: shared.md split into core.md + design.md — a "shared" citation may target a
+// core.md and design.md both carry doctrine that a "shared" citation may target a
 // heading in either, so shared idioms resolve to BOTH files and the heading check unions.
 const SHARED_PATHS = [path.join(root, 'spec/doctrine/core.md'), path.join(root, 'spec/doctrine/design.md')]
 const GENESIS_PATH = path.join(root, 'spec/doctrine/genesis.md')
@@ -229,7 +229,7 @@ for (const file of scannedFiles) {
       const targets = Array.isArray(resolution.target) ? resolution.target : [resolution.target]
       const heads = targets.flatMap(headingsOf)
       // Untruncated text following `§` (joined across the wrap window, same as `heading`'s
-      // source) — used to check the OTHER direction: a heading with no parenthetical whose
+      // source) — checks the OTHER direction: a heading with no parenthetical whose
       // name the citation's own sentence over-runs ("§ Risk Tiers makes it universal") still
       // matches because the real heading is a prefix of the full trailing text, even though
       // `heading`'s terminator-bounded capture over-ran the actual name.

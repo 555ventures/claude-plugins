@@ -5,17 +5,14 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT, SPEC, read, runBash } = require('../helpers')
 
-// specs/20260825/01-genesis-panel-collapse.md (2026-08-25): deletes the genesis MoA panel
-// (wf-panel.js: three blind Sonnet proposers + a Fable aggregator) and replaces it with one
-// proposer — the planning session itself — over the retained wf-research.js fan-out. Panel
-// verdicts don't reproduce run-to-run and identical-evidence deliberation herds (both sources
-// cited in the spec's Rationale); the collapse deletes the readers and keeps the research
-// slices. These tests pin the key/file/manifest deletion (AC-1), the doctrine section swap and
-// its literal ban (AC-2), the archetype registry's product-free three-column shape (AC-3), the
-// two genesis commands' literal ban (AC-4), README/design.md's literal ban (AC-5), and the
-// retained wf-research/shared-for regression (AC-6). None of AC-1..AC-5 can pass yet — the
-// panel is still wired into every one of these files (TDD red, 2026-08-25); AC-6 is a sanctioned
-// green-pre-change regression pin.
+// specs/20260825/01-genesis-panel-collapse.md: deletes the genesis MoA panel (wf-panel.js:
+// three blind Sonnet proposers + a Fable aggregator) and replaces it with one proposer — the
+// planning session itself — over the retained wf-research.js fan-out; panel verdicts don't
+// reproduce run-to-run and identical-evidence deliberation herds (spec Rationale). These tests
+// pin the key/file/manifest deletion (AC-1), the doctrine section swap and its literal ban
+// (AC-2), the archetype registry's product-free three-column shape (AC-3), the two genesis
+// commands' literal ban (AC-4), README/design.md's literal ban (AC-5), and the retained
+// wf-research/shared-for regression (AC-6, a sanctioned green-pre-change pin).
 
 // ---------------------------------------------------------------------------
 // AC-20260825-01-1
@@ -60,12 +57,12 @@ function assertNoBannedLiterals (src, banned, msgFor) {
   }
 }
 
-// Repo-wide retired-name sweep, shared by AC-20260825-04-9 (`genesis-architect`) and
-// AC-20260827-02-8 (`genesis-explore`) — extracted 2026-08-29 per § Review Checks (three or
-// more near-identical blocks names the extraction; the third sweep, for `genesis-design`,
-// arrives with specs/20260827/03 and uses this from day one). File-local for the same reason
-// assertNoBannedLiterals above is: every sweep lives in this file, and a tests/helpers.js
-// export would widen a single-file helper into cross-file surface for no second-file caller.
+// Repo-wide retired-name sweep, shared by AC-20260825-04-9 (`genesis-architect`),
+// AC-20260827-02-8 (`genesis-explore`), and AC-20260827-03-7 (`genesis-design`) — per §
+// Review Checks (three or more near-identical blocks names the extraction). File-local for the
+// same reason assertNoBannedLiterals above is: every sweep lives in this file, and a
+// tests/helpers.js export would widen a single-file helper into cross-file surface for no
+// second-file caller.
 //
 // `citations` is the structural answer to the self-reference trap: a spec that retires a
 // command usually has the command's name inside its OWN filename, so every dated provenance
@@ -208,12 +205,12 @@ test('AC-20260825-01-4: genesis.md and genesis-design.md name none of the retire
     [/aggregator/i, 'aggregator']
   ]
   // specs/20260825/04-genesis-driver.md D11: genesis-architect.md is retired and /spec:genesis
-  // (spec/commands/genesis.md) is the greenfield entry point. The banned-literal pin follows the
-  // command to its new file in place — never weakened, never dropped.
-  // specs/20260827/03-genesis-design-state.md D7 (2026-08-29): spec/commands/genesis-design.md is
-  // deleted — read()ing it here would throw once the file is gone. Dropped from this list in
-  // place (its own deletion is pinned separately by this file's new AC-20260827-03-7 test); the
-  // one remaining file still carries the invariant unchanged.
+  // (spec/commands/genesis.md) is the greenfield entry point — the banned-literal pin follows the
+  // command to its new file in place, never weakened, never dropped.
+  // specs/20260827/03-genesis-design-state.md D7: spec/commands/genesis-design.md is deleted —
+  // read()ing it here would throw once the file is gone. Dropped from this list in place (its
+  // own deletion is pinned separately by this file's AC-20260827-03-7 test); the one remaining
+  // file still carries the invariant unchanged.
   for (const rel of ['spec/commands/genesis.md']) {
     const src = read(rel)
     assertNoBannedLiterals(src, banned, (label) =>
@@ -292,18 +289,15 @@ test('AC-20260825-01-6: spec-paths wf-research continues to resolve to an existi
     sharedFor.stdout)
 })
 
-// specs/20260825/02-genesis-consultant-discovery.md (2026-08-25) adds three more ACs to this
-// same doctrine-pin file. D1/D2 rewrite the panel-era § Genesis: Discovery Interview posture: out
-// go the fixed Product/User/Scope/Architect lens batches, the scripted "Probe once" / "One probe
-// round, never a recursion" / "Reflect back, twice" sentences, and the read-back sign-off gate;
-// in comes an adaptive interview gated by a silent ten-key coverage audit, whose keys (plus D5's
-// six derived dimension keys) must now be named in genesis.md (AC-1). D3 introduces the brief
-// template `spec/templates/genesis-brief.md`: six fixed `## ` headings in order and a ten-line,
-// all-`dark` `## Coverage` skeleton (AC-2). D3/D4 add an On-disk Handoff roster line naming that
-// template as `brief.md`'s source and the throwaway `.claude/genesis/sketch.html`, pruned by
-// `/spec:genesis-design` (AC-3). None of AC-1..AC-3 can pass yet — the old lens/probe/read-back
-// literals are still live, the template file does not exist, and the roster names neither
-// artifact (TDD red, 2026-08-25).
+// specs/20260825/02-genesis-consultant-discovery.md D1/D2/D3/D4/D5: rewrites the panel-era §
+// Genesis: Discovery Interview posture — out go the fixed Product/User/Scope/Architect lens
+// batches, the scripted "Probe once" / "One probe round, never a recursion" / "Reflect back,
+// twice" sentences, and the read-back sign-off gate; in comes an adaptive interview gated by a
+// silent ten-key coverage audit, whose keys (plus D5's six derived dimension keys) are named in
+// genesis.md (AC-1). The brief template `spec/templates/genesis-brief.md` carries six fixed
+// `## ` headings in order and a ten-line, all-`dark` `## Coverage` skeleton (AC-2). The On-disk
+// Handoff roster names that template as `brief.md`'s source and the throwaway
+// `.claude/genesis/sketch.html`, pruned at the driver's rules-locked mark (AC-3).
 
 // Build a regex matching a multi-word phrase with `\s+` between words instead of a literal space,
 // so a doctrine file that hard-wraps the phrase across two lines still gets caught (memory:
@@ -330,10 +324,9 @@ test("AC-20260825-02-1: genesis.md (doctrine), genesis.md (command), and genesis
     [/\[Scope lens\]/, '[Scope lens]'],
     [/\[Architect lens\]/, '[Architect lens]']
   ]
-  // specs/20260827/03-genesis-design-state.md D7 (2026-08-29): spec/commands/genesis-design.md is
-  // deleted — read()ing it here would throw once the file is gone. Dropped from this list in
-  // place (its own deletion is pinned separately by this file's new AC-20260827-03-7 test); the
-  // two remaining files still carry the invariant unchanged.
+  // specs/20260827/03-genesis-design-state.md D7: spec/commands/genesis-design.md is deleted
+  // and dropped from this list in place (see the AC-20260825-01-4 test above); the two
+  // remaining files still carry the invariant unchanged.
   const files = [
     'spec/doctrine/genesis.md',
     'spec/commands/genesis.md',
@@ -445,10 +438,9 @@ test("AC-20260825-02-3: genesis.md's On-disk Handoff roster names genesis-brief.
     'D4: the sketch.html roster entry must say it is deleted at a prune step — its absence means ' +
     'the roster does not document that this is a throwaway artifact, not a durable one: ' +
     JSON.stringify(sketchWindow))
-  // specs/20260827/03-genesis-design-state.md D4/D8 (2026-08-29): /spec:genesis-design is
-  // deleted and its prune step becomes an act of the driver's own accepted rules-locked mark
-  // (D4) — the sketch-prune sentence is retargeted in place from the retired command to that
-  // mark, never left naming a command that no longer exists.
+  // specs/20260827/03-genesis-design-state.md D4/D8: /spec:genesis-design is deleted and its
+  // prune step becomes an act of the driver's own accepted rules-locked mark — the sketch-prune
+  // sentence names that mark, never a deleted command.
   assert.doesNotMatch(sketchWindow, /genesis-design/,
     'D8: the sketch.html roster entry must no longer name /spec:genesis-design — the command is ' +
     'deleted, and a surviving mention here would point the session at a dead command: ' +
@@ -459,12 +451,10 @@ test("AC-20260825-02-3: genesis.md's On-disk Handoff roster names genesis-brief.
     'that the prune is a driver act, not a separate command: ' + JSON.stringify(sketchWindow))
 })
 
-// specs/20260825/03-genesis-currency-executed.md (2026-08-25): D8 replaces the model-placement
-// paragraph's Haiku-currency sentence in genesis.md with one naming registry-check.js
-// (`spec-paths registry-check`) as the mechanism, and D7 wires the same script into all three
-// genesis commands' menu steps. AC-20260825-03-9 cannot pass yet — as of 2026-08-26 none of the
-// four files name `registry-check`, and genesis.md/genesis-architect.md/genesis-design.md still
-// carry `verifyKeys`/`Haiku pass` (grep confirmed at authoring time; TDD red).
+// specs/20260825/03-genesis-currency-executed.md D7/D8: the model-placement paragraph's
+// currency sentence in genesis.md names registry-check.js (`spec-paths registry-check`) as the
+// mechanism, wired into the genesis commands' menu steps in place of the retired Haiku
+// currency pass.
 
 // ---------------------------------------------------------------------------
 // AC-20260825-03-9
@@ -477,22 +467,16 @@ test('AC-20260825-03-9: genesis.md and genesis-driver.js name registry-check, an
     [wordsRe('Haiku currency'), 'Haiku currency'],
     [/verifyKeys/, 'verifyKeys']
   ]
-  // specs/20260825/04-genesis-driver.md D4/D13: the architect stage's menu step no longer
-  // narrates the registry check — genesis-driver.js RUNS it on `--mark menu-written`. The pin
-  // follows the mechanism to its new home in place; the invariant (every file that owns a menu
-  // step names the deterministic currency script) is unchanged.
+  // specs/20260825/04-genesis-driver.md D4/D13: genesis-driver.js RUNS the registry-check
+  // currency check on `--mark menu-written` rather than the architect stage's menu step
+  // narrating it — the pin follows the mechanism to its new home; the invariant (every file
+  // that owns a menu step names the deterministic currency script) is unchanged.
   //
-  // specs/20260827/02-genesis-explore-state.md D10 (2026-08-27): spec/commands/genesis-explore.md
-  // is deleted — read()ing it here would throw once the file is gone. Dropped from this list in
-  // place (its own deletion is pinned separately, in this file's new AC-20260827-02-8 test); the
-  // three remaining files still carry the invariant unchanged.
-  //
-  // specs/20260827/03-genesis-design-state.md D7 (2026-08-29): spec/commands/genesis-design.md is
-  // now ALSO deleted — the last remaining genesis command file this list ever named is gone, so
-  // the test name above no longer claims "both remaining genesis command files" (there are none
-  // left; genesis.md the command never owned a menu step naming registry-check in the first
-  // place). Dropped from this list in place; the two remaining files still carry the invariant
-  // unchanged.
+  // spec/commands/genesis-explore.md (specs/20260827/02-genesis-explore-state.md D10) and
+  // spec/commands/genesis-design.md (specs/20260827/03-genesis-design-state.md D7) are both
+  // deleted — read()ing either here would throw. Both are dropped from the `files` list below
+  // in place (their own deletions are pinned separately, by this file's AC-20260827-02-8 and
+  // AC-20260827-03-7 tests); the two remaining files still carry the invariant unchanged.
   const files = [
     'spec/doctrine/genesis.md',
     'spec/scripts/genesis-driver.js',
@@ -511,24 +495,21 @@ test('AC-20260825-03-9: genesis.md and genesis-driver.js name registry-check, an
   }
 })
 
-// specs/20260825/04-genesis-driver.md (2026-08-26): the architect stage becomes driver-stepped.
+// specs/20260825/04-genesis-driver.md: the architect stage is driver-stepped.
 // `/spec:genesis-architect` is retired and replaced by a thin `spec/commands/genesis.md` looping
 // on `spec/scripts/genesis-driver.js`; the ops-conventions ADR paragraph, the day-zero skeleton
-// list, and the roadmap decomposition rules move verbatim out of the command into three new
+// list, and the roadmap decomposition rules move verbatim out of the command into three
 // `spec/doctrine/genesis.md` sections; the `shared-for` section list is rekeyed
 // genesis-architect -> genesis. AC-20260825-04-9 is the conformance pin over all of it, plus the
-// D15 regression that genesis-explore keeps being served § Design Canon. TDD red at authoring
-// time: neither genesis.md (command) nor genesis-driver.js existed.
+// D15 regression that genesis-explore keeps being served § Design Canon.
 //
-// 2026-08-26 review ruling: the stale-name sweep below used to be a hand-enumerated file list,
-// and it was wrong twice on this one rename — it missed tests/ (caught during the build, see
-// specs/20260825/04-genesis-driver.deviations.md) and it missed the repo-root
-// .claude-plugin/marketplace.json, the public marketplace listing, which was still advertising
-// the deleted command as the greenfield entry point until this review caught it. Per this repo's
-// own rules § Gotchas, a conformance guard that decides what to inspect by name-shape is a hole
-// evadable by the exact thing it guards. The sweep is inverted: walk the whole repo from ROOT and
-// read everything, then subtract an explicit, justified waive-list — never enumerate what to
-// check.
+// .claude/rules/spec-pipeline.md § Gotchas: a conformance guard that decides what to inspect by
+// name-shape is a hole evadable by the exact thing it guards — a hand-enumerated file list for
+// the stale-name sweep would miss files like tests/ or the repo-root
+// .claude-plugin/marketplace.json exactly as an enumerated list did on this rename (see
+// specs/20260825/04-genesis-driver.deviations.md). The sweep is inverted: walk the whole repo
+// from ROOT and read everything, then subtract an explicit, justified waive-list — never
+// enumerate what to check.
 
 // ---------------------------------------------------------------------------
 // AC-20260825-04-9
@@ -583,18 +564,17 @@ test('AC-20260825-04-9: spec-paths resolves genesis-driver and shared-for genesi
       'than moved, and the driver would print a step no doctrine explains')
   }
 
-  // D14, inverted 2026-08-26: waived by explicit path (never by name-shape or extension), each
-  // entry justified. Re-verify a waived entry's own hit before trusting it — a fix landing
-  // concurrently can remove the very mention it waives. Mechanics shared via
-  // sweepRetiredLiteral (2026-08-29); this spec's own filename does not carry the literal, so
-  // it needs no citation subtraction.
+  // D14: waived by explicit path (never by name-shape or extension), each entry justified.
+  // Re-verify a waived entry's own hit before trusting it — a fix landing concurrently can
+  // remove the very mention it waives. Mechanics shared via sweepRetiredLiteral; this spec's
+  // own filename does not carry the literal, so it needs no citation subtraction.
   const offenders = sweepRetiredLiteral('genesis-architect', {
     waivedPaths: [
       // D14 waives it by name: a wording edit re-stamps every host repo's grounding as stale
       // (rules § Risk Tiers), and the contract hash is not paid for a word.
       'spec/templates/grounding-contract.md',
       // its `description` is the changelog surface; historical entries legitimately record that
-      // the command was deleted.
+      // the command is retired.
       'spec/.claude-plugin/plugin.json',
       // its header comment states the incident history (the choreography it replaced).
       'spec/scripts/genesis-driver.js',
@@ -621,12 +601,12 @@ test('AC-20260825-04-9: spec-paths resolves genesis-driver and shared-for genesi
     'file list because that list missed tests/ and .claude-plugin/marketplace.json on this same ' +
     'rename (rules § Gotchas: classify by location, never by name-shape)')
 
-  // D15 regression pin, retargeted specs/20260827/02-genesis-explore-state.md D10 (2026-08-27):
-  // the explore stage is no longer untouched by a later spec — D10 deletes genesis-explore's own
-  // `shared-for` map entry outright and folds Design Canon into `genesis` instead (the driver now
-  // runs the taste funnel end-to-end from the entry point). AC-20260825-04-9's own sibling-list
-  // regression pin is retargeted in place from `genesis-explore` to `genesis`, never weakened;
-  // AC-20260827-02-8's own test below pins genesis-explore's NEW fall-through-to-full-doctrine
+  // D15 regression pin, retargeted specs/20260827/02-genesis-explore-state.md D10: the explore
+  // stage is not untouched by a later spec — D10 deletes genesis-explore's own `shared-for` map
+  // entry outright and folds Design Canon into `genesis` instead (the driver runs the taste
+  // funnel end-to-end from the entry point). AC-20260825-04-9's own sibling-list regression pin
+  // is retargeted in place from `genesis-explore` to `genesis`, never weakened;
+  // AC-20260827-02-8's own test below pins genesis-explore's fall-through-to-full-doctrine
   // behavior.
   const genesisShared = runBash('bin/spec-paths', ['shared-for', 'genesis'])
   assert.strictEqual(genesisShared.status, 0,
@@ -638,15 +618,12 @@ test('AC-20260825-04-9: spec-paths resolves genesis-driver and shared-for genesi
     'point lost the doctrine governing the taste funnel it now runs end-to-end')
 })
 
-// specs/20260827/01-genesis-tournament.md (2026-08-27): D10 deletes spec/commands/genesis.md's
-// own "## Per-state judgment pointers" section — the driver now prints a Doctrine: line per
-// state instead (the behavioral half of AC-20260827-01-8, pinned by step-text assertions in
-// tests/genesis/tournament.test.js) — and D11 adds spec/doctrine/genesis.md's
-// "## Genesis: Tournament of Scaffolds" section. D1 adds the `tournament` key to
-// spec/templates/status.json, and D3 introduces spec/templates/finalists.json. None of this can
-// pass yet: as of 2026-08-27 genesis.md (command) still carries the pointer section,
-// genesis.md (doctrine) has no Tournament of Scaffolds heading, status.json has no `tournament`
-// key, and spec/templates/finalists.json does not exist (TDD red).
+// specs/20260827/01-genesis-tournament.md D1/D3/D10/D11: spec/commands/genesis.md drops its
+// own "## Per-state judgment pointers" section — the driver prints a Doctrine: line per state
+// instead (the behavioral half of AC-20260827-01-8, pinned by step-text assertions in
+// tests/genesis/tournament.test.js) — and spec/doctrine/genesis.md gains a
+// "## Genesis: Tournament of Scaffolds" section. spec/templates/status.json carries the
+// `tournament` key, and spec/templates/finalists.json exists.
 
 // ---------------------------------------------------------------------------
 // AC-20260827-01-8 (file-level half; the step-text half lives in tournament.test.js)
@@ -704,16 +681,12 @@ test('AC-20260827-01-8: spec/commands/genesis.md drops its per-state pointer sec
   }
 })
 
-// specs/20260827/02-genesis-explore-state.md (2026-08-27): explore's Round 0 folds into the
-// driver as states between MENUS and FINALISTS; `/spec:genesis-explore` and its hook arm are
-// deleted, and the name is swept from every live surface. D11 gains this file's own standing
-// repo-wide emptiness sweep for the retired literal, on the AC-20260825-04-9 pattern just above
-// (same inverted walk-then-waive shape, its own justified waive-list — narrower than
-// AC-20260825-04-9's, since fewer files legitimately still need the retired name). None of this
-// can pass yet: as of 2026-08-27 spec/commands/genesis-explore.md still exists, spec/entrypoints.json
-// still names it in four rows, spec/doctrine/genesis.md still carries "## Genesis: Explore Stage"
-// (not "## Genesis: Explore State"), and `spec-paths shared-for genesis` does not yet serve
-// § Design Canon (TDD red, grep/run confirmed at authoring time 2026-08-29).
+// specs/20260827/02-genesis-explore-state.md D11: explore's Round 0 folds into the driver as
+// states between MENUS and FINALISTS; `/spec:genesis-explore` and its hook arm are deleted, and
+// the name is swept from every live surface via this file's own standing repo-wide emptiness
+// sweep for the retired literal, on the AC-20260825-04-9 pattern above (same inverted
+// walk-then-waive shape, its own justified waive-list — narrower than AC-20260825-04-9's, since
+// fewer files legitimately still need the retired name).
 
 // ---------------------------------------------------------------------------
 // AC-20260827-02-8
@@ -764,10 +737,10 @@ test('AC-20260827-02-8: spec-paths shared-for genesis serves Design Canon and co
   assert.ok(!genesisDoctrine.includes('## Genesis: Explore Stage'),
     'D11: spec/doctrine/genesis.md must NOT carry the old "## Genesis: Explore Stage" heading — a surviving old heading alongside the new one means the section was duplicated rather than rewritten in place, and any `§ Genesis: Explore Stage` citation elsewhere (e.g. spec/templates/design-positions.md) would still resolve')
 
-  // D11/§ Gotchas: classify by location (a repo-wide walk), never by name-shape — a narrower,
-  // hand-enumerated file list is the exact hole a prior incident on this same pattern (the
-  // genesis-architect sweep above) was built to close. Mechanics shared via
-  // sweepRetiredLiteral (2026-08-29).
+  // D11/.claude/rules/spec-pipeline.md § Gotchas: classify by location (a repo-wide walk),
+  // never by name-shape — a narrower, hand-enumerated file list is the exact hole the
+  // genesis-architect sweep above closes the same way. Mechanics shared via
+  // sweepRetiredLiteral.
   //
   // `citations` replaces eight hand-enumerated waives that existed only because THIS spec's own
   // filename contains the literal: six tests/ files carrying a dated provenance header citing
@@ -793,14 +766,13 @@ test('AC-20260827-02-8: spec-paths shared-for genesis serves Design Canon and co
       // D14 waives it by name: a wording edit re-stamps every host repo's grounding as stale
       // (rules § Risk Tiers), and the contract hash is not paid for a word.
       'spec/templates/grounding-contract.md',
-      // AC-20260827-02-7 asserts the hook now IGNORES this exact prompt string, so the literal
-      // is the input under test — the honest waive that replaces the runtime string-splitting
-      // this file used to carry (condemned 2026-08-29: it evaded a sweep already waiving it).
+      // AC-20260827-02-7 asserts the hook IGNORES this exact prompt string, so the literal is
+      // the input under test — the honest waive replacing runtime string-splitting that evaded
+      // a sweep already waiving it.
       'tests/genesis-gate.test.js',
-      // specs/20260827/03-genesis-design-state.md AC-20260827-03-5 (2026-08-29) asserts
-      // spec/commands/genesis.md's chain bullet no longer names genesis-explore either — the
-      // literal is the input under test, the same reason tests/genesis-gate.test.js is waived
-      // just above.
+      // specs/20260827/03-genesis-design-state.md AC-20260827-03-5 asserts spec/commands/genesis.md's
+      // chain bullet never names genesis-explore either — the literal is the input under test,
+      // the same reason tests/genesis-gate.test.js is waived just above.
       'tests/genesis/design-state.test.js',
     ],
     waivedPrefixes: [
@@ -819,15 +791,11 @@ test('AC-20260827-02-8: spec-paths shared-for genesis serves Design Canon and co
     'spec that deletes the command, not left for a later pass to discover')
 })
 
-// specs/20260827/03-genesis-design-state.md (2026-08-29): the design lock stops being a command —
+// specs/20260827/03-genesis-design-state.md D8: the design lock stops being a command —
 // /spec:genesis-design and its hook arm are deleted, the driver gains a DESIGN state between
-// ROADMAP and HANDOFF, and the name is swept from every live surface exactly as spec 02 did for
-// genesis-explore (D8 gains this file's third repo-wide emptiness sweep, on the same pattern,
-// via the shared sweepRetiredLiteral helper). None of this can pass yet: as of 2026-08-29
-// spec/commands/genesis-design.md still exists, spec/entrypoints.json still names it in four
-// rows, spec/doctrine/genesis.md has no "## Genesis: Design State" heading, and `spec-paths
-// shared-for genesis` does not yet serve § Design Authoring Contracts (TDD red, grep/run
-// confirmed at authoring time 2026-08-29).
+// ROADMAP and HANDOFF, and the name is swept from every live surface the same way spec 02 swept
+// genesis-explore (this file's third repo-wide emptiness sweep, on the same pattern, via the
+// shared sweepRetiredLiteral helper).
 
 // ---------------------------------------------------------------------------
 // AC-20260827-03-7
@@ -868,9 +836,9 @@ test('AC-20260827-03-7: spec-paths shared-for genesis serves Design Authoring Co
   assert.match(genesisDoctrine, /^## Genesis: Design State$/m,
     'D8: spec/doctrine/genesis.md must carry the "## Genesis: Design State" heading — its absence means the ratification variant of the old Phase 4 (tokens ratified not authored, doctrine distilled, the ledgers, base primitives + component vocabulary, the design-rules closure check, the prune) was never landed')
 
-  // D8/§ Gotchas: classify by location (a repo-wide walk), never by name-shape — the same
-  // pattern the genesis-explore sweep above already uses. Mechanics shared via
-  // sweepRetiredLiteral (2026-08-29).
+  // D8/.claude/rules/spec-pipeline.md § Gotchas: classify by location (a repo-wide walk),
+  // never by name-shape — the same pattern the genesis-explore sweep above uses. Mechanics
+  // shared via sweepRetiredLiteral.
   //
   // `citations` replaces the dated-provenance-header trap the same way the genesis-explore
   // sweep's citations do: THIS spec's own filename contains the literal, so every dated header
@@ -898,8 +866,8 @@ test('AC-20260827-03-7: spec-paths shared-for genesis serves Design Authoring Co
       // AC-20260827-03-6 asserts the hook now IGNORES this exact prompt string, so the literal
       // is the input under test — the same reason this file is already waived for genesis-explore.
       'tests/genesis-gate.test.js',
-      // AC-20260827-03-1/-5 assert the driver reaches DESIGN and the HANDOFF/chain-bullet
-      // wording no longer names the retired command — the literal is the input under test.
+      // AC-20260827-03-1/-5 assert the driver reaches DESIGN and that the HANDOFF/chain-bullet
+      // wording never names the retired command — the literal is the input under test.
       'tests/genesis/design-state.test.js',
     ],
     waivedPrefixes: [
@@ -918,18 +886,14 @@ test('AC-20260827-03-7: spec-paths shared-for genesis serves Design Authoring Co
     'spec that deletes the command, not left for a later pass to discover')
 })
 
-// specs/20260827/04-genesis-conventions-handoff.md (2026-08-29): D6 adds a new
-// "## Genesis: Conventions Probe Suite" heading to spec/doctrine/genesis.md; D5 rewrites
-// spec/commands/genesis.md's chain bullet to end at /spec:enforce (greenfield genesis is now
-// init + enforce) and retires its `next`: `{kind: 'command', text: '/spec:init'}` literal along
-// with the plain "next: /spec:init" wording, since HANDOFF is no longer terminal; D7 adds a
-// `handoff` key to spec/templates/status.json; D1 ships spec/templates/conventions.json, the
-// nine-floor-key starting-point template. This test is [no-ac: test-plumbing] for its own file
-// (it adds no new sweep mechanics), but the assertions below are this spec's AC-20260827-04-5
-// coverage. None of them can pass yet: as of 2026-08-29 genesis.md (doctrine) has no Conventions
-// Probe Suite heading, genesis.md (command) still ends its chain at /spec:init and still carries
-// `text: '/spec:init'`, status.json has no handoff key, and spec/templates/conventions.json does
-// not exist (grep/read confirmed at authoring time, 2026-08-29).
+// specs/20260827/04-genesis-conventions-handoff.md D1/D5/D6/D7: spec/doctrine/genesis.md gains
+// a "## Genesis: Conventions Probe Suite" heading; spec/commands/genesis.md's chain bullet ends
+// at /spec:enforce (greenfield genesis is now init + enforce), retiring its `next`:
+// `{kind: 'command', text: '/spec:init'}` literal along with the plain "next: /spec:init"
+// wording, since HANDOFF is not terminal; spec/templates/status.json carries a `handoff` key;
+// spec/templates/conventions.json is the nine-floor-key starting-point template. This test is
+// [no-ac: test-plumbing] for its own file (it adds no new sweep mechanics), but the assertions
+// below are this spec's AC-20260827-04-5 coverage.
 
 // ---------------------------------------------------------------------------
 // AC-20260827-04-5

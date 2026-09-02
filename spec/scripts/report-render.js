@@ -6,13 +6,13 @@
 // Before this script the console-output contract was prose-only: every command hand-filled
 // its own fenced template at report time, and drifted from every other command under
 // long-context runs (the audit that produced this spec found exactly ONE command's report
-// ending test-pinned repo-wide). This is the spec-status precedent (v6.15.0/v6.23.0) applied
+// ending test-pinned repo-wide). This is the spec-status precedent applied
 // to the report layer — the render lives in code, a command only assembles a slots object and
 // prints this script's stdout verbatim.
 //
 // Deliberately does NOT: derive `next` — a `status-verbatim` slot is captured by the calling
 // command running `spec-status --next` itself; shelling out to spec-status from here would be
-// a second derivation path and break the v6.20.0 sole-derivation rule (D3). Does NOT reorder,
+// a second derivation path and break the sole-derivation rule (D3). Does NOT reorder,
 // merge, or rewrite slot text — glossing quality (plain English, no identifiers) stays a prose
 // obligation on the assembling command; this script only guarantees shape. Does NOT retry any
 // command phase on failure — a slots-file contract violation is discovered strictly AFTER the

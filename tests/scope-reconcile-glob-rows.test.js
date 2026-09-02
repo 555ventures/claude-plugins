@@ -5,16 +5,16 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, gitRepo } = require('./helpers')
 
-// PRAX-20260813-05 (row for scope-reconcile.js, corroborating specs/20260805/01-review-scope-
-// reconciliation.md): scope-reconcile.js does not expand File Plan glob rows before comparing
+// specs/20260805/01-review-scope-reconciliation.md: scope-reconcile.js does not expand File
+// Plan glob rows before comparing
 // against the changed-file set (parseFilePlan/lib/file-plan.js keeps a glob cell like
 // `dir/*.ext` as a literal string; scope-reconcile.js's `filePlanPaths.has(p)` check is an exact
 // string match, never a glob match, against the CONCRETE changed file). A codegen output File
 // Plan row written as a glob therefore double-reports: the concrete changed file lands in
 // outOfPlan (its literal path was never in filePlanPaths) AND the glob row itself lands in
 // unrealized (the literal glob string was never among the changed files). Confirmed by direct
-// execution against a synthetic fixture below, before this test existed. First incident: prax
-// spec 20260810/05 deviation; second: spec 20260812/01, contracts codegen ripple.
+// execution against a synthetic fixture below, before this test existed. First incident:
+// specs/20260810/05 deviation; second: specs/20260812/01, contracts codegen ripple.
 //
 // specs/20260813/03-gate-script-mechanics.md D2 pins the fix: AC-20260813-03-4 (glob-covered
 // file excluded from outOfPlan) and AC-20260813-03-5 (glob row excluded from unrealized once a
@@ -24,7 +24,7 @@ const { tmpdir, runNode, gitRepo } = require('./helpers')
 // `atRisk` field must not disturb outOfPlan/unrealized/excluded/renamed or the exit-code
 // alphabet these three tests already pin — retagged in place, assertions unweakened.
 //
-// specs/20260823/04-review-close-hardening.md D6/D9 (2026-08-23): `.claude/agent-memory/**` is
+// specs/20260823/04-review-close-hardening.md D6/D9: `.claude/agent-memory/**` is
 // structurally out-of-plan on every worker-dispatching build (no File Plan can enumerate the
 // memories a worker will write) — D6 adds it to lib/glob-match.js's BASELINE_GLOBS, so a changed
 // agent-memory file must land in `excluded`, never `outOfPlan` (AC-20260823-04-7, new test below,

@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const { read } = require('../helpers')
 
-// specs/20260823/01-release-legs.md (2026-08-23): D10 retires the feedback-brief flush
+// specs/20260823/01-release-legs.md: D10 retires the feedback-brief flush
 // everywhere it lives (the /intake consumer died in v7), and D11 shrinks release.md's Phase 2
 // preamble to judgment steps only, citing the row grammar to release-legs.js's own header
 // comment instead of restating it. Pins AC-20260823-01-15 and -17 (RED against the current,

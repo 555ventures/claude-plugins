@@ -8,7 +8,7 @@
 //          repair-applied --continued <n> --spawned <n> | committed
 // spec-build-driver <spec.md> --state                  -> print the state name only (scripting)
 //
-// specs/20260901/02-run-provenance.md (D5, 2026-09-01, brief 18): --via <loop|direct> is recorded
+// specs/20260901/02-run-provenance.md (D5): --via <loop|direct> is recorded
 // once, at sidecar creation (default "direct"; a later invocation naming a different value is
 // ignored) and the DONE row gains `via`/`model` immediately after `tier` — model derived at
 // row-write time by lib/session-stamp.js's sessionModel(repoRoot), `null` on a host with no
@@ -18,7 +18,7 @@
 //   RED_ATTRIBUTION? -> WAVE:<label>... -> INTEGRATION -> GATE (driver-only) ->
 //   REPAIR? (cap 3; 4th -> ESCALATE, terminal) -> COMMIT -> DONE (terminal)
 //
-// WHY THIS EXISTS: specs/20260901/01-build-driver.md (2026-09-01, brief 18) — /spec:build was a
+// WHY THIS EXISTS: specs/20260901/01-build-driver.md — /spec:build was a
 // 161-line markdown procedure with no driver and no state file: it resumed by inspecting the
 // diff, ran the red-check/gate/scope-reconcile by hand, and hand-appended its own ledger row —
 // the last stage in the per-feature loop whose deterministic choreography was still performed by
@@ -51,9 +51,7 @@
 //                 maxBuffer-overflowed) via lib/driver-io.js's runChild() fail-closed refusal,
 //                 and a re-run on a status: implementing spec with no sidecar whose build is
 //                 already DONE (a stage:"build" ledger row names this spec) — refused before any
-//                 sidecar is opened, remedy = the review driver (prax field report, 2026-09-02:
-//                 the loop session re-ran this driver by reflex after DONE and it silently opened
-//                 a fresh redCheck:"skipped-resume" sidecar and asked for tests again).
+//                 sidecar is opened, remedy = the review driver.
 
 'use strict'
 const fs = require('fs')
@@ -64,6 +62,7 @@ const { fmValue } = require('./lib/frontmatter')
 const { readConfig } = require('./lib/host-config')
 const { resolveGate } = require('./lib/gate-resolve')
 const { parseFilePlanRows } = require('./lib/file-plan')
+const { globMatch } = require('./lib/glob-match')
 // D5 (specs/20260901/02-run-provenance.md): model is derived at row-write time (never once at
 // startup) — the review driver's own sibling reasoning applies here too.
 const { sessionModel } = require('./lib/session-stamp.js')
@@ -150,15 +149,15 @@ if (status === 'hardened') {
     process.exit(2)
   }
 
-  // ---- stamp diff_base whenever it is absent (revised 2026-09-01, spec 20260901/01 review) ---
-  // Originally absent-only in BOTH fields: a spec already carrying `build_base` was left unpinned,
+  // ---- stamp diff_base whenever it is absent (specs/20260901/01-build-driver.md) ---
+  // Absent-only stamping in BOTH fields would leave a spec already carrying `build_base` unpinned,
   // on the reasoning that build_base already answered "what is this built against". It does not —
   // build_base is conventionally the moving ref `main`, and /git:enter-worktree writes it at any
   // time, including after a build has run. HEAD at build start is the true pre-image in both the
   // in-place and worktree flows, so pin it unconditionally; `build_base` then means only "merge
   // target", which is all merge-back.sh branch-for needs of it. Consumers already prefer the pin
   // (replay.js:374, and now spec-review-driver.js's resolveBase), so an existing build_base must
-  // no longer suppress the one durable fact a later review needs.
+  // never suppress the one durable fact a later review needs.
   const diffBaseFm = fmVal('diff_base')
   if (!diffBaseFm) {
     const headR = runChild('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' },
@@ -212,8 +211,8 @@ function dirtyNonTestsPaths(base) {
 
 const sidecarExisted = fs.existsSync(sidecarDir)
 
-// ---- build already DONE (prax field report, 2026-09-02) ----------------------------------------
-// The sidecar is deleted at DONE, so "status: implementing, no sidecar" is also the state a
+// ---- build already DONE ----------------------------------------
+// The sidecar is removed at DONE, so "status: implementing, no sidecar" is also the state a
 // finished build leaves behind until the review driver opens its own sidecar. The ledger is the
 // one on-disk fact that tells the two apart: a stage:"build" row is written only at DONE, so its
 // presence for this spec IS the terminal outcome — no extra outcome field is needed. Refused
@@ -293,7 +292,7 @@ function computeWaveOrder() {
   const otherRows = [...rowsByLayer.entries()]
     .filter(([layer]) => !groupedLayers.has(layer)).flatMap(([, rows]) => rows)
   if (otherRows.length) waves.push({ label: 'other', rows: otherRows })
-  // A declared group with no File Plan rows is not a wave (prax field report, 2026-09-02: two
+  // A declared group with no File Plan rows is not a wave (two
   // empty groups each printed a dispatch step with no layers and demanded a --workers 0 mark).
   // Skipped here, at derivation, so no state ever names it; the WAVE step prints the skips once.
   for (const w of waves) if (!w.rows.length) skippedWaves.push(w.label)
@@ -354,14 +353,42 @@ function runGate() {
 }
 
 // ---- mark handlers --------------------------------------------------------------------------------
+// A tests-layer File Plan row may be a glob (sanctioned by scope-reconcile.js, D2 of
+// specs/20260813/03-gate-script-mechanics.md, and expanded the same way by red-check.js). A
+// pattern is satisfied by at least one matching file on disk; a literal path by its own
+// existence. Expansion goes through lib/glob-match.js — never a private matcher.
+function walkTree(dir, rootDir, out = []) {
+  let entries
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return out
+  }
+  for (const e of entries) {
+    if (e.name === '.git') continue
+    const full = path.join(dir, e.name)
+    if (e.isDirectory()) walkTree(full, rootDir, out)
+    else out.push(path.relative(rootDir, full).split(path.sep).join('/'))
+  }
+  return out
+}
+
 function handleTestsAuthored() {
   const rows = filePlanRows.filter((r) =>
     /^tests?$/i.test((r.layer || '').trim()) && (r.action || '').trim().toUpperCase() !== 'DELETE')
+  const remedy = ' — author it, then re-run `node ' + __filename + ' ' + specPath +
+    ' --mark tests-authored`'
+  let treeCache = null
   for (const r of rows) {
     for (const p of r.paths) {
-      if (!fs.existsSync(path.join(repoRoot, p))) {
-        die('tests-authored refused — missing tests-layer File Plan path: ' + p + ' — author it, ' +
-          'then re-run `node ' + __filename + ' ' + specPath + ' --mark tests-authored`')
+      if (/[*?[]/.test(p)) {
+        if (treeCache === null) treeCache = walkTree(repoRoot, repoRoot)
+        if (!treeCache.some((f) => globMatch(p, f))) {
+          die('tests-authored refused — tests-layer File Plan pattern matches no file: ' + p +
+            remedy)
+        }
+      } else if (!fs.existsSync(path.join(repoRoot, p))) {
+        die('tests-authored refused — missing tests-layer File Plan path: ' + p + remedy)
       }
     }
   }
@@ -386,10 +413,21 @@ function handleRedAttributed() {
   return null
 }
 
+// A File Plan row may be a glob (specs/20260902/02-plugin-code-sweep.md D10, the same rule
+// handleTestsAuthored applies): a CREATE/MODIFY pattern verifies when at least one file matches,
+// a DELETE pattern when none does. Expansion goes through lib/glob-match.js — never a private
+// matcher.
 function verifyWaveRows(rows) {
+  let treeCache = null
   for (const r of rows) {
     const action = (r.action || '').trim().toUpperCase()
     for (const p of r.paths) {
+      if (/[*?[]/.test(p)) {
+        if (treeCache === null) treeCache = walkTree(repoRoot, repoRoot)
+        const anyMatch = treeCache.some((f) => globMatch(p, f))
+        if (action === 'DELETE' ? anyMatch : !anyMatch) return p
+        continue
+      }
       const full = path.join(repoRoot, p)
       if (action === 'DELETE') {
         if (fs.existsSync(full)) return p

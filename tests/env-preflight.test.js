@@ -6,8 +6,8 @@ const path = require('node:path')
 const { spawnSync } = require('node:child_process')
 const { SPEC, tmpdir, read } = require('./helpers')
 
-// specs/20260815/05-env-preflight.md — SALONOS-20260815-01 (salon-os, runId wf_e4778d03-81b,
-// INTAKE JJ-20260815-08): an unprovisioned environment variable reached the gate as an ordinary
+// specs/20260815/05-env-preflight.md — runId wf_e4778d03-81b: an unprovisioned
+// environment variable reached the gate as an ordinary
 // red, indistinguishable from broken code, and burned a full repair round it could not win. This
 // pins the new `spec/scripts/env-preflight.js` (D2) by execution against synthetic hosts in
 // tmpdir(), plus the doctor.md/design.md doctrine wiring (D4/D3a) by regex over live prose.
@@ -113,10 +113,10 @@ test('AC-20260815-05-7: doctor doctrine\'s check 6b invokes spec-paths env-prefl
 // from AC-20260815-05-8): the driver-stepped body dies with the design-driver state machine —
 // D1 rebuilds /spec:design as six steps (preflight → author (direct Sonnet dispatch) → host
 // gate → render gate → look → reconcile), so the old `wf-design` invocation step this pin
-// originally named is retired along with the workflow file itself (D2). The pin carries
+// named is retired along with the workflow file itself (D2). The pin carries
 // AC-20260815-05-8's incident forward onto the new step: an unprovisioned environment must
-// never reach the author dispatch, same class as the original salon-os incident on build
-// (INTAKE JJ-20260815-08). `wf-design` is no longer part of the oracle — a surviving reference
+// never reach the author dispatch.
+// `wf-design` is not part of the oracle — a surviving reference
 // to a retired literal is exactly the Gotcha this repo's Assumptions call out.
 test('AC-20260824-02-3 (AC-20260815-05-8 incident carried forward): design doctrine names env-preflight before the author dispatch step with STOP-on-miss semantics', () => {
   const design = read('spec/commands/design.md')

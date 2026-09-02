@@ -2,7 +2,7 @@
 'use strict'
 // promise-sweep.js --spec <path> [--manifest <path>] [--json] [--applies-from <YYYYMMDD>]
 //
-// Why (2026-08-17, specs/20260817/07-promise-sweep-leg.md D1/D2): the v7 replay eval measured
+// Why (specs/20260817/07-promise-sweep-leg.md D1/D2): the v7 replay eval measured
 // the single reviewer's one systematic miss class — a spec `## Decisions` row that promises
 // behavior nothing implements. No test fails, so nothing points at it (all five measured misses
 // were Decisions-table rows), and the prose "promise sweep" a reviewer performed by hand every
@@ -14,7 +14,7 @@
 // at plan lock (no --manifest) so orphans die at authoring time, and as a findings leg in every
 // review scope (review-legs.js appends its manifest row).
 //
-// Incident (2026-08-20, spec review-observation-truth.md D5, Salon OS field report): the sweep
+// specs/20260820/03-review-observation-truth.md D5: the sweep
 // applied retroactively to specs locked before this carrier convention existed, producing 52
 // noise findings that trained bulk-waiving — escape rv_8b7c4e2e9ec0 shipped inside a 17/17-waive
 // review. It now gains an applicability cutoff: spec date = the first `specs/<YYYYMMDD>/` path
@@ -26,7 +26,7 @@
 // existing tmpdir-based test pin depends on. One parameter, no baseline file, no host config key:
 // the convention's ship date is a plugin fact.
 //
-// specs/20260820/06-typed-evidence-manifest.md D8/D9 (2026-08-20, brief 16's second move): the
+// specs/20260820/06-typed-evidence-manifest.md D8/D9: the
 // two rows this script can append to --manifest carry typed JSON objects, not packed strings —
 // the counted row is {"rows":N,"carried":C,"sanctioned":S,"orphans":O} and the pre-cutoff row is
 // {"notApplicable":{"spec":"YYYYMMDD","appliesFrom":"YYYYMMDD"}}. The human-readable stdout

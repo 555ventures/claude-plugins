@@ -3,14 +3,14 @@
 // spec-review-driver.js's REPLAY entry and this module's own direct tests exercise the identical
 // regex instead of two copies drifting apart.
 //
-// specs/20260823/09-replay-baseline-attribution.md D6 (2026-08-23): replay.js --select gained two
+// specs/20260823/09-replay-baseline-attribution.md D6: replay.js --select gained two
 // tokens (baselineRed=/baselineLegs=) appended after the five this parser already read — the
 // baseline step 7 attributes red legs against. Captured OPTIONALLY (each group's own trailing
 // `?`, matching only when the literal key= is present) so a five-token line from an old sidecar
 // resumed mid-flight against a pre-D1 replay.js still parses cleanly: absent -> null, never a
 // parse failure (AC-8).
 //
-// Escaped from spec-review-driver.js's own review (2026-08-24): the driver's REPLAY-path test for
+// Escaped from spec-review-driver.js's own review: the driver's REPLAY-path test for
 // AC-8 drove the real replay.js binary, which (line 340) always prints both baselineRed=/
 // baselineLegs= tokens as VALUES (never omits the keys) — so no fixture reachable through that
 // path can ever produce a genuine five-token line, and the absence branch this function's `|| null`

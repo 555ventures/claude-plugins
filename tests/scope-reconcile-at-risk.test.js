@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, gitRepo } = require('./helpers')
 
-// specs/20260815/02-at-risk-pins.md (D1, escape wf_e1da0ea6-94c / INTAKE JJ-20260815-03): a
+// specs/20260815/02-at-risk-pins.md (D1, escape wf_e1da0ea6-94c): a
 // Decision that changes what a shared script returns reddens suites the scoped gate never runs
 // because those suites live outside the spec's own File Plan tests rows. scope-reconcile.js
 // gains a path-stem-based `atRisk` derivation (additive --json field) so review can mechanically
@@ -134,7 +134,7 @@ test('AC-20260815-02-4 [AC-20260822-02-12 regression pin]: a changed file that i
   // guard were removed) is embedded deliberately — a relative `./helpers` require alone
   // matches neither of tests/helpers.js's stems ("tests/helpers.js", "tests/helpers") and
   // makes this fixture pass with the guard stripped out, which is the vacuous-pin defect this
-  // fixture was rewritten to close (mutation-proved 2026-08-16, specs/20260815/02-at-risk-pins.md
+  // fixture was rewritten to close (mutation-proved, specs/20260815/02-at-risk-pins.md
   // review).
   fs.writeFileSync(path.join(dir, 'tests/other.test.js'),
     "// depends on tests/helpers for shared assertions\nrequire('./helpers')\n")
@@ -153,7 +153,7 @@ test('AC-20260815-02-4 [AC-20260822-02-12 regression pin]: a changed file that i
     JSON.stringify(out))
 })
 
-// specs/20260815/02-at-risk-pins.md review 2026-08-16: two degenerate-stem defects in stemsFor(),
+// specs/20260815/02-at-risk-pins.md review: two degenerate-stem defects in stemsFor(),
 // both reproduced against today's code. (a) EMPTY STEM: '.gitignore'.replace(/\.[^./]+$/, '')
 // returns '' because the whole basename is consumed as "the extension" — the empty string
 // survives stemsFor's dedupe and `content.includes('')` is true for every candidate file, so a

@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT } = require('./helpers')
 
-// Doctrine-diff review panel (2026-07-17): doctrine is the one artifact class in the system
+// Doctrine-diff review panel: doctrine is the one artifact class in the system
 // that gets no adversarial pass — host code gets a diff-scaled review panel, doctrine changes
 // get `npm test` (regex pins on past incidents) and a sole author's read. Both independent
 // design reviews of the v7 hypothesis converged on this as the true residue: the recurring

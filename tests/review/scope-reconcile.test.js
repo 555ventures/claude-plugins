@@ -5,9 +5,9 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20260805/01-review-scope-reconciliation.md (D1/D3/D4): /spec:review diffed only the
-// File Plan's directories, so the confirmed 2026-08 host escape (an out-of-plan `waitForExit`
-// edit) rode a CLEAN verdict into production. scope-reconcile.js inverts the File Plan from
+// specs/20260805/01-review-scope-reconciliation.md D1/D3/D4: /spec:review diffed only the
+// File Plan's directories, so an out-of-plan `waitForExit` edit could ride a CLEAN verdict into
+// production. scope-reconcile.js inverts the File Plan from
 // scope-definer to prediction-under-test: it reconciles the WHOLE changed-file set (committed
 // diff UNION untracked) against the plan, so an out-of-plan file always surfaces (exit 3) and a
 // planned-but-untouched file surfaces too (`unrealized`), enforced by a script, never reviewer
@@ -129,10 +129,11 @@ test('AC-20260805-01-8 / AC-20260813-03-6: a planned file renamed in the diff re
     'rename must never produce a spurious out-of-plan + unrealized finding pair: ' + JSON.stringify(out))
 })
 
-// specs/20260805/01-review-scope-reconciliation.md review (2026-08-06): scope-reconcile.js:125-127
+// specs/20260805/01-review-scope-reconciliation.md: scope-reconcile.js:125-127
 // exempts BOTH sides of every rename pair from outOfPlan (`!renamedFrom.has(p) && !renamedTo.has(p)`)
-// without checking whether the rename's OLD path was ever in the File Plan. `git mv` of a file the
-// File Plan never mentioned then exits 0 with `outOfPlan: []` — invisible to review. Contracts: "a
+// without checking whether the rename's OLD path was ever in the File Plan — a `git mv` of a
+// file the File Plan never mentioned must not exit 0 with `outOfPlan: []`, invisible to review.
+// Contracts: "a
 // rename's new path counts as in-plan when its old path was planned"; Behavior: "a rename whose old
 // path was NOT planned is just an ordinary out-of-plan new path." This test pins that an unplanned
 // rename must still surface, while remaining visible in `renamed` too.

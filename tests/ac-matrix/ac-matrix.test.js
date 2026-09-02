@@ -5,64 +5,31 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, runBash, SPEC } = require('../helpers')
 
-// AC-20260821-01-2 (multi-tag regression, 2026-08-22) additionally pins lib/spec-sections.js's
-// parseAcBullets directly for exact per-tag VALUES — a plain require()able library, unlike a
-// workflow script (mirrors tests/red-check/red-check.test.js's existing idiom).
+// AC-20260821-01-2 additionally pins lib/spec-sections.js's parseAcBullets directly for exact
+// per-tag VALUES — a plain require()able library, unlike a workflow script (mirrors
+// tests/red-check/red-check.test.js's existing idiom).
 const { parseAcBullets } = require('../../spec/scripts/lib/spec-sections')
 
-// specs/20260814/01-ac-matrix-script.md: review.md Phase 0 steps 5-6 (AC-line lint, AC<->test
-// coverage matrix, [oracle:]/[env:] handling, skipped-test reconciliation) are today hand-
-// executed prose that drifts per session/model. This suite pins the sole-derivation replacement,
-// spec/scripts/ac-matrix.js, by executing it against synthetic host trees — never against
-// implementation internals, since the script does not exist yet at HEAD. Scoped under
-// tests/ac-matrix/ so other specs' gate runs stay pin-free (D7).
+// specs/20260814/01-ac-matrix-script.md D7: pins spec/scripts/ac-matrix.js, the sole-derivation
+// replacement for review.md Phase 0's AC-line lint, AC<->test coverage matrix, [oracle:]/[env:]
+// handling, and skipped-test reconciliation, by executing it against synthetic host trees —
+// never against implementation internals. Scoped under tests/ac-matrix/ so other specs' gate
+// runs stay pin-free.
 //
-// RETAG (specs/20260817/07-promise-sweep-leg.md D3, AC-20260817-07-14): AC_ID_RE,
-// AC_ID_RE_GLOBAL, extractSection, and parseAcBullets move out of this file into the new
-// spec/scripts/lib/spec-sections.js, which ac-matrix.js now imports; every observed string,
-// finding class, and exit code below stays byte-identical. This whole suite — unchanged, no
-// assertion edited — IS the byte-identity pin for D3: any divergence introduced by the
-// extraction surfaces here as a wrong observed grammar, finding class, or exit code.
-//
-// D13 (2026-08-20, specs/20260820/04-entrypoint-conformance.md): `missing-test-file` asserted
-// existence for EVERY tests-layer File Plan row regardless of its Action column — reproduced
-// live against this spec's own D7 row (`tests/advisory-append/advisory-append.test.js`,
-// planned DELETE): `ac-matrix: uncovered=0 oracle=0 · 1 finding(s)`. A row that plans a
-// deletion is satisfied by the file's absence, not violated by it. Fixed fail-closed: the
-// check skips ONLY an explicit `DELETE` action; a `CREATE` row or a row whose table binds no
-// Action column at all keeps the existence requirement.
-//
-// specs/20260820/06-typed-evidence-manifest.md D2/D8/AC-20260820-06-10 (2026-08-20, brief 16's
-// second move): ac-matrix.js's two manifest rows and its `--json` output's `observed` field both
-// retire the packed "uncovered=N oracle=M" / "skipped=N sanctioned=S" strings for the typed
-// objects {"uncovered":N,"oracle":N} and {"skipped":N,"sanctioned":N} — D8 pins the `--json`
-// field mirrors the manifest objects exactly, byte-unchanged plain-mode stdout summary line
-// aside (untouched by this spec). Every `out.observed.acMatrix` / `out.observed.skipReconcile`
-// assertion below is retyped in place; none is retagged (D8/AC-20260820-06-10 is a NEW test,
-// added at the end of this file, that owns the AC-ID — these existing pins keep their own
-// AC-IDs, since their invariant — which finding drives which count — is unchanged by the shape).
-//
-// specs/20260821/01-red-check.md D1/D6 (2026-08-21): the `[pre-green: <reason>]` AC tag (closed
-// enum `fallback-rejection | absence-invariant | predicate-in-test`, lib/spec-sections.js) rides
-// into ac-matrix.js's typed acMatrix row as a third counted field, extending 06's shape in place
-// to {"uncovered":N,"oracle":N,"preGreen":N}. Every existing `out.observed.acMatrix` literal
-// above is updated in place to add `preGreen: 0` (none of those fixture bullets carry the tag) —
-// none is retagged, since none of them happens to also satisfy AC-20260821-01-2/-10/-12's own
-// fixture shape. Three NEW tests below own those AC-IDs: an out-of-enum reason is its own hard
-// finding (`invalid-pre-green`, AC-2), the field counts exactly N valid tags (AC-10), and the tag
-// never launders an AC with zero test hits out of `uncovered` (AC-12, a SHALL-CONTINUE-TO pin —
-// its carrier assertion already passes today, since an unrecognized bracket tag is inert to the
-// pre-06 uncovered/oracle logic; only the shape/finding-class additions above are new).
-//
-// specs/20260823/03-silent-drop-hardening.md D1/D2 (2026-08-23, the upwell silent-drop incident):
-// two pins below are retagged (bare-trailing-tag AC-5, mid-sentence-quoted-null AC-6 — assertions
-// unchanged). A third is a genuine COLLISION found at test-authoring time, not a mere retag: the
-// former AC-20260821-01-2 "backticked trailing tag illustration" test drove ac-matrix.js and
-// pinned its zero-hit AC as a plain `uncovered-ac` finding — but that fixture (zero coverage plus
-// a refused trailing `[oracle:]`) is exactly D1's rule 1, which now requires `rejected-trailing-tag`
-// instead. Updated in place and retagged to AC-20260823-03-1, never weakened — the assertion
-// changed because the correct behavior changed, not because the invariant it protects got looser.
-// See specs/20260823/03-silent-drop-hardening.deviations.md.
+// Also pins: specs/20260817/07-promise-sweep-leg.md D3 (AC-20260817-07-14: AC_ID_RE,
+// AC_ID_RE_GLOBAL, extractSection, and parseAcBullets live in spec/scripts/lib/spec-sections.js,
+// which ac-matrix.js imports — this whole suite is the byte-identity pin for that extraction);
+// specs/20260820/04-entrypoint-conformance.md D13 (`missing-test-file` skips ONLY an explicit
+// `DELETE` File Plan action; a `CREATE` row or a row whose table binds no Action column at all
+// keeps the existence requirement); specs/20260820/06-typed-evidence-manifest.md D2/D8
+// (AC-20260820-06-10: ac-matrix.js's manifest rows and `--json` `observed` field use the typed
+// objects {"uncovered":N,"oracle":N} and {"skipped":N,"sanctioned":N}); specs/20260821/01-red-check.md
+// D1/D6 (the `[pre-green: <reason>]` AC tag, closed enum `fallback-rejection |
+// absence-invariant | predicate-in-test`, extends the acMatrix row to
+// {"uncovered":N,"oracle":N,"preGreen":N}); specs/20260823/03-silent-drop-hardening.md D1/D2
+// (bare-trailing-tag AC-5, mid-sentence-quoted-null AC-6, and the rejected-trailing-tag
+// reclassification of AC-20260823-03-1 below — see
+// specs/20260823/03-silent-drop-hardening.deviations.md).
 
 function specMd(acLines, filePlanRows) {
   return '# Test Spec\n\n## Acceptance Criteria\n\n' + acLines.join('\n') + '\n\n' +
@@ -478,15 +445,12 @@ test('AC-20260821-01-2: an AC bullet carrying [pre-green: because-i-said-so] —
     `the invalid-tag class is the only signal in this fixture — got ${JSON.stringify(out.observed.acMatrix)}`)
 })
 
-// 2026-08-22 review finding: parseAcBullets/extractTag (lib/spec-sections.js) used to scan a
-// whole AC bullet for [oracle:]/[env:]/[pre-green:], so a spec's own prose EXAMPLE of a tag —
-// exactly how specs/20260821/01-red-check.md writes its own AC-20260821-01-2 requirement text,
-// which quotes `[pre-green: because-i-said-so]` mid-sentence to describe the invalid-tag case —
-// self-tagged and fired a fabricated invalid-pre-green finding against a spec that declares no
-// such tag at all. Fixed: extractTag now recognizes exactly two positions — the declaration slot
-// (first line, right after the bold AC token's closing `**`, before the requirement-opening `:`)
-// and true trailing content (last non-whitespace of the bullet) — so a mid-sentence prose mention
-// parses preGreen: null and is inert.
+// specs/20260821/01-red-check.md (AC-20260821-01-2): extractTag (lib/spec-sections.js)
+// recognizes a bracket tag in exactly two positions — the declaration slot (right after the
+// bold AC token's closing `**`, before the requirement-opening `:`) and true trailing content
+// (the bullet's last non-whitespace) — so a tag mentioned mid-sentence in the requirement prose,
+// such as this file's own worked example of the invalid-tag case, parses preGreen: null and is
+// inert.
 test('AC-20260821-01-2: an AC bullet whose PROSE mentions [pre-green: reason] mid-sentence — matching how specs/20260821/01-red-check.md writes its own AC-2 — is not a declared tag, parses preGreen: null, and exits 0 with no invalid-pre-green finding', () => {
   const dir = tmpdir('acm-rc2-prose')
   fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
@@ -511,18 +475,13 @@ test('AC-20260821-01-2: an AC bullet whose PROSE mentions [pre-green: reason] mi
     `hit so uncovered/oracle stay 0 too — got ${JSON.stringify(out.observed.acMatrix)}`)
 })
 
-// 2026-08-22 regression (false-negative sibling of the anchoring fix above): extractTag
-// (lib/spec-sections.js) matches its declaration-slot and trailing regexes against exactly ONE
-// tag name at a time, anchored to "right after **...**:" / "right at the raw text's end" — so a
-// bullet carrying TWO sibling tags in the SAME slot (spec/templates/spec.md lines 90-103 sanction
-// combinations like [env:]+[oracle:]+[pre-green:] together, forbidding only [oracle:] paired
-// with a test mapping) silently drops every tag but the one immediately adjacent to the anchor:
-// declaration-slot `[env: FOO]` `[oracle: gate]`: parses oracle (adjacent to `:`) but env: null;
-// trailing `... [env: X] [oracle: Y]` parses oracle (adjacent to raw's end) but env: null. A
-// dropped [env:] un-sanctions a legitimately env-gated skip into a fabricated unsanctioned-skip
-// hard finding — the exact false-finding class specs/20260821/01-red-check.md exists to
-// eliminate. These four tests pin every sibling tag in a run being extracted, in both positions,
-// mixed, and confirm the mid-prose anchoring above still holds for a RUN of tags, not just one.
+// specs/20260821/01-red-check.md: extractTag (lib/spec-sections.js) extracts every sibling tag
+// sharing one slot — spec/templates/spec.md lines 90-103 sanction stacking
+// [env:]+[oracle:]+[pre-green:] together — not just the tag immediately adjacent to the anchor
+// (`**...**:` for the declaration slot, the raw text's end for trailing). A parser that drops a
+// sibling [env:] un-sanctions a legitimately env-gated skip into a fabricated unsanctioned-skip
+// hard finding. These four tests pin every sibling tag in a run, in both positions and mixed,
+// confirming the mid-prose anchoring above still holds as the run grows.
 test('AC-20260821-01-2: a run of three sibling tags in the declaration slot — [env:] [oracle:] [pre-green:], each backticked, before the requirement-opening colon — parses every one of them, not just the tag adjacent to the colon', () => {
   const section = '- **AC-20260821-86-1** `[env: FOO]` `[oracle: gate]` `[pre-green: absence-invariant]`: WHEN X THE SYSTEM SHALL Y → tests/foo.test.js\n'
   const bullets = parseAcBullets(section)
@@ -580,15 +539,13 @@ test('AC-20260823-03-6 (retags this mid-sentence-quoted-null pin, previously pla
     `same guard, the other tag of the mid-sentence pair — got ${JSON.stringify(b)}`)
 })
 
-// 2026-08-22 escape (unanchored-marker-match, specs/20260821/01-red-check.md review passed
-// CLEAN with this present): extractTag's TRAILING position accepted a tag item whether or not it
-// was backtick-wrapped — identical to the declaration slot's grammar — so a bullet ending in a
-// BACKTICKED tag illustration (documentation-by-example, e.g. `... name the gate, e.g.
-// \`[oracle: gate]\``) self-tagged exactly like the mid-prose case the anchoring fix above
-// already closed. A phantom [oracle:] then makes ac-matrix.js treat a zero-hit AC as
-// covered-by-declaration whenever the named leg happens to be green in the manifest — laundered
-// coverage, fail-open. Fixed: the trailing position now requires a BARE (un-backticked) tag; the
-// declaration slot still accepts either, per the two tests below that pin it stays that way.
+// specs/20260821/01-red-check.md (escape class unanchored-marker-match): extractTag's trailing
+// position requires a BARE (un-backticked) tag; the declaration slot still accepts either. A
+// bullet ending in a backticked tag illustration (documentation-by-example) must parse that tag
+// null — accepting a backtick-wrapped trailing tag identically to the declaration slot's grammar
+// self-tags on a worked example and makes ac-matrix.js treat a zero-hit AC as
+// covered-by-declaration whenever the named leg happens to be green in the manifest — laundered,
+// fail-open coverage. The two tests below pin both positions.
 test('AC-20260821-01-2: a bullet ending in a BACKTICKED trailing tag illustration — e.g. `... name the gate, e.g. `[oracle: gate]`` — parses that tag null', () => {
   const section = '- **AC-20260822-71-1**: WHEN a skip is reported THE SYSTEM SHALL name the gate, e.g. `[oracle: gate]`\n'
   const bullets = parseAcBullets(section)
@@ -599,14 +556,13 @@ test('AC-20260821-01-2: a bullet ending in a BACKTICKED trailing tag illustratio
     `on this exact shape — got ${JSON.stringify(bullets[0])}`)
 })
 
-// COLLISION (specs/20260823/03-silent-drop-hardening.md D1, found and fixed in place at
-// test-authoring time, 2026-08-23 — never weakened, per this repo's own collision-resolution
-// convention): this fixture IS "rv_640c582f4902's own case" the new spec's Goal cites —
-// AC-20260822-71-1 has zero literal test hits and its only would-be oracle declaration is
-// refused for being backticked, so it is exactly D1's rule 1 (`uncovered-ac` with a refused
-// trailing `[oracle:]`), not AC-4's "otherwise clean" carve-out (AC-4 requires the AC be
-// COVERED — this one is genuinely uncovered). Driven through ac-matrix.js the finding must now
-// be `rejected-trailing-tag`, not `uncovered-ac` — updated in place and retagged to
+// COLLISION (specs/20260823/03-silent-drop-hardening.md D1, per this repo's own
+// collision-resolution convention — never weakened): this fixture is "rv_640c582f4902's own
+// case" the spec's Goal cites — AC-20260822-71-1 has zero literal test hits and its only
+// would-be oracle declaration is refused for being backticked, so it is exactly D1's rule 1
+// (`uncovered-ac` with a refused trailing `[oracle:]`), not AC-4's "otherwise clean" carve-out
+// (AC-4 requires the AC be COVERED — this one is genuinely uncovered). Driven through
+// ac-matrix.js the finding must be `rejected-trailing-tag`, not `uncovered-ac` — retagged
 // AC-20260823-03-1 (also pinned by its own dedicated fixture in
 // tests/ac-matrix/rejected-trailing-tag.test.js; kept here too as the real-corpus-derived shape
 // that surfaced the collision). See specs/20260823/03-silent-drop-hardening.deviations.md.

@@ -5,13 +5,13 @@
 // release-legs.js append --manifest <path> --leg production --result <verified|skipped|failed>
 // release-legs.js record --root <dir> --manifest <path> [--milestone <s>] [--briefs <N,N,...>]
 //
-// Why (2026-08-23, specs/20260823/01-release-legs.md): /spec:release was a ~10-step prose
+// Why (specs/20260823/01-release-legs.md): /spec:release was a ~10-step prose
 // checklist a session re-performed by hand every milestone — deploy, ready check, migrations
 // check, CI polling, e2e, hand-printf'd manifest JSON rows, and a verdict.js/ledger call the
 // session had to remember on EVERY path, including the paths where it bails. This is release's
 // version of what review got in review-legs.js: one script that runs the deterministic legs,
 // owns every manifest row append, and owns every `verdict.js --profile release` invocation, so a
-// red leg or an abandoned run can no longer leave the ledger silent by omission of a
+// red leg or an abandoned run cannot leave the ledger silent by omission of a
 // hand-performed step.
 //
 // Row grammar (closed; verdict.js --profile release copies `observed` verbatim — this header is
@@ -82,9 +82,10 @@ function usage() {
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)) }
 
-// Whole-payload stdout write immediately before process.exit(): process.stdout.write() truncates
-// to 64KB on a pipe (async write, buffer cut before it drains), and a single fs.writeSync call can
-// itself return short — the safe pattern is a loop until every byte is written.
+// The 64 KiB process.exit stdout truncation this synchronous writer avoids is explained in full
+// at spec/scripts/lib/driver-io.js's writeOut.
+// Local to this script: a single fs.writeSync call can itself return short, so the loop below runs
+// until every byte is written.
 function writeAll(fd, str) {
   const buf = Buffer.from(str, 'utf8')
   let written = 0
@@ -199,7 +200,7 @@ function ciQueryOnce(root) {
   // D4: review-legs.js's exact output->row mapping, copied verbatim so the two ci consumers can
   // never drift apart. specs/20260830/03-ci-leg-honest-absence.md D4 extends it with the
   // shaUnseen alternative, mapped to exit 0 unconditionally — `exit` is never touched on that
-  // branch, so a red branchConclusion can never redden this leg (the 2026-08-30 never-block ruling).
+  // branch, so a red branchConclusion can never redden this leg (the never-block ruling).
   let observed = { unavailable: 'no-adapter' }, exit = 0
   const line = ((r.stdout) || '').trim().split('\n').pop() || ''
   if (/^unavailable/.test(line)) observed = { unavailable: 'no-adapter' }

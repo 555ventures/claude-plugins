@@ -2,8 +2,8 @@
 'use strict'
 // lib/observation.js — the sole D2 qualifying-row algorithm for a spec's post-review
 // observation state, read from `.claude/spec-runs*.jsonl` (live + year archives).
-// Extracted verbatim from spec-status.js and observe-ci.js (2026-08-06 review of
-// specs/20260805/03-done-unobserved-observation.md) so both consumers share one derivation
+// Extracted verbatim from spec-status.js and observe-ci.js (specs/20260805/03-done-unobserved-
+// observation.md) so both consumers share one derivation
 // instead of two copies drifting apart — the repo rules flag a second derivation of the same
 // algorithm as a hard finding. This module has no CLI of its own — it exports
 // readLedgerRows/qualifyingObservation for both callers.

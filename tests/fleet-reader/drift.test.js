@@ -5,14 +5,12 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT, tmpdir, runNode } = require('../helpers')
 
-// Fleet evidence reader (specs/20260820/05-fleet-evidence-reader.md, 2026-08-20): D11's
-// standing rule — every parseable row renders verbatim, drift is counted in a named bucket
-// alongside it, and nothing is ever coerced to zero or silently dropped — exists because
-// specs/20260820/03 fixed exactly that defect once already and this reader must not
-// reproduce it against itself. D10 is the strongest form of the opacity boundary D14's
-// classifier depends on: the reader's own source must never regex the packed strings the
-// parser (brief 16) exists to structure. spec/scripts/fleet-reader.js does not exist yet
-// (TDD red phase) — every assertion below fails until D1 ships it.
+// specs/20260820/05-fleet-evidence-reader.md D10/D11: every parseable row renders verbatim,
+// drift is counted in a named bucket alongside it, and nothing is ever coerced to zero or
+// silently dropped — the reader must not reproduce the defect specs/20260820/03 fixed once
+// already, against itself. D10 is the strongest form of the opacity boundary D14's classifier
+// depends on: the reader's own source must never regex the packed strings the parser (brief 16)
+// exists to structure.
 
 const SCRIPT = 'scripts/fleet-reader.js'
 const SCRIPT_PATH = path.join(ROOT, 'spec/scripts/fleet-reader.js')

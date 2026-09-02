@@ -3,7 +3,7 @@
 A Claude Code plugin marketplace with two plugins:
 
 - **spec** — the full project lifecycle: optional greenfield **genesis** (picks your stack and
-  design direction), then the spec-driven **plan → build** loop per feature, and a **release**
+  design direction), then the spec-driven **plan → run** loop per feature, and a **release**
   gate per milestone.
 - **git** — fast add-all-commit and a guided merge.
 

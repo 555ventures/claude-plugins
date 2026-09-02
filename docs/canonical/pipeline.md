@@ -69,11 +69,14 @@ already closed. (specs/20260823/04-review-close-hardening.md, done 2026-08-23)
 
 ## One command per feature
 
-After `/spec:plan`, `/spec:build <spec>` derives the stage from disk and runs design (when
-due), the build driver, and the review driver in sequence, each with `--via loop`. Status
+After `/spec:plan`, `/spec:run <spec>` derives the stage from disk and runs design (when
+due), the build driver, and the review driver in sequence, each with `--via loop`;
+`/spec:design`, `/spec:build`, and `/spec:review` are the three stages' direct entries
+(`--via direct`). Status
 transitions are owned by driver states, not commands: plan's lock → `hardened`, the build
 driver's preflight → `implementing`, the review driver's close → `done`; the state gate
-admits `/spec:build` on all three and stays a prompt-boundary check. There is no stop
+admits `/spec:run` on all three (`/spec:build` on `hardened|implementing`, `/spec:review` on
+`implementing|done`) and stays a prompt-boundary check. There is no stop
 between the reviewer's return and dispositions. Independence is a fresh-context
 `spec:disposer` agent (read-only, paths only, the session's model) dispatched at
 DISPOSITIONS on both review entries; it returns one grounded recommendation per survivor
@@ -87,7 +90,9 @@ recommendations the user overrode), `empty` (nothing to disposition), or `not-re
 disposer is a ledger query. The session-id checkpoint, its restart remedy, and
 `--skip-independence-check-because` are retired (specs/20260901/09-disposer-gate.md,
 ADR-0005). The pre-merge stop is the worktree step-out, never a forced clear.
-`/spec:design` and `/spec:review` remain direct entry points to the same drivers. The loop
+`spec-status --next` names `/spec:run` for every spec past `hardened`; its `--json` action
+set is `/spec:plan | /spec:run | /spec:escape` (specs/20260901/10-spec-run-command.md,
+ADR-0005). The loop
 is scored by the fleet reader's `cleanByVia` (escapes-per-CLEAN by `via`); a `loop` rate
 above the `direct` rate over 30 fleet reviews reverts the loop.
 (specs/20260901/03-unified-build-loop.md, done 2026-09-01)

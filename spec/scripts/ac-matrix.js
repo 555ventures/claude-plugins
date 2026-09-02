@@ -112,7 +112,7 @@ const path = require('path')
 const { parseFilePlanRows } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
 const {
-  AC_ID_RE, AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, extractSection, parseAcBullets, acIdOccurs,
+  AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, extractSection, parseAcBullets, acIdOccurs,
   rejectedTrailingTagDetail,
 } = require('./lib/spec-sections')
 

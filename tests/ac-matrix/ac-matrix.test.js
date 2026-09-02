@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir, runNode, runBash, ROOT, SPEC } = require('../helpers')
+const { tmpdir, runNode, runBash, SPEC } = require('../helpers')
 
 // AC-20260821-01-2 (multi-tag regression, 2026-08-22) additionally pins lib/spec-sections.js's
 // parseAcBullets directly for exact per-tag VALUES — a plain require()able library, unlike a

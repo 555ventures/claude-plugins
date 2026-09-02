@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir, runNode, SPEC } = require('../helpers')
+const { tmpdir, runNode } = require('../helpers')
 
 // specs/20260816/03-file-plan-table-scoped-parsing.md — `parseFilePlanRows` resolves its
 // Action/Layer column indices section-wide after its walk, so the LAST header row anywhere in

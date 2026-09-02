@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir, runNode, read } = require('./helpers')
+const { tmpdir, runNode } = require('./helpers')
 
 // JJ-20260808-01, found during the 2026-08-08 review of specs/20260807/05-explore-taste-channels.md.
 // review.md Phase 0 step 8 documents the pre-panel hard-stop invocation as: "The stopped attempt

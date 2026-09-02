@@ -173,7 +173,7 @@ const { resolveGate } = require('./lib/gate-resolve')
 // D4 (specs/20260901/02-run-provenance.md): model is derived at row-write time (never once at
 // startup) — right after /clear the new transcript has no assistant line yet, and by the time a
 // verdict pass runs the session has spoken many times.
-const { sessionModel, readSessionStamp } = require('./lib/session-stamp.js')
+const { sessionModel } = require('./lib/session-stamp.js')
 
 // D1-D6 (specs/20260821/04-stopped-row-durability.md): a worktree review's RED_BLOCKING hard-stop
 // durably appends here, at the MAIN root, instead of the worktree's own (destructible)

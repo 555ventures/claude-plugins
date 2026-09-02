@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { SPEC, read, tmpdir, runNode, runBash } = require('../helpers')
+const { SPEC, tmpdir, runNode, runBash } = require('../helpers')
 
 // specs/20260813/06-report-renderer.md (2026-08-13): the console-output contract was prose-only
 // (exactly one command's report ending was test-pinned repo-wide, per the audit) — every other

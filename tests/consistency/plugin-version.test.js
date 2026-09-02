@@ -1,7 +1,7 @@
 'use strict'
 const { test } = require('node:test')
 const assert = require('node:assert')
-const { ROOT, read } = require('../helpers')
+const { read } = require('../helpers')
 
 // specs/20260820/08-config-name-ban.md (2026-08-20, D15 — orchestrator coverage ruling mid-build):
 // AC-20260820-08-14 cites "the existing version-bump consistency test" as its carrier, but no test

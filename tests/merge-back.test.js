@@ -163,7 +163,7 @@ test('create refuses on an un-gitignored worktree dir and an unborn HEAD', () =>
   assert.match(r2.stderr, /no commits yet/)
 })
 
-// specs/20260823/02-room-mechanics.md: `cleanup` must not rely on `git branch -d`'s ANCESTRY
+// `cleanup` must not rely on `git branch -d`'s ANCESTRY
 // containment check alone — a squash merge deliberately creates none (it copies the tree into
 // one new commit and links nothing), so an ancestry-only check fails on 100% of squash merges,
 // the exact strategy `inspect` RECOMMENDs for a many-commit spec. A cleanup failure there lands

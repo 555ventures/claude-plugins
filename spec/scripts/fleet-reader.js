@@ -513,12 +513,10 @@ const cleanContradicted = computeCleanContradicted(reposData)
 const cleanByVia = computeCleanByVia(reposData)
 const driftCensus = computeDriftCensus(reposData)
 
-// fs.writeSync(1, …), looped to absorb a partial write, rather than process.stdout.write()
-// followed by process.exit(): stdout.write is async when stdout is a pipe, and process.exit
-// cuts the internal buffer before it drains — a large fleet's JSON silently truncates at 64KB
-// while the process still reports exit 0 (spec-pipeline.md [host] gotcha, reproduced here on a
-// 20-repo synthetic fleet). Falling off the end of the script with nothing else keeping the
-// event loop alive exits 0 on its own, so neither branch below calls process.exit(0).
+// The 64 KiB process.exit stdout truncation this synchronous writer avoids is explained in full
+// at spec/scripts/lib/driver-io.js's writeOut.
+// Local to this script: falling off the end with nothing else keeping the event loop alive exits
+// 0 on its own, so neither branch below calls process.exit(0).
 function writeAll(fd, buf) {
   let written = 0
   while (written < buf.length) written += fs.writeSync(fd, buf, written)

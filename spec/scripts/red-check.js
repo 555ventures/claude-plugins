@@ -322,11 +322,10 @@ for (const relPath of [...testFiles].sort()) {
 }
 
 // ---- output -------------------------------------------------------------------------------------
-// fs.writeSync(fd, …), looped to absorb a partial write, rather than process.stdout.write()
-// followed by process.exit(): stdout.write is async when stdout is a pipe, and process.exit cuts
-// the internal buffer before it drains, silently truncating at 64KB while reporting exit 0
-// (spec-pipeline.md [host] gotcha). process.exitCode is set instead of calling process.exit(), so
-// Node drains stdout naturally before exiting.
+// The 64 KiB process.exit stdout truncation this synchronous writer avoids is explained in full
+// at spec/scripts/lib/driver-io.js's writeOut.
+// Local to this script: process.exitCode is set instead of calling process.exit(), so Node drains
+// stdout naturally before exiting.
 
 function writeAll(fd, buf) {
   let written = 0

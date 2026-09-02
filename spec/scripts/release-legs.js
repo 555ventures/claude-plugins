@@ -82,9 +82,10 @@ function usage() {
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)) }
 
-// Whole-payload stdout write immediately before process.exit(): process.stdout.write() truncates
-// to 64KB on a pipe (async write, buffer cut before it drains), and a single fs.writeSync call can
-// itself return short — the safe pattern is a loop until every byte is written.
+// The 64 KiB process.exit stdout truncation this synchronous writer avoids is explained in full
+// at spec/scripts/lib/driver-io.js's writeOut.
+// Local to this script: a single fs.writeSync call can itself return short, so the loop below runs
+// until every byte is written.
 function writeAll(fd, str) {
   const buf = Buffer.from(str, 'utf8')
   let written = 0

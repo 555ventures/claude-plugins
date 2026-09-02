@@ -1,6 +1,6 @@
 ---
 date: 2026-09-02
-status: implementing
+status: done
 tier: standard
 area: gate-integrity
 design: false
@@ -104,6 +104,50 @@ branch merges, so D6 records the executed result at build close and at review in
 
 Regression pins: AC-20260902-02-2 is the whole-suite `SHALL CONTINUE TO` pin; no narrower
 neighbor needs pinning because the oracle bounds the edit to comment lines.
+
+### What the run departed from, and why (deviations fold, review rv_c76e8d7cb3e9)
+
+**The sweep itself was uneventful; the pipeline around it was not.** 768 comment lines across
+157 code-group files went to zero, the final gate held at 953/953 with nothing skipped, and the
+D6 oracle names exactly three `code-changed` files — the retag this spec's own Orchestrator
+duties mandate, plus D10's driver fix and its test. No swept file moved an executable byte.
+None of the three is a host § Risk Tiers surface, so D8's upgrade trigger never fired and the
+tier stayed `standard`.
+
+**Two amendments were forced mid-build.** AC-20260902-02-1's original `--json` clause filtered
+`Object.keys(files)`, but `comment-narration.js` builds that map from the directory walk, so
+every scanned code file keeps a key regardless of findings and the clause was unsatisfiable for
+any non-empty tree. It was amended in place to the three clauses this spec's Goal already
+stated, with the superseded formula demoted to an indented sub-line. D10 records the user's
+ruling to fix `spec-build-driver.js`, which checked File Plan paths with a literal
+`fs.existsSync` in two handlers — so a glob row, a form this spec's File Plan uses and
+`scope-reconcile.js` sanctions, could satisfy neither `--mark tests-authored` nor
+`--mark wave-done`. Both handlers now expand through the shared `lib/glob-match.js`, each with
+its own behavioral test.
+
+**Ordering yielded to red-check twice.** D7 asks the test author to shrink the baseline at
+Phase 1, but `red-check.js` refuses to run while any non-tests File Plan path differs from the
+base, and the baseline is an `other`-layer row; the shrink was reverted for the red-check run
+and re-applied at the `other` wave, which the orchestrator applied directly (`--workers 0`)
+since the artifact was already byte-verified. The pin was genuinely red either way. D9's
+literal version target 7.57.1 was taken at HEAD, so the bump landed at 7.57.2 — the host's own
+Gotchas already record that a spec's version number is a target, not a pin.
+
+**Three sweep judgments are worth keeping.** Two test files open with an informal incident id
+that also leads a protected test name, so the person check fires structurally no matter how the
+prose is worded; the header's restatement was deleted under D2's own restated-fact rule rather
+than reworded, since the id survives verbatim in the test name. One agent-doctrine header had no
+citable owner anywhere — no spec, no AC, no ledger row — so the mechanism paragraph was kept
+uncited rather than deleted with its citation, which a literal reading of the fallback would
+have required. And a comment in `tests/merge-back.test.js` cited another repo's spec by a path
+that reads as local once the host qualifier is stripped; with no sanctioned citation form
+available for it, the incident sentence was dropped and the mechanism kept.
+
+**Review cost three passes.** The first caught the broken cross-repo citation and a D4
+consolidation that had reached two duplicate sites but not five; the second caught that D10's
+second handler had shipped unpinned and that this record had claimed otherwise; the third was
+clean. All eight sites of the 64 KiB truncation mechanism now cite `lib/driver-io.js`, each
+keeping its own file-local detail.
 
 ## Canonical Delta
 

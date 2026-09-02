@@ -45,3 +45,11 @@ or mechanize. Agent-memory notes are disposed when a spec's diff touches what th
 disposition records `reviewed: YYYY-MM-DD` in the note's metadata. Comment narration is capped
 per file by `.claude/comment-narration.baseline.json` while the sweep runs, and at zero once it
 is deleted.
+
+The plugin's own code-group comments — everything under `spec/scripts`, `spec/bin`, `scripts`,
+and `tests` — are at zero narration. A new comment there states the current invariant plus one
+owner id (a spec path, AC-ID, D-number, ADR, or run id) and nothing else; the standing scan in
+`tests/consistency/comment-narration-live.test.js` refuses anything else, and the tracked
+baseline holds no code-group path to fall back on. A mechanism explanation survives on its
+merits — the rule bans history, not reasons — but it lives in exactly one file, and every other
+site that would repeat it carries a one-line citation instead.

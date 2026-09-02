@@ -813,3 +813,41 @@ test('a tests-layer File Plan glob row is satisfied by any matching file on disk
   assert.match(fs.readFileSync(path.join(host.sidecar, 'build-state.json'), 'utf8'), /"testsAuthored":\s*true/,
     'the accepted glob mark must be recorded on the sidecar, or the driver re-demands the step forever')
 })
+
+// Owner: specs/20260902/02-plugin-code-sweep.md D10 — verifyWaveRows expands a glob row through
+// lib/glob-match.js too, not only handleTestsAuthored. This branch runs on EVERY wave-done mark of
+// every build, so it is pinned separately from the tests-authored one above. No AC-ID, for the
+// same red-check reason.
+test('a wave File Plan glob row verifies on at least one match for CREATE/MODIFY and on no match for DELETE', () => {
+  const host = makeHost()
+  const globbed = fs.readFileSync(host.spec, 'utf8')
+    .replace('| src/foo.js | MODIFY | scripts |', '| src/*.js | MODIFY | scripts |')
+  fs.writeFileSync(host.spec, globbed)
+  toFirstWave(host)
+  implementScriptsWave(host)
+
+  const rMatch = run(host.root, host.spec, '--mark', 'wave-done', '--wave', 'doctrine+scripts', '--workers', '1')
+  assert.strictEqual(rMatch.status, 0,
+    'a MODIFY glob row with matching files on disk must verify — checking the pattern as a literal filename would refuse every wave whose File Plan plans by glob: ' + rMatch.stdout + rMatch.stderr)
+
+  const host2 = makeHost()
+  const deleteRow = fs.readFileSync(host2.spec, 'utf8')
+    .replace('| src/foo.js | MODIFY | scripts |', '| src/gone-*.js | DELETE | scripts |')
+  fs.writeFileSync(host2.spec, deleteRow)
+  toFirstWave(host2)
+  implementScriptsWave(host2)
+  const rAbsent = run(host2.root, host2.spec, '--mark', 'wave-done', '--wave', 'doctrine+scripts', '--workers', '1')
+  assert.strictEqual(rAbsent.status, 0,
+    'a DELETE glob row matching nothing on disk is satisfied by that absence — refusing it would strand every wave that plans a deletion by pattern: ' + rAbsent.stdout + rAbsent.stderr)
+
+  const host3 = makeHost()
+  fs.writeFileSync(host3.spec, deleteRow)
+  toFirstWave(host3)
+  implementScriptsWave(host3)
+  fs.writeFileSync(path.join(host3.root, 'src/gone-still-here.js'), 'module.exports = () => 1\n')
+  const rStillThere = run(host3.root, host3.spec, '--mark', 'wave-done', '--wave', 'doctrine+scripts', '--workers', '1')
+  assert.strictEqual(rStillThere.status, 2,
+    'a DELETE glob row must be refused while a matching file still exists — accepting it would record a deletion wave that never deleted anything: ' + rStillThere.stdout + rStillThere.stderr)
+  assert.match(rStillThere.stderr, /src\/gone-\*\.js/,
+    'the refusal must name the unsatisfied pattern, or the session cannot tell which File Plan row still fails: ' + rStillThere.stderr)
+})

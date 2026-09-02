@@ -175,11 +175,8 @@ const path = require('path')
 const { spawnSync } = require('child_process')
 const { CONFIG_RELPATH } = require('./lib/host-config')
 
-// Node's stdout write to a pipe is ASYNCHRONOUS; process.exit() tears the process down before a
-// large console.log() payload finishes flushing, silently truncating at the 64 KiB pipe buffer
-// while the exit code still reads 0 (recorded incident, specs/20260823/08 repair round —
-// spec-status.js's --json truncated its ~75 KB dashboard at exactly 65536 bytes). Every site here
-// that prints a payload and then exits routes through this synchronous, EAGAIN-retrying writer.
+// The 64 KiB process.exit stdout truncation this synchronous writer avoids is explained in full
+// at spec/scripts/lib/driver-io.js's writeOut.
 function writeOut(fd, str) {
   const buf = Buffer.from(str + '\n', 'utf8')
   let off = 0

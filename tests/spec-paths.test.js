@@ -98,12 +98,19 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // the spec-review-driver.js and spec-queue.js additions above, it is enforced fail-closed by this
 // existing suite guard: the key list below is updated in place, never a parallel exhaustive pin.
 
+// AC-20260901-01-16: specs/20260901/01-build-driver.md D10 adds spec/scripts/spec-build-driver.js
+// to the bundle (a new `build-driver` key) — like every other bundled script it needs a
+// spec-paths key, or /spec:build's driver invocation resolves nothing (§ Risk Tiers, spec-paths:
+// "a wrong key breaks commands silently"). This is the tenth recurrence of the known spec-paths
+// additive-collision class (JJ-20260814-01): the key list below is updated in place, never a
+// parallel exhaustive pin.
+
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-enforce',
     'wf-research', 'design-atlas', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
-    'review-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'render-gate', 'render-compare',
+    'review-driver', 'build-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'render-gate', 'render-compare',
     'render-inventory', 'render-rules', 'registry-check', 'genesis-driver', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
@@ -301,6 +308,15 @@ test('AC-20260821-01-11: spec-paths red-check resolves to spec/scripts/red-check
     'build.md\'s `node "$(spec-paths red-check)"` invocation silently (§ Risk Tiers, spec-paths: "a wrong ' +
     'key breaks commands silently")')
   assert.ok(fs.existsSync(redCheckPath), 'the resolved red-check.js path must actually exist on disk: ' + redCheckPath)
+})
+
+test('AC-20260901-01-16: spec-paths build-driver resolves to spec/scripts/spec-build-driver.js, an existing path', () => {
+  const fs = require('node:fs')
+  const buildDriverPath = run('build-driver').trim()
+  assert.strictEqual(buildDriverPath, path.join(SPEC, 'scripts/spec-build-driver.js'),
+    'D10: `spec-paths build-driver` must resolve to spec/scripts/spec-build-driver.js — a wrong or missing key breaks ' +
+    '/spec:build\'s driver invocation silently (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently")')
+  assert.ok(fs.existsSync(buildDriverPath), 'the resolved spec-build-driver.js path must actually exist on disk: ' + buildDriverPath)
 })
 
 test('AC-20260822-02-13: spec-paths init-gen resolves to spec/scripts/init-gen.js, an existing path', () => {

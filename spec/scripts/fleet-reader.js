@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 'use strict'
 // fleet-reader.js [--repos-root <dir>] [--json] — read every spec-run ledger this machine can
-// see and answer six fixed questions: leg red-recency, the brief-08 adoption gate, escape
-// aggregates, replay debt, CLEAN-contradicted-by-escape, and a schema-drift census.
+// see and answer seven fixed questions: leg red-recency, the brief-08 adoption gate, escape
+// aggregates, replay debt, CLEAN-contradicted-by-escape, a schema-drift census, and
+// escapes-per-CLEAN by via (loop vs. direct vs. unknown).
 //
 // Why: brief 17 (2026-08-20) found pipeline questions were being answered from whichever repo
 // happened to be open on this machine — ~14% of the fleet's ~1,100 evidence rows at the time
@@ -13,8 +14,9 @@
 // What this deliberately does NOT do: it never stores a repo list, a cache, or any derived
 // number between runs (read-only, stateless — D12); it never regexes a ledger row's packed
 // legacy status-string field (D10 — structured fields only: leg name + exit, verdict, stage,
-// ts, escape enums, replay outcomes); it takes no query flags — the six questions are fixed
-// (D5), a seventh needs a spec, not a flag; and it never coerces an out-of-enum or missing
+// ts, escape enums, replay outcomes); it takes no query flags — the seven questions are fixed
+// (D5; the seventh, cleanByVia, added by specs/20260901/03-unified-build-loop.md D9), a new
+// query still needs a spec, not a flag; and it never coerces an out-of-enum or missing
 // value to zero or drops a parseable row silently (D11) — every such row renders verbatim in
 // its query AND increments a named drift-census reason bucket.
 //
@@ -356,6 +358,52 @@ function computeCleanContradicted(reposList) {
   return { byRepo }
 }
 
+// ---- query 7: cleanByVia ---------------------------------------------------------------------
+// specs/20260901/03-unified-build-loop.md D9: per repo and fleet-total, for each via bucket
+// (loop / direct / unknown — review rows carrying no via at all, pre-sibling-02 rows), the same
+// {cleans, contradicted} shape query 5 (computeCleanContradicted) already derives, using the
+// EXACT reviewRunId<->runId join that query uses. A4: this is a sibling function, never a
+// reshape of computeCleanContradicted itself — that query's --json output stays byte-identical.
+const VIA_BUCKETS = ['loop', 'direct', 'unknown']
+
+function bucketOf(via) {
+  return via === 'loop' || via === 'direct' ? via : 'unknown'
+}
+
+function emptyViaTotals() {
+  return { loop: { cleans: 0, contradicted: 0 }, direct: { cleans: 0, contradicted: 0 }, unknown: { cleans: 0, contradicted: 0 } }
+}
+
+function computeCleanByVia(reposList) {
+  const total = emptyViaTotals()
+  const byRepo = []
+  for (const repo of reposList) {
+    const cleanRows = repo.rawRows.filter(r => r.stage === 'review' && r.verdict === 'CLEAN')
+    // Same join as computeCleanContradicted, but keyed per bucket: a Map from runId to the
+    // bucket its CLEAN row belongs in, so an escape's reviewRunId match increments the SAME
+    // bucket as the CLEAN row it contradicts.
+    const cleanBucketByRunId = new Map()
+    const repoTotals = emptyViaTotals()
+    for (const r of cleanRows) {
+      const bucket = bucketOf(r.via)
+      repoTotals[bucket].cleans++
+      if (typeof r.runId === 'string') cleanBucketByRunId.set(r.runId, bucket)
+    }
+    for (const r of repo.rawRows) {
+      if (r.stage !== 'escape') continue
+      if (typeof r.reviewRunId !== 'string') continue
+      const bucket = cleanBucketByRunId.get(r.reviewRunId)
+      if (bucket) repoTotals[bucket].contradicted++
+    }
+    for (const b of VIA_BUCKETS) {
+      total[b].cleans += repoTotals[b].cleans
+      total[b].contradicted += repoTotals[b].contradicted
+    }
+    byRepo.push({ name: repo.name, ...repoTotals })
+  }
+  return { total, byRepo }
+}
+
 // ---- query 6: driftCensus -------------------------------------------------------------------
 // Current-shape classifier (D14): a row is in-shape iff every applicable rule holds; each
 // failure increments a named reason bucket. Unparseable lines are counted separately (per
@@ -404,6 +452,7 @@ const gate08 = computeGate08(reposData)
 const escapes = computeEscapes(reposData)
 const replayDebt = computeReplayDebt(reposData)
 const cleanContradicted = computeCleanContradicted(reposData)
+const cleanByVia = computeCleanByVia(reposData)
 const driftCensus = computeDriftCensus(reposData)
 
 // fs.writeSync(1, …), looped to absorb a partial write, rather than process.stdout.write()
@@ -419,7 +468,7 @@ function writeAll(fd, buf) {
 
 if (json) {
   writeAll(1, Buffer.from(JSON.stringify({
-    population, legRecency, gate08, escapes, replayDebt, cleanContradicted, driftCensus,
+    population, legRecency, gate08, escapes, replayDebt, cleanContradicted, driftCensus, cleanByVia,
   }, null, 2) + '\n'))
 }
 
@@ -494,6 +543,13 @@ function renderCleanContradicted(cc) {
   return lines.join('\n')
 }
 
+// specs/20260901/03-unified-build-loop.md D9/Contracts: one line, exact wording and middle-dot
+// separators — the brief 18 kill condition is read straight off this line.
+function renderCleanByVia(cbv) {
+  const part = (b) => `${b} ${cbv.total[b].contradicted}/${cbv.total[b].cleans}`
+  return `escapes-per-CLEAN by via: ${VIA_BUCKETS.map(part).join(' · ')}`
+}
+
 function renderDriftCensus(dc) {
   const lines = ['6. Drift census — ledger rows outside the current shape, per repo']
   for (const r of dc.byRepo) {
@@ -512,5 +568,6 @@ if (!json) {
     renderReplayDebt(replayDebt),
     renderCleanContradicted(cleanContradicted),
     renderDriftCensus(driftCensus),
+    renderCleanByVia(cleanByVia),
   ].join('\n\n'))
 }

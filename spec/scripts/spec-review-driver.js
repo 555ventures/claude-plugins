@@ -96,8 +96,8 @@
 //   spec-review-driver <spec.md> --state          -> print the state name only (scripting)
 //
 // States: LEGS (driver-only) -> STOPPED (terminal on RED_BLOCKING) | SKIPS? -> REVIEWER ->
-//   DISPOSITIONS -> FIX/ESCALATE(cap 2, terminal)? -> CLOSE -> MERGE/CONFLICTS -> REPLAY? ->
-//   DONE (terminal)
+//   CHECKPOINT (--via loop only, specs/20260901/03-unified-build-loop.md D2)? -> DISPOSITIONS ->
+//   FIX/ESCALATE(cap 2, terminal)? -> CLOSE -> MERGE/CONFLICTS -> REPLAY? -> DONE (terminal)
 //
 // Exit codes: 0 = step printed · 2 = precondition failure or refused mark (message names the
 // repair — a missing/malformed artifact, a REVIEWER_FAILED return, dispositions exceeding the
@@ -125,7 +125,13 @@
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
-const { spawnSync } = require('child_process')
+// D11 (specs/20260901/01-build-driver.md): the fail-closed spawn wrapper, the synchronous
+// EAGAIN-retrying stdout writer, the ledger append, and the sidecar load/save pair now live in
+// lib/driver-io.js — spec-build-driver.js needs the identical four shapes for its own
+// <spec>.build/ sidecar, and a second copy here would be the drift seam ci-query.js and
+// lib/gate-resolve.js were each unified over. Local wrappers below (appendLedger/saveSidecar)
+// keep every existing call site in this file unchanged — only the load/save primitives moved.
+const { runChild, writeOut, appendLedger: appendLedgerLib, loadSidecar, saveSidecar: saveSidecarLib } = require('./lib/driver-io')
 // The repo's ONE ledger reader (live + year archives, in read order) — REPLAY counts
 // stage:"replay" rows through it rather than opening the ledger a second way.
 const { readLedgerRows } = require('./lib/observation')
@@ -150,6 +156,10 @@ const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
 // host-gate re-run in handleClosed() shares the exact {testDirs}/{scopeDirs} resolution
 // review-legs.js's own gate leg uses — a second, paraphrased copy here would be a drift seam.
 const { resolveGate } = require('./lib/gate-resolve')
+// D4 (specs/20260901/02-run-provenance.md): model is derived at row-write time (never once at
+// startup) — right after /clear the new transcript has no assistant line yet, and by the time a
+// verdict pass runs the session has spoken many times.
+const { sessionModel, readSessionStamp } = require('./lib/session-stamp.js')
 
 // D1-D6 (specs/20260821/04-stopped-row-durability.md): a worktree review's RED_BLOCKING hard-stop
 // durably appends here, at the MAIN root, instead of the worktree's own (destructible)
@@ -160,24 +170,9 @@ const STOPPED_LEDGER = '.claude/spec-runs.stopped.jsonl'
 
 function die(msg) { process.stderr.write('spec-review-driver: ' + msg + '\n'); process.exit(2) }
 
-// R9: spawnSync's `status` is null when the child dies by signal, fails to spawn, or overflows
-// maxBuffer — every branch in this file that reads `.status`/`.code` or trusts `.stdout` without
-// checking either used to tolerate that null silently (a SIGKILLed review-legs.js printed
-// `state: REVIEWER` over a manifest that was never written). This is the ONE place that death is
-// handled: every spawnSync call in the file is routed through here, and only a genuine no-exit-
-// code death is fatal — a legitimate non-zero exit (RED_BLOCKING, merge conflicts, a branch that
-// doesn't exist yet) still comes back as a normal result for the caller's own branch to read.
-function runChild(cmd, args, opts, what) {
-  const r = spawnSync(cmd, args, opts)
-  if (r.error || r.status === null) {
-    const reason = r.error ? r.error.message
-      : r.signal ? 'killed by signal ' + r.signal
-      : 'exited with no status (spawn failure)'
-    die(what + ' died without an exit code (' + reason + ') — nothing it was meant to produce can ' +
-      'be trusted; fix the cause and re-run `node ' + __filename + ' ' + (specPath || '<spec.md>') + '`')
-  }
-  return r
-}
+// runChild is now lib/driver-io.js's shared fail-closed spawn wrapper (D11) — every call site
+// below is unchanged (still passes its own `what` label as the 4th arg); only the definition
+// moved.
 
 const argv = process.argv.slice(2)
 const specPath = argv[0]
@@ -274,15 +269,39 @@ const specRel = path.relative(repoRoot, resolvedSpecPath) || resolvedSpecPath
 // sidecarDir) because the file is gone (folded) long before any merge-back relocation could run.
 const deviationsPath = resolvedSpecPath.replace(/\.md$/, '.deviations.md')
 
-let marks = {}
-try { marks = JSON.parse(fs.readFileSync(stateFile, 'utf8')) } catch { marks = {} }
+let marks = loadSidecar(sidecarDir, 'review-state.json')
 // D8/D9: set only when a self-heal attempt (deriveState()'s ESCALATE arm) hits a verdict.js drift
 // refusal — the ESCALATE step text names it in place of the (unset) escalateLedgerPath. Never
 // persisted: a fresh invocation retries the write from scratch rather than trusting a stale error.
 let escalateDriftError = null
-function saveSidecar() {
-  fs.mkdirSync(sidecarDir, { recursive: true })
-  fs.writeFileSync(stateFile, JSON.stringify(marks, null, 2) + '\n')
+// saveSidecar/appendLedger are thin wrappers over lib/driver-io.js's shared primitives (D11) —
+// every existing call site below (`saveSidecar()`, `appendLedger(line)`) is unchanged.
+function saveSidecar() { saveSidecarLib(sidecarDir, path.basename(stateFile), marks) }
+
+// D4: --model <sessionModel(repoRoot) or omitted when null> — one shared arg-builder for all
+// three verdict.js passes below, read fresh at each call site (never cached) so a session that
+// has spoken since the last pass gets its current model, not a startup snapshot.
+function viaModelArgs() {
+  const m = sessionModel(repoRoot)
+  return m === null ? ['--via', marks.via] : ['--via', marks.via, '--model', m]
+}
+
+// ---- D2 (specs/20260901/03-unified-build-loop.md): the CHECKPOINT enforcement ------------------
+// A --via loop run records checkpoint: {sessionId} from readSessionStamp(repoRoot) at
+// reviewer-returned time (handleReviewerReturned); checkpointStillParked() is the single read-only
+// predicate both deriveState() (to return the CHECKPOINT state) and handleDispositions() (to
+// refuse the mark) consult, so the two can never disagree about whether the run is still parked.
+// A via:"direct" run, a never-cleared-yet null-sessionId degrade, or a checkpoint already cleared
+// this run (marks.checkpointCleared, sticky — fires once per run) are all "not parked".
+function checkpointStamp() {
+  const stamp = readSessionStamp(repoRoot)
+  return stamp && typeof stamp.sessionId === 'string' ? stamp.sessionId : null
+}
+
+function checkpointStillParked() {
+  return marks.via === 'loop' && !marks.checkpointCleared &&
+    !!marks.checkpoint && marks.checkpoint.sessionId !== null &&
+    checkpointStamp() === marks.checkpoint.sessionId
 }
 
 // ---- Gotchas cap (prose-cap.js, specs/20260823/06 + 2026-08-25 ratchet) ------------------------
@@ -409,6 +428,20 @@ if (status === 'done' && !marks.closeRunId) {
   die('spec status is already "done" and ' + sidecarRel + ' does not record this run\'s own ' +
     'close — the authoritative verdict for this spec already ran; use /spec:escape to record a ' +
     'defect that escaped a review that already passed, not another review run')
+}
+
+// ---- D4 (specs/20260901/02-run-provenance.md): --via recorded once, at sidecar creation --------
+// A later invocation naming a different --via is ignored — the run's provenance is fixed at
+// creation, so a resumed session reports the same via the run started with, never re-derived.
+// flag('--via') (A5) reads any --via value present; anything other than exactly "loop" defaults
+// to "direct", mirroring verdict.js's own default (D3) — the driver documents no separate --via
+// usage refusal, so an unrecognized value is treated the same as its absence rather than dying.
+// Placed AFTER the terminal-cold-path short-circuits above (never before them): saving here on a
+// spec already status:"done" with no sidecar would resurrect the very directory printDoneNow just
+// deleted, corrupting a `--state` query on a finished review into a fresh restart attempt.
+if (marks.via === undefined) {
+  marks.via = flag('--via') === 'loop' ? 'loop' : 'direct'
+  saveSidecar()
 }
 
 // ---- base derivation (D2: build_base -> diff_base -> branch) ----------------------------------
@@ -541,11 +574,7 @@ function computeDiffLoc() {
   return (Number(m[2]) || 0) + (Number(m[3]) || 0)
 }
 
-function appendLedger(jsonLine) {
-  const ledgerPath = path.join(repoRoot, '.claude/spec-runs.jsonl')
-  fs.mkdirSync(path.dirname(ledgerPath), { recursive: true })
-  fs.appendFileSync(ledgerPath, jsonLine + '\n')
-}
+function appendLedger(jsonLine) { appendLedgerLib(repoRoot, jsonLine) }
 
 // D2/D3: is STOPPED_LEDGER ignored at mainRootDir right now? `check-ignore -q` verdicts a
 // not-yet-existing path (A3's executed spike), so this runs before the first durable append ever
@@ -609,7 +638,7 @@ function runHardStopVerdict(n) {
   const diffLoc = computeDiffLoc()
   const args = ['--manifest', manifestPathFor(n), '--ledger', '--spec', specRel, '--tier', tier,
     '--diff-loc', String(diffLoc), '--iteration', String(n), '--run-id', runId,
-    '--base-sha', baseSha, '--head-sha', headSha()]
+    '--base-sha', baseSha, '--head-sha', headSha(), ...viaModelArgs()]
   if (treeDirty()) args.push('--dirty')
   const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
     'verdict.js (hard-stop pass)')
@@ -664,7 +693,7 @@ function writeEscalateRow(n) {
     '--waived', String(d.waived), '--rejected', String(d.rejected), '--fixDispatched', '0',
     '--escalated', '--ledger', '--spec', specRel, '--tier', tier, '--diff-loc', String(diffLoc),
     '--iteration', String(n), '--run-id', runId, '--retain', path.join(repoRoot, '.claude/spec-runs'),
-    '--base-sha', baseSha, '--head-sha', headSha()]
+    '--base-sha', baseSha, '--head-sha', headSha(), ...viaModelArgs()]
   if (treeDirty()) args.push('--dirty')
   const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
     'verdict.js (escalate pass)')
@@ -731,7 +760,7 @@ function doCloseWork(n) {
     '--waived', String(d.waived), '--rejected', String(d.rejected), '--fixDispatched', String(d.fixDispatched),
     '--ledger', '--spec', specRel, '--tier', tier, '--diff-loc', String(diffLoc),
     '--iteration', String(n), '--run-id', runId, '--retain', retainDir,
-    '--base-sha', baseSha, '--head-sha', headSha()]
+    '--base-sha', baseSha, '--head-sha', headSha(), ...viaModelArgs()]
   if (treeDirty()) args.push('--dirty')
   const r = runChild(process.execPath, [verdictBin, ...args], { encoding: 'utf8' },
     'verdict.js (authoritative pass)')
@@ -806,12 +835,12 @@ function findWorktreeForBranch(root, branch) {
 // state itself. `--state` is answered before the delete: a state query must not be the thing that
 // tears down the run it is querying.
 function printDoneNow(note, harnessLine) {
-  if (STATE_ONLY) { process.stdout.write('DONE\n'); process.exit(0) }
+  if (STATE_ONLY) { writeOut(1, 'DONE\n'); process.exit(0) }
   fs.rmSync(sidecarDir, { recursive: true, force: true })
   const status2 = runChild(process.execPath, [specStatusBin, '--root', repoRoot, '--next'],
     { encoding: 'utf8' }, 'spec-status.js --next')
   const nextLine = status2.status === 0 ? status2.stdout.trim() : '(spec-status --next unavailable)'
-  process.stdout.write(`[spec-review-driver] state: DONE  spec: ${replaySpecPath}\n` +
+  writeOut(1, `[spec-review-driver] state: DONE  spec: ${replaySpecPath}\n` +
     (note ? note + '\n' : '') +
     (harnessLine ? harnessLine + '\n' : '') +
     '\n## DONE\n' + nextLine + '\n')
@@ -876,8 +905,8 @@ function replayEntry(note) {
   // session appending its own replay row for a different target must not satisfy this mark.
   marks.replayTarget = { ...t, rowsAtEntry: countReplayRowsFor(t.reviewRunId) }
   saveSidecar()
-  if (STATE_ONLY) { process.stdout.write('REPLAY\n'); process.exit(0) }
-  process.stdout.write(`[spec-review-driver] state: REPLAY  spec: ${replaySpecPath}\n` +
+  if (STATE_ONLY) { writeOut(1, 'REPLAY\n'); process.exit(0) }
+  writeOut(1, `[spec-review-driver] state: REPLAY  spec: ${replaySpecPath}\n` +
     (note ? note + '\n' : '') +
     '(re-run this driver after completing the step; it verifies artifacts and prints the next one)\n\n' +
     replayStepBody(marks.replayTarget) + '\n')
@@ -933,12 +962,35 @@ function handleReviewerReturned() {
   marks.dispositions = null
   marks.dispositionsIteration = null
   marks.pendingFix = false
+  // D2: recorded only for --via loop runs — a via:"direct" run must never write a checkpoint key
+  // (AC-20260901-03-5). No stamp file degrades to a stderr warning and {sessionId: null}, which
+  // checkpointStillParked() treats as "not parked" — DISPOSITIONS is admitted honestly rather than
+  // stalling on evidence the driver cannot obtain.
+  if (marks.via === 'loop') {
+    const sid = checkpointStamp()
+    if (sid === null) {
+      process.stderr.write('spec-review-driver: no session stamp found at .claude/spec-session.json' +
+        ' — the loop checkpoint cannot verify a session change here and admits DISPOSITIONS directly\n')
+    }
+    marks.checkpoint = { sessionId: sid }
+  }
   saveSidecar()
   return null
 }
 
 function handleDispositions() {
   if (!marks.reviewerReturnFile) die('no reviewer return recorded yet — mark reviewer-returned first')
+  // D2: refused (exit 2, state unchanged) while the run is still parked at CHECKPOINT — the same
+  // remedy the CHECKPOINT step itself prints. Never mutates marks before this check.
+  if (checkpointStillParked()) {
+    die('the session that built this spec must not disposition its review (CHECKPOINT) — ' +
+      '/clear, then re-run /spec:build ' + specPath + '; the driver resumes at DISPOSITIONS')
+  }
+  // A stamp change past a recorded (non-null) checkpoint is the one thing that admits this mark
+  // for a --via loop run — record it as cleared, once, before doing the disposition work below.
+  if (marks.via === 'loop' && marks.checkpoint && marks.checkpoint.sessionId !== null && !marks.checkpointCleared) {
+    marks.checkpointCleared = true
+  }
   const waivedRaw = flag('--waived'), rejectedRaw = flag('--rejected'), fixRaw = flag('--fix-dispatched')
   const waived = Number(waivedRaw), rejected = Number(rejectedRaw), fixDispatched = Number(fixRaw)
   if (![waived, rejected, fixDispatched].every(Number.isFinite)) {
@@ -1146,7 +1198,7 @@ function handleMergeStrategy() {
     marks.mergeConflicted = true
     marks.mergeCtx = { mainRoot, target, source, wt: wt || null }
     saveSidecar()
-    process.stdout.write(`[spec-review-driver] state: CONFLICTS  spec: ${specPath}\n\n` +
+    writeOut(1, `[spec-review-driver] state: CONFLICTS  spec: ${specPath}\n\n` +
       '## Step: resolve merge conflicts by intent\n' + (r.stdout + r.stderr).trim() + '\n\n' +
       'Read both sides, resolve by INTENT (never a mechanical pick), `git -C ' + mainRoot +
       ' add` each resolved file, then commit.\nThen: node ' + __filename + ' ' + specPath +
@@ -1363,6 +1415,11 @@ function deriveState() {
   const reviewerFresh = marks.reviewerReturnFile && marks.reviewerReturnIteration === n
   if (!reviewerFresh) return 'REVIEWER'
 
+  // D2: the checkpoint — a pure read (checkpointStillParked reads the stamp but writes nothing),
+  // so this is safe under a --state query too. checkpointCleared is set only where DISPOSITIONS
+  // is actually marked (handleDispositions), never here.
+  if (checkpointStillParked()) return 'CHECKPOINT'
+
   const dispositionsFresh = marks.dispositions && marks.dispositionsIteration === n
   if (!dispositionsFresh) return 'DISPOSITIONS'
 
@@ -1400,7 +1457,7 @@ if (MARK) forcedState = handleMark()
 const state = forcedState || deriveState()
 const currentN = listManifestNumbers().length ? Math.max(...listManifestNumbers()) : 0
 
-if (STATE_ONLY) { process.stdout.write(state + '\n'); process.exit(0) }
+if (STATE_ONLY) { writeOut(1, state + '\n'); process.exit(0) }
 
 // ---- step text per state -------------------------------------------------------------------------
 const manifestPath = manifestPathFor(currentN)
@@ -1457,6 +1514,13 @@ const STEPS = {
     `path::name form is the worked example); use bare names only when the runner reports no ` +
     `path — then:\n` +
     `  node ${__filename} ${specPath} --mark skips-extracted --file <path>`,
+
+  // D2: the enforced checkpoint. checkpointStillParked() already established this state, so this
+  // body is fixed text (no derived counts to print) plus the exact remedy also named by
+  // handleDispositions()'s refusal.
+  CHECKPOINT: () => `## Step: checkpoint — /clear, then re-run /spec:build ${specPath}\n` +
+    `The session that built this spec must not disposition its review. Clear, re-run, and the ` +
+    `driver resumes at DISPOSITIONS.`,
 
   REVIEWER: () => `## Step: dispatch the reviewer\n` +
     `Legs are green. Dispatch ONE Agent {subagent_type: "spec:reviewer"} with the spec path, ` +
@@ -1585,7 +1649,7 @@ const STEPS = {
   REPLAY: () => replayStepBody(marks.replayTarget),
 }
 
-process.stdout.write(`[spec-review-driver] state: ${state}  spec: ${specPath}\n` +
+writeOut(1, `[spec-review-driver] state: ${state}  spec: ${specPath}\n` +
   `(re-run this driver after completing the step; it verifies artifacts and prints the next one)\n\n` +
   STEPS[state]() + '\n')
 process.exit(0)

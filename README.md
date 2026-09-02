@@ -3,8 +3,8 @@
 A Claude Code plugin marketplace with two plugins:
 
 - **spec** — the full project lifecycle: optional greenfield **genesis** (picks your stack and
-  design direction), then the spec-driven **plan → design → build → review** loop per feature,
-  and a **release** gate per milestone.
+  design direction), then the spec-driven **plan → build** loop per feature, and a **release**
+  gate per milestone.
 - **git** — fast add-all-commit and a guided merge.
 
 The idea in one sentence:
@@ -54,22 +54,27 @@ Until `/spec:init` has run, every other `spec` command refuses to start.
 ```
 /spec:sketch docs/roadmap/01-*.md            # optional, UI briefs: mock + brainstorm, ratify
 /spec:plan   docs/roadmap/01-*.md            # write + harden the spec (asks the hard questions)
-/spec:design specs/20260716/01-foo.md        # optional, UI specs: mock → components → your approval
-/spec:build  specs/20260716/01-foo.md        # implement test-first, in parallel, resumably
-/spec:review specs/20260716/01-foo.md        # independent executed verification; flips to done
+/spec:build  specs/20260716/01-foo.md        # hardened → done: build driver, then review driver
 ```
 
 - `plan` prints the spec path — paste it into the commands that follow. It also tells you when a
   change is too small to bother; small work should just be asked for directly.
-- `sketch` and `design` only matter for UI-bearing work. Sketch mocks ONE brief before planning
-  and triages every brainstorm change into its binding home (mock / brief / scope / ADR); plan
-  warns if you skipped it, never blocks.
+- `sketch` only matters for UI-bearing work. It mocks ONE brief before planning and triages every
+  brainstorm change into its binding home (mock / brief / scope / ADR); plan warns if you skipped
+  it, never blocks.
+- `/spec:build` carries a hardened spec the rest of the way itself: test-first implementation
+  behind the host gate, then independent executed review. It stops twice, both by design — once
+  at a mandatory `/clear` checkpoint (the session that dispositions the review must not be the
+  same session that built it; re-paste the same `/spec:build <spec>` after clearing) and once to
+  step you out of the build worktree before merge.
 - Requirement changed mid-build? Write the ruling into the spec's Decisions table — that is
   where workers read it — and re-run `/spec:build`; it resumes by skipping File Plan rows the
   diff already shows landed.
 
 Each stage refuses to run out of order (`draft → hardened → implementing → done` is enforced by
-a hook), so a wrong command costs you an error message, not a mess.
+a hook); `/spec:build` itself is admitted on `hardened`, `implementing`, and `done` since one
+invocation now spans build through review. A wrong command still costs you an error message, not
+a mess.
 
 ## Ship a milestone
 
@@ -99,9 +104,9 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
 | `/spec:init` | Profile the repo, generate the grounding layer, run enforce | Once per repo |
 | `/spec:sketch` | Mock + brainstorm one roadmap brief; ratify mock↔brief agreement | Before planning a UI-bearing brief |
 | `/spec:plan` | Author + adversarially harden a spec | Per feature |
-| `/spec:design` | Mock → components → your catalog approval | UI specs, catalog repos only |
-| `/spec:build` | Test-first implementation, one Sonnet worker per layer wave behind the host gate; resumable | Per feature |
-| `/spec:review` | Independent executed verification; commits, merges, flips `done` | Per feature |
+| `/spec:build` | Runs the whole feature: test-first implementation behind the host gate, then independent executed review, commits/merges and flips `done`; resumable, with a mandatory `/clear` checkpoint between build and review dispositions | Per feature |
+| `/spec:design` | Resume entry point: mock → components → your catalog approval | UI specs, catalog repos only |
+| `/spec:review` | Resume entry point: re-enter the review driver directly (same driver `/spec:build` runs at `--via loop`) | Per feature, if resuming review alone |
 | `/spec:release` | Staging deploy → executed checks → confirmed promote | Per milestone |
 | `/spec:atlas` | Whole-product design view + annotation loop | Anytime |
 | `/spec:doctor` | Drift + ledger check; `--fix` repairs with approval | When things feel off |

@@ -1,6 +1,6 @@
 ---
 date: 2026-09-01
-status: hardened
+status: done
 tier: critical
 area: build-integrity
 design: false
@@ -8,6 +8,8 @@ breaking: false
 depends_on: ["specs/20260901/01-build-driver.md"]
 depended_on_by: ["specs/20260901/03-unified-build-loop.md"]
 brief: 18
+build_base: c0113441b316a1de01a42534df0e1f876c7b88dd
+diff_base: c0113441b316a1de01a42534df0e1f876c7b88dd
 open_markers: 0
 ---
 
@@ -40,6 +42,9 @@ and `via: "direct"` with nothing refused. The fleet query that splits escapes-pe
 | D7 | `spec/entrypoints.json` gains the hook script's row (entry point `spec/hooks/hooks.json`) and `lib/session-stamp.js`'s consumers; `tests/consistency/entrypoints.test.js`'s live hook-path pin goes four → five in place, retagged. (AC-20260901-02-8) | The exhaustive-pin class (host § Gotchas): updated in place, never weakened, one waive line at review. |
 | D8 | Escape rows keep their own `via` (`commit\|manual`) untouched; the two keys share a name across stages and nothing else. `[no-ac: no behavior changes on escape rows; brief 19 owns escape-row validation]` | Brief 18 names the key; a rename here would touch escape.md and the fleet reader's fixtures for no measurement gain. Brief 19's per-stage validator is where the enum split lives. |
 | D9 | Concurrency is last-writer-wins per root: two sessions prompting `/spec:` in the same root overwrite one stamp; the row may then carry the sibling's model. Recorded, not solved. `[no-ac: documented limitation — the aggregate A/B tolerates it; no observable to assert]` | A per-session stamp would need the driver to know its session id, which is exactly what it lacks. Concurrent sessions in one root are rare and worktree builds get their own `cwd` and stamp. |
+| D10 | `build_base` is `c0113441b316a1de01a42534df0e1f876c7b88dd` — sibling 01's review-close commit, this spec's true pre-image — not the moving ref `main`, which sibling 01 has since outrun on this branch. Recorded as a JJ ruling 2026-09-01: spec 02's review panel covers spec 02's changes only. `[no-ac: build-range identity, not a runtime observable; red-check's pre-image purity refusal is the executed evidence]` | With `main` the red-check pre-image-purity leg refuses (six non-tests File Plan paths already differ) and review would re-judge sibling 01's six approved files. `merge-back.sh branch-for` derives the merge target independently, so a sha here changes nothing about merge-back. |
+| D11 | `spec/entrypoints.json` gains the hook script's row ONLY; D7's second clause (a manifest row for `lib/session-stamp.js`) is withdrawn — the manifest is an entry-point inventory whose executable scan deliberately excludes `spec/scripts/lib/`, and `tests/consistency/entrypoints.test.js`'s AC-20260820-04-1 pins `manifest keys === scanned executables` exactly. `[no-ac: withdrawal of an addition; AC-20260901-02-8 already pins the hook row, and AC-20260820-04-1 pins the absence]` | Adding a `lib/` row made the live bijection pin read 41 vs 40 with no legal fix short of weakening it, and that pin is never weakened (D7's own rationale). `lib/session-stamp.js`'s consumers are recorded in its own header comment instead. |
+| D12 | `tests/consistency/red-fixture-coverage.test.js` is added to scope: its `HOOK_HANDLERS` registry gains a `spec-session-stamp.sh` handler that proves the hook ENGAGES (a planted `/spec:` prompt writes the stamp; a planted non-`/spec:` prompt writes nothing; both exit 0 with empty stdout) rather than that it BLOCKS. `[no-ac: scope addition carrying no new observable; the engagement it asserts is AC-20260901-02-1's contract]` | The guard fails closed for any hook it has not been taught, and D1 makes "can block on a planted violation" unprovable for this one — asserting blocking would be false, and exempting it would leave the hook shipped with nothing proving it works. Derived in-session 2026-09-01 rather than escalated: the hook's contract already fixes the only defensible fixture. |
 
 ## File Plan
 
@@ -60,6 +65,7 @@ and `via: "direct"` with nothing refused. The fleet query that splits escapes-pe
 | tests/build/build-driver.test.js | MODIFY | tests | AC-20260901-02-5 |
 | tests/consistency/entrypoints.test.js | MODIFY | tests | AC-20260901-02-8 (four → five hook paths, in place) |
 | tests/init-gen/generate.test.js | MODIFY | tests | AC-20260901-02-7 |
+| tests/consistency/red-fixture-coverage.test.js | MODIFY | tests | D12: `HOOK_HANDLERS` gains a `spec-session-stamp.sh` engagement fixture (added to scope at build) |
 
 ## Contracts
 
@@ -151,6 +157,29 @@ appears only when sibling 03's outer loop passes it.
 fallback (`null`). Last-writer-wins per root (D9) can mislabel a row's model when two sessions
 interleave in one root; the `via` axis is unaffected because it comes from the invoking
 command, not the stamp.
+
+**Deviations folded at review close 2026-09-01.** Two entries were recurring-shaped and folded
+into the host rules § Gotchas: D10's `build_base` correction (a moving ref planned as the base
+of a chained sibling series) extends the stale-`diff_base` entry as its second trigger, and
+D11/D12's two exhaustive-live-file-pin collisions (`red-fixture-coverage.test.js`'s
+`HOOK_HANDLERS` guard; `entrypoints.json`'s manifest-vs-executables count, where a
+`spec/scripts/lib/` row is unrepresentable because the executable scan excludes that directory)
+extend the exhaustive-pin entry as its fifth and sixth recurrences. Neither addition changed the
+Gotchas entry count. The remaining three were one-offs, recorded here:
+
+- The test author repaired a fixture defect in `tests/provenance/provenance.test.js` caught by
+  the coordinator's red-attribution pass: `manifestFixture()` wrote a single green `gate` row
+  against a minimal workflow object, missing seven of `verdict.js`'s eight required `REVIEW_LEGS`
+  rows, so the three `status === 0` tests derived `UNVERIFIED` and failed on the verdict word
+  rather than on the `--via`/`--model` contract. Replaced with the eight-leg-green fixture and
+  full workflow shape `tests/review/verdict.test.js` already uses, confirmed by direct execution
+  against an unmodified `verdict.js` that the fixture alone reaches CLEAN.
+- The orchestrator applied D6's one-line `.gitignore` row directly rather than dispatching a
+  `general-purpose` worker for it — the wave's whole file set was one literal line with no design
+  question. Recorded as `--workers 0` on the ledger row so the count stays honest.
+- Agent-memory disposal at this close: the sweep surfaced eight notes by content reference and
+  the spec's own diff touched none. All eight were judged still true against the current scripts
+  and carried, with `reviewed: 2026-09-01` written into each.
 
 ## Canonical Delta
 

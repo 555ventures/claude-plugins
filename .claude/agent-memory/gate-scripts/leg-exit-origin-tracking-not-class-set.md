@@ -3,7 +3,7 @@ name: leg-exit-origin-tracking-not-class-set
 description: when one finding class can be emitted from two different manifest-leg loops, adding it to both legs' class-membership sets cross-contaminates both exits — track emission SITE via a Set of object references instead, never a field on the finding
 metadata:
   type: feedback
-  reviewed: 2026-08-27
+  reviewed: 2026-09-01
 ---
 
 `ac-matrix.js` derives two manifest leg exits (`ac-matrix`, `skip-reconcile`) by testing each

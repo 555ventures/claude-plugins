@@ -1,6 +1,6 @@
 ---
 date: 2026-09-01
-status: hardened
+status: done
 tier: critical
 area: build-integrity
 design: false
@@ -8,6 +8,8 @@ breaking: false
 depends_on: ["specs/20260901/01-build-driver.md", "specs/20260901/02-run-provenance.md"]
 depended_on_by: []
 brief: 18
+build_base: 7057642892ac238ec746904aff23b94b44bba42d
+diff_base: 7057642892ac238ec746904aff23b94b44bba42d
 open_markers: 0
 ---
 
@@ -45,6 +47,7 @@ fleet query prints two numbers.
 | D9 | `fleet-reader.js` gains the seventh fixed question `cleanByVia`: per repo and fleet-total, for each bucket `loop` / `direct` / `unknown` (review rows lacking `via`), `{cleans, contradicted}` using the exact `reviewRunId ↔ runId` join `cleanContradicted` uses; `--json` gains the key `cleanByVia`; the human render prints one line `escapes-per-CLEAN by via: loop <c>/<n> · direct <c>/<n> · unknown <c>/<n>`. The kill condition reads the two rates. (AC-20260901-03-6, AC-20260901-03-7) | Brief 18 § Scope 5. The reader's header says a seventh question needs a spec — this is it. Placed here, not in 02, because `loop` rows first exist with the loop. |
 | D10 | No loop-length cap. The unattended stretch is bounded by construction: design's blocking look, build's `blocked`-return and RED_FINDINGS stops, and the mandatory CHECKPOINT before DISPOSITIONS. `[no-ac: a decision not to build — nothing to assert]` | Brief 18 open question 5; a numeric cap would be a second stop rule with no measured need. |
 | D11 | Every stop prints one report via `report-render.js`: `outcome` from the driver's state, `next` = the literal re-run command at a checkpoint (`/spec:build <spec>` — a same-spec chain the stage owns) or `spec-status --next` verbatim at DONE. `[no-ac: report shape is pinned by the report-render suite; the slot choice is command prose]` | core § Console Output Style. |
+| D12 | **Build-time ruling (2026-09-01, orchestrator, red-check `broken-pin`).** AC-20260901-03-1 as locked mixed one NEW promise (the gate admits `/spec:build` on `done`) with four `SHALL CONTINUE TO` clauses in a single bullet. `red-check.js` sanctions per AC bullet on a literal `SHALL CONTINUE TO` occurrence (D1 of specs/20260821/01), so the mixed bullet sanctioned `tests/state-gates.test.js` green while the spec's own File Plan requires the `done` assertion flipped in place — i.e. genuinely red until D5 lands. The bullet is split: AC-20260901-03-1 keeps the new promise only (red-expected); the carried clauses move verbatim to AC-20260901-03-10 (sanctioned green). No promise is added, removed, or weakened — the same six admissions are asserted in the same file. (AC-20260901-03-1, AC-20260901-03-10) | Spec-authoring drift resolved against Assumption A2, which states the `done` admission is new behavior and names the pre-D5 exit-2 pin it replaces; `every(sanctioned)` over a file's carried ACs then classifies the file red, as intended. |
 
 ## File Plan
 
@@ -60,7 +63,7 @@ fleet query prints two numbers.
 | spec/entrypoints.json | MODIFY | doctrine | D8 |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | version bump target 7.50.0 + changelog paragraph (next free version if taken) |
 | .claude-plugin/marketplace.json | MODIFY | doctrine | D7: the marketplace description's "plan → design → build → review" becomes "plan → build" (collision-closure literals hit, 2026-09-01) |
-| tests/state-gates.test.js | MODIFY | tests | AC-20260901-03-1 (flip the `done` pin in place; tag the design/review pins with the SHALL CONTINUE TO AC) |
+| tests/state-gates.test.js | MODIFY | tests | AC-20260901-03-1 (flip the `done` pin in place), AC-20260901-03-10 (tag the unchanged build/design/review pins with the SHALL CONTINUE TO AC) |
 | tests/review/loop-checkpoint.test.js | CREATE | tests | AC-20260901-03-2, AC-20260901-03-3, AC-20260901-03-4, AC-20260901-03-5 |
 | tests/review/review-driver.test.js | MODIFY | tests | AC-20260901-03-5 (tag the existing reviewer-returned → DISPOSITIONS test in place) |
 | tests/fleet-reader/queries.test.js | MODIFY | tests | AC-20260901-03-6, AC-20260901-03-7 |
@@ -121,7 +124,7 @@ relocation refusal is printed as the step), REPLAY, DONE.
 
 ## Acceptance Criteria
 
-- **AC-20260901-03-1**: WHEN the state gate receives a `/spec:build <spec>` prompt against `status: done` THE SYSTEM SHALL exit 0; WHEN it receives `/spec:build` against `hardened` or `implementing` THE SYSTEM SHALL CONTINUE TO exit 0; WHEN it receives `/spec:design` against `draft` or `/spec:review` against `draft` THE SYSTEM SHALL CONTINUE TO exit 2, and `/spec:design` against `hardened` and `/spec:review` against `implementing` SHALL CONTINUE TO exit 0 (the existing assertions, tagged in place) → `tests/state-gates.test.js`
+- **AC-20260901-03-1**: WHEN the state gate receives a `/spec:build <spec>` prompt against `status: done` THE SYSTEM SHALL exit 0 → `tests/state-gates.test.js`
 - **AC-20260901-03-2**: WHEN the review driver was created with `--via loop`, a stamp `{"session_id":"s1",…}` exists at `reviewer-returned`, and the stamp still reads `s1` THE SYSTEM SHALL print `state: CHECKPOINT` with a step body containing `/clear` and `/spec:build`, `--state` SHALL print `CHECKPOINT`, and `--mark dispositions --waived 0 --rejected 0 --fix-dispatched 0` SHALL exit 2 leaving the state `CHECKPOINT` → `tests/review/loop-checkpoint.test.js`
 - **AC-20260901-03-3**: WHEN the stamp is rewritten to `{"session_id":"s2",…}` after AC-20260901-03-2's parking THE SYSTEM SHALL print `state: DISPOSITIONS`, accept `--mark dispositions …`, and record `checkpointCleared: true` in `review-state.json` → `tests/review/loop-checkpoint.test.js`
 - **AC-20260901-03-4**: WHEN `checkpointCleared` is true and a fix cycle brings a second `reviewer-returned` in the same session (stamp unchanged at `s2`) THE SYSTEM SHALL print `state: DISPOSITIONS`, never `CHECKPOINT`; WHEN a `--via loop` run reaches `reviewer-returned` with no stamp file THE SYSTEM SHALL print a stderr warning containing `.claude/spec-session.json` and admit DISPOSITIONS → `tests/review/loop-checkpoint.test.js`
@@ -130,6 +133,7 @@ relocation refusal is printed as the step), REPLAY, DONE.
 - **AC-20260901-03-7**: WHEN the fleet reader renders the human report over AC-20260901-03-6's fixture THE SYSTEM SHALL print the line `escapes-per-CLEAN by via: loop 1/2 · direct 0/3 · unknown 1/1` → `tests/fleet-reader/queries.test.js`
 - **AC-20260901-03-8** `[oracle: gate]`: WHEN `tests/consistency/read-load.test.js` runs THE SYSTEM SHALL find `/spec:build` and `/spec:review` each at or under 500 lines including their `shared-for` sections
 - **AC-20260901-03-9** `[oracle: gate]`: WHEN `tests/consistency/entrypoints.test.js` runs THE SYSTEM SHALL find `spec/commands/build.md` declared as an entry point of `spec/scripts/spec-review-driver.js` with a real invocation literal, and zero forward, reverse, or reachability violations
+- **AC-20260901-03-10**: WHEN the state gate receives `/spec:build` against `hardened` or `implementing` THE SYSTEM SHALL CONTINUE TO exit 0; WHEN it receives `/spec:design` against `draft` or `/spec:review` against `draft` THE SYSTEM SHALL CONTINUE TO exit 2, and `/spec:design` against `hardened` and `/spec:review` against `implementing` SHALL CONTINUE TO exit 0 (the existing assertions, tagged in place) → `tests/state-gates.test.js`
 
 ## Assumptions (escalation triggers)
 
@@ -177,6 +181,38 @@ sweep's own waived prefixes, never a live claim. Executes leg for `spec-state-ga
 `tests/state-gates.test.js` is a File Plan row; `tests/consistency/red-fixture-coverage.test.js`
 (the `open_markers` block) and `tests/consistency/entrypoints.test.js` exercise paths D5 does not
 touch and stay green unchanged.
+
+**Deviation, folded at close (2026-09-01) — sibling 02's driver test.**
+`tests/review/review-driver.test.js`'s `AC-20260901-02-4` test (sibling 02, outside this spec's
+File Plan) collides with D2's new CHECKPOINT state: its `loopHost` fixture is created with
+`--via loop`, writes a session stamp, then marks `reviewer-returned` while that stamp is still
+the one on disk — before D2 that landed `DISPOSITIONS` directly; under D2 the same sequence must
+park at `CHECKPOINT` first (AC-20260901-03-2). Updated in place, never weakened: the test asserts
+the `CHECKPOINT` park as an added setup precondition, then rewrites the stamp to a new
+`session_id` (the `/clear` signature) before proceeding, mirroring what a real build session
+does to reach DISPOSITIONS. Its actual assertions (CLEAN row, `via:"loop"`,
+`model:"claude-sonnet-5"`) are unchanged. One-off, not a class.
+
+**Deviation, folded at close (2026-09-01) — why D12 split AC-20260901-03-1.**
+At build Phase 1 the red-check reported `broken-pin`: AC-20260901-03-1 as locked mixed one new
+promise (the state gate admits `/spec:build` on `done`) with four `SHALL CONTINUE TO` clauses in
+one bullet, and `red-check.js` sanctions a file green per AC bullet on a literal
+`SHALL CONTINUE TO` occurrence — so the bullet sanctioned `tests/state-gates.test.js` green while
+the File Plan requires its `done` assertion flipped in place, i.e. genuinely red until D5 lands.
+Resolved against Assumption A2 (which states the `done` admission is new behavior and names the
+pre-D5 exit-2 pin it replaces) by splitting the bullet: AC-20260901-03-1 keeps the new promise
+only, AC-20260901-03-10 carries the `SHALL CONTINUE TO` clauses verbatim. Recorded as D12; the
+File Plan row and the test's tags name both IDs. No promise was added, removed, or weakened —
+the same six admissions are asserted in the same file. One-off, not a class.
+
+**Review waive (2026-09-01).** The reconcile leg reported two out-of-File-Plan files —
+`tests/fleet-reader/discovery.test.js` and `tests/fleet-reader/review-fixes.test.js`. Both are
+exhaustive `--json` key-set pins that D9's new `cleanByVia` key invalidates by construction; each
+was updated in place by adding the key (never weakened — both remain exhaustive, so a missing key
+still fails) and retagged with AC-20260901-03-6. This is the documented
+add-a-member-to-an-exhaustive-live-file-pin class (host rules § Gotchas, seventh recurrence),
+which the rules record as costing exactly one review waive line; a lock-time guard for it was
+measured and rejected 2026-08-24. Waived by JJ.
 
 **Kill condition (brief 18 § Scope 5).** Over the next 30 fleet reviews, if `loop` CLEANs are
 contradicted by escapes at a higher rate than `direct` CLEANs, the loop reverts to three

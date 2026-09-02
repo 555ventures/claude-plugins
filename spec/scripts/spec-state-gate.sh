@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # UserPromptSubmit hook: enforce the spec state machine at the command boundary.
 #   /spec:design requires status: hardened
-#   /spec:build  requires status: hardened (or implementing, for a resume)
+#   /spec:build  requires status: hardened, implementing, or done (done is the loop's
+#                post-checkpoint resume entry — a /clear then re-pasting /spec:build <spec>)
 #   /spec:review requires status: implementing (or done, for a re-run)
 #   all three    require zero [NEEDS CLARIFICATION] markers in the spec
 # Also warns (stdout → injected context, never a block) on exactly the four gated
@@ -77,9 +78,9 @@ case "$PROMPT" in
     ;;
   /spec:build*)
     case "$STATUS" in
-      hardened|implementing) exit 0 ;;
+      hardened|implementing|done) exit 0 ;;
     esac
-    echo "Spec state gate: /spec:build requires status: hardened (or implementing to resume) — $SPEC has status: ${STATUS:-<missing>}. Run /spec:plan first." >&2
+    echo "Spec state gate: /spec:build requires status: hardened, implementing (to resume), or done (the loop's post-checkpoint resume entry) — $SPEC has status: ${STATUS:-<missing>}. Run /spec:plan first." >&2
     exit 2
     ;;
   /spec:review*)

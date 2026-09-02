@@ -47,7 +47,7 @@
   "spec/scripts/env-preflight.js": {
     "entryPoints": [
       "spec/commands/doctor.md",
-      "spec/commands/build.md",
+      "spec/scripts/spec-build-driver.js",
       "spec/commands/design.md",
       "spec/scripts/review-legs.js"
     ]
@@ -111,7 +111,7 @@
   },
   "spec/scripts/red-check.js": {
     "entryPoints": [
-      "spec/commands/build.md"
+      "spec/scripts/spec-build-driver.js"
     ]
   },
   "spec/scripts/registry-check.js": {
@@ -181,7 +181,7 @@
   },
   "spec/scripts/scope-reconcile.js": {
     "entryPoints": [
-      "spec/commands/build.md",
+      "spec/scripts/spec-build-driver.js",
       "spec/scripts/review-legs.js",
       "spec/scripts/init-gen.js"
     ]
@@ -193,6 +193,11 @@
       "spec/scripts/manifest-check.sh"
     ]
   },
+  "spec/scripts/spec-build-driver.js": {
+    "entryPoints": [
+      "spec/commands/build.md"
+    ]
+  },
   "spec/scripts/spec-queue.js": {
     "entryPoints": [
       "spec/commands/queue.md"
@@ -200,7 +205,13 @@
   },
   "spec/scripts/spec-review-driver.js": {
     "entryPoints": [
-      "spec/commands/review.md"
+      "spec/commands/review.md",
+      "spec/commands/build.md"
+    ]
+  },
+  "spec/scripts/spec-session-stamp.sh": {
+    "entryPoints": [
+      "spec/hooks/hooks.json"
     ]
   },
   "spec/scripts/spec-state-gate.sh": {
@@ -217,6 +228,7 @@
       "spec/commands/plan.md",
       "spec/commands/review.md",
       "spec/scripts/spec-review-driver.js",
+      "spec/scripts/spec-build-driver.js",
       "spec/doctrine/core.md"
     ]
   },

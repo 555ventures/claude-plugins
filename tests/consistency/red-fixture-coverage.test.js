@@ -486,16 +486,72 @@ function hookCrossWorktree() {
     'the blocked case must print the BLOCKED: diagnostic on stderr: ' + crossTree.stderr)
 }
 
+// spec-session-stamp.sh: specs/20260901/02-run-provenance.md D1/D12 (2026-09-01, brief 18) —
+// this hook is deliberately NOT a gate. It never prints and never blocks; its only exit code is
+// 0 (D1). "Can actually block on a planted violation" is unprovable for a hook with no block
+// path at all, and asserting it would be false — so D12 registers a handler proving the hook
+// ENGAGES with a planted input instead: a planted `/spec:` prompt must make the hook write the
+// stamp file carrying THIS invocation's own planted session_id/transcript_path (never a
+// generic "some file appeared" check), and a planted non-`/spec:` prompt must write nothing —
+// the discriminating half, since a hook that always stamped regardless of the prompt would also
+// pass a same-input-only check. Both invocations must still exit 0 with empty stdout: a stamp
+// that ever blocks or prints corrupts every prompt in every host repo (D1's whole point).
+function hookSessionStamp() {
+  const specRoot = fs.realpathSync(tmpdir('rfc-hook-sessionstamp-spec'))
+  fs.mkdirSync(path.join(specRoot, '.claude'), { recursive: true })
+  const specPrompt = runBash('scripts/spec-session-stamp.sh', [], {
+    input: JSON.stringify({
+      prompt: '/spec:build specs/x.md',
+      session_id: 'RED_FIXTURE_SESSION_ID',
+      transcript_path: '/red-fixture/transcript.jsonl',
+      cwd: specRoot,
+    }),
+  })
+  assert.strictEqual(specPrompt.status, 0,
+    'D1: the hook must exit 0 even on the planted /spec: prompt — a stamp hook that ever exits nonzero blocks every prompt in every host repo: ' + specPrompt.stdout + specPrompt.stderr)
+  assert.strictEqual(specPrompt.stdout, '',
+    'D1: the hook must print nothing on stdout — output here would be injected into the model\'s context on every /spec: prompt: ' + JSON.stringify(specPrompt.stdout))
+  const stampPath = path.join(specRoot, '.claude/spec-session.json')
+  assert.ok(fs.existsSync(stampPath),
+    'evidence the check engaged: a planted /spec: prompt must produce <cwd>/.claude/spec-session.json — its absence means the hook never actually ran the write path this fixture plants: ' + JSON.stringify(fs.readdirSync(path.join(specRoot, '.claude'))))
+  const stamp = JSON.parse(fs.readFileSync(stampPath, 'utf8'))
+  assert.strictEqual(stamp.session_id, 'RED_FIXTURE_SESSION_ID',
+    'evidence the check engaged: the written stamp must carry THIS invocation\'s own planted session_id — a stub that writes a fixed or empty stamp would still create the file and pass a mere existence check: ' + JSON.stringify(stamp))
+  assert.strictEqual(stamp.transcript_path, '/red-fixture/transcript.jsonl',
+    'evidence the check engaged: the written stamp must carry THIS invocation\'s own planted transcript_path: ' + JSON.stringify(stamp))
+
+  const nonSpecRoot = fs.realpathSync(tmpdir('rfc-hook-sessionstamp-nonspec'))
+  fs.mkdirSync(path.join(nonSpecRoot, '.claude'), { recursive: true })
+  const nonSpecPrompt = runBash('scripts/spec-session-stamp.sh', [], {
+    input: JSON.stringify({
+      prompt: 'git status',
+      session_id: 'RED_FIXTURE_SESSION_ID_2',
+      transcript_path: '/red-fixture/other.jsonl',
+      cwd: nonSpecRoot,
+    }),
+  })
+  assert.strictEqual(nonSpecPrompt.status, 0, 'D1: a non-/spec: prompt must also exit 0: ' + nonSpecPrompt.stdout + nonSpecPrompt.stderr)
+  assert.strictEqual(nonSpecPrompt.stdout, '', 'D1: a non-/spec: prompt must also print nothing: ' + JSON.stringify(nonSpecPrompt.stdout))
+  assert.ok(!fs.existsSync(path.join(nonSpecRoot, '.claude/spec-session.json')),
+    'evidence the check discriminates: a planted non-/spec: prompt must write no stamp file — a handler that stamps on every prompt regardless of content would also pass the planted-/spec:-prompt case above, so this control is what proves the hook actually reads the prompt rather than firing unconditionally')
+}
+
 const HOOK_HANDLERS = {
   'spec-state-gate.sh': hookSpecState,
   'genesis-state-gate.sh': hookGenesisState,
   'question-style-gate.js': hookQuestionStyle,
   'block-cross-worktree-writes.sh': hookCrossWorktree,
+  'spec-session-stamp.sh': hookSessionStamp,
 }
 
+// The shared title below names the ENGAGEMENT each handler proves, not "can block" — three of
+// four pre-existing handlers (spec-state-gate.sh, genesis-state-gate.sh, question-style-gate.js,
+// block-cross-worktree-writes.sh) still assert a real block (status 2/nonzero) inside their own
+// handler bodies, unchanged; this rename touches only the outer label, never an assertion, and it
+// generalizes for every hook rather than special-casing spec-session-stamp.sh, per D12.
 for (const hookPath of HOOK_PATHS) {
   const base = path.basename(hookPath)
-  test(`red-fixture coverage: the hook script "${hookPath}" (spec/hooks/hooks.json) can actually block on a planted violation`, () => {
+  test(`red-fixture coverage: the hook script "${hookPath}" (spec/hooks/hooks.json) can actually engage on a planted input, per its own contract`, () => {
     const handler = HOOK_HANDLERS[base]
     assert.ok(handler,
       `no red-fixture handler is registered in this meta-test for hook script "${hookPath}" — either ` +

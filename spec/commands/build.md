@@ -1,161 +1,171 @@
 ---
-description: Implement a hardened spec — direct Sonnet worker dispatch per layer wave behind the deterministic gate
+description: Carry a hardened spec to done — the outer loop derives the next stage from disk and runs design (when due), then the build driver, then the review driver in sequence, each `--via loop`; direct Sonnet worker dispatch per layer wave behind the deterministic gate, driver-stepped — spec-build-driver.js and spec-review-driver.js each own their own sequencing; this session holds every judgment step and the two checkpoints
 argument-hint: <spec path>
 ---
 
-# Spec Build
+# Spec Build: The Loop
 
-Implement a hardened spec: resolve the gate, author tests red-first, dispatch one worker
-agent per layer wave, gate, ship. Orchestrator and workers: Sonnet. The spec is the
-contract; the gate is deterministic; surprises go to the user with the spec's own language.
+`/spec:build <spec>` is the loop that finishes a feature after `/spec:plan`. Each invocation
+derives the next stage from disk in the order below and executes it in-session, so one
+command carries a spec from `hardened` to `done`. `spec-build-driver.js` and
+`spec-review-driver.js` each own their own stage's sequencing — admission, wave/leg
+derivation, gate resolution, the status flip, the final gate, and the ledger row — executing
+every deterministic step themselves and printing exactly one step at a time for the judgments
+only this session can make. The spec is the contract; the gate is deterministic; surprises go
+to the user with the spec's own language. Orchestrator and workers: Sonnet.
 
 **Setup:** run `spec-paths shared-for build` and read its output. Read the host's
 `.claude/spec.config.json` and its `pipelineRules` file. Either missing → STOP: run
-`/spec:init` first.
+`/spec:init` first. Then run `spec-paths build-driver` once and keep the printed path — it is
+`{driver}` below — and run `spec-paths review-driver` once and keep that printed path too —
+it is `{review-driver}` below.
 
 ## Input
 
-`$ARGUMENTS` — path to a hardened spec.
+`$ARGUMENTS` — path to a hardened spec (or one already `implementing` or `done`, to resume the
+loop or a checkpoint). **Worktree isolation is not build's concern** — run
+`/git:enter-worktree <spec>` first to build in isolation; the drivers never create, enter, or
+leave a worktree and never write `build_base`.
 
-## Phase 0 — Preflight
+## Routing — derived from disk, in this order
 
-1. **State:** `status: hardened` → proceed; `implementing` → resume (skip already-landed
-   File Plan rows by inspecting the diff); anything else → STOP with the required command.
-   `design: true` without `designed:` (design-capable hosts) → ask whether to run
-   `/spec:design` first. **Worktree isolation is not build's concern** — run
-   `/git:enter-worktree <spec>` first to build in isolation; build never creates, enters,
-   or leaves one and never writes `build_base`.
-2. **Parse the spec once.** File Plan rows → waves by **Layer**, ordered per the host's
-   `layerGroups` (layers listed together in one group form ONE wave; their file sets must
-   be disjoint or the wave splits). `tests` rows form the test-author dispatch (Phase 1);
-   `other` rows and shared registration/wiring files form a final serial wave.
-3. **Resolve the gate.** Substitute `{testDirs}`/`{scopeDirs}` in `gateCommand` from the
-   spec's File Plan test rows, **resolved to the form the host's runner actually executes**
-   — for `node --test` the glob form (`node --test 'tests/<dir>/*.test.js'`; a bare
-   directory silently runs nothing or errors). Also resolve `typecheckCommand` when the
-   host exposes a standalone typecheck leg; the red-check treats a file red if it fails
-   **either** leg. Then run `node "$(spec-paths env-preflight)" --root {root}` — exit 1 is
-   a provisioning STOP: print its output verbatim and stop; an unprovisioned environment
-   must never enter a repair loop (the gate cannot distinguish wrong code from a missing
-   variable, and repair dispatches structurally cannot fix the second).
-4. **Flip `status: hardened → implementing`**, and in the same edit write
-   `diff_base: <git rev-parse HEAD>` into frontmatter when no `build_base` exists (an
-   in-place build) — `/spec:review` recovers its diff base from the spec file, never from
-   conversation context.
+1. `status: hardened`, `design: true`, no `designed:` date, and the host config declares a
+   `design` block → execute `spec/commands/design.md`'s steps unchanged in this session, then
+   re-derive from step 1.
+2. `hardened`, or `implementing` with no `<spec>.review/` sidecar → run the **build stage**
+   below (`node {driver} <spec> --via loop`) to `DONE`.
+3. `implementing` or `done` → run the **review stage** below
+   (`node {review-driver} <spec> --via loop`) until it prints `CHECKPOINT`, a judgment step,
+   or `DONE`.
+4. `done` with no review sidecar → the review driver's own cold path prints `DONE` with
+   `spec-status --next` — the loop's no-op resume.
 
-## Phase 1 — Tests first (when ACs exist)
+This is `spec-status.js`'s own `deriveNext` order, restated rather than re-derived — never
+skip a rung or guess ahead of what step 1 finds on disk.
 
-Dispatch the test author: one `Agent {subagent_type: <agentMap.tests>, model: sonnet}` with
-the spec path and pipeline-rules path — it derives tests from the spec alone.
-Implementation workers never write tests for code they implement.
+## Build stage — the build driver owns this part of the state machine
 
-**Red-check (executed, one observation per verdict):** run
-`node "$(spec-paths red-check)" --spec {spec path} --root {root} --base {build_base or
-diff_base}` — it resolves the spec's own expectation (a `SHALL CONTINUE TO` pin or a valid
-`[pre-green:]` tag sanctions green; everything else expects red), executes `{testCommand}
-<file>` (plus the `typecheckCommand` leg when declared) once per tests-layer file, and
-reads exit codes only. For a design-stage pre-landed component's test (design-capable
-hosts only), pass `--expect-green <path>` per such file — an orchestrator-derived,
-per-invocation sanction, printed as a warning naming the flag and the path.
+Loop until the driver prints `DONE`:
 
-Dispositions:
-- **exit 0** — every file matched its expectation; proceed. The script proves the file's
-  colour only, never that the failure is attributable to the spec's contract — a
-  red-expected file that fails by crashing on loading a module the File Plan's CREATE rows
-  name is not yet demonstrated red (the script deliberately does not distinguish crash-red
-  from assert-red): stub the missing module inert, re-run, confirm the file's assertions
-  now execute and fail, then delete the stub.
-- **exit 1, `unsanctioned-green`** — a red-expected file passed: the spec is wrong
-  somewhere. Diagnose (stale assumption, wrong target, behavior already exists,
-  mis-classified pin) and confirm with the user before proceeding.
-- **exit 1, `broken-pin`** — a sanctioned-green file failed. Diagnose the drift; never
-  weaken the carrier.
-- **exit 1, `missing-test-file`** — a non-DELETE tests-layer File Plan path does not exist
-  on disk; the script probes existence before invoking the runner and never fakes a
-  satisfied red expectation. Author the missing file.
-- **exit 1, `invalid-pre-green`** — an AC bullet's `[pre-green:]` reason is outside the
-  closed enum, so it sanctions nothing and the file stays red-expected. Fix the tag to a
-  valid enum member (`fallback-rejection` | `absence-invariant` | `predicate-in-test`).
-- **exit 2** — a refusal (usage, config, or pre-image purity), never a findings result:
-  print the remedy verbatim and stop.
+1. Run `node {driver} <spec path>`. It inspects on-disk state (frontmatter, the
+   `<spec>.build/` sidecar, artifacts already on disk) and prints the **current step's
+   instructions** — running deterministic work itself (admission, the `hardened →
+   implementing` flip with the absent-only `diff_base` stamp, wave derivation from
+   `layerGroups`, gate resolution, env preflight, red-check, the final gate, scope-reconcile,
+   diff counts, the `stage:"build"` ledger row) — and printing only the steps that need this
+   session's judgment: test-author dispatch, red attribution, per-wave worker dispatch, host
+   integration, repair dispatch, and the checkpoint commit.
+2. Execute exactly that step. Record it with `node {driver} <spec> --mark <mark> [args]` once
+   the step is done — the driver verifies the step's artifacts before it advances; a missing
+   or malformed artifact is refused (exit 2) with the remedy named, and the state is left
+   unchanged.
+3. Re-run the driver. It never trusts the sidecar alone — a mark whose artifact vanished is
+   demanded again — so it always re-derives the true current step; never skip ahead of it or
+   re-do a step it reports complete.
 
-## Phase 2 — Implementation waves
+Re-entrancy is the driver's job: a fresh session, or this one resuming later, runs step 1 and
+lands exactly where the last run left off. A red-expected file that passed
+(`unsanctioned-green`) or a red run that never observed a purity-clean pre-image
+(`redCheck: "skipped-resume"` on a no-sidecar resume) is diagnosed with the user before the
+next mark, never laundered past. A fourth `repair-applied` parks the run at the terminal
+`ESCALATE` state — the repair loop is capped at 3 rounds — and prints its two exits: edit the
+tree and delete `<spec>.build/gate-cap` to re-arm one more round, or delete the whole sidecar
+to restart cold.
 
-For each wave, in `layerGroups` order: dispatch **one worker `Agent` per layer in the wave**
-(`subagent_type` = the host `agentMap` value for that layer's kind, `model: sonnet`),
-in parallel within the wave. Each worker prompt carries only:
+When the build driver prints `DONE`, print the advisory checkpoint —
+`✅ checkpoint — build complete; safe to /clear and re-run /spec:build <spec>` — and continue
+straight into the review stage below in this same invocation; legs and the reviewer dispatch
+need no memory of the build's trade-offs, so clearing here is optional, never required.
 
-- the spec path (workers Read Decisions, Contracts, UI, and their own File Plan rows
-  themselves), the pipeline-rules path, and the worker's file list `{path, action}`;
-- the **Worker Contract** block from the host's grounding layer (pipeline rules § Worker
-  Rules): apply Decisions verbatim, never run git, never query MCPs, read-only surfaces
-  stay read-only, return `blocked` naming the assumption instead of improvising, append
-  forced-but-unblocking departures to the deviations sidecar
+## Review stage — the review driver owns this part of the state machine
+
+Run `node {review-driver} <spec> --via loop` the same way: step, execute, mark, re-run, per
+`spec/commands/review.md`'s own Protocol and Rules, which this loop follows unchanged for
+every judgment step (reviewer dispatch, dispositions, close, merge strategy, replay). Two
+places the loop stops that are specific to `--via loop`:
+
+- **CHECKPOINT (enforced).** Once the reviewer returns, a loop-driven run parks at
+  `CHECKPOINT` and refuses `--mark dispositions` until the session id in
+  `.claude/spec-session.json` has changed from the one recorded when the reviewer returned —
+  the loop ends the invocation here and reports the re-run command as `next`; the disposing
+  session must have no memory of the build's trade-offs. `/clear`, then re-paste
+  `/spec:build <spec>` — the state gate admits it on `done` as much as on `hardened` or
+  `implementing`, and the loop lands back on the review driver at DISPOSITIONS with the new
+  session id. This fires once per run: a fix cycle's second reviewer pass is judged by the
+  session that dispatched the fix, not gated again.
+- **Pre-merge (unchanged).** The review driver's existing relocation refusal is the pre-merge
+  stop — never a forced `/clear`. `ExitWorktree(action="keep")` when this session entered via
+  `EnterWorktree`, otherwise `cd` the main session to the driver-named root, then re-run; the
+  loop prints the driver's refusal as the step and nothing more.
+
+## Worker Contract — every dispatch this session makes
+
+Every worker prompt (test author, wave workers, repair dispatches) carries only: the spec
+path (workers Read Decisions, Contracts, UI, and their own File Plan rows themselves), the
+pipeline-rules path, and the worker's file list `{path, action}` — orchestrators pass paths,
+never raw file contents (core § Model Placement). Every worker applies this contract:
+
+- Apply the Decisions table verbatim — nobody overrides it; only this session adds entries,
+  recording a user ruling.
+- Never run git (core § Worker Git Ban) — no checkout/stash/restore/reset/clean/add/commit.
+  This session owns all git and the checkpoint commit.
+- Never query MCPs (core § MCP Policy); read-only/generated surfaces change only via their
+  declared tool (core § Read-Only Surfaces).
+- Return `blocked` naming the assumption instead of improvising on a genuine fork or scope
+  change.
+- Append forced-but-unblocking departures to the deviations sidecar
   (`<spec path minus .md>.deviations.md`) as one `- ` bullet per departure, continuations
   indented — flush-left prose is invisible to the ledger count and refused at review close.
   The sidecar is per-spec and shared by every worker in the build and by review's own fold:
   its first writer creates it under a spec-scoped header only (`# Deviations — <spec slug>`),
-  never a layer or worker name — a layer-titled header reads to the next worker as another
-  run's log, and the misattributed provenance that invites is the one thing this file exists
-  to make legible.
+  never a layer or worker name.
 
-On a `blocked` return: resolve it against the spec's Rationale/Assumptions when the intent
-is clear; a genuine fork or scope change goes to the user via `AskUserQuestion` with the
-consequence of each option. Write the ruling **into the spec's Decisions table** (that is
-where workers read it), then re-dispatch that worker. A ruling that adds or changes an
-observable promise updates its terminal-observable AC in the same spec edit. A gate failure
-implicating a file outside the File Plan is never silently widened — ask: add to scope /
-file separately / pause.
+**The WAVE step** names one worker per layer in the wave (`subagent_type` = the host
+`agentMap` value for that layer's kind, `model: sonnet`) — spawn one `Agent` per layer and
+**keep it**. **The REPAIR step** routes each failing file to the worker that owns its layer
+via `SendMessage`, spawning fresh only when that worker is gone (a resumed session); the
+counts (`--workers`, `--continued`/`--spawned`) land on the ledger row so continuation is
+measurable. The test author and the reviewer stay fresh-context dispatches.
 
-## Phase 3 — Host integration (orchestrator-only)
+## `blocked` returns
 
-Execute the orchestrator duties the host's pipeline rules § Build declares (codegen
-regeneration, migrations, catalog fills, wiring checks) — these touch shared or generated
-surfaces parallel workers must never own. When a worker reports an embedded reference wrong
-against the installed version, re-run the plan-time lookup (e.g. Context7) and record the
-corrected reference in Decisions before dispatching a fix.
+Resolve against the spec's Rationale/Assumptions when the intent is clear; a genuine fork or
+scope change goes to the user via `AskUserQuestion` with the consequence of each option
+(core § Question Style). Write the ruling **into the spec's Decisions table**, then
+re-dispatch that worker. A ruling that adds or changes an observable promise updates its
+terminal-observable AC in the same spec edit. A gate failure implicating a file outside the
+File Plan is never silently widened — ask: add to scope / file separately / pause. A gate
+failure inside the File Plan routes to the owning worker per the Worker Contract above.
+`AskUserQuestion` dismissed → STOP.
 
-## Phase 4 — Final gate
+## Report
 
-Run the resolved `gateCommand`. On failure: repair via Sonnet dispatches mapped to the
-owning wave, max 3 rounds (detect → repair → verify); a round that leaves the failure set
-unchanged escalates to the user immediately. Then run
-`node "$(spec-paths scope-reconcile)" --root {root} --base {build_base or diff_base} --spec
-{spec path} --json` (advisory, never blocks): non-empty `outOfPlan` prints
-`⚠️ out-of-plan: {list}`; non-empty `atRisk` prints `⚠️ {N} at-risk pins outside this
-spec's gate — review will run them`. Checkpoint-commit once the gate is green.
-
-## Phase 5 — Report & handoff
-
-Append exactly ONE line to `.claude/spec-runs.jsonl` (repo root; create on first append):
-
-```
-{"ts":"<ISO-8601>","spec":"<repo-relative spec path>","stage":"build","tier":"<standard|critical>","diff":{"files":<n>,"loc":<n>},"gate":{"finalRounds":<n>},"deviations":<n>}
-```
-
-`diff` from `git diff --shortstat {base}..HEAD` — `loc` = insertions + deletions (the same
-sum review's {diffLoc} uses); `deviations` = sidecar entry count (lines matching `^- `; 0 if
-absent). Counts/enums/paths only — never prose or pasted gate output (rulings live in the
-spec's Decisions table).
-
-Report — assemble slots and render via `node "$(spec-paths report-render)" --slots <file>`,
-print verbatim. `outcome`: ✅ `build green — {N} files, gate passed` (⚠️ when the run needs
-the user); `bullets`: one line per escalation; `next`: `/spec:review {spec path}`.
+Every stop of the loop — a checkpoint, a judgment step this session must make, or the
+terminal `DONE` — prints one report (rationale: core § Console Output Style). Assemble the
+slots from whichever driver's state produced the stop — `outcome`: the stop's one-line state
+(✅ at a clean stop, ⚠️ when the run needed the user); `bullets`: one line per escalation;
+`next`: the literal re-run command at a checkpoint (`/spec:build <spec>` — this same command
+chains itself, the stage owns where it resumes) or `spec-status --next` verbatim once the
+review driver's own DONE is reached. Run `node "$(spec-paths report-render)" --slots <file>`
+and print its output verbatim.
 
 ```report
-✅ **build green — 6 files, gate passed**
+✅ **checkpoint — build complete; safe to /clear and re-run /spec:build <spec>**
 
-Next: /spec:review specs/20260817/01-example.md
+Next: /spec:build specs/20260817/01-example.md
 ```
 
-Status stays `implementing` — only `/spec:review` flips `done`. If in a worktree, stay in
-it: review runs there and merges back on CLEAN.
+If in a worktree, stay in it until the pre-merge stop relocates the session — merge-back runs
+outside the worktree and merges on CLEAN. Every ledger row lands in `.claude/spec-runs.jsonl`,
+appended by the driver at each stop — this session never hand-appends a line.
 
 ## Rules
 
-- **Workers never run git.** The orchestrator owns all git and checkpoint commits.
-- **Decisions table is authoritative** — nobody overrides it; only the orchestrator adds
-  entries, recording a user ruling.
+- **Workers never run git.** This session owns all git and checkpoint commits.
+- **Decisions table is authoritative** — nobody overrides it; only this session adds entries,
+  recording a user ruling.
 - **Workers never query MCPs** and read-only/generated surfaces change only via their
   declared tools.
 - `AskUserQuestion` dismissed → STOP.
+- **The driver never dispatches agents, writes the Decisions table, renders a report, or runs
+  a git write** — those stay this session's, always.

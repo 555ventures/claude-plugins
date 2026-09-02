@@ -173,3 +173,62 @@ test('AC-20260820-05-7: cleanContradicted joins an escape\'s reviewRunId to a CL
   assert.strictEqual(entry.contradicted, 1, 'the escape whose reviewRunId matches the CLEAN row\'s runId is a contradiction — a CLEAN verdict a later escape disproves')
   assert.strictEqual(entry.escapesUnjoined, 1, 'the escape with reviewRunId:null must count as unjoined — it must NEVER be folded into contradicted (a false miscalibration signal) or silently dropped (a lost escape)')
 })
+
+// specs/20260901/03-unified-build-loop.md D9 (2026-09-01, brief 18): the seventh fixed query,
+// cleanByVia, buckets CLEAN review rows by their via field (loop/direct/unknown for rows
+// carrying no via at all — pre-sibling-02 rows) and joins escape.reviewRunId to a bucket's CLEAN
+// runIds using the EXACT reviewRunId<->runId join computeCleanContradicted (query 5) already
+// uses, per bucket. This is the reader's answer to the brief 18 kill condition: a loop rate
+// higher than direct's over 30 fleet reviews reverts the loop. Written before fleet-reader.js
+// gains cleanByVia (TDD red, 2026-09-01) — both tests below fail on a missing cleanByVia key /
+// missing render line until D9 ships.
+test('AC-20260901-03-6: cleanByVia buckets CLEAN review rows by via (loop/direct/unknown) and joins escape reviewRunId to each bucket\'s CLEAN runIds using cleanContradicted\'s own join', () => {
+  const root = tmpdir('fleet-cleanbyvia')
+  mkRepo(root, 'repo-a', {
+    rows: [
+      { ts: '2026-08-01T00:00:00Z', stage: 'review', spec: 'specs/1.md', verdict: 'CLEAN', runId: 'rv_a', via: 'loop' },
+      { ts: '2026-08-01T00:00:00Z', stage: 'review', spec: 'specs/2.md', verdict: 'CLEAN', runId: 'rv_b', via: 'loop' },
+      { ts: '2026-08-02T00:00:00Z', stage: 'review', spec: 'specs/3.md', verdict: 'CLEAN', runId: 'rv_c', via: 'direct' },
+      { ts: '2026-08-02T00:00:00Z', stage: 'review', spec: 'specs/4.md', verdict: 'CLEAN', runId: 'rv_d', via: 'direct' },
+      { ts: '2026-08-02T00:00:00Z', stage: 'review', spec: 'specs/5.md', verdict: 'CLEAN', runId: 'rv_e', via: 'direct' },
+      { ts: '2026-08-03T00:00:00Z', stage: 'review', spec: 'specs/6.md', verdict: 'CLEAN', runId: 'rv_f' },
+      { ts: '2026-08-04T00:00:00Z', stage: 'escape', spec: 'specs/1.md', file: 'x.js', reviewRunId: 'rv_a', foundBy: 'user', severity: 'hard', killedMatch: null, preventedBy: 'none', via: 'manual' },
+      { ts: '2026-08-05T00:00:00Z', stage: 'escape', spec: 'specs/6.md', file: 'y.js', reviewRunId: 'rv_f', foundBy: 'user', severity: 'soft', killedMatch: null, preventedBy: 'none', via: 'manual' },
+      { ts: '2026-08-06T00:00:00Z', stage: 'escape', spec: 'specs/9.md', file: 'z.js', reviewRunId: null, foundBy: 'user', severity: 'soft', killedMatch: null, preventedBy: 'none', via: 'manual' },
+    ],
+  })
+  const out = runJson(root)
+  assert.deepStrictEqual(out.cleanByVia.total, {
+    loop: { cleans: 2, contradicted: 1 },
+    direct: { cleans: 3, contradicted: 0 },
+    unknown: { cleans: 1, contradicted: 1 },
+  }, 'AC-20260901-03-6/D9: cleanByVia.total must bucket the 6 CLEAN rows loop=2/direct=3/unknown=1 by their via field (a missing via folds into unknown, never direct) and join the reviewRunId-matching escapes into the SAME bucket as the CLEAN row they contradict, leaving the null-reviewRunId escape joined to nothing: ' + JSON.stringify(out.cleanByVia))
+  const repoEntry = out.cleanByVia.byRepo.find(r => r.name === 'repo-a')
+  assert.ok(repoEntry, 'AC-20260901-03-6: repo-a must appear in cleanByVia.byRepo — a fleet-only total with no per-repo breakdown would hide which host is driving the kill condition')
+  assert.deepStrictEqual({ loop: repoEntry.loop, direct: repoEntry.direct, unknown: repoEntry.unknown }, {
+    loop: { cleans: 2, contradicted: 1 },
+    direct: { cleans: 3, contradicted: 0 },
+    unknown: { cleans: 1, contradicted: 1 },
+  }, 'AC-20260901-03-6/D9: the byRepo entry for the only repo in this fixture must carry the exact same numbers as the fleet total: ' + JSON.stringify(repoEntry))
+})
+
+test('AC-20260901-03-7: the human render prints the exact line "escapes-per-CLEAN by via: loop 1/2 · direct 0/3 · unknown 1/1" over AC-20260901-03-6\'s fixture', () => {
+  const root = tmpdir('fleet-cleanbyvia-render')
+  mkRepo(root, 'repo-a', {
+    rows: [
+      { ts: '2026-08-01T00:00:00Z', stage: 'review', spec: 'specs/1.md', verdict: 'CLEAN', runId: 'rv_a', via: 'loop' },
+      { ts: '2026-08-01T00:00:00Z', stage: 'review', spec: 'specs/2.md', verdict: 'CLEAN', runId: 'rv_b', via: 'loop' },
+      { ts: '2026-08-02T00:00:00Z', stage: 'review', spec: 'specs/3.md', verdict: 'CLEAN', runId: 'rv_c', via: 'direct' },
+      { ts: '2026-08-02T00:00:00Z', stage: 'review', spec: 'specs/4.md', verdict: 'CLEAN', runId: 'rv_d', via: 'direct' },
+      { ts: '2026-08-02T00:00:00Z', stage: 'review', spec: 'specs/5.md', verdict: 'CLEAN', runId: 'rv_e', via: 'direct' },
+      { ts: '2026-08-03T00:00:00Z', stage: 'review', spec: 'specs/6.md', verdict: 'CLEAN', runId: 'rv_f' },
+      { ts: '2026-08-04T00:00:00Z', stage: 'escape', spec: 'specs/1.md', file: 'x.js', reviewRunId: 'rv_a', foundBy: 'user', severity: 'hard', killedMatch: null, preventedBy: 'none', via: 'manual' },
+      { ts: '2026-08-05T00:00:00Z', stage: 'escape', spec: 'specs/6.md', file: 'y.js', reviewRunId: 'rv_f', foundBy: 'user', severity: 'soft', killedMatch: null, preventedBy: 'none', via: 'manual' },
+      { ts: '2026-08-06T00:00:00Z', stage: 'escape', spec: 'specs/9.md', file: 'z.js', reviewRunId: null, foundBy: 'user', severity: 'soft', killedMatch: null, preventedBy: 'none', via: 'manual' },
+    ],
+  })
+  const bare = runNode(SCRIPT, ['--repos-root', root])
+  assert.strictEqual(bare.status, 0, bare.stderr)
+  assert.match(bare.stdout, /escapes-per-CLEAN by via: loop 1\/2 · direct 0\/3 · unknown 1\/1/,
+    'AC-20260901-03-7/D9: the human render must print this exact line, middle-dot separators included — this is the literal Contracts render the brief 18 kill condition is read off of: ' + bare.stdout)
+})

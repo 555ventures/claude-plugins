@@ -488,6 +488,15 @@ const IGNORE_ENTRIES = [
   // run (deleted only at DONE) — unignored, a host gate that sweeps the whole tree reds on the
   // pipeline's own scratch before a reviewer dispatches (hearwell 2026-08-31, prettier --check).
   { line: 'specs/**/*.review/', sample: 'specs/20260101/01-x.review/review-state.json' },
+  // specs/20260901/01-build-driver.md D5: spec-build-driver.js keeps its own re-entry sidecar at
+  // specs/<date>/<spec>.build/ for the build run's whole lifetime (deleted only at DONE) — the
+  // same hearwell 2026-08-31 mechanism as the .review/ entry above, closed here for build.
+  { line: 'specs/**/*.build/', sample: 'specs/20260101/01-x.build/build-state.json' },
+  // specs/20260901/02-run-provenance.md D6: spec-session-stamp.sh writes a per-session scratch
+  // file at .claude/spec-session.json on every /spec: prompt — a per-session file must never ride
+  // a close commit (the 7.45.0 sidecar class). A single bare file, not a directory glob, so the
+  // probe is the literal path itself rather than a child-path sample.
+  { line: '.claude/spec-session.json', sample: '.claude/spec-session.json' },
 ]
 
 function ensureGitignore(hostRoot) {

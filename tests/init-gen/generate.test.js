@@ -227,6 +227,67 @@ test('2026-08-31 review-sidecar ignore: generate provisions specs/**/*.review/ s
     'is what keeps this idempotent on hosts where no sidecar exists on disk yet: ' + gitignore)
 })
 
+// AC-20260901-01-13: specs/20260901/01-build-driver.md D5 — spec-build-driver.js parks its own
+// re-entry sidecar at specs/<date>/<spec>.build/ for the run's whole lifetime, the same shape as
+// the review driver's specs/**/*.review/ sidecar above, and for the same reason: an unignored
+// sidecar lets a whole-tree host gate red on the build run's own scratch. IGNORE_ENTRIES gains a
+// specs/**/*.build/ entry with a child-path sample, and generate must stay idempotent across a
+// --refresh re-run exactly like the review-sidecar entry above.
+test('AC-20260901-01-13: generate provisions specs/**/*.build/ so git check-ignore covers the build-driver sidecar, idempotently across a --refresh re-run', () => {
+  const dir = newHost('init-gen-generate-build')
+  const profile = baseProfile()
+  const profilePath = writeProfile(dir, profile)
+
+  const r1 = runNode('scripts/init-gen.js', ['generate', '--root', dir, '--profile', profilePath])
+  assert.strictEqual(r1.status, 0, 'first generate run must succeed cleanly: ' + r1.stderr)
+
+  const probe = spawnSync('git', ['check-ignore', '-q', 'specs/20260101/01-x.build/build-state.json'], { cwd: dir })
+  assert.strictEqual(probe.status, 0,
+    'git must report a build-driver-sidecar child path as ignored after generate — unignored, a whole-tree ' +
+    'host gate reds on the build run\'s own scratch and hard-stops the build before a repair or commit step ' +
+    'is ever reached (AC-20260901-01-13, the same hearwell 2026-08-31 mechanism, closed here for build): ' +
+    fs.readFileSync(path.join(dir, '.gitignore'), 'utf8'))
+
+  const r2 = runNode('scripts/init-gen.js', ['generate', '--root', dir, '--profile', profilePath, '--refresh'])
+  assert.strictEqual(r2.status, 0, 'a --refresh re-run of an identical profile must still succeed: ' + r2.stderr)
+  const gitignore = fs.readFileSync(path.join(dir, '.gitignore'), 'utf8')
+  const hits = gitignore.split('\n').filter((l) => l.trim() === 'specs/**/*.build/').length
+  assert.strictEqual(hits, 1,
+    'two generate runs must leave exactly one specs/**/*.build/ line — the same child-path-probe idempotency ' +
+    '(D4) the review-sidecar entry relies on must apply here too, on hosts where no build sidecar exists on ' +
+    'disk yet: ' + gitignore)
+})
+
+// AC-20260901-02-7: specs/20260901/02-run-provenance.md D6 — the never-blocking spec-session-stamp.sh
+// hook writes a per-session scratch file at <root>/.claude/spec-session.json on every /spec: prompt.
+// A per-session file must never ride a close commit (the 7.45.0 sidecar class, the same reasoning
+// behind the .review/.build sidecar entries above) so init-gen.js's IGNORE_ENTRIES gains this exact
+// bare-file path. Unlike the .review/.build sidecar entries this is a single file, not a directory
+// glob, so the probe is the literal path itself rather than a child-path sample.
+test('AC-20260901-02-7: generate leaves git check-ignore .claude/spec-session.json exiting 0, with the line appearing exactly once across two runs', () => {
+  const dir = newHost('init-gen-generate-session-stamp')
+  const profile = baseProfile()
+  const profilePath = writeProfile(dir, profile)
+
+  const r1 = runNode('scripts/init-gen.js', ['generate', '--root', dir, '--profile', profilePath])
+  assert.strictEqual(r1.status, 0, 'first generate run must succeed cleanly: ' + r1.stderr)
+
+  const probe = spawnSync('git', ['check-ignore', '-q', '.claude/spec-session.json'], { cwd: dir })
+  assert.strictEqual(probe.status, 0,
+    'git must report .claude/spec-session.json as ignored after generate — unignored, the per-session ' +
+    'stamp a concurrent session writes on every /spec: prompt could ride a close commit, the exact ' +
+    '7.45.0 sidecar-class defect D6 exists to prevent: ' + fs.readFileSync(path.join(dir, '.gitignore'), 'utf8'))
+
+  const r2 = runNode('scripts/init-gen.js', ['generate', '--root', dir, '--profile', profilePath, '--refresh'])
+  assert.strictEqual(r2.status, 0, 'a --refresh re-run of an identical profile must still succeed: ' + r2.stderr)
+  const gitignore = fs.readFileSync(path.join(dir, '.gitignore'), 'utf8')
+  const hits = gitignore.split('\n').filter((l) => l.trim() === '.claude/spec-session.json').length
+  assert.strictEqual(hits, 1,
+    'two generate runs must leave exactly one .claude/spec-session.json line — a re-appended duplicate on ' +
+    'every --refresh is the same idempotency defect the .claude/worktrees/ and sidecar entries above were ' +
+    'fixed against: ' + gitignore)
+})
+
 test('AC-20260822-02-5: the Worker Contract section is strictEqual across every generated agent (with selfVerifyExamples substituted verbatim), and only the tests-kind agent carries the Tests-kind addendum bullets', () => {
   const dir = newHost('init-gen-generate')
   const selfVerify = "`node --test 'tests/x/*.test.js'`"

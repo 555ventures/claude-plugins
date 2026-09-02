@@ -3,5 +3,10 @@ node_modules/
 .claude/settings.local.json
 .claude/spec-preimage/
 .claude/spec-runs.stopped.jsonl
+.claude/spec-session.json
 .playwright-mcp/
 package-lock.json
+
+# spec pipeline driver sidecars (never committed)
+specs/**/*.review/
+specs/**/*.build/

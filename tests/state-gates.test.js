@@ -30,17 +30,36 @@ const SPEC_MD = (status, body = '') => `---\nstatus: ${status}\n---\n# Spec\n${b
 // while specs/20260824/02 replaces its interior (driver, wf-design, skeletons-check all
 // retired) — this pair of assertions is the SHALL-CONTINUE-TO regression pin, green at HEAD by
 // design, not a new behavior.
-test('AC-20260824-02-5: state machine: right status passes, wrong status blocks', () => {
+//
+// specs/20260901/03-unified-build-loop.md D5/AC-20260901-03-1 (2026-09-01, brief 18): the loop
+// (D1) resumes a done spec after a checkpoint /clear by re-pasting /spec:build <spec>, so the
+// gate must admit /spec:build on status: done — the `done` assertion below is flipped in place
+// from its prior exit-2 expectation (A2's pre-D5 pin) to exit 0. That flip is AC-20260901-03-1's
+// sole promise, and it is the reason this file is red-expected at build.
+//
+// AC-20260901-03-10 (D12, split out of AC-20260901-03-1 at build time) carries the admissions
+// this spec does NOT change — /spec:build on hardened/implementing, /spec:design on
+// hardened/draft, /spec:review on implementing/draft, /spec:plan on draft — as SHALL CONTINUE TO
+// regression pins. The split exists because red-check.js sanctions a file green per AC bullet on
+// a literal SHALL CONTINUE TO occurrence, and a single bullet carrying both a new promise and its
+// carried clauses would sanction this genuinely-red file green.
+test('AC-20260901-03-1 / AC-20260901-03-10 / AC-20260824-02-5 (SHALL CONTINUE TO): state machine: /spec:build admits hardened, implementing, and done; /spec:design and /spec:review keep their unchanged admissions; wrong status still blocks', () => {
   assert.strictEqual(gate('/spec:design', SPEC_MD('hardened')).status, 0,
-    'AC-20260824-02-5/D16: the design stage keeps its frozen seat in the state machine — a hardened spec must still be admitted to /spec:design even though the stage\'s interior (driver, wf-design, skeletons-check) is being replaced')
+    'AC-20260824-02-5 (SHALL CONTINUE TO)/D16: the design stage keeps its frozen seat in the state machine — a hardened spec must still be admitted to /spec:design even though the stage\'s interior (driver, wf-design, skeletons-check) is being replaced')
   assert.strictEqual(gate('/spec:design', SPEC_MD('draft')).status, 2,
-    'AC-20260824-02-5/D16: the design stage keeps its frozen seat in the state machine — a draft spec must still be blocked from /spec:design even though the stage\'s interior (driver, wf-design, skeletons-check) is being replaced')
-  assert.strictEqual(gate('/spec:build', SPEC_MD('hardened')).status, 0)
-  assert.strictEqual(gate('/spec:build', SPEC_MD('implementing')).status, 0)
-  assert.strictEqual(gate('/spec:build', SPEC_MD('done')).status, 2)
-  assert.strictEqual(gate('/spec:review', SPEC_MD('implementing')).status, 0)
-  assert.strictEqual(gate('/spec:review', SPEC_MD('draft')).status, 2)
-  assert.strictEqual(gate('/spec:plan', SPEC_MD('draft')).status, 0)
+    'AC-20260824-02-5 (SHALL CONTINUE TO)/D16: the design stage keeps its frozen seat in the state machine — a draft spec must still be blocked from /spec:design even though the stage\'s interior (driver, wf-design, skeletons-check) is being replaced')
+  assert.strictEqual(gate('/spec:build', SPEC_MD('hardened')).status, 0,
+    'AC-20260901-03-10 (SHALL CONTINUE TO)/D5: /spec:build against hardened must continue to be admitted — the loop\'s first stage is unchanged by widening the admitted set to include done')
+  assert.strictEqual(gate('/spec:build', SPEC_MD('implementing')).status, 0,
+    'AC-20260901-03-10 (SHALL CONTINUE TO)/D5: /spec:build against implementing must continue to be admitted — the loop resumes the build/review drivers mid-run on this status')
+  assert.strictEqual(gate('/spec:build', SPEC_MD('done')).status, 0,
+    'AC-20260901-03-1/D5: /spec:build against done must now be admitted (exit 0, not the prior exit 2) — this is the loop\'s post-checkpoint resume entry: a /clear followed by re-pasting /spec:build <spec> must not be blocked by the state gate')
+  assert.strictEqual(gate('/spec:review', SPEC_MD('implementing')).status, 0,
+    'AC-20260901-03-10 (SHALL CONTINUE TO)/D5: /spec:review against implementing must continue to be admitted — /spec:review remains a direct entry point to the same review driver')
+  assert.strictEqual(gate('/spec:review', SPEC_MD('draft')).status, 2,
+    'AC-20260901-03-10 (SHALL CONTINUE TO)/D5: /spec:review against draft must continue to be blocked — the admitted set for /spec:review (implementing|done) is unchanged by this spec')
+  assert.strictEqual(gate('/spec:plan', SPEC_MD('draft')).status, 0,
+    'AC-20260901-03-10 (SHALL CONTINUE TO)/D5: /spec:plan against draft must continue to be admitted — this spec touches only the /spec:build and /spec:review admitted sets')
 })
 
 test('unresolved bracketed markers block', () => {

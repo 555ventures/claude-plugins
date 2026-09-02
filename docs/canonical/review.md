@@ -104,6 +104,16 @@
   third-recurrence bar's Materiality field cites the joined count.
   (specs/20260901/07-escape-class-contract.md)
 
+- The replay corpus has two regions: hand-authored `## ` classes and a `## Derived classes`
+  region of `### ` classes grown from the escape ledger — a class with two or more fleet
+  recurrences (joined count) and no corpus entry is a `corpusGaps` line in the fleet reader,
+  and its section is authored from the escape's fix diff with its ledger rows cited.
+  `lib/replay-corpus.js` is the one parser; `replay.js` refuses a `--class` outside the corpus
+  and `--pick-class` selects the next class (fewest measurement rows, derived first on ties).
+  Reviewer returns carry `file`/`line` (or explicit null) on every killed claim, enforced at the
+  `reviewer-returned` mark, so `/spec:escape` matches dismissed claims by location.
+  (specs/20260901/08-corpus-derivation-and-kill-match.md)
+
   Reviewer catch-rate is measured, not assumed: every 5th review (and at least once per
   major version) `/spec:replay` injects one corpus-class defect into the last CLEANed
   spec's tree in a marker-guarded scratch worktree, re-runs the legs, and dispatches the

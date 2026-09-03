@@ -133,7 +133,20 @@
 // `--waived`/`--rejected`/`--fix-dispatched` count that does not match the return's
 // `final`-or-`recommended` tallies (names `--fix-dispatched`), or `--skip-independence-check-
 // because` passed at all, on any run (names the flag and ADR-0005 — there is no CHECKPOINT left
-// for it to bypass).
+// for it to bypass), or (specs/20260902/05-manifest-stamped-scope.md D5) `--mark dispositions`
+// whose pass derives `UNVERIFIED` — message quotes verdict.js's own `UNVERIFIED — <cause>` line
+// verbatim plus the remedy (delete the sidecar directory, named, and re-run the bare
+// `node <driver> <spec>` command, also named), refused before any sidecar or disposer-return
+// write.
+//
+// specs/20260902/05-manifest-stamped-scope.md (D6): `scope` leaves the reviewer return
+// contract — it was a fact only the driver could have known (`review-legs.js`'s own `--fix-delta`
+// flag), never something the reviewer could honestly report, so asking for it was an interview for
+// its own sake. The REVIEWER step text and both `reviewer-returned` refusal messages now name the
+// trimmed shape `{verdict, survivors, killed, reviewerCount, tokens}`; a return that still carries
+// a stray `scope` key (an older doctrine copy, or this spec's own dogfooding review pipeline, A7)
+// is accepted and the key silently ignored — `--mark dispositions` derives its required-leg set
+// from the manifest's own scope stamps (D2, verdict.js) regardless of what the return says.
 
 'use strict'
 const fs = require('fs')
@@ -1021,7 +1034,7 @@ function handleReviewerReturned() {
   let json
   try { json = JSON.parse(raw) } catch (e) {
     die('--file ' + file + ' is not valid JSON (' + e.message + ') — re-dispatch the reviewer ' +
-      'and write a clean {verdict, survivors, killed, reviewerCount, scope, tokens} return')
+      'and write a clean {verdict, survivors, killed, reviewerCount, tokens} return')
   }
   if (json.verdict === 'REVIEWER_FAILED') {
     die('the reviewer returned REVIEWER_FAILED (the run died mid-review, never CLEAN) — ' +
@@ -1029,7 +1042,7 @@ function handleReviewerReturned() {
   }
   if (!Array.isArray(json.survivors)) {
     die('--file ' + file + ' is missing a survivors array — the reviewer return shape must be ' +
-      '{verdict, survivors, killed, reviewerCount, scope, tokens}; re-dispatch and write a valid return')
+      '{verdict, survivors, killed, reviewerCount, tokens}; re-dispatch and write a valid return')
   }
   // D8 (specs/20260901/08-corpus-derivation-and-kill-match.md, brief 19): killed must
   // be an array, and every entry an object carrying a string claim plus BOTH file (string|null)
@@ -1089,6 +1102,22 @@ function handleDispositions() {
       '/spec:run and /spec:review; drop the flag')
   }
   const n = marks.reviewerReturnIteration
+
+  // D5 (specs/20260902/05-manifest-stamped-scope.md): refuse before any sidecar or disposer-
+  // return write when the pass derives UNVERIFIED — dispositions can never cure missing or
+  // contradictory evidence, only a cold legs re-run can. A dry pre-check against zero
+  // dispositions is enough: verdict.js's first-match-wins order (D10) derives UNVERIFIED before
+  // any disposition arithmetic runs, so the --waived/--rejected/--fix-dispatched values this
+  // invocation actually carries cannot change the outcome.
+  const unverifiedCheck = runChild(process.execPath,
+    [verdictBin, '--manifest', manifestPathFor(n), '--workflow', marks.reviewerReturnFile],
+    { encoding: 'utf8' }, 'verdict.js (dispositions UNVERIFIED pre-check)')
+  if ((unverifiedCheck.stdout || '').split('\n')[0].trim() === 'UNVERIFIED') {
+    die((unverifiedCheck.stderr || '').trim() +
+      '\n--mark dispositions refused: dispositions cannot cure missing evidence — the legs must ' +
+      'run again from cold. Delete ' + sidecarDir + ' and re-run:\n  node ' + __filename + ' ' + specPath)
+  }
+
   const pools = dispositionPools(n)
   const poolRefs = [
     ...pools.survivors.map((_, i) => 's' + i),
@@ -1725,7 +1754,7 @@ const STEPS = {
             'to the reviewer as evidence.\n'
           : ' (design.render is not declared — skip the advisory render-gate run).\n')
       : '') +
-    `Write its structured return ({verdict, survivors, killed, reviewerCount, scope, tokens}) to ` +
+    `Write its structured return ({verdict, survivors, killed, reviewerCount, tokens}) to ` +
     `a file, then:\n  node ${__filename} ${specPath} --mark reviewer-returned --file <return.json>\n` +
     `REVIEWER_FAILED is a failed run, never CLEAN — re-dispatch before marking.`,
 

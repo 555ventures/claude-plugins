@@ -269,22 +269,24 @@ test('AC-20260822-01-3: WHEN --escalated is passed with --profile release THE SY
   assert.strictEqual(r.stdout, '', 'a before-file-I/O refusal must print no verdict word: ' + JSON.stringify(r.stdout))
 })
 
-test('AC-20260822-01-4: WHEN --escalated derivation reaches CLEAN (spike S1 Case B: 6 green fix-delta legs + green at-risk, 1 hard survivor, --waived 1 --fixDispatched 0) THE SYSTEM SHALL exit 2, print no verdict word and no ledger line, and name evidence drift on stderr — even though the identical inputs without --escalated derive CLEAN exit 0', () => {
+test('AC-20260822-01-4 (also AC-20260902-05-2): WHEN --escalated derivation reaches CLEAN (spike S1 Case B: 6 green fix-delta legs + green at-risk, 1 hard survivor, --waived 1 --fixDispatched 0) THE SYSTEM SHALL exit 2, print no verdict word and no ledger line, and name evidence drift on stderr — even though the identical inputs without --escalated derive CLEAN exit 0', () => {
   const dir = fs.realpathSync(tmpdir('esc-ac4'))
   const manifestPath = path.join(dir, 'manifest.jsonl')
   fs.writeFileSync(manifestPath, [
-    { leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 40 } },
-    { leg: 'smoke', exit: 4, observed: { result: 'inert' } },
+    // specs/20260902/05 D1/D2 (A4 fallback): the pass scope lives on the rows review-legs.js
+    // writes (gate/smoke/ci/at-risk stamped fix-delta), never on the reviewer return
+    { leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 40 }, scope: 'fix-delta' },
+    { leg: 'smoke', exit: 4, observed: { result: 'inert' }, scope: 'fix-delta' },
     { leg: 'ac-matrix', exit: 0, observed: { uncovered: 0, oracle: 0 } },
     { leg: 'skip-reconcile', exit: 0, observed: { skipped: 0, sanctioned: 0 } },
-    { leg: 'ci', exit: 0, observed: { conclusion: 'success' } },
+    { leg: 'ci', exit: 0, observed: { conclusion: 'success' }, scope: 'fix-delta' },
     { leg: 'promise-sweep', exit: 0, observed: { rows: 1, carried: 1, sanctioned: 0, orphans: 0 } },
-    { leg: 'at-risk', exit: 0, observed: { files: 0, testsExecuted: 0 } },
+    { leg: 'at-risk', exit: 0, observed: { files: 0, testsExecuted: 0 }, scope: 'fix-delta' },
   ].map((r) => JSON.stringify(r)).join('\n') + '\n')
   const workflowPath = path.join(dir, 'workflow.json')
   fs.writeFileSync(workflowPath, JSON.stringify({
     verdict: 'CLEAN', survivors: [{ severity: 'hard', claim: 'x', file: 'a', line: 1, impact: 'x', evidence: 'x' }],
-    killed: [], reviewerCount: 1, scope: 'fix-delta', tokens: 10,
+    killed: [], reviewerCount: 1, tokens: 10,
   }))
 
   // Regression proof this fixture is genuinely CLEAN-bound (never a vacuous rejection): the SAME

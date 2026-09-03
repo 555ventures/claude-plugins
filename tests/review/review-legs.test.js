@@ -357,7 +357,7 @@ function fakeGhBranchingDir(commitBody, branchBody) {
   return dir
 }
 
-test('AC-20260830-03-2: the review ci leg maps ci-query.js\'s shaUnseen shape to {"unavailable":"sha-unseen",branch,branchConclusion} at exit 0, even though the branch conclusion is failure', () => {
+test('AC-20260830-03-2 (also AC-20260902-05-1): the review ci leg maps ci-query.js\'s shaUnseen shape to {"unavailable":"sha-unseen",branch,branchConclusion,scope:"full"} at exit 0, even though the branch conclusion is failure', () => {
   const { dir, base } = makeHostForCiLeg()
   const ghDir = fakeGhBranchingDir(
     "echo '[]'",
@@ -371,13 +371,63 @@ test('AC-20260830-03-2: the review ci leg maps ci-query.js\'s shaUnseen shape to
     : []
   const byLeg = new Map(rows.map(x => [x.leg, x]))
   assert.deepStrictEqual(byLeg.get('ci'),
-    { leg: 'ci', exit: 0, observed: { unavailable: 'sha-unseen', branch: 'main', branchConclusion: 'failure' } },
+    { leg: 'ci', exit: 0, observed: { unavailable: 'sha-unseen', branch: 'main', branchConclusion: 'failure' }, scope: 'full' },
     'D4: an unpushed HEAD whose current branch has a real red origin run must map to the honest sha-unseen ' +
     'row at exit 0 — mapping it to {"unavailable":"no-adapter"} (today\'s code) hides the exact salon-os ' +
     'condition this AC exists to surface, and reddening the leg over a red branchConclusion would violate ' +
-    'the 2026-08-30 never-block ruling: ' + JSON.stringify(byLeg.get('ci')) + ' / ' + r.stdout + r.stderr)
+    'the 2026-08-30 never-block ruling; D1: a full-scope run must stamp "scope":"full" as this row\'s last key: ' +
+    JSON.stringify(byLeg.get('ci')) + ' / ' + r.stdout + r.stderr)
   assert.strictEqual(r.status, 0,
     'every other blocking leg on this otherwise-green host must pass, so a nonzero exit here can only mean ' +
     'the red branchConclusion leaked into the leg\'s own exit code, which the never-block ruling forbids: ' +
     r.stdout + r.stderr)
+})
+
+// D1 (AC-20260902-05-1): review-legs.js's own writer stamps `scope` as the LAST key on every
+// row it appends (gate, smoke, reconcile, ci, at-risk); ac-matrix, skip-reconcile and
+// promise-sweep write their own rows directly and carry no `scope` key in either mode.
+test('AC-20260902-05-1: a full-scope run stamps "scope":"full" as the last key on every row review-legs.js writes through its own writer, while ac-matrix/skip-reconcile/promise-sweep rows carry no scope key', () => {
+  const { dir, base } = makeHost({ testBody: GREEN_TEST })
+  const { r, byLeg } = run(dir, base)
+  for (const leg of ['gate', 'smoke', 'reconcile', 'ci', 'at-risk']) {
+    const row = byLeg.get(leg)
+    assert.ok(row, `the manifest must carry a "${leg}" row on a full-scope run: ${r.stdout} ${r.stderr}`)
+    assert.strictEqual(row.scope, 'full',
+      `D1: review-legs.js's own writer must stamp "${leg}"'s row with scope:"full" on a run with no --fix-delta ` +
+      `— a missing or wrong scope here means the derivation in verdict.js has nothing to key required legs off ` +
+      `of: ${JSON.stringify(row)}`)
+    assert.strictEqual(Object.keys(row).at(-1), 'scope',
+      `D1: scope must be the LAST key review-legs.js writes on the "${leg}" row — a mid-object key here means ` +
+      `some later writer step appended after the stamp: ${JSON.stringify(row)}`)
+  }
+  for (const leg of ['ac-matrix', 'skip-reconcile', 'promise-sweep']) {
+    const row = byLeg.get(leg)
+    assert.ok(row, `the manifest must still carry a "${leg}" row: ${r.stdout} ${r.stderr}`)
+    assert.ok(!('scope' in row),
+      `D1: "${leg}" rows are written by their own script, not review-legs.js's writer, and must carry NO scope ` +
+      `key in either mode — a scope key here means the additive field leaked into a sibling writer's rows: ` +
+      `${JSON.stringify(row)}`)
+  }
+})
+
+test('AC-20260902-05-1: a --fix-delta run stamps "scope":"fix-delta" as the last key on gate/smoke/ci rows, while ac-matrix/skip-reconcile/promise-sweep rows still carry no scope key', () => {
+  const { dir, base } = makeHost({ testBody: GREEN_TEST })
+  const { r, byLeg } = run(dir, base, ['--fix-delta'])
+  for (const leg of ['gate', 'smoke', 'ci']) {
+    const row = byLeg.get(leg)
+    assert.ok(row, `the manifest must carry a "${leg}" row on a --fix-delta run: ${r.stdout} ${r.stderr}`)
+    assert.strictEqual(row.scope, 'fix-delta',
+      `D1: review-legs.js's own writer must stamp "${leg}"'s row with scope:"fix-delta" when invoked with ` +
+      `--fix-delta — a wrong stamp here means the derivation in verdict.js would require the wrong leg set: ` +
+      `${JSON.stringify(row)}`)
+    assert.strictEqual(Object.keys(row).at(-1), 'scope',
+      `D1: scope must be the LAST key on the "${leg}" row under --fix-delta too: ${JSON.stringify(row)}`)
+  }
+  for (const leg of ['ac-matrix', 'skip-reconcile', 'promise-sweep']) {
+    const row = byLeg.get(leg)
+    assert.ok(row, `the manifest must still carry a "${leg}" row under --fix-delta: ${r.stdout} ${r.stderr}`)
+    assert.ok(!('scope' in row),
+      `D1: "${leg}" rows carry no scope key under --fix-delta either — these two writers are unchanged by this ` +
+      `spec: ${JSON.stringify(row)}`)
+  }
 })

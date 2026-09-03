@@ -101,7 +101,7 @@ Run `node "$(spec-paths report-render)" --slots <file>` and print its output ver
   block the verdict on their own. Write the reviewer's structured return
   to the file the driver's step names: `{verdict: "CLEAN"|"REVIEWER_FAILED", survivors:
   [{severity, claim, file, line, impact, evidence}], killed: [{claim, file, line, evidence}],
-  reviewerCount: 1, scope: "full"|"fix-delta", tokens: <n>}`, then mark
+  reviewerCount: 1, tokens: <n>}`, then mark
   `reviewer-returned --file <json>`.
   `REVIEWER_FAILED` (agent died) is a failed run, never CLEAN — re-dispatch before marking.
 - **The reviewer is read-only**; it may create and delete its own repro file — fixes are always

@@ -289,6 +289,44 @@ test('AC-20260820-07-4: WHEN the reviewer return file\'s verdict is REVIEWER_FAI
   assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER', 'the state must remain REVIEWER so the very next driver run asks for a fresh dispatch')
 })
 
+// specs/20260902/05-manifest-stamped-scope.md D6: scope leaves the reviewer return contract —
+// the REVIEWER step text and both reviewer-returned refusal messages (malformed JSON, missing
+// survivors) must name the return shape as {verdict, survivors, killed, reviewerCount, tokens}
+// with no "scope" key anywhere in the printed text.
+test('AC-20260902-05-13: WHEN the driver prints the REVIEWER step, or refuses a reviewer-returned file that is not JSON or lacks survivors, THE SYSTEM names the return shape as {verdict, survivors, killed, reviewerCount, tokens} and the printed text SHALL NOT contain the substring "scope"', () => {
+  const host = makeHost()
+  // The printed text embeds the driver's own absolute path and the spec path; a checkout whose
+  // directory name carries this spec's slug (its build worktree) would trip the substring check
+  // on the path, not on doctrine — scrub paths so the assertion reads only the driver's prose.
+  const REPO_ROOT = path.resolve(__dirname, '..', '..')
+  const scrub = (text) => text.split(REPO_ROOT).join('<repo>').split(host.spec).join('<spec>')
+  const stepR = run(host.root, host.spec)
+  stepR.stdout = scrub(stepR.stdout)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER', 'setup: a fresh green-legs fixture must reach REVIEWER before this AC can be exercised')
+  assert.match(stepR.stdout, /verdict, survivors, killed, reviewerCount, tokens/,
+    'D6: the REVIEWER step must document the trimmed return shape verbatim: ' + stepR.stdout)
+  assert.ok(!stepR.stdout.includes('scope'),
+    `D6: the REVIEWER step text must not mention "scope" anywhere — a reviewer reading this step must never be ` +
+    `asked to hand-type a field only the driver could have known: ${JSON.stringify(stepR.stdout)}`)
+
+  const malformed = path.join(fs.realpathSync(tmpdir('rvdrv-05-13-malformed')), 'bad.json')
+  fs.writeFileSync(malformed, '{not valid json')
+  const rBad = run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', malformed)
+  assert.strictEqual(rBad.status, 2, 'an unparseable reviewer return file must exit 2: ' + rBad.stdout + rBad.stderr)
+  assert.match(rBad.stdout + rBad.stderr, /verdict, survivors, killed, reviewerCount, tokens/,
+    'D6: the malformed-JSON refusal must name the trimmed return shape: ' + (rBad.stdout + rBad.stderr))
+  assert.ok(!scrub(rBad.stdout + rBad.stderr).includes('scope'),
+    `D6: the malformed-JSON refusal text must not mention "scope": ${JSON.stringify(rBad.stdout + rBad.stderr)}`)
+
+  const noSurvivors = returnFileWith('rvdrv-05-13-nosurvivors', { verdict: 'CLEAN', killed: [], reviewerCount: 1, tokens: 10 })
+  const rNoSurvivors = run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', noSurvivors)
+  assert.strictEqual(rNoSurvivors.status, 2, 'a return missing survivors must exit 2: ' + rNoSurvivors.stdout + rNoSurvivors.stderr)
+  assert.match(rNoSurvivors.stdout + rNoSurvivors.stderr, /verdict, survivors, killed, reviewerCount, tokens/,
+    'D6: the missing-survivors refusal must name the trimmed return shape: ' + (rNoSurvivors.stdout + rNoSurvivors.stderr))
+  assert.ok(!scrub(rNoSurvivors.stdout + rNoSurvivors.stderr).includes('scope'),
+    `D6: the missing-survivors refusal text must not mention "scope": ${JSON.stringify(rNoSurvivors.stdout + rNoSurvivors.stderr)}`)
+})
+
 test('AC-20260820-07-5: WHEN --mark dispositions counts exceed the survivor + leg-finding pools THE SYSTEM exits 2 (verdict.js\'s contradiction arithmetic, surfaced through the driver) and leaves the state unchanged', () => {
   const host = makeHost()
   toReviewer(host)
@@ -312,7 +350,7 @@ test('AC-20260820-07-5: WHEN --mark dispositions counts exceed the survivor + le
 // place, never weakened): D9 keeps this exact zero-pool CONTINUES-TO-pass shape as the AC-5
 // pin — both pools empty still admits --mark dispositions --waived 0 --rejected 0
 // --fix-dispatched 0 with no --file and lands CLOSE, unaffected by the CHECKPOINT retirement.
-test('AC-20260820-07-6 / AC-20260901-03-5 / AC-20260901-09-5 (SHALL CONTINUE TO): WHEN a clean run reaches CLOSE (0 survivors, dispositions 0 0 0) THE SYSTEM runs the authoritative verdict with --retain .claude/spec-runs, appends one ledger line, flips status implementing -> done, and prints the close-step instructions', () => {
+test('AC-20260820-07-6 / AC-20260901-03-5 / AC-20260901-09-5 (SHALL CONTINUE TO) / AC-20260902-05-11 (SHALL CONTINUE TO, D6): WHEN a clean run reaches CLOSE (0 survivors, dispositions 0 0 0) THE SYSTEM runs the authoritative verdict with --retain .claude/spec-runs, appends one ledger line, flips status implementing -> done, and prints the close-step instructions', () => {
   const host = makeHost()
   toReviewer(host)
   const returnFile = returnFileWith('rvdrv-clean', CLEAN_RETURN)
@@ -738,6 +776,90 @@ test('AC-20260820-07-8 (manifest-provable cap) / AC-20260901-09-2: hand-editing 
   assert.strictEqual(fixR2.status, 0,
     'the hand-edited counter must not have consumed the real cap — the second genuine fix-applied (only manifest-1/2 on disk beforehand) must still succeed: ' + fixR2.stdout + fixR2.stderr)
   assert.ok(fs.existsSync(path.join(host.sidecar, 'manifest-3.jsonl')), 'the second genuine fix cycle must produce manifest-3.jsonl')
+})
+
+// specs/20260902/05-manifest-stamped-scope.md D10/AC-20260902-05-6 (A8): a green host, one soft
+// survivor dispositioned "fix", a broken tests/foo.test.js before --mark fix-applied — the
+// fix-delta legs run hard-stops on the now-red gate. D2 makes the manifest's own scope:"fix-delta"
+// stamps (D1) the source of the hard-stop pass's required-leg set, so the red gate is reached and
+// GATE_RED derives (today's code judges the same manifest against the FULL set and derives
+// UNVERIFIED instead — A2 spike S1).
+test('AC-20260902-05-6: WHEN the driver\'s --mark fix-applied legs run hard-stops on a red gate THE SYSTEM SHALL append a ledger row with verdict:"GATE_RED", scope:"fix-delta" and iteration:2, and --state SHALL report STOPPED', () => {
+  const host = makeHost()
+  run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER', 'setup: a fresh green-legs fixture must reach REVIEWER')
+
+  const returnFile = returnFileWith('rvdrv-05-6-return', SURVIVOR_RETURN)
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile)
+  assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS', 'setup: the one soft survivor must land DISPOSITIONS')
+
+  const dispFile = oneFixReturnFile('rvdrv-05-6-disp', 's0')
+  const dispR = run(host.root, host.spec, '--mark', 'dispositions', '--file', dispFile, '--waived', '0', '--rejected', '0', '--fix-dispatched', '1')
+  assert.strictEqual(dispR.status, 0, 'setup: dispatching a fix for the single survivor must be accepted: ' + dispR.stdout + dispR.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'FIX', 'setup: fix-dispatched must land FIX')
+
+  // A8: break the gate before the fix-delta legs re-run — the "fix" never actually fixed it.
+  fs.writeFileSync(path.join(host.root, 'tests/foo.test.js'),
+    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "const foo = require('../src/foo.js')\n" +
+    "test('AC-20260820-99-1: foo() returns 42', () => { assert.strictEqual(foo(), 43) })\n")
+
+  const ledgerPath = path.join(host.root, '.claude/spec-runs.jsonl')
+  const before = fs.existsSync(ledgerPath) ? fs.readFileSync(ledgerPath, 'utf8').trim().split('\n').filter(Boolean) : []
+  const fixR = run(host.root, host.spec, '--mark', 'fix-applied')
+  assert.strictEqual(stateOf(host.root, host.spec), 'STOPPED',
+    'D10: a fix-delta legs run that hard-stops on a red gate must report state STOPPED: ' + fixR.stdout + fixR.stderr)
+  const after = fs.readFileSync(ledgerPath, 'utf8').trim().split('\n').filter(Boolean)
+  assert.strictEqual(after.length, before.length + 1,
+    'exactly one ledger line must be appended for the hard-stop pass: ' + JSON.stringify({ before, after }))
+  const row = JSON.parse(after[after.length - 1])
+  assert.strictEqual(row.verdict, 'GATE_RED',
+    'D2: the manifest\'s own scope:"fix-delta" stamps must make requiredLegs the six-leg fix-delta set (never ' +
+    'the full eight, which is missing reconcile/at-risk by design on a fix pass) so the red gate is reached and ' +
+    `GATE_RED derives, never UNVERIFIED: ${JSON.stringify(row)}`)
+  assert.strictEqual(row.scope, 'fix-delta',
+    `D4: the hard-stop ledger row must carry the manifest-derived scope "fix-delta": ${JSON.stringify(row)}`)
+  assert.strictEqual(row.iteration, 2,
+    `this is the second manifest iteration (manifest-2.jsonl, the fix-delta re-run) — the row must record it: ${JSON.stringify(row)}`)
+})
+
+// specs/20260902/05-manifest-stamped-scope.md D5/AC-20260902-05-8: a hand-edited manifest (the
+// only realistic way this class occurs — a leg crashed after review-legs.js wrote some rows,
+// leaving the on-disk manifest with disagreeing scope carriers) must refuse --mark dispositions
+// before any write, naming the D3 line and the cold-restart remedy.
+test('AC-20260902-05-8: WHEN --mark dispositions is invoked after a gate override row carrying a disagreeing scope has been appended to the manifest THE SYSTEM SHALL exit 2, leave review-state.json byte-identical, write no disposer-return file, and print stderr naming the D3 line, the sidecar directory, and the bare re-run command', () => {
+  const host = makeHost()
+  run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER', 'setup: a fresh green-legs fixture must reach REVIEWER')
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith('rvdrv-05-8-return', CLEAN_RETURN))
+  assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS', 'setup: a clean zero-survivor return must land DISPOSITIONS')
+
+  // Hand-edit the manifest to append a "gate" row stamped scope:"fix-delta" — once D1 stamps
+  // every other row "full", this single override disagrees with the rest of the manifest.
+  const manifestPath = path.join(host.sidecar, 'manifest-1.jsonl')
+  fs.appendFileSync(manifestPath,
+    JSON.stringify({ leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 1 }, scope: 'fix-delta' }) + '\n')
+
+  const stateFile = path.join(host.sidecar, 'review-state.json')
+  const stateBefore = fs.readFileSync(stateFile, 'utf8')
+  const disposerFilesBefore = fs.readdirSync(host.sidecar).filter(f => /^disposer-return-/.test(f))
+
+  const r = run(host.root, host.spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(r.status, 2,
+    'D5: --mark dispositions must refuse a pass that derives UNVERIFIED — dispositions can never cure missing ' +
+    `or contradictory evidence: ${r.stdout} / ${r.stderr}`)
+  const stateAfter = fs.readFileSync(stateFile, 'utf8')
+  assert.strictEqual(stateAfter, stateBefore,
+    'D5: the refusal must happen BEFORE any sidecar write — review-state.json must be byte-identical to before the refused mark')
+  const disposerFilesAfter = fs.readdirSync(host.sidecar).filter(f => /^disposer-return-/.test(f))
+  assert.deepStrictEqual(disposerFilesAfter, disposerFilesBefore,
+    'D5: the refusal must write no disposer-return-*.json file: ' + JSON.stringify(disposerFilesAfter))
+  assert.match(r.stderr, /verdict\.js: UNVERIFIED — manifest invalid: scope values disagree/,
+    'D5: stderr must carry verdict.js\'s own D3 line verbatim, naming the manifest-invalid cause: ' + r.stderr)
+  assert.match(r.stderr, new RegExp(host.sidecar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    'D5: stderr must name the sidecar directory the session should delete before re-running from cold: ' + r.stderr)
+  assert.match(r.stderr, /node .*\.js.*99-drv-test\.md/,
+    'D5: stderr must name the literal bare re-run command "node <driver> <spec>" as the remedy: ' + r.stderr)
 })
 
 test('AC-20260820-07-9: WHEN the driver is re-invoked with no mark THE SYSTEM prints the same step again with no side effects — no duplicate manifest rows, no duplicate ledger lines', () => {

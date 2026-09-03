@@ -27,7 +27,9 @@
 // manifest-only and can reach UNVERIFIED or GATE_RED. A manifest that is green and complete
 // with no --workflow is a usage error (exit 2 naming --workflow as the remedy) — a panel-less
 // CLEAN must stay structurally unreachable. The no-workflow --ledger row is partial: it omits
-// scope/tokens/findings/verify, which only a real workflow return can supply.
+// tokens/findings/verify, which only a real workflow return can supply (scope is manifest-
+// derived and present on this row regardless, D4 below, specs/20260902/05-manifest-stamped-
+// scope.md).
 //
 // What this deliberately does NOT do: read git/frontmatter itself (the orchestrator resolves
 // --spec/--tier/--diff-loc/--iteration/--run-id/--milestone/--briefs and passes them in as
@@ -199,6 +201,24 @@
 // message says it is retired), --checkpoint-overrides passed without --checkpoint disposer,
 // --checkpoint-overrides not a non-negative integer, or --checkpoint passed with --profile
 // release (no runId to key).
+//
+// specs/20260902/05-manifest-stamped-scope.md (D2-D4): the review-profile pass scope
+// (full vs. fix-delta) is now derived from the manifest's own `scope` carriers — rows
+// review-legs.js stamped — never from `workflow.scope`, a word the reviewer typed that was
+// never told which pass it was in. `deriveScope` reads every effective (last-per-leg) row that
+// carries a `scope` key: an empty carrier set derives "full" (the strictest, and today's only,
+// set); exactly one distinct value in {"full","fix-delta"} derives that value; two disagreeing
+// values, or a lone value outside the enum, invalidate the whole manifest -> UNVERIFIED — this
+// can only come from a hand-edited manifest or a writer bug, never from `--profile release`,
+// which does not read the key at all (D2/AC-20260902-05-12). On UNVERIFIED (D3), this script now
+// prints exactly one stderr line, `verdict.js: UNVERIFIED — <cause>` — `missing required legs:
+// <a>, <b> (scope <s>)` when the manifest itself is structurally valid but incomplete, or
+// `manifest invalid: <reason>` (an unparseable row, or the scope disagreement/enum cause above)
+// when it is not — stdout and the exit code are untouched. The review ledger row's and the
+// retained artifact's `scope` (D4) are this same manifest-derived value, at the key position
+// documented in this spec's Contracts (after `verdict`/`checkpoint`/`escalated`, before
+// `iteration`), present on every review row including the no-`--workflow` hard-stop row, which
+// never saw a reviewer return to read a scope off in the first place.
 
 const fs = require('fs')
 const path = require('path')
@@ -412,7 +432,13 @@ try {
 }
 const legRows = new Map()
 let manifestValid = true
+// specs/20260902/05-manifest-stamped-scope.md D3: the first row-parse failure names the cause
+// printed on UNVERIFIED's stderr line below (`invalidCause`) — later failures on the same
+// manifest add nothing a session could act on differently, so only the first is kept.
+let invalidCause = null
+let lineNo = 0
 for (const line of manifestRaw.split('\n')) {
+  lineNo++
   if (!line.trim()) continue
   try {
     const row = JSON.parse(line)
@@ -427,6 +453,7 @@ for (const line of manifestRaw.split('\n')) {
     legRows.set(row.leg, row)
   } catch {
     manifestValid = false
+    if (invalidCause === null) invalidCause = 'row ' + lineNo + ' unparseable'
   }
 }
 
@@ -444,6 +471,28 @@ if (workflowPath) {
 }
 
 const survivors = workflow && Array.isArray(workflow.survivors) ? workflow.survivors : []
+
+// ---- pass scope: manifest-derived, never workflow.scope (D2, specs/20260902/05-manifest-
+// stamped-scope.md) ----------------------------------------------------------------------------
+// Never consulted on --profile release (D2/AC-20260902-05-12) — a stray scope key on a release
+// leg row must not perturb RELEASE_LEGS derivation, so this whole block is skipped there and
+// `scope` stays null.
+const SCOPE_ENUM = new Set(['full', 'fix-delta'])
+let scope = null
+if (profile !== 'release') {
+  const scopeValues = [...new Set([...legRows.values()]
+    .filter(row => Object.prototype.hasOwnProperty.call(row, 'scope'))
+    .map(row => row.scope))]
+  if (scopeValues.length === 0) {
+    scope = 'full'
+  } else if (scopeValues.length > 1) {
+    if (manifestValid) { manifestValid = false; invalidCause = 'scope values disagree: ' + scopeValues.join(', ') }
+  } else if (!SCOPE_ENUM.has(scopeValues[0])) {
+    if (manifestValid) { manifestValid = false; invalidCause = 'scope outside the enum: ' + JSON.stringify(scopeValues[0]) }
+  } else {
+    scope = scopeValues[0]
+  }
+}
 
 // ---- required/blocking legs per profile (D3/D7) --------------------------------------------
 //
@@ -466,7 +515,7 @@ const RELEASE_LEGS = ['deploy', 'ready', 'e2e', 'journeys', 'substrate', 'produc
 
 const requiredLegs = profile === 'release'
   ? [...RELEASE_LEGS]
-  : ((workflow && workflow.scope === 'fix-delta')
+  : (scope === 'fix-delta'
       ? REVIEW_LEGS.filter(l => l !== 'reconcile' && l !== 'at-risk')
       : [...REVIEW_LEGS])
 const blockingLegs = profile === 'release' ? new Set(RELEASE_LEGS) : new Set(REVIEW_BLOCKING)
@@ -562,6 +611,19 @@ function derive() {
 }
 
 const word = derive()
+
+// D3 (specs/20260902/05-manifest-stamped-scope.md): UNVERIFIED prints exactly one stderr line
+// naming its cause — the word alone gave a caller nothing to act on. `manifestValid` is false
+// only for the two `invalidCause` sources set above (an unparseable row, or the scope
+// disagreement/enum violation); any other UNVERIFIED comes from `requiredLegs.some` finding an
+// absent row against a structurally-valid manifest, whose scope was therefore derived above.
+if (word === 'UNVERIFIED') {
+  const cause = !manifestValid
+    ? 'manifest invalid: ' + (invalidCause || 'unparseable manifest')
+    : 'missing required legs: ' + requiredLegs.filter(l => !legRows.has(l)).join(', ') +
+      (profile === 'release' ? '' : ' (scope ' + scope + ')')
+  console.error('verdict.js: UNVERIFIED — ' + cause)
+}
 
 // D4 (load-bearing guard, specs/20260822/01-escalate-ledger-row.md): a derived CLEAN under
 // --escalated is refused BEFORE anything prints — spike S1 Case B falsified "CLEAN is
@@ -679,7 +741,9 @@ if (ledger) {
     if (ciRow) row.ci = ciRow.observed
     row.legs = legs
   } else {
-    if (workflow) row.scope = workflow.scope
+    // D4: scope is the manifest-derived value (D2 above), present on every review row —
+    // including a no-workflow hard-stop row, which never carried a scope of its own to read.
+    row.scope = scope
     if (iteration !== null) row.iteration = iteration
     // D1/D3: diff's key order is fixed loc, base, head, dirty — loc is assigned first (when
     // present) so a subsequent base/head/dirty assignment never reorders it; neither flag set
@@ -723,7 +787,7 @@ if (ledger) {
       spec: specArg,
       tier,
       iteration,
-      scope: workflow ? workflow.scope : null,
+      scope, // D4: manifest-derived (D2), equal to row.scope above — never workflow.scope
       verdict: word,
       dispositions: { waived, rejected, fixDispatched },
     }

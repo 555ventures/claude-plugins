@@ -1,6 +1,7 @@
 ---
 date: 2026-09-02
-status: hardened
+status: implementing
+build_base: main
 tier: critical
 area: review-verification
 design: false
@@ -9,6 +10,7 @@ depends_on: []
 depended_on_by: []
 brief: n/a
 open_markers: 0
+diff_base: ad22f0beefab6ec5690c94a93b34178cfe1076c0
 ---
 
 # Manifest-stamped review scope: the verdict reads the pass mode it already ran

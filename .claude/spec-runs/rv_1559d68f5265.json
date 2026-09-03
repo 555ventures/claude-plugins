@@ -1,0 +1,128 @@
+{
+  "runId": "rv_1559d68f5265",
+  "ts": "2026-09-03T00:21:27.373Z",
+  "spec": "specs/20260902/04-host-generators-owner-citations.md",
+  "tier": "critical",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 185,
+    "base": "e1b8a86fdf3fa5ba451829100715faf6c86c4e66",
+    "head": "78b9097b616e87a9b466f30702b351388e4a6ae7",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 0,
+      "observed": {
+        "outOfPlan": 0,
+        "files": []
+      }
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      }
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 144
+      }
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": {
+        "matches": 10
+      }
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": {
+        "files": 44,
+        "testsExecuted": 399
+      }
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      }
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 11,
+        "carried": 9,
+        "sanctioned": 2,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "D8's baseline deletion structurally kills tests/consistency/comment-narration-live.test.js's AC-20260902-02-1 and AC-20260902-03-1 test bodies (dropping a promise a prior spec relies on)",
+        "file": "tests/consistency/comment-narration-live.test.js",
+        "line": 25,
+        "evidence": "specs/20260902/03-plugin-prose-sweep.md D9's own rationale reads '04 deletes the baseline anyway' (line 41) — sibling 03 explicitly anticipates and sanctions this supersession, and it is not a SHALL-CONTINUE-TO regression pin; the retag to AC-20260902-04-5 is recorded in the deviations sidecar and the new test body still asserts zero findings repo-wide plus baseline-file absence, a strictly stronger promise than the two it replaces. node --test tests/consistency/*.test.js — 96/96 pass."
+      },
+      {
+        "claim": "D5's 'one edit, headings byte-identical' constraint on grounding-contract.md is violated",
+        "file": "spec/templates/grounding-contract.md",
+        "line": 68,
+        "evidence": "diff of '^## ' headings between e1b8a86 and HEAD produced no diff — all headings byte-identical; the edit touches only prose within existing sections plus the D11-sanctioned third narrated-line reword, recorded as a locked Decision (D11) in the spec itself."
+      },
+      {
+        "claim": "D2's init.md net line-growth bar (<= +1) is violated",
+        "file": "spec/commands/init.md",
+        "line": 286,
+        "evidence": "e1b8a86:spec/commands/init.md wc -l = 495; HEAD = 496 — net +1, matching A4's fallback path recorded in the deviations sidecar."
+      },
+      {
+        "claim": "contractHash in .claude/spec.config.json does not match the worktree template's current spec-paths contract-hash output",
+        "file": ".claude/spec.config.json",
+        "line": 3,
+        "evidence": "citations-check.js: TOTAL=177 CHECKED=82 SKIP=95 MISS=0; full suite (956 tests) passes including AC-20260902-04-4's live re-derivation; the stamp d84ad1eb648e cross-checked by re-running the generator against the current contract file — identical value."
+      }
+    ],
+    "reviewerCount": 1,
+    "scope": "full",
+    "tokens": 45000
+  }
+}

@@ -57,7 +57,7 @@ notes.json, and the loop is the command's review step.
 | spec/commands/sketch.md | MODIFY | doctrine | D8 |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D10 |
 | tests/fixtures/mocks-notes/notes.sample.json | CREATE | tests | D9 |
-| tests/mocks/mocks-notes.test.js | CREATE | tests | AC-20260902-10-1, AC-20260902-10-5, AC-20260902-10-6 |
+| tests/mocks/mocks-notes.test.js | CREATE | tests | AC-20260902-10-1, AC-20260902-10-5, AC-20260902-10-6, AC-20260902-10-10 |
 | tests/design-atlas.test.js | MODIFY | tests | AC-20260902-10-2, AC-20260902-10-3, AC-20260902-10-4 |
 | tests/consistency/design-doctrine.test.js | MODIFY | tests | AC-20260902-10-7, AC-20260902-10-8, AC-20260902-10-9 |
 
@@ -161,9 +161,8 @@ Mark refusals (D5), exact prefixes: `project note(s) open: N005 — answer the p
 - **AC-20260902-10-6**: WHEN `--mark journey-approved --journey j1` runs with an unresolved
   project note THE SYSTEM SHALL exit 2 with `project note(s) open: N005`; with only an
   `addressed` note on `a` (a screen of j1) it SHALL exit 2 with `unresolved note(s) on j1:
-  N001`; with every note `resolved` it SHALL CONTINUE TO accept; `journey-skinned`,
-  `journey-reviewed`, and `approved` SHALL apply the same rule (approved: any unresolved note
-  anywhere) → `tests/mocks/mocks-notes.test.js`
+  N001`; `journey-skinned`, `journey-reviewed`, and `approved` SHALL apply the same rule
+  (approved: any unresolved note anywhere) → `tests/mocks/mocks-notes.test.js`
 - **AC-20260902-10-7**: WHEN `spec/commands/mocks.md` is read THE SYSTEM SHALL name the four
   bins as literals `mock detail`, `product understanding`, `question back`, `propose to
   decline`, and contain `canon.md first` → `tests/consistency/design-doctrine.test.js`
@@ -174,6 +173,8 @@ Mark refusals (D5), exact prefixes: `project note(s) open: N005 — answer the p
   THE SYSTEM SHALL find `notes open` in each and neither `annotation MCP` nor `Vibe
   Annotations`; `spec/doctrine/mocks.md` SHALL carry `## Mocks: Page Notes`; and
   `citations-check.js` over `spec/` SHALL report `MISS=0` → `tests/consistency/design-doctrine.test.js`
+- **AC-20260902-10-10**: WHEN `--mark journey-approved --journey j1` runs with every note
+  `resolved` THE SYSTEM SHALL CONTINUE TO accept → `tests/mocks/mocks-notes.test.js`
 
 ## Assumptions (escalation triggers)
 

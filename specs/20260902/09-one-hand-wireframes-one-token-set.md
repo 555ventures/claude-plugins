@@ -53,7 +53,7 @@ chrome is rendered from `viewer.css`, and the wire tokens are pinned value-equal
 | spec/scripts/design-atlas.js | MODIFY | scripts | D5: `page()` inlines viewer.css; chrome CSS on `--v-*` roles; gallery/build/serve toolbar |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D8 |
 | tests/mocks/viewer-tokens.test.js | CREATE | tests | AC-20260902-09-4 |
-| tests/design-atlas.test.js | MODIFY | tests | AC-20260902-09-5 |
+| tests/design-atlas.test.js | MODIFY | tests | AC-20260902-09-5, AC-20260902-09-6 |
 | tests/consistency/design-doctrine.test.js | MODIFY | tests | AC-20260902-09-1, AC-20260902-09-2 (banned literals; atlas/sketch/core citations) |
 | tests/consistency/genesis-doctrine.test.js | MODIFY | tests | AC-20260902-09-3 (mocks.md section presence; shared-mocks resolves) |
 
@@ -145,8 +145,9 @@ in-session · {K} check-only dispatches`.
   `wire-tokens.css` → `tests/mocks/viewer-tokens.test.js`
 - **AC-20260902-09-5**: WHEN `design-atlas.js build` and `gallery` emit a page THE SYSTEM
   SHALL include `--v-bg:` in the page's `<style>` and no `#[0-9a-f]{3,8}` literal outside the
-  inlined `:root{…}` block, and two consecutive builds SHALL CONTINUE TO be byte-identical →
-  `tests/design-atlas.test.js`
+  inlined `:root{…}` block → `tests/design-atlas.test.js`
+- **AC-20260902-09-6**: WHEN `design-atlas.js build` runs twice on the same root THE SYSTEM
+  SHALL CONTINUE TO emit byte-identical output → `tests/design-atlas.test.js`
 
 ## Assumptions (escalation triggers)
 

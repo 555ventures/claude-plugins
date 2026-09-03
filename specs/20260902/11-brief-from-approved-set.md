@@ -49,10 +49,10 @@ with a refusal that names the missing item.
 | spec/commands/genesis.md | MODIFY | doctrine | D7: BRIEF derivation note, ≤120 lines |
 | spec/commands/status.md | MODIFY | doctrine | D7: the count line |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D8 |
-| tests/genesis/brief-state.test.js | MODIFY | tests | AC-20260902-11-1, AC-20260902-11-2, AC-20260902-11-3 |
-| tests/genesis/genesis-driver.test.js | MODIFY | tests | AC-20260902-11-4, AC-20260902-11-5 |
+| tests/genesis/brief-state.test.js | MODIFY | tests | AC-20260902-11-1, AC-20260902-11-2, AC-20260902-11-3, AC-20260902-11-10, AC-20260902-11-11 |
+| tests/genesis/genesis-driver.test.js | MODIFY | tests | AC-20260902-11-4, AC-20260902-11-5, AC-20260902-11-12, AC-20260902-11-13 |
 | tests/spec-status.test.js | MODIFY | tests | AC-20260902-11-6, AC-20260902-11-7 |
-| tests/consistency/genesis-doctrine.test.js | MODIFY | tests | AC-20260902-11-1 (template headings pin → eight), AC-20260902-11-8 |
+| tests/consistency/genesis-doctrine.test.js | MODIFY | tests | AC-20260902-11-1 (template headings pin → eight), AC-20260902-11-8, AC-20260902-11-9 |
 
 ## Contracts
 
@@ -119,31 +119,28 @@ price every framework option against these two rows (research contextPaths inclu
 - **AC-20260902-11-1**: WHEN `spec/templates/genesis-brief.md` is read THE SYSTEM SHALL
   contain exactly eight `## ` headings in order (`What I think you're building`, `Coverage`,
   `Non-goals`, `Open Dimensions`, `Research Angles`, `Picks`, `Journeys`, `Non-UI Coverage`)
-  and a six-line all-`dark` Non-UI Coverage block, and the ten-line Coverage block SHALL
-  CONTINUE TO be present → `tests/consistency/genesis-doctrine.test.js` (the AC-20260825-02-2
-  pin is updated in place to eight headings)
+  and a six-line all-`dark` Non-UI Coverage block → `tests/consistency/genesis-doctrine.test.js`
+  (the AC-20260825-02-2 pin is updated in place to eight headings)
 - **AC-20260902-11-2**: WHEN `--mark brief-written` runs on a fresh visual run whose
   `brief.md` lacks `## Journeys` THE SYSTEM SHALL exit 2 naming `## Journeys` and the first
   missing journey; when `## Journeys` omits label `roster` of journey `owner-onboarding` it
   SHALL exit 2 naming `roster` and `owner-onboarding`; when `## Non-UI Coverage` has
-  `- pricing: dark` it SHALL exit 2 naming `pricing`; when all hold it SHALL CONTINUE TO
-  accept (spec 08's checks unchanged); and the BRIEF step text SHALL list every confirmed
-  product row id (`P1`, `P1b`, …) and the journey count → `tests/genesis/brief-state.test.js`
+  `- pricing: dark` it SHALL exit 2 naming `pricing`; and the BRIEF step text SHALL list every
+  confirmed product row id (`P1`, `P1b`, …) and the journey count →
+  `tests/genesis/brief-state.test.js`
 - **AC-20260902-11-3**: WHEN the MENUS step prints for a fresh visual run with `framework`
   open THE SYSTEM SHALL print the `primary-surface` and `platforms-horizon` rows' ids and
-  claims and the literal `price every framework option against these two rows`; for a legacy
-  run it SHALL CONTINUE TO print the unchanged MENUS text → `tests/genesis/brief-state.test.js`
+  claims and the literal `price every framework option against these two rows` →
+  `tests/genesis/brief-state.test.js`
 - **AC-20260902-11-4**: WHEN `--mark roadmap-written` runs on a fresh visual run with seed
   labels `signin invite session-live` and briefs whose surfaces blocks declare `signin invite`
   THE SYSTEM SHALL exit 2 naming `session-live`; with `signin` in two briefs it SHALL exit 2
-  naming `signin` and both files; with every label placed once it SHALL CONTINUE TO run the
-  cycle check and accept → `tests/genesis/genesis-driver.test.js`
+  naming `signin` and both files → `tests/genesis/genesis-driver.test.js`
 - **AC-20260902-11-5**: WHEN `--mark skeleton-landed` runs on a fresh visual run with no
   `design/shell/app.html` THE SYSTEM SHALL exit 2 naming the file and `shell adopt --apply`;
   with a shell but `consent.html` lacking `data-shell` it SHALL exit 2 naming `consent.html`;
   with `canon.md` primitives `read-back card` and `orb` and a manifest holding only `orb` it
-  SHALL exit 2 naming `read-back card`; with every check satisfied it SHALL CONTINUE TO run
-  the zero-day gate → `tests/genesis/genesis-driver.test.js`
+  SHALL exit 2 naming `read-back card` → `tests/genesis/genesis-driver.test.js`
 - **AC-20260902-11-6**: WHEN `spec-status.js` runs on a root whose `design/mocks/ledger.md`
   carries 13 catches (fixture from spec 06, latest `M14` at `THEME`) THE SYSTEM SHALL print
   `🧭 misunderstandings: 13 caught before build (latest M14 at THEME)` between the 🗺️
@@ -158,6 +155,19 @@ price every framework option against these two rows (research contextPaths inclu
   Genesis: Day-Zero Skeleton SHALL contain `shell adopt --apply`; `spec/commands/genesis.md`
   SHALL be ≤120 lines; `citations-check.js` SHALL report `MISS=0` →
   `tests/consistency/genesis-doctrine.test.js`
+- **AC-20260902-11-9**: WHEN `spec/templates/genesis-brief.md` is read THE SYSTEM SHALL
+  CONTINUE TO contain the ten-line Coverage block → `tests/consistency/genesis-doctrine.test.js`
+- **AC-20260902-11-10**: WHEN `--mark brief-written` runs on a fresh visual run whose
+  `brief.md` satisfies every `## Journeys` and `## Non-UI Coverage` check THE SYSTEM SHALL
+  CONTINUE TO accept (spec 08's checks unchanged) → `tests/genesis/brief-state.test.js`
+- **AC-20260902-11-11**: WHEN the MENUS step prints for a legacy run THE SYSTEM SHALL
+  CONTINUE TO print the unchanged MENUS text → `tests/genesis/brief-state.test.js`
+- **AC-20260902-11-12**: WHEN `--mark roadmap-written` runs on a fresh visual run with every
+  seed label placed in exactly one brief THE SYSTEM SHALL CONTINUE TO run the cycle check and
+  accept → `tests/genesis/genesis-driver.test.js`
+- **AC-20260902-11-13**: WHEN `--mark skeleton-landed` runs on a fresh visual run with every
+  shell, `data-shell`, matrix and primitive check satisfied THE SYSTEM SHALL CONTINUE TO run
+  the zero-day gate → `tests/genesis/genesis-driver.test.js`
 
 ## Assumptions (escalation triggers)
 

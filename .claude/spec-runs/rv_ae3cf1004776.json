@@ -1,0 +1,124 @@
+{
+  "runId": "rv_ae3cf1004776",
+  "ts": "2026-09-03T02:14:25.958Z",
+  "spec": "specs/20260902/05-manifest-stamped-scope.md",
+  "tier": "critical",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 1,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 581,
+    "base": "ad22f0beefab6ec5690c94a93b34178cfe1076c0",
+    "head": "991b1a7eb1a0f683069b1c7164bfed93215d0307",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 3,
+      "observed": {
+        "outOfPlan": 1,
+        "files": [
+          "tests/review/escalate-row.test.js"
+        ]
+      }
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      }
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 207
+      }
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": {
+        "matches": 10
+      }
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": {
+        "files": 26,
+        "testsExecuted": 247
+      }
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      }
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 10,
+        "carried": 8,
+        "sanctioned": 2,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "D2 derivation order — the dispositions-refusal pre-check (spec-review-driver.js handleDispositions) passes only --manifest/--workflow with no --waived/--rejected/--fix-dispatched, so it can't reflect the real invocation's disposition counts",
+        "file": "spec/scripts/spec-review-driver.js",
+        "line": 1113,
+        "evidence": "verdict.js's derive() checks `!manifestValid || requiredLegs.some(...)` for UNVERIFIED before the disposition-contradiction guard, and UNVERIFIED depends only on manifestValid/requiredLegs, never on waived/rejected/fixDispatched — so a 0/0/0 pre-check correctly predicts UNVERIFIED regardless of the real mark's disposition values. Confirmed by AC-20260902-05-8's passing test using a hand-edited disagreeing-scope manifest."
+      },
+      {
+        "claim": "tests/review/escalate-row.test.js edit is outside the File Plan",
+        "file": "specs/20260902/05-manifest-stamped-scope.md",
+        "line": 233,
+        "evidence": "scope-reconcile.js flags tests/review/escalate-row.test.js as outOfPlan (exit 3), but the spec's Assumption A4 explicitly pre-authorizes this exact fallback ('stamp scope onto that fixture's hand-written rows in place, retagged') and the deviations sidecar records it verbatim, matching the actual diff — sanctioned departure, not a finding."
+      },
+      {
+        "claim": "spec/commands/replay.md still shows a stale reviewer-return example with scope: \"full\"",
+        "file": "spec/commands/replay.md",
+        "line": 178,
+        "evidence": "Confirmed present via grep; already disclosed in the deviations sidecar as adjacent, not touched — a stray scope is accepted and ignored (AC-20260902-05-11) — a sanctioned, disclosed non-fix, not a new defect."
+      }
+    ],
+    "reviewerCount": 1,
+    "scope": "full",
+    "tokens": 58000
+  }
+}

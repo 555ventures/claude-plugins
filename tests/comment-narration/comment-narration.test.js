@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir, runNode, runBash, gitRepo, read } = require('../helpers')
+const { tmpdir, runNode, runBash, gitRepo, read, ROOT } = require('../helpers')
 
 // Behavioral pins for spec/scripts/comment-narration.js — the plugin scan, the ratchet
 // baseline, the code-identical oracle, the rules-mode scan, and the spec-paths/entrypoints
@@ -385,4 +385,31 @@ test('AC-20260902-01-12: the entrypoints manifest maps comment-narration.js to d
   const doctorMd = read('spec/commands/doctor.md')
   assert.match(doctorMd, /spec-paths comment-narration/,
     'doctor.md must invoke the scanner via spec-paths comment-narration — a hand-rolled path here breaks silently on any script move')
+})
+
+// specs/20260902/04-host-generators-owner-citations.md D2/D3/D4: the three host-generator
+// command surfaces that write Gotchas entries all carry the same owner-citation grammar, so a
+// worker following any one of them writes tag + rule + one owner citation, never a story.
+test('AC-20260902-04-2: spec/commands/review.md, spec/commands/escape.md, and spec/commands/init.md each contain the literal never-narrate grammar', () => {
+  const files = ['spec/commands/review.md', 'spec/commands/escape.md', 'spec/commands/init.md']
+  for (const rel of files) {
+    assert.ok(fs.existsSync(path.join(ROOT, rel)), 'setup: ' + rel + ' must exist for this pin to be meaningful')
+    const src = read(rel)
+    assert.ok(src.includes('never dates, people, hosts, versions, or prior behavior'),
+      'D2/D3/D4: ' + rel + ' must contain the literal "never dates, people, hosts, versions, or prior behavior" — without it this surface still lets a worker write a Gotchas entry that narrates instead of citing an owner: ' + rel)
+  }
+})
+
+// specs/20260902/04-host-generators-owner-citations.md D5: the contract must state the
+// owner-citation duty and must not contain either retired narrated phrase.
+test('AC-20260902-04-3: spec/templates/grounding-contract.md contains the owner-citation duty sentence and neither retired narrated phrase', () => {
+  assert.ok(fs.existsSync(path.join(ROOT, 'spec/templates/grounding-contract.md')),
+    'setup: spec/templates/grounding-contract.md must exist for this pin to be meaningful')
+  const src = read('spec/templates/grounding-contract.md')
+  assert.ok(src.includes('state the current invariant plus one owner citation'),
+    'D5: the contract must state the rule-notes duty verbatim — without this sentence hosts\' rules layers carry no textual source for the owner-citation invariant doctor check 16 enforces: ' + src.slice(0, 200))
+  assert.ok(!src.includes('UpWell, 2026-07'),
+    'D5: the contract\'s own narrated runtime-verification example (a dated host anecdote) must be reworded away — its survival here is exactly the pattern this spec exists to stop the contract itself from teaching: ' + src.slice(0, 200))
+  assert.ok(!src.includes('used to hardcode'),
+    'D5: the contract\'s own "used to hardcode" prior-behavior sentence must be reworded away — its survival here means the contract still narrates history instead of stating the current invariant: ' + src.slice(0, 200))
 })

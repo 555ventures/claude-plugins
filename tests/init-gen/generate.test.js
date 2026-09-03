@@ -114,7 +114,7 @@ test('AC-20260822-02-1: generate against a synthetic host with a valid profile w
   assert.strictEqual(cfg.generatedBy, 'spec@' + version,
     'D3: a green manifest-check must stamp generatedBy as spec@<plugin version> — a wrong or missing stamp means a host can never tell which contract version generated it: ' + JSON.stringify(cfg))
   assert.strictEqual(cfg.contractHash, hash,
-    'D3: contractHash must equal the spec-paths contract-hash output — a mismatch breaks the state-gate hook\'s drift detection for every future session on this host: ' + JSON.stringify(cfg))
+    'AC-20260902-04-4/D3: contractHash must equal the spec-paths contract-hash output — a mismatch breaks the state-gate hook\'s drift detection for every future session on this host: ' + JSON.stringify(cfg))
 
   assert.ok(fs.existsSync(path.join(dir, '.claude/rules/spec-pipeline.md')),
     'the pipeline rules file must be written — a missing rules file leaves every future session in this host ungrounded')
@@ -754,4 +754,24 @@ test('AC-20260823-02-5: an existing .claude/settings.json path that is a directo
     'AC-5: the settings path must be left untouched on this refusal — anything other than a directory here means generate wrote into or replaced it before refusing')
   assert.ok(!fs.existsSync(path.join(dir, '.claude/spec.config.json')),
     'AC-5: a config file appearing here means generation proceeded past the unreadable-settings pre-flight before the check fired')
+})
+
+// specs/20260902/04-host-generators-owner-citations.md D1: renderRulesFile's Gotchas header
+// stops teaching hosts to narrate dates/people/hosts/versions/prior behavior and instead
+// teaches tag + rule + one owner citation.
+test('AC-20260902-04-1: generate renders the minimal-host fixture profile\'s rules file with a Gotchas header naming one owner citation and never a dated story', () => {
+  const dir = newHost('init-gen-generate-gotchas-header')
+  const profile = baseProfile()
+  const profilePath = writeProfile(dir, profile)
+
+  const r = runNode('scripts/init-gen.js', ['generate', '--root', dir, '--profile', profilePath])
+  assert.strictEqual(r.status, 0, 'setup: this generate call must succeed for the rendered rules file to be inspectable: ' + r.stderr)
+
+  const rulesFile = fs.readFileSync(path.join(dir, '.claude/rules/spec-pipeline.md'), 'utf8')
+  assert.ok(rulesFile.includes('one owner citation (spec path, AC-ID, D-number, ADR, run id)'),
+    'D1: the rendered Gotchas header must name the owner-citation grammar verbatim — a host generated without it is never taught that a rule note needs a citation, not a story: ' + rulesFile)
+  assert.ok(rulesFile.includes('Never dates, people, hosts, versions, or prior behavior'),
+    'D1: the rendered Gotchas header must forbid narration verbatim — without this line a generated host has no textual cue that doctor check 16 scans this layer: ' + rulesFile)
+  assert.ok(!rulesFile.includes('dated'),
+    'D1: the rendered Gotchas header must not contain the word "dated" — the retired grammar ("a dated incident") is exactly what this generator must stop planting on every fresh host: ' + rulesFile)
 })

@@ -137,9 +137,10 @@ defective file — that is the only unrecoverable input.
    field above was derived wrong — fix it and re-run, never hand-append around the refusal.
 6. **Close the loop on the prevention delta** (the one write beyond the ledger row, and the
    only one): by `preventedBy` value —
-   - `doctrine` → **draft the one-line Gotchas entry verbatim from session context**
-     (pipeline rules § Gotchas; cite this escape row; tag `[host]` or `[plugin]` by where
-     the wrong assumption came from). Check whether the target section is at cap:
+   - `doctrine` → **draft the one-line Gotchas entry as tag + rule + one owner citation
+     (this escape row's id) — never dates, people, hosts, versions, or prior behavior**
+     (pipeline rules § Gotchas; tag `[host]` or `[plugin]` by where the wrong assumption
+     came from). Check whether the target section is at cap:
      `node "$(spec-paths prose-cap)" --file <host pipelineRules> --section Gotchas`; exit 1
      means it is — evict before appending (on a legacy over-cap host the next review close
      is ratcheted against its verdict-time count, so the append must be paired with at least

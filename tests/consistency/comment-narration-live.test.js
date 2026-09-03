@@ -8,9 +8,11 @@ const { ROOT, runNode } = require('../helpers')
 // Standing enforcement for spec/scripts/comment-narration.js's plugin scan over this
 // repository's real tree.
 // Owner: specs/20260902/01-comment-narration-gate.md, AC-20260902-01-13.
-// Owner: specs/20260902/02-plugin-code-sweep.md, AC-20260902-02-1.
-// Owner: specs/20260902/03-plugin-prose-sweep.md, AC-20260902-03-1 (D9: baseline reduced to
-// the grounding contract file alone, at its real scanned count, once the prose sweep lands).
+// Owner: specs/20260902/04-host-generators-owner-citations.md, AC-20260902-04-5 (D8: the
+// baseline file is deleted; the scan runs with no --baseline flag and finds zero repo-wide —
+// this supersedes specs/20260902/02-plugin-code-sweep.md AC-20260902-02-1 and
+// specs/20260902/03-plugin-prose-sweep.md AC-20260902-03-1, whose ratchet-baseline pins this
+// test body replaces).
 //
 // This file does not classify any narration itself — it only invokes the scanner with the
 // fleet's host and person literals against the tracked ratchet baseline and asserts the exit
@@ -23,43 +25,21 @@ const HOSTS = 'upwell,prax,salon-os,salon os,hearwell,hiwora,zubu,bwm,cctop,auto
 const PEOPLE = 'JJ,founder'
 const CODE_GROUP_RE = /^(spec\/scripts|spec\/bin|scripts|tests)\//
 
-test('AC-20260902-02-1: the plugin scan over this repository with the fleet host and person literals exits 0 against the tracked baseline, the tracked baseline holds no code-group key, and --json names no code-group finding', () => {
+test('AC-20260902-04-5: the plugin scan over this repository with the fleet host and person literals, run with no --baseline flag, exits 0 with zero findings repo-wide, and the tracked baseline file is absent from disk', () => {
   const args = ['--root', ROOT, '--hosts', HOSTS, '--people', PEOPLE]
-  if (fs.existsSync(BASELINE_ABS)) args.push('--baseline', BASELINE_ABS)
   const r = runNode('scripts/comment-narration.js', args)
   assert.strictEqual(r.status, 0,
-    'the plugin scan must exit 0 against the tracked baseline once the sweep leaves no code-group path unbaselined — a nonzero exit means unswept code-group narration remains, and stderr names the offending file: ' + r.stderr)
-
-  const baseline = fs.existsSync(BASELINE_ABS) ? JSON.parse(fs.readFileSync(BASELINE_ABS, 'utf8')) : {}
-  const baselineCodeGroupKeys = Object.keys(baseline).filter((k) => CODE_GROUP_RE.test(k))
-  assert.deepStrictEqual(baselineCodeGroupKeys, [],
-    'the tracked baseline must hold no key under a code-group directory (spec/scripts, spec/bin, scripts, tests) — a surviving key hides a regression the ratchet would otherwise catch: ' + JSON.stringify(baselineCodeGroupKeys))
+    'D8: the plugin scan run with no --baseline flag must exit 0 once the sweep is complete repo-wide — a nonzero exit means narration remains and stderr names the offending file: ' + r.stderr)
 
   const jr = runNode('scripts/comment-narration.js', [...args, '--json'])
   assert.strictEqual(jr.status, 0,
-    'the --json run of the same invocation must also exit 0 — a mismatch against the text-mode exit means --json and text mode disagree about the same scan: ' + jr.stderr)
+    'D8: the --json run of the same no-baseline invocation must also exit 0 — a mismatch against the text-mode exit means --json and text mode disagree about the same scan: ' + jr.stderr)
   const parsed = JSON.parse(jr.stdout)
-  const codeGroupFindings = parsed.findings.filter((f) => CODE_GROUP_RE.test(f.file))
-  assert.strictEqual(codeGroupFindings.length, 0,
-    'no finding may name a file under a code-group directory (spec/scripts, spec/bin, scripts, tests) — a surviving finding means unswept narration remains in a code-group file: ' + JSON.stringify(codeGroupFindings.slice(0, 5)))
-})
+  assert.strictEqual(parsed.total, 0,
+    'D8: the standing scan must find zero narration repo-wide with no baseline in play — a nonzero total means the sweep left findings that only a deleted ratchet was hiding: ' + JSON.stringify(parsed))
 
-test('AC-20260902-03-1: the plugin scan over this repository with the fleet host and person literals leaves the tracked baseline equal to exactly the grounding contract entry, and every other prose-group path reports zero findings', () => {
-  const args = ['--root', ROOT, '--hosts', HOSTS, '--people', PEOPLE]
-  if (fs.existsSync(BASELINE_ABS)) args.push('--baseline', BASELINE_ABS)
-
-  const baseline = fs.existsSync(BASELINE_ABS) ? JSON.parse(fs.readFileSync(BASELINE_ABS, 'utf8')) : {}
-  assert.deepStrictEqual(baseline, { 'spec/templates/grounding-contract.md': 3 },
-    'the tracked baseline must hold exactly the grounding contract entry at its real scanned count — a surviving or drifted key means the prose sweep left another prose-group path unswept or the contract count moved without sibling 04 re-hashing it: ' + JSON.stringify(baseline))
-
-  const jr = runNode('scripts/comment-narration.js', [...args, '--json'])
-  assert.strictEqual(jr.status, 0,
-    'the --json run of the plugin scan must exit 0 against the tracked baseline — a nonzero exit means unswept prose-group narration remains, and stderr names the offending file: ' + jr.stderr)
-  const parsed = JSON.parse(jr.stdout)
-  const findingFiles = [...new Set(parsed.findings.map((f) => f.file))]
-  const otherFindingFiles = findingFiles.filter((f) => f !== 'spec/templates/grounding-contract.md')
-  assert.deepStrictEqual(otherFindingFiles, [],
-    'every prose-group path other than the grounding contract must report zero findings once the sweep lands — a surviving file means narration prose was missed: ' + JSON.stringify(otherFindingFiles))
+  assert.strictEqual(fs.existsSync(BASELINE_ABS), false,
+    'D8: .claude/comment-narration.baseline.json must be absent from disk — a surviving file means the sweep is not actually complete and the plugin still leans on a ratchet instead of a zero-finding standing scan: ' + BASELINE_ABS)
 })
 
 test('AC-20260902-01-13: every path recorded in the tracked comment-narration baseline still exists on disk', () => {

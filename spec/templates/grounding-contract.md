@@ -37,7 +37,7 @@ fails, killed on exit; `readyTimeout` (optional, seconds, default 120).
 
 Every verification claim the pipeline makes must be backed by an executed observation — a
 verification stack composed entirely of static legs can pass a program that cannot start
-(UpWell, 2026-07: 8/8 gate tasks green while `GET /` returned 500 on every commit), and can
+(a host once had every gate task green while its root route returned 500 on every commit), and can
 equally pass a program that starts but cannot cleanly stop. The `runtime` config block is the
 contract for the executed leg:
 
@@ -68,7 +68,7 @@ activation is demonstrated. `/spec:doctor` re-runs it as the activation drift ch
 ## Session grounding (required)
 
 Three deliverables serve **every** Claude session in the host — interactive or pipeline — not
-only spec commands (adopted 2026-07 from the mid-2026 Claude Code baseline: path-scoped rules,
+only spec commands (the Claude Code baseline: path-scoped rules,
 checked-in permissions, generated project skills):
 
 - **Path-scoped rules.** The pipeline-rules file opens with `paths:` frontmatter scoping its
@@ -77,7 +77,10 @@ checked-in permissions, generated project skills):
   additionally live as small per-kind rule files in `.claude/rules/conventions/`, each with
   `paths:` globs derived from the same evidence as the config `routing` — a rule loads only
   when a session touches a matching file. A `paths:` glob matching zero tracked files is
-  drift (`/spec:doctor` flags it: that rule silently never loads).
+  drift (`/spec:doctor` flags it: that rule silently never loads). Rule notes — Gotchas
+  entries, convention bullets, agent constraints, `enforcement.json` notes — state the current invariant plus one owner citation (spec path, AC-ID, D-number, ADR, run id) and
+  never narrate dates, people, hosts, versions, or prior behavior; `/spec:doctor` check 16
+  scans the layer.
 - **Permissions.** `.claude/settings.json` carries a generated `permissions` block: allow
   entries for the exact toolchain commands the config declares (gate / test / setup / boot /
   patterns), deny entries for destructive ops and secrets reads (`.env*`). Init merges into
@@ -98,7 +101,7 @@ init/first-release time — the plugin never invents deploy mechanics.
 
 ## Capabilities (optional — declares stack-shaped facts the pipeline would otherwise assume)
 
-Several commands and scripts used to hardcode a stack shape — GitHub as the forge, a universal
+Without this block, commands and scripts would hardcode a stack shape — GitHub as the forge, a universal
 skip-count format, pnpm-shaped monorepos, Storybook-shaped previews — and on a host where the
 assumption missed, the consuming leg went inert *silently* (audit Class C). `capabilities` is
 one closed block, written by `/spec:init`'s detection pass, read at the single points that

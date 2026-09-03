@@ -19,12 +19,12 @@ around it. **The atlas is the map; `/spec:sketch <brief>` is the workbench** —
 design-brainstorm on one brief's surfaces (mock + brief co-evolve, exit ratification) belongs
 there; the atlas is for seeing the whole product and applying cross-cutting notes.
 
-**Intended model: the session model, plus the planning seat for the sweep** (shared § Model
-Placement — sketch-tier authorship is a planning-seat duty). Regeneration and serving are
-zero-judgment. **Change rounds that are direction-level** (new journey shape, a surface's whole
-posture, cross-screen coherence rulings) are the roadmap-level taste seat — recommend the user
-run them with Fable/Opus; mechanical annotation fixes (copy, spacing, a moved element) run on
-Sonnet dispatch regardless of session model.
+**Intended model: the session model.** Regeneration and serving are zero-judgment; the sweep
+runs entirely in-session, every mock authored and edited by one hand (shared § Design Atlas's
+authorship paragraph, core § Model Placement) — no `Agent` dispatch ever writes a mock.
+**Change rounds that are direction-level** (new journey shape, a surface's whole posture,
+cross-screen coherence rulings) are the roadmap-level taste seat — recommend the user run them
+with Fable/Opus.
 
 **Setup:** run `spec-paths shared-for atlas` and read its output. Run `spec-paths design-atlas`
 once and keep the path — `{atlas}` below. Read `.claude/spec.config.json` if present (optional
@@ -82,7 +82,7 @@ user's input; `sweep` as an argument only skips the gap confirmation.
    handling for bound regions — the real fix, but reopens a spec); a vague or contested note
    recommends "withdraw the note" (nothing changes, but the concern stays unaddressed until it's
    sharper); never silently rewrite a bound mock. Then per mock edit: locate the file by
-   `data-screen-label`, dispatch a Sonnet edit under the design harness (`{atlas} check` after
+   `data-screen-label`, edit it in-session under the design harness (`{atlas} check` after
    every edit), rerun `node {atlas} build`, tell the user to refresh. Direction-level notes →
    record, and route per the model note above rather than silently absorbing them into a
    mechanical fix. When the notes keep converging on ONE brief — a feature brainstorm, not a

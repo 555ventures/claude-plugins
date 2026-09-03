@@ -39,14 +39,14 @@ Fable retainer, the vision consult, and the `ITERATE` catalog loop.
 
 ## Sketch-tier authorship and the shell canon (2026-09-01, specs/20260901/04)
 
-Sketch-tier authorship is a planning-seat duty for both `/spec:atlas`'s gap sweep and
-`/spec:sketch`'s scoped sweep (ADR-0003, superseding specs/20260810/01 D8): the session authors
-the journey-central set in-session (≤5, at least one per declared journey); one sequential
-`Agent {model: "fable"}` dispatch (Opus fallback) authors the overflow with those paths as
-exemplars, never one agent per surface; Sonnet takes mechanical edits only. Every author reads
-the picked position brief (`design/explore/positions.md`, the `design-pick.json` winner's
-section) ahead of tokens, and the report names the position and the author split. Single
-doctrine home: design.md § Design Atlas.
+Authorship of every mock pass — `/spec:atlas`'s gap sweep, `/spec:sketch`'s scoped sweep, and
+`/spec:mocks`'s screens, wireframe or themed — is one in-session hand (ADR-0006,
+specs/20260902/09, superseding ADR-0003's sequential-dispatch split and specs/20260810/01 D8):
+no `Agent` dispatch writes a mock at any stage or tier; subagents run judgment-free checks
+only. Grounding opens with the mocks seed and canon (`design/mocks/seed.md` →
+`design/mocks/canon.md` → research brief → owning brief → doctrine → `tokens.css` → shell
+canon), and every command's report carries one line: `🎨 authored {N} in-session · {K}
+check-only dispatches`. Single doctrine home: design.md § Design Atlas.
 
 Coherence is a shell artifact: `design/shell/<name>.html` (root `data-shell-canon`, named
 `data-slot`s, an empty content slot, non-content slots `data-contract="none"`) plus a linked
@@ -59,6 +59,20 @@ link — as violations at `ratified`/`approved`/`--matrix` and warns at `sketch`
 `shell adopt` (plan table, then `--apply`) migrates pre-shell mocks. The shell canon is
 extracted from the approved set at SCAFFOLD (spec 11); genesis authors `AppShell` from it and
 `/spec:design`'s worker envelope carries `shell`.
+
+## One token set (2026-09-03, specs/20260902/09)
+
+`spec/templates/mocks/viewer.css` is the one token set: shadcn's default zinc values as plain
+CSS custom properties (`--v-*`) plus the full chrome register (cards, 1px borders with a soft
+shadow, filled primary button, badges, inputs, toolbar, status chips). `design-atlas.js`'s
+`page()` inlines it into every chrome page (atlas, galleries, the preview toolbar, the notes
+layer, the sketch workbench), and the chrome's own rules consume only `var(--v-*)` roles — no
+literal color outside the inlined `:root{…}` block, output byte-stable across runs.
+`spec/templates/mocks/wire-tokens.css` carries the same values under flat role names
+(`--bg --fg --muted --muted-bg --border --primary --primary-fg --ring --radius --font`), and
+`wire.css` is the flat register on those roles (dashed `--border` placeholders, `--muted-bg`
+fills, no shadow, no filled button but `.btn.primary`); a test pins the two files value-equal
+per role. Product tokens exist only from THEME and chrome never adopts them.
 
 ## Render gate (2026-08-24, specs/20260824/01)
 

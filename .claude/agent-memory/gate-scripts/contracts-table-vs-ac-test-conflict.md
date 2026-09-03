@@ -3,7 +3,7 @@ name: contracts-table-vs-ac-test-conflict
 description: a spec's Contracts-table quoted message can literally omit a phrase the same spec's Decision (D-row) and AC test both require in every case — resolve by keeping the quoted text verbatim as a prefix and appending the required phrase, then log a deviation
 metadata:
   type: feedback
-  reviewed: 2026-09-01
+  reviewed: 2026-09-03
 ---
 
 specs/20260824/06 D2 said ALL `--base-sha`/`--head-sha` refusals (bad hex, mismatched pair,

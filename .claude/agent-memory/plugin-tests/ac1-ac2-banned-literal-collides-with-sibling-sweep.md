@@ -3,6 +3,7 @@ name: ac1-ac2-banned-literal-collides-with-sibling-sweep
 description: Adding a design.md AC-1-style banned-literal test can trip an unrelated sibling spec's retired-literal repo sweep over the SAME literal — extend that sweep's existing per-literal waivedPaths block, don't invent a new one.
 metadata:
   type: feedback
+  reviewed: 2026-09-03
 ---
 
 Writing a banned-literal test (`assert.ok(!src.includes(literal), ...)`) for one spec's design.md

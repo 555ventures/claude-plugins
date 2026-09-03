@@ -1,6 +1,6 @@
 ---
 date: 2026-09-02
-status: implementing
+status: done
 build_base: main
 tier: standard
 area: mocks
@@ -10,7 +10,7 @@ depends_on: [specs/20260902/07-mocks-command-driver.md]
 depended_on_by: [specs/20260902/10-page-notes-review-loop.md]
 brief: 22
 open_markers: 0
-diff_base: 94601d6120a96fee2c415fec85c9008aa5ad14ae
+diff_base: cb7acb23cc3d497cf98b7b28617099c68ce14550
 ---
 
 # One hand, canon-first wireframes, theme as recomposition, one token set
@@ -197,6 +197,23 @@ the generic unavailable→Opus fallback rule, not authorship — it stays; `docs
 tests, `tests/render/render-inventory.test.js`) is an unrelated use of the word or a file spec
 08 deletes. `executes` hit `tests/design-shell.test.js` (runs design-atlas.js): the chrome
 change touches `page()` only; shell sync/adopt/check outputs are byte-identical — green.
+
+Build and review deviations (folded at close, 2026-09-03, review rv_03c85f8d5896; all three are
+instances of Gotchas entries that already stand — nothing new added to the host rules):
+
+- D8's version target (7.63.0) was stale by build time; the branch stood at 7.67.0, so the
+  build bumped to 7.68.0 (Gotchas: literal version-bump targets race concurrent sessions).
+- A concurrent `main` commit merged mid-build left a date literal in a test comment inside
+  `tests/consistency/genesis-doctrine.test.js` (a File Plan row); the comment-narration sweep
+  reddened on it and the integration step replaced the date with this spec's path as the owner
+  citation — no assertion touched.
+- `diff_base` was stamped at build Phase 0 before four `main` commits were merged into the
+  branch, so review's reconcile leg diffed the sibling's files (`spec-status.js`, its test,
+  brief 24) into this panel. Corrected to the merge-base with `main` and the review restarted
+  cold before any reviewer dispatch (Gotchas: stale `diff_base` pre-image).
+- Review: two fix rounds, both in `spec/commands/atlas.md` — the Model Placement paragraph and
+  the annotation-triage step each still licensed a Sonnet dispatch to edit a mock; the
+  AC-2 literal ban did not cover either phrasing. Both rewritten to in-session wording.
 
 ## Canonical Delta
 

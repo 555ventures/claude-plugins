@@ -38,6 +38,15 @@
 //                  {"unavailable":"no-test-command"} | {"malformed":{"entries":N,"of":M}} — exit is
 //                  FORCED to 1 when files>0 and testsExecuted===0 strictly (D5, emitter-side
 //                  contradiction; an unavailability object is not a zero)
+//   suite          {"leg":"suite","exit":<code>,"observed":{"skips":N|{"unavailable":...},
+//                  "todos":N?,"testsExecuted":N|{"unavailable":"pattern-no-match"|
+//                  "no-format-declared"}}} | {"unavailable":"no-test-command"} — its own wave,
+//                  1b, after wave 1 (reconcile/gate/ci) and before wave 2 (at-risk/patterns);
+//                  runs config.testCommand BARE (no file args) through sh(), typed exactly like
+//                  the gate row; exit is FORCED to 1 when a declared testCountPattern observes
+//                  exactly 0 executed tests on an exit-0 run (the at-risk contradiction rule,
+//                  D5, applied to the whole suite); runs in EVERY scope including --fix-delta;
+//                  BLOCKING (specs/20260903/02-whole-suite-review-leg.md D1-D3)
 //   ac-matrix / skip-reconcile — appended by ac-matrix.js itself (same manifest)
 //   promise-sweep  {"leg":"promise-sweep","exit":<0|1>,"observed":{"rows":N,"carried":C,
 //                  "sanctioned":S,"orphans":O}} — appended by promise-sweep.js itself (same
@@ -64,6 +73,15 @@
 // re-runs everything else in full — a fix-delta pass must re-assert executed state, never
 // inherit it (CROSS-20260727-01).
 //
+// specs/20260903/02-whole-suite-review-leg.md D1/D2/D3: a ninth leg, `suite`, closes the
+// scoped-gate-blind-spot escape class — the gate's {testDirs} glob and at-risk's stem match are
+// both directory/content-shaped, so a repo-wide scanner test outside every File Plan test
+// directory (never naming a changed file) is invisible to both. `suite` runs the host's bare
+// `testCommand` once per legs iteration, in its own wave (1b, never concurrent with another leg
+// that runs host tests), typed like the gate row, and is BLOCKING. A host declaring no
+// `testCommand` gets the typed whole-row alternative {"unavailable":"no-test-command"} — never a
+// silent skip, since `testCommand` is a contract-required config key.
+//
 // specs/20260902/05-manifest-stamped-scope.md D1: every row this script appends
 // through its own `appendRow` writer carries `scope` as its LAST key — "full" with no
 // --fix-delta, "fix-delta" with it — derived from the one `fixDelta` flag this script already
@@ -85,7 +103,7 @@
 // prefixed `review-legs.js:`, and no leg has spawned yet so no manifest row exists. A host with no
 // testEnv registry (or an empty one) sees preflight exit 0 and zero behavior change.
 //
-// Exit codes: 0 = every blocking leg (gate/smoke/ci) green — findings legs may still have
+// Exit codes: 0 = every blocking leg (gate/suite/smoke/ci) green — findings legs may still have
 // findings for disposition · 1 = a blocking leg is red (review hard-stops pre-reviewer) ·
 // 2 = usage error or precondition failure (unreadable config/spec, scope-reconcile exit 2, or
 // env-preflight.js exit 1 — an unprovisioned declared testEnv var)
@@ -190,11 +208,13 @@ async function main() {
   const q = (p) => `"${p}"`
   const reconcilePath = path.join(outDir, 'reconcile.json')
   const gateOutPath = path.join(outDir, 'gate-output.txt')
+  const suiteOutPath = path.join(outDir, 'suite-output.txt')
   const patternsPath = path.join(outDir, 'patterns.txt')
   const atRiskPath = path.join(outDir, 'at-risk.txt')
   // Advertise at-risk.txt only when THIS run wrote it — a reused --out-dir can hold a stale
   // copy from a prior run, and an existence probe would advertise it as this run's evidence.
   let wroteAtRisk = false
+  let wroteSuiteOutput = false
 
   // ---- wave 1 (parallel): reconcile, gate, ci ---------------------------------------------
   // smoke deliberately runs AFTER the gate AND after the at-risk/patterns wave (its own wave
@@ -260,6 +280,29 @@ async function main() {
   }))
 
   await Promise.all(wave1)
+
+  // ---- wave 1b: suite, ALONE — after wave 1 (reconcile/gate/ci), before wave 2 (at-risk/
+  // patterns). Runs in EVERY scope including --fix-delta (D1, specs/20260903/02-whole-suite-
+  // review-leg.md). Never concurrent with another leg that runs host tests — the same collision
+  // class the wave-1/wave-2b comments already document for smoke.
+  if (!config.testCommand) {
+    // D2: the whole-row unavailable alternative — testCommand is a contract-required config key,
+    // so its absence is a broken host, never a silent skip.
+    appendRow('suite', 1, { unavailable: 'no-test-command' })
+  } else {
+    const sr = await sh(config.testCommand)
+    fs.writeFileSync(suiteOutPath, `$ ${config.testCommand}\n\n${sr.out}${sr.err}`)
+    wroteSuiteOutput = true
+    const output = sr.out + sr.err
+    const skipPat = config.capabilities && config.capabilities.skipReportPattern
+    const countPat = config.capabilities && config.capabilities.testCountPattern
+    const testsExecuted = computeTestsExecuted(output, countPat)
+    // D2: exit is FORCED to 1 when a declared testCountPattern observes exactly 0 executed tests
+    // on an exit-0 run — the at-risk emitter-side contradiction rule (D5, specs/20260820/06),
+    // applied to the whole suite: a vacuous-green whole run is the same escape at a wider scope.
+    const exit = (testsExecuted === 0) ? 1 : sr.code
+    appendRow('suite', exit, { ...computeSkips(output, skipPat), testsExecuted })
+  }
 
   // ---- wave 2 (parallel): at-risk + patterns (post-gate; both need reconcile's output) ----
   const wave2 = []
@@ -337,7 +380,7 @@ async function main() {
   // ---- summary ----------------------------------------------------------------------------
   const all = fs.readFileSync(manifest, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
   const byLeg = new Map(all.map(r => [r.leg, r]))
-  const BLOCKING = ['gate', 'smoke', 'ci']
+  const BLOCKING = ['gate', 'suite', 'smoke', 'ci']
   let blockedBy = []
   for (const r of byLeg.values()) {
     const red = r.leg === 'smoke' ? (r.exit !== 0 && r.exit !== 4) : r.exit !== 0
@@ -346,7 +389,7 @@ async function main() {
     console.log(`${red ? (blocking ? '❌' : '⚠️ ') : '✅'} ${r.leg.padEnd(14)} exit=${r.exit} ${JSON.stringify(r.observed)}${red && !blocking ? ' (findings — disposition in review)' : ''}`)
   }
   console.log(`manifest: ${manifest}`)
-  console.log(`outputs: ${outDir}  (reconcile.json, gate-output.txt, smoke.txt, ac-matrix.txt, promise-sweep.txt${config.patternsScript ? ', patterns.txt' : ''}${wroteAtRisk ? ', at-risk.txt' : ''})`)
+  console.log(`outputs: ${outDir}  (reconcile.json, gate-output.txt${wroteSuiteOutput ? ', suite-output.txt' : ''}, smoke.txt, ac-matrix.txt, promise-sweep.txt${config.patternsScript ? ', patterns.txt' : ''}${wroteAtRisk ? ', at-risk.txt' : ''})`)
   if (blockedBy.length) {
     console.log(`RED_BLOCKING: ${blockedBy.join(',')}`)
     process.exit(1)

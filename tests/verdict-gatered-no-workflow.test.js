@@ -40,8 +40,14 @@ function writeManifest(dir, rows) {
 // manifest row's `observed` field becomes a typed JSON object — the two fixtures below are
 // retyped in place; this file's own assertions (GATE_RED presence, no-workflow-green-manifest
 // usage error) key on `exit` alone and never inspect `observed`, so no assertion text changes.
+//
+// specs/20260903/02-whole-suite-review-leg.md D6 (AC-20260903-02-15, SHALL CONTINUE TO): both
+// fixtures gain a green `suite` row — A3's executed check confirms the pre-image verdict.js
+// ignores this unknown row entirely, so this GATE_RED-from-gate-alone pin (and the green-
+// manifest usage-error pin below) both stay green pre-image.
 const SIX_ROWS_GATE_RED = [
   { leg: 'gate', exit: 1, observed: { unavailable: 'gate-unresolvable', detail: 'boot-crash' } },
+  { leg: 'suite', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 1035 } },
   { leg: 'smoke', exit: 4, observed: { result: 'inert' } },
   { leg: 'reconcile', exit: 0, observed: { outOfPlan: 0 } },
   { leg: 'ac-matrix', exit: 0, observed: { uncovered: 0, oracle: 0 } },
@@ -51,7 +57,7 @@ const SIX_ROWS_GATE_RED = [
   { leg: 'promise-sweep', exit: 0, observed: { rows: 1, carried: 1, sanctioned: 0, orphans: 0 } },
 ]
 
-test('JJ-20260808-01 / AC-20260813-03-7 (CONTINUE TO AC-20260815-02-9 / AC-20260817-07-13): review.md Phase 0 step 8\'s documented pre-panel hard-stop invocation (--manifest --ledger, no --workflow) derives GATE_RED and exits 1 from a red gate leg alone', () => {
+test('JJ-20260808-01 / AC-20260813-03-7 (CONTINUE TO AC-20260815-02-9 / AC-20260817-07-13 / AC-20260903-02-15): review.md Phase 0 step 8\'s documented pre-panel hard-stop invocation (--manifest --ledger, no --workflow) derives GATE_RED and exits 1 from a red gate leg alone', () => {
   const dir = tmpdir('verdict-gatered-no-workflow')
   const manifest = writeManifest(dir, SIX_ROWS_GATE_RED)
   const r = runNode(SCRIPT, ['--manifest', manifest, '--ledger', '--spec', 'x.md',
@@ -87,6 +93,7 @@ test('JJ-20260808-01 / AC-20260813-03-7 (CONTINUE TO AC-20260815-02-9 / AC-20260
 // <path to the wf-review return>"). This must never derive CLEAN by manifest evidence alone.
 const SIX_ROWS_GREEN = [
   { leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 0 } },
+  { leg: 'suite', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 1035 } },
   { leg: 'smoke', exit: 4, observed: { result: 'inert' } },
   { leg: 'reconcile', exit: 0, observed: { outOfPlan: 0 } },
   { leg: 'ac-matrix', exit: 0, observed: { uncovered: 0, oracle: 0 } },
@@ -96,7 +103,7 @@ const SIX_ROWS_GREEN = [
   { leg: 'promise-sweep', exit: 0, observed: { rows: 1, carried: 1, sanctioned: 0, orphans: 0 } },
 ]
 
-test('AC-20260813-03-8 (CONTINUE TO AC-20260815-02-9 / AC-20260817-07-13): verdict.js --manifest with no --workflow on a green, complete manifest exits 2 with a usage error naming --workflow as the remedy, never a derived CLEAN', () => {
+test('AC-20260813-03-8 (CONTINUE TO AC-20260815-02-9 / AC-20260817-07-13 / AC-20260903-02-15): verdict.js --manifest with no --workflow on a green, complete manifest exits 2 with a usage error naming --workflow as the remedy, never a derived CLEAN', () => {
   const dir = tmpdir('verdict-gatered-no-workflow')
   const manifest = writeManifest(dir, SIX_ROWS_GREEN)
   const r = runNode(SCRIPT, ['--manifest', manifest])

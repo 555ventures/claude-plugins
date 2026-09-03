@@ -117,8 +117,14 @@ function writeWorkflow(dir, obj) {
 // added here so every existing test below that reuses SIX_GREEN CONTINUES TO derive the same
 // verdict words it already asserts (A2's executed redden spike named this file as one of the
 // three suites the extension reds).
+// specs/20260903/02-whole-suite-review-leg.md D6 (AC-20260903-02-15, self-application, A3):
+// `suite` joins REVIEW_LEGS as the ninth leg, required in BOTH scopes and BLOCKING — A3's
+// executed check confirms the pre-image verdict.js ignores this unknown green row entirely (CLEAN
+// over nine rows unweakened), so this fixture's own pin stays green pre-image, as a SHALL
+// CONTINUE TO pin must be; every downstream reuse of SIX_GREEN inherits the row from here.
 const SIX_GREEN = [
   { leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 40 } },
+  { leg: 'suite', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 1035 } },
   { leg: 'smoke', exit: 4, observed: { result: 'inert' } },
   { leg: 'reconcile', exit: 0, observed: { outOfPlan: 0 } },
   { leg: 'ac-matrix', exit: 0, observed: { uncovered: 0, oracle: 0 } },
@@ -618,8 +624,12 @@ test('AC-20260805-02-8: --ledger normalizes an array-shaped workflow.killed to i
 // byte-identical to AC-20260817-07-11's fix-delta manifest). The row is added here, mirroring
 // SIX_GREEN's own retarget, so AC-20260815-02-6/-7/-8 keep meaning "every OTHER leg genuinely
 // passed" instead of silently asserting a claim D4 makes structurally false.
+// specs/20260903/02-whole-suite-review-leg.md D6 (AC-20260903-02-15, SHALL CONTINUE TO): `suite`
+// joins here too — A3's executed check (an unknown green row is ignored pre-image) keeps this
+// fixture's own pin green pre-image; every downstream reuse of SIX_LEGS_NO_AT_RISK inherits it.
 const SIX_LEGS_NO_AT_RISK = [
   { leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 40 } },
+  { leg: 'suite', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 1035 } },
   { leg: 'smoke', exit: 4, observed: { result: 'inert' } },
   { leg: 'reconcile', exit: 0, observed: { outOfPlan: 0 } },
   { leg: 'ac-matrix', exit: 0, observed: { uncovered: 0, oracle: 0 } },
@@ -1535,4 +1545,62 @@ test('AC-20260824-06-10: WHEN a manifest\'s reconcile row is {"exit":3,"observed
     'the count: ' + waivedThree.stdout + ' / ' + waivedThree.stderr)
   assert.ok(!VERDICT_WORDS.test((waivedThree.stdout.split('\n')[0] || '').trim()),
     'no verdict word may print on the contradictory --waived 3 run: ' + JSON.stringify(waivedThree.stdout))
+})
+
+// ---- specs/20260903/02-whole-suite-review-leg.md D3: the "suite" leg is required in both -----
+// ---- scopes and blocking ----------------------------------------------------------------------
+
+test('AC-20260903-02-7: WHEN a review manifest carries every REVIEW_LEGS row green except that no suite row exists THE SYSTEM SHALL print UNVERIFIED and the stderr line "verdict.js: UNVERIFIED — missing required legs: suite (scope full)", exit 1', () => {
+  const dir = tmpdir('verdict-suite-missing-full')
+  const rows = SIX_GREEN.filter(r => r.leg !== 'suite')
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
+  assert.strictEqual(r.stdout.split('\n')[0], 'UNVERIFIED',
+    'D3: suite is required in the full scope via the same fail-closed presence rule every REVIEW_LEGS entry ' +
+    'carries — a manifest missing it must derive UNVERIFIED even though every other leg is green and the ' +
+    'workflow returned zero-survivor CLEAN: ' + r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 1, 'UNVERIFIED must exit 1 so the close step is mechanically unreachable: ' + r.stderr)
+  assert.strictEqual(r.stderr.trim(), 'verdict.js: UNVERIFIED — missing required legs: suite (scope full)',
+    'AC-20260903-02-7 (literal): the stderr line must name exactly "suite" as the missing leg and "full" as ' +
+    'the scope: ' + JSON.stringify(r.stderr))
+})
+
+test('AC-20260903-02-7 (fix-delta scope): WHEN a fix-delta-scoped manifest is missing the suite row (reconcile/at-risk also absent, as fix-delta requires) THE SYSTEM SHALL print UNVERIFIED and a stderr line naming "suite" and "(scope fix-delta)"', () => {
+  const dir = tmpdir('verdict-suite-missing-fixdelta')
+  const rows = SIX_GREEN.filter(r => r.leg !== 'suite' && r.leg !== 'reconcile' && r.leg !== 'at-risk')
+    .map(r => ({ ...r, scope: 'fix-delta' }))
+  const manifest = writeManifest(dir, rows)
+  const { scope, ...workflowNoScope } = cleanWorkflow([])
+  const workflow = writeWorkflow(dir, workflowNoScope)
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
+  assert.strictEqual(r.stdout.split('\n')[0], 'UNVERIFIED',
+    'D3: suite is required in BOTH scopes, unlike reconcile/at-risk which fix-delta filters out of ' +
+    'requiredLegs — a fix-delta manifest missing the suite row must still derive UNVERIFIED, never CLEAN from ' +
+    'the remaining green legs alone: ' + r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 1, 'UNVERIFIED must exit 1: ' + r.stderr)
+  assert.match(r.stderr, /missing required legs: suite \(scope fix-delta\)/,
+    'AC-20260903-02-7 (literal, fix-delta): the stderr line must name "suite" and "(scope fix-delta)": ' +
+    JSON.stringify(r.stderr))
+})
+
+test('AC-20260903-02-8: WHEN a review manifest is green on every other leg and carries {"leg":"suite","exit":1,"observed":{"skips":0,"todos":0,"testsExecuted":1035}} THE SYSTEM SHALL print GATE_RED and exit 1 with a CLEAN zero-survivor workflow, and SHALL print GATE_RED with no --workflow at all — never HARD_FINDINGS', () => {
+  const dir = tmpdir('verdict-suite-red')
+  const rows = SIX_GREEN.map(r => (r.leg === 'suite'
+    ? { leg: 'suite', exit: 1, observed: { skips: 0, todos: 0, testsExecuted: 1035 } } : r))
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+
+  const withWorkflow = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
+  assert.strictEqual(withWorkflow.stdout.split('\n')[0], 'GATE_RED',
+    'D3/A3: suite is a blocking leg — a red suite row must override an otherwise-CLEAN workflow return and ' +
+    'derive GATE_RED, never HARD_FINDINGS (the pre-image demonstrably derives HARD_FINDINGS for this exact ' +
+    `manifest since it does not know "suite" is blocking, A3): ${withWorkflow.stdout} / ${withWorkflow.stderr}`)
+  assert.strictEqual(withWorkflow.status, 1, 'GATE_RED must exit 1: ' + withWorkflow.stderr)
+
+  const noWorkflow = runNode(SCRIPT, ['--manifest', manifest])
+  assert.strictEqual(noWorkflow.stdout.split('\n')[0], 'GATE_RED',
+    'D3: the hard-stop pass (no --workflow) must also derive GATE_RED from the red suite row alone — a red ' +
+    `blocking leg reaches GATE_RED before a panel would ever be required: ${noWorkflow.stdout} / ${noWorkflow.stderr}`)
+  assert.strictEqual(noWorkflow.status, 1, 'GATE_RED with no --workflow must exit 1: ' + noWorkflow.stderr)
 })

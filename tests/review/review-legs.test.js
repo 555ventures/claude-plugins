@@ -48,6 +48,18 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // the same pattern release-legs.test.js's AC-20260823-01-7 already uses) and has no remote at all,
 // so its HEAD is unpushed by construction — a fake `gh` on PATH branching on argv (the
 // ci-query.test.js A5 pattern) answers `--commit` empty and `--branch main` with a real red run.
+//
+// specs/20260903/02-whole-suite-review-leg.md D1-D3 (AC-20260903-02-1..5, -12): review-legs.js
+// gains a ninth leg, `suite`, its own wave 1b — it runs the host's bare `testCommand` (no file
+// args) once per legs iteration, typed like the gate row, and is BLOCKING (RED_BLOCKING: suite,
+// exit 1). D2's two fail-closed alternatives (no testCommand at all; a declared
+// testCountPattern observing exactly 0 executed tests on an exit-0 run) are pinned directly.
+// AC-2's host is A2's own executed construction: the scanner lives in tests/consistency/ (a
+// SIBLING of the File Plan's tests/inplan/ row, never beside it — a scanner beside the planned
+// test reddens the gate GLOB itself, a different failure) and its own source text never
+// mentions the changed file's path stem, so scope-reconcile's at-risk derivation cannot select
+// it either — the bare `testCommand` is the only leg that ever executes it. The required-leg
+// loop below gains `suite`, retagged AC-20260903-02-12.
 
 const SCRIPT = 'scripts/review-legs.js'
 
@@ -151,10 +163,10 @@ test('AC-20260820-03-1: an unset declared testEnv var makes review-legs.js exit 
 // asserts the gate leg executes the resolved glob form and exits 0 (the bare-directory class),
 // so it is the extraction's own regression pin — tagged in place below, never duplicated, never
 // weakened.
-test('AC-20260820-03-2 (also AC-20260830-02-3, SHALL CONTINUE TO): a green synthetic host produces every required leg row, resolves {testDirs} to the glob form via lib/gate-resolve.js\'s resolveGate(), and exits 0', () => {
+test('AC-20260820-03-2 (also AC-20260830-02-3, AC-20260903-02-12, SHALL CONTINUE TO): a green synthetic host produces every required leg row (now nine, suite included), resolves {testDirs} to the glob form via lib/gate-resolve.js\'s resolveGate(), and exits 0', () => {
   const { dir, base } = makeHost({ testBody: GREEN_TEST })
   const { r, byLeg } = run(dir, base)
-  for (const leg of ['gate', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk', 'promise-sweep']) {
+  for (const leg of ['gate', 'suite', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk', 'promise-sweep']) {
     assert.ok(byLeg.has(leg),
       `the manifest must carry a "${leg}" row — verdict.js's REVIEW_LEGS presence rule derives UNVERIFIED ` +
       `without it, so a review over this manifest could never close: rows=${JSON.stringify([...byLeg.keys()])} ` +
@@ -191,7 +203,7 @@ test('AC-20260820-03-2 (also AC-20260830-02-3, SHALL CONTINUE TO): a green synth
     'every blocking leg is green — review-legs must exit 0 so the review proceeds to the reviewer: ' + r.stdout + r.stderr)
 })
 
-test('the green manifest feeds verdict.js to CLEAN — the two scripts agree on row shapes', () => {
+test('AC-20260903-02-12 (also, SHALL CONTINUE TO): the green manifest feeds verdict.js to CLEAN — the two scripts agree on row shapes, including the new suite row', () => {
   const { dir, base } = makeHost({ testBody: GREEN_TEST })
   const { manifest } = run(dir, base)
   const workflow = path.join(dir, 'workflow.json')
@@ -430,4 +442,240 @@ test('AC-20260902-05-1: a --fix-delta run stamps "scope":"fix-delta" as the last
       `D1: "${leg}" rows carry no scope key under --fix-delta either — these two writers are unchanged by this ` +
       `spec: ${JSON.stringify(row)}`)
   }
+})
+
+// ---- specs/20260903/02-whole-suite-review-leg.md: the "suite" leg ---------------------------
+
+test('AC-20260903-02-1: WHEN review-legs.js runs full scope against a green synthetic host declaring testCommand "node --test" and skipReportPattern with no testCountPattern THE SYSTEM SHALL append exactly one suite row {"leg":"suite","exit":0,"observed":{"skips":0,"todos":0,"testsExecuted":{"unavailable":"no-format-declared"}},"scope":"full"}, write <out-dir>/suite-output.txt whose first line is "$ node --test", and list suite-output.txt in the outputs line', () => {
+  const { dir, base } = makeHost({ testBody: GREEN_TEST })
+  const manifest = path.join(tmpdir('review-legs-suite-out'), 'manifest.jsonl')
+  const outDir = tmpdir('review-legs-suite-outdir')
+  const r = runNode(SCRIPT, ['--root', dir, '--spec', 'specs/20260817/99-test.md',
+    '--base', base, '--manifest', manifest, '--out-dir', outDir])
+  const rows = fs.existsSync(manifest)
+    ? fs.readFileSync(manifest, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
+    : []
+  const suiteRows = rows.filter(x => x.leg === 'suite')
+  assert.strictEqual(suiteRows.length, 1,
+    'D1: exactly one "suite" row must be appended per legs iteration — more than one means the leg ran twice, ' +
+    'fewer means it never ran: ' + JSON.stringify(rows))
+  assert.deepStrictEqual(suiteRows[0],
+    { leg: 'suite', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: { unavailable: 'no-format-declared' } }, scope: 'full' },
+    'AC-20260903-02-1 (literal): the suite row must run the bare testCommand (no file args) and type its ' +
+    'observed exactly like the gate row\'s grammar, with scope "full" as the last key — a mismatch means the ' +
+    'leg observed something other than the whole bare suite: ' + JSON.stringify(suiteRows[0]) + ' / ' + r.stdout + r.stderr)
+  const suiteOutputPath = path.join(outDir, 'suite-output.txt')
+  assert.ok(fs.existsSync(suiteOutputPath),
+    'D1: <out-dir>/suite-output.txt must be written — a red suite row with no retained output is undiagnosable: ' +
+    r.stdout + r.stderr)
+  assert.strictEqual(fs.readFileSync(suiteOutputPath, 'utf8').split('\n')[0], '$ node --test',
+    'D1: suite-output.txt\'s first line must be "$ <testCommand>" verbatim, mirroring at-risk.txt\'s layout: ' +
+    fs.readFileSync(suiteOutputPath, 'utf8').split('\n')[0])
+  assert.match(r.stdout, /outputs:.*suite-output\.txt/,
+    'D1: the summary\'s outputs: line must name suite-output.txt so a session can find the retained evidence ' +
+    'without guessing the filename: ' + r.stdout)
+})
+
+// A2 (executed, this spec's own Assumptions): the scanner must live in a SIBLING directory of
+// the File Plan's tests row (tests/inplan/), never beside it — a scanner beside the planned
+// test reddens the gate GLOB itself (a different failure), and the scanner's own source text
+// must never mention the changed file's path stem or scope-reconcile's at-risk derivation would
+// select it as an ordinary at-risk finding instead of the invisible blind spot this AC pins.
+const SUITE_BLIND_SPEC_BODY = `---
+status: implementing
+tier: standard
+---
+# Suite-blind-spot fixture
+
+## Decisions
+
+| ID | Decision | One-line rationale |
+|----|----------|--------------------|
+| D1 | foo() returns 42 (AC-20260903-98-1) | why |
+
+## File Plan
+
+| File | Action | Layer |
+|---|---|---|
+| src/foo.js | edit | scripts |
+| tests/inplan/foo.test.js | create | tests |
+
+## Acceptance Criteria
+
+- **AC-20260903-98-1**: foo() returns 42.
+`
+
+const SUITE_BLIND_GREEN_TEST = `'use strict'
+const { test } = require('node:test')
+const assert = require('node:assert')
+const foo = require('../../src/foo.js')
+test('AC-20260903-98-1: foo() returns 42', () => { assert.strictEqual(foo(), 42) })
+`
+
+// The scanner walks the whole tree for a planted literal — never mentioning "foo" (the changed
+// file's stem) anywhere in its own source, so scope-reconcile's content-scan at-risk derivation
+// cannot select it.
+const SUITE_BLIND_SCANNER = `'use strict'
+const { test } = require('node:test')
+const assert = require('node:assert')
+const fs = require('node:fs')
+const path = require('node:path')
+function walk(dir, out) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === '.git' || entry.name === 'node_modules') continue
+    const p = path.join(dir, entry.name)
+    if (entry.isDirectory()) walk(p, out)
+    else out.push(p)
+  }
+  return out
+}
+test('no tracked file names the forbidden literal', () => {
+  const root = path.join(__dirname, '..', '..')
+  const hit = walk(root, []).some((p) => fs.readFileSync(p, 'utf8').includes('AC2_SUITE_BLIND_SPOT_LITERAL'))
+  assert.strictEqual(hit, false)
+})
+`
+
+function makeSuiteBlindSpotHost() {
+  const dir = tmpdir('review-legs-suite-blind')
+  const g = gitRepo(dir)
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'tests/inplan'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'tests/consistency'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify({
+    gateCommand: 'node --test {testDirs}',
+    testCommand: 'node --test',
+    runtime: { inert: 'plugin repo — nothing boots' },
+    capabilities: { forge: 'none', skipReportPattern: 'ℹ skipped (\\d+)' },
+  }))
+  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 41\n')
+  // Predates the diff and names no changed file by path stem — a repo-wide narration scanner,
+  // never an at-risk candidate.
+  fs.writeFileSync(path.join(dir, 'tests/consistency/scanner.test.js'), SUITE_BLIND_SCANNER)
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const base = g('rev-parse', 'HEAD').trim()
+  fs.mkdirSync(path.join(dir, 'specs/20260903'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'specs/20260903/98-suite-blind.md'), SUITE_BLIND_SPEC_BODY)
+  // The diff introduces the forbidden literal into a File Plan file — the scanner above catches
+  // it, but the gate glob (tests/inplan/*.test.js) and the at-risk stem match never see it.
+  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 42 // AC2_SUITE_BLIND_SPOT_LITERAL\n')
+  fs.writeFileSync(path.join(dir, 'tests/inplan/foo.test.js'), SUITE_BLIND_GREEN_TEST)
+  g('add', '-A'); g('commit', '-q', '-m', 'implement')
+  return { dir, base }
+}
+
+test('AC-20260903-02-2: WHEN the host\'s File Plan names tests/inplan/foo.test.js and a predating tests/consistency/scanner.test.js (naming no changed file) fails because of a literal the diff introduces THE SYSTEM SHALL append gate exit:0, at-risk observed.files 0, suite exit:1, print RED_BLOCKING: suite, and exit 1', () => {
+  const { dir, base } = makeSuiteBlindSpotHost()
+  const manifest = path.join(tmpdir('review-legs-suite-blind-out'), 'manifest.jsonl')
+  const r = runNode(SCRIPT, ['--root', dir, '--spec', 'specs/20260903/98-suite-blind.md',
+    '--base', base, '--manifest', manifest])
+  const rows = fs.existsSync(manifest)
+    ? fs.readFileSync(manifest, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
+    : []
+  const byLeg = new Map(rows.map(x => [x.leg, x]))
+  assert.ok(byLeg.get('gate'), 'the manifest must carry a "gate" row: ' + JSON.stringify(rows) + ' / ' + r.stdout + r.stderr)
+  assert.strictEqual(byLeg.get('gate').exit, 0,
+    'A2 (executed): the gate glob resolves only to tests/inplan/*.test.js — a sibling scanner outside that ' +
+    'directory must never redden it: ' + JSON.stringify(byLeg.get('gate')) + ' / ' + r.stdout + r.stderr)
+  assert.ok(byLeg.get('at-risk'), 'the manifest must carry an "at-risk" row: ' + JSON.stringify(rows))
+  assert.strictEqual(byLeg.get('at-risk').observed.files, 0,
+    'A2 (executed): the scanner names no changed file by path stem, so scope-reconcile\'s at-risk derivation ' +
+    'must never select it — observed.files must be 0: ' + JSON.stringify(byLeg.get('at-risk')))
+  assert.ok(byLeg.get('suite'), 'the manifest must carry a "suite" row: ' + JSON.stringify(rows) + ' / ' + r.stdout + r.stderr)
+  assert.strictEqual(byLeg.get('suite').exit, 1,
+    'D1: the bare testCommand (node --test, whole repo) must also run the scanner test — this is the one ' +
+    'observation invisible to both gate and at-risk, so it alone must redden: ' + JSON.stringify(byLeg.get('suite')))
+  assert.match(r.stdout, /RED_BLOCKING: .*suite/,
+    'D3: suite is a blocking leg — a red suite row must name itself in the RED_BLOCKING summary line: ' + r.stdout)
+  assert.strictEqual(r.status, 1,
+    'a red blocking suite leg must hard-stop review-legs.js at exit 1, before any reviewer spend: ' + r.stdout + r.stderr)
+})
+
+test('AC-20260903-02-3: WHEN review-legs.js runs with --fix-delta THE SYSTEM SHALL still append the suite row with scope:"fix-delta" as its last key, while reconcile/at-risk stay absent', () => {
+  const { dir, base } = makeHost({ testBody: GREEN_TEST })
+  const { r, byLeg } = run(dir, base, ['--fix-delta'])
+  const row = byLeg.get('suite')
+  assert.ok(row, 'the manifest must carry a "suite" row under --fix-delta — the leg runs in EVERY scope, ' +
+    'unlike reconcile/at-risk: ' + r.stdout + r.stderr)
+  assert.strictEqual(row.exit, 0, 'a green host must keep the suite leg green under --fix-delta: ' + JSON.stringify(row))
+  assert.strictEqual(row.scope, 'fix-delta',
+    'D1: the suite row must stamp scope:"fix-delta" under --fix-delta: ' + JSON.stringify(row))
+  assert.strictEqual(Object.keys(row).at(-1), 'scope',
+    'D1: scope must be the LAST key on the suite row too: ' + JSON.stringify(row))
+  assert.ok(!byLeg.has('reconcile') && !byLeg.has('at-risk'),
+    'fix-delta must still skip reconcile/at-risk while running suite: ' + JSON.stringify([...byLeg.keys()]))
+})
+
+function makeHostNoTestCommand() {
+  const dir = tmpdir('review-legs-no-testcmd')
+  const g = gitRepo(dir)
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify({
+    gateCommand: 'node --test {testDirs}',
+    runtime: { inert: 'plugin repo — nothing boots' },
+    capabilities: { forge: 'none', skipReportPattern: 'ℹ skipped (\\d+)' },
+  }))
+  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 41\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const base = g('rev-parse', 'HEAD').trim()
+  fs.mkdirSync(path.join(dir, 'specs/20260817'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'specs/20260817/99-test.md'), SPEC_BODY)
+  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 42\n')
+  fs.writeFileSync(path.join(dir, 'tests/foo.test.js'), GREEN_TEST)
+  g('add', '-A'); g('commit', '-q', '-m', 'implement')
+  return { dir, base }
+}
+
+test('AC-20260903-02-4: WHEN the host config declares gateCommand but no testCommand THE SYSTEM SHALL append {"leg":"suite","exit":1,"observed":{"unavailable":"no-test-command"},"scope":"full"}, print RED_BLOCKING: suite, and exit 1', () => {
+  const { dir, base } = makeHostNoTestCommand()
+  const { r, byLeg } = run(dir, base)
+  assert.deepStrictEqual(byLeg.get('suite'),
+    { leg: 'suite', exit: 1, observed: { unavailable: 'no-test-command' }, scope: 'full' },
+    'D2: a host declaring no testCommand at all must fail closed with the typed whole-row alternative, never a ' +
+    'silent skip — testCommand is a contract-required config key: ' + JSON.stringify(byLeg.get('suite')) + ' / ' + r.stdout + r.stderr)
+  assert.match(r.stdout, /RED_BLOCKING: .*suite/,
+    'D3: suite is blocking — a missing testCommand must hard-stop the review, not degrade to a finding: ' + r.stdout)
+  assert.strictEqual(r.status, 1, 'a red blocking suite leg must exit 1: ' + r.stdout + r.stderr)
+})
+
+function makeSuiteCountHost(printLine) {
+  const dir = tmpdir('review-legs-suite-count')
+  const g = gitRepo(dir)
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify({
+    gateCommand: 'node --test {testDirs}',
+    testCommand: `bash -c "echo '${printLine}'"`,
+    runtime: { inert: 'plugin repo — nothing boots' },
+    capabilities: { forge: 'none', skipReportPattern: 'none', testCountPattern: 'ℹ tests (\\d+)' },
+  }))
+  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 41\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const base = g('rev-parse', 'HEAD').trim()
+  fs.mkdirSync(path.join(dir, 'specs/20260817'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'specs/20260817/99-test.md'), SPEC_BODY)
+  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 42\n')
+  fs.writeFileSync(path.join(dir, 'tests/foo.test.js'), GREEN_TEST)
+  g('add', '-A'); g('commit', '-q', '-m', 'implement')
+  return { dir, base }
+}
+
+test('AC-20260903-02-5: WHEN the host declares testCountPattern and its bare testCommand exits 0 printing "ℹ tests 0" THE SYSTEM SHALL append the suite row with exit:1 and observed.testsExecuted 0; WHEN the same shape prints "ℹ tests 3" THE SYSTEM SHALL keep exit:0 with testsExecuted 3', () => {
+  const zero = makeSuiteCountHost('ℹ tests 0')
+  const zeroRun = run(zero.dir, zero.base)
+  assert.deepStrictEqual(zeroRun.byLeg.get('suite'),
+    { leg: 'suite', exit: 1, observed: { skips: { unavailable: 'no-format-declared' }, testsExecuted: 0 }, scope: 'full' },
+    'D2: a declared testCountPattern observing exactly 0 executed tests on the bare suite invocation must force ' +
+    'exit to 1, never a vacuous green: ' + JSON.stringify(zeroRun.byLeg.get('suite')) + ' / ' + zeroRun.r.stdout + zeroRun.r.stderr)
+
+  const three = makeSuiteCountHost('ℹ tests 3')
+  const threeRun = run(three.dir, three.base)
+  assert.deepStrictEqual(threeRun.byLeg.get('suite'),
+    { leg: 'suite', exit: 0, observed: { skips: { unavailable: 'no-format-declared' }, testsExecuted: 3 }, scope: 'full' },
+    'D2: the same declared pattern observing a nonzero executed count must keep the child\'s real exit code (0) ' +
+    'with the observed count carried through, never forced: ' + JSON.stringify(threeRun.byLeg.get('suite')) + ' / ' + threeRun.r.stdout + threeRun.r.stderr)
 })

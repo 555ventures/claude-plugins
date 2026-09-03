@@ -2069,7 +2069,12 @@ test('AC-20260819-03-13: --record exits 2 naming the violated requirement when -
 // and picks the fewest, tying to derived-first then corpus file order; every corpus class starts
 // at 0 even with zero rows recorded for it. This mode does not exist at HEAD (usage/exit 2 on the
 // unrecognized flag today), so every assertion below is red on MODE_FLAGS not knowing --pick-class.
-test('AC-20260901-08-4: --pick-class picks the fewest-measurement-rows class, tying derived-first then corpus order, and ignores non-measurement rows entirely', () => {
+// specs/20260903/02-whole-suite-review-leg.md D10: the corpus gains a ninth class,
+// scoped-gate-blind-spot, derived:true and last in file order — every fixture below that seeds
+// one row per derived class to keep a hand-authored class winning the tie must seed it beside
+// prefix-collision-coverage-fail-open and server-code-in-client-bundle, or scoped-gate-blind-spot
+// (0 rows, derived-first) wins the tie instead.
+test('AC-20260901-08-4 (also AC-20260903-02-17): --pick-class picks the fewest-measurement-rows class, tying derived-first then corpus order, and ignores non-measurement rows entirely', () => {
   const emptyDir = fs.realpathSync(tmpdir('replay-pickclass-empty'))
   const empty = runNode(SCRIPT, ['--pick-class', '--root', emptyDir])
   assert.strictEqual(empty.status, 0, 'D3: --pick-class over an empty ledger must succeed: ' + empty.stderr)
@@ -2086,6 +2091,7 @@ test('AC-20260901-08-4: --pick-class picks the fewest-measurement-rows class, ty
     replayLedgerRow(5, { class: 'boundary-shift', outcome: 'caught' }),
     replayLedgerRow(6, { class: 'dead-wiring', outcome: 'caught' }),
     replayLedgerRow(8, { class: 'server-code-in-client-bundle', outcome: 'caught' }),
+    replayLedgerRow(9, { class: 'scoped-gate-blind-spot', outcome: 'caught' }),
     // doc-contract-lie has zero rows; a setup-failed row for it must not count as a measurement.
     replayLedgerRow(7, { class: 'doc-contract-lie', outcome: 'setup-failed', legs: 'none' }),
   ])
@@ -2100,6 +2106,7 @@ test('AC-20260901-08-4: --pick-class picks the fewest-measurement-rows class, ty
   writeLedger(orderDir, [
     replayLedgerRow(1, { class: 'prefix-collision-coverage-fail-open', outcome: 'caught' }),
     replayLedgerRow(2, { class: 'server-code-in-client-bundle', outcome: 'caught' }),
+    replayLedgerRow(3, { class: 'scoped-gate-blind-spot', outcome: 'caught' }),
   ])
   const order = runNode(SCRIPT, ['--pick-class', '--root', orderDir])
   assert.strictEqual(order.status, 0, 'D3: --pick-class over this ledger must succeed: ' + order.stderr)
@@ -2610,16 +2617,20 @@ test('direct fix: --setup --overlay materializes .claude/agent-memory/ rows whil
   assert.strictEqual(teardown.status, 0, 'teardown must still remove the overlay worktree: ' + teardown.stderr)
 })
 
-test('direct fix: --pick-class skips the ids in spec.config.json replay.inapplicableClasses, prints them as skipped=, and refuses an id the corpus does not carry or a list that rules out every class', () => {
+// specs/20260903/02-whole-suite-review-leg.md D10 (also AC-20260903-02-17): the corpus's third
+// derived class, scoped-gate-blind-spot, joins the other two derived ids in the declared
+// inapplicableClasses list and the expected skipped= string (corpus file order, which this test's
+// script prints them in).
+test('direct fix: --pick-class skips the ids in spec.config.json replay.inapplicableClasses, prints them as skipped=, and refuses an id the corpus does not carry or a list that rules out every class (also AC-20260903-02-17)', () => {
   const skipDir = fs.realpathSync(tmpdir('replay-pickclass-skip'))
   fs.mkdirSync(path.join(skipDir, '.claude'), { recursive: true })
   fs.writeFileSync(path.join(skipDir, '.claude/spec.config.json'),
-    JSON.stringify({ replay: { inapplicableClasses: ['prefix-collision-coverage-fail-open', 'server-code-in-client-bundle'] } }))
+    JSON.stringify({ replay: { inapplicableClasses: ['prefix-collision-coverage-fail-open', 'server-code-in-client-bundle', 'scoped-gate-blind-spot'] } }))
   const skip = runNode(SCRIPT, ['--pick-class', '--root', skipDir])
   assert.strictEqual(skip.status, 0, 'a valid inapplicable list must not refuse: ' + skip.stderr)
-  assert.match(skip.stdout, /^class=promise-carried-not-delivered derived=false rows=0 skipped=prefix-collision-coverage-fail-open,server-code-in-client-bundle$/m,
-    'with both derived classes ruled out the first hand-authored class wins at 0 rows, and the skipped ids ' +
-    'are printed so the exclusion is visible in the step output: ' + skip.stdout)
+  assert.match(skip.stdout, /^class=promise-carried-not-delivered derived=false rows=0 skipped=prefix-collision-coverage-fail-open,server-code-in-client-bundle,scoped-gate-blind-spot$/m,
+    'with all three derived classes ruled out the first hand-authored class wins at 0 rows, and the skipped ids ' +
+    'are printed (corpus file order) so the exclusion is visible in the step output: ' + skip.stdout)
 
   const noConfigDir = fs.realpathSync(tmpdir('replay-pickclass-noconfig'))
   const plain = runNode(SCRIPT, ['--pick-class', '--root', noConfigDir])

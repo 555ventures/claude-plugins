@@ -1,0 +1,7 @@
+# Deviations — 02-whole-suite-review-leg
+
+- D9 version target 7.71.0 taken by the sibling branch spec/11 (queued merge); bumped to 7.72.0 per pipeline-rules Gotcha (version literal is a target, not a pin).
+- A6's if-false clause taken: tests/review/review-legs-at-risk-argv.test.js joined the File Plan as a MODIFY row under AC-20260903-02-13 — its malformed-entry test asserted the recorder log did not exist, and the suite leg's bare invocation now creates it with one empty line; the assertion became "no with-args line", never weakened on the at-risk claim.
+- AC-20260903-02-10's fixture as first authored declared the always-red `testCommand` from the start, so the suite leg hard-stopped LEGS before CLOSE was reachable; the fixture now reaches CLOSE on a green `testCommand` and rewrites the config to `bash always-red.sh` before `--mark closed`. The AC's promise is unchanged.
+- AC-20260903-02-11's planted scanner asserted with no message, so `node --test`'s reporter never printed the planted literal into `suite-output.txt`; the scanner's assert message now carries the literal. Test-authoring lesson, not a behavior change.
+- Final gate round 1: tests/replay/replay.test.js joined the File Plan under AC-20260903-02-17 — its `--pick-class` fixtures enumerate the derived classes by hand (seeded ledger rows, the `inapplicableClasses` list), the exhaustive-live-set class the Gotchas record; each fixture grew by the one id in place and was retagged.

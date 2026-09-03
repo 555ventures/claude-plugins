@@ -174,6 +174,12 @@ test('AC-20260820-06-5 (companion, retag of AC-20260820-03-11): review-legs.js a
 // Mirrors tests/review/review-legs-at-risk-argv.test.js's host shape: an at-risk test file must
 // predate the diff, live OUTSIDE the File Plan, and content-reference the changed file's stem —
 // scope-reconcile.js's at-risk derivation requires exactly that shape.
+//
+// specs/20260903/02-whole-suite-review-leg.md D1/D6 (AC-20260903-02-16): the same recorder is
+// now also the host's `suite` leg invocation (bare, no file args) — it must stay GREEN there
+// (printing "ℹ tests 3" when declared) so this file's at-risk contradiction assertions stay
+// isolated from the new leg's own: the at-risk row's forced-red exit must come from at-risk's
+// own captured count alone, never leak from (or be masked by) the suite row's state.
 
 function makeAtRiskHost({ testCountPattern, recorderBody, recorderExitCode }) {
   const dir = tmpdir('legs-verdict-pair-atrisk')
@@ -215,10 +221,14 @@ function runLegsAtRisk(dir, base) {
   return { r, manifest }
 }
 
-test('AC-20260820-06-6: a synthetic host declaring testCountPattern, with one at-risk file, whose testCommand exits 0 while printing a captured executed-count of 0 emits {"leg":"at-risk","exit":1,"observed":{"files":1,"testsExecuted":0}}, and verdict.js pools at least 1 leg finding from it — the emitter forces the exit itself, never a vacuous green', () => {
+test('AC-20260820-06-6 (also AC-20260903-02-16, SHALL CONTINUE TO): a synthetic host declaring testCountPattern, with one at-risk file, whose testCommand exits 0 while printing a captured executed-count of 0 emits {"leg":"at-risk","exit":1,"observed":{"files":1,"testsExecuted":0}}, verdict.js pools at least 1 leg finding from it, and the SAME recorder invoked bare (the suite leg) prints "ℹ tests 3" and stays green — the emitter forces the at-risk exit itself, never a vacuous green, and the two legs\' contradiction checks stay isolated', () => {
   const { dir, base } = makeAtRiskHost({
-    testCountPattern: 'RAN_MARKER: (\\d+)',
-    recorderBody: 'process.stdout.write("RAN_MARKER: 0\\n")\nprocess.exit(0)\n',
+    testCountPattern: 'ℹ tests (\\d+)',
+    // Bare (no argv — the suite leg) prints a nonzero count and stays green; with file args
+    // (the at-risk leg) prints a captured executed-count of 0 while still exiting 0 itself.
+    recorderBody: 'const args = process.argv.slice(2)\n' +
+      'if (args.length > 0) { process.stdout.write("ℹ tests 0\\n"); process.exit(0) }\n' +
+      'else { process.stdout.write("ℹ tests 3\\n"); process.exit(0) }\n',
   })
   const { r, manifest } = runLegsAtRisk(dir, base)
   const rows = fs.readFileSync(manifest, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
@@ -232,6 +242,20 @@ test('AC-20260820-06-6: a synthetic host declaring testCountPattern, with one at
     'testsExecuted === 0 STRICTLY, never a falsy check) so this is a same-run red, never the 2026-08-16 escape\'s ' +
     'vacuous green (exit:0, observed:"files=1"); D1: a full-scope run must stamp scope:"full" as this row\'s ' +
     `last key: ${JSON.stringify(row)}`)
+
+  // Suite-row EXISTENCE is pinned by the suite-row tests in review-legs.test.js; this pin is
+  // conditional so it holds both pre-image (no row) and post-image (a green row with this exact
+  // shape) — never asserting the row must exist here.
+  const suiteRows = rows.filter(x => x.leg === 'suite')
+  for (const suiteRow of suiteRows) {
+    assert.strictEqual(suiteRow.exit, 0,
+      'AC-20260903-02-16: the bare (suite) invocation of the identical recorder must print "ℹ tests 3" and stay ' +
+      'green — the at-risk leg\'s own forced-red contradiction (files>0, testsExecuted 0) must never leak onto ' +
+      `the suite row, whose own captured count is genuinely nonzero: ${JSON.stringify(suiteRow)}`)
+    assert.deepStrictEqual(suiteRow, { leg: 'suite', exit: 0, observed: { skips: { unavailable: 'no-format-declared' }, testsExecuted: 3 }, scope: 'full' },
+      'AC-20260903-02-16: when a suite row is present, its shape must be exactly this — a mismatch means the ' +
+      `bare invocation's output or typing drifted: ${JSON.stringify(suiteRow)}`)
+  }
 
   const workflow = path.join(dir, 'workflow.json')
   fs.writeFileSync(workflow, JSON.stringify({ verdict: 'CLEAN', survivors: [], killed: 0, reviewerCount: 1, scope: 'full' }))
@@ -247,10 +271,12 @@ test('AC-20260820-06-6: a synthetic host declaring testCountPattern, with one at
     `no new rule for this, per D5\'s rationale ("a red non-blocking row already pools"): ${JSON.stringify(ledgerRow.findings)}`)
 })
 
-test('AC-20260820-06-7: a synthetic host declaring no testCountPattern gives the at-risk row the child\'s real exit code (1) with observed {"files":1,"testsExecuted":{"unavailable":"no-format-declared"}} — no contradiction check is possible without an observation', () => {
+test('AC-20260820-06-7 (also AC-20260903-02-16, SHALL CONTINUE TO): a synthetic host declaring no testCountPattern gives the at-risk row the child\'s real exit code (1) with observed {"files":1,"testsExecuted":{"unavailable":"no-format-declared"}} — no contradiction check is possible without an observation — and the same recorder invoked bare (the suite leg) still exits 0', () => {
   const { dir, base } = makeAtRiskHost({
     testCountPattern: null,
-    recorderBody: 'process.stdout.write("some unrelated output\\n")\nprocess.exit(1)\n',
+    recorderBody: 'const args = process.argv.slice(2)\n' +
+      'if (args.length > 0) { process.stdout.write("some unrelated output\\n"); process.exit(1) }\n' +
+      'else { process.stdout.write("ℹ tests 3\\n"); process.exit(0) }\n',
   })
   const { r, manifest } = runLegsAtRisk(dir, base)
   const rows = fs.readFileSync(manifest, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
@@ -266,6 +292,16 @@ test('AC-20260820-06-7: a synthetic host declaring no testCountPattern gives the
     'contradiction only applies when an executed-count observation actually exists; with none, there is nothing ' +
     'to contradict, so the exit must never be forced; D1: a full-scope run must stamp scope:"full" as this ' +
     `row's last key: ${JSON.stringify(row)}`)
+
+  // Suite-row EXISTENCE is pinned by the suite-row tests in review-legs.test.js; this pin is
+  // conditional so it holds both pre-image (no row) and post-image (a green row) — never
+  // asserting the row must exist here.
+  const suiteRows = rows.filter(x => x.leg === 'suite')
+  for (const suiteRow of suiteRows) {
+    assert.strictEqual(suiteRow.exit, 0,
+      'AC-20260903-02-16: the bare (suite) invocation of the identical recorder must exit 0 (its own branch ' +
+      `never runs the at-risk-only process.exit(1) path) — the at-risk row's red exit must never leak onto it: ${JSON.stringify(suiteRow)}`)
+  }
 })
 
 // D2 (AC-20260902-05-2): end-to-end, the whole point of the manifest-derived scope — a real

@@ -17,7 +17,7 @@ const assert = require('node:assert')
 
 const { CORPUS_BAR, corpusPath, parseCorpus } = require('../../spec/scripts/lib/replay-corpus')
 
-test('AC-20260901-08-1: WHEN parseCorpus reads the shipped replay-corpus.md THE SYSTEM SHALL return eight classes in file order — the six Contracts ids with derived:false, followed by prefix-collision-coverage-fail-open and server-code-in-client-bundle with derived:true', () => {
+test('AC-20260901-08-1 (also AC-20260903-02-17, updated in place and retagged): WHEN parseCorpus reads the shipped replay-corpus.md THE SYSTEM SHALL return nine classes in file order — the six Contracts ids with derived:false, followed by prefix-collision-coverage-fail-open, server-code-in-client-bundle, and scoped-gate-blind-spot with derived:true, and the last section\'s text SHALL contain "inapplicableClasses" and "suite"', () => {
   const fs = require('node:fs')
   const shippedPath = corpusPath()
   assert.ok(fs.existsSync(shippedPath),
@@ -30,9 +30,10 @@ test('AC-20260901-08-1: WHEN parseCorpus reads the shipped replay-corpus.md THE 
   assert.deepStrictEqual(ids, [
     'promise-carried-not-delivered', 'self-consistent-polarity', 'silent-fallback',
     'boundary-shift', 'dead-wiring', 'doc-contract-lie',
-    'prefix-collision-coverage-fail-open', 'server-code-in-client-bundle',
-  ], `D1/D5: the shipped corpus must parse to exactly these eight ids in FILE ORDER — the six ` +
-    `hand-authored classes followed by the derived classes (D5's first, then the escape-backfill one); ` +
+    'prefix-collision-coverage-fail-open', 'server-code-in-client-bundle', 'scoped-gate-blind-spot',
+  ], `D1/D5/specs/20260903/02-whole-suite-review-leg.md D10: the shipped corpus must parse to exactly ` +
+    `these nine ids in FILE ORDER — the six hand-authored classes followed by the derived classes ` +
+    `(D5's first, then the two escape-derived ones, scoped-gate-blind-spot last); ` +
     `a wrong order or a missing/extra id here means replay.js's --class validation and --pick-class ` +
     `tie-break (corpus order) would target the wrong class: ${JSON.stringify(ids)}`)
   for (let i = 0; i < 6; i++) {
@@ -51,6 +52,16 @@ test('AC-20260901-08-1: WHEN parseCorpus reads the shipped replay-corpus.md THE 
       `D1: the derived class's own section text must be non-empty and belong to it, not bleed in from ` +
       `a neighboring heading: ${JSON.stringify(String(last.section).slice(0, 120))}`)
   }
+  const lastSection = classes[classes.length - 1]
+  assert.strictEqual(lastSection.id, 'scoped-gate-blind-spot',
+    `AC-20260903-02-17 (literal): the last class in file order must be scoped-gate-blind-spot: ${JSON.stringify(ids)}`)
+  assert.match(lastSection.section, /inapplicableClasses/,
+    `AC-20260903-02-17: scoped-gate-blind-spot's own section text must reference "inapplicableClasses" — the ` +
+    `leg-invisibility requirement that a host declares the id there once the suite leg makes the class ` +
+    `mechanized everywhere: ${JSON.stringify(String(lastSection.section).slice(0, 400))}`)
+  assert.match(lastSection.section, /suite/,
+    `AC-20260903-02-17: scoped-gate-blind-spot's own section text must reference the "suite" leg — the ` +
+    `structural fix that makes the class mechanized: ${JSON.stringify(String(lastSection.section).slice(0, 400))}`)
 })
 
 test('AC-20260901-08-1: WHEN parseCorpus reads a synthetic corpus carrying a stray level-3 heading BEFORE "## Derived classes" THE SYSTEM SHALL return only the three real classes (one hand-authored, two derived) and ignore the stray heading entirely', () => {

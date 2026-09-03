@@ -199,8 +199,12 @@ test('AC-20260901-02-2: readSessionStamp(root) returns the parsed stamp object, 
 // own SIX_GREEN fixture (a one-leg, all-fields-absent manifest derives UNVERIFIED, never CLEAN,
 // so a --status-0 assertion here would fail on the verdict word rather than on the via/model
 // contract this file exists to pin).
+// specs/20260903/02-whole-suite-review-leg.md D6 (AC-20260903-02-15, SHALL CONTINUE TO): `suite`
+// joins here too — A3's executed check confirms the pre-image verdict.js ignores this unknown
+// green row entirely, so this fixture's own pin stays green pre-image.
 const CLEAN_LEGS = [
   { leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 40 } },
+  { leg: 'suite', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 1035 } },
   { leg: 'smoke', exit: 4, observed: { result: 'inert' } },
   { leg: 'reconcile', exit: 0, observed: { outOfPlan: 0 } },
   { leg: 'ac-matrix', exit: 0, observed: { uncovered: 0, oracle: 0 } },
@@ -223,7 +227,7 @@ function manifestFixture() {
   return { manifest, workflow }
 }
 
-test('AC-20260901-02-3: verdict.js --via loop --model <id> on a review-profile ledger pass prints a row whose key order begins ts, spec, stage, tier, via, model, runId with the passed values', () => {
+test('AC-20260901-02-3 (also AC-20260903-02-15, SHALL CONTINUE TO): verdict.js --via loop --model <id> on a review-profile ledger pass prints a row whose key order begins ts, spec, stage, tier, via, model, runId with the passed values', () => {
   const { manifest, workflow } = manifestFixture()
   const retainDir = fs.realpathSync(tmpdir('verdict-retain'))
   const r = runNode('scripts/verdict.js', [

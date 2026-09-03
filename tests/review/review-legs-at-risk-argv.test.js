@@ -39,6 +39,11 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 //   (c) write the runner output to `at-risk.txt`, because the leg's founding contract defines its
 //       finding as "{failing files/digest, session-extracted from runner output}" — discarding the
 //       output makes the finding the leg exists to produce unproducible.
+//
+// specs/20260903/02-whole-suite-review-leg.md D1 (Assumption A6): the suite leg's bare
+// invocation runs this file's SAME recorder as the host's testCommand, so the malformed-entry
+// test's argv-log assertion below is narrowed to "no WITH-ARGS invocation" rather than "the log
+// never exists at all" — see that test's own comment.
 
 const SCRIPT = 'scripts/review-legs.js'
 
@@ -185,7 +190,7 @@ test('the at-risk leg saves the runner output to at-risk.txt, so its red finding
     'never learns it exists: ' + r.stdout)
 })
 
-test('a malformed atRisk entry fails the leg closed rather than shipping garbage to the runner', () => {
+test('a malformed atRisk entry fails the leg closed rather than shipping garbage to the runner (also AC-20260903-02-13)', () => {
   // The schema is correct today, so the fail-closed branch can only be exercised by the shape a
   // future drift would produce. Drive it BEHAVIORALLY: copy spec/scripts into a tmpdir and replace
   // scope-reconcile.js with a stub emitting a fileless entry — the copied review-legs.js runs its
@@ -204,11 +209,21 @@ test('a malformed atRisk entry fails the leg closed rather than shipping garbage
   const rows = fs.readFileSync(manifest, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
   const atRiskRow = rows.find(x => x.leg === 'at-risk')
 
-  assert.ok(!fs.existsSync(argvLog),
-    'the runner must never be invoked over entries with no usable path — a schema drift silently ' +
+  // specs/20260903/02-whole-suite-review-leg.md D1 (AC-20260903-02-13): the suite leg now runs
+  // this same recorder as the host's bare testCommand on every legs iteration, so argvLog can
+  // legitimately exist by the time this assertion runs — its bare invocation appends only an
+  // empty line (argv.slice(2) is []). The AT-RISK-SPECIFIC claim this test pins is narrower: no
+  // WITH-ARGS invocation (a real or malformed at-risk dispatch) ever reached the runner — so the
+  // log must either not exist or contain no non-empty line.
+  const argvLogLines = fs.existsSync(argvLog)
+    ? fs.readFileSync(argvLog, 'utf8').split('\n').filter(Boolean)
+    : []
+  assert.strictEqual(argvLogLines.length, 0,
+    'the runner must never be invoked WITH ARGS over entries with no usable path — a schema drift silently ' +
     'degrading to "[object Object]" argv is the exact failure this file exists to prevent, and most ' +
-    'hosts hand paths straight to a runner that greens over zero matches: ' +
-    (fs.existsSync(argvLog) ? fs.readFileSync(argvLog, 'utf8') : ''))
+    'hosts hand paths straight to a runner that greens over zero matches; a non-empty line here means the ' +
+    'at-risk leg (not the suite leg\'s bare, argument-less invocation) ran a malformed entry: ' +
+    JSON.stringify(argvLogLines))
   assert.strictEqual(atRiskRow && atRiskRow.exit, 1,
     'a malformed entry must surface as a red at-risk row, never a green count: ' + JSON.stringify(atRiskRow))
   assert.deepStrictEqual(atRiskRow && atRiskRow.observed, { malformed: { entries: 1, of: 1 } },

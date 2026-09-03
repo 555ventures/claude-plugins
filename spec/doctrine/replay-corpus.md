@@ -202,3 +202,32 @@ stayed green (144 leaked module ids at the pre-fix commit). The intended catch i
 tracing each client import back to its module's top-level imports rather than trusting a
 green dev-server smoke; the mechanized catch is a production-build leg that fails on server
 module ids reaching a client chunk.
+
+### `scoped-gate-blind-spot`
+
+**Derived from:** the plugin repo's own escape rows × 2 (specs 20260813/10
+`tests/review/verdict.test.js` via a backfill amendment, 20260903/01
+`tests/fleet-reader/doctrine-pins.test.js` — `preventedBy: review-check`); the structural fix
+specs/20260903/02-whole-suite-review-leg.md (the `suite` review leg).
+
+**Recipe:** Inside one of the target spec's File Plan files, introduce content that a repo-wide
+scanner test forbids and that no test in the spec's own File Plan directories checks — a version
+literal or a fleet host name in a test comment (the narration sweep), a raw NUL byte or a tracked
+binary (the tracked-text purity walk), a new member of an exhaustively pinned live set. The
+scanner must live outside every directory the File Plan's test rows name and must reference no
+changed file by path stem, so the scoped gate glob never runs it and the at-risk derivation never
+selects it. The mutation is the forbidden content, never the scanner.
+
+**Leg-invisibility requirement:** the host's review must lack a whole-suite leg. After
+specs/20260903/02 every host's review runs the bare `testCommand` as the blocking `suite` leg, so
+this class is mechanized everywhere and a replay that picks it can only record `leg-caught` —
+declare it in `.claude/spec.config.json` → `replay.inapplicableClasses` and pick another. It
+stays in the corpus so the recurrence count has a section to resolve against and so a host that
+has not yet updated the plugin reads the recipe that describes its own hole.
+
+**Worked example (the real escape):** a spec's build left a plugin version literal in a test
+comment. The build gate ran only the planned directories' globs, the at-risk derivation found no
+outside test naming a changed script, the review closed CLEAN (`rv_96a6a9ef5458`), and the
+narration scan under `tests/consistency/` went red on main only after merge-back. Two sibling
+specs re-tracked spike screenshots the same way against the tracked-text purity walk. The intended catch is the `suite` leg: one bare `testCommand` run per legs iteration, red
+before any reviewer spend.

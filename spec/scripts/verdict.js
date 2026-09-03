@@ -186,6 +186,15 @@
 // --checkpoint passed with --profile release
 //
 // specs/20260901/05-checkpoint-fail-closed.md (D3, brief 18a) — SUPERSEDED by
+// specs/20260903/02-whole-suite-review-leg.md (D3): `suite` — review-legs.js's whole-
+// bare-testCommand leg, closing the scoped-gate-blind-spot escape class — joins REVIEW_LEGS
+// (required in BOTH scopes, mirroring promise-sweep/ac-matrix, never filtered out on fix-delta
+// like reconcile/at-risk) and REVIEW_BLOCKING (red -> GATE_RED, first-match, same path as a red
+// gate). Built-in membership, not `--require <leg>`: an executed check showed `--require` only
+// widens the review profile's REQUIRED set, so a `--require`d suite would derive HARD_FINDINGS
+// (a dispositionable, waivable word) rather than making CLEAN structurally unreachable while the
+// whole suite is red — the ruling this spec locks.
+//
 // specs/20260901/09-disposer-gate.md (D5, brief 18b): the session-change CHECKPOINT
 // (cleared|stamp-appeared|overridden|not-reached) is retired along with --checkpoint-reason.
 // --checkpoint <disposer|empty|not-reached> and --checkpoint-overrides <N> (a non-negative
@@ -512,8 +521,8 @@ if (profile !== 'release') {
 // neither scope's requiredLegs filter below, mirroring ac-matrix's standing exactly (the spec
 // text may be amended during a fix pass, and the leg costs milliseconds).
 
-const REVIEW_LEGS = ['gate', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk', 'promise-sweep']
-const REVIEW_BLOCKING = new Set(['gate', 'smoke', 'ci'])
+const REVIEW_LEGS = ['gate', 'suite', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk', 'promise-sweep']
+const REVIEW_BLOCKING = new Set(['gate', 'suite', 'smoke', 'ci'])
 const RELEASE_LEGS = ['deploy', 'ready', 'e2e', 'journeys', 'substrate', 'production', 'ci']
 
 const requiredLegs = profile === 'release'

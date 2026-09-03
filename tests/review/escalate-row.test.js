@@ -209,11 +209,15 @@ function driveToCapEdge(root, spec) {
 
 // ---- verdict.js-level ACs (D1-D4): --escalated behavior, no driver involved --------------------
 
-test('AC-20260822-01-1: WHEN verdict.js runs --escalated --fixDispatched 0 --ledger against 1 hard survivor + 1 red at-risk leg with --waived 1 --rejected 0 THE SYSTEM SHALL print HARD_FINDINGS (exit 1) and a ledger row carrying escalated:true and findings.fixDispatched:0', () => {
+test('AC-20260822-01-1 (also AC-20260903-02-15, SHALL CONTINUE TO): WHEN verdict.js runs --escalated --fixDispatched 0 --ledger against 1 hard survivor + 1 red at-risk leg with --waived 1 --rejected 0 THE SYSTEM SHALL print HARD_FINDINGS (exit 1) and a ledger row carrying escalated:true and findings.fixDispatched:0', () => {
   const dir = fs.realpathSync(tmpdir('esc-ac1'))
   const manifestPath = path.join(dir, 'manifest.jsonl')
   fs.writeFileSync(manifestPath, [
     { leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 40 } },
+    // specs/20260903/02-whole-suite-review-leg.md D6 (AC-20260903-02-15): A3's executed check
+    // confirms the pre-image verdict.js ignores this unknown green row entirely, so this pin
+    // stays green pre-image.
+    { leg: 'suite', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 1035 } },
     { leg: 'smoke', exit: 4, observed: { result: 'inert' } },
     { leg: 'reconcile', exit: 0, observed: { outOfPlan: 0 } },
     { leg: 'ac-matrix', exit: 0, observed: { uncovered: 0, oracle: 0 } },
@@ -269,13 +273,17 @@ test('AC-20260822-01-3: WHEN --escalated is passed with --profile release THE SY
   assert.strictEqual(r.stdout, '', 'a before-file-I/O refusal must print no verdict word: ' + JSON.stringify(r.stdout))
 })
 
-test('AC-20260822-01-4 (also AC-20260902-05-2): WHEN --escalated derivation reaches CLEAN (spike S1 Case B: 6 green fix-delta legs + green at-risk, 1 hard survivor, --waived 1 --fixDispatched 0) THE SYSTEM SHALL exit 2, print no verdict word and no ledger line, and name evidence drift on stderr — even though the identical inputs without --escalated derive CLEAN exit 0', () => {
+test('AC-20260822-01-4 (also AC-20260902-05-2, AC-20260903-02-15, SHALL CONTINUE TO): WHEN --escalated derivation reaches CLEAN (spike S1 Case B: 6 green fix-delta legs + green at-risk, 1 hard survivor, --waived 1 --fixDispatched 0) THE SYSTEM SHALL exit 2, print no verdict word and no ledger line, and name evidence drift on stderr — even though the identical inputs without --escalated derive CLEAN exit 0', () => {
   const dir = fs.realpathSync(tmpdir('esc-ac4'))
   const manifestPath = path.join(dir, 'manifest.jsonl')
   fs.writeFileSync(manifestPath, [
     // specs/20260902/05 D1/D2 (A4 fallback): the pass scope lives on the rows review-legs.js
     // writes (gate/smoke/ci/at-risk stamped fix-delta), never on the reviewer return
     { leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 40 }, scope: 'fix-delta' },
+    // specs/20260903/02-whole-suite-review-leg.md D6 (AC-20260903-02-15): suite is required in
+    // BOTH scopes (D3), so a fix-delta manifest carries its own row too — A3's executed check
+    // confirms the pre-image ignores this unknown green row, so this pin stays green pre-image.
+    { leg: 'suite', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 1035 }, scope: 'fix-delta' },
     { leg: 'smoke', exit: 4, observed: { result: 'inert' }, scope: 'fix-delta' },
     { leg: 'ac-matrix', exit: 0, observed: { uncovered: 0, oracle: 0 } },
     { leg: 'skip-reconcile', exit: 0, observed: { skipped: 0, sanctioned: 0 } },

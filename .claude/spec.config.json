@@ -37,7 +37,8 @@
   "pipelineRules": ".claude/rules/spec-pipeline.md",
   "replay": {
     "inapplicableClasses": [
-      "server-code-in-client-bundle"
+      "server-code-in-client-bundle",
+      "scoped-gate-blind-spot"
     ]
   }
 }

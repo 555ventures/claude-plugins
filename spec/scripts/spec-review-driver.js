@@ -86,6 +86,16 @@
 // nested `node --test` inheriting that var degrades to a silent child-protocol run (exit 0 over
 // failing tests), which would make this refusal vacuously green.
 //
+// specs/20260903/02-whole-suite-review-leg.md (D3/D4): `suite` — review-legs.js's own
+// whole-bare-testCommand leg — joins BLOCKING_LEGS: a red suite hard-stops LEGS into STOPPED
+// (GATE_RED row, the STOPPED step's `❌ suite exit=…` line) exactly like a red gate, and is
+// excluded from the disposition pools the same way. runCloseTimeGate() widens additively: after
+// the resolved gateCommand re-run above, it also runs the host's bare testCommand over the same
+// committed close tree and refuses `--mark closed` (exit 2, before any mutation) on a non-zero
+// exit — naming the literal phrase "suite red at close" — or on an absent testCommand, covering
+// the exact hole the gate-only re-run left: the files CLOSE itself writes (canonical doc, rules
+// fold) land AFTER review-legs.js's own suite leg last ran.
+//
 // CONTRACT:
 //   spec-review-driver <spec.md>                  -> print current state + ONLY that step
 //   spec-review-driver <spec.md> --mark <mark>    -> verify artifacts, record, print next step
@@ -121,7 +131,11 @@
 // close-time host-gate re-run over the committed close tree exiting non-zero (message names the
 // literal phrase "gate red at close", the resolved command, and the re-run remedy) or resolving to
 // no runnable gate at all (message names the unresolvable-gate reason and the remedy — never a
-// silent skip; specs/20260830/02-close-gate-rerun.md D1/D2/D4), or (specs/20260901/09-disposer-
+// silent skip; specs/20260830/02-close-gate-rerun.md D1/D2/D4), or `--mark closed`'s close-time
+// whole-suite re-run (additive, after the gate re-run above) exiting non-zero over the committed
+// close tree (message names the literal phrase "suite red at close", the testCommand, and the
+// re-run remedy) or the host declaring no testCommand at all (message names the config remedy;
+// specs/20260903/02-whole-suite-review-leg.md D4), or (specs/20260901/09-disposer-
 // gate.md D2, the CHECKPOINT/`--skip-independence-check-because` cases above are retired outright)
 // `--mark dispositions` on a non-empty survivor/leg-finding pool with `--file` absent (names
 // `--file` and `spec:disposer`), the named file unreadable or not valid JSON, a disposer return
@@ -611,7 +625,7 @@ function readManifestRows(p) {
 // Mirrors review-legs.js's own blocking-leg/exit rule (gate/smoke/ci; smoke's exit 4 = sanctioned
 // inert-green) — this is plumbing over review-legs.js's OWN typed exit codes, never a second
 // derivation of a verdict word (verdict.js stays the sole derivation of that).
-const BLOCKING_LEGS = new Set(['gate', 'smoke', 'ci'])
+const BLOCKING_LEGS = new Set(['gate', 'suite', 'smoke', 'ci'])
 function isRedBlocking(rows) {
   for (const r of rows) {
     if (!BLOCKING_LEGS.has(r.leg)) continue
@@ -1324,6 +1338,27 @@ function runCloseTimeGate() {
       'close tree.\nThe files written at CLOSE (canonical doc, rules fold) are inside the host\'s ' +
       'rule surface; fix them, commit the fix, then re-run `node ' + __filename + ' ' + specPath +
       ' --mark closed`.\n--- last 40 lines of gate output ---\n' + tailLines(output, 40))
+  }
+  // specs/20260903/02-whole-suite-review-leg.md D4: additive to the resolved-gate re-run above —
+  // a host's gateCommand may carry typecheck/lint the testCommand lacks, so the scoped re-run
+  // stays. The whole-suite run is the second observation, over the same committed close tree,
+  // covering the files CLOSE itself writes (canonical doc, rules fold) that review-legs.js's own
+  // suite leg ran before they existed. Same env scrub/cwd as the gate re-run above and as
+  // review-legs.js's own sh() — this driver is itself invoked from inside `node --test` by its
+  // own tests.
+  if (!gateConfig.testCommand) {
+    die('close-time whole-suite re-run could not run — no testCommand declared in ' + CONFIG_RELPATH +
+      ' under ' + repoRoot + ' — add testCommand to the host config, then re-run `node ' + __filename +
+      ' ' + specPath + ' --mark closed`')
+  }
+  const sr = runChild('bash', ['-c', gateConfig.testCommand], { cwd: repoRoot, encoding: 'utf8', env },
+    'close-time whole-suite (' + gateConfig.testCommand + ')')
+  if (sr.status !== 0) {
+    const output = (sr.stdout || '') + (sr.stderr || '')
+    die('suite red at close — ' + gateConfig.testCommand + ' exited ' + sr.status + ' over the ' +
+      'committed close tree.\nThe files written at CLOSE (canonical doc, rules fold) are inside ' +
+      'the host\'s rule surface; fix them, commit the fix, then re-run `node ' + __filename + ' ' +
+      specPath + ' --mark closed`.\n--- last 40 lines of suite output ---\n' + tailLines(output, 40))
   }
 }
 

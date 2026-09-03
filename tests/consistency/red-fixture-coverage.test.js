@@ -346,6 +346,82 @@ function legPromiseSweep() {
     'evidence the check engaged: the finding detail must name the exact planted row (D1): ' + JSON.stringify(f))
 }
 
+// suite: specs/20260903/02-whole-suite-review-leg.md D5 (AC-20260903-02-11) — the planned test
+// lives in tests/inplan/ (matched by the resolved gate glob), the planted red scanner lives in
+// tests/consistency/ (a SIBLING directory, never beside the planned test — which would redden
+// the gate glob itself instead) and walks the tree for a literal the diff introduces, naming no
+// changed file. Only the bare testCommand (the suite leg) ever executes the scanner, so this
+// handler also asserts gate exit 0 and at-risk observed.files 0 — proof the other two legs stay
+// green while suite alone catches it.
+function legSuite() {
+  const dir = tmpdir('rfc-suite')
+  const g = gitRepo(dir)
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'tests/inplan'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'tests/consistency'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), baseHostConfig())
+  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 41\n')
+  // Predates the diff, lives outside the File Plan's tests/inplan/ row, and its own source text
+  // never mentions the changed file's stem — a repo-wide narration scanner, never an at-risk
+  // candidate and never inside the gate's resolved glob.
+  fs.writeFileSync(path.join(dir, 'tests/consistency/scanner.test.js'),
+    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "const fs = require('node:fs')\nconst path = require('node:path')\n" +
+    'function walk(d, out) {\n' +
+    "  for (const entry of fs.readdirSync(d, { withFileTypes: true })) {\n" +
+    "    if (entry.name === '.git' || entry.name === 'node_modules') continue\n" +
+    '    const p = path.join(d, entry.name)\n' +
+    '    if (entry.isDirectory()) walk(p, out)\n' +
+    '    else out.push(p)\n' +
+    '  }\n' +
+    '  return out\n' +
+    '}\n' +
+    "test('no tracked file names the forbidden literal', () => {\n" +
+    "  const root = path.join(__dirname, '..', '..')\n" +
+    "  const hit = walk(root, []).some((p) => fs.readFileSync(p, 'utf8').includes('RED_FIXTURE_SUITE_PLANTED_VIOLATION'))\n" +
+    "  assert.strictEqual(hit, false, 'planted scanner found RED_FIXTURE_SUITE_PLANTED_VIOLATION in the tree')\n" +
+    '})\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const base = g('rev-parse', 'HEAD').trim()
+  fs.mkdirSync(path.join(dir, 'specs/20260903'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'specs/20260903/91-fixture.md'),
+    '---\nstatus: implementing\n---\n\n## File Plan\n\n| Path | Action | Layer | Summary |\n|---|---|---|---|\n' +
+    '| `src/foo.js` | MODIFY | scripts | x |\n| `tests/inplan/foo.test.js` | CREATE | tests | x |\n')
+  // The diff introduces the forbidden literal into a File Plan file — the scanner above catches
+  // it, but the gate glob (tests/inplan/*.test.js) and the at-risk stem match never see it.
+  fs.writeFileSync(path.join(dir, 'src/foo.js'), 'module.exports = () => 42 // RED_FIXTURE_SUITE_PLANTED_VIOLATION\n')
+  fs.writeFileSync(path.join(dir, 'tests/inplan/foo.test.js'),
+    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "const foo = require('../../src/foo.js')\ntest('foo', () => { assert.strictEqual(typeof foo, 'function') })\n")
+  g('add', '-A'); g('commit', '-q', '-m', 'work')
+  const outDir = tmpdir('rfc-suite-out')
+  const manifest = path.join(tmpdir('rfc-suite-manifest'), 'manifest.jsonl')
+  const r = runNode('scripts/review-legs.js', ['--root', dir, '--spec', 'specs/20260903/91-fixture.md',
+    '--base', base, '--manifest', manifest, '--out-dir', outDir])
+  const byLeg = new Map(manifestRows(manifest).map((x) => [x.leg, x]))
+  const row = byLeg.get('suite')
+  assert.ok(row, 'review-legs.js must append a "suite" manifest row: ' + r.stdout + r.stderr)
+  assert.notStrictEqual(row.exit, 0,
+    'D1: the bare testCommand (the suite leg) must also run the planted scanner and redden — this is the one ' +
+    'observation invisible to both gate and at-risk: ' + JSON.stringify(row) + ' / ' + r.stdout + r.stderr)
+  const suiteOutput = fs.readFileSync(path.join(outDir, 'suite-output.txt'), 'utf8')
+  assert.match(suiteOutput, /RED_FIXTURE_SUITE_PLANTED_VIOLATION/,
+    'evidence the check engaged: suite-output.txt must contain the planted scanner\'s own assertion text, ' +
+    'proving the bare testCommand actually executed our fixture scanner rather than reddening on an unrelated ' +
+    'precondition: ' + suiteOutput)
+  const gateRow = byLeg.get('gate')
+  assert.ok(gateRow, 'review-legs.js must append a "gate" manifest row: ' + r.stdout + r.stderr)
+  assert.strictEqual(gateRow.exit, 0,
+    'D5: the gate glob resolves only to tests/inplan/*.test.js — a sibling scanner outside that directory must ' +
+    'never redden it, proving the leg\'s blind spot is real: ' + JSON.stringify(gateRow))
+  const atRiskRow = byLeg.get('at-risk')
+  assert.ok(atRiskRow, 'review-legs.js must append an "at-risk" manifest row: ' + r.stdout + r.stderr)
+  assert.strictEqual(atRiskRow.observed.files, 0,
+    'D5: the scanner names no changed file by path stem, so scope-reconcile\'s at-risk derivation must never ' +
+    'select it — observed.files must be 0, proving the leg\'s blind spot is real: ' + JSON.stringify(atRiskRow))
+}
+
 // smoke: smoke.sh directly — a bootCommand that genuinely runs (proven by a marker file it
 // writes) paired with a readyCheck that can never pass, so red comes from a real timeout, not a
 // precondition (no-runtime / boot-crashed / usage error).
@@ -372,8 +448,18 @@ function legSmoke() {
     'from a stub that reports not-ready without ever spawning bootCommand')
 }
 
+// AC-20260903-02-11: called directly (not only through the dynamic LEGS loop below, which
+// derives its test set from verdict.js's OWN current REVIEW_LEGS source and so cannot exercise
+// a leg the script has not yet declared) — this is the genuinely-red-now pin for the handler.
+// Once verdict.js's REVIEW_LEGS gains "suite", the loop below also exercises it through this
+// same registered handler.
+test('AC-20260903-02-11 (direct call): the "suite" review leg (verdict.js REVIEW_LEGS) can actually go red on a planted violation', () => {
+  legSuite()
+})
+
 const LEG_HANDLERS = {
   gate: legGate,
+  suite: legSuite,
   smoke: legSmoke,
   reconcile: legReconcile,
   'ac-matrix': legAcMatrix,

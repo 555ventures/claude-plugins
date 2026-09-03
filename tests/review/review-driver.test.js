@@ -176,7 +176,7 @@ test('AC-20260820-07-1: WHEN the driver runs on an implementing spec whose legs 
 // (including one introduced while splicing in the shared helpers) would show up as a diff
 // between the driver's appended row and a direct verdict.js re-invocation with the row's own
 // recorded flags.
-test('AC-20260820-07-2 (also AC-20260821-04-8, SHALL CONTINUE TO) / AC-20260824-06-5 / AC-20260901-01-17 (SHALL CONTINUE TO) / AC-20260901-09-13: WHEN the synthetic gate fails THE SYSTEM appends exactly one GATE_RED ledger line byte-equal to verdict.js\'s own line, whose diff.base/diff.head/diff.dirty name the reviewed range, prints the red leg + remedy, and reports state STOPPED — the reviewer step is never printed', () => {
+test('AC-20260820-07-2 (also AC-20260821-04-8, SHALL CONTINUE TO) / AC-20260824-06-5 / AC-20260901-01-17 (SHALL CONTINUE TO) / AC-20260901-09-13 / AC-20260903-02-13 (SHALL CONTINUE TO — the "suite" leg beside this row): WHEN the synthetic gate fails THE SYSTEM appends exactly one GATE_RED ledger line byte-equal to verdict.js\'s own line, whose diff.base/diff.head/diff.dirty name the reviewed range, prints the red leg + remedy, and reports state STOPPED — the reviewer step is never printed', () => {
   const { root, spec, sidecar } = makeHost({ gateFails: true })
   const ledger = path.join(root, '.claude/spec-runs.jsonl')
   const before = fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8') : ''
@@ -257,6 +257,144 @@ test('AC-20260820-07-2 (also AC-20260821-04-8, SHALL CONTINUE TO) / AC-20260824-
   const appendedNoTs = { ...appended }; delete appendedNoTs.ts
   assert.deepStrictEqual(appendedNoTs, reRunRow,
     'the ledger row the driver appended must be byte-equal (aside from the call-time timestamp) to verdict.js\'s own output for the same manifest and flags — any divergence means the driver hand-assembled the row instead of using verdict.js\'s printed line: appended=' + JSON.stringify(appended) + ' reRun=' + JSON.stringify(reRunRow))
+})
+
+// specs/20260903/02-whole-suite-review-leg.md D1/D3 (AC-20260903-02-9): a synthetic host whose
+// planned test is green but whose tests/consistency/scanner.test.js (outside the File Plan,
+// naming no changed file — the same A2/D5 shape) fails because of the diff's own content. Only
+// the bare testCommand (the suite leg) ever executes the scanner, so gate stays green and the
+// hard-stop must come from the new blocking leg alone.
+function makeSuiteBlindSpotDriverHost() {
+  const root = fs.realpathSync(tmpdir('rvdrv-suite-blind'))
+  const g = gitRepo(root)
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'tests/inplan'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'tests/consistency'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({
+    gateCommand: 'node --test {testDirs}',
+    testCommand: 'node --test',
+    runtime: { inert: 'plugin repo — nothing boots' },
+    capabilities: { forge: 'none', skipReportPattern: 'none' },
+  }))
+  fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 41\n')
+  fs.writeFileSync(path.join(root, 'tests/consistency/scanner.test.js'),
+    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "const fs = require('node:fs')\nconst path = require('node:path')\n" +
+    'function walk(d, out) {\n' +
+    "  for (const entry of fs.readdirSync(d, { withFileTypes: true })) {\n" +
+    "    if (entry.name === '.git' || entry.name === 'node_modules') continue\n" +
+    '    const p = path.join(d, entry.name)\n' +
+    '    if (entry.isDirectory()) walk(p, out)\n' +
+    '    else out.push(p)\n' +
+    '  }\n' +
+    '  return out\n' +
+    '}\n' +
+    "test('no tracked file names the forbidden literal', () => {\n" +
+    "  const root = path.join(__dirname, '..', '..')\n" +
+    "  const hit = walk(root, []).some((p) => fs.readFileSync(p, 'utf8').includes('DRIVER_SUITE_BLIND_SPOT_LITERAL'))\n" +
+    '  assert.strictEqual(hit, false)\n' +
+    '})\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const diffBase = g('rev-parse', 'HEAD').trim()
+  fs.mkdirSync(path.join(root, 'specs/20260903'), { recursive: true })
+  const spec = path.join(root, 'specs/20260903/99-drv-suite-blind.md')
+  fs.writeFileSync(spec, specBody({ diffBase, acId: 'AC-20260903-98-1' })
+    .replace('tests/foo.test.js | create | tests', 'tests/inplan/foo.test.js | create | tests'))
+  fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 42 // DRIVER_SUITE_BLIND_SPOT_LITERAL\n')
+  fs.writeFileSync(path.join(root, 'tests/inplan/foo.test.js'),
+    GREEN_TEST.replace('AC-20260820-99-1', 'AC-20260903-98-1').replace("require('../src/foo.js')", "require('../../src/foo.js')"))
+  g('add', '-A'); g('commit', '-q', '-m', 'implement')
+  return { root, spec, sidecar: spec.replace(/\.md$/, '.review') }
+}
+
+test('AC-20260903-02-9: WHEN the driver runs against a synthetic host whose planned test is green and whose tests/consistency/scanner.test.js (outside the File Plan, naming no changed file) is red THE SYSTEM SHALL land --state STOPPED, append exactly one ledger row with verdict:"GATE_RED", and print the STOPPED step with a line matching ❌ suite exit=1', () => {
+  const { root, spec } = makeSuiteBlindSpotDriverHost()
+  const ledger = path.join(root, '.claude/spec-runs.jsonl')
+  const before = fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8') : ''
+  const r = run(root, spec)
+  assert.strictEqual(stateOf(root, spec), 'STOPPED',
+    'a red blocking suite leg must land the driver in the terminal state STOPPED, exactly like a red gate: ' + r.stdout + r.stderr)
+  assert.match(r.stdout, /❌ suite exit=1/,
+    'AC-20260903-02-9 (literal): the STOPPED step must print a line matching "❌ suite exit=1" — a generic red-leg summary here would not tell the session which leg to fix: ' + r.stdout)
+  const beforeLines = before.trim() ? before.trim().split('\n') : []
+  assert.ok(fs.existsSync(ledger), 'a GATE_RED run must append a ledger line: ' + r.stdout + r.stderr)
+  const afterLines = fs.readFileSync(ledger, 'utf8').trim().split('\n')
+  assert.strictEqual(afterLines.length, beforeLines.length + 1,
+    'exactly one ledger line must be appended for the STOPPED run: before=' + beforeLines.length + ' after=' + afterLines.length)
+  const appended = JSON.parse(afterLines[afterLines.length - 1])
+  assert.strictEqual(appended.verdict, 'GATE_RED', 'the appended ledger row must carry verdict GATE_RED: ' + JSON.stringify(appended))
+})
+
+// AC-20260903-02-10 (D4): the close-time re-run's OWN refusal, independent of the close-time
+// gate re-run — gateCommand is genuinely green ("true"), only testCommand is red.
+test('AC-20260903-02-10: WHEN --mark closed is invoked with every earlier refusal passing, gateCommand "true", and testCommand "bash always-red.sh" THE SYSTEM SHALL refuse (exit 2), leave marks.closed unset (--state stays CLOSE), and print a message containing "suite red at close", the literal "bash always-red.sh", and "--mark closed"', () => {
+  const root = fs.realpathSync(tmpdir('rvdrv-suite-close-red'))
+  const g = gitRepo(root)
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'tests'), { recursive: true })
+  // Lives at repo root so the literal testCommand "bash always-red.sh" (bash resolves an
+  // explicit script argument relative to cwd = repoRoot, not PATH) finds it directly.
+  fs.writeFileSync(path.join(root, 'always-red.sh'), '#!/usr/bin/env bash\nexit 1\n')
+  fs.chmodSync(path.join(root, 'always-red.sh'), 0o755)
+  // D1: the suite leg runs the host's bare testCommand on EVERY legs iteration — a host whose
+  // testCommand is "bash always-red.sh" from the start would hard-stop at STOPPED and never
+  // reach CLOSE. Start green ("node --test", the fixture's real tests dir) so LEGS/REVIEWER/
+  // dispositions all pass, then rewrite testCommand to the red script immediately before
+  // --mark closed, isolating this AC's own claim (the close-time re-run's OWN refusal) from the
+  // review-time suite leg's.
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({
+    gateCommand: 'true',
+    testCommand: 'node --test',
+    runtime: { inert: 'plugin repo — nothing boots' },
+    capabilities: { forge: 'none', skipReportPattern: 'none' },
+  }))
+  fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 41\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const diffBase = g('rev-parse', 'HEAD').trim()
+  fs.mkdirSync(path.join(root, 'specs/20260903'), { recursive: true })
+  const spec = path.join(root, 'specs/20260903/98-drv-suite-close.md')
+  fs.writeFileSync(spec, specBody({ diffBase, acId: 'AC-20260903-97-1' }))
+  fs.writeFileSync(path.join(root, 'src/foo.js'), 'module.exports = () => 42\n')
+  fs.writeFileSync(path.join(root, 'tests/foo.test.js'), GREEN_TEST.replace('AC-20260820-99-1', 'AC-20260903-97-1'))
+  g('add', '-A'); g('commit', '-q', '-m', 'implement')
+
+  const legsR = run(root, spec)
+  assert.strictEqual(stateOf(root, spec), 'REVIEWER',
+    'setup: the fixture must reach REVIEWER on a genuinely green gate ("true") and a genuinely green suite ' +
+    'leg ("node --test" over the fixture\'s own green test): ' + legsR.stdout + legsR.stderr)
+  const returnFile = returnFileWith('rvdrv-suite-close-return', CLEAN_RETURN)
+  run(root, spec, '--mark', 'reviewer-returned', '--file', returnFile)
+  run(root, spec, '--mark', 'dispositions', '--waived', '0', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(stateOf(root, spec), 'CLOSE', 'setup: a clean pass must reach CLOSE')
+
+  execFileSync('git', ['-C', root, 'add', 'specs/20260903/98-drv-suite-close.md'])
+  execFileSync('git', ['-C', root, 'commit', '-q', '-m', 'close'])
+
+  // Now that CLOSE is reached, swap testCommand to the red script — this AC pins the CLOSE-time
+  // re-run's OWN refusal (D4), independent of whether the review-time suite leg was ever red.
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({
+    gateCommand: 'true',
+    testCommand: 'bash always-red.sh',
+    runtime: { inert: 'plugin repo — nothing boots' },
+    capabilities: { forge: 'none', skipReportPattern: 'none' },
+  }))
+  execFileSync('git', ['-C', root, 'add', '.claude/spec.config.json'])
+  execFileSync('git', ['-C', root, 'commit', '-q', '-m', 'redden testCommand for the close-time re-run'])
+
+  const closeR = run(root, spec, '--mark', 'closed')
+  assert.strictEqual(closeR.status, 2,
+    'AC-20260903-02-10: a red testCommand at close must refuse --mark closed (exit 2), never silently accept it: ' + closeR.stdout + closeR.stderr)
+  assert.strictEqual(stateOf(root, spec), 'CLOSE',
+    'AC-20260903-02-10: a refused close-time suite re-run must leave marks.closed unset — --state must stay CLOSE, never advance to MERGE')
+  const msg = closeR.stdout + closeR.stderr
+  assert.match(msg, /suite red at close/,
+    'AC-20260903-02-10 (literal): the refusal must contain "suite red at close": ' + msg)
+  assert.match(msg, /bash always-red\.sh/,
+    'AC-20260903-02-10 (literal): the refusal must name the exact testCommand "bash always-red.sh": ' + msg)
+  assert.match(msg, /--mark closed/,
+    'AC-20260903-02-10 (literal): the refusal must name the "--mark closed" re-run remedy: ' + msg)
 })
 
 test('AC-20260820-07-3: WHEN --mark reviewer-returned --file names a missing or malformed file THE SYSTEM exits 2 naming the defect and leaves the state unchanged', () => {
@@ -946,7 +1084,7 @@ test('AC-20260820-07-11: WHEN --state is passed THE SYSTEM prints the bare state
     '--state must print exactly the bare state name and nothing else — a caller scripting against this needs one clean token: ' + JSON.stringify(r.stdout))
 })
 
-test('AC-20260820-07-12 (also AC-20260821-04-9, AC-20260823-07-6, and AC-20260830-02-2, SHALL CONTINUE TO): WHEN merge-strategy is marked from the main root in a two-branch fixture THE SYSTEM runs merge, cleanup, and verify — promoting the worktree\'s ledger and retained evidence into the main root (exact-line / filename dedup) and leaving the worktree clean for a plain `git worktree remove` — prints spec-status --next verbatim, and lands DONE; the same mark from inside the build worktree is refused with a relocate instruction (AC-20260823-07-6: this closed-success call, on a tree carrying no deviations sidecar, must keep succeeding once the deviations backstop lands; AC-20260830-02-2: the same closed-success call, now also running the close-time host-gate re-run over a green gateCommand "true", must keep succeeding and land MERGE, never refuse a genuinely green gate)', () => {
+test('AC-20260820-07-12 (also AC-20260821-04-9, AC-20260823-07-6, AC-20260830-02-2, and AC-20260903-02-14, SHALL CONTINUE TO): WHEN merge-strategy is marked from the main root in a two-branch fixture THE SYSTEM runs merge, cleanup, and verify — promoting the worktree\'s ledger and retained evidence into the main root (exact-line / filename dedup) and leaving the worktree clean for a plain `git worktree remove` — prints spec-status --next verbatim, and lands DONE; the same mark from inside the build worktree is refused with a relocate instruction (AC-20260823-07-6: this closed-success call, on a tree carrying no deviations sidecar, must keep succeeding once the deviations backstop lands; AC-20260830-02-2: the same closed-success call, now also running the close-time host-gate re-run over a green gateCommand "true", must keep succeeding and land MERGE, never refuse a genuinely green gate)', () => {
   const root = fs.realpathSync(tmpdir('rvdrv-merge'))
   const g = gitRepo(root)
   fs.mkdirSync(path.join(root, '.claude'), { recursive: true })

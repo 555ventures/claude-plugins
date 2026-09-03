@@ -1040,10 +1040,6 @@ test('AC-20260902-08-12: the retired-literal sweep for design-pick.json, positio
       // through while `explore: "tiles-culled"` (a legacy mid-flight value) — the literal is
       // the input under test, not a stale reference to a retired mechanism.
       'tests/genesis-gate.test.js',
-      // a dated agent-memory note recording this repo's own driver-descriptor/status.archetype
-      // incident quotes the old research-done→…→tiles-culled funnel by name as history, outside
-      // the spec/, README.md, .claude-plugin/ scope AC-20260902-08-12 names.
-      '.claude/agent-memory/plugin-tests/driver-descriptor-archetype-vs-status-archetype.md',
     ]
     // Collision closure (spec body, "Collision closure" section): spec/doctrine/design.md's two
     // sentences naming `rules-locked` and the `positions.md`/`design-pick.json` grounding are

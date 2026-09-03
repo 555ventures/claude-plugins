@@ -9,9 +9,9 @@ consult, the exit fidelity review, and `copyCatalogs` as a required key.*
 The product's committed building blocks live as **commitment entries** in
 `design/components.json` (`name`, `purpose`, `boundaries`) — the same manifest that holds
 landed components; absence of `props`/`mockRefs` is what marks an entry as commitment-only.
-Seeded by the genesis design state (specs/20260827/03) at its `rules-locked` mark. Validated by
-`components-check.js` (spec-paths key `components-check`): **fail-closed** at the genesis
-design state's `rules-locked` mark, **advisory** at the design driver's preflight (brownfield
+Seeded at SKELETON (checked by `components-check.js` at `skeleton-landed`,
+specs/20260902/08). Validated by `components-check.js` (spec-paths key `components-check`):
+**fail-closed** at genesis `skeleton-landed`, **advisory** at the design driver's preflight (brownfield
 files may predate the canonical shape; the legacy `{"components": [...]}` wrapper is tolerated
 with a warning).
 Consumed as binding canon by `wf-design` workers via the `componentManifestPath` arg — a
@@ -56,8 +56,8 @@ content slot's inner HTML and an optional `data-active`, and carry the chrome as
 skipped unless named). `check` binds a shell family once `design/shell/` exists — undeclared,
 unknown name, region drift (named to the slot), own `<nav>`/`<header>` in content, missing css
 link — as violations at `ratified`/`approved`/`--matrix` and warns at `sketch`.
-`shell adopt` (plan table, then `--apply`) migrates pre-shell mocks. Genesis `tokens-landed`
-requires `design/shell/app.html` passing `check`; `rules-locked` authors `AppShell` from it and
+`shell adopt` (plan table, then `--apply`) migrates pre-shell mocks. The shell canon is
+extracted from the approved set at SCAFFOLD (spec 11); genesis authors `AppShell` from it and
 `/spec:design`'s worker envelope carries `shell`.
 
 ## Render gate (2026-08-24, specs/20260824/01)

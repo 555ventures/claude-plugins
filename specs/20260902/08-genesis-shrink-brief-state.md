@@ -1,6 +1,6 @@
 ---
 date: 2026-09-02
-status: implementing
+status: done
 build_base: main
 tier: critical             # genesis-state-gate.sh is a hook surface (pipeline rules § Risk Tiers); genesis-driver.js is the greenfield boot path
 area: genesis
@@ -148,9 +148,9 @@ Hook (`genesis-state-gate.sh` init arm), exact behavior table:
   `--legacy` or non-visual), doctrine file/line cap/Dissents, design-rules shape, tokens
   presence; each names the artifact and the remedy.
 - **Dissents check:** every key of `design/mocks/status.json.directions` other than
-  `status.theme` must appear as a substring in the `## Dissents` body; legacy runs with no
-  mocks status use the old `design-pick.json` rejected list when that file exists, else no
-  name is required.
+  `status.theme` must appear as a substring in the `## Dissents` body; legacy runs (no mocks
+  status) owe a non-empty `## Dissents` only — there is no pick record left to name
+  candidates from (review waive, 2026-09-03; see Rationale).
 - **MENUS onward:** unchanged, except the tournament's expected task set has no `style-tile`
   and the PROBE step prints no tile source line. `handleMenusDone` no longer writes
   `explore`; `handleRoadmapWritten` no longer writes `design` (BRIEF did) and hands to HANDOFF.
@@ -286,6 +286,19 @@ design paths is the inconsistency the brief measured), and mapping `rules-locked
 
 Version and canonical: the plugin description's "in-driver taste-funnel explore state and
 design-ratification state" phrase is replaced by "BRIEF ratifies the /spec:mocks approved set".
+
+**Review waive (2026-09-03, rv_cf225f5bba11).** Reviewer finding: the `--legacy` Dissents
+check dropped the per-candidate naming fallback that the Behavior prose still described.
+Waived by the user ("we don't need backward compat"): D4's rationale and D11 retire the pick
+record, AC-20260902-08-12 bans its name in scripts, and D6 accepts legacy artifacts in place
+of a set — the Behavior sentence was the pre-shrink leftover and is corrected above.
+
+**Build deviations (folded 2026-09-03).** D13's literal 7.62.0 target was already taken by
+spec 07; the build bumped to the next free minor, 7.63.0 (§ Gotchas' stale-version-target
+class, recorded in the changelog line). The legacy pick-file fallback removal above was applied
+at build from the spec text (no fork) and is the waived finding. D14 was added at build: the
+retired-mark refusal table spells `positions-authored`/`tiles-culled` plainly and the AC-12
+sweep waives the driver by path for those two names — the refusal-by-name contract wins.
 
 ## Canonical Delta
 

@@ -17,7 +17,7 @@ const assert = require('node:assert')
 
 const { CORPUS_BAR, corpusPath, parseCorpus } = require('../../spec/scripts/lib/replay-corpus')
 
-test('AC-20260901-08-1: WHEN parseCorpus reads the shipped replay-corpus.md THE SYSTEM SHALL return seven classes in file order — the six Contracts ids with derived:false, followed by prefix-collision-coverage-fail-open with derived:true', () => {
+test('AC-20260901-08-1: WHEN parseCorpus reads the shipped replay-corpus.md THE SYSTEM SHALL return eight classes in file order — the six Contracts ids with derived:false, followed by prefix-collision-coverage-fail-open and server-code-in-client-bundle with derived:true', () => {
   const fs = require('node:fs')
   const shippedPath = corpusPath()
   assert.ok(fs.existsSync(shippedPath),
@@ -30,9 +30,9 @@ test('AC-20260901-08-1: WHEN parseCorpus reads the shipped replay-corpus.md THE 
   assert.deepStrictEqual(ids, [
     'promise-carried-not-delivered', 'self-consistent-polarity', 'silent-fallback',
     'boundary-shift', 'dead-wiring', 'doc-contract-lie',
-    'prefix-collision-coverage-fail-open',
-  ], `D1/D5: the shipped corpus must parse to exactly these seven ids in FILE ORDER — the six ` +
-    `hand-authored classes followed by the one derived class D5 authors from the Contracts block; ` +
+    'prefix-collision-coverage-fail-open', 'server-code-in-client-bundle',
+  ], `D1/D5: the shipped corpus must parse to exactly these eight ids in FILE ORDER — the six ` +
+    `hand-authored classes followed by the derived classes (D5's first, then the escape-backfill one); ` +
     `a wrong order or a missing/extra id here means replay.js's --class validation and --pick-class ` +
     `tie-break (corpus order) would target the wrong class: ${JSON.stringify(ids)}`)
   for (let i = 0; i < 6; i++) {
@@ -42,14 +42,15 @@ test('AC-20260901-08-1: WHEN parseCorpus reads the shipped replay-corpus.md THE 
       `a hand-authored class over the real derived one, or vice versa: class "${classes[i].id}" ` +
       `carried derived:${classes[i].derived}`)
   }
-  const last = classes[6]
-  assert.strictEqual(last.derived, true,
-    `D1/D5: prefix-collision-coverage-fail-open sits under "## Derived classes" as a "### " heading ` +
-    `and must carry derived:true — a false value here means --pick-class could never prefer it on a ` +
-    `tie, defeating D5's whole point of exercising the parser's derived arm against the shipped file`)
-  assert.match(last.section, /prefix-collision-coverage-fail-open|recipe/i,
-    `D1: the derived class's own section text must be non-empty and belong to it, not bleed in from ` +
-    `a neighboring heading: ${JSON.stringify(String(last.section).slice(0, 120))}`)
+  for (const last of classes.slice(6)) {
+    assert.strictEqual(last.derived, true,
+      `D1/D5: ${last.id} sits under "## Derived classes" as a "### " heading ` +
+      `and must carry derived:true — a false value here means --pick-class could never prefer it on a ` +
+      `tie, defeating D5's whole point of exercising the parser's derived arm against the shipped file`)
+    assert.match(last.section, new RegExp(last.id + '|recipe', 'i'),
+      `D1: the derived class's own section text must be non-empty and belong to it, not bleed in from ` +
+      `a neighboring heading: ${JSON.stringify(String(last.section).slice(0, 120))}`)
+  }
 })
 
 test('AC-20260901-08-1: WHEN parseCorpus reads a synthetic corpus carrying a stray level-3 heading BEFORE "## Derived classes" THE SYSTEM SHALL return only the three real classes (one hand-authored, two derived) and ignore the stray heading entirely', () => {

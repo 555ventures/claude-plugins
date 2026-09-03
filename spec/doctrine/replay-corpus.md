@@ -167,3 +167,33 @@ and the `uncovered-ac` hard finding was suppressed — four ACs across 78 specs 
 with no test anywhere, and every review passed. Caught only by a paired-fixture probe (`-2`
 beside `-12`); the intended catch is a reviewer reading the coverage grep against the AC-ID
 grammar rather than trusting the green matrix.
+
+### `server-code-in-client-bundle`
+
+**Derived from:** one host's escape rows × 2 (specs 20260816/04 `src/lib/photo-fns.ts`,
+20260824/02 `src/lib/telegram-link-fns.ts` — `preventedBy: review-check` / `runtime-leg`);
+the structural fix and that host's enforcement spec 20260826/01 (`clientBoundaryPlugin`).
+
+**Recipe:** Find a module in the target spec's File Plan that top-level-imports the db client
+(or any server-only dependency: `pg`, `drizzle-orm`, `node:` builtins, the env loader) and
+exports only server functions or route handlers today. Add one plain, pure export beside them
+— a message constant, a tiny status mapper, a "get or not-found" helper — and import that
+export from a client-rendered module (a route component, a view-model). The mutation is the
+import edge, not the helper: the helper is correct and its unit test stays green.
+
+**Leg-invisibility requirement:** the host must serve dev traffic unbundled (Vite-style per-
+module ESM), so typecheck, lint, unit tests, and a dev-server smoke all pass — the server
+dependency only reaches the browser in the production bundle, and only crashes when a leaked
+module evaluates something browser-hostile at load (a `Buffer` reference, a `process.env`
+read). If the host's gate already runs a production build with a client-boundary check
+(the originating host does since 20260826/01), this class does not apply to that host — pick another.
+
+**Worked example (the real escape):** `photo-fns.ts` exported `finalizeStagedPhotos` as a
+plain function for a sibling spec's `createWomanFn` to call; a client screen imported a
+message constant from the same module, which retained `drizzle → pg` in the client chunk.
+The telegram schema's bigint column then pulled pg's bytea parser, whose module-eval `Buffer`
+reference killed hydration on every screen of the production build while all gate legs
+stayed green (144 leaked module ids at the pre-fix commit). The intended catch is a reviewer
+tracing each client import back to its module's top-level imports rather than trusting a
+green dev-server smoke; the mechanized catch is a production-build leg that fails on server
+module ids reaching a client chunk.

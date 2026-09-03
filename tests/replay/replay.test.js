@@ -2067,7 +2067,7 @@ test('AC-20260901-08-4: --pick-class picks the fewest-measurement-rows class, ty
   assert.strictEqual(empty.status, 0, 'D3: --pick-class over an empty ledger must succeed: ' + empty.stderr)
   assert.match(empty.stdout, /^class=prefix-collision-coverage-fail-open derived=true rows=0$/m,
     'D3/D5: with zero replay rows every corpus class starts at 0, and the tie resolves derived-first ' +
-    '— the shipped corpus\'s one derived class must be picked: ' + empty.stdout)
+    '— the first-listed of the shipped corpus\'s derived classes must be picked: ' + empty.stdout)
 
   const tieDir = fs.realpathSync(tmpdir('replay-pickclass-tie'))
   writeLedger(tieDir, [
@@ -2077,6 +2077,7 @@ test('AC-20260901-08-4: --pick-class picks the fewest-measurement-rows class, ty
     replayLedgerRow(4, { class: 'silent-fallback', outcome: 'caught' }),
     replayLedgerRow(5, { class: 'boundary-shift', outcome: 'caught' }),
     replayLedgerRow(6, { class: 'dead-wiring', outcome: 'caught' }),
+    replayLedgerRow(8, { class: 'server-code-in-client-bundle', outcome: 'caught' }),
     // doc-contract-lie has zero rows; a setup-failed row for it must not count as a measurement.
     replayLedgerRow(7, { class: 'doc-contract-lie', outcome: 'setup-failed', legs: 'none' }),
   ])
@@ -2090,11 +2091,12 @@ test('AC-20260901-08-4: --pick-class picks the fewest-measurement-rows class, ty
   const orderDir = fs.realpathSync(tmpdir('replay-pickclass-order'))
   writeLedger(orderDir, [
     replayLedgerRow(1, { class: 'prefix-collision-coverage-fail-open', outcome: 'caught' }),
+    replayLedgerRow(2, { class: 'server-code-in-client-bundle', outcome: 'caught' }),
   ])
   const order = runNode(SCRIPT, ['--pick-class', '--root', orderDir])
   assert.strictEqual(order.status, 0, 'D3: --pick-class over this ledger must succeed: ' + order.stderr)
   assert.match(order.stdout, /^class=promise-carried-not-delivered derived=false rows=0$/m,
-    'D3: once the derived class has 1 measurement row and every hand-authored class still has 0, a ' +
+    'D3: once every derived class has 1 measurement row and every hand-authored class still has 0, a ' +
     'hand-authored class must win the tie (fewest rows is the primary key, derived-first only breaks ' +
     'ties among equals) — and among the six tied hand-authored classes at 0, corpus file order picks ' +
     'promise-carried-not-delivered (the first-listed class): ' + order.stdout)

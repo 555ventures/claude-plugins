@@ -1620,7 +1620,11 @@ test('AC-20260819-03-17: --score normalizes a survivor\'s file — stripping a l
     'suffix would falsely score caught: ' + falseAbsScore.stdout)
 })
 
-test('AC-20260819-02-6 / AC-20260823-09-11 (pre-existing matrix continuity: green for a caught outcome): --record appends one ledger row matching the Contracts shape with a fresh rp_ runId and writes the evidence artifact holding the patch verbatim', () => {
+// AC-20260903-01-15 (updated in place, never weakened) + AC-20260903-01-17 (CONTINUE TO pin):
+// specs/20260903/01-owed-query-and-row-handoff.md D8 adds `via` to the --record row's Contracts
+// key set — this invocation carries no --via flag: the key set gains `via` stamped "manual"
+// (AC-15) and the record still exits 0 appending exactly one row + artifact (AC-17, D16).
+test('AC-20260819-02-6 / AC-20260823-09-11 / AC-20260903-01-15 / AC-20260903-01-17 (pre-existing matrix continuity: green for a caught outcome): --record appends one ledger row matching the Contracts shape with a fresh rp_ runId and writes the evidence artifact holding the patch verbatim', () => {
   const root = fs.realpathSync(tmpdir('replay-record'))
   const patchFile = path.join(root, 'mutation.patch')
   fs.writeFileSync(patchFile, '--- a/lib/x.js\n+++ b/lib/x.js\n@@ -1 +1 @@\n-a\n+B\n')
@@ -1655,11 +1659,15 @@ test('AC-20260819-02-6 / AC-20260823-09-11 (pre-existing matrix continuity: gree
     'D8: the generated runId must match rp_ + 12 lowercase hex — a wrong shape breaks the evidence ' +
     'artifact\'s filename convention (<rp_id>.json): ' + row.runId)
   assert.deepStrictEqual(Object.keys(row).sort(),
-    ['class', 'files', 'legs', 'outcome', 'reviewRunId', 'runId', 'spec', 'stage', 'tokens', 'ts'],
-    'D7/D8: the row\'s keys must be EXACTLY the Contracts set, no more, no less — this is the retagged-in-' +
-    'place form of the original key-set pin, with the retired singular "file" key replaced by the ' +
-    'D7-derived "files" array: an extra, missing, or wrongly-named key breaks --stats\' aggregation and any ' +
-    'script that reads this row: ' + JSON.stringify(row))
+    ['class', 'files', 'legs', 'outcome', 'reviewRunId', 'runId', 'spec', 'stage', 'tokens', 'ts', 'via'],
+    'D7/D8/AC-20260903-01-15: the row\'s keys must be EXACTLY the Contracts set, no more, no less — this is ' +
+    'the retagged-in-place form of the original key-set pin, with the retired singular "file" key replaced ' +
+    'by the D7-derived "files" array and D8\'s "via" field now added: an extra, missing, or wrongly-named ' +
+    'key breaks --stats\' aggregation and any script that reads this row: ' + JSON.stringify(row))
+  assert.strictEqual(row.via, 'manual',
+    'AC-20260903-01-15: this invocation carries no --via flag — D8 says absent or any non-"driver" value ' +
+    'stamps "manual", mirroring build/review\'s existing default-to-manual rule so every pre-change --record ' +
+    'call keeps working unchanged: ' + JSON.stringify(row))
   assert.deepStrictEqual(row.files, ['lib/x.js'],
     'D7: files must be DERIVED from --patch\'s own mutated-file headers now that --file is gone — a wrong ' +
     'or missing derivation here means every downstream consumer of this row loses the file this run scored: ' +

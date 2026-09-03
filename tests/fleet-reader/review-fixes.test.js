@@ -72,11 +72,12 @@ test('review finding 1: a >64KB --json payload survives a pipe byte-identical, e
   assert.ok(byteLen > 65536,
     'the fixture must exceed 64KB (got ' + byteLen + ' bytes) — at or under that boundary this test cannot distinguish the fix from the truncation bug it pins, making the assertions below vacuous')
   const parsed = JSON.parse(r.stdout)
-  // AC-20260901-03-6: specs/20260901/03 D9's cleanByVia is the eighth top-level key; the pin stays
-  // exhaustive (the truncation this test exists to catch is still detected by a MISSING key).
+  // AC-20260901-03-6 / AC-20260903-01-8: specs/20260901/03 D9's cleanByVia is the eighth
+  // top-level key and specs/20260903/01 D1's owed is the ninth; the pin stays exhaustive (the
+  // truncation this test exists to catch is still detected by a MISSING key).
   assert.deepStrictEqual(Object.keys(parsed).sort(), [
-    'cleanByVia', 'cleanContradicted', 'driftCensus', 'escapes', 'gate08', 'legRecency', 'population',
-    'replayDebt',
+    'cleanByVia', 'cleanContradicted', 'driftCensus', 'escapes', 'gate08', 'legRecency', 'owed',
+    'population', 'replayDebt',
   ], 'a truncated pipe write cuts the JSON mid-object — if any top-level key is missing or extra, the output is corrupt even though the process reported exit 0')
 
   const codeOnly = stripLineComments(fs.readFileSync(SCRIPT_PATH, 'utf8'))

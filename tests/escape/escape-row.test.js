@@ -91,8 +91,9 @@ test('AC-20260901-07-2: escape-row.js --check applies the amendment rules to a s
   assert.strictEqual(validAmend.stdout.trim(), '', 'exit 0 prints nothing on stdout, same contract as a valid escape row')
 })
 
-// AC-20260901-07-3
-test('AC-20260901-07-3: escape-row.js --append creates the ledger and appends exactly one canonicalized JSON line for a valid row, and touches nothing for an invalid one', () => {
+// AC-20260901-07-3 / AC-20260903-01-16 (CONTINUE TO pin, retagged in place: the append still
+// exits 0 with exactly one row and the unanchored confirmation line — specs/20260903/01 D16)
+test('AC-20260901-07-3 / AC-20260903-01-16: escape-row.js --append creates the ledger and appends exactly one canonicalized JSON line for a valid row, and touches nothing for an invalid one', () => {
   const root = tmpdir('escape-row-append')
   const row = validEscapeRow({ spec: 'specs/new.md', file: 'new.js' })
   const r = runNode(SCRIPT, ['--append', '--root', root, '--row', JSON.stringify(row)])
@@ -111,6 +112,25 @@ test('AC-20260901-07-3: escape-row.js --append creates the ledger and appends ex
   assert.match(r2.stdout, /class-malformed/, 'the printed reason must name the actual violation, not a generic append failure')
   assert.strictEqual(fs.readFileSync(ledgerPath, 'utf8'), before,
     'D2 Contracts: "an invalid row -> exit 1 with reasons and the file untouched" — the ledger must be byte-identical after a rejected append')
+})
+
+// AC-20260903-01-13: specs/20260903/01-owed-query-and-row-handoff.md D11 — the confirmation
+// line gains a trailing key= suffix derived from basename(resolved --root), the row's own ts,
+// and file, so a session copies the key verbatim into its report for fleet-reader --owed to
+// look up. A5 (assumption): the existing AC-20260901-07-3 regex above is unanchored and already
+// tolerates this suffix — it stays untouched; this is a fresh pin for the suffix itself.
+test('AC-20260903-01-13: escape-row.js --append prints a trailing key=escape:<repo>:<ts>:<file> suffix on the existing confirmation line, derived from basename(--root), the row\'s own ts, and file', () => {
+  const parent = tmpdir('escape-row-append-key')
+  const hostDir = path.join(parent, 'host-a')
+  fs.mkdirSync(hostDir, { recursive: true })
+  const row = validEscapeRow({ spec: 'specs/new.md', file: 'new.js', ts: '2026-09-03T10:00:00.000Z' })
+  const r = runNode(SCRIPT, ['--append', '--root', hostDir, '--row', JSON.stringify(row)])
+  assert.strictEqual(r.status, 0, 'AC-13: a valid append against a --root whose basename is host-a must still exit 0: ' + r.stderr)
+  assert.strictEqual(r.stdout.trim(),
+    'appended spec=specs/new.md file=new.js key=escape:host-a:2026-09-03T10:00:00.000Z:new.js',
+    'D11/AC-13: the confirmation line must gain a trailing key= suffix derived from basename(resolved ' +
+    '--root), the row\'s own ts, and file — the session copies this key verbatim into its report so ' +
+    'fleet-reader --owed can look it up, and a missing or malformed suffix breaks that handoff: ' + JSON.stringify(r.stdout))
 })
 
 // Trailing-newline guard: a ledger seeded WITHOUT a trailing newline (e.g. by an older writer,

@@ -25,8 +25,12 @@
 // the effective class across amendments (that join is fleet-reader.js's job — this script's
 // duplicate/key search reads only the ROOT's own raw rows, never joins them).
 //
-// Exit codes: 0 = ok (--check: no reasons; --append/--amend: one line appended, stdout
-//                 `appended spec=… file=…` / `amended escapeTs=… spec=… file=… class=…|null`)
+// Exit codes: 0 = ok (--check: no reasons; --append: one line appended, stdout
+//                 `appended spec=… file=… key=escape:<basename(resolved --root)>:<ts>:<file>` —
+//                 specs/20260903/01-owed-query-and-row-handoff.md D11: the trailing key= suffix
+//                 is the exact literal spec/scripts/fleet-reader.js's `owed` query joins
+//                 citations against, so a session copies it verbatim into its report;
+//                 --amend: one line appended, stdout `amended escapeTs=… spec=… file=… class=…|null`)
 //             1 = validation reasons found (lib/escape-row.js's closed reason set), printed one
 //                 per line on stdout, nothing appended
 //             2 = usage error, unreadable/unparseable --row/--file, --root not a directory,
@@ -160,7 +164,13 @@ if (mode === 'append') {
     process.exit(3)
   }
   appendLine(root, row)
-  console.log(`appended spec=${row.spec} file=${row.file}`)
+  // D11 (specs/20260903/01-owed-query-and-row-handoff.md): the key the fleet reader's `owed`
+  // query joins citations against — derived here, never hand-composed by the session that
+  // copies it into its report. basename(resolved --root) is the population name fleet-reader.js
+  // itself keys repos by; the row's OWN ts (never an amendment's) plus file make it unique
+  // fleet-wide (D4).
+  const key = `escape:${path.basename(root)}:${row.ts}:${row.file}`
+  console.log(`appended spec=${row.spec} file=${row.file} key=${key}`)
   process.exit(0)
 }
 

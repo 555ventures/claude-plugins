@@ -97,6 +97,18 @@ is scored by the fleet reader's `cleanByVia` (escapes-per-CLEAN by `via`); a `lo
 above the `direct` rate over 30 fleet reviews reverts the loop.
 (specs/20260901/03-unified-build-loop.md, done 2026-09-01)
 
+The fleet reader's `owed` question (`--owed` for the human render) lists every
+plugin-blaming row across this machine's checkouts: escape rows whose `preventedBy` is
+`review-check` or `runtime-leg`, missed replay rows, and unstamped `docs/spec-feedback/`
+findings, grouped by effective class with the joined recurrence count and a pointer to core
+§ Incident Policy. Fixed-status is derived, never stored: an item's key
+(`escape:<repo>:<ts>:<file>`, a replay run id, or a feedback finding id) cited in a landed
+test, a doctrine file, or a `done` spec marks it fixed; a citation in an unfinished spec marks
+it in-flight. Host reports end with the row key and nothing else — no handoff prompt is
+composed; the owed query is the consumer. Replay rows carry `via` (`driver` when the review
+driver's REPLAY step handed the target, `manual` otherwise), so `replay.js --stats`'s `by-via`
+line counts the manual path. (specs/20260903/01-owed-query-and-row-handoff.md, done 2026-09-03)
+
 ## The question gate asks product facts, never derives them (2026-09-02, specs/20260902/06)
 
 `question-style-gate.js`'s tier-2 judge verdict `derive` is suppressed — treated as pass —

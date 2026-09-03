@@ -204,7 +204,9 @@ tipped-off reviewer measures nothing (D10's rationale).
 1. Run `node "$(spec-paths replay)" --record --spec {spec} --review-run-id {reviewRunId}
    --legs green|baseline-red:<leg>[,<leg>]|red:<leg>|none --outcome
    caught|missed|leg-caught|unresolved|setup-failed [--class {classId}] [--patch {patchOutFile}]
-   [--workflow {workflowReturnFile}] --tokens {N}` — D2/D3's restated validation matrix:
+   [--workflow {workflowReturnFile}] --tokens {N} --via driver|manual` — `--via driver` when
+   this run's target came from the review driver's REPLAY step; `--via manual` when Phase 0 ran
+   in this command itself (the manual surface). D2/D3's restated validation matrix:
 
    | `--outcome` | `--legs` accepted | `--patch` | `--workflow` |
    |---|---|---|---|
@@ -237,7 +239,9 @@ verbatim (shared § Console Output Style):
   `replay setup-failed — the scratch copy could not be prepared`.
 - `bullets`: the class id, the mutated file(s), and the selected spec; `unresolved` adds the
   retained `runId` for later adjudication; `setup-failed` never had a class or a mutated file —
-  its bullets name the failing `setupCommand` and the selected spec instead.
+  its bullets name the failing `setupCommand` and the selected spec instead; `missed` adds a
+  line naming the run id: `- {runId} — the plugin repo's fleet-reader --owed picks this row
+  up; no handoff prompt is composed here`.
 - `warns`: `ambiguous score adjudicated by hand — see the recorded outcome` when Phase 3 asked;
   omit otherwise.
 - `next`: `{kind:'status-verbatim', text: <spec-status --next captured this run>}`.

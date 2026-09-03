@@ -157,7 +157,11 @@ test('AC-20260820-05-12: an unknown flag or a non-directory --repos-root exits 2
 // enriches the "escapes" and "driftCensus" values with unclassedRows/amendments/new drift
 // buckets, but the CONTRACT is that the top-level key SET stays at exactly eight — this test is
 // the oracle for that.
-test('AC-20260820-05-13 / AC-20260901-03-6 / AC-20260901-07-12: --json prints exactly the eight contracted top-level keys; without --json the render is not JSON', () => {
+// AC-20260903-01-8 (updated in place, never weakened): specs/20260903/01-owed-query-and-
+// row-handoff.md D1 adds a NINTH fixed question, `owed`, so the eight-key set above is
+// invalidated by construction again — the same add-a-member-to-an-exhaustive-live-file-pin
+// class. The pin stays exhaustive: `owed` is added to the expected set, nothing is loosened.
+test('AC-20260820-05-13 / AC-20260901-03-6 / AC-20260901-07-12 / AC-20260903-01-8: --json prints exactly the nine contracted top-level keys; without --json the render is not JSON', () => {
   const root = tmpdir('fleet-json-shape')
   mkRepo(root, 'repo-a', { config: true, git: 'dir' })
 
@@ -165,9 +169,9 @@ test('AC-20260820-05-13 / AC-20260901-03-6 / AC-20260901-07-12: --json prints ex
   assert.strictEqual(j.status, 0, j.stderr)
   const out = JSON.parse(j.stdout)
   assert.deepStrictEqual(Object.keys(out).sort(), [
-    'cleanByVia', 'cleanContradicted', 'driftCensus', 'escapes', 'gate08', 'legRecency', 'population',
-    'replayDebt',
-  ], 'D13: --json must carry exactly the eight contracted top-level keys (cleanByVia added by specs/20260901/03 D9) — an extra or missing key breaks every --json consumer silently')
+    'cleanByVia', 'cleanContradicted', 'driftCensus', 'escapes', 'gate08', 'legRecency', 'owed',
+    'population', 'replayDebt',
+  ], 'D13/AC-20260903-01-8: --json must carry exactly the nine contracted top-level keys (owed added by specs/20260903/01 D1) — an extra or missing key breaks every --json consumer silently')
 
   const bare = runNode(SCRIPT, ['--repos-root', root])
   assert.strictEqual(bare.status, 0, bare.stderr)

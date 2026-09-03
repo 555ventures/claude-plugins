@@ -3,7 +3,7 @@ name: info-exclude-not-per-worktree
 description: git info/exclude is NOT per-worktree — it lives in the shared common git dir; use the worktree's private git-dir (rev-parse --git-dir) for any marker that must die with the worktree
 metadata:
   type: feedback
-  reviewed: 2026-09-02
+  reviewed: 2026-09-03
 ---
 
 `git -C <linked-worktree> rev-parse --git-path info/exclude` resolves into the **shared common git

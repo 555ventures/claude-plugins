@@ -1365,6 +1365,42 @@ test('AC-20260823-09-7: WHEN --select prints the two new baseline tokens THE SYS
     'not just which of them were red: ' + r.stdout)
 })
 
+// specs/20260903/01-owed-query-and-row-handoff.md D10: the REPLAY step body's --record
+// sentence and the replay-recorded refusal's remedy command both gain --via driver — the review
+// driver is the only caller that knows a replay run is driver-handed, so it prints the flag
+// where the session copies the command from.
+test('AC-20260903-01-12: WHEN the driver enters REPLAY with a selected target THE SYSTEM prints a step body whose --record sentence carries --review-run-id <id> --via driver', () => {
+  const host = makeReplayHost('rvdrvreplayvia', { acId: 'AC-20260820-99-19', seedRows: fiveSeedReviews })
+  driveToClose(host, 'rvdrv-replay-via-ret')
+  commitClose(host)
+  const runId = closeRunIdOf(host.root)
+  const r = run(host.root, host.spec, '--mark', 'closed')
+  assert.strictEqual(r.status, 0,
+    'D10: a due close with a selected target must still be accepted into REPLAY: ' + r.stdout + r.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REPLAY',
+    'setup precondition: the fixture must park at REPLAY before the --record sentence can be exercised: ' + r.stdout)
+  assert.match(r.stdout, new RegExp('--review-run-id ' + runId + ' --via driver'),
+    'D10: the REPLAY step body\'s --record sentence must spell --via driver right after --review-run-id <id> ' +
+    '— the review driver is the only caller that knows this run is driver-handed, and printing it where the ' +
+    'session copies the command from is the cheapest correct stamp: ' + r.stdout)
+})
+
+test('AC-20260903-01-12: WHEN --mark replay-recorded is refused for a missing row THE SYSTEM prints a remedy command carrying --via driver before --legs', () => {
+  const host = makeReplayHost('rvdrvreplayviaremedy', { acId: 'AC-20260820-99-20', seedRows: fiveSeedReviews })
+  driveToClose(host, 'rvdrv-replay-via-remedy-ret')
+  commitClose(host)
+  run(host.root, host.spec, '--mark', 'closed')
+  assert.strictEqual(stateOf(host.root, host.spec), 'REPLAY', 'setup precondition: the due fixture must park at REPLAY')
+
+  const r = run(host.root, host.spec, '--mark', 'replay-recorded')
+  assert.strictEqual(r.status, 2,
+    'marking replay-recorded with no replay row for this review\'s target must still be refused: ' + r.stdout + r.stderr)
+  const out = r.stdout + r.stderr
+  assert.match(out, /--record --spec \S+ --review-run-id \S+ --via driver --legs/,
+    'D10: the refusal\'s printed --record remedy command must carry --via driver right before --legs — a ' +
+    'remedy the session copies verbatim that omits it would silently record the retry as manual: ' + out)
+})
+
 // Review of specs/20260823/09-replay-baseline-attribution.md: this test's earlier form
 // claimed AC-20260823-09-8 (a FIVE-token line, neither baseline token present) but its fixture —
 // makeReplayHost driving the REAL spec/scripts/replay.js — can never produce one: replay.js:340

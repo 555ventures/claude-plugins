@@ -195,10 +195,14 @@ if (fs.existsSync(roadmapDir)) {
     // (`Depends on: spec 20260804/02 at done`) into permanent phantom brief dependencies —
     // 20260804 can never exist, and the 02 fragment binds to an unrelated real brief.
     // Items that parse as neither are kept aside and surfaced as anomalies, never as deps.
+    // A trailing parenthetical note — `16 (the review driver this brief mirrors)` — is the
+    // author's natural spelling and is read as the bare id: the note is ignored, the
+    // dependency binds. Commas inside the note never split the item.
     const deps = [], depRejects = []
-    for (const item of (dep ? dep[1].split(',') : []).map(s => s.trim()).filter(Boolean)) {
+    const items = dep ? dep[1].replace(/\([^)]*\)/g, m => m.replace(/,/g, '\u0000')).split(',').map(s => s.replace(/\u0000/g, ',').replace(/\s+/g, ' ').trim()).filter(Boolean) : []
+    for (const item of items) {
       if (BRIEFLESS.test(item)) continue
-      if (/^(?:brief\s+)?\d{1,2}[A-Za-z]?(?:-[\w-]+)?$/.test(item)) deps.push(normBrief(item.replace(/^brief\s+/, '')))
+      if (/^(?:brief\s+)?\d{1,2}[A-Za-z]?(?:-[\w-]+)?(?: \([^)]*\))?$/.test(item)) deps.push(normBrief(item.replace(/^brief\s+/, '').replace(/ \(.*$/, '')))
       else depRejects.push(item)
     }
     briefs.push({

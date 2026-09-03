@@ -1,9 +1,13 @@
-/* Wireframe class set — spec/doctrine/mocks.md § Mocks: State Machine (D17). Copied verbatim
+/* Wireframe class set — spec/doctrine/mocks.md § Mocks: State Machine (D17), re-based on the
+   wire tokens per specs/20260902/09-one-hand-wireframes-one-token-set.md D6. Copied verbatim
    into design/wire/wire.css by `canon-written` when absent, linked from every sketch-stage
    screen alongside tokens.css. Every color here is var(--role) from wire-tokens.css — a
    literal added to this file drifts the sketch register out from under design-atlas.js check,
-   which only inspects markup, not stylesheets. Layout uses px/rem freely (mocks legitimately
-   fix layout early); color is the one family this file must never hardcode. */
+   which only inspects markup, not stylesheets. The flat register: no shadow, dashed
+   placeholders on --border, gray fills on --muted-bg, and no filled buttons except
+   `.btn.primary` (which fills with --muted-bg, never --primary) — a wireframe stays honestly
+   gray, never pre-empting THEME's color decisions. Layout uses px/rem freely (mocks
+   legitimately fix layout early); color is the one family this file must never hardcode. */
 
 * { box-sizing: border-box; }
 
@@ -53,7 +57,7 @@ body {
 
 .muted {
   color: var(--fg);
-  opacity: 0.6;
+  background: var(--muted-bg);
 }
 
 .input {
@@ -75,10 +79,12 @@ body {
   cursor: pointer;
 }
 
-.btn-primary {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: var(--primary-fg);
+/* .btn.primary is the ONE filled button the flat register allows — filled with --muted-bg,
+   never --primary, so a wireframe never pre-empts a theme color decision. */
+.btn.primary {
+  border-color: var(--border);
+  background: var(--muted-bg);
+  color: var(--fg);
 }
 
 .btn:focus-visible,
@@ -101,4 +107,18 @@ body {
   gap: 8px;
   border-bottom: 1px solid var(--border);
   padding-bottom: 8px;
+}
+
+/* .placeholder — a dashed box standing in for content not yet drawn (an image, a chart, a
+   pending region); dashed on --border, filled --muted-bg, so it reads as "not real" at a
+   glance, never mistaken for a card. */
+.placeholder {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--muted-bg);
+  color: var(--fg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
 }

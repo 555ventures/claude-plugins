@@ -1050,8 +1050,14 @@ test('AC-20260902-08-12: the retired-literal sweep for design-pick.json, positio
     // rewritten by spec 09's design.md row, which builds AFTER this spec in the same brief — a
     // deliberate, spec-cited deferral, waived here for exactly the two literals it names, never
     // for style-tile/tiles-culled/positions-authored, which design.md does not mention.
+    // specs/20260902/09-one-hand-wireframes-one-token-set.md AC-20260902-09-1 pins the SAME two
+    // literals as design.md's OWN banned-literal ban (via
+    // tests/consistency/design-doctrine.test.js) — that test file's body must spell both
+    // literals verbatim as the strings it asserts are absent from design.md, so it is the
+    // input-under-test class this sweep already waives by path elsewhere in this file, not a
+    // stale reference.
     if (literal === 'design-pick.json' || literal === 'positions.md') {
-      waivedPaths.push('spec/doctrine/design.md')
+      waivedPaths.push('spec/doctrine/design.md', 'tests/consistency/design-doctrine.test.js')
     }
     // D14: the driver's own retired-mark refusal table (Contracts § driver surface) must spell
     // `positions-authored` and `tiles-culled` plainly by name so `--mark positions-authored`/
@@ -1079,6 +1085,37 @@ test('AC-20260902-08-12: the retired-literal sweep for design-pick.json, positio
     'D11: spec/templates/design-positions.md must be deleted along with the retired EXPLORE state it templated')
   assert.strictEqual(fs.existsSync(path.join(SPEC, 'templates/design-pick.json')), false,
     'D11: spec/templates/design-pick.json must be deleted — the pick record now lives in the mocks status (D4), not this template')
+})
+
+// specs/20260902/09-one-hand-wireframes-one-token-set.md D3, AC-20260902-09-3: mocks.md gains
+// a `## Mocks: Authoring Rules` heading carrying the six dry-run-converged wireframe/theme
+// rules as contract prose. The heading does not exist pre-D3, so this test is red until it lands.
+test('AC-20260902-09-3: mocks.md carries a "## Mocks: Authoring Rules" heading whose body names the half-styled-middle ban, recompose, dense-screen-first, and gray-until-confirmed rules, and spec-paths shared-mocks still resolves', () => {
+  const src = read('spec/doctrine/mocks.md')
+  const headingMatch = src.match(/^## Mocks: Authoring Rules$/m)
+  assert.ok(headingMatch,
+    'D3 adds a "## Mocks: Authoring Rules" heading to mocks.md — its absence means the six ' +
+    'wireframe/theme rules the dry run converged on (LEDGER standing rules + M11/M13/M14 + ' +
+    'A6/A7) have no doctrine home for the driver-unenforced half of the contract')
+
+  const bodyStart = headingMatch.index + headingMatch[0].length
+  const nextHeading = src.slice(bodyStart).search(/^## /m)
+  const body = nextHeading === -1 ? src.slice(bodyStart) : src.slice(bodyStart, bodyStart + nextHeading)
+
+  for (const literal of ['never a half-styled middle', 'recompose', 'dense screen first', 'gray until confirmed']) {
+    assert.ok(body.includes(literal),
+      'D3: the "## Mocks: Authoring Rules" section body must contain the literal "' + literal +
+      '" — its absence means one of the four checkable rules (one honest wireframe or the ' +
+      'full theme, theme = recomposing on structure and facts, judged on the dense screen ' +
+      'first, AI-reworded text stays gray until confirmed) is missing from the section')
+  }
+
+  const shared = runBash('bin/spec-paths', ['shared-mocks'])
+  assert.strictEqual(shared.status, 0,
+    'spec-paths shared-mocks must SHALL CONTINUE TO resolve to doctrine/mocks.md — D3\'s new ' +
+    'section must not break the key that hands the mocks driver this whole file: ' + shared.stderr)
+  assert.match(shared.stdout, /doctrine\/mocks\.md/,
+    'spec-paths shared-mocks must SHALL CONTINUE TO print a path ending in doctrine/mocks.md: ' + shared.stdout)
 })
 
 test('AC-20260902-08-17: spec-paths shared-for genesis SHALL CONTINUE TO serve its scoped sections (Design Canon, Design Authoring Contracts, Host Grounding)', () => {

@@ -47,6 +47,11 @@
 //                                                  strip detected chrome and wrap the rest as the
 //                                                  content slot
 //
+// specs/20260902/09-one-hand-wireframes-one-token-set.md D5: every chrome page (build, gallery,
+// serve's index) is emitted by the one `page()` — it inlines spec/templates/mocks/viewer.css (the
+// one token set's `--v-*` register, read once per process) ahead of its own rules, and every chrome
+// rule below consumes only `var(--v-*)` roles, never a literal color.
+//
 // check/build/gallery are a file walk + string emit: zero tokens, reproducible output (no
 // timestamps), and never edit their inputs. `shell` is the one writer here, and it writes only
 // the region it derives (plus a missing css link, plus the data-shell stamp on adopt) — never a
@@ -441,50 +446,67 @@ function cmdShellAdopt(argv) {
 }
 
 // ---- shared page chrome ----------------------------------------------------------------------------
+// specs/20260902/09-one-hand-wireframes-one-token-set.md D5/A3: every chrome page (build, gallery,
+// the serve index) is a light page on the ONE token set — read from the plugin template once per
+// process and inlined verbatim ahead of the atlas's own rules, so every `--v-*` role (plus the
+// full register's `.v-*` classes) is available before the chrome rules below reference it. The
+// chrome rules consume ONLY `var(--v-*)` roles — no `#hex`/`rgb(`/`hsl(` literal survives here; the
+// one derived value (the lightbox backdrop, 85% of `--v-fg`) is composed with `color-mix()` over a
+// role, never a literal, so it still reads as "no literal" under the AC's own regex.
+let __viewerCss = null
+function viewerCss() {
+  if (__viewerCss === null) {
+    const p = path.join(__dirname, '..', 'templates', 'mocks', 'viewer.css')
+    try { __viewerCss = fs.readFileSync(p, 'utf8') } catch { die('page: cannot read ' + p + ' — the one token set (specs/20260902/09 D4) must exist before any chrome page can render') }
+  }
+  return __viewerCss
+}
+
 // Review posture: every mock is shown WHOLE — full content height, scaled to the card width — so
 // the reviewer never pans inside a card (card iframes are pointer-inert; clicking opens the
 // lightbox at natural size). The page itself scrolls vertically only, at every width.
 function page(title, bodyHtml, extraHead = '') {
   return '<!doctype html>\n<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">\n' +
     '<title>' + esc(title) + '</title>\n<style>\n' +
-    'body{font:14px/1.5 system-ui,sans-serif;margin:0;padding:1.25rem;background:#111;color:#ddd;overflow-x:hidden}\n' +
-    'h1,h2{font-weight:600} a{color:#8fa8ff}\n' +
+    viewerCss() + '\n' +
+    'body{font:14px/1.5 var(--v-font);margin:0;padding:1.25rem;background:var(--v-bg);color:var(--v-fg);overflow-x:hidden}\n' +
+    'h1,h2{font-weight:600} a{color:var(--v-primary)}\n' +
     'h1{margin:.2rem 0 .1rem}\n' +
     '.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;align-items:start}\n' +
-    '.card{border:1px solid #333;border-radius:8px;padding:.75rem;background:#181818;min-width:0}\n' +
+    '.card{border:1px solid var(--v-border);border-radius:var(--v-radius);padding:.75rem;background:var(--v-bg);box-shadow:var(--v-shadow);min-width:0}\n' +
     '.card.wide{grid-column:1/-1}\n' +
     '.card h3{margin:.1rem 0 .4rem;font-size:14px}\n' +
-    '.vp{color:#777;font-size:11px;font-weight:400;margin-left:.4em}\n' +
+    '.vp{color:var(--v-muted);font-size:11px;font-weight:400;margin-left:.4em}\n' +
     '.open{float:right;font-size:12px;font-weight:400}\n' +
-    '.badge{display:inline-block;border:1px solid #444;border-radius:99px;padding:0 .5em;font-size:11px;' +
+    '.badge{display:inline-block;border:1px solid var(--v-border);border-radius:99px;padding:0 .5em;font-size:11px;' +
     'margin-right:.3em;text-transform:uppercase;letter-spacing:.04em}\n' +
-    '.badge.gap{border-color:#a55;color:#e99}.badge.sketch{border-color:#996;color:#dc6}\n' +
-    '.badge.ratified{border-color:#7a5;color:#bd8}\n' +
-    '.badge.approved{border-color:#595;color:#8d8}.badge.bound{border-color:#568;color:#9bd}\n' +
-    '.badge.built{border-color:#66a;color:#aae}.badge.orphan{border-color:#a5a;color:#d9d}\n' +
-    '.shot{overflow:hidden;border-radius:4px;background:#0d0d0d;cursor:zoom-in;margin-top:.35rem}\n' +
-    '.frame{border:0;display:block;transform-origin:0 0;pointer-events:none;background:#0d0d0d;width:100%}\n' +
+    '.badge.gap{border-color:var(--v-danger);color:var(--v-danger)}.badge.sketch{border-color:var(--v-warn);color:var(--v-warn)}\n' +
+    '.badge.ratified{border-color:var(--v-ok);color:var(--v-ok)}\n' +
+    '.badge.approved{border-color:var(--v-ok);color:var(--v-ok)}.badge.bound{border-color:var(--v-ring);color:var(--v-fg)}\n' +
+    '.badge.built{border-color:var(--v-primary);color:var(--v-primary)}.badge.orphan{border-color:var(--v-danger);color:var(--v-danger)}\n' +
+    '.shot{overflow:hidden;border-radius:var(--v-radius);background:var(--v-muted-bg);cursor:zoom-in;margin-top:.35rem}\n' +
+    '.frame{border:0;display:block;transform-origin:0 0;pointer-events:none;background:var(--v-muted-bg);width:100%}\n' +
     '.sect{margin:1.75rem 0 0}\n' +
-    '.sect>h2{font-size:15px;margin:0 0 .75rem;padding-bottom:.35rem;border-bottom:1px solid #2a2a2a}\n' +
-    '.sect>h2 .count{color:#777;font-size:12px;font-weight:400;margin-left:.5em}\n' +
+    '.sect>h2{font-size:15px;margin:0 0 .75rem;padding-bottom:.35rem;border-bottom:1px solid var(--v-border)}\n' +
+    '.sect>h2 .count{color:var(--v-muted);font-size:12px;font-weight:400;margin-left:.5em}\n' +
     '.gaps{display:flex;flex-wrap:wrap;gap:.4rem;margin:.75rem 0 0}\n' +
-    '.gapchip{border:1px dashed #544;color:#c99;border-radius:99px;padding:.05rem .65rem;font-size:12px}\n' +
-    '.gapcard{border:1px dashed #555;border-radius:4px;color:#999;display:flex;align-items:center;' +
+    '.gapchip{border:1px dashed var(--v-danger);color:var(--v-danger);border-radius:99px;padding:.05rem .65rem;font-size:12px}\n' +
+    '.gapcard{border:1px dashed var(--v-border);border-radius:var(--v-radius);color:var(--v-muted);display:flex;align-items:center;' +
     'justify-content:center;min-height:6rem;margin-top:.35rem}\n' +
-    '.meta{color:#888;font-size:12px;margin-top:.35rem}\n' +
+    '.meta{color:var(--v-muted);font-size:12px;margin-top:.35rem}\n' +
     '.bar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;' +
-    'background:rgba(17,17,17,.94);backdrop-filter:blur(4px);padding:.5rem 0;margin:0 0 .5rem}\n' +
-    '.bar button{background:#222;color:#ccc;border:1px solid #444;border-radius:6px;padding:.2em .7em;' +
+    'background:var(--v-bg);backdrop-filter:blur(4px);padding:.5rem 0;margin:0 0 .5rem;border-bottom:1px solid var(--v-border)}\n' +
+    '.bar button{background:var(--v-muted-bg);color:var(--v-fg);border:1px solid var(--v-border);border-radius:var(--v-radius);padding:.2em .7em;' +
     'cursor:pointer;font:inherit;font-size:12px}\n' +
-    '.bar button.on{border-color:#8fa8ff;color:#cfd9ff}\n' +
-    '.bar .sep{width:1px;height:1.2em;background:#333;margin:0 .35em}\n' +
-    '#journey{height:420px;border:1px solid #333;border-radius:8px;margin-bottom:1rem}\n' +
-    '#lb{position:fixed;inset:0;z-index:10;background:rgba(0,0,0,.85);display:none;overflow:auto;padding:3.2rem 1rem 1rem}\n' +
+    '.bar button.on{border-color:var(--v-ring);color:var(--v-primary)}\n' +
+    '.bar .sep{width:1px;height:1.2em;background:var(--v-border);margin:0 .35em}\n' +
+    '#journey{height:420px;border:1px solid var(--v-border);border-radius:var(--v-radius);margin-bottom:1rem}\n' +
+    '#lb{position:fixed;inset:0;z-index:10;background:color-mix(in srgb, var(--v-fg) 85%, transparent);display:none;overflow:auto;padding:3.2rem 1rem 1rem}\n' +
     '#lb.on{display:block}\n' +
-    '#lb iframe{border:0;display:block;margin:0 auto;background:#111;box-shadow:0 8px 40px rgba(0,0,0,.8)}\n' +
+    '#lb iframe{border:0;display:block;margin:0 auto;background:var(--v-bg);box-shadow:var(--v-shadow)}\n' +
     '#lbbar{position:fixed;top:.6rem;right:1rem;z-index:11;display:flex;gap:.4rem;align-items:center}\n' +
-    '#lbbar span{color:#ccc;font-size:13px;margin-right:.4em}\n' +
-    '#lbbar button,#lbbar a{background:#222;color:#ccc;border:1px solid #444;border-radius:6px;' +
+    '#lbbar span{color:var(--v-bg);font-size:13px;margin-right:.4em}\n' +
+    '#lbbar button,#lbbar a{background:var(--v-muted-bg);color:var(--v-fg);border:1px solid var(--v-border);border-radius:var(--v-radius);' +
     'padding:.2em .7em;cursor:pointer;font:inherit;font-size:13px;text-decoration:none}\n' +
     '@media(max-width:640px){body{padding:.75rem}.grid{grid-template-columns:1fr}#journey{height:260px}}\n' +
     '</style>' + extraHead + '</head><body>\n' + bodyHtml + '\n</body></html>\n'
@@ -845,15 +867,20 @@ function cmdBuild(argv) {
     '<script src="https://unpkg.com/cytoscape-dagre@2/cytoscape-dagre.js"></script>\n' +
     '<script>\n' +
     'if (window.cytoscape) { try { if (window.cytoscapeDagre) cytoscape.use(cytoscapeDagre) } catch (e) {}\n' +
-    '  var colors={gap:"#a55",sketch:"#996",ratified:"#7a5",approved:"#595",bound:"#568",built:"#66a"};\n' +
+    // specs/20260902/09-one-hand-wireframes-one-token-set.md D5/Behavior: the graph's status colors
+    // are read at runtime via getComputedStyle from the same --v-* roles the rest of the chrome
+    // consumes, never a literal hex map in this script.
+    '  var __cs=getComputedStyle(document.documentElement);\n' +
+    '  function __role(name,fallback){var v=__cs.getPropertyValue(name).trim();return v||fallback}\n' +
+    '  var colorRoles={gap:"--v-danger",sketch:"--v-warn",ratified:"--v-ok",approved:"--v-ok",bound:"--v-ring",built:"--v-primary"};\n' +
     '  var cy=cytoscape({container:document.getElementById("journey"),elements:__atlas,\n' +
     '    minZoom:.15,maxZoom:3,wheelSensitivity:.2,\n' +
     '    layout:{name:window.cytoscapeDagre?"dagre":"breadthfirst",rankDir:"LR",padding:16},\n' +
-    '    style:[{selector:"node",style:{label:"data(id)",color:"#ddd","font-size":"11px",\n' +
+    '    style:[{selector:"node",style:{label:"data(id)",color:__role("--v-fg","#333"),"font-size":"11px",\n' +
     '      "text-valign":"bottom","text-margin-y":4,\n' +
-    '      "background-color":function(e){return colors[e.data("status")]||"#555"}}},\n' +
+    '      "background-color":function(e){return __role(colorRoles[e.data("status")]||"--v-border","#999")}}},\n' +
     '      {selector:"edge",style:{"curve-style":"bezier","target-arrow-shape":"triangle",\n' +
-    '      width:1.5,"line-color":"#555","target-arrow-color":"#555"}}]});\n' +
+    '      width:1.5,"line-color":__role("--v-border","#999"),"target-arrow-color":__role("--v-border","#999")}}]});\n' +
     '  cy.on("tap","node",function(e){var el=document.getElementById("s-"+e.target.id());if(el)el.scrollIntoView({behavior:"smooth"})});\n' +
     '}\n</script>'
 

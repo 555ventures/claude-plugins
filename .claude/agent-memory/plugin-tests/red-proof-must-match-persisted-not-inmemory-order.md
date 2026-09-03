@@ -3,7 +3,7 @@ name: red-proof-must-match-persisted-not-inmemory-order
 description: when red-proving a reorder fix by reverting it, match the OLD PERSISTED (saveSidecar-relative) order, not just the in-memory statement order, or the revert is a no-op
 metadata:
   type: feedback
-  reviewed: 2026-09-01
+  reviewed: 2026-09-03
 ---
 
 When a dispatch describes a fix as "X now runs before Y" (e.g. spec-build-driver.js's

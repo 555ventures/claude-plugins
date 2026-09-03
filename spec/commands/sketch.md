@@ -17,10 +17,10 @@ whole-product map; this command is the per-brief workbench — the atlas's annot
 
 **Intended model: the session model, plus the planning seat for scoped-sweep authorship**
 (shared § Model Placement — direction is judged here so `/spec:design` later inherits it):
-recommend Fable/Opus for brainstorm rounds. Scoped-sweep mock authorship follows the shared
-authorship + grounding rule in full (shared § Design Atlas's authorship paragraph, ADR-0003).
-Mechanical mock edits (copy swaps, reorders) may still dispatch Sonnet agents
-(`Agent {model: "sonnet"}`) under the harness check; taste-bearing edits stay in-session.
+recommend the best available model for brainstorm rounds. Scoped-sweep mock authorship follows
+the shared authorship + grounding rule in full (shared § Design Atlas's authorship paragraph,
+ADR-0003) — one hand, in-session, for every edit; no `Agent` dispatch ever writes a mock
+(subagents run judgment-free checks only).
 
 **Fresh-window contract:** every invocation cold-starts from disk — brief + mocks are re-read,
 state is derived (which surfaces have mocks, at what `data-status`), and each applied round is
@@ -61,10 +61,9 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    Style): `🚫 **{surface} is bound — sketch is pre-plan only.**` then `Next: /spec:design —
    reopen the spec that bound this surface.`
 3. **Scoped sweep — single pass, over this brief's gap surfaces only.** Every gap surface of
-   this brief follows the shared authorship + grounding rule in full (shared § Design Atlas's
-   authorship paragraph): the journey-central set in-session (≤5, ≥1 per declared journey), the
-   rest by one sequential Fable dispatch citing the session-authored paths as exemplars, never
-   one-agent-per-surface; no shell canon yet → author `design/shell/app.html` in-session first.
+   this brief is authored in-session by one hand, following the shared authorship + grounding
+   rule in full (shared § Design Atlas's authorship paragraph) — no `Agent` dispatch ever
+   writes a mock; no shell canon yet → author `design/shell/app.html` in-session first.
    Existing mocks are never re-authored. When a surface carries capability an out-of-scope
    brief owns, give that capability its own region rather than folding it into a region the
    current brief must bind — an unbound region is inherited for free, while future-brief
@@ -78,9 +77,9 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    (discover via ToolSearch, never assume). Group notes by surface, present the plan, then
    **triage every change by root cause before touching anything** — the shared triage (shared
    § Design Atlas) plus the architecture route:
-   - **Mock-detail** (spacing, copy, emphasis, pure-UI state) → taste-bearing edits in-session,
-     mechanical ones (copy swaps, reorders) via Sonnet mock edit; `{atlas} check`, rebuild,
-     refresh.
+   - **Mock-detail** (spacing, copy, emphasis, pure-UI state) → edited in-session — copy swaps
+     and reorders too, the cost that justified dispatching them is gone at sketch tier;
+     `{atlas} check`, rebuild, refresh.
    - **Structure** (surface added/removed, journey edge changed) → the brief's `surfaces` block
      FIRST, then the mock follows (create/delete/edit as implied).
    - **Intent/scope** (a capability added or dropped — "users can favorite items") → the brief's
@@ -133,8 +132,8 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    `approved` does from here on (shared § Design Canon). On `change …` — one more round of
    step 5's triage, then this step again. No reply — state is on disk; re-invoke to continue.
 7. **Report.** Assemble the slots (rationale: shared § Console Output Style) — `outcome`:
-   ✅ `ratified {N} of {M} surfaces — {brief}`; `bullets`: the `🎨 position: …` line (shared §
-   Design Atlas) when this round authored any mocks; `warns`: one line per un-ratified surface
+   ✅ `ratified {N} of {M} surfaces — {brief}`; `bullets`: the `🎨 authored {N} in-session · {K}
+   check-only dispatches` line (shared § Design Atlas) when this round authored any mocks; `warns`: one line per un-ratified surface
    or open question written (drop when none); `artifacts`: the brief path (edited-section
    inventories stay in the brief file — print its path, not the sections); `next`:
    `{kind: 'command', text: '/spec:plan {brief}'}`. Run
@@ -142,7 +141,7 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
 
    ```report
    ✅ **ratified 3 of 4 surfaces — docs/roadmap/09-checkout.md**
-   🎨 position: instrument · authored 4 in-session · 1 fable · 0 sonnet-mechanical
+   🎨 authored 4 in-session · 0 check-only dispatches
    ⚠️ checkout-confirm still sketch — open question: refund flow ownership
    📦 docs/roadmap/09-checkout.md
 

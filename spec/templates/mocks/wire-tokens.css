@@ -3,16 +3,20 @@
    `canon-written` when absent. Every color a wireframe consumes must resolve to one of these
    roles (design-atlas.js check flags any color literal in markup) — sketching stays neutral
    on purpose so no direction is smuggled in before THEME. Do not add roles here without
-   updating design/wire/wire.css's consumers. */
+   updating design/wire/wire.css's consumers. Values are byte-equal (after whitespace trim) to
+   spec/templates/mocks/viewer.css's `--v-*` register per role pair — one token set, two
+   registers (specs/20260902/09-one-hand-wireframes-one-token-set.md D4); a pinned test
+   (tests/mocks/viewer-tokens.test.js) keeps the two files from drifting. */
 
 :root {
   --bg: #ffffff;
-  --fg: #18181b;
-  --muted: #f4f4f5;
+  --fg: #09090b;
+  --muted: #71717a;
+  --muted-bg: #f4f4f5;
   --border: #e4e4e7;
   --primary: #18181b;
   --primary-fg: #fafafa;
-  --ring: #18181b;
-  --radius: 0.5rem;
-  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ring: #a1a1aa;
+  --radius: 6px;
+  --font: ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;
 }

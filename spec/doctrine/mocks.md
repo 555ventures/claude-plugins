@@ -153,6 +153,39 @@ verify. `mocks-driver.js look-via <playwright|browser>` records the session's de
 `browser` means a browser MCP the command told the session to `ToolSearch` for, which cannot be
 probed from a script and so is declared once and trusted thereafter.
 
+## Mocks: Authoring Rules
+
+The six rules the dry run converged on (LEDGER standing rules + M11/M13/M14 + A6/A7) — the
+half the driver cannot check, carried here as contract prose the authoring session applies:
+
+- **Wireframes are gray but carry every graphic that IS structure.** A state is shown as the
+  product's map or a slice, never described in a caption; text is reserved for what someone
+  actually said (copy, labels), never for narrating what a picture should be doing instead.
+- **One honest wireframe or the full theme, never a half-styled middle.** A screen is either
+  the flat gray register at full structural honesty or the themed register at production
+  fidelity — a screen half-dressed in theme colors while its neighbors stay gray is neither
+  register and misleads a reviewer about what has actually been judged.
+- **Theme = recompose, never repaint.** A theme direction is composed to recompose each
+  approved wireframe screen at production fidelity on that screen's own structure and facts,
+  never freehand — across ≥3 screens per direction (the densest screen included) and
+  ≥2 directions; every direction is judged on the dense screen first, because a direction that
+  only survives on simple screens has not been tested.
+- **AI-reworded text stays gray until confirmed.** Copy the model rewrote or invented reads as
+  visibly provisional (the gray/unconfirmed treatment) until a human confirms it — a themed
+  screen never launders invented copy into something that reads as final.
+- **A persistent recording indicator on any capture surface.** Any screen whose product
+  purpose includes recording (audio, video, screen) shows a persistent, undismissable
+  indicator while active — never a state a wireframe or theme omits as an implementation
+  detail.
+- **Equal-weight verdict controls survive every theme.** Where a screen offers a binary or
+  multi-way verdict (approve/reject, accept/decline), every theme direction keeps the options
+  visually equal-weight — no direction may imply an outcome by making one option louder than
+  its alternatives.
+- **A new primitive names the nearest existing one and why it fails.** Before authoring a
+  primitive not already in the component vocabulary, the authoring pass names the nearest
+  existing entry and states specifically why it does not fit — silence is a gate failure, the
+  same bar § Design Authoring Contracts sets for the built-code side.
+
 ## Product-Stage Exemption (question-style-gate.js)
 
 While a mocks run is live (`design/mocks/status.json` exists with `state` other than

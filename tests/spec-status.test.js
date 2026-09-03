@@ -166,6 +166,26 @@ test('a typo\'d brief id in Depends on surfaces as an anomaly instead of silentl
   assert.strictEqual(rej.length, 1, 'a mistyped brief id must stay visible in the dependency graph report')
 })
 
+// A brief id followed by a parenthetical note (`16 (the review driver this brief mirrors)`)
+// is how briefs are actually written; rejecting it dropped real dependencies (18, 19, 23)
+// from the graph while printing four remediation paragraphs. The note is ignored, the id binds,
+// and a comma inside the note never splits the item.
+test('a brief id with a trailing parenthetical note binds as a dependency, not an anomaly', () => {
+  const dir = host({
+    briefs: {
+      '01-auth.md': BRIEFS['01-auth.md'],
+      '02-billing.md': '# 02 — Billing\n\nPhase: P0 · Depends on: 01 (auth — sessions, tokens\nand refresh), 03 (design; the atlas is its output) · Primary workspaces: api\n',
+      '03-design.md': '# 03 — Design\n\nPhase: P0 · Depends on: none · Primary workspaces: ui\n',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--json'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const j = JSON.parse(r.stdout)
+  const b2 = j.briefs.find(b => b.num === '02')
+  assert.deepStrictEqual(b2.depends_on, ['01', '03'], 'both ids bind; the notes (with their comma and line break) are ignored')
+  assert.strictEqual(j.anomalies.filter(a => a.kind === 'unparsed-dependency').length, 0, 'an author\'s note is not an anomaly')
+})
+
 test('lettered ad-hoc briefs (04b between 04 and 05) are first-class brief ids', () => {
   const dir = host({
     briefs: {

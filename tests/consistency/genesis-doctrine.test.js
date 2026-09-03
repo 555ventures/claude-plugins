@@ -89,6 +89,10 @@ function sweepRetiredLiteral (literal, { citations = [], waivedPaths = [], waive
   const walk = (dir, acc) => {
     for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
       if (ent.name === '.git' || ent.name === 'node_modules') continue
+      // A sibling session's live /spec:run worktree (.claude/worktrees/<branch>/) is a
+      // checkout of an OLDER commit, not this repo's content — sweeping it reddens every
+      // retired-literal pin whenever a run is in flight (observed 2026-09-03, spec 09).
+      if (dir === path.join(ROOT, '.claude') && ent.name === 'worktrees') continue
       const abs = path.join(dir, ent.name)
       if (ent.isDirectory()) walk(abs, acc)
       else if (ent.isFile()) acc.push(abs)

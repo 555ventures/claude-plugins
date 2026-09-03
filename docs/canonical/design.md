@@ -159,3 +159,29 @@ CLI (`look-probe` gates every screen-producing state unless `look-via browser` w
 `design-atlas.js build` renders seed journeys (owner `seed:<journey>`), one frame per
 `data-state-btn` state, a `shapes` section, and skips `references/`. Greenfield chain:
 `/spec:mocks → /spec:genesis → /spec:enforce → /spec:plan`.
+
+## Page notes (2026-09-03, specs/20260902/10)
+
+Feedback on mocks is written on the served pages, never in chat and never in mock markup.
+`design-atlas.js serve` injects a notes layer (`lib/notes-layer.browser.js`, on `viewer.css`'s
+`--v-*` roles) into every served `.html` at serve time; `?clean` skips the injection and is what
+the driver's look and the render gate's capture append. Notes live in `design/mocks/notes.json`
+at two scopes — a mock note is anchored to a screen + state, a project note to the whole
+product, never to an element — and are written only through `lib/mocks-notes.js`
+(`readNotes`, `validateNotes`, `writeNotes`, `addNote`, `resolveNote`, `addressNote`,
+`replyNote`, `groupOpen`, `unresolvedFor`). The server binds loopback only and exposes
+`GET /__notes/notes.js|viewer.css|list?screen=<label>|*` and `POST /__notes/add|resolve`;
+`address` and `reply` are driver-only file writes (`mocks-driver.js notes open|address|reply`),
+never HTTP, so a page can never mark the session's work done. The loop is asymmetric: the
+session addresses (`open → addressed`, with the change and an optional ledger row recorded
+under the note) and replies; the author resolves on the page after a re-look; no driver
+subcommand resolves. Triage bins are a closed set — `mock detail`, `product understanding`,
+`question back`, `propose to decline` — and a note that hits a canon primitive changes
+`canon.md` first, every dependent screen after. Project notes outrank mock notes:
+`journey-approved`, `journey-skinned`, `journey-reviewed` refuse while any project note is
+unresolved or any note on that journey's screens is unresolved (`addressed` is not
+`resolved`); `approved` refuses while any note anywhere is unresolved. Zero unresolved notes
+on a journey is its approval. Client review is the same loop with the recorded decider; the
+REVIEW step prints `Approval means "this is the product I understand" — the written brief, not
+these screens, holds scope`. `/spec:atlas` and `/spec:sketch` route their annotation loops
+through the same serve + `notes open`; the annotation-MCP discovery clause is retired.

@@ -33,7 +33,13 @@
 //                                                  specs/20260902/07 D12: static, no-cache,
 //                                                  read-only server over <root>/design/ — first
 //                                                  stdout line is the SSH port-forward
-//                                                  instruction; exits on SIGINT/SIGTERM
+//                                                  instruction; exits on SIGINT/SIGTERM.
+//                                                  specs/20260902/10 D2: every served text/html
+//                                                  response gets the page-notes layer script
+//                                                  injected before </body> unless the request
+//                                                  carries ?clean; /__notes/* exposes
+//                                                  notes.js, viewer.css, list, add, resolve
+//                                                  (address/reply are driver-only, never HTTP)
 //   design-atlas.js shell sync  [--root <r>] [<mock|dir>…]
 //                                                  specs/20260901/04-shell-composed-mocks.md D5:
 //                                                  rewrite every declaring mock's chrome region
@@ -65,6 +71,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { readConfig } = require('./lib/host-config')
 const shellLib = require('./lib/shell-region')
+const notesLib = require('./lib/mocks-notes')
 
 const die = (msg) => { process.stderr.write('[design-atlas] ' + msg + '\n'); process.exit(2) }
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -897,22 +904,111 @@ function cmdBuild(argv) {
 // ---- serve -----------------------------------------------------------------------------------------
 // specs/20260902/07-mocks-command-driver.md D12: static, read-only, no-store server over
 // `<root>/design/` — the SSH rule (client access is the forwarded port only, never an export or a
-// hosted copy). The port-forward line is the very first stdout write, before anything else, so a
-// caller reading stdout line-by-line never blocks waiting on a second line that never comes.
+// hosted copy); the listener binds loopback only — never every interface — so the forwarded port
+// is the only remote path in, per specs/20260902/10-page-notes-review-loop.md's Contracts: "binds
+// `localhost` only". The port-forward line is the very first stdout write, before anything else,
+// so a caller reading stdout line-by-line never blocks waiting on a second line that never comes.
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'application/javascript',
   '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.woff': 'font/woff', '.woff2': 'font/woff2',
 }
+// D2: inserts the notes-layer script tag immediately before the last `</body>` — appended at
+// the end when no `</body>` is present at all (never blocks serving a headless fragment).
+function injectNotesScript(html) {
+  const tag = '<script src="/__notes/notes.js"></script>\n'
+  const idx = html.lastIndexOf('</body>')
+  if (idx === -1) return html + '\n' + tag
+  return html.slice(0, idx) + tag + html.slice(idx)
+}
+
+// D2's POST body reader — a malformed (non-JSON) body rejects; an empty body reads as {}.
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let raw = ''
+    req.on('data', (c) => { raw += c })
+    req.on('end', () => {
+      if (!raw) return resolve({})
+      try { resolve(JSON.parse(raw)) } catch (e) { reject(e) }
+    })
+    req.on('error', reject)
+  })
+}
+
+function jsonRes(res, code, obj) {
+  res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+  res.end(JSON.stringify(obj))
+}
+
 function cmdServe(argv) {
   const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d }
   const root = path.resolve(arg('--root', '.'))
   const port = parseInt(arg('--port', '4173'), 10)
   const designRoot = path.join(root, 'design') + path.sep
+  const notesLibPath = path.join(__dirname, 'lib', 'notes-layer.browser.js')
+  const viewerCssPath = path.join(__dirname, '..', 'templates', 'mocks', 'viewer.css')
   const http = require('node:http')
   const server = http.createServer((req, res) => {
+    const urlObj = new URL(req.url || '/', 'http://localhost')
     let reqPath
-    try { reqPath = decodeURIComponent((req.url || '/').split('?')[0]) } catch { reqPath = '/' }
+    try { reqPath = decodeURIComponent(urlObj.pathname) } catch { reqPath = '/' }
+
+    // ---- /__notes/* (D2) ------------------------------------------------------------------
+    if (reqPath === '/__notes/notes.js' && req.method === 'GET') {
+      fs.readFile(notesLibPath, (err, data) => {
+        if (err) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end('not found'); return }
+        res.writeHead(200, { 'content-type': 'text/javascript', 'cache-control': 'no-store' })
+        res.end(data)
+      })
+      return
+    }
+    if (reqPath === '/__notes/viewer.css' && req.method === 'GET') {
+      fs.readFile(viewerCssPath, (err, data) => {
+        if (err) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end('not found'); return }
+        res.writeHead(200, { 'content-type': 'text/css', 'cache-control': 'no-store' })
+        res.end(data)
+      })
+      return
+    }
+    if (reqPath === '/__notes/list' && req.method === 'GET') {
+      const screen = urlObj.searchParams.get('screen')
+      let notes = []
+      try { notes = notesLib.readNotes(root) } catch { notes = [] }
+      const out = screen === '*'
+        ? notes.filter((n) => n.scope === 'project')
+        : notes.filter((n) => n.scope === 'mock' && n.screen === screen)
+      jsonRes(res, 200, out)
+      return
+    }
+    if (reqPath === '/__notes/add' && req.method === 'POST') {
+      readJsonBody(req).then((body) => {
+        let notes = []
+        try { notes = notesLib.readNotes(root) } catch { notes = [] }
+        let result
+        try { result = notesLib.addNote(notes, body) } catch (e) { jsonRes(res, 400, { error: e.message }); return }
+        notesLib.writeNotes(root, result.notes)
+        jsonRes(res, 201, result.note)
+      }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
+      return
+    }
+    if (reqPath === '/__notes/resolve' && req.method === 'POST') {
+      readJsonBody(req).then((body) => {
+        let notes = []
+        try { notes = notesLib.readNotes(root) } catch { notes = [] }
+        let result
+        try { result = notesLib.resolveNote(notes, body.id, body.by) } catch (e) { jsonRes(res, 404, { error: e.message }); return }
+        notesLib.writeNotes(root, result.notes)
+        jsonRes(res, 200, result.note)
+      }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
+      return
+    }
+    if (reqPath.startsWith('/__notes/')) {
+      res.writeHead(404, { 'cache-control': 'no-store' })
+      res.end('not found')
+      return
+    }
+
+    // ---- static <root>/design/ (D12, spec 07) ----------------------------------------------
     const resolved = path.normalize(path.join(designRoot, reqPath))
     if (resolved !== designRoot.slice(0, -1) && !resolved.startsWith(designRoot)) {
       res.writeHead(404, { 'cache-control': 'no-store' })
@@ -921,11 +1017,18 @@ function cmdServe(argv) {
     }
     fs.readFile(resolved, (err, data) => {
       if (err) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end('not found'); return }
-      res.writeHead(200, { 'content-type': MIME[path.extname(resolved)] || 'application/octet-stream', 'cache-control': 'no-store' })
+      const ext = path.extname(resolved)
+      const contentType = MIME[ext] || 'application/octet-stream'
+      if (ext === '.html' && !urlObj.searchParams.has('clean')) {
+        res.writeHead(200, { 'content-type': contentType, 'cache-control': 'no-store' })
+        res.end(injectNotesScript(data.toString('utf8')))
+        return
+      }
+      res.writeHead(200, { 'content-type': contentType, 'cache-control': 'no-store' })
       res.end(data)
     })
   })
-  server.listen(port, () => {
+  server.listen(port, '127.0.0.1', () => {
     process.stdout.write('serving http://localhost:' + port + '/atlas/index.html — remote: ssh -L ' + port + ':localhost:' + port + ' <host>\n')
   })
   const shutdown = () => server.close(() => process.exit(0))

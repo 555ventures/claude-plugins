@@ -1,6 +1,7 @@
 ---
 date: 2026-09-02
-status: hardened
+status: done
+build_base: main
 tier: standard
 area: mocks
 design: false
@@ -9,6 +10,7 @@ depends_on: [specs/20260902/09-one-hand-wireframes-one-token-set.md]
 depended_on_by: [specs/20260902/11-brief-from-approved-set.md]
 brief: 22
 open_markers: 0
+diff_base: c68d4d17147233f0b31db30ead9bd2f59ba7dac2
 ---
 
 # Review loop: page notes at two scopes, batch triage, author resolves
@@ -213,6 +215,25 @@ literal hits (`spec/commands/atlas.md`, `spec/commands/sketch.md`) are rows. `ex
 `tests/design-shell.test.js` (runs design-atlas.js): `serve` is a new subcommand and the
 injection touches served responses only; shell sync/adopt/check are untouched — green.
 `likely`/`mentions` hits on `plugin.json` owe nothing.
+
+Build deviations (folded at review close, 2026-09-03; each class already carries its § Gotchas
+entry, so none is added there): (1) D10's literal target 7.64.0 was stale — the plugin was at
+7.68.0 by build time; bumped to 7.69.0 (§ Gotchas: stale version-bump target). (2) D2's
+unconditional injection collided with spec 07's serve test (AC-20260902-07-12), which asserted
+exact bytes for a `.html` GET without `?clean`; the pin was updated in place to request `?clean`
+and retagged with AC-20260902-10-2, never weakened (§ Gotchas: colliding test pin outside the
+File Plan — the lock-time collision-closure `executes` leg judged `tests/design-shell.test.js`
+and missed `tests/design-atlas.test.js`, which is the file that actually exercises `serve`).
+Same incident, second lesson: a serve test whose assertion fails before its `child.kill` orphans
+the server process and hangs the test runner (the spawned child keeps the event loop alive) —
+that test and the new `withServe` helper now kill the child in `finally`; first occurrence, no
+guard. (3) D8's new `mocks-driver` call sites in atlas.md/sketch.md required two rows in
+`spec/entrypoints.json`, an exhaustive live-file pin outside the File Plan — waived at review
+by the user (§ Gotchas: exhaustive live-file pins invalidated by construction).
+
+Review fix (2026-09-03, rv_a37f65f09c6f): `serve` bound every interface while this spec's own
+Contracts said localhost-only (pre-existing `listen(port)` with no host); fixed to loopback with
+an executed `lsof` bind assertion under AC-20260902-10-2.
 
 ## Canonical Delta
 

@@ -3,6 +3,9 @@
 // mocks-driver.js --root <dir> --mark <mark> [--journey <j>] [--direction <k>] [--shape <k>] [--decider "<name>"]
 // mocks-driver.js --root <dir> --reopen journey:<j>|shapes|theme
 // mocks-driver.js --root <dir> ledger (add|set|catch|check|counts) [flags]
+// mocks-driver.js --root <dir> notes open
+// mocks-driver.js --root <dir> notes address --id <id> --change "<what changed>" [--ledger <rowId>]
+// mocks-driver.js --root <dir> notes reply --id <id> --text "<question back>"
 // mocks-driver.js --root <dir> look <label> [--state <s>] [--out <png>]
 // mocks-driver.js --root <dir> look-probe | look-via <playwright|browser>
 //
@@ -26,6 +29,10 @@
 //   - hand-write a ledger row: `ledger add/set/catch` are the only writers of
 //     design/mocks/ledger.md, routed through spec/scripts/lib/mocks-ledger.js exactly as spec 06
 //     built it.
+//   - resolve a note (specs/20260902/10-page-notes-review-loop.md D4): `notes address` and
+//     `notes reply` are the only note writers this driver exposes; there is no `notes resolve`
+//     subcommand — resolving happens only from the served page (the Resolve button, POST
+//     /__notes/resolve), so a `notes resolve` invocation refuses (exit 2) naming the page.
 //
 // Deviation (specs/20260902/07-mocks-command-driver.deviations.md): D8 names "theme-directions"
 // and "theme" product ledger rows without pinning their identification shape (ledger ids are
@@ -48,6 +55,7 @@ const path = require('path')
 const { spawnSync } = require('child_process')
 const { runChild, writeOut } = require('./lib/driver-io')
 const { parseLedger, gateVerdict, countsLine, appendAssumption, appendCatch, setStatus } = require('./lib/mocks-ledger')
+const { readNotes, writeNotes, addressNote, replyNote, groupOpen, unresolvedFor } = require('./lib/mocks-notes')
 
 function die(msg) { writeOut(2, 'mocks-driver: ' + msg + '\n'); process.exit(2) }
 function nowIso() { return new Date().toISOString() }
@@ -231,6 +239,115 @@ function requireGateOpen() {
     const rows = verdict.blocking.map((b) => b.id + ' ' + b.tag + ' ' + b.status).join(', ')
     die('provenance ledger is blocked: ' + rows + ' — remedy: `ledger set --id <id> --status confirmed --tag said-by-user` (or `--status overridden`)')
   }
+}
+
+// ---------------------------------------------------------------------------
+// Page notes (specs/20260902/10-page-notes-review-loop.md D4/D5). notesPath's own reader/writer
+// and pure transforms live in lib/mocks-notes.js — this file owns only the gate rule, the CLI
+// surface, and the printed shapes.
+// ---------------------------------------------------------------------------
+function notesOrEmpty() {
+  try { return readNotes(root) } catch (e) { die('design/mocks/notes.json is not valid JSON (' + e.message + ') — restore it from git history, or delete it (no notes is a valid starting point) and re-run') }
+  return [] // unreachable
+}
+
+// D5: any open (not-resolved) project note blocks every advancing mark, named first; then, when
+// `labels` is given, an unresolved note on any of those screens blocks it too. `approved` calls
+// this with every declared label (D5: "any unresolved note anywhere").
+function requireNotesResolved(labels, journeyName) {
+  const notes = notesOrEmpty()
+  const openProject = notes.filter((n) => n.scope === 'project' && n.status !== 'resolved')
+  if (openProject.length) {
+    die('project note(s) open: ' + openProject.map((n) => n.id).join(', ') + ' — answer the project note first')
+  }
+  if (labels && labels.length) {
+    const unresolved = unresolvedFor(notes, labels)
+    if (unresolved.length) {
+      const where = journeyName ? ' on ' + journeyName : ''
+      die('unresolved note(s)' + where + ': ' + unresolved.map((n) => n.id).join(', ') + ' — the author resolves after a re-look')
+    }
+  }
+}
+
+function allDeclaredLabels() {
+  const labels = []
+  for (const [, j] of currentSeedJourneys()) for (const l of j.labels) if (!labels.includes(l)) labels.push(l)
+  return labels
+}
+
+function noteTag(n) {
+  if (n.status === 'addressed' && n.addressed && n.addressed.ledgerRow) return 'addressed → ' + n.addressed.ledgerRow
+  return n.status
+}
+function noteLine(n, indent) {
+  let line = indent + n.id + ' [' + noteTag(n) + '] ' + n.by + ' · ' + n.text
+  if (n.status === 'addressed' && n.addressed && n.addressed.change) line += '   ↳ changed: ' + n.addressed.change
+  return line
+}
+
+// D4's `notes open` — exact shape: project notes first (⚠️ tail while any is open), then
+// journey -> screen -> state, derived from seed.md via groupOpen.
+function cmdNotesOpen() {
+  const notes = notesOrEmpty()
+  const seed = currentSeedJourneys()
+  const { project, journeys } = groupOpen(notes, seed)
+  const notResolved = notes.filter((n) => n.status !== 'resolved')
+  const mockCount = notResolved.filter((n) => n.scope === 'mock').length
+  const addressedCount = notResolved.filter((n) => n.status === 'addressed').length
+
+  const lines = []
+  lines.push('📝 open notes: ' + notResolved.length + ' (' + project.length + ' project · ' + mockCount + ' mock) · addressed: ' + addressedCount)
+  if (project.length) {
+    lines.push('project')
+    for (const n of project) lines.push(noteLine(n, '  '))
+  }
+  for (const [journeyName, screens] of journeys) {
+    lines.push(journeyName)
+    for (const [screenLabel, states] of screens) {
+      lines.push('  ' + screenLabel)
+      for (const [stateLabel, ns] of states) {
+        lines.push('    ' + stateLabel)
+        for (const n of ns) lines.push(noteLine(n, '      '))
+      }
+    }
+  }
+  if (project.length) {
+    lines.push('⚠️ a project note is open — answer it (canon change or new directions) before any mock note')
+  }
+  writeOut(1, lines.join('\n') + '\n')
+  process.exit(0)
+}
+
+function cmdNotes(sub, args) {
+  const narg = (name) => flagArg(args, name)
+  if (sub === 'open') { cmdNotesOpen(); return }
+  if (sub === 'address') {
+    const id = narg('--id')
+    const change = narg('--change')
+    const ledgerRow = narg('--ledger')
+    if (!id) die('notes address: --id <id> is required')
+    if (!change) die('notes address: --change "<what changed>" is required')
+    const notes = notesOrEmpty()
+    let result
+    try { result = addressNote(notes, id, { change, ledgerRow }) } catch (e) { die('notes address: ' + e.message) }
+    writeNotes(root, result.notes)
+    writeOut(1, 'notes address: ' + id + ' → addressed\n')
+    process.exit(0)
+  }
+  if (sub === 'reply') {
+    const id = narg('--id')
+    const text = narg('--text')
+    if (!id) die('notes reply: --id <id> is required')
+    if (!text) die('notes reply: --text "<question back>" is required')
+    const notes = notesOrEmpty()
+    let result
+    try { result = replyNote(notes, id, text) } catch (e) { die('notes reply: ' + e.message) }
+    writeNotes(root, result.notes)
+    writeOut(1, 'notes reply: ' + id + ' → reply recorded\n')
+    process.exit(0)
+  }
+  die('notes: no "' + sub + '" subcommand — resolving a note happens only on the served page ' +
+    '(the Resolve button); one of: open, address, reply')
 }
 
 // ---------------------------------------------------------------------------
@@ -436,6 +553,8 @@ function handleJourneyApproved(journeyName) {
   if (!journeyName) die('--journey <name> is required')
   const st = status.journeys[journeyName]
   if (!st || !st.drawn) die('journey "' + journeyName + '" has not been drawn yet — mark journey-drawn --journey ' + journeyName + ' first')
+  const j = currentSeedJourneys().get(journeyName)
+  requireNotesResolved(j ? j.labels : [], journeyName)
   st.approved = nowIso()
   saveStatus()
 }
@@ -497,6 +616,7 @@ function handleJourneySkinned(journeyName) {
   const journeys = currentSeedJourneys()
   const j = journeys.get(journeyName)
   if (!j) die('journey "' + journeyName + '" is not declared in design/mocks/seed.md')
+  requireNotesResolved(j.labels, journeyName)
   for (const label of j.labels) {
     const file = mockFile(label)
     if (!fs.existsSync(file)) die('design/mocks/' + label + '.html does not exist')
@@ -523,12 +643,15 @@ function handleJourneyReviewed(journeyName) {
   if (!journeyName) die('--journey <name> is required')
   const st = status.journeys[journeyName]
   if (!st || !st.skinned) die('journey "' + journeyName + '" has not been skinned yet — mark journey-skinned --journey ' + journeyName + ' first')
+  const j = currentSeedJourneys().get(journeyName)
+  requireNotesResolved(j ? j.labels : [], journeyName)
   st.reviewed = nowIso()
   saveStatus()
 }
 
 function handleApproved() {
   requireGateOpen()
+  requireNotesResolved(allDeclaredLabels(), null)
   const journeys = currentSeedJourneys()
   for (const [jn] of journeys) {
     const st = status.journeys[jn]
@@ -873,7 +996,8 @@ function printReviewStep() {
     }
   }
   printStepBlock('REVIEW', 'sign off — approval of understanding, not of scope',
-    ['design/mocks/*.html'], 'Mocks: State Machine', '',
+    ['design/mocks/*.html'], 'Mocks: State Machine',
+    'Approval means "this is the product I understand" — the written brief, not these screens, holds scope. (decider: ' + status.decider + ')',
     [driverCmd('--mark approved')])
 }
 
@@ -901,6 +1025,8 @@ function doBareStep() {
 // ---------------------------------------------------------------------------
 if (rest[0] === 'ledger') {
   cmdLedger(rest[1], rest.slice(2))
+} else if (rest[0] === 'notes') {
+  cmdNotes(rest[1], rest.slice(2))
 } else if (rest[0] === 'look-probe') {
   cmdLookProbe()
 } else if (rest[0] === 'look-via') {

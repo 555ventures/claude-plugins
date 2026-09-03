@@ -28,7 +28,9 @@ written to disk before the next. There is no state file and no dependency on pri
 re-invoking with the same brief resumes exactly where the files say you are.
 
 **Setup:** run `spec-paths shared-for sketch` and read its output. Run `spec-paths design-atlas`
-once and keep the path — `{atlas}` below. Read `.claude/spec.config.json` if present.
+once and keep the path — `{atlas}` below. Run `spec-paths mocks-driver` once and keep the path —
+`{driver}` below (owns the `notes` subcommands the loop reads). Read `.claude/spec.config.json`
+if present.
 
 ## Input resolution
 
@@ -70,21 +72,28 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    content entangled inside a bound region costs an evidence-gated delta row.
 4. **Build & report.** `node {atlas} build`, then report the output path
    (`design/atlas/index.html`) — the user opens the file themselves (e.g. from VS Code); do
-   **not** start a server or open a browser. Serve from the repo root only if the user asks or
-   a local annotation MCP needs same-origin anchoring. The map shows everything, but this
-   session's iteration scope stays the one brief.
-5. **The loop.** Take changes in chat against screen labels, or via a local annotation MCP
-   (discover via ToolSearch, never assume). Group notes by surface, present the plan, then
-   **triage every change by root cause before touching anything** — the shared triage (shared
-   § Design Atlas) plus the architecture route:
+   **not** start a server or open a browser. Serve (`node "$(spec-paths design-atlas)" serve`)
+   from the repo root only if the user asks or wants to leave notes — serving injects the notes
+   layer. The map shows everything, but this session's iteration scope stays the one brief.
+5. **The loop.** Take changes in chat against screen labels, or read them back from the served
+   page with `node {driver} notes open` (spec/doctrine/mocks.md § Mocks: Page Notes owns the
+   note shape and mark refusals). Group notes by surface, present the plan, then **triage every
+   change by root cause before touching anything** — the shared triage (shared § Design Atlas)
+   plus the two loop bins plus the architecture route:
    - **Mock-detail** (spacing, copy, emphasis, pure-UI state) → edited in-session — copy swaps
      and reorders too, the cost that justified dispatching them is gone at sketch tier;
-     `{atlas} check`, rebuild, refresh.
+     `{atlas} check`, rebuild, refresh, then `notes address --id <id> --change "<what changed>"`
+     for a page note.
    - **Structure** (surface added/removed, journey edge changed) → the brief's `surfaces` block
-     FIRST, then the mock follows (create/delete/edit as implied).
+     FIRST, then the mock follows (create/delete/edit as implied); `notes address` with
+     `--ledger <rowId>` when a page note drove it.
    - **Intent/scope** (a capability added or dropped — "users can favorite items") → the brief's
      Scope / Out of scope; a change that crosses briefs is an amendment ADR (`Applies to` every
      touched brief, effects edited into each in this session — adr.md template); then the mock.
+   - **Question back** (the note needs the user, not a change) → `notes reply --id <id> --text
+     "<question>"`, status stays open. **Propose to decline** → never declined by this session,
+     print it for the user; a canon-primitive note edits canon.md first, every dependent screen
+     after. Resolve happens only on the page — this session never resolves a note.
    - **Architecture-impacting** — before applying any scope/structure change, ask: *does this
      alter what the ADRs decided or assume* (new persistence, endpoint shape, auth surface,
      real-time requirement)? If yes, never silently absorb it: name the affected or missing

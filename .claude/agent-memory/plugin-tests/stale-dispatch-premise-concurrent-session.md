@@ -3,7 +3,7 @@ name: stale-dispatch-premise-concurrent-session
 description: A dispatching agent's framing of "this is RED today" can go stale mid-task if a concurrent session lands the fix while this task is running — verify against current git log, not the conversation-start git status snapshot or the prompt's own framing
 metadata:
   type: feedback
-  reviewed: 2026-09-01
+  reviewed: 2026-09-03
 ---
 
 This repo's spec pipeline runs autonomously and concurrently — other sessions (or background

@@ -1,6 +1,6 @@
 ---
 date: 2026-09-02
-status: implementing
+status: done
 build_base: main
 tier: critical
 area: bootstrap
@@ -120,6 +120,14 @@ Rejected: a `--fix` grammar specific to enforcement notes (the generic line-item
 covers it); dropping `notes` from legacy manifests (they hold carve-out rationale a host
 still needs — patched to rule + citation instead); moving the baseline deletion earlier
 (the contract's two lines are the last findings and belong to this edit).
+
+Build deviations folded at close (2026-09-02, one-offs): the live scan test's two
+baseline-content pins (AC-20260902-02-1, AC-20260902-03-1) were retired with the baseline
+itself — sibling 03 D9 anticipated this — and the retagged AC-20260902-04-5 asserts a strictly
+stronger promise; the contract's third narrated line (§ Session grounding's dated
+"adopted" parenthetical) was reworded under D11 because the sweep-to-zero Goal, not D5's
+literal list, is the contract; init.md's D2 edit first landed at net +2 and was brought to
++1 by shortening the `config` bullet, per A4's fallback.
 
 ## Canonical Delta
 

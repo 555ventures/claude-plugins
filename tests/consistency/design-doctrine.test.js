@@ -4,7 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
-const { SPEC, read } = require('../helpers')
+const { ROOT, SPEC, read, runNode } = require('../helpers')
 
 // specs/20260824/05-design-doctrine-cut.md D1/D2/D5: spec/doctrine/design.md holds five
 // sections (contracts a script enforces or a worker applies only) capped at 160 lines;
@@ -43,6 +43,62 @@ test('AC-20260824-05-2: spec/doctrine/design.md is at most 160 lines and names n
       'and per this spec\'s Rationale the literal ban is the reopen condition for every seat and ' +
       'artifact the series retired: a future edit that reintroduces it must redden this suite')
   }
+})
+
+// specs/20260902/09-one-hand-wireframes-one-token-set.md D1/D2, AC-20260902-09-1/-2: the
+// authorship paragraph in design.md § Design Atlas is replaced in place (one-hand authorship,
+// the retired sequential-Fable-dispatch/Sonnet-mechanical split banned), and both commands
+// that cite it (atlas.md, sketch.md) plus core.md § Model Placement's parenthetical are
+// rewritten to match. The pre-image paragraph and commands still carry every retired literal
+// and none of the replacement's, so every assertion below is red pre-D1/D2.
+
+test('AC-20260902-09-1: design.md carries the D1 one-hand-authorship literals and none of the retired dispatch-split literals', () => {
+  const src = read('spec/doctrine/design.md')
+  for (const literal of [
+    'no `Agent` dispatch ever writes a mock',
+    '🎨 authored {N} in-session · {K} check-only dispatches',
+    'skeleton-landed',
+  ]) {
+    assert.ok(src.includes(literal),
+      'D1 replaces design.md\'s authorship paragraph in place — the literal "' + literal +
+      '" must appear, or the doctrine still describes the retired fan-out authorship model ' +
+      'instead of the one-hand rule and its report line')
+  }
+  for (const literal of ['Agent {model: "fable"}', 'sonnet-mechanical', 'positions.md', 'design-pick.json', 'rules-locked']) {
+    assert.ok(!src.includes(literal),
+      'D1 bans the retired literal "' + literal + '" from design.md — its presence means the ' +
+      'sequential-Fable-dispatch/Sonnet-mechanical split, the position-brief grounding, or the ' +
+      'retired "rules-locked" mark this spec retires is still documented as though it exists')
+  }
+})
+
+test('AC-20260902-09-2: atlas.md and sketch.md cite the one-hand authorship rule and name none of the retired dispatch-split literals; core.md § Model Placement names every mock authored in-session; citations-check.js reports MISS=0', () => {
+  for (const rel of ['spec/commands/atlas.md', 'spec/commands/sketch.md']) {
+    const src = read(rel)
+    assert.ok(src.includes('authored {N} in-session'),
+      'D2: ' + rel + ' must cite the shared report line ("authored {N} in-session") — its ' +
+      'absence means the command still describes its own dispatch shape instead of citing ' +
+      'design.md\'s one paragraph')
+    for (const literal of ['fable', 'sonnet-mechanical', 'Sonnet mock edit', 'one sequential']) {
+      assert.ok(!src.includes(literal),
+        'D2: ' + rel + ' must drop the retired literal "' + literal + '" — its presence means ' +
+        'the command still documents the sequential-Fable-dispatch/Sonnet-mechanical-edit split ' +
+        'that D1 retires from the shared doctrine paragraph this command cites')
+    }
+  }
+
+  const core = read('spec/doctrine/core.md')
+  assert.ok(core.includes('every mock, wireframe or themed, authored in-session'),
+    'D2: core.md § Model Placement\'s parenthetical must name "every mock, wireframe or ' +
+    'themed, authored in-session" in place of the retired "sketch-tier authorship" clause — ' +
+    'its absence leaves the model-placement doctrine describing a design seat this spec retires')
+
+  const check = runNode('scripts/citations-check.js', [], { cwd: ROOT })
+  assert.strictEqual(check.status, 0, 'citations-check.js must exit 0 over the repo root (advisory scan, never a usage error): ' + check.stderr)
+  assert.match(check.stdout, /\bMISS=0\b/,
+    'D1/D2\'s doctrine and command edits must not orphan any "§ ..." citation elsewhere in ' +
+    'spec/ — a nonzero MISS means some file still points at a heading these edits moved or ' +
+    'removed: ' + check.stdout)
 })
 
 test('AC-20260824-05-4: spec-paths dc-extract and spec-paths fidelity-check are refused now that D5 retires both keys, and neither script exists on disk', () => {

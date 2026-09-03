@@ -46,6 +46,44 @@ test('check: labeled token-consuming mocks pass; label/tokens/color violations f
   assert.match(bad.stdout, /off-token color literal/)
 })
 
+// specs/20260902/09-one-hand-wireframes-one-token-set.md D5, AC-20260902-09-5: page() reads
+// spec/templates/mocks/viewer.css and inlines it before its own rules, and every chrome rule
+// (badges, bar, cards, gap chips, lightbox, matrix toolbar, gallery cards) is rewritten onto
+// var(--v-*) roles — no chrome literal survives in the emitted page's <style>. page() today has
+// no viewer.css read at all and every current chrome rule is a literal hex color (#111, #333,
+// #8fa8ff, …), so both tests below are red pre-D5.
+function assertChromeTokenized(out, label) {
+  const styleMatch = out.match(/<style>([\s\S]*?)<\/style>/)
+  assert.ok(styleMatch, label + ': the emitted page must carry a <style> block to inspect for chrome literals')
+  const style = styleMatch[1]
+  assert.match(style, /--v-bg:/,
+    label + ": the inlined chrome stylesheet must declare --v-bg — D5 requires viewer.css's " +
+    "full --v-* register to be inlined into every chrome page's own <style> block")
+  const withoutRoot = style.replace(/:root\s*\{[\s\S]*?\}/, '')
+  assert.doesNotMatch(withoutRoot, /#[0-9a-f]{3,8}\b/i,
+    label + ' no hex color literal may survive in the chrome CSS outside the inlined ' +
+    ':root{…} block — every chrome rule must consume a var(--v-*) role, never a literal color')
+}
+
+test("AC-20260902-09-5: build emits a page whose <style> inlines viewer.css's --v-* register with no literal chrome color outside :root{…}", () => {
+  const dir = fixture()
+  const res = atlas(['build'], { cwd: dir })
+  assert.strictEqual(res.status, 0, res.stdout + res.stderr)
+  const out = fs.readFileSync(path.join(dir, 'design/atlas/index.html'), 'utf8')
+  assertChromeTokenized(out, 'build:')
+})
+
+test("AC-20260902-09-5: gallery emits a page whose <style> inlines viewer.css's --v-* register with no literal chrome color outside :root{…}", () => {
+  const dir = fixture()
+  fs.mkdirSync(path.join(dir, 'design/explore/r0-instrument'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/explore/r0-instrument/tile.html'),
+    '<link rel="stylesheet" href="./tokens.css">\n<main data-screen-label="signin">t</main>\n')
+  const res = atlas(['gallery', path.join(dir, 'design/explore')])
+  assert.strictEqual(res.status, 0, res.stdout + res.stderr)
+  const out = fs.readFileSync(path.join(dir, 'design/explore/gallery.html'), 'utf8')
+  assertChromeTokenized(out, 'gallery:')
+})
+
 test('gallery: one card per candidate subdir, lazy iframes, deterministic output path', () => {
   const dir = fixture()
   for (const c of ['r0-instrument', 'r0-guide']) {
@@ -172,7 +210,7 @@ test('build/gallery: matrix toolbar emitted only when targets.json exists', () =
   assert.match(gal, /tablet 834/, 'gallery finds design/targets.json by walking up')
 })
 
-test('build: generated output is byte-stable across runs (no timestamps, sorted walks)', () => {
+test('AC-20260902-09-6: build output is byte-identical across two runs (no timestamps, sorted walks)', () => {
   const dir = fixture()
   atlas(['build'], { cwd: dir })
   const a = fs.readFileSync(path.join(dir, 'design/atlas/index.html'), 'utf8')

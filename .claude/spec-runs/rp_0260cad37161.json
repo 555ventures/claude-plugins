@@ -1,0 +1,39 @@
+{
+  "ts": "2026-09-03T16:54:09.684Z",
+  "stage": "replay",
+  "spec": "specs/20260902/08-genesis-shrink-brief-state.md",
+  "runId": "rp_0260cad37161",
+  "reviewRunId": "rv_cf225f5bba11",
+  "class": "boundary-shift",
+  "files": [
+    "spec/scripts/genesis-driver.js"
+  ],
+  "legs": "baseline-red:gate",
+  "outcome": "missed",
+  "tokens": 82654,
+  "patch": "diff --git a/spec/scripts/genesis-driver.js b/spec/scripts/genesis-driver.js\nindex 02836c2..a14363d 100644\n--- a/spec/scripts/genesis-driver.js\n+++ b/spec/scripts/genesis-driver.js\n@@ -570,7 +570,7 @@ function handleBriefWritten() {\n   }\n   const text = fs.readFileSync(p, 'utf8')\n   const lineCount = text.split('\\n').length\n-  if (lineCount > DOCTRINE_LINE_CAP) {\n+  if (lineCount >= DOCTRINE_LINE_CAP) {\n     die('docs/design/doctrine.md is ' + lineCount + ' lines — the one-page cap is ' + DOCTRINE_LINE_CAP +\n       ' lines — trim it, then re-mark brief-written')\n   }\n",
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "npm test is red on this diff: AC-20260902-08-12's retired-literal sweep finds the literal \"tiles-culled\" in .claude/agent-memory/plugin-tests/driver-descriptor-archetype-vs-status-archetype.md, which is outside the test's waivedPaths/waivedPrefixes, so the AC's own zero-offenders SHALL is unmet on the current tree.",
+        "file": "tests/consistency/genesis-doctrine.test.js",
+        "line": 1019,
+        "impact": "The full test suite fails on the built tree, violating the pipeline's plainly-green gate rule and this spec's own AC-20260902-08-12 acceptance criterion; anyone running npm test after this build sees a real failure, not a pre-existing one.",
+        "evidence": "Executed `npm test` in the worktree: `997 tests, 996 pass, 1 fail` — failing test is exactly AC-20260902-08-12, with assertion output `D12: these files outside the waive-list still name the retired literal \"tiles-culled\": .claude/agent-memory/plugin-tests/driver-descriptor-archetype-vs-status-archetype.md`. The evidence manifest at /private/tmp/.../scratchpad/manifest3.XXXXXX.jsonl already records this: {\"leg\":\"gate\",\"exit\":1,...}. Confirmed the offending file predates the diff base (last touched at commit 782b211, `git merge-base --is-ancestor 782b211 8541568` exits 0 — true ancestor) but the SWEEP ITSELF is new/modified by this diff (AC-20260902-08-12 and its RETIRED_LITERALS list, including \"tiles-culled\", is introduced/retargeted by this spec's own File Plan row for tests/consistency/genesis-doctrine.test.js), so the red is newly triggered by code inside the range, not inherited: the same sweep did not exist against this literal at base 8541568."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "The Behavior section's Dissents-check clause (\"legacy runs with no mocks status use the old design-pick.json rejected list when that file exists, else no name is required\") is not implemented — the --legacy path only checks a non-empty ## Dissents body, with no design-pick.json-backed per-candidate naming fallback.",
+        "file": "spec/scripts/genesis-driver.js",
+        "line": 586,
+        "evidence": "Read genesis-driver.js lines 582-593: the composed-direction Dissents check runs only `if (!legacy && isVisualArchetype(archetype))`; no design-pick.json read path exists (designPickPath/readDesignPick/candidateKebab helpers are deleted per the deviation note). Confirmed via the spec's own deviations.md (specs/20260902/08-genesis-shrink-brief-state.deviations.md, second entry): AC-20260902-08-12 bans the literal `design-pick.json` in genesis-driver.js with no waiver (unlike D14's explicit two-literal waiver for positions-authored/tiles-culled), so the Behavior clause and the AC contradict each other; the build resolved the contradiction in the AC's favor and documented it as a disclosed deviation, consistent with D4's own rationale (\"the pick record is the mocks status now, not design-pick.json\") and D6's legacy framing. No AC pins the design-pick.json fallback specifically (checked tests/genesis/brief-state.test.js and tests/consistency/genesis-doctrine.test.js — no test asserts a per-candidate name requirement for --legacy), so this is a disclosed, rationale-consistent deviation rather than an unflagged spec violation."
+      }
+    ],
+    "reviewerCount": 1,
+    "scope": "specs/20260902/08-genesis-shrink-brief-state.md, diff 854156825ba55794d31eabe7cd33315f10ffca41..HEAD",
+    "tokens": 45000
+  }
+}

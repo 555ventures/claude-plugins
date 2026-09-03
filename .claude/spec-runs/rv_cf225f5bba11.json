@@ -1,0 +1,143 @@
+{
+  "runId": "rv_cf225f5bba11",
+  "ts": "2026-09-03T16:34:26.138Z",
+  "spec": "specs/20260902/08-genesis-shrink-brief-state.md",
+  "tier": "critical",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 1,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 3832,
+    "base": "854156825ba55794d31eabe7cd33315f10ffca41",
+    "head": "444f5e078464f956e33bbefa6b6b04b50ac11b85",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 0,
+      "observed": {
+        "outOfPlan": 0,
+        "files": []
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 362
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": {
+        "matches": 10
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": {
+        "files": 7,
+        "testsExecuted": 81
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 14,
+        "carried": 13,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "The spec Behavior section requires a legacy BRIEF ratification to name every rejected candidate from the old design-pick.json (when that file exists) in the doctrines Dissents section, falling back to no-name-required only when design-pick.json is absent. The build deleted this fallback entirely instead.",
+        "file": "spec/scripts/genesis-driver.js",
+        "line": 586,
+        "impact": "A legacy host whose old design-pick.json still records rejected design candidates with reasons can now ratify BRIEF without naming any of them in the doctrine Dissents section, losing the provenance guarantee the spec promises for legacy resumes.",
+        "evidence": "Spec text says: Dissents check: legacy runs with no mocks status use the old design-pick.json rejected list when that file exists, else no name is required. The shipped code runs the composed-direction Dissents check only when the mark is not legacy and the archetype is visual -- for a legacy run it is skipped outright with no design-pick.json read anywhere in the file. The helper functions that used to read design-pick.json were removed entirely from the driver (confirmed by grepping spec and tests for the literal, which shows no remaining reference inside the driver script). The deviations sidecar documents this cut as forced by the retired-literal sweep AC, but no locked Decision authorizes dropping this specific Behavior fallback -- the one sanctioned build ruling covers only two unrelated retired-mark literals in the refusal table."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "A die() call inside the mocks-precondition failure branches might fall through to use an undefined status object, corrupting the recorded brief record on a refused precondition",
+        "file": "spec/scripts/genesis-driver.js",
+        "line": 552,
+        "evidence": "A standalone node repro confirmed that calling process.exit(2) terminates the process immediately with no further JS executing in the same synchronous call stack (exit code 2 observed, no code after the exit call ran) -- the code after each die() call never executes."
+      },
+      {
+        "claim": "The legacy-resume regression fixture might expose a bug where the derived-state scaffold-exit check fires before the architect scaffold-complete check, re-triggering the scaffold step for a legacy host with no recorded scaffold exit",
+        "file": "spec/scripts/genesis-driver.js",
+        "line": 1605,
+        "evidence": "The brief-state test file shows the legacy-resume fixture explicitly sets a recorded scaffold exit of 0 and a recorded zero-day-gate exit of 0 alongside the scaffold-complete architect flag -- a realistic legacy host that reached that state necessarily already has that recorded scaffold exit from the old drivers own logic, so this path is not reachable incorrectly for a genuine legacy fixture; the same test confirms the next bare run derives the correct next state."
+      },
+      {
+        "claim": "The doctrine section deletions might have orphaned a live section citation elsewhere in the repo",
+        "file": "spec/doctrine/genesis.md",
+        "line": null,
+        "evidence": "Running the repos citations-check script from the repo root printed a zero-miss summary line."
+      },
+      {
+        "claim": "The diff might have left the repos test suite red or the review evidence manifests legs failing",
+        "file": null,
+        "line": null,
+        "evidence": "A full test run reported 997 passing tests and zero failures. The review evidence manifest recorded zero out-of-plan files, zero uncovered ACs, zero skipped or todo tests, and zero orphan promise rows."
+      }
+    ],
+    "reviewerCount": 1,
+    "scope": "The single commit that implements spec 08 in this worktree, plus an unrelated working-tree change to a spec-runs log file that is not part of this spec",
+    "tokens": 95000
+  }
+}

@@ -153,6 +153,39 @@ verify. `mocks-driver.js look-via <playwright|browser>` records the session's de
 `browser` means a browser MCP the command told the session to `ToolSearch` for, which cannot be
 probed from a script and so is declared once and trusted thereafter.
 
+## Mocks: Page Notes
+
+Feedback on served mocks is written on the page, never in chat and never in mock markup.
+`design-atlas.js serve` injects a notes layer (`spec/scripts/lib/notes-layer.browser.js`) into
+every served `.html` unless the request carries `?clean`; every write — HTTP or driver — goes
+through `spec/scripts/lib/mocks-notes.js`, the one writer of `design/mocks/notes.json` (the
+ledger's pattern, § Provenance Ledger).
+
+**Two scopes, never an element.** A note is anchored to a screen + state (`scope: "mock"`,
+`screen`, `state` set) or to the whole product (`scope: "project"`, `screen`/`state` null) — the
+dry run's catches were all state-level; an element anchor is brittle across redraws and was
+rejected.
+
+**Status is a three-step queue, asymmetric by design.** `open` → `addressed` (driver-only:
+`notes address --id <id> --change "<what changed>" [--ledger <rowId>]`, or a question-back reply
+via `notes reply --id <id> --text "<question>"`, which leaves status unchanged) → `resolved`
+(the page's `Resolve` button only, `by` = the browser's author name; an `open` note may also be
+withdrawn straight to `resolved` by its author). Nothing but the page can set `resolved` — an
+HTTP endpoint reachable on a forwarded port must not be able to mark the session's own work
+done, and only the author who raised a note is positioned to judge that a re-look actually
+answered it.
+
+**Project notes block first.** Any note with `scope: "project"` not yet `resolved` refuses
+every mock-note mark (`journey-approved`, `journey-skinned`, `journey-reviewed`, `approved`),
+naming the note id — a direction-level concern outranks any per-screen work until it is
+answered. Once no project note is open, a mark still refuses while any note on its own screens
+is unresolved; `approved` refuses while any note anywhere is unresolved. Zero open notes on a
+journey is that journey's approval mark.
+
+**Client review is the same notes loop**, `review-opened --decider <name>` recording who is
+signing off; the REVIEW step's printed text carries the fixed sign-off line: `Approval means
+"this is the product I understand" — the written brief, not these screens, holds scope`.
+
 ## Mocks: Authoring Rules
 
 The six rules the dry run converged on (LEDGER standing rules + M11/M13/M14 + A6/A7) — the

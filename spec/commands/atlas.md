@@ -27,9 +27,10 @@ cross-screen coherence rulings) are the roadmap-level taste seat — recommend t
 with Fable/Opus.
 
 **Setup:** run `spec-paths shared-for atlas` and read its output. Run `spec-paths design-atlas`
-once and keep the path — `{atlas}` below. Read `.claude/spec.config.json` if present (optional
-`design.atlasRoutes`). No genesis required: any repo with `design/mocks/` and/or roadmap
-`surfaces` blocks gets an atlas.
+once and keep the path — `{atlas}` below. Run `spec-paths mocks-driver` once and keep the path —
+`{driver}` below (owns the `notes` subcommands the annotation loop reads). Read
+`.claude/spec.config.json` if present (optional `design.atlasRoutes`). No genesis required: any
+repo with `design/mocks/` and/or roadmap `surfaces` blocks gets an atlas.
 
 ## The run — build, serve, dispatch on what you find
 
@@ -60,34 +61,37 @@ user's input; `sweep` as an argument only skips the gap confirmation.
    sweep below. Invoked as `/spec:atlas sweep`, skip the question and run it directly.
 3. Report the output path (`design/atlas/index.html`) — the user opens the file themselves
    (e.g. from VS Code); do **not** start a server or open a browser unprompted. Serve
-   (`python3 -m http.server` or the host's equivalent, backgrounded from the repo root) only
-   when the user asks or when a local annotation MCP will anchor to the page — serving (not
-   `file://`) is what enables MCP anchoring, same-origin frame measurement, and the theme
-   buttons of the matrix toolbar (present when `design/targets.json` exists — on `file://` it
-   degrades gracefully to viewport-only); point the user at it for per-device / dark-mode
-   review.
-4. **Annotation loop (when the user leaves notes):** if a local annotation MCP is connected
-   (e.g. Vibe Annotations / Agentation — discover via ToolSearch, never assume), poll/receive
-   its anchored notes; otherwise take changes in chat against screen labels. When several notes
-   arrive together, group them by surface and present the plan before applying anything.
-   **Triage every note by root cause first** (shared § Design Atlas): **mock-detail** (spacing,
-   copy, emphasis) → edit the mock file; **product-understanding** (wrong surface set, missing
-   journey edge, a flow that shouldn't exist) → fix the owning brief's `surfaces` block FIRST
-   (cross-brief scope changes via an amendment ADR — adr.md template § Applies to), then the
-   mock follows — a pixel edit over a brief error leaves the brief lying
-   to every future planning session. If a note contradicts the doctrine or a bound region
-   (coverage ledger claim), that is a **fork**: `AskUserQuestion`, glossed in plain English with
-   a consequence per option, recommended-first from how concrete the note is — a specific,
+   (`node "$(spec-paths design-atlas)" serve`) only when the user asks or when notes are the
+   plan — serving (not `file://`) is what injects the notes layer, enables same-origin frame
+   measurement, and the theme buttons of the matrix toolbar (present when `design/targets.json`
+   exists — on `file://` it degrades gracefully to viewport-only); point the user at it for
+   per-device / dark-mode review and for leaving notes.
+4. **Annotation loop (when the user leaves notes):** notes are written on the served page (the
+   injected notes layer, `?clean` skips it) and read back with `node {driver} notes open`,
+   grouped project → journey → screen → state (spec/doctrine/mocks.md § Mocks: Page Notes owns
+   the note shape and mark refusals). When several are open, present the grouped list before
+   applying anything. **Triage every note by root cause first** (shared § Design Atlas) into one
+   of four bins: **mock-detail** (spacing, copy, emphasis) → edit the mock file, then `notes
+   address --id <id> --change "<what changed>"`; **product-understanding** (wrong surface set,
+   missing journey edge, a flow that shouldn't exist) → fix the owning brief's `surfaces` block
+   FIRST (cross-brief scope changes via an amendment ADR — adr.md template § Applies to), then
+   the mock, then `notes address` with `--ledger <rowId>` — a pixel edit over a brief error
+   leaves the brief lying to every future planning session; **question back** → `notes reply
+   --id <id> --text "<question>"`, status stays open; **propose to decline** → never declined by
+   this session, print it for the user. A note hitting a canon primitive edits canon.md first,
+   every dependent screen after. If a note contradicts the doctrine or a bound region (coverage
+   ledger claim), that is a **fork**: `AskUserQuestion`, glossed in plain English with a
+   consequence per option, recommended-first from how concrete the note is — a specific,
    actionable note recommends "mock-and-spec both change" (route through `/spec:design`'s drift
    handling for bound regions — the real fix, but reopens a spec); a vague or contested note
    recommends "withdraw the note" (nothing changes, but the concern stays unaddressed until it's
    sharper); never silently rewrite a bound mock. Then per mock edit: locate the file by
    `data-screen-label`, edit it in-session under the design harness (`{atlas} check` after
-   every edit), rerun `node {atlas} build`, tell the user to refresh. Direction-level notes →
-   record, and route per the model note above rather than silently absorbing them into a
-   mechanical fix. When the notes keep converging on ONE brief — a feature brainstorm, not a
-   coherence pass — hand off: recommend `/spec:sketch <that brief>`, where the brief is a
-   first-class write target and the session ends in ratification.
+   every edit), rerun `node {atlas} build`, tell the user to refresh. Resolve happens only on
+   the page (the `Resolve` button) — this session never resolves a note. When the notes keep
+   converging on ONE brief — a feature brainstorm, not a coherence pass — hand off: recommend
+   `/spec:sketch <that brief>`, where the brief is a first-class write target and the session
+   ends in ratification.
 
 ## The sweep — fill the gaps at sketch tier
 

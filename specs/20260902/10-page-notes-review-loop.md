@@ -1,6 +1,7 @@
 ---
 date: 2026-09-02
-status: hardened
+status: implementing
+build_base: main
 tier: standard
 area: mocks
 design: false
@@ -9,6 +10,7 @@ depends_on: [specs/20260902/09-one-hand-wireframes-one-token-set.md]
 depended_on_by: [specs/20260902/11-brief-from-approved-set.md]
 brief: 22
 open_markers: 0
+diff_base: c68d4d17147233f0b31db30ead9bd2f59ba7dac2
 ---
 
 # Review loop: page notes at two scopes, batch triage, author resolves

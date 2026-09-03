@@ -660,7 +660,13 @@ test('check/sync: active nav derived (AC-20260901-04-8)', () => {
 // responses while the child is still alive (spec-pipeline.md Gotchas: "a test that stands up an
 // in-process http.createServer stub … hangs to the spawn timeout instead of returning the
 // stubbed response" — the live-server mirror of that same class).
-test('AC-20260902-07-12: design-atlas.js serve prints the port-forward line first, serves design/ statically with no-store, blocks path traversal, and exits on SIGTERM', async () => {
+// Retagged AC-20260902-10-2 (repair): specs/20260902/10-page-notes-review-loop.md D2 now injects
+// the notes-layer script into every served .html unless the request carries `?clean`, which made
+// this test's plain `/mocks/a.html` fetch collide with D2 by construction (exact-bytes is no
+// longer true for an unclean request). The `?clean` query keeps this pin's original meaning —
+// the server serves exact bytes when asked cleanly — per spec-pipeline.md § Gotchas: "a colliding
+// test pin is updated in place and retagged with the new AC-ID, never weakened, never left red."
+test('AC-20260902-07-12 / AC-20260902-10-2: design-atlas.js serve prints the port-forward line first, serves design/ statically with no-store (exact bytes via ?clean), blocks path traversal, and exits on SIGTERM', async () => {
   const dir = tmpdir('atlas-serve')
   fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'design/mocks/a.html'), '<main data-screen-label="a">hello</main>\n')
@@ -669,51 +675,207 @@ test('AC-20260902-07-12: design-atlas.js serve prints the port-forward line firs
   const port = 41230 + (process.pid % 300)
   const child = spawn(process.execPath, [path.join(SPEC, 'scripts/design-atlas.js'), 'serve', '--root', dir, '--port', String(port)])
 
-  let firstLine = null
-  let stdoutBuf = ''
-  const firstLinePromise = new Promise((resolve) => {
-    child.stdout.on('data', (chunk) => {
-      stdoutBuf += chunk.toString('utf8')
-      if (firstLine === null && stdoutBuf.includes('\n')) {
-        firstLine = stdoutBuf.split('\n')[0]
-        resolve()
-      }
+  try {
+    let firstLine = null
+    let stdoutBuf = ''
+    const firstLinePromise = new Promise((resolve) => {
+      child.stdout.on('data', (chunk) => {
+        stdoutBuf += chunk.toString('utf8')
+        if (firstLine === null && stdoutBuf.includes('\n')) {
+          firstLine = stdoutBuf.split('\n')[0]
+          resolve()
+        }
+      })
     })
-  })
-  let stderrBuf = ''
-  child.stderr.on('data', (chunk) => { stderrBuf += chunk.toString('utf8') })
+    let stderrBuf = ''
+    child.stderr.on('data', (chunk) => { stderrBuf += chunk.toString('utf8') })
 
-  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('serve did not print its first stdout line within 5s: ' + stderrBuf)), 5000))
-  await Promise.race([firstLinePromise, timeout])
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('serve did not print its first stdout line within 5s: ' + stderrBuf)), 5000))
+    await Promise.race([firstLinePromise, timeout])
 
-  assert.strictEqual(firstLine,
-    'serving http://localhost:' + port + '/atlas/index.html — remote: ssh -L ' + port + ':localhost:' + port + ' <host>',
-    'the very first stdout line must be the exact D12 port-forward line, with the port substituted and the literal <host> left for the user to fill in: got ' + JSON.stringify(firstLine))
+    assert.strictEqual(firstLine,
+      'serving http://localhost:' + port + '/atlas/index.html — remote: ssh -L ' + port + ':localhost:' + port + ' <host>',
+      'the very first stdout line must be the exact D12 port-forward line, with the port substituted and the literal <host> left for the user to fill in: got ' + JSON.stringify(firstLine))
 
-  function get(urlPath) {
-    return new Promise((resolve, reject) => {
-      http.get({ host: 'localhost', port, path: urlPath }, (res) => {
-        let body = ''
-        res.on('data', (c) => { body += c })
-        res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body }))
-      }).on('error', reject)
-    })
+    function get(urlPath) {
+      return new Promise((resolve, reject) => {
+        http.get({ host: 'localhost', port, path: urlPath }, (res) => {
+          let body = ''
+          res.on('data', (c) => { body += c })
+          res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body }))
+        }).on('error', reject)
+      })
+    }
+
+    const mockRes = await get('/mocks/a.html?clean')
+    assert.strictEqual(mockRes.status, 200, 'GET /mocks/a.html?clean must serve the file with status 200')
+    assert.strictEqual(mockRes.headers['cache-control'], 'no-store', 'the server must never cache — every response must carry cache-control: no-store')
+    assert.strictEqual(mockRes.body, fs.readFileSync(path.join(dir, 'design/mocks/a.html'), 'utf8'),
+      'AC-20260902-10-2: a ?clean request must return the exact bytes of design/mocks/a.html, with no notes-layer injection')
+
+    const traversal = await get('/../package.json')
+    assert.strictEqual(traversal.status, 404,
+      'a path-traversal request outside design/ must answer 404, never leak a file above the served root (package.json here)')
+
+    const exitPromise = new Promise((resolve) => child.on('exit', (code, signal) => resolve({ code, signal })))
+    child.kill('SIGTERM')
+    const exitTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('serve did not exit within 5s of SIGTERM')), 5000))
+    await Promise.race([exitPromise, exitTimeout])
+  } finally {
+    // Harness-level hardening (repair): an assertion failure above must not orphan the serve
+    // child — a live child keeps the event loop alive and hangs the whole test process, not just
+    // this test. SIGKILL is a safe fallback for a process that already caught SIGTERM once.
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGKILL')
+    }
   }
+})
 
-  const mockRes = await get('/mocks/a.html')
-  assert.strictEqual(mockRes.status, 200, 'GET /mocks/a.html must serve the file with status 200')
-  assert.strictEqual(mockRes.headers['cache-control'], 'no-store', 'the server must never cache — every response must carry cache-control: no-store')
-  assert.strictEqual(mockRes.body, fs.readFileSync(path.join(dir, 'design/mocks/a.html'), 'utf8'),
-    'the served body must be the exact bytes of design/mocks/a.html')
+// specs/20260902/10-page-notes-review-loop.md D2/D3, AC-20260902-10-2/-3/-4 (TDD red): serve
+// has no notes injection, no /__notes/* endpoints, and lib/notes-layer.browser.js does not
+// exist yet — this async-spawn + http helper mirrors AC-20260902-07-12's runner above (Gotcha:
+// runNode's spawnSync would block the parent event loop for the child's whole lifetime).
+async function withServe(dir, portOffset, fn) {
+  const port = 41830 + ((process.pid + portOffset) % 300)
+  const child = spawn(process.execPath, [path.join(SPEC, 'scripts/design-atlas.js'), 'serve', '--root', dir, '--port', String(port)])
+  try {
+    let stdoutBuf = ''
+    let stderrBuf = ''
+    child.stderr.on('data', (chunk) => { stderrBuf += chunk.toString('utf8') })
+    const firstLinePromise = new Promise((resolve) => {
+      child.stdout.on('data', (chunk) => {
+        stdoutBuf += chunk.toString('utf8')
+        if (stdoutBuf.includes('\n')) resolve()
+      })
+    })
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('serve did not print its first stdout line within 5s: ' + stderrBuf)), 5000))
+    await Promise.race([firstLinePromise, timeout])
 
-  const traversal = await get('/../package.json')
-  assert.strictEqual(traversal.status, 404,
-    'a path-traversal request outside design/ must answer 404, never leak a file above the served root (package.json here)')
+    function get(urlPath) {
+      return new Promise((resolve, reject) => {
+        http.get({ host: 'localhost', port, path: urlPath }, (res) => {
+          let body = ''
+          res.on('data', (c) => { body += c })
+          res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body }))
+        }).on('error', reject)
+      })
+    }
+    function post(urlPath, obj) {
+      return new Promise((resolve, reject) => {
+        const data = JSON.stringify(obj)
+        const req = http.request({
+          host: 'localhost', port, path: urlPath, method: 'POST',
+          headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(data) },
+        }, (res) => {
+          let body = ''
+          res.on('data', (c) => { body += c })
+          res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body }))
+        })
+        req.on('error', reject)
+        req.end(data)
+      })
+    }
 
-  const exitPromise = new Promise((resolve) => child.on('exit', (code, signal) => resolve({ code, signal })))
-  child.kill('SIGTERM')
-  const exitTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('serve did not exit within 5s of SIGTERM')), 5000))
-  await Promise.race([exitPromise, exitTimeout])
+    await fn({ get, post, port })
+  } finally {
+    // Harness-level hardening (repair, AC-20260902-07-12 sibling): a failure anywhere above —
+    // including the first-line wait itself — must not orphan the serve child, or it keeps the
+    // event loop alive and hangs the whole test process, not just this test.
+    if (child.exitCode === null && child.signalCode === null) {
+      const exitPromise = new Promise((resolve) => child.on('exit', (code, signal) => resolve({ code, signal })))
+      child.kill('SIGTERM')
+      const exitTimeout = new Promise((resolve) => setTimeout(resolve, 5000))
+      await Promise.race([exitPromise, exitTimeout])
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill('SIGKILL')
+      }
+    }
+  }
+}
+
+test('AC-20260902-10-2: design-atlas.js serve injects the notes layer script before </body> on every served html unless ?clean is present, and GET /__notes/notes.js serves lib/notes-layer.browser.js verbatim as text/javascript', async () => {
+  const dir = tmpdir('atlas-notes-inject')
+  fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
+  const bodyHtml = '<!doctype html>\n<html><head></head><body><main data-screen-label="a">hello</main>\n</body></html>\n'
+  fs.writeFileSync(path.join(dir, 'design/mocks/a.html'), bodyHtml)
+
+  await withServe(dir, 1, async ({ get }) => {
+    const injected = await get('/mocks/a.html')
+    assert.strictEqual(injected.status, 200, 'GET /mocks/a.html must still serve 200 once the notes layer is wired in: ' + injected.body)
+    assert.match(injected.body, /<script src="\/__notes\/notes\.js"><\/script>\s*<\/body>/,
+      'D2: every served text/html response without ?clean must carry the notes layer script tag immediately before </body> — got: ' + JSON.stringify(injected.body))
+
+    const clean = await get('/mocks/a.html?clean')
+    assert.strictEqual(clean.body, bodyHtml,
+      'D2: a request carrying ?clean must skip injection and return the file\'s exact original bytes, unchanged for screenshot capture — got: ' + JSON.stringify(clean.body))
+
+    const libPath = path.join(SPEC, 'scripts/lib/notes-layer.browser.js')
+    assert.ok(fs.existsSync(libPath), 'D3: spec/scripts/lib/notes-layer.browser.js must exist — the /__notes/notes.js endpoint has nothing to serve without it')
+    const libBytes = fs.readFileSync(libPath, 'utf8')
+    const notesJs = await get('/__notes/notes.js')
+    assert.strictEqual(notesJs.status, 200, 'GET /__notes/notes.js must serve the notes layer script: ' + notesJs.body)
+    assert.strictEqual(notesJs.headers['content-type'], 'text/javascript',
+      'GET /__notes/notes.js must declare content-type text/javascript per the HTTP contract: got ' + notesJs.headers['content-type'])
+    assert.strictEqual(notesJs.body, libBytes, 'GET /__notes/notes.js must return lib/notes-layer.browser.js verbatim, byte for byte')
+  })
+})
+
+test('AC-20260902-10-3: POST /__notes/add writes design/mocks/notes.json and returns 201, GET /__notes/list?screen filters by screen, POST /__notes/resolve marks resolved, empty text 400s, and an unknown /__notes/* path 404s', async () => {
+  const dir = tmpdir('atlas-notes-add')
+  fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/mocks/a.html'), '<main data-screen-label="a">hello</main>\n')
+
+  await withServe(dir, 2, async ({ get, post }) => {
+    const added = await post('/__notes/add', { scope: 'mock', screen: 'a', state: 'busy', text: 'x', by: 'JJ' })
+    assert.strictEqual(added.status, 201, 'POST /__notes/add with a valid mock-scope body must respond 201: ' + added.status + ' ' + added.body)
+    const addedNote = JSON.parse(added.body)
+    assert.strictEqual(addedNote.id, 'N001', 'the first added note must be assigned id "N001" — D1\'s monotonic N001-style scheme: got ' + JSON.stringify(addedNote))
+
+    const onDisk = JSON.parse(fs.readFileSync(path.join(dir, 'design/mocks/notes.json'), 'utf8'))
+    assert.strictEqual(onDisk.length, 1, 'POST /__notes/add must persist the note to design/mocks/notes.json: got ' + JSON.stringify(onDisk))
+    assert.strictEqual(onDisk[0].id, 'N001', 'the persisted note must carry the same id returned to the caller: got ' + JSON.stringify(onDisk))
+
+    const listed = await get('/__notes/list?screen=a')
+    assert.strictEqual(listed.status, 200, 'GET /__notes/list?screen=a must respond 200: ' + listed.body)
+    const listedNotes = JSON.parse(listed.body)
+    assert.strictEqual(listedNotes.length, 1, 'GET /__notes/list?screen=a must return the note whose screen === "a": got ' + JSON.stringify(listedNotes))
+    assert.strictEqual(listedNotes[0].id, 'N001', 'the listed note must be N001: got ' + JSON.stringify(listedNotes))
+
+    const resolved = await post('/__notes/resolve', { id: 'N001', by: 'JJ' })
+    assert.strictEqual(resolved.status, 200, 'POST /__notes/resolve for an existing id must respond 200: ' + resolved.status + ' ' + resolved.body)
+    const resolvedNote = JSON.parse(resolved.body)
+    assert.strictEqual(resolvedNote.status, 'resolved', 'POST /__notes/resolve must set status to "resolved": got ' + JSON.stringify(resolvedNote))
+    assert.strictEqual(resolvedNote.resolvedBy, 'JJ', 'POST /__notes/resolve must record resolvedBy from the request body: got ' + JSON.stringify(resolvedNote))
+
+    const bad = await post('/__notes/add', { scope: 'mock', screen: 'a', state: 'busy', text: '', by: 'JJ' })
+    assert.strictEqual(bad.status, 400, 'POST /__notes/add with an empty text must respond 400, never silently accept a blank note: got ' + bad.status)
+
+    const notFound = await get('/__notes/nope')
+    assert.strictEqual(notFound.status, 404, 'an unknown /__notes/* path must respond 404: got ' + notFound.status)
+  })
+})
+
+test('AC-20260902-10-4: lib/notes-layer.browser.js reads data-screen-label/data-state-btn, keys localStorage on nl-author, respects ?clean, uses only var(--v-*) chrome tokens with no raw hex literal, and GET /__notes/viewer.css serves the template bytes', async () => {
+  const libPath = path.join(SPEC, 'scripts/lib/notes-layer.browser.js')
+  assert.ok(fs.existsSync(libPath), 'D3: spec/scripts/lib/notes-layer.browser.js must exist — the served notes layer has no source file yet')
+  const src = fs.readFileSync(libPath, 'utf8')
+  for (const literal of ['data-screen-label', 'data-state-btn', 'nl-author', 'clean', 'var(--v-']) {
+    assert.ok(src.includes(literal),
+      'D3: notes-layer.browser.js must reference "' + literal + '" — its absence means the layer cannot find the active state, keep the author identity across the browser, honor the capture-clean query, or read every visual off the shared chrome tokens: ' + libPath)
+  }
+  assert.ok(!/#[0-9a-f]{3,8}/.test(src),
+    'D3: notes-layer.browser.js must carry no raw hex color literal — every visual is required to read off var(--v-*) chrome tokens instead: ' + libPath)
+
+  const dir = tmpdir('atlas-notes-css')
+  fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/mocks/a.html'), '<main data-screen-label="a">hello</main>\n')
+  const templateBytes = fs.readFileSync(path.join(SPEC, 'templates/mocks/viewer.css'), 'utf8')
+
+  await withServe(dir, 3, async ({ get }) => {
+    const res = await get('/__notes/viewer.css')
+    assert.strictEqual(res.status, 200, 'GET /__notes/viewer.css must respond 200: ' + res.status)
+    assert.strictEqual(res.body, templateBytes, 'GET /__notes/viewer.css must return spec/templates/mocks/viewer.css verbatim, byte for byte')
+  })
 })
 
 // specs/20260902/07-mocks-command-driver.md D15, AC-20260902-07-14 (TDD red): parseSurfaces

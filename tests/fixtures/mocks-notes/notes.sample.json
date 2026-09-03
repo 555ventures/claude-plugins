@@ -1,0 +1,58 @@
+[
+  {
+    "id": "N001",
+    "scope": "mock",
+    "screen": "session-live",
+    "state": "read-back pending",
+    "text": "Four equal buttons is right, but Unsure reads as a fifth state. Can Unsure just be a tap on Correct with an empty edit?",
+    "by": "JJ",
+    "at": "2026-09-02T20:07:37.247Z",
+    "status": "resolved",
+    "addressed": null,
+    "reply": null,
+    "resolvedBy": "JJ",
+    "resolvedAt": "2026-09-02T20:09:47.149Z"
+  },
+  {
+    "id": "N002",
+    "scope": "mock",
+    "screen": "session-live",
+    "state": "reconnecting",
+    "text": "Say how long we wait before giving up. Drivers are in tunnels.",
+    "by": "JJ",
+    "at": "2026-09-02T20:07:37.254Z",
+    "status": "resolved",
+    "addressed": null,
+    "reply": null,
+    "resolvedBy": "JJ",
+    "resolvedAt": "2026-09-02T20:09:46.641Z"
+  },
+  {
+    "id": "N003",
+    "scope": "mock",
+    "screen": "session-live",
+    "state": "listening",
+    "text": "End session needs a confirm; too easy to hit.",
+    "by": "JJ",
+    "at": "2026-09-02T20:07:37.260Z",
+    "status": "resolved",
+    "addressed": null,
+    "reply": null,
+    "resolvedBy": "session",
+    "resolvedAt": "2026-09-02T20:07:37.266Z"
+  },
+  {
+    "id": "N004",
+    "scope": "mock",
+    "screen": "session-live",
+    "state": "read-back pending",
+    "text": "I think Approve, Correct, Reject, Unsure is not UI/UX friendly...",
+    "by": "JJ",
+    "at": "2026-09-02T20:11:36.153Z",
+    "status": "open",
+    "addressed": null,
+    "reply": null,
+    "resolvedBy": null,
+    "resolvedAt": null
+  }
+]

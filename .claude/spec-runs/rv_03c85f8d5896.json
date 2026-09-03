@@ -1,0 +1,108 @@
+{
+  "runId": "rv_03c85f8d5896",
+  "ts": "2026-09-03T18:50:40.589Z",
+  "spec": "specs/20260902/09-one-hand-wireframes-one-token-set.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 668,
+    "base": "cb7acb23cc3d497cf98b7b28617099c68ce14550",
+    "head": "5057b9649476006f3463832eb1f8532127834c7d",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 342
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 8,
+        "carried": 7,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "the working-tree fix at spec/commands/atlas.md's annotation-triage step resolves reviewer-return-2's hard survivor (dispatching a Sonnet edit to make a mock edit)",
+        "file": "spec/commands/atlas.md",
+        "line": 85,
+        "evidence": "Current text reads: 'Then per mock edit: locate the file by `data-screen-label`, edit it in-session under the design harness (`{atlas} check` after every edit), rerun `node {atlas} build`, tell the user to refresh.' — the prior 'dispatch a Sonnet edit under the design harness' phrase is gone; this now matches D1's binding rule and the paragraph two lines above (line 24: 'no `Agent` dispatch ever writes a mock')."
+      },
+      {
+        "claim": "some other wording in spec/commands/atlas.md, spec/commands/sketch.md, spec/commands/mocks.md, spec/doctrine/design.md, or spec/doctrine/mocks.md still hands mock authoring/editing to a dispatched agent",
+        "file": null,
+        "line": null,
+        "evidence": "grep -niE 'dispatch|sonnet|\\bAgent\\b|worker' across all five files, every hit read in context: atlas.md lines 24/34/44/103/107 all state or reference the in-session/no-Agent-dispatch rule or 'check-only dispatches' (judgment-free checks, sanctioned by D1); sketch.md lines 22/65/81/112/136/144 are the same in-session rule, a note that dispatching cost 'is gone at sketch tier', and a script (not an agent) replacing an old Sonnet checklist pass; mocks.md line 16 'Intended model: Sonnet' names the session's own model (the in-session author), not a dispatch target, and line 116 is the generic Model Placement rule; design.md lines 79/90/146 ('worker's receipt', 'Authoring dispatches read it as canon', 'Design-stage component authoring is direct dispatch: a warm Sonnet per surface') concern production-component authoring at the later /spec:design build stage — a distinct artifact from the mock file — and this line is unchanged by the diff (confirmed present verbatim in the pre-image via `git show cb7acb23cc3d497cf98b7b28617099c68ce14550:spec/doctrine/design.md`), so it is not this spec's authorship-split residue; mocks.md contains no 'dispatch/Sonnet/Agent/worker' occurrence near mock authoring beyond the session-model line already cleared."
+      },
+      {
+        "claim": "the fix or any other working-tree change regressed the scoped test suite",
+        "file": null,
+        "line": null,
+        "evidence": "`node --test tests/consistency/design-doctrine.test.js tests/consistency/genesis-doctrine.test.js tests/mocks/*.test.js tests/design-atlas.test.js` — 69 tests, 69 pass, 0 fail, 0 skipped, run just now."
+      },
+      {
+        "claim": "the diff introduced changes outside the fix scope that need separate review",
+        "file": null,
+        "line": null,
+        "evidence": "`git diff cb7acb23cc3d497cf98b7b28617099c68ce14550 --stat` shows only the files already reviewed across iterations 1-3 (atlas.md, sketch.md, core.md, design.md, mocks.md doctrine, design-atlas.js, mocks templates, tests, spec/deviations); no new file appeared in this iteration beyond the atlas.md line-85 hunk already checked."
+      }
+    ],
+    "reviewerCount": 1,
+    "scope": "cb7acb23cc3d497cf98b7b28617099c68ce14550..HEAD plus uncommitted working-tree changes",
+    "tokens": 34000
+  }
+}

@@ -22,12 +22,49 @@
 // Contract: reads PreToolUse JSON on stdin. exit 0 = allow, exit 2 = block with the
 // corrective rewrite instruction on stderr (fed back to the model, which re-authors).
 // Fail-open: any parse failure or unexpected shape allows the call (never wedge).
+//
+// specs/20260902/06-mocks-provenance-ledger.md D5/D6: while a mocks run (design/mocks/
+// status.json, state !== APPROVED) or a genesis run (.claude/genesis/status.json, handoff
+// null) is live under the resolved root, a "derive" judge verdict is treated as pass — every
+// question inside those runs is a user decision by construction. "rewrite" and every tier-1
+// check are unchanged. The judge prompt also carries one added rule sentence: a document that
+// cites a subject is never the user deciding it. Root resolution and stage reads fail open on
+// any error (missing/unparsable file => not in a product stage, never a block).
 
 const MIN_DESC = 25 // chars — below this a description cannot carry a consequence
 const MIN_RECOMMENDED_DESC = 40 // a recommendation must also say WHY
 
 const JUDGE_MODEL = 'claude-haiku-4-5-20251001'
 const JUDGE_TIMEOUT_MS = 30000 // hook budget is 60s; leave headroom to fail open
+
+// D5: product-stage exemption. `root` resolution mirrors spec-state-gate.sh
+// (${CLAUDE_PROJECT_DIR:-.}) and spec-session-stamp.sh (.cwd): env var first, then the hook
+// input's own `cwd`, then process.cwd(). Fail-open throughout — any read/parse error means
+// "not in a product stage", never "block".
+function productStageRoot(input) {
+  return process.env.CLAUDE_PROJECT_DIR || (input && input.cwd) || process.cwd()
+}
+
+function readJsonSafe(p) {
+  try {
+    return JSON.parse(require('node:fs').readFileSync(p, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+function inProductStage(root) {
+  try {
+    const path = require('node:path')
+    const mocks = readJsonSafe(path.join(root, 'design/mocks/status.json'))
+    if (mocks && mocks.state !== 'APPROVED') return true
+    const genesis = readJsonSafe(path.join(root, '.claude/genesis/status.json'))
+    if (genesis && genesis.handoff == null) return true
+  } catch {
+    return false
+  }
+  return false
+}
 
 function normalize(s) {
   return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
@@ -81,6 +118,7 @@ function judgePrompt(questions) {
     '  even with no literal code identifiers — or asks the owner to weigh implementation effort.',
     '- "derive": any question asks something the agent\'s own codebase, session history, or decision',
     '  records almost certainly already answer (e.g. one option is the very behavior being fixed).',
+    '- A document that cites, discusses, or recommends a subject is never the user deciding it; a product fact (who, what, platform, payer, tenancy, what a screen does) is never "derive" — ask it.',
     '',
     'Reply with ONLY this JSON, nothing else:',
     '{"verdict":"pass"|"rewrite"|"derive","problems":["<per offending question: quote the phrase that fails, say what to state instead>"]}',
@@ -91,7 +129,9 @@ function judgePrompt(questions) {
 }
 
 // Returns null to allow, or a stderr message string to block. Fail-open throughout.
-function judge(questions) {
+// D5: `input` is the parsed hook JSON, used only to resolve productStageRoot for the derive
+// exemption; `rewrite` verdicts and tier-1 are unaffected by it.
+function judge(questions, input) {
   if (process.env.SPEC_QUESTION_JUDGE === 'off') return null
   const bin = process.env.SPEC_QUESTION_JUDGE_BIN || 'claude'
   let res
@@ -122,6 +162,11 @@ function judge(questions) {
     )
   }
   if (verdict.verdict === 'derive') {
+    try {
+      if (inProductStage(productStageRoot(input))) return null
+    } catch {
+      // fail-open toward the existing derive-block behavior below
+    }
     return (
       'BLOCKED — this looks answerable without the user (the codebase, session, or decision records already hold the answer).\n' +
       problems.map((p) => `- ${p}`).join('\n') +
@@ -163,7 +208,7 @@ function main() {
   if (!Array.isArray(questions) || questions.length === 0) process.exit(0)
   let blockMessage = null
   try {
-    blockMessage = judge(questions)
+    blockMessage = judge(questions, input)
   } catch {
     process.exit(0) // fail-open
   }

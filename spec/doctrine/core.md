@@ -249,6 +249,8 @@ that reader:
   and confirmed, never asked open-ended. Every derived decision prints one console line —
   `📌 Auto-picked <choice> — <one-line reason> (veto anytime)` — so a wrong derivation costs
   a five-second veto, not an archaeology dig.
+- **Product facts are asked, never derived.** A citing document is never the user deciding
+  it; the mocks/genesis product-stage exemption (`spec-paths shared-mocks`) is the mechanism.
 
 The floor is enforced by the `question-style-gate.js` PreToolUse hook: tier 1 deterministic
 (consequence-bearing descriptions, reasoned recommendations, identifier density), tier 2 a

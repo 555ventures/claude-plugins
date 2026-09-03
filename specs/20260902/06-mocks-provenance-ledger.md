@@ -1,6 +1,7 @@
 ---
 date: 2026-09-02
-status: hardened
+status: implementing
+build_base: main
 tier: critical             # question-style-gate.js is a hook surface (pipeline rules § Risk Tiers); spec/bin/spec-paths gains a key
 area: mocks
 design: false
@@ -10,6 +11,7 @@ depended_on_by: [specs/20260902/07-mocks-command-driver.md]
 brief: 22
 open_markers: 0
 spiked: 2026-09-02
+diff_base: 448691927309c4f9b9705a4cf9520e2533b3a684
 ---
 
 # Mocks provenance ledger + the question gate's product-stage exemption
@@ -52,7 +54,7 @@ run's ledger, the gate verdict is executable, and the hook exemption is measured
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D9: version + changelog entry |
 | tests/mocks/mocks-ledger.test.js | CREATE | tests | AC-20260902-06-1, AC-20260902-06-2, AC-20260902-06-3, AC-20260902-06-4, AC-20260902-06-5 |
 | tests/question-style-gate.test.js | MODIFY | tests | AC-20260902-06-6, AC-20260902-06-7, AC-20260902-06-8 |
-| tests/spec-paths.test.js | MODIFY | tests | AC-20260902-06-9 |
+| tests/spec-paths.test.js | MODIFY | tests | AC-20260902-06-9, AC-20260902-06-10 |
 
 Pre-existing input (no row): `tests/fixtures/mocks-ledger/dry-run.md` (D8, committed with this spec).
 
@@ -185,9 +187,10 @@ Judge prompt (D6) — the exact sentence inserted after the `"derive"` verdict l
   the literal sentence `A document that cites, discusses, or recommends a subject is never the user deciding it`
   (fake judge bin writes its argv to a file; the test reads it back) → `tests/question-style-gate.test.js`
 - **AC-20260902-06-9**: WHEN `spec-paths shared-mocks` runs THE SYSTEM SHALL print an
-  absolute path ending in `spec/doctrine/mocks.md`, that file SHALL exist with a `## Provenance
-  Ledger` heading, and `spec-paths` with no arguments SHALL CONTINUE TO print the plugin root →
-  `tests/spec-paths.test.js`
+  absolute path ending in `spec/doctrine/mocks.md`, and that file SHALL exist with a
+  `## Provenance Ledger` heading → `tests/spec-paths.test.js`
+- **AC-20260902-06-10**: WHEN `spec-paths` runs with no arguments THE SYSTEM SHALL CONTINUE TO
+  print the plugin root → `tests/spec-paths.test.js`
 
 ## Assumptions (escalation triggers)
 

@@ -110,7 +110,7 @@ test('every documented key resolves to an existing path', () => {
     'wf-research', 'design-atlas', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
     'review-driver', 'build-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'render-gate', 'render-compare',
-    'render-inventory', 'render-rules', 'registry-check', 'genesis-driver', 'escape-row', 'shared', 'shared-genesis', 'template', 'templates', 'contract']) {
+    'render-inventory', 'render-rules', 'registry-check', 'genesis-driver', 'escape-row', 'shared', 'shared-genesis', 'shared-mocks', 'template', 'templates', 'contract']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }
@@ -126,6 +126,29 @@ test('AC-20260901-07-15: spec-paths escape-row resolves to spec/scripts/escape-r
     'D2/D10: `spec-paths escape-row` must resolve to spec/scripts/escape-row.js — a wrong or missing key breaks escape.md\'s D6 --append/--amend invocations silently (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently")')
   assert.ok(fs.existsSync(escapeRowPath), 'the resolved escape-row.js path must actually exist on disk: ' + escapeRowPath)
   assert.ok(fs.statSync(escapeRowPath).isFile(), 'the resolved escape-row.js path must be a regular file, not a directory or missing entirely: ' + escapeRowPath)
+})
+
+// specs/20260902/06-mocks-provenance-ledger.md D7, AC-20260902-06-9: spec-paths gains a
+// `shared-mocks` key resolving to the new spec/doctrine/mocks.md, the way `shared-design` and
+// `shared-genesis` resolve their own doctrine files — a missing key breaks any command that
+// resolves it silently (§ Risk Tiers, spec-paths).
+test('AC-20260902-06-9: spec-paths shared-mocks resolves to an existing spec/doctrine/mocks.md carrying a Provenance Ledger heading', () => {
+  const fs = require('node:fs')
+  const mocksPath = run('shared-mocks').trim()
+  assert.ok(mocksPath.endsWith('spec/doctrine/mocks.md'),
+    'D7: `spec-paths shared-mocks` must print an absolute path ending in spec/doctrine/mocks.md, not resolve to some other doctrine file or an empty usage line: ' + mocksPath)
+  assert.ok(path.isAbsolute(mocksPath), 'the printed path must be absolute — a relative path breaks callers invoked from a different cwd: ' + mocksPath)
+  assert.ok(fs.existsSync(mocksPath), 'the resolved mocks.md path must actually exist on disk, or every command that resolves it silently gets nothing: ' + mocksPath)
+  assert.match(read('spec/doctrine/mocks.md'), /^## Provenance Ledger$/m,
+    'D7: mocks.md must carry a "## Provenance Ledger" heading — the section spec 07\'s driver and the ledger grammar doctrine live under')
+})
+
+// specs/20260902/06-mocks-provenance-ledger.md AC-20260902-06-10: the zero-argument default is a
+// regression pin — adding the shared-mocks key must never change what bare `spec-paths` prints.
+test('AC-20260902-06-10: spec-paths with no arguments continues to print the plugin root', () => {
+  const noArgs = execFileSync('bash', [BIN], { encoding: 'utf8' }).trim()
+  assert.strictEqual(noArgs, run('root').trim(),
+    'AC-10: spec-paths with no arguments must CONTINUE TO print the plugin root exactly as `spec-paths root` does — adding the shared-mocks key must never change the zero-argument default')
 })
 
 test('shared-for: every mapped section name still exists as a core.md or design.md heading', () => {

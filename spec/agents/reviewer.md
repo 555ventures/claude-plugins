@@ -81,6 +81,14 @@ aside, or a "worth a one-line fix" remark. The findings list is the only channel
 disposition step reads; anything outside it is silently lost (measured on replay: a
 verified wrong-flag doc error reported only in prose never reached disposition).
 
+The same standard binds a **kill**. A claim is dismissed only on executed evidence about the
+input the change weakens — never on equivalence over today's fixtures. A weakened identity
+or boundary check (`===` → `includes`/`startsWith`/`indexOf`, an anchored regex → unanchored,
+a full-token match → substring) is a finding unless you construct the colliding input the
+loosened check would newly accept and show it cannot reach that site; "every current id is
+the same length" or "the pinned tests still pass" is not a kill (`replay-corpus.md`
+§ `prefix-collision-coverage-fail-open`; replay `rp_c88b27bf13b2`).
+
 ## Severity calibration
 
 - **hard** — violates an explicit project rule or contradicts the spec; causes runtime

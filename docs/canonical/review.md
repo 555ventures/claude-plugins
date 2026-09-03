@@ -19,7 +19,7 @@
 - The verdict word and the ledger row are both emitted by `verdict.js` from the
   per-iteration evidence manifest (fresh mktemp file; legs re-executed each iteration) +
   reviewer return + dispositions; survivor counts come from the return file, never flags;
-  `UNVERIFIED` = required leg missing, `GATE_RED` = blocking leg red; only `gate`/`smoke`/`ci`
+  `UNVERIFIED` = required leg missing, `GATE_RED` = blocking leg red; only `gate`/`suite`/`smoke`/`ci`
   block — `reconcile`/`ac-matrix`/`skip-reconcile`/`at-risk`/`promise-sweep` emit
   dispositionable findings; CI status
   flows through `ci-query.js` — red blocks pre-reviewer, unavailable
@@ -223,6 +223,14 @@
   single-segment basename; the full repo-relative path always survives so a root-level file
   stays matchable. (specs/20260815/02-at-risk-pins.md, done 2026-08-16; the stem-degeneracy
   clause added by that spec's own review, AC-20260815-02-15)
+
+- The Phase 0 leg inventory carries **`suite`**: required in both scopes, blocking. It runs the
+  host's bare `testCommand` from the repo root in its own wave after gate/reconcile/ci and before
+  at-risk and smoke, writes `<out-dir>/suite-output.txt`, and types its row like the gate's
+  (`skips`, `todos`, `testsExecuted`); a declared `testCountPattern` observing zero executed tests
+  forces exit 1, and a host with no `testCommand` gets a red `{"unavailable":"no-test-command"}`
+  row, never a silent skip. The close-time re-run runs the same command after the resolved gate.
+  (specs/20260903/02-whole-suite-review-leg.md)
 
 - The promise sweep's **deterministic half** lives in `promise-sweep.js` — run manifest-less at
   plan lock and in every review scope (full AND fix-delta) by `review-legs.js`. It reads only

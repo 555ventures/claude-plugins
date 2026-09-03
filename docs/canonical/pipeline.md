@@ -20,23 +20,29 @@ skipped-test reconciliation and semantic backstop. No new script, section, or re
 exists for this — deliberately (ruled 2026-08-10, superseding the discarded `## Surface
 Paths` design; specs/20260810/02-terminal-observable-acs.md).
 
-## The gate is scoped, and the scoping is compensated
+## The build gate is scoped; review runs the whole suite
 
-Every gate in the pipeline resolves `{testDirs}` from the spec's own File Plan tests rows, so
-a run never executes the whole suite. That scoping is deliberate and load-bearing — it is what
-makes a red-pin baseline livable — and it is never widened. Its cost is precise: a Decision
-that changes what a shared script *returns* reddens suites that pinned the old behavior, and
-because those suites sit outside the File Plan, neither the build gate nor the review panel
-ever runs them (escape `wf_e1da0ea6-94c`: five pins, two files, zero signal, found by hand
-twelve minutes after a CLEAN verdict).
+Every build gate resolves `{testDirs}` from the spec's own File Plan tests rows, so a build
+iteration runs only the test globs of the directories the spec names — the inner repair loops
+stay fast, and that is the whole reason the scoping survives. Its earlier justification, that
+scoping "makes a red-pin baseline livable", described the sanctioned-red apparatus v7 retired:
+gates are plainly green now, so at review time nothing is protected by not looking. The cost of
+a scoped gate is directory-shaped and precise: a test outside every named directory — a shared
+script's pinned return, a repo-wide scanner (narration sweep, tracked-text purity, an exhaustive
+live-file pin) — can go red because of the diff while neither the build gate nor the review
+panel ever runs it (escape `wf_e1da0ea6-94c`: five pins, two files, zero signal; class
+`scoped-gate-blind-spot`: three merges in two days went red on main only after merge-back).
 
-The compensation is a derivation, not a wider gate: `scope-reconcile.js` — already the sole
-owner of the changed-set-vs-File-Plan comparison — also derives the **at-risk** set by
-matching changed-file path stems against the content of test files outside the plan, and
-`/spec:review` runs that set as a required, non-blocking leg. Failures become ordinary
-findings the session disposes of; a pre-existing sanctioned pin is a waive naming the pin. The
-gate never runs unscoped, and the prediction the scoping makes is now itself under test.
-(specs/20260815/02-at-risk-pins.md, done 2026-08-16.)
+Two compensations, one per question. `scope-reconcile.js` derives the **at-risk** set — outside
+test files whose content names a changed file's path stem — and review runs that set as a
+required, non-blocking leg whose failures are ordinary findings: it answers *which* outside
+tests this diff endangers. The **`suite`** leg answers whether the tree is green at all: review
+runs the host's bare `testCommand` once per legs iteration in its own wave (never concurrent
+with another leg that runs host tests), in both scopes, and it is blocking — a red suite
+derives `GATE_RED` before any reviewer spend, and the driver's close-time re-run runs the same
+command over the committed close tree so the files CLOSE itself writes are covered. Build never
+runs unscoped; review never closes on a scoped observation alone.
+(specs/20260815/02-at-risk-pins.md, done 2026-08-16; specs/20260903/02-whole-suite-review-leg.md)
 
 ## Runtime verification covers stopping, not just starting
 

@@ -1,6 +1,6 @@
 ---
 date: 2026-09-03
-status: implementing
+status: done
 tier: critical             # verdict.js + review-legs.js + spec-review-driver.js are this repo's critical triggers (pipeline rules § Risk Tiers)
 area: pipeline
 design: false
@@ -243,6 +243,21 @@ hosts whose whole suite is their planned green test (A5) and change no assertion
 **Rejected:** widening `{testDirs}` for build (ruling); a `driftScript` config hook running the
 suite (this host declares none, and a knob makes the promise optional); pooling a red suite as
 a finding (waivable); a per-host opt-out (a red suite is never a preference).
+
+**Build record (2026-09-03, folded from the deviations sidecar; all one-offs, Gotchas at cap).**
+D9's version target 7.71.0 was taken by the sibling branch spec/11 queued to merge, so the build
+bumped to 7.72.0 — the literal is a target, not a pin. A6's if-false clause was taken:
+`tests/review/review-legs-at-risk-argv.test.js` joined the File Plan under AC-20260903-02-13
+because the suite leg's bare invocation now creates the recorder log with one empty line; its
+existence assertion became "no with-args line", the at-risk claim untouched. AC-20260903-02-10's
+fixture as first authored declared the always-red `testCommand` from the start, so the suite leg
+hard-stopped LEGS before CLOSE was reachable; the fixture now reaches CLOSE green and rewrites the
+config before `--mark closed`. AC-20260903-02-11's planted scanner asserted with no message, so the
+runner never printed the planted literal; the assert message now carries it. The final gate's one
+repair round: `tests/replay/replay.test.js` joined the File Plan under AC-20260903-02-17 — its
+`--pick-class` fixtures enumerate the derived classes by hand (seeded rows, the
+`inapplicableClasses` list), the exhaustive-live-set class the Gotchas record; each grew by the one
+id in place and was retagged. Review: CLEAN rv_51101642472c, zero survivors, no waives.
 
 ## Canonical Delta
 

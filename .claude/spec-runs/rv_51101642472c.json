@@ -1,0 +1,131 @@
+{
+  "runId": "rv_51101642472c",
+  "ts": "2026-09-03T22:55:33.787Z",
+  "spec": "specs/20260903/02-whole-suite-review-leg.md",
+  "tier": "critical",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1202,
+    "base": "55883225efa714d1cddecfe257c88cc27d50b19b",
+    "head": "997b53c1036f8c87340a4a8cc8bc558de1fe6c83",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 0,
+      "observed": {
+        "outOfPlan": 0,
+        "files": []
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 3
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 3
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": {
+        "matches": 10
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": {
+        "files": 90,
+        "testsExecuted": 945
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 10,
+        "carried": 8,
+        "sanctioned": 2,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "D8's Canonical Delta (docs/canonical/pipeline.md § \"The gate is scoped, and the scoping is compensated\" rewrite, docs/canonical/review.md leg-inventory bullet, docs/canonical/review-legs.md new section) does not appear applied in the diff under review.",
+        "file": "docs/canonical/pipeline.md",
+        "line": 23,
+        "evidence": "git diff 5588322 -- docs/canonical/ is empty; docs/canonical/pipeline.md:23 still reads '## The gate is scoped, and the scoping is compensated' with the old red-pin-baseline rationale text, and docs/canonical/review-legs.md has no '## The suite leg' section. Dismissed per the review contract's 'Not findings' clause: Canonical Delta application is an expected precondition owned by a stage that runs after review's verdict, never a review finding."
+      },
+      {
+        "claim": "Fixture-manifest duplication (SIX_GREEN / SIX_LEGS_NO_AT_RISK / SIX_ROWS_GATE_RED / SIX_ROWS_GREEN / CLEAN_LEGS all gaining a near-identical green suite row) is extraction-worthy duplication under the pipeline rules' three-or-more-near-identical-blocks calibration.",
+        "file": "tests/review/verdict.test.js",
+        "line": 122,
+        "evidence": "Read the five constants across tests/review/verdict.test.js, tests/verdict-gatered-no-workflow.test.js, tests/provenance/provenance.test.js, tests/review/escalate-row.test.js, tests/review/legs-verdict-pair.test.js — each is a pre-existing, independently-owned fixture constant in a separate test file that predates this diff; the diff only adds one row to each in place, matching D6's explicit instruction ('gains a green suite row ... never weakened'). Not new duplication introduced by this spec; each file's constant was already separately maintained pre-image."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 95000
+  }
+}

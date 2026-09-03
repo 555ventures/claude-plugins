@@ -61,3 +61,12 @@ into the ledger row and the verdict derives from leg exits.
 Every row this script appends carries `scope` as its last key, `full` or `fix-delta`, from the
 one `--fix-delta` flag; rows appended by `ac-matrix.js` and `promise-sweep.js` carry no key and
 `verdict.js` treats them as non-carriers. (specs/20260902/05-manifest-stamped-scope.md)
+
+## The suite leg
+
+`review-legs.js` runs the host's bare `testCommand` once per legs iteration as the `suite` leg —
+the one observation that sees repo-wide scanner tests the scoped gate glob and the at-risk stem
+match cannot. It is blocking in `review-legs.js`, `verdict.js` (`REVIEW_LEGS` + `REVIEW_BLOCKING`,
+required in both scopes) and the review driver's `BLOCKING_LEGS` alike; `--require` was not the
+mechanism because on the review profile it widens the required set only. It has its own wave so
+it never overlaps another leg that runs host tests. (specs/20260903/02-whole-suite-review-leg.md)

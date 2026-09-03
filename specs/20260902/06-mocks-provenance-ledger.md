@@ -1,6 +1,6 @@
 ---
 date: 2026-09-02
-status: implementing
+status: done
 build_base: main
 tier: critical             # question-style-gate.js is a hook surface (pipeline rules § Risk Tiers); spec/bin/spec-paths gains a key
 area: mocks
@@ -239,6 +239,14 @@ in plan sessions.
 Fragile: the counts line is a fixed string other specs will grep — change it only with its
 AC. Rejected: appending catches to `.claude/spec-runs.jsonl` as rows (a second writer and a
 second schema for a table that already lives in the repo; spec 11 reads the table directly).
+
+Build-time departures (folded from the deviations sidecar at close, 2026-09-02): the test
+author inlined the Contracts block's empty-template text into AC-5's test instead of reading
+`spec/templates/mocks-ledger.md`, which did not exist at test-authoring time — the template
+file must stay byte-identical to the Contracts block. AC-9 was split at build time because its
+trailing `SHALL CONTINUE TO` clause made red-check classify the whole AC as a green pin; the
+no-args regression clause became AC-10 and no observable promise changed. D9's literal target
+7.60.0 was already taken on main by a concurrent fix, so the bump landed at 7.61.0.
 
 ## Canonical Delta
 

@@ -56,12 +56,12 @@ doctrine, templates and tests carry none of the retired states, and a legacy fix
 | spec/templates/design-positions.md | DELETE | doctrine | D11 |
 | spec/templates/design-pick.json | DELETE | doctrine | D11 |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D13 |
-| tests/genesis/brief-state.test.js | CREATE | tests | AC-20260902-08-3, AC-20260902-08-4, AC-20260902-08-5, AC-20260902-08-6, AC-20260902-08-7 |
+| tests/genesis/brief-state.test.js | CREATE | tests | AC-20260902-08-3, AC-20260902-08-4, AC-20260902-08-5, AC-20260902-08-6, AC-20260902-08-7, AC-20260902-08-13, AC-20260902-08-14 |
 | tests/genesis/genesis-driver.test.js | MODIFY | tests | AC-20260902-08-1, AC-20260902-08-2 (v3 status shape; retired marks refused; regression pins retagged) |
-| tests/genesis/tournament.test.js | MODIFY | tests | AC-20260902-08-8 (backend-api fixtures gain `--mark brief-written`; web-app style-tile cases rewritten) |
+| tests/genesis/tournament.test.js | MODIFY | tests | AC-20260902-08-8, AC-20260902-08-15 (backend-api fixtures gain `--mark brief-written`; web-app style-tile cases rewritten) |
 | tests/genesis/conventions-handoff.test.js | MODIFY | tests | D12: data-ml fixtures gain `--mark brief-written` before `menus-done`; assertions unchanged (retag with AC-20260902-08-2's continue clause) |
-| tests/genesis-gate.test.js | MODIFY | tests | AC-20260902-08-9 |
-| tests/consistency/genesis-doctrine.test.js | MODIFY | tests | AC-20260902-08-10, AC-20260902-08-11, AC-20260902-08-12 |
+| tests/genesis-gate.test.js | MODIFY | tests | AC-20260902-08-9, AC-20260902-08-16 |
+| tests/consistency/genesis-doctrine.test.js | MODIFY | tests | AC-20260902-08-10, AC-20260902-08-11, AC-20260902-08-12, AC-20260902-08-17 |
 | tests/genesis/explore-states.test.js | DELETE | tests | D12 |
 | tests/genesis/design-state.test.js | DELETE | tests | D12 |
 
@@ -177,8 +177,7 @@ Hook (`genesis-state-gate.sh` init arm), exact behavior table:
   no `- archetype:` line THE SYSTEM SHALL exit 2 naming `archetype` and the eight registry
   keys; with `- archetype: web-app` it SHALL record `status.archetype` and print a DISCOVERY→
   BRIEF checkpoint whose step text names `/spec:mocks`; with `- archetype: backend-api` the
-  step text SHALL name `--mark brief-written` and not `/spec:mocks`; `--mark menus-done`
-  SHALL CONTINUE TO accept a brief whose archetype line is present →
+  step text SHALL name `--mark brief-written` and not `/spec:mocks` →
   `tests/genesis/brief-state.test.js`
 - **AC-20260902-08-4**: WHEN `--mark brief-written` runs for `web-app` with no
   `design/mocks/status.json` THE SYSTEM SHALL exit 2 naming that path and `run /spec:mocks`;
@@ -196,8 +195,7 @@ Hook (`genesis-state-gate.sh` init arm), exact behavior table:
 - **AC-20260902-08-6**: WHEN `--mark skeleton-landed` runs for `web-app` with the probes and
   binding subset in place but no `design/components.json` THE SYSTEM SHALL exit 2 naming the
   file; with a manifest that duplicates a `name` it SHALL exit 2 carrying `components-check.js`'s
-  own line; with a valid manifest it SHALL CONTINUE TO run the zero-day gate →
-  `tests/genesis/brief-state.test.js`
+  own line → `tests/genesis/brief-state.test.js`
 - **AC-20260902-08-7**: WHEN a v2 `status.json` has `marks.menusDone`, `marks.decided`,
   `architect: "scaffold-complete"`, `marks.roadmapWritten`, `explore: "picked"`, `design:
   "rules-locked"` and no `marks.briefWritten` THE SYSTEM SHALL derive BRIEF with a step text
@@ -207,18 +205,15 @@ Hook (`genesis-state-gate.sh` init arm), exact behavior table:
   → `tests/genesis/brief-state.test.js`
 - **AC-20260902-08-8**: WHEN the PROBE step prints for `web-app` THE SYSTEM SHALL list the
   archetype's tasks without `style-tile` and without a tile-source line, and `--mark
-  probe-done` SHALL accept a `probe.json` that carries no tile entries (the existing accept
-  path SHALL CONTINUE TO re-run gate + boot and write the benchmark) →
+  probe-done` SHALL accept a `probe.json` that carries no tile entries →
   `tests/genesis/tournament.test.js`
 - **AC-20260902-08-9**: WHEN `/spec:init` is prompted with `design: "ratified"` THE SYSTEM
-  SHALL exit 0 silently; with `doctrine-drafted` or `tokens-landed` it SHALL CONTINUE TO exit
-  2 with stderr echoing the value and now naming `BRIEF`; with `rules-locked` or `skipped` it
-  SHALL CONTINUE TO exit 0; with no `design` it SHALL CONTINUE TO exit 0 printing a `Genesis
-  note` that names `BRIEF` and never `genesis-design` → `tests/genesis-gate.test.js`
+  SHALL exit 0 silently; with `doctrine-drafted` or `tokens-landed` it SHALL exit 2 with
+  stderr echoing the value and naming `BRIEF`; with no `design` it SHALL exit 0 printing a
+  `Genesis note` that names `BRIEF` and never `genesis-design` → `tests/genesis-gate.test.js`
 - **AC-20260902-08-10**: WHEN `spec/doctrine/genesis.md` is read THE SYSTEM SHALL carry a
   `## Genesis: Brief State` heading and neither `## Genesis: Explore State` nor `## Genesis:
-  Design State`, `citations-check.js` over `spec/` SHALL report `MISS=0`, and `spec-paths
-  shared-for genesis` SHALL CONTINUE TO print its scoped sections →
+  Design State`, and `citations-check.js` over `spec/` SHALL report `MISS=0` →
   `tests/consistency/genesis-doctrine.test.js`
 - **AC-20260902-08-11**: WHEN `spec/commands/genesis.md` is read THE SYSTEM SHALL be ≤120
   lines, contain the literal `/spec:mocks → /spec:genesis → /spec:enforce`, and not contain
@@ -231,6 +226,17 @@ Hook (`genesis-state-gate.sh` init arm), exact behavior table:
   `specs/20260827/0[123]-*.md` waived; `specs/`, `docs/`, `.claude/spec-runs*` never swept),
   and `spec/templates/design-positions.md` / `design-pick.json` SHALL not exist →
   `tests/consistency/genesis-doctrine.test.js`
+- **AC-20260902-08-13**: WHEN `--mark menus-done` runs on a brief whose archetype line is
+  already present THE SYSTEM SHALL CONTINUE TO accept it → `tests/genesis/brief-state.test.js`
+- **AC-20260902-08-14**: WHEN `--mark skeleton-landed` runs for `web-app` with a valid
+  `design/components.json` THE SYSTEM SHALL CONTINUE TO run the zero-day gate →
+  `tests/genesis/brief-state.test.js`
+- **AC-20260902-08-15**: WHEN `--mark probe-done` accepts a `probe.json` THE SYSTEM SHALL
+  CONTINUE TO re-run gate + boot and write the benchmark → `tests/genesis/tournament.test.js`
+- **AC-20260902-08-16**: WHEN `/spec:init` is prompted with `design: "rules-locked"` or
+  `"skipped"` THE SYSTEM SHALL CONTINUE TO exit 0 → `tests/genesis-gate.test.js`
+- **AC-20260902-08-17**: WHEN `spec-paths shared-for genesis` runs THE SYSTEM SHALL CONTINUE TO
+  print its scoped sections → `tests/consistency/genesis-doctrine.test.js`
 
 ## Assumptions (escalation triggers)
 

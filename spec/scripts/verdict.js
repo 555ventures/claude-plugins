@@ -223,6 +223,9 @@
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
+// The leg-finding count is shared with spec-review-driver.js's disposition tally — one derivation
+// of the unit both callers count in (lib/leg-findings.js header carries the ruling).
+const { countLegFinding } = require('./lib/leg-findings')
 
 function usage() {
   console.error('usage: verdict.js --manifest <path> [--workflow <path>] [--waived N] [--rejected N] ' +
@@ -538,25 +541,8 @@ function legIsRed(leg) {
 // ---- survivors, floored at 1 (a red row can never contribute 0 — an absent/non-numeric field ---
 // ---- must fail closed, not silently disappear). specs/20260820/06-typed-evidence-manifest.md ---
 // ---- D3: this reads typed fields directly now — no leg's finding count is pattern-matched -----
-// ---- out of a string any more. -----------------------------------------------------------------
-
-function countLegFinding(row) {
-  const observed = (row && row.observed) || {}
-  let n = NaN
-  if (row && row.leg === 'reconcile') {
-    n = observed.outOfPlan
-  } else if (row && row.leg === 'ac-matrix') {
-    n = observed.uncovered
-  } else if (row && row.leg === 'skip-reconcile') {
-    if (typeof observed.skipped === 'number') {
-      n = observed.skipped - (typeof observed.sanctioned === 'number' ? observed.sanctioned : 0)
-    }
-  } else if (row && row.leg === 'promise-sweep') {
-    n = observed.orphans
-  }
-  // any other red non-blocking leg (at-risk, drift, patterns) or an absent/non-numeric field floors to 1
-  return Number.isFinite(n) && n >= 1 ? n : 1
-}
+// ---- out of a string any more. The count itself lives in lib/leg-findings.js (countLegFinding), --
+// ---- required above, so the driver's disposition tally weighs a leg ref by the same number. -----
 
 function computeLegFindings() {
   let total = 0

@@ -45,7 +45,9 @@ written there, never inferred from the shape of the code.
 - The diff base and root, for `git diff <base>..HEAD` and any repro you choose to run.
 
 You disposition exactly the union of these two pools — every reviewer survivor, indexed `s0`,
-`s1`, … in return order, and every qualifying manifest row, named `leg:<name>`. Nothing else is
+`s1`, … in return order, and every qualifying manifest row, named `leg:<name>`. One `leg:<name>`
+entry covers that leg's whole finding count (its typed observed count — every out-of-plan file,
+every uncovered AC), so its reason must ground each counted item, not the first. Nothing else is
 in scope: you do not re-review the diff for new findings, and you do not disposition a `killed`
 entry or a passing leg.
 

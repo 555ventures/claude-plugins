@@ -449,3 +449,63 @@ test('AC-20260901-09-13: WHEN a run\'s synthetic gate fails at iteration 1 THE S
   assert.deepStrictEqual(directRow.checkpoint, { outcome: 'not-reached' },
     'AC-20260901-09-13/D6: D6 threads the derived outcome onto EVERY review verdict pass, both via values — unlike the retired mechanism, a --via-absent GATE_RED row must also carry checkpoint:{"outcome":"not-reached"}, not omit the key: ' + JSON.stringify(directRow))
 })
+
+// ---- disposition-pool unit (direct fix, core § Incident Policy) --------------------------------
+// Fixture shape: a red reconcile row with outOfPlan:5
+// and ONE `leg:reconcile` waive entry. Before the fix the driver's tally counted entries (waive:1)
+// while verdict.js counted findings (5), so `--waived 1` was accepted and derived HARD_FINDINGS
+// forever, and `--waived 5` — the only count verdict.js would have cleared — was refused by the
+// driver's own tally check. The ruling (lib/leg-findings.js): a leg ref covers that leg's whole
+// count, from the same module both scripts require.
+
+function makeFiveFileReconcileHost(prefix) {
+  const host = makeHost(prefix)
+  run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER',
+    'setup precondition: the fixture must reach REVIEWER (manifest-1.jsonl written) before the reconcile row can be appended')
+  fs.appendFileSync(path.join(host.sidecar, 'manifest-1.jsonl'),
+    JSON.stringify({ leg: 'reconcile', exit: 3, observed: { outOfPlan: 5, files: ['a', 'b', 'c', 'd', 'e'] } }) + '\n')
+  run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith(prefix + '-return', CLEAN_RETURN))
+  assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS',
+    'setup precondition: a red reconcile row must land DISPOSITIONS: ' + JSON.stringify(readState(host.sidecar)))
+  return host
+}
+const ONE_LEG_WAIVE = () => disposerReturn([
+  { ref: 'leg:reconcile', recommended: 'waive', reason: 'D1 sanctions every out-of-plan file' },
+])
+
+test('disposition-pool unit: WHEN the manifest holds a red reconcile row with outOfPlan:5 and --file holds ONE leg:reconcile waive entry THE SYSTEM refuses --waived 1 (exit 2, stderr names the leg weight, state byte-identical) and accepts --waived 5, recording dispositions.word CLEAN — the count verdict.js derives, never a per-entry tally', () => {
+  const host = makeFiveFileReconcileHost('disposer-unit-five')
+  const before = readStateRaw(host.sidecar)
+
+  const step = run(host.root, host.spec)
+  assert.match(step.stdout, /leg:reconcile exit=3 count=5/,
+    'the DISPOSITIONS step body must print each leg\'s finding count so the disposer sees what one leg ref covers: ' + step.stdout)
+
+  const perEntry = run(host.root, host.spec, '--mark', 'dispositions', '--file',
+    returnFileWith('disposer-unit-five-w1', ONE_LEG_WAIVE()), '--waived', '1', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(perEntry.status, 2,
+    'a per-entry tally (--waived 1) must be refused — verdict.js would subtract 1 from 5 and derive HARD_FINDINGS forever: ' + perEntry.stdout + perEntry.stderr)
+  assert.match(perEntry.stderr, /leg:reconcile=5/,
+    'the refusal must name the leg weight so the recount is mechanical: ' + perEntry.stderr)
+  assert.strictEqual(readStateRaw(host.sidecar), before, 'a refused mark must leave review-state.json byte-identical')
+  assert.ok(!fs.existsSync(path.join(host.sidecar, 'disposer-return-1.json')), 'a refused mark must write no disposer-return-1.json')
+
+  const weighted = run(host.root, host.spec, '--mark', 'dispositions', '--file',
+    returnFileWith('disposer-unit-five-w5', ONE_LEG_WAIVE()), '--waived', '5', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(weighted.status, 0,
+    'one leg:reconcile waive must cover the leg\'s whole count (--waived 5): ' + weighted.stdout + weighted.stderr)
+  const state = readState(host.sidecar)
+  assert.deepStrictEqual(state.dispositions, { waived: 5, rejected: 0, fixDispatched: 0, word: 'CLEAN' },
+    'the verdict pass must derive CLEAN from the weighted count: ' + JSON.stringify(state.dispositions))
+  assert.strictEqual(state.disposer.iteration, 1, JSON.stringify(state.disposer))
+})
+
+test('disposition-pool unit: WHEN the same five-file reconcile row is waived with --waived 6 THE SYSTEM refuses (exit 2) — the weighted tally check stays meaningful in both directions', () => {
+  const host = makeFiveFileReconcileHost('disposer-unit-over')
+  const r = run(host.root, host.spec, '--mark', 'dispositions', '--file',
+    returnFileWith('disposer-unit-over-w6', ONE_LEG_WAIVE()), '--waived', '6', '--rejected', '0', '--fix-dispatched', '0')
+  assert.strictEqual(r.status, 2, 'an over-count must still die: ' + r.stdout + r.stderr)
+  assert.match(r.stderr, /do not match the return's final-or-recommended tallies/, r.stderr)
+  assert.ok(!fs.existsSync(path.join(host.sidecar, 'disposer-return-1.json')))
+})

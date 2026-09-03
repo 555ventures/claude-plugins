@@ -131,7 +131,9 @@
 // `recommended`/`final` value outside `fix|waive|reject`, a blank `reason`, a `final` that differs
 // from `recommended` with no `overriddenBy:"user"` plus non-blank `overrideReason`, a
 // `--waived`/`--rejected`/`--fix-dispatched` count that does not match the return's
-// `final`-or-`recommended` tallies (names `--fix-dispatched`), or `--skip-independence-check-
+// `final`-or-`recommended` tallies (names `--fix-dispatched`; a `leg:<name>` entry weighs that
+// leg's whole finding count via lib/leg-findings.js, the unit verdict.js sums — so one waived
+// reconcile leg with `outOfPlan: 5` is `--waived 5`, never 1), or `--skip-independence-check-
 // because` passed at all, on any run (names the flag and ADR-0005 — there is no CHECKPOINT left
 // for it to bypass), or (specs/20260902/05-manifest-stamped-scope.md D5) `--mark dispositions`
 // whose pass derives `UNVERIFIED` — message quotes verdict.js's own `UNVERIFIED — <cause>` line
@@ -187,6 +189,10 @@ const { resolveGate } = require('./lib/gate-resolve')
 // startup) — right after /clear the new transcript has no assistant line yet, and by the time a
 // verdict pass runs the session has spoken many times.
 const { sessionModel } = require('./lib/session-stamp.js')
+// A `leg:<name>` disposition covers that leg's WHOLE finding count — the same count verdict.js sums
+// into legFindings, from the same module, so the two never count in different units again
+// (lib/leg-findings.js header carries the ruling; tests/review/disposer-gate.test.js pins it).
+const { countLegFinding } = require('./lib/leg-findings')
 
 // D1-D6 (specs/20260821/04-stopped-row-durability.md): a worktree review's RED_BLOCKING hard-stop
 // durably appends here, at the MAIN root, instead of the worktree's own (destructible)
@@ -1184,6 +1190,10 @@ function handleDispositions() {
           'leg-finding pools for this iteration')
       }
     }
+    // Weighted tally: a survivor ref counts 1; a leg ref counts that leg's finding count — the
+    // SAME number verdict.js's legFindings sums for the row (lib/leg-findings.js), so the counts
+    // this mark passes to the verdict pass below cover exactly what its arithmetic subtracts.
+    const legWeight = new Map(pools.legs.map((r) => ['leg:' + r.leg, countLegFinding(r)]))
     const tally = { fix: 0, waive: 0, reject: 0 }
     for (const entry of ret.dispositions) {
       if (!RECOMMEND_ENUM.has(entry.recommended)) {
@@ -1211,12 +1221,14 @@ function handleDispositions() {
         }
         effective = entry.final
       }
-      tally[effective]++
+      tally[effective] += legWeight.has(entry.ref) ? legWeight.get(entry.ref) : 1
     }
     if (tally.fix !== fixDispatched || tally.waive !== waived || tally.reject !== rejected) {
+      const weights = [...legWeight].filter(([, w]) => w > 1).map(([ref, w]) => ref + '=' + w).join(', ')
       die('--waived/--rejected/--fix-dispatched (' + waived + '/' + rejected + '/' + fixDispatched +
         ') do not match the return\'s final-or-recommended tallies (waive:' + tally.waive +
-        ' reject:' + tally.reject + ' fix:' + tally.fix + ') — recount before re-running')
+        ' reject:' + tally.reject + ' fix:' + tally.fix + ') — a leg ref counts that leg\'s whole ' +
+        'finding count' + (weights ? ' (' + weights + ')' : '') + '; recount before re-running')
     }
     fs.mkdirSync(sidecarDir, { recursive: true })
     dest = path.join(sidecarDir, `disposer-return-${n}.json`)
@@ -1771,8 +1783,9 @@ const STEPS = {
     return `## Step: dispositions due — dispatch the disposer, apply its recommendations\n` +
       `survivors (${survivors.length}):\n` +
       survivors.map((s) => `  [${s.severity}] ${s.file}:${s.line} — ${s.claim}`).join('\n') + '\n' +
-      `leg findings (${legs.length}):\n` +
-      legs.map((r) => `  ${r.leg} exit=${r.exit} ${JSON.stringify(r.observed)}`).join('\n') + '\n' +
+      `leg findings (${legs.length} leg(s), ${legs.reduce((t, r) => t + countLegFinding(r), 0)} finding(s) — ` +
+      `one leg:<name> disposition covers the leg's whole count):\n` +
+      legs.map((r) => `  leg:${r.leg} exit=${r.exit} count=${countLegFinding(r)} ${JSON.stringify(r.observed)}`).join('\n') + '\n' +
       `Dispatch ONE Agent {subagent_type: "spec:disposer"} with the spec path, diff base ${base}, ` +
       `root ${repoRoot}, the pipeline-rules path${pipelineRulesPath ? ' (' + pipelineRulesPath + ')' : ' (none declared)'}, ` +
       `and this iteration's evidence:\n` +

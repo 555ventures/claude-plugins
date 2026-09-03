@@ -3,7 +3,7 @@ name: console-log-exit-pipe-truncation
 description: console.log immediately followed by process.exit(0) silently truncates large stdout to 64KiB when a caller pipes/spawnSync's the script, exit code still reads 0
 metadata:
   type: feedback
-  reviewed: 2026-09-02
+  reviewed: 2026-09-03
 ---
 
 `console.log(bigString)` followed on the next line by `process.exit(0)` is unsafe in any

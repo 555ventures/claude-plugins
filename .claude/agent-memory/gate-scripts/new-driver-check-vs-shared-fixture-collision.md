@@ -3,6 +3,7 @@ name: new-driver-check-vs-shared-fixture-collision
 description: A spec-wide gate check applied unconditionally per its own Applicability clause will redden every pre-existing shared test fixture that predates it, even fixtures documented as exempt in a sibling test's own header comment — implement literally, log deviations, never narrow the check to match a stale fixture assumption.
 metadata:
   type: feedback
+  reviewed: 2026-09-03
 ---
 
 When a spec's Decision table states a new driver check applies unconditionally under some

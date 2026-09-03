@@ -1,0 +1,57 @@
+{
+  "ts": "2026-09-03T23:12:48.725Z",
+  "stage": "replay",
+  "spec": "specs/20260903/02-whole-suite-review-leg.md",
+  "runId": "rp_20de7e8400fd",
+  "reviewRunId": "rv_51101642472c",
+  "class": "dead-wiring",
+  "files": [
+    "spec/scripts/spec-review-driver.js"
+  ],
+  "legs": "green",
+  "outcome": "caught",
+  "tokens": 95000,
+  "via": "driver",
+  "patch": "diff --git a/spec/scripts/spec-review-driver.js b/spec/scripts/spec-review-driver.js\nindex 5597282..68e0811 100644\n--- a/spec/scripts/spec-review-driver.js\n+++ b/spec/scripts/spec-review-driver.js\n@@ -1351,7 +1351,7 @@ function runCloseTimeGate() {\n       ' under ' + repoRoot + ' — add testCommand to the host config, then re-run `node ' + __filename +\n       ' ' + specPath + ' --mark closed`')\n   }\n-  const sr = runChild('bash', ['-c', gateConfig.testCommand], { cwd: repoRoot, encoding: 'utf8', env },\n+  const sr = runChild('bash', ['-c', gateConfig.testCommand], { cwd: repoRoot, encoding: 'utf8', env: process.env },\n     'close-time whole-suite (' + gateConfig.testCommand + ')')\n   if (sr.status !== 0) {\n     const output = (sr.stdout || '') + (sr.stderr || '')\n",
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "The close-time whole-suite re-run in runCloseTimeGate() does not scrub NODE_TEST_CONTEXT from the child env, contradicting D4's explicit requirement ('with the same env scrub and cwd') and the function's own adjacent comment ('Same env scrub/cwd as the gate re-run above') — the gate re-run two lines above builds a scrubbed `env` local and uses it, but the suite call passes `env: process.env` raw.",
+        "file": "spec/scripts/spec-review-driver.js",
+        "line": 1354,
+        "impact": "When the driver's own process is invoked from inside a running `node --test` (exactly how this repo's own test suite invokes it via tests/helpers.js runNode, which spawns with the inherited environment), NODE_TEST_CONTEXT is set in that parent process's env. If a host's testCommand runs `node --test`, the unscrubbed child inherits NODE_TEST_CONTEXT and node --test recursively 'skips running files', reporting exit 0 even though the suite is genuinely red — silently defeating the close-time refusal D4 exists to guarantee, for exactly the nested-runner class of host this repo already documents as vulnerable for the gate re-run two lines above.",
+        "evidence": "Quoted D4 (spec line 41): 'runs the host `testCommand` bare, after the resolved gate and with the same env scrub and cwd'. Quoted code (spec-review-driver.js:1331-1332 builds `const env = {...process.env}; delete env.NODE_TEST_CONTEXT` and uses it for the gate re-run at line 1333); the suite re-run at line 1354 instead calls `runChild('bash', [...], { cwd: repoRoot, encoding: 'utf8', env: process.env }, ...)` — process.env unscrubbed. Executed repro: `node --test` on a file with NODE_TEST_CONTEXT unset exits 1 on a failing assertion (verified); the same invocation with NODE_TEST_CONTEXT=child-v8 set prints 'Warning: node:test run() is being called recursively within a test file. skipping running files.' and exits 0 despite the failing test (verified via a standalone repro run in this session). Also verified directly: running `node --test tests/review/review-driver.test.js` under this repo prints NODE_TEST_CONTEXT=child-v8 in the test process's own env (confirmed by a throwaway probe test), so tests/helpers.js's runNode (plain spawnSync, no env override) propagates it to any driver child it spawns. AC-20260903-02-10's own test (tests/review/review-driver.test.js) sidesteps this: it uses `testCommand: 'bash always-red.sh'`, a script that fails regardless of NODE_TEST_CONTEXT, so the AC citation does not actually exercise the env-scrub half of D4's promise and the gap is invisible to the suite (all 1048 tests pass with the bug present: `node --test` on this repo at 5588322-plus-diff exits 0, 1048/1048 pass)."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "docs/canonical/pipeline.md, review.md, review-legs.md (D8's Canonical Delta) were not touched in this diff.",
+        "file": "docs/canonical/pipeline.md",
+        "line": null,
+        "evidence": "git -C <root> diff 5588322 --stat -- docs/canonical/ returned no output (zero changes); per the review contract, Canonical Delta application is a deliverable owned by a stage that runs after review's verdict and is an expected precondition, never a review finding."
+      },
+      {
+        "claim": "review-legs.js's `suite` leg might run concurrently with the gate leg (also a host-test invocation), violating D1's 'never concurrent with another leg that runs host tests'.",
+        "file": "spec/scripts/review-legs.js",
+        "line": 284,
+        "evidence": "Read the control flow: wave 1 (reconcile/gate/ci) is built into an array `wave1` and run via `await Promise.all(wave1)` (line ~261-279); the suite block (lines 284-305) executes only after that await resolves, sequentially, before wave 2's array is built. AC-20260903-02-6's new test in tests/review/review-legs-smoke-wave.test.js also directly proves ordering (suite-done exists before the at-risk invocation starts) — executed: `node --test tests/review/review-legs-smoke-wave.test.js` passes (confirmed as part of the full-suite green run, 1048/1048)."
+      },
+      {
+        "claim": "verdict.js's fix-delta requiredLegs filter might drop `suite` the way it drops `reconcile`/`at-risk`, violating D3's 'required in BOTH scopes'.",
+        "file": "spec/scripts/verdict.js",
+        "line": 530,
+        "evidence": "Read the filter: `scope === 'fix-delta' ? REVIEW_LEGS.filter(l => l !== 'reconcile' && l !== 'at-risk') : [...REVIEW_LEGS]` — suite is not named in the filter predicate, so it survives into fix-delta's requiredLegs. AC-20260903-02-3 and the two AC-20260903-02-7 tests (full and fix-delta variants) in tests/review/review-legs.test.js and tests/review/verdict.test.js assert this directly; both pass in the full-suite green run."
+      },
+      {
+        "claim": "The `suite` row's `observed` shape might diverge from the gate row's typed shape, violating the Contracts block's 'observed typed exactly like the gate row's'.",
+        "file": "spec/scripts/review-legs.js",
+        "line": 304,
+        "evidence": "review-legs.js:304 calls `appendRow('suite', exit, { ...computeSkips(output, skipPat), testsExecuted })`, the identical `computeSkips`/`computeTestsExecuted` functions the gate row (line 254) uses with the same call shape. Confirmed by reading both call sites side by side; no new typing logic was introduced for the suite leg."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 95000
+  }
+}

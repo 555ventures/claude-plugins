@@ -1,0 +1,101 @@
+{
+  "runId": "rv_0d5a90343171",
+  "ts": "2026-09-03T04:45:36.966Z",
+  "spec": "specs/20260902/07-mocks-command-driver.md",
+  "tier": "critical",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 2451,
+    "base": "1add289c6c7090ba7654a24cfb1ec549e4838113",
+    "head": "80e27416d84892b4932b7b69f6c03d4147abcbe3",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 232
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 18,
+        "carried": 17,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "AC-20260902-07-6: journey-drawn's ratified-status and missing-wire/tokens.css branches die() before invoking design-atlas.js check, so only the off-token-literal branch carried the atlas line (prior iteration's sole hard finding)",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 422,
+        "evidence": "Fix now runs runDesignAtlasCheck([file]) up front (line 422) and appends its output via atlasSuffix to the die() calls at lines 424 (label mismatch), 425 (data-status), and 426 (missing wire/tokens.css link), in addition to the pre-existing atlas-driven die at line 428. Executed `node --test --test-name-pattern=\"AC-20260902-07-6\" tests/mocks/mocks-driver.test.js` -> 1 pass, 0 fail, exercising all three isolated D6 violations (ratified status, missing tokens.css link, #999 off-token literal) and asserting both the failing label and a CHECK_LINE_RE match (`design-atlas\\.js check|CHECK FAIL`) on each. Executed full suite `node --test tests/mocks/mocks-driver.test.js` -> 12/12 pass, exit 0, no regression across AC-1..AC-11/AC-13."
+      },
+      {
+        "claim": "Fix-delta introduced no new non-builtin dependency, suppression marker, or version-bump omission",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 1,
+        "evidence": "grep of require(...) in the modified file shows only fs, path, child_process, and in-repo lib/driver-io + lib/mocks-ledger; no new eslint-disable/ts-ignore/casts added in the diff; plugin.json version and deviations.md were untouched by this delta (already resolved and sanctioned in iteration 1)."
+      },
+      {
+        "claim": "Working tree left clean of reviewer-created scratch files",
+        "file": null,
+        "line": null,
+        "evidence": "`git status --porcelain` shows only the three files the fix touched (.claude/spec-runs.jsonl, spec/scripts/mocks-driver.js, tests/mocks/mocks-driver.test.js); no reviewer-added files present."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 52000
+  }
+}

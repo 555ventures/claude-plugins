@@ -73,28 +73,21 @@
   clean into the root. Every step text prints a `Doctrine:` pointer; the command no longer
   carries per-state pointers. (specs/20260827/01-genesis-tournament.md, done 2026-08-27)
 
-- Since specs/20260827/02 the explore funnel is a driver state (`EXPLORE`, between `MENUS` and
-  `FINALISTS`) for visual archetypes: marks `research-done` (research brief +
-  `design/targets.json`) → `positions-authored` (6–8 complete position briefs, session-authored
-  starter `tokens.css` snapshotted to `.claude/genesis/explore/authored/`) → `tiles-built` (the
-  driver runs `design-atlas.js check` per tile, enforces additions-only tokens by prefix, builds
-  the gallery) → `tiles-culled` (exactly two survivors); or `external --file
-  design/explore/external/<name>` for a supplied design (no research owed). The two culled looks
-  are the tournament's `style-tile` task, rendered inside each finalist; `picked` records stack
-  and design together (`design-pick.json`). Round-1 prototypes and persona walkthroughs are
-  retired. The separate explore command is deleted and its hook arm removed.
-  (specs/20260827/02-genesis-explore-state.md, done 2026-08-29)
-
-- Since specs/20260827/03 the design lock is a driver state (`DESIGN`, between `ROADMAP` and
-  `HANDOFF`): marks `doctrine-drafted` (one-page doctrine, Dissents carrying every rejected
-  direction) → `tokens-landed` (visual only: `design/tokens.css` starts with the winner's file
-  verbatim, an approved matrix-expanded mock passes `design-atlas.js check --matrix`,
-  `design/components.json` exists) → `rules-locked` (`design-rules.json` category/grounding
-  enums valid, `components-check.js` green, then the driver prunes the losing candidates, the
-  gallery, the sketch, and the authored-tokens snapshot). `backend-api`/`data-ml` are written
-  `design: skipped`; non-visual archetypes skip the tokens mark. HANDOFF always hands to
-  `/spec:init`. The command is deleted, its hook arm removed; the genesis hook now gates only
-  `/spec:init` on a partial canon. (specs/20260827/03-genesis-design-state.md, done 2026-08-29)
+- Since specs/20260902/08 the design stage has left genesis for `/spec:mocks`
+  (specs/20260902/07): the in-driver explore funnel (specs/20260827/02) and design-lock state
+  (specs/20260827/03) are retired with their marks and templates. The driver chain is
+  DISCOVERY → BRIEF → MENUS → tournament → DECIDE → SCAFFOLD → SKELETON → GATE → ROADMAP →
+  HANDOFF → GROUNDED (`status.json` schemaVersion 3, `brief` record, no `explore`).
+  `discovery-done` requires `- archetype: <registry key>` in `## Picks` and hands off to
+  `/spec:mocks` for visual archetypes. BRIEF requires `design/mocks/status.json` APPROVED with
+  an open ledger gate and `--mark brief-written` ratifies the one-page doctrine (Dissents
+  naming every composed-but-unpicked direction), the category-only `design-rules.json`, and
+  THEME's `design/tokens.css` (`design: "ratified"`; `backend-api`/`data-ml` record
+  `skipped`). The tournament's tile probe task and the discovery sketch are retired; the
+  `design/components.json` check moves to `skeleton-landed`. A legacy status past MENUS
+  resumes at BRIEF via `--mark brief-written --legacy` (no re-run forced); the init hook
+  accepts `design: ratified` and still blocks on a partial legacy canon.
+  (specs/20260902/08-genesis-shrink-brief-state.md, done 2026-09-03)
 
 - Since specs/20260827/04 `decided` also validates `.claude/genesis/conventions.json` (the nine
   ops floor rows DECIDED or DEFERRED-with-reason; enforceable rows name a probe under

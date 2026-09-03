@@ -3,7 +3,7 @@ name: sweepretiredliteral-new-sweep-must-waive-own-siblings
 description: adding a new sweepRetiredLiteral() call for a freshly-retired command name must waive ONLY the test files that must contain the literal to do their job (asserting its absence, a sibling sweep's own test file); every other hit — including an out-of-batch file's stale comment — gets edited in place, never waived, and this memory file must describe the retired name generically, never spell it
 metadata:
   type: feedback
-  reviewed: 2026-09-01
+  reviewed: 2026-09-03
 ---
 
 `tests/consistency/genesis-doctrine.test.js`'s `sweepRetiredLiteral(literal, {citations,

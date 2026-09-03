@@ -3,7 +3,7 @@ name: self-matching-literal-pin-fragment-idiom
 description: a grep-for-string pin that must also scan its own file assembles the forbidden string from split fragments at runtime rather than exempting its own path
 metadata:
   type: feedback
-  reviewed: 2026-08-31
+  reviewed: 2026-09-03
 ---
 
 When a suite pin greps the tracked tree for a literal string (a package name, a banned

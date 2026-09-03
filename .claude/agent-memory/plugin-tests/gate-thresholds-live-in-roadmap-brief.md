@@ -3,7 +3,7 @@ name: gate-thresholds-live-in-roadmap-brief
 description: A spec Decision defining a "gate" (clause1/clause2-style pass criteria) can state the derivation formula without stating the literal threshold numbers — check the docs/roadmap/NN brief the Decision cites for the concrete threshold before writing the assertion.
 metadata:
   type: feedback
-  reviewed: 2026-08-31
+  reviewed: 2026-09-03
 ---
 
 specs/20260820/05-fleet-evidence-reader.md D6 ("Brief-08 gate pins") defines `hostSpecsCleaned`,

@@ -71,48 +71,11 @@
 //     leader and a `## Picks` that names the other finalist still records THAT finalist as the
 //     winner.
 //
-// specs/20260827/02-genesis-explore-state.md: between MENUS and the tournament's
-// FINALISTS, four VISUAL archetypes (web-app, mobile-app, realtime-trading, desktop-app) gain an
-// EXPLORE state — Round 0 of the taste funnel, folded in rather than left as its own command.
-// Marks progress research-done -> positions-authored ->
-// tiles-built -> tiles-culled, or `external --file <dir>` for a design the session already has.
-// The two culled looks (or the one external candidate) become the tournament's `style-tile`
-// task's tile sources, rendered inside each finalist with its real component library — replacing
-// spec 01 D6's `.claude/genesis/sketch.html`, which is never a tile source again. Every other
-// archetype gets `explore: "skipped"` recorded the moment menus-done resolves it, and is never
-// routed through EXPLORE at all.
-//
-// What EXPLORE deliberately does NOT do:
-//   - render a tile, screenshot it, or judge a position's quality — `design-atlas.js check` is
-//     the only deterministic gate; the render -> screenshot -> critique loop, and the cull to
-//     two, are the session's.
-//   - extract literals out of an external candidate — no `dc-extract` (deleted 20260824/05); the
-//     bundle's own literals are what the later design state authors tokens from.
-//   - trust a builder-edited tokens.css: `tiles-built` diffs the CURRENT file against the
-//     `.claude/genesis/explore/authored/<kebab>.css` snapshot `positions-authored` wrote, via
-//     `startsWith` (additions-only, no git in play — Assumption A2).
-//
-// specs/20260827/03-genesis-design-state.md: between ROADMAP and HANDOFF, every
-// archetype except backend-api/data-ml gains a DESIGN state — a design lock folded in rather
-// than left as its own command. Marks progress doctrine-drafted (one-page
-// `docs/design/doctrine.md`, `## Dissents` naming every rejected direction from
-// `.claude/genesis/design-pick.json`) -> [tokens-landed, visual archetypes only:
-// `design/tokens.css` ratified verbatim from the winner's, an approved matrix-clean mock in
-// `design/mocks/`, `design/components.json` seeded] -> rules-locked
-// (`.claude/genesis/design-rules.json`'s category/grounding enums valid, `components-check.js`
-// green on `design/components.json` for visual archetypes). `backend-api`/`data-ml` are recorded
-// `design: "skipped"` by `handleRoadmapWritten` the moment `roadmap-written` is accepted and never
-// enter DESIGN; non-visual archetypes (`conversational-bot`, `cli-devtool`) enter DESIGN but skip
-// the tokens mark entirely (refused: "no tokens step"). HANDOFF's `next:` is always `/spec:init`
-// now — there is no separate command left to hand off into for any archetype or designCatalog.
-//
-// What DESIGN deliberately does NOT do:
-//   - author the doctrine, ratify the tokens, promote the signature screen, or write the
-//     design-rules manifest itself — those stay session judgment; the driver only closes each
-//     mark once the artifact exists and validates.
-//   - judge a design decision's taste — its checks are closure checks (a line count, a non-empty
-//     section, a byte-for-byte prefix, a closed enum, a green child process), never opinions on
-//     which direction won.
+// specs/20260827/01-genesis-tournament.md D1 named an EXPLORE state (a pre-tournament
+// taste funnel) and specs/20260827/03-genesis-design-state.md D1 named a DESIGN state (the
+// design lock, between ROADMAP and HANDOFF); both are retired outright by
+// specs/20260902/08-genesis-shrink-brief-state.md D1 — see that spec's own paragraph below for
+// the current contract; `deriveState` never derives either name for any status shape.
 //
 // specs/20260827/04-genesis-conventions-handoff.md: the ops-conventions table
 // stops being ADR paragraph nobody re-runs. `--mark decided` additionally validates
@@ -148,6 +111,32 @@
 // decision `tokens.css` already gates here, checked by the same driver so the mark cannot pass
 // without it. The check runs alongside the tokens.css checks (both validate a CANON file), ahead
 // of the approved-mock/matrix checks that validate the MOCKS.
+// NOTE: this paragraph describes a mark (`tokens-landed`) retired by
+// specs/20260902/08-genesis-shrink-brief-state.md D1 — kept here only as history for the
+// shell-canon fact it recorded; `design/shell/app.html` is not re-checked by BRIEF (spec 11 is
+// expected to fold shell extraction into SCAFFOLD).
+//
+// specs/20260902/08-genesis-shrink-brief-state.md D1-D8, D11: genesis loses its design
+// states. The chain becomes DISCOVERY -> BRIEF -> MENUS -> tournament -> DECIDE -> SCAFFOLD ->
+// SKELETON -> GATE -> ROADMAP -> HANDOFF -> GROUNDED. DISCOVERY now also names the archetype
+// (`- archetype: <registry key>` in `## Picks`, moved here from menus-done) and hands off to
+// `/spec:mocks` for a visual archetype. BRIEF sits between DISCOVERY and MENUS: for
+// DESIGN_SKIPPED_ARCHETYPES (backend-api/data-ml) it is a pass-through (D4); every other
+// archetype ratifies a design canon there — doctrine + category-only design-rules for every
+// archetype, plus (visual only) `design/mocks/status.json` APPROVED with an open provenance
+// ledger (D3, spec 06's lib) and `design/tokens.css` (written by THEME). The pick record lives
+// in the mocks status (`status.brief`) — RETIRED_MARKS (below) all refuse with exit 2 naming
+// `/spec:mocks` as the remedy. A legacy `status.json` past MENUS with no `marks.briefWritten`
+// resumes at BRIEF and accepts `--mark brief-written --legacy`, which skips the mocks
+// precondition (D3) but still ratifies D4's doctrine/design-rules artifacts, requiring only a
+// non-empty `## Dissents` (there is no pick record for a legacy run to name candidates from).
+//
+// What the BRIEF addition deliberately does NOT do:
+//   - author the doctrine, the design-rules manifest, or approve a mocks set itself — those stay
+//     session (or `/spec:mocks`) judgment; the driver only closes brief-written once the
+//     artifacts exist and validate.
+//   - re-derive whether a mocks set was ever needed after DISCOVERY — that fact is fixed the
+//     moment discovery-done records `status.archetype`.
 //
 // Fixing that overflow only at the child's own capture is insufficient: `logTail`, which builds the
 // SCAFFOLD_RED/GATE_RED excerpt embedded in the driver's OWN stdout, bounds its excerpt by BYTES,
@@ -174,6 +163,7 @@ const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
 const { CONFIG_RELPATH } = require('./lib/host-config')
+const mocksLedgerLib = require('./lib/mocks-ledger')
 
 // The 64 KiB process.exit stdout truncation this synchronous writer avoids is explained in full
 // at spec/scripts/lib/driver-io.js's writeOut.
@@ -229,14 +219,16 @@ const statusPath = path.join(genesisDir, 'status.json')
 function genesisRel(name) { return '.claude/genesis/' + name }
 
 // ---------------------------------------------------------------------------
-// status.json (v2, D10) — created fresh on a cold root; an existing v1 file is read as-is
-// (missing keys default in memory) and rewritten as v2 only on the next accepted mark.
+// status.json (v3, specs/20260902/08-genesis-shrink-brief-state.md D11) — created fresh on a
+// cold root; an existing v1/v2 file is read as-is (missing keys default in memory, and any
+// legacy-only keys such as `explore` or `exploreRecord` are kept untouched — see loadStatus())
+// and rewritten as v3 only on the next accepted mark.
 // ---------------------------------------------------------------------------
 function freshStatus() {
   return {
-    schemaVersion: 2,
-    architect: 'pending', explore: 'pending', design: 'pending',
-    archetype: null, localeScope: null,
+    schemaVersion: 3,
+    architect: 'pending', design: 'pending',
+    archetype: null, localeScope: null, brief: null,
     stackDescriptorPath: '.claude/genesis/stack-descriptor.json',
     designManifestPath: '.claude/genesis/design-rules.json',
     gateCommand: null, lastUpdated: null,
@@ -267,7 +259,7 @@ function loadStatus() {
 }
 
 function saveStatus() {
-  status.schemaVersion = 2
+  status.schemaVersion = 3
   status.lastUpdated = new Date().toISOString()
   fs.mkdirSync(genesisDir, { recursive: true })
   fs.writeFileSync(statusPath, JSON.stringify(status, null, 2) + '\n')
@@ -397,9 +389,21 @@ function handleDiscoveryDone() {
         'them, in the user\'s words, then re-mark discovery-done')
     }
   }
+  // specs/20260902/08-genesis-shrink-brief-state.md D2: the archetype gate moves here from
+  // menus-done — BRIEF (the very next state) must already know whether a mocks set is owed.
+  const archetype = picks().archetype
+  if (!archetype) {
+    die('brief.md ## Picks is missing a `- archetype: <key>` line — add one of: ' +
+      REGISTRY_KEYS.join(', ') + ', then re-mark discovery-done')
+  }
+  if (!REGISTRY_KEYS.includes(archetype)) {
+    die('brief.md ## Picks names an unknown archetype "' + archetype + '" — pick one of: ' +
+      REGISTRY_KEYS.join(', ') + ', then re-mark discovery-done')
+  }
   status.marks.discoveryDone = true
+  status.archetype = archetype
   saveStatus()
-  return { prev: 'DISCOVERY', next: 'MENUS' }
+  return { prev: 'DISCOVERY', next: 'BRIEF' }
 }
 
 // ---------------------------------------------------------------------------
@@ -466,262 +470,176 @@ function isDesignSkipped(a) { return DESIGN_SKIPPED_ARCHETYPES.includes(a) }
 
 function handleMenusDone() {
   if (!status.marks.discoveryDone) die('discovery-done has not been marked yet — mark discovery-done first')
+  if (!status.marks.briefWritten) die('brief-written has not been marked yet — mark brief-written first')
   const check = menusCheck()
   if (!check.ok) {
     die('open dimension(s) missing a menu file or a ## Picks line: ' + check.missing.join(', ') +
       ' — finish the interview, then re-mark menus-done')
   }
-  const archetype = picks().archetype
-  if (!archetype) {
-    die('brief.md ## Picks is missing a `- archetype: <key>` line — add one of: ' +
-      REGISTRY_KEYS.join(', ') + ', then re-mark menus-done')
-  }
-  if (!REGISTRY_KEYS.includes(archetype)) {
-    die('brief.md ## Picks names an unknown archetype "' + archetype + '" — pick one of: ' +
-      REGISTRY_KEYS.join(', ') + ', then re-mark menus-done')
-  }
+  // specs/20260902/08-genesis-shrink-brief-state.md D2: the archetype was already validated
+  // and recorded at discovery-done — AC-20260902-08-13 requires a ## Picks archetype line
+  // still present here (never removed from the grammar) to keep being accepted, never re-parsed
+  // or re-validated a second time.
   status.marks.menusDone = true
-  status.archetype = archetype
-  // D1: every non-visual archetype's explore stays "skipped" — recorded here, on the FIRST
-  // derivation past MENUS, so a session (or the hook, per A3) has a durable record that this
-  // project was never offered the taste funnel.
-  if (!isVisualArchetype(archetype)) status.explore = 'skipped'
   saveStatus()
+  const archetype = status.archetype
   let next
-  if (isVisualArchetype(archetype)) next = 'EXPLORE'
-  else if (isTournamentArchetype(archetype)) next = 'FINALISTS'
+  if (isTournamentArchetype(archetype)) next = 'FINALISTS'
   else next = 'DECIDE'
   return { prev: 'MENUS', next }
 }
 
-// D1/D6: EXPLORE resolves to tiles-culled (the funnel) or external (a supplied design); once
-// picked, both read as resolved too (PICK has already recorded the winning tile source).
-function exploreResolved() {
-  return status.explore === 'tiles-culled' || status.explore === 'external' ||
-    status.explore === 'picked' || status.explore === 'skipped'
+// ---------------------------------------------------------------------------
+// BRIEF (specs/20260902/08-genesis-shrink-brief-state.md D3/D4/D6): sits between DISCOVERY and
+// MENUS. `--mark brief-written` is the ONLY mark this state accepts (the retired EXPLORE/DESIGN
+// marks are refused elsewhere, in handleMark's default branch). For DESIGN_SKIPPED_ARCHETYPES
+// (backend-api/data-ml) it is a pass-through: nothing beyond DISCOVERY is owed. Every other
+// archetype ratifies doctrine + category-only design-rules; a VISUAL archetype additionally
+// requires an APPROVED `design/mocks/status.json` with an open provenance ledger (D3, spec 06's
+// `lib/mocks-ledger.js`) and `design/tokens.css` (written by THEME). `--legacy` skips D3's mocks
+// precondition (never D4's ratification artifacts) for a status.json that resumed at BRIEF with
+// pre-existing explore/design artifacts (D6).
+// ---------------------------------------------------------------------------
+function mocksStatusPath() { return path.join(root, 'design/mocks/status.json') }
+function mocksLedgerPath() { return path.join(root, 'design/mocks/ledger.md') }
+function readMocksStatus() {
+  try { return JSON.parse(fs.readFileSync(mocksStatusPath(), 'utf8')) } catch (e) { return null }
 }
 
-function tileSourcesFor() {
-  const rec = status.exploreRecord
-  return (rec && Array.isArray(rec.finalists)) ? rec.finalists : []
-}
-
-// ---------------------------------------------------------------------------
-// EXPLORE (specs/20260827/02-genesis-explore-state.md D1-D6): the taste funnel's Round 0, folded
-// into the driver as mark-driven internal progression (research-done -> positions-authored ->
-// tiles-built -> tiles-culled), or `external --file <dir>` for a design the session already has.
-// Entered only for VISUAL_ARCHETYPES; every other archetype never reaches this block at all
-// (handleMenusDone already wrote explore: "skipped" and routed past it).
-// ---------------------------------------------------------------------------
-const EXPLORE_FUNNEL_MARKS = ['research-done', 'positions-authored', 'tiles-built', 'tiles-culled']
-
-function targetsPath() { return path.join(root, 'design/targets.json') }
-function researchBriefPath() { return path.join(root, 'docs/design/research-brief.md') }
-function positionsPath() { return path.join(root, 'design/explore/positions.md') }
-function positionDir(kebab) { return path.join(root, 'design/explore/r0-' + kebab) }
-function exploreAuthoredDir() { return path.join(genesisDir, 'explore/authored') }
-function exploreGalleryPath() { return path.join(root, 'design/explore/gallery.html') }
-
-// D2: design/targets.json parses with non-empty themes/viewports arrays, each viewport a
-// {name, width, height} object. Shared by research-done and external (D6 owes it too).
-function checkExploreTargets() {
-  const p = targetsPath()
-  if (!fs.existsSync(p)) return { ok: false, msg: 'design/targets.json does not exist' }
+// D3: design/mocks/status.json must exist, be APPROVED, and its own provenance ledger must have
+// no open blocking row (spec 06's gateVerdict) — the same closure /spec:mocks itself enforces at
+// its own APPROVED mark, re-checked here so BRIEF never trusts a state that regressed after
+// approval.
+function briefPreconditionCheck() {
+  const p = mocksStatusPath()
+  if (!fs.existsSync(p)) return { ok: false, reason: 'no-status' }
   let parsed
   try {
     parsed = JSON.parse(fs.readFileSync(p, 'utf8'))
   } catch (e) {
-    return { ok: false, msg: 'design/targets.json is not valid JSON (' + e.message + ')' }
+    return { ok: false, reason: 'bad-json', detail: e.message }
   }
-  if (!Array.isArray(parsed.themes) || parsed.themes.length === 0) {
-    return { ok: false, msg: 'design/targets.json has an empty or missing "themes" array' }
-  }
-  if (!Array.isArray(parsed.viewports) || parsed.viewports.length === 0) {
-    return { ok: false, msg: 'design/targets.json has an empty or missing "viewports" array' }
-  }
-  for (const v of parsed.viewports) {
-    if (!v || typeof v.name !== 'string' || typeof v.width !== 'number' || typeof v.height !== 'number') {
-      return { ok: false, msg: 'design/targets.json has a viewport missing name/width/height' }
+  if (parsed.state !== 'APPROVED') return { ok: false, reason: 'not-approved', detail: parsed.state }
+  let ledgerText = ''
+  try { ledgerText = fs.readFileSync(mocksLedgerPath(), 'utf8') } catch (e) { /* treated as empty */ }
+  const verdict = mocksLedgerLib.gateVerdict(mocksLedgerLib.parseLedger(ledgerText))
+  if (!verdict.open) return { ok: false, reason: 'blocked', detail: verdict.blocking }
+  return { ok: true, status: parsed }
+}
+
+function handleBriefWritten() {
+  if (!status.marks.discoveryDone) die('discovery-done has not been marked yet — mark discovery-done first')
+  const archetype = status.archetype
+  const legacy = argv.includes('--legacy')
+
+  let mocksStatus = null
+  if (isVisualArchetype(archetype) && !legacy) {
+    const check = briefPreconditionCheck()
+    if (!check.ok) {
+      if (check.reason === 'no-status') {
+        die('design/mocks/status.json does not exist — run /spec:mocks first, then re-mark brief-written')
+      }
+      if (check.reason === 'bad-json') {
+        die('design/mocks/status.json is not valid JSON (' + check.detail + ') — run /spec:mocks first, then re-mark brief-written')
+      }
+      if (check.reason === 'not-approved') {
+        die('design/mocks/status.json is not APPROVED yet (state: ' + check.detail + ') — run /spec:mocks first, then re-mark brief-written')
+      }
+      if (check.reason === 'blocked') {
+        die('design/mocks/ledger.md still has open blocking row(s): ' +
+          check.detail.map((b) => b.id).join(', ') + ' — run /spec:mocks first, then re-mark brief-written')
+      }
     }
+    mocksStatus = check.status
   }
-  return { ok: true }
-}
 
-// D6: the external path is only refused once a FUNNEL mark has actually recorded progress —
-// "the funnel has started". A prior "skipped"/"pending" explore value never blocks it.
-function funnelStarted() { return EXPLORE_FUNNEL_MARKS.includes(status.explore) }
-
-function handleResearchDone() {
-  if (status.explore === 'external') die('explore is external — no funnel — the external candidate skips research-done entirely')
-  const t = checkExploreTargets()
-  if (!t.ok) die(t.msg + ' — write it, then re-mark research-done')
-  const briefP = researchBriefPath()
-  if (!fs.existsSync(briefP)) {
-    die('docs/design/research-brief.md does not exist — write it (ux-research-brief.md template) with at least one ## heading, then re-mark research-done')
+  // specs/20260902/08-genesis-shrink-brief-state.md D4: DESIGN_SKIPPED_ARCHETYPES
+  // (backend-api/data-ml) own nothing beyond DISCOVERY — record design: "skipped" straight away.
+  if (isDesignSkipped(archetype)) {
+    status.marks.briefWritten = true
+    status.brief = { mocks: null, legacy: false, ratifiedAt: new Date().toISOString() }
+    status.design = 'skipped'
+    saveStatus()
+    return { prev: 'BRIEF', next: 'MENUS' }
   }
-  const text = fs.readFileSync(briefP, 'utf8')
-  if (!text.trim()) die('docs/design/research-brief.md is empty — write it, then re-mark research-done')
-  if (!/^##\s/m.test(text)) die('docs/design/research-brief.md has no "## " heading — add one, then re-mark research-done')
-  status.explore = 'research-done'
-  saveStatus()
-  return { prev: 'EXPLORE', next: 'EXPLORE' }
-}
 
-// positions.md's `## Position: <kebab>` blocks (D3). Reused by positions-authored, tiles-built,
-// and tiles-culled — always re-read from disk, never cached in status.json.
-const POSITION_LABELS = [
-  'Stance', 'Rules cited', 'Anti-defaults', 'Reference direction',
-  'Motion character', 'Density & layout intent', 'Starter tokens',
-]
-
-function readPositionsMd() {
-  try { return fs.readFileSync(positionsPath(), 'utf8') } catch (e) { return null }
-}
-
-function parsePositions(text) {
-  const starts = []
-  const re = /^## Position: ([a-z0-9-]+)\s*$/gm
-  let m
-  while ((m = re.exec(text))) starts.push({ kebab: m[1], index: m.index, headerEnd: m.index + m[0].length })
-  return starts.map((s, i) => ({
-    kebab: s.kebab,
-    body: text.slice(s.headerEnd, i + 1 < starts.length ? starts[i + 1].index : text.length),
-  }))
-}
-
-function handlePositionsAuthored() {
-  if (status.explore === 'external') die('explore is external — no funnel — the external candidate skips positions-authored entirely')
-  if (status.explore !== 'research-done') die('research-done has not been marked yet — mark research-done first')
-  const text = readPositionsMd()
-  if (text === null) die('design/explore/positions.md does not exist — author 6-8 ## Position: <kebab> blocks, then re-mark positions-authored')
-  const blocks = parsePositions(text)
-  if (blocks.length < 6 || blocks.length > 8) {
-    die('design/explore/positions.md has ' + blocks.length + ' position block(s) — the floor is 6 (6-8 complete positions are required), then re-mark positions-authored')
+  const p = doctrinePath()
+  if (!fs.existsSync(p)) {
+    die('docs/design/doctrine.md does not exist — draft the one-page doctrine with a ## Dissents ' +
+      'section naming every rejected direction, then re-mark brief-written')
   }
-  for (const b of blocks) {
-    for (const label of POSITION_LABELS) {
-      if (!b.body.includes('**' + label + ':**')) {
-        die('position "' + b.kebab + '" is missing the "**' + label + ':**" label — add it, then re-mark positions-authored')
+  const text = fs.readFileSync(p, 'utf8')
+  const lineCount = text.split('\n').length
+  if (lineCount > DOCTRINE_LINE_CAP) {
+    die('docs/design/doctrine.md is ' + lineCount + ' lines — the one-page cap is ' + DOCTRINE_LINE_CAP +
+      ' lines — trim it, then re-mark brief-written')
+  }
+  if (!dissentsNonEmpty(text)) {
+    die('docs/design/doctrine.md ## Dissents has no non-blank line — record every rejected ' +
+      'direction there, then re-mark brief-written')
+  }
+
+  // D4/D6: ## Dissents must name every composed-but-unpicked direction from the mocks status —
+  // the pick record lives there now, never in a per-candidate file. A `--legacy` ratification has
+  // no mocks status to read directions from, so D4's non-empty-Dissents check above is the whole
+  // requirement for it; there is no pick record left to name candidates from.
+  if (!legacy && isVisualArchetype(archetype)) {
+    const directions = (mocksStatus && mocksStatus.directions) || {}
+    const theme = mocksStatus && mocksStatus.theme
+    const body = dissentsBody(text) || ''
+    for (const key of Object.keys(directions)) {
+      if (key === theme) continue
+      if (!body.includes(key)) {
+        die('docs/design/doctrine.md ## Dissents does not name composed direction "' + key +
+          '" — add it, then re-mark brief-written')
       }
     }
   }
-  for (const b of blocks) {
-    const tokensPath = path.join(positionDir(b.kebab), 'tokens.css')
-    if (!fs.existsSync(tokensPath) || !fs.readFileSync(tokensPath, 'utf8').trim()) {
-      die(tokensPath + ' does not exist or is empty — write it, then re-mark positions-authored')
-    }
-  }
-  fs.mkdirSync(exploreAuthoredDir(), { recursive: true })
-  for (const b of blocks) {
-    fs.copyFileSync(path.join(positionDir(b.kebab), 'tokens.css'), path.join(exploreAuthoredDir(), b.kebab + '.css'))
-  }
-  status.explore = 'positions-authored'
-  saveStatus()
-  return { prev: 'EXPLORE', next: 'EXPLORE' }
-}
 
-// D4: each tile passes design-atlas.js check, each current tokens.css still startsWith its
-// authored baseline (A2 — additions-only, no git), then the gallery is built. Refused as a whole
-// on the first failure — no partial gallery.
-function handleTilesBuilt() {
-  if (status.explore === 'external') die('explore is external — no funnel — the external candidate skips tiles-built entirely')
-  if (status.explore !== 'positions-authored') die('positions-authored has not been marked yet — mark positions-authored first')
-  const text = readPositionsMd()
-  const blocks = parsePositions(text || '')
-  const designAtlasBin = path.join(__dirname, 'design-atlas.js')
-  for (const b of blocks) {
-    const dir = positionDir(b.kebab)
-    const tokensPath = path.join(dir, 'tokens.css')
-    const authoredPath = path.join(exploreAuthoredDir(), b.kebab + '.css')
-    let current
-    try {
-      current = fs.readFileSync(tokensPath, 'utf8')
-    } catch (e) {
-      die(tokensPath + ' does not exist — write it, then re-mark tiles-built')
-      return null // unreachable
+  const rulesCheck = designRulesCheck()
+  if (!rulesCheck.ok) {
+    if (rulesCheck.reason === 'unreadable') {
+      die('.claude/genesis/design-rules.json does not exist or is not valid JSON (' + rulesCheck.detail +
+        ') — write it, then re-mark brief-written')
     }
-    const authored = (() => { try { return fs.readFileSync(authoredPath, 'utf8') } catch (e) { return '' } })()
-    if (!current.startsWith(authored)) {
-      die(tokensPath + ' no longer starts with its authored baseline at ' + authoredPath +
-        ' — builders append, never alter; restore the authored lines and only add after them, then re-mark tiles-built')
+    if (rulesCheck.reason === 'no-rules-array') {
+      die('.claude/genesis/design-rules.json has no "rules" array — write it (an empty array is ' +
+        'valid), then re-mark brief-written')
     }
-    if (!fs.existsSync(path.join(dir, 'tile.html'))) {
-      die(path.join(dir, 'tile.html') + ' does not exist — build the tile, then re-mark tiles-built')
+    if (rulesCheck.reason === 'bad-id') {
+      die('.claude/genesis/design-rules.json has a rule with a missing or empty "id" — fix it, then re-mark brief-written')
     }
-    const r = runChild(process.execPath, [designAtlasBin, 'check', dir], { encoding: 'utf8' }, 'design-atlas.js check (' + dir + ')')
-    if (r.status !== 0) {
-      die('design-atlas.js check failed for ' + dir + ': ' + (r.stdout || r.stderr || '').trim())
+    if (rulesCheck.reason === 'bad-category') {
+      die('.claude/genesis/design-rules.json rule "' + rulesCheck.rule.id + '" has targetCategory "' +
+        rulesCheck.rule.targetCategory + '" — must be one of: ' + DESIGN_RULE_CATEGORIES.join(', ') +
+        ' — fix it, then re-mark brief-written')
+    }
+    if (rulesCheck.reason === 'bad-grounding') {
+      die('.claude/genesis/design-rules.json rule "' + rulesCheck.rule.id + '" has grounding "' +
+        rulesCheck.rule.grounding + '" — must be "grounded" or "taste" — fix it, then re-mark brief-written')
+    }
+    if (rulesCheck.reason === 'bad-severity') {
+      die('.claude/genesis/design-rules.json rule "' + rulesCheck.rule.id + '" has a missing or empty ' +
+        '"severity" — fix it, then re-mark brief-written')
+    }
+    if (rulesCheck.reason === 'bad-appliesto') {
+      die('.claude/genesis/design-rules.json rule "' + rulesCheck.rule.id + '" has no "appliesTo" array — fix it, then re-mark brief-written')
     }
   }
-  const g = runChild(process.execPath,
-    [designAtlasBin, 'gallery', path.join(root, 'design/explore'), '--out', exploreGalleryPath()],
-    { encoding: 'utf8' }, 'design-atlas.js gallery (design/explore)')
-  if (g.status !== 0) die('design-atlas.js gallery failed: ' + (g.stdout || g.stderr || '').trim())
-  status.explore = 'tiles-built'
-  saveStatus()
-  return { prev: 'EXPLORE', next: 'EXPLORE' }
-}
 
-// D5: positions.md's `## Cull record` names every position EXCEPT exactly two survivors, which
-// are recorded (in position order) as exploreRecord.finalists — PROBE's tile source list (D7).
-function handleTilesCulled() {
-  if (status.explore === 'external') die('explore is external — no funnel — the external candidate skips tiles-culled entirely')
-  if (status.explore !== 'tiles-built') die('tiles-built has not been marked yet — mark tiles-built first')
-  const text = readPositionsMd() || ''
-  const blocks = parsePositions(text)
-  const cullSection = section(text, 'Cull record')
-  const culled = new Set()
-  if (cullSection) {
-    const re = /^-\s+\*\*([a-z0-9-]+)\*\*\s+—\s+culled:/gm
-    let m
-    while ((m = re.exec(cullSection))) culled.add(m[1])
+  if (isVisualArchetype(archetype) && !fs.existsSync(tokensCssPath())) {
+    die('design/tokens.css does not exist — ratify THEME\'s tokens.css, then re-mark brief-written')
   }
-  for (const k of culled) {
-    if (!fs.existsSync(positionDir(k))) {
-      die('## Cull record names "' + k + '" but ' + positionDir(k) + ' does not exist — fix the cull record, then re-mark tiles-culled')
-    }
-  }
-  const survivors = blocks.filter((b) => !culled.has(b.kebab)).map((b) => b.kebab)
-  if (survivors.length !== 2) {
-    die('## Cull record leaves ' + survivors.length + ' survivor(s) (' + (survivors.join(', ') || 'none') +
-      ') — exactly 2 are required, then re-mark tiles-culled')
-  }
-  status.exploreRecord = Object.assign({}, status.exploreRecord, { finalists: survivors, culledAt: new Date().toISOString() })
-  status.explore = 'tiles-culled'
-  saveStatus()
-  return { prev: 'EXPLORE', next: 'FINALISTS' }
-}
 
-// D6: a supplied design skips the funnel entirely — location plus a root data-screen-label per
-// file is admission; targets.json is still owed (the matrix is a declaration, not research), but
-// docs/design/research-brief.md is never owed. Markable at any point before a funnel mark starts;
-// refused afterwards.
-function handleExternal() {
-  if (funnelStarted()) die('the funnel has started — finish it or delete design/explore/ and re-mark')
-  if (!FILE) die('--mark external needs --file <dir> (relative to the project root, or an absolute path)')
-  const resolved = path.isAbsolute(FILE) ? FILE : path.join(root, FILE)
-  const externalRoot = path.join(root, 'design/explore/external') + path.sep
-  if (!(resolved + path.sep).startsWith(externalRoot) || resolved + path.sep === externalRoot) {
-    die('--file ' + FILE + ' must be a directory under design/explore/external/ — fix the path and re-mark external')
+  status.marks.briefWritten = true
+  status.brief = {
+    mocks: mocksStatus ? 'design/mocks/status.json' : null,
+    legacy,
+    ratifiedAt: new Date().toISOString(),
   }
-  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
-    die('--file ' + FILE + ' does not exist at ' + resolved + ' — create the dir with your design bundle, then re-mark external')
-  }
-  const htmlFiles = fs.readdirSync(resolved).filter((f) => f.endsWith('.html')).map((f) => path.join(resolved, f))
-  if (!htmlFiles.length) die(resolved + ' holds no .html file — add at least one labelled screen, then re-mark external')
-  for (const f of htmlFiles) {
-    const html = fs.readFileSync(f, 'utf8')
-    if (!/data-screen-label\s*=\s*"[^"]*"/.test(html)) {
-      die(f + ' has no data-screen-label attribute — every screen must carry one, then re-mark external')
-    }
-  }
-  const t = checkExploreTargets()
-  if (!t.ok) die(t.msg + ' — write it, then re-mark external')
-  const name = path.basename(resolved)
-  status.exploreRecord = Object.assign({}, status.exploreRecord, { finalists: ['external/' + name], authoredAt: new Date().toISOString() })
-  status.explore = 'external'
+  status.design = 'ratified'
   saveStatus()
-  return { prev: 'EXPLORE', next: 'FINALISTS' }
+  return { prev: 'BRIEF', next: 'MENUS' }
 }
 
 // ---------------------------------------------------------------------------
@@ -733,12 +651,14 @@ function handleExternal() {
 // (D7). PICK (`picked`) never ranks finalists itself — it matches the brief's own ## Picks
 // against each finalist's `picks` (D8).
 // ---------------------------------------------------------------------------
+// specs/20260902/08-genesis-shrink-brief-state.md D7: PROBE_TASKS carries only the
+// archetype's own task set — no per-archetype tile-rendering task exists.
 const PROBE_TASKS = {
-  'web-app': ['authed-crud-screen', 'background-job', 'style-tile'],
-  'realtime-trading': ['authed-crud-screen', 'background-job', 'style-tile'],
+  'web-app': ['authed-crud-screen', 'background-job'],
+  'realtime-trading': ['authed-crud-screen', 'background-job'],
   'backend-api': ['authed-crud-resource', 'background-job'],
-  'mobile-app': ['authed-list-detail-screen', 'async-task', 'style-tile'],
-  'desktop-app': ['authed-list-detail-screen', 'async-task', 'style-tile'],
+  'mobile-app': ['authed-list-detail-screen', 'async-task'],
+  'desktop-app': ['authed-list-detail-screen', 'async-task'],
 }
 
 function tournamentDir() { return path.join(genesisDir, 'tournament') }
@@ -750,14 +670,8 @@ function benchmarkJsonPath() { return path.join(tournamentDir(), 'benchmark.json
 function benchmarkMdPath() { return path.join(tournamentDir(), 'benchmark.md') }
 function galleryPath() { return path.join(tournamentDir(), 'gallery.html') }
 
-// specs/20260827/02-genesis-explore-state.md D7: tile source derivation replaces spec 01 D6's
-// sketch source — `.claude/genesis/sketch.html` is never a tile source again. style-tile's tiles
-// are `exploreRecord.finalists` (tileSourcesFor()); when that list is empty (explore: "skipped",
-// or a visual archetype that hasn't resolved EXPLORE yet), style-tile is dropped from the
-// expected task set entirely — never listed, never required by probe-done.
 function expectedTasksFor(archetype) {
-  const all = PROBE_TASKS[archetype] || []
-  return tileSourcesFor().length ? all.slice() : all.filter((t) => t !== 'style-tile')
+  return (PROBE_TASKS[archetype] || []).slice()
 }
 
 // D4: "last measured" reads an existing tournament/benchmark.json's average tokens/finalist, or
@@ -780,23 +694,12 @@ function finalistMatchesCurrentPicks(f) {
   return Object.keys(p).every((k) => current[k] === p[k])
 }
 
-// specs/20260827/02-genesis-explore-state.md D1: a visual archetype must resolve EXPLORE before
-// it can ever reach FINALISTS — deriveState() already gates the bare-invocation path, but these
-// two marks are invoked directly and must refuse the same way if called early.
-function requireExploreResolvedForFinalists() {
-  if (isVisualArchetype(status.archetype) && !exploreResolved()) {
-    die('the explore taste funnel has not resolved yet (research-done → positions-authored → ' +
-      'tiles-built → tiles-culled, or external) — finish EXPLORE first')
-  }
-}
-
 function handleFinalistsSkipped() {
   if (!status.marks.menusDone) die('menus-done has not been marked yet — mark menus-done first')
   if (!isTournamentArchetype(status.archetype)) {
     die('archetype "' + status.archetype + '" is not a tournament archetype (' +
       TOURNAMENT_ARCHETYPES.join(', ') + ') — finalists-skipped only applies once a tournament archetype has reached FINALISTS')
   }
-  requireExploreResolvedForFinalists()
   status.tournament = Object.assign({}, status.tournament, { skipped: true, at: new Date().toISOString() })
   saveStatus()
   return { prev: 'FINALISTS', next: 'DECIDE' }
@@ -808,7 +711,6 @@ function handleFinalistsWritten() {
     die('archetype "' + status.archetype + '" is not a tournament archetype (' +
       TOURNAMENT_ARCHETYPES.join(', ') + ') — finalists-written only applies once a tournament archetype has reached FINALISTS')
   }
-  requireExploreResolvedForFinalists()
   if (!FILE) die('--mark finalists-written needs --file <finalists.json> (relative to .claude/genesis/, or an absolute path)')
   const resolved = path.isAbsolute(FILE) ? FILE : path.join(genesisDir, FILE)
   if (!fs.existsSync(resolved)) {
@@ -952,28 +854,14 @@ function handleProbeDone() {
     const tasks = Array.isArray(parsed.tasks) ? parsed.tasks : null
     if (!tasks) die('finalist "' + name + '"\'s probe.json must have a top-level "tasks" array')
 
-    // specs/20260827/02-genesis-explore-state.md D7: style-tile is not a single task — it
-    // is ONE entry per tile source (exploreRecord.finalists), keyed `tile: "<kebab>"` or
-    // `"external/<name>"`. Every other task keeps the old single-entry-per-task contract.
-    const tileSources = tileSourcesFor()
     const seenTasks = new Set()
-    const seenTiles = new Set()
     for (const t of tasks) {
       if (!t || typeof t.task !== 'string' || !expected.includes(t.task)) {
         die('finalist "' + name + '"\'s probe.json names an unexpected task "' + (t && t.task) +
           '" — the expected task set for ' + archetype + ' is: ' + expected.join(', '))
       }
-      if (t.task === 'style-tile') {
-        if (typeof t.tile !== 'string' || !tileSources.includes(t.tile)) {
-          die('finalist "' + name + '"\'s probe.json has a style-tile entry with an unexpected "tile" (' +
-            (t && t.tile) + ') — expected one of: ' + tileSources.join(', '))
-        }
-        if (seenTiles.has(t.tile)) die('finalist "' + name + '"\'s probe.json has a duplicate style-tile entry for tile "' + t.tile + '"')
-        seenTiles.add(t.tile)
-      } else {
-        if (seenTasks.has(t.task)) die('finalist "' + name + '"\'s probe.json has a duplicate task "' + t.task + '"')
-        seenTasks.add(t.task)
-      }
+      if (seenTasks.has(t.task)) die('finalist "' + name + '"\'s probe.json has a duplicate task "' + t.task + '"')
+      seenTasks.add(t.task)
       if (typeof t.passed !== 'boolean') {
         die('finalist "' + name + '"\'s probe.json task "' + t.task + '" is missing a boolean "passed"')
       }
@@ -991,11 +879,9 @@ function handleProbeDone() {
         }
       }
     }
-    const missingTasks = expected.filter((e) => e !== 'style-tile' && !seenTasks.has(e))
-    const missingTiles = expected.includes('style-tile') ? tileSources.filter((s) => !seenTiles.has(s)) : []
-    const missing = missingTasks.concat(missingTiles)
+    const missing = expected.filter((e) => !seenTasks.has(e))
     if (missing.length) {
-      die('finalist "' + name + '"\'s probe.json is missing task(s)/tile(s): ' + missing.join(', ') +
+      die('finalist "' + name + '"\'s probe.json is missing task(s): ' + missing.join(', ') +
         ' — build the missing probe slice(s), then re-mark probe-done')
     }
 
@@ -1061,10 +947,9 @@ function renderBenchmarkMd(rows) {
   return header + body + '\n'
 }
 
-// specs/20260827/02-genesis-explore-state.md D7: style-tile can carry several entries per
-// finalist (one per tile source), so the gallery row key is task+tile, never task alone — task
-// alone would collapse every style-tile entry but the first onto one row.
-function taskRowKey(t) { return t.task + (t.tile ? ':' + t.tile : '') }
+// specs/20260902/08-genesis-shrink-brief-state.md D7: every probe.json task carries exactly
+// one entry per task name — the gallery row key is the task name alone.
+function taskRowKey(t) { return t.task }
 
 function renderGalleryHtml(rows) {
   const post = (status.tournament && status.tournament.post) || {}
@@ -1103,13 +988,9 @@ function writeBenchmark() {
 
 // D8: the driver never ranks finalists — it matches the brief's CURRENT ## Picks against each
 // finalist's own `picks`. Exactly one match records the winner; zero or several is refused.
-// specs/20260827/02-genesis-explore-state.md D8: when explore has left tile sources
-// (exploreRecord.finalists non-empty), picked ALSO requires .claude/genesis/design-pick.json —
-// its "winner" must equal one tile source path and every other tile must appear in rejected[]
-// with a non-empty reason. Stack and design are picked together: success writes
-// explore: "picked" alongside tournament.winner.
-function tileSourcePath(s) { return s.startsWith('external/') ? 'design/explore/' + s : 'design/explore/r0-' + s }
-
+// specs/20260902/08-genesis-shrink-brief-state.md D1/D7: the design pick this mark used
+// to also validate (specs/20260827/02's EXPLORE tile winner) is retired outright — the design
+// canon is ratified at BRIEF, before the tournament ever runs, so PICK is a stack-only decision.
 function handlePicked() {
   if (!(status.tournament && status.tournament.finalists)) die('the tournament has not reached PICK yet')
   const finalistDefs = status.tournament.finalistDefs || []
@@ -1117,38 +998,7 @@ function handlePicked() {
   if (matches.length !== 1) {
     die('## Picks matches ' + matches.length + ' finalist(s) — exactly 1 match is required to record a winner; rewrite ## Picks to the winner\'s labels, then re-mark picked')
   }
-
-  const tileSources = tileSourcesFor()
-  if (tileSources.length) {
-    const pickPath = path.join(genesisDir, 'design-pick.json')
-    if (!fs.existsSync(pickPath)) {
-      die('.claude/genesis/design-pick.json does not exist — record the design pick (winner + rejected[] with reasons), then re-mark picked')
-    }
-    let pick
-    try {
-      pick = JSON.parse(fs.readFileSync(pickPath, 'utf8'))
-    } catch (e) {
-      die('.claude/genesis/design-pick.json is not valid JSON (' + e.message + ') — fix it and re-mark picked')
-      return null // unreachable
-    }
-    const expectedPaths = tileSources.map(tileSourcePath)
-    if (typeof pick.winner !== 'string' || !expectedPaths.includes(pick.winner)) {
-      die('design-pick.json "winner" (' + pick.winner + ') is not one of the tile sources (' +
-        expectedPaths.join(', ') + ') — fix winner, then re-mark picked')
-    }
-    const rejected = Array.isArray(pick.rejected) ? pick.rejected : []
-    const rejectedWithReason = new Set(rejected
-      .filter((r) => r && typeof r.reason === 'string' && r.reason.trim())
-      .map((r) => r.candidate))
-    const missingRejected = expectedPaths.filter((p) => p !== pick.winner && !rejectedWithReason.has(p))
-    if (missingRejected.length) {
-      die('design-pick.json "rejected[]" is missing a non-empty reason for: ' + missingRejected.join(', ') +
-        ' — fix it, then re-mark picked')
-    }
-  }
-
   status.tournament = Object.assign({}, status.tournament, { winner: matches[0].name, at: new Date().toISOString() })
-  if (tileSources.length) status.explore = 'picked'
   saveStatus()
   return { prev: 'PICK', next: 'DECIDE' }
 }
@@ -1448,6 +1298,21 @@ function handleSkeletonLanded() {
   if (!pc.ok) die(describeProbeGap(pc) + ' — land it, then re-mark skeleton-landed')
   const bc = bindingSubsetCheck(desc, testTree)
   if (!bc.ok) die(describeBindingSubsetGap(bc) + ' — fix it, then re-mark skeleton-landed')
+  // specs/20260902/08-genesis-shrink-brief-state.md D5: the components manifest check
+  // relocates here from the retired DESIGN state's tokens-landed/rules-locked marks — the
+  // manifest is a skeleton artifact (spec 11 will make SCAFFOLD extract it from the approved
+  // mocks set; until then the session seeds it here per the surviving doctrine, Assumption A2).
+  if (isVisualArchetype(status.archetype)) {
+    if (!fs.existsSync(componentsJsonPath())) {
+      die('design/components.json does not exist — seed the component vocabulary, then re-mark skeleton-landed')
+    }
+    const componentsCheckBin = path.join(__dirname, 'components-check.js')
+    const r = runChild(process.execPath, [componentsCheckBin, componentsJsonPath()],
+      { encoding: 'utf8' }, 'components-check.js (design/components.json)')
+    if (r.status !== 0) {
+      die('components-check.js failed for design/components.json: ' + (r.stdout || r.stderr || '').trim())
+    }
+  }
   status.marks.skeletonLanded = true
   saveStatus()
   const g = runGateIfDue()
@@ -1576,173 +1441,31 @@ function handleRoadmapWritten() {
     }
   }
   status.marks.roadmapWritten = true
-  // specs/20260827/03-genesis-design-state.md D1: this IS "the first derivation past ROADMAP" —
-  // backend-api/data-ml are recorded design: "skipped" right here and never routed through
-  // DESIGN; every other archetype is handed the new DESIGN state next instead of HANDOFF.
-  const designSkip = isDesignSkipped(status.archetype)
-  if (designSkip) status.design = 'skipped'
+  // specs/20260902/08-genesis-shrink-brief-state.md D9: the design canon (doctrine,
+  // design-rules, tokens) is ratified at BRIEF now, long before ROADMAP — there is no DESIGN
+  // state left to route into here for any archetype; ROADMAP hands straight to HANDOFF.
   saveStatus()
-  return { prev: 'ROADMAP', next: designSkip ? 'HANDOFF' : 'DESIGN' }
+  return { prev: 'ROADMAP', next: 'HANDOFF' }
 }
 
 // ---------------------------------------------------------------------------
-// DESIGN (specs/20260827/03-genesis-design-state.md D1-D4): the design lock's own mark-driven
-// progression, folded from the retired design-lock command — doctrine-drafted (one-page
-// doctrine, Dissents naming every rejected direction) -> [tokens-landed, visual only: the
-// winner's tokens.css ratified verbatim, an approved matrix-clean mock, design/components.json
-// seeded] -> rules-locked (design-rules.json category/grounding enums valid, components-check.js
-// green on design/components.json for visual archetypes, then the prune of the losing
-// candidates/gallery/sketch/authored-snapshot). Entered only for archetypes NOT in
-// DESIGN_SKIPPED_ARCHETYPES — handleRoadmapWritten already wrote design: "skipped" and routed
-// past it for backend-api/data-ml.
+// Design-canon helpers shared by BRIEF (handleBriefWritten, above) and by SKELETON's
+// components.json check (handleSkeletonLanded, below). specs/20260902/08-genesis-shrink-
+// brief-state.md D3/D4: the design canon (doctrine length/Dissents, the design-rules enum) is
+// ratified at BRIEF now; the pick record lives in the mocks status (status.brief), never in a
+// per-candidate file, and there is no candidate directory left anywhere to prune.
 // ---------------------------------------------------------------------------
 const DOCTRINE_LINE_CAP = 120
 const DESIGN_RULE_CATEGORIES = ['color', 'typography', 'i18n', 'structure', 'a11y', 'density', 'layout']
 
 function doctrinePath() { return path.join(root, 'docs/design/doctrine.md') }
-function designPickPath() { return path.join(genesisDir, 'design-pick.json') }
-function readDesignPick() {
-  try { return JSON.parse(fs.readFileSync(designPickPath(), 'utf8')) } catch (e) { return null }
-}
-function mocksDir() { return path.join(root, 'design/mocks') }
 function tokensCssPath() { return path.join(root, 'design/tokens.css') }
 function componentsJsonPath() { return path.join(root, 'design/components.json') }
 function designRulesPath() { return path.join(genesisDir, 'design-rules.json') }
 
-// D2: design-pick.json's rejected[].candidate paths are `design/explore/r0-<kebab>` (or an
-// external dir) — Dissents is authored against the bare kebab throughout the funnel (Cull
-// record, positions.md), never against the `r0-` directory prefix, so the prefix is stripped
-// before matching against the doctrine's Dissents body.
-function candidateKebab(candidate) {
-  const base = path.basename(String(candidate || ''))
-  return base.startsWith('r0-') ? base.slice(3) : base
-}
-
-function hasApprovedMock() {
-  const dir = mocksDir()
-  if (!fs.existsSync(dir)) return false
-  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.html'))
-  return files.some((f) => {
-    try { return /data-status\s*=\s*"approved"/.test(fs.readFileSync(path.join(dir, f), 'utf8')) } catch (e) { return false }
-  })
-}
-
-// D2: `docs/design/doctrine.md` exists, ≤ DOCTRINE_LINE_CAP lines, with a non-empty ## Dissents
-// naming every rejected candidate the current design-pick.json (if any) records.
-function handleDoctrineDrafted() {
-  if (!status.marks.roadmapWritten) die('roadmap-written has not been marked yet — mark roadmap-written first')
-  if (isDesignSkipped(status.archetype)) {
-    die('archetype "' + status.archetype + '" never enters the design state — doctrine-drafted does not apply')
-  }
-  const p = doctrinePath()
-  if (!fs.existsSync(p)) {
-    die('docs/design/doctrine.md does not exist — draft the one-page doctrine with a ## Dissents ' +
-      'section naming every rejected direction, then re-mark doctrine-drafted')
-  }
-  const text = fs.readFileSync(p, 'utf8')
-  const lineCount = text.split('\n').length
-  if (lineCount > DOCTRINE_LINE_CAP) {
-    die('docs/design/doctrine.md is ' + lineCount + ' lines — the one-page cap is ' + DOCTRINE_LINE_CAP +
-      ' lines — trim it, then re-mark doctrine-drafted')
-  }
-  if (!dissentsNonEmpty(text)) {
-    die('docs/design/doctrine.md ## Dissents has no non-blank line — record every rejected ' +
-      'direction there, then re-mark doctrine-drafted')
-  }
-  const pick = readDesignPick()
-  if (pick && Array.isArray(pick.rejected)) {
-    const body = dissentsBody(text) || ''
-    for (const r of pick.rejected) {
-      const kebab = candidateKebab(r && r.candidate)
-      if (kebab && !body.includes(kebab)) {
-        die('docs/design/doctrine.md ## Dissents does not name rejected candidate "' + kebab +
-          '" — add it, then re-mark doctrine-drafted')
-      }
-    }
-  }
-  status.design = 'doctrine-drafted'
-  saveStatus()
-  return { prev: 'DESIGN', next: 'DESIGN' }
-}
-
-// D3 (visual only — refused for non-visual, "no tokens step"): design/tokens.css ratified
-// verbatim from the winner's tokens.css (no prefix rule for an external winner), an approved
-// mock in design/mocks/ passing design-atlas.js check --matrix, and design/components.json
-// present.
-function handleTokensLanded() {
-  if (!isVisualArchetype(status.archetype)) {
-    die('no tokens step for ' + status.archetype + ' — non-visual archetypes skip tokens-landed ' +
-      'entirely and mark rules-locked directly')
-  }
-  if (status.design !== 'doctrine-drafted') die('doctrine-drafted has not been marked yet — mark doctrine-drafted first')
-
-  const tokensPath = tokensCssPath()
-  if (!fs.existsSync(tokensPath)) {
-    die('design/tokens.css does not exist — ratify the winner\'s tokens.css verbatim, then re-mark tokens-landed')
-  }
-  const pick = readDesignPick()
-  const winner = pick && typeof pick.winner === 'string' ? pick.winner : null
-  if (winner && winner.startsWith('design/explore/r0-')) {
-    const winnerPath = path.join(root, winner, 'tokens.css')
-    let winnerTokens
-    try {
-      winnerTokens = fs.readFileSync(winnerPath, 'utf8')
-    } catch (e) {
-      die(winnerPath + ' does not exist — the winning candidate\'s tokens.css is missing; restore it, then re-mark tokens-landed')
-      return null // unreachable
-    }
-    const current = fs.readFileSync(tokensPath, 'utf8')
-    if (!current.startsWith(winnerTokens)) {
-      die('design/tokens.css does not start with the winner\'s tokens.css (' + winnerPath +
-        ') verbatim — ratify the winner\'s file byte-for-byte, then re-mark tokens-landed')
-    }
-  }
-
-  const designAtlasBin = path.join(__dirname, 'design-atlas.js')
-
-  // specs/20260901/04-shell-composed-mocks.md D7: the navigation shell is the mock-side artifact
-  // of the same decision tokens.css already gates here — a repo may not land tokens-landed with a
-  // tokens canon but no chrome canon. `design/shell/app.html` must exist and pass check on its own
-  // canon rules (D1), checked alongside the tokens.css checks above (Rationale: "the shell is the
-  // navigation decision's mock-side artifact exactly as tokens.css is the token canon's") — before
-  // the approved-mock/matrix checks below, which validate the MOCKS rather than the canon itself.
-  const shellCanonPath = path.join(root, 'design/shell/app.html')
-  if (!fs.existsSync(shellCanonPath)) {
-    die('design/shell/app.html does not exist — author the shell canon in-session (data-shell-canon="app" ' +
-      'plus its linked app.css), then re-mark tokens-landed')
-  }
-  const shellR = runChild(process.execPath, [designAtlasBin, 'check', path.join(root, 'design/shell')],
-    { encoding: 'utf8' }, 'design-atlas.js check (design/shell)')
-  if (shellR.status !== 0) {
-    die('design-atlas.js check failed for design/shell: ' + (shellR.stdout || shellR.stderr || '').trim() +
-      ' — fix the shell canon, then re-mark tokens-landed')
-  }
-
-  if (!hasApprovedMock()) {
-    die('design/mocks/ holds no .html with data-status="approved" — promote and approve the ' +
-      'winner\'s signature screen, then re-mark tokens-landed')
-  }
-
-  const r = runChild(process.execPath, [designAtlasBin, 'check', '--matrix', mocksDir()],
-    { encoding: 'utf8' }, 'design-atlas.js check --matrix (design/mocks)')
-  if (r.status !== 0) {
-    die('design-atlas.js check --matrix failed for design/mocks: ' + (r.stdout || r.stderr || '').trim())
-  }
-
-  if (!fs.existsSync(componentsJsonPath())) {
-    die('design/components.json does not exist — seed the component vocabulary, then re-mark tokens-landed')
-  }
-
-  status.design = 'tokens-landed'
-  saveStatus()
-  return { prev: 'DESIGN', next: 'DESIGN' }
-}
-
-// D4: after the prerequisite mark (tokens-landed for visual, doctrine-drafted for non-visual —
-// tokens-landed never applies to it), design-rules.json's rules[] must carry only the seven
-// closed targetCategory values and grounding ∈ grounded|taste (an empty rules array is valid for
-// a non-visual archetype); visual archetypes additionally run components-check.js on
-// design/components.json. Success prunes the losing explore candidates — never on a refusal.
+// D4: design-rules.json's rules[] must carry only the seven closed targetCategory values and
+// grounding ∈ grounded|taste (an empty rules array is valid — every archetype this check now
+// runs for, visual or not, may have nothing category-specific to say).
 function designRulesCheck() {
   let parsed
   try {
@@ -1759,89 +1482,6 @@ function designRulesCheck() {
     if (!Array.isArray(rule.appliesTo)) return { ok: false, reason: 'bad-appliesto', rule }
   }
   return { ok: true }
-}
-
-// D4: delete every losing design/explore/r0-*  and design/explore/external/* dir except the
-// winner's, plus the explore gallery, a legacy sketch.html, and the authored-tokens snapshot —
-// positions.md and the winner's own dir are never touched.
-function pruneDesignExplore() {
-  const pick = readDesignPick()
-  const winner = pick && typeof pick.winner === 'string' ? pick.winner : null
-  const exploreDir = path.join(root, 'design/explore')
-  if (fs.existsSync(exploreDir)) {
-    for (const e of fs.readdirSync(exploreDir)) {
-      if (e.startsWith('r0-') && 'design/explore/' + e !== winner) {
-        fs.rmSync(path.join(exploreDir, e), { recursive: true, force: true })
-      }
-    }
-    const externalDir = path.join(exploreDir, 'external')
-    if (fs.existsSync(externalDir)) {
-      for (const e of fs.readdirSync(externalDir)) {
-        if ('design/explore/external/' + e !== winner) {
-          fs.rmSync(path.join(externalDir, e), { recursive: true, force: true })
-        }
-      }
-    }
-  }
-  fs.rmSync(exploreGalleryPath(), { force: true })
-  fs.rmSync(path.join(genesisDir, 'sketch.html'), { force: true })
-  fs.rmSync(exploreAuthoredDir(), { recursive: true, force: true })
-}
-
-function handleRulesLocked() {
-  if (isDesignSkipped(status.archetype)) {
-    die('archetype "' + status.archetype + '" never enters the design state — rules-locked does not apply')
-  }
-  if (isVisualArchetype(status.archetype)) {
-    if (status.design !== 'tokens-landed') die('tokens-landed has not been marked yet — mark tokens-landed first')
-  } else if (status.design !== 'doctrine-drafted') {
-    die('doctrine-drafted has not been marked yet — mark doctrine-drafted first')
-  }
-
-  const check = designRulesCheck()
-  if (!check.ok) {
-    if (check.reason === 'unreadable') {
-      die('.claude/genesis/design-rules.json does not exist or is not valid JSON (' + check.detail +
-        ') — write it, then re-mark rules-locked')
-    }
-    if (check.reason === 'no-rules-array') {
-      die('.claude/genesis/design-rules.json has no "rules" array — write it (an empty array is ' +
-        'valid for a non-visual archetype), then re-mark rules-locked')
-    }
-    if (check.reason === 'bad-id') {
-      die('.claude/genesis/design-rules.json has a rule with a missing or empty "id" — fix it, then re-mark rules-locked')
-    }
-    if (check.reason === 'bad-category') {
-      die('.claude/genesis/design-rules.json rule "' + check.rule.id + '" has targetCategory "' +
-        check.rule.targetCategory + '" — must be one of: ' + DESIGN_RULE_CATEGORIES.join(', ') +
-        ' — fix it, then re-mark rules-locked')
-    }
-    if (check.reason === 'bad-grounding') {
-      die('.claude/genesis/design-rules.json rule "' + check.rule.id + '" has grounding "' +
-        check.rule.grounding + '" — must be "grounded" or "taste" — fix it, then re-mark rules-locked')
-    }
-    if (check.reason === 'bad-severity') {
-      die('.claude/genesis/design-rules.json rule "' + check.rule.id + '" has a missing or empty ' +
-        '"severity" — fix it, then re-mark rules-locked')
-    }
-    if (check.reason === 'bad-appliesto') {
-      die('.claude/genesis/design-rules.json rule "' + check.rule.id + '" has no "appliesTo" array — fix it, then re-mark rules-locked')
-    }
-  }
-
-  if (isVisualArchetype(status.archetype)) {
-    const componentsCheckBin = path.join(__dirname, 'components-check.js')
-    const r = runChild(process.execPath, [componentsCheckBin, componentsJsonPath()],
-      { encoding: 'utf8' }, 'components-check.js (design/components.json)')
-    if (r.status !== 0) {
-      die('components-check.js failed for design/components.json: ' + (r.stdout || r.stderr || '').trim())
-    }
-  }
-
-  status.design = 'rules-locked'
-  saveStatus()
-  pruneDesignExplore() // D4: only after the components check passes and the rules validate — a refused mark deletes nothing
-  return { prev: 'DESIGN', next: 'HANDOFF' }
 }
 
 // ---------------------------------------------------------------------------
@@ -1908,24 +1548,33 @@ function handleProfileWritten() {
 function deriveState(opts) {
   const peek = !!(opts && opts.peek)
 
+  // specs/20260902/08-genesis-shrink-brief-state.md D6: a status.json carrying
+  // `marks.menusDone` with no `marks.briefWritten` resumes at BRIEF on its existing artifacts;
+  // `discoveryDone` is trusted from the recorded mark alone for this one resume path, since
+  // its own brief.md is not required to satisfy discoveryCheck()'s current grammar or even to
+  // exist.
+  const legacyResume = !!(status.marks && status.marks.menusDone && !status.marks.briefWritten)
+
   const disc = discoveryCheck()
-  if (!status.marks.discoveryDone || !disc.ok) return 'DISCOVERY'
+  if (!status.marks.discoveryDone || (!legacyResume && !disc.ok)) return 'DISCOVERY'
+
+  // specs/20260902/08-genesis-shrink-brief-state.md D1/D6: BRIEF sits between DISCOVERY
+  // and MENUS — a legacy status.json past MENUS with no `marks.briefWritten` still derives BRIEF
+  // here, regardless of any later legacy marks already recorded (D6's "resumes at BRIEF").
+  if (!status.marks.briefWritten) return 'BRIEF'
 
   const menus = menusCheck()
   if (!status.marks.menusDone || !menus.ok) return 'MENUS'
-
-  // specs/20260827/02-genesis-explore-state.md D1: EXPLORE sits between MENUS and FINALISTS for
-  // the four VISUAL archetypes, until the taste funnel (or the external path) resolves it.
-  // handleMenusDone already wrote explore: "skipped" for every other archetype, so this never
-  // fires for them.
-  if (isVisualArchetype(status.archetype) && !exploreResolved()) return 'EXPLORE'
 
   // specs/20260827/01-genesis-tournament.md D1: FINALISTS -> RACE -> PROBE -> PICK sits between
   // MENUS and DECIDE for a tournament archetype that hasn't been skipped or resolved yet. Once
   // skipped (tournament.skipped) or resolved (tournament.winner), fall straight through to the
   // unchanged decideCheck() derivation below — a non-tournament archetype never enters this block
-  // at all (status.archetype stays outside TOURNAMENT_ARCHETYPES).
-  if (isTournamentArchetype(status.archetype) &&
+  // at all (status.archetype stays outside TOURNAMENT_ARCHETYPES). specs/20260902/08's D6
+  // legacy resume additionally exempts a host whose `decided` mark is already recorded — a
+  // legacy record past DECIDE has necessarily already resolved (or predates) the tournament, and
+  // must never be routed backward into FINALISTS just because it carries no tournament record.
+  if (isTournamentArchetype(status.archetype) && !status.marks.decided &&
       !(status.tournament && (status.tournament.skipped || status.tournament.winner))) {
     const t = status.tournament || {}
     if (!t.finalists) return 'FINALISTS'
@@ -1943,8 +1592,15 @@ function deriveState(opts) {
     return 'PICK'
   }
 
+  // specs/20260902/08-genesis-shrink-brief-state.md D6: a legacy-ratified status
+  // (`status.brief.legacy === true`) trusts its own recorded `decided`/`roadmapWritten` marks
+  // for these two closure checks instead of re-validating their backing artifacts — a legacy
+  // host is never asked to reconstruct them (AC-20260902-08-7: "every downstream legacy mark
+  // stays valid so the run lands on its real next state after one mark").
+  const legacyTrusted = !!(status.brief && status.brief.legacy)
+
   const decide = decideCheck()
-  if (!status.marks.decided || !decide.ok) return 'DECIDE'
+  if (!status.marks.decided || (!legacyTrusted && !decide.ok)) return 'DECIDE'
 
   if (!(status.scaffold && status.scaffold.exit === 0)) {
     if (peek) return status.scaffold ? 'SCAFFOLD_RED' : 'SCAFFOLD'
@@ -1960,12 +1616,10 @@ function deriveState(opts) {
   }
 
   const rm = roadmapCheck()
-  if (!status.marks.roadmapWritten || !rm.ok) return 'ROADMAP'
+  if (!status.marks.roadmapWritten || (!legacyTrusted && !rm.ok)) return 'ROADMAP'
 
-  // specs/20260827/03-genesis-design-state.md D1: DESIGN sits between ROADMAP and HANDOFF for
-  // every archetype except backend-api/data-ml, which handleRoadmapWritten already recorded
-  // design: "skipped" for and which never enter DESIGN at all.
-  if (!isDesignSkipped(status.archetype) && status.design !== 'rules-locked') return 'DESIGN'
+  // specs/20260902/08-genesis-shrink-brief-state.md D9: ROADMAP hands directly to HANDOFF —
+  // the design canon is ratified at BRIEF, before ROADMAP is ever reached.
 
   // specs/20260827/04-genesis-conventions-handoff.md D4: HANDOFF is not terminal — once
   // `profile-written` records a successful init-gen generate run, the derived state advances to
@@ -2006,12 +1660,17 @@ const STEPS = {
       lines.push('Doctrine: spec/doctrine/genesis.md § Genesis: Discovery Interview')
       lines.push(genesisRel('brief.md') + ' does not exist yet — start from the template above.')
     } else {
-      lines.push('Read only: ' + genesisRel('brief.md') + ' (## Coverage)')
+      lines.push('Read only: ' + genesisRel('brief.md') + ' (## Coverage, ## Picks)')
       lines.push('Doctrine: spec/doctrine/genesis.md § Genesis: Discovery Interview')
       const check = discoveryCheck()
       if (check.reason === 'unparseable') lines.push('unparseable coverage line(s): ' + check.detail.join('; '))
       if (check.reason === 'missing') lines.push('missing coverage key(s): ' + check.detail.join(', '))
       if (check.reason === 'dark') lines.push('dark coverage key(s) — ask, in the user\'s words: ' + check.detail.join(', '))
+      // specs/20260902/08-genesis-shrink-brief-state.md D2: the archetype gate moved here from
+      // menus-done — this step must tell the session the exact `## Picks` line it still owes.
+      if (check.ok && !picks().archetype) {
+        lines.push('missing ## Picks line: - archetype: <key> (one of: ' + REGISTRY_KEYS.join(', ') + ')')
+      }
     }
     lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark discovery-done')
     return lines.join('\n')
@@ -2048,49 +1707,73 @@ const STEPS = {
     return lines.join('\n')
   },
 
-  // specs/20260827/02-genesis-explore-state.md D1/D9: the taste funnel's own mark-driven
-  // progression, rendered per status.explore substate. `nothing marked yet` matches the Contracts
-  // step-text excerpt verbatim (funnel/external inline, no separate Then: block needed there —
-  // both marks are already spelled out on their own lines).
-  EXPLORE: () => {
-    const doctrineLine = 'Doctrine: spec/doctrine/genesis.md § Genesis: Explore State'
-    const lines = []
-    switch (status.explore) {
-      case 'research-done':
-        lines.push('## Step: author 6-8 explore positions')
-        lines.push('Read only: docs/design/research-brief.md, design/targets.json')
-        lines.push(doctrineLine)
-        lines.push('write design/explore/positions.md with 6-8 `## Position: <kebab>` blocks (Stance, ' +
-          'Rules cited, Anti-defaults, Reference direction, Motion character, Density & layout intent, ' +
-          'Starter tokens) and each design/explore/r0-<kebab>/tokens.css')
-        lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark positions-authored')
-        break
-      case 'positions-authored':
-        lines.push('## Step: build and check the tiles')
-        lines.push('Read only: design/explore/positions.md, .claude/genesis/explore/authored/')
-        lines.push(doctrineLine)
-        lines.push('build each design/explore/r0-<kebab>/tile.html rendering the position\'s tokens — ' +
-          'builders append tokens.css, never alter the authored baseline')
-        lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark tiles-built')
-        break
-      case 'tiles-built':
-        lines.push('## Step: open the gallery and cull to two')
-        lines.push('Read only: design/explore/gallery.html')
-        lines.push(doctrineLine)
-        lines.push('open the gallery, then record a `## Cull record` in design/explore/positions.md ' +
-          'leaving exactly two survivors')
-        lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark tiles-culled')
-        break
-      default:
-        lines.push('## Step: research the constraints floor and declare the matrix')
-        lines.push('Read only: ' + genesisRel('brief.md') + ' (## What I think you\'re building, ## Research Angles), ' +
-          genesisRel('stack-descriptor.json') + ' (absent — the stack is not decided yet; archetype from status.json)')
-        lines.push(doctrineLine)
-        lines.push('funnel: write docs/design/research-brief.md (ux-research-brief.md template) and design/targets.json, then --mark research-done')
-        lines.push('external: a design you already have → --mark external --file design/explore/external/<name>')
-        lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark research-done' +
-          '\n  node ' + __filename + ' --root ' + root + ' --mark external --file design/explore/external/<name>')
+  // specs/20260902/08-genesis-shrink-brief-state.md D2/D3/D4/D6: sits between DISCOVERY and
+  // MENUS. A legacy resume (status.marks.menusDone already true, briefWritten not yet) opens with
+  // `legacy:` and names `--legacy`; DESIGN_SKIPPED_ARCHETYPES owe nothing beyond DISCOVERY; a
+  // visual archetype whose mocks set is not yet APPROVED is sent to `/spec:mocks`; otherwise the
+  // step renders D4's ratification instructions (Contracts' "BRIEF step text" example).
+  BRIEF: () => {
+    const archetype = status.archetype
+    const doctrineLine = 'Doctrine: spec/doctrine/genesis.md § Genesis: Brief State'
+    const legacyResume = !!(status.marks && status.marks.menusDone && !status.marks.briefWritten)
+
+    if (legacyResume) {
+      return [
+        '## Step: brief — ratify the approved set into the design canon',
+        'Read only: docs/design/doctrine.md, .claude/genesis/design-rules.json' +
+          (isVisualArchetype(archetype) ? ', design/tokens.css' : ''),
+        doctrineLine,
+        'legacy: explore/design artifacts accepted in place of a mocks set (explore: ' +
+          (status.explore || 'n/a') + ', design: ' + (status.design || 'pending') + ')',
+        'Write docs/design/doctrine.md (one page, ## Dissents) and .claude/genesis/design-rules.json, then:',
+        '  node ' + __filename + ' --root ' + root + ' --mark brief-written --legacy',
+      ].join('\n')
     }
+
+    if (isDesignSkipped(archetype)) {
+      return [
+        '## Step: brief — nothing owed beyond discovery',
+        'Read only: ' + genesisRel('brief.md') + ' (## Picks)',
+        doctrineLine,
+        'archetype "' + archetype + '" owes nothing beyond DISCOVERY — no mocks set, no doctrine, no design canon.',
+        'Then:\n  node ' + __filename + ' --root ' + root + ' --mark brief-written',
+      ].join('\n')
+    }
+
+    const visual = isVisualArchetype(archetype)
+    const mocksStatus = readMocksStatus()
+    if (visual && !(mocksStatus && mocksStatus.state === 'APPROVED')) {
+      return [
+        '## Step: brief — approve the mocks set first',
+        'Read only: design/mocks/seed.md, design/mocks/ledger.md, design/mocks/status.json',
+        doctrineLine,
+        mocksStatus ? ('mocks: ' + mocksStatus.state + ' — not yet approved') : 'no design/mocks/status.json yet',
+        'next: run /spec:mocks in this repo (seed → shapes → wireframes → theme → skin → review → ' +
+          'approved), then --mark brief-written',
+      ].join('\n')
+    }
+
+    const directions = visual ? Object.keys((mocksStatus && mocksStatus.directions) || {}) : []
+    const theme = visual ? (mocksStatus && mocksStatus.theme) : null
+    const journeys = (visual && mocksStatus && mocksStatus.journeys) ? Object.keys(mocksStatus.journeys).length : 0
+    const readFiles = visual
+      ? ['design/mocks/seed.md', 'design/mocks/ledger.md', 'design/mocks/status.json', 'design/tokens.css', genesisRel('brief.md')]
+      : [genesisRel('brief.md')]
+    const dissentsClause = visual
+      ? (directions.filter((d) => d !== theme).join(', ') || 'none')
+      : 'none — no directions composed'
+    const lines = [
+      '## Step: brief — ratify the approved set into the design canon',
+      'Read only: ' + readFiles.join(', '),
+      doctrineLine,
+    ]
+    if (visual) {
+      lines.push('mocks: APPROVED · journeys: ' + journeys + ' · directions composed: ' +
+        (directions.join(', ') || 'none') + ' (picked: ' + (theme || 'none') + ') · open product rows: 0')
+    }
+    lines.push('Write docs/design/doctrine.md (one page, ## Dissents naming: ' + dissentsClause +
+      ') and .claude/genesis/design-rules.json, then:')
+    lines.push('  node ' + __filename + ' --root ' + root + ' --mark brief-written')
     return lines.join('\n')
   },
 
@@ -2136,11 +1819,9 @@ const STEPS = {
     'Then:\n  node ' + __filename + ' --root ' + root,
   ].join('\n'),
 
-  // D6/D7: race results per finalist (a failed scaffold prints "failed at scaffold — spent no
-  // further" and owes no probe.json), the expected task set (tile-source-conditioned, D7), one
-  // style-tile source line per tile (a position's tile.html, or an external candidate's dir —
-  // never sketch.html, per specs/20260827/02 D7), the retry cap, each raced finalist's evidence
-  // dir, and the probe.json shape.
+  // D6: race results per finalist (a failed scaffold prints "failed at scaffold — spent no
+  // further" and owes no probe.json), the archetype's expected task set, the retry cap, each
+  // raced finalist's evidence dir, and the probe.json shape.
   PROBE: () => {
     const archetype = status.archetype
     const expected = expectedTasksFor(archetype)
@@ -2161,12 +1842,6 @@ const STEPS = {
           (r.boot.sentinel ? ' (' + r.boot.sentinel + ')' : ''))
     }
     lines.push('expected tasks: ' + expected.join(', '))
-    if (expected.includes('style-tile')) {
-      for (const src of tileSourcesFor()) {
-        const p = src.startsWith('external/') ? 'design/explore/' + src + '/' : 'design/explore/r0-' + src + '/tile.html'
-        lines.push('style-tile source (' + src + '): ' + p + ' (render inside the finalist, with its own real component library)')
-      }
-    }
     lines.push('retry cap: 2 per task')
     for (const name of names) {
       const r = race[name]
@@ -2237,61 +1912,9 @@ const STEPS = {
     'Then:\n  node ' + __filename + ' --root ' + root + ' --mark roadmap-written',
   ].join('\n'),
 
-  // specs/20260827/03-genesis-design-state.md D1/D9: the design lock's own mark-driven
-  // progression, rendered per status.design substate — same pattern as EXPLORE above. The
-  // "nothing marked" case matches the Contracts step-text excerpt for a visual archetype
-  // verbatim; a non-visual archetype (no tokens step) gets an adapted Read only: list, since it
-  // never runs the taste funnel and so has no design-pick.json/positions.md/research-brief.md to
-  // read.
-  DESIGN: () => {
-    const doctrineLine = 'Doctrine: spec/doctrine/genesis.md § Genesis: Design State'
-    const visual = isVisualArchetype(status.archetype)
-    const pick = readDesignPick()
-    const winnerDir = (pick && typeof pick.winner === 'string') ? pick.winner : '<winner dir>'
-    const lines = []
-    switch (status.design) {
-      case 'doctrine-drafted':
-        if (visual) {
-          lines.push('## Step: ratify the tokens and promote the signature screen')
-          lines.push('Read only: ' + winnerDir + '/tokens.css, design/targets.json, docs/design/doctrine.md')
-          lines.push(doctrineLine)
-          lines.push('ratify design/tokens.css verbatim from the winner\'s tokens.css, promote the winner\'s ' +
-            'signature screen to design/mocks/ (data-status="approved") expanded across design/targets.json\'s ' +
-            'declared matrix, and seed design/components.json')
-          lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark tokens-landed')
-        } else {
-          lines.push('## Step: lock the category-only design rules')
-          lines.push('Read only: docs/design/doctrine.md')
-          lines.push(doctrineLine)
-          lines.push('write .claude/genesis/design-rules.json (id/targetCategory/grounding/severity/appliesTo per ' +
-            'rule; an empty rules array is valid — this archetype has no tokens step)')
-          lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark rules-locked')
-        }
-        break
-      case 'tokens-landed':
-        lines.push('## Step: lock the category-only design rules')
-        lines.push('Read only: docs/design/doctrine.md, design/components.json')
-        lines.push(doctrineLine)
-        lines.push('write .claude/genesis/design-rules.json (id/targetCategory/grounding/severity/appliesTo ' +
-          'per rule) — components-check.js must pass on design/components.json')
-        lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark rules-locked')
-        break
-      default:
-        if (visual) {
-          lines.push('## Step: ratify the pick — doctrine first')
-          lines.push('Read only: .claude/genesis/design-pick.json, design/explore/positions.md, ' +
-            'docs/design/research-brief.md, ' + winnerDir + '/tokens.css')
-        } else {
-          lines.push('## Step: distill the design doctrine')
-          lines.push('Read only: ' + genesisRel('brief.md'))
-        }
-        lines.push(doctrineLine)
-        lines.push('distill docs/design/doctrine.md (one page, ## Dissents naming every rejected direction)' +
-          (visual ? '' : ' — no tokens step for this archetype; doctrine-drafted advances straight to rules-locked'))
-        lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark doctrine-drafted')
-    }
-    return lines.join('\n')
-  },
+  // specs/20260902/08-genesis-shrink-brief-state.md D9: the DESIGN state (its own
+  // doctrine-drafted -> tokens-landed -> rules-locked progression) is retired — the design canon
+  // is ratified at BRIEF, long before ROADMAP.
 
   // specs/20260827/04-genesis-conventions-handoff.md D4: HANDOFF becomes a judgment step — the
   // session authors .claude/genesis/init-profile.json (init.md Phase 4's shape) and closes with
@@ -2357,17 +1980,22 @@ function acceptedOutput(prevNext) {
     ' → ' + prevNext.next + '); safe to /clear and re-run /spec:genesis'
 }
 
+// specs/20260902/08-genesis-shrink-brief-state.md D1: the eight EXPLORE/DESIGN marks are
+// retired outright — the design stage is /spec:mocks now, ratified at BRIEF's own single mark.
+// D14: this refusal table is the sanctioned live surface for `positions-authored` and
+// `tiles-culled` — AC-20260902-08-12's sweep waives this file by path for those two names.
+const RETIRED_MARKS = [
+  'research-done', 'positions-authored', 'tiles-built', 'tiles-culled', 'external',
+  'doctrine-drafted', 'tokens-landed', 'rules-locked',
+]
+
 function handleMark() {
   let result
   switch (MARK) {
     case 'discovery-done': result = handleDiscoveryDone(); break
+    case 'brief-written': result = handleBriefWritten(); break
     case 'menu-written': result = handleMenuWritten(); break
     case 'menus-done': result = handleMenusDone(); break
-    case 'research-done': result = handleResearchDone(); break
-    case 'positions-authored': result = handlePositionsAuthored(); break
-    case 'tiles-built': result = handleTilesBuilt(); break
-    case 'tiles-culled': result = handleTilesCulled(); break
-    case 'external': result = handleExternal(); break
     case 'finalists-written': result = handleFinalistsWritten(); break
     case 'finalists-skipped': result = handleFinalistsSkipped(); break
     case 'probe-done': result = handleProbeDone(); break
@@ -2375,16 +2003,15 @@ function handleMark() {
     case 'decided': result = handleDecided(); break
     case 'skeleton-landed': result = handleSkeletonLanded(); break
     case 'roadmap-written': result = handleRoadmapWritten(); break
-    case 'doctrine-drafted': result = handleDoctrineDrafted(); break
-    case 'tokens-landed': result = handleTokensLanded(); break
-    case 'rules-locked': result = handleRulesLocked(); break
     case 'profile-written': result = handleProfileWritten(); break
     default:
-      die('unknown mark "' + MARK + '" (discovery-done | menu-written --file <f> | menus-done | ' +
-        'research-done | positions-authored | tiles-built | tiles-culled | external --file <dir> | ' +
-        'finalists-written --file <f> | finalists-skipped | probe-done | picked | ' +
-        'decided | skeleton-landed | roadmap-written | doctrine-drafted | tokens-landed | ' +
-        'rules-locked | profile-written --file <f> [--refresh])')
+      if (RETIRED_MARKS.includes(MARK)) {
+        die('mark "' + MARK + '" was retired with the genesis design states (specs/20260902/08) — ' +
+          'the design stage is /spec:mocks; run it, then --mark brief-written')
+      }
+      die('unknown mark "' + MARK + '" (discovery-done | brief-written [--legacy] | menu-written --file <f> | ' +
+        'menus-done | finalists-written --file <f> | finalists-skipped | probe-done | picked | ' +
+        'decided | skeleton-landed | roadmap-written | profile-written --file <f> [--refresh])')
       return
   }
   writeOut(1, acceptedOutput(result))

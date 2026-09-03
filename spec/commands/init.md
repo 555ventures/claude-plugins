@@ -374,20 +374,20 @@ specs; do not invent components or tokens no planned surface needs yet.
 **Precedence — check for a genesis canon first.** If `.claude/genesis/status.json` exists
 (the genesis stage seeded this repo), branch four ways on its `design` value:
 
-- `rules-locked` or `skipped` → **consume, never re-prompt.** The canon already exists: the
-  genesis design state authored the doctrine + token files and
+- `ratified`, `rules-locked`, or `skipped` → **consume, never re-prompt.** The canon already
+  exists: the genesis BRIEF state authored the doctrine + token files and
   `.claude/genesis/design-rules.json`. Do NOT run the adopt/craft `AskUserQuestion` below —
   extract from what's there (treat it like brownfield), and record `genesisStackDescriptor` +
   `design.rulesManifest` in `profile.config` (enforcement is generated later by
   `/spec:enforce`, Phase 8). On `skipped` (headless archetype) write no `design` block at all.
   Report mode `genesis` in Phase 7.
-- `doctrine-drafted` / `tokens-landed` → **partial canon: STOP.** Tell the user to finish the
-  genesis design state (re-run `/spec:genesis` to lock its rules) first; the state gate also
-  blocks this. Do not half-adopt.
+- `doctrine-drafted` / `tokens-landed` (legacy partial canon) → **STOP.** Tell the user to
+  finish the genesis BRIEF state (re-run `/spec:genesis` to reach BRIEF and ratify it) first;
+  the state gate also blocks this. Do not half-adopt.
 - `pending`, or any value outside the three arms above → **warn and proceed** — matching
   genesis.md's own gate for this state ("warned, proceeds"). Write **no** `design` block (the
   canon isn't ready to consume, and adopt/craft here would mint a second canon that the genesis
-  design state later contradicts); name **re-run `/spec:genesis`** as the pending finisher in
+  BRIEF state later contradicts); name **re-run `/spec:genesis`** as the pending finisher in
   both the warning and the Phase 7 report. Never run the adopt/craft `AskUserQuestion` below for
   this arm.
 - (no `.claude/genesis/` at all) → the greenfield adopt/craft path below.

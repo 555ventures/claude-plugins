@@ -14,6 +14,12 @@ const { tmpdir, runNode } = require('../helpers')
 //
 // Fixtures use packages: [] in every menu option so registry-check.js (invoked by the driver
 // for `menu-written`) never probes a network endpoint (spec D16).
+//
+// specs/20260902/08-genesis-shrink-brief-state.md D1/D2/D11 (AC-20260902-08-1, AC-20260902-08-2):
+// status.json becomes schemaVersion 3 (no `explore` key, adds `brief`) and the eight EXPLORE/
+// DESIGN marks are retired; every shared helper below now interposes the new BRIEF state
+// (archetype named at discovery-done, `--mark brief-written` accepted immediately for the
+// DESIGN_SKIPPED_ARCHETYPES default `data-ml`) between discovery-done and MENUS.
 
 const SCRIPT = 'scripts/genesis-driver.js'
 const DIM = 'hosting'
@@ -77,13 +83,22 @@ ${picks.join('\n')}
 `)
 }
 
-// Drives the real binary from an empty root through the coverage-audit gate to MENUS.
-function advanceToMenus(dir) {
+// Drives the real binary from an empty root through the coverage-audit gate, the new BRIEF
+// state, and to MENUS. specs/20260902/08-genesis-shrink-brief-state.md D2: `discovery-done` now
+// also requires a `- archetype: <key>` ## Picks line; D4: `archetype` defaults to `data-ml`
+// (DESIGN_SKIPPED_ARCHETYPES) so `--mark brief-written` is accepted immediately with no
+// mocks/doctrine artifacts owed at all — every caller of this helper (every AC-20260825-04/
+// AC-20260827-*/F1/F3/F6/logtail regression below) only cares about the state past MENUS, and a
+// visual or doctrine-owing archetype default would force every one of them to author a design
+// canon just to reach MENUS, which the worker contract forbids rewriting them for.
+function advanceToMenus(dir, archetype = 'data-ml') {
   bare(dir)
-  writeBrief(dir)
+  writeBrief(dir, { picks: ['- archetype: ' + archetype] })
   const r = mark(dir, 'discovery-done')
-  assert.strictEqual(r.status, 0, 'test setup requires discovery-done to be accepted on a fully-covered brief: ' + r.stderr)
-  return r
+  assert.strictEqual(r.status, 0, 'test setup requires discovery-done to be accepted on a fully-covered brief naming archetype ' + archetype + ': ' + r.stderr)
+  const bw = mark(dir, 'brief-written')
+  assert.strictEqual(bw.status, 0, 'test setup requires brief-written to be accepted immediately for a DISCOVERY-only archetype (' + archetype + ' owes nothing beyond discovery per D4): ' + bw.stderr)
+  return bw
 }
 
 // Drives from MENUS through the registry-check menu write and the picks gate to DECIDE.
@@ -98,7 +113,7 @@ function advanceToMenus(dir) {
 // worker contract forbids. Only AC-20260825-04-3 below passes a different archetype, to exercise
 // D1's tournament routing itself.
 function advanceToDecide(dir, archetype = 'data-ml') {
-  advanceToMenus(dir)
+  advanceToMenus(dir, archetype)
   writeJSON(path.join(dir, '.claude/genesis/interview-research', DIM + '.json'), {
     dimension: DIM,
     options: [{ label: 'AWS', packages: [] }],
@@ -224,44 +239,105 @@ Something observable.
   }
 }
 
-test('AC-20260825-04-1: a cold --root creates status.json schemaVersion 2 with the template key set and prints state: DISCOVERY', () => {
+test('AC-20260902-08-1: a cold --root creates status.json schemaVersion 3 with `brief: null`, no `explore` key, and prints state: DISCOVERY; a loaded v2 file carrying `explore: "picked"` keeps that key in memory and rewrites the file as v3 still carrying it on the next accepted mark', () => {
   const dir = tmpdir('gdrv-ac1')
   const r = bare(dir)
   assert.strictEqual(r.status, 0, 'a cold empty root must be a valid starting point, not a driver error: ' + r.stderr)
   const statusPath = path.join(dir, '.claude/genesis/status.json')
   assert.ok(fs.existsSync(statusPath), 'the driver must create .claude/genesis/status.json on first invocation so re-entry has something to derive state from')
   const st = JSON.parse(fs.readFileSync(statusPath, 'utf8'))
-  assert.strictEqual(st.schemaVersion, 2, 'a v1 status.json silently starves the driver of marks/menus/scaffold/zeroDayGate — the file must be created as v2')
-  // specs/20260827/04-genesis-conventions-handoff.md D7 (additive, [no-ac: schemaVersion
-  // unchanged]): status.json gains `handoff: null` for the new profile-written mark. Updated in
-  // place per this repo's standing handling for an additive Decision invalidating an exhaustive
-  // key-set pin (§ Gotchas) — never weakened, the other thirteen keys still asserted exactly.
+  assert.strictEqual(st.schemaVersion, 3, 'D1/D11: a cold root must be created as schemaVersion 3 — a v2 stamp here means the driver template was never bumped for the DESIGN/EXPLORE retirement')
+  assert.strictEqual(st.brief, null, 'D11: the fresh template must carry `brief: null` — its absence means the new BRIEF state has nowhere durable to record its ratification')
+  assert.ok(!('explore' in st), 'D11: a cold v3 status.json must carry no `explore` key at all — its presence means the retired EXPLORE artifact key was never dropped from the template')
   assert.deepStrictEqual(Object.keys(st).sort(), [
-    'architect', 'archetype', 'design', 'designManifestPath', 'explore', 'gateCommand',
+    'architect', 'archetype', 'brief', 'design', 'designManifestPath', 'gateCommand',
     'handoff', 'lastUpdated', 'localeScope', 'marks', 'menus', 'scaffold', 'schemaVersion',
     'stackDescriptorPath', 'zeroDayGate',
   ].sort(), 'a missing or extra key here means the driver and status.json template have drifted apart, breaking every downstream mark that reads a specific key')
   assert.match(r.stdout, /^\[genesis-driver\] state: DISCOVERY/, 'the printed state line is the one thing a re-invoking session reads to know what to do next')
   const s = state(dir)
   assert.strictEqual(s.stdout, 'DISCOVERY\n', '--state must print exactly the state name and a newline so scripting callers never have to parse the full step text')
+
+  // D11's second half: a legacy v2 file (no `brief` key, carrying `explore`) must load with
+  // `explore` preserved in memory and rewrite as v3 on the next accepted mark, still carrying it —
+  // a legacy record silently dropped on the first write is a legacy host losing evidence of which
+  // design path it took, for no reason this spec ever asks for.
+  const legacy = tmpdir('gdrv-ac1-legacy')
+  bare(legacy)
+  const legacyStatusPath = path.join(legacy, '.claude/genesis/status.json')
+  const legacyRaw = JSON.parse(fs.readFileSync(legacyStatusPath, 'utf8'))
+  delete legacyRaw.brief
+  legacyRaw.schemaVersion = 2
+  legacyRaw.explore = 'picked'
+  fs.writeFileSync(legacyStatusPath, JSON.stringify(legacyRaw, null, 2) + '\n')
+  writeBrief(legacy, { picks: ['- archetype: data-ml'] })
+  const disco = mark(legacy, 'discovery-done')
+  assert.strictEqual(disco.status, 0, 'test setup requires discovery-done to be accepted on a v2 legacy file carrying explore: "picked": ' + disco.stderr)
+  const rewritten = JSON.parse(fs.readFileSync(legacyStatusPath, 'utf8'))
+  assert.strictEqual(rewritten.schemaVersion, 3, 'D11: the first accepted mark on a loaded v2 file must rewrite status.json as v3 — a file still stamped v2 after a successful mark means the driver never migrates a legacy host forward')
+  assert.strictEqual(rewritten.explore, 'picked', 'D11: loadStatus() must keep the legacy `explore` key from a v2 file untouched through the v3 rewrite — losing it here strands a legacy run\'s own record of which design path it took, which the BRIEF step text for a legacy resume needs to read')
+})
+
+test('AC-20260902-08-2: WHEN --mark tiles-culled (or any of the eight retired EXPLORE/DESIGN marks) runs THE SYSTEM exits 2 naming the mark, "retired", and "/spec:mocks", and deriveState never prints EXPLORE or DESIGN for any status shape, including a v2 file carrying explore: "pending" and a visual archetype past MENUS', () => {
+  const RETIRED_MARKS = [
+    'research-done', 'positions-authored', 'tiles-built', 'tiles-culled', 'external',
+    'doctrine-drafted', 'tokens-landed', 'rules-locked',
+  ]
+  const dir = tmpdir('gdrv-ac2-retired')
+  for (const m of RETIRED_MARKS) {
+    const r = mark(dir, m)
+    assert.strictEqual(r.status, 2, 'D1: a retired mark must exit 2, not fall through to a live handler or a generic unknown-mark message — "' + m + '" is one of the eight D1 names')
+    assert.match(r.stderr, new RegExp(m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), 'the refusal must name the retired mark "' + m + '" so the session can tell which one it typed')
+    assert.match(r.stderr, /retired/, 'the refusal must say "retired" per D1\'s literal wording, or the session cannot distinguish this from an ordinary precondition refusal')
+    assert.match(r.stderr, /\/spec:mocks/, 'the refusal must name the remedy /spec:mocks — the design stage this mark used to belong to has left genesis entirely')
+  }
+
+  // D11: a v2 file with explore: "pending" and a visual archetype past MENUS must derive BRIEF
+  // (never EXPLORE) — the retired state must never print for ANY status shape, not just a fresh
+  // v3 one.
+  const legacy = tmpdir('gdrv-ac2-legacy-visual')
+  bare(legacy)
+  const legacyStatusPath = path.join(legacy, '.claude/genesis/status.json')
+  const raw = JSON.parse(fs.readFileSync(legacyStatusPath, 'utf8'))
+  raw.schemaVersion = 2
+  delete raw.brief
+  raw.explore = 'pending'
+  raw.archetype = 'web-app'
+  raw.marks = { discoveryDone: true, menusDone: true }
+  fs.writeFileSync(legacyStatusPath, JSON.stringify(raw, null, 2) + '\n')
+  const peek = state(legacy)
+  assert.strictEqual(peek.status, 0, 'test setup requires --state to run cleanly against a hand-seeded legacy v2 file: ' + peek.stderr)
+  assert.doesNotMatch(peek.stdout, /^EXPLORE$/m, 'D1: deriveState must never print EXPLORE for any status shape — an explore: "pending" legacy value must never route back into the retired taste-funnel state')
+  assert.doesNotMatch(peek.stdout, /^DESIGN$/m, 'D1: deriveState must never print DESIGN for any status shape — the design lock left genesis entirely, so no legacy value may derive the retired state name')
+  assert.strictEqual(peek.stdout, 'BRIEF\n', 'D6: a v2 file with menusDone true and no briefWritten mark must derive BRIEF regardless of any later legacy marks recorded — this legacy shape (explore: "pending", archetype past MENUS) has nowhere else valid to land')
 })
 
 test('AC-20260825-04-2: --mark discovery-done refuses a dark coverage key by name and accepts once every key is covered/n-a', () => {
   const dir = tmpdir('gdrv-ac2')
   bare(dir)
-  writeBrief(dir, { coverage: { residency: 'dark' } })
+  // D2: `discovery-done` also requires a `- archetype: <key>` ## Picks line — the archetype
+  // line is present in both fixtures below so the dark-coverage refusal actually exercises the
+  // coverage-audit gate this test pins, rather than being masked by D2's archetype refusal.
+  writeBrief(dir, { coverage: { residency: 'dark' }, picks: ['- archetype: data-ml'] })
   const refused = mark(dir, 'discovery-done')
   assert.strictEqual(refused.status, 2, 'a dark coverage key means the interview left a required question unasked — the mark must be refused, not silently accepted')
   assert.match(refused.stderr, /residency/, 'the refusal must name the dark key so the session knows exactly which question to ask next')
 
-  writeBrief(dir, { coverage: {} })
+  writeBrief(dir, { coverage: {}, picks: ['- archetype: data-ml'] })
   const accepted = mark(dir, 'discovery-done')
   assert.strictEqual(accepted.status, 0, 'a brief with every coverage key covered must be accepted: ' + accepted.stderr)
   const lines = accepted.stdout.trimEnd().split('\n')
-  assert.match(lines[lines.length - 1], /^✅ checkpoint — genesis state saved \(DISCOVERY → MENUS\); safe to \/clear/, 'the checkpoint line is the session\'s only signal that it is safe to /clear and re-invoke — losing it strands the session mid-context')
+  // D1: discovery-done now hands off to the new BRIEF state, not straight to MENUS — the
+  // checkpoint names the state it actually reached.
+  assert.match(lines[lines.length - 1], /^✅ checkpoint — genesis state saved \(DISCOVERY → BRIEF\); safe to \/clear/, 'the checkpoint line is the session\'s only signal that it is safe to /clear and re-invoke — losing it strands the session mid-context')
+
+  // D4: data-ml owes nothing beyond DISCOVERY, so brief-written is accepted immediately —
+  // this is the one intervening mark BRIEF adds between discovery-done and MENUS.
+  const briefWritten = mark(dir, 'brief-written')
+  assert.strictEqual(briefWritten.status, 0, 'D4: brief-written must be accepted immediately for data-ml, which owes no doctrine/mocks artifacts beyond discovery: ' + briefWritten.stderr)
 
   const next = bare(dir)
-  assert.match(next.stdout, /state: MENUS/, 'the very next bare invocation must re-derive MENUS from the recorded mark, or re-entry after /clear is broken')
+  assert.match(next.stdout, /state: MENUS/, 'the very next bare invocation must re-derive MENUS from the recorded marks, or re-entry after /clear is broken')
   const stepLines = next.stdout.split('\n').filter((l) => l.trim().length > 0)
   const stepHeadingIdx = stepLines.findIndex((l) => l.startsWith('## Step:'))
   assert.notStrictEqual(stepHeadingIdx, -1, 'every non-terminal state must print a ## Step: heading naming what the session does next')

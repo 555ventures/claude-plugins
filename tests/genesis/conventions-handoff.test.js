@@ -17,6 +17,12 @@ const { SPEC, tmpdir, runNode, gitRepo } = require('../helpers')
 // `baseProfile()` shape against a `gitRepo()` host generates green — the AC-4 fixture below
 // copies that exact profile shape and the host under test is `gitRepo()`-initialised throughout
 // this file, matching that spec's own `newHost()` pattern.
+//
+// specs/20260902/08-genesis-shrink-brief-state.md D1/D2/D4 (no new AC in this file, D12/File
+// Plan retarget): `advanceToDecide`'s shared archetype (data-ml) now names itself at
+// discovery-done and accepts `--mark brief-written` immediately before reaching MENUS — the one
+// fixture line the new BRIEF state, inserted between DISCOVERY and MENUS, requires of every test
+// in this file.
 
 const SCRIPT = 'scripts/genesis-driver.js'
 const DIM = 'hosting'
@@ -266,11 +272,18 @@ function validProfile() {
 // Drives a fresh gitRepo() host to DECIDE (archetype data-ml, non-visual, non-tournament, so
 // menus-done lands DECIDE directly — the same shortest path genesis-driver.test.js's own
 // advanceToDecide uses).
+//
+// specs/20260902/08-genesis-shrink-brief-state.md D1/D2/D4: discovery-done now requires the
+// archetype line up front, and the new BRIEF state sits between DISCOVERY and MENUS —
+// `--mark brief-written` is accepted immediately here since data-ml is one of the two
+// DESIGN_SKIPPED_ARCHETYPES that owe nothing beyond DISCOVERY.
 function advanceToDecide(dir) {
   bare(dir)
-  writeBrief(dir)
+  writeBrief(dir, { picks: ['- archetype: data-ml'] })
   const disco = mark(dir, 'discovery-done')
-  assert.strictEqual(disco.status, 0, 'test setup requires discovery-done to be accepted on a fully-covered brief: ' + disco.stderr)
+  assert.strictEqual(disco.status, 0, 'test setup requires discovery-done to be accepted on a fully-covered brief naming archetype data-ml: ' + disco.stderr)
+  const briefWritten = mark(dir, 'brief-written')
+  assert.strictEqual(briefWritten.status, 0, 'test setup requires brief-written to be accepted immediately for archetype data-ml (DESIGN_SKIPPED_ARCHETYPES owe nothing beyond DISCOVERY, D4): ' + briefWritten.stderr)
   writeHostingMenu(dir)
   const written = mark(dir, 'menu-written', 'interview-research/' + DIM + '.json')
   assert.strictEqual(written.status, 0, 'test setup requires menu-written to be accepted on a zero-package menu: ' + written.stderr)

@@ -3,7 +3,7 @@ name: logtail-byte-window-falsification
 description: Fixture + falsification recipe for pinning a "bound an excerpt by byte window, not line count" fix (genesis-driver.js logTail, 2026-08-26).
 metadata:
   type: feedback
-  reviewed: 2026-09-01
+  reviewed: 2026-09-03
 ---
 
 Pinning "an excerpt embedded in a script's own stdout must stay small even when the source file

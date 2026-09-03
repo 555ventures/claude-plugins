@@ -138,6 +138,26 @@
 //   - re-derive whether a mocks set was ever needed after DISCOVERY — that fact is fixed the
 //     moment discovery-done records `status.archetype`.
 //
+// specs/20260902/11-brief-from-approved-set.md D1-D5 (Behavior: Applicability — a fresh visual
+// run only, `status.brief.mocks` set; legacy and non-visual runs are untouched): `brief-written`
+// additionally requires brief.md's `## Journeys` to cover every design/mocks/seed.md journey and
+// label, and `## Non-UI Coverage`'s six closed keys to carry none dark or missing (D1); the
+// BRIEF step text prints the derivation sources (confirmed product ledger row ids, the seed's
+// journey count, unresolved notes) so the session writes the brief from the approved set, never
+// from the discovery interview alone (D2); the MENUS step text prints the seed's
+// primary-surface/platforms-horizon rows above an open `framework` dimension (D3);
+// `roadmap-written` additionally requires every seed-declared label to land in exactly one
+// brief's ```surfaces block (D4); `skeleton-landed` additionally requires design/shell/app.html
+// to pass `check`, every top-level design/mocks/*.html to declare `data-shell`,
+// `check --matrix design/mocks` to exit 0, and design/components.json to name every
+// design/mocks/canon.md primitive (D5).
+//
+// What the D1-D5 additions deliberately do NOT do:
+//   - author brief.md's prose, the shell canon, or the component manifest — those stay session
+//     judgment; the driver only closes each mark once the artifacts exist and cover the seed.
+//   - run `design-atlas.js shell adopt --apply` itself — SKELETON's step text instructs the
+//     session to run it; `skeleton-landed` only verifies its result.
+//
 // Fixing that overflow only at the child's own capture is insufficient: `logTail`, which builds the
 // SCAFFOLD_RED/GATE_RED excerpt embedded in the driver's OWN stdout, bounds its excerpt by BYTES,
 // not lines (`text.split('\n').slice(-n)` cannot: a caller's buffer is measured in bytes). A single
@@ -164,6 +184,10 @@ const path = require('path')
 const { spawnSync } = require('child_process')
 const { CONFIG_RELPATH } = require('./lib/host-config')
 const mocksLedgerLib = require('./lib/mocks-ledger')
+// specs/20260902/11-brief-from-approved-set.md D2: the BRIEF step text's "notes unresolved"
+// derivation source reads design/mocks/notes.json through the same validated reader
+// design-atlas.js's serve endpoints and mocks-driver.js's `notes` subcommands share.
+const mocksNotesLib = require('./lib/mocks-notes')
 
 // The 64 KiB process.exit stdout truncation this synchronous writer avoids is explained in full
 // at spec/scripts/lib/driver-io.js's writeOut.
@@ -282,8 +306,11 @@ function section(text, name) {
   return next === -1 ? rest : rest.slice(0, next)
 }
 
-function parseCoverage(text) {
-  const sec = section(text, 'Coverage')
+// specs/20260902/11-brief-from-approved-set.md Assumption A4: the `covered|dark|n/a` line
+// grammar is shared by ## Coverage and ## Non-UI Coverage — one parser, parameterized by
+// section name, never a second copy of the regex.
+function parseKeyedSection(text, sectionName) {
+  const sec = section(text, sectionName)
   const keys = {}
   const unparseable = []
   if (sec === null) return { keys, unparseable }
@@ -296,6 +323,8 @@ function parseCoverage(text) {
   }
   return { keys, unparseable }
 }
+
+function parseCoverage(text) { return parseKeyedSection(text, 'Coverage') }
 
 function parseOpenDimensions(text) {
   const sec = section(text, 'Open Dimensions')
@@ -331,6 +360,168 @@ function allDimensionKeys() { return Object.keys(openDimensions()) }
 function openDimensionKeys() { const d = openDimensions(); return Object.keys(d).filter((k) => d[k] === 'open') }
 function picks() { const t = briefText(); return t === null ? {} : parsePicks(t) }
 function hasMenuFile(key) { return fs.existsSync(path.join(genesisDir, 'interview-research', key + '.json')) }
+
+// ---------------------------------------------------------------------------
+// specs/20260902/11-brief-from-approved-set.md D1-D3: design/mocks/seed.md and
+// design/mocks/ledger.md readers shared by BRIEF's journey/coverage derivation (D1/D2), MENUS'
+// framework pricing print (D3), and ROADMAP's journey-placement check (D4).
+// ---------------------------------------------------------------------------
+function seedPath() { return path.join(root, 'design/mocks/seed.md') }
+function seedText() { try { return fs.readFileSync(seedPath(), 'utf8') } catch (e) { return null } }
+
+// Assumption A1: design-atlas.js's own `parseSeedJourneys` is not exported (a plain CLI
+// entrypoint, no module.exports) — duplicated here rather than adding a require-time coupling
+// to a script this file's own conventions forbid importing as a library. Same tiny grammar:
+// `### <journey-kebab>` header, first non-blank line is the persona, a ```surfaces fenced block
+// whose lines are a bare label or an `a -> b` edge (both ends declare a label).
+function parseSeedJourneysLocal(text) {
+  const journeys = new Map() // kebab -> {persona, labels}
+  if (text === null) return journeys
+  const stripped = text.replace(/<!--[\s\S]*?-->/g, '')
+  const starts = []
+  const re = /^### ([a-z0-9-]+)\s*$/gm
+  let m
+  while ((m = re.exec(stripped))) starts.push({ name: m[1], index: m.index, headerEnd: m.index + m[0].length })
+  for (let i = 0; i < starts.length; i++) {
+    const body = stripped.slice(starts[i].headerEnd, i + 1 < starts.length ? starts[i + 1].index : stripped.length)
+    let persona = ''
+    for (const l of body.split('\n')) { if (l.trim()) { persona = l.trim(); break } }
+    const surf = body.match(/```surfaces\n([\s\S]*?)```/)
+    const labels = []
+    if (surf) {
+      for (const raw of surf[1].split('\n')) {
+        const line = raw.trim()
+        if (!line || line.startsWith('#')) continue
+        const edge = line.split('->').map((s) => s.trim())
+        if (edge.length === 2 && edge[0] && edge[1]) {
+          for (const l of edge) if (!labels.includes(l)) labels.push(l)
+        } else if (/^[\w][\w-]*$/.test(line) && !labels.includes(line)) {
+          labels.push(line)
+        }
+      }
+    }
+    journeys.set(starts[i].name, { persona, labels })
+  }
+  return journeys
+}
+function seedJourneysMap() { return parseSeedJourneysLocal(seedText()) }
+
+// design/mocks/seed.md's `## Facts` section: `- <key>: <value>` lines (D3 reads
+// `primary-surface`/`platforms-horizon`, whose value is a product ledger row id).
+function seedFacts() {
+  const t = seedText()
+  const sec = t === null ? null : section(t, 'Facts')
+  const facts = {}
+  if (sec === null) return facts
+  for (const raw of sec.split('\n')) {
+    const line = raw.trim()
+    if (!line) continue
+    const m = line.match(/^- ([a-z0-9-]+):\s*(.+)$/)
+    if (m) facts[m[1]] = m[2].trim()
+  }
+  return facts
+}
+
+// D2: every confirmed said-by-user/ratified-doc product row — the derivation sources the BRIEF
+// step text must list by id, never the discovery interview alone. Read/parse failure degrades
+// to [] (the step text falls back to "none"), never a throw.
+function confirmedProductRows() {
+  let text
+  try { text = fs.readFileSync(mocksLedgerPath(), 'utf8') } catch (e) { return [] }
+  const ledger = mocksLedgerLib.parseLedger(text)
+  if (ledger.errors.length) return []
+  return ledger.assumptions
+    .filter((r) => r.kind === 'product' && r.status === 'confirmed' &&
+      (r.tag === 'said-by-user' || r.tag === 'ratified-doc'))
+    .map((r) => ({ id: r.id, claim: r.claim, tag: r.tag }))
+}
+
+// D3: look up one product ledger row by id (the seed's primary-surface/platforms-horizon facts
+// name a row id, not a claim — the MENUS step reads the claim text off the ledger itself).
+function productRowById(id) {
+  let text
+  try { text = fs.readFileSync(mocksLedgerPath(), 'utf8') } catch (e) { return null }
+  const ledger = mocksLedgerLib.parseLedger(text)
+  if (ledger.errors.length) return null
+  return ledger.assumptions.find((r) => r.id === id) || null
+}
+
+// D1: does brief.md's own ## Journeys section cover every seed journey and every one of its
+// labels? Walked in seed-file order so the refusal names the FIRST offender (Contracts: "the
+// first missing journey").
+function briefJourneysCheck(text, seedJourneys) {
+  const sec = section(text, 'Journeys') || ''
+  for (const [name, j] of seedJourneys) {
+    const re = new RegExp('^### ' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$', 'm')
+    const m = re.exec(sec)
+    if (!m) return { ok: false, reason: 'missing-journey', journey: name }
+    const rest = sec.slice(m.index + m[0].length)
+    const next = rest.search(/^### /m)
+    const block = next === -1 ? rest : rest.slice(0, next)
+    for (const label of j.labels) {
+      const lre = new RegExp('\\b' + label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b')
+      if (!lre.test(block)) return { ok: false, reason: 'missing-label', label, journey: name }
+    }
+  }
+  return { ok: true }
+}
+
+// D1: ## Non-UI Coverage's six closed keys, none dark or missing — Assumption A4's
+// parameterized reuse of ## Coverage's own grammar.
+const NON_UI_COVERAGE_KEYS = ['jobs', 'notifications', 'retention', 'integrations', 'admin', 'pricing']
+function briefNonUiCheck(text) {
+  const { keys } = parseKeyedSection(text, 'Non-UI Coverage')
+  const missing = NON_UI_COVERAGE_KEYS.filter((k) => !(k in keys) || keys[k] === 'dark')
+  return { missing }
+}
+
+// D4: every seed-declared label placed in exactly one brief's ```surfaces block. A local
+// duplicate of design-atlas.js's `parseSurfaces` grammar (Assumption A1 — same reasoning as
+// parseSeedJourneysLocal above: no module.exports to import), extended to track EVERY brief
+// declaring a label (design-atlas.js's own version keeps only the first) since D4 must also
+// catch a double-placement, not just an absence.
+function parseSurfacesPlacementLocal(roadmapDir) {
+  const byLabel = new Map() // label -> [brief file name, ...]
+  let files = []
+  try { files = fs.readdirSync(roadmapDir).sort().filter((f) => f.endsWith('.md')) } catch (e) { files = [] }
+  for (const f of files) {
+    const text = fs.readFileSync(path.join(roadmapDir, f), 'utf8')
+    const seenInFile = new Set()
+    for (const m of text.matchAll(/```surfaces\n([\s\S]*?)```/g)) {
+      for (const raw of m[1].split('\n')) {
+        const line = raw.trim()
+        if (!line || line.startsWith('#')) continue
+        const edge = line.split('->').map((s) => s.trim())
+        const labels = (edge.length === 2 && edge[0] && edge[1]) ? edge
+          : (/^[\w][\w-]*$/.test(line) ? [line] : [])
+        for (const l of labels) {
+          if (seenInFile.has(l)) continue
+          seenInFile.add(l)
+          if (!byLabel.has(l)) byLabel.set(l, [])
+          byLabel.get(l).push(f)
+        }
+      }
+    }
+  }
+  return byLabel
+}
+
+function journeyPlacementCheck() {
+  const seedJourneys = seedJourneysMap()
+  const seedLabels = []
+  const seen = new Set()
+  for (const [, j] of seedJourneys) {
+    for (const l of j.labels) { if (!seen.has(l)) { seen.add(l); seedLabels.push(l) } }
+  }
+  const byLabel = parseSurfacesPlacementLocal(path.join(root, 'docs/roadmap'))
+  const unplaced = seedLabels.filter((l) => !byLabel.has(l) || byLabel.get(l).length === 0)
+  if (unplaced.length) return { ok: false, reason: 'unplaced', labels: unplaced }
+  for (const l of seedLabels) {
+    const files = byLabel.get(l)
+    if (files.length > 1) return { ok: false, reason: 'double', label: l, files }
+  }
+  return { ok: true }
+}
 
 // D4: on registryExit === 1 the step re-print names the dropped labels, read from the menu
 // file's `droppedForCurrency` (registry-check.js --write's shape: [{label, packages: [...]}]).
@@ -551,6 +742,30 @@ function handleBriefWritten() {
       }
     }
     mocksStatus = check.status
+
+    // specs/20260902/11-brief-from-approved-set.md D1: the brief is generated from the
+    // approved set, not from memory — ## Journeys must cover every seed journey and label, and
+    // ## Non-UI Coverage must carry none dark or missing. Applies only to a fresh visual run
+    // (Behavior: Applicability) — the `legacy`/`isVisualArchetype` guard above already scopes
+    // this whole block to that condition.
+    const text = briefText() || ''
+    const jCheck = briefJourneysCheck(text, seedJourneysMap())
+    if (!jCheck.ok) {
+      if (jCheck.reason === 'missing-journey') {
+        die('## Journeys is missing journey ' + jCheck.journey + ' — add a `### ' + jCheck.journey +
+          '` block (persona line, the seed\'s surfaces block verbatim, one states: line per screen), ' +
+          'then re-mark brief-written')
+      }
+      if (jCheck.reason === 'missing-label') {
+        die('label ' + jCheck.label + ' (journey ' + jCheck.journey + ') is missing from ## Journeys' +
+          ' — add it to the `### ' + jCheck.journey + '` block, then re-mark brief-written')
+      }
+    }
+    const nCheck = briefNonUiCheck(text)
+    if (nCheck.missing.length) {
+      die('## Non-UI Coverage key(s) dark or missing: ' + nCheck.missing.join(', ') +
+        ' — answer them, in the user\'s words, then re-mark brief-written')
+    }
   }
 
   // specs/20260902/08-genesis-shrink-brief-state.md D4: DESIGN_SKIPPED_ARCHETYPES
@@ -1313,6 +1528,59 @@ function handleSkeletonLanded() {
       die('components-check.js failed for design/components.json: ' + (r.stdout || r.stderr || '').trim())
     }
   }
+  // specs/20260902/11-brief-from-approved-set.md D5: on a fresh visual run (status.brief.mocks
+  // set — Behavior: Applicability), the shell canon and the component inventory must be
+  // EXTRACTED from the composed set: design/shell/app.html passes `check`, every top-level
+  // design/mocks/*.html declares data-shell, `check --matrix design/mocks` exits 0, and
+  // design/components.json carries an entry for every canon.md primitive. Runs after the
+  // pre-existing components.json existence/duplicate-name check above so a missing manifest is
+  // still reported by that check's own message, never masked by this block's primitive-coverage
+  // read of the same file.
+  if (status.brief && status.brief.mocks) {
+    const designAtlasBin = path.join(__dirname, 'design-atlas.js')
+    const shellHtmlPath = path.join(root, 'design/shell/app.html')
+    if (!fs.existsSync(shellHtmlPath)) {
+      die('design/shell/app.html does not exist — author it from the densest composed screen, then run design-atlas.js shell adopt --apply')
+    }
+    const shellCheck = runChild(process.execPath, [designAtlasBin, 'check', shellHtmlPath],
+      { encoding: 'utf8' }, 'design-atlas.js check (design/shell/app.html)')
+    if (shellCheck.status !== 0) {
+      die('design/shell/app.html failed design-atlas.js check: ' + (shellCheck.stdout || shellCheck.stderr || '').trim())
+    }
+
+    const mocksDirPath = path.join(root, 'design/mocks')
+    let mockFiles = []
+    try { mockFiles = fs.readdirSync(mocksDirPath).filter((f) => f.endsWith('.html')) } catch (e) { mockFiles = [] }
+    const undeclared = mockFiles.filter((f) => !/data-shell\s*=\s*"[^"]*"/.test(fs.readFileSync(path.join(mocksDirPath, f), 'utf8')))
+    if (undeclared.length) {
+      die('mock(s) without data-shell: ' + undeclared.join(', ') + ' — run design-atlas.js shell adopt --apply, then re-mark skeleton-landed')
+    }
+
+    const matrixCheck = runChild(process.execPath, [designAtlasBin, 'check', '--matrix', mocksDirPath],
+      { encoding: 'utf8' }, 'design-atlas.js check --matrix (design/mocks)')
+    if (matrixCheck.status !== 0) {
+      die('design-atlas.js check --matrix design/mocks failed: ' + (matrixCheck.stdout || matrixCheck.stderr || '').trim())
+    }
+
+    let canonText = null
+    try { canonText = fs.readFileSync(path.join(root, 'design/mocks/canon.md'), 'utf8') } catch (e) { canonText = null }
+    if (canonText !== null) {
+      const primSec = section(canonText, 'Primitives') || ''
+      const primitives = []
+      for (const raw of primSec.split('\n')) {
+        const m = raw.trim().match(/^-\s+\*\*(.+?)\*\*/)
+        if (m) primitives.push(m[1])
+      }
+      let manifest = []
+      try { manifest = JSON.parse(fs.readFileSync(componentsJsonPath(), 'utf8')) } catch (e) { manifest = [] }
+      const manifestNames = new Set((Array.isArray(manifest) ? manifest : []).map((c) => c && c.name))
+      const missingPrimitives = primitives.filter((p) => !manifestNames.has(p))
+      if (missingPrimitives.length) {
+        die('components.json is missing primitive(s) from canon.md: ' + missingPrimitives.join(', ') +
+          ' — add them, then re-mark skeleton-landed')
+      }
+    }
+  }
   status.marks.skeletonLanded = true
   saveStatus()
   const g = runGateIfDue()
@@ -1438,6 +1706,23 @@ function handleRoadmapWritten() {
     }
     if (check.reason === 'cycle') {
       die('docs/roadmap has a Depends-on cycle: ' + check.detail.join(' -> ') + ' — break the cycle, then re-mark roadmap-written')
+    }
+  }
+  // specs/20260902/11-brief-from-approved-set.md D4: on a fresh visual run (status.brief.mocks
+  // set — Behavior: Applicability; legacy and non-visual runs see none of this), every seed
+  // label must land in exactly one brief's ```surfaces block — the atlas's gap/orphan badges
+  // then mean what they say from day one.
+  if (status.brief && status.brief.mocks) {
+    const pc = journeyPlacementCheck()
+    if (!pc.ok) {
+      if (pc.reason === 'unplaced') {
+        die('seed label(s) not placed in any brief\'s surfaces block: ' + pc.labels.join(', ') +
+          ' — add each to a brief\'s ```surfaces block, then re-mark roadmap-written')
+      }
+      if (pc.reason === 'double') {
+        die('seed label(s) placed in two briefs: ' + pc.label + ' (' + pc.files.join(', ') + ')' +
+          ' — remove it from every brief but one, then re-mark roadmap-written')
+      }
     }
   }
   status.marks.roadmapWritten = true
@@ -1702,6 +1987,21 @@ const STEPS = {
       }
       if (rec.registryExit === 3) lines.push('⚠️ unverified: ' + k + ' (registry unreachable — options kept, currency unconfirmed)')
     }
+    // specs/20260902/11-brief-from-approved-set.md D3: for a fresh visual run
+    // (status.brief.mocks set — never a legacy or non-visual run, Behavior: Applicability) with
+    // `framework` still open, print the seed's primary-surface/platforms-horizon rows above the
+    // framework dimension and the literal pricing instruction — the framework pick must be priced
+    // against a second platform the seed already knows is coming, not decided blind to it.
+    if (status.brief && status.brief.mocks && openKeys.includes('framework')) {
+      const facts = seedFacts()
+      const psRow = facts['primary-surface'] ? productRowById(facts['primary-surface']) : null
+      const phRow = facts['platforms-horizon'] ? productRowById(facts['platforms-horizon']) : null
+      if (psRow) lines.push('seed: primary-surface (' + psRow.id + ') — ' + psRow.claim)
+      if (phRow) lines.push('seed: platforms-horizon (' + phRow.id + ') — ' + phRow.claim)
+      if (psRow || phRow) {
+        lines.push('price every framework option against these two rows (research contextPaths include design/mocks/seed.md)')
+      }
+    }
     lines.push('Then:\n  node ' + __filename + ' --root ' + root + ' --mark menu-written --file <menu.json>' +
       '\n  node ' + __filename + ' --root ' + root + ' --mark menus-done')
     return lines.join('\n')
@@ -1770,6 +2070,19 @@ const STEPS = {
     if (visual) {
       lines.push('mocks: APPROVED · journeys: ' + journeys + ' · directions composed: ' +
         (directions.join(', ') || 'none') + ' (picked: ' + (theme || 'none') + ') · open product rows: 0')
+      // D2: the derivation sources for `## What I think you're building` and the two new
+      // sections — every confirmed product ledger row by id, and the seed's own journey count —
+      // read from the seed and the ledger, never from the discovery interview alone.
+      const productRows = confirmedProductRows()
+      const seedCount = seedJourneysMap().size
+      let notesUnresolved = 0
+      try {
+        notesUnresolved = mocksNotesLib.readNotes(root).filter((n) => n && n.status !== 'resolved').length
+      } catch (e) { notesUnresolved = 0 }
+      lines.push('derived from: product ledger row(s) ' +
+        (productRows.length ? productRows.map((r) => r.id).join(', ') : 'none') +
+        ' · seed journeys: ' + seedCount + ' · notes unresolved: ' + notesUnresolved +
+        ' — write ## What I think you\'re building, ## Journeys, and ## Non-UI Coverage from these, never from the interview alone')
     }
     lines.push('Write docs/design/doctrine.md (one page, ## Dissents naming: ' + dissentsClause +
       ') and .claude/genesis/design-rules.json, then:')

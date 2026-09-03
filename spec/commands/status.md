@@ -57,7 +57,11 @@ thing the script can't: narration.
    exist. Tags worth knowing: `[design]` routes through `/spec:design` first; `[designed]`
    means that stage already ran and the Next line is `/spec:run`; `⛓ serial`
    runner-ups must wait for the main lane (the script names why), `⚡` lanes are safe to run
-   concurrently in separate worktrees via `/git:enter-worktree`.
+   concurrently in separate worktrees via `/git:enter-worktree`. A `🧭 misunderstandings:
+   {N} caught before build (latest {id} at {step})` line, printed directly under the 🗺️
+   Roadmap block, is a read-only pipeline-record count of `design/mocks/ledger.md` catches —
+   it prints only when the ledger exists with ≥1 catch, and it is display only, never a
+   verdict.
 2. **Anomalies** — the dashboard folds any anomaly about a spec that already has a 🎯 Next
    line onto that line as a trailing `⚠️ kind` tag; only the rest get bottom-section lines.
    Narrate the ⚠️-tagged lines and each remaining `[kind]` line in plain language with its

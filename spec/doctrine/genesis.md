@@ -174,6 +174,22 @@ additionally requires `design/components.json` to exist and `components-check.js
 the session seeds this manifest at SKELETON from the approved set's primitives, until spec 11's
 extraction lands.
 
+**Brief generation is derived, never guessed (specs/20260902/11 D1–D2).** On a fresh run
+that owes a mocks set, `.claude/genesis/brief.md` gains two sections after `## Picks`:
+`## Journeys` (one `### <journey>` block per seed journey — persona line, the seed's
+`surfaces` block copied verbatim, and one `states:` line per screen naming its
+`data-state-btn` names) and `## Non-UI Coverage` (`- <key>: covered|n/a — <one line>` for the
+six closed keys `jobs notifications retention integrations admin pricing`). `--mark
+brief-written` refuses when any seed journey or label is missing from `## Journeys`, or any
+Non-UI Coverage key is missing or still `dark` — the checklist is the counter to "polished
+prototypes drop the screen-less facts": a fact with no screen still owes a line. The BRIEF
+step text prints the derivation sources the session writes `## What I think you're building`
+from — every confirmed `product` ledger row (`said-by-user`/`ratified-doc`) with its id, the
+journey and label counts, and the `notes.json` unresolved count — so a fact the brief states
+is a row the user already confirmed, never a restatement of the discovery interview alone.
+Legacy runs (`brief.legacy: true`) and archetypes that never owe a mocks set see none of
+these refusals.
+
 ## Genesis: Tournament of Scaffolds
 
 Between `MENUS` and `DECIDE`, **tournament archetypes** (`web-app`, `realtime-trading`,
@@ -473,6 +489,19 @@ Land the test + CI skeleton — the enforcement half of the ops ADR, day zero:
   ≤150-line file naming the gate command and the test tree, the primary artifact a fresh agent
   actually reads.
 
+**Shell and inventory extraction (specs/20260902/11 D5, fresh mocks-set runs only).** The
+SKELETON step text instructs the session to author `design/shell/app.html` + `app.css` from
+the seed's `## Dense screen` — the densest composed screen's chrome — and then run
+`design-atlas.js shell adopt --apply` over `design/mocks/` to stamp every mock with the
+extracted shell (brief 20's mechanism, now fed from extraction instead of authored blind at
+day zero; ADR-0006 reverses ADR-0003's bootstrap order). `--mark skeleton-landed` additionally
+requires: `design/shell/app.html` exists and passes `check`; every top-level
+`design/mocks/*.html` declares `data-shell`; `design-atlas.js check --matrix design/mocks`
+exits 0; and `design/components.json` carries one entry named for every primitive bullet in
+`design/mocks/canon.md ## Primitives` (`components-check.js` exit 0, § Genesis: Brief State's
+components check). Each refusal names the exact missing item — the file, the un-stamped mock,
+or the missing primitive — never a generic "extraction incomplete".
+
 ## Genesis: Conventions Probe Suite
 
 The ops-conventions table (§ Genesis: Ops Conventions ADR) stops being a paragraph nobody
@@ -581,6 +610,17 @@ written against real code. Never pre-plan the whole roadmap into specs.
    ≥1 brief's Grounding or is genuinely cross-cutting (note which); no two briefs claim the same
    scope; each milestone gate is satisfiable by the briefs sequenced before it; brief 01 depends
    on nothing and is plannable immediately after `/spec:init` + `/spec:enforce`.
+
+**Journey placement (specs/20260902/11 D4, fresh mocks-set runs only).** Decomposition
+derives from `design/mocks/seed.md`'s journeys: the ROADMAP step text lists journeys →
+suggested brief slices, one brief per journey by default, splitting a journey whose Scope
+exceeds a page. `--mark roadmap-written` additionally requires every label `seed.md` declares
+to appear in **exactly one brief**'s `## Surfaces` block — a label placed in zero briefs is
+unplaced scope, a label placed in two is duplicated scope, and both refuse by name. An extra
+label a brief declares that no journey names is allowed (new scope discovered while slicing);
+only a seed-declared label is checked for placement. This is what makes the design atlas's
+gap/orphan badges mean what they say from day one, instead of drifting the moment a journey's
+screens land in the wrong brief.
 
 ## Genesis: On-disk Handoff (the genesis artifacts)
 

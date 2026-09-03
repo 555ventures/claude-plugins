@@ -37,3 +37,15 @@
   `- archetype: <key>` line, `<key>` one of the eight registry keys: `web-app` `mobile-app`
   `conversational-bot` `backend-api` `realtime-trading` `cli-devtool` `data-ml`
   `desktop-app` (genesis.md § Genesis: Archetype Registry) }
+
+## Journeys
+{ generated from design/mocks/seed.md — one block per journey, machine-read by genesis-driver.js:
+  `### <journey>` · persona line · the seed's ```surfaces block verbatim · one `states: <label>: a, b, c` line per screen }
+
+## Non-UI Coverage
+- jobs: dark
+- notifications: dark
+- retention: dark
+- integrations: dark
+- admin: dark
+- pricing: dark

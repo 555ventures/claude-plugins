@@ -1,6 +1,7 @@
 ---
 date: 2026-09-02
-status: hardened
+status: implementing
+build_base: main
 tier: critical             # spec-status.js is a frozen-API critical surface (pipeline rules § Risk Tiers)
 area: genesis
 design: false
@@ -9,6 +10,7 @@ depends_on: [specs/20260902/08-genesis-shrink-brief-state.md, specs/20260902/10-
 depended_on_by: []
 brief: 22
 open_markers: 0
+diff_base: 55883225efa714d1cddecfe257c88cc27d50b19b
 ---
 
 # Brief from the approved set, roadmap from the journeys, shell and inventory extracted
@@ -53,6 +55,7 @@ with a refusal that names the missing item.
 | tests/genesis/genesis-driver.test.js | MODIFY | tests | AC-20260902-11-4, AC-20260902-11-5, AC-20260902-11-12, AC-20260902-11-13 |
 | tests/spec-status.test.js | MODIFY | tests | AC-20260902-11-6, AC-20260902-11-7 |
 | tests/consistency/genesis-doctrine.test.js | MODIFY | tests | AC-20260902-11-1 (template headings pin → eight), AC-20260902-11-8, AC-20260902-11-9 |
+| tests/genesis/tournament.test.js | MODIFY | tests | Build-time row (orchestrator): `raceWebApp`/`ratifyBriefArtifacts` fixture gains `## Journeys` + `## Non-UI Coverage` so AC-20260902-08-8/-15 stay green under D1 — the lock closure waived this file on a premise that was false |
 
 ## Contracts
 

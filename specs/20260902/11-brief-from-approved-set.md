@@ -1,6 +1,7 @@
 ---
 date: 2026-09-02
-status: hardened
+status: done
+build_base: main
 tier: critical             # spec-status.js is a frozen-API critical surface (pipeline rules § Risk Tiers)
 area: genesis
 design: false
@@ -9,6 +10,7 @@ depends_on: [specs/20260902/08-genesis-shrink-brief-state.md, specs/20260902/10-
 depended_on_by: []
 brief: 22
 open_markers: 0
+diff_base: 55883225efa714d1cddecfe257c88cc27d50b19b
 ---
 
 # Brief from the approved set, roadmap from the journeys, shell and inventory extracted
@@ -53,6 +55,7 @@ with a refusal that names the missing item.
 | tests/genesis/genesis-driver.test.js | MODIFY | tests | AC-20260902-11-4, AC-20260902-11-5, AC-20260902-11-12, AC-20260902-11-13 |
 | tests/spec-status.test.js | MODIFY | tests | AC-20260902-11-6, AC-20260902-11-7 |
 | tests/consistency/genesis-doctrine.test.js | MODIFY | tests | AC-20260902-11-1 (template headings pin → eight), AC-20260902-11-8, AC-20260902-11-9 |
+| tests/genesis/tournament.test.js | MODIFY | tests | Build-time row (orchestrator): `raceWebApp`/`ratifyBriefArtifacts` fixture gains `## Journeys` + `## Non-UI Coverage` so AC-20260902-08-8/-15 stay green under D1 — the lock closure waived this file on a premise that was false |
 
 ## Contracts
 
@@ -221,6 +224,27 @@ shapes are pinned unchanged by AC-7; `genesis-driver.js` `executes` hits
 `spec/scripts/components-check.js`'s header comment ("Callers: the genesis design state's
 `rules-locked` mark") is retargeted to `skeleton-landed` as an orchestrator duty alongside
 D5 — a comment edit, out of the table on purpose (§ Gotchas: name the file, not an ID).
+
+Build and review record (2026-09-03, deviations folded as one-offs — both classes below already
+carry a § Gotchas entry, so no new entry is owed):
+
+- `main` moved under the worktree (specs/20260903/01 merged at plugin 7.70.0) after the branch
+  forked; red-check refused the impure pre-image on `plugin.json`. The branch had no commits,
+  so it was fast-forwarded to main and `diff_base` re-pinned to 55883225 (the true pre-image).
+  D8's 7.65.0 target was stale; the build bumped to the next free version, 7.71.0.
+- D1/D5 applied literally reddened five pre-existing shared fixtures across three test files
+  (`writeValidBriefArtifacts`, `advanceToRoadmapVisual`, `ratifyBriefArtifacts`) that predate
+  the new sections and shell artifacts, including `tests/genesis/tournament.test.js`, which the
+  lock-time collision closure above waived on the claim that it never sets `brief.mocks` — its
+  `raceWebApp` fixture does. That file entered the File Plan as a build-time tests row
+  (auto-picked as the conservative option under core § Question Style); every fixture was
+  extended, never weakened, and the D5 fixture was scoped to `advanceToRoadmapVisual` rather
+  than the shared `advanceToSkeletonVisual` because AC-20260902-11-5 varies that helper's
+  shell per sub-case. `check --matrix` refuses an empty `design/mocks/` outright, so the
+  AC-20260902-08-14 fixture also gained one data-shell mock. Suite 1044/1044 after one repair
+  round.
+- Review: one survivor (this section's `components-check.js` header retarget had not landed);
+  dispositioned fix, applied, fix-delta pass CLEAN.
 
 ## Canonical Delta
 

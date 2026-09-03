@@ -232,11 +232,175 @@ function writeRoadmap(dir, briefs) {
     writeFile(path.join(dir, 'docs/roadmap', b.name), `# ${b.name}
 
 Phase: P0 · Depends on: ${b.dependsOn}
-
+${b.surfaces ? '\n```surfaces\n' + b.surfaces.join('\n') + '\n```\n' : ''}
 ## Result
 Something observable.
 `)
   }
+}
+
+// ---------------------------------------------------------------------------
+// specs/20260902/11-brief-from-approved-set.md D4/D5: journey placement (roadmap-written) and
+// shell/component extraction (skeleton-landed) both apply only to a fresh visual run (Behavior:
+// gated on status.brief.mocks being set) — genesis-driver.test.js's own advanceToMenus/
+// advanceToDecide default to the non-visual archetype data-ml (D15 orchestrator ruling, see the
+// header comment above), so a dedicated visual-archetype chain is built here, file-local (not
+// shared with tests/genesis/brief-state.test.js's own near-identical helpers, per that file's
+// own header comment on the same constraint).
+// ---------------------------------------------------------------------------
+function writeMocksStatusVisual(dir, { directions = { quiet: { composed: '2026-09-01T00:00:00.000Z' } }, theme = 'quiet' } = {}) {
+  writeJSON(path.join(dir, 'design/mocks/status.json'), { schemaVersion: 1, state: 'APPROVED', journeys: {}, directions, theme })
+}
+
+function writeOpenLedger(dir) {
+  writeFile(path.join(dir, 'design/mocks/ledger.md'), [
+    '# Provenance ledger — test project', '', '## Assumptions', '',
+    '| id | step | kind | claim | tag | status | rejected | dependents | note |',
+    '| - | - | - | - | - | - | - | - | - |',
+    '', '## Misunderstandings', '',
+    '| id | what | step | cost | note |', '| - | - | - | - | - |', '',
+  ].join('\n'))
+}
+
+function writeDesignDoctrine(dir, dissentsBody) {
+  writeFile(path.join(dir, 'docs/design/doctrine.md'), '# Design doctrine\n\n## Dissents\n' + dissentsBody + '\n')
+}
+
+function writeVisualDesignRules(dir) {
+  writeJSON(path.join(dir, '.claude/genesis/design-rules.json'), { rules: [] })
+}
+
+function writeVisualTokens(dir) {
+  writeFile(path.join(dir, 'design/tokens.css'), ':root { --brand: #123; }\n')
+}
+
+// design/mocks/seed.md's `### <journey-kebab>` grammar (design-atlas.js's parseSeedJourneys) —
+// see tests/genesis/brief-state.test.js's own near-identical writeSeed for the same grammar,
+// duplicated here per that file's own file-locality comment.
+function writeSeedJourneys(dir, journeys) {
+  const blocks = journeys.map((j) => {
+    const surf = j.labels.map((l, i) => (i === 0 ? l : `${j.labels[i - 1]} -> ${l}`)).slice(1)
+    const first = j.labels.length ? j.labels[0] : ''
+    return `### ${j.name}\n${j.persona}\n\`\`\`surfaces\n${first ? first + '\n' : ''}${surf.join('\n')}\n\`\`\`\n`
+  }).join('\n')
+  writeFile(path.join(dir, 'design/mocks/seed.md'), `# Seed — test product
+
+## Product
+Synthetic product for genesis-driver.test.js.
+
+## Facts
+- primary-surface: P1
+
+## References
+- none
+
+## Journeys
+${blocks}
+## Dense screen
+- ${journeys[0] && journeys[0].labels[0]}
+`)
+}
+
+function briefJourneysSectionFor(journeys) {
+  return journeys.map((j) => {
+    const surf = j.labels.map((l, i) => (i === 0 ? l : `${j.labels[i - 1]} -> ${l}`)).slice(1)
+    const first = j.labels.length ? j.labels[0] : ''
+    const states = j.labels.map((l) => `states: ${l}: default`).join('\n')
+    return `### ${j.name}\n${j.persona}\n\`\`\`surfaces\n${first ? first + '\n' : ''}${surf.join('\n')}\n\`\`\`\n${states}\n`
+  }).join('\n')
+}
+
+const NON_UI_KEYS_GD = ['jobs', 'notifications', 'retention', 'integrations', 'admin', 'pricing']
+function briefNonUiSectionFor() {
+  return NON_UI_KEYS_GD.map((k) => `- ${k}: covered — synthetic test note`).join('\n')
+}
+
+function writeVisualBrief(dir, { journeys }) {
+  writeFile(path.join(dir, '.claude/genesis/brief.md'), `# Discovery brief — test project
+
+## What I think you're building
+A synthetic project for genesis-driver.test.js.
+
+## Coverage
+${COVERAGE_KEYS.map((k) => `- ${k}: covered — synthetic test value`).join('\n')}
+
+## Non-goals
+none
+
+## Open Dimensions
+none
+
+## Research Angles
+none — synthetic host, no research needed.
+
+## Picks
+- archetype: web-app
+
+## Journeys
+${briefJourneysSectionFor(journeys)}
+
+## Non-UI Coverage
+${briefNonUiSectionFor()}
+`)
+}
+
+// Drives a fresh visual (web-app) run through DISCOVERY/BRIEF/MENUS/DECIDE/SCAFFOLD, stopping
+// right before `--mark skeleton-landed` so callers can vary the D5 shell/mocks/canon fixtures
+// (or skip straight to ROADMAP via advanceToRoadmapVisual below, for callers that don't care).
+function advanceToSkeletonVisual(dir, journeys) {
+  bare(dir)
+  writeVisualBrief(dir, { journeys })
+  const disco = mark(dir, 'discovery-done')
+  assert.strictEqual(disco.status, 0, 'test setup requires discovery-done to be accepted for web-app: ' + disco.stderr)
+  writeMocksStatusVisual(dir)
+  writeOpenLedger(dir)
+  writeSeedJourneys(dir, journeys)
+  writeDesignDoctrine(dir, 'No minority direction rejected — synthetic fixture.')
+  writeVisualDesignRules(dir)
+  writeVisualTokens(dir)
+  const bw = mark(dir, 'brief-written')
+  assert.strictEqual(bw.status, 0, 'test setup requires brief-written to be accepted on a fully D1/D3/D4-compliant web-app fixture: ' + bw.stderr)
+  const menusDone = mark(dir, 'menus-done')
+  assert.strictEqual(menusDone.status, 0, 'test setup requires menus-done to be accepted with no open dimensions: ' + menusDone.stderr)
+  const skip = mark(dir, 'finalists-skipped')
+  assert.strictEqual(skip.status, 0, 'test setup requires finalists-skipped to be accepted for the tournament archetype web-app: ' + skip.stderr)
+  writeValidDecideArtifacts(dir)
+  writeConventionsArtifacts(dir)
+  const decided = mark(dir, 'decided')
+  assert.strictEqual(decided.status, 0, 'test setup requires decided to be accepted: ' + decided.stderr)
+  const scaffolded = bare(dir)
+  assert.match(scaffolded.stdout, /SKELETON/, 'test setup requires the auto-run scaffold to reach SKELETON: ' + scaffolded.stdout)
+  writeBindingSubset(dir, 'true')
+  // Deliberately writes no design/shell/app.html and no design/mocks/*.html: this file's own
+  // AC-20260902-11-5 test calls this helper directly and needs full control over that fixture
+  // per sub-case (missing shell, undeclared mock, missing primitive) — the compliant version
+  // lives in advanceToRoadmapVisual below, not here, so it stays that test's to vary.
+}
+
+// Drives a fresh visual (web-app) run all the way to ROADMAP: BRIEF is fully D1-compliant
+// (## Journeys/## Non-UI Coverage covering `journeys`), MENUS/DECIDE run the tournament's
+// skip path (`finalists-skipped`), SCAFFOLD/SKELETON use the same true/true commands and
+// components.json shape AC-20260902-08-14 (brief-state.test.js) already proves accepted —
+// D5's own new shell/data-shell/primitive checks are exercised separately, by this file's
+// AC-20260902-11-5 test, not by every roadmap-written caller.
+function advanceToRoadmapVisual(dir, journeys) {
+  advanceToSkeletonVisual(dir, journeys)
+  writeJSON(path.join(dir, 'design/components.json'), [{ name: 'Button', purpose: 'primary action' }])
+  // Repair round 1 (build gate red — deviations sidecar): D5's skeleton-landed shell/data-shell/
+  // matrix checks fire unconditionally once status.brief.mocks is set, which every caller of
+  // this helper now hits — a compliant design/shell/app.html plus one data-shell-declaring mock
+  // per journey label, the exact fixture shape this file's own AC-20260902-11-5 test already
+  // proves passes `design-atlas.js check`/`check --matrix` (writeShellDirGD/mockDeclaringGD,
+  // defined below). Only this ROADMAP-reaching helper gets it, never advanceToSkeletonVisual
+  // itself — AC-20260902-11-5 calls that one directly and needs to vary the shell fixture
+  // per sub-case.
+  writeShellDirGD(dir)
+  const allLabels = new Set()
+  for (const j of journeys) for (const l of j.labels) allLabels.add(l)
+  for (const label of allLabels) writeFile(path.join(dir, 'design/mocks', label + '.html'), mockDeclaringGD(label))
+  const landed = mark(dir, 'skeleton-landed')
+  assert.strictEqual(landed.status, 0, 'test setup requires skeleton-landed to be accepted: ' + landed.stderr)
+  assert.match(landed.stdout, /ROADMAP/, 'test setup requires a green zero-day gate to reach ROADMAP: ' + landed.stdout)
 }
 
 test('AC-20260902-08-1: a cold --root creates status.json schemaVersion 3 with `brief: null`, no `explore` key, and prints state: DISCOVERY; a loaded v2 file carrying `explore: "picked"` keeps that key in memory and rewrites the file as v3 still carrying it on the next accepted mark', () => {
@@ -706,4 +870,149 @@ test('a gate log that fits inside both the byte window and the line bound render
   assert.strictEqual(landed.status, 0, 'skeleton-landed must be accepted regardless of the gate\'s own outcome: ' + landed.stderr)
   assert.match(landed.stdout, /short-gate-output-line/, 'a log that fits inside both bounds must still render its actual content — a step text with no content here means the driver is hiding a log that had room to show')
   assert.doesNotMatch(landed.stdout, /truncated, full log at/, 'a marker on a complete excerpt would train the reader to ignore it — the marker must appear only when content was actually dropped, which a short single-line log never triggers')
+})
+
+const ONBOARDING_JOURNEY = [{ name: 'onboarding', persona: 'Priya (owner) signs in and invites staff to a live session.', labels: ['signin', 'invite', 'session-live'] }]
+
+test('AC-20260902-11-4: WHEN --mark roadmap-written runs on a fresh visual run with seed labels signin/invite/session-live and briefs whose surfaces blocks declare only signin/invite THE SYSTEM exits 2 naming session-live; with signin placed in two briefs it exits 2 naming signin and both files; AC-20260902-11-12: with every seed label placed in exactly one brief THE SYSTEM CONTINUES TO run the cycle check and accept', () => {
+  const unplaced = tmpdir('gdrv-11-4-unplaced')
+  advanceToRoadmapVisual(unplaced, ONBOARDING_JOURNEY)
+  writeRoadmap(unplaced, [{ name: '01-onboarding.md', dependsOn: '—', surfaces: ['signin', 'invite'] }])
+  const unplacedResult = mark(unplaced, 'roadmap-written')
+  assert.strictEqual(unplacedResult.status, 2, 'D4: a seed-declared label absent from every brief\'s surfaces block means the roadmap never actually decomposed the seed\'s own journey — roadmap-written must refuse it')
+  assert.match(unplacedResult.stderr, /session-live/, 'the refusal must name the unplaced label "session-live"')
+
+  const doublePlaced = tmpdir('gdrv-11-4-double')
+  advanceToRoadmapVisual(doublePlaced, ONBOARDING_JOURNEY)
+  writeRoadmap(doublePlaced, [
+    { name: '01-onboarding.md', dependsOn: '—', surfaces: ['signin', 'invite', 'session-live'] },
+    { name: '02-staff.md', dependsOn: '—', surfaces: ['signin'] },
+  ])
+  const doubleResult = mark(doublePlaced, 'roadmap-written')
+  assert.strictEqual(doubleResult.status, 2, 'D4: a seed label declared in two briefs\' surfaces blocks is a double-placement — roadmap-written must refuse it rather than silently pick one')
+  assert.match(doubleResult.stderr, /signin/, 'the refusal must name the double-placed label "signin"')
+  assert.match(doubleResult.stderr, /01-onboarding\.md/, 'the refusal must name the first brief carrying the double-placed label')
+  assert.match(doubleResult.stderr, /02-staff\.md/, 'the refusal must name the second brief carrying the double-placed label')
+
+  const placed = tmpdir('gdrv-11-12-placed')
+  advanceToRoadmapVisual(placed, ONBOARDING_JOURNEY)
+  writeRoadmap(placed, [{ name: '01-onboarding.md', dependsOn: '—', surfaces: ['signin', 'invite', 'session-live'] }])
+  const placedResult = mark(placed, 'roadmap-written')
+  assert.strictEqual(placedResult.status, 0, 'AC-20260902-11-12: every seed label placed in exactly one brief\'s surfaces block must CONTINUE TO be accepted, unchanged by D4: ' + placedResult.stderr)
+  assert.strictEqual(statusOf(placed).marks.roadmapWritten, true, 'AC-20260902-11-12: a successful roadmap-written must CONTINUE TO record marks.roadmapWritten')
+  assert.match(placedResult.stdout, /HANDOFF/, 'AC-20260902-11-12: an acyclic, fully-placed roadmap must CONTINUE TO advance the driver past ROADMAP into HANDOFF — D4\'s new placement check runs alongside the existing acyclic-graph check, never instead of it')
+})
+
+// specs/20260901/04-shell-composed-mocks.md D1's own Contracts example, byte-identical to
+// tests/design-shell.test.js's own CANON_APP_HTML/SHELL_APP_CSS — duplicated here file-locally
+// (per this file's own header comment on the cross-file fixture-sharing constraint) as a
+// known-valid `design-atlas.js check` fixture for D5's new shell/data-shell/matrix checks.
+const CANON_APP_HTML = '<!doctype html><html><head><meta charset="utf-8">\n' +
+  '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
+  '<link rel="stylesheet" href="../tokens.css">\n' +
+  '<link rel="stylesheet" href="app.css">\n' +
+  '<style>* { box-sizing: border-box; }</style></head><body>\n' +
+  '<div data-shell-canon="app" class="shell">\n' +
+  '  <nav data-slot="nav" data-contract="none" aria-label="Main">\n' +
+  '    <a data-nav="inbox" href="#">Inbox</a>\n' +
+  '    <a data-nav="settings" href="#">Settings</a>\n' +
+  '  </nav>\n' +
+  '  <header data-slot="header" data-contract="none">…</header>\n' +
+  '  <main data-slot="content"></main>\n' +
+  '</div></body></html>\n'
+const SHELL_APP_CSS = '.shell { display: flex; gap: 1rem; }\n' +
+  '.shell nav a { color: var(--text-body); font-size: 14px; line-height: 1.4; }\n'
+
+function writeShellDirGD(dir) {
+  fs.mkdirSync(path.join(dir, 'design/shell'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/shell/app.html'), CANON_APP_HTML)
+  fs.writeFileSync(path.join(dir, 'design/shell/app.css'), SHELL_APP_CSS)
+}
+
+// A mock already adopted into the shell (data-shell="app", the region byte-consistent with
+// CANON_APP_HTML) plus the box-sizing reset and no off-token color literals — the shape
+// tests/design-shell.test.js's own "adopt --apply" test proves passes `design-atlas.js check`.
+function mockDeclaringGD(label) {
+  return '<link rel="stylesheet" href="../tokens.css">\n' +
+    '<link rel="stylesheet" href="../shell/app.css">\n' +
+    '<style>* { box-sizing: border-box; }</style>\n' +
+    '<div data-screen-label="' + label + '" data-status="ratified" data-shell="app">' +
+    '<div data-shell-region="app" class="shell">\n' +
+    '  <nav data-slot="nav" data-contract="none" aria-label="Main">\n' +
+    '    <a data-nav="inbox" href="#">Inbox</a>\n' +
+    '    <a data-nav="settings" href="#">Settings</a>\n' +
+    '  </nav>\n' +
+    '  <header data-slot="header" data-contract="none">…</header>\n' +
+    '  <main data-slot="content"><h1>' + label + '</h1></main>\n' +
+    '</div></div>\n'
+}
+
+// A mock with its own (undeclared) chrome, no data-shell at all — the exact D5 "consent.html
+// lacking data-shell" Contracts example.
+function mockNoShellGD(label) {
+  return '<link rel="stylesheet" href="../tokens.css">\n' +
+    '<style>* { box-sizing: border-box; }</style>\n' +
+    '<main data-screen-label="' + label + '" data-status="ratified">plain, undeclared chrome</main>\n'
+}
+
+function writeCanonMd(dir, primitives) {
+  writeFile(path.join(dir, 'design/mocks/canon.md'), `## Shells
+none
+
+## Primitives
+${primitives.map((p) => `- **${p}** — synthetic primitive`).join('\n')}
+
+## Rules
+- One screen at a time.
+
+## Grounding
+This canon is binding: see docs/design/research-brief.md for the research basis.
+`)
+}
+
+const CONSENT_JOURNEY = [{ name: 'onboarding', persona: 'Priya (owner) signs in, gathers consent, and reaches the live session.', labels: ['signin', 'consent', 'session-live'] }]
+
+test('AC-20260902-11-5: WHEN --mark skeleton-landed runs for a fresh visual run with no design/shell/app.html THE SYSTEM exits 2 naming the file and "shell adopt --apply"; with a shell but consent.html lacking data-shell it exits 2 naming consent.html; with canon.md primitives "read-back card" and "orb" and a manifest holding only "orb" it exits 2 naming "read-back card"; AC-20260902-11-13: with every shell, data-shell, matrix and primitive check satisfied THE SYSTEM CONTINUES TO run the zero-day gate', () => {
+  const noShell = tmpdir('gdrv-11-5-noshell')
+  advanceToSkeletonVisual(noShell, CONSENT_JOURNEY)
+  for (const label of ['signin', 'consent', 'session-live']) writeFile(path.join(noShell, 'design/mocks', label + '.html'), mockNoShellGD(label))
+  writeCanonMd(noShell, ['Button'])
+  writeJSON(path.join(noShell, 'design/components.json'), [{ name: 'Button', purpose: 'primary action' }])
+  const noShellRefused = mark(noShell, 'skeleton-landed')
+  assert.strictEqual(noShellRefused.status, 2, 'D5: a visual archetype must not land the skeleton without design/shell/app.html — the shell canon has not been extracted from the composed set yet')
+  assert.match(noShellRefused.stderr, /design\/shell\/app\.html/, 'the refusal must name the missing file design/shell/app.html')
+  assert.match(noShellRefused.stderr, /shell adopt --apply/, 'the refusal must name the remedy "shell adopt --apply" (design-atlas.js\'s own subcommand)')
+
+  const noDataShell = tmpdir('gdrv-11-5-nodatashell')
+  advanceToSkeletonVisual(noDataShell, CONSENT_JOURNEY)
+  writeShellDirGD(noDataShell)
+  writeFile(path.join(noDataShell, 'design/mocks/signin.html'), mockDeclaringGD('signin'))
+  writeFile(path.join(noDataShell, 'design/mocks/session-live.html'), mockDeclaringGD('session-live'))
+  writeFile(path.join(noDataShell, 'design/mocks/consent.html'), mockNoShellGD('consent'))
+  writeCanonMd(noDataShell, ['Button'])
+  writeJSON(path.join(noDataShell, 'design/components.json'), [{ name: 'Button', purpose: 'primary action' }])
+  const noDataShellRefused = mark(noDataShell, 'skeleton-landed')
+  assert.strictEqual(noDataShellRefused.status, 2, 'D5: a top-level design/mocks/*.html with no data-shell attribute means shell adopt was never run over the full composed set — skeleton-landed must refuse it')
+  assert.match(noDataShellRefused.stderr, /consent\.html/, 'the refusal must name the undeclared mock "consent.html"')
+
+  const missingPrimitive = tmpdir('gdrv-11-5-missingprim')
+  advanceToSkeletonVisual(missingPrimitive, CONSENT_JOURNEY)
+  writeShellDirGD(missingPrimitive)
+  for (const label of ['signin', 'consent', 'session-live']) writeFile(path.join(missingPrimitive, 'design/mocks', label + '.html'), mockDeclaringGD(label))
+  writeCanonMd(missingPrimitive, ['read-back card', 'orb'])
+  writeJSON(path.join(missingPrimitive, 'design/components.json'), [{ name: 'orb', purpose: 'ambient indicator' }])
+  const missingPrimitiveRefused = mark(missingPrimitive, 'skeleton-landed')
+  assert.strictEqual(missingPrimitiveRefused.status, 2, 'D5: design/components.json must carry an entry for every canon.md primitive bullet — a manifest missing "read-back card" (while carrying "orb") means the component vocabulary extraction is incomplete')
+  assert.match(missingPrimitiveRefused.stderr, /read-back card/, 'the refusal must name the missing primitive "read-back card"')
+
+  const ok = tmpdir('gdrv-11-13-ok')
+  advanceToSkeletonVisual(ok, CONSENT_JOURNEY)
+  writeShellDirGD(ok)
+  for (const label of ['signin', 'consent', 'session-live']) writeFile(path.join(ok, 'design/mocks', label + '.html'), mockDeclaringGD(label))
+  writeCanonMd(ok, ['Button'])
+  writeJSON(path.join(ok, 'design/components.json'), [{ name: 'Button', purpose: 'primary action' }])
+  const landed = mark(ok, 'skeleton-landed')
+  assert.strictEqual(landed.status, 0, 'AC-20260902-11-13: a fully compliant shell/data-shell/matrix/primitive fixture must be accepted: ' + landed.stderr)
+  assert.strictEqual(statusOf(ok).zeroDayGate.exit, 0, 'AC-20260902-11-13: skeleton-landed must CONTINUE TO run the zero-day gate once D5\'s new extraction checks all pass — its absence means the new checks were inserted in place of the gate instead of ahead of it')
+  assert.match(landed.stdout, /ROADMAP/, 'AC-20260902-11-13: a green zero-day gate must still advance the driver to ROADMAP')
 })

@@ -106,3 +106,7 @@ passes `--refresh` to `init-gen generate` the same way any other regeneration do
 - `args` to `wf-research` is a control channel — paths, enum keys, booleans only.
 - Every `Agent`/workflow `model:` is explicit (Opus session is the sole proposer — shared §
   Model Placement — Sonnet research).
+- **BRIEF derives, never guesses.** On a fresh mocks-set run, write `## Journeys` and
+  `## Non-UI Coverage` from `design/mocks/seed.md` and the confirmed ledger rows the step
+  prints — never from the discovery interview alone (spec/doctrine/genesis.md § Genesis:
+  Brief State).

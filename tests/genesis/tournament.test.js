@@ -145,6 +145,25 @@ function writeBindingSubset(dir, gateCommand) {
 // accepted immediately with no mocks/doctrine artifacts — except the one PROBE test below that
 // deliberately exercises web-app (a visual archetype), which writes its own full D4 ratification
 // set instead of calling this helper.
+// specs/20260902/11-brief-from-approved-set.md D1 repair (build gate red round 1): raceWebApp
+// (below, the one call site that ratifies a web-app/visual archetype through this helper) drives
+// brief.md through this file's own writeBrief() first (six sections, no Journeys/Non-UI
+// Coverage). This fixture writes no design/mocks/seed.md, so briefJourneysCheck() has zero seed
+// journeys to walk and passes trivially — but briefNonUiCheck() is unconditional. Appends a
+// compliant, all-covered `## Non-UI Coverage` block (plus an empty `## Journeys` heading,
+// harmless with no seed journeys to satisfy) onto whatever brief.md already exists, the same
+// fix shape as tests/genesis/brief-state.test.js's own writeValidBriefArtifacts (deviations
+// sidecar) — additive only, never touching the six sections writeBrief() already wrote.
+const NON_UI_KEYS = ['jobs', 'notifications', 'retention', 'integrations', 'admin', 'pricing']
+function ensureJourneysAndNonUiSections(dir) {
+  const p = path.join(dir, '.claude/genesis/brief.md')
+  const text = fs.readFileSync(p, 'utf8')
+  if (text.includes('## Non-UI Coverage')) return
+  fs.writeFileSync(p, text.replace(/\n?$/, '') +
+    '\n\n## Journeys\n(no design/mocks/seed.md for this synthetic fixture — nothing to cover)\n' +
+    '\n## Non-UI Coverage\n' + NON_UI_KEYS.map((k) => `- ${k}: covered — synthetic test note`).join('\n') + '\n')
+}
+
 function ratifyBriefArtifacts(dir) {
   writeJSON(path.join(dir, 'design/mocks/status.json'), {
     schemaVersion: 1, state: 'APPROVED', journeys: {}, directions: {}, theme: null,
@@ -165,6 +184,7 @@ function ratifyBriefArtifacts(dir) {
   ].join('\n'))
   writeJSON(path.join(dir, '.claude/genesis/design-rules.json'), { rules: [] })
   writeFile(path.join(dir, 'design/tokens.css'), ':root { --brand: #123; }\n')
+  ensureJourneysAndNonUiSections(dir)
 }
 
 // Drives from an empty root, through the new BRIEF state, to a MENUS state whose hosting menu

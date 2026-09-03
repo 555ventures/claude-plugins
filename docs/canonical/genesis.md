@@ -99,3 +99,19 @@
   landing the terminal state `GROUNDED` with `next: /spec:enforce`. Greenfield genesis is init +
   enforce; `/spec:init` is the brownfield entry and the regeneration owner.
   (specs/20260827/04-genesis-conventions-handoff.md, done 2026-08-30)
+
+- **Brief from the approved set (specs/20260902/11).** BRIEF generates `## Journeys` and
+  `## Non-UI Coverage` from `design/mocks/seed.md` and the ledger — `--mark brief-written`
+  checks that every seed journey and label appears under `## Journeys` and that the six non-UI
+  keys (`jobs notifications retention integrations admin pricing`) are `covered`/`n/a`, never
+  `dark`; the BRIEF step prints its derivation sources (confirmed `product` ledger rows by id,
+  journey and label counts, unresolved page-note count). MENUS prints the seed's
+  `primary-surface` and `platforms-horizon` rows above the framework dimension and prices every
+  framework option against them (`wf-research` `contextPaths` include the seed).
+  `roadmap-written` requires every seed label in exactly one brief's ```surfaces block and
+  refuses naming unplaced or double-placed labels. `skeleton-landed` requires the shell canon
+  extracted from the densest composed screen (`design/shell/app.html` passing `check`), every
+  top-level mock `data-shell`-stamped via `design-atlas.js shell adopt --apply`, a green
+  `check --matrix design/mocks`, and a `design/components.json` entry per `canon.md` primitive.
+  Legacy runs and non-visual archetypes see none of the new refusals.
+  (specs/20260902/11-brief-from-approved-set.md, done 2026-09-03)

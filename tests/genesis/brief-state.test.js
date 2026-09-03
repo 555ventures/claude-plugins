@@ -127,6 +127,74 @@ function advanceToDiscoveryDone(dir, archetype) {
   return r
 }
 
+// specs/20260901/04-shell-composed-mocks.md D1's own Contracts example, byte-identical to
+// tests/design-shell.test.js's own CANON_APP_HTML — duplicated here file-locally (per this
+// file's own header comment on cross-file fixture-sharing) as a known-valid
+// `design-atlas.js check` fixture for D5's new skeleton-landed shell-canon requirement.
+// Repair round 1: AC-20260902-08-14 provides a valid design/components.json and so now reaches
+// past the pre-existing spec-08 manifest check into D5's own new shell/data-shell/matrix checks
+// (unconditional once status.brief.mocks is set) — this fixture writes design/shell/app.html
+// so skeleton-landed's D5 leg passes cleanly; no design/mocks/*.html exists in this fixture at
+// all, so the data-shell/matrix legs have nothing to walk and pass trivially.
+const CANON_APP_HTML = '<!doctype html><html><head><meta charset="utf-8">\n' +
+  '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
+  '<link rel="stylesheet" href="../tokens.css">\n' +
+  '<link rel="stylesheet" href="app.css">\n' +
+  '<style>* { box-sizing: border-box; }</style></head><body>\n' +
+  '<div data-shell-canon="app" class="shell">\n' +
+  '  <nav data-slot="nav" data-contract="none" aria-label="Main">\n' +
+  '    <a data-nav="inbox" href="#">Inbox</a>\n' +
+  '    <a data-nav="settings" href="#">Settings</a>\n' +
+  '  </nav>\n' +
+  '  <header data-slot="header" data-contract="none">…</header>\n' +
+  '  <main data-slot="content"></main>\n' +
+  '</div></body></html>\n'
+const SHELL_APP_CSS = '.shell { display: flex; gap: 1rem; }\n' +
+  '.shell nav a { color: var(--text-body); font-size: 14px; line-height: 1.4; }\n'
+function writeShellDirBS(dir) {
+  fs.mkdirSync(path.join(dir, 'design/shell'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/shell/app.html'), CANON_APP_HTML)
+  fs.writeFileSync(path.join(dir, 'design/shell/app.css'), SHELL_APP_CSS)
+}
+
+// design-atlas.js's `check` command refuses (usage error, exit 2) an EMPTY design/mocks/ — "no
+// .html files under <dir>" — so `check --matrix design/mocks` needs at least one compliant,
+// already-adopted mock (data-shell="app", the region byte-consistent with CANON_APP_HTML,
+// box-sizing reset, no off-token colors), the shape tests/design-shell.test.js's own
+// "adopt --apply" test proves passes `design-atlas.js check`.
+function mockDeclaringBS(label) {
+  return '<link rel="stylesheet" href="../tokens.css">\n' +
+    '<link rel="stylesheet" href="../shell/app.css">\n' +
+    '<style>* { box-sizing: border-box; }</style>\n' +
+    '<div data-screen-label="' + label + '" data-status="ratified" data-shell="app">' +
+    '<div data-shell-region="app" class="shell">\n' +
+    '  <nav data-slot="nav" data-contract="none" aria-label="Main">\n' +
+    '    <a data-nav="inbox" href="#">Inbox</a>\n' +
+    '    <a data-nav="settings" href="#">Settings</a>\n' +
+    '  </nav>\n' +
+    '  <header data-slot="header" data-contract="none">…</header>\n' +
+    '  <main data-slot="content"><h1>' + label + '</h1></main>\n' +
+    '</div></div>\n'
+}
+
+// specs/20260902/11-brief-from-approved-set.md D1 repair (build gate red round 1): every caller
+// of writeValidBriefArtifacts drives brief.md through the file's own writeBrief() first (six D3
+// sections, no Journeys/Non-UI Coverage) — since none of those callers write
+// design/mocks/seed.md, briefJourneysCheck() has zero seed journeys to walk and always passes,
+// but briefNonUiCheck() is unconditional (D1: "Non-UI Coverage key(s) dark or missing" fires
+// regardless of whether a seed exists). Appends a compliant, all-covered `## Non-UI Coverage`
+// block (plus an empty `## Journeys` heading, harmless with no seed journeys to satisfy) onto
+// whatever brief.md already exists — additive only, never touching the six sections
+// writeBrief() already wrote or any other test's own brief.md content.
+function ensureJourneysAndNonUiSections(dir) {
+  const p = path.join(dir, '.claude/genesis/brief.md')
+  const text = fs.readFileSync(p, 'utf8')
+  if (text.includes('## Non-UI Coverage')) return
+  fs.writeFileSync(p, text.replace(/\n?$/, '') +
+    '\n\n## Journeys\n(no design/mocks/seed.md for this synthetic fixture — nothing to cover)\n' +
+    '\n## Non-UI Coverage\n' + NON_UI_KEYS.map((k) => `- ${k}: covered — synthetic test note`).join('\n') + '\n')
+}
+
 // Full D4 ratification artifact set for a visual archetype: an APPROVED mocks status with two
 // composed directions (only one picked), an open ledger, a valid doctrine naming the unpicked
 // direction, a valid (empty) design-rules.json, and tokens.css.
@@ -136,7 +204,166 @@ function writeValidBriefArtifacts(dir) {
   writeDoctrine(dir, { dissentsBody: 'The "warm" direction was composed and rejected in favor of "quiet" — no other minority option surfaced.' })
   writeDesignRules(dir, [])
   writeTokens(dir)
+  ensureJourneysAndNonUiSections(dir)
 }
+
+// specs/20260902/11-brief-from-approved-set.md D1/D2/D3: BRIEF generates `## Journeys` and
+// `## Non-UI Coverage` from the approved seed and ledger instead of from memory. `--mark
+// brief-written` (visual archetypes with a mocks set) now additionally refuses a brief.md
+// missing a seed journey or label from `## Journeys`, or any `## Non-UI Coverage` key
+// missing/`dark`; the BRIEF step text prints the derivation sources (confirmed product ledger
+// row ids, journey/label counts); the MENUS step text prints the seed's primary-surface/
+// platforms-horizon rows when `framework` is open. None of this block's ACs can pass yet —
+// genesis-driver.js reads neither `## Journeys`/`## Non-UI Coverage` in brief.md nor
+// design/mocks/seed.md's `## Facts`/`## Journeys` sections at all.
+
+const NON_UI_KEYS = ['jobs', 'notifications', 'retention', 'integrations', 'admin', 'pricing']
+
+// design/mocks/seed.md's `### <journey-kebab>` grammar (design-atlas.js's parseSeedJourneys,
+// Assumption A1: the driver reads roadmap/seed surfaces blocks with the same tiny grammar) —
+// first non-blank line after the header is the persona, then a ```surfaces fenced block whose
+// lines are either a bare label or an `a -> b` edge (both ends declare a label).
+function writeSeed(dir, journeys, { facts = {} } = {}) {
+  const factLines = Object.entries(facts).map(([k, v]) => `- ${k}: ${v}`).join('\n')
+  const journeyBlocks = journeys.map((j) => {
+    const surf = j.labels.map((l, i) => i === 0 ? l : `${j.labels[i - 1]} -> ${l}`).slice(1)
+    const first = j.labels.length ? j.labels[0] : ''
+    return `### ${j.name}\n${j.persona}\n\`\`\`surfaces\n${first ? first + '\n' : ''}${surf.join('\n')}\n\`\`\`\n`
+  }).join('\n')
+  writeFile(path.join(dir, 'design/mocks/seed.md'), `# Seed — test product
+
+## Product
+Synthetic product for brief-state.test.js.
+
+## Facts
+${factLines}
+
+## References
+- none
+
+## Journeys
+${journeyBlocks}
+## Dense screen
+- ${journeys[0] && journeys[0].labels[0]}
+`)
+}
+
+// Product ledger rows (spec 06's `| id | step | kind | claim | tag | status | rejected |
+// dependents | note |` grammar) confirmed said-by-user or ratified-doc — the fact rows D2's
+// BRIEF derivation-sources line must list by id.
+function productRow(id, claim, tag = 'said-by-user') {
+  return `| ${id} | SEED | product | ${claim} | ${tag} | confirmed | - | - | - |`
+}
+
+// `## Journeys` as the session would author it per D1's Contracts grammar: one `### <journey>`
+// block per seed journey, persona line, the seed's surfaces block copied verbatim (optionally
+// with a label dropped, to exercise the missing-label refusal), plus a `states:` line per
+// screen (content the driver does not itself validate, per Behavior — included anyway so the
+// fixture matches what a real session would write).
+function briefJourneysSection(journeys, { dropLabel = null } = {}) {
+  return journeys.map((j) => {
+    const labels = dropLabel ? j.labels.filter((l) => l !== dropLabel) : j.labels
+    const surf = labels.map((l, i) => i === 0 ? l : `${labels[i - 1]} -> ${l}`).slice(1)
+    const first = labels.length ? labels[0] : ''
+    const states = labels.map((l) => `states: ${l}: default`).join('\n')
+    return `### ${j.name}\n${j.persona}\n\`\`\`surfaces\n${first ? first + '\n' : ''}${surf.join('\n')}\n\`\`\`\n${states}\n`
+  }).join('\n')
+}
+
+function briefNonUiSection(overrides = {}) {
+  return NON_UI_KEYS.map((k) => `- ${k}: ${overrides[k] || 'covered — synthetic test note'}`).join('\n')
+}
+
+// Full brief.md for a fresh visual run: the six D3 sections plus D1's two new ones, so a
+// caller only has to say what varies (the ## Journeys body, or a Non-UI override).
+function writeBriefWithSections(dir, { archetype, journeysBody, nonUiBody, dims = {}, extraPicks = [] }) {
+  const dimLines = Object.entries(dims).map(([k, v]) => `- ${k}: ${v}`).join('\n')
+  writeFile(path.join(dir, '.claude/genesis/brief.md'), `# Discovery brief — test project
+
+## What I think you're building
+A synthetic project for brief-state.test.js.
+
+## Coverage
+${COVERAGE_KEYS.map((k) => `- ${k}: covered — synthetic test value`).join('\n')}
+
+## Non-goals
+none
+
+## Open Dimensions
+${dimLines || 'none'}
+
+## Research Angles
+none — synthetic host, no research needed.
+
+## Picks
+- archetype: ${archetype}
+${extraPicks.join('\n')}
+
+## Journeys
+${journeysBody}
+
+## Non-UI Coverage
+${nonUiBody}
+`)
+}
+
+test('AC-20260902-11-1, AC-20260902-11-2: WHEN --mark brief-written runs on a fresh visual run whose brief.md lacks ## Journeys THE SYSTEM exits 2 naming ## Journeys and the first missing journey; omitting a seed label from ## Journeys exits 2 naming the label and its journey; a dark ## Non-UI Coverage key exits 2 naming it; and the BRIEF step text lists every confirmed product ledger row id and the journey count', () => {
+  const JOURNEYS = [{ name: 'owner-onboarding', persona: 'Priya (owner) signs up and invites staff.', labels: ['signin', 'roster'] }]
+
+  const noJourneys = tmpdir('brief-11-2-nojourneys')
+  advanceToDiscoveryDone(noJourneys, 'web-app')
+  writeValidBriefArtifacts(noJourneys)
+  writeSeed(noJourneys, JOURNEYS)
+  writeBriefWithSections(noJourneys, { archetype: 'web-app', journeysBody: '', nonUiBody: briefNonUiSection() })
+  const noJourneysRefused = mark(noJourneys, 'brief-written')
+  assert.strictEqual(noJourneysRefused.status, 2, 'D1: a brief.md whose ## Journeys section names none of the seed\'s journeys must be refused — an empty section here means the session never actually derived the brief from the approved set')
+  assert.match(noJourneysRefused.stderr, /## Journeys/, 'the refusal must name "## Journeys" so the session knows which section to fill in')
+  assert.match(noJourneysRefused.stderr, /owner-onboarding/, 'the refusal must name the first missing journey "owner-onboarding" so the session knows exactly which journey block to author')
+
+  const missingLabel = tmpdir('brief-11-2-missinglabel')
+  advanceToDiscoveryDone(missingLabel, 'web-app')
+  writeValidBriefArtifacts(missingLabel)
+  writeSeed(missingLabel, JOURNEYS)
+  writeBriefWithSections(missingLabel, {
+    archetype: 'web-app',
+    journeysBody: briefJourneysSection(JOURNEYS, { dropLabel: 'roster' }),
+    nonUiBody: briefNonUiSection(),
+  })
+  const missingLabelRefused = mark(missingLabel, 'brief-written')
+  assert.strictEqual(missingLabelRefused.status, 2, 'D1: a ## Journeys block that drops one of the seed journey\'s own labels must be refused — the brief silently under-documents a screen the seed declares')
+  assert.match(missingLabelRefused.stderr, /roster/, 'the refusal must name the missing label "roster"')
+  assert.match(missingLabelRefused.stderr, /owner-onboarding/, 'the refusal must name the journey "owner-onboarding" the missing label belongs to, so the session knows which block to fix')
+
+  const darkNonUi = tmpdir('brief-11-2-darknonui')
+  advanceToDiscoveryDone(darkNonUi, 'web-app')
+  writeValidBriefArtifacts(darkNonUi)
+  writeSeed(darkNonUi, JOURNEYS)
+  writeBriefWithSections(darkNonUi, {
+    archetype: 'web-app',
+    journeysBody: briefJourneysSection(JOURNEYS),
+    nonUiBody: briefNonUiSection({ pricing: 'dark' }),
+  })
+  const darkRefused = mark(darkNonUi, 'brief-written')
+  assert.strictEqual(darkRefused.status, 2, 'D1: a `- pricing: dark` line in ## Non-UI Coverage means the screen-less pricing question was never answered — brief-written must refuse it, not silently ratify a checklist with a dark row')
+  assert.match(darkRefused.stderr, /pricing/, 'the refusal must name the dark key "pricing" so the session knows exactly which question to answer')
+
+  // D2: the BRIEF step text (printed while brief-written is still owed) must derive its own
+  // provenance — every confirmed said-by-user/ratified-doc product ledger row by id, and the
+  // journey count — from the seed and the ledger, never from the discovery interview alone.
+  const stepDir = tmpdir('brief-11-2-steptext')
+  advanceToDiscoveryDone(stepDir, 'web-app')
+  writeMocksStatus(stepDir, { directions: { quiet: { composed: '2026-09-01T00:00:00.000Z' } }, theme: 'quiet' })
+  writeFile(path.join(stepDir, 'design/mocks/ledger.md'), LEDGER_TEMPLATE_ROWS.slice(0, 6).concat([
+    productRow('P1', 'Primary surface is the web', 'said-by-user'),
+    productRow('P1b', 'A native mobile app is coming within 12-24 months', 'ratified-doc'),
+    '', '## Misunderstandings', '', '| id | what | step | cost | note |', '| - | - | - | - | - |', '',
+  ]).join('\n'))
+  writeSeed(stepDir, JOURNEYS)
+  const step = bare(stepDir)
+  assert.match(step.stdout, /P1\b/, 'AC-20260902-11-2/D2: the BRIEF step text must list confirmed product ledger row id "P1"')
+  assert.match(step.stdout, /P1b\b/, 'AC-20260902-11-2/D2: the BRIEF step text must list confirmed product ledger row id "P1b"')
+  assert.match(step.stdout, /\b1\b/, 'AC-20260902-11-2/D2: the BRIEF step text must name the journey count (1, from the single seed journey owner-onboarding)')
+})
 
 test('AC-20260902-08-3: WHEN --mark discovery-done runs with every coverage key covered but no `- archetype:` line THE SYSTEM exits 2 naming archetype and the eight registry keys; with `- archetype: web-app` it records status.archetype and prints a DISCOVERY→BRIEF checkpoint whose step text names /spec:mocks; with `- archetype: backend-api` the step text names --mark brief-written and not /spec:mocks', () => {
   const noArchetype = tmpdir('brief-ac3-none')
@@ -217,6 +444,7 @@ test('AC-20260902-08-5: WHEN the BRIEF precondition holds for web-app, doctrine-
   writeLedger(noTokens)
   writeDoctrine(noTokens, { dissentsBody: 'The "warm" direction was composed and rejected in favor of "quiet".' })
   writeDesignRules(noTokens, [])
+  ensureJourneysAndNonUiSections(noTokens)
   const tokensRefused = mark(noTokens, 'brief-written')
   assert.strictEqual(tokensRefused.status, 2, 'D4: design/tokens.css (written by THEME) must exist before BRIEF ratifies a design canon around it — its absence must refuse the mark')
   assert.match(tokensRefused.stderr, /design\/tokens\.css/, 'the refusal must name the missing tokens.css path')
@@ -429,9 +657,91 @@ None recorded — synthetic fixture.
   assert.match(scaffolded.stdout, /SKELETON/, 'test setup requires the auto-run scaffold to reach SKELETON: ' + scaffolded.stdout)
   writeFile(path.join(dir, 'CLAUDE.md'), '# Grounding\nGate command: `exit 0`\nTest tree: `tests`\n')
   writeJSON(path.join(dir, 'design/components.json'), [{ name: 'Button', purpose: 'primary action' }])
+  writeShellDirBS(dir)
+  writeFile(path.join(dir, 'design/mocks/home.html'), mockDeclaringBS('home'))
 
   const landed = mark(dir, 'skeleton-landed')
   assert.strictEqual(landed.status, 0, 'D5: a valid design/components.json must not, by itself, block skeleton-landed: ' + landed.stderr)
   assert.strictEqual(statusOf(dir).zeroDayGate.exit, 0, 'skeleton-landed must CONTINUE TO run the zero-day gate exactly as it did before D5\'s components.json check was added — its absence here means the new check was inserted ahead of the gate instead of alongside it')
   assert.match(landed.stdout, /ROADMAP/, 'a green zero-day gate must still advance the driver to ROADMAP')
+})
+
+// A single journey/fixture reused by the AC-20260902-11-3/-10/-11 block below, so every test
+// drives a genuinely compliant D1 brief.md (never a fixture that would itself trip the new
+// ## Journeys/## Non-UI Coverage refusals for reasons unrelated to what each test pins).
+const SINGLE_JOURNEY = [{ name: 'owner-onboarding', persona: 'Priya (owner) signs up and invites staff.', labels: ['signin', 'roster'] }]
+
+test('AC-20260902-11-3: WHEN the MENUS step prints for a fresh visual run with framework open THE SYSTEM prints the primary-surface and platforms-horizon rows\' ids and claims and the literal "price every framework option against these two rows"', () => {
+  const dir = tmpdir('brief-11-3-menus')
+  advanceToDiscoveryDone(dir, 'web-app')
+  writeValidBriefArtifacts(dir)
+  writeSeed(dir, SINGLE_JOURNEY, { facts: { 'primary-surface': 'P1', 'platforms-horizon': 'P1b' } })
+  writeFile(path.join(dir, 'design/mocks/ledger.md'), LEDGER_TEMPLATE_ROWS.slice(0, 6).concat([
+    productRow('P1', 'Primary surface is the web: phone-first sessions', 'said-by-user'),
+    productRow('P1b', 'A native mobile app for sessions IS coming within 12-24 months', 'ratified-doc'),
+    '', '## Misunderstandings', '', '| id | what | step | cost | note |', '| - | - | - | - | - |', '',
+  ]).join('\n'))
+  writeBriefWithSections(dir, {
+    archetype: 'web-app',
+    dims: { framework: 'open' },
+    journeysBody: briefJourneysSection(SINGLE_JOURNEY),
+    nonUiBody: briefNonUiSection(),
+  })
+  const briefWritten = mark(dir, 'brief-written')
+  assert.strictEqual(briefWritten.status, 0, 'test setup requires brief-written to be accepted on a fully D1/D3/D4-compliant fixture: ' + briefWritten.stderr)
+
+  const step = bare(dir)
+  assert.match(step.stdout, /state: MENUS/, 'test setup requires the driver to have reached MENUS with framework still open: ' + step.stdout)
+  assert.match(step.stdout, /P1\b/, 'AC-20260902-11-3/D3: the MENUS step must print the primary-surface row\'s id "P1"')
+  assert.match(step.stdout, /Primary surface is the web: phone-first sessions/, 'AC-20260902-11-3/D3: the MENUS step must print the primary-surface row\'s claim text')
+  assert.match(step.stdout, /P1b\b/, 'AC-20260902-11-3/D3: the MENUS step must print the platforms-horizon row\'s id "P1b"')
+  assert.match(step.stdout, /A native mobile app for sessions IS coming within 12-24 months/, 'AC-20260902-11-3/D3: the MENUS step must print the platforms-horizon row\'s claim text')
+  assert.match(step.stdout, /price every framework option against these two rows/, 'AC-20260902-11-3/D3: the MENUS step must print the literal instruction to price every framework option against the primary-surface and platforms-horizon rows')
+})
+
+test('AC-20260902-11-10: WHEN --mark brief-written runs on a fresh visual run whose brief.md satisfies every ## Journeys and ## Non-UI Coverage check THE SYSTEM CONTINUES TO accept (spec 08\'s D3/D4 checks unchanged)', () => {
+  const dir = tmpdir('brief-11-10-accept')
+  advanceToDiscoveryDone(dir, 'web-app')
+  writeValidBriefArtifacts(dir)
+  writeSeed(dir, SINGLE_JOURNEY)
+  writeBriefWithSections(dir, {
+    archetype: 'web-app',
+    journeysBody: briefJourneysSection(SINGLE_JOURNEY),
+    nonUiBody: briefNonUiSection(),
+  })
+  const accepted = mark(dir, 'brief-written')
+  assert.strictEqual(accepted.status, 0, 'AC-20260902-11-10: a brief.md that fully covers the seed\'s journeys/labels and carries no dark Non-UI key must be accepted — spec 08\'s doctrine-length/Dissents/design-rules/tokens checks (D3/D4) must CONTINUE TO run exactly as before D1 added its own checks: ' + accepted.stderr)
+  const st = statusOf(dir)
+  assert.strictEqual(st.marks.briefWritten, true, 'a successful brief-written must still record marks.briefWritten')
+  assert.strictEqual(st.design, 'ratified', 'a successful brief-written for a visual archetype must still record design: "ratified"')
+  assert.match(accepted.stdout, /\(BRIEF → MENUS\)/, 'a successful brief-written must still checkpoint into MENUS')
+})
+
+test('AC-20260902-11-11: WHEN the MENUS step prints for a legacy run THE SYSTEM CONTINUES TO print the unchanged MENUS text — no primary-surface/platforms-horizon lines, since a legacy run\'s status.brief.mocks is never set', () => {
+  const dir = tmpdir('brief-11-11-legacy')
+  bare(dir)
+  writeBrief(dir, { dims: { framework: 'open' }, picks: ['- archetype: web-app'] })
+  const statusPath = path.join(dir, '.claude/genesis/status.json')
+  const raw = JSON.parse(fs.readFileSync(statusPath, 'utf8'))
+  raw.schemaVersion = 2
+  delete raw.brief
+  raw.archetype = 'web-app'
+  raw.explore = 'picked'
+  raw.design = 'rules-locked'
+  raw.marks = { discoveryDone: true, menusDone: true }
+  fs.writeFileSync(statusPath, JSON.stringify(raw, null, 2) + '\n')
+
+  writeDoctrine(dir, { dissentsBody: 'Legacy resume — no mocks directions to name; nothing else was rejected.' })
+  writeDesignRules(dir, [])
+  writeTokens(dir)
+  const withLegacy = mark(dir, 'brief-written', ['--legacy'])
+  assert.strictEqual(withLegacy.status, 0, 'test setup requires --mark brief-written --legacy to be accepted: ' + withLegacy.stderr)
+  assert.strictEqual(statusOf(dir).brief.mocks, null, 'test setup requires a legacy ratification to record brief.mocks: null — D1/D3\'s MENUS prints are gated on this being set, per Behavior')
+
+  const step = bare(dir)
+  assert.match(step.stdout, /state: MENUS/, 'test setup requires the driver to land on MENUS with framework still open, no menu file written: ' + step.stdout)
+  assert.match(step.stdout, /open, no menu yet:[^\n]*\bframework\b/, 'test setup requires framework to still be listed as an open, unresearched dimension')
+  assert.doesNotMatch(step.stdout, /primary-surface/, 'AC-20260902-11-11: a legacy run\'s MENUS step must print no "primary-surface" line — D3 applies only to a fresh visual run (status.brief.mocks set), and a legacy ratification never sets it')
+  assert.doesNotMatch(step.stdout, /platforms-horizon/, 'AC-20260902-11-11: a legacy run\'s MENUS step must print no "platforms-horizon" line, for the same reason')
+  assert.doesNotMatch(step.stdout, /price every framework option/, 'AC-20260902-11-11: a legacy run\'s MENUS step must not print D3\'s pricing instruction — the seed this instruction is derived from does not exist for a legacy host')
 })

@@ -84,6 +84,10 @@ const {
 // corrupting an unspaced value like `design_source: https://x/p#frag` — the sole shared derivation
 // strips only a whitespace-preceded "#", per YAML unquoted-scalar semantics.
 const { fmMap } = require('./lib/frontmatter')
+// specs/20260902/11-brief-from-approved-set.md D6: the 🧭 misunderstandings line reads
+// design/mocks/ledger.md through this lib the same way genesis-driver.js's BRIEF precondition
+// check does — never a second ledger parser.
+const mocksLedgerLib = require('./lib/mocks-ledger')
 
 // Brief ids are NN plus an optional letter suffix — ad-hoc briefs slot between neighbors
 // as 04a, 04b, … Normalize any spelling (4b, 04B, 04b-auth) to the canonical zero-padded
@@ -676,6 +680,23 @@ if (json) {
     const lw = Math.max(...rows.map(r => r.label.length))
     const pw = Math.max(...rows.map(r => r.phase.length))
     for (const r of rows) out.push(`   ${r.icon} ${r.label.padEnd(lw)}  ${r.phase.padEnd(pw)}  ${r.tail}`)
+  }
+
+  // D6: 🧭 misunderstandings — a render-only pipeline-record line read from
+  // design/mocks/ledger.md's own Misunderstandings table (spec 06's grammar), directly under
+  // 🗺️ Roadmap and ahead of 📡 Observation. Any absence or read/parse failure omits the line
+  // silently (Behavior: "a viewer, never a verdict") — never a second derivation surfaced via
+  // --json, which stays byte-for-byte unchanged (AC-20260902-11-7).
+  {
+    let ledgerText = null
+    try { ledgerText = fs.readFileSync(path.join(root, 'design/mocks/ledger.md'), 'utf8') } catch (e) { ledgerText = null }
+    if (ledgerText !== null) {
+      const ledger = mocksLedgerLib.parseLedger(ledgerText)
+      if (!ledger.errors.length && ledger.catches.length) {
+        const latest = ledger.catches[ledger.catches.length - 1]
+        out.push(`   🧭 misunderstandings: ${ledger.catches.length} caught before build (latest ${latest.id} at ${latest.step})`)
+      }
+    }
   }
 
   // 📡 red-alarm lines (D1: right after Roadmap, only when at least one done spec is red — "ok"

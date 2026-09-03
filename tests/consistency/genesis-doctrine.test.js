@@ -363,7 +363,7 @@ test("AC-20260825-02-1: genesis.md (doctrine), genesis.md (command), and genesis
 // AC-20260825-02-2
 // ---------------------------------------------------------------------------
 
-test('AC-20260825-02-2: spec/templates/genesis-brief.md exists with the six D3 headings in order and a ten-line all-dark Coverage block', () => {
+test('AC-20260902-11-1 (updates AC-20260825-02-2 in place), AC-20260902-11-9: spec/templates/genesis-brief.md exists with the eight D1 headings in order (six original plus Journeys/Non-UI Coverage), a ten-line all-dark Coverage block, and a six-line all-dark Non-UI Coverage block', () => {
   const templatePath = path.join(SPEC, 'templates/genesis-brief.md')
   assert.ok(fs.existsSync(templatePath),
     'D3: spec/templates/genesis-brief.md must exist — its absence means the brief-as-interface ' +
@@ -374,13 +374,14 @@ test('AC-20260825-02-2: spec/templates/genesis-brief.md exists with the six D3 h
   const headings = [...src.matchAll(/^## (.+)$/gm)].map((m) => m[1].trim())
   const expectedHeadings = [
     "What I think you're building", 'Coverage', 'Non-goals',
-    'Open Dimensions', 'Research Angles', 'Picks'
+    'Open Dimensions', 'Research Angles', 'Picks', 'Journeys', 'Non-UI Coverage'
   ]
   assert.deepStrictEqual(headings, expectedHeadings,
-    'D3: genesis-brief.md must contain exactly these six `## ` headings in this order — a ' +
-    'missing, renamed, reordered, or extra heading means the brief-as-interface contract (the ' +
-    'fixed page shape every genesis command reads and re-renders) is not what D3 locked: got ' +
-    JSON.stringify(headings))
+    'D1: genesis-brief.md must contain exactly these eight `## ` headings in this order — the ' +
+    'template narrows AC-20260825-02-2\'s old six-heading pin to eight (D1 appends `## Journeys` ' +
+    'and `## Non-UI Coverage` after `## Picks`) — a missing, renamed, reordered, or extra heading ' +
+    'means the brief-as-interface contract every genesis command reads and re-renders is not what ' +
+    'D1 locked: got ' + JSON.stringify(headings))
 
   // `m` makes `$` match before every line terminator, not just end-of-string — so a
   // trailing `\n?$` alternative in the lookahead let the lazy `[\s\S]*?` stop after the
@@ -392,10 +393,10 @@ test('AC-20260825-02-2: spec/templates/genesis-brief.md exists with the six D3 h
     'skeleton against')
   const coverageLines = coverageMatch[1].split('\n').map((l) => l.trim()).filter(Boolean)
   assert.strictEqual(coverageLines.length, 10,
-    'D2/D3: the template\'s `## Coverage` block must pre-fill exactly the ten coverage keys, one ' +
-    'line each — a count other than ten means the fixed audit structure the interview depends on ' +
-    'is incomplete or padded in the shipped template: found ' + coverageLines.length + ' lines: ' +
-    JSON.stringify(coverageLines))
+    'AC-20260902-11-9 (SHALL CONTINUE TO): the template\'s `## Coverage` block must pre-fill ' +
+    'exactly the ten coverage keys, one line each — a count other than ten means the fixed audit ' +
+    'structure the interview depends on is incomplete or padded in the shipped template: found ' +
+    coverageLines.length + ' lines: ' + JSON.stringify(coverageLines))
 
   const grammar = /^- (payer|tenancy|data-sensitivity|residency|ai-use|unattended|integrations|scale-outage|vendor-budget|offline-mobile): (covered|dark|n\/a)( — .+)?$/
   for (const line of coverageLines) {
@@ -404,9 +405,37 @@ test('AC-20260825-02-2: spec/templates/genesis-brief.md exists with the six D3 h
       '— <reason>)?$` — a line outside this grammar means the driver spec\'s later parser (spec ' +
       '03/04) has no fixed shape to read the audit from')
     assert.match(line, /: dark$/,
-      'D3: every coverage line in the pristine (freshly-copied) template must read exactly ' +
-      '"dark" with no trailing reason — a template that ships any key pre-marked covered/n-a ' +
-      'means the audit starts already-answered instead of silently dark: ' + JSON.stringify(line))
+      'AC-20260902-11-9 (SHALL CONTINUE TO): every coverage line in the pristine (freshly-copied) ' +
+      'template must read exactly "dark" with no trailing reason — a template that ships any key ' +
+      'pre-marked covered/n-a means the audit starts already-answered instead of silently dark: ' +
+      JSON.stringify(line))
+  }
+
+  // D1: the six closed Non-UI keys (jobs notifications retention integrations admin pricing),
+  // each pre-filled `dark` in the pristine template — the same discipline as `## Coverage`
+  // above, so the checklist starts silently unanswered rather than pre-committing scope.
+  const nonUiMatch = src.match(/^## Non-UI Coverage\n([\s\S]*?)(?=\n## |(?![\s\S]))/m)
+  assert.ok(nonUiMatch,
+    'D1: a `## Non-UI Coverage` section must be findable in genesis-brief.md — its absence means ' +
+    'the six-key screen-less-facts checklist this spec introduces has no template skeleton at all')
+  const nonUiLines = nonUiMatch[1].split('\n').map((l) => l.trim()).filter(Boolean)
+  assert.strictEqual(nonUiLines.length, 6,
+    'D1: the template\'s `## Non-UI Coverage` block must pre-fill exactly the six closed keys ' +
+    '(jobs, notifications, retention, integrations, admin, pricing), one line each — a count ' +
+    'other than six means the checklist is incomplete or padded in the shipped template: found ' +
+    nonUiLines.length + ' lines: ' + JSON.stringify(nonUiLines))
+  const nonUiGrammar = /^- (jobs|notifications|retention|integrations|admin|pricing): (covered|dark|n\/a)( — .+)?$/
+  for (const line of nonUiLines) {
+    assert.match(line, nonUiGrammar,
+      'D1: Non-UI Coverage line "' + line + '" does not match the grammar `^- <key>: ' +
+      'covered|dark|n/a( — <reason>)?$` — a line outside this grammar means brief-written\'s ' +
+      'D1 parser (which reuses D2\'s coverage-line grammar, Assumption A4) has no fixed shape to ' +
+      'read the checklist from')
+    assert.match(line, /: dark$/,
+      'D1: every Non-UI Coverage line in the pristine template must read exactly "dark" with no ' +
+      'trailing reason — a template that ships any key pre-marked covered/n-a means the checklist ' +
+      'starts already-answered instead of silently dark, defeating its whole purpose as the ' +
+      'counter to "polished prototypes drop the screen-less facts": ' + JSON.stringify(line))
   }
 })
 
@@ -1128,4 +1157,72 @@ test('AC-20260902-08-17: spec-paths shared-for genesis SHALL CONTINUE TO serve i
     'shared-for genesis must CONTINUE TO serve § Design Authoring Contracts')
   assert.match(genesisShared.stdout, /## Host Grounding/,
     'shared-for genesis must CONTINUE TO serve § Host Grounding — a section map broken by this spec\'s doctrine edits would mean the command reads no grounding doctrine at all')
+})
+
+// specs/20260902/11-brief-from-approved-set.md D7: spec/commands/status.md names the new 🧭
+// misunderstandings line; spec/doctrine/genesis.md's three touched sections (§ Genesis: Brief
+// State, § Genesis: Roadmap Decomposition, § Genesis: Day-Zero Skeleton — all three headings
+// already exist, migrated by earlier specs; D7 only adds prose inside them) gain the D1/D4/D5
+// derivation rules; spec/commands/genesis.md stays <=120 lines; citations-check.js still reports
+// MISS=0 over the repo. None of the three literal phrases below exist anywhere in genesis.md
+// today (grep-confirmed at test-authoring time), so this test is red until D7 lands.
+
+test('AC-20260902-11-8: spec/commands/status.md names the 🧭 misunderstandings line, genesis.md\'s three named sections carry D1/D4/D5\'s new prose, genesis.md stays <=120 lines, and citations-check.js reports MISS=0', () => {
+  const statusCmd = read('spec/commands/status.md')
+  assert.match(statusCmd, /🧭 misunderstandings/,
+    'D7: spec/commands/status.md must name "🧭 misunderstandings" — its absence means the ' +
+    'command doc never tells the session the new pipeline-record count line exists, even though ' +
+    'D6 makes spec-status.js print it unconditionally whenever the ledger has catches')
+
+  const doctrineSrc = read('spec/doctrine/genesis.md')
+
+  const briefStateMatch = doctrineSrc.match(/^## Genesis: Brief State$/m)
+  assert.ok(briefStateMatch,
+    'the "## Genesis: Brief State" heading (migrated by specs/20260902/08) must still exist as ' +
+    'the section boundary D7 adds D1\'s derivation rules inside')
+  const afterBriefState = doctrineSrc.slice(briefStateMatch.index + briefStateMatch[0].length)
+  const briefStateSection = afterBriefState.slice(0, (afterBriefState.match(/^## /m) || { index: afterBriefState.length }).index)
+  assert.match(briefStateSection, /Non-UI Coverage/,
+    'D7: § Genesis: Brief State must contain "Non-UI Coverage" — its absence means D1\'s six-key ' +
+    'screen-less-facts checklist rule has no doctrine home even though the driver (once D1 lands) ' +
+    'already enforces it')
+
+  const roadmapMatch = doctrineSrc.match(/^## Genesis: Roadmap Decomposition$/m)
+  assert.ok(roadmapMatch,
+    'the "## Genesis: Roadmap Decomposition" heading (migrated by specs/20260825/04) must still ' +
+    'exist as the section boundary D7 adds D4\'s journey-placement rule inside')
+  const afterRoadmap = doctrineSrc.slice(roadmapMatch.index + roadmapMatch[0].length)
+  const roadmapSection = afterRoadmap.slice(0, (afterRoadmap.match(/^## /m) || { index: afterRoadmap.length }).index)
+  assert.match(roadmapSection, /exactly one brief/,
+    'D7: § Genesis: Roadmap Decomposition must contain "exactly one brief" — its absence means ' +
+    'D4\'s rule (every seed-declared label lands in exactly one brief\'s surfaces block) has no ' +
+    'doctrine home even though roadmap-written (once D4 lands) already enforces it')
+
+  const skeletonMatch = doctrineSrc.match(/^## Genesis: Day-Zero Skeleton$/m)
+  assert.ok(skeletonMatch,
+    'the "## Genesis: Day-Zero Skeleton" heading (migrated by specs/20260825/04) must still ' +
+    'exist as the section boundary D7 adds D5\'s extraction rule inside')
+  const afterSkeleton = doctrineSrc.slice(skeletonMatch.index + skeletonMatch[0].length)
+  const skeletonSection = afterSkeleton.slice(0, (afterSkeleton.match(/^## /m) || { index: afterSkeleton.length }).index)
+  assert.match(skeletonSection, /shell adopt --apply/,
+    'D7: § Genesis: Day-Zero Skeleton must contain "shell adopt --apply" — its absence means D5\'s ' +
+    'extraction instruction (author the shell from the densest composed screen, then run ' +
+    '`design-atlas.js shell adopt --apply` over design/mocks/) has no doctrine home even though ' +
+    'skeleton-landed (once D5 lands) already closes on it')
+
+  const cmdSrc = read('spec/commands/genesis.md')
+  const cmdLines = cmdSrc.split('\n').length
+  assert.ok(cmdLines <= 120,
+    'D7: spec/commands/genesis.md must stay at most 120 lines (AC-20260825-04-9\'s own pin, ' +
+    'carried forward) — found ' + cmdLines + '; a command that grew past this bound means the ' +
+    'BRIEF derivation note D7 adds crept the choreography back into the command instead of ' +
+    'staying a shell over the driver')
+
+  const check = runNode('scripts/citations-check.js', [], { cwd: ROOT })
+  assert.strictEqual(check.status, 0,
+    'citations-check.js must exit 0 (advisory scan, never a usage error) over the repo root: ' + check.stderr)
+  assert.match(check.stdout, /\bMISS=0\b/,
+    'D7: adding prose to three existing doctrine sections and a new command command-doc line ' +
+    'must not orphan any "§ Genesis: ..." citation elsewhere in spec/ — a nonzero MISS here means ' +
+    'some command or doctrine file points at a heading this spec\'s edits broke: ' + check.stdout)
 })

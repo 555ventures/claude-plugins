@@ -8,8 +8,25 @@
   tile funnel), brief 10a (tournament + conventions sequencing after MENUS), brief 02 D8 as
   amended by ADR-0003 (sketch authorship: session ≤5 surfaces + Fable dispatch; shell canon
   authored *before* mocks as bootstrap), brief 20 (shell-composed mocks: `shell sync` fed from
-  a bootstrap canon), brief 08 (sketch tier as the atlas's fidelity). D-numbers are
-  enumerated at plan time of brief 22.
+  a bootstrap canon), brief 08 (sketch tier as the atlas's fidelity). D-numbers enumerated at
+  plan time of brief 22 (2026-09-02; specs/20260902/06–11 carry the change; the cited specs are
+  `done` and are never edited):
+  - specs/20260825/01 — D4 narrowed (the registry's design-stage column now means "mocks set
+    owed"); D6 superseded.
+  - specs/20260825/02 — D2 narrowed (the question gate's `derive` verdict exempts product
+    stages); D4 superseded (the throwaway discovery sketch and its prune).
+  - specs/20260825/03 — D7 and D9 superseded for their explore/design arms only.
+  - specs/20260825/04 — D2 narrowed (BRIEF joins the chain), D8 superseded, D10 narrowed
+    (`explore`/`design` enums retired; `design` keeps `ratified|skipped` + legacy values), D12
+    narrowed, D15 superseded.
+  - specs/20260827/01 — D6 superseded (`style-tile` probe), D7 narrowed.
+  - specs/20260827/02 — D1–D8 superseded (the whole EXPLORE state, `design-pick.json`, the tile fold).
+  - specs/20260827/03 — D1–D4 superseded (the DESIGN state and its prune; the rules/Dissents
+    closure checks relocate into BRIEF), D5 narrowed (chain gains `/spec:mocks`), D9 superseded.
+  - specs/20260827/04 — D5 narrowed (the report chain).
+  - specs/20260901/04 — D7, D9, D10 superseded (shell required before mocks; Fable dispatch
+    authorship; position-brief grounding), D8 narrowed (AppShell rule survives under BRIEF/SKELETON).
+  - specs/20260810/01 — D3, D4, D8 superseded (already retargeted twice; no live seat remains).
 - Amended by: —
 
 ## Context

@@ -1,0 +1,57 @@
+{
+  "ts": "2026-09-03T00:00:46.754Z",
+  "stage": "replay",
+  "spec": "specs/20260902/01-comment-narration-gate.md",
+  "runId": "rp_24b4f079dcb2",
+  "reviewRunId": "rv_86d3458f366f",
+  "class": "prefix-collision-coverage-fail-open",
+  "files": [
+    "spec/scripts/comment-narration.js"
+  ],
+  "legs": "green",
+  "outcome": "caught",
+  "tokens": 55000,
+  "patch": "diff --git a/spec/scripts/comment-narration.js b/spec/scripts/comment-narration.js\nindex 6508bd0..ccba9c0 100644\n--- a/spec/scripts/comment-narration.js\n+++ b/spec/scripts/comment-narration.js\n@@ -291,7 +291,8 @@ function finishScan(mode, findings, files, baseline, jsonMode) {\n   const overage = []\n   if (baseline !== null) {\n     for (const [file, count] of Object.entries(files)) {\n-      const base = Object.prototype.hasOwnProperty.call(baseline, file) ? baseline[file] : 0\n+      const baseKey = Object.keys(baseline).find((k) => file.startsWith(k))\n+      const base = baseKey !== undefined ? baseline[baseKey] : 0\n       if (count > base) overage.push({ file, count, base })\n     }\n     overage.sort((a, b) => (a.file < b.file ? -1 : 1))\n",
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "The ratchet baseline lookup does a string-prefix match on the relative path instead of exact key equality, letting an unbaselined narrated file inherit an unrelated tracked file's baseline budget",
+        "file": "spec/scripts/comment-narration.js",
+        "line": 294,
+        "impact": "A new file with narration text can silently pass the gate by sharing a filename prefix with an existing tracked file, defeating the whole point of the ratchet that is supposed to freeze debt at zero growth",
+        "evidence": "D6 (spec line 42): 'A scanned file passes iff its finding count <= its baseline count (absent path -> 0).' Code: const baseKey = Object.keys(baseline).find((k) => file.startsWith(k)). Executed repro: root with spec/scripts/x.js (no narration) and spec/scripts/x.js.evasion.js containing a comment '// 2026-09-02 previously used to be different'; baseline.json = {\"spec/scripts/x.js\": 5}; node comment-narration.js --root . --baseline baseline.json printed 'spec/scripts/x.js.evasion.js:2 [date,prior] ...' / '1 findings in 2 files' and exited 0 (should be 1, since x.js.evasion.js has no real baseline entry)."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "Rules-mode agents scan is non-recursive while plugin-scan agents scan is recursive",
+        "file": "spec/scripts/comment-narration.js",
+        "line": 248,
+        "evidence": "D2 gives distinct globs for the two modes; implementation matches exactly."
+      },
+      {
+        "claim": "Standing test / full behavioral suite is red on touched files",
+        "file": "tests/comment-narration/comment-narration.test.js",
+        "line": 0,
+        "evidence": "node --test over tests/comment-narration and the live test: 16 pass, 0 fail."
+      },
+      {
+        "claim": "plugin.json version bump / changelog missing or malformed per D14",
+        "file": "spec/.claude-plugin/plugin.json",
+        "line": 3,
+        "evidence": "git diff shows 7.56.1 -> 7.57.0 with a last-3 changelog paragraph matching D14."
+      },
+      {
+        "claim": "spec-paths / entrypoints wiring for comment-narration missing (D8/D10)",
+        "file": "spec/bin/spec-paths",
+        "line": 51,
+        "evidence": "grep confirms the comment-narration key and usage string; spec/entrypoints.json adds the manifest row."
+      }
+    ],
+    "reviewerCount": 1,
+    "scope": "full",
+    "tokens": 55000
+  }
+}

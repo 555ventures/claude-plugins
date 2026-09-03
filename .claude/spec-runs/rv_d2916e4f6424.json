@@ -1,0 +1,105 @@
+{
+  "runId": "rv_d2916e4f6424",
+  "ts": "2026-09-02T23:51:42.103Z",
+  "spec": "specs/20260902/03-plugin-prose-sweep.md",
+  "tier": "standard",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 1,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 462,
+    "base": "3fe76c32694fae5e23a5801781a3acf7e6452c98",
+    "head": "2dffbb9ddbd04a50584752a2aa54782cca450ea7",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      }
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 98
+      }
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      }
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 1,
+      "observed": {
+        "uncovered": 1,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 9,
+        "carried": 8,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "Prior hard survivor: AC-20260902-03-1 retagged onto a test whose assertions only cover the code-group, never the prose-group promise (exact baseline value and every other prose-group path reporting zero findings)",
+        "file": "tests/consistency/comment-narration-live.test.js",
+        "line": 47,
+        "evidence": "Working-tree diff shows a new test block at lines 47-60 that: (1) reads the baseline and asserts deepStrictEqual to {\"spec/templates/grounding-contract.md\": 3}; (2) runs the scanner --json and asserts exit 0; (3) collects finding files minus the grounding contract and asserts deepStrictEqual to []. Executed node --test tests/consistency/comment-narration-live.test.js -> 3/3 pass including the AC-20260902-03-1 test."
+      },
+      {
+        "claim": "ac-matrix leg reports HARD uncovered-ac for AC-20260902-03-2",
+        "file": "specs/20260902/03-plugin-prose-sweep.md",
+        "line": 38,
+        "evidence": "legs-2/ac-matrix.txt: 'HARD uncovered-ac AC-20260902-03-2: zero hits across File Plan tests rows'. Spec Rationale (working tree) records: 'Review waiver (2026-09-02, user): AC-20260902-03-2 stays uncovered by any test ... waived rather than satisfied by a placeholder test.'"
+      },
+      {
+        "claim": "citations-check.js reports zero MISS after the fix (AC-20260902-03-3 regression pin)",
+        "file": "tests/consistency/citations-check.test.js",
+        "line": 0,
+        "evidence": "Executed node spec/scripts/citations-check.js --root . -> 'TOTAL=177 CHECKED=82 SKIP=95 MISS=0', exit 0."
+      },
+      {
+        "claim": "read-load budgets stay within cap after the fix (AC-20260902-03-4 regression pin)",
+        "file": "tests/consistency/read-load.test.js",
+        "line": 0,
+        "evidence": "Executed node --test tests/consistency/read-load.test.js tests/consistency/citations-check.test.js -> 28/28 pass, 0 fail."
+      }
+    ],
+    "reviewerCount": 1,
+    "scope": "fix-delta",
+    "tokens": 42000
+  }
+}

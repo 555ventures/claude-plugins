@@ -3,7 +3,7 @@ name: gitstatus-snapshot-stale-vs-live
 description: The conversation-start gitStatus block can be stale by the time you read a file — a target script had uncommitted prior-session work not reflected in that snapshot
 metadata:
   type: feedback
-  reviewed: 2026-08-31
+  reviewed: 2026-09-02
 ---
 
 The `gitStatus` block injected at conversation start is a snapshot, not live state — it explicitly says so, but it's easy to trust it as "what's currently modified." On a 2026-08-20 extraction task in `block-cross-worktree-writes.sh`, the snapshot showed the file clean, yet the file I actually Read already contained a full uncommitted hardening pass (a marker-forgery fix) that wasn't in `HEAD` (`git show HEAD:<path>` proved it absent). The working tree had moved between the snapshot and my read.

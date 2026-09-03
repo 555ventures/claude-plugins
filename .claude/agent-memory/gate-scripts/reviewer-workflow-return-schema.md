@@ -28,3 +28,9 @@ produced usable output" and refuse to interpret `survivors` at all. Don't confus
 with verdict.js's derived CLEAN/FINDINGS/HARD_FINDINGS/REVIEWER_FAILED vocabulary — same word
 "CLEAN", different layer, different meaning window. See [[replay-js-mode-flag-dispatch]] for the
 sibling replay.js conventions this schema get consumed under.
+
+**Corrected 2026-09-02 (review close, specs/20260902/05-manifest-stamped-scope.md):** the
+reviewer return no longer carries a `scope` field and `verdict.js` never reads `workflow.scope`
+— the pass scope (`full` | `fix-delta`) is stamped on the manifest rows `review-legs.js`
+writes and derived from those carriers. A return that still carries `scope` is accepted and the
+key ignored. The two-value `verdict` enum and the `survivors` guard above are unchanged.

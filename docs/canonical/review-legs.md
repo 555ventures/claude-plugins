@@ -55,3 +55,9 @@ branch evidence to report.
 
 `verdict.js` needs no case for any of this: the ci row's `observed` object is copied opaquely
 into the ledger row and the verdict derives from leg exits.
+
+## Rows carry their scope
+
+Every row this script appends carries `scope` as its last key, `full` or `fix-delta`, from the
+one `--fix-delta` flag; rows appended by `ac-matrix.js` and `promise-sweep.js` carry no key and
+`verdict.js` treats them as non-carriers. (specs/20260902/05-manifest-stamped-scope.md)

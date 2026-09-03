@@ -1,6 +1,6 @@
 ---
 date: 2026-09-02
-status: implementing
+status: done
 build_base: main
 tier: critical
 area: review-verification
@@ -307,6 +307,21 @@ call — the D3 diagnostic is built from typed fields and string joins, never a 
 **Doctrine gate.** D6 edits `review.md` and `reviewer.md`. JJ ruled yes at plan time
 (2026-09-02: drop the field from the reviewer's instructions); the two doctrine rows and the
 driver's schema strings are in the File Plan on that ruling.
+
+**Review close (2026-09-02).** One leg finding waived: the reconcile leg flagged
+`tests/review/escalate-row.test.js` as out of plan. Assumption A4's own fallback ("stamp `scope`
+onto that fixture's hand-written rows in place, retagged") is exactly the edit that landed; the
+disposer recommended `waive` on that quoted sanction and the question-style gate ruled the
+answer derivable, so it was auto-picked and announced in-console. Build deviations, all
+one-offs, folded here: (1) A4 falsified as above — the fixture's hand-written rows are now
+stamped `fix-delta` and the test carries `(also AC-20260902-05-2)`; (2) the test author's first
+AC-20260902-05-9 no-`--workflow` case fed a green fix-delta manifest, which spike S4's "panel
+must run" guard refuses by design — the scripts worker's guard narrowing was reverted and the
+test now uses the AC-5 red-gate manifest verbatim; (3) AC-20260902-05-13's `scope` substring
+check tripped on the driver's own path inside a worktree named for this spec — the test scrubs
+the repo root and spec path before asserting; (4) `spec/commands/replay.md` still shows a stale
+`scope: "full"` in a reviewer-return example — outside the File Plan, harmless under AC-11, left
+for a direct edit.
 
 ## Canonical Delta
 

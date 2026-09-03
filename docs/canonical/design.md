@@ -101,3 +101,19 @@ print under the cell and fail the gate; no manifest prints one skip line — and
 runs the same rules over the mock render. The Sonnet rule-checklist walk is retired from sketch
 exit, the design gate, and `/spec:review`'s design leg; the checklist survives only at the
 explore stage, which precedes `design-rules.json` and so has no manifest to execute.
+
+## Provenance ledger (2026-09-02, specs/20260902/06)
+
+The mocks ledger, `design/mocks/ledger.md`, is a markdown file with fixed-word columns parsed
+by `spec/scripts/lib/mocks-ledger.js` (`parseLedger`, `gateVerdict`, `countsLine`,
+`appendAssumption`, `appendCatch`, `setStatus`; grammar in `spec/doctrine/mocks.md`, resolved
+via `spec-paths shared-mocks`; empty ledger at `spec/templates/mocks-ledger.md`). Two tables:
+Assumptions (`id · step · kind · claim · tag · status · rejected · dependents · note`) and
+Misunderstandings (`id · what · step · cost · note`). Every enum cell is one fixed word — tag
+`said-by-user|ratified-doc|inferred|invented`, status `open|confirmed|overridden|decided`
+(+ optional ISO date), kind `product|process` — and free text lives only in `claim`,
+`rejected`, and `note`. A product row that is `invented` (not `overridden`) or `inferred` +
+`open` blocks every advance; `ratified-doc` rows and every `process` row never block and are
+counted on the fixed `📒 ledger:` line. A ledger that does not parse never opens a gate. The
+lib is the one writer of rows: edits rewrite only the touched row and leave every other byte
+identical; a literal pipe inside a cell is written `\|`.

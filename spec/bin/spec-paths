@@ -52,6 +52,7 @@ case "${1:-root}" in
   shared)         echo "$ROOT/doctrine/core.md" ;;
   shared-design)  echo "$ROOT/doctrine/design.md" ;;
   shared-genesis) echo "$ROOT/doctrine/genesis.md" ;;
+  shared-mocks)   echo "$ROOT/doctrine/mocks.md" ;;
   replay-corpus)  echo "$ROOT/doctrine/replay-corpus.md" ;;
   shared-for)
     # Print the shared-invariants CONTENT scoped to one command — only the `## ` sections that
@@ -103,7 +104,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|design-atlas|components-check|render-gate|render-compare|render-inventory|render-rules|registry-check|merge-back|smoke|manifest-check|env-preflight|citations-check|review-legs|release-legs|review-driver|build-driver|genesis-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|collision-closure|ci-query|ci-gate-parity|replay|escape-row|fleet-reader|comment-narration|shared|shared-design|shared-for <command>|shared-genesis|replay-corpus|template|templates|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|design-atlas|components-check|render-gate|render-compare|render-inventory|render-rules|registry-check|merge-back|smoke|manifest-check|env-preflight|citations-check|review-legs|release-legs|review-driver|build-driver|genesis-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|collision-closure|ci-query|ci-gate-parity|replay|escape-row|fleet-reader|comment-narration|shared|shared-design|shared-for <command>|shared-genesis|shared-mocks|replay-corpus|template|templates|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

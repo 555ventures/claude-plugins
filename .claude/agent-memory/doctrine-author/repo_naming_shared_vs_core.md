@@ -3,10 +3,10 @@ name: repo-naming-shared-vs-core
 description: This repo's doctrine invariants file is spec/doctrine/core.md, not shared.md — my own agent instructions reference "shared.md" but that's stale/wrong for this repo
 metadata:
   type: project
-  reviewed: 2026-09-01
+  reviewed: 2026-09-02
 ---
 
-`spec/doctrine/` holds `core.md`, `design.md`, `genesis.md`, `replay-corpus.md` — there is no
+`spec/doctrine/` holds `core.md`, `design.md`, `genesis.md`, `mocks.md`, `replay-corpus.md` — there is no
 `shared.md`. `spec-paths shared` resolves to `core.md`; `spec-paths shared-for <command>`
 pulls a section allowlist (defined in `spec/bin/spec-paths`) out of `core.md` (+ `design.md`
 for design-family commands). Command prose still says "shared §" as an informal idiom even

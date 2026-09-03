@@ -96,3 +96,14 @@ ADR-0005). The loop
 is scored by the fleet reader's `cleanByVia` (escapes-per-CLEAN by `via`); a `loop` rate
 above the `direct` rate over 30 fleet reviews reverts the loop.
 (specs/20260901/03-unified-build-loop.md, done 2026-09-01)
+
+## The question gate asks product facts, never derives them (2026-09-02, specs/20260902/06)
+
+`question-style-gate.js`'s tier-2 judge verdict `derive` is suppressed — treated as pass —
+while a product stage is live in the repo: `design/mocks/status.json` exists with `state` not
+`APPROVED`, or `.claude/genesis/status.json` exists with `handoff` null. Root resolution is
+`CLAUDE_PROJECT_DIR`, else the hook input's `cwd`, else the process cwd; any read error or
+unparsable status file fails open toward the existing behavior, never toward blocking.
+`rewrite` verdicts and every tier-1 check are unchanged. The judge prompt states that a
+document citing, discussing, or recommending a subject is never the user deciding it, and that
+a product fact (who, what, platform, payer, tenancy, what a screen does) is never `derive`.

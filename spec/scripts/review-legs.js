@@ -169,15 +169,25 @@ function appendRow(leg, exit, observed) {
 // means the host declares no format (sanctioned, never a finding); declared but unmatched means
 // drift (pages via verdict.js's gate-skips finding for skips specifically; at-risk's contradiction
 // rule for testsExecuted). Never assumed zero either way.
+// LAST match, never first: every runner prints its summary line after the per-test lines, and a
+// test NAME that quotes the summary phrase (a test pinning the pattern itself) precedes it in
+// the same output — a first match would read the quoted decoy as the count and, on a quoted
+// zero, force a false red suite row (specs/20260903/02-whole-suite-review-leg.md, close record).
+function lastMatch(output, pattern) {
+  let last = null
+  for (const m of output.matchAll(new RegExp(pattern, 'g'))) last = m
+  return last
+}
+
 function computeTestsExecuted(output, pattern) {
   if (!pattern || pattern === 'none') return { unavailable: 'no-format-declared' }
-  const m = new RegExp(pattern).exec(output)
+  const m = lastMatch(output, pattern)
   return m ? (Number(m[1]) || 0) : { unavailable: 'pattern-no-match' }
 }
 
 function computeSkips(output, pattern) {
   if (!pattern || pattern === 'none') return { skips: { unavailable: 'no-format-declared' } }
-  const m = new RegExp(pattern).exec(output)
+  const m = lastMatch(output, pattern)
   if (!m) return { skips: { unavailable: 'pattern-no-match' } }
   return { skips: Number(m[1]) || 0, todos: m[2] !== undefined ? Number(m[2]) || 0 : 0 }
 }

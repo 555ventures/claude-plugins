@@ -97,7 +97,10 @@ function makeSkipsHost() {
   fs.mkdirSync(path.join(root, 'src'), { recursive: true })
   fs.mkdirSync(path.join(root, 'tests'), { recursive: true })
   fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({
-    gateCommand: "echo 'ℹ skipped 1'; node --test {testDirs}",
+    // The injected skips line comes AFTER the runner: the skip pattern reads the LAST match, as
+    // every real runner prints its summary line last (specs/20260903/02-whole-suite-review-leg.md
+    // close record) — an echo ahead of the runner would be shadowed by node's own `ℹ skipped 0`.
+    gateCommand: "node --test {testDirs}; echo 'ℹ skipped 1'",
     testCommand: 'node --test',
     runtime: { inert: 'plugin repo — nothing boots' },
     capabilities: { forge: 'none', skipReportPattern: 'ℹ skipped (\\d+)' },

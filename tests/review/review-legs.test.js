@@ -679,3 +679,19 @@ test('AC-20260903-02-5: WHEN the host declares testCountPattern and its bare tes
     'D2: the same declared pattern observing a nonzero executed count must keep the child\'s real exit code (0) ' +
     'with the observed count carried through, never forced: ' + JSON.stringify(threeRun.byLeg.get('suite')) + ' / ' + threeRun.r.stdout + threeRun.r.stderr)
 })
+
+// specs/20260903/02-whole-suite-review-leg.md close record: the executed-count and skip patterns
+// read the runner's SUMMARY line, which every reporter prints last — a test whose NAME quotes the
+// summary phrase (this file's own AC-20260903-02-5 above prints `"ℹ tests 0"` inside its name)
+// precedes it in the same output, so a first-match read takes the quoted decoy as the count.
+test('the suite row reads the LAST testCountPattern match, so a per-test line that quotes "ℹ tests 0" ahead of the real summary line "ℹ tests 3" observes 3 and keeps exit 0 — never the quoted decoy and never a forced false red', () => {
+  // The stand-in prints a decoy per-test line first (a test name quoting the pattern with a zero
+  // count), then the genuine summary line — the exact ordering the runner produces on this host.
+  const host = makeSuiteCountHost('✔ AC pin: a bare testCommand printing ℹ tests 0 forces exit 1 (1ms)\'; echo \'ℹ tests 3')
+  const out = run(host.dir, host.base)
+  assert.deepStrictEqual(out.byLeg.get('suite'),
+    { leg: 'suite', exit: 0, observed: { skips: { unavailable: 'no-format-declared' }, testsExecuted: 3 }, scope: 'full' },
+    'a first-match read of the testCountPattern takes the quoted "ℹ tests 0" from a test NAME as the executed count ' +
+    'and forces the suite row red on a green run — a nondeterministic false GATE_RED whenever that test file reports ' +
+    'before the summary line: ' + JSON.stringify(out.byLeg.get('suite')) + ' / ' + out.r.stdout + out.r.stderr)
+})

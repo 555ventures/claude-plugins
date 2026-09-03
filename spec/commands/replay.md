@@ -175,7 +175,7 @@ and nothing else. The prompt carries no mention of "replay," "mutation," "corpus
 anything is being measured; the reviewer must believe this is an ordinary `/spec:review` run.
 Same evidence standard (executed repro or quoted spec violation; an empty findings list is
 valid), same structured return: `{verdict: "CLEAN"|"REVIEWER_FAILED", survivors: [{severity,
-claim, file, line, impact, evidence}], killed: [], reviewerCount: 1, scope: "full", tokens: <n>}`,
+claim, file, line, impact, evidence}], killed: [], reviewerCount: 1, tokens: <n>}`,
 written to a temp file. `REVIEWER_FAILED` → re-dispatch before scoring; a variant prompt or a
 tipped-off reviewer measures nothing (D10's rationale).
 

@@ -38,3 +38,4 @@ fences off belongs to its owning brief.
 | 20 | shell-composed-mocks *(amends 02 D8 via ADR-0003; queued before 19)* |
 | 21 | comment-hygiene *(owner citations, never history: narration gate → plugin sweep → host generators + doctor)* |
 | 22 | mocks-first-genesis *(amends 10, 10a, 20 and ADR-0003 via ADR-0006; standalone design command → brief → architecture; page notes + provenance ledger gate every advance)* |
+| 24 | status-and-queue-diet *(status = roadmap + one paste + ≤3 decisions; hygiene anomalies move to doctor; queue positional with one `move` verb, no accept step)* |

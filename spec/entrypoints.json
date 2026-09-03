@@ -46,7 +46,8 @@
       "spec/commands/sketch.md",
       "spec/commands/atlas.md",
       "spec/commands/design.md",
-      "spec/doctrine/design.md"
+      "spec/doctrine/design.md",
+      "spec/commands/mocks.md"
     ]
   },
   "spec/scripts/env-preflight.js": {

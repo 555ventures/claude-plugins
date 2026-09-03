@@ -108,23 +108,30 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    run `{atlas} shell sync` on those mocks (a canon change since authoring never blocks
    ratification for a mechanical reason — a drift finding that survives sync is real), then
    run `node {atlas} check --matrix`, and render the matrix screenshots — each declared viewport, each
-   theme at minimum on the draft framing — for one fast confirm look. Then run
+   theme at minimum on the draft framing — they are confirmed at this step's single stop below. Then run
    `node "$(spec-paths render-gate)" --mocks <the brief's sketch mocks>` — this replaces the
    Sonnet rule-checklist pass with the design rules genesis wrote as `renderCheck` entries,
    executed as a script (shared § Design Canon: a rule a script can check is never checked by an
    LLM at runtime). A rule finding blocks ratification until the mock is fixed or the rule is
    amended — never excused per surface; a `severity: "warn"` rule prints its finding prefixed
-   `⚠️` and does not block. Only then `AskUserQuestion`,
-   glossed in plain English with a consequence per option: "ratify this brief's sketches now?
-   (Recommended when the readout found no open flags and the matrix confirm looked right:
-   `/spec:plan` can then proceed on a brief whose mocks already agree with it and pass the render
-   gate's hygiene bar) or keep iterating (nothing changes on disk, but planning stays behind the
-   un-ratified-UI warning until you come back)." On yes, set `data-status="ratified"` on each
+   `⚠️` and does not block. Only then the look stop — printed, then **end the turn**, never
+   `AskUserQuestion` (shared § Design Atlas: look stops are never questions):
+
+     🎨 **ready for review** — open design/atlas/index.html (step 4's build), matrix shots in
+        <the render directory>
+
+     🆕 design/mocks/<label>.html — one line per `sketch` mock of this brief
+
+     Reply  ✅ approve  — or —  ✏️ change <what looks wrong>
+
+   The user opens the atlas themselves (step 4: never start a server). Only the literal
+   `approve` ratifies; every other reply is a change round, an ambiguous one re-prints the
+   block with one clarifying line. On `approve`, set `data-status="ratified"` on each
    of the brief's `sketch` mocks (`approved`+ mocks are untouched) and rebuild the atlas.
    **Ratified = approved, one stamp:** direction confirmed at roadmap level, brief and mocks
    agree, matrix already confirmed in this step — `ratified` carries the same check enforcement
-   `approved` does from here on (shared § Design Canon). On no — state is on disk; re-invoke
-   to continue. `AskUserQuestion` dismissed → STOP.
+   `approved` does from here on (shared § Design Canon). On `change …` — one more round of
+   step 5's triage, then this step again. No reply — state is on disk; re-invoke to continue.
 7. **Report.** Assemble the slots (rationale: shared § Console Output Style) — `outcome`:
    ✅ `ratified {N} of {M} surfaces — {brief}`; `bullets`: the `🎨 position: …` line (shared §
    Design Atlas) when this round authored any mocks; `warns`: one line per un-ratified surface

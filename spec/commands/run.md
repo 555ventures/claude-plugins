@@ -45,8 +45,9 @@ skip a rung or guess ahead of what step 1 finds on disk.
 
 ## Design stage
 
-Execute `spec/commands/design.md`'s steps unchanged in this session (its approvals are stops),
-then re-derive from Routing step 1.
+Execute `spec/commands/design.md`'s steps unchanged in this session. Its look (Step 5) is a
+printed stop that ends the turn — the user's `approve` reply continues design.md's Step 6 in
+the next turn, and only then re-derive from Routing step 1.
 
 ## Build stage
 
@@ -79,7 +80,8 @@ specific to `--via loop`:
 ## Report
 
 Every stop of the loop — a checkpoint, a judgment step this session must make, or the
-terminal `DONE` — prints one report (rationale: core § Console Output Style). Assemble the
+terminal `DONE` — prints one report (rationale: core § Console Output Style); the one exception
+is a look stop, whose printed block replaces the report (shared § Design Atlas). Assemble the
 slots from whichever driver's state produced the stop — `outcome`: the stop's one-line state
 (✅ at a clean stop, ⚠️ when the run needed the user); `bullets`: one line per escalation;
 `next`: the literal re-run command at a checkpoint (`/spec:run <spec>` — this same command

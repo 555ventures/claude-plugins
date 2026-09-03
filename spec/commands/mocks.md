@@ -61,14 +61,32 @@ picking them, not a silent drop.
 ## SSH / look rule
 
 Everything here works over a forwarded port: `design-atlas.js serve` (`spec-paths
-design-atlas`) serves `design/` statically and prints the port-forward line first — hand the
-user that line, never a different access path. Before SHAPES, WIREFRAMES, THEME, or SKIN the
+design-atlas`) serves `design/` statically and prints the port-forward line first — the user
+runs it, never this session; hand them the command, never a different access path. Before SHAPES, WIREFRAMES, THEME, or SKIN the
 driver itself runs the look-reachability probe; if it refuses, either fix the named remedy
 (`npx playwright install chromium`) or, when a browser MCP is the session's real look path,
 `ToolSearch` for the `claude-in-chrome` (or equivalent) tools and record `mocks-driver.js
 look-via browser` before re-running. To actually look at a screen, use `mocks-driver.js look
 <label> [--state <s>]` (writes a PNG under `design/mocks/.looks/`) or the browser MCP you
 declared — never approve a journey or a direction on the HTML source alone.
+
+**The user's look is a printed stop, never a question.** Every step that waits on the user
+having looked — `journey-approved`, `journey-reviewed`, `approved` — prints this block and
+**ends the turn** (shared § Design Atlas: look stops are never questions):
+
+  🎨 **ready for review** — run this; its first line is the URL (and the ssh -L line remote)
+
+      node "$(spec-paths design-atlas)" serve
+
+  🆕 /mocks/<label>.html — one line per screen this step is about, served path only
+     (`/theme/<kebab>/<label>.html` for a skinned screen)
+
+  Reply  ✅ approve  — or —  ✏️ change <what looks wrong>
+
+Only the literal `approve` is the mark's input; every other reply is a change round (an
+ambiguous one re-prints the block with one clarifying line, never marks), then the block again.
+`theme-picked` is not a look stop: the THEME direction interview stays an `AskUserQuestion`
+whose answer names the winner and the reason each other direction was rejected.
 
 ## Report
 

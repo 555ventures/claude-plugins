@@ -25,7 +25,7 @@ missing → STOP: run `/spec:init` first.
 | On disk | Step |
 |---------|------|
 | `designed:` set | DONE — report, `next: /spec:run <spec>` |
-| ledger claim for every surface with `stories` for every state, both gates green this invocation | Step 5 — your look |
+| ledger claim for every surface with `stories` for every state | Step 3 — host gate → Step 4 → Step 5 (gates always re-run cold; a look is offered only on gates green this invocation) |
 | ledger claim present, some state without a story id, or components absent | Step 2 — author |
 | no ledger claim for a surface | Step 1 — preflight → Step 2 — author |
 
@@ -72,11 +72,11 @@ Five lines, then continue at Step 1:
 1. Author `design/mocks/<label>.html` for each of the spec's UI surfaces under the design
    harness (shared § Design Canon): draft framing first (the most-constrained declared viewport,
    light theme), checked by `node "$(spec-paths design-atlas)" check design/mocks/<label>.html`.
-2. Iterate to direction approval with the user, then run the **matrix expansion pass** (media
-   queries + the tokens dark block, one responsive file, never per-device variants), gated by
-   `check --matrix`.
+2. Iterate to direction approval with the user (each look is Step 5's printed stop, the 🆕
+   lines naming mock paths), then run the **matrix expansion pass** (media queries + the tokens
+   dark block, one responsive file, never per-device variants), gated by `check --matrix`.
 3. Stamp `data-status="approved"` on the mock's root — approval is two-step (direction, then
-   the matrix confirm), so the check enforces the matrix on `approved` mocks.
+   the matrix confirm, one stop each), so the check enforces the matrix on `approved` mocks.
 4. Persist the mock path as `design_source:` frontmatter.
 5. Continue at Step 1 — preflight now finds a `design_source`.
 
@@ -139,32 +139,35 @@ session scratchpad, else `.claude/spec-runs/render/<spec-stem>/`).
 
 ## Step 5 — Your look (blocking)
 
-Only after BOTH gates are green. Hand off with exactly this block, real values, before the
-question — the user runs the catalog command, never this session. Every value is already on
-disk (`design.command`, the coverage-ledger claim's story ids, `design.render.url`, the mock's
-states, the gate report path) — derive them; never ask the user which components to check:
+Only after BOTH gates are green. Print exactly this block, real values, then **end the turn**
+— never `AskUserQuestion` (shared § Design Atlas: look stops are never questions). The user
+runs the catalog command, never this session. Both values are already on disk — `design.command`
+and the coverage-ledger claim's story ids name the components bound this run — derive them;
+never ask the user which components to check:
 
-  🎨 **ready for review** — run: `<design.command>`
-  🔗 `<Search Words>` → <deep link> — one line per story bound this run. Lead with the
-     catalog's search keyword (Storybook's Find-components input matches space-separated
-     words, never the slashed title or the export's camelCase: `Chat Thread Empty` for
-     Canon/Chat Thread → Empty), then the deep link substituted from `design.render.url`'s
-     `{story}` placeholder (theme `light`, the most-constrained declared viewport). Deep links
-     are mechanically derivable — derive them, never omit.
-  🆕 <components added or changed this run, one line each with the states it renders>
-  👀 <one line per component: what to look for — the mock's copy and states, any auto-excused
-     static→link role, any Decision row the component exercises>
-  📄 gate report: <path>
+  🎨 **ready for review**
 
-Then `AskUserQuestion` (shared § Question Style — wording is hook-gated): **approve**
-(Recommended — the gates already measured what a human cannot overlay) / **change** (free-text
-notes).
+      <design.command>
 
-A change round: one `Agent {model: "sonnet"}` edit dispatch per affected surface, then Step 3
-and Step 4 again, then this hand-off block and question again — the 🆕 and 🔗 lines name only
-what the round touched. The session is cold between rounds — all state on disk.
+  🆕 <Component Name> — one line per component added or changed this run, written the way
+     the catalog's search box finds it (Storybook: the space-separated title, never the
+     camelCase export); when the round's touched set is not on disk, every component in the
+     ledger claim — the claim is the run
 
-`AskUserQuestion` dismissed → STOP. State is safely on disk; re-invoke to continue.
+  Reply  ✅ approve  — or —  ✏️ change <what looks wrong>
+
+Nothing else in the block: no deep links, no state lists, no gate-report path, no gloss — the
+user searches the catalog by component name and the render gate already measured what a human
+cannot overlay. The report path is on disk for whoever wants it. Under `/spec:run` this block
+IS the stop's report — no slots report is rendered for a look stop; its reply line is the
+`next:` line.
+
+The user's reply is the decision. Only the literal `approve` accepts → Step 6; every other
+reply is a change round (an ambiguous one — praise, a question — re-prints the block with one
+clarifying line, never stamps). `change …` → a change round: one
+`Agent {model: "sonnet"}` edit dispatch per affected surface, then Step 3 and Step 4 again,
+then this block again — the 🆕 lines name only what the round touched. No reply → nothing
+moved; state is on disk and the Resume table lands here again on the next invocation.
 
 ## Step 6 — Reconcile + stamp
 

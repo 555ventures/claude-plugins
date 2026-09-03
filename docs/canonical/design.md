@@ -117,3 +117,31 @@ Misunderstandings (`id · what · step · cost · note`). Every enum cell is one
 counted on the fixed `📒 ledger:` line. A ledger that does not parse never opens a gate. The
 lib is the one writer of rows: edits rewrite only the touched row and leave every other byte
 identical; a literal pipe inside a cell is written `\|`.
+
+## The mocks command (2026-09-02, specs/20260902/07)
+
+`/spec:mocks` is the standalone design stage. `spec/scripts/mocks-driver.js` (`spec-paths
+mocks-driver`) derives SEED → SHAPES → WIREFRAMES → THEME → SKIN → REVIEW → APPROVED from
+`design/mocks/status.json` (schemaVersion 1) plus the artifacts on disk, prints exactly one step
+(`Read only:` + `Doctrine:` lines), checkpoints every accepted mark (`✅ checkpoint — mocks state
+saved (<prev> → <next>); safe to /clear and re-run /spec:mocks`, preceded by the `📒 ledger:`
+counts line), gates every advance on the provenance ledger (`gateVerdict`, refusing on
+`open:false` and naming the rows), and records a sub-mark per journey (`journey-drawn`,
+`journey-approved`, `journey-skinned`, `journey-reviewed`), per theme direction
+(`direction-composed`), and `--reopen journey:<j>|shapes|theme` (recorded, printed, nothing
+deleted). The 13 seed fact keys are closed (`primary-surface platforms-horizon tenancy offline
+realtime ai-in-loop residency payer day-one-integrations scale-outage vendor-limits retention
+legal-floor`), each mapped in `seed.md ## Facts` to a confirmed `product` ledger row. Registers
+are link signatures: a wireframe links `design/wire/tokens.css` + `wire.css` (copied from
+`spec/templates/mocks/` at `canon-written`), a skinned screen links `design/tokens.css` and no
+`wire/` stylesheet; `theme-picked` copies the chosen `design/theme/<k>/tokens.css` into place.
+THEME opens with a direction interview — 2–3 candidate directions derived from the seed and
+asked, never fixed anchors — recorded as the `theme-directions` product row. The driver's
+`ledger add|set|catch|check|counts` subcommands are the only writers of `design/mocks/ledger.md`.
+SSH rule: `design-atlas.js serve` serves `design/` statically and prints
+`serving http://localhost:<port>/atlas/index.html — remote: ssh -L <port>:localhost:<port> <host>`;
+the driver's own look is `mocks-driver.js look <label> [--state <s>]` through the Playwright
+CLI (`look-probe` gates every screen-producing state unless `look-via browser` was declared).
+`design-atlas.js build` renders seed journeys (owner `seed:<journey>`), one frame per
+`data-state-btn` state, a `shapes` section, and skips `references/`. Greenfield chain:
+`/spec:mocks → /spec:genesis → /spec:enforce → /spec:plan`.

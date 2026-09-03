@@ -414,11 +414,17 @@ function handleJourneyDrawn(journeyName) {
     const file = mockFile(label)
     if (!fs.existsSync(file)) die('design/mocks/' + label + '.html does not exist — draw it, then re-mark journey-drawn --journey ' + journeyName)
     const html = fs.readFileSync(file, 'utf8')
-    if (labelOf(html) !== label) die(file + ': data-screen-label must equal "' + label + '"')
-    if (statusOf(html) !== 'sketch') die(file + ': data-status must be "sketch" at journey-drawn time')
-    if (!/wire\/tokens\.css/.test(html)) die(file + ': does not link ../wire/tokens.css')
-    if (!/wire\/wire\.css/.test(html)) die(file + ': does not link ../wire/wire.css')
+    // AC-20260902-07-6: every D6 failure mode (ratified status, no wire/tokens.css link, an
+    // off-token color literal) must exit 2 carrying BOTH the failing label and design-atlas.js
+    // check's own line — so the atlas check runs once, up front, and its output (when it fails)
+    // rides along on whichever die() below actually fires for this label, not only the branch
+    // that reads the atlas exit code directly.
     const r = runDesignAtlasCheck([file])
+    const atlasSuffix = r.status !== 0 ? ' — design-atlas.js check: ' + childOutput(r) : ''
+    if (labelOf(html) !== label) die(file + ': data-screen-label must equal "' + label + '"' + atlasSuffix)
+    if (statusOf(html) !== 'sketch') die(file + ': data-status must be "sketch" at journey-drawn time' + atlasSuffix)
+    if (!/wire\/tokens\.css/.test(html)) die(file + ': does not link ../wire/tokens.css' + atlasSuffix)
+    if (!/wire\/wire\.css/.test(html)) die(file + ': does not link ../wire/wire.css' + atlasSuffix)
     if (r.status !== 0) die(file + ': design-atlas.js check failed for label "' + label + '": ' + childOutput(r))
   }
   ensureJourneyRecord(journeyName).drawn = nowIso()

@@ -1,6 +1,6 @@
 ---
 date: 2026-09-02
-status: implementing
+status: done
 build_base: main
 tier: critical             # spec/bin/spec-paths gains keys and a shared-for list (pipeline rules § Risk Tiers)
 area: mocks
@@ -354,6 +354,14 @@ directly afterwards is fine (product tokens are the host's from then on), but re
 `theme-picked` would overwrite it; the driver refuses a second `theme-picked` without
 `--reopen theme`. Rejected: putting shapes/theme under `design/mocks/` (the atlas walk would
 read them as surfaces).
+
+Deviations folded at close (2026-09-02, review rv_0d5a90343171), both one-offs:
+- D8 names `theme-directions` and `theme` product rows without pinning how the driver finds
+  them — ledger ids are `^[A-Z]+\d+[a-z]?$`, so the test fixture carries the literal
+  `theme-directions: <kebab>` / `theme: <kebab>` in the `claim` cell and the driver reads that
+  shape; assertions are on driver behavior, not the row's exact form.
+- D18's 7.61.0 target was already shipped by spec 06; the build bumped to 7.62.0 (the standing
+  § Gotchas version-target rule).
 
 ## Canonical Delta
 

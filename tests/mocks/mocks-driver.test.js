@@ -433,12 +433,50 @@ test('AC-20260902-07-6: journey-drawn refuses a missing or non-conforming label 
   assert.match(r.stderr + r.stdout, new RegExp(LABELS[1]), 'the refusal must name the missing label "' + LABELS[1] + '"')
 
   for (const label of LABELS) writeWireframe(dir, label)
-  // corrupt one file: ratified status is not a valid sketch stage, and no wire tokens link
+
+  // AC-6's three named non-conforming shapes, each isolated to ONE violation against an
+  // otherwise-conforming file — the literal text requires exit 2, the failing label, AND
+  // design-atlas.js check's own output line on ALL THREE, not just a label match.
+  const CHECK_LINE_RE = /design-atlas\.js check|CHECK FAIL/
+
+  // (a) data-status="ratified" — otherwise D6-conforming (both wire links present); ratified
+  // tier binds design-atlas.js check's hygiene rules (e.g. the border-box reset), which this
+  // bare fixture carries none of, so check fails and prints its own CHECK FAIL line.
   fs.writeFileSync(path.join(dir, 'design/mocks', LABELS[1] + '.html'),
-    '<main data-screen-label="' + LABELS[1] + '" data-status="ratified">no tokens link</main>\n')
+    '<link rel="stylesheet" href="../wire/tokens.css">\n' +
+    '<link rel="stylesheet" href="../wire/wire.css">\n' +
+    '<main data-screen-label="' + LABELS[1] + '" data-status="ratified">' + LABELS[1] + '</main>\n')
   r = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
-  assert.strictEqual(r.status, 2, 'journey-drawn must refuse a non-conforming file (wrong status or missing wire/tokens.css link): ' + r.stdout + r.stderr)
-  assert.match(r.stderr + r.stdout, new RegExp(LABELS[1]), 'the refusal must carry the failing label')
+  assert.strictEqual(r.status, 2, 'journey-drawn must refuse a data-status="ratified" file (not the required sketch stage): ' + r.stdout + r.stderr)
+  assert.match(r.stderr + r.stdout, new RegExp(LABELS[1]), 'the ratified-status refusal must carry the failing label "' + LABELS[1] + '"')
+  assert.match(r.stderr + r.stdout, CHECK_LINE_RE,
+    'the ratified-status refusal must also carry design-atlas.js check\'s own output line, not just the label — the AC requires both: ' + r.stdout + r.stderr)
+
+  // (b) links no wire/tokens.css — otherwise D6-conforming (sketch status, wire.css still
+  // linked); design-atlas.js check unconditionally requires a tokens.css link at any tier.
+  writeWireframe(dir, LABELS[1]) // restore baseline before isolating the next violation
+  fs.writeFileSync(path.join(dir, 'design/mocks', LABELS[1] + '.html'),
+    '<link rel="stylesheet" href="../wire/wire.css">\n' +
+    '<main data-screen-label="' + LABELS[1] + '" data-status="sketch">' + LABELS[1] + '</main>\n')
+  r = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
+  assert.strictEqual(r.status, 2, 'journey-drawn must refuse a file that links no wire/tokens.css: ' + r.stdout + r.stderr)
+  assert.match(r.stderr + r.stdout, new RegExp(LABELS[1]), 'the missing-tokens-link refusal must carry the failing label "' + LABELS[1] + '"')
+  assert.match(r.stderr + r.stdout, CHECK_LINE_RE,
+    'the missing-tokens-link refusal must also carry design-atlas.js check\'s own output line, not just the label: ' + r.stdout + r.stderr)
+
+  // (c) contains an off-token color literal (#999) — otherwise D6-conforming; design-atlas.js
+  // check unconditionally flags inline off-token color literals at any tier.
+  writeWireframe(dir, LABELS[1]) // restore baseline before isolating the next violation
+  fs.writeFileSync(path.join(dir, 'design/mocks', LABELS[1] + '.html'),
+    '<link rel="stylesheet" href="../wire/tokens.css">\n' +
+    '<link rel="stylesheet" href="../wire/wire.css">\n' +
+    '<style>.x { color: #999; }</style>\n' +
+    '<main data-screen-label="' + LABELS[1] + '" data-status="sketch">' + LABELS[1] + '</main>\n')
+  r = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
+  assert.strictEqual(r.status, 2, 'journey-drawn must refuse a file containing an off-token color literal (#999): ' + r.stdout + r.stderr)
+  assert.match(r.stderr + r.stdout, new RegExp(LABELS[1]), 'the off-token-color refusal must carry the failing label "' + LABELS[1] + '"')
+  assert.match(r.stderr + r.stdout, CHECK_LINE_RE,
+    'the off-token-color refusal must also carry design-atlas.js check\'s own output line, not just the label: ' + r.stdout + r.stderr)
 
   writeWireframe(dir, LABELS[1])
   r = mark(dir, 'journey-drawn', ['--journey', JOURNEY])

@@ -3,7 +3,7 @@ name: replay-js-cwd-not-root
 description: OUTDATED PREMISE, corrected — spec/scripts/replay.js DOES accept `--root <dir>` today (added 2026-08-27); cwd is only the fallback default. Never assume a Decisions-table flag list stays exhaustive across later specs.
 metadata:
   type: project
-  reviewed: 2026-08-31
+  reviewed: 2026-09-02
 ---
 
 **Corrected 2026-08-30 (review close, specs/20260830/02).** The headline claim of this note is

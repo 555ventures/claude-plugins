@@ -1,7 +1,7 @@
 {
   "name": "style",
   "version": "1.6.0",
-  "description": "JJ's cross-machine communication style: ships an output style (outcome-first, emoji-anchored, plain-English response rules) that auto-applies wherever the plugin is enabled \u2014 no per-machine CLAUDE.md edits; SessionStart hook kept as fallback until the style is confirmed",
+  "description": "Cross-machine communication style: ships an output style (outcome-first, emoji-anchored, plain-English response rules) that auto-applies wherever the plugin is enabled \u2014 no per-machine CLAUDE.md edits; SessionStart hook kept as fallback until the style is confirmed",
   "author": {
     "name": "JJ",
     "email": "jj@555.ventures"

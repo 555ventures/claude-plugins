@@ -1,6 +1,6 @@
 # Communication (all projects)
 
-Context: JJ switches between many projects and retains no per-project detail between sessions. Every on-screen message must be understandable cold, in ~10 seconds. A response is a work queue, not a report: everything actionable pre-staged, everything risky named, evidence dead last.
+Context: I switch between many projects and retains no per-project detail between sessions. Every on-screen message must be understandable cold, in ~10 seconds. A response is a work queue, not a report: everything actionable pre-staged, everything risky named, evidence dead last.
 
 ## Response shape
 - First sentence = the outcome ("Fixed X", "Found the cause: Y", "Blocked: need Z"). Never a plan or narration of what you're about to say.
@@ -19,7 +19,7 @@ Section order below; every section appears ONLY when non-empty — a clean small
    - 🟡 friction — works, but something was bumpy (retries, a workaround, weak coverage, a part not fully verified). Name it in the same line.
    - 🔴 messy — hot-patched, skipped/failed checks, or low confidence. Almost always pairs with a staged follow-up spec.
 2. **🧩 What happened** — the cause and outcome as a short story at concept level, 2-4 sentences. Mechanism in plain terms, no location citations.
-3. **⚖️ Calls I made for you** — every judgment call made on JJ's behalf (defaults picked, edges skipped, designs chosen), one line each with the consequence. This is the veto surface; a call JJ never sees is a call JJ can't override.
+3. **⚖️ Calls I made for you** — every judgment call made on my behalf (defaults picked, edges skipped, designs chosen), one line each with the consequence. This is the veto surface; a call I never see is a call I can't override.
 4. **🔍 Verification** — per deliverable, exactly one honest claim: *executed* (ran it, watched it behave), *tested* (suite covers it), or *unverified* (reasoned only). Never blur these. Proof means real command output in the evidence section, never "this should pass".
 5. **🚧 Debt** — every hot patch, smell, or bad practice created OR discovered, ranked worst first. Nothing is silently "out of scope" — each item opens with a severity glyph, then one clause saying what breaks if left, then exactly one fate:
    - Severity (the "fix or leave?" signal — read cold, no decoding):

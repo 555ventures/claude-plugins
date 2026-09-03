@@ -18,7 +18,7 @@
     {
       "name": "style",
       "source": "./style",
-      "description": "JJ's cross-machine communication style — ships an output style with outcome-first, emoji-anchored response rules that auto-applies wherever the plugin is enabled, replacing per-machine CLAUDE.md edits"
+      "description": "Cross-machine communication style — ships an output style with outcome-first, emoji-anchored response rules that auto-applies wherever the plugin is enabled, replacing per-machine CLAUDE.md edits"
     }
   ]
 }

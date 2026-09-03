@@ -1,0 +1,148 @@
+/* Chrome token register — spec/doctrine/design.md § Design Atlas (D4/D5, specs/20260902/09).
+   shadcn's default zinc scale as plain CSS custom properties, plus the full register every
+   chrome page (atlas, galleries, preview toolbar, sketch workbench, notes layer) inlines and
+   consumes — never a literal color outside this `:root` block. `design-atlas.js`'s `page()`
+   reads this file once per process and inlines it before its own rules; every chrome rule
+   below is written on `var(--v-*)` roles only. The flat register a wireframe links
+   (`wire-tokens.css`/`wire.css`) carries the SAME values under role names without the `v-`
+   prefix — a pinned test (tests/mocks/viewer-tokens.test.js) keeps the two files value-equal
+   per the Contracts' pair list. Plain CSS, no build step, no preprocessor. */
+
+:root{
+  --v-bg:#ffffff; --v-fg:#09090b; --v-muted:#71717a; --v-muted-bg:#f4f4f5; --v-border:#e4e4e7;
+  --v-primary:#18181b; --v-primary-fg:#fafafa; --v-ring:#a1a1aa; --v-accent:#f4f4f5;
+  --v-danger:#dc2626; --v-warn:#d97706; --v-ok:#16a34a;
+  --v-radius:6px; --v-space-1:4px; --v-space-2:8px; --v-space-3:12px; --v-space-4:16px; --v-space-6:24px;
+  --v-font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;
+  --v-shadow:0 1px 2px rgba(0,0,0,.05),0 4px 12px rgba(0,0,0,.06);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--v-bg);
+  color: var(--v-fg);
+  font-family: var(--v-font);
+}
+
+/* .v-card — the base card surface: 1px border, soft shadow, rounded corners */
+.v-card {
+  background: var(--v-bg);
+  color: var(--v-fg);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius);
+  box-shadow: var(--v-shadow);
+  padding: var(--v-space-4);
+}
+
+/* .v-btn — ghost by default; .primary is the one filled button */
+.v-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--v-space-2);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius);
+  background: var(--v-bg);
+  color: var(--v-fg);
+  padding: var(--v-space-2) var(--v-space-3);
+  font: inherit;
+  cursor: pointer;
+}
+.v-btn.primary {
+  border-color: var(--v-primary);
+  background: var(--v-primary);
+  color: var(--v-primary-fg);
+}
+.v-btn.ghost {
+  border-color: transparent;
+  background: transparent;
+}
+.v-btn:focus-visible {
+  outline: 2px solid var(--v-ring);
+  outline-offset: 1px;
+}
+
+/* .v-badge — status chip base, tinted only through roles */
+.v-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--v-space-1);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius);
+  background: var(--v-muted-bg);
+  color: var(--v-muted);
+  padding: 2px var(--v-space-2);
+  font-size: 0.8em;
+}
+
+.v-input {
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius);
+  background: var(--v-bg);
+  color: var(--v-fg);
+  padding: var(--v-space-2) var(--v-space-3);
+  font: inherit;
+}
+.v-input:focus-visible {
+  outline: 2px solid var(--v-ring);
+  outline-offset: 1px;
+}
+
+/* .v-bar — the atlas/toolbar chrome bar */
+.v-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--v-space-3);
+  background: var(--v-bg);
+  border-bottom: 1px solid var(--v-border);
+  padding: var(--v-space-3) var(--v-space-4);
+}
+
+/* .v-chip — the journey-status badge register: gap/sketch/ratified/approved/bound/built/orphan */
+.v-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--v-space-1);
+  border-radius: var(--v-radius);
+  padding: 2px var(--v-space-2);
+  font-size: 0.8em;
+  border: 1px solid var(--v-border);
+  background: var(--v-muted-bg);
+  color: var(--v-muted);
+}
+.v-chip.gap { border-color: var(--v-danger); color: var(--v-danger); background: var(--v-bg); }
+.v-chip.sketch { border-color: var(--v-muted); color: var(--v-muted); background: var(--v-muted-bg); }
+.v-chip.ratified { border-color: var(--v-warn); color: var(--v-warn); background: var(--v-bg); }
+.v-chip.approved { border-color: var(--v-ok); color: var(--v-ok); background: var(--v-bg); }
+.v-chip.bound { border-color: var(--v-primary); color: var(--v-primary); background: var(--v-bg); }
+.v-chip.built { border-color: var(--v-ok); color: var(--v-primary-fg); background: var(--v-ok); }
+.v-chip.orphan { border-color: var(--v-danger); color: var(--v-primary-fg); background: var(--v-danger); }
+
+/* Gallery cards — the atlas/gallery grid item wrapping a rendered mock */
+.v-gallery-card {
+  background: var(--v-bg);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius);
+  box-shadow: var(--v-shadow);
+  overflow: hidden;
+}
+.v-gallery-card .v-bar { border-bottom: 1px solid var(--v-border); }
+
+/* Lightbox — backdrop derived from --v-fg at 85%, never a literal color */
+.v-lightbox-backdrop {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--v-fg) 85%, transparent);
+}
+
+/* Matrix toolbar — theme/viewport switches for the atlas review surface */
+.v-matrix-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--v-space-2);
+  background: var(--v-muted-bg);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius);
+  padding: var(--v-space-2) var(--v-space-3);
+}

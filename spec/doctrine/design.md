@@ -86,7 +86,7 @@ creating a component must cost strictly more than reusing one.
 `boundaries` — distinguished from a landed entry by having no `props`/`mockRefs` yet.
 `spec/scripts/components-check.js` (`spec-paths components-check`) is the manifest's schema
 authority (`name`+`purpose` required, `boundaries` an array when present, no duplicate `name`s)
-— fail-closed at the genesis design state's `rules-locked` mark, advisory at `/spec:design`
+— fail-closed at the genesis design state's `skeleton-landed` mark, advisory at `/spec:design`
 preflight. Authoring dispatches read it as binding canon like tokens: bind/import or author to
 fulfil an entry, never re-invent a lookalike; a `boundaries` contradiction is a fork, and
 `/spec:review` treats commitment entries as first-class near-duplicate targets.
@@ -128,16 +128,14 @@ blocks, `.claude/design-coverage.json`, and spec frontmatter — zero-token.
 - **`/spec:sketch <brief>`** is the per-brief workbench whose exit coherence readout sets the brief's
   sketches to `ratified`; never required — `/spec:plan` warns on an unratified UI brief, never blocks.
 - **Built surfaces join the atlas** when the host declares `design.atlasRoutes`; else badge only.
-**Sketch-tier authorship, shared home for both sweeps.** The session authors the journey-central
-set in-session (≤5, ≥1 per declared journey); one sequential `Agent {model: "fable"}` dispatch
-(Opus fallback, § Model Placement) authors the rest, citing those paths as exemplars — never one
-agent per surface; Sonnet is mechanical edits only. No shell canon → author one in-session first
-(§ Design Canon); `shell sync` runs on the pass's mocks before `check`. Grounding order: picked
-position brief → research brief → owning brief → doctrine → `tokens.css` → shell canon. The
-position brief is `design/explore/positions.md`'s `## Position: <kebab>` section naming the
-`design-pick.json` winner (`external — <name>` / plain `none` without genesis state). Both
-commands' reports add one line: `🎨 position: <kebab|none|external — name> · authored {N}
-in-session · {M} fable · {K} sonnet-mechanical`.
+**Authorship, shared home for every mock pass.** Every mock — wireframe or themed, atlas gap,
+sketch surface, or `/spec:mocks` screen — is authored and edited in-session by one hand;
+no `Agent` dispatch ever writes a mock at any stage or tier (subagents run judgment-free
+checks only). No shell canon → author one in-session first (§ Design Canon); `shell sync`
+runs on the pass's mocks before `check`. Grounding order: `design/mocks/seed.md` →
+`design/mocks/canon.md` → research brief → owning brief → doctrine → `tokens.css` → shell
+canon (a repo with no seed starts at the research brief). Both commands' reports add one
+line: `🎨 authored {N} in-session · {K} check-only dispatches`.
 **Look stops are never questions.** A stop that waits on the user having looked at screens prints
 🎨 the viewer start line on its own, 🆕 one name per item, `Reply ✅ approve — or — ✏️ change <notes>`,
 then **ends the turn** — a question dialog hides what precedes it (Claude Code #67475); the reply decides.

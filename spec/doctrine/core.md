@@ -205,8 +205,9 @@ before the model sees it.
 gates; review independence comes from fresh-context, blind-to-author dispatch and
 execution-grounded evidence, never model diversity.** Concretely: the planning session
 (Fable, or the best available model) authors specs and holds the roadmap-level design seats
-(genesis position briefs, atlas direction rounds, sketch brainstorms, sketch-tier authorship —
-the atlas sweep and the sketch scoped sweep, design.md § Design Atlas). **Sonnet** orchestrates
+(genesis position briefs, atlas direction rounds, sketch brainstorms,
+every mock, wireframe or themed, authored in-session, design.md § Design Atlas). **Sonnet**
+orchestrates
 build and review and is every worker and the reviewer. **Haiku** runs lookups and structural
 re-reads. Surprises during build go to the user, framed with the spec's own
 Rationale/Assumptions — there is no resident consultant seat. Orchestrators pass paths, never

@@ -41,7 +41,8 @@ user's input; `sweep` as an argument only skips the gap confirmation.
    (rationale: shared § Console Output Style) — this is the run's terminal report:
    - `outcome`: anchor `✅` text `atlas rebuilt — {N} surfaces ({M} bound, {K} gaps)`.
    - `bullets`: `- orphan: {mock path} — declare in {owning brief} or delete` (one per orphan);
-     plus the `🎨 position: …` line (shared § Design Atlas) after a sweep authored any mocks.
+     plus the `🎨 authored {N} in-session · {K} check-only dispatches` line (shared § Design
+     Atlas) after a sweep authored any mocks.
    - `warns`: `{bound-but-drifted suspicion the user raised}`, when raised.
    - `artifacts`: `design/atlas/index.html`.
    - `next`: two arms (A5) — `{kind:'command', text:'/spec:atlas sweep — fill the {K} gap
@@ -99,12 +100,13 @@ are incremental gap-filling.
 Every `gap` surface is authored at **sketch tier** (`data-status="sketch"`; structure, real
 copy register, token roles — no polish pass, no screenshot loop) under the harness check,
 following the shared authorship + grounding rule **in full** (shared § Design Atlas's
-authorship paragraph — who authors in-session vs. the sequential Fable dispatch, the
-no-shell-canon bootstrap, and the grounding order); paths, not prose, are what a later dispatch
+authorship paragraph — one hand, in-session, no dispatch ever writes a mock; the
+no-shell-canon bootstrap, and the grounding order); paths, not prose, are what a later mock
 in the same pass cites. Run `shell sync` on the pass's mocks, then `{atlas} check`. Then
 rebuild and report — same ```report template as step 1 above, fresh slots from the post-sweep
-build, plus the `🎨 position: …` bullet (shared § Design Atlas) — the whole picture should
-always exist; polish arrives per-surface at `/spec:design`.
+build, plus the `🎨 authored {N} in-session · {K} check-only dispatches` bullet (shared §
+Design Atlas) — the whole picture should always exist; polish arrives per-surface at
+`/spec:design`.
 
 ## Rules
 

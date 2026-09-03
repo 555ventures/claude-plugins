@@ -115,9 +115,9 @@ test('AC-20260903-01-14: replay.md Phase 4 gains --via driver|manual on the --re
 })
 
 // AC-20260903-01-14 (part 3): D15 — every behavior change in this spec bumps the owning
-// plugin's semver (pipeline rules § Planning). The literal 7.68.0 is the version at plan time,
-// never the pinned target — a concurrent session may land a different next version first
-// (§ Gotchas), so this only asserts the version DIFFERS, never a specific new value.
+// plugin's semver (pipeline rules § Planning). The AC pins the pre-image value as the one the
+// manifest must have moved past — never a specific target, since the next free number is
+// derived at build time (§ Gotchas), so this only asserts the version DIFFERS.
 test('AC-20260903-01-14: plugin.json version bumps past 7.68.0', () => {
   assert.ok(fs.existsSync(PLUGIN_JSON), 'spec/.claude-plugin/plugin.json must exist for this pin to mean anything')
   const pkg = JSON.parse(read('spec/.claude-plugin/plugin.json'))

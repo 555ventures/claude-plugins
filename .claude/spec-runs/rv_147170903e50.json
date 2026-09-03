@@ -1,0 +1,139 @@
+{
+  "runId": "rv_147170903e50",
+  "ts": "2026-09-03T03:31:51.189Z",
+  "spec": "specs/20260902/06-mocks-provenance-ledger.md",
+  "tier": "critical",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 794,
+    "base": "448691927309c4f9b9705a4cf9520e2533b3a684",
+    "head": "a84f7a1ee699e6b200c8512f12367d89fae938c7",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 0,
+      "observed": {
+        "outOfPlan": 0,
+        "files": []
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 216
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": {
+        "matches": 10
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": {
+        "files": 20,
+        "testsExecuted": 263
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 9,
+        "carried": 8,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "Version bump target 7.60.0 deviates to 7.61.0",
+        "file": "spec/.claude-plugin/plugin.json",
+        "line": 3,
+        "evidence": "Deviations sidecar cites pipeline rules Gotchas (a spec Decision naming a literal version-bump target can be stale by build time); commit 4486919 (disposition-pool fix) already took 7.60.0 on main before this spec build landed. tests/consistency/plugin-version.test.js passes: 4 tests green at 7.61.0."
+      },
+      {
+        "claim": "AC-20260902-06-9 split into AC-9/AC-10 at build time deviates from the spec listed AC",
+        "file": "specs/20260902/06-mocks-provenance-ledger.md",
+        "line": 189,
+        "evidence": "Deviations sidecar explains red-check RED_FINDINGS classified the compound AC SHALL-CONTINUE-TO clause as a green pin; splitting is the documented remedy. tests/spec-paths.test.js has both AC-9 and AC-10 tests, both passing (verified via node --test run)."
+      },
+      {
+        "claim": "tests/mocks/mocks-ledger.test.js inlines the empty-template text instead of reading spec/templates/mocks-ledger.md from disk",
+        "file": "tests/mocks/mocks-ledger.test.js",
+        "line": 15,
+        "evidence": "Verified spec/templates/mocks-ledger.md exists in the diff and its content is byte-identical to the inlined EMPTY_TEMPLATE constant; deviations sidecar records rationale and sync instruction."
+      },
+      {
+        "claim": "question-style-gate.js productStageRoot/inProductStage match the D5/Contracts pseudocode exactly including fail-open behavior",
+        "file": "spec/scripts/question-style-gate.js",
+        "line": 41,
+        "evidence": "Diff shows productStageRoot returns process.env.CLAUDE_PROJECT_DIR || (input && input.cwd) || process.cwd(), matching Contracts verbatim; readJsonSafe returns null on parse error (fail-open). Full targeted test run: 31/31 passing including AC-6/7/8 covering the WIREFRAMES/genesis/APPROVED/cwd-fallback matrix."
+      },
+      {
+        "claim": "New spec/doctrine/mocks.md section headings are correctly citable via spec-paths shared-mocks and citations-check",
+        "file": "spec/doctrine/mocks.md",
+        "line": 8,
+        "evidence": "Ran node spec/scripts/citations-check.js: TOTAL=178 CHECKED=82 SKIP=96 MISS=0, exit 0 - no mismatched Section Name citations in the diff."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 0
+  }
+}

@@ -3,7 +3,7 @@ name: spec-ac-example-vs-shipped-refusal
 description: an AC's illustrative "e.g." text can contradict the very refusal rule it's demonstrating — verify AC worked examples empirically against the shipped script before encoding them as test literals
 metadata:
   type: feedback
-  reviewed: 2026-08-31
+  reviewed: 2026-09-02
 ---
 
 specs/20260819/02-mutation-replay.md's AC-20260819-02-4 gives a worked example: `--subject

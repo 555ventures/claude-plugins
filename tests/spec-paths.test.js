@@ -110,7 +110,7 @@ test('every documented key resolves to an existing path', () => {
     'wf-research', 'design-atlas', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
     'review-driver', 'build-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'render-gate', 'render-compare',
-    'render-inventory', 'render-rules', 'registry-check', 'genesis-driver', 'escape-row', 'shared', 'shared-genesis', 'shared-mocks', 'template', 'templates', 'contract']) {
+    'render-inventory', 'render-rules', 'registry-check', 'genesis-driver', 'escape-row', 'mocks-driver', 'shared', 'shared-genesis', 'shared-mocks', 'template', 'templates', 'contract']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }
@@ -385,4 +385,37 @@ test('AC-20260823-01-16: spec-paths release-legs resolves to spec/scripts/releas
   assert.match(output, /usage: spec-paths/,
     'the refusal must print the usage line, the same way any other unknown key does, so a caller ' +
     'relying on the old key gets a discoverable error rather than a silent wrong path: ' + output)
+})
+
+// specs/20260902/07-mocks-command-driver.md D16 (TDD red): spec-paths has no `mocks-driver` key
+// and no `mocks` entry in the `shared-for` SECTIONS map yet — /spec:mocks would resolve nothing.
+test('AC-20260902-07-15: spec-paths mocks-driver resolves to spec/scripts/mocks-driver.js, an existing absolute path', () => {
+  const fs = require('node:fs')
+  const mocksDriverPath = run('mocks-driver').trim()
+  assert.strictEqual(mocksDriverPath, path.join(SPEC, 'scripts/mocks-driver.js'),
+    'D16: `spec-paths mocks-driver` must resolve to spec/scripts/mocks-driver.js — a wrong or ' +
+    'missing key breaks /spec:mocks\'s driver invocation silently (§ Risk Tiers, spec-paths: "a ' +
+    'wrong key breaks commands silently")')
+  assert.ok(path.isAbsolute(mocksDriverPath), 'the printed path must be absolute — a relative path breaks a caller invoked from a different cwd: ' + mocksDriverPath)
+  assert.ok(fs.existsSync(mocksDriverPath), 'the resolved mocks-driver.js path must actually exist on disk: ' + mocksDriverPath)
+})
+
+// specs/20260902/07-mocks-command-driver.md D16, AC-20260902-07-15: the mocks command's own
+// shared-for scope — core sections (Host Grounding, Model Placement, Decisions, Question Style,
+// Console Output Style, MCP Policy) plus the design sections (Design Canon, Design Atlas), never
+// the render gate doctrine (mocks authors screens, it never binds a spec against them).
+test('AC-20260902-07-15: spec-paths shared-for mocks serves exactly the D16 section set — Design Canon and Design Atlas present, Design Render Gate absent', () => {
+  const out = run('shared-for', 'mocks')
+  const full = run('shared-for', 'no-such-command')
+  assert.ok(out.length < full.length, '`shared-for mocks` output must be a strict subset of the full doctrine, or the scoping map has no mocks entry at all')
+  assert.match(out, /## Host Grounding/, 'mocks must be served § Host Grounding — the core invariants every command reads')
+  assert.match(out, /## Model Placement/, 'mocks must be served § Model Placement')
+  assert.match(out, /## Decisions/, 'mocks must be served § Decisions')
+  assert.match(out, /## Question Style/, 'mocks must be served § Question Style — the THEME direction interview and every other AskUserQuestion the driver prompts for must follow it')
+  assert.match(out, /## Console Output Style/, 'mocks must be served § Console Output Style — the checkpoint/ledger-counts glyph lines follow the shared narration doctrine')
+  assert.match(out, /## MCP Policy/, 'mocks must be served § MCP Policy — the look-via browser path tells the session to ToolSearch for a browser MCP')
+  assert.match(out, /## Design Canon/, 'mocks must be served § Design Canon — the seed/canon/wireframe grammar it enforces lives there')
+  assert.match(out, /## Design Atlas/, 'mocks must be served § Design Atlas — the atlas build the driver reuses for state frames and shapes')
+  assert.ok(!/## Design Render Gate/.test(out),
+    'mocks must NOT be served § Design Render Gate — the driver authors and approves screens, it never binds a spec against one, so paying for the render-gate doctrine would be dead weight')
 })

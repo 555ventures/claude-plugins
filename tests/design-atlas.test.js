@@ -3,7 +3,9 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir, runNode } = require('./helpers')
+const http = require('node:http')
+const { spawn } = require('node:child_process')
+const { tmpdir, runNode, SPEC } = require('./helpers')
 
 const atlas = (argv, opts) => runNode('scripts/design-atlas.js', argv, opts)
 
@@ -611,4 +613,132 @@ test('check/sync: active nav derived (AC-20260901-04-8)', () => {
     noMatch.stdout + noMatch.stderr)
   assert.match(noMatch.stdout, /shell region differs from canon \(nav slot\)/,
     'the drift must be named to the nav slot, since that is where the stale aria-current sits')
+})
+
+// specs/20260902/07-mocks-command-driver.md D12, AC-20260902-07-12 (TDD red): design-atlas.js has
+// no `serve` subcommand yet. The AC itself names the runner: async child_process.spawn + http.get,
+// never runNode's spawnSync — tests/helpers.js's runNode blocks the parent event loop for the
+// child's whole lifetime, so a synchronous spawn here could never receive the server's own
+// responses while the child is still alive (spec-pipeline.md Gotchas: "a test that stands up an
+// in-process http.createServer stub … hangs to the spawn timeout instead of returning the
+// stubbed response" — the live-server mirror of that same class).
+test('AC-20260902-07-12: design-atlas.js serve prints the port-forward line first, serves design/ statically with no-store, blocks path traversal, and exits on SIGTERM', async () => {
+  const dir = tmpdir('atlas-serve')
+  fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/mocks/a.html'), '<main data-screen-label="a">hello</main>\n')
+  fs.writeFileSync(path.join(dir, 'package.json'), '{"name":"should-never-be-served"}')
+
+  const port = 41230 + (process.pid % 300)
+  const child = spawn(process.execPath, [path.join(SPEC, 'scripts/design-atlas.js'), 'serve', '--root', dir, '--port', String(port)])
+
+  let firstLine = null
+  let stdoutBuf = ''
+  const firstLinePromise = new Promise((resolve) => {
+    child.stdout.on('data', (chunk) => {
+      stdoutBuf += chunk.toString('utf8')
+      if (firstLine === null && stdoutBuf.includes('\n')) {
+        firstLine = stdoutBuf.split('\n')[0]
+        resolve()
+      }
+    })
+  })
+  let stderrBuf = ''
+  child.stderr.on('data', (chunk) => { stderrBuf += chunk.toString('utf8') })
+
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('serve did not print its first stdout line within 5s: ' + stderrBuf)), 5000))
+  await Promise.race([firstLinePromise, timeout])
+
+  assert.strictEqual(firstLine,
+    'serving http://localhost:' + port + '/atlas/index.html — remote: ssh -L ' + port + ':localhost:' + port + ' <host>',
+    'the very first stdout line must be the exact D12 port-forward line, with the port substituted and the literal <host> left for the user to fill in: got ' + JSON.stringify(firstLine))
+
+  function get(urlPath) {
+    return new Promise((resolve, reject) => {
+      http.get({ host: 'localhost', port, path: urlPath }, (res) => {
+        let body = ''
+        res.on('data', (c) => { body += c })
+        res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body }))
+      }).on('error', reject)
+    })
+  }
+
+  const mockRes = await get('/mocks/a.html')
+  assert.strictEqual(mockRes.status, 200, 'GET /mocks/a.html must serve the file with status 200')
+  assert.strictEqual(mockRes.headers['cache-control'], 'no-store', 'the server must never cache — every response must carry cache-control: no-store')
+  assert.strictEqual(mockRes.body, fs.readFileSync(path.join(dir, 'design/mocks/a.html'), 'utf8'),
+    'the served body must be the exact bytes of design/mocks/a.html')
+
+  const traversal = await get('/../package.json')
+  assert.strictEqual(traversal.status, 404,
+    'a path-traversal request outside design/ must answer 404, never leak a file above the served root (package.json here)')
+
+  const exitPromise = new Promise((resolve) => child.on('exit', (code, signal) => resolve({ code, signal })))
+  child.kill('SIGTERM')
+  const exitTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('serve did not exit within 5s of SIGTERM')), 5000))
+  await Promise.race([exitPromise, exitTimeout])
+})
+
+// specs/20260902/07-mocks-command-driver.md D15, AC-20260902-07-14 (TDD red): parseSurfaces
+// (used by cmdBuild) does not yet read design/mocks/seed.md's per-journey ```surfaces blocks, does
+// not render one frame per data-state-btn state, does not emit a shapes section for
+// design/shapes/*.html, and the html walk does not yet skip design/mocks/references/.
+test('AC-20260902-07-14: build reads seed.md journeys (owner seed:<journey>, persona line), renders one frame per data-state-btn state, a shapes section, and skips references/', () => {
+  const dir = tmpdir('atlas-seed')
+  fs.mkdirSync(path.join(dir, 'design/mocks/references'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'design/shapes'), { recursive: true })
+
+  fs.writeFileSync(path.join(dir, 'design/mocks/seed.md'), `# Seed — Test Product
+
+## Product
+It is a synthetic product.
+Built for tests.
+It must do one job.
+
+## Facts
+- primary-surface: P1
+
+## References
+- none
+
+## Journeys
+### j1
+Mika (dispatch lead) draws two screens and reaches the busy state.
+\`\`\`surfaces
+a -> b
+\`\`\`
+
+## Dense screen
+- a
+`)
+
+  fs.writeFileSync(path.join(dir, 'design/mocks/a.html'),
+    '<link rel="stylesheet" href="../wire/tokens.css">\n' +
+    '<main data-screen-label="a" data-status="sketch">\n' +
+    '<div data-contract="none"><button data-state-btn="busy">Busy</button><button data-state-btn="empty">Empty</button></div>\n' +
+    'A</main>\n')
+  fs.writeFileSync(path.join(dir, 'design/mocks/b.html'),
+    '<link rel="stylesheet" href="../wire/tokens.css">\n<main data-screen-label="b" data-status="sketch">B</main>\n')
+  fs.writeFileSync(path.join(dir, 'design/mocks/references/inspiration.html'),
+    '<main data-screen-label="should-never-appear">ref</main>\n')
+  fs.writeFileSync(path.join(dir, 'design/shapes/calm.html'),
+    '<main data-screen-label="a" data-shape="calm">calm shape</main>\n')
+
+  const res = atlas(['build'], { cwd: dir })
+  assert.strictEqual(res.status, 0, res.stdout + res.stderr)
+  const out = fs.readFileSync(path.join(dir, 'design/atlas/index.html'), 'utf8')
+
+  assert.match(out, /<h2>j1/, 'a section headed by the journey key "j1" must be emitted for the seed journey')
+  assert.match(out, /Mika \(dispatch lead\) draws two screens/, 'the journey\'s persona line from seed.md must appear in the rendered section')
+
+  const frameCount = (out.match(/data-screen-label="a"/g) || []).length
+  assert.ok(frameCount >= 2,
+    'two frames must be rendered for label "a" (one per data-state-btn state: busy, empty) — got ' + frameCount + ' occurrences of data-screen-label="a"')
+  assert.match(out, /data-state="busy"/, 'a frame rendered for the "busy" state must carry data-state="busy"')
+  assert.match(out, /data-state="empty"/, 'a frame rendered for the "empty" state must carry data-state="empty"')
+
+  assert.match(out, /shapes/i, 'a "shapes" section must be emitted for design/shapes/*.html files')
+  assert.match(out, /calm/, 'the shapes section must be keyed by the shape file (calm.html)')
+
+  assert.ok(!/should-never-appear/.test(out),
+    'design/mocks/references/ must be skipped by the html walk entirely — a file under it must never surface as a rendered label')
 })

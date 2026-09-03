@@ -23,7 +23,17 @@
 //   design-atlas.js gallery <dir> [--out <file>]   comparison gallery over candidate subdirs (explore rounds)
 //   design-atlas.js build [--root <repo>] [--out <file>]
 //                                                  the atlas: mocks × roadmap `surfaces` blocks ×
-//                                                  coverage ledger × spec stamps → one browsable page
+//                                                  design/mocks/seed.md journeys (owner
+//                                                  `seed:<journey>`, specs/20260902/07 D15) ×
+//                                                  coverage ledger × spec stamps → one browsable
+//                                                  page; one frame per data-state-btn state, a
+//                                                  `shapes` section for design/shapes/*.html,
+//                                                  design/mocks/references/ never walked
+//   design-atlas.js serve [--root <r>] [--port <n>]
+//                                                  specs/20260902/07 D12: static, no-cache,
+//                                                  read-only server over <root>/design/ — first
+//                                                  stdout line is the SSH port-forward
+//                                                  instruction; exits on SIGINT/SIGTERM
 //   design-atlas.js shell sync  [--root <r>] [<mock|dir>…]
 //                                                  specs/20260901/04-shell-composed-mocks.md D5:
 //                                                  rewrite every declaring mock's chrome region
@@ -44,7 +54,7 @@
 // D1 canon rule set) live in spec/scripts/lib/shell-region.js, kept outside this file's own
 // entrypoint-conformance surface deliberately (specs/20260901/04 D12 — no new spec-paths key).
 // Exit 0 = pass/written, 1 = check violations or a `shell sync` refusal, 2 = usage/IO error or an
-// ambiguous `shell adopt --apply` with no --shell.
+// ambiguous `shell adopt --apply` with no --shell. `serve` runs until SIGINT/SIGTERM (exit 0).
 'use strict'
 const fs = require('node:fs')
 const path = require('node:path')
@@ -58,7 +68,10 @@ function htmlFilesUnder(p, out = []) {
   const st = fs.statSync(p)
   if (st.isFile()) { if (p.endsWith('.html')) out.push(p); return out }
   for (const e of fs.readdirSync(p).sort()) {
-    if (e === 'atlas' || e === 'gallery.html' || e.startsWith('.')) continue
+    // specs/20260902/07-mocks-command-driver.md D15: design/mocks/references/ holds inspiration
+    // material the seed's ## References section may cite by path — it is never a screen and must
+    // never surface as a rendered label in check/build/gallery's walk.
+    if (e === 'atlas' || e === 'gallery.html' || e === 'references' || e.startsWith('.')) continue
     htmlFilesUnder(path.join(p, e), out)
   }
   return out
@@ -624,6 +637,46 @@ function parseSurfaces(roadmapDir) {
   return { nodes, edges }
 }
 
+// specs/20260902/07-mocks-command-driver.md D15: design/mocks/seed.md's `### <journey-kebab>`
+// blocks (D4's grammar) are a second surfaces source — journeys exist before any roadmap does.
+// Owner = `seed:<journey>` (never a roadmap file path) so cmdBuild can section and title these
+// labels by journey instead of by declaring brief; the persona line rides along for the section
+// subtitle. Comments are stripped once so the template's own instructional `<!-- -->` blocks
+// never get misread as journey content.
+function parseSeedJourneys(root) {
+  const journeys = new Map() // kebab -> {persona, labels, edges}
+  let text
+  try { text = fs.readFileSync(path.join(root, 'design/mocks/seed.md'), 'utf8') } catch { return journeys }
+  text = text.replace(/<!--[\s\S]*?-->/g, '')
+  const starts = []
+  const re = /^### ([a-z0-9-]+)\s*$/gm
+  let m
+  while ((m = re.exec(text))) starts.push({ name: m[1], index: m.index, headerEnd: m.index + m[0].length })
+  for (let i = 0; i < starts.length; i++) {
+    const body = text.slice(starts[i].headerEnd, i + 1 < starts.length ? starts[i + 1].index : text.length)
+    let persona = ''
+    for (const l of body.split('\n')) { if (l.trim()) { persona = l.trim(); break } }
+    const surf = body.match(/```surfaces\n([\s\S]*?)```/)
+    const labels = []
+    const edges = []
+    if (surf) {
+      for (const raw of surf[1].split('\n')) {
+        const line = raw.trim()
+        if (!line || line.startsWith('#')) continue
+        const edge = line.split('->').map(s => s.trim())
+        if (edge.length === 2 && edge[0] && edge[1]) {
+          for (const l of edge) if (!labels.includes(l)) labels.push(l)
+          edges.push(edge)
+        } else if (/^[\w][\w-]*$/.test(line) && !labels.includes(line)) {
+          labels.push(line)
+        }
+      }
+    }
+    journeys.set(starts[i].name, { persona, labels, edges })
+  }
+  return journeys
+}
+
 // ---- build ---------------------------------------------------------------------------------------
 function cmdBuild(argv) {
   const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d }
@@ -632,16 +685,27 @@ function cmdBuild(argv) {
   const mocksDir = path.join(root, 'design/mocks')
   const { nodes, edges } = parseSurfaces(path.join(root, 'docs/roadmap'))
 
+  // D15: seed.md journeys are a second surfaces source, owner `seed:<journey>` — merged in
+  // before section/labels are derived so a seed-only label (no roadmap yet) still gets a home.
+  const seedJourneys = parseSeedJourneys(root)
+  const seedPersonaByJourney = new Map()
+  for (const [jn, j] of seedJourneys) {
+    seedPersonaByJourney.set(jn, j.persona)
+    for (const l of j.labels) if (!nodes.has(l)) nodes.set(l, { brief: 'seed:' + jn })
+    for (const e of j.edges) edges.push(e)
+  }
+
   const targets = loadTargets(root)
   const vp0 = (targets && (targets.viewports || [])[0]) || { width: 390, height: 844 }
 
-  // mocks: label -> {file, status, vp}
+  // mocks: label -> {file, status, vp, states}
   const mocks = new Map()
   if (fs.existsSync(mocksDir)) {
     for (const f of htmlFilesUnder(mocksDir)) {
       const html = fs.readFileSync(f, 'utf8')
+      const states = [...new Set([...html.matchAll(/data-state-btn\s*=\s*"([^"]+)"/g)].map(m => m[1]))]
       mocks.set(labelOf(html) || path.basename(f, '.html'),
-        { file: f, status: statusOf(html), vp: viewportOf(html) || vp0 })
+        { file: f, status: statusOf(html), vp: viewportOf(html) || vp0, states })
     }
   }
 
@@ -667,7 +731,10 @@ function cmdBuild(argv) {
     // in the coverage ledger. Standalone-spec mocks (claimed, undeclared) are legitimate.
     if (mock && !declared && !claim) badges.push('orphan')
     const primary = badges[0]
-    const brief = declared ? path.basename(nodes.get(label).brief) : null
+    // `brief` is the raw section-grouping key (a roadmap md path, or `seed:<journey>`); the
+    // meta line renders a friendlier form so a journey-owned label never shows "brief: seed:j1".
+    const rawBrief = declared ? nodes.get(label).brief : null
+    const brief = rawBrief
     // gap surfaces render as compact chips under their section — 60 undrawn screens as full-size
     // dashed boxes would bury the mocks the reviewer came to see.
     if (!mock) {
@@ -678,12 +745,23 @@ function cmdBuild(argv) {
       }
     }
     const badgeHtml = badges.map(b => '<span class="badge ' + b + '">' + b + '</span>').join('')
-    const body = frameTag(path.relative(outDir, mock.file), mock.vp.width, mock.vp.height)
+    // D15: one frame per declared data-state-btn state, each carrying data-screen-label/
+    // data-state so the atlas surfaces every state side by side instead of only the default —
+    // a mock with no state controls keeps the single default frame, byte-identical to before.
+    const body = mock.states.length
+      ? mock.states.map(s =>
+          '<div class="framewrap" data-screen-label="' + esc(label) + '" data-state="' + esc(s) + '">' +
+          '<div class="statelabel">' + esc(s) + '</div>' +
+          frameTag(path.relative(outDir, mock.file), mock.vp.width, mock.vp.height) + '</div>').join('')
+      : frameTag(path.relative(outDir, mock.file), mock.vp.width, mock.vp.height)
     const builtFrame = routes[label]
       ? '\n<h3>built</h3>' + frameTag(routes[label], mock.vp.width, mock.vp.height)
       : ''
+    const briefDisplay = !rawBrief ? null
+      : rawBrief.startsWith('seed:') ? 'journey: ' + rawBrief.slice(5)
+      : 'brief: ' + esc(path.basename(rawBrief))
     const meta = [
-      brief ? 'brief: ' + esc(brief) : 'no declaring brief',
+      briefDisplay || 'no declaring brief',
       claim ? 'spec: ' + esc(claim.spec) : null,
     ].filter(Boolean).join(' · ')
     // wide framings (tablet/desktop mocks) take the full row so they stay legible when scaled
@@ -708,14 +786,39 @@ function cmdBuild(argv) {
   }
   const sectionHtml = [...sections.keys()].sort().map(key => {
     const { cards, chips } = sections.get(key)
-    const title = key === '~no declaring brief' ? 'no declaring brief' : key.replace(/\.md$/, '')
+    // D15: a `seed:<journey>` key titles by the bare journey (not the raw "seed:j1" key) and
+    // carries the seed's persona line as a subtitle — the same context a session reads before
+    // drawing that journey's screens.
+    const isSeed = key.startsWith('seed:')
+    const title = key === '~no declaring brief' ? 'no declaring brief' : isSeed ? key.slice(5) : key.replace(/\.md$/, '')
+    const subtitle = isSeed ? (seedPersonaByJourney.get(title) || '') : ''
     const count = [cards.length ? cards.length + ' mocked' : null, chips.length ? chips.length + ' gap' : null]
       .filter(Boolean).join(' · ')
     return '<section class="sect"><h2>' + esc(title) + '<span class="count">' + count + '</span></h2>\n' +
+      (subtitle ? '<p class="meta">' + esc(subtitle) + '</p>\n' : '') +
       (cards.length ? '<div class="grid">\n' + cards.map(r => r.html).join('\n') + '\n</div>' : '') +
       (chips.length ? '\n<div class="gaps">' + chips.map(r => r.html).join('') + '</div>' : '') +
       '</section>'
   }).join('\n')
+
+  // D15: design/shapes/*.html render under their own "shapes" section keyed by shape file (a
+  // candidate register, not a screen — never merged into the labels/journeys sections above).
+  const shapesDir = path.join(root, 'design/shapes')
+  let shapesSectionHtml = ''
+  if (fs.existsSync(shapesDir)) {
+    const shapeFiles = fs.readdirSync(shapesDir).filter(f => f.endsWith('.html')).sort()
+    if (shapeFiles.length) {
+      const shapeCards = shapeFiles.map(f => {
+        const kebab = path.basename(f, '.html')
+        const filePath = path.join(shapesDir, f)
+        const vp = viewportOf(fs.readFileSync(filePath, 'utf8')) || vp0
+        return '<div class="card"><h3>' + esc(kebab) + '</h3>' +
+          frameTag(path.relative(outDir, filePath), vp.width, vp.height) + '</div>'
+      }).join('\n')
+      shapesSectionHtml = '<section class="sect"><h2>shapes<span class="count">' + shapeFiles.length +
+        '</span></h2>\n<div class="grid">\n' + shapeCards + '\n</div></section>'
+    }
+  }
 
   // status filter chips: hide everything not matching, collapse sections that go empty
   const filterBar =
@@ -758,10 +861,49 @@ function cmdBuild(argv) {
   const html = page('Design atlas',
     '<h1>Design atlas</h1><p class="meta">' + esc(summary) + '</p>\n' + graph +
     '\n<div class="bar">' + filterBar + (bar.buttons ? '<span class="sep"></span>' + bar.buttons : '') + '</div>' +
-    '\n' + sectionHtml + '\n' + LIGHTBOX + '\n' + UI_SCRIPT + bar.script + filterScript)
+    '\n' + sectionHtml + '\n' + shapesSectionHtml + '\n' + LIGHTBOX + '\n' + UI_SCRIPT + bar.script + filterScript)
   fs.mkdirSync(outDir, { recursive: true })
   fs.writeFileSync(out, html)
   process.stdout.write('atlas: ' + labels.length + ' surface(s) (' + summary + ') → ' + out + '\n')
+}
+
+// ---- serve -----------------------------------------------------------------------------------------
+// specs/20260902/07-mocks-command-driver.md D12: static, read-only, no-store server over
+// `<root>/design/` — the SSH rule (client access is the forwarded port only, never an export or a
+// hosted copy). The port-forward line is the very first stdout write, before anything else, so a
+// caller reading stdout line-by-line never blocks waiting on a second line that never comes.
+const MIME = {
+  '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'application/javascript',
+  '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.woff': 'font/woff', '.woff2': 'font/woff2',
+}
+function cmdServe(argv) {
+  const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d }
+  const root = path.resolve(arg('--root', '.'))
+  const port = parseInt(arg('--port', '4173'), 10)
+  const designRoot = path.join(root, 'design') + path.sep
+  const http = require('node:http')
+  const server = http.createServer((req, res) => {
+    let reqPath
+    try { reqPath = decodeURIComponent((req.url || '/').split('?')[0]) } catch { reqPath = '/' }
+    const resolved = path.normalize(path.join(designRoot, reqPath))
+    if (resolved !== designRoot.slice(0, -1) && !resolved.startsWith(designRoot)) {
+      res.writeHead(404, { 'cache-control': 'no-store' })
+      res.end('not found')
+      return
+    }
+    fs.readFile(resolved, (err, data) => {
+      if (err) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end('not found'); return }
+      res.writeHead(200, { 'content-type': MIME[path.extname(resolved)] || 'application/octet-stream', 'cache-control': 'no-store' })
+      res.end(data)
+    })
+  })
+  server.listen(port, () => {
+    process.stdout.write('serving http://localhost:' + port + '/atlas/index.html — remote: ssh -L ' + port + ':localhost:' + port + ' <host>\n')
+  })
+  const shutdown = () => server.close(() => process.exit(0))
+  process.on('SIGINT', shutdown)
+  process.on('SIGTERM', shutdown)
 }
 
 // ---- main ----------------------------------------------------------------------------------------
@@ -769,7 +911,8 @@ const [cmd, ...rest] = process.argv.slice(2)
 if (cmd === 'check') cmdCheck(rest)
 else if (cmd === 'gallery') cmdGallery(rest)
 else if (cmd === 'build') cmdBuild(rest)
+else if (cmd === 'serve') cmdServe(rest)
 else if (cmd === 'shell' && rest[0] === 'sync') cmdShellSync(rest.slice(1))
 else if (cmd === 'shell' && rest[0] === 'adopt') cmdShellAdopt(rest.slice(1))
 else if (cmd === 'shell') die('usage: design-atlas.js shell <sync|adopt> …')
-else die('usage: design-atlas.js <check|gallery|build|shell> …')
+else die('usage: design-atlas.js <check|gallery|build|shell|serve> …')

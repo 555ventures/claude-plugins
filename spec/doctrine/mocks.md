@@ -52,6 +52,107 @@ counting product rows per tag, every process row in one bucket, and misunderstan
 catches. The shape is fixed so a reader learns it once — change it only under the spec that
 owns it.
 
+## Mocks: State Machine
+
+`mocks-driver.js` derives the current state on every invocation from
+`design/mocks/status.json` plus the artifacts on disk — a recorded mark is never trusted
+alone; if its artifact vanished (a journey's screen deleted, a direction's tokens file
+removed) the derivation lands earlier and demands the mark again. The order is fixed: **SEED**
+(the 13 facts, journeys, dense screen, research brief) → **SHAPES** (one shape kebab picked
+from 2–3 candidates) → **WIREFRAMES** (canon written, then every seed journey drawn and
+approved) → **THEME** (≥2 directions composed, one picked) → **SKIN** (every journey skinned
+to the picked theme) → **REVIEW** (a named decider, every journey reviewed) → **APPROVED**
+(terminal). WIREFRAMES, THEME, and SKIN each carry a sub-mark per journey or direction so no
+single conversation ever has to hold more than one journey's state — a seed journey added
+mid-WIREFRAMES reappears as `0/N drawn` and reopens the state rather than silently completing.
+
+**The gate rides every advancing mark.** `seed-done`, `shape-picked`, `canon-written`,
+`journey-approved`, `theme-picked`, `journey-skinned`, `journey-reviewed`, and `approved` each
+run the provenance ledger's `gateVerdict` (§ Provenance Ledger) before recording; a blocked
+gate refuses (exit 2) naming the offending rows and the remedy (`ledger set --id <id> --status
+confirmed --tag said-by-user`, or `--status overridden`). `journey-drawn` and
+`direction-composed` run no gate — drawing and composing are how open questions get found, not
+resolved. Process rows never surface as something to resolve; they are counted, not asked.
+
+**Reopening never deletes.** `--reopen journey:<j>` clears that journey's
+approved/skinned/reviewed marks (and the terminal `approved`); `--reopen shapes` clears the
+shape pick and every downstream mark; `--reopen theme` clears the theme pick, every
+skinned/reviewed mark, and `approved`. Every reopen appends one row to `status.reopens` naming
+what it invalidated and leaves every file on disk byte-identical — the next derivation lands on
+the earliest state whose marks are now missing.
+
+## Mocks: Seed
+
+SEED is the one state where facts are established, not drawn — screens exist only after
+`primary-surface` and `platforms-horizon` (the framework lesson: know the surface and the
+device horizon before a pixel). The seed closes on 13 keys, each naming a `confirmed` product
+row in the ledger: `primary-surface platforms-horizon tenancy offline realtime ai-in-loop
+residency payer day-one-integrations scale-outage vendor-limits retention legal-floor`.
+`retention` and `legal-floor` generalize the two facts that caught real misunderstandings in
+the dry run (audio-retention limits; a regulation constraining a core mechanic) — every product
+has some data lifetime and some regulatory floor worth naming even when the answer is "none".
+
+`design/mocks/seed.md` (template `spec/templates/mocks-seed.md`) carries five sections in
+order: `## Product` (three sentences — what it is, who it is for, the one job), `## Facts`
+(one `- <key>: <ledger id>` line per key above, each id `confirmed`), `## References` (a path,
+URL, or `- none`; anything under `design/mocks/references/` is picked up automatically),
+`## Journeys` (one `### <journey-kebab>` per journey, a persona line, and one fenced
+` ```surfaces ``` ` block in the roadmap-brief grammar — names and arrows only, one line per
+edge, every label declared in exactly one journey), and `## Dense screen` (one label already
+declared in a journey — the screen most representative of the product's real complexity, the
+one theme directions must survive). `design/targets.json` must parse with non-empty
+`themes`/`viewports`; `docs/design/research-brief.md` must exist and be non-empty (authored via
+genesis.md § Genesis: Fresh UX Research — the method is fixed there, this command only names
+the step). Journeys exist before the first screen because no roadmap exists yet to derive them
+from; the same surfaces grammar lets the atlas render journeys today and a later spec derive
+roadmap briefs from them.
+
+## Mocks: Checkpoint contract
+
+Every state opens with exactly one step, `Read only:` naming the files this step needs and
+nothing else, and a `Doctrine:` line naming the `## ` section of this file governing the
+judgment — the genesis checkpoint contract verbatim (specs/20260825/04 D9), because a driver
+loop across many `/clear`s only survives if the session never has to hold more state in
+context than the current step. An accepted `--mark` prints, as its last two non-blank lines,
+the ledger's counts line (§ Provenance Ledger) and:
+
+```
+✅ checkpoint — mocks state saved (<prev> → <next>); safe to /clear and re-run /spec:mocks
+```
+
+`<prev>`/`<next>` are the derived state names, identical when a sub-mark (a journey, a
+direction) advances without changing the top-level state. This line is the sole signal that
+disk, not chat context, is now the source of truth — a session may `/clear` immediately after
+reading it and re-invoke `/spec:mocks` cold with nothing lost. `--state` is a read-only peek:
+it prints only the derived state name, never writes `status.json` beyond first-run creation,
+and never runs the look-reachability probe (§ Mocks: Look and Serve) — it exists so a session
+recovering from a `/clear` can check where it left off before doing anything.
+
+## Mocks: Look and Serve
+
+Every mock is a static file; nothing requires a running app. `design-atlas.js serve [--root
+<r>] [--port <n>]` serves `<root>/design/` read-only with no cache (`cache-control: no-store`,
+path traversal outside the root answers 404) and its first stdout line is always the
+port-forward instruction: `serving http://localhost:<port>/atlas/index.html — remote: ssh -L
+<port>:localhost:<port> <host>` — the client's access path is the forwarded port only, never an
+export or a hosted copy. The server exits cleanly on SIGINT/SIGTERM.
+
+**The session's own look** is `mocks-driver.js look <label> [--state <s>] [--out <png>]`: it
+writes a sibling `.look-<label>.html` (the mock plus an inline script that clicks
+`[data-state-btn="<s>"]` on load when `--state` is given), captures it with the Playwright CLI
+at the first declared viewport in `design/targets.json`, and deletes the sibling in a `finally`
+— the repo never accumulates look scratch files. `look-probe` exits 0 exactly when `npx
+--no-install playwright --version` exits 0; this is the reachability signal because
+`require.resolve('playwright')` does not resolve from a host repo even when the CLI works.
+
+**Reachability is a precondition, not an afterthought.** Before printing SHAPES, WIREFRAMES,
+THEME, or SKIN — every state that asks the session to look at a screen — the driver runs the
+look probe unless `status.look` is already `"browser"`; a failed probe refuses (exit 2) naming
+`npx playwright install chromium` rather than silently proceeding into a state no one can
+verify. `mocks-driver.js look-via <playwright|browser>` records the session's declared path:
+`browser` means a browser MCP the command told the session to `ToolSearch` for, which cannot be
+probed from a script and so is declared once and trusted thereafter.
+
 ## Product-Stage Exemption (question-style-gate.js)
 
 While a mocks run is live (`design/mocks/status.json` exists with `state` other than

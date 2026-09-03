@@ -1,6 +1,6 @@
 ---
 date: 2026-09-03
-status: implementing
+status: done
 tier: standard
 area: feedback-loop
 design: false
@@ -281,7 +281,18 @@ no fixture repair is owed beyond the two named pins.
 
 **Regression pins.** The bare human render, existing `--record` invocations, `--stats` lines,
 and the `--append` confirmation line each carry a `SHALL CONTINUE TO` clause (AC-7, AC-11,
-AC-13, AC-15).
+AC-16, AC-17; the last two split out of AC-13/AC-15 at build under D16).
+
+**Build deviation (2026-09-03, one-off, folded from the sidecar).** A6's "if false" branch
+fired: the ninth top-level `--json` key reddened a second exhaustive key-set pin beyond
+`discovery.test.js` — `tests/fleet-reader/review-fixes.test.js`'s 64 KiB-pipe test also
+`deepStrictEqual`s the full sorted key set (pinned under AC-20260901-03-6). Updated in place to
+add `owed`, never weakened, per A6's own remedy and the pipeline rules' exhaustive-pin Gotchas
+entry.
+
+**Review waive (2026-09-03, JJ).** `leg:reconcile` reported that same file as out-of-File-Plan
+(`outOfPlan: 1`). Waived on the disposer's recommendation: the change is a strict in-place
+widening pre-sanctioned by A6, and the Gotchas entry prices exactly this at one waive line.
 
 ## Canonical Delta
 

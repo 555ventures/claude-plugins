@@ -3,7 +3,7 @@ name: exec-fixture-cant-reach-branch-extract-to-lib
 description: When an AC's exec-a-script fixture structurally cannot produce the input shape the AC names (a real binary always emits a superset), extract the parser to spec/scripts/lib/ and prove the branch with a direct test instead of patching the exec fixture.
 metadata:
   type: feedback
-  reviewed: 2026-09-02
+  reviewed: 2026-09-03
 ---
 
 Finding pattern (2026-08-24, specs/20260823/09-replay-baseline-attribution.md

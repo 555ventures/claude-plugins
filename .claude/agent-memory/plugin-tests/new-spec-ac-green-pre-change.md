@@ -3,7 +3,7 @@ name: new-spec-ac-green-pre-change
 description: a brand-new spec's AC can be legitimately green pre-implementation when it pins the ABSENCE of a not-yet-built mechanism (an overlay that doesn't exist yet trivially "stays off"/"is suppressed") — tag it as a sanctioned pin exception rather than treating it as a stale-assumption block.
 metadata:
   type: feedback
-  reviewed: 2026-09-01
+  reviewed: 2026-09-03
 ---
 
 specs/20260823/08-derived-session-queue.md added a queue overlay to spec-status.js's --next
@@ -25,6 +25,13 @@ tests/spec-status.test.js (AC-20260805-01-7, AC-20260805-03-7, AC-20260807-01-7/
 a test to redden artificially (e.g. by weakening the fixture until some unrelated thing breaks)
 would be a fabricated red, not a real one, and blocking on "spec is wrong" here would be a false
 positive — the spec is fine, the AC just isn't a distinguishing pin by construction.
+
+**Carried 2026-09-03 (review close, specs/20260903/01-owed-query-and-row-handoff.md D16) — the
+mirror case.** `red-check.js` reads the sanction the same way: ANY AC bullet carrying `SHALL
+CONTINUE TO` is a green pin for every file that cites it. An AC that mixes a NEW promise with a
+CONTINUE TO clause therefore makes its test file expected-green while the new assertion is
+genuinely red — `broken-pin`, not `unsanctioned-green`. The fix is in the spec (split the AC:
+promise in one, CONTINUE TO pin in another, both cited by the file), never in the test.
 
 **How to apply:** before treating a currently-green new-spec test as a stale-assumption blocker,
 check whether the AC's own wording says "SHALL CONTINUE TO" or its Decisions/Rationale states the

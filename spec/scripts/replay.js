@@ -124,7 +124,8 @@
 // --apply/--record --class names a value spec/scripts/lib/replay-corpus.js's parseCorpus(corpusPath())
 // does not carry (specs/20260901/08-corpus-derivation-and-kill-match.md D2 — stderr names the corpus
 // path and the comma-joined valid ids in corpus order; nothing is committed/appended) / --pick-class
-// finds the corpus parses to zero classes (D3) /
+// finds the corpus parses to zero classes (D3), or .claude/spec.config.json's replay.inapplicableClasses
+// is malformed, names an id the corpus does not carry, or rules out every class (direct fix) /
 // --setup --subject opens with "replay" (case-insensitive, D5 — the overlay commit message must be
 // indistinguishable from a real build commit) /
 // --score --workflow is not a CLEAN verdict with a survivors array / --score --patch parses to zero
@@ -173,6 +174,7 @@ const { readLedgerRows } = require('./lib/observation')
 // parser for spec/doctrine/replay-corpus.md's class-heading grammar — --apply/--record's --class
 // validation (D2) and --pick-class's selection (D3) both key off it, never a second regex sweep.
 const { corpusPath, parseCorpus } = require('./lib/replay-corpus')
+const { configPath, configExists, readConfigStrict, CONFIG_RELPATH } = require('./lib/host-config')
 // D2 (specs/20260823/04-review-close-hardening.md, rv_6825fa48c98d): the local frontmatter() kv
 // loop this replaced stripped a trailing comment at the FIRST "#" regardless of what preceded it,
 // corrupting an unspaced value like `build_base: <sha>#frag` — the sole shared derivation strips
@@ -458,10 +460,24 @@ function deriveScratchDir(resolvedRoot, specPath) {
 
 // ---- D2 (specs/20260831/01): the meta prefix set — the three surfaces a close commit uses to -----
 // ---- record the review's own outcome (status flip + Decision amendments + retained sidecar; ------
-// ---- ledger + evidence + rules/agent-memory; canonical delta citing the spec). Overlay rows under -
-// ---- any of these are never materialized, keeping the blindness invariant F3 bought. ---------------
+// ---- ledger + evidence + rules; canonical delta citing the spec). Overlay rows under any of these -
+// ---- are never materialized, keeping the blindness invariant F3 bought — except the one carve-out -
+// ---- below. ----------------------------------------------------------------------------------------
 
 const OVERLAY_META_PREFIXES = ['specs/', '.claude/', 'docs/canonical/']
+
+// ---- Direct fix (core § Incident Policy): `.claude/agent-memory/` is a build surface, not a --------
+// ---- review record — worker notes land there during the build, and a host whose gate sweeps -------
+// ---- those notes (this repo's AC-12 literal sweep) reddened the scratch gate on every replay -----
+// ---- because the overlay withheld the note edits the close commit carried. Carve it out of the ---
+// ---- `.claude/` meta prefix; the ledger, evidence, worktrees and rules stay withheld. --------------
+
+const OVERLAY_META_EXEMPT = ['.claude/agent-memory/']
+
+function isOverlayMetaPath(p) {
+  if (OVERLAY_META_EXEMPT.some((e) => p.startsWith(e))) return false
+  return OVERLAY_META_PREFIXES.some((m) => p.startsWith(m))
+}
 
 // ---- D1/D3 (specs/20260831/01): materialize <commit>..<overlay>'s non-meta delta into `dir`, ------
 // ---- uniformly (no diff.dirty branch) — `git diff --name-status --no-renames` under --no-renames --
@@ -483,7 +499,7 @@ function materializeOverlay(dirPath, commitSha, overlaySha, subject) {
     const idx = line.indexOf('\t')
     return { status: line.slice(0, idx), path: line.slice(idx + 1) }
   })
-  const materializable = rows.filter((r) => !OVERLAY_META_PREFIXES.some((p) => r.path.startsWith(p)))
+  const materializable = rows.filter((r) => !isOverlayMetaPath(r.path))
   if (materializable.length === 0) return 0
   for (const row of materializable) {
     try {
@@ -984,11 +1000,49 @@ function cmdStats() {
 // ---- challenger is derived and `best` is not, so the earliest corpus-order class among equals ---
 // ---- that are otherwise tied stays picked). --------------------------------------------------------
 
+// ---- Direct fix (core § Incident Policy): a corpus class can declare in prose that it does not ----
+// ---- apply to some hosts ("pick another") — nothing the picker can evaluate. The host says so -----
+// ---- once, in the host config → `replay.inapplicableClasses: [<id>, …]`; every id is -----------
+// ---- validated against the corpus (exit 2 on a typo, naming the valid ids), the picker skips them
+// ---- and prints `skipped=<ids>` so the exclusion is visible in the step's own output. A host that
+// ---- rules every class out gets exit 2, never a silent pick. ---------------------------------------
+
+function readInapplicableClasses(rootDir, classes) {
+  if (!configExists(rootDir)) return []
+  const cfgPath = configPath(rootDir)
+  let config
+  try { config = readConfigStrict(rootDir) } catch (e) {
+    console.error(`replay.js: ${e.message} — cannot read replay.inapplicableClasses`)
+    process.exit(2)
+  }
+  const declared = config && config.replay && config.replay.inapplicableClasses
+  if (declared === undefined || declared === null) return []
+  if (!Array.isArray(declared) || declared.some((v) => typeof v !== 'string')) {
+    console.error(`replay.js: ${cfgPath} replay.inapplicableClasses must be an array of corpus class ids`)
+    process.exit(2)
+  }
+  const ids = classes.map((c) => c.id)
+  const unknown = declared.filter((v) => !ids.includes(v))
+  if (unknown.length > 0) {
+    console.error(`replay.js: ${cfgPath} replay.inapplicableClasses names ${unknown.join(', ')} — not a class in ` +
+      `${corpusPath()}; valid ids (corpus order): ${ids.join(', ')}`)
+    process.exit(2)
+  }
+  return declared
+}
+
 function cmdPickClass() {
-  const classes = readCorpusClasses()
-  if (classes.length === 0) {
+  const allClasses = readCorpusClasses()
+  if (allClasses.length === 0) {
     console.error(`replay.js: ${corpusPath()} parses to zero classes — nothing to pick from; ` +
       'confirm the corpus file carries at least one `## `id`` heading')
+    process.exit(2)
+  }
+  const skipped = readInapplicableClasses(root, allClasses)
+  const classes = allClasses.filter((c) => !skipped.includes(c.id))
+  if (classes.length === 0) {
+    console.error(`replay.js: every corpus class is listed in ${CONFIG_RELPATH} replay.inapplicableClasses ` +
+      `(${skipped.join(', ')}) — nothing is left to pick; remove at least one id`)
     process.exit(2)
   }
   const rows = readLedgerRows(root).filter(isMeasurementReplay)
@@ -1001,7 +1055,8 @@ function cmdPickClass() {
       best = { id: c.id, derived: c.derived, rows: n }
     }
   }
-  console.log(`class=${best.id} derived=${best.derived} rows=${best.rows}`)
+  console.log(`class=${best.id} derived=${best.derived} rows=${best.rows}` +
+    (skipped.length > 0 ? ` skipped=${skipped.join(',')}` : ''))
   process.exit(0)
 }
 

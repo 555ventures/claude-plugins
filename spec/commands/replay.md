@@ -85,7 +85,10 @@ asked.
    then clean — then continue to class selection.
 3. **Pick a corpus class:** run `node "$(spec-paths replay)" --pick-class` and read `class=` from
    its stdout — the script owns selection (fewest measurement rows, derived classes breaking ties
-   first) so this step never re-derives it. Read `spec-paths replay-corpus` and extract that
+   first) so this step never re-derives it. A class whose corpus section says it does not apply
+   to this host ("pick another") is declared once, by id, in `.claude/spec.config.json` →
+   `replay.inapplicableClasses`; the picker skips those and prints them as `skipped=`, so the
+   session never re-picks by hand. Read `spec-paths replay-corpus` and extract that
    class's own section (id, recipe, leg-invisibility requirement, worked example).
 4. **Author the mutation (D2):** this session writes the mutation itself — Edit/Write into the
    File Plan files the selected class's recipe requires inside `{dir}`, guided only by the
@@ -263,7 +266,10 @@ Next: {spec-status --next, verbatim}
   by the same invariant from the other direction: the three meta prefixes (`specs/`, `.claude/`,
   `docs/canonical/`) — where a close commit records the review's own outcome (status flip,
   ledger row, canonical delta) — never enter the tree at all, so the "already reviewed" signal
-  those paths would carry stays out of what the blind reviewer can read.
+  those paths would carry stays out of what the blind reviewer can read. One carve-out:
+  `.claude/agent-memory/` is a build surface (worker notes), not a review record, and IS
+  materialized — a host whose gate sweeps those notes would otherwise redden the scratch tree
+  on every replay for an edit the build already made.
 - **The main tree is never in scope.** Every mutating step runs inside `{dir}`, a detached
   worktree isolated by three mechanisms together — the worktree itself, the ignore line
   `--setup` self-provisions when the host lacks it, and the `--setup`/`--teardown` marker guard

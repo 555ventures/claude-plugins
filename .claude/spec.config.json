@@ -34,5 +34,10 @@
     "doctrine": "spec/commands/*.md, spec/doctrine/*.md, spec/agents/*.md, spec/templates/*, git/commands/*.md, spec/hooks/hooks.json, plugin manifests",
     "scripts": "spec/scripts/*.js|*.sh, spec/bin/*, scripts/*, spec/workflows/wf-*.js (frozen design/enforce scripts)"
   },
-  "pipelineRules": ".claude/rules/spec-pipeline.md"
+  "pipelineRules": ".claude/rules/spec-pipeline.md",
+  "replay": {
+    "inapplicableClasses": [
+      "server-code-in-client-bundle"
+    ]
+  }
 }

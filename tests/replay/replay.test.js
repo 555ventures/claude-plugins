@@ -2562,3 +2562,78 @@ test('replay-root-3: replay.md\'s setup gate instructs the session to run setupC
     'the invariant must state the consequence (the row is lost at teardown), not just the rule — the grounding ' +
     'is what keeps it from being dropped at the next edit: ' + JSON.stringify(rule))
 })
+
+// ---- Replay-harness gaps surfaced by rp_0260cad37161 (direct fix, core § Incident Policy). ---------
+// Gap 1: --setup --overlay withheld every `.claude/` row, so a build's own agent-memory note edits
+// never reached the scratch tree and a host gate that sweeps those notes reddened on every replay.
+// Gap 2: --pick-class could not skip a class whose corpus section says "does not apply — pick
+// another"; the host now declares such ids in .claude/spec.config.json replay.inapplicableClasses.
+test('direct fix: --setup --overlay materializes .claude/agent-memory/ rows while every other .claude/ row stays at the --commit version', () => {
+  const root = fs.realpathSync(tmpdir('replay-overlay-agent-memory'))
+  gitRepo(root)
+  const parent = commitFiles(root, {
+    'lib/a.js': 'a\n',
+    '.claude/agent-memory/tests/note.md': 'old note\n',
+    '.claude/spec-runs.jsonl': '{"line":1}\n',
+  }, 'parent commit')
+  const close = commitFiles(root, {
+    'lib/a.js': 'A\n',
+    '.claude/agent-memory/tests/note.md': 'corrected note\n',
+    '.claude/agent-memory/scripts/new-note.md': 'new note\n',
+    '.claude/spec-runs.jsonl': '{"line":1}\n{"line":2}\n',
+    '.claude/spec-runs/rv_deadbeefcafe.json': '{"evidence":true}\n',
+  }, 'close commit')
+
+  const dir = path.join(fs.realpathSync(tmpdir('replay-overlay-agent-memory-wt')), 'wt')
+  const r = runNode(SCRIPT, ['--setup', '--commit', parent, '--overlay', close, '--dir', dir], { cwd: root })
+  assert.strictEqual(r.status, 0, 'the overlay must still succeed: ' + r.stderr)
+  assert.match(r.stdout, /overlaid=3\n?$/,
+    'exactly three rows materialize — lib/a.js plus the two agent-memory notes; the ledger row and the ' +
+    'evidence file stay withheld: ' + r.stdout)
+  assert.strictEqual(fs.readFileSync(path.join(dir, '.claude/agent-memory/tests/note.md'), 'utf8'), 'corrected note\n',
+    'a note the build corrected must reach the scratch tree — withholding it is what reddened the host gate')
+  assert.strictEqual(fs.readFileSync(path.join(dir, '.claude/agent-memory/scripts/new-note.md'), 'utf8'), 'new note\n',
+    'a note the build added must reach the scratch tree')
+  assert.strictEqual(fs.readFileSync(path.join(dir, '.claude/spec-runs.jsonl'), 'utf8'), '{"line":1}\n',
+    'the ledger stays at the --commit version — the carve-out is agent-memory only')
+  assert.ok(!fs.existsSync(path.join(dir, '.claude/spec-runs/rv_deadbeefcafe.json')),
+    'the evidence file stays withheld — the carve-out must never widen to .claude/spec-runs/')
+  const teardown = runNode(SCRIPT, ['--teardown', '--dir', dir], { cwd: root })
+  assert.strictEqual(teardown.status, 0, 'teardown must still remove the overlay worktree: ' + teardown.stderr)
+})
+
+test('direct fix: --pick-class skips the ids in spec.config.json replay.inapplicableClasses, prints them as skipped=, and refuses an id the corpus does not carry or a list that rules out every class', () => {
+  const skipDir = fs.realpathSync(tmpdir('replay-pickclass-skip'))
+  fs.mkdirSync(path.join(skipDir, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(skipDir, '.claude/spec.config.json'),
+    JSON.stringify({ replay: { inapplicableClasses: ['prefix-collision-coverage-fail-open', 'server-code-in-client-bundle'] } }))
+  const skip = runNode(SCRIPT, ['--pick-class', '--root', skipDir])
+  assert.strictEqual(skip.status, 0, 'a valid inapplicable list must not refuse: ' + skip.stderr)
+  assert.match(skip.stdout, /^class=promise-carried-not-delivered derived=false rows=0 skipped=prefix-collision-coverage-fail-open,server-code-in-client-bundle$/m,
+    'with both derived classes ruled out the first hand-authored class wins at 0 rows, and the skipped ids ' +
+    'are printed so the exclusion is visible in the step output: ' + skip.stdout)
+
+  const noConfigDir = fs.realpathSync(tmpdir('replay-pickclass-noconfig'))
+  const plain = runNode(SCRIPT, ['--pick-class', '--root', noConfigDir])
+  assert.strictEqual(plain.status, 0, 'no config file means no skip list: ' + plain.stderr)
+  assert.match(plain.stdout, /^class=prefix-collision-coverage-fail-open derived=true rows=0$/m,
+    'without a skip list the output shape is unchanged — no trailing skipped= token: ' + plain.stdout)
+
+  const typoDir = fs.realpathSync(tmpdir('replay-pickclass-typo'))
+  fs.mkdirSync(path.join(typoDir, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(typoDir, '.claude/spec.config.json'),
+    JSON.stringify({ replay: { inapplicableClasses: ['server-code-in-client-bundl'] } }))
+  const typo = runNode(SCRIPT, ['--pick-class', '--root', typoDir])
+  assert.strictEqual(typo.status, 2, 'an id the corpus does not carry must refuse with exit 2, never silently skip nothing: ' + typo.stdout)
+  assert.match(typo.stderr, /server-code-in-client-bundl — not a class in .*replay-corpus\.md; valid ids \(corpus order\): promise-carried-not-delivered, /,
+    'the refusal names the bad id and the valid ids in corpus order: ' + typo.stderr)
+
+  const allDir = fs.realpathSync(tmpdir('replay-pickclass-all'))
+  fs.mkdirSync(path.join(allDir, '.claude'), { recursive: true })
+  const { corpusPath, parseCorpus } = require('../../spec/scripts/lib/replay-corpus')
+  const allIds = parseCorpus(fs.readFileSync(corpusPath(), 'utf8')).map((c) => c.id)
+  fs.writeFileSync(path.join(allDir, '.claude/spec.config.json'), JSON.stringify({ replay: { inapplicableClasses: allIds } }))
+  const all = runNode(SCRIPT, ['--pick-class', '--root', allDir])
+  assert.strictEqual(all.status, 2, 'ruling out every class must refuse with exit 2: ' + all.stdout)
+  assert.match(all.stderr, /every corpus class is listed .* nothing is left to pick/, all.stderr)
+})

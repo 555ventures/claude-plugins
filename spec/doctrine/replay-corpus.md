@@ -30,6 +30,11 @@ classes` line is hand-authored, a `### ` heading after it is derived. The six ha
 classes below stay until a derived class supersedes one by name, at which point the superseded
 `## ` heading is replaced by a `### ` heading under the derived region — the id appears once.
 
+A class may say in its leg-invisibility requirement that it does not apply to some hosts
+("pick another"). The picker cannot read that prose, so the host declares the id once in
+`.claude/spec.config.json` → `replay.inapplicableClasses`; `--pick-class` validates each id
+against this file and skips it.
+
 ## `promise-carried-not-delivered`
 
 **Recipe:** Pick a Decision row in the target spec whose cited AC/test asserts a fact

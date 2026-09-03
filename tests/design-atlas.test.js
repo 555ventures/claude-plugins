@@ -4,7 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const http = require('node:http')
-const { spawn } = require('node:child_process')
+const { spawn, spawnSync } = require('node:child_process')
 const { tmpdir, runNode, SPEC } = require('./helpers')
 
 const atlas = (argv, opts) => runNode('scripts/design-atlas.js', argv, opts)
@@ -799,7 +799,19 @@ test('AC-20260902-10-2: design-atlas.js serve injects the notes layer script bef
   const bodyHtml = '<!doctype html>\n<html><head></head><body><main data-screen-label="a">hello</main>\n</body></html>\n'
   fs.writeFileSync(path.join(dir, 'design/mocks/a.html'), bodyHtml)
 
-  await withServe(dir, 1, async ({ get }) => {
+  await withServe(dir, 1, async ({ get, port }) => {
+    // Repair (coordinator fix request): the Contracts section pins "server binds `localhost`
+    // only" — assert the live listener via `lsof`, since `server.address()` isn't reachable from
+    // this test (the server runs in a spawned child process).
+    const lsof = spawnSync('lsof', ['-nP', '-iTCP:' + port, '-sTCP:LISTEN'], { encoding: 'utf8' })
+    assert.ok(!lsof.error && lsof.stdout.includes('127.0.0.1:' + port),
+      'AC-20260902-10-2 repair: design-atlas.js serve must bind 127.0.0.1 only (Contracts: "binds `localhost` only") — ' +
+      '`lsof -nP -iTCP:' + port + ' -sTCP:LISTEN` must show a 127.0.0.1:' + port + ' listener: got ' +
+      JSON.stringify(lsof.stdout) + (lsof.error ? ' (lsof error: ' + lsof.error.message + ')' : ''))
+    assert.ok(!lsof.stdout.includes('*:' + port) && !lsof.stdout.includes('0.0.0.0:' + port),
+      'AC-20260902-10-2 repair: design-atlas.js serve must not bind all interfaces — no `*:' + port + '` or `0.0.0.0:' + port +
+      '` listener may appear: got ' + JSON.stringify(lsof.stdout))
+
     const injected = await get('/mocks/a.html')
     assert.strictEqual(injected.status, 200, 'GET /mocks/a.html must still serve 200 once the notes layer is wired in: ' + injected.body)
     assert.match(injected.body, /<script src="\/__notes\/notes\.js"><\/script>\s*<\/body>/,

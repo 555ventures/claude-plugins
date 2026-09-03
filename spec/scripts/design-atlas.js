@@ -904,8 +904,10 @@ function cmdBuild(argv) {
 // ---- serve -----------------------------------------------------------------------------------------
 // specs/20260902/07-mocks-command-driver.md D12: static, read-only, no-store server over
 // `<root>/design/` — the SSH rule (client access is the forwarded port only, never an export or a
-// hosted copy). The port-forward line is the very first stdout write, before anything else, so a
-// caller reading stdout line-by-line never blocks waiting on a second line that never comes.
+// hosted copy); the listener binds loopback only — never every interface — so the forwarded port
+// is the only remote path in, per specs/20260902/10-page-notes-review-loop.md's Contracts: "binds
+// `localhost` only". The port-forward line is the very first stdout write, before anything else,
+// so a caller reading stdout line-by-line never blocks waiting on a second line that never comes.
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'application/javascript',
   '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg',
@@ -1026,7 +1028,7 @@ function cmdServe(argv) {
       res.end(data)
     })
   })
-  server.listen(port, () => {
+  server.listen(port, '127.0.0.1', () => {
     process.stdout.write('serving http://localhost:' + port + '/atlas/index.html — remote: ssh -L ' + port + ':localhost:' + port + ' <host>\n')
   })
   const shutdown = () => server.close(() => process.exit(0))

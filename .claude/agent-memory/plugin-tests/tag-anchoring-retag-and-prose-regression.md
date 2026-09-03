@@ -3,7 +3,7 @@ name: tag-anchoring-retag-and-prose-regression
 description: When an AC-grammar tag parser ([oracle:]/[env:]/[pre-green:]) moves from whole-bullet scan to two fixed positions, retag fixtures into the declaration slot and pin the regression against the real spec's own wording, not a generic mid-sentence string.
 metadata:
   type: feedback
-  reviewed: 2026-09-01
+  reviewed: 2026-09-03
 ---
 
 2026-08-22 (spec/scripts/lib/spec-sections.js `extractTag` fix, dispatched to

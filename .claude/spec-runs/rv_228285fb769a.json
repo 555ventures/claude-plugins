@@ -1,0 +1,107 @@
+{
+  "runId": "rv_228285fb769a",
+  "ts": "2026-09-03T22:02:32.003Z",
+  "spec": "specs/20260902/11-brief-from-approved-set.md",
+  "tier": "critical",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1399,
+    "base": "55883225efa714d1cddecfe257c88cc27d50b19b",
+    "head": "a9e717483d30deedc585ec79d995dcb47d1ba0cf",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 385
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 8,
+        "carried": 7,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "The components-check.js header comment retarget from the retired rules-locked mark to skeleton-landed might still cite the wrong caller or omit the owning spec citation.",
+        "file": "spec/scripts/components-check.js",
+        "line": 16,
+        "evidence": "Comparison of spec/scripts/components-check.js against HEAD shows the comment now reads Callers: genesis-driver.js skeleton-landed mark (specs/20260902/11-brief-from-approved-set.md D5; fail-closed). Grep of genesis-driver.js confirms handleSkeletonLanded (lines 1522-1528) invokes components-check.js and dies with components-check.js failed for design/components.json on non-zero exit, matching the fail-closed claim. Spec 11 D5 is the correct owner citation."
+      },
+      {
+        "claim": "The retargeted comment might reintroduce a dates/people/versions/prior-behavior narration violation of the header-comment rule.",
+        "file": "spec/scripts/components-check.js",
+        "line": 16,
+        "evidence": "Reading lines 1-21 shows the comment names only the caller, the spec/D-number citation, and the fail-closed rationale, no dates, people, hosts, versions, or prior-behavior narration, matching .claude/rules/spec-pipeline.md Worker Rules and .claude/rules/conventions/scripts.md."
+      },
+      {
+        "claim": "The fix delta might have widened beyond the single sanctioned comment edit or left stray references to rules-locked as components-check.js caller.",
+        "file": "spec/scripts/components-check.js",
+        "line": null,
+        "evidence": "Stat comparison against base sha 55883225efa714d1cddecfe257c88cc27d50b19b for spec/scripts/components-check.js and tests/components-check.test.js shows exactly 1 file changed, 3 insertions, 3 deletions (the comment block only). Repo-wide grep for rules-locked across spec/ and tests/ shows all remaining hits are the documented legacy status value (D12 closed canon), none referencing components-check.js as caller."
+      },
+      {
+        "claim": "The genesis and components-check test suites might regress under the retargeted comment.",
+        "file": "tests/genesis/genesis-driver.test.js",
+        "line": null,
+        "evidence": "node --test tests/genesis/star.test.js run: 52/52 pass. node --test tests/components-check.test.js run: 9/9 pass."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 38000
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "runId": "rv_a37f65f09c6f",
+  "ts": "2026-09-03T20:42:55.489Z",
+  "spec": "specs/20260902/10-page-notes-review-loop.md",
+  "tier": "standard",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1732,
+    "base": "c68d4d17147233f0b31db30ead9bd2f59ba7dac2",
+    "head": "3b6611ba5120ace564de2150aa2433f2e40ffba6",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 354
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 10,
+        "carried": 9,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "server.listen(port, 127.0.0.1, ...) correctly restricts design-atlas.js serve to loopback, matching spec Contracts line 81 server binds localhost only",
+        "file": "spec/scripts/design-atlas.js",
+        "line": 1031,
+        "evidence": "git diff shows server.listen(port, cb) changed to server.listen(port, 127.0.0.1, cb); specs/20260902/10-page-notes-review-loop.md:81 reads HTTP (all JSON; server binds localhost only). Header comment above the MIME table (lines 906-909) updated to cite this spec and explain the loopback bind rationale."
+      },
+      {
+        "claim": "New lsof-based bind assertion in AC-20260902-10-2 executes and is deterministic using the real per-test port exposed by withServe not a hardcoded value",
+        "file": "tests/design-atlas.test.js",
+        "line": 802,
+        "evidence": "node --test tests/design-atlas.test.js output: PASS AC-20260902-10-2 design-atlas.js serve injects the notes layer script before body close (135ms). withServe (line 738-794) returns get,post,port to the callback; the added port destructure at line 802 and the lsof command lsof -nP -iTCP:port -sTCP:LISTEN at lines 804-812 run against the actual spawned childs port, no race or hardcode risk."
+      },
+      {
+        "claim": "Full suite has no regressions from the fix",
+        "file": null,
+        "line": null,
+        "evidence": "npm test run: tests 1019 pass 1019 fail 0 cancelled 0 after the fix was applied on top of the full spec-10 diff."
+      },
+      {
+        "claim": "No serve child processes were left running by this reviews repro work",
+        "file": null,
+        "line": null,
+        "evidence": "ps aux grep design-atlas.js serve grep -v grep returned no rows after test runs; a manual mutation-test attempt (temporarily reverting the bind via sed) was blocked by the sandboxs write-classifier before any repo file was touched, confirmed via git diff --stat spec/scripts/design-atlas.js showing only the intended 5-insertion 3-deletion delta, unchanged."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 0
+  }
+}

@@ -1,0 +1,18 @@
+/* Wireframe token register — spec/doctrine/mocks.md § Mocks: State Machine (D17: flat gray
+   register on shadcn's zinc defaults). Copied verbatim into design/wire/tokens.css by
+   `canon-written` when absent. Every color a wireframe consumes must resolve to one of these
+   roles (design-atlas.js check flags any color literal in markup) — sketching stays neutral
+   on purpose so no direction is smuggled in before THEME. Do not add roles here without
+   updating design/wire/wire.css's consumers. */
+
+:root {
+  --bg: #ffffff;
+  --fg: #18181b;
+  --muted: #f4f4f5;
+  --border: #e4e4e7;
+  --primary: #18181b;
+  --primary-fg: #fafafa;
+  --ring: #18181b;
+  --radius: 0.5rem;
+  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+}

@@ -1,6 +1,7 @@
 ---
 date: 2026-09-02
-status: hardened
+status: implementing
+build_base: main
 tier: critical             # spec/bin/spec-paths gains keys and a shared-for list (pipeline rules § Risk Tiers)
 area: mocks
 design: false
@@ -10,6 +11,7 @@ depended_on_by: [specs/20260902/08-genesis-shrink-brief-state.md, specs/20260902
 brief: 22
 open_markers: 0
 spiked: 2026-09-02
+diff_base: 1add289c6c7090ba7654a24cfb1ec549e4838113
 ---
 
 # `/spec:mocks` — the standalone design command and its file-derived driver

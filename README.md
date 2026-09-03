@@ -34,18 +34,23 @@ build resumes instead of restarting.
 /spec:init          # profiles the repo, writes config + rules, then runs /spec:enforce for you
 ```
 
-**Brand-new project** (no code yet) — run genesis, then enforce:
+**Brand-new project** (no code yet) — mock the product first, then run genesis and enforce:
 
 ```
-/spec:genesis         "a trading simulator for retail traders in Japan"  # stack + scaffold + roadmap briefs; rendered design candidates in your browser → your pick, ratified into tokens + design canon
+/spec:mocks                                                               # seed → shapes → wireframes → theme → skin → review → approved mocks
+/spec:genesis         "a trading simulator for retail traders in Japan"  # stack + scaffold + roadmap briefs, grounded in the approved mocks
 /spec:enforce
 ```
 
-Genesis researches live (web agents), has one proposer — the planning session itself — write
-the decision record from that research, and brings every hard-to-reverse fork back to you as a
-question — nothing is silently decided without you. It ends with a scaffolded repo and
-`docs/roadmap/` briefs, so setup never ends without a next command. Existing repos skip it
-entirely.
+Chain: `/spec:mocks → /spec:genesis → /spec:enforce → /spec:plan`.
+
+`/spec:mocks` is optional but recommended for any product with a UI: a driver-stepped design
+session derives its state from disk, gates every advance on a provenance ledger, and ends with
+an approved set of screens genesis can ground its stack pick in. Genesis researches live (web
+agents), has one proposer — the planning session itself — write the decision record from that
+research, and brings every hard-to-reverse fork back to you as a question — nothing is
+silently decided without you. It ends with a scaffolded repo and `docs/roadmap/` briefs, so
+setup never ends without a next command. Existing repos skip both entirely.
 
 Until `/spec:init` has run, every other `spec` command refuses to start.
 
@@ -99,6 +104,7 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
 
 | Command | What it does | When |
 |---|---|---|
+| `/spec:mocks` | Driver-stepped design entry point: seed → shapes → wireframes → theme → skin → review → approved mocks | Greenfield only, before genesis |
 | `/spec:genesis` / `-design` | Stack + scaffold + roadmap + rendered design candidates in your browser; ratify the pick | Greenfield only, before init |
 | `/spec:init` | Profile the repo, generate the grounding layer, run enforce | Once per repo |
 | `/spec:sketch` | Mock + brainstorm one roadmap brief; ratify mock↔brief agreement | Before planning a UI-bearing brief |

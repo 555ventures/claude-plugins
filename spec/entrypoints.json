@@ -104,6 +104,13 @@
       "git/commands/enter-worktree.md"
     ]
   },
+  "spec/scripts/mocks-driver.js": {
+    "entryPoints": [
+      "spec/commands/mocks.md",
+      "spec/templates/mocks-ledger.md",
+      "spec/templates/mocks-seed.md"
+    ]
+  },
   "spec/scripts/promise-sweep.js": {
     "entryPoints": [
       "spec/commands/plan.md",
@@ -179,6 +186,7 @@
       "spec/commands/enforce.md",
       "spec/commands/design.md",
       "spec/commands/escape.md",
+      "spec/commands/mocks.md",
       "spec/commands/review.md",
       "spec/commands/plan.md",
       "git/commands/enter-worktree.md",

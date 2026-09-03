@@ -31,6 +31,7 @@ case "${1:-root}" in
   review-driver)  echo "$ROOT/scripts/spec-review-driver.js" ;;
   build-driver)   echo "$ROOT/scripts/spec-build-driver.js" ;;
   genesis-driver) echo "$ROOT/scripts/genesis-driver.js" ;;
+  mocks-driver)   echo "$ROOT/scripts/mocks-driver.js" ;;
   report-render)  echo "$ROOT/scripts/report-render.js" ;;
   spec-status)    echo "$ROOT/scripts/spec-status.js" ;;
   spec-queue)     echo "$ROOT/scripts/spec-queue.js" ;;
@@ -75,6 +76,7 @@ case "${1:-root}" in
       release) SECTIONS="Host Grounding|Runtime Verification|Release Stage|Model Placement|Decisions|Question Style|Console Output Style|Canonical Docs Loop" ;;
       enforce) SECTIONS="Host Grounding|Grounding Drift|Rule Enforcement|Model Placement|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment" ;;
       genesis)           SECTIONS="Host Grounding|Pipeline Entry|Design Canon|Design Authoring Contracts|Design Atlas|Model Placement|Decisions|Question Style|Console Output Style|Workflows Encode Shape, Not Judgment|Worker Git Ban|MCP Policy" ;;
+      mocks)   SECTIONS="Host Grounding|Model Placement|Decisions|Question Style|Console Output Style|MCP Policy|Design Canon|Design Atlas" ;;
       status)  SECTIONS="Host Grounding|State Machine|Question Style|Console Output Style" ;;
       queue)   SECTIONS="Host Grounding|State Machine|Question Style|Console Output Style" ;;
       escape)  SECTIONS="Host Grounding|Feedback Loop|Incident Policy|Question Style|Console Output Style" ;;
@@ -104,7 +106,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|design-atlas|components-check|render-gate|render-compare|render-inventory|render-rules|registry-check|merge-back|smoke|manifest-check|env-preflight|citations-check|review-legs|release-legs|review-driver|build-driver|genesis-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|collision-closure|ci-query|ci-gate-parity|replay|escape-row|fleet-reader|comment-narration|shared|shared-design|shared-for <command>|shared-genesis|shared-mocks|replay-corpus|template|templates|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|design-atlas|components-check|render-gate|render-compare|render-inventory|render-rules|registry-check|merge-back|smoke|manifest-check|env-preflight|citations-check|review-legs|release-legs|review-driver|build-driver|genesis-driver|mocks-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|collision-closure|ci-query|ci-gate-parity|replay|escape-row|fleet-reader|comment-narration|shared|shared-design|shared-for <command>|shared-genesis|shared-mocks|replay-corpus|template|templates|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { ROOT, SPEC, read, runBash } = require('../helpers')
+const { ROOT, SPEC, read, runBash, runNode } = require('../helpers')
 
 // specs/20260825/01-genesis-panel-collapse.md: deletes the genesis MoA panel (wf-panel.js:
 // three blind Sonnet proposers + a Fable aggregator) and replaces it with one proposer — the
@@ -407,10 +407,15 @@ test('AC-20260825-02-2: spec/templates/genesis-brief.md exists with the six D3 h
 })
 
 // ---------------------------------------------------------------------------
-// AC-20260825-02-3
+// AC-20260902-08-10 (was AC-20260825-02-3: genesis.md's On-disk Handoff roster named
+// genesis-brief.md as brief.md's template and sketch.html as the throwaway artifact pruned at
+// /spec:genesis-design — specs/20260902/08-genesis-shrink-brief-state.md D7 retires
+// sketch.html outright (never authored at DISCOVERY, never pruned anywhere), so the roster
+// carries no sketch.html entry at all; D9 folds the design/mocks/ workspace into the roster in
+// its place)
 // ---------------------------------------------------------------------------
 
-test("AC-20260825-02-3: genesis.md's On-disk Handoff roster names genesis-brief.md as brief.md's template and sketch.html as the throwaway artifact pruned at /spec:genesis-design", () => {
+test("AC-20260902-08-10: genesis.md's On-disk Handoff roster still names genesis-brief.md as brief.md's template, carries no sketch.html entry anywhere in the file, and lists the design/mocks/ workspace BRIEF reads", () => {
   const src = read('spec/doctrine/genesis.md')
   const headingMatch = src.match(/^## Genesis: On-disk Handoff.*$/m)
   assert.ok(headingMatch,
@@ -429,26 +434,20 @@ test("AC-20260825-02-3: genesis.md's On-disk Handoff roster names genesis-brief.
     'from (e.g. "template via `spec-paths templates`") — its absence means the template ' +
     'introduced by this spec is undocumented as brief.md\'s source: ' + JSON.stringify(briefWindow))
 
-  const sketchIdx = section.indexOf('sketch.html')
-  assert.ok(sketchIdx !== -1,
-    'D4: § On-disk Handoff must name .claude/genesis/sketch.html — its absence means the ' +
-    'throwaway core-screen sketch this spec introduces has no roster entry at all')
-  const sketchWindow = section.slice(Math.max(0, sketchIdx - 300), sketchIdx + 300)
-  assert.match(sketchWindow, /prune/i,
-    'D4: the sketch.html roster entry must say it is deleted at a prune step — its absence means ' +
-    'the roster does not document that this is a throwaway artifact, not a durable one: ' +
-    JSON.stringify(sketchWindow))
-  // specs/20260827/03-genesis-design-state.md D4/D8: /spec:genesis-design is deleted and its
-  // prune step becomes an act of the driver's own accepted rules-locked mark — the sketch-prune
-  // sentence names that mark, never a deleted command.
-  assert.doesNotMatch(sketchWindow, /genesis-design/,
-    'D8: the sketch.html roster entry must no longer name /spec:genesis-design — the command is ' +
-    'deleted, and a surviving mention here would point the session at a dead command: ' +
-    JSON.stringify(sketchWindow))
-  assert.match(sketchWindow, /rules-locked/,
-    'D4/D8: the sketch.html roster entry must name the driver\'s rules-locked mark as what prunes ' +
-    'it — its absence means the roster does not say WHEN the throwaway artifact goes away now ' +
-    'that the prune is a driver act, not a separate command: ' + JSON.stringify(sketchWindow))
+  // D7: sketch.html is not authored at DISCOVERY and not pruned anywhere, so the doctrine file
+  // must carry no roster entry, or any other mention, of it at all. A surviving mention (roster
+  // bullet or prose) would document an artifact the driver does not write.
+  assert.doesNotMatch(src, /sketch\.html/,
+    'D7: spec/doctrine/genesis.md must not mention sketch.html anywhere — the throwaway ' +
+    'discovery-sketch artifact and its prune step are retired outright, not merely relocated, ' +
+    'and a surviving mention here would document an artifact the driver never writes')
+
+  // D9: the roster gains the design/mocks/ workspace pointer BRIEF reads directly, in place of
+  // the retired explore/pick/positions artifacts.
+  assert.match(section, /design\/mocks\//,
+    'D9: § On-disk Handoff must list the design/mocks/ workspace BRIEF reads (seed.md, ' +
+    'ledger.md, status.json, tokens.css) — its absence means the roster still describes the ' +
+    'pre-mocks artifact set instead of the workspace BRIEF actually depends on')
 })
 
 // specs/20260825/03-genesis-currency-executed.md D7/D8: the model-placement paragraph's
@@ -689,10 +688,16 @@ test('AC-20260827-01-8: spec/commands/genesis.md drops its per-state pointer sec
 // fewer files legitimately still need the retired name).
 
 // ---------------------------------------------------------------------------
-// AC-20260827-02-8
+// AC-20260902-08-17 (was AC-20260827-02-8: genesis.md doctrine carried the "## Genesis:
+// Explore State" heading and not the old "## Genesis: Explore Stage" one — specs/20260902/08
+// D9 retires "## Genesis: Explore State" outright rather than renaming it again, so the
+// still-true clauses here (spec-paths shared-for genesis's section list, the genesis-explore
+// fallback, the entrypoints.json/command-file deletion, the repo-wide sweep) are retargeted to
+// this spec's continuing shared-for regression; the heading clause below is retargeted to
+// assert absence rather than presence.)
 // ---------------------------------------------------------------------------
 
-test('AC-20260827-02-8: spec-paths shared-for genesis serves Design Canon and continues to serve Host Grounding, shared-for genesis-explore falls back to the full doctrine, the retired command file and its entrypoints.json rows are gone, genesis.md doctrine carries the new heading and not the old one, and no file outside a justified waive-list names genesis-explore', () => {
+test('AC-20260902-08-17: spec-paths shared-for genesis serves Design Canon and continues to serve Host Grounding, shared-for genesis-explore falls back to the full doctrine, the retired command file and its entrypoints.json rows are gone, genesis.md doctrine carries neither retired Explore heading, and no file outside a justified waive-list names genesis-explore', () => {
   const genesisShared = runBash('bin/spec-paths', ['shared-for', 'genesis'])
   assert.strictEqual(genesisShared.status, 0,
     'D10: `spec-paths shared-for genesis` must exit 0 — a non-zero exit here means folding Design Canon into genesis\'s own section list broke the resolver itself: ' + genesisShared.stderr)
@@ -732,10 +737,14 @@ test('AC-20260827-02-8: spec-paths shared-for genesis serves Design Canon and co
     JSON.stringify(entrypointOffenders))
 
   const genesisDoctrine = read('spec/doctrine/genesis.md')
-  assert.match(genesisDoctrine, /^## Genesis: Explore State$/m,
-    'D11: spec/doctrine/genesis.md must carry the "## Genesis: Explore State" heading — its absence means the rewritten § Explore Stage section (states, marks, external candidate, tile fold, driver-vs-session split) was never landed')
+  // specs/20260902/08 D9: the doctrine file carries neither "## Genesis: Explore State" (this
+  // test's regression) nor its own predecessor "## Genesis: Explore Stage" (next assertion);
+  // this file's other AC-20260902-08-10 test pins the replacement "## Genesis: Brief State"
+  // heading that governs the taste-funnel facts.
+  assert.ok(!genesisDoctrine.includes('## Genesis: Explore State'),
+    'D9: spec/doctrine/genesis.md must NOT carry the "## Genesis: Explore State" heading — the taste funnel it governed is retired outright by D1, and a surviving heading would still describe a mechanism the driver no longer has')
   assert.ok(!genesisDoctrine.includes('## Genesis: Explore Stage'),
-    'D11: spec/doctrine/genesis.md must NOT carry the old "## Genesis: Explore Stage" heading — a surviving old heading alongside the new one means the section was duplicated rather than rewritten in place, and any `§ Genesis: Explore Stage` citation elsewhere (e.g. spec/templates/design-positions.md) would still resolve')
+    'D11 (specs/20260827/02): spec/doctrine/genesis.md must still NOT carry the older "## Genesis: Explore Stage" heading — a surviving old heading would leave a dead `§ Genesis: Explore Stage` citation resolvable elsewhere')
 
   // D11/.claude/rules/spec-pipeline.md § Gotchas: classify by location (a repo-wide walk),
   // never by name-shape — a narrower, hand-enumerated file list is the exact hole the
@@ -798,10 +807,15 @@ test('AC-20260827-02-8: spec-paths shared-for genesis serves Design Canon and co
 // shared sweepRetiredLiteral helper).
 
 // ---------------------------------------------------------------------------
-// AC-20260827-03-7
+// AC-20260902-08-10 (was AC-20260827-03-7: genesis.md doctrine carried the "## Genesis:
+// Design State" heading — specs/20260902/08 D9 retires that heading outright, folding its
+// ratification contract into the new "## Genesis: Brief State" heading pinned by this file's
+// other AC-20260902-08-10 test; the still-true clauses here (spec-paths shared-for genesis's
+// section list, the retired command-file/entrypoints.json deletion, the repo-wide sweep) carry
+// over unchanged, retagged to this spec since the heading they were grouped with moved.)
 // ---------------------------------------------------------------------------
 
-test('AC-20260827-03-7: spec-paths shared-for genesis serves Design Authoring Contracts and continues to serve Design Canon and Host Grounding, the retired command file and its entrypoints.json rows are gone, genesis.md doctrine carries the new Design State heading, and no file outside a justified waive-list names genesis-design', () => {
+test('AC-20260902-08-10: spec-paths shared-for genesis serves Design Authoring Contracts and continues to serve Design Canon and Host Grounding, the retired command file and its entrypoints.json rows are gone, genesis.md doctrine carries no Design State heading, and no file outside a justified waive-list names genesis-design', () => {
   const genesisShared = runBash('bin/spec-paths', ['shared-for', 'genesis'])
   assert.strictEqual(genesisShared.status, 0,
     'D7: `spec-paths shared-for genesis` must exit 0 — a non-zero exit here means folding Design Authoring Contracts into genesis\'s own section list broke the resolver itself: ' + genesisShared.stderr)
@@ -833,8 +847,11 @@ test('AC-20260827-03-7: spec-paths shared-for genesis serves Design Authoring Co
     JSON.stringify(entrypointOffenders))
 
   const genesisDoctrine = read('spec/doctrine/genesis.md')
-  assert.match(genesisDoctrine, /^## Genesis: Design State$/m,
-    'D8: spec/doctrine/genesis.md must carry the "## Genesis: Design State" heading — its absence means the ratification variant of the old Phase 4 (tokens ratified not authored, doctrine distilled, the ledgers, base primitives + component vocabulary, the design-rules closure check, the prune) was never landed')
+  // specs/20260902/08 D9: "## Genesis: Design State" is retired outright — its ratification
+  // contract (doctrine distilled, the design-rules closure check, tokens presence) moves into
+  // the new "## Genesis: Brief State" heading this file's AC-20260902-08-10 sibling test pins.
+  assert.ok(!genesisDoctrine.includes('## Genesis: Design State'),
+    'D9: spec/doctrine/genesis.md must NOT carry the "## Genesis: Design State" heading — its ratification contract moved into the new "## Genesis: Brief State" heading, so a surviving old heading would leave two homes for the same fact')
 
   // D8/.claude/rules/spec-pipeline.md § Gotchas: classify by location (a repo-wide walk),
   // never by name-shape — the same pattern the genesis-explore sweep above uses. Mechanics
@@ -851,6 +868,11 @@ test('AC-20260827-03-7: spec-paths shared-for genesis serves Design Authoring Co
       '03-genesis-design-state.md',
     ],
     waivedPaths: [
+      // specs/20260902/08's own D8/D9 header comment quotes the retired command name once
+      // (`"genesis-design" (that command is retired; BRIEF is a driver state, not a command)`)
+      // to document that neither of the hook's reworded messages says it — a dated record of
+      // the fold, never a live pointer the session could follow.
+      'spec/scripts/genesis-state-gate.sh',
       // this test file's own header/body names the retired literal as the string under test.
       'tests/consistency/genesis-doctrine.test.js',
       // its `description` is the changelog surface; the changelog paragraph names the retired
@@ -953,4 +975,120 @@ test('AC-20260827-04-5: spec/doctrine/genesis.md carries the Conventions Probe S
       '" — its absence means the template does not demonstrate the full nine-key floor this ' +
       'spec requires every genesis project to record: ' + JSON.stringify(rowKeys))
   }
+})
+
+// ---------------------------------------------------------------------------
+// specs/20260902/08-genesis-shrink-brief-state.md: DISCOVERY hands off to /spec:mocks;
+// BRIEF ratifies the approved set. AC-20260902-08-10 (doctrine sections), AC-20260902-08-11
+// (commands/genesis.md and init.md), AC-20260902-08-12 (repo-wide retired-literal sweep for
+// design-pick.json/positions.md/style-tile/tiles-culled/positions-authored plus the deleted
+// templates), AC-20260902-08-17 (shared-for genesis regression).
+// ---------------------------------------------------------------------------
+
+test('AC-20260902-08-10: spec/doctrine/genesis.md carries a "## Genesis: Brief State" heading and neither "## Genesis: Explore State" nor "## Genesis: Design State", and citations-check.js over spec/ reports MISS=0', () => {
+  const src = read('spec/doctrine/genesis.md')
+  assert.match(src, /^## Genesis: Brief State$/m,
+    'D9: spec/doctrine/genesis.md must carry the "## Genesis: Brief State" heading — its absence means the new BRIEF state (D3/D4/D6\'s ratification contract) has no doctrine section governing it')
+  assert.doesNotMatch(src, /^## Genesis: Explore State$/m,
+    'D9: "## Genesis: Explore State" must be deleted — the taste funnel it governed is retired outright by D1, and a surviving heading would still describe a mechanism the driver no longer has')
+  assert.doesNotMatch(src, /^## Genesis: Design State$/m,
+    'D9: "## Genesis: Design State" must be deleted — its ratification contract moves into the new "## Genesis: Brief State" heading, so a surviving old heading would leave two homes for the same fact')
+
+  const check = runNode('scripts/citations-check.js', [], { cwd: ROOT })
+  assert.strictEqual(check.status, 0, 'citations-check.js must exit 0 (advisory scan, never a usage error) over the repo root: ' + check.stderr)
+  assert.match(check.stdout, /\bMISS=0\b/,
+    'D9: deleting two doctrine sections and adding one must not orphan any "§ Genesis: ..." citation elsewhere in spec/ — a nonzero MISS here means some command or doctrine file still points at a heading this spec renamed or removed: ' + check.stdout)
+})
+
+test('AC-20260902-08-11: spec/commands/genesis.md is <=120 lines, contains the literal "/spec:mocks → /spec:genesis → /spec:enforce", and does not contain "/spec:atlas sweep"; spec/commands/init.md contains "ratified" within its design precedence list', () => {
+  const genesisCmd = read('spec/commands/genesis.md')
+  const lineCount = genesisCmd.split('\n').length
+  assert.ok(lineCount <= 120,
+    'D10: spec/commands/genesis.md must stay at or under 120 lines — it is ' + lineCount +
+    ' lines; dropping the atlas-sweep link and rewriting the chain bullet must not be offset by growth elsewhere')
+  assert.ok(genesisCmd.includes('/spec:mocks → /spec:genesis → /spec:enforce'),
+    'D10: the chain bullet must contain the literal "/spec:mocks → /spec:genesis → /spec:enforce" — the whole-product design stage now precedes genesis for a visual archetype, and a missing literal here means the command doc still tells the session the old (design-inside-genesis) chain')
+  assert.ok(!genesisCmd.includes('/spec:atlas sweep'),
+    'D10: "/spec:atlas sweep" must not appear anywhere in spec/commands/genesis.md — the whole-product atlas view now precedes genesis (2026-08-31 ruling) instead of being a scheduled stage the chain bullet still names')
+
+  const initCmd = read('spec/commands/init.md')
+  assert.ok(initCmd.includes('ratified'),
+    'D10: spec/commands/init.md\'s design-precedence branch must add "ratified" to its consume-case list — BRIEF\'s own successful value is a closed canon exactly like the legacy "rules-locked"/"skipped" values already listed, and its absence would leave init.md silent about the value /spec:init actually sees on a fresh BRIEF-ratified host')
+})
+
+test('AC-20260902-08-12: the retired-literal sweep for design-pick.json, positions.md, style-tile, tiles-culled, and positions-authored over spec/, README.md, and .claude-plugin/ returns zero offenders, and spec/templates/design-positions.md / design-pick.json do not exist', () => {
+  const RETIRED_LITERALS = ['design-pick.json', 'positions.md', 'style-tile', 'tiles-culled', 'positions-authored']
+  for (const literal of RETIRED_LITERALS) {
+    // No `citations` entry: unlike the genesis-explore/genesis-design sweeps above, none of
+    // these five literals is a substring of this spec's own filename or of any sibling spec's
+    // filename (the genesis-architect sweep's own precedent for omitting citations) — every
+    // legitimate historical mention already falls under the specs/ + docs/ + .claude/spec-runs
+    // prefix waiver below.
+    const waivedPaths = [
+      // this test file's own body names every retired literal as the string under test.
+      'tests/consistency/genesis-doctrine.test.js',
+      // tests/genesis/*.test.js pin the retired mark refusal (AC-20260902-08-2) and the
+      // retargeted PROBE/style-tile regression (AC-20260902-08-8) — the literal is the input
+      // under test in both, never a stale reference.
+      'tests/genesis/genesis-driver.test.js',
+      'tests/genesis/tournament.test.js',
+      'tests/genesis/brief-state.test.js',
+      // its `description` is the changelog surface; prior changelog paragraphs legitimately
+      // name retired mechanisms by design (D11 precedent) as a historical record.
+      'spec/.claude-plugin/plugin.json',
+      // AC-20260827-02-3/D6's own fallback regression asserts genesis-design keeps falling
+      // through while `explore: "tiles-culled"` (a legacy mid-flight value) — the literal is
+      // the input under test, not a stale reference to a retired mechanism.
+      'tests/genesis-gate.test.js',
+      // a dated agent-memory note recording this repo's own driver-descriptor/status.archetype
+      // incident quotes the old research-done→…→tiles-culled funnel by name as history, outside
+      // the spec/, README.md, .claude-plugin/ scope AC-20260902-08-12 names.
+      '.claude/agent-memory/plugin-tests/driver-descriptor-archetype-vs-status-archetype.md',
+    ]
+    // Collision closure (spec body, "Collision closure" section): spec/doctrine/design.md's two
+    // sentences naming `rules-locked` and the `positions.md`/`design-pick.json` grounding are
+    // rewritten by spec 09's design.md row, which builds AFTER this spec in the same brief — a
+    // deliberate, spec-cited deferral, waived here for exactly the two literals it names, never
+    // for style-tile/tiles-culled/positions-authored, which design.md does not mention.
+    if (literal === 'design-pick.json' || literal === 'positions.md') {
+      waivedPaths.push('spec/doctrine/design.md')
+    }
+    // D14: the driver's own retired-mark refusal table (Contracts § driver surface) must spell
+    // `positions-authored` and `tiles-culled` plainly by name so `--mark positions-authored`/
+    // `--mark tiles-culled` are refused with a remedy naming them — waived by explicit path,
+    // per literal, never for design-pick.json/positions.md/style-tile, which this table does
+    // not need to name.
+    if (literal === 'positions-authored' || literal === 'tiles-culled') {
+      waivedPaths.push('spec/scripts/genesis-driver.js')
+    }
+    const offenders = sweepRetiredLiteral(literal, {
+      waivedPaths,
+      waivedPrefixes: [
+        // dated historical records and run/queue state — never swept, per D12/AC-12 verbatim.
+        'specs/',
+        'docs/',
+        '.claude/spec-runs',
+      ],
+    })
+    assert.deepStrictEqual(offenders, [],
+      'D12: these files outside the waive-list still name the retired literal "' + literal +
+      '": ' + offenders.join(', ') + ' — the retired EXPLORE/DESIGN mechanism must leave no live surface behind, or a later reader has no way to tell a dead reference from a live one')
+  }
+
+  assert.strictEqual(fs.existsSync(path.join(SPEC, 'templates/design-positions.md')), false,
+    'D11: spec/templates/design-positions.md must be deleted along with the retired EXPLORE state it templated')
+  assert.strictEqual(fs.existsSync(path.join(SPEC, 'templates/design-pick.json')), false,
+    'D11: spec/templates/design-pick.json must be deleted — the pick record now lives in the mocks status (D4), not this template')
+})
+
+test('AC-20260902-08-17: spec-paths shared-for genesis SHALL CONTINUE TO serve its scoped sections (Design Canon, Design Authoring Contracts, Host Grounding)', () => {
+  const genesisShared = runBash('bin/spec-paths', ['shared-for', 'genesis'])
+  assert.strictEqual(genesisShared.status, 0,
+    'shared-for genesis must CONTINUE TO exit 0 — this spec\'s doctrine section deletions/additions must not break the resolver: ' + genesisShared.stderr)
+  assert.match(genesisShared.stdout, /## Design Canon/,
+    'shared-for genesis must CONTINUE TO serve § Design Canon — D9\'s section rewrite must not drop a section a prior spec already added')
+  assert.match(genesisShared.stdout, /## Design Authoring Contracts/,
+    'shared-for genesis must CONTINUE TO serve § Design Authoring Contracts')
+  assert.match(genesisShared.stdout, /## Host Grounding/,
+    'shared-for genesis must CONTINUE TO serve § Host Grounding — a section map broken by this spec\'s doctrine edits would mean the command reads no grounding doctrine at all')
 })

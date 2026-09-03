@@ -1,11 +1,11 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "architect": "pending",
-  "explore": "pending",
   "design": "pending",
   "archetype": null,
   "localeScope": null,
   "tournament": null,
+  "brief": null,
   "stackDescriptorPath": ".claude/genesis/stack-descriptor.json",
   "designManifestPath": ".claude/genesis/design-rules.json",
   "gateCommand": null,

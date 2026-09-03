@@ -11,9 +11,13 @@
 # it — shared with the already-retired explore command's arm from
 # specs/20260827/02-genesis-explore-state.md via the same require_scaffold helper — is deleted
 # too. Both retired commands' prompts now fall through untouched (exit 0, no arm) at every state.
-# The init arm below is untouched in behavior (its exit codes per `design` value are
-# byte-identical); only its messages are reworded to point at the genesis design state instead of
-# the deleted command.
+#
+# specs/20260902/08-genesis-shrink-brief-state.md D8: the init arm's passing value set gains
+# "ratified" (BRIEF's own successful ratification, D4) alongside the legacy "rules-locked"/
+# "skipped" values; the blocked message for the legacy partial-canon values doctrine-drafted/
+# tokens-landed is reworded to "re-run /spec:genesis to reach BRIEF" and the pending/absent note
+# to "the genesis BRIEF state has not ratified a design canon" — neither message says
+# "genesis-design" (that command is retired; BRIEF is a driver state, not a command).
 set -u
 
 INPUT=$(cat)
@@ -39,14 +43,14 @@ DES=$(jq -r '.design // "pending"' "$STATUS" 2>/dev/null)
 case "$PROMPT" in
   /spec:init*)
     case "$DES" in
-      rules-locked|skipped) exit 0 ;;
+      ratified|rules-locked|skipped) exit 0 ;;
       doctrine-drafted|tokens-landed)
-        echo "Genesis state gate: /spec:init found a partial design canon (design: $DES) — the genesis design state (re-run /spec:genesis) has not locked its rules. Finish it (or reach design: skipped for a headless archetype) before grounding, so spec:init consumes one canon instead of half-adopting." >&2
+        echo "Genesis state gate: /spec:init found a partial design canon (design: $DES) — re-run /spec:genesis to reach BRIEF and ratify it before grounding, so spec:init consumes one canon instead of half-adopting." >&2
         exit 2
         ;;
       *)
         # design pending: not an error — a headless archetype legitimately has no design stage.
-        echo "Genesis note: a .claude/genesis/ exists but the genesis design state has not run (design: ${DES:-pending}). If this archetype has no UI that is expected — spec:init will write no design block. Otherwise re-run /spec:genesis first so spec:init can ground the design canon."
+        echo "Genesis note: a .claude/genesis/ exists but the genesis BRIEF state has not ratified a design canon (design: ${DES:-pending}). If this archetype has no UI that is expected — spec:init will write no design block. Otherwise re-run /spec:genesis first so spec:init can ground the design canon."
         exit 0
         ;;
     esac

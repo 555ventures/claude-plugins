@@ -74,26 +74,40 @@ test('AC-20260827-03-6: /spec:genesis-design now falls through the hook untouche
   assert.strictEqual(midFlight.stderr, '', 'D6: a fallen-through prompt must inject nothing onto stderr regardless of explore state')
 })
 
-// AC-20260827-03-6's "SHALL CONTINUE TO" half: the /spec:init arm's exit codes per design value
-// are byte-identical (A4) — D6 only removes genesis-design's own arm and require_scaffold, never
-// touching this arm. Tags and extends the pre-existing "init gating unchanged" pin with the
-// pending-note and skipped cases and D6's new no-"genesis-design"-in-messages requirement.
-test('AC-20260827-03-6: init gating SHALL CONTINUE TO block at design: doctrine-drafted and tokens-landed, pass at rules-locked and skipped, note (never block) at pending, and never mention "genesis-design" in any of its messages', () => {
+// specs/20260902/08-genesis-shrink-brief-state.md D8 (AC-20260902-08-9, AC-20260902-08-16):
+// the init arm's init-arm value set gains "ratified" (BRIEF's own successful ratification value,
+// D4) as a third passing value alongside the SHALL-CONTINUE-TO "rules-locked"/"skipped" legacy
+// values; the blocked message for doctrine-drafted/tokens-landed says "re-run /spec:genesis to
+// reach BRIEF" (never "genesis design state"); the pending/absent note says "the genesis BRIEF
+// state has not ratified a design canon".
+test('AC-20260902-08-9: init gating passes silently at design: "ratified"; blocks at doctrine-drafted/tokens-landed naming the value and BRIEF; notes (never blocks) at pending naming BRIEF and never "genesis-design"; AC-20260902-08-16: SHALL CONTINUE TO pass at rules-locked and skipped', () => {
+  const ratified = gate('/spec:init', { architect: 'scaffold-complete', design: 'ratified' })
+  assert.strictEqual(ratified.status, 0, 'D8: design: "ratified" is BRIEF\'s own successful ratification value — /spec:init must pass silently')
+  assert.strictEqual(ratified.stdout, '', 'D8: a passing design: "ratified" invocation must inject nothing onto stdout')
+  assert.strictEqual(ratified.stderr, '', 'D8: a passing design: "ratified" invocation must inject nothing onto stderr')
+
   const drafted = gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked', design: 'doctrine-drafted' })
-  assert.strictEqual(drafted.status, 2, 'design: doctrine-drafted is a partial canon — /spec:init must still block it')
-  assert.ok(!drafted.stderr.includes('genesis-design'), 'D6: the init arm\'s blocked message at design: doctrine-drafted must replace its "/spec:genesis-design" mention with "the genesis design state (re-run /spec:genesis)" — a surviving mention points the session at a deleted command')
+  assert.strictEqual(drafted.status, 2, 'design: doctrine-drafted is a partial legacy canon — /spec:init must still block it')
+  assert.match(drafted.stderr, /doctrine-drafted/, 'D8: the blocked message must echo the actual design value "doctrine-drafted" so the session knows exactly what state it is stuck in')
+  assert.match(drafted.stderr, /BRIEF/, 'D8: the blocked message must name BRIEF as the state the session needs to reach — its old wording pointed at the retired "genesis design state"')
+  assert.match(drafted.stderr, /re-run \/spec:genesis to reach BRIEF/, 'D8: the blocked message must carry the literal remedy "re-run /spec:genesis to reach BRIEF"')
+  assert.ok(!drafted.stderr.includes('genesis-design'), 'D8: the blocked message must never mention "genesis-design" — that command is retired and BRIEF is a driver state, not a command')
 
   const tokensLanded = gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked', design: 'tokens-landed' })
-  assert.strictEqual(tokensLanded.status, 2, 'design: tokens-landed is still a partial canon — /spec:init must still block it')
-  assert.ok(!tokensLanded.stderr.includes('genesis-design'), 'D6: the init arm\'s blocked message at design: tokens-landed must not mention "genesis-design" either')
+  assert.strictEqual(tokensLanded.status, 2, 'design: tokens-landed is still a partial legacy canon — /spec:init must still block it')
+  assert.match(tokensLanded.stderr, /tokens-landed/, 'D8: the blocked message must echo the actual design value "tokens-landed"')
+  assert.match(tokensLanded.stderr, /BRIEF/, 'D8: the blocked message must name BRIEF for tokens-landed too')
+  assert.ok(!tokensLanded.stderr.includes('genesis-design'), 'D8: the blocked message must not mention "genesis-design" either')
 
-  assert.strictEqual(gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked', design: 'rules-locked' }).status, 0, 'design: rules-locked is a closed canon — /spec:init must pass')
-  assert.strictEqual(gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked', design: 'skipped' }).status, 0, 'design: skipped is a legitimate headless archetype — /spec:init must pass')
+  assert.strictEqual(gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked', design: 'rules-locked' }).status, 0, 'AC-20260902-08-16: design: rules-locked is a legacy closed canon — /spec:init SHALL CONTINUE TO pass')
+  assert.strictEqual(gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked', design: 'skipped' }).status, 0, 'AC-20260902-08-16: design: skipped is a legitimate headless archetype — /spec:init SHALL CONTINUE TO pass')
 
   const pending = gate('/spec:init', { architect: 'scaffold-complete', explore: 'picked' })
   assert.strictEqual(pending.status, 0, 'design: pending must never block /spec:init — a headless archetype legitimately has no design stage')
   assert.match(pending.stdout, /Genesis note/, 'design: pending must still print a note (not a block) so the session knows a design canon is available but unrun')
-  assert.ok(!pending.stdout.includes('genesis-design'), 'D6: the design: pending note must not point the session at the deleted genesis-design command')
+  assert.match(pending.stdout, /the genesis BRIEF state has not ratified a design canon/, 'D8: the pending note must carry the literal reworded wording naming the BRIEF state, not the retired "genesis design state" phrasing')
+  assert.match(pending.stdout, /BRIEF/, 'D8: the pending note must name BRIEF')
+  assert.ok(!pending.stdout.includes('genesis-design'), 'D8: the design: pending note must not point the session at the deleted genesis-design command')
 })
 
 test('no genesis status on disk → hook is inert for every genesis command', () => {

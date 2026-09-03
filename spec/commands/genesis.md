@@ -60,12 +60,12 @@ commands assemble slots and print its output verbatim):
 - `outcome`: `✅ architected + grounded — scaffold green, {N} ADRs, {P} convention probes,
   roadmap of {M} briefs`.
 - `bullets`: `{archetype} for {audience}; gate: {resolved gate command}`; one
-  `{decision made — ADR path}` entry per decision; a `Chain: /spec:genesis →
-  /spec:atlas sweep + your holistic atlas review → /spec:enforce →
-  /spec:plan docs/roadmap/01-*.md` entry, rendered above the close so the whole sequence is
-  visible before the one recommended next step. For an archetype whose design stage is `none`
-  (design written `skipped`) the chain bullet drops the atlas link: `Chain: /spec:genesis →
-  /spec:enforce → /spec:plan docs/roadmap/01-*.md`.
+  `{decision made — ADR path}` entry per decision; a chain entry rendered above the close so the
+  whole sequence is visible before the one recommended next step. For an archetype that owed a
+  mocks set (§ Genesis: Archetype Registry): `Chain: /spec:mocks → /spec:genesis →
+  /spec:enforce → /spec:plan docs/roadmap/01-*.md`. For one that owed no set (`design` written
+  `skipped` or non-visual): `Chain: /spec:genesis → /spec:enforce →
+  /spec:plan docs/roadmap/01-*.md`.
 - `warns`: one `dissent recorded: {one-phrase summary}` entry per dissent (drop if none).
 - `next`: `{kind: 'command', text: '/spec:enforce'}` — every archetype. The `HANDOFF` step
   (spec/doctrine/genesis.md § Genesis: Conventions Probe Suite) already grounded the repo
@@ -81,7 +81,7 @@ verbatim. Filled example:
 - web-app for solo creators; gate: npm run typecheck && npm run lint && npm test
 - framework: Next.js 15 (App Router) — docs/adr/0001-framework.md
 - persistence: Postgres via Neon — docs/adr/0002-persistence.md
-- Chain: /spec:genesis → /spec:atlas sweep + your holistic atlas review → /spec:enforce → /spec:plan docs/roadmap/01-*.md
+- Chain: /spec:mocks → /spec:genesis → /spec:enforce → /spec:plan docs/roadmap/01-*.md
 ⚠️ dissent recorded: SQLite rejected — no managed backup story for a solo operator
 
 Next: /spec:enforce

@@ -1,6 +1,7 @@
 ---
 date: 2026-09-02
-status: hardened
+status: implementing
+build_base: main
 tier: critical             # genesis-state-gate.sh is a hook surface (pipeline rules § Risk Tiers); genesis-driver.js is the greenfield boot path
 area: genesis
 design: false
@@ -9,6 +10,7 @@ depends_on: [specs/20260902/07-mocks-command-driver.md]
 depended_on_by: [specs/20260902/11-brief-from-approved-set.md]
 brief: 22
 open_markers: 0
+diff_base: 854156825ba55794d31eabe7cd33315f10ffca41
 ---
 
 # Genesis shrinks: DISCOVERY hands off to `/spec:mocks`, BRIEF ratifies the approved set
@@ -41,6 +43,7 @@ doctrine, templates and tests carry none of the retired states, and a legacy fix
 | D10 | `spec/commands/genesis.md` (≤120 lines): the loop is unchanged; the chain bullet becomes `Chain: /spec:mocks → /spec:genesis → /spec:enforce → /spec:plan docs/roadmap/01-*.md` (visual) or `/spec:genesis → /spec:enforce → /spec:plan …` (non-visual); the atlas-sweep link is dropped; `spec/commands/init.md`'s design-precedence branch adds `ratified` to the consume case (AC-20260902-08-11) | `/spec:atlas` stays the derived view (2026-08-31 ruling) — the whole-product picture now precedes genesis, so the sweep is no longer a scheduled stage. |
 | D11 | Templates: `status.json` → `schemaVersion: 3` (drops `explore`, adds `brief: null`; `design` retained); `design-positions.md` and `design-pick.json` deleted; the driver reads v2 files as-is (missing keys default) and rewrites v3 on the next accepted mark (AC-20260902-08-1) | Retired artifacts leave with their state; legacy files must still load. |
 | D12 | Tests: `tests/genesis/explore-states.test.js` and `tests/genesis/design-state.test.js` are deleted; `tests/genesis/brief-state.test.js` is created; `genesis-driver.test.js`, `tournament.test.js`, `conventions-handoff.test.js` (its data-ml fixtures gain the one `--mark brief-written` line the new chain requires before `menus-done`), `genesis-gate.test.js`, and `tests/consistency/genesis-doctrine.test.js` are retargeted in place (pins updated to the new enum, never weakened); a repo-wide `sweepRetiredLiteral` for `design-pick.json`, `positions.md`, `style-tile`, `tiles-culled`, `positions-authored` across `spec/`, `README.md`, `.claude-plugin/` with this spec's path as the citation waiver (AC-20260902-08-12) | The suite's own pattern for retired commands (AC-20260827-02-8, -03-7); the sweep is the reopen condition. |
+| D14 | Build ruling (session, no user fork — intent clear from Contracts): the retired-mark refusal table in `genesis-driver.js` spells `positions-authored` and `tiles-culled` plainly; `tests/consistency/genesis-doctrine.test.js`'s AC-20260902-08-12 sweep waives `spec/scripts/genesis-driver.js` by explicit path for those two literals only (justified: the refusal table is the one sanctioned live surface — Contracts § driver surface). Never string-splitting to evade the sweep. | AC-12 and the Contracts collided; the refusal-by-name contract wins, the sweep waives by path per the test's own D14 rule. |
 | D13 | Version bump → 7.62.0 target; changelog names the retired states and the BRIEF gate | § Planning. `[no-ac: standing plugin-version pin]` |
 
 ## File Plan

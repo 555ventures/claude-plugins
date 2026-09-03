@@ -137,14 +137,46 @@ function writeBindingSubset(dir, gateCommand) {
   ].join('\n'))
 }
 
-// Drives from an empty root to a MENUS state whose hosting menu file is already written (the
-// registry-check pass recorded) — everything AC-1/AC-2 need before they exercise the archetype
-// line themselves.
-function advanceToMenusReady(dir) {
+// specs/20260902/08-genesis-shrink-brief-state.md D1/D2/D4: discovery-done now requires the
+// `- archetype: <key>` line up front, and BRIEF now sits between DISCOVERY and MENUS —
+// `--mark brief-written` must be accepted before this file's MENUS-stage setup can proceed at
+// all. Every archetype this file drives through is either `backend-api` or `data-ml`
+// (DESIGN_SKIPPED_ARCHETYPES, D4), which owes nothing beyond DISCOVERY, so brief-written is
+// accepted immediately with no mocks/doctrine artifacts — except the one PROBE test below that
+// deliberately exercises web-app (a visual archetype), which writes its own full D4 ratification
+// set instead of calling this helper.
+function ratifyBriefArtifacts(dir) {
+  writeJSON(path.join(dir, 'design/mocks/status.json'), {
+    schemaVersion: 1, state: 'APPROVED', journeys: {}, directions: {}, theme: null,
+  })
+  writeFile(path.join(dir, 'design/mocks/ledger.md'), [
+    '# Provenance ledger — test project', '',
+    '## Assumptions', '',
+    '| id | step | kind | claim | tag | status | rejected | dependents | note |',
+    '| - | - | - | - | - | - | - | - | - |', '',
+    '## Misunderstandings', '',
+    '| id | what | step | cost | note |',
+    '| - | - | - | - | - |', '',
+  ].join('\n'))
+  writeFile(path.join(dir, 'docs/design/doctrine.md'), [
+    '# Design doctrine', '',
+    '## Dissents',
+    'Nothing rejected — synthetic fixture with no composed directions.',
+  ].join('\n'))
+  writeJSON(path.join(dir, '.claude/genesis/design-rules.json'), { rules: [] })
+  writeFile(path.join(dir, 'design/tokens.css'), ':root { --brand: #123; }\n')
+}
+
+// Drives from an empty root, through the new BRIEF state, to a MENUS state whose hosting menu
+// file is already written (the registry-check pass recorded) — everything AC-1/AC-2 need before
+// they exercise the archetype line themselves.
+function advanceToMenusReady(dir, archetype) {
   bare(dir)
-  writeBrief(dir)
+  writeBrief(dir, { picks: ['- archetype: ' + archetype] })
   const disco = mark(dir, 'discovery-done')
-  assert.strictEqual(disco.status, 0, 'test setup requires discovery-done to be accepted on a fully-covered brief: ' + disco.stderr)
+  assert.strictEqual(disco.status, 0, 'test setup requires discovery-done to be accepted on a fully-covered brief naming archetype ' + archetype + ': ' + disco.stderr)
+  const briefWritten = mark(dir, 'brief-written')
+  assert.strictEqual(briefWritten.status, 0, 'test setup requires brief-written to be accepted immediately for archetype ' + archetype + ' (DESIGN_SKIPPED_ARCHETYPES owe nothing beyond DISCOVERY, D4): ' + briefWritten.stderr)
   writeHostingMenu(dir)
   const written = mark(dir, 'menu-written', 'interview-research/' + DIM + '.json')
   assert.strictEqual(written.status, 0, 'test setup requires menu-written to be accepted on a zero-package menu: ' + written.stderr)
@@ -153,7 +185,7 @@ function advanceToMenusReady(dir) {
 // Drives all the way through menus-done with a named TOURNAMENT archetype, asserting the driver
 // actually lands in FINALISTS — the shared setup every AC-3..AC-8 test in this file builds on.
 function advanceToFinalists(dir, archetype) {
-  advanceToMenusReady(dir)
+  advanceToMenusReady(dir, archetype)
   writeBrief(dir, { picks: ['- archetype: ' + archetype, '- ' + DIM + ': AWS'] })
   const done = mark(dir, 'menus-done')
   assert.strictEqual(done.status, 0, 'test setup requires menus-done to be accepted with a valid archetype and every open dimension picked: ' + done.stderr)
@@ -172,11 +204,16 @@ function finalist(name, picks, overrides = {}) {
   }, overrides)
 }
 
-const BOOT_CMD = "touch booted; trap 'exit 0' TERM; while :; do sleep 1; done"
+// review finding (AC-20260902-08-8, AC-20260902-08-15): the boot command must clear its own
+// ready marker on TERM — smoke.sh's pre-boot staleness guard (D4) fails closed with exit 7
+// "stale-ready" whenever a readyCheck run finds `booted` already present before it has spawned
+// a fresh bootCommand, which is exactly what happens on probe-done's post-race re-boot in the
+// same finalist dir once a prior boot's marker survives its own stop.
+const BOOT_CMD = "touch booted; trap 'rm -f booted; exit 0' TERM; while :; do sleep 1; done"
 
 test('AC-20260827-01-1: menus-done with a non-tournament archetype reaches DECIDE with no tournament/ directory ever created, a tournament archetype prints FINALISTS with the cost and last-measured lines, and finalists-skipped records the skip and hands the state back to DECIDE', () => {
   const dataMl = tmpdir('tourn-ac1-datamL')
-  advanceToMenusReady(dataMl)
+  advanceToMenusReady(dataMl, 'data-ml')
   writeBrief(dataMl, { picks: ['- archetype: data-ml', '- ' + DIM + ': AWS'] })
   const done1 = mark(dataMl, 'menus-done')
   assert.strictEqual(done1.status, 0, 'a fully-covered, fully-picked brief with a valid archetype must be accepted: ' + done1.stderr)
@@ -184,7 +221,7 @@ test('AC-20260827-01-1: menus-done with a non-tournament archetype reaches DECID
   assert.strictEqual(fs.existsSync(path.join(dataMl, '.claude/genesis/tournament')), false, 'D1: a non-tournament archetype must never create .claude/genesis/tournament/ — its existence would mean race bookkeeping was set up for a project that will never run one')
 
   const backend = tmpdir('tourn-ac1-backend')
-  advanceToMenusReady(backend)
+  advanceToMenusReady(backend, 'backend-api')
   writeBrief(backend, { picks: ['- archetype: backend-api', '- ' + DIM + ': AWS'] })
   const done2 = mark(backend, 'menus-done')
   assert.strictEqual(done2.status, 0, 'a fully-covered, fully-picked brief with a valid tournament archetype must be accepted: ' + done2.stderr)
@@ -200,28 +237,21 @@ test('AC-20260827-01-1: menus-done with a non-tournament archetype reaches DECID
   assert.match(afterSkip.stdout, /state: DECIDE/, 'a skipped tournament must resume at DECIDE on the very next bare invocation — landing anywhere else means the skip was not actually honored by state re-derivation')
 })
 
-test('AC-20260827-01-2: menus-done refuses a missing archetype line by name, refuses an unknown archetype value by naming the bad value and a real key, and accepts a known archetype, recording it into status.json', () => {
-  const missing = tmpdir('tourn-ac2-missing')
-  advanceToMenusReady(missing)
-  writeBrief(missing, { picks: ['- ' + DIM + ': AWS'] })
-  const r1 = mark(missing, 'menus-done')
-  assert.strictEqual(r1.status, 2, 'D2: menus-done must refuse a brief whose ## Picks carries every dimension pick but no archetype line — the driver has no way to know which archetype the tournament (and later the explore stage) should condition on: ' + JSON.stringify(r1))
-  assert.match(r1.stderr, /archetype/, 'the refusal must name "archetype" so the session knows exactly which pick line is missing, not a generic "brief incomplete" message')
-
+// specs/20260902/08-genesis-shrink-brief-state.md D2: the archetype gate this AC pinned at
+// menus-done is RELOCATED to discovery-done ("moved here from menus-done, which SHALL CONTINUE
+// TO accept it when already present") — the missing-line and valid-archetype-recorded cases are
+// now AC-20260902-08-3's own pins in tests/genesis/brief-state.test.js. The one assertion that
+// still belongs to this file's tournament-archetype-registry concern — an unknown value being
+// refused by name, with a real key offered — is retargeted in place to the mark that now performs
+// it, never weakened, never left orphan-red at its old location.
+test('AC-20260902-08-3 (regression, retargeted from AC-20260827-01-2): discovery-done refuses an archetype value outside the eight registry keys by naming the bad value and a real key', () => {
   const bogus = tmpdir('tourn-ac2-bogus')
-  advanceToMenusReady(bogus)
-  writeBrief(bogus, { picks: ['- archetype: bogus', '- ' + DIM + ': AWS'] })
-  const r2 = mark(bogus, 'menus-done')
-  assert.strictEqual(r2.status, 2, 'D2: an archetype value outside the eight registry keys must be refused — accepting it would let a typo silently become the project\'s permanent, load-bearing archetype: ' + JSON.stringify(r2))
+  bare(bogus)
+  writeBrief(bogus, { picks: ['- archetype: bogus'] })
+  const r2 = mark(bogus, 'discovery-done')
+  assert.strictEqual(r2.status, 2, 'D2: an archetype value outside the eight registry keys must be refused at discovery-done, the gate\'s new home — accepting it would let a typo silently become the project\'s permanent, load-bearing archetype: ' + JSON.stringify(r2))
   assert.match(r2.stderr, /bogus/, 'the refusal must name the offending value "bogus" so the session knows what it wrote was rejected, not just that something was wrong')
   assert.match(r2.stderr, /web-app/, 'the refusal must name at least one real registry key (e.g. web-app) so the session has the actual eight-key vocabulary in front of it instead of having to go look up the registry table')
-
-  const ok = tmpdir('tourn-ac2-ok')
-  advanceToMenusReady(ok)
-  writeBrief(ok, { picks: ['- archetype: web-app', '- ' + DIM + ': AWS'] })
-  const r3 = mark(ok, 'menus-done')
-  assert.strictEqual(r3.status, 0, 'a brief naming a real registry archetype must be accepted: ' + r3.stderr)
-  assert.strictEqual(statusOf(ok).archetype, 'web-app', 'D2: a successful menus-done must store the archetype into status.json — its absence means the tournament routing (D1) and the later explore stage have no durable record of which archetype this project is, and would have to re-parse the brief every time')
 })
 
 test('AC-20260827-01-3: finalists-written refuses one finalist, four finalists, a finalist missing readyCheck, and a set with no incumbent, each by name, and accepts two valid finalists that include the incumbent, recording their names in order and printing the FINALISTS to RACE checkpoint', () => {
@@ -329,38 +359,28 @@ test('AC-20260827-01-4: a bare invocation in RACE scaffolds, gates, and boots a 
   assert.strictEqual(peek.stdout, 'PROBE\n', '--state must report PROBE for the driver-only RACE state exactly like the existing SCAFFOLD/GATE peek contract (F3) — a --state call that races or reports something else breaks the read-only peek invariant this driver already guarantees elsewhere')
 })
 
-// specs/20260827/02-genesis-explore-state.md D7: tile source derivation replaces
-// this spec's own D6 sketch source — the style-tile task's tiles are now `explore.finalists`
-// (a position's tile.html + tokens.css, or an external candidate's dir), never
-// .claude/genesis/sketch.html. web-app is also one of D1's four VISUAL archetypes, so it must
-// now resolve the new EXPLORE state (between MENUS and FINALISTS) before it can ever reach
-// FINALISTS at all — advanceToFinalists()'s "menus-done reaches FINALISTS straight away"
-// contract does not hold for web-app specifically (it still holds for every archetype used
-// elsewhere in this file, all of which are the non-visual backend-api). This test's own
-// "sketch-tile" setup is retargeted in place to resolve EXPLORE via `--mark external` — the
-// funnel-skipping path D6 introduces — and merges the old two-directory noSketch/withSketch
-// shape into one flow that ALSO writes a decoy sketch.html, so the pin gets STRICTLY stronger:
-// it now proves sketch.html is ignored even when present on disk, not merely when absent. Never
-// weakened, no new AC-ID (this row carries none per the File Plan).
-test('AC-20260827-01-5: PROBE lists the archetype\'s task set and the tile source, dropping style-tile when no sketch.html exists, and probe-done refuses a task over the retry cap and a probe.json missing an expected task before accepting a valid one that re-executes the finalist\'s gate, writes the benchmark and gallery, and advances to PICK', () => {
-  function raceWebAppViaExternal(dir) {
-    advanceToMenusReady(dir)
+// specs/20260902/08-genesis-shrink-brief-state.md D7 (AC-20260902-08-8): style-tile leaves
+// PROBE_TASKS for every archetype entirely, and `.claude/genesis/sketch.html` is never authored
+// anywhere. web-app is a visual archetype, so it reaches FINALISTS by ratifying a full BRIEF
+// (D3/D4); this test's setup drives that path and asserts PROBE's task list carries no
+// style-tile entry and no tile-source line.
+test('AC-20260902-08-8, AC-20260902-08-15: WHEN the PROBE step prints for web-app THE SYSTEM lists the archetype\'s tasks without style-tile and without a tile-source line, probe-done accepts a probe.json that carries no tile entries, and (D15) probe-done SHALL CONTINUE TO re-run the finalist\'s gate, re-boot, and write the benchmark', () => {
+  function raceWebApp(dir) {
+    bare(dir)
+    writeBrief(dir, { picks: ['- archetype: web-app'] })
+    const disco = mark(dir, 'discovery-done')
+    assert.strictEqual(disco.status, 0, 'test setup requires discovery-done to be accepted: ' + disco.stderr)
+    ratifyBriefArtifacts(dir)
+    const briefWritten = mark(dir, 'brief-written')
+    assert.strictEqual(briefWritten.status, 0, 'test setup requires brief-written to be accepted for web-app once D4\'s ratification artifacts hold: ' + briefWritten.stderr)
+
+    writeHostingMenu(dir)
+    const menuWritten = mark(dir, 'menu-written', 'interview-research/' + DIM + '.json')
+    assert.strictEqual(menuWritten.status, 0, 'test setup requires menu-written to be accepted: ' + menuWritten.stderr)
     writeBrief(dir, { picks: ['- archetype: web-app', '- ' + DIM + ': AWS'] })
     const done = mark(dir, 'menus-done')
     assert.strictEqual(done.status, 0, 'test setup requires menus-done to be accepted: ' + done.stderr)
-    assert.match(done.stdout, /state: EXPLORE/, 'specs/20260827/02 D1: menus-done for the visual archetype web-app must now reach EXPLORE, not FINALISTS — this test\'s own setup must track that routing change or every assertion below is exercising a state the driver would never actually reach')
-
-    // A decoy sketch.html PROVES D7's "sketch.html is never a tile source" claim: it must never
-    // be named by PROBE even though it genuinely exists on disk.
-    writeFile(path.join(dir, '.claude/genesis/sketch.html'), '<html><body>decoy sketch.html — must never be named by PROBE</body></html>')
-    writeFile(path.join(dir, 'design/explore/external/mine/index.html'),
-      '<html><body><div data-screen-label="mine"></div></body></html>')
-    writeJSON(path.join(dir, 'design/targets.json'), { themes: ['light'], viewports: [{ name: 'mobile', width: 390, height: 844 }] })
-    const external = mark(dir, 'external', 'design/explore/external/mine')
-    assert.strictEqual(external.status, 0, 'test setup requires --mark external to be accepted: ' + external.stderr)
-
-    const finalistsStep = bare(dir)
-    assert.match(finalistsStep.stdout, /state: FINALISTS/, 'test setup requires explore: external to hand EXPLORE off to FINALISTS: ' + finalistsStep.stdout)
+    assert.match(done.stdout, /state: FINALISTS/, 'D1: menus-done for web-app must reach FINALISTS directly now that EXPLORE is retired — landing anywhere else means the retired taste funnel is still wired into the tournament routing')
 
     writeJSON(path.join(dir, '.claude/genesis/finalists.json'), {
       finalists: [
@@ -381,13 +401,12 @@ test('AC-20260827-01-5: PROBE lists the archetype\'s task set and the tile sourc
     return raced
   }
 
-  const dir = tmpdir('tourn-ac5-external')
-  const probeStep = raceWebAppViaExternal(dir)
-  assert.match(probeStep.stdout, /authed-crud-screen/, 'D6: web-app\'s PROBE step must list authed-crud-screen — its absence means the probe-task table is not actually wired to the printed step')
-  assert.match(probeStep.stdout, /background-job/, 'D6: web-app\'s PROBE step must list background-job')
-  assert.match(probeStep.stdout, /style-tile/, 'specs/20260827/02 D7: once explore has resolved to an external candidate, style-tile must be listed as an expected task — its absence means a real tile source is being silently dropped')
-  assert.match(probeStep.stdout, /design\/explore\/external\/mine/, 'specs/20260827/02 D7: the PROBE step must print the external candidate\'s own dir as the style-tile task\'s tile source — a session that has to go find the source on its own defeats the point of the printed step')
-  assert.doesNotMatch(probeStep.stdout, /sketch\.html/, 'specs/20260827/02 D7: "sketch.html is never a tile source" — its mention here would mean the retired spec 01 D6 mechanism is still being read even though a decoy sketch.html exists on disk and an external candidate was properly marked')
+  const dir = tmpdir('tourn-ac8-webapp')
+  const probeStep = raceWebApp(dir)
+  assert.match(probeStep.stdout, /authed-crud-screen/, 'D7: web-app\'s PROBE step must still list authed-crud-screen — its absence means the probe-task table is not actually wired to the printed step')
+  assert.match(probeStep.stdout, /background-job/, 'D7: web-app\'s PROBE step must still list background-job')
+  assert.doesNotMatch(probeStep.stdout, /style-tile/, 'D7: style-tile must never appear in PROBE\'s task list for any archetype anymore — its presence means the retired taste-funnel task is still being offered')
+  assert.doesNotMatch(probeStep.stdout, /tile source/i, 'D7: PROBE must never print a tile-source line — the mechanism that fed it (EXPLORE) is retired outright, so there is nothing left to source a tile from')
 
   function probeJsonPath(dir) {
     return path.join(dir, '.claude/genesis/tournament/evidence/stack-a/probe.json')
@@ -406,7 +425,6 @@ test('AC-20260827-01-5: PROBE lists the archetype\'s task set and the tile sourc
     tasks: [
       { task: 'authed-crud-screen', passed: true, retries: 3, tokens: 100, screenshot: null },
       { task: 'background-job', passed: true, retries: 0, tokens: 200, screenshot: null },
-      { task: 'style-tile', tile: 'external/mine', passed: true, retries: 0, tokens: 50, screenshot: null },
     ],
   })
   const r1 = mark(dir, 'probe-done')
@@ -418,25 +436,22 @@ test('AC-20260827-01-5: PROBE lists the archetype\'s task set and the tile sourc
   writeJSON(probeJsonPath(dir), {
     tasks: [
       { task: 'authed-crud-screen', passed: true, retries: 0, tokens: 100, screenshot: null },
-      { task: 'style-tile', tile: 'external/mine', passed: true, retries: 0, tokens: 50, screenshot: null },
     ],
   })
   const r2 = mark(dir, 'probe-done')
-  assert.strictEqual(r2.status, 2, 'D7: probe.json must cover exactly the expected task set — a probe.json missing background-job must be refused, not accepted as if the missing task were simply skipped: ' + JSON.stringify(r2))
+  assert.strictEqual(r2.status, 2, 'D7: probe.json must cover exactly the expected task set (no style-tile entry expected at all) — a probe.json missing background-job must be refused, not accepted as if the missing task were simply skipped: ' + JSON.stringify(r2))
   assert.match(r2.stderr, /background-job/, 'the refusal must name the missing task "background-job" so the session knows exactly which probe slice still needs building')
 
-  // valid
+  // valid — no style-tile entry anywhere in the accepted probe.json.
   const shot1 = shotAt(dir, 'authed-crud-screen.png')
-  const shot3 = shotAt(dir, 'style-tile.external.png')
   writeJSON(probeJsonPath(dir), {
     tasks: [
       { task: 'authed-crud-screen', passed: true, retries: 1, tokens: 100, screenshot: shot1 },
       { task: 'background-job', passed: true, retries: 0, tokens: 200, screenshot: null },
-      { task: 'style-tile', tile: 'external/mine', passed: true, retries: 0, tokens: 50, screenshot: shot3 },
     ],
   })
   const r3 = mark(dir, 'probe-done')
-  assert.strictEqual(r3.status, 0, 'a probe.json covering exactly the expected tasks, with retries and screenshots inside the contract, must be accepted: ' + r3.stderr)
+  assert.strictEqual(r3.status, 0, 'D7: a probe.json covering exactly the expected tasks, with no tile entries at all, must be accepted: ' + r3.stderr)
   assert.match(r3.stdout, /state: PICK/, 'D7: a successful probe-done must advance the driver to PICK — anything else means the benchmark assembly this mark owns never actually ran')
 
   const gateRunsPath = path.join(dir, '.claude/genesis/tournament/finalists/stack-a/gate-runs.txt')
@@ -446,13 +461,14 @@ test('AC-20260827-01-5: PROBE lists the archetype\'s task set and the tile sourc
   const benchmark = JSON.parse(fs.readFileSync(path.join(dir, '.claude/genesis/tournament/benchmark.json'), 'utf8'))
   const row = benchmark.finalists.find((f) => f.name === 'stack-a')
   assert.ok(row, 'D7: benchmark.json must carry a row for stack-a — its absence means the one finalist that actually reached PROBE has no recorded benchmark evidence at all')
-  assert.strictEqual(row.tokens, 350, 'D7: tokens must be summed from probe.json (100 + 200 + 50 = 350) — any other figure means tokens were estimated or mis-summed instead of read straight from the harness-reported values A4 documents')
-  assert.strictEqual(row.probePassed, 3, 'D7: probePassed must count the 3 passing tasks in probe.json')
-  assert.strictEqual(row.probeTotal, 3, 'D7: probeTotal must count all 3 expected tasks')
+  assert.strictEqual(row.tokens, 300, 'D7: tokens must be summed from probe.json\'s two tasks only (100 + 200 = 300, no style-tile task to add in) — any other figure means a retired tile task is still being counted')
+  assert.strictEqual(row.probePassed, 2, 'D7: probePassed must count the 2 passing tasks in probe.json')
+  assert.strictEqual(row.probeTotal, 2, 'D7: probeTotal must count all 2 expected tasks, never 3 — a 3 here means the retired style-tile task is still part of the expected set')
+  assert.strictEqual(row.gatePost, 0, 'D15: probe-done must CONTINUE TO re-run the finalist\'s gateCommand and record its post-probe exit — an unset gatePost means the re-run this AC pins as unchanged never happened')
+  assert.strictEqual(row.bootPost, 0, 'D15: probe-done must CONTINUE TO re-boot the finalist and record its post-probe boot exit — an unset bootPost means the re-boot this AC pins as unchanged never happened')
   assert.ok(fs.existsSync(path.join(dir, '.claude/genesis/tournament/benchmark.md')), 'D7: benchmark.md must be written as the human-readable render of benchmark.json — its absence leaves PICK (D8) with no table to print verbatim')
   const gallery = fs.readFileSync(path.join(dir, '.claude/genesis/tournament/gallery.html'), 'utf8')
   assert.ok(gallery.includes(shot1), 'D7: gallery.html must contain the recorded authed-crud-screen screenshot\'s path — its absence means the gallery is missing an <img> cell for evidence that was actually captured')
-  assert.ok(gallery.includes(shot3), 'D7: gallery.html must contain the recorded style-tile screenshot\'s path')
 })
 
 test('AC-20260827-01-6: picked refuses a ## Picks that matches zero finalists by naming the zero count and ## Picks, and once exactly one finalist matches it records the winner and the PICK to DECIDE checkpoint; the PICK step text carries the benchmark.md table and the evidence-informs-never-decides line', () => {
@@ -615,10 +631,14 @@ test('AC-20260827-01-8: every state from DISCOVERY through ROADMAP prints a Doct
   const discovery = bare(dir)
   assert.match(discovery.stdout, DOCTRINE_LINE, 'D10: DISCOVERY must print a Doctrine: line — its absence leaves the session with no printed pointer to the section governing this step, the entire reason D10 deletes the command\'s own per-state pointer list')
 
-  writeBrief(dir)
-  const menus = mark(dir, 'discovery-done')
-  assert.strictEqual(menus.status, 0, 'test setup requires discovery-done to be accepted: ' + menus.stderr)
-  assert.match(menus.stdout, DOCTRINE_LINE, 'D10: MENUS must print a Doctrine: line')
+  writeBrief(dir, { picks: ['- archetype: backend-api'] })
+  const briefStep = mark(dir, 'discovery-done')
+  assert.strictEqual(briefStep.status, 0, 'test setup requires discovery-done to be accepted on a brief naming its archetype (D2): ' + briefStep.stderr)
+  assert.match(briefStep.stdout, DOCTRINE_LINE, 'D10: BRIEF must print a Doctrine: line — specs/20260902/08-genesis-shrink-brief-state.md D1 inserts BRIEF between DISCOVERY and MENUS, and it must carry the same per-state pointer every other step does')
+
+  const briefWritten = mark(dir, 'brief-written')
+  assert.strictEqual(briefWritten.status, 0, 'test setup requires brief-written to be accepted immediately for backend-api (DESIGN_SKIPPED_ARCHETYPES owe nothing beyond DISCOVERY, D4): ' + briefWritten.stderr)
+  assert.match(briefWritten.stdout, DOCTRINE_LINE, 'D10: MENUS must print a Doctrine: line')
 
   writeHostingMenu(dir)
   const menuWritten = mark(dir, 'menu-written', 'interview-research/' + DIM + '.json')

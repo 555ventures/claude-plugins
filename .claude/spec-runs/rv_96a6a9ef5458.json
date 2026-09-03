@@ -1,0 +1,110 @@
+{
+  "runId": "rv_96a6a9ef5458",
+  "ts": "2026-09-03T21:03:28.774Z",
+  "spec": "specs/20260903/01-owed-query-and-row-handoff.md",
+  "tier": "standard",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 1,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1084,
+    "base": "841b3de18b61ec869fd560e27f4b3b4c1f51267f",
+    "head": "9f7703ea08ea9018c871d3390f83e64db331f6f5",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 3,
+      "observed": {
+        "outOfPlan": 1,
+        "files": [
+          "tests/fleet-reader/review-fixes.test.js"
+        ]
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 330
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": {
+        "matches": 10
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": {
+        "files": 20,
+        "testsExecuted": 147
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 16,
+        "carried": 13,
+        "sanctioned": 3,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [],
+    "reviewerCount": 1,
+    "tokens": 0
+  }
+}

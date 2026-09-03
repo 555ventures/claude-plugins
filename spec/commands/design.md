@@ -141,33 +141,38 @@ session scratchpad, else `.claude/spec-runs/render/<spec-stem>/`).
 
 Only after BOTH gates are green. Print exactly this block, real values, then **end the turn**
 — never `AskUserQuestion` (shared § Design Atlas: look stops are never questions). The user
-runs the catalog command, never this session. Both values are already on disk — `design.command`
-and the coverage-ledger claim's story ids name the components bound this run — derive them;
-never ask the user which components to check:
+runs the catalog command, never this session. Derive every value from disk — `design.command`
+and the coverage-ledger claim's story ids — never ask the user which components to check:
 
   🎨 **ready for review**
 
-      <design.command>
+  ```
+  <design.command>
+  ```
 
-  🆕 <Component Name> — one line per component added or changed this run, written the way
-     the catalog's search box finds it (Storybook: the space-separated title, never the
-     camelCase export); when the round's touched set is not on disk, every component in the
-     ledger claim — the claim is the run
+  🆕 <sidebar path of story 1>
+  🆕 <sidebar path of story 2>
+  ℹ️ <ComponentName> changed — see <a 🆕 path above>
+  ↻ Storybook already running? restart it so the sidebar re-indexes.
 
   Reply  ✅ approve  — or —  ✏️ change <what looks wrong>
 
-Nothing else in the block: no deep links, no state lists, no gate-report path, no gloss — the
-user searches the catalog by component name and the render gate already measured what a human
-cannot overlay. The report path is on disk for whoever wants it. Under `/spec:run` this block
-IS the stop's report — no slots report is rendered for a look stop; its reply line is the
-`next:` line.
+The command is in a fenced code block, one blank line above and below. 🆕 is one line per
+**bound story**, never per component: the sidebar path as the catalog renders it,
+`<title> / <story name>` (Storybook: the stories file's CSF `title`, then the story's `name` or
+export name), e.g. `Showcase / Living Showcase / 監査ログ / 通常` — a host filing every story
+under one title with localized names finds the path, never the export. Resolve each claim
+story id; an unresolvable id prints raw; touched set not on disk → every story in the claim.
+ℹ️ is one line per component changed without a new story, pointing at the 🆕 path that shows
+it (omitted when none); ↻ is fixed (a running Storybook does not re-index new stories).
+Nothing else — no deep links, no gate-report path, no gloss. Under `/spec:run` this block IS
+the stop's report — no slots report is rendered for a look stop; its reply line is `next:`.
 
 The user's reply is the decision. Only the literal `approve` accepts → Step 6; every other
 reply is a change round (an ambiguous one — praise, a question — re-prints the block with one
-clarifying line, never stamps). `change …` → a change round: one
-`Agent {model: "sonnet"}` edit dispatch per affected surface, then Step 3 and Step 4 again,
-then this block again — the 🆕 lines name only what the round touched. No reply → nothing
-moved; state is on disk and the Resume table lands here again on the next invocation.
+clarifying line, never stamps): one `Agent {model: "sonnet"}` edit dispatch per affected
+surface, then Step 3, Step 4, and this block again — 🆕 naming only the stories the round
+touched. No reply → nothing moved; the Resume table lands here again on the next invocation.
 
 ## Step 6 — Reconcile + stamp
 

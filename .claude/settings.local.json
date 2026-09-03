@@ -9,5 +9,6 @@
     "cloudflare": "off",
     "cloudflare-email-service": "off",
     "agents-sdk": "off"
-  }
+  },
+  "outputStyle": "style:Plain"
 }

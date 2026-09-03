@@ -133,14 +133,14 @@ set in-session (≤5, ≥1 per declared journey); one sequential `Agent {model: 
 (Opus fallback, § Model Placement) authors the rest, citing those paths as exemplars — never one
 agent per surface; Sonnet is mechanical edits only. No shell canon → author one in-session first
 (§ Design Canon); `shell sync` runs on the pass's mocks before `check`. Grounding order: picked
-position brief → research brief → owning brief → doctrine → `tokens.css` → shell canon. The
-position brief is `design/explore/positions.md`'s `## Position: <kebab>` section naming the
-`design-pick.json` winner (`external — <name>` / plain `none` without genesis state). Both
+position brief → research brief → owning brief → doctrine → `tokens.css` → shell canon. Both
 commands' reports add one line: `🎨 position: <kebab|none|external — name> · authored {N}
 in-session · {M} fable · {K} sonnet-mechanical`.
-**Look stops are never questions.** A stop that waits on the user having looked at screens prints
-🎨 the viewer start line on its own, 🆕 one name per item, `Reply ✅ approve — or — ✏️ change <notes>`,
-then **ends the turn** — a question dialog hides what precedes it (Claude Code #67475); the reply decides.
+**Look stops are never questions.** A stop that waits on a human look prints 🎨 the viewer command
+in a fenced code block, 🆕 one line per item as the viewer navigates it (catalog: the story's sidebar
+path `<title> / <story name>`, never a component name; mock: the served path), ↻ `Storybook already
+running? restart it so the sidebar re-indexes.`, `Reply ✅ approve — or — ✏️ change <notes>`, then
+**ends the turn** — a question dialog hides what precedes it (Claude Code #67475); the reply decides.
 
 ## Workflows Encode Shape, Not Judgment
 The plugin's `wf-build.js`, `wf-review.js`, `wf-enforce.js` (and genesis `wf-research.js`) own

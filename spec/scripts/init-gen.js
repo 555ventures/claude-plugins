@@ -279,11 +279,12 @@ function renderRulesFile(rules) {
   let body = '# Spec pipeline grounding\n\n'
   for (const name of order) body += `## ${name}\n\n${String(rules.sections[name]).trimEnd()}\n\n`
   body += '## Gotchas (evidence-cited)\n\n' +
-    '<!-- One line per entry; every entry cites a ledger row (spec path + runId) or a dated\n' +
-    'incident, and carries a provenance tag: [host] (this repo/stack) or [plugin] (traces to a\n' +
-    'spec-plugin template/command/generated artifact). Writers: /spec:review close and\n' +
-    '/spec:escape only. /spec:doctor prunes dead citations and rolls [plugin] entries up as an\n' +
-    'upstream bug list. -->\n'
+    '<!-- One line per entry: a provenance tag — [host] (this repo/stack) or [plugin] (traces to\n' +
+    'a spec-plugin template/command/generated artifact) — the rule with its mechanism, and\n' +
+    'one owner citation (spec path, AC-ID, D-number, ADR, run id).\n' +
+    'Never dates, people, hosts, versions, or prior behavior (/spec:doctor check 16 scans this\n' +
+    'layer). Writers: /spec:review close and /spec:escape only. /spec:doctor prunes dead\n' +
+    'citations and rolls [plugin] entries up as an upstream bug list. -->\n'
   return fm + '\n' + body
 }
 

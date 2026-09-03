@@ -286,19 +286,20 @@ describes:
 Field-by-field, tracing each back to the phase that grounds it:
 
 - **`config`** — Phase 1's stack/toolchain/runtime findings; Phase 6's `design` block on
-  design-capable hosts. Same authoring bar as ever: real paths, real commands, no
-  invented references — the script validates required keys and exits 2 naming the first
-  missing one, but a *wrong* value is never caught for you.
+  design-capable hosts. Real paths, real commands, no invented references — the script
+  validates keys and exits 2 naming the first missing one; a *wrong* value is never caught.
 - **`rules.sections`** — the six judgment sections (Risk Tiers / Planning / Build / Worker
   Rules / Test Rules / Review Checks) as this repo's concrete grounding: the critical-tier
   trigger list with real paths, the new-surface checklist, orchestrator integration duties,
   worker/test conventions, reviewer severity calibrations — same content bar the pipeline
-  rules file has always carried. `## Gotchas` is never authored here; the script emits it empty
-  with its own contract header.
+  rules file has always carried — rules state the current invariant plus one owner citation,
+  never dates, people, hosts, versions, or prior behavior. `## Gotchas` is never authored
+  here; the script emits it empty with its own contract header.
 - **`conventionRules`** — one entry per routing kind with hard conventions worth ambient
   enforcement (skip kinds with nothing beyond generic style); each `paths` glob must match ≥1
   tracked file, each `body` ≤15 lines citing the matching agent and one exemplar file rather
-  than duplicating its tables.
+  than duplicating its tables, and one owner citation per rule that needs one, never a dated
+  story.
 - **`agents`** — one entry per non-`default` `agentMap` kind. Study real code first: for each
   kind, read the canonical files of that layer and extract naming tables, exemplar paths, and
   constraints — every path and export you cite must exist. Per field: `persona` is a paragraph

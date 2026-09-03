@@ -3,7 +3,7 @@ name: doctrine-regex-linewrap
 description: Doctrine regex pins must use \s+ (not a literal space) between words that can straddle a hard-wrapped markdown line break
 metadata:
   type: feedback
-  reviewed: 2026-09-01
+  reviewed: 2026-09-02
 ---
 
 Doctrine `.md` files in this repo hard-wrap prose at ~85-90 chars. A regex pin like

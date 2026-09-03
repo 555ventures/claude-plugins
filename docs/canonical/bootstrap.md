@@ -51,6 +51,12 @@
   `templates/grounding-contract.md`, never copied — the hash-stamped file stays the single
   source, so there is no second copy to drift.
 
+- **Rule notes cite owners, never history.** The generated Gotchas header, the init
+  authoring bar, and the review/escape writers all produce tag + rule + one owner citation;
+  the grounding contract states the duty and `/spec:doctor` check 16 enforces it in every
+  host's rules layer. The narration baseline that ratcheted the plugin's own sweep is gone;
+  the standing scan runs at zero.
+
 ## Exit codes (`generate`)
 
 `0` generated, manifest-check green, stamped · `1` manifest-check red, nothing stamped ·

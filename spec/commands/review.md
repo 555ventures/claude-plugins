@@ -143,7 +143,8 @@ Run `node "$(spec-paths report-render)" --slots <file>` and print its output ver
   appending no manifest rows, and the session provisions the variable and re-runs.
 - **Close (the CLOSE step).** Apply the spec's Canonical Delta to `docs/canonical/{area}.md`.
   Fold the deviations sidecar if one exists: recurring-shaped deviations become one-line
-  entries in the host rules' Gotchas section (tagged `[host]`/`[plugin]` by provenance);
+  entries in the host rules' Gotchas section (tagged `[host]`/`[plugin]` by provenance;
+  written as tag + rule + one owner citation — the spec path — never dates, people, hosts, versions, or prior behavior);
   one-offs go to the spec's Rationale; delete the sidecar. The driver enumerates every
   sidecar entry (numbered, first line, 120-char-bounded) into this step's printed
   instruction ahead of the fold, and refuses `--mark closed` (exit 2, remedy named) while

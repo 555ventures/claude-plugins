@@ -1,6 +1,7 @@
 ---
 date: 2026-09-02
-status: hardened
+status: done
+build_base: main
 tier: critical
 area: bootstrap
 design: false
@@ -9,6 +10,7 @@ depends_on: ["specs/20260902/03-plugin-prose-sweep.md"]
 depended_on_by: []
 brief: 21
 open_markers: 0
+diff_base: e1b8a86fdf3fa5ba451829100715faf6c86c4e66
 ---
 
 # Host generators stop planting narration; contract re-hashed; baseline deleted
@@ -39,6 +41,7 @@ is deleted, and the standing scan is green at zero with no baseline.
 | D8 | **`.claude/comment-narration.baseline.json` is deleted**; the standing test runs the scan with no baseline and expects zero findings repo-wide, and a third assertion requires the baseline file to be absent. (AC-20260902-04-5) | Brief § Result: swept to zero with the baseline file deleted. |
 | D9 | `spec/.claude-plugin/plugin.json`: version bump target 7.58.0 (next free if taken); changelog paragraph names the generator grammar, the contract re-hash (hosts: run `/spec:doctor`, approve the re-stamp, then apply check 16 patches), and the baseline deletion (last-3 form). `[no-ac: manifest — pinned by tests/consistency/plugin-version.test.js]` | Host § Planning; minor bump because hosts' grounding is re-stamped. |
 | D10 | **Tests.** `tests/init-gen/generate.test.js` gains AC-20260902-04-1 (rendered rules file's Gotchas header grammar); `tests/comment-narration/comment-narration.test.js` gains AC-20260902-04-2 (the three command files contain the grammar literal) and AC-20260902-04-3 (the contract contains the grammar sentence and neither narrated phrase); `tests/init-gen/generate.test.js`'s existing contract-hash assertion is tagged AC-20260902-04-4 in place; `tests/consistency/comment-narration-live.test.js` is retagged AC-20260902-04-5 with the absent-baseline assertion added. (AC-20260902-04-1, AC-20260902-04-2, AC-20260902-04-3, AC-20260902-04-4, AC-20260902-04-5) | Host § Test Rules; AC-2/3 are prose-content pins on generator surfaces, the same standing as the plugin-version and citations pins. |
+| D11 | **`spec/templates/grounding-contract.md`** § Session grounding, same single edit as D5: the parenthetical "(adopted 2026-07 from the mid-2026 Claude Code baseline: …)" becomes "(the Claude Code baseline: …)" — the baseline held three contract findings, D5 named two; AC-20260902-04-5 (scan at zero, no baseline) observes it. Session ruling against Rationale during build, 2026-09-02. | The Goal requires the standing scan at zero; a third narrated line in the contract was unlisted, not out of scope. |
 
 ## File Plan
 
@@ -117,6 +120,14 @@ Rejected: a `--fix` grammar specific to enforcement notes (the generic line-item
 covers it); dropping `notes` from legacy manifests (they hold carve-out rationale a host
 still needs — patched to rule + citation instead); moving the baseline deletion earlier
 (the contract's two lines are the last findings and belong to this edit).
+
+Build deviations folded at close (2026-09-02, one-offs): the live scan test's two
+baseline-content pins (AC-20260902-02-1, AC-20260902-03-1) were retired with the baseline
+itself — sibling 03 D9 anticipated this — and the retagged AC-20260902-04-5 asserts a strictly
+stronger promise; the contract's third narrated line (§ Session grounding's dated
+"adopted" parenthetical) was reworded under D11 because the sweep-to-zero Goal, not D5's
+literal list, is the contract; init.md's D2 edit first landed at net +2 and was brought to
++1 by shortening the `config` bullet, per A4's fallback.
 
 ## Canonical Delta
 

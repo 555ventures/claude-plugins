@@ -3,7 +3,7 @@ name: spec-20260825-02-prompt-window-isolation
 description: When an AC requires a specific prompt/section to contain a literal (not just the file), isolate that substring with a regex window before asserting — checking whole-file src risks a vacuous pass when the literal exists elsewhere (e.g. a schema property key) but not in the place the AC actually cares about.
 metadata:
   type: feedback
-  reviewed: 2026-08-30
+  reviewed: 2026-09-02
 ---
 
 Spec 20260825/02 AC-5 required wf-research.js's *research prompt string* (not the file as a

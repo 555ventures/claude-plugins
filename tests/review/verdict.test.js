@@ -628,7 +628,7 @@ const SIX_LEGS_NO_AT_RISK = [
   { leg: 'promise-sweep', exit: 0, observed: { rows: 1, carried: 1, sanctioned: 0, orphans: 0 } },
 ]
 
-test('AC-20260815-02-6: a full-scope review manifest missing the at-risk row derives UNVERIFIED, never CLEAN, even with all six legacy legs green and a CLEAN workflow return', () => {
+test('AC-20260815-02-6 (also AC-20260902-05-10, SHALL CONTINUE TO): a full-scope review manifest (no rows carry a scope key, or all carriers say "full") missing the at-risk row derives UNVERIFIED, never CLEAN, even with all six legacy legs green and a CLEAN workflow return', () => {
   const dir = tmpdir('verdict-at-risk-missing')
   const manifest = writeManifest(dir, SIX_LEGS_NO_AT_RISK)
   const workflow = writeWorkflow(dir, cleanWorkflow([]))
@@ -677,16 +677,18 @@ test('AC-20260818-01-9 (retag of AC-20260815-02-7): a red at-risk leg CONTINUES 
 // manifest-only construction that makes this AC red on unimplemented code without at-risk first
 // entering REVIEW_LEGS. Logged per host rules' conservative-deviation clause (this AC's shape is
 // a regression continuity guard, not a reachable red-first case): 02-at-risk-pins.deviations.md.
-test('AC-20260815-02-8: on scope fix-delta, a manifest lacking both reconcile and at-risk rows still derives from the remaining required legs', () => {
+test('AC-20260815-02-8 (also AC-20260902-05-2, D8: scope moved from the workflow return onto the manifest rows): on a manifest of six rows each stamped scope:"fix-delta" (reconcile and at-risk absent), a workflow return carrying no scope key at all still derives CLEAN from the remaining required legs', () => {
   const dir = tmpdir('verdict-at-risk-fixdelta')
-  const rows = SIX_LEGS_NO_AT_RISK.filter(r => r.leg !== 'reconcile')
+  const rows = SIX_LEGS_NO_AT_RISK.filter(r => r.leg !== 'reconcile').map(r => ({ ...r, scope: 'fix-delta' }))
   const manifest = writeManifest(dir, rows)
-  const workflow = writeWorkflow(dir, { ...cleanWorkflow([]), scope: 'fix-delta' })
+  const { scope, ...workflowNoScope } = cleanWorkflow([])
+  const workflow = writeWorkflow(dir, workflowNoScope)
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
   assert.strictEqual(r.stdout.split('\n')[0], 'CLEAN',
-    'D4: the fix-delta filter excludes both reconcile and at-risk from requiredLegs — a manifest ' +
-    'missing both rows must still derive CLEAN from the remaining five green legs, never ' +
-    'UNVERIFIED for a leg fix-delta scope never had to run: ' + r.stdout + ' / ' + r.stderr)
+    'D2: verdict.js must derive the fix-delta required-leg set from the manifest rows\' own scope stamps — ' +
+    'never from workflow.scope, which this return does not even carry — so a manifest whose carriers are all ' +
+    '{"fix-delta"} must still derive CLEAN from the remaining five green legs, never UNVERIFIED for a leg ' +
+    'fix-delta scope never had to run: ' + r.stdout + ' / ' + r.stderr)
   assert.strictEqual(r.status, 0, 'CLEAN must exit 0: ' + r.stderr)
 })
 
@@ -708,17 +710,168 @@ test('AC-20260817-07-11: a full-scope manifest missing the promise-sweep row der
   assert.strictEqual(r.status, 1, 'UNVERIFIED must exit 1 so the close step is mechanically unreachable: ' + r.stderr)
 })
 
-test('AC-20260817-07-11 (fix-delta scope): a fix-delta manifest missing the promise-sweep row also derives UNVERIFIED — the leg is excluded from neither scope\'s required set', () => {
+test('AC-20260817-07-11 (fix-delta scope, D8: scope moved from the workflow return onto the manifest rows): a manifest whose remaining rows are each stamped scope:"fix-delta" but which is missing the promise-sweep row also derives UNVERIFIED — the leg is excluded from neither scope\'s required set', () => {
   const dir = tmpdir('verdict-promise-sweep-missing-fixdelta')
   const rows = EIGHT_LEGS_NO_PROMISE_SWEEP.filter(r => r.leg !== 'reconcile' && r.leg !== 'at-risk')
+    .map(r => ({ ...r, scope: 'fix-delta' }))
   const manifest = writeManifest(dir, rows)
-  const workflow = writeWorkflow(dir, { ...cleanWorkflow([]), scope: 'fix-delta' })
+  const { scope, ...workflowNoScope } = cleanWorkflow([])
+  const workflow = writeWorkflow(dir, workflowNoScope)
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
   assert.strictEqual(r.stdout.split('\n')[0], 'UNVERIFIED',
     'D4: promise-sweep is required in BOTH scopes, unlike reconcile/at-risk which fix-delta filters out of ' +
     'requiredLegs — a fix-delta manifest missing the promise-sweep row must still derive UNVERIFIED, never ' +
     'CLEAN from the remaining green legs alone: ' + r.stdout + ' / ' + r.stderr)
   assert.strictEqual(r.status, 1, 'UNVERIFIED must exit 1 so the close step is mechanically unreachable: ' + r.stderr)
+})
+
+// specs/20260902/05-manifest-stamped-scope.md D2/D3: the pass scope is derived from the
+// manifest's own `scope` carriers, never from workflow.scope, which leaves the reviewer return
+// contract entirely (D6). These tests build manifests whose rows carry the scope stamp directly
+// (as review-legs.js now does per D1) and feed them straight to verdict.js.
+
+function withScope(rows, scope) {
+  return rows.map(r => ({ ...r, scope }))
+}
+
+test('AC-20260902-05-3: WHEN six green rows (missing reconcile/at-risk) carry no scope key anywhere and the workflow return says scope:"fix-delta" THE SYSTEM SHALL print UNVERIFIED — the return\'s scope is never read', () => {
+  const dir = tmpdir('verdict-05-3')
+  const rows = SIX_LEGS_NO_AT_RISK.filter(r => r.leg !== 'reconcile') // no scope key on any row
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, { ...cleanWorkflow([]), scope: 'fix-delta' })
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
+  assert.strictEqual(r.stdout.split('\n')[0], 'UNVERIFIED',
+    'D2: carriers over rows with a scope key is the empty set here (no row carries one), which derives "full" ' +
+    '— the strictest set — regardless of what the workflow return claims; a manifest missing reconcile and ' +
+    'at-risk under the full requirement must derive UNVERIFIED even though the return says fix-delta: ' +
+    r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 1, 'UNVERIFIED must exit 1: ' + r.stderr)
+})
+
+test('AC-20260902-05-4: WHEN every leg is present and green but the gate row says scope:"full" and the smoke row says scope:"fix-delta" THE SYSTEM SHALL print UNVERIFIED and a stderr line containing "scope values disagree: full, fix-delta"', () => {
+  const dir = tmpdir('verdict-05-4-disagree')
+  const rows = SIX_GREEN.map(r => {
+    if (r.leg === 'gate') return { ...r, scope: 'full' }
+    if (r.leg === 'smoke') return { ...r, scope: 'fix-delta' }
+    return r
+  })
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
+  assert.strictEqual(r.stdout.split('\n')[0], 'UNVERIFIED',
+    'D2: two carriers with different scope values can only come from a hand-edited manifest or a writer bug ' +
+    '— the manifest is invalid and must derive UNVERIFIED, never pick either value: ' + r.stdout + ' / ' + r.stderr)
+  assert.match(r.stderr, /scope values disagree: full, fix-delta/,
+    'D3: stderr must name both disagreeing values verbatim so the session can tell which row lies about its ' +
+    'own scope without re-reading the manifest by hand: ' + r.stderr)
+})
+
+test('AC-20260902-05-4 (outside the enum): WHEN a carrier says scope:"fix-delta over d63af56..HEAD" THE SYSTEM SHALL print UNVERIFIED and a stderr line containing "scope outside the enum"', () => {
+  const dir = tmpdir('verdict-05-4-enum')
+  const rows = SIX_GREEN.map(r => (r.leg === 'gate' ? { ...r, scope: 'fix-delta over d63af56..HEAD' } : r))
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
+  assert.strictEqual(r.stdout.split('\n')[0], 'UNVERIFIED',
+    'D2: a scope value outside {"full","fix-delta"} can only come from a stale prose-scope reviewer habit ' +
+    'leaking onto a row (A6: two prax rows carry exactly this shape) — the manifest is invalid: ' +
+    r.stdout + ' / ' + r.stderr)
+  assert.match(r.stderr, /scope outside the enum/,
+    'D3: stderr must name the disagreement class as "scope outside the enum" — a generic "manifest invalid" ' +
+    'with no further detail leaves the session unable to tell this apart from an unparseable row: ' + r.stderr)
+})
+
+test('AC-20260902-05-5: WHEN verdict.js runs with no --workflow over a manifest stamped scope:"fix-delta" whose gate row is red and which has no reconcile/at-risk rows THE SYSTEM SHALL print GATE_RED, never UNVERIFIED (pre-image executed: prints UNVERIFIED, spike S1)', () => {
+  const dir = tmpdir('verdict-05-5')
+  const rows = withScope(SIX_LEGS_NO_AT_RISK.filter(r => r.leg !== 'reconcile'), 'fix-delta')
+    .map(r => (r.leg === 'gate' ? { ...r, exit: 1 } : r))
+  const manifest = writeManifest(dir, rows)
+  const r = runNode(SCRIPT, ['--manifest', manifest])
+  assert.strictEqual(r.stdout.split('\n')[0], 'GATE_RED',
+    'D2/D10: the hard-stop pass never passes --workflow, so today\'s code judges every fix-delta manifest ' +
+    'against the FULL required-leg set (missing reconcile/at-risk) and UNVERIFIED always wins over GATE_RED in ' +
+    'the derivation order — the manifest\'s own scope:"fix-delta" carriers must make requiredLegs the six-leg ' +
+    'fix-delta set so the red gate is reached and GATE_RED derives: ' + r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(r.status, 1, 'GATE_RED must exit 1: ' + r.stderr)
+})
+
+test('AC-20260902-05-7 (missing legs): WHEN verdict.js derives UNVERIFIED because the manifest is missing the at-risk row THE SYSTEM SHALL print exactly one stderr line beginning "verdict.js: UNVERIFIED — missing required legs: at-risk (scope full)"', () => {
+  const dir = tmpdir('verdict-05-7-missing')
+  const manifest = writeManifest(dir, SIX_LEGS_NO_AT_RISK)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
+  assert.strictEqual(r.stdout.split('\n')[0], 'UNVERIFIED',
+    'sanity: this fixture must still derive UNVERIFIED — the stderr diagnostic assertion below proves nothing ' +
+    'otherwise: ' + r.stdout + ' / ' + r.stderr)
+  const stderrLines = r.stderr.trim().split('\n')
+  assert.strictEqual(stderrLines.length, 1,
+    'D3: verdict.js must print EXACTLY one stderr line on UNVERIFIED, never a stack trace or extra diagnostic ' +
+    'noise the driver would have to filter: ' + JSON.stringify(stderrLines))
+  assert.strictEqual(stderrLines[0], 'verdict.js: UNVERIFIED — missing required legs: at-risk (scope full)',
+    'D3: the line must name the exact missing leg and the scope it was required under, in the documented ' +
+    'Contracts format, so a caller reading stderr alone knows the remedy: ' + JSON.stringify(stderrLines))
+  assert.ok(r.stdout.trim().split('\n').length >= 2,
+    'D3: stdout must be unaffected by the new stderr line — line 1 the bare word, line 2 still the --ledger ' +
+    `row: ${JSON.stringify(r.stdout)}`)
+})
+
+test('AC-20260902-05-7 (invalid manifest): WHEN a row\'s observed field is a string THE SYSTEM SHALL print a stderr line beginning "verdict.js: UNVERIFIED — manifest invalid: "', () => {
+  const dir = tmpdir('verdict-05-7-invalid')
+  const rows = SIX_GREEN.map(r => (r.leg === 'gate' ? { leg: 'gate', exit: 0, observed: 'skips=2 todos=1' } : r))
+  const manifest = writeManifest(dir, rows)
+  const workflow = writeWorkflow(dir, cleanWorkflow([]))
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
+  assert.strictEqual(r.stdout.split('\n')[0], 'UNVERIFIED',
+    'sanity: a string-observed row must still derive UNVERIFIED under D1: ' + r.stdout + ' / ' + r.stderr)
+  assert.match(r.stderr, /^verdict\.js: UNVERIFIED — manifest invalid: /,
+    'D3: an unparseable-row UNVERIFIED must use the "manifest invalid: " cause prefix, distinct from the ' +
+    `missing-legs cause, so a caller can tell a bad row from a merely incomplete one: ${JSON.stringify(r.stderr)}`)
+})
+
+test('AC-20260902-05-9 (no --workflow): WHEN verdict.js --ledger runs with no --workflow over a fix-delta-scope manifest THE SYSTEM SHALL print a row whose scope is "fix-delta", keyed immediately after verdict', () => {
+  const dir = tmpdir('verdict-05-9-noworkflow')
+  // the AC-20260902-05-5 manifest verbatim: fix-delta carriers, red gate — the hard-stop shape
+  // the driver really invokes with no --workflow (a green complete manifest is refused by the
+  // spike-S4 "panel must run" guard by design, A2)
+  const rows = withScope(SIX_LEGS_NO_AT_RISK.filter(r => r.leg !== 'reconcile'), 'fix-delta')
+    .map(r => (r.leg === 'gate' ? { ...r, exit: 1 } : r))
+  const manifest = writeManifest(dir, rows)
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--ledger'])
+  const lines = r.stdout.trim().split('\n')
+  let row
+  assert.strictEqual(lines[0], 'GATE_RED', 'setup: the AC-5 manifest derives GATE_RED: ' + r.stdout + ' / ' + r.stderr)
+  assert.doesNotThrow(() => { row = JSON.parse(lines[1]) },
+    'D4: a hard-stop pass (no --workflow) must still print a parseable --ledger row: ' + r.stdout + ' / ' + r.stderr)
+  assert.strictEqual(row.scope, 'fix-delta',
+    'D4: the ledger row must carry the manifest-derived scope even on a hard-stop row that never saw a ' +
+    `reviewer return: ${JSON.stringify(row)}`)
+  const keys = Object.keys(row)
+  const verdictIdx = keys.indexOf('verdict')
+  assert.notStrictEqual(verdictIdx, -1, 'sanity: the row must carry a verdict key: ' + JSON.stringify(keys))
+  assert.strictEqual(keys[verdictIdx + 1], 'scope',
+    'D4: with no --checkpoint/--escalated passed, scope must sit immediately after verdict in the row\'s key ' +
+    `order — the key position the reviewer-supplied value used to occupy: ${JSON.stringify(keys)}`)
+})
+
+test('AC-20260902-05-9 (--retain): WHEN verdict.js writes a retained artifact from a workflow return carrying no scope key THE SYSTEM SHALL write an artifact whose scope equals the ledger row\'s scope, with the artifact\'s key order unchanged', () => {
+  const dir = tmpdir('verdict-05-9-retain')
+  const rows = withScope(SIX_LEGS_NO_AT_RISK.filter(r => r.leg !== 'reconcile'), 'fix-delta')
+  const manifest = writeManifest(dir, rows)
+  const { scope, ...workflowNoScope } = cleanWorkflow([])
+  const workflow = writeWorkflow(dir, workflowNoScope)
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
+  const lines = r.stdout.trim().split('\n')
+  const row = JSON.parse(lines[1])
+  const artifact = JSON.parse(fs.readFileSync(path.join(dir, row.runId + '.json'), 'utf8'))
+  assert.strictEqual(artifact.scope, row.scope,
+    `D4: the retained artifact's scope must equal the printed ledger row's scope, both manifest-derived, even ` +
+    `though the workflow return carries no scope key at all: row=${JSON.stringify(row)} artifact=${JSON.stringify(artifact)}`)
+  assert.strictEqual(artifact.scope, 'fix-delta',
+    'D4: the derived value itself must be "fix-delta" for this manifest: ' + JSON.stringify(artifact))
+  assert.deepStrictEqual(Object.keys(artifact),
+    ['runId', 'ts', 'spec', 'tier', 'iteration', 'scope', 'verdict', 'dispositions', 'legs', 'reviewer'],
+    'D4: the artifact\'s key order must stay unchanged from today\'s shape — only the VALUE source moves from ' +
+    `workflow.scope to the manifest derivation: ${JSON.stringify(Object.keys(artifact))}`)
 })
 
 // specs/20260818/01-ledger-truth.md D7 retag: the surviving half (promise-sweep's non-zero
@@ -796,6 +949,18 @@ test('AC-20260813-02-5 (AC-20260805-02-8 / AC-20260810-07-5, byte-identical per 
     'just its .result the way production is — the release ledger row gains a "ci" field per D4/Contracts ' +
     'once ci joins RELEASE_LEGS, and this six-leg fixture regresses to UNVERIFIED the moment that happens ' +
     '(refuter-demonstrated) unless the ci row is present here: ' + JSON.stringify(row))
+})
+
+test('AC-20260902-05-12: WHEN verdict.js --profile release reads a green release manifest in which one row carries scope:"fix-delta" THE SYSTEM SHALL CONTINUE TO derive CLEAN from RELEASE_LEGS alone — the key is not read on the release profile', () => {
+  const dir = tmpdir('verdict-05-12')
+  const rows = RELEASE_SEVEN_LEGS.map(r => (r.leg === 'deploy' ? { ...r, scope: 'fix-delta' } : r))
+  const manifest = writeManifest(dir, rows)
+  const r = runNode(SCRIPT, ['--manifest', manifest, '--profile', 'release'])
+  assert.strictEqual(r.stdout.split('\n')[0], 'CLEAN',
+    'D2: the release profile never consults the scope key at all — a stray scope:"fix-delta" on one row (the ' +
+    'kind review-legs.js would never itself emit onto a release-profile manifest) must not perturb RELEASE_LEGS ' +
+    `presence/blocking derivation: ${r.stdout} / ${r.stderr}`)
+  assert.strictEqual(r.status, 0, 'CLEAN must exit 0: ' + r.stderr)
 })
 
 test('AC-20260813-02-4 (v7 retag): --profile release with six green legs and a ci row observed {"unavailable":"no-adapter"} (exit 0, structurally-absent verdict) derives plain CLEAN, records the typed observation in row.ci, and exits 0', () => {

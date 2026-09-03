@@ -3,7 +3,7 @@ name: ac-example-unreachable-branch
 description: an AC's "e.g." example can point at a script branch that is dead code (unreachable via any real call), and a remedy-string AC can be vacuous as a red pin because the literal was already hardcoded — verify reachability and vacuity empirically before writing the exec test
 metadata:
   type: feedback
-  reviewed: 2026-08-31
+  reviewed: 2026-09-02
 ---
 
 specs/20260820/08-config-name-ban.md AC-20260820-08-9 gave `review-legs.js` with an unreadable

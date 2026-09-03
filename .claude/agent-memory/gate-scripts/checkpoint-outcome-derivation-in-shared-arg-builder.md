@@ -2,6 +2,7 @@
 name: checkpoint-outcome-derivation-in-shared-arg-builder
 description: Deriving a per-call verdict.js flag (--checkpoint) inside the driver's one shared viaModelArgs() arg-builder rather than at each of the three call sites
 metadata:
+  reviewed: 2026-09-02
   type: project
 ---
 

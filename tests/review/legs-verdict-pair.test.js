@@ -226,11 +226,12 @@ test('AC-20260820-06-6: a synthetic host declaring testCountPattern, with one at
   assert.ok(row,
     'review-legs.js must append an "at-risk" manifest row when scope-reconcile.js finds an at-risk file: ' +
     r.stdout + r.stderr)
-  assert.deepStrictEqual(row, { leg: 'at-risk', exit: 1, observed: { files: 1, testsExecuted: 0 } },
-    'AC-20260820-06-6 (literal): the recorder EXITS 0 and files>0, but its captured executed-count is 0 — the ' +
-    'emitter must force exit to 1 (D5\'s emitter-side contradiction rule, keyed on testsExecuted === 0 ' +
-    'STRICTLY, never a falsy check) so this is a same-run red, never the 2026-08-16 escape\'s vacuous green ' +
-    `(exit:0, observed:"files=1"): ${JSON.stringify(row)}`)
+  assert.deepStrictEqual(row, { leg: 'at-risk', exit: 1, observed: { files: 1, testsExecuted: 0 }, scope: 'full' },
+    'AC-20260820-06-6 (literal, also AC-20260902-05-1): the recorder EXITS 0 and files>0, but its captured ' +
+    'executed-count is 0 — the emitter must force exit to 1 (D5\'s emitter-side contradiction rule, keyed on ' +
+    'testsExecuted === 0 STRICTLY, never a falsy check) so this is a same-run red, never the 2026-08-16 escape\'s ' +
+    'vacuous green (exit:0, observed:"files=1"); D1: a full-scope run must stamp scope:"full" as this row\'s ' +
+    `last key: ${JSON.stringify(row)}`)
 
   const workflow = path.join(dir, 'workflow.json')
   fs.writeFileSync(workflow, JSON.stringify({ verdict: 'CLEAN', survivors: [], killed: 0, reviewerCount: 1, scope: 'full' }))
@@ -259,8 +260,35 @@ test('AC-20260820-06-7: a synthetic host declaring no testCountPattern gives the
     r.stdout + r.stderr)
   assert.deepStrictEqual(row, {
     leg: 'at-risk', exit: 1, observed: { files: 1, testsExecuted: { unavailable: 'no-format-declared' } },
-  }, 'AC-20260820-06-7 (literal): with no declared testCountPattern, the row must carry the CHILD\'s real exit ' +
-    'code (1, from the recorder\'s own process.exit(1)) unmodified — D5\'s emitter-side contradiction only ' +
-    'applies when an executed-count observation actually exists; with none, there is nothing to contradict, ' +
-    `so the exit must never be forced: ${JSON.stringify(row)}`)
+    scope: 'full',
+  }, 'AC-20260820-06-7 (literal, also AC-20260902-05-1): with no declared testCountPattern, the row must carry ' +
+    'the CHILD\'s real exit code (1, from the recorder\'s own process.exit(1)) unmodified — D5\'s emitter-side ' +
+    'contradiction only applies when an executed-count observation actually exists; with none, there is nothing ' +
+    'to contradict, so the exit must never be forced; D1: a full-scope run must stamp scope:"full" as this ' +
+    `row's last key: ${JSON.stringify(row)}`)
+})
+
+// D2 (AC-20260902-05-2): end-to-end, the whole point of the manifest-derived scope — a real
+// --fix-delta legs run feeds a scope-less reviewer return to verdict.js and still closes CLEAN,
+// because the six stamped rows alone (never workflow.scope, which this return omits entirely)
+// derive the fix-delta required-leg set.
+test('AC-20260902-05-2: a real --fix-delta review-legs.js run, fed to verdict.js with a reviewer return carrying no scope key at all, derives CLEAN', () => {
+  const { dir, base } = makeHost({
+    skipReportPattern: 'none',
+    gateCommand: 'node --test tests/*.test.js',
+  })
+  const manifest = path.join(tmpdir('legs-verdict-pair-out'), 'manifest.jsonl')
+  const r = runNode('scripts/review-legs.js', ['--root', dir, '--spec', 'specs/20260820/98-test.md',
+    '--base', base, '--manifest', manifest, '--fix-delta'])
+  assert.strictEqual(r.status, 0,
+    'the fix-delta legs run on this green host must itself exit 0 before this pair test can prove anything ' +
+    'about verdict.js\'s derivation: ' + r.stdout + r.stderr)
+  const workflow = path.join(dir, 'workflow.json')
+  fs.writeFileSync(workflow, JSON.stringify({ verdict: 'CLEAN', survivors: [], killed: [], reviewerCount: 1, tokens: 10 }))
+  const v = runNode('scripts/verdict.js', ['--manifest', manifest, '--workflow', workflow])
+  assert.strictEqual(v.stdout.split('\n')[0], 'CLEAN',
+    'D2: verdict.js must derive the fix-delta required-leg set from the manifest\'s own stamped rows — the ' +
+    'reviewer return here carries no scope key whatsoever (D6: the field leaves the return contract), so a ' +
+    'result other than CLEAN means verdict.js is still reaching for workflow.scope instead of the manifest: ' +
+    v.stdout + ' / ' + v.stderr)
 })

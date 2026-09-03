@@ -324,3 +324,12 @@
   deliberately not ledgered — it would be self-attested at exactly the moment the backstop exists
   to distrust; the build row's `deviations` count remains the cross-spec signal.
   (specs/20260823/07-deviations-sidecar-backstop.md, done 2026-08-23)
+- **Review scope is manifest-derived.** `review-legs.js` stamps every row it writes with
+  `scope: "full" | "fix-delta"`; `verdict.js` reads the pass scope off those rows (carriers must
+  agree; none means `full`; disagreement or a value outside the enum invalidates the manifest →
+  `UNVERIFIED`) and never off the reviewer's return, which no longer carries a `scope` field. On
+  `UNVERIFIED`, `verdict.js` prints one stderr line naming the missing legs or the invalid row,
+  and the review driver refuses `--mark dispositions` on that word before any write —
+  dispositions cannot cure missing evidence; the remedy is a cold re-run of the legs. The
+  review-profile ledger row's `scope` is the manifest-derived value on every row, hard-stop rows
+  included. (specs/20260902/05-manifest-stamped-scope.md, done 2026-09-02)

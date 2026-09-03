@@ -64,6 +64,13 @@
 // re-runs everything else in full — a fix-delta pass must re-assert executed state, never
 // inherit it (CROSS-20260727-01).
 //
+// specs/20260902/05-manifest-stamped-scope.md D1: every row this script appends
+// through its own `appendRow` writer carries `scope` as its LAST key — "full" with no
+// --fix-delta, "fix-delta" with it — derived from the one `fixDelta` flag this script already
+// holds. Rows `ac-matrix.js` and `promise-sweep.js` append directly to the manifest in their
+// own scripts (never through this file's `appendRow`) and carry no `scope` key in either mode;
+// `verdict.js` treats them as non-carriers when it derives the pass scope off the manifest.
+//
 // What this deliberately does NOT do: derive a verdict (verdict.js is the sole derivation),
 // extract skipped-test NAMES from gate output (runner-specific; the session passes --skips
 // when the gate reports skips), or retry/poll anything.
@@ -132,7 +139,10 @@ fs.mkdirSync(outDir, { recursive: true })
 
 const rows = []
 function appendRow(leg, exit, observed) {
-  const row = { leg, exit, observed }
+  // D1: scope is always the LAST key on a row this writer appends — full/fix-delta from the
+  // one fixDelta flag already parsed above; ac-matrix.js/promise-sweep.js append their own rows
+  // directly and never pass through here, so their rows stay untouched.
+  const row = { leg, exit, observed, scope: fixDelta ? 'fix-delta' : 'full' }
   rows.push(row)
   fs.appendFileSync(manifest, JSON.stringify(row) + '\n')
 }

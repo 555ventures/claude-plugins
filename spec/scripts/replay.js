@@ -8,6 +8,7 @@
 //         | --record --spec <path> --review-run-id <id> --legs green|red:<leg>|none
 //                     --outcome caught|missed|leg-caught|unresolved|setup-failed
 //                     [--class <id>] [--patch <file>] [--workflow <file>] [--tokens N]
+//                     [--via driver|manual]
 //         | --stats
 //         | --teardown --dir <path>
 //         [--root <path>]  # repo root for every ledger/git read+append; defaults to cwd
@@ -98,6 +99,16 @@
 // follow-up") is refused with exit 2 when it opens with "replay" (case-insensitive) — the
 // class-id half of --apply's F2 refusal does not apply here, since no --class exists at setup
 // time. (D7) --setup without --overlay is unaffected; the overlay is additive.
+// specs/20260903/01-owed-query-and-row-handoff.md: (D8) --record gains --via driver|manual —
+// exactly "driver" stamps via:"driver" on the row and the retained artifact (the review driver's
+// REPLAY step is the only caller that knows a run was driver-handed, so it prints the flag in
+// the command the session copies); absent or any other value stamps the honest default
+// "manual", mirroring build/review's own --via rule so no pre-change --record caller reddens.
+// stdout becomes `recorded runId=<rp_…> via=<driver|manual>`. (D9) --stats gains one
+// `by-via driver=N manual=N unknown=N` line (unknown = no via field at all) after `catch-rate`
+// and before `per-class:`, so the manual-retry-path promise (brief 23 scope 3) is a ledger count
+// invocable cold, not a jq exercise.
+//
 // What this deliberately does NOT do: derive review-legs verdicts, touch the main working tree
 // (--setup/--apply/--teardown only ever act on a --dir the caller supplies, or one --setup derives
 // itself from --spec (D1, specs/20260826/01) — --setup refuses a caller --dir that resolves inside
@@ -188,7 +199,8 @@ function usage() {
     '--score --workflow <file> --patch <file> | ' +
     '--record --spec <path> --review-run-id <id> --legs green|red:<leg>|baseline-red:<leg>[,<leg>]|none ' +
     '--outcome caught|missed|leg-caught|unresolved|setup-failed [--class <id>] [--patch <file>] ' +
-    '[--workflow <file>] [--tokens N] | --stats | --pick-class [--root <path>] | --teardown --dir <path>')
+    '[--workflow <file>] [--tokens N] [--via driver|manual] | --stats | --pick-class [--root <path>] | ' +
+    '--teardown --dir <path>')
 }
 
 const MODE_FLAGS = {
@@ -200,7 +212,7 @@ const MODE_FLAGS = {
 let mode = null
 let commit = null, dir = null, patch = null, cls = null, workflowPath = null, patchOut = null
 let specArg = null, reviewRunId = null, legs = null, outcome = null, tokensArg = null, subjectArg = null
-let rootArg = null, overlayArg = null
+let rootArg = null, overlayArg = null, viaArg = null
 
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
@@ -223,6 +235,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--subject') subjectArg = argv[++i]
   else if (a === '--root') rootArg = argv[++i]
   else if (a === '--overlay') overlayArg = argv[++i]
+  else if (a === '--via') viaArg = argv[++i]
   else { usage(); process.exit(2) }
 }
 if (!mode) { usage(); process.exit(2) }
@@ -951,9 +964,14 @@ function cmdRecord() {
   }
   const runId = 'rp_' + crypto.randomBytes(6).toString('hex')
   const ts = new Date().toISOString()
+  // D8 (specs/20260903/01-owed-query-and-row-handoff.md): mirrors build/review's --via rule —
+  // exactly "driver" stamps "driver" (the review driver's REPLAY step is the only caller that
+  // knows the run was driver-handed); absent or any other value stamps the honest default
+  // "manual", so every pre-change --record caller keeps working unchanged.
+  const via = viaArg === 'driver' ? 'driver' : 'manual'
   const row = {
     ts, stage: 'replay', spec: specArg, runId, reviewRunId,
-    class: cls || null, files: filesArr, legs, outcome, tokens,
+    class: cls || null, files: filesArr, legs, outcome, tokens, via,
   }
   const claudeDir = path.join(root, '.claude')
   fs.mkdirSync(claudeDir, { recursive: true })
@@ -962,7 +980,7 @@ function cmdRecord() {
   fs.mkdirSync(artifactDir, { recursive: true })
   const artifact = { ...row, patch: patchContent, reviewer }
   fs.writeFileSync(path.join(artifactDir, runId + '.json'), JSON.stringify(artifact, null, 2) + '\n')
-  console.log(`recorded runId=${runId}`)
+  console.log(`recorded runId=${runId} via=${via}`)
   process.exit(0)
 }
 
@@ -986,6 +1004,15 @@ function cmdStats() {
   console.log(`total ${total}`)
   for (const b of STATS_BUCKETS) console.log(`${b} ${counts[b]}`)
   console.log(`catch-rate ${counts.caught}/${counts.caught + counts.missed}`)
+  // D9 (specs/20260903/01-owed-query-and-row-handoff.md): manual-path usage as a ledger count —
+  // "unknown" is a row with no via field at all (every pre-D8 --record row).
+  const viaCounts = { driver: 0, manual: 0, unknown: 0 }
+  for (const r of rows) {
+    if (r.via === 'driver') viaCounts.driver++
+    else if (r.via === 'manual') viaCounts.manual++
+    else viaCounts.unknown++
+  }
+  console.log(`by-via driver=${viaCounts.driver} manual=${viaCounts.manual} unknown=${viaCounts.unknown}`)
   console.log('per-class:')
   for (const [name, c] of byClass) {
     console.log(`  ${name} ` + STATS_BUCKETS.map(b => `${b}=${c[b]}`).join(' '))

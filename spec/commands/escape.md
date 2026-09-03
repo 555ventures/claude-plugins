@@ -135,6 +135,8 @@ defective file — that is the only unrecoverable input.
    in the ledger with this spec+file) → back to step 2's distinct-defect confirm, then
    re-run with `--allow-duplicate`; exit 1 (validation reasons printed one per line) means a
    field above was derived wrong — fix it and re-run, never hand-append around the refusal.
+   The confirmation line carries a trailing ` key=escape:<repo>:<ts>:<file>` — that is the
+   row's key, derived by the script; step 7 reports it verbatim, never re-composed.
 6. **Close the loop on the prevention delta** (the one write beyond the ledger row, and the
    only one): by `preventedBy` value —
    - `doctrine` → **draft the one-line Gotchas entry as tag + rule + one owner citation
@@ -165,7 +167,10 @@ defective file — that is the only unrecoverable input.
    - `outcome`: anchor `✅` (record-completion is an outcome, not an artifact pointer —
      the closed anchor set wins over a bespoke lead), text `escape logged — {preventedBy}
      row appended; prevention delta {landed / declined / recommended: <command>}`.
-   - `bullets`: one line, `- {N} escape rows now point at this spec`.
+   - `bullets`: one line, `- {N} escape rows now point at this spec`; when `preventedBy`
+     is `review-check` or `runtime-leg`, a second line naming the row's key: `- {key} —
+     the plugin repo's fleet-reader --owed picks this row up; no handoff prompt is
+     composed here`.
    - `warns`: `correlated review said CLEAN — miscalibration signal /spec:doctor aggregates`
      when the step-3 correlated review row's verdict was CLEAN, else omit. After the append,
      re-run `node "$(spec-paths fleet-reader)" --json` and add `corpus gap: <class> has <N>

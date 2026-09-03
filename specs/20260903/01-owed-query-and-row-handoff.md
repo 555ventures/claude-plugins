@@ -1,6 +1,6 @@
 ---
 date: 2026-09-03
-status: hardened
+status: implementing
 tier: standard
 area: feedback-loop
 design: false
@@ -9,6 +9,8 @@ depends_on: []
 depended_on_by: []
 brief: 23
 open_markers: 0
+build_base: main
+diff_base: 841b3de18b61ec869fd560e27f4b3b4c1f51267f
 ---
 
 # Owed query and row-as-handoff: hosts emit rows, the plugin reads them
@@ -46,6 +48,7 @@ pin stays exhaustive (updated in place, never loosened), and nothing stores stat
 | D13 | No doctrine edit carries the citation convention; the owed render's per-item next action teaches it at the moment it is needed [no-ac: the deliverable is the absence of a doctrine edit; D7's AC pins the render line that carries the convention] | JJ's standing rule: doctrine prose only shrinks; the render is the surface where a planner meets the row, so it is where the convention belongs. |
 | D14 | Precondition recorded, not blocked: the post-backfill fleet values are in Assumptions; the three never-replayed repos that hold reviews (autopilot-hub, zubu-menu, hiwora) get one queue item, run later [no-ac: queue entry, no code surface] | JJ ruling this session: nothing in this design changes with those results. |
 | D15 | Plugin version bumps to the next free minor (target 7.69.0) with the plugin.json description's changelog line [no-ac: the version-bump omission is a hard review finding already; the literal number is a target, not a pin (Gotchas)] | Behavior change discipline in pipeline rules § Planning. |
+| D16 | Build-time amendment (auto-picked by the build session 2026-09-03, veto anytime): AC-13 and AC-15 each mixed a new promise with a `SHALL CONTINUE TO` clause, and `red-check.js` classifies any AC carrying that phrase as a green pin — so their test files were expected green on the pre-image while genuinely red. The regression clauses moved to their own ACs (AC-20260903-01-16 for `--append`'s exit 0 / one row, AC-20260903-01-17 for `--record`'s exit 0 / one row) and the pre-existing tests carry the new tags; no promise changed (AC-20260903-01-16, AC-20260903-01-17) | The sanction lives in the spec's AC carriers by design (the build driver never accepts an "unsanctioned" colour itself); a mixed AC is a composition defect of the spec, not of the tests, and splitting it is the smallest reversible correction. Note for future specs: one AC never carries both a new promise and a CONTINUE TO clause. |
 
 ## File Plan
 
@@ -60,10 +63,10 @@ pin stays exhaustive (updated in place, never loosened), and nothing stores stat
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | Version bump to the next free minor (D15) and the description's changelog line |
 | tests/fleet-reader/owed.test.js | CREATE | tests | AC-20260903-01-1, AC-20260903-01-2, AC-20260903-01-3, AC-20260903-01-4, AC-20260903-01-5, AC-20260903-01-6, AC-20260903-01-7, AC-20260903-01-9 |
 | tests/fleet-reader/discovery.test.js | MODIFY | tests | AC-20260903-01-8 — the exhaustive top-level key pin updated in place to nine keys and retagged (never loosened) |
-| tests/replay/replay.test.js | MODIFY | tests | AC-20260903-01-15 — the `--record` row key-set pin updated in place to include `via` and retagged; one existing no-`--via` invocation tagged as the CONTINUE TO pin |
+| tests/replay/replay.test.js | MODIFY | tests | AC-20260903-01-15, AC-20260903-01-17 — the `--record` row key-set pin updated in place to include `via` and retagged; the same no-`--via` invocation tagged as the CONTINUE TO pin |
 | tests/replay/record-via.test.js | CREATE | tests | AC-20260903-01-10, AC-20260903-01-11 |
 | tests/review/review-driver.test.js | MODIFY | tests | AC-20260903-01-12 — the REPLAY step body and the `replay-recorded` refusal name `--via driver` |
-| tests/escape/escape-row.test.js | MODIFY | tests | AC-20260903-01-13 — `--append` prints the derived key |
+| tests/escape/escape-row.test.js | MODIFY | tests | AC-20260903-01-13, AC-20260903-01-16 — `--append` prints the derived key; the pre-existing append pin retagged as the CONTINUE TO pin |
 | tests/fleet-reader/doctrine-pins.test.js | MODIFY | tests | AC-20260903-01-14 — escape.md step 7 bullet, replay.md Phase 4 rule and Phase 5 bullet |
 
 ## Contracts
@@ -202,9 +205,11 @@ REPLAY step body: `Phase 4 records the outcome via replay.js --record --review-r
 - **AC-20260903-01-10**: WHEN `replay.js --record … --via driver` runs THE SYSTEM SHALL append a row with `via:"driver"`, write the artifact with `via:"driver"`, and print `recorded runId=<rp_…> via=driver`; WHEN `--via` is absent or `--via anything-else` THE SYSTEM SHALL stamp `via:"manual"` and print `via=manual` → `record-via.test.js`
 - **AC-20260903-01-11**: WHEN `replay.js --stats` runs over a ledger holding one replay row with `via:"driver"`, two with `via:"manual"`, and one with no `via` THE SYSTEM SHALL print the line `by-via driver=1 manual=2 unknown=1` after the `catch-rate` line and before `per-class:`, and SHALL CONTINUE TO print the existing `total`, five bucket, and `catch-rate` lines unchanged → `record-via.test.js`
 - **AC-20260903-01-12**: WHEN the review driver enters REPLAY with a selected target THE SYSTEM SHALL print a step body whose `--record` sentence contains `--review-run-id <id> --via driver`; and WHEN `--mark replay-recorded` is refused for a missing row THE SYSTEM SHALL print a remedy command containing `--via driver` → `review-driver.test.js`
-- **AC-20260903-01-13**: WHEN `escape-row.js --append --root <dir> --row '<json>'` succeeds with `<dir>` = `/tmp/x/host-a` and a row `ts:"2026-09-03T10:00:00.000Z"`, `spec:"specs/new.md"`, `file:"new.js"` THE SYSTEM SHALL print `appended spec=specs/new.md file=new.js key=escape:host-a:2026-09-03T10:00:00.000Z:new.js` and SHALL CONTINUE TO exit 0 with exactly one row appended → `escape-row.test.js`
+- **AC-20260903-01-13**: WHEN `escape-row.js --append --root <dir> --row '<json>'` succeeds with `<dir>` = `/tmp/x/host-a` and a row `ts:"2026-09-03T10:00:00.000Z"`, `spec:"specs/new.md"`, `file:"new.js"` THE SYSTEM SHALL print `appended spec=specs/new.md file=new.js key=escape:host-a:2026-09-03T10:00:00.000Z:new.js` → `escape-row.test.js`
 - **AC-20260903-01-14**: WHEN the shipped doctrine is read THE SYSTEM SHALL carry, in `spec/commands/escape.md` step 7, a bullet naming `fleet-reader --owed` and the phrase `no handoff prompt`, gated on `review-check` and `runtime-leg`; in `spec/commands/replay.md`, a Phase 4 `--record` invocation carrying `--via driver|manual` with the sentence that `driver` applies when the target came from the review driver's REPLAY step, and a Phase 5 `missed` bullet naming `fleet-reader --owed`; and `spec/.claude-plugin/plugin.json` `version` SHALL differ from `7.68.0` → `doctrine-pins.test.js`
-- **AC-20260903-01-15**: WHEN `replay.js --record` is invoked with the full pre-change argument set and no `--via` THE SYSTEM SHALL CONTINUE TO exit 0 appending exactly one row, whose keys are exactly `class, files, legs, outcome, reviewRunId, runId, spec, stage, tokens, ts, via` (sorted) → the key-set pin in `replay.test.js`, updated in place and retagged
+- **AC-20260903-01-15**: WHEN `replay.js --record` is invoked with the full pre-change argument set and no `--via` THE SYSTEM SHALL append a row whose keys are exactly `class, files, legs, outcome, reviewRunId, runId, spec, stage, tokens, ts, via` (sorted) and whose `via` is `"manual"` → the key-set pin in `replay.test.js`, updated in place and retagged
+- **AC-20260903-01-16**: WHEN `escape-row.js --append --root <dir> --row '<json>'` succeeds with a valid row THE SYSTEM SHALL CONTINUE TO exit 0 with exactly one row appended and a confirmation line matching `appended spec=<spec> file=<file>` → `escape-row.test.js` (the pre-existing append pin, retagged)
+- **AC-20260903-01-17**: WHEN `replay.js --record` is invoked with the full pre-change argument set and no `--via` THE SYSTEM SHALL CONTINUE TO exit 0 appending exactly one ledger row and writing the evidence artifact → `replay.test.js` (the same pre-existing record test, retagged)
 
 ## Assumptions (escalation triggers)
 

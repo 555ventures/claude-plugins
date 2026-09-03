@@ -973,9 +973,10 @@ function replayStepBody(t) {
     `  baselineLegs:${t.baselineLegs}\n` +
     `  root:        ${repoRoot}   (pass as replay.js --root — the harness otherwise resolves the ` +
     `ledger from the session's cwd, which the scratch worktree can capture)\n` +
-    `Phase 4 records the outcome via replay.js --record --review-run-id ${t.reviewRunId}. ANY ` +
-    `outcome concludes this review; a non-measurement outcome (unresolved/setup-failed) leaves ` +
-    `the harness due, so the NEXT review retries rather than this one.\n` +
+    `Phase 4 records the outcome via replay.js --record --review-run-id ${t.reviewRunId} ` +
+    `--via driver. ANY outcome concludes this review; a non-measurement outcome ` +
+    `(unresolved/setup-failed) leaves the harness due, so the NEXT review retries rather than ` +
+    `this one.\n` +
     `Then: node ${__filename} ${replaySpecPath} --mark replay-recorded`
 }
 
@@ -1592,7 +1593,7 @@ function handleReplayRecorded() {
       'since REPLAY was entered (' + t.rowsAtEntry + ' then, ' + now + ' now) — run ' +
       'spec/commands/replay.md Phases 1-5 against that target and record the outcome first: ' +
       'node ' + replayBin + ' --record --spec ' + t.spec + ' --review-run-id ' + t.reviewRunId +
-      ' --legs <green|red:leg|baseline-red:leg[,leg]|none> --outcome ' +
+      ' --via driver --legs <green|red:leg|baseline-red:leg[,leg]|none> --outcome ' +
       '<caught|missed|leg-caught|unresolved|setup-failed> [--class <id>] [--patch <f>] [--workflow <f>]')
   }
   marks.replayTarget = null

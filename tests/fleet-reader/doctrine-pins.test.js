@@ -19,6 +19,8 @@ function pin(phrase) {
 
 const CORE = path.join(ROOT, 'spec/doctrine/core.md')
 const ESCAPE = path.join(ROOT, 'spec/commands/escape.md')
+const REPLAY = path.join(ROOT, 'spec/commands/replay.md')
+const PLUGIN_JSON = path.join(ROOT, 'spec/.claude-plugin/plugin.json')
 
 // AC-20260820-05-15 / AC-20260901-07-14 (tagged, no assertion change): the three
 // AC-20260820-05-15 phrases must survive specs/20260901/07-escape-class-contract.md D8's edit
@@ -71,4 +73,54 @@ test('AC-20260820-05-16: escape.md\'s row template gains a class field before pr
     'D8: step 4 must gain a classification bullet describing class as a stable kebab-case defect-class id, in the same naming style as replay-corpus.md classes')
   assert.match(step4[0], pin('null when underivable'),
     'D8: the bullet must say class is null when underivable — unknown is null, never a guessed value (the file\'s own standing rule, restated for the new field)')
+})
+
+// AC-20260903-01-14 (part 1): specs/20260903/01-owed-query-and-row-handoff.md D12 — escape.md
+// step 7 gains one bullet, gated on preventedBy review-check|runtime-leg, naming the row key and
+// the sentence that the plugin repo's fleet-reader --owed consumes it, nothing to paste.
+test('AC-20260903-01-14: escape.md step 7 gains a review-check/runtime-leg row-as-handoff bullet naming fleet-reader --owed and that no handoff prompt is composed', () => {
+  assert.ok(fs.existsSync(ESCAPE), 'spec/commands/escape.md must exist for this pin to mean anything')
+  const doc = read('spec/commands/escape.md')
+  const step7 = doc.match(/7\.\s+\*\*Report[\s\S]*?(?=\n## Backfill mode)/)
+  assert.ok(step7, 'escape.md must still have a numbered step 7 (Report) — without it there is no report step to add the row-as-handoff bullet to')
+  assert.match(step7[0], /fleet-reader --owed/,
+    'D12/AC-14: step 7 must name fleet-reader --owed as the consumer of the row key — a bullet with no command name leaves the session with nothing to point at')
+  assert.match(step7[0], pin('no handoff prompt'),
+    'D12/AC-14: the bullet must state that no handoff prompt is composed — the whole point of the row-as-handoff design is that the session never assembles a prompt for a human to paste')
+  assert.match(step7[0], /review-check/,
+    'D12/AC-14: the bullet must gate on preventedBy review-check — an ungated bullet would wrongly claim every escape row is plugin-blaming')
+  assert.match(step7[0], /runtime-leg/,
+    'D12/AC-14: the bullet must also gate on preventedBy runtime-leg, the other plugin-blaming value D2 defines')
+})
+
+// AC-20260903-01-14 (part 2): specs/20260903/01-owed-query-and-row-handoff.md D10/D12 — replay.md
+// Phase 4's --record invocation gains --via driver|manual with the driver-applies-when rule, and
+// Phase 5 gains a `missed`-outcome bullet naming fleet-reader --owed the same way escape.md does.
+test('AC-20260903-01-14: replay.md Phase 4 gains --via driver|manual on the --record invocation with the driver-applies-when-REPLAY-step rule, and Phase 5 gains a missed bullet naming fleet-reader --owed', () => {
+  assert.ok(fs.existsSync(REPLAY), 'spec/commands/replay.md must exist for this pin to mean anything')
+  const doc = read('spec/commands/replay.md')
+  const phase4 = doc.match(/## Phase 4[\s\S]*?(?=\n## Phase 5)/)
+  assert.ok(phase4, 'replay.md must still have a "## Phase 4" section — without it there is nothing to check the --via addition against')
+  assert.match(phase4[0], /--via\s+driver\|manual/,
+    'D10/AC-14: Phase 4\'s --record invocation must gain --via driver|manual — omitting it leaves the printed command silently defaulting to manual on every run')
+  assert.match(phase4[0], pin('review driver'),
+    'D10/AC-14: Phase 4 must state the rule that driver applies when the target came from the review driver\'s REPLAY step')
+  assert.match(phase4[0], pin('REPLAY step'),
+    'D10/AC-14: the rule must name the REPLAY step specifically — a manual /spec:replay run also invokes this same script and must stay manual')
+
+  const phase5 = doc.match(/## Phase 5[\s\S]*?(?=\n## Rules)/)
+  assert.ok(phase5, 'replay.md must still have a "## Phase 5" section — without it there is nothing to check the missed bullet against')
+  assert.match(phase5[0], /fleet-reader --owed/,
+    'D12/AC-14: Phase 5 must gain a missed-outcome bullet naming fleet-reader --owed as the consumer of the run id — mirroring escape.md\'s row-as-handoff bullet, no prompt is composed for a human to paste')
+})
+
+// AC-20260903-01-14 (part 3): D15 — every behavior change in this spec bumps the owning
+// plugin's semver (pipeline rules § Planning). The literal 7.68.0 is the version at plan time,
+// never the pinned target — a concurrent session may land a different next version first
+// (§ Gotchas), so this only asserts the version DIFFERS, never a specific new value.
+test('AC-20260903-01-14: plugin.json version bumps past 7.68.0', () => {
+  assert.ok(fs.existsSync(PLUGIN_JSON), 'spec/.claude-plugin/plugin.json must exist for this pin to mean anything')
+  const pkg = JSON.parse(read('spec/.claude-plugin/plugin.json'))
+  assert.notStrictEqual(pkg.version, '7.68.0',
+    'D15: every behavior change in this spec must bump the owning plugin\'s semver — a version still reading 7.68.0 means the pipeline rules § Planning version-bump discipline was skipped: ' + pkg.version)
 })

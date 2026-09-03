@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 'use strict'
-// fleet-reader.js [--repos-root <dir>] [--json] — read every spec-run ledger this machine can
-// see and answer seven fixed questions: leg red-recency, the brief-08 adoption gate, escape
-// aggregates, replay debt, CLEAN-contradicted-by-escape, a schema-drift census, and
-// escapes-per-CLEAN by via (loop vs. direct vs. unknown).
+// fleet-reader.js [--repos-root <dir>] [--json] [--owed] — read every spec-run ledger this
+// machine can see and answer nine fixed questions: leg red-recency, the brief-08 adoption gate,
+// escape aggregates, replay debt, CLEAN-contradicted-by-escape, a schema-drift census,
+// escapes-per-CLEAN by via (loop vs. direct vs. unknown), and — the ninth,
+// specs/20260903/01-owed-query-and-row-handoff.md D1 — `owed`: every plugin-blaming row across
+// this machine's checkouts (escape rows whose preventedBy is review-check|runtime-leg, missed
+// replay rows, and unstamped docs/spec-feedback/ findings), grouped by class with the joined
+// recurrence count and a derived fixed/in-flight/uncited/unknown citation status.
 //
 // Why: pipeline questions were being answered from whichever repo
 // happened to be open on this machine — ~14% of the fleet's ~1,100 evidence rows at the time
@@ -11,14 +15,25 @@
 // rots the moment a checkout moves or a new one clones, so this script re-derives the fleet on
 // every run instead (spec/scripts/fleet-reader.js, specs/20260820/05-fleet-evidence-reader.md).
 //
+// --owed (D1) is a RENDER SELECTOR only, never a new machine format: the bare human render (no
+// flag) stays byte-identical to the pre-owed render — population then queries 1-6 plus
+// cleanByVia; `--owed` instead prints population then the owed render (population, then class
+// groups/ambiguous/spec-feedback/hidden/excluded — the other eight queries are omitted from
+// this render, still readable via --json or a bare run); `--json` always carries `owed` as a
+// top-level key regardless of whether --owed rode along, so a `jq` reader never needs the flag.
+//
 // What this deliberately does NOT do: it never stores a repo list, a cache, or any derived
 // number between runs (read-only, stateless — D12); it never regexes a ledger row's packed
 // legacy status-string field (D10 — structured fields only: leg name + exit, verdict, stage,
-// ts, escape enums, replay outcomes); it takes no query flags — the seven questions are fixed
-// (D5; the seventh, cleanByVia, added by specs/20260901/03-unified-build-loop.md D9), a new
-// query still needs a spec, not a flag; and it never coerces an out-of-enum or missing
-// value to zero or drops a parseable row silently (D11) — every such row renders verbatim in
-// its query AND increments a named drift-census reason bucket.
+// ts, escape enums, replay outcomes); it takes no query flags beyond --owed's render selection —
+// the nine questions are fixed (D5; the seventh, cleanByVia, added by
+// specs/20260901/03-unified-build-loop.md D9; the ninth, owed, added by this spec's D1), a new
+// query still needs a spec, not a flag; it never coerces an out-of-enum or missing value to zero
+// or drops a parseable row silently (D11) — every such row renders verbatim in its query AND
+// increments a named drift-census reason bucket; and the owed query's citation scan (D5) never
+// reads `docs/` — a roadmap or feedback-brief mention of a row's key is a plan, not a fix, so
+// only `specs/`, `spec/`, and `tests/` are scanned (docs/spec-feedback/ is read separately, by
+// D6's own frontmatter parser, purely to find UNSTAMPED findings — never as a citation surface).
 //
 // specs/20260901/08-corpus-derivation-and-kill-match.md D6: the escapes
 // query gains corpusGaps (classes at or past CORPUS_BAR fleet recurrences with no replay-corpus
@@ -37,8 +52,9 @@ const os = require('os')
 const { configExists } = require('./lib/host-config')
 const { validateEscapeRow, validateAmendmentRow, joinAmendments, escapeKey } = require('./lib/escape-row')
 const { CORPUS_BAR, corpusPath, parseCorpus } = require('./lib/replay-corpus')
+const { fmBlock } = require('./lib/frontmatter')
 
-const USAGE = 'Usage: node fleet-reader.js [--repos-root <dir>] [--json]'
+const USAGE = 'Usage: node fleet-reader.js [--repos-root <dir>] [--json] [--owed]'
 
 function printUsage(message) {
   if (message) console.error(`fleet-reader.js: ${message}`)
@@ -49,6 +65,7 @@ function printUsage(message) {
 
 let reposRoot = path.join(os.homedir(), 'Projects')
 let json = false
+let owedFlag = false
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
@@ -60,8 +77,10 @@ for (let i = 0; i < argv.length; i++) {
     reposRoot = argv[++i]
   } else if (a === '--json') {
     json = true
+  } else if (a === '--owed') {
+    owedFlag = true
   } else {
-    printUsage(`unknown flag ${a} — the only flags are --repos-root <dir> and --json (the six queries are fixed, no query flags)`)
+    printUsage(`unknown flag ${a} — the only flags are --repos-root <dir>, --json, and --owed (the nine queries are fixed, no query flags)`)
     process.exit(2)
   }
 }
@@ -161,6 +180,7 @@ function loadRepo(repo) {
   const selfRepair = fs.existsSync(path.join(repo.dir, '.claude-plugin', 'marketplace.json'))
   return {
     name: repo.name,
+    dir: repo.dir,
     rawRows,
     unparseable,
     unreadable,
@@ -504,6 +524,250 @@ function computeDriftCensus(reposList) {
   return { byRepo }
 }
 
+// ---- query 9: owed ----------------------------------------------------------------------------
+// specs/20260903/01-owed-query-and-row-handoff.md D1-D7: every plugin-blaming row across this
+// machine's checkouts, grouped by effective class with a derived fixed/in-flight/uncited/unknown
+// citation status. Owner rule (D2): preventedBy review-check|runtime-leg -> owed item;
+// enforcer|test -> hostOwned (never listed); anything else (doctrine|none|missing|out-of-enum)
+// -> ambiguous (listed, never grouped). D3: a self-repair repo's plugin-blaming escape rows are
+// never listed (selfRepairExcluded counts them; their class's recurrences, read from
+// escapes.byClass, still counts them) — a self-repair repo's OWN missed replay rows ARE listed
+// (a reviewer measurement is fleet evidence regardless of whose repo it ran in).
+
+const CITATION_SURFACES = ['specs', 'spec', 'tests']
+
+function ownerBucket(preventedBy) {
+  if (preventedBy === 'review-check' || preventedBy === 'runtime-leg') return 'item'
+  if (preventedBy === 'enforcer' || preventedBy === 'test') return 'hostOwned'
+  return 'ambiguous'
+}
+
+// D5: walk specs/, spec/, tests/ recursively under every self-repair repo; a missing surface
+// directory scans as zero files (readdirSync's ENOENT is caught, never thrown onward); an
+// unreadable file inside a scanned surface is skipped and contributes nothing to `files` — never
+// a crash, since this scan is read-only advisory. `null` (never an empty-but-present shape) when
+// the population holds no self-repair repo at all, so a caller can tell "scanned, found nothing"
+// apart from "never scanned".
+function scanCitationSurfaces(selfRepairRepos) {
+  if (!selfRepairRepos.length) return null
+  const roots = selfRepairRepos.map(r => path.resolve(r.dir))
+  const records = []
+  let filesScanned = 0
+  for (const repo of selfRepairRepos) {
+    for (const surface of CITATION_SURFACES) {
+      const surfaceDir = path.join(repo.dir, surface)
+      let entries
+      try {
+        entries = fs.readdirSync(surfaceDir, { recursive: true, withFileTypes: true })
+      } catch {
+        continue
+      }
+      for (const e of entries) {
+        if (!e.isFile()) continue
+        const parentPath = e.parentPath !== undefined ? e.parentPath : e.path
+        const fullPath = path.join(parentPath, e.name)
+        let text
+        try {
+          text = fs.readFileSync(fullPath, 'utf8')
+        } catch {
+          continue
+        }
+        filesScanned++
+        const relPath = path.relative(repo.dir, fullPath).split(path.sep).join('/')
+        // Spec frontmatter status (D5 Contracts): the first `^status:\s*(\S+)` line inside the
+        // leading `---` block — a narrower grammar than lib/frontmatter's general fmValue, pinned
+        // by this spec directly rather than reused.
+        let status = null
+        if (surface === 'specs') {
+          const m = /^status:\s*(\S+)/m.exec(fmBlock(text))
+          status = m ? m[1] : null
+        }
+        records.push({ relPath, surface, status, text })
+      }
+    }
+  }
+  return { roots, files: filesScanned, records }
+}
+
+// D5/D7: derive {cited, next} for one item key against the citation scan (or the citationScan:
+// null case). A hit under spec/ or tests/, or under specs/ in a status:done spec, marks fixed
+// (by lists every such hit, path asc); a hit only under specs/ in a non-done spec marks
+// in-flight (by lists those hits; next names the first one's path and its own status); no hit at
+// all marks uncited; no self-repair repo in the population marks every item unknown.
+function citeItem(key, scan, reposRoot) {
+  if (!scan) {
+    return {
+      cited: { status: 'unknown', by: [] },
+      next: `no plugin checkout under ${reposRoot} — fixed-status unknown`,
+    }
+  }
+  const fixedHits = []
+  const inFlightHits = []
+  for (const rec of scan.records) {
+    if (!rec.text.includes(key)) continue
+    if (rec.surface === 'spec' || rec.surface === 'tests') { fixedHits.push(rec.relPath); continue }
+    // surface === 'specs'
+    if (rec.status === 'done') fixedHits.push(rec.relPath)
+    else inFlightHits.push({ path: rec.relPath, status: rec.status || 'unknown' })
+  }
+  if (fixedHits.length) {
+    fixedHits.sort()
+    return { cited: { status: 'fixed', by: fixedHits }, next: `cited by ${fixedHits[0]}` }
+  }
+  if (inFlightHits.length) {
+    inFlightHits.sort((a, b) => a.path.localeCompare(b.path))
+    const first = inFlightHits[0]
+    return {
+      cited: { status: 'in-flight', by: inFlightHits.map(h => h.path) },
+      next: `cited by ${first.path} (${first.status}) — lands when that spec closes`,
+    }
+  }
+  return {
+    cited: { status: 'uncited', by: [] },
+    next: `reproduce in tests/fixtures/ before claiming; cite ${key} in the fixing spec (Rationale or Decisions) or the fixing test header`,
+  }
+}
+
+// D6: the docs/spec-feedback/*.md hand-rolled frontmatter parser. Returns null when the file
+// carries no leading `---\n…\n---` block at all (parsed:false); otherwise an array (possibly
+// empty) of { id, category, stage, severity, intake } entries read from the `findings:` list —
+// which opens at a `findings:` line and ends at the next non-indented line. No YAML library, no
+// multi-line values, no other keys read.
+function parseSpecFeedback(text) {
+  const block = fmBlock(text)
+  if (!block) return null
+  const lines = block.split('\n')
+  const startIdx = lines.findIndex(l => /^findings:\s*$/.test(l))
+  const findings = []
+  if (startIdx !== -1) {
+    let current = null
+    for (let i = startIdx + 1; i < lines.length; i++) {
+      const line = lines[i]
+      if (/^\S/.test(line)) break // next non-indented line ends the list
+      const idMatch = /^\s*-\s*id:\s*(\S+)/.exec(line)
+      if (idMatch) {
+        if (current) findings.push(current)
+        current = { id: idMatch[1], category: null, stage: null, severity: null, intake: false }
+        continue
+      }
+      if (!current) continue
+      const catMatch = /^\s*category:\s*(\S+)/.exec(line)
+      if (catMatch) { current.category = catMatch[1]; continue }
+      const stageMatch = /^\s*stage:\s*(\S+)/.exec(line)
+      if (stageMatch) { current.stage = stageMatch[1]; continue }
+      const sevMatch = /^\s*severity:\s*(\S+)/.exec(line)
+      if (sevMatch) { current.severity = sevMatch[1]; continue }
+      if (/^\s*intake:/.test(line)) { current.intake = true; continue }
+    }
+    if (current) findings.push(current)
+  }
+  return findings
+}
+
+function computeOwed(reposList, reposRoot, escapesByClass) {
+  const selfRepairRepos = reposList.filter(r => r.selfRepair)
+  const scan = scanCitationSurfaces(selfRepairRepos)
+  let selfRepairExcluded = 0
+  let hostOwned = 0
+  const groupsMap = new Map()
+  const ambiguous = []
+
+  function pushGroup(cls, item) {
+    const key = cls || 'unclassed'
+    if (!groupsMap.has(key)) groupsMap.set(key, [])
+    groupsMap.get(key).push(item)
+  }
+
+  for (const repo of reposList) {
+    const amendments = joinAmendments(repo.rawRows)
+    for (const r of repo.rawRows) {
+      if (r.stage === 'escape') {
+        const bucket = ownerBucket(r.preventedBy)
+        if (bucket === 'hostOwned') { hostOwned++; continue }
+        if (bucket === 'item' && repo.selfRepair) { selfRepairExcluded++; continue }
+        const effective = effectiveClassReason(r, amendments)
+        const itemClass = (typeof effective.class === 'string' && effective.class) ? effective.class : null
+        const key = `escape:${repo.name}:${r.ts}:${r.file}`
+        const { cited, next } = citeItem(key, scan, reposRoot)
+        const item = {
+          kind: 'escape', key, repo: repo.name, ts: r.ts, spec: r.spec, file: r.file,
+          class: itemClass, preventedBy: r.preventedBy,
+          reviewRunId: r.reviewRunId !== undefined ? r.reviewRunId : null,
+          cited, next,
+        }
+        if (bucket === 'ambiguous') { ambiguous.push(item); continue }
+        pushGroup(itemClass, item)
+      } else if (r.stage === 'replay' && r.outcome === 'missed') {
+        const itemClass = (typeof r.class === 'string' && r.class) ? r.class : null
+        const key = r.runId
+        const { cited, next } = citeItem(key, scan, reposRoot)
+        const item = {
+          kind: 'replay', key, repo: repo.name, ts: r.ts, spec: r.spec, runId: r.runId,
+          class: itemClass, outcome: 'missed',
+          reviewRunId: r.reviewRunId !== undefined ? r.reviewRunId : null,
+          cited, next,
+        }
+        pushGroup(itemClass, item)
+      }
+    }
+  }
+
+  const sortItems = (items) => items.sort((a, b) => a.repo.localeCompare(b.repo) || String(a.ts).localeCompare(String(b.ts)))
+  const groups = Array.from(groupsMap.entries()).map(([cls, items]) => {
+    sortItems(items)
+    const recurrences = escapesByClass[cls] || 0
+    return {
+      class: cls, recurrences,
+      policy: `core § Incident Policy (recurrences ${recurrences}; guard bar 3)`,
+      items,
+    }
+  })
+  groups.sort((a, b) => a.class.localeCompare(b.class))
+  sortItems(ambiguous)
+
+  // D6: docs/spec-feedback/*.md — a flat glob of that one directory per repo (never nested); a
+  // repo with no such directory contributes no files entry at all.
+  const feedbackFiles = []
+  const feedbackUnstamped = []
+  for (const repo of reposList) {
+    const dir = path.join(repo.dir, 'docs', 'spec-feedback')
+    let names
+    try { names = fs.readdirSync(dir) } catch { continue }
+    for (const name of names.filter(n => n.endsWith('.md')).sort()) {
+      const filePath = path.join(dir, name)
+      let text
+      try { text = fs.readFileSync(filePath, 'utf8') } catch { continue }
+      const relPath = `docs/spec-feedback/${name}`
+      const findings = parseSpecFeedback(text)
+      if (findings === null) {
+        feedbackFiles.push({ path: relPath, parsed: false, findings: 0, unstamped: 0 })
+        continue
+      }
+      const unstamped = findings.filter(f => !f.intake)
+      feedbackFiles.push({ path: relPath, parsed: true, findings: findings.length, unstamped: unstamped.length })
+      for (const f of unstamped) {
+        const { cited, next } = citeItem(f.id, scan, reposRoot)
+        feedbackUnstamped.push({
+          kind: 'feedback', key: f.id, repo: repo.name, path: relPath,
+          id: f.id, category: f.category, stage: f.stage, severity: f.severity,
+          cited, next,
+        })
+      }
+    }
+  }
+  feedbackFiles.sort((a, b) => a.path.localeCompare(b.path))
+  feedbackUnstamped.sort((a, b) => a.key.localeCompare(b.key))
+
+  return {
+    citationScan: scan ? { roots: scan.roots, surfaces: CITATION_SURFACES, files: scan.files } : null,
+    selfRepairExcluded,
+    hostOwned,
+    groups,
+    ambiguous,
+    feedback: { files: feedbackFiles, unstamped: feedbackUnstamped },
+  }
+}
+
 const legRecency = computeLegRecency(reposData)
 const gate08 = computeGate08(reposData)
 const escapes = computeEscapes(reposData)
@@ -512,6 +776,7 @@ const replayDebt = computeReplayDebt(reposData)
 const cleanContradicted = computeCleanContradicted(reposData)
 const cleanByVia = computeCleanByVia(reposData)
 const driftCensus = computeDriftCensus(reposData)
+const owed = computeOwed(reposData, reposRoot, escapes.byClass)
 
 // The 64 KiB process.exit stdout truncation this synchronous writer avoids is explained in full
 // at spec/scripts/lib/driver-io.js's writeOut.
@@ -524,7 +789,7 @@ function writeAll(fd, buf) {
 
 if (json) {
   writeAll(1, Buffer.from(JSON.stringify({
-    population, legRecency, gate08, escapes, replayDebt, cleanContradicted, driftCensus, cleanByVia,
+    population, legRecency, gate08, escapes, replayDebt, cleanContradicted, driftCensus, cleanByVia, owed,
   }, null, 2) + '\n'))
 }
 
@@ -631,15 +896,82 @@ function renderDriftCensus(dc) {
   return lines.join('\n')
 }
 
+// D7: the owed render — population first, then class groups (header + one line per non-fixed
+// item), ambiguous owners, spec-feedback, then trailing hidden:/excluded: counts that keep every
+// exclusion visible (never a silent drop). D1: --owed is a render SELECTOR — this replaces
+// queries 1-6/cleanByVia in the printed output, never adds to them; the full nine-query --json
+// stays the sole complete machine view.
+function bracketStatus(cited, next) {
+  if (cited.status === 'uncited') return `[uncited → ${next}]`
+  return `[${cited.status}: ${next}]`
+}
+
+function renderOwedItemLine(item) {
+  if (item.kind === 'escape') {
+    return `${item.key}  preventedBy=${item.preventedBy} repo=${item.repo} spec=${item.spec}  ${bracketStatus(item.cited, item.next)}`
+  }
+  return `${item.key}  outcome=${item.outcome} repo=${item.repo} spec=${item.spec}  ${bracketStatus(item.cited, item.next)}`
+}
+
+function renderOwed(ow, reposRootValue) {
+  const scanLabel = ow.citationScan
+    ? `${ow.citationScan.roots.join(', ')} — ${ow.citationScan.files} files`
+    : `no plugin checkout under ${reposRootValue} — fixed-status unknown`
+  const lines = [`Owed — plugin-blaming rows across this machine's checkouts (citation scan: ${scanLabel})`]
+
+  const allItems = []
+  for (const g of ow.groups) allItems.push(...g.items)
+  allItems.push(...ow.ambiguous)
+  allItems.push(...ow.feedback.unstamped)
+  const hidden = allItems.filter(i => i.cited.status === 'fixed').length
+
+  const empty = ow.groups.length === 0 && ow.ambiguous.length === 0 && ow.feedback.unstamped.length === 0
+  if (empty) {
+    lines.push('owed: none — every plugin-blaming row on this machine is cited')
+  } else {
+    for (const g of ow.groups) {
+      lines.push(`  ${g.class}: recurrences=${g.recurrences} → ${g.policy}`)
+      for (const item of g.items) {
+        if (item.cited.status === 'fixed') continue
+        lines.push(`    ${renderOwedItemLine(item)}`)
+      }
+    }
+    if (ow.ambiguous.length) {
+      lines.push(`  ambiguous owner (preventedBy doctrine|none — no cited gotcha links a row): ${ow.ambiguous.length} rows`)
+      for (const item of ow.ambiguous) {
+        if (item.cited.status === 'fixed') continue
+        lines.push(`    ${renderOwedItemLine(item)}`)
+      }
+    }
+    if (ow.feedback.files.length || ow.feedback.unstamped.length) {
+      lines.push(`  spec-feedback — files=${ow.feedback.files.length} unstamped=${ow.feedback.unstamped.length}`)
+      for (const f of ow.feedback.unstamped) {
+        if (f.cited.status === 'fixed') continue
+        lines.push(`    ${f.repo}: ${f.path} ${f.id} category=${f.category} stage=${f.stage} severity=${f.severity}  ${bracketStatus(f.cited, f.next)}`)
+      }
+    }
+  }
+  lines.push(`  hidden: ${hidden} rows already cited by landed code or a done spec`)
+  lines.push(`  excluded: selfRepair=${ow.selfRepairExcluded} hostOwned=${ow.hostOwned}`)
+  return lines.join('\n')
+}
+
 if (!json) {
-  console.log([
-    renderPopulation(population),
-    renderLegRecency(legRecency),
-    renderGate08(gate08),
-    renderEscapes(escapes),
-    renderReplayDebt(replayDebt),
-    renderCleanContradicted(cleanContradicted),
-    renderDriftCensus(driftCensus),
-    renderCleanByVia(cleanByVia),
-  ].join('\n\n'))
+  if (owedFlag) {
+    console.log([
+      renderPopulation(population),
+      renderOwed(owed, reposRoot),
+    ].join('\n\n'))
+  } else {
+    console.log([
+      renderPopulation(population),
+      renderLegRecency(legRecency),
+      renderGate08(gate08),
+      renderEscapes(escapes),
+      renderReplayDebt(replayDebt),
+      renderCleanContradicted(cleanContradicted),
+      renderDriftCensus(driftCensus),
+      renderCleanByVia(cleanByVia),
+    ].join('\n\n'))
+  }
 }

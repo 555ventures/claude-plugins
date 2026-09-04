@@ -113,8 +113,12 @@ Write the spec per the template. `status: draft`. While drafting:
    and enumerates every literals-leg hit in the File Plan as fix or recorded waive;
    `executes` hits are read for fixture repair to plan now; `likely`/`mentions` hits owe
    nothing (specs/20260814/05-collision-closure.md D6/D12).
-   Work discovered this session that needs its own spec → write the roadmap brief now, or
-   record why not.
+   Work discovered this session that needs its own spec → write the roadmap brief now (it
+   queues last by itself); if it must run before the current work,
+   `node "$(spec-paths spec-queue)" add NN --top`; any follow-up that must wait for this
+   spec (a re-mark, a backfill, a second sweep) →
+   `node "$(spec-paths spec-queue)" add "<paste-ready action>" --after-spec {spec path}`.
+   Record why not only when there is truly nothing to queue.
 3. **Ledger row:** append exactly ONE row to `.claude/spec-runs.jsonl` (repo root;
    `printf '%s\n' '<json>' >>`) recording this lock's executed
    facts, before the status flip so an interrupted lock leaves either no row or a complete
@@ -133,7 +137,9 @@ Write the spec per the template. `status: draft`. While drafting:
 
 4. Flip `status: draft → hardened`.
 5. **Report:** assemble slots — `outcome`: ✅ `spec hardened & locked — {path}`; `bullets`:
-   one plain line per decision made; `warns`: notable spike findings; `next`: the verbatim
+   one plain line per decision made; `warns`: notable spike findings; `queued`: one line
+   per `spec-queue add` run in step 2, printed verbatim or glossed in plain English (omit
+   the slot when step 2 wrote nothing); `next`: the verbatim
    output of `node "$(spec-paths spec-status)" --root . --next` as
    `{kind: 'status-verbatim'}` — the script is the sole source of the Next suggestion.
    Render via `node "$(spec-paths report-render)" --slots <file>`, print verbatim.

@@ -154,6 +154,79 @@ test('AC-20260813-06-5: `spec-paths report-render` prints the renderer\'s absolu
     'spec-paths report-render must print the renderer\'s own absolute path — a wrong or missing key breaks the command that resolves it silently (§ Risk Tiers, spec-paths)')
 })
 
+// specs/20260903/04-reports-write-the-queue.md: report-render.js gains an optional `queued`
+// slot so a deferred `spec-queue add` write is shown, never left as report prose (D1).
+// AC-20260903-04-1/2/3 pin the render position, empty/absent byte-identity, and the
+// pre-anchored/non-string rejection.
+
+test('AC-20260903-04-1: a `queued` entry renders as a 📋-anchored line after `found` and before the `Next:` close', () => {
+  const dir = tmpdir('report-render-queue-ac1')
+  const slotsPath = writeSlots(dir, {
+    outcome: { anchor: '✅', text: 'plan locked' },
+    found: ['spec 04 hardened'],
+    queued: ['added q9 (/spec:plan @docs/roadmap/26-x.md) at position 2'],
+    next: { kind: 'command', text: '/spec:build specs/x.md' },
+  })
+  const r = runNode('scripts/report-render.js', ['--slots', slotsPath])
+  assert.strictEqual(r.status, 0,
+    'a `queued` array of plain strings is a contract-valid slots file — the renderer must not reject the new optional slot: ' + r.stderr)
+  const lines = r.stdout.trim().split('\n')
+  const foundIdx = lines.indexOf('✨ spec 04 hardened')
+  const queuedIdx = lines.indexOf('📋 added q9 (/spec:plan @docs/roadmap/26-x.md) at position 2')
+  const nextIdx = lines.indexOf('Next: /spec:build specs/x.md')
+  assert.ok(foundIdx !== -1 && queuedIdx !== -1 && nextIdx !== -1,
+    '`found`, `queued`, and `next` must each render as their own line in the fixed skeleton — a missing line means the deferred write is not shown to the user: ' + r.stdout)
+  assert.ok(foundIdx < queuedIdx && queuedIdx < nextIdx,
+    'the `queued` line must render strictly between `found` and `next` per the amended render order (found → queued → next) — a queue write shown out of position reads as unrelated to the close')
+})
+
+test('AC-20260903-04-2: an empty or absent `queued` array renders byte-identical stdout — no 📋 line and no blank line', () => {
+  const dir = tmpdir('report-render-queue-ac2')
+  const base = {
+    outcome: { anchor: '✅', text: 'plan locked' },
+    found: ['spec 04 hardened'],
+    next: { kind: 'command', text: '/spec:build specs/x.md' },
+  }
+  const withEmptyPath = writeSlots(dir, { ...base, queued: [] })
+  const rWithEmpty = runNode('scripts/report-render.js', ['--slots', withEmptyPath])
+  const absentDir = tmpdir('report-render-queue-ac2-absent')
+  const absentPath = writeSlots(absentDir, base)
+  const rAbsent = runNode('scripts/report-render.js', ['--slots', absentPath])
+  assert.strictEqual(rWithEmpty.status, 0, 'a `queued: []` slots file must exit 0: ' + rWithEmpty.stderr)
+  assert.strictEqual(rAbsent.status, 0, rAbsent.stderr)
+  assert.strictEqual(rWithEmpty.stdout, rAbsent.stdout,
+    '`queued: []` and an absent `queued` key must produce byte-identical stdout — a droppable empty array must never leave a blank 📋 line or any other stray output behind: ' +
+      JSON.stringify({ withEmpty: rWithEmpty.stdout, absent: rAbsent.stdout }))
+  assert.ok(!rWithEmpty.stdout.includes('📋'),
+    'neither an empty nor an absent `queued` array may render a 📋 line — the slot is fully droppable when there is nothing to show')
+})
+
+test('AC-20260903-04-3: a pre-anchored or non-string `queued` entry exits 2 naming `queued[0]` and the remedy', () => {
+  const preAnchoredDir = tmpdir('report-render-queue-ac3-anchored')
+  const preAnchoredPath = writeSlots(preAnchoredDir, {
+    outcome: { anchor: '✅', text: 'plan locked' },
+    queued: ['📋 added q9'],
+    next: { kind: 'command', text: '/spec:status' },
+  })
+  const rAnchored = runNode('scripts/report-render.js', ['--slots', preAnchoredPath])
+  assert.strictEqual(rAnchored.status, 2,
+    'a `queued` entry that already carries the 📋 anchor must be a contract violation — the script prepends the anchor itself, so a pre-anchored entry would double-anchor the rendered line: stdout=' + rAnchored.stdout)
+  assert.match(rAnchored.stderr, /queued\[0\]/,
+    'the exit-2 message must name the offending slot as `queued[0]` and the remedy (fix the slots file and re-run this script only) so the calling command knows exactly what to fix')
+
+  const nonStringDir = tmpdir('report-render-queue-ac3-nonstring')
+  const nonStringPath = writeSlots(nonStringDir, {
+    outcome: { anchor: '✅', text: 'plan locked' },
+    queued: [{ text: 'added q9' }],
+    next: { kind: 'command', text: '/spec:status' },
+  })
+  const rNonString = runNode('scripts/report-render.js', ['--slots', nonStringPath])
+  assert.strictEqual(rNonString.status, 2,
+    'a `queued` entry that is not a string must be a contract violation, matching every other optional array slot\'s uniform string-or-fail rule: stdout=' + rNonString.stdout)
+  assert.match(rNonString.stderr, /queued\[0\]/,
+    'the exit-2 message must name the offending slot as `queued[0]` even when the entry is a non-string value')
+})
+
 // Mirrors the awk-range extraction used elsewhere in this suite (tests/terminal-observable-acs.test.js's
 // `between`): slice by line index from the heading up to (not including) the next `## ` heading, so the
 // count matches exactly what a human reading the file between the two headings would count.

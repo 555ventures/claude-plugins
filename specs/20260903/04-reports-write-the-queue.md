@@ -1,6 +1,6 @@
 ---
 date: 2026-09-03
-status: hardened
+status: implementing
 tier: standard           # report-render.js + command/doctrine prose; no critical-trigger surface (spec-status.js untouched)
 area: session-queue
 design: false
@@ -9,6 +9,7 @@ depends_on: [specs/20260903/03-pipeline-queue-mechanics.md]
 depended_on_by: []
 brief: 24
 open_markers: 0
+diff_base: 09e8486f6114b795bf5e0b1ff667b57ca54a640e
 ---
 
 # Reports write the queue — deferred work is an item, never a sentence

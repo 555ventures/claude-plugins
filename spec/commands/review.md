@@ -71,9 +71,12 @@ because review ran on the originating branch); `warns`: one line naming the bran
 conclusion — "CI has not seen this commit; origin `<branch>`'s latest run: `<conclusion>`" —
 when the ci leg's evidence-manifest row observed `sha-unseen` with a `branchConclusion` of
 `failure`, `timed_out`, or `cancelled` (drop the slot otherwise; the row itself stays exit 0,
-this is a report-only warning, never a finding); `next`: the driver's captured
-`node "$(spec-paths spec-status)" --next`, printed verbatim — never a hand-applied mapping.
-Run `node "$(spec-paths report-render)" --slots <file>` and print its output verbatim.
+this is a report-only warning, never a finding); `queued`: one line per
+`spec-queue add` this close ran (per the Close step's follow-up rule below), printed
+verbatim or glossed in plain English (omit the slot when nothing was queued); `next`: the
+driver's captured `node "$(spec-paths spec-status)" --next`, printed verbatim — never a
+hand-applied mapping. Run `node "$(spec-paths report-render)" --slots <file>` and print its
+output verbatim.
 
 ```report
 ✅ **CLEAN — merged**
@@ -145,7 +148,11 @@ Run `node "$(spec-paths report-render)" --slots <file>` and print its output ver
   Fold the deviations sidecar if one exists: recurring-shaped deviations become one-line
   entries in the host rules' Gotchas section (tagged `[host]`/`[plugin]` by provenance;
   written as tag + rule + one owner citation — the spec path — never dates, people, hosts, versions, or prior behavior);
-  one-offs go to the spec's Rationale; delete the sidecar. The driver enumerates every
+  one-offs go to the spec's Rationale; delete the sidecar. A follow-up the fold or the
+  Rationale surfaces — a staged fix spec, an owed re-run, a re-mark gated on this spec's
+  successor — is queued, never left narrated: `node "$(spec-paths spec-queue)" add …`
+  (`--top` for a defect fix, `--after-spec <path>` for work gated on this spec's successor),
+  listed under the DONE report's `queued` slot (core § Console Output Style). The driver enumerates every
   sidecar entry (numbered, first line, 120-char-bounded) into this step's printed
   instruction ahead of the fold, and refuses `--mark closed` (exit 2, remedy named) while
   the sidecar still exists on disk, or while the last persisted observation records a

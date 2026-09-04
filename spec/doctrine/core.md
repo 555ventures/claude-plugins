@@ -271,7 +271,13 @@ verbatim; restyling it is a defect.
   inline them; translate pipeline vocabulary into product consequence.
 - **Close the loop** — every report ends with exactly one recommended next action. "Which
   spec/brief next" is answered by `node "$(spec-paths spec-status)" --next` printed verbatim,
-  never a hand-applied mapping; same-spec chains a stage owns stay literal.
+  never a hand-applied mapping; same-spec chains a stage owns stay literal. A deferred
+  action — anything this report would tell the user to do after the current run, or a new
+  spec/brief this session judges must run before the current work — is a queue item, never
+  a sentence: write it with `node "$(spec-paths spec-queue)" add …` before rendering
+  (`--top` when urgent, `--after-spec <path>` / `--after-brief NN` when it waits on
+  something, plain otherwise) and list what the script printed under the report's `queued`
+  slot. A deferred action that survives only as prose is a defect.
 
 ## On-Disk Handoff
 

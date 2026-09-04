@@ -28,10 +28,11 @@
 //   blocks:  [string]                                             optional, 🚫-anchored item lines
 //   artifacts: [string]                                           optional, 📦-anchored path lines
 //   found:   [string]                                             optional, ✨-anchored
+//   queued:  [string]                                             optional, 📋-anchored
 //   next: { kind: 'command'|'status-verbatim'|'none', text?, reason? }   required
-// Render order (fixed): outcome → bullets → pins → warns → blocks → artifacts → found → next.
-// Empty optional arrays drop their lines entirely — no blank anchor lines. Slot text must NOT
-// arrive pre-anchored with one of the glyphs this script itself prepends (✅⚠️🚫📦✨📌🎯) —
+// Render order (fixed): outcome → bullets → pins → warns → blocks → artifacts → found → queued
+// → next. Empty optional arrays drop their lines entirely — no blank anchor lines. Slot text
+// must NOT arrive pre-anchored with one of the glyphs this script itself prepends (✅⚠️🚫📦✨📌📋🎯) —
 // double-anchoring is a contract violation, checked uniformly across every slot regardless of
 // whether that particular slot type gets an anchor prepended.
 // next.kind 'command': text is one non-empty line, must not end with '?' (a recommendation,
@@ -81,7 +82,7 @@ const OUTCOME_ANCHORS = new Set(['✅', '⚠️', '🚫'])
 // The fixed anchor set this script itself prepends across the skeleton — slot text may never
 // arrive already carrying one of these (double-anchoring), even for a slot type (bullets) this
 // script renders plain; the invariant is contract-wide, not per-slot.
-const ANCHOR_GLYPHS = ['✅', '⚠️', '🚫', '📦', '✨', '📌', '🎯']
+const ANCHOR_GLYPHS = ['✅', '⚠️', '🚫', '📦', '✨', '📌', '📋', '🎯']
 
 function assertString(v, slot) {
   if (typeof v !== 'string' || v.length === 0) fail(slot, 'must be a non-empty string')
@@ -121,6 +122,7 @@ const warns = arrayOf('warns')
 const blocks = arrayOf('blocks')
 const artifacts = arrayOf('artifacts')
 const found = arrayOf('found')
+const queued = arrayOf('queued')
 
 // ---- next (required) ------------------------------------------------------------------------
 const next = slots.next
@@ -152,6 +154,7 @@ warns.forEach(w => out.push(`⚠️ ${w}`))
 blocks.forEach(b => out.push(`🚫 ${b}`))
 artifacts.forEach(a => out.push(`📦 ${a}`))
 found.forEach(f => out.push(`✨ ${f}`))
+queued.forEach(q => out.push(`📋 ${q}`))
 out.push(nextLine)
 
 console.log(out.join('\n'))

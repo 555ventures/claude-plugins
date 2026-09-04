@@ -161,7 +161,10 @@ defective file — that is the only unrecoverable input.
    - `review-check` → draft the one-line § Review Checks severity row the same way, same
      Gotchas discipline, same severable approval ask.
    - `runtime-leg` / `none` → nothing to write; the ledger row itself is the signal.
-7. **Report the context, not a fix.** Assemble slots and render via
+7. **Report the context, not a fix.** When this session stages a fix spec or brief for the
+   escaped defect (an ad-hoc high-priority spec, not the default), queue it before
+   rendering: `node "$(spec-paths spec-queue)" add <spec path | NN> --top`, and list what
+   the script printed under `queued`. Assemble slots and render via
    `node "$(spec-paths report-render)" --slots <file>`, print the script's output verbatim
    (rationale: shared § Console Output Style):
    - `outcome`: anchor `✅` (record-completion is an outcome, not an artifact pointer —
@@ -179,6 +182,8 @@ defective file — that is the only unrecoverable input.
    - `found`: `killedMatch: execution-grounded verification killed a finding that later
      proved real — strongest re-tuning evidence the ledger can hold` when `killedMatch` is
      `true`, else omit.
+   - `queued`: the `spec-queue add` line above, printed verbatim or glossed in plain
+     English, when a fix spec or brief was staged and queued this step; omit otherwise.
    - `next`: `{kind:'command', text:'/spec:enforce — mechanize the {category} check this
      escape implies'}` when `preventedBy` is `enforcer`; otherwise
      `{kind:'status-verbatim', text: <this session's captured `spec-status --next`

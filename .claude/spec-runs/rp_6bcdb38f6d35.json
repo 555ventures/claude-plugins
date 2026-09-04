@@ -1,0 +1,57 @@
+{
+  "ts": "2026-09-04T04:47:59.406Z",
+  "stage": "replay",
+  "spec": "specs/20260903/03-pipeline-queue-mechanics.md",
+  "runId": "rp_6bcdb38f6d35",
+  "reviewRunId": "rv_2a1640857a55",
+  "class": "doc-contract-lie",
+  "files": [
+    "spec/scripts/spec-queue.js"
+  ],
+  "legs": "green",
+  "outcome": "missed",
+  "tokens": 0,
+  "via": "driver",
+  "patch": "diff --git a/spec/scripts/spec-queue.js b/spec/scripts/spec-queue.js\nindex e489d20..da8088c 100755\n--- a/spec/scripts/spec-queue.js\n+++ b/spec/scripts/spec-queue.js\n@@ -117,8 +117,7 @@ function loadQueue() {\n   try {\n     data = JSON.parse(fs.readFileSync(QUEUE_PATH, 'utf8'))\n   } catch (e) {\n-    console.error(`spec-queue: ${QUEUE_PATH} is not valid JSON (${e.message}) — remove or repair it, then re-run \\`spec-queue next\\` to reseed`)\n-    process.exit(2)\n+    return { version: 1, seq: 0, items: [] }\n   }\n   if (!data || !Array.isArray(data.items) || typeof data.seq !== 'number') {\n     console.error(`spec-queue: ${QUEUE_PATH} does not match the {version,seq,items} shape — remove or repair it, then re-run \\`spec-queue next\\` to reseed`)\n",
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "soft",
+        "claim": "The build's deviations record describes a fix (a queueGateTargetSpecs Set plus an internal __gateTargetPending sort clause in deriveNext() demoting a gate target's own entry) that does not exist anywhere in spec/scripts/spec-status.js, and was not actually needed for AC-20260903-03-2's fixture to pass (the target spec is unqueued/Infinity queuePos while the unrelated spec is queued, so ordinary queuePos ordering already produces the asserted next[0] with no demotion logic at all).",
+        "file": "specs/20260903/03-pipeline-queue-mechanics.deviations.md",
+        "line": 10,
+        "impact": "A future reader who trusts the deviations record to explain how the gate-target ordering actually works will look for a mechanism (queueGateTargetSpecs / __gateTargetPending) that was never built, wasting time or drawing wrong conclusions about the sort logic.",
+        "evidence": "grep -n \"__gateTargetPending\\|queueGateTargetSpecs\" spec/scripts/spec-status.js returns no hits. node --test tests/queue/queue-overlay.test.js shows AC-20260903-03-2 and AC-20260903-03-3 passing (11/11 pass) with only the plain queuePos/blockers.length sort keys present at spec/scripts/spec-status.js:536-542."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "spec-status.js's overlay sort order might let a gated (not-ready) queue item's own entry rank ahead of the true top pick, since blockers are appended after the sort key is computed.",
+        "file": "spec/scripts/spec-status.js",
+        "line": 536,
+        "evidence": "entries.sort comparator's first key is `(a.blockers.length ? 1 : 0) - (b.blockers.length ? 1 : 0)` (spec-status.js:536-537), and blockers are populated via queueBlockersBySpec/queueBlockersByBrief before the sort/build loop runs (spec-status.js:487-491, 339-347) — a gated entry's blockers array is non-empty at sort time, so it always sinks below every unblocked entry. Confirmed green: AC-20260903-03-2 and AC-20260903-03-3 in tests/queue/queue-overlay.test.js both pass (node --test tests/queue/queue-overlay.test.js -> 11 pass, 0 fail)."
+      },
+      {
+        "claim": "The retired verbs (bump/defer/ok) or flags (--after, --brief) might still silently act instead of exiting 2, reintroducing dead vocabulary the fleet grep found no reader of.",
+        "file": "spec/scripts/spec-queue.js",
+        "line": 71,
+        "evidence": "REMOVED_SUBS table (spec-queue.js:71-79) intercepts bump/defer/ok before any queue file I/O, and add's inline checks for --after/--brief (spec-queue.js:300-301) exit 2 before payload processing. tests/queue/spec-queue.test.js AC-20260903-03-9 executes all five cases and asserts exit 2, the correct replacement message, and a byte-identical queue file afterward — node --test tests/queue/spec-queue.test.js passed (all tests green)."
+      },
+      {
+        "claim": "D5's duplicate-brief/spec refusal on `add` might allow a second copy through under some payload-classification edge case.",
+        "file": "spec/scripts/spec-queue.js",
+        "line": 354,
+        "evidence": "AC-20260903-03-6 in tests/queue/spec-queue.test.js exercises `spec-queue add 21` against an already-queued brief 21 and asserts exit 2, the exact pending position, the move remedy, and byte-identical file — executed via node --test tests/queue/spec-queue.test.js, all pass."
+      },
+      {
+        "claim": "The queue file's `version: 1` field or `auto_placed` compatibility might have been silently broken by the read/write path changes (D10), causing an old-format file to fail to load.",
+        "file": "spec/scripts/lib/queue.js",
+        "line": 156,
+        "evidence": "stripAutoPlaced (lib/queue.js:156-162) tolerates and drops the key non-destructively; writeQueue always persists {version:1, seq, items} (spec-queue.js:132-137). Whole-suite run `node --test 'tests/**/*.test.js'` completed 1072/1072 passing with no version-shape failures."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": null
+  }
+}

@@ -64,9 +64,9 @@ test('derives unplanned / in-flight / done per doctor check 14', () => {
   assert.deepStrictEqual(by, { '01': 'done', '02': 'unplanned', '03': 'in-flight' })
 })
 
-// AC-20260903-05-3 (retagged, D2/D3): a skipped-brief anomaly is a DECIDE kind — it no longer
-// prints as a bracket `[skipped-brief]` line (that form is hygiene-only now); the default
-// render prints the two-line decide pair (`⚠️ {line}` then `   {ask}  {paste}`) instead.
+// AC-20260903-05-3 (D2/D3): a skipped-brief anomaly is a DECIDE kind — the bracket
+// `[skipped-brief]` form belongs to hygiene kinds; the default render prints the two-line
+// decide pair (`⚠️ {line}` then `   {ask}  {paste}`).
 test('AC-20260903-05-3: flags a skipped brief as a decide pair — in-flight work on top of an unplanned dependency', () => {
   const dir = host({
     briefs: BRIEFS,
@@ -96,9 +96,9 @@ test('AC-20260903-05-9: --brief preflight (D6 frozen surface) exit 1 with unmet 
   assert.strictEqual(met.status, 0, 'brief 02 depends only on done 01: ' + met.stdout)
 })
 
-// AC-20260903-05-7 (retagged, D2/D5): orphan-stamp and hand-tracked-status are both hygiene
-// kinds — they no longer print anywhere in the default render (D1: nothing hygiene-shaped
-// prints by default); they only surface under `--all`'s `🧹 Hygiene` catalogue.
+// AC-20260903-05-7 (D2/D5): orphan-stamp and hand-tracked-status are both hygiene kinds —
+// D1 keeps every hygiene-shaped line out of the default render, so they surface only under
+// `--all`'s `🧹 Hygiene` catalogue.
 test('AC-20260903-05-7: flags orphan brief stamps and hand-tracked overview status under --all, absent by default', () => {
   const dir = host({
     briefs: { '01-auth.md': BRIEFS['01-auth.md'] },

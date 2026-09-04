@@ -1,0 +1,129 @@
+{
+  "runId": "rv_bc65c0bd327b",
+  "ts": "2026-09-04T21:27:22.214Z",
+  "spec": "specs/20260903/06-test-suite-critical-path.md",
+  "tier": "standard",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 4538,
+    "base": "9880ad962a0c295dd45381840e2eaa068fd230a9",
+    "head": "ae1d79a9d6cea95920fb9f9fe6777dccb63a51a3",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 229
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1083
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 1,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 6,
+        "carried": 2,
+        "sanctioned": 4,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "Iteration-1 s0 unresolved: review-driver.test.js header still cites a non-existent owner spec for AC-20260821-03-8.",
+        "file": "/Users/jj/Projects/claude-plugins/tests/review/review-driver.test.js",
+        "line": 13,
+        "evidence": "git diff 9880ad9 -- tests/review/review-driver.test.js: line 13 now reads `specs/20260821/03-cross-spec-skip-mapping.md AC-20260821-03-8`; `test -f specs/20260821/03-cross-spec-skip-mapping.md` -> EXISTS; grep -c AC-20260821-03-8 in that file -> 3. grep -rn silent-drop-hardening tests/review -> only the three legitimate 20260823/03 citations (close-row.test.js:15, fixtures.js:12/23), which exist."
+      },
+      {
+        "claim": "Iteration-1 s1 unresolved: review-driver-fix-cycle.test.js header still cites specs/20260822/01-escalate-cap.md.",
+        "file": "/Users/jj/Projects/claude-plugins/tests/review/review-driver-fix-cycle.test.js",
+        "line": 12,
+        "evidence": "Diff line 12 now reads `specs/20260822/01-escalate-ledger-row.md`; test -f -> EXISTS; grep -c AC-20260822-01-10 -> 3. grep -rn escalate-cap tests/review -> no hits."
+      },
+      {
+        "claim": "Iteration-1 s2 unresolved: review-driver-replay-entry.test.js header still cites specs/20260903/01-run-provenance.md.",
+        "file": "/Users/jj/Projects/claude-plugins/tests/review/review-driver-replay-entry.test.js",
+        "line": 10,
+        "evidence": "Diff line 10 now reads `specs/20260903/01-owed-query-and-row-handoff.md`; test -f -> EXISTS; grep -c AC-20260903-01-12 -> 3. grep -rn '20260903/01-run-provenance' tests/review -> no hits."
+      },
+      {
+        "claim": "The fix delta touches anything beyond the three header comment lines (regression risk to test bodies or fixtures).",
+        "file": "/Users/jj/Projects/claude-plugins/tests/review/review-driver.test.js",
+        "line": 13,
+        "evidence": "git diff 9880ad9 (working tree vs ae1d79a) under tests/review: exactly three hunks, each a single `//` comment line replaced; no code lines changed. Only other dirty file is .claude/spec-runs.jsonl, whose one added line is this spec's own build ledger row (bd_aa0486891bb7)."
+      },
+      {
+        "claim": "Another header in the 13 split files cites a spec path that does not exist.",
+        "file": "/Users/jj/Projects/claude-plugins/tests/review/review-driver.fixtures.js",
+        "line": 1,
+        "evidence": "Swept every `specs/YYYYMMDD/NN-*.md` token across review-driver*.js, escalate-row*.js, disposer-gate*.js against the filesystem: the only non-existent paths are 15 synthetic `99-*`/`98-*` names (e.g. review-driver.test.js:465 `path.join(root, 'specs/20260820/99-drv-done.md')`) — fixture-generated host specs inside test bodies, zero of them on a comment line. Every header citation resolves."
+      },
+      {
+        "claim": "The corrected shards no longer execute green (AC-20260903-06-1 regression).",
+        "file": "/Users/jj/Projects/claude-plugins/specs/20260903/06-test-suite-critical-path.review/legs-2/suite-output.txt",
+        "line": 1,
+        "evidence": "Re-executed `node --test` on the three touched shards: tests 26, pass 26, fail 0. legs-2/suite-output.txt: tests 1083, fail 0; manifest-2 suite leg exit 0 testsExecuted 1083, gate leg exit 0 testsExecuted 229, ac-matrix uncovered 0, promise-sweep orphans 0."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 21000
+  }
+}

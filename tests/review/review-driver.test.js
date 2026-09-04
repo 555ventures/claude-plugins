@@ -10,7 +10,7 @@ const { GREEN_TEST, specBody, makeHost, run, stateOf, toReviewer, returnFileWith
 // Shard A of the review-driver family (split from review-driver.test.js by
 // specs/20260903/06-test-suite-critical-path.md D1/D3). Owns:
 // specs/20260820/07-review-driver.md (brief 16) AC-20260820-07-1,3,4,5,9,10,11,12,14,15;
-// specs/20260821/03-silent-drop-hardening.md AC-20260821-03-8; specs/20260821/04 AC-20260821-04-8/-9;
+// specs/20260821/03-cross-spec-skip-mapping.md AC-20260821-03-8; specs/20260821/04 AC-20260821-04-8/-9;
 // specs/20260823/07; specs/20260830/02-2; specs/20260901/02-run-provenance.md AC-20260901-02-4;
 // specs/20260901/09-disposer-gate.md AC-20260901-09-6; specs/20260902/05-manifest-stamped-scope.md
 // AC-20260902-05-13. Shared helpers live in review-driver.fixtures.js (D2).

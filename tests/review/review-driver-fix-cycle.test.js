@@ -9,7 +9,7 @@ const { GREEN_TEST, specBody, makeHost, run, stateOf, returnFileWith, oneFixRetu
 // Shard D of the review-driver family (review-driver-fix-cycle.test.js, split from
 // review-driver.test.js by specs/20260903/06-test-suite-critical-path.md D1/D3). Owns the
 // fix-cycle ACs: specs/20260903/02-whole-suite-review-leg.md AC-20260903-02-9;
-// specs/20260820/07-review-driver.md AC-20260820-07-8; specs/20260822/01-escalate-cap.md
+// specs/20260820/07-review-driver.md AC-20260820-07-8; specs/20260822/01-escalate-ledger-row.md
 // AC-20260822-01-10; specs/20260901/09-disposer-gate.md AC-20260901-09-2;
 // specs/20260902/05-manifest-stamped-scope.md AC-20260902-05-6/-8. Shared helpers live in
 // review-driver.fixtures.js (D2).

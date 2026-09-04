@@ -3,10 +3,12 @@ name: concurrent-worker-file-collision-select-tiebreak
 description: Edit tool's "modified on disk since you last read it" warning means STOP and re-Read in full before trusting your own draft — the concurrent editor is usually the ORCHESTRATOR that dispatched you (its completion notification can fire early), so report what you found and never stand down as "already done"; also, replay.js --select's own tie-break means a driver CLOSE's own just-appended CLEAN+runId row is always a self-selectable candidate
 metadata:
   type: feedback
-  reviewed: 2026-09-03
+  reviewed: 2026-09-04
 ---
 
-Dispatched 2026-08-21 to author tests/review/review-driver.test.js (AC-20260821-02-1..7) and
+Dispatched 2026-08-21 to author tests/review/review-driver.test.js (AC-20260821-02-1..7 — those
+tests now live in tests/review/review-driver-replay-entry.test.js and
+review-driver-replay-record.test.js since specs/20260903/06 sharded the family) and
 tests/run-ledger.test.js (AC-20260821-02-8/9) for specs/20260821/02-replay-review-phase.md. By
 the time I finished research and called Edit on review-driver.test.js, the tool returned
 success but flagged: "the file had been modified on disk since you last read it." `git status`

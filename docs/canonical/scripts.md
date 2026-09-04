@@ -36,6 +36,14 @@ fuller incident write-ups live in each cited spec's history.
   classify runnable targets by extension *or* shebang, never extension alone.
   (specs/20260830/01-collision-closure-exec-recall.md)
 
+- **`node:test` parallelises across files and serialises within one.** A single file's
+  serial runtime is a hard floor on the whole suite's wall clock no matter how many cores the
+  other files spread over; measured 2026-09-03, one 49-test file at 94.6 s alone WAS a 106-file
+  suite's 85–90 s. Keep exec-a-script test files to a dozen-odd tests grouped by owning AC
+  family; when a family's shards need shared helpers, they live in a sibling
+  `tests/<topic>/<family>.fixtures.js` module (never executed as a test by either the bare or
+  the glob form). (specs/20260903/06-test-suite-critical-path.md)
+
 ## Prose budgets
 
 The host rules' § Gotchas section is capped at 15 entries, enforced by `prose-cap.js` (review

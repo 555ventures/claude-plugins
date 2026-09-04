@@ -3,10 +3,11 @@ name: driver-contract-reproducibility-and-worktree-cwd-pins
 description: Testing a stage-driver's "byte-equal to <subscript>'s own line" claim, and its "refused while CWD is inside the worktree" claim, without controlling the subscript's internal invocation.
 metadata:
   type: feedback
-  reviewed: 2026-09-03
+  reviewed: 2026-09-04
 ---
 
-Two reusable patterns from authoring tests/review/review-driver.test.js
+Two reusable patterns from authoring tests/review/review-driver.test.js (since sharded into
+review-driver-*.test.js + review-driver.fixtures.js by specs/20260903/06)
 (specs/20260820/07-review-driver.md, 2026-08-21) for a stage driver that owns ledger appends
 and merge-back. `spec-review-driver.js` is now the only such driver in this repo —
 `spec-design-driver.js` was retired 2026-08-24 (specs/20260824/02) and `/spec:design` derives

@@ -1,6 +1,6 @@
 ---
 date: 2026-09-03
-status: implementing
+status: done
 tier: standard
 area: scripts
 design: false

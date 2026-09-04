@@ -7,7 +7,7 @@ const { run, stateOf, seedReplayRow, seedReviewRow, fiveSeedReviews, makeReplayH
 // Shard E of the review-driver family (review-driver-replay-entry.test.js, split from
 // review-driver.test.js by specs/20260903/06-test-suite-critical-path.md D1/D3). Owns the replay
 // entry ACs: specs/20260821/02-replay-review-phase.md AC-20260821-02-1/-2;
-// specs/20260823/09 AC-20260823-09-7; specs/20260903/01-run-provenance.md AC-20260903-01-12;
+// specs/20260823/09 AC-20260823-09-7; specs/20260903/01-owed-query-and-row-handoff.md AC-20260903-01-12;
 // plus the seven-token selection line and replay-root-4 regressions. Shared helpers (incl. the
 // replay fixture family) live in review-driver.fixtures.js (D2).
 

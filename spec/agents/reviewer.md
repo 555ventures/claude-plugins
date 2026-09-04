@@ -1,7 +1,8 @@
 ---
 name: reviewer
 description: "Read-only spec-implementation reviewer. Checks a diff against the spec and the host repo's rule surfaces and reports execution-grounded findings by severity. Dispatched by /spec:review as its single fresh-context reviewer."
-model: sonnet
+model: fable
+effort: low
 tools:
   - Read
   - Grep

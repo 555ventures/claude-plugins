@@ -201,19 +201,19 @@ before the model sees it.
 
 ## Model Placement
 
-**The expensive model authors the contract; cheap models execute it behind deterministic
-gates; review independence comes from fresh-context, blind-to-author dispatch and
-execution-grounded evidence, never model diversity.** Concretely: the planning session
-(Fable, or the best available model) authors specs and holds the roadmap-level design seats
-(genesis position briefs, atlas direction rounds, sketch brainstorms, and
-every mock, wireframe or themed, authored in-session — design.md § Design Atlas). **Sonnet**
-orchestrates build and review and is every worker and the reviewer. **Haiku** runs lookups and
-structural re-reads. Surprises during build go to the user, framed with the spec's own
-Rationale/Assumptions — there is no resident consultant seat. Orchestrators pass paths, never
-raw file contents. Named exceptions: `/spec:enforce` and the genesis judgment seats run Opus;
-standalone `/spec:design` (no roadmap) runs on the session model; `/spec:init` runs on
-whatever invokes it. An `Agent {model: "fable"}` call that returns unavailable falls back to
-`{model: "opus"}` and continues.
+**The expensive model authors the contract; cheap models execute it behind deterministic gates;
+review independence comes from fresh-context, blind-to-author dispatch, executed evidence, and a
+reviewer from a different model family than the builder.** Concretely: the planning session (Fable,
+or the best available model) authors specs and holds the roadmap-level design seats (genesis position
+briefs, atlas direction rounds, sketch brainstorms, and every mock, wireframe or themed, authored in-session
+— design.md § Design Atlas). **Sonnet** orchestrates build and review and is every worker. **The
+reviewer seat is Fable at `effort: low`** (`agents/reviewer.md`), a different family from the Opus
+session that builds; low holds because every finding and kill needs an executed repro, so skipped
+evidence is `REVIEWER_FAILED`, never a false `CLEAN`. The disposer inherits the session model at
+`effort: medium`; every verdict seat declares its effort. **Haiku** runs lookups and re-reads. Build
+surprises go to the user with the spec's own Rationale/Assumptions — no resident consultant seat;
+orchestrators pass paths, never raw file contents. `/spec:enforce` and genesis judgment seats run
+Opus; standalone `/spec:design` and `/spec:init` run on the invoker; an unavailable `Agent {model: "fable"}` falls back to `opus`.
 
 ## Decisions
 

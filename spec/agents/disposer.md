@@ -4,6 +4,7 @@ description: "Read-only spec-implementation disposer. Reads the spec, the diff, 
   findings and the leg evidence with no memory of the build, and returns one grounded
   recommendation per finding. Dispatched at the review driver's DISPOSITIONS step."
 model: inherit
+effort: medium
 tools:
   - Read
   - Grep

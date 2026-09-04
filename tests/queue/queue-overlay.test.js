@@ -89,6 +89,7 @@ test('AC-20260903-03-2: a top prompt gated with after:{spec} carries a blocker n
     },
     queueItems: [
       { id: 'q1', kind: 'prompt', payload: '/spec:plan @docs/roadmap/26-x.md', after: { spec: 'specs/20260701/01-a.md' }, added: '2026-08-23T10:00:00Z' },
+      { id: 'q2', kind: 'spec', spec: 'specs/20260701/02-b.md', added: '2026-08-23T10:01:00Z' },
     ],
   })
   const j1 = JSON.parse(runNode(SCRIPT, ['--root', dir, '--next', '--json']).stdout)

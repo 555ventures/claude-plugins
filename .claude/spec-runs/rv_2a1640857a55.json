@@ -1,0 +1,162 @@
+{
+  "runId": "rv_2a1640857a55",
+  "ts": "2026-09-04T03:34:24.213Z",
+  "spec": "specs/20260903/03-pipeline-queue-mechanics.md",
+  "tier": "critical",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 1,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1669,
+    "base": "af5e0a08c786bb40ede5c2d23bca4c0dc0991ad0",
+    "head": "103af6d224c45a37bef2a84e14741a770339efe4",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 251
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1072
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 11,
+        "carried": 10,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "soft",
+        "claim": "The done-duplicate refusal on `add` (the iteration-1 s3 fix) names `spec-queue move <ref> <n>` as its remedy, but `move` on a done item exits 2 `already done`, so for this one branch the named remedy cannot succeed. D5 dictates the message form (`already queued at position <n> — spec-queue move <ref> <n>`) with no done-item variant, so this is advisory: the honest remedy for a done duplicate is 'nothing — it is already done', which the spec's locked wording has no slot for.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/spec-queue.js",
+        "line": 363,
+        "impact": "A user who re-adds a brief that already shipped is told to run a reorder command that will itself refuse, instead of being told the brief is simply finished.",
+        "evidence": "Fixture: brief 05 with one `status: done` spec; items=[{q1, brief 05}]. `spec-queue add 05` → exit 2, stderr `spec-queue: brief 05 is already queued at position 1 (done) — spec-queue move 05 <n> to reorder it`, file byte-identical (correct per D5). Same fixture: `spec-queue move 05 1` → exit 2, stderr `spec-queue: \"05\" is already done — nothing to move`. Hunk: `const posDesc = pendPos !== -1 ? ... : \\`position ${dupIdx + 1} (done)\\`` followed by the unconditional `— spec-queue move ${ref} <n> to reorder it`."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "Iteration-1 s0 (unsanctioned `__gateTargetPending` sort key) still present or its removal broke AC-2.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/spec-status.js",
+        "line": 537,
+        "evidence": "Working-tree diff deletes `queueGateTargetSpecs`, the `__gateTargetPending` entry field, the sort clause and the --json strip. Executed: specs 01-a (implementing, n/a) + 02-b (hardened, n/a); (a) items=[] → `--next` line 2 `/spec:run @specs/20260701/01-a.md`; (b) items=[gated prompt after 01-a] → line 2 unchanged `/spec:run @specs/20260701/01-a.md`, --next --json order [01-a [], 02-b [], prompt ['after specs/20260701/01-a.md (implementing)']]; (c) items=[spec 01-a, gated prompt] → `spec-queue next` and `spec-status --next` both print `/spec:run @specs/20260701/01-a.md`, matching `list`'s `1  spec specs/20260701/01-a.md`. AC-2's fixture now queues 02-b as a `spec` item so `next[0].path === 02-b` follows from D1 queue position, and the test still asserts the blocker string and the post-flip line 2; `node --test 'tests/queue/*.test.js' tests/spec-paths.test.js tests/spec-status.test.js 'tests/status/*.test.js'` → 89 pass 0 fail."
+      },
+      {
+        "claim": "Iteration-1 s1 (write path reads a superseded gate target as `missing`) still present.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/spec-queue.js",
+        "line": 161,
+        "evidence": "`ctxFor` now merges `statusJson.superseded` into `specStatusMap` as 'superseded'. Executed: 01-a `status: superseded`, 02-b hardened, items=[prompt 'plan brief 26' after 01-a] → `spec-status --next` line 2 `plan brief 26`; `spec-queue list` → `1  plan brief 26` (no ⏳); `spec-queue next` → `plan brief 26`. A queued `spec` item pointing at the superseded spec → `list` prints `✨ nothing pending · 1 done`. `spec-status --json` always emits the `superseded` array (spec-status.js:653), so the `for…of` cannot throw."
+      },
+      {
+        "claim": "Iteration-1 s2 (`list` skips the append-missing-briefs step) still present.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/spec-queue.js",
+        "line": 260,
+        "evidence": "`case 'list'` now calls `reconciledItems(..., { append: true })`. Executed: briefs 20, 21 (done specs) and 24 (no specs) on disk, items=[20, 21] → `spec-queue list` prints `1  brief 24 (status-and-queue-diet)` / `— 2 done · move: spec-queue move <ref> <n>`, queue file byte-identical before/after, and `spec-status --next` line 2 is `/spec:plan @docs/roadmap/24-status-and-queue-diet.md` — the two screens agree. New test at tests/queue/spec-queue.test.js:274 asserts exactly this (render + byte-identical file); the AC-8 empty-pending fixture was corrected to carry no unqueued non-done brief, which is a fixture fix, not an assertion weakening."
+      },
+      {
+        "claim": "Iteration-1 s3 (`add` of a done duplicate writes a second item) still present.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/spec-queue.js",
+        "line": 355,
+        "evidence": "Executed: brief 05 with one done spec, items=[{q1, brief 05}]; `spec-queue add 05` → exit 2, stderr `brief 05 is already queued at position 1 (done) — spec-queue move 05 <n> to reorder it`, queue file byte-identical. Pending-duplicate path unchanged: items=[08 (gated), 05], `add 05` → exit 2 `already queued at position 2`, and `add docs/roadmap/08-b.md` → `already queued at position 1`."
+      },
+      {
+        "claim": "Iteration-1 s4 (`queue-orphan` remedy names `spec-queue done <ref>`, inert on a brief item) is still live in the range.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/spec-status.js",
+        "line": 333,
+        "evidence": "Still reproduces (items=[brief 99], no roadmap: `spec-queue done 99` → `ticked q1`, `list` → `1  brief 99`, anomaly detail still names `spec-queue done 99`), but disposer-return-1.json disposes it `waive` on D11's locked wording (\"re-points the `queue-orphan` remedy at `move`/`done`\") and D9's \"brief doneness never stored\"; review-state.json records waived:1. A waived finding is not re-raised; a change to D11's remedy list is a spec-level call."
+      },
+      {
+        "claim": "Reconcile leg: docs/roadmap/24-status-and-queue-diet.md is an out-of-File-Plan change in the range (scope-reconcile.js exit 3, outOfPlan=1).",
+        "file": "/Users/jj/Projects/claude-plugins/docs/roadmap/24-status-and-queue-diet.md",
+        "line": null,
+        "evidence": "`git diff --stat af5e0a0..HEAD` lists 11 paths, none under docs/roadmap/; the file was ` M` in `git status --short` before either range commit (055a2ca, 103af6d) and is the brief's planning-stage Scope 3 rewrite, explicitly waived in the spec's Collision closure. Same evidence and disposition (reject) as iteration 1. The other working-tree additions (`.claude/agent-memory/gate-scripts/*`, `.claude/spec-runs.jsonl`, the sidecar, specs 04/05) are listed under `excluded` by scope-reconcile.js --json."
+      },
+      {
+        "claim": "lib/queue.js header narrates prior behavior (\"superseding … original dependency-aware placement\"), violating the header rule.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/lib/queue.js",
+        "line": 3,
+        "evidence": "Untouched by the fix-delta; commit 103af6d in range reworded what the narration sweep flagged and the whole suite (legs-2 suite leg: 1072 tests, fail 0; `bash scripts/spec-patterns.sh` → every count 0) accepts the residual wording. Same kill as iteration 1."
+      },
+      {
+        "claim": "A first-write `add` on an absent queue file seeds silently, without D9's 'one summary line'.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/spec-queue.js",
+        "line": 289,
+        "evidence": "Base af5e0a0's spec-queue.js printed `seeded queue with N briefs (roadmap order)` only in the `next` subcommand (line 161 of the base file) — identical to HEAD. D9 is a SHALL CONTINUE TO pin (AC-10 retags AC-20260823-08-9, which exercises `next`), so this is continuation, not a regression."
+      },
+      {
+        "claim": "Residual `queue-auto-placed` / `auto_placed` / `ANOM_ICON` entry survives in spec/ or tests/.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/spec-status.js",
+        "line": 762,
+        "evidence": "`grep -rn 'auto_placed|auto-placed|queue-auto-placed|ANOM_ICON' spec tests` → only `stripAutoPlaced`'s own implementation/comment in lib/queue.js, the reconcile comment in spec-status.js, and the `ANOM_ICON` map whose keys no longer include `queue-auto-placed`; every test hit asserts the absence (`!('auto_placed' in i)`, `!anomalies.some(kind === 'queue-auto-placed')`). AC-4 executed: `spec-status --json` anomalies on an orphan-only fixture contain only `queue-orphan`."
+      },
+      {
+        "claim": "Frozen surfaces (--next --json keys, exit-code alphabet, removed-verb messages) regressed in the range.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/spec-queue.js",
+        "line": 68,
+        "evidence": "Executed: `--next --json` top-level keys `[\"next\"]`; no-git dir → exit 3 with remedy; `bump 05` → exit 2 `spec-queue move 05 1`; `ok` → exit 2 `no accept step`; `add --brief 05` → exit 2 `pass the brief number as the payload`; `add x --after q1` → exit 2 `--at <n>`; `add --after-brief 99` / `--after-spec specs/nope.md` / `add specs/nope.md` → exit 2 naming the target; `add Y --at 0` → exit 2; `--top` + `--at` → exit 2. AC-7 shape executed: items [A, 05(done), B, C], `add X --at 2` → [A,05,X,B,C]; `move C 1` → [C,A,05,X,B]; `move 05 1` → exit 2 `already done`. `node spec/scripts/citations-check.js` → MISS=0; plugin.json 7.74.0 (next free above 7.73.0, the Gotcha-sanctioned deviation from D11's literal 7.73.0 target)."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 72000
+  }
+}

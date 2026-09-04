@@ -229,7 +229,10 @@ test('AC-20260903-03-8: spec-queue list renders exactly the numbered pending for
   function listHost(withPending) {
     return host({
       briefs: {
-        '24-status-and-queue-diet.md': '# 24 — Status and queue diet\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',
+        // Brief 24 only exists on the pending host — the empty-pending host must carry no
+        // non-done, non-queued brief at all, or `list`'s D8 reconcile step would legitimately
+        // surface it as a pending item and falsify the "nothing pending" assertion below.
+        ...(withPending ? { '24-status-and-queue-diet.md': '# 24 — Status and queue diet\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n' } : {}),
         '20-a.md': '# 20 — A\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',
         '21-b.md': '# 21 — B\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',
       },
@@ -266,6 +269,29 @@ test('AC-20260903-03-8: spec-queue list renders exactly the numbered pending for
   assert.strictEqual(rEmpty.status, 0, rEmpty.stderr)
   assert.strictEqual(rEmpty.stdout.trim(), '✨ nothing pending · 2 done',
     'D8: with nothing pending, `list` must print exactly this one line, never an empty pending section with just a footer: ' + rEmpty.stdout)
+})
+
+test('AC-20260903-03-8: spec-queue list virtually reconciles an unqueued, non-done on-disk brief into its numbered pending output at the append-last position, without ever writing the queue file', () => {
+  const dir = host({
+    briefs: {
+      '05-a.md': '# 05 — A\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',
+      '08-b.md': '# 08 — B\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',
+    },
+    queue: [{ id: 'q1', kind: 'brief', brief: '05', added: '2026-09-03T10:00:00Z' }],
+  })
+  const before = fs.readFileSync(path.join(dir, '.git/spec-queue.json'), 'utf8')
+
+  const r = runNode(SCRIPT, ['list'], { cwd: dir })
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.strictEqual(r.stdout.trim(),
+    '1  brief 05 (a)\n' +
+    '2  brief 08 (b)\n' +
+    '— 0 done · move: spec-queue move <ref> <n>',
+    "D8: `list` must virtually reconcile brief 08 — never queued, still on-disk and not done — into the numbered pending output at its append-last position, exactly as a write subcommand's own reconcile would place it: " + r.stdout)
+
+  const after = fs.readFileSync(path.join(dir, '.git/spec-queue.json'), 'utf8')
+  assert.strictEqual(after, before,
+    'D8: `list` never writes — the on-disk queue file must stay byte-identical even though the reconciled brief appears in the rendered output: ' + after)
 })
 
 test('AC-20260823-08-5 / AC-20260903-03-10: a ledger-count predicate completes an item at current-minus-baseline >= min and leaves it undone one row short', () => {

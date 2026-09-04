@@ -20,9 +20,8 @@
 // end (the dependency-aware/letter-suffix placement and its veto/accept notice are retired
 // — D4); alias the retired `bump`/`defer`/`ok` verbs or the retired `add --after`/`--brief`
 // flags (each exits 2 naming its `move`/`--at`/payload replacement — D6); have `list` mutate
-// the queue file (it virtually reconciles a copy, purely for numbering, and never appends a
-// newly-landed on-disk brief — only a write subcommand makes that append real, so `list`
-// always reflects exactly what the last write persisted, dedupe/strip-normalized).
+// the queue file (it virtually reconciles a copy — strip, dedupe, and append missing on-disk
+// briefs — purely for display numbering; only a write subcommand persists the result).
 //
 // Subcommands:
 //   next                          reconcile+write, print the pick (or a prompt payload)
@@ -154,7 +153,12 @@ function onDiskBriefs(statusJson) {
 
 function ctxFor(statusJson) {
   const briefStatusMap = new Map(statusJson.briefs.map(b => [b.num, b.status]))
+  // `statusJson.specs` deliberately excludes superseded specs (they live in the separate
+  // `superseded` array) — merge both so a gate or queued item pointing at a since-superseded
+  // spec resolves to 'superseded' here exactly as spec-status.js's own in-process overlay
+  // does (D2: ready ⇔ done or superseded; D3: one readiness derivation for both callers).
   const specStatusMap = new Map(statusJson.specs.map(s => [s.path, s.status]))
+  for (const s of statusJson.superseded) specStatusMap.set(s.path, 'superseded')
   return makeCtx({
     ledgerRows: readLedgerRows(root),
     briefStatus: n => briefStatusMap.get(n),
@@ -163,10 +167,10 @@ function ctxFor(statusJson) {
   })
 }
 
-// Virtual reconcile shared by every subcommand: strip -> dedupe -> (optionally) append
-// missing on-disk briefs last. `list` deliberately omits the append step (Behavior:
-// numbering must match exactly what the last write persisted) — only a write subcommand
-// makes a newly-landed brief a real, persisted item.
+// Virtual reconcile shared by every subcommand: strip -> dedupe -> append missing on-disk
+// briefs last, all on a copy — never written back here. Every subcommand (including `list`,
+// which reconciles purely for display numbering) runs the full three-step reconcile with
+// `append: true`; only a write subcommand additionally persists the result.
 function reconciledItems(rawItems, statusJson, { append }) {
   let items = dedupeItems(stripAutoPlaced(rawItems))
   if (append) {
@@ -253,7 +257,7 @@ switch (sub) {
     const statusJson = readSpecStatusJson()
     const raw = loadQueue()
     const ctx = ctxFor(statusJson)
-    const items = reconciledItems(raw ? raw.items : [], statusJson, { append: false })
+    const items = reconciledItems(raw ? raw.items : [], statusJson, { append: true })
     const briefNameByNum = new Map(statusJson.briefs.map(b => [b.num, b.name]))
     const pending = items.filter(it => !isItemDone(it, ctx).done)
     const doneCount = items.length - pending.length
@@ -344,18 +348,21 @@ switch (sub) {
     const items = reconciledItems(raw ? raw.items : [], statusJson, { append: true })
     const ctx = ctxFor(statusJson)
 
-    // D5: duplicate refusal, position numbered exactly as `list` (pending only).
+    // D5: a brief or spec is queued at most once — refuse regardless of the existing item's
+    // doneness (no done-item exception). Position is numbered exactly as `list` (pending)
+    // when the existing item is itself pending; a done duplicate has no `list` position (done
+    // items are hidden there), so it is named by its raw item-order position instead.
     if (kind === 'brief' || kind === 'spec') {
       const dupIdx = items.findIndex(it => (kind === 'brief' && it.kind === 'brief' && it.brief === briefNum)
         || (kind === 'spec' && it.kind === 'spec' && it.spec === specPath))
       if (dupIdx !== -1) {
         const pending = pendingIndices(items, ctx)
         const pendPos = pending.indexOf(dupIdx)
-        if (pendPos !== -1) {
-          const ref = kind === 'brief' ? briefNum : specPath
-          console.error(`spec-queue: ${kind === 'brief' ? `brief ${briefNum}` : specPath} is already queued at position ${pendPos + 1} — spec-queue move ${ref} <n> to reorder it`)
-          process.exit(2)
-        }
+        const ref = kind === 'brief' ? briefNum : specPath
+        const label = kind === 'brief' ? `brief ${briefNum}` : specPath
+        const posDesc = pendPos !== -1 ? `position ${pendPos + 1}` : `position ${dupIdx + 1} (done)`
+        console.error(`spec-queue: ${label} is already queued at ${posDesc} — spec-queue move ${ref} <n> to reorder it`)
+        process.exit(2)
       }
     }
 

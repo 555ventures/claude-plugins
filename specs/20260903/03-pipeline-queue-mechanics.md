@@ -1,6 +1,6 @@
 ---
 date: 2026-09-03
-status: implementing
+status: done
 tier: critical           # edits spec-status.js (frozen --next/--json surface, .claude/rules/spec-pipeline.md § Risk Tiers) and changes the queue file's item vocabulary
 area: session-queue
 design: false
@@ -246,6 +246,18 @@ puts in the hands of the commands that create work.
 D6 removes verbs rather than aliasing them because the fleet grep found no reader of the old
 vocabulary; an alias release would preserve words nobody types. `move` is the whole reorder
 API; `--at` is `move` at insert time.
+
+Waived at review close (2026-09-03, JJ): the `queue-orphan` anomaly remedy names
+`spec-queue done <ref>`, which cannot clear a `brief` item — brief doneness is derived-only
+(D9), so `done` stamps a tick `isItemDone` ignores and the anomaly persists. D11 dictates the
+remedy text verbatim, so honest wording would amend a locked Decision; the message offers two
+other verbs that do work, and a later spec can add the missing case knowingly.
+
+Waived at review close (2026-09-03, JJ): `add`'s duplicate refusal names
+`spec-queue move <ref> <n>` on the done branch too, but `move` on a done item exits 2
+`already done`, so that one branch points at a command that refuses. D5 locks the single
+message form with no done-item variant and AC-20260903-03-6 pins only the pending case; the
+refusal still blocks the duplicate and names the existing entry's position as `(done)`.
 
 Rejected: a stored `priority` field (brief 24 § Out of scope — order is the priority); a
 `ready` predicate that also marks done (conflates the two states D2 separates); keeping

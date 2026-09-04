@@ -3,7 +3,7 @@ name: collision-closure-spec-flag-resolves-against-cwd
 description: collision-closure.js's --spec is read via a bare fs.readFileSync(specPath), resolved against process.cwd() — unlike scope-reconcile.js, which does path.join(root, specPath) itself. A fixture test must pass { cwd: dir } or use an absolute --spec, or it silently ENOENTs (exit 2) even with --root set correctly.
 metadata:
   type: project
-  reviewed: 2026-09-02
+  reviewed: 2026-09-03
 ---
 
 specs/20260825/05-workflow-scripts-in-review-scope.md build (2026-08-27), authoring

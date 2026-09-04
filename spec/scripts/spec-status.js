@@ -307,13 +307,6 @@ const queuePosByBrief = new Map()
 const queuePosBySpec = new Map()
 const queueBlockersByBrief = new Map()
 const queueBlockersBySpec = new Map()
-// A spec named as the target of any item's still-unmet `after: {spec: …}` gate — regardless
-// of the gated item's OWN kind (a gated prompt is the common case, AC-20260903-03-2) — sinks
-// to the bottom of the unblocked tier in its own --next entry: recommending it no higher
-// than any other ready, independent spec keeps the top line from oscillating between "the
-// thing someone is waiting on" and "unrelated ready work" on every derivation. It stays
-// genuinely unblocked (blockers: [] untouched) — only its sort position moves.
-const queueGateTargetSpecs = new Set()
 let queueUndonePromptEntries = []
 if (queueOverlay.parseError) {
   anomalies.push({ kind: 'queue-unparseable', detail: `${queueOverlay.parseError} — the session queue overlay is disabled until this is fixed (or the file removed and reseeded with \`spec-queue next\`)` })
@@ -352,10 +345,6 @@ if (queueOverlay.on) {
         if (it.kind === 'brief') queueBlockersByBrief.set(it.brief, blocker)
         else queueBlockersBySpec.set(it.spec, blocker)
       }
-    }
-    if (it.after && it.after.spec) {
-      const r = isItemReady(it, ctx)
-      if (!r.ready) queueGateTargetSpecs.add(it.after.spec)
     }
   })
   queueUndonePromptEntries = reconciled
@@ -506,7 +495,6 @@ function deriveNext() {
       note: s.status + (s.design ? (s.designed ? ' [designed]' : ' [design]') : '')
         + (s.brief ? ` (brief ${s.brief})` : ''),
       rank,
-      __gateTargetPending: queueGateTargetSpecs.has(s.path),
     })
   }
   // D5: a red observation is a dashboard-level alarm — it outranks every build/review/plan
@@ -548,7 +536,6 @@ function deriveNext() {
   entries.sort((a, b) =>
     (a.blockers.length ? 1 : 0) - (b.blockers.length ? 1 : 0)
     || (a.rank === -3 ? 0 : 1) - (b.rank === -3 ? 0 : 1)
-    || (a.__gateTargetPending ? 1 : 0) - (b.__gateTargetPending ? 1 : 0)
     || queuePos(a) - queuePos(b)
     || a.rank - b.rank
     || (a.brief ? briefOrd(a.brief) : Infinity) - (b.brief ? briefOrd(b.brief) : Infinity)
@@ -607,7 +594,7 @@ if (nextMode) {
     // claim against), so the generic augmentation is skipped for it, never applied then
     // nulled out.
     writeOut(JSON.stringify({
-      next: entries.map(({ rank, parallelReason, __queuePos, __gateTargetPending, ...e }) =>
+      next: entries.map(({ rank, parallelReason, __queuePos, ...e }) =>
         e.queue ? e : { ...e, parallel: e.parallel === undefined ? null : e.parallel, parallel_reason: parallelReason || null }),
     }, null, 2))
     process.exit(0)

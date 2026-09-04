@@ -1,6 +1,6 @@
 ---
 date: 2026-09-03
-status: hardened
+status: implementing
 tier: standard
 area: scripts
 design: false
@@ -9,6 +9,7 @@ depends_on: []
 depended_on_by: [specs/20260903/07-test-file-budget-guard.md]
 brief: n/a
 open_markers: 0
+diff_base: 9880ad962a0c295dd45381840e2eaa068fd230a9
 ---
 
 # Test suite critical path: split the three serial review-driver files

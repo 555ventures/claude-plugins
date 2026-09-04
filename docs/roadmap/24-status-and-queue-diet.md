@@ -4,7 +4,7 @@ Phase: P2 · Depends on: 15 (the queue this brief reshapes), 22 (in flight; its 
 first field run of the new screen) · Primary workspaces: spec/scripts/spec-status.js,
 spec/scripts/spec-queue.js, spec/scripts/lib/queue.js, spec/commands/{status,queue,doctor}.md,
 tests · Risk: T3 (spec-status.js is a critical-tier frozen surface; the `--next --json` shape
-and the queue verbs change) · Design stage: no · Expected specs: 2
+and the queue verbs change) · Design stage: no · Expected specs: 3
 
 <!-- One brief = one /spec:plan session = 1–4 sibling specs. Execution-shaped detail belongs in
      the spec. This brief names WHAT and WHY and where the ground truth lives. -->
@@ -19,9 +19,11 @@ roadmap block exactly as today, one paste line, at most three things only a huma
 Nothing else, ever — a new rule that can detect something does not earn a line here. Every
 file-hygiene finding (a bad status word, a typo'd dependency, a hand-tracked status cell, an
 unreadable queue file) lives in `/spec:doctor`, which is the linter and already speaks that
-language. `/spec:queue` shows only pending items, numbered by position, one brief at most
-once, and is edited with one verb: `move <ref> <n>`. A brief that lands on the roadmap is
-placed last with no accept step. The acceptance picture, measured on this repo on 2026-09-03:
+language. The queue is written by the pipeline — every deferred promise a report would narrate
+("after spec 05, plan brief 26"; "this fix goes first") becomes a queue item at the moment it
+is made — and read only through this screen. `/spec:queue` shows pending items numbered by
+position, one brief at most once, and is edited with one verb: `move <ref> <n>`. A brief
+that lands on the roadmap is placed last with no accept step. The acceptance picture, measured on this repo on 2026-09-03:
 
 ```
 🗺️ Roadmap
@@ -32,10 +34,10 @@ placed last with no accept step. The acceptance picture, measured on this repo o
 🎯 Next
 /spec:run @specs/20260902/09-one-hand-wireframes-one-token-set.md
 
-⚠️ Brief 23 is new in the queue, placed last.
-   Move it up?  spec-queue move 23 1
+⚠️ Brief 19 (escape-seeded-replay) is unplanned while later brief 22 has moved on.
+   Still wanted?  /spec:plan @docs/roadmap/19-escape-seeded-replay.md
 
-🟢 next is ready · 2 specs wait behind it
+🟢 next is ready · 2 wait behind it
 ```
 
 ## Why this brief
@@ -91,12 +93,38 @@ Measured 2026-09-03 on this repo, the same day the screen was called unreadable:
    out-of-order. Hygiene: everything else. queue-auto-placed is deleted as a kind (see 3).
    Every surviving line is rewritten in the reader's language: what happened, one question,
    one paste — the wording bar is the acceptance picture above.
-3. **Positional queue** — `spec-queue list` prints pending items only, numbered 1..n, no
-   internal ids, done count in a footer, and ends with the edit hint. `move <ref> <n>`
-   replaces bump/defer/`add --after` (those stay one release as aliases that print the
-   move form). Auto-placement places last and marks 🆕 for one session; there is no `ok`.
-   A brief item may exist at most once — `add --brief` and the reconciler refuse a
-   duplicate. `--when` predicates stay in the file format and are never printed by `list`.
+3. **Pipeline-written queue** (rewritten at planning, 2026-09-03 — JJ: "how da heck should
+   I keep track of these messages"). The queue is the pipeline's memory for the promises a
+   report would otherwise narrate and lose: "after spec 05 lands, `/spec:plan` brief 26",
+   "this fix spec goes first". The writer is the pipeline, never the user; the user reads
+   `/spec:status`. Concretely:
+   - Items carry an optional **after-gate** (`after: {spec: <path>}` or `{brief: NN}`): the
+     item is not *ready* until that target is done. The pick is the top item that is undone
+     **and** ready; a gated item sinks with its gate named (visible under `--all`, never on
+     the diet screen). This retires 20260823/08 D3's "no hold state" ruling.
+   - A third item kind, **`spec`** (a spec path), so an ad-hoc fix spec (`brief: n/a`) can be
+     queued at the top instead of sorting below every queued brief. Its command and doneness
+     derive live like a brief item's.
+   - **Commands write items instead of sentences.** Every report site that defers work
+     (plan's discovered-work step, review close, escape's staged fix, and the shared
+     close-the-loop rule) writes the item first — `--top` when the session judges it urgent
+     (a fix spec, a red gate, the user's words), last otherwise — and the report lists what it
+     wrote under a `queued` slot. A deferred action that appears only as prose is a defect.
+   - A brief that lands on the roadmap is placed **last, silently**: no 🆕 mark, no accept
+     step, no anomaly (`queue-auto-placed` is deleted as a kind; `auto_placed` stamps are
+     dropped from the file). If the session that wrote the brief wants it first, it says so
+     with `--top`.
+   - Verbs shrink to `next` (reconcile + print the pick), `list` (pending items only,
+     numbered 1..n, no internal ids, gates shown, done count in a footer), `add <payload>
+     [--top | --at <n>] [--after-spec <path> | --after-brief NN] [--when …]`, `move <ref>
+     <n>`, `done <ref>`. `bump`, `defer`, `ok`, `add --after <ref>`, `add --brief` are
+     removed outright (exit 2 naming the replacement) — no host or global instruction cites
+     them (fleet grep 2026-09-03), and their only callers are the command docs this brief
+     rewrites. A brief or spec item exists at most once: `add` refuses a duplicate, the
+     write-path reconcile collapses existing duplicates to the first occurrence.
+   - `/spec:queue` stays as a thin command surface for the one thing a human ever pastes — a
+     `move` handed over by a status Decide line — and for the pipeline's own writes.
+     `spec-queue next` is plumbing, not a user surface.
 
 ## Out of scope
 
@@ -104,7 +132,10 @@ Measured 2026-09-03 on this repo, the same day the screen was called unreadable:
 - Session-start injection of the queue (ruled out 2026-08-30, stays out).
 - Changing what `--next` derives (blockers, lane admission, action strings) — only how it
   renders. Brief 15 and 16 own the derivation.
-- A priority field on queue items. Order is the priority; that ruling holds.
+- A priority field on queue items. Order is the priority; that ruling holds — `--top` /
+  `--at <n>` express urgency as position, never as a stored rank.
+- Preempting a running `/spec:run`. The queue changes what `Next` recommends after the
+  current run, never what is already executing.
 
 ## Grounding
 
@@ -117,12 +148,14 @@ Measured 2026-09-03 on this repo, the same day the screen was called unreadable:
 - Memory rulings 2026-08-30 (no session-start queue hook) and 2026-08-31 (no design-coverage
   anomaly in status).
 
-## Open questions for planning
+## Resolved at planning (2026-09-03)
 
-- Does any external `--json` consumer read `anomalies[]` from `spec-status.js --next --json`
-  and expect the hygiene kinds there? Grep the fleet at plan time; if none, the hygiene
-  kinds may leave the `--next` payload and stay in `--json` (full) only.
-- Should `skipped-spec` (a done spec whose dependency is not done) be `decide` or `hygiene`?
-  Default hygiene: it describes the past, not a choice.
-- Is one release of `bump`/`defer`/`ok` aliases enough, or do host command docs cite them?
-  Grep `spec/commands` and host `CLAUDE.md`s at plan time.
+- `anomalies[]` never existed in `--next --json` (executed: top-level keys are `["next"]`);
+  it lives only in the full `--json`, whose sole consumers are doctor check 13 and
+  `spec-queue.js` (which reads `briefs` only). Every kind stays in the full `--json` with an
+  additive `audience` field; nothing leaves the payload.
+- `skipped-spec` is `hygiene` — it describes the past, not a choice.
+- No alias release: no host, global instruction, or memory cites `bump`/`defer`/`ok` (fleet
+  grep 2026-09-03); the removed verbs exit 2 naming the replacement.
+- The "new brief placed last" nudge is dropped entirely: JJ ruled its information content is
+  zero, and a session that wants a brief first says `--top` when it writes the brief.

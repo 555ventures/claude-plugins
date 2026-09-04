@@ -194,7 +194,8 @@
       "spec/commands/plan.md",
       "git/commands/enter-worktree.md",
       "git/commands/merge.md",
-      "git/commands/commit.md"
+      "git/commands/commit.md",
+      "spec/doctrine/core.md"
     ]
   },
   "spec/scripts/review-legs.js": {
@@ -225,7 +226,11 @@
   },
   "spec/scripts/spec-queue.js": {
     "entryPoints": [
-      "spec/commands/queue.md"
+      "spec/commands/queue.md",
+      "spec/commands/plan.md",
+      "spec/commands/review.md",
+      "spec/commands/escape.md",
+      "spec/doctrine/core.md"
     ]
   },
   "spec/scripts/spec-review-driver.js": {

@@ -259,25 +259,19 @@ fast-model judge against the cold test (fails open; `SPEC_QUESTION_JUDGE=off` di
 ## Console Output Style (progress narration and end-of-run reports)
 
 Console output is read once, live, by a busy reader; specs, docs, and ledger rows keep their
-rigorous style. The render lives in a script: **`report-render.js`** (`spec-paths
-report-render`) is the sole render authority — commands assemble slots and print its output
-verbatim; restyling it is a defect.
+rigorous style. **`report-render.js`** (`spec-paths report-render`) is the sole render
+authority — commands assemble slots and print its output verbatim; restyling it is a defect.
 
 - **Outcome first, bold, anchored** — one emoji-anchored bold line carrying outcome + stakes,
   then only what changes the user's next action. A pending decision outranks all progress.
-- **Emoji as structure**: ✅ done / ⚠️ needs the user / 🚫 blocked / 📦 artifact — every
-  status line opens with its anchor; fixed meanings, never decoration.
+- **Emoji as structure**: ✅ done / ⚠️ needs the user / 🚫 blocked / 📦 artifact — every status
+  line opens with its anchor; fixed meanings, never decoration.
 - **Meaning over dumps** — reframe results into their takeaway; print artifact paths, don't
   inline them; translate pipeline vocabulary into product consequence.
-- **Close the loop** — every report ends with exactly one recommended next action. "Which
-  spec/brief next" is answered by `node "$(spec-paths spec-status)" --next` printed verbatim,
-  never a hand-applied mapping; same-spec chains a stage owns stay literal. A deferred
-  action — anything this report would tell the user to do after the current run, or a new
-  spec/brief this session judges must run before the current work — is a queue item, never
-  a sentence: write it with `node "$(spec-paths spec-queue)" add …` before rendering
-  (`--top` when urgent, `--after-spec <path>` / `--after-brief NN` when it waits on
-  something, plain otherwise) and list what the script printed under the report's `queued`
-  slot. A deferred action that survives only as prose is a defect.
+- **Close the loop** — every report ends with one recommended next action, never hand-mapped:
+  "what next" is `node "$(spec-paths spec-status)" --next` verbatim, same-spec chains literal.
+  Deferred work — due after this run, or judged to precede it — is queued via `spec-paths spec-queue`
+  (`--top`/`--after-spec`/`--after-brief`) before the report renders, listed under `queued`, never prose.
 
 ## On-Disk Handoff
 

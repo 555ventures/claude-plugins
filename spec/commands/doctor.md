@@ -126,10 +126,13 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     bug report" block (entry + citation, verbatim).
 13. **Roadmap derivation** (only if `docs/roadmap/00-overview.md` exists) — run
     `node "$(spec-paths spec-status)" --root . --json` (the one derivation, shared with
-    `/spec:status` and `/spec:plan`'s preflight). Report its derived table and surface every
-    `anomalies` entry: `orphan-stamp` and `hand-tracked-status` as findings;
-    `skipped-spec`/`skipped-brief`/`out-of-order`/`unknown-dependency` prominently as info —
-    the roadmap may have been deliberately reordered.
+    `/spec:status` and `/spec:plan`'s preflight). Report its derived table and split every
+    `anomalies` entry by its `audience` field: `hygiene` anomalies (`queue-unparseable`,
+    `queue-orphan`, `unknown-status`, `orphan-stamp`, `unparsed-dependency`,
+    `unknown-dependency`, `skipped-spec`, `hand-tracked-status`) are this check's findings —
+    each names a file to fix; `decide` anomalies (`skipped-brief`, `out-of-order`) report
+    prominently as info, never a finding — their remedy is a choice the user makes, and
+    `/spec:status`'s default screen already surfaces them as paste-ready decide lines.
 14. **CI-gate parity** (deterministic, advisory) — run
     `node "$(spec-paths ci-gate-parity)" --root .`. It owns the whole algorithm and
     self-gates on `.github/workflows/` existing. A non-zero exit means the host's CI does

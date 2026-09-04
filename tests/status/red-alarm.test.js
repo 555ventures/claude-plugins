@@ -63,7 +63,11 @@ const BRIEFS_AC7 = {
   '02-billing.md': '# 02 — Billing\n\nPhase: P0 · Depends on: 01 · Primary workspaces: api\n',
 }
 
-test('AC-20260807-01-7: a red latest observation turns the headline red, renders the red line with branch/sha/url, and tops --next as a full oracle-shaped escape entry', () => {
+// AC-20260903-05-6 (rewritten in place, D8, specs/20260903/05-status-diet.md): the 📡
+// Observation block is deleted; a red observation now renders as the /spec:escape Next line
+// plus a 🔴 footer sentence carrying branch, sha and url — the old 📡 line assertion below is
+// rewritten to the new footer literal, never weakened.
+test('AC-20260807-01-7 / AC-20260903-05-6: a red latest observation turns the headline red, renders the 🔴 footer with branch/sha/url (no 📡 line), and tops --next as a full oracle-shaped escape entry', () => {
   const specPath = 'specs/20260701/01-auth-core.md'
   const ledgerRows = [
     { ts: '2026-07-05', stage: 'review', spec: specPath, verdict: 'CLEAN' },
@@ -82,8 +86,10 @@ test('AC-20260807-01-7: a red latest observation turns the headline red, renders
   const dashNonEmpty = dash.stdout.split('\n').filter((l) => l.trim() !== '')
   assert.match(dashNonEmpty[dashNonEmpty.length - 1], /^🔴/,
     'D1: a red latest observation is a dashboard-level alarm — the bottom-anchored headline glyph must turn 🔴')
-  assert.match(dash.stdout, /🔴 done-but-red specs\/20260701\/01-auth-core\.md — main@deadbee \(https:\/\/github\.com\/x\/y\/actions\/runs\/9\)/,
-    'the 📡 red line must carry the spec path, branch, sha, and url')
+  assert.strictEqual(dashNonEmpty[dashNonEmpty.length - 1],
+    '🔴 CI is red on specs/20260701/01-auth-core.md — main@deadbee (https://github.com/x/y/actions/runs/9)',
+    'AC-20260903-05-6/D8: the 📡 block is deleted — the red alarm now lives entirely in the footer, carrying the spec path, branch, sha, and url as its last line')
+  assert.doesNotMatch(dash.stdout, /📡/, 'AC-20260903-05-6/D8: the 📡 Observation block must never render — the alarm is the footer line alone')
 
   const j = JSON.parse(runNode(SCRIPT, ['--root', dir, '--next', '--json']).stdout)
   assert.ok(j.next.length, 'test fixture bug: --next must return at least the escape entry')

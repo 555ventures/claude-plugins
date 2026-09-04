@@ -1,6 +1,6 @@
 ---
 date: 2026-09-03
-status: hardened
+status: implementing
 tier: critical           # spec-status.js is a named critical trigger (.claude/rules/spec-pipeline.md § Risk Tiers): frozen --root/--next/--json surface
 area: session-queue
 design: false
@@ -9,6 +9,7 @@ depends_on: [specs/20260903/03-pipeline-queue-mechanics.md]
 depended_on_by: []
 brief: 24
 open_markers: 0
+diff_base: 90c89d2364043c7fe2fac506fdf76c8b9e142cd7
 ---
 
 # Status diet — roadmap, one paste, at most three decisions, one footer

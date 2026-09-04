@@ -116,20 +116,29 @@ let root = '.'
 let json = false
 let briefFilter = null
 let nextMode = false
+let allMode = false
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--root') root = argv[++i]
   else if (argv[i] === '--json') json = true
   else if (argv[i] === '--brief') briefFilter = normBrief(argv[++i])
   else if (argv[i] === '--next') nextMode = true
+  else if (argv[i] === '--all') allMode = true
   else if (argv[i] === '--pretty') { /* no-op: pretty is the default human render */ }
   else {
-    console.error('usage: spec-status.js [--root <dir>] [--json] [--brief NN | --next]')
+    console.error('usage: spec-status.js [--root <dir>] [--json] [--brief NN | --next | --all]')
     process.exit(2)
   }
 }
 if (nextMode && briefFilter) {
   console.error('--next and --brief are mutually exclusive')
+  process.exit(2)
+}
+// D5/Contracts (specs/20260903/05-status-diet.md): --all is a render switch only — it is
+// usage-incompatible with --next or --brief, and a no-op combined with --json (the full
+// --json shape is unaffected by --all).
+if (allMode && (nextMode || briefFilter)) {
+  console.error('usage: --all cannot combine with --next or --brief')
   process.exit(2)
 }
 
@@ -309,7 +318,7 @@ const queueBlockersByBrief = new Map()
 const queueBlockersBySpec = new Map()
 let queueUndonePromptEntries = []
 if (queueOverlay.parseError) {
-  anomalies.push({ kind: 'queue-unparseable', detail: `${queueOverlay.parseError} — the session queue overlay is disabled until this is fixed (or the file removed and reseeded with \`spec-queue next\`)` })
+  anomalies.push({ kind: 'queue-unparseable', audience: 'hygiene', detail: `${queueOverlay.parseError} — the session queue overlay is disabled until this is fixed (or the file removed and reseeded with \`spec-queue next\`)` })
 }
 if (queueOverlay.on) {
   // D4: virtual reconcile — computed here, never written here (spec-queue.js's own
@@ -330,7 +339,7 @@ if (queueOverlay.on) {
     if (it.kind === 'brief') {
       queuePosByBrief.set(it.brief, i)
       if (!briefByNum.has(it.brief)) {
-        anomalies.push({ kind: 'queue-orphan', detail: `spec-queue.json item points at brief ${it.brief}, which has no docs/roadmap/${it.brief}-*.md — remove it with \`spec-queue done ${it.brief}\`, reorder it away with \`spec-queue move ${it.brief} <n>\`, or restore the brief file` })
+        anomalies.push({ kind: 'queue-orphan', audience: 'hygiene', detail: `spec-queue.json item points at brief ${it.brief}, which has no docs/roadmap/${it.brief}-*.md — remove it with \`spec-queue done ${it.brief}\`, reorder it away with \`spec-queue move ${it.brief} <n>\`, or restore the brief file` })
       }
     } else if (it.kind === 'spec') {
       queuePosBySpec.set(it.spec, i)
@@ -365,14 +374,14 @@ if (queueOverlay.on) {
 // filtered it out above — so every hit is a typo or a hand-invented word, which has a real fix.
 for (const s of specs) {
   if (!KNOWN_STATUS.has(s.status)) {
-    anomalies.push({ kind: 'unknown-status', detail: `${s.path} has status: ${s.status} — not in the spec lifecycle (${[...KNOWN_STATUS].join(' → ')}); fix the frontmatter (to retire a preserved spec: status: superseded)` })
+    anomalies.push({ kind: 'unknown-status', audience: 'hygiene', detail: `${s.path} has status: ${s.status} — not in the spec lifecycle (${[...KNOWN_STATUS].join(' → ')}); fix the frontmatter (to retire a preserved spec: status: superseded)` })
   }
 }
 
 // Orphan stamps: spec points at a brief file that doesn't exist.
 for (const s of specs) {
   if (s.brief && !briefByNum.has(s.brief)) {
-    anomalies.push({ kind: 'orphan-stamp', detail: `${s.path} stamps brief: ${s.brief} but no docs/roadmap/${s.brief}-*.md exists (brief renamed/deleted, or typo)` })
+    anomalies.push({ kind: 'orphan-stamp', audience: 'hygiene', detail: `${s.path} stamps brief: ${s.brief} but no docs/roadmap/${s.brief}-*.md exists (brief renamed/deleted, or typo)` })
   }
 }
 
@@ -381,27 +390,42 @@ for (const s of specs) {
 // but surfaced so a mistyped brief id doesn't silently vanish from the dependency graph.
 for (const b of briefs) {
   for (const r of b.dep_rejects) {
-    anomalies.push({ kind: 'unparsed-dependency', detail: `${b.file} Depends on: item "${r}" is not a brief id (NN or NNa) — ignored; if it names a spec-level gate, move it into the brief body` })
+    anomalies.push({ kind: 'unparsed-dependency', audience: 'hygiene', detail: `${b.file} Depends on: item "${r}" is not a brief id (NN or NNa) — ignored; if it names a spec-level gate, move it into the brief body` })
   }
 }
 
-// Skipped dependency: a brief moved while a declared dependency is still unplanned.
+// Skipped dependency: a brief moved while a declared dependency is still unplanned. D2
+// (specs/20260903/05-status-diet.md): skipped-brief is a DECIDE anomaly — the remedy is a
+// choice ("plan it now?"), so it carries line/ask/paste alongside detail (Contracts).
 for (const b of briefs) {
   if (b.status === 'unplanned') continue
   for (const d of b.depends_on) {
     const dep = briefByNum.get(d)
-    if (!dep) anomalies.push({ kind: 'unknown-dependency', detail: `${b.file} depends on brief ${d}, which doesn't exist` })
-    else if (dep.status === 'unplanned') anomalies.push({ kind: 'skipped-brief', detail: `brief ${b.num} (${b.name}) is ${b.status} but its dependency ${d} (${dep.name}) is unplanned — likely skipped; plan it with /spec:plan ${dep.file}` })
+    if (!dep) anomalies.push({ kind: 'unknown-dependency', audience: 'hygiene', detail: `${b.file} depends on brief ${d}, which doesn't exist` })
+    else if (dep.status === 'unplanned') anomalies.push({
+      kind: 'skipped-brief', audience: 'decide',
+      detail: `brief ${b.num} (${b.name}) is ${b.status} but its dependency ${d} (${dep.name}) is unplanned — likely skipped; plan it with /spec:plan ${dep.file}`,
+      line: `Brief ${b.num} (${b.name}) moved on, but its dependency ${d} (${dep.name}) was never planned.`,
+      ask: 'Plan it now?',
+      paste: `/spec:plan @${dep.file}`,
+    })
   }
 }
 
 // Sequence-order skip: an earlier unplanned brief sitting below any later brief that moved.
+// D2: also a DECIDE anomaly (Contracts) — the remedy is "still wanted?", a choice, not a fix.
 const moved = briefs.filter(b => b.status !== 'unplanned')
 if (moved.length) {
   const maxMoved = moved.reduce((m, b) => briefOrd(b.num) > briefOrd(m.num) ? b : m).num
   for (const b of briefs) {
     if (b.status === 'unplanned' && briefOrd(b.num) < briefOrd(maxMoved) && !anomalies.some(a => a.detail.includes(`dependency ${b.num} `))) {
-      anomalies.push({ kind: 'out-of-order', detail: `brief ${b.num} (${b.name}) is unplanned while later brief ${maxMoved} has moved — deliberate reordering or a skip; if it still matters: /spec:plan ${b.file}` })
+      anomalies.push({
+        kind: 'out-of-order', audience: 'decide',
+        detail: `brief ${b.num} (${b.name}) is unplanned while later brief ${maxMoved} has moved — deliberate reordering or a skip; if it still matters: /spec:plan ${b.file}`,
+        line: `Brief ${b.num} (${b.name}) is unplanned while later brief ${maxMoved} has moved on.`,
+        ask: 'Still wanted?',
+        paste: `/spec:plan @${b.file}`,
+      })
     }
   }
 }
@@ -413,7 +437,7 @@ for (const s of specs) {
   for (const d of s.depends_on) {
     const dep = specDep(d)
     if (dep && !DONE(dep.status)) {
-      anomalies.push({ kind: 'skipped-spec', detail: `${s.path} is done but its dependency ${dep.path} is still ${dep.status}` })
+      anomalies.push({ kind: 'skipped-spec', audience: 'hygiene', detail: `${s.path} is done but its dependency ${dep.path} is still ${dep.status}` })
     }
   }
 }
@@ -426,7 +450,7 @@ if (fs.existsSync(overview)) {
   const STATUSY = /^(?:[✅✔❌🟢🟠]\s*)?(planned|unplanned|done|in.?progress|in.?flight|shipped|completed?|wip|todo)[.!]?$|^[✅✔❌🟢🟠]$/i
   const cells = rows.flatMap(l => l.split('|').map(c => c.trim())).filter(c => STATUSY.test(c))
   if (cells.length) {
-    anomalies.push({ kind: 'hand-tracked-status', detail: `docs/roadmap/00-overview.md Sequence table carries hand-tracked status cell(s): ${[...new Set(cells)].join(', ')} — statuses live only in this derivation; strip that column` })
+    anomalies.push({ kind: 'hand-tracked-status', audience: 'hygiene', detail: `docs/roadmap/00-overview.md Sequence table carries hand-tracked status cell(s): ${[...new Set(cells)].join(', ')} — statuses live only in this derivation; strip that column` })
   }
 }
 
@@ -654,40 +678,42 @@ if (json) {
   process.exit(0)
 }
 
+// Lane admission (shared by --all's 📋 render and the footer's parallel-count clause, D4/D5):
+// pairwise-greedy fan-out over unblocked, non-escape entries — one derivation, two call sites,
+// so the count in the footer and the lanes actually drawn under --all can never disagree.
+function laneAdmission(entries) {
+  const unblocked = entries.filter(e => !e.blockers.length && e.action !== '/spec:escape')
+  const blocked = entries.filter(e => e.blockers.length)
+  const lanes = unblocked.length ? [unblocked[0]] : []
+  const laneClash = new Map()
+  for (const e of unblocked.slice(1)) {
+    if (e.parallel !== true) continue
+    const clash = lanes.slice(1).find(l => briefSerialReason(e.brief, l.brief))
+    if (clash) laneClash.set(e, briefSerialReason(e.brief, clash.brief))
+    else lanes.push(e)
+  }
+  const later = unblocked.slice(1).filter(e => !lanes.includes(e))
+  return { unblocked, blocked, lanes, laneClash, later }
+}
+const shortBlocker = b => b.replace(/^\S*\//, '').replace(/\s*\([^)]*\)$/, '').replace(/\.md$/, '')
+const waitClause = n => n === 1 ? '1 waits behind it' : `${n} wait behind it`
+
 {
-  // D1: a terminal shows the TAIL of output, so section order bottom-anchors the actionable
-  // content — 🗺️ Roadmap → 📡 red-alarm lines (only when red) → ⚠️ Anomalies → 🎯 Next → the
-  // one-line headline verdict LAST. Content within each section is unchanged; only the order
-  // moves, plus the ⏳/"unobserved" segment dies with the retired `pending` state (D2).
+  // D1/D5: the default render is exactly four blocks — 🗺️ Roadmap, 🎯 Next, up to three ⚠️
+  // decide lines, one footer. `--all` lifts the decide cap and inserts 📋 All open work (the
+  // pre-diet lane render, verbatim) and 🧹 Hygiene before the same footer. No anomaly fold, no
+  // ⚠️ Anomalies section, no 📡 block, no headline verdict line survive anywhere (D1/D8).
   const out = []
   const BRIEF_ICON = { done: '✅', 'in-flight': '🔨', unplanned: '⬜' }
 
-  const doneB = briefs.filter(b => b.status === 'done').length
-  const flightB = briefs.filter(b => b.status === 'in-flight').length
-  const unplB = briefs.filter(b => b.status === 'unplanned').length
-  const doneS = specs.filter(s => DONE(s.status)).length
-  const scope = briefs.length
-    ? [`${doneB} brief${doneB === 1 ? '' : 's'} done`, flightB && `${flightB} in flight`, unplB && `${unplB} unplanned`].filter(Boolean).join(' · ')
-    : specs.length ? `${doneS}/${specs.length} specs done` : 'no specs or briefs found'
-  // D2/D5(a): a red observation is a dashboard-level alarm, not a lane detail — it overrides the
-  // ordinary 🟢/🟠 anomaly-driven glyph outright. "ok" never renders anywhere.
+  // D2/D5(a): a red observation is a dashboard-level alarm — it decides the footer glyph
+  // outright and is never folded into the ordinary anomaly-driven verdict. "ok" never renders.
   const doneRed = specs.filter(s => s.observation === 'red')
-  const headline = doneRed.length ? '🔴' : anomalies.length ? '🟠' : '🟢'
-  const headlineLine = `${headline} ${scope}${retired.length ? ` · ${retired.length} superseded` : ''} · ${anomalies.length ? `⚠️ ${anomalies.length} anomal${anomalies.length === 1 ? 'y' : 'ies'}` : 'no anomalies'}`
-
-  // Computed early: the anomaly-fold (which entries carry a ⚠️ tag vs. stand alone) is needed by
-  // both the ⚠️ Anomalies section and the 🎯 Next section, and D1 now renders Anomalies first.
   const entries = deriveNext()
-  // An anomaly about a spec that already has a Next line folds onto that line as a ⚠️ tag —
-  // no bottom section repeating the path. Only anomalies with no line of their own (done
-  // specs, brief-level drift, hand-tracked cells) keep a section entry.
-  const inlineKinds = new Map()
-  const standalone = []
-  for (const a of anomalies) {
-    const hit = entries.find(e => e.path && a.detail.includes(e.path))
-    if (hit) inlineKinds.set(hit.path, [...new Set([...(inlineKinds.get(hit.path) || []), a.kind])])
-    else standalone.push(a)
-  }
+  const decideAnomalies = anomalies.filter(a => a.audience === 'decide')
+  const hygieneAnomalies = anomalies.filter(a => a.audience === 'hygiene')
+  const shownDecide = allMode ? decideAnomalies : decideAnomalies.slice(0, 3)
+  const decideOverflow = allMode ? 0 : Math.max(0, decideAnomalies.length - 3)
 
   if (briefs.length) {
     out.push('', '🗺️ Roadmap')
@@ -741,65 +767,42 @@ if (json) {
     }
   }
 
-  // 📡 red-alarm lines (D1: right after Roadmap, only when at least one done spec is red — "ok"
-  // renders nothing at all, D2).
-  if (doneRed.length) {
-    out.push('', '📡 Observation')
-    for (const s of doneRed) {
-      const row = observationRows.get(s.path)
-      out.push(`   🔴 done-but-red ${s.path} — ${row.branch}@${row.sha} (${row.url})`)
-    }
-  }
-
-  // ⚠️ Anomalies (D1: above 🎯 Next now, so a scrolled-to-bottom terminal still lands on Next).
-  out.push('')
-  const folded = anomalies.length - standalone.length
-  if (!anomalies.length) {
-    out.push('✅ No anomalies — nothing skipped, no drift')
-  } else if (!standalone.length) {
-    out.push(`⚠️ ${anomalies.length} anomal${anomalies.length === 1 ? 'y' : 'ies'} — each tagged ⚠️ on its 🎯 Next line`)
-  } else {
-    const ANOM_ICON = { 'orphan-stamp': '🏷️', 'skipped-brief': '⏭️', 'out-of-order': '🔀', 'unknown-dependency': '❓', 'skipped-spec': '🕳️', 'hand-tracked-status': '✍️', 'unknown-status': '🚧', 'queue-orphan': '🔗', 'queue-unparseable': '💥' }
-    out.push(`⚠️ Anomalies (${standalone.length}${folded ? ` here · ${folded} tagged ⚠️ below` : ''})`)
-    for (const a of standalone) out.push(`   ${ANOM_ICON[a.kind] || '⚠️'} [${a.kind}] ${a.detail}`)
-  }
-
+  // 🎯 Next (D1): the same top-pick line(s) --next prints after its header — one command, plus
+  // ⏳ branch lines only when the top pick is blocked. No trailing ⚠️ tag ever (the anomaly fold
+  // is deleted, D1) — a queue prompt entry (no path) prints its payload alone, same as --next.
   out.push('', '🎯 Next')
   if (!entries.length) {
     out.push(`   ✨ ${nothingNextLine()}`)
   } else {
-    // Operator-first: every runnable line IS exactly what you paste into Claude Code —
-    // flush-left "action @path", no icons, indent, padding, or status words around it
-    // (any of those poison a triple-click paste or slash-command detection). Status is
-    // already encoded one-to-one in the action itself. Context rides only on headers and
-    // on lines never pasted as-is: blocked ⏳ reasons and 🕓 parallel-verdict branches get
-    // their own indented line (narrow terminals wrap trailing text); only the compact
-    // anomaly ⚠️ tag trails the command.
-    const warn = e => e.path && inlineKinds.has(e.path) ? `  ⚠️ ${inlineKinds.get(e.path).join(', ')}` : ''
-    // A queue prompt entry (D11) has no path — print its payload alone, same as --next.
-    const cmd = e => e.path ? `${e.action} @${e.path}${warn(e)}` : `${e.action}${warn(e)}`
-    const shortBlocker = b => b.replace(/^\S*\//, '').replace(/\s*\([^)]*\)$/, '').replace(/\.md$/, '')
-    // Escape entries (D5) rank first but are never worktree build work — they print as their
-    // own bare command line(s) ahead of everything else, excluded from the ⚡ lane fan-out.
+    const top = entries[0]
+    out.push(top.path ? `${top.action} @${top.path}` : top.action)
+    top.blockers.forEach((b, i) =>
+      out.push(`   ${i === top.blockers.length - 1 ? '└─' : '├─'} ⏳ ${shortBlocker(b)}`))
+  }
+
+  // ⚠️ Decide lines (D3): `⚠️ {line}` then `   {ask}  {paste}` — capped at three by default in
+  // derivation order (skipped-brief before out-of-order, roadmap order within a kind, already
+  // the anomalies array's own push order); `--all` lifts the cap.
+  if (shownDecide.length) {
+    out.push('')
+    for (const a of shownDecide) {
+      out.push(`⚠️ ${a.line}`)
+      out.push(`   ${a.ask}  ${a.paste}`)
+    }
+  }
+
+  const cmd = e => e.path ? `${e.action} @${e.path}` : e.action
+
+  if (allMode) {
+    // D5: `--all` lifts the decide cap (above) and inserts the pre-diet lane render — verbatim,
+    // text unchanged — under a 📋 header, then the hygiene catalogue, ahead of the same footer.
+    out.push('', '📋 All open work')
+    // Escape entries (D5/D8) rank first but are never worktree build work — they print as
+    // their own bare command line(s) ahead of everything else, excluded from the ⚡ fan-out.
     const escapes = entries.filter(e => e.action === '/spec:escape')
     escapes.forEach(e => out.push(cmd(e)))
-    const unblocked = entries.filter(e => !e.blockers.length && e.action !== '/spec:escape')
-    const blocked = entries.filter(e => e.blockers.length)
+    const { unblocked, blocked, lanes, laneClash, later } = laneAdmission(entries)
     if (unblocked.length) {
-      // Lane admission is pairwise, not vs-top-only: `parallel === true` proves safety against
-      // the top pick, but two runner-ups can still be ordered against EACH OTHER (03 and 04
-      // both unrelated to the pick, 04 depends on 03). Greedy in sort order: a candidate joins
-      // only if the roadmap declares it unrelated to every lane already admitted — the ⚡
-      // header claims mutual parallelism, so mutual is what gets checked.
-      const lanes = [unblocked[0]]
-      const laneClash = new Map()
-      for (const e of unblocked.slice(1)) {
-        if (e.parallel !== true) continue
-        const clash = lanes.slice(1).find(l => briefSerialReason(e.brief, l.brief))
-        if (clash) laneClash.set(e, briefSerialReason(e.brief, clash.brief))
-        else lanes.push(e)
-      }
-      const later = unblocked.slice(1).filter(e => !lanes.includes(e))
       if (lanes.length > 1) {
         out.push(`⚡ ${lanes.length} parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):`)
         lanes.forEach(e => out.push(cmd(e)))
@@ -818,9 +821,9 @@ if (json) {
           }
         }
         overlaps.forEach((o, i) => {
-          const shown = o.shared.slice(0, 2).join(', ') + (o.shared.length > 2 ? ` (+${o.shared.length - 2} more)` : '')
+          const shownFiles = o.shared.slice(0, 2).join(', ') + (o.shared.length > 2 ? ` (+${o.shared.length - 2} more)` : '')
           const pair = lanes.length > 2 ? `${path.basename(o.a.path)} × ${path.basename(o.b.path)}: ` : ''
-          out.push(`   ${i === overlaps.length - 1 ? '└─' : '├─'} 🔶 ${pair}merge-conflict risk: ${shown}`)
+          out.push(`   ${i === overlaps.length - 1 ? '└─' : '├─'} 🔶 ${pair}merge-conflict risk: ${shownFiles}`)
         })
       } else {
         out.push(cmd(unblocked[0]))
@@ -853,11 +856,53 @@ if (json) {
           out.push(`   ${i === e.blockers.length - 1 ? '└─' : '├─'} ⏳ ${shortBlocker(b)}`))
       })
     }
+    out.push('', `🧹 Hygiene (${hygieneAnomalies.length}) — /spec:doctor`)
+    for (const a of hygieneAnomalies) out.push(`   [${a.kind}] ${a.detail}`)
   }
 
-  // D1: the one-line headline verdict is the LAST thing printed — everything actionable must
-  // already be on screen by the time a terminal shows only its tail.
-  out.push('', headlineLine)
+  // D4: the one-line footer — glyph + one sentence, the LAST line printed. A red observation
+  // outranks every other head (the Next line above is already its /spec:escape entry); else a
+  // blocked top pick names its short blocker; else ready/nothing. Clauses (wait, parallel-count,
+  // decide-overflow, hygiene-count), each only when non-zero, ride after the head in that order
+  // — except the wait clause on the 🟢 line, which prints "nothing waits behind it" at n = 0
+  // rather than being omitted.
+  {
+    const nonEscape = entries.filter(e => e.action !== '/spec:escape')
+    const n = nonEscape.length ? nonEscape.length - 1 : 0
+    const { lanes } = laneAdmission(entries)
+    const m = Math.max(0, lanes.length - 1)
+    const k = decideOverflow
+    const h = hygieneAnomalies.length
+    let glyph, head
+    if (doneRed.length) {
+      const top = entries[0]
+      const row = observationRows.get(top.path)
+      glyph = '🔴'
+      head = `CI is red on ${top.path} — ${row.branch}@${row.sha} (${row.url})`
+    } else if (!entries.length && briefs.some(b => b.status === 'unplanned')) {
+      // D4/Behavior "Nothing next": ⬜ is reserved for the specific stuck-on-a-dependency shape
+      // (nothingNextLine()'s "nothing actionable" branch) — a host that is simply, cleanly done
+      // (no open specs, no unplanned brief left blocked) reads as ready, not stalled.
+      glyph = '⬜'
+      head = 'nothing waits'
+    } else if (!entries.length) {
+      glyph = '🟢'
+      head = 'next is ready'
+    } else if (entries[0].blockers.length) {
+      glyph = '🟠'
+      head = `next is blocked · waiting on ${shortBlocker(entries[0].blockers[0])}`
+    } else {
+      glyph = '🟢'
+      head = 'next is ready'
+    }
+    const clauses = []
+    if (glyph === '🟢') clauses.push(n === 0 ? 'nothing waits behind it' : waitClause(n))
+    else if (n > 0) clauses.push(waitClause(n))
+    if (m > 0) clauses.push(`${m} could run in parallel (--all)`)
+    if (k > 0) clauses.push(`${k} more to decide (--all)`)
+    if (h > 0) clauses.push(`${h} hygiene finding${h === 1 ? '' : 's'} (/spec:doctor)`)
+    out.push('', `${glyph} ${head}${clauses.map(c => ` · ${c}`).join('')}`)
+  }
 
   // Redraw from the top of the viewport (not a scrollback wipe) so re-invoking the dashboard
   // never leaves it stranded wherever the cursor last scrolled to — only when stdout is a TTY,

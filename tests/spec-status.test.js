@@ -64,7 +64,10 @@ test('derives unplanned / in-flight / done per doctor check 14', () => {
   assert.deepStrictEqual(by, { '01': 'done', '02': 'unplanned', '03': 'in-flight' })
 })
 
-test('flags a skipped brief: in-flight work on top of an unplanned dependency', () => {
+// AC-20260903-05-3 (retagged, D2/D3): a skipped-brief anomaly is a DECIDE kind — it no longer
+// prints as a bracket `[skipped-brief]` line (that form is hygiene-only now); the default
+// render prints the two-line decide pair (`⚠️ {line}` then `   {ask}  {paste}`) instead.
+test('AC-20260903-05-3: flags a skipped brief as a decide pair — in-flight work on top of an unplanned dependency', () => {
   const dir = host({
     briefs: BRIEFS,
     specs: {
@@ -74,13 +77,14 @@ test('flags a skipped brief: in-flight work on top of an unplanned dependency', 
   })
   const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, 'anomalies are report lines, not failures')
-  assert.match(r.stdout, /skipped-brief/, 'unplanned dependency under a moved brief must be flagged')
-  assert.match(r.stdout, /02-billing\.md/, 'the remedy names the brief to plan')
+  assert.doesNotMatch(r.stdout, /\[skipped-brief\]/, 'D2: skipped-brief is a decide kind — it must never render as a bracketed hygiene-style line')
+  assert.match(r.stdout, /⚠️ Brief 03 \(reports\) moved on, but its dependency 02 \(billing\) was never planned\.\n   Plan it now\?  \/spec:plan @docs\/roadmap\/02-billing\.md/,
+    'D3: the decide pair — one sentence, one question, one paste — must print for the unplanned dependency under the moved brief')
 })
 
 // AC-20260805-01-7 (sanctioned pin exception, green pre-change): --brief output must stay
 // byte-identical after the lib extraction (D2).
-test('--brief preflight: exit 1 with unmet dependencies, 0 when met', () => {
+test('AC-20260903-05-9: --brief preflight (D6 frozen surface) exit 1 with unmet dependencies, 0 when met', () => {
   const dir = host({
     briefs: BRIEFS,
     specs: { '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01' },
@@ -92,16 +96,23 @@ test('--brief preflight: exit 1 with unmet dependencies, 0 when met', () => {
   assert.strictEqual(met.status, 0, 'brief 02 depends only on done 01: ' + met.stdout)
 })
 
-test('flags orphan brief stamps and hand-tracked overview status', () => {
+// AC-20260903-05-7 (retagged, D2/D5): orphan-stamp and hand-tracked-status are both hygiene
+// kinds — they no longer print anywhere in the default render (D1: nothing hygiene-shaped
+// prints by default); they only surface under `--all`'s `🧹 Hygiene` catalogue.
+test('AC-20260903-05-7: flags orphan brief stamps and hand-tracked overview status under --all, absent by default', () => {
   const dir = host({
     briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
     specs: { '20260701/01-x.md': 'date: 2026-07-01\nstatus: done\nbrief: 07' },
     overviewRow: '| 01 | auth | P0 | — | ✅ done |',
   })
-  const r = runNode(SCRIPT, ['--root', dir])
+  const bare = runNode(SCRIPT, ['--root', dir])
+  assert.strictEqual(bare.status, 0, bare.stderr)
+  assert.doesNotMatch(bare.stdout, /orphan-stamp/, 'D1: a hygiene kind must never print by default')
+  assert.doesNotMatch(bare.stdout, /hand-tracked-status/, 'D1: a hygiene kind must never print by default')
+  const r = runNode(SCRIPT, ['--root', dir, '--all'])
   assert.strictEqual(r.status, 0, r.stderr)
-  assert.match(r.stdout, /orphan-stamp/, 'brief: 07 matches no roadmap file')
-  assert.match(r.stdout, /hand-tracked-status/, 'status column in the Sequence table is drift')
+  assert.match(r.stdout, /\[orphan-stamp\]/, 'brief: 07 matches no roadmap file — must surface in the --all hygiene catalogue')
+  assert.match(r.stdout, /\[hand-tracked-status\]/, 'status column in the Sequence table is drift — must surface in the --all hygiene catalogue')
 })
 
 test('hand-tracked detection is whole-cell: a brief NAMED after a status word is not drift', () => {
@@ -222,7 +233,10 @@ test('AC-20260901-10-4: a design: true spec routes to /spec:run in the dashboard
   assert.match(r.stdout, /\/spec:run @specs\/20260701\/01-ui\.md/, 'AC-20260901-10-4/D5: design: true must surface as /spec:run — the loop derives design-due itself, so the dashboard no longer names /spec:design as a next-command')
 })
 
-test('flags a done spec whose depends_on spec is not done', () => {
+// AC-20260903-05-7 / AC-20260903-05-4 (retagged, D2): skipped-spec is a hygiene kind — D1
+// forbids any hygiene output in the default render, so the finding is proven via --all's
+// hygiene catalogue and --json's audience:"hygiene", never a default-render substring match.
+test('AC-20260903-05-7 / AC-20260903-05-4: flags a done spec whose depends_on spec is not done, via --all and --json (never the default render)', () => {
   const dir = host({
     briefs: {},
     specs: {
@@ -230,8 +244,16 @@ test('flags a done spec whose depends_on spec is not done', () => {
       '20260710/01-top.md': 'date: 2026-07-10\nstatus: done\ndepends_on: [specs/20260701/01-base.md]',
     },
   })
-  const r = runNode(SCRIPT, ['--root', dir])
-  assert.match(r.stdout, /skipped-spec/, 'done work atop an unfinished dependency must be flagged')
+  const bare = runNode(SCRIPT, ['--root', dir])
+  assert.strictEqual(bare.status, 0, bare.stderr)
+  assert.doesNotMatch(bare.stdout, /skipped-spec/, 'D1: a hygiene kind must never print in the default render')
+  const all = runNode(SCRIPT, ['--root', dir, '--all'])
+  assert.strictEqual(all.status, 0, all.stderr)
+  assert.match(all.stdout, /\[skipped-spec\]/, 'done work atop an unfinished dependency must still be flagged — in the --all hygiene catalogue')
+  const j = JSON.parse(runNode(SCRIPT, ['--root', dir, '--json']).stdout)
+  const skip = j.anomalies.find(a => a.kind === 'skipped-spec')
+  assert.ok(skip, 'test fixture bug: skipped-spec must be present in --json: ' + JSON.stringify(j.anomalies))
+  assert.strictEqual(skip.audience, 'hygiene', 'D2: skipped-spec is classified hygiene')
 })
 
 test('AC-20260901-10-4: roadmap-less host still reports open specs as /spec:run, no crash', () => {
@@ -476,7 +498,7 @@ test('consecutive done briefs collapse to one range row with brief and spec coun
     'the collapsed done run must replace the per-brief rows, not print alongside them')
 })
 
-test('AC-20260901-10-4: dashboard draws unblocked parallel-ok runner-ups as lanes and sinks serial/blocked, both as /spec:run', () => {
+test('AC-20260903-05-7 (--all retag): AC-20260901-10-4: dashboard draws unblocked parallel-ok runner-ups as lanes and sinks serial/blocked, both as /spec:run', () => {
   const dir = host({
     briefs: {
       '01-auth.md': BRIEFS['01-auth.md'],
@@ -492,7 +514,7 @@ test('AC-20260901-10-4: dashboard draws unblocked parallel-ok runner-ups as lane
       '20260710/05-adhoc.md': 'date: 2026-07-10\nstatus: hardened\nbrief: n/a',
     },
   })
-  const r = runNode(SCRIPT, ['--root', dir])
+  const r = runNode(SCRIPT, ['--root', dir, '--all'])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.match(r.stdout, /⚡ 2 parallel lanes/, 'top pick + parallel-ok runner-up form the lane group')
   assert.match(r.stdout, /lanes[^\n]*\n\/spec:run @specs\/20260710\/01-billing\.md\n\/spec:run @specs\/20260710\/03-reports\.md/,
@@ -517,7 +539,7 @@ const PARALLEL_BRIEFS = {
 const planBody = rows => '# spec\n\n## File Plan\n\n| File | Notes |\n|---|---|\n'
   + rows.map(r => `| \`${r}\` | — |\n`).join('')
 
-test('AC-20260901-10-4: dashboard flags a merge-conflict heads-up when two parallel lanes share a File Plan path, both as /spec:run', () => {
+test('AC-20260903-05-7 (--all retag): AC-20260901-10-4: dashboard flags a merge-conflict heads-up when two parallel lanes share a File Plan path, both as /spec:run', () => {
   const dir = host({
     briefs: PARALLEL_BRIEFS,
     specs: {
@@ -532,7 +554,7 @@ test('AC-20260901-10-4: dashboard flags a merge-conflict heads-up when two paral
       },
     },
   })
-  const r = runNode(SCRIPT, ['--root', dir])
+  const r = runNode(SCRIPT, ['--root', dir, '--all'])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.match(r.stdout, /⚡ 2 parallel lanes/, 'shared File Plan path must NOT demote the verdict')
   assert.match(r.stdout,
@@ -540,7 +562,7 @@ test('AC-20260901-10-4: dashboard flags a merge-conflict heads-up when two paral
     'the branch line sits under the lane commands and names the shared file')
 })
 
-test('dashboard adds no heads-up when parallel lanes\' File Plans are disjoint', () => {
+test('AC-20260903-05-7 (--all retag): dashboard adds no heads-up when parallel lanes\' File Plans are disjoint', () => {
   const dir = host({
     briefs: PARALLEL_BRIEFS,
     specs: {
@@ -555,13 +577,13 @@ test('dashboard adds no heads-up when parallel lanes\' File Plans are disjoint',
       },
     },
   })
-  const r = runNode(SCRIPT, ['--root', dir])
+  const r = runNode(SCRIPT, ['--root', dir, '--all'])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.match(r.stdout, /⚡ 2 parallel lanes/)
   assert.doesNotMatch(r.stdout, /🔶/, 'disjoint File Plans must never earn a heads-up line')
 })
 
-test('dashboard is silent, not broken, when a parallel lane has no File Plan section', () => {
+test('AC-20260903-05-7 (--all retag): dashboard is silent, not broken, when a parallel lane has no File Plan section', () => {
   const dir = host({
     briefs: PARALLEL_BRIEFS,
     specs: {
@@ -576,13 +598,13 @@ test('dashboard is silent, not broken, when a parallel lane has no File Plan sec
       },
     },
   })
-  const r = runNode(SCRIPT, ['--root', dir])
+  const r = runNode(SCRIPT, ['--root', dir, '--all'])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.match(r.stdout, /⚡ 2 parallel lanes/)
   assert.doesNotMatch(r.stdout, /🔶/, 'zero rows parsed from a missing File Plan is a silent no-op')
 })
 
-test('File Plan compound cells (a + b, comma lists, braces, trailing annotations) split into real paths', () => {
+test('AC-20260903-05-7 (--all retag): File Plan compound cells (a + b, comma lists, braces, trailing annotations) split into real paths', () => {
   // The only format variance the corpus audit counted (~1% of cells) — pinned here so the
   // splitter never regresses into treating a compound cell as one bogus path.
   const dir = host({
@@ -599,13 +621,13 @@ test('File Plan compound cells (a + b, comma lists, braces, trailing annotations
       },
     },
   })
-  const r = runNode(SCRIPT, ['--root', dir])
+  const r = runNode(SCRIPT, ['--root', dir, '--all'])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.match(r.stdout, /└─ 🔶 merge-conflict risk: worker\/package\.json/,
     'worker/package.json hides inside a "a + b" compound cell — the splitter must surface it')
 })
 
-test('AC-20260901-10-4: lane admission is pairwise — a runner-up parallel with the pick but ordered against another lane is demoted, both as /spec:run', () => {
+test('AC-20260903-05-7 (--all retag): AC-20260901-10-4: lane admission is pairwise — a runner-up parallel with the pick but ordered against another lane is demoted, both as /spec:run', () => {
   // 03 and 04 are both unrelated to the pick's brief 02, but 04 depends on 03 — vs-top-only
   // checking would draw three "parallel" lanes with a declared ordering inside the fan-out.
   const dir = host({
@@ -623,7 +645,7 @@ test('AC-20260901-10-4: lane admission is pairwise — a runner-up parallel with
       '20260710/03-exports.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 04',
     },
   })
-  const r = runNode(SCRIPT, ['--root', dir])
+  const r = runNode(SCRIPT, ['--root', dir, '--all'])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.match(r.stdout, /⚡ 2 parallel lanes/, 'only the mutually-unrelated pair fans out')
   assert.match(r.stdout, /lanes[^\n]*\n\/spec:run @specs\/20260710\/01-billing\.md\n\/spec:run @specs\/20260710\/02-reports-ui\.md/,
@@ -632,7 +654,7 @@ test('AC-20260901-10-4: lane admission is pairwise — a runner-up parallel with
     'the vs-top-parallel entry ordered against lane 03 is demoted with the pairwise reason')
 })
 
-test('AC-20260901-10-4: dashboard states solo out loud when the pick has no parallel lane but other work exists, as /spec:run', () => {
+test('AC-20260903-05-7 (--all retag): AC-20260901-10-4: dashboard states solo out loud when the pick has no parallel lane but other work exists, as /spec:run', () => {
   const dir = host({
     briefs: {
       '01-auth.md': BRIEFS['01-auth.md'],
@@ -644,19 +666,19 @@ test('AC-20260901-10-4: dashboard states solo out loud when the pick has no para
       '20260710/02-billing-b.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
     },
   })
-  const r = runNode(SCRIPT, ['--root', dir])
+  const r = runNode(SCRIPT, ['--root', dir, '--all'])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.doesNotMatch(r.stdout, /⚡/, 'one lane is not a fan-out')
   assert.match(r.stdout, /\/spec:run @specs\/20260710\/01-billing\.md\n\s+└─ 🚦 solo/,
     'the solo pick says it is not parallelable instead of relying on the missing ⚡ header')
 })
 
-test('dashboard omits the solo branch when the pick is the only open work', () => {
+test('AC-20260903-05-7 (--all retag): dashboard omits the solo branch when the pick is the only open work', () => {
   const dir = host({
     briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
     specs: { '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 01' },
   })
-  const r = runNode(SCRIPT, ['--root', dir])
+  const r = runNode(SCRIPT, ['--root', dir, '--all'])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.doesNotMatch(r.stdout, /🚦/, 'nothing else exists to be parallel WITH — the branch would be noise')
 })
@@ -686,11 +708,12 @@ test('brief: n/a (and none/-) is deliberately briefless — no orphan-stamp, bri
   assert.match(orphans[0].detail, /04-typo\.md/)
 })
 
-// D1 render inversion (specs/20260807/01-observation-red-alarm.md): a terminal shows the TAIL
-// of output, so the actionable sections must be the last thing printed. Section order flips to
-// Roadmap → anomalies → 🎯 Next → headline verdict LAST (owner directive — "I need
-// to scroll up to see what's Next").
-test('AC-20260807-01-1: --pretty renders Roadmap, then the anomalies section, then 🎯 Next, with the headline verdict as the final line', () => {
+// D1 (status diet, specs/20260903/05-status-diet.md): the anomaly fold and the ⚠️ Anomalies
+// section are DELETED from the default render — the screen is exactly four blocks (Roadmap,
+// Next, up to three decide lines, one footer). The old AC-20260807-01-1 order pin (Roadmap →
+// anomalies → Next → headline) is rewritten in place to the new order and retagged; this is
+// a deliberate rewrite, not a weakening (spec's own "Regression pins" note).
+test('AC-20260903-05-1 / AC-20260903-05-3 (rewritten in place, was AC-20260807-01-1): default render is Roadmap then Next then the footer, with no anomaly section anywhere', () => {
   const dir = host({
     briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
     specs: { '20260701/01-x.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 01' },
@@ -700,32 +723,35 @@ test('AC-20260807-01-1: --pretty renders Roadmap, then the anomalies section, th
   assert.strictEqual(r.status, 0, r.stderr)
   const lines = r.stdout.split('\n')
   const idxRoadmap = lines.findIndex((l) => l.includes('🗺️ Roadmap'))
-  const idxAnomalies = lines.findIndex((l) => l.includes('⚠️ Anomalies') || l.includes('No anomalies'))
   const idxNext = lines.findIndex((l) => l.includes('🎯 Next'))
-  assert.ok(idxRoadmap !== -1 && idxAnomalies !== -1 && idxNext !== -1,
-    'test fixture bug: Roadmap, an anomalies section, and Next must all be present: ' + r.stdout)
-  assert.ok(idxRoadmap < idxAnomalies, 'D1: 🗺️ Roadmap must render before the anomalies section — today anomalies print after 🎯 Next, at the very bottom')
-  assert.ok(idxAnomalies < idxNext, 'D1: the anomalies section must render above 🎯 Next so a scrolled-to-bottom terminal still shows Next, not anomaly detail')
+  assert.ok(idxRoadmap !== -1 && idxNext !== -1, 'test fixture bug: Roadmap and Next must both be present: ' + r.stdout)
+  assert.ok(idxRoadmap < idxNext, 'D1: 🗺️ Roadmap must render before 🎯 Next')
+  assert.doesNotMatch(r.stdout, /Anomalies/, 'D1: the ⚠️ Anomalies section is deleted from the default render — this repo\'s only anomaly is hygiene-kind and must be invisible here')
+  assert.doesNotMatch(r.stdout, /anomal/, 'D1: no anomaly-count language survives in the default render')
   const nonEmpty = lines.filter((l) => l.trim() !== '')
-  assert.match(nonEmpty[nonEmpty.length - 1], /^(🔴|🟠|🟢)/,
-    'D1: the one-line headline verdict must be the LAST line of output — today it is printed first, so a terminal showing only the tail never sees it')
+  assert.strictEqual(nonEmpty[nonEmpty.length - 1], '🟢 next is ready · nothing waits behind it · 1 hygiene finding (/spec:doctor)',
+    'D4: the one-line footer is the LAST line, carries the verdict glyph and the hygiene count clause for the hand-tracked-status finding')
 })
 
-test('AC-20260901-10-4: dashboard folds spec-scoped anomalies onto their Next lines instead of a bottom section, Next line is /spec:run', () => {
+// D1/D3: the old anomaly-fold (a ⚠️ tag trailing the spec's own Next line) is deleted — D1's
+// own list of forbidden default-render content names "no ⚠️ tags on Next lines" explicitly.
+test('AC-20260903-05-1 (rewritten in place, was AC-20260901-10-4 fold test): a hygiene anomaly never tags the Next line and never prints a bracketed line by default', () => {
   const dir = host({
     briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
     specs: { '20260701/01-x.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 07' },
   })
   const r = runNode(SCRIPT, ['--root', dir])
   assert.strictEqual(r.status, 0, r.stderr)
-  assert.match(r.stdout, /\/spec:run @specs\/20260701\/01-x\.md\s+⚠️ orphan-stamp/,
-    'the orphan-stamp rides the spec\'s own Next line as a ⚠️ tag')
-  assert.match(r.stdout, /⚠️ 1 anomaly — each tagged ⚠️ on its 🎯 Next line/,
-    'all anomalies folded → one summary line, no section repeating the paths')
-  assert.doesNotMatch(r.stdout, /\[orphan-stamp\]/, 'no bottom-section line for a folded anomaly')
+  assert.match(r.stdout, /^\/spec:run @specs\/20260701\/01-x\.md$/m,
+    'D1: the Next line must be exactly the bare command — no trailing ⚠️ tag, even though the spec carries an orphan-stamp finding')
+  assert.doesNotMatch(r.stdout, /⚠️/, 'D1: no ⚠️ glyph anywhere in the default render when the only anomaly is hygiene-kind (no decide anomaly exists on this host)')
+  assert.doesNotMatch(r.stdout, /\[orphan-stamp\]/, 'D1: no bracketed hygiene line in the default render')
+  const nonEmpty = r.stdout.split('\n').filter((l) => l.trim() !== '')
+  assert.strictEqual(nonEmpty[nonEmpty.length - 1], '🟢 next is ready · nothing waits behind it · 1 hygiene finding (/spec:doctor)',
+    'D4: the orphan-stamp finding must still be visible somewhere — folded into the footer\'s hygiene clause, never on the Next line')
 })
 
-test('--pretty is a no-op — pretty is the default render, old call sites keep working', () => {
+test('AC-20260903-05-9: --pretty is a no-op (D6 frozen surface) — pretty is the default render, old call sites keep working', () => {
   const dir = host({
     briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
     specs: { '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 01' },
@@ -740,7 +766,7 @@ test('--pretty is a no-op — pretty is the default render, old call sites keep 
 
 // AC-20260805-01-7 (sanctioned pin exception, green pre-change): --next output must stay
 // byte-identical after the lib extraction (D2).
-test('AC-20260901-10-4: --next prints only the header and the top pick, @-prefixed, as /spec:run', () => {
+test('AC-20260901-10-4 / AC-20260903-05-9 (D6 frozen surface): --next prints only the header and the top pick, @-prefixed, as /spec:run', () => {
   const dir = host({
     briefs: {},
     specs: {
@@ -927,16 +953,20 @@ test('AC-20260902-11-6: WHEN spec-status.js runs on a root whose design/mocks/le
     'AC-20260902-11-6/D6: a ledger with 13 catches (latest M14 at THEME) must print the exact ' +
     'pipeline-record line the Contracts block pins — its absence means the table never became a ' +
     'status-line-visible fact: ' + r.stdout)
+  // AC-20260903-05-1 (D1) deletes the ⚠️ Anomalies section from the default render entirely, so
+  // the block that follows 🧭 misunderstandings today is 🎯 Next — rewritten in place per the
+  // spec's Rationale § Regression pins; the Roadmap < 🧭 < next-block ordering invariant is
+  // unchanged, only the anchor for "whatever follows" moves.
   const lines = r.stdout.split('\n')
   const idxRoadmap = lines.findIndex((l) => l.includes('🗺️ Roadmap'))
   const idxMisunderstandings = lines.findIndex((l) => l.includes('🧭 misunderstandings'))
-  const idxAnomalies = lines.findIndex((l) => l.includes('⚠️ Anomalies') || l.includes('No anomalies') || l.includes('anomal'))
-  assert.ok(idxRoadmap !== -1 && idxMisunderstandings !== -1 && idxAnomalies !== -1,
-    'test fixture bug: 🗺️ Roadmap, 🧭 misunderstandings, and the anomalies section must all be present: ' + r.stdout)
+  const idxNextBlock = lines.findIndex((l) => l.includes('🎯 Next'))
+  assert.ok(idxRoadmap !== -1 && idxMisunderstandings !== -1 && idxNextBlock !== -1,
+    'test fixture bug: 🗺️ Roadmap, 🧭 misunderstandings, and 🎯 Next must all be present: ' + r.stdout)
   assert.ok(idxRoadmap < idxMisunderstandings,
     'D6: the 🧭 line must render directly under the 🗺️ Roadmap block, not above it: ' + r.stdout)
-  assert.ok(idxMisunderstandings < idxAnomalies,
-    'D6: the 🧭 line must render before the anomalies section (Contracts: "before 📡 Observation") — a line after anomalies would sit past the block this spec pins it under: ' + r.stdout)
+  assert.ok(idxMisunderstandings < idxNextBlock,
+    'D6/AC-20260903-05-1: the 🧭 line must render before whatever follows the Roadmap block — now 🎯 Next, since the anomalies section it used to precede is deleted: ' + r.stdout)
 
   const noLedger = host({
     briefs: BRIEFS,
@@ -970,7 +1000,10 @@ test('AC-20260902-11-6: WHEN spec-status.js runs on a root whose design/mocks/le
     'D6: a valid ledger with zero catch rows must print no 🧭 line — "0 caught before build" is not the pipeline-record fact this line exists to surface: ' + rZero.stdout)
 })
 
-test('AC-20260902-11-7: WHEN spec-status.js --json and --next --json run on a root whose ledger has catches THE SYSTEM CONTINUES TO emit the same top-level keys as before this spec, with no misunderstandings key', () => {
+// AC-20260903-05-9 (retag): this is the --json/--next --json top-level key-set pin the spec's
+// D6 (frozen surfaces) targets — the additive `audience` field lands on individual anomaly
+// objects, never on the top-level key set pinned here.
+test('AC-20260902-11-7 / AC-20260903-05-9: WHEN spec-status.js --json and --next --json run on a root whose ledger has catches THE SYSTEM CONTINUES TO emit the same top-level keys as before this spec, with no misunderstandings key', () => {
   const dir = host({
     briefs: BRIEFS,
     specs: { '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01' },

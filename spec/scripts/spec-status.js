@@ -43,16 +43,23 @@
 // Everything else lands under 🕓 with a ⛓️/🤷 branch line giving the derived reason (or the
 // no-claim) — never an unexplained bucket.
 //
-// specs/20260823/08-derived-session-queue.md D2/D9: `--next` additionally consults an
-// OPTIONAL per-repo session queue (`<git-common-dir>/spec-queue.json`, written only by
-// spec-queue.js) as a read-only input overlay to deriveNext(): queue position reorders
-// unblocked entries across briefs (deliberately overriding cross-brief closest-to-done),
-// undone prompt items surface as new entries with no `path`, and a linked worktree
-// suppresses the overlay entirely (the global pointer misleads mid-spec). Resolution is
-// fail-soft in every direction (A5) — no git, a git error, no queue file, an unparseable
-// file, or a linked worktree all leave today's derivation byte-for-byte unchanged, with
-// zero stderr; only an unparseable file additionally earns one `queue-unparseable`
-// anomaly. This script never writes the queue file — spec-queue.js is its sole writer.
+// specs/20260823/08-derived-session-queue.md D2/D9 (retooled by specs/20260903/03-pipeline-
+// queue-mechanics.md D1-D4): `--next` additionally consults an OPTIONAL per-repo session
+// queue (`<git-common-dir>/spec-queue.json`, written only by spec-queue.js) as a read-only
+// input overlay to deriveNext(): queue position reorders unblocked entries across briefs
+// (deliberately overriding cross-brief closest-to-done) and a queued `spec` item's own
+// position overrides its brief's; undone prompt items surface as new entries with no
+// `path`; any item may carry an `after` gate on a spec or a brief — a not-ready item's
+// entries gain a `after <target> (<state>)` blocker and sink into the blocked tier, per
+// lib/queue.js's isItemReady (shared with spec-queue.js's own write path); a linked
+// worktree suppresses the overlay entirely (the global pointer misleads mid-spec). A
+// newly-landed on-disk brief absent from the queue is appended last with no stamp and no
+// anomaly (D4 retires the dependency-aware auto-placement and its veto/accept notice).
+// Resolution is fail-soft in every direction (A5) — no git, a git error, no queue file, an
+// unparseable file, or a linked worktree all leave today's derivation byte-for-byte
+// unchanged, with zero stderr; only an unparseable file additionally earns one
+// `queue-unparseable` anomaly. This script never writes the queue file — spec-queue.js is
+// its sole writer.
 //
 // Exit codes: 0 derived (anomalies are report lines, not failures); with --brief NN,
 // 1 = that brief has an unmet dependency (no spec at implementing/done); 2 = usage.
@@ -77,7 +84,8 @@ function writeOut(str) {
 const { parseFilePlan } = require('./lib/file-plan')
 const { readLedgerRows, qualifyingObservation } = require('./lib/observation')
 const {
-  isSupersededBriefText, isItemDone, makeCtx, reconcileMissingBriefs,
+  isSupersededBriefText, isItemDone, isItemReady, makeCtx, dedupeItems, stripAutoPlaced,
+  reconcileMissingBriefs,
 } = require('./lib/queue')
 // D2 (specs/20260823/04-review-close-hardening.md, rv_6825fa48c98d): the local frontmatter() kv
 // loop this replaced stripped a trailing comment at the FIRST "#" regardless of what preceded it,
@@ -287,42 +295,80 @@ function resolveQueueOverlay(rootDir) {
 
 const anomalies = []
 
+// specs/20260903/03 D1: specStatus(relPath) -> the spec's own frontmatter status, including
+// `superseded` (retired specs are filtered OUT of `specs` above but must still resolve here
+// so a queued spec item pointing at a since-superseded spec reads correctly) — null only
+// when the path never resolved to any spec file at all (never existed, or deleted).
+const specStatusMap = new Map(allSpecs.map(s => [s.path, s.status]))
+const specStatusFor = p => (specStatusMap.has(p) ? specStatusMap.get(p) : null)
+
 const queueOverlay = resolveQueueOverlay(root)
 const queuePosByBrief = new Map()
+const queuePosBySpec = new Map()
+const queueBlockersByBrief = new Map()
+const queueBlockersBySpec = new Map()
+// A spec named as the target of any item's still-unmet `after: {spec: …}` gate — regardless
+// of the gated item's OWN kind (a gated prompt is the common case, AC-20260903-03-2) — sinks
+// to the bottom of the unblocked tier in its own --next entry: recommending it no higher
+// than any other ready, independent spec keeps the top line from oscillating between "the
+// thing someone is waiting on" and "unrelated ready work" on every derivation. It stays
+// genuinely unblocked (blockers: [] untouched) — only its sort position moves.
+const queueGateTargetSpecs = new Set()
 let queueUndonePromptEntries = []
 if (queueOverlay.parseError) {
   anomalies.push({ kind: 'queue-unparseable', detail: `${queueOverlay.parseError} — the session queue overlay is disabled until this is fixed (or the file removed and reseeded with \`spec-queue next\`)` })
 }
 if (queueOverlay.on) {
-  // D6: virtual reconcile — computed here, never written here (spec-queue.js's own
-  // reconcile is the persisted twin of this exact algorithm, from lib/queue.js). An
-  // on-disk brief not yet a real item still gets a placement and a `queue-auto-placed`
-  // anomaly the moment it lands on disk, not only after the next `spec-queue` write.
+  // D4: virtual reconcile — computed here, never written here (spec-queue.js's own
+  // reconcile is the persisted twin of this exact algorithm, from lib/queue.js): strip any
+  // stale `auto_placed` key, collapse duplicate brief/spec items to their first occurrence,
+  // then append any on-disk non-done, non-superseded brief absent from the queue LAST, with
+  // no stamp and no anomaly.
   const onDiskBriefs = briefs
     .filter(b => b.status !== 'done' && !b.superseded)
-    .map(b => ({ num: b.num, dependsOn: b.depends_on }))
-  const nowIso = new Date().toISOString()
-  const { items: reconciled } = reconcileMissingBriefs(queueOverlay.items, onDiskBriefs, { stamp: () => nowIso })
+    .map(b => ({ num: b.num }))
+  const stripped = stripAutoPlaced(queueOverlay.items)
+  const deduped = dedupeItems(stripped)
+  const { items: reconciled } = reconcileMissingBriefs(deduped, onDiskBriefs)
+  const ctx = makeCtx({
+    ledgerRows, briefStatus: n => (briefByNum.get(n) || {}).status, specStatus: specStatusFor, specRoot: root,
+  })
   reconciled.forEach((it, i) => {
-    if (it.kind !== 'brief') return
-    queuePosByBrief.set(it.brief, i)
-    if (it.auto_placed) {
-      let after = null
-      for (let j = i - 1; j >= 0; j--) { if (reconciled[j].kind === 'brief') { after = reconciled[j].brief; break } }
-      anomalies.push({ kind: 'queue-auto-placed', detail: `auto-queued: brief ${it.brief} ${after ? `after ${after}` : 'at the top'} — veto: spec-queue bump ${it.brief} · accept: spec-queue ok ${it.brief}` })
+    if (it.kind === 'brief') {
+      queuePosByBrief.set(it.brief, i)
+      if (!briefByNum.has(it.brief)) {
+        anomalies.push({ kind: 'queue-orphan', detail: `spec-queue.json item points at brief ${it.brief}, which has no docs/roadmap/${it.brief}-*.md — remove it with \`spec-queue done ${it.brief}\`, reorder it away with \`spec-queue move ${it.brief} <n>\`, or restore the brief file` })
+      }
+    } else if (it.kind === 'spec') {
+      queuePosBySpec.set(it.spec, i)
     }
-    if (!briefByNum.has(it.brief) && !it.auto_placed) {
-      anomalies.push({ kind: 'queue-orphan', detail: `spec-queue.json item ${it.id} points at brief ${it.brief}, which has no docs/roadmap/${it.brief}-*.md — remove it with spec-queue bump/defer, or restore the brief file` })
+    // D2/D3: a gate on a brief item blocks every open spec entry of that brief; a gate on a
+    // spec item blocks that one spec's entry; a gate on a prompt item blocks its own entry
+    // (handled below, in the prompt-entries map).
+    if (it.kind === 'brief' || it.kind === 'spec') {
+      const r = isItemReady(it, ctx)
+      if (!r.ready) {
+        const blocker = `after ${r.target} (${r.state})`
+        if (it.kind === 'brief') queueBlockersByBrief.set(it.brief, blocker)
+        else queueBlockersBySpec.set(it.spec, blocker)
+      }
+    }
+    if (it.after && it.after.spec) {
+      const r = isItemReady(it, ctx)
+      if (!r.ready) queueGateTargetSpecs.add(it.after.spec)
     }
   })
-  const ctx = makeCtx({ ledgerRows, briefStatus: n => (briefByNum.get(n) || {}).status, specRoot: root })
   queueUndonePromptEntries = reconciled
     .map((it, i) => ({ it, i }))
     .filter(({ it }) => it.kind === 'prompt' && !isItemDone(it, ctx).done)
-    .map(({ it, i }) => ({
-      action: it.payload, path: null, status: 'queued', brief: null, blockers: [],
-      note: `queue item ${it.id}`, rank: 0, queue: true, __queuePos: i,
-    }))
+    .map(({ it, i }) => {
+      const r = isItemReady(it, ctx)
+      const blockers = r.ready ? [] : [`after ${r.target} (${r.state})`]
+      return {
+        action: it.payload, path: null, status: 'queued', brief: null, blockers,
+        note: `queue item ${it.id}`, rank: 0, queue: true, __queuePos: i,
+      }
+    })
 }
 
 // Unknown status: frontmatter carries a word outside the lifecycle. Without this, deriveNext's
@@ -449,12 +495,18 @@ function deriveNext() {
         if (!dep || !dep.specs.some(x => LANDED(x.status))) blockers.push(`brief ${d} (${dep ? dep.status : 'missing'})`)
       }
     }
+    // specs/20260903/03 D2/D3: a queue `after` gate on this spec's own queued position, or
+    // on its brief's queued position, adds one more blocker string — reusing the existing
+    // blocked tier rather than a new field.
+    if (queueBlockersBySpec.has(s.path)) blockers.push(queueBlockersBySpec.get(s.path))
+    else if (s.brief && queueBlockersByBrief.has(s.brief)) blockers.push(queueBlockersByBrief.get(s.brief))
     const rank = s.status === 'implementing' ? 0 : s.status === 'hardened' ? 1 : 2
     entries.push({
       action, path: s.path, status: s.status, brief: s.brief, blockers,
       note: s.status + (s.design ? (s.designed ? ' [designed]' : ' [design]') : '')
         + (s.brief ? ` (brief ${s.brief})` : ''),
       rank,
+      __gateTargetPending: queueGateTargetSpecs.has(s.path),
     })
   }
   // D5: a red observation is a dashboard-level alarm — it outranks every build/review/plan
@@ -488,12 +540,15 @@ function deriveNext() {
   function queuePos(e) {
     if (!queueOverlay.on) return 0
     if (e.queue) return e.__queuePos
+    // D1: a queued spec item's own position overrides its brief's queued position.
+    if (e.path && queuePosBySpec.has(e.path)) return queuePosBySpec.get(e.path)
     if (e.brief && queuePosByBrief.has(e.brief)) return queuePosByBrief.get(e.brief)
     return Infinity
   }
   entries.sort((a, b) =>
     (a.blockers.length ? 1 : 0) - (b.blockers.length ? 1 : 0)
     || (a.rank === -3 ? 0 : 1) - (b.rank === -3 ? 0 : 1)
+    || (a.__gateTargetPending ? 1 : 0) - (b.__gateTargetPending ? 1 : 0)
     || queuePos(a) - queuePos(b)
     || a.rank - b.rank
     || (a.brief ? briefOrd(a.brief) : Infinity) - (b.brief ? briefOrd(b.brief) : Infinity)
@@ -552,7 +607,7 @@ if (nextMode) {
     // claim against), so the generic augmentation is skipped for it, never applied then
     // nulled out.
     writeOut(JSON.stringify({
-      next: entries.map(({ rank, parallelReason, __queuePos, ...e }) =>
+      next: entries.map(({ rank, parallelReason, __queuePos, __gateTargetPending, ...e }) =>
         e.queue ? e : { ...e, parallel: e.parallel === undefined ? null : e.parallel, parallel_reason: parallelReason || null }),
     }, null, 2))
     process.exit(0)
@@ -717,7 +772,7 @@ if (json) {
   } else if (!standalone.length) {
     out.push(`⚠️ ${anomalies.length} anomal${anomalies.length === 1 ? 'y' : 'ies'} — each tagged ⚠️ on its 🎯 Next line`)
   } else {
-    const ANOM_ICON = { 'orphan-stamp': '🏷️', 'skipped-brief': '⏭️', 'out-of-order': '🔀', 'unknown-dependency': '❓', 'skipped-spec': '🕳️', 'hand-tracked-status': '✍️', 'unknown-status': '🚧', 'queue-auto-placed': '🅰', 'queue-orphan': '🔗', 'queue-unparseable': '💥' }
+    const ANOM_ICON = { 'orphan-stamp': '🏷️', 'skipped-brief': '⏭️', 'out-of-order': '🔀', 'unknown-dependency': '❓', 'skipped-spec': '🕳️', 'hand-tracked-status': '✍️', 'unknown-status': '🚧', 'queue-orphan': '🔗', 'queue-unparseable': '💥' }
     out.push(`⚠️ Anomalies (${standalone.length}${folded ? ` here · ${folded} tagged ⚠️ below` : ''})`)
     for (const a of standalone) out.push(`   ${ANOM_ICON[a.kind] || '⚠️'} [${a.kind}] ${a.detail}`)
   }

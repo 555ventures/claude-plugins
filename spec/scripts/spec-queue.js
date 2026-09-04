@@ -1,63 +1,86 @@
 #!/usr/bin/env node
 'use strict'
 // spec-queue.js <subcommand> [args] — the sole writer of the per-repo session queue
-// (<git-common-dir>/spec-queue.json). Why: specs/20260823/08-derived-session-queue.md —
-// the session's intended work order across roadmap briefs, plus free-text work items and
-// their done-when predicates, was being reconstructed by hand every session (the recurring
-// incident this spec exists to end). spec-status.js reads this file read-only, as
-// an input overlay to its `--next` derivation (D2) — it never writes it, and this script
-// never re-derives `--next`'s own action/blockers shape; for a `brief` item it delegates
-// the paste line entirely to `spec-status.js --next` (the one frozen next-pointer
-// surface), layering only queue-specific parts (seed/reconcile summaries, auto-placement
-// veto notices) on top. Item doneness (both kinds) is evaluated exclusively via
-// lib/queue.js's isItemDone — the same evaluator spec-status.js's overlay uses — never a
-// second derivation here.
+// (<git-common-dir>/spec-queue.json). Why: specs/20260903/03-pipeline-queue-mechanics.md —
+// the queue is the pipeline's own memory for deferred work: an item can wait behind a spec
+// or a brief (an "after" gate) until that target is done, an ad-hoc spec can be queued by
+// path at any position, a brief that lands on the roadmap is appended last with no mark or
+// notice, and a brief or spec is queued at most once. spec-status.js reads this file
+// read-only, as an input overlay to its `--next` derivation — it never writes it, and this
+// script never re-derives `--next`'s own action/blockers shape; for a non-prompt item it
+// delegates the paste line entirely to `spec-status.js --next` (the one frozen next-pointer
+// surface). Item doneness and readiness (every kind) are evaluated exclusively via
+// lib/queue.js's isItemDone/isItemReady — the same evaluators spec-status.js's overlay
+// uses — never a second derivation here.
 //
 // What this deliberately does NOT do: reorder or render spec-status.js's `--next` output
-// itself; write a "done" flag onto a brief item (D4 — brief doneness is always derived
-// live from spec-status.js, never stored); keep a sidecar journal for manual ticks (D14 —
-// the tick stamps the item itself, in this file); seed or reconcile-insert from `list`
-// (D7 — that subcommand is read-only and never writes the queue file, even when on-disk
-// briefs have drifted since the last write subcommand ran).
+// itself; write a "done" flag onto a brief or spec item (doneness is always derived live
+// from spec-status.js, never stored); keep a sidecar journal for manual ticks (the tick
+// stamps the item itself, in this file); insert a newly-landed brief anywhere but the very
+// end (the dependency-aware/letter-suffix placement and its veto/accept notice are retired
+// — D4); alias the retired `bump`/`defer`/`ok` verbs or the retired `add --after`/`--brief`
+// flags (each exits 2 naming its `move`/`--at`/payload replacement — D6); have `list` mutate
+// the queue file (it virtually reconciles a copy, purely for numbering, and never appends a
+// newly-landed on-disk brief — only a write subcommand makes that append real, so `list`
+// always reflects exactly what the last write persisted, dedupe/strip-normalized).
 //
 // Subcommands:
-//   next                          reconcile+write, print top undone item + notices
-//   list                          full queue: done ✅ · top ▶ · pending ○ · auto-placed 🅰
-//   add <payload…> [--brief NN] [--when <type>:<args>] [--top | --after <ref>]
-//   bump <ref>                    move to top, clear auto_placed
-//   defer <ref> [--after <ref2>]  move to end (or after ref2), clear auto_placed
-//   done <ref>                    manual tick: stamp ticked, clear auto_placed
-//   ok [<ref>]                    accept auto placement(s): clear flag, keep position
-// <ref> resolves against an id, a brief number, or a unique payload substring.
+//   next                          reconcile+write, print the pick (or a prompt payload)
+//   list                          pending items only, numbered, gates shown, footer
+//   add <payload…> [--top | --at <n>] [--after-spec <path> | --after-brief NN]
+//                  [--when <type>:<args>]
+//   move <ref> <n>                n counts pending positions exactly as `list` prints them
+//   done <ref>                    manual tick: stamp ticked
+// Payload classification: NN/NNa or a docs/roadmap/NN-*.md path -> brief; a path matching
+// ^specs/.*\.md$ -> spec; anything else -> prompt verbatim.
+// <ref> resolves against an id, a brief number, a spec path (exact or unique basename
+// substring), or a unique prompt-payload substring.
 // --when <type>:<args>: brief-state:NN:STATE · spec-exists:PATH · ledger-count:STAGE:MIN
-//   (baseline is auto-stamped from the CURRENT ledger count at add time, D5) · manual.
+//   (baseline is auto-stamped from the CURRENT ledger count at add time) · manual.
 //
-// Exit codes: 0 ok/nothing-to-say · 2 usage, unresolvable <ref>, or a corrupt queue file
-//   (remedy: spec-queue list; or remove .git/spec-queue.json and re-run spec-queue next to
-//   reseed) · 3 not a git repository (remedy: run inside the repo).
+// Exit codes: 0 ok · 2 usage, unresolvable/ambiguous/already-done <ref>, duplicate brief/spec
+//   on add (names `spec-queue move <ref> <n>`), a missing --after-spec/--after-brief target,
+//   a removed verb/flag (names its replacement), or a corrupt queue file (remedy: remove
+//   <git-common-dir>/spec-queue.json and re-run `spec-queue next`) · 3 not a git repository
+//   (remedy: run inside the repo).
 
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
 const { readLedgerRows } = require('./lib/observation')
 const {
-  normBrief, isSupersededBriefText, isItemDone, makeCtx, reconcileMissingBriefs,
+  normBrief, isSupersededBriefText, isItemDone, isItemReady, makeCtx,
+  dedupeItems, stripAutoPlaced, reconcileMissingBriefs,
 } = require('./lib/queue')
 
 const SPEC_STATUS = path.join(__dirname, 'spec-status.js')
 
 function usage() {
-  console.error('usage: spec-queue.js <next|list|add|bump|defer|done|ok> [args]')
+  console.error('usage: spec-queue.js <next|list|add|move|done> [args]')
   console.error('  next | list')
-  console.error('  add <payload…> [--brief NN] [--when <type>:<args>] [--top | --after <ref>]')
-  console.error('  bump <ref> | defer <ref> [--after <ref2>] | done <ref> | ok [<ref>]')
+  console.error('  add <payload…> [--top | --at <n>] [--after-spec <path> | --after-brief NN] [--when <type>:<args>]')
+  console.error('  move <ref> <n> | done <ref>')
 }
 
 const argv = process.argv.slice(2)
-const SUBS = ['next', 'list', 'add', 'bump', 'defer', 'done', 'ok']
 const sub = argv[0]
-if (!SUBS.includes(sub)) { usage(); process.exit(2) }
 const rest = argv.slice(1)
+
+// D6: the retired verbs are recognized only to name their replacement and exit 2 — they
+// never touch the queue file. Checked before general usage validation so a typo'd old verb
+// gets a helpful message, not a bare usage dump.
+const REMOVED_SUBS = {
+  bump: ref => `spec-queue: 'bump' is retired — the reorder verb is move: spec-queue move ${ref || '<ref>'} 1`,
+  defer: ref => `spec-queue: 'defer' is retired — the reorder verb is move: spec-queue move ${ref || '<ref>'} <n>`,
+  ok: () => 'spec-queue: \'ok\' is retired — there is no accept step; a landed brief is placed last automatically. To reorder: spec-queue move <ref> <n>',
+}
+if (Object.prototype.hasOwnProperty.call(REMOVED_SUBS, sub)) {
+  console.error(REMOVED_SUBS[sub](rest[0]))
+  process.exit(2)
+}
+
+const SUBS = ['next', 'list', 'add', 'move', 'done']
+if (!SUBS.includes(sub)) { usage(); process.exit(2) }
 
 const root = process.cwd()
 
@@ -105,27 +128,9 @@ function loadQueue() {
   return data
 }
 
-// Written atomically (temp file + rename), adapted from spec/scripts/verdict.js's
-// writeRetainedArtifact — /spec:review of this spec found a CONTRACT
-// CONTRADICTION, not an observed corruption in this code: the spec's Behavior section
-// promises a lost insert self-heals ("reappears on the next invocation") but nowhere
-// tolerates a torn file, and loadQueue() exits 2 on one — bricking every spec-queue
-// subcommand and the SessionStart hook until a human deletes the file by hand. The review's
-// first repro (a synthetic script doing a raw fs.writeFileSync with a ~625KB payload, ~150x
-// a realistic queue file, NOT this function) tore in 1/40 trials; a second repro
-// reconstructing the REAL pre-fix writeQueue (plus its full lib/ + spec-status.js dependency
-// set) and racing it ~250 times — this test's own 12-way x 6-trial config, 200 trials at
-// 12-way, and 25 trials at 48-way, all at realistic ~196KB payloads — produced ZERO
-// corruptions on macOS/APFS (this repo's own test filesystem; no CI config exists here). The
-// fix stands on the contract contradiction and on host-filesystem portability, not on an
-// observed defect in the real code: the >196KB tearing threshold measured above is a
-// property of ONE filesystem, and this plugin ships to arbitrary host machines. The temp
-// file lives in the SAME directory as QUEUE_PATH (rename is only atomic within one
-// filesystem) and is discriminated by process.pid ALONE — unlike writeRetainedArtifact's
-// runId + process.pid + crypto.randomBytes(4) — because synchronous fs calls mean a single
-// process only ever has one writeQueue call in flight at a time, so two simultaneously-live
-// pids can never collide on the same temp path, and pid reuse only ever overwrites a stale
-// temp abandoned by a long-dead process.
+// Written atomically (temp file + rename) — see git history for the concurrency-safety
+// rationale this function's shape stands on (pinned by
+// tests/queue/spec-queue.test.js's AC-20260823-08-review-concurrent-writer-safety).
 function writeQueue(data) {
   const dir = path.dirname(QUEUE_PATH)
   const tmpPath = path.join(dir, `.spec-queue.${process.pid}.tmp`)
@@ -135,82 +140,75 @@ function writeQueue(data) {
 
 function nowIso() { return new Date().toISOString() }
 
-// On-disk briefs the way spec-queue.js needs them: num + dependsOn + status come straight
-// from spec-status.js's own derivation (never re-parsed here — see the module header);
-// superseded exclusion (D6) reads each brief file once more for isSupersededBriefText.
+// On-disk briefs the way spec-queue.js needs them: num + status come straight from
+// spec-status.js's own derivation (never re-parsed here); superseded exclusion reads each
+// brief file once more for isSupersededBriefText.
 function onDiskBriefs(statusJson) {
   return statusJson.briefs
     .filter(b => {
       try { return !isSupersededBriefText(fs.readFileSync(path.join(root, b.file), 'utf8')) }
       catch { return true } // file vanished under us — treat as queueable, never silently drop it
     })
-    .map(b => ({ num: b.num, dependsOn: b.depends_on, status: b.status }))
-}
-
-// Write-path reconcile (D6/D7): seed an absent file (non-done briefs only, roadmap order,
-// zero auto_placed, one summary line) or insert on-disk non-done briefs missing from an
-// existing file (auto_placed + a veto notice each). Every write subcommand calls this
-// before its own mutation; `list` never does.
-function reconcileForWrite(statusJson) {
-  const disk = onDiskBriefs(statusJson).filter(b => b.status !== 'done')
-  let data = loadQueue()
-  if (!data) {
-    const items = disk.map((b, i) => ({ id: `q${i + 1}`, kind: 'brief', brief: b.num, added: nowIso() }))
-    data = { version: 1, seq: items.length, items }
-    writeQueue(data)
-    console.log(`seeded queue with ${items.length} briefs (roadmap order)`)
-    return { data, notices: [] }
-  }
-  const { items: reconciled, inserted } = reconcileMissingBriefs(data.items, disk, { stamp: nowIso })
-  if (inserted.length) {
-    let seq = data.seq
-    for (const it of inserted) it.id = `q${++seq}`
-    data = { version: 1, seq, items: reconciled }
-    writeQueue(data)
-  }
-  const notices = reconciled
-    .filter(it => it.kind === 'brief' && it.auto_placed)
-    .map(it => autoPlacedNotice(reconciled, it))
-  return { data, notices }
-}
-
-function autoPlacedNotice(items, item) {
-  const idx = items.indexOf(item)
-  let after = null
-  for (let i = idx - 1; i >= 0; i--) { if (items[i].kind === 'brief') { after = items[i].brief; break } }
-  return `⚠️ auto-queued: brief ${item.brief} ${after ? `after ${after}` : 'at the top'} — veto: spec-queue bump ${item.brief} · accept: spec-queue ok ${item.brief}`
+    .map(b => ({ num: b.num, status: b.status }))
 }
 
 function ctxFor(statusJson) {
   const briefStatusMap = new Map(statusJson.briefs.map(b => [b.num, b.status]))
-  return makeCtx({ ledgerRows: readLedgerRows(root), briefStatus: n => briefStatusMap.get(n), specRoot: root })
+  const specStatusMap = new Map(statusJson.specs.map(s => [s.path, s.status]))
+  return makeCtx({
+    ledgerRows: readLedgerRows(root),
+    briefStatus: n => briefStatusMap.get(n),
+    specStatus: p => (fs.existsSync(path.join(root, p)) ? (specStatusMap.get(p) || null) : null),
+    specRoot: root,
+  })
 }
 
-function topUndone(items, ctx) {
-  for (const it of items) if (!isItemDone(it, ctx).done) return it
-  return null
+// Virtual reconcile shared by every subcommand: strip -> dedupe -> (optionally) append
+// missing on-disk briefs last. `list` deliberately omits the append step (Behavior:
+// numbering must match exactly what the last write persisted) — only a write subcommand
+// makes a newly-landed brief a real, persisted item.
+function reconciledItems(rawItems, statusJson, { append }) {
+  let items = dedupeItems(stripAutoPlaced(rawItems))
+  if (append) {
+    const disk = onDiskBriefs(statusJson).filter(b => b.status !== 'done')
+    items = reconcileMissingBriefs(items, disk).items
+  }
+  return items
 }
 
-// Delegates the actual paste line to spec-status.js's own overlay-aware --next — the sole
-// next-pointer derivation (D2) — rather than re-deriving a brief's action here.
-function printTopLine(item) {
-  if (!item) { console.log('✨ queue empty — nothing left undone'); return }
-  if (item.kind === 'prompt') { console.log(item.payload); return }
-  const r = spawnSync(process.execPath, [SPEC_STATUS, '--root', root, '--next'], { encoding: 'utf8' })
-  const lines = (r.stdout || '').split('\n')
-  console.log(lines.slice(1).join('\n').trim() || `brief ${item.brief}`)
+// Assigns real sequential ids to any inserted item (id === null) and writes the file.
+// `baseSeq` is the queue file's previous `seq` (0 for a brand-new file).
+function persist(items, baseSeq) {
+  let seq = baseSeq
+  const withIds = items.map(it => (it.id === null ? { ...it, id: `q${++seq}` } : it))
+  writeQueue({ version: 1, seq, items: withIds })
+  return { version: 1, seq, items: withIds }
+}
+
+function pendingIndices(items, ctx) {
+  return items.map((it, i) => ({ it, i })).filter(({ it }) => !isItemDone(it, ctx).done).map(({ i }) => i)
+}
+
+function itemDesc(it, briefNameByNum) {
+  if (it.kind === 'brief') {
+    const name = briefNameByNum.get(it.brief)
+    return `brief ${it.brief}${name ? ` (${name})` : ''}`
+  }
+  if (it.kind === 'spec') return `spec ${it.spec}`
+  return it.payload
 }
 
 function resolveRef(items, ref) {
   let matches = items.filter(i => i.id === ref)
   if (!matches.length) matches = items.filter(i => i.kind === 'brief' && i.brief === normBrief(ref))
+  if (!matches.length) matches = items.filter(i => i.kind === 'spec' && (i.spec === ref || path.basename(i.spec).includes(ref)))
   if (!matches.length) matches = items.filter(i => i.kind === 'prompt' && i.payload.includes(ref))
   if (!matches.length) {
-    console.error(`spec-queue: no item matches "${ref}" — run \`spec-queue list\` to see current ids/briefs/payloads`)
+    console.error(`spec-queue: no item matches "${ref}" — run \`spec-queue list\` to see current ids/briefs/specs/payloads`)
     process.exit(2)
   }
   if (matches.length > 1) {
-    console.error(`spec-queue: "${ref}" is ambiguous — matches ${matches.map(m => m.id).join(', ')} — use the id instead`)
+    console.error(`spec-queue: "${ref}" is ambiguous — matches ${matches.map(m => m.id || itemDesc(m, new Map())).join(', ')} — use the id instead`)
     process.exit(2)
   }
   return matches[0]
@@ -230,59 +228,144 @@ function parseWhen(raw, ctx) {
   return null
 }
 
+// Delegates the actual paste line to spec-status.js's own overlay-aware --next — the sole
+// next-pointer derivation — rather than re-deriving a brief/spec's action here.
+function printTopLine(item) {
+  if (!item) { console.log('✨ queue empty — nothing left undone'); return }
+  if (item.kind === 'prompt') { console.log(item.payload); return }
+  const r = spawnSync(process.execPath, [SPEC_STATUS, '--root', root, '--next'], { encoding: 'utf8' })
+  const lines = (r.stdout || '').split('\n')
+  console.log(lines.slice(1).join('\n').trim() || itemDesc(item, new Map()))
+}
+
+// The pick is the first item in queue order that is both undone AND ready (D3).
+function topPick(items, ctx) {
+  for (const it of items) {
+    if (isItemDone(it, ctx).done) continue
+    if (!isItemReady(it, ctx).ready) continue
+    return it
+  }
+  return null
+}
+
 switch (sub) {
   case 'list': {
-    const data = loadQueue()
-    if (!data || !data.items.length) {
-      console.log('queue is empty — seed it with `spec-queue next`, or start it with `spec-queue add <payload>`')
+    const statusJson = readSpecStatusJson()
+    const raw = loadQueue()
+    const ctx = ctxFor(statusJson)
+    const items = reconciledItems(raw ? raw.items : [], statusJson, { append: false })
+    const briefNameByNum = new Map(statusJson.briefs.map(b => [b.num, b.name]))
+    const pending = items.filter(it => !isItemDone(it, ctx).done)
+    const doneCount = items.length - pending.length
+    if (!pending.length) {
+      console.log(`✨ nothing pending · ${doneCount} done`)
       process.exit(0)
     }
-    const ctx = ctxFor(readSpecStatusJson())
-    let sawTop = false
-    for (const it of data.items) {
-      const done = isItemDone(it, ctx).done
-      const glyph = done ? '✅' : (!sawTop ? '▶' : '○')
-      if (!done) sawTop = true
-      const desc = it.kind === 'brief' ? `brief ${it.brief}` : it.payload
-      const tags = [it.auto_placed ? '🅰' : null, it.ticked ? `ticked ${it.ticked}` : null].filter(Boolean)
-      console.log(`${glyph} ${it.id}  ${desc}${tags.length ? '  (' + tags.join(', ') + ')' : ''}`)
-    }
+    pending.forEach((it, i) => {
+      let line = `${i + 1}  ${itemDesc(it, briefNameByNum)}`
+      if (it.after) {
+        const r = isItemReady(it, ctx)
+        if (!r.ready) line += `  ⏳ after ${r.target} (${r.state})`
+      }
+      console.log(line)
+    })
+    console.log(`— ${doneCount} done · move: spec-queue move <ref> <n>`)
     process.exit(0)
   }
 
   case 'next': {
-    const { data, notices } = reconcileForWrite(readSpecStatusJson())
-    const ctx = ctxFor(readSpecStatusJson())
-    notices.forEach(n => console.log(n))
-    printTopLine(topUndone(data.items, ctx))
+    const statusJson = readSpecStatusJson()
+    const raw = loadQueue()
+    const items = reconciledItems(raw ? raw.items : [], statusJson, { append: true })
+    const { items: written } = persist(items, raw ? raw.seq : 0)
+    if (!raw) console.log(`seeded queue with ${written.length} briefs (roadmap order)`)
+    const ctx = ctxFor(statusJson)
+    printTopLine(topPick(written, ctx))
     process.exit(0)
   }
 
   case 'add': {
-    const flags = { brief: null, when: null, top: false, after: null }
+    const flags = { when: null, top: false, at: null, afterSpec: null, afterBrief: null }
     const payloadParts = []
     for (let i = 0; i < rest.length; i++) {
       const a = rest[i]
-      if (a === '--brief') flags.brief = rest[++i]
+      if (a === '--top') flags.top = true
+      else if (a === '--at') flags.at = rest[++i]
+      else if (a === '--after-spec') flags.afterSpec = rest[++i]
+      else if (a === '--after-brief') flags.afterBrief = rest[++i]
       else if (a === '--when') flags.when = rest[++i]
-      else if (a === '--top') flags.top = true
-      else if (a === '--after') flags.after = rest[++i]
+      else if (a === '--after') { console.error('spec-queue: --after is retired — use --at <n> to insert at a specific pending position'); process.exit(2) }
+      else if (a === '--brief') { console.error('spec-queue: --brief is retired — pass the brief number as the payload directly (e.g. spec-queue add 05)'); process.exit(2) }
       else payloadParts.push(a)
     }
     const payload = payloadParts.join(' ')
-    if (!payload && !flags.brief) { console.error('spec-queue: add needs a payload (a brief number, a roadmap path, or free text)'); process.exit(2) }
-    const statusJson = readSpecStatusJson()
-    const { data } = reconcileForWrite(statusJson)
+    if (!payload) { console.error('spec-queue: add needs a payload (a brief number, a spec path, or free text)'); process.exit(2) }
+    if (flags.top && flags.at !== null) { console.error('spec-queue: add takes --top or --at <n>, never both'); process.exit(2) }
+    if (flags.afterSpec && flags.afterBrief) { console.error('spec-queue: add takes --after-spec or --after-brief, never both'); process.exit(2) }
+
+    const statusJson = readSpecStatusJson() // read-only — never touches the queue file
+
+    // Classification (D1): NN/NNa or docs/roadmap/NN-*.md -> brief; specs/*.md -> spec;
+    // else -> prompt verbatim.
+    const roadmapPathMatch = /^docs\/roadmap\/(\d+[a-z]?)-/.exec(payload)
+    let kind, briefNum, specPath
+    if (/^\d{2}[a-z]?$/.test(payload) || roadmapPathMatch) {
+      kind = 'brief'
+      briefNum = normBrief(roadmapPathMatch ? roadmapPathMatch[1] : payload)
+    } else if (/^specs\/.*\.md$/.test(payload)) {
+      kind = 'spec'
+      specPath = payload
+      if (!fs.existsSync(path.join(root, specPath))) {
+        console.error(`spec-queue: add ${specPath}: no such spec file — a queued spec path must exist at add time`)
+        process.exit(2)
+      }
+    } else {
+      kind = 'prompt'
+    }
+
+    // --after-* target validation (D2) — BEFORE any write, so a refused add creates nothing.
+    let after = null
+    if (flags.afterSpec) {
+      if (!fs.existsSync(path.join(root, flags.afterSpec))) {
+        console.error(`spec-queue: --after-spec ${flags.afterSpec}: no such spec file`)
+        process.exit(2)
+      }
+      after = { spec: flags.afterSpec }
+    } else if (flags.afterBrief) {
+      const num = normBrief(flags.afterBrief)
+      if (!statusJson.briefs.some(b => b.num === num)) {
+        console.error(`spec-queue: --after-brief ${flags.afterBrief}: no docs/roadmap/${num}-*.md found`)
+        process.exit(2)
+      }
+      after = { brief: num }
+    }
+
+    const raw = loadQueue()
+    const items = reconciledItems(raw ? raw.items : [], statusJson, { append: true })
+    const ctx = ctxFor(statusJson)
+
+    // D5: duplicate refusal, position numbered exactly as `list` (pending only).
+    if (kind === 'brief' || kind === 'spec') {
+      const dupIdx = items.findIndex(it => (kind === 'brief' && it.kind === 'brief' && it.brief === briefNum)
+        || (kind === 'spec' && it.kind === 'spec' && it.spec === specPath))
+      if (dupIdx !== -1) {
+        const pending = pendingIndices(items, ctx)
+        const pendPos = pending.indexOf(dupIdx)
+        if (pendPos !== -1) {
+          const ref = kind === 'brief' ? briefNum : specPath
+          console.error(`spec-queue: ${kind === 'brief' ? `brief ${briefNum}` : specPath} is already queued at position ${pendPos + 1} — spec-queue move ${ref} <n> to reorder it`)
+          process.exit(2)
+        }
+      }
+    }
 
     let newItem
-    const roadmapPathMatch = /^docs\/roadmap\/(\d+[a-z]?)-/.exec(payload)
-    if (flags.brief || /^\d{2}[a-z]?$/.test(payload) || roadmapPathMatch) {
-      const num = normBrief(flags.brief || (roadmapPathMatch ? roadmapPathMatch[1] : payload))
-      newItem = { id: null, kind: 'brief', brief: num, added: nowIso() }
-    } else {
+    if (kind === 'brief') newItem = { id: null, kind: 'brief', brief: briefNum, added: nowIso() }
+    else if (kind === 'spec') newItem = { id: null, kind: 'spec', spec: specPath, added: nowIso() }
+    else {
       newItem = { id: null, kind: 'prompt', payload, added: nowIso() }
       if (flags.when) {
-        const w = parseWhen(flags.when, ctxFor(statusJson))
+        const w = parseWhen(flags.when, ctx)
         if (!w) {
           console.error(`spec-queue: unrecognized --when "${flags.when}" — expected brief-state:NN:STATE, spec-exists:PATH, ledger-count:STAGE:MIN, or manual`)
           process.exit(2)
@@ -290,72 +373,62 @@ switch (sub) {
         newItem.when = w
       }
     }
-    let seq = data.seq
-    newItem.id = `q${++seq}`
-    const items = data.items.slice()
-    if (flags.top) items.unshift(newItem)
-    else if (flags.after) { const ref = resolveRef(items, flags.after); items.splice(items.indexOf(ref) + 1, 0, newItem) }
-    else items.push(newItem)
-    writeQueue({ version: 1, seq, items })
-    console.log(`added ${newItem.id}${newItem.kind === 'brief' ? ` (brief ${newItem.brief})` : ''}`)
+    if (after) newItem.after = after
+
+    let placed
+    if (flags.top) placed = [newItem, ...items]
+    else if (flags.at !== null) {
+      const n = Number(flags.at)
+      if (!Number.isInteger(n) || n < 1) { console.error(`spec-queue: --at <n> must be an integer >= 1 (got "${flags.at}")`); process.exit(2) }
+      const pending = pendingIndices(items, ctx)
+      const insertAt = n - 1 >= pending.length ? items.length : pending[n - 1]
+      placed = [...items.slice(0, insertAt), newItem, ...items.slice(insertAt)]
+    } else {
+      placed = [...items, newItem]
+    }
+    persist(placed, raw ? raw.seq : 0)
+    console.log(`added${kind === 'brief' ? ` brief ${briefNum}` : kind === 'spec' ? ` ${specPath}` : ''}`)
     process.exit(0)
   }
 
-  case 'bump': {
+  case 'move': {
     const ref = rest[0]
-    if (!ref) { console.error('spec-queue: bump needs a <ref>'); process.exit(2) }
-    const { data } = reconcileForWrite(readSpecStatusJson())
-    const item = resolveRef(data.items, ref)
-    const items = data.items.filter(i => i !== item)
-    delete item.auto_placed
-    items.unshift(item)
-    writeQueue({ version: 1, seq: data.seq, items })
-    console.log(`bumped ${item.id} to the top`)
-    process.exit(0)
-  }
+    const nRaw = rest[1]
+    if (!ref || nRaw === undefined) { console.error('spec-queue: move needs a <ref> and <n>'); process.exit(2) }
+    const n = Number(nRaw)
+    if (!Number.isInteger(n) || n < 1) { console.error(`spec-queue: move <n> must be an integer >= 1 (got "${nRaw}")`); process.exit(2) }
 
-  case 'defer': {
-    const ref = rest[0]
-    let after = null
-    for (let i = 1; i < rest.length; i++) if (rest[i] === '--after') after = rest[++i]
-    if (!ref) { console.error('spec-queue: defer needs a <ref>'); process.exit(2) }
-    const { data } = reconcileForWrite(readSpecStatusJson())
-    const item = resolveRef(data.items, ref)
-    const items = data.items.filter(i => i !== item)
-    delete item.auto_placed
-    if (after) { const target = resolveRef(items, after); items.splice(items.indexOf(target) + 1, 0, item) }
-    else items.push(item)
-    writeQueue({ version: 1, seq: data.seq, items })
-    console.log(`deferred ${item.id}`)
+    const statusJson = readSpecStatusJson()
+    const raw = loadQueue()
+    if (!raw) { console.error('spec-queue: no queue file — nothing to move (remedy: spec-queue next to seed one)'); process.exit(2) }
+    const ctx = ctxFor(statusJson)
+    const items = reconciledItems(raw.items, statusJson, { append: true })
+
+    const item = resolveRef(items, ref)
+    if (isItemDone(item, ctx).done) {
+      console.error(`spec-queue: "${ref}" is already done — nothing to move`)
+      process.exit(2)
+    }
+    const without = items.filter(it => it !== item)
+    const pending = pendingIndices(without, ctx)
+    const insertAt = n - 1 >= pending.length ? without.length : pending[n - 1]
+    const finalItems = [...without.slice(0, insertAt), item, ...without.slice(insertAt)]
+    persist(finalItems, raw.seq)
+    console.log(`moved ${itemDesc(item, new Map(statusJson.briefs.map(b => [b.num, b.name])))} to pending position ${Math.min(n, pending.length + 1)}`)
     process.exit(0)
   }
 
   case 'done': {
     const ref = rest[0]
     if (!ref) { console.error('spec-queue: done needs a <ref>'); process.exit(2) }
-    const { data } = reconcileForWrite(readSpecStatusJson())
-    const item = resolveRef(data.items, ref)
+    const statusJson = readSpecStatusJson()
+    const raw = loadQueue()
+    if (!raw) { console.error('spec-queue: no queue file — nothing to tick (remedy: spec-queue next to seed one)'); process.exit(2) }
+    const items = reconciledItems(raw.items, statusJson, { append: true })
+    const item = resolveRef(items, ref)
     item.ticked = nowIso()
-    delete item.auto_placed
-    writeQueue(data)
-    console.log(`ticked ${item.id}`)
-    process.exit(0)
-  }
-
-  case 'ok': {
-    const ref = rest[0]
-    const { data } = reconcileForWrite(readSpecStatusJson())
-    if (ref) {
-      const item = resolveRef(data.items, ref)
-      delete item.auto_placed
-      writeQueue(data)
-      console.log(`accepted placement of ${item.id}`)
-    } else {
-      const cleared = data.items.filter(i => i.auto_placed)
-      cleared.forEach(i => delete i.auto_placed)
-      writeQueue(data)
-      console.log(`accepted placement of ${cleared.length} item(s)`)
-    }
+    persist(items, raw.seq)
+    console.log(`ticked ${item.id || itemDesc(item, new Map())}`)
     process.exit(0)
   }
 }

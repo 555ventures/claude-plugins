@@ -15,6 +15,13 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // (a "SHALL CONTINUE TO" pin that must already be green on today's pre-queue code and stay green
 // after), the overlay being suppressed entirely inside a linked worktree (D9), and the red-
 // observation escape entry keeping rank supremacy over every queue position (D10).
+//
+// specs/20260903/03-pipeline-queue-mechanics.md adds two new readiness inputs to this same
+// read-only overlay: an `after` gate on any item (D2/D3 — a not-ready item's entry gains a
+// blocker string and sinks into the blocked tier, isItemReady shared with spec-queue.js's own
+// write path) and a queued `spec` item whose own position overrides its brief's (D1). The four
+// AC-20260823-08-3/-4/-14/-15 tests below are retagged in place as continuation pins (D9/D12);
+// nothing in their bodies changes.
 
 const SCRIPT = 'scripts/spec-status.js'
 
@@ -74,7 +81,116 @@ test('AC-20260823-08-2: a queue ordering brief 08 ahead of brief 05 makes 08\'s 
     'the queue-aware --json top entry must be brief 08, per Behavior: "queue position deliberately OVERRIDES cross-brief closest-to-done": ' + JSON.stringify(j.next))
 })
 
-test('AC-20260823-08-3 / AC-20260901-10-4: with no queue file present, --next output on a non-git host stays byte-identical to today\'s pre-queue derivation, as /spec:run', () => {
+test('AC-20260903-03-2: a top prompt gated with after:{spec} carries a blocker naming the target and its state, sinks below the unblocked spec, and unblocks once that spec is done', () => {
+  const dir = host({
+    specs: {
+      '20260701/01-a.md': 'date: 2026-07-01\nstatus: implementing',
+      '20260701/02-b.md': 'date: 2026-07-01\nstatus: hardened\nbrief: n/a',
+    },
+    queueItems: [
+      { id: 'q1', kind: 'prompt', payload: '/spec:plan @docs/roadmap/26-x.md', after: { spec: 'specs/20260701/01-a.md' }, added: '2026-08-23T10:00:00Z' },
+    ],
+  })
+  const j1 = JSON.parse(runNode(SCRIPT, ['--root', dir, '--next', '--json']).stdout)
+  const gated = j1.next.find((e) => e.action === '/spec:plan @docs/roadmap/26-x.md')
+  assert.ok(gated, 'D2/D3: a gated prompt item must still surface as its own --next entry: ' + JSON.stringify(j1.next))
+  assert.deepStrictEqual(gated.blockers, ['after specs/20260701/01-a.md (implementing)'],
+    "D2: the entry's blockers must name the exact gate target and its current status — a caller reading --json otherwise has no idea why the item is stuck: " + JSON.stringify(gated))
+  assert.strictEqual(j1.next[0].path, 'specs/20260701/02-b.md',
+    'D3: a not-ready item sinks into the blocked tier — the unblocked spec must be next[0] while the gate holds: ' + JSON.stringify(j1.next))
+
+  fs.writeFileSync(path.join(dir, 'specs/20260701/01-a.md'), '---\nstatus: done\n---\n# a\n')
+  const r2 = runNode(SCRIPT, ['--root', dir, '--next'])
+  assert.strictEqual(r2.status, 0, r2.stderr)
+  const lines2 = r2.stdout.split('\n')
+  assert.strictEqual(lines2[1], '/spec:plan @docs/roadmap/26-x.md',
+    'D2/D3: once the gate target is done, the prompt must become ready and print as line 2 of --next: ' + r2.stdout)
+})
+
+test('AC-20260903-03-3: a queued brief item gated with after:{brief} carries the blocker on its spec entry and unblocks once that brief is fully done', () => {
+  const dir = host({
+    briefs: {
+      '05-a.md': '# 05 — A\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',
+      '08-b.md': '# 08 — B\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',
+    },
+    specs: {
+      '20260701/01-a.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 05',
+      '20260701/02-b.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 08',
+    },
+    queueItems: [
+      { id: 'q1', kind: 'brief', brief: '08', after: { brief: '05' }, added: '2026-08-23T10:00:00Z' },
+    ],
+  })
+  const j1 = JSON.parse(runNode(SCRIPT, ['--root', dir, '--next', '--json']).stdout)
+  const gated = j1.next.find((e) => e.path === 'specs/20260701/02-b.md')
+  assert.ok(gated, "D2: brief 08's own spec entry must still surface in --next even while gated: " + JSON.stringify(j1.next))
+  assert.deepStrictEqual(gated.blockers, ['after brief 05 (in-flight)'],
+    "D2: a brief gate must give brief 08's spec entry the blocker naming brief 05 and its derived status: " + JSON.stringify(gated))
+  assert.strictEqual(j1.next[0].path, 'specs/20260701/01-a.md',
+    "D3: while 08 is gated on 05, brief 05's own spec must be the top pick: " + JSON.stringify(j1.next))
+
+  fs.writeFileSync(path.join(dir, 'specs/20260701/01-a.md'), '---\nstatus: done\nbrief: 05\n---\n# a\n')
+  const j2 = JSON.parse(runNode(SCRIPT, ['--root', dir, '--next', '--json']).stdout)
+  assert.strictEqual(j2.next[0].brief, '08',
+    'D2/D3: once every brief-05 spec is done, brief 05 is fully done and 08\'s spec must become next[0] with no more blocker: ' + JSON.stringify(j2.next))
+  const stillThere = j2.next.find((e) => e.path === 'specs/20260701/02-b.md')
+  assert.deepStrictEqual(stillThere.blockers, [],
+    "D2: once the gate's target brief is done, the blocker must be gone entirely, not merely relabeled: " + JSON.stringify(stillThere))
+})
+
+// (sanctioned pin exception, green pre-change, per this file's AC-20260823-08-3/-14 precedent):
+// D9's own Contracts section describes this key shape as CONTINUE TO — the frozen surface is
+// unchanged by this spec, so the pin is green both before and after the `after`/`spec`-item
+// mechanisms land.
+test('AC-20260903-03-12: --next --json keeps its exact frozen key shapes — top-level ["next"], the prompt entry\'s 7 keys, every other entry\'s 8 keys — with a gated prompt, a spec item, and a brief item all present', () => {
+  const dir = host({
+    briefs: { '05-a.md': '# 05 — A\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n' },
+    specs: {
+      '20260701/01-a.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 05',
+      '20260701/02-b.md': 'date: 2026-07-01\nstatus: hardened\nbrief: n/a',
+    },
+    queueItems: [
+      { id: 'q1', kind: 'prompt', payload: '/spec:plan @docs/roadmap/26-x.md', after: { brief: '05' }, added: '2026-08-23T10:00:00Z' },
+      { id: 'q2', kind: 'spec', spec: 'specs/20260701/02-b.md', added: '2026-08-23T10:01:00Z' },
+      { id: 'q3', kind: 'brief', brief: '05', added: '2026-08-23T10:02:00Z' },
+    ],
+  })
+  const j = JSON.parse(runNode(SCRIPT, ['--root', dir, '--next', '--json']).stdout)
+  assert.deepStrictEqual(Object.keys(j).sort(), ['next'],
+    'D9: --next --json top-level keys must stay exactly ["next"] — a new top-level key is a frozen-surface break: ' + Object.keys(j).join(','))
+  const promptEntry = j.next.find((e) => e.queue)
+  assert.ok(promptEntry, 'a gated prompt item must still emit its own --json entry: ' + JSON.stringify(j.next))
+  assert.deepStrictEqual(Object.keys(promptEntry).sort(),
+    ['action', 'blockers', 'brief', 'note', 'path', 'queue', 'status'].sort(),
+    "D9: a prompt entry's key set must stay exactly action,path,queue,status,brief,blockers,note — an ungated OR gated prompt entry never grows or drops a key: " + Object.keys(promptEntry).join(','))
+  const specEntry = j.next.find((e) => !e.queue)
+  assert.ok(specEntry, 'a queued spec item and brief item must both surface as ordinary (non-queue) entries: ' + JSON.stringify(j.next))
+  assert.deepStrictEqual(Object.keys(specEntry).sort(),
+    ['action', 'blockers', 'brief', 'note', 'parallel', 'parallel_reason', 'path', 'status'].sort(),
+    'D9: every non-prompt entry\'s key set must stay exactly action,path,status,brief,blockers,note,parallel,parallel_reason: ' + Object.keys(specEntry).join(','))
+})
+
+// (sanctioned pin exception, green pre-change): D1's own rationale states this is "today's
+// after-every-queued-position sort" — the existing Infinity-queuePos fallback for an unqueued
+// briefless spec already produces this ordering; this pin is green both before and after D1
+// lands, per this file's AC-20260823-08-3 precedent.
+test('AC-20260903-03-13: an unqueued brief:n/a hardened spec is placed virtually LAST behind a queued brief\'s spec', () => {
+  const dir = host({
+    briefs: { '08-b.md': '# 08 — B\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n' },
+    specs: {
+      '20260701/01-a.md': 'date: 2026-07-01\nstatus: hardened\nbrief: n/a',
+      '20260701/02-b.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 08',
+    },
+    queueItems: [
+      { id: 'q1', kind: 'brief', brief: '08', added: '2026-08-23T10:00:00Z' },
+    ],
+  })
+  const j = JSON.parse(runNode(SCRIPT, ['--root', dir, '--next', '--json']).stdout)
+  assert.deepStrictEqual(j.next.map((e) => e.brief).slice(0, 2), ['08', null],
+    "D1: brief 08 (queued) must be next[0], and the unqueued briefless spec's entry (brief: null) must sort right after it, never ahead of it: " + JSON.stringify(j.next.map((e) => ({ brief: e.brief, path: e.path }))))
+})
+
+test('AC-20260823-08-3 / AC-20260901-10-4 / AC-20260903-03-10: with no queue file present, --next output on a non-git host stays byte-identical to today\'s pre-queue derivation, as /spec:run', () => {
   // Deliberately NOT a git repo at all — the overlay resolution (D1: git rev-parse
   // --git-common-dir) must fail soft with zero stderr noise, matching A5's assumption that
   // existing spec-status tests already exercise non-git tmpdir hosts.
@@ -90,7 +206,7 @@ test('AC-20260823-08-3 / AC-20260901-10-4: with no queue file present, --next ou
     'a host with no git repository at all must never print overlay-resolution noise to stderr')
 })
 
-test('AC-20260823-08-4: a top prompt queue item prints its payload verbatim as line 2 of --next with no @path suffix, and as the frozen {action,path:null,queue:true} shape in --json', () => {
+test('AC-20260823-08-4 / AC-20260903-03-10: a top prompt queue item prints its payload verbatim as line 2 of --next with no @path suffix, and as the frozen {action,path:null,queue:true} shape in --json', () => {
   const dir = host({
     queueItems: [
       { id: 'q1', kind: 'prompt', payload: 'ship the landing page', added: '2026-08-23T10:00:00Z' },
@@ -114,7 +230,7 @@ test('AC-20260823-08-4: a top prompt queue item prints its payload verbatim as l
 // necessarily green both before and after D9 lands, matching this file's AC-20260823-08-3 sibling
 // and the repo's established convention for continuation invariants (spec-status.test.js's
 // AC-20260805-01-7/AC-20260805-03-7 precedent).
-test('AC-20260823-08-14: spec-status --root pointed at a linked worktree ignores a shared queue overlay entirely', () => {
+test('AC-20260823-08-14 / AC-20260903-03-10: spec-status --root pointed at a linked worktree ignores a shared queue overlay entirely', () => {
   const root = fs.realpathSync(tmpdir('queue-wt-overlay'))
   gitRepo(root)
   fs.mkdirSync(path.join(root, 'docs/roadmap'), { recursive: true })
@@ -227,7 +343,7 @@ test('spec-status.js --next --json survives a real pipe intact at a fixture size
     'the parsed --next JSON received over the pipe must carry its documented top-level "next" array — a truncated payload would either fail JSON.parse above or land here without it: ' + JSON.stringify(parsed))
 })
 
-test('AC-20260823-08-15: a red-observation escape entry keeps rank supremacy above every queue position', () => {
+test('AC-20260823-08-15 / AC-20260903-03-10: a red-observation escape entry keeps rank supremacy above every queue position', () => {
   const dir = fs.realpathSync(tmpdir('queue-escape'))
   gitRepo(dir)
   fs.mkdirSync(path.join(dir, 'docs/roadmap'), { recursive: true })

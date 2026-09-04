@@ -74,13 +74,9 @@ thing the script can't: narration.
    - `skipped-spec` — the unfinished dependency is the work item: point at its line in
      the dashboard's 🎯 Next section (its entry already carries the command — usually
      `/spec:review`), never re-derive it here.
-   - `queue-auto-placed` — the session queue's reconciliation stamped this item in
-     automatically from on-disk brief provenance; narrate the notice and name the veto
-     command the anomaly's detail carries (`spec-queue bump <ref>`, or `spec-queue ok <ref>`
-     to accept the placement) — never clear the stamp yourself.
    - `queue-orphan` — a queue item points at a brief file that does not exist; point at
      the fix (`spec-queue done <ref>` if the brief shipped under a new number, `spec-queue
-     defer <ref>` otherwise) — advice about a *pointer*, not a status change this command
+     move <ref> <n>` otherwise) — advice about a *pointer*, not a status change this command
      performs.
    - `hand-tracked-status` — see below.
 

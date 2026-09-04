@@ -250,7 +250,12 @@ test('shared-for: scoped output carries its sections and is smaller than the ful
   assert.match(run('shared-for', 'queue'), /## Question Style/,
     'D12: /spec:queue must be served § Question Style — any AskUserQuestion it raises (e.g. an ambiguous <ref>) must follow the same doctrine as every other command')
   assert.match(run('shared-for', 'queue'), /## Console Output Style/,
-    'D12: /spec:queue must be served § Console Output Style — the list glyph conventions (✅▶○🅰, veto/accept lines) must follow the shared narration doctrine')
+    // specs/20260903/03-pipeline-queue-mechanics.md D8 retires the old glyph-keyed render
+    // (done/top/pending/auto-placed markers) for a numbered `{n}  {desc}` list plus one
+    // `⏳ after <target> (<state>)` gate marker and a `— {d} done · move: …` footer — message
+    // text updated in place, the assertion itself unchanged (this test only checks the section
+    // is served, never the render's own literal shape).
+    'D12: /spec:queue must be served § Console Output Style — the list\'s numbered-pending render and its ⏳ gate marker must follow the shared narration doctrine')
 })
 
 // AC-20260824-05-3: specs/20260824/05-design-doctrine-cut.md D4 renames the design shared-for

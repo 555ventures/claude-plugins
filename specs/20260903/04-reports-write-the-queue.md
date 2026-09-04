@@ -1,6 +1,6 @@
 ---
 date: 2026-09-03
-status: implementing
+status: done
 tier: standard           # report-render.js + command/doctrine prose; no critical-trigger surface (spec-status.js untouched)
 area: session-queue
 design: false
@@ -126,6 +126,25 @@ must stay `spec-status --next` verbatim); writing the queue from `report-render.
 Why no regression pin: this spec adds one optional slot and prose; every existing
 `report-render` test exercises slots files without `queued` and stays green by AC-2's
 byte-identity, which is the pin.
+
+### Deviations folded at close (2026-09-03)
+
+Four departures were recorded during the build; two are already-known classes covered by the
+host's pipeline rules § Gotchas and added nothing new there (a Decision's literal version-bump
+target going stale under parallel worktrees — D6's 7.74.0 was taken by sibling spec 03, so this
+landed on 7.75.0; and a spec that adds a member to an exhaustive live-file pin landing
+out-of-File-Plan by construction — `spec/entrypoints.json`, waived at close on the user's ruling).
+Two are one-offs specific to this spec:
+
+- A3 proved false in the direction the assumption anticipated: `spec-queue add` prints a terse
+  `added` / `added brief NN` / `added <path>`, not the id-and-position example the Contracts
+  block used. Per A3's own if-false clause, every doctrine site is worded "printed verbatim or
+  glossed in plain English"; the `queued` slot contract is unchanged.
+- D2's Contracts block gave the core.md rule as a verbatim target, but the 7-line addition pushed
+  `/spec:design` (506 > 500) and `/spec:init` (976 > 970) past the one-way read-load ratchet. The
+  rule ships compressed with every clause intact, and § Console Output Style's intro and
+  Close-the-loop bullet were re-wrapped in the same edit to reclaim the remaining lines
+  (JJ ruling, recorded as D7).
 
 ## Canonical Delta
 

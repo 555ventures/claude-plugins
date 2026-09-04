@@ -125,3 +125,14 @@ unparsable status file fails open toward the existing behavior, never toward blo
 `rewrite` verdicts and every tier-1 check are unchanged. The judge prompt states that a
 document citing, discussing, or recommending a subject is never the user deciding it, and that
 a product fact (who, what, platform, payer, tenancy, what a screen does) is never `derive`.
+
+## Reports never defer work in prose (2026-09-03, specs/20260903/04)
+
+A command that decides something must happen after the current run writes it to the session
+queue (`spec-queue add …`, `--top` when urgent, `--after-spec`/`--after-brief` when gated)
+before rendering, and lists the write under the report's `queued` slot — `report-render.js`
+renders it as `📋 {text}` lines between `found` and `next`, with `📋` in `ANCHOR_GLYPHS` so a
+pre-anchored entry is refused like every other slot. An empty or absent `queued` renders
+byte-identically to a report without it. The `Next:` close is still `spec-status --next`
+verbatim and now reflects the write. Nothing writes the queue from a hook or on session start;
+every write is a command's explicit, reported act.

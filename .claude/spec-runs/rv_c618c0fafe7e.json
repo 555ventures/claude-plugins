@@ -1,0 +1,139 @@
+{
+  "runId": "rv_c618c0fafe7e",
+  "ts": "2026-09-04T04:07:34.498Z",
+  "spec": "specs/20260903/04-reports-write-the-queue.md",
+  "tier": "standard",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 1,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 611,
+    "base": "09e8486f6114b795bf5e0b1ff667b57ca54a640e",
+    "head": "f5599c0b7cc2ed5cc87225836c89a739b8f59178",
+    "dirty": false
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 3,
+      "observed": {
+        "outOfPlan": 1,
+        "files": [
+          "spec/entrypoints.json"
+        ]
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 13
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1075
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": {
+        "matches": 10
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": {
+        "files": 14,
+        "testsExecuted": 179
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 7,
+        "carried": 1,
+        "sanctioned": 6,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "reconcile leg out-of-plan hit on spec/entrypoints.json is an undisclosed scope escape",
+        "file": "spec/entrypoints.json",
+        "line": null,
+        "evidence": "Deviations sidecar (specs/20260903/04-reports-write-the-queue.deviations.md) records the file as required by entrypoints.test.js because the diff adds four new spec-paths spec-queue call sites plus core.md's now-unwrapped spec-paths report-render mention; D6 in the spec explicitly names spec/entrypoints.json joining scope for this reason. Full suite (npm test) exits 0 and entrypoints.test.js passes on the final tree, confirming the addition is required, not a shortcut."
+      },
+      {
+        "claim": "A3's Contracts-block example stdout for spec-queue add ('added q9 (…, after …) at position 2') doesn't match the shipped script's actual output, so the doctrine sites are unfaithful to the real observable",
+        "file": "spec/scripts/spec-queue.js",
+        "line": 397,
+        "evidence": "spec-queue.js line 397: console.log(`added${kind === 'brief' ? ` brief ${briefNum}` : kind === 'spec' ? ` ${specPath}` : ''}`) — no id or position printed, confirming the deviations sidecar's claim. The shipped doctrine wording (core.md, plan.md, review.md, escape.md diffs) hedges with 'printed verbatim or glossed in plain English' rather than asserting the richer example text, per A3's own if-false clause; the queued slot contract (report-render.js) is unaffected and its tests (AC-20260903-04-1/2/3) pass against the actual format."
+      },
+      {
+        "claim": "D7's read-load-driven compression of the core.md doctrine rule dropped a promised clause",
+        "file": "spec/doctrine/core.md",
+        "line": 259,
+        "evidence": "Diff shows the Close-the-loop bullet retains: queue write before render, --top/--after-spec/--after-brief, the queued slot, and 'never prose' — all four clauses D7 promises survive. tests/consistency/read-load.test.js and tests/consistency/citations-check.test.js pass in the full suite run (npm test exit 0)."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": null
+  }
+}

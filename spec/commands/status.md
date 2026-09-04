@@ -78,7 +78,9 @@ The default screen is exactly four blocks, in order:
 
 Nothing else prints by default — no anomaly-fold tag trailing the Next line, no separate
 anomalies section, no `⚡`/`🚦`/`🕓`/`⛔` lane render, no observation block, no headline
-verdict line above the roadmap. Those all move behind `--all`.
+verdict line above the roadmap. The anomaly-fold tag, the observation block and the headline
+verdict line are deleted outright — they print nowhere, not even under `--all`; only the lane
+render, the blocked list and the hygiene catalogue move behind `--all`.
 
 1. **After the block, narrate in one or two sentences** what the dashboard means for the
    user's next hour — name the paste line and, only when a decide line printed, the one

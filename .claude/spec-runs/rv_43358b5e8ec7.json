@@ -1,0 +1,162 @@
+{
+  "runId": "rv_43358b5e8ec7",
+  "ts": "2026-09-04T16:12:08.821Z",
+  "spec": "specs/20260903/05-status-diet.md",
+  "tier": "critical",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 1,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 859,
+    "base": "90c89d2364043c7fe2fac506fdf76c8b9e142cd7",
+    "head": "e66bb10ee91254aceba71952aab37bd51935d4a9",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 237
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1083
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 8,
+        "carried": 7,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "medium",
+        "claim": "status.md's closing sentence of the default-render section says the anomaly-fold tag, the observation block and the headline verdict line \"all move behind `--all`\", but D8 deletes the 📡 block outright and the File Plan deletes the fold and the headline; `--all` on a red-CI host prints neither an observation block nor a headline, and no ⚠️ tag ever trails a Next line under `--all`.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/commands/status.md",
+        "line": 79,
+        "impact": "A reader who wants the old CI-red evidence block or the headline verdict is told to run the everything flag and will not find them there; the footer is the only place that evidence lives now, and the doc points away from it.",
+        "evidence": "status.md:79-81 (rewritten hunk in this range): `Nothing else prints by default — no anomaly-fold tag trailing the Next line, no separate anomalies section, no ⚡/🚦/🕓/⛔ lane render, no observation block, no headline verdict line above the roadmap. Those all move behind --all.` D8: `The 📡 Observation block is deleted; a red observation renders as the /spec:escape Next line plus the 🔴 footer`. File Plan row spec-status.js: `anomaly fold, ⚠️ Anomalies section, 📡 block, headline line deleted`. Executed: synthetic host (brief 01; 01-auth-core done + ledger row {stage:observe, ci:red, branch:main, sha:deadbee, url:…/runs/9}; 02-open/03-open hardened) → `node spec/scripts/spec-status.js --root <host> --all` prints `🗺️ Roadmap … 🎯 Next /spec:escape @… 📋 All open work … 🧹 Hygiene (0) — /spec:doctor … 🔴 CI is red on specs/20260701/01-auth-core.md — main@deadbee (https://github.com/x/y/actions/runs/9) · 2 wait behind it`; regex test `/📡|done-but-red|anomal/` over that output → false. Only the anomalies section (as 🧹 Hygiene) and the lane render genuinely moved behind --all; the other three items in the sentence were deleted."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "Round-2 s0: spec-status.js header still cites doctor check 14 while the drift check is check 13.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/spec-status.js",
+        "line": 13,
+        "evidence": "Fix landed in the working tree: `grep -n 'check 14\\|check 13' spec/scripts/spec-status.js spec/commands/status.md spec/commands/doctor.md` → spec-status.js:13,19,22,252,461 all read `check 13`; zero `check 14` hits remain in the script or status.md; doctor.md's own numbering (`13. **Roadmap derivation**` / `14. **CI-gate parity**`) unchanged."
+      },
+      {
+        "claim": "Round-2 s1: status.md frontmatter description still narrates the pre-diet anomaly-oriented product.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/commands/status.md",
+        "line": 2,
+        "evidence": "Fix landed in the working tree: `git diff -- spec/commands/status.md` shows line 2 rewritten to `description: Where the work stands — one script run, four blocks: the roadmap, the one command to paste next, up to three decisions, and a one-line verdict footer; --all adds the parallel lanes, blocked list, and hygiene catalogue; /spec:doctor stays the deep audit`. The frontmatter still carries `argument-hint` and `allowed-tools`; no other frontmatter key changed."
+      },
+      {
+        "claim": "Round-1 s0/s2 fixes regressed: all-done footer glyph or the red-CI wait count.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/spec-status.js",
+        "line": 891,
+        "evidence": "Executed on synthetic hosts via a scratch runner (deleted after): all-done host (01-auth brief, 01-x.md done) default render ends `🎯 Next\\n   ✨ nothing next — all specs done, no unplanned briefs\\n\\n⬜ nothing waits`, exit 0; red-CI host (01-auth-core done + ci:red row, 02-open/03-open hardened) footer `🔴 CI is red on specs/20260701/01-auth-core.md — main@deadbee (https://github.com/x/y/actions/runs/9) · 2 wait behind it` and `--next --json` = [escape 01-auth-core, run 02-open, run 03-open] — two non-top entries, count matches. Hunk: `const topIsEscape = entries.length > 0 && entries[0].action === '/spec:escape'; const n = topIsEscape ? nonEscape.length : (nonEscape.length ? nonEscape.length - 1 : 0)` and `} else if (!entries.length) { glyph = '⬜'; head = 'nothing waits' }`."
+      },
+      {
+        "claim": "Round-1 s3/s4 fixes regressed: header comment or per-site audience literals.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/spec-status.js",
+        "line": 318,
+        "evidence": "Working-tree diff vs base: header lines 3-36 rewritten (usage lists `--all`; four-block narration; 🔴 footer narration; no `📡`); `DECIDE_KINDS = new Set(['skipped-brief','out-of-order'])` + `pushAnomaly()` at 314-321; every former `anomalies.push(` derivation site now calls `pushAnomaly(` (ten sites in the diff, none carry an `audience:` literal). `--json` on the AC-4 fixture (tests/status/status-diet.test.js) passes: skipped-brief → decide + line/ask/paste, orphan-stamp → hygiene without them."
+      },
+      {
+        "claim": "Round-1 s1 fix regressed: status.md still enumerates hygiene kinds.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/commands/status.md",
+        "line": 106,
+        "evidence": "status.md:106-112 at tree: `one [kind] {detail} line per hygiene-audience anomaly. These describe a file to fix, not a choice — the full catalogue of hygiene kinds lives in /spec:doctor check 13; this list is --all's pointer to it, never a second catalogue.` The only kind names left in the file are the two decide kinds (lines 68, 88-89, which D2/D3 make render content) and `hand-tracked-status` at 109 (whose strip offer D7 explicitly places under --all's hygiene list). doctor.md:130-134 carries the eight-kind list, sanctioned by D7."
+      },
+      {
+        "claim": "Frozen surfaces (D6 / AC-20260903-05-9) drifted in this range.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/spec-status.js",
+        "line": 124,
+        "evidence": "Executed on this repo at HEAD+tree: `--json | jq keys` → [\"anomalies\",\"briefs\",\"specs\",\"superseded\"]; `--all --json | jq keys` → same; `--next --json | jq keys` → [\"next\"]; `--next` → `🎯 Next\\n/spec:run @specs/20260903/05-status-diet.md` exit 0; `--all --brief 24` and `--all --next` → `usage: --all cannot combine with --next or --brief` exit 2; `cmp` of default vs `--pretty` output → identical. The argv hunk (lines 124-151) adds only the `--all` arm and the mutual-exclusion guard; the --next render and --brief preflight have no hunk."
+      },
+      {
+        "claim": "Existing assertions were weakened in tests/spec-status.test.js or tests/status/red-alarm.test.js.",
+        "file": "/Users/jj/Projects/claude-plugins/tests/spec-status.test.js",
+        "line": 723,
+        "evidence": "Every removed assert line in the range diff (`git diff <base> -- tests/spec-status.test.js tests/status/red-alarm.test.js | grep '^-' | grep assert` → 16 lines) belongs to one of the three pins the spec's Regression-pins paragraph names for in-place rewrite (AC-20260807-01-1 order test, the fold test, the 📡 line assertion) or to the 🧭-ordering/anomaly-mention tests that anchored on the deleted section; each is replaced by a stricter full-line footer pin or an equal-strength ordering pin against 🎯 Next (hunks at 723-755, 953-970; red-alarm.test.js 125-133). The eight lane tests change only their name and add `--all` to argv. Commit e66bb10 edits two comments only (`git show e66bb10` → 6 comment lines, no code)."
+      },
+      {
+        "claim": "Suite, scoped tests, or citation sweep red on the working tree.",
+        "file": "/Users/jj/Projects/claude-plugins/tests/status/status-diet.test.js",
+        "line": 1,
+        "evidence": "`node --test tests/status/status-diet.test.js tests/status/red-alarm.test.js tests/spec-status.test.js` → tests 56, pass 56, fail 0. `npm test` → tests 1083, pass 1083, fail 0, skipped 0, todo 0 (131.7 s). `node spec/scripts/citations-check.js --root .` → TOTAL=168 CHECKED=79 SKIP=89 MISS=0. manifest-3: gate 237 pass, suite 1083 exit 0, ac-matrix uncovered=0, promise-sweep rows=8 carried=7 sanctioned=1 orphans=0, smoke inert (no adapter)."
+      },
+      {
+        "claim": "Uncommitted working-tree edits are out-of-range or foreign work.",
+        "file": null,
+        "line": null,
+        "evidence": "`git status --short` → ` M .claude/spec-runs.jsonl` (review driver ledger, +2 rows), ` M spec/commands/status.md`, ` M spec/scripts/spec-status.js`, ` M tests/status/red-alarm.test.js`, `?? specs/20260903/05-status-diet.deviations.md`. The dispatcher named base..HEAD plus working tree; every tree hunk is a round-1 or round-2 fix reviewed above, and the deviations sidecar records the red-alarm last-line retag that round 2 already killed as a non-weakening."
+      },
+      {
+        "claim": "D7's `[no-ac: …]` sanction is false (doctrine prose + version pin are testable behavior the spec never turned into an AC).",
+        "file": "/Users/jj/Projects/claude-plugins/spec/.claude-plugin/plugin.json",
+        "line": 3,
+        "evidence": "The reason names the two enforcers that actually run: tests/consistency/plugin-version.test.js passes in the 1083-test suite (version 7.75.0 → 7.76.0, next free minor — 7.75.0 was taken by 392e396 before the range, sanctioned by § Gotchas' next-free rule), and the doctrine-without-bump check is the reviewer's own § Review Checks hard rule, satisfied here. The changelog paragraph names this spec and its three test files."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 112000
+  }
+}

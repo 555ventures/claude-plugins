@@ -2,9 +2,15 @@
 
 Observation is a red alarm, not a certification (specs/20260807/01). v7.0.0 retired
 `observe-ci.js` (no new `stage:"observe"` rows are written); `spec-status.js` still derives
-`observation: n/a|ok|red` from historical rows; only red renders (🔴 headline, one 📡 line, `/spec:escape` tops
---next as the oracle-shaped entry). The `--pretty` dashboard is bottom-anchored: Roadmap and
-detail first, 🎯 Next and the headline verdict are the final lines.
+`observation: n/a|ok|red` from historical rows; only red renders — the `/spec:escape` entry
+tops `--next` as the oracle-shaped pick and the dashboard footer turns 🔴 carrying branch, sha
+and url. The default dashboard is four blocks — 🗺️ Roadmap, 🎯 Next (the paste line, with ⏳ branch
+lines only when the top pick is blocked), up to three ⚠️ decide lines (`skipped-brief`,
+`out-of-order`: one sentence, one question, one paste), and a one-line footer whose glyph
+is the verdict (🔴 red CI, 🟠 blocked, 🟢 ready, ⬜ nothing) and whose clauses carry the
+wait, parallel, overflow and hygiene counts. `--all` adds the lane render, the blocked list
+and the hygiene catalogue. Every anomaly carries `audience: decide|hygiene` in `--json`;
+hygiene kinds are `/spec:doctor` check 13's findings and never render by default.
 
 The `--next` derivation consults an optional per-repo session queue (`spec-queue.json` in the
 git common directory, written only by `spec-queue.js`) as an input overlay. Items are briefs

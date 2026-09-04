@@ -1,6 +1,6 @@
 ---
 date: 2026-09-03
-status: implementing
+status: done
 tier: critical           # spec-status.js is a named critical trigger (.claude/rules/spec-pipeline.md § Risk Tiers): frozen --root/--next/--json surface
 area: session-queue
 design: false
@@ -228,6 +228,26 @@ the additive `audience` field, A5). Paths-leg `executes` hits outside the File P
 `tests/review/review-driver.test.js`, `tests/queue/queue-overlay.test.js` — all run
 `spec-status.js` with `--json` or `--next`, surfaces AC-20260903-05-9 keeps byte-identical; no
 fixture repair owed.
+
+**Deviation folded at close (one-off):** the File Plan row for `tests/status/red-alarm.test.js`
+predicted "last-line glyph assertions unchanged." § Behavior's unqualified nothing-next rule
+(`⬜ nothing waits`, no qualifier) falsifies that prediction for the green-observation host in
+`AC-20260807-01-10`'s runAt-max test: that host has zero open entries, so its footer is the
+nothing-next case, not the ready case. The assertion is rewritten in place to `⬜ nothing waits`
+plus a `doesNotMatch(/^🔴/)` guard and retagged AC-20260903-05-6 / AC-20260903-05-8 alongside its
+runAt-max tag. Behavior is the locked contract; a File Plan summary is a prediction, and the
+prediction lost.
+
+**Waived at close (2026-09-04, user ruling):** `spec/commands/status.md`'s default-render
+section closes by saying the anomaly-fold tag, the observation block and the headline verdict
+line "all move behind `--all`", when D1 and D8 delete all three outright — only the lanes, the
+blocked list and the hygiene catalogue actually move. The reviewer graded it medium and the
+disposer recommended `fix`; the review's fix loop was at its two-iteration cap, so landing the
+correction inside the run would have written an escalated ledger row against a run whose code,
+tests and frozen surfaces were all green. The cap guards against a runaway repair loop, which
+this was not, and the false signal would have corrupted the loop-vs-direct quality measurement.
+The correction is queued at the top of the session queue to land with the next close; nothing
+about the shipped behavior is in dispute.
 
 ## Canonical Delta
 

@@ -1,19 +1,25 @@
 #!/usr/bin/env node
 'use strict'
-// spec-status.js [--root <dir>] [--json] [--brief NN] [--next] — derive pipeline status,
-// never store it.
+// spec-status.js [--root <dir>] [--json] [--brief NN | --next | --all] — derive pipeline
+// status, never store it.
 //
-// Human output is ALWAYS the pretty render: bare invocation → the emoji dashboard;
-// --next → the lean 🎯 top-pick line (@-prefixed so it pastes straight into Claude Code).
-// --json is the only machine format (doctor check 14, release). --pretty is accepted as a
-// no-op for old call sites; there is no plain human render anymore.
+// Human output is ALWAYS the pretty render: bare invocation → the four-block dashboard —
+// 🗺️ Roadmap, 🎯 Next (the paste line), up to three ⚠️ decide lines, one glyph+sentence
+// footer — and nothing else (specs/20260903/05-status-diet.md D1/D3/D4). --next → the lean
+// 🎯 top-pick line alone (@-prefixed so it pastes straight into Claude Code). --all lifts the
+// decide-line cap and appends the full lane render and the hygiene catalogue ahead of the
+// same footer (D5) — every anomaly kind classifies once, in code, as `audience: "decide"`
+// (a choice only the reader can make) or `"hygiene"` (/spec:doctor's findings), never
+// re-derived per call site (D2). --json is the only machine format (doctor check 13,
+// release). --pretty is accepted as a no-op for old call sites; there is no plain human
+// render anymore.
 //
 // The single source of truth for "where is the work": specs/** frontmatter (`status:`,
 // `brief:`, `depends_on:`, `design:`, `designed:`) and docs/roadmap/NN-*.md headers
-// (`Depends on:`). Roadmap brief status is DERIVED per /spec:doctor check 14 — no specs
+// (`Depends on:`). Roadmap brief status is DERIVED per /spec:doctor check 13 — no specs
 // stamped `brief: NN` → unplanned; any matching spec not done → in-flight; all matching
 // specs done → done. Nothing here writes; this is a viewer. Consumers: /spec:status
-// (render + --next section 2), /spec:doctor check 14 (drift report), /spec:plan Phase 0
+// (render + --next section 2), /spec:doctor check 13 (drift report), /spec:plan Phase 0
 // (--brief dependency preflight), the /spec:review close-out Next pointer (--next), and
 // external `--json` consumers of the frozen --next --json shape.
 //
@@ -23,9 +29,11 @@
 // queries CI lives solely in observe-ci.js. Observation is a red alarm, not a certification
 // (specs/20260807/01-observation-red-alarm.md D2): the derived state is `n/a`/`ok`/`red` only —
 // `pending` is retired, nothing renders for "ok" (no ⏳, no "unobserved" anywhere). Observation
-// never blocks depends_on satisfaction; a red observation turns the dashboard headline 🔴, prints
-// one 📡 line, and becomes the --next top pick as a full oracle-shaped `/spec:escape` entry
-// (unchanged from specs/20260805/03's D5).
+// never blocks depends_on satisfaction; a red observation becomes the --next top pick as a full
+// oracle-shaped `/spec:escape` entry (unchanged from specs/20260805/03's D5) and drives the
+// dashboard footer to `🔴 CI is red on {path} — {branch}@{sha} ({url})`
+// (specs/20260903/05-status-diet.md D8) — the sole render of the alarm; there is no separate
+// observation section.
 //
 // --next derives the recommended next command per open spec: draft → /spec:plan; hardened
 // (with or without `design: true`, `designed:` set or not) and implementing both → /spec:run
@@ -241,7 +249,7 @@ if (fs.existsSync(roadmapDir)) {
   }
 }
 
-// ---- derivation (doctor check 14) -----------------------------------------------------------
+// ---- derivation (doctor check 13) -----------------------------------------------------------
 
 const DONE = s => s === 'done'
 const LANDED = s => s === 'done' || s === 'implementing'
@@ -303,6 +311,14 @@ function resolveQueueOverlay(rootDir) {
 }
 
 const anomalies = []
+// D2 (specs/20260903/05-status-diet.md): every anomaly kind classifies once, here — DECIDE
+// kinds are the two whose remedy is a choice only the reader can make; every other kind,
+// including one added here later and never listed in DECIDE, resolves to hygiene by
+// construction rather than silently carrying no audience at all.
+const DECIDE_KINDS = new Set(['skipped-brief', 'out-of-order'])
+function pushAnomaly(a) {
+  anomalies.push({ ...a, audience: DECIDE_KINDS.has(a.kind) ? 'decide' : 'hygiene' })
+}
 
 // specs/20260903/03 D1: specStatus(relPath) -> the spec's own frontmatter status, including
 // `superseded` (retired specs are filtered OUT of `specs` above but must still resolve here
@@ -318,7 +334,7 @@ const queueBlockersByBrief = new Map()
 const queueBlockersBySpec = new Map()
 let queueUndonePromptEntries = []
 if (queueOverlay.parseError) {
-  anomalies.push({ kind: 'queue-unparseable', audience: 'hygiene', detail: `${queueOverlay.parseError} — the session queue overlay is disabled until this is fixed (or the file removed and reseeded with \`spec-queue next\`)` })
+  pushAnomaly({ kind: 'queue-unparseable', detail: `${queueOverlay.parseError} — the session queue overlay is disabled until this is fixed (or the file removed and reseeded with \`spec-queue next\`)` })
 }
 if (queueOverlay.on) {
   // D4: virtual reconcile — computed here, never written here (spec-queue.js's own
@@ -339,7 +355,7 @@ if (queueOverlay.on) {
     if (it.kind === 'brief') {
       queuePosByBrief.set(it.brief, i)
       if (!briefByNum.has(it.brief)) {
-        anomalies.push({ kind: 'queue-orphan', audience: 'hygiene', detail: `spec-queue.json item points at brief ${it.brief}, which has no docs/roadmap/${it.brief}-*.md — remove it with \`spec-queue done ${it.brief}\`, reorder it away with \`spec-queue move ${it.brief} <n>\`, or restore the brief file` })
+        pushAnomaly({ kind: 'queue-orphan', detail: `spec-queue.json item points at brief ${it.brief}, which has no docs/roadmap/${it.brief}-*.md — remove it with \`spec-queue done ${it.brief}\`, reorder it away with \`spec-queue move ${it.brief} <n>\`, or restore the brief file` })
       }
     } else if (it.kind === 'spec') {
       queuePosBySpec.set(it.spec, i)
@@ -374,14 +390,14 @@ if (queueOverlay.on) {
 // filtered it out above — so every hit is a typo or a hand-invented word, which has a real fix.
 for (const s of specs) {
   if (!KNOWN_STATUS.has(s.status)) {
-    anomalies.push({ kind: 'unknown-status', audience: 'hygiene', detail: `${s.path} has status: ${s.status} — not in the spec lifecycle (${[...KNOWN_STATUS].join(' → ')}); fix the frontmatter (to retire a preserved spec: status: superseded)` })
+    pushAnomaly({ kind: 'unknown-status', detail: `${s.path} has status: ${s.status} — not in the spec lifecycle (${[...KNOWN_STATUS].join(' → ')}); fix the frontmatter (to retire a preserved spec: status: superseded)` })
   }
 }
 
 // Orphan stamps: spec points at a brief file that doesn't exist.
 for (const s of specs) {
   if (s.brief && !briefByNum.has(s.brief)) {
-    anomalies.push({ kind: 'orphan-stamp', audience: 'hygiene', detail: `${s.path} stamps brief: ${s.brief} but no docs/roadmap/${s.brief}-*.md exists (brief renamed/deleted, or typo)` })
+    pushAnomaly({ kind: 'orphan-stamp', detail: `${s.path} stamps brief: ${s.brief} but no docs/roadmap/${s.brief}-*.md exists (brief renamed/deleted, or typo)` })
   }
 }
 
@@ -390,7 +406,7 @@ for (const s of specs) {
 // but surfaced so a mistyped brief id doesn't silently vanish from the dependency graph.
 for (const b of briefs) {
   for (const r of b.dep_rejects) {
-    anomalies.push({ kind: 'unparsed-dependency', audience: 'hygiene', detail: `${b.file} Depends on: item "${r}" is not a brief id (NN or NNa) — ignored; if it names a spec-level gate, move it into the brief body` })
+    pushAnomaly({ kind: 'unparsed-dependency', detail: `${b.file} Depends on: item "${r}" is not a brief id (NN or NNa) — ignored; if it names a spec-level gate, move it into the brief body` })
   }
 }
 
@@ -401,9 +417,9 @@ for (const b of briefs) {
   if (b.status === 'unplanned') continue
   for (const d of b.depends_on) {
     const dep = briefByNum.get(d)
-    if (!dep) anomalies.push({ kind: 'unknown-dependency', audience: 'hygiene', detail: `${b.file} depends on brief ${d}, which doesn't exist` })
-    else if (dep.status === 'unplanned') anomalies.push({
-      kind: 'skipped-brief', audience: 'decide',
+    if (!dep) pushAnomaly({ kind: 'unknown-dependency', detail: `${b.file} depends on brief ${d}, which doesn't exist` })
+    else if (dep.status === 'unplanned') pushAnomaly({
+      kind: 'skipped-brief',
       detail: `brief ${b.num} (${b.name}) is ${b.status} but its dependency ${d} (${dep.name}) is unplanned — likely skipped; plan it with /spec:plan ${dep.file}`,
       line: `Brief ${b.num} (${b.name}) moved on, but its dependency ${d} (${dep.name}) was never planned.`,
       ask: 'Plan it now?',
@@ -419,8 +435,8 @@ if (moved.length) {
   const maxMoved = moved.reduce((m, b) => briefOrd(b.num) > briefOrd(m.num) ? b : m).num
   for (const b of briefs) {
     if (b.status === 'unplanned' && briefOrd(b.num) < briefOrd(maxMoved) && !anomalies.some(a => a.detail.includes(`dependency ${b.num} `))) {
-      anomalies.push({
-        kind: 'out-of-order', audience: 'decide',
+      pushAnomaly({
+        kind: 'out-of-order',
         detail: `brief ${b.num} (${b.name}) is unplanned while later brief ${maxMoved} has moved — deliberate reordering or a skip; if it still matters: /spec:plan ${b.file}`,
         line: `Brief ${b.num} (${b.name}) is unplanned while later brief ${maxMoved} has moved on.`,
         ask: 'Still wanted?',
@@ -437,12 +453,12 @@ for (const s of specs) {
   for (const d of s.depends_on) {
     const dep = specDep(d)
     if (dep && !DONE(dep.status)) {
-      anomalies.push({ kind: 'skipped-spec', audience: 'hygiene', detail: `${s.path} is done but its dependency ${dep.path} is still ${dep.status}` })
+      pushAnomaly({ kind: 'skipped-spec', detail: `${s.path} is done but its dependency ${dep.path} is still ${dep.status}` })
     }
   }
 }
 
-// Hand-tracked status drift in the overview's Sequence table (doctor check 14 outlaws it).
+// Hand-tracked status drift in the overview's Sequence table (doctor check 13 outlaws it).
 // Whole-cell match only: a brief legitimately NAMED "mark-as-done flow" is not drift.
 const overview = path.join(roadmapDir, '00-overview.md')
 if (fs.existsSync(overview)) {
@@ -450,7 +466,7 @@ if (fs.existsSync(overview)) {
   const STATUSY = /^(?:[✅✔❌🟢🟠]\s*)?(planned|unplanned|done|in.?progress|in.?flight|shipped|completed?|wip|todo)[.!]?$|^[✅✔❌🟢🟠]$/i
   const cells = rows.flatMap(l => l.split('|').map(c => c.trim())).filter(c => STATUSY.test(c))
   if (cells.length) {
-    anomalies.push({ kind: 'hand-tracked-status', audience: 'hygiene', detail: `docs/roadmap/00-overview.md Sequence table carries hand-tracked status cell(s): ${[...new Set(cells)].join(', ')} — statuses live only in this derivation; strip that column` })
+    pushAnomaly({ kind: 'hand-tracked-status', detail: `docs/roadmap/00-overview.md Sequence table carries hand-tracked status cell(s): ${[...new Set(cells)].join(', ')} — statuses live only in this derivation; strip that column` })
   }
 }
 
@@ -663,12 +679,12 @@ if (briefFilter) {
   process.exit(unmet.length ? 1 : 0)
 }
 
-// ---- the /spec:status dashboard (default render) --------------------------------------------
-// Deterministic emoji render of the same derivation: verdict line, roadmap with per-brief
-// progress bars (consecutive unplanned briefs collapse to one row), the next-action lanes
+// ---- the /spec:status dashboard (default render + --all) --------------------------------------
+// Deterministic emoji render of the same derivation, roadmap with per-brief progress bars
+// (consecutive unplanned briefs collapse to one row); under --all, the next-action lanes
 // (parallel-ok runner-ups drawn as fan-out lanes under the top pick, a 🔶 branch line when
-// two lanes' File Plan tables share a path), anomalies. Purely a view — same data as --json,
-// styled here so no renderer re-derives it.
+// two lanes' File Plan tables share a path) and the hygiene catalogue. Purely a view — same
+// data as --json, styled here so no renderer re-derives it.
 
 if (json) {
   // `superseded` (the brief-level flag, internal-only per its own comment above) is
@@ -867,8 +883,12 @@ const waitClause = n => n === 1 ? '1 waits behind it' : `${n} wait behind it`
   // — except the wait clause on the 🟢 line, which prints "nothing waits behind it" at n = 0
   // rather than being omitted.
   {
+    // D4/Behavior: wait count n excludes escape entries outright, then excludes the top pick
+    // itself — the top pick is entries[0] regardless of whether it is the escape entry, so an
+    // escape top pick subtracts nothing (every non-escape entry is still waiting behind it).
     const nonEscape = entries.filter(e => e.action !== '/spec:escape')
-    const n = nonEscape.length ? nonEscape.length - 1 : 0
+    const topIsEscape = entries.length > 0 && entries[0].action === '/spec:escape'
+    const n = topIsEscape ? nonEscape.length : (nonEscape.length ? nonEscape.length - 1 : 0)
     const { lanes } = laneAdmission(entries)
     const m = Math.max(0, lanes.length - 1)
     const k = decideOverflow
@@ -879,15 +899,12 @@ const waitClause = n => n === 1 ? '1 waits behind it' : `${n} wait behind it`
       const row = observationRows.get(top.path)
       glyph = '🔴'
       head = `CI is red on ${top.path} — ${row.branch}@${row.sha} (${row.url})`
-    } else if (!entries.length && briefs.some(b => b.status === 'unplanned')) {
-      // D4/Behavior "Nothing next": ⬜ is reserved for the specific stuck-on-a-dependency shape
-      // (nothingNextLine()'s "nothing actionable" branch) — a host that is simply, cleanly done
-      // (no open specs, no unplanned brief left blocked) reads as ready, not stalled.
+    } else if (!entries.length) {
+      // D4/Behavior "Nothing next": unqualified — every entries.length === 0 shape (not just the
+      // blocked-unplanned-brief one) is ⬜, the Next block's ✨ nothingNextLine() message paired
+      // one-to-one with this glyph.
       glyph = '⬜'
       head = 'nothing waits'
-    } else if (!entries.length) {
-      glyph = '🟢'
-      head = 'next is ready'
     } else if (entries[0].blockers.length) {
       glyph = '🟠'
       head = `next is blocked · waiting on ${shortBlocker(entries[0].blockers[0])}`

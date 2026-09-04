@@ -1,5 +1,5 @@
 ---
-description: Where the work stands — derived roadmap/spec status plus skip and drift anomalies, one script run. The cheap "which briefs are done, which spec did I skip?" view; /spec:doctor stays the deep audit
+description: Where the work stands — one script run, four blocks: the roadmap, the one command to paste next, up to three decisions, and a one-line verdict footer; --all adds the parallel lanes, blocked list, and hygiene catalogue; /spec:doctor stays the deep audit
 argument-hint: "[NN — optional brief number for a single-brief dependency readiness check] [--all — everything the default screen omits]"
 allowed-tools: Bash(spec-paths:*), Bash(node:*), Read, Edit
 ---
@@ -104,14 +104,12 @@ sections the default screen never shows, then the same footer:
   and the full blocked list live now — narrate them exactly as before when the user asks "what
   else could I run."
 - **`🧹 Hygiene ({h}) — /spec:doctor`** — one `[kind] {detail}` line per hygiene-audience
-  anomaly (`queue-unparseable`, `queue-orphan`, `unknown-status`, `orphan-stamp`,
-  `unparsed-dependency`, `unknown-dependency`, `skipped-spec`, `hand-tracked-status`). These
-  describe a file to fix, not a choice — every hygiene kind's full write-up lives in
-  `/spec:doctor` check 13; this list is the pointer, never a second catalogue. On
-  `hand-tracked-status`, quote the offending cell(s) from its line and offer to strip that
-  column from `00-overview.md` — that edit is sanctioned because the overview template itself
-  outlaws the column; it is the single edit this command may make, and it still requires the
-  user's yes.
+  anomaly. These describe a file to fix, not a choice — the full catalogue of hygiene kinds
+  lives in `/spec:doctor` check 13; this list is `--all`'s pointer to it, never a second
+  catalogue. On `hand-tracked-status`, quote the offending cell(s) from its line and offer to
+  strip that column from `00-overview.md` — that edit is sanctioned because the overview
+  template itself outlaws the column; it is the single edit this command may make, and it
+  still requires the user's yes.
 
 Do not re-derive, second-guess, or embellish the script's statuses, and never offer to
 "fix" a status by editing `status:` frontmatter — statuses only move by running the pipeline

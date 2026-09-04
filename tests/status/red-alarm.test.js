@@ -106,7 +106,7 @@ test('AC-20260807-01-7 / AC-20260903-05-6: a red latest observation turns the he
     'while an escape entry exists the all-done → plan-next-brief branch must be suppressed entirely')
 })
 
-test('AC-20260807-01-10: the qualifying row is the greatest runAt regardless of file line order — a newer green row clears an older red row and reports observation:"ok"', () => {
+test('AC-20260807-01-10 / AC-20260903-05-6 / AC-20260903-05-8: the qualifying row is the greatest runAt regardless of file line order — a newer green row clears an older red row, reports observation:"ok", and never reddens the footer', () => {
   const specPath = 'specs/20260701/01-x.md'
   // The green row sits EARLIER in the ledger file (line 2) but carries the LATER runAt; the red
   // row sits LATER in the file (line 3) but carries the EARLIER runAt. A last-line-wins
@@ -125,8 +125,13 @@ test('AC-20260807-01-10: the qualifying row is the greatest runAt regardless of 
   assert.strictEqual(r.status, 0, r.stderr)
   assert.doesNotMatch(r.stdout, /done-but-red/, 'the older red row must never win over the newer green one')
   const nonEmpty = r.stdout.split('\n').filter((l) => l.trim() !== '')
-  assert.match(nonEmpty[nonEmpty.length - 1], /^🟢/,
-    'D1: a green-resolved observation must never turn the bottom-anchored headline red')
+  // This host's one spec is done and there are no briefs, so deriveNext() has zero open
+  // entries — the footer head is D4's nothing-next case, not the ready case; the invariant
+  // this test guards is that a green-resolved observation never turns that footer red.
+  assert.doesNotMatch(nonEmpty[nonEmpty.length - 1], /^🔴/,
+    'AC-20260903-05-6/D8: a green-resolved observation must never turn the bottom-anchored footer red')
+  assert.strictEqual(nonEmpty[nonEmpty.length - 1], '⬜ nothing waits',
+    'AC-20260903-05-8/D4: zero open entries is the nothing-next case — the footer is exactly ⬜ nothing waits, unqualified')
 })
 
 // (sanctioned pin exception, green pre-change): lib/observation.js's runAt-tie red-wins rule is

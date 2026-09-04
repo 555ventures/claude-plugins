@@ -41,8 +41,8 @@ unique prompt-payload substring, or an item id. Pass everything after the subcom
 through — never reparse or validate `<ref>`/`--when`/`--after-*` shapes yourself; the
 script's usage/ambiguity errors already name the fix.
 
-`bump`, `defer`, `ok`, `add --after <ref>`, and `add --brief` no longer exist — the script
-exits 2 naming the replacement (`move`, or `--at`/`--top` at add time); relay that message
+The verb set is exactly `next`, `list`, `add`, `move`, `done`. Anything outside it — `bump`,
+`defer`, `ok`, `add --after <ref>`, `add --brief` — exits 2 naming the replacement (`move`, or `--at`/`--top` at add time); relay that message
 verbatim rather than translating it.
 
 ## Run

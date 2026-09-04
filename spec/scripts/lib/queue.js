@@ -68,7 +68,7 @@ function evaluateWhen(when, ctx) {
 
 // Item doneness (D1/D4/D14 of the two specs): a `brief` item's doneness is ALWAYS the
 // derived brief state — never a stored flag. A `spec` item's doneness (D1, this spec) is
-// ALWAYS the derived spec status — done or superseded — OR the file no longer existing
+// ALWAYS the derived spec status — done or superseded — OR the file being absent
 // (retirement precedent: a vanished spec is silence, not a dangling reference). A `prompt`
 // item is done when manually ticked (`ticked` stamped), OR — when it carries a `when`
 // predicate — when that predicate evaluates true; a prompt item with neither is manual-only
@@ -149,8 +149,8 @@ function dedupeItems(items) {
   return out
 }
 
-// D4 (this spec): `auto_placed` is never written going forward; a file carrying it from
-// before this spec is tolerated on read and stripped on the next write. Returns a NEW array
+// D4 (this spec): `auto_placed` is never written; a file carrying the key is tolerated on
+// read and stripped on the next write. Returns a NEW array
 // (items themselves are shallow-copied only when they actually carry the key) — `items` is
 // never mutated.
 function stripAutoPlaced(items) {

@@ -35,6 +35,11 @@
       "spec/commands/doctor.md"
     ]
   },
+  "spec/scripts/commit-coverage.js": {
+    "entryPoints": [
+      "git/commands/commit.md"
+    ]
+  },
   "spec/scripts/components-check.js": {
     "entryPoints": [
       "spec/doctrine/design.md",

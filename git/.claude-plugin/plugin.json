@@ -1,7 +1,7 @@
 {
   "name": "git",
-  "version": "1.2.0",
-  "description": "Git helpers: a fast add-all-and-commit flow, a guided merge with conflict repair and worktree cleanup, and idempotent per-spec worktree entry",
+  "version": "1.3.0",
+  "description": "Git helpers: a fast add-all-and-commit flow, a guided merge with conflict repair and worktree cleanup, and idempotent per-spec worktree entry. `/git:commit`'s step 3 escape check now runs `commit-coverage.js` (via `spec-paths commit-coverage`) instead of the retired git-blame/jq heuristic, gated on a fix-typed commit subject, and offers on any touched file a reviewed spec landed — still never blocking the commit.",
   "author": {
     "name": "JJ",
     "email": "jj@555.ventures"

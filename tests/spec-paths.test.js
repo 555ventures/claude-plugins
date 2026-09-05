@@ -110,7 +110,8 @@ test('every documented key resolves to an existing path', () => {
     'wf-research', 'design-atlas', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
     'review-driver', 'build-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'render-gate', 'render-compare',
-    'render-inventory', 'render-rules', 'registry-check', 'genesis-driver', 'escape-row', 'mocks-driver', 'shared', 'shared-genesis', 'shared-mocks', 'template', 'templates', 'contract']) {
+    'render-inventory', 'render-rules', 'registry-check', 'genesis-driver', 'escape-row', 'mocks-driver', 'commit-coverage',
+    'shared', 'shared-genesis', 'shared-mocks', 'template', 'templates', 'contract']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }
@@ -126,6 +127,20 @@ test('AC-20260901-07-15: spec-paths escape-row resolves to spec/scripts/escape-r
     'D2/D10: `spec-paths escape-row` must resolve to spec/scripts/escape-row.js — a wrong or missing key breaks escape.md\'s D6 --append/--amend invocations silently (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently")')
   assert.ok(fs.existsSync(escapeRowPath), 'the resolved escape-row.js path must actually exist on disk: ' + escapeRowPath)
   assert.ok(fs.statSync(escapeRowPath).isFile(), 'the resolved escape-row.js path must be a regular file, not a directory or missing entirely: ' + escapeRowPath)
+})
+
+// AC-20260904-01-1: specs/20260904/01-commit-time-escape-coverage.md D1 adds
+// spec/scripts/commit-coverage.js to the bundle (a new `commit-coverage` key) — like every other
+// bundled script it needs a spec-paths key, or git/commands/commit.md's step 3
+// `spec-paths commit-coverage` invocation resolves nothing (§ Risk Tiers, spec-paths: "a wrong
+// key breaks commands silently"; same additive-collision class as AC-20260819-02-10 above).
+test('AC-20260904-01-1: spec-paths commit-coverage resolves to spec/scripts/commit-coverage.js, an existing absolute path', () => {
+  const fs = require('node:fs')
+  const commitCoveragePath = run('commit-coverage').trim()
+  assert.strictEqual(commitCoveragePath, path.join(SPEC, 'scripts/commit-coverage.js'),
+    'D1: `spec-paths commit-coverage` must resolve to spec/scripts/commit-coverage.js — a wrong or missing key breaks git/commands/commit.md\'s step 3 invocation silently (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently")')
+  assert.ok(path.isAbsolute(commitCoveragePath), 'the printed path must be absolute — a relative path breaks a caller invoked from a different cwd: ' + commitCoveragePath)
+  assert.ok(fs.existsSync(commitCoveragePath), 'the resolved commit-coverage.js path must actually exist on disk: ' + commitCoveragePath)
 })
 
 // specs/20260902/06-mocks-provenance-ledger.md D7, AC-20260902-06-9: spec-paths gains a

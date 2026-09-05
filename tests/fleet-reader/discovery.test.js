@@ -161,7 +161,11 @@ test('AC-20260820-05-12: an unknown flag or a non-directory --repos-root exits 2
 // row-handoff.md D1 adds a NINTH fixed question, `owed`, so the eight-key set above is
 // invalidated by construction again — the same add-a-member-to-an-exhaustive-live-file-pin
 // class. The pin stays exhaustive: `owed` is added to the expected set, nothing is loosened.
-test('AC-20260820-05-13 / AC-20260901-03-6 / AC-20260901-07-12 / AC-20260903-01-8: --json prints exactly the nine contracted top-level keys; without --json the render is not JSON', () => {
+// AC-20260904-01-14 (tagged, no assertion change): specs/20260904/01-commit-time-escape-
+// coverage.md D7 reads fleet-reader.js's population and gate08.cutover for its own fleet mode
+// but must not touch fleet-reader.js itself — this exhaustive nine-key pin is the oracle that
+// the key set stays exactly what D7 assumes.
+test('AC-20260820-05-13 / AC-20260901-03-6 / AC-20260901-07-12 / AC-20260903-01-8 / AC-20260904-01-14: --json prints exactly the nine contracted top-level keys; without --json the render is not JSON', () => {
   const root = tmpdir('fleet-json-shape')
   mkRepo(root, 'repo-a', { config: true, git: 'dir' })
 

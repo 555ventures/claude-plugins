@@ -300,6 +300,10 @@ switch (sub) {
       else if (a === '--when') flags.when = rest[++i]
       else if (a === '--after') { console.error('spec-queue: --after is retired — use --at <n> to insert at a specific pending position'); process.exit(2) }
       else if (a === '--brief') { console.error('spec-queue: --brief is retired — pass the brief number as the payload directly (e.g. spec-queue add 05)'); process.exit(2) }
+      // An unrecognized --flag never folds into the payload: that silently turns a spec path into a
+      // free-text prompt item (observed: `add specs/x.md --root /abs` landed as kind "prompt").
+      // spec-queue takes no --root — the queue is keyed off the cwd's git common dir; run it from the repo root.
+      else if (/^--/.test(a)) { console.error(`spec-queue: add: unknown flag ${a} — spec-queue takes no --root (run from the repo root); flags: --top | --at <n> | --after-spec <path> | --after-brief NN | --when <type>:<args>`); process.exit(2) }
       else payloadParts.push(a)
     }
     const payload = payloadParts.join(' ')

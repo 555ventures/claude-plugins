@@ -188,6 +188,9 @@ test('AC-20260903-03-9: the retired bump/defer/ok verbs and the retired add flag
     { argv: ['ok'], mustMatch: /no accept step/ },
     { argv: ['add', 'x', '--after', 'q1'], mustMatch: /--at <n>/ },
     { argv: ['add', '--brief', '05'], mustMatch: /pass the brief number as the payload/ },
+    // An unknown flag must refuse, never fold into the payload — `add specs/x.md --root /abs` once
+    // landed as a kind "prompt" item with payload "specs/x.md --root /abs" (salon-os, 2026-09-05).
+    { argv: ['add', 'specs/20260901/01-a.md', '--top', '--root', dir], mustMatch: /unknown flag --root/ },
   ]
   for (const { argv, mustMatch } of cases) {
     const r = runNode(SCRIPT, argv, { cwd: dir })

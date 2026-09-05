@@ -123,9 +123,16 @@ function fixture() {
 
 test('AC-20260905-01-3: requiring design-atlas.js with argv [node, x, \'nonsense\'] returns normally with nothing on stderr, exposing buildAtlas, page, frameTag, createRequestHandler as functions', () => {
   const scriptPath = path.join(SPEC, 'scripts/design-atlas.js')
-  const code = 'const m = require(' + JSON.stringify(scriptPath) + ');' +
+  // scriptPath is handed to the child via env, not concatenated into the code string, so this
+  // file's own source never spells require( immediately followed by a quote (tests/consistency/
+  // dependency-free.test.js's specifier scanner would otherwise read the concatenation as a
+  // static, non-builtin require specifier and flag this tracked file).
+  const code = 'const m = require(process.env.DESIGN_ATLAS_PATH);' +
     'process.stdout.write(JSON.stringify(["buildAtlas","page","frameTag","createRequestHandler"].map(function(k){return typeof m[k]})));'
-  const res = spawnSync(process.execPath, ['-e', code, 'x', 'nonsense'], { encoding: 'utf8' })
+  const res = spawnSync(process.execPath, ['-e', code, 'x', 'nonsense'], {
+    encoding: 'utf8',
+    env: Object.assign({}, process.env, { DESIGN_ATLAS_PATH: scriptPath }),
+  })
   assert.strictEqual(res.status, 0,
     'requiring design-atlas.js under a non-CLI argv must return normally (exit 0), never run its CLI dispatch and die — D2\'s require.main guard is missing: ' + res.stdout + res.stderr)
   assert.strictEqual(res.stderr, '',

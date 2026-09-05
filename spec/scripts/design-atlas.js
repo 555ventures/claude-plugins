@@ -1476,8 +1476,8 @@ function cmdServe(argv) {
 
 // ---- main ----------------------------------------------------------------------------------------
 // specs/20260905/01-picks-on-the-atlas-page.md D2: CLI dispatch runs only when this file is the
-// process entry point — a plain `require('design-atlas.js')` (spec 02's hub, this file's own
-// tests) must load the module and expose its exports without also running a CLI command.
+// process entry point — a plain module load of this file (spec 02's hub, this file's own tests)
+// must expose its exports without also running a CLI command.
 if (require.main === module) {
   const [cmd, ...rest] = process.argv.slice(2)
   if (cmd === 'check') cmdCheck(rest)

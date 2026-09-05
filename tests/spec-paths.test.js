@@ -104,6 +104,13 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // nothing (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently"; same
 // additive-collision class as AC-20260819-02-10 above).
 
+// AC-20260904-02-12: specs/20260904/02-worktree-include-shared-owner.md D5 adds
+// spec/scripts/worktree-include.sh to the bundle (a new `worktree-include` key) — like every
+// other bundled script it needs a spec-paths key, or replay.js's sibling-resolution fallback and
+// any session running `spec-paths worktree-include` by hand resolve nothing (§ Risk Tiers,
+// spec-paths: "a wrong key breaks commands silently"; same additive-collision class as
+// AC-20260819-02-10 above). The key list below is updated in place, never a parallel exhaustive pin.
+
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-enforce',
@@ -111,12 +118,38 @@ test('every documented key resolves to an existing path', () => {
     'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
     'review-driver', 'build-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'render-gate', 'render-compare',
     'render-inventory', 'render-rules', 'registry-check', 'genesis-driver', 'escape-row', 'mocks-driver', 'commit-coverage',
-    'shared', 'shared-genesis', 'shared-mocks', 'template', 'templates', 'contract']) {
+    'worktree-include', 'shared', 'shared-genesis', 'shared-mocks', 'template', 'templates', 'contract']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }
   assert.match(run('version').trim(), /^\d+\.\d+\.\d+$/)
   assert.match(run('contract-hash').trim(), /^[0-9a-f]{12}$/)
+})
+
+// AC-20260904-02-12's own wording says "no argument prints a usage line" — but
+// AC-20260902-06-10 already pins zero-args as printing the plugin ROOT (unchanged regression),
+// and D5 says only "listed in its usage line". Read as the usage line spec-paths prints on an
+// UNKNOWN key (the only usage-line trigger this script has) so the two pins stay consistent.
+test('AC-20260904-02-12: spec-paths worktree-include resolves to spec/scripts/worktree-include.sh, an existing file, and the usage line names the key', () => {
+  const fs = require('node:fs')
+  const worktreeIncludePath = run('worktree-include').trim()
+  assert.strictEqual(worktreeIncludePath, path.join(SPEC, 'scripts/worktree-include.sh'),
+    'D5: `spec-paths worktree-include` must resolve to spec/scripts/worktree-include.sh — a wrong or ' +
+    'missing key breaks replay.js\'s owner resolution and any manual invocation silently (§ Risk Tiers, ' +
+    'spec-paths: "a wrong key breaks commands silently")')
+  assert.ok(fs.existsSync(worktreeIncludePath),
+    'the resolved worktree-include.sh path must actually exist on disk: ' + worktreeIncludePath)
+
+  const usage = (() => {
+    try {
+      return run('no-such-key-xyz') // an unknown key triggers spec-paths' own usage line
+    } catch (e) {
+      return String(e.stdout || '') + String(e.stderr || '')
+    }
+  })()
+  assert.match(usage, /worktree-include/,
+    'D5: spec-paths\' own usage line must list `worktree-include` alongside every other bundled key, or a ' +
+    'session reading the usage line to discover keys never learns this one exists: ' + JSON.stringify(usage))
 })
 
 // AC-20260901-07-15

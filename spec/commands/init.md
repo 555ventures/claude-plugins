@@ -147,10 +147,10 @@ and each is skippable only by an explicit `inert` manifest row with a reason:
 - **Seed entry point** — a script that produces an observable post-signup state (test
   tenant/user, minimal fixtures). Without it, "launch, seed, observe" fails at step two.
 - **Worktree env manifest** — if gitignored runtime config exists (`.env*`, local override
-  files), write `.worktreeinclude` at the repo root listing those patterns (gitignore
-  syntax; Claude Code's native format). `merge-back.sh create` copies matching gitignored
-  files into every build worktree — without it, worktree builds boot env-less and the
-  smoke leg fails on a config artifact, not the code under review.
+  files), write `.worktreeinclude` at the repo root listing those patterns (gitignore syntax;
+  Claude Code's native format). The manifest feeds both worktree-creation paths through the
+  shared `worktree-include.sh` owner — `merge-back.sh create`'s build worktree and `/spec:replay`'s
+  `--setup` scratch worktree — without it, either boots env-less and smoke fails on a config artifact, not the code under review.
 - **Quickstart** — a root README section (or file) answering "how do I run this?" in five
   lines, citing the real commands.
 - **Git remote / CI activation** — check `git remote -v`. If empty, ask the user

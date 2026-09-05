@@ -274,6 +274,13 @@
       "spec/scripts/release-legs.js"
     ]
   },
+  "spec/scripts/worktree-include.sh": {
+    "entryPoints": [
+      "spec/scripts/merge-back.sh",
+      "spec/scripts/replay.js",
+      "spec/commands/replay.md"
+    ]
+  },
   "spec/workflows/wf-enforce.js": {
     "entryPoints": [
       "spec/commands/enforce.md"

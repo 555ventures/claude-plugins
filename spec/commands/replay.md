@@ -66,7 +66,11 @@ asked.
    wins verbatim over derivation when both are given, and it is refused with exit 3 when its
    basename opens with `replay` (case-insensitive) — the remedy is to omit `--dir` and pass
    `--spec` so the harness derives a build-shaped name instead. An in-repo `--dir` that resolves
-   outside `.claude/worktrees/` keeps its own exit-3 refusal unchanged.
+   outside `.claude/worktrees/` keeps its own exit-3 refusal unchanged. Once the worktree is
+   registered, `--setup` calls the shared owner (`spec-paths worktree-include`) to copy the
+   host's `.worktreeinclude`-matched gitignored files into `{dir}` before the setup gate below
+   ever runs, so a host that boots from env files reaches setup and the smoke leg with them
+   present; a host with no manifest is unchanged — no manifest means nothing to copy.
 2. **Setup gate (D4):** read the host's `setupCommand` from `.claude/spec.config.json` and run
    it inside `{dir}` **without relocating the session** — a subshell (`(cd {dir} && <setupCommand>)`)
    or the tool's own directory flag, never a bare `cd`, since a session shell that stays inside

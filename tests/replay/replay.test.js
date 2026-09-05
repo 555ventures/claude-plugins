@@ -718,7 +718,10 @@ test('AC-20260823-05-4: WHEN the repo\'s info/exclude already carries the .claud
 // AC-20260831-01-6 (SHALL CONTINUE TO, specs/20260831/01): --setup without --overlay must stay
 // byte-identical to today — this test already pins the exact two-token printed line and the
 // marker-carrying worktree that shape produces, so it is retagged in place rather than duplicated.
-test('AC-20260826-01-1 / AC-20260831-01-6: --setup --commit <sha> --spec <spec path> with no --dir exits 0, prints exactly one stdout line "setup dir=<abs> commit=<sha>" where <abs> is R/.claude/worktrees/<name>-<6 lowercase hex> and <name> is merge-back.sh branch-for <spec path> with "/" -> "-", registers a detached worktree there carrying scratch-worktree, and leaves the host repo\'s git status --porcelain empty', () => {
+// AC-20260904-02-11 (specs/20260904/02): this fixture's host carries NO .worktreeinclude — the
+// owner call D4 inserts must CONTINUE TO be a no-op here, printing exactly the same one stdout
+// line and no "copied" line on stderr.
+test('AC-20260826-01-1 / AC-20260831-01-6 / AC-20260904-02-11: --setup --commit <sha> --spec <spec path> with no --dir exits 0, prints exactly one stdout line "setup dir=<abs> commit=<sha>" where <abs> is R/.claude/worktrees/<name>-<6 lowercase hex> and <name> is merge-back.sh branch-for <spec path> with "/" -> "-", registers a detached worktree there carrying scratch-worktree, leaves the host repo\'s git status --porcelain empty, and — since this host has no .worktreeinclude — prints no "copied" line on stderr', () => {
   const root = fs.realpathSync(tmpdir('replay-setup-derived'))
   gitRepo(root) // gitRepo()'s own fixture .gitignore already covers .claude/worktrees/
   const relSpec = 'specs/20260825/02-genesis-consultant-discovery.md'
@@ -774,6 +777,11 @@ test('AC-20260826-01-1 / AC-20260831-01-6: --setup --commit <sha> --spec <spec p
     'D1: a derived --setup must leave the host repo exactly as clean as before it ran — the .claude/' +
     'worktrees/ ignore already covers this location, and any drift here means the derivation leaked into ' +
     'the tracked tree: ' + JSON.stringify({ before: statusBefore, after: statusAfter }))
+
+  assert.ok(!/copied/.test(r.stderr),
+    'AC-20260904-02-11: this fixture\'s host carries no .worktreeinclude — the owner call D4 inserts before ' +
+    'the overlay must be a true no-op here, printing nothing containing "copied" on stderr, exactly as a ' +
+    'no-manifest host behaves today: ' + JSON.stringify(r.stderr))
 })
 
 test('AC-20260826-01-2: two derived --setup --spec runs for the same spec coexist as distinct suffixed siblings alongside the spec\'s real un-suffixed build worktree (left untouched, still on its own branch), and --setup with neither --spec nor --dir exits 2 naming both flags with nothing registered', () => {
@@ -1138,6 +1146,95 @@ test('AC-20260831-01-5: --setup --overlay refuses a --subject that opens with "r
     'D5: the accepted --subject must land as the overlay commit\'s subject VERBATIM — any transformation here ' +
     'would break the "indistinguishable from a real build commit" invariant --apply\'s own --subject already ' +
     'relies on: ' + subject)
+})
+
+// specs/20260904/02-worktree-include-shared-owner.md D4: --setup now calls the shared
+// worktree-include owner right after the marker write and BEFORE any overlay materialization, so
+// a host that boots from gitignored env files reaches the setup gate with them present. The two
+// tests below pin the copy itself (AC-9) and its interaction with --overlay (AC-10, the files must
+// never leak into the overlay commit since they are gitignored at the target commit).
+
+test('AC-20260904-02-9: --setup copies the host\'s .worktreeinclude-matched gitignored files into the scratch worktree, forwarding the owner\'s stderr line verbatim, leaving both the host and the worktree clean', () => {
+  const root = fs.realpathSync(tmpdir('replay-setup-include'))
+  const g = gitRepo(root)
+  fs.appendFileSync(path.join(root, '.gitignore'), 'app/.env.local\n')
+  fs.writeFileSync(path.join(root, '.worktreeinclude'), 'app/.env.local\n')
+  const relSpec = 'specs/x.md'
+  fs.mkdirSync(path.join(root, 'specs'), { recursive: true })
+  fs.writeFileSync(path.join(root, relSpec), '---\nstatus: implementing\n---\n# x\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'manifest + spec')
+  const sha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  fs.mkdirSync(path.join(root, 'app'), { recursive: true })
+  fs.writeFileSync(path.join(root, 'app/.env.local'), 'DATABASE_URL=x\n')
+
+  const statusBefore = execFileSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' })
+
+  const r = runNode(SCRIPT, ['--setup', '--commit', sha, '--spec', relSpec], { cwd: root })
+  assert.strictEqual(r.status, 0,
+    'D4: a host whose committed .worktreeinclude matches a committed-ignored, on-disk file must still exit ' +
+    '0 — the setup gate this Decision exists for depends on this succeeding: ' + r.stderr)
+
+  const stdoutLines = r.stdout.split('\n').filter(Boolean)
+  assert.strictEqual(stdoutLines.length, 1,
+    'Contracts: --setup\'s stdout contract is unchanged by D4 — exactly one setup dir=… line, never a second ' +
+    'line from the owner call: ' + JSON.stringify(r.stdout))
+  const m = stdoutLines[0].match(/^setup dir=(\S+) commit=(\S+)$/)
+  assert.ok(m, 'the printed line must match "setup dir=<abs> commit=<sha>" exactly, unchanged by D4: ' + JSON.stringify(r.stdout))
+  assert.strictEqual(m[2], sha, 'the printed commit must be the --commit sha, unaffected by the owner call')
+  const dir = m[1]
+
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'app/.env.local'), 'utf8'), 'DATABASE_URL=x\n',
+    'D4: the manifest-matched gitignored file must land in the scratch worktree before the setup gate runs, ' +
+    'or a host that boots from it dies at setup/smoke for a reason that has nothing to do with the reviewer ' +
+    'being measured (the Goal\'s cited replay row)')
+  assert.match(r.stderr, /^worktree-include: copied 1 \.worktreeinclude-matched file\(s\) into /m,
+    'D4: the owner\'s stderr line must be forwarded verbatim so the session\'s console shows the copy — a ' +
+    'silent copy here would be undiscoverable when it silently stops working: ' + JSON.stringify(r.stderr))
+
+  const statusAfterHost = execFileSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' })
+  assert.strictEqual(statusAfterHost, statusBefore,
+    'D4: copying into the SCRATCH worktree must never touch the host repo\'s own working tree: ' +
+    JSON.stringify({ before: statusBefore, after: statusAfterHost }))
+  const statusWt = execFileSync('git', ['-C', dir, 'status', '--porcelain'], { encoding: 'utf8' })
+  assert.strictEqual(statusWt.trim(), '',
+    'D8/A3: the copied file is ignored at the target commit, so it must never show up in the scratch ' +
+    'worktree\'s own git status — a dirty status here would mean the copy landed as an untracked, visible ' +
+    'file instead of an invisible one: ' + JSON.stringify(statusWt))
+})
+
+test('AC-20260904-02-10: a --setup --overlay call still delivers the .worktreeinclude-matched file to disk, but the overlay commit never contains it since it is gitignored at the target commit', () => {
+  const root = fs.realpathSync(tmpdir('replay-setup-include-overlay'))
+  const g = gitRepo(root)
+  fs.appendFileSync(path.join(root, '.gitignore'), 'app/.env.local\n')
+  fs.writeFileSync(path.join(root, '.worktreeinclude'), 'app/.env.local\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'manifest')
+  const parent = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  fs.mkdirSync(path.join(root, 'app'), { recursive: true })
+  fs.writeFileSync(path.join(root, 'app/.env.local'), 'DATABASE_URL=x\n')
+  const close = commitFiles(root, { 'lib/fix.js': 'fix\n' }, 'close commit')
+
+  const dir = path.join(fs.realpathSync(tmpdir('replay-setup-include-overlay-wt')), 'wt')
+  const r = runNode(SCRIPT, ['--setup', '--commit', parent, '--overlay', close, '--dir', dir], { cwd: root })
+  assert.strictEqual(r.status, 0,
+    'D4: the owner call happens BEFORE overlay materialization, so a manifest-matched file present must ' +
+    'not interfere with a subsequent --overlay: ' + r.stderr)
+
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'app/.env.local'), 'utf8'), 'DATABASE_URL=x\n',
+    'AC-10: the copied file must still be present on disk after the overlay commit lands')
+  const nameOnly = execFileSync('git', ['-C', dir, 'show', '--name-only', '--format=', 'HEAD'], { encoding: 'utf8' })
+  const rows = nameOnly.split('\n').filter(Boolean)
+  assert.ok(rows.includes('lib/fix.js'),
+    'AC-10: the overlay commit must still carry the close commit\'s own non-meta row: ' + nameOnly)
+  assert.ok(!rows.includes('app/.env.local'),
+    'D4/Rationale: the copied file is gitignored at the target commit, so it can never enter `git apply ' +
+    '--index` — it must NOT appear in the overlay commit\'s own HEAD show, or the harness would be leaking ' +
+    'its own scratch provisioning into the diff surface the reviewer and the reconcile/at-risk legs read: ' +
+    nameOnly)
+
+  const status = execFileSync('git', ['-C', dir, 'status', '--porcelain'], { encoding: 'utf8' })
+  assert.strictEqual(status.trim(), '',
+    'D8/A3: after the overlay commit, the copied file (ignored at the target commit) must leave the ' +
+    'worktree clean: ' + JSON.stringify(status))
 })
 
 test('AC-20260823-05-6 / AC-20260826-01-6 (retagged from AC-20260819-02-3, SHALL CONTINUE TO): --setup builds a marker-carrying detached worktree at an outside --dir that leaves the host repo byte-identical', () => {
@@ -2478,6 +2575,35 @@ test('AC-20260831-01-7: replay.md states, in Phase 1 step 1, that setup passes -
     'D6: rung 3 must state that a STILL-red pristine result routes to rung 4\'s question seam — silently ' +
     'recording leg-caught (or silently explaining it away) on a pristine-red result would misattribute ' +
     'environment drift as either mutation-caused or pre-existing: ' + JSON.stringify(step7Match[0]))
+})
+
+// specs/20260904/02-worktree-include-shared-owner.md D6, AC-20260904-02-13: Phase 1 step 1 must
+// name the new .worktreeinclude copy and state that a host without the manifest is unchanged —
+// an earlier spec's deferral of this copy lived only in that spec's own prose, invisible to a
+// host author reading this command's own doctrine.
+test('AC-20260904-02-13: replay.md states, in Phase 1 step 1, that --setup copies the host\'s .worktreeinclude-matched gitignored files into the scratch worktree before the setup gate, and that a host with no manifest is unchanged', () => {
+  const src = read('spec/commands/replay.md')
+
+  const phase1Match = src.match(/## Phase 1 — Mutation authoring\n([\s\S]*?)\n## Phase 2 —/)
+  assert.ok(phase1Match,
+    'sanity: Phase 1 — Mutation authoring must exist as its own section ending at Phase 2 — if this heading ' +
+    'moved or was reworded, the step-1 slice below is scoped to the wrong text region')
+  const phase1 = phase1Match[1]
+
+  const step1Match = phase1.match(/1\.\s+\*\*Setup:\*\*[\s\S]*?(?=\n2\.\s+\*\*Setup gate)/)
+  assert.ok(step1Match,
+    'sanity: step 1, "**Setup:** ...", must exist as Phase 1\'s first numbered step, bounded by step 2\'s own ' +
+    'heading — if this step moved or was reworded, the assertions below are scoped to the wrong text')
+  const step1 = step1Match[0].replace(/\s+/g, ' ')
+
+  assert.match(step1, /\.worktreeinclude/,
+    'D6: step 1 must name .worktreeinclude explicitly — without it a host author reading this command\'s ' +
+    'own doctrine has no way to learn that --setup copies the manifest\'s matches at all, the exact gap an ' +
+    'earlier spec\'s deferral left (it lived only in that spec\'s own prose)')
+  assert.match(step1, /no .*manifest|without .*manifest/i,
+    'D6: step 1 must state that a host WITHOUT the manifest is unchanged — omitting this leaves a reader ' +
+    'unsure whether the new copy step has any effect on a host that never adopted .worktreeinclude: ' +
+    JSON.stringify(step1Match[0]))
 })
 
 // ---- The CWD-relocation trap (direct fix, no spec). ------------------------

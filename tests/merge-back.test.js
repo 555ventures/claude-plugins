@@ -113,7 +113,14 @@ test('squash of an already-merged source reports nothing-to-squash, not a generi
   assert.match(res.stdout, /nothing to squash/i)
 })
 
-test('create honors .worktreeinclude: copies gitignored matches, skips unmatched ignored files', () => {
+// specs/20260904/02-worktree-include-shared-owner.md D3: `create` now replaces its inline
+// .worktreeinclude copy block with one call to the shared owner (spec/scripts/worktree-include.sh)
+// — the two tests below retag the pre-existing pins as AC-20260904-02-6/-8 (CONTINUE TO: the
+// observable behavior of a host with or without a manifest is unchanged, D3), and a third pin
+// (AC-20260904-02-7) asserts the stderr line now carries the owner's `worktree-include:` prefix
+// instead of `merge-back:`, with no `merge-back: copied` line surviving anywhere.
+
+test('AC-20260904-02-6: create CONTINUES TO honor .worktreeinclude: copies gitignored matches, skips unmatched ignored files', () => {
   const dir = tmpdir('mbwi')
   const g = gitRepo(dir)
   fs.appendFileSync(path.join(dir, '.gitignore'), '.env\nconfig/local.json\nsecret.txt\n')
@@ -125,15 +132,48 @@ test('create honors .worktreeinclude: copies gitignored matches, skips unmatched
   fs.writeFileSync(path.join(dir, 'secret.txt'), 's\n')                 // ignored, NOT in manifest -> stays behind
 
   const created = runBash(SCRIPT, ['create', '--source', 'spec/wi', '--root', dir])
-  assert.strictEqual(created.status, 0, created.stderr)
+  assert.strictEqual(created.status, 0,
+    'D3: create must still exit 0 once the copy step is delegated to the shared owner: ' + created.stderr)
   const wt = created.stdout.trim().split('\n').pop()
-  assert.strictEqual(fs.readFileSync(path.join(wt, '.env'), 'utf8'), 'KEY=1\n')
-  assert.strictEqual(fs.readFileSync(path.join(wt, 'config', 'local.json'), 'utf8'), '{}\n')
-  assert.ok(!fs.existsSync(path.join(wt, 'secret.txt')), 'unmatched gitignored file must not be copied')
-  assert.match(created.stderr, /copied 2 \.worktreeinclude-matched file/)
+  assert.strictEqual(fs.readFileSync(path.join(wt, '.env'), 'utf8'), 'KEY=1\n',
+    'AC-6: .env must still land in the new worktree with its exact content')
+  assert.strictEqual(fs.readFileSync(path.join(wt, 'config', 'local.json'), 'utf8'), '{}\n',
+    'AC-6: a nested manifest match must still preserve its relative path')
+  assert.ok(!fs.existsSync(path.join(wt, 'secret.txt')),
+    'AC-6: unmatched gitignored file must still not be copied — extraction to the shared owner must not ' +
+    'widen the selection rule')
+  assert.match(created.stderr, /copied 2 \.worktreeinclude-matched file/,
+    'D2/A7: the copy-line substring survives D3\'s extraction — this fixture asserts by substring, not by ' +
+    'the (now-changed) prefix, exactly as A7 requires')
 })
 
-test('create with a manifest matching nothing (or tracked files only) copies nothing and stays quiet', () => {
+test('AC-20260904-02-7: create emits the copy-line from the shared owner — the line opens with worktree-include:, and no merge-back: copied line appears anywhere', () => {
+  const dir = tmpdir('mbwipfx')
+  const g = gitRepo(dir)
+  fs.appendFileSync(path.join(dir, '.gitignore'), '.env\nconfig/local.json\nsecret.txt\n')
+  fs.writeFileSync(path.join(dir, '.worktreeinclude'), '.env\nconfig/local.json\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'manifest')
+  fs.writeFileSync(path.join(dir, '.env'), 'KEY=1\n')
+  fs.mkdirSync(path.join(dir, 'config'))
+  fs.writeFileSync(path.join(dir, 'config', 'local.json'), '{}\n')
+  fs.writeFileSync(path.join(dir, 'secret.txt'), 's\n')
+
+  const created = runBash(SCRIPT, ['create', '--source', 'spec/wipfx', '--root', dir])
+  assert.strictEqual(created.status, 0, created.stderr)
+  const wt = created.stdout.trim().split('\n').pop()
+  assert.match(created.stderr, /^worktree-include: copied 2 \.worktreeinclude-matched file\(s\) into /m,
+    'D2/D3: the copy line must now come from the shared owner with its own `worktree-include:` prefix — a ' +
+    'surviving `merge-back:` prefix here means create never switched to calling the extracted script: ' +
+    JSON.stringify(created.stderr))
+  assert.ok(created.stderr.includes('worktree-include: copied 2 .worktreeinclude-matched file(s) into ' + wt),
+    'AC-7: the printed dest in the owner\'s line must be the new worktree path create just created: ' +
+    JSON.stringify(created.stderr))
+  assert.ok(!created.stderr.includes('merge-back: copied'),
+    'D3: no `merge-back: copied` line may appear anywhere — the inline copy block this Decision retires ' +
+    'must leave no trace of its own prefix behind: ' + JSON.stringify(created.stderr))
+})
+
+test('AC-20260904-02-8: create CONTINUES TO copy nothing and stay quiet when the manifest matches nothing (or tracked files only)', () => {
   const dir = tmpdir('mbwi0')
   const g = gitRepo(dir)
   // a.txt is TRACKED; listing it in the manifest must not trigger a copy (checkout owns it)
@@ -141,10 +181,13 @@ test('create with a manifest matching nothing (or tracked files only) copies not
   g('add', '-A'); g('commit', '-q', '-m', 'manifest only')
 
   const created = runBash(SCRIPT, ['create', '--source', 'spec/wi0', '--root', dir])
-  assert.strictEqual(created.status, 0, created.stderr)
+  assert.strictEqual(created.status, 0,
+    'D3: create must still exit 0 once the copy step is delegated to the shared owner: ' + created.stderr)
   const wt = created.stdout.trim().split('\n').pop()
-  assert.ok(fs.existsSync(path.join(wt, 'a.txt')), 'tracked file arrives via checkout')
-  assert.ok(!created.stderr.includes('copied'), 'no copy message when nothing qualifies')
+  assert.ok(fs.existsSync(path.join(wt, 'a.txt')), 'AC-8: tracked file must still arrive via checkout')
+  assert.ok(!created.stderr.includes('copied'),
+    'AC-8: no copy message may appear when nothing qualifies — this must hold regardless of which script ' +
+    'owns the copy step')
 })
 
 test('create refuses on an un-gitignored worktree dir and an unborn HEAD', () => {

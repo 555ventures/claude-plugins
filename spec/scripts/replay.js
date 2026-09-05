@@ -109,6 +109,16 @@
 // and before `per-class:`, so the manual-retry-path promise (brief 23 scope 3) is a ledger count
 // invocable cold, not a jq exercise.
 //
+// specs/20260904/02-worktree-include-shared-owner.md: (D4) --setup calls the shared
+// worktree-include owner (spec/scripts/worktree-include.sh, resolved as a sibling script via
+// __dirname — never through spec-paths, D5) right after the scratch marker is written and
+// BEFORE any --overlay materialization, copying the host's .worktreeinclude-matched gitignored
+// files into the scratch worktree so a host that boots from them reaches the setup gate and the
+// smoke leg with them present. Owner exit 0/3 continues (its stderr forwarded verbatim); any
+// other exit prints the git-worktree-remove remedy and exits 4 (no new exit code — the existing
+// "worktree registered but unusable" arm). (D5) spec-paths gains a `worktree-include` key for
+// every other caller; --setup's own resolution stays a sibling-script lookup, off the hot path.
+//
 // What this deliberately does NOT do: derive review-legs verdicts, touch the main working tree
 // (--setup/--apply/--teardown only ever act on a --dir the caller supplies, or one --setup derives
 // itself from --spec (D1, specs/20260826/01) — --setup refuses a caller --dir that resolves inside
@@ -163,7 +173,10 @@
 // validated ancestor of the close commit's parent distinct from it — widened by D4 to also cover a
 // stale (moving-ref) candidate, not just an absent one — or --setup's --overlay does not resolve to
 // a strict descendant of --commit (specs/20260831/01 D4: an unrelated sha, an ancestor, or an equal
-// sha), refused before any worktree is created, naming the --select remedy.
+// sha), refused before any worktree is created, naming the --select remedy, or --setup's call to
+// the shared worktree-include.sh owner (spec/scripts/worktree-include.sh, D4 below) exits
+// anything other than 0 or 3 — the worktree is registered but unusable; the message names the
+// `git -C <root> worktree remove --force <dir>` remedy (specs/20260904/02 D4).
 //
 // specs/20260826/01-replay-scratch-path-blindness.md: a value whose correctness is load-bearing
 // for a measurement's validity must be derived by a script, never asserted in prose a session
@@ -648,6 +661,25 @@ function cmdSetup() {
   } catch (e) {
     console.error(`replay.js: failed to write the scratch-worktree marker in ${gitDirAbs} — the worktree is ` +
       `registered but unusable; remove it with git -C ${root} worktree remove --force ${resolvedDir}: ${e.message}`)
+    process.exit(4)
+  }
+  // specs/20260904/02-worktree-include-shared-owner.md D4: copy the host's .worktreeinclude-
+  // matched gitignored files into the scratch worktree through the same owner merge-back.sh
+  // create uses for build worktrees — right after the marker write, BEFORE any overlay
+  // materialization, so a host that boots from gitignored env files reaches the setup gate and
+  // the smoke leg with them present (the Goal's cited replay row). The owner is resolved as a
+  // sibling script relative to __dirname, never through spec-paths (D5 — --setup's hot path
+  // stays free of a shell lookup). Exit 0/3 continue (3 is already a printed WARNING from the
+  // owner); any other exit means the worktree is registered but unusable — print the git
+  // worktree-remove remedy and exit 4 (the header's existing "worktree registered but unusable"
+  // arm — no new exit code).
+  const ownerPath = path.join(__dirname, 'worktree-include.sh')
+  const includeResult = spawnSync('bash', [ownerPath, '--root', resolvedRoot, '--dest', resolvedDir], { encoding: 'utf8' })
+  if (includeResult.status === 0 || includeResult.status === 3) {
+    if (includeResult.stderr) process.stderr.write(includeResult.stderr)
+  } else {
+    console.error(`replay.js: worktree-include.sh exited ${includeResult.status} for ${resolvedDir} — the ` +
+      `worktree is registered but unusable; remove it with git -C ${root} worktree remove --force ${resolvedDir}: ${includeResult.stderr}`)
     process.exit(4)
   }
   let overlaySuffix = ''

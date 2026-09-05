@@ -30,6 +30,9 @@
 #                                name=S with '/'->'-'. Must run from the MAIN working tree.
 #                                --source is taken pre-derived; callers derive it via `branch-for`
 #                                — `create` itself never re-derives the `spec/<stem>` naming rule.
+#                                The .worktreeinclude copy step is delegated to the shared owner
+#                                spec/scripts/worktree-include.sh (spec-paths worktree-include) —
+#                                see specs/20260904/02-worktree-include-shared-owner.md D3.
 #   root     [--worktree W]   -> prints the absolute PROJECT root (the main worktree), so the
 #                                caller cd's to a verified path and never guesses "root".
 #                                Project root != $HOME. Run from inside the worktree if no W.
@@ -130,17 +133,17 @@ case "$SUB" in
     # repo root) with the same semantics the harness applies to worktrees IT creates —
     # copy files that are BOTH gitignored AND manifest-matched. Claude Code never
     # processes the manifest for externally created worktrees like this one, hence here.
-    if [ -f "$CROOT/.worktreeinclude" ]; then
-      INCLUDES="$(cd "$CROOT" && git ls-files -oi --exclude-from=.worktreeinclude \
-        | grep -v '^\.claude/worktrees/' | git check-ignore --stdin 2>/dev/null)"
-      if [ -n "$INCLUDES" ]; then
-        if (cd "$CROOT" && printf '%s\n' "$INCLUDES" | tar -cf - -T - 2>/dev/null | tar -xf - -C "$WT"); then
-          echo "merge-back: copied $(printf '%s\n' "$INCLUDES" | wc -l | tr -d ' ') .worktreeinclude-matched file(s) into the worktree" >&2
-        else
-          echo "merge-back: WARNING — .worktreeinclude copy failed; the worktree may be missing env/config files" >&2
-        fi
-      fi
-    fi
+    # specs/20260904/02-worktree-include-shared-owner.md D3: the copy step itself is delegated
+    # to the shared owner (spec-paths worktree-include) — replay.js's scratch worktree calls the
+    # same owner, so the two paths cannot drift apart again. Exit 0/3 continue (3 is already a
+    # printed WARNING from the owner); any other exit is a programmer-error `die` naming the
+    # owner's usage remedy.
+    bash "$(dirname "$0")/worktree-include.sh" --root "$CROOT" --dest "$WT"
+    OWNER_RC=$?
+    case "$OWNER_RC" in
+      0|3) : ;;
+      *) die "create: worktree-include.sh failed (exit $OWNER_RC) — run it by hand: bash $(dirname "$0")/worktree-include.sh --root $CROOT --dest $WT" ;;
+    esac
     echo "merge-back: created worktree '$NAME' (branch '$SOURCE', base '$BASE') at $WT" >&2
     rp "$WT"            # absolute path — the LAST stdout line, for EnterWorktree {path:} and --worktree
     exit 0 ;;

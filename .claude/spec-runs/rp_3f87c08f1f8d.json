@@ -1,0 +1,73 @@
+{
+  "ts": "2026-09-05T05:12:20.989Z",
+  "stage": "replay",
+  "spec": "specs/20260903/05-status-diet.md",
+  "runId": "rp_3f87c08f1f8d",
+  "reviewRunId": "rv_43358b5e8ec7",
+  "class": "prefix-collision-coverage-fail-open",
+  "files": [
+    "spec/scripts/spec-status.js"
+  ],
+  "legs": "green",
+  "outcome": "caught",
+  "tokens": 92928,
+  "via": "driver",
+  "patch": "diff --git a/spec/scripts/spec-status.js b/spec/scripts/spec-status.js\nindex fb244a8..2a86f72 100644\n--- a/spec/scripts/spec-status.js\n+++ b/spec/scripts/spec-status.js\n@@ -282,7 +282,7 @@ for (const s of specs) {\n }\n \n for (const b of briefs) {\n-  b.specs = specs.filter(s => s.brief === b.num)\n+  b.specs = specs.filter(s => String(s.brief).startsWith(b.num))\n   b.status = b.specs.length === 0 ? 'unplanned' : b.specs.every(s => DONE(s.status)) ? 'done' : 'in-flight'\n }\n const briefByNum = new Map(briefs.map(b => [b.num, b]))\n",
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "Brief-to-spec attribution was loosened from an identity match (`s.brief === b.num`) to a prefix match (`String(s.brief).startsWith(b.num)`), so a spec stamped `brief: 01a` now also counts toward brief `01`. This changes the derivation the spec says must not change and alters the frozen full `--json` surface (D6) plus the roadmap counts.",
+        "file": "spec/scripts/spec-status.js",
+        "line": 285,
+        "impact": "A brief whose letter-suffixed sibling has shipped is reported as done even when nothing was ever planned for it, its skipped-brief decision line disappears, and every spec under a suffixed brief is double-counted in the roadmap and in the machine-readable output.",
+        "evidence": "Spec § Behavior: \"the roadmap collapse rules, the TTY redraw, and every derivation stay as they are; only the render changes.\" D6: \"Frozen surfaces stay: full `--json` top-level keys `briefs, specs, superseded, anomalies`\". Contracts literal render: \"✅ 01–23  P1–P3  done (26 briefs, 55 specs)\". Violating hunk (commit acd0fef): `-  b.specs = specs.filter(s => s.brief === b.num)` / `+  b.specs = specs.filter(s => String(s.brief).startsWith(b.num))`. Executed repro 1 (fixture: briefs 01-auth.md + 01a-auth-followup.md, one spec `brief: 01a`, status done): base script `--json` → briefs `[[\"01\",\"unplanned\",0],[\"01a\",\"done\",1]]`, anomalies `[\"skipped-brief\"]`; HEAD script → briefs `[[\"01\",\"done\",1],[\"01a\",\"done\",1]]`, anomalies `[]`; HEAD default render prints `✅ 01–01a  P0  done (2 briefs, 2 specs)` and no decide line. Executed repro 2 (live worktree root): base render `✅ 01–23  P1–P3  done (26 briefs, 55 specs)`; HEAD render `✅ 01–23  P1–P3  done (26 briefs, 62 specs)`; `--json` briefs 10/18 spec counts base `[10:4, 18:3]` → HEAD `[10:8, 18:6]` (10a's four and 18a/18b's three specs appended to briefs 10 and 18)."
+      },
+      {
+        "severity": "soft",
+        "claim": "status.md's footer paragraph says \"Clauses print only when non-zero\" but D4 (and the code) print `· nothing waits behind it` on the 🟢 line when the wait count is zero.",
+        "file": "spec/commands/status.md",
+        "line": 76,
+        "impact": "The command doc slightly misdescribes the ready-state footer a reader will actually see.",
+        "evidence": "D4: \"`· {n} wait behind it` (or `· nothing waits behind it` on the 🟢 line when n = 0)\"; status.md line 76: \"Clauses print only when non-zero: how many wait behind the top pick, ...\". Advisory: doc wording only, behavior matches the Decision."
+      },
+      {
+        "severity": "soft",
+        "claim": "The retagged skipped-spec test cites AC-20260903-05-4, but that AC names only the skipped-brief and orphan-stamp JSON shapes; the test's audience assertion is D2 behavior, not AC-4's.",
+        "file": "tests/spec-status.test.js",
+        "line": 239,
+        "impact": "Coverage bookkeeping over-credits one acceptance criterion; the real AC-4 test exists separately and asserts the pinned shape.",
+        "evidence": "tests/spec-status.test.js:239 test title `AC-20260903-05-7 / AC-20260903-05-4: flags a done spec whose depends_on spec is not done...` asserts `skip.audience === 'hygiene'` on a skipped-spec anomaly; AC-20260903-05-4 text names `skipped-brief` and `orphan-stamp` only. tests/status/status-diet.test.js carries the genuine AC-4 pin (paste === \"/spec:plan @docs/roadmap/02-billing.md\"). Advisory."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "The 🔴 footer head reads `observationRows.get(entries[0].path)` and could throw if the top entry is not the red spec's escape entry.",
+        "file": "spec/scripts/spec-status.js",
+        "line": 900,
+        "evidence": "deriveNext() sorts /spec:escape entries first (spec-status.js:561 D10 comment, :601 `entries[0].action === '/spec:escape'` guard); every escape entry carries the red spec's path (:549). tests/status/red-alarm.test.js (AC-20260903-05-6) executed green: footer `🔴 CI is red on specs/20260701/01-auth-core.md — main@deadbee (https://github.com/x/y/actions/runs/9)` as last line; node --test on the four touched files → 60 pass / 0 fail."
+      },
+      {
+        "claim": "plugin.json bumps to 7.76.0 while D7 targets 7.75.0.",
+        "file": "spec/.claude-plugin/plugin.json",
+        "line": 3,
+        "evidence": "D7 text: \"bumps to the next free minor (target 7.75.0)\"; `git show 90c89d2:spec/.claude-plugin/plugin.json` already reads 7.75.0 (spec 04 took it), so 7.76.0 is the next free minor and the changelog paragraph is 7.76.0's. tests/consistency/plugin-version.test.js executed green in the same run."
+      },
+      {
+        "claim": "`--all --json` might alter the frozen full --json shape.",
+        "file": "spec/scripts/spec-status.js",
+        "line": 149,
+        "evidence": "The --all usage check only rejects --next/--brief; `node spec-status.js --root <worktree> --json` top-level keys `['anomalies','briefs','specs','superseded']`, anomalies `[]`; suite leg 1083/1083 green including tests/frontmatter, tests/replay, tests/queue/queue-overlay, tests/review/review-driver --json consumers."
+      },
+      {
+        "claim": "Range carries red tests, lint or typecheck on touched lines.",
+        "file": null,
+        "line": null,
+        "evidence": "Leg manifest: gate exit 0 (237 tests), suite exit 0 (1083 tests, 0 fail), at-risk exit 0 (232 tests), ac-matrix uncovered=0, promise-sweep orphans=0, patterns 0 leads, reconcile outOfPlan=0. Re-ran tests/status/status-diet.test.js, tests/status/red-alarm.test.js, tests/spec-status.test.js, tests/consistency/plugin-version.test.js at HEAD: 60 pass, 0 fail."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 62000
+  }
+}

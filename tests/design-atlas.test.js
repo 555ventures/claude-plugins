@@ -549,6 +549,7 @@ function makeNotesLayerDom({ metaContent, screenLabel } = {}) {
       setAttribute(k, v) { this[k] = v },
       getAttribute(k) { return this[k] },
       remove() {},
+      attachShadow() { const root = makeEl('#shadow-root'); this.shadowRoot = root; return root },
     }
     created.push(el)
     return el
@@ -617,15 +618,22 @@ test('AC-20260905-01-10: with no notes-scope meta and a screen root present, not
   assert.ok(!created.some((el) => el.className === 'nl-proj'), 'the meta-absent mock fallback must create no nl-proj element')
 })
 
-test('AC-20260905-01-10: the injected CSS carries a body.lb-open rule that hides .nl-bar', () => {
-  const { created } = evalNotesLayer({ pathname: '/mocks/a.html', metaContent: 'mock', screenLabel: 'a' })
-  const styleEl = created.find((el) => el.tagName === 'STYLE' && typeof el.textContent === 'string')
-  assert.ok(styleEl, 'a <style> element carrying the injected CSS must be created')
-  const idx = styleEl.textContent.indexOf('body.lb-open')
-  assert.ok(idx !== -1, 'the injected CSS must contain a body.lb-open selector so the bar can hide while the lightbox is open: got ' + styleEl.textContent)
-  const ruleEnd = styleEl.textContent.indexOf('}', idx)
-  const rule = styleEl.textContent.slice(idx, ruleEnd === -1 ? styleEl.textContent.length : ruleEnd + 1)
-  assert.match(rule, /\.nl-bar/, 'the body.lb-open rule (or its selector list) must reference .nl-bar: got ' + rule)
+test('AC-20260905-01-10: the injected CSS carries a body.lb-open rule that hides the chrome hosts (the bar lives behind an .nl-host shadow root)', () => {
+  const { created, document } = evalNotesLayer({ pathname: '/mocks/a.html', metaContent: 'mock', screenLabel: 'a' })
+  const headStyles = document.head.children.filter((el) => el.tagName === 'STYLE' && typeof el.textContent === 'string')
+  assert.strictEqual(headStyles.length, 1, 'exactly one <style> may be appended to the served document\'s <head>: got ' + headStyles.length)
+  const idx = headStyles[0].textContent.indexOf('body.lb-open')
+  assert.ok(idx !== -1, 'the document-level CSS must contain a body.lb-open selector so the chrome can hide while the lightbox is open: got ' + headStyles[0].textContent)
+  const ruleEnd = headStyles[0].textContent.indexOf('}', idx)
+  const rule = headStyles[0].textContent.slice(idx, ruleEnd === -1 ? headStyles[0].textContent.length : ruleEnd + 1)
+  assert.match(rule, /\.nl-host/, 'the body.lb-open rule must hide the .nl-host shadow hosts (the bar is inside one): got ' + rule)
+  const bar = created.find((el) => el.className === 'nl-bar')
+  assert.ok(bar, 'the bar element must still be created')
+  const host = created.find((el) => el.shadowRoot && el.shadowRoot.children.includes(bar))
+  assert.ok(host && host.className === 'nl-host', 'the bar must be appended inside an .nl-host element\'s shadow root, never directly to the document')
+  assert.ok(host.shadowRoot.children.some((el) => el.tagName === 'LINK' && el.href === '/__notes/viewer.css'),
+    'the viewer.css link must live inside the same shadow root as the bar')
+  assert.ok(!document.head.children.some((el) => el.tagName === 'LINK'), 'no <link> may be appended to the served document\'s <head>')
 })
 
 test('AC-20260905-01-12: spec/doctrine/mocks.md documents Picks under § Mocks: Page Notes (D8: no entrypoints row)', () => {

@@ -5,7 +5,8 @@
 // Anchor = the served page's data-screen-label + the active state (the last-clicked
 // data-state-btn, else the first declared, else "default"), or the project scope — never an
 // element. Talks only to the /__notes/* endpoints design-atlas.js's serve exposes; every visual
-// reads var(--v-*) off /__notes/viewer.css (linked here once) — no literal color in this file.
+// reads var(--v-*) off /__notes/viewer.css, linked inside this layer's own shadow roots — never
+// into the served document — so no rule of it reaches the mock's cascade. No literal color here.
 // D5: the endpoint base (and the viewer.css link) is derived from location.pathname by the same
 // rule the atlas's own decide script uses (a leading `/p/<name>` mount, else ''), and the page
 // declares exactly ONE scope via <meta name="notes-scope"> — `project` (the atlas index) or
@@ -26,10 +27,19 @@
 
   var __base = (location.pathname.match(/^\/p\/[^/]+/) || [''])[0]
 
-  var link = document.createElement('link')
-  link.rel = 'stylesheet'
-  link.href = __base + '/__notes/viewer.css'
-  document.head.appendChild(link)
+  // Chrome isolation: every piece of this layer lives in a shadow root — the viewer stylesheet
+  // is linked INSIDE each root (its tokens are declared on `:host,:root`, so they resolve
+  // there), never into the served document's <head>: viewer.css carries `body{background;color}`
+  // and `*{box-sizing}` chrome-page rules that would otherwise cascade over the mock's own (later
+  // sheet, equal specificity) and repaint the mock in the light palette whatever its theme. The
+  // one document-level rule this layer adds targets only its own `.nl-host` elements. Invariant
+  // (tests/mocks/notes-layer-isolation.test.js): a served mock computes the same styles with and
+  // without this layer attached.
+  var hostStyle = document.createElement('style')
+  // D5: while the lightbox is open, the served page's own bar/panel are hidden — the framed
+  // mock's own bar (inside the lightbox iframe, a different document) is the only one visible.
+  hostStyle.textContent = 'body.lb-open .nl-host{display:none}'
+  document.head.appendChild(hostStyle)
 
   var css =
     '.nl-bar,.nl-strip,.nl-proj{font:14px/1.45 var(--v-font);color:var(--v-fg)}' +
@@ -54,11 +64,23 @@
     '.nl-strip textarea,.nl-proj textarea{width:100%;box-sizing:border-box;min-height:64px;' +
     'font:14px/1.45 var(--v-font);color:var(--v-fg);border:1px solid var(--v-border);' +
     'border-radius:var(--v-radius);padding:6px 8px;margin:6px 0;resize:vertical}' +
-    '.nl-row{display:flex;gap:6px;justify-content:flex-end}' +
-    // D5: while the lightbox is open, the served page's own bar/panel are hidden — the framed
-    // mock's own bar (inside the lightbox iframe, a different document) is the only one visible.
-    'body.lb-open .nl-bar,body.lb-open .nl-proj,body.lb-open .nl-strip{display:none}'
-  document.head.appendChild(Object.assign(document.createElement('style'), { textContent: css }))
+    '.nl-row{display:flex;gap:6px;justify-content:flex-end}'
+
+  // One shadow host per chrome piece (the fixed bar; the in-flow strip or project panel). The
+  // host element is a plain block in the mock's flow; everything painted lives behind the
+  // shadow boundary with its own copy of the viewer link + the rules above.
+  function mount(element) {
+    var host = document.createElement('div')
+    host.className = 'nl-host'
+    var root = host.attachShadow({ mode: 'open' })
+    var link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = __base + '/__notes/viewer.css'
+    root.appendChild(link)
+    root.appendChild(Object.assign(document.createElement('style'), { textContent: css }))
+    root.appendChild(element)
+    return host
+  }
 
   var rootEl = document.querySelector('[data-screen-label]')
   var screen = rootEl ? rootEl.getAttribute('data-screen-label') : null
@@ -102,7 +124,7 @@
   }
 
   var bar = document.createElement('div'); bar.className = 'nl-bar'
-  document.body.appendChild(bar)
+  document.body.appendChild(mount(bar))
 
   // D5: exactly one panel exists per page, matching the declared scope — a project page never
   // gets an nl-strip (mock notes belong on the screen), a mock page never gets an nl-proj (project
@@ -112,11 +134,11 @@
   if (scope === 'project') {
     proj = document.createElement('div'); proj.className = 'nl-proj'
     var projAnchor = rootEl || document.body
-    projAnchor.insertAdjacentElement('afterend', proj)
+    projAnchor.insertAdjacentElement('afterend', mount(proj))
   } else {
     strip = document.createElement('div'); strip.className = 'nl-strip'
     var stripAnchor = rootEl || document.body
-    stripAnchor.insertAdjacentElement('afterend', strip)
+    stripAnchor.insertAdjacentElement('afterend', mount(strip))
   }
 
   var showResolved = false

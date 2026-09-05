@@ -68,6 +68,9 @@ function validatePicks(stops) {
     if (!KINDS.includes(s.kind)) {
       errors.push('stop "' + label + '": kind must be one of ' + KINDS.join('|') + ' (field "kind")')
     }
+    if (typeof s.key !== 'string' || !s.key.trim()) {
+      errors.push('stop "' + label + '": key must be non-empty (field "key")')
+    }
     if (!STATUSES.includes(s.status)) {
       errors.push('stop "' + label + '": status must be one of ' + STATUSES.join('|') + ' (field "status")')
     }
@@ -130,25 +133,31 @@ function findStop(stops, id) {
 // open → decided; decided → replaced (prior decision appended to previous, oldest first).
 // Throws on a consumed stop, a superseded stop, a pick outside the declared targets, a change
 // with an empty note, and a verdict the stop's kind does not allow.
+function stopError(code, message) {
+  const e = new Error(message)
+  e.code = code
+  return e
+}
+
 function decideStop(stops, id, input) {
   const body = input || {}
   const stop = findStop(stops, id)
-  if (stop.status === 'consumed') throw new Error('stop "' + id + '": already consumed')
-  if (stop.status === 'superseded') throw new Error('stop "' + id + '": superseded')
+  if (stop.status === 'consumed') throw stopError('consumed', 'stop "' + id + '": already consumed')
+  if (stop.status === 'superseded') throw stopError('superseded', 'stop "' + id + '": superseded')
 
   const allowed = VERDICTS_BY_KIND[stop.kind] || []
   if (!allowed.includes(body.verdict)) {
-    throw new Error('stop "' + id + '": verdict "' + body.verdict + '" is not allowed on a "' + stop.kind +
+    throw stopError('bad-request', 'stop "' + id + '": verdict "' + body.verdict + '" is not allowed on a "' + stop.kind +
       '" stop — ' + stop.kind + ' stops take ' + allowed.join('|'))
   }
   if (body.verdict === 'pick') {
     const targets = [...new Set((stop.candidates || []).map((c) => c.group))]
     if (!targets.includes(body.pick)) {
-      throw new Error('stop "' + id + '": pick "' + body.pick + '" is not among the candidate groups (' + targets.join(', ') + ')')
+      throw stopError('bad-request', 'stop "' + id + '": pick "' + body.pick + '" is not among the candidate groups (' + targets.join(', ') + ')')
     }
   }
   if (body.verdict === 'change' && !String(body.note || '').trim()) {
-    throw new Error('stop "' + id + '": a change decision requires a non-empty note (field "note")')
+    throw stopError('bad-request', 'stop "' + id + '": a change decision requires a non-empty note (field "note")')
   }
 
   const decision = {

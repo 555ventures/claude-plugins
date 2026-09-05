@@ -1,0 +1,132 @@
+{
+  "runId": "rv_e1f06b694443",
+  "ts": "2026-09-05T20:04:35.073Z",
+  "spec": "specs/20260905/01-picks-on-the-atlas-page.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 1,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1648,
+    "base": "5d36d7618837ae7f80cfd460df09ec82e5a707f7",
+    "head": "b0b0304217d8b3cc22948ec7e87893cf626ea97d",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 289
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1141
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 8,
+        "carried": 8,
+        "sanctioned": 0,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "soft",
+        "claim": "The new D4 pin comment narrates prior behavior and provenance (\"a reviewer caught this reverting to a page-wide chead-position guess\"), which .claude/rules/conventions/tests.md excludes from test comments; the comment should state the invariant without the incident story.",
+        "file": "/Users/jj/Projects/claude-plugins/tests/design-atlas.test.js",
+        "line": 298,
+        "impact": "A future reader is told a story about who found a bug instead of what the test guarantees.",
+        "evidence": "Hunk: `// candidate\" purely from data-group/data-step on the card — a reviewer caught this reverting` / `// to a page-wide chead-position guess, so pin both the markup and the script's own selectors.` Convention: tests.md \"never dates, people, hosts, versions, or prior behavior\". Executed: comment-narration.js --root → 0 findings, so the deterministic scan does not catch this phrasing; advisory only."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "s1 fix not landed or misapplied.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/design-atlas.js",
+        "line": 573,
+        "evidence": "Executed build: `.chead + .step{border-top:0;margin-top:0;padding-top:0}` emitted, no first-of-type; child order cmp > chead > chead > step > card > card > step, so exactly the first row loses its border."
+      },
+      {
+        "claim": "s0 fix not landed or pins do not match real output.",
+        "file": "/Users/jj/Projects/claude-plugins/tests/design-atlas.test.js",
+        "line": 300,
+        "evidence": "Six asserts added with consequence messages; executed on a 3-candidate fixture: empty has no data attrs, data-step present on both cards, all three script selectors true; node --test → 44 pass."
+      },
+      {
+        "claim": "The delta regresses the suite, gate, or promise sweep.",
+        "file": "/Users/jj/Projects/claude-plugins/specs/20260905/01-picks-on-the-atlas-page.review/manifest-3.jsonl",
+        "line": 2,
+        "evidence": "manifest-3: gate 289 green, suite 1141 green, ac-matrix uncovered 0, promise-sweep 8/8, smoke inert as declared."
+      },
+      {
+        "claim": "Version bump missing or non-builtin import introduced.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/.claude-plugin/plugin.json",
+        "line": 3,
+        "evidence": "7.82.0 present; delta hunks are CSS literals and node:assert calls only."
+      },
+      {
+        "claim": "Delta introduces dated/prior-behavior narration in script comments.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/design-atlas.js",
+        "line": 839,
+        "evidence": "comment-narration.js --root → 0 findings; the design-atlas.js D4 comment states the invariant only."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 36000
+  }
+}

@@ -10,28 +10,15 @@ const { tmpdir, runNode, SPEC, read } = require('./helpers')
 
 const atlas = (argv, opts) => runNode('scripts/design-atlas.js', argv, opts)
 
-// specs/20260905/01-picks-on-the-atlas-page.md D2: design-atlas.js does not yet guard its CLI
-// dispatch behind require.main, so a plain top-level require() of the script runs the CLI and
-// calls process.exit(2) — which would kill this whole test file, not just one test. This loader
-// patches process.exit to throw (caught below) instead of tearing the process down, so every
-// AC-4..AC-10/-12 test below can require the module in-process (per A4: "mount
-// createRequestHandler in-process on http.createServer, never a child process") and simply see
-// createRequestHandler/buildAtlas/etc as undefined until D2 lands — a clean, catchable red
-// reason instead of a crashed suite.
+// specs/20260905/01-picks-on-the-atlas-page.md D2: design-atlas.js guards its CLI dispatch
+// behind require.main, so a plain top-level require() of the script never runs the CLI and
+// returns the module's exports (buildAtlas, page, frameTag, createRequestHandler) untouched.
+// The cache bust lets each test that mutates a fixture on disk (design-coverage.json, roadmap
+// docs) re-require a fresh module against the new state.
 function loadDesignAtlas() {
   const scriptPath = path.join(SPEC, 'scripts/design-atlas.js')
   delete require.cache[scriptPath]
-  const realExit = process.exit
-  let exited = null
-  process.exit = (code) => { exited = code; throw new Error('__design_atlas_guarded_exit__:' + code) }
-  try {
-    return require(scriptPath)
-  } catch (e) {
-    if (exited !== null) return null
-    throw e
-  } finally {
-    process.exit = realExit
-  }
+  return require(scriptPath)
 }
 
 // In-process mirror of the file's existing withServe() child-process helper, for the new
@@ -39,7 +26,7 @@ function loadDesignAtlas() {
 function withHandler(root, prefix, fn) {
   const mod = loadDesignAtlas()
   assert.ok(mod && typeof mod.createRequestHandler === 'function',
-    'design-atlas.js must export createRequestHandler(root,{prefix}) — D2 extracts it from cmdServe and guards CLI dispatch behind require.main')
+    'design-atlas.js must export createRequestHandler(root,{prefix}), the handler cmdServe mounts on http.createServer')
   const server = http.createServer(mod.createRequestHandler(root, { prefix }))
   return new Promise((resolve, reject) => {
     server.listen(0, '127.0.0.1', () => {
@@ -116,10 +103,9 @@ function fixture() {
   return dir
 }
 
-// specs/20260905/01-picks-on-the-atlas-page.md D1/D2/D3/D4/D5, AC-20260905-01-3..-10/-12 (TDD
-// red): design-atlas.js has no require.main guard or module.exports yet (A2: requiring it today
-// runs the CLI and exits 2), createRequestHandler/the picks endpoints/the stop rendering/the
-// inline decide script do not exist, and notes-layer.browser.js has no notes-scope handling.
+// specs/20260905/01-picks-on-the-atlas-page.md D1/D2/D3/D4/D5, AC-20260905-01-3..-10/-12:
+// design-atlas.js's require.main guard, createRequestHandler, the picks endpoints, the stop
+// rendering, and the inline decide script; notes-layer.browser.js's notes-scope handling.
 
 test('AC-20260905-01-3: requiring design-atlas.js with argv [node, x, \'nonsense\'] returns normally with nothing on stderr, exposing buildAtlas, page, frameTag, createRequestHandler as functions', () => {
   const scriptPath = path.join(SPEC, 'scripts/design-atlas.js')
@@ -307,6 +293,22 @@ a -> b
   assert.ok(iframes.some((f) => /src="[^"]*shapes\/orb-hero\.html\?clean"/.test(f)), 'one frame src must end shapes/orb-hero.html?clean')
   assert.match(cmpBlock, /class="card"[\s\S]*?open ↗[\s\S]*?href="[^"]*shapes\/card-first\.html"/,
     'each frame must sit inside a class="card" element carrying an open ↗ link to the un-?clean path')
+
+  // D4: the lightbox override resolves "which group is this card" and "same step, other
+  // candidate" purely from data-group/data-step on the card — a reviewer caught this reverting
+  // to a page-wide chead-position guess, so pin both the markup and the script's own selectors.
+  assert.match(cmpBlock, /class="card" data-group="card-first" data-step="1"/,
+    'every non-empty compare-table card must carry its own data-group and data-step — without them the lightbox cannot resolve which candidate a card is')
+  assert.match(cmpBlock, /class="card" data-group="orb-hero" data-step="1"/,
+    'every non-empty compare-table card must carry its own data-group and data-step — without them the lightbox cannot resolve which candidate a card is')
+  assert.doesNotMatch(cmpBlock, /class="card empty"[^>]*data-(group|step)=/,
+    'an empty compare-table cell must carry neither data-group nor data-step — it stands for no candidate at all')
+  assert.ok(out.includes('.card[data-step='),
+    'the inline script must scope same-step lookups with the .card[data-step=...] selector, not a page-wide index')
+  assert.ok(out.includes('curCard.dataset.group'),
+    'the lightbox Pick this button must read the group off the shown card\'s own dataset, not off chead position')
+  assert.ok(!out.includes("querySelectorAll('.chead')["),
+    'the lightbox wiring must never fall back to a positional .chead index — that breaks as soon as columns are reordered or filtered')
 
   const j1Idx = out.indexOf('<h2>j1')
   assert.ok(j1Idx !== -1, 'a section headed "j1" must exist for the seed journey')

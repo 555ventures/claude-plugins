@@ -4,9 +4,8 @@ const assert = require('node:assert')
 const { openStop, decideStop, consumeStop, pending, validatePicks } = require('../../spec/scripts/lib/mocks-picks')
 
 // specs/20260905/01-picks-on-the-atlas-page.md D1, AC-20260905-01-1, AC-20260905-01-2: the sole
-// reader/writer of design/mocks/picks.json plus its pure transforms — mocks-picks.js does not
-// exist yet, so the top-level require above fails the whole file until D1 lands (the same
-// red-phase pattern tests/mocks/mocks-notes.test.js used for spec 10's not-yet-existing lib).
+// reader/writer of design/mocks/picks.json plus its pure stop transforms (openStop, decideStop,
+// consumeStop, pending, validatePicks).
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
 
@@ -149,4 +148,17 @@ test('AC-20260905-01-2: validatePicks returns one error each for a malformed id,
     assert.ok(joined.includes(needle),
       'the error list must name the offending stop id "' + needle + '" so an author can find which stop is malformed: got ' + JSON.stringify(errors))
   }
+})
+
+test('AC-20260905-01-2: validatePicks returns exactly one error naming key for a stop with an empty key', () => {
+  const stop = {
+    id: 'P901', kind: 'pick', key: '', title: 't', question: null,
+    candidates: [{ group: 'a', label: 'l', path: 'p.html' }],
+    url: null, openedAt: '2026-01-01T00:00:00.000Z', status: 'open', decision: null, previous: [],
+  }
+  const { errors } = validatePicks([stop])
+  assert.strictEqual(errors.length, 1,
+    'an otherwise-valid stop with only an empty key must yield exactly one error, not zero (the field going unchecked) or more than one: got ' + JSON.stringify(errors))
+  assert.ok(errors[0].includes('key'),
+    'the single error must mention "key" so an author can tell which field is empty: got ' + JSON.stringify(errors))
 })

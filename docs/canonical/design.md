@@ -185,3 +185,20 @@ on a journey is its approval. Client review is the same loop with the recorded d
 REVIEW step prints `Approval means "this is the product I understand" — the written brief, not
 these screens, holds scope`. `/spec:atlas` and `/spec:sketch` route their annotation loops
 through the same serve + `notes open`; the annotation-MCP discovery clause is retired.
+
+**Picks (specs/20260905/01).** A look stop is a record in `design/mocks/picks.json` (one
+writer, `lib/mocks-picks.js`: `readPicks`, `writePicks`, `validatePicks`, `openStop`,
+`decideStop`, `consumeStop`, `pending`) of candidate groups — a group is one flow, its screens in
+order, so a shape file, a theme direction, and a per-surface variant inside a journey are the same
+shape. The served atlas lists open stops at the top (`#stops`, links only) and renders each in
+place in the section its screens live in, derived from the key grammar `<mark>[:<journey>]`: a
+`pick` stop as a compare table (one row per step, one column per candidate, full cards, sticky
+column headers) with a one-click **Pick this** per group and an optional why-line after it, an
+`approve` stop as **Approve** / **Change** with a note. The decision posts to the notes server's
+`POST /__picks/decide` (`GET /__picks/list` returns the pending stops) and lands in `picks.json`,
+re-pickable until the mocks driver consumes it; a new `openStop` with the same key supersedes the
+old one. The notes layer shows one scope per page, declared by the server's
+`<meta name="notes-scope" content="project|mock">`: project notes on the atlas index, mock notes
+on a screen, and the index's bar hides while the lightbox is open (`body.lb-open`). `design-atlas.js`
+exports `buildAtlas`, `page`, `frameTag`, `createRequestHandler(root, {prefix})` — one handler,
+mountable under a prefix — and runs its CLI only as a main module.

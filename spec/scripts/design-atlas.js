@@ -552,7 +552,38 @@ function page(title, bodyHtml, extraHead = '') {
     '#lbbar span{color:var(--v-bg);font-size:13px;margin-right:.4em}\n' +
     '#lbbar button,#lbbar a{background:var(--v-muted-bg);color:var(--v-fg);border:1px solid var(--v-border);border-radius:var(--v-radius);' +
     'padding:.2em .7em;cursor:pointer;font:inherit;font-size:13px;text-decoration:none}\n' +
-    '@media(max-width:640px){body{padding:.75rem}.grid{grid-template-columns:1fr}#journey{height:200px}}\n' +
+    // specs/20260905/01-picks-on-the-atlas-page.md D3(c): the compare table — #stops is links
+    // only (D3a), .cmp is a CSS grid with one column per group (--cols, set inline per stop),
+    // .chead stays visible while its steps scroll, .step spans every column as a row label, and
+    // .card.empty renders as a dashed placeholder instead of a blank cell.
+    '#stops{margin:0 0 1.25rem;padding:.75rem 1rem;border:1px solid var(--v-border);border-left:4px solid var(--v-warn);' +
+    'border-radius:var(--v-radius);background:var(--v-bg);box-shadow:var(--v-shadow)}\n' +
+    '#stops h2{margin:0 0 .3rem;font-size:14px}#stops h2~h2{margin-top:.6rem}\n' +
+    '#stops ol{margin:0;padding-left:1.2rem;font-size:13px}\n' +
+    '.cmp{display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:.75rem;align-items:start;' +
+    'margin:0 0 1.25rem;padding:.75rem;border:1px solid var(--v-border);border-radius:var(--v-radius);background:var(--v-bg)}\n' +
+    '.chead{position:sticky;top:2.6rem;z-index:3;display:flex;align-items:center;flex-wrap:wrap;gap:.4em;' +
+    'padding:.4rem .1rem;background:var(--v-bg);font-size:13px;font-weight:600}\n' +
+    '.chead button{background:var(--v-bg);color:var(--v-fg);border:1px solid var(--v-border);border-radius:99px;' +
+    'padding:.15em .8em;cursor:pointer;font:inherit;font-size:12px;margin-left:auto}\n' +
+    '.chead.picked button{border-color:var(--v-ok);color:var(--v-ok)}\n' +
+    '.chead.rejected button{color:var(--v-muted)}\n' +
+    '.step{grid-column:1/-1;font-size:12px;font-weight:600;color:var(--v-muted);text-transform:uppercase;' +
+    'letter-spacing:.04em;padding:.5rem 0 0;border-top:1px solid var(--v-border);margin-top:.25rem}\n' +
+    '.chead + .step{border-top:0;margin-top:0;padding-top:0}\n' +
+    '.card.empty{border:1px dashed var(--v-border);border-radius:var(--v-radius);background:transparent;' +
+    'min-height:6rem;box-shadow:none}\n' +
+    '.badge.picked{border-color:var(--v-ok);color:var(--v-ok);background:color-mix(in srgb, var(--v-ok) 12%, var(--v-bg))}\n' +
+    '.badge.rejected{border-color:var(--v-border);color:var(--v-muted);background:var(--v-muted-bg)}\n' +
+    '.stop{display:flex;flex-wrap:wrap;gap:.5rem;align-items:flex-start;margin:0 0 1rem;padding:.75rem;' +
+    'border:1px solid var(--v-border);border-radius:var(--v-radius);background:var(--v-bg)}\n' +
+    '.stop textarea{flex:1 1 16rem;min-height:2.6rem;font:14px/1.4 var(--v-font);color:var(--v-fg);' +
+    'border:1px solid var(--v-border);border-radius:var(--v-radius);padding:.4em .6em;resize:vertical}\n' +
+    '.stop button,.cmp input,.cmp button[data-decide]{background:var(--v-bg);color:var(--v-fg);' +
+    'border:1px solid var(--v-border);border-radius:99px;padding:.25em .9em;cursor:pointer;font:inherit;font-size:13px}\n' +
+    '.decide-msg{grid-column:1/-1;font-size:12px;color:var(--v-danger);margin-top:.25rem}\n' +
+    '@media(max-width:640px){body{padding:.75rem}.grid{grid-template-columns:1fr}#journey{height:200px}' +
+    '.cmp{grid-template-columns:1fr}.chead{position:static}}\n' +
     '</style>' + extraHead + '</head><body>\n' + bodyHtml + '\n</body></html>\n'
 }
 
@@ -624,21 +655,30 @@ const LIGHTBOX = '<div id="lb"><div id="lbbar"><span id="lbtitle"></span>' +
 // the toolbar degrades to viewport-only). Returns {buttons, script} so pages that skip targets
 // emit neither.
 function matrixBar(targets) {
-  if (!targets) return { buttons: '', script: '' }
+  if (!targets) return { buttons: '', style: '', script: '' }
   const vps = (targets.viewports || []).map(v =>
     '<button data-vp onclick="__vp(' + (v.width | 0) + ',' + (v.height | 0) + ',this)">' +
     esc(v.name) + ' ' + (v.width | 0) + '</button>').join('')
   const themes = (targets.themes || []).map(t =>
     '<button data-th onclick="__theme(\'' + esc(t) + '\',this)">' + esc(t) + '</button>').join('')
-  if (!vps && !themes) return { buttons: '', script: '' }
+  if (!vps && !themes) return { buttons: '', style: '', script: '' }
+  // D3(c): a .cmp's columns stack to one per row when the widest declared viewport is selected
+  // (a compare table at desktop width has room to read every candidate full-width, not squeezed
+  // into a grid column) — __vp stamps body[data-vp-max] so this rule can key off it; kept out of
+  // page()'s always-on <style> so a targets-less atlas never emits a data-vp* attribute at all.
+  const widest = (targets.viewports || []).reduce((m, v) => Math.max(m, v.width | 0), 0)
+  const style = vps
+    ? '<style>body[data-vp-max="1"] .cmp{grid-template-columns:1fr}body[data-vp-max="1"] .chead{position:static}</style>'
+    : ''
   const script = '<script>\n' +
     'function __vp(w,h,btn){__sel(btn,"data-vp");document.querySelectorAll("iframe.frame").forEach(function(f){' +
     'f.dataset.w=w;f.dataset.h=h;var c=f.closest(".card"),v=c&&c.querySelector(".vp");' +
-    'if(v)v.textContent=w+"\\u00d7"+h});__fitAll();setTimeout(__fitAll,200)}\n' +
+    'if(v)v.textContent=w+"\\u00d7"+h});document.body.dataset.vpMax=(w===' + widest + ')?"1":"";' +
+    '__fitAll();setTimeout(__fitAll,200)}\n' +
     'function __theme(t,btn){__sel(btn,"data-th");document.querySelectorAll("iframe.frame").forEach(function(f){' +
     'try{f.contentDocument.documentElement.setAttribute("data-theme",t)}catch(e){}})}\n' +
     '</script>'
-  return { buttons: vps + (vps && themes ? '<span class="sep"></span>' : '') + themes, script }
+  return { buttons: vps + (vps && themes ? '<span class="sep"></span>' : '') + themes, style, script }
 }
 
 // ---- gallery -------------------------------------------------------------------------------------
@@ -796,7 +836,10 @@ function renderCompareTable(stop, root, outDir, vp0) {
       try { html = fs.readFileSync(filePath, 'utf8') } catch { html = '' }
       const vp = viewportOf(html) || vp0
       const rel = path.relative(outDir, filePath).split(path.sep).join('/')
-      return '<div class="card"><h3>' + esc(label) + '<span class="vp">' + vp.width + '×' + vp.height + '</span>' +
+      // D4's lightbox wiring resolves "same step, other candidate" and "which group is this
+      // card" purely from these two attributes — never from a page-wide frame index.
+      return '<div class="card" data-group="' + esc(g) + '" data-step="' + (i + 1) + '"><h3>' + esc(label) +
+        '<span class="vp">' + vp.width + '×' + vp.height + '</span>' +
         '<a class="open" title="open ↗" href="' + esc(rel) + '" target="_blank">open ↗</a></h3>' +
         frameTag(rel, vp.width, vp.height) + '</div>'
     }).join('')
@@ -909,18 +952,24 @@ const PICKS_SCRIPT = '<!--picks-script--><script>\n' +
   "    __post(id,{verdict:'change',note:note}).then(function(res){__apply(stopEl,res)})\n" +
   "  }\n" +
   "})\n" +
+  // D4: opening a lightbox from a card inside a .cmp must walk only the SAME step's other
+  // candidates, and the bar's Pick this must resolve the group from the card actually shown —
+  // never a page-wide frame index or a chead-position guess. `.step` is a sibling of the cards,
+  // not an ancestor, so the sibling set is read off each card's own data-step/data-group
+  // attributes (emitted by renderCompareTable), scoped to this .cmp only.
   "var __origOpen=window.__lbOpen\n" +
   "if(typeof __origOpen==='function'){\n" +
   "  window.__lbOpen=function(f){\n" +
   "    document.body.classList.add('lb-open')\n" +
+  // Delegate to the base opener for the frame it is given, then narrow __lbList/__lbIx to this
+  // step's candidates inside the same .cmp so ‹ › navigation stays scoped to the compare table.
+  "    __origOpen(f)\n" +
   "    var card=f.closest && f.closest('.card')\n" +
   "    var cmp=card && card.closest('.cmp')\n" +
-  "    if(cmp){\n" +
-  "      var step=card.closest('.step') || card.parentElement\n" +
-  "      var siblings=step ? Array.prototype.slice.call(step.querySelectorAll('iframe.frame')) : null\n" +
-  "      if(siblings && siblings.length) window.__lbList=siblings\n" +
+  "    if(cmp && card && card.dataset.step){\n" +
+  "      var siblings=Array.prototype.slice.call(cmp.querySelectorAll('.card[data-step=\"'+card.dataset.step+'\"] iframe.frame'))\n" +
+  "      if(siblings.length){ window.__lbList=siblings; window.__lbIx=siblings.indexOf(f) }\n" +
   "    }\n" +
-  "    __origOpen(f)\n" +
   "    var bar=document.getElementById('lbbar')\n" +
   "    if(bar){\n" +
   "      var old=bar.querySelector('.decide-pick'); if(old) old.remove()\n" +
@@ -928,8 +977,9 @@ const PICKS_SCRIPT = '<!--picks-script--><script>\n' +
   "        var pb=document.createElement('button'); pb.className='decide-pick'; pb.textContent='Pick this'\n" +
   "        bar.insertBefore(pb, bar.lastChild)\n" +
   "        pb.onclick=function(){\n" +
-  "          var chead=cmp.querySelectorAll('.chead')[window.__lbIx]\n" +
-  "          var g=chead?chead.getAttribute('data-group'):null\n" +
+  "          var curFrame=window.__lbList[window.__lbIx]\n" +
+  "          var curCard=curFrame && curFrame.closest && curFrame.closest('.card')\n" +
+  "          var g=curCard?curCard.dataset.group:null\n" +
   "          __post(cmp.getAttribute('data-id'),{verdict:'pick',pick:g}).then(function(res){__apply(cmp,res)})\n" +
   "        }\n" +
   "      }\n" +
@@ -1236,7 +1286,7 @@ function buildAtlas(root, out) {
     header + headerStopsHtml + stopsIndexHtml + standaloneHtml + (rows.length ? graph : '') +
     '\n<div class="bar">' + filterBar + (bar.buttons ? '<span class="sep"></span>' + bar.buttons : '') + '</div>' +
     '\n' + shapesSectionHtml + '\n' + themeSectionHtml + '\n' + sectionHtml + '\n' + emptyHtml + '\n' +
-    LIGHTBOX + '\n' + UI_SCRIPT + bar.script + filterScript + PICKS_SCRIPT)
+    LIGHTBOX + '\n' + UI_SCRIPT + bar.style + bar.script + filterScript + PICKS_SCRIPT)
   fs.mkdirSync(outDir, { recursive: true })
   fs.writeFileSync(out, html)
   return { html, out, count: labels.length, summary }
@@ -1390,13 +1440,14 @@ function createRequestHandler(root, opts = {}) {
         try {
           result = picksLib.decideStop(stops, body && body.id, body || {})
         } catch (e) {
-          const msg = e.message
-          if (/no stop with id/.test(msg)) { jsonRes(res, 404, { error: msg }); return }
-          if (/already consumed|superseded/.test(msg)) {
-            jsonRes(res, 409, { error: msg, stop: stops.find((s) => s.id === (body && body.id)) })
+          // mocks-picks.js's decideStop tags its refusals with a code (consumed|superseded|
+          // bad-request); findStop's not-found throw carries none, which is exactly the 404 case.
+          if (!e.code) { jsonRes(res, 404, { error: e.message }); return }
+          if (e.code === 'consumed' || e.code === 'superseded') {
+            jsonRes(res, 409, { error: e.message, stop: stops.find((s) => s.id === (body && body.id)) })
             return
           }
-          jsonRes(res, 400, { error: msg })
+          jsonRes(res, 400, { error: e.message })
           return
         }
         picksLib.writePicks(rootAbs, result.stops)

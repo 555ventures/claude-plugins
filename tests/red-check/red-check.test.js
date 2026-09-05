@@ -74,7 +74,7 @@ function findings(res) {
   return parsed
 }
 
-test('AC-20260821-01-1: parseAcBullets parses a [pre-green: absence-invariant] tag into preGreen, an untagged bullet parses preGreen: null, and PRE_GREEN_REASONS exports the three-member closed enum', () => {
+test('AC-20260821-01-1: parseAcBullets parses a [pre-green: absence-invariant] tag into preGreen, an untagged bullet parses preGreen: null, and PRE_GREEN_REASONS exports the four-member closed enum', () => {
   const section =
     '- **AC-20260821-99-1**: WHEN x THE SYSTEM SHALL y [pre-green: absence-invariant]\n' +
     '- **AC-20260821-99-2**: WHEN x THE SYSTEM SHALL y\n'
@@ -84,9 +84,9 @@ test('AC-20260821-01-1: parseAcBullets parses a [pre-green: absence-invariant] t
   assert.strictEqual(bullets[1].preGreen, null,
     'a bullet with no [pre-green:] tag must parse preGreen: null, not an empty string or undefined — a truthy-but-wrong value would let an untagged AC silently sanction itself')
   const reasons = new Set(PRE_GREEN_REASONS)
-  assert.strictEqual(reasons.size, 3,
-    `PRE_GREEN_REASONS must be the single enum authority naming exactly the three recorded sub-shapes — got ${JSON.stringify([...reasons])}`)
-  for (const r of ['fallback-rejection', 'absence-invariant', 'predicate-in-test']) {
+  assert.strictEqual(reasons.size, 4,
+    `PRE_GREEN_REASONS must be the single enum authority naming exactly the four recorded sub-shapes — got ${JSON.stringify([...reasons])}`)
+  for (const r of ['fallback-rejection', 'absence-invariant', 'predicate-in-test', 'design-landed']) {
     assert.ok(reasons.has(r), `PRE_GREEN_REASONS must include "${r}" — a consumer validating against an incomplete enum would reject a legitimately-tagged AC`)
   }
 })
@@ -502,4 +502,51 @@ test('AC-20260821-03-12: a tests-layer file whose only ACTUAL citation is a long
     `green — got ${JSON.stringify(row)}`)
   assert.strictEqual(row.observed, 'green',
     `the file's own test genuinely passes against the pre-image — got ${JSON.stringify(row)}`)
+})
+
+// The design-stage sub-shape. `spec/commands/design.md` authors real, kept components before the
+// build stage and states that "Build treats the landed components as done inputs" — so a UI AC
+// whose component shipped at design is green against build's pre-image by construction. Before
+// `design-landed` joined the enum, red-check had no sanction for it: salon-os
+// specs/20260905/02-photo-reframe-ui.md stalled at RED_FINDINGS with two unsanctioned-green
+// findings on strong, AC-faithful tests, and the only exits were laundering the ACs into
+// `SHALL CONTINUE TO` regression pins or deleting approved components. These two cases pin both
+// directions: the tag sanctions a genuinely-green design-landed file, and it stays a real
+// sanction to TEST — a `design-landed` AC whose file is RED is still a broken-pin finding, never
+// an attestation taken on faith.
+test('AC-20260821-01-1: a tests-layer file whose carried AC declares [pre-green: design-landed] and passes against the pre-image is sanctioned — exit 0, no finding', () => {
+  const { dir, base } = newHost('rcdl1')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/x9.test.js'),
+    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260821-95-1: the design stage already landed this component', () => { assert.ok(true) })\n")
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260821-95-1** [pre-green: design-landed]: WHEN x THE SYSTEM SHALL y → tests/x9.test.js'],
+    ['| tests/x9.test.js | CREATE | tests | design-landed component, green against the pre-image by construction |']))
+  const res = run(spec, dir, base, ['--json'])
+  assert.strictEqual(res.status, 0,
+    `a [pre-green: design-landed] AC whose test passes against the pre-image must be sanctioned — without this enum member the design stage's own landed components stall every UI build at RED_FINDINGS (stderr: ${res.stderr})`)
+  const out = findings(res)
+  assert.strictEqual(out.findings.length, 0,
+    `a valid design-landed sanction must emit no finding at all — an invalid-pre-green here would mean the enum authority never learned the reason — got ${JSON.stringify(out.findings)}`)
+})
+
+test('AC-20260821-01-1: a [pre-green: design-landed] AC whose test FAILS against the pre-image is still a broken-pin finding — the tag is a sanction to test, never an attestation', () => {
+  const { dir, base } = newHost('rcdl2')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/x10.test.js'),
+    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260821-96-1: the component was NOT landed', () => { assert.ok(false) })\n")
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260821-96-1** [pre-green: design-landed]: WHEN x THE SYSTEM SHALL y → tests/x10.test.js'],
+    ['| tests/x10.test.js | CREATE | tests | design-landed claimed, but the component is absent |']))
+  const res = run(spec, dir, base, ['--json'])
+  assert.strictEqual(res.status, 1,
+    `a design-landed claim contradicted by a red run must exit 1 — a sanction that skipped execution would let any AC self-certify as already-shipped (stderr: ${res.stderr})`)
+  const out = findings(res)
+  assert.ok(out.findings.some(f => f.class === 'broken-pin' && f.path === 'tests/x10.test.js' &&
+    Array.isArray(f.acs) && f.acs.includes('AC-20260821-96-1')),
+    `the contradicted claim must surface as broken-pin naming the file and its AC-ID — got ${JSON.stringify(out.findings)}`)
 })

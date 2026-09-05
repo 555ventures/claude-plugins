@@ -99,10 +99,12 @@ depended_on_by: []
      red or absent oracle leg is a hard finding, identical in standing to an uncovered AC. One
      oracle per AC; an AC never carries both a test mapping and an `[oracle:]` tag. An AC whose
      test is legitimately green pre-implementation declares `[pre-green: <reason>]` — closed
-     enum `fallback-rejection` | `absence-invariant` | `predicate-in-test`, sibling syntax to
+     enum `fallback-rejection` | `absence-invariant` | `predicate-in-test` | `design-landed`,
+     sibling syntax to
      `[env:]`/`[oracle:]`: tag a rejection criterion a pre-existing generic fallback already
-     satisfies, an absence invariant an inert stub already satisfies, or a predicate that IS the
-     deliverable living inside a test file. Verify against the pre-image before tagging at plan
+     satisfies, an absence invariant an inert stub already satisfies, a predicate that IS the
+     deliverable living inside a test file, or a UI promise whose component the design stage
+     already authored and kept (design.md: build treats landed components as done inputs). Verify against the pre-image before tagging at plan
      time — build's red-check reads the tag as a sanction to test at Phase 1, never an
      attestation taken on faith, and it never launders coverage (a tagged AC with zero test hits
      still counts uncovered in ac-matrix). A Decision that

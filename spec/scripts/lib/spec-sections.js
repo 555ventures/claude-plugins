@@ -129,7 +129,17 @@ function acIdOccurs(text, id) {
 
 // The closed enum of `[pre-green: <reason>]` sub-shapes (D1) — the single authority every
 // consumer validates a tagged bullet's raw reason against.
-const PRE_GREEN_REASONS = ['fallback-rejection', 'absence-invariant', 'predicate-in-test']
+//
+// `design-landed` is the design-stage sub-shape: `spec/commands/design.md` authors real, kept
+// components before build and states outright that "Build treats the landed components as done
+// inputs" — so a UI AC whose component shipped at the design stage is green against build's
+// pre-image by construction, not by a vacuous pin. Without this member the only exits were
+// laundering (reword the AC as a `SHALL CONTINUE TO` regression pin, which misreports a new
+// promise as pre-existing behaviour) or waste (delete approved components so the build can
+// re-author them). Verified against the pre-image at plan/build time like every other reason.
+const PRE_GREEN_REASONS = [
+  'fallback-rejection', 'absence-invariant', 'predicate-in-test', 'design-landed',
+]
 
 // One `[tagname: value]` item, optionally backtick-wrapped. `[a-z][a-z-]*` covers the three
 // known tag names (oracle, env, pre-green) generically — this exists only to consume a run of

@@ -76,7 +76,7 @@ Write the spec per the template. `status: draft`. While drafting:
 - **ACs** follow the template's contract: `WHEN … THE SYSTEM SHALL …`, namespaced IDs
   (`AC-{YYYYMMDD-NN}-k`), `[env: VAR]` on environment-gated tests, `[oracle: <leg>]` where
   a gate leg is the honest oracle, `[pre-green: <reason>]` (closed enum: `fallback-rejection`
-  | `absence-invariant` | `predicate-in-test`) on an AC whose test is legitimately green
+  | `absence-invariant` | `predicate-in-test` | `design-landed`) on an AC whose test is legitimately green
   against the pre-image — verify against the pre-image before tagging; build's red-check
   reads the tag as a sanction, never an attestation to take on faith — literal input→output
   examples on ambiguity-prone terms (always, on critical tier). A Decision that promises a

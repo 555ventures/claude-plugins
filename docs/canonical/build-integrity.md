@@ -60,7 +60,8 @@ stub that itself fails to compile reports still-load-red, which is a consult, ne
 
 The build driver's RED_CHECK state is mechanized by `spec/scripts/red-check.js` (`spec-paths
 red-check`). Expectation derives from `SHALL CONTINUE TO` regression pins and closed-enum
-`[pre-green:]` tags (`fallback-rejection` | `absence-invariant` | `predicate-in-test`);
+`[pre-green:]` tags (`fallback-rejection` | `absence-invariant` | `predicate-in-test` |
+`design-landed`, the last for a UI AC whose component the design stage already landed);
 observation is per-file `{testCommand}` exit codes against the pre-image, purity-refused when
 non-tests File Plan paths already differ from the diff base. The plan-time tag count rides
 review's ac-matrix manifest row as `observed.preGreen` into every ledger row, making the class

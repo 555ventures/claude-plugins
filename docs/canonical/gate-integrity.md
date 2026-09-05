@@ -8,6 +8,16 @@ rules that replaced it:
 - **Gates are plainly green.** `npm test` exits 0 on untouched code; there is no
   sanctioned-failing set and no failing-pins-as-TODO convention. A red gate is a regression
   or unfinished work, never a backlog entry.
+- **No single test file may be the suite's floor.** `node:test` parallelises across files
+  and serialises within one, so a file's serial runtime caps the whole run regardless of core
+  count. `scripts/test-file-budget-reporter.js` — wired into both `npm test` and the host
+  `testCommand`, so the review's `suite` leg and the close-time re-run see it — sums each
+  file's test durations and fails the run (`__FILE_BUDGET_RED__ <file> …`, exit 1) when any
+  file exceeds 45 s; a green run prints `__FILE_BUDGET_OK__ slowest <file> <ms>ms of 45000ms`.
+  The remedy is always the same: split the file into sibling `*.test.js` files by owning AC
+  family, sharing helpers through a `<family>.fixtures.js` module. The budget tightens via
+  `SPEC_TEST_FILE_BUDGET_MS` (tests only) and loosens only by editing the constant in a
+  reviewed diff. (specs/20260903/07-test-file-budget-guard.md)
 - **One derivation per verdict.** `verdict.js` is the sole source of the review/release
   verdict word, derived from the evidence manifest `review-legs.js` writes plus the
   reviewer's return and disposition counts. Nothing else computes or asserts CLEAN.

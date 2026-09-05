@@ -1,0 +1,117 @@
+{
+  "runId": "rv_b451fd3b00fe",
+  "ts": "2026-09-05T03:09:15.976Z",
+  "spec": "specs/20260903/07-test-file-budget-guard.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 2206,
+    "base": "9796f9da2228f414ec630077ba3fff3c3de5dcfb",
+    "head": "c16695794d566458f0c9fc4f50e432aef3c76289",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 422
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1090
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 1,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 8,
+        "carried": 7,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "Iteration-2 s1 (D8 plugin behavior change shipped without a spec/.claude-plugin/plugin.json bump) is still open",
+        "file": "/Users/jj/Projects/claude-plugins/spec/.claude-plugin/plugin.json",
+        "line": 3,
+        "evidence": "`git diff 9796f9da -- spec/.claude-plugin/plugin.json` shows `\"version\": \"7.76.0\"` -> `\"version\": \"7.77.0\"` and a new leading changelog paragraph `7.77.0 — scope-reconcile.js's at-risk candidate walk skips fixtures/__fixtures__ directories ... (specs/20260903/07-test-file-budget-guard.md D8, AC-20260903-07-7)`. `git tag | grep -c 7.77.0` -> 0 and `git log -S'\"version\": \"7.77.0\"' -- spec/.claude-plugin/plugin.json` -> empty: the number is unused in history. File Plan row added: `spec/.claude-plugin/plugin.json | MODIFY | doctrine | D8 is a plugin behavior change: bump to 7.77.0`."
+      },
+      {
+        "claim": "The changelog edit breaks the last-3 convention or the manifest-pinning consistency tests",
+        "file": "/Users/jj/Projects/claude-plugins/tests/consistency/plugin-version.test.js",
+        "line": 60,
+        "evidence": "Scratch extractor over description after `Changelog (last 3):` -> ['7.77.0','7.76.0','7.75.0'] (7.74.0 trimmed). `node --test tests/consistency/plugin-version.test.js tests/doctrine-review.test.js tests/consistency/genesis-doctrine.test.js tests/scope-reconcile-at-risk.test.js` -> `ℹ tests 36`, `ℹ pass 36`, `ℹ fail 0`, including `✔ AC-20260820-08-14: the leading changelog version equals the declared manifest version` and `✔ ... lists exactly three versions`. `.claude-plugin/marketplace.json` carries no per-plugin version field (grep '\"version\"' -> no match), so nothing else pins the number."
+      },
+      {
+        "claim": "The changelog text misdescribes the shipped behavior (claims changed-file classification untouched / scope of the skip)",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/scope-reconcile.js",
+        "line": 244,
+        "evidence": "Iteration-2 executed evidence still holds on the unchanged script: `git diff 9796f9da -- spec/scripts/scope-reconcile.js` is two hunks (header sentence + the one-line `fixtures`/`__fixtures__` skip at :244); synthetic AC-7 host lists only tests/util.test.js against the fixed script vs both fixture .md files against the base script; `✔ AC-20260903-07-7` passes. The 7.77.0 paragraph names exactly that mechanism and AC."
+      },
+      {
+        "claim": "The iteration-3 range regressed any leg or earlier kill (reporter D1-D5, D3 wiring, D6 no-ac, D7 shards verbatim)",
+        "file": "/Users/jj/Projects/claude-plugins/specs/20260903/07-test-file-budget-guard.review/manifest-3.jsonl",
+        "line": 3,
+        "evidence": "manifest-3: gate exit 0 testsExecuted 422; suite exit 0 testsExecuted 1090 (>= 1061); ac-matrix uncovered 0 (oracle 1 = AC-1's declared suite oracle, a WARN not a finding); promise-sweep rows 8 carried 7 sanctioned 1 orphans 0. legs-3/suite-output.txt: `ℹ tests 1090`, `ℹ fail 0`, `ℹ skipped 0`, exactly one `__FILE_BUDGET_OK__ slowest tests/mocks/mocks-driver.test.js 24451ms of 45000ms`; AC-20260903-07-2/-3 ✔. The fix delta touches only plugin.json, the spec (D8 row + File Plan rows + driver frontmatter), and .claude/spec-runs.jsonl (a driver-appended build row)."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 16000
+  }
+}

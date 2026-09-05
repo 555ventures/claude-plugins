@@ -15,7 +15,9 @@
 // in .claude/spec.config.json, or re-derive the changed set anywhere else — /spec:review and
 // /spec:build's Final gate both call this, once each. It DOES read test-file CONTENT, but only
 // for the at-risk derivation's substring scan below (specs/20260815/02-at-risk-pins.md D1) — the
-// outOfPlan/unrealized/excluded/renamed derivation never looks past a path string.
+// outOfPlan/unrealized/excluded/renamed derivation never looks past a path string. The at-risk
+// walk does NOT descend into `fixtures`/`__fixtures__` directories (specs/20260903/07-test-file-
+// budget-guard.md D8) — fixture files are never at-risk candidates, even when test-classified.
 //
 // Changed set = `git diff --name-status -M <base>` (BOTH sides of R/C rows) UNION `??` paths
 // from `git status --porcelain --untracked-files=all` (the `=all` flag is required — plain
@@ -238,7 +240,8 @@ function walkTestFiles(dir, out, classifyFn = isTestClassified) {
     return
   }
   for (const entry of entries) {
-    if (entry.name === '.git' || entry.name === 'node_modules') continue
+    // specs/20260903/07-test-file-budget-guard.md D8: fixture dirs are never at-risk candidates.
+    if (entry.name === '.git' || entry.name === 'node_modules' || entry.name === 'fixtures' || entry.name === '__fixtures__') continue
     const full = path.join(dir, entry.name)
     if (entry.isDirectory()) {
       walkTestFiles(full, out, classifyFn)

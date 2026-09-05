@@ -19,6 +19,10 @@ const { tmpdir, runNode, gitRepo } = require('./helpers')
 // emit byte-identical output on these exact fixtures after that addition lands, so every test
 // below is retagged (name only, no assertion changed or weakened) as the regression pin D10 and
 // AC-20260822-02-12 call for.
+//
+// specs/20260903/07-test-file-budget-guard.md D8 (AC-20260903-07-7): walkTestFiles skips
+// directories named `fixtures`/`__fixtures__` exactly as it already skips node_modules/.git, so
+// prose/data fixtures under a test tree are never handed to the host testCommand as tests.
 
 const SCRIPT = 'scripts/scope-reconcile.js'
 
@@ -252,4 +256,42 @@ test('AC-20260815-02-5 [AC-20260822-02-12 regression pin]: a stem match that exi
     'the only file referencing the changed spec/scripts/verdict.js stem lives under node_modules/, ' +
     'which the repo walk must always skip — a non-empty atRisk here means vendored/installed code ' +
     'is being scanned as a candidate: ' + JSON.stringify(out))
+})
+
+test('AC-20260903-07-7: a stem match under a fixtures/ or __fixtures__/ directory is never listed in atRisk, while a real test file with the same stem still is', () => {
+  const dir = tmpdir('scope-reconcile-at-risk')
+  const g = gitRepo(dir)
+
+  const specRel = specWithFilePlan(dir, 'specs/20260903/07-x.md', [
+    { path: 'lib/util.js', action: 'MODIFY', layer: 'scripts' },
+  ])
+  fs.mkdirSync(path.join(dir, 'lib'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'lib/util.js'), '// v1\nmodule.exports = {}\n')
+  fs.mkdirSync(path.join(dir, 'tests/fixtures/sample'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/fixtures/sample/notes.md'),
+    'this fixture mentions lib/util.js in a sentence\n')
+  fs.mkdirSync(path.join(dir, 'tests/__fixtures__'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/__fixtures__/data.md'),
+    'this fixture also mentions lib/util.js in a sentence\n')
+  fs.writeFileSync(path.join(dir, 'tests/util.test.js'),
+    "require('../lib/util') // lib/util.js\n")
+  g('add', '-A'); g('commit', '-q', '-m', 'base')
+  const base = g('rev-parse', 'HEAD').trim()
+
+  fs.writeFileSync(path.join(dir, 'lib/util.js'), '// v2\nmodule.exports = { changed: true }\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'change lib/util.js')
+
+  const r = runNode(SCRIPT, ['--root', dir, '--base', base, '--spec', specRel, '--json'])
+  const out = JSON.parse(r.stdout)
+  const atRiskFiles = out.atRisk.map((entry) => entry.file)
+  assert.ok(atRiskFiles.includes('tests/util.test.js'),
+    'tests/util.test.js is a real test file containing the changed file\'s stem "lib/util.js" and ' +
+    'is not resolved by any File Plan tests row — if atRisk omits it, a suite pinning lib/util.js\'s ' +
+    'old return value can go red without review ever running it: ' + JSON.stringify(out))
+  assert.ok(!atRiskFiles.includes('tests/fixtures/sample/notes.md'),
+    'tests/fixtures/sample/notes.md lives under a fixtures/ directory and is prose, not a test — if ' +
+    'it appears in atRisk, review is being told to RUN a non-test file as a suite: ' + JSON.stringify(out))
+  assert.ok(!atRiskFiles.includes('tests/__fixtures__/data.md'),
+    'tests/__fixtures__/data.md lives under a __fixtures__/ directory and is prose, not a test — if ' +
+    'it appears in atRisk, review is being told to RUN a non-test file as a suite: ' + JSON.stringify(out))
 })

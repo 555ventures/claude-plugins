@@ -1,6 +1,6 @@
 ---
 date: 2026-09-04
-status: implementing
+status: done
 tier: critical
 area: replay
 design: false
@@ -121,7 +121,8 @@ scratch tree, so no new surface tells the reviewer it is being measured.
 - **AC-20260904-02-9**: WHEN `replay.js --setup --commit <sha> --spec specs/x.md` runs in a host whose committed `.gitignore` ignores `app/.env.local`, whose committed `.worktreeinclude` lists `app/.env.local`, and where `R/app/.env.local` = `DATABASE_URL=x\n` exists untracked THE SYSTEM SHALL exit 0, print exactly one stdout line `setup dir=<abs> commit=<sha>`, leave `<abs>/app/.env.local` = `DATABASE_URL=x\n`, print a stderr line matching `^worktree-include: copied 1 `, and leave both `git -C <abs> status --porcelain` and `git -C R status --porcelain` empty → `tests/replay/replay.test.js`
 - **AC-20260904-02-10**: WHEN the AC-9 host is set up with `--overlay <close sha>` where the close commit adds `lib/fix.js` THE SYSTEM SHALL leave `<abs>/app/.env.local` present on disk while `git -C <abs> show --name-only --format= HEAD` lists `lib/fix.js` and NOT `app/.env.local`, and `git -C <abs> status --porcelain` is empty → `tests/replay/replay.test.js`
 - **AC-20260904-02-11**: WHEN `--setup --commit <sha> --spec <path>` runs in a host with no `.worktreeinclude` THE SYSTEM SHALL CONTINUE TO exit 0, print exactly one stdout line `setup dir=<abs> commit=<sha>`, register a detached scratch worktree carrying the `scratch-worktree` marker, leave the host `git status --porcelain` empty, and print no line containing `copied` on stderr → the existing `AC-20260826-01-1 / AC-20260831-01-6` test in `tests/replay/replay.test.js`, retagged
-- **AC-20260904-02-12**: WHEN `spec-paths worktree-include` runs THE SYSTEM SHALL print one line ending in `spec/scripts/worktree-include.sh` that names an existing file, and `spec-paths` with no argument prints a usage line containing `worktree-include` → `tests/spec-paths.test.js` (the key joins the exhaustive resolution list)
+- **AC-20260904-02-12**: WHEN `spec-paths worktree-include` runs THE SYSTEM SHALL print one line ending in `spec/scripts/worktree-include.sh` that names an existing file, and `spec-paths` given an unknown key (e.g. `spec-paths nope`) prints its usage line, containing `worktree-include`, on stderr and exits 1 (`spec-paths` with no argument keeps printing the plugin root, AC-20260902-06-10) → `tests/spec-paths.test.js` (the key joins the exhaustive resolution list)
+  - superseded at review (2026-09-04, reviewer soft finding): "and `spec-paths` with no argument prints a usage line containing `worktree-include`" — a no-arg `spec-paths` prints the plugin root (AC-20260902-06-10); the usage line is printed on an unknown key only.
 - **AC-20260904-02-13**: WHEN `spec/commands/replay.md` is read THE SYSTEM SHALL state, inside Phase 1 step 1 (the text between `1. **Setup:**` and `2. **Setup gate`), that `--setup` copies the host's `.worktreeinclude`-matched gitignored files into the scratch worktree, and that a host without the manifest is unchanged (the step-1 text matches `/\.worktreeinclude/` and `/no .*manifest|without .*manifest/`) → `tests/replay/replay.test.js`
 
 ## Assumptions (escalation triggers)
@@ -166,6 +167,13 @@ writes to the running user — a root-run CI would make it pass vacuously, which
 does not have. No existing behavior is retired, so no collision-closure sweep was owed; the
 copy-line substring was grepped by hand across `tests/` and lives only in the two retagged
 merge-back tests.
+
+**Build deviation (folded at review close, 2026-09-04, one-off).** `spec/entrypoints.json`
+gained a row for `spec/scripts/worktree-include.sh` although the File Plan did not list it:
+the entrypoints consistency sweep refuses any bundled script without a manifest row, so the
+whole-suite gate could not go green without it. The row was added to the File Plan at build
+rather than asked — filing separately would have left the suite red. The general rule (a new
+bundled script needs an entrypoints row) is already a Gotchas entry; no new entry.
 
 ## Canonical Delta
 

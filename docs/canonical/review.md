@@ -140,6 +140,13 @@
   `replay.js --setup --spec` derives from the target spec (the build-worktree naming rule
   `merge-back.sh branch-for` owns, `/`→`-`, plus a random suffix because the spec's own build
   worktree may still be registered), never a name a session supplies.
+  `--setup` then copies the host's `.worktreeinclude`-matched gitignored files into the
+  scratch tree through the same owner `merge-back.sh create` uses for build worktrees
+  (`spec/scripts/worktree-include.sh`, `spec-paths worktree-include`), so a host that boots
+  from env files reaches the setup gate and the smoke leg with them present; a host with no
+  manifest is unchanged, and a `setup-failed` row still means the host's own `setupCommand`
+  failed, never that the scratch copy was under-provisioned.
+  (specs/20260904/02-worktree-include-shared-owner.md)
   The worktree materializes the judged range's true upper bound: `--setup --commit <parent>
   --overlay <close>` stands the tree at the close commit's parent, then re-applies the close
   commit's non-meta content (everything outside `specs/`, `.claude/`, `docs/canonical/`) as

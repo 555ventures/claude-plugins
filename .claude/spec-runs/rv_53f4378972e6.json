@@ -1,0 +1,105 @@
+{
+  "runId": "rv_53f4378972e6",
+  "ts": "2026-09-05T06:35:16.139Z",
+  "spec": "specs/20260904/02-worktree-include-shared-owner.md",
+  "tier": "critical",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 717,
+    "base": "9406d14e741210226d840f8d98f2362ced20c16c",
+    "head": "b644dd18439dfe6e9c97e71bbce5dea716cc441e",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 310
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1114
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 8,
+        "carried": 6,
+        "sanctioned": 2,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "Iteration-2 soft finding: the AC-20260904-02-12 test only asserted the usage text somewhere in stdout+stderr of a throwing run, pinning neither the stderr stream nor exit code 1.",
+        "file": "/Users/jj/Projects/claude-plugins/tests/spec-paths.test.js",
+        "line": 143,
+        "evidence": "Fixed. tests/spec-paths.test.js:142-150 now spawns `bash $BIN no-such-key-xyz` via spawnSync and asserts `r.status === 1`, `r.stdout === ''`, and `r.stderr` matches `/^usage: spec-paths \\[.*\\|worktree-include\\|.*\\]/` — each with a consequence-of-failure message. BIN is defined at line 8 (`path.join(SPEC, 'bin/spec-paths')`). Executed: `bash spec/bin/spec-paths nope` -> exit=1, stdout 0 bytes, stderr begins `usage: spec-paths [root|workflows|...`; `bash spec/bin/spec-paths` (no arg) -> `/Users/jj/Projects/claude-plugins/spec`, exit 0 (AC-20260902-06-10 unchanged). `node --test tests/spec-paths.test.js` -> 17 pass, 0 fail. Manifest-3: gate 310 / suite 1114 pass, ac-matrix uncovered 0 / oracle 0, promise-sweep orphans 0."
+      },
+      {
+        "claim": "The iteration-3 working-tree delta (vs HEAD b644dd1) introduces something beyond the test fix.",
+        "file": "/Users/jj/Projects/claude-plugins/tests/spec-paths.test.js",
+        "line": 129,
+        "evidence": "Executed `git diff b644dd1 --stat`: four files. worktree-include.sh (+remedy suffixes on die lines) and the spec AC-12 amendment are the iteration-2 fixes already reviewed and killed in reviewer-return-2.json; .claude/spec-runs.jsonl carries the single driver-written build row (bd_9a7e5dccd413) already dismissed in iteration 2; tests/spec-paths.test.js changes are the comment refresh (lines 129-130) plus the AC-12 assert rewrite. No other hunks; no new suppression markers, no non-builtin imports (node:child_process only)."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 14000
+  }
+}

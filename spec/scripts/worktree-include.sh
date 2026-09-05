@@ -28,10 +28,10 @@ ROOT=""; DEST=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --root|--dest)
-      [ $# -ge 2 ] || die "flag $1 requires a value"
-      case "$2" in --*) die "flag $1 requires a value (got flag '$2')" ;; esac
+      [ $# -ge 2 ] || die "flag $1 requires a value — usage: --root <main worktree root> --dest <existing directory>"
+      case "$2" in --*) die "flag $1 requires a value (got flag '$2') — usage: --root <main worktree root> --dest <existing directory>" ;; esac
       ;;
-    *) die "unknown arg: $1" ;;
+    *) die "unknown arg: $1 — usage: --root <main worktree root> --dest <existing directory>" ;;
   esac
   case "$1" in
     --root) ROOT="$2" ;;
@@ -42,7 +42,7 @@ done
 
 [ -n "$DEST" ] || die "--dest is required (usage: --root <main worktree root> --dest <existing directory>)"
 [ -n "$ROOT" ] || die "--root is required (usage: --root <main worktree root> --dest <existing directory>)"
-git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1 || die "--root '$ROOT' is not a git repo"
+git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1 || die "--root '$ROOT' is not a git repo — pass the main worktree root, e.g. --root \"\$(git rev-parse --show-toplevel)\""
 [ -d "$DEST" ] || die "--dest '$DEST' does not exist — create it first, e.g. mkdir -p '$DEST'"
 
 INCLUDES=""

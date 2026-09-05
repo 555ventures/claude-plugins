@@ -126,10 +126,8 @@ test('every documented key resolves to an existing path', () => {
   assert.match(run('contract-hash').trim(), /^[0-9a-f]{12}$/)
 })
 
-// AC-20260904-02-12's own wording says "no argument prints a usage line" — but
-// AC-20260902-06-10 already pins zero-args as printing the plugin ROOT (unchanged regression),
-// and D5 says only "listed in its usage line". Read as the usage line spec-paths prints on an
-// UNKNOWN key (the only usage-line trigger this script has) so the two pins stay consistent.
+// AC-20260904-02-12 pins the usage line spec-paths prints on an UNKNOWN key (the only
+// usage-line trigger this script has); zero args keeps printing the plugin ROOT (AC-20260902-06-10).
 test('AC-20260904-02-12: spec-paths worktree-include resolves to spec/scripts/worktree-include.sh, an existing file, and the usage line names the key', () => {
   const fs = require('node:fs')
   const worktreeIncludePath = run('worktree-include').trim()
@@ -140,16 +138,16 @@ test('AC-20260904-02-12: spec-paths worktree-include resolves to spec/scripts/wo
   assert.ok(fs.existsSync(worktreeIncludePath),
     'the resolved worktree-include.sh path must actually exist on disk: ' + worktreeIncludePath)
 
-  const usage = (() => {
-    try {
-      return run('no-such-key-xyz') // an unknown key triggers spec-paths' own usage line
-    } catch (e) {
-      return String(e.stdout || '') + String(e.stderr || '')
-    }
-  })()
-  assert.match(usage, /worktree-include/,
-    'D5: spec-paths\' own usage line must list `worktree-include` alongside every other bundled key, or a ' +
-    'session reading the usage line to discover keys never learns this one exists: ' + JSON.stringify(usage))
+  // an unknown key triggers spec-paths' own usage line — on stderr, exit 1 (AC-12's amended wording)
+  const { spawnSync } = require('node:child_process')
+  const r = spawnSync('bash', [BIN, 'no-such-key-xyz'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 1,
+    'AC-12: an unknown key exits 1 (usage, never a resolved path): ' + JSON.stringify({ status: r.status, stdout: r.stdout, stderr: r.stderr }))
+  assert.strictEqual(r.stdout, '',
+    'AC-12: the usage line goes to stderr only — anything on stdout would be mistaken for a resolved path by a $(spec-paths …) caller: ' + JSON.stringify(r.stdout))
+  assert.match(r.stderr, /^usage: spec-paths \[.*\|worktree-include\|.*\]/,
+    'D5: spec-paths\' own usage line (stderr) must list `worktree-include` alongside every other bundled key, or a ' +
+    'session reading the usage line to discover keys never learns this one exists: ' + JSON.stringify(r.stderr))
 })
 
 // AC-20260901-07-15

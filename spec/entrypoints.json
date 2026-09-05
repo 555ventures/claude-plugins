@@ -94,7 +94,8 @@
   },
   "spec/scripts/init-gen.js": {
     "entryPoints": [
-      "spec/commands/init.md"
+      "spec/commands/init.md",
+      "spec/commands/doctor.md"
     ]
   },
   "spec/scripts/manifest-check.sh": {

@@ -507,7 +507,7 @@ test('AC-20260821-03-12: a tests-layer file whose only ACTUAL citation is a long
 // The design-stage sub-shape. `spec/commands/design.md` authors real, kept components before the
 // build stage and states that "Build treats the landed components as done inputs" — so a UI AC
 // whose component shipped at design is green against build's pre-image by construction. Before
-// `design-landed` joined the enum, red-check had no sanction for it: salon-os
+// `design-landed` joined the enum, red-check had no sanction for it: a host's
 // specs/20260905/02-photo-reframe-ui.md stalled at RED_FINDINGS with two unsanctioned-green
 // findings on strong, AC-faithful tests, and the only exits were laundering the ACs into
 // `SHALL CONTINUE TO` regression pins or deleting approved components. These two cases pin both

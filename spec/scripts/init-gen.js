@@ -54,18 +54,20 @@ const { configPath, CONFIG_RELPATH } = require('./lib/host-config')
 function usage() {
   console.error('usage: init-gen.js probe --root <dir> [--test-command "<cmd>"] [--sample <n>]')
   console.error('       init-gen.js generate --root <dir> --profile <path> [--refresh]')
+  console.error('       init-gen.js ignore-check --root <dir> [--fix]   (exit 0 all present · 3 missing, one path per line)')
 }
 
 const argv = process.argv.slice(2)
 const sub = argv[0]
-if (sub !== 'probe' && sub !== 'generate') { usage(); process.exit(2) }
+if (sub !== 'probe' && sub !== 'generate' && sub !== 'ignore-check') { usage(); process.exit(2) }
 
-let root = null, profilePath = null, refresh = false, testCommandArg = null, sample = 20
+let root = null, profilePath = null, refresh = false, testCommandArg = null, sample = 20, fix = false
 for (let i = 1; i < argv.length; i++) {
   const a = argv[i]
   if (a === '--root') root = argv[++i]
   else if (a === '--profile') profilePath = argv[++i]
   else if (a === '--refresh') refresh = true
+  else if (a === '--fix') fix = true
   else if (a === '--test-command') testCommandArg = argv[++i]
   else if (a === '--sample') sample = parseInt(argv[++i], 10)
   else { usage(); process.exit(2) }
@@ -81,6 +83,54 @@ const DEFAULT_TEST_GLOBS = ['tests/**', 'test/**', '**/*.test.*', '**/*.spec.*',
 // ============================================================================================
 // probe
 // ============================================================================================
+
+// D4: idempotency by executed child-path probe — never the bare-directory form that falsified
+// init.md's locked prose (A5). Each entry carries a representative descendant path to probe.
+const IGNORE_ENTRIES = [
+  { line: '.claude/worktrees/', sample: '.claude/worktrees/x' },
+  // spec-review-driver.js keeps its re-entry sidecar at specs/<date>/<spec>.review/ for the whole
+  // run (deleted only at DONE) — unignored, a host gate that sweeps the whole tree reds on the
+  // pipeline's own scratch before a reviewer dispatches (a host lint/format gate, e.g. prettier --check).
+  { line: 'specs/**/*.review/', sample: 'specs/20260101/01-x.review/review-state.json' },
+  // specs/20260901/01-build-driver.md D5: spec-build-driver.js keeps its own re-entry sidecar at
+  // specs/<date>/<spec>.build/ for the build run's whole lifetime (deleted only at DONE) — the
+  // same host-gate mechanism as the .review/ entry above, closed here for build.
+  { line: 'specs/**/*.build/', sample: 'specs/20260101/01-x.build/build-state.json' },
+  // specs/20260901/02-run-provenance.md D6: spec-session-stamp.sh writes a per-session scratch
+  // file at .claude/spec-session.json on every /spec: prompt — a per-session file must never ride
+  // a close commit (the same sidecar-scratch class as above). A single bare file, not a directory glob, so the
+  // probe is the literal path itself rather than a child-path sample.
+  { line: '.claude/spec-session.json', sample: '.claude/spec-session.json' },
+]
+
+// The same executed probe answers the drift question: an entry added to this list after a host
+// ran /spec:init never reaches that host (init writes .gitignore once), and nothing else audited
+// it — a host initialised before D6 of specs/20260901/02 surfaces its un-ignored session stamp
+// as a spurious out-of-plan reconcile finding. `ignore-check` is the read-only sweep
+// /spec:doctor runs (doctor.md check 12); `--fix` is ensureGitignore itself.
+function missingIgnoreEntries(hostRoot) {
+  return IGNORE_ENTRIES.filter(({ sample }) => spawnSync('git', ['check-ignore', '-q', sample], { cwd: hostRoot }).status !== 0)
+}
+
+function ensureGitignore(hostRoot) {
+  const p = path.join(hostRoot, '.gitignore')
+  let content = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : ''
+  let changed = false
+  for (const { line } of missingIgnoreEntries(hostRoot)) {
+    if (content.length && !content.endsWith('\n')) content += '\n'
+    content += line + '\n'
+    changed = true
+  }
+  if (changed) fs.writeFileSync(p, content)
+}
+
+if (sub === 'ignore-check') {
+  const missing = missingIgnoreEntries(root)
+  if (missing.length && fix) { ensureGitignore(root); console.log(`init-gen ignore-check: appended ${missing.length} missing .gitignore line(s): ${missing.map(m => m.line).join(', ')}`); process.exit(0) }
+  if (missing.length) { for (const m of missing) console.log(m.line); process.exit(3) }
+  console.log(`init-gen ignore-check: all ${IGNORE_ENTRIES.length} pipeline ignore entries present`)
+  process.exit(0)
+}
 
 if (sub === 'probe') {
   const out = {}
@@ -479,39 +529,6 @@ function writeTarget(hostRoot, t) {
   fs.mkdirSync(path.dirname(full), { recursive: true })
   fs.writeFileSync(full, t.kind === 'json' ? JSON.stringify(t.obj, null, 2) + '\n' : t.text)
   if (t.executable) fs.chmodSync(full, 0o755)
-}
-
-// D4: idempotency by executed child-path probe — never the bare-directory form that falsified
-// init.md's locked prose (A5). Each entry carries a representative descendant path to probe.
-const IGNORE_ENTRIES = [
-  { line: '.claude/worktrees/', sample: '.claude/worktrees/x' },
-  // spec-review-driver.js keeps its re-entry sidecar at specs/<date>/<spec>.review/ for the whole
-  // run (deleted only at DONE) — unignored, a host gate that sweeps the whole tree reds on the
-  // pipeline's own scratch before a reviewer dispatches (a host lint/format gate, e.g. prettier --check).
-  { line: 'specs/**/*.review/', sample: 'specs/20260101/01-x.review/review-state.json' },
-  // specs/20260901/01-build-driver.md D5: spec-build-driver.js keeps its own re-entry sidecar at
-  // specs/<date>/<spec>.build/ for the build run's whole lifetime (deleted only at DONE) — the
-  // same host-gate mechanism as the .review/ entry above, closed here for build.
-  { line: 'specs/**/*.build/', sample: 'specs/20260101/01-x.build/build-state.json' },
-  // specs/20260901/02-run-provenance.md D6: spec-session-stamp.sh writes a per-session scratch
-  // file at .claude/spec-session.json on every /spec: prompt — a per-session file must never ride
-  // a close commit (the same sidecar-scratch class as above). A single bare file, not a directory glob, so the
-  // probe is the literal path itself rather than a child-path sample.
-  { line: '.claude/spec-session.json', sample: '.claude/spec-session.json' },
-]
-
-function ensureGitignore(hostRoot) {
-  const p = path.join(hostRoot, '.gitignore')
-  let content = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : ''
-  let changed = false
-  for (const { line, sample } of IGNORE_ENTRIES) {
-    const r = spawnSync('git', ['check-ignore', '-q', sample], { cwd: hostRoot })
-    if (r.status === 0) continue
-    if (content.length && !content.endsWith('\n')) content += '\n'
-    content += line + '\n'
-    changed = true
-  }
-  if (changed) fs.writeFileSync(p, content)
 }
 
 // D4/A6: gitattributes detection stays `git check-attr merge` (unlike the ignore check, this

@@ -105,8 +105,13 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     and review rows carry no `runId` (older rows may; a `runId`-bearing row is history, never a
     flag); escape and release rows carry their own field sets. The file is tracked by git, and
     `git check-attr merge -- .claude/spec-runs.jsonl` reports `union` (without it, parallel
-    worktree builds conflict at merge-back — init sets the `.gitattributes` entry). A line
-    over ~1000 chars is an advisory tripwire ("long but well-formed — inspect for prose
+    worktree builds conflict at merge-back — init sets the `.gitattributes` entry). The
+    pipeline's own ignore entries are audited the same way: `node "$(spec-paths init-gen)"
+    ignore-check --root .` exits 0, else each printed line is a scratch path init would
+    ignore on a fresh host but this host never received (entries added after its init) —
+    un-ignored, it surfaces as a spurious out-of-plan reconcile finding and can ride a close
+    commit; the remedy is the same command with `--fix`, a line-item patch under Repair mode.
+    A line over ~1000 chars is an advisory tripwire ("long but well-formed — inspect for prose
     leak"), never a standalone broken finding. Year archives
     (`.claude/spec-runs-<year>.jsonl`) get the same checks; suggest archiving whole years
     past ~2 MB. **Tier distribution:** with ≥5 build rows, if ≥90% share one tier, flag it —

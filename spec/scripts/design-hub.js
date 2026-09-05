@@ -250,7 +250,7 @@ function cmdServe() {
   const base = effectiveBase(registry)
   const handlersByProject = new Map()
   function handlerFor(name, root) {
-    const key = name + ' ' + root
+    const key = name + '\x00' + root
     if (!handlersByProject.has(key)) handlersByProject.set(key, createRequestHandler(root, { prefix: '/p/' + name }))
     return handlersByProject.get(key)
   }

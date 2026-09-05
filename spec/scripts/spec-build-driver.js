@@ -347,9 +347,9 @@ function runGate() {
   // The gate's stdout+stderr go straight to the log fd, never through a Node pipe: a host's
   // full gate (integration suites logging every request) routinely exceeds spawnSync's 1 MiB
   // default maxBuffer, and an in-memory capture then SIGTERM-kills the child mid-run (ENOBUFS)
-  // with a null status — a green gate reported as "died without an exit code" (observed
-  // 2026-09-05, prax specs/20260902/09). Same pattern as genesis-driver.js's runLogged; nothing
-  // downstream reads the captured text — every reader follows `gateRuns[k].log`.
+  // with a null status — a green gate reported as "died without an exit code". Same pattern as
+  // genesis-driver.js's runLogged; nothing downstream reads the captured text — every reader
+  // follows `gateRuns[k].log`.
   let fd
   try {
     fd = fs.openSync(logPath, 'w')

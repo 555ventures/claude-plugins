@@ -279,8 +279,8 @@ test('field report 2026-09-02 (empty waves): WHEN layerGroups declares groups wi
 test('AC-20260901-01-7 (large output): a gate whose stdout exceeds spawnSync\'s 1 MiB default maxBuffer and exits 0 still lands COMMIT with the whole log on disk — output streams to gate-1.log, never through a Node pipe', () => {
   const host = makeNoTestsHost()
   // 2 MiB of a single character line-wrapped every 80 bytes, then exit 0 — the shape of a host
-  // integration suite that logs every request (prax, 2026-09-05: a green gate reported as
-  // "died without an exit code (spawnSync bash ENOBUFS)").
+  // integration suite that logs every request (a green gate once reported as "died without an
+  // exit code (spawnSync bash ENOBUFS)").
   fs.writeFileSync(path.join(host.root, 'gate.sh'),
     '#!/usr/bin/env bash\nhead -c 2097152 /dev/zero | tr "\\0" x | fold -w 80\nexit 0\n')
   host.g('add', '-A'); host.g('commit', '-q', '-m', 'noisy gate')

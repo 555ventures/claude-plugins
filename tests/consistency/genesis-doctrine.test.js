@@ -1065,6 +1065,9 @@ test('AC-20260902-08-12: the retired-literal sweep for design-pick.json, positio
       // under test in both, never a stale reference.
       'tests/genesis/genesis-driver.test.js',
       'tests/genesis/tournament.test.js',
+      // the AC-20260902-08-8 regression moved here verbatim under
+      // specs/20260903/07-test-file-budget-guard.md D7 (the per-file budget split).
+      'tests/genesis/tournament-probe-pick.test.js',
       'tests/genesis/brief-state.test.js',
       // its `description` is the changelog surface; prior changelog paragraphs legitimately
       // name retired mechanisms by design (D11 precedent) as a historical record.

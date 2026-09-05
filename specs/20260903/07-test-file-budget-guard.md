@@ -1,6 +1,6 @@
 ---
 date: 2026-09-03
-status: hardened
+status: implementing
 tier: standard
 area: gate-integrity
 design: false
@@ -9,6 +9,7 @@ depends_on: [specs/20260903/06-test-suite-critical-path.md]
 depended_on_by: []
 brief: n/a
 open_markers: 0
+diff_base: 9796f9da2228f414ec630077ba3fff3c3de5dcfb
 ---
 
 # Per-file runtime budget: the suite goes red when one test file becomes the floor
@@ -36,6 +37,7 @@ reporter can never turn a failing run green.
 | D4 | **Output contract** (sentinel lines, stdout, after the spec reporter's summary): over budget → one line per offending file, worst first, `__FILE_BUDGET_RED__ <repo-relative path> <ms>ms > <budget>ms — split this file into sibling *.test.js files (node:test runs one file's tests serially; specs/20260903/06-test-suite-critical-path.md)`; otherwise exactly one `__FILE_BUDGET_OK__ slowest <repo-relative path> <ms>ms of <budget>ms` line (`(none) 0ms` when no test ran). Paths are relative to `process.cwd()`; ms are rounded integers (AC-20260903-07-2, AC-20260903-07-3) | Machine contracts here are sentinel lines; the OK line carrying the slowest file makes every green run print the number a maintainer needs without a separate timing pass. Neither line matches `testCountPattern` (`ℹ tests (\d+)`) or `skipReportPattern`, so the leg's last-match parsing is unaffected. |
 | D5 | The reporter **never lowers** the exit status: it sets `exitCode` to 1 only, never to 0, and never calls `process.exit` (AC-20260903-07-5) | A reporter that wrote `exitCode = 0` on an under-budget run would mask node:test's own failure exit — the worst possible defect for a gate. |
 | D6 | The reporter is a **host script under `scripts/`**, beside `spec-patterns.sh`, not under `spec/scripts/` — so it is not a plugin surface, owes no `spec/entrypoints.json` row, no `spec-paths` key, and no `plugin.json` bump `[no-ac: placement; the entrypoints consistency test's scope (spec/scripts + spec/workflows) is the evidence]` | This repo's own suite hygiene is host grounding, exactly like the patterns sweep; hosts that want the same guard copy the file. |
+| D7 | **User ruling (build, 2026-09-04):** the guard's first live run reddened `tests/genesis/tournament.test.js` (8 tests, ~46–49 s serial, alone or under the full suite — it was the suite's real ~52 s floor, not the post-split shards spec 06 measured). Remedy applied in this spec, not deferred and not a budget raise: split it by AC family into `tests/genesis/tournament.test.js` (AC-20260827-01-1, AC-20260902-08-3, AC-20260827-01-3, AC-20260827-01-4), `tests/genesis/tournament-probe-pick.test.js` (AC-20260902-08-8/-15, AC-20260827-01-6, AC-20260827-01-8) and `tests/genesis/tournament-decided.test.js` (AC-20260827-01-7), sharing helpers through `tests/genesis/tournament.fixtures.js`; test bodies move verbatim, no assertion changes, every shard under 25 s alone (AC-20260903-07-1) | The three options were split here, pause and split under a separate spec, or raise the budget to 60 s; raising would leave the suite at its current floor and make the guard bite only on files worse than today's worst. Splitting is the spec's own stated remedy and the mechanical pattern spec 06 established. |
 
 ## File Plan
 
@@ -45,6 +47,11 @@ reporter can never turn a failing run green.
 | tests/test-file-budget.test.js | CREATE | tests | AC-20260903-07-2, AC-20260903-07-3, AC-20260903-07-4, AC-20260903-07-5, AC-20260903-07-6 |
 | package.json | MODIFY | other | D3: `scripts.test` carries both reporters (spec + budget, each to stdout) ahead of the glob |
 | .claude/spec.config.json | MODIFY | other | D3: `testCommand` = the `package.json` command minus the trailing `'tests/**/*.test.js'`; `gateCommand` unchanged |
+| tests/genesis/tournament.test.js | MODIFY | tests | D7: keeps AC-20260827-01-1, AC-20260902-08-3, AC-20260827-01-3, AC-20260827-01-4 verbatim; helpers move to the fixtures module |
+| tests/genesis/tournament-probe-pick.test.js | CREATE | tests | D7: AC-20260902-08-8/-15, AC-20260827-01-6, AC-20260827-01-8 moved verbatim |
+| tests/genesis/tournament-decided.test.js | CREATE | tests | D7: AC-20260827-01-7 moved verbatim |
+| tests/genesis/tournament.fixtures.js | CREATE | tests | D7: shared constants/helpers of the three tournament shards (no `test(` calls) |
+| tests/consistency/genesis-doctrine.test.js | MODIFY | tests | D7: the retired-literal sweep's waive list gains `tests/genesis/tournament-probe-pick.test.js` — the AC-20260902-08-8 regression that names `style-tile` as its input moved there verbatim |
 
 ## Contracts
 

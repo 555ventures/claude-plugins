@@ -46,3 +46,21 @@
   `diff_base` was corrected from f7491dd to that commit, the true pre-image (§ Gotchas
   `diff_base` entry). The changelog count is repaired by the doctrine worker under D10, which
   rewrites that block anyway.
+- Test author (repair round): review's suite leg tripped specs/20260903/07's per-file 45s budget
+  guard on `tests/mocks/mocks-driver.test.js` (50s under full-suite load, 43s standalone) once
+  D6/D7/D8's look-stop tests landed beside the spec 06/07 chain. Split it the same way that spec
+  split tournament.test.js/build-driver.test.js: shared fixtures (constants, `bare`/`mark`/
+  `ledgerCmd`, every `writeX` helper, `decideLook`/`openLook`/`freePort`/`killHubIn`/`getBody`,
+  every `advanceTo*`, `writeShortSeed`/`advanceToShortJourneyDrawn`, `stubNpx`) moved verbatim
+  into a new `tests/mocks/mocks-driver-fixtures.js` (module.exports, no `test(` calls, so it
+  never matches the `*.test.js` glob); the seven AC-20260905-02-9..15 tests moved verbatim into a
+  new sibling `tests/mocks/mocks-driver-look-stops.test.js`. Both new files sit outside this
+  spec's File Plan — they exist only because the budget guard forced the split, the same
+  "additive-collision"-shaped departure specs/20260903/07's own File Plan predicted for future
+  slow files. No assertion was changed or weakened; `advanceToApproved` and `getBody` (unused in
+  both resulting test files, dead code carried over from the pre-split file) are exported from
+  the fixtures module for symmetry with the other `advanceTo*`/helper exports. Standalone timings
+  after the split: mocks-driver.test.js 20.25s (12 tests), mocks-driver-look-stops.test.js 22.59s
+  (7 tests) — both well under the 45s budget; full suite via
+  `test-file-budget-reporter.js` reports `__FILE_BUDGET_OK__ slowest
+  tests/mocks/mocks-driver-look-stops.test.js 27754ms of 45000ms` and exits 0 (1158/1158 pass).

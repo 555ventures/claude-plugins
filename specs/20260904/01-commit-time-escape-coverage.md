@@ -1,6 +1,6 @@
 ---
 date: 2026-09-04
-status: implementing
+status: done
 tier: standard
 area: feedback-loop
 design: false
@@ -54,6 +54,7 @@ recorded, and the fleet reader is untouched.
 | tests/commit-coverage/commit-mode.test.js | CREATE | tests | AC-20260904-01-3, AC-20260904-01-4, AC-20260904-01-5, AC-20260904-01-7 |
 | tests/commit-coverage/window-mode.test.js | CREATE | tests | AC-20260904-01-6, AC-20260904-01-9 |
 | tests/commit-coverage/fleet-mode.test.js | CREATE | tests | AC-20260904-01-8, AC-20260904-01-10 |
+| tests/commit-coverage/commit-coverage.fixtures.js | CREATE | tests | Shared `writeSpec`/`appendLedger`/`commitAt` fixture helpers for the three commit-coverage test files (review fix rv iteration 1, duplication finding) |
 | tests/git/commit-escape-check.test.js | CREATE | tests | AC-20260904-01-2, AC-20260904-01-11, AC-20260904-01-12, AC-20260904-01-13 |
 | tests/spec-paths.test.js | MODIFY | tests | AC-20260904-01-1 — `commit-coverage` added to the resolves list plus one dedicated resolve test |
 | tests/fleet-reader/discovery.test.js | MODIFY | tests | AC-20260904-01-14 — the existing nine-key exhaustive pin tagged (no assertion change) |
@@ -317,6 +318,20 @@ plugin manifests show only `likely`/`mentions` hits.
 **Regression pins.** commit.md's never-blocking sentence and worktree rule (AC-13) and the
 fleet reader's nine-key set (AC-14) carry `SHALL CONTINUE TO`; each lives in its own AC, never
 mixed with a new promise (specs/20260903/01 D16's lesson).
+
+**Build and review departures (folded 2026-09-04, one-offs).** D9's literal target 7.78.0 was
+taken by a concurrent commit before the build; the spec plugin bumped to 7.79.0 (Gotchas: a
+literal version is a target, not a pin). Rule 2's trailing clause in `git/commands/commit.md`
+was updated from "fix-shaped" to "fix-typed" so it matches D2 and the new rule 7, although the
+File Plan row said rules 1–6 unchanged. The pre-authored commit-mode test fixture carried a date
+literal in a comment that tripped the comment-narration `date` class and folded the spec and
+ledger files into the fix commit; both were repaired in the build's repair round (the fixture
+now commits specs and ledger first, and asserts git's tree-sort file order). Review iteration 1
+found the human render's file count filtered pipeline-owned paths to satisfy the pinned `files:
+4` — removed, the render counts the raw list; the three test files' shared fixture helpers were
+extracted to `tests/commit-coverage/commit-coverage.fixtures.js` (row added to the File Plan);
+and commit mode now classifies File Plan membership without a ledger so the two modes agree on
+`inFlight`. Verdict CLEAN rv_a9e5d71dfe48.
 
 ## Canonical Delta
 

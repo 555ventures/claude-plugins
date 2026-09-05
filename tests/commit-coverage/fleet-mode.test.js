@@ -6,6 +6,7 @@ const path = require('node:path')
 const crypto = require('node:crypto')
 const { execFileSync } = require('node:child_process')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
+const { writeSpec, appendLedger, commitAt } = require('./commit-coverage.fixtures')
 
 // specs/20260904/01-commit-time-escape-coverage.md — fleet mode: AC-20260904-01-8, -10.
 // spec/scripts/commit-coverage.js does not exist yet (TDD red) — every runNode call below fails
@@ -18,32 +19,6 @@ const FLEET_READER = 'scripts/fleet-reader.js'
 function writeConfig(dir) {
   fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
   fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), '{}')
-}
-
-function writeSpec(dir, relPath, filePlanPaths) {
-  const abs = path.join(dir, relPath)
-  fs.mkdirSync(path.dirname(abs), { recursive: true })
-  const rows = filePlanPaths.map(p => `| ${p} | MODIFY | src | . |`).join('\n')
-  fs.writeFileSync(abs, '---\ndate: 2026-08-01\n---\n\n# spec\n\n## File Plan\n\n' +
-    '| Path | Action | Layer | Summary |\n|---|---|---|---|\n' + rows + '\n')
-}
-
-function appendLedger(dir, rows) {
-  const claudeDir = path.join(dir, '.claude')
-  fs.mkdirSync(claudeDir, { recursive: true })
-  fs.appendFileSync(path.join(claudeDir, 'spec-runs.jsonl'),
-    rows.map(r => JSON.stringify(r)).join('\n') + '\n')
-}
-
-function commitAt(dir, relPath, content, isoDate, subject) {
-  const abs = path.join(dir, relPath)
-  fs.mkdirSync(path.dirname(abs), { recursive: true })
-  fs.writeFileSync(abs, content)
-  execFileSync('git', ['-C', dir, 'add', '-A'], { encoding: 'utf8' })
-  execFileSync('git', ['-C', dir, 'commit', '-q', '-m', subject], {
-    encoding: 'utf8',
-    env: { ...process.env, GIT_AUTHOR_DATE: isoDate, GIT_COMMITTER_DATE: isoDate },
-  })
 }
 
 // host-a: the same commit/spec/ledger history as window-mode.test.js's AC-20260904-01-6

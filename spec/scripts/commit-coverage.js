@@ -226,15 +226,16 @@ function runCommitMode(rawRoot, shaArg) {
   const fixShaped = isFixShaped(subject)
   const landed = []
   const inFlight = []
-  if (ledger) {
-    const specIndex = loadSpecIndex(root)
-    const ledgerRows = readLedgerRows(root)
-    const refEpoch = Date.parse(committerTs)
-    for (const file of files) {
-      const cls = classifyFile(file, refEpoch, specIndex, ledgerRows)
-      if (cls.status === 'landed') landed.push({ file, specs: cls.specs })
-      else if (cls.status === 'inflight') inFlight.push({ file, specs: cls.specs })
-    }
+  // D3/s1: classification runs regardless of ledger presence — with no ledger there are simply
+  // no qualifying review rows, so every File-Plan-listed file falls out as inFlight (never
+  // landed) via the SAME classifyFile window mode uses; one classification path, not two.
+  const specIndex = loadSpecIndex(root)
+  const ledgerRows = readLedgerRows(root)
+  const refEpoch = Date.parse(committerTs)
+  for (const file of files) {
+    const cls = classifyFile(file, refEpoch, specIndex, ledgerRows)
+    if (cls.status === 'landed') landed.push({ file, specs: cls.specs })
+    else if (cls.status === 'inflight') inFlight.push({ file, specs: cls.specs })
   }
   const offer = fixShaped && landed.length > 0
 

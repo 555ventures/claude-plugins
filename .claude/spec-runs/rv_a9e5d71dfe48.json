@@ -1,0 +1,111 @@
+{
+  "runId": "rv_a9e5d71dfe48",
+  "ts": "2026-09-05T04:59:32.853Z",
+  "spec": "specs/20260904/01-commit-time-escape-coverage.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1290,
+    "base": "d542a092b9c0ffb9b86ae2c7aebb8e5fafa1532a",
+    "head": "7b09b15e03c829388fcdbf88866c7899e8319402",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 288
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1104
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 11,
+        "carried": 10,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "Sidecar third bullet still describes a live red (date literal in commit-mode.test.js comment turning comment-narration-live red).",
+        "file": "/Users/jj/Projects/claude-plugins/specs/20260904/01-commit-time-escape-coverage.deviations.md",
+        "line": 5,
+        "evidence": "git diff of the sidecar replaces the old present-tense bullet with: '- The pre-authored `tests/commit-coverage/commit-mode.test.js` fixture comment carried a date literal that tripped comment-narration.js's `date` class; reworded in the build's repair round, comment-narration-live green at close.' HEAD:tests/commit-coverage/commit-mode.test.js has no comment line containing a date literal (grep over `//` lines -> none; line 17 reads '...at a committer date between the 01-a/02-c/04-g'); working-tree diff of that file touches no comment lines. Executed: node --test tests/consistency/comment-narration-live.test.js -> tests 2, pass 2, fail 0. Bullet is now a true past-tense record."
+      },
+      {
+        "claim": "Sidecar bullet is flush-left prose rather than a single `- ` bullet with indented continuation lines.",
+        "file": "/Users/jj/Projects/claude-plugins/specs/20260904/01-commit-time-escape-coverage.deviations.md",
+        "line": 5,
+        "evidence": "Lines 5-7: line 5 starts '- The pre-authored ...', lines 6-7 start with two-space indent ('  literal that tripped ...', '  round, comment-narration-live green at close.'). grep -nE '^[^- #].+' over the file -> no matches (no flush-left prose). Three bullets total, all `- ` prefixed."
+      },
+      {
+        "claim": "Something other than the sidecar changed in the working tree since iteration 2.",
+        "file": null,
+        "line": null,
+        "evidence": "git status --short: M .claude/spec-runs.jsonl, M spec/scripts/commit-coverage.js, M deviations.md, M spec .md, M commit-mode/fleet-mode/window-mode.test.js, ?? commit-coverage.fixtures.js — the identical file set iteration 2 reviewed. git diff --stat: 7 files, +19/-91. commit-coverage.js diff is the s1 unconditional-classification hunk (lines 226-241) reviewed in iteration 2; spec .md diff is the single File Plan row for commit-coverage.fixtures.js; test-file diffs are the s2 fixture dedup; spec-runs.jsonl is the one pipeline build row. Only deviations.md differs from the iteration-2 state (bullet 3 rewritten). Iteration-3 manifest: gate 288 tests exit 0, suite 1104 tests exit 0, ac-matrix uncovered 0, promise-sweep orphans 0, skip-reconcile 0."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 16000
+  }
+}

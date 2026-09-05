@@ -115,6 +115,17 @@ composed; the owed query is the consumer. Replay rows carry `via` (`driver` when
 driver's REPLAY step handed the target, `manual` otherwise), so `replay.js --stats`'s `by-via`
 line counts the manual path. (specs/20260903/01-owed-query-and-row-handoff.md, done 2026-09-03)
 
+Commit-time escape coverage is a derived number, never asserted:
+`node "$(spec-paths commit-coverage)" --repos-root ~/Projects` prints, population first, per
+checkout and for the host fleet, the fix-typed commits (`fix`/`hotfix` type token) since the v7
+cutover, how many touched a file a reviewed spec landed (File Plan membership joined to a
+`stage:"review"` row that precedes the commit's committer date), and the escape rows recorded
+`via:"commit"` in the same window; `--since` scopes one repo, `--commit <sha>` answers the
+single-commit question `/git:commit`'s step 3 asks. The commit-time offer fires on `offer: true`
+— a fix-typed commit touching any file a reviewed spec landed — and is always skippable; a spec
+still under build or review is in flight and never offered. Nothing blocks a commit and no
+decline is recorded. (specs/20260904/01-commit-time-escape-coverage.md, done 2026-09-04)
+
 ## The question gate asks product facts, never derives them (2026-09-02, specs/20260902/06)
 
 `question-style-gate.js`'s tier-2 judge verdict `derive` is suppressed — treated as pass —

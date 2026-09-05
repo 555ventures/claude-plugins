@@ -5,39 +5,13 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
+const { writeSpec, appendLedger, commitAt } = require('./commit-coverage.fixtures')
 
 // specs/20260904/01-commit-time-escape-coverage.md — commit mode: AC-20260904-01-3, -4, -5, -7.
 // spec/scripts/commit-coverage.js does not exist yet (TDD red) — every runNode call below fails
 // (non-zero exit or unparseable stdout) until D1-D5 ship it.
 
 const SCRIPT = 'scripts/commit-coverage.js'
-
-function writeSpec(dir, relPath, filePlanPaths) {
-  const abs = path.join(dir, relPath)
-  fs.mkdirSync(path.dirname(abs), { recursive: true })
-  const rows = filePlanPaths.map(p => `| ${p} | MODIFY | src | . |`).join('\n')
-  fs.writeFileSync(abs, '---\ndate: 2026-08-01\n---\n\n# spec\n\n## File Plan\n\n' +
-    '| Path | Action | Layer | Summary |\n|---|---|---|---|\n' + rows + '\n')
-}
-
-function appendLedger(dir, rows) {
-  const claudeDir = path.join(dir, '.claude')
-  fs.mkdirSync(claudeDir, { recursive: true })
-  fs.appendFileSync(path.join(claudeDir, 'spec-runs.jsonl'),
-    rows.map(r => JSON.stringify(r)).join('\n') + '\n')
-}
-
-function commitAt(dir, relPath, content, isoDate, subject) {
-  const abs = path.join(dir, relPath)
-  fs.mkdirSync(path.dirname(abs), { recursive: true })
-  fs.writeFileSync(abs, content)
-  execFileSync('git', ['-C', dir, 'add', '-A'], { encoding: 'utf8' })
-  execFileSync('git', ['-C', dir, 'commit', '-q', '-m', subject], {
-    encoding: 'utf8',
-    env: { ...process.env, GIT_AUTHOR_DATE: isoDate, GIT_COMMITTER_DATE: isoDate },
-  })
-  return execFileSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
-}
 
 // Builds the AC-20260904-01-4 fixture: four specs and their review rows are committed FIRST
 // in a separate, non-fix `chore: specs` commit at a committer date between the 01-a/02-c/04-g

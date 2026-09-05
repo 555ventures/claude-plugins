@@ -1,0 +1,69 @@
+{
+  "ts": "2026-09-05T22:03:09.617Z",
+  "stage": "replay",
+  "spec": "specs/20260904/02-worktree-include-shared-owner.md",
+  "runId": "rp_67cc974dfa8d",
+  "reviewRunId": "rv_53f4378972e6",
+  "class": "promise-carried-not-delivered",
+  "files": [
+    "spec/scripts/worktree-include.sh"
+  ],
+  "legs": "green",
+  "outcome": "caught",
+  "tokens": 42000,
+  "via": "driver",
+  "patch": "diff --git a/spec/scripts/worktree-include.sh b/spec/scripts/worktree-include.sh\nindex 7b2cf72..fd7c0fe 100755\n--- a/spec/scripts/worktree-include.sh\n+++ b/spec/scripts/worktree-include.sh\n@@ -48,7 +48,7 @@ git -C \"$ROOT\" rev-parse --git-dir >/dev/null 2>&1 || die \"--root '$ROOT' is not\n INCLUDES=\"\"\n if [ -f \"$ROOT/.worktreeinclude\" ]; then\n   INCLUDES=\"$(cd \"$ROOT\" && git ls-files -oi --exclude-from=.worktreeinclude \\\n-    | grep -v '^\\.claude/worktrees/' | git check-ignore --stdin 2>/dev/null)\"\n+    | grep -v '^\\.claude/worktrees/')\"\n fi\n \n if [ -n \"$INCLUDES\" ]; then\n",
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "worktree-include.sh drops the `| git check-ignore --stdin` stage that D1, the Contracts block, A2 and the base merge-back.sh inline block all carry, so it copies any manifest-matched UNTRACKED file, not only the gitignored ones — a selection-rule change on both worktree paths that no AC-1..5 test pins.",
+        "file": "spec/scripts/worktree-include.sh",
+        "line": 50,
+        "impact": "A file listed in the manifest but merely untracked rather than ignored now lands in every build worktree and every replay scratch worktree; the build worktree path silently changed behavior though the spec promised it preserved.",
+        "evidence": "Spec D1: enumerates files that are BOTH gitignored AND matched; Contracts: selection pipeline ends in `| git check-ignore --stdin`; base merge-back.sh via git show 9406d14e carries it. Violating hunk worktree-include.sh:50-51 has no check-ignore. Executed repro (scratch host: .gitignore=.env, .worktreeinclude=.env+notes.txt, notes.txt untracked NOT ignored): `bash spec/scripts/worktree-include.sh --root R --dest D` → stderr `copied 2`, dest contains .env and notes.txt; the Contracts pipeline yields .env only."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "merge-back.sh create's OWNER_RC capture could abort under set -e",
+        "file": "spec/scripts/merge-back.sh",
+        "line": 49,
+        "evidence": "only set -u; patterns leg set -e count 0"
+      },
+      {
+        "claim": "version bump missing (D7)",
+        "file": "spec/.claude-plugin/plugin.json",
+        "line": 3,
+        "evidence": "7.79.0 → 7.80.0 with changelog head; plugin-version test green"
+      },
+      {
+        "claim": "exit-4 arm in replay.js undocumented",
+        "file": "spec/scripts/replay.js",
+        "line": 176,
+        "evidence": "header extends the existing exit-4 sentence naming the worktree remove remedy"
+      },
+      {
+        "claim": "entrypoints.json row out of File Plan",
+        "file": "spec/entrypoints.json",
+        "line": 277,
+        "evidence": "File Plan carries the row; reconcile outOfPlan []"
+      },
+      {
+        "claim": "AC-6/8/11 pins weakened by retag",
+        "file": "tests/merge-back.test.js",
+        "line": 1,
+        "evidence": "all asserts retained; green in gate + suite"
+      },
+      {
+        "claim": "owner stderr leaks onto --setup stdout line",
+        "file": "spec/scripts/replay.js",
+        "line": 679,
+        "evidence": "owner writes >&2 only; AC-9 asserts one stdout line; green"
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 42000
+  }
+}

@@ -18,7 +18,10 @@ read-only: you report findings, never modify code. Bash is for inspection and re
 (`git diff`, `git log`, running the host's typecheck/lint/test commands, executing a minimal
 repro); you may create one scratch repro file and must delete it before returning. Never any
 other write, never git state changes, never execution side effects on shared stateful
-substrates (databases, queues, live services).
+substrates (databases, queues, live services). "Git state changes" means every mutating
+verb — `stash`, `checkout`, `switch`, `reset`, `restore`, `clean`, `add`, `commit` — even for a
+moment; read base-side content with `git show <ref>:<path>` or `git archive`, never by moving
+the working tree.
 
 ## Ground yourself first
 

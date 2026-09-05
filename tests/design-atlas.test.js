@@ -954,3 +954,47 @@ a -> b
   assert.ok(!/should-never-appear/.test(out),
     'design/mocks/references/ must be skipped by the html walk entirely — a file under it must never surface as a rendered label')
 })
+
+// The atlas is a derived view, so serve regenerates it on every GET of the index instead of
+// serving a file only `build` ever wrote (a shapes-only tree at the SHAPES look stop has no
+// such file, and the banner promised the page anyway); a busy port reuses the running atlas
+// (prints the same URL line with "already serving", exit 0) instead of an EADDRINUSE trace.
+test('serve derives the atlas index on request (shapes-only tree, no design/atlas file) and a second serve on the same port prints "already serving" + exits 0', async () => {
+  const dir = tmpdir('atlas-serve-derived')
+  fs.mkdirSync(path.join(dir, 'design/shapes'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/shapes/work-queue.html'), '<main data-screen-label="work-queue">wq</main>')
+  fs.writeFileSync(path.join(dir, 'design/shapes/stacked-cards.html'), '<main data-screen-label="stacked-cards">sc</main>')
+  const port = 43000 + Math.floor(Math.random() * 2000)
+  const child = spawn(process.execPath, [path.join(SPEC, 'scripts/design-atlas.js'), 'serve', '--root', dir, '--port', String(port)])
+  try {
+    await new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('serve did not print its first line')), 5000)
+      child.stdout.once('data', () => { clearTimeout(t); resolve() })
+    })
+    const get = (p) => new Promise((resolve, reject) => {
+      http.get({ host: '127.0.0.1', port, path: p }, (res) => {
+        let body = ''
+        res.on('data', (c) => { body += c })
+        res.on('end', () => resolve({ status: res.statusCode, body }))
+      }).on('error', reject)
+    })
+    assert.ok(!fs.existsSync(path.join(dir, 'design/atlas/index.html')), 'precondition: no atlas file exists before the first request')
+    for (const p of ['/atlas/index.html', '/', '/atlas/']) {
+      const r = await get(p)
+      assert.strictEqual(r.status, 200, 'GET ' + p + ' must answer 200 by deriving the atlas, never 404')
+      assert.match(r.body, /work-queue/, 'GET ' + p + ' must carry the shapes section')
+      assert.match(r.body, /candidate/, 'GET ' + p + ' must mark each shape as a candidate')
+      assert.match(r.body, /\/__notes\/notes\.js/, 'the derived atlas must carry the notes layer like every served html')
+    }
+    assert.ok(fs.existsSync(path.join(dir, 'design/atlas/index.html')), 'the derived atlas is also written to disk so file:// readers see the same page')
+
+    const second = spawnSync(process.execPath, [path.join(SPEC, 'scripts/design-atlas.js'), 'serve', '--root', dir, '--port', String(port)], { encoding: 'utf8', timeout: 5000 })
+    assert.strictEqual(second.status, 0, 'a second serve on a busy atlas port must exit 0, not crash: ' + second.stderr)
+    assert.strictEqual(second.stdout.split('\n')[0],
+      'already serving http://localhost:' + port + '/atlas/index.html — remote: ssh -L ' + port + ':localhost:' + port + ' <host>',
+      'the first line must be the same URL line, verb "already serving"')
+  } finally {
+    child.kill('SIGTERM')
+    await new Promise((resolve) => child.on('exit', resolve))
+  }
+})

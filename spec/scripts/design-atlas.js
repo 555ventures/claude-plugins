@@ -101,7 +101,7 @@ const viewportOf = (html) => {
 // to the card, so the frame itself never scrolls.
 const frameTag = (src, w, h) =>
   '<iframe class="frame" loading="lazy" scrolling="no" data-w="' + (w | 0) + '" data-h="' + (h | 0) +
-  '" src="' + esc(src) + '"></iframe>'
+  '" src="' + esc(src) + (src.includes('?') ? '&' : '?') + 'clean"></iframe>'
 
 // ---- targets -------------------------------------------------------------------------------------
 // design/targets.json declares the theme × viewport matrix the product owes (archetype-derived;
@@ -476,38 +476,62 @@ function page(title, bodyHtml, extraHead = '') {
   return '<!doctype html>\n<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">\n' +
     '<title>' + esc(title) + '</title>\n<style>\n' +
     viewerCss() + '\n' +
-    'body{font:14px/1.5 var(--v-font);margin:0;padding:1.25rem;background:var(--v-bg);color:var(--v-fg);overflow-x:hidden}\n' +
+    'body{font:14px/1.5 var(--v-font);margin:0;padding:1.25rem 1.5rem 3rem;background:var(--v-muted-bg);color:var(--v-fg);overflow-x:hidden}\n' +
     'h1,h2{font-weight:600} a{color:var(--v-primary)}\n' +
-    'h1{margin:.2rem 0 .1rem}\n' +
+    'h1{margin:0;font-size:22px;letter-spacing:-.01em}\n' +
+    '.hdr{display:flex;flex-wrap:wrap;align-items:baseline;gap:.5rem 1rem;margin:0 0 .35rem}\n' +
+    '.hdr .proj{color:var(--v-muted);font-size:14px}\n' +
+    '.lede{color:var(--v-muted);font-size:13px;margin:0 0 .9rem;max-width:70ch}\n' +
+    '.legend{display:flex;flex-wrap:wrap;gap:.4rem .9rem;font-size:12px;color:var(--v-muted);margin:0 0 1rem}\n' +
+    '.legend .badge{margin-right:.15em}\n' +
+    '.pick{border:1px solid var(--v-border);border-left:4px solid var(--v-warn);background:var(--v-bg);border-radius:var(--v-radius);' +
+    'padding:.75rem 1rem;margin:0 0 1rem;box-shadow:var(--v-shadow)}\n' +
+    '.pick h2{margin:0 0 .2rem;font-size:16px}\n' +
+    '.pick p{margin:0;color:var(--v-muted);font-size:13px}\n' +
+    '.card .num{display:inline-flex;align-items:center;justify-content:center;width:1.6em;height:1.6em;border-radius:99px;' +
+    'background:var(--v-primary);color:var(--v-primary-fg);font-size:12px;font-weight:600;margin-right:.5em}\n' +
+    '.empty{border:1px dashed var(--v-border);border-radius:var(--v-radius);color:var(--v-muted);padding:2rem;text-align:center;background:var(--v-bg)}\n' +
     '.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;align-items:start}\n' +
-    '.card{border:1px solid var(--v-border);border-radius:var(--v-radius);padding:.75rem;background:var(--v-bg);box-shadow:var(--v-shadow);min-width:0}\n' +
+    '.card{border:1px solid var(--v-border);border-radius:var(--v-radius);padding:.75rem;background:var(--v-bg);box-shadow:var(--v-shadow);min-width:0;' +
+    'transition:box-shadow .15s,transform .15s}\n' +
+    '.card:hover{box-shadow:0 2px 6px color-mix(in srgb, var(--v-fg) 8%, transparent),0 12px 28px color-mix(in srgb, var(--v-fg) 12%, transparent);transform:translateY(-1px)}\n' +
     '.card.wide{grid-column:1/-1}\n' +
-    '.card h3{margin:.1rem 0 .4rem;font-size:14px}\n' +
+    '.card h3{margin:.1rem 0 .4rem;font-size:15px;display:flex;align-items:center;flex-wrap:wrap;gap:.15em}\n' +
+    '.card h3 .open{margin-left:auto}\n' +
+    '.statelabel{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--v-muted);margin:.6rem 0 .1rem}\n' +
     '.vp{color:var(--v-muted);font-size:11px;font-weight:400;margin-left:.4em}\n' +
     '.open{float:right;font-size:12px;font-weight:400}\n' +
-    '.badge{display:inline-block;border:1px solid var(--v-border);border-radius:99px;padding:0 .5em;font-size:11px;' +
-    'margin-right:.3em;text-transform:uppercase;letter-spacing:.04em}\n' +
-    '.badge.gap{border-color:var(--v-danger);color:var(--v-danger)}.badge.sketch{border-color:var(--v-warn);color:var(--v-warn)}\n' +
-    '.badge.ratified{border-color:var(--v-ok);color:var(--v-ok)}\n' +
-    '.badge.approved{border-color:var(--v-ok);color:var(--v-ok)}.badge.bound{border-color:var(--v-ring);color:var(--v-fg)}\n' +
-    '.badge.built{border-color:var(--v-primary);color:var(--v-primary)}.badge.orphan{border-color:var(--v-danger);color:var(--v-danger)}\n' +
-    '.shot{overflow:hidden;border-radius:var(--v-radius);background:var(--v-muted-bg);cursor:zoom-in;margin-top:.35rem}\n' +
+    '.badge{display:inline-block;border:1px solid var(--v-border);border-radius:99px;padding:.05em .6em;font-size:11px;font-weight:600;' +
+    'margin-right:.3em;text-transform:uppercase;letter-spacing:.04em;background:var(--v-muted-bg);color:var(--v-muted)}\n' +
+    '.badge.gap{border-color:color-mix(in srgb, var(--v-danger) 40%, transparent);color:var(--v-danger);background:color-mix(in srgb, var(--v-danger) 10%, var(--v-bg))}\n' +
+    '.badge.sketch{border-color:color-mix(in srgb, var(--v-warn) 40%, transparent);color:var(--v-warn);background:color-mix(in srgb, var(--v-warn) 12%, var(--v-bg))}\n' +
+    '.badge.ratified,.badge.approved{border-color:color-mix(in srgb, var(--v-ok) 40%, transparent);color:var(--v-ok);background:color-mix(in srgb, var(--v-ok) 12%, var(--v-bg))}\n' +
+    '.badge.bound{border-color:var(--v-ring);color:var(--v-fg);background:var(--v-bg)}\n' +
+    '.badge.built{border-color:var(--v-primary);color:var(--v-primary-fg);background:var(--v-primary)}\n' +
+    '.badge.orphan{border-color:var(--v-danger);color:var(--v-primary-fg);background:var(--v-danger)}\n' +
+    '.badge.candidate{border-color:color-mix(in srgb, var(--v-warn) 40%, transparent);color:var(--v-warn);background:color-mix(in srgb, var(--v-warn) 12%, var(--v-bg))}\n' +
+    '.shot{overflow:hidden;border-radius:var(--v-radius);background:var(--v-muted-bg);cursor:zoom-in;margin-top:.5rem;' +
+    'border:1px solid var(--v-border);box-shadow:inset 0 1px 3px color-mix(in srgb, var(--v-fg) 6%, transparent)}\n' +
     '.frame{border:0;display:block;transform-origin:0 0;pointer-events:none;background:var(--v-muted-bg);width:100%}\n' +
-    '.sect{margin:1.75rem 0 0}\n' +
-    '.sect>h2{font-size:15px;margin:0 0 .75rem;padding-bottom:.35rem;border-bottom:1px solid var(--v-border)}\n' +
-    '.sect>h2 .count{color:var(--v-muted);font-size:12px;font-weight:400;margin-left:.5em}\n' +
+    '.sect{margin:2rem 0 0}\n' +
+    '.sect>h2{font-size:17px;margin:0 0 .75rem;padding:.1rem 0 .1rem .7rem;border-left:4px solid var(--v-primary);display:flex;align-items:baseline;flex-wrap:wrap;gap:.5em}\n' +
+    '.sect>h2 .count{color:var(--v-muted);font-size:12px;font-weight:500;border:1px solid var(--v-border);border-radius:99px;padding:0 .6em;background:var(--v-bg)}\n' +
+    '.sect>p.meta{margin:-.4rem 0 .75rem .95rem;font-size:13px;max-width:100ch}\n' +
     '.gaps{display:flex;flex-wrap:wrap;gap:.4rem;margin:.75rem 0 0}\n' +
     '.gapchip{border:1px dashed var(--v-danger);color:var(--v-danger);border-radius:99px;padding:.05rem .65rem;font-size:12px}\n' +
     '.gapcard{border:1px dashed var(--v-border);border-radius:var(--v-radius);color:var(--v-muted);display:flex;align-items:center;' +
     'justify-content:center;min-height:6rem;margin-top:.35rem}\n' +
     '.meta{color:var(--v-muted);font-size:12px;margin-top:.35rem}\n' +
     '.bar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;' +
-    'background:var(--v-bg);backdrop-filter:blur(4px);padding:.5rem 0;margin:0 0 .5rem;border-bottom:1px solid var(--v-border)}\n' +
-    '.bar button{background:var(--v-muted-bg);color:var(--v-fg);border:1px solid var(--v-border);border-radius:var(--v-radius);padding:.2em .7em;' +
-    'cursor:pointer;font:inherit;font-size:12px}\n' +
-    '.bar button.on{border-color:var(--v-ring);color:var(--v-primary)}\n' +
+    'background:color-mix(in srgb, var(--v-muted-bg) 88%, transparent);backdrop-filter:blur(6px);padding:.5rem 0;margin:0 0 .5rem;border-bottom:1px solid var(--v-border)}\n' +
+    '.bar button{background:var(--v-bg);color:var(--v-fg);border:1px solid var(--v-border);border-radius:99px;padding:.25em .8em;' +
+    'cursor:pointer;font:inherit;font-size:12px;display:inline-flex;align-items:center;gap:.4em}\n' +
+    '.bar button.on{border-color:var(--v-primary);background:var(--v-primary);color:var(--v-primary-fg)}\n' +
+    '.bar button .dot{width:.55em;height:.55em;border-radius:99px;background:var(--v-muted);display:inline-block}\n' +
+    '.bar button .dot.gap{background:var(--v-danger)}.bar button .dot.sketch{background:var(--v-warn)}\n' +
+    '.bar button .dot.approved,.bar button .dot.ratified,.bar button .dot.built{background:var(--v-ok)}\n' +
     '.bar .sep{width:1px;height:1.2em;background:var(--v-border);margin:0 .35em}\n' +
-    '#journey{height:420px;border:1px solid var(--v-border);border-radius:var(--v-radius);margin-bottom:1rem}\n' +
+    '#journey{height:280px;border:1px solid var(--v-border);border-radius:var(--v-radius);margin-bottom:1rem;background:var(--v-bg);box-shadow:var(--v-shadow)}\n' +
     '#lb{position:fixed;inset:0;z-index:10;background:color-mix(in srgb, var(--v-fg) 85%, transparent);display:none;overflow:auto;padding:3.2rem 1rem 1rem}\n' +
     '#lb.on{display:block}\n' +
     '#lb iframe{border:0;display:block;margin:0 auto;background:var(--v-bg);box-shadow:var(--v-shadow)}\n' +
@@ -515,7 +539,7 @@ function page(title, bodyHtml, extraHead = '') {
     '#lbbar span{color:var(--v-bg);font-size:13px;margin-right:.4em}\n' +
     '#lbbar button,#lbbar a{background:var(--v-muted-bg);color:var(--v-fg);border:1px solid var(--v-border);border-radius:var(--v-radius);' +
     'padding:.2em .7em;cursor:pointer;font:inherit;font-size:13px;text-decoration:none}\n' +
-    '@media(max-width:640px){body{padding:.75rem}.grid{grid-template-columns:1fr}#journey{height:260px}}\n' +
+    '@media(max-width:640px){body{padding:.75rem}.grid{grid-template-columns:1fr}#journey{height:200px}}\n' +
     '</style>' + extraHead + '</head><body>\n' + bodyHtml + '\n</body></html>\n'
 }
 
@@ -523,6 +547,7 @@ function page(title, bodyHtml, extraHead = '') {
 // (same-origin measurement when served; falls back to the declared device height on file://),
 // scale to the card width, and open the click-to-inspect lightbox. No scrollbars in cards, ever.
 const UI_SCRIPT = '<script>\n' +
+  'function __full(src){return String(src||"").replace(/[?&]clean$/,"")}\n' +
   'function __sel(btn,attr){document.querySelectorAll("button["+attr+"]").forEach(function(b){b.classList.toggle("on",b===btn)})}\n' +
   'function __measure(f){try{var d=f.contentDocument;if(!d||!d.documentElement)return 0;' +
   'var h=d.documentElement.scrollHeight||0;if(d.body&&d.body.scrollHeight>h)h=d.body.scrollHeight;return h}catch(e){return 0}}\n' +
@@ -541,10 +566,10 @@ const UI_SCRIPT = '<script>\n' +
   'function __lbShow(i){var fr=document.getElementById("lbframe");if(!fr||!__lbList.length)return;' +
   'if(i<0)i=__lbList.length-1;if(i>=__lbList.length)i=0;__lbIx=i;var f=__lbList[i];' +
   'var w=+f.dataset.w||390;fr.style.width=Math.min(w,window.innerWidth-32)+"px";' +
-  'fr.style.height=(parseInt(f.style.height)||+f.dataset.h||844)+"px";fr.src=f.getAttribute("src");' +
+  'fr.style.height=(parseInt(f.style.height)||+f.dataset.h||844)+"px";fr.src=__full(f.getAttribute("src"));' +
   'var card=f.closest(".card"),h3=card&&card.querySelector("h3");' +
   'document.getElementById("lbtitle").textContent=h3?h3.childNodes[0].textContent:"";' +
-  'document.getElementById("lbopen").href=f.getAttribute("src");' +
+  'document.getElementById("lbopen").href=__full(f.getAttribute("src"));' +
   'document.getElementById("lb").classList.add("on")}\n' +
   'function __lbOpen(f){__lbList=[].slice.call(document.querySelectorAll("iframe.frame")).filter(function(x){' +
   'var c=x.closest(".card");return !c||!c.hidden});__lbShow(__lbList.indexOf(f))}\n' +
@@ -560,7 +585,7 @@ const UI_SCRIPT = '<script>\n' +
   '    var card=s.closest(".card"),h3=card&&card.querySelector("h3");\n' +
   '    if(h3&&!h3.querySelector(".vp"))h3.insertAdjacentHTML("beforeend",' +
   '"<span class=\\"vp\\">"+(+f.dataset.w||390)+"\\u00d7"+(+f.dataset.h||844)+"</span> ' +
-  '<a class=\\"open\\" href=\\""+f.getAttribute("src")+"\\" target=\\"_blank\\">open \\u2197</a>");\n' +
+  '<a class=\\"open\\" href=\\""+__full(f.getAttribute("src"))+"\\" target=\\"_blank\\">open \\u2197</a>");\n' +
   '    f.addEventListener("load",function(){__still(f);__fit(f);setTimeout(function(){__fit(f)},250)});\n' +
   '    s.addEventListener("click",function(){__lbOpen(f)});\n' +
   '  });\n' +
@@ -707,10 +732,10 @@ function parseSeedJourneys(root) {
 }
 
 // ---- build ---------------------------------------------------------------------------------------
-function cmdBuild(argv) {
-  const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d }
-  const root = path.resolve(arg('--root', '.'))
-  const out = path.resolve(root, arg('--out', 'design/atlas/index.html'))
+// buildAtlas(root, out) is the one derivation both `build` (writes the file, prints one line)
+// and `serve` (regenerates on every GET of the index, so the served atlas is never a stale or
+// missing file) call — the atlas is a derived view, never a hand-maintained artifact.
+function buildAtlas(root, out) {
   const mocksDir = path.join(root, 'design/mocks')
   const { nodes, edges } = parseSurfaces(path.join(root, 'docs/roadmap'))
 
@@ -837,15 +862,18 @@ function cmdBuild(argv) {
   if (fs.existsSync(shapesDir)) {
     const shapeFiles = fs.readdirSync(shapesDir).filter(f => f.endsWith('.html')).sort()
     if (shapeFiles.length) {
-      const shapeCards = shapeFiles.map(f => {
+      const shapeCards = shapeFiles.map((f, i) => {
         const kebab = path.basename(f, '.html')
         const filePath = path.join(shapesDir, f)
         const vp = viewportOf(fs.readFileSync(filePath, 'utf8')) || vp0
-        return '<div class="card"><h3>' + esc(kebab) + '</h3>' +
+        return '<div class="card' + (vp.width >= 700 ? ' wide' : '') + '"><h3><span class="num">' + (i + 1) + '</span>' + esc(kebab) + '</h3>' +
+          '<span class="badge candidate">candidate</span>' +
           frameTag(path.relative(outDir, filePath), vp.width, vp.height) + '</div>'
       }).join('\n')
-      shapesSectionHtml = '<section class="sect"><h2>shapes<span class="count">' + shapeFiles.length +
-        '</span></h2>\n<div class="grid">\n' + shapeCards + '\n</div></section>'
+      shapesSectionHtml = '<section class="sect" id="shapes"><h2>shapes<span class="count">' + shapeFiles.length + ' candidates</span></h2>\n' +
+        '<p class="meta">Each card is one way to lay out the whole product. Click a card to see it at full size, ' +
+        'use the width buttons above to compare on phone and desktop, then reply <b>approve &lt;name&gt;</b> in the session.</p>\n' +
+        '<div class="grid">\n' + shapeCards + '\n</div></section>'
     }
   }
 
@@ -853,7 +881,7 @@ function cmdBuild(argv) {
   const filterBar =
     '<button data-f class="on" onclick="__filter(\'all\',this)">all ' + rows.length + '</button>' +
     Object.keys(counts).sort().map(k =>
-      '<button data-f onclick="__filter(\'' + k + '\',this)">' + k + ' ' + counts[k] + '</button>').join('')
+      '<button data-f onclick="__filter(\'' + k + '\',this)"><span class="dot ' + k + '"></span>' + k + ' ' + counts[k] + '</button>').join('')
   const filterScript = '<script>\n' +
     'function __filter(st,btn){__sel(btn,"data-f");' +
     'document.querySelectorAll("[data-st]").forEach(function(el){el.hidden=st!=="all"&&el.dataset.st!==st});' +
@@ -892,13 +920,41 @@ function cmdBuild(argv) {
     '}\n</script>'
 
   const bar = matrixBar(targets)
+  // The header says what the page is and how to read it — a reviewer arriving cold from a link
+  // gets the legend in words, not just chip colors.
+  const projectName = path.basename(root)
+  const legend = [
+    ['gap', 'declared, not drawn yet'], ['sketch', 'drawn, waiting for your look'],
+    ['approved', 'you approved it'], ['built', 'shipped in code'],
+  ].filter(([k]) => counts[k]).map(([k, t]) => '<span><span class="badge ' + k + '">' + k + '</span>' + t + '</span>').join('')
+  const shapesOnly = shapesSectionHtml && !rows.length
+  const lede = shapesOnly
+    ? 'Nothing is drawn per screen yet. The candidates below are the whole-product layout to pick first.'
+    : rows.length
+      ? 'One card per screen, grouped by journey. Click a card to see it at full size; the width and theme buttons re-frame every card at once.'
+      : ''
+  const header =
+    '<div class="hdr"><h1>Design atlas</h1><span class="proj">' + esc(projectName) + ' · ' + esc(summary) + '</span></div>\n' +
+    (lede ? '<p class="lede">' + lede + '</p>\n' : '') +
+    (legend ? '<div class="legend">' + legend + '</div>\n' : '')
+  const emptyHtml = (!rows.length && !shapesSectionHtml)
+    ? '<div class="empty">Nothing drawn yet. Shapes appear here after the SHAPES step, screens after the first journey is drawn.</div>'
+    : ''
   const html = page('Design atlas',
-    '<h1>Design atlas</h1><p class="meta">' + esc(summary) + '</p>\n' + graph +
+    header + (rows.length ? graph : '') +
     '\n<div class="bar">' + filterBar + (bar.buttons ? '<span class="sep"></span>' + bar.buttons : '') + '</div>' +
-    '\n' + sectionHtml + '\n' + shapesSectionHtml + '\n' + LIGHTBOX + '\n' + UI_SCRIPT + bar.script + filterScript)
+    '\n' + shapesSectionHtml + '\n' + sectionHtml + '\n' + emptyHtml + '\n' + LIGHTBOX + '\n' + UI_SCRIPT + bar.script + filterScript)
   fs.mkdirSync(outDir, { recursive: true })
   fs.writeFileSync(out, html)
-  process.stdout.write('atlas: ' + labels.length + ' surface(s) (' + summary + ') → ' + out + '\n')
+  return { html, out, count: labels.length, summary }
+}
+
+function cmdBuild(argv) {
+  const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d }
+  const root = path.resolve(arg('--root', '.'))
+  const out = path.resolve(root, arg('--out', 'design/atlas/index.html'))
+  const r = buildAtlas(root, out)
+  process.stdout.write('atlas: ' + r.count + ' surface(s) (' + r.summary + ') → ' + r.out + '\n')
 }
 
 // ---- serve -----------------------------------------------------------------------------------------
@@ -908,6 +964,7 @@ function cmdBuild(argv) {
 // is the only remote path in, per specs/20260902/10-page-notes-review-loop.md's Contracts: "binds
 // `localhost` only". The port-forward line is the very first stdout write, before anything else,
 // so a caller reading stdout line-by-line never blocks waiting on a second line that never comes.
+const ATLAS_INDEX_PATHS = new Set(['/', '/atlas', '/atlas/', '/atlas/index.html'])
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'application/javascript',
   '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg',
@@ -1008,6 +1065,19 @@ function cmdServe(argv) {
       return
     }
 
+    // ---- the atlas index is derived on every request (never a stale/missing file) -------------
+    if (req.method === 'GET' && ATLAS_INDEX_PATHS.has(reqPath)) {
+      let built
+      try { built = buildAtlas(root, path.join(root, 'design/atlas/index.html')) } catch (e) {
+        res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
+        res.end('atlas build failed under ' + root + ': ' + (e && e.message || e) + '\n')
+        return
+      }
+      res.writeHead(200, { 'content-type': MIME['.html'], 'cache-control': 'no-store' })
+      res.end(urlObj.searchParams.has('clean') ? built.html : injectNotesScript(built.html))
+      return
+    }
+
     // ---- static <root>/design/ (D12, spec 07) ----------------------------------------------
     const resolved = path.normalize(path.join(designRoot, reqPath))
     if (resolved !== designRoot.slice(0, -1) && !resolved.startsWith(designRoot)) {
@@ -1028,9 +1098,22 @@ function cmdServe(argv) {
       res.end(data)
     })
   })
-  server.listen(port, '127.0.0.1', () => {
-    process.stdout.write('serving http://localhost:' + port + '/atlas/index.html — remote: ssh -L ' + port + ':localhost:' + port + ' <host>\n')
+  const banner = (verb) => verb + ' http://localhost:' + port + '/atlas/index.html — remote: ssh -L ' + port + ':localhost:' + port + ' <host>\n'
+  // A busy port is the common case, not an error: the previous session left its server up. Probe
+  // it for the notes layer (the one route only this server answers); an atlas answers → print the
+  // same URL line with "already serving" and exit 0, so a caller reading the first line still
+  // gets the URL. Anything else on the port is a real conflict and dies with the port named.
+  server.on('error', (err) => {
+    if (!err || err.code !== 'EADDRINUSE') die('serve: ' + (err && err.message || err))
+    const probe = http.get({ host: '127.0.0.1', port, path: '/__notes/notes.js', timeout: 1500 }, (r) => {
+      r.resume()
+      if (r.statusCode === 200) { process.stdout.write(banner('already serving')); process.exit(0) }
+      die('serve: port ' + port + ' is taken by something that is not a design atlas — pass --port <n>')
+    })
+    probe.on('timeout', () => probe.destroy(new Error('timeout')))
+    probe.on('error', () => die('serve: port ' + port + ' is taken by something that is not a design atlas — pass --port <n>'))
   })
+  server.listen(port, '127.0.0.1', () => { process.stdout.write(banner('serving')) })
   const shutdown = () => server.close(() => process.exit(0))
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)

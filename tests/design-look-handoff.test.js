@@ -57,14 +57,59 @@ test('design.md Step 5 derives every hand-off value from disk: the catalog comma
     'Step 5 must forbid asking the user which components to check — that question is exactly the friction the hand-off block exists to remove')
 })
 
-test('every human look stop prints the block and ends the turn: sketch ratification, mocks approvals, and the core rule they cite', () => {
-  const shared = read('spec/doctrine/design.md')
-  assert.match(shared, /Look stops are never questions/, 'shared § Design Atlas must carry the look-stop rule the commands cite')
-  assert.match(shared, /fenced code block/, 'the shared rule must require the fenced command — every look stop inherits the formatting')
-  assert.match(shared, /sidebar\s+path/, 'the shared rule must define catalog 🆕 lines as sidebar paths, never component names')
-  assert.match(shared, /restart it so the sidebar re-indexes/, 'the shared rule must carry the fixed ↻ restart line')
-  const sketch = read('spec/commands/sketch.md')
-  assert.ok(sketch.includes('✅ approve') && sketch.includes('end the turn'), 'sketch.md step 6 must print the block and end the turn instead of asking')
+// specs/20260905/02-design-review-hub-and-look-stops.md D9, AC-20260905-02-16/-17: every mock
+// look stop (the mocks driver's five looks, /spec:sketch ratification, /spec:atlas) now opens a
+// stop on the design review hub and prints exactly the verified link plus the fixed reply line —
+// never a server command or a list of 🆕 names — then ends the turn; the shared doctrine splits
+// the look-stop rule into "catalog stops" (Storybook, unchanged) and "mock stops" (the hub link).
+// The Step 5 catalog assertions above are untouched — this replaces the old unified-rule pin.
+
+test('AC-20260905-02-16: mocks.md carries the Look rule fenced hand-off block and chat-decide, sketch.md opens a hub stop and reads stop list, atlas.md prints the hub link — and none of the retired literals remain', () => {
   const mocks = read('spec/commands/mocks.md')
-  assert.ok(mocks.includes('✅ approve') && mocks.includes('ends the turn'), 'mocks.md look rule must print the block and end the turn for every approval mark')
+  assert.match(mocks, /## Look rule/, 'D9 renames "## SSH / look rule" to "## Look rule" — its absence means the section was never renamed')
+  assert.ok(mocks.includes('stop open'), 'mocks.md must route every look through `stop open` — its absence means the driver hand-off still describes the retired server-command flow')
+  assert.match(mocks, /🎨 ready for review — <url>\s*\n\s*Reply\s+✅ approve\s+— or —\s+✏️ change <what looks wrong>/,
+    'the fenced block\'s two content lines must be exactly the D6 hand-off pattern — a caller pasting it must see the link and the fixed reply line, nothing else: ' + mocks)
+  assert.ok(mocks.includes('end the turn'), 'mocks.md must instruct the session to end the turn after the block, per D9\'s hand-off contract')
+  assert.ok(mocks.includes('stop decide') && mocks.includes('--by chat'), 'a chat reply must be recorded with `stop decide … --by chat`, never interpreted directly by the session')
+  for (const retired of ['design-atlas)" serve', '🆕']) {
+    assert.ok(!mocks.includes(retired), 'D9 retires the literal "' + retired + '" from mocks.md — its presence means the old server-command/name-list hand-off is still documented')
+  }
+
+  const sketch = read('spec/commands/sketch.md')
+  assert.ok(sketch.includes('design-hub'), 'sketch.md\'s ratification step must name design-hub — its absence means the step still routes through a retired mechanism')
+  assert.ok(sketch.includes('stop open'), 'sketch.md must open a hub stop for its ratification look, the same mechanism every other mock stop uses')
+  assert.ok(sketch.includes('--key sketch:'), 'sketch.md\'s stop must be keyed "sketch:<brief>" — its absence means the stop-key convention D9 sets was never written down')
+  assert.match(sketch, /🎨 ready for review — <url>\s*\n\s*Reply\s+✅ approve\s+— or —\s+✏️ change <what looks wrong>/,
+    'sketch.md must print the same D6 fenced hand-off block as every other mock stop: ' + sketch)
+  assert.ok(sketch.includes('end the turn'), 'sketch.md must end the turn after the block')
+  assert.ok(sketch.includes('stop list'), 'sketch.md must read `stop list` on the next invocation to learn the ratification decision')
+  assert.ok(!sketch.includes('open design/atlas/index.html'), 'D9: sketch.md must no longer tell the user to open the atlas file themselves — the hub serves it now')
+
+  const atlas = read('spec/commands/atlas.md')
+  assert.ok(atlas.includes('design-hub'), 'atlas.md step 3 must name design-hub — its absence means the step still tells the user to open a local file')
+  assert.ok(atlas.includes('register'), 'atlas.md step 3 must register the project with the hub')
+  assert.ok(atlas.includes('ensure'), 'atlas.md step 3 must ensure the hub is up before printing its link')
+  assert.ok(atlas.includes('/atlas/index.html'), 'atlas.md step 3 must print the hub-served atlas path')
+  assert.ok(!atlas.includes('design-atlas)" serve'), 'D9: atlas.md must drop the retired serve-command literal — the hub is the one long-lived server now')
+  assert.ok(!atlas.includes('opens the file themselves'), 'D9: atlas.md must drop the retired "user opens the file themselves" instruction — the hub serves the atlas over one bookmarkable link')
+})
+
+test('AC-20260905-02-17: design.md § Design Atlas splits the look-stop rule into catalog stops and mock stops, and mocks.md gains ## Mocks: Review Hub plus a reworded Look and Serve', () => {
+  const design = read('spec/doctrine/design.md')
+  assert.ok(design.includes('catalog stops'), 'D9 splits the look-stop rule into "catalog stops" and "mock stops" — the catalog-stops clause must be named')
+  assert.ok(design.includes('sidebar'), 'the catalog-stops clause must keep today\'s Storybook block, including the sidebar-path rule')
+  assert.ok(design.includes('restart it so the sidebar re-indexes'), 'the catalog-stops clause must keep the fixed ↻ restart line verbatim')
+  assert.ok(design.includes('mock stops'), 'D9 names "mock stops" as the second shape of the look-stop rule')
+  assert.ok(design.includes('🎨 ready for review — <url>'), 'the mock-stops clause must show the D6 hand-off line')
+  assert.ok(design.includes('end the turn'), 'the mock-stops clause must say the stop ends the turn')
+
+  const mocks = read('spec/doctrine/mocks.md')
+  assert.match(mocks, /## Mocks: Review Hub/, 'D9 adds a "## Mocks: Review Hub" heading — its absence means the hub mechanism (registry, ensure, /p/<name>/, the inbox) has no doctrine home')
+  const hubSection = mocks.slice(mocks.indexOf('## Mocks: Review Hub'))
+  for (const literal of ['registry.json', 'ensure', '/p/<name>/', '127.0.0.1', 'base', 'stop open']) {
+    assert.ok(hubSection.includes(literal), '## Mocks: Review Hub must mention "' + literal + '" — its absence leaves a mechanism of the hub undocumented: ' + hubSection)
+  }
+  assert.ok(mocks.includes('hub link'), '§ Mocks: Look and Serve must say the user\'s path is the "hub link" — the serve command stays the session\'s own tool')
+  assert.ok(mocks.includes('never printed to the user'), '§ Mocks: Look and Serve must state the serve command is never printed to the user')
 })

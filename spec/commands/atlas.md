@@ -59,12 +59,14 @@ user's input; `sweep` as an argument only skips the gap confirmation.
 2. **Gaps in the report → offer the sweep** ("N declared surfaces have no mock — fill them at
    sketch tier?" — the interactive confirmation behind the Next line above). Yes → run the
    sweep below. Invoked as `/spec:atlas sweep`, skip the question and run it directly.
-3. Report the output path (`design/atlas/index.html`) — the user opens the file themselves
-   (e.g. from VS Code); do **not** start a server or open a browser unprompted. Serve
-   (`node "$(spec-paths design-atlas)" serve`) only when the user asks or when notes are the
-   plan — serving (not `file://`) is what injects the notes layer, enables same-origin frame
-   measurement, and the theme buttons of the matrix toolbar (present when `design/targets.json`
-   exists — on `file://` it degrades gracefully to viewport-only); point the user at it for
+3. Register and ensure the design review hub, then print its link — never a file path, never
+   a serve command, and this session never starts a server or opens a browser itself:
+   `node "$(spec-paths design-hub)" register --root .` (idempotent) followed by
+   `node "$(spec-paths design-hub)" ensure` (spawns the hub if it isn't already up); report
+   `🎨 <base>/p/<name>/atlas/index.html`, where `<base>` and `<name>` are the two commands'
+   own printed values. The hub serves the same `/atlas/index.html` with the notes layer
+   injected (`?clean` skips it), same-origin frame measurement, and the theme buttons of the
+   matrix toolbar (present when `design/targets.json` exists) — point the user at it for
    per-device / dark-mode review and for leaving notes.
 4. **Annotation loop (when the user leaves notes):** notes are written on the served page (the
    injected notes layer, `?clean` skips it) and read back with `node {driver} notes open`,

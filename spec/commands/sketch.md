@@ -71,10 +71,10 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    current brief must bind — an unbound region is inherited for free, while future-brief
    content entangled inside a bound region costs an evidence-gated delta row.
 4. **Build & report.** `node {atlas} build`, then report the output path
-   (`design/atlas/index.html`) — the user opens the file themselves (e.g. from VS Code); do
-   **not** start a server or open a browser. Serve (`node "$(spec-paths design-atlas)" serve`)
-   from the repo root only if the user asks or wants to leave notes — serving injects the notes
-   layer. The map shows everything, but this session's iteration scope stays the one brief.
+   (`design/atlas/index.html`); this session never starts a server or opens a browser itself —
+   the design review hub (§ 6's look stop) is the one viewer, for the atlas and for leaving
+   notes alike. The map shows everything, but this session's iteration scope stays the one
+   brief.
 5. **The loop.** Take changes in chat against screen labels, or read them back from the served
    page with `node {driver} notes open` (spec/doctrine/mocks.md § Mocks: Page Notes owns the
    note shape and mark refusals). Group notes by surface, present the plan, then **triage every
@@ -122,24 +122,24 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    executed as a script (shared § Design Canon: a rule a script can check is never checked by an
    LLM at runtime). A rule finding blocks ratification until the mock is fixed or the rule is
    amended — never excused per surface; a `severity: "warn"` rule prints its finding prefixed
-   `⚠️` and does not block. Only then the look stop — printed, then **end the turn**, never
-   `AskUserQuestion` (shared § Design Atlas: look stops are never questions):
+   `⚠️` and does not block. Only then the look stop: run `node "$(spec-paths design-hub)"
+   stop open --root . --kind approve --key sketch:<brief> --title "ratify <brief>"
+   --candidates <label>=mocks/<label>.html[,…]` over the brief's `sketch` mocks — it registers
+   this repo with the hub, ensures it is up, and its stdout is the whole hand-off, the same two
+   lines every look stop prints, then **end the turn**, never `AskUserQuestion` (shared
+   § Design Atlas: look stops are never questions):
 
-     🎨 **ready for review** — open design/atlas/index.html (step 4's build), matrix shots in
-        <the render directory>
-
-     🆕 design/mocks/<label>.html — one line per `sketch` mock of this brief
-
+     🎨 ready for review — <url>
      Reply  ✅ approve  — or —  ✏️ change <what looks wrong>
 
-   The user opens the atlas themselves (step 4: never start a server). Only the literal
-   `approve` ratifies; every other reply is a change round, an ambiguous one re-prints the
-   block with one clarifying line. On `approve`, set `data-status="ratified"` on each
-   of the brief's `sketch` mocks (`approved`+ mocks are untouched) and rebuild the atlas.
-   **Ratified = approved, one stamp:** direction confirmed at roadmap level, brief and mocks
-   agree, matrix already confirmed in this step — `ratified` carries the same check enforcement
-   `approved` does from here on (shared § Design Canon). On `change …` — one more round of
-   step 5's triage, then this step again. No reply — state is on disk; re-invoke to continue.
+   On the next invocation, read `node "$(spec-paths design-hub)" stop list --root .` for the
+   decision rather than asking again. `decided approve` ratifies: set `data-status="ratified"`
+   on each of the brief's `sketch` mocks (`approved`+ mocks are untouched) and rebuild the
+   atlas. **Ratified = approved, one stamp:** direction confirmed at roadmap level, brief and
+   mocks agree, matrix already confirmed in this step — `ratified` carries the same check
+   enforcement `approved` does from here on (shared § Design Canon). `decided change` is one
+   more round of step 5's triage, then a fresh `stop open` for the same key. No decision yet —
+   end the turn again; re-run to re-read `stop list`.
 7. **Report.** Assemble the slots (rationale: shared § Console Output Style) — `outcome`:
    ✅ `ratified {N} of {M} surfaces — {brief}`; `bullets`: the `🎨 authored {N} in-session · {K}
    check-only dispatches` line (shared § Design Atlas) when this round authored any mocks; `warns`: one line per un-ratified surface

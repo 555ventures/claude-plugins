@@ -136,11 +136,11 @@ runs on the pass's mocks before `check`. Grounding order: `design/mocks/seed.md`
 `design/mocks/canon.md` → research brief → owning brief → doctrine → `tokens.css` → shell
 canon (a repo with no seed starts at the research brief). Both commands' reports add one
 line: `🎨 authored {N} in-session · {K} check-only dispatches`.
-**Look stops are never questions.** A stop that waits on a human look prints 🎨 the viewer command
-in a fenced code block, 🆕 one line per item as the viewer navigates it (catalog: the story's sidebar
-path `<title> / <story name>`, never a component name; mock: the served path), ↻ `Storybook already
-running? restart it so the sidebar re-indexes.`, `Reply ✅ approve — or — ✏️ change <notes>`, then
-**ends the turn** — a question dialog hides what precedes it (Claude Code #67475); the reply decides.
+**Look stops are never questions — two shapes.** catalog stops (Storybook) print 🎨 the viewer command in a fenced block,
+🆕 one sidebar path per item (`<title> / <story name>`, never a component name), ↻ `Storybook already running?
+restart it so the sidebar re-indexes.`, then end the turn. mock stops (mocks-driver/sketch/atlas) print exactly two lines — `🎨 ready for review — <url>` and `Reply ✅ approve —
+or — ✏️ change <what looks wrong>` (`✅ pick <name>` for a pick) — no server command/file path/item list — then
+end the turn too; decided on the hub page or via `stop decide --by chat`.
 
 ## Workflows Encode Shape, Not Judgment
 The plugin's `wf-build.js`, `wf-review.js`, `wf-enforce.js` (and genesis `wf-research.js`) own

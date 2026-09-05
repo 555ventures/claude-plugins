@@ -10,7 +10,7 @@ The standalone design-stage entry point, ahead of `/spec:genesis` and any roadma
 ledger gating on every advancing mark, journey/direction sub-marks, the look-reachability
 precondition — printing exactly one step at a time for the judgment only this session can make.
 This command is a thin shell: it names where each step's doctrine lives, runs the THEME
-interview, the look/serve rule, and the review loop below, and assembles the APPROVED report.
+interview, the look rule, and the review loop below, and assembles the APPROVED report.
 
 **Intended model: Sonnet** (drawing and skinning screens one at a time; escalate to Opus only
 for a genuinely hard-to-reverse product-facts fork).
@@ -18,7 +18,7 @@ for a genuinely hard-to-reverse product-facts fork).
 **Setup:** run `spec-paths shared-for mocks` and read its output (Host Grounding, Model
 Placement, Decisions, Question Style, Console Output Style, MCP Policy, Design Canon, Design
 Atlas); run `spec-paths shared-mocks` and read it too — the ledger, the state machine, the seed
-grammar, the checkpoint contract, the look/serve rule, and page notes. Run `spec-paths
+grammar, the checkpoint contract, the look rule, and page notes. Run `spec-paths
 mocks-driver` once and keep the printed path as `{driver}`.
 
 ## Input
@@ -50,37 +50,36 @@ The THEME step opens with a direction interview, not a fixed menu: derive 2–3 
 directions from the seed's product, audience, and references, and `AskUserQuestion` which to
 compose — never anchor on a stock pair (warm/cool, playful/serious). Record the picks as the
 `theme-directions` product row the driver's step text names, then run `--mark direction-composed
---direction <k>` per direction once its tokens and ≥3 screens exist. Once ≥2 directions are
-composed, `--mark theme-picked --direction <k>` needs a `theme` row whose `rejected` cell names
-every other direction — the user's stated reason for not picking them, not a silent drop.
+--direction <k>` per direction once its tokens and ≥3 screens exist. The interview asks only
+which directions to compose — the winner is picked on the hub, not by a second question (§ Look
+rule): once ≥2 directions are composed, `stop open theme` opens a pick stop and `--mark
+theme-picked` accepts once it is decided, appending the `theme` row itself (`rejected` = the
+other directions).
 
-## SSH / look rule
+## Look rule
 
-Everything here works over a forwarded port: `design-atlas.js serve` (`spec-paths design-atlas`)
-serves `design/` statically, injects the notes layer, and prints the port-forward line first —
-the user runs it, never this session. Before SHAPES, WIREFRAMES, THEME, or SKIN the driver runs
-the look-reachability probe; if it refuses, either fix the remedy (`npx playwright install
-chromium`) or, when a browser MCP is the real look path, `ToolSearch` for `claude-in-chrome` (or
-equivalent) and record `mocks-driver.js look-via browser` before re-running. To look at a
-screen, use `mocks-driver.js look <label> [--state <s>]` or the declared browser MCP — never
-approve on the HTML source alone.
+Before SHAPES, WIREFRAMES, THEME, or SKIN the driver runs the look-reachability probe; if it
+refuses, either fix the remedy (`npx playwright install chromium`) or, when a browser MCP is the
+real look path, `ToolSearch` for `claude-in-chrome` (or equivalent) and record `mocks-driver.js
+look-via browser` before re-running. To look at a screen, use `mocks-driver.js look <label>
+[--state <s>]` or the declared browser MCP — never approve on the HTML source alone.
 
-**The user's look is a printed stop, never a question.** Every step waiting on a look —
-`journey-approved`, `journey-reviewed`, `approved` — prints this block and **ends the turn**
-(shared § Design Atlas: look stops are never questions):
+**The user's look is a hub stop, never a question.** Every step waiting on a human verdict —
+SHAPES, `journey-approved`, THEME, `journey-reviewed`, `approved` — runs `node {driver} stop
+open <step>` (`<step>` = `shapes` | `journey:<j>` | `theme` | `review:<j>` | `signoff`); its
+stdout is the whole hand-off — exactly two lines — then **end the turn** (shared § Design Atlas:
+look stops are never questions). No server command, no file paths, no list of screen names:
 
-  🎨 **ready for review** — run this; its first line is the URL (and the ssh -L line remote)
+    🎨 ready for review — <url>
+    Reply  ✅ approve  — or —  ✏️ change <what looks wrong>
 
-      node "$(spec-paths design-atlas)" serve
-
-  🆕 /mocks/<label>.html — one line per screen this step is about, served path only
-     (`/theme/<kebab>/<label>.html` for a skinned screen)
-
-  Reply  ✅ approve  — or —  ✏️ change <what looks wrong>
-
-Only the literal `approve` is the mark's input; every other reply is a change round (ambiguous
-→ one clarifying line, never marks), then the block again. `theme-picked` is not a look stop —
-the THEME interview stays an `AskUserQuestion` naming the winner and why each rejected.
+(a pick stop — SHAPES, THEME — prints `Reply  ✅ pick <name>  — or —  ✏️ change <what looks
+wrong>` as its second line instead). The decision is taken on the hub page or, from chat,
+recorded with `node {driver} stop decide --id <P…> --verdict approve|pick|change [--pick
+<group>] [--note <n>] --by chat` — never interpreted directly by this session. On the next bare
+run the driver reads the decided stop off disk: `approve`/`pick` advances with the mark's own
+`--mark …` line; `change` starts a fresh round — address the note, then `stop open <step>`
+again.
 
 ## Review loop (REVIEW state)
 

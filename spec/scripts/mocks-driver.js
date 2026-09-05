@@ -8,6 +8,8 @@
 // mocks-driver.js --root <dir> notes reply --id <id> --text "<question back>"
 // mocks-driver.js --root <dir> look <label> [--state <s>] [--out <png>]
 // mocks-driver.js --root <dir> look-probe | look-via <playwright|browser>
+// mocks-driver.js --root <dir> stop open <step>      shapes | journey:<j> | theme | review:<j> | signoff
+// mocks-driver.js --root <dir> stop decide <P…> --verdict pick|approve|change [--pick <g>] [--note <n>] --by <who>
 //
 // WHY: specs/20260902/07-mocks-command-driver.md — `/spec:mocks` is the standalone design
 // stage; this driver derives SEED -> SHAPES -> WIREFRAMES -> THEME -> SKIN -> REVIEW ->
@@ -16,6 +18,16 @@
 // gates every advancing mark on the provenance ledger (spec 06, lib/mocks-ledger.js), and
 // checkpoints every accepted mark so a run survives any number of `/clear`s (the genesis
 // driver's discipline verbatim — spec/scripts/genesis-driver.js).
+//
+// specs/20260905/02-design-review-hub-and-look-stops.md D6-D8: `stop open <step>` derives the
+// candidate set for the step's look from disk and delegates to design-hub.js (sibling path, never
+// spec-paths) to register/serve/write the stop, printing only the verified link plus the fixed
+// reply line; `stop decide` passes an id + verdict straight through to the hub script (the chat
+// channel for a decision, `--by chat`). The five gated marks (shape-picked, journey-approved,
+// theme-picked, journey-reviewed, approved) now read their verdict from the newest non-superseded
+// look stop for the mark's key (lib/mocks-picks.js, spec 01) instead of trusting the session's own
+// judgment — a session can never mark past a look. A pick mark's `--shape`/`--direction` flag is
+// now optional (the page's pick is the value); a given flag that disagrees with the pick refuses.
 //
 // What this deliberately does NOT do:
 //   - author the seed, canon, screens, theme directions, or the review itself — those stay
@@ -43,11 +55,13 @@
 // Exit codes:
 //   0  a bare invocation printed the current step (or `--state` printed the state name), an
 //      accepted `--mark` recorded its result and printed the checkpoint line, a `--reopen`
-//      printed what it invalidated, or a ledger/look subcommand succeeded.
+//      printed what it invalidated, a ledger/look subcommand succeeded, `stop open` printed the
+//      link + reply line, or `stop decide` recorded a decision.
 //   1  `ledger check` found a blocked gate (rows printed).
 //   2  a refused mark, a failed precondition (missing artifact, blocked gate, unreachable look
-//      probe), a usage error, `ledger check` grammar errors, or a dead child process (runChild's
-//      fail-closed refusal).
+//      probe, undeclared/undrawn journey for `stop open`), a usage error, `ledger check` grammar
+//      errors, or a dead child process (runChild's fail-closed refusal).
+//   3  `stop open`/`stop decide` failed inside design-hub.js itself (its own stderr forwarded).
 
 'use strict'
 const fs = require('fs')
@@ -56,6 +70,7 @@ const { spawnSync } = require('child_process')
 const { runChild, writeOut } = require('./lib/driver-io')
 const { parseLedger, gateVerdict, countsLine, appendAssumption, appendCatch, setStatus } = require('./lib/mocks-ledger')
 const { readNotes, writeNotes, addressNote, replyNote, groupOpen, unresolvedFor } = require('./lib/mocks-notes')
+const picksLib = require('./lib/mocks-picks.js')
 
 function die(msg) { writeOut(2, 'mocks-driver: ' + msg + '\n'); process.exit(2) }
 function nowIso() { return new Date().toISOString() }
@@ -85,6 +100,7 @@ const statusPath = path.join(mocksDir, 'status.json')
 const ledgerPath = path.join(mocksDir, 'ledger.md')
 const seedPath = path.join(mocksDir, 'seed.md')
 const designAtlasBin = path.join(__dirname, 'design-atlas.js')
+const designHubBin = path.join(__dirname, 'design-hub.js')
 const templatesDir = path.join(__dirname, '..', 'templates')
 
 const FACT_KEYS = [
@@ -227,6 +243,85 @@ function findAssumption(pred) {
   return parsed.assumptions.find(pred) || null
 }
 
+function todayIso() { return nowIso().slice(0, 10) }
+
+// specs/20260905/02-design-review-hub-and-look-stops.md D7: the driver derives, never asks the
+// session to re-type, the id for a ledger row it appends on the page's behalf (shape:/theme:
+// picks) — picks the next unused "P<n>" the way lib/mocks-picks.js's own nextId does for stops.
+function nextLedgerId(parsed) {
+  let max = 0
+  for (const a of parsed.assumptions) {
+    const m = /^P(\d+)$/.exec(a.id)
+    if (m) max = Math.max(max, parseInt(m[1], 10))
+  }
+  return 'P' + (max + 1)
+}
+
+// ---------------------------------------------------------------------------
+// Look stops (specs/20260905/02-design-review-hub-and-look-stops.md D5-D8). picks.json's one
+// validated reader/writer is lib/mocks-picks.js (spec 01) — this module never hand-edits a stop.
+// ---------------------------------------------------------------------------
+function readStopsOrEmpty() {
+  try { return picksLib.readPicks(root) } catch (e) {
+    die('design/mocks/picks.json is not valid JSON (' + e.message + ') — restore it from git history, or delete it (no stops is a valid starting point) and re-run')
+    return [] // unreachable
+  }
+}
+
+// The newest non-superseded, non-consumed stop carrying `key`, or null.
+function liveStopFor(key) {
+  const live = readStopsOrEmpty().filter((s) => s.key === key && s.status !== 'superseded' && s.status !== 'consumed')
+  if (!live.length) return null
+  live.sort((a, b) => (a.openedAt < b.openedAt ? 1 : a.openedAt > b.openedAt ? -1 : 0))
+  return live[0]
+}
+
+// D7: refuses (exit 2) unless the key's live stop is decided approve/pick; returns that stop.
+function requireStopDecision(key, remedyCmd) {
+  const stop = liveStopFor(key)
+  if (!stop) die('no look stop for ' + key + ' — run `' + remedyCmd + '` first')
+  if (stop.status === 'open') die('waiting on ' + stop.url + ' — the decision has not been taken yet')
+  if (stop.decision.verdict === 'change') {
+    die('change requested by ' + stop.decision.by + ': "' + stop.decision.note + '"' +
+      ' — address it, then `' + remedyCmd + '`')
+  }
+  return stop
+}
+
+// consumeStop in the SAME write as status.json (D7) — callers set their own status fields, then
+// call this right before saveStatus() so both writes land together.
+function consumeStopAndSave(stopId) {
+  const stops = readStopsOrEmpty()
+  let result
+  try { result = picksLib.consumeStop(stops, stopId) } catch (e) { die('could not consume stop "' + stopId + '": ' + e.message) }
+  picksLib.writePicks(root, result.stops)
+  saveStatus()
+}
+
+// D8: the bare step's `look:` line plus its derived `Then:` line, for the five look-gated marks.
+// `mapAccept(pickValue?)` renders the accept-branch Then command with the picked value filled in
+// when the stop is a pick stop.
+function lookLineAndThen(key, step, mapAccept) {
+  const openCmd = 'stop open ' + step
+  const stop = liveStopFor(key)
+  if (!stop) return { look: 'look: none — `' + openCmd + '` next', then: [openCmd] }
+  if (stop.status === 'open') {
+    return { look: 'look: ⏳ waiting — ' + stop.url, then: ['end the turn; re-run after the decision'] }
+  }
+  if (stop.decision.verdict === 'change') {
+    return {
+      look: 'look: ✏️ change requested by ' + stop.decision.by + ': ' + stop.decision.note,
+      then: ['address it, then ' + openCmd],
+    }
+  }
+  const who = stop.decision.by
+  const at = stop.decision.at
+  if (stop.kind === 'pick') {
+    return { look: 'look: ✅ picked "' + stop.decision.pick + '" by ' + who + ' at ' + at, then: [mapAccept(stop.decision.pick)] }
+  }
+  return { look: 'look: ✅ approved by ' + who + ' at ' + at, then: [mapAccept()] }
+}
+
 // D2: every advancing mark first runs gateVerdict and refuses (exit 2) naming the offending
 // rows and the remedy — journey-drawn and direction-composed never call this.
 function requireGateOpen() {
@@ -367,6 +462,112 @@ function runDesignAtlasCheck(args) {
 function childOutput(r) { return ((r.stdout || '') + (r.stderr || '')).trim() }
 
 // ---------------------------------------------------------------------------
+// stop open <step> (D6) — the driver derives every candidate set from disk and delegates to
+// design-hub.js (sibling path, never spec-paths) for registration/serving/writing the stop.
+// ---------------------------------------------------------------------------
+function candidatesArgOf(candidates) {
+  return candidates.map((c) => (c.group != null ? c.group + '/' : '') + c.label + '=' + c.path).join(',')
+}
+
+function buildShapesStopSpec() {
+  const shapesDir = path.join(root, 'design/shapes')
+  let files = []
+  try { files = fs.readdirSync(shapesDir).filter((f) => f.endsWith('.html')) } catch { /* none yet */ }
+  const kebabs = files.map((f) => path.basename(f, '.html'))
+  if (kebabs.length < 2 || kebabs.length > 3) die('stop open shapes: design/shapes/ has ' + kebabs.length + ' candidate(s) — 2-3 are required before opening a look stop')
+  return { kind: 'pick', key: 'shape-picked', title: 'pick a shape', candidates: kebabs.map((k) => ({ group: k, label: k, path: 'shapes/' + k + '.html' })) }
+}
+
+function buildJourneyStopSpec(journeyName) {
+  const j = currentSeedJourneys().get(journeyName)
+  if (!j) die('stop open journey:' + journeyName + ': journey "' + journeyName + '" is not declared in design/mocks/seed.md')
+  for (const label of j.labels) {
+    if (!fs.existsSync(mockFile(label))) die('stop open journey:' + journeyName + ': design/mocks/' + label + '.html does not exist — mark journey-drawn --journey ' + journeyName + ' first')
+  }
+  return {
+    kind: 'approve', key: 'journey-approved:' + journeyName, title: 'approve journey ' + journeyName,
+    candidates: j.labels.map((l) => ({ group: null, label: l, path: 'mocks/' + l + '.html' })),
+  }
+}
+
+function buildThemeStopSpec() {
+  const composed = Object.keys(status.directions || {})
+  if (composed.length < 2) die('stop open theme: only ' + composed.length + ' direction(s) composed — at least 2 are required before opening a look stop')
+  const candidates = []
+  for (const dir of composed) {
+    const dirPath = path.join(root, 'design/theme', dir)
+    let files = []
+    try { files = fs.readdirSync(dirPath).filter((f) => f.endsWith('.html')) } catch { /* not composed */ }
+    for (const f of files) candidates.push({ group: dir, label: path.basename(f, '.html'), path: 'theme/' + dir + '/' + f })
+  }
+  return { kind: 'pick', key: 'theme-picked', title: 'pick the theme', candidates }
+}
+
+function buildReviewStopSpec(journeyName) {
+  const j = currentSeedJourneys().get(journeyName)
+  if (!j) die('stop open review:' + journeyName + ': journey "' + journeyName + '" is not declared in design/mocks/seed.md')
+  const st = status.journeys[journeyName]
+  if (!st || !st.skinned) die('stop open review:' + journeyName + ': journey "' + journeyName + '" has not been skinned yet — mark journey-skinned --journey ' + journeyName + ' first')
+  return {
+    kind: 'approve', key: 'journey-reviewed:' + journeyName, title: 'review journey ' + journeyName,
+    candidates: j.labels.map((l) => ({ group: null, label: l, path: 'mocks/' + l + '.html' })),
+  }
+}
+
+function buildSignoffStopSpec() {
+  return {
+    kind: 'approve', key: 'approved', title: 'sign off',
+    candidates: allDeclaredLabels().map((l) => ({ group: null, label: l, path: 'mocks/' + l + '.html' })),
+  }
+}
+
+function buildStopSpec(step) {
+  if (step === 'shapes') return buildShapesStopSpec()
+  if (step === 'theme') return buildThemeStopSpec()
+  if (step === 'signoff') return buildSignoffStopSpec()
+  let m
+  if ((m = /^journey:(.+)$/.exec(step))) return buildJourneyStopSpec(m[1])
+  if ((m = /^review:(.+)$/.exec(step))) return buildReviewStopSpec(m[1])
+  die('stop open: unknown step "' + step + '" — one of: shapes, journey:<j>, theme, review:<j>, signoff')
+  return null // unreachable
+}
+
+function runDesignHubStopOpen(spec) {
+  const args = ['stop', 'open', '--root', root, '--kind', spec.kind, '--key', spec.key,
+    '--title', spec.title, '--candidates', candidatesArgOf(spec.candidates)]
+  const r = spawnSync(process.execPath, [designHubBin, ...args], { encoding: 'utf8' })
+  if (r.error || r.status === null) {
+    die('design-hub.js died without an exit code (' + (r.error ? r.error.message : 'no status') + ')')
+  }
+  if (r.status !== 0) {
+    writeOut(2, (r.stderr || r.stdout || 'design-hub.js failed with no output') + '\n')
+    process.exit(3)
+  }
+  return (r.stdout || '').trim()
+}
+
+function cmdStopOpen(step) {
+  const spec = buildStopSpec(step)
+  const url = runDesignHubStopOpen(spec)
+  const replyLine = spec.kind === 'pick'
+    ? 'Reply  ✅ pick <name>  — or —  ✏️ change <what looks wrong>'
+    : 'Reply  ✅ approve  — or —  ✏️ change <what looks wrong>'
+  writeOut(1, '🎨 ready for review — ' + url + '\n' + replyLine + '\n')
+  process.exit(0)
+}
+
+function cmdStopDecide(id, args) {
+  if (!id) die('stop decide: needs a stop id, e.g. `stop decide P001 --verdict approve --by chat`')
+  const r = spawnSync(process.execPath, [designHubBin, 'stop', 'decide', '--root', root, '--id', id, ...args], { encoding: 'utf8' })
+  if (r.error || r.status === null) {
+    die('design-hub.js died without an exit code (' + (r.error ? r.error.message : 'no status') + ')')
+  }
+  if (r.stdout) writeOut(1, r.stdout)
+  if (r.stderr) writeOut(2, r.stderr)
+  process.exit(r.status)
+}
+
+// ---------------------------------------------------------------------------
 // State derivation (D2, Behavior "Derivation order") — a pure function of `status` + disk,
 // never trusting a recorded mark whose artifact vanished.
 // ---------------------------------------------------------------------------
@@ -453,13 +654,17 @@ function handleSeedDone() {
 function handleShapePicked(shapeArg) {
   requireGateOpen()
   if (!status.marks.seedDone) die('seed-done has not been marked yet — mark seed-done first')
-  if (!shapeArg) die('--shape <kebab> is required')
+  const stop = requireStopDecision('shape-picked', 'stop open shapes')
+  const pick = stop.decision.pick
+  if (shapeArg && shapeArg !== pick) die('--shape ' + shapeArg + ' disagrees with the page pick "' + pick + '" (stop ' + stop.id + ')')
+  const shapeChosen = pick
+
   const shapesDir = path.join(root, 'design/shapes')
   let files = []
   try { files = fs.readdirSync(shapesDir).filter((f) => f.endsWith('.html')) } catch { /* none yet */ }
   const kebabs = files.map((f) => path.basename(f, '.html'))
   if (kebabs.length < 2 || kebabs.length > 3) die('design/shapes/ has ' + kebabs.length + ' candidate(s) — 2-3 are required before a pick')
-  if (!kebabs.includes(shapeArg)) die('"' + shapeArg + '" is not among the shape candidates (' + kebabs.join(', ') + ')')
+  if (!kebabs.includes(shapeChosen)) die('"' + shapeChosen + '" is not among the shape candidates (' + kebabs.join(', ') + ')')
 
   const text = stripComments(seedTextOr(''))
   const dense = parseDenseScreen(text)
@@ -475,15 +680,29 @@ function handleShapePicked(shapeArg) {
     if (!m || m[1] !== kebab) die(f + ': data-shape must equal "' + kebab + '"')
   }
 
-  const row = findAssumption((a) => a.kind === 'product' && a.tag === 'said-by-user' && a.status === 'confirmed' && a.claim === 'shape: ' + shapeArg)
-  if (!row) die('design/mocks/ledger.md has no confirmed said-by-user product row with claim "shape: ' + shapeArg + '"')
-  const rejectedTokens = (row.rejected || '').split(/[,\s]+/).filter(Boolean)
-  const missing = kebabs.filter((k) => k !== shapeArg).filter((o) => !rejectedTokens.includes(o))
-  if (missing.length) die('the "shape: ' + shapeArg + '" ledger row\'s rejected cell does not name every other shape candidate — missing: ' + missing.join(', '))
+  const row = findAssumption((a) => a.kind === 'product' && a.tag === 'said-by-user' && a.status === 'confirmed' && a.claim === 'shape: ' + shapeChosen)
+  const others = kebabs.filter((k) => k !== shapeChosen)
+  if (!row) {
+    // D7: the page's radio exclusivity already names every rejected group — the driver appends
+    // the row itself rather than ask the session to re-type it.
+    let out
+    try {
+      out = appendAssumption(ledgerTextOrDie(), {
+        id: nextLedgerId(parseLedger(ledgerTextOrDie())), step: 'SHAPES', kind: 'product',
+        claim: 'shape: ' + shapeChosen, tag: 'said-by-user', status: 'confirmed ' + todayIso(),
+        rejected: others.join(', '), note: stop.decision.note || 'picked on the page',
+      })
+    } catch (e) { die('could not append the shape ledger row: ' + e.message) }
+    fs.writeFileSync(ledgerPath, out)
+  } else {
+    const rejectedTokens = (row.rejected || '').split(/[,\s]+/).filter(Boolean)
+    const missing = others.filter((o) => !rejectedTokens.includes(o))
+    if (missing.length) die('the "shape: ' + shapeChosen + '" ledger row\'s rejected cell does not name every other shape candidate — missing: ' + missing.join(', '))
+  }
 
-  status.shape = shapeArg
+  status.shape = shapeChosen
   status.marks.shapePicked = nowIso()
-  saveStatus()
+  consumeStopAndSave(stop.id)
 }
 
 function handleCanonWritten() {
@@ -555,8 +774,9 @@ function handleJourneyApproved(journeyName) {
   if (!st || !st.drawn) die('journey "' + journeyName + '" has not been drawn yet — mark journey-drawn --journey ' + journeyName + ' first')
   const j = currentSeedJourneys().get(journeyName)
   requireNotesResolved(j ? j.labels : [], journeyName)
+  const stop = requireStopDecision('journey-approved:' + journeyName, 'stop open journey:' + journeyName)
   st.approved = nowIso()
-  saveStatus()
+  consumeStopAndSave(stop.id)
 }
 
 function handleDirectionComposed(kebab) {
@@ -591,22 +811,37 @@ function handleDirectionComposed(kebab) {
   saveStatus()
 }
 
-function handleThemePicked(kebab) {
+function handleThemePicked(directionArg) {
   requireGateOpen()
-  if (!kebab) die('--direction <kebab> is required')
+  const stop = requireStopDecision('theme-picked', 'stop open theme')
+  const pick = stop.decision.pick
+  if (directionArg && directionArg !== pick) die('--direction ' + directionArg + ' disagrees with the page pick "' + pick + '" (stop ' + stop.id + ')')
+  const kebab = pick
   const composed = Object.keys(status.directions || {})
   if (composed.length < 2) die('only ' + composed.length + ' direction(s) composed — at least 2 are required before a pick')
   if (!composed.includes(kebab)) die('direction "' + kebab + '" has not been composed yet — mark direction-composed --direction ' + kebab + ' first')
+  const others = composed.filter((k) => k !== kebab)
   const row = findAssumption((a) => a.kind === 'product' && a.tag === 'said-by-user' && a.status === 'confirmed' && a.claim === 'theme: ' + kebab)
-  if (!row) die('design/mocks/ledger.md has no confirmed said-by-user product row with claim "theme: ' + kebab + '" naming the pick')
-  const rejectedTokens = (row.rejected || '').split(/[,\s]+/).filter(Boolean)
-  const missing = composed.filter((k) => k !== kebab).filter((o) => !rejectedTokens.includes(o))
-  if (missing.length) die('the "theme: ' + kebab + '" ledger row\'s rejected cell does not name every other composed direction — missing: ' + missing.join(', '))
+  if (!row) {
+    let out
+    try {
+      out = appendAssumption(ledgerTextOrDie(), {
+        id: nextLedgerId(parseLedger(ledgerTextOrDie())), step: 'THEME', kind: 'product',
+        claim: 'theme: ' + kebab, tag: 'said-by-user', status: 'confirmed ' + todayIso(),
+        rejected: others.join(', '), note: stop.decision.note || 'picked on the page',
+      })
+    } catch (e) { die('could not append the theme ledger row: ' + e.message) }
+    fs.writeFileSync(ledgerPath, out)
+  } else {
+    const rejectedTokens = (row.rejected || '').split(/[,\s]+/).filter(Boolean)
+    const missing = others.filter((o) => !rejectedTokens.includes(o))
+    if (missing.length) die('the "theme: ' + kebab + '" ledger row\'s rejected cell does not name every other composed direction — missing: ' + missing.join(', '))
+  }
 
   fs.copyFileSync(path.join(root, 'design/theme', kebab, 'tokens.css'), path.join(root, 'design/tokens.css'))
   status.theme = kebab
   status.marks.themePicked = nowIso()
-  saveStatus()
+  consumeStopAndSave(stop.id)
 }
 
 function handleJourneySkinned(journeyName) {
@@ -645,8 +880,9 @@ function handleJourneyReviewed(journeyName) {
   if (!st || !st.skinned) die('journey "' + journeyName + '" has not been skinned yet — mark journey-skinned --journey ' + journeyName + ' first')
   const j = currentSeedJourneys().get(journeyName)
   requireNotesResolved(j ? j.labels : [], journeyName)
+  const stop = requireStopDecision('journey-reviewed:' + journeyName, 'stop open review:' + journeyName)
   st.reviewed = nowIso()
-  saveStatus()
+  consumeStopAndSave(stop.id)
 }
 
 function handleApproved() {
@@ -672,8 +908,9 @@ function handleApproved() {
   const r = runDesignAtlasCheck([mocksDir, '--matrix'])
   if (r.status !== 0) die('design-atlas.js check --matrix design/mocks failed: ' + childOutput(r))
 
+  const stop = requireStopDecision('approved', 'stop open signoff')
   status.marks.approved = nowIso()
-  saveStatus()
+  consumeStopAndSave(stop.id)
 }
 
 // ---------------------------------------------------------------------------
@@ -898,10 +1135,11 @@ function printSeedStep() {
 }
 
 function printShapesStep() {
+  const look = lookLineAndThen('shape-picked', 'shapes', (pick) => driverCmd('--mark shape-picked --shape ' + pick))
   printStepBlock('SHAPES', 'pick a shape — 2 to 3 candidates, one wins',
     ['design/mocks/seed.md', 'design/shapes/*.html', 'design/mocks/ledger.md'],
-    'Mocks: State Machine', openRowsLine(),
-    [driverCmd('--mark shape-picked --shape <kebab>')])
+    'Mocks: State Machine', openRowsLine() + '\n' + look.look,
+    look.then)
 }
 
 function journeysProgressLine(journeys) {
@@ -937,10 +1175,11 @@ function printWireframesStep() {
   for (const [jn] of journeys) {
     const st = status.journeys[jn]
     if (!st.approved) {
+      const look = lookLineAndThen('journey-approved:' + jn, 'journey:' + jn, () => driverCmd('--mark journey-approved --journey ' + jn))
       printStepBlock('WIREFRAMES', 'approve journey ' + jn + ' — look, then approve',
         ['design/mocks/ledger.md'],
-        'Mocks: State Machine', journeysProgressLine(journeys),
-        [driverCmd('--mark journey-approved --journey ' + jn)])
+        'Mocks: State Machine', journeysProgressLine(journeys) + '\n' + look.look,
+        look.then)
       return
     }
   }
@@ -958,10 +1197,11 @@ function printThemeStep() {
       [driverCmd('--mark direction-composed --direction <kebab>')])
     return
   }
+  const look = lookLineAndThen('theme-picked', 'theme', (pick) => driverCmd('--mark theme-picked --direction ' + pick))
   printStepBlock('THEME', 'pick the theme — reject every other composed direction by name',
     ['design/mocks/seed.md', 'design/mocks/ledger.md'],
-    'Mocks: State Machine', 'composed: ' + composed.join(', '),
-    [driverCmd('--mark theme-picked --direction <kebab>')])
+    'Mocks: State Machine', 'composed: ' + composed.join(', ') + '\n' + look.look,
+    look.then)
 }
 
 function printSkinStep() {
@@ -989,16 +1229,18 @@ function printReviewStep() {
   for (const [jn, j] of journeys) {
     const st = status.journeys[jn]
     if (!st || !st.reviewed) {
+      const look = lookLineAndThen('journey-reviewed:' + jn, 'review:' + jn, () => driverCmd('--mark journey-reviewed --journey ' + jn))
       printStepBlock('REVIEW', 'review journey ' + jn + ' with ' + status.decider,
-        j.labels.map((l) => 'design/mocks/' + l + '.html'), 'Mocks: State Machine', '',
-        [driverCmd('--mark journey-reviewed --journey ' + jn)])
+        j.labels.map((l) => 'design/mocks/' + l + '.html'), 'Mocks: State Machine', look.look,
+        look.then)
       return
     }
   }
+  const look = lookLineAndThen('approved', 'signoff', () => driverCmd('--mark approved'))
   printStepBlock('REVIEW', 'sign off — approval of understanding, not of scope',
     ['design/mocks/*.html'], 'Mocks: State Machine',
-    'Approval means "this is the product I understand" — the written brief, not these screens, holds scope. (decider: ' + status.decider + ')',
-    [driverCmd('--mark approved')])
+    'Approval means "this is the product I understand" — the written brief, not these screens, holds scope. (decider: ' + status.decider + ')' + '\n' + look.look,
+    look.then)
 }
 
 function printApprovedTerminal() {
@@ -1033,6 +1275,12 @@ if (rest[0] === 'ledger') {
   cmdLookVia(rest[1])
 } else if (rest[0] === 'look') {
   cmdLook(rest[1], rest.slice(2))
+} else if (rest[0] === 'stop' && rest[1] === 'open') {
+  cmdStopOpen(rest[2])
+} else if (rest[0] === 'stop' && rest[1] === 'decide') {
+  cmdStopDecide(rest[2], rest.slice(3))
+} else if (rest[0] === 'stop') {
+  die('stop: unknown subcommand "' + rest[1] + '" — one of: open, decide')
 } else {
   const REOPEN = flagArg(rest, '--reopen')
   const MARK = flagArg(rest, '--mark')

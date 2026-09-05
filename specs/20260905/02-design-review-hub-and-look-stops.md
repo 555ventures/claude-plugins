@@ -1,6 +1,6 @@
 ---
 date: 2026-09-05
-status: hardened
+status: implementing
 open_markers: 0
 tier: standard
 area: design
@@ -9,6 +9,7 @@ breaking: false
 depends_on: [specs/20260905/01-picks-on-the-atlas-page.md]
 depended_on_by: [specs/20260905/03-candidate-flows-in-a-journey.md]
 brief: n/a
+diff_base: 411b8d9defb16afbed8125051912dba9b8511d1a
 ---
 
 # Design review hub and look stops: one URL per machine, the driver reads every verdict from disk

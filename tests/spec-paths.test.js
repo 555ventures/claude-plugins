@@ -111,10 +111,16 @@ const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 // spec-paths: "a wrong key breaks commands silently"; same additive-collision class as
 // AC-20260819-02-10 above). The key list below is updated in place, never a parallel exhaustive pin.
 
+// AC-20260905-02-19: specs/20260905/02-design-review-hub-and-look-stops.md D10 adds
+// spec/scripts/design-hub.js to the bundle (a new `design-hub` key) — like every other bundled
+// script it needs a spec-paths key, or `ensure`/`stop open`/`stop decide` calls from any session
+// resolve nothing (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently"; same
+// additive-collision class as AC-20260819-02-10 above). The key list below is updated in place.
+
 test('every documented key resolves to an existing path', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-enforce',
-    'wf-research', 'design-atlas', 'merge-back',
+    'wf-research', 'design-atlas', 'design-hub', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
     'review-driver', 'build-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'render-gate', 'render-compare',
     'render-inventory', 'render-rules', 'registry-check', 'genesis-driver', 'escape-row', 'mocks-driver', 'commit-coverage',
@@ -455,6 +461,21 @@ test('AC-20260902-07-15: spec-paths mocks-driver resolves to spec/scripts/mocks-
 // shared-for scope — core sections (Host Grounding, Model Placement, Decisions, Question Style,
 // Console Output Style, MCP Policy) plus the design sections (Design Canon, Design Atlas), never
 // the render gate doctrine (mocks authors screens, it never binds a spec against them).
+// AC-20260905-02-19
+test('AC-20260905-02-19: spec-paths design-hub resolves to spec/scripts/design-hub.js, an existing file, and an unknown key\'s usage line names design-hub', () => {
+  const fs = require('node:fs')
+  const designHubPath = run('design-hub').trim()
+  assert.ok(designHubPath.endsWith('spec/scripts/design-hub.js'),
+    'D10: `spec-paths design-hub` must print one line ending in spec/scripts/design-hub.js — a wrong or missing key breaks the hub CLI\'s callers (mocks-driver.js, sketch.md, atlas.md) silently (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently"): got ' + designHubPath)
+  assert.ok(path.isAbsolute(designHubPath), 'the printed path must be absolute — a relative path breaks a caller invoked from a different cwd: ' + designHubPath)
+  assert.ok(fs.existsSync(designHubPath), 'the resolved design-hub.js path must actually exist on disk: ' + designHubPath)
+
+  const { spawnSync } = require('node:child_process')
+  const r = spawnSync('bash', [BIN, 'nope'], { encoding: 'utf8' })
+  assert.match(r.stderr, /design-hub/,
+    '`spec-paths nope`\'s usage line (stderr) must list "design-hub" alongside every other bundled key, or a caller reading the usage line to discover keys never learns this one exists: ' + JSON.stringify(r.stderr))
+})
+
 test('AC-20260902-07-15: spec-paths shared-for mocks serves exactly the D16 section set — Design Canon and Design Atlas present, Design Render Gate absent', () => {
   const out = run('shared-for', 'mocks')
   const full = run('shared-for', 'no-such-command')

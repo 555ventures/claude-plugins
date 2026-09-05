@@ -5,6 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { ROOT, SPEC, read, runNode, tmpdir } = require('../helpers')
+const picksLib = require('../../spec/scripts/lib/mocks-picks')
 
 // specs/20260824/05-design-doctrine-cut.md D1/D2/D5: spec/doctrine/design.md holds five
 // sections (contracts a script enforces or a worker applies only) capped at 160 lines;
@@ -172,6 +173,33 @@ function docBare(dir, extra = []) { return runNode('scripts/mocks-driver.js', ['
 function docMark(dir, name, extra = []) { return runNode('scripts/mocks-driver.js', ['--root', dir, '--mark', name, ...extra]) }
 function docLedger(dir, sub, extra = []) { return runNode('scripts/mocks-driver.js', ['--root', dir, 'ledger', sub, ...extra]) }
 
+// D11 fixture repair: once D7 lands, journey-approved/theme-picked/journey-reviewed refuse
+// without a decided look stop for the mark's key — decideLook writes that stop through
+// lib/mocks-picks.js (spec 01's lib, never by hand), the same helper the other mocks test files
+// carry (file-local per this file's own convention).
+function decideLook(dir, key, verdict, extra = {}) {
+  let stops = picksLib.readPicks(dir)
+  const kind = verdict === 'pick' ? 'pick' : 'approve'
+  let candidates = extra.candidates
+  if (!candidates) {
+    if (kind === 'pick') {
+      const groups = [extra.pick || 'a', ...(extra.others || ['b'])]
+      candidates = groups.map((g) => ({ group: g, label: extra.label || g, path: extra.path || (g + '.html') }))
+    } else {
+      candidates = [{ group: null, label: 'a', path: 'mocks/a.html' }]
+    }
+  }
+  const opened = picksLib.openStop(stops, { kind, key, title: extra.title || key, candidates })
+  const decided = picksLib.decideStop(opened.stops, opened.stop.id, {
+    verdict,
+    pick: verdict === 'pick' ? (extra.pick || candidates[0].group) : null,
+    note: extra.note || (verdict === 'change' ? 'change requested' : null),
+    by: extra.by || 'jj',
+  })
+  picksLib.writePicks(dir, decided.stops)
+  return decided.stop
+}
+
 function advanceToReviewSignoff(dir) {
   docBare(dir)
   docWriteJSON(path.join(dir, 'design/targets.json'), { schemaVersion: 1, themes: ['light'], viewports: [{ name: 'mobile', width: 390, height: 844 }] })
@@ -212,6 +240,7 @@ ${DOC_LABELS[1]} -> ${DOC_LABELS[2]}
   docWriteFile(path.join(dir, 'design/shapes/bold.html'), '<main data-screen-label="' + DOC_DENSE + '" data-shape="bold">bold</main>\n')
   const shapeLedger = docLedger(dir, 'add', ['--id', 'P14', '--step', 'SHAPES', '--kind', 'product', '--claim', 'shape: calm', '--tag', 'said-by-user', '--status', 'confirmed', '--rejected', 'bold'])
   assert.strictEqual(shapeLedger.status, 0, 'test setup requires the shape ledger row to be accepted: ' + shapeLedger.stderr)
+  decideLook(dir, 'shape-picked', 'pick', { pick: 'calm', others: ['bold'], by: 'jj' })
   const shapePicked = docMark(dir, 'shape-picked', ['--shape', 'calm'])
   assert.strictEqual(shapePicked.status, 0, 'test setup requires shape-picked to be accepted: ' + shapePicked.stderr)
 
@@ -226,6 +255,7 @@ ${DOC_LABELS[1]} -> ${DOC_LABELS[2]}
   }
   const drawn = docMark(dir, 'journey-drawn', ['--journey', DOC_JOURNEY])
   assert.strictEqual(drawn.status, 0, 'test setup requires journey-drawn to be accepted: ' + drawn.stderr)
+  decideLook(dir, 'journey-approved:' + DOC_JOURNEY, 'approve', { by: 'jj' })
   const approved = docMark(dir, 'journey-approved', ['--journey', DOC_JOURNEY])
   assert.strictEqual(approved.status, 0, 'test setup requires journey-approved to be accepted: ' + approved.stderr)
 
@@ -241,6 +271,7 @@ ${DOC_LABELS[1]} -> ${DOC_LABELS[2]}
   }
   const themeLedger = docLedger(dir, 'add', ['--id', 'P17', '--step', 'THEME', '--kind', 'product', '--claim', 'theme: quiet', '--tag', 'said-by-user', '--status', 'confirmed', '--rejected', 'warm'])
   assert.strictEqual(themeLedger.status, 0, 'test setup requires the theme-pick ledger row to be accepted: ' + themeLedger.stderr)
+  decideLook(dir, 'theme-picked', 'pick', { pick: 'quiet', others: ['warm'], by: 'jj' })
   const themePicked = docMark(dir, 'theme-picked', ['--direction', 'quiet'])
   assert.strictEqual(themePicked.status, 0, 'test setup requires theme-picked to be accepted: ' + themePicked.stderr)
 
@@ -254,6 +285,7 @@ ${DOC_LABELS[1]} -> ${DOC_LABELS[2]}
 
   const opened = docMark(dir, 'review-opened', ['--decider', 'Ren'])
   assert.strictEqual(opened.status, 0, 'test setup requires review-opened to be accepted: ' + opened.stderr)
+  decideLook(dir, 'journey-reviewed:' + DOC_JOURNEY, 'approve', { by: 'jj' })
   const reviewed = docMark(dir, 'journey-reviewed', ['--journey', DOC_JOURNEY])
   assert.strictEqual(reviewed.status, 0, 'test setup requires journey-reviewed to be accepted: ' + reviewed.stderr)
 }

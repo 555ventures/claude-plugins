@@ -1,0 +1,117 @@
+{
+  "runId": "rv_1adc95968755",
+  "ts": "2026-09-05T21:54:29.718Z",
+  "spec": "specs/20260905/02-design-review-hub-and-look-stops.md",
+  "tier": "standard",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 2658,
+    "base": "411b8d9defb16afbed8125051912dba9b8511d1a",
+    "head": "75ace6f3ab00bb237f48476a1a2e74cdb97c859c",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 418
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1159
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 11,
+        "carried": 11,
+        "sanctioned": 0,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "Iteration-1 s0 (hard): mocks.md chat-decision command used `stop decide --id <P…>` while the driver takes the id positionally",
+        "file": "spec/commands/mocks.md",
+        "line": 78,
+        "evidence": "Hunk now reads `node {driver} stop decide <P…> --verdict approve|pick|change [--pick <group>] [--note <n>] --by chat`, matching Contracts. Executed against a scratch root + hub on port 47623: stop open → exit 0 URL printed; `mocks-driver.js --root R stop decide P001 --verdict approve --by chat` → exit 0 `decided P001 approve`; stop list shows `P001 decided approve journey-approved:j — approve journey j`; picks.json by:\"chat\". Old `--id P001` form still exits 2. grep 'stop decide --id' over commands/doctrine → no hits. Hub killed, scratch deleted."
+      },
+      {
+        "claim": "Iteration-1 s1 (soft): design-hub.js header omitted serve's listen-error exit 3",
+        "file": "spec/scripts/design-hub.js",
+        "line": 35,
+        "evidence": "Header lines 35-36 now document serve's listen error (EADDRINUSE) under exit 3; comment-only change."
+      },
+      {
+        "claim": "Fix delta regressed handoff/doctrine/hub tests",
+        "file": "tests/design-look-handoff.test.js",
+        "line": null,
+        "evidence": "node --test over design-look-handoff, design-doctrine, design-hub → 22 pass 0 fail; legs-2: gate 0 fail, suite 0 fail with __FILE_BUDGET_OK__ slowest 27807ms of 45000ms, ac-matrix uncovered=0, promise-sweep 11/11 carried."
+      },
+      {
+        "claim": "File Plan fold is an out-of-plan or hand-edited managed surface",
+        "file": "specs/20260905/02-design-review-hub-and-look-stops.md",
+        "line": 64,
+        "evidence": "The fold is exactly the iteration-1 disposer's recorded remedy (reconcile waived, ac-matrix rejected); AC text otherwise unchanged; ac-matrix leg-2 reports uncovered=0 against the folded plan."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 21000
+  }
+}

@@ -75,7 +75,7 @@ look stops are never questions). No server command, no file paths, no list of sc
 
 (a pick stop — SHAPES, THEME — prints `Reply  ✅ pick <name>  — or —  ✏️ change <what looks
 wrong>` as its second line instead). The decision is taken on the hub page or, from chat,
-recorded with `node {driver} stop decide --id <P…> --verdict approve|pick|change [--pick
+recorded with `node {driver} stop decide <P…> --verdict approve|pick|change [--pick
 <group>] [--note <n>] --by chat` — never interpreted directly by this session. On the next bare
 run the driver reads the decided stop off disk: `approve`/`pick` advances with the mark's own
 `--mark …` line; `change` starts a fresh round — address the note, then `stop open <step>`

@@ -10,10 +10,13 @@ Building a `mocks-driver.js` fixture up to a late state (e.g. REVIEW sign-off, f
 asserting the bare-step output text) needs the full SEED→SHAPES→WIREFRAMES→THEME→SKIN→REVIEW
 chain driven via real `--mark` calls — no shortcut. `direction-composed` requires >=3 composed
 screens per direction, so the journey itself needs >=3 labels (not 2) to have enough approved
-labels to compose with once THEME is reached. Each test file writes its own condensed
-`advanceTo*` helper chain rather than importing another test file's (no shared fixture module
-beyond `tests/helpers.js`) — expect duplication across `tests/mocks/*.test.js` and any doctrine
-test that needs to exec the driver.
+labels to compose with once THEME is reached. The shared `advanceTo*` builders, `decideLook`/`openLook`,
+and the hub helpers live in `tests/mocks/mocks-driver-fixtures.js` (module.exports, no `test(`
+calls) — require it from a new mocks-driver test file instead of re-writing the chain; doctrine
+tests outside `tests/mocks/` still carry their own condensed chain. Since specs/20260905/02 the
+five marks `shape-picked`/`journey-approved`/`theme-picked`/`journey-reviewed`/`approved` refuse
+without a decided look stop in `picks.json`: seed one with `decideLook` (writes through
+`lib/mocks-picks.js`) before every acceptance, refusal paths included.
 
 Trap: `design/targets.json`'s `viewports` array is checked non-empty at `seed-done` time
 (`!targets.viewports.length` dies), even though viewport *usage* (the `<meta name="viewport">`

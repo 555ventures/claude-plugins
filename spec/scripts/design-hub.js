@@ -32,7 +32,8 @@
 //   2  a usage error (missing/bad flag), a register name collision, or a stop decide refused by
 //      lib/mocks-picks.js (already consumed/superseded, bad verdict, …), or ensure finding the
 //      port held by something that is not this hub.
-//   3  ensure/stop open could not bring up or reach a healthy hub within the window (hub.log named).
+//   3  ensure/stop open could not bring up or reach a healthy hub within the window (hub.log
+//      named); serve could not bind its port (listen error, e.g. EADDRINUSE).
 
 'use strict'
 const fs = require('fs')

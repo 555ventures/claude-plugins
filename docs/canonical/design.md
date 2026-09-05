@@ -202,3 +202,18 @@ old one. The notes layer shows one scope per page, declared by the server's
 on a screen, and the index's bar hides while the lightbox is open (`body.lb-open`). `design-atlas.js`
 exports `buildAtlas`, `page`, `frameTag`, `createRequestHandler(root, {prefix})` — one handler,
 mountable under a prefix — and runs its CLI only as a main module.
+
+**Design review hub (specs/20260905/02).** One hub per machine (`design-hub.js`, `spec-paths
+design-hub`; state in `~/.claude/design-hub/`, port 4600 by default, `base` configured once with
+`config --base <url>`). Every project is registered under `/p/<name>/` and served by the same
+request handler `design-atlas.js serve` uses; the front page is an inbox of open look stops,
+newest first across projects, each linking to the stop's block on that project's atlas. Every mock
+look stop — the mocks driver's five looks (`stop open shapes | journey:<j> | theme | review:<j> |
+signoff`), `/spec:sketch` ratification, `/spec:atlas` — opens a stop on the hub and prints the 🎨
+link line plus the fixed reply line, then ends the turn; the decision is taken on the page or
+recorded from chat with `stop decide <P…> … --by chat`, and the driver's marks refuse without it,
+deriving the ledger's `rejected` cell from the picked group. The look-stop rule names two shapes:
+catalog stops keep the Storybook block; mock stops are the link. The serve command is the
+session's own tool and is never printed to the user; on a hub machine `design-hub.js ensure`
+mounts every registered project. The hub binds `127.0.0.1` only; a phone reaches it through
+the tunnel configured as `base`.

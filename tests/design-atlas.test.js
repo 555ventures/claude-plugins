@@ -201,6 +201,8 @@ test('build/gallery: matrix toolbar emitted only when targets.json exists', () =
   assert.match(out, /mobile 390/)
   assert.match(out, /desktop 1280/)
   assert.match(out, /setAttribute\("data-theme",t\)/, 'theme toggle stamps data-theme on frames')
+  assert.match(out, /querySelector\("\.vp"\)[^\n]*textContent=w\+"\\u00d7"\+h/,
+    'viewport toggle rewrites each card\'s WxH label (JJ 2026-09-05: label stuck at 390×844 after desktop)')
 
   fs.mkdirSync(path.join(dir, 'design/explore/r0-a'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'design/explore/r0-a/tile.html'),

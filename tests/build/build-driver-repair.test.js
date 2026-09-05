@@ -275,3 +275,26 @@ test('field report 2026-09-02 (empty waves): WHEN layerGroups declares groups wi
   assert.strictEqual(r2.status, 0, r2.stdout + r2.stderr)
   assert.strictEqual(stateOf(host.root, host.spec), 'INTEGRATION', 'no wave remains after other: ' + r2.stdout)
 })
+
+test('AC-20260901-01-7 (large output): a gate whose stdout exceeds spawnSync\'s 1 MiB default maxBuffer and exits 0 still lands COMMIT with the whole log on disk — output streams to gate-1.log, never through a Node pipe', () => {
+  const host = makeNoTestsHost()
+  // 2 MiB of a single character line-wrapped every 80 bytes, then exit 0 — the shape of a host
+  // integration suite that logs every request (prax, 2026-09-05: a green gate reported as
+  // "died without an exit code (spawnSync bash ENOBUFS)").
+  fs.writeFileSync(path.join(host.root, 'gate.sh'),
+    '#!/usr/bin/env bash\nhead -c 2097152 /dev/zero | tr "\\0" x | fold -w 80\nexit 0\n')
+  host.g('add', '-A'); host.g('commit', '-q', '-m', 'noisy gate')
+
+  run(host.root, host.spec)
+  run(host.root, host.spec, '--mark', 'wave-done', '--wave', 'doctrine+scripts', '--workers', '3')
+  assert.strictEqual(stateOf(host.root, host.spec), 'INTEGRATION', 'setup precondition: INTEGRATION')
+
+  const r = run(host.root, host.spec, '--mark', 'integrated')
+  assert.strictEqual(r.status, 0,
+    'a green gate must never be reported as a dead child because it printed a lot: ' + r.stdout + r.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'COMMIT', 'the noisy green gate must land COMMIT: ' + r.stdout + r.stderr)
+  const log = path.join(host.sidecar, 'gate-1.log')
+  assert.ok(fs.existsSync(log), 'gate-1.log must exist: ' + host.sidecar)
+  assert.ok(fs.statSync(log).size >= 2097152,
+    'the log must hold the gate\'s entire output, not a truncated capture: ' + fs.statSync(log).size + ' bytes')
+})

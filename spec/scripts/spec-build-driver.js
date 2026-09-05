@@ -342,11 +342,28 @@ function runGate() {
   const env = { ...process.env }
   delete env.NODE_TEST_CONTEXT
   const k = (marks.gateRuns || []).length + 1
-  const r = runChild('bash', ['-c', resolved.gate], { cwd: repoRoot, encoding: 'utf8', env },
-    'gate (' + resolved.gate + ')')
   fs.mkdirSync(sidecarDir, { recursive: true })
   const logPath = path.join(sidecarDir, 'gate-' + k + '.log')
-  fs.writeFileSync(logPath, (r.stdout || '') + (r.stderr || ''))
+  // The gate's stdout+stderr go straight to the log fd, never through a Node pipe: a host's
+  // full gate (integration suites logging every request) routinely exceeds spawnSync's 1 MiB
+  // default maxBuffer, and an in-memory capture then SIGTERM-kills the child mid-run (ENOBUFS)
+  // with a null status — a green gate reported as "died without an exit code" (observed
+  // 2026-09-05, prax specs/20260902/09). Same pattern as genesis-driver.js's runLogged; nothing
+  // downstream reads the captured text — every reader follows `gateRuns[k].log`.
+  let fd
+  try {
+    fd = fs.openSync(logPath, 'w')
+  } catch (e) {
+    die('could not open gate log ' + logPath + ' for writing (' + e.message + ') — check the ' +
+      'sidecar directory is writable and re-run')
+  }
+  let r
+  try {
+    r = runChild('bash', ['-c', resolved.gate], { cwd: repoRoot, stdio: ['ignore', fd, fd], env },
+      'gate (' + resolved.gate + ')')
+  } finally {
+    try { fs.closeSync(fd) } catch (e) { /* already closed */ }
+  }
   marks.gateRuns = marks.gateRuns || []
   marks.gateRuns.push({ exit: r.status, log: logPath })
   saveSidecar()

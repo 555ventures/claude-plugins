@@ -620,7 +620,8 @@ function matrixBar(targets) {
   if (!vps && !themes) return { buttons: '', script: '' }
   const script = '<script>\n' +
     'function __vp(w,h,btn){__sel(btn,"data-vp");document.querySelectorAll("iframe.frame").forEach(function(f){' +
-    'f.dataset.w=w;f.dataset.h=h});__fitAll();setTimeout(__fitAll,200)}\n' +
+    'f.dataset.w=w;f.dataset.h=h;var c=f.closest(".card"),v=c&&c.querySelector(".vp");' +
+    'if(v)v.textContent=w+"\\u00d7"+h});__fitAll();setTimeout(__fitAll,200)}\n' +
     'function __theme(t,btn){__sel(btn,"data-th");document.querySelectorAll("iframe.frame").forEach(function(f){' +
     'try{f.contentDocument.documentElement.setAttribute("data-theme",t)}catch(e){}})}\n' +
     '</script>'

@@ -1,11 +1,18 @@
 // notes-layer.browser.js — served verbatim as GET /__notes/notes.js by design-atlas.js's
 // `serve`, injected before </body> on every served mock page unless the request carries
-// ?clean. specs/20260902/10-page-notes-review-loop.md D3.
+// ?clean. specs/20260902/10-page-notes-review-loop.md D3; specs/20260905/01-picks-on-the-atlas-page.md D5.
 //
 // Anchor = the served page's data-screen-label + the active state (the last-clicked
 // data-state-btn, else the first declared, else "default"), or the project scope — never an
 // element. Talks only to the /__notes/* endpoints design-atlas.js's serve exposes; every visual
 // reads var(--v-*) off /__notes/viewer.css (linked here once) — no literal color in this file.
+// D5: the endpoint base (and the viewer.css link) is derived from location.pathname by the same
+// rule the atlas's own decide script uses (a leading `/p/<name>` mount, else ''), and the page
+// declares exactly ONE scope via <meta name="notes-scope"> — `project` (the atlas index) or
+// `mock` (a served screen); meta absent falls back to `mock` when a [data-screen-label] root
+// exists, else `project`. Declared scope always wins over that fallback (A6: the atlas index
+// itself carries [data-screen-label] on every state-frame wrapper, so inferring scope from that
+// attribute alone would misread it as a mock page).
 //
 // Does NOT: resolve a note (only POST /__notes/resolve does that — this file's own Resolve
 // button is its one caller; address/reply are driver-only and unreachable from here), touch mock
@@ -17,9 +24,11 @@
 ;(function () {
   if (new URLSearchParams(location.search).has('clean')) return
 
+  var __base = (location.pathname.match(/^\/p\/[^/]+/) || [''])[0]
+
   var link = document.createElement('link')
   link.rel = 'stylesheet'
-  link.href = '/__notes/viewer.css'
+  link.href = __base + '/__notes/viewer.css'
   document.head.appendChild(link)
 
   var css =
@@ -45,11 +54,23 @@
     '.nl-strip textarea,.nl-proj textarea{width:100%;box-sizing:border-box;min-height:64px;' +
     'font:14px/1.45 var(--v-font);color:var(--v-fg);border:1px solid var(--v-border);' +
     'border-radius:var(--v-radius);padding:6px 8px;margin:6px 0;resize:vertical}' +
-    '.nl-row{display:flex;gap:6px;justify-content:flex-end}'
+    '.nl-row{display:flex;gap:6px;justify-content:flex-end}' +
+    // D5: while the lightbox is open, the served page's own bar/panel are hidden — the framed
+    // mock's own bar (inside the lightbox iframe, a different document) is the only one visible.
+    'body.lb-open .nl-bar,body.lb-open .nl-proj,body.lb-open .nl-strip{display:none}'
   document.head.appendChild(Object.assign(document.createElement('style'), { textContent: css }))
 
   var rootEl = document.querySelector('[data-screen-label]')
   var screen = rootEl ? rootEl.getAttribute('data-screen-label') : null
+
+  // D5: one declared scope per page — the server stamps <meta name="notes-scope"> on every page
+  // it serves; absent meta falls back to mock (a screen root exists) or project (it does not).
+  // The declared value always wins, so the atlas index's own [data-screen-label] frame wrappers
+  // (A6) never make the layer misclassify it as a mock page.
+  var metaEl = document.querySelector('meta[name="notes-scope"]')
+  var declaredScope = metaEl ? metaEl.content : null
+  var scope = declaredScope === 'project' ? 'project' : declaredScope === 'mock' ? 'mock' : (rootEl ? 'mock' : 'project')
+
   var stateButtons = Array.prototype.slice.call(document.querySelectorAll('[data-state-btn]'))
   var activeState = stateButtons.length ? stateButtons[0].getAttribute('data-state-btn') : 'default'
   stateButtons.forEach(function (btn) {
@@ -77,16 +98,26 @@
   }
   function api(p, body) {
     var opts = body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : undefined
-    return fetch('/__notes/' + p, opts).then(function (r) { return r.json() })
+    return fetch(__base + '/__notes/' + p, opts).then(function (r) { return r.json() })
   }
 
   var bar = document.createElement('div'); bar.className = 'nl-bar'
-  var proj = document.createElement('div'); proj.className = 'nl-proj'
-  var strip = document.createElement('div'); strip.className = 'nl-strip'
   document.body.appendChild(bar)
-  var anchor = rootEl || document.body
-  anchor.insertAdjacentElement('afterend', proj)
-  proj.insertAdjacentElement('afterend', strip)
+
+  // D5: exactly one panel exists per page, matching the declared scope — a project page never
+  // gets an nl-strip (mock notes belong on the screen), a mock page never gets an nl-proj (project
+  // notes belong on the atlas).
+  var proj = null
+  var strip = null
+  if (scope === 'project') {
+    proj = document.createElement('div'); proj.className = 'nl-proj'
+    var projAnchor = rootEl || document.body
+    projAnchor.insertAdjacentElement('afterend', proj)
+  } else {
+    strip = document.createElement('div'); strip.className = 'nl-strip'
+    var stripAnchor = rootEl || document.body
+    stripAnchor.insertAdjacentElement('afterend', strip)
+  }
 
   var showResolved = false
   var mockNotes = []
@@ -137,9 +168,18 @@
     var openProj = projectNotes.filter(function (n) { return n.status !== 'resolved' }).length
 
     bar.innerHTML = ''
-    var badge = document.createElement('span'); badge.textContent = (openMock + openProj) + ' open'
-    var addProjBtn = document.createElement('button'); addProjBtn.className = 'nl-btn primary'
-    addProjBtn.textContent = '+ Project note'; addProjBtn.onclick = composeProject
+    var badge = document.createElement('span')
+    badge.textContent = (scope === 'project' ? openProj : openMock) + ' open'
+    bar.appendChild(badge)
+    if (scope === 'project') {
+      var addProjBtn = document.createElement('button'); addProjBtn.className = 'nl-btn primary'
+      addProjBtn.textContent = '+ Project note'; addProjBtn.onclick = composeProject
+      bar.appendChild(addProjBtn)
+    } else {
+      var addMockBtn = document.createElement('button'); addMockBtn.className = 'nl-btn primary'
+      addMockBtn.textContent = '+ Note on this state'; addMockBtn.onclick = composeMock
+      bar.appendChild(addMockBtn)
+    }
     var showBtn = document.createElement('button'); showBtn.className = 'nl-btn'
     showBtn.textContent = showResolved ? 'Hide resolved' : 'Show resolved'
     showBtn.onclick = function () { showResolved = !showResolved; render() }
@@ -149,33 +189,41 @@
       if (name) { author = name; try { localStorage.setItem('nl-author', author) } catch (e) { /* in-memory only */ } }
       render()
     }
-    bar.appendChild(badge); bar.appendChild(addProjBtn); bar.appendChild(showBtn); bar.appendChild(authorBtn)
+    bar.appendChild(showBtn); bar.appendChild(authorBtn)
 
-    proj.innerHTML = ''
-    var projHead = document.createElement('h4'); projHead.textContent = 'Project notes (' + openProj + ' open)'
-    proj.appendChild(projHead)
-    projectNotes.filter(function (n) { return showResolved || n.status !== 'resolved' }).forEach(function (n) { proj.appendChild(noteRow(n)) })
-    var projAdd = document.createElement('button'); projAdd.className = 'nl-btn'; projAdd.textContent = '+ Note'
-    projAdd.onclick = composeProject
-    proj.appendChild(projAdd)
+    if (proj) {
+      proj.innerHTML = ''
+      var projHead = document.createElement('h4'); projHead.textContent = 'Project notes (' + openProj + ' open)'
+      proj.appendChild(projHead)
+      projectNotes.filter(function (n) { return showResolved || n.status !== 'resolved' }).forEach(function (n) { proj.appendChild(noteRow(n)) })
+      var projAdd = document.createElement('button'); projAdd.className = 'nl-btn'; projAdd.textContent = '+ Note'
+      projAdd.onclick = composeProject
+      proj.appendChild(projAdd)
+    }
 
-    strip.innerHTML = ''
-    var stripHead = document.createElement('h4'); stripHead.textContent = 'Notes — ' + activeState
-    strip.appendChild(stripHead)
-    mockNotes.filter(function (n) { return n.state === activeState && (showResolved || n.status !== 'resolved') })
-      .forEach(function (n) { strip.appendChild(noteRow(n)) })
-    var stripAdd = document.createElement('button'); stripAdd.className = 'nl-btn'; stripAdd.textContent = '+ Note on this state'
-    stripAdd.onclick = composeMock
-    strip.appendChild(stripAdd)
+    if (strip) {
+      strip.innerHTML = ''
+      var stripHead = document.createElement('h4'); stripHead.textContent = 'Notes — ' + activeState
+      strip.appendChild(stripHead)
+      mockNotes.filter(function (n) { return n.state === activeState && (showResolved || n.status !== 'resolved') })
+        .forEach(function (n) { strip.appendChild(noteRow(n)) })
+      var stripAdd = document.createElement('button'); stripAdd.className = 'nl-btn'; stripAdd.textContent = '+ Note on this state'
+      stripAdd.onclick = composeMock
+      strip.appendChild(stripAdd)
+    }
   }
 
+  // D5: a page fetches only the list its declared scope owns — a mock page never fetches the
+  // project-wide list (screen=*), a project page never fetches a per-screen list.
   function refresh() {
-    return Promise.all([
-      fetch('/__notes/list?screen=' + encodeURIComponent(screen || '')).then(function (r) { return r.json() }),
-      fetch('/__notes/list?screen=*').then(function (r) { return r.json() }),
-    ]).then(function (results) {
-      mockNotes = results[0] || []
-      projectNotes = results[1] || []
+    if (scope === 'project') {
+      return fetch(__base + '/__notes/list?screen=*').then(function (r) { return r.json() }).then(function (list) {
+        projectNotes = list || []
+        render()
+      })
+    }
+    return fetch(__base + '/__notes/list?screen=' + encodeURIComponent(screen || '')).then(function (r) { return r.json() }).then(function (list) {
+      mockNotes = list || []
       render()
     })
   }

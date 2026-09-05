@@ -4,10 +4,96 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const http = require('node:http')
+const vm = require('node:vm')
 const { spawn, spawnSync } = require('node:child_process')
-const { tmpdir, runNode, SPEC } = require('./helpers')
+const { tmpdir, runNode, SPEC, read } = require('./helpers')
 
 const atlas = (argv, opts) => runNode('scripts/design-atlas.js', argv, opts)
+
+// specs/20260905/01-picks-on-the-atlas-page.md D2: design-atlas.js does not yet guard its CLI
+// dispatch behind require.main, so a plain top-level require() of the script runs the CLI and
+// calls process.exit(2) — which would kill this whole test file, not just one test. This loader
+// patches process.exit to throw (caught below) instead of tearing the process down, so every
+// AC-4..AC-10/-12 test below can require the module in-process (per A4: "mount
+// createRequestHandler in-process on http.createServer, never a child process") and simply see
+// createRequestHandler/buildAtlas/etc as undefined until D2 lands — a clean, catchable red
+// reason instead of a crashed suite.
+function loadDesignAtlas() {
+  const scriptPath = path.join(SPEC, 'scripts/design-atlas.js')
+  delete require.cache[scriptPath]
+  const realExit = process.exit
+  let exited = null
+  process.exit = (code) => { exited = code; throw new Error('__design_atlas_guarded_exit__:' + code) }
+  try {
+    return require(scriptPath)
+  } catch (e) {
+    if (exited !== null) return null
+    throw e
+  } finally {
+    process.exit = realExit
+  }
+}
+
+// In-process mirror of the file's existing withServe() child-process helper, for the new
+// createRequestHandler-based tests (A4: never a child process for these).
+function withHandler(root, prefix, fn) {
+  const mod = loadDesignAtlas()
+  assert.ok(mod && typeof mod.createRequestHandler === 'function',
+    'design-atlas.js must export createRequestHandler(root,{prefix}) — D2 extracts it from cmdServe and guards CLI dispatch behind require.main')
+  const server = http.createServer(mod.createRequestHandler(root, { prefix }))
+  return new Promise((resolve, reject) => {
+    server.listen(0, '127.0.0.1', () => {
+      const port = server.address().port
+      const get = (p) => new Promise((res2, rej2) => {
+        http.get({ host: '127.0.0.1', port, path: p }, (r) => {
+          let body = ''
+          r.on('data', (c) => { body += c })
+          r.on('end', () => res2({ status: r.statusCode, headers: r.headers, body }))
+        }).on('error', rej2)
+      })
+      const post = (p, obj) => new Promise((res2, rej2) => {
+        const data = typeof obj === 'string' ? obj : JSON.stringify(obj)
+        const req = http.request({
+          host: '127.0.0.1', port, path: p, method: 'POST',
+          headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(data) },
+        }, (r) => {
+          let body = ''
+          r.on('data', (c) => { body += c })
+          r.on('end', () => res2({ status: r.statusCode, headers: r.headers, body }))
+        })
+        req.on('error', rej2)
+        req.end(data)
+      })
+      Promise.resolve(fn({ get, post, port })).then(
+        (v) => server.close(() => resolve(v)),
+        (e) => server.close(() => reject(e)),
+      )
+    })
+  })
+}
+
+// Balanced-<div> element extraction (extractFn's brace-matching, adapted for markup) — lets the
+// buildAtlas rendering tests below isolate exactly the compare-table/stop element they assert on
+// instead of matching loose substrings that could accidentally straddle sibling elements.
+function sliceElement(html, openMarker) {
+  const start = html.indexOf(openMarker)
+  if (start === -1) return null
+  const tagRe = /<div\b|<\/div>/g
+  tagRe.lastIndex = html.indexOf('>', start) + 1
+  let depth = 1
+  let m
+  while ((m = tagRe.exec(html))) {
+    if (m[0] === '<div') depth++
+    else depth--
+    if (depth === 0) return html.slice(start, m.index + m[0].length)
+  }
+  return null
+}
+
+function writePicksJson(dir, stops) {
+  fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/mocks/picks.json'), JSON.stringify(stops, null, 2) + '\n')
+}
 
 function fixture() {
   const dir = tmpdir('atlas')
@@ -29,6 +115,521 @@ function fixture() {
   mk('specs/20260716/01-x.md', '---\nstatus: done\n---\n# x\n')
   return dir
 }
+
+// specs/20260905/01-picks-on-the-atlas-page.md D1/D2/D3/D4/D5, AC-20260905-01-3..-10/-12 (TDD
+// red): design-atlas.js has no require.main guard or module.exports yet (A2: requiring it today
+// runs the CLI and exits 2), createRequestHandler/the picks endpoints/the stop rendering/the
+// inline decide script do not exist, and notes-layer.browser.js has no notes-scope handling.
+
+test('AC-20260905-01-3: requiring design-atlas.js with argv [node, x, \'nonsense\'] returns normally with nothing on stderr, exposing buildAtlas, page, frameTag, createRequestHandler as functions', () => {
+  const scriptPath = path.join(SPEC, 'scripts/design-atlas.js')
+  const code = 'const m = require(' + JSON.stringify(scriptPath) + ');' +
+    'process.stdout.write(JSON.stringify(["buildAtlas","page","frameTag","createRequestHandler"].map(function(k){return typeof m[k]})));'
+  const res = spawnSync(process.execPath, ['-e', code, 'x', 'nonsense'], { encoding: 'utf8' })
+  assert.strictEqual(res.status, 0,
+    'requiring design-atlas.js under a non-CLI argv must return normally (exit 0), never run its CLI dispatch and die — D2\'s require.main guard is missing: ' + res.stdout + res.stderr)
+  assert.strictEqual(res.stderr, '',
+    'requiring design-atlas.js must print nothing to stderr — any CLI usage message here means the guard did not fire: ' + JSON.stringify(res.stderr))
+  assert.deepStrictEqual(JSON.parse(res.stdout || 'null'), ['function', 'function', 'function', 'function'],
+    'design-atlas.js must export buildAtlas, page, frameTag, and createRequestHandler as functions: got ' + res.stdout)
+})
+
+test('AC-20260905-01-4: createRequestHandler mounted under a prefix serves a mock page with the mock notes-scope tag, exact bytes under ?clean, notes.js, the derived index with the project notes-scope tag, and blocks traversal', async () => {
+  const dir = tmpdir('atlas-handler')
+  fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
+  const bodyHtml = '<html><body data-screen-label="a">hi</body></html>'
+  fs.writeFileSync(path.join(dir, 'design/mocks/a.html'), bodyHtml)
+  fs.writeFileSync(path.join(dir, 'package.json'), '{"name":"should-never-be-served"}')
+
+  await withHandler(dir, '/p/demo', async ({ get }) => {
+    const mockRes = await get('/p/demo/mocks/a.html')
+    assert.strictEqual(mockRes.status, 200, 'GET /p/demo/mocks/a.html must serve 200: ' + mockRes.body)
+    assert.ok(mockRes.body.endsWith('<meta name="notes-scope" content="mock">\n<script src="/p/demo/__notes/notes.js"></script>\n</body></html>'),
+      'a static mock page must end with the mock notes-scope meta tag followed by the base-prefixed notes script tag: got ' + JSON.stringify(mockRes.body))
+
+    const cleanRes = await get('/p/demo/mocks/a.html?clean')
+    assert.strictEqual(cleanRes.body, bodyHtml, '?clean must return the exact original file bytes, with no injected tag, even under a prefix')
+
+    const notesJs = await get('/p/demo/__notes/notes.js')
+    assert.strictEqual(notesJs.status, 200, 'GET /p/demo/__notes/notes.js must serve 200 under the prefix')
+    assert.strictEqual(notesJs.headers['content-type'], 'text/javascript', 'notes.js must be served as text/javascript under the prefix')
+
+    const indexRes = await get('/p/demo/atlas/index.html')
+    assert.strictEqual(indexRes.status, 200, 'GET /p/demo/atlas/index.html must derive and serve the atlas index under the prefix')
+    assert.match(indexRes.headers['content-type'], /text\/html/, 'the derived index must be served as text/html')
+    assert.match(indexRes.body, /<meta name="notes-scope" content="project">\n<script src="\/p\/demo\/__notes\/notes\.js"><\/script>/,
+      'the derived atlas index must carry the project notes-scope tag followed by the same prefixed script tag: got tail ' + JSON.stringify(indexRes.body.slice(-300)))
+
+    const traversal = await get('/p/demo/../package.json')
+    assert.strictEqual(traversal.status, 404, 'a traversal request must never leak a file above the served root, even under a prefix')
+  })
+})
+
+test('AC-20260905-01-5: createRequestHandler serves /__picks/list and /__picks/decide against picks.json — 200 on decide and re-decide, 404 unknown id, 400 empty-note change, 400 non-JSON body, 409 once consumed', async () => {
+  const dir = tmpdir('atlas-picks-http')
+  writePicksJson(dir, [{
+    id: 'P001', kind: 'pick', key: 'shape-picked', title: 'pick a shape', question: null,
+    candidates: [
+      { group: 'a', label: 'x', path: 'shapes/a.html' },
+      { group: 'b', label: 'x', path: 'shapes/b.html' },
+    ],
+    url: null, openedAt: '2026-01-01T00:00:00.000Z', status: 'open', decision: null, previous: [],
+  }])
+
+  await withHandler(dir, '', async ({ get, post }) => {
+    const listed = await get('/__picks/list')
+    assert.strictEqual(listed.status, 200, 'GET /__picks/list must respond 200: ' + listed.body)
+    assert.ok(JSON.parse(listed.body).some((s) => s.id === 'P001'), 'GET /__picks/list must include the open stop P001: got ' + listed.body)
+
+    const decided = await post('/__picks/decide', { id: 'P001', verdict: 'pick', pick: 'b', by: 'jj' })
+    assert.strictEqual(decided.status, 200, 'a valid decide POST on an open stop must respond 200: ' + decided.status + ' ' + decided.body)
+    assert.strictEqual(JSON.parse(decided.body).status, 'decided', 'the returned stop must show status decided')
+    const onDisk = JSON.parse(fs.readFileSync(path.join(dir, 'design/mocks/picks.json'), 'utf8'))
+    assert.strictEqual(onDisk.find((s) => s.id === 'P001').status, 'decided', 'the decision must be persisted back to picks.json')
+
+    const redecided = await post('/__picks/decide', { id: 'P001', verdict: 'pick', pick: 'a', note: 'why', by: 'jj' })
+    assert.strictEqual(redecided.status, 200, 're-deciding a decided stop must also respond 200: ' + redecided.status + ' ' + redecided.body)
+    const redecidedBody = JSON.parse(redecided.body)
+    assert.strictEqual(redecidedBody.decision.pick, 'a', 'the re-decide must record the new pick')
+    assert.strictEqual(redecidedBody.previous.length, 1, 'the re-decide must push the earlier decision onto previous')
+
+    const notFound = await post('/__picks/decide', { id: 'P999', verdict: 'pick', pick: 'a', by: 'jj' })
+    assert.strictEqual(notFound.status, 404, 'a decide POST for an unknown id must respond 404: got ' + notFound.status)
+
+    const noNote = await post('/__picks/decide', { id: 'P001', verdict: 'change', by: 'jj' })
+    assert.strictEqual(noNote.status, 400, 'an empty-note change must respond 400 naming note: got ' + noNote.status + ' ' + noNote.body)
+    assert.match(noNote.body, /note/, 'the 400 body must name "note" as the reason')
+
+    const malformed = await post('/__picks/decide', 'not json')
+    assert.strictEqual(malformed.status, 400, 'a non-JSON body must respond 400, never crash the server: got ' + malformed.status)
+  })
+
+  const picksLib = require(path.join(SPEC, 'scripts/lib/mocks-picks'))
+  const before = JSON.parse(fs.readFileSync(path.join(dir, 'design/mocks/picks.json'), 'utf8'))
+  const { stops: consumedStops } = picksLib.consumeStop(before, 'P001')
+  fs.writeFileSync(path.join(dir, 'design/mocks/picks.json'), JSON.stringify(consumedStops, null, 2) + '\n')
+
+  await withHandler(dir, '', async ({ post }) => {
+    const after409 = await post('/__picks/decide', { id: 'P001', verdict: 'pick', pick: 'a', by: 'jj' })
+    assert.strictEqual(after409.status, 409, 'deciding a consumed stop through the endpoint must respond 409: got ' + after409.status)
+  })
+})
+
+test('AC-20260905-01-6: buildAtlas renders an open pick stop as an in-place compare table in the shapes section and an open approve stop as an approve control in its journey section, with a #stops index of links only', () => {
+  const dir = tmpdir('atlas-picks-build')
+  fs.mkdirSync(path.join(dir, 'design/shapes'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/shapes/card-first.html'), '<main data-screen-label="session-live">card-first</main>\n')
+  fs.writeFileSync(path.join(dir, 'design/shapes/orb-hero.html'), '<main data-screen-label="session-live">orb-hero</main>\n')
+  fs.writeFileSync(path.join(dir, 'design/mocks/seed.md'), `# Seed — Test Product
+
+## Product
+It is a synthetic product.
+Built for tests.
+It must do one job.
+
+## Facts
+- primary-surface: P1
+
+## References
+- none
+
+## Journeys
+### j1
+Mika (dispatch lead) draws two screens and reaches the busy state.
+\`\`\`surfaces
+a -> b
+\`\`\`
+
+## Dense screen
+- a
+`)
+  fs.writeFileSync(path.join(dir, 'design/mocks/a.html'),
+    '<link rel="stylesheet" href="../wire/tokens.css">\n<main data-screen-label="a" data-status="sketch">A</main>\n')
+  fs.writeFileSync(path.join(dir, 'design/mocks/b.html'),
+    '<link rel="stylesheet" href="../wire/tokens.css">\n<main data-screen-label="b" data-status="sketch">B</main>\n')
+
+  const openedAt = '2026-01-01T00:00:00.000Z'
+  writePicksJson(dir, [
+    {
+      id: 'P001', kind: 'pick', key: 'shape-picked', title: 'pick a shape', question: null,
+      candidates: [
+        { group: 'card-first', label: 'session-live', path: 'shapes/card-first.html' },
+        { group: 'orb-hero', label: 'session-live', path: 'shapes/orb-hero.html' },
+      ],
+      url: null, openedAt, status: 'open', decision: null, previous: [],
+    },
+    {
+      id: 'P002', kind: 'approve', key: 'journey-approved:j1', title: 'approve journey j1', question: null,
+      candidates: [
+        { group: null, label: 'a', path: 'mocks/a.html' },
+        { group: null, label: 'b', path: 'mocks/b.html' },
+      ],
+      url: null, openedAt, status: 'open', decision: null, previous: [],
+    },
+  ])
+
+  const res = atlas(['build'], { cwd: dir })
+  assert.strictEqual(res.status, 0, res.stdout + res.stderr)
+  const out = fs.readFileSync(path.join(dir, 'design/atlas/index.html'), 'utf8')
+
+  const stopsIdx = out.indexOf('<section id="stops">')
+  assert.ok(stopsIdx !== -1, 'buildAtlas must emit a <section id="stops"> summarizing every open/decided stop')
+  const firstSectIdx = out.indexOf('class="sect"')
+  assert.ok(firstSectIdx === -1 || firstSectIdx > stopsIdx, '<section id="stops"> must be emitted before the first class="sect" section')
+  const stopsCloseIdx = out.indexOf('</section>', stopsIdx)
+  const stopsBlock = out.slice(stopsIdx, stopsCloseIdx)
+  assert.match(stopsBlock, /href="#stop-P001"/, 'the #stops index must link the pick stop')
+  assert.match(stopsBlock, /href="#stop-P002"/, 'the #stops index must link the approve stop')
+  assert.doesNotMatch(stopsBlock, /<iframe/, 'the #stops index must be links and text only, never a frame')
+
+  const cmpBlock = sliceElement(out, '<div class="cmp" id="stop-P001" data-kind="pick"')
+  assert.ok(cmpBlock, 'the shapes section must render stop P001 as a class="cmp" compare table element')
+  assert.strictEqual((cmpBlock.match(/class="chead"/g) || []).length, 2,
+    'the compare table must render exactly one chead column per group (card-first, orb-hero): got ' + JSON.stringify(cmpBlock))
+  assert.match(cmpBlock, /data-group="card-first"/, 'a chead column for group card-first must be present')
+  assert.match(cmpBlock, /data-group="orb-hero"/, 'a chead column for group orb-hero must be present')
+  assert.strictEqual((cmpBlock.match(/data-decide="pick"/g) || []).length, 2, 'exactly one Pick this button per group must render')
+  assert.strictEqual((cmpBlock.match(/class="step"/g) || []).length, 1,
+    'the compare table must render exactly one step row for the single shared label session-live')
+  assert.match(cmpBlock, /class="step">step 1[^<]*session-live/, 'the single step row must be labeled with session-live')
+  const iframes = cmpBlock.match(/<iframe[^>]*>/g) || []
+  assert.strictEqual(iframes.length, 2,
+    'exactly two frames must render, one per candidate — the plain shape cards of today must not also render under an open stop: got ' + JSON.stringify(iframes))
+  assert.ok(iframes.some((f) => /src="[^"]*shapes\/card-first\.html\?clean"/.test(f)), 'one frame src must end shapes/card-first.html?clean')
+  assert.ok(iframes.some((f) => /src="[^"]*shapes\/orb-hero\.html\?clean"/.test(f)), 'one frame src must end shapes/orb-hero.html?clean')
+  assert.match(cmpBlock, /class="card"[\s\S]*?open ↗[\s\S]*?href="[^"]*shapes\/card-first\.html"/,
+    'each frame must sit inside a class="card" element carrying an open ↗ link to the un-?clean path')
+
+  const j1Idx = out.indexOf('<h2>j1')
+  assert.ok(j1Idx !== -1, 'a section headed "j1" must exist for the seed journey')
+  const stopBlock = sliceElement(out, '<div class="stop" id="stop-P002" data-kind="approve"')
+  assert.ok(stopBlock, 'the j1 section must render stop P002 as a class="stop" approve control')
+  assert.ok(out.indexOf(stopBlock) > j1Idx, 'the approve stop element must sit inside the j1 section, not elsewhere')
+  assert.strictEqual((stopBlock.match(/data-decide="approve"/g) || []).length, 1, 'exactly one Approve button must render')
+  assert.match(stopBlock, /name="note-P002"/, 'a note-P002 textarea must render for the approve control')
+  assert.strictEqual((stopBlock.match(/data-decide="change"/g) || []).length, 1, 'exactly one Change button must render')
+  assert.doesNotMatch(stopBlock, /<iframe/, 'the approve stop element itself must render no frame — the section\'s own cards are the screens')
+})
+
+test('AC-20260905-01-7: a theme-picked stop renders its own #theme section after shapes, columns per group, steps in candidate order, and an empty cell for a missing label; an unknown key renders right after #stops', () => {
+  const dir = tmpdir('atlas-theme-build')
+  fs.mkdirSync(path.join(dir, 'design/shapes'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/shapes/one.html'), '<main data-screen-label="one">one</main>\n')
+  for (const p of ['themes/ocean/signin.html', 'themes/ocean/home.html', 'themes/ember/signin.html']) {
+    fs.mkdirSync(path.join(dir, 'design', path.dirname(p)), { recursive: true })
+    fs.writeFileSync(path.join(dir, 'design', p), '<main data-screen-label="x">x</main>\n')
+  }
+  const openedAt = '2026-01-01T00:00:00.000Z'
+  writePicksJson(dir, [
+    {
+      id: 'P001', kind: 'pick', key: 'theme-picked', title: 'pick a theme', question: null,
+      candidates: [
+        { group: 'ocean', label: 'signin', path: 'themes/ocean/signin.html' },
+        { group: 'ocean', label: 'home', path: 'themes/ocean/home.html' },
+        { group: 'ember', label: 'signin', path: 'themes/ember/signin.html' },
+      ],
+      url: null, openedAt, status: 'open', decision: null, previous: [],
+    },
+    {
+      id: 'P002', kind: 'approve', key: 'x-y', title: 'a stop with an unknown key', question: null,
+      candidates: [{ group: null, label: 'a', path: 'shapes/one.html' }],
+      url: null, openedAt, status: 'open', decision: null, previous: [],
+    },
+  ])
+
+  const res = atlas(['build'], { cwd: dir })
+  assert.strictEqual(res.status, 0, res.stdout + res.stderr)
+  const out = fs.readFileSync(path.join(dir, 'design/atlas/index.html'), 'utf8')
+
+  const shapesIdx = out.indexOf('id="shapes"')
+  const themeIdx = out.indexOf('id="theme"')
+  assert.ok(shapesIdx !== -1 && themeIdx > shapesIdx, 'a #theme section must be emitted right after the shapes section')
+
+  const themeCmp = sliceElement(out, '<div class="cmp" id="stop-P001" data-kind="pick"')
+  assert.ok(themeCmp, 'the theme section must render the theme-picked stop as a compare table')
+  assert.strictEqual((themeCmp.match(/class="chead"/g) || []).length, 2, 'exactly two chead columns (ocean, ember) must render')
+  assert.match(themeCmp, /data-group="ocean"/)
+  assert.match(themeCmp, /data-group="ember"/)
+  const steps = themeCmp.match(/class="step">step \d+[^<]*/g) || []
+  assert.strictEqual(steps.length, 2, 'exactly two step rows (signin, home) must render: got ' + JSON.stringify(steps))
+  assert.match(steps[0], /signin/, 'signin must be the first step row (candidate order)')
+  assert.match(steps[1], /home/, 'home must be the second step row')
+  assert.strictEqual((themeCmp.match(/<iframe/g) || []).length, 3, 'three frames must render, one per declared candidate')
+  assert.match(themeCmp, /class="card empty"/, 'ember\'s missing home label must render an empty cell')
+
+  const stopsIdx2 = out.indexOf('<section id="stops">')
+  const stopsBlock2 = out.slice(stopsIdx2, out.indexOf('</section>', stopsIdx2))
+  assert.match(stopsBlock2, /href="#stop-P002"/, 'the unknown-key stop must still be listed in the #stops index')
+  const afterStops = out.slice(out.indexOf('</section>', stopsIdx2))
+  const p002Pos = afterStops.indexOf('id="stop-P002"')
+  const firstSectPos = afterStops.indexOf('class="sect"')
+  assert.ok(p002Pos !== -1 && (firstSectPos === -1 || p002Pos < firstSectPos),
+    'a stop whose key matches no known grammar must render as a standalone block right after #stops, before any class="sect" section')
+})
+
+test('AC-20260905-01-7: a decided pick stop renders picked/rejected cheads with badges, a why-line input, and lists under Decided — waiting for the session', () => {
+  const dir = tmpdir('atlas-theme-decided')
+  for (const p of ['themes/ocean/signin.html', 'themes/ember/signin.html']) {
+    fs.mkdirSync(path.join(dir, 'design', path.dirname(p)), { recursive: true })
+    fs.writeFileSync(path.join(dir, 'design', p), '<main data-screen-label="x">x</main>\n')
+  }
+  const openedAt = '2026-01-01T00:00:00.000Z'
+  writePicksJson(dir, [{
+    id: 'P001', kind: 'pick', key: 'theme-picked', title: 'pick a theme', question: null,
+    candidates: [
+      { group: 'ocean', label: 'signin', path: 'themes/ocean/signin.html' },
+      { group: 'ember', label: 'signin', path: 'themes/ember/signin.html' },
+    ],
+    url: null, openedAt, status: 'decided',
+    decision: { verdict: 'pick', pick: 'ocean', note: null, by: 'jj', at: openedAt },
+    previous: [],
+  }])
+
+  const res = atlas(['build'], { cwd: dir })
+  assert.strictEqual(res.status, 0, res.stdout + res.stderr)
+  const out = fs.readFileSync(path.join(dir, 'design/atlas/index.html'), 'utf8')
+
+  const cmp = sliceElement(out, '<div class="cmp" id="stop-P001" data-kind="pick"')
+  assert.ok(cmp, 'the decided stop must still render as a compare table element')
+  assert.match(cmp, /class="chead picked"[^>]*data-group="ocean"/, 'the picked group\'s chead must carry class "chead picked"')
+  assert.match(cmp, /class="chead rejected"[^>]*data-group="ember"/, 'the rejected group\'s chead must carry class "chead rejected"')
+  assert.match(cmp, /class="badge picked">picked/, 'the picked chead must carry a picked badge')
+  assert.match(cmp, /class="badge rejected">rejected/, 'the rejected chead must carry a rejected badge')
+  assert.match(cmp, />Picked</, 'the picked chead\'s button text must read "Picked"')
+  assert.match(cmp, />Pick this instead</, 'the rejected chead\'s button text must read "Pick this instead"')
+  assert.match(cmp, /name="why-P001"/, 'a why-P001 input must render for a decided pick stop')
+  assert.strictEqual((cmp.match(/data-decide="why"/g) || []).length, 1, 'exactly one Save (data-decide="why") button must render')
+
+  const stopsIdx = out.indexOf('<section id="stops">')
+  const stopsBlock = out.slice(stopsIdx, out.indexOf('</section>', stopsIdx))
+  assert.match(stopsBlock, /Decided — waiting for the session/, 'the #stops index must carry the Decided heading for a decided stop')
+  const decidedLine = stopsBlock.slice(stopsBlock.indexOf('Decided — waiting for the session'))
+  assert.match(decidedLine, /href="#stop-P001"/)
+  assert.match(decidedLine, /ocean/, 'the decided-stop index line must name the picked group (ocean)')
+  assert.match(decidedLine, /jj/, 'the decided-stop index line must name the decider (jj)')
+})
+
+test('AC-20260905-01-7: a consumed stop, and an absent picks.json, render neither #stops nor any compare table — the plain shape cards render exactly as before', () => {
+  const dir = tmpdir('atlas-theme-consumed')
+  fs.mkdirSync(path.join(dir, 'design/shapes'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/shapes/card-first.html'), '<main data-screen-label="session-live">card-first</main>\n')
+
+  const openedAt = '2026-01-01T00:00:00.000Z'
+  writePicksJson(dir, [{
+    id: 'P001', kind: 'pick', key: 'shape-picked', title: 'pick a shape', question: null,
+    candidates: [{ group: 'card-first', label: 'session-live', path: 'shapes/card-first.html' }],
+    url: null, openedAt, status: 'consumed',
+    decision: { verdict: 'pick', pick: 'card-first', note: null, by: 'jj', at: openedAt },
+    previous: [],
+  }])
+
+  const consumedRes = atlas(['build'], { cwd: dir })
+  assert.strictEqual(consumedRes.status, 0, consumedRes.stdout + consumedRes.stderr)
+  const consumedOut = fs.readFileSync(path.join(dir, 'design/atlas/index.html'), 'utf8')
+  assert.doesNotMatch(consumedOut, /id="stops"/, 'a consumed stop must never emit a #stops section')
+  assert.doesNotMatch(consumedOut, /class="cmp"/, 'a consumed stop must never render a compare table')
+  assert.match(consumedOut, /card-first/, 'the shapes section must still render the shape\'s own plain card')
+
+  fs.rmSync(path.join(dir, 'design/mocks/picks.json'))
+  const absentRes = atlas(['build'], { cwd: dir })
+  assert.strictEqual(absentRes.status, 0, absentRes.stdout + absentRes.stderr)
+  const absentOut = fs.readFileSync(path.join(dir, 'design/atlas/index.html'), 'utf8')
+  assert.doesNotMatch(absentOut, /id="stops"/, 'an absent picks.json must never emit a #stops section')
+  assert.doesNotMatch(absentOut, /class="cmp"/, 'an absent picks.json must never render a compare table')
+})
+
+test('AC-20260905-01-8: buildAtlas SHALL CONTINUE TO produce byte-identical output across two runs, now including a root whose picks.json holds an open stop', () => {
+  const dir = tmpdir('atlas-picks-byte')
+  fs.mkdirSync(path.join(dir, 'design/shapes'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/shapes/card-first.html'), '<main data-screen-label="session-live">card-first</main>\n')
+  writePicksJson(dir, [{
+    id: 'P001', kind: 'pick', key: 'shape-picked', title: 'pick a shape', question: null,
+    candidates: [{ group: 'card-first', label: 'session-live', path: 'shapes/card-first.html' }],
+    url: null, openedAt: '2026-01-01T00:00:00.000Z', status: 'open', decision: null, previous: [],
+  }])
+  atlas(['build'], { cwd: dir })
+  const a = fs.readFileSync(path.join(dir, 'design/atlas/index.html'), 'utf8')
+  atlas(['build'], { cwd: dir })
+  const b = fs.readFileSync(path.join(dir, 'design/atlas/index.html'), 'utf8')
+  assert.strictEqual(a, b, 'AC-20260902-09-6\'s byte-identical guarantee must extend unchanged to a root carrying picks.json')
+})
+
+function hashTree(root) {
+  const out = {}
+  function walk(dir) {
+    for (const name of fs.readdirSync(dir).sort()) {
+      const p = path.join(dir, name)
+      const st = fs.statSync(p)
+      if (st.isDirectory()) walk(p)
+      else out[path.relative(root, p)] = fs.readFileSync(p)
+    }
+  }
+  walk(root)
+  return out
+}
+
+test('AC-20260905-01-8: a POST /__picks/decide leaves every file under design/ unchanged except design/mocks/picks.json', async () => {
+  const dir = tmpdir('atlas-picks-untouched')
+  fs.mkdirSync(path.join(dir, 'design/shapes'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/shapes/card-first.html'), '<main data-screen-label="session-live">card-first</main>\n')
+  fs.writeFileSync(path.join(dir, 'design/shapes/orb-hero.html'), '<main data-screen-label="session-live">orb-hero</main>\n')
+  writePicksJson(dir, [{
+    id: 'P001', kind: 'pick', key: 'shape-picked', title: 'pick a shape', question: null,
+    candidates: [
+      { group: 'card-first', label: 'session-live', path: 'shapes/card-first.html' },
+      { group: 'orb-hero', label: 'session-live', path: 'shapes/orb-hero.html' },
+    ],
+    url: null, openedAt: '2026-01-01T00:00:00.000Z', status: 'open', decision: null, previous: [],
+  }])
+  atlas(['build'], { cwd: dir })
+
+  const designDir = path.join(dir, 'design')
+  const before = hashTree(designDir)
+
+  await withHandler(dir, '', async ({ post }) => {
+    const r = await post('/__picks/decide', { id: 'P001', verdict: 'pick', pick: 'orb-hero', by: 'jj' })
+    assert.strictEqual(r.status, 200, 'the decide POST must succeed: ' + r.status + ' ' + r.body)
+  })
+
+  const after = hashTree(designDir)
+  const changedFiles = Object.keys({ ...before, ...after }).filter((f) => {
+    const b = before[f], a = after[f]
+    return !b || !a || !b.equals(a)
+  })
+  assert.deepStrictEqual(changedFiles, ['mocks/picks.json'],
+    'a decide POST must change design/mocks/picks.json only — every other file under design/ (the previously built atlas index included) must stay byte-identical: changed = ' + JSON.stringify(changedFiles))
+})
+
+test('AC-20260905-01-9: the served atlas body carries the inline decide script referencing /__picks/decide, the base regex, nl-author, and the required literals; ?clean strips it entirely', async () => {
+  const dir = tmpdir('atlas-decide-script')
+  fs.mkdirSync(path.join(dir, 'design/shapes'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/shapes/one.html'), '<main data-screen-label="one">one</main>\n')
+
+  await withHandler(dir, '', async ({ get }) => {
+    const res = await get('/atlas/index.html')
+    assert.strictEqual(res.status, 200, 'the derived atlas must serve 200: ' + res.body)
+    for (const literal of [
+      '/__picks/decide', '^/p/[^/]+', 'nl-author',
+      'open the served atlas to decide', 'already picked up by the session',
+      'Pick this instead', 'lb-open',
+    ]) {
+      assert.ok(res.body.includes(literal), 'the served atlas body must reference "' + literal + '" in its inline decide script')
+    }
+    for (const verdict of ["verdict:'pick'", "verdict:'approve'", "verdict:'change'"]) {
+      assert.ok(res.body.includes(verdict), 'the inline decide script must post ' + verdict + ' on its matching data-decide click')
+    }
+    assert.ok(res.body.includes('note'), 'a "why" re-post must carry a note field')
+
+    const clean = await get('/atlas/index.html?clean')
+    assert.strictEqual(clean.status, 200, 'the ?clean atlas must still serve 200')
+    assert.ok(!clean.body.includes('__picks'), '?clean must strip the decide script entirely — no __picks reference may remain')
+    assert.ok(!clean.body.includes('lb-open'), '?clean must strip the lightbox-open class hook along with the rest of the script')
+  })
+})
+
+function makeNotesLayerDom({ metaContent, screenLabel } = {}) {
+  const created = []
+  function makeEl(tag) {
+    const el = {
+      tagName: String(tag).toUpperCase(),
+      children: [],
+      appendChild(c) { this.children.push(c); return c },
+      insertAdjacentElement(_pos, c) { return c },
+      addEventListener() {},
+      setAttribute(k, v) { this[k] = v },
+      getAttribute(k) { return this[k] },
+      remove() {},
+    }
+    created.push(el)
+    return el
+  }
+  const head = makeEl('head')
+  const body = makeEl('body')
+  let metaEl = null
+  if (metaContent != null) { metaEl = makeEl('meta'); metaEl.content = metaContent }
+  let screenEl = null
+  if (screenLabel != null) { screenEl = makeEl('main'); screenEl.setAttribute('data-screen-label', screenLabel) }
+  const document = {
+    head, body,
+    createElement: makeEl,
+    querySelector(sel) {
+      if (sel === 'meta[name="notes-scope"]') return metaEl
+      if (sel === '[data-screen-label]') return screenEl
+      return null
+    },
+    querySelectorAll() { return [] },
+  }
+  return { document, created }
+}
+
+function evalNotesLayer({ pathname, metaContent, screenLabel }) {
+  const src = fs.readFileSync(path.join(SPEC, 'scripts/lib/notes-layer.browser.js'), 'utf8')
+  const { document, created } = makeNotesLayerDom({ metaContent, screenLabel })
+  const fetchCalls = []
+  const sandbox = {
+    location: { pathname, search: '' },
+    document,
+    window: { prompt: () => 'jj' },
+    localStorage: { getItem: () => 'jj', setItem() {} },
+    fetch(url) { fetchCalls.push(url); return Promise.resolve({ json: () => Promise.resolve([]) }) },
+    URLSearchParams,
+  }
+  vm.createContext(sandbox)
+  vm.runInContext(src, sandbox)
+  return { fetchCalls, created, document }
+}
+
+test('AC-20260905-01-10: notes-layer.browser.js under vm shows only the mock strip and its bar for a page declaring notes-scope mock, fetching only its own screen', () => {
+  const { fetchCalls, created } = evalNotesLayer({ pathname: '/p/hearwell/mocks/a.html', metaContent: 'mock', screenLabel: 'a' })
+  assert.ok(fetchCalls.includes('/p/hearwell/__notes/list?screen=a'),
+    'a mock-scope page must fetch its own screen\'s notes under the derived base: got ' + JSON.stringify(fetchCalls))
+  assert.ok(!fetchCalls.some((u) => /screen=\*/.test(u)),
+    'a mock-scope page must never fetch the project-wide notes list (screen=*): got ' + JSON.stringify(fetchCalls))
+  assert.ok(!created.some((el) => el.className === 'nl-proj'), 'a mock-scope page must create no nl-proj element — the project panel belongs on the index only')
+  assert.ok(!created.some((el) => el.textContent === '+ Project note'), 'a mock-scope page must create no "+ Project note" button')
+  assert.ok(created.some((el) => el.href === '/p/hearwell/__notes/viewer.css'), 'the stylesheet link must be derived under the same /p/hearwell base')
+})
+
+test('AC-20260905-01-10: notes-layer.browser.js under vm shows only the project panel and its bar for the atlas index (notes-scope project) even though the index carries a data-screen-label root (A6)', () => {
+  const { fetchCalls, created } = evalNotesLayer({ pathname: '/atlas/index.html', metaContent: 'project', screenLabel: 'some-frame-wrapper-label' })
+  assert.ok(fetchCalls.includes('/__notes/list?screen=*'),
+    'a project-scope page must fetch the project-wide notes list under the empty base: got ' + JSON.stringify(fetchCalls))
+  assert.ok(!fetchCalls.some((u) => u.includes('screen=') && !u.includes('screen=*')),
+    'a project-scope page must never fetch a per-screen notes list, even though a [data-screen-label] root exists: got ' + JSON.stringify(fetchCalls))
+  assert.ok(!created.some((el) => el.className === 'nl-strip'),
+    'a project-scope page must create no nl-strip element — the declared meta scope must win over A6\'s inference trap')
+})
+
+test('AC-20260905-01-10: with no notes-scope meta and a screen root present, notes-layer.browser.js falls back to mock scope', () => {
+  const { fetchCalls, created } = evalNotesLayer({ pathname: '/mocks/a.html', metaContent: null, screenLabel: 'a' })
+  assert.ok(fetchCalls.includes('/__notes/list?screen=a'),
+    'absent meta with a screen root must fall back to mock scope, fetching that screen\'s notes: got ' + JSON.stringify(fetchCalls))
+  assert.ok(!created.some((el) => el.className === 'nl-proj'), 'the meta-absent mock fallback must create no nl-proj element')
+})
+
+test('AC-20260905-01-10: the injected CSS carries a body.lb-open rule that hides .nl-bar', () => {
+  const { created } = evalNotesLayer({ pathname: '/mocks/a.html', metaContent: 'mock', screenLabel: 'a' })
+  const styleEl = created.find((el) => el.tagName === 'STYLE' && typeof el.textContent === 'string')
+  assert.ok(styleEl, 'a <style> element carrying the injected CSS must be created')
+  const idx = styleEl.textContent.indexOf('body.lb-open')
+  assert.ok(idx !== -1, 'the injected CSS must contain a body.lb-open selector so the bar can hide while the lightbox is open: got ' + styleEl.textContent)
+  const ruleEnd = styleEl.textContent.indexOf('}', idx)
+  const rule = styleEl.textContent.slice(idx, ruleEnd === -1 ? styleEl.textContent.length : ruleEnd + 1)
+  assert.match(rule, /\.nl-bar/, 'the body.lb-open rule (or its selector list) must reference .nl-bar: got ' + rule)
+})
+
+test('AC-20260905-01-12: spec/doctrine/mocks.md documents Picks under § Mocks: Page Notes (D8: no entrypoints row)', () => {
+  const doctrine = read('spec/doctrine/mocks.md')
+  const pageNotesIdx = doctrine.indexOf('## Mocks: Page Notes')
+  assert.ok(pageNotesIdx !== -1, 'the § Mocks: Page Notes heading must exist to anchor the new Picks paragraph')
+  const nextHeadingIdx = doctrine.indexOf('\n## ', pageNotesIdx + 1)
+  const section = doctrine.slice(pageNotesIdx, nextHeadingIdx === -1 ? doctrine.length : nextHeadingIdx)
+  for (const literal of ['picks.json', 'Pick this', 'one scope per page', 'notes-scope', 'compare table', 'mocks-picks.js']) {
+    assert.ok(section.includes(literal),
+      'the § Mocks: Page Notes section must document "' + literal + '" in its new Picks paragraph — an author reading this doctrine section has no other reference for the picks flow')
+  }
+})
 
 test('check: labeled token-consuming mocks pass; label/tokens/color violations fail closed (AC-20260901-04-6)', () => {
   const dir = fixture()
@@ -668,7 +1269,7 @@ test('check/sync: active nav derived (AC-20260901-04-8)', () => {
 // longer true for an unclean request). The `?clean` query keeps this pin's original meaning —
 // the server serves exact bytes when asked cleanly — per spec-pipeline.md § Gotchas: "a colliding
 // test pin is updated in place and retagged with the new AC-ID, never weakened, never left red."
-test('AC-20260902-07-12 / AC-20260902-10-2: design-atlas.js serve prints the port-forward line first, serves design/ statically with no-store (exact bytes via ?clean), blocks path traversal, and exits on SIGTERM', async () => {
+test('AC-20260905-01-11 (carrying forward AC-20260902-07-12 / AC-20260902-10-2): design-atlas.js serve SHALL CONTINUE TO print the port-forward line first, serve design/ statically with no-store (exact bytes via ?clean), block path traversal, and exit on SIGTERM', async () => {
   const dir = tmpdir('atlas-serve')
   fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'design/mocks/a.html'), '<main data-screen-label="a">hello</main>\n')
@@ -961,7 +1562,7 @@ a -> b
 // serving a file only `build` ever wrote (a shapes-only tree at the SHAPES look stop has no
 // such file, and the banner promised the page anyway); a busy port reuses the running atlas
 // (prints the same URL line with "already serving", exit 0) instead of an EADDRINUSE trace.
-test('serve derives the atlas index on request (shapes-only tree, no design/atlas file) and a second serve on the same port prints "already serving" + exits 0', async () => {
+test('AC-20260905-01-11: serve SHALL CONTINUE TO derive the atlas index on request (shapes-only tree, no design/atlas file) and a second serve on the same port prints "already serving" + exits 0', async () => {
   const dir = tmpdir('atlas-serve-derived')
   fs.mkdirSync(path.join(dir, 'design/shapes'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'design/shapes/work-queue.html'), '<main data-screen-label="work-queue">wq</main>')

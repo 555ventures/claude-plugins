@@ -39,7 +39,14 @@
 //                                                  injected before </body> unless the request
 //                                                  carries ?clean; /__notes/* exposes
 //                                                  notes.js, viewer.css, list, add, resolve
-//                                                  (address/reply are driver-only, never HTTP)
+//                                                  (address/reply are driver-only, never HTTP).
+//                                                  specs/20260905/01 D2: every served page also
+//                                                  carries a <meta name="notes-scope"> tag (mock
+//                                                  for a static file, project for the derived
+//                                                  index) so the notes layer never guesses its
+//                                                  scope; /__picks/list and /__picks/decide
+//                                                  expose design/mocks/picks.json's look stops
+//                                                  through lib/mocks-picks.js.
 //   design-atlas.js shell sync  [--root <r>] [<mock|dir>…]
 //                                                  specs/20260901/04-shell-composed-mocks.md D5:
 //                                                  rewrite every declaring mock's chrome region
@@ -66,12 +73,18 @@
 // entrypoint-conformance surface deliberately (specs/20260901/04 D12 — no new spec-paths key).
 // Exit 0 = pass/written, 1 = check violations or a `shell sync` refusal, 2 = usage/IO error or an
 // ambiguous `shell adopt --apply` with no --shell. `serve` runs until SIGINT/SIGTERM (exit 0).
+//
+// specs/20260905/01-picks-on-the-atlas-page.md D2: CLI dispatch at the bottom of this file runs
+// only under `require.main === module` — the script also exports { buildAtlas, page, frameTag,
+// createRequestHandler } so spec 02's review hub can mount createRequestHandler(root, {prefix})
+// under its own path without spawning a second `serve` process.
 'use strict'
 const fs = require('node:fs')
 const path = require('node:path')
 const { readConfig } = require('./lib/host-config')
 const shellLib = require('./lib/shell-region')
 const notesLib = require('./lib/mocks-notes')
+const picksLib = require('./lib/mocks-picks.js')
 
 const die = (msg) => { process.stderr.write('[design-atlas] ' + msg + '\n'); process.exit(2) }
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -732,6 +745,208 @@ function parseSeedJourneys(root) {
   return journeys
 }
 
+// ---- picks (specs/20260905/01-picks-on-the-atlas-page.md D3/D4) ----------------------------------
+// A look stop's key says where it renders (D3b): shape-picked -> the shapes section, theme-picked
+// -> a dedicated theme section right after shapes, journey-approved:<j>/journey-reviewed:<j>/
+// variants:<j> -> the <j> journey section, approved -> the page header, anything else ->
+// a standalone block right after #stops.
+function stopHome(key) {
+  if (key === 'shape-picked') return { type: 'shapes' }
+  if (key === 'theme-picked') return { type: 'theme' }
+  if (key === 'approved') return { type: 'header' }
+  const m = /^(?:journey-approved|journey-reviewed|variants):(.+)$/.exec(key)
+  if (m) return { type: 'journey', journey: m[1] }
+  return { type: 'standalone' }
+}
+
+function candidateGroupsOf(candidates) {
+  const groups = []
+  for (const c of candidates || []) if (!groups.includes(c.group)) groups.push(c.group)
+  return groups
+}
+
+function stepLabelsOf(candidates) {
+  const labels = []
+  for (const c of candidates || []) if (!labels.includes(c.label)) labels.push(c.label)
+  return labels
+}
+
+// D3(c)/(e): one column per candidate group (sticky chead with the Pick this control), one row
+// per distinct step label in candidate order, a full `.card` (or `.card empty`) per cell — plus,
+// once decided, the picked/rejected chead treatment and the why-line input.
+function renderCompareTable(stop, root, outDir, vp0) {
+  const groups = candidateGroupsOf(stop.candidates)
+  const labels = stepLabelsOf(stop.candidates)
+  const decided = stop.status === 'decided' && stop.decision
+  const pickedGroup = decided ? stop.decision.pick : null
+  const heads = groups.map((g, i) => {
+    const cls = decided ? (g === pickedGroup ? 'chead picked' : 'chead rejected') : 'chead'
+    const badge = decided ? (g === pickedGroup ? 'picked' : 'rejected') : 'candidate'
+    const btnText = decided ? (g === pickedGroup ? 'Picked' : 'Pick this instead') : 'Pick this'
+    return '<div class="' + cls + '" data-group="' + esc(g) + '"><span class="num">' + (i + 1) + '</span>' +
+      esc(g) + ' <span class="badge ' + badge + '">' + badge + '</span>' +
+      '<button data-decide="pick" data-group="' + esc(g) + '">' + esc(btnText) + '</button></div>'
+  }).join('')
+  const rows = labels.map((label, i) => {
+    const cells = groups.map((g) => {
+      const cand = (stop.candidates || []).find((c) => c.group === g && c.label === label)
+      if (!cand) return '<div class="card empty"></div>'
+      const filePath = path.join(root, 'design', cand.path)
+      let html = ''
+      try { html = fs.readFileSync(filePath, 'utf8') } catch { html = '' }
+      const vp = viewportOf(html) || vp0
+      const rel = path.relative(outDir, filePath).split(path.sep).join('/')
+      return '<div class="card"><h3>' + esc(label) + '<span class="vp">' + vp.width + '×' + vp.height + '</span>' +
+        '<a class="open" title="open ↗" href="' + esc(rel) + '" target="_blank">open ↗</a></h3>' +
+        frameTag(rel, vp.width, vp.height) + '</div>'
+    }).join('')
+    return '<div class="step">step ' + (i + 1) + ' · ' + esc(label) + '</div>' + cells
+  }).join('')
+  const why = decided
+    ? '<input name="why-' + stop.id + '" placeholder="why this one — optional">' +
+      '<button data-decide="why">Save</button>'
+    : ''
+  return '<div class="cmp" id="stop-' + stop.id + '" data-kind="pick" data-id="' + stop.id +
+    '" style="--cols:' + groups.length + '">' + heads + rows + why + '</div>'
+}
+
+// D3(d)/(e): an approve stop is Approve/Change with a note while open; decided renders the
+// recorded outcome instead — no frames either way, the owning section's own cards are the screens.
+function renderApproveStop(stop) {
+  const decided = stop.status === 'decided' && stop.decision
+  const body = !decided
+    ? '<button data-decide="approve">Approve</button>' +
+      '<textarea name="note-' + stop.id + '"></textarea>' +
+      '<button data-decide="change">Change</button>'
+    : stop.decision.verdict === 'approve'
+      ? 'Approved by ' + esc(stop.decision.by)
+      : esc(stop.decision.note)
+  return '<div class="stop" id="stop-' + stop.id + '" data-kind="approve" data-id="' + stop.id + '">' + body + '</div>'
+}
+
+function renderStop(stop, root, outDir, vp0) {
+  return stop.kind === 'pick' ? renderCompareTable(stop, root, outDir, vp0) : renderApproveStop(stop)
+}
+
+// D4: the atlas page's own inline decide script — wrapped in HTML comment markers so a `?clean`
+// request can strip it wholesale (createRequestHandler's stripCleanArtifacts), exactly like the
+// notes layer is skipped under ?clean. Base derivation, verdicts, and every literal below are
+// pinned by AC-20260905-01-9.
+const PICKS_SCRIPT = '<!--picks-script--><script>\n' +
+  '(function(){\n' +
+  "if (new URLSearchParams(location.search).has('clean')) return\n" +
+  "var __pm = location.pathname.match(new RegExp('^/p/[^/]+'))\n" +
+  "var __pbase = __pm ? __pm[0] : ''\n" +
+  "function __esc(s){return String(s).replace(/[&<>\"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]})}\n" +
+  "function __author(){\n" +
+  "  var a=null\n" +
+  "  try{a=localStorage.getItem('nl-author')}catch(e){}\n" +
+  "  if(a) return a\n" +
+  "  var name=(window.prompt('Your name (shown on your notes)')||'').trim()||'anonymous'\n" +
+  "  try{localStorage.setItem('nl-author',name)}catch(e){}\n" +
+  "  return name\n" +
+  "}\n" +
+  "function __post(id,extra){\n" +
+  "  var body=Object.assign({id:id,by:__author()},extra||{})\n" +
+  "  return fetch(__pbase+'/__picks/decide',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})\n" +
+  "    .then(function(r){return r.json().then(function(j){return {status:r.status,body:j}}).catch(function(){return {status:r.status,body:{}}})})\n" +
+  "    .catch(function(){return {status:0,body:{error:'open the served atlas to decide'}}})\n" +
+  "}\n" +
+  "function __msg(el,text){\n" +
+  "  var prev=el.querySelector('.decide-msg'); if(prev) prev.remove()\n" +
+  "  var d=document.createElement('div'); d.className='decide-msg'; d.textContent=text\n" +
+  "  el.appendChild(d)\n" +
+  "}\n" +
+  "function __renderPick(stopEl,stop){\n" +
+  "  var heads=stopEl.querySelectorAll('.chead')\n" +
+  "  heads.forEach(function(h){\n" +
+  "    var g=h.getAttribute('data-group')\n" +
+  "    var picked=stop.decision && stop.decision.pick===g\n" +
+  "    h.className='chead '+(picked?'picked':'rejected')\n" +
+  "    var badge=h.querySelector('.badge')\n" +
+  "    if(badge){badge.className='badge '+(picked?'picked':'rejected');badge.textContent=picked?'picked':'rejected'}\n" +
+  "    var btn=h.querySelector('[data-decide=\"pick\"]')\n" +
+  "    if(btn) btn.textContent=picked?'Picked':'Pick this instead'\n" +
+  "  })\n" +
+  "  if(!stopEl.querySelector('[data-decide=\"why\"]')){\n" +
+  "    var why=document.createElement('input'); why.name='why-'+stop.id; why.placeholder='why this one — optional'\n" +
+  "    var save=document.createElement('button'); save.setAttribute('data-decide','why'); save.textContent='Save'\n" +
+  "    stopEl.appendChild(why); stopEl.appendChild(save)\n" +
+  "  }\n" +
+  "}\n" +
+  "function __renderApprove(stopEl,stop){\n" +
+  "  stopEl.innerHTML = stop.decision.verdict==='approve' ? 'Approved by '+__esc(stop.decision.by) : __esc(stop.decision.note)\n" +
+  "}\n" +
+  "function __apply(stopEl,res){\n" +
+  "  if(res.status===200){\n" +
+  "    var stop=res.body\n" +
+  "    if(stop.kind==='pick') __renderPick(stopEl,stop); else __renderApprove(stopEl,stop)\n" +
+  "    return\n" +
+  "  }\n" +
+  "  if(res.status===409){ __msg(stopEl,'already picked up by the session'); return }\n" +
+  "  if(res.status===0){ __msg(stopEl,res.body.error); return }\n" +
+  "  __msg(stopEl,(res.body&&res.body.error)||'could not record the decision')\n" +
+  "}\n" +
+  "document.addEventListener('click',function(e){\n" +
+  "  var btn=e.target.closest && e.target.closest('[data-decide]')\n" +
+  "  if(!btn) return\n" +
+  "  var kind=btn.getAttribute('data-decide')\n" +
+  "  var stopEl=btn.closest('[data-id]')\n" +
+  "  if(!stopEl) return\n" +
+  "  var id=stopEl.getAttribute('data-id')\n" +
+  "  if(kind==='pick'){\n" +
+  "    __post(id,{verdict:'pick',pick:btn.getAttribute('data-group')}).then(function(res){__apply(stopEl,res)})\n" +
+  "  } else if(kind==='why'){\n" +
+  "    var input=stopEl.querySelector('[name=\"why-'+id+'\"]')\n" +
+  "    var picked=stopEl.querySelector('.chead.picked')\n" +
+  "    __post(id,{verdict:'pick',pick:picked?picked.getAttribute('data-group'):null,note:input?input.value:''}).then(function(res){__apply(stopEl,res)})\n" +
+  "  } else if(kind==='approve'){\n" +
+  "    __post(id,{verdict:'approve'}).then(function(res){__apply(stopEl,res)})\n" +
+  "  } else if(kind==='change'){\n" +
+  "    var ta=stopEl.querySelector('textarea[name=\"note-'+id+'\"]')\n" +
+  "    var note=ta?ta.value.trim():''\n" +
+  "    if(!note){ __msg(stopEl,'a change needs a note'); return }\n" +
+  "    __post(id,{verdict:'change',note:note}).then(function(res){__apply(stopEl,res)})\n" +
+  "  }\n" +
+  "})\n" +
+  "var __origOpen=window.__lbOpen\n" +
+  "if(typeof __origOpen==='function'){\n" +
+  "  window.__lbOpen=function(f){\n" +
+  "    document.body.classList.add('lb-open')\n" +
+  "    var card=f.closest && f.closest('.card')\n" +
+  "    var cmp=card && card.closest('.cmp')\n" +
+  "    if(cmp){\n" +
+  "      var step=card.closest('.step') || card.parentElement\n" +
+  "      var siblings=step ? Array.prototype.slice.call(step.querySelectorAll('iframe.frame')) : null\n" +
+  "      if(siblings && siblings.length) window.__lbList=siblings\n" +
+  "    }\n" +
+  "    __origOpen(f)\n" +
+  "    var bar=document.getElementById('lbbar')\n" +
+  "    if(bar){\n" +
+  "      var old=bar.querySelector('.decide-pick'); if(old) old.remove()\n" +
+  "      if(cmp){\n" +
+  "        var pb=document.createElement('button'); pb.className='decide-pick'; pb.textContent='Pick this'\n" +
+  "        bar.insertBefore(pb, bar.lastChild)\n" +
+  "        pb.onclick=function(){\n" +
+  "          var chead=cmp.querySelectorAll('.chead')[window.__lbIx]\n" +
+  "          var g=chead?chead.getAttribute('data-group'):null\n" +
+  "          __post(cmp.getAttribute('data-id'),{verdict:'pick',pick:g}).then(function(res){__apply(cmp,res)})\n" +
+  "        }\n" +
+  "      }\n" +
+  "    }\n" +
+  "  }\n" +
+  "}\n" +
+  "var __origClose=window.__lbClose\n" +
+  "if(typeof __origClose==='function'){\n" +
+  "  window.__lbClose=function(){ document.body.classList.remove('lb-open'); __origClose() }\n" +
+  "}\n" +
+  '})()\n' +
+  '</script><!--/picks-script-->'
+
+function stripCleanArtifacts(html) {
+  return html.replace(/<!--picks-script-->[\s\S]*?<!--\/picks-script-->/g, '')
+}
+
 // ---- build ---------------------------------------------------------------------------------------
 // buildAtlas(root, out) is the one derivation both `build` (writes the file, prints one line)
 // and `serve` (regenerates on every GET of the index, so the served atlas is never a stale or
@@ -773,6 +988,26 @@ function buildAtlas(root, out) {
 
   const labels = [...new Set([...nodes.keys(), ...mocks.keys()])].sort()
   const outDir = path.dirname(out)
+
+  // specs/20260905/01-picks-on-the-atlas-page.md D3: picks.json is read on every request — a
+  // consumed/superseded stop, or no file at all, renders nothing (readPicks/pending both fail
+  // closed to []/empty lists, never a build error).
+  let picksStops = []
+  try { picksStops = picksLib.readPicks(root) } catch { picksStops = [] }
+  const { open: openStops, decided: decidedStops } = picksLib.pending(picksStops)
+  const liveStops = openStops.concat(decidedStops)
+  const stopsByHome = { shapes: [], theme: [], header: [], standalone: [] }
+  const stopsByJourney = new Map()
+  for (const stop of liveStops) {
+    const home = stopHome(stop.key)
+    if (home.type === 'journey') {
+      if (!stopsByJourney.has(home.journey)) stopsByJourney.set(home.journey, [])
+      stopsByJourney.get(home.journey).push(stop)
+    } else {
+      stopsByHome[home.type].push(stop)
+    }
+  }
+
   const rows = labels.map(label => {
     const mock = mocks.get(label)
     const claim = claims.get(label)
@@ -839,6 +1074,27 @@ function buildAtlas(root, out) {
     if (!sections.has(key)) sections.set(key, { cards: [], chips: [] })
     sections.get(key)[r.chip ? 'chips' : 'cards'].push(r)
   }
+  // D3(b): a journey key (journey-approved:<j>, journey-reviewed:<j>, variants:<j>) attaches to
+  // the section whose derived title equals <j> — the same title a reader sees on the section's
+  // own <h2>. A journey with no matching section (nothing drawn under it yet) falls back to a
+  // standalone block rather than being silently dropped.
+  const journeySectionKeyByName = new Map()
+  for (const key of sections.keys()) {
+    const isSeedKey = key.startsWith('seed:')
+    const t = key === '~no declaring brief' ? 'no declaring brief' : isSeedKey ? key.slice(5) : key.replace(/\.md$/, '')
+    journeySectionKeyByName.set(t, key)
+  }
+  const journeyStopsHtmlByKey = new Map()
+  const unhomedJourneyStops = []
+  for (const [journeyName, jStops] of stopsByJourney) {
+    const key = journeySectionKeyByName.get(journeyName)
+    if (key) {
+      journeyStopsHtmlByKey.set(key, (journeyStopsHtmlByKey.get(key) || '') + jStops.map((s) => renderStop(s, root, outDir, vp0)).join('\n'))
+    } else {
+      unhomedJourneyStops.push(...jStops)
+    }
+  }
+
   const sectionHtml = [...sections.keys()].sort().map(key => {
     const { cards, chips } = sections.get(key)
     // D15: a `seed:<journey>` key titles by the bare journey (not the raw "seed:j1" key) and
@@ -849,8 +1105,10 @@ function buildAtlas(root, out) {
     const subtitle = isSeed ? (seedPersonaByJourney.get(title) || '') : ''
     const count = [cards.length ? cards.length + ' mocked' : null, chips.length ? chips.length + ' gap' : null]
       .filter(Boolean).join(' · ')
+    const stopsHtml = journeyStopsHtmlByKey.get(key) || ''
     return '<section class="sect"><h2>' + esc(title) + '<span class="count">' + count + '</span></h2>\n' +
       (subtitle ? '<p class="meta">' + esc(subtitle) + '</p>\n' : '') +
+      stopsHtml +
       (cards.length ? '<div class="grid">\n' + cards.map(r => r.html).join('\n') + '\n</div>' : '') +
       (chips.length ? '\n<div class="gaps">' + chips.map(r => r.html).join('') + '</div>' : '') +
       '</section>'
@@ -863,6 +1121,9 @@ function buildAtlas(root, out) {
   if (fs.existsSync(shapesDir)) {
     const shapeFiles = fs.readdirSync(shapesDir).filter(f => f.endsWith('.html')).sort()
     if (shapeFiles.length) {
+      // D3(b)/(c): an open or decided shape-picked stop replaces the plain candidate cards with
+      // the compare table — the pick lives where the look already happened.
+      const shapeStopsHtml = stopsByHome.shapes.map((s) => renderStop(s, root, outDir, vp0)).join('\n')
       const shapeCards = shapeFiles.map((f, i) => {
         const kebab = path.basename(f, '.html')
         const filePath = path.join(shapesDir, f)
@@ -874,9 +1135,39 @@ function buildAtlas(root, out) {
       shapesSectionHtml = '<section class="sect" id="shapes"><h2>shapes<span class="count">' + shapeFiles.length + ' candidates</span></h2>\n' +
         '<p class="meta">Each card is one way to lay out the whole product. Click a card to see it at full size, ' +
         'use the width buttons above to compare on phone and desktop, then reply <b>approve &lt;name&gt;</b> in the session.</p>\n' +
-        '<div class="grid">\n' + shapeCards + '\n</div></section>'
+        (shapeStopsHtml || ('<div class="grid">\n' + shapeCards + '\n</div>')) + '</section>'
     }
   }
+
+  // D3(b): a theme-picked stop gets its own section right after shapes — there is no plain
+  // "theme" derivation elsewhere in the atlas to replace, the compare table is the whole section.
+  const themeStopsHtml = stopsByHome.theme.map((s) => renderStop(s, root, outDir, vp0)).join('\n')
+  const themeSectionHtml = themeStopsHtml
+    ? '<section class="sect" id="theme"><h2>theme</h2>\n' + themeStopsHtml + '</section>'
+    : ''
+
+  // D3(a): the #stops index — links and text only, before every other section.
+  const openLines = openStops.map((s) =>
+    '<li><a href="#stop-' + s.id + '">' + esc(s.title) + '</a> · ' + esc(s.kind) + '</li>').join('')
+  const decidedLines = decidedStops.map((s) => {
+    const verdictPhrase = s.decision ? s.decision.verdict + (s.decision.pick ? ' ' + s.decision.pick : '') : ''
+    const by = s.decision ? s.decision.by : ''
+    return '<li><a href="#stop-' + s.id + '">' + esc(s.title) + '</a> · ' + esc(verdictPhrase) + ' · ' + esc(by) + '</li>'
+  }).join('')
+  const stopsIndexHtml = liveStops.length
+    ? '<section id="stops">' +
+      (openLines ? '<h2>Waiting for your look</h2><ol>' + openLines + '</ol>' : '') +
+      (decidedLines ? '<h2>Decided — waiting for the session</h2><ol>' + decidedLines + '</ol>' : '') +
+      '</section>'
+    : ''
+
+  // D3(b): a key matching no known grammar (or a journey with no matching section) renders as a
+  // standalone block right after #stops, before any class="sect" section.
+  const standaloneHtml = stopsByHome.standalone.concat(unhomedJourneyStops)
+    .map((s) => renderStop(s, root, outDir, vp0)).join('\n')
+
+  // D3(b): key "approved" attaches to the page header.
+  const headerStopsHtml = stopsByHome.header.map((s) => renderStop(s, root, outDir, vp0)).join('\n')
 
   // status filter chips: hide everything not matching, collapse sections that go empty
   const filterBar =
@@ -942,9 +1233,10 @@ function buildAtlas(root, out) {
     ? '<div class="empty">Nothing drawn yet. Shapes appear here after the SHAPES step, screens after the first journey is drawn.</div>'
     : ''
   const html = page('Design atlas',
-    header + (rows.length ? graph : '') +
+    header + headerStopsHtml + stopsIndexHtml + standaloneHtml + (rows.length ? graph : '') +
     '\n<div class="bar">' + filterBar + (bar.buttons ? '<span class="sep"></span>' + bar.buttons : '') + '</div>' +
-    '\n' + shapesSectionHtml + '\n' + sectionHtml + '\n' + emptyHtml + '\n' + LIGHTBOX + '\n' + UI_SCRIPT + bar.script + filterScript)
+    '\n' + shapesSectionHtml + '\n' + themeSectionHtml + '\n' + sectionHtml + '\n' + emptyHtml + '\n' +
+    LIGHTBOX + '\n' + UI_SCRIPT + bar.script + filterScript + PICKS_SCRIPT)
   fs.mkdirSync(outDir, { recursive: true })
   fs.writeFileSync(out, html)
   return { html, out, count: labels.length, summary }
@@ -971,10 +1263,14 @@ const MIME = {
   '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.woff': 'font/woff', '.woff2': 'font/woff2',
 }
-// D2: inserts the notes-layer script tag immediately before the last `</body>` — appended at
-// the end when no `</body>` is present at all (never blocks serving a headless fragment).
-function injectNotesScript(html) {
-  const tag = '<script src="/__notes/notes.js"></script>\n'
+// D2: inserts the notes-scope meta tag plus the (prefix-aware) notes-layer script tag
+// immediately before the last `</body>` — appended at the end when no `</body>` is present at
+// all (never blocks serving a headless fragment). specs/20260905/01 D2: the page declares its
+// own scope (`mock` for a static file, `project` for the derived index) so the notes layer never
+// has to guess it.
+function injectNotesScript(html, scope, prefix) {
+  const tag = '<meta name="notes-scope" content="' + scope + '">\n' +
+    '<script src="' + prefix + '/__notes/notes.js"></script>\n'
   const idx = html.lastIndexOf('</body>')
   if (idx === -1) return html + '\n' + tag
   return html.slice(0, idx) + tag + html.slice(idx)
@@ -998,18 +1294,30 @@ function jsonRes(res, code, obj) {
   res.end(JSON.stringify(obj))
 }
 
-function cmdServe(argv) {
-  const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d }
-  const root = path.resolve(arg('--root', '.'))
-  const port = parseInt(arg('--port', '4173'), 10)
-  const designRoot = path.join(root, 'design') + path.sep
+// specs/20260905/01-picks-on-the-atlas-page.md D2: the per-root request handler extracted from
+// `cmdServe` — `serve` mounts it at prefix '' (today, unchanged); spec 02's review hub mounts the
+// same function at `/p/<name>` with no second implementation of any route below. Every path is
+// matched after stripping `prefix`; a request whose path does not start with `prefix` 404s.
+function createRequestHandler(root, opts = {}) {
+  const prefix = opts.prefix || ''
+  const rootAbs = path.resolve(root)
+  const designRoot = path.join(rootAbs, 'design') + path.sep
   const notesLibPath = path.join(__dirname, 'lib', 'notes-layer.browser.js')
   const viewerCssPath = path.join(__dirname, '..', 'templates', 'mocks', 'viewer.css')
-  const http = require('node:http')
-  const server = http.createServer((req, res) => {
+
+  return function handler(req, res) {
     const urlObj = new URL(req.url || '/', 'http://localhost')
+    let fullPath
+    try { fullPath = decodeURIComponent(urlObj.pathname) } catch { fullPath = '/' }
+
     let reqPath
-    try { reqPath = decodeURIComponent(urlObj.pathname) } catch { reqPath = '/' }
+    if (prefix) {
+      if (fullPath === prefix) reqPath = '/'
+      else if (fullPath.startsWith(prefix + '/')) reqPath = fullPath.slice(prefix.length)
+      else { res.writeHead(404, { 'cache-control': 'no-store' }); res.end('not found'); return }
+    } else {
+      reqPath = fullPath
+    }
 
     // ---- /__notes/* (D2) ------------------------------------------------------------------
     if (reqPath === '/__notes/notes.js' && req.method === 'GET') {
@@ -1031,7 +1339,7 @@ function cmdServe(argv) {
     if (reqPath === '/__notes/list' && req.method === 'GET') {
       const screen = urlObj.searchParams.get('screen')
       let notes = []
-      try { notes = notesLib.readNotes(root) } catch { notes = [] }
+      try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
       const out = screen === '*'
         ? notes.filter((n) => n.scope === 'project')
         : notes.filter((n) => n.scope === 'mock' && n.screen === screen)
@@ -1041,10 +1349,10 @@ function cmdServe(argv) {
     if (reqPath === '/__notes/add' && req.method === 'POST') {
       readJsonBody(req).then((body) => {
         let notes = []
-        try { notes = notesLib.readNotes(root) } catch { notes = [] }
+        try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
         let result
         try { result = notesLib.addNote(notes, body) } catch (e) { jsonRes(res, 400, { error: e.message }); return }
-        notesLib.writeNotes(root, result.notes)
+        notesLib.writeNotes(rootAbs, result.notes)
         jsonRes(res, 201, result.note)
       }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
       return
@@ -1052,10 +1360,10 @@ function cmdServe(argv) {
     if (reqPath === '/__notes/resolve' && req.method === 'POST') {
       readJsonBody(req).then((body) => {
         let notes = []
-        try { notes = notesLib.readNotes(root) } catch { notes = [] }
+        try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
         let result
         try { result = notesLib.resolveNote(notes, body.id, body.by) } catch (e) { jsonRes(res, 404, { error: e.message }); return }
-        notesLib.writeNotes(root, result.notes)
+        notesLib.writeNotes(rootAbs, result.notes)
         jsonRes(res, 200, result.note)
       }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
       return
@@ -1066,16 +1374,54 @@ function cmdServe(argv) {
       return
     }
 
+    // ---- /__picks/* (specs/20260905/01 D1/D2) ----------------------------------------------
+    if (reqPath === '/__picks/list' && req.method === 'GET') {
+      let stops = []
+      try { stops = picksLib.readPicks(rootAbs) } catch { stops = [] }
+      const { open, decided } = picksLib.pending(stops)
+      jsonRes(res, 200, open.concat(decided))
+      return
+    }
+    if (reqPath === '/__picks/decide' && req.method === 'POST') {
+      readJsonBody(req).then((body) => {
+        let stops = []
+        try { stops = picksLib.readPicks(rootAbs) } catch { stops = [] }
+        let result
+        try {
+          result = picksLib.decideStop(stops, body && body.id, body || {})
+        } catch (e) {
+          const msg = e.message
+          if (/no stop with id/.test(msg)) { jsonRes(res, 404, { error: msg }); return }
+          if (/already consumed|superseded/.test(msg)) {
+            jsonRes(res, 409, { error: msg, stop: stops.find((s) => s.id === (body && body.id)) })
+            return
+          }
+          jsonRes(res, 400, { error: msg })
+          return
+        }
+        picksLib.writePicks(rootAbs, result.stops)
+        jsonRes(res, 200, result.stop)
+      }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
+      return
+    }
+    if (reqPath.startsWith('/__picks/')) {
+      res.writeHead(404, { 'cache-control': 'no-store' })
+      res.end('not found')
+      return
+    }
+
     // ---- the atlas index is derived on every request (never a stale/missing file) -------------
     if (req.method === 'GET' && ATLAS_INDEX_PATHS.has(reqPath)) {
       let built
-      try { built = buildAtlas(root, path.join(root, 'design/atlas/index.html')) } catch (e) {
+      try { built = buildAtlas(rootAbs, path.join(rootAbs, 'design/atlas/index.html')) } catch (e) {
         res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
-        res.end('atlas build failed under ' + root + ': ' + (e && e.message || e) + '\n')
+        res.end('atlas build failed under ' + rootAbs + ': ' + (e && e.message || e) + '\n')
         return
       }
       res.writeHead(200, { 'content-type': MIME['.html'], 'cache-control': 'no-store' })
-      res.end(urlObj.searchParams.has('clean') ? built.html : injectNotesScript(built.html))
+      res.end(urlObj.searchParams.has('clean')
+        ? stripCleanArtifacts(built.html)
+        : injectNotesScript(built.html, 'project', prefix))
       return
     }
 
@@ -1092,13 +1438,21 @@ function cmdServe(argv) {
       const contentType = MIME[ext] || 'application/octet-stream'
       if (ext === '.html' && !urlObj.searchParams.has('clean')) {
         res.writeHead(200, { 'content-type': contentType, 'cache-control': 'no-store' })
-        res.end(injectNotesScript(data.toString('utf8')))
+        res.end(injectNotesScript(data.toString('utf8'), 'mock', prefix))
         return
       }
       res.writeHead(200, { 'content-type': contentType, 'cache-control': 'no-store' })
       res.end(data)
     })
-  })
+  }
+}
+
+function cmdServe(argv) {
+  const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d }
+  const root = path.resolve(arg('--root', '.'))
+  const port = parseInt(arg('--port', '4173'), 10)
+  const http = require('node:http')
+  const server = http.createServer(createRequestHandler(root, { prefix: '' }))
   const banner = (verb) => verb + ' http://localhost:' + port + '/atlas/index.html — remote: ssh -L ' + port + ':localhost:' + port + ' <host>\n'
   // A busy port is the common case, not an error: the previous session left its server up. Probe
   // it for the notes layer (the one route only this server answers); an atlas answers → print the
@@ -1121,12 +1475,19 @@ function cmdServe(argv) {
 }
 
 // ---- main ----------------------------------------------------------------------------------------
-const [cmd, ...rest] = process.argv.slice(2)
-if (cmd === 'check') cmdCheck(rest)
-else if (cmd === 'gallery') cmdGallery(rest)
-else if (cmd === 'build') cmdBuild(rest)
-else if (cmd === 'serve') cmdServe(rest)
-else if (cmd === 'shell' && rest[0] === 'sync') cmdShellSync(rest.slice(1))
-else if (cmd === 'shell' && rest[0] === 'adopt') cmdShellAdopt(rest.slice(1))
-else if (cmd === 'shell') die('usage: design-atlas.js shell <sync|adopt> …')
-else die('usage: design-atlas.js <check|gallery|build|shell|serve> …')
+// specs/20260905/01-picks-on-the-atlas-page.md D2: CLI dispatch runs only when this file is the
+// process entry point — a plain `require('design-atlas.js')` (spec 02's hub, this file's own
+// tests) must load the module and expose its exports without also running a CLI command.
+if (require.main === module) {
+  const [cmd, ...rest] = process.argv.slice(2)
+  if (cmd === 'check') cmdCheck(rest)
+  else if (cmd === 'gallery') cmdGallery(rest)
+  else if (cmd === 'build') cmdBuild(rest)
+  else if (cmd === 'serve') cmdServe(rest)
+  else if (cmd === 'shell' && rest[0] === 'sync') cmdShellSync(rest.slice(1))
+  else if (cmd === 'shell' && rest[0] === 'adopt') cmdShellAdopt(rest.slice(1))
+  else if (cmd === 'shell') die('usage: design-atlas.js shell <sync|adopt> …')
+  else die('usage: design-atlas.js <check|gallery|build|shell|serve> …')
+}
+
+module.exports = { buildAtlas, page, frameTag, createRequestHandler }

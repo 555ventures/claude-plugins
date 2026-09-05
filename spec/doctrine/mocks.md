@@ -186,6 +186,23 @@ journey is that journey's approval mark.
 signing off; the REVIEW step's printed text carries the fixed sign-off line: `Approval means
 "this is the product I understand" — the written brief, not these screens, holds scope`.
 
+**Picks.** A pick stage of the flow — shapes, theme directions, per-surface variants — is
+recorded as a look stop in `design/mocks/picks.json`, written only by
+`spec/scripts/lib/mocks-picks.js` (`openStop`, `decideStop`, `consumeStop`, `pending`; the
+`picks.json` pattern mirrors the ledger's one-writer rule, § Provenance Ledger). A stop is one
+of two kinds: `pick`, choosing among candidate groups — a group is one flow, its screens in
+candidate order — or `approve`, a single-flow yes/note-and-change. The served atlas renders
+every open or decided stop **in place**, in the section its own screens already live in, never
+on a separate page. A `pick` stop renders as a **compare table**: one row per step, one column
+per candidate group, full cards, with an exclusive one-click `Pick this` button per column;
+picking a group auto-rejects the rest, and the decision stays re-pickable (`Pick this instead`)
+until the mocks driver consumes it, so a second look that changes the user's mind is never
+stuck behind a session round-trip. An `approve` stop offers `Approve` or `Change` with a note.
+Every served page declares which notes bar it shows through the `notes-scope` meta tag the
+server stamps on it — `project` on the atlas index, `mock` on a screen — so the notes layer
+renders **one scope per page**, declared by the page, rather than guessing from document
+structure.
+
 ## Mocks: Authoring Rules
 
 The six rules the dry run converged on (LEDGER standing rules + M11/M13/M14 + A6/A7) — the

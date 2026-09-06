@@ -31,7 +31,7 @@
 //
 // specs/20260905/05-desktop-fill-render-rule.md (D2-D5/D7): the closed renderCheck.kind set
 // gains `desktop-fill` — over each inventory document, the measurand is CONTENT SPAN (not root
-// width, falsified by an executed spike: Hearwell's labeled root is body-wide, the narrow
+// width, falsified by an executed spike: the labeled root can be body-wide while a narrow
 // column is a child region inside it), computed from entries with a `box` and none of
 // `fixed`/`outOfFlow`/`dataPositioned`/`srOnly`: `span = max(x+w) - min(x)`,
 // `fraction = span / page.clientWidth`. Viewport-gated like `line-length` (silent skip below

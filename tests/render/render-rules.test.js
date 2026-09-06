@@ -326,7 +326,7 @@ test('AC-20260831-02-8/AC-20260905-05-8: render-rules.js run with the shipped sp
 // specs/20260905/05-desktop-fill-render-rule.md D2-D7 (Contracts, A1/A2): render-rules.js
 // gains a third viewport-gated renderCheck kind, `desktop-fill`, measuring the horizontal span
 // of a document's in-flow entries against page.clientWidth — never the labeled root's own box,
-// which A1's spike found is body-wide on the measured Hearwell case and would pass the exact
+// which A1's spike found is body-wide on the spec's measured case and would pass the exact
 // phone-column-at-desktop escape this spec exists to close. AC-20260905-05-1 …
 // AC-20260905-05-6.
 

@@ -143,10 +143,12 @@ test('AC-20260905-04-1: grep -rn "SPEC_DESIGN_HUB|design-hub" over spec/, tests/
     'D1: no command, doctrine, canonical, script, or rules file may mention the retired hub surface outside a tests/ absence pin or the 7.83.0 changelog line — the deleted machine-wide hub must leave no live reference behind: ' + JSON.stringify(offenders, null, 2))
 })
 
-test('themes are composed under the frontend-design skill (7.90.0): /spec:mocks THEME rule, /spec:sketch themed pass, and doctrine § Authoring Rules each bind the skill, and the missing-skill case stops on the install line', () => {
+test('mocks are authored under the frontend-design skill (7.90.1): every /spec:mocks authoring step, every /spec:sketch mock, and doctrine § Authoring Rules bind the skill, and a missing skill warns once and continues', () => {
   const cmd = read('spec/commands/mocks.md')
-  assert.match(cmd, /always runs under the `frontend-design`\nskill/, 'mocks.md THEME rule must bind direction composition to the frontend-design skill — got no such clause')
-  assert.match(cmd, /\/plugin install frontend-design/, 'mocks.md must name the install line for the missing-skill stop — got none')
-  assert.match(read('spec/commands/sketch.md'), /the `frontend-design` skill loaded first/, 'sketch.md themed pass must load the skill first — got no such clause')
-  assert.match(read('spec/doctrine/mocks.md'), /\*\*Themes are composed under the `frontend-design` skill\.\*\*/, 'doctrine § Authoring Rules must carry the rule — got none')
+  assert.match(cmd, /Every authoring step of this command[\s\S]{0,120}`frontend-design` skill/, 'mocks.md must bind every authoring step to the frontend-design skill — got no such clause')
+  assert.match(cmd, /⚠️ frontend-design skill not installed[\s\S]{0,200}and continue; never stop/, 'mocks.md must warn-and-continue on a missing skill, never stop — got no such clause')
+  const sk = read('spec/commands/sketch.md')
+  assert.match(sk, /authored under the\n`frontend-design` skill/, 'sketch.md must author every mock under the skill — got no such clause')
+  assert.match(sk, /⚠️ frontend-design skill not installed[\s\S]{0,120}and continue/, 'sketch.md must warn-and-continue on a missing skill — got no such clause')
+  assert.match(read('spec/doctrine/mocks.md'), /\*\*Mocks are authored under the `frontend-design` skill\.\*\*[\s\S]{0,400}never a stop/, 'doctrine § Authoring Rules must carry the warn-not-stop rule — got none')
 })

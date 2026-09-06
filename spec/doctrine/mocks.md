@@ -231,10 +231,11 @@ half the driver cannot check, carried here as contract prose the authoring sessi
   never freehand — across ≥3 screens per direction (the densest screen included) and
   ≥2 directions; every direction is judged on the dense screen first, because a direction that
   only survives on simple screens has not been tested.
-- **Themes are composed under the `frontend-design` skill.** Every theme direction — in
-  `/spec:mocks` THEME and in `/spec:sketch`'s themed pass — is authored with the skill loaded
-  first; the pipeline never composes tokens or a themed screen from the session's unaided taste.
-  Missing skill = stop and print the install line, never a silent fallback.
+- **Mocks are authored under the `frontend-design` skill.** Every authoring step of
+  `/spec:mocks` (shapes, wireframes, theme directions, skins) and every mock `/spec:sketch`
+  drafts or reworks loads the skill first; the pipeline never composes a screen or a token from
+  the session's unaided taste. Missing skill = one `⚠️` warning line naming
+  `/plugin install frontend-design`, then continue — never a stop, never silence.
 - **AI-reworded text stays gray until confirmed.** Copy the model rewrote or invented reads as
   visibly provisional (the gray/unconfirmed treatment) until a human confirms it — a themed
   screen never launders invented copy into something that reads as final.

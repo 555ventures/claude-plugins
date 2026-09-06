@@ -56,12 +56,13 @@ rule): once ≥2 directions are composed, `stop open theme` opens a pick stop an
 theme-picked` accepts once it is decided, appending the `theme` row itself (`rejected` = the
 other directions).
 
-Composing a direction — its tokens and its ≥3 screens — always runs under the `frontend-design`
-skill (invoke it via the Skill tool before the first token is written; the skill is the
-plugin's standing source of visual-design instruction, not a menu the session consults only when
-stuck). If the skill is not installed, print the `/plugin install frontend-design` line from
-`/spec:init`'s offer and stop before composing — a direction composed without it is the templated
-default the THEME step exists to avoid (JJ, 2026-09-06, after repeated asks).
+Every authoring step of this command — shapes, wireframes, theme directions, skins — runs under
+the `frontend-design` skill (invoke it via the Skill tool before the first screen or token is
+written; the skill is the plugin's standing source of visual-design instruction, not a menu the
+session consults only when stuck). If the skill is not installed, print ONE warning line —
+`⚠️ frontend-design skill not installed — authoring without it; install: /plugin install
+frontend-design` — and continue; never stop the run on it, never omit the warning (JJ,
+2026-09-06: "use it in both, but if not active, give me a warning").
 
 ## Look rule
 

@@ -9,7 +9,12 @@ The pre-plan seat for roadmap-level design iteration. Scoped **by construction t
 its surfaces get mocks, the user brainstorms on them — add, remove, change radically — and every
 applied change lands in its binding home *in the same round*, so `/spec:plan` on that brief later
 reads files that are already true. Sits between the roadmap (genesis-authored or hand-authored)
-and `/spec:plan`; owns no spec state and never edits `specs/**`. `/spec:atlas` remains the
+and `/spec:plan`; owns no spec state and never edits `specs/**`. Every mock this command
+authors or reworks — first draft, brainstorm round, themed pass — is authored under the
+`frontend-design` skill (Skill tool, before the first edit; § Mocks: Authoring Rules); when the
+skill is not installed, print ONE warning line (`⚠️ frontend-design skill not installed —
+authoring without it; install: /plugin install frontend-design`) and continue. This is the seat
+where each surface's UI/UX is argued individually, so the skill's critique is the point. `/spec:atlas` remains the
 whole-product map; this command is the per-brief workbench — the atlas's annotation triage
 (shared § Design Atlas) applies here verbatim, plus the architecture route below.
 
@@ -112,8 +117,7 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    `data-state-btn`, `data-contract="none"`, `data-positioned`, `data-narrow` — are documented
    in shared § Design Canon; this is where they get checked, not where they get defined. Then run the
    **expansion pass** (shared § Design Canon: media queries + the
-   tokens dark block, one responsive file, no new taste; the `frontend-design` skill loaded first,
-   § Mocks: Authoring Rules) on each of the brief's `sketch` mocks,
+   tokens dark block, one responsive file, no new taste) on each of the brief's `sketch` mocks,
    run `{atlas} shell sync` on those mocks (a canon change since authoring never blocks
    ratification for a mechanical reason — a drift finding that survives sync is real), then
    run `node {atlas} check --matrix`, and render the matrix screenshots — each declared viewport, each

@@ -330,6 +330,10 @@ test('AC-20260831-02-8/AC-20260905-05-8: render-rules.js run with the shipped sp
 // phone-column-at-desktop escape this spec exists to close. AC-20260905-05-1 …
 // AC-20260905-05-6.
 
+// The manifest row every AC-20260905-05-1/2/3/4/6 fixture below runs against — hoisted so the
+// calibrated threshold/gate pair is written once, not re-typed (and re-risked) five times.
+const DESKTOP_FILL_RULE = { id: 'desktop-fill', targetCategory: 'layout', severity: 'error', renderCheck: { kind: 'desktop-fill', minFraction: 0.5, minViewport: 1024 } }
+
 test('AC-20260905-05-1: a desktop-fill rule (minFraction 0.5, minViewport 1024) over a 1440-wide document with in-flow entries at x:522/w:396 and x:522/w:200 exits 1 with "rule desktop-fill desktop-fill content spans 396px of 1440px (28% < 50%)" naming both the widen and data-narrow remedies, even with a fixed/outOfFlow/dataPositioned/srOnly entry spanning the full page that must be excluded from the measurement', () => {
   const entries = [
     mkEntry({ text: 'Client shell body', box: { x: 522, y: 0, w: 396, h: 20 } }),
@@ -344,7 +348,7 @@ test('AC-20260905-05-1: a desktop-fill rule (minFraction 0.5, minViewport 1024) 
     mkEntry({ text: 'Skip link', box: { x: 2000, y: 0, w: 5000, h: 20 }, srOnly: true }),
   ]
   const r = runRules({
-    rules: [{ id: 'desktop-fill', targetCategory: 'layout', severity: 'error', renderCheck: { kind: 'desktop-fill', minFraction: 0.5, minViewport: 1024 } }],
+    rules: [DESKTOP_FILL_RULE],
     inventories: [{ entries, page: { scrollWidth: 1440, clientWidth: 1440 }, narrow: false }],
     tokensCss: ':root {}\n',
   })
@@ -358,8 +362,26 @@ test('AC-20260905-05-1: a desktop-fill rule (minFraction 0.5, minViewport 1024) 
     'a desktop-fill finding must fail the run, or a phone-width column centred on a desktop viewport ratifies clean — the exact Hearwell escape this spec exists to close: ' + r.stderr)
 })
 
+test('AC-20260905-05-1: a thresholdless desktop-fill row is refused at validation, never silently green', () => {
+  const entries = [
+    mkEntry({ text: 'Client shell body', box: { x: 522, y: 0, w: 396, h: 20 } }),
+    mkEntry({ text: 'Client shell footer', box: { x: 522, y: 100, w: 200, h: 20 } }),
+  ]
+  const r = runRules({
+    rules: [{ id: 'desktop-fill', targetCategory: 'layout', severity: 'error', renderCheck: { kind: 'desktop-fill' } }],
+    inventories: [{ entries, page: { scrollWidth: 1440, clientWidth: 1440 }, narrow: false }],
+    tokensCss: ':root {}\n',
+  })
+  assert.strictEqual(r.status, 2,
+    'a desktop-fill row with no thresholds declared is a malformed manifest, not a run to score — a rule with an unusable measurand must be refused at validation, never silently scored against the AC-1 28%-fill inventory: got status ' + r.status + ' stdout: ' + r.stdout + ' stderr: ' + r.stderr)
+  assert.match(r.stderr, /desktop-fill/,
+    'the exit-2 refusal must name the offending rule\'s id ("desktop-fill"), or a manifest author fixing a missing threshold has no discoverable pointer to which rule is broken: ' + r.stderr)
+  assert.match(r.stderr, /minFraction/,
+    'the exit-2 refusal must name the missing field ("minFraction"), or a manifest author sees a bare rule-id and still cannot tell which threshold to add: ' + r.stderr)
+})
+
 test('AC-20260905-05-2: a desktop-fill rule emits no finding at page.clientWidth 390 (below minViewport 1024, exit 0), and emits no finding over a 1440-wide document whose in-flow entries span x:141..1298 (80%, exit 0) even with an out-of-span fixed entry present', () => {
-  const rules = [{ id: 'desktop-fill', targetCategory: 'layout', severity: 'error', renderCheck: { kind: 'desktop-fill', minFraction: 0.5, minViewport: 1024 } }]
+  const rules = [DESKTOP_FILL_RULE]
 
   const rNarrowViewport = runRules({
     rules,
@@ -397,7 +419,7 @@ test('AC-20260905-05-3: the AC-1 28%-fill document produces no desktop-fill find
     mkEntry({ text: 'Client shell footer', box: { x: 522, y: 100, w: 200, h: 20 } }),
   ]
   const r = runRules({
-    rules: [{ id: 'desktop-fill', targetCategory: 'layout', severity: 'error', renderCheck: { kind: 'desktop-fill', minFraction: 0.5, minViewport: 1024 } }],
+    rules: [DESKTOP_FILL_RULE],
     inventories: [{ entries, page: { scrollWidth: 1440, clientWidth: 1440 }, narrow: true }],
     tokensCss: ':root {}\n',
   })
@@ -409,7 +431,7 @@ test('AC-20260905-05-3: the AC-1 28%-fill document produces no desktop-fill find
 
 test('AC-20260905-05-4: a desktop-fill rule over an inventory document with no page block exits 1 with a finding naming re-capture with the current render-inventory.browser.js, never a silent pass', () => {
   const r = runRules({
-    rules: [{ id: 'desktop-fill', targetCategory: 'layout', severity: 'error', renderCheck: { kind: 'desktop-fill', minFraction: 0.5, minViewport: 1024 } }],
+    rules: [DESKTOP_FILL_RULE],
     inventories: [[mkEntry({ text: 'Fine', box: { x: 0, y: 0, w: 100, h: 20 } })]],
     tokensCss: ':root {}\n',
   })
@@ -425,7 +447,7 @@ test('AC-20260905-05-6: a desktop-fill rule over a 1440-wide document whose only
     mkEntry({ text: 'Absolute chip', box: { x: 0, y: 0, w: 300, h: 20 }, outOfFlow: true }),
   ]
   const r = runRules({
-    rules: [{ id: 'desktop-fill', targetCategory: 'layout', severity: 'error', renderCheck: { kind: 'desktop-fill', minFraction: 0.5, minViewport: 1024 } }],
+    rules: [DESKTOP_FILL_RULE],
     inventories: [{ entries, page: { scrollWidth: 1440, clientWidth: 1440 }, narrow: false }],
     tokensCss: ':root {}\n',
   })

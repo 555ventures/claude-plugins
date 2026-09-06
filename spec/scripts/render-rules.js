@@ -46,9 +46,11 @@
 //
 // Exit codes: 0 = no findings · 1 = one or more findings (a `severity: "warn"` rule's own
 // finding is printed but never contributes to this) · 2 = usage, an unreadable/unparsable
-// --rules/--inventory/--tokens file, or a rule's renderCheck.kind outside the closed
-// target-size/cta-count/contrast/palette/no-overflow/line-length/desktop-fill set (stderr names
-// the offending rule's id).
+// --rules/--inventory/--tokens file, a rule's renderCheck.kind outside the closed
+// target-size/cta-count/contrast/palette/no-overflow/line-length/desktop-fill set, or a
+// desktop-fill row missing (or carrying a non-numeric) minFraction/minViewport — refused at
+// validation before any check runs, since an unset threshold would otherwise measure nothing
+// and pass silently (stderr names the offending rule's id).
 
 const fs = require('fs')
 
@@ -132,6 +134,22 @@ for (const rule of manifest.rules) {
   if (rule.renderCheck && !CLOSED_KINDS.includes(rule.renderCheck.kind)) {
     die('rule "' + rule.id + '" declares renderCheck.kind ' + JSON.stringify(rule.renderCheck.kind) +
       ' — the closed set is ' + CLOSED_KINDS.join(', ') + '; fix ' + rulesPath)
+  }
+}
+
+// desktop-fill's thresholds are required, not optional: a row missing minFraction/minViewport
+// (or carrying a non-numeric one) would otherwise measure nothing (clientWidth < undefined is
+// always false) and pass silently — fail closed at validation instead, before any check runs.
+for (const rule of manifest.rules) {
+  if (!rule.renderCheck || rule.renderCheck.kind !== 'desktop-fill') continue
+  const { minFraction, minViewport } = rule.renderCheck
+  const bad = []
+  if (typeof minFraction !== 'number' || !Number.isFinite(minFraction)) bad.push('minFraction')
+  if (typeof minViewport !== 'number' || !Number.isFinite(minViewport)) bad.push('minViewport')
+  if (bad.length) {
+    die('rule "' + rule.id + '" declares renderCheck.kind "desktop-fill" with ' +
+      (bad.length > 1 ? 'invalid or missing ' + bad.join(' and ') + ' fields' : 'an invalid or missing ' + bad[0] + ' field') +
+      ' — expected { kind: "desktop-fill", minFraction: <0..1>, minViewport: <px> }; fix ' + rulesPath)
   }
 }
 

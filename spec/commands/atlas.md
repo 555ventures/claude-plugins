@@ -59,15 +59,15 @@ user's input; `sweep` as an argument only skips the gap confirmation.
 2. **Gaps in the report → offer the sweep** ("N declared surfaces have no mock — fill them at
    sketch tier?" — the interactive confirmation behind the Next line above). Yes → run the
    sweep below. Invoked as `/spec:atlas sweep`, skip the question and run it directly.
-3. Register and ensure the design review hub, then print its link — never a file path, never
-   a serve command, and this session never starts a server or opens a browser itself:
-   `node "$(spec-paths design-hub)" register --root .` (idempotent) followed by
-   `node "$(spec-paths design-hub)" ensure` (spawns the hub if it isn't already up); report
-   `🎨 <base>/p/<name>/atlas/index.html`, where `<base>` and `<name>` are the two commands'
-   own printed values. The hub serves the same `/atlas/index.html` with the notes layer
-   injected (`?clean` skips it), same-origin frame measurement, and the theme buttons of the
-   matrix toolbar (present when `design/targets.json` exists) — point the user at it for
-   per-device / dark-mode review and for leaving notes.
+3. Start `node "$(spec-paths design-atlas)" serve --root . [--port <n>]` as a
+   **tracked background task** (`already serving` means a previous session's server is still
+   up — reuse it; this is the session's own tool and is never printed to the user), then print
+   its link — never a raw file path for the user to open themselves:
+   `🎨 http://localhost:<port>/atlas/index.html`, the URL from serve's own first stdout line.
+   The served page shows the same `/atlas/index.html` with the notes layer injected (`?clean`
+   skips it), same-origin frame
+   measurement, and the theme buttons of the matrix toolbar (present when `design/targets.json`
+   exists) — point the user at it for per-device / dark-mode review and for leaving notes.
 4. **Annotation loop (when the user leaves notes):** notes are written on the served page (the
    injected notes layer, `?clean` skips it) and read back with `node {driver} notes open`,
    grouped project → journey → screen → state (spec/doctrine/mocks.md § Mocks: Page Notes owns
@@ -104,7 +104,7 @@ the user audits the model's grasp of the whole product at sketch-edit prices. La
 are incremental gap-filling.
 
 Every `gap` surface is authored at **sketch tier** (`data-status="sketch"`; structure, real
-copy register, token roles — no polish pass, no screenshot loop) under the harness check,
+copy tone, token roles — no polish pass, no screenshot loop) under the harness check,
 following the shared authorship + grounding rule **in full** (shared § Design Atlas's
 authorship paragraph — one hand, in-session, no dispatch ever writes a mock; the
 no-shell-canon bootstrap, and the grounding order); paths, not prose, are what a later mock

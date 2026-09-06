@@ -140,7 +140,7 @@ line: `🎨 authored {N} in-session · {K} check-only dispatches`.
 🆕 one sidebar path per item (`<title> / <story name>`, never a component name), ↻ `Storybook already running?
 restart it so the sidebar re-indexes.`, then end the turn. mock stops (mocks-driver/sketch/atlas) print exactly two lines — `🎨 ready for review — <url>` and `Reply ✅ approve —
 or — ✏️ change <what looks wrong>` (`✅ pick <name>` for a pick) — no server command/file path/item list — then
-end the turn too; decided on the hub page or via `stop decide --by chat`.
+end the turn too; decided on the served atlas page or via `stop decide --by chat`.
 
 ## Workflows Encode Shape, Not Judgment
 The plugin's `wf-build.js`, `wf-review.js`, `wf-enforce.js` (and genesis `wf-research.js`) own

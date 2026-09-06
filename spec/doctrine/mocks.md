@@ -132,12 +132,18 @@ recovering from a `/clear` can check where it left off before doing anything.
 
 Every mock is a static file; nothing requires a running app. `design-atlas.js serve [--root
 <r>] [--port <n>]` serves `<root>/design/` read-only with no cache (`cache-control: no-store`,
-path traversal outside the root answers 404) and exits cleanly on SIGINT/SIGTERM; the design
-review hub (§ Mocks: Review Hub) mounts every registered project through the same
-`createRequestHandler`. This makes `serve` the session's own tool — run to spawn or probe the
-hub — and the serve command itself is never printed to the user. **The user's path is the hub link**:
-a look stop's `🎨 ready for review — <url>` line is that hub-served page, one bookmark per
-machine, never a per-project port the user forwards by hand.
+path traversal outside the root answers 404) and exits cleanly on SIGINT/SIGTERM; its busy-port
+branch answers `already serving` when a previous session's server is still up on that port, so
+starting it is idempotent. This makes `serve` the session's own tool: before the first look
+stop of a `/spec:mocks`, `/spec:sketch`, or `/spec:atlas` run, the session starts
+`node "$(spec-paths design-atlas)" serve --root . [--port <n>]` as a
+**tracked background task** (D4, specs/20260905/04), leaves it running across that run's look
+stops, and stops the task at sign-off or when the session ends — no script ever spawns a
+detached server, writes a pid file, or runs a registry; the serve command itself is
+never printed to the user. **The user's path is the look link**: a look stop's `🎨 ready for review —
+<url>` line is that project's own served atlas page, `http://localhost:<port>/atlas/index.html
+#stop-<id>` — never a per-project port the user forwards by hand, and never a machine-wide
+address shared across projects.
 
 **The session's own look** is `mocks-driver.js look <label> [--state <s>] [--out <png>]`: it
 writes a sibling `.look-<label>.html` (the mock plus an inline script that clicks
@@ -154,32 +160,6 @@ look probe unless `status.look` is already `"browser"`; a failed probe refuses (
 verify. `mocks-driver.js look-via <playwright|browser>` records the session's declared path:
 `browser` means a browser MCP the command told the session to `ToolSearch` for, which cannot be
 probed from a script and so is declared once and trusted thereafter.
-
-## Mocks: Review Hub
-
-One hub per machine, `design-hub.js` (`spec-paths design-hub`), replaces a per-project served
-port with one bookmarkable address. State lives under `$SPEC_DESIGN_HUB_HOME` (default
-`~/.claude/design-hub/`): `registry.json` (`{schemaVersion, port, base, projects:[{name, root,
-registeredAt}]}`), `hub.pid`, `hub.log`. `register --root <r>` adds this repo (idempotent for
-the same realpath, refuses a second root under a used name); `ensure` probes `GET
-/__hub/health`, spawns the hub detached when it's down, and prints exactly one stdout line, the
-`base` — never a serve command; the caller splices that line straight into a link. `config
---base <url>` sets the origin every printed or rendered link uses (a phone reaches the hub
-through whatever tunnel the machine already has, configured once).
-
-Every registered project mounts under `/p/<name>/`, served by the same request handler
-`design-atlas.js serve` uses — its atlas, its mocks, its `__picks`/`__notes` endpoints all work
-under the prefix. The front page (`GET /`) is an inbox: every registered project's open look
-stops, newest first, then decided stops, then one line per project with nothing pending; a
-project whose root vanished renders `unreachable`. The listener binds `127.0.0.1` only — a
-writable endpoint (`__picks/decide`, notes) must never sit on an open interface (spec 10's
-review ruling); `base` is the only address ever handed to a phone or another machine.
-
-`stop open --root <r> --kind pick|approve --key <k> --title <t> --candidates <…>` registers,
-ensures, writes the stop through `lib/mocks-picks.js`, confirms the served page answers with
-the stop's block, and prints the one link every look stop hands the user. `stop decide` (the
-chat channel, `--by chat`) and `stop list` (the readback) complete the CLI —
-`mocks-driver.js stop open <step>` and `stop decide` are thin pass-throughs to these three.
 
 ## Mocks: Page Notes
 

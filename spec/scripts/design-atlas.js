@@ -59,6 +59,17 @@
 //                                                  a plan table with no writes, or --apply to
 //                                                  strip detected chrome and wrap the rest as the
 //                                                  content slot
+//   design-atlas.js stop open  --root <r> --kind pick|approve --key <k> --title <t>
+//                              --candidates <[group/]label=path>[,…] [--question <q>] [--port <n>]
+//                                                  specs/20260905/04-per-project-look-server.md D2:
+//                                                  writes the stop (lib/mocks-picks.js) with url
+//                                                  http://localhost:<port>/atlas/index.html#stop-<id>
+//                                                  (port defaults to 4173, serve's own default),
+//                                                  then probes that served page for the stop's own
+//                                                  block; prints exactly one stdout line, the url.
+//   design-atlas.js stop decide --root <r> --id <P…> --verdict pick|approve|change
+//                                [--pick <g>] [--note <n>] --by <who>
+//   design-atlas.js stop list  --root <r>          one line per non-superseded stop
 //
 // specs/20260902/09-one-hand-wireframes-one-token-set.md D5: every chrome page (build, gallery,
 // serve's index) is emitted by the one `page()` — it inlines spec/templates/mocks/viewer.css (the
@@ -72,12 +83,15 @@
 // D1 canon rule set) live in spec/scripts/lib/shell-region.js, kept outside this file's own
 // entrypoint-conformance surface deliberately (specs/20260901/04 D12 — no new spec-paths key).
 // Exit 0 = pass/written, 1 = check violations or a `shell sync` refusal, 2 = usage/IO error or an
-// ambiguous `shell adopt --apply` with no --shell. `serve` runs until SIGINT/SIGTERM (exit 0).
+// ambiguous `shell adopt --apply` with no --shell (`stop decide`'s own refusals — already
+// consumed/superseded, bad verdict, … — also exit 2). `serve` runs until SIGINT/SIGTERM (exit 0).
+// `stop open` exits 3 when nothing answers its probe of the served atlas within the timeout — the
+// stop is written regardless; the exit-3 message names the `serve --root` remedy verbatim.
 //
 // specs/20260905/01-picks-on-the-atlas-page.md D2: CLI dispatch at the bottom of this file runs
 // only under `require.main === module` — the script also exports { buildAtlas, page, frameTag,
-// createRequestHandler } so spec 02's review hub can mount createRequestHandler(root, {prefix})
-// under its own path without spawning a second `serve` process.
+// createRequestHandler } so a plain module load (this file's own tests) exposes them without also
+// running a CLI command.
 'use strict'
 const fs = require('node:fs')
 const path = require('node:path')
@@ -86,8 +100,9 @@ const shellLib = require('./lib/shell-region')
 const notesLib = require('./lib/mocks-notes')
 const picksLib = require('./lib/mocks-picks.js')
 
-const die = (msg) => { process.stderr.write('[design-atlas] ' + msg + '\n'); process.exit(2) }
+const die = (msg, code = 2) => { process.stderr.write('[design-atlas] ' + msg + '\n'); process.exit(code) }
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+const flagArg = (argv, name) => { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : null }
 
 function htmlFilesUnder(p, out = []) {
   const st = fs.statSync(p)
@@ -1345,9 +1360,9 @@ function jsonRes(res, code, obj) {
 }
 
 // specs/20260905/01-picks-on-the-atlas-page.md D2: the per-root request handler extracted from
-// `cmdServe` — `serve` mounts it at prefix '' (today, unchanged); spec 02's review hub mounts the
-// same function at `/p/<name>` with no second implementation of any route below. Every path is
-// matched after stripping `prefix`; a request whose path does not start with `prefix` 404s.
+// `cmdServe` — `serve` mounts it at prefix '' (the only mount this repo uses, specs/20260905/04
+// D1). Every path is matched after stripping `prefix`; a request whose path does not start with
+// `prefix` 404s.
 function createRequestHandler(root, opts = {}) {
   const prefix = opts.prefix || ''
   const rootAbs = path.resolve(root)
@@ -1525,10 +1540,134 @@ function cmdServe(argv) {
   process.on('SIGTERM', shutdown)
 }
 
+// ---- stop open/decide/list (specs/20260905/04-per-project-look-server.md D2) ----------------------
+// Moved here from the now-deleted per-machine hub script verbatim (its registry/ensure lines
+// removed, D1): this script
+// already serves the page a stop renders on and owns the /__picks/* routes, and — unlike
+// mocks-driver.js's module-top loadStatus() — creates no status.json/ledger.md/seed.md on a cold
+// root, which /spec:sketch's roadmap-first hosts must never grow.
+// `[group/]label=path` per candidate, comma-separated. A pick stop requires a group on every
+// candidate; an approve stop forbids one on any.
+function parseCandidates(spec, kind) {
+  const out = []
+  for (const raw of spec.split(',')) {
+    const eq = raw.indexOf('=')
+    if (eq === -1) die('stop open: malformed --candidates entry "' + raw + '" — expected label=path or group/label=path')
+    const left = raw.slice(0, eq)
+    const p = raw.slice(eq + 1)
+    if (!left || !p) die('stop open: malformed --candidates entry "' + raw + '" — expected label=path or group/label=path')
+    const slash = left.indexOf('/')
+    const group = slash === -1 ? null : left.slice(0, slash)
+    const label = slash === -1 ? left : left.slice(slash + 1)
+    out.push({ group, label, path: p })
+  }
+  if (kind === 'pick') {
+    const missing = out.filter((c) => c.group == null)
+    if (missing.length) die('stop open: every candidate needs a group on a "pick" stop (missing on ' +
+      missing.map((c) => '"' + c.label + '"').join(', ') + ') — pass group/label=path')
+  } else {
+    const withGroup = out.filter((c) => c.group != null)
+    if (withGroup.length) die('stop open: an "approve" stop\'s candidates must carry no group (found on ' +
+      withGroup.map((c) => '"' + c.label + '"').join(', ') + ')')
+  }
+  return out
+}
+
+// One-shot GET, resolved (never rejected) — timeout/error both come back as {ok:false} so the
+// probe below reads as a plain failed-probe branch, not a caught exception.
+function getUrl(url, timeoutMs = 1500) {
+  const http = require('node:http')
+  return new Promise((resolve) => {
+    const req = http.get(url, { timeout: timeoutMs }, (res) => {
+      const chunks = []
+      res.on('data', (c) => chunks.push(c))
+      res.on('end', () => resolve({ ok: true, status: res.statusCode, body: Buffer.concat(chunks).toString('utf8') }))
+    })
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false }) })
+    req.on('error', () => resolve({ ok: false }))
+  })
+}
+
+async function cmdStopOpen(args) {
+  const rootArg = flagArg(args, '--root')
+  const kind = flagArg(args, '--kind')
+  const key = flagArg(args, '--key')
+  const title = flagArg(args, '--title')
+  const candidatesArg = flagArg(args, '--candidates')
+  const question = flagArg(args, '--question')
+  const port = flagArg(args, '--port') || '4173'
+  if (!rootArg) die('stop open: --root <r> is required')
+  if (!kind || !['pick', 'approve'].includes(kind)) die('stop open: --kind must be "pick" or "approve"')
+  if (!key) die('stop open: --key <k> is required')
+  if (!title) die('stop open: --title <t> is required')
+  if (!candidatesArg) die('stop open: --candidates <[group/]label=path>[,…] is required')
+  const candidates = parseCandidates(candidatesArg, kind)
+
+  if (!fs.existsSync(rootArg)) die('stop open: --root ' + rootArg + ' does not exist')
+  const realRoot = fs.realpathSync(rootArg)
+
+  let stops
+  try { stops = picksLib.readPicks(realRoot) } catch (e) { die('stop open: cannot read design/mocks/picks.json under ' + realRoot + ': ' + e.message) }
+  let opened
+  try {
+    opened = picksLib.openStop(stops, { kind, key, title, question: question != null ? question : null, candidates, url: null })
+  } catch (e) { die('stop open: ' + e.message) }
+
+  // D2: the stop is written before it is probed — a failed probe (the common first-look case)
+  // still leaves the id stable for the remedy's re-run.
+  const url = 'http://localhost:' + port + '/atlas/index.html#stop-' + opened.stop.id
+  const finalStops = opened.stops.map((s) => (s.id === opened.stop.id ? Object.assign({}, s, { url }) : s))
+  picksLib.writePicks(realRoot, finalStops)
+
+  const probeUrl = 'http://127.0.0.1:' + port + '/atlas/index.html'
+  const probe = await getUrl(probeUrl)
+  if (!probe.ok || probe.status !== 200 || !probe.body || !probe.body.includes('id="stop-' + opened.stop.id + '"')) {
+    die('stop open: nothing answered ' + probeUrl + ' with stop ' + opened.stop.id + ' — start `node "$(spec-paths ' +
+      'design-atlas)" serve --root ' + rootArg + ' [--port <n>]` as a tracked background task, then re-run stop ' +
+      'open (the stop is already written; the link will be the same)', 3)
+  }
+  process.stdout.write(url + '\n')
+}
+
+function cmdStopDecide(args) {
+  const rootArg = flagArg(args, '--root')
+  const id = flagArg(args, '--id')
+  const verdict = flagArg(args, '--verdict')
+  const pick = flagArg(args, '--pick')
+  const note = flagArg(args, '--note')
+  const by = flagArg(args, '--by')
+  if (!rootArg) die('stop decide: --root <r> is required')
+  if (!id) die('stop decide: --id <P…> is required')
+  if (!verdict) die('stop decide: --verdict pick|approve|change is required')
+  if (!by) die('stop decide: --by <who> is required')
+  if (!fs.existsSync(rootArg)) die('stop decide: --root ' + rootArg + ' does not exist')
+  const realRoot = fs.realpathSync(rootArg)
+  let stops
+  try { stops = picksLib.readPicks(realRoot) } catch (e) { die('stop decide: cannot read design/mocks/picks.json under ' + realRoot + ': ' + e.message) }
+  let result
+  try {
+    result = picksLib.decideStop(stops, id, { verdict, pick, note, by })
+  } catch (e) { die('stop decide: ' + e.message) }
+  picksLib.writePicks(realRoot, result.stops)
+  process.stdout.write('decided ' + id + ' ' + verdict + '\n')
+}
+
+function cmdStopList(args) {
+  const rootArg = flagArg(args, '--root')
+  if (!rootArg) die('stop list: --root <r> is required')
+  if (!fs.existsSync(rootArg)) die('stop list: --root ' + rootArg + ' does not exist')
+  const realRoot = fs.realpathSync(rootArg)
+  let stops
+  try { stops = picksLib.readPicks(realRoot) } catch (e) { die('stop list: cannot read design/mocks/picks.json under ' + realRoot + ': ' + e.message) }
+  const lines = stops.filter((s) => s.status !== 'superseded')
+    .map((s) => s.id + ' ' + s.status + ' ' + s.kind + ' ' + s.key + ' — ' + s.title)
+  process.stdout.write(lines.length ? lines.join('\n') + '\n' : '')
+}
+
 // ---- main ----------------------------------------------------------------------------------------
 // specs/20260905/01-picks-on-the-atlas-page.md D2: CLI dispatch runs only when this file is the
-// process entry point — a plain module load of this file (spec 02's hub, this file's own tests)
-// must expose its exports without also running a CLI command.
+// process entry point — a plain module load of this file (this file's own tests) must expose its
+// exports without also running a CLI command.
 if (require.main === module) {
   const [cmd, ...rest] = process.argv.slice(2)
   if (cmd === 'check') cmdCheck(rest)
@@ -1538,7 +1677,11 @@ if (require.main === module) {
   else if (cmd === 'shell' && rest[0] === 'sync') cmdShellSync(rest.slice(1))
   else if (cmd === 'shell' && rest[0] === 'adopt') cmdShellAdopt(rest.slice(1))
   else if (cmd === 'shell') die('usage: design-atlas.js shell <sync|adopt> …')
-  else die('usage: design-atlas.js <check|gallery|build|shell|serve> …')
+  else if (cmd === 'stop' && rest[0] === 'open') cmdStopOpen(rest.slice(1)).catch((e) => die('stop open: unexpected error: ' + (e && e.message || e)))
+  else if (cmd === 'stop' && rest[0] === 'decide') cmdStopDecide(rest.slice(1))
+  else if (cmd === 'stop' && rest[0] === 'list') cmdStopList(rest.slice(1))
+  else if (cmd === 'stop') die('stop: unknown subcommand "' + rest[0] + '" — one of: open, decide, list')
+  else die('usage: design-atlas.js <check|gallery|build|shell|serve|stop> …')
 }
 
 module.exports = { buildAtlas, page, frameTag, createRequestHandler }

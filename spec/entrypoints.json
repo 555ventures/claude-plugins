@@ -51,15 +51,10 @@
       "spec/commands/sketch.md",
       "spec/commands/atlas.md",
       "spec/commands/design.md",
-      "spec/doctrine/design.md"
-    ]
-  },
-  "spec/scripts/design-hub.js": {
-    "entryPoints": [
+      "spec/doctrine/design.md",
       "spec/scripts/mocks-driver.js",
-      "spec/commands/sketch.md",
-      "spec/commands/atlas.md",
-      "spec/doctrine/mocks.md"
+      "spec/doctrine/mocks.md",
+      "spec/commands/mocks.md"
     ]
   },
   "spec/scripts/env-preflight.js": {

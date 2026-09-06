@@ -203,17 +203,14 @@ on a screen, and the index's bar hides while the lightbox is open (`body.lb-open
 exports `buildAtlas`, `page`, `frameTag`, `createRequestHandler(root, {prefix})` — one handler,
 mountable under a prefix — and runs its CLI only as a main module.
 
-**Design review hub (specs/20260905/02).** One hub per machine (`design-hub.js`, `spec-paths
-design-hub`; state in `~/.claude/design-hub/`, port 4600 by default, `base` configured once with
-`config --base <url>`). Every project is registered under `/p/<name>/` and served by the same
-request handler `design-atlas.js serve` uses; the front page is an inbox of open look stops,
-newest first across projects, each linking to the stop's block on that project's atlas. Every mock
-look stop — the mocks driver's five looks (`stop open shapes | journey:<j> | theme | review:<j> |
-signoff`), `/spec:sketch` ratification, `/spec:atlas` — opens a stop on the hub and prints the 🎨
-link line plus the fixed reply line, then ends the turn; the decision is taken on the page or
-recorded from chat with `stop decide <P…> … --by chat`, and the driver's marks refuse without it,
-deriving the ledger's `rejected` cell from the picked group. The look-stop rule names two shapes:
-catalog stops keep the Storybook block; mock stops are the link. The serve command is the
-session's own tool and is never printed to the user; on a hub machine `design-hub.js ensure`
-mounts every registered project. The hub binds `127.0.0.1` only; a phone reaches it through
-the tunnel configured as `base`.
+**Look server (specs/20260905/04).** There is no resident process. A mock look stop is served by
+that project's own `design-atlas.js serve`, which the session starts as a tracked background task
+before the first `stop open` of a run and stops at sign-off or when the session ends (a server a
+previous session left up is reused — serve answers `already serving`). `design-atlas.js stop
+open|decide|list` own the stop CLI (`stop open` writes the stop through `lib/mocks-picks.js`,
+probes the served page for the stop's block and prints the one link
+`http://localhost:<port>/atlas/index.html#stop-<id>`; exit 3 names the serve command as the
+remedy); the mocks driver's `stop open <step>` delegates there. The user's path is the 🎨 link;
+the serve command is never printed to them. Picks on the page, the two-line hand-off, marks
+refusing without a decided stop, and the derived `rejected` cell are unchanged from specs
+20260905/01–02.

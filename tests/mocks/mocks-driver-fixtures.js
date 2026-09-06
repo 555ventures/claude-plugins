@@ -4,6 +4,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const net = require('node:net')
 const http = require('node:http')
+const { spawn } = require('node:child_process')
 const { tmpdir, runNode } = require('../helpers')
 const picksLib = require('../../spec/scripts/lib/mocks-picks')
 
@@ -184,11 +185,34 @@ function freePort() {
   })
 }
 
-function killHubIn(home) {
-  try {
-    const pid = parseInt(fs.readFileSync(path.join(home, 'hub.pid'), 'utf8').trim(), 10)
-    if (pid) process.kill(pid)
-  } catch (e) { if (e.code !== 'ENOENT' && e.code !== 'ESRCH') throw e }
+// specs/20260905/04-per-project-look-server.md D7: the deleted hub script's `killHubIn(home)`
+// (kill a registry-recorded pid under a fake per-machine state dir) is replaced by a per-project
+// `design-atlas.js serve` child — `startServe` spawns it on the given port and resolves once its
+// first stdout line lands (readiness), `stopServe` always tears it down (SIGTERM, then SIGKILL if
+// it does not exit) so a failing assertion in a caller's try block never orphans a listener.
+function startServe(root, port) {
+  return new Promise((resolve, reject) => {
+    const designAtlasBin = path.join(__dirname, '../../spec/scripts/design-atlas.js')
+    const child = spawn(process.execPath, [designAtlasBin, 'serve', '--root', root, '--port', String(port)])
+    let stderrBuf = ''
+    child.stderr.on('data', (chunk) => { stderrBuf += chunk.toString('utf8') })
+    const timer = setTimeout(() => reject(new Error('design-atlas.js serve --port ' + port + ' did not print its first stdout line within 5s: ' + stderrBuf)), 5000)
+    child.stdout.once('data', () => { clearTimeout(timer); resolve(child) })
+    child.once('error', (err) => { clearTimeout(timer); reject(err) })
+  })
+}
+
+function stopServe(child) {
+  return new Promise((resolve) => {
+    if (!child || child.exitCode !== null || child.signalCode !== null) { resolve(); return }
+    const done = () => resolve()
+    child.once('exit', done)
+    child.kill('SIGTERM')
+    setTimeout(() => {
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+      done()
+    }, 5000)
+  })
 }
 
 function getBody(url) {
@@ -384,7 +408,7 @@ module.exports = {
   writeFile, writeJSON, statusPath, statusJson,
   writeTargets, writeResearchBrief, writeSeed, confirmFacts, writeCanon, writeWireframe,
   writeThemeDirection, writeSkinned,
-  decideLook, openLook, freePort, killHubIn, getBody,
+  decideLook, openLook, freePort, startServe, stopServe, getBody,
   advanceToSeedDone, advanceToShapePicked, advanceToCanonWritten, advanceToJourneyApproved,
   advanceToDirectionComposed, advanceToThemePicked, advanceToSkinned, advanceToReviewed,
   advanceToApproved,

@@ -8,7 +8,7 @@
 // mocks-driver.js --root <dir> notes reply --id <id> --text "<question back>"
 // mocks-driver.js --root <dir> look <label> [--state <s>] [--out <png>]
 // mocks-driver.js --root <dir> look-probe | look-via <playwright|browser>
-// mocks-driver.js --root <dir> stop open <step>      shapes | journey:<j> | theme | review:<j> | signoff
+// mocks-driver.js --root <dir> stop open <step> [--port <n>]   shapes | journey:<j> | theme | review:<j> | signoff
 // mocks-driver.js --root <dir> stop decide <P…> --verdict pick|approve|change [--pick <g>] [--note <n>] --by <who>
 //
 // WHY: specs/20260902/07-mocks-command-driver.md — `/spec:mocks` is the standalone design
@@ -19,15 +19,18 @@
 // checkpoints every accepted mark so a run survives any number of `/clear`s (the genesis
 // driver's discipline verbatim — spec/scripts/genesis-driver.js).
 //
-// specs/20260905/02-design-review-hub-and-look-stops.md D6-D8: `stop open <step>` derives the
-// candidate set for the step's look from disk and delegates to design-hub.js (sibling path, never
-// spec-paths) to register/serve/write the stop, printing only the verified link plus the fixed
-// reply line; `stop decide` passes an id + verdict straight through to the hub script (the chat
-// channel for a decision, `--by chat`). The five gated marks (shape-picked, journey-approved,
-// theme-picked, journey-reviewed, approved) now read their verdict from the newest non-superseded
-// look stop for the mark's key (lib/mocks-picks.js, spec 01) instead of trusting the session's own
-// judgment — a session can never mark past a look. A pick mark's `--shape`/`--direction` flag is
-// now optional (the page's pick is the value); a given flag that disagrees with the pick refuses.
+// specs/20260905/04-per-project-look-server.md D3: `stop open <step> [--port <n>]` derives the
+// candidate set for the step's look from disk and delegates to design-atlas.js (sibling path,
+// never spec-paths) `stop open`, printing only the verified link plus the fixed reply line;
+// `stop decide` passes an id + verdict straight through to the same script (the chat channel for
+// a decision, `--by chat`). There is no per-machine hub — each project serves its own look stops
+// (specs/20260905/02's design-review-hub-and-look-stops.md D6-D8 established the delegation
+// shape; spec 04 retargets it at design-atlas.js). The five gated marks (shape-picked,
+// journey-approved, theme-picked, journey-reviewed, approved) read their verdict from the newest
+// non-superseded look stop for the mark's key (lib/mocks-picks.js, spec 01) instead of trusting
+// the session's own judgment — a session can never mark past a look. A pick mark's
+// `--shape`/`--direction` flag is optional (the page's pick is the value); a given flag that
+// disagrees with the pick refuses.
 //
 // What this deliberately does NOT do:
 //   - author the seed, canon, screens, theme directions, or the review itself — those stay
@@ -61,7 +64,7 @@
 //   2  a refused mark, a failed precondition (missing artifact, blocked gate, unreachable look
 //      probe, undeclared/undrawn journey for `stop open`), a usage error, `ledger check` grammar
 //      errors, or a dead child process (runChild's fail-closed refusal).
-//   3  `stop open`/`stop decide` failed inside design-hub.js itself (its own stderr forwarded).
+//   3  `stop open`/`stop decide` failed inside design-atlas.js itself (its own stderr forwarded).
 
 'use strict'
 const fs = require('fs')
@@ -100,7 +103,6 @@ const statusPath = path.join(mocksDir, 'status.json')
 const ledgerPath = path.join(mocksDir, 'ledger.md')
 const seedPath = path.join(mocksDir, 'seed.md')
 const designAtlasBin = path.join(__dirname, 'design-atlas.js')
-const designHubBin = path.join(__dirname, 'design-hub.js')
 const templatesDir = path.join(__dirname, '..', 'templates')
 
 const FACT_KEYS = [
@@ -462,8 +464,10 @@ function runDesignAtlasCheck(args) {
 function childOutput(r) { return ((r.stdout || '') + (r.stderr || '')).trim() }
 
 // ---------------------------------------------------------------------------
-// stop open <step> (D6) — the driver derives every candidate set from disk and delegates to
-// design-hub.js (sibling path, never spec-paths) for registration/serving/writing the stop.
+// stop open <step> [--port <n>] (specs/20260905/04-per-project-look-server.md D3) — the driver
+// derives every candidate set from disk and delegates to design-atlas.js (sibling path, never
+// spec-paths) `stop open`/`stop decide` for writing/probing the stop; there is no hub to register
+// with.
 // ---------------------------------------------------------------------------
 function candidatesArgOf(candidates) {
   return candidates.map((c) => (c.group != null ? c.group + '/' : '') + c.label + '=' + c.path).join(',')
@@ -532,23 +536,25 @@ function buildStopSpec(step) {
   return null // unreachable
 }
 
-function runDesignHubStopOpen(spec) {
+function runDesignAtlasStopOpen(spec, port) {
   const args = ['stop', 'open', '--root', root, '--kind', spec.kind, '--key', spec.key,
     '--title', spec.title, '--candidates', candidatesArgOf(spec.candidates)]
-  const r = spawnSync(process.execPath, [designHubBin, ...args], { encoding: 'utf8' })
+  if (port) args.push('--port', port)
+  const r = spawnSync(process.execPath, [designAtlasBin, ...args], { encoding: 'utf8' })
   if (r.error || r.status === null) {
-    die('design-hub.js died without an exit code (' + (r.error ? r.error.message : 'no status') + ')')
+    die('design-atlas.js died without an exit code (' + (r.error ? r.error.message : 'no status') + ')')
   }
   if (r.status !== 0) {
-    writeOut(2, (r.stderr || r.stdout || 'design-hub.js failed with no output') + '\n')
+    writeOut(2, (r.stderr || r.stdout || 'design-atlas.js failed with no output') + '\n')
     process.exit(3)
   }
   return (r.stdout || '').trim()
 }
 
-function cmdStopOpen(step) {
+function cmdStopOpen(step, args) {
   const spec = buildStopSpec(step)
-  const url = runDesignHubStopOpen(spec)
+  const port = flagArg(args, '--port')
+  const url = runDesignAtlasStopOpen(spec, port)
   const replyLine = spec.kind === 'pick'
     ? 'Reply  ✅ pick <name>  — or —  ✏️ change <what looks wrong>'
     : 'Reply  ✅ approve  — or —  ✏️ change <what looks wrong>'
@@ -558,9 +564,9 @@ function cmdStopOpen(step) {
 
 function cmdStopDecide(id, args) {
   if (!id) die('stop decide: needs a stop id, e.g. `stop decide P001 --verdict approve --by chat`')
-  const r = spawnSync(process.execPath, [designHubBin, 'stop', 'decide', '--root', root, '--id', id, ...args], { encoding: 'utf8' })
+  const r = spawnSync(process.execPath, [designAtlasBin, 'stop', 'decide', '--root', root, '--id', id, ...args], { encoding: 'utf8' })
   if (r.error || r.status === null) {
-    die('design-hub.js died without an exit code (' + (r.error ? r.error.message : 'no status') + ')')
+    die('design-atlas.js died without an exit code (' + (r.error ? r.error.message : 'no status') + ')')
   }
   if (r.stdout) writeOut(1, r.stdout)
   if (r.stderr) writeOut(2, r.stderr)
@@ -1276,7 +1282,7 @@ if (rest[0] === 'ledger') {
 } else if (rest[0] === 'look') {
   cmdLook(rest[1], rest.slice(2))
 } else if (rest[0] === 'stop' && rest[1] === 'open') {
-  cmdStopOpen(rest[2])
+  cmdStopOpen(rest[2], rest.slice(3))
 } else if (rest[0] === 'stop' && rest[1] === 'decide') {
   cmdStopDecide(rest[2], rest.slice(3))
 } else if (rest[0] === 'stop') {

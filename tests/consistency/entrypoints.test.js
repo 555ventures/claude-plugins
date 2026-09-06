@@ -577,7 +577,7 @@ test('AC-20260901-02-8 (was AC-20260820-04-5 / D10 / hole2): parseHookScriptPath
     JSON.stringify([...result.paths].sort()))
 })
 
-test('AC-20260820-04-6: the live repo, scanned in both inventory directions and both invocation directions, reports zero violations — the green pin every future drift turns red', () => {
+test('AC-20260820-04-6 (carrying forward AC-20260905-04-8): the live repo, scanned in both inventory directions and both invocation directions, reports zero violations — the green pin every future drift turns red', () => {
   const manifestPath = path.join(ROOT, 'spec/entrypoints.json')
   assert.ok(fs.existsSync(manifestPath),
     'spec/entrypoints.json does not exist — the comprehensive live-repo green pin cannot run ' +

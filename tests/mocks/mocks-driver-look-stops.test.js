@@ -7,15 +7,17 @@ const { runNode, tmpdir } = require('../helpers')
 const {
   SCRIPT, JOURNEY, LABELS, DENSE,
   bare, mark, writeFile, writeWireframe, writeSkinned, statusJson,
-  decideLook, openLook, freePort, killHubIn,
+  decideLook, openLook, freePort, startServe, stopServe,
   advanceToSeedDone, advanceToCanonWritten, advanceToJourneyApproved,
   advanceToDirectionComposed, advanceToSkinned, advanceToReviewed,
   advanceToShortJourneyDrawn,
 } = require('./mocks-driver-fixtures')
 
-// specs/20260905/02-design-review-hub-and-look-stops.md D6/D7/D8: mocks-driver.js's `stop open`/
-// `stop decide` pass-through and the five gated marks' verdict-from-disk behavior.
-// AC-20260905-02-9, -10, -11, -12, -13, -14, -15.
+// specs/20260905/04-per-project-look-server.md D3/D7: mocks-driver.js's `stop open`/`stop decide`
+// now delegate to design-atlas.js's `stop` subcommands (design-hub.js is deleted) — these tests
+// drive that delegation with a real `design-atlas.js serve` child on a free port instead of the
+// old hub's registry, per fixture (AC-20260905-04-5, AC-20260905-04-9 carrying forward the
+// still-true AC-20260905-02-10..-15 mark/bare-step behavior against a serve child).
 //
 // specs/20260903/07-test-file-budget-guard.md's per-file 45s guard split these tests out of
 // tests/mocks/mocks-driver.test.js (that file tripped the guard at 50s under full-suite load once
@@ -23,20 +25,24 @@ const {
 // sibling mocks-driver-fixtures.js, required by both files.
 
 // ---------------------------------------------------------------------------
-// AC-20260905-02-9
+// AC-20260905-04-5
 // ---------------------------------------------------------------------------
-test('AC-20260905-02-9: mocks-driver.js stop open journey:<j> prints the two-line hand-off and writes an open approve stop with the journey\'s labels as candidates', async () => {
+test('AC-20260905-04-5: mocks-driver.js stop open journey:<j> --port <free> prints the D4 hand-off link off that project\'s own serve child (never a `/p/<name>/` hub mount), exits 3 naming the serve remedy when nothing answers --port, and stop decide keeps passing straight through', async () => {
   const dir = tmpdir('mocks-driver')
   advanceToShortJourneyDrawn(dir, 'onboarding', ['signin', 'invite'])
-  const home = tmpdir('design-hub-home')
   const port = await freePort()
-  const env = { ...process.env, SPEC_DESIGN_HUB_HOME: home, SPEC_DESIGN_HUB_PORT: String(port) }
+  let serveChild = null
   try {
-    const r = runNode(SCRIPT, ['--root', dir, 'stop', 'open', 'journey:onboarding'], { env })
+    serveChild = await startServe(dir, port)
+
+    const r = runNode(SCRIPT, ['--root', dir, 'stop', 'open', 'journey:onboarding', '--port', String(port)])
     assert.strictEqual(r.status, 0, 'stop open journey:onboarding must exit 0 once the journey is drawn: ' + r.stdout + r.stderr)
     const lines = r.stdout.split('\n').filter((l) => l.trim() !== '')
     assert.strictEqual(lines.length, 2, 'stop open journey:<j> must print exactly two stdout lines — the link and the fixed reply line: ' + JSON.stringify(r.stdout))
-    assert.match(lines[0], /^🎨 ready for review — http:\/\/localhost:\d+\/p\/[^/]+\/atlas\/index\.html#stop-P\d{3}$/, 'the first line must match the D6 hand-off pattern: ' + JSON.stringify(lines[0]))
+    assert.match(lines[0], /^🎨 ready for review — http:\/\/localhost:\d+\/atlas\/index\.html#stop-P\d{3}$/,
+      'the first line must match the D4 look-server link — the project\'s own served atlas, never a `/p/<name>/` hub mount: ' + JSON.stringify(lines[0]))
+    assert.match(lines[0], new RegExp('localhost:' + port + '/'),
+      'the printed link must name the project\'s own --port ' + port + ', not a shared hub port: ' + JSON.stringify(lines[0]))
     assert.strictEqual(lines[1], 'Reply  ✅ approve  — or —  ✏️ change <what looks wrong>', 'the second line must be the exact fixed reply line for an approve stop: ' + JSON.stringify(lines[1]))
 
     // advanceToShortJourneyDrawn's own setup runs shape-picked through a decided pick stop
@@ -51,25 +57,36 @@ test('AC-20260905-02-9: mocks-driver.js stop open journey:<j> prints the two-lin
       [{ group: null, label: 'signin', path: 'mocks/signin.html' }, { group: null, label: 'invite', path: 'mocks/invite.html' }],
       'the stop\'s candidates must be the journey\'s seed labels mapped to mocks/<label>.html: ' + JSON.stringify(openStops[0].candidates))
     assert.strictEqual(openStops[0].url, lines[0].replace('🎨 ready for review — ', ''), 'the stop\'s recorded url must equal the printed link')
+
+    const busyPort = await freePort()
+    const noServe = runNode(SCRIPT, ['--root', dir, 'stop', 'open', 'journey:onboarding', '--port', String(busyPort)])
+    assert.strictEqual(noServe.status, 3, 'stop open must exit 3 when nothing answers the given --port: ' + noServe.stdout + noServe.stderr)
+    assert.match(noServe.stderr, /serve --root/, 'the exit-3 remedy must name `serve --root`: ' + JSON.stringify(noServe.stderr))
+
+    const liveStop = JSON.parse(fs.readFileSync(path.join(dir, 'design/mocks/picks.json'), 'utf8')).find((s) => s.status === 'open')
+    const decided = runNode(SCRIPT, ['--root', dir, 'stop', 'decide', liveStop.id, '--verdict', 'approve', '--by', 'chat'])
+    assert.strictEqual(decided.status, 0, 'stop decide must still exit 0, passed straight through: ' + decided.stdout + decided.stderr)
+    assert.strictEqual(decided.stdout, 'decided ' + liveStop.id + ' approve\n', 'stop decide must print exactly "decided <id> approve": ' + JSON.stringify(decided.stdout))
   } finally {
-    killHubIn(home)
+    if (serveChild) await stopServe(serveChild)
   }
 })
 
 // ---------------------------------------------------------------------------
-// AC-20260905-02-10
+// AC-20260905-02-10, AC-20260905-04-9
 // ---------------------------------------------------------------------------
-test('AC-20260905-02-10: stop open shapes/theme write pick stops grouped by candidate, and unknown/too-few-candidate steps refuse naming the remedy', async () => {
-  const home = tmpdir('design-hub-home')
-  const port = await freePort()
-  const env = { ...process.env, SPEC_DESIGN_HUB_HOME: home, SPEC_DESIGN_HUB_PORT: String(port) }
+test('AC-20260905-02-10/AC-20260905-04-9: stop open shapes/theme write pick stops grouped by candidate, and unknown/too-few-candidate steps refuse naming the remedy', async () => {
+  let serveChild = null
+  let serveChild2 = null
   try {
     const dir = tmpdir('mocks-driver')
     advanceToSeedDone(dir) // now at SHAPES
     writeFile(path.join(dir, 'design/shapes/card-first.html'), '<main data-screen-label="' + DENSE + '" data-shape="card-first">card-first</main>\n')
     writeFile(path.join(dir, 'design/shapes/orb-hero.html'), '<main data-screen-label="' + DENSE + '" data-shape="orb-hero">orb-hero</main>\n')
+    const port = await freePort()
+    serveChild = await startServe(dir, port)
 
-    const r = runNode(SCRIPT, ['--root', dir, 'stop', 'open', 'shapes'], { env })
+    const r = runNode(SCRIPT, ['--root', dir, 'stop', 'open', 'shapes', '--port', String(port)])
     assert.strictEqual(r.status, 0, 'stop open shapes must exit 0 with 2-3 shape candidates on disk: ' + r.stdout + r.stderr)
     const lines = r.stdout.split('\n').filter((l) => l.trim() !== '')
     assert.strictEqual(lines[1], 'Reply  ✅ pick <name>  — or —  ✏️ change <what looks wrong>', 'stop open shapes must print the pick-shaped reply line as its second line: ' + JSON.stringify(lines))
@@ -82,7 +99,9 @@ test('AC-20260905-02-10: stop open shapes/theme write pick stops grouped by cand
     advanceToJourneyApproved(dir2)
     advanceToDirectionComposed(dir2, 'ocean', [DENSE, LABELS[0], LABELS[1]], 'P15')
     advanceToDirectionComposed(dir2, 'ember', [DENSE, LABELS[0], LABELS[2]], 'P16')
-    const themeR = runNode(SCRIPT, ['--root', dir2, 'stop', 'open', 'theme'], { env })
+    const port2 = await freePort()
+    serveChild2 = await startServe(dir2, port2)
+    const themeR = runNode(SCRIPT, ['--root', dir2, 'stop', 'open', 'theme', '--port', String(port2)])
     assert.strictEqual(themeR.status, 0, 'stop open theme must exit 0 once 2+ directions are composed: ' + themeR.stdout + themeR.stderr)
     const stops2 = JSON.parse(fs.readFileSync(path.join(dir2, 'design/mocks/picks.json'), 'utf8'))
     const themeStop = stops2.find((s) => s.key === 'theme-picked')
@@ -93,24 +112,25 @@ test('AC-20260905-02-10: stop open shapes/theme write pick stops grouped by cand
     const dir3 = tmpdir('mocks-driver')
     advanceToSeedDone(dir3)
     writeFile(path.join(dir3, 'design/shapes/only-one.html'), '<main data-screen-label="' + DENSE + '" data-shape="only-one">x</main>\n')
-    const tooFew = runNode(SCRIPT, ['--root', dir3, 'stop', 'open', 'shapes'], { env })
+    const tooFew = runNode(SCRIPT, ['--root', dir3, 'stop', 'open', 'shapes'])
     assert.strictEqual(tooFew.status, 2, 'stop open shapes must refuse with fewer than 2 shape candidates on disk: ' + tooFew.stdout + tooFew.stderr)
     assert.match(tooFew.stderr + tooFew.stdout, /2-3/, 'the refusal must name the 2-3 candidate floor/ceiling: ' + tooFew.stdout + tooFew.stderr)
 
-    const unknown = runNode(SCRIPT, ['--root', dir3, 'stop', 'open', 'nope'], { env })
+    const unknown = runNode(SCRIPT, ['--root', dir3, 'stop', 'open', 'nope'])
     assert.strictEqual(unknown.status, 2, 'stop open nope must refuse an unknown step: ' + unknown.stdout + unknown.stderr)
     for (const step of ['shapes', 'theme', 'signoff']) {
       assert.match(unknown.stderr + unknown.stdout, new RegExp(step), 'the unknown-step refusal must name the valid steps, including "' + step + '": ' + unknown.stdout + unknown.stderr)
     }
   } finally {
-    killHubIn(home)
+    if (serveChild) await stopServe(serveChild)
+    if (serveChild2) await stopServe(serveChild2)
   }
 })
 
 // ---------------------------------------------------------------------------
 // AC-20260905-02-11
 // ---------------------------------------------------------------------------
-test('AC-20260905-02-11: --mark journey-approved refuses naming the remedy when no stop exists, "waiting on" when one is open, and the change note when one is decided change', () => {
+test('AC-20260905-02-11/AC-20260905-04-9: --mark journey-approved refuses naming the remedy when no stop exists, "waiting on" when one is open, and the change note when one is decided change', () => {
   const dir = tmpdir('mocks-driver')
   advanceToCanonWritten(dir)
   for (const label of LABELS) writeWireframe(dir, label)
@@ -137,7 +157,7 @@ test('AC-20260905-02-11: --mark journey-approved refuses naming the remedy when 
 // ---------------------------------------------------------------------------
 // AC-20260905-02-12
 // ---------------------------------------------------------------------------
-test('AC-20260905-02-12: journey-approved accepts a decided-approve stop and consumes it; a newer open stop sharing the key makes it refuse "waiting on" that newer url', () => {
+test('AC-20260905-02-12/AC-20260905-04-9: journey-approved accepts a decided-approve stop and consumes it; a newer open stop sharing the key makes it refuse "waiting on" that newer url', () => {
   const dir = tmpdir('mocks-driver')
   advanceToCanonWritten(dir)
   for (const label of LABELS) writeWireframe(dir, label)
@@ -166,7 +186,7 @@ test('AC-20260905-02-12: journey-approved accepts a decided-approve stop and con
 // ---------------------------------------------------------------------------
 // AC-20260905-02-13
 // ---------------------------------------------------------------------------
-test('AC-20260905-02-13: a decided shape/theme pick accepts without the flag, appends the ledger row when absent, and refuses a flag that disagrees with the pick', () => {
+test('AC-20260905-02-13/AC-20260905-04-9: a decided shape/theme pick accepts without the flag, appends the ledger row when absent, and refuses a flag that disagrees with the pick', () => {
   const dir = tmpdir('mocks-driver')
   advanceToSeedDone(dir)
   writeFile(path.join(dir, 'design/shapes/card-first.html'), '<main data-screen-label="' + DENSE + '" data-shape="card-first">card-first</main>\n')
@@ -212,7 +232,7 @@ test('AC-20260905-02-13: a decided shape/theme pick accepts without the flag, ap
 // ---------------------------------------------------------------------------
 // AC-20260905-02-14
 // ---------------------------------------------------------------------------
-test('AC-20260905-02-14: journey-reviewed refuses without a decided stop and accepts with one; approved refuses without a decided stop and accepts with one', () => {
+test('AC-20260905-02-14/AC-20260905-04-9: journey-reviewed refuses without a decided stop and accepts with one; approved refuses without a decided stop and accepts with one', () => {
   const dir = tmpdir('mocks-driver')
   advanceToSkinned(dir)
   const opened = mark(dir, 'review-opened', ['--decider', 'Ren'])
@@ -240,7 +260,7 @@ test('AC-20260905-02-14: journey-reviewed refuses without a decided stop and acc
 // ---------------------------------------------------------------------------
 // AC-20260905-02-15
 // ---------------------------------------------------------------------------
-test('AC-20260905-02-15: the bare driver prints the look: progress line and derives Then: from the stop state, for an approve step (journey-approved) and a pick step (shapes)', () => {
+test('AC-20260905-02-15/AC-20260905-04-9: the bare driver prints the look: progress line and derives Then: from the stop state, for an approve step (journey-approved) and a pick step (shapes)', () => {
   const dir = tmpdir('mocks-driver')
   advanceToCanonWritten(dir)
   for (const label of LABELS) writeWireframe(dir, label)

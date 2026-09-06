@@ -1,6 +1,6 @@
 ---
 date: 2026-09-05
-status: hardened
+status: implementing
 open_markers: 0
 tier: standard
 area: design
@@ -9,6 +9,7 @@ breaking: false
 depends_on: [specs/20260905/02-design-review-hub-and-look-stops.md]
 depended_on_by: [specs/20260905/03-candidate-flows-in-a-journey.md]
 brief: n/a
+diff_base: 08118416e214cfdaa2cb77aa65cf093a3a949aec
 ---
 
 # Per-project look server: delete the machine-wide hub, serve only while a look needs it
@@ -56,6 +57,7 @@ hand-off, marks that refuse without a decided stop, the derived `rejected` cell 
 | spec/doctrine/design.md | MODIFY | doctrine | D5: mock-stops sentence, no "hub" |
 | spec/doctrine/mocks.md | MODIFY | doctrine | D5: `## Mocks: Review Hub` deleted; § Look and Serve reworded (look link, D4 lifetime) |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D6: version bump + changelog entry |
+| docs/canonical/design.md | MODIFY | doctrine | D6: Canonical Delta applied in the build wave (deviation at build: AC-20260905-04-1's sweep greps `docs/canonical/`, so the paragraph must be replaced before the build gate can go green; review's CLOSE finds it already applied) |
 | tests/design-hub.test.js | DELETE | tests | D1 |
 | tests/design-atlas.test.js | MODIFY | tests | AC-20260905-04-2, AC-20260905-04-3, AC-20260905-04-4 |
 | tests/mocks/mocks-driver-look-stops.test.js | MODIFY | tests | AC-20260905-04-5, AC-20260905-04-9 — serve child instead of hub env, new link pattern |

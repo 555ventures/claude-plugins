@@ -71,10 +71,10 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    current brief must bind — an unbound region is inherited for free, while future-brief
    content entangled inside a bound region costs an evidence-gated delta row.
 4. **Build & report.** `node {atlas} build`, then report the output path
-   (`design/atlas/index.html`); this session never starts a server or opens a browser itself —
-   the design review hub (§ 6's look stop) is the one viewer, for the atlas and for leaving
-   notes alike. The map shows everything, but this session's iteration scope stays the one
-   brief.
+   (`design/atlas/index.html`); this session never opens a browser itself — the served atlas
+   page (§ 6's look stop starts it as a tracked background task) is the one viewer, for the
+   atlas and for leaving notes alike. The map shows everything, but this session's iteration
+   scope stays the one brief.
 5. **The loop.** Take changes in chat against screen labels, or read them back from the served
    page with `node {driver} notes open` (spec/doctrine/mocks.md § Mocks: Page Notes owns the
    note shape and mark refusals). Group notes by surface, present the plan, then **triage every
@@ -122,17 +122,20 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    executed as a script (shared § Design Canon: a rule a script can check is never checked by an
    LLM at runtime). A rule finding blocks ratification until the mock is fixed or the rule is
    amended — never excused per surface; a `severity: "warn"` rule prints its finding prefixed
-   `⚠️` and does not block. Only then the look stop: run `node "$(spec-paths design-hub)"
-   stop open --root . --kind approve --key sketch:<brief> --title "ratify <brief>"
-   --candidates <label>=mocks/<label>.html[,…]` over the brief's `sketch` mocks — it registers
-   this repo with the hub, ensures it is up, and its stdout is the whole hand-off, the same two
-   lines every look stop prints, then **end the turn**, never `AskUserQuestion` (shared
-   § Design Atlas: look stops are never questions):
+   `⚠️` and does not block. Before the first `stop open`, start
+   `node "$(spec-paths design-atlas)" serve --root . [--port <n>]` as a
+   **tracked background task** (`already serving` means a previous session's server is still
+   up — reuse it); this is the session's own tool and is never printed to the user. Only then
+   the look stop: run `node "$(spec-paths
+   design-atlas)" stop open --root . --kind approve --key sketch:<brief> --title "ratify
+   <brief>" --candidates <label>=mocks/<label>.html[,…]` over the brief's `sketch` mocks — its
+   stdout is the whole hand-off, the same two lines every look stop prints, then **end the
+   turn**, never `AskUserQuestion` (shared § Design Atlas: look stops are never questions):
 
      🎨 ready for review — <url>
      Reply  ✅ approve  — or —  ✏️ change <what looks wrong>
 
-   On the next invocation, read `node "$(spec-paths design-hub)" stop list --root .` for the
+   On the next invocation, read `node "$(spec-paths design-atlas)" stop list --root .` for the
    decision rather than asking again. `decided approve` ratifies: set `data-status="ratified"`
    on each of the brief's `sketch` mocks (`approved`+ mocks are untouched) and rebuild the
    atlas. **Ratified = approved, one stamp:** direction confirmed at roadmap level, brief and

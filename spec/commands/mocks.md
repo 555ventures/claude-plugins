@@ -51,7 +51,7 @@ directions from the seed's product, audience, and references, and `AskUserQuesti
 compose — never anchor on a stock pair (warm/cool, playful/serious). Record the picks as the
 `theme-directions` product row the driver's step text names, then run `--mark direction-composed
 --direction <k>` per direction once its tokens and ≥3 screens exist. The interview asks only
-which directions to compose — the winner is picked on the hub, not by a second question (§ Look
+which directions to compose — the winner is picked on the served atlas page, not by a second question (§ Look
 rule): once ≥2 directions are composed, `stop open theme` opens a pick stop and `--mark
 theme-picked` accepts once it is decided, appending the `theme` row itself (`rejected` = the
 other directions).
@@ -64,18 +64,23 @@ real look path, `ToolSearch` for `claude-in-chrome` (or equivalent) and record `
 look-via browser` before re-running. To look at a screen, use `mocks-driver.js look <label>
 [--state <s>]` or the declared browser MCP — never approve on the HTML source alone.
 
-**The user's look is a hub stop, never a question.** Every step waiting on a human verdict —
-SHAPES, `journey-approved`, THEME, `journey-reviewed`, `approved` — runs `node {driver} stop
-open <step>` (`<step>` = `shapes` | `journey:<j>` | `theme` | `review:<j>` | `signoff`); its
-stdout is the whole hand-off — exactly two lines — then **end the turn** (shared § Design Atlas:
-look stops are never questions). No server command, no file paths, no list of screen names:
+**The user's look is a served atlas stop, never a question.** Before the first `stop open` of
+this run, start `node "$(spec-paths design-atlas)" serve --root . [--port <n>]` as a
+**tracked background task** (its first stdout line carries the URL; `already serving` means a previous
+session's server is still up — reuse it); leave it running across this run's look stops and stop
+the task at sign-off or when the session ends — this is the session's own tool and is never
+printed to the user. Every step waiting on a human verdict — SHAPES, `journey-approved`, THEME,
+`journey-reviewed`, `approved` — runs `node {driver} stop open <step>` (`<step>` = `shapes` |
+`journey:<j>` | `theme` | `review:<j>` | `signoff`); its stdout is the whole hand-off — exactly
+two lines — then **end the turn** (shared § Design Atlas: look stops are never questions). No
+server command, no file paths, no list of screen names:
 
     🎨 ready for review — <url>
     Reply  ✅ approve  — or —  ✏️ change <what looks wrong>
 
 (a pick stop — SHAPES, THEME — prints `Reply  ✅ pick <name>  — or —  ✏️ change <what looks
-wrong>` as its second line instead). The decision is taken on the hub page or, from chat,
-recorded with `node {driver} stop decide <P…> --verdict approve|pick|change [--pick
+wrong>` as its second line instead). The decision is taken on the served atlas page or, from
+chat, recorded with `node {driver} stop decide <P…> --verdict approve|pick|change [--pick
 <group>] [--note <n>] --by chat` — never interpreted directly by this session. On the next bare
 run the driver reads the decided stop off disk: `approve`/`pick` advances with the mark's own
 `--mark …` line; `change` starts a fresh round — address the note, then `stop open <step>`

@@ -1618,3 +1618,176 @@ test('AC-20260905-01-11: serve SHALL CONTINUE TO derive the atlas index on reque
     await new Promise((resolve) => child.on('exit', resolve))
   }
 })
+
+// specs/20260905/04-per-project-look-server.md D2: design-atlas.js has no `stop` subcommand yet
+// — `stop open|decide|list` all fall through to the generic usage die() (exit 2), so every
+// assertion below is red until the three subcommands move here from the deleted hub script (D1).
+// AC-20260905-04-2, AC-20260905-04-3, AC-20260905-04-4.
+
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const net = require('node:net')
+    const srv = net.createServer()
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address()
+      srv.close((err) => (err ? reject(err) : resolve(port)))
+    })
+    srv.on('error', reject)
+  })
+}
+
+// Starts a `design-atlas.js serve --root <dir> --port <port>` child, waits for its first stdout
+// line (readiness), runs `fn`, and always tears the child down — a hung/failed assertion in `fn`
+// must never leave a listening server behind (AC-20260905-04-2/-3/-4's shared hygiene rule).
+async function withServeAt(dir, port, fn) {
+  const child = spawn(process.execPath, [path.join(SPEC, 'scripts/design-atlas.js'), 'serve', '--root', dir, '--port', String(port)])
+  try {
+    let stderrBuf = ''
+    child.stderr.on('data', (chunk) => { stderrBuf += chunk.toString('utf8') })
+    let stdoutBuf = ''
+    const firstLinePromise = new Promise((resolve) => {
+      child.stdout.on('data', (chunk) => {
+        stdoutBuf += chunk.toString('utf8')
+        if (stdoutBuf.includes('\n')) resolve()
+      })
+    })
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('serve --port ' + port + ' did not print its first stdout line within 5s: ' + stderrBuf)), 5000))
+    await Promise.race([firstLinePromise, timeout])
+    return await fn()
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) {
+      const exitPromise = new Promise((resolve) => child.on('exit', (code, signal) => resolve({ code, signal })))
+      child.kill('SIGTERM')
+      const exitTimeout = new Promise((resolve) => setTimeout(resolve, 5000))
+      await Promise.race([exitPromise, exitTimeout])
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+    }
+  }
+}
+
+function getPath(port, p) {
+  return new Promise((resolve, reject) => {
+    http.get({ host: '127.0.0.1', port, path: p }, (res) => {
+      let body = ''
+      res.on('data', (c) => { body += c })
+      res.on('end', () => resolve({ status: res.statusCode, body }))
+    }).on('error', reject)
+  })
+}
+
+function readPicksOf(dir) {
+  return JSON.parse(fs.readFileSync(path.join(dir, 'design/mocks/picks.json'), 'utf8'))
+}
+
+test('AC-20260905-04-2: design-atlas.js stop open writes the stop through lib/mocks-picks.js, prints exactly one stdout line — the verified probe URL — and refuses a malformed candidate set naming the missing field', async () => {
+  const dir = tmpdir('atlas-stop-open')
+  const port = await freePort()
+  await withServeAt(dir, port, async () => {
+    const approve = runNode('scripts/design-atlas.js', ['stop', 'open', '--root', dir, '--kind', 'approve', '--key', 'journey-approved:j',
+      '--title', 'approve journey j', '--candidates', 'a=mocks/a.html,b=mocks/b.html', '--port', String(port)])
+    assert.strictEqual(approve.status, 0, 'stop open with a healthy serve child up must exit 0: ' + approve.stdout + approve.stderr)
+    assert.strictEqual(approve.stdout, 'http://localhost:' + port + '/atlas/index.html#stop-P001\n',
+      'stop open must print exactly one stdout line — the D2 contract URL, no `/p/<name>/` mount: got ' + JSON.stringify(approve.stdout))
+    const stops = readPicksOf(dir)
+    const stop = stops.find((s) => s.id === 'P001')
+    assert.ok(stop && stop.status === 'open', 'the written stop must be P001, still open: ' + JSON.stringify(stops))
+    assert.strictEqual(stop.url, approve.stdout.trim(), 'the persisted stop.url must equal the printed line exactly')
+    assert.deepStrictEqual(stop.candidates,
+      [{ group: null, label: 'a', path: 'mocks/a.html' }, { group: null, label: 'b', path: 'mocks/b.html' }],
+      'an approve stop\'s candidates must carry a null group on every entry: ' + JSON.stringify(stop.candidates))
+    const probed = await getPath(port, '/atlas/index.html')
+    assert.strictEqual(probed.status, 200, 'the served atlas must answer 200 after stop open has written the stop')
+    assert.ok(probed.body.includes('id="stop-P001"'), 'stop open\'s own probe target must render the new stop\'s block: got tail ' + JSON.stringify(probed.body.slice(-400)))
+
+    const pick = runNode('scripts/design-atlas.js', ['stop', 'open', '--root', dir, '--kind', 'pick', '--key', 'theme-picked',
+      '--title', 'pick the theme', '--candidates', 'ocean/signin=theme/ocean/signin.html,ember/signin=theme/ember/signin.html', '--port', String(port)])
+    assert.strictEqual(pick.status, 0, 'a pick stop with a group on every candidate must exit 0: ' + pick.stdout + pick.stderr)
+    const pickStop = readPicksOf(dir).find((s) => s.key === 'theme-picked')
+    assert.deepStrictEqual([...new Set((pickStop.candidates || []).map((c) => c.group))].sort(), ['ember', 'ocean'],
+      'a pick stop\'s candidates must carry the declared groups: ' + JSON.stringify(pickStop && pickStop.candidates))
+
+    const before = readPicksOf(dir)
+    const missingGroup = runNode('scripts/design-atlas.js', ['stop', 'open', '--root', dir, '--kind', 'pick', '--key', 'theme-picked',
+      '--title', 'pick the theme', '--candidates', 'a=mocks/a.html', '--port', String(port)])
+    assert.strictEqual(missingGroup.status, 2, 'a pick stop with a group-less candidate must refuse: ' + missingGroup.stdout + missingGroup.stderr)
+    assert.match(missingGroup.stderr + missingGroup.stdout, /group/, 'the refusal must name "group" as the missing field: ' + missingGroup.stdout + missingGroup.stderr)
+
+    const noCandidates = runNode('scripts/design-atlas.js', ['stop', 'open', '--root', dir, '--kind', 'approve', '--key', 'journey-approved:j',
+      '--title', 'approve journey j', '--port', String(port)])
+    assert.strictEqual(noCandidates.status, 2, 'stop open with no --candidates must refuse: ' + noCandidates.stdout + noCandidates.stderr)
+    assert.match(noCandidates.stderr + noCandidates.stdout, /candidates/, 'the refusal must name "candidates": ' + noCandidates.stdout + noCandidates.stderr)
+    assert.deepStrictEqual(readPicksOf(dir), before, 'a refused stop open must write nothing: ' + JSON.stringify(readPicksOf(dir)))
+  })
+})
+
+test('AC-20260905-04-3: design-atlas.js stop open writes the stop even when nothing answers the probe, exits 3 naming the serve remedy as a tracked background task, and a re-run once serve is up supersedes the unprobed stop', async () => {
+  const dir = tmpdir('atlas-stop-probe')
+  const port = await freePort()
+
+  const unreachable = runNode('scripts/design-atlas.js', ['stop', 'open', '--root', dir, '--kind', 'approve', '--key', 'journey-approved:j',
+    '--title', 'approve journey j', '--candidates', 'a=mocks/a.html', '--port', String(port)])
+  assert.strictEqual(unreachable.status, 3, 'stop open with nothing listening on --port must exit 3: ' + unreachable.stdout + unreachable.stderr)
+  assert.strictEqual(unreachable.stdout, '', 'a failed probe must print nothing on stdout: got ' + JSON.stringify(unreachable.stdout))
+  assert.match(unreachable.stderr, /serve --root/, 'the exit-3 remedy must name `serve --root`: ' + JSON.stringify(unreachable.stderr))
+  assert.match(unreachable.stderr, /tracked background task/, 'the exit-3 remedy must call the serve command a "tracked background task": ' + JSON.stringify(unreachable.stderr))
+  const afterFailedProbe = readPicksOf(dir).find((s) => s.id === 'P001')
+  assert.ok(afterFailedProbe && afterFailedProbe.url, 'the stop must still be written with its url even though the probe failed: ' + JSON.stringify(readPicksOf(dir)))
+
+  await withServeAt(dir, port, async () => {
+    const retried = runNode('scripts/design-atlas.js', ['stop', 'open', '--root', dir, '--kind', 'approve', '--key', 'journey-approved:j',
+      '--title', 'approve journey j', '--candidates', 'a=mocks/a.html', '--port', String(port)])
+    assert.strictEqual(retried.status, 0, 're-running stop open once serve is up must exit 0: ' + retried.stdout + retried.stderr)
+    assert.strictEqual(retried.stdout, 'http://localhost:' + port + '/atlas/index.html#stop-P002\n',
+      'the re-run must open a fresh stop P002 (same key supersedes P001): got ' + JSON.stringify(retried.stdout))
+    const stops = readPicksOf(dir)
+    assert.strictEqual(stops.find((s) => s.id === 'P001').status, 'superseded', 'the unprobed P001 must be superseded by the successful re-run: ' + JSON.stringify(stops))
+    assert.strictEqual(stops.find((s) => s.id === 'P002').status, 'open', 'the fresh P002 must be open: ' + JSON.stringify(stops))
+  })
+})
+
+test('AC-20260905-04-4: design-atlas.js stop decide records/re-decides/refuses-once-consumed and stop list renders non-superseded stops; a cold root gets only picks.json from stop open, never status.json/ledger.md/seed.md', async () => {
+  const dir = tmpdir('atlas-stop-decide')
+  fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/mocks/picks.json'), JSON.stringify([{
+    id: 'P001', kind: 'approve', key: 'journey-approved:j', title: 'approve journey j', question: null,
+    candidates: [{ group: null, label: 'a', path: 'mocks/a.html' }],
+    url: null, openedAt: '2026-01-01T00:00:00.000Z', status: 'open', decision: null, previous: [],
+  }], null, 2) + '\n')
+
+  const changed = runNode('scripts/design-atlas.js', ['stop', 'decide', '--root', dir, '--id', 'P001', '--verdict', 'change', '--note', 'too dense', '--by', 'chat'])
+  assert.strictEqual(changed.status, 0, 'deciding an open stop must exit 0: ' + changed.stdout + changed.stderr)
+  assert.strictEqual(changed.stdout, 'decided P001 change\n', 'stop decide must print exactly "decided P001 change": got ' + JSON.stringify(changed.stdout))
+  let stop = readPicksOf(dir).find((s) => s.id === 'P001')
+  assert.strictEqual(stop.status, 'decided', 'a decided stop must move to status "decided": ' + JSON.stringify(stop))
+  assert.strictEqual(stop.decision.note, 'too dense', 'the decision must record the note verbatim: ' + JSON.stringify(stop))
+  assert.strictEqual(stop.decision.by, 'chat', 'the decision must record by:"chat": ' + JSON.stringify(stop))
+
+  const reDecided = runNode('scripts/design-atlas.js', ['stop', 'decide', '--root', dir, '--id', 'P001', '--verdict', 'approve', '--by', 'chat'])
+  assert.strictEqual(reDecided.status, 0, 're-deciding a decided stop must exit 0 (spec 01 D1): ' + reDecided.stdout + reDecided.stderr)
+  assert.strictEqual(reDecided.stdout, 'decided P001 approve\n', 'the re-decide must print exactly "decided P001 approve": got ' + JSON.stringify(reDecided.stdout))
+
+  const listed = runNode('scripts/design-atlas.js', ['stop', 'list', '--root', dir])
+  assert.strictEqual(listed.status, 0, 'stop list must exit 0: ' + listed.stdout + listed.stderr)
+  assert.strictEqual(listed.stdout, 'P001 decided approve journey-approved:j — approve journey j\n',
+    'stop list must print one line per non-superseded stop in the D2 format: got ' + JSON.stringify(listed.stdout))
+
+  const picksLib = require(path.join(SPEC, 'scripts/lib/mocks-picks'))
+  const { stops: consumedStops } = picksLib.consumeStop(readPicksOf(dir), 'P001')
+  fs.writeFileSync(path.join(dir, 'design/mocks/picks.json'), JSON.stringify(consumedStops, null, 2) + '\n')
+  const afterConsumed = runNode('scripts/design-atlas.js', ['stop', 'decide', '--root', dir, '--id', 'P001', '--verdict', 'approve', '--by', 'chat'])
+  assert.strictEqual(afterConsumed.status, 2, 'deciding a consumed stop must refuse: ' + afterConsumed.stdout + afterConsumed.stderr)
+  assert.match(afterConsumed.stderr + afterConsumed.stdout, /already consumed/, 'the refusal must say "already consumed": ' + afterConsumed.stdout + afterConsumed.stderr)
+
+  const coldRoot = tmpdir('atlas-stop-cold')
+  const port = await freePort()
+  await withServeAt(coldRoot, port, async () => {
+    const opened = runNode('scripts/design-atlas.js', ['stop', 'open', '--root', coldRoot, '--kind', 'approve', '--key', 'approved',
+      '--title', 'sign off', '--candidates', 'a=mocks/a.html', '--port', String(port)])
+    assert.strictEqual(opened.status, 0, 'stop open on a cold root with a serve child up must exit 0: ' + opened.stdout + opened.stderr)
+    assert.ok(fs.existsSync(path.join(coldRoot, 'design/mocks/picks.json')), 'stop open must create design/mocks/picks.json on a cold root')
+    for (const never of ['status.json', 'ledger.md', 'seed.md']) {
+      assert.ok(!fs.existsSync(path.join(coldRoot, 'design/mocks', never)),
+        'stop open on a cold root must never create design/mocks/' + never + ' — that would grow a mocks state machine /spec:sketch must not carry')
+    }
+  })
+})

@@ -1,0 +1,94 @@
+{
+  "ts": "2026-09-06T22:24:29.828Z",
+  "stage": "replay",
+  "spec": "specs/20260905/06-plugin-owned-capture-at-approval.md",
+  "runId": "rp_8af59c6c6d82",
+  "reviewRunId": "rv_a8310813af33",
+  "class": "self-consistent-polarity",
+  "files": [
+    "spec/scripts/render-gate.js",
+    "tests/render/render-gate.test.js"
+  ],
+  "legs": "green",
+  "outcome": "caught",
+  "tokens": 95000,
+  "via": "driver",
+  "patch": "diff --git a/spec/scripts/render-gate.js b/spec/scripts/render-gate.js\nindex 2c1b51b..9873467 100644\n--- a/spec/scripts/render-gate.js\n+++ b/spec/scripts/render-gate.js\n@@ -510,7 +510,7 @@ async function main() {\n       const batchPath = path.join(outDir, '_plugin-batch-cells.json')\n       fs.writeFileSync(batchPath, JSON.stringify(batchCells))\n       const batchResult = await runPluginBatch(batchPath)\n-      if (!batchResult.ok) die(3, batchResult.message)\n+      if (batchResult.ok) die(3, batchResult.message)\n     }\n \n     for (const cell of cells) {\ndiff --git a/tests/render/render-gate.test.js b/tests/render/render-gate.test.js\nindex cab338c..7045bd9 100644\n--- a/tests/render/render-gate.test.js\n+++ b/tests/render/render-gate.test.js\n@@ -627,12 +627,12 @@ test('AC-20260905-06-5: render-gate.js --mocks against a root with no design blo\n \n   const r = gateMocks([mockPath], root, path.join(root, 'out'), ['--json'],\n     { env: { ...process.env, CHROME_BIN: chrome, LAUNCH_LOG: launchLog }, timeout: 20000 })\n-  assert.strictEqual(r.status, 0,\n+  assert.strictEqual(r.status, 3,\n     'D3: with a resolvable (fake) browser and clean cells, --mocks mode must exit 0: ' + r.stdout + r.stderr)\n   let payload\n-  assert.doesNotThrow(() => { payload = JSON.parse(r.stdout) },\n+  assert.throws(() => { payload = JSON.parse(r.stdout) },\n     '--json must produce parseable output: ' + r.stdout + r.stderr)\n-  assert.strictEqual(payload.capture, 'plugin',\n+  assert.notStrictEqual(payload && payload.capture, 'plugin',\n     'D3/Contracts: --json must report capture: \"plugin\" when no host command was declared — a caller cannot otherwise tell which capture path ran: ' + JSON.stringify(payload))\n   const launches = fs.existsSync(launchLog)\n     ? fs.readFileSync(launchLog, 'utf8').trim().split('\\n').filter(Boolean)\n",
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "render-gate.js's plugin-capture success check is inverted: `if (batchResult.ok) die(3, batchResult.message)` exits 3 with the message `undefined` exactly when render-capture.js --batch succeeded, and falls through to the per-cell parse when it failed. The whole D3 fallback path (and therefore D5's journey-approved/approved marks on every mocks-first host with a browser) can never pass. Introduced by HEAD commit ef8b49a, a 2-file/4-line commit that flipped this line and the AC-5 test together.",
+        "file": "spec/scripts/render-gate.js",
+        "line": 513,
+        "impact": "On any machine with Chrome installed, approving a journey or the whole mock set on a mocks-first product always refuses with an error reading `undefined`, even when every screen captured correctly. The spec's central goal, a rendered check that actually runs at approval, never happens.",
+        "evidence": "Executed repro (real Chrome, root with `.claude/spec.config.json` = `{}`, one mock, targets 390+1440): `node spec/scripts/render-gate.js --mocks <root>/design/mocks/home.html --root <root> --json` → `exit 3 ms 2236`, STDOUT empty, STDERR `render-gate: undefined`; both `home.default.light.phone.mock.json` (page {scrollWidth:390,clientWidth:390}) and `home.default.light.wide.mock.json` (page {scrollWidth:1440,clientWidth:1440}) were written correctly by the batch. Spec D3: 'otherwise capture every cell through one --batch call' / AC-20260905-06-5: 'exit 0 with __RENDER_GATE_PASS__ when the canned inventories pass'. `git show ef8b49a` hunk: `-      if (!batchResult.ok) die(3, batchResult.message)` / `+      if (batchResult.ok) die(3, batchResult.message)`. Also violates Review Checks 'an error path that doesn't name its remedy command' — the exit-3 message is the literal string `undefined`."
+      },
+      {
+        "severity": "hard",
+        "claim": "The AC-20260905-06-5 test names the AC and asserts its inverse: `assert.strictEqual(r.status, 3, ...must exit 0...)`, `assert.throws(() => JSON.parse(r.stdout), '--json must produce parseable output')`, `assert.notStrictEqual(payload && payload.capture, 'plugin', ...must report capture: \"plugin\"...)`. Each assert message still states the correct expectation while the assertion checks the opposite, so the suite is green precisely because the pin was flipped alongside the production bug in ef8b49a. This is a weakened existing assertion (Review Checks: hard) and the AC↔test semantic backstop failure (a test that names an AC without testing its behavior).",
+        "file": "tests/render/render-gate.test.js",
+        "line": 632,
+        "impact": "The only test covering the plugin capture path through render-gate now guards the bug instead of the behavior: the suite reports green while the feature is dead, and a future correct fix would turn this test red.",
+        "evidence": "`git show ef8b49a -- tests/render/render-gate.test.js`: `-  assert.strictEqual(r.status, 0,` → `+  assert.strictEqual(r.status, 3,`; `-  assert.doesNotThrow(() => { payload = JSON.parse(r.stdout) },` → `+  assert.throws(() => { payload = JSON.parse(r.stdout) },`; `-  assert.strictEqual(payload.capture, 'plugin',` → `+  assert.notStrictEqual(payload && payload.capture, 'plugin',`. Spec AC-20260905-06-5: 'THE SYSTEM SHALL invoke it exactly once for 1 theme × 2 viewports, report `capture: \"plugin\"` in `--json`, and exit 0 with `__RENDER_GATE_PASS__`'. Live run `node --test 'tests/render/*.test.js'` → pass 45 fail 0 (green only because of the inversion); real-Chrome repro above shows the true behavior is exit 3."
+      },
+      {
+        "severity": "medium",
+        "claim": "Third near-identical fixture-capture block in one diff: tests/mocks/mocks-notes.test.js:123 carries a file-local `FIXTURE_CAPTURE_SRC` + `writeFixtureCapture` + `writeCaptureConfig` copy of tests/mocks/mocks-driver-fixtures.js:275's exported helpers (which tests/consistency/design-doctrine.test.js already imports across directories), on top of render-gate.test.js's FAKE_CAPTURE_SRC/FAKE_CAPTURE_ENTRIES_SRC variants. The extraction is to import `writeFixtureCapture`/`writeCaptureConfig` from tests/mocks/mocks-driver-fixtures.js.",
+        "file": "tests/mocks/mocks-notes.test.js",
+        "line": 123,
+        "impact": "Two copies of the same fake capture script will drift apart the next time the capture contract or the inventory shape changes, and one of them will silently keep passing on a stale shape.",
+        "evidence": "Review Checks: 'three or more near-identical blocks in one diff is a finding naming the extraction'. `grep -n 'const FIXTURE_CAPTURE_SRC'` → tests/mocks/mocks-driver-fixtures.js:275 and tests/mocks/mocks-notes.test.js:123 (both new in this range); design-doctrine.test.js:9 `require('../mocks/mocks-driver-fixtures')` shows the cross-file import is already the pattern. The range's own agent-memory note added in 0250416 reads 'import it, never a third file-local copy'."
+      },
+      {
+        "severity": "soft",
+        "claim": "`cell._mockOut = mockOut` is assigned in the batch-cell map and never read; the per-cell loop recomputes `mockOut` from the same base.",
+        "file": "spec/scripts/render-gate.js",
+        "line": 503,
+        "impact": "Dead field on the cell object; harmless today but suggests an abandoned plumbing path.",
+        "evidence": "`grep -n '_mockOut' spec/scripts/render-gate.js` → only line 503 (the write); no reader."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "render-capture.js's real-Chrome path (D1/D2/D10, AC-1/AC-2/AC-3) is broken.",
+        "file": "spec/scripts/render-capture.js",
+        "line": 275,
+        "evidence": "Real-Chrome repro through render-gate --batch wrote both cell inventories with correct page geometry (390/390, 1440/1440) in 2236 ms total (one launch); `node --test 'tests/render/*.test.js'` on this Chrome-equipped machine → pass 45 fail 0, including the two [env: CHROME_BIN] pins and AC-2's launch-count wrapper (one launch line with --user-data-dir=). The defect is confined to render-gate.js:513's inverted branch."
+      },
+      {
+        "claim": "Reconcile leg's 5 out-of-plan files (docs/adr/0002, design-doctrine.test.js, mocks-driver-fixtures.js, mocks-driver-look-stops.test.js, mocks-notes.test.js) are unsanctioned scope creep.",
+        "file": "specs/20260905/06-plugin-owned-capture-at-approval.deviations.md",
+        "line": 3,
+        "evidence": "docs/adr/0002's one-line `Amended by: ADR-0007` is the spec's named orchestrator duty (D8 + 'Orchestrator duty' paragraph). The four test files are the Rationale's own 'Executes leg' instruction ('every journey-approved/approved test there will hit the --which path: the build sets CHROME_BIN to a fixture executable ... or declares a fixture capture in their config — repair planned now'); each change is a fixture capture declaration only, recorded in the deviations file. Suite leg: pass 1180 fail 0 under __FILE_BUDGET_OK__."
+      },
+      {
+        "claim": "D9's design.md sentence pushed the file past the 160-line cap.",
+        "file": "spec/doctrine/design.md",
+        "line": 48,
+        "evidence": "`wc -l spec/doctrine/design.md` → 156. citations-check over the root: TOTAL=172 CHECKED=79 SKIP=93 MISS=0 (the new `§ Design Render Gate` reference resolves)."
+      },
+      {
+        "claim": "mocks-driver's D5 wiring is out of order or uses the wrong exit code.",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 804,
+        "evidence": "handleJourneyApproved: `requireNotesResolved(...)` then `requireRenderGateMocks(...)` then `requireStopDecision(...)` — matches D5 'after requireNotesResolved, before the stop decision is consumed'. handleApproved runs it after `runDesignAtlasCheck([mocksDir, '--matrix'])` over `files = mocksTopLevelHtmlFiles()`. `die` is `process.exit(2)` with the `journey \"<j>\" fails the rendered adaptation gate:\\n<stdout>` / `render-gate --mocks could not run: <stderr>` texts Contracts names; the AC-7/8/9 driver tests exercise both branches through a host-declared fixture capture (D6) and pass. Note the driver's success path is only ever green via a host capture: with the plugin fallback it inherits finding 1."
+      },
+      {
+        "claim": "The `build: follow-up` commit 0250416 smuggled code into the range.",
+        "file": null,
+        "line": null,
+        "evidence": "`git show --stat 0250416` → 12 files, all under .claude/agent-memory/ (reviewed-date bumps, one gotcha line added, one stale memory file deleted). No script, test, doctrine or template content; reconcile lists those paths under `excluded`."
+      },
+      {
+        "claim": "D4's scratch empty tokens.css substitution masks a shape bug (defensive fallback).",
+        "file": "spec/scripts/render-gate.js",
+        "line": 488,
+        "evidence": "Scoped to `usingDefaultRules && !fs.existsSync(tokensCssAbs)` only — a host-declared rulesManifest with no tokens.css still hits render-rules.js's own exit-2 refusal, pinned by the new 'AC-20260905-06-6 / D4' test (exit 2 naming tokens.css). The deviations file records the cause (journey-approved precedes theme-picked, so design/tokens.css legitimately does not exist yet) and none of the three adaptation rules read a token colour. A recorded, narrowly-scoped ordering fix, not a shape mask."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 95000
+  }
+}

@@ -8,19 +8,29 @@
 // diffing. This script is the one place that judgment runs mechanically: it derives the host's
 // (mock x component) matrix from `design/targets.json` and the mock's own declared states,
 // serves the mock side itself (D8 — so `../tokens.css` resolves without a host obligation),
-// drives the host's OWN `design.render.capture` command per cell (D1 — the plugin never
-// launches a browser, never names a tool), diffs each pair with render-compare.js, and reports
-// a sentinel-terminated verdict `/spec:review` (or any script consumer) can trust without
-// reading prose.
+// drives a capture command per cell — the host's OWN `design.render.capture` when declared —
+// diffs each pair with render-compare.js, and reports a sentinel-terminated verdict
+// `/spec:review` (or any script consumer) can trust without reading prose.
 //
 // specs/20260824/04-render-rules.md (D5): when the host config declares
 // `design.rulesManifest`, every COMPONENT inventory (never the mock side, in --spec mode) is
 // also run through render-rules.js after comparison — a rule finding prints under its cell
 // (`rule <id> <kind> …`) and fails the gate exactly like a fidelity finding. No manifest
 // declared prints one line (`rules: no design.rulesManifest declared — skipped`) and changes
-// nothing else. The new `--mocks <mock>…` mode captures mock(s) only — no --spec, no ledger
-// read, no component URL, no comparison — so /spec:sketch's exit can run the same rules over a
-// brief's mocks before any component exists to compare against.
+// nothing else. The `--mocks <mock>…` mode captures mock(s) only — no --spec, no ledger
+// read, no component URL, no comparison — so /spec:sketch's and /spec:mocks's own marks can run
+// the same rules over a set of mocks before any component exists to compare against.
+//
+// specs/20260905/06-plugin-owned-capture-at-approval.md (D1/D3/D4, ADR-0007 amends
+// ADR-0002's D1): `--mocks` mode needs no `design.render` block at all. With no
+// `design.render.capture` declared, this script falls back to the plugin's own
+// render-capture.js — `--which` first (its exit 2 becomes this script's own exit 2, same
+// three-way remedy), then ONE `--batch` call over every cell (one browser launch for the whole
+// run). With no `design.rulesManifest` declared it runs `spec/templates/adaptation-rules.json`
+// (the three viewport-adaptation rules only) instead of skipping, and says so on one line.
+// `--spec` mode is entirely unchanged: it still requires a host-declared capture and URL, and
+// still prints the bare skip line when no rulesManifest is declared. `--json` gains
+// `capture: "host" | "plugin"` naming which path ran.
 //
 // What this deliberately does NOT do: compute or diff pixels (D7 — the capture contract this
 // script issues has no screenshot flag, ever); pick a per-host geometry tolerance (D4's
@@ -29,12 +39,14 @@
 // only); read anything outside the host's declared render config, targets.json, the resolved
 // mock file(s), and the coverage ledger's own claims (--spec mode only — --mocks mode reads no
 // ledger); interpret a renderCheck itself (render-rules.js owns that reading, this script only
-// shells out to it per cell and folds its findings into its own output).
+// shells out to it per cell and folds its findings into its own output); scan for a browser
+// itself (render-capture.js owns that resolution — D2's own list).
 //
 // Exit codes: 0 = pass (__RENDER_GATE_PASS__) · 1 = findings, including any unbound-state and
 // any render-rules finding (__RENDER_GATE_FAIL__) · 2 = precondition failure (missing
-// design.render, targets.json, design_source/--mocks file, ledger claim in --spec mode, a
-// malformed design.rulesManifest per render-rules.js's own exit 2, or neither/both of --spec and
+// design.render in --spec mode, no browser resolved for the plugin fallback in --mocks mode,
+// targets.json, design_source/--mocks file, ledger claim in --spec mode, a malformed
+// design.rulesManifest per render-rules.js's own exit 2, or neither/both of --spec and
 // --mocks given — stderr names the remedy) · 3 = capture-family failure (a capture command
 // exiting non-zero, an unparsable inventory or render-rules --json payload, or a readiness
 // timeout — stderr names the failed command/config key; never a pass and never printed alongside
@@ -50,6 +62,8 @@ const { fmBlock, fmValue } = require('./lib/frontmatter')
 const RENDER_COMPARE = path.join(__dirname, 'render-compare.js')
 const RENDER_INVENTORY = path.join(__dirname, 'render-inventory.browser.js')
 const RENDER_RULES = path.join(__dirname, 'render-rules.js')
+const RENDER_CAPTURE = path.join(__dirname, 'render-capture.js')
+const ADAPTATION_RULES = path.join(__dirname, '..', 'templates', 'adaptation-rules.json')
 
 function die(code, msg) {
   process.stderr.write('render-gate: ' + msg + '\n')
@@ -111,11 +125,31 @@ if (mode === 'spec') {
 // ---- preconditions (exit 2, remedy named) ---------------------------------------------------------
 const config = readConfig(root)
 const renderConfig = config.design && config.design.render
-if (!renderConfig || typeof renderConfig.capture !== 'string' || !renderConfig.capture.trim() ||
-    typeof renderConfig.url !== 'string' || !renderConfig.url.trim()) {
-  die(2, 'no usable design.render block in ' + path.join(root, CONFIG_RELPATH) + ' — declare ' +
-    'design.render.capture and design.render.url (see spec/templates/grounding-contract.md) ' +
-    '— this is the same precondition /spec:design stops on at preflight')
+const hostCaptureCmd = (renderConfig && typeof renderConfig.capture === 'string' && renderConfig.capture.trim())
+  ? renderConfig.capture.trim() : null
+
+// D9 (specs/20260824/01): --spec mode needs a host-declared capture command AND URL — the
+// component side has no other way to resolve a URL. --mocks mode has no component side, so D3
+// (specs/20260905/06) drops this precondition entirely for that mode.
+if (mode === 'spec') {
+  if (!hostCaptureCmd || typeof renderConfig.url !== 'string' || !renderConfig.url.trim()) {
+    die(2, 'no usable design.render block in ' + path.join(root, CONFIG_RELPATH) + ' — declare ' +
+      'design.render.capture and design.render.url (see spec/templates/grounding-contract.md) ' +
+      '— this is the same precondition /spec:design stops on at preflight')
+  }
+}
+
+// D3: --mocks mode with no host-declared capture command falls back to the plugin's own
+// render-capture.js — resolved up front via --which (never touches this script's own in-process
+// mock server, so a plain spawnSync is safe here) so a machine with no browser refuses before any
+// capture, exactly like the --spec-mode precondition above.
+const captureMode = (mode === 'mocks' && !hostCaptureCmd) ? 'plugin' : 'host'
+if (captureMode === 'plugin') {
+  const which = spawnSync(process.execPath, [RENDER_CAPTURE, '--which'], { encoding: 'utf8' })
+  if (which.status !== 0) {
+    die(2, (which.stderr || which.stdout || '').trim() ||
+      'render-capture.js --which found no browser — set CHROME_BIN, install Google Chrome, or declare design.render.capture')
+  }
 }
 
 const targetsPath = path.join(root, 'design/targets.json')
@@ -295,7 +329,7 @@ function probeReady(cmd) {
 }
 
 async function ensureReady() {
-  if (!renderConfig.ready) return // Behavior: neither ready nor boot declared -> assume up
+  if (!renderConfig || !renderConfig.ready) return // Behavior: neither ready nor boot declared -> assume up
   if (probeReady(renderConfig.ready)) return
   if (renderConfig.boot && !noBoot) {
     bootChild = spawn('bash', ['-c', renderConfig.boot], { cwd: root, detached: true, stdio: 'ignore' })
@@ -319,7 +353,7 @@ async function ensureReady() {
 // spawn() + a Promise keeps the event loop free to service the server while the child runs.
 function runCapture(url, width, height, theme, stateArg, outPath) {
   return new Promise((resolve) => {
-    const parts = renderConfig.capture.trim().split(/\s+/)
+    const parts = hostCaptureCmd.trim().split(/\s+/)
     const [prog, ...baseArgs] = parts
     const args = [...baseArgs, '--url', url, '--width', String(width), '--height', String(height),
       '--theme', theme, '--state', stateArg, '--script', RENDER_INVENTORY, '--out', outPath]
@@ -349,6 +383,38 @@ function runCapture(url, width, height, theme, stateArg, outPath) {
         JSON.parse(fs.readFileSync(outPath, 'utf8'))
       } catch (e) {
         resolve({ ok: false, message: 'capture wrote a missing/unparsable inventory at ' + outPath + ' (' + e.message + ') for: ' + cmdLine })
+        return
+      }
+      resolve({ ok: true })
+    })
+  })
+}
+
+// D3 (specs/20260905/06): the plugin capture fallback — ONE render-capture.js --batch call over
+// every cell of the whole run (D1: one browser launch, not one per cell). ASYNC, never
+// spawnSync, for the exact reason runCapture() above is async: this process's own D8 mock server
+// must stay free to answer render-capture.js's page navigations while the child runs.
+function runPluginBatch(cellsPath) {
+  return new Promise((resolve) => {
+    let child
+    try {
+      child = spawn(process.execPath, [RENDER_CAPTURE, '--batch', cellsPath], { cwd: root })
+    } catch (e) {
+      resolve({ ok: false, message: 'render-capture.js --batch failed to spawn (' + e.message + ')' })
+      return
+    }
+    let stderr = ''
+    child.stderr.on('data', (d) => { stderr += d })
+    child.on('error', (e) => {
+      resolve({ ok: false, message: 'render-capture.js --batch died without an exit code (' + e.message + ')' })
+    })
+    child.on('close', (code, signal) => {
+      if (code === null) {
+        resolve({ ok: false, message: 'render-capture.js --batch died without an exit code (signal ' + signal + ')' })
+        return
+      }
+      if (code !== 0) {
+        resolve({ ok: false, message: 'render-capture.js --batch failed: exit ' + code + (stderr.trim() ? '\n' + stderr.trim() : '') })
         return
       }
       resolve({ ok: true })
@@ -404,22 +470,65 @@ async function main() {
   const excusedSeen = new Set()
   const excusedLines = []
   const rulesManifestRel = config.design && config.design.rulesManifest
-  const rulesManifestAbs = rulesManifestRel ? path.join(root, rulesManifestRel) : null
-  const tokensAbs = path.join(designDir, 'tokens.css')
+  // D4: --mocks mode with no declared manifest runs the plugin's own adaptation-only rules
+  // instead of skipping — --spec mode is untouched (rulesManifestAbs stays null, skip line).
+  const usingDefaultRules = !rulesManifestRel && mode === 'mocks'
+  const rulesManifestAbs = rulesManifestRel ? path.join(root, rulesManifestRel)
+    : (usingDefaultRules ? ADAPTATION_RULES : null)
+  // D5's own driver call (specs/20260905/06) reaches --mocks mode at journey-approved — before
+  // /spec:mocks's THEME stage ever copies a chosen tokens.css into design/ — so design/tokens.css
+  // may not exist yet. None of the three adaptation rules (no-overflow/desktop-fill/line-length)
+  // read a token color, so a missing file here is not a host misconfiguration to refuse; an empty
+  // scratch file keeps render-rules.js's own --tokens precondition satisfied without inventing a
+  // real palette. A host-declared manifest with a genuine palette/contrast rule still gets its
+  // OWN declared tokens.css when that exists (this substitution only fires when the real file is
+  // absent, in --mocks mode only — --spec mode's design/tokens.css is expected to exist already).
+  const tokensCssAbs = path.join(designDir, 'tokens.css')
+  const tokensAbs = (mode === 'mocks' && !fs.existsSync(tokensCssAbs))
+    ? (() => { const p = path.join(outDir, '_empty-tokens.css'); fs.writeFileSync(p, ''); return p })()
+    : tokensCssAbs
 
   if (cells.length) {
     const server = await startMockServer()
     const port = server.address().port
     await ensureReady()
 
+    // D3: the plugin capture fallback captures every mock cell in ONE render-capture.js --batch
+    // call (one browser launch for the whole run) before the per-cell reporting loop below.
+    if (captureMode === 'plugin') {
+      const batchCells = cells.map((cell) => {
+        const vpLabel = viewportLabel(cell.viewport)
+        const base = cell.mock.label + '.' + cell.state.name + '.' + cell.theme + '.' + vpLabel
+        const mockOut = path.join(outDir, base + '.mock.json')
+        cell._mockOut = mockOut
+        return {
+          url: 'http://127.0.0.1:' + port + '/' + cell.mock.designRelPath,
+          width: cell.viewport.width, height: cell.viewport.height, theme: cell.theme,
+          state: cell.state.captureArg, script: RENDER_INVENTORY, out: mockOut,
+        }
+      })
+      const batchPath = path.join(outDir, '_plugin-batch-cells.json')
+      fs.writeFileSync(batchPath, JSON.stringify(batchCells))
+      const batchResult = await runPluginBatch(batchPath)
+      if (!batchResult.ok) die(3, batchResult.message)
+    }
+
     for (const cell of cells) {
       const vpLabel = viewportLabel(cell.viewport)
       const base = cell.mock.label + '.' + cell.state.name + '.' + cell.theme + '.' + vpLabel
       const mockOut = path.join(outDir, base + '.mock.json')
 
-      const mockUrl = 'http://127.0.0.1:' + port + '/' + cell.mock.designRelPath
-      const mockResult = await runCapture(mockUrl, cell.viewport.width, cell.viewport.height, cell.theme, cell.state.captureArg, mockOut)
-      if (!mockResult.ok) die(3, mockResult.message)
+      if (captureMode === 'plugin') {
+        try {
+          JSON.parse(fs.readFileSync(mockOut, 'utf8'))
+        } catch (e) {
+          die(3, 'render-capture.js --batch wrote a missing/unparsable inventory at ' + mockOut + ' (' + e.message + ')')
+        }
+      } else {
+        const mockUrl = 'http://127.0.0.1:' + port + '/' + cell.mock.designRelPath
+        const mockResult = await runCapture(mockUrl, cell.viewport.width, cell.viewport.height, cell.theme, cell.state.captureArg, mockOut)
+        if (!mockResult.ok) die(3, mockResult.message)
+      }
 
       if (mode === 'mocks') {
         let ruleFindings = []
@@ -470,12 +579,17 @@ async function main() {
   const anyUnbound = unboundFindings.length > 0
   const anyDirtyCell = cellReports.some((c) => !c.pass)
   const exitCode = (anyUnbound || anyDirtyCell) ? 1 : 0
-  const rulesSkipLine = rulesManifestRel ? null : 'rules: no design.rulesManifest declared — skipped'
+  // D4: a declared manifest never prints a line at all; an absent one prints either the bare
+  // --spec-mode skip line or, in --mocks mode, the adaptation-only line naming the template path.
+  const rulesSkipLine = rulesManifestRel ? null
+    : (usingDefaultRules
+      ? 'rules: no design.rulesManifest declared — adaptation rules only (' + ADAPTATION_RULES + ')'
+      : 'rules: no design.rulesManifest declared — skipped')
 
   if (asJson) {
     writeOut(JSON.stringify({
       cells: cellReports, unboundStates: unboundFindings, excused: excusedLines,
-      rulesDeclared: !!rulesManifestRel, exit: exitCode,
+      rulesDeclared: !!rulesManifestRel, capture: captureMode, exit: exitCode,
     }))
     process.exit(exitCode)
   }

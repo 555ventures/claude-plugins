@@ -13,6 +13,7 @@ const {
   decideLook,
   advanceToSeedDone, advanceToShapePicked, advanceToCanonWritten, advanceToJourneyApproved,
   advanceToDirectionComposed, advanceToThemePicked, advanceToSkinned, advanceToReviewed,
+  writeFixtureCapture, writeCaptureConfig,
   stubNpx,
 } = require('./mocks-driver-fixtures')
 
@@ -513,4 +514,88 @@ test('AC-20260902-07-13: look-probe refuses on a failing npx naming the install 
   assert.match(argv, new RegExp(outPng.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), 'look must pass the requested --out path as the screenshot destination')
   const leftoverLooks = fs.readdirSync(path.join(dir2, 'design/mocks')).filter((f) => f.startsWith('.look-'))
   assert.deepStrictEqual(leftoverLooks, [], 'the generated .look-a.html sibling must be deleted after the screenshot runs, leaving no trace on disk')
+})
+
+// ---------------------------------------------------------------------------
+// specs/20260905/06-plugin-owned-capture-at-approval.md (D5): journey-approved and approved
+// now run render-gate --mocks over the journey's / the whole set's top-level mocks and refuse
+// on any finding or capture failure. AC-20260905-06-7/-8/-9.
+// ---------------------------------------------------------------------------
+test('AC-20260905-06-7: --mark journey-approved --journey <j> on a fixture host declaring a capture command whose canned inventory is a phone-width column at the 1440 cell exits 2 naming "fails the rendered adaptation gate" and a desktop-fill line, leaving journeys[j].approved unset', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToCanonWritten(dir)
+  for (const label of LABELS) writeWireframe(dir, label)
+  const drawn = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
+  assert.strictEqual(drawn.status, 0, 'test setup requires journey-drawn to be accepted once every label conforms to D6: ' + drawn.stderr)
+
+  fs.writeFileSync(path.join(dir, 'design/targets.json'),
+    JSON.stringify({ schemaVersion: 1, themes: ['light'], viewports: [{ name: 'wide', width: 1440, height: 900 }] }))
+  writeCaptureConfig(dir, writeFixtureCapture(dir))
+  decideLook(dir, 'journey-approved:' + JOURNEY, 'approve', { by: 'jj' })
+
+  const phoneColumnEntries = JSON.stringify([{ box: { x: 0, y: 0, w: 390, h: 20 }, fixed: false, outOfFlow: false, dataPositioned: false, srOnly: false }])
+  const wideCleanPage = JSON.stringify({ scrollWidth: 1440, clientWidth: 1440 })
+  const r = runNode(SCRIPT, ['--root', dir, '--mark', 'journey-approved', '--journey', JOURNEY], {
+    env: { ...process.env, FAKE_CAPTURE_ENTRIES: phoneColumnEntries, FAKE_CAPTURE_PAGE: wideCleanPage },
+  })
+
+  assert.strictEqual(r.status, 2,
+    'D5: a phone-width column at the 1440 cell must fail the adaptation gate and refuse the mark, exit 2: ' + r.stdout + r.stderr)
+  assert.match(r.stdout + r.stderr, /fails the rendered adaptation gate/,
+    'D5: the refusal must carry the exact "fails the rendered adaptation gate" prefix Contracts names: ' + r.stdout + r.stderr)
+  assert.match(r.stdout + r.stderr, /desktop-fill/,
+    'D5: the refusal must surface render-gate\'s own desktop-fill finding, not a generic failure: ' + r.stdout + r.stderr)
+  const st = statusJson(dir)
+  assert.ok(!st.journeys[JOURNEY] || !st.journeys[JOURNEY].approved,
+    'a refused journey-approved must never record journeys.<j>.approved: ' + JSON.stringify(st.journeys[JOURNEY]))
+})
+
+test('AC-20260905-06-8: the same journey-approved mark with canned inventories that fill the 1440 cell records journeys[j].approved and prints the checkpoint line', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToCanonWritten(dir)
+  for (const label of LABELS) writeWireframe(dir, label)
+  const drawn = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
+  assert.strictEqual(drawn.status, 0, 'test setup requires journey-drawn to be accepted once every label conforms to D6: ' + drawn.stderr)
+
+  fs.writeFileSync(path.join(dir, 'design/targets.json'),
+    JSON.stringify({ schemaVersion: 1, themes: ['light'], viewports: [{ name: 'wide', width: 1440, height: 900 }] }))
+  writeCaptureConfig(dir, writeFixtureCapture(dir))
+  decideLook(dir, 'journey-approved:' + JOURNEY, 'approve', { by: 'jj' })
+
+  const filledEntries = JSON.stringify([{ box: { x: 0, y: 0, w: 1440, h: 20 }, fixed: false, outOfFlow: false, dataPositioned: false, srOnly: false }])
+  const wideCleanPage = JSON.stringify({ scrollWidth: 1440, clientWidth: 1440 })
+  const r = runNode(SCRIPT, ['--root', dir, '--mark', 'journey-approved', '--journey', JOURNEY], {
+    env: { ...process.env, FAKE_CAPTURE_ENTRIES: filledEntries, FAKE_CAPTURE_PAGE: wideCleanPage },
+  })
+
+  assert.strictEqual(r.status, 0,
+    'D5: content filling the 1440 cell must pass the adaptation gate and accept the mark: ' + r.stdout + r.stderr)
+  assert.match(r.stdout, /checkpoint/i,
+    'an accepted mark must print the checkpoint line, same as every other accepted mark in this driver: ' + r.stdout)
+  const st = statusJson(dir)
+  assert.ok(st.journeys[JOURNEY] && st.journeys[JOURNEY].approved,
+    'an accepted journey-approved must record journeys.<j>.approved: ' + JSON.stringify(st.journeys[JOURNEY]))
+})
+
+test('AC-20260905-06-9: --mark approved on a host declaring no design block with CHROME_BIN=/nonexistent/chrome exits 2 with "render-gate --mocks could not run:" naming CHROME_BIN, and marks.approved stays null', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToReviewed(dir)
+  writeSkinned(dir, LABELS, 'approved')
+  decideLook(dir, 'approved', 'approve', { by: 'jj' })
+  // The chain up to here (via advanceToJourneyApproved) declared a fixture capture command so
+  // every earlier journey-approved/journey-reviewed mark could pass predictably — AC-9 needs a
+  // host declaring NO design block at all when the final `approved` mark itself runs.
+  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify({}))
+
+  const r = runNode(SCRIPT, ['--root', dir, '--mark', 'approved'],
+    { env: { ...process.env, CHROME_BIN: '/nonexistent/chrome' } })
+
+  assert.strictEqual(r.status, 2,
+    'D5: no design block declared and no browser resolved must refuse the approved mark, exit 2: ' + r.stdout + r.stderr)
+  assert.match(r.stdout + r.stderr, /render-gate --mocks could not run:/,
+    'D5: a gate exit 2/3 (capture-family) must be refused with this exact prefix, distinct from an ordinary findings refusal: ' + r.stdout + r.stderr)
+  assert.match(r.stdout + r.stderr, /CHROME_BIN/,
+    'the underlying render-gate remedy naming CHROME_BIN must still be visible through the driver\'s own prefix: ' + r.stdout + r.stderr)
+  assert.strictEqual(statusJson(dir).marks.approved, null,
+    'a refused approved mark must leave marks.approved null, never recorded: ' + JSON.stringify(statusJson(dir).marks))
 })

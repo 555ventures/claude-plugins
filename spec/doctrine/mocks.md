@@ -70,7 +70,10 @@ mid-WIREFRAMES reappears as `0/N drawn` and reopens the state rather than silent
 `journey-approved`, `theme-picked`, `journey-skinned`, `journey-reviewed`, and `approved` each
 run the provenance ledger's `gateVerdict` (§ Provenance Ledger) before recording; a blocked
 gate refuses (exit 2) naming the offending rows and the remedy (`ledger set --id <id> --status
-confirmed --tag said-by-user`, or `--status overridden`). `journey-drawn` and
+confirmed --tag said-by-user`, or `--status overridden`). `journey-approved` and `approved`
+additionally run the rendered adaptation gate (§ Design Render Gate, `render-gate --mocks`),
+falling back to the plugin's own capture when the host declares none, and refuse the mark on
+any finding or on a machine with no browser. `journey-drawn` and
 `direction-composed` run no gate — drawing and composing are how open questions get found, not
 resolved. Process rows never surface as something to resolve; they are counted, not asked.
 

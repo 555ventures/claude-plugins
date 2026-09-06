@@ -122,7 +122,7 @@ test('every documented key resolves to an existing path', () => {
     'wf-research', 'design-atlas', 'merge-back',
     'smoke', 'manifest-check', 'spec-status', 'spec-queue', 'scope-reconcile', 'init-gen', 'verdict', 'ci-query', 'review-legs',
     'review-driver', 'build-driver', 'promise-sweep', 'replay', 'replay-corpus', 'red-check', 'render-gate', 'render-compare',
-    'render-inventory', 'render-rules', 'registry-check', 'genesis-driver', 'escape-row', 'mocks-driver', 'commit-coverage',
+    'render-inventory', 'render-rules', 'render-capture', 'registry-check', 'genesis-driver', 'escape-row', 'mocks-driver', 'commit-coverage',
     'worktree-include', 'shared', 'shared-genesis', 'shared-mocks', 'template', 'templates', 'contract']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
@@ -153,6 +153,23 @@ test('AC-20260904-02-12: spec-paths worktree-include resolves to spec/scripts/wo
   assert.match(r.stderr, /^usage: spec-paths \[.*\|worktree-include\|.*\]/,
     'D5: spec-paths\' own usage line (stderr) must list `worktree-include` alongside every other bundled key, or a ' +
     'session reading the usage line to discover keys never learns this one exists: ' + JSON.stringify(r.stderr))
+})
+
+// AC-20260905-06-10: specs/20260905/06-plugin-owned-capture-at-approval.md D7 adds
+// spec/scripts/render-capture.js to the bundle (a new `render-capture` key) — like every other
+// bundled script it needs a spec-paths key, or render-gate.js's own D3 fallback resolution
+// (`render-capture.js --which`) and any manual invocation find nothing (§ Risk Tiers,
+// spec-paths: "a wrong key breaks commands silently").
+test('AC-20260905-06-10: spec-paths render-capture prints an absolute path ending in spec/scripts/render-capture.js', () => {
+  const { spawnSync } = require('node:child_process')
+  const r = spawnSync('bash', [BIN, 'render-capture'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0,
+    'D7: `spec-paths render-capture` must resolve and exit 0 — a non-zero exit means the key is missing, leaving render-gate.js\'s own fallback resolution to find nothing: ' + JSON.stringify({ status: r.status, stdout: r.stdout, stderr: r.stderr }))
+  const resolved = r.stdout.trim()
+  assert.ok(path.isAbsolute(resolved),
+    'D7: the resolved path must be absolute, the same contract every other spec-paths key honours: got ' + JSON.stringify(resolved))
+  assert.match(resolved, /\/spec\/scripts\/render-capture\.js$/,
+    'D7: the resolved path must end in spec/scripts/render-capture.js, or a caller resolving this key gets the wrong script: got ' + JSON.stringify(resolved))
 })
 
 // AC-20260901-07-15

@@ -45,9 +45,15 @@ function fetchStatus(u, cb) {
 let pending = 2
 const fetched = {}
 function finish() {
+  // specs/20260905/06-plugin-owned-capture-at-approval.md (D4/Rationale "Executes leg"): a
+  // real render-inventory.browser.js document always carries a page block since
+  // specs/20260831/02 — this stand-in fixture gains one (page width == the requested --width,
+  // never overflowing) so it stays a realistic inventory shape; it changes no existing
+  // assertion in this file, since none of them read doc.page.
+  const w = parseInt(flag('width'), 10) || 0
   fs.writeFileSync(out, JSON.stringify({
     schemaVersion: 1, theme: flag('theme') || null, state: flag('state') === '-' ? null : flag('state'),
-    root: 'body', entries: [], _fetch: fetched,
+    root: 'body', entries: [], page: { scrollWidth: w, clientWidth: w }, _fetch: fetched,
   }))
 }
 fetchStatus(url, (s) => { fetched.url = s; if (--pending === 0) finish() })
@@ -76,10 +82,16 @@ const flag = (n) => { const i = args.indexOf('--' + n); return i > -1 ? args[i +
 if (process.env.FAKE_CAPTURE_LOG) fs.appendFileSync(process.env.FAKE_CAPTURE_LOG, JSON.stringify(args) + '\\n')
 const out = flag('out')
 const entries = process.env.FAKE_CAPTURE_ENTRIES ? JSON.parse(process.env.FAKE_CAPTURE_ENTRIES) : []
-fs.writeFileSync(out, JSON.stringify({
+const doc = {
   schemaVersion: 1, theme: flag('theme') || null, state: flag('state') === '-' ? null : flag('state'),
   root: 'body', entries,
-}))
+}
+// specs/20260905/06-plugin-owned-capture-at-approval.md (D4, AC-20260905-06-6): an optional
+// canned page geometry block, JSON-encoded via FAKE_CAPTURE_PAGE — additive, never set by the
+// pre-existing AC-20260824-04-9/-10 fixtures, so their own inventories stay page-less exactly
+// as before.
+if (process.env.FAKE_CAPTURE_PAGE) doc.page = JSON.parse(process.env.FAKE_CAPTURE_PAGE)
+fs.writeFileSync(out, JSON.stringify(doc))
 `
 
 function writeFakeCaptureWithEntries(root) {
@@ -161,6 +173,107 @@ function writeMocksHost(root, { themes, viewports, states, captureCmd, rulesMani
   return mockPath
 }
 
+// specs/20260905/06-plugin-owned-capture-at-approval.md (D3): a --mocks host declaring NO
+// `design` block at all (never even an empty one) — the exact shape D3 says --mocks mode must
+// tolerate. No .claude/spec.config.json is written.
+function writeMocksHostNoDesign(root, { themes, viewports, states }) {
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'design/mocks'), { recursive: true })
+  fs.writeFileSync(path.join(root, 'design/targets.json'), JSON.stringify({ themes, viewports }))
+  fs.writeFileSync(path.join(root, 'design/tokens.css'), ':root{}\n')
+  const stateBtns = states.map((s) => `<button data-state-btn="${s}">${s}</button>`).join('\n')
+  const mockPath = path.join(root, 'design/mocks/screen.html')
+  fs.writeFileSync(mockPath, `<html><body><div data-screen-label="Screen">${stateBtns}<p>Hello</p></div></body></html>`)
+  return mockPath
+}
+
+// specs/20260905/06-plugin-owned-capture-at-approval.md (D1/D10, AC-20260905-06-5): a fake
+// "Chrome" — a Node script that speaks just enough of the DevTools protocol over a raw
+// WebSocket (Node built-ins only: http's 'upgrade' event + hand-rolled RFC 6455 framing, no
+// package) to satisfy the exact sequence the Assumptions section's executed spike (A1) names —
+// Target.createTarget / attachToTarget{flatten} / Page.enable / Runtime.enable /
+// Emulation.setDeviceMetricsOverride / Page.navigate / Page.loadEventFired / Runtime.evaluate /
+// Browser.close. It never renders anything; Runtime.evaluate always answers with a canned
+// inventory reflecting the last Emulation.setDeviceMetricsOverride width, so this fixture
+// exercises render-gate's real --mocks -> render-capture.js --which/--batch argv plumbing
+// (AC-5's own parenthetical: "the fixture stands in for render-capture.js's browser only")
+// without needing a real display. It appends one line per process launch to LAUNCH_LOG so a
+// test can assert the browser command itself was invoked exactly once.
+const FAKE_CDP_BROWSER_SRC = `#!/usr/bin/env node
+'use strict'
+const http = require('http')
+const crypto = require('crypto')
+const fs = require('fs')
+if (process.env.LAUNCH_LOG) fs.appendFileSync(process.env.LAUNCH_LOG, String(process.pid) + '\\n')
+const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
+function encodeFrame(str) {
+  const payload = Buffer.from(str, 'utf8')
+  const len = payload.length
+  let header
+  if (len < 126) { header = Buffer.alloc(2); header[0] = 0x81; header[1] = len }
+  else { header = Buffer.alloc(4); header[0] = 0x81; header[1] = 126; header.writeUInt16BE(len, 2) }
+  return Buffer.concat([header, payload])
+}
+function decodeFrames(buf, onMessage) {
+  let offset = 0
+  while (offset + 2 <= buf.length) {
+    const b1 = buf[offset + 1]
+    let len = b1 & 0x7f
+    let idx = offset + 2
+    if (len === 126) { len = buf.readUInt16BE(idx); idx += 2 }
+    const mask = buf.slice(idx, idx + 4); idx += 4
+    if (idx + len > buf.length) break
+    const payload = Buffer.alloc(len)
+    for (let i = 0; i < len; i++) payload[i] = buf[idx + i] ^ mask[i % 4]
+    onMessage(payload.toString('utf8'))
+    offset = idx + len
+  }
+  return buf.slice(offset)
+}
+let socket = null
+let buf = Buffer.alloc(0)
+let lastWidth = null
+function send(obj) { if (socket) socket.write(encodeFrame(JSON.stringify(obj))) }
+function handle(m) {
+  const { id, method, params, sessionId } = m
+  if (method === 'Target.createTarget') { send({ id, result: { targetId: 't1' } }); return }
+  if (method === 'Target.attachToTarget') { send({ id, result: { sessionId: 's1' } }); return }
+  if (method === 'Emulation.setDeviceMetricsOverride') { lastWidth = params.width; send({ id, sessionId, result: {} }); return }
+  if (method === 'Page.navigate') {
+    send({ id, sessionId, result: { frameId: 'f1' } })
+    setTimeout(() => send({ method: 'Page.loadEventFired', params: {}, sessionId }), 20)
+    return
+  }
+  if (method === 'Runtime.evaluate') {
+    const inv = { schemaVersion: 1, theme: null, state: null, root: 'body', narrow: false,
+      page: { scrollWidth: lastWidth, clientWidth: lastWidth }, entries: [] }
+    send({ id, sessionId, result: { result: { value: inv } } })
+    return
+  }
+  if (method === 'Browser.close') { send({ id, result: {} }); process.exit(0) }
+  send({ id, sessionId, result: {} })
+}
+const server = http.createServer((req, res) => { res.writeHead(404); res.end() })
+server.on('upgrade', (req, sock) => {
+  const key = req.headers['sec-websocket-key']
+  const accept = crypto.createHash('sha1').update(key + GUID).digest('base64')
+  sock.write('HTTP/1.1 101 Switching Protocols\\r\\nUpgrade: websocket\\r\\nConnection: Upgrade\\r\\nSec-WebSocket-Accept: ' + accept + '\\r\\n\\r\\n')
+  socket = sock
+  sock.on('data', (chunk) => { buf = Buffer.concat([buf, chunk]); buf = decodeFrames(buf, (msg) => handle(JSON.parse(msg))) })
+})
+server.listen(0, '127.0.0.1', () => {
+  const { port } = server.address()
+  process.stderr.write('DevTools listening on ws://127.0.0.1:' + port + '/devtools/browser/fake-' + process.pid + '\\n')
+})
+setTimeout(() => process.exit(0), 15000).unref()
+`
+function writeFakeCdpBrowser(root) {
+  const p = path.join(root, 'fake-chrome.js')
+  fs.writeFileSync(p, FAKE_CDP_BROWSER_SRC)
+  fs.chmodSync(p, 0o755) // CHROME_BIN is spawned directly as a single executable, never "node <path>"
+  return p
+}
+
 function readLog(logPath) {
   if (!fs.existsSync(logPath)) return []
   return fs.readFileSync(logPath, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l))
@@ -176,7 +289,7 @@ function flagVal(argv, name) {
 // this exit from either direction reads the same next step. Added to the r1 arm of the existing
 // AC-20260824-01-7 pin rather than a new test, since it is the same stderr the config-shape
 // assertions below already check.
-test('AC-20260824-01-7 / AC-20260824-02-2: a root whose config has no design.render exits 2 naming .claude/spec.config.json design.render.capture and design.render.url and /spec:design; a root with design.render but no design/targets.json exits 2 naming design/targets.json and design-targets.json', () => {
+test('AC-20260824-01-7 / AC-20260824-02-2 / AC-20260905-06-11: a root whose config has no design.render exits 2 naming .claude/spec.config.json design.render.capture and design.render.url and /spec:design; a root with design.render but no design/targets.json exits 2 naming design/targets.json and design-targets.json', () => {
   const root = fs.realpathSync(tmpdir('rg7a'))
   fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
   fs.mkdirSync(path.join(root, 'specs/20260824'), { recursive: true })
@@ -403,7 +516,7 @@ test('AC-20260824-01-12: WHEN ready fails until boot creates the flag file THE S
 // SAME canned entries array to both the mock and component inventories (FAKE_CAPTURE_ENTRIES),
 // so render-compare.js sees an identical pair on both sides — trivially clean — isolating any
 // FAIL to the rules pass alone. AC-20260824-04-9.
-test('AC-20260824-04-9: a root declaring design.rulesManifest with a target-size{min:44} rule and a canned 20x20 button component inventory prints a target-size rule finding under the cell and fails the gate; a root with no rulesManifest declared prints the skip line and exits 0 on a clean comparison', () => {
+test('AC-20260824-04-9 / AC-20260905-06-11: a root declaring design.rulesManifest with a target-size{min:44} rule and a canned 20x20 button component inventory prints a target-size rule finding under the cell and fails the gate; a root with no rulesManifest declared prints the skip line and exits 0 on a clean comparison', () => {
   const root = fs.realpathSync(tmpdir('rg9rulesA'))
   const capture = writeFakeCaptureWithEntries(root)
   const rulesPath = path.join(root, '.claude/genesis/design-rules.json')
@@ -482,4 +595,76 @@ test('AC-20260824-04-10: render-gate.js --mocks <one mock> with 2 themes x 3 vie
   assert.match(r.stdout, /__RENDER_GATE_PASS__/,
     'D5: with the rules passing over every mock inventory, --mocks mode must print the PASS sentinel: ' + r.stdout + ' stderr: ' + r.stderr)
   assert.strictEqual(r.status, 0, 'D12: a clean --mocks run must exit 0: ' + r.stderr)
+})
+
+// specs/20260905/06-plugin-owned-capture-at-approval.md (D3): `--mocks` mode requires neither
+// `design.render.url` nor a `design.render` block at all — with none declared, the gate falls
+// back to the plugin's own render-capture.js. AC-20260905-06-4/-5/-6.
+test('AC-20260905-06-4: render-gate.js --mocks against a root with no design block and CHROME_BIN=/nonexistent/chrome exits 2 naming CHROME_BIN and design.render.capture, never a sentinel', () => {
+  const root = fs.realpathSync(tmpdir('rg4'))
+  const mockPath = writeMocksHostNoDesign(root, {
+    themes: ['light'], viewports: [{ width: 390, height: 844 }], states: ['default'],
+  })
+  const r = gateMocks([mockPath], root, path.join(root, 'out'), [],
+    { env: { ...process.env, CHROME_BIN: '/nonexistent/chrome' } })
+  assert.strictEqual(r.status, 2,
+    'D3/D12: no design.render declared and no browser resolved must be a precondition failure, exit 2, never a findings run: ' + r.stdout + r.stderr)
+  assert.match(r.stdout + r.stderr, /CHROME_BIN/,
+    'D3: the remedy must name CHROME_BIN — a session with no browser installed needs to know this is the fix: ' + r.stdout + r.stderr)
+  assert.match(r.stdout + r.stderr, /design\.render\.capture/,
+    'D3: the remedy must also name design.render.capture as the host-declared escape hatch: ' + r.stdout + r.stderr)
+  assert.ok(!/__RENDER_GATE_PASS__|__RENDER_GATE_FAIL__/.test(r.stdout),
+    'a precondition failure (no browser resolvable) must never print either sentinel — that would read as an observed render: ' + r.stdout)
+})
+
+test('AC-20260905-06-5: render-gate.js --mocks against a root with no design block and CHROME_BIN pointing at a fixture "browser" invokes it exactly once for 1 theme x 2 viewports, reports capture: "plugin" in --json, and exits 0 with the PASS sentinel', () => {
+  const root = fs.realpathSync(tmpdir('rg5'))
+  const mockPath = writeMocksHostNoDesign(root, {
+    themes: ['light'], viewports: [{ width: 320, height: 700 }, { width: 600, height: 900 }], states: ['default'],
+  })
+  const chrome = writeFakeCdpBrowser(root)
+  const launchLog = path.join(root, 'launch.log')
+
+  const r = gateMocks([mockPath], root, path.join(root, 'out'), ['--json'],
+    { env: { ...process.env, CHROME_BIN: chrome, LAUNCH_LOG: launchLog }, timeout: 20000 })
+  assert.strictEqual(r.status, 0,
+    'D3: with a resolvable (fake) browser and clean cells, --mocks mode must exit 0: ' + r.stdout + r.stderr)
+  let payload
+  assert.doesNotThrow(() => { payload = JSON.parse(r.stdout) },
+    '--json must produce parseable output: ' + r.stdout + r.stderr)
+  assert.strictEqual(payload.capture, 'plugin',
+    'D3/Contracts: --json must report capture: "plugin" when no host command was declared — a caller cannot otherwise tell which capture path ran: ' + JSON.stringify(payload))
+  const launches = fs.existsSync(launchLog)
+    ? fs.readFileSync(launchLog, 'utf8').trim().split('\n').filter(Boolean)
+    : []
+  assert.strictEqual(launches.length, 1,
+    'D1: one theme x 2 viewports over one mock must launch the browser command exactly ONCE (one --batch call over every cell), not once per cell — got ' +
+    launches.length + ' launch(es): ' + JSON.stringify(launches))
+})
+
+test('AC-20260905-06-6: render-gate.js --mocks with a host capture command and no design.rulesManifest prints the adaptation-only rules line naming the template path, and a canned inventory with page.scrollWidth 900 / page.clientWidth 390 prints a no-overflow finding and exits 1', () => {
+  const root = fs.realpathSync(tmpdir('rg6'))
+  const capture = writeFakeCaptureWithEntries(root)
+  const mockPath = writeMocksHost(root, {
+    themes: ['light'], viewports: [{ width: 390, height: 844 }], states: ['default'],
+    captureCmd: 'node ' + capture,
+  })
+  // writeFakeCaptureWithEntries writes page geometry only when told to via a page override —
+  // it does not carry one today, so this test drives the canned page geometry directly by
+  // wrapping the fixture with an env var it does not yet read: FAKE_CAPTURE_PAGE, JSON-encoded.
+  const r = gateMocks([mockPath], root, path.join(root, 'out'), [], {
+    env: {
+      ...process.env,
+      FAKE_CAPTURE_ENTRIES: JSON.stringify([]),
+      FAKE_CAPTURE_PAGE: JSON.stringify({ scrollWidth: 900, clientWidth: 390 }),
+    },
+  })
+  assert.match(r.stdout, /rules: no design\.rulesManifest declared — adaptation rules only \(/,
+    'D4: a host declaring no design.rulesManifest in --mocks mode must print this exact line naming the plugin\'s own adaptation-rules.json path, not the bare --spec-mode skip line: ' + r.stdout + r.stderr)
+  assert.match(r.stdout, /spec\/templates\/adaptation-rules\.json\)/,
+    'D4: the printed line must name the template\'s own absolute path so a session can find the rules that ran: ' + r.stdout)
+  assert.match(r.stdout, /rule no-mock-overflow no-overflow/,
+    'D4: a page whose scrollWidth (900) exceeds its clientWidth (390) must fail the copied no-mock-overflow rule from the default adaptation manifest: ' + r.stdout + r.stderr)
+  assert.match(r.stdout, /__RENDER_GATE_FAIL__/, 'a no-overflow finding must fail the gate: ' + r.stdout)
+  assert.strictEqual(r.status, 1, 'D12: a findings-only run over the default adaptation rules must exit 1: ' + r.stderr)
 })

@@ -265,11 +265,46 @@ function advanceToCanonWritten(dir) {
   return r
 }
 
+// specs/20260905/06-plugin-owned-capture-at-approval.md (D5, Rationale "Executes leg"): once
+// the driver runs render-gate --mocks inside journey-approved/approved, every fixture host that
+// reaches those marks needs SOME declared capture (or it falls through to the real-Chrome
+// --which fallback) — writeCaptureFixture below is a small Node script honouring the host
+// capture contract that defaults to a clean inventory (page geometry mirrors the requested
+// --width, empty entries), so the default adaptation rules always pass over it unless a test
+// overrides FAKE_CAPTURE_ENTRIES/FAKE_CAPTURE_PAGE in its own env for that one mark() call.
+const FIXTURE_CAPTURE_SRC = `#!/usr/bin/env node
+'use strict'
+const fs = require('fs')
+const args = process.argv.slice(2)
+const flag = (n) => { const i = args.indexOf('--' + n); return i > -1 ? args[i + 1] : undefined }
+const out = flag('out')
+const w = parseInt(flag('width'), 10) || 0
+const page = process.env.FAKE_CAPTURE_PAGE ? JSON.parse(process.env.FAKE_CAPTURE_PAGE) : { scrollWidth: w, clientWidth: w }
+const entries = process.env.FAKE_CAPTURE_ENTRIES ? JSON.parse(process.env.FAKE_CAPTURE_ENTRIES) : []
+fs.writeFileSync(out, JSON.stringify({
+  schemaVersion: 1, theme: flag('theme') || null, state: flag('state') === '-' ? null : flag('state'),
+  root: 'body', page, entries,
+}))
+`
+function writeFixtureCapture(dir) {
+  const p = path.join(dir, 'fixture-capture.js')
+  fs.writeFileSync(p, FIXTURE_CAPTURE_SRC)
+  return p
+}
+function writeCaptureConfig(dir, capturePath) {
+  const configPath = path.join(dir, '.claude/spec.config.json')
+  let existing = {}
+  try { existing = JSON.parse(fs.readFileSync(configPath, 'utf8')) } catch { /* cold root */ }
+  existing.design = Object.assign({}, existing.design, { render: { capture: 'node ' + capturePath } })
+  writeJSON(configPath, existing)
+}
+
 function advanceToJourneyApproved(dir, journeyName = JOURNEY, labels = LABELS) {
   advanceToCanonWritten(dir)
   for (const label of labels) writeWireframe(dir, label)
   const drawn = mark(dir, 'journey-drawn', ['--journey', journeyName])
   assert.strictEqual(drawn.status, 0, 'test setup requires journey-drawn to be accepted once every label of the journey conforms to D6: ' + drawn.stderr)
+  writeCaptureConfig(dir, writeFixtureCapture(dir))
   decideLook(dir, 'journey-approved:' + journeyName, 'approve', { by: 'jj' })
   const approved = mark(dir, 'journey-approved', ['--journey', journeyName])
   assert.strictEqual(approved.status, 0, 'test setup requires journey-approved to be accepted once the journey is drawn and the ledger gate is open: ' + approved.stderr)
@@ -409,6 +444,7 @@ module.exports = {
   writeTargets, writeResearchBrief, writeSeed, confirmFacts, writeCanon, writeWireframe,
   writeThemeDirection, writeSkinned,
   decideLook, openLook, freePort, startServe, stopServe, getBody,
+  writeFixtureCapture, writeCaptureConfig,
   advanceToSeedDone, advanceToShapePicked, advanceToCanonWritten, advanceToJourneyApproved,
   advanceToDirectionComposed, advanceToThemePicked, advanceToSkinned, advanceToReviewed,
   advanceToApproved,

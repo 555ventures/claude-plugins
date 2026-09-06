@@ -1,6 +1,6 @@
 ---
 date: 2026-09-05
-status: hardened
+status: implementing
 tier: critical
 area: design-render
 design: false
@@ -10,6 +10,7 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-05
 open_markers: 0
+diff_base: 13f5d831d9f2336f7c1ca6aa5cb1f1a28ff7ef16
 ---
 
 # Plugin-owned browser capture, bound at the mocks-first approval marks

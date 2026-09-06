@@ -463,6 +463,27 @@ function runDesignAtlasCheck(args) {
 }
 function childOutput(r) { return ((r.stdout || '') + (r.stderr || '')).trim() }
 
+// specs/20260905/06-plugin-owned-capture-at-approval.md (D5): journey-approved and approved
+// both run render-gate.js --mocks over their own mock set and refuse the mark on any finding
+// (gate exit 1) or capture-family failure (gate exit 2/3) — never on a pass. A plain spawnSync
+// (via runChild) is safe here, unlike render-gate.js's OWN capture calls: render-gate.js's D8
+// mock HTTP server lives inside THAT child process, never in this one, so this call carries
+// none of the async-vs-spawnSync deadlock its own header guards against.
+const renderGateBin = path.join(__dirname, 'render-gate.js')
+function requireRenderGateMocks(mockPaths, journeyName) {
+  const args = []
+  for (const p of mockPaths) args.push('--mocks', p)
+  args.push('--root', root)
+  const r = runChild(process.execPath, [renderGateBin, ...args], { encoding: 'utf8' }, 'render-gate.js --mocks')
+  if (r.status === 1) {
+    const subject = journeyName ? 'journey "' + journeyName + '"' : 'the mock set'
+    die(subject + ' fails the rendered adaptation gate:\n' + (r.stdout || '').trim())
+  }
+  if (r.status !== 0) {
+    die('render-gate --mocks could not run: ' + ((r.stderr || r.stdout || '').trim()))
+  }
+}
+
 // ---------------------------------------------------------------------------
 // stop open <step> [--port <n>] (specs/20260905/04-per-project-look-server.md D3) — the driver
 // derives every candidate set from disk and delegates to design-atlas.js (sibling path, never
@@ -780,6 +801,7 @@ function handleJourneyApproved(journeyName) {
   if (!st || !st.drawn) die('journey "' + journeyName + '" has not been drawn yet — mark journey-drawn --journey ' + journeyName + ' first')
   const j = currentSeedJourneys().get(journeyName)
   requireNotesResolved(j ? j.labels : [], journeyName)
+  requireRenderGateMocks((j ? j.labels : []).map((l) => mockFile(l)), journeyName)
   const stop = requireStopDecision('journey-approved:' + journeyName, 'stop open journey:' + journeyName)
   st.approved = nowIso()
   consumeStopAndSave(stop.id)
@@ -913,6 +935,8 @@ function handleApproved() {
   }
   const r = runDesignAtlasCheck([mocksDir, '--matrix'])
   if (r.status !== 0) die('design-atlas.js check --matrix design/mocks failed: ' + childOutput(r))
+
+  requireRenderGateMocks(files, null)
 
   const stop = requireStopDecision('approved', 'stop open signoff')
   status.marks.approved = nowIso()

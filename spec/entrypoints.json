@@ -154,6 +154,11 @@
       "spec/commands/release.md"
     ]
   },
+  "spec/scripts/render-capture.js": {
+    "entryPoints": [
+      "spec/scripts/render-gate.js"
+    ]
+  },
   "spec/scripts/render-compare.js": {
     "entryPoints": [
       "spec/scripts/render-gate.js"

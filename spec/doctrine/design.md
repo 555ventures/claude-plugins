@@ -13,8 +13,7 @@ frontmatter, routed through `/spec:design` between plan and build; the catalog a
 Render Gate gate UI **appearance**, TDD gates logic, **reachability is never exempt**
 (`plan.md` Phase 2) — skipping design is the user's call, never the model's.
 
-**Local mock canon (the `design/` dir).** Mocks are **repo files** — plain HTML on the repo's
-own tokens, never an external-tool export:
+**Local mock canon (the `design/` dir).** Mocks are **repo files** — plain HTML on the repo's own tokens, never an external-tool export:
 - **`tokens.css`** — the mock-side consumption surface of the token canon, value-identical to
   the framework-native surface by construction.
 - **`targets.json`** — the theme × viewport matrix owed. **One responsive mock per surface,
@@ -46,7 +45,8 @@ code only.
 `data-positioned` (data-placed children), `data-shell`/`data-active` (shell declaration), `data-narrow`
 (narrow root) — then runs `design-atlas.js check` (`spec-paths design-atlas`) fail-closed, enforced at
 `ratified`/`approved` or `--matrix` (viewport-meta/dark-block/shell checks are static preconditions);
-`render-gate --mocks` at `/spec:sketch`'s exit verifies matrix adaptation. **Render rules pass:**
+`render-gate --mocks` at `/spec:sketch`'s exit, and at `/spec:mocks`'s `journey-approved`/
+`approved` marks (plugin capture when undeclared), verifies matrix adaptation. **Render rules pass:**
 `render-rules.js` (`spec-paths render-rules`) runs every design-rules-genesis `renderCheck` rule, newest
 `desktop-fill` (content span vs `page.clientWidth`), over the render inventory before approval —
 measured, taste advisory; § Design Authoring Contracts' grounded-vs-taste rules apply too, mocks' copy

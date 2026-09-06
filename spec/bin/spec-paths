@@ -17,6 +17,7 @@ case "${1:-root}" in
   design-atlas) echo "$ROOT/scripts/design-atlas.js" ;;
   components-check) echo "$ROOT/scripts/components-check.js" ;;
   render-gate) echo "$ROOT/scripts/render-gate.js" ;;
+  render-capture) echo "$ROOT/scripts/render-capture.js" ;;
   render-compare) echo "$ROOT/scripts/render-compare.js" ;;
   render-inventory) echo "$ROOT/scripts/render-inventory.browser.js" ;;
   render-rules) echo "$ROOT/scripts/render-rules.js" ;;
@@ -108,7 +109,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|design-atlas|components-check|render-gate|render-compare|render-inventory|render-rules|registry-check|merge-back|worktree-include|smoke|manifest-check|env-preflight|citations-check|commit-coverage|review-legs|release-legs|review-driver|build-driver|genesis-driver|mocks-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|collision-closure|ci-query|ci-gate-parity|replay|escape-row|fleet-reader|comment-narration|shared|shared-design|shared-for <command>|shared-genesis|shared-mocks|replay-corpus|template|templates|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|design-atlas|components-check|render-gate|render-capture|render-compare|render-inventory|render-rules|registry-check|merge-back|worktree-include|smoke|manifest-check|env-preflight|citations-check|commit-coverage|review-legs|release-legs|review-driver|build-driver|genesis-driver|mocks-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|collision-closure|ci-query|ci-gate-parity|replay|escape-row|fleet-reader|comment-narration|shared|shared-design|shared-for <command>|shared-genesis|shared-mocks|replay-corpus|template|templates|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

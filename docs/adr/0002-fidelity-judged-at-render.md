@@ -53,6 +53,8 @@ exemption process lose their consumer and are retired with it.
 The single most important reason: it is the only comparison that sees what shipped, and it
 found what two human rounds, one waived review, and one passing grep all missed.
 
+- Amended by: ADR-0007 (plugin-owned capture fallback for mock-only rendering)
+
 ## Consequences
 
 - The fidelity gate becomes executed observation, satisfying core § Runtime Verification

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "archetype": "web-app",
+  "designCatalog": "storybook",
+  "rules": [
+    {
+      "id": "no-mock-overflow",
+      "intent": "A mock must not scroll or clip horizontally at any declared viewport — no page-level or entry-level overflow past the viewport's clientWidth.",
+      "targetCategory": "layout",
+      "appliesTo": ["src/**/*.{ts,tsx,css}"],
+      "exemptGlobs": ["**/tokens/**", "**/*.stories.*"],
+      "severity": "error",
+      "grounding": "grounded",
+      "rationale": "Adaptation is a rendered property, not an authored one; a mock that only works at its narrowest viewport is exactly the escape the static atlas checks cannot see.",
+      "renderCheck": { "kind": "no-overflow" }
+    },
+    {
+      "id": "desktop-fill",
+      "intent": "At wide viewports a mock's content must use the screen — no phone-width column centred on a desktop unless the root declares data-narrow.",
+      "targetCategory": "layout",
+      "appliesTo": ["src/**/*.{ts,tsx,css}"],
+      "exemptGlobs": ["**/tokens/**", "**/*.stories.*"],
+      "severity": "error",
+      "grounding": "grounded",
+      "rationale": "Adaptation is a rendered property, not an authored one; a phone-width column centred on a desktop cell is exactly the escape the static atlas checks cannot see.",
+      "renderCheck": { "kind": "desktop-fill", "minFraction": 0.5, "minViewport": 1024 }
+    },
+    {
+      "id": "line-length",
+      "intent": "Body copy at wide viewports should sit within a comfortable measure — no unbounded line lengths in wide-viewport text blocks.",
+      "targetCategory": "typography",
+      "appliesTo": ["src/**/*.{ts,tsx,css}"],
+      "exemptGlobs": ["**/tokens/**", "**/*.stories.*"],
+      "severity": "warn",
+      "grounding": "taste",
+      "rationale": "A very long measure hurts readability at wide viewports; warn-only until a host observes its false-positive rate in practice.",
+      "renderCheck": { "kind": "line-length", "maxCh": 90, "minViewport": 768 }
+    }
+  ]
+}

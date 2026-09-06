@@ -552,6 +552,22 @@ test('AC-20260820-04-1 / D11: every spec-paths key resolving under spec/scripts/
     'deliberately separate from the shape-based checks above: ' + JSON.stringify(violations))
 })
 
+// specs/20260905/06-plugin-owned-capture-at-approval.md D7: spec/entrypoints.json gains a
+// spec/scripts/render-capture.js row naming spec/scripts/render-gate.js as an entry point — like
+// every other bundled script it needs a manifest row, or this repo's own conformance guard
+// treats the new script as an orphan (§ Risk Tiers, spec-paths: "an unregistered script is
+// invisible to the conformance guard").
+test('AC-20260905-06-10: spec/entrypoints.json carries a spec/scripts/render-capture.js row naming spec/scripts/render-gate.js among its entry points', () => {
+  const manifestPath = path.join(ROOT, 'spec/entrypoints.json')
+  assert.ok(fs.existsSync(manifestPath), 'spec/entrypoints.json does not exist — D7 needs it seeded before this row can be checked')
+  const manifest = readManifest(ROOT)
+  const row = manifest['spec/scripts/render-capture.js']
+  assert.ok(row && Array.isArray(row.entryPoints),
+    'the manifest must carry a "spec/scripts/render-capture.js" key with an entryPoints array — its absence means render-capture.js ships as an orphan the conformance guard never sees: ' + JSON.stringify(row))
+  assert.ok(row.entryPoints.includes('spec/scripts/render-gate.js'),
+    'render-capture.js\'s entryPoints must include spec/scripts/render-gate.js — that is the only caller (D3\'s --which/--batch fallback), and its absence would mean the guard cannot see the real invocation edge: ' + JSON.stringify(row.entryPoints))
+})
+
 // Exhaustive live-file pin: every hooks.json addition updates the expected set here in place
 // (specs/20260823/08 added session-queue.sh — the recorded out-of-File-Plan collision class;
 // removed with the SessionStart queue hook, so the set went back to four; specs/

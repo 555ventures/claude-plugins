@@ -122,6 +122,14 @@ exit, the design gate, and `/spec:review`'s design leg; the checklist survives o
 explore stage, which precedes `design-rules.json` and so has no manifest to execute.
 The canon template's § Shells asks what each shell does at every declared viewport
 (specs/20260905/05 D8).
+`render-gate --mocks` on a host with no `design.render.capture` captures through the plugin's
+own `render-capture.js` (an installed Chrome over DevTools, Node built-ins only; `CHROME_BIN`
+overrides), one browser per run via `--batch`; with no `design.rulesManifest` it runs the
+plugin's adaptation rules (`spec/templates/adaptation-rules.json`: no-overflow, desktop-fill,
+line-length) and says so on one line; no browser is exit 2 with the remedy, never a pass.
+`--spec` mode is unchanged: host-declared capture and URL. `/spec:mocks`'s `journey-approved`
+and `approved` marks run this gate over the journey's / the whole set's top-level mocks and
+refuse on any finding or capture failure (specs/20260905/06; ADR-0007 amends ADR-0002).
 
 ## Provenance ledger (2026-09-02, specs/20260902/06)
 

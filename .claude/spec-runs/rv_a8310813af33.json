@@ -1,0 +1,117 @@
+{
+  "runId": "rv_a8310813af33",
+  "ts": "2026-09-06T20:02:08.441Z",
+  "spec": "specs/20260905/06-plugin-owned-capture-at-approval.md",
+  "tier": "critical",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1321,
+    "base": "13f5d831d9f2336f7c1ca6aa5cb1f1a28ff7ef16",
+    "head": "f9d612a290b6e120b20f83099ce38e3ab775730a",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 465
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1180
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 10,
+        "carried": 8,
+        "sanctioned": 2,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "s0 (iteration-2 hard) still open: a test outside render-capture's own [env: CHROME_BIN] pins launches a real browser or goes red without Chrome.",
+        "file": "/Users/jj/Projects/claude-plugins/tests/mocks/mocks-driver.test.js",
+        "line": 290,
+        "evidence": "Executed from root: CHROME_BIN=/nonexistent/chrome node --test --test-reporter=tap 'tests/**/*.test.js' → '# tests 1179 / # pass 1177 / # fail 2 / # skipped 0'; the only not-ok lines are AC-20260905-06-1 and AC-20260905-06-2 in tests/render/render-capture.test.js, which D6 sanctions ('the real Chrome path is pinned once, [env: CHROME_BIN], in render-capture's own test'). Iteration-2's two named sites are now preceded by writeCaptureConfig(dir, writeFixtureCapture(dir)) from the shared fixtures helper."
+      },
+      {
+        "claim": "The fix commit weakened an existing assertion, removed a pin, or touched files beyond the two named.",
+        "file": "/Users/jj/Projects/claude-plugins/tests/consistency/design-doctrine.test.js",
+        "line": 259,
+        "evidence": "git show HEAD --stat → design-doctrine.test.js 2+, mocks-driver.test.js 1+; 3 insertions, 0 deletions: one require line plus one setup line per file; every assert in the hunks is context. Both files green with real Chrome resolution: '# pass 23 / # fail 0'."
+      },
+      {
+        "claim": "This iteration's evidence legs contradict the reviewer run.",
+        "file": "/Users/jj/Projects/claude-plugins/specs/20260905/06-plugin-owned-capture-at-approval.review/manifest-3.jsonl",
+        "line": 3,
+        "evidence": "manifest-3: gate exit 0 (465 tests, skips 0), suite exit 0 (1180 tests, skips 0), ac-matrix uncovered 0, promise-sweep orphans 0; ci no-adapter, smoke inert. Consistent with the 1177-pass whole-suite run."
+      },
+      {
+        "claim": "The range carries foreign work, working-tree edits, or a doctrine change without a version bump.",
+        "file": null,
+        "line": null,
+        "evidence": "git log 13f5d83..HEAD → 113bf4e build, d70c5c9 fix, f9d612a fix — all 20260905/06; git status → only .claude/spec-runs.jsonl. The fix-delta commit is test-only; 7.88.0 carried by the build commit."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 21000
+  }
+}

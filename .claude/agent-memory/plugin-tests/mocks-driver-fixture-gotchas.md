@@ -3,7 +3,7 @@ name: mocks-driver-fixture-gotchas
 description: mocks-driver.js fixture-chain gotchas for red-phase tests reaching THEME/REVIEW state, plus a serve-endpoint content-type trap.
 metadata:
   type: pattern
-  reviewed: 2026-09-05
+  reviewed: 2026-09-06
 ---
 
 Building a `mocks-driver.js` fixture up to a late state (e.g. REVIEW sign-off, for an AC
@@ -39,3 +39,5 @@ Same-session reconfirms the top-level-`require`-of-a-not-yet-existing-lib red pa
 (`spec/scripts/lib/mocks-notes.js` for spec 10), `require`ing it at module top level — not
 inside each test body — is the sanctioned way to make the whole file red at once via
 MODULE_NOT_FOUND.
+
+Since specs/20260905/06, `journey-approved` and `approved` run `render-gate --mocks` and fall back to the plugin's real-Chrome capture when the fixture host declares no `design.render.capture` — every fixture that reaches those marks calls `writeCaptureConfig(dir, writeFixtureCapture(dir))` from tests/mocks/mocks-driver-fixtures.js first (import it, never a third file-local copy), or the test launches a real browser and goes red without one.

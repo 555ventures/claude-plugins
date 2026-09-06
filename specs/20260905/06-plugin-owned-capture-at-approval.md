@@ -1,6 +1,6 @@
 ---
 date: 2026-09-05
-status: implementing
+status: done
 tier: critical
 area: design-render
 design: false
@@ -252,6 +252,32 @@ leg: `tests/render/render-gate.test.js` AC-20260824-04-10 (fixture repair, in Fi
 fixtures declare no capture, so every `journey-approved`/`approved` test there will hit the
 `--which` path: the build sets `CHROME_BIN` to a fixture executable in those tests' env (D6)
 or declares a fixture capture in their config — repair planned now, not discovered at Phase 4.
+
+Review close (2026-09-06, rv_a8310813af33, CLEAN after two fix rounds). Build deviations, all
+one-offs folded here: (1) `tests/mocks/mocks-driver-fixtures.js` gained the shared fixture
+capture helpers (`writeFixtureCapture`/`writeCaptureConfig`) and `advanceToJourneyApproved`
+calls them — the Executes-leg repair above, landed in the one shared helper; the same two-line
+setup was then applied at every pre-existing `journey-approved` site outside the File Plan
+(mocks-notes, look-stops, the mocks-driver ledger-gate test, design-doctrine's AC-20260902-10-8
+setup) across the two review fix rounds, until the whole suite under
+`CHROME_BIN=/nonexistent/chrome` is red only on AC-1/AC-2 — D6's sole sanctioned browser
+launches. (2) AC-5's fixture browser is a hand-rolled DevTools-over-WebSocket stub speaking
+A1's exact sequence; the shipped render-capture.js speaks the same sequence, so the coupling
+held. (3) The render-gate test's canned-capture fixtures gained a `page` block (AC-20260824-04-10
+repair, additive). (4) `render-gate --mocks` substitutes a scratch empty tokens.css when
+`design/tokens.css` is absent — `journey-approved` precedes `theme-picked` — scoped at review
+to the plugin's default adaptation manifest only (a host manifest with no tokens.css keeps
+render-rules.js's exit-2 refusal; pinned). (5) The D9 sentence first pushed `/spec:design` and
+`/spec:init` two lines over their read-load budgets; compressed in place, design.md holds at
+156 — the second consecutive spec (after 20260905/05) to pay this compression, a third earns
+a look at the budget itself, not more compression. The mocks.md citation was reordered because
+citations-check.js resolves the word before `§` as a basename. (6) ADR-0007 (layer `other`)
+was authored by the doctrine worker in the first wave; the `other` wave counted that worker
+once. Review dispositions: reconcile leg **waived** by JJ 2026-09-06 — the ADR-0002 backlink is
+the spec's stated orchestrator duty and the fixtures helper is the planned repair above;
+survivors s0 (untagged real-Chrome launches in pre-existing tests), s1 (AC-2's one-launch clause
+pinned by an elapsed-time proxy), s2 (unscoped tokens.css substitution) all fixed. The
+grounding-contract § Render gate clause correction is queued (q-slot 5 at close).
 
 ## Canonical Delta
 

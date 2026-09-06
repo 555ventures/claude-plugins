@@ -1,0 +1,111 @@
+{
+  "runId": "rv_abda54ca1693",
+  "ts": "2026-09-06T22:08:19.336Z",
+  "spec": "specs/20260906/01-ac-drift-doctor-check.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1315,
+    "base": "c5460825b63d7992f000126c42b90317e5283aed",
+    "head": "e7038f6c5f160a43a3490f2194de7fdba8082442",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 404
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1202
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 11,
+        "carried": 8,
+        "sanctioned": 3,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "Prior medium survivor: the exit-2 branch for a --root that is not an existing directory had no test pin.",
+        "file": "tests/doctor/ac-drift.test.js",
+        "line": 219,
+        "evidence": "Delta adds two cases to the AC-7 test: run('/nonexistent-dir-xyz') and run(<tmpdir>/not-a-dir.txt), each asserting status===2, stderr includes the usage line and \"--root must name an existing directory\". run() -> runNode('scripts/ac-drift.js') -> spawnSync(process.execPath, [SPEC/scripts/ac-drift.js]) so the real script executes. Executed: node --test tests/doctor/ac-drift.test.js -> 9 pass 0 fail. Redden spike on a scratch copy with the rootStat guard block removed (207 bytes): --root /nonexistent-dir-xyz -> exit 0 stdout \"inapplicable — no specs/\"; --root package.json -> exit 0 same; both would fail the strictEqual(status,2) asserts. Fixed."
+      },
+      {
+        "claim": "Something else regressed in the fix delta.",
+        "file": null,
+        "line": null,
+        "evidence": "git diff -- tests/doctor/ac-drift.test.js is the only file changed since iteration 2 (AC-4/AC-6 hunks are identical to those killed in return-2). legs-3: gate exit 0 (skips 0, todos 0), suite exit 0 (__FILE_BUDGET_OK__ slowest replay.test.js 26528ms of 45000ms), ac-matrix uncovered=0 oracle=0 preGreen=0, promise-sweep orphans=0. Executed: node --test ac-drift + ci-gate-parity + retired-flags -> 20 pass 0 fail. Header Exit codes line still documents 2 = --root not a directory (verified in iteration 2, unchanged)."
+      },
+      {
+        "claim": "The new asserts lack consequence-of-failure messages (Review Checks soft calibration).",
+        "file": "tests/doctor/ac-drift.test.js",
+        "line": 220,
+        "evidence": "Every new assert carries a message naming the consequence (a mistyped root in /spec:doctor passing silently as clean). Not a finding."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 14000
+  }
+}

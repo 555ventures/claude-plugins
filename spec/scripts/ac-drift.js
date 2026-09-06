@@ -22,7 +22,7 @@
 //
 // Exit codes: 0 = derived, no findings (incl. the `inapplicable — no specs/` sentinel) ·
 //             1 = derived, findings printed (advisory in doctor — never a script failure) ·
-//             2 = usage error (unknown flag, --root without a value)
+//             2 = usage error (unknown flag, --root without a value, --root not a directory)
 
 const fs = require('fs')
 const path = require('path')
@@ -65,6 +65,16 @@ for (let i = 0; i < argv.length; i++) {
 }
 if (!root) die(2, 'usage: ' + USAGE)
 root = path.resolve(root)
+
+let rootStat = null
+try {
+  rootStat = fs.statSync(root)
+} catch {
+  rootStat = null
+}
+if (!rootStat || !rootStat.isDirectory()) {
+  die(2, 'usage: ' + USAGE + ' — --root must name an existing directory')
+}
 
 const specsDir = path.join(root, 'specs')
 if (!fs.existsSync(specsDir)) {
@@ -168,8 +178,15 @@ for (const specFile of specFiles) {
 
 const exitCode = findings.length ? 1 : 0
 
-// D5's Contracts note stderr carries every per-row finding regardless of --json (--json's own
-// findings array is the machine mirror of the same facts, printed to stdout).
+// --json is a single stdout object and nothing else — no per-row stderr lines, no skipped/summary
+// lines (D5's Contracts: the human render and --json are two distinct formats, not one payload
+// doubled across streams). The human render below is unchanged: per-row findings on stderr, the
+// summary/sentinel on stdout.
+if (asJson) {
+  writeOut(1, JSON.stringify({ floor: V7_APPLIES_FROM, scanned, criteria, skippedPreFloor, findings }, null, 2))
+  process.exit(exitCode)
+}
+
 if (findings.length) {
   const lines = findings.map((f) => (
     f.class === 'retired-uncited'
@@ -178,11 +195,6 @@ if (findings.length) {
         'with the id, or mark the bullet [retired: <spec path or docs/adr path that retired it>]'
   ))
   writeOut(2, lines.join('\n'))
-}
-
-if (asJson) {
-  writeOut(1, JSON.stringify({ floor: V7_APPLIES_FROM, scanned, criteria, skippedPreFloor, findings }, null, 2))
-  process.exit(exitCode)
 }
 
 const summaryLines = []

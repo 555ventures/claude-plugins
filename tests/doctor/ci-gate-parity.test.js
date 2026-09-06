@@ -25,7 +25,7 @@ function run(root, extraArgs = []) {
   return runNode('scripts/ci-gate-parity.js', ['--root', root, ...extraArgs])
 }
 
-test('AC-20260906-01-15a: SHALL CONTINUE TO exit 2 with a stderr line naming "cannot read/parse" and "check --root" when .claude/spec.config.json is absent', () => {
+test('AC-20260906-01-15 (a): SHALL CONTINUE TO exit 2 with a stderr line naming "cannot read/parse" and "check --root" when .claude/spec.config.json is absent', () => {
   const dir = tmpdir('cgp-a')
   const res = run(dir)
   assert.strictEqual(res.status, 2,
@@ -38,7 +38,7 @@ test('AC-20260906-01-15a: SHALL CONTINUE TO exit 2 with a stderr line naming "ca
     `the refusal must name "check --root" as the remedy — got ${JSON.stringify(res.stderr)}`)
 })
 
-test('AC-20260906-01-15b: SHALL CONTINUE TO print "inapplicable — no gateCommand" and exit 0 when gateCommand is ""', () => {
+test('AC-20260906-01-15 (b): SHALL CONTINUE TO print "inapplicable — no gateCommand" and exit 0 when gateCommand is ""', () => {
   const dir = tmpdir('cgp-b')
   writeConfig(dir, '')
   const res = run(dir)
@@ -48,7 +48,7 @@ test('AC-20260906-01-15b: SHALL CONTINUE TO print "inapplicable — no gateComma
     `the sentinel line must be exactly "inapplicable — no gateCommand" — got ${JSON.stringify(res.stdout)}`)
 })
 
-test('AC-20260906-01-15c: SHALL CONTINUE TO print "inapplicable — no .github/workflows" and exit 0 when no workflow file exists', () => {
+test('AC-20260906-01-15 (c): SHALL CONTINUE TO print "inapplicable — no .github/workflows" and exit 0 when no workflow file exists', () => {
   const dir = tmpdir('cgp-c')
   writeConfig(dir, 'node --test {testDirs}')
   const res = run(dir)
@@ -58,7 +58,7 @@ test('AC-20260906-01-15c: SHALL CONTINUE TO print "inapplicable — no .github/w
     `the sentinel line must be exactly "inapplicable — no .github/workflows" — got ${JSON.stringify(res.stdout)}`)
 })
 
-test('AC-20260906-01-15d: SHALL CONTINUE TO exit 1 naming the missing segment when gateCommand is "node --test {testDirs}" and the only workflow runs "npm test"', () => {
+test('AC-20260906-01-15 (d): SHALL CONTINUE TO exit 1 naming the missing segment when gateCommand is "node --test {testDirs}" and the only workflow runs "npm test"', () => {
   const dir = tmpdir('cgp-d')
   writeConfig(dir, 'node --test {testDirs}')
   writeWorkflow(dir, 'ci.yml', 'name: CI\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n')
@@ -70,7 +70,7 @@ test('AC-20260906-01-15d: SHALL CONTINUE TO exit 1 naming the missing segment wh
     `the parity-failure line is pinned byte-for-byte — got ${JSON.stringify(res.stderr)}`)
 })
 
-test('AC-20260906-01-15e: SHALL CONTINUE TO print "ci-gate-parity: parity — 1 segment(s) found in ci.yml" and exit 0 when the workflow runs "node --test tests/"', () => {
+test('AC-20260906-01-15 (e): SHALL CONTINUE TO print "ci-gate-parity: parity — 1 segment(s) found in ci.yml" and exit 0 when the workflow runs "node --test tests/"', () => {
   const dir = tmpdir('cgp-e')
   writeConfig(dir, 'node --test {testDirs}')
   writeWorkflow(dir, 'ci.yml', 'name: CI\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: node --test tests/\n')
@@ -81,7 +81,7 @@ test('AC-20260906-01-15e: SHALL CONTINUE TO print "ci-gate-parity: parity — 1 
     `the parity line is pinned byte-for-byte — got ${JSON.stringify(res.stdout)}`)
 })
 
-test('AC-20260906-01-15f: SHALL CONTINUE TO exit 2 printing "usage: ci-gate-parity.js --root <dir>" when run with no --root', () => {
+test('AC-20260906-01-15 (f): SHALL CONTINUE TO exit 2 printing "usage: ci-gate-parity.js --root <dir>" when run with no --root', () => {
   const res = runNode('scripts/ci-gate-parity.js', [])
   assert.strictEqual(res.status, 2,
     `an invocation with no --root must be a usage error (exit 2) — got ${res.status}, stdout: ${res.stdout}`)

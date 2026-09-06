@@ -114,19 +114,23 @@ test('AC-20260906-01-4: an uncited [retired:] (empty or free text) is itself a f
     '- **AC-20260901-01-1**: WHEN a THE SYSTEM SHALL b [retired: ]',
     '- **AC-20260901-01-2**: WHEN a THE SYSTEM SHALL b [retired: superseded by the hub rewrite]',
   ])
+  const uncitedHumanRes = run(uncited)
+  assert.strictEqual(uncitedHumanRes.status, 1,
+    `an uncited [retired:] tag (empty, or free text with no specs/…md or docs/adr/ path) is NOT a sanction ` +
+    `— it must exit 1, the exact coverage-laundering route [oracle:] was hardened against (stderr: ${uncitedHumanRes.stderr})`)
+  assert.ok(uncitedHumanRes.stderr.includes(
+    'ac-drift: specs/20260901/01-x.md AC-20260901-01-1 — [retired:] must cite the specs/ or docs/adr/ path that retired it'),
+    `the retired-uncited stderr line must be pinned byte-for-byte in the human render — got ${JSON.stringify(uncitedHumanRes.stderr)}`)
+
   const uncitedRes = run(uncited, ['--json'])
   assert.strictEqual(uncitedRes.status, 1,
-    `an uncited [retired:] tag (empty, or free text with no specs/…md or docs/adr/ path) is NOT a sanction ` +
-    `— it must exit 1, the exact coverage-laundering route [oracle:] was hardened against (stderr: ${uncitedRes.stderr})`)
+    `--json must derive the same exit code as the human render for an uncited [retired:] tag (stderr: ${uncitedRes.stderr})`)
   const out = parseJson(uncitedRes)
   for (const ac of ['AC-20260901-01-1', 'AC-20260901-01-2']) {
     const f = out.findings.find((x) => x.ac === ac)
     assert.ok(f && f.class === 'retired-uncited',
-      `${ac}'s uncited [retired:] tag must produce class "retired-uncited" — got ${JSON.stringify(f)}`)
+      `${ac}'s uncited [retired:] tag must produce class "retired-uncited" in --json output — got ${JSON.stringify(f)}`)
   }
-  assert.ok(uncitedRes.stderr.includes(
-    'ac-drift: specs/20260901/01-x.md AC-20260901-01-1 — [retired:] must cite the specs/ or docs/adr/ path that retired it'),
-    `the retired-uncited stderr line must be pinned byte-for-byte — got ${JSON.stringify(uncitedRes.stderr)}`)
 
   const backticked = tmpdir('ac-drift-4b')
   writeSpec(backticked, 'specs/20260901/01-x.md', 'done', [
@@ -173,6 +177,9 @@ test('AC-20260906-01-6: --json prints exactly one object with keys floor/scanned
   const res = run(dir, ['--json'])
   assert.strictEqual(res.status, 1,
     `--json must derive the same exit code as the human render (findings present here) — got ${res.status}, stderr: ${res.stderr}`)
+  assert.strictEqual(res.stderr, '',
+    `--json must print exactly one JSON object on stdout and nothing on stderr — a per-row human line leaking ` +
+    `onto stderr under --json would corrupt any host script piping stdout through a JSON parser — got ${JSON.stringify(res.stderr)}`)
   const out = parseJson(res)
   assert.deepStrictEqual(Object.keys(out).sort(), ['criteria', 'findings', 'floor', 'scanned', 'skippedPreFloor'].sort(),
     `D5's --json shape is exactly these five keys — got ${JSON.stringify(Object.keys(out))}`)
@@ -208,6 +215,29 @@ test('AC-20260906-01-7: a --root with no specs/ directory is inapplicable and ex
     `--root with no following value must be a usage error (exit 2) — got ${noRootValueRes.status}, stderr: ${noRootValueRes.stderr}`)
   assert.ok(noRootValueRes.stderr.includes('ac-drift.js --root <dir> [--json]'),
     `the valueless --root refusal must print the same usage line — got ${JSON.stringify(noRootValueRes.stderr)}`)
+
+  const missingRootRes = run('/nonexistent-dir-xyz')
+  assert.strictEqual(missingRootRes.status, 2,
+    `a --root naming a path that does not exist at all must be a usage error (exit 2), never laundered into ` +
+    `the "inapplicable — no specs/" sentinel — a mistyped root in /spec:doctor would otherwise pass silently ` +
+    `as clean instead of failing loudly (stderr: ${missingRootRes.stderr})`)
+  assert.ok(missingRootRes.stderr.includes('ac-drift.js --root <dir> [--json]'),
+    `the nonexistent-root refusal must print the usage line — got ${JSON.stringify(missingRootRes.stderr)}`)
+  assert.ok(missingRootRes.stderr.includes('--root must name an existing directory'),
+    `the nonexistent-root refusal must state the specific reason "--root must name an existing directory" — ` +
+    `got ${JSON.stringify(missingRootRes.stderr)}`)
+
+  const fileRoot = writeFile(tmpdir('ac-drift-7c'), 'not-a-dir.txt', 'x\n')
+  const fileRootRes = run(fileRoot)
+  assert.strictEqual(fileRootRes.status, 2,
+    `a --root naming an existing regular file (not a directory) must also be a usage error (exit 2) — the ` +
+    `same mistyped-root class /spec:doctor must fail loudly on, not silently treat as an empty host ` +
+    `(stderr: ${fileRootRes.stderr})`)
+  assert.ok(fileRootRes.stderr.includes('ac-drift.js --root <dir> [--json]'),
+    `the file-as-root refusal must print the usage line — got ${JSON.stringify(fileRootRes.stderr)}`)
+  assert.ok(fileRootRes.stderr.includes('--root must name an existing directory'),
+    `the file-as-root refusal must state the specific reason "--root must name an existing directory" — ` +
+    `got ${JSON.stringify(fileRootRes.stderr)}`)
 })
 
 test('AC-20260906-01-8: a host-declared testGlobs array replaces the default classification, and lib/host-config.js\'s exported DEFAULT_TEST_GLOBS deep-equals scope-reconcile.js\'s own defaultTestGlobs literal', () => {

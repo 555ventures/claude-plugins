@@ -147,3 +147,15 @@ pre-anchored entry is refused like every other slot. An empty or absent `queued`
 byte-identically to a report without it. The `Next:` close is still `spec-status --next`
 verbatim and now reflects the write. Nothing writes the queue from a hook or on session start;
 every write is a command's explicit, reported act.
+
+## Pins are re-derived after close (2026-09-06, specs/20260906/01)
+
+The AC↔test matrix runs at review against one spec; `ac-drift.js` re-derives it on demand for
+every done spec dated on or after the v7 cutover (`V7_APPLIES_FROM` in `lib/spec-sections.js`,
+shared with the promise sweep) and `/spec:doctor` check 17 prints each criterion no
+test-classified file cites. Sanctions are the review-time ones — `SHALL CONTINUE TO`,
+`[oracle:]`, `[pre-green:]` — plus `[retired: <specs/… or docs/adr/… path>]`, the one edit a
+done spec accepts: the citation of the decision that retired the behaviour. An uncited
+`[retired:]` is itself a finding. Test classification is the host's `testGlobs` or
+`DEFAULT_TEST_GLOBS` (`lib/host-config.js`), the same set the at-risk leg walks; fixture
+directories never count as citations.

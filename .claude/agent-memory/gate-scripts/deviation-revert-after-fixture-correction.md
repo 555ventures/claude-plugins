@@ -2,7 +2,7 @@
 name: deviation-revert-after-fixture-correction
 description: A recorded deviations-sidecar departure (extra internal-only field, or an omitted step) can become invalid once the AC fixture it cited gets corrected — revert cleanly rather than re-justifying
 metadata:
-  reviewed: 2026-09-03
+  reviewed: 2026-09-06
   type: feedback
 ---
 

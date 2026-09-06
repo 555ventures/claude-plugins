@@ -1,6 +1,6 @@
 ---
 date: 2026-09-06
-status: implementing
+status: done
 tier: standard
 area: doctor
 design: false
@@ -10,7 +10,7 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-06
 open_markers: 0
-diff_base: 2f4affc3db25b38f6c2911a8f64cffbdd7810de8
+diff_base: c5460825b63d7992f000126c42b90317e5283aed
 ---
 
 # Post-close AC-pin drift as a doctor check (`ac-drift.js`), plus the dead-flag and untested-script sweep
@@ -43,6 +43,7 @@ doctrine-documented ledger column stays and is documented at its driver.
 | D8 | Delete four parsed-but-never-passed flags: `render-gate.js --no-boot` (with the `noBoot` gate on the boot spawn), `promise-sweep.js --applies-from` (with its 8-digit validation; D2's constant is the only floor), `registry-check.js --timeout-ms` (the `timeoutMs` default 8000 stays as the sole value, plumbed as today), `design-atlas.js stop open --question` (the usage line and the `flagArg` read; `lib/mocks-picks.js`'s `openStop` keeps accepting an optional `question` so `picks.json`'s shape and its existing pins are untouched — the field is simply always `null` from the CLI) (AC-20260906-01-11, AC-20260906-01-12, AC-20260906-01-13, AC-20260906-01-14) | Each was grep-verified referenced nowhere outside its own file (commands, doctrine, tests, README); a flag nobody can reach is dead scope, and `--question` was stored but never rendered on the atlas page |
 | D9 | Keep `mocks-driver.js ledger add --dependents`: the `dependents` column is doctrine (`spec/doctrine/mocks.md` § Assumptions table) and the flag is its only writer; the driver's header usage block gains the `ledger add` line listing every flag it accepts, `--dependents` included [no-ac: a header comment line in a script; the review's doctrine leg reads it, and a source-grep pin would be a regex over prose] | The mocks session authors ledger rows by hand through the driver; an undocumented flag on a documented column is the defect, not the flag |
 | D10 | `spec/.claude-plugin/plugin.json` bumps to the next free minor (target 7.89.0 — next free at build time per Gotchas) with a changelog paragraph naming ac-drift, doctor check 17, the ci-gate-parity pins and the four flag deletions [no-ac: version discipline; `tests/consistency/plugin-version.test.js` covers the changelog form] | Behaviour change → owning plugin bumps (pipeline rules § Planning) |
+| D11 | Review-time ruling (JJ, build 2026-09-06): the whole-suite leg was red only on the per-file 45 s budget guard — `tests/mocks/mocks-driver.test.js` and `tests/mocks/mocks-driver-look-stops.test.js` (pre-existing 23–30 s alone, 57 s under full-suite load) — so both are split into sibling `*.test.js` files with no test-logic change, added to this File Plan [no-ac: a mechanical split of files this spec does not otherwise touch; the budget guard (specs/20260903/07) is the executed oracle and the whole-suite leg re-runs it] | The guard's own printed remedy is the split; every test passes, and a queued split would leave this review parked on a red the spec's own added load tipped over |
 
 ## File Plan
 
@@ -64,6 +65,10 @@ doctrine-documented ledger column stays and is documented at its driver.
 | tests/review/promise-sweep.test.js | MODIFY | tests | AC-20260906-01-10 — retag the existing AC-20260820-03-7 not-applicable pin (collision-closure literals hit on `APPLIES_FROM`, comment + assert-message mentions), add the `--applies-from` refusal and the `V7_APPLIES_FROM` equality |
 | tests/consistency/retired-flags.test.js | CREATE | tests | AC-20260906-01-11, AC-20260906-01-12, AC-20260906-01-13, AC-20260906-01-14 |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D10: version bump (target 7.89.0) + changelog paragraph |
+| tests/mocks/mocks-driver.test.js | MODIFY | tests | D11: split — half the test blocks move verbatim to a sibling file |
+| tests/mocks/mocks-driver-2.test.js | CREATE | tests | D11: the moved half of mocks-driver.test.js, logic unchanged |
+| tests/mocks/mocks-driver-look-stops.test.js | MODIFY | tests | D11: split — half the test blocks move verbatim to a sibling file |
+| tests/mocks/mocks-driver-look-stops-2.test.js | CREATE | tests | D11: the moved half of mocks-driver-look-stops.test.js, logic unchanged |
 
 ## Contracts
 
@@ -312,6 +317,33 @@ question-style gate, ADRs, roadmap briefs — 60+ files); the real literal is `-
 which the sweep's flag parser cannot take and A8's grep found only in design-atlas.js. The
 File Plan lands at 16 rows, one over the guideline, because the retag row is a closure
 obligation, not new scope.
+
+**Build and review deviations (folded at close, 2026-09-06).** Seven one-offs, none recurring
+enough for a Gotchas entry (the section sits at its 15-entry cap):
+
+- AC-14's design-atlas clause names a bare no-argument run, whose usage never contains `stop
+  open`; the reachable sibling (`design-atlas.js stop open` with no flags, which dies naming
+  `stop open`) is what tests/consistency/retired-flags.test.js pins.
+- AC-10 mixes a `SHALL CONTINUE TO` clause with two new promises, so red-check classified
+  tests/review/promise-sweep.test.js green-expected and the new-promise test raised
+  `broken-pin`; the retagged pin stays there and the two new-promise assertions live in
+  tests/consistency/retired-flags.test.js, still citing AC-10. Second recorded instance of the
+  class (first: specs/20260903/01 D16) — an AC never mixes a new promise with `SHALL CONTINUE
+  TO`; a third earns a lock-time guard.
+- D10's 7.89.0 target was stale (7.90.1 current at build); the build bumped to 7.91.0, then a
+  sibling session's direct commit (c546082) swept the working-tree plugin.json into its own
+  commit, kept the 7.91.0 number for its 7.90.2 entry and dropped this spec's paragraph — this
+  spec re-bumped to 7.92.0. The same commit carried D9's mocks-driver.js header line.
+- The comment-narration sweep was red on the pre-image (a person + date in design-atlas.js's
+  card-height comment, from a direct commit); reworded here since the file is a File Plan row,
+  and the new ci-gate-parity test header's date was reworded the same way.
+- A5 re-measured with the shipped script: 41 findings across 13 done specs (84 scanned, 884
+  criteria, 52 pre-v7 skipped) against the spike's 42; the clean-up reads the script's output.
+- `diff_base` corrected from 2f4affc to c546082 (the sibling commit, true parent of the
+  checkpoint) and review restarted cold so the panel diffs only this spec.
+- D11 (review-time ruling): the whole-suite leg was red only on the per-file 45 s budget guard
+  for two pre-existing mocks-driver test files (23–30 s alone, 57 s under full-suite load once
+  this spec's tests were added); both split into siblings with no logic change.
 
 ## Canonical Delta
 

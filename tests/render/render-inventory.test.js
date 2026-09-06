@@ -248,6 +248,43 @@ function buildPageDom(scrollingElement) {
   return { document, documentElement, root }
 }
 
+// specs/20260905/05-desktop-fill-render-rule.md D6: render-inventory.browser.js gains a
+// top-level `narrow` boolean, read via the labeled root's own `hasAttribute('data-narrow')`
+// (schemaVersion stays 1) — render-rules.js's new desktop-fill check (specs/20260905/05) has no
+// escape hatch for a deliberately narrow mock without it. Extends buildDom()'s labeled-root
+// shape rather than reaching for any API outside the file's existing stub-DOM surface.
+function buildNarrowDom(opts) {
+  const root = opts.labeled ? el('div', opts.narrow ? { 'data-screen-label': 'Screen', 'data-narrow': 'true' } : { 'data-screen-label': 'Screen' }) : el('div', opts.narrow ? { 'data-narrow': 'true' } : {})
+  append(root, textNode('Content'))
+  const documentElement = el('html')
+  const document = {
+    documentElement,
+    body: root,
+    querySelector(sel) { return queryAll(root, sel)[0] || null },
+    querySelectorAll(sel) { return queryAll(root, sel) },
+  }
+  return { document, documentElement, root }
+}
+
+test('AC-20260905-05-5: the walker returns narrow: true when the labeled root carries data-narrow, narrow: false when a labeled root carries no such attribute, and narrow: false when no element carries data-screen-label at all (even if the fallback body root itself carries data-narrow)', () => {
+  const walk = loadWalker()
+
+  const domLabeledNarrow = buildNarrowDom({ labeled: true, narrow: true })
+  const invLabeledNarrow = withGlobals(domLabeledNarrow, () => walk({ theme: 'light', state: '-' }))
+  assert.strictEqual(invLabeledNarrow.narrow, true,
+    'D6: a labeled [data-screen-label] root carrying data-narrow must surface top-level narrow:true, or the desktop-fill escape hatch (declaring a mock deliberately narrow) never reaches render-rules.js: ' + JSON.stringify(invLabeledNarrow.narrow))
+
+  const domLabeledNotNarrow = buildNarrowDom({ labeled: true, narrow: false })
+  const invLabeledNotNarrow = withGlobals(domLabeledNotNarrow, () => walk({ theme: 'light', state: '-' }))
+  assert.strictEqual(invLabeledNotNarrow.narrow, false,
+    'D6: a labeled root with no data-narrow attribute must surface top-level narrow:false — anything else here means an un-declared mock silently escapes the desktop-fill check: ' + JSON.stringify(invLabeledNotNarrow.narrow))
+
+  const domUnlabeledNarrow = buildNarrowDom({ labeled: false, narrow: true })
+  const invUnlabeledNarrow = withGlobals(domUnlabeledNarrow, () => walk({ theme: 'light', state: '-' }))
+  assert.strictEqual(invUnlabeledNarrow.narrow, false,
+    'D6: narrow is read via the LABELED root\'s own hasAttribute call — with no [data-screen-label] element anywhere, the walker falls back to walking body, but narrow must still read false even though the fallback body itself carries data-narrow, or an unrelated ancestor attribute could accidentally suppress the check on a host with no labeled screens at all: ' + JSON.stringify(invUnlabeledNarrow.narrow))
+})
+
 test('AC-20260831-02-1: the walker returns page: { scrollWidth: 900, clientWidth: 390 } from a scrolling element reporting those metrics, and page: { scrollWidth: null, clientWidth: null } without throwing when no scrolling-element metrics are exposed', () => {
   const walk = loadWalker()
 

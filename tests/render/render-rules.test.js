@@ -20,9 +20,10 @@ function rulesManifest(rules) {
   return { schemaVersion: 1, archetype: 'web-app', designCatalog: 'storybook', rules }
 }
 
-function inventoryDoc(entries, page) {
+function inventoryDoc(entries, page, narrow) {
   const doc = { schemaVersion: 1, theme: 'light', state: null, root: 'body', entries }
   if (page !== undefined) doc.page = page
+  if (narrow !== undefined) doc.narrow = narrow
   return doc
 }
 
@@ -52,8 +53,9 @@ function runRules({ rules, inventories, tokensCss, extraArgs = [] }) {
   inventories.forEach((invSpec, i) => {
     const entries = Array.isArray(invSpec) ? invSpec : invSpec.entries
     const page = Array.isArray(invSpec) ? undefined : invSpec.page
+    const narrow = Array.isArray(invSpec) ? undefined : invSpec.narrow
     const p = path.join(dir, 'inv' + i + '.json')
-    fs.writeFileSync(p, JSON.stringify(inventoryDoc(entries, page)))
+    fs.writeFileSync(p, JSON.stringify(inventoryDoc(entries, page, narrow)))
     invArgs.push('--inventory', p)
   })
   const tokensPath = path.join(dir, 'tokens.css')
@@ -61,7 +63,7 @@ function runRules({ rules, inventories, tokensCss, extraArgs = [] }) {
   return runNode(SCRIPT, ['--rules', rulesPath, ...invArgs, '--tokens', tokensPath, ...extraArgs])
 }
 
-test('AC-20260824-04-1/AC-20260831-02-7: a manifest rule carrying renderCheck.kind "sparkle" makes render-rules.js exit 2 naming that rule\'s id and the closed target-size/cta-count/contrast/palette/no-overflow/line-length kind set', () => {
+test('AC-20260824-04-1/AC-20260831-02-7/AC-20260905-05-7: a manifest rule carrying renderCheck.kind "sparkle" makes render-rules.js exit 2 naming that rule\'s id and the closed target-size/cta-count/contrast/palette/no-overflow/line-length/desktop-fill kind set', () => {
   const r = runRules({
     rules: [{ id: 'weird-rule', targetCategory: 'layout', renderCheck: { kind: 'sparkle' } }],
     inventories: [[mkEntry({ text: 'x' })]],
@@ -71,10 +73,11 @@ test('AC-20260824-04-1/AC-20260831-02-7: a manifest rule carrying renderCheck.ki
     'D1: an unknown renderCheck.kind is a manifest error, not a findings run — the exit alphabet must distinguish "the manifest is malformed" from "the render has findings": got ' + r.status + ' stderr: ' + r.stderr + ' stdout: ' + r.stdout)
   assert.match(r.stderr, /weird-rule/,
     'the exit-2 remedy must name the offending rule\'s id, or a manifest author cannot find which rule to fix: ' + r.stderr)
-  // specs/20260831/02 D1 amends this closed set's MEMBER LIST (adding no-overflow/line-length),
-  // never its refusal contract — the printed set must still name all six kinds, or a manifest
-  // author fixing a typo'd kind after this spec lands sees a stale, incomplete remedy.
-  for (const kind of ['target-size', 'cta-count', 'contrast', 'palette', 'no-overflow', 'line-length']) {
+  // specs/20260831/02 D1 and specs/20260905/05 D1 each amend this closed set's MEMBER LIST
+  // (adding no-overflow/line-length, then desktop-fill), never its refusal contract — the
+  // printed set must still name all seven kinds, or a manifest author fixing a typo'd kind
+  // after this spec lands sees a stale, incomplete remedy.
+  for (const kind of ['target-size', 'cta-count', 'contrast', 'palette', 'no-overflow', 'line-length', 'desktop-fill']) {
     assert.match(r.stderr, new RegExp(kind),
       'D1: the exit-2 remedy must name the closed kind set (' + kind + ' missing) — otherwise "nothing is half-checked" has no discoverable fix: ' + r.stderr)
   }
@@ -296,7 +299,7 @@ test('AC-20260831-02-6: a line-length rule (maxCh 90, minViewport 768) over page
   assert.strictEqual(rNarrow.status, 0, 'a minViewport-skipped document must exit 0: ' + rNarrow.stderr)
 })
 
-test('AC-20260831-02-8: render-rules.js run with the shipped spec/templates/design-rules.json as --rules over an empty inventory exits 0 — the template\'s new no-overflow/line-length rows are valid under the extended closed set', () => {
+test('AC-20260831-02-8/AC-20260905-05-8: render-rules.js run with the shipped spec/templates/design-rules.json as --rules over an empty inventory exits 0, and the parsed template carries a desktop-fill rule with renderCheck { kind: "desktop-fill", minFraction: 0.5, minViewport: 1024 } at severity "error"', () => {
   const dir = tmpdir('rr-shipped')
   const rulesPath = path.join(ROOT, 'spec', 'templates', 'design-rules.json')
   const invPath = path.join(dir, 'inv0.json')
@@ -308,5 +311,126 @@ test('AC-20260831-02-8: render-rules.js run with the shipped spec/templates/desi
   fs.writeFileSync(tokensPath, ':root { --accent: #2255cc; }\n')
   const r = runNode(SCRIPT, ['--rules', rulesPath, '--inventory', invPath, '--tokens', tokensPath])
   assert.strictEqual(r.status, 0,
-    'D1/D8: the shipped manifest\'s new no-overflow and line-length rows must be valid under the closed renderCheck.kind set, and an empty inventory with a non-overflowing page block must produce zero findings from either — a non-zero exit here means the template itself fails its own closed-set contract: ' + r.stderr + ' stdout: ' + r.stdout)
+    'D1/D8: the shipped manifest\'s new no-overflow, line-length, and desktop-fill rows must be valid under the closed renderCheck.kind set, and an empty inventory with a non-overflowing page block must produce zero findings from any of them — a non-zero exit here means the template itself fails its own closed-set contract: ' + r.stderr + ' stdout: ' + r.stdout)
+
+  const parsedTemplate = JSON.parse(fs.readFileSync(rulesPath, 'utf8'))
+  const desktopFillRule = parsedTemplate.rules.find((rule) => rule.renderCheck && rule.renderCheck.kind === 'desktop-fill')
+  assert.ok(desktopFillRule,
+    'D4/File Plan: the shipped template must carry a rule whose renderCheck.kind is "desktop-fill" — without it, no host adopting the template ever runs the check this spec exists to add: ' + JSON.stringify(parsedTemplate.rules.map((r) => r.id)))
+  assert.deepStrictEqual(desktopFillRule.renderCheck, { kind: 'desktop-fill', minFraction: 0.5, minViewport: 1024 },
+    'D4: the calibrated threshold (0.5, not the payload\'s ~0.6) and gate (1024, not 768) are pinned template values — a drifted number here silently changes what every host inherits: got ' + JSON.stringify(desktopFillRule.renderCheck))
+  assert.strictEqual(desktopFillRule.severity, 'error',
+    'D5/Rationale: severity must be "error" — JJ ruled "it should be responsive" against a payload that already shipped a warn-equivalent pass, so a warn severity here would repeat the exact miss this spec exists to close: got ' + desktopFillRule.severity)
+})
+
+// specs/20260905/05-desktop-fill-render-rule.md D2-D7 (Contracts, A1/A2): render-rules.js
+// gains a third viewport-gated renderCheck kind, `desktop-fill`, measuring the horizontal span
+// of a document's in-flow entries against page.clientWidth — never the labeled root's own box,
+// which A1's spike found is body-wide on the measured Hearwell case and would pass the exact
+// phone-column-at-desktop escape this spec exists to close. AC-20260905-05-1 …
+// AC-20260905-05-6.
+
+test('AC-20260905-05-1: a desktop-fill rule (minFraction 0.5, minViewport 1024) over a 1440-wide document with in-flow entries at x:522/w:396 and x:522/w:200 exits 1 with "rule desktop-fill desktop-fill content spans 396px of 1440px (28% < 50%)" naming both the widen and data-narrow remedies, even with a fixed/outOfFlow/dataPositioned/srOnly entry spanning the full page that must be excluded from the measurement', () => {
+  const entries = [
+    mkEntry({ text: 'Client shell body', box: { x: 522, y: 0, w: 396, h: 20 } }),
+    mkEntry({ text: 'Client shell footer', box: { x: 522, y: 100, w: 200, h: 20 } }),
+    // D2: none of these may widen the min/max span — each carries a flag the measurable
+    // filter must exclude, and each is deliberately positioned to blow the span past 50% if
+    // the exclusion regresses (a full-width fixed banner, an out-of-viewport chip, a
+    // data-positioned decoration, and an sr-only skip link).
+    mkEntry({ text: 'Fixed banner', box: { x: 0, y: 0, w: 1440, h: 20 }, fixed: true }),
+    mkEntry({ text: 'Absolute chip', box: { x: -50, y: 0, w: 50, h: 20 }, outOfFlow: true }),
+    mkEntry({ text: 'Chart decoration', box: { x: 1300, y: 0, w: 100, h: 20 }, dataPositioned: true }),
+    mkEntry({ text: 'Skip link', box: { x: 2000, y: 0, w: 5000, h: 20 }, srOnly: true }),
+  ]
+  const r = runRules({
+    rules: [{ id: 'desktop-fill', targetCategory: 'layout', severity: 'error', renderCheck: { kind: 'desktop-fill', minFraction: 0.5, minViewport: 1024 } }],
+    inventories: [{ entries, page: { scrollWidth: 1440, clientWidth: 1440 }, narrow: false }],
+    tokensCss: ':root {}\n',
+  })
+  assert.match(r.stdout, /rule desktop-fill desktop-fill content spans 396px of 1440px \(28% < 50%\)/,
+    'D2/D5: the two real in-flow entries span x:522..918 (396px) of a 1440px viewport — 28% under the 50% floor must print this exact finding line, or a session scanning output for the phone-column escape needs the literal contract line: ' + r.stdout + ' stderr: ' + r.stderr)
+  assert.match(r.stdout, /widen the layout/,
+    'D5: the finding must name the first remedy ("widen the layout"), or a mock author sees a failure with no discoverable fix: ' + r.stdout)
+  assert.match(r.stdout, /data-narrow/,
+    'D5: the finding must also name the escape-hatch remedy (declaring data-narrow), or a legitimately narrow mock has no path to ratify clean: ' + r.stdout)
+  assert.strictEqual(r.status, 1,
+    'a desktop-fill finding must fail the run, or a phone-width column centred on a desktop viewport ratifies clean — the exact Hearwell escape this spec exists to close: ' + r.stderr)
+})
+
+test('AC-20260905-05-2: a desktop-fill rule emits no finding at page.clientWidth 390 (below minViewport 1024, exit 0), and emits no finding over a 1440-wide document whose in-flow entries span x:141..1298 (80%, exit 0) even with an out-of-span fixed entry present', () => {
+  const rules = [{ id: 'desktop-fill', targetCategory: 'layout', severity: 'error', renderCheck: { kind: 'desktop-fill', minFraction: 0.5, minViewport: 1024 } }]
+
+  const rNarrowViewport = runRules({
+    rules,
+    inventories: [{
+      entries: [mkEntry({ text: 'Column content', box: { x: 20, y: 0, w: 60, h: 20 } })],
+      page: { scrollWidth: 390, clientWidth: 390 },
+      narrow: false,
+    }],
+    tokensCss: ':root {}\n',
+  })
+  assert.ok(!/desktop-fill/.test(rNarrowViewport.stdout),
+    'D3: page.clientWidth 390 is under minViewport 1024 — this is a declared gate, not missing data, so the document must be skipped silently regardless of how narrow its content is: ' + rNarrowViewport.stdout + ' stderr: ' + rNarrowViewport.stderr)
+  assert.strictEqual(rNarrowViewport.status, 0, 'a minViewport-skipped document must exit 0: ' + rNarrowViewport.stderr)
+
+  const rWideContent = runRules({
+    rules,
+    inventories: [{
+      entries: [
+        mkEntry({ text: 'Wide content', box: { x: 141, y: 0, w: 1157, h: 20 } }),
+        mkEntry({ text: 'Fixed banner', box: { x: 2000, y: 0, w: 300, h: 20 }, fixed: true }),
+      ],
+      page: { scrollWidth: 1440, clientWidth: 1440 },
+      narrow: false,
+    }],
+    tokensCss: ':root {}\n',
+  })
+  assert.ok(!/desktop-fill/.test(rWideContent.stdout),
+    'D2: the in-flow entry spans x:141..1298 (80% of 1440), well over the 50% floor, and the fixed entry at x:2000 must not widen the measured span — no finding must print: ' + rWideContent.stdout + ' stderr: ' + rWideContent.stderr)
+  assert.strictEqual(rWideContent.status, 0, 'an 80%-fill document must exit 0: ' + rWideContent.stderr)
+})
+
+test('AC-20260905-05-3: the AC-1 28%-fill document produces no desktop-fill finding and exits 0 when its top-level narrow is true', () => {
+  const entries = [
+    mkEntry({ text: 'Client shell body', box: { x: 522, y: 0, w: 396, h: 20 } }),
+    mkEntry({ text: 'Client shell footer', box: { x: 522, y: 100, w: 200, h: 20 } }),
+  ]
+  const r = runRules({
+    rules: [{ id: 'desktop-fill', targetCategory: 'layout', severity: 'error', renderCheck: { kind: 'desktop-fill', minFraction: 0.5, minViewport: 1024 } }],
+    inventories: [{ entries, page: { scrollWidth: 1440, clientWidth: 1440 }, narrow: true }],
+    tokensCss: ':root {}\n',
+  })
+  assert.ok(!/desktop-fill/.test(r.stdout),
+    'D5: narrow:true is the author\'s own declared assertion that this mock is deliberately a narrow column — the same content that fires in AC-1 must produce no finding here, or the escape hatch does not work: ' + r.stdout + ' stderr: ' + r.stderr)
+  assert.strictEqual(r.status, 0,
+    'D5: a narrow-declared document must exit 0 even at 28% fill: ' + r.stderr)
+})
+
+test('AC-20260905-05-4: a desktop-fill rule over an inventory document with no page block exits 1 with a finding naming re-capture with the current render-inventory.browser.js, never a silent pass', () => {
+  const r = runRules({
+    rules: [{ id: 'desktop-fill', targetCategory: 'layout', severity: 'error', renderCheck: { kind: 'desktop-fill', minFraction: 0.5, minViewport: 1024 } }],
+    inventories: [[mkEntry({ text: 'Fine', box: { x: 0, y: 0, w: 100, h: 20 } })]],
+    tokensCss: ':root {}\n',
+  })
+  assert.match(r.stdout, /rule desktop-fill desktop-fill inventory has no page geometry \(theme light state null\) — re-capture with the current render-inventory\.browser\.js/,
+    'D3: an inventory document with no usable page block must fail closed and name the remedy — a stale pre-D6 inventory silently passing means the phone-column escape survives on every host that has not re-captured: ' + r.stdout + ' stderr: ' + r.stderr)
+  assert.strictEqual(r.status, 1,
+    'D3: fail-closed means this must exit 1, never 0, on a document with no page geometry: ' + r.stderr)
+})
+
+test('AC-20260905-05-6: a desktop-fill rule over a 1440-wide document whose only entries are fixed or outOfFlow (zero measurable) exits 1 with a finding containing "no in-flow entries to measure at 1440px"', () => {
+  const entries = [
+    mkEntry({ text: 'Fixed banner', box: { x: 0, y: 0, w: 1440, h: 20 }, fixed: true }),
+    mkEntry({ text: 'Absolute chip', box: { x: 0, y: 0, w: 300, h: 20 }, outOfFlow: true }),
+  ]
+  const r = runRules({
+    rules: [{ id: 'desktop-fill', targetCategory: 'layout', severity: 'error', renderCheck: { kind: 'desktop-fill', minFraction: 0.5, minViewport: 1024 } }],
+    inventories: [{ entries, page: { scrollWidth: 1440, clientWidth: 1440 }, narrow: false }],
+    tokensCss: ':root {}\n',
+  })
+  assert.match(r.stdout, /no in-flow entries to measure at 1440px/,
+    'D7: a document with zero measurable entries must never pass silently — a mock whose every entry is fixed or out of flow has no in-flow content to fill a desktop with, which is exactly the question the check exists to answer: ' + r.stdout + ' stderr: ' + r.stderr)
+  assert.strictEqual(r.status, 1,
+    'D7: a zero-measurable document at or above minViewport must exit 1, never 0: ' + r.stderr)
 })

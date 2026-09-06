@@ -10,7 +10,10 @@
 
 { The app shell(s) this product needs, if any — persistent chrome around a content slot (nav,
 header, tab bar). Name each shell and what it always shows; "none" is a legitimate answer for
-a single-surface product. }
+a single-surface product. For each shell, state what it does at every viewport in
+`design/targets.json` — how the content area uses a wide screen (columns, rails, a wider
+measure), or, if the shell is deliberately a narrow column at every width, say so and mark its
+mocks `data-narrow`. }
 
 ## Primitives
 

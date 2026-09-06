@@ -44,13 +44,15 @@ code only.
 **Design harness.** Every mock-authoring pass declares the marks the gate reads —
 `data-screen-label` (root), `data-status`, `data-state-btn="<state>"`, `data-contract="none"`
 (non-contract subtree), `data-positioned` (data-placed children), `data-shell`/`data-active`
-(shell declaration) — then runs `design-atlas.js check` (`spec-paths design-atlas`)
-fail-closed, enforced at `ratified`/`approved` or `--matrix` (viewport-meta/dark-block/shell
-checks are static preconditions); `render-gate --mocks` at `/spec:sketch`'s exit verifies
-matrix adaptation. **Render rules pass:** `render-rules.js` (`spec-paths render-rules`) runs
-every design-rules-genesis `renderCheck` rule over the render inventory before direction
-approval — measured, taste advisory; § Design Authoring Contracts' grounded-vs-taste rules
-apply too, mocks' copy the contract code is later held to.
+(shell declaration), `data-narrow` (deliberately narrow root at every width) — then runs
+`design-atlas.js check` (`spec-paths design-atlas`) fail-closed, enforced at
+`ratified`/`approved` or `--matrix` (viewport-meta/dark-block/shell checks are static
+preconditions); `render-gate --mocks` at `/spec:sketch`'s exit verifies matrix adaptation.
+**Render rules pass:** `render-rules.js` (`spec-paths render-rules`) runs every
+design-rules-genesis `renderCheck` rule over the render inventory before direction approval,
+newest kind `desktop-fill` (content span vs `page.clientWidth`) — measured, taste advisory;
+§ Design Authoring Contracts' grounded-vs-taste rules apply too, mocks' copy the contract
+code is later held to.
 **Cross-spec consistency**, strongest first: token/theme files in code (a code-side
 `off-token-color` rule wired by `/spec:enforce`; near-matches reuse, never fork the scale); the
 design doctrine doc (taste tokens can't encode, binding like a locked Decision); the living

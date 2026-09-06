@@ -45,6 +45,14 @@
 // document.documentElement` — the same discipline as every other optional lookup in this file —
 // with `null` values when the surface or its numeric fields are unavailable, never a throw;
 // D5 turns an unmeasurable page into a fail-closed finding downstream, never a crash here.
+//
+// specs/20260905/05-desktop-fill-render-rule.md (D6): the document also carries a top-level
+// `narrow: <boolean>` — true iff the LABELED `[data-screen-label]` root itself carries
+// `data-narrow`, read through this file's own guarded `hasAttr` helper (the same one already
+// used for `data-screen-label`); false when there is no labeled root (the body-walk fallback)
+// or the labeled root carries no such attribute. Read from `labeledRoot`, never the resolved
+// `rootEl` fallback, so an unrelated `data-narrow` on `body` can never suppress the
+// desktop-fill check on a host with no labeled screens. `schemaVersion` stays 1 (additive).
 
 (function (opts) {
   var theme = opts && opts.theme
@@ -276,6 +284,7 @@
     theme: theme || null,
     state: (rootEl && typeof rootEl.getAttribute === 'function' && rootEl.getAttribute('data-state')) || null,
     root: rootSelector,
+    narrow: !!(labeledRoot && hasAttr(labeledRoot, 'data-narrow')),
     page: page,
     entries: entries,
   }

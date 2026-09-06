@@ -29,11 +29,26 @@
 // silently — the exact laundering measured (spec 20260823/11: a phone-only mock ratified
 // clean, its non-adaptation later misattributed to components).
 //
+// specs/20260905/05-desktop-fill-render-rule.md (D2-D5/D7): the closed renderCheck.kind set
+// gains `desktop-fill` — over each inventory document, the measurand is CONTENT SPAN (not root
+// width, falsified by an executed spike: Hearwell's labeled root is body-wide, the narrow
+// column is a child region inside it), computed from entries with a `box` and none of
+// `fixed`/`outOfFlow`/`dataPositioned`/`srOnly`: `span = max(x+w) - min(x)`,
+// `fraction = span / page.clientWidth`. Viewport-gated like `line-length` (silent skip below
+// `minViewport`); a document with no usable `page` block fails closed with the same
+// re-capture finding as `no-overflow`/`line-length` (D3); zero measurable entries at or above
+// `minViewport` is its own fail-closed finding, never a silent pass (D7); a fraction below
+// `minFraction` fires unless the inventory's top-level `narrow` is exactly `true` (D5) — the
+// author's own declared escape hatch, never a manifest exemption list. What this deliberately
+// does NOT do: read `design/targets.json` to find "the widest declared viewport" (D3 — the
+// host expresses that as `minViewport` in its own manifest, same shape as `line-length`); read
+// or infer anything from the labeled root's own box (D2 — content span needs no new geometry).
+//
 // Exit codes: 0 = no findings · 1 = one or more findings (a `severity: "warn"` rule's own
 // finding is printed but never contributes to this) · 2 = usage, an unreadable/unparsable
 // --rules/--inventory/--tokens file, or a rule's renderCheck.kind outside the closed
-// target-size/cta-count/contrast/palette/no-overflow/line-length set (stderr names the
-// offending rule's id).
+// target-size/cta-count/contrast/palette/no-overflow/line-length/desktop-fill set (stderr names
+// the offending rule's id).
 
 const fs = require('fs')
 
@@ -112,7 +127,7 @@ try {
 }
 
 // ---- D1: closed renderCheck.kind set, validated before anything runs --------------------------
-const CLOSED_KINDS = ['target-size', 'cta-count', 'contrast', 'palette', 'no-overflow', 'line-length']
+const CLOSED_KINDS = ['target-size', 'cta-count', 'contrast', 'palette', 'no-overflow', 'line-length', 'desktop-fill']
 for (const rule of manifest.rules) {
   if (rule.renderCheck && !CLOSED_KINDS.includes(rule.renderCheck.kind)) {
     die('rule "' + rule.id + '" declares renderCheck.kind ' + JSON.stringify(rule.renderCheck.kind) +
@@ -338,9 +353,39 @@ function checkLineLength(rule) {
   }
 }
 
+// ---- D2-D5/D7: desktop-fill — viewport-gated content-span-vs-clientWidth check. Measurand is
+// CONTENT SPAN, not root width (A1): the labeled root can be body-wide while a narrow column
+// sits inside it as a child region, so span is computed from the in-flow entries themselves,
+// the same exemption set no-overflow already uses (fixed/outOfFlow/dataPositioned/srOnly).
+function checkDesktopFill(rule) {
+  const { minFraction, minViewport } = rule.renderCheck
+  for (const doc of inventories) {
+    if (!hasUsablePage(doc)) { noPageFinding(rule, 'desktop-fill', doc); continue }
+    const { clientWidth } = doc.page
+    if (clientWidth < minViewport) continue
+    const measurable = doc.entries.filter((e) =>
+      e.box && !e.fixed && !e.outOfFlow && !e.dataPositioned && !e.srOnly)
+    if (!measurable.length) {
+      pushFinding(rule, 'rule ' + rule.id + ' desktop-fill no in-flow entries to measure at ' +
+        clientWidth + 'px')
+      continue
+    }
+    const maxRight = Math.max(...measurable.map((e) => e.box.x + e.box.w))
+    const minLeft = Math.min(...measurable.map((e) => e.box.x))
+    const span = maxRight - minLeft
+    const fraction = span / clientWidth
+    if (fraction < minFraction && doc.narrow !== true) {
+      pushFinding(rule, 'rule ' + rule.id + ' desktop-fill content spans ' + Math.round(span) +
+        'px of ' + Math.round(clientWidth) + 'px (' + Math.round(fraction * 100) + '% < ' +
+        Math.round(minFraction * 100) + '%) — widen the layout for this viewport or declare ' +
+        'data-narrow on the root')
+    }
+  }
+}
+
 const CHECKS = {
   'target-size': checkTargetSize, 'cta-count': checkCtaCount, contrast: checkContrast, palette: checkPalette,
-  'no-overflow': checkNoOverflow, 'line-length': checkLineLength,
+  'no-overflow': checkNoOverflow, 'line-length': checkLineLength, 'desktop-fill': checkDesktopFill,
 }
 
 const checkedRules = manifest.rules.filter((r) => r.renderCheck)

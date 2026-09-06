@@ -118,6 +118,17 @@
       "grounding": "taste",
       "rationale": "A very long measure hurts readability at wide viewports; warn-only until a host observes its false-positive rate in practice.",
       "renderCheck": { "kind": "line-length", "maxCh": 90, "minViewport": 768 }
+    },
+    {
+      "id": "desktop-fill",
+      "intent": "At wide viewports a mock's content must use the screen — no phone-width column centred on a desktop unless the root declares data-narrow.",
+      "targetCategory": "layout",
+      "appliesTo": ["src/**/*.{ts,tsx,css}"],
+      "exemptGlobs": ["**/tokens/**", "**/*.stories.*"],
+      "severity": "error",
+      "grounding": "grounded",
+      "rationale": "Adaptation is a rendered property, not an authored one; a phone-width column centred on a desktop cell is exactly the escape the static atlas checks cannot see.",
+      "renderCheck": { "kind": "desktop-fill", "minFraction": 0.5, "minViewport": 1024 }
     }
   ]
 }

@@ -46,11 +46,11 @@
 // any render-rules finding (__RENDER_GATE_FAIL__) · 2 = precondition failure (missing
 // design.render in --spec mode, no browser resolved for the plugin fallback in --mocks mode,
 // targets.json, design_source/--mocks file, ledger claim in --spec mode, a malformed
-// design.rulesManifest per render-rules.js's own exit 2, or neither/both of --spec and
-// --mocks given — stderr names the remedy) · 3 = capture-family failure (a capture command
-// exiting non-zero, an unparsable inventory or render-rules --json payload, or a readiness
-// timeout — stderr names the failed command/config key; never a pass and never printed alongside
-// either sentinel).
+// design.rulesManifest or an unreadable tokens.css per render-rules.js's own exit 2, or
+// neither/both of --spec and --mocks given — stderr names the remedy) · 3 = capture-family
+// failure (a capture command exiting non-zero, an unparsable inventory or render-rules --json
+// payload, or a readiness timeout — stderr names the failed command/config key; never a pass
+// and never printed alongside either sentinel).
 
 const fs = require('fs')
 const path = require('path')
@@ -475,16 +475,16 @@ async function main() {
   const usingDefaultRules = !rulesManifestRel && mode === 'mocks'
   const rulesManifestAbs = rulesManifestRel ? path.join(root, rulesManifestRel)
     : (usingDefaultRules ? ADAPTATION_RULES : null)
-  // D5's own driver call (specs/20260905/06) reaches --mocks mode at journey-approved — before
-  // /spec:mocks's THEME stage ever copies a chosen tokens.css into design/ — so design/tokens.css
-  // may not exist yet. None of the three adaptation rules (no-overflow/desktop-fill/line-length)
-  // read a token color, so a missing file here is not a host misconfiguration to refuse; an empty
-  // scratch file keeps render-rules.js's own --tokens precondition satisfied without inventing a
-  // real palette. A host-declared manifest with a genuine palette/contrast rule still gets its
-  // OWN declared tokens.css when that exists (this substitution only fires when the real file is
-  // absent, in --mocks mode only — --spec mode's design/tokens.css is expected to exist already).
+  // D5's own driver call (specs/20260905/06) reaches --mocks mode at journey-approved, before
+  // /spec:mocks's THEME stage copies a chosen tokens.css into design/ — so design/tokens.css can
+  // be absent under the plugin's own default adaptation manifest specifically (none of its three
+  // rules — no-overflow/desktop-fill/line-length — read a token color), and an empty scratch file
+  // keeps render-rules.js's own --tokens precondition satisfied without inventing a real palette.
+  // Scoped to that one case only: a host-declared design.rulesManifest (which may carry a genuine
+  // palette/contrast rule) always gets the real design/tokens.css, or render-rules.js's own exit 2
+  // "tokens not readable" refusal when it is missing — never this substitution.
   const tokensCssAbs = path.join(designDir, 'tokens.css')
-  const tokensAbs = (mode === 'mocks' && !fs.existsSync(tokensCssAbs))
+  const tokensAbs = (usingDefaultRules && !fs.existsSync(tokensCssAbs))
     ? (() => { const p = path.join(outDir, '_empty-tokens.css'); fs.writeFileSync(p, ''); return p })()
     : tokensCssAbs
 

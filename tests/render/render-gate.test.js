@@ -668,3 +668,34 @@ test('AC-20260905-06-6: render-gate.js --mocks with a host capture command and n
   assert.match(r.stdout, /__RENDER_GATE_FAIL__/, 'a no-overflow finding must fail the gate: ' + r.stdout)
   assert.strictEqual(r.status, 1, 'D12: a findings-only run over the default adaptation rules must exit 1: ' + r.stderr)
 })
+
+// specs/20260905/06-plugin-owned-capture-at-approval.md (D4/AC-20260905-06-6): D4's default
+// adaptation-rules scratch-tokens substitution is scoped to the no-host-manifest case only — a
+// host that declares its OWN design.rulesManifest keeps render-rules.js's ordinary
+// tokens.css precondition, since the rejected-alternative rationale is "the full template's
+// palette/contrast/cta rows are host-taste" (D4), not "a manifest never needs real tokens".
+test('AC-20260905-06-6 / D4: render-gate.js --mocks with a host-declared design.rulesManifest and a host capture command but no design/tokens.css exits 2 naming tokens.css, never a pass', () => {
+  const root = fs.realpathSync(tmpdir('rg6tokens'))
+  const capture = writeFakeCaptureWithEntries(root)
+  const rulesPath = path.join(root, '.claude/genesis/design-rules.json')
+  fs.mkdirSync(path.dirname(rulesPath), { recursive: true })
+  fs.writeFileSync(rulesPath, JSON.stringify({
+    schemaVersion: 1,
+    rules: [{ id: 'no-raw-color', targetCategory: 'color', severity: 'error', renderCheck: { kind: 'palette' } }],
+  }))
+  const mockPath = writeMocksHost(root, {
+    themes: ['light'], viewports: [{ width: 390, height: 844 }], states: ['default'],
+    captureCmd: 'node ' + capture, rulesManifest: '.claude/genesis/design-rules.json',
+  })
+  fs.unlinkSync(path.join(root, 'design/tokens.css'))
+
+  const r = gateMocks([mockPath], root, path.join(root, 'out'), [],
+    { env: { ...process.env, FAKE_CAPTURE_ENTRIES: JSON.stringify([]) } })
+
+  assert.strictEqual(r.status, 2,
+    'D4: a declared rulesManifest with no design/tokens.css must be a precondition failure, exit 2 — never a pass over rules that silently skipped their token read: ' + r.stdout + r.stderr)
+  assert.match(r.stdout + r.stderr, /tokens\.css/,
+    'the exit-2 remedy must name tokens.css — render-rules.js\'s own unreadable-tokens refusal, not a generic failure: ' + r.stdout + r.stderr)
+  assert.ok(!/__RENDER_GATE_PASS__/.test(r.stdout),
+    'a host-declared manifest missing its own tokens.css must never read as a clean pass: ' + r.stdout)
+})

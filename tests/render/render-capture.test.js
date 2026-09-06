@@ -68,6 +68,25 @@ function runNodeAsync(scriptRel, argv, opts = {}) {
   })
 }
 
+// tests/render/render-gate.test.js's own LAUNCH_LOG pattern (AC-20260905-06-5's fake browser):
+// a CHROME_BIN wrapper that logs its own argv (the D10 launch flags, including
+// --user-data-dir=) to LAUNCH_LOG, then `exec`s the real resolved Chrome IN PLACE (same pid) so
+// render-capture.js's own process tracking/kill logic still targets the actual browser, never an
+// intermediary. Direct launch-count proof, replacing an elapsed-time proxy.
+const CHROME_LAUNCH_WRAPPER_SRC = `#!/usr/bin/env bash
+set -u
+if [ -n "\${LAUNCH_LOG:-}" ]; then
+  printf '%s\\n' "$*" >> "$LAUNCH_LOG"
+fi
+exec "$REAL_CHROME_BIN" "$@"
+`
+function writeChromeLaunchWrapper(root) {
+  const p = path.join(root, 'chrome-launch-wrapper.sh')
+  fs.writeFileSync(p, CHROME_LAUNCH_WRAPPER_SRC)
+  fs.chmodSync(p, 0o755)
+  return p
+}
+
 function writeMock(root) {
   fs.writeFileSync(path.join(root, 'screen.html'),
     '<!DOCTYPE html><html><body>' +
@@ -122,11 +141,11 @@ test('AC-20260905-06-2 [env: CHROME_BIN]: render-capture.js --batch over two cel
     { url, width: 1440, height: 900, theme: 'light', state: '-', script: RENDER_INVENTORY, out: out1440 },
   ]))
   const chrome = resolveBrowserForTest()
+  const wrapper = writeChromeLaunchWrapper(root)
+  const launchLog = path.join(root, 'launch.log')
 
-  const start = Date.now()
   const r = await runNodeAsync(SCRIPT, ['--batch', cellsPath],
-    { env: chrome ? { ...process.env, CHROME_BIN: chrome } : process.env })
-  const elapsed = Date.now() - start
+    { env: { ...process.env, CHROME_BIN: wrapper, REAL_CHROME_BIN: chrome || '', LAUNCH_LOG: launchLog } })
   server.close()
 
   assert.strictEqual(r.status, 0,
@@ -137,13 +156,16 @@ test('AC-20260905-06-2 [env: CHROME_BIN]: render-capture.js --batch over two cel
     'the 390-width cell\'s own --out must report page.clientWidth 390: ' + JSON.stringify(doc390.page))
   assert.strictEqual(doc1440.page && doc1440.page.clientWidth, 1440,
     'the 1440-width cell\'s own --out must report page.clientWidth 1440 — a wrong value means the per-cell device-metrics override leaked from the prior cell: ' + JSON.stringify(doc1440.page))
-  // A3 (executed): a single launch costs 2.2-3.4s, ~0.4s per additional page in the SAME
-  // browser — two full separate launches would cost at least ~2x a single launch. This bounds
-  // the batch well under that floor as the black-box proxy for "launched the browser once".
-  assert.ok(elapsed < 10000,
-    'D1/A3: a --batch run over 2 cells sharing one browser should finish well under 10s (one ' +
-    'launch ~2.2-3.4s + ~0.4s/cell) — taking this long suggests a SECOND full browser launch ' +
-    'rather than one shared page session: ' + elapsed + 'ms')
+
+  const launches = fs.existsSync(launchLog)
+    ? fs.readFileSync(launchLog, 'utf8').trim().split('\n').filter(Boolean)
+    : []
+  assert.strictEqual(launches.length, 1,
+    'D1: two cells of the same mock must share ONE Chrome launch (one --batch call, one process) — ' +
+    'a second launch line here means each cell spawned its own browser instead of reusing one page ' +
+    'session, defeating the whole reason --batch exists: got ' + launches.length + ' launch(es): ' + JSON.stringify(launches))
+  assert.match(launches[0] || '', /--user-data-dir=/,
+    'D10: the single logged launch must carry its own --user-data-dir= flag (the fresh tmp profile dir the Contracts section names) — its absence means the wrapper caught something other than the real launch argv: ' + JSON.stringify(launches[0]))
 })
 
 // ---------------------------------------------------------------------------

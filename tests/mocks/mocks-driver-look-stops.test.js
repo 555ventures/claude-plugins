@@ -11,6 +11,7 @@ const {
   advanceToSeedDone, advanceToCanonWritten, advanceToJourneyApproved,
   advanceToDirectionComposed, advanceToSkinned, advanceToReviewed,
   advanceToShortJourneyDrawn,
+  writeFixtureCapture, writeCaptureConfig,
 } = require('./mocks-driver-fixtures')
 
 // specs/20260905/04-per-project-look-server.md D3/D7: mocks-driver.js's `stop open`/`stop decide`
@@ -136,6 +137,7 @@ test('AC-20260905-02-11/AC-20260905-04-9: --mark journey-approved refuses naming
   for (const label of LABELS) writeWireframe(dir, label)
   const drawn = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
   assert.strictEqual(drawn.status, 0, 'test setup requires journey-drawn to be accepted: ' + drawn.stderr)
+  writeCaptureConfig(dir, writeFixtureCapture(dir))
 
   const noStop = mark(dir, 'journey-approved', ['--journey', JOURNEY])
   assert.strictEqual(noStop.status, 2, 'journey-approved must refuse when no look stop exists for its key: ' + noStop.stdout + noStop.stderr)
@@ -162,6 +164,7 @@ test('AC-20260905-02-12/AC-20260905-04-9: journey-approved accepts a decided-app
   advanceToCanonWritten(dir)
   for (const label of LABELS) writeWireframe(dir, label)
   assert.strictEqual(mark(dir, 'journey-drawn', ['--journey', JOURNEY]).status, 0, 'test setup requires journey-drawn to be accepted')
+  writeCaptureConfig(dir, writeFixtureCapture(dir))
 
   decideLook(dir, 'journey-approved:' + JOURNEY, 'approve', { by: 'jj' })
   const accepted = mark(dir, 'journey-approved', ['--journey', JOURNEY])
@@ -175,6 +178,7 @@ test('AC-20260905-02-12/AC-20260905-04-9: journey-approved accepts a decided-app
   advanceToCanonWritten(dir2)
   for (const label of LABELS) writeWireframe(dir2, label)
   assert.strictEqual(mark(dir2, 'journey-drawn', ['--journey', JOURNEY]).status, 0, 'test setup requires journey-drawn to be accepted')
+  writeCaptureConfig(dir2, writeFixtureCapture(dir2))
   decideLook(dir2, 'journey-approved:' + JOURNEY, 'approve', { by: 'jj' })
   openLook(dir2, 'journey-approved:' + JOURNEY, { title: 'approve journey ' + JOURNEY, url: 'http://localhost:0/p/x/atlas/index.html#stop-newer' })
   const refused = mark(dir2, 'journey-approved', ['--journey', JOURNEY])

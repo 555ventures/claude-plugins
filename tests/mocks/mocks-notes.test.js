@@ -114,6 +114,37 @@ function writeThemeDirection(dir, kebab, labels) {
       '<main data-screen-label="' + label + '" data-status="sketch">' + label + '</main>\n')
   }
 }
+// specs/20260905/06-plugin-owned-capture-at-approval.md (D5, Rationale "Executes leg"): once
+// journey-approved/approved run render-gate --mocks internally, a fixture host with no declared
+// capture command falls through to render-gate's real-Chrome --which fallback — a fixture
+// capture command sidesteps that, mirroring tests/mocks/mocks-driver-fixtures.js's own
+// writeFixtureCapture/writeCaptureConfig helpers (this file keeps its own private fixture set,
+// so it carries a file-local copy rather than importing across test files).
+const FIXTURE_CAPTURE_SRC = `#!/usr/bin/env node
+'use strict'
+const fs = require('fs')
+const args = process.argv.slice(2)
+const flag = (n) => { const i = args.indexOf('--' + n); return i > -1 ? args[i + 1] : undefined }
+const out = flag('out')
+const w = parseInt(flag('width'), 10) || 0
+fs.writeFileSync(out, JSON.stringify({
+  schemaVersion: 1, theme: flag('theme') || null, state: flag('state') === '-' ? null : flag('state'),
+  root: 'body', page: { scrollWidth: w, clientWidth: w }, entries: [],
+}))
+`
+function writeFixtureCapture(dir) {
+  const p = path.join(dir, 'fixture-capture.js')
+  fs.writeFileSync(p, FIXTURE_CAPTURE_SRC)
+  return p
+}
+function writeCaptureConfig(dir, capturePath) {
+  const configPath = path.join(dir, '.claude/spec.config.json')
+  let existing = {}
+  try { existing = JSON.parse(fs.readFileSync(configPath, 'utf8')) } catch { /* cold root */ }
+  existing.design = Object.assign({}, existing.design, { render: { capture: 'node ' + capturePath } })
+  writeJSON(configPath, existing)
+}
+
 function writeSkinned(dir, labels, status = 'sketch') {
   for (const label of labels) {
     writeFile(path.join(dir, 'design/mocks', label + '.html'),
@@ -307,6 +338,7 @@ test('AC-20260902-10-5: `notes open` prints the project note first, groups N004 
 test('AC-20260902-10-6: journey-approved, journey-skinned, journey-reviewed, and approved all refuse on an open project note or an unresolved journey note, naming the note ids', () => {
   const dir = tmpdir('mocks-notes-gate')
   advanceToJourneyDrawn(dir)
+  writeCaptureConfig(dir, writeFixtureCapture(dir))
 
   // journey-approved: open project note blocks it first.
   decideLook(dir, 'journey-approved:' + JOURNEY, 'approve', { by: 'jj' })
@@ -374,6 +406,7 @@ test('AC-20260902-10-6: journey-approved, journey-skinned, journey-reviewed, and
 test('AC-20260902-10-10: `--mark journey-approved --journey <j>` continues to accept once every note is resolved', () => {
   const dir = tmpdir('mocks-notes-allresolved')
   advanceToJourneyDrawn(dir)
+  writeCaptureConfig(dir, writeFixtureCapture(dir))
   decideLook(dir, 'journey-approved:' + JOURNEY, 'approve', { by: 'jj' })
   writeNotes(dir, [projectNote('N005', 'resolved'), mockNote('N001', 'resolved')])
   const r = mark(dir, 'journey-approved', ['--journey', JOURNEY])

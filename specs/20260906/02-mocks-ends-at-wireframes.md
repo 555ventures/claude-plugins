@@ -1,0 +1,124 @@
+---
+date: 2026-09-06
+status: hardened
+tier: standard
+area: design-mocks
+design: false
+breaking: true
+depends_on: []
+depended_on_by: [specs/20260906/03-questions-on-the-wireframe.md, specs/20260906/05-gray-states-on-every-wireframe.md, specs/20260906/06-sketch-high-fidelity-and-critique.md]
+brief: 22a
+open_markers: 0
+spiked: 2026-09-06
+---
+
+# Mocks ends at wireframes: SKIN and REVIEW retired, THEME picked on the dense screens, one sign-off
+
+## Goal
+
+`/spec:mocks` becomes the gray comprehension check brief 22a rules: SEED → SHAPES → WIREFRAMES → THEME → SIGNOFF → APPROVED. The SKIN and REVIEW states, the marks `journey-skinned`, `review-opened`, `journey-reviewed`, and the `--decider` flag leave the driver, its doctrine, and its tests. THEME composes each direction on the seed's dense screen (a second screen at most) and picks one; `design/tokens.css` is its output. The terminal `approved` mark is the one sign-off: it stamps every wireframe `approved` itself. Done means a host mid-SKIN today derives THEME or SIGNOFF from disk and continues, and no live file names a retired state or mark.
+
+## Decisions (locked — workers apply verbatim, never override)
+
+| ID | Decision | One-line rationale |
+|----|----------|--------------------|
+| D1 | `deriveState()` derives SEED → SHAPES → WIREFRAMES → THEME (`!status.theme`) → SIGNOFF (`!marks.approved`) → APPROVED; `freshStatus()` marks are `{seedDone, shapePicked, canonWritten, themePicked, approved}` and a journey record is `{drawn, approved}` (plus `variant` when specs/20260905/03 has landed); legacy fields `marks.reviewOpened`, `decider`, `journeys[j].skinned`, `journeys[j].reviewed` are ignored on read and dropped on the next write (AC-20260906-02-1) | State is derived from disk, never read; a host checkpointed in SKIN or REVIEW resumes at the state its marks now imply. Rejected: a migration step — there is nothing to migrate, the marks that matter survive. |
+| D2 | `--mark journey-skinned`, `review-opened`, `journey-reviewed` are unknown marks: exit 2, stderr `unknown mark "<m>" — one of: seed-done, shape-picked, canon-written, journey-drawn, journey-approved, direction-composed, theme-picked, approved`; `--decider <name>` on any invocation exits 2 with `--decider is retired — the sign-off stop's "by" is the decider` (AC-20260906-02-2) | A retired mark that silently no-ops would leave a session believing it advanced. |
+| D3 | `direction-composed --direction <k>` requires `design/theme/<k>/tokens.css` and the seed's dense screen composed under `design/theme/<k>/`; a second screen is allowed; three or more screens refuse with `direction "<k>" composes <n> screens — at most 2 (the dense screen first): a theme is picked on the dense screens, never the whole product; /spec:sketch skins per brief`; every composed screen's label must be an approved wireframe label linking `tokens.css` (existing checks kept) (AC-20260906-02-3) | The pick is a taste decision on the screen that stresses the theme most; recomposing more screens is the SKIN work this brief retires. |
+| D4 | `theme-picked` keeps its contract — reads the decided `theme-picked` pick stop, refuses a disagreeing `--direction`, requires ≥2 composed directions, appends/validates the `theme: <k>` ledger row naming every other direction as rejected, copies `design/theme/<k>/tokens.css` → `design/tokens.css` (AC-20260906-02-4) | The shell canon keeps being extracted from the picked dense screen at genesis SKELETON — THEME's output is tokens plus that screen; nothing new to write here. |
+| D5 | `approved` requires: gate open, `marks.themePicked` (else `theme-picked first`), every declared journey `approved`, `requireNotesResolved(allDeclaredLabels())`, `render-gate --mocks` over every top-level mock and `design-atlas check --matrix design/mocks` green (existing), and a decided `approved` stop; on accept it rewrites each top-level mock's root `data-status="sketch"` → `data-status="approved"` (attribute text only, the file otherwise byte-identical), records `status.decider = stop.by`, sets `marks.approved`, consumes the stop; the `data-status="approved"` precondition on every mock is dropped (the mark is what stamps it) (AC-20260906-02-5) | The sign-off look IS the approval; asking the session to hand-stamp thirty files before the mark is the review loop this brief retires. Precedent for the driver writing a mock: `variant-picked` copies and rewrites links (specs/20260905/03 D3). |
+| D6 | The SIGNOFF bare step prints `## Step: sign off — the product I understand`, a `Read only:` line naming `design/atlas/index.html`, the literal `Approval means "this is the product I understand" — the written brief, not these screens, holds scope.`, the `approved` look line (`stop open signoff`), and `Then: node {driver} --mark approved`; `printReviewStep` and `printSkinStep` are deleted; `printApprovedTerminal` reads `done — every journey approved, theme "<k>" picked, signed off by <decider>` (AC-20260906-02-6) | The sign-off literal is the one REVIEW sentence worth keeping (specs/20260902/07 D7); it moves, it does not die. |
+| D7 | `--reopen theme` clears `theme`, `marks.themePicked`, `marks.approved`, `decider`; prints `invalidated: theme, approved(all)`; `--reopen journey:<j>` clears that journey's `approved` (+ `variant`/`drawn` per specs/20260905/03 D4 when present) and `marks.approved`, `decider`; `--reopen shapes` keeps clearing everything downstream (AC-20260906-02-7) | Reopening never deletes and never over-clears: a theme re-pick must not un-approve a journey's wireframes. |
+| D8 | One constant `AUTHORING_STATES = new Set(['SHAPES','WIREFRAMES','THEME'])` feeds both `printStepBlock`'s skill line and the look-probe precondition; SIGNOFF prints no skill line and runs the look probe (it asks the user to look) (AC-20260906-02-8) | The duplicated literal list is the kind of drift a retired state exposes. |
+| D9 | Doctrine, one home each: `spec/doctrine/mocks.md` § Mocks: State Machine (chain, gated-mark list, reopen rules), § Provenance Ledger (`step` enum drops SKIN and REVIEW, gains SIGNOFF; rows written under the old names keep parsing), § Mocks: Look and Serve (state list), § Mocks: Page Notes (mark list; the client review paragraph becomes "client review is the same page and the same notes — there is no review state"), § Mocks: Authoring Rules ("Theme = recompose, never repaint" shrinks to ≥1 and ≤2 screens per direction, the dense screen first, ≥2 directions; the skill bullet drops "skin"; "One honest wireframe or the full theme" stays — it governs direction screens); `spec/commands/mocks.md` drops § Review loop (REVIEW state), rewrites § THEME interview rule's screen count, the Report `outcome` (`✅ mocks approved — {N} journeys, theme "{k}", signed off by {by}`), the Rules line (`canon before screens, screens before theme, theme before sign-off`), and the model line ("drawing screens one at a time"); `docs/adr/0008-mocks-is-wireframes.md` amends ADR-0006 (Applies to: ADR-0006 order; specs/20260902/07 D-rows for SKIN/REVIEW superseded, enumerated at build) and ADR-0006 gains `Amended by: ADR-0008` `[no-ac: review's citations-check and doctrine legs are the oracle; the driver's printed blocks are pinned by AC-20260906-02-6 and AC-20260906-02-9]` | § Doctrine Authoring: the driver is the mechanism; prose points at it. |
+| D10 | `genesis-driver.js` keeps requiring `design/mocks/status.json` `state === 'APPROVED'` at BRIEF, naming the actual state on refusal (AC-20260906-02-9) | Regression pin — the genesis chain must not admit a half-finished mocks run; the test fixture merely stops writing a state that no longer exists. |
+| D11 | Tests: `tests/mocks/mocks-driver-fixtures.js` deletes `writeSkinned`, `advanceToSkinned`, `advanceToReviewed`; `advanceToApproved(dir)` = `advanceToThemePicked` + `decideLook(dir,'approved','approve',{by:'Ren'})` + `mark approved`; `writeThemeDirection(dir, kebab, labels)` writes ≤2 labels with the dense screen first; every test named in the File Plan retargets its AC as listed in Acceptance Criteria (AC-20260906-02-1 … -9) | Fixture chain is the one place the retired states were "known"; retargeted pins keep every surviving contract executed. |
+| D12 | Bump `spec/.claude-plugin/plugin.json` to the next free minor (target 7.93.0 at plan time; take the next free one at build) with the changelog entry `[no-ac: review's version-bump check is the oracle]` | § Planning version discipline. |
+
+**Orchestrator duty (outside the File Plan table):** after the doctrine wave, run `node "$(spec-paths citations-check)"` (or the suite's citations test) and fix any `§` citation the section rewrites broke; delete or re-stamp `.claude/agent-memory/plugin-tests/mocks-driver-fixture-gotchas.md` lines that name `advanceToSkinned`/`journey-skinned`.
+
+## File Plan
+
+| Path | Action | Layer | Summary |
+|------|--------|-------|---------|
+| spec/scripts/mocks-driver.js | MODIFY | scripts | D1–D8, D10-facing: state chain, marks table, `--decider` refusal, `direction-composed` cap, `approved` stamping + decider from the stop, SIGNOFF printer, reopen rules, one `AUTHORING_STATES`; header comment rewritten (states, eight marks, exit codes unchanged) |
+| spec/scripts/design-atlas.js | MODIFY | scripts | `stopHome`: drop the `journey-reviewed:<j>` key route (`approved` already homes to the page header); usage header line for stop keys |
+| spec/doctrine/mocks.md | MODIFY | doctrine | D9: the five sections named, one home each |
+| spec/commands/mocks.md | MODIFY | doctrine | D9: § Review loop removed, THEME rule, Report, Rules, model line |
+| docs/adr/0008-mocks-is-wireframes.md | CREATE | doctrine | D9: amendment ADR — Applies to ADR-0006 + specs/20260902/07 rows for SKIN/REVIEW/decider; Amended by: — |
+| docs/adr/0006-mocks-first-genesis.md | MODIFY | doctrine | `Amended by: ADR-0008` backlink line only |
+| tests/mocks/mocks-driver-fixtures.js | MODIFY | tests | D11 helper changes (no AC of its own; every driver test consumes it) |
+| tests/mocks/mocks-driver.test.js | MODIFY | tests | AC-20260906-02-1, AC-20260906-02-2, AC-20260906-02-3, AC-20260906-02-4 (retag of the theme-picked test), AC-20260906-02-7; the `journey-skinned` test deleted |
+| tests/mocks/mocks-driver-2.test.js | MODIFY | tests | AC-20260906-02-5 (rewrite of the approved test + retag of AC-20260905-06-9's pin), AC-20260906-02-7 (reopen test rewritten); the journey-reviewed test deleted |
+| tests/mocks/mocks-notes.test.js | MODIFY | tests | AC-20260902-10-6 retargeted: `journey-approved` and `approved` refuse on notes; the skinned/reviewed arms deleted |
+| tests/mocks/mocks-driver-look-stops-2.test.js | MODIFY | tests | AC-20260906-02-6, AC-20260906-02-8 (skill line in SHAPES/WIREFRAMES/THEME only; SIGNOFF block literal + stop); journey-reviewed stop test deleted, approved stop arm kept |
+| tests/consistency/design-doctrine.test.js | MODIFY | tests | AC-20260902-10-8 retargeted to the SIGNOFF block (setup via `advanceToThemePicked`, no `journey-reviewed`) |
+| tests/genesis/brief-state.test.js | MODIFY | tests | AC-20260906-02-9 (fixture writes `state: "THEME"`, asserts the refusal names THEME) |
+| spec/.claude-plugin/plugin.json | MODIFY | doctrine | D12 version bump + changelog entry |
+
+## Contracts
+
+```
+mocks-driver.js --root <dir>                               # bare: prints the current step block
+mocks-driver.js --root <dir> --mark <m> [--journey <j>] [--direction <k>]
+  <m> ∈ seed-done | shape-picked | canon-written | journey-drawn | journey-approved
+      | direction-composed | theme-picked | approved
+mocks-driver.js --root <dir> --reopen journey:<j> | shapes | theme
+mocks-driver.js --root <dir> stop open shapes | journey:<j> | theme | signoff
+Exit codes: unchanged (0 accepted/printed · 1 gate blocked · 2 usage/refusal · 3 look unreachable)
+
+status.json (schemaVersion 1):
+  state: SEED | SHAPES | WIREFRAMES | THEME | SIGNOFF | APPROVED      # derived, written for readers
+  marks: { seedDone, shapePicked, canonWritten, themePicked, approved }
+  journeys: { <j>: { drawn, approved[, variant] } }
+  theme: <kebab> | null · decider: <stop.by> | null · directions · reopens · look · lastUpdated
+```
+
+Retired literals (never printed, never accepted): `SKIN`, `REVIEW`, `journey-skinned`, `review-opened`, `journey-reviewed`, `--decider`, `reviewOpened`, `skinned`, `reviewed`.
+
+## Behavior
+
+**Resume from a legacy checkpoint.** A `status.json` written by 7.92.0 in state `SKIN` (theme picked, journeys skinned or not) derives `SIGNOFF` on the next bare run: the step block asks for the sign-off look. One in `REVIEW` derives the same. Nothing on disk is deleted; the ignored fields vanish on the next write.
+
+**THEME.** With <2 directions composed the step reads as today except the count: "compose theme directions — the seed's dense screen per direction, a second screen at most; derive 2–3 candidates, then ASK which to compose". With ≥2 composed, the pick stop and `theme-picked` are unchanged.
+
+**SIGNOFF.** One look over the atlas index (every journey, gray, in the picked theme's tokens? — no: wireframes stay gray; the theme lives in `design/tokens.css` and the composed dense screens). The `approved` stop is an `approve` stop keyed `approved`, opened by `stop open signoff` exactly as today. On `decided approve` the mark stamps every top-level mock `approved` and records the decider.
+
+## Acceptance Criteria
+
+- **AC-20260906-02-1**: WHEN a root has `canonWritten`, every declared journey `approved`, and `theme: null` THE SYSTEM SHALL derive `THEME`; WHEN `theme` is set and `marks.approved` is false it SHALL derive `SIGNOFF`; WHEN `marks.approved` is true it SHALL derive `APPROVED`; WHEN the same `status.json` additionally carries `marks.reviewOpened: "2026-09-01T00:00:00Z"`, `decider: "Ren"`, and `journeys.onboarding.skinned`/`.reviewed` set THE SYSTEM SHALL derive the identical state and, after any accepted mark, write a `status.json` with none of `reviewOpened`, `skinned`, `reviewed` present (e.g. legacy `{state:"SKIN", theme:"quiet", marks:{…themePicked:…, approved:false}}` → `--state` prints `SIGNOFF`) → `tests/mocks/mocks-driver.test.js`
+- **AC-20260906-02-2**: WHEN `--mark journey-skinned --journey onboarding`, `--mark review-opened`, or `--mark journey-reviewed --journey onboarding` runs THE SYSTEM SHALL exit 2 with stderr containing `unknown mark` and the eight live mark names; WHEN any invocation carries `--decider Ren` it SHALL exit 2 with stderr containing `--decider is retired` → `tests/mocks/mocks-driver.test.js`
+- **AC-20260906-02-3**: WHEN `design/theme/quiet/` holds `tokens.css` and only the seed's dense screen (`session-live.html`) THE SYSTEM SHALL accept `--mark direction-composed --direction quiet`; WHEN it holds `tokens.css`, `session-live.html`, `signin.html`, `invite.html` THE SYSTEM SHALL exit 2 with stderr containing `composes 3 screens — at most 2` and `/spec:sketch`; WHEN it holds two screens neither of which is the dense screen THE SYSTEM SHALL CONTINUE TO exit 2 naming `session-live` → `tests/mocks/mocks-driver.test.js`
+- **AC-20260906-02-4**: WHEN two directions are composed and the `theme-picked` stop is decided `pick quiet` THE SYSTEM SHALL CONTINUE TO accept `--mark theme-picked`, append the `theme: quiet` row with `rejected` = `warm`, copy `design/theme/quiet/tokens.css` to `design/tokens.css` byte-equal, and derive `SIGNOFF` → the existing theme-picked test in `tests/mocks/mocks-driver.test.js`, retagged
+- **AC-20260906-02-5**: WHEN `--mark approved` runs before `theme-picked` THE SYSTEM SHALL exit 2 with stderr containing `theme-picked first`; WHEN it runs after `theme-picked` with a mock note on `consent` unresolved it SHALL exit 2 naming that note id; WHEN it runs with notes resolved and no `approved` stop it SHALL exit 2 containing `no look stop for approved` and `stop open signoff`; WHEN the `approved` stop is decided `approve` by `Ren` while `design/mocks/signin.html` carries `data-status="sketch"` THE SYSTEM SHALL exit 0, rewrite that file so that the only byte difference is `data-status="sketch"` → `data-status="approved"`, set `status.decider` = `Ren`, `marks.approved`, derive `APPROVED`, consume the stop, and SHALL CONTINUE TO run `render-gate --mocks` and `design-atlas check --matrix` before accepting (a fixture capture command writing a broken inventory → exit 2 naming the render finding, no file rewritten) → `tests/mocks/mocks-driver-2.test.js` (the second pin retags AC-20260905-06-9's test)
+- **AC-20260906-02-6**: WHEN the bare driver runs in `SIGNOFF` THE SYSTEM SHALL print `## Step: sign off — the product I understand`, a line containing `Approval means "this is the product I understand" — the written brief, not these screens, holds scope.`, a `look:` line naming `stop open signoff`, and a `Then:` line containing `--mark approved`; stdout SHALL contain none of `review-opened`, `--decider`, `journey-reviewed`, `SKIN`, `REVIEW`; WHEN it runs in `APPROVED` it SHALL print `done — every journey approved, theme "quiet" picked, signed off by Ren` → `tests/mocks/mocks-driver-look-stops-2.test.js`
+- **AC-20260906-02-7**: WHEN `--reopen theme` runs on an `APPROVED` root THE SYSTEM SHALL print `invalidated: theme, approved(all)`, set `theme` null, `marks.themePicked` null, `marks.approved` null, `decider` null, leave every `journeys[j].approved` unchanged, and derive `THEME`; WHEN `--reopen journey:onboarding` runs on an `APPROVED` root it SHALL print `invalidated:` containing `approved` and `approved(all)`, clear `journeys.onboarding.approved` and `marks.approved`, and derive `WIREFRAMES` → `tests/mocks/mocks-driver-2.test.js`
+- **AC-20260906-02-8**: WHEN the bare driver prints the SHAPES, WIREFRAMES, or THEME block with a fake `claude` on PATH reporting the skill installed THE SYSTEM SHALL CONTINUE TO print the `🎨 Load the \`frontend-design\` skill` line; WHEN it prints the SIGNOFF block THE SYSTEM SHALL print no line containing `frontend-design` and SHALL run the look probe (an unreachable `design.look` → exit 3 naming the remedy) → `tests/mocks/mocks-driver-look-stops-2.test.js`
+- **AC-20260906-02-9**: WHEN `design/mocks/status.json` carries `state: "THEME"` at the genesis BRIEF step THE SYSTEM SHALL CONTINUE TO exit 2 with stderr matching `/THEME/` and naming `/spec:mocks` → `tests/genesis/brief-state.test.js`
+
+## Assumptions (escalation triggers)
+
+- A1: The ledger parser accepts any `^[A-Z][A-Z-]*$` step token, so rows written under `SKIN`/`REVIEW` keep parsing after the enum prose changes — **executed 2026-09-06**: `parseLedger` over a row with step `WIREFRAMES` and the fixture's 74 rows → `errors: []`; `STEP_RE` at lib/mocks-ledger.js is the regex, no enum list. **if false:** add `SKIN`/`REVIEW` to an accepted-legacy list in the parser, one AC.
+- A2: `status.json` is read through `mergeStatus()` which tolerates unknown fields (7.92.0 reads `raw.reopens` defensively) — **verified by reading** mocks-driver.js `freshStatus`/merge at :120-158. **if false:** strip the four legacy keys explicitly on read.
+- A3: specs/20260905/03 (candidate flows) may land before or after this spec; both edit `handleJourneyApproved`/`doReopen`. **if 03 lands first:** keep its `variant` clearing inside D7's journey reopen; **if this lands first:** 03's build folds onto the new chain (its D4 already says "gate and notes still apply"). Not a blocker either way; the orchestrator re-bases.
+- A4: A host checkpointed in `SKIN`/`REVIEW` loses nothing on resume — **executed 2026-09-06**: `find ~/Projects -path '*/design/mocks/status.json'` → one host, `~/Projects/hearwell`, `state: "REVIEW"` (theme picked, journeys skinned); under D1 it derives `SIGNOFF` and its next bare run asks for the sign-off look. Its skinned mocks link `../tokens.css`, which `approved`'s matrix check and render gate accept as they do today. **if false** (a host refuses at `approved` on a skinned-era precondition): `--reopen theme` on that host, then continue.
+- A1 (addendum, executed): `parseLedger` over the Hearwell fixture → 74 rows, 13 catches, 0 errors, steps `SEED,SHAPES,WIREFRAMES,AUDIT,VISUAL,THEME`; a synthetic table with steps `SKIN` and `SIGNOFF` → `errors: []`.
+- A5: `genesis-driver.js` compares `state === 'APPROVED'` and never lists the intermediate states — **verified by reading** (genesis-driver.js :713, :737, :2045, :2071). **if false:** one more row in this File Plan.
+
+## Rationale
+
+**Why retire rather than gate off.** A state that exists but is skipped is prose in the driver's head: the next session reads `printSkinStep` and skins. Brief 22a's whole point is that fidelity before the brief pre-commits scope; the only honest mechanism is that the driver cannot ask for it.
+
+**Why SIGNOFF is a state and not a THEME sub-step.** The look probe and the step-block printer are keyed by state; the sign-off is a look with its own stop key (`approved`) and its own literal. Folding it into THEME would make THEME print two different looks. It replaces REVIEW one-for-one, minus the decider ceremony.
+
+**Why `approved` stamps the mocks.** Today `approved` demands every mock already carry `data-status="approved"`, which the REVIEW loop set by hand per journey. With no review loop nobody would set it, and the mark would refuse forever. The stamp is the mark's own write, attribute-only, so the byte-diff pin (AC-5) keeps it honest. `variant-picked` already writes mocks.
+
+**Why the dense screen, not "1–2 core screens" chosen by the session.** The seed already names the dense screen (a confirmed fact key); it is the screen that stresses a theme most; the second screen stays free. Rejected: letting `direction-composed` accept any two — the session would pick the prettiest, not the hardest.
+
+**Fragile spots for build.** The doctrine wave touches five sections of mocks.md; `§` citations from commands/mocks.md, sketch.md, design.md and the tests' header comments must still resolve (citations-check). `tests/mocks/mocks-notes.test.js`'s AC-20260902-10-6 exercises four marks in one test — split the surviving two arms cleanly rather than commenting out. The fixture chain is consumed by six test files; change it first, run the mocks glob, then retarget.
+
+**Collision closure.** Retired literals `journey-skinned`, `journey-reviewed`, `review-opened`, `SKIN`, `REVIEW`, `advanceToSkinned`, `advanceToReviewed`: every `executes` hit is a File Plan row above (six test files + fixtures); `mentions` in `docs/canonical/design.md` lands via Canonical Delta; historical specs, ADR-0006's option text and brief 22a's "Current state" are provenance (waived); `.claude/agent-memory/plugin-tests/*` is the orchestrator duty. Paths leg `executes` hits on design-atlas.js outside the File Plan (retired-flags, design-shell, notes-layer-isolation tests) exercise routes this spec does not touch — waived; the build's whole-suite check adjudicates.
+
+## Canonical Delta
+
+`docs/canonical/design.md` § The mocks command: replace the state chain sentence with "SEED → SHAPES → WIREFRAMES → THEME → SIGNOFF → APPROVED (specs/20260906/02, ADR-0008 amending ADR-0006): the skin and review states are retired; a wireframe is never skinned inside mocks — `/spec:sketch` owns fidelity per brief. Sub-marks per journey are `journey-drawn` and `journey-approved` (and `variant-picked` when candidate flows are used). THEME composes each direction on the seed's dense screen, a second screen at most, and `theme-picked` copies the winner's `tokens.css` into place. SIGNOFF is one look over the atlas; `--mark approved` stamps every top-level mock `data-status="approved"` and records the stop's decider. `--reopen theme` clears the theme pick and the sign-off only; `--reopen journey:<j>` clears that journey's approval and the sign-off." Replace the § Page notes sentence listing the marks with "`journey-approved` and `approved` refuse while any project note is unresolved or any note on the journey's screens is unresolved; client review is the same page and the same notes — there is no review state."

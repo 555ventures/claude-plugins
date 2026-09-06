@@ -1,0 +1,108 @@
+---
+date: 2026-09-06
+status: hardened
+tier: standard
+area: design-mocks
+design: false
+breaking: false
+depends_on: [specs/20260906/03-questions-on-the-wireframe.md]
+depended_on_by: []
+brief: 22a
+open_markers: 0
+---
+
+# The journey review page: screens rail, artboards with state tabs, a question inspector with keyboard flow — the look surface for a journey
+
+## Goal
+
+`stop open journey:<j>` points at a page built for answering: a three-pane review page per journey served at `/review/<j>.html`. Left, the journeys and this journey's screens with open counts. Centre, one artboard per screen on a dotted canvas, each an iframe of the served mock with `happy | empty | loading | error` state tabs. Right, the inspector: every question and note on the journey, filtered Open / Answered / All, answered inline, a composer with scope and reason, foldable to a strip, driven by `J K Y N Esc \`. The header carries the breadcrumb, `k of n answered`, and the stop's Approve control, disabled while anything is open. The chrome is authored under the frontend-design skill in the shadcn idiom on the viewer's zinc register; the wireframes inside the iframes stay gray. Done means the journey look happens on this page, the atlas index links to it, and nothing about the endpoints or the stores changes.
+
+## Decisions (locked — workers apply verbatim, never override)
+
+| ID | Decision | One-line rationale |
+|----|----------|--------------------|
+| D1 | New pure builder `lib/review-page.js` `buildReviewPage({root, journey, seed, notes, ledger, stops, prefix}) → html` (byte-deterministic for equal inputs; no fs, no clock — `at` fields render as given); the served route `GET /review/<j>.html` derives on every request (like the atlas), 404 for an undeclared journey naming the declared ones, `?clean` strips the chrome to the artboard grid; the page links `<prefix>/__notes/viewer.css` and loads `<prefix>/__review/review.js` (`lib/review.browser.js`, served verbatim, `no-store`) (AC-20260906-04-1, AC-20260906-04-2) | Same posture as the atlas: derived, never stale, one builder the test can call without a server. |
+| D2 | Static mock serving accepts `?state=<s>`: the server injects the same click script `look --state` injects today (`[data-state-btn="<s>"]` clicked on `DOMContentLoaded`), before the notes-layer injection; `?clean&state=<s>` injects the click script only; `mocks-driver.js look` keeps its own injection for the file-URL path and uses `?state=` when a served URL is available (AC-20260906-04-3) | The artboard tabs are URLs; a second injection path in the browser script would be a second mechanism. |
+| D3 | Artboards: one per screen in seed order, caption `<n>. <label>` + open count + `+ note`, a segmented control `happy` (no state param) plus every `data-state-btn` value the mock declares in declared order (a mock with none shows `happy` only), an iframe `src="<prefix>/mocks/<label>.html?clean[&state=<s>]"` at the seed's primary viewport width (the first `design/targets.json` viewport ≤ 480 wide, else 400px); the frame of the screen holding the selected item carries `data-focus`; per-screen questions and notes render as a count badge on the caption and the selected item highlights its screen's frame — no element anchoring (the store has none) (AC-20260906-04-4) | The page shows where a doubt lives at screen + state resolution, which is exactly what the store records. Rejected: coordinates on the note — a second contract for the notes layer to keep in sync. |
+| D4 | Inspector: rows are the journey's questions (`kind: question`) and notes (mock notes on its labels + every project note) sorted screen order then id; filters `Open \| Answered \| All` (default Open; Answered = resolved); a question row = `<id>` · `I assumed` \| `A fresh reader asked` (by ≠ session) · screen · tag · claim · `Rejected: …` · controls `Yes, that's right` / `No, it's…` (textarea, `Save correction`, Enter saves) / `Later` (moves the cursor); a note row = `<id>` · `You told JJ` · scope · reason chip · text · `Waiting for the session · blocks approval until addressed` (resolved notes read `Addressed: <change>`); the composer at the bottom: scope `Whole project \| This screen` (This screen = the focused artboard), four reason chips, textarea, `Send` (`⌘/Ctrl+Enter`); every write goes through the spec 03 endpoints unchanged; the pane folds to a 44px strip (open count vertical, `‹` to unfold) via `›` or `\`, and clicking any artboard badge unfolds it on that screen; keyboard: `J`/`↓` next, `K`/`↑` previous, `Y` answer yes, `N` open the correction box, `Esc` clear selection — never captured while a textarea has focus (AC-20260906-04-5, AC-20260906-04-6) | The prototype JJ approved, row for row; keyboard-first answering is the one memorable thing, everything else is quiet. |
+| D5 | Header: breadcrumb `<product> / Mocks / <n> · <journey title>`, stage pill `Wireframes · awaiting your answers` (or `· approved`), progress `<answered> of <total> answered[ · <m> notes for the session]` with a 96px track, and the stop control: when a `journey-approved:<j>` (or `variants:<j>`) stop is open the page renders that stop's existing approve/change block (spec 01 D3's rendering, unchanged) as the `Approve journey` button + `Request changes`; the button is `disabled` with title `<k> open item(s) block approval` while any question is unanswered or any note unresolved; with no open stop it renders `Waiting for the session to open a look` (AC-20260906-04-7) | The gate the driver enforces on disk is mirrored on the page so a client never clicks Approve into a refusal. |
+| D6 | `mocks-driver.js stop open journey:<j>` (and `variants:<j>`) stamps the stop's `url` as `http://localhost:<port>/review/<j>.html#stop-<id>` and probes that page for `id="stop-<id>"`; the atlas index keeps rendering the same stop (spec 01 D3) and every journey section's heading links `Review →` to `/review/<j>.html`; `shapes`, `theme`, `signoff` stops keep the atlas URL (AC-20260906-04-8) | One verified link per look stop (JJ 2026-09-04 ruling); the journey look now has a better page. |
+| D7 | Chrome rule, one home: `spec/doctrine/design.md` § Design Canon gains "**Plugin chrome is a designed surface.** Every page the plugin serves for a look — atlas index, journey review page, galleries, the notes layer — is authored under the `frontend-design` skill in the shadcn idiom on `viewer.css`'s register (the zinc roles byte-equal to `wire-tokens.css`), never on product tokens; the wireframe inside a frame stays gray." `spec/doctrine/mocks.md` § Mocks: Look and Serve names the review page as the journey look surface and points at design.md for the chrome rule `[no-ac: review's citations-check and doctrine legs are the oracle; the served page is pinned by AC-20260906-04-1]` | JJ 2026-09-06: "use Shadcn and frontend-design plugin — even for our tool"; one binding home. |
+| D8 | Bump `spec/.claude-plugin/plugin.json` to the next free minor (target 7.95.0) with the changelog entry `[no-ac: review's version-bump check is the oracle]` | § Planning version discipline. |
+
+**Orchestrator duty (outside the File Plan table):** the session authors `review-page.js`'s markup/CSS and `review.browser.js` itself with the `frontend-design` skill loaded (core § Model Placement: the session authors every design surface; workers build the routes, the tests, and the driver wiring). Before the build's final gate, serve a fixture root and open `/review/<j>.html` in Chrome at 1500×900 and 390×844; fold, answer one question with `Y`, send one project note; screenshot both widths into the run's scratchpad and cite them in the build report.
+
+## File Plan
+
+| Path | Action | Layer | Summary |
+|------|--------|-------|---------|
+| spec/scripts/lib/review-page.js | CREATE | scripts | D1, D3, D4 (markup), D5: pure builder, byte-deterministic; header names inputs and the no-fs/no-clock rule |
+| spec/scripts/lib/review.browser.js | CREATE | scripts | D4 behaviour, D5 disabled-state derivation, keyboard map, fold; talks to `/__notes/*` and `/__picks/*` only |
+| spec/scripts/design-atlas.js | MODIFY | scripts | D1 route + `?clean`, D2 `?state=` injection, `/__review/review.js`, D6 journey section `Review →` link; usage header |
+| spec/scripts/mocks-driver.js | MODIFY | scripts | D6 stop url + probe target for `journey:<j>`/`variants:<j>`; `look` prefers `?state=` on a served URL |
+| spec/templates/mocks/viewer.css | MODIFY | doctrine | D4/D5 review-page classes (`.rv-*`) on the existing register — no new token, values untouched |
+| spec/doctrine/design.md | MODIFY | doctrine | D7 chrome rule in § Design Canon |
+| spec/doctrine/mocks.md | MODIFY | doctrine | D7 pointer in § Mocks: Look and Serve |
+| tests/mocks/review-page.test.js | CREATE | tests | AC-20260906-04-1, AC-20260906-04-4, AC-20260906-04-5, AC-20260906-04-7 |
+| tests/design-atlas.test.js | MODIFY | tests | AC-20260906-04-2, AC-20260906-04-3, AC-20260906-04-6 |
+| tests/mocks/mocks-driver-look-stops.test.js | MODIFY | tests | AC-20260906-04-8 |
+| spec/.claude-plugin/plugin.json | MODIFY | doctrine | D8 version bump + changelog entry |
+
+## Contracts
+
+```
+GET /review/<journey>.html[?clean]      → derived page, 200 | 404 "unknown journey <j> — declared: a, b, c"
+GET /__review/review.js                 → lib/review.browser.js verbatim, text/javascript, no-store
+GET /mocks/<label>.html?state=<s>       → the mock with the state click script injected (then the notes layer unless ?clean)
+
+buildReviewPage({ root, journey, seed, notes, ledger, stops, prefix }) → string
+  seed:   parsed seed (journeys in order, this journey's labels in order, dense label, product name)
+  notes:  notes.json array (questions joined with ledger rows as /__notes/list joins them)
+  stops:  picks.json stops (open|decided) — the journey's live stop is rendered in the header
+Markup anchors the tests read: [data-rv="rail"] [data-rv="board" data-label] [data-rv="tab" data-state]
+  [data-rv="frame" data-focus?] [data-rv="row" data-id data-kind data-status] [data-rv="approve" disabled?]
+  [data-rv="progress"] [data-rv="composer"] [data-rv="strip"]
+```
+
+## UI
+
+Three panes on a 48px app bar (see Goal); shadcn zinc register: `--bg #fff · --fg #09090b · --muted #71717a · --muted-bg #f4f4f5 · --border #e4e4e7 · --primary #18181b · --radius 6px`, one accent for open doubt (`#c2410c` on `#fff7ed`), green for confirmed (`#15803d`), `--primary` for corrected; dotted canvas `radial-gradient(circle,#d4d4d8 1px,transparent 1px) 20px`; 13px system sans, tabular numerals for counts; `kbd` chips in the inspector footer; `prefers-reduced-motion` respected; visible focus rings. States: no open stop (header line), zero items (inspector empty line `Every question is answered. Approve the journey when the screens look right.`), folded strip, a journey with no `data-state-btn` mocks (single `happy` tab), a client note on a screen (badge + row). Phone width (≤480): rail collapses to a select, inspector becomes a bottom sheet — same DOM, CSS only.
+
+## Behavior
+
+Open the stop URL → the page loads with the first open item selected, its screen framed, the inspector on Open. `J` moves down the open list; `Y` posts an answer and the row leaves the Open filter, the badge and progress update, the Approve button enables when the last item clears. `N` opens the correction box; Enter saves. `+ note` on an artboard unfolds the inspector with the composer scoped to that screen. `Approve journey` posts the stop decision exactly as the atlas block does today; the driver's `journey-approved` then reads it from `picks.json`.
+
+## Acceptance Criteria
+
+- **AC-20260906-04-1**: WHEN `buildReviewPage` runs twice over the Hearwell-shaped fixture (three screens, two questions, one project note, one open `journey-approved:onboarding` stop) THE SYSTEM SHALL return byte-identical HTML containing exactly three `[data-rv="board"]`, `[data-rv="rail"]` listing every seed journey with the current one marked and every screen with its open count, `[data-rv="progress"]` text `1 of 4 answered · 1 note for the session`, and a `<link>` to `<prefix>/__notes/viewer.css` and a `<script src="<prefix>/__review/review.js">` → `tests/mocks/review-page.test.js`
+- **AC-20260906-04-2**: WHEN `GET /review/onboarding.html` runs against a served fixture THE SYSTEM SHALL respond 200 with the builder's bytes for the on-disk stores at that moment (a note added via `/__notes/add` appears on the next GET); `GET /review/nowhere.html` → 404 whose body names `onboarding`; `?clean` → no `[data-rv="rail"]`, no `[data-rv="composer"]`, no `review.js`; `GET /__review/review.js` → the lib file verbatim with `cache-control: no-store` → `tests/design-atlas.test.js`
+- **AC-20260906-04-3**: WHEN `GET /mocks/signin.html?clean&state=empty` runs THE SYSTEM SHALL respond with the mock plus one injected `<script>` that clicks `[data-state-btn="empty"]` on `DOMContentLoaded` and no notes-layer script; WHEN `?state=empty` runs without `clean` it SHALL inject the click script before the notes-layer `<meta>`/`<script>`; WHEN no `state` param is present THE SYSTEM SHALL CONTINUE TO serve the exact bytes it serves today → `tests/design-atlas.test.js`
+- **AC-20260906-04-4**: WHEN a screen's mock declares `data-state-btn` values `empty`, `loading`, `error` THE SYSTEM SHALL render its board with tabs `happy, empty, loading, error` in that order whose iframe `src` values are `…/signin.html?clean`, `…?clean&state=empty`, …; WHEN a mock declares none it SHALL render the single `happy` tab; WHEN two questions and one note sit on `signin` THE SYSTEM SHALL render its caption badge `3` and `data-focus` on the frame of the first open item's screen → `tests/mocks/review-page.test.js`
+- **AC-20260906-04-5**: WHEN the inspector renders one open question (`W7`, by `session`), one open question by `critic`, one answered `no` question, and one project note with `reason:"missing-screen"` THE SYSTEM SHALL render, under the default Open filter, exactly three `[data-rv="row"]` (the answered one excluded), the session's with `I assumed`, the critic's with `A fresh reader asked`, the note's with `You told JJ`, `Whole project`, the chip `Missing screen`, and the line `blocks approval until addressed`; the answered row under `All` SHALL read `You corrected: <text>` with no buttons → `tests/mocks/review-page.test.js`
+- **AC-20260906-04-6**: WHEN `review.browser.js` runs under `vm` over AC-4's markup with a stubbed `fetch` THE SYSTEM SHALL, on keydown `j`, move the selected row and `data-focus` to the next open item; on `y` issue `POST /__notes/answer {id, verdict:"yes", by}` and remove the row from the Open filter; on `n` reveal the row's textarea, and on Enter inside it issue `POST /__notes/answer {…verdict:"no", text}`; on `\` toggle `[data-rv="strip"]` visible and the pane hidden; on keydown `j` while a textarea has focus issue nothing; on `Send` with scope `Whole project` and chip `Wrong direction` issue `POST /__notes/add {scope:"project", screen:null, state:null, reason:"wrong-direction", text, by}` → `tests/design-atlas.test.js`
+- **AC-20260906-04-7**: WHEN the journey's `journey-approved:onboarding` stop is open and one question is unanswered THE SYSTEM SHALL render `[data-rv="approve"]` with `disabled` and title `1 open item blocks approval`; WHEN every item is answered/resolved it SHALL render it enabled inside the stop's `id="stop-<id>"` block whose decide script posts `{id, verdict:"approve", by}` to `/__picks/decide` (spec 01 D9's literals, unchanged); WHEN no stop is open it SHALL render `Waiting for the session to open a look` and no approve control; WHEN the stop is decided it SHALL render the decided line as the atlas does → `tests/mocks/review-page.test.js`
+- **AC-20260906-04-8**: WHEN `stop open journey:onboarding` runs with the server up THE SYSTEM SHALL write the stop's `url` as `http://localhost:<port>/review/onboarding.html#stop-<id>`, probe that page for `id="stop-<id>"`, and print the existing two look lines with that URL; WHEN the page cannot be fetched it SHALL CONTINUE TO exit 3 naming `serve --root`; `stop open theme` SHALL CONTINUE TO write the atlas URL → `tests/mocks/mocks-driver-look-stops.test.js`
+
+## Assumptions (escalation triggers)
+
+- A1: The atlas's stop block renderer is a function the review builder can call for one stop (spec 01 D3 renders per key) — **verified by reading** design-atlas.js (`stopHome` :815, stop sections :1221-1234). **if false:** extract it to `lib/stop-block.js` inside the design-atlas.js row (same landing unit).
+- A2: `injectNotesScript` is the single injection point for served `.html` — **verified by reading** (:1343-1349, :1512-1516); the state script goes in front of it. **if false:** STOP, re-read the handler.
+- A3: The `vm` harness used for the notes layer (AC-20260905-01-10) can run a second browser script with `document.addEventListener('keydown')` — **verified by reading** that test's jsdom-free DOM shim. **if false:** AC-6 runs in headless Chrome under `[env: CHROME_BIN]`.
+- A4: `design/targets.json` viewports carry `width` — **verified by reading** `spec/templates/design-targets.json`. **if false:** 400px fixed.
+- A5: specs/20260905/03's `variants:<j>` stop is a pick stop with groups; the header renders it as the pick block instead of approve/change. **if 03 has not landed:** D5/D6 mention it only; nothing to render.
+
+## Rationale
+
+**Design source.** A throwaway prototype served from the session scratchpad on 2026-09-06 went through three revisions with JJ ("Look much better!" on the shadcn zinc pass; "more like professional tool design, yet modern" produced the three-pane form; "can it be closed?" produced the fold). It is not a repo path; this host declares no `design` block, so `design:` stays false and the page this spec builds is its own canon.
+
+**Why a page per journey instead of growing the atlas index.** The atlas is the whole product at a glance and already owes navigation work (queued separately). Answering doubts is a different job with a different shape — a queue beside the screens — and mixing it into the index would make both worse. The stop URL is what routes a look; pointing it at the right page costs one line in the driver.
+
+**Why no element anchoring.** The notes store anchors at screen + state by contract (specs/20260902/10); pins on elements were in the throwaway prototype and would require coordinates the store does not hold and could not keep in sync with a redrawn mock. Screen-level badges plus the focused frame carry the same information at the resolution the store has.
+
+**Why the chrome rule lands in design.md, not in a repo conventions file.** The rule binds every host's served pages, which the plugin ships; `.claude/rules/` binds this repo's workers. § Design Canon already carries the "viewer.css into every chrome page" rule; this is its sibling.
+
+**Fragile spots for build.** `review-page.js` must stay pure — the test calls it with fixtures; the server passes the stores it read. The keyboard map must ignore textarea focus or the correction box eats `j`. The iframe width for a desktop-only product (no viewport ≤480) falls to 400px; the desktop-fill render rule does not apply to the review page (it is chrome, not a mock).
+
+## Canonical Delta
+
+`docs/canonical/design.md` § The mocks command: append "The journey look surface is the review page `/review/<j>.html` (specs/20260906/04): screens rail · artboards with state tabs (`?state=<s>` on the served mock) · question inspector answered in place with `J K Y N Esc \`; `stop open journey:<j>` points there; the approve control mirrors the on-disk gate (disabled while any question or note is open). Plugin chrome — atlas, review page, galleries, notes layer — is authored under the frontend-design skill in the shadcn idiom on `viewer.css`'s register (design.md § Design Canon), never on product tokens."

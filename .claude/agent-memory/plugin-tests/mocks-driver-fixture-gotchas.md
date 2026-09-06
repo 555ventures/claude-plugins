@@ -11,7 +11,7 @@ asserting the bare-step output text) needs the full SEED→SHAPES→WIREFRAMES�
 chain driven via real `--mark` calls — no shortcut. `direction-composed` requires >=3 composed
 screens per direction, so the journey itself needs >=3 labels (not 2) to have enough approved
 labels to compose with once THEME is reached. The shared `advanceTo*` builders, `decideLook`/`openLook`,
-and the hub helpers live in `tests/mocks/mocks-driver-fixtures.js` (module.exports, no `test(`
+and the serve-child helpers (`startServe`/`stopServe`, since specs/20260905/04 — no hub exists any more) live in `tests/mocks/mocks-driver-fixtures.js` (module.exports, no `test(`
 calls) — require it from a new mocks-driver test file instead of re-writing the chain; doctrine
 tests outside `tests/mocks/` still carry their own condensed chain. Since specs/20260905/02 the
 five marks `shape-picked`/`journey-approved`/`theme-picked`/`journey-reviewed`/`approved` refuse

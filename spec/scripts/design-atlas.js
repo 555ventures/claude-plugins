@@ -1614,7 +1614,7 @@ async function cmdStopOpen(args) {
   } catch (e) { die('stop open: ' + e.message) }
 
   // D2: the stop is written before it is probed — a failed probe (the common first-look case)
-  // still leaves the id stable for the remedy's re-run.
+  // still leaves the stop on disk; the remedy's re-run supersedes it with a fresh id.
   const url = 'http://localhost:' + port + '/atlas/index.html#stop-' + opened.stop.id
   const finalStops = opened.stops.map((s) => (s.id === opened.stop.id ? Object.assign({}, s, { url }) : s))
   picksLib.writePicks(realRoot, finalStops)
@@ -1624,7 +1624,7 @@ async function cmdStopOpen(args) {
   if (!probe.ok || probe.status !== 200 || !probe.body || !probe.body.includes('id="stop-' + opened.stop.id + '"')) {
     die('stop open: nothing answered ' + probeUrl + ' with stop ' + opened.stop.id + ' — start `node "$(spec-paths ' +
       'design-atlas)" serve --root ' + rootArg + ' [--port <n>]` as a tracked background task, then re-run stop ' +
-      'open (the stop is already written; the link will be the same)', 3)
+      'open (the stop is already written; the re-run supersedes it and prints the fresh link)', 3)
   }
   process.stdout.write(url + '\n')
 }

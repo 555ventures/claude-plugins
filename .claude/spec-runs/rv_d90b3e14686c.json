@@ -1,0 +1,117 @@
+{
+  "runId": "rv_d90b3e14686c",
+  "ts": "2026-09-06T00:47:52.392Z",
+  "spec": "specs/20260905/04-per-project-look-server.md",
+  "tier": "standard",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1875,
+    "base": "08118416e214cfdaa2cb77aa65cf093a3a949aec",
+    "head": "92dd23d165c65a5987ba8eebf44cc9e1884290bd",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 415
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1160
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 8,
+        "carried": 7,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "The iteration-1 soft finding (exit-3 remedy says the link will be the same though a re-run supersedes to a fresh id) is unresolved or the reworded text still misdescribes the executed behavior.",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/design-atlas.js",
+        "line": 1627,
+        "evidence": "Executed from a scratch node script: stop open with nothing listening on 60552 → exit 3, stdout empty, stderr names serve --root, tracked background task, and '(the stop is already written; the re-run supersedes it and prints the fresh link)'; picks.json P001 open. Started serve on 60552, re-ran → exit 0, stdout exactly http://localhost:60552/atlas/index.html#stop-P002, picks.json P001 superseded, P002 open. Comment at line 1617 now reads 'the remedy's re-run supersedes it with a fresh id'."
+      },
+      {
+        "claim": "The spec's D2, Contracts, Rationale, AC-3 and § Behavior still disagree on re-run semantics.",
+        "file": "/Users/jj/Projects/claude-plugins/specs/20260905/04-per-project-look-server.md",
+        "line": 37,
+        "evidence": "Working-tree quotes of D2 (line 37), Contracts (85), § Behavior (118-119), AC-3 (142), Rationale (176-177) all state supersede-and-fresh-link; amendment note at line 209. grep for the retired wording over the script, spec, commands, doctrine and canonical → 0 hits except the amendment note's own quotation. Contracts line 85 matches the executed stderr verbatim."
+      },
+      {
+        "claim": "The fix introduced changes beyond design-atlas.js and the spec.",
+        "file": "/Users/jj/Projects/claude-plugins/.claude/spec-runs.jsonl",
+        "line": null,
+        "evidence": "git diff HEAD --stat → design-atlas.js (2 lines), the spec, and .claude/spec-runs.jsonl (+1 line: the build-stage ledger row bd_e4e95a83425e, pipeline bookkeeping). No test edits."
+      },
+      {
+        "claim": "The fix reddened a touched-file test or a leg.",
+        "file": "/Users/jj/Projects/claude-plugins/tests/design-atlas.test.js",
+        "line": null,
+        "evidence": "Executed node --test tests/design-atlas.test.js → pass 47, fail 0. manifest-2 legs: gate exit 0 (415 tests), suite exit 0 (1160 tests), ac-matrix uncovered 0, promise-sweep orphans 0, smoke inert; slowest file 28220 ms of 45000."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 42000
+  }
+}

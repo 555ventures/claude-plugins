@@ -1,6 +1,6 @@
 ---
 date: 2026-09-05
-status: implementing
+status: done
 open_markers: 0
 tier: standard
 area: design
@@ -34,7 +34,7 @@ hand-off, marks that refuse without a decided stop, the derived `rejected` cell 
 | ID | Decision | One-line rationale |
 |----|----------|--------------------|
 | D1 | DELETE `spec/scripts/design-hub.js`, `tests/design-hub.test.js`, the `design-hub` key + usage entry in `spec/bin/spec-paths`, and the `spec/scripts/design-hub.js` row in `spec/entrypoints.json`; nothing under `~/.claude/design-hub/` is read or written by any script afterwards; no `SPEC_DESIGN_HUB_*` env var is read anywhere (AC-20260905-04-1, AC-20260905-04-8) | The user's ruling: no resident process, no registry. A stripped hub with `ensure` removed would be a second CLI over the same three `stop` verbs — delete it rather than keep a facade. |
-| D2 | `design-atlas.js` gains `stop open --root <r> --kind pick\|approve --key <k> --title <t> --candidates <[group/]label=path,…> [--question <q>] [--port <n>]`, `stop decide --root <r> --id <P…> --verdict pick\|approve\|change [--pick <g>] [--note <n>] --by <who>`, `stop list --root <r>` — the three functions move from the hub script with the registry/ensure lines removed; `stop open` writes the stop through `lib/mocks-picks.js` with `url` = `http://localhost:<port>/atlas/index.html#stop-<id>` (port = `--port` else `4173`, serve's own default), then GETs `http://127.0.0.1:<port>/atlas/index.html` expecting 200 and a body containing `id="stop-<id>"`, and prints exactly one stdout line, that URL; the stop stays written when the probe fails (a re-run after serving it prints the same link, the key's newest stop is superseded only by a fresh `stop open`); exit 2 usage/refused decide · 3 probe failed, the message naming the exact remedy `node "$(spec-paths design-atlas)" serve --root <r> [--port <n>]` and "start it as a tracked background task" (AC-20260905-04-2, AC-20260905-04-3, AC-20260905-04-4) | The atlas script already owns the served page and the `/__picks` routes, imports `mocks-picks.js`, and — unlike the mocks driver — creates no `status.json`/`ledger.md`/`seed.md` on a cold root, which `/spec:sketch`'s roadmap-first hosts must never grow. Rejected: putting the raw form on the mocks driver (its module-top `loadStatus()` seeds a cold root). |
+| D2 | `design-atlas.js` gains `stop open --root <r> --kind pick\|approve --key <k> --title <t> --candidates <[group/]label=path,…> [--question <q>] [--port <n>]`, `stop decide --root <r> --id <P…> --verdict pick\|approve\|change [--pick <g>] [--note <n>] --by <who>`, `stop list --root <r>` — the three functions move from the hub script with the registry/ensure lines removed; `stop open` writes the stop through `lib/mocks-picks.js` with `url` = `http://localhost:<port>/atlas/index.html#stop-<id>` (port = `--port` else `4173`, serve's own default), then GETs `http://127.0.0.1:<port>/atlas/index.html` expecting 200 and a body containing `id="stop-<id>"`, and prints exactly one stdout line, that URL; the stop stays written when the probe fails (a re-run after serving it supersedes that stop and prints the fresh id's link — spec 01 D1); exit 2 usage/refused decide · 3 probe failed, the message naming the exact remedy `node "$(spec-paths design-atlas)" serve --root <r> [--port <n>]` and "start it as a tracked background task" (AC-20260905-04-2, AC-20260905-04-3, AC-20260905-04-4) | The atlas script already owns the served page and the `/__picks` routes, imports `mocks-picks.js`, and — unlike the mocks driver — creates no `status.json`/`ledger.md`/`seed.md` on a cold root, which `/spec:sketch`'s roadmap-first hosts must never grow. Rejected: putting the raw form on the mocks driver (its module-top `loadStatus()` seeds a cold root). |
 | D3 | `mocks-driver.js stop open <step> [--port <n>]` and `stop decide <P…> …` keep their contracts (spec 02 D6: two lines, the pick reply variant, exit 2 preconditions, exit 3 with the child's stderr forwarded) and delegate to `design-atlas.js stop open|decide` by sibling path (`designAtlasBin`, already resolved) instead of `design-hub.js`; `--port` passes through; the `designHubBin` constant and every hub mention in the header go (AC-20260905-04-5, AC-20260905-04-9) | The driver already derives every candidate set; only the child it spawns changes. |
 | D4 | Lifetime is the session's, never a script's: doctrine says the session starts `node "$(spec-paths design-atlas)" serve --root . [--port <n>]` as a **tracked background task** immediately before the first `stop open` of a `/spec:mocks`, `/spec:sketch` or `/spec:atlas` run (serve's busy-port branch answers `already serving` when a previous session's server is still up, so the start is idempotent), leaves it running across that run's look stops (the user reads the page after the turn ends), and stops it (the harness's task stop) when the run reaches sign-off / ratification, or when the session ends; no script ever spawns a detached server, writes a pid file, or probes for "is a hub up" beyond D2's page probe. `spec/commands/mocks.md` § Look rule, `spec/commands/sketch.md` step 5, and `spec/commands/atlas.md` step 3 carry this sentence; the serve command is the session's own tool and is never printed to the user (AC-20260905-04-6) | "Only run when needed" is exactly a session-scoped background task; the dev-servers rule (tracked, stopped before finishing) already governs it. A script-spawned detached server is the daemon again under another name. |
 | D5 | Doctrine: `spec/doctrine/mocks.md` deletes `## Mocks: Review Hub`; § Mocks: Look and Serve says the user's path is **the look link** (`🎨 ready for review — <url>`, that project's served atlas), names D4's start/stop rule, and keeps "the serve command is never printed to the user"; `spec/doctrine/design.md` § Design Atlas's mock-stops sentence says "decided on the served atlas page or via `stop decide --by chat`" (no "hub"); `spec/commands/sketch.md` step 5 runs `node "$(spec-paths design-atlas)" stop open --root . --kind approve --key sketch:<brief> …` and reads `node "$(spec-paths design-atlas)" stop list --root .`; `spec/commands/atlas.md` step 3 starts serve per D4 and prints `🎨 http://localhost:<port>/atlas/index.html` (the URL from serve's own first stdout line), never a file path; the literals `design-hub`, `spec-paths design-hub`, `SPEC_DESIGN_HUB`, `/p/<name>/`, `Mocks: Review Hub`, `hub page`, `hub link` appear in no command, doctrine, or canonical file (AC-20260905-04-6, AC-20260905-04-7) | Two viewers, two shapes stays (catalog stops untouched); only the mock stop's server changes. |
@@ -82,7 +82,7 @@ design-atlas.js stop open  --root <r> --kind pick|approve --key <k> --title <t>
                              exit 2 usage · 3 probe failed:
                                design-atlas: stop open: nothing answered http://127.0.0.1:<port>/atlas/index.html with stop <id> —
                                start `node "$(spec-paths design-atlas)" serve --root <r> [--port <n>]` as a tracked background
-                               task, then re-run stop open (the stop is already written; the link will be the same)
+                               task, then re-run stop open (the stop is already written; the re-run supersedes it and prints the fresh link)
 design-atlas.js stop decide --root <r> --id <P…> --verdict pick|approve|change [--pick <g>] [--note <n>] --by <who>
                              stdout `decided <id> <verdict>` · exit 2 refused (lib's message)
 design-atlas.js stop list  --root <r>     one line per non-superseded stop: `<id> <status> <kind> <key> — <title>`
@@ -173,8 +173,8 @@ after the turn ends, and dies with the run or the session — no pid file, no pr
 `ensure`. The busy-port reuse from 7.78.0 makes a stale server from a crashed session harmless.
 
 **Why `stop open` writes before it probes.** A failed probe is the common first-look case (the
-session forgot to start serve). Writing first means the remedy is one command and a re-run, and
-the id the page will show is stable across that re-run's supersede.
+session forgot to start serve). Writing first means no stop is ever half-written; the remedy is one
+command and a re-run, which supersedes the unprobed stop and prints the fresh id (AC-20260905-04-3).
 
 **Why spec 03 is amended here.** It is `hardened` and pins the hub link shape in AC-2; it runs
 after this spec, so the amendment is a planning-seat edit recorded in D8, not build work.
@@ -191,6 +191,20 @@ whole-suite check adjudicates.
 **Fragile.** Two projects reviewed at once on the default port need `--port`; the atlas has no
 notion of which root a running server serves. Acceptable: the user reviews one project at a time.
 
+**Build deviations (folded at close, 2026-09-05 — all one-offs).** (1) AC-20260905-04-1's sweep greps
+`docs/canonical/`, so the Canonical Delta was applied in the doctrine wave (File Plan row added)
+rather than at review close; CLOSE found it in place. (2) A5 was false — 7.85.0 had shipped between
+plan and build — so the bump is 7.86.0. (3) AC-6 makes `spec/commands/mocks.md` carry the literal
+`spec-paths design-atlas)" serve` sentence, which the entrypoints sweep counts as an invocation, so
+the `design-atlas.js` manifest row also names that command; `spec/doctrine/mocks.md` § Look and
+Serve names the same call so its declared entry point is backed by a literal. (4) A pre-existing
+"copy register" phrase in `spec/commands/atlas.md` collided with AC-6's `register` ban and became
+"copy tone". (5) Red-phase tests isolated the pre-image's unconditional hub spawn behind a `HOME`
+override and fragment-assembled literals; that scaffolding was removed once D3 landed, and the one
+look-stops test that still relied on the hub's auto-spawn was wrapped in a serve child. (6) Two
+transient in-build reds (the entrypoints sweep before the doctrine wave; the look-stops test before
+its serve wrap) were resolved before the final gate.
+
 ## Canonical Delta
 
 `docs/canonical/design.md`: replace the paragraph **Design review hub (specs/20260905/02)** with
@@ -205,3 +219,5 @@ remedy); the mocks driver's `stop open <step>` delegates there. The user's path 
 the serve command is never printed to them. Picks on the page, the two-line hand-off, marks
 refusing without a decided stop, and the derived `rejected` cell are unchanged from specs
 20260905/01–02.
+
+**Review amendment (2026-09-05, review iteration 1, disposition s0 fix).** D2's "prints the same link" sentence, the Contracts remedy parenthetical and the Rationale's "stable across that re-run's supersede" line contradicted AC-20260905-04-3 and § Behavior; all three now state the supersede-and-fresh-link behavior the AC pins, and the script's remedy text was reworded to match.

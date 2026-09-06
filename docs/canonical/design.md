@@ -94,15 +94,20 @@ universal `border-box` reset, a declared `line-height` wherever a block declares
 no `border`/`border-radius` on the `[data-screen-label]` root, and state controls placed
 outside the contract — plus the matrix rules (viewport meta, dark block). The mark vocabulary
 a mock declares is `data-screen-label` (root, one per file), `data-status`,
-`data-state-btn="<state>"`, `data-contract="none"` (non-contract subtree), and
-`data-positioned` (children placed from data). The matrix expansion runs at `/spec:sketch`
+`data-state-btn="<state>"`, `data-contract="none"` (non-contract subtree),
+`data-positioned` (children placed from data), and `data-narrow` (a deliberately narrow root at
+every width). The matrix expansion runs at `/spec:sketch`
 exit — expand, `check --matrix`, render the matrix screenshots, then ratify — so ratification
 is the single stamp that makes a mock render-gate-ready.
 
 ## Executable design rules (2026-08-24, specs/20260824/04)
 
 `design-rules.json` entries may carry a `renderCheck` object with a closed `kind` set —
-`target-size {min}`, `cta-count {max, tokens[]}`, `contrast {min, minLarge}`, `palette {}`;
+`target-size {min}`, `cta-count {max, tokens[]}`, `contrast {min, minLarge}`, `palette {}`,
+the adaptation kinds `no-overflow {}` and `line-length {maxCh, minViewport}` (specs/20260831/02),
+and `desktop-fill {minFraction, minViewport}` (specs/20260905/05) — measures the in-flow content
+span against `page.clientWidth` at cells at or above `minViewport`, failing a phone-width column
+unless the mock's root declares `data-narrow` (inventory top-level `narrow`);
 an unknown kind is a manifest error, and entries without one are counted as `source-side=<n>`,
 never silently dropped. `render-rules.js` (`spec-paths render-rules`) executes them over render
 inventories against a palette resolved from `tokens.css` (hex / `rgb()` / one-level `var()`,
@@ -115,6 +120,8 @@ print under the cell and fail the gate; no manifest prints one skip line — and
 runs the same rules over the mock render. The Sonnet rule-checklist walk is retired from sketch
 exit, the design gate, and `/spec:review`'s design leg; the checklist survives only at the
 explore stage, which precedes `design-rules.json` and so has no manifest to execute.
+The canon template's § Shells asks what each shell does at every declared viewport
+(specs/20260905/05 D8).
 
 ## Provenance ledger (2026-09-02, specs/20260902/06)
 

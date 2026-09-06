@@ -1,0 +1,117 @@
+{
+  "runId": "rv_8a39bda09c95",
+  "ts": "2026-09-06T06:39:41.364Z",
+  "spec": "specs/20260905/05-desktop-fill-render-rule.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 612,
+    "base": "234301e30c975d26abb065ed30cc124cdefc6697",
+    "head": "191990823986c45f1b7617783c1b61a528b6d9e5",
+    "dirty": false
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 300
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1168
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 10,
+        "carried": 8,
+        "sanctioned": 2,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "Pass-2 medium finding unresolved: the thresholdless-row refusal test still carries a borrowed AC-20260905-05-1 prefix.",
+        "file": "/Users/jj/Projects/claude-plugins/tests/render/render-rules.test.js",
+        "line": 367,
+        "evidence": "`git show 1919908 -- tests/render/render-rules.test.js`: the only change is the test title dropping `AC-20260905-05-1: ` plus a two-line owner comment. `grep -n 'AC-20260905-05-1:'` on the file → exactly one test title, line 337, which asserts `r.status === 1` with the 28% finding (the AC-1 promise). No other test file or script carries the ID."
+      },
+      {
+        "claim": "The owner comment names a host, person, date, or version, or invents a placeholder AC-ID.",
+        "file": "/Users/jj/Projects/claude-plugins/tests/render/render-rules.test.js",
+        "line": 365,
+        "evidence": "Comment text: `// Owner: pass-1 review finding of specs/20260905/05-desktop-fill-render-rule.md — a thresholdless row measured nothing and passed.` — cites a spec path only; no date, person, host, version, or fabricated ID."
+      },
+      {
+        "claim": "The delta weakened an assertion or dropped AC coverage.",
+        "file": "/Users/jj/Projects/claude-plugins/specs/20260905/05-desktop-fill-render-rule.review/legs-3/ac-matrix.txt",
+        "line": 1,
+        "evidence": "`git show 1919908 --stat` → one file, +3/-1, no assert lines touched. Executed `node --test tests/render/render-rules.test.js` → 19 pass, 0 fail. legs-3/ac-matrix.txt: `uncovered=0 oracle=0 preGreen=0 · 0 finding(s)`; promise-sweep: `rows=10 carried=8 sanctioned=2 orphans=0`; gate leg fail 0, suite leg fail 0 with `__FILE_BUDGET_OK__`."
+      },
+      {
+        "claim": "Working tree carries uncommitted changes inside the range.",
+        "file": null,
+        "line": null,
+        "evidence": "`git status --short` → only `?? specs/20260905/06-plugin-owned-capture-at-approval.md`, an untracked sibling spec outside this spec's File Plan; no modified tracked files."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 9000
+  }
+}

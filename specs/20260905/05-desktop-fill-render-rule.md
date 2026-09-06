@@ -1,6 +1,6 @@
 ---
 date: 2026-09-05
-status: implementing
+status: done
 tier: standard
 area: design-render
 design: false
@@ -220,6 +220,19 @@ find the widest viewport (D8 of spec 02 keeps thresholds in the manifest; `minVi
 the same shape `line-length` already uses); severity `warn` (JJ ruled "it should be
 responsive" — a warn would have passed Hearwell again); binding for capture-less hosts in
 this spec (spec 06, own ADR, own risk).
+
+Build deviations (folded at review close, both one-offs): D9's "kind list gains `desktop-fill`"
+met a design.md that carried no explicit renderCheck kind list, so the Render rules pass sentence
+gained one clause naming the kind instead of a new list. The +2 net lines that clause and the
+`data-narrow` mark cost pushed two commands' read-load budgets over by exactly two lines on the
+whole-suite review leg (`/spec:design` 502 > 500, `/spec:init` 972 > 970); per A5 the same
+paragraph was compressed back to net +0 (156 lines), no claim dropped, never a raised cap. Review
+pass 1 also surfaced that a `desktop-fill` manifest row with a missing or non-numeric threshold
+passed validation and measured nothing (exit 0); it is now refused at validation (exit 2, rule id,
+field, expected shape, remedy) — scoped to this kind only; `line-length` keeps its prior shape.
+Canonical Delta note: docs/canonical/design.md had never received `no-overflow`/`line-length`
+into its kind sentence, so the Delta landed those two names beside `desktop-fill`; the mark
+vocabulary lives in that doc's § Mock hygiene and marks, not a "Shell-composed mocks" section.
 
 ## Canonical Delta
 

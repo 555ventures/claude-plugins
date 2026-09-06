@@ -142,3 +142,11 @@ test('AC-20260905-04-1: grep -rn "SPEC_DESIGN_HUB|design-hub" over spec/, tests/
   assert.deepStrictEqual(offenders, [],
     'D1: no command, doctrine, canonical, script, or rules file may mention the retired hub surface outside a tests/ absence pin or the 7.83.0 changelog line — the deleted machine-wide hub must leave no live reference behind: ' + JSON.stringify(offenders, null, 2))
 })
+
+test('themes are composed under the frontend-design skill (7.90.0): /spec:mocks THEME rule, /spec:sketch themed pass, and doctrine § Authoring Rules each bind the skill, and the missing-skill case stops on the install line', () => {
+  const cmd = read('spec/commands/mocks.md')
+  assert.match(cmd, /always runs under the `frontend-design`\nskill/, 'mocks.md THEME rule must bind direction composition to the frontend-design skill — got no such clause')
+  assert.match(cmd, /\/plugin install frontend-design/, 'mocks.md must name the install line for the missing-skill stop — got none')
+  assert.match(read('spec/commands/sketch.md'), /the `frontend-design` skill loaded first/, 'sketch.md themed pass must load the skill first — got no such clause')
+  assert.match(read('spec/doctrine/mocks.md'), /\*\*Themes are composed under the `frontend-design` skill\.\*\*/, 'doctrine § Authoring Rules must carry the rule — got none')
+})

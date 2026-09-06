@@ -1795,7 +1795,7 @@ test('AC-20260905-04-4: design-atlas.js stop decide records/re-decides/refuses-o
 test('atlas card previews clamp to one fixed height (7.89.0): page() ships the .shot max-height clamp, the clip fade, and a __fit that toggles .clip when the scaled mock overflows the cap', () => {
   const { page } = require('../spec/scripts/design-atlas.js')
   const html = page('t', '<div class="grid"></div>')
-  assert.match(html, /\.shot\{position:relative;max-height:var\(--v-shot-max,520px\)\}/,
+  assert.match(html, /\.shot\{position:relative;max-height:var\(--v-shot-max,260px\)\}/,
     'card previews must carry a fixed max-height so a tall mock never makes a tall card — got no .shot clamp')
   assert.match(html, /\.shot\.clip::after\{[^}]*linear-gradient/,
     'the clipped remainder must fade out (a .shot.clip::after gradient) — got none')

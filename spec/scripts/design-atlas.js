@@ -543,7 +543,7 @@ function page(title, bodyHtml, extraHead = '') {
     '.frame{border:0;display:block;transform-origin:0 0;pointer-events:none;background:var(--v-muted-bg);width:100%}\n' +
     // Cards clamp to one fixed preview height (JJ 2026-09-06: a 3000px mock made a 3000px card);
     // the clipped remainder fades out and the click-to-inspect lightbox still shows the full mock.
-    '.shot{position:relative;max-height:var(--v-shot-max,520px)}\n' +
+    '.shot{position:relative;max-height:var(--v-shot-max,260px)}\n' +
     '.shot.clip::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4rem;pointer-events:none;' +
     'background:linear-gradient(to bottom,transparent,var(--v-bg))}\n' +
     '.sect{margin:2rem 0 0}\n' +

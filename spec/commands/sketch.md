@@ -112,7 +112,8 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    `data-state-btn`, `data-contract="none"`, `data-positioned`, `data-narrow` — are documented
    in shared § Design Canon; this is where they get checked, not where they get defined. Then run the
    **expansion pass** (shared § Design Canon: media queries + the
-   tokens dark block, one responsive file, no new taste) on each of the brief's `sketch` mocks,
+   tokens dark block, one responsive file, no new taste; the `frontend-design` skill loaded first,
+   § Mocks: Authoring Rules) on each of the brief's `sketch` mocks,
    run `{atlas} shell sync` on those mocks (a canon change since authoring never blocks
    ratification for a mechanical reason — a drift finding that survives sync is real), then
    run `node {atlas} check --matrix`, and render the matrix screenshots — each declared viewport, each

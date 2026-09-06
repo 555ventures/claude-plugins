@@ -6,6 +6,7 @@ const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { ROOT, SPEC, read, runNode, tmpdir } = require('../helpers')
 const picksLib = require('../../spec/scripts/lib/mocks-picks')
+const { writeFixtureCapture, writeCaptureConfig } = require('../mocks/mocks-driver-fixtures')
 
 // specs/20260824/05-design-doctrine-cut.md D1/D2/D5: spec/doctrine/design.md holds five
 // sections (contracts a script enforces or a worker applies only) capped at 160 lines;
@@ -255,6 +256,7 @@ ${DOC_LABELS[1]} -> ${DOC_LABELS[2]}
   }
   const drawn = docMark(dir, 'journey-drawn', ['--journey', DOC_JOURNEY])
   assert.strictEqual(drawn.status, 0, 'test setup requires journey-drawn to be accepted: ' + drawn.stderr)
+  writeCaptureConfig(dir, writeFixtureCapture(dir))
   decideLook(dir, 'journey-approved:' + DOC_JOURNEY, 'approve', { by: 'jj' })
   const approved = docMark(dir, 'journey-approved', ['--journey', DOC_JOURNEY])
   assert.strictEqual(approved.status, 0, 'test setup requires journey-approved to be accepted: ' + approved.stderr)

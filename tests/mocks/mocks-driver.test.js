@@ -287,6 +287,7 @@ test('AC-20260902-07-6 / AC-20260905-02-18: journey-drawn refuses a missing or n
   const early = mark(dir2, 'journey-approved', ['--journey', JOURNEY])
   assert.strictEqual(early.status, 2, 'journey-approved must refuse before journey-drawn has been recorded, even with a decided approve stop present: ' + early.stdout + early.stderr)
 
+  writeCaptureConfig(dir, writeFixtureCapture(dir))
   decideLook(dir, 'journey-approved:' + JOURNEY, 'approve', { by: 'jj' })
   const approved = mark(dir, 'journey-approved', ['--journey', JOURNEY])
   assert.strictEqual(approved.status, 0, 'journey-approved must be accepted once drawn and the ledger gate is open: ' + approved.stdout + approved.stderr)

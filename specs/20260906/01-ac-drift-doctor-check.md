@@ -1,6 +1,6 @@
 ---
 date: 2026-09-06
-status: hardened
+status: implementing
 tier: standard
 area: doctor
 design: false
@@ -10,6 +10,7 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-06
 open_markers: 0
+diff_base: 2f4affc3db25b38f6c2911a8f64cffbdd7810de8
 ---
 
 # Post-close AC-pin drift as a doctor check (`ac-drift.js`), plus the dead-flag and untested-script sweep

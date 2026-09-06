@@ -45,6 +45,14 @@ const path = require('path')
 
 const CONFIG_RELPATH = '.claude/spec.config.json'
 
+// specs/20260906/01-ac-drift-doctor-check.md D4: the default test-classification glob set,
+// lifted here VERBATIM from scope-reconcile.js's own private `defaultTestGlobs` literal so the new
+// ac-drift.js can classify test files the same way the at-risk leg already does, without a second
+// from-scratch copy of the array. scope-reconcile.js keeps its own local copy for this spec (it is
+// critical-tier; the fold-in is queued for the next spec that touches it) —
+// tests/doctor/ac-drift.test.js's own consistency pin holds the two literals equal until then.
+const DEFAULT_TEST_GLOBS = ['tests/**', 'test/**', '**/*.test.*', '**/*.spec.*', '**/*_test.*']
+
 function configPath(root) { return path.join(root, '.claude', 'spec.config.json') }
 
 // Presence only — never opens, reads, or parses the file. A directory occupying the path
@@ -85,4 +93,7 @@ function declaredForge(root) {
   return capabilities && capabilities.forge
 }
 
-module.exports = { readConfig, readConfigStrict, declaredForge, configPath, configExists, CONFIG_RELPATH }
+module.exports = {
+  readConfig, readConfigStrict, declaredForge, configPath, configExists, CONFIG_RELPATH,
+  DEFAULT_TEST_GLOBS,
+}

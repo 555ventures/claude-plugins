@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict'
-// registry-check.js --menu <file>… [--write] [--base <registry>=<url>]… [--timeout-ms <n>] [--json]
+// registry-check.js --menu <file>… [--write] [--base <registry>=<url>]… [--json]
 //
 // specs/20260825/03-genesis-currency-executed.md: replaces wf-research.js's deleted Haiku "still
 // current?" pass — a fast model asked to opine, never told to pin to release pages, in a year
@@ -61,8 +61,7 @@ function die(code, msg) {
   process.exit(code)
 }
 
-const USAGE = 'registry-check.js --menu <file>… [--write] [--base <registry>=<url>]… ' +
-  '[--timeout-ms <n>] [--json]'
+const USAGE = 'registry-check.js --menu <file>… [--write] [--base <registry>=<url>]… [--json]'
 
 const KNOWN_REGISTRIES = ['npm', 'pypi', 'crates', 'endoflife']
 const DEFAULT_BASES = {
@@ -96,10 +95,6 @@ function parseArgs(argv) {
       opts.write = true
     } else if (a === '--json') {
       opts.json = true
-    } else if (a === '--timeout-ms') {
-      const v = Number(argv[++i])
-      if (!Number.isFinite(v) || v <= 0) die(2, 'usage: ' + USAGE + ' — --timeout-ms needs a positive number')
-      opts.timeoutMs = v
     } else if (a === '--base') {
       const raw = argv[++i]
       const eq = raw ? raw.indexOf('=') : -1

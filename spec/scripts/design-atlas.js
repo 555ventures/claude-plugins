@@ -60,7 +60,7 @@
 //                                                  strip detected chrome and wrap the rest as the
 //                                                  content slot
 //   design-atlas.js stop open  --root <r> --kind pick|approve --key <k> --title <t>
-//                              --candidates <[group/]label=path>[,…] [--question <q>] [--port <n>]
+//                              --candidates <[group/]label=path>[,…] [--port <n>]
 //                                                  specs/20260905/04-per-project-look-server.md D2:
 //                                                  writes the stop (lib/mocks-picks.js) with url
 //                                                  http://localhost:<port>/atlas/index.html#stop-<id>
@@ -541,8 +541,8 @@ function page(title, bodyHtml, extraHead = '') {
     '.shot{overflow:hidden;border-radius:var(--v-radius);background:var(--v-muted-bg);cursor:zoom-in;margin-top:.5rem;' +
     'border:1px solid var(--v-border);box-shadow:inset 0 1px 3px color-mix(in srgb, var(--v-fg) 6%, transparent)}\n' +
     '.frame{border:0;display:block;transform-origin:0 0;pointer-events:none;background:var(--v-muted-bg);width:100%}\n' +
-    // Cards clamp to one fixed preview height (JJ 2026-09-06: a 3000px mock made a 3000px card);
-    // the clipped remainder fades out and the click-to-inspect lightbox still shows the full mock.
+    // Cards clamp to one fixed preview height (a tall mock must never make a tall card — the card is
+    // a thumbnail); the clipped remainder fades out and the click-to-inspect lightbox shows the full mock.
     '.shot{position:relative;max-height:var(--v-shot-max,260px)}\n' +
     '.shot.clip::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4rem;pointer-events:none;' +
     'background:linear-gradient(to bottom,transparent,var(--v-bg))}\n' +
@@ -1601,7 +1601,6 @@ async function cmdStopOpen(args) {
   const key = flagArg(args, '--key')
   const title = flagArg(args, '--title')
   const candidatesArg = flagArg(args, '--candidates')
-  const question = flagArg(args, '--question')
   const port = flagArg(args, '--port') || '4173'
   if (!rootArg) die('stop open: --root <r> is required')
   if (!kind || !['pick', 'approve'].includes(kind)) die('stop open: --kind must be "pick" or "approve"')
@@ -1617,7 +1616,10 @@ async function cmdStopOpen(args) {
   try { stops = picksLib.readPicks(realRoot) } catch (e) { die('stop open: cannot read design/mocks/picks.json under ' + realRoot + ': ' + e.message) }
   let opened
   try {
-    opened = picksLib.openStop(stops, { kind, key, title, question: question != null ? question : null, candidates, url: null })
+    // D8 (specs/20260906/01-ac-drift-doctor-check.md): --question is deleted from the CLI —
+    // lib/mocks-picks.js's openStop() keeps accepting an optional question so picks.json's shape
+    // and its existing pins are untouched; the field is simply always null from this command.
+    opened = picksLib.openStop(stops, { kind, key, title, question: null, candidates, url: null })
   } catch (e) { die('stop open: ' + e.message) }
 
   // D2: the stop is written before it is probed — a failed probe (the common first-look case)

@@ -47,6 +47,7 @@ case "${1:-root}" in
   collision-closure) echo "$ROOT/scripts/collision-closure.js" ;;
   ci-query)       echo "$ROOT/scripts/ci-query.js" ;;
   ci-gate-parity) echo "$ROOT/scripts/ci-gate-parity.js" ;;
+  ac-drift)       echo "$ROOT/scripts/ac-drift.js" ;;
   replay)         echo "$ROOT/scripts/replay.js" ;;
   escape-row)     echo "$ROOT/scripts/escape-row.js" ;;
   fleet-reader)   echo "$ROOT/scripts/fleet-reader.js" ;;
@@ -109,7 +110,7 @@ case "${1:-root}" in
     fi
     ;;
   *)
-    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|design-atlas|components-check|render-gate|render-capture|render-compare|render-inventory|render-rules|registry-check|merge-back|worktree-include|smoke|manifest-check|env-preflight|citations-check|commit-coverage|review-legs|release-legs|review-driver|build-driver|genesis-driver|mocks-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|collision-closure|ci-query|ci-gate-parity|replay|escape-row|fleet-reader|comment-narration|shared|shared-design|shared-for <command>|shared-genesis|shared-mocks|replay-corpus|template|templates|version|contract|contract-hash]" >&2
+    echo "usage: spec-paths [root|workflows|wf-enforce|wf-research|design-atlas|components-check|render-gate|render-capture|render-compare|render-inventory|render-rules|registry-check|merge-back|worktree-include|smoke|manifest-check|env-preflight|citations-check|commit-coverage|review-legs|release-legs|review-driver|build-driver|genesis-driver|mocks-driver|report-render|spec-status|spec-queue|scope-reconcile|init-gen|verdict|ac-matrix|red-check|promise-sweep|collision-closure|ci-query|ci-gate-parity|ac-drift|replay|escape-row|fleet-reader|comment-narration|shared|shared-design|shared-for <command>|shared-genesis|shared-mocks|replay-corpus|template|templates|version|contract|contract-hash]" >&2
     exit 1
     ;;
 esac

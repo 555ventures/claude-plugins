@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict'
-// promise-sweep.js --spec <path> [--manifest <path>] [--json] [--applies-from <YYYYMMDD>]
+// promise-sweep.js --spec <path> [--manifest <path>] [--json]
 //
 // Why (specs/20260817/07-promise-sweep-leg.md D1/D2): the v7 replay eval measured
 // the single reviewer's one systematic miss class — a spec `## Decisions` row that promises
@@ -18,13 +18,14 @@
 // applied retroactively to specs locked before this carrier convention existed, producing 52
 // noise findings that trained bulk-waiving — escape rv_8b7c4e2e9ec0 shipped inside a 17/17-waive
 // review. It now gains an applicability cutoff: spec date = the first `specs/<YYYYMMDD>/` path
-// segment in --spec, compared against built-in `APPLIES_FROM = '20260817'` (the date this
-// convention shipped, specs/20260817/07), overridable via `--applies-from <YYYYMMDD>` (must be 8
-// digits). A pre-cutoff spec skips Decisions enumeration entirely, exits 0 with zero findings, and
-// (with --manifest) appends a distinct `not-applicable` row instead of a swept one. A path with no
-// `specs/<YYYYMMDD>/` segment applies the sweep in full — unchanged, fail-closed behavior every
-// existing tmpdir-based test pin depends on. One parameter, no baseline file, no host config key:
-// the convention's ship date is a plugin fact.
+// segment in --spec, compared against `lib/spec-sections.js`'s exported `V7_APPLIES_FROM`
+// (the date this convention shipped, specs/20260817/07). A pre-cutoff spec skips Decisions
+// enumeration entirely, exits 0 with zero findings, and (with --manifest) appends a distinct
+// `not-applicable` row instead of a swept one. A path with no `specs/<YYYYMMDD>/` segment applies
+// the sweep in full — unchanged, fail-closed behavior every existing tmpdir-based test pin depends
+// on. No override flag, no baseline file, no host config key: the convention's ship date is a
+// plugin fact, shared with ac-drift.js (specs/20260906/01-ac-drift-doctor-check.md D2) instead of
+// each script carrying its own copy.
 //
 // specs/20260820/06-typed-evidence-manifest.md D8/D9: the
 // two rows this script can append to --manifest carry typed JSON objects, not packed strings —
@@ -47,34 +48,26 @@
 // pre-cutoff spec exempted by the applicability cutoff (not-applicable, zero findings) ·
 // 1 = executed, findings emitted (orphan-decision rows — rides the normal review disposition
 // flow, or resolved by hand at plan lock; never a script failure) · 2 = usage error, unreadable
-// --spec, a spec with no `## Decisions` section, or a malformed --applies-from value (not 8
-// digits) (stderr names the remedy).
+// --spec, or a spec with no `## Decisions` section (stderr names the remedy).
 
 const fs = require('fs')
-const { AC_ID_RE_GLOBAL, extractSection } = require('./lib/spec-sections')
-
-const APPLIES_FROM = '20260817'
+const { AC_ID_RE_GLOBAL, extractSection, V7_APPLIES_FROM } = require('./lib/spec-sections')
 
 function usage() {
-  console.error('usage: promise-sweep.js --spec <path> [--manifest <path>] [--json] [--applies-from <YYYYMMDD>]')
+  console.error('usage: promise-sweep.js --spec <path> [--manifest <path>] [--json]')
 }
 
-let specPath = null, manifestPath = null, jsonOut = false, appliesFromArg = null
+let specPath = null, manifestPath = null, jsonOut = false
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
   if (a === '--spec') specPath = argv[++i]
   else if (a === '--manifest') manifestPath = argv[++i]
   else if (a === '--json') jsonOut = true
-  else if (a === '--applies-from') appliesFromArg = argv[++i]
   else { usage(); process.exit(2) }
 }
 if (!specPath) { usage(); process.exit(2) }
-if (appliesFromArg !== null && !/^\d{8}$/.test(appliesFromArg)) {
-  console.error(`promise-sweep: --applies-from must be 8 digits (YYYYMMDD) — got "${appliesFromArg}"`)
-  process.exit(2)
-}
-const appliesFrom = appliesFromArg || APPLIES_FROM
+const appliesFrom = V7_APPLIES_FROM
 
 let specText
 try {

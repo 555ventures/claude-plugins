@@ -103,6 +103,13 @@
 // same discipline `promise-sweep.js` already applies inline to Decision-row citations, now given
 // one exported authority instead of a third from-scratch spelling.
 
+// specs/20260906/01-ac-drift-doctor-check.md D2: the v7 floor date, lifted here from
+// promise-sweep.js's former private `APPLIES_FROM` constant so it and the new ac-drift.js share
+// one literal instead of each carrying its own copy of the date this repo's AC-carrier convention
+// shipped (specs/20260817/07-promise-sweep-leg.md) — two copies of a plugin-wide fact is the
+// identical-literal shape this module's own history (see the header notes above) exists to remove.
+const V7_APPLIES_FROM = '20260817'
+
 // AC-ID shape: full anchored match of `AC-\d{8}-\d{2}[a-z]?-\d+`.
 const AC_ID_RE = /^AC-\d{8}-\d{2}[a-z]?-\d+$/
 const AC_ID_RE_GLOBAL = /AC-\d{8}-\d{2}[a-z]?-\d+/g
@@ -334,6 +341,6 @@ function parseAcBullets(sectionText) {
 }
 
 module.exports = {
-  AC_ID_RE, AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, extractSection, parseAcBullets, acIdOccurs,
-  rejectedTrailingTagDetail,
+  AC_ID_RE, AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, V7_APPLIES_FROM, extractSection, parseAcBullets,
+  acIdOccurs, rejectedTrailingTagDetail, extractTag,
 }

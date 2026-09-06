@@ -1,4 +1,9 @@
 {
+  "spec/scripts/ac-drift.js": {
+    "entryPoints": [
+      "spec/commands/doctor.md"
+    ]
+  },
   "spec/scripts/ac-matrix.js": {
     "entryPoints": [
       "spec/scripts/review-legs.js"

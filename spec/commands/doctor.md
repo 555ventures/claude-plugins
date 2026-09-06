@@ -152,6 +152,12 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     narration finding in the rules layer; under `--fix` each is a line-item patch at the
     repair-mode bar above (before → after: the note rewritten as tag + rule + one owner
     citation — spec path, AC-ID, D-number, ADR, run id — evidence is the finding line itself).
+17. **AC-pin drift** (deterministic, advisory) — run `node "$(spec-paths ac-drift)" --root .`.
+    It re-derives, for every `done` spec dated on or after the v7 cutover, the acceptance
+    criteria no test-classified file cites and no `SHALL CONTINUE TO` / `[oracle:]` /
+    `[pre-green:]` / cited `[retired:]` sanction covers. Each printed row is a finding whose
+    remedy the row names (tag the covering test, or mark the bullet `[retired: <citation>]`);
+    `inapplicable — no specs/` is not a finding.
 
 ## Semantic spot-check — small, bounded
 

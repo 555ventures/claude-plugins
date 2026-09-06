@@ -17,12 +17,21 @@ const { tmpdir, runNode } = require('../helpers')
 // findings that trained bulk-waiving, which shipped escape rv_8b7c4e2e9ec0 inside a
 // 17/17-waive review): the sweep applied retroactively to specs locked
 // before the carrier convention existed. It now gains an applicability cutoff — spec date = the
-// first `specs/<YYYYMMDD>/` path segment, compared against built-in `APPLIES_FROM = '20260817'`
+// first `specs/<YYYYMMDD>/` path segment, compared against `V7_APPLIES_FROM = '20260817'`
 // (the date specs/20260817/07 shipped the convention). A pre-cutoff spec exits 0 with zero
 // findings and (with --manifest) appends a distinct `not-applicable` row instead of sweeping —
 // even a spec whose Decisions carry a genuinely uncarried row. A path with no dated segment
 // applies the sweep in full (fail-closed, unchanged behavior) — AC-20260817-07-2's tmpdir-based
 // fixture below already pins that default and is retagged accordingly.
+//
+// specs/20260906/01-ac-drift-doctor-check.md D2 (AC-20260906-01-10): the local
+// `APPLIES_FROM` constant lifts to `lib/spec-sections.js` as the exported `V7_APPLIES_FROM`,
+// shared with the new `ac-drift.js`. promise-sweep.js's not-applicable behaviour stays
+// byte-unchanged (a SHALL CONTINUE TO pin, retagging AC-20260820-03-7 below). AC-10's two NEW
+// promises — the `V7_APPLIES_FROM` export equality and the `--applies-from` unknown-flag refusal —
+// are pinned in tests/consistency/retired-flags.test.js: this file is green-expected on the
+// pre-image (its only own-spec AC is a SHALL CONTINUE TO pin) and a red assertion here is a
+// broken-pin finding under red-check.js.
 //
 // specs/20260820/06-typed-evidence-manifest.md D1/D9 (brief 16's second move): every
 // manifest row's `observed` field becomes a typed JSON object — promise-sweep's counted row
@@ -291,7 +300,7 @@ test('AC-20260817-07-8: --manifest <path> appends exactly one promise-sweep JSON
     `ahead of it, which this assertion does not constrain) — got ${JSON.stringify(resNoManifest.stdout)}`)
 })
 
-test('AC-20260820-03-7: a spec whose path\'s dated segment predates the cutoff (specs/20260701/...) exits 0 with zero findings even though its lone Decisions row is uncarried, stdout naming "not-applicable spec=20260701 appliesFrom=20260817"', () => {
+test('AC-20260820-03-7 (SHALL CONTINUE TO, retagged AC-20260906-01-10): a spec whose path\'s dated segment predates the cutoff (specs/20260701/...) exits 0 with zero findings even though its lone Decisions row is uncarried, stdout naming "not-applicable spec=20260701 appliesFrom=20260817"', () => {
   const dir = tmpdir('ps-cutoff')
   const specDir = path.join(dir, 'specs', '20260701')
   fs.mkdirSync(specDir, { recursive: true })
@@ -303,9 +312,9 @@ test('AC-20260820-03-7: a spec whose path\'s dated segment predates the cutoff (
   const manifest = writeManifest(dir, [])
   const res = run(spec, manifest)
   assert.strictEqual(res.status, 0,
-    `D5: a spec dated before APPLIES_FROM (20260817) must exit 0 with zero findings regardless of an ` +
-    `uncarried Decisions row — retroactive application to pre-convention specs is the exact defect that ` +
-    `trained bulk-waiving and shipped escape rv_8b7c4e2e9ec0 (stderr: ${res.stderr})`)
+    `D5: a spec dated before V7_APPLIES_FROM (20260817, lib/spec-sections.js) must exit 0 with zero findings ` +
+    `regardless of an uncarried Decisions row — retroactive application to pre-convention specs is the exact ` +
+    `defect that trained bulk-waiving and shipped escape rv_8b7c4e2e9ec0 (stderr: ${res.stderr})`)
   assert.match(res.stdout, /not-applicable spec=20260701 appliesFrom=20260817/,
     `D5: stdout must contain the literal "not-applicable spec=20260701 appliesFrom=20260817" so a caller ` +
     `reading console output (not just the manifest) can tell a genuinely-swept clean spec from one the ` +

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict'
-// render-gate.js (--spec <spec.md> | --mocks <mock>…) [--root <dir>] [--out <dir>] [--json] [--no-boot]
+// render-gate.js (--spec <spec.md> | --mocks <mock>…) [--root <dir>] [--out <dir>] [--json]
 //
 // WHY: specs/20260824/01-render-gate.md (ADR-0002) — the render gate's driver. Two
 // host spikes measured that fidelity between a mock and its built component can only be
@@ -103,7 +103,7 @@ function flagVals(name) {
 const specPath = flagVal('--spec')
 const mocksArgVals = flagVals('--mocks')
 if (!specPath && !mocksArgVals.length) {
-  die(2, 'usage: render-gate.js (--spec <spec.md> | --mocks <mock>…) [--root <dir>] [--out <dir>] [--json] [--no-boot]')
+  die(2, 'usage: render-gate.js (--spec <spec.md> | --mocks <mock>…) [--root <dir>] [--out <dir>] [--json]')
 }
 if (specPath && mocksArgVals.length) {
   die(2, 'render-gate.js takes exactly one of --spec or --mocks, not both')
@@ -111,7 +111,6 @@ if (specPath && mocksArgVals.length) {
 const mode = specPath ? 'spec' : 'mocks'
 const root = path.resolve(flagVal('--root') || process.cwd())
 const asJson = argv.includes('--json')
-const noBoot = argv.includes('--no-boot')
 const outFlag = flagVal('--out')
 
 let designSource = null
@@ -331,7 +330,7 @@ function probeReady(cmd) {
 async function ensureReady() {
   if (!renderConfig || !renderConfig.ready) return // Behavior: neither ready nor boot declared -> assume up
   if (probeReady(renderConfig.ready)) return
-  if (renderConfig.boot && !noBoot) {
+  if (renderConfig.boot) {
     bootChild = spawn('bash', ['-c', renderConfig.boot], { cwd: root, detached: true, stdio: 'ignore' })
     bootChild.unref()
   }

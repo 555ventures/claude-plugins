@@ -56,13 +56,8 @@ rule): once ≥2 directions are composed, `stop open theme` opens a pick stop an
 theme-picked` accepts once it is decided, appending the `theme` row itself (`rejected` = the
 other directions).
 
-Every authoring step of this command — shapes, wireframes, theme directions, skins — runs under
-the `frontend-design` skill (invoke it via the Skill tool before the first screen or token is
-written; the skill is the plugin's standing source of visual-design instruction, not a menu the
-session consults only when stuck). If the skill is not installed, print ONE warning line —
-`⚠️ frontend-design skill not installed — authoring without it; install: /plugin install
-frontend-design` — and continue; never stop the run on it, never omit the warning (JJ,
-2026-09-06: "use it in both, but if not active, give me a warning").
+Every authoring step block the driver prints carries the `frontend-design` skill line; act on it
+before the first edit (§ Mocks: Authoring Rules — the one binding home).
 
 ## Look rule
 

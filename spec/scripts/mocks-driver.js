@@ -3,6 +3,8 @@
 // mocks-driver.js --root <dir> --mark <mark> [--journey <j>] [--direction <k>] [--shape <k>] [--decider "<name>"]
 // mocks-driver.js --root <dir> --reopen journey:<j>|shapes|theme
 // mocks-driver.js --root <dir> ledger (add|set|catch|check|counts) [flags]
+// mocks-driver.js --root <dir> ledger add --id <i> --step <s> --kind <k> --claim <c> [--tag <t>]
+//                              [--status <st>] [--rejected <r>] [--dependents <d>] [--note <n>]
 // mocks-driver.js --root <dir> notes open
 // mocks-driver.js --root <dir> notes address --id <id> --change "<what changed>" [--ledger <rowId>]
 // mocks-driver.js --root <dir> notes reply --id <id> --text "<question back>"
@@ -1140,6 +1142,7 @@ function openRowsLine() {
   return 'open product rows: ' + open.length + ' (' + open.map((r) => r.id + ' ' + r.tag).join(', ') + ')'
 }
 
+const AUTHORING_STATES = new Set(['SHAPES', 'WIREFRAMES', 'THEME', 'SKIN'])
 function printStepBlock(state, title, readOnlyList, doctrineSection, progressLine, thenLines) {
   const lines = []
   lines.push('[mocks-driver] state: ' + state + '  root: ' + root)
@@ -1148,6 +1151,7 @@ function printStepBlock(state, title, readOnlyList, doctrineSection, progressLin
   lines.push('## Step: ' + title)
   lines.push('Read only: ' + readOnlyList.join(', '))
   lines.push('Doctrine: spec/doctrine/mocks.md § ' + doctrineSection)
+  if (AUTHORING_STATES.has(state)) lines.push(skillLine())
   if (progressLine) lines.push(progressLine)
   lines.push('Then:')
   for (const t of thenLines) lines.push('  ' + t)
@@ -1293,9 +1297,36 @@ function doBareStep() {
 }
 
 // ---------------------------------------------------------------------------
+// frontend-design skill check (doctrine/mocks.md § Mocks: Authoring Rules). Every authoring
+// step block carries skillLine(); `skill-check` prints it alone (sketch's setup runs it). Never
+// blocks: exit 0 on every outcome. Probe: `claude plugin list --json` (same read as
+// init-gen.js probe D7); the CLI absent or unparseable is reported, never guessed installed.
+// ---------------------------------------------------------------------------
+function probeSkill() {
+  const r = spawnSync('claude', ['plugin', 'list', '--json'], { encoding: 'utf8' })
+  if (r.error) return { unavailable: 'no-claude-cli' }
+  let rows
+  try { rows = JSON.parse(r.stdout) } catch { return { unavailable: 'unparseable-plugin-list' } }
+  if (!Array.isArray(rows)) return { unavailable: 'unparseable-plugin-list' }
+  const row = rows.find((x) => x && typeof x.id === 'string' && x.id.split('@')[0] === 'frontend-design')
+  if (!row) return { installed: false }
+  return { installed: true, enabled: row.enabled !== false }
+}
+function skillLine() {
+  const p = probeSkill()
+  if (p.installed && p.enabled) return '🎨 Load the `frontend-design` skill (Skill tool) before the first edit — every mock is authored under it'
+  if (p.installed) return '⚠️ frontend-design skill installed but disabled — authoring without it; enable: /plugin (toggle frontend-design)'
+  if (p.unavailable) return '⚠️ frontend-design skill could not be verified (' + p.unavailable + ') — load it via the Skill tool if present; install: /plugin install frontend-design'
+  return '⚠️ frontend-design skill not installed — authoring without it; install: /plugin install frontend-design'
+}
+function cmdSkillCheck() { writeOut(1, skillLine() + '\n'); process.exit(0) }
+
+// ---------------------------------------------------------------------------
 // Dispatch.
 // ---------------------------------------------------------------------------
-if (rest[0] === 'ledger') {
+if (rest[0] === 'skill-check') {
+  cmdSkillCheck()
+} else if (rest[0] === 'ledger') {
   cmdLedger(rest[1], rest.slice(2))
 } else if (rest[0] === 'notes') {
   cmdNotes(rest[1], rest.slice(2))

@@ -10,11 +10,9 @@ its surfaces get mocks, the user brainstorms on them — add, remove, change rad
 applied change lands in its binding home *in the same round*, so `/spec:plan` on that brief later
 reads files that are already true. Sits between the roadmap (genesis-authored or hand-authored)
 and `/spec:plan`; owns no spec state and never edits `specs/**`. Every mock this command
-authors or reworks — first draft, brainstorm round, themed pass — is authored under the
-`frontend-design` skill (Skill tool, before the first edit; § Mocks: Authoring Rules); when the
-skill is not installed, print ONE warning line (`⚠️ frontend-design skill not installed —
-authoring without it; install: /plugin install frontend-design`) and continue. This is the seat
-where each surface's UI/UX is argued individually, so the skill's critique is the point. `/spec:atlas` remains the
+authors or reworks is authored under the `frontend-design` skill (§ Mocks: Authoring Rules):
+at setup run `node {driver} skill-check`, print its line verbatim, and act on it before the
+first edit. `/spec:atlas` remains the
 whole-product map; this command is the per-brief workbench — the atlas's annotation triage
 (shared § Design Atlas) applies here verbatim, plus the architecture route below.
 

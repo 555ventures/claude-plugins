@@ -541,6 +541,11 @@ function page(title, bodyHtml, extraHead = '') {
     '.shot{overflow:hidden;border-radius:var(--v-radius);background:var(--v-muted-bg);cursor:zoom-in;margin-top:.5rem;' +
     'border:1px solid var(--v-border);box-shadow:inset 0 1px 3px color-mix(in srgb, var(--v-fg) 6%, transparent)}\n' +
     '.frame{border:0;display:block;transform-origin:0 0;pointer-events:none;background:var(--v-muted-bg);width:100%}\n' +
+    // Cards clamp to one fixed preview height (JJ 2026-09-06: a 3000px mock made a 3000px card);
+    // the clipped remainder fades out and the click-to-inspect lightbox still shows the full mock.
+    '.shot{position:relative;max-height:var(--v-shot-max,520px)}\n' +
+    '.shot.clip::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4rem;pointer-events:none;' +
+    'background:linear-gradient(to bottom,transparent,var(--v-bg))}\n' +
     '.sect{margin:2rem 0 0}\n' +
     '.sect>h2{font-size:17px;margin:0 0 .75rem;padding:.1rem 0 .1rem .7rem;border-left:4px solid var(--v-primary);display:flex;align-items:baseline;flex-wrap:wrap;gap:.5em}\n' +
     '.sect>h2 .count{color:var(--v-muted);font-size:12px;font-weight:500;border:1px solid var(--v-border);border-radius:99px;padding:0 .6em;background:var(--v-bg)}\n' +
@@ -602,9 +607,10 @@ function page(title, bodyHtml, extraHead = '') {
     '</style>' + extraHead + '</head><body>\n' + bodyHtml + '\n</body></html>\n'
 }
 
-// Always-on page behavior: wrap each frame in a .shot, size it to the mock's FULL content height
-// (same-origin measurement when served; falls back to the declared device height on file://),
-// scale to the card width, and open the click-to-inspect lightbox. No scrollbars in cards, ever.
+// Always-on page behavior: wrap each frame in a .shot, measure the mock's FULL content height
+// (same-origin when served; falls back to the declared device height on file://), scale to the
+// card width, clamp the card to one fixed preview height (the rest fades; the lightbox shows all),
+// and open the click-to-inspect lightbox. No scrollbars in cards, ever.
 const UI_SCRIPT = '<script>\n' +
   'function __full(src){return String(src||"").replace(/[?&]clean$/,"")}\n' +
   'function __sel(btn,attr){document.querySelectorAll("button["+attr+"]").forEach(function(b){b.classList.toggle("on",b===btn)})}\n' +
@@ -614,7 +620,8 @@ const UI_SCRIPT = '<script>\n' +
   'var w=+f.dataset.w||390,cw=s.clientWidth||w;f.style.width=w+"px";' +
   'var h=__measure(f)||+f.dataset.h||844;f.style.height=h+"px";' +
   'var sc=Math.min(1,cw/w);f.style.transform="scale("+sc+")";f.style.margin=sc<1?"0":"0 auto";' +
-  's.style.height=Math.round(h*sc)+"px"}\n' +
+  'var full=Math.round(h*sc),cap=parseInt(getComputedStyle(s).maxHeight)||full;' +
+  's.style.height=Math.min(full,cap)+"px";s.classList.toggle("clip",full>cap)}\n' +
   'function __fitAll(){document.querySelectorAll("iframe.frame").forEach(function(f){__still(f);__fit(f)})}\n' +
   // Grid mocks pause every CSS animation (infinite pulse/shimmer loops across ~20 iframes burn
   // 25%+ renderer CPU at idle); the lightbox iframe is separate and stays live.

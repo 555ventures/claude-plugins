@@ -362,7 +362,9 @@ test('AC-20260905-05-1: a desktop-fill rule (minFraction 0.5, minViewport 1024) 
     'a desktop-fill finding must fail the run, or a phone-width column centred on a desktop viewport ratifies clean — the exact Hearwell escape this spec exists to close: ' + r.stderr)
 })
 
-test('AC-20260905-05-1: a thresholdless desktop-fill row is refused at validation, never silently green', () => {
+// Owner: pass-1 review finding of specs/20260905/05-desktop-fill-render-rule.md — a
+// thresholdless row measured nothing and passed.
+test('a thresholdless desktop-fill row is refused at validation, never silently green', () => {
   const entries = [
     mkEntry({ text: 'Client shell body', box: { x: 522, y: 0, w: 396, h: 20 } }),
     mkEntry({ text: 'Client shell footer', box: { x: 522, y: 100, w: 200, h: 20 } }),

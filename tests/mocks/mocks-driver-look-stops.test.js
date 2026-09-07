@@ -280,14 +280,53 @@ test('AC-20260906-04-9: stop open theme SHALL CONTINUE TO write the atlas URL (n
   try {
     serveChild = await startServe(dir, port)
     const r = runNode(SCRIPT, ['--root', dir, 'stop', 'open', 'theme', '--port', String(port)])
-    assert.strictEqual(r.status, 0, 'AC-8: stop open theme must exit 0 once 2+ directions are composed: ' + r.stdout + r.stderr)
+    assert.strictEqual(r.status, 0, 'AC-9: stop open theme must exit 0 once 2+ directions are composed: ' + r.stdout + r.stderr)
     const lines = r.stdout.split('\n').filter((l) => l.trim() !== '')
-    assert.match(lines[0], /atlas\/index\.html#stop-P\d+$/, 'AC-8: stop open theme must CONTINUE TO write/print the atlas URL, never a review-page URL: got ' + JSON.stringify(lines[0]))
+    assert.match(lines[0], /atlas\/index\.html#stop-P\d+$/, 'AC-9: stop open theme must CONTINUE TO write/print the atlas URL, never a review-page URL: got ' + JSON.stringify(lines[0]))
     const stops = JSON.parse(fs.readFileSync(path.join(dir, 'design/mocks/picks.json'), 'utf8'))
     const themeStop = stops.find((s) => s.key === 'theme-picked')
-    assert.match(themeStop.url, /atlas\/index\.html#stop-/, 'AC-8: the theme stop\'s recorded url must CONTINUE TO be the atlas URL: got ' + JSON.stringify(themeStop.url))
+    assert.match(themeStop.url, /atlas\/index\.html#stop-/, 'AC-9: the theme stop\'s recorded url must CONTINUE TO be the atlas URL: got ' + JSON.stringify(themeStop.url))
   } finally {
     if (serveChild) await stopServe(serveChild)
+  }
+})
+
+// ---------------------------------------------------------------------------
+// review fix round F4 (AC-20260906-04-3): `look --port` prefers design-atlas.js's own `?state=`
+// injection on the served mock over the file:// sibling-with-injected-script path.
+// ---------------------------------------------------------------------------
+test('AC-20260906-04-3: mocks-driver.js look <label> --state <s> --port <p> screenshots the served URL (design-atlas.js\'s own ?state= injection, D2) and never creates the .look-<label>.html sibling; without --port the sibling path is used exactly as before', async () => {
+  const dir = tmpdir('mocks-driver-look-port')
+  advanceToShortJourneyDrawn(dir, 'onboarding', ['signin', 'invite'])
+  const port = await freePort()
+  const siblingPath = path.join(dir, 'design/mocks/.look-signin.html')
+  const outPath = path.join(dir, 'design/mocks/.looks/signin.empty.png')
+  let serveChild = null
+  try {
+    serveChild = await startServe(dir, port)
+    const r = runNode(SCRIPT, ['--root', dir, 'look', 'signin', '--state', 'empty', '--port', String(port)])
+    assert.ok(!fs.existsSync(siblingPath), 'F4: look --port must never create the file:// sibling .look-signin.html: ' + JSON.stringify(r))
+    if (r.status === 0) {
+      assert.ok(fs.existsSync(outPath), 'F4: look --port must write the screenshot once playwright succeeds: ' + r.stdout + r.stderr)
+    } else {
+      assert.strictEqual(r.status, 2, 'a failed look must CONTINUE TO exit 2 on the existing playwright-failure remedy path: ' + r.stdout + r.stderr)
+      assert.match(r.stderr, new RegExp('http://localhost:' + port + '/mocks/signin\\.html\\?clean&state=empty'),
+        'F4: the failure remedy must name the SERVED url (?clean&state=empty) once --port is given, never a sibling file: ' + JSON.stringify(r.stderr))
+    }
+  } finally {
+    if (serveChild) await stopServe(serveChild)
+  }
+
+  const dir2 = tmpdir('mocks-driver-look-noport')
+  advanceToShortJourneyDrawn(dir2, 'onboarding', ['signin', 'invite'])
+  const r2 = runNode(SCRIPT, ['--root', dir2, 'look', 'signin', '--state', 'empty'])
+  if (r2.status === 0) {
+    assert.ok(!fs.existsSync(path.join(dir2, 'design/mocks/.look-signin.html')),
+      'without --port, once playwright succeeds the sibling must still be cleaned up exactly as before: ' + JSON.stringify(r2))
+  } else {
+    assert.strictEqual(r2.status, 2, 'a failed look without --port must CONTINUE TO exit 2 on the existing remedy path: ' + r2.stdout + r2.stderr)
+    assert.match(r2.stderr, /file:\/\/.*\.look-signin\.html/,
+      'without --port the failure remedy must CONTINUE TO name the file:// sibling target, unchanged: ' + JSON.stringify(r2.stderr))
   }
 })
 

@@ -2164,6 +2164,10 @@ test('AC-20260906-04-3/AC-20260906-04-10: GET /mocks/signin.html?clean&state=emp
   const bodyHtml = '<main data-screen-label="signin" data-status="sketch"><button data-state-btn="empty">empty</button>signin</main>\n'
   fs.writeFileSync(path.join(dir, 'design/mocks/signin.html'), bodyHtml)
   const clickScript = '<script>document.addEventListener(\'DOMContentLoaded\',function(){var b=document.querySelector(\'[data-state-btn="empty"]\');if(b)b.click()})</script>'
+  // review fix round F1: a real <body>…</body> mock — the bodyless fixture above can't tell
+  // "click script inserted before </body>" from "appended after the notes tag and </html>".
+  const withBodyHtml = '<html><body data-screen-label="withbody" data-status="sketch"><button data-state-btn="empty">empty</button>wb</body></html>'
+  fs.writeFileSync(path.join(dir, 'design/mocks/withbody.html'), withBodyHtml)
 
   await withHandler(dir, '', async ({ get }) => {
     const clean = await get('/mocks/signin.html?clean&state=empty')
@@ -2182,6 +2186,28 @@ test('AC-20260906-04-3/AC-20260906-04-10: GET /mocks/signin.html?clean&state=emp
     assert.strictEqual(plain.status, 200, 'test setup requires the plain (no state) request to 200: got ' + plain.status)
     assert.strictEqual(plain.body, bodyHtml + '<meta name="notes-scope" content="mock">\n<script src="/__notes/notes.js"></script>\n',
       'AC-3: with no state param the server must CONTINUE TO serve the exact bytes it serves today (mock bytes plus the notes-layer injection, no click script): got ' + JSON.stringify(plain.body))
+
+    // review fix round F1: on a mock with a real </body>, the click script must land BEFORE the
+    // notes meta/script tag AND before </body> — not after the notes tag and </html>.
+    const withBody = await get('/mocks/withbody.html?state=empty')
+    assert.strictEqual(withBody.status, 200, 'test setup requires ?state=empty (no clean) on a real <body> mock to 200: got ' + withBody.status)
+    const wbClickIdx = withBody.body.indexOf(clickScript)
+    const wbNotesIdx = withBody.body.indexOf('<meta name="notes-scope"')
+    const wbBodyEndIdx = withBody.body.indexOf('</body>')
+    assert.ok(wbClickIdx !== -1 && wbNotesIdx !== -1 && wbBodyEndIdx !== -1,
+      'F1: the click script, the notes tag, and </body> must all be present: got ' + JSON.stringify(withBody.body))
+    assert.ok(wbClickIdx < wbNotesIdx && wbNotesIdx < wbBodyEndIdx,
+      'F1: order must be mock body -> click script -> notes meta/script -> </body>: click ' + wbClickIdx + ', notes ' + wbNotesIdx + ', </body> ' + wbBodyEndIdx + ' — got ' + JSON.stringify(withBody.body))
+
+    // review fix round F5: a state value carrying a quote (here URL-decoded to x'y) must never be
+    // interpolated into the injected script's selector literal — it serves as if absent instead
+    // of producing a syntactically broken <script>.
+    const badState = await get('/mocks/signin.html?clean&state=x%27y')
+    assert.strictEqual(badState.status, 200, 'test setup requires ?clean&state=x%27y to 200: got ' + badState.status)
+    assert.strictEqual(badState.body, bodyHtml, 'F5: an invalid state (x\'y) must serve the plain mock bytes with no injected <script>: got ' + JSON.stringify(badState.body))
+
+    const goodStateStillClean = await get('/mocks/signin.html?clean&state=empty')
+    assert.strictEqual(goodStateStillClean.body, bodyHtml + clickScript, 'F5: a valid state (empty) must remain byte-identical to the pinned literal: got ' + JSON.stringify(goodStateStillClean.body))
   })
 })
 
@@ -2392,6 +2418,13 @@ test('AC-20260906-04-6: review.browser.js under vm over the builder\'s own marku
   assert.ok(typeof answerBody.by === 'string' && answerBody.by, 'AC-6: the answer POST body must carry a non-empty "by": got ' + JSON.stringify(answerBody))
   const n002Row = document.querySelector('[data-rv="row"][data-id="N002"]')
   assert.ok(n002Row.hidden, 'AC-6: "y" must remove the answered row from the Open filter (hidden): got hidden=' + n002Row.hidden)
+  // review fix round (F2): the artboard badge is the screen's OPEN count and tracks the rail after an answer
+  const homeBadge = document.querySelector('[data-rv="board"][data-label="home"] [data-rv="badge"]')
+  const homeCount = document.querySelector('[data-rv="count"][data-screen="home"]')
+  assert.ok(homeBadge && homeCount, 'test setup requires a badge on the home board and a rail count for home')
+  assert.strictEqual(homeBadge.textContent, '0', 'AC-6 / D3: after "y" answers the only open item on home, its caption badge must read the open count 0 — a stale badge contradicts the rail: got ' + homeBadge.textContent)
+  assert.ok(homeBadge.hasAttribute('data-zero'), 'AC-6 / D3: a badge at zero open items must carry data-zero so it stops rendering in the open-doubt style')
+  assert.strictEqual(homeCount.textContent, '0', 'AC-6: the rail count for home must read 0 after its only open item is answered: got ' + homeCount.textContent)
 
   const n001Row = document.querySelector('[data-rv="row"][data-id="N001"]')
   fireKey('n')
@@ -2436,4 +2469,27 @@ test('AC-20260906-04-6: review.browser.js under vm over the builder\'s own marku
     { scope: 'project', screen: null, state: null, reason: 'wrong-direction', text: 'the flow contradicts the sketch' },
     'AC-6: Send with scope "Whole project" and chip "Wrong direction" must POST /__notes/add {scope:"project", screen:null, state:null, reason:"wrong-direction", text, by}: got ' + JSON.stringify(addBody))
   assert.ok(typeof addBody.by === 'string' && addBody.by, 'AC-6: the add POST body must carry a non-empty "by": got ' + JSON.stringify(addBody))
+
+  // review fix round (F3): the look stop's URL ends in #stop-<id>, whose target lives inside the
+  // sticky bar — the fragment jump would scroll the bar out of place, so the script pins the page
+  // back to the top at load, and only when such a hash is present.
+  function loadWithHash(hash) {
+    const scrolls = []
+    const { document: doc } = parseFlatDom(html)
+    const sb = {
+      location: { pathname: '/review/onboarding.html', hash },
+      document: doc,
+      window: { prompt: () => { throw new Error('no prompt at load') }, addEventListener() {} },
+      localStorage: { getItem: () => 'jj', setItem() {} },
+      fetch() { return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }) },
+      scrollTo(x, y) { scrolls.push([x, y]) },
+      URLSearchParams,
+      console,
+    }
+    vm.createContext(sb)
+    vm.runInContext(src, sb)
+    return scrolls
+  }
+  assert.deepStrictEqual(loadWithHash('#stop-P001'), [[0, 0]], 'F3: opening the page at #stop-<id> must scroll back to (0,0) once at load — otherwise the sticky bar is pushed down and the first caption and key legend are clipped')
+  assert.deepStrictEqual(loadWithHash(''), [], 'F3: with no #stop- hash the script must not scroll at all — an unconditional scrollTo would fight the user\'s own scroll position on a reload')
 })

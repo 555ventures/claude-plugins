@@ -52,6 +52,15 @@
   pre-existing quirk, not something D2 introduces. AC-20260906-04-10's "CONTINUES TO serve the
   exact bytes served today" pins the no-blank-line form; changed the fallback to `html + tag` (no
   forced newline) to match. No other test exercises this branch's exact bytes.
+- Scripts worker, review fix round (spec/scripts/design-atlas.js, F4 test only): the new F4 pin
+  found that `cmdLook`'s existing (pre-F4) failure path calls `die()`, which `process.exit()`s
+  synchronously — a pending `try/finally` cleanup of the `.look-<label>.html` sibling never runs
+  when the child dies before a screenshot is taken (verified: on this machine `npx playwright`
+  reports installed but the chromium binary itself is missing, so the failure path is the one
+  actually exercised). Pre-existing at HEAD, unrelated to F1/F4/F5's own asks; not fixed in
+  application code (out of scope for this round) — the new test tolerates either the success
+  path (sibling cleaned) or the failure path (sibling may remain, remedy names the file:// target)
+  instead of asserting cleanup unconditionally.
 - Scripts worker — found, not fixed (tests/mocks/mocks-driver-look-stops.test.js,
   AC-20260905-04-5, outside this spec's File Plan): that pre-existing test opens
   `stop open journey:onboarding` and asserts the printed/persisted URL matches

@@ -1288,11 +1288,30 @@ function injectNotesScript(html, scope, prefix) {
 }
 
 // specs/20260906/04-journey-review-page.md D2: the exact literal mocks-driver.js's `look --state`
-// already injects for the file:// path — one mechanism, two entry points. Appended after the mock
-// body and BEFORE the notes-layer injection (never after — D2's ordering AC).
+// already injects for the file:// path — one mechanism, two entry points. Inserted before the
+// last `</body>` (appended when absent — the same rule injectNotesScript uses), THEN
+// injectNotesScript runs, so the order on disk is: mock body, click script, notes meta/script,
+// </body> (never after — review fix round F1's ordering AC).
 function stateClickScript(state) {
   return '<script>document.addEventListener(\'DOMContentLoaded\',function(){var b=document.querySelector(\'[data-state-btn="' +
-    String(state).replace(/"/g, '&quot;') + '"]\');if(b)b.click()})</script>'
+    state + '"]\');if(b)b.click()})</script>'
+}
+
+// review fix round F1: insert before the last `</body>`, append at the end when none — shared
+// with injectNotesScript's own placement rule so the two injections never straddle it.
+function insertBeforeBodyEnd(html, snippet) {
+  const idx = html.lastIndexOf('</body>')
+  if (idx === -1) return html + snippet
+  return html.slice(0, idx) + snippet + html.slice(idx)
+}
+
+// review fix round F5: a `state` value is only ever interpolated into the click script's
+// double-quoted attribute-selector literal when it is exactly [A-Za-z0-9_-]+ — a state carrying a
+// quote or backslash (e.g. `?state=x%27y`) would otherwise break out of the selector and produce
+// a syntactically broken injected script. An invalid state serves as if the param were absent
+// (never a 400 — ?state is advisory tooling, not a contract).
+function validState(raw) {
+  return raw && /^[A-Za-z0-9_-]+$/.test(raw) ? raw : null
 }
 
 // D2's POST body reader — a malformed (non-JSON) body rejects; an empty body reads as {}.
@@ -1562,8 +1581,9 @@ function createRequestHandler(root, opts = {}) {
       const ext = path.extname(resolved)
       const contentType = MIME[ext] || 'application/octet-stream'
       if (ext === '.html') {
-        const state = urlObj.searchParams.get('state')
-        let body = data.toString('utf8') + (state ? stateClickScript(state) : '')
+        const state = validState(urlObj.searchParams.get('state'))
+        let body = data.toString('utf8')
+        if (state) body = insertBeforeBodyEnd(body, stateClickScript(state))
         if (!urlObj.searchParams.has('clean')) body = injectNotesScript(body, 'mock', prefix)
         res.writeHead(200, { 'content-type': contentType, 'cache-control': 'no-store' })
         res.end(body)

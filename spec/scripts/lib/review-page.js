@@ -131,8 +131,10 @@ function renderBoard(screen, i, vp, prefix, openCount, itemCount, focused) {
     '" src="' + frameSrc(prefix, label, k === 0 ? null : s) + '"></iframe>').join('')
   return '<section class="rv-board" data-rv="board" data-label="' + esc(label) + '" id="board-' + esc(label) + '"' + (focused ? ' data-focus' : '') + '>' +
     '<header class="rv-cap"><h3>' + (i + 1) + '. ' + esc(label) + '</h3>' +
-    '<button type="button" class="rv-badge" data-rv="badge" data-label="' + esc(label) + '"' + (itemCount ? '' : ' data-zero') +
-    ' title="' + openCount + ' open of ' + itemCount + ' on this screen">' + itemCount + '</button>' +
+    // D3: the badge is the screen's OPEN count (the title carries the total); review.browser.js
+    // keeps it in step with the rail after every answer.
+    '<button type="button" class="rv-badge" data-rv="badge" data-label="' + esc(label) + '"' + (openCount ? '' : ' data-zero') +
+    ' title="' + openCount + ' open of ' + itemCount + ' on this screen">' + openCount + '</button>' +
     '<button type="button" class="rv-addnote" data-rv="addnote" data-label="' + esc(label) + '">+ note</button></header>' +
     '<div class="rv-tabs" role="tablist" aria-label="States of ' + esc(label) + '">' + tabsHtml + '</div>' +
     '<div class="rv-shot" data-rv="shot" style="--rv-w:' + vp.width + ';--rv-h:' + vp.height + '">' + framesHtml + '</div></section>'

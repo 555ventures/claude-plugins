@@ -10,7 +10,7 @@
 // mocks-driver.js --root <dir> notes open
 // mocks-driver.js --root <dir> notes address --id <id> --change "<what changed>" [--ledger <rowId>]
 // mocks-driver.js --root <dir> notes reply --id <id> --text "<question back>"
-// mocks-driver.js --root <dir> look <label> [--state <s>] [--out <png>]
+// mocks-driver.js --root <dir> look <label> [--state <s>] [--out <png>] [--port <n>]
 // mocks-driver.js --root <dir> look-probe | look-via <playwright|browser>
 // mocks-driver.js --root <dir> stop open <step> [--port <n>]   shapes | journey:<j> | theme | signoff
 // mocks-driver.js --root <dir> stop decide <P…> --verdict pick|approve|change [--pick <g>] [--note <n>] --by <who>
@@ -1215,31 +1215,44 @@ function cmdLookVia(mode) {
   writeOut(1, 'look-via: recorded "' + mode + '"\n')
   process.exit(0)
 }
+// specs/20260906/04-journey-review-page.md D2 (review fix round F4): `--port <n>` prefers the
+// served URL's `?state=` (design-atlas.js's own state injection, D2) over this command's own
+// file:// sibling-with-injected-script path — the same mock served instead of a throwaway copy.
+// No `--port` leaves the file:// path byte-identical to before.
 function cmdLook(label, args) {
   if (!label) die('look needs a <label>')
   const file = mockFile(label)
   if (!fs.existsSync(file)) die('design/mocks/' + label + '.html does not exist')
   const stateArg = flagArg(args, '--state')
   const outArg = flagArg(args, '--out')
+  const portArg = flagArg(args, '--port')
   const targets = loadTargetsOrNull()
   const vp = (targets && Array.isArray(targets.viewports) && targets.viewports[0]) || { width: 390, height: 844 }
   const outPath = outArg ? path.resolve(outArg) : path.join(mocksDir, '.looks', label + (stateArg ? '.' + stateArg : '') + '.png')
   fs.mkdirSync(path.dirname(outPath), { recursive: true })
-  const siblingPath = path.join(mocksDir, '.look-' + label + '.html')
-  let content = fs.readFileSync(file, 'utf8')
-  if (stateArg) {
-    const script = '<script>document.addEventListener(\'DOMContentLoaded\',function(){var b=document.querySelector(\'[data-state-btn="' + stateArg + '"]\');if(b)b.click()})</script>'
-    content = /<\/body>/i.test(content) ? content.replace(/<\/body>/i, script + '</body>') : content + script
+
+  let target
+  let siblingPath = null
+  if (portArg) {
+    target = 'http://localhost:' + portArg + '/mocks/' + encodeURIComponent(label) + '.html?clean' + (stateArg ? '&state=' + encodeURIComponent(stateArg) : '')
+  } else {
+    siblingPath = path.join(mocksDir, '.look-' + label + '.html')
+    let content = fs.readFileSync(file, 'utf8')
+    if (stateArg) {
+      const script = '<script>document.addEventListener(\'DOMContentLoaded\',function(){var b=document.querySelector(\'[data-state-btn="' + stateArg + '"]\');if(b)b.click()})</script>'
+      content = /<\/body>/i.test(content) ? content.replace(/<\/body>/i, script + '</body>') : content + script
+    }
+    fs.writeFileSync(siblingPath, content)
+    target = 'file://' + siblingPath
   }
-  fs.writeFileSync(siblingPath, content)
   try {
-    const screenshotArgs = ['--no-install', 'playwright', 'screenshot', '--viewport-size=' + (vp.width | 0) + ',' + (vp.height | 0), 'file://' + siblingPath, outPath]
+    const screenshotArgs = ['--no-install', 'playwright', 'screenshot', '--viewport-size=' + (vp.width | 0) + ',' + (vp.height | 0), target, outPath]
     const r = spawnSync('npx', screenshotArgs, { encoding: 'utf8' })
     if (r.error || r.status !== 0) {
-      die('look: playwright screenshot failed: ' + (childOutput(r) || (r.error && r.error.message) || 'unknown error'))
+      die('look: playwright screenshot of ' + target + ' failed: ' + (childOutput(r) || (r.error && r.error.message) || 'unknown error'))
     }
   } finally {
-    try { fs.unlinkSync(siblingPath) } catch { /* best-effort cleanup */ }
+    if (siblingPath) { try { fs.unlinkSync(siblingPath) } catch { /* best-effort cleanup */ } }
   }
   writeOut(1, 'look: wrote ' + outPath + '\n')
   process.exit(0)

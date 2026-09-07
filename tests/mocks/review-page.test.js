@@ -147,8 +147,10 @@ test('AC-20260906-04-4: a board renders a happy/empty/loading/error tab set in d
         questionNote('N001', 'signin', 'W1', { by: 'session' }),
         questionNote('N002', 'signin', 'W2', { by: 'session' }),
         { id: 'N003', scope: 'mock', screen: 'signin', state: null, text: 'x', by: 'jj', at: NOW, status: 'open', addressed: null, reply: null, resolvedBy: null, resolvedAt: null, reason: 'missing-screen' },
+        // review fix round (F2): an answered question on home — its badge must read the OPEN count (0), never the item total (1)
+        questionNote('N004', 'home', 'W4', { by: 'session', open: false, answer: { verdict: 'yes', text: '', by: 'session', at: NOW } }),
       ],
-      ledger: [ledgerRow('W1'), ledgerRow('W2')],
+      ledger: [ledgerRow('W1'), ledgerRow('W2'), ledgerRow('W4', { status: 'confirmed 2026-09-06' })],
       stops: [],
     }
   }
@@ -179,6 +181,11 @@ test('AC-20260906-04-4: a board renders a happy/empty/loading/error tab set in d
   assert.match(signinBlock, /\+ note/, 'AC-4: the caption must carry a "+ note" control: got ' + signinBlock)
   assert.match(signinBlock, /data-rv="frame"[^>]*\bdata-focus\b/, 'AC-4: the frame of the first open item\'s screen (signin, holding N001) must carry data-focus: got ' + signinBlock)
   assert.doesNotMatch(homeBlock, /data-focus/, 'AC-4: only the focused screen\'s frame may carry data-focus — home holds no open item and must not: got ' + homeBlock)
+  const homeBadge = (homeBlock.match(/<button[^>]*data-rv="badge"[^>]*>([^<]*)<\/button>/) || [])[0] || ''
+  assert.match(homeBadge, />0<\/button>$/, 'AC-4 / D3: the caption badge is the screen\'s OPEN count — home holds one answered question and no open item, so its badge must read 0, never the item total: got ' + homeBadge)
+  assert.match(homeBadge, /\bdata-zero\b/, 'AC-4 / D3: a badge at zero open items must carry data-zero so it renders quiet, not in the open-doubt style: got ' + homeBadge)
+  const signinBadge = (signinBlock.match(/<button[^>]*data-rv="badge"[^>]*>([^<]*)<\/button>/) || [])[0] || ''
+  assert.doesNotMatch(signinBadge, /\bdata-zero\b/, 'AC-4 / D3: a badge with open items must not carry data-zero: got ' + signinBadge)
 
   const htmlNoTargets = buildReviewPage(fixture(null))
   assert.ok(htmlNoTargets.includes('width="1280"'), 'AC-4: with no design/targets.json (viewportWidth null/undefined) the builder must default every iframe to width="1280": got ' + htmlNoTargets.slice(0, 400))

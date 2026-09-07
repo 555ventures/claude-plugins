@@ -113,6 +113,10 @@
       var n = openByLabel[c.getAttribute('data-screen')] || 0
       setText(c, String(n)); if (n) c.removeAttribute('data-zero'); else c.setAttribute('data-zero', '')
     })
+    qa('[data-rv="badge"]').forEach(function (b) {
+      var n = openByLabel[b.getAttribute('data-label')] || 0
+      setText(b, String(n)); if (n) b.removeAttribute('data-zero'); else b.setAttribute('data-zero', '')
+    })
     setText(q('[data-rv="open-count"]'), String(openTotal))
     setText(q('[data-rv="strip-count"]'), String(openTotal))
     var progress = q('[data-rv="progress"]')
@@ -358,4 +362,11 @@
   recount()
   if (selectedId && rowById(selectedId)) select(selectedId)
   fitAll()
+  // The look stop's URL ends in #stop-<id>, whose target lives inside the sticky bar: the browser's
+  // fragment jump would scroll the bar down and clip the first artboard's caption. Undo it at load
+  // (and again after the load event, which is when the jump lands in some engines).
+  if (location.hash && /^#stop-/.test(location.hash) && typeof scrollTo === 'function') {
+    scrollTo(0, 0)
+    if (window.addEventListener) window.addEventListener('load', function () { scrollTo(0, 0) })
+  }
 })()

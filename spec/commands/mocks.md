@@ -35,7 +35,10 @@ already clear from the repo.
    `spec/doctrine/mocks.md` (or `## Design Canon` / `## Design Atlas` of `design.md`) governing
    the judgment.
 3. Record it with the step's own printed `--mark …` line. The driver verifies the step's
-   artifacts before advancing; a missing or failing one is refused and demanded again.
+   artifacts before advancing; a missing or failing one is refused and demanded again. While
+   drawing a journey, pin every inferred or invented product assumption as it is written
+   (`ledger add … --screen <label>`, or `ledger ask` after the fact) — § Mocks: Page Notes,
+   **Questions** is the one binding home for how it is authored, answered, and gated.
 4. Re-run `node {driver} --root .`. Repeat until it prints `APPROVED`.
 
 A dismissed `AskUserQuestion` STOPS the run — never invent the declined answer; state is

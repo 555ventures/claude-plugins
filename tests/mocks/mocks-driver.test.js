@@ -441,3 +441,103 @@ test('AC-20260906-02-1: state derives THEME once canonWritten + every journey ap
   assert.strictEqual(written.journeys[JOURNEY].skinned, undefined, 'the write following an accepted mark must drop journeys[j].skinned entirely')
   assert.strictEqual(written.journeys[JOURNEY].reviewed, undefined, 'the write following an accepted mark must drop journeys[j].reviewed entirely')
 })
+
+// ---------------------------------------------------------------------------
+// specs/20260906/03-questions-on-the-wireframe.md — TDD red: D2's `ledger add --screen`/
+// `ledger ask` and D7's questions progress line + Then: hint do not exist yet on mocks-driver.js.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// AC-20260906-03-2
+// ---------------------------------------------------------------------------
+test('AC-20260906-03-2: `ledger add --screen <label>` appends both the ledger row and a question note; refuses --screen on a process row, on a said-by-user tag, and on an unknown screen; `ledger ask` pins an existing open row to a screen and refuses re-pinning', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToCanonWritten(dir) // declares the seed's journey/screens (LABELS[0] = "signin")
+
+  const notesPath = path.join(dir, 'design/mocks/notes.json')
+  const readNotes = () => (fs.existsSync(notesPath) ? JSON.parse(fs.readFileSync(notesPath, 'utf8')) : [])
+
+  const added = ledgerCmd(dir, 'add', [
+    '--id', 'W7', '--step', 'WIREFRAMES', '--kind', 'product', '--claim', 'single-use link',
+    '--tag', 'inferred', '--status', 'open', '--screen', LABELS[0],
+  ])
+  assert.strictEqual(added.status, 0, 'D2: `ledger add --screen ' + LABELS[0] + '` on a declared screen must exit 0: ' + added.stdout + added.stderr)
+  const ledgerText = fs.readFileSync(path.join(dir, 'design/mocks/ledger.md'), 'utf8')
+  assert.match(ledgerText, /\| W7 \| WIREFRAMES \| product \| single-use link \| inferred \| open \|/,
+    'D2: `ledger add --screen` must still append the ledger row exactly as a plain `ledger add` would: ' + ledgerText)
+  const q = readNotes().find((n) => n.ledgerId === 'W7')
+  assert.ok(q, 'D2: `ledger add --screen ' + LABELS[0] + '` must append a notes.json record carrying ledgerId "W7" — none found: ' + JSON.stringify(readNotes()))
+  assert.deepStrictEqual(
+    { kind: q.kind, scope: q.scope, screen: q.screen, state: q.state, text: q.text, by: q.by, status: q.status },
+    { kind: 'question', scope: 'mock', screen: LABELS[0], state: null, text: 'single-use link', by: 'session', status: 'open' },
+    'D2: the appended question record must carry exactly this shape: ' + JSON.stringify(q))
+
+  const processRow = ledgerCmd(dir, 'add', [
+    '--id', 'W8', '--step', 'WIREFRAMES', '--kind', 'process', '--claim', 'x',
+    '--tag', 'inferred', '--status', 'open', '--screen', LABELS[0],
+  ])
+  assert.strictEqual(processRow.status, 2, 'D2: `--screen` on a `--kind process` row must refuse (exit 2) — a process row is never a question for the user: ' + processRow.stdout + processRow.stderr)
+  assert.match(processRow.stderr + processRow.stdout, /never a question/, 'the process-row refusal must carry the exact D2 phrase "never a question": ' + processRow.stdout + processRow.stderr)
+
+  const saidByUser = ledgerCmd(dir, 'add', [
+    '--id', 'W9', '--step', 'WIREFRAMES', '--kind', 'product', '--claim', 'x',
+    '--tag', 'said-by-user', '--status', 'confirmed', '--screen', LABELS[0],
+  ])
+  assert.strictEqual(saidByUser.status, 2, 'D2: `--screen` on a "said-by-user" tag must refuse — the user already said it: ' + saidByUser.stdout + saidByUser.stderr)
+  assert.match(saidByUser.stderr + saidByUser.stdout, /nothing to ask/, 'the said-by-user refusal must carry the exact D2 phrase "nothing to ask": ' + saidByUser.stdout + saidByUser.stderr)
+
+  const unknownScreen = ledgerCmd(dir, 'add', [
+    '--id', 'W10', '--step', 'WIREFRAMES', '--kind', 'product', '--claim', 'x',
+    '--tag', 'inferred', '--status', 'open', '--screen', 'nowhere',
+  ])
+  assert.strictEqual(unknownScreen.status, 2, 'D2: `--screen nowhere` (not a declared journey screen) must refuse: ' + unknownScreen.stdout + unknownScreen.stderr)
+  assert.match(unknownScreen.stderr + unknownScreen.stdout, /unknown screen "nowhere"/, 'the unknown-screen refusal must carry the exact D2 message: ' + unknownScreen.stdout + unknownScreen.stderr)
+
+  const plainRow = ledgerCmd(dir, 'add', [
+    '--id', 'W11', '--step', 'WIREFRAMES', '--kind', 'product', '--claim', 'y',
+    '--tag', 'invented', '--status', 'open',
+  ])
+  assert.strictEqual(plainRow.status, 0, 'test setup requires a plain (un-pinned) open product row for `ledger ask` to pin: ' + plainRow.stderr)
+
+  const asked = ledgerCmd(dir, 'ask', ['--id', 'W11', '--screen', LABELS[1]])
+  assert.strictEqual(asked.status, 0, 'D2: `ledger ask --id W11 --screen ' + LABELS[1] + '` must pin an existing open product row and exit 0: ' + asked.stdout + asked.stderr)
+  const askedNote = readNotes().find((n) => n.ledgerId === 'W11')
+  assert.ok(askedNote && askedNote.screen === LABELS[1], 'D2: `ledger ask` must append a question note pinned to the given screen: ' + JSON.stringify(askedNote))
+
+  const askedAgain = ledgerCmd(dir, 'ask', ['--id', 'W11', '--screen', LABELS[1]])
+  assert.strictEqual(askedAgain.status, 2, 'D2: re-pinning an already-pinned row must refuse: ' + askedAgain.stdout + askedAgain.stderr)
+  assert.match(askedAgain.stderr + askedAgain.stdout, /already a question on/, 'the re-pin refusal must carry the exact D2 phrase "already a question on": ' + askedAgain.stdout + askedAgain.stderr)
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260906-03-8
+// ---------------------------------------------------------------------------
+test('AC-20260906-03-8: the WIREFRAMES draw-journey step\'s progress line names "questions: <open>/<total> open on <journey>" and its Then: block gains a line pointing at `ledger add … --screen`', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToCanonWritten(dir)
+
+  const notesPath = path.join(dir, 'design/mocks/notes.json')
+  const nowIso = () => new Date().toISOString()
+  const question = (id, screen, ledgerId, resolved) => ({
+    id, scope: 'mock', screen, state: null, kind: 'question', ledgerId,
+    text: 'claim', by: 'session', at: nowIso(),
+    status: resolved ? 'resolved' : 'open',
+    addressed: null, reply: null, resolvedBy: resolved ? 'Ren' : null, resolvedAt: resolved ? nowIso() : null,
+    answer: resolved ? { verdict: 'yes', text: '', by: 'Ren', at: nowIso() } : null,
+  })
+  fs.writeFileSync(notesPath, JSON.stringify([
+    question('N001', LABELS[0], 'W7', false),
+    question('N002', LABELS[1], 'W8', true),
+  ], null, 2) + '\n')
+
+  const r = bare(dir)
+  assert.strictEqual(r.status, 0, 'a bare invocation at the WIREFRAMES draw-journey step must exit 0: ' + r.stderr)
+  assert.match(r.stdout, /questions: 1\/2 open on onboarding/,
+    'D7: the draw-journey step\'s progress line must contain "questions: 1/2 open on onboarding" for one open question out of two declared on this journey\'s screens: ' + r.stdout)
+
+  const thenIdx = r.stdout.indexOf('Then:')
+  assert.ok(thenIdx > -1, 'the printed step must carry a "Then:" block: ' + r.stdout)
+  const thenBlock = r.stdout.slice(thenIdx)
+  assert.match(thenBlock, /ledger add/, 'D7: the draw step\'s Then: block must gain a line mentioning `ledger add` (pinning an assumption while drawing): ' + r.stdout)
+  assert.match(thenBlock, /--screen/, 'D7: the draw step\'s Then: block must gain a line mentioning `--screen`: ' + r.stdout)
+})

@@ -12,7 +12,7 @@ const picksLib = require('../../spec/scripts/lib/mocks-picks')
 // tests/mocks/mocks-ledger.test.js used for spec 06's not-yet-existing lib) until D1 lands;
 // the CLI-level tests stay red independently (mocks-driver.js ignores an unknown "notes" verb
 // and falls through to its ordinary bare-step/mark output) once the lib exists but D4/D5 don't.
-const { validateNotes } = require('../../spec/scripts/lib/mocks-notes')
+const { validateNotes, answerQuestion, resolveNote } = require('../../spec/scripts/lib/mocks-notes')
 
 const SCRIPT = 'scripts/mocks-driver.js'
 const FIXTURE = path.join(ROOT, 'tests/fixtures/mocks-notes/notes.sample.json')
@@ -381,4 +381,159 @@ test('AC-20260902-10-10: `--mark journey-approved --journey <j>` continues to ac
   writeNotes(dir, [projectNote('N005', 'resolved'), mockNote('N001', 'resolved')])
   const r = mark(dir, 'journey-approved', ['--journey', JOURNEY])
   assert.strictEqual(r.status, 0, 'journey-approved must accept once every project and journey note is resolved — a gate that still refuses here is stricter than D5 requires: ' + r.stdout + r.stderr)
+})
+
+// ---------------------------------------------------------------------------
+// specs/20260906/03-questions-on-the-wireframe.md — TDD red: D1's kind/reason/ledgerId/answer
+// fields, answerQuestion, and resolveNote's question refusal do not exist yet on
+// spec/scripts/lib/mocks-notes.js; D2's `ledger add --screen`/`ledger ask` and D4's
+// question-aware gate wording do not exist yet on mocks-driver.js; D6's `notes open` questions
+// block and `ledger counts` catch-provenance line do not exist yet either.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// AC-20260906-03-1
+// ---------------------------------------------------------------------------
+test('AC-20260906-03-1: validateNotes accepts a well-formed question note, rejects a question missing ledgerId, a question carrying reason, an unknown reason, and a "no" answer with empty text (one error each naming the field); answerQuestion sets answer and status "resolved"; resolveNote on a question throws "answered, never resolved"', () => {
+  const base = {
+    id: 'N001', scope: 'mock', screen: 'signin', state: null, text: 'single-use link', by: 'session',
+    at: new Date().toISOString(), status: 'open', addressed: null, reply: null, resolvedBy: null, resolvedAt: null,
+  }
+
+  const goodQuestion = Object.assign({}, base, { kind: 'question', ledgerId: 'W7' })
+  const clean = validateNotes([goodQuestion])
+  assert.deepStrictEqual(clean.errors, [],
+    'D1: a well-formed question note ({kind:"question", ledgerId:"W7", scope:"mock", screen:"signin"}) must validate with zero errors — kind/ledgerId are an additive shape, never a stricter one: ' + JSON.stringify(clean.errors))
+
+  const noLedgerId = Object.assign({}, base, { id: 'N002', kind: 'question' })
+  const r1 = validateNotes([noLedgerId])
+  assert.strictEqual(r1.errors.length, 1, 'D1: a question note with no ledgerId must produce exactly one error, not zero (silently accepted) or more than one: ' + JSON.stringify(r1.errors))
+  assert.match(r1.errors.join(' '), /ledgerId/, 'D1: the missing-ledgerId error must name the field "ledgerId": ' + JSON.stringify(r1.errors))
+
+  const questionWithReason = Object.assign({}, base, { id: 'N003', kind: 'question', ledgerId: 'W8', reason: 'other' })
+  const r2 = validateNotes([questionWithReason])
+  assert.strictEqual(r2.errors.length, 1, 'D1: a question note carrying a "reason" must produce exactly one error — reason is notes-only: ' + JSON.stringify(r2.errors))
+  assert.match(r2.errors.join(' '), /reason/, 'D1: the reason-on-a-question error must name the field "reason": ' + JSON.stringify(r2.errors))
+
+  const badReason = Object.assign({}, base, { id: 'N004', reason: 'typo' })
+  const r3 = validateNotes([badReason])
+  assert.strictEqual(r3.errors.length, 1, 'D1: a note with an unknown reason "typo" (outside missing-screen|wrong-direction|wrong-words|other) must produce exactly one error: ' + JSON.stringify(r3.errors))
+  assert.match(r3.errors.join(' '), /reason/, 'D1: the unknown-reason error must name the field "reason": ' + JSON.stringify(r3.errors))
+
+  const badAnswer = Object.assign({}, base, { id: 'N005', kind: 'question', ledgerId: 'W9', answer: { verdict: 'no', text: '', by: 'Ren', at: new Date().toISOString() } })
+  const r4 = validateNotes([badAnswer])
+  assert.strictEqual(r4.errors.length, 1, 'D1: a "no" answer with empty text must produce exactly one error: ' + JSON.stringify(r4.errors))
+  assert.match(r4.errors.join(' '), /answer|text/, 'D1: the empty-text-on-no error must name the offending field: ' + JSON.stringify(r4.errors))
+
+  const answerable = [Object.assign({}, base, { id: 'N012', kind: 'question', ledgerId: 'W7' })]
+  const answered = answerQuestion(answerable, 'N012', { verdict: 'no', text: 'Owner sets modality', by: 'Ren' })
+  assert.strictEqual(answered.note.status, 'resolved', 'D1: answerQuestion must set status to "resolved": got ' + JSON.stringify(answered.note))
+  assert.deepStrictEqual(
+    { verdict: answered.note.answer && answered.note.answer.verdict, text: answered.note.answer && answered.note.answer.text, by: answered.note.answer && answered.note.answer.by },
+    { verdict: 'no', text: 'Owner sets modality', by: 'Ren' },
+    'D1: answerQuestion must set answer.verdict/text/by verbatim from its input: got ' + JSON.stringify(answered.note))
+
+  assert.throws(() => resolveNote(answerable, 'N012', 'JJ'), /answered, never resolved/,
+    'D1: resolveNote on a question note must throw a message containing "answered, never resolved" — the HTTP resolve path is forbidden for questions')
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260906-03-5
+// ---------------------------------------------------------------------------
+test('AC-20260906-03-5: journey-approved refuses on an unanswered question naming the ledger id and screen (not the note id), accepts once the question is answered "yes" and its ledger row is confirmed, and CONTINUES TO refuse first on an open project note even alongside an unanswered question', () => {
+  const dir = tmpdir('mocks-notes-question-gate')
+  advanceToJourneyDrawn(dir)
+  writeCaptureConfig(dir, writeFixtureCapture(dir))
+  decideLook(dir, 'journey-approved:' + JOURNEY, 'approve', { by: 'jj' })
+
+  const ledgerRow = ledgerCmd(dir, 'add', [
+    '--id', 'W7', '--step', 'WIREFRAMES', '--kind', 'product', '--claim', 'single-use link',
+    '--tag', 'inferred', '--status', 'open',
+  ])
+  assert.strictEqual(ledgerRow.status, 0, 'test setup requires the W7 ledger row to be accepted: ' + ledgerRow.stderr)
+
+  const question = {
+    id: 'N010', scope: 'mock', screen: LABELS[0], state: null, kind: 'question', ledgerId: 'W7',
+    text: 'single-use link', by: 'session', at: nowIso(), status: 'open',
+    addressed: null, reply: null, resolvedBy: null, resolvedAt: null, answer: null,
+  }
+  writeNotes(dir, [question])
+
+  const blocked = mark(dir, 'journey-approved', ['--journey', JOURNEY])
+  assert.strictEqual(blocked.status, 2, 'D4: journey-approved must refuse (exit 2) while W7 is an unanswered question: ' + blocked.stdout + blocked.stderr)
+  assert.match(blocked.stderr + blocked.stdout, new RegExp('unanswered question\\(s\\) on ' + JOURNEY + ': W7 \\(' + LABELS[0] + '\\)'),
+    'D4: the refusal must carry the exact "unanswered question(s) on ' + JOURNEY + ': W7 (' + LABELS[0] + ')" line — it names the ledger id and screen, never the note id N010: ' + blocked.stdout + blocked.stderr)
+  assert.match(blocked.stderr + blocked.stdout, /answer them on the page/,
+    'D4: the refusal must carry the "answer them on the page" remedy: ' + blocked.stdout + blocked.stderr)
+
+  const confirmRow = ledgerCmd(dir, 'set', ['--id', 'W7', '--status', 'confirmed 2026-09-06', '--tag', 'inferred'])
+  assert.strictEqual(confirmRow.status, 0, 'test setup requires `ledger set` to confirm W7 (mirroring what an answer:"yes" writes): ' + confirmRow.stderr)
+  const answered = Object.assign({}, question, { status: 'resolved', resolvedBy: 'Ren', resolvedAt: nowIso(), answer: { verdict: 'yes', text: '', by: 'Ren', at: nowIso() } })
+  writeNotes(dir, [answered])
+  const accepted = mark(dir, 'journey-approved', ['--journey', JOURNEY])
+  assert.strictEqual(accepted.status, 0, 'D4: journey-approved must be accepted once the question is answered "yes" and its ledger row is confirmed: ' + accepted.stdout + accepted.stderr)
+
+  writeNotes(dir, [projectNote('N005', 'open'), question])
+  const blockedByProject = mark(dir, 'journey-approved', ['--journey', JOURNEY])
+  assert.strictEqual(blockedByProject.status, 2, 'D4: journey-approved must CONTINUE TO refuse (exit 2) while a project note is open, even alongside an unanswered question: ' + blockedByProject.stdout + blockedByProject.stderr)
+  assert.match(blockedByProject.stdout + blockedByProject.stderr, /project note\(s\) open: N005/,
+    'D4: the project-note refusal must CONTINUE TO carry the exact prefix naming N005, and must fire before the question refusal: ' + blockedByProject.stdout + blockedByProject.stderr)
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260906-03-7
+// ---------------------------------------------------------------------------
+test('AC-20260906-03-7: `notes open` prints "❓ questions: N open" first, then each open question under its journey/screen, then answered questions under "answered:" ("no → \\"<text>\\"" for a "no" verdict); `ledger counts` prints the exact "📎 catches: <n> — question <q> · note <m> · unlinked <u>" line after 📒 ledger, derived from addressed.ledgerRow', () => {
+  const dir = tmpdir('mocks-notes-questions-open')
+  bare(dir)
+  writeSeed(dir) // declares JOURNEY -> signin -> invite -> session-live
+
+  const open = {
+    id: 'N001', scope: 'mock', screen: LABELS[0], state: null, kind: 'question', ledgerId: 'W7',
+    text: 'single-use link', by: 'session', at: nowIso(), status: 'open',
+    addressed: null, reply: null, resolvedBy: null, resolvedAt: null, answer: null,
+  }
+  const answered = {
+    id: 'N002', scope: 'mock', screen: LABELS[1], state: null, kind: 'question', ledgerId: 'W8',
+    text: 'invite expires in 1h', by: 'session', at: nowIso(), status: 'resolved',
+    addressed: null, reply: null, resolvedBy: 'Ren', resolvedAt: nowIso(),
+    answer: { verdict: 'no', text: 'Owner sets modality', by: 'Ren', at: nowIso() },
+  }
+  writeNotes(dir, [open, answered])
+
+  const opened = bare(dir, ['notes', 'open'])
+  assert.strictEqual(opened.status, 0, '`notes open` must exit 0 over a valid seed.md + notes.json carrying questions: ' + opened.stderr)
+  const out = opened.stdout
+  assert.ok(out.startsWith('❓ questions: 1 open'),
+    'D6: `notes open` must print "❓ questions: 1 open" as its first line for one open question out of two total — a different count means the questions block or its counting drifted: got ' + JSON.stringify(out))
+  const qIdx = out.indexOf('❓')
+  const journeyIdx = out.indexOf(JOURNEY, qIdx)
+  const w7Idx = out.indexOf('W7', journeyIdx === -1 ? qIdx : journeyIdx)
+  const answeredIdx = out.indexOf('answered:')
+  assert.ok(journeyIdx > -1 && journeyIdx < w7Idx, 'D6: the open question W7 must be grouped under its declaring journey "' + JOURNEY + '": got ' + JSON.stringify(out))
+  assert.ok(answeredIdx > -1 && w7Idx < answeredIdx, 'D6: the open question W7 must print before the "answered:" block: got ' + JSON.stringify(out))
+  assert.match(out.slice(answeredIdx), /W8/, 'D6: the answered question W8 must print inside the "answered:" block: got ' + JSON.stringify(out))
+  assert.match(out.slice(answeredIdx), /no → "Owner sets modality"/,
+    'D6: an answered "no" question must print exactly `no → "<text>"` under answered: got ' + JSON.stringify(out))
+
+  const c1 = ledgerCmd(dir, 'catch', ['--id', 'M1', '--what', 'wrong link lifetime', '--step', 'WIREFRAMES', '--cost', '5 minutes'])
+  assert.strictEqual(c1.status, 0, 'test setup requires `ledger catch --id M1` to be accepted: ' + c1.stderr)
+  const c2 = ledgerCmd(dir, 'catch', ['--id', 'M2', '--what', 'wrong copy', '--step', 'WIREFRAMES', '--cost', '5 minutes'])
+  assert.strictEqual(c2.status, 0, 'test setup requires `ledger catch --id M2` to be accepted: ' + c2.stderr)
+  const c3 = ledgerCmd(dir, 'catch', ['--id', 'M3', '--what', 'unrelated typo', '--step', 'WIREFRAMES', '--cost', '5 minutes'])
+  assert.strictEqual(c3.status, 0, 'test setup requires `ledger catch --id M3` to be accepted: ' + c3.stderr)
+
+  writeNotes(dir, [
+    Object.assign({}, open, { status: 'addressed', addressed: { at: nowIso(), change: 'redrawn with expiry', ledgerRow: 'M1' } }),
+    answered,
+    mockNote('N003', 'addressed', { addressed: { at: nowIso(), change: 'copy fixed', ledgerRow: 'M2' } }),
+  ])
+
+  const counts = ledgerCmd(dir, 'counts')
+  assert.strictEqual(counts.status, 0, '`ledger counts` must exit 0: ' + counts.stderr)
+  const lines = counts.stdout.split('\n').filter((l) => l.trim() !== '')
+  const ledgerIdx = lines.findIndex((l) => l.startsWith('📒 ledger:'))
+  assert.ok(ledgerIdx > -1, '`ledger counts` must still print the existing 📒 ledger: line: got ' + JSON.stringify(counts.stdout))
+  assert.strictEqual(lines[ledgerIdx + 1], '📎 catches: 3 — question 1 · note 1 · unlinked 1',
+    'D6: `ledger counts` must print the exact catch-provenance line immediately after 📒 ledger, deriving question 1 (M1, addressed by a question note) / note 1 (M2, addressed by a plain note) / unlinked 1 (M3, addressed by neither) from addressed.ledgerRow: got ' + JSON.stringify(counts.stdout))
 })

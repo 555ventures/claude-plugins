@@ -1,6 +1,6 @@
 ---
 date: 2026-09-06
-status: hardened
+status: implementing
 tier: standard
 area: design-mocks
 design: false
@@ -10,6 +10,7 @@ depended_on_by: [specs/20260906/04-journey-review-page.md, specs/20260906/06-ske
 brief: 22a
 open_markers: 0
 spiked: 2026-09-06
+diff_base: cbe3423ba6ab845def4369d6407bb58ac09d03e9
 ---
 
 # Questions on the wireframe: the session's assumptions pinned to the screen, answered inline, gating approval; free-form messages with a reason; catch provenance derived

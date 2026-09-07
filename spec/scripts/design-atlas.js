@@ -38,8 +38,18 @@
 //                                                  response gets the page-notes layer script
 //                                                  injected before </body> unless the request
 //                                                  carries ?clean; /__notes/* exposes
-//                                                  notes.js, viewer.css, list, add, resolve
+//                                                  notes.js, viewer.css, list, add, resolve, answer
 //                                                  (address/reply are driver-only, never HTTP).
+//                                                  specs/20260906/03 D3: /__notes/list joins
+//                                                  claim/rejected/tag/status from the ledger row
+//                                                  onto every question note it returns; POST
+//                                                  /__notes/answer is the one path that both
+//                                                  rewrites the ledger row's status (confirmed/
+//                                                  overridden <today>) and resolves the question;
+//                                                  /__notes/resolve 400s a question, naming
+//                                                  /__notes/answer; /__notes/add 400s a body
+//                                                  carrying kind/ledgerId (questions are
+//                                                  session-authored).
 //                                                  specs/20260905/01 D2: every served page also
 //                                                  carries a <meta name="notes-scope"> tag (mock
 //                                                  for a static file, project for the derived
@@ -98,6 +108,7 @@ const path = require('node:path')
 const { readConfig } = require('./lib/host-config')
 const shellLib = require('./lib/shell-region')
 const notesLib = require('./lib/mocks-notes')
+const { parseLedger, setStatus } = require('./lib/mocks-ledger')
 const picksLib = require('./lib/mocks-picks.js')
 
 const die = (msg, code = 2) => { process.stderr.write('[design-atlas] ' + msg + '\n'); process.exit(code) }
@@ -1416,11 +1427,31 @@ function createRequestHandler(root, opts = {}) {
       const out = screen === '*'
         ? notes.filter((n) => n.scope === 'project')
         : notes.filter((n) => n.scope === 'mock' && n.screen === screen)
-      jsonRes(res, 200, out)
+      // specs/20260906/03 D3: a question note is joined against its ledger row on every request
+      // (never cached) — claim/rejected/tag/status come from the row, ledgerMissing:true when the
+      // row is gone. Parsed at most once per request, lazily (most lists carry no question).
+      let ledgerRows = null
+      const joined = out.map((n) => {
+        if (n.kind !== 'question') return n
+        if (ledgerRows === null) {
+          try { ledgerRows = parseLedger(fs.readFileSync(path.join(rootAbs, 'design/mocks/ledger.md'), 'utf8')).assumptions } catch { ledgerRows = [] }
+        }
+        const row = ledgerRows.find((a) => a.id === n.ledgerId)
+        if (!row) return Object.assign({}, n, { ledgerMissing: true })
+        return Object.assign({}, n, { claim: row.claim, rejected: row.rejected, tag: row.tag, status: row.status })
+      })
+      jsonRes(res, 200, joined)
       return
     }
     if (reqPath === '/__notes/add' && req.method === 'POST') {
       readJsonBody(req).then((body) => {
+        // D3: questions are session-authored only — a client body naming kind/ledgerId is
+        // rejected before it ever reaches addNote (which itself accepts those fields for
+        // mocks-driver.js's own direct, non-HTTP callers).
+        if (body && (body.kind != null || body.ledgerId != null)) {
+          jsonRes(res, 400, { error: 'questions are session-authored — kind/ledgerId are not accepted here' })
+          return
+        }
         let notes = []
         try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
         let result
@@ -1434,8 +1465,54 @@ function createRequestHandler(root, opts = {}) {
       readJsonBody(req).then((body) => {
         let notes = []
         try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
+        // D3: a question is never resolved this way — the refusal names the one path that closes
+        // it (POST /__notes/answer), checked before resolveNote's own generic "no note" 404.
+        const target = notes.find((n) => n.id === (body && body.id))
+        if (target && target.kind === 'question') {
+          jsonRes(res, 400, { error: 'a question is answered, never resolved — answer it (/__notes/answer)' })
+          return
+        }
         let result
         try { result = notesLib.resolveNote(notes, body.id, body.by) } catch (e) { jsonRes(res, 404, { error: e.message }); return }
+        notesLib.writeNotes(rootAbs, result.notes)
+        jsonRes(res, 200, result.note)
+      }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))
+      return
+    }
+    if (reqPath === '/__notes/answer' && req.method === 'POST') {
+      readJsonBody(req).then((body) => {
+        const id = body && body.id
+        const verdict = body && body.verdict
+        const by = (body && body.by) || 'session'
+        if (!id || (verdict !== 'yes' && verdict !== 'no')) {
+          jsonRes(res, 400, { error: 'answer needs {id, verdict: "yes"|"no", by}' })
+          return
+        }
+        if (verdict === 'no' && !String((body && body.text) || '').trim()) {
+          jsonRes(res, 400, { error: 'a "no" answer requires non-empty text' })
+          return
+        }
+        let notes = []
+        try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
+        const target = notes.find((n) => n.id === id)
+        if (!target) { jsonRes(res, 404, { error: 'no note with id "' + id + '"' }); return }
+        if (target.kind !== 'question') { jsonRes(res, 400, { error: 'note "' + id + '" is not a question' }); return }
+        if (target.status === 'resolved') { jsonRes(res, 409, { error: 'question "' + id + '" is already answered' }); return }
+
+        // D3 Rationale: the ledger write happens FIRST — a crash between the two writes leaves an
+        // answered row with a still-open note (a harmless re-ask), never a resolved note over an
+        // open row.
+        const ledgerPath = path.join(rootAbs, 'design/mocks/ledger.md')
+        let ledgerText
+        try { ledgerText = fs.readFileSync(ledgerPath, 'utf8') } catch (e) { jsonRes(res, 400, { error: 'design/mocks/ledger.md does not exist: ' + e.message }); return }
+        const today = new Date().toISOString().slice(0, 10)
+        const newStatus = (verdict === 'yes' ? 'confirmed ' : 'overridden ') + today
+        let rewritten
+        try { rewritten = setStatus(ledgerText, target.ledgerId, newStatus) } catch (e) { jsonRes(res, 400, { error: e.message }); return }
+        fs.writeFileSync(ledgerPath, rewritten)
+
+        let result
+        try { result = notesLib.answerQuestion(notes, id, { verdict, text: (body && body.text) || '', by }) } catch (e) { jsonRes(res, 400, { error: e.message }); return }
         notesLib.writeNotes(rootAbs, result.notes)
         jsonRes(res, 200, result.note)
       }).catch((e) => jsonRes(res, 400, { error: 'malformed request body: ' + e.message }))

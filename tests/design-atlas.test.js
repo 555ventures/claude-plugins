@@ -1805,3 +1805,217 @@ test('atlas card previews clamp to one fixed height (7.89.0): page() ships the .
   assert.match(src, /s\.classList\.toggle\("clip",full>cap\)/,
     '__fit must mark a card .clip only when the scaled height exceeds the cap — got no toggle')
 })
+
+// ---------------------------------------------------------------------------
+// specs/20260906/03-questions-on-the-wireframe.md — TDD red: D3's /__notes/list ledger join,
+// /__notes/answer, the /__notes/resolve question refusal, and /__notes/add's reason/kind handling
+// do not exist yet on design-atlas.js; D5's question-row rendering, its three controls, and the
+// composer's reason chips + scope toggle do not exist yet on lib/notes-layer.browser.js.
+// ---------------------------------------------------------------------------
+
+function writeQuestionLedger(dir, rows) {
+  fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
+  const rowLines = rows.map((r) => `| ${r.id} | ${r.step} | ${r.kind} | ${r.claim} | ${r.tag} | ${r.status} | ${r.rejected || '-'} | - | - |`).join('\n')
+  fs.writeFileSync(path.join(dir, 'design/mocks/ledger.md'), `# Provenance ledger — { project }
+
+## Assumptions
+
+| id | step | kind | claim | tag | status | rejected | dependents | note |
+| - | - | - | - | - | - | - | - | - |
+${rowLines}
+
+## Misunderstandings
+
+| id | what | step | cost | note |
+| - | - | - | - | - |
+`)
+}
+
+function writeQuestionNotes(dir, notes) {
+  fs.writeFileSync(path.join(dir, 'design/mocks/notes.json'), JSON.stringify(notes, null, 2) + '\n')
+}
+
+function baseQuestion(id, screen, ledgerId) {
+  return {
+    id, scope: 'mock', screen, state: null, kind: 'question', ledgerId,
+    text: 'claim', by: 'session', at: new Date().toISOString(), status: 'open',
+    addressed: null, reply: null, resolvedBy: null, resolvedAt: null, answer: null,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// AC-20260906-03-3
+// ---------------------------------------------------------------------------
+test('AC-20260906-03-3: GET /__notes/list joins claim/rejected/tag/status from the ledger row onto a question note (ledgerMissing:true when the row is absent); POST /__notes/add stores a valid reason, 400s an unknown reason, and 400s a body carrying kind', async () => {
+  const dir = tmpdir('atlas-notes-questions')
+  fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/mocks/signin.html'), '<main data-screen-label="signin">signin</main>\n')
+  writeQuestionLedger(dir, [{ id: 'W7', step: 'WIREFRAMES', kind: 'product', claim: 'single-use link', tag: 'inferred', status: 'open', rejected: 'durable link' }])
+  writeQuestionNotes(dir, [baseQuestion('N001', 'signin', 'W7'), baseQuestion('N002', 'signin', 'W99')])
+
+  await withHandler(dir, '', async ({ get, post }) => {
+    const listed = await get('/__notes/list?screen=signin')
+    assert.strictEqual(listed.status, 200, 'GET /__notes/list?screen=signin must respond 200: ' + listed.body)
+    const notes = JSON.parse(listed.body)
+    const w7 = notes.find((n) => n.id === 'N001')
+    assert.ok(w7, 'the response must still carry the question note N001: got ' + JSON.stringify(notes))
+    assert.deepStrictEqual(
+      { claim: w7.claim, rejected: w7.rejected, tag: w7.tag, status: w7.status },
+      { claim: 'single-use link', rejected: 'durable link', tag: 'inferred', status: 'open' },
+      'D3: GET /__notes/list must join claim/rejected/tag/status from ledger row W7 onto the question note it belongs to: got ' + JSON.stringify(w7))
+
+    const ghost = notes.find((n) => n.id === 'N002')
+    assert.ok(ghost, 'the response must still carry N002 (pinned to a ledger row that does not exist): got ' + JSON.stringify(notes))
+    assert.strictEqual(ghost.ledgerMissing, true, 'D3: a question pinned to a missing ledger row (W99) must carry ledgerMissing:true: got ' + JSON.stringify(ghost))
+
+    const withReason = await post('/__notes/add', { scope: 'project', screen: null, state: null, text: 'no screen for cancelling a session', by: 'JJ', reason: 'missing-screen' })
+    assert.strictEqual(withReason.status, 201, 'D3: POST /__notes/add carrying a valid reason must respond 201: ' + withReason.status + ' ' + withReason.body)
+    const storedNote = JSON.parse(withReason.body)
+    assert.strictEqual(storedNote.reason, 'missing-screen', 'D3: the stored note must carry the reason verbatim: got ' + JSON.stringify(storedNote))
+
+    const badReason = await post('/__notes/add', { scope: 'project', screen: null, state: null, text: 'x', by: 'JJ', reason: 'typo' })
+    assert.strictEqual(badReason.status, 400, 'D3: POST /__notes/add with an unknown reason "typo" must respond 400, never silently accept it: got ' + badReason.status)
+
+    const withKind = await post('/__notes/add', { scope: 'mock', screen: 'signin', state: null, text: 'x', by: 'JJ', kind: 'question' })
+    assert.strictEqual(withKind.status, 400, 'D3: POST /__notes/add carrying "kind" in the body must respond 400 — questions are session-authored, never client-authored: got ' + withKind.status)
+    assert.match(withKind.body, /session-authored/, 'the kind-rejection body must carry the exact D3 phrase "session-authored": got ' + withKind.body)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260906-03-4
+// ---------------------------------------------------------------------------
+test('AC-20260906-03-4: POST /__notes/answer rewrites exactly the named ledger row to confirmed/overridden <today> (every other row byte-unchanged) and resolves the note with the verdict/text; a missing text on "no" 400s, an unknown id 404s, a second answer 409s; POST /__notes/resolve on a question 400s naming the answer endpoint', async () => {
+  const dir = tmpdir('atlas-notes-answer')
+  writeQuestionLedger(dir, [
+    { id: 'W7', step: 'WIREFRAMES', kind: 'product', claim: 'single-use link', tag: 'inferred', status: 'open' },
+    { id: 'W8', step: 'WIREFRAMES', kind: 'product', claim: 'dark send button', tag: 'invented', status: 'open' },
+  ])
+  writeQuestionNotes(dir, [baseQuestion('N012', 'signin', 'W7'), baseQuestion('N013', 'signin', 'W8')])
+
+  await withHandler(dir, '', async ({ post }) => {
+    const today = new Date().toISOString().slice(0, 10)
+
+    const yes = await post('/__notes/answer', { id: 'N012', verdict: 'yes', by: 'Ren' })
+    assert.strictEqual(yes.status, 200, 'a "yes" answer for an existing open question must respond 200: ' + yes.status + ' ' + yes.body)
+    const ledgerAfterYes = fs.readFileSync(path.join(dir, 'design/mocks/ledger.md'), 'utf8')
+    assert.match(ledgerAfterYes, new RegExp('\\| W7 \\| WIREFRAMES \\| product \\| single-use link \\| inferred \\| confirmed ' + today + ' \\|'),
+      'D4/A2: a "yes" answer must rewrite exactly the W7 row to status "confirmed <today>": got ' + JSON.stringify(ledgerAfterYes))
+    assert.match(ledgerAfterYes, /\| W8 \| WIREFRAMES \| product \| dark send button \| invented \| open \|/,
+      'D3 Rationale: a "yes" answer to W7 must leave every other row (W8) byte-unchanged: got ' + JSON.stringify(ledgerAfterYes))
+    const yesNote = JSON.parse(yes.body)
+    assert.strictEqual(yesNote.answer && yesNote.answer.verdict, 'yes', 'the response note must carry answer.verdict "yes": got ' + JSON.stringify(yesNote))
+    assert.strictEqual(yesNote.status, 'resolved', 'the response note must carry status "resolved": got ' + JSON.stringify(yesNote))
+
+    const noMissingText = await post('/__notes/answer', { id: 'N013', verdict: 'no', by: 'Ren' })
+    assert.strictEqual(noMissingText.status, 400, 'a "no" answer with no text must respond 400, never silently accept an empty correction: got ' + noMissingText.status)
+
+    const no = await post('/__notes/answer', { id: 'N013', verdict: 'no', text: 'Owner sets modality', by: 'Ren' })
+    assert.strictEqual(no.status, 200, 'a "no" answer carrying text must respond 200: ' + no.status + ' ' + no.body)
+    const ledgerAfterNo = fs.readFileSync(path.join(dir, 'design/mocks/ledger.md'), 'utf8')
+    assert.match(ledgerAfterNo, new RegExp('\\| W8 \\| WIREFRAMES \\| product \\| dark send button \\| invented \\| overridden ' + today + ' \\|'),
+      'D4/A2: a "no" answer must rewrite the W8 row to status "overridden <today>": got ' + JSON.stringify(ledgerAfterNo))
+    const noNote = JSON.parse(no.body)
+    assert.strictEqual(noNote.answer && noNote.answer.text, 'Owner sets modality', 'the response note must carry answer.text verbatim: got ' + JSON.stringify(noNote))
+
+    const unknown = await post('/__notes/answer', { id: 'N999', verdict: 'yes', by: 'Ren' })
+    assert.strictEqual(unknown.status, 404, 'answering an unknown id must respond 404: got ' + unknown.status)
+
+    const again = await post('/__notes/answer', { id: 'N012', verdict: 'yes', by: 'Ren' })
+    assert.strictEqual(again.status, 409, 'answering an already-answered question a second time must respond 409, never silently re-write the row: got ' + again.status)
+
+    const resolveAttempt = await post('/__notes/resolve', { id: 'N013', by: 'Ren' })
+    assert.strictEqual(resolveAttempt.status, 400, 'POST /__notes/resolve on a question must respond 400 — it is never the resolve path for a question: got ' + resolveAttempt.status)
+    assert.match(resolveAttempt.body, /answer it/, 'the resolve-on-question refusal must carry the exact D3 phrase "answer it": got ' + resolveAttempt.body)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260906-03-6
+// ---------------------------------------------------------------------------
+test('AC-20260906-03-6: notes-layer.browser.js renders a distinct question row (claim, "I assumed", "I rejected:") with three controls whose labels are exactly "Yes, that\'s right"/"No, it\'s…"/"Later"; clicking "Yes, that\'s right" posts {id, verdict:"yes", by}; the composer gains four reason chips and a scope toggle whose "Whole project" state posts scope:"project"; an answered question renders "You confirmed" with no controls; the document-level style CONTINUES TO be the single body.lb-open .nl-host{display:none} rule', async () => {
+  const src = fs.readFileSync(path.join(SPEC, 'scripts/lib/notes-layer.browser.js'), 'utf8')
+  const textOf = (el) => [el.textContent, el.innerHTML].filter((v) => typeof v === 'string').join(' ')
+
+  async function evalWithNotes(notes) {
+    const { document, created } = makeNotesLayerDom({ metaContent: 'mock', screenLabel: 'a' })
+    const posts = []
+    const sandbox = {
+      location: { pathname: '/mocks/a.html', search: '' },
+      document,
+      window: { prompt: () => 'jj' },
+      localStorage: { getItem: () => 'jj', setItem() {} },
+      fetch(url, opts) {
+        if (opts && opts.method === 'POST') {
+          posts.push({ url, body: opts.body ? JSON.parse(opts.body) : null })
+          return Promise.resolve({ json: () => Promise.resolve({}) })
+        }
+        return Promise.resolve({ json: () => Promise.resolve(notes) })
+      },
+      URLSearchParams,
+    }
+    vm.createContext(sandbox)
+    vm.runInContext(src, sandbox)
+    for (let i = 0; i < 6; i++) await Promise.resolve()
+    return { document, created, posts }
+  }
+
+  const question = {
+    id: 'N010', scope: 'mock', screen: 'a', state: 'default', kind: 'question', ledgerId: 'W7',
+    text: 'single-use link', claim: 'single-use link', rejected: 'durable link', tag: 'inferred', status: 'open',
+    by: 'session', at: new Date().toISOString(), addressed: null, reply: null, resolvedBy: null, resolvedAt: null, answer: null,
+  }
+  const { document, created, posts } = await evalWithNotes([question])
+
+  const allText = created.map(textOf).join(' | ')
+  assert.ok(allText.includes('I assumed'), 'D5: a question row must render the literal "I assumed": got ' + allText)
+  assert.ok(allText.includes('single-use link'), 'D5: a question row must render its claim text: got ' + allText)
+  assert.ok(allText.includes('I rejected:') && allText.includes('durable link'),
+    'D5: a question row carrying a rejected value must render "I rejected: <rejected>": got ' + allText)
+
+  const buttons = created.filter((el) => el.tagName === 'BUTTON')
+  const yesBtn = buttons.find((el) => el.textContent === "Yes, that's right")
+  const noBtn = buttons.find((el) => el.textContent === "No, it's…")
+  const laterBtn = buttons.find((el) => el.textContent === 'Later')
+  assert.ok(yesBtn && noBtn && laterBtn,
+    'D5: a question row must render exactly three controls labeled "Yes, that\'s right", "No, it\'s…", and "Later": got buttons ' + JSON.stringify(buttons.map((el) => el.textContent)))
+
+  yesBtn.onclick()
+  const answerPost = posts.find((p) => /\/__notes\/answer$/.test(p.url))
+  assert.ok(answerPost, 'D5: clicking "Yes, that\'s right" must POST to /__notes/answer: got ' + JSON.stringify(posts))
+  assert.deepStrictEqual(
+    { id: answerPost.body && answerPost.body.id, verdict: answerPost.body && answerPost.body.verdict, by: answerPost.body && answerPost.body.by },
+    { id: 'N010', verdict: 'yes', by: 'jj' },
+    'D5: the answer POST body must carry {id, verdict:"yes", by}: got ' + JSON.stringify(answerPost && answerPost.body))
+
+  const addBtn = created.find((el) => el.tagName === 'BUTTON' && el.textContent === '+ Note on this state')
+  assert.ok(addBtn, 'test setup requires the mock-scope composer trigger button to exist')
+  addBtn.onclick()
+  for (const label of ['Missing screen', 'Wrong direction', 'Wrong words', 'Other']) {
+    assert.ok(created.some((el) => el.textContent === label),
+      'D5: the composer must render a reason chip labeled "' + label + '": got ' + JSON.stringify(created.map((el) => el.textContent)))
+  }
+  const wholeProjectToggle = created.find((el) => el.textContent === 'Whole project')
+  assert.ok(wholeProjectToggle, 'D5: the mock-page composer must render a scope toggle option labeled "Whole project": got ' + JSON.stringify(created.map((el) => el.textContent)))
+  if (wholeProjectToggle.onclick) wholeProjectToggle.onclick()
+  const textarea = created.filter((el) => el.tagName === 'TEXTAREA').pop()
+  const saveBtn = created.filter((el) => el.tagName === 'BUTTON' && el.textContent === 'Save').pop()
+  assert.ok(textarea && saveBtn, 'test setup requires the composer\'s textarea and Save button to exist once opened')
+  textarea.value = 'there is no screen for cancelling a session'
+  saveBtn.onclick()
+  const addPost = posts.find((p) => /\/__notes\/add$/.test(p.url) && p.body && p.body.text === 'there is no screen for cancelling a session')
+  assert.ok(addPost, 'D5: after toggling "Whole project" and saving, a POST /__notes/add must be issued: got ' + JSON.stringify(posts))
+  assert.strictEqual(addPost.body.scope, 'project', 'D5: toggling "Whole project" then saving must post scope:"project": got ' + JSON.stringify(addPost.body))
+
+  const answeredQuestion = Object.assign({}, question, { status: 'resolved', answer: { verdict: 'yes', text: '', by: 'Ren', at: new Date().toISOString() } })
+  const { created: created2 } = await evalWithNotes([answeredQuestion])
+  const allText2 = created2.map(textOf).join(' | ')
+  assert.ok(allText2.includes('You confirmed'), 'D5: an answered "yes" question must render "You confirmed": got ' + allText2)
+  assert.ok(!created2.some((el) => el.tagName === 'BUTTON' && ["Yes, that's right", "No, it's…", 'Later'].includes(el.textContent)),
+    'D5: an answered question must render no answer controls: got ' + JSON.stringify(created2.filter((el) => el.tagName === 'BUTTON').map((el) => el.textContent)))
+
+  const headStyles = document.head.children.filter((el) => el.tagName === 'STYLE' && typeof el.textContent === 'string')
+  assert.strictEqual(headStyles.length, 1, 'exactly one document-level <style> may exist: got ' + headStyles.length)
+  assert.strictEqual(headStyles[0].textContent, 'body.lb-open .nl-host{display:none}',
+    'the document-level style must CONTINUE TO be the single "body.lb-open .nl-host{display:none}" rule verbatim: got ' + headStyles[0].textContent)
+})

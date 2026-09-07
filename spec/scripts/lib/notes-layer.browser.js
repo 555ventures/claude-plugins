@@ -2,6 +2,15 @@
 // `serve`, injected before </body> on every served mock page unless the request carries
 // ?clean. specs/20260902/10-page-notes-review-loop.md D3; specs/20260905/01-picks-on-the-atlas-page.md D5.
 //
+// specs/20260906/03-questions-on-the-wireframe.md D5: a note carrying kind:"question" renders as
+// a distinct row (id badge, "I assumed <claim>", "I rejected: <rejected>" when present) with
+// three controls — Yes/No(+text)/Later — that POST /__notes/answer; an answered question renders
+// "You confirmed"/"You corrected: <text>" and no controls. The composer on both scopes gains a
+// reason chip row; the mock-page composer alone gains a "Whole project" scope toggle. New
+// question-specific chrome carries `nl-q`-prefixed classes so spec/templates/mocks/viewer.css (a
+// parallel doctrine change, never touched here) can style it — this file adds no new local CSS
+// rule for them.
+//
 // Anchor = the served page's data-screen-label + the active state (the last-clicked
 // data-state-btn, else the first declared, else "default"), or the project scope — never an
 // element. Talks only to the /__notes/* endpoints design-atlas.js's serve exposes; every visual
@@ -161,28 +170,114 @@
     return d
   }
 
-  function compose(container, placeholder, onSave) {
+  // D5: the reason chip row shared by both scopes' composers — "Other" is the default until a
+  // different chip is clicked.
+  var REASONS = [
+    { label: 'Missing screen', value: 'missing-screen' },
+    { label: 'Wrong direction', value: 'wrong-direction' },
+    { label: 'Wrong words', value: 'wrong-words' },
+    { label: 'Other', value: 'other' },
+  ]
+
+  // `allowProjectToggle` (mock composer only) adds a "This screen | Whole project" scope toggle;
+  // `onSave(text, reason, sendAsProject)` is called only when the textarea is non-empty.
+  function buildComposer(container, placeholder, allowProjectToggle, onSave) {
     var box = document.createElement('div')
+    var reason = 'other'
+    var sendAsProject = false
+
+    var chipsRow = document.createElement('div'); chipsRow.className = 'nl-q-chips'
+    REASONS.forEach(function (r) {
+      var chip = document.createElement('button')
+      chip.className = 'nl-btn nl-q-chip' + (r.value === 'other' ? ' active' : '')
+      chip.textContent = r.label
+      chip.onclick = function () { reason = r.value }
+      chipsRow.appendChild(chip)
+    })
+    box.appendChild(chipsRow)
+
+    if (allowProjectToggle) {
+      var toggleRow = document.createElement('div'); toggleRow.className = 'nl-q-scope'
+      var thisScreen = document.createElement('button')
+      thisScreen.className = 'nl-btn nl-q-scope-btn active'; thisScreen.textContent = 'This screen'
+      var wholeProject = document.createElement('button')
+      wholeProject.className = 'nl-btn nl-q-scope-btn'; wholeProject.textContent = 'Whole project'
+      thisScreen.onclick = function () { sendAsProject = false; thisScreen.className = 'nl-btn nl-q-scope-btn active'; wholeProject.className = 'nl-btn nl-q-scope-btn' }
+      wholeProject.onclick = function () { sendAsProject = true; wholeProject.className = 'nl-btn nl-q-scope-btn active'; thisScreen.className = 'nl-btn nl-q-scope-btn' }
+      toggleRow.appendChild(thisScreen); toggleRow.appendChild(wholeProject)
+      box.appendChild(toggleRow)
+    }
+
     var ta = document.createElement('textarea'); ta.placeholder = placeholder
     var row = document.createElement('div'); row.className = 'nl-row'
     var cancel = document.createElement('button'); cancel.className = 'nl-btn'; cancel.textContent = 'Cancel'
     var save = document.createElement('button'); save.className = 'nl-btn primary'; save.textContent = 'Save'
     cancel.onclick = render
-    save.onclick = function () { if (ta.value.trim()) onSave(ta.value.trim()) }
+    save.onclick = function () { if (ta.value.trim()) onSave(ta.value.trim(), reason, sendAsProject) }
     row.appendChild(cancel); row.appendChild(save)
     box.appendChild(ta); box.appendChild(row)
     container.appendChild(box)
-    ta.focus()
+    if (ta.focus) ta.focus()
   }
   function composeProject() {
-    compose(proj, 'Direction-level: what is wrong with the whole set, or where should it go?', function (text) {
-      api('add', { scope: 'project', screen: null, state: null, text: text, by: author }).then(refresh)
+    buildComposer(proj, 'Direction-level: what is wrong with the whole set, or where should it go?', false, function (text, reason) {
+      api('add', { scope: 'project', screen: null, state: null, text: text, by: author, reason: reason }).then(refresh)
     })
   }
   function composeMock() {
-    compose(strip, 'What is wrong with "' + activeState + '", or what should change?', function (text) {
-      api('add', { scope: 'mock', screen: screen, state: activeState, text: text, by: author }).then(refresh)
+    buildComposer(strip, 'What is wrong with "' + activeState + '", or what should change?', true, function (text, reason, sendAsProject) {
+      if (sendAsProject) {
+        api('add', { scope: 'project', screen: null, state: null, text: text, by: author, reason: reason }).then(refresh)
+      } else {
+        api('add', { scope: 'mock', screen: screen, state: activeState, text: text, by: author, reason: reason }).then(refresh)
+      }
     })
+  }
+
+  // D5: a question row — id badge, "I assumed <claim>", "I rejected: <rejected>" when present,
+  // and three controls (Yes/No+text/Later) while open; "You confirmed"/"You corrected: <text>"
+  // and no controls once answered.
+  function questionRow(n) {
+    var d = document.createElement('div')
+    d.className = 'n nl-q' + (n.status === 'resolved' ? ' done' : '')
+    var idBadge = document.createElement('b'); idBadge.textContent = n.ledgerId || n.id
+    var body = document.createElement('span'); body.className = 't nl-q-body'
+    var assumed = document.createElement('div'); assumed.textContent = 'I assumed ' + (n.claim != null ? n.claim : n.text)
+    body.appendChild(assumed)
+    if (n.rejected) {
+      var rejected = document.createElement('small'); rejected.textContent = 'I rejected: ' + n.rejected
+      body.appendChild(rejected)
+    }
+    d.appendChild(idBadge); d.appendChild(body)
+
+    if (n.status === 'resolved') {
+      var verdict = document.createElement('small'); verdict.className = 'nl-q-verdict'
+      verdict.textContent = n.answer && n.answer.verdict === 'no' ? 'You corrected: ' + n.answer.text : 'You confirmed'
+      body.appendChild(verdict)
+      return d
+    }
+
+    var controls = document.createElement('div'); controls.className = 'nl-row nl-q-controls'
+    var yesBtn = document.createElement('button'); yesBtn.className = 'nl-btn'; yesBtn.textContent = "Yes, that's right"
+    yesBtn.onclick = function () { api('answer', { id: n.id, verdict: 'yes', by: author }).then(refresh) }
+    var noBtn = document.createElement('button'); noBtn.className = 'nl-btn'; noBtn.textContent = "No, it's…"
+    noBtn.onclick = function () {
+      var box = document.createElement('div'); box.className = 'nl-q-correct'
+      var ta = document.createElement('textarea'); ta.placeholder = 'What is actually true?'
+      var save = document.createElement('button'); save.className = 'nl-btn primary'; save.textContent = 'Save'
+      save.onclick = function () {
+        if (!ta.value.trim()) return
+        api('answer', { id: n.id, verdict: 'no', text: ta.value.trim(), by: author }).then(refresh)
+      }
+      box.appendChild(ta); box.appendChild(save)
+      d.appendChild(box)
+      if (ta.focus) ta.focus()
+    }
+    var laterBtn = document.createElement('button'); laterBtn.className = 'nl-btn'; laterBtn.textContent = 'Later'
+    laterBtn.onclick = function () { /* nothing written — the question stays open */ }
+    controls.appendChild(yesBtn); controls.appendChild(noBtn); controls.appendChild(laterBtn)
+    d.appendChild(controls)
+    return d
   }
 
   function render() {
@@ -217,7 +312,10 @@
       proj.innerHTML = ''
       var projHead = document.createElement('h4'); projHead.textContent = 'Project notes (' + openProj + ' open)'
       proj.appendChild(projHead)
-      projectNotes.filter(function (n) { return showResolved || n.status !== 'resolved' }).forEach(function (n) { proj.appendChild(noteRow(n)) })
+      // D5: an answered question stays visible (its own row already reads as settled — "You
+      // confirmed"/"You corrected") — only a plain resolved note hides behind "Show resolved".
+      projectNotes.filter(function (n) { return n.kind === 'question' || showResolved || n.status !== 'resolved' })
+        .forEach(function (n) { proj.appendChild(n.kind === 'question' ? questionRow(n) : noteRow(n)) })
       var projAdd = document.createElement('button'); projAdd.className = 'nl-btn'; projAdd.textContent = '+ Note'
       projAdd.onclick = composeProject
       proj.appendChild(projAdd)
@@ -227,8 +325,8 @@
       strip.innerHTML = ''
       var stripHead = document.createElement('h4'); stripHead.textContent = 'Notes — ' + activeState
       strip.appendChild(stripHead)
-      mockNotes.filter(function (n) { return n.state === activeState && (showResolved || n.status !== 'resolved') })
-        .forEach(function (n) { strip.appendChild(noteRow(n)) })
+      mockNotes.filter(function (n) { return n.state === activeState && (n.kind === 'question' || showResolved || n.status !== 'resolved') })
+        .forEach(function (n) { strip.appendChild(n.kind === 'question' ? questionRow(n) : noteRow(n)) })
       var stripAdd = document.createElement('button'); stripAdd.className = 'nl-btn'; stripAdd.textContent = '+ Note on this state'
       stripAdd.onclick = composeMock
       strip.appendChild(stripAdd)

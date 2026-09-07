@@ -151,3 +151,86 @@ body {
   border-radius: var(--v-radius);
   padding: var(--v-space-2) var(--v-space-3);
 }
+
+/* Question row (.nl-q*) — specs/20260906/03-questions-on-the-wireframe.md D5. A note row whose
+   text is a pinned ledger claim, rendered inside the notes layer's existing shadow roots
+   (notes-layer.browser.js mounts this file there, never into a served mock). Every color is an
+   existing --v-* role — no new token, no literal. */
+.nl-q {
+  border-top: 1px solid var(--v-border);
+  border-left: 2px solid var(--v-warn);
+  padding: var(--v-space-2) 0 var(--v-space-2) var(--v-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--v-space-1);
+}
+.nl-q:first-of-type { border-top: 0; }
+.nl-q-id {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--v-warn);
+  border: 1px solid var(--v-warn);
+  border-radius: 999px;
+  padding: 1px var(--v-space-2);
+  flex: none;
+  align-self: flex-start;
+}
+.nl-q-claim { color: var(--v-fg); }
+.nl-q-rejected { color: var(--v-muted); font-size: 12px; }
+.nl-q-actions {
+  display: flex;
+  gap: var(--v-space-2);
+  justify-content: flex-end;
+}
+/* An answered question loses its warn accent and its controls — the same "done" treatment
+   .nl-strip/.nl-proj already give a resolved note. */
+.nl-q-answered {
+  border-left-color: var(--v-border);
+  color: var(--v-muted);
+}
+.nl-q-text { color: var(--v-muted); font-size: 12px; }
+
+/* Composer reason chips (.nl-chips/.nl-chip) and the mock-page scope toggle (.nl-scope) —
+   same D5. Unselected chips/scope read as .v-badge does; the selected state borrows the one
+   filled-button treatment (.v-btn.primary) rather than inventing a new fill. */
+.nl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--v-space-1);
+  margin: var(--v-space-1) 0;
+}
+.nl-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--v-border);
+  border-radius: 999px;
+  background: var(--v-muted-bg);
+  color: var(--v-muted);
+  padding: 2px var(--v-space-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+.nl-chip-on {
+  border-color: var(--v-primary);
+  background: var(--v-primary);
+  color: var(--v-primary-fg);
+}
+.nl-scope {
+  display: inline-flex;
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius);
+  overflow: hidden;
+}
+.nl-scope button {
+  border: 0;
+  background: var(--v-bg);
+  color: var(--v-fg);
+  padding: var(--v-space-1) var(--v-space-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.nl-scope-on {
+  background: var(--v-primary);
+  color: var(--v-primary-fg);
+}

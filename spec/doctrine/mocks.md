@@ -43,6 +43,9 @@ every `process` row never block — a fact the user ratified as prose stays coun
 and is re-tested on the screen that renders it, never re-asked as a question. A ledger that
 fails to parse never opens a gate (parse errors are reported, not silently passed).
 
+A row pinned as a question (§ Mocks: Page Notes, **Questions**) is answered on the page; the
+answer writes the row's status.
+
 **Counts line.** Every mark prints one fixed line:
 
 ```
@@ -185,6 +188,22 @@ withdrawn straight to `resolved` by its author). Nothing but the page can set `r
 HTTP endpoint reachable on a forwarded port must not be able to mark the session's own work
 done, and only the author who raised a note is positioned to judge that a re-look actually
 answered it.
+
+**Questions.** A question is a note whose text is a ledger claim: it exists only because a
+`product` row in § Provenance Ledger was written `inferred` or `invented`, and only the session
+can create one — `ledger add … --screen <label>` pins the assumption row and its question note
+in one call as the row is written, and `ledger ask --id <rowId> --screen <label>` pins an
+existing open row after the fact. Neither the client nor whoever signs off can author a
+question; a human free-form message is a note (optionally carrying `reason`), never a
+question. A question is answered only on the served page — `Yes, that's right` or `No, it's…`
+plus a one-line correction — never in chat and never through `notes resolve`; the answer writes the ledger
+row's status (`confirmed` for yes, `overridden` for no, both dated today) before it resolves
+the note, so the ledger is true the moment the human clicks and the note write is placement
+catching up. An unanswered question gates `journey-approved` (and `approved`) exactly as an
+unresolved note does, named on its own line first. Catch provenance — whether a fixed
+misunderstanding traces back to a pinned question, a free-form note, or neither — is derived
+from a catch row's `addressed.ledgerRow` link, never attested, and printed by `ledger counts`
+as `question · note · unlinked`.
 
 **Project notes block first.** Any note with `scope: "project"` not yet `resolved` refuses
 every mock-note mark (`journey-approved`, `approved`), naming the note id — a direction-level

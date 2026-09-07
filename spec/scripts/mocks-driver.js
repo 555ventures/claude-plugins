@@ -2,9 +2,11 @@
 // mocks-driver.js [--root <dir>] [--state]
 // mocks-driver.js --root <dir> --mark <mark> [--journey <j>] [--direction <k>] [--shape <k>]
 // mocks-driver.js --root <dir> --reopen journey:<j>|shapes|theme
-// mocks-driver.js --root <dir> ledger (add|set|catch|check|counts) [flags]
+// mocks-driver.js --root <dir> ledger (add|set|catch|check|counts|ask) [flags]
 // mocks-driver.js --root <dir> ledger add --id <i> --step <s> --kind <k> --claim <c> [--tag <t>]
 //                              [--status <st>] [--rejected <r>] [--dependents <d>] [--note <n>]
+//                              [--screen <label> [--state <s>]]
+// mocks-driver.js --root <dir> ledger ask --id <rowId> --screen <label> [--state <s>]
 // mocks-driver.js --root <dir> notes open
 // mocks-driver.js --root <dir> notes address --id <id> --change "<what changed>" [--ledger <rowId>]
 // mocks-driver.js --root <dir> notes reply --id <id> --text "<question back>"
@@ -57,6 +59,11 @@
 //   - migrate a legacy status.json: a root checkpointed at SKIN or REVIEW derives THEME or
 //     SIGNOFF from its still-live marks on the very next invocation; the retired fields it still
 //     carries are ignored on read and dropped on the next write — there is nothing to migrate.
+//   - answer a question (specs/20260906/03-questions-on-the-wireframe.md D2-D4): `ledger add
+//     --screen`/`ledger ask` only PIN an assumption row to a screen as a question note; the page
+//     is the only place a question is answered (POST /__notes/answer on design-atlas.js), which
+//     is also the one writer of the ledger row's confirmed/overridden status for a question — this
+//     driver never writes that transition itself.
 //
 // Deviation (specs/20260902/07-mocks-command-driver.deviations.md): D8 names "theme-directions"
 // and "theme" product ledger rows without pinning their identification shape (ledger ids are
@@ -82,7 +89,7 @@ const path = require('path')
 const { spawnSync } = require('child_process')
 const { runChild, writeOut } = require('./lib/driver-io')
 const { parseLedger, gateVerdict, countsLine, appendAssumption, appendCatch, setStatus } = require('./lib/mocks-ledger')
-const { readNotes, writeNotes, addressNote, replyNote, groupOpen, unresolvedFor } = require('./lib/mocks-notes')
+const { readNotes, writeNotes, addNote, addressNote, replyNote, groupOpen, unresolvedFor } = require('./lib/mocks-notes')
 const picksLib = require('./lib/mocks-picks.js')
 
 function die(msg) { writeOut(2, 'mocks-driver: ' + msg + '\n'); process.exit(2) }
@@ -375,6 +382,11 @@ function notesOrEmpty() {
 // D5: any open (not-resolved) project note blocks every advancing mark, named first; then, when
 // `labels` is given, an unresolved note on any of those screens blocks it too. `approved` calls
 // this with every declared label (D5: "any unresolved note anywhere").
+// specs/20260906/03-questions-on-the-wireframe.md D4: an unanswered question on any of `labels`
+// blocks the mark too, named on its own line before any plain unresolved note — by ledger id and
+// screen, never the note id, and callers run this BEFORE requireGateOpen() (a question's ledger
+// row is by construction open+inferred, so requireGateOpen's own "provenance ledger is blocked"
+// message would otherwise fire first and the promised wording could never be reached).
 function requireNotesResolved(labels, journeyName) {
   const notes = notesOrEmpty()
   const openProject = notes.filter((n) => n.scope === 'project' && n.status !== 'resolved')
@@ -383,9 +395,15 @@ function requireNotesResolved(labels, journeyName) {
   }
   if (labels && labels.length) {
     const unresolved = unresolvedFor(notes, labels)
-    if (unresolved.length) {
-      const where = journeyName ? ' on ' + journeyName : ''
-      die('unresolved note(s)' + where + ': ' + unresolved.map((n) => n.id).join(', ') + ' — the author resolves after a re-look')
+    const where = journeyName ? ' on ' + journeyName : ''
+    const questions = unresolved.filter((n) => n.kind === 'question')
+    if (questions.length) {
+      const list = questions.map((n) => n.ledgerId + ' (' + n.screen + ')').join(', ')
+      die('unanswered question(s)' + where + ': ' + list + ' — answer them on the page')
+    }
+    const plain = unresolved.filter((n) => n.kind !== 'question')
+    if (plain.length) {
+      die('unresolved note(s)' + where + ': ' + plain.map((n) => n.id).join(', ') + ' — the author resolves after a re-look')
     }
   }
 }
@@ -406,17 +424,57 @@ function noteLine(n, indent) {
   return line
 }
 
-// D4's `notes open` — exact shape: project notes first (⚠️ tail while any is open), then
-// journey -> screen -> state, derived from seed.md via groupOpen.
+// specs/20260906/03-questions-on-the-wireframe.md D6: questions print in their own block, before
+// the plain-note listing — "❓ questions: N open" (N = still-open questions only), then each open
+// question grouped journey -> screen the way groupOpen groups plain notes, then every answered
+// question under "answered:" (D1's answer.verdict "yes"/"no" rendered "yes" / `no → "<text>"`).
+function questionLines(notes, seed) {
+  const questions = notes.filter((n) => n.kind === 'question')
+  const open = questions.filter((n) => n.status !== 'resolved')
+  const answered = questions.filter((n) => n.status === 'resolved')
+
+  const labelToJourney = new Map()
+  for (const [journeyName, j] of seed) for (const label of (j && j.labels) || []) labelToJourney.set(label, journeyName)
+  const journeys = new Map() // journeyName -> Map(screen -> notes[])
+  for (const n of open) {
+    const jn = labelToJourney.get(n.screen) || 'unassigned'
+    if (!journeys.has(jn)) journeys.set(jn, new Map())
+    const screens = journeys.get(jn)
+    if (!screens.has(n.screen)) screens.set(n.screen, [])
+    screens.get(n.screen).push(n)
+  }
+
+  const lines = ['❓ questions: ' + open.length + ' open']
+  for (const [jn, screens] of journeys) {
+    lines.push(jn)
+    for (const [screenLabel, ns] of screens) {
+      lines.push('  ' + screenLabel)
+      for (const n of ns) lines.push('    ' + n.id + ' [' + n.ledgerId + '] ' + n.text)
+    }
+  }
+  if (answered.length) {
+    lines.push('answered:')
+    for (const n of answered) {
+      const verdictText = n.answer && n.answer.verdict === 'no' ? 'no → "' + (n.answer.text || '') + '"' : 'yes'
+      lines.push('  ' + n.id + ' [' + n.ledgerId + '] ' + verdictText)
+    }
+  }
+  return lines
+}
+
+// D4's `notes open` — exact shape: the D6 questions block first, then plain notes (project first,
+// with a ⚠️ tail while any is open, then journey -> screen -> state, derived from seed.md via
+// groupOpen); questions never appear twice — the plain listing below excludes them.
 function cmdNotesOpen() {
   const notes = notesOrEmpty()
   const seed = currentSeedJourneys()
-  const { project, journeys } = groupOpen(notes, seed)
-  const notResolved = notes.filter((n) => n.status !== 'resolved')
+  const plainNotes = notes.filter((n) => n.kind !== 'question')
+  const { project, journeys } = groupOpen(plainNotes, seed)
+  const notResolved = plainNotes.filter((n) => n.status !== 'resolved')
   const mockCount = notResolved.filter((n) => n.scope === 'mock').length
   const addressedCount = notResolved.filter((n) => n.status === 'addressed').length
 
-  const lines = []
+  const lines = questionLines(notes, seed)
   lines.push('📝 open notes: ' + notResolved.length + ' (' + project.length + ' project · ' + mockCount + ' mock) · addressed: ' + addressedCount)
   if (project.length) {
     lines.push('project')
@@ -803,12 +861,15 @@ function handleJourneyDrawn(journeyName) {
 }
 
 function handleJourneyApproved(journeyName) {
-  requireGateOpen()
   if (!journeyName) die('--journey <name> is required')
   const st = status.journeys[journeyName]
   if (!st || !st.drawn) die('journey "' + journeyName + '" has not been drawn yet — mark journey-drawn --journey ' + journeyName + ' first')
   const j = currentSeedJourneys().get(journeyName)
+  // specs/20260906/03-questions-on-the-wireframe.md's ruling on D4: the notes gate (question-aware)
+  // runs BEFORE requireGateOpen — otherwise a question's own open/inferred ledger row trips the
+  // generic ledger-blocked message first and the question wording is never reached.
   requireNotesResolved(j ? j.labels : [], journeyName)
+  requireGateOpen()
   requireRenderGateMocks((j ? j.labels : []).map((l) => mockFile(l)), journeyName)
   const stop = requireStopDecision('journey-approved:' + journeyName, 'stop open journey:' + journeyName)
   st.approved = nowIso()
@@ -893,13 +954,15 @@ function handleThemePicked(directionArg) {
 // decider from the stop's own "by" — there is no precondition that a mock already carry
 // data-status="approved" (D5 rationale: with no review loop nobody would ever set it by hand).
 function handleApproved() {
-  requireGateOpen()
   if (!status.marks.themePicked) die('theme-picked first')
   for (const [jn] of currentSeedJourneys()) {
     const st = status.journeys[jn]
     if (!st || !st.approved) die('journey "' + jn + '" is not approved — mark journey-approved --journey ' + jn + ' first')
   }
+  // specs/20260906/03: notes gate (question-aware) runs before requireGateOpen — same ordering
+  // reason as handleJourneyApproved above.
   requireNotesResolved(allDeclaredLabels(), null)
+  requireGateOpen()
   const stop = requireStopDecision('approved', 'stop open signoff')
 
   const files = mocksTopLevelHtmlFiles()
@@ -1006,18 +1069,66 @@ function doReopen(target) {
 // ---------------------------------------------------------------------------
 // ledger subcommand (D14).
 // ---------------------------------------------------------------------------
+// specs/20260906/03-questions-on-the-wireframe.md D2: the shared refusal checks `ledger add
+// --screen` and `ledger ask` both run before pinning a row as a question — a process row is
+// never a question, a said-by-user/ratified-doc row has nothing to ask, and the screen must be
+// one the seed actually declares.
+function refuseUnaskable(prefix, kind, tag, screenArg) {
+  if (kind === 'process') die(prefix + ': --screen on a process row is never a question for the user')
+  if (tag === 'said-by-user' || tag === 'ratified-doc') {
+    die(prefix + ': --screen on a "' + tag + '" tag — nothing to ask — the user already said it')
+  }
+  if (!allDeclaredLabels().includes(screenArg)) die(prefix + ': unknown screen "' + screenArg + '"')
+}
+
 function cmdLedger(sub, args) {
   const larg = (name) => flagArg(args, name)
   if (sub === 'add') {
+    const screenArg = larg('--screen')
+    const stateArg = larg('--state')
+    const kind = larg('--kind')
+    const tag = larg('--tag')
+    const claim = larg('--claim')
+    const id = larg('--id')
+    if (screenArg) refuseUnaskable('ledger add', kind, tag, screenArg)
     let out
     try {
       out = appendAssumption(ledgerTextOrDie(), {
-        id: larg('--id'), step: larg('--step'), kind: larg('--kind'), claim: larg('--claim'),
-        tag: larg('--tag'), status: larg('--status'), rejected: larg('--rejected'),
+        id, step: larg('--step'), kind, claim,
+        tag, status: larg('--status'), rejected: larg('--rejected'),
         dependents: larg('--dependents'), note: larg('--note'),
       })
     } catch (e) { die('ledger add: ' + e.message) }
     fs.writeFileSync(ledgerPath, out)
+    if (screenArg) {
+      const notes = notesOrEmpty()
+      let result
+      try {
+        result = addNote(notes, { kind: 'question', ledgerId: id, scope: 'mock', screen: screenArg, state: stateArg || null, text: claim, by: 'session' })
+      } catch (e) { die('ledger add: ' + e.message) }
+      writeNotes(root, result.notes)
+    }
+    process.exit(0)
+  }
+  if (sub === 'ask') {
+    const id = larg('--id')
+    const screenArg = larg('--screen')
+    const stateArg = larg('--state')
+    if (!id) die('ledger ask: --id <id> is required')
+    if (!screenArg) die('ledger ask: --screen <label> is required')
+    const parsed = parseLedger(ledgerTextOrDie())
+    const row = parsed.assumptions.find((a) => a.id === id)
+    if (!row) die('ledger ask: no assumption row "' + id + '" found')
+    refuseUnaskable('ledger ask', row.kind, row.tag, screenArg)
+    if (row.status !== 'open') die('ledger ask: row "' + id + '" must be open (found "' + row.status + '")')
+    const notes = notesOrEmpty()
+    const already = notes.find((n) => n.kind === 'question' && n.ledgerId === id)
+    if (already) die(id + ' is already a question on ' + already.screen)
+    let result
+    try {
+      result = addNote(notes, { kind: 'question', ledgerId: id, scope: 'mock', screen: screenArg, state: stateArg || null, text: row.claim, by: 'session' })
+    } catch (e) { die('ledger ask: ' + e.message) }
+    writeNotes(root, result.notes)
     process.exit(0)
   }
   if (sub === 'set') {
@@ -1048,10 +1159,27 @@ function cmdLedger(sub, args) {
     process.exit(1)
   }
   if (sub === 'counts') {
-    writeOut(1, countsLine(parseLedger(ledgerTextOrDie())) + '\n')
+    const parsed = parseLedger(ledgerTextOrDie())
+    writeOut(1, countsLine(parsed) + '\n' + catchProvenanceLine(parsed) + '\n')
     process.exit(0)
   }
-  die('ledger: unknown subcommand "' + sub + '" — one of: add, set, catch, check, counts')
+  die('ledger: unknown subcommand "' + sub + '" — one of: add, set, catch, check, counts, ask')
+}
+
+// specs/20260906/03-questions-on-the-wireframe.md D6: derived, never attested — a catch row
+// counts as "question" when some question note's addressed.ledgerRow names it, "note" when some
+// plain note's addressed.ledgerRow does, "unlinked" otherwise.
+function catchProvenanceLine(parsed) {
+  const notes = notesOrEmpty()
+  let question = 0; let note = 0; let unlinked = 0
+  for (const c of parsed.catches) {
+    const byQuestion = notes.some((n) => n.kind === 'question' && n.addressed && n.addressed.ledgerRow === c.id)
+    const byNote = notes.some((n) => n.kind !== 'question' && n.addressed && n.addressed.ledgerRow === c.id)
+    if (byQuestion) question++
+    else if (byNote) note++
+    else unlinked++
+  }
+  return '📎 catches: ' + parsed.catches.length + ' — question ' + question + ' · note ' + note + ' · unlinked ' + unlinked
 }
 
 // ---------------------------------------------------------------------------
@@ -1163,6 +1291,16 @@ function journeysProgressLine(journeys) {
   return 'journeys: ' + drawn + '/' + total + ' drawn · ' + approved + '/' + total + ' approved · ' + openRowsLine()
 }
 
+// specs/20260906/03-questions-on-the-wireframe.md D7: per-journey question counts (open/total)
+// anchored to the journey's own declared labels — feeds the draw/approve step progress lines.
+function journeyQuestionCounts(jn, journeys) {
+  const j = journeys.get(jn)
+  const labels = j ? j.labels : []
+  const qs = notesOrEmpty().filter((n) => n.kind === 'question' && labels.includes(n.screen))
+  const open = qs.filter((n) => n.status !== 'resolved').length
+  return 'questions: ' + open + '/' + qs.length + ' open on ' + jn
+}
+
 function printWireframesStep() {
   if (!status.marks.canonWritten) {
     printStepBlock('WIREFRAMES', 'write the canon — one hand before any screen',
@@ -1177,8 +1315,9 @@ function printWireframesStep() {
     if (!st || !st.drawn) {
       printStepBlock('WIREFRAMES', 'draw journey ' + jn + ' — one screen at a time, canon first',
         ['design/mocks/seed.md (## Journeys › ' + jn + ')', 'design/mocks/canon.md', 'docs/design/research-brief.md', 'design/mocks/ledger.md'],
-        'Mocks: State Machine', journeysProgressLine(journeys),
-        [driverCmd('--mark journey-drawn --journey ' + jn)])
+        'Mocks: State Machine', journeysProgressLine(journeys) + ' · ' + journeyQuestionCounts(jn, journeys),
+        [driverCmd('--mark journey-drawn --journey ' + jn),
+          'pin every inferred/invented product assumption you write while drawing: ledger add … --screen <label>'])
       return
     }
   }
@@ -1188,7 +1327,7 @@ function printWireframesStep() {
       const look = lookLineAndThen('journey-approved:' + jn, 'journey:' + jn, () => driverCmd('--mark journey-approved --journey ' + jn))
       printStepBlock('WIREFRAMES', 'approve journey ' + jn + ' — look, then approve',
         ['design/mocks/ledger.md'],
-        'Mocks: State Machine', journeysProgressLine(journeys) + '\n' + look.look,
+        'Mocks: State Machine', journeysProgressLine(journeys) + ' · ' + journeyQuestionCounts(jn, journeys) + '\n' + look.look,
         look.then)
       return
     }

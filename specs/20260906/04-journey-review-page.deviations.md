@@ -45,13 +45,6 @@
   caller that sets it, to `/review/<j>.html` (D6's own subject — "mocks-driver.js stop open
   journey:<j> stamps..."). Same url/probe-target result AC-20260906-04-8/-9 pin; zero risk to the
   generic CLI's existing contract.
-- Scripts worker (spec/scripts/design-atlas.js): `injectNotesScript`'s no-`</body>` fallback
-  (serving a bodyless fragment mock, common in this repo's test fixtures) appended `'\n' + tag`,
-  producing a stray blank line before the injected notes/state tags — verified against the real
-  server on unmodified HEAD (`git stash` + a live request) before touching it, so this is a
-  pre-existing quirk, not something D2 introduces. AC-20260906-04-10's "CONTINUES TO serve the
-  exact bytes served today" pins the no-blank-line form; changed the fallback to `html + tag` (no
-  forced newline) to match. No other test exercises this branch's exact bytes.
 - Scripts worker, review fix round (spec/scripts/design-atlas.js, F4 test only): the new F4 pin
   found that `cmdLook`'s existing (pre-F4) failure path calls `die()`, which `process.exit()`s
   synchronously — a pending `try/finally` cleanup of the `.look-<label>.html` sibling never runs
@@ -61,13 +54,30 @@
   application code (out of scope for this round) — the new test tolerates either the success
   path (sibling cleaned) or the failure path (sibling may remain, remedy names the file:// target)
   instead of asserting cleanup unconditionally.
-- Scripts worker — found, not fixed (tests/mocks/mocks-driver-look-stops.test.js,
-  AC-20260905-04-5, outside this spec's File Plan): that pre-existing test opens
-  `stop open journey:onboarding` and asserts the printed/persisted URL matches
-  `/^…\/atlas\/index\.html#stop-P\d{3}$/` — exactly the literal D6 retires for every
-  `journey:<j>` stop. This is the documented collision-closure class (`.claude/rules/spec-
-  pipeline.md` Gotchas: "a locked Decision that retires a literal... can leave a live assertion
-  outside the File Plan"); the fix is updating that regex to `\/review\/onboarding\.html#stop-
-  P\d{3}$` in place, retagged AC-20260906-04-8 alongside its existing AC-20260905-04-5 citation —
-  a tests/ edit outside a scripts worker's remit, left for the test owner/orchestrator. Left RED,
-  not weakened, not routed around in application code.
+- Scripts worker — found in round 1 (tests/mocks/mocks-driver-look-stops.test.js,
+  AC-20260905-04-5, outside this spec's File Plan): that pre-existing test pinned the atlas URL
+  for `stop open journey:<j>`, colliding with D6. Resolved by the coordinator between rounds
+  (the test is now `AC-20260905-04-5/AC-20260906-04-8`, pinning the review-page URL) — noted here
+  only because this entry previously described it as still open.
+- Scripts worker, review round 2 (spec/scripts/design-atlas.js, F7): the new `/review/<j>.html`
+  route double-decoded the journey segment — `createRequestHandler` already runs
+  `decodeURIComponent` once on `urlObj.pathname` (the try/catch building `fullPath`/`reqPath`), so
+  the route's own second `decodeURIComponent(reviewMatch[1])` threw an uncaught `URIError` on a
+  malformed escape (e.g. `/review/%25.html`), crashing the whole `serve` process (exit 1) and
+  dropping every open look for the host. Fixed by using `reviewMatch[1]` as-is (reqPath is already
+  decoded); the unknown-journey 404 arm now answers instead.
+- Scripts worker, review round 2 (spec/scripts/design-atlas.js, F8 — reverts a round-1 change):
+  round 1 changed `injectNotesScript`'s no-`</body>` fallback from `html + '\n' + tag` to
+  `html + tag` after finding the blank line looked like a bug — but AC-20260906-04-10 pins
+  "CONTINUES TO serve the exact bytes served today" against the REAL bytes at the spec's own
+  pre-image (`git show 16aea5f:spec/scripts/design-atlas.js`), which do include the blank line.
+  Reverted to `html + '\n' + tag`; `insertBeforeBodyEnd` (F1, a distinct helper for the state
+  click script) is unaffected and stays `html + snippet`. Re-pinned the AC-10 `plain.body` literal
+  to include the blank line and verified it against the 16aea5f source directly. The round-1
+  sidecar bullet claiming the no-blank-line form is what AC-10 pins is deleted (superseded by
+  this entry) rather than left contradicting the current code.
+- Scripts worker, review round 2 (spec/scripts/mocks-driver.js, F9): `cmdLook` now reads the
+  mock's bytes once up front and refuses (exit 2, naming the declared states) before building
+  either target when `--state` fails `/^[A-Za-z0-9_-]+$/` or the mock declares no matching
+  `data-state-btn` — one rule shared by the file:// and `--port` served paths, closing the
+  silent-drop-to-happy-state gap design-atlas.js's own `validState` (F5) left on this side.

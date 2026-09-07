@@ -11,6 +11,7 @@ const {
   advanceToSeedDone, advanceToCanonWritten, advanceToJourneyApproved,
   advanceToDirectionComposed, advanceToShortJourneyDrawn,
   writeFixtureCapture, writeCaptureConfig,
+  stubNpx,
 } = require('./mocks-driver-fixtures')
 
 // specs/20260905/04-per-project-look-server.md D3/D7: mocks-driver.js's `stop open`/`stop decide`
@@ -298,6 +299,9 @@ test('AC-20260906-04-9: stop open theme SHALL CONTINUE TO write the atlas URL (n
 test('AC-20260906-04-3: mocks-driver.js look <label> --state <s> --port <p> screenshots the served URL (design-atlas.js\'s own ?state= injection, D2) and never creates the .look-<label>.html sibling; without --port the sibling path is used exactly as before', async () => {
   const dir = tmpdir('mocks-driver-look-port')
   advanceToShortJourneyDrawn(dir, 'onboarding', ['signin', 'invite'])
+  // review fix round F9 refuses an undeclared --state — signin must actually declare "empty" for
+  // this test to exercise the --port path rather than F9's refusal.
+  writeWireframe(dir, 'signin', { stateBtn: '<button data-state-btn="empty">empty</button>' })
   const port = await freePort()
   const siblingPath = path.join(dir, 'design/mocks/.look-signin.html')
   const outPath = path.join(dir, 'design/mocks/.looks/signin.empty.png')
@@ -319,6 +323,7 @@ test('AC-20260906-04-3: mocks-driver.js look <label> --state <s> --port <p> scre
 
   const dir2 = tmpdir('mocks-driver-look-noport')
   advanceToShortJourneyDrawn(dir2, 'onboarding', ['signin', 'invite'])
+  writeWireframe(dir2, 'signin', { stateBtn: '<button data-state-btn="empty">empty</button>' })
   const r2 = runNode(SCRIPT, ['--root', dir2, 'look', 'signin', '--state', 'empty'])
   if (r2.status === 0) {
     assert.ok(!fs.existsSync(path.join(dir2, 'design/mocks/.look-signin.html')),
@@ -328,5 +333,27 @@ test('AC-20260906-04-3: mocks-driver.js look <label> --state <s> --port <p> scre
     assert.match(r2.stderr, /file:\/\/.*\.look-signin\.html/,
       'without --port the failure remedy must CONTINUE TO name the file:// sibling target, unchanged: ' + JSON.stringify(r2.stderr))
   }
+})
+
+// ---------------------------------------------------------------------------
+// review fix round F9: an undeclared/invalid --state must refuse BEFORE any target is built —
+// silently dropping it (design-atlas.js's own validState) would otherwise write a state-named PNG
+// of the HAPPY state, which looks like a captured state but is not one.
+// ---------------------------------------------------------------------------
+test('AC-20260906-04-3 (F9): look <label> --state "x\'y" refuses naming the mock\'s declared states before invoking the screenshot CLI at all — never a silently-dropped state producing a state-named PNG of the happy state', () => {
+  const dir = tmpdir('mocks-driver-look-badstate')
+  advanceToShortJourneyDrawn(dir, 'onboarding', ['signin', 'invite'])
+  writeWireframe(dir, 'signin', { stateBtn: '<button data-state-btn="empty">empty</button><button data-state-btn="loading">loading</button>' })
+  const argvLog = path.join(dir, 'npx-argv.log')
+  const okPath = stubNpx(dir, { exitCode: 0, logArgvTo: argvLog })
+
+  const r = runNode(SCRIPT, ['--root', dir, 'look', 'signin', '--state', "x'y", '--port', '4599'],
+    { env: { ...process.env, PATH: okPath } })
+  assert.notStrictEqual(r.status, 0, 'F9: an undeclared/invalid --state must refuse, never exit 0: ' + r.stdout + r.stderr)
+  assert.match(r.stderr, /empty/, 'F9: the refusal must name the mock\'s declared states, including "empty": ' + JSON.stringify(r.stderr))
+  assert.match(r.stderr, /loading/, 'F9: the refusal must name the mock\'s declared states, including "loading": ' + JSON.stringify(r.stderr))
+  assert.ok(!fs.existsSync(argvLog), 'F9: the refusal must happen before the screenshot CLI is ever invoked — the stub\'s argv log must not exist: got ' + (fs.existsSync(argvLog) ? fs.readFileSync(argvLog, 'utf8') : ''))
+  assert.ok(!fs.existsSync(path.join(dir, "design/mocks/.looks/signin.x'y.png")),
+    'F9: a silently-dropped state would write a state-named PNG of the happy state (looks captured, is not) — no such file may exist')
 })
 

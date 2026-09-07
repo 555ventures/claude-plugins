@@ -84,8 +84,8 @@
 //   1  `ledger check` found a blocked gate (rows printed).
 //   2  a refused mark (an unknown mark or the retired `--decider` flag included), a failed
 //      precondition (missing artifact, blocked gate, unreachable look probe, undeclared/undrawn
-//      journey for `stop open`), a usage error, `ledger check` grammar errors, or a dead child
-//      process (runChild's fail-closed refusal).
+//      journey for `stop open`, a `look --state` value the mock does not declare), a usage error,
+//      `ledger check` grammar errors, or a dead child process (runChild's fail-closed refusal).
 //   3  `stop open`/`stop decide` failed inside design-atlas.js itself (its own stderr forwarded).
 
 'use strict'
@@ -1226,6 +1226,19 @@ function cmdLook(label, args) {
   const stateArg = flagArg(args, '--state')
   const outArg = flagArg(args, '--out')
   const portArg = flagArg(args, '--port')
+  const mockHtml = fs.readFileSync(file, 'utf8')
+
+  // review fix round F9: a state design-atlas.js's ?state= would silently drop (invalid chars) or
+  // a state the mock never declares both produce, silently, a state-named PNG of the HAPPY state
+  // — refuse BEFORE any target is built, one rule for both the file:// and served paths.
+  if (stateArg) {
+    const declared = [...new Set([...mockHtml.matchAll(/data-state-btn\s*=\s*"([^"]+)"/g)].map((m) => m[1]))]
+    if (!/^[A-Za-z0-9_-]+$/.test(stateArg) || !declared.includes(stateArg)) {
+      die('look: state "' + stateArg + '" is not declared by design/mocks/' + label + '.html — use --state <one of: ' +
+        (declared.join(', ') || 'none declared') + '> or omit it for happy')
+    }
+  }
+
   const targets = loadTargetsOrNull()
   const vp = (targets && Array.isArray(targets.viewports) && targets.viewports[0]) || { width: 390, height: 844 }
   const outPath = outArg ? path.resolve(outArg) : path.join(mocksDir, '.looks', label + (stateArg ? '.' + stateArg : '') + '.png')
@@ -1237,7 +1250,7 @@ function cmdLook(label, args) {
     target = 'http://localhost:' + portArg + '/mocks/' + encodeURIComponent(label) + '.html?clean' + (stateArg ? '&state=' + encodeURIComponent(stateArg) : '')
   } else {
     siblingPath = path.join(mocksDir, '.look-' + label + '.html')
-    let content = fs.readFileSync(file, 'utf8')
+    let content = mockHtml
     if (stateArg) {
       const script = '<script>document.addEventListener(\'DOMContentLoaded\',function(){var b=document.querySelector(\'[data-state-btn="' + stateArg + '"]\');if(b)b.click()})</script>'
       content = /<\/body>/i.test(content) ? content.replace(/<\/body>/i, script + '</body>') : content + script

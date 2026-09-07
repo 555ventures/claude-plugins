@@ -68,7 +68,7 @@ Before SHAPES, WIREFRAMES, THEME, or SIGNOFF the driver runs the look-reachabili
 refuses, either fix the remedy (`npx playwright install chromium`) or, when a browser MCP is the
 real look path, `ToolSearch` for `claude-in-chrome` (or equivalent) and record `mocks-driver.js
 look-via browser` before re-running. To look at a screen, use `mocks-driver.js look <label>
-[--state <s>]` or the declared browser MCP — never approve on the HTML source alone.
+[--state <s>] [--port <n>]` or the declared browser MCP — never approve on the HTML source alone.
 
 **The user's look is a served atlas stop, never a question.** Before the first `stop open` of
 this run, start `node "$(spec-paths design-atlas)" serve --root . [--port <n>]` as a

@@ -1283,7 +1283,7 @@ function injectNotesScript(html, scope, prefix) {
   const tag = '<meta name="notes-scope" content="' + scope + '">\n' +
     '<script src="' + prefix + '/__notes/notes.js"></script>\n'
   const idx = html.lastIndexOf('</body>')
-  if (idx === -1) return html + tag
+  if (idx === -1) return html + '\n' + tag
   return html.slice(0, idx) + tag + html.slice(idx)
 }
 
@@ -1531,7 +1531,10 @@ function createRequestHandler(root, opts = {}) {
     }
     const reviewMatch = /^\/review\/([^/]+)\.html$/.exec(reqPath)
     if (reviewMatch && req.method === 'GET') {
-      const journey = decodeURIComponent(reviewMatch[1])
+      // review fix round F7: reqPath is already decoded once (the try/catch above) — a second
+      // decodeURIComponent here throws URIError uncaught on a malformed escape (e.g. /review/%25.html),
+      // which would exit the whole serve process and drop every open look for the host.
+      const journey = reviewMatch[1]
       let notes = []
       try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
       let ledgerRows = []

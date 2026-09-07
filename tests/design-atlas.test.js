@@ -2152,6 +2152,16 @@ test('AC-20260906-04-2: GET /review/onboarding.html derives 200 from the on-disk
     assert.strictEqual(reviewJs.headers['cache-control'], 'no-store', 'AC-2: /__review/review.js must be served with cache-control: no-store: got ' + JSON.stringify(reviewJs.headers))
     const libSrc = fs.readFileSync(path.join(SPEC, 'scripts/lib/review.browser.js'), 'utf8')
     assert.strictEqual(reviewJs.body, libSrc, 'AC-2: /__review/review.js must serve lib/review.browser.js verbatim: bytes differ')
+
+    // review fix round F7: reqPath is already decoded once by createRequestHandler — a malformed
+    // %-escape in the journey segment must 404 through the unknown-journey arm, never throw an
+    // uncaught URIError (which would exit the whole serve process and drop every open look).
+    const malformed = await get('/review/%25.html')
+    assert.strictEqual(malformed.status, 404, 'F7: GET /review/%25.html must 404 (never crash the server on a double-decode URIError): got ' + malformed.status)
+    assert.match(malformed.body, /onboarding/, 'F7: the 404 body must still name the declared journey "onboarding": got ' + JSON.stringify(malformed.body))
+
+    const stillUp = await get('/mocks/signin.html')
+    assert.strictEqual(stillUp.status, 200, 'F7: the handler must still answer GET /mocks/signin.html afterward — a crashed serve process would answer nothing at all: got ' + stillUp.status)
   })
 })
 
@@ -2184,8 +2194,8 @@ test('AC-20260906-04-3/AC-20260906-04-10: GET /mocks/signin.html?clean&state=emp
 
     const plain = await get('/mocks/signin.html')
     assert.strictEqual(plain.status, 200, 'test setup requires the plain (no state) request to 200: got ' + plain.status)
-    assert.strictEqual(plain.body, bodyHtml + '<meta name="notes-scope" content="mock">\n<script src="/__notes/notes.js"></script>\n',
-      'AC-3: with no state param the server must CONTINUE TO serve the exact bytes it serves today (mock bytes plus the notes-layer injection, no click script): got ' + JSON.stringify(plain.body))
+    assert.strictEqual(plain.body, bodyHtml + '\n' + '<meta name="notes-scope" content="mock">\n<script src="/__notes/notes.js"></script>\n',
+      'AC-3: with no state param the server must CONTINUE TO serve the exact bytes it serves today (mock bytes plus the notes-layer injection, no click script, including the blank line the fallback has always inserted): got ' + JSON.stringify(plain.body))
 
     // review fix round F1: on a mock with a real </body>, the click script must land BEFORE the
     // notes meta/script tag AND before </body> — not after the notes tag and </html>.

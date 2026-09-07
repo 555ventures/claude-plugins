@@ -44,7 +44,8 @@ diff_base: 16aea5f7c3c1e6731da9fa451550ffdc8a5a6e47
 | spec/scripts/mocks-driver.js | MODIFY | scripts | D6 stop url + probe target for `journey:<j>` only (`variants:<j>` keeps the atlas URL); `look` prefers `?state=` on a served URL |
 | spec/templates/mocks/viewer.css | MODIFY | doctrine | D4/D5 review-page classes (`.rv-*`) on the existing register — no new token, values untouched |
 | spec/doctrine/design.md | MODIFY | doctrine | D7 chrome rule in § Design Canon |
-| spec/doctrine/mocks.md | MODIFY | doctrine | D7 pointer in § Mocks: Look and Serve |
+| spec/doctrine/mocks.md | MODIFY | doctrine | D7 pointer in § Mocks: Look and Serve; the session's-own-look sentence carries `look … --port` (review round 2) |
+| spec/commands/mocks.md | MODIFY | doctrine | usage pointer gains `[--port <n>]` (review round 2 amendment; the rule's home stays mocks.md) |
 | tests/mocks/review-page.test.js | CREATE | tests | AC-20260906-04-1, AC-20260906-04-4, AC-20260906-04-5, AC-20260906-04-7 |
 | tests/design-atlas.test.js | MODIFY | tests | AC-20260906-04-2, AC-20260906-04-3, AC-20260906-04-6 |
 | tests/mocks/mocks-driver-look-stops.test.js | MODIFY | tests | AC-20260906-04-8 |

@@ -156,11 +156,13 @@ at `/review/<j>.html`, served by `design-atlas.js` alongside the atlas index —
 per-screen artboards with state tabs, and a question/note inspector answered in place. Its
 chrome follows the plugin-chrome rule, one binding home: design.md § Design Canon.
 
-**The session's own look** is `mocks-driver.js look <label> [--state <s>] [--out <png>]`: it
-writes a sibling `.look-<label>.html` (the mock plus an inline script that clicks
-`[data-state-btn="<s>"]` on load when `--state` is given), captures it with the Playwright CLI
-at the first declared viewport in `design/targets.json`, and deletes the sibling in a `finally`
-— the repo never accumulates look scratch files. `look-probe` exits 0 exactly when `npx
+**The session's own look** is `mocks-driver.js look <label> [--state <s>] [--port <n>] [--out
+<png>]`: with `--port` it captures the served `http://localhost:<port>/mocks/<label>.html?clean[&state=<s>]`
+(`design-atlas.js`'s own `?state=` injection, § Mocks: Look and Serve) and writes no sibling file;
+without `--port` it writes a sibling `.look-<label>.html` (the mock plus an inline script that
+clicks `[data-state-btn="<s>"]` on load when `--state` is given), captures it with the Playwright
+CLI at the first declared viewport in `design/targets.json`, and deletes the sibling in a
+`finally` — the repo never accumulates look scratch files. `look-probe` exits 0 exactly when `npx
 --no-install playwright --version` exits 0; this is the reachability signal because
 `require.resolve('playwright')` does not resolve from a host repo even when the CLI works.
 

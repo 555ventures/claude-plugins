@@ -1,6 +1,6 @@
 ---
 date: 2026-09-06
-status: implementing
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -89,6 +89,35 @@ The session draws `signin.html` with the happy path and three `data-state-btn` s
 **Why at journey-drawn and not only at approval.** The session finds the states while drawing; refusing at the drawn mark means the user's first look already includes them. Approval re-runs it so a redrawn screen cannot lose a state.
 
 **Fragile spots for build.** The fixture default flips every driver test to three-state mocks — run the mocks glob first and expect the render-gate fixture captures to see three states per mock (`render-gate` tests that count captures per mock must be re-read; they are in `tests/render/`, not touched by this spec, and use their own hosts).
+
+**The fixture default needs a `data-contract="none"` wrapper.** The three default buttons sit
+inside `<div data-contract="none">…</div>` in the labeled root. Undeclared, `advanceToApproved`'s
+fixtures fail the pre-existing hygiene(d) rule (specs/20260824/03 D1(d): a `data-state-btn` inside
+the labeled root with no `data-contract="none"` ancestor) the moment `approved`'s `check --matrix`
+call runs over them — found empirically by running the mocks glob straight after the plain fixture
+change. The pre-existing `opts.stateBtn` raw-HTML escape hatch (three look-stops tests need one
+exact button element with no wrapper) is kept working unchanged and bypasses `opts.states`
+entirely when passed.
+
+**AC-20260906-05-2 is green against the pre-image by design.** It pins the ABSENCE of the new
+mechanism on the flag-less path — the sanctioned green-pre-change shape, not a red-check miss.
+Confirmed by running it against the untouched pre-image.
+
+**A4 resolved: desktop-fill never engaged.** The mocks driver's render-gate leg captures at the
+fixture's single 390px viewport and the desktop-fill rule's `minViewport` is 1024, so the gray
+empty panel never reached the rule. No `data-narrow` escape was needed and none was added.
+
+**The real cost of D2 + D4 is test wall-clock, and it lands on file budgets.** Two extra
+`design-atlas.js` spawns per journey mark plus three-state mocks flowing through every render-gate
+fixture took the slowest mocks test file from 29 s at the pre-image to 54 s — past the per-file
+45 s budget (specs/20260903/07), with the whole suite still green. D7 is the resolution. A spec
+that adds per-screen work to a shared design fixture should expect to pay for it in a budget
+split, and should plan the split rather than discover it at the review gate.
+
+**The `-2` sibling name was already taken.** D7's literal `mocks-driver-2.test.js` belongs to
+specs/20260906/01 D11's earlier split; the next free number (`mocks-driver-3.test.js`) is used and
+the collision is cited in both files' headers. The two look-stops siblings had no collision and
+carry D7's literal names.
 
 ## Canonical Delta
 

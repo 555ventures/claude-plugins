@@ -1,0 +1,155 @@
+{
+  "runId": "rv_15be2a54ec71",
+  "ts": "2026-09-07T21:07:04.866Z",
+  "spec": "specs/20260906/05-gray-states-on-every-wireframe.md",
+  "tier": "standard",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1263,
+    "base": "0dbf31103b04780b87ff6f24eb2636007bb1a17b",
+    "head": "774858c17e4f18d866ea18d34f7223f8e8a0509d",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 0,
+      "observed": {
+        "outOfPlan": 0,
+        "files": []
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 342
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1232
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": {
+        "matches": 10
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": {
+        "files": 15,
+        "testsExecuted": 123
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 7,
+        "carried": 4,
+        "sanctioned": 3,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "D7 split may have altered or dropped a moved test rather than moving it verbatim",
+        "file": "/Users/jj/Projects/claude-plugins/tests/mocks/mocks-driver-3.test.js",
+        "line": 1,
+        "evidence": "Scratch script compared test bodies (whitespace-normalised) at base 0dbf311 vs HEAD across the three split pairs: mocks-driver (12 old → 14 new: 1 retag adding AC-20260906-05-5 to the existing accepting test, 2 new AC-3/AC-4 tests, 0 missing), look-stops (9 → 9, all bodies identical), look-stops-2 (6 → 6, all bodies identical); the two 'CHANGED' hits were the artefact of the last retained test's slice running to EOF in the old file, confirmed by direct diff showing only the moved-out tail. suite-output.txt: __FILE_BUDGET_OK__ slowest tests/mocks/mocks-driver-2.test.js 30449ms of 45000ms."
+      },
+      {
+        "claim": "journey-approved with a journey no longer in seed would run check --states with zero paths and print a misleading 'draw the missing states' remedy",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/mocks-driver.js",
+        "line": 900,
+        "evidence": "Executed: mark journey-approved --journey ghost after a real drawn journey → exit 2, stderr 'journey \"ghost\" has not been drawn yet — mark journey-drawn --journey ghost first'; the status.journeys guard at :890 fires before the states check is reached."
+      },
+      {
+        "claim": "data-no-state parsing might mishandle spaces after commas or honour the attribute on a non-root element",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/design-atlas.js",
+        "line": 107,
+        "evidence": "Executed check --states: data-no-state=\"loading, error\" on root + empty button → exit 0 CHECK PASS (1 file(s)); data-no-state=\"empty,loading,error\" on root → exit 0; data-no-state=\"loading,error\" on a child div → exit 1 'missing state(s) loading, error' (root-only per D1)."
+      },
+      {
+        "claim": "AC tests cite the AC-IDs without asserting the promised behaviour",
+        "file": "/Users/jj/Projects/claude-plugins/tests/mocks/mocks-driver.test.js",
+        "line": 1,
+        "evidence": "Read each: AC-1 asserts exit 0/CHECK PASS, exit 1 with exact 'missing state(s) loading, error — every wireframe carries…' line, opt-out pass, 'unknown state \"busy\"', canon exempt; AC-2 asserts stdout === 'CHECK PASS (1 file(s))\\n'; AC-3 asserts exit 2, 'consent.html: missing state(s) empty, loading, error', 'draw the missing states', journeys.onboarding.drawn null; AC-4 asserts the Then: block regexes; AC-5 tags the existing accepting test. Executed: node --test --test-name-pattern=AC-20260906-05 → 5/5 pass."
+      },
+      {
+        "claim": "D6 duplicate removal changed mocks-notes.test.js assertions",
+        "file": "/Users/jj/Projects/claude-plugins/tests/mocks/mocks-notes.test.js",
+        "line": 8,
+        "evidence": "git diff base..HEAD on the file: +1 require line, -8 lines of the local writeWireframe(dir,label) function, no other hunks; suite leg exit 0 with 1232 tests."
+      },
+      {
+        "claim": "Doctrine/behaviour change without a plugin.json bump or a § citation that matches no heading",
+        "file": "/Users/jj/Projects/claude-plugins/spec/.claude-plugin/plugin.json",
+        "line": 3,
+        "evidence": "version 7.95.0 → 7.96.0 with 'Changelog (last 3): 7.96.0 — gray states on every wireframe'; grep '^## ' confirms 'Mocks: Authoring Rules' (mocks.md:242), 'Provenance Ledger' (mocks.md:9), 'Design Canon (mocks, tokens, harness)' (design.md:6)."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 62000
+  }
+}

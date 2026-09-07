@@ -100,6 +100,12 @@ every width). The matrix expansion runs at `/spec:sketch`
 exit — expand, `check --matrix`, render the matrix screenshots, then ratify — so ratification
 is the single stamp that makes a mock render-gate-ready.
 
+Every wireframe declares its empty, loading and error states (`data-state-btn`) or opts a state
+out on the root (`data-no-state="<name>"`) with the product reason in the ledger
+(specs/20260906/05); `design-atlas.js check --states` is the presence check, run by the mocks
+driver at `journey-drawn` and `journey-approved`; the render gate captures every declared state
+as before.
+
 ## Executable design rules (2026-08-24, specs/20260824/04)
 
 `design-rules.json` entries may carry a `renderCheck` object with a closed `kind` set —

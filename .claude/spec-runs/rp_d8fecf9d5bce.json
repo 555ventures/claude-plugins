@@ -1,0 +1,63 @@
+{
+  "ts": "2026-09-07T21:15:01.519Z",
+  "stage": "replay",
+  "spec": "specs/20260906/05-gray-states-on-every-wireframe.md",
+  "runId": "rp_d8fecf9d5bce",
+  "reviewRunId": "rv_15be2a54ec71",
+  "class": "silent-fallback",
+  "files": [
+    "spec/scripts/mocks-driver.js"
+  ],
+  "legs": "green",
+  "outcome": "caught",
+  "tokens": 85016,
+  "via": "driver",
+  "patch": "diff --git a/spec/scripts/mocks-driver.js b/spec/scripts/mocks-driver.js\nindex 9d2f72e..1c6d0a2 100644\n--- a/spec/scripts/mocks-driver.js\n+++ b/spec/scripts/mocks-driver.js\n@@ -898,7 +898,7 @@ function handleJourneyApproved(journeyName) {\n   // D2: re-run check --states before the render gate — a redrawn screen cannot lose a state\n   // between journey-drawn and journey-approved.\n   const statesRes = runDesignAtlasCheck(['--states', ...(j ? j.labels : []).map(mockFile)])\n-  if (statesRes.status !== 0) {\n+  if ((statesRes.status || 0) > 1) {\n     die(childOutput(statesRes) + '\\ndraw the missing states in the wireframe register, then re-mark')\n   }\n   requireRenderGateMocks((j ? j.labels : []).map((l) => mockFile(l)), journeyName)\n",
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "handleJourneyApproved's states gate only refuses on design-atlas check exit > 1, but a states violation exits 1 (design-atlas.js:399), so journey-approved accepts a screen that lost every gray state after journey-drawn and records journeys.<j>.approved — D2's second gate is dead code for the case it exists for.",
+        "file": "/Users/jj/Projects/claude-plugins/.claude/worktrees/spec-05-gray-states-on-every-wireframe-1d63f5/spec/scripts/mocks-driver.js",
+        "line": 901,
+        "impact": "A wireframe redrawn without its empty, loading or error states between the drawn mark and the approved mark is approved silently, which is exactly the regression the approval-time re-check was promised to stop.",
+        "evidence": "Spec D2: `mocks-driver.js runs check --states ... at journey-approved (before the render gate); a violation refuses the mark with exit 2`; Rationale: `Approval re-runs it so a redrawn screen cannot lose a state`. Hunk mocks-driver.js:900-903: `const statesRes = runDesignAtlasCheck(['--states', ...]); if ((statesRes.status || 0) > 1) { die(...) }` while design-atlas.js:397-399 exits 1 on violations (`CHECK FAIL ... process.exit(1)`); the drawn arm at :881 correctly tests `!== 0`. Executed repro (scratch node:test file, real driver via mocks-driver-fixtures, deleted after): advanceToCanonWritten; writeWireframe all labels; mark journey-drawn → status 0; then writeWireframe(dir,'consent',{states:[]}) (file content: `<main data-screen-label=\"consent\" data-status=\"sketch\">consent</main>`, no data-state-btn, no data-no-state); writeCaptureConfig + decideLook approve; mark journey-approved → `APPROVED status 0`, stdout `✅ checkpoint — mocks state saved (WIREFRAMES → THEME)`, stderr empty, `journeys.onboarding.approved = 2026-09-07T21:13:34.213Z`. Promise-sweep residue: D2 cites AC-20260906-05-3, whose test exercises only journey-drawn; no test in the range asserts the journey-approved refusal, so the cited AC does not deliver D2's approval arm."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "D7 split dropped or weakened a test while moving files.",
+        "file": "/Users/jj/Projects/claude-plugins/.claude/worktrees/spec-05-gray-states-on-every-wireframe-1d63f5/tests/mocks/mocks-driver-3.test.js",
+        "line": null,
+        "evidence": "Sorted `^test(` names at base vs (original + sibling) at HEAD via comm: mocks-driver.test.js 12 → 8+6 (only delta: the AC-5 retag of the AC-20260902-07-6 test name plus new AC-3/AC-4 tests); look-stops 9 → 5+4 and look-stops-2 6 → 3+3 with zero names missing or added. Suite leg: 1232 tests, exit 0, `__FILE_BUDGET_OK__ slowest tests/mocks/mocks-driver-2.test.js 30036ms of 45000ms`."
+      },
+      {
+        "claim": "D3 doctrine citations point at headings that do not exist (§ Mocks: Authoring Rules, § Design Canon).",
+        "file": "/Users/jj/Projects/claude-plugins/.claude/worktrees/spec-05-gray-states-on-every-wireframe-1d63f5/spec/doctrine/design.md",
+        "line": 87,
+        "evidence": "awk on the nearest preceding `## ` heading: design.md:87 sits under `## Design Canon (mocks, tokens, harness)`; mocks.md:99 sits under `## Mocks: Authoring Rules`. `node spec/scripts/citations-check.js --root .` → TOTAL=181 CHECKED=80 SKIP=101 MISS=0."
+      },
+      {
+        "claim": "Behavior change without a plugin.json bump / new exit code undocumented.",
+        "file": "/Users/jj/Projects/claude-plugins/.claude/worktrees/spec-05-gray-states-on-every-wireframe-1d63f5/spec/.claude-plugin/plugin.json",
+        "line": 3,
+        "evidence": "Diff shows 7.95.0 → 7.96.0 with a 7.96.0 changelog entry; design-atlas.js header updated for --states and Exit codes unchanged (contract says `Exit codes: unchanged`); mocks-driver.js reuses die() (exit 2) for the refusal, no new code."
+      },
+      {
+        "claim": "AC-20260906-05-1 / -2 tests name the AC without asserting the behavior.",
+        "file": "/Users/jj/Projects/claude-plugins/.claude/worktrees/spec-05-gray-states-on-every-wireframe-1d63f5/tests/design-atlas.test.js",
+        "line": 672,
+        "evidence": "Read in full: AC-1 exercises all five arms (three-state pass with CHECK PASS line, empty-only exit 1 with the exact `missing state(s) loading, error — every wireframe carries...` line, data-no-state=\"loading,error\" pass, data-no-state=\"busy\" exit 1 with `unknown state \"busy\"`, shell canon exempt with CHECK PASS); AC-2 asserts stdout strictEqual `CHECK PASS (1 file(s))\\n` on the flag-less path. Both run the real script via runNode. AC-2's green-pre-change shape is recorded in the deviations file as a continuity pin."
+      },
+      {
+        "claim": "Fixture default wrap in data-contract=\"none\" and the kept opts.stateBtn escape hatch are unsanctioned deviations from D4.",
+        "file": "/Users/jj/Projects/claude-plugins/.claude/worktrees/spec-05-gray-states-on-every-wireframe-1d63f5/tests/mocks/mocks-driver-fixtures.js",
+        "line": 118,
+        "evidence": "Both recorded in specs/20260906/05-gray-states-on-every-wireframe.deviations.md with the pre-existing hygiene(d) rule cited (specs/20260824/03 D1(d)); D4's promise (`opts.states` default three, `[]` to omit) is implemented and AC-3's negative arm uses `states: []`; reconcile leg outOfPlan=0."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 95000
+  }
+}

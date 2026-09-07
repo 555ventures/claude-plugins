@@ -57,6 +57,18 @@
 //                                                  scope; /__picks/list and /__picks/decide
 //                                                  expose design/mocks/picks.json's look stops
 //                                                  through lib/mocks-picks.js.
+//                                                  specs/20260906/04 D1: GET /review/<j>.html
+//                                                  derives the journey review page on every
+//                                                  request (lib/review-page.js), 404 for an
+//                                                  undeclared journey naming the declared ones,
+//                                                  ?clean strips the chrome to the artboard grid;
+//                                                  GET /__review/review.js serves
+//                                                  lib/review.browser.js verbatim, no-store.
+//                                                  D2: GET /mocks/<label>.html accepts ?state=<s>,
+//                                                  injecting the same DOMContentLoaded click
+//                                                  script `look --state` injects, before the
+//                                                  notes-layer tag (?clean&state=<s> injects only
+//                                                  the click script).
 //   design-atlas.js shell sync  [--root <r>] [<mock|dir>…]
 //                                                  specs/20260901/04-shell-composed-mocks.md D5:
 //                                                  rewrite every declaring mock's chrome region
@@ -70,13 +82,19 @@
 //                                                  strip detected chrome and wrap the rest as the
 //                                                  content slot
 //   design-atlas.js stop open  --root <r> --kind pick|approve --key <k> --title <t>
-//                              --candidates <[group/]label=path>[,…] [--port <n>]
+//                              --candidates <[group/]label=path>[,…] [--port <n>] [--page <path>]
 //                                                  specs/20260905/04-per-project-look-server.md D2:
 //                                                  writes the stop (lib/mocks-picks.js) with url
-//                                                  http://localhost:<port>/atlas/index.html#stop-<id>
-//                                                  (port defaults to 4173, serve's own default),
-//                                                  then probes that served page for the stop's own
-//                                                  block; prints exactly one stdout line, the url.
+//                                                  http://localhost:<port><page>#stop-<id> (port
+//                                                  defaults to 4173, serve's own default; --page
+//                                                  defaults to /atlas/index.html), then probes that
+//                                                  served page for the stop's own block; prints
+//                                                  exactly one stdout line, the url.
+//                                                  specs/20260906/04 D6: mocks-driver.js's own
+//                                                  `stop open journey:<j>` passes
+//                                                  --page /review/<j>.html — every other caller
+//                                                  (shapes, theme, signoff, variants:<j>) leaves
+//                                                  --page unset and keeps the atlas URL.
 //   design-atlas.js stop decide --root <r> --id <P…> --verdict pick|approve|change
 //                                [--pick <g>] [--note <n>] --by <who>
 //   design-atlas.js stop list  --root <r>          one line per non-superseded stop
@@ -110,6 +128,10 @@ const shellLib = require('./lib/shell-region')
 const notesLib = require('./lib/mocks-notes')
 const { parseLedger, setStatus } = require('./lib/mocks-ledger')
 const picksLib = require('./lib/mocks-picks.js')
+// specs/20260906/04-journey-review-page.md D1: the pure journey-review builder — the served
+// GET /review/<j>.html route below adapts parseSeedJourneys()/loadTargets() into its input shape
+// and calls it fresh on every request (never cached, never storing derived state).
+const reviewPageLib = require('./lib/review-page')
 
 const die = (msg, code = 2) => { process.stderr.write('[design-atlas] ' + msg + '\n'); process.exit(code) }
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -560,6 +582,7 @@ function page(title, bodyHtml, extraHead = '') {
     '.sect{margin:2rem 0 0}\n' +
     '.sect>h2{font-size:17px;margin:0 0 .75rem;padding:.1rem 0 .1rem .7rem;border-left:4px solid var(--v-primary);display:flex;align-items:baseline;flex-wrap:wrap;gap:.5em}\n' +
     '.sect>h2 .count{color:var(--v-muted);font-size:12px;font-weight:500;border:1px solid var(--v-border);border-radius:99px;padding:0 .6em;background:var(--v-bg)}\n' +
+    '.sect>h2 .rv-review{margin-left:auto;font-size:13px;font-weight:500;color:var(--v-primary);text-decoration:none}\n' +
     '.sect>p.meta{margin:-.4rem 0 .75rem .95rem;font-size:13px;max-width:100ch}\n' +
     '.gaps{display:flex;flex-wrap:wrap;gap:.4rem;margin:.75rem 0 0}\n' +
     '.gapchip{border:1px dashed var(--v-danger);color:var(--v-danger);border-radius:99px;padding:.05rem .65rem;font-size:12px}\n' +
@@ -629,7 +652,11 @@ const UI_SCRIPT = '<script>\n' +
   'var h=d.documentElement.scrollHeight||0;if(d.body&&d.body.scrollHeight>h)h=d.body.scrollHeight;return h}catch(e){return 0}}\n' +
   'function __fit(f){var s=f.parentNode;if(!s||!s.classList||!s.classList.contains("shot"))return;' +
   'var w=+f.dataset.w||390,cw=s.clientWidth||w;f.style.width=w+"px";' +
-  'var h=__measure(f)||+f.dataset.h||844;f.style.height=h+"px";' +
+  // specs/20260906/04-journey-review-page.md A6: the declared device height is set BEFORE measuring
+  // (a 100vh mock measured inside a 150px-default iframe reports 150 and collapses to a strip);
+  // the measured content height only ever raises that floor.
+  'var vh=+f.dataset.h||844;if(!f.style.height||parseInt(f.style.height)<vh)f.style.height=vh+"px";' +
+  'var h=Math.max(__measure(f)||0,vh);f.style.height=h+"px";' +
   'var sc=Math.min(1,cw/w);f.style.transform="scale("+sc+")";f.style.margin=sc<1?"0":"0 auto";' +
   'var full=Math.round(h*sc),cap=parseInt(getComputedStyle(s).maxHeight)||full;' +
   's.style.height=Math.min(full,cap)+"px";s.classList.toggle("clip",full>cap)}\n' +
@@ -818,6 +845,33 @@ function parseSeedJourneys(root) {
   return journeys
 }
 
+// specs/20260906/04-journey-review-page.md D1: adapts parseSeedJourneys()/loadTargets() into
+// buildReviewPage's `seed` shape on every request — product = the seed's own `# Seed — <name>` H1
+// (root dir's basename with none), title = the journey's kebab name (D1: no other source exists),
+// screens = the journey's labels with `states` derived from each mock's own markup
+// (reviewPageLib.statesOf), viewport = the first design/targets.json viewport (1280x800 default,
+// reviewPageLib.viewportOf). Pure over the given root; never caches, never writes.
+function seedForReview(root) {
+  const seedJourneys = parseSeedJourneys(root)
+  let product = path.basename(root)
+  try {
+    const seedText = fs.readFileSync(path.join(root, 'design/mocks/seed.md'), 'utf8')
+    const m = /^# Seed — (.+)$/m.exec(seedText)
+    if (m) product = m[1].trim()
+  } catch { /* no seed.md yet — fall back to the root dir's basename */ }
+  const vp = reviewPageLib.viewportOf(loadTargets(root))
+  const journeys = [...seedJourneys.entries()].map(([name, j]) => ({
+    name,
+    title: name,
+    screens: j.labels.map((label) => {
+      let html = ''
+      try { html = fs.readFileSync(path.join(root, 'design/mocks', label + '.html'), 'utf8') } catch { /* undrawn */ }
+      return { label, states: reviewPageLib.statesOf(html) }
+    }),
+  }))
+  return { product, viewportWidth: vp.width, viewportHeight: vp.height, journeys }
+}
+
 // ---- picks (specs/20260905/01-picks-on-the-atlas-page.md D3/D4) ----------------------------------
 // A look stop's key says where it renders (D3b): shape-picked -> the shapes section, theme-picked
 // -> a dedicated theme section right after shapes, journey-approved:<j>/variants:<j> -> the <j>
@@ -887,148 +941,18 @@ function renderCompareTable(stop, root, outDir, vp0) {
     '" style="--cols:' + groups.length + '">' + heads + rows + why + '</div>'
 }
 
-// D3(d)/(e): an approve stop is Approve/Change with a note while open; decided renders the
-// recorded outcome instead — no frames either way, the owning section's own cards are the screens.
-function renderApproveStop(stop) {
-  const decided = stop.status === 'decided' && stop.decision
-  const body = !decided
-    ? '<button data-decide="approve">Approve</button>' +
-      '<textarea name="note-' + stop.id + '"></textarea>' +
-      '<button data-decide="change">Change</button>'
-    : stop.decision.verdict === 'approve'
-      ? 'Approved by ' + esc(stop.decision.by)
-      : esc(stop.decision.note)
-  return '<div class="stop" id="stop-' + stop.id + '" data-kind="approve" data-id="' + stop.id + '">' + body + '</div>'
-}
+// D3(d)/(e): the approve/change block and D4's inline decide script live in lib/stop-block.js —
+// one renderer and one copy of the picks script shared with the journey review page
+// (specs/20260906/04-journey-review-page.md A1/D5), so a decision recorded from either page is
+// byte-identical on disk. `?clean` strips the script wholesale via its comment markers.
+const { renderApproveStop, PICKS_SCRIPT, stripPicksScript } = require('./lib/stop-block')
 
 function renderStop(stop, root, outDir, vp0) {
   return stop.kind === 'pick' ? renderCompareTable(stop, root, outDir, vp0) : renderApproveStop(stop)
 }
 
-// D4: the atlas page's own inline decide script — wrapped in HTML comment markers so a `?clean`
-// request can strip it wholesale (createRequestHandler's stripCleanArtifacts), exactly like the
-// notes layer is skipped under ?clean. Base derivation, verdicts, and every literal below are
-// pinned by AC-20260905-01-9.
-const PICKS_SCRIPT = '<!--picks-script--><script>\n' +
-  '(function(){\n' +
-  "if (new URLSearchParams(location.search).has('clean')) return\n" +
-  "var __pm = location.pathname.match(new RegExp('^/p/[^/]+'))\n" +
-  "var __pbase = __pm ? __pm[0] : ''\n" +
-  "function __esc(s){return String(s).replace(/[&<>\"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]})}\n" +
-  "function __author(){\n" +
-  "  var a=null\n" +
-  "  try{a=localStorage.getItem('nl-author')}catch(e){}\n" +
-  "  if(a) return a\n" +
-  "  var name=(window.prompt('Your name (shown on your notes)')||'').trim()||'anonymous'\n" +
-  "  try{localStorage.setItem('nl-author',name)}catch(e){}\n" +
-  "  return name\n" +
-  "}\n" +
-  "function __post(id,extra){\n" +
-  "  var body=Object.assign({id:id,by:__author()},extra||{})\n" +
-  "  return fetch(__pbase+'/__picks/decide',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})\n" +
-  "    .then(function(r){return r.json().then(function(j){return {status:r.status,body:j}}).catch(function(){return {status:r.status,body:{}}})})\n" +
-  "    .catch(function(){return {status:0,body:{error:'open the served atlas to decide'}}})\n" +
-  "}\n" +
-  "function __msg(el,text){\n" +
-  "  var prev=el.querySelector('.decide-msg'); if(prev) prev.remove()\n" +
-  "  var d=document.createElement('div'); d.className='decide-msg'; d.textContent=text\n" +
-  "  el.appendChild(d)\n" +
-  "}\n" +
-  "function __renderPick(stopEl,stop){\n" +
-  "  var heads=stopEl.querySelectorAll('.chead')\n" +
-  "  heads.forEach(function(h){\n" +
-  "    var g=h.getAttribute('data-group')\n" +
-  "    var picked=stop.decision && stop.decision.pick===g\n" +
-  "    h.className='chead '+(picked?'picked':'rejected')\n" +
-  "    var badge=h.querySelector('.badge')\n" +
-  "    if(badge){badge.className='badge '+(picked?'picked':'rejected');badge.textContent=picked?'picked':'rejected'}\n" +
-  "    var btn=h.querySelector('[data-decide=\"pick\"]')\n" +
-  "    if(btn) btn.textContent=picked?'Picked':'Pick this instead'\n" +
-  "  })\n" +
-  "  if(!stopEl.querySelector('[data-decide=\"why\"]')){\n" +
-  "    var why=document.createElement('input'); why.name='why-'+stop.id; why.placeholder='why this one — optional'\n" +
-  "    var save=document.createElement('button'); save.setAttribute('data-decide','why'); save.textContent='Save'\n" +
-  "    stopEl.appendChild(why); stopEl.appendChild(save)\n" +
-  "  }\n" +
-  "}\n" +
-  "function __renderApprove(stopEl,stop){\n" +
-  "  stopEl.innerHTML = stop.decision.verdict==='approve' ? 'Approved by '+__esc(stop.decision.by) : __esc(stop.decision.note)\n" +
-  "}\n" +
-  "function __apply(stopEl,res){\n" +
-  "  if(res.status===200){\n" +
-  "    var stop=res.body\n" +
-  "    if(stop.kind==='pick') __renderPick(stopEl,stop); else __renderApprove(stopEl,stop)\n" +
-  "    return\n" +
-  "  }\n" +
-  "  if(res.status===409){ __msg(stopEl,'already picked up by the session'); return }\n" +
-  "  if(res.status===0){ __msg(stopEl,res.body.error); return }\n" +
-  "  __msg(stopEl,(res.body&&res.body.error)||'could not record the decision')\n" +
-  "}\n" +
-  "document.addEventListener('click',function(e){\n" +
-  "  var btn=e.target.closest && e.target.closest('[data-decide]')\n" +
-  "  if(!btn) return\n" +
-  "  var kind=btn.getAttribute('data-decide')\n" +
-  "  var stopEl=btn.closest('[data-id]')\n" +
-  "  if(!stopEl) return\n" +
-  "  var id=stopEl.getAttribute('data-id')\n" +
-  "  if(kind==='pick'){\n" +
-  "    __post(id,{verdict:'pick',pick:btn.getAttribute('data-group')}).then(function(res){__apply(stopEl,res)})\n" +
-  "  } else if(kind==='why'){\n" +
-  "    var input=stopEl.querySelector('[name=\"why-'+id+'\"]')\n" +
-  "    var picked=stopEl.querySelector('.chead.picked')\n" +
-  "    __post(id,{verdict:'pick',pick:picked?picked.getAttribute('data-group'):null,note:input?input.value:''}).then(function(res){__apply(stopEl,res)})\n" +
-  "  } else if(kind==='approve'){\n" +
-  "    __post(id,{verdict:'approve'}).then(function(res){__apply(stopEl,res)})\n" +
-  "  } else if(kind==='change'){\n" +
-  "    var ta=stopEl.querySelector('textarea[name=\"note-'+id+'\"]')\n" +
-  "    var note=ta?ta.value.trim():''\n" +
-  "    if(!note){ __msg(stopEl,'a change needs a note'); return }\n" +
-  "    __post(id,{verdict:'change',note:note}).then(function(res){__apply(stopEl,res)})\n" +
-  "  }\n" +
-  "})\n" +
-  // D4: opening a lightbox from a card inside a .cmp must walk only the SAME step's other
-  // candidates, and the bar's Pick this must resolve the group from the card actually shown —
-  // never a page-wide frame index or a chead-position guess. `.step` is a sibling of the cards,
-  // not an ancestor, so the sibling set is read off each card's own data-step/data-group
-  // attributes (emitted by renderCompareTable), scoped to this .cmp only.
-  "var __origOpen=window.__lbOpen\n" +
-  "if(typeof __origOpen==='function'){\n" +
-  "  window.__lbOpen=function(f){\n" +
-  "    document.body.classList.add('lb-open')\n" +
-  // Delegate to the base opener for the frame it is given, then narrow __lbList/__lbIx to this
-  // step's candidates inside the same .cmp so ‹ › navigation stays scoped to the compare table.
-  "    __origOpen(f)\n" +
-  "    var card=f.closest && f.closest('.card')\n" +
-  "    var cmp=card && card.closest('.cmp')\n" +
-  "    if(cmp && card && card.dataset.step){\n" +
-  "      var siblings=Array.prototype.slice.call(cmp.querySelectorAll('.card[data-step=\"'+card.dataset.step+'\"] iframe.frame'))\n" +
-  "      if(siblings.length){ window.__lbList=siblings; window.__lbIx=siblings.indexOf(f) }\n" +
-  "    }\n" +
-  "    var bar=document.getElementById('lbbar')\n" +
-  "    if(bar){\n" +
-  "      var old=bar.querySelector('.decide-pick'); if(old) old.remove()\n" +
-  "      if(cmp){\n" +
-  "        var pb=document.createElement('button'); pb.className='decide-pick'; pb.textContent='Pick this'\n" +
-  "        bar.insertBefore(pb, bar.lastChild)\n" +
-  "        pb.onclick=function(){\n" +
-  "          var curFrame=window.__lbList[window.__lbIx]\n" +
-  "          var curCard=curFrame && curFrame.closest && curFrame.closest('.card')\n" +
-  "          var g=curCard?curCard.dataset.group:null\n" +
-  "          __post(cmp.getAttribute('data-id'),{verdict:'pick',pick:g}).then(function(res){__apply(cmp,res)})\n" +
-  "        }\n" +
-  "      }\n" +
-  "    }\n" +
-  "  }\n" +
-  "}\n" +
-  "var __origClose=window.__lbClose\n" +
-  "if(typeof __origClose==='function'){\n" +
-  "  window.__lbClose=function(){ document.body.classList.remove('lb-open'); __origClose() }\n" +
-  "}\n" +
-  '})()\n' +
-  '</script><!--/picks-script-->'
-
 function stripCleanArtifacts(html) {
-  return html.replace(/<!--picks-script-->[\s\S]*?<!--\/picks-script-->/g, '')
+  return stripPicksScript(html)
 }
 
 // ---- build ---------------------------------------------------------------------------------------
@@ -1190,7 +1114,10 @@ function buildAtlas(root, out) {
     const count = [cards.length ? cards.length + ' mocked' : null, chips.length ? chips.length + ' gap' : null]
       .filter(Boolean).join(' · ')
     const stopsHtml = journeyStopsHtmlByKey.get(key) || ''
-    return '<section class="sect"><h2>' + esc(title) + '<span class="count">' + count + '</span></h2>\n' +
+    // D6: every journey section's heading links to its review page — the journey look now
+    // happens there, never inline on the atlas index.
+    const reviewLink = isSeed ? '<a class="rv-review" href="/review/' + esc(title) + '.html">Review →</a>' : ''
+    return '<section class="sect"><h2>' + esc(title) + '<span class="count">' + count + '</span>' + reviewLink + '</h2>\n' +
       (subtitle ? '<p class="meta">' + esc(subtitle) + '</p>\n' : '') +
       stopsHtml +
       (cards.length ? '<div class="grid">\n' + cards.map(r => r.html).join('\n') + '\n</div>' : '') +
@@ -1356,8 +1283,16 @@ function injectNotesScript(html, scope, prefix) {
   const tag = '<meta name="notes-scope" content="' + scope + '">\n' +
     '<script src="' + prefix + '/__notes/notes.js"></script>\n'
   const idx = html.lastIndexOf('</body>')
-  if (idx === -1) return html + '\n' + tag
+  if (idx === -1) return html + tag
   return html.slice(0, idx) + tag + html.slice(idx)
+}
+
+// specs/20260906/04-journey-review-page.md D2: the exact literal mocks-driver.js's `look --state`
+// already injects for the file:// path — one mechanism, two entry points. Appended after the mock
+// body and BEFORE the notes-layer injection (never after — D2's ordering AC).
+function stateClickScript(state) {
+  return '<script>document.addEventListener(\'DOMContentLoaded\',function(){var b=document.querySelector(\'[data-state-btn="' +
+    String(state).replace(/"/g, '&quot;') + '"]\');if(b)b.click()})</script>'
 }
 
 // D2's POST body reader — a malformed (non-JSON) body rejects; an empty body reads as {}.
@@ -1388,6 +1323,7 @@ function createRequestHandler(root, opts = {}) {
   const designRoot = path.join(rootAbs, 'design') + path.sep
   const notesLibPath = path.join(__dirname, 'lib', 'notes-layer.browser.js')
   const viewerCssPath = path.join(__dirname, '..', 'templates', 'mocks', 'viewer.css')
+  const reviewBrowserPath = path.join(__dirname, 'lib', 'review.browser.js')
 
   return function handler(req, res) {
     const urlObj = new URL(req.url || '/', 'http://localhost')
@@ -1564,6 +1500,41 @@ function createRequestHandler(root, opts = {}) {
       return
     }
 
+    // ---- /review/<journey>.html and /__review/review.js (specs/20260906/04-journey-review-page.md
+    // D1) ------------------------------------------------------------------------------------
+    if (reqPath === '/__review/review.js' && req.method === 'GET') {
+      fs.readFile(reviewBrowserPath, (err, data) => {
+        if (err) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end('not found'); return }
+        res.writeHead(200, { 'content-type': 'text/javascript', 'cache-control': 'no-store' })
+        res.end(data)
+      })
+      return
+    }
+    const reviewMatch = /^\/review\/([^/]+)\.html$/.exec(reqPath)
+    if (reviewMatch && req.method === 'GET') {
+      const journey = decodeURIComponent(reviewMatch[1])
+      let notes = []
+      try { notes = notesLib.readNotes(rootAbs) } catch { notes = [] }
+      let ledgerRows = []
+      try { ledgerRows = parseLedger(fs.readFileSync(path.join(rootAbs, 'design/mocks/ledger.md'), 'utf8')).assumptions } catch { ledgerRows = [] }
+      let stops = []
+      try { stops = picksLib.readPicks(rootAbs) } catch { stops = [] }
+      let html
+      try {
+        html = reviewPageLib.buildReviewPage({
+          root: rootAbs, journey, prefix, seed: seedForReview(rootAbs), notes, ledger: ledgerRows, stops,
+          clean: urlObj.searchParams.has('clean'),
+        })
+      } catch (e) {
+        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
+        res.end((e && e.message) || 'not found')
+        return
+      }
+      res.writeHead(200, { 'content-type': MIME['.html'], 'cache-control': 'no-store' })
+      res.end(html)
+      return
+    }
+
     // ---- the atlas index is derived on every request (never a stale/missing file) -------------
     if (req.method === 'GET' && ATLAS_INDEX_PATHS.has(reqPath)) {
       let built
@@ -1590,9 +1561,12 @@ function createRequestHandler(root, opts = {}) {
       if (err) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end('not found'); return }
       const ext = path.extname(resolved)
       const contentType = MIME[ext] || 'application/octet-stream'
-      if (ext === '.html' && !urlObj.searchParams.has('clean')) {
+      if (ext === '.html') {
+        const state = urlObj.searchParams.get('state')
+        let body = data.toString('utf8') + (state ? stateClickScript(state) : '')
+        if (!urlObj.searchParams.has('clean')) body = injectNotesScript(body, 'mock', prefix)
         res.writeHead(200, { 'content-type': contentType, 'cache-control': 'no-store' })
-        res.end(injectNotesScript(data.toString('utf8'), 'mock', prefix))
+        res.end(body)
         return
       }
       res.writeHead(200, { 'content-type': contentType, 'cache-control': 'no-store' })
@@ -1683,6 +1657,11 @@ async function cmdStopOpen(args) {
   const title = flagArg(args, '--title')
   const candidatesArg = flagArg(args, '--candidates')
   const port = flagArg(args, '--port') || '4173'
+  // specs/20260906/04-journey-review-page.md D6: mocks-driver.js's own `stop open journey:<j>`
+  // is the caller that stamps the review-page url — this CLI defaults to the atlas index for
+  // every other caller (AC-20260905-04-2/-3's own --key literals keep passing unmodified) and
+  // only ever renders a caller-supplied page path verbatim.
+  const urlPath = flagArg(args, '--page') || '/atlas/index.html'
   if (!rootArg) die('stop open: --root <r> is required')
   if (!kind || !['pick', 'approve'].includes(kind)) die('stop open: --kind must be "pick" or "approve"')
   if (!key) die('stop open: --key <k> is required')
@@ -1705,11 +1684,11 @@ async function cmdStopOpen(args) {
 
   // D2: the stop is written before it is probed — a failed probe (the common first-look case)
   // still leaves the stop on disk; the remedy's re-run supersedes it with a fresh id.
-  const url = 'http://localhost:' + port + '/atlas/index.html#stop-' + opened.stop.id
+  const url = 'http://localhost:' + port + urlPath + '#stop-' + opened.stop.id
   const finalStops = opened.stops.map((s) => (s.id === opened.stop.id ? Object.assign({}, s, { url }) : s))
   picksLib.writePicks(realRoot, finalStops)
 
-  const probeUrl = 'http://127.0.0.1:' + port + '/atlas/index.html'
+  const probeUrl = 'http://127.0.0.1:' + port + urlPath
   const probe = await getUrl(probeUrl)
   if (!probe.ok || probe.status !== 200 || !probe.body || !probe.body.includes('id="stop-' + opened.stop.id + '"')) {
     die('stop open: nothing answered ' + probeUrl + ' with stop ' + opened.stop.id + ' — start `node "$(spec-paths ' +

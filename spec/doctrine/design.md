@@ -38,8 +38,7 @@ Render Gate gate UI **appearance**, TDD gates logic, **reachability is never exe
 bound: the mock is authority, code is held to it. Once the claiming spec is `done`,
 **authority inverts: shipped code is truth, the mock a historical contract allowed to go
 stale** — displayed (the atlas `built` badge), never owed; re-sync (`shell sync` included) is
-lazy, at the next design touch. Litmus: a design-contract change goes to the mock first, else
-code only.
+lazy, at the next design touch. Litmus: a design-contract change goes to the mock first, else code only.
 **Design harness.** Every mock-authoring pass declares the marks the gate reads — `data-screen-label`
 (root), `data-status`, `data-state-btn="<state>"`, `data-contract="none"` (non-contract subtree),
 `data-positioned` (data-placed children), `data-shell`/`data-active` (shell declaration), `data-narrow`
@@ -49,12 +48,13 @@ code only.
 `approved` marks (plugin capture when undeclared), verifies matrix adaptation. **Render rules pass:**
 `render-rules.js` (`spec-paths render-rules`) runs every design-rules-genesis `renderCheck` rule, newest
 `desktop-fill` (content span vs `page.clientWidth`), over the render inventory before approval —
-measured, taste advisory; § Design Authoring Contracts' grounded-vs-taste rules apply too, mocks' copy
-the contract code is later held to.
+measured, taste advisory; § Design Authoring Contracts' grounded-vs-taste rules apply too, mocks' copy the contract code is later held to.
 **Cross-spec consistency**, strongest first: token/theme files in code (a code-side
 `off-token-color` rule wired by `/spec:enforce`; near-matches reuse, never fork the scale); the
-design doctrine doc (taste tokens can't encode, binding like a locked Decision); the living
-showcase catalog (composes every landed spec's surfaces, drift visible with zero tooling).
+design doctrine doc (taste tokens can't encode, binding like a locked Decision); the living showcase catalog (composes every landed spec's surfaces, drift visible with zero tooling).
+**Plugin chrome is a designed surface.** Every page the plugin serves for a look — atlas index, journey review page,
+galleries, the notes layer — is authored under the `frontend-design` skill in the shadcn idiom on `viewer.css`'s
+register (the zinc roles byte-equal to `wire-tokens.css`), never on product tokens; the wireframe inside a frame stays gray.
 ## Design Authoring Contracts
 Consumed by `/spec:design` and the genesis design state (genesis.md § Genesis: Design State),
 authored against § Design Canon.

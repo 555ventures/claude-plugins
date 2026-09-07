@@ -151,6 +151,11 @@ never printed to the user. **The user's path is the look link**: a look stop's `
 #stop-<id>` — never a per-project port the user forwards by hand, and never a machine-wide
 address shared across projects.
 
+**The journey look surface is the review page.** `stop open journey:<j>` points the stop's URL
+at `/review/<j>.html`, served by `design-atlas.js` alongside the atlas index — screens rail,
+per-screen artboards with state tabs, and a question/note inspector answered in place. Its
+chrome follows the plugin-chrome rule, one binding home: design.md § Design Canon.
+
 **The session's own look** is `mocks-driver.js look <label> [--state <s>] [--out <png>]`: it
 writes a sibling `.look-<label>.html` (the mock plus an inline script that clicks
 `[data-state-btn="<s>"]` on load when `--state` is given), captures it with the Playwright CLI

@@ -29,7 +29,9 @@ const {
 // ---------------------------------------------------------------------------
 // AC-20260905-04-5
 // ---------------------------------------------------------------------------
-test('AC-20260905-04-5: mocks-driver.js stop open journey:<j> --port <free> prints the D4 hand-off link off that project\'s own serve child (never a `/p/<name>/` hub mount), exits 3 naming the serve remedy when nothing answers --port, and stop decide keeps passing straight through', async () => {
+// specs/20260906/04-journey-review-page.md D6 (AC-20260906-04-8/-9): the journey stop's link is
+// the review page, never the atlas — the pin below was updated in place, not weakened.
+test('AC-20260905-04-5/AC-20260906-04-8: mocks-driver.js stop open journey:<j> --port <free> prints the D4 hand-off link off that project\'s own serve child (never a `/p/<name>/` hub mount) pointing at the journey review page, exits 3 naming the serve remedy when nothing answers --port, and stop decide keeps passing straight through', async () => {
   const dir = tmpdir('mocks-driver')
   advanceToShortJourneyDrawn(dir, 'onboarding', ['signin', 'invite'])
   const port = await freePort()
@@ -41,8 +43,8 @@ test('AC-20260905-04-5: mocks-driver.js stop open journey:<j> --port <free> prin
     assert.strictEqual(r.status, 0, 'stop open journey:onboarding must exit 0 once the journey is drawn: ' + r.stdout + r.stderr)
     const lines = r.stdout.split('\n').filter((l) => l.trim() !== '')
     assert.strictEqual(lines.length, 2, 'stop open journey:<j> must print exactly two stdout lines — the link and the fixed reply line: ' + JSON.stringify(r.stdout))
-    assert.match(lines[0], /^🎨 ready for review — http:\/\/localhost:\d+\/atlas\/index\.html#stop-P\d{3}$/,
-      'the first line must match the D4 look-server link — the project\'s own served atlas, never a `/p/<name>/` hub mount: ' + JSON.stringify(lines[0]))
+    assert.match(lines[0], /^🎨 ready for review — http:\/\/localhost:\d+\/review\/onboarding\.html#stop-P\d{3}$/,
+      'the first line must match the D4 look-server link — the project\'s own served review page (specs/20260906/04 D6), never a `/p/<name>/` hub mount: ' + JSON.stringify(lines[0]))
     assert.match(lines[0], new RegExp('localhost:' + port + '/'),
       'the printed link must name the project\'s own --port ' + port + ', not a shared hub port: ' + JSON.stringify(lines[0]))
     assert.strictEqual(lines[1], 'Reply  ✅ approve  — or —  ✏️ change <what looks wrong>', 'the second line must be the exact fixed reply line for an approve stop: ' + JSON.stringify(lines[1]))
@@ -232,5 +234,60 @@ test('AC-20260905-02-13/AC-20260905-04-9: a decided shape/theme pick accepts wit
   const themeDisagree = mark(dir4, 'theme-picked', ['--direction', 'ember'])
   assert.strictEqual(themeDisagree.status, 2, 'a --direction flag disagreeing with the page\'s pick must be refused: ' + themeDisagree.stdout + themeDisagree.stderr)
   assert.match(themeDisagree.stderr + themeDisagree.stdout, /disagrees with the page pick "ocean"/, 'the refusal must name the page\'s actual pick: ' + themeDisagree.stdout + themeDisagree.stderr)
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260906-04-8 / AC-20260906-04-9
+// ---------------------------------------------------------------------------
+// A5 (specs/20260906/04-journey-review-page.md): specs/20260905/03's `variants:<j>` stop is still
+// `hardened`, not built — buildStopSpec() in mocks-driver.js has no `variants:` arm at all yet, so
+// that arm of this AC cannot be exercised against the current tree. Per A5 it is omitted here,
+// tagged `[pre-green: specs/20260905/03]`, rather than asserted or env-gated-skipped; once 03
+// lands this test gains a third stop open variants:onboarding case asserting the atlas URL.
+test('AC-20260906-04-8: stop open journey:<j> --port <free> writes/prints the stop\'s url as http://localhost:<port>/review/<j>.html#stop-<id> and probes that page (never the atlas)', async () => {
+  const dir = tmpdir('mocks-driver-review-stop')
+  advanceToShortJourneyDrawn(dir, 'onboarding', ['signin', 'invite'])
+  const port = await freePort()
+  let serveChild = null
+  try {
+    serveChild = await startServe(dir, port)
+
+    const r = runNode(SCRIPT, ['--root', dir, 'stop', 'open', 'journey:onboarding', '--port', String(port)])
+    assert.strictEqual(r.status, 0, 'AC-8: stop open journey:onboarding must exit 0 once /review/<j>.html exists and the journey is drawn: ' + r.stdout + r.stderr)
+    const lines = r.stdout.split('\n').filter((l) => l.trim() !== '')
+    assert.match(lines[0], /^🎨 ready for review — http:\/\/localhost:\d+\/review\/onboarding\.html#stop-P\d+$/,
+      'AC-8: the printed link must be the D6 review-page URL (http://localhost:<port>/review/onboarding.html#stop-<id>), never the atlas: got ' + JSON.stringify(lines[0]))
+    assert.match(lines[0], new RegExp('localhost:' + port + '/'), 'AC-8: the printed link must name the project\'s own --port ' + port + ': ' + JSON.stringify(lines[0]))
+
+    const stops = JSON.parse(fs.readFileSync(path.join(dir, 'design/mocks/picks.json'), 'utf8'))
+    const openStop = stops.find((s) => s.status === 'open')
+    assert.ok(openStop, 'test setup requires exactly one open stop to exist after stop open journey:onboarding')
+    assert.match(openStop.url, /^http:\/\/localhost:\d+\/review\/onboarding\.html#stop-P\d+$/,
+      'AC-8: the stop\'s recorded url must be the review-page URL, not the atlas URL: got ' + JSON.stringify(openStop.url))
+    assert.strictEqual(openStop.url, lines[0].replace('🎨 ready for review — ', ''), 'the stop\'s recorded url must equal the printed link')
+  } finally {
+    if (serveChild) await stopServe(serveChild)
+  }
+})
+
+test('AC-20260906-04-9: stop open theme SHALL CONTINUE TO write the atlas URL (never the review page) once 2+ directions are composed', async () => {
+  const dir = tmpdir('mocks-driver-review-stop-theme')
+  advanceToJourneyApproved(dir)
+  advanceToDirectionComposed(dir, 'ocean', [DENSE, LABELS[0]], 'P15')
+  advanceToDirectionComposed(dir, 'ember', [DENSE, LABELS[1]], 'P16')
+  const port = await freePort()
+  let serveChild = null
+  try {
+    serveChild = await startServe(dir, port)
+    const r = runNode(SCRIPT, ['--root', dir, 'stop', 'open', 'theme', '--port', String(port)])
+    assert.strictEqual(r.status, 0, 'AC-8: stop open theme must exit 0 once 2+ directions are composed: ' + r.stdout + r.stderr)
+    const lines = r.stdout.split('\n').filter((l) => l.trim() !== '')
+    assert.match(lines[0], /atlas\/index\.html#stop-P\d+$/, 'AC-8: stop open theme must CONTINUE TO write/print the atlas URL, never a review-page URL: got ' + JSON.stringify(lines[0]))
+    const stops = JSON.parse(fs.readFileSync(path.join(dir, 'design/mocks/picks.json'), 'utf8'))
+    const themeStop = stops.find((s) => s.key === 'theme-picked')
+    assert.match(themeStop.url, /atlas\/index\.html#stop-/, 'AC-8: the theme stop\'s recorded url must CONTINUE TO be the atlas URL: got ' + JSON.stringify(themeStop.url))
+  } finally {
+    if (serveChild) await stopServe(serveChild)
+  }
 })
 

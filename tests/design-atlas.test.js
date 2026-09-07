@@ -2077,3 +2077,363 @@ test('AC-20260906-03-6: notes-layer.browser.js renders a distinct question row (
   assert.strictEqual(headStyles[0].textContent, 'body.lb-open .nl-host{display:none}',
     'the document-level style must CONTINUE TO be the single "body.lb-open .nl-host{display:none}" rule verbatim: got ' + headStyles[0].textContent)
 })
+
+// ---------------------------------------------------------------------------
+// specs/20260906/04-journey-review-page.md — TDD red: the `/review/<j>.html` route, `?state=`
+// mock injection, and `/__review/review.js` do not exist yet on design-atlas.js;
+// lib/review-page.js and lib/review.browser.js do not exist yet either.
+// ---------------------------------------------------------------------------
+
+function writeReviewSeed(dir, journeyName, labels) {
+  fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/mocks/seed.md'), `# Seed — Hearwell
+
+## Product
+It is a synthetic product for the review-page tests.
+Built for QA engineers.
+It must let a user complete a short flow.
+
+## Facts
+- primary-surface: P1
+
+## References
+- none
+
+## Journeys
+### ${journeyName}
+Mika moves through a short flow.
+\`\`\`surfaces
+${labels.join('\n')}
+\`\`\`
+
+## Dense screen
+- ${labels[labels.length - 1]}
+`)
+  for (const label of labels) {
+    fs.writeFileSync(path.join(dir, 'design/mocks', label + '.html'),
+      '<main data-screen-label="' + label + '" data-status="sketch">' + label + '</main>\n')
+  }
+}
+
+// ---------------------------------------------------------------------------
+// AC-20260906-04-2
+// ---------------------------------------------------------------------------
+test('AC-20260906-04-2: GET /review/onboarding.html derives 200 from the on-disk stores (a note added via /__notes/add appears on the next GET), GET /review/nowhere.html 404s naming the declared journey "onboarding", ?clean strips the rail/composer/review.js, and GET /__review/review.js serves lib/review.browser.js verbatim with cache-control no-store', async () => {
+  const dir = tmpdir('atlas-review-route')
+  writeReviewSeed(dir, 'onboarding', ['signin'])
+  writeQuestionLedger(dir, [])
+  writeQuestionNotes(dir, [])
+  writePicksJson(dir, [])
+
+  await withHandler(dir, '', async ({ get, post }) => {
+    const first = await get('/review/onboarding.html')
+    assert.strictEqual(first.status, 200, 'AC-2: GET /review/onboarding.html must derive 200 for a declared journey: ' + first.status + ' ' + first.body.slice(0, 300))
+    assert.ok(!first.body.includes('add a cancel screen'), 'test setup requires the not-yet-added note text to be absent from the first response')
+
+    const added = await post('/__notes/add', { scope: 'project', text: 'add a cancel screen', by: 'jj' })
+    assert.strictEqual(added.status, 201, 'test setup requires POST /__notes/add to be accepted: ' + added.status + ' ' + added.body)
+
+    const second = await get('/review/onboarding.html')
+    assert.strictEqual(second.status, 200, 'AC-2: GET /review/onboarding.html must still 200 after a note is added: ' + second.status)
+    assert.ok(second.body.includes('add a cancel screen'), 'AC-2: the page must derive on every request — a note added via /__notes/add must appear on the very next GET, never a cached/stale page: got ' + second.body.slice(0, 600))
+
+    const missing = await get('/review/nowhere.html')
+    assert.strictEqual(missing.status, 404, 'AC-2: GET /review/nowhere.html must 404 for an undeclared journey: got ' + missing.status)
+    assert.match(missing.body, /onboarding/, 'AC-2: the 404 body must name the declared journeys, including "onboarding": got ' + JSON.stringify(missing.body))
+
+    const clean = await get('/review/onboarding.html?clean')
+    assert.strictEqual(clean.status, 200, 'AC-2: ?clean must still 200: got ' + clean.status)
+    assert.doesNotMatch(clean.body, /data-rv="rail"/, 'AC-2: ?clean must strip the rail: got ' + clean.body.slice(0, 600))
+    assert.doesNotMatch(clean.body, /data-rv="composer"/, 'AC-2: ?clean must strip the composer: got ' + clean.body.slice(0, 600))
+    assert.doesNotMatch(clean.body, /__review\/review\.js/, 'AC-2: ?clean must strip the review.js script tag: got ' + clean.body.slice(0, 600))
+
+    const reviewJs = await get('/__review/review.js')
+    assert.strictEqual(reviewJs.status, 200, 'AC-2: GET /__review/review.js must serve 200: got ' + reviewJs.status)
+    assert.strictEqual(reviewJs.headers['cache-control'], 'no-store', 'AC-2: /__review/review.js must be served with cache-control: no-store: got ' + JSON.stringify(reviewJs.headers))
+    const libSrc = fs.readFileSync(path.join(SPEC, 'scripts/lib/review.browser.js'), 'utf8')
+    assert.strictEqual(reviewJs.body, libSrc, 'AC-2: /__review/review.js must serve lib/review.browser.js verbatim: bytes differ')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260906-04-3 / AC-20260906-04-10
+// ---------------------------------------------------------------------------
+test('AC-20260906-04-3/AC-20260906-04-10: GET /mocks/signin.html?clean&state=empty injects only the DOMContentLoaded click script for [data-state-btn="empty"] with no notes-layer script, ?state=empty without clean injects that click script before the notes-layer tag, and no state param CONTINUES TO serve the exact bytes served today', async () => {
+  const dir = tmpdir('atlas-review-state')
+  fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
+  const bodyHtml = '<main data-screen-label="signin" data-status="sketch"><button data-state-btn="empty">empty</button>signin</main>\n'
+  fs.writeFileSync(path.join(dir, 'design/mocks/signin.html'), bodyHtml)
+  const clickScript = '<script>document.addEventListener(\'DOMContentLoaded\',function(){var b=document.querySelector(\'[data-state-btn="empty"]\');if(b)b.click()})</script>'
+
+  await withHandler(dir, '', async ({ get }) => {
+    const clean = await get('/mocks/signin.html?clean&state=empty')
+    assert.strictEqual(clean.status, 200, 'test setup requires ?clean&state=empty to 200: got ' + clean.status)
+    assert.strictEqual(clean.body, bodyHtml + clickScript, 'AC-3: ?clean&state=empty must serve the mock bytes plus exactly one injected click script for [data-state-btn="empty"] and no notes-layer tag: got ' + JSON.stringify(clean.body))
+
+    const withNotes = await get('/mocks/signin.html?state=empty')
+    assert.strictEqual(withNotes.status, 200, 'test setup requires ?state=empty (no clean) to 200: got ' + withNotes.status)
+    const clickIdx = withNotes.body.indexOf(clickScript)
+    const notesIdx = withNotes.body.indexOf('<meta name="notes-scope"')
+    assert.ok(clickIdx !== -1, 'AC-3: ?state=empty without clean must still inject the click script: got ' + withNotes.body)
+    assert.ok(notesIdx !== -1, 'test setup requires the notes-layer tag to still be injected when clean is absent: got ' + withNotes.body)
+    assert.ok(clickIdx < notesIdx, 'AC-3: the state click script must be injected BEFORE the notes-layer meta/script tag: click at ' + clickIdx + ', notes at ' + notesIdx)
+
+    const plain = await get('/mocks/signin.html')
+    assert.strictEqual(plain.status, 200, 'test setup requires the plain (no state) request to 200: got ' + plain.status)
+    assert.strictEqual(plain.body, bodyHtml + '<meta name="notes-scope" content="mock">\n<script src="/__notes/notes.js"></script>\n',
+      'AC-3: with no state param the server must CONTINUE TO serve the exact bytes it serves today (mock bytes plus the notes-layer injection, no click script): got ' + JSON.stringify(plain.body))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Minimal flat-DOM shim for review.browser.js — per the spec's own "AC-6 harness contract" build
+// note (specs/20260906/04-journey-review-page.md Rationale): a flat element list scanned off the
+// builder's real markup for data-rv tags, exposing dataset/getAttribute-family/hidden/classList/
+// addEventListener/querySelector(All) (single compound selectors, descendant-scoped)/closest —
+// never innerHTML parsing, getBoundingClientRect, MutationObserver, or window.prompt at load.
+// ---------------------------------------------------------------------------
+function parseFlatDom(html) {
+  const VOID = new Set(['input', 'br', 'img', 'link', 'meta', 'hr'])
+
+  function parseAttrs(str) {
+    const attrs = {}
+    const re = /([a-zA-Z_:][-\w:.]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g
+    let m
+    while ((m = re.exec(str))) {
+      const name = m[1]
+      const val = m[2] !== undefined ? m[2] : m[3] !== undefined ? m[3] : m[4] !== undefined ? m[4] : ''
+      attrs[name] = val
+    }
+    return attrs
+  }
+
+  function matchesCompound(node, compound) {
+    const tagM = compound.match(/^([a-zA-Z][\w-]*)/)
+    const tag = tagM && tagM[1]
+    if (tag && node.tagName !== tag.toUpperCase()) return false
+    const rest = tag ? compound.slice(tag.length) : compound
+    const attrRe = /\[([a-zA-Z_:][-\w:.]*)(?:="([^"]*)")?\]/g
+    let m
+    while ((m = attrRe.exec(rest))) {
+      const key = m[1]; const val = m[2]
+      if (!node.hasAttribute(key)) return false
+      if (val !== undefined && node.getAttribute(key) !== val) return false
+    }
+    return true
+  }
+
+  const allNodes = []
+  function descendants(node) {
+    const out = []
+    for (const c of node.children) { out.push(c); out.push(...descendants(c)) }
+    return out
+  }
+  function queryAll(scopeNode, sel) {
+    const parts = sel.trim().split(/\s+/)
+    const pool = scopeNode === null ? allNodes : descendants(scopeNode)
+    let matched = pool.filter((n) => matchesCompound(n, parts[0]))
+    for (let i = 1; i < parts.length; i++) {
+      const part = parts[i]
+      const next = []
+      for (const n of pool) {
+        if (!matchesCompound(n, part)) continue
+        let anc = n.parentNode
+        let ok = false
+        while (anc) { if (matched.includes(anc)) { ok = true; break } anc = anc.parentNode }
+        if (ok) next.push(n)
+      }
+      matched = next
+    }
+    return matched
+  }
+
+  function makeNode(tagName, attrs) {
+    const node = {
+      tagName: tagName.toUpperCase(),
+      attrs,
+      children: [],
+      parentNode: null,
+      value: '',
+      _handlers: {},
+      getAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attrs, k) ? this.attrs[k] : null },
+      setAttribute(k, v) { this.attrs[k] = String(v) },
+      removeAttribute(k) { delete this.attrs[k] },
+      hasAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attrs, k) },
+      addEventListener(type, fn) { (this._handlers[type] = this._handlers[type] || []).push(fn) },
+      focus() { this._focused = true },
+      closest(sel) {
+        let n = this
+        while (n) { if (matchesCompound(n, sel.trim())) return n; n = n.parentNode }
+        return null
+      },
+      querySelector(sel) { return queryAll(this, sel)[0] || null },
+      querySelectorAll(sel) { return queryAll(this, sel) },
+    }
+    Object.defineProperty(node, 'hidden', {
+      get() { return this.hasAttribute('hidden') },
+      set(v) { if (v) this.setAttribute('hidden', ''); else this.removeAttribute('hidden') },
+    })
+    Object.defineProperty(node, 'dataset', {
+      get() {
+        const out = {}
+        for (const k of Object.keys(this.attrs)) {
+          if (k.startsWith('data-')) out[k.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = this.attrs[k]
+        }
+        return out
+      },
+    })
+    Object.defineProperty(node, 'classList', {
+      get() {
+        const self = this
+        const classes = () => (self.attrs.class || '').split(/\s+/).filter(Boolean)
+        return {
+          add(c) { const cs = classes(); if (!cs.includes(c)) { cs.push(c); self.attrs.class = cs.join(' ') } },
+          remove(c) { self.attrs.class = classes().filter((x) => x !== c).join(' ') },
+          toggle(c, force) { const has = classes().includes(c); const want = force === undefined ? !has : force; if (want) this.add(c); else this.remove(c) },
+          contains(c) { return classes().includes(c) },
+        }
+      },
+    })
+    return node
+  }
+
+  const root = makeNode('#root', {})
+  const stack = [root]
+  const tagRe = /<(\/)?([a-zA-Z][\w-]*)((?:[^<>])*?)(\/)?>/g
+  let m
+  while ((m = tagRe.exec(html))) {
+    const closing = !!m[1]
+    const tagName = m[2]
+    const attrStr = m[3]
+    const selfClose = !!m[4] || VOID.has(tagName.toLowerCase())
+    if (closing) {
+      for (let i = stack.length - 1; i > 0; i--) {
+        if (stack[i].tagName === tagName.toUpperCase()) { stack.length = i; break }
+      }
+      continue
+    }
+    const attrs = parseAttrs(attrStr)
+    const node = makeNode(tagName, attrs)
+    node.parentNode = stack[stack.length - 1]
+    stack[stack.length - 1].children.push(node)
+    allNodes.push(node)
+    if (!selfClose) stack.push(node)
+  }
+
+  const document = {
+    querySelector(sel) { return queryAll(null, sel)[0] || null },
+    querySelectorAll(sel) { return queryAll(null, sel) },
+    addEventListener(type, fn) { (root._handlers[type] = root._handlers[type] || []).push(fn) },
+    _handlers: root._handlers,
+  }
+  return { document, allNodes }
+}
+
+// ---------------------------------------------------------------------------
+// AC-20260906-04-6
+// ---------------------------------------------------------------------------
+test('AC-20260906-04-6: review.browser.js under vm over the builder\'s own markup moves the selection/data-focus to the next open item on "j", posts /__notes/answer verdict:"yes" and drops the row from Open on "y", reveals the correction textarea on "n" and posts verdict:"no" on Enter inside it, toggles the strip/pane on "\\", ignores "j" while a textarea has focus, and posts /__notes/add {scope:"project", screen:null, state:null, reason:"wrong-direction", text, by} from Send', async () => {
+  const reviewPagePath = path.join(SPEC, 'scripts/lib/review-page.js')
+  const reviewBrowserPath = path.join(SPEC, 'scripts/lib/review.browser.js')
+  assert.ok(fs.existsSync(reviewPagePath), 'test setup requires lib/review-page.js to exist so this harness can scan its real markup: not found at ' + reviewPagePath)
+  delete require.cache[reviewPagePath]
+  const { buildReviewPage } = require(reviewPagePath)
+  const src = fs.readFileSync(reviewBrowserPath, 'utf8')
+
+  const NOW = '2026-09-06T12:00:00.000Z'
+  const html = buildReviewPage({
+    root: '/t', journey: 'onboarding', prefix: '',
+    seed: { product: 'Hearwell', viewportWidth: 1280, journeys: [{ name: 'onboarding', title: 'Onboarding', screens: [{ label: 'signin', states: [] }, { label: 'home', states: [] }] }] },
+    notes: [
+      { id: 'N001', scope: 'mock', screen: 'signin', state: null, kind: 'question', ledgerId: 'W1', text: 'c', by: 'session', at: NOW, status: 'open', addressed: null, reply: null, resolvedBy: null, resolvedAt: null, answer: null },
+      { id: 'N002', scope: 'mock', screen: 'home', state: null, kind: 'question', ledgerId: 'W2', text: 'c', by: 'session', at: NOW, status: 'open', addressed: null, reply: null, resolvedBy: null, resolvedAt: null, answer: null },
+    ],
+    ledger: [{ id: 'W1', step: 'WIREFRAMES', kind: 'product', claim: 'c1', tag: 'inferred', status: 'open', rejected: null, dependents: null, note: null },
+      { id: 'W2', step: 'WIREFRAMES', kind: 'product', claim: 'c2', tag: 'inferred', status: 'open', rejected: null, dependents: null, note: null }],
+    stops: [],
+  })
+
+  const { document } = parseFlatDom(html)
+  const posts = []
+  const sandbox = {
+    location: { pathname: '/review/onboarding.html' },
+    document,
+    window: { prompt: () => { throw new Error('window.prompt must never be called at load — the reviewer name comes from localStorage') } },
+    localStorage: { getItem: () => 'jj', setItem() {} },
+    fetch(url, init) {
+      if (init && init.method === 'POST') posts.push({ url, init })
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    },
+    URLSearchParams,
+    console,
+  }
+  vm.createContext(sandbox)
+  vm.runInContext(src, sandbox)
+
+  const keydownHandlers = document._handlers.keydown || []
+  assert.ok(keydownHandlers.length > 0, 'test setup requires review.browser.js to register a document-level keydown handler')
+  const fireKey = (key, target) => { for (const h of keydownHandlers) h({ key, target: target || { tagName: 'BODY' }, preventDefault() {} }) }
+
+  const homeFrame = document.querySelector('[data-rv="board"][data-label="home"] [data-rv="frame"]')
+  const signinFrame = document.querySelector('[data-rv="board"][data-label="signin"] [data-rv="frame"]')
+  assert.ok(signinFrame && signinFrame.hasAttribute('data-focus'), 'test setup requires the first open item (N001 on signin) to start focused')
+  assert.ok(homeFrame && !homeFrame.hasAttribute('data-focus'), 'test setup requires only one frame to carry data-focus initially')
+
+  fireKey('j')
+  assert.ok(homeFrame.hasAttribute('data-focus'), 'AC-6: "j" must move data-focus to the next open item\'s screen (home, holding N002): got no data-focus on home')
+  assert.ok(!signinFrame.hasAttribute('data-focus'), 'AC-6: "j" must move the focus off the previously-focused screen (signin): still carries data-focus')
+
+  fireKey('y')
+  const answerPost = posts.find((p) => /\/__notes\/answer$/.test(p.url))
+  assert.ok(answerPost, 'AC-6: "y" must POST /__notes/answer for the selected row: got ' + JSON.stringify(posts))
+  const answerBody = JSON.parse(answerPost.init.body)
+  assert.deepStrictEqual({ id: answerBody.id, verdict: answerBody.verdict }, { id: 'N002', verdict: 'yes' },
+    'AC-6: the answer POST body must carry {id, verdict:"yes", by} for the selected row (N002): got ' + JSON.stringify(answerBody))
+  assert.ok(typeof answerBody.by === 'string' && answerBody.by, 'AC-6: the answer POST body must carry a non-empty "by": got ' + JSON.stringify(answerBody))
+  const n002Row = document.querySelector('[data-rv="row"][data-id="N002"]')
+  assert.ok(n002Row.hidden, 'AC-6: "y" must remove the answered row from the Open filter (hidden): got hidden=' + n002Row.hidden)
+
+  const n001Row = document.querySelector('[data-rv="row"][data-id="N001"]')
+  fireKey('n')
+  const textarea = n001Row.querySelector('textarea')
+  assert.ok(textarea, 'AC-6: "n" must reveal the selected row\'s correction textarea: none found on N001\'s row')
+  assert.strictEqual(textarea.hidden, false, 'AC-6: "n" must reveal (un-hide) the correction textarea: got hidden=' + textarea.hidden)
+  textarea.value = 'owner sets modality'
+  fireKey('Enter', textarea)
+  const noPost = posts.find((p) => { try { const b = JSON.parse(p.init.body); return b.id === 'N001' && b.verdict === 'no' } catch { return false } })
+  assert.ok(noPost, 'AC-6: pressing Enter inside the revealed textarea must POST /__notes/answer {id:"N001", verdict:"no", text}: got ' + JSON.stringify(posts))
+  assert.strictEqual(JSON.parse(noPost.init.body).text, 'owner sets modality', 'AC-6: the "no" answer POST must carry the textarea\'s value verbatim as text: got ' + noPost.init.body)
+
+  const strip = document.querySelector('[data-rv="strip"]')
+  const stripHiddenBefore = strip.hidden
+  fireKey('\\')
+  assert.notStrictEqual(strip.hidden, stripHiddenBefore, 'AC-6: "\\" must toggle [data-rv="strip"] visibility: unchanged (' + strip.hidden + ')')
+
+  const postsBeforeIgnoredJ = posts.length
+  const homeFrameFocusedBefore = homeFrame.hasAttribute('data-focus')
+  const signinFrameFocusedBefore = signinFrame.hasAttribute('data-focus')
+  fireKey('j', { tagName: 'TEXTAREA' })
+  assert.strictEqual(posts.length, postsBeforeIgnoredJ, 'AC-6: "j" while a textarea has focus must issue nothing — no fetch call: got ' + (posts.length - postsBeforeIgnoredJ) + ' new call(s)')
+  assert.strictEqual(homeFrame.hasAttribute('data-focus'), homeFrameFocusedBefore, 'AC-6: "j" while a textarea has focus must not move data-focus (home unchanged)')
+  assert.strictEqual(signinFrame.hasAttribute('data-focus'), signinFrameFocusedBefore, 'AC-6: "j" while a textarea has focus must not move data-focus (signin unchanged)')
+
+  const scopeProject = document.querySelector('[data-rv="composer"] [data-rv="scope"][data-value="project"]')
+  const chipWrongDirection = document.querySelector('[data-rv="composer"] [data-rv="chip"][data-value="wrong-direction"]')
+  const composerTextarea = document.querySelector('[data-rv="composer"] textarea')
+  const sendBtn = document.querySelector('[data-rv="composer"] [data-rv="send"]')
+  assert.ok(scopeProject && chipWrongDirection && composerTextarea && sendBtn,
+    'test setup requires the composer to expose a "Whole project" scope control, a "wrong-direction" reason chip, a textarea, and a Send control')
+  const clickOf = (el) => { const hs = el._handlers.click || []; for (const h of hs) h({ preventDefault() {} }) }
+  clickOf(scopeProject)
+  clickOf(chipWrongDirection)
+  composerTextarea.value = 'the flow contradicts the sketch'
+  clickOf(sendBtn)
+  const addPost = posts.find((p) => /\/__notes\/add$/.test(p.url))
+  assert.ok(addPost, 'AC-6: Send must POST /__notes/add: got ' + JSON.stringify(posts.map((p) => p.url)))
+  const addBody = JSON.parse(addPost.init.body)
+  assert.deepStrictEqual(
+    { scope: addBody.scope, screen: addBody.screen, state: addBody.state, reason: addBody.reason, text: addBody.text },
+    { scope: 'project', screen: null, state: null, reason: 'wrong-direction', text: 'the flow contradicts the sketch' },
+    'AC-6: Send with scope "Whole project" and chip "Wrong direction" must POST /__notes/add {scope:"project", screen:null, state:null, reason:"wrong-direction", text, by}: got ' + JSON.stringify(addBody))
+  assert.ok(typeof addBody.by === 'string' && addBody.by, 'AC-6: the add POST body must carry a non-empty "by": got ' + JSON.stringify(addBody))
+})

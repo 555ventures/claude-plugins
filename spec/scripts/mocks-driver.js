@@ -40,6 +40,11 @@
 // own judgment — a session can never mark past a look. A pick mark's `--shape`/`--direction` flag
 // is optional (the page's pick is the value); a given flag that disagrees with the pick refuses.
 //
+// specs/20260906/04-journey-review-page.md D6: `stop open journey:<j>` passes design-atlas.js's
+// `stop open` a `--page /review/<j>.html` override, so the stop's url/probe target is that
+// journey's own review page (http://localhost:<port>/review/<j>.html#stop-<id>) instead of the
+// atlas index — every other step (shapes, theme, signoff) omits `--page` and keeps the atlas URL.
+//
 // What this deliberately does NOT do:
 //   - author the seed, canon, screens, theme directions, or the sign-off itself — those stay
 //     session judgment; the driver only closes each mark once the artifact exists and validates
@@ -597,6 +602,9 @@ function buildJourneyStopSpec(journeyName) {
   return {
     kind: 'approve', key: 'journey-approved:' + journeyName, title: 'approve journey ' + journeyName,
     candidates: j.labels.map((l) => ({ group: null, label: l, path: 'mocks/' + l + '.html' })),
+    // specs/20260906/04-journey-review-page.md D6: the journey look happens on its own review
+    // page now, not the atlas index — every other stop spec omits `page` and keeps the atlas URL.
+    page: '/review/' + journeyName + '.html',
   }
 }
 
@@ -634,6 +642,7 @@ function runDesignAtlasStopOpen(spec, port) {
   const args = ['stop', 'open', '--root', root, '--kind', spec.kind, '--key', spec.key,
     '--title', spec.title, '--candidates', candidatesArgOf(spec.candidates)]
   if (port) args.push('--port', port)
+  if (spec.page) args.push('--page', spec.page)
   const r = spawnSync(process.execPath, [designAtlasBin, ...args], { encoding: 'utf8' })
   if (r.error || r.status === null) {
     die('design-atlas.js died without an exit code (' + (r.error ? r.error.message : 'no status') + ')')

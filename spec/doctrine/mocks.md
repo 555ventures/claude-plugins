@@ -19,8 +19,9 @@ identical.
 note`:
 
 - `id` — `^[A-Z]+\d+[a-z]?$`, unique across the table.
-- `step` — `^[A-Z][A-Z-]*$` (`SEED`, `SHAPES`, `WIREFRAMES`, `THEME`, `SKIN`, `REVIEW`,
-  `GENESIS`, …).
+- `step` — `^[A-Z][A-Z-]*$` (`SEED`, `SHAPES`, `WIREFRAMES`, `THEME`, `SIGNOFF`,
+  `GENESIS`, …); rows written under retired step names (`SKIN`, `REVIEW`) still match the
+  pattern and keep parsing.
 - `kind` — one fixed word: `product` or `process`.
 - `claim` — free text; the assumption itself.
 - `tag` — one fixed word: `said-by-user`, `ratified-doc`, `inferred`, or `invented`.
@@ -60,14 +61,14 @@ alone; if its artifact vanished (a journey's screen deleted, a direction's token
 removed) the derivation lands earlier and demands the mark again. The order is fixed: **SEED**
 (the 13 facts, journeys, dense screen, research brief) → **SHAPES** (one shape kebab picked
 from 2–3 candidates) → **WIREFRAMES** (canon written, then every seed journey drawn and
-approved) → **THEME** (≥2 directions composed, one picked) → **SKIN** (every journey skinned
-to the picked theme) → **REVIEW** (a named decider, every journey reviewed) → **APPROVED**
-(terminal). WIREFRAMES, THEME, and SKIN each carry a sub-mark per journey or direction so no
-single conversation ever has to hold more than one journey's state — a seed journey added
-mid-WIREFRAMES reappears as `0/N drawn` and reopens the state rather than silently completing.
+approved) → **THEME** (≥2 directions composed, one picked) → **SIGNOFF** (one look over the
+whole approved set) → **APPROVED** (terminal). WIREFRAMES and THEME each carry a sub-mark per
+journey or direction so no single conversation ever has to hold more than one journey's state —
+a seed journey added mid-WIREFRAMES reappears as `0/N drawn` and reopens the state rather than
+silently completing.
 
 **The gate rides every advancing mark.** `seed-done`, `shape-picked`, `canon-written`,
-`journey-approved`, `theme-picked`, `journey-skinned`, `journey-reviewed`, and `approved` each
+`journey-approved`, `theme-picked`, and `approved` each
 run the provenance ledger's `gateVerdict` (§ Provenance Ledger) before recording; a blocked
 gate refuses (exit 2) naming the offending rows and the remedy (`ledger set --id <id> --status
 confirmed --tag said-by-user`, or `--status overridden`). `journey-approved` and `approved`
@@ -77,12 +78,11 @@ any finding or on a machine with no browser. `journey-drawn` and
 `direction-composed` run no gate — drawing and composing are how open questions get found, not
 resolved. Process rows never surface as something to resolve; they are counted, not asked.
 
-**Reopening never deletes.** `--reopen journey:<j>` clears that journey's
-approved/skinned/reviewed marks (and the terminal `approved`); `--reopen shapes` clears the
-shape pick and every downstream mark; `--reopen theme` clears the theme pick, every
-skinned/reviewed mark, and `approved`. Every reopen appends one row to `status.reopens` naming
-what it invalidated and leaves every file on disk byte-identical — the next derivation lands on
-the earliest state whose marks are now missing.
+**Reopening never deletes.** `--reopen journey:<j>` clears that journey's `approved` mark
+(and the terminal `approved`); `--reopen shapes` clears the shape pick and every downstream
+mark; `--reopen theme` clears the theme pick and `approved`. Every reopen appends one row to
+`status.reopens` naming what it invalidated and leaves every file on disk byte-identical — the
+next derivation lands on the earliest state whose marks are now missing.
 
 ## Mocks: Seed
 
@@ -157,7 +157,7 @@ at the first declared viewport in `design/targets.json`, and deletes the sibling
 `require.resolve('playwright')` does not resolve from a host repo even when the CLI works.
 
 **Reachability is a precondition, not an afterthought.** Before printing SHAPES, WIREFRAMES,
-THEME, or SKIN — every state that asks the session to look at a screen — the driver runs the
+THEME, or SIGNOFF — every state that asks the session to look at a screen — the driver runs the
 look probe unless `status.look` is already `"browser"`; a failed probe refuses (exit 2) naming
 `npx playwright install chromium` rather than silently proceeding into a state no one can
 verify. `mocks-driver.js look-via <playwright|browser>` records the session's declared path:
@@ -187,15 +187,14 @@ done, and only the author who raised a note is positioned to judge that a re-loo
 answered it.
 
 **Project notes block first.** Any note with `scope: "project"` not yet `resolved` refuses
-every mock-note mark (`journey-approved`, `journey-skinned`, `journey-reviewed`, `approved`),
-naming the note id — a direction-level concern outranks any per-screen work until it is
-answered. Once no project note is open, a mark still refuses while any note on its own screens
-is unresolved; `approved` refuses while any note anywhere is unresolved. Zero open notes on a
-journey is that journey's approval mark.
+every mock-note mark (`journey-approved`, `approved`), naming the note id — a direction-level
+concern outranks any per-screen work until it is answered. Once no project note is open, a
+mark still refuses while any note on its own screens is unresolved; `approved` refuses while
+any note anywhere is unresolved. Zero open notes on a journey is that journey's approval mark.
 
-**Client review is the same notes loop**, `review-opened --decider <name>` recording who is
-signing off; the REVIEW step's printed text carries the fixed sign-off line: `Approval means
-"this is the product I understand" — the written brief, not these screens, holds scope`.
+**Client review is the same page and the same notes — there is no review state.** The
+SIGNOFF step's printed text carries the fixed sign-off line: `Approval means "this is the
+product I understand" — the written brief, not these screens, holds scope`.
 
 **Picks.** A pick stage of the flow — shapes, theme directions, per-surface variants — is
 recorded as a look stop in `design/mocks/picks.json`, written only by
@@ -226,13 +225,14 @@ half the driver cannot check, carried here as contract prose the authoring sessi
   the flat gray register at full structural honesty or the themed register at production
   fidelity — a screen half-dressed in theme colors while its neighbors stay gray is neither
   register and misleads a reviewer about what has actually been judged.
-- **Theme = recompose, never repaint.** A theme direction is composed to recompose each
-  approved wireframe screen at production fidelity on that screen's own structure and facts,
-  never freehand — across ≥3 screens per direction (the densest screen included) and
-  ≥2 directions; every direction is judged on the dense screen first, because a direction that
-  only survives on simple screens has not been tested.
+- **Theme = recompose, never repaint.** A theme direction is composed to recompose the seed's
+  dense screen at production fidelity on that screen's own structure and facts, never freehand
+  — one screen per direction, a second at most, and ≥2 directions; every direction is judged on
+  the dense screen first, because a direction that only survives on a simple screen has not
+  been tested. Recomposing the rest of the product is `/spec:sketch`'s per-brief work, not
+  THEME's.
 - **Mocks are authored under the `frontend-design` skill.** Every mock — shape, wireframe,
-  theme direction, skin, and every `/spec:sketch` draft or rework — is authored with the skill
+  theme direction, and every `/spec:sketch` draft or rework — is authored with the skill
   loaded (Skill tool) before the first edit; the pipeline never composes a screen or a token from
   the session's unaided taste. The mocks driver prints the skill line on every authoring step
   and as `skill-check`: a probe result, never a guess — installed (load it), not installed or

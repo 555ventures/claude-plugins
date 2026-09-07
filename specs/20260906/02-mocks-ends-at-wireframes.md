@@ -1,6 +1,6 @@
 ---
 date: 2026-09-06
-status: hardened
+status: implementing
 tier: standard
 area: design-mocks
 design: false
@@ -10,6 +10,7 @@ depended_on_by: [specs/20260906/03-questions-on-the-wireframe.md, specs/20260906
 brief: 22a
 open_markers: 0
 spiked: 2026-09-06
+diff_base: 08fae7e995c3018daad7e8bee45a692ee5203b65
 ---
 
 # Mocks ends at wireframes: SKIN and REVIEW retired, THEME picked on the dense screens, one sign-off
@@ -34,6 +35,7 @@ spiked: 2026-09-06
 | D10 | `genesis-driver.js` keeps requiring `design/mocks/status.json` `state === 'APPROVED'` at BRIEF, naming the actual state on refusal (AC-20260906-02-9) | Regression pin — the genesis chain must not admit a half-finished mocks run; the test fixture merely stops writing a state that no longer exists. |
 | D11 | Tests: `tests/mocks/mocks-driver-fixtures.js` deletes `writeSkinned`, `advanceToSkinned`, `advanceToReviewed`; `advanceToApproved(dir)` = `advanceToThemePicked` + `decideLook(dir,'approved','approve',{by:'Ren'})` + `mark approved`; `writeThemeDirection(dir, kebab, labels)` writes ≤2 labels with the dense screen first; every test named in the File Plan retargets its AC as listed in Acceptance Criteria (AC-20260906-02-1 … -9) | Fixture chain is the one place the retired states were "known"; retargeted pins keep every surviving contract executed. |
 | D12 | Bump `spec/.claude-plugin/plugin.json` to the next free minor (target 7.93.0 at plan time; take the next free one at build) with the changelog entry `[no-ac: review's version-bump check is the oracle]` | § Planning version discipline. |
+| D13 | Build ruling (session, whole-suite check): `tests/mocks/mocks-driver-look-stops.test.js` enters the File Plan — its setup composed three screens per theme direction, which D3 now refuses; the setup drops to the dense screen plus one, no assertion weakened, no AC of its own | A test whose fixture performs the retired SKIN work is the collision closure's paths-leg hit the spec waived to the whole-suite check; adding it to scope is the cheapest reversible fix. |
 
 **Orchestrator duty (outside the File Plan table):** after the doctrine wave, run `node "$(spec-paths citations-check)"` (or the suite's citations test) and fix any `§` citation the section rewrites broke; delete or re-stamp `.claude/agent-memory/plugin-tests/mocks-driver-fixture-gotchas.md` lines that name `advanceToSkinned`/`journey-skinned`.
 
@@ -54,6 +56,7 @@ spiked: 2026-09-06
 | tests/mocks/mocks-driver-look-stops-2.test.js | MODIFY | tests | AC-20260906-02-6, AC-20260906-02-8 (skill line in SHAPES/WIREFRAMES/THEME only; SIGNOFF block literal + stop); journey-reviewed stop test deleted, approved stop arm kept |
 | tests/consistency/design-doctrine.test.js | MODIFY | tests | AC-20260902-10-8 retargeted to the SIGNOFF block (setup via `advanceToThemePicked`, no `journey-reviewed`) |
 | tests/genesis/brief-state.test.js | MODIFY | tests | AC-20260906-02-9 (fixture writes `state: "THEME"`, asserts the refusal names THEME) |
+| tests/mocks/mocks-driver-look-stops.test.js | MODIFY | tests | D13: direction setup composes ≤2 screens, dense first (no AC of its own) |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D12 version bump + changelog entry |
 
 ## Contracts

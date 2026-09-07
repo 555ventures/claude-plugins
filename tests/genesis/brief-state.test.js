@@ -388,7 +388,7 @@ test('AC-20260902-08-3: WHEN --mark discovery-done runs with every coverage key 
   assert.doesNotMatch(backendResult.stdout, /\/spec:mocks/, 'D2: backend-api is not a visual archetype — its BRIEF step text must never send the session to /spec:mocks, a design stage this archetype never enters')
 })
 
-test('AC-20260902-08-4: WHEN --mark brief-written runs for web-app with no design/mocks/status.json THE SYSTEM exits 2 naming that path and "run /spec:mocks"; with state: "SKIN" it exits 2 naming SKIN; with state: "APPROVED" but a ledger holding a blocking invented-open row it exits 2 naming that row\'s id', () => {
+test('AC-20260902-08-4 / AC-20260906-02-9: WHEN --mark brief-written runs for web-app with no design/mocks/status.json THE SYSTEM exits 2 naming that path and "run /spec:mocks"; with state: "THEME" it exits 2 naming THEME; with state: "APPROVED" but a ledger holding a blocking invented-open row it exits 2 naming that row\'s id', () => {
   const noStatus = tmpdir('brief-ac4-nostatus')
   advanceToDiscoveryDone(noStatus, 'web-app')
   const refused = mark(noStatus, 'brief-written')
@@ -396,13 +396,13 @@ test('AC-20260902-08-4: WHEN --mark brief-written runs for web-app with no desig
   assert.match(refused.stderr, /design\/mocks\/status\.json/, 'the refusal must name the missing path so the session knows exactly what /spec:mocks is expected to have produced')
   assert.match(refused.stderr, /run \/spec:mocks/, 'the refusal must name the remedy — /spec:mocks is the only command that can produce this file')
 
-  const notApproved = tmpdir('brief-ac4-skin')
+  const notApproved = tmpdir('brief-ac4-theme')
   advanceToDiscoveryDone(notApproved, 'web-app')
-  writeMocksStatus(notApproved, { state: 'SKIN' })
+  writeMocksStatus(notApproved, { state: 'THEME' })
   writeLedger(notApproved)
-  const skinRefused = mark(notApproved, 'brief-written')
-  assert.strictEqual(skinRefused.status, 2, 'D3: a mocks run still at SKIN has not been approved by the user yet — brief-written must refuse it')
-  assert.match(skinRefused.stderr, /SKIN/, 'the refusal must name the actual state "SKIN" so the session knows how far the mocks run still has to go')
+  const themeRefused = mark(notApproved, 'brief-written')
+  assert.strictEqual(themeRefused.status, 2, 'D10/AC-20260906-02-9: a mocks run still at THEME (SKIN and REVIEW are retired — /spec:mocks now runs SEED → SHAPES → WIREFRAMES → THEME → SIGNOFF → APPROVED) has not been approved by the user yet — brief-written must refuse it')
+  assert.match(themeRefused.stderr, /THEME/, 'the refusal must name the actual state "THEME" so the session knows how far the mocks run still has to go, and must never name the retired "SKIN" state')
 
   const blockedLedger = tmpdir('brief-ac4-blocked')
   advanceToDiscoveryDone(blockedLedger, 'web-app')

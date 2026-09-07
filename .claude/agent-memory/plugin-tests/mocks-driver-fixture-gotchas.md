@@ -1,20 +1,20 @@
 ---
 name: mocks-driver-fixture-gotchas
-description: mocks-driver.js fixture-chain gotchas for red-phase tests reaching THEME/REVIEW state, plus a serve-endpoint content-type trap.
+description: mocks-driver.js fixture-chain gotchas for red-phase tests reaching THEME/SIGNOFF state, plus a serve-endpoint content-type trap.
 metadata:
   type: pattern
   reviewed: 2026-09-06
 ---
 
-Building a `mocks-driver.js` fixture up to a late state (e.g. REVIEW sign-off, for an AC
-asserting the bare-step output text) needs the full SEED→SHAPES→WIREFRAMES→THEME→SKIN→REVIEW
-chain driven via real `--mark` calls — no shortcut. `direction-composed` requires >=3 composed
-screens per direction, so the journey itself needs >=3 labels (not 2) to have enough approved
-labels to compose with once THEME is reached. The shared `advanceTo*` builders, `decideLook`/`openLook`,
+Building a `mocks-driver.js` fixture up to a late state (e.g. the SIGNOFF look, for an AC
+asserting the bare-step output text) needs the full SEED→SHAPES→WIREFRAMES→THEME→SIGNOFF
+chain driven via real `--mark` calls — no shortcut. Since specs/20260906/02 `direction-composed`
+caps a direction at 2 composed screens with the seed's dense screen first (3+ refuses), so
+`writeThemeDirection` takes `[DENSE, one more label]`, never a third. The shared `advanceTo*` builders, `decideLook`/`openLook`,
 and the serve-child helpers (`startServe`/`stopServe`, since specs/20260905/04 — no hub exists any more) live in `tests/mocks/mocks-driver-fixtures.js` (module.exports, no `test(`
 calls) — require it from a new mocks-driver test file instead of re-writing the chain; doctrine
 tests outside `tests/mocks/` still carry their own condensed chain. Since specs/20260905/02 the
-five marks `shape-picked`/`journey-approved`/`theme-picked`/`journey-reviewed`/`approved` refuse
+four marks `shape-picked`/`journey-approved`/`theme-picked`/`approved` refuse
 without a decided look stop in `picks.json`: seed one with `decideLook` (writes through
 `lib/mocks-picks.js`) before every acceptance, refusal paths included.
 

@@ -99,8 +99,8 @@ test('AC-20260905-02-10/AC-20260905-04-9: stop open shapes/theme write pick stop
 
     const dir2 = tmpdir('mocks-driver')
     advanceToJourneyApproved(dir2)
-    advanceToDirectionComposed(dir2, 'ocean', [DENSE, LABELS[0], LABELS[1]], 'P15')
-    advanceToDirectionComposed(dir2, 'ember', [DENSE, LABELS[0], LABELS[2]], 'P16')
+    advanceToDirectionComposed(dir2, 'ocean', [DENSE, LABELS[0]], 'P15')
+    advanceToDirectionComposed(dir2, 'ember', [DENSE, LABELS[1]], 'P16')
     const port2 = await freePort()
     serveChild2 = await startServe(dir2, port2)
     const themeR = runNode(SCRIPT, ['--root', dir2, 'stop', 'open', 'theme', '--port', String(port2)])
@@ -215,8 +215,8 @@ test('AC-20260905-02-13/AC-20260905-04-9: a decided shape/theme pick accepts wit
 
   const dir3 = tmpdir('mocks-driver')
   advanceToJourneyApproved(dir3)
-  advanceToDirectionComposed(dir3, 'ocean', [DENSE, LABELS[0], LABELS[1]], 'P15')
-  advanceToDirectionComposed(dir3, 'ember', [DENSE, LABELS[0], LABELS[2]], 'P16')
+  advanceToDirectionComposed(dir3, 'ocean', [DENSE, LABELS[0]], 'P15')
+  advanceToDirectionComposed(dir3, 'ember', [DENSE, LABELS[1]], 'P16')
   decideLook(dir3, 'theme-picked', 'pick', { pick: 'ocean', others: ['ember'], by: 'jj' })
   const themeAccepted = mark(dir3, 'theme-picked')
   assert.strictEqual(themeAccepted.status, 0, 'theme-picked must accept with no --direction flag once the page decided a pick: ' + themeAccepted.stdout + themeAccepted.stderr)
@@ -226,8 +226,8 @@ test('AC-20260905-02-13/AC-20260905-04-9: a decided shape/theme pick accepts wit
 
   const dir4 = tmpdir('mocks-driver')
   advanceToJourneyApproved(dir4)
-  advanceToDirectionComposed(dir4, 'ocean', [DENSE, LABELS[0], LABELS[1]], 'P15')
-  advanceToDirectionComposed(dir4, 'ember', [DENSE, LABELS[0], LABELS[2]], 'P16')
+  advanceToDirectionComposed(dir4, 'ocean', [DENSE, LABELS[0]], 'P15')
+  advanceToDirectionComposed(dir4, 'ember', [DENSE, LABELS[1]], 'P16')
   decideLook(dir4, 'theme-picked', 'pick', { pick: 'ocean', others: ['ember'], by: 'jj' })
   const themeDisagree = mark(dir4, 'theme-picked', ['--direction', 'ember'])
   assert.strictEqual(themeDisagree.status, 2, 'a --direction flag disagreeing with the page\'s pick must be refused: ' + themeDisagree.stdout + themeDisagree.stderr)

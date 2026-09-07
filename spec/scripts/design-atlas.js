@@ -809,14 +809,15 @@ function parseSeedJourneys(root) {
 
 // ---- picks (specs/20260905/01-picks-on-the-atlas-page.md D3/D4) ----------------------------------
 // A look stop's key says where it renders (D3b): shape-picked -> the shapes section, theme-picked
-// -> a dedicated theme section right after shapes, journey-approved:<j>/journey-reviewed:<j>/
-// variants:<j> -> the <j> journey section, approved -> the page header, anything else ->
-// a standalone block right after #stops.
+// -> a dedicated theme section right after shapes, journey-approved:<j>/variants:<j> -> the <j>
+// journey section, approved -> the page header (specs/20260906/02-mocks-ends-at-wireframes.md:
+// journey-reviewed is retired along with the REVIEW state — approved already homes to the page
+// header), anything else -> a standalone block right after #stops.
 function stopHome(key) {
   if (key === 'shape-picked') return { type: 'shapes' }
   if (key === 'theme-picked') return { type: 'theme' }
   if (key === 'approved') return { type: 'header' }
-  const m = /^(?:journey-approved|journey-reviewed|variants):(.+)$/.exec(key)
+  const m = /^(?:journey-approved|variants):(.+)$/.exec(key)
   if (m) return { type: 'journey', journey: m[1] }
   return { type: 'standalone' }
 }
@@ -1146,7 +1147,7 @@ function buildAtlas(root, out) {
     if (!sections.has(key)) sections.set(key, { cards: [], chips: [] })
     sections.get(key)[r.chip ? 'chips' : 'cards'].push(r)
   }
-  // D3(b): a journey key (journey-approved:<j>, journey-reviewed:<j>, variants:<j>) attaches to
+  // D3(b): a journey key (journey-approved:<j>, variants:<j>) attaches to
   // the section whose derived title equals <j> — the same title a reader sees on the section's
   // own <h2>. A journey with no matching section (nothing drawn under it yet) falls back to a
   // standalone block rather than being silently dropped.

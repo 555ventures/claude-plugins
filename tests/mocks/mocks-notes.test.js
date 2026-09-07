@@ -102,10 +102,13 @@ This canon is binding: see docs/design/research-brief.md for the research basis.
 }
 function writeWireframe(dir, label) {
   writeFile(path.join(dir, 'design/mocks', label + '.html'),
+    '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
     '<link rel="stylesheet" href="../wire/tokens.css">\n' +
     '<link rel="stylesheet" href="../wire/wire.css">\n' +
+    '<style>* { box-sizing: border-box; }</style>\n' +
     '<main data-screen-label="' + label + '" data-status="sketch">' + label + '</main>\n')
 }
+// D3: at most 2 screens per direction, the dense screen first.
 function writeThemeDirection(dir, kebab, labels) {
   writeFile(path.join(dir, 'design/theme', kebab, 'tokens.css'), ':root{--text-body:#111}\n')
   for (const label of labels) {
@@ -143,16 +146,6 @@ function writeCaptureConfig(dir, capturePath) {
   try { existing = JSON.parse(fs.readFileSync(configPath, 'utf8')) } catch { /* cold root */ }
   existing.design = Object.assign({}, existing.design, { render: { capture: 'node ' + capturePath } })
   writeJSON(configPath, existing)
-}
-
-function writeSkinned(dir, labels, status = 'sketch') {
-  for (const label of labels) {
-    writeFile(path.join(dir, 'design/mocks', label + '.html'),
-      '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
-      '<link rel="stylesheet" href="../tokens.css">\n' +
-      '<style>* { box-sizing: border-box; }</style>\n' +
-      '<main data-screen-label="' + label + '" data-status="' + status + '">' + label + '</main>\n')
-  }
 }
 
 // D11 fixture repair: once D7 lands, journey-approved/theme-picked refuse without a decided look
@@ -213,13 +206,13 @@ function advanceToJourneyDrawn(dir) {
 }
 
 function advanceToThemePicked(dir) {
-  const composeDirection = (kebab, ledgerId, other) => {
+  const composeDirection = (kebab, ledgerId) => {
     const ledgerR = ledgerCmd(dir, 'add', [
       '--id', ledgerId, '--step', 'THEME', '--kind', 'product',
       '--claim', 'theme-directions: ' + kebab, '--tag', 'said-by-user', '--status', 'confirmed',
     ])
     assert.strictEqual(ledgerR.status, 0, 'test setup requires the theme-directions ledger row to be accepted: ' + ledgerR.stderr)
-    writeThemeDirection(dir, kebab, LABELS)
+    writeThemeDirection(dir, kebab, [DENSE, LABELS[0]])
     const r = mark(dir, 'direction-composed', ['--direction', kebab])
     assert.strictEqual(r.status, 0, 'test setup requires direction-composed to be accepted for "' + kebab + '": ' + r.stderr)
   }
@@ -335,7 +328,7 @@ test('AC-20260902-10-5: `notes open` prints the project note first, groups N004 
 // ---------------------------------------------------------------------------
 // AC-20260902-10-6
 // ---------------------------------------------------------------------------
-test('AC-20260902-10-6: journey-approved, journey-skinned, journey-reviewed, and approved all refuse on an open project note or an unresolved journey note, naming the note ids', () => {
+test('AC-20260902-10-6: journey-approved and approved both refuse on an open project note or an unresolved journey note, naming the note ids', () => {
   const dir = tmpdir('mocks-notes-gate')
   advanceToJourneyDrawn(dir)
   writeCaptureConfig(dir, writeFixtureCapture(dir))
@@ -362,42 +355,19 @@ test('AC-20260902-10-6: journey-approved, journey-skinned, journey-reviewed, and
   assert.strictEqual(approvedNow.status, 0, 'journey-approved must be accepted once every project and journey note is resolved: ' + approvedNow.stdout + approvedNow.stderr)
 
   advanceToThemePicked(dir)
-  writeSkinned(dir, LABELS)
-
-  // journey-skinned: same rule.
-  writeNotes(dir, [projectNote('N005', 'resolved'), mockNote('N002', 'open')])
-  const blockedSkin = mark(dir, 'journey-skinned', ['--journey', JOURNEY])
-  assert.strictEqual(blockedSkin.status, 2, 'journey-skinned must apply the same unresolved-note rule as journey-approved: ' + blockedSkin.stdout + blockedSkin.stderr)
-  assert.match(blockedSkin.stdout + blockedSkin.stderr, new RegExp('unresolved note\\(s\\) on ' + JOURNEY + ': N002'),
-    'journey-skinned\'s refusal must name the journey and the unresolved note id, the same D5 prefix journey-approved uses: ' + blockedSkin.stdout + blockedSkin.stderr)
-
-  writeNotes(dir, [projectNote('N005', 'resolved'), mockNote('N002', 'resolved')])
-  const skinnedNow = mark(dir, 'journey-skinned', ['--journey', JOURNEY])
-  assert.strictEqual(skinnedNow.status, 0, 'journey-skinned must be accepted once every note is resolved: ' + skinnedNow.stdout + skinnedNow.stderr)
-
-  const opened = mark(dir, 'review-opened', ['--decider', 'Ren'])
-  assert.strictEqual(opened.status, 0, 'test setup requires review-opened to be accepted: ' + opened.stderr)
-
-  // journey-reviewed: same rule.
-  decideLook(dir, 'journey-reviewed:' + JOURNEY, 'approve', { by: 'jj' })
-  writeNotes(dir, [projectNote('N005', 'resolved'), mockNote('N003', 'open')])
-  const blockedReview = mark(dir, 'journey-reviewed', ['--journey', JOURNEY])
-  assert.strictEqual(blockedReview.status, 2, 'journey-reviewed must apply the same unresolved-note rule: ' + blockedReview.stdout + blockedReview.stderr)
-  assert.match(blockedReview.stdout + blockedReview.stderr, new RegExp('unresolved note\\(s\\) on ' + JOURNEY + ': N003'),
-    'journey-reviewed\'s refusal must name the journey and the unresolved note id: ' + blockedReview.stdout + blockedReview.stderr)
-
-  writeNotes(dir, [projectNote('N005', 'resolved'), mockNote('N003', 'resolved')])
-  const reviewedNow = mark(dir, 'journey-reviewed', ['--journey', JOURNEY])
-  assert.strictEqual(reviewedNow.status, 0, 'journey-reviewed must be accepted once every note is resolved: ' + reviewedNow.stdout + reviewedNow.stderr)
-
-  // approved: any unresolved note anywhere blocks it (project scope again, this time).
   decideLook(dir, 'approved', 'approve', { by: 'jj' })
-  writeSkinned(dir, LABELS, 'approved')
+
+  // approved: any unresolved note anywhere blocks it (project scope again, this time — SKIN and
+  // REVIEW are retired, so approved is the only remaining note gate past journey-approved).
   writeNotes(dir, [projectNote('N006', 'open')])
   const blockedApproved = mark(dir, 'approved')
   assert.strictEqual(blockedApproved.status, 2, '`--mark approved` must refuse while any note anywhere is unresolved, per D5\'s "approved: any unresolved note anywhere": ' + blockedApproved.stdout + blockedApproved.stderr)
   assert.match(blockedApproved.stdout + blockedApproved.stderr, /unresolved note|N006/,
     'the approved refusal must name the unresolved note: ' + blockedApproved.stdout + blockedApproved.stderr)
+
+  writeNotes(dir, [projectNote('N006', 'resolved')])
+  const approvedFinal = mark(dir, 'approved')
+  assert.strictEqual(approvedFinal.status, 0, '`--mark approved` must be accepted once every note is resolved: ' + approvedFinal.stdout + approvedFinal.stderr)
 })
 
 // ---------------------------------------------------------------------------

@@ -10,10 +10,10 @@ The standalone design-stage entry point, ahead of `/spec:genesis` and any roadma
 ledger gating on every advancing mark, journey/direction sub-marks, the look-reachability
 precondition — printing exactly one step at a time for the judgment only this session can make.
 This command is a thin shell: it names where each step's doctrine lives, runs the THEME
-interview, the look rule, and the review loop below, and assembles the APPROVED report.
+interview, the look rule, and the sign-off step below, and assembles the APPROVED report.
 
-**Intended model: Sonnet** (drawing and skinning screens one at a time; escalate to Opus only
-for a genuinely hard-to-reverse product-facts fork).
+**Intended model: Sonnet** (drawing screens one at a time; escalate to Opus only for a
+genuinely hard-to-reverse product-facts fork).
 
 **Setup:** run `spec-paths shared-for mocks` and read its output (Host Grounding, Model
 Placement, Decisions, Question Style, Console Output Style, MCP Policy, Design Canon, Design
@@ -50,18 +50,18 @@ The THEME step opens with a direction interview, not a fixed menu: derive 2–3 
 directions from the seed's product, audience, and references, and `AskUserQuestion` which to
 compose — never anchor on a stock pair (warm/cool, playful/serious). Record the picks as the
 `theme-directions` product row the driver's step text names, then run `--mark direction-composed
---direction <k>` per direction once its tokens and ≥3 screens exist. The interview asks only
-which directions to compose — the winner is picked on the served atlas page, not by a second question (§ Look
-rule): once ≥2 directions are composed, `stop open theme` opens a pick stop and `--mark
-theme-picked` accepts once it is decided, appending the `theme` row itself (`rejected` = the
-other directions).
+--direction <k>` per direction once its tokens and the seed's dense screen exist (a second
+screen at most). The interview asks only which directions to compose — the winner is picked on
+the served atlas page, not by a second question (§ Look rule): once ≥2 directions are composed,
+`stop open theme` opens a pick stop and `--mark theme-picked` accepts once it is decided,
+appending the `theme` row itself (`rejected` = the other directions).
 
 Every authoring step block the driver prints carries the `frontend-design` skill line; act on it
 before the first edit (§ Mocks: Authoring Rules — the one binding home).
 
 ## Look rule
 
-Before SHAPES, WIREFRAMES, THEME, or SKIN the driver runs the look-reachability probe; if it
+Before SHAPES, WIREFRAMES, THEME, or SIGNOFF the driver runs the look-reachability probe; if it
 refuses, either fix the remedy (`npx playwright install chromium`) or, when a browser MCP is the
 real look path, `ToolSearch` for `claude-in-chrome` (or equivalent) and record `mocks-driver.js
 look-via browser` before re-running. To look at a screen, use `mocks-driver.js look <label>
@@ -73,8 +73,8 @@ this run, start `node "$(spec-paths design-atlas)" serve --root . [--port <n>]` 
 session's server is still up — reuse it); leave it running across this run's look stops and stop
 the task at sign-off or when the session ends — this is the session's own tool and is never
 printed to the user. Every step waiting on a human verdict — SHAPES, `journey-approved`, THEME,
-`journey-reviewed`, `approved` — runs `node {driver} stop open <step>` (`<step>` = `shapes` |
-`journey:<j>` | `theme` | `review:<j>` | `signoff`); its stdout is the whole hand-off — exactly
+`approved` — runs `node {driver} stop open <step>` (`<step>` = `shapes` |
+`journey:<j>` | `theme` | `signoff`); its stdout is the whole hand-off — exactly
 two lines — then **end the turn** (shared § Design Atlas: look stops are never questions). No
 server command, no file paths, no list of screen names:
 
@@ -89,23 +89,27 @@ run the driver reads the decided stop off disk: `approve`/`pick` advances with t
 `--mark …` line; `change` starts a fresh round — address the note, then `stop open <step>`
 again.
 
-## Review loop (REVIEW state)
+## Sign-off (SIGNOFF state)
 
-Sitting → go: run `node {driver} notes open` on go (or re-invoke `/spec:mocks`) and triage every
-note into one bin: **mock detail** (redraw, `notes address --id <id> --change "<what changed>"`),
-**product understanding** (a ledger row first, same address call plus `--ledger <rowId>`),
-**question back** (`notes reply --id <id> --text "<question>"`), or **propose to decline**
-(never decided here — print it for the decider). A canon-primitive note edits canon.md first,
-every dependent screen after; resolve happens only on the page, never a `notes resolve`
-subcommand. Client review (`review-opened --decider <name>`) is the same loop; REVIEW prints
-`Approval means "this is the product I understand" — the written brief, not these screens, holds scope`.
+The terminal look: one pass over `design/atlas/index.html`, every journey, gray, theme tokens
+already in place. There is no separate review loop — feedback on the served pages is the same
+notes layer as every earlier state: run `node {driver} notes open` on go (or re-invoke
+`/spec:mocks`) and triage every note into one bin: **mock detail** (redraw, `notes address --id
+<id> --change "<what changed>"`), **product understanding** (a ledger row first, same address
+call plus `--ledger <rowId>`), **question back** (`notes reply --id <id> --text "<question>"`),
+or **propose to decline** (never decided here — print it for whoever signs off). A
+canon-primitive note edits canon.md first, every dependent screen after; resolve happens only on
+the page, never a `notes resolve` subcommand. The step prints the fixed sign-off line,
+`Approval means "this is the product I understand" — the written brief, not these screens, holds
+scope`, then `stop open signoff`. On `decided approve`, `--mark approved` stamps every top-level
+mock `data-status="approved"` and records the stop's own decider.
 
 ## Report
 
 Printed once the driver reaches `APPROVED`. Assemble the slots object (shared § Console Output
 Style — `report-render.js` is the sole render authority):
 
-- `outcome`: `✅ mocks approved — {N} journeys, theme "{direction}", decider {name}`.
+- `outcome`: `✅ mocks approved — {N} journeys, theme "{direction}", signed off by {name}`.
 - `bullets`: `{journey}: {M} screens` per journey; `theme: {direction} — rejected {others}`;
   `Chain: /spec:mocks → /spec:genesis → /spec:enforce → /spec:plan`.
 - `warns`: one `catch: {what}` entry per ledger misunderstanding row logged this run (drop if none).
@@ -119,7 +123,7 @@ verbatim.
 - **Never restate the driver's derivation.** Read its printed step and doctrine citation; act
   on them — re-deriving state by hand from `status.json` is the class of bug the driver exists
   to prevent.
-- Canon before screens, screens before theme, theme before skin — the driver refuses out of
+- Canon before screens, screens before theme, theme before sign-off — the driver refuses out of
   order; this command never works around a refusal by editing `status.json`.
 - `AskUserQuestion` dismissed → STOP; never invent the declined answer.
 - The ledger is written only through the driver's `ledger` subcommands, notes.json only

@@ -3,13 +3,13 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir } = require('../helpers')
+const { tmpdir, runNode } = require('../helpers')
 const {
-  JOURNEY, LABELS, DENSE,
+  SCRIPT, JOURNEY, LABELS, DENSE,
   bare, mark, stateOf, ledgerCmd,
-  writeFile, statusJson,
+  writeFile, statusJson, statusPath,
   writeTargets, writeResearchBrief, writeSeed, confirmFacts, writeCanon, writeWireframe,
-  writeThemeDirection, writeSkinned,
+  writeThemeDirection,
   decideLook,
   advanceToShapePicked, advanceToCanonWritten, advanceToJourneyApproved,
   advanceToDirectionComposed, advanceToThemePicked,
@@ -27,6 +27,11 @@ const {
 // (AC-20260905-02-9..15) moved to the sibling mocks-driver-look-stops.test.js.
 //
 // Split under specs/20260906/01-ac-drift-doctor-check.md D11 (per-file 45 s budget, specs/20260903/06-test-suite-critical-path.md): the second half lives in mocks-driver-2.test.js; test logic unchanged.
+//
+// specs/20260906/02-mocks-ends-at-wireframes.md: SKIN and REVIEW retire — AC-20260906-02-1,
+// -2, -3, and -4 (retag of the theme-picked test) replace AC-20260902-07-1's stale "SKIN"-shaped
+// assumptions where they collide; the journey-skinned test (former AC-20260902-07-8) is deleted
+// outright — journey-skinned is not among the driver's live marks.
 
 // ---------------------------------------------------------------------------
 // AC-20260902-07-1
@@ -40,7 +45,7 @@ test('AC-20260902-07-1: WHEN the driver runs on a cold --root THE SYSTEM creates
   assert.strictEqual(status.schemaVersion, 1, 'a cold status.json must be created with schemaVersion 1')
   assert.strictEqual(status.state, 'SEED', 'a cold status.json must record state SEED')
   assert.strictEqual(status.look, 'playwright', 'a cold status.json must default look to "playwright"')
-  for (const key of ['seedDone', 'shapePicked', 'canonWritten', 'themePicked', 'reviewOpened', 'approved']) {
+  for (const key of ['seedDone', 'shapePicked', 'canonWritten', 'themePicked', 'approved']) {
     assert.strictEqual(status.marks[key], null, 'mark "' + key + '" must be null on a cold status.json, never a stale value from a template default')
   }
 
@@ -296,7 +301,9 @@ test('AC-20260902-07-6 / AC-20260905-02-18: journey-drawn refuses a missing or n
 })
 
 // ---------------------------------------------------------------------------
-// AC-20260902-07-7
+// AC-20260906-02-4 (retag of the former AC-20260902-07-7 theme-picked test — the too-few-
+// screens/too-many-screens clauses move to AC-20260906-02-3 below; this test keeps the
+// under-2-directions and incomplete-rejection refusals, and the byte-copy-on-accept pin)
 // ---------------------------------------------------------------------------
 // Deviation (recorded in specs/20260902/07-mocks-command-driver.deviations.md): the spec names
 // a "theme-directions"/"theme" product ledger ROW without pinning how the driver identifies it
@@ -305,27 +312,16 @@ test('AC-20260902-07-6 / AC-20260905-02-18: journey-drawn refuses a missing or n
 // "theme-directions: <kebab>" / "theme: <kebab>" text as the most literal reading of D8 — an
 // implementation reading a different cell/shape for this row is a legitimate in-bounds choice
 // the spec leaves open, not a locked Decision this test overrides.
-test('AC-20260902-07-7 / AC-20260905-02-18: direction-composed refuses too few screens; theme-picked refuses under 2 directions or an incomplete rejection even with a decided stop present, and copies tokens on acceptance', () => {
+test('AC-20260906-02-4 / AC-20260902-07-7: theme-picked refuses under 2 composed directions or an incomplete rejection even with a decided stop present, and copies tokens on acceptance', () => {
   const dir = tmpdir('mocks-driver')
   advanceToJourneyApproved(dir)
-
-  writeThemeDirection(dir, 'quiet', [DENSE, LABELS[0]]) // only 2 screens, dense screen present
-  const ledgerR = ledgerCmd(dir, 'add', ['--id', 'P15', '--step', 'THEME', '--kind', 'product', '--claim', 'theme-directions: quiet', '--tag', 'said-by-user', '--status', 'confirmed'])
-  assert.strictEqual(ledgerR.status, 0, 'test setup requires the theme-directions row to be accepted: ' + ledgerR.stderr)
-  let r = mark(dir, 'direction-composed', ['--direction', 'quiet'])
-  assert.strictEqual(r.status, 2, 'direction-composed must refuse with only 2 composed screens (the floor is 3, incl. the dense screen): ' + r.stdout + r.stderr)
-  assert.match(r.stderr + r.stdout, /2/, 'the refusal must name the actual screen count')
-
-  writeThemeDirection(dir, 'quiet', [DENSE, LABELS[0], LABELS[1]])
-  r = mark(dir, 'direction-composed', ['--direction', 'quiet'])
-  assert.strictEqual(r.status, 0, 'direction-composed must be accepted with 3 approved screens including the dense screen: ' + r.stdout + r.stderr)
-  assert.strictEqual(statusJson(dir).directions.quiet.composed !== null, true, 'an accepted direction-composed must record directions.quiet.composed')
+  advanceToDirectionComposed(dir, 'quiet', [DENSE, LABELS[0]], 'P15')
 
   decideLook(dir, 'theme-picked', 'pick', { pick: 'quiet', others: ['warm'], by: 'jj' })
   let picked = mark(dir, 'theme-picked', ['--direction', 'quiet'])
   assert.strictEqual(picked.status, 2, 'theme-picked must refuse while only one direction is composed, even with a decided pick stop present: ' + picked.stdout + picked.stderr)
 
-  advanceToDirectionComposed(dir, 'warm', [DENSE, LABELS[0], LABELS[2]], 'P16')
+  advanceToDirectionComposed(dir, 'warm', [DENSE, LABELS[1]], 'P16')
   const badRejectRow = ledgerCmd(dir, 'add', ['--id', 'P17', '--step', 'THEME', '--kind', 'product', '--claim', 'theme: quiet', '--tag', 'said-by-user', '--status', 'confirmed'])
   assert.strictEqual(badRejectRow.status, 0, 'test setup requires the theme row (missing rejected cell) to be accepted: ' + badRejectRow.stderr)
   decideLook(dir, 'theme-picked', 'pick', { pick: 'quiet', others: ['warm'], by: 'jj' })
@@ -341,38 +337,107 @@ test('AC-20260902-07-7 / AC-20260905-02-18: direction-composed refuses too few s
   assert.strictEqual(fs.readFileSync(path.join(dir2, 'design/tokens.css'), 'utf8'),
     fs.readFileSync(path.join(dir2, 'design/theme/quiet/tokens.css'), 'utf8'),
     'theme-picked must copy design/theme/<k>/tokens.css to design/tokens.css byte-for-byte')
-  assert.strictEqual(statusJson(dir2).state, 'SKIN', 'an accepted theme-picked must advance the derived state to SKIN')
+  assert.strictEqual(statusJson(dir2).state, 'SIGNOFF', 'D1: an accepted theme-picked must advance the derived state to SIGNOFF, not the retired SKIN')
 })
 
 // ---------------------------------------------------------------------------
-// AC-20260902-07-8
+// AC-20260906-02-3
 // ---------------------------------------------------------------------------
-test('AC-20260902-07-8: journey-skinned refuses before theme-picked and while a screen still links wire/, and records skinned once every screen links only tokens.css', () => {
+test('AC-20260906-02-3: direction-composed accepts a direction composing only the seed\'s dense screen; refuses composing 3 screens naming the cap and /spec:sketch; continues to refuse 2 screens neither of which is the dense screen', () => {
   const dir = tmpdir('mocks-driver')
   advanceToJourneyApproved(dir)
-  const early = mark(dir, 'journey-skinned', ['--journey', JOURNEY])
-  assert.strictEqual(early.status, 2, 'journey-skinned must refuse before theme-picked has been recorded: ' + early.stdout + early.stderr)
+  writeThemeDirection(dir, 'quiet', [DENSE])
+  const ledgerR = ledgerCmd(dir, 'add', ['--id', 'P15', '--step', 'THEME', '--kind', 'product', '--claim', 'theme-directions: quiet', '--tag', 'said-by-user', '--status', 'confirmed'])
+  assert.strictEqual(ledgerR.status, 0, 'test setup requires the theme-directions ledger row to be accepted: ' + ledgerR.stderr)
+  const onlyDense = mark(dir, 'direction-composed', ['--direction', 'quiet'])
+  assert.strictEqual(onlyDense.status, 0, 'D3: direction-composed must accept a direction composing only the seed\'s dense screen: ' + onlyDense.stdout + onlyDense.stderr)
+  assert.strictEqual(statusJson(dir).directions.quiet.composed !== null, true, 'an accepted direction-composed must record directions.quiet.composed')
 
-  advanceToDirectionComposed(dir, 'quiet', [DENSE, LABELS[0], LABELS[1]], 'P15')
-  advanceToDirectionComposed(dir, 'warm', [DENSE, LABELS[0], LABELS[2]], 'P16')
+  const dir2 = tmpdir('mocks-driver')
+  advanceToJourneyApproved(dir2)
+  writeThemeDirection(dir2, 'quiet', [DENSE, LABELS[0], LABELS[1]])
+  const ledgerR2 = ledgerCmd(dir2, 'add', ['--id', 'P15', '--step', 'THEME', '--kind', 'product', '--claim', 'theme-directions: quiet', '--tag', 'said-by-user', '--status', 'confirmed'])
+  assert.strictEqual(ledgerR2.status, 0, 'test setup requires the theme-directions ledger row to be accepted: ' + ledgerR2.stderr)
+  const threeScreens = mark(dir2, 'direction-composed', ['--direction', 'quiet'])
+  assert.strictEqual(threeScreens.status, 2, 'D3: direction-composed must refuse a direction composing 3 screens — the cap is 2: ' + threeScreens.stdout + threeScreens.stderr)
+  assert.match(threeScreens.stderr + threeScreens.stdout, /composes 3 screens — at most 2/, 'the refusal must carry the exact D3 cap message: ' + threeScreens.stdout + threeScreens.stderr)
+  assert.match(threeScreens.stderr + threeScreens.stdout, /\/spec:sketch/, 'the refusal must name /spec:sketch as the fidelity-work remedy: ' + threeScreens.stdout + threeScreens.stderr)
+
+  const dir3 = tmpdir('mocks-driver')
+  advanceToJourneyApproved(dir3)
+  writeThemeDirection(dir3, 'quiet', [LABELS[0], LABELS[1]])
+  const ledgerR3 = ledgerCmd(dir3, 'add', ['--id', 'P15', '--step', 'THEME', '--kind', 'product', '--claim', 'theme-directions: quiet', '--tag', 'said-by-user', '--status', 'confirmed'])
+  assert.strictEqual(ledgerR3.status, 0, 'test setup requires the theme-directions ledger row to be accepted: ' + ledgerR3.stderr)
+  const noDense = mark(dir3, 'direction-composed', ['--direction', 'quiet'])
+  assert.strictEqual(noDense.status, 2, 'direction-composed must CONTINUE TO refuse when neither composed screen is the dense screen: ' + noDense.stdout + noDense.stderr)
+  assert.match(noDense.stderr + noDense.stdout, new RegExp(DENSE), 'the refusal must name the missing dense screen "' + DENSE + '": ' + noDense.stdout + noDense.stderr)
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260906-02-2
+// ---------------------------------------------------------------------------
+test('AC-20260906-02-2: --mark journey-skinned/review-opened/journey-reviewed exit 2 naming "unknown mark" and the eight live mark names; --decider on a bare or --mark invocation exits 2 with the retirement message', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToJourneyApproved(dir)
+
+  for (const [markName, extra] of [
+    ['journey-skinned', ['--journey', JOURNEY]],
+    ['review-opened', []],
+    ['journey-reviewed', ['--journey', JOURNEY]],
+  ]) {
+    const r = mark(dir, markName, extra)
+    assert.strictEqual(r.status, 2, '--mark ' + markName + ' must exit 2 — it is a retired mark, never a silent no-op: ' + r.stdout + r.stderr)
+    assert.match(r.stderr + r.stdout, /unknown mark/, '--mark ' + markName + '\'s refusal must say "unknown mark": ' + r.stdout + r.stderr)
+    for (const live of ['seed-done', 'shape-picked', 'canon-written', 'journey-drawn', 'journey-approved', 'direction-composed', 'theme-picked', 'approved']) {
+      assert.match(r.stderr + r.stdout, new RegExp(live), '--mark ' + markName + '\'s refusal must list the live mark name "' + live + '": ' + r.stdout + r.stderr)
+    }
+  }
+
+  const deciderBare = runNode(SCRIPT, ['--root', dir, '--decider', 'Ren'])
+  assert.strictEqual(deciderBare.status, 2, '--decider on a bare invocation must exit 2 — the flag is retired outright: ' + deciderBare.stdout + deciderBare.stderr)
+  assert.match(deciderBare.stderr + deciderBare.stdout, /--decider is retired/, 'the refusal must carry the exact D2 retirement message: ' + deciderBare.stdout + deciderBare.stderr)
+
+  const deciderOnMark = runNode(SCRIPT, ['--root', dir, '--mark', 'journey-approved', '--journey', JOURNEY, '--decider', 'Ren'])
+  assert.strictEqual(deciderOnMark.status, 2, '--decider on a --mark invocation must also exit 2: ' + deciderOnMark.stdout + deciderOnMark.stderr)
+  assert.match(deciderOnMark.stderr + deciderOnMark.stdout, /--decider is retired/, 'the refusal must carry the exact D2 retirement message on a --mark invocation too: ' + deciderOnMark.stdout + deciderOnMark.stderr)
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260906-02-1
+// ---------------------------------------------------------------------------
+test('AC-20260906-02-1: state derives THEME once canonWritten + every journey approved with theme:null, SIGNOFF once theme is set with marks.approved false, and APPROVED once marks.approved is true; a legacy status.json additionally carrying marks.reviewOpened/decider/journeys[j].skinned/.reviewed derives the identical state, and the next accepted mark writes a status.json with none of reviewOpened/skinned/reviewed present', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToJourneyApproved(dir) // canonWritten + every declared journey approved, theme still null
+  assert.strictEqual(stateOf(dir).stdout.trim(), 'THEME', 'canonWritten + every journey approved with theme:null must derive THEME')
+
+  advanceToDirectionComposed(dir, 'quiet', [DENSE, LABELS[0]], 'P15')
+  advanceToDirectionComposed(dir, 'warm', [DENSE, LABELS[1]], 'P16')
   const themeRow = ledgerCmd(dir, 'add', ['--id', 'P17', '--step', 'THEME', '--kind', 'product', '--claim', 'theme: quiet', '--tag', 'said-by-user', '--status', 'confirmed', '--rejected', 'warm'])
   assert.strictEqual(themeRow.status, 0, 'test setup requires the theme row to be accepted: ' + themeRow.stderr)
   decideLook(dir, 'theme-picked', 'pick', { pick: 'quiet', others: ['warm'], by: 'jj' })
   const picked = mark(dir, 'theme-picked', ['--direction', 'quiet'])
   assert.strictEqual(picked.status, 0, 'test setup requires theme-picked to be accepted: ' + picked.stdout + picked.stderr)
+  assert.strictEqual(stateOf(dir).stdout.trim(), 'SIGNOFF', 'theme set with marks.approved false must derive SIGNOFF')
 
-  writeSkinned(dir, LABELS)
-  // leave one file still linking wire/wire.css
-  fs.writeFileSync(path.join(dir, 'design/mocks', LABELS[0] + '.html'),
-    '<link rel="stylesheet" href="../wire/wire.css">\n<link rel="stylesheet" href="../tokens.css">\n' +
-    '<main data-screen-label="' + LABELS[0] + '" data-status="sketch">' + LABELS[0] + '</main>\n')
-  let r = mark(dir, 'journey-skinned', ['--journey', JOURNEY])
-  assert.strictEqual(r.status, 2, 'journey-skinned must refuse while any screen still links a wire/ stylesheet: ' + r.stdout + r.stderr)
-  assert.match(r.stderr + r.stdout, new RegExp(LABELS[0]), 'the refusal must name the offending file')
-  assert.match(r.stderr + r.stdout, /wire\//, 'the refusal must name the wire/ register still linked')
+  // Hand-write a legacy status.json in the AC's own example shape (state:"SKIN", theme set,
+  // marks.approved false) plus every other retired field, and confirm the derivation is
+  // unaffected by the fields it carries alongside.
+  const legacy = statusJson(dir)
+  legacy.state = 'SKIN'
+  legacy.marks.reviewOpened = '2026-09-01T00:00:00Z'
+  legacy.decider = 'Ren'
+  legacy.journeys[JOURNEY].skinned = '2026-09-01T00:00:00Z'
+  legacy.journeys[JOURNEY].reviewed = '2026-09-01T00:00:00Z'
+  fs.writeFileSync(statusPath(dir), JSON.stringify(legacy, null, 2))
+  assert.strictEqual(stateOf(dir).stdout.trim(), 'SIGNOFF', 'a legacy status.json written state:"SKIN" with theme set and marks.approved false, plus reviewOpened/decider/skinned/reviewed, must still derive SIGNOFF — the legacy fields are ignored on read')
 
-  writeSkinned(dir, LABELS)
-  r = mark(dir, 'journey-skinned', ['--journey', JOURNEY])
-  assert.strictEqual(r.status, 0, 'journey-skinned must be accepted once every screen links only ../tokens.css: ' + r.stdout + r.stderr)
-  assert.strictEqual(statusJson(dir).journeys[JOURNEY].skinned !== null, true, 'an accepted journey-skinned must record journeys.<j>.skinned')
+  decideLook(dir, 'approved', 'approve', { by: 'Ren' })
+  const accepted = mark(dir, 'approved')
+  assert.strictEqual(accepted.status, 0, 'test setup requires the next accepted mark (approved) to succeed once theme is picked and the stop is decided: ' + accepted.stdout + accepted.stderr)
+  assert.strictEqual(stateOf(dir).stdout.trim(), 'APPROVED', 'marks.approved set must derive APPROVED')
+
+  const written = statusJson(dir)
+  assert.strictEqual(written.marks.reviewOpened, undefined, 'the write following an accepted mark must drop marks.reviewOpened entirely, not merely null it')
+  assert.strictEqual(written.journeys[JOURNEY].skinned, undefined, 'the write following an accepted mark must drop journeys[j].skinned entirely')
+  assert.strictEqual(written.journeys[JOURNEY].reviewed, undefined, 'the write following an accepted mark must drop journeys[j].reviewed entirely')
 })

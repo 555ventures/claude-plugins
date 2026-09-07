@@ -150,20 +150,27 @@ identical; a literal pipe inside a cell is written `\|`.
 ## The mocks command (2026-09-02, specs/20260902/07)
 
 `/spec:mocks` is the standalone design stage. `spec/scripts/mocks-driver.js` (`spec-paths
-mocks-driver`) derives SEED → SHAPES → WIREFRAMES → THEME → SKIN → REVIEW → APPROVED from
-`design/mocks/status.json` (schemaVersion 1) plus the artifacts on disk, prints exactly one step
+mocks-driver`) derives SEED → SHAPES → WIREFRAMES → THEME → SIGNOFF → APPROVED
+(specs/20260906/02, ADR-0008 amending ADR-0006) from `design/mocks/status.json`
+(schemaVersion 1) plus the artifacts on disk: the skin and review states are retired; a
+wireframe is never skinned inside mocks — `/spec:sketch` owns fidelity per brief. The driver
+prints exactly one step
 (`Read only:` + `Doctrine:` lines), checkpoints every accepted mark (`✅ checkpoint — mocks state
 saved (<prev> → <next>); safe to /clear and re-run /spec:mocks`, preceded by the `📒 ledger:`
 counts line), gates every advance on the provenance ledger (`gateVerdict`, refusing on
 `open:false` and naming the rows), and records a sub-mark per journey (`journey-drawn`,
-`journey-approved`, `journey-skinned`, `journey-reviewed`), per theme direction
+`journey-approved`, and `variant-picked` when candidate flows are used), per theme direction
 (`direction-composed`), and `--reopen journey:<j>|shapes|theme` (recorded, printed, nothing
-deleted). The 13 seed fact keys are closed (`primary-surface platforms-horizon tenancy offline
+deleted). THEME composes each direction on the seed's dense screen, a second screen at most,
+and `theme-picked` copies the winner's `tokens.css` into place. SIGNOFF is one look over the
+atlas; `--mark approved` stamps every top-level mock `data-status="approved"` and records the
+stop's decider. `--reopen theme` clears the theme pick and the sign-off only;
+`--reopen journey:<j>` clears that journey's approval and the sign-off. The 13 seed fact keys are closed (`primary-surface platforms-horizon tenancy offline
 realtime ai-in-loop residency payer day-one-integrations scale-outage vendor-limits retention
 legal-floor`), each mapped in `seed.md ## Facts` to a confirmed `product` ledger row. Registers
 are link signatures: a wireframe links `design/wire/tokens.css` + `wire.css` (copied from
-`spec/templates/mocks/` at `canon-written`), a skinned screen links `design/tokens.css` and no
-`wire/` stylesheet; `theme-picked` copies the chosen `design/theme/<k>/tokens.css` into place.
+`spec/templates/mocks/` at `canon-written`), a composed direction screen links its
+direction's `tokens.css` and no `wire/` stylesheet.
 THEME opens with a direction interview — 2–3 candidate directions derived from the seed and
 asked, never fixed anchors — recorded as the `theme-directions` product row. The driver's
 `ledger add|set|catch|check|counts` subcommands are the only writers of `design/mocks/ledger.md`.
@@ -193,12 +200,11 @@ under the note) and replies; the author resolves on the page after a re-look; no
 subcommand resolves. Triage bins are a closed set — `mock detail`, `product understanding`,
 `question back`, `propose to decline` — and a note that hits a canon primitive changes
 `canon.md` first, every dependent screen after. Project notes outrank mock notes:
-`journey-approved`, `journey-skinned`, `journey-reviewed` refuse while any project note is
-unresolved or any note on that journey's screens is unresolved (`addressed` is not
-`resolved`); `approved` refuses while any note anywhere is unresolved. Zero unresolved notes
-on a journey is its approval. Client review is the same loop with the recorded decider; the
-REVIEW step prints `Approval means "this is the product I understand" — the written brief, not
-these screens, holds scope`. `/spec:atlas` and `/spec:sketch` route their annotation loops
+`journey-approved` and `approved` refuse while any project note is unresolved or any note on
+the journey's screens is unresolved (`addressed` is not `resolved`); client review is the same
+page and the same notes — there is no review state. Zero unresolved notes on a journey is its
+approval. The SIGNOFF step prints `Approval means "this is the product I understand" — the
+written brief, not these screens, holds scope`. `/spec:atlas` and `/spec:sketch` route their annotation loops
 through the same serve + `notes open`; the annotation-MCP discovery clause is retired.
 
 **Picks (specs/20260905/01).** A look stop is a record in `design/mocks/picks.json` (one

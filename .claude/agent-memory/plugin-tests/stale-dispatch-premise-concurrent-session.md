@@ -3,7 +3,7 @@ name: stale-dispatch-premise-concurrent-session
 description: A dispatching agent's framing of "this is RED today" can go stale mid-task if a concurrent session lands the fix while this task is running — verify against current git log, not the conversation-start git status snapshot or the prompt's own framing
 metadata:
   type: feedback
-  reviewed: 2026-09-06
+  reviewed: 2026-09-07
 ---
 
 This repo's spec pipeline runs autonomously and concurrently — other sessions (or background
@@ -57,3 +57,15 @@ sibling) — an unnamed "concurrent process" is never an acceptable attribution,
 that work already landed never licenses standing down from an assignment. Re-derive, report
 the true state, and let the orchestrator adjudicate. See
 [[concurrent-worker-file-collision-select-tiebreak]] for the corrected sibling case.
+
+**2026-09-07 recurrence, review-fix dispatch expecting red.** Dispatched to add two new arms
+(spec 20260906/02 AC-5, AC-8) explicitly framed as "expected red until a sibling scripts
+worker lands the remedy." Wrote both arms per the spec's D5/D8 wording, then ran them before
+reporting: both passed immediately. `grep -n 'is not approved' spec/scripts/mocks-driver.js`
+and a check of the `SIGNOFF` entry in the probe-gated states array showed the sibling worker's
+mechanism (exact remedy string `journey "<j>" is not approved — mark journey-approved --journey
+<j> first`, and `SIGNOFF` admitted by the probe gate, which now derives from `AUTHORING_STATES`)
+had already landed on disk in the same working tree before the test run. Confirmed the passes
+were not vacuous (checked the exact mechanism the assertions exercise, not just exit codes)
+and reported the true state — both arms green against already-shipped code — rather than
+treating the dispatch's "expected red" framing as license to skip running them.

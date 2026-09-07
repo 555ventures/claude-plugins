@@ -9,6 +9,7 @@ const {
   bare, mark, writeFile, writeWireframe,
   decideLook, openLook, freePort,
   advanceToSeedDone, advanceToCanonWritten, advanceToJourneyApproved, advanceToThemePicked,
+  stubNpx,
 } = require('./mocks-driver-fixtures')
 
 // specs/20260905/04-per-project-look-server.md D3/D7: mocks-driver.js's `stop open`/`stop decide`
@@ -190,4 +191,16 @@ test('AC-20260906-02-8: WIREFRAMES and THEME step blocks continue to print the f
   const unreachable = runNode(SCRIPT, ['--root', signoffRoot, 'stop', 'open', 'signoff', '--port', String(busyPort)])
   assert.strictEqual(unreachable.status, 3, 'AC-8: SIGNOFF\'s own look mechanism (`stop open signoff`) must exit 3 when nothing answers the served port: ' + unreachable.stdout + unreachable.stderr)
   assert.match(unreachable.stderr, /serve --root/, 'the exit-3 remedy must name `serve --root`: ' + JSON.stringify(unreachable.stderr))
+})
+
+test('AC-20260906-02-8: the SIGNOFF block runs the look probe itself, not just stop open signoff — a bare driver run in SIGNOFF with a failing npx on PATH exits 2 naming the install remedy', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToThemePicked(dir) // now at SIGNOFF
+  const failingPath = stubNpx(dir, { exitCode: 1 })
+
+  const r = runNode(SCRIPT, ['--root', dir], { env: { ...process.env, PATH: failingPath } })
+  assert.strictEqual(r.status, 2,
+    'D8: SIGNOFF "runs the look probe" (not merely the stop-open path) — a bare run must refuse exit 2 when the probe\'s npx is unreachable, the same way SHAPES/WIREFRAMES do: ' + r.stdout + r.stderr)
+  assert.match(r.stderr + r.stdout, /npx playwright install chromium/,
+    'D8: the SIGNOFF probe refusal must name the exact install remedy, same as the SHAPES/WIREFRAMES probe: ' + r.stdout + r.stderr)
 })

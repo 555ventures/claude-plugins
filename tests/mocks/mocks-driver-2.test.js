@@ -111,6 +111,33 @@ test('AC-20260905-06-9 / AC-20260906-02-5: --mark approved on a host declaring n
     'AC-20260906-02-5: a refused approved mark must never rewrite a mock file — the data-status stamp is the mark\'s own write and must only happen on acceptance: ' + JSON.stringify({ before, after }))
 })
 
+test('AC-20260906-02-5: approved refuses while a declared journey is not approved, even once theme is picked and the approved stop is decided approve — reopening the journey below journey-approved must re-block the mark it does not stamp', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToThemePicked(dir)
+  decideLook(dir, 'approved', 'approve', { by: 'Ren' })
+
+  const reopened = runNode(SCRIPT, ['--root', dir, '--reopen', 'journey:' + JOURNEY])
+  assert.strictEqual(reopened.status, 0, 'test setup requires --reopen journey:<j> to be accepted on a theme-picked root, or the refusal below is not exercising an unapproved journey: ' + reopened.stdout + reopened.stderr)
+  assert.strictEqual(statusJson(dir).journeys[JOURNEY].approved, null, 'test setup requires journeys.<j>.approved to be cleared by the reopen, or the precondition under test is not actually violated: ' + JSON.stringify(statusJson(dir).journeys))
+
+  const signinPath = path.join(dir, 'design/mocks', LABELS[0] + '.html')
+  const before = fs.readFileSync(signinPath, 'utf8')
+
+  const r = mark(dir, 'approved')
+  assert.strictEqual(r.status, 2,
+    'D5: approved must refuse while any declared journey is not approved, even with theme picked and the approved stop already decided approve: ' + r.stdout + r.stderr)
+  assert.match(r.stderr + r.stdout, new RegExp(JOURNEY),
+    'D5: the refusal must name the unapproved journey "' + JOURNEY + '", not a generic message: ' + r.stdout + r.stderr)
+  assert.match(r.stderr + r.stdout, /journey-approved/,
+    'D5: the refusal must name the remedy mark "journey-approved" so the session knows how to clear it: ' + r.stdout + r.stderr)
+  assert.strictEqual(statusJson(dir).marks.approved, null,
+    'a refused approved mark must leave marks.approved null, never recorded: ' + JSON.stringify(statusJson(dir).marks))
+
+  const after = fs.readFileSync(signinPath, 'utf8')
+  assert.strictEqual(after, before,
+    'a refused approved mark must never rewrite a mock file — the data-status stamp is the mark\'s own write and must only happen on acceptance: ' + JSON.stringify({ before, after }))
+})
+
 // ---------------------------------------------------------------------------
 // AC-20260906-02-7
 // ---------------------------------------------------------------------------

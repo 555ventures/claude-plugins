@@ -1,6 +1,6 @@
 ---
 date: 2026-09-06
-status: implementing
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -35,7 +35,7 @@ diff_base: 08fae7e995c3018daad7e8bee45a692ee5203b65
 | D10 | `genesis-driver.js` keeps requiring `design/mocks/status.json` `state === 'APPROVED'` at BRIEF, naming the actual state on refusal (AC-20260906-02-9) | Regression pin — the genesis chain must not admit a half-finished mocks run; the test fixture merely stops writing a state that no longer exists. |
 | D11 | Tests: `tests/mocks/mocks-driver-fixtures.js` deletes `writeSkinned`, `advanceToSkinned`, `advanceToReviewed`; `advanceToApproved(dir)` = `advanceToThemePicked` + `decideLook(dir,'approved','approve',{by:'Ren'})` + `mark approved`; `writeThemeDirection(dir, kebab, labels)` writes ≤2 labels with the dense screen first; every test named in the File Plan retargets its AC as listed in Acceptance Criteria (AC-20260906-02-1 … -9) | Fixture chain is the one place the retired states were "known"; retargeted pins keep every surviving contract executed. |
 | D12 | Bump `spec/.claude-plugin/plugin.json` to the next free minor (target 7.93.0 at plan time; take the next free one at build) with the changelog entry `[no-ac: review's version-bump check is the oracle]` | § Planning version discipline. |
-| D13 | Build ruling (session, whole-suite check): `tests/mocks/mocks-driver-look-stops.test.js` enters the File Plan — its setup composed three screens per theme direction, which D3 now refuses; the setup drops to the dense screen plus one, no assertion weakened, no AC of its own | A test whose fixture performs the retired SKIN work is the collision closure's paths-leg hit the spec waived to the whole-suite check; adding it to scope is the cheapest reversible fix. |
+| D13 | Build ruling (session, whole-suite check): `tests/mocks/mocks-driver-look-stops.test.js` enters the File Plan — its setup composed three screens per theme direction, which D3 now refuses; the setup drops to the dense screen plus one, no assertion weakened `[no-ac: a fixture-setup change under D3, whose AC-20260906-02-3 pins the cap; the whole-suite leg is the oracle]` | A test whose fixture performs the retired SKIN work is the collision closure's paths-leg hit the spec waived to the whole-suite check; adding it to scope is the cheapest reversible fix. |
 
 **Orchestrator duty (outside the File Plan table):** after the doctrine wave, run `node "$(spec-paths citations-check)"` (or the suite's citations test) and fix any `§` citation the section rewrites broke; delete or re-stamp `.claude/agent-memory/plugin-tests/mocks-driver-fixture-gotchas.md` lines that name `advanceToSkinned`/`journey-skinned`.
 
@@ -121,6 +121,8 @@ Retired literals (never printed, never accepted): `SKIN`, `REVIEW`, `journey-ski
 **Fragile spots for build.** The doctrine wave touches five sections of mocks.md; `§` citations from commands/mocks.md, sketch.md, design.md and the tests' header comments must still resolve (citations-check). `tests/mocks/mocks-notes.test.js`'s AC-20260902-10-6 exercises four marks in one test — split the surviving two arms cleanly rather than commenting out. The fixture chain is consumed by six test files; change it first, run the mocks glob, then retarget.
 
 **Collision closure.** Retired literals `journey-skinned`, `journey-reviewed`, `review-opened`, `SKIN`, `REVIEW`, `advanceToSkinned`, `advanceToReviewed`: every `executes` hit is a File Plan row above (six test files + fixtures); `mentions` in `docs/canonical/design.md` lands via Canonical Delta; historical specs, ADR-0006's option text and brief 22a's "Current state" are provenance (waived); `.claude/agent-memory/plugin-tests/*` is the orchestrator duty. Paths leg `executes` hits on design-atlas.js outside the File Plan (retired-flags, design-shell, notes-layer-isolation tests) exercise routes this spec does not touch — waived; the build's whole-suite check adjudicates.
+
+**Build deviations (folded at close, one-offs).** (1) `tests/mocks/mocks-driver.test.js`'s File Plan row named AC-20260906-02-7, but that AC's two WHEN clauses are pinned only in `tests/mocks/mocks-driver-2.test.js`; the header of the first file does not name AC-7, so `red-check.js`'s comment-scanned expectation is not forced onto a file with no AC-7 test. (2) AC-20260906-02-5's second pin is the retag of the existing AC-20260905-06-9 CHROME_BIN scenario plus a byte-unchanged assertion, not a new broken-inventory scenario — AC-20260905-06-7 already covers that shape at `journey-approved`. (3) `design-atlas check --matrix`'s box-sizing and viewport-meta rules were only ever satisfied by the retired skinned fixture; `approved` now reaches them from wireframe-stage content, so `writeWireframe` emits the viewport meta and the universal box-sizing rule (repair round 1, tests layer; a scripts-side narrowing of the viewport precondition was reverted). Review fixes (rv_b39adbe19aa6): `approved` gained D5's every-journey-approved refusal (missed at build, caught by the reviewer's executed repro), the SIGNOFF look probe is pinned on the bare step, and the probe gate derives from `AUTHORING_STATES` (D8).
 
 ## Canonical Delta
 

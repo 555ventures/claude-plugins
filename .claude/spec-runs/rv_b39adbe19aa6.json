@@ -1,0 +1,117 @@
+{
+  "runId": "rv_b39adbe19aa6",
+  "ts": "2026-09-07T08:01:23.240Z",
+  "spec": "specs/20260906/02-mocks-ends-at-wireframes.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1382,
+    "base": "08fae7e995c3018daad7e8bee45a692ee5203b65",
+    "head": "8bfae0a17744cf3ca496c7cada3b454374657b31",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 221
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1207
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 13,
+        "carried": 12,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "Iteration-2 soft finding (duplicated literal state list at the look-probe gate) still present.",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 1239,
+        "evidence": "Only new hunk: the gate became (AUTHORING_STATES.has(state) || state === 'SIGNOFF'); AUTHORING_STATES is the single source, SIGNOFF the D8-sanctioned exception."
+      },
+      {
+        "claim": "The rewritten gate is vacuous or no longer routes SIGNOFF through the probe.",
+        "file": "tests/mocks/mocks-driver-look-stops-2.test.js",
+        "line": 205,
+        "evidence": "Executed: look-stops-2 pass 6 fail 0; redden spike dropping SIGNOFF from the gate → the 'runs the look probe itself' arm fails (pass 0 fail 1); original restored, diff stat unchanged."
+      },
+      {
+        "claim": "The fix delta touches anything beyond the one gate line.",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 1239,
+        "evidence": "git diff HEAD on mocks-driver.js = the iteration-2 journey loop + the gate line; other dirty files are the iteration-2 test pins, spec-runs.jsonl, one agent-memory note."
+      },
+      {
+        "claim": "Fix delta regresses gate/suite/budget/promise-sweep.",
+        "file": null,
+        "line": null,
+        "evidence": "manifest-3: gate 0 (221), suite 0 (1207), ac-matrix uncovered=0, skip-reconcile 0, promise-sweep orphans=0, smoke inert."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 21000
+  }
+}

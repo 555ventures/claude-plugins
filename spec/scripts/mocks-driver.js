@@ -895,6 +895,10 @@ function handleThemePicked(directionArg) {
 function handleApproved() {
   requireGateOpen()
   if (!status.marks.themePicked) die('theme-picked first')
+  for (const [jn] of currentSeedJourneys()) {
+    const st = status.journeys[jn]
+    if (!st || !st.approved) die('journey "' + jn + '" is not approved — mark journey-approved --journey ' + jn + ' first')
+  }
   requireNotesResolved(allDeclaredLabels(), null)
   const stop = requireStopDecision('approved', 'stop open signoff')
 
@@ -1232,7 +1236,7 @@ function printApprovedTerminal() {
 
 function doBareStep() {
   const state = deriveState()
-  if (['SHAPES', 'WIREFRAMES', 'THEME', 'SIGNOFF'].includes(state) && status.look !== 'browser' && !probeOk()) {
+  if ((AUTHORING_STATES.has(state) || state === 'SIGNOFF') && status.look !== 'browser' && !probeOk()) {
     dieProbeFailed()
   }
   if (state === 'SEED') return printSeedStep()

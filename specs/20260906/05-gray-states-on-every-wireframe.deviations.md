@@ -15,3 +15,10 @@
   mechanism on the flag-less path, the same sanctioned green-pre-change shape as prior specs'
   "not-yet-built mechanism's absence" pins. Confirmed empirically: `node --test
   --test-name-pattern="AC-20260906-05-2" tests/design-atlas.test.js` passes pre-image.
+- D7 names the new sibling for `tests/mocks/mocks-driver.test.js`'s split half literally
+  `mocks-driver-2.test.js`; that name is already an unrelated shard from
+  specs/20260906/01-ac-drift-doctor-check.md D11's earlier split (holds AC-20260906-02-5/-7 and
+  AC-20260902-07-13 plus the AC-20260905-06-7/-8/-9 render-gate tests) and must not be disturbed.
+  Used `mocks-driver-3.test.js` instead — the next free number in the same naming sequence — and
+  cited the collision in both files' headers. `mocks-driver-look-stops-3.test.js` and
+  `mocks-driver-look-stops-4.test.js` had no such collision and are named exactly as D7 states.

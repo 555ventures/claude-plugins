@@ -28,6 +28,7 @@ A wireframe shows the happy path and, as gray boxes behind `data-state-btn` swit
 | D4 | Tests: `tests/mocks/mocks-driver-fixtures.js` `writeWireframe(dir, label, opts)` writes the three state buttons by default (`opts.states = ['empty','loading','error']`, `opts.states = []` to omit) so every existing driver test keeps passing under D2 (AC-20260906-05-3's negative arm uses `states: []`) | Fixture default changes are how the suite adopts a new precondition without a sweep. |
 | D5 | Bump `spec/.claude-plugin/plugin.json` to the next free minor (target 7.96.0) with the changelog entry `[no-ac: review's version-bump check is the oracle]` | § Planning version discipline. |
 | D6 | Build-time ruling (JJ, 2026-09-07): `tests/mocks/mocks-notes.test.js` carries its own pre-D4 local `writeWireframe` — a duplicate that predates the shared-fixture split — and its `advanceToJourneyDrawn` helper trips D2's new check. Delete the local copy and import `writeWireframe` from `tests/mocks/mocks-driver-fixtures.js`; no other change to that file's assertions `[no-ac: the file's own existing ACs are the oracle — they must stay green, unweakened]` | One helper, one home: the second copy is exactly what drifts out of step with the next authoring rule. Rejected: patching the duplicate in place (keeps two helpers alive), and filing separately (the suite would stay red, and § Test Rules forbids a sanctioned-failing baseline). |
+| D7 | Review-time ruling (JJ, 2026-09-07): D2's two checks plus D4's three-state fixture default are real per-screen work, and the suite's per-file 45 s budget guard (specs/20260903/07) reds three mocks files that were 29 s at the pre-image and are 50–54 s after. Split each over-budget file into sibling `*.test.js` files — the guard's own sanctioned remedy (specs/20260903/07 D7) — moving tests verbatim, never weakening or deleting one: `tests/mocks/mocks-driver.test.js` → `+ mocks-driver-3.test.js` (the `-2` name is already taken by specs/20260906/01 D11's shard; the next free number is used and the collision cited in both headers), `tests/mocks/mocks-driver-look-stops.test.js` → `+ mocks-driver-look-stops-3.test.js`, `tests/mocks/mocks-driver-look-stops-2.test.js` → `+ mocks-driver-look-stops-4.test.js` `[no-ac: the budget reporter's own __FILE_BUDGET_OK__ line is the oracle]` | node:test runs one file's tests serially, so an over-budget file is the suite's critical-path floor; splitting makes the whole suite faster, not merely compliant. Rejected: reopening D2 to make the check cheaper (a locked-decision design change mid-build with an unmeasured saving), and raising the 45 s bar (retires the guard that stops per-spec creep for every future spec). |
 
 ## File Plan
 
@@ -42,6 +43,11 @@ A wireframe shows the happy path and, as gray boxes behind `data-state-btn` swit
 | tests/design-atlas.test.js | MODIFY | tests | AC-20260906-05-1, AC-20260906-05-2 |
 | tests/mocks/mocks-driver.test.js | MODIFY | tests | AC-20260906-05-3, AC-20260906-05-4, AC-20260906-05-5 |
 | tests/mocks/mocks-notes.test.js | MODIFY | tests | D6: drop the local `writeWireframe` duplicate, import the shared one |
+| tests/mocks/mocks-driver-3.test.js | ADD | tests | D7: budget split of mocks-driver.test.js |
+| tests/mocks/mocks-driver-look-stops.test.js | MODIFY | tests | D7: budget split, tests move out verbatim |
+| tests/mocks/mocks-driver-look-stops-3.test.js | ADD | tests | D7: budget split of mocks-driver-look-stops.test.js |
+| tests/mocks/mocks-driver-look-stops-2.test.js | MODIFY | tests | D7: budget split, tests move out verbatim |
+| tests/mocks/mocks-driver-look-stops-4.test.js | ADD | tests | D7: budget split of mocks-driver-look-stops-2.test.js |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D5 version bump + changelog entry |
 
 ## Contracts

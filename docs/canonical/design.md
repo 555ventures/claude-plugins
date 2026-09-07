@@ -60,6 +60,17 @@ link — as violations at `ratified`/`approved`/`--matrix` and warns at `sketch`
 extracted from the approved set at SCAFFOLD (spec 11); genesis authors `AppShell` from it and
 `/spec:design`'s worker envelope carries `shell`.
 
+Fidelity lives in sketch (specs/20260906/06): `/spec:mocks` ends gray; `/spec:sketch` authors
+each brief's surfaces at production fidelity in the picked theme, reworks the brief's
+wireframes into it, writes a three-line UX argument per surface into the brief, and closes
+with the fixed critique pass — `check --states`, `render-gate --mocks`, one fresh-context
+`design-critic` (Opus, read-only) on error prevention · error recovery · help · efficiency —
+whose findings are page notes by `critic` resolved through the existing loop.
+`design-atlas.js check` flags a mock linking `wire/` after `design/tokens.css` exists: warn at
+`sketch`, violation at `ratified` only — `approved` gray wireframes from mocks sign-off are
+exempt — and flags a `ratified` mock with unresolved notes on its label (critic or human) the
+same way.
+
 ## One token set (2026-09-03, specs/20260902/09)
 
 `spec/templates/mocks/viewer.css` is the one token set: shadcn's default zinc values as plain

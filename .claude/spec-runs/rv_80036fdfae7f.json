@@ -1,0 +1,123 @@
+{
+  "runId": "rv_80036fdfae7f",
+  "ts": "2026-09-07T23:04:31.578Z",
+  "spec": "specs/20260906/06-sketch-high-fidelity-and-critique.md",
+  "tier": "standard",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 533,
+    "base": "dea9175f8d069ebe562ac5a262db9b357a759a10",
+    "head": "2300ed15d79e11f96e19461a4f2c97f55773a396",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 463
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1238
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 8,
+        "carried": 7,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "Prior finding 1 (medium): the Critique step's `shared § Design Render Gate` citation points at a section `spec-paths shared-for sketch` never serves",
+        "file": "/Users/jj/Projects/claude-plugins/spec/commands/sketch.md",
+        "line": 126,
+        "evidence": "Working-tree diff vs HEAD rewrites the citation to `spec/doctrine/design.md § Design Render Gate` (file-qualified, same form sketch.md already uses for `spec/doctrine/mocks.md § Mocks: Page Notes`). `grep -n '^## Design Render Gate' spec/doctrine/design.md` → :93 exists. `node spec/scripts/citations-check.js --root .` → TOTAL=186 CHECKED=82 SKIP=104 MISS=0, exit 0. spec/bin/spec-paths:76 sketch SECTIONS list unchanged, so no served-section widening was needed. Resolved."
+      },
+      {
+        "claim": "Prior finding 2 (soft): `notes add` without `--by` exits with `by must be non-empty`, naming the field rather than the flag",
+        "file": "/Users/jj/Projects/claude-plugins/spec/scripts/mocks-driver.js",
+        "line": 536,
+        "evidence": "Executed: `node spec/scripts/mocks-driver.js --root <tmp> notes add --scope mock --screen signin --reason help --text x` → `mocks-driver: notes add: --by <name> is required`, exit=2. With `--by critic` → `notes add: N001 → added`, exit=0; notes.json holds {scope:mock, screen:signin, by:critic, reason:help, status:open}. Exit 2 is the existing documented `die()` code (header `Exit codes:` block, :96–117); header usage line :11 already lists `--by <name>`. Resolved."
+      },
+      {
+        "claim": "The fix delta reddens a pinned literal in sketch.md or the notes CLI tests",
+        "file": "/Users/jj/Projects/claude-plugins/tests/design-look-handoff.test.js",
+        "line": 79,
+        "evidence": "`node --test tests/design-look-handoff.test.js tests/mocks/mocks-notes.test.js tests/consistency/design-doctrine.test.js tests/design-atlas.test.js` → tests 84, pass 84, fail 0. Round-2 legs: gate exit 0 (463 tests), suite exit 0 (1238 tests, 0 skips/todos, `__FILE_BUDGET_OK__`), ac-matrix uncovered=0, promise-sweep rows=8 carried=7 sanctioned=1 orphans=0, smoke `__SMOKE_INERT__` (expected for this repo)."
+      },
+      {
+        "claim": "D8's build-time reword row lacks a real trigger or changes substance",
+        "file": "/Users/jj/Projects/claude-plugins/specs/20260906/06-sketch-high-fidelity-and-critique.deviations.md",
+        "line": 8,
+        "evidence": "Re-checked unchanged from round 1: design-look-handoff.test.js:79 bans `register` case-insensitively across spec/commands/{mocks,sketch,atlas}.md with no carve-out; D8 row and sidecar agree; the D1 violation string in design-atlas.js keeps `wireframe register` verbatim and AC-20260906-06-1 test is green. Sanctioned by the Decisions table."
+      },
+      {
+        "claim": "Out-of-plan working-tree changes ride the range",
+        "file": "/Users/jj/Projects/claude-plugins/.claude/spec-runs.jsonl",
+        "line": 463,
+        "evidence": "`git status --short` → M .claude/spec-runs.jsonl (one appended build-stage ledger row for bd_b002f9d69c75, pipeline-written), M sketch.md, M mocks-driver.js (the two fix-delta files), ?? specs/20260907/03-… (a sibling spec locked by another session, untracked, not part of this diff). No other files touched."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 32000
+  }
+}

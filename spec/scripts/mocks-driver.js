@@ -533,6 +533,7 @@ function cmdNotes(sub, args) {
     if (narg('--kind') != null || narg('--ledger-id') != null) {
       die('notes add: --kind/--ledger-id are not accepted here — questions come from `ledger add --screen`')
     }
+    if (!narg('--by')) die('notes add: --by <name> is required')
     const notes = notesOrEmpty()
     let result
     try {

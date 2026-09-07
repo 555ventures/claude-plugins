@@ -123,7 +123,7 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
 6. **Critique (fixed) — before the exit stop, every round.** Run `node {atlas} check --states`
    over the brief's mocks — the states-presence check (spec/doctrine/mocks.md § Mocks:
    Authoring Rules). Then run `node "$(spec-paths render-gate)" --mocks <the brief's sketch
-   mocks>` (shared § Design Render Gate). Then dispatch `Agent {subagent_type:
+   mocks>` (spec/doctrine/design.md § Design Render Gate). Then dispatch `Agent {subagent_type:
    'design-critic'}` once — the brief path, the mock paths, and `design/tokens.css`, never file
    contents (shared § Model Placement) — read-only, fresh context; it returns findings
    `{screen, state, blindspot, finding, severity}` and edits nothing. Record every returned

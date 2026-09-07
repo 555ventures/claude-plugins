@@ -1,6 +1,6 @@
 ---
 date: 2026-09-06
-status: implementing
+status: done
 tier: standard
 area: design-sketch
 design: false
@@ -99,6 +99,15 @@ Sketch on brief 07 after Hearwell's theme is picked: the sweep authors `report.h
 **Why sketch stays prose-only.** A sketch driver was rejected (again): the command shells out to three existing scripts and derives state from disk; the critique step adds one agent dispatch and one CLI verb, both of which exist independently.
 
 **Fragile spots for build.** sketch.md's § The run is pinned by three test files (design-look-handoff, design-doctrine); rewrite in place, keep every literal. The critic must be dispatched with paths, never file contents (core: orchestrators pass paths).
+
+**Deviations folded at close (2026-09-07).** Two one-off departures, neither recurring-shaped (the Gotchas section stood at its 15-entry cap and earns no entry at count 1):
+
+- *A3's fallback was taken.* `tests/review/reviewer-seat.test.js`'s `frontmatter()` reads only flat `key: value` lines and cannot see a `tools:` YAML list, so it cannot pin `design-critic.md`'s tools array. Per A3's own "if none exists" arm, `tests/consistency/design-doctrine.test.js` carries a file-local `frontmatterWithLists()` reader instead of reusing the existing one.
+- *D2's prose literals were reworded (recorded as D8).* `tests/design-look-handoff.test.js` (AC-20260905-04-6) bans the literal `register` case-insensitively across `spec/commands/{mocks,sketch,atlas}.md` — a leftover from the deleted machine-wide hub's registration endpoint, with no carve-out. D2's `[no-ac:]` fallback wording collided with it coincidentally; the reword preserves the substance and `design-atlas.js`'s own violation message still says "wireframe register" verbatim (AC-20260906-06-1 pins it). The general shape — a standing retired-literal ban colliding with unrelated new prose — is already carried as worker guidance in `.claude/agent-memory/plugin-tests/ac1-ac2-banned-literal-collides-with-sibling-sweep.md`.
+
+**Review fixes (2026-09-07, rv_80036fdfae7f).** Two findings, both dispositioned `fix`: the new Critique step's `shared § Design Render Gate` citation pointed at a section `spec-paths shared-for sketch` never serves (rewritten file-qualified, the served list left untouched); and `notes add` without `--by` refused with the shared lib's internal field message, so the CLI now refuses naming the flag itself.
+
+**Agent-memory disposal (2026-09-07).** No `.claude/agent-memory/` file was in this spec's diff; the advisory sweep surfaced eleven notes (eight diff-adjacent, three TTL-expired). All eleven carried with `reviewed:` refreshed — each re-checked as still true, including `collision-closure.js`'s bare `readFileSync(specPath)` (confirmed live) — and none attributes observed work to an unnamed concurrent process.
 
 ## Canonical Delta
 

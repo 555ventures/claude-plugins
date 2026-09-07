@@ -12,7 +12,7 @@ const picksLib = require('../../spec/scripts/lib/mocks-picks')
 // tests/mocks/mocks-ledger.test.js used for spec 06's not-yet-existing lib) until D1 lands;
 // the CLI-level tests stay red independently (mocks-driver.js ignores an unknown "notes" verb
 // and falls through to its ordinary bare-step/mark output) once the lib exists but D4/D5 don't.
-const { validateNotes, answerQuestion, resolveNote } = require('../../spec/scripts/lib/mocks-notes')
+const { validateNotes, answerQuestion, resolveNote, unresolvedFor } = require('../../spec/scripts/lib/mocks-notes')
 
 const SCRIPT = 'scripts/mocks-driver.js'
 const FIXTURE = path.join(ROOT, 'tests/fixtures/mocks-notes/notes.sample.json')
@@ -536,4 +536,72 @@ test('AC-20260906-03-7: `notes open` prints "❓ questions: N open" first, then 
   assert.ok(ledgerIdx > -1, '`ledger counts` must still print the existing 📒 ledger: line: got ' + JSON.stringify(counts.stdout))
   assert.strictEqual(lines[ledgerIdx + 1], '📎 catches: 3 — question 1 · note 1 · unlinked 1',
     'D6: `ledger counts` must print the exact catch-provenance line immediately after 📒 ledger, deriving question 1 (M1, addressed by a question note) / note 1 (M2, addressed by a plain note) / unlinked 1 (M3, addressed by neither) from addressed.ledgerRow: got ' + JSON.stringify(counts.stdout))
+})
+
+// ---------------------------------------------------------------------------
+// s0 pin (review of specs/20260906/03-questions-on-the-wireframe.md build): the spec's own
+// follow-up flow — answer a question "no" via answerQuestion, then the session's own
+// `notes address --id <qid> --change … --ledger M15` (Behavior: "notes open shows it under
+// answered:, so the session records the catch … then notes address … and redraws") — flips
+// addressNote's status back to "addressed", and "unanswered" was keyed on `status !== "resolved"`
+// instead of `answer == null`: a question the session has already answered and addressed reads
+// back as unresolved again, re-blocking gates that should stay open and re-appearing as an open
+// question in `notes open`.
+// ---------------------------------------------------------------------------
+test('AC-20260906-03-5 / AC-20260906-03-7 (s0 pin): a question answered "no" and then addressed via `notes address` must stay non-blocking (unresolvedFor empty, journey-approved still accepts) and must still print under "answered:" with 0 open — answered-ness keys on answer!=null, never on status', () => {
+  const dir = tmpdir('mocks-notes-answered-then-addressed')
+  advanceToJourneyDrawn(dir)
+  writeCaptureConfig(dir, writeFixtureCapture(dir))
+  decideLook(dir, 'journey-approved:' + JOURNEY, 'approve', { by: 'jj' })
+
+  const ledgerRow = ledgerCmd(dir, 'add', [
+    '--id', 'W7', '--step', 'WIREFRAMES', '--kind', 'product', '--claim', 'single-use link',
+    '--tag', 'inferred', '--status', 'open',
+  ])
+  assert.strictEqual(ledgerRow.status, 0, 'test setup requires the W7 ledger row to be accepted: ' + ledgerRow.stderr)
+
+  const question = {
+    id: 'N010', scope: 'mock', screen: LABELS[0], state: null, kind: 'question', ledgerId: 'W7',
+    text: 'single-use link', by: 'session', at: nowIso(), status: 'open',
+    addressed: null, reply: null, resolvedBy: null, resolvedAt: null, answer: null,
+  }
+
+  // Answer "no" via the lib (mirrors what /__notes/answer does server-side).
+  const answeredResult = answerQuestion([question], 'N010', { verdict: 'no', text: 'Owner sets modality', by: 'Ren' })
+  assert.strictEqual(answeredResult.note.status, 'resolved', 'test setup requires answerQuestion to set status "resolved": got ' + JSON.stringify(answeredResult.note))
+  writeNotes(dir, answeredResult.notes)
+
+  // Mirror what a "no" answer writes to the ledger (D4/A2), so the generic ledger gate does not
+  // independently block journey-approved below for an unrelated reason.
+  const overridden = ledgerCmd(dir, 'set', ['--id', 'W7', '--status', 'overridden', '--tag', 'inferred'])
+  assert.strictEqual(overridden.status, 0, 'test setup requires `ledger set` to override W7 (mirroring what the "no" answer writes): ' + overridden.stderr)
+
+  // The session's own follow-up: record the catch, then link the question note to it via
+  // `notes address` — the real driver, not a hand-written fixture.
+  const addressed = bare(dir, ['notes', 'address', '--id', 'N010', '--change', 'redrawn with expiry', '--ledger', 'M15'])
+  assert.strictEqual(addressed.status, 0, '`notes address --id N010 --change … --ledger M15` must be accepted on an already-answered question: ' + addressed.stdout + addressed.stderr)
+  const notesAfterAddress = readNotesOnDisk(dir)
+  const afterAddress = notesAfterAddress.find((n) => n.id === 'N010')
+  assert.ok(afterAddress.answer && afterAddress.answer.verdict === 'no',
+    'test setup requires `notes address` to leave the prior answer in place — an answer wiped by address means the fixture no longer represents "answered then addressed": got ' + JSON.stringify(afterAddress))
+
+  // (a) unresolvedFor must treat an answered-then-addressed question as resolved for gate
+  // purposes — keyed on answer!=null, never on status!=="resolved".
+  const stillUnresolved = unresolvedFor(notesAfterAddress, [LABELS[0]])
+  assert.deepStrictEqual(stillUnresolved, [],
+    's0: unresolvedFor must return no rows for a question that has been answered (answer.verdict:"no") even though `notes address` moved its status to "addressed" — a non-empty result means answered-ness is still keyed on status instead of answer, re-blocking every gate that reads it: got ' + JSON.stringify(stillUnresolved))
+
+  // (a, exec-level) journey-approved must still accept.
+  const approved = mark(dir, 'journey-approved', ['--journey', JOURNEY])
+  assert.strictEqual(approved.status, 0,
+    's0: journey-approved must still accept once an answered question has been addressed via `notes address` — a refusal here means the "unanswered" check re-triggered on the addressed status instead of the recorded answer: ' + approved.stdout + approved.stderr)
+
+  // (b) `notes open` must report 0 open questions and print this one under "answered:".
+  const opened = bare(dir, ['notes', 'open'])
+  assert.strictEqual(opened.status, 0, '`notes open` must exit 0: ' + opened.stderr)
+  assert.ok(opened.stdout.startsWith('❓ questions: 0 open'),
+    's0: `notes open` must report "❓ questions: 0 open" once the only question has been answered and addressed — a non-zero count means it re-reads as an open/unanswered question: got ' + JSON.stringify(opened.stdout))
+  const answeredIdx = opened.stdout.indexOf('answered:')
+  assert.ok(answeredIdx > -1 && opened.stdout.slice(answeredIdx).includes('N010'),
+    's0: the answered-then-addressed question N010 must still print under "answered:", not reappear as an open question: got ' + JSON.stringify(opened.stdout))
 })

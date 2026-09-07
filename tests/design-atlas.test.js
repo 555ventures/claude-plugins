@@ -1835,6 +1835,32 @@ function writeQuestionNotes(dir, notes) {
   fs.writeFileSync(path.join(dir, 'design/mocks/notes.json'), JSON.stringify(notes, null, 2) + '\n')
 }
 
+// s3 repair (review of specs/20260906/03-questions-on-the-wireframe.md build): AC-20260906-03-4
+// promises the rewrite touches ONLY the named row — a regex match against the other row's text
+// proves that row's cells are still present somewhere in the file, not that every other BYTE
+// (including line order, whitespace, and every other row) is untouched. Compare line-by-line
+// against a captured before-snapshot instead: every line except the named row's must be
+// byte-identical, and the named row's line must match the expected rewritten shape.
+function assertLedgerOnlyRowChanged(before, after, id, expectedRowRegex, message) {
+  const beforeLines = before.split('\n')
+  const afterLines = after.split('\n')
+  assert.strictEqual(afterLines.length, beforeLines.length,
+    message + ' — the rewrite must not add or remove any line: before had ' + beforeLines.length + ', after has ' + afterLines.length)
+  const rowMarker = '| ' + id + ' |'
+  let sawRow = false
+  for (let i = 0; i < beforeLines.length; i++) {
+    if (beforeLines[i].startsWith(rowMarker)) {
+      sawRow = true
+      assert.match(afterLines[i], expectedRowRegex,
+        message + ' — line ' + (i + 1) + ' (the ' + id + ' row) must match the expected rewritten row: got ' + JSON.stringify(afterLines[i]))
+    } else {
+      assert.strictEqual(afterLines[i], beforeLines[i],
+        message + ' — line ' + (i + 1) + ' (not the ' + id + ' row) must be byte-for-byte unchanged: before ' + JSON.stringify(beforeLines[i]) + ' after ' + JSON.stringify(afterLines[i]))
+    }
+  }
+  assert.ok(sawRow, 'test setup requires the ' + id + ' row to exist in the before-snapshot, or this comparison proves nothing')
+}
+
 function baseQuestion(id, screen, ledgerId) {
   return {
     id, scope: 'mock', screen, state: null, kind: 'question', ledgerId,
@@ -1896,13 +1922,13 @@ test('AC-20260906-03-4: POST /__notes/answer rewrites exactly the named ledger r
   await withHandler(dir, '', async ({ post }) => {
     const today = new Date().toISOString().slice(0, 10)
 
+    const ledgerBeforeYes = fs.readFileSync(path.join(dir, 'design/mocks/ledger.md'), 'utf8')
     const yes = await post('/__notes/answer', { id: 'N012', verdict: 'yes', by: 'Ren' })
     assert.strictEqual(yes.status, 200, 'a "yes" answer for an existing open question must respond 200: ' + yes.status + ' ' + yes.body)
     const ledgerAfterYes = fs.readFileSync(path.join(dir, 'design/mocks/ledger.md'), 'utf8')
-    assert.match(ledgerAfterYes, new RegExp('\\| W7 \\| WIREFRAMES \\| product \\| single-use link \\| inferred \\| confirmed ' + today + ' \\|'),
-      'D4/A2: a "yes" answer must rewrite exactly the W7 row to status "confirmed <today>": got ' + JSON.stringify(ledgerAfterYes))
-    assert.match(ledgerAfterYes, /\| W8 \| WIREFRAMES \| product \| dark send button \| invented \| open \|/,
-      'D3 Rationale: a "yes" answer to W7 must leave every other row (W8) byte-unchanged: got ' + JSON.stringify(ledgerAfterYes))
+    assertLedgerOnlyRowChanged(ledgerBeforeYes, ledgerAfterYes, 'W7',
+      new RegExp('^\\| W7 \\| WIREFRAMES \\| product \\| single-use link \\| inferred \\| confirmed ' + today + ' \\|'),
+      'D4/A2 (s3): a "yes" answer must rewrite exactly the W7 line to "confirmed <today>" and leave every other line of ledger.md — including the W8 row — byte-for-byte unchanged')
     const yesNote = JSON.parse(yes.body)
     assert.strictEqual(yesNote.answer && yesNote.answer.verdict, 'yes', 'the response note must carry answer.verdict "yes": got ' + JSON.stringify(yesNote))
     assert.strictEqual(yesNote.status, 'resolved', 'the response note must carry status "resolved": got ' + JSON.stringify(yesNote))
@@ -1910,11 +1936,13 @@ test('AC-20260906-03-4: POST /__notes/answer rewrites exactly the named ledger r
     const noMissingText = await post('/__notes/answer', { id: 'N013', verdict: 'no', by: 'Ren' })
     assert.strictEqual(noMissingText.status, 400, 'a "no" answer with no text must respond 400, never silently accept an empty correction: got ' + noMissingText.status)
 
+    const ledgerBeforeNo = fs.readFileSync(path.join(dir, 'design/mocks/ledger.md'), 'utf8')
     const no = await post('/__notes/answer', { id: 'N013', verdict: 'no', text: 'Owner sets modality', by: 'Ren' })
     assert.strictEqual(no.status, 200, 'a "no" answer carrying text must respond 200: ' + no.status + ' ' + no.body)
     const ledgerAfterNo = fs.readFileSync(path.join(dir, 'design/mocks/ledger.md'), 'utf8')
-    assert.match(ledgerAfterNo, new RegExp('\\| W8 \\| WIREFRAMES \\| product \\| dark send button \\| invented \\| overridden ' + today + ' \\|'),
-      'D4/A2: a "no" answer must rewrite the W8 row to status "overridden <today>": got ' + JSON.stringify(ledgerAfterNo))
+    assertLedgerOnlyRowChanged(ledgerBeforeNo, ledgerAfterNo, 'W8',
+      new RegExp('^\\| W8 \\| WIREFRAMES \\| product \\| dark send button \\| invented \\| overridden ' + today + ' \\|'),
+      'D4/A2 (s3): a "no" answer must rewrite exactly the W8 line to "overridden <today>" and leave every other line of ledger.md — including the already-confirmed W7 row — byte-for-byte unchanged')
     const noNote = JSON.parse(no.body)
     assert.strictEqual(noNote.answer && noNote.answer.text, 'Owner sets modality', 'the response note must carry answer.text verbatim: got ' + JSON.stringify(noNote))
 
@@ -1927,6 +1955,36 @@ test('AC-20260906-03-4: POST /__notes/answer rewrites exactly the named ledger r
     const resolveAttempt = await post('/__notes/resolve', { id: 'N013', by: 'Ren' })
     assert.strictEqual(resolveAttempt.status, 400, 'POST /__notes/resolve on a question must respond 400 — it is never the resolve path for a question: got ' + resolveAttempt.status)
     assert.match(resolveAttempt.body, /answer it/, 'the resolve-on-question refusal must carry the exact D3 phrase "answer it": got ' + resolveAttempt.body)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// s0 pin (review of specs/20260906/03-questions-on-the-wireframe.md build, AC-20260906-03-4):
+// the session's own follow-up (`notes address --id <qid> --change … --ledger M15`, per the spec's
+// own Behavior section) flips addressNote's status to "addressed" without touching the note's
+// prior `answer` — "already answered" must key on note.answer !== null, never on
+// note.status !== "resolved", or the addressed question reads back as unanswered and a second
+// answer silently overwrites it.
+// ---------------------------------------------------------------------------
+test('AC-20260906-03-4 (s0 pin): after a "no" answer is addressed via the real `notes address` (moving status to "addressed" while the answer stays set), a second POST /__notes/answer on the same question still 409s', async () => {
+  const dir = tmpdir('atlas-notes-answer-addressed')
+  writeQuestionLedger(dir, [{ id: 'W7', step: 'WIREFRAMES', kind: 'product', claim: 'single-use link', tag: 'inferred', status: 'open' }])
+  writeQuestionNotes(dir, [baseQuestion('N012', 'signin', 'W7')])
+
+  await withHandler(dir, '', async ({ post }) => {
+    const no = await post('/__notes/answer', { id: 'N012', verdict: 'no', text: 'Owner sets modality', by: 'Ren' })
+    assert.strictEqual(no.status, 200, 'test setup requires the initial "no" answer to be accepted: ' + no.status + ' ' + no.body)
+
+    const addressed = runNode('scripts/mocks-driver.js', ['--root', dir, 'notes', 'address', '--id', 'N012', '--change', 'redrawn with expiry', '--ledger', 'M15'])
+    assert.strictEqual(addressed.status, 0, 'test setup requires the real `notes address` to accept the already-answered question: ' + addressed.stdout + addressed.stderr)
+    const afterAddress = JSON.parse(fs.readFileSync(path.join(dir, 'design/mocks/notes.json'), 'utf8')).find((n) => n.id === 'N012')
+    assert.strictEqual(afterAddress.status, 'addressed', 'test setup requires `notes address` to have moved status to "addressed" — otherwise this fixture does not reproduce the s0 scenario: got ' + JSON.stringify(afterAddress))
+    assert.ok(afterAddress.answer && afterAddress.answer.verdict === 'no',
+      'test setup requires `notes address` to leave the prior answer verdict in place: got ' + JSON.stringify(afterAddress))
+
+    const again = await post('/__notes/answer', { id: 'N012', verdict: 'yes', by: 'Ren' })
+    assert.strictEqual(again.status, 409,
+      's0: a second answer on a question already answered "no" must still respond 409 after `notes address` moved its status to "addressed" — "already answered" must key on note.answer !== null, never on note.status !== "resolved", or an addressed question is silently re-answered and its recorded correction lost: got ' + again.status + ' ' + again.body)
   })
 })
 

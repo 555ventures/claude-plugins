@@ -239,10 +239,14 @@ function groupOpen(notes, seed) {
 }
 
 // D5's mark-gate primitive: mock-scope notes anchored to any of `labels` that are not resolved
-// (open or addressed both count — only `resolved` clears a gate).
+// (open or addressed both count — only `resolved` clears a gate). specs/20260906/03 s0 fix: a
+// question's "unresolved" is `answer == null`, never `status`'s "resolved" word — the session's
+// own follow-up (`notes address` after a "no" answer) sets a question's status to "addressed" to
+// record the redraw, and that must never flip an already-answered question back to unanswered.
 function unresolvedFor(notes, labels) {
   const set = new Set(labels || [])
-  return (notes || []).filter((n) => n.scope === 'mock' && set.has(n.screen) && n.status !== 'resolved')
+  return (notes || []).filter((n) => n.scope === 'mock' && set.has(n.screen) &&
+    (n.kind === 'question' ? n.answer == null : n.status !== 'resolved'))
 }
 
 module.exports = {

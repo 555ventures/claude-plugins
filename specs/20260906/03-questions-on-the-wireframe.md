@@ -1,6 +1,6 @@
 ---
 date: 2026-09-06
-status: implementing
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -111,6 +111,8 @@ Ledger write on answer: `yes` → `setStatus(id, 'confirmed <YYYY-MM-DD>')`; `no
 **Why provenance is derived from `addressed.ledgerRow`.** The session already links a note to the row it produced when it addresses it. Counting over that link costs nothing and never asks anyone to attest a source. The three buckets are all the next dry run needs: did the catch come from a pinned doubt, from the user's free-form look, or from neither.
 
 **Fragile spots for build.** `viewer.css` is byte-linked to `wire-tokens.css` per role (viewer-tokens.test.js) — add classes, never values. The `vm` harness for the layer stubs `fetch`; the answer POST must go through the same stub. The `notes open` block ordering (questions first) is asserted verbatim.
+
+**Build rulings (2026-09-07, folded from the deviations sidecar at review close).** (1) The test author noted that a pinned question's ledger row is by construction `open` + `inferred`/`invented` — exactly the shape the generic ledger gate (`requireGateOpen`) already refused on before the notes gate ran, so D4's promised first stderr line was unreachable under the old order. Resolved against D4 + § Behavior "Gate" without a user fork: `journey-approved` and `approved` call `requireNotesResolved` before `requireGateOpen`; the generic gate still runs, unchanged, afterwards. (2) Review rv_889fc4c8485c (2 fix rounds): "answered" is derived from `answer == null`, never from `status`, so the spec's own follow-up (`notes address` on a question after a `no`, which sets `addressed`) keeps the question answered for the gate, `notes open`, the page controls and the 409; the layer's class names were realigned to `viewer.css`'s `.nl-q*` register and the selected reason chip now moves `nl-chip-on`; AC-4's pin compares every other ledger line byte-for-byte. Waived by the user (2026-09-07): the 7.94.0 changelog names `variant-picked` alongside the marks that refuse on an unanswered question although specs/20260905/03 is unbuilt — it mirrors D4 and the Canonical Delta and becomes literally true when that spec ships.
 
 ## Canonical Delta
 

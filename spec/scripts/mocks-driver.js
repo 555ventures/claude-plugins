@@ -428,10 +428,13 @@ function noteLine(n, indent) {
 // the plain-note listing — "❓ questions: N open" (N = still-open questions only), then each open
 // question grouped journey -> screen the way groupOpen groups plain notes, then every answered
 // question under "answered:" (D1's answer.verdict "yes"/"no" rendered "yes" / `no → "<text>"`).
+// s0 fix: a question's open/answered split keys on `answer == null`, never `status` — the
+// session's own `notes address` follow-up (recording the redraw after a "no") sets status
+// "addressed" without touching `answer`, and that must never re-list an answered question as open.
 function questionLines(notes, seed) {
   const questions = notes.filter((n) => n.kind === 'question')
-  const open = questions.filter((n) => n.status !== 'resolved')
-  const answered = questions.filter((n) => n.status === 'resolved')
+  const open = questions.filter((n) => n.answer == null)
+  const answered = questions.filter((n) => n.answer != null)
 
   const labelToJourney = new Map()
   for (const [journeyName, j] of seed) for (const label of (j && j.labels) || []) labelToJourney.set(label, journeyName)
@@ -1293,11 +1296,12 @@ function journeysProgressLine(journeys) {
 
 // specs/20260906/03-questions-on-the-wireframe.md D7: per-journey question counts (open/total)
 // anchored to the journey's own declared labels — feeds the draw/approve step progress lines.
+// s0 fix: "open" keys on `answer == null`, never `status` (see questionLines above).
 function journeyQuestionCounts(jn, journeys) {
   const j = journeys.get(jn)
   const labels = j ? j.labels : []
   const qs = notesOrEmpty().filter((n) => n.kind === 'question' && labels.includes(n.screen))
-  const open = qs.filter((n) => n.status !== 'resolved').length
+  const open = qs.filter((n) => n.answer == null).length
   return 'questions: ' + open + '/' + qs.length + ' open on ' + jn
 }
 

@@ -235,3 +235,13 @@ remedy); the mocks driver's `stop open <step>` delegates there. The user's path 
 the serve command is never printed to them. Picks on the page, the two-line hand-off, marks
 refusing without a decided stop, and the derived `rejected` cell are unchanged from specs
 20260905/01–02.
+
+**Questions (specs/20260906/03).** A note with `kind: "question"` is a ledger assumption row
+pinned to a screen by the session (`ledger add … --screen`, `ledger ask`); the page answers it
+(`/__notes/answer` yes/no + text), and the answer writes the row's status (`confirmed` /
+`overridden` + date) before resolving the note. `journey-approved` (and `variant-picked`,
+`approved`) refuse while a question on the journey is unanswered, naming the ledger ids — the
+question-aware notes gate runs ahead of the generic ledger gate, so that line is the first one
+printed. Free-form notes carry an optional `reason` (missing-screen · wrong-direction ·
+wrong-words · other). Catch provenance is derived from `addressed.ledgerRow` and printed by
+`ledger counts` as question · note · unlinked — never a ledger column.

@@ -1497,7 +1497,10 @@ function createRequestHandler(root, opts = {}) {
         const target = notes.find((n) => n.id === id)
         if (!target) { jsonRes(res, 404, { error: 'no note with id "' + id + '"' }); return }
         if (target.kind !== 'question') { jsonRes(res, 400, { error: 'note "' + id + '" is not a question' }); return }
-        if (target.status === 'resolved') { jsonRes(res, 409, { error: 'question "' + id + '" is already answered' }); return }
+        // s0 fix: "already answered" keys on `answer != null`, never `status` — a question's
+        // status can move to "addressed" later (the session's own `notes address` follow-up
+        // recording a redraw after a "no") without ever being re-answerable.
+        if (target.answer != null) { jsonRes(res, 409, { error: 'question "' + id + '" is already answered' }); return }
 
         // D3 Rationale: the ledger write happens FIRST — a crash between the two writes leaves an
         // answered row with a still-open note (a harmless re-ask), never a resolved note over an

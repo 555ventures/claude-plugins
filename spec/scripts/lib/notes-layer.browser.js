@@ -181,29 +181,37 @@
 
   // `allowProjectToggle` (mock composer only) adds a "This screen | Whole project" scope toggle;
   // `onSave(text, reason, sendAsProject)` is called only when the textarea is non-empty.
+  // Class names below are the exact `.nl-chips`/`.nl-chip`/`.nl-chip-on`/`.nl-scope`/`.nl-scope-on`
+  // register spec/templates/mocks/viewer.css declares (a parallel doctrine change, never touched
+  // here) — this layer emits only those names, never an invented sibling.
   function buildComposer(container, placeholder, allowProjectToggle, onSave) {
     var box = document.createElement('div')
     var reason = 'other'
     var sendAsProject = false
 
-    var chipsRow = document.createElement('div'); chipsRow.className = 'nl-q-chips'
+    var chipsRow = document.createElement('div'); chipsRow.className = 'nl-chips'
+    var chipEls = []
     REASONS.forEach(function (r) {
       var chip = document.createElement('button')
-      chip.className = 'nl-btn nl-q-chip' + (r.value === 'other' ? ' active' : '')
+      chip.className = 'nl-btn nl-chip' + (r.value === 'other' ? ' nl-chip-on' : '')
       chip.textContent = r.label
-      chip.onclick = function () { reason = r.value }
+      chip.onclick = function () {
+        reason = r.value
+        chipEls.forEach(function (c) { c.el.className = 'nl-btn nl-chip' + (c.value === reason ? ' nl-chip-on' : '') })
+      }
+      chipEls.push({ el: chip, value: r.value })
       chipsRow.appendChild(chip)
     })
     box.appendChild(chipsRow)
 
     if (allowProjectToggle) {
-      var toggleRow = document.createElement('div'); toggleRow.className = 'nl-q-scope'
+      var toggleRow = document.createElement('div'); toggleRow.className = 'nl-scope'
       var thisScreen = document.createElement('button')
-      thisScreen.className = 'nl-btn nl-q-scope-btn active'; thisScreen.textContent = 'This screen'
+      thisScreen.className = 'nl-btn nl-scope-on'; thisScreen.textContent = 'This screen'
       var wholeProject = document.createElement('button')
-      wholeProject.className = 'nl-btn nl-q-scope-btn'; wholeProject.textContent = 'Whole project'
-      thisScreen.onclick = function () { sendAsProject = false; thisScreen.className = 'nl-btn nl-q-scope-btn active'; wholeProject.className = 'nl-btn nl-q-scope-btn' }
-      wholeProject.onclick = function () { sendAsProject = true; wholeProject.className = 'nl-btn nl-q-scope-btn active'; thisScreen.className = 'nl-btn nl-q-scope-btn' }
+      wholeProject.className = 'nl-btn'; wholeProject.textContent = 'Whole project'
+      thisScreen.onclick = function () { sendAsProject = false; thisScreen.className = 'nl-btn nl-scope-on'; wholeProject.className = 'nl-btn' }
+      wholeProject.onclick = function () { sendAsProject = true; wholeProject.className = 'nl-btn nl-scope-on'; thisScreen.className = 'nl-btn' }
       toggleRow.appendChild(thisScreen); toggleRow.appendChild(wholeProject)
       box.appendChild(toggleRow)
     }
@@ -236,34 +244,41 @@
 
   // D5: a question row — id badge, "I assumed <claim>", "I rejected: <rejected>" when present,
   // and three controls (Yes/No+text/Later) while open; "You confirmed"/"You corrected: <text>"
-  // and no controls once answered.
+  // and no controls once answered. s0 fix: open/answered keys on `answer == null`, never
+  // `status` — a question's status can later move to "addressed" (the session's own `notes
+  // address` follow-up recording a redraw after a "no") without ever un-answering it. Class
+  // names are the exact `.nl-q`/`.nl-q-id`/`.nl-q-claim`/`.nl-q-rejected`/`.nl-q-actions`/
+  // `.nl-q-answered`/`.nl-q-text` register viewer.css declares (never touched here).
   function questionRow(n) {
+    var answered = n.answer != null
     var d = document.createElement('div')
-    d.className = 'n nl-q' + (n.status === 'resolved' ? ' done' : '')
-    var idBadge = document.createElement('b'); idBadge.textContent = n.ledgerId || n.id
-    var body = document.createElement('span'); body.className = 't nl-q-body'
-    var assumed = document.createElement('div'); assumed.textContent = 'I assumed ' + (n.claim != null ? n.claim : n.text)
+    d.className = 'n nl-q' + (answered ? ' done' : '')
+    var idBadge = document.createElement('b'); idBadge.className = 'nl-q-id'; idBadge.textContent = n.ledgerId || n.id
+    var body = document.createElement('span'); body.className = 't'
+    var assumed = document.createElement('div'); assumed.className = 'nl-q-claim'
+    assumed.textContent = 'I assumed ' + (n.claim != null ? n.claim : n.text)
     body.appendChild(assumed)
     if (n.rejected) {
-      var rejected = document.createElement('small'); rejected.textContent = 'I rejected: ' + n.rejected
+      var rejected = document.createElement('small'); rejected.className = 'nl-q-rejected'
+      rejected.textContent = 'I rejected: ' + n.rejected
       body.appendChild(rejected)
     }
     d.appendChild(idBadge); d.appendChild(body)
 
-    if (n.status === 'resolved') {
-      var verdict = document.createElement('small'); verdict.className = 'nl-q-verdict'
-      verdict.textContent = n.answer && n.answer.verdict === 'no' ? 'You corrected: ' + n.answer.text : 'You confirmed'
+    if (answered) {
+      var verdict = document.createElement('small'); verdict.className = 'nl-q-answered'
+      verdict.textContent = n.answer.verdict === 'no' ? 'You corrected: ' + n.answer.text : 'You confirmed'
       body.appendChild(verdict)
       return d
     }
 
-    var controls = document.createElement('div'); controls.className = 'nl-row nl-q-controls'
+    var controls = document.createElement('div'); controls.className = 'nl-row nl-q-actions'
     var yesBtn = document.createElement('button'); yesBtn.className = 'nl-btn'; yesBtn.textContent = "Yes, that's right"
     yesBtn.onclick = function () { api('answer', { id: n.id, verdict: 'yes', by: author }).then(refresh) }
     var noBtn = document.createElement('button'); noBtn.className = 'nl-btn'; noBtn.textContent = "No, it's…"
     noBtn.onclick = function () {
-      var box = document.createElement('div'); box.className = 'nl-q-correct'
-      var ta = document.createElement('textarea'); ta.placeholder = 'What is actually true?'
+      var box = document.createElement('div')
+      var ta = document.createElement('textarea'); ta.className = 'nl-q-text'; ta.placeholder = 'What is actually true?'
       var save = document.createElement('button'); save.className = 'nl-btn primary'; save.textContent = 'Save'
       save.onclick = function () {
         if (!ta.value.trim()) return
@@ -280,9 +295,13 @@
     return d
   }
 
+  // s0 fix: a question's "open" is `answer == null`, never `status` — used everywhere below that
+  // counts or renders "open" vs. settled notes.
+  function isOpenNote(n) { return n.kind === 'question' ? n.answer == null : n.status !== 'resolved' }
+
   function render() {
-    var openMock = mockNotes.filter(function (n) { return n.status !== 'resolved' }).length
-    var openProj = projectNotes.filter(function (n) { return n.status !== 'resolved' }).length
+    var openMock = mockNotes.filter(isOpenNote).length
+    var openProj = projectNotes.filter(isOpenNote).length
 
     bar.innerHTML = ''
     var badge = document.createElement('span')

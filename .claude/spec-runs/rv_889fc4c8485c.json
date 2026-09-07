@@ -1,0 +1,111 @@
+{
+  "runId": "rv_889fc4c8485c",
+  "ts": "2026-09-07T16:02:34.597Z",
+  "spec": "specs/20260906/03-questions-on-the-wireframe.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1239,
+    "base": "cbe3423ba6ab845def4369d6407bb58ac09d03e9",
+    "head": "7b30821a90970f1a596fda6567c6841dd56f80a4",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 326
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1217
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 9,
+        "carried": 8,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "Iteration-2 soft survivor not closed: the s0 pin headers still say \"Expected RED until the scripts worker's fix lands\" / still narrate prior behaviour.",
+        "file": "tests/mocks/mocks-notes.test.js",
+        "line": 542,
+        "evidence": "`grep -rn \"Expected RED\" tests spec/scripts` → no hits (exit 1); `grep -n \"scripts worker\"` on both files → no hits. New headers (tests/mocks/mocks-notes.test.js:541-550, tests/design-atlas.test.js:1961-1968) cite the spec path + AC-IDs and describe the invariant pinned, no expected-failure sentence. Both files green: `node --test tests/design-atlas.test.js tests/mocks/mocks-notes.test.js` → tests 60, pass 60, fail 0; both s0 pins listed as ✔."
+      },
+      {
+        "claim": "The iteration-3 delta contains more than the two comment-only edits.",
+        "file": "tests/design-atlas.test.js",
+        "line": 1962,
+        "evidence": "mtimes: tests/mocks/mocks-notes.test.js 08:59:00 and tests/design-atlas.test.js 08:59:05 are the only files in the dirty set newer than reviewer-return-2.json (08:57:11); spec/scripts/design-atlas.js 08:30:38, lib/mocks-notes.js 08:30:03, lib/notes-layer.browser.js 08:31:54, mocks-driver.js 08:30:28, .claude/spec-runs.jsonl 08:19:45 all predate iteration 2. Pin anchors match iteration-2's evidence within the removed comment line (s0 pin test at :551 vs 549-header, assertLedgerOnlyRowChanged still at :1844, atlas s0 pin at :1969 vs 1967-header). Test count unchanged at 60."
+      },
+      {
+        "claim": "The delta regresses the gate, suite, ac-matrix, or promise sweep.",
+        "file": null,
+        "line": null,
+        "evidence": "manifest-3.jsonl: gate exit 0 (326 tests, 0 skips/todos), suite exit 0 (1217 tests), ac-matrix uncovered=0 oracle=0 preGreen=0, skip-reconcile 0/0, promise-sweep rows=9 carried=8 sanctioned=1 orphans=0, smoke inert (exit 4, marketplace has no bootable app) — identical observations to manifest-2."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 22000
+  }
+}

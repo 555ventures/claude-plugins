@@ -1,0 +1,147 @@
+{
+  "runId": "rv_e18e9ceb6633",
+  "ts": "2026-09-07T18:24:31.941Z",
+  "spec": "specs/20260906/04-journey-review-page.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 2740,
+    "base": "16aea5f7c3c1e6731da9fa451550ffdc8a5a6e47",
+    "head": "14c568e155d8a0398221276aa56f937910bed0ec",
+    "dirty": false
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 337
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1228
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 8,
+        "carried": 7,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "F7 not closed — GET /review/%25.html still crashes the serve process",
+        "file": "spec/scripts/design-atlas.js",
+        "line": 1537,
+        "evidence": "Live HEAD server: /review/%25.html → 404 'unknown journey % — declared: onboarding'; subsequent /mocks/signin.html → 200; child exitCode null, stderr empty. AC-2 test carries the F7 pin, 68/68 pass."
+      },
+      {
+        "claim": "F8 not closed — injectNotesScript's bodyless fallback still differs from the 16aea5f bytes or the AC-10 pin asserts the new bytes",
+        "file": "spec/scripts/design-atlas.js",
+        "line": 1286,
+        "evidence": "git show 16aea5f:spec/scripts/design-atlas.js:1359 = `if (idx === -1) return html + '\\n' + tag`; HEAD:1286 identical; the AC-10 pin asserts bodyHtml + '\\n' + meta/script; insertBeforeBodyEnd is a distinct helper left as html + snippet."
+      },
+      {
+        "claim": "F9 not closed — look --state <undeclared> still exits 0 writing a state-named PNG of the happy state",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 1234,
+        "evidence": "look signin --state \"x'y\" → exit 2 naming the declared states; --state nope → exit 2; --state empty → exit 0 PNG written; stub npx argv log absent on refusal. Header documents the arm under exit 2."
+      },
+      {
+        "claim": "F9's early read of the mock runs before the missing-mock guard and throws ENOENT",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 1229,
+        "evidence": "existsSync guard precedes the read; `look ghost --state empty` → 'design/mocks/ghost.html does not exist', exit 2."
+      },
+      {
+        "claim": "F9 regresses `--state happy` for an existing caller",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 1234,
+        "evidence": "--state happy on a mock declaring only empty → exit 2 with the 'omit it for happy' remedy; zero callers pass --state happy across spec/, docs/canonical, tests; D3 defines happy as the no-param tab; a mock declaring happy is accepted."
+      },
+      {
+        "claim": "F10 not closed — mocks.md / commands/mocks.md still describe only the sibling-file look path",
+        "file": "spec/doctrine/mocks.md",
+        "line": 159,
+        "evidence": "mocks.md:159-163 carries [--port <n>] and the served ?clean[&state=] capture with no sibling; commands/mocks.md:70-71 pointer carries [--port <n>]; usage matches; citations-check MISS=0."
+      },
+      {
+        "claim": "A different malformed escape (/review/%E0%A4%A.html) answers 200 with the atlas index instead of 404",
+        "file": "spec/scripts/design-atlas.js",
+        "line": 1350,
+        "evidence": "The base file from git archive 16aea5f serves the same fixture identically for /review/, /mocks/ and /zzz/ malformed paths — the `catch { fullPath = '/' }` fallback predates the range; HEAD identical."
+      },
+      {
+        "claim": "The fix round left the suite red or over the per-file budget",
+        "file": null,
+        "line": null,
+        "evidence": "manifest-3: every leg exit 0 (smoke exit 4 = inert sentinel); suite 1228 pass / 0 fail; __FILE_BUDGET_OK__ slowest look-stops 38324ms of 45000ms; three touched files 68/68."
+      },
+      {
+        "claim": "Range identity: a20ce72 (sibling docs-only planning commit) sits inside 16aea5f..HEAD",
+        "file": null,
+        "line": null,
+        "evidence": "git log 16aea5f..HEAD lists 878e40e, 076e7da, 14b5ec3, a20ce72, 14c568e; a20ce72 touches only specs/, docs/adr, docs/roadmap, .claude/spec-runs.jsonl — waived as F11; no script/test paths."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 62000
+  }
+}

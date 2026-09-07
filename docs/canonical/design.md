@@ -182,6 +182,13 @@ CLI (`look-probe` gates every screen-producing state unless `look-via browser` w
 `data-state-btn` state, a `shapes` section, and skips `references/`. Greenfield chain:
 `/spec:mocks → /spec:genesis → /spec:enforce → /spec:plan`.
 
+The journey look surface is the review page `/review/<j>.html` (specs/20260906/04): screens rail ·
+artboards with state tabs (`?state=<s>` on the served mock) · question inspector answered in place
+with `J K Y N Esc \`; `stop open journey:<j>` points there; the approve control mirrors the on-disk
+gate (disabled while any question or note is open). Plugin chrome — atlas, review page, galleries,
+notes layer — is authored under the frontend-design skill in the shadcn idiom on `viewer.css`'s
+register (design.md § Design Canon), never on product tokens.
+
 ## Page notes (2026-09-03, specs/20260902/10)
 
 Feedback on mocks is written on the served pages, never in chat and never in mock markup.

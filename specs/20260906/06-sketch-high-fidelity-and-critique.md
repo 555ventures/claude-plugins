@@ -1,6 +1,6 @@
 ---
 date: 2026-09-06
-status: hardened
+status: implementing
 tier: standard
 area: design-sketch
 design: false
@@ -9,6 +9,7 @@ depends_on: [specs/20260906/03-questions-on-the-wireframe.md, specs/20260906/05-
 depended_on_by: []
 brief: 22a
 open_markers: 0
+diff_base: dea9175f8d069ebe562ac5a262db9b357a759a10
 ---
 
 # Sketch owns high fidelity per brief in the picked theme, argues each surface's UX, and closes with a fixed critique pass
@@ -28,6 +29,7 @@ open_markers: 0
 | D5 | `spec/agents/design-critic.md` (CREATE): `model: opus`, `effort: medium`, tools Read/Grep/Glob/Bash (inspection only); prompt = read the brief and every mock (open each state), then for each surface answer the four questions in order — *can the person make a mistake here that the screen does not prevent? · when something fails, does the screen say what happened and how to recover? · is there help where a first-time user needs it? · can a repeat user do this faster?* — one finding per real gap, none invented (an empty list is a valid return), severity `hard` only when the gap blocks the job; returns JSON only; never edits `[no-ac: agent prompt; its wiring is AC-20260906-06-4]` | Judgment seats run Opus (core § Model Placement); read-only so it cannot "fix" its way past the session. |
 | D6 | Doctrine: `spec/doctrine/design.md` § Design Canon gains "**Fidelity lives in sketch.** `/spec:mocks` ends gray; `/spec:sketch` authors each brief's surfaces at production fidelity in the picked theme and closes with the fixed critique pass (states check · render rules · one fresh-context critic on the four blind spots) whose findings are page notes"; `spec/doctrine/mocks.md` § Mocks: Authoring Rules's "One honest wireframe or the full theme" bullet points at D1's check; `spec/commands/sketch.md` Rules gains "the critique pass is never skipped and never self-run" `[no-ac: review's citations-check and doctrine legs are the oracle; the mechanism is AC-20260906-06-1 and AC-20260906-06-3]` | One home per rule. |
 | D7 | Bump `spec/.claude-plugin/plugin.json` to the next free minor (target 7.97.0) with the changelog entry `[no-ac: review's version-bump check is the oracle]` | § Planning version discipline. |
+| D8 (build-time, 2026-09-07) | D2's `[no-ac:]` prose literals in `spec/commands/sketch.md` — "the brief's existing wireframe-register mocks" and the printed fallback `⚠️ no theme picked yet (/spec:mocks THEME) — sketching in the wireframe register` — are reworded to "gray mocks" and `⚠️ no theme picked yet (/spec:mocks THEME) — sketching gray, structure only`. Substance is unchanged; `design-atlas.js`'s D1 violation message keeps "wireframe register" verbatim (AC-20260906-06-1 pins it) | `tests/design-look-handoff.test.js` (AC-20260905-04-6) bans the literal `register` case-insensitively in `spec/commands/{mocks,sketch,atlas}.md` — a leftover from the deleted machine-wide hub's registration endpoint, with no carve-out. The collision is coincidental; no test pins D2's fallback string, so the reword is forced-but-unblocking. |
 
 **Orchestrator duty (outside the File Plan table):** `tests/design-look-handoff.test.js` pins sketch.md literals (serve sentence, `stop open --key sketch:`, the hand-off block) — the rewrite of § The run must keep them; run that file after the doctrine wave.
 

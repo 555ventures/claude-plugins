@@ -1105,6 +1105,132 @@ test("check: unbalanced braces in a ratified mock's <style> fail closed instead 
     'the unbalanced-braces violation must not fire when the style block is well-formed')
 })
 
+// specs/20260906/06-sketch-high-fidelity-and-critique.md D1, AC-20260906-06-1/-2: `check` flags a
+// mock that still links the wireframe register (wire/) once design/tokens.css exists above it —
+// violation at ratified only, ⚠️ warn at sketch, `approved` exempt with or without --matrix. TDD
+// red: cmdCheck today has no wire-register rule at all, so a ratified mock linking wire/wire.css
+// alongside tokens.css passes clean today and a sketch mock prints no warn line for it.
+function wireAfterThemeMock(status) {
+  return mockHtml({
+    status,
+    style: '* { box-sizing: border-box; }\n.screen { color: var(--text-body); }',
+    beforeRoot: '<link rel="stylesheet" href="../wire/wire.css">\n',
+  })
+}
+
+test('AC-20260906-06-1: check flags a mock linking wire/wire.css once design/tokens.css exists above it — violation at ratified, ⚠️ warn at sketch, exempt at approved with and without --matrix, and a wire-free mock always passes', () => {
+  const dir = tmpdir('atlas-wire-after-theme')
+  fs.mkdirSync(path.join(dir, 'design/mocks'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/tokens.css'), ':root{--text-body:#111}\n')
+
+  const mockPath = writeMock(dir, wireAfterThemeMock('ratified'))
+  const violationMsg = 'links the wireframe register (wire/) after THEME — skin it in the picked theme (design/tokens.css)'
+
+  const ratified = atlas(['check', mockPath])
+  assert.strictEqual(ratified.status, 1,
+    'a ratified mock still linking wire/wire.css once design/tokens.css exists above it must fail check — D1\'s register-after-theme rule is missing: ' + ratified.stdout + ratified.stderr)
+  assert.ok(ratified.stdout.includes('  - ' + mockPath + ': ' + violationMsg),
+    'the D1 violation line must be printed verbatim, naming the file and the remedy: ' + ratified.stdout)
+
+  writeMock(dir, wireAfterThemeMock('sketch'))
+  const sketch = atlas(['check', mockPath])
+  assert.strictEqual(sketch.status, 0,
+    'the same mock at data-status="sketch" must pass check (exit 0) — D1 warns at sketch, it never fails the gate: ' + sketch.stdout + sketch.stderr)
+  assert.ok(sketch.stdout.includes('  ⚠️ ' + mockPath + ': ' + violationMsg),
+    'the sketch-stage run must print the same D1 line prefixed "  ⚠️ " as a warning (the shell-family warn/violation split D1 copies, A1), not silence it: ' + sketch.stdout)
+
+  writeMock(dir, wireAfterThemeMock('approved'))
+  for (const extra of [[], ['--matrix']]) {
+    const approved = atlas(['check', ...extra, mockPath])
+    assert.strictEqual(approved.status, 0,
+      'data-status="approved" must be exempt from D1 regardless of --matrix — /spec:mocks stamps gray wireframes approved by design: ' + JSON.stringify(extra) + ' ' + approved.stdout + approved.stderr)
+    assert.doesNotMatch(approved.stdout, /wireframe register/,
+      'an approved mock must print no line containing "wireframe register", warn or violation, with or without --matrix: ' + JSON.stringify(extra) + ' ' + approved.stdout)
+  }
+
+  writeMock(dir, mockHtml({ status: 'ratified', style: '* { box-sizing: border-box; }\n.screen { color: var(--text-body); }' }))
+  const clean = atlas(['check', mockPath])
+  assert.strictEqual(clean.status, 0,
+    'a ratified mock linking only ../tokens.css (no wire/ link) must pass check — D1 must never fire on a properly reworked mock: ' + clean.stdout + clean.stderr)
+  assert.doesNotMatch(clean.stdout, /wireframe register/,
+    'a wire-free ratified mock must print no wireframe-register line at all: ' + clean.stdout)
+})
+
+// AC-20260906-06-2: a "SHALL CONTINUE TO" continuity pin (core § Incident Policy's "absence of a
+// not-yet-built mechanism" pattern) — with no design/tokens.css anywhere above the mock, D1 must
+// never bind, so this assertion already holds against the pre-image and must keep holding once D1
+// exists; it is authored now so a future change that lets D1 leak onto a theme-less root is caught.
+test('AC-20260906-06-2: check over a ratified mock linking wire/wire.css in a root with no design/tokens.css SHALL CONTINUE TO exit 0 with output byte-identical to today', () => {
+  const dir = tmpdir('atlas-wire-no-theme')
+  const mockPath = writeMock(dir, wireAfterThemeMock('ratified'))
+  const first = atlas(['check', mockPath])
+  assert.strictEqual(first.status, 0,
+    'with no design/tokens.css anywhere above the mock, D1 must never bind — a ratified mock linking wire/wire.css must keep passing exactly as it does today: ' + first.stdout + first.stderr)
+  assert.strictEqual(first.stdout, 'CHECK PASS (1 file(s))\n',
+    'the output must be byte-identical to today\'s plain CHECK PASS line — any extra warn or violation text here means D1 leaked onto a root with no theme picked yet: ' + JSON.stringify(first.stdout))
+  const second = atlas(['check', mockPath])
+  assert.strictEqual(second.stdout, first.stdout,
+    'the output must stay reproducible byte-for-byte across runs, exactly like every other check output')
+})
+
+// specs/20260906/06-sketch-high-fidelity-and-critique.md D3, AC-20260906-06-5: `check` flags a
+// ratified mock carrying an unresolved scope:"mock" note on its own label (from design/mocks/
+// notes.json, the same walk-up as D1 per A2) — violation at ratified, ⚠️ warn at sketch, and a
+// pass once every note on the label is resolved or the root has no notes store at all. TDD red:
+// cmdCheck reads no notes store today, so an open critic note never surfaces here.
+function labeledMock({ label, status = 'ratified' }) {
+  return '<link rel="stylesheet" href="../tokens.css">\n' +
+    '<style>\n* { box-sizing: border-box; }\n.screen { color: var(--text-body); }\n</style>\n' +
+    '<main class="screen" data-screen-label="' + label + '" data-status="' + status + '">\n' +
+    '<div data-contract="none"><button data-state-btn="empty">Empty</button></div>\n' + label + '\n</main>\n'
+}
+function noteOn(id, screen, status) {
+  return {
+    id, scope: 'mock', screen, state: 'error', text: 'no way back to the invite', by: 'critic',
+    at: '2026-01-01T00:00:00.000Z', status, addressed: null, reply: null,
+    resolvedBy: status === 'resolved' ? 'critic' : null,
+    resolvedAt: status === 'resolved' ? '2026-01-01T00:00:00.000Z' : null,
+  }
+}
+
+test('AC-20260906-06-5: check flags a ratified mock with an unresolved critic note on its own label (excluding an already-resolved one), warns at sketch, and passes once every note on the label is resolved or notes.json is absent', () => {
+  const dir = tmpdir('atlas-unresolved-notes')
+  const p = path.join(dir, 'design/mocks/signin.html')
+  fs.mkdirSync(path.dirname(p), { recursive: true })
+  fs.writeFileSync(p, labeledMock({ label: 'signin', status: 'ratified' }))
+  const notesFile = path.join(dir, 'design/mocks/notes.json')
+  fs.writeFileSync(notesFile, JSON.stringify([noteOn('N001', 'signin', 'open'), noteOn('N002', 'signin', 'resolved')], null, 2) + '\n')
+  const violationMsg = '1 unresolved note(s) on signin (N001) — address them (notes address) or resolve them on the page before ratifying'
+
+  const ratified = atlas(['check', p])
+  assert.strictEqual(ratified.status, 1,
+    'a ratified mock with one open critic note on its own label must fail check — D3\'s unresolved-notes rule is missing: ' + ratified.stdout + ratified.stderr)
+  assert.ok(ratified.stdout.includes('  - ' + p + ': ' + violationMsg),
+    'the D3 violation line must be printed verbatim, naming the file, the count, the label and the offending id — excluding the already-resolved N002: ' + ratified.stdout)
+
+  fs.writeFileSync(p, labeledMock({ label: 'signin', status: 'sketch' }))
+  const sketch = atlas(['check', p])
+  assert.strictEqual(sketch.status, 0,
+    'the same mock at data-status="sketch" must pass check (exit 0) — D3 warns at sketch, it never fails the gate: ' + sketch.stdout + sketch.stderr)
+  assert.ok(sketch.stdout.includes('  ⚠️ ' + p + ': ' + violationMsg),
+    'the sketch-stage run must print the same D3 line prefixed "  ⚠️ " as a warning: ' + sketch.stdout)
+
+  fs.writeFileSync(p, labeledMock({ label: 'signin', status: 'ratified' }))
+  fs.writeFileSync(notesFile, JSON.stringify([noteOn('N001', 'signin', 'resolved'), noteOn('N002', 'signin', 'resolved')], null, 2) + '\n')
+  const allResolved = atlas(['check', p])
+  assert.strictEqual(allResolved.status, 0,
+    'once every note on the label is resolved, check must pass: ' + allResolved.stdout + allResolved.stderr)
+  assert.doesNotMatch(allResolved.stdout, /unresolved note/,
+    'no unresolved-notes line may print once every note on the label is resolved: ' + allResolved.stdout)
+
+  fs.rmSync(notesFile)
+  const noStore = atlas(['check', p])
+  assert.strictEqual(noStore.status, 0,
+    'a root with no notes.json at all must pass check — "no notes store → no check" per D3: ' + noStore.stdout + noStore.stderr)
+  assert.doesNotMatch(noStore.stdout, /unresolved note/,
+    'no unresolved-notes line may print when notes.json does not exist: ' + noStore.stdout)
+})
+
 // specs/20260901/04-shell-composed-mocks.md D1: design/shell/<name>.html carries the canon
 // shape (data-shell-canon root, named data-slots, one empty content slot, non-content slots
 // data-contract="none") plus a linked <name>.css; D4 binds a shell family on `check`, tiered

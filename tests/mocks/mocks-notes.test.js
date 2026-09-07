@@ -598,3 +598,69 @@ test('AC-20260906-03-5 / AC-20260906-03-7 (s0 pin): a question answered "no" and
   assert.ok(answeredIdx > -1 && opened.stdout.slice(answeredIdx).includes('N010'),
     's0: the answered-then-addressed question N010 must still print under "answered:", not reappear as an open question: got ' + JSON.stringify(opened.stdout))
 })
+
+// ---------------------------------------------------------------------------
+// specs/20260906/06-sketch-high-fidelity-and-critique.md D3/D4, AC-20260906-06-3: `notes add`
+// does not exist as a driver subcommand yet — cmdNotes only knows open/address/reply and dies
+// naming them for any other sub, so every add-path assertion below is red; REASONS on
+// lib/mocks-notes.js is still the four-item enum, so validateNotes rejects reason:"efficiency";
+// and `notes open`'s noteTag() has no `[critic: <blindspot>]` rendering for a critic note.
+// ---------------------------------------------------------------------------
+test('AC-20260906-06-3: `notes add` appends a well-formed critic note and exits 0, refuses an unknown reason naming all eight, refuses --kind question/--ledger-id pointing at ledger add --screen, refuses --scope mock with no --screen, `notes open` renders the critic tag, and validateNotes accepts reason "efficiency"', () => {
+  const dir = tmpdir('mocks-notes-add')
+  bare(dir) // cold-root scaffold
+  writeSeed(dir) // declares JOURNEY -> signin -> invite -> session-live
+
+  const added = bare(dir, [
+    'notes', 'add', '--scope', 'mock', '--screen', 'signin', '--state', 'error',
+    '--by', 'critic', '--reason', 'error-recovery', '--text', 'no way back to the invite',
+  ])
+  assert.strictEqual(added.status, 0,
+    '`notes add --scope mock --screen signin --state error --by critic --reason error-recovery --text "..."` must be accepted: ' + added.stdout + added.stderr)
+  const onDisk = readNotesOnDisk(dir)
+  assert.strictEqual(onDisk.length, 1,
+    '`notes add` must append exactly one note to notes.json: got ' + JSON.stringify(onDisk))
+  assert.deepStrictEqual(
+    { scope: onDisk[0].scope, screen: onDisk[0].screen, state: onDisk[0].state, by: onDisk[0].by, reason: onDisk[0].reason, status: onDisk[0].status },
+    { scope: 'mock', screen: 'signin', state: 'error', by: 'critic', reason: 'error-recovery', status: 'open' },
+    'AC-3 pins the exact appended shape — a mismatch means `notes add` is not writing the CLI args straight through addNote: got ' + JSON.stringify(onDisk[0]))
+
+  const badReason = bare(dir, [
+    'notes', 'add', '--scope', 'mock', '--screen', 'signin', '--by', 'critic', '--reason', 'typo', '--text', 'x',
+  ])
+  assert.strictEqual(badReason.status, 2,
+    '`notes add --reason typo` must exit 2 — an unknown reason is a usage error: ' + badReason.stdout + badReason.stderr)
+  for (const reason of ['missing-screen', 'wrong-direction', 'wrong-words', 'other', 'error-prevention', 'error-recovery', 'help', 'efficiency']) {
+    assert.match(badReason.stdout + badReason.stderr, new RegExp(reason),
+      'D4: the unknown-reason refusal must name all eight reasons, including "' + reason + '", so an author can read the whole enum off the error: ' + badReason.stdout + badReason.stderr)
+  }
+
+  const withKind = bare(dir, [
+    'notes', 'add', '--scope', 'mock', '--screen', 'signin', '--by', 'critic', '--kind', 'question', '--text', 'x',
+  ])
+  assert.strictEqual(withKind.status, 2,
+    '`notes add --kind question` must exit 2 — questions come from `ledger add --screen`, never `notes add`: ' + withKind.stdout + withKind.stderr)
+  assert.match(withKind.stdout + withKind.stderr, /ledger add --screen/,
+    'D4: the --kind question refusal must name "ledger add --screen" as the remedy: ' + withKind.stdout + withKind.stderr)
+
+  const withLedgerId = bare(dir, [
+    'notes', 'add', '--scope', 'mock', '--screen', 'signin', '--by', 'critic', '--ledger-id', 'W7', '--text', 'x',
+  ])
+  assert.strictEqual(withLedgerId.status, 2,
+    '`notes add --ledger-id W7` must exit 2 for the same reason as --kind question — a question-only field on the plain-note verb: ' + withLedgerId.stdout + withLedgerId.stderr)
+  assert.match(withLedgerId.stdout + withLedgerId.stderr, /ledger add --screen/,
+    'D4: the --ledger-id refusal must also name "ledger add --screen" as the remedy: ' + withLedgerId.stdout + withLedgerId.stderr)
+
+  const scopeMockNoScreen = bare(dir, ['notes', 'add', '--scope', 'mock', '--by', 'critic', '--text', 'x'])
+  assert.strictEqual(scopeMockNoScreen.status, 2,
+    '`notes add --scope mock` with no --screen must exit 2 per the Contracts exit-2 row: ' + scopeMockNoScreen.stdout + scopeMockNoScreen.stderr)
+
+  const opened = bare(dir, ['notes', 'open'])
+  assert.strictEqual(opened.status, 0, '`notes open` must exit 0: ' + opened.stderr)
+  assert.match(opened.stdout, /\[critic: error-recovery\]/,
+    'D4: `notes open` must render a critic note\'s reason as "[critic: error-recovery]": got ' + JSON.stringify(opened.stdout))
+
+  const withEfficiency = validateNotes([Object.assign({}, onDisk[0], { reason: 'efficiency' })])
+  assert.deepStrictEqual(withEfficiency.errors, [],
+    'D4: validateNotes must accept reason "efficiency" with zero errors — the reason enum must gain all four blind-spot values: got ' + JSON.stringify(withEfficiency.errors))
+})

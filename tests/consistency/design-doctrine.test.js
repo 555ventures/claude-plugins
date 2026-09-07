@@ -192,3 +192,65 @@ test('AC-20260902-10-9: spec/commands/atlas.md and spec/commands/sketch.md route
     'D8\'s doctrine and command edits must not orphan any "§ ..." citation elsewhere in spec/ — ' +
     'a nonzero MISS means some file still points at a heading these edits moved or removed: ' + check.stdout)
 })
+
+// specs/20260906/06-sketch-high-fidelity-and-critique.md D5/D2/D3, AC-20260906-06-4. Neither
+// spec/agents/design-critic.md nor sketch.md's Critique step exist yet — TDD red on both halves.
+// A3: tests/review/reviewer-seat.test.js's frontmatter() reads only flat "key: value" lines and
+// cannot see reviewer.md's own `tools:` YAML list, so it cannot pin design-critic's tools array;
+// per A3's fallback this file carries its own small reader (noted in the deviations sidecar).
+function frontmatterWithLists(src) {
+  const m = src.match(/^---\n([\s\S]*?)\n---/)
+  assert.ok(m, 'the file must open with a --- frontmatter block')
+  const out = {}
+  let listKey = null
+  for (const line of m[1].split('\n')) {
+    const item = line.match(/^\s*-\s+(\S.*)$/)
+    if (item && listKey) { (out[listKey] = out[listKey] || []).push(item[1].trim()); continue }
+    const kv = line.match(/^([a-zA-Z]+):\s*(\S.*)?$/)
+    if (kv) { listKey = kv[2] ? null : kv[1]; if (kv[2]) out[kv[1]] = kv[2].trim() }
+  }
+  return out
+}
+
+test('AC-20260906-06-4: spec/agents/design-critic.md parses as model opus, effort medium, tools exactly Read/Grep/Glob/Bash, and a body naming the four blind-spot questions in order plus "empty list is a valid return"; spec/commands/sketch.md carries a Critique step under § The run naming check --states, render-gate, design-critic and notes add, positioned before the exit step', () => {
+  const criticPath = path.join(SPEC, 'agents/design-critic.md')
+  assert.ok(fs.existsSync(criticPath), 'D5: spec/agents/design-critic.md must exist — the critic agent file has not been created yet')
+  const criticSrc = fs.readFileSync(criticPath, 'utf8')
+  const fm = frontmatterWithLists(criticSrc)
+  assert.strictEqual(fm.model, 'opus',
+    'D5: design-critic.md frontmatter must declare model: opus — judgment seats run Opus per core § Model Placement: got ' + JSON.stringify(fm))
+  assert.strictEqual(fm.effort, 'medium',
+    'D5: design-critic.md frontmatter must declare effort: medium: got ' + JSON.stringify(fm))
+  assert.deepStrictEqual(fm.tools, ['Read', 'Grep', 'Glob', 'Bash'],
+    'D5: design-critic.md frontmatter must declare tools exactly Read, Grep, Glob, Bash (inspection only, read-only so it cannot "fix" its way past the session): got ' + JSON.stringify(fm.tools))
+
+  const closeIdx = criticSrc.indexOf('---', 3)
+  const body = criticSrc.slice(closeIdx + 3)
+  for (const literal of ['prevent', 'recover', 'help', 'faster']) {
+    assert.ok(body.includes(literal),
+      'D5: design-critic.md\'s body must contain the four blind-spot questions — missing "' + literal + '"')
+  }
+  const positions = ['prevent', 'recover', 'help', 'faster'].map((w) => body.indexOf(w))
+  assert.ok(positions.every((v, i) => i === 0 || v > positions[i - 1]),
+    'D5: the four questions must appear in the fixed order prevent, recover, help, faster (CHI 2026\'s measured heuristics, in the order the spec fixes them): got positions ' + JSON.stringify(positions))
+  assert.ok(body.includes('empty list is a valid return'),
+    'D5: design-critic.md must contain the exact phrase "empty list is a valid return" — an empty findings list is a valid, honest return, never a failure to invent a gap')
+
+  const sketchSrc = read('spec/commands/sketch.md')
+  const runIdx = sketchSrc.indexOf('## The run')
+  assert.ok(runIdx !== -1, 'sketch.md must still carry a "## The run" heading to anchor the Critique step search')
+  const nextHeadingIdx = sketchSrc.indexOf('\n## ', runIdx + 1)
+  const runSection = sketchSrc.slice(runIdx, nextHeadingIdx === -1 ? sketchSrc.length : nextHeadingIdx)
+
+  const critiqueIdx = runSection.search(/\*\*[^*]*Critique[^*]*\*\*/)
+  assert.ok(critiqueIdx !== -1,
+    'D3: spec/commands/sketch.md § The run must carry a step whose heading contains "Critique" — the fixed critique pass (states check · render rules · one fresh-context critic) before the exit stop')
+  const exitIdx = runSection.search(/\*\*[^*]*Exit[^*]*\*\*/)
+  assert.ok(exitIdx !== -1, 'sketch.md § The run must still carry an exit step to compare the Critique step\'s position against')
+  assert.ok(critiqueIdx < exitIdx,
+    'D3: the Critique step must be positioned before the exit step, never after — ratification must never be reachable without running the critique pass: critique@' + critiqueIdx + ' exit@' + exitIdx)
+  for (const literal of ['check --states', 'render-gate', 'design-critic', 'notes add']) {
+    assert.ok(runSection.includes(literal),
+      'D3: § The run must name "' + literal + '" — the Critique step wires the states check, the render rules, the critic dispatch, and the note-writing verb the session records findings through')
+  }
+})

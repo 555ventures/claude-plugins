@@ -29,6 +29,19 @@
 //                                                  file and an unlabeled mock are exempt; without
 //                                                  --states this rule never runs (byte-identical
 //                                                  legacy output).
+//                                                  specs/20260906/06-sketch-high-fidelity-and-critique.md
+//                                                  D1: once design/tokens.css resolves above a
+//                                                  labeled non-canon mock (walk-up from the file),
+//                                                  a lingering wire/ stylesheet link is a violation
+//                                                  at data-status="ratified", a ⚠️ warn at "sketch";
+//                                                  data-status="approved" is exempt outright and
+//                                                  --matrix never binds this rule; no tokens.css
+//                                                  anywhere above the mock = the rule never runs.
+//                                                  D3: same ratified/sketch/approved split for a
+//                                                  labeled mock with an unresolved (non-"resolved")
+//                                                  scope:"mock" note on its own label in
+//                                                  design/mocks/notes.json (walk-up resolved); no
+//                                                  notes.json anywhere above the mock = no check.
 //   design-atlas.js gallery <dir> [--out <file>]   comparison gallery over candidate subdirs (explore rounds)
 //   design-atlas.js build [--root <repo>] [--out <file>]
 //                                                  the atlas: mocks × roadmap `surfaces` blocks ×
@@ -298,6 +311,76 @@ function statesViolations(f, html) {
   return out
 }
 
+// ---- register-after-theme / unresolved critique notes (specs/20260906/06-sketch-high-fidelity-
+// and-critique.md D1/D3) --------------------------------------------------------------------------
+// D1: once design/tokens.css resolves above a labeled non-canon mock (same walk-up shape as
+// resolveShellDir, A2), a lingering wire/ stylesheet link is "the full theme, never a half-styled
+// middle" made mechanical — violation at data-status="ratified" (sketch's own stamp), a ⚠️ warn at
+// "sketch", and data-status="approved" (mocks sign-off's own stamp) is exempt outright; --matrix
+// never binds this rule (Rationale "Why ratified only, never approved"). No tokens.css anywhere
+// above the mock = the rule never runs (AC-20260906-06-2's byte-identical-to-today pin).
+function resolveTokensCss(fromPath) {
+  let dir = path.resolve(fromPath)
+  try { if (!fs.statSync(dir).isDirectory()) dir = path.dirname(dir) } catch { dir = path.dirname(dir) }
+  for (;;) {
+    for (const c of [path.join(dir, 'tokens.css'), path.join(dir, 'design', 'tokens.css')]) {
+      if (fs.existsSync(c)) return c
+    }
+    const up = path.dirname(dir)
+    if (up === dir) return null
+    dir = up
+  }
+}
+const WIRE_LINK_RE = /<link[^>]+href\s*=\s*"[^"]*\bwire\/[^"]*"/
+
+// D3: same walk-up, but for design/mocks/notes.json — resolved from a mock at design/mocks/<f>,
+// or from the notes.json itself sitting alongside a mock in a flatter fixture tree. No notes.json
+// anywhere above the mock = "no notes store → no check" (D3), same absence-invariant as D1.
+function resolveNotesFile(fromPath) {
+  let dir = path.resolve(fromPath)
+  try { if (!fs.statSync(dir).isDirectory()) dir = path.dirname(dir) } catch { dir = path.dirname(dir) }
+  for (;;) {
+    for (const c of [path.join(dir, 'notes.json'), path.join(dir, 'mocks', 'notes.json'), path.join(dir, 'design', 'mocks', 'notes.json')]) {
+      if (fs.existsSync(c)) return c
+    }
+    const up = path.dirname(dir)
+    if (up === dir) return null
+    dir = up
+  }
+}
+
+// Both D1 and D3 bind on the same stamp split (ratified violation / sketch warn / approved
+// exempt) for a labeled non-canon mock — computed once per file and pushed into `violations` or
+// `warnLines` by the caller, which already owns those arrays.
+function themeAndNotesViolations(f, html, label) {
+  const hard = []
+  const warn = []
+  if (label) {
+    const status = statusOf(html)
+    if (status !== 'approved') {
+      const tokensCss = resolveTokensCss(f)
+      if (tokensCss && WIRE_LINK_RE.test(html)) {
+        const msg = f + ': links the wireframe register (wire/) after THEME — skin it in the picked theme (design/tokens.css)'
+        if (status === 'ratified') hard.push(msg); else warn.push(msg)
+      }
+      const notesFile = resolveNotesFile(f)
+      if (notesFile) {
+        let notes = []
+        try { notes = JSON.parse(fs.readFileSync(notesFile, 'utf8')) } catch { notes = [] }
+        const unresolved = (Array.isArray(notes) ? notes : [])
+          .filter((n) => n && n.scope === 'mock' && n.screen === label && n.status !== 'resolved')
+        if (unresolved.length) {
+          const ids = unresolved.map((n) => n.id).join(', ')
+          const msg = f + ': ' + unresolved.length + ' unresolved note(s) on ' + label + ' (' + ids +
+            ') — address them (notes address) or resolve them on the page before ratifying'
+          if (status === 'ratified') hard.push(msg); else warn.push(msg)
+        }
+      }
+    }
+  }
+  return { hard, warn }
+}
+
 // ---- check ---------------------------------------------------------------------------------------
 // The deterministic half of the design harness: every mock/tile/prototype passes this before a
 // human (or a critique round) sees it. Colors live in tokens.css and are consumed as var(--role);
@@ -357,6 +440,12 @@ function cmdCheck(argv) {
             else warnLines.push('  ⚠️ ' + f + ': ' + fnd.text)
           }
         }
+        // specs/20260906/06 D1/D3: register-after-theme and unresolved-critique-note rules —
+        // ratified|sketch|approved split of their own (never --matrix-bound), so kept out of the
+        // boundApproved/boundNow gates above.
+        const themeNotes = themeAndNotesViolations(f, html, labelOf(html))
+        violations.push(...themeNotes.hard)
+        for (const w of themeNotes.warn) warnLines.push('  ⚠️ ' + w)
       }
 
       // declared matrix (design/targets.json): mocks are RESPONSIVE SINGLE FILES — one file per

@@ -258,7 +258,11 @@ half the driver cannot check, carried here as contract prose the authoring sessi
 - **One honest wireframe or the full theme, never a half-styled middle.** A screen is either
   the flat gray register at full structural honesty or the themed register at production
   fidelity — a screen half-dressed in theme colors while its neighbors stay gray is neither
-  register and misleads a reviewer about what has actually been judged.
+  register and misleads a reviewer about what has actually been judged. `design-atlas.js check`
+  (`spec-paths design-atlas`) makes this mechanical at the stamp that matters: a labeled mock
+  still linking `wire/` once `design/tokens.css` exists above it is a violation at
+  `data-status="ratified"`, a `⚠️` warn at `sketch` — `approved` wireframes from `/spec:mocks`
+  sign-off are exempt by design, since THEME already precedes SIGNOFF (specs/20260906/06 D1).
 - **Theme = recompose, never repaint.** A theme direction is composed to recompose the seed's
   dense screen at production fidelity on that screen's own structure and facts, never freehand
   — one screen per direction, a second at most, and ≥2 directions; every direction is judged on

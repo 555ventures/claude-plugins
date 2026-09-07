@@ -8,6 +8,8 @@
 //                              [--screen <label> [--state <s>]]
 // mocks-driver.js --root <dir> ledger ask --id <rowId> --screen <label> [--state <s>]
 // mocks-driver.js --root <dir> notes open
+// mocks-driver.js --root <dir> notes add --scope mock|project [--screen <label>] [--state <s>]
+//                              --by <name> [--reason <r>] --text "<t>"
 // mocks-driver.js --root <dir> notes address --id <id> --change "<what changed>" [--ledger <rowId>]
 // mocks-driver.js --root <dir> notes reply --id <id> --text "<question back>"
 // mocks-driver.js --root <dir> look <label> [--state <s>] [--out <png>] [--port <n>]
@@ -50,6 +52,15 @@
 // existing per-label closure checks at drawn; before the render gate at approved) and refuse the
 // mark on any violation, naming the file, the missing/unknown state(s), and the redraw remedy. D3:
 // the "draw journey <j>" step's printed Then: block carries the same states/data-no-state prompt.
+//
+// specs/20260906/06-sketch-high-fidelity-and-critique.md D3/D4: `notes add` is the one CLI writer
+// of a plain (non-question) note — /spec:sketch's fixed critique step routes a design-critic
+// finding through it (`--by critic --reason <blindspot>`), and a client message on the page routes
+// through the same verb with a different `--by`. It refuses `--scope mock` with no `--screen`,
+// `--kind`/`--ledger-id` present at all (naming `ledger add --screen` as the remedy — questions are
+// session-authored, never client- or critic-authored), and an unknown `--reason` (naming the whole
+// eight-value enum via lib/mocks-notes.js's own validation); `notes open` renders a `by: "critic"`
+// note's reason as `[critic: <blindspot>]` alongside its existing status tag.
 //
 // What this deliberately does NOT do:
 //   - author the seed, canon, screens, theme directions, or the sign-off itself — those stay
@@ -429,8 +440,12 @@ function noteTag(n) {
   if (n.status === 'addressed' && n.addressed && n.addressed.ledgerRow) return 'addressed → ' + n.addressed.ledgerRow
   return n.status
 }
+// specs/20260906/06 D4: a critic note's reason renders as its own "[critic: <blindspot>]" tag,
+// alongside (never instead of) the existing status tag.
 function noteLine(n, indent) {
-  let line = indent + n.id + ' [' + noteTag(n) + '] ' + n.by + ' · ' + n.text
+  let line = indent + n.id + ' [' + noteTag(n) + ']'
+  if (n.by === 'critic' && n.reason) line += ' [critic: ' + n.reason + ']'
+  line += ' ' + n.by + ' · ' + n.text
   if (n.status === 'addressed' && n.addressed && n.addressed.change) line += '   ↳ changed: ' + n.addressed.change
   return line
 }
@@ -514,6 +529,22 @@ function cmdNotesOpen() {
 function cmdNotes(sub, args) {
   const narg = (name) => flagArg(args, name)
   if (sub === 'open') { cmdNotesOpen(); return }
+  if (sub === 'add') {
+    if (narg('--kind') != null || narg('--ledger-id') != null) {
+      die('notes add: --kind/--ledger-id are not accepted here — questions come from `ledger add --screen`')
+    }
+    const notes = notesOrEmpty()
+    let result
+    try {
+      result = addNote(notes, {
+        scope: narg('--scope'), screen: narg('--screen'), state: narg('--state'),
+        by: narg('--by'), reason: narg('--reason'), text: narg('--text'),
+      })
+    } catch (e) { die('notes add: ' + e.message) }
+    writeNotes(root, result.notes)
+    writeOut(1, 'notes add: ' + result.note.id + ' → added\n')
+    process.exit(0)
+  }
   if (sub === 'address') {
     const id = narg('--id')
     const change = narg('--change')
@@ -540,7 +571,7 @@ function cmdNotes(sub, args) {
     process.exit(0)
   }
   die('notes: no "' + sub + '" subcommand — resolving a note happens only on the served page ' +
-    '(the Resolve button); one of: open, address, reply')
+    '(the Resolve button); one of: open, add, address, reply')
 }
 
 // ---------------------------------------------------------------------------

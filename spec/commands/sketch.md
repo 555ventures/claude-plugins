@@ -65,17 +65,23 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    If the requested change targets one, STOP with the shared shape (shared § Console Output
    Style): `🚫 **{surface} is bound — sketch is pre-plan only.**` then `Next: /spec:design —
    reopen the spec that bound this surface.`
-3. **Scoped sweep — single pass, over this brief's gap surfaces only.** Every gap surface of
-   this brief is authored in-session by one hand, following the shared authorship + grounding
-   rule in full (shared § Design Atlas's authorship paragraph) — no `Agent` dispatch ever
-   writes a mock; no shell canon yet → author `design/shell/app.html` in-session first.
-   Existing mocks are never re-authored. When a surface carries capability an out-of-scope
-   brief owns, give that capability its own region rather than folding it into a region the
-   current brief must bind — an unbound region is inherited for free, while future-brief
-   content entangled inside a bound region costs an evidence-gated delta row.
+3. **Scoped sweep — single pass, over this brief's gap surfaces and its existing gray mocks.**
+   Every gap surface of this brief is authored in-session by one hand, following the shared
+   authorship + grounding rule in full (shared § Design Atlas's authorship paragraph) — no
+   `Agent` dispatch ever writes a mock. When `design/tokens.css` exists, every mock this step
+   touches is authored at production fidelity in the picked theme — links `../tokens.css` and
+   the shell canon, never `wire/` — and the brief's existing gray mocks are reworked into it:
+   the only time an existing mock is re-authored, structure and facts kept, only the fidelity
+   changes. No shell canon yet → author `design/shell/app.html` in-session first. When
+   `design/tokens.css` is absent, this step prints `⚠️ no theme picked yet (/spec:mocks
+   THEME) — sketching gray, structure only` and continues, authoring gap surfaces gray as
+   before and leaving existing gray mocks untouched. When a surface carries capability an
+   out-of-scope brief owns, give that capability its own region rather than folding it into a
+   region the current brief must bind — an unbound region is inherited for free, while
+   future-brief content entangled inside a bound region costs an evidence-gated delta row.
 4. **Build & report.** `node {atlas} build`, then report the output path
    (`design/atlas/index.html`); this session never opens a browser itself — the served atlas
-   page (§ 6's look stop starts it as a tracked background task) is the one viewer, for the
+   page (§ 7's look stop starts it as a tracked background task) is the one viewer, for the
    atlas and for leaving notes alike. The map shows everything, but this session's iteration
    scope stays the one brief.
 5. **The loop.** Take changes in chat against screen labels, or read them back from the served
@@ -104,11 +110,30 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
      brief's **Open questions for planning** so the plan interview must resolve it;
      contradicts an accepted ADR → recommend the ADR amendment happen before this brief is
      planned. The brief never smuggles an unratified architecture decision past `/spec:plan`.
+   - **The UX argument** (every surface this round touched) → after the triage above resolves,
+     write three lines into that surface's entry in the brief's `surfaces` block: `job:` what
+     the person is doing, `risk:` what goes wrong if the screen is wrong, `choice:` the one UI
+     decision made and the alternative rejected. This is where each surface's UI/UX is argued
+     individually, not left implicit in the pixels — the brief is already this session's write
+     target (Rules).
 
    Every applied round hits disk immediately — brief edit first, mock second — so stopping
    mid-session (or losing the window) loses nothing. This detection is judgment, not a grep:
    the per-change ADR question plus the exit readout is what makes it reliably *asked*.
-6. **Exit — ratification.** When the user says done (or asks "where are we"): produce the
+6. **Critique (fixed) — before the exit stop, every round.** Run `node {atlas} check --states`
+   over the brief's mocks — the states-presence check (spec/doctrine/mocks.md § Mocks:
+   Authoring Rules). Then run `node "$(spec-paths render-gate)" --mocks <the brief's sketch
+   mocks>` (shared § Design Render Gate). Then dispatch `Agent {subagent_type:
+   'design-critic'}` once — the brief path, the mock paths, and `design/tokens.css`, never file
+   contents (shared § Model Placement) — read-only, fresh context; it returns findings
+   `{screen, state, blindspot, finding, severity}` and edits nothing. Record every returned
+   finding as a page note: `node {driver} notes add --scope mock --screen <label> [--state <s>]
+   --by critic --reason <blindspot> --text "<finding>"`; an empty findings list is recorded as
+   nothing — the critic found no real gap. Fix what the session can (step 5's triage) and leave
+   the rest open for the user — the look stop below is where any note still open surfaces to
+   them. This pass runs on every exit, never skipped for a small brief, and never run by the
+   session standing in for the critic — the fresh-context dispatch is the whole point (Rules).
+7. **Exit — ratification.** When the user says done (or asks "where are we"): produce the
    **coherence readout** — one line per declared surface: what the mock shows vs what
    Scope/`surfaces` claim, plus any unresolved architecture flags. Fix what the readout catches
    (same triage). The marks a mock declares — `data-screen-label`, `data-status`,
@@ -146,7 +171,7 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
    enforcement `approved` does from here on (shared § Design Canon). `decided change` is one
    more round of step 5's triage, then a fresh `stop open` for the same key. No decision yet —
    end the turn again; re-run to re-read `stop list`.
-7. **Report.** Assemble the slots (rationale: shared § Console Output Style) — `outcome`:
+8. **Report.** Assemble the slots (rationale: shared § Console Output Style) — `outcome`:
    ✅ `ratified {N} of {M} surfaces — {brief}`; `bullets`: the `🎨 authored {N} in-session · {K}
    check-only dispatches` line (shared § Design Atlas) when this round authored any mocks; `warns`: one line per un-ratified surface
    or open question written (drop when none); `artifacts`: the brief path (edited-section
@@ -173,4 +198,6 @@ Any trailing instruction ("change 1a to have a liked feature") seeds round 1 of 
 - Never edits `specs/**`, the coverage ledger, or `design/atlas/` (derived); never touches
   surfaces another brief owns (Out of scope fences are binding here too).
 - Bound mocks are contracts; the fork ruling lives in `/spec:design`, not here.
+- The critique pass is never skipped and never self-run — a small brief still gets the states
+  check, the render rules, and the fresh-context critic before its exit stop.
 - `AskUserQuestion` dismissed → STOP.

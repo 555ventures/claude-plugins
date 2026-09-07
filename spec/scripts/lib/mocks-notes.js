@@ -29,7 +29,11 @@ const SCOPES = ['mock', 'project']
 const STATUSES = ['open', 'addressed', 'resolved']
 const ID_RE = /^N\d+$/
 const KINDS = ['note', 'question']
-const REASONS = ['missing-screen', 'wrong-direction', 'wrong-words', 'other']
+// specs/20260906/06-sketch-high-fidelity-and-critique.md D4: the enum gains the four fixed
+// critique blind spots (error-prevention, error-recovery, help, efficiency) alongside the
+// original client-message reasons — one enum shared by a critic finding and a client message,
+// which differ only in `by` and `reason`.
+const REASONS = ['missing-screen', 'wrong-direction', 'wrong-words', 'other', 'error-prevention', 'error-recovery', 'help', 'efficiency']
 const LEDGER_ID_RE = /^[A-Z]+\d+[a-z]?$/
 
 function notesPath(root) { return path.join(root, 'design/mocks/notes.json') }

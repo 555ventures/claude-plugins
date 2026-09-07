@@ -20,7 +20,7 @@ Render Gate gate UI **appearance**, TDD gates logic, **reachability is never exe
   never per-device/per-theme variants.** Direction iterates on the single most-constrained
   viewport, light theme; the full matrix is owed and confirmed only once approved —
   `approved` always means a human saw the whole matrix. Roadmap mocks confirm both at
-  `/spec:sketch`'s exit — **`ratified` = `approved`, one stamp**.
+  `/spec:sketch`'s exit — **`ratified` = `approved`, one stamp**. **Fidelity lives in sketch.** `/spec:mocks` ends gray; `/spec:sketch` authors each brief's surfaces at production fidelity in the picked theme and closes with the fixed critique pass (states check · render rules · one fresh-context critic on the four blind spots) whose findings are page notes.
 - **`mocks/<label>.html`** — one screen per file, root `data-screen-label="<label>"`. IS the
   `design_source` — the render gate resolves it directly, no extraction. `data-status`:
   `sketch` (default) | `ratified` | `approved`; declares `data-shell="<name>"`/`"none"`, its

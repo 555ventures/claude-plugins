@@ -326,6 +326,47 @@ test('AC-20260906-05-3: journey-drawn refuses when one screen of the journey dec
 })
 
 // ---------------------------------------------------------------------------
+// AC-20260906-05-6
+// ---------------------------------------------------------------------------
+// specs/20260906/05-gray-states-on-every-wireframe.md D2 promises the states refusal at BOTH
+// marks; AC-20260906-05-3 above delivers only the journey-drawn arm, so the journey-approved
+// arm shipped carried by an AC that asserts a neighbouring fact. Replay rp_d8fecf9d5bce
+// weakened this arm's comparison to `> 1` — design-atlas.js check exits 1 on violations, so the
+// refusal became unreachable — and every deterministic leg stayed green. This test is that
+// mutation run as a pin: it fails against `> 1` and passes against `!== 0`.
+//
+// The journey is fully drawn and approvable FIRST, then one screen loses its states: that makes
+// the refusal below differ from AC-20260906-05-5's accepting arm in exactly one thing, so an
+// exit 2 can only have come from the states check. The capture config and the decided stop are
+// written for the same reason — the states check runs ahead of the render gate and the stop
+// decision, and without them a refusal could be either of those instead.
+test('AC-20260906-05-6: journey-approved refuses when a screen has lost its three gray states since journey-drawn, naming the file, every missing state in empty/loading/error order, and the draw-the-missing-states remedy, and never records journeys.onboarding.approved', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToCanonWritten(dir)
+  for (const label of LABELS) writeWireframe(dir, label)
+
+  const drawn = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
+  assert.strictEqual(drawn.status, 0,
+    'the journey must be genuinely drawn before this test can isolate the approval-time arm — a refusal here would make the assertions below meaningless: ' + drawn.stdout + drawn.stderr)
+
+  writeCaptureConfig(dir, writeFixtureCapture(dir))
+  decideLook(dir, 'journey-approved:' + JOURNEY, 'approve', { by: 'jj' })
+
+  // the redraw D2's Rationale names: a screen loses a state between drawn and approved
+  writeWireframe(dir, 'consent', { states: [] })
+
+  const r = mark(dir, 'journey-approved', ['--journey', JOURNEY])
+  assert.strictEqual(r.status, 2,
+    'D2: journey-approved must refuse (exit 2) when check --states finds a screen that has lost its states since journey-drawn — otherwise a redrawn screen silently reaches the render gate and the approved mark without them: ' + r.stdout + r.stderr)
+  assert.match(r.stderr + r.stdout, /consent\.html: missing state\(s\) empty, loading, error/,
+    'D1/D2: the approval-time refusal must name consent.html and every missing state in empty, loading, error order — a partial list leaves the author guessing which states to redraw: ' + r.stdout + r.stderr)
+  assert.match(r.stderr + r.stdout, /draw the missing states/,
+    'D2: the approval-time refusal must carry the exact remedy phrase "draw the missing states", the same remedy the drawn arm gives: ' + r.stdout + r.stderr)
+  assert.strictEqual(statusJson(dir).journeys[JOURNEY].approved == null, true,
+    'a refused journey-approved must never record journeys.onboarding.approved — a session must not believe the journey was approved when the states check blocked it: ' + JSON.stringify(statusJson(dir).journeys[JOURNEY]))
+})
+
+// ---------------------------------------------------------------------------
 // AC-20260906-05-4
 // ---------------------------------------------------------------------------
 // TDD red: the WIREFRAMES "draw journey <j>" step's Then: block carries no states line today.

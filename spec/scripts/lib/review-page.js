@@ -22,7 +22,7 @@
 // randomness, no environment read. Same-origin frames: every artboard iframe is the served mock
 // under `?clean[&state=<s>]` (D2's state injection), never a file:// path.
 //
-// A6 (measured on the hearwell atlas): a viewport-filling mock (`100vh` app shells, sign-in
+// A6 (measured on a live host atlas): a viewport-filling mock (`100vh` app shells, sign-in
 // screens) measured inside an iframe still at the browser's default 150px height reports 150 and
 // collapses to a strip. Every frame here therefore carries BOTH `width` and `height` attributes
 // from the primary viewport before any script measures it; review.browser.js only ever raises

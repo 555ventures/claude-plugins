@@ -247,6 +247,14 @@ half the driver cannot check, carried here as contract prose the authoring sessi
 - **Wireframes are gray but carry every graphic that IS structure.** A state is shown as the
   product's map or a slice, never described in a caption; text is reserved for what someone
   actually said (copy, labels), never for narrating what a picture should be doing instead.
+- **Every wireframe carries its states.** Behind `data-state-btn="<name>"` switches, drawn as
+  gray boxes, a wireframe shows its `empty`, `loading`, and `error` states alongside the happy
+  path — happy path alone is a finding, not a wireframe. A screen the product truly has no such
+  state for declares it on the labeled root, `data-no-state="<name>[,<name>]"`, naming the
+  states it lacks; the opt-out is visible in the source, and the product reason it stands on
+  lives as a row in the ledger (§ Provenance Ledger), never asserted silently. `design-atlas.js
+  check --states` is the presence check — it judges only that the states exist, never what they
+  say — run by the mocks driver at `journey-drawn` and `journey-approved`.
 - **One honest wireframe or the full theme, never a half-styled middle.** A screen is either
   the flat gray register at full structural honesty or the themed register at production
   fidelity — a screen half-dressed in theme colors while its neighbors stay gray is neither

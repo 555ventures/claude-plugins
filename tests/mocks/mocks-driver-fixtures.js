@@ -108,13 +108,31 @@ This canon is binding: see docs/design/research-brief.md for the research basis.
 `)
 }
 
-function writeWireframe(dir, label, { stateBtn = '' } = {}) {
+// specs/20260906/05-gray-states-on-every-wireframe.md D4: every wireframe carries the three
+// data-state-btn gray-box switches by default, so every existing driver test's fixture keeps
+// declaring the full state set once the new journey-drawn/journey-approved check-states gate
+// lands (D2) — `opts.states = []` is the one escape hatch tests/mocks/mocks-driver.test.js's
+// missing-states refusal case needs to isolate that violation. `stateBtn` (a raw HTML string) stays the pre-existing
+// escape hatch for the look-stops fixtures that need one exact button element with no wrapper
+// markup around it — passing it bypasses `states` entirely, unchanged from its prior behavior.
+function writeWireframe(dir, label, opts = {}) {
+  const { stateBtn } = opts
+  const states = opts.states !== undefined ? opts.states : ['empty', 'loading', 'error']
+  // The design-atlas.js hygiene(d) rule (specs/20260824/03 D1(d)) requires every data-state-btn
+  // to sit inside a data-contract="none" ancestor once a mock is bound (approved mark runs
+  // `check --matrix`) — the default three-button set is wrapped so advanceToApproved's fixtures
+  // keep passing under that pre-existing rule; `stateBtn`'s raw-HTML escape hatch stays
+  // unwrapped, matching its prior byte-for-byte output for the callers that use it.
+  const stateBtnsHtml = stateBtn !== undefined
+    ? stateBtn
+    : (states.length ? '<div data-contract="none">' +
+        states.map((s) => '<button data-state-btn="' + s + '">' + s + '</button>').join('') + '</div>' : '')
   writeFile(path.join(dir, 'design/mocks', label + '.html'),
     '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
     '<link rel="stylesheet" href="../wire/tokens.css">\n' +
     '<link rel="stylesheet" href="../wire/wire.css">\n' +
     '<style>* { box-sizing: border-box; }</style>\n' +
-    '<main data-screen-label="' + label + '" data-status="sketch">' + label + stateBtn + '</main>\n')
+    '<main data-screen-label="' + label + '" data-status="sketch">' + label + stateBtnsHtml + '</main>\n')
 }
 
 function writeThemeDirection(dir, kebab, labels) {

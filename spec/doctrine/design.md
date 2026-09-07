@@ -42,7 +42,7 @@ lazy, at the next design touch. Litmus: a design-contract change goes to the moc
 **Design harness.** Every mock-authoring pass declares the marks the gate reads — `data-screen-label`
 (root), `data-status`, `data-state-btn="<state>"`, `data-contract="none"` (non-contract subtree),
 `data-positioned` (data-placed children), `data-shell`/`data-active` (shell declaration), `data-narrow`
-(narrow root) — then runs `design-atlas.js check` (`spec-paths design-atlas`) fail-closed, enforced at
+(narrow root), `data-no-state="<name>[,<name>]"` (declared-absent state, root) — then runs `design-atlas.js check` (`spec-paths design-atlas`) fail-closed, enforced at
 `ratified`/`approved` or `--matrix` (viewport-meta/dark-block/shell checks are static preconditions);
 `render-gate --mocks` at `/spec:sketch`'s exit, and at `/spec:mocks`'s `journey-approved`/
 `approved` marks (plugin capture when undeclared), verifies matrix adaptation. **Render rules pass:**

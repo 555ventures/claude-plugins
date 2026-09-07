@@ -38,7 +38,10 @@ already clear from the repo.
    artifacts before advancing; a missing or failing one is refused and demanded again. While
    drawing a journey, pin every inferred or invented product assumption as it is written
    (`ledger add … --screen <label>`, or `ledger ask` after the fact) — § Mocks: Page Notes,
-   **Questions** is the one binding home for how it is authored, answered, and gated.
+   **Questions** is the one binding home for how it is authored, answered, and gated. Draw every
+   screen's empty, loading, and error states alongside the happy path, or opt one out on the
+   root with its product reason in the ledger — § Mocks: Authoring Rules is the one binding
+   home for the rule and its grammar.
 4. Re-run `node {driver} --root .`. Repeat until it prints `APPROVED`.
 
 A dismissed `AskUserQuestion` STOPS the run — never invent the declined answer; state is

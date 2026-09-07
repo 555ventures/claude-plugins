@@ -5,6 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT, tmpdir, runNode } = require('../helpers')
 const picksLib = require('../../spec/scripts/lib/mocks-picks')
+const { writeWireframe } = require('./mocks-driver-fixtures')
 
 // specs/20260902/10-page-notes-review-loop.md D1/D4/D5, AC-20260902-10-1/-5/-6/-10.
 // spec/scripts/lib/mocks-notes.js and the driver's `notes` subcommands + mark gates do not
@@ -99,14 +100,6 @@ none
 ## Grounding
 This canon is binding: see docs/design/research-brief.md for the research basis.
 `)
-}
-function writeWireframe(dir, label) {
-  writeFile(path.join(dir, 'design/mocks', label + '.html'),
-    '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
-    '<link rel="stylesheet" href="../wire/tokens.css">\n' +
-    '<link rel="stylesheet" href="../wire/wire.css">\n' +
-    '<style>* { box-sizing: border-box; }</style>\n' +
-    '<main data-screen-label="' + label + '" data-status="sketch">' + label + '</main>\n')
 }
 // D3: at most 2 screens per direction, the dense screen first.
 function writeThemeDirection(dir, kebab, labels) {

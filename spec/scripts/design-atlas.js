@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // design-atlas: deterministic design-artifact tooling (no model, no deps) — shared § Design Atlas.
 //
-//   design-atlas.js check <file|dir> [...more] [--matrix]
+//   design-atlas.js check <file|dir> [...more] [--matrix] [--states]
 //                                                  harness gate: labels, tokens link, no off-token
 //                                                  colors; at data-status ratified|approved (or
 //                                                  --matrix, which also forces the static matrix
@@ -20,6 +20,15 @@
 //                                                  ratified and approved are equivalent for every
 //                                                  check (specs/20260824/03 D2); sketch mocks are
 //                                                  free of all of the above.
+//                                                  specs/20260906/05-gray-states-on-every-wireframe.md
+//                                                  D1: --states requires every labeled non-canon
+//                                                  mock to declare empty/loading/error via
+//                                                  data-state-btn="<name>" (anywhere in the file) or
+//                                                  opt a name out via data-no-state="<name>[,<name>]"
+//                                                  on the [data-screen-label] root; a shell canon
+//                                                  file and an unlabeled mock are exempt; without
+//                                                  --states this rule never runs (byte-identical
+//                                                  legacy output).
 //   design-atlas.js gallery <dir> [--out <file>]   comparison gallery over candidate subdirs (explore rounds)
 //   design-atlas.js build [--root <repo>] [--out <file>]
 //                                                  the atlas: mocks × roadmap `surfaces` blocks ×
@@ -262,6 +271,33 @@ function hygieneViolations(f, html) {
   return out
 }
 
+// ---- states (specs/20260906/05-gray-states-on-every-wireframe.md D1) -------------------------
+// Presence only, never judgment (Rationale "Why presence, not judgment"): the declared-state set
+// is data-state-btn values found ANYWHERE in the file, unioned with the comma-separated names in
+// the [data-screen-label] root's own data-no-state attribute (the product's explicit opt-out,
+// visible in source). A data-no-state name outside the three required states is its own violation
+// — a typo'd opt-out must never silently pass a state that was never actually declared.
+const REQUIRED_STATES = ['empty', 'loading', 'error']
+function statesViolations(f, html) {
+  const out = []
+  const declared = new Set()
+  for (const m of html.matchAll(/data-state-btn\s*=\s*"([^"]+)"/g)) declared.add(m[1])
+  const rootTag = html.match(/<[a-zA-Z][\w-]*\b[^>]*\bdata-screen-label="[^"]*"[^>]*>/)
+  const noStateMatch = rootTag ? rootTag[0].match(/data-no-state\s*=\s*"([^"]*)"/) : null
+  const noStateNames = noStateMatch ? noStateMatch[1].split(',').map(s => s.trim()).filter(Boolean) : []
+  for (const n of noStateNames) {
+    if (REQUIRED_STATES.includes(n)) declared.add(n)
+    else out.push(f + ': data-no-state names unknown state "' + n + '" — one of empty, loading, error')
+  }
+  const missing = REQUIRED_STATES.filter(s => !declared.has(s))
+  if (missing.length) {
+    out.push(f + ': missing state(s) ' + missing.join(', ') +
+      ' — every wireframe carries its empty, loading and error states as gray boxes (data-state-btn), ' +
+      'or declares data-no-state="<name>" on the root for a state the product truly lacks')
+  }
+  return out
+}
+
 // ---- check ---------------------------------------------------------------------------------------
 // The deterministic half of the design harness: every mock/tile/prototype passes this before a
 // human (or a critique round) sees it. Colors live in tokens.css and are consumed as var(--role);
@@ -269,7 +305,8 @@ function hygieneViolations(f, html) {
 // (layout in mocks legitimately uses px); color is the load-bearing token family.
 function cmdCheck(argv) {
   const forceMatrix = argv.includes('--matrix')
-  const paths = argv.filter(a => a !== '--matrix')
+  const statesMode = argv.includes('--states')
+  const paths = argv.filter(a => a !== '--matrix' && a !== '--states')
   if (!paths.length) die('check: need at least one file or directory')
   const violations = []
   const warnLines = []
@@ -285,6 +322,9 @@ function cmdCheck(argv) {
       // instead of D4's mock shell family.
       const isCanon = shellLib.isCanonFile(html)
       if (!isCanon && !labelOf(html)) violations.push(f + ': no data-screen-label on any element')
+      // D1: a shell canon is chrome, never a screen — exempt entirely; an unlabeled mock is
+      // already flagged above and has no [data-screen-label] root to read data-no-state from.
+      if (statesMode && !isCanon && labelOf(html)) violations.push(...statesViolations(f, html))
       if (!/<link[^>]+tokens\.css/.test(html)) violations.push(f + ': does not link a tokens.css')
       // strip the tokens link line itself, then flag color literals anywhere in markup/styles
       const body = html.replace(/<link[^>]*>/g, '')

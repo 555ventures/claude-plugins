@@ -225,7 +225,7 @@ No citation here.
 // ---------------------------------------------------------------------------
 // AC-20260902-07-6
 // ---------------------------------------------------------------------------
-test('AC-20260902-07-6 / AC-20260905-02-18: journey-drawn refuses a missing or non-conforming label and records drawn; journey-approved refuses before drawn or on a blocked gate even with a decided stop present', () => {
+test('AC-20260902-07-6 / AC-20260905-02-18 / AC-20260906-05-5: journey-drawn refuses a missing or non-conforming label and records drawn; journey-approved refuses before drawn or on a blocked gate even with a decided stop present; both marks CONTINUE TO accept once every screen declares its three gray states (the fixture default)', () => {
   const dir = tmpdir('mocks-driver')
   advanceToCanonWritten(dir)
 
@@ -283,7 +283,8 @@ test('AC-20260902-07-6 / AC-20260905-02-18: journey-drawn refuses a missing or n
 
   writeWireframe(dir, LABELS[1])
   r = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
-  assert.strictEqual(r.status, 0, 'journey-drawn must be accepted once every label of the journey conforms to D6: ' + r.stdout + r.stderr)
+  assert.strictEqual(r.status, 0,
+    'AC-20260906-05-5: journey-drawn must CONTINUE TO be accepted once every label of the journey conforms to D6, including the fixture default\'s three declared gray states: ' + r.stdout + r.stderr)
   assert.strictEqual(statusJson(dir).journeys[JOURNEY].drawn !== null, true, 'an accepted journey-drawn must record journeys.<j>.drawn')
 
   // journey-approved before any draw, on a fresh journey name that was never drawn
@@ -296,8 +297,53 @@ test('AC-20260902-07-6 / AC-20260905-02-18: journey-drawn refuses a missing or n
   writeCaptureConfig(dir, writeFixtureCapture(dir))
   decideLook(dir, 'journey-approved:' + JOURNEY, 'approve', { by: 'jj' })
   const approved = mark(dir, 'journey-approved', ['--journey', JOURNEY])
-  assert.strictEqual(approved.status, 0, 'journey-approved must be accepted once drawn and the ledger gate is open: ' + approved.stdout + approved.stderr)
+  assert.strictEqual(approved.status, 0,
+    'AC-20260906-05-5: journey-approved must CONTINUE TO be accepted once drawn and the ledger gate is open, including the fixture default\'s three declared gray states: ' + approved.stdout + approved.stderr)
   assert.strictEqual(statusJson(dir).journeys[JOURNEY].approved !== null, true, 'an accepted journey-approved must record journeys.<j>.approved')
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260906-05-3
+// ---------------------------------------------------------------------------
+// specs/20260906/05-gray-states-on-every-wireframe.md D2, TDD red: mocks-driver.js does not run
+// `check --states` at journey-drawn yet, so a screen declaring none of the three states passes
+// journey-drawn today (status 0) — every assertion below expects the refusal D2 promises instead.
+test('AC-20260906-05-3: journey-drawn refuses when one screen of the journey declares none of the three gray states, naming the file, every missing state in empty/loading/error order, and the draw-the-missing-states remedy, and never records journeys.onboarding.drawn', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToCanonWritten(dir)
+  for (const label of LABELS) {
+    writeWireframe(dir, label, label === 'consent' ? { states: [] } : {})
+  }
+
+  const r = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
+  assert.strictEqual(r.status, 2,
+    'D2: journey-drawn must refuse (exit 2) once check --states finds a screen declaring none of the three required states: ' + r.stdout + r.stderr)
+  assert.match(r.stderr + r.stdout, /consent\.html: missing state\(s\) empty, loading, error/,
+    'D1/D2: the refusal must name consent.html and every missing state in empty, loading, error order — a partial list leaves the author guessing which states to draw: ' + r.stdout + r.stderr)
+  assert.match(r.stderr + r.stdout, /draw the missing states/,
+    'D2: the refusal must carry the exact remedy phrase "draw the missing states" (in the wireframe register, then re-mark): ' + r.stdout + r.stderr)
+  const journeyRecord = statusJson(dir).journeys[JOURNEY]
+  assert.strictEqual(journeyRecord === undefined || journeyRecord.drawn == null, true,
+    'a refused journey-drawn must never record journeys.onboarding.drawn — a session must not believe the journey was drawn when the states check blocked it: ' + JSON.stringify(journeyRecord))
+})
+
+// ---------------------------------------------------------------------------
+// AC-20260906-05-4
+// ---------------------------------------------------------------------------
+// TDD red: the WIREFRAMES "draw journey <j>" step's Then: block carries no states line today.
+test('AC-20260906-05-4: the bare driver\'s "draw journey <j>" step Then: block gains a line naming the empty/loading/error states and the data-no-state opt-out', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToCanonWritten(dir)
+
+  const r = bare(dir)
+  assert.strictEqual(r.status, 0, 'a bare invocation at the WIREFRAMES draw-journey step must exit 0: ' + r.stdout + r.stderr)
+  const thenIdx = r.stdout.indexOf('Then:')
+  assert.ok(thenIdx > -1, 'the printed draw-journey step must carry a "Then:" block for this assertion to be meaningful: ' + r.stdout)
+  const thenBlock = r.stdout.slice(thenIdx)
+  assert.match(thenBlock, /states: empty, loading, error on every screen/,
+    'D3: the draw step\'s Then: block must gain a line naming "states: empty, loading, error on every screen" — without it a session drawing wireframes has no prompt to add the gray states: ' + r.stdout)
+  assert.match(thenBlock, /data-no-state/,
+    'D3: the draw step\'s Then: block must gain a line naming the data-no-state opt-out, or a session with a genuinely state-less screen has no documented escape: ' + r.stdout)
 })
 
 // ---------------------------------------------------------------------------

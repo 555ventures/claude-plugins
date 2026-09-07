@@ -45,6 +45,12 @@
 // journey's own review page (http://localhost:<port>/review/<j>.html#stop-<id>) instead of the
 // atlas index — every other step (shapes, theme, signoff) omits `--page` and keeps the atlas URL.
 //
+// specs/20260906/05-gray-states-on-every-wireframe.md D2: `journey-drawn` and `journey-approved`
+// each run design-atlas.js's `check --states` over the journey's own top-level mocks (after the
+// existing per-label closure checks at drawn; before the render gate at approved) and refuse the
+// mark on any violation, naming the file, the missing/unknown state(s), and the redraw remedy. D3:
+// the "draw journey <j>" step's printed Then: block carries the same states/data-no-state prompt.
+//
 // What this deliberately does NOT do:
 //   - author the seed, canon, screens, theme directions, or the sign-off itself — those stay
 //     session judgment; the driver only closes each mark once the artifact exists and validates
@@ -868,6 +874,13 @@ function handleJourneyDrawn(journeyName) {
     if (!/wire\/wire\.css/.test(html)) die(file + ': does not link ../wire/wire.css' + atlasSuffix)
     if (r.status !== 0) die(file + ': design-atlas.js check failed for label "' + label + '": ' + childOutput(r))
   }
+  // specs/20260906/05-gray-states-on-every-wireframe.md D2: after every per-label closure check
+  // above, run check --states over the journey's own top-level mocks — a violation refuses the
+  // mark before journeys.<j>.drawn is ever recorded.
+  const statesRes = runDesignAtlasCheck(['--states', ...j.labels.map(mockFile)])
+  if (statesRes.status !== 0) {
+    die(childOutput(statesRes) + '\ndraw the missing states in the wireframe register, then re-mark')
+  }
   ensureJourneyRecord(journeyName).drawn = nowIso()
   saveStatus()
 }
@@ -882,6 +895,12 @@ function handleJourneyApproved(journeyName) {
   // generic ledger-blocked message first and the question wording is never reached.
   requireNotesResolved(j ? j.labels : [], journeyName)
   requireGateOpen()
+  // D2: re-run check --states before the render gate — a redrawn screen cannot lose a state
+  // between journey-drawn and journey-approved.
+  const statesRes = runDesignAtlasCheck(['--states', ...(j ? j.labels : []).map(mockFile)])
+  if (statesRes.status !== 0) {
+    die(childOutput(statesRes) + '\ndraw the missing states in the wireframe register, then re-mark')
+  }
   requireRenderGateMocks((j ? j.labels : []).map((l) => mockFile(l)), journeyName)
   const stop = requireStopDecision('journey-approved:' + journeyName, 'stop open journey:' + journeyName)
   st.approved = nowIso()
@@ -1356,6 +1375,7 @@ function printWireframesStep() {
         ['design/mocks/seed.md (## Journeys › ' + jn + ')', 'design/mocks/canon.md', 'docs/design/research-brief.md', 'design/mocks/ledger.md'],
         'Mocks: State Machine', journeysProgressLine(journeys) + ' · ' + journeyQuestionCounts(jn, journeys),
         [driverCmd('--mark journey-drawn --journey ' + jn),
+          'states: empty, loading, error on every screen (data-state-btn) — or data-no-state="<name>" with the product reason in the ledger',
           'pin every inferred/invented product assumption you write while drawing: ledger add … --screen <label>'])
       return
     }

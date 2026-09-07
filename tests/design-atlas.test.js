@@ -664,6 +664,110 @@ test('check: labeled token-consuming mocks pass; label/tokens/color violations f
   assert.match(bad.stdout, /off-token color literal/)
 })
 
+// specs/20260906/05-gray-states-on-every-wireframe.md D1, AC-20260906-05-1: `check --states`
+// requires a labeled non-canon mock to declare empty/loading/error via data-state-btn, or opt a
+// name out on the root via data-no-state — with a shell canon file exempt entirely. TDD red:
+// cmdCheck today filters only `--matrix` out of its path list, so a bare `--states` is read as a
+// nonexistent path and every assertion below sees exit 2 ("no such path: --states") instead.
+test('AC-20260906-05-1: check --states passes a mock declaring all three data-state-btn states, fails naming missing ones in empty/loading/error order, passes with a matching data-no-state opt-out, fails on an unknown data-no-state name, and exempts a shell canon file', () => {
+  const dir = tmpdir('atlas-states')
+
+  const full = path.join(dir, 'design/mocks/full.html')
+  fs.mkdirSync(path.dirname(full), { recursive: true })
+  fs.writeFileSync(full,
+    '<link rel="stylesheet" href="../tokens.css">\n' +
+    '<main data-screen-label="full">\n' +
+    '  <button data-state-btn="empty">empty</button>\n' +
+    '  <button data-state-btn="loading">loading</button>\n' +
+    '  <button data-state-btn="error">error</button>\n' +
+    '  full\n' +
+    '</main>\n')
+  const passRes = atlas(['check', '--states', full])
+  assert.strictEqual(passRes.status, 0,
+    'a mock declaring data-state-btn for empty, loading, and error must pass --states with exit 0: ' + passRes.stdout + passRes.stderr)
+  assert.match(passRes.stdout, /CHECK PASS \(1 file\(s\)\)/,
+    'a passing --states run must print the exact CHECK PASS line, unchanged from a plain check: ' + passRes.stdout)
+
+  const partial = path.join(dir, 'design/mocks/partial.html')
+  fs.writeFileSync(partial,
+    '<link rel="stylesheet" href="../tokens.css">\n' +
+    '<main data-screen-label="partial">\n' +
+    '  <button data-state-btn="empty">empty</button>\n' +
+    '  partial\n' +
+    '</main>\n')
+  const missingRes = atlas(['check', '--states', partial])
+  assert.strictEqual(missingRes.status, 1,
+    'a mock declaring only the "empty" state must fail --states with exit 1: ' + missingRes.stdout + missingRes.stderr)
+  const missingLineRe = new RegExp(partial.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
+    ': missing state\\(s\\) loading, error — every wireframe carries its empty, loading and error states')
+  assert.match(missingRes.stdout, missingLineRe,
+    'the missing-states violation must name the file and the exact D1 message with the missing names filtered in empty, loading, error order, or an author cannot tell which states to draw: ' + missingRes.stdout)
+
+  const optOut = path.join(dir, 'design/mocks/optout.html')
+  fs.writeFileSync(optOut,
+    '<link rel="stylesheet" href="../tokens.css">\n' +
+    '<main data-screen-label="optout" data-no-state="loading,error">\n' +
+    '  <button data-state-btn="empty">empty</button>\n' +
+    '  optout\n' +
+    '</main>\n')
+  const optOutRes = atlas(['check', '--states', optOut])
+  assert.strictEqual(optOutRes.status, 0,
+    'data-no-state="loading,error" opting out of the two missing states must pass --states — the opt-out is honored, not ignored: ' + optOutRes.stdout + optOutRes.stderr)
+
+  const unknown = path.join(dir, 'design/mocks/unknown.html')
+  fs.writeFileSync(unknown,
+    '<link rel="stylesheet" href="../tokens.css">\n' +
+    '<main data-screen-label="unknown" data-no-state="busy">\n' +
+    '  <button data-state-btn="empty">empty</button>\n' +
+    '  <button data-state-btn="loading">loading</button>\n' +
+    '  <button data-state-btn="error">error</button>\n' +
+    '  unknown\n' +
+    '</main>\n')
+  const unknownRes = atlas(['check', '--states', unknown])
+  assert.strictEqual(unknownRes.status, 1,
+    'an unknown data-no-state name must fail --states even though every real state is separately declared — a typo\'d opt-out must never silently pass: ' + unknownRes.stdout + unknownRes.stderr)
+  assert.match(unknownRes.stdout, /unknown state "busy"/,
+    'the unknown-name violation must contain the exact D1 phrase naming the bad value "busy": ' + unknownRes.stdout)
+
+  const canon = path.join(dir, 'design/shell/topbar.html')
+  fs.mkdirSync(path.dirname(canon), { recursive: true })
+  fs.writeFileSync(canon,
+    '<link rel="stylesheet" href="../tokens.css">\n' +
+    '<link rel="stylesheet" href="topbar.css">\n' +
+    '<style>* { box-sizing: border-box; }</style>\n' +
+    '<div data-shell-canon="topbar" class="shell">\n' +
+    '  <main data-slot="content"></main>\n' +
+    '</div>\n')
+  const canonRes = atlas(['check', '--states', canon])
+  assert.strictEqual(canonRes.status, 0,
+    'a shell canon file must be exempt from --states — it is chrome, never a screen with its own empty/loading/error states: ' + canonRes.stdout + canonRes.stderr)
+  assert.match(canonRes.stdout, /CHECK PASS \(1 file\(s\)\)/,
+    'the exempt canon file must still print CHECK PASS, not merely a non-1 exit code: ' + canonRes.stdout)
+})
+
+// AC-20260906-05-2: a green-pre-change continuity pin (core § Incident Policy's "absence of a
+// not-yet-built mechanism" pattern) — cmdCheck's behavior with no --states flag is untouched by
+// D1, so this assertion already holds against the pre-image and must keep holding once --states
+// exists; it is authored now so a future change to the default path is caught the same run.
+test('AC-20260906-05-2: check with no --states flag continues to print byte-identical CHECK PASS output for a happy-path-only mock, unaffected by the new states rule', () => {
+  const dir = tmpdir('atlas-states-legacy')
+  const happy = path.join(dir, 'design/mocks/happy.html')
+  fs.mkdirSync(path.dirname(happy), { recursive: true })
+  fs.writeFileSync(happy,
+    '<link rel="stylesheet" href="../tokens.css">\n' +
+    '<main data-screen-label="happy">happy path only, no state controls</main>\n')
+
+  const first = atlas(['check', happy])
+  assert.strictEqual(first.status, 0,
+    'check with no --states flag must pass a happy-path-only mock exit 0, exactly as before D1: ' + first.stdout + first.stderr)
+  assert.strictEqual(first.stdout, 'CHECK PASS (1 file(s))\n',
+    'check with no --states flag must print byte-identical output to today for a happy-path-only mock — any extra line here means the new states rule leaked into the default path: ' + JSON.stringify(first.stdout))
+
+  const second = atlas(['check', happy])
+  assert.strictEqual(second.stdout, first.stdout,
+    'check with no --states flag must stay reproducible byte-for-byte across runs, exactly as every other check output already is: ' + JSON.stringify(second.stdout))
+})
+
 // specs/20260902/09-one-hand-wireframes-one-token-set.md D5, AC-20260902-09-5: page() reads
 // spec/templates/mocks/viewer.css and inlines it before its own rules, and every chrome rule
 // (badges, bar, cards, gap chips, lightbox, matrix toolbar, gallery cards) is rewritten onto

@@ -1,6 +1,6 @@
 ---
 date: 2026-09-06
-status: hardened
+status: implementing
 tier: standard
 area: design-mocks
 design: false
@@ -9,6 +9,7 @@ depends_on: [specs/20260906/02-mocks-ends-at-wireframes.md]
 depended_on_by: [specs/20260906/06-sketch-high-fidelity-and-critique.md]
 brief: 22a
 open_markers: 0
+diff_base: 0dbf31103b04780b87ff6f24eb2636007bb1a17b
 ---
 
 # Gray states on every wireframe: empty, loading and error declared as states, checked by presence at journey-drawn and journey-approved
@@ -26,6 +27,7 @@ A wireframe shows the happy path and, as gray boxes behind `data-state-btn` swit
 | D3 | Doctrine, one home: `spec/doctrine/mocks.md` § Mocks: Authoring Rules gains the bullet **Every wireframe carries its states.** (the rule, the attribute grammar, the opt-out, "happy path alone is a finding"); `spec/commands/mocks.md`'s WIREFRAMES draw step points at it in one clause; the driver's "draw journey <j>" `Then:` gains `states: empty, loading, error on every screen (data-state-btn) — or data-no-state="<name>" with the product reason in the ledger`; `spec/doctrine/design.md` § Design Canon's marks list gains `data-no-state` (AC-20260906-05-4 pins the driver line; prose `[no-ac: review's citations-check and doctrine legs are the oracle]`) | The checkpoint contract prints the next action; doctrine holds the rule once. |
 | D4 | Tests: `tests/mocks/mocks-driver-fixtures.js` `writeWireframe(dir, label, opts)` writes the three state buttons by default (`opts.states = ['empty','loading','error']`, `opts.states = []` to omit) so every existing driver test keeps passing under D2 (AC-20260906-05-3's negative arm uses `states: []`) | Fixture default changes are how the suite adopts a new precondition without a sweep. |
 | D5 | Bump `spec/.claude-plugin/plugin.json` to the next free minor (target 7.96.0) with the changelog entry `[no-ac: review's version-bump check is the oracle]` | § Planning version discipline. |
+| D6 | Build-time ruling (JJ, 2026-09-07): `tests/mocks/mocks-notes.test.js` carries its own pre-D4 local `writeWireframe` — a duplicate that predates the shared-fixture split — and its `advanceToJourneyDrawn` helper trips D2's new check. Delete the local copy and import `writeWireframe` from `tests/mocks/mocks-driver-fixtures.js`; no other change to that file's assertions `[no-ac: the file's own existing ACs are the oracle — they must stay green, unweakened]` | One helper, one home: the second copy is exactly what drifts out of step with the next authoring rule. Rejected: patching the duplicate in place (keeps two helpers alive), and filing separately (the suite would stay red, and § Test Rules forbids a sanctioned-failing baseline). |
 
 ## File Plan
 
@@ -39,6 +41,7 @@ A wireframe shows the happy path and, as gray boxes behind `data-state-btn` swit
 | tests/mocks/mocks-driver-fixtures.js | MODIFY | tests | D4 `writeWireframe` states default |
 | tests/design-atlas.test.js | MODIFY | tests | AC-20260906-05-1, AC-20260906-05-2 |
 | tests/mocks/mocks-driver.test.js | MODIFY | tests | AC-20260906-05-3, AC-20260906-05-4, AC-20260906-05-5 |
+| tests/mocks/mocks-notes.test.js | MODIFY | tests | D6: drop the local `writeWireframe` duplicate, import the shared one |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D5 version bump + changelog entry |
 
 ## Contracts

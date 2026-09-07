@@ -2,6 +2,7 @@
 
 Phase: P2
 Depends on: none
+Amended by: ADR-0009 (the SessionStart surfacing hook and `hello` are removed — `/spec:queue` is the on-demand surface; `bump`/`defer` retired by specs/20260903/03)
 
 ## Why this brief
 

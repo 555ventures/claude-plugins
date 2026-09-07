@@ -38,7 +38,7 @@ A wireframe shows the happy path and, as gray boxes behind `data-state-btn` swit
 | spec/doctrine/design.md | MODIFY | doctrine | D3 `data-no-state` in the marks list (§ Design Canon) |
 | tests/mocks/mocks-driver-fixtures.js | MODIFY | tests | D4 `writeWireframe` states default |
 | tests/design-atlas.test.js | MODIFY | tests | AC-20260906-05-1, AC-20260906-05-2 |
-| tests/mocks/mocks-driver.test.js | MODIFY | tests | AC-20260906-05-3, AC-20260906-05-4 |
+| tests/mocks/mocks-driver.test.js | MODIFY | tests | AC-20260906-05-3, AC-20260906-05-4, AC-20260906-05-5 |
 | spec/.claude-plugin/plugin.json | MODIFY | doctrine | D5 version bump + changelog entry |
 
 ## Contracts
@@ -60,7 +60,8 @@ The session draws `signin.html` with the happy path and three `data-state-btn` s
 
 - **AC-20260906-05-1**: WHEN `check --states` runs over a labeled mock declaring `data-state-btn="empty"`, `"loading"`, `"error"` THE SYSTEM SHALL print `CHECK PASS (1 file(s))` and exit 0; over a mock declaring only `data-state-btn="empty"` it SHALL exit 1 with a line `<file>: missing state(s) loading, error — every wireframe carries its empty, loading and error states` (order `empty, loading, error` filtered); over a mock with `data-no-state="loading,error"` and `data-state-btn="empty"` it SHALL pass; with `data-no-state="busy"` it SHALL exit 1 with a line containing `unknown state "busy"`; a shell canon file SHALL be exempt → `tests/design-atlas.test.js`
 - **AC-20260906-05-2**: WHEN `check` runs without `--states` over the happy-path-only mock THE SYSTEM SHALL CONTINUE TO print `CHECK PASS (1 file(s))` (byte-identical output to today) → `tests/design-atlas.test.js`
-- **AC-20260906-05-3**: WHEN `--mark journey-drawn --journey onboarding` runs with one screen written via `writeWireframe(dir, 'consent', {states: []})` THE SYSTEM SHALL exit 2 with stderr containing `consent.html: missing state(s) empty, loading, error` and `draw the missing states`, and `journeys.onboarding.drawn` stays null; WHEN every screen declares the three states THE SYSTEM SHALL CONTINUE TO accept `journey-drawn` and `journey-approved` (the fixture default) → `tests/mocks/mocks-driver.test.js`
+- **AC-20260906-05-3**: WHEN `--mark journey-drawn --journey onboarding` runs with one screen written via `writeWireframe(dir, 'consent', {states: []})` THE SYSTEM SHALL exit 2 with stderr containing `consent.html: missing state(s) empty, loading, error` and `draw the missing states`, and `journeys.onboarding.drawn` stays null → `tests/mocks/mocks-driver.test.js`
+- **AC-20260906-05-5**: WHEN every screen declares the three states (the fixture default) THE SYSTEM SHALL CONTINUE TO accept `journey-drawn` and `journey-approved` → `tests/mocks/mocks-driver.test.js` (the existing accepting test, tagged in place — split out of AC-3 at the 2026-09-07 planning pass of specs/20260907/01 D10: a bullet mixing a promise with a `SHALL CONTINUE TO` pin is read by red-check as a pin)
 - **AC-20260906-05-4**: WHEN the bare driver prints the "draw journey <j>" step THE SYSTEM SHALL print a `Then:` line containing `states: empty, loading, error on every screen` and `data-no-state` → `tests/mocks/mocks-driver.test.js`
 
 ## Assumptions (escalation triggers)

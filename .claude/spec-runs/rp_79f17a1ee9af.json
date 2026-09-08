@@ -1,0 +1,103 @@
+{
+  "ts": "2026-09-08T20:48:55.961Z",
+  "stage": "replay",
+  "spec": "specs/20260907/04-kit-canon-family.md",
+  "runId": "rp_79f17a1ee9af",
+  "reviewRunId": "rv_36f19c9b001d",
+  "class": "boundary-shift",
+  "files": [
+    "spec/scripts/lib/shell-region.js"
+  ],
+  "legs": "green",
+  "outcome": "caught",
+  "tokens": 130000,
+  "via": "driver",
+  "patch": "diff --git a/spec/scripts/lib/shell-region.js b/spec/scripts/lib/shell-region.js\nindex b52d290..060536a 100644\n--- a/spec/scripts/lib/shell-region.js\n+++ b/spec/scripts/lib/shell-region.js\n@@ -510,7 +510,7 @@ function diagnoseKitRegions(mockHtml, kitDir) {\n           code: 'unknown-kit',\n           text: 'names data-bespoke=\"' + m[1] + ': ' + m[2] + '\" but design/kit/ declares no primitive \"' + m[1] + '\"',\n         })\n-      } else if (!m || !m[2].trim()) {\n+      } else if (!m || m[2].trim().length <= 1) {\n         findings.push({\n           code: 'bespoke-unnamed',\n           text: 'data-bespoke=\"' + bespokeMatch[1] + '\" names no difference — say what prevents reuse',\n",
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "hard",
+        "claim": "HEAD commit 448c93f changed the bespoke difference check to `m[2].trim().length <= 1`, so a non-empty one-character difference is refused as 'names no difference', contradicting D4's 'difference is non-empty'",
+        "file": "spec/scripts/lib/shell-region.js",
+        "line": 513,
+        "impact": "A correctly marked bespoke region with a short difference is refused at journey approval, and the threshold landed as an unexplained one-line commit at the head of the range with no test or Decision naming it.",
+        "evidence": "Executed: check --matrix over <section data-bespoke=\"sheet: x\"> -> '…onechar.html: data-bespoke=\"sheet: x\" names no difference — say what prevents reuse' exit=1; the same with 'sheet: xy' -> no bespoke finding. Spec D4 line 38: '<difference> is non-empty'. git show 448c93f: '-      } else if (!m || !m[2].trim()) {' / '+      } else if (!m || m[2].trim().length <= 1) {'"
+      },
+      {
+        "severity": "hard",
+        "claim": "kitContentRegionOf picks the first data-slot=\"content\" anywhere under the labeled root regardless of whether the mock declares a shell, so a no-shell mock whose first region is a kit instance (which per D2 carries its own data-slot=\"content\") has its scan redirected into that instance and its remaining top-level regions are never examined",
+        "file": "spec/scripts/lib/shell-region.js",
+        "line": 460,
+        "impact": "The per-screen kit count is wrong and an unmarked region can pass journey approval unexamined on any mock without a shell whose first region is a kit instance.",
+        "evidence": "Executed: no-shell mock with '<section data-kit=\"sheet\">…<div data-slot=\"content\"><p>filled</p></div></section><section>bare region</section>' -> check --matrix prints 'region 1 carries neither data-kit nor data-bespoke' (the inner <p>) and 'ⓘ nested: 0 kit, 0 bespoke'; the data-kit region is uncounted and the bare sibling never reported. Spec D4 line 38: 'the data-slot=\"content\" subtree when the mock declares a shell, else the labeled root's own top-level children'."
+      },
+      {
+        "severity": "soft",
+        "claim": "sweepKitFamily on a mocks-only walk reports only cross-file duplicate primitives; an intra-file duplicate in a kit file surfaces only when design/kit itself is walked",
+        "file": "spec/scripts/design-atlas.js",
+        "line": 427,
+        "impact": "Duplicate detection reach differs by which directory the check is pointed at, though the sign-off gate still walks the kit directory and closes it.",
+        "evidence": "Read: design-atlas.js:427-435 only pushes when uniqueFiles.length > 1; checkKitCanon (per-file duplicates) runs only in the isKitCanon branch at line 476. Advisory, not contradicted by D13's text."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "D7 stop-refusal literal differs from the Contracts block",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 345,
+        "evidence": "AC-9 requires only that the refusal name 'stop open kit'; requireStopDecision prints 'no look stop for kit-signed — run `stop open kit` first', asserted at tests/mocks/mocks-driver-2.test.js:290"
+      },
+      {
+        "claim": "The shipped kit template fails its own check",
+        "file": "spec/templates/mocks-kit.html",
+        "line": 1,
+        "evidence": "Executed: cp template -> $H/design/kit/kit.html; design-atlas.js check $H/design/kit -> 'CHECK PASS (1 file(s))' exit=0"
+      },
+      {
+        "claim": "D15 ordering: ⓘ lines print before the CHECK block",
+        "file": "spec/scripts/design-atlas.js",
+        "line": 547,
+        "evidence": "Executed: FAIL case prints 'CHECK FAIL (…)' + bullets then 'ⓘ bad: 0 kit, 0 bespoke'; sketch case prints '⚠️ …' then 'CHECK PASS (1 file(s))' then 'ⓘ sk: 0 kit, 0 bespoke'"
+      },
+      {
+        "claim": "D14 #kit section renders the approve buttons without framing the kit",
+        "file": "spec/scripts/design-atlas.js",
+        "line": 1095,
+        "evidence": "renderKitStop emits one .card with open ↗ and frameTag per candidate before renderApproveStop; tests/design-atlas.test.js:2981-3026 asserts iframe srcs for both candidates, first <iframe> index < data-decide=\"approve\" index, and no id=\"kit\" without a stop"
+      },
+      {
+        "claim": "D4 finding text omits the '<label>: ' prefix the Decision cell shows",
+        "file": "spec/scripts/lib/shell-region.js",
+        "line": 520,
+        "evidence": "Sanctioned in the deviations file; matches the Contracts block and AC-4/-5/-12 tests"
+      },
+      {
+        "claim": "D12 version bumped to 7.101.0 instead of the 7.98.0 target",
+        "file": "spec/.claude-plugin/plugin.json",
+        "line": 3,
+        "evidence": "Rules-file Gotcha: 'the spec's literal number is a target, not a pin'; deviation recorded; changelog entry present"
+      },
+      {
+        "claim": "design.md's new bullet cites § Mocks: Authoring Rules, a heading not in design.md",
+        "file": "spec/doctrine/design.md",
+        "line": 35,
+        "evidence": "citations-check.js:134-163: lookback words resolve to no file -> SKIP, never MISS; the identical idiom pre-exists in spec/commands/mocks.md"
+      },
+      {
+        "claim": "handleKitSignedOff adds requireGateOpen() that D7 does not name",
+        "file": "spec/scripts/mocks-driver.js",
+        "line": 885,
+        "evidence": "spec/doctrine/mocks.md:74 'The gate rides every advancing mark. seed-done, shape-picked, kit-signed, …'; pinned by tests/mocks/mocks-driver-kit-gate.test.js:19"
+      },
+      {
+        "claim": "Full-suite run failed during this review",
+        "file": ".claude/spec-runs.jsonl",
+        "line": 1,
+        "evidence": "Failures were all 'ENOSPC: no space left on device' from tmpfs filling, not test assertions; the review-legs manifest records suite exit 0 / 1281 tests, gate exit 0 / 495 tests, ac-matrix uncovered 0."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 130000
+  }
+}

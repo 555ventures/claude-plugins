@@ -189,13 +189,13 @@ function advanceToJourneyDrawn(dir) {
   const shapePicked = mark(dir, 'shape-picked', ['--shape', 'calm'])
   assert.strictEqual(shapePicked.status, 0, 'test setup requires shape-picked to be accepted: ' + shapePicked.stderr)
 
-  // specs/20260907/04-kit-canon-family.md D1: KIT now sits between SHAPES and WIREFRAMES, so
-  // this file-local advance chain (which duplicates mocks-driver-fixtures.js's own chain rather
-  // than importing it) must gain the same kit-signed step or canon-written below refuses.
+  // specs/20260907/04-kit-canon-family.md D1 fixture repair: KIT now sits between SHAPES and
+  // WIREFRAMES — this file's own duplicate of the shared advance chain gains the same
+  // `--mark kit-signed` step tests/mocks/mocks-driver-fixtures.js's advanceToKitSigned adds.
   writeKitCanon(dir)
-  decideLook(dir, 'kit-signed', 'approve', { title: 'sign off the kit' })
+  decideLook(dir, 'kit-signed', 'approve', { by: 'jj' })
   const kitSigned = mark(dir, 'kit-signed')
-  assert.strictEqual(kitSigned.status, 0, 'test setup requires kit-signed to be accepted once design/kit/ holds a valid canon and the look stop is decided: ' + kitSigned.stderr)
+  assert.strictEqual(kitSigned.status, 0, 'test setup requires kit-signed to be accepted: ' + kitSigned.stderr)
 
   writeCanon(dir)
   const canonWritten = mark(dir, 'canon-written')

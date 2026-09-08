@@ -255,45 +255,37 @@ test('AC-20260906-06-4: spec/agents/design-critic.md parses as model opus, effor
   }
 })
 
-// specs/20260907/04-kit-canon-family.md D11: the KIT state, its gated mark, and the two region
-// marks each get exactly one doctrine home. The mechanisms are the driver and the checker
-// (AC-20260907-04-1 and AC-20260907-04-4); this test pins only that the prose points at them,
-// so a session reading doctrine cold learns the chain, the mark, and the two region marks.
-test('AC-20260907-04-14: spec/doctrine/mocks.md names KIT in its state-chain order sentence, kit-signed in its gated-mark list, and both region marks in § Mocks: Authoring Rules', () => {
-  const src = read('spec/doctrine/mocks.md')
+// specs/20260907/04-kit-canon-family.md D11: KIT is a new state inserted between SHAPES and
+// WIREFRAMES — its § Mocks: State Machine order sentence, gated-mark list, and § Mocks:
+// Authoring Rules must all name it.
+test('AC-20260907-04-14: spec/doctrine/mocks.md names SEED, SHAPES, KIT, WIREFRAMES in that order within its § Mocks: State Machine order sentence, names kit-signed in its gated-mark list, and names both data-kit and data-bespoke in § Mocks: Authoring Rules', () => {
+  const p = 'spec/doctrine/mocks.md'
+  assert.ok(fs.existsSync(path.join(ROOT, p)), p + ' must exist for this doctrine pin to be meaningful')
+  const src = read(p)
 
-  const smIdx = src.indexOf('## Mocks: State Machine')
-  assert.ok(smIdx !== -1,
-    'spec/doctrine/mocks.md must still carry a "## Mocks: State Machine" heading — every /spec:mocks step block cites this section by name, and a renamed heading is silently dropped by shared-for filtering')
-  const smEnd = src.indexOf('\n## ', smIdx + 1)
-  const stateMachine = src.slice(smIdx, smEnd === -1 ? src.length : smEnd)
+  const stateMachineIdx = src.indexOf('## Mocks: State Machine')
+  assert.ok(stateMachineIdx !== -1, p + ' must carry a "## Mocks: State Machine" heading to anchor the order-sentence search')
+  const nextHeadingIdx = src.indexOf('\n## ', stateMachineIdx + 1)
+  const stateMachineSection = src.slice(stateMachineIdx, nextHeadingIdx === -1 ? src.length : nextHeadingIdx)
 
-  const order = ['SEED', 'SHAPES', 'KIT', 'WIREFRAMES'].map((s) => stateMachine.indexOf('**' + s + '**'))
-  for (const [i, s] of ['SEED', 'SHAPES', 'KIT', 'WIREFRAMES'].entries()) {
-    assert.ok(order[i] !== -1,
-      'the § Mocks: State Machine order sentence must name **' + s + '** — a state missing from the fixed order leaves an authoring session with no way to know when it runs')
+  const orderTokens = ['SEED', 'SHAPES', 'KIT', 'WIREFRAMES']
+  const positions = orderTokens.map((tok) => stateMachineSection.indexOf('**' + tok + '**'))
+  assert.ok(positions.every((pos) => pos !== -1),
+    'D1/D11: § Mocks: State Machine must name SEED, SHAPES, KIT, and WIREFRAMES (each bold, as the section already does) — got positions ' + JSON.stringify(positions) + ' in:\n' + stateMachineSection)
+  for (let i = 1; i < positions.length; i++) {
+    assert.ok(positions[i] > positions[i - 1],
+      'D1/D11: the order sentence must name ' + orderTokens.join(' -> ') + ' in that order, with KIT sitting between SHAPES and WIREFRAMES — got positions ' + JSON.stringify(positions))
   }
-  assert.ok(order.every((v, i) => i === 0 || v > order[i - 1]),
-    'the order sentence must read SEED, SHAPES, KIT, WIREFRAMES in that sequence — KIT names the shared parts before any screen is drawn, and prose that puts it after WIREFRAMES teaches the opposite of what the driver enforces: got positions ' + JSON.stringify(order))
 
-  // The mark must appear in the GATED-MARK paragraph specifically, not merely somewhere in the
-  // section: handleKitSigned calls requireGateOpen(), so a list that enumerates the gate-riding
-  // marks and omits this one tells an author a refusal they will actually hit cannot happen.
-  const gateParaIx = stateMachine.indexOf('The gate rides every advancing mark')
-  assert.ok(gateParaIx !== -1,
-    '§ Mocks: State Machine must still carry the "The gate rides every advancing mark" paragraph — it is the enumeration this assertion pins')
-  const gatePara = stateMachine.slice(gateParaIx, stateMachine.indexOf('\n\n', gateParaIx))
-  assert.ok(gatePara.includes('kit-signed'),
-    '§ Mocks: State Machine\'s gated-mark list must name `kit-signed` — the kit sign-off runs the provenance ledger gate like every other advancing mark, and a list that omits it denies a refusal the driver really raises')
+  assert.match(stateMachineSection, /kit-signed/,
+    'D11: § Mocks: State Machine\'s gated-mark list must name "kit-signed" alongside every other advancing mark')
 
-  const arIdx = src.indexOf('## Mocks: Authoring Rules')
-  assert.ok(arIdx !== -1,
-    'spec/doctrine/mocks.md must still carry a "## Mocks: Authoring Rules" heading — it is the cited home for the half of the contract the driver cannot check')
-  const arEnd = src.indexOf('\n## ', arIdx + 1)
-  const authoringRules = src.slice(arIdx, arEnd === -1 ? src.length : arEnd)
-
-  for (const mark of ['data-kit', 'data-bespoke']) {
-    assert.ok(authoringRules.includes(mark),
-      '§ Mocks: Authoring Rules must name `' + mark + '` — the region rule is what an author applies by hand while drawing, and a rule stated only as a check failure is learned one refusal at a time')
-  }
+  const authoringIdx = src.indexOf('## Mocks: Authoring Rules')
+  assert.ok(authoringIdx !== -1, p + ' must carry a "## Mocks: Authoring Rules" heading to anchor the kit-rule search')
+  const authoringNextIdx = src.indexOf('\n## ', authoringIdx + 1)
+  const authoringSection = src.slice(authoringIdx, authoringNextIdx === -1 ? src.length : authoringNextIdx)
+  assert.match(authoringSection, /data-kit\b/,
+    'D11: § Mocks: Authoring Rules must name data-kit — the "name the shared parts" rule\'s one written home')
+  assert.match(authoringSection, /data-bespoke\b/,
+    'D11: § Mocks: Authoring Rules must name data-bespoke — the deliberate non-instance escape and its required difference')
 })

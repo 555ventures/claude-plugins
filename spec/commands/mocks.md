@@ -52,15 +52,21 @@ disk, never chat context.
 
 ## Kit (KIT state)
 
-Between SHAPES and WIREFRAMES: author `design/kit/<name>.html` — the shared-primitive canon,
-sibling to the shell canon under the same marks and the same checker (§ Design Canon). Name
-every primitive once, `data-kit-primitive="<key>"` with a `data-purpose` when-to-use line, in
-every state, before drawing any screen. `stop open kit` opens a decided look stop over the kit
-page; `--mark kit-signed` accepts once it is decided and `design-atlas.js check design/kit`
-exits 0. Once a kit family exists, every content region of a labeled mock carries
-`data-kit="<key>"` or `data-bespoke="<key>: <difference>"` — § Mocks: Authoring Rules is the one
-binding home for the two marks and the `check` count line; `journey-approved` refuses on an
-unmarked region.
+Before any screen: name the shared parts once, in every state, with a when-to-use line. The
+driver's step names the starting page; copy it yourself — `cp "$(spec-paths templates)"/mocks-kit.html
+design/kit/<name>.html` — then edit it in place: draw the ten kit primitives (sheet, empty-state, table-row, card,
+form-field, option-group, list-item, toolbar, banner, dialog) or better names the seed's
+product suggests, each `data-kit-primitive="<key>"` with its `data-purpose` when-to-use line,
+gray on `wire/tokens.css`, never skinned. Look at it the same way a wireframe is looked at:
+`stop open kit` opens an approve stop framing the page itself, then `--mark kit-signed` accepts
+once it is decided and `design-atlas.js check design/kit` exits 0.
+
+Once the kit is signed off, every wireframe authoring step is handed the kit page first: a
+labeled mock's content regions each instantiate a primitive (`data-kit="<key>"`) or carry an
+explicit `data-bespoke="<key>: <difference>"` naming the primitive it is not and the one
+structural difference preventing reuse (§ Mocks: Authoring Rules — the one binding home for the
+rule and its grammar). `check` prints the running `ⓘ <label>: <n> kit, <m> bespoke` count on
+every run, and `--mark journey-approved` refuses on any region carrying neither mark.
 
 ## THEME interview rule
 
@@ -141,8 +147,8 @@ verbatim.
 - **Never restate the driver's derivation.** Read its printed step and doctrine citation; act
   on them — re-deriving state by hand from `status.json` is the class of bug the driver exists
   to prevent.
-- Canon before screens, kit before wireframes, screens before sign-off — the driver refuses out
-  of order; this command never works around a refusal by editing `status.json`.
+- Canon before screens, kit before wireframes, screens before sign-off — the driver refuses out of
+  order; this command never works around a refusal by editing `status.json`.
 - `AskUserQuestion` dismissed → STOP; never invent the declined answer.
 - The ledger is written only through the driver's `ledger` subcommands, notes.json only
   through its `notes` subcommands or the served page — never hand-typed.

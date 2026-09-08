@@ -133,6 +133,19 @@ for (let i = 0; i < argv.length; i++) {
 }
 if (!root || !spec || !base || !manifest) { usage(); process.exit(2) }
 root = path.resolve(root)
+// The manifest is all-or-nothing. Every row below (appendRow's, and the ones ac-matrix.js and
+// promise-sweep.js append by path) lands in `<manifest>.partial`; the file the caller named
+// exists only after the summary — the single rename at the tail. Rows are appended as each
+// parallel leg finishes, so a runner killed mid-wave (a gate that SIGKILLs it, the driver's
+// own death) leaves a fragment holding the legs that had already returned and no gate row.
+// spec-review-driver.js counts manifest-<n>.jsonl files to derive its state and sees nothing
+// red in such a fragment; were the fragment under the named path, a re-invocation would
+// advance to REVIEWER over it — the cached advance AC-20260820-07-14 forbids. The fragment
+// stays .partial, which that count never matches, and is truncated here so a re-run never
+// inherits another run's rows.
+const manifestFinal = manifest
+manifest = manifestFinal + '.partial'
+fs.rmSync(manifest, { force: true })
 let config
 try { config = readConfig(root) } catch (e) {
   console.error(`review-legs.js: cannot read ${CONFIG_RELPATH} under --root: ${e.message} — run /spec:init first`)
@@ -398,7 +411,10 @@ async function main() {
     if (red && blocking) blockedBy.push(r.leg)
     console.log(`${red ? (blocking ? '❌' : '⚠️ ') : '✅'} ${r.leg.padEnd(14)} exit=${r.exit} ${JSON.stringify(r.observed)}${red && !blocking ? ' (findings — disposition in review)' : ''}`)
   }
-  console.log(`manifest: ${manifest}`)
+  // Finalize: only now does the caller's manifest path exist. Both exits below follow it, so
+  // a RED_BLOCKING run still hands the driver a complete manifest to derive STOPPED from.
+  fs.renameSync(manifest, manifestFinal)
+  console.log(`manifest: ${manifestFinal}`)
   console.log(`outputs: ${outDir}  (reconcile.json, gate-output.txt${wroteSuiteOutput ? ', suite-output.txt' : ''}, smoke.txt, ac-matrix.txt, promise-sweep.txt${config.patternsScript ? ', patterns.txt' : ''}${wroteAtRisk ? ', at-risk.txt' : ''})`)
   if (blockedBy.length) {
     console.log(`RED_BLOCKING: ${blockedBy.join(',')}`)

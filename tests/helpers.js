@@ -53,37 +53,37 @@ function checkWorkflowSyntax(rel) {
     '"use strict"; return (async () => {' + body + '\n})()')
 }
 
-// Every synthetic host tree lives under one per-process root that is removed exactly once when
-// the test process ends — normal exit, thrown error, or an interrupt signal. Without this, each
-// tmpdir() call left a ~700-inode tree behind on /tmp; across a few thousand runs that exhausted
-// the tmpfs inode table and made unrelated shell commands fail with ENOSPC. Tests that already
-// rmSync their own dirs keep working: removing a subtree twice is a no-op.
-let tmpRoot = null
+// Every temp directory this test process (and every child it spawns) creates lands under one
+// per-process root that is removed exactly once when the process ends — normal exit, thrown
+// error, or an interrupt signal. Without this, each tmpdir() call left a ~700-inode tree behind
+// on /tmp; eight full-suite runs leaked enough fixture trees to fill a 7.8G tmpfs, exhaust the
+// inode table, and stall unrelated tools with ENOSPC. TMPDIR is set here so scripts under test
+// that call os.tmpdir() themselves (review-legs.js, release-legs.js, render-capture.js) land
+// under the same root and are swept with it. Tests that already rmSync their own dirs keep
+// working: removing a subtree twice is a no-op.
+const RUN_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-tests-' + process.pid + '-'))
+process.env.TMPDIR = RUN_ROOT
 
-function removeTmpRoot() {
-  if (!tmpRoot) return
-  const root = tmpRoot
-  tmpRoot = null
-  try { fs.rmSync(root, { recursive: true, force: true, maxRetries: 3 }) } catch { /* best-effort cleanup */ }
+let swept = false
+
+function removeRunRoot() {
+  if (swept) return
+  swept = true
+  try { fs.rmSync(RUN_ROOT, { recursive: true, force: true, maxRetries: 3 }) } catch { /* best-effort: never fail a run on cleanup */ }
 }
 
-function ensureTmpRoot() {
-  if (tmpRoot) return tmpRoot
-  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-plugins-tests-' + process.pid + '-'))
-  process.once('exit', removeTmpRoot)
-  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
-    process.once(sig, () => {
-      removeTmpRoot()
-      // Re-deliver the signal with default disposition so the exit status stays signal-shaped
-      // (the test runner and the shell see a real interrupt, not a clean exit).
-      process.kill(process.pid, sig)
-    })
-  }
-  return tmpRoot
+process.once('exit', removeRunRoot)
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.once(sig, () => {
+    removeRunRoot()
+    // Re-deliver the signal with default disposition so the exit status stays signal-shaped
+    // (the test runner and the shell see a real interrupt, not a clean exit).
+    process.kill(process.pid, sig)
+  })
 }
 
 function tmpdir(prefix) {
-  return fs.mkdtempSync(path.join(ensureTmpRoot(), prefix + '-'))
+  return fs.mkdtempSync(path.join(RUN_ROOT, prefix + '-'))
 }
 
 function runNode(script, argv, opts = {}) {

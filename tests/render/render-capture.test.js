@@ -34,6 +34,13 @@ function resolveBrowserForTest() {
   return null
 }
 
+// AC-1/AC-2 are [env: CHROME_BIN] on their AC lines: with no browser resolved they skip with
+// a named reason (the AC-matrix skip-reconcile leg sanctions the skip via the tag) instead of
+// failing — a red here on a Chrome-less host is an environment gap, never a defect.
+const BROWSER = resolveBrowserForTest()
+const NO_BROWSER = BROWSER ? false :
+  'no browser resolved — set CHROME_BIN to a Chrome/Chromium binary or install Google Chrome ([env: CHROME_BIN])'
+
 function serveStatic(root) {
   return new Promise((resolve) => {
     const server = http.createServer((req, res) => {
@@ -97,13 +104,13 @@ function writeMock(root) {
 // ---------------------------------------------------------------------------
 // AC-20260905-06-1 [env: CHROME_BIN]
 // ---------------------------------------------------------------------------
-test('AC-20260905-06-1 [env: CHROME_BIN]: render-capture.js writes a parseable inventory with page.clientWidth 390 and page.scrollWidth >= 900 and exits 0 for a served mock with a 900px child at width 390', async () => {
+test('AC-20260905-06-1 [env: CHROME_BIN]: render-capture.js writes a parseable inventory with page.clientWidth 390 and page.scrollWidth >= 900 and exits 0 for a served mock with a 900px child at width 390', { skip: NO_BROWSER }, async () => {
   const root = fs.realpathSync(tmpdir('rcap1'))
   writeMock(root)
   const server = await serveStatic(root)
   const port = server.address().port
   const outPath = path.join(root, 'out.json')
-  const chrome = resolveBrowserForTest()
+  const chrome = BROWSER
 
   const r = await runNodeAsync(SCRIPT, [
     '--url', 'http://127.0.0.1:' + port + '/screen.html',
@@ -127,7 +134,7 @@ test('AC-20260905-06-1 [env: CHROME_BIN]: render-capture.js writes a parseable i
 // ---------------------------------------------------------------------------
 // AC-20260905-06-2 [env: CHROME_BIN]
 // ---------------------------------------------------------------------------
-test('AC-20260905-06-2 [env: CHROME_BIN]: render-capture.js --batch over two cells of the same mock at widths 390 and 1440 writes both --out files with the matching page.clientWidth, launching the browser once', async () => {
+test('AC-20260905-06-2 [env: CHROME_BIN]: render-capture.js --batch over two cells of the same mock at widths 390 and 1440 writes both --out files with the matching page.clientWidth, launching the browser once', { skip: NO_BROWSER }, async () => {
   const root = fs.realpathSync(tmpdir('rcap2'))
   writeMock(root)
   const server = await serveStatic(root)
@@ -140,7 +147,7 @@ test('AC-20260905-06-2 [env: CHROME_BIN]: render-capture.js --batch over two cel
     { url, width: 390, height: 844, theme: 'light', state: '-', script: RENDER_INVENTORY, out: out390 },
     { url, width: 1440, height: 900, theme: 'light', state: '-', script: RENDER_INVENTORY, out: out1440 },
   ]))
-  const chrome = resolveBrowserForTest()
+  const chrome = BROWSER
   const wrapper = writeChromeLaunchWrapper(root)
   const launchLog = path.join(root, 'launch.log')
 

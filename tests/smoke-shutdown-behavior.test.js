@@ -28,7 +28,10 @@ const smoke = (dir, ...args) => runBash('scripts/smoke.sh', args, { cwd: dir, ti
 test('AC-20260815-04-1: smoke.sh fails the leg as hung when the booted process ignores the stop signal', () => {
   const dir = tmpdir('smoke-shutdown')
   writeConfig(dir, {
-    bootCommand: `touch ${dir}/up && trap '' TERM && while :; do sleep 1; done`,
+    // The trap is installed BEFORE the ready file lands: the ready file is the sentinel smoke.sh
+    // waits on, so touching it first let SIGTERM arrive before the handler existed under load
+    // and the leg failed as shutdown-unclean (143) instead of shutdown-hung.
+    bootCommand: `trap '' TERM && touch ${dir}/up && while :; do sleep 1; done`,
     readyCheck: `test -f ${dir}/up`,
     readyTimeout: 20,
     stopTimeout: 2,

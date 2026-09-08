@@ -60,6 +60,12 @@ link — as violations at `ratified`/`approved`/`--matrix` and warns at `sketch`
 extracted from the approved set at SCAFFOLD (spec 11); genesis authors `AppShell` from it and
 `/spec:design`'s worker envelope carries `shell`.
 
+The kit is the shell's sibling canon family for the content slot: `design/kit/<name>.html` (root
+`data-kit-canon`, one `data-kit-primitive="<key>"` element per shared primitive with a
+`data-purpose` when-to-use line, chrome `data-contract="none"`, content `data-slot="content"`,
+states via `data-state-btn`), linking the wireframe register and never skinned
+(specs/20260907/04). Same walk-up resolution (`resolveCanonDir(from, family)`), same checker.
+
 Fidelity lives in sketch (specs/20260906/06): `/spec:mocks` ends gray; `/spec:sketch` authors
 each brief's surfaces at production fidelity in the picked theme, reworks the brief's
 wireframes into it, writes a three-line UX argument per surface into the brief, and closes
@@ -167,8 +173,8 @@ identical; a literal pipe inside a cell is written `\|`.
 ## The mocks command (2026-09-02, specs/20260902/07)
 
 `/spec:mocks` is the standalone design stage. `spec/scripts/mocks-driver.js` (`spec-paths
-mocks-driver`) derives SEED → SHAPES → WIREFRAMES → THEME → SIGNOFF → APPROVED
-(specs/20260906/02, ADR-0008 amending ADR-0006) from `design/mocks/status.json`
+mocks-driver`) derives `SEED → SHAPES → KIT → WIREFRAMES → THEME → SIGNOFF → APPROVED`
+(specs/20260907/04, ADR-0010 amending ADR-0008) from `design/mocks/status.json`
 (schemaVersion 1) plus the artifacts on disk: the skin and review states are retired; a
 wireframe is never skinned inside mocks — `/spec:sketch` owns fidelity per brief. The driver
 prints exactly one step
@@ -198,6 +204,17 @@ CLI (`look-probe` gates every screen-producing state unless `look-via browser` w
 `design-atlas.js build` renders seed journeys (owner `seed:<journey>`), one frame per
 `data-state-btn` state, a `shapes` section, and skips `references/`. Greenfield chain:
 `/spec:mocks → /spec:genesis → /spec:enforce → /spec:plan`.
+
+`KIT` (specs/20260907/04, ADR-0010 amending ADR-0008) writes `design/kit/<name>.html`, a canon
+family sibling to `design/shell/` under the same marks and the same checker, gray and never
+skinned, signed off on the page via `stop open kit` / `--mark kit-signed`. Once a kit family
+resolves, every content region of a labeled mock is either `data-kit="<key>"` or
+`data-bespoke="<key>: <difference>"` (the key must name a primitive the family declares);
+`check` prints `ⓘ <label>: <n> kit, <m> bespoke` per screen plus an unabsorbed total after its
+CHECK PASS/FAIL block, warns at `sketch` and violates at `ratified`/`approved`/`--matrix`, and
+`journey-approved` refuses on an unmarked region. A primitive key is unique per family, not per
+file. `--reopen kit` clears the kit sign-off and the terminal approval only, never a journey's
+own approval. A tree with no `design/kit/` is unaffected.
 
 The journey look surface is the review page `/review/<j>.html` (specs/20260906/04): screens rail ·
 artboards with state tabs (`?state=<s>` on the served mock) · question inspector answered in place

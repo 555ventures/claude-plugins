@@ -1,0 +1,117 @@
+{
+  "runId": "rv_36f19c9b001d",
+  "ts": "2026-09-08T20:25:00.872Z",
+  "spec": "specs/20260907/04-kit-canon-family.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 1315,
+    "base": "e4013c065d4512c8b016e4154133e56ebf588c01",
+    "head": "0d9271535ff09a64e67e2010ca04b22170f5e118",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 495
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1281
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 15,
+        "carried": 14,
+        "sanctioned": 1,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "Commit 0d92715 changes more than comment/assert-message text (assertion values or test names)",
+        "file": "tests/mocks/mocks-driver-kit-gate.test.js",
+        "line": 13,
+        "evidence": "git show 0d92715 --stat: 1 file changed (tests/mocks/mocks-driver-kit-gate.test.js), 7 insertions, 6 deletions. Every +/- hunk line is either the :13-17 header comment block or the string literal inside the two assert messages (:30 'D2's requireGateOpen' -> 'the doctrine gate's requireGateOpen'; :32 'D2's exact gate literal' -> 'requireGateOpen's exact gate literal'). No test(...) name, assert call, or expected value line appears in the diff."
+      },
+      {
+        "claim": "Stale D2/D7 attribution survives in the test file",
+        "file": "tests/mocks/mocks-driver-kit-gate.test.js",
+        "line": 13,
+        "evidence": "grep -nE \"D2's|D7/D2|D11|The gate rides every\" -> single hit: 13:// specs/20260907/04-kit-canon-family.md D11 (spec/doctrine/mocks.md \"The gate rides every ... (continues 'advancing mark' on :14). Zero hits for D2's or D7/D2."
+      },
+      {
+        "claim": "The re-cited test no longer passes",
+        "file": "tests/mocks/mocks-driver-kit-gate.test.js",
+        "line": 18,
+        "evidence": "node --test tests/mocks/mocks-driver-kit-gate.test.js -> tests 1, pass 1, fail 0 (994ms)."
+      },
+      {
+        "claim": "Something else in the spec's range regressed since iteration 2",
+        "file": "tests/design-atlas.test.js",
+        "line": 1,
+        "evidence": "node --test tests/design-atlas.test.js tests/mocks/*.test.js tests/consistency/design-doctrine.test.js -> tests 159, pass 159, fail 0 (46.9s). node spec/scripts/citations-check.js -> TOTAL=188 CHECKED=82 SKIP=106 MISS=0. HEAD = 0d9271535ff09a64e67e2010ca04b22170f5e118; git status shows only .claude/spec-runs.jsonl modified (run ledger, not a reviewed surface)."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 9000
+  }
+}

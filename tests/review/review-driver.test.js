@@ -449,6 +449,54 @@ test('AC-20260820-07-14: WHEN the gateCommand SIGKILLs review-legs.js itself THE
     'the re-invocation must also leave manifest-1.jsonl unwritten — the underlying cause (the gateCommand) was never fixed, so nothing new can have been trusted into existence: ' + r2.stdout + r2.stderr)
 })
 
+// The same host, but the gate kills the runner only AFTER the reconcile leg's row has landed —
+// the ordering the bare kill above reaches only under load (9/12 under two concurrent suites),
+// and the one that exposed the escape: with rows appended per leg straight into
+// manifest-1.jsonl, the file survived holding reconcile + ci and no gate row, and the driver
+// derived REVIEWER over it. The gate polls the runner's .partial for the reconcile row rather
+// than sleeping, so the ordering is forced, never timed.
+function makePartialKillHost() {
+  const host = makeKillHost()
+  const partial = path.join(host.sidecar, 'manifest-1.jsonl.partial')
+  const cfgPath = path.join(host.root, '.claude/spec.config.json')
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
+  // Watches the .partial AND the named manifest: a regression that appends straight to the
+  // named file still gets killed after reconcile lands (and then fails the no-manifest
+  // assertion) instead of hanging the gate forever. Bounded at ~20 s so a runner that never
+  // writes either file exits the gate green and trips the precondition assertion below.
+  cfg.gateCommand = 'node -e ' + JSON.stringify(
+    "const fs=require('fs');const ps=process.argv.slice(1);let n=0;(function w(){const t=ps.map(p=>{try{return fs.readFileSync(p,'utf8')}catch{return ''}}).join('');" +
+    "if(t.includes('\"reconcile\"')){process.kill(process.ppid,'SIGKILL')}else if(++n>2000){process.exit(0)}else{setTimeout(w,10)}})()") +
+    ' ' + JSON.stringify(partial) + ' ' + JSON.stringify(path.join(host.sidecar, 'manifest-1.jsonl'))
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg))
+  const g = (...a) => require('child_process').execFileSync('git', a, { cwd: host.root, stdio: 'pipe' })
+  g('add', '-A'); g('commit', '-q', '-m', 'gate waits for the reconcile row, then kills')
+  return { ...host, partial }
+}
+
+test('AC-20260820-07-14 (partial-manifest ordering): WHEN the gateCommand SIGKILLs review-legs.js after a sibling leg already appended its row THE SYSTEM still leaves no manifest-1.jsonl and refuses identically on re-invocation, never deriving REVIEWER over the fragment', () => {
+  const host = makePartialKillHost()
+  const r = run(host.root, host.spec)
+  assert.strictEqual(r.status, 2,
+    'the runner dies by signal after reconcile returned — the driver must exit 2 naming the dead child, never treat the fragment as a finished legs run: ' + r.stdout + r.stderr)
+  assert.match(r.stderr, /review-legs\.js/,
+    'the refusal must name review-legs.js as the dead child: ' + r.stderr)
+  const partialText = fs.existsSync(host.partial) ? fs.readFileSync(host.partial, 'utf8') : ''
+  assert.match(partialText, /"leg":"reconcile"/,
+    'setup precondition: the kill must have landed AFTER the reconcile row was appended — otherwise this test degenerates into the bare-kill case above and proves nothing about a partial manifest: ' + JSON.stringify(partialText))
+  const manifestPath = path.join(host.sidecar, 'manifest-1.jsonl')
+  assert.ok(!fs.existsSync(manifestPath),
+    'a legs run killed after some rows landed must leave no manifest-1.jsonl — the rows live in .partial until the summary renames it, and a file here is exactly the fragment the driver used to advance over: ' + JSON.stringify(fs.readdirSync(host.sidecar)))
+
+  const r2 = run(host.root, host.spec, '--state')
+  assert.notStrictEqual(r2.stdout.trim(), 'REVIEWER',
+    'a re-invocation must never derive REVIEWER from a manifest fragment holding reconcile and ci but no gate row — that is the cached advance this AC forbids: ' + r2.stdout + r2.stderr)
+  assert.strictEqual(r2.status, 2,
+    'the same unfixed host must refuse identically on re-invocation (the gate kills again once reconcile lands) rather than flip to a stale REVIEWER: ' + r2.stdout + r2.stderr)
+  assert.ok(!fs.existsSync(manifestPath),
+    'the re-invocation must also leave manifest-1.jsonl unwritten: ' + r2.stdout + r2.stderr)
+})
+
 function makeDoneHost() {
   const root = fs.realpathSync(tmpdir('rvdrv-done'))
   const g = gitRepo(root)

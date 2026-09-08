@@ -30,10 +30,10 @@ Render Gate gate UI **appearance**, TDD gates logic, **reachability is never exe
   `data-slot`s, one empty `data-slot="content"`, other slots `data-contract="none"`) plus a
   linked `shell/<name>.css`; chrome, never a surface. `shell sync` rewrites a declaring mock's
   region from canon, byte-equal, active-nav derived (`built` mocks skipped by default); `shell
-  adopt` migrates pre-shell mocks via a confirmed plan. `check` binds a shell family once `shell/` exists, warn at `sketch`, violation at `ratified`/`approved`/`--matrix`.
-- **`kit/<name>.html`** — the shared content-primitive canon (`data-kit-canon` root, each `data-kit-primitive="<key>"`), sibling family to `shell/<name>.html` under the same marks/checker.
-- **`explore/`** — genesis explore-state candidates, pruned once locked; **`atlas/`** —
-  generated output (§ Design Atlas), never hand-edited.
+  adopt` migrates pre-shell mocks via a confirmed plan. `check` binds a shell family once
+  `shell/` exists, warn at `sketch`, violation at `ratified`/`approved`/`--matrix`.
+- **`kit/<name>.html`** — the shared-primitive canon (`data-kit-canon` root, `data-kit-primitive="<key>"` + `data-purpose`), gray, never skinned; sibling to `shell/<name>.html`, same marks/checker (`data-kit`/`data-bespoke`, § Mocks: Authoring Rules).
+- **`explore/`** — genesis explore-state candidates, pruned once locked; **`atlas/`** — generated output (§ Design Atlas), never hand-edited.
 **Mock authority has a lifecycle — it expires at `built`.** Sketch → ratified → approved →
 bound: the mock is authority, code is held to it. Once the claiming spec is `done`,
 **authority inverts: shipped code is truth, the mock a historical contract allowed to go

@@ -1,6 +1,6 @@
 ---
 date: 2026-09-07
-status: implementing
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -10,7 +10,7 @@ depended_on_by: []
 brief: 22a
 spiked: 2026-09-07
 open_markers: 0
-diff_base: d50340952d739ab9d39e9cd3c78268cd2c5b3eb3
+diff_base: e4013c065d4512c8b016e4154133e56ebf588c01
 ---
 
 # The kit: shared primitives are named before any screen and bound at journey approval
@@ -44,6 +44,11 @@ journey whose screens quietly invent a primitive the kit already names.
 | D10 | `--reopen kit` clears `marks.kitSignedOff`, `marks.approved` and `decider`, leaves every `journeys[j].approved` untouched, prints `↩ reopened kit — invalidated: kit, approved(all)`, and pushes the standard `{at,target,invalidated}` record; the refusal literal becomes `--reopen must be journey:<j>, shapes, kit, or theme`. `--reopen shapes` additionally clears `marks.kitSignedOff` and names `kit` in its invalidated list (AC-20260907-04-13) | Mirrors `--reopen theme` exactly: never over-clear, never touch disk. A kit change does not un-approve a journey by fiat — D9's gate re-runs and catches the screens that no longer conform. |
 | D11 | Doctrine, one home each: `spec/doctrine/mocks.md` § Mocks: State Machine gains `KIT` in the fixed order sentence and the gated-mark list (`kit-signed`), § Provenance Ledger's step vocabulary gains `KIT`, § Mocks: Authoring Rules gains **"Name the shared parts before the screens."** naming D4's two marks and D6's count; `spec/doctrine/design.md` § Design Canon gains the `kit/<name>.html` bullet beside the existing `shell/<name>.html` bullet; `spec/commands/mocks.md` gains a `## Kit (KIT state)` section and the Rules line becomes `canon before screens, kit before wireframes, screens before sign-off` `[no-ac: prose contract; review's citations-check and doctrine legs are the oracle, the mechanisms are AC-20260907-04-1 and AC-20260907-04-4]` | § Doctrine Authoring: the driver and the checker are the mechanism; prose points at them. |
 | D12 | Bump `spec/.claude-plugin/plugin.json` to the next free minor (target 7.98.0) with the changelog entry `[no-ac: review's version-bump check is the oracle]` | § Planning version discipline. |
+| D13 | **A primitive is named once per FAMILY, never per file.** `checkKitCanon` is called with the whole family: `design-atlas.js check` collects every `data-kit-primitive` key across every `data-kit-canon` file that resolves to the same `design/kit/` directory, and a key declared in two different files of one family is the same `duplicate data-kit-primitive="<k>"` violation as two declarations in one file, naming both files (AC-20260907-04-16) | JJ's ruling 2026-09-08: a previous build enforced uniqueness only within one file, so two files in `design/kit/` could both declare `sheet` and pass — D2's "one family" is the directory, not the file. |
+| D14 | **The kit is signed off on a page that shows the kit.** The atlas's `#kit` section (D7's `stopHome('kit-signed') → {type:'kit'}`) renders, for every candidate of the stop, one `.card` carrying the candidate's name, an `open ↗` link and a `frameTag` of `design/kit/<name>.html` at the file's own viewport (exactly as `renderCompareTable` frames a pick candidate), **before** the approve/change block — never the buttons alone (AC-20260907-04-17) | JJ's ruling 2026-09-08: a previous build rendered the approve/change buttons and never the kit page itself, so the sign-off step had nothing to look at — the feature's core interaction did not work. |
+| D15 | **The reason leads; the statistic follows.** `design-atlas.js check` prints D6's `ⓘ` informational lines AFTER the `CHECK FAIL (…)` block (headline plus its `  - ` bullets) or after the `CHECK PASS (…)` line — never before either. Fixed at the producer only; none of the eight `runDesignAtlasCheck` call sites across `mocks-driver.js` and `genesis-driver.js` re-orders or filters the output (AC-20260907-04-18) | JJ's ruling 2026-09-08: with the counts printed first, every consumer that surfaces the check's output leads with a statistic instead of the reason for the refusal. |
+
+**Orchestrator duty (cold read before close, JJ 2026-09-08):** before the final gate is marked, this session (or a fresh-context reader it dispatches) reads EVERY Decision D1–D15 against the code as landed — not the diff, the whole implementation — and records each as satisfied or as a repair. A previous build shipped D2 and D7 misses with every gate green and three delta reviews clean; only a whole-implementation read against the Decisions catches a contract that the tests never asked about.
 
 **Orchestrator duty (outside the File Plan table):** `tests/mocks/mocks-driver-fixtures.js` is the single highest-leverage edit — every test that reaches `WIREFRAMES` or beyond routes through its `advanceTo*` chain, and inserting `KIT` means every such helper gains a `kit-signed` step. Author that fixture change first and run `node --test tests/mocks/` before any other test file. Per-file 45 s budget (specs/20260903/07) applies: split a driver test file rather than let it cross the budget.
 
@@ -54,7 +59,7 @@ journey whose screens quietly invent a primitive the kit already names.
 | Path | Action | Layer | Summary |
 |------|--------|-------|---------|
 | spec/scripts/lib/shell-region.js | MODIFY | scripts | D3: `resolveCanonDir(fromPath, family)`, `resolveShellDir` reimplemented on it, `isKitCanonFile`, `checkKitCanon`, `diagnoseKitRegions` (D4's three finding codes); exports extended |
-| spec/scripts/design-atlas.js | MODIFY | scripts | D5: kit family bound in `cmdCheck` (warn at sketch, violation at ratified/approved/--matrix, off when no `design/kit/` resolves); D6: the two `ⓘ` count lines; D7: `stopHome('kit-signed') → {type:'kit'}` and the `#kit` page section; usage header |
+| spec/scripts/design-atlas.js | MODIFY | scripts | D5: kit family bound in `cmdCheck` (warn at sketch, violation at ratified/approved/--matrix, off when no `design/kit/` resolves); D6: the two `ⓘ` count lines; D7/D14: `stopHome('kit-signed') → {type:'kit'}` and the `#kit` page section framing every candidate before the approve block; D13: family-wide primitive uniqueness; D15: `ⓘ` lines after the CHECK block; usage header |
 | spec/scripts/mocks-driver.js | MODIFY | scripts | D1: `KIT` in `deriveState` + `kitSignedOff` in `freshStatus`; D7: `kit-signed` mark handler + `buildKitStopSpec` + `stop open kit`; D8: `AUTHORING_STATES` + `printKitStep`; D9: the `journey-approved` kit gate; D10: `--reopen kit` and the shapes-reopen widening; unknown-mark and unknown-step literals; header |
 | spec/templates/mocks-kit.html | CREATE | doctrine | D2: the kit canon starting page — the ten primitives as empty `data-kit-primitive` shells with `data-purpose` and state buttons, linking `../wire/tokens.css` |
 | spec/doctrine/mocks.md | MODIFY | doctrine | D11: state chain, gated marks, step vocabulary, § Mocks: Authoring Rules' new rule |
@@ -64,8 +69,9 @@ journey whose screens quietly invent a primitive the kit already names.
 | tests/mocks/mocks-driver-fixtures.js | MODIFY | tests | Orchestrator duty: `advanceToKitSigned(dir)` inserted into the chain every later helper routes through; `writeKitCanon(dir, primitives)` helper |
 | tests/mocks/mocks-driver.test.js | MODIFY | tests | AC-20260907-04-1, AC-20260907-04-13 |
 | tests/mocks/mocks-driver-2.test.js | MODIFY | tests | AC-20260907-04-9, AC-20260907-04-10, AC-20260907-04-12 |
+| tests/mocks/mocks-driver-kit-gate.test.js | CREATE | tests | AC-20260907-04-9 (review fix s1: the provenance-ledger gate on `--mark kit-signed`; split from mocks-driver-2 for the per-file 45 s budget) |
 | tests/mocks/mocks-driver-look-stops-2.test.js | MODIFY | tests | AC-20260907-04-11 (the KIT step block, its skill line and its look probe) |
-| tests/design-atlas.test.js | MODIFY | tests | AC-20260907-04-2, AC-20260907-04-3, AC-20260907-04-4, AC-20260907-04-5, AC-20260907-04-6, AC-20260907-04-7, AC-20260907-04-8 |
+| tests/design-atlas.test.js | MODIFY | tests | AC-20260907-04-2, AC-20260907-04-3, AC-20260907-04-4, AC-20260907-04-5, AC-20260907-04-6, AC-20260907-04-7, AC-20260907-04-8, AC-20260907-04-16, AC-20260907-04-17, AC-20260907-04-18 |
 | tests/consistency/design-doctrine.test.js | MODIFY | tests | AC-20260907-04-14 (doctrine names the chain, the two marks and the count line) |
 | tests/mocks/mocks-notes.test.js | MODIFY | tests | Fixture repair only (collision-closure `executes` hit): its local `advanceToThemePicked()` duplicates the shared chain and must gain the `kit-signed` step — no new AC |
 
@@ -126,6 +132,9 @@ design/mocks/<label>.html   (content regions, when a kit family resolves)
 - **AC-20260907-04-13**: WHEN `--reopen kit` runs on an `APPROVED` root THE SYSTEM SHALL print `↩ reopened kit — invalidated: kit, approved(all)`, set `marks.kitSignedOff`, `marks.approved` and `decider` to null, leave every `journeys[j].approved` unchanged, and derive `KIT`; WHEN `--reopen bogus` runs it SHALL exit non-zero naming `journey:<j>, shapes, kit, or theme` → `tests/mocks/mocks-driver.test.js`
 - **AC-20260907-04-14**: WHEN `spec/doctrine/mocks.md` is read THE SYSTEM SHALL contain `SEED`, `SHAPES`, `KIT`, `WIREFRAMES` in that order within its § Mocks: State Machine order sentence, name `kit-signed` in its gated-mark list, and name both `data-kit` and `data-bespoke` in § Mocks: Authoring Rules → `tests/consistency/design-doctrine.test.js`
 - **AC-20260907-04-15**: WHEN the driver derives state on a root checkpointed under the pre-spec shape (`marks.shapePicked` set, `marks.canonWritten` set, every journey approved, `theme` set, `marks.approved` null, and no `kitSignedOff` key at all) THE SYSTEM SHALL CONTINUE TO advance rather than trap — it SHALL print `KIT` and SHALL NOT throw → `tests/mocks/mocks-driver.test.js`
+- **AC-20260907-04-16**: WHEN `check` runs over a `design/kit/` holding `a.html` and `b.html` that each declare one element with `data-kit-primitive="sheet"` and no other duplicate THE SYSTEM SHALL exit 1 naming `duplicate data-kit-primitive="sheet"` and both file names; WHEN the two files declare disjoint keys it SHALL exit 0 → `tests/design-atlas.test.js`
+- **AC-20260907-04-17**: WHEN the atlas is built for a root whose picks store holds an open `approve` stop keyed `kit-signed` with candidates `kit=kit/kit.html` and `forms=kit/forms.html` THE SYSTEM SHALL emit a `<section … id="kit">` containing, before the stop's `data-decide="approve"` button, one `<iframe` whose `src` ends in `kit/kit.html` and one whose `src` ends in `kit/forms.html`, each inside a `.card` naming its candidate; WHEN no `kit-signed` stop is live it SHALL emit no `id="kit"` section → `tests/design-atlas.test.js`
+- **AC-20260907-04-18**: WHEN `check --matrix` runs over a labeled mock with one unabsorbed region and a kit family present THE SYSTEM SHALL print the `CHECK FAIL (` line and its `  - ` bullet before the first `ⓘ` line, and WHEN the same mock is fully kit-tagged it SHALL print `CHECK PASS (` before the first `ⓘ` line → `tests/design-atlas.test.js`
 
 ## Assumptions
 
@@ -187,6 +196,27 @@ pins the `shared-for` section sets this spec does not touch — waived.
 `canon sync` and the manifest derivation are deliberately out. Each is its own landing unit,
 and this spec is green without them: the kit exists, is checked, and binds approval, while
 `design/components.json` keeps its current session-authored contract untouched.
+
+**Build deviations (folded at review close, 2026-09-08; one-offs, no new Gotcha — the section is
+at its cap and the version race is already recorded):**
+
+- D12 targeted 7.98.0; sibling specs spent 7.98.0–7.100.0 before this build reached the bump,
+  so the build bumped to the next free minor, **7.101.0**, per the stale-version-target Gotcha.
+- D4's Decisions cell shows finding text label-prefixed (`<label>: region <n> …`); the
+  Contracts block and every AC-4/-5/-12 test print it file-prefixed (`<file>: region <n> …`),
+  matching `cmdCheck`'s existing `f + ': ' + fnd.text` convention. The file-prefixed form
+  shipped; the Contracts block is the literal contract.
+- AC-1's test advances one root through two `advanceTo*` helpers in sequence; the shared chain
+  re-ran SEED/SHAPES and re-appended ledger rows P1..P13, tripping `parseLedger`'s duplicate-id
+  check. Repaired at the fixture — every `advanceTo*` helper returns early when its mark is
+  already set — a fixture-idempotency fix in a File Plan tests row, no Decision or script changed.
+
+**Review (2026-09-08, rv_36f19c9b001d):** three iterations. Iteration 1 found two hard misses
+in the from-scratch build — the bespoke branch never validated `<key>` against the family
+(D4), and `--mark kit-signed` skipped the provenance-ledger gate D11's doctrine row promises —
+plus four soft (empty-key remedy text, the D13 sweep not reaching a mocks-only walk, three
+`readdirSync` copies, "shell primitives" wording). All six fixed; iteration 2 verified each by
+executed repro and raised one citation nit in the new gate test; iteration 3 CLEAN.
 
 ## Canonical Delta
 

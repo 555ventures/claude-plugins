@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // spec/scripts/lib/shell-region.js — the shell-canon region mechanics behind design-atlas.js's
-// `check` shell family (D4) and `shell sync`/`shell adopt` subcommands (D5/D6).
+// `check` shell family (D4) and `shell sync`/`shell adopt` subcommands (D5/D6), plus the sibling
+// kit-canon family (specs/20260907/04-kit-canon-family.md D2-D4/D13).
 //
 // WHY: specs/20260901/04-shell-composed-mocks.md D1-D6. Chrome drifts because nothing shares it
 // and nothing checks it: each mock hand-copying its nav/header markup means a sidebar edit in
@@ -10,14 +11,6 @@
 // (checkCanon, D1) built on the same tag walker. It lives under `lib/` deliberately (D12) — the
 // entrypoint/spec-paths conformance scan walks by directory, and `lib/` is outside it, so this
 // file needs no new `spec-paths` key of its own; `design-atlas.js` is the only caller.
-//
-// specs/20260907/04-kit-canon-family.md D3/D4: a SECOND canon family, `design/kit/`, rides the
-// same mechanics. `resolveCanonDir(fromPath, family)` is the one walk-up both families use
-// (`resolveShellDir` is now a thin alias for the 'shell' family), and isKitCanonFile /
-// checkKitCanon / diagnoseKitRegions mirror isCanonFile / checkCanon / diagnoseMock for the kit.
-// The two families are deliberately disjoint in what they govern: the shell owns page chrome,
-// the kit owns the regions INSIDE the content slot — which is the one area the shell family
-// cannot see, and empirically where unnamed primitives multiply.
 //
 // The tag walker (scanTags/findElement/findAllElements) is a depth-counting walk, not an HTML
 // parser: void elements (area|base|br|col|embed|hr|img|input|link|meta|source|track|wbr) and any
@@ -386,17 +379,16 @@ function isCanonFile(html) {
   return labelIx === -1 || canonIx < labelIx
 }
 
-// ---- resolveCanonDir / resolveShellDir -------------------------------------------------------
-// Same walk-up shape design-atlas.js's loadTargets() uses for targets.json: from `fromPath`,
-// climb ancestors checking both `<dir>/<family>` (dir IS the design/ folder) and
+// ---- resolveCanonDir / resolveShellDir ---------------------------------------------------------
+// specs/20260907/04-kit-canon-family.md D3: resolveCanonDir(fromPath, family) generalises the
+// walk-up design-atlas.js's loadTargets() uses for targets.json over the DIRECTORY NAME — from
+// `fromPath`, climb ancestors checking both `<dir>/<family>` (dir IS the design/ folder) and
 // `<dir>/design/<family>` (dir is above it), returning the first existing directory. null when no
-// such directory resolves anywhere above fromPath — which is what keeps each family OFF BY
-// ABSENCE (D4 for shell, specs/20260907/04 D5 for kit): a host that never authored the family
-// sees byte-identical `check` output.
-//
-// specs/20260907/04-kit-canon-family.md D3: one resolver, two families. `resolveShellDir` is kept
-// as the shell family's entry point — every existing caller and test reads through it — and is
-// now defined in terms of this function rather than duplicating the walk.
+// design/<family>/ resolves anywhere above fromPath (the family's rule set then stays off
+// entirely — the shell family's D4 absence-invariant, generalised). resolveShellDir(fromPath) is
+// resolveCanonDir(fromPath, 'shell') — byte-identical in behavior to the pre-D3 implementation
+// (A2: it must NOT resolve a tree holding only design/kit/, which is exactly what the generic walk
+// checking only the 'shell' family name already guarantees).
 function resolveCanonDir(fromPath, family) {
   let dir = path.resolve(fromPath)
   try { if (!fs.statSync(dir).isDirectory()) dir = path.dirname(dir) } catch { dir = path.dirname(dir) }
@@ -409,12 +401,11 @@ function resolveCanonDir(fromPath, family) {
     dir = up
   }
 }
-
 function resolveShellDir(fromPath) { return resolveCanonDir(fromPath, 'shell') }
 
-// ---- kit family (specs/20260907/04-kit-canon-family.md D2/D3/D4) -----------------------------
-// "First labeled root", the same ordering test isCanonFile applies to the shell family: a file is
-// a kit canon when data-kit-canon appears before any data-screen-label in document order.
+// ---- D2/D3/D4/D13: kit-canon family -----------------------------------------------------------
+// "First labeled root" (same ordering test as isCanonFile): a file is a kit canon when
+// data-kit-canon appears before any data-screen-label in document order.
 function isKitCanonFile(html) {
   const canonIx = html.search(/data-kit-canon\s*=\s*"/)
   if (canonIx === -1) return false
@@ -422,110 +413,118 @@ function isKitCanonFile(html) {
   return labelIx === -1 || canonIx < labelIx
 }
 
-// Every data-kit-primitive key declared by one kit canon file, in document order (duplicates
-// included — checkKitCanon is what rejects them, and diagnoseKitRegions only needs membership).
-function kitPrimitiveKeys(html) {
-  return [...html.matchAll(/data-kit-primitive\s*=\s*"([^"]*)"/g)].map((m) => m[1])
+// htmlFilesIn(dir) -> sorted basenames of the .html files directly in dir, [] on any read error
+// (missing dir, not a dir, permission). The one shared body for the "list a design/ subdir's
+// .html files" shape that recurs across shell-region.js and mocks-driver.js.
+function htmlFilesIn(dir) {
+  try { return fs.readdirSync(dir).filter((f) => f.endsWith('.html')).sort() } catch { return [] }
 }
 
-// The union of every primitive key declared anywhere in the family directory. A family is a
-// directory of files, not a single file, so a mock's data-kit may name a primitive from any of
-// them — the count of files is the author's business, not the checker's.
-function kitFamilyKeys(kitDir) {
-  const keys = new Set()
-  let entries = []
-  try { entries = fs.readdirSync(kitDir).filter((f) => f.endsWith('.html')) } catch { return keys }
-  for (const f of entries) {
-    let html = ''
-    try { html = fs.readFileSync(path.join(kitDir, f), 'utf8') } catch { continue }
-    for (const k of kitPrimitiveKeys(html)) keys.add(k)
+// D13: "a primitive is named once per FAMILY, never per file" — every data-kit-primitive key
+// declared by every kit-canon .html file sitting directly in `kitDir` (a design/kit/ directory
+// already resolved by resolveCanonDir), keyed to the list of files (repeats included) that
+// declare it. A file failing to read, or one that is not itself a kit-canon file (first labeled
+// root is not data-kit-canon), contributes nothing.
+function kitPrimitivesInDir(kitDir) {
+  const byKey = new Map()
+  for (const f of htmlFilesIn(kitDir)) {
+    const p = path.join(kitDir, f)
+    let html
+    try { html = fs.readFileSync(p, 'utf8') } catch { continue }
+    if (!isKitCanonFile(html)) continue
+    for (const m of html.matchAll(/data-kit-primitive\s*=\s*"([^"]+)"/g)) {
+      if (!byKey.has(m[1])) byKey.set(m[1], [])
+      byKey.get(m[1]).push(p)
+    }
   }
-  return keys
+  return byKey
 }
 
-// D2: the kit canon's own rule set — one primitive is named once per family. Returned in the
-// "<path>: <text>" shape `check` already prints, matching checkCanon's contract.
+// checkKitCanon(canonPath, html) -> [violation string, ...] ("<path>: <text>" shape, as `check`
+// already prints). D2: a duplicate data-kit-primitive key WITHIN this one file is a violation —
+// the family-wide half of D13 (a key repeated across two SIBLING files) is derived by the caller
+// from kitPrimitivesInDir once per resolved design/kit/ directory (never per file), so this
+// function's own scope stays this file's own markup, exactly as checkCanon's scope is its own
+// canon file.
 function checkKitCanon(canonPath, html) {
   const out = []
-  const seen = new Set()
-  const reported = new Set()
-  for (const key of kitPrimitiveKeys(html)) {
-    if (seen.has(key) && !reported.has(key)) {
-      out.push(canonPath + ': duplicate data-kit-primitive="' + key + '" — a primitive is named once per family; rename one or merge them')
-      reported.add(key)
-    }
-    seen.add(key)
+  if (!isKitCanonFile(html)) return out
+  const counts = new Map()
+  for (const m of html.matchAll(/data-kit-primitive\s*=\s*"([^"]+)"/g)) {
+    counts.set(m[1], (counts.get(m[1]) || 0) + 1)
+  }
+  for (const [key, n] of counts) {
+    if (n > 1) out.push(canonPath + ': duplicate data-kit-primitive="' + key + '" — a primitive is named once per family')
   }
   return out
 }
 
-// D4: the kit family's diagnosis for a page mock -> { regions, kit, bespoke, findings }.
-//   finding codes: unabsorbed | unknown-kit | bespoke-unnamed
-// The inspected regions are the top-level CHILD ELEMENTS of the labeled root's content region —
-// the data-slot="content" subtree when the mock declares a shell, else the labeled root's own
-// top-level children — with any subtree under data-contract="none" skipped. That scoping is what
-// keeps chrome (already governed by the shell family) and state-switcher tooling out of the
-// count, and it is why a text-only mock legitimately has zero regions.
+// D4: the top-level children of the labeled root's CONTENT region — the data-slot="content"
+// subtree when the mock declares a shell (data-shell present and resolved to a slot), else the
+// labeled root's own top-level children directly.
+function kitContentRegionOf(mockHtml, rootEl) {
+  const inner = mockHtml.slice(rootEl.innerStart, rootEl.innerEnd)
+  const slot = findElement(inner, (t) => /data-slot\s*=\s*"content"/.test(t.raw))
+  return slot ? inner.slice(slot.innerStart, slot.innerEnd) : inner
+}
+
+// diagnoseKitRegions(mockHtml, kitDir) -> { findings: [{code, text}], kit: <n>, bespoke: <n> }
+//   codes: unabsorbed | unknown-kit | bespoke-unnamed
+// Each top-level child of the content region (D4), skipping any child itself carrying
+// data-contract="none" (the state-button switcher — tooling, never a content region), must carry
+// either data-kit="<key>" naming an existing family primitive, or data-bespoke="<key>: <diff>"
+// naming an existing primitive and a non-empty difference. `kit`/`bespoke` are D6's raw counts
+// (every data-kit / every data-bespoke region, regardless of whether it also finds a violation),
+// consumed by the caller's informational ⓘ line — never a gate signal itself.
 function diagnoseKitRegions(mockHtml, kitDir) {
-  const empty = { regions: 0, kit: 0, bespoke: 0, findings: [] }
-  const root = findElement(mockHtml, (t) => /data-screen-label\s*=\s*"[^"]*"/.test(t.raw))
-  if (!root) return empty
-  const labelMatch = root.openRaw.match(/data-screen-label\s*=\s*"([^"]*)"/)
-  const label = labelMatch ? labelMatch[1] : ''
-
-  const rootInner = mockHtml.slice(root.innerStart, root.innerEnd)
-  const contentSlot = findElement(rootInner, (t) => /data-slot\s*=\s*"content"/.test(t.raw))
-  const scope = contentSlot ? rootInner.slice(contentSlot.innerStart, contentSlot.innerEnd) : rootInner
-
-  const known = kitFamilyKeys(kitDir)
   const findings = []
   let kit = 0
   let bespoke = 0
+  const root = findElement(mockHtml, (t) => /data-screen-label\s*=\s*"[^"]*"/.test(t.raw))
+  if (!root) return { findings, kit, bespoke }
+  const validKeys = new Set(kitPrimitivesInDir(kitDir).keys())
+  const contentHtml = kitContentRegionOf(mockHtml, root)
+  const children = topLevelChildren(contentHtml).filter((c) => !/data-contract\s*=\s*"none"/.test(c.raw))
   let n = 0
-  for (const child of topLevelChildren(scope)) {
-    if (/data-contract\s*=\s*"none"/.test(child.raw)) continue
+  for (const c of children) {
     n++
-    const kitMatch = child.raw.match(/data-kit\s*=\s*"([^"]*)"/)
-    const bespokeMatch = child.raw.match(/data-bespoke\s*=\s*"([^"]*)"/)
+    const kitMatch = c.raw.match(/data-kit\s*=\s*"([^"]*)"/)
+    const bespokeMatch = c.raw.match(/data-bespoke\s*=\s*"([^"]*)"/)
     if (kitMatch) {
       kit++
-      const key = kitMatch[1]
-      if (!known.has(key)) {
+      if (!validKeys.has(kitMatch[1])) {
         findings.push({
           code: 'unknown-kit',
-          text: label + ': region ' + n + ' names data-kit="' + key + '" but design/kit/ declares no primitive "' + key +
-            '" — fix the key, or name the primitive in the kit page first',
+          text: 'names data-kit="' + kitMatch[1] + '" but design/kit/ declares no primitive "' + kitMatch[1] + '"',
         })
       }
-      continue
-    }
-    if (bespokeMatch) {
+    } else if (bespokeMatch) {
       bespoke++
-      const raw = bespokeMatch[1]
-      const sep = raw.indexOf(':')
-      const key = sep === -1 ? raw.trim() : raw.slice(0, sep).trim()
-      const difference = sep === -1 ? '' : raw.slice(sep + 1).trim()
-      if (!difference) {
+      // D4: <key> must name an EXISTING primitive, exactly as data-kit's key must. A value with
+      // no colon at all keeps the pre-D4-fix fallback (bespoke-unnamed) — there is no key to
+      // validate. An empty key (":  <diff>") is not an existing primitive either, so it routes
+      // here via the same "" not in validKeys test, ahead of the difference check.
+      const m = bespokeMatch[1].match(/^([^:]*):\s*(.*)$/)
+      if (m && !validKeys.has(m[1])) {
+        findings.push({
+          code: 'unknown-kit',
+          text: 'names data-bespoke="' + m[1] + ': ' + m[2] + '" but design/kit/ declares no primitive "' + m[1] + '"',
+        })
+      } else if (!m || !m[2].trim()) {
         findings.push({
           code: 'bespoke-unnamed',
-          text: label + ': region ' + n + ' data-bespoke="' + key + ': " names no difference — say what prevents reuse',
-        })
-      } else if (!known.has(key)) {
-        findings.push({
-          code: 'unknown-kit',
-          text: label + ': region ' + n + ' names data-bespoke="' + key + '" but design/kit/ declares no primitive "' + key +
-            '" — a bespoke mark names the primitive it is NOT, so the key must exist',
+          text: 'data-bespoke="' + bespokeMatch[1] + '" names no difference — say what prevents reuse',
         })
       }
-      continue
+    } else {
+      findings.push({
+        code: 'unabsorbed',
+        text: 'region ' + n + ' carries neither data-kit nor data-bespoke — instantiate a kit primitive ' +
+          'or mark it data-bespoke="<key>: <what differs>"',
+      })
     }
-    findings.push({
-      code: 'unabsorbed',
-      text: label + ': region ' + n + ' carries neither data-kit nor data-bespoke — instantiate a kit primitive ' +
-        'or mark it data-bespoke="<key>: <what differs>"',
-    })
   }
-  return { regions: n, kit, bespoke, findings }
+  return { findings, kit, bespoke }
 }
 
 module.exports = {
@@ -543,8 +542,8 @@ module.exports = {
   resolveCanonDir,
   resolveShellDir,
   isKitCanonFile,
-  kitPrimitiveKeys,
-  kitFamilyKeys,
+  htmlFilesIn,
+  kitPrimitivesInDir,
   checkKitCanon,
   diagnoseKitRegions,
   loadCoverageClaims,

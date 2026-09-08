@@ -18,7 +18,7 @@
 // mocks-driver.js --root <dir> stop decide <P…> --verdict pick|approve|change [--pick <g>] [--note <n>] --by <who>
 //
 // WHY: specs/20260902/07-mocks-command-driver.md — `/spec:mocks` is the standalone design
-// stage; this driver derives SEED -> SHAPES -> WIREFRAMES -> THEME -> SIGNOFF -> APPROVED on
+// stage; this driver derives SEED -> SHAPES -> KIT -> WIREFRAMES -> THEME -> SIGNOFF -> APPROVED on
 // every invocation from `design/mocks/status.json` plus the artifacts actually on disk (a
 // recorded mark whose artifact vanished is demanded again), prints exactly one step, gates every
 // advancing mark on the provenance ledger (spec 06, lib/mocks-ledger.js), and checkpoints every
@@ -29,6 +29,13 @@
 // dense screen (a second screen at most) and picks one; the terminal `approved` mark is the one
 // sign-off — it stamps every top-level mock `data-status="approved"` itself and records the
 // decider from the sign-off stop's own "by".
+//
+// specs/20260907/04-kit-canon-family.md D1: `KIT` sits between `SHAPES` and `WIREFRAMES`,
+// gated on `marks.kitSignedOff` exactly like every other step in the chain. `--mark kit-signed`
+// (D7) requires a decided `kit-signed` look stop, a non-empty `design/kit/`, and a passing
+// `design-atlas.js check design/kit`; `--reopen kit` (D10) clears the sign-off and the terminal
+// approval only, never a journey's own approval, and `--reopen shapes` widens to clear it too
+// (a re-picked shape invalidates whatever the kit was authored against).
 //
 // specs/20260905/04-per-project-look-server.md D3: `stop open <step> [--port <n>]` derives the
 // candidate set for the step's look from disk and delegates to design-atlas.js (sibling path,
@@ -113,8 +120,6 @@ const { runChild, writeOut } = require('./lib/driver-io')
 const { parseLedger, gateVerdict, countsLine, appendAssumption, appendCatch, setStatus } = require('./lib/mocks-ledger')
 const { readNotes, writeNotes, addNote, addressNote, replyNote, groupOpen, unresolvedFor } = require('./lib/mocks-notes')
 const picksLib = require('./lib/mocks-picks.js')
-// specs/20260907/04-kit-canon-family.md D9: the kit family's walk-up resolver, shared with
-// design-atlas.js's checker so the driver's gate and the check bind on exactly the same rule.
 const shellLib = require('./lib/shell-region')
 
 function die(msg) { writeOut(2, 'mocks-driver: ' + msg + '\n'); process.exit(2) }
@@ -649,17 +654,16 @@ function buildJourneyStopSpec(journeyName) {
   }
 }
 
-// specs/20260907/04-kit-canon-family.md D7: the kit is signed off on the page, never by typing
-// — the same approve-stop contract every other gated mark uses. One candidate per kit file, so a
-// family split across several pages is reviewed as a set.
+// specs/20260907/04-kit-canon-family.md D7: `stop open kit`'s candidate derivation — one
+// candidate per design/kit/*.html file, "<name>=kit/<name>.html".
 function buildKitStopSpec() {
   const kitDir = path.join(root, 'design/kit')
-  let files = []
-  try { files = fs.readdirSync(kitDir).filter((f) => f.endsWith('.html')) } catch { /* not authored yet */ }
-  if (!files.length) die('stop open kit: design/kit/ holds no .html file — author the kit page first (start from spec/templates/mocks-kit.html)')
+  const files = shellLib.htmlFilesIn(kitDir)
+  if (!files.length) die('stop open kit: design/kit/ holds no .html file — author the kit page first')
+  const kebabs = files.map((f) => path.basename(f, '.html')).sort()
   return {
     kind: 'approve', key: 'kit-signed', title: 'sign off the kit',
-    candidates: files.map((f) => ({ group: null, label: path.basename(f, '.html'), path: 'kit/' + f })),
+    candidates: kebabs.map((k) => ({ group: null, label: k, path: 'kit/' + k + '.html' })),
   }
 }
 
@@ -745,16 +749,15 @@ function allJourneysApproved() {
   for (const [jn] of journeys) { const st = status.journeys[jn]; if (!st || !st.approved) return false }
   return true
 }
-// D1: SEED -> SHAPES -> WIREFRAMES -> THEME (`!status.theme`) -> SIGNOFF (`!marks.approved`) ->
-// APPROVED — SKIN and REVIEW are retired; a root with `theme` set derives SIGNOFF straight
-// through, whatever legacy SKIN/REVIEW-era fields it still carries alongside.
+// D1: SEED -> SHAPES -> KIT (`!marks.kitSignedOff`) -> WIREFRAMES -> THEME (`!status.theme`) ->
+// SIGNOFF (`!marks.approved`) -> APPROVED — SKIN and REVIEW are retired; a root with `theme` set
+// derives SIGNOFF straight through, whatever legacy SKIN/REVIEW-era fields it still carries
+// alongside. specs/20260907/04-kit-canon-family.md D1: KIT sits between SHAPES and WIREFRAMES,
+// gated on one mark exactly like every other step in this chain — never on design/kit/ existing
+// on disk, so a half-authored kit never silently advances the state.
 function deriveState() {
   if (!status.marks.seedDone) return 'SEED'
   if (!shapeValid()) return 'SHAPES'
-  // specs/20260907/04-kit-canon-family.md D1: KIT sits between SHAPES and WIREFRAMES — the shared
-  // parts are named once, before any screen is drawn. Mark-gated like every other authoring
-  // state, never derived from design/kit/ existing on disk: a half-authored kit would otherwise
-  // advance the state silently.
   if (!status.marks.kitSignedOff) return 'KIT'
   if (!(status.marks.canonWritten && allJourneysApproved())) return 'WIREFRAMES'
   if (!status.theme) return 'THEME'
@@ -871,21 +874,18 @@ function handleShapePicked(shapeArg) {
   consumeStopAndSave(stop.id)
 }
 
-// specs/20260907/04-kit-canon-family.md D7: kit-signed is gated the way every authoring mark is
-// — a decided look stop, the artifact actually on disk, and the artifact passing `check` — so the
-// mark can never record a sign-off for a kit nobody looked at or that does not satisfy its own
-// rule set.
-function handleKitSigned() {
+// specs/20260907/04-kit-canon-family.md D7: `--mark kit-signed` requires a decided look stop
+// keyed kit-signed, requires design/kit/ to hold at least one .html file, and requires
+// design-atlas.js check design/kit to exit 0 — in that order, so the refusal always names the
+// most immediate missing precondition. spec/doctrine/mocks.md "The gate rides every advancing
+// mark" lists kit-signed among the gated marks, so this opens with requireGateOpen() exactly as
+// handleShapePicked does.
+function handleKitSignedOff() {
   requireGateOpen()
-  if (!status.marks.shapePicked) die('shape-picked has not been marked yet — mark shape-picked first')
   const stop = requireStopDecision('kit-signed', 'stop open kit')
   const kitDir = path.join(root, 'design/kit')
-  let files = []
-  try { files = fs.readdirSync(kitDir).filter((f) => f.endsWith('.html')) } catch { /* not authored yet */ }
-  if (!files.length) die('design/kit/ holds no .html file — author the kit page first (start from spec/templates/mocks-kit.html), then re-mark kit-signed')
-  // The child runs with this process's cwd, not `root`, so the path handed to it is absolute —
-  // every other runDesignAtlasCheck caller does the same. The message keeps the repo-relative
-  // form, which is what the author needs to read.
+  const files = shellLib.htmlFilesIn(kitDir)
+  if (!files.length) die('design/kit/ holds no .html file — author the kit page first')
   const r = runDesignAtlasCheck([kitDir])
   if (r.status !== 0) die('design-atlas.js check design/kit failed: ' + childOutput(r))
   status.marks.kitSignedOff = nowIso()
@@ -977,15 +977,17 @@ function handleJourneyApproved(journeyName) {
   if (statesRes.status !== 0) {
     die(childOutput(statesRes) + '\ndraw the missing states in the wireframe register, then re-mark')
   }
-  // specs/20260907/04-kit-canon-family.md D9: the kit binding fires once per journey, at the last
-  // gate before a client sees the frame, where amending the kit is still cheap — never at
-  // wireframe speed across every screen. journey-approved's mocks sit at data-status="sketch",
-  // where the check would only warn, so --matrix forces the violation tier.
-  const kitDir = shellLib.resolveCanonDir(mocksDir, 'kit')
-  if (kitDir) {
-    const kitRes = runDesignAtlasCheck(['--matrix', ...(j ? j.labels : []).map(mockFile)])
+  // specs/20260907/04-kit-canon-family.md D9: once a kit family resolves, every content region of
+  // this journey's own screens must already be kit-tagged or bespoke-marked — --matrix forces the
+  // D5 stamp gate's violation tier onto these mocks even though journey-approved's mocks sit at
+  // data-status="sketch" (A3). Bound only when a kit family actually resolves above these mocks
+  // (D5's absence-invariant — the same resolveCanonDir walk-up `check` itself uses, so a
+  // design/kit/ sitting above `root` binds here exactly as it binds `check`).
+  if (shellLib.resolveCanonDir(mocksDir, 'kit')) {
+    const journeyLabelFiles = (j ? j.labels : []).map(mockFile)
+    const kitRes = runDesignAtlasCheck(['--matrix', ...journeyLabelFiles])
     if (kitRes.status !== 0) {
-      die(childOutput(kitRes) + '\ninstantiate a kit primitive (data-kit) or mark the region data-bespoke="<key>: <what differs>", then re-mark')
+      die(childOutput(kitRes) + '\ninstantiate the missing kit primitive(s), or mark the region data-bespoke, then re-mark')
     }
   }
   requireRenderGateMocks((j ? j.labels : []).map((l) => mockFile(l)), journeyName)
@@ -1120,7 +1122,7 @@ function doMark(mark, opts) {
   switch (mark) {
     case 'seed-done': handleSeedDone(); break
     case 'shape-picked': handleShapePicked(opts.shape); break
-    case 'kit-signed': handleKitSigned(); break
+    case 'kit-signed': handleKitSignedOff(); break
     case 'canon-written': handleCanonWritten(); break
     case 'journey-drawn': handleJourneyDrawn(opts.journey); break
     case 'journey-approved': handleJourneyApproved(opts.journey); break
@@ -1155,8 +1157,9 @@ function doReopen(target) {
   } else if (target === 'shapes') {
     status.shape = null
     status.marks.shapePicked = null
-    // specs/20260907/04 D10: a new shape invalidates the kit too — the shared parts were named
-    // against the shape that just went away.
+    // specs/20260907/04-kit-canon-family.md D10: `--reopen shapes` additionally clears
+    // marks.kitSignedOff — KIT sits after SHAPES in the chain, so a re-picked shape invalidates
+    // whatever the kit was authored against.
     status.marks.kitSignedOff = null
     status.marks.canonWritten = null
     for (const k of Object.keys(status.directions || {})) delete status.directions[k]
@@ -1174,9 +1177,6 @@ function doReopen(target) {
     writeOut(1, '↩ reopened shapes — invalidated: ' + invalidated.join(', ') + '\n')
     process.exit(0)
   } else if (target === 'kit') {
-    // D10: mirrors --reopen theme exactly — never over-clear. A kit change does not un-approve a
-    // journey by fiat: each journey keeps its own approval, and D9's gate is what re-decides
-    // conformance at the next journey-approved.
     status.marks.kitSignedOff = null
     status.marks.approved = null
     status.decider = null
@@ -1440,6 +1440,19 @@ function printShapesStep() {
     look.then)
 }
 
+// specs/20260907/04-kit-canon-family.md D8: the KIT step's own printStepBlock invocation — the
+// fixed instantiate-not-invent line is the authoring seed, and (like SIGNOFF's D6) the Then:
+// command stays pinned to `--mark kit-signed` regardless of the look stop's own state; only the
+// look: progress line varies (none/waiting/change/approved).
+function printKitStep() {
+  const look = lookLineAndThen('kit-signed', 'kit', () => driverCmd('--mark kit-signed'))
+  printStepBlock('KIT', 'name the shared parts — one page, every state, before any screen',
+    ['design/mocks/seed.md', 'design/shapes/<shape>.html'],
+    'Mocks: State Machine',
+    'Every wireframe is instantiated from this page — name a primitive once here or it gets invented once per screen.' + '\n' + look.look,
+    [driverCmd('--mark kit-signed')])
+}
+
 function journeysProgressLine(journeys) {
   const total = journeys.size
   let drawn = 0; let approved = 0
@@ -1460,23 +1473,6 @@ function journeyQuestionCounts(jn, journeys) {
   const qs = notesOrEmpty().filter((n) => n.kind === 'question' && labels.includes(n.screen))
   const open = qs.filter((n) => n.answer == null).length
   return 'questions: ' + open + '/' + qs.length + ' open on ' + jn
-}
-
-// specs/20260907/04-kit-canon-family.md D8: KIT asks the session to draw, so it is an authoring
-// state — the frontend-design skill line prints and the look probe runs. The fixed line below is
-// the "instantiate, do not invent" seed, stated where the author actually reads it.
-function printKitStep() {
-  const look = lookLineAndThen('kit-signed', 'kit', () => driverCmd('--mark kit-signed'))
-  printStepBlock('KIT', 'name the shared parts — one page, every state, before any screen',
-    ['design/mocks/seed.md', 'design/shapes/<shape>.html'],
-    'Mocks: State Machine',
-    'Every wireframe is instantiated from this page — name a primitive once here or it gets invented once per screen.\n' +
-      'start from spec/templates/mocks-kit.html → design/kit/<name>.html\n' +
-      openRowsLine() + '\n' + look.look,
-    // Same shape as SIGNOFF: the look line carries the stop command, the Then line names the mark
-    // the stop's decision unlocks — so the author reads the whole gate in one block rather than
-    // discovering the second half after the first completes.
-    [driverCmd('--mark kit-signed')])
 }
 
 function printWireframesStep() {

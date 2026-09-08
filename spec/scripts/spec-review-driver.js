@@ -1807,6 +1807,27 @@ function deviationsEnumBlock() {
   return numbered + malformedPart + '\n'
 }
 
+// specs/20260907/01-mixed-pin-guard-and-drift-line.md D6: the CLOSE step's advisory AC-pin drift
+// line — doctor-only first (/spec:doctor check 17), an advisory line here second, never a
+// review-legs.js leg (critical tier: a drift line never touches the verdict, the ledger row, or
+// mark acceptance). Runs ac-drift.js --root <repoRoot> --json via the shared fail-closed runChild
+// wrapper; a non-zero-but-alive exit other than 0/1 (a genuine death is runChild's own fail-closed
+// exit(2)) prints a could-not-run line instead of guessing a count.
+const driftBin = path.join(PLUGIN, 'scripts/ac-drift.js')
+function acPinDriftLine() {
+  const r = runChild(process.execPath, [driftBin, '--root', repoRoot, '--json'], { encoding: 'utf8' },
+    'ac-drift.js')
+  if (r.status !== 0 && r.status !== 1) {
+    return `⚠️ AC-pin drift check could not run (exit ${r.status}) — see /spec:doctor check 17\n`
+  }
+  const parsed = JSON.parse(r.stdout)
+  const driftFindings = Array.isArray(parsed.findings) ? parsed.findings : []
+  if (driftFindings.length === 0) return ''
+  const specCount = new Set(driftFindings.map((f) => f.spec)).size
+  return `⚠️ AC-pin drift (advisory): ${driftFindings.length} criteria across ${specCount} done ` +
+    `spec(s) have no citing test — node "$(spec-paths ac-drift)" --root . names each\n`
+}
+
 const STEPS = {
   STOPPED: () => {
     const rows = readManifestRows(manifestPathFor(marks.stoppedIteration || currentN))
@@ -1939,6 +1960,7 @@ const STEPS = {
       `   EXPECTED   ${sidecarRel}/            (never committed — deleted at DONE)\n` +
       `   EXPECTED   .claude/spec-runs/*.json  (retained review evidence)\n` +
       `   EXPECTED   .claude/spec-runs.jsonl   (the run ledger)\n` +
+      acPinDriftLine() +
       closeCommitLine +
       `Then: node ${__filename} ${specPath} --mark closed`
   },

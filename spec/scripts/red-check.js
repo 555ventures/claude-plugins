@@ -34,10 +34,10 @@
 //
 // Exit codes: 0 = every resolved tests-layer file matches its expected pre-image colour ·
 //             1 = findings emitted (unsanctioned-green | broken-pin | missing-test-file |
-//                 invalid-pre-green | rejected-trailing-tag) — rides the normal build Phase 1
-//                 disposition flow, never a script failure · 2 = usage error, unreadable --spec,
-//                 no ## Acceptance Criteria section, host config declares no testCommand, or a
-//                 pre-image purity refusal (a non-tests File Plan path already differs from
+//                 invalid-pre-green | rejected-trailing-tag | mixed-pin) — rides the normal build
+//                 Phase 1 disposition flow, never a script failure · 2 = usage error, unreadable
+//                 --spec, no ## Acceptance Criteria section, host config declares no testCommand,
+//                 or a pre-image purity refusal (a non-tests File Plan path already differs from
 //                 --base — tracked or untracked)
 //
 // specs/20260821/03-cross-spec-skip-mapping.md D7: the carried-AC
@@ -58,6 +58,14 @@
 // finding `rejected-trailing-tag` REPLACES `unsanctioned-green` for that file — never both. A
 // carried AC whose refused tag never changes the file's expected colour (e.g. the AC is already
 // sanctioned another way) stays silent.
+//
+// specs/20260907/01-mixed-pin-guard-and-drift-line.md D1/D2: a carried AC whose `pinShape`
+// (lib/spec-sections.js, the one authority also imported by ac-matrix.js D3 and `/spec:plan` lock
+// D4) is `'mixed'` — a bullet mixing a new `SHALL` promise with a `SHALL CONTINUE TO` regression
+// pin — is never sanctioned: the file gets exactly one hard `mixed-pin` finding naming every mixed
+// AC-ID and the split remedy, no colour classification runs for that file in this pass (no
+// `unsanctioned-green`/`broken-pin`), and the `{testCommand} <file>` run still executes and is
+// logged — only the colour verdict is withheld, never the observation.
 
 const fs = require('fs')
 const path = require('path')
@@ -67,6 +75,7 @@ const { globMatch } = require('./lib/glob-match')
 const { readConfig } = require('./lib/host-config')
 const {
   extractSection, parseAcBullets, PRE_GREEN_REASONS, acIdOccurs, rejectedTrailingTagDetail,
+  normalizeForPinCheck, pinShape,
 } = require('./lib/spec-sections')
 
 function usage() {
@@ -217,10 +226,11 @@ for (const { p, isDelete } of testsRowEntries) {
 // quoted marker is never a declaration), then whitespace runs — including the newline a
 // hard-wrap introduces — collapse to a single space (a wrapped genuine pin still reads as one
 // phrase). The regex then runs on that normalized text, never on `b.raw` directly.
-
-function normalizeForPinCheck(raw) {
-  return raw.replace(/`[^`]*`/g, ' ').replace(/\s+/g, ' ').trim()
-}
+//
+// specs/20260907/01-mixed-pin-guard-and-drift-line.md D1: `normalizeForPinCheck` is imported from
+// lib/spec-sections.js (the single authority ac-drift.js and this file's own D1/D2 `pinShape` use
+// too) rather than defined locally — a third from-scratch copy of the identical strip-then-collapse
+// pass is the exact duplication this repo's calibration flags.
 
 const preGreenValidity = new Map() // AC-ID -> 'valid' | 'invalid' (only set when tagged)
 for (const b of wellFormed) {
@@ -272,6 +282,25 @@ for (const relPath of [...testFiles].sort()) {
   if (carriedAcs.length === 0) {
     files.push({ path: relPath, expected: 'unclassified', observed: 'absent', carriedAcs: [] })
     warnings.push(`${relPath}: carries zero AC-IDs — unclassified, never executed`)
+    continue
+  }
+
+  // specs/20260907/01-mixed-pin-guard-and-drift-line.md D2: a carried AC whose bullet mixes a new
+  // promise with a SHALL CONTINUE TO pin is refused outright — no file colour is guessed while the
+  // bullet is ambiguous. Exactly one hard finding for the whole file, naming every mixed AC-ID; the
+  // run still executes and is logged (D2's Contracts), but no other finding class fires for it.
+  const mixedAcs = carriedAcs.filter(id => pinShape(bulletById.get(id).raw) === 'mixed')
+  if (mixedAcs.length) {
+    findings.push({
+      severity: 'hard', class: 'mixed-pin', path: relPath, acs: mixedAcs,
+      detail: `${relPath}: ${mixedAcs.join(', ')} mixes a new promise with a SHALL CONTINUE TO pin ` +
+        `— split the SHALL CONTINUE TO clause into its own AC, then re-run`,
+    })
+    let observed = runLeg(config.testCommand, relPath) === 0 ? 'green' : 'red'
+    if (observed === 'green' && config.typecheckCommand) {
+      observed = runLeg(config.typecheckCommand, relPath) === 0 ? 'green' : 'red'
+    }
+    files.push({ path: relPath, expected: 'unclassified', observed, carriedAcs })
     continue
   }
 

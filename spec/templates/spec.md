@@ -123,7 +123,10 @@ depended_on_by: []
      this spec alone, and a concrete pair is the only wording they cannot misread. Critical-
      tier ACs always carry at least one literal example. Defect-fix/behavior-change specs carry a
      regression pin per behavior that must survive: WHEN {trigger} THE SYSTEM SHALL
-     CONTINUE TO {existing behavior} — literal marker, never paraphrased. Pin tests are
+     CONTINUE TO {existing behavior} — literal marker, never paraphrased. A pin bullet carries
+     only `SHALL CONTINUE TO` clauses — every `SHALL` in it is a `SHALL CONTINUE TO`; a bullet
+     that mixes a new promise with a pin is refused at lock (`ac-matrix --lint`) and at build
+     (red-check `mixed-pin`): split it. Pin tests are
      expected GREEN against pre-change code (the sanctioned exception to red-first);
      prefer tagging the existing covering test with the AC-ID over duplicating it. -->
 

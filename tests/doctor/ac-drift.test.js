@@ -8,6 +8,10 @@ const { read, tmpdir, runNode, runBash } = require('../helpers')
 // Pins: specs/20260906/01-ac-drift-doctor-check.md D1-D6/D8/D9,
 // AC-20260906-01-1 .. AC-20260906-01-9. spec/scripts/ac-drift.js does not exist yet — every
 // test below is a TDD red pin against a synthetic host tree in tmpdir(), executed via runNode.
+// The former AC-20260906-01-3 test below is retagged AC-20260907-01-10 by
+// specs/20260907/01-mixed-pin-guard-and-drift-line.md D1 (title + assert messages only, the
+// assertions themselves unchanged) — its own bullet is a SHALL CONTINUE TO pin, so the
+// sanctioned-pin behavior it proves continues unmodified.
 
 function writeSpec(root, relPath, status, acLines) {
   const abs = path.join(root, relPath)
@@ -86,7 +90,7 @@ test('AC-20260906-01-2: coverage is full-token (a prefix citation never counts) 
     `the fixture-only citation must still leave AC-20260901-01-1 reported uncovered — got stderr: ${JSON.stringify(fixtureRes.stderr)}`)
 })
 
-test('AC-20260906-01-3: SHALL CONTINUE TO (plain and hard-wrapped), bare [oracle:], bare [pre-green:], and a cited [retired:] each sanction an otherwise-uncovered AC — no finding, but each still counts toward criteria', () => {
+test('AC-20260907-01-10 (was AC-20260906-01-3, retagged by specs/20260907/01-mixed-pin-guard-and-drift-line.md D1): SHALL CONTINUE TO (plain and hard-wrapped), bare [oracle:], bare [pre-green:], and a cited [retired:] each sanction an otherwise-uncovered AC — no finding, but each still counts toward criteria', () => {
   const dir = tmpdir('ac-drift-3')
   writeSpec(dir, 'specs/20260901/01-x.md', 'done', [
     '- **AC-20260901-01-1**: WHEN a THE SYSTEM SHALL CONTINUE TO b',
@@ -98,14 +102,14 @@ test('AC-20260906-01-3: SHALL CONTINUE TO (plain and hard-wrapped), bare [oracle
   ])
   const res = run(dir)
   assert.strictEqual(res.status, 0,
-    `every AC here carries a sanction (plain SHALL CONTINUE TO, hard-wrapped SHALL CONTINUE TO, bare ` +
-    `[oracle:], bare [pre-green:], cited [retired:]) — none must raise a finding, so the run must exit 0 ` +
-    `(stdout: ${res.stdout} stderr: ${res.stderr})`)
+    `AC-20260907-01-10: every AC here carries a sanction (plain SHALL CONTINUE TO, hard-wrapped SHALL ` +
+    `CONTINUE TO, bare [oracle:], bare [pre-green:], cited [retired:]) — none must raise a finding, so ` +
+    `the run must exit 0 (stdout: ${res.stdout} stderr: ${res.stderr})`)
   assert.strictEqual(res.stderr, '',
-    `a fully-sanctioned spec must print zero finding lines on stderr — got ${JSON.stringify(res.stderr)}`)
+    `AC-20260907-01-10: a fully-sanctioned spec must print zero finding lines on stderr — got ${JSON.stringify(res.stderr)}`)
   assert.strictEqual(res.stdout.trim(), 'ac-drift: clean — 1 specs, 5 criteria',
-    `all 5 sanctioned bullets must still be counted in "criteria" — a sanction excuses the FINDING, never ` +
-    `the count, or the doctor's own backlog denominator silently shrinks — got ${JSON.stringify(res.stdout)}`)
+    `AC-20260907-01-10: all 5 sanctioned bullets must still be counted in "criteria" — a sanction excuses ` +
+    `the FINDING, never the count, or the doctor's own backlog denominator silently shrinks — got ${JSON.stringify(res.stdout)}`)
 })
 
 test('AC-20260906-01-4: an uncited [retired:] (empty or free text) is itself a finding, and a backticked trailing [retired:] parses as no tag at all — a plain uncovered-ac finding, never retired-uncited', () => {

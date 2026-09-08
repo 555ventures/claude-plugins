@@ -101,7 +101,9 @@ Write the spec per the template. `status: draft`. While drafting:
    (ask or explore; delete the marker, record the ruling in Decisions), then write
    `open_markers: N` into frontmatter (0 to lock; quoted narration doesn't count — the
    state gate reads this field as authoritative).
-2. **Confirm:** zero open forks; every shape-triggered micro-spike executed with evidence
+2. **Confirm:** run `node "$(spec-paths ac-matrix)" --spec {spec path} --lint` first — zero
+   findings to lock (a `mixed-pin` is fixed by splitting the bullet, never by rewording the
+   pin away). Then: zero open forks; every shape-triggered micro-spike executed with evidence
    in Assumptions; every Goal promise traced to a Decision that delivers it and an AC that
    goes red in its absence — run `node "$(spec-paths promise-sweep)" --spec {spec path}`
    (no `--manifest`) and resolve every `orphan-decision` finding by citing the delivering
@@ -124,7 +126,9 @@ Write the spec per the template. `status: draft`. While drafting:
    facts, before the status flip so an interrupted lock leaves either no row or a complete
    one, never a partial: `spikes` = the count of executed micro-spikes recorded in
    Assumptions; `promiseSweep` = step 2's `promise-sweep.js` printed counters
-   (`rows`/`carried`/`sanctioned`/`orphans`) copied verbatim; `collisions` = `{hits,
+   (`rows`/`carried`/`sanctioned`/`orphans`) copied verbatim; `acLint` = `{"mixed":N}` where N
+   is the `mixed=` counter step 2's FIRST `ac-matrix --lint` run printed (0 when clean first
+   time — a later, clean re-run never overwrites it); `collisions` = `{hits,
    waived}` from step 2's `collision-closure.js` run, omitted entirely when no Decision
    triggered that sweep. Numbers, enums, and paths only — never prose or a self-scored
    judgment of lock quality:
@@ -132,7 +136,7 @@ Write the spec per the template. `status: draft`. While drafting:
    ```
    {"ts":"<ISO-8601>","stage":"plan","spec":"<repo-relative spec path>","tier":"<tier>",
     "brief":"NN"|"n/a","spikes":N,"promiseSweep":{"rows":N,"carried":N,"sanctioned":N,
-    "orphans":0},"collisions":{"hits":N,"waived":N},"verdict":"locked"}
+    "orphans":0},"acLint":{"mixed":N},"collisions":{"hits":N,"waived":N},"verdict":"locked"}
    ```
 
 4. Flip `status: draft → hardened`.

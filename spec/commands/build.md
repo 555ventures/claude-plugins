@@ -59,7 +59,8 @@ Loop until the driver prints `DONE`:
 
 Re-entrancy is the driver's job: a fresh session, or this one resuming later, runs step 1 and
 lands exactly where the last run left off. A red-expected file that passed
-(`unsanctioned-green`) or a red run that never observed a purity-clean pre-image
+(`unsanctioned-green`), or a file whose carried AC mixes a promise with a pin (`mixed-pin` —
+split the AC, then re-run), or a red run that never observed a purity-clean pre-image
 (`redCheck: "skipped-resume"` on a no-sidecar resume) is diagnosed with the user before the
 next mark, never laundered past. A fourth `repair-applied` parks the run at the terminal
 `ESCALATE` state — the repair loop is capped at 3 rounds — and prints its two exits: edit the

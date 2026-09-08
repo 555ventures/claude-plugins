@@ -1,6 +1,6 @@
 ---
 date: 2026-09-07
-status: hardened
+status: implementing
 tier: standard
 area: pipeline-gates
 design: false
@@ -10,6 +10,8 @@ depended_on_by: [specs/20260907/02-ac-drift-backfill.md]
 brief: n/a
 spiked: 2026-09-07
 open_markers: 0
+build_base: spec/20260907-01-02-03
+diff_base: 59a2dedacfefca44483a3737d198715e19472c0c
 ---
 
 # Mixed-pin guard (`pinShape`) at lock, build and review, plus the advisory AC-drift line at review close
@@ -44,6 +46,7 @@ drift is seen at the moment it is created rather than at the next doctor run (JJ
 | D8 | `spec/entrypoints.json`: `spec/scripts/ac-matrix.js` gains `spec/commands/plan.md`; `spec/scripts/ac-drift.js` gains `spec/scripts/spec-review-driver.js` (AC-20260907-01-13) | The entrypoints conformance sweep derives invokers from the tree; an unlisted invoker is its red |
 | D9 | `spec/.claude-plugin/plugin.json` bumps to the next free minor (target 7.96.0 — next free at build time per Gotchas) with a changelog paragraph naming `pinShape`, `mixed-pin` at lock/build/review, and the advisory drift line [no-ac: version discipline; `tests/consistency/plugin-version.test.js` covers the changelog form] | Behaviour change → owning plugin bumps (pipeline rules § Planning) |
 | D10 | Planning-pass amendment, done by the planning session at this lock and NOT a File Plan row: `specs/20260906/05-gray-states-on-every-wireframe.md` AC-3 (mixed — Assumptions A1) is split into AC-3 (the promise) and a new AC-20260906-05-5 (the `SHALL CONTINUE TO` pin), File Plan test row updated [no-ac: another spec's file, edited before this spec builds; recorded here for the cold reader] | 05 builds before this guard ships; without the split its Phase 1 sanctions the states-check test green (the exact class) |
+| D11 | Build-pass ruling (JJ 2026-09-08, `AskUserQuestion`): `tests/red-check/red-check.test.js`'s AC-20260821-01-4 fixture bullet is edited in place to drop its `SHALL y,` promise clause, leaving `WHEN x THE SYSTEM SHALL\nCONTINUE TO require the existing pin check in the same step` — still hard-wrapped mid-marker, now a pure pin under D1. The test's assertions (exit 0, no findings) and its stated guarantee are unchanged; scope is widened by this one file [no-ac: a pre-existing fixture repaired to match the grammar D5 now states; AC-20260907-01-1/-3 already pin the guard] | The fixture's own comment names its subject as hard-wrap normalisation of the marker; the promise clause was incidental copy from the real AC-20260810-02-4 bullet. Rejected: flipping the expectation to `mixed-pin` — nothing would then prove a wrapped genuine pin is still sanctioned, which is the escape that fixture exists for. Rejected: pausing — the gate cannot go green, so the guard could not ship |
 
 ## File Plan
 

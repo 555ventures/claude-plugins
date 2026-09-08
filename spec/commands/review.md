@@ -183,7 +183,10 @@ output verbatim.
   `reviewed: YYYY-MM-DD` into the note's `metadata:` block, resetting its TTL.
   Adjudicate the driver's printed
   hygiene listing — everything it doesn't mark EXPECTED is a stray to explain or clean before
-  marking `closed`; never blind-`git add -A` past an unadjudicated path. Commit everything
+  marking `closed`; never blind-`git add -A` past an unadjudicated path. After the hygiene
+  listing, the driver prints one advisory line naming the repo's current AC-pin drift count
+  (or nothing, when there is none) — informational only, it never affects the verdict, the
+  ledger row, or mark acceptance. Commit everything
   still uncommitted on the working branch, following the driver's printed instruction for what
   the close commit includes — a worktree review's close commit excludes
   `.claude/spec-runs.jsonl` and `.claude/spec-runs/` (promoted to the main root once the merge

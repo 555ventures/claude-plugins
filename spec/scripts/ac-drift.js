@@ -27,7 +27,9 @@
 const fs = require('fs')
 const path = require('path')
 const { fmValue } = require('./lib/frontmatter')
-const { extractSection, parseAcBullets, acIdOccurs, extractTag, V7_APPLIES_FROM } = require('./lib/spec-sections')
+const {
+  extractSection, parseAcBullets, acIdOccurs, extractTag, V7_APPLIES_FROM, normalizeForPinCheck,
+} = require('./lib/spec-sections')
 const { readConfig, DEFAULT_TEST_GLOBS } = require('./lib/host-config')
 const { globMatch } = require('./lib/glob-match')
 
@@ -155,8 +157,14 @@ for (const specFile of specFiles) {
 
     if (acIdOccurs(getHaystack(), bullet.id)) continue // covered — never reported, sanctioned or not
 
-    const normalized = bullet.raw.replace(/`[^`]*`/g, ' ').replace(/\s+/g, ' ')
-    if (/SHALL CONTINUE TO/.test(normalized)) continue
+    // specs/20260907/01-mixed-pin-guard-and-drift-line.md D1: the inline backtick-strip/whitespace-
+    // collapse here is lib/spec-sections.js's exported normalizeForPinCheck — the single authority
+    // red-check.js's D2 mixed-pin guard and ac-matrix.js's D3 lint/warning also import, rather than
+    // a third from-scratch copy of the identical pass. Behaviour is unchanged: this predicate still
+    // only asks whether the bullet contains a `SHALL CONTINUE TO` phrase at all, never `pinShape`'s
+    // finer promise/pin/mixed read — a done spec's mixed bullet is history (Assumptions A1), not a
+    // hygiene finding this script reports.
+    if (/SHALL CONTINUE TO/.test(normalizeForPinCheck(bullet.raw))) continue
     if (bullet.oracle !== null) continue
     if (bullet.preGreen !== null) continue
 

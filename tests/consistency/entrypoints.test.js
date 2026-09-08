@@ -67,6 +67,14 @@ const { ROOT, tmpdir } = require('../helpers')
 // function returns full repo-relative paths across BOTH /scripts/ and /workflows/, not bare
 // basenames confined to /scripts/ — see the D10/hole2 note near its definition below.)
 //
+// AC-20260907-01-13 (specs/20260907/01-mixed-pin-guard-and-drift-line.md D8): spec/entrypoints.json
+// gains two invoker rows with no new script (both scripts already carry manifest entries, so the
+// exhaustive live-file key-count pin below is unaffected) — spec/scripts/ac-matrix.js's
+// entryPoints gains spec/commands/plan.md (D4: the lock-step `--lint` run) and
+// spec/scripts/ac-drift.js's entryPoints gains spec/scripts/spec-review-driver.js (D6: the CLOSE
+// step's advisory drift line via runChild). See the dedicated AC-20260907-01-13 test below,
+// which reads the live manifest directly and is red until both rows exist.
+//
 // D11 (orchestrator ruling, same sweep): `scanExecutables` was non-recursive and `.js`/`.sh`-
 // only, and `isExecutableDomainPath` mirrored the same shape — the two agreed perfectly, so a
 // script placed one directory deeper or saved without a recognized extension was invisible to
@@ -566,6 +574,25 @@ test('AC-20260905-06-10: spec/entrypoints.json carries a spec/scripts/render-cap
     'the manifest must carry a "spec/scripts/render-capture.js" key with an entryPoints array — its absence means render-capture.js ships as an orphan the conformance guard never sees: ' + JSON.stringify(row))
   assert.ok(row.entryPoints.includes('spec/scripts/render-gate.js'),
     'render-capture.js\'s entryPoints must include spec/scripts/render-gate.js — that is the only caller (D3\'s --which/--batch fallback), and its absence would mean the guard cannot see the real invocation edge: ' + JSON.stringify(row.entryPoints))
+})
+
+// specs/20260907/01-mixed-pin-guard-and-drift-line.md D8: the lock step (plan.md) now opens with
+// an ac-matrix.js --lint run, and the review driver's CLOSE step (spec-review-driver.js) now runs
+// ac-drift.js via runChild — two new invocation edges onto two already-manifested scripts.
+// Neither row exists in the live manifest yet, so this is TDD red until D8 lands.
+test('AC-20260907-01-13: spec/entrypoints.json lists spec/commands/plan.md as an entry point of spec/scripts/ac-matrix.js, and spec/scripts/spec-review-driver.js as an entry point of spec/scripts/ac-drift.js', () => {
+  const manifest = readManifest(ROOT)
+  const acMatrixRow = manifest['spec/scripts/ac-matrix.js']
+  assert.ok(acMatrixRow && Array.isArray(acMatrixRow.entryPoints) && acMatrixRow.entryPoints.includes('spec/commands/plan.md'),
+    'D8/D4: the spec/scripts/ac-matrix.js manifest row must declare spec/commands/plan.md as an ' +
+    'entry point — the lock step now opens with the --lint run, and an undeclared invocation is ' +
+    'exactly the "authored but never activated" class checkReverseInvocation exists to catch: ' +
+    JSON.stringify(acMatrixRow))
+  const acDriftRow = manifest['spec/scripts/ac-drift.js']
+  assert.ok(acDriftRow && Array.isArray(acDriftRow.entryPoints) && acDriftRow.entryPoints.includes('spec/scripts/spec-review-driver.js'),
+    'D8/D6: the spec/scripts/ac-drift.js manifest row must declare spec/scripts/spec-review-driver.js ' +
+    'as an entry point — the CLOSE step now runs ac-drift.js via runChild, and an undeclared ' +
+    'invocation is exactly the class checkReverseInvocation exists to catch: ' + JSON.stringify(acDriftRow))
 })
 
 // Exhaustive live-file pin: every hooks.json addition updates the expected set here in place

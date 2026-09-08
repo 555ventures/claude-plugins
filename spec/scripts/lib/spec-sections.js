@@ -148,6 +148,35 @@ const PRE_GREEN_REASONS = [
   'fallback-rejection', 'absence-invariant', 'predicate-in-test', 'design-landed',
 ]
 
+// specs/20260907/01-mixed-pin-guard-and-drift-line.md D1: `normalizeForPinCheck` is red-check.js's
+// former local function, lifted here byte-for-byte so red-check.js, ac-drift.js, and this module's
+// own `pinShape` share one strip-then-collapse pass instead of three near-identical copies (the
+// duplication this repo's own calibration flags at three occurrences). It strips inline code spans
+// to a single space first (a quoted marker inside a code span is never a declaration), then
+// collapses every whitespace run — including a hard-wrap's newline — down to one space and trims.
+function normalizeForPinCheck(raw) {
+  return raw.replace(/`[^`]*`/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+// D1: `pinShape(raw)` classifies one AC bullet's raw text as `'promise' | 'pin' | 'mixed'` — a
+// three-way read of how many `SHALL` clauses in the (normalized) bullet are `SHALL CONTINUE TO`
+// regression pins versus new-promise `SHALL`s. `promise` when the bullet declares no pin at all
+// (`pins === 0`); `pin` when EVERY `SHALL` in it is part of a `SHALL CONTINUE TO` clause
+// (`shalls === pins`, a `SHALL CONTINUE TO` match also counts one `SHALL`); `mixed` otherwise — at
+// least one pin clause alongside at least one new-promise `SHALL` (including `SHALL NOT`, which is
+// a promise, not a pin) in the same bullet. Deliberately a whole-bullet SHALL count, not a
+// per-clause parser (Rationale: "the SHALL count is the whole rule") — red-check.js (D2),
+// ac-matrix.js's `--lint` mode and full-mode warning (D3), and `/spec:plan` lock (D4) all import
+// this one predicate rather than each re-deriving the mixed-bullet classification.
+function pinShape(raw) {
+  const normalized = normalizeForPinCheck(raw)
+  const pins = (normalized.match(/\bSHALL CONTINUE TO\b/g) || []).length
+  const shalls = (normalized.match(/\bSHALL\b/g) || []).length
+  if (pins === 0) return 'promise'
+  if (shalls === pins) return 'pin'
+  return 'mixed'
+}
+
 // One `[tagname: value]` item, optionally backtick-wrapped. `[a-z][a-z-]*` covers the three
 // known tag names (oracle, env, pre-green) generically — this exists only to consume a run of
 // tag-shaped items, never to extract a value, so it need not be tied to one tagName.
@@ -342,5 +371,5 @@ function parseAcBullets(sectionText) {
 
 module.exports = {
   AC_ID_RE, AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, V7_APPLIES_FROM, extractSection, parseAcBullets,
-  acIdOccurs, rejectedTrailingTagDetail, extractTag,
+  acIdOccurs, rejectedTrailingTagDetail, extractTag, normalizeForPinCheck, pinShape,
 }

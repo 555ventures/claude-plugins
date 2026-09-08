@@ -1230,14 +1230,10 @@ test('AC-20260902-11-8: spec/commands/status.md names the 🧭 misunderstandings
     'some command or doctrine file points at a heading this spec\'s edits broke: ' + check.stdout)
 })
 
-// specs/20260907/05-genesis-drops-the-theme-gates.md D6: the theme pick moves into
-// /spec:sketch, which runs after genesis — so BRIEF's `design/tokens.css` precondition and its
-// composed-but-unpicked `## Dissents` check are removed from the driver, and the two homes
-// that document them (§ Genesis: Brief State, § Genesis: Discovery Interview's `next:` prose
-// twin naming the retired SKIN/REVIEW states) must drop the same claims in place. None of this
-// test's assertions can pass yet — spec/doctrine/genesis.md still names `design/tokens.css` and
-// `composed-but-unpicked` inside § Genesis: Brief State, and still carries `skin` in the
-// Discovery Interview prose twin of the driver's not-yet-approved `next:` line.
+// specs/20260907/05-genesis-drops-the-theme-gates.md D6: § Genesis: Brief State and the
+// § Genesis: Discovery Interview `next:` prose twin drop the same `design/tokens.css` /
+// composed-but-unpicked-direction / retired-SKIN-REVIEW claims removed from the driver.
+// AC-20260907-05-8, AC-20260907-05-9.
 
 // ---------------------------------------------------------------------------
 // AC-20260907-05-8
@@ -1269,8 +1265,8 @@ test('AC-20260907-05-8: spec/doctrine/genesis.md\'s § Genesis: Brief State sect
   assert.ok(!src.includes('skin'),
     'D6: spec/doctrine/genesis.md must carry the literal "skin" nowhere in the file — the one ' +
     'surviving prose twin of the driver\'s retired mocks-chain enumeration ("seed → shapes → ' +
-    'wireframes → theme → skin → review → approved") names SKIN and REVIEW, both retired the day ' +
-    'before this spec (D5), and a surviving mention here re-documents a chain the driver itself ' +
+    'wireframes → theme → skin → review → approved") names SKIN and REVIEW, both retired ' +
+    'states (D5), and a surviving mention here re-documents a chain the driver itself ' +
     'no longer prints')
 })
 

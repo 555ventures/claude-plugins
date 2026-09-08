@@ -450,12 +450,9 @@ test('AC-20260902-08-5: WHEN the BRIEF precondition holds for web-app, doctrine-
   assert.strictEqual(statusOf(dataMl).design, 'skipped', 'D4: data-ml\'s brief-written must record design: "skipped" — it is one of the two archetypes that never ratifies a design canon')
 })
 
-// specs/20260907/05-genesis-drops-the-theme-gates.md: BRIEF's tokens.css precondition (D1) and
-// composed-direction ## Dissents check (D2) are deleted outright — the theme pick moves to
-// /spec:sketch, which runs after genesis, so neither artifact exists when BRIEF runs. None of
-// this block's ACs can pass yet — spec/scripts/genesis-driver.js still refuses on a missing
-// design/tokens.css and still refuses a ## Dissents body that doesn't name every composed-but-
-// unpicked direction.
+// specs/20260907/05-genesis-drops-the-theme-gates.md: AC-20260907-05-1 through -05-6, pinning
+// D1-D5 — BRIEF's tokens.css precondition and composed-direction ## Dissents check are deleted
+// outright, its refusal literals reworded, and its step text stops naming theme artifacts.
 
 test('AC-20260907-05-1: WHEN --mark brief-written runs on a visual (web-app) run whose BRIEF preconditions all hold except that design/tokens.css does not exist THE SYSTEM accepts', () => {
   const dir = tmpdir('brief-ac05-1-notokens')
@@ -482,11 +479,12 @@ test('AC-20260907-05-2: WHEN --mark brief-written runs on a visual run whose des
   writeLedger(dir)
   writeDoctrine(dir, { dissentsBody: 'Nothing else was considered.' })
   writeDesignRules(dir, [])
-  writeTokens(dir)
   ensureJourneysAndNonUiSections(dir)
+  // deliberately no writeTokens(dir) — this is the same run AC-20260907-05-1 names: BRIEF
+  // preconditions all hold except design/tokens.css does not exist
 
   const accepted = mark(dir, 'brief-written')
-  assert.strictEqual(accepted.status, 0, 'D2: BRIEF must accept a ## Dissents body of "Nothing else was considered." even though status.json.directions composed "warm" and never picked it — the composed-but-unpicked check is deleted outright, its purpose moved to the theme pick\'s own look stop in /spec:sketch: ' + accepted.stderr)
+  assert.strictEqual(accepted.status, 0, 'D2: BRIEF must accept a ## Dissents body of "Nothing else was considered." even though status.json.directions composed "warm" and never picked it, and even with design/tokens.css absent too — the composed-but-unpicked check is deleted outright, its purpose moved to the theme pick\'s own look stop in /spec:sketch: ' + accepted.stderr)
 })
 
 test('AC-20260907-05-3: WHEN docs/design/doctrine.md is absent, and separately WHEN its ## Dissents heading is followed by no non-blank line, THE SYSTEM refuses with exit 2 and a message naming "minority positions" but naming neither "rejected direction" nor "composed direction"', () => {
@@ -546,9 +544,7 @@ test('AC-20260907-05-4: WHEN the bare driver prints the BRIEF step for a visual 
   const legacyReadOnlyLine = legacyStep.stdout.split('\n').find((l) => l.startsWith('Read only:'))
   assert.ok(legacyReadOnlyLine, 'test setup requires a "Read only:" line in the legacy-resume BRIEF step: ' + legacyStep.stdout)
   assert.ok(!legacyReadOnlyLine.includes('design/tokens.css'), 'D4: the legacy-resume "Read only:" line must not contain "design/tokens.css" either: ' + legacyReadOnlyLine)
-  // D8/AC-20260907-05-4: the legacy branch already prints exactly this literal today — this
-  // half is a green-pre-change regression pin (D8's convergence target), asserted anyway so a
-  // future edit to either branch cannot silently diverge them again.
+  // D8/AC-20260907-05-4: pins the legacy branch's write-line literal.
   assert.match(legacyStep.stdout, /Write docs\/design\/doctrine\.md \(one page, ## Dissents\) and \.claude\/genesis\/design-rules\.json,/, 'D8 (SHALL CONTINUE TO): the legacy-resume branch must keep printing the converged write-line unchanged')
   assert.doesNotMatch(legacyStep.stdout, /## Dissents naming:/, 'D8 (SHALL CONTINUE TO): the legacy-resume branch must keep printing no "## Dissents naming:" line — it never named theme artifacts to begin with')
 })
@@ -560,7 +556,7 @@ test('AC-20260907-05-5: WHEN the bare driver prints the BRIEF step for a visual 
 
   const step = bare(dir)
   assert.match(step.stdout, /state: BRIEF/, 'test setup requires the driver to be sitting at BRIEF for a visual run with a not-yet-approved mocks set: ' + step.stdout)
-  assert.match(step.stdout, /next: run \/spec:mocks in this repo until it reports APPROVED, then --mark brief-written/, 'D5: the not-yet-approved BRIEF step must print the literal "next: run /spec:mocks in this repo until it reports APPROVED, then --mark brief-written" — the retired chain enumeration (seed → shapes → wireframes → theme → skin → review → approved) already names SKIN and REVIEW, retired the day before this spec: ' + step.stdout)
+  assert.match(step.stdout, /next: run \/spec:mocks in this repo until it reports APPROVED, then --mark brief-written/, 'D5: the not-yet-approved BRIEF step must print the literal "next: run /spec:mocks in this repo until it reports APPROVED, then --mark brief-written" — the retired chain enumeration (seed → shapes → wireframes → theme → skin → review → approved) already names SKIN and REVIEW: ' + step.stdout)
   assert.doesNotMatch(step.stdout, /skin/, 'D5: the printed BRIEF step block must not contain "skin" — SKIN is a retired mocks state and re-editing the enumeration on every chain change is exactly what deleting it (instead of correcting it) is meant to stop')
   assert.doesNotMatch(step.stdout, /review/, 'D5: the printed BRIEF step block must not contain "review" — REVIEW is a retired mocks state for the same reason')
 })

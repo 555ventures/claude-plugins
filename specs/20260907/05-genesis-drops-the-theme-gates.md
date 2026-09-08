@@ -1,7 +1,7 @@
 ---
 date: 2026-09-07
 build_base: main
-status: implementing
+status: done
 tier: standard
 area: genesis
 design: false
@@ -251,6 +251,18 @@ be to invert its two dying arms into "accepts now" assertions inside it. Do not 
 superseded, the new acceptance behaviour is pinned by AC-20260907-05-1 and AC-20260907-05-2 as
 their own tests, and an inverted arm inside a test named for the old contract is how a spec's
 intent gets lost two specs later.
+
+**Review ruling — rejected finding, 2026-09-08.** The second review pass raised the driver's
+file-preamble history paragraph (`spec/scripts/genesis-driver.js` ~111-112) as still asserting
+that BRIEF runs a `tokens.css` check. Rejected on demonstrated miscitation, twice over: the
+paragraph's subject is the retired `--mark tokens-landed`, not BRIEF — the `// NOTE:` line
+immediately below it says so and marks the whole paragraph as history kept only for the
+shell-canon fact it recorded — and A1 is an assumption about the driver's *gates*, not a
+promise to edit all three narrative comments, so D6's verbatim preamble scope (the
+`and design/tokens.css (written by THEME)` clause) is closed and was fully applied. Executed:
+`grep -n "tokens.css" spec/scripts/genesis-driver.js` returns only those two history lines —
+every live occurrence is gone. The first review pass killed the same claim on the same grounds.
+User ruled to leave the paragraph unedited rather than widen this spec past its own contract.
 
 ## Canonical Delta
 

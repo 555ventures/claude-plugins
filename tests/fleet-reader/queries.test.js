@@ -232,3 +232,46 @@ test('AC-20260901-03-7: the human render prints the exact line "escapes-per-CLEA
   assert.match(bare.stdout, /escapes-per-CLEAN by via: loop 1\/2 · direct 0\/3 · unknown 1\/1/,
     'AC-20260901-03-7/D9: the human render must print this exact line, middle-dot separators included — this is the literal Contracts render the brief 18 kill condition is read off of: ' + bare.stdout)
 })
+
+// core § Incident Policy (materiality): build rows' `incidents` entries (spec-build-driver
+// `--mark incident`) join byClass with escape rows — two escapes plus one build incident of
+// the same class reaches the guard-earning count. `total` stays escape rows only; `incidents`
+// is the build-incident count. Without the join a build-time-only class scores 0 forever
+// (host spec 20260905/07 D16).
+test('Incident Policy: build-row incidents join escapes.byClass and reach recurrentUnguarded; total stays escape-only', () => {
+  const root = tmpdir('fleet-incidents')
+  const base = { stage: 'escape', file: 'x.js', reviewRunId: null, foundBy: 'user', severity: 'soft', killedMatch: null, preventedBy: 'none', via: 'manual' }
+  mkRepo(root, 'repo-a', {
+    rows: [
+      { ...base, ts: '2026-08-01T00:00:00Z', spec: 'specs/1.md', class: 'test-isolation' },
+      { ts: '2026-08-02T00:00:00Z', stage: 'build', spec: 'specs/2.md', runId: 'bd_000000000001', incidents: [
+        { ts: '2026-08-02T01:00:00Z', class: 'test-isolation', exit: 124 },
+        { ts: '2026-08-02T02:00:00Z', class: 'cpu-pin', exit: null },
+        { ts: '2026-08-02T03:00:00Z', class: null, exit: null },
+      ] },
+      { ts: '2026-08-03T00:00:00Z', stage: 'build', spec: 'specs/3.md', runId: 'bd_000000000002', incidents: [] },
+      { ts: '2026-08-04T00:00:00Z', stage: 'build', spec: 'specs/4.md', runId: 'bd_000000000003' },
+    ],
+  })
+  mkRepo(root, 'repo-b', {
+    rows: [
+      { ...base, ts: '2026-08-05T00:00:00Z', spec: 'specs/9.md', class: 'test-isolation' },
+    ],
+  })
+  const out = runJson(root)
+  assert.strictEqual(out.escapes.total, 2, 'total counts escape rows only — build incidents never inflate it')
+  assert.strictEqual(out.escapes.incidents, 2, 'incidents counts every classed build-row entry fleet-wide; a null-class entry is not a count')
+  assert.strictEqual(out.escapes.byClass['test-isolation'], 3, 'two escapes + one build incident of the same class = 3 on the joined count')
+  assert.strictEqual(out.escapes.byClass['cpu-pin'], 1, 'a build-only class appears in byClass at all — the whole point')
+  assert.strictEqual(out.escapes.byClass.unclassed, undefined, 'a null-class incident entry is skipped, never folded into unclassed (that bucket is escape rows\' work list)')
+  const entry = out.escapes.recurrentUnguarded.find((e) => e.class === 'test-isolation')
+  assert.ok(entry, 'the joined third recurrence must surface in recurrentUnguarded')
+  assert.strictEqual(entry.count, 3)
+  assert.strictEqual(entry.latestTs, '2026-08-05T00:00:00Z', 'latestTs spans escape rows and incident entries')
+  assert.ok(out.escapes.registry.some((r) => r.class === 'cpu-pin'), 'the registry (escape.md\'s class vocabulary) lists build-only classes too')
+
+  const bare = runNode(SCRIPT, ['--repos-root', root])
+  assert.strictEqual(bare.status, 0, bare.stderr)
+  assert.match(bare.stdout, /buildIncidents: 2/, 'the human render names the build-incident count')
+  assert.match(bare.stdout, /byClass \(escapes \+ build incidents\)/, 'the human render says byClass is the joined count')
+})

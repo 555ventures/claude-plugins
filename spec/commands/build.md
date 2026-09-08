@@ -64,7 +64,12 @@ lands exactly where the last run left off. A red-expected file that passed
 next mark, never laundered past. A fourth `repair-applied` parks the run at the terminal
 `ESCALATE` state — the repair loop is capped at 3 rounds — and prints its two exits: edit the
 tree and delete `<spec>.build/gate-cap` to re-arm one more round, or delete the whole sidecar
-to restart cold.
+to restart cold. An incident this session observes mid-build (a test watchdog trip, a worker
+that pinned a CPU, an assumption that cost the session) is recorded with
+`node {driver} <spec> --mark incident --class <id> [--exit <n>]` at any live step — `class`
+from `fleet-reader --json`'s `.escapes.registry` (invent a kebab-case id only when none fits);
+the entry lands on the build row so the class counts toward core § Incident Policy's
+materiality. The mark never moves the state.
 
 ## Worker Contract — every dispatch this session makes
 

@@ -227,3 +227,54 @@ test('a wave File Plan glob row verifies on at least one match for CREATE/MODIFY
   assert.match(rStillThere.stderr, /src\/gone-\*\.js/,
     'the refusal must name the unsatisfied pattern, or the session cannot tell which File Plan row still fails: ' + rStillThere.stderr)
 })
+
+// core § Incident Policy (materiality joins build-row incidents; host spec 20260905/07 D16):
+// a build-time incident is counted on the stage:"build" row the run writes anyway, via
+// `--mark incident --class <id> [--exit <n>]`, so a class that only ever costs build time can
+// reach the recurrence count that earns a guard. The mark never moves the state.
+test('Incident Policy: --mark incident records a classed entry on the build row without moving the state; a malformed class is refused', () => {
+  const host = makeHost()
+  run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'TESTS', 'setup: a fresh host lands TESTS')
+
+  const bad = run(host.root, host.spec, '--mark', 'incident', '--class', 'Not Kebab')
+  assert.strictEqual(bad.status, 2, 'a class outside the kebab-case id vocabulary must refuse: ' + bad.stdout + bad.stderr)
+  assert.match(bad.stderr, /--class/, 'the refusal must name the --class remedy: ' + bad.stderr)
+  const noExit = run(host.root, host.spec, '--mark', 'incident', '--class', 'test-isolation', '--exit', 'x')
+  assert.strictEqual(noExit.status, 2, 'a non-integer --exit must refuse: ' + noExit.stdout + noExit.stderr)
+
+  const ok = run(host.root, host.spec, '--mark', 'incident', '--class', 'test-isolation', '--exit', '124')
+  assert.strictEqual(ok.status, 0, 'a well-formed incident mark at TESTS must be accepted: ' + ok.stdout + ok.stderr)
+  assert.match(ok.stderr, /incident recorded \(test-isolation, exit 124\)/, 'the mark must confirm what it recorded: ' + ok.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'TESTS', 'the incident mark must leave the state where it was (TESTS)')
+  assert.match(ok.stdout, /## Step: author the tests/, 'after the mark the driver re-prints the step the session was executing: ' + ok.stdout)
+
+  toCommit(host)
+  const second = run(host.root, host.spec, '--mark', 'incident', '--class', 'test-isolation')
+  assert.strictEqual(second.status, 0, 'an incident mark is admitted at any live step, COMMIT included: ' + second.stdout + second.stderr)
+  assert.strictEqual(stateOf(host.root, host.spec), 'COMMIT', 'still COMMIT after the second incident mark')
+
+  execFileSync('git', ['-C', host.root, 'add', '-A'], { encoding: 'utf8' })
+  execFileSync('git', ['-C', host.root, 'commit', '-q', '-m', 'checkpoint'], { encoding: 'utf8' })
+  const r = run(host.root, host.spec, '--mark', 'committed')
+  assert.strictEqual(r.status, 0, 'committed must be accepted: ' + r.stdout + r.stderr)
+  const ledger = path.join(host.root, '.claude/spec-runs.jsonl')
+  const rows = fs.readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l))
+  const row = rows[rows.length - 1]
+  assert.strictEqual(row.stage, 'build')
+  assert.strictEqual(row.incidents.length, 2, 'both incident marks must land on the build row: ' + JSON.stringify(row.incidents))
+  assert.deepStrictEqual(row.incidents.map((i) => [i.class, i.exit]), [['test-isolation', 124], ['test-isolation', null]],
+    'each entry carries its class and its exit (null when not given): ' + JSON.stringify(row.incidents))
+  assert.ok(row.incidents.every((i) => /^\d{4}-\d{2}-\d{2}T/.test(i.ts)), 'each entry carries an ISO ts: ' + JSON.stringify(row.incidents))
+})
+
+test('Incident Policy: a build with no incident marks writes incidents:[] so the field is always countable', () => {
+  const host = makeHost()
+  toCommit(host)
+  execFileSync('git', ['-C', host.root, 'add', '-A'], { encoding: 'utf8' })
+  execFileSync('git', ['-C', host.root, 'commit', '-q', '-m', 'checkpoint'], { encoding: 'utf8' })
+  const r = run(host.root, host.spec, '--mark', 'committed')
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr)
+  const rows = fs.readFileSync(path.join(host.root, '.claude/spec-runs.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+  assert.deepStrictEqual(rows[rows.length - 1].incidents, [], 'no marks -> an empty array, never a missing key')
+})

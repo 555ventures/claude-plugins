@@ -53,8 +53,19 @@ function checkWorkflowSyntax(rel) {
     '"use strict"; return (async () => {' + body + '\n})()')
 }
 
+// Every temp directory this test process (and every child it spawns) creates lands under one
+// per-process root that is removed at exit. Without this, eight full-suite runs leaked enough
+// fixture trees to fill a 7.8G tmpfs and stall every tool on the machine. TMPDIR is set here so
+// scripts under test that call os.tmpdir() themselves (review-legs.js, release-legs.js,
+// render-capture.js) land under the same root and are swept with it.
+const RUN_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-tests-'))
+process.env.TMPDIR = RUN_ROOT
+process.on('exit', () => {
+  try { fs.rmSync(RUN_ROOT, { recursive: true, force: true }) } catch { /* best-effort: never fail a run on cleanup */ }
+})
+
 function tmpdir(prefix) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix + '-'))
+  return fs.mkdtempSync(path.join(RUN_ROOT, prefix + '-'))
 }
 
 function runNode(script, argv, opts = {}) {

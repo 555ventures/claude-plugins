@@ -24,7 +24,7 @@ one the way the suite does (`tests/helpers.js`):
 - `tmpdir(prefix)` — throwaway dir; write `specs/`, `docs/roadmap/`, `.claude/spec.config.json`
   into it with plain `fs.writeFileSync` (see the `host()` factory in `tests/spec-status.test.js`).
 - `gitRepo(dir)` — throwaway git repo on `main`, for merge-back/state-gate behavior.
-- Realistic multi-file inputs live in `tests/fixtures/` (`minimal-host/`, `parity/`).
+- Realistic multi-file inputs live in `tests/fixtures/` (`minimal-host/`).
 
 ## Observe
 

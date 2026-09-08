@@ -3,7 +3,7 @@ name: git-show-name-only-tree-sort-order
 description: git show --name-only orders files by git's tree sort (byte-compare, directory as prefix), not insertion/write order or plain string alphabetical — verify empirically before hardcoding a files array.
 metadata:
   type: feedback
-  reviewed: 2026-09-04
+  reviewed: 2026-09-08
 ---
 
 `git show --format= --name-only <sha>` lists touched files in git's tree-sort order, not the

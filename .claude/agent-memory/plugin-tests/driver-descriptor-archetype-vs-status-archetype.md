@@ -3,7 +3,7 @@ name: driver-descriptor-archetype-vs-status-archetype
 description: genesis-driver.js test fixtures set TWO different "archetype" values — status.json's (from the brief's `## Picks` line, drives isVisualArchetype/isTournamentArchetype branching) and stack-descriptor.json's (a REQUIRED_DESCRIPTOR_KEYS field, cosmetic to deriveState()) — never assume writing one changes the other
 metadata:
   type: feedback
-  reviewed: 2026-09-07
+  reviewed: 2026-09-08
 ---
 
 `genesis-driver.js`'s `deriveState()` branches on `status.archetype` (set once, in
@@ -27,10 +27,19 @@ records `design: skipped` (non-visual) vs demands an APPROVED `design/mocks/stat
 (visual) must control `status.archetype` via the brief's `## Picks` line at `discovery-done`,
 not via `writeValidDecideArtifacts`'s descriptor field — changing only the descriptor's
 `archetype` string changes nothing about which state the driver reaches next. A visual fixture
-needs a real `design/mocks/status.json` at `APPROVED` plus `design/tokens.css` and a
-`docs/design/doctrine.md` whose `## Dissents` names every unpicked direction
-(tests/genesis/brief-state.test.js has the canonical fixture); the retired in-driver explore
-funnel (specs/20260827/02, retired by specs/20260902/08) no longer exists as a path to any of it.
+needs a real `design/mocks/status.json` at `APPROVED` plus a `docs/design/doctrine.md` whose
+`## Dissents` heading is followed by at least one non-blank line, and a valid
+`.claude/genesis/design-rules.json` (tests/genesis/brief-state.test.js has the canonical
+fixture); the retired in-driver explore funnel (specs/20260827/02, retired by
+specs/20260902/08) no longer exists as a path to any of it.
+
+**Corrected 2026-09-08 (review close, specs/20260907/05-genesis-drops-the-theme-gates.md):**
+this note previously said a visual BRIEF fixture also needs `design/tokens.css` present and a
+`## Dissents` body naming every unpicked direction. Both preconditions are deleted — the theme
+pick moved into `/spec:sketch`, which runs AFTER genesis, so `design/tokens.css` does not exist
+while genesis runs and BRIEF never checks it. `## Dissents` keeps only its two surviving
+requirements: the heading exists and is followed by a non-blank line. A fixture that still
+writes `tokens.css` is not wrong, only unread — but it no longer pins what the AC describes.
 
 **How to apply:** when a new driver-state test needs a specific `status.archetype` behavior,
 trace it to the brief's `## Picks` `- archetype:` line (via `discovery-done`), never to a

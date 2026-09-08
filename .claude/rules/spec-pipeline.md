@@ -54,8 +54,12 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
   doctrine, and a plugin.json `description` update (the changelog surface, last-3-versions
   form). A new plugin needs `<plugin>/.claude-plugin/plugin.json` and a
   `.claude-plugin/marketplace.json` entry.
-- Version bump discipline: every behavior change bumps the owning plugin's
-  `.claude-plugin/plugin.json` semver.
+- Version bump discipline: every change under a plugin directory bumps that plugin's
+  `.claude-plugin/plugin.json` semver via
+  `node scripts/plugin-bump.js --bump --plugin <name> --changelog "<paragraph>"` (derives the
+  next minor, rotates the changelog to three entries). A spec's plugin.json File Plan row cites
+  that command; Decisions name no version literal and no sibling claims —
+  `node scripts/plugin-bump.js --check` in the gate is the oracle.
 
 ## Build
 
@@ -105,7 +109,10 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
 
 ## Review Checks
 
-- A doctrine/behavior change without a plugin.json version bump is **hard**.
+- A doctrine/behavior change without a plugin.json version bump is **hard** — pinned
+  mechanically by `scripts/plugin-bump.js --check` (gate, via `tests/consistency/plugin-bump.test.js`)
+  against the merge base; the reviewer keeps only the residue a branch-level check cannot see
+  (a second behavior change on a branch that already bumped once).
 - A script or test importing a non-builtin package is **hard**. Any non-builtin import
   anywhere stays a hard finding, no exceptions.
 - An error path that doesn't name its remedy command, or a new exit code not documented in

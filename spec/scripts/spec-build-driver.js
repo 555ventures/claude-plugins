@@ -66,6 +66,7 @@ const { globMatch } = require('./lib/glob-match')
 // D5 (specs/20260901/02-run-provenance.md): model is derived at row-write time (never once at
 // startup) — the review driver's own sibling reasoning applies here too.
 const { sessionModel } = require('./lib/session-stamp.js')
+const { CLASS_ID_RE } = require('./lib/escape-row')
 
 function die(msg) { process.stderr.write('spec-build-driver: ' + msg + '\n'); process.exit(2) }
 
@@ -374,6 +375,8 @@ function ensureRedCheckAdvanced() {
   fs.writeFileSync(logPath, (r.stdout || '') + (r.stderr || ''))
   marks.redCheckRuns = k
   marks.redCheckLog = logPath
+  const trips = ((r.stdout || '').match(/^WARN\s+watchdog-trip\s+(\S+)/gm) || [])
+  for (const t of trips) recordIncident('test-watchdog-trip', 124, 'red-check run ' + k + ': ' + t.replace(/^WARN\s+watchdog-trip\s+/, ''))
   if (r.status === 0) {
     marks.redCheck = 'green'
     marks.lastRedCheckPass = true
@@ -420,7 +423,19 @@ function runGate() {
   }
   marks.gateRuns = marks.gateRuns || []
   marks.gateRuns.push({ exit: r.status, log: logPath })
+  if (r.status === 124) recordIncident('test-watchdog-trip', 124, 'gate run ' + k)
   saveSidecar()
+}
+
+// Automatic incident entries (core § Incident Policy): a watchdog trip is observable by exit
+// code, so the driver records it itself instead of relying on the session to remember
+// `--mark incident`. Same entry shape as the manual mark plus `source`, so fleet-reader's
+// materiality join counts both alike.
+function recordIncident(cls, exit, source) {
+  marks.incidents = marks.incidents || []
+  marks.incidents.push({ ts: new Date().toISOString(), class: cls, exit, source })
+  process.stderr.write('spec-build-driver: incident recorded automatically (' + cls + ', exit ' + exit +
+    ', ' + source + ') — ' + marks.incidents.length + ' on this build; it lands on the stage:"build" ledger row at DONE\n')
 }
 
 // ---- mark handlers --------------------------------------------------------------------------------
@@ -599,6 +614,32 @@ function isAtRepairNow() {
   const last = runs[runs.length - 1]
   return !!marks.integrated && !!last && last.exit !== 0 && !fs.existsSync(gateCapPath)
 }
+// `--mark incident --class <id> [--exit <n>]`: core § Incident Policy — a build-time incident
+// (a test watchdog trip, a worker that pinned a CPU, a wrong assumption that cost the session)
+// is recorded as an entry on the build row the driver already writes, never a row of its own,
+// so fleet-reader's escapes.byClass can join it with escape rows and the class can reach the
+// recurrence count that earns a guard — without it a class that only ever burns build time
+// scores 0 forever (host spec 20260905/07 D16). The mark never moves the state: the session
+// re-lands on the step it was executing.
+function handleIncident() {
+  const cls = flag('--class')
+  if (typeof cls !== 'string' || !CLASS_ID_RE.test(cls)) {
+    die('--mark incident needs --class <kebab-case id> (same vocabulary as escape.md\'s class ' +
+      'field; read `.escapes.registry` from fleet-reader --json first) — got ' + JSON.stringify(cls))
+  }
+  const exitRaw = flag('--exit')
+  let exit = null
+  if (exitRaw !== null) {
+    exit = Number(exitRaw)
+    if (!Number.isInteger(exit) || exit < 0) die('--mark incident --exit must be a non-negative integer (got ' + JSON.stringify(exitRaw) + ')')
+  }
+  marks.incidents = marks.incidents || []
+  marks.incidents.push({ ts: new Date().toISOString(), class: cls, exit })
+  saveSidecar()
+  process.stderr.write('spec-build-driver: incident recorded (' + cls + (exit === null ? '' : ', exit ' + exit) +
+    ') — ' + marks.incidents.length + ' on this build; it lands on the stage:"build" ledger row at DONE\n')
+  return null
+}
 function handleRepairApplied() {
   const continuedRaw = flag('--continued')
   const spawnedRaw = flag('--spawned')
@@ -720,6 +761,7 @@ function handleCommitted() {
     deviations: countDeviations(),
     redCheck: marks.redCheck || 'none',
     workers,
+    incidents: marks.incidents || [],
   }
   appendLedger(repoRoot, JSON.stringify(row))
   fs.rmSync(sidecarDir, { recursive: true, force: true })
@@ -742,6 +784,7 @@ const MARK_STATE = {
   'integrated': (s) => s === 'INTEGRATION',
   'repair-applied': (s) => s === 'REPAIR',
   'committed': (s) => s === 'COMMIT',
+  'incident': (s) => s !== 'DONE',   // any live step — an incident has no state of its own
 }
 function admitMark() {
   const admits = MARK_STATE[MARK]
@@ -762,9 +805,11 @@ function handleMark() {
     case 'integrated': return handleIntegrated()
     case 'repair-applied': return handleRepairApplied()
     case 'committed': return handleCommitted() // exits the process itself
+    case 'incident': return handleIncident()
     default:
       die('unknown mark "' + MARK + '" (tests-authored | red-attributed | wave-done --wave ' +
-        '<label> --workers <n> | integrated | repair-applied --continued <n> --spawned <n> | committed)')
+        '<label> --workers <n> | integrated | repair-applied --continued <n> --spawned <n> | committed | ' +
+        'incident --class <id> [--exit <n>])')
   }
 }
 

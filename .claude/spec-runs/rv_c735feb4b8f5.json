@@ -1,0 +1,141 @@
+{
+  "runId": "rv_c735feb4b8f5",
+  "ts": "2026-09-08T20:44:07.433Z",
+  "spec": "specs/20260907/01-mixed-pin-guard-and-drift-line.md",
+  "tier": "standard",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 943,
+    "base": "59a2dedacfefca44483a3737d198715e19472c0c",
+    "head": "92dfc9a57a0964197f21129313500e4ac6c417ca",
+    "dirty": false
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 451
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1289
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 1
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 12,
+        "carried": 6,
+        "sanctioned": 6,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "Prior-round finding: .claude/spec-runs/rv_e456394c30b6.json is tracked on the worktree branch against the review.md Close-step exclusion of .claude/spec-runs/",
+        "file": "/home/jj/projects/claude-plugins/.claude/worktrees/spec-01-mixed-pin-guard-and-drift-line/.claude/spec-runs/rv_e456394c30b6.json",
+        "line": 1,
+        "evidence": "show --stat of 92dfc9a: .claude/spec-runs/rv_e456394c30b6.json | 150 --- (1 file changed, 150 deletions). ls-files .claude/spec-runs/ at HEAD lists 111 rp_/rv_ files and omits rv_e456394c30b6.json; status --porcelain --untracked-files=all prints exactly one line: ?? .claude/spec-runs/rv_e456394c30b6.json; ls -la .claude/spec-runs/ shows the file on disk (8902 bytes, mtime Sep 8 12:36). The CLOSE hygiene listing (spec-review-driver.js:1969-1971, in range) marks .claude/spec-runs/*.json EXPECTED, so the untracked residue is the sanctioned state."
+      },
+      {
+        "claim": "The rewritten Canonical Delta (pre-image said None, no docs/canonical/) names anchor sentences that do not exist in docs/canonical/build-integrity.md or review-close.md, so the post-verdict application would fail",
+        "file": "/home/jj/projects/claude-plugins/.claude/worktrees/spec-01-mixed-pin-guard-and-drift-line/docs/canonical/build-integrity.md",
+        "line": 67,
+        "evidence": "ls docs/canonical/ lists 14 files including build-integrity.md and review-close.md (the pre-image sentence at base lines 200-203 was false). Flattening build-integrity.md with tr and grepping printed: into every ledger row, making the class fleet-countable. The kill condition and the rejected per-AC mutation mandate (with its reopen condition) ... — both the after- and before-anchors exist, hard-wrapped at lines 67-68 under the heading ## Mechanized red-check (line 59). review-close.md:30 holds **Cost is accepted by contract.** and the flattened text contains: never a silent skip. grep -c pinShape|advisory drift on both files = 0: the Delta is not yet applied, which is the stage after this verdict, not a finding."
+      },
+      {
+        "claim": "D6 third arm (ac-drift.js exits other than 0/1 -> AC-pin drift check could not run) is a Decision promise with no carrying AC or test",
+        "file": "/home/jj/projects/claude-plugins/.claude/worktrees/spec-01-mixed-pin-guard-and-drift-line/spec/scripts/spec-review-driver.js",
+        "line": 1817,
+        "evidence": "ac-drift.js header (lines 23-25) exit alphabet: 0 derived/inapplicable, 1 findings, 2 usage (unknown flag, --root without value, --root not a directory). Executed: node spec/scripts/ac-drift.js --root /nonexistent --json printed: ac-drift: usage: ... --root must name an existing directory, exit=2. The driver passes --root repoRoot, derived at spec-review-driver.js:250-255 from rev-parse --show-toplevel (die() if it fails), so repoRoot is always an existing directory and the arm is a fail-closed guard no reachable input triggers; D6 carries AC-8/-9/-12 for the three reachable outcomes (findings>0, 0 findings, inapplicable sentinel), all executed green (tests/review/review-driver-close-drift-line.test.js: 4 tests in the 89-pass scoped run)."
+      },
+      {
+        "claim": "ac-matrix.js --lint duplicates the full-mode malformed-ac and invalid-pre-green finding builders (duplication calibration)",
+        "file": "/home/jj/projects/claude-plugins/.claude/worktrees/spec-01-mixed-pin-guard-and-drift-line/spec/scripts/ac-matrix.js",
+        "line": 204,
+        "evidence": "grep -n for the malformed detail string in spec/scripts/ac-matrix.js -> lines 204 and 270; grep -n for is not in PRE_GREEN_REASONS -> lines 213 and 287. Two copies each; the pipeline rules calibration fires at three or more near-identical blocks in one diff, and this diff adds exactly one copy of each (the other is pre-existing full-mode code)."
+      },
+      {
+        "claim": "The lock-step lint or the full-mode warning misclassifies the pin bullets of this spec itself (AC-2, AC-10, AC-11, AC-12 carry SHALL CONTINUE TO)",
+        "file": "/home/jj/projects/claude-plugins/.claude/worktrees/spec-01-mixed-pin-guard-and-drift-line/specs/20260907/01-mixed-pin-guard-and-drift-line.md",
+        "line": 161,
+        "evidence": "Executed: node spec/scripts/ac-matrix.js --spec specs/20260907/01-mixed-pin-guard-and-drift-line.md --lint printed: ac-matrix: lint malformed=0 invalidPreGreen=0 mixed=0 · 0 finding(s), exit=0. legs-2/ac-matrix.txt (full mode): uncovered=0 oracle=0 preGreen=1 · skipped=0 sanctioned=0 · 0 finding(s), 0 warning(s). Every SHALL in those four bullets is a SHALL CONTINUE TO, so pinShape returns pin, matching D1."
+      },
+      {
+        "claim": "The advisory drift line remedy names a spec-paths key that does not resolve, or the Rationale 41/13 figure is stale",
+        "file": "/home/jj/projects/claude-plugins/.claude/worktrees/spec-01-mixed-pin-guard-and-drift-line/spec/scripts/spec-review-driver.js",
+        "line": 1836,
+        "evidence": "Executed: spec/bin/spec-paths ac-drift -> <worktree>/spec/scripts/ac-drift.js; spec/bin/spec-paths ac-matrix -> <worktree>/spec/scripts/ac-matrix.js. node spec/scripts/ac-drift.js --root . --json piped to jq -> {n:41, specs:13}, matching the spec Rationale (the line will read 41/13 on this repo)."
+      },
+      {
+        "claim": "Out-of-File-Plan edits to tests/red-check/red-check.test.js and tests/provenance/provenance.test.js weaken pinned assertions",
+        "file": "/home/jj/projects/claude-plugins/.claude/worktrees/spec-01-mixed-pin-guard-and-drift-line/tests/red-check/red-check.test.js",
+        "line": 240,
+        "evidence": "Both are sanctioned by locked Decisions D11 and D12 (spec lines 63-64, added in range) and recorded in the deviations sidecar. The range diff over tests/ shows only the fixture bullet text (SHALL y, AND SHALL dropped; marker still wrapped SHALL / CONTINUE TO) and the PATH construction (a tmpdir holding one bash symlink) changed; every assert, message, and AC tag is byte-identical. Executed: node --test over tests/red-check/mixed-pin.test.js, tests/red-check/red-check.test.js, tests/ac-matrix/lint-mode.test.js, tests/review/review-driver-close-drift-line.test.js, tests/doctor/ac-drift.test.js, tests/consistency/entrypoints.test.js, tests/consistency/plugin-version.test.js, tests/provenance/provenance.test.js -> 89 pass, 0 fail, 0 skipped."
+      },
+      {
+        "claim": "A section citation added in range mismatches a doctrine heading, or a new invoker edge is undeclared in spec/entrypoints.json",
+        "file": "/home/jj/projects/claude-plugins/.claude/worktrees/spec-01-mixed-pin-guard-and-drift-line/spec/entrypoints.json",
+        "line": 4,
+        "evidence": "Executed: node spec/scripts/citations-check.js --root . -> TOTAL=188 CHECKED=82 SKIP=106 MISS=0. tests/consistency/entrypoints.test.js (the AC-20260907-01-13 test reads the live manifest for both rows) passed in the 89-pass scoped run; manifest-2 gate leg exit 0 (451 tests) and suite leg exit 0 (1289 pass, 0 fail, __FILE_BUDGET_OK__)."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 95000
+  }
+}

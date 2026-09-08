@@ -45,13 +45,14 @@ const path = require('path')
 
 const CONFIG_RELPATH = '.claude/spec.config.json'
 
-// specs/20260906/01-ac-drift-doctor-check.md D4: the default test-classification glob set,
-// lifted here VERBATIM from scope-reconcile.js's own private `defaultTestGlobs` literal so the new
-// ac-drift.js can classify test files the same way the at-risk leg already does, without a second
-// from-scratch copy of the array. scope-reconcile.js keeps its own local copy for this spec (it is
-// critical-tier; the fold-in is queued for the next spec that touches it) —
-// tests/doctor/ac-drift.test.js's own consistency pin holds the two literals equal until then.
-const DEFAULT_TEST_GLOBS = ['tests/**', 'test/**', '**/*.test.*', '**/*.spec.*', '**/*_test.*']
+// The default test-classification glob set — THE single declaration in this repo (docs/adr/0011).
+// Every consumer imports it: scope-reconcile.js (at-risk leg + --probe-at-risk), ac-drift.js, and
+// init-gen.js's at-risk-applicability probe. It was briefly declared three times over
+// (specs/20260906/01 D4 deliberately deferred the fold-in); tests/doctor/ac-drift.test.js now pins
+// single-sourcing directly — a second copy anywhere under spec/scripts/ reddens that test.
+// Frozen because it is shared by reference across those modules: no consumer mutates it today
+// (all three read sites are membership tests), and the freeze keeps that true by construction.
+const DEFAULT_TEST_GLOBS = Object.freeze(['tests/**', 'test/**', '**/*.test.*', '**/*.spec.*', '**/*_test.*'])
 
 function configPath(root) { return path.join(root, '.claude', 'spec.config.json') }
 

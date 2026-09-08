@@ -49,7 +49,7 @@ const os = require('os')
 const crypto = require('crypto')
 const { spawnSync } = require('child_process')
 const { globMatch } = require('./lib/glob-match')
-const { configPath, CONFIG_RELPATH } = require('./lib/host-config')
+const { configPath, CONFIG_RELPATH, DEFAULT_TEST_GLOBS } = require('./lib/host-config')
 
 function usage() {
   console.error('usage: init-gen.js probe --root <dir> [--test-command "<cmd>"] [--sample <n>]')
@@ -78,7 +78,6 @@ const CONTRACT_FILE = path.join(__dirname, '..', 'templates', 'grounding-contrac
 const CONTRACT_HEADING = '## Worker Contract (byte-identical across all generated agents)'
 const ADDENDUM_HEADING = '## Tests-kind addendum (appended after the contract bullets, identical wording)'
 const SELF_VERIFY_LITERAL = '`bun lint`, `bun test:run <your files>`, `bunx tsc --noEmit`'
-const DEFAULT_TEST_GLOBS = ['tests/**', 'test/**', '**/*.test.*', '**/*.spec.*', '**/*_test.*']
 
 // ============================================================================================
 // probe

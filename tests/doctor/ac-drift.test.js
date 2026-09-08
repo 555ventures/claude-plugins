@@ -244,7 +244,7 @@ test('AC-20260906-01-7: a --root with no specs/ directory is inapplicable and ex
     `got ${JSON.stringify(fileRootRes.stderr)}`)
 })
 
-test('AC-20260906-01-8: a host-declared testGlobs array replaces the default classification, and lib/host-config.js\'s exported DEFAULT_TEST_GLOBS deep-equals scope-reconcile.js\'s own defaultTestGlobs literal', () => {
+test('AC-20260906-01-8: a host-declared testGlobs array replaces the default classification, and lib/host-config.js\'s exported DEFAULT_TEST_GLOBS is the SINGLE declaration of that array under spec/scripts/ (docs/adr/0011)', () => {
   const dir = tmpdir('ac-drift-8')
   fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
   fs.writeFileSync(path.join(dir, '.claude', 'spec.config.json'), JSON.stringify({ testGlobs: ['checks/**'] }))
@@ -257,19 +257,41 @@ test('AC-20260906-01-8: a host-declared testGlobs array replaces the default cla
     `citation living in checks/a.js must count as coverage exactly as tests/**/*.test.js would by default ` +
     `(stderr: ${res.stderr})`)
 
-  const scopeSrc = read('spec/scripts/scope-reconcile.js')
-  const m = /const defaultTestGlobs = (\[[^\]]*\])/.exec(scopeSrc)
-  assert.ok(m,
-    'scope-reconcile.js must still declare its defaultTestGlobs array literal verbatim under that exact name ' +
-    'for this pin to extract it from source — the literal moved, was renamed, or its value changed shape')
-  // eslint-disable-next-line no-new-func
-  const scopeGlobs = new Function('return ' + m[1])()
+  // docs/adr/0011 SUPERSEDES this AC's original second clause. That clause read the
+  // `const defaultTestGlobs = [...]` literal out of scope-reconcile.js's source and asserted it
+  // deep-equalled the export — a bridge pin holding two copies together while specs/20260906/01 D4
+  // deliberately deferred the fold-in. The fold has now landed: scope-reconcile.js, ac-drift.js and
+  // init-gen.js all import the export, so there is no second literal left to compare against and
+  // the equality form is unsatisfiable by construction. The replacement below is strictly stronger:
+  // equality can only ever compare the copies it names, so a copy it does not name is invisible to
+  // it; single-sourcing catches ANY declaration, named or not.
+  const SHARED = ['tests/**', 'test/**', '**/*.test.*', '**/*.spec.*', '**/*_test.*']
   const { DEFAULT_TEST_GLOBS } = require('../../spec/scripts/lib/host-config')
-  assert.deepStrictEqual(DEFAULT_TEST_GLOBS, scopeGlobs,
-    `D4: lib/host-config.js's exported DEFAULT_TEST_GLOBS must deep-equal scope-reconcile.js's own ` +
-    `defaultTestGlobs literal verbatim — two copies of this array are the identical-literal shape D4 exists ` +
-    `to remove, and this pin is the only thing holding them together until scope-reconcile.js itself imports ` +
-    `the export — got ${JSON.stringify(DEFAULT_TEST_GLOBS)} vs scope-reconcile's ${JSON.stringify(scopeGlobs)}`)
+  assert.deepStrictEqual(DEFAULT_TEST_GLOBS, SHARED,
+    'lib/host-config.js\'s exported DEFAULT_TEST_GLOBS must still hold this exact glob set in this exact ' +
+    'order — it is the sole classification authority for the at-risk leg, ac-drift, and init-gen\'s probe, ' +
+    `so a silent edit here silently changes what all three call a test file: got ${JSON.stringify(DEFAULT_TEST_GLOBS)}`)
+  assert.ok(Object.isFrozen(DEFAULT_TEST_GLOBS),
+    'DEFAULT_TEST_GLOBS must be frozen — it is now shared BY REFERENCE across scope-reconcile.js, ac-drift.js ' +
+    'and init-gen.js, so an unfrozen array lets any one consumer mutate what the other two classify with')
+
+  // Single-sourcing: no file under spec/scripts/ may declare this array again. Scans real source, so
+  // a new copy added anywhere in the tree reddens this test — the failure mode a two-copy equality
+  // assertion is structurally blind to.
+  const scriptsDir = path.join(__dirname, '..', '..', 'spec', 'scripts')
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => {
+    const full = path.join(d, e.name)
+    if (e.isDirectory()) return e.name === 'node_modules' ? [] : walk(full)
+    return e.isFile() && e.name.endsWith('.js') ? [full] : []
+  })
+  const HOST_CONFIG = path.join(scriptsDir, 'lib', 'host-config.js')
+  const dupes = walk(scriptsDir).filter((f) => (
+    f !== HOST_CONFIG && /\[\s*'tests\/\*\*'\s*,\s*'test\/\*\*'/.test(fs.readFileSync(f, 'utf8'))
+  ))
+  assert.deepStrictEqual(dupes.map((f) => path.relative(path.join(__dirname, '..', '..'), f)), [],
+    'lib/host-config.js must be the ONLY declaration of the default test-glob array under spec/scripts/ ' +
+    '(docs/adr/0011) — every other consumer imports DEFAULT_TEST_GLOBS. A re-declared copy drifts silently ' +
+    'the moment one side is edited, and nothing downstream can tell which copy a given consumer classified with')
 })
 
 test('AC-20260906-01-9: spec-paths resolves the ac-drift key to an existing file, doctor.md wires it as check 17, and entrypoints.json carries its row', () => {

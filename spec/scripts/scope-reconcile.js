@@ -64,12 +64,7 @@ const path = require('path')
 const { execFileSync } = require('child_process')
 const { parseFilePlan, parseFilePlanRows } = require('./lib/file-plan')
 const { globMatch, pipelineOwnedGlobs } = require('./lib/glob-match')
-const { readConfig } = require('./lib/host-config')
-
-// Shared by both the --probe-at-risk mode and the main at-risk derivation further down — moved
-// here (from its former inline position) so the probe branch above can use it before requiring a
-// spec/base ref.
-const defaultTestGlobs = ['tests/**', 'test/**', '**/*.test.*', '**/*.spec.*', '**/*_test.*']
+const { readConfig, DEFAULT_TEST_GLOBS } = require('./lib/host-config')
 
 // D1/D2 (specs/20260907/03-ignored-paths-and-unobserved-count.md): derived once per process —
 // the first call wins and every later call (main derivation, --probe-at-risk) reuses the same
@@ -131,7 +126,7 @@ if (probeAtRiskFile) {
     process.exit(2)
   }
   const sampledFiles = listRaw.split('\n').map(s => s.trim()).filter(Boolean)
-  const probeTestGlobs = testGlobsArg ? testGlobsArg.split(',').map(s => s.trim()).filter(Boolean) : defaultTestGlobs
+  const probeTestGlobs = testGlobsArg ? testGlobsArg.split(',').map(s => s.trim()).filter(Boolean) : DEFAULT_TEST_GLOBS
   const probeIsTestClassified = (p) => probeTestGlobs.some(g => globMatch(g, p))
 
   // Reuses stemsFor (declared below, a hoisted function — pure over its argument, no TDZ risk
@@ -246,7 +241,7 @@ const unrealized = [
 // unrealized/excluded/renamed above — never affects the exit code (D2).
 
 const configTestGlobs = readConfig(root).testGlobs
-const testGlobs = Array.isArray(configTestGlobs) ? configTestGlobs : defaultTestGlobs
+const testGlobs = Array.isArray(configTestGlobs) ? configTestGlobs : DEFAULT_TEST_GLOBS
 const isTestClassified = (p) => testGlobs.some(g => globMatch(g, p))
 
 function stemsFor(p) {

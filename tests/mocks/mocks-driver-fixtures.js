@@ -267,54 +267,8 @@ function advanceToShapePicked(dir, chosen = 'calm', others = ['bold']) {
   return r
 }
 
-// specs/20260907/04-kit-canon-family.md D2/D7: the KIT state sits between SHAPES and WIREFRAMES,
-// so every advanceTo* helper past advanceToShapePicked routes through advanceToKitSigned below.
-// The default family declares two primitives — enough for a real `data-kit` instance and a real
-// `data-bespoke` mark in the tests that need them, small enough that the D6 count lines stay
-// readable. The canon links ../wire/tokens.css (the gray register, D2) and carries the inline
-// box-sizing reset design-atlas.js's hygiene(a) owes every bound file — a kit canon is bound
-// "as if approved" exactly as a shell canon is.
-const KIT_PRIMITIVES = [
-  { key: 'sheet', purpose: 'a side panel that does one task on one record while the parent stays visible' },
-  { key: 'blank-state', purpose: 'the region-filling placeholder when a collection has nothing to show' },
-]
-
-function kitCanonHtml(name = 'kit', primitives = KIT_PRIMITIVES) {
-  const blocks = primitives.map((pr) =>
-    '  <section data-kit-primitive="' + pr.key + '" data-purpose="' + pr.purpose + '">\n' +
-    '    <div data-contract="none">' + pr.key + '</div>\n' +
-    '    <div data-slot="content"></div>\n' +
-    '  </section>\n').join('')
-  return '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
-    '<link rel="stylesheet" href="../wire/tokens.css">\n' +
-    '<link rel="stylesheet" href="../wire/wire.css">\n' +
-    '<style>* { box-sizing: border-box; }</style>\n' +
-    '<div data-contract="none">' +
-    ['empty', 'loading', 'error'].map((st) => '<button data-state-btn="' + st + '">' + st + '</button>').join('') +
-    '</div>\n' +
-    '<div data-kit-canon="' + name + '">\n' + blocks + '</div>\n'
-}
-
-function writeKitCanon(dir, primitives = KIT_PRIMITIVES, name = 'kit') {
-  writeFile(path.join(dir, 'design/kit', name + '.html'), kitCanonHtml(name, primitives))
-}
-
-function advanceToKitSigned(dir, primitives = KIT_PRIMITIVES) {
-  // Idempotent on its predecessor: a test that asserts the intermediate SHAPES state calls
-  // advanceToShapePicked itself first, and re-running the whole cold chain here would append a
-  // second copy of every seed ledger row (a duplicate-id grammar error, not a state problem).
-  let already = false
-  try { already = Boolean(JSON.parse(fs.readFileSync(statusPath(dir), 'utf8')).marks.shapePicked) } catch { already = false }
-  if (!already) advanceToShapePicked(dir)
-  writeKitCanon(dir, primitives)
-  decideLook(dir, 'kit-signed', 'approve', { title: 'sign off the kit' })
-  const r = mark(dir, 'kit-signed')
-  assert.strictEqual(r.status, 0, 'test setup requires kit-signed to be accepted once design/kit/ holds a valid canon and the look stop is decided: ' + r.stderr)
-  return r
-}
-
 function advanceToCanonWritten(dir) {
-  advanceToKitSigned(dir)
+  advanceToShapePicked(dir)
   writeCanon(dir)
   const r = mark(dir, 'canon-written')
   assert.strictEqual(r.status, 0, 'test setup requires canon-written to be accepted on a valid canon.md with no existing mocks: ' + r.stderr)
@@ -488,8 +442,7 @@ module.exports = {
   writeThemeDirection,
   decideLook, openLook, freePort, startServe, stopServe, getBody,
   writeFixtureCapture, writeCaptureConfig,
-  advanceToSeedDone, advanceToShapePicked, advanceToKitSigned, advanceToCanonWritten, advanceToJourneyApproved,
-  KIT_PRIMITIVES, kitCanonHtml, writeKitCanon,
+  advanceToSeedDone, advanceToShapePicked, advanceToCanonWritten, advanceToJourneyApproved,
   advanceToDirectionComposed, advanceToThemePicked,
   advanceToApproved,
   writeShortSeed, advanceToShortJourneyDrawn,

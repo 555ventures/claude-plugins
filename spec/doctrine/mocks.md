@@ -19,7 +19,7 @@ identical.
 note`:
 
 - `id` — `^[A-Z]+\d+[a-z]?$`, unique across the table.
-- `step` — `^[A-Z][A-Z-]*$` (`SEED`, `SHAPES`, `KIT`, `WIREFRAMES`, `THEME`, `SIGNOFF`,
+- `step` — `^[A-Z][A-Z-]*$` (`SEED`, `SHAPES`, `WIREFRAMES`, `THEME`, `SIGNOFF`,
   `GENESIS`, …); rows written under retired step names (`SKIN`, `REVIEW`) still match the
   pattern and keep parsing.
 - `kind` — one fixed word: `product` or `process`.
@@ -63,8 +63,7 @@ owns it.
 alone; if its artifact vanished (a journey's screen deleted, a direction's tokens file
 removed) the derivation lands earlier and demands the mark again. The order is fixed: **SEED**
 (the 13 facts, journeys, dense screen, research brief) → **SHAPES** (one shape kebab picked
-from 2–3 candidates) → **KIT** (every shared primitive named once, signed off via
-`kit-signed`) → **WIREFRAMES** (canon written, then every seed journey drawn and
+from 2–3 candidates) → **WIREFRAMES** (canon written, then every seed journey drawn and
 approved) → **THEME** (≥2 directions composed, one picked) → **SIGNOFF** (one look over the
 whole approved set) → **APPROVED** (terminal). WIREFRAMES and THEME each carry a sub-mark per
 journey or direction so no single conversation ever has to hold more than one journey's state —
@@ -293,12 +292,6 @@ half the driver cannot check, carried here as contract prose the authoring sessi
   primitive not already in the component vocabulary, the authoring pass names the nearest
   existing entry and states specifically why it does not fit — silence is a gate failure, the
   same bar § Design Authoring Contracts sets for the built-code side.
-- **Name the shared parts before the screens.** Once a kit family (`design/kit/`) resolves,
-  every content region of a labeled mock carries `data-kit="<key>"` — an instance of a named
-  primitive — or `data-bespoke="<key>: <difference>"`, naming the primitive it is *not* and the
-  one structural difference preventing reuse; a bare `data-bespoke` with no difference stated is
-  a rubber stamp, not an escape. `check` prints the `ⓘ <label>: <n> kit, <m> bespoke` count on
-  every run — the number an author and a reviewer watch to keep the bespoke mark honest.
 
 ## Product-Stage Exemption (question-style-gate.js)
 

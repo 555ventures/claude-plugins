@@ -2,15 +2,6 @@
 // design-atlas: deterministic design-artifact tooling (no model, no deps) — shared § Design Atlas.
 //
 //   design-atlas.js check <file|dir> [...more] [--matrix] [--states]
-//                                                  specs/20260907/04-kit-canon-family.md D5/D6:
-//                                                  once a design/kit/ family resolves by walk-up,
-//                                                  every content region of a labeled mock must be
-//                                                  data-kit="<key>" or data-bespoke="<key>: <why>"
-//                                                  (⚠️ at sketch, violation at ratified/approved/
-//                                                  --matrix), and one ⓘ count line prints per
-//                                                  screen plus a bespoke total. No design/kit/
-//                                                  anywhere above the mock = the rule never runs
-//                                                  and output is byte-identical.
 //                                                  harness gate: labels, tokens link, no off-token
 //                                                  colors; at data-status ratified|approved (or
 //                                                  --matrix, which also forces the static matrix
@@ -402,10 +393,6 @@ function cmdCheck(argv) {
   if (!paths.length) die('check: need at least one file or directory')
   const violations = []
   const warnLines = []
-  // specs/20260907/04 D6: informational only — never a violation, never an exit-code change.
-  const kitCountLines = []
-  let kitUnabsorbed = 0
-  let kitUnabsorbedScreens = 0
   const darkChecked = new Set()
   let count = 0
   for (const t of paths) {
@@ -417,16 +404,10 @@ function cmdCheck(argv) {
       // never asked for a data-screen-label and is validated under its own rule set below,
       // instead of D4's mock shell family.
       const isCanon = shellLib.isCanonFile(html)
-      // specs/20260907/04-kit-canon-family.md D5: a kit canon file is a second canon family under
-      // the same treatment a shell canon already gets — never asked for a data-screen-label,
-      // exempt from --states (it is a parts page, not a screen), bound for hygiene "as if
-      // approved", and validated by its own rule set (checkKitCanon) instead of the mock rules.
-      const isKitCanon = shellLib.isKitCanonFile(html)
-      const isAnyCanon = isCanon || isKitCanon
-      if (!isAnyCanon && !labelOf(html)) violations.push(f + ': no data-screen-label on any element')
+      if (!isCanon && !labelOf(html)) violations.push(f + ': no data-screen-label on any element')
       // D1: a shell canon is chrome, never a screen — exempt entirely; an unlabeled mock is
       // already flagged above and has no [data-screen-label] root to read data-no-state from.
-      if (statesMode && !isAnyCanon && labelOf(html)) violations.push(...statesViolations(f, html))
+      if (statesMode && !isCanon && labelOf(html)) violations.push(...statesViolations(f, html))
       if (!/<link[^>]+tokens\.css/.test(html)) violations.push(f + ': does not link a tokens.css')
       // strip the tokens link line itself, then flag color literals anywhere in markup/styles
       const body = html.replace(/<link[^>]*>/g, '')
@@ -440,7 +421,7 @@ function cmdCheck(argv) {
       // canon binds hygiene "as if approved" — it never carries a data-status attribute at all.
       const status = statusOf(html)
       const boundApproved = forceMatrix || status === 'ratified' || status === 'approved'
-      const boundNow = boundApproved || isAnyCanon
+      const boundNow = boundApproved || isCanon
       if (boundNow) violations.push(...hygieneViolations(f, html))
 
       // specs/20260901/04: canon files get D1's own rule set (name match, own css link, content
@@ -448,30 +429,9 @@ function cmdCheck(argv) {
       // the LINKED css file — invisible to the generic checks above, which only read inline
       // <style> blocks). Page mocks get D4's shell family instead, bound only when a
       // design/shell/ dir resolves by walk-up (D4's absence-invariant, AC-20260901-04-6).
-      if (isKitCanon) {
-        // D2: the kit canon's own rule set — a primitive is named once per family.
-        violations.push(...shellLib.checkKitCanon(f, html))
-      } else if (isCanon) {
+      if (isCanon) {
         violations.push(...shellLib.checkCanon(f, html))
       } else {
-        // specs/20260907/04 D5/D6: the kit family binds exactly as the shell family does —
-        // violations at ratified|approved|--matrix, ⚠️ warns at sketch — and prints its per-screen
-        // ⓘ count line. Both are gated on the family RESOLVING, never on the findings being
-        // empty: a host with no design/kit/ anywhere above the mock sees byte-identical output
-        // (AC-20260907-04-6), which is what makes this whole family off-by-absence.
-        const kitDir = shellLib.resolveCanonDir(f, 'kit')
-        if (kitDir) {
-          const kd = shellLib.diagnoseKitRegions(html, kitDir)
-          kitCountLines.push('  ⓘ ' + (labelOf(html) || f) + ': ' + kd.kit + ' kit, ' + kd.bespoke + ' bespoke')
-          // D6: the running total counts BESPOKE regions — the same <m> as the per-screen line.
-          // A region the kit absorbed needs no watching; a deliberate non-instance is exactly the
-          // escape that must stay visible and countable run over run.
-          if (kd.bespoke) { kitUnabsorbed += kd.bespoke; kitUnabsorbedScreens++ }
-          for (const fnd of kd.findings) {
-            if (boundApproved) violations.push(f + ': ' + fnd.text)
-            else warnLines.push('  ⚠️ ' + f + ': ' + fnd.text)
-          }
-        }
         const shellDir = shellLib.resolveShellDir(f)
         if (shellDir) {
           const diag = shellLib.diagnoseMock(html, shellDir)
@@ -521,14 +481,6 @@ function cmdCheck(argv) {
     }
   }
   if (!count) die('check: no .html files under ' + paths.join(', '))
-  // specs/20260907/04 D6: the counts print BEFORE the warns, one line per labeled non-canon mock
-  // plus a run-level unabsorbed total. A growing total across runs is the signal the reviewer
-  // approves against — it is what keeps the data-bespoke escape from becoming a rubber stamp —
-  // so it is printed on a passing run too, and never touches the exit code.
-  for (const l of kitCountLines) process.stdout.write(l + '\n')
-  if (kitUnabsorbed) {
-    process.stdout.write('  ⓘ unabsorbed total: ' + kitUnabsorbed + ' across ' + kitUnabsorbedScreens + ' screen(s)\n')
-  }
   for (const w of warnLines) process.stdout.write(w + '\n')
   if (violations.length) {
     process.stdout.write('CHECK FAIL (' + violations.length + ' violation(s) across ' + count + ' file(s)):\n')
@@ -1058,9 +1010,6 @@ function seedForReview(root) {
 function stopHome(key) {
   if (key === 'shape-picked') return { type: 'shapes' }
   if (key === 'theme-picked') return { type: 'theme' }
-  // specs/20260907/04-kit-canon-family.md D7: the kit sign-off renders in its own section, the
-  // same shape the theme pick already gets — the kit is looked at as one page, not per screen.
-  if (key === 'kit-signed') return { type: 'kit' }
   if (key === 'approved') return { type: 'header' }
   const m = /^(?:journey-approved|variants):(.+)$/.exec(key)
   if (m) return { type: 'journey', journey: m[1] }
@@ -1184,7 +1133,7 @@ function buildAtlas(root, out) {
   try { picksStops = picksLib.readPicks(root) } catch { picksStops = [] }
   const { open: openStops, decided: decidedStops } = picksLib.pending(picksStops)
   const liveStops = openStops.concat(decidedStops)
-  const stopsByHome = { shapes: [], kit: [], theme: [], header: [], standalone: [] }
+  const stopsByHome = { shapes: [], theme: [], header: [], standalone: [] }
   const stopsByJourney = new Map()
   for (const stop of liveStops) {
     const home = stopHome(stop.key)
@@ -1330,17 +1279,6 @@ function buildAtlas(root, out) {
     }
   }
 
-  // specs/20260907/04 D7: the kit-signed stop renders as its own #kit section between shapes and
-  // theme, matching the state order the driver enforces — the section IS the stop, since there is
-  // no other derivation of the kit anywhere in the atlas.
-  const kitStopsHtml = stopsByHome.kit.map((s) => renderStop(s, root, outDir, vp0)).join('\n')
-  const kitSectionHtml = kitStopsHtml
-    ? '<section class="sect" id="kit"><h2>kit</h2>\n' +
-      '<p class="meta">Every shared part of the product, named once and drawn in every state. ' +
-      'Each screen is built from these — reply <b>approve</b> in the session once they are the right parts.</p>\n' +
-      kitStopsHtml + '</section>'
-    : ''
-
   // D3(b): a theme-picked stop gets its own section right after shapes — there is no plain
   // "theme" derivation elsewhere in the atlas to replace, the compare table is the whole section.
   const themeStopsHtml = stopsByHome.theme.map((s) => renderStop(s, root, outDir, vp0)).join('\n')
@@ -1437,7 +1375,7 @@ function buildAtlas(root, out) {
   const html = page('Design atlas',
     header + headerStopsHtml + stopsIndexHtml + standaloneHtml + (rows.length ? graph : '') +
     '\n<div class="bar">' + filterBar + (bar.buttons ? '<span class="sep"></span>' + bar.buttons : '') + '</div>' +
-    '\n' + shapesSectionHtml + '\n' + kitSectionHtml + '\n' + themeSectionHtml + '\n' + sectionHtml + '\n' + emptyHtml + '\n' +
+    '\n' + shapesSectionHtml + '\n' + themeSectionHtml + '\n' + sectionHtml + '\n' + emptyHtml + '\n' +
     LIGHTBOX + '\n' + UI_SCRIPT + bar.style + bar.script + filterScript + PICKS_SCRIPT)
   fs.mkdirSync(outDir, { recursive: true })
   fs.writeFileSync(out, html)

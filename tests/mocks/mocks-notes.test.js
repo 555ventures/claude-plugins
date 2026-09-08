@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT, tmpdir, runNode } = require('../helpers')
 const picksLib = require('../../spec/scripts/lib/mocks-picks')
-const { writeWireframe, writeKitCanon } = require('./mocks-driver-fixtures')
+const { writeWireframe } = require('./mocks-driver-fixtures')
 
 // specs/20260902/10-page-notes-review-loop.md D1/D4/D5, AC-20260902-10-1/-5/-6/-10.
 // spec/scripts/lib/mocks-notes.js and the driver's `notes` subcommands + mark gates do not
@@ -188,14 +188,6 @@ function advanceToJourneyDrawn(dir) {
   decideLook(dir, 'shape-picked', 'pick', { pick: 'calm', others: ['bold'], by: 'jj' })
   const shapePicked = mark(dir, 'shape-picked', ['--shape', 'calm'])
   assert.strictEqual(shapePicked.status, 0, 'test setup requires shape-picked to be accepted: ' + shapePicked.stderr)
-
-  // specs/20260907/04-kit-canon-family.md D1: KIT now sits between SHAPES and WIREFRAMES, so
-  // this file-local advance chain (which duplicates mocks-driver-fixtures.js's own chain rather
-  // than importing it) must gain the same kit-signed step or canon-written below refuses.
-  writeKitCanon(dir)
-  decideLook(dir, 'kit-signed', 'approve', { title: 'sign off the kit' })
-  const kitSigned = mark(dir, 'kit-signed')
-  assert.strictEqual(kitSigned.status, 0, 'test setup requires kit-signed to be accepted once design/kit/ holds a valid canon and the look stop is decided: ' + kitSigned.stderr)
 
   writeCanon(dir)
   const canonWritten = mark(dir, 'canon-written')

@@ -50,18 +50,6 @@ already safe on disk. Every accepted mark ends with the ledger's counts line and
 session may `/clear` after any checkpoint and re-invoke cold — it re-derives everything from
 disk, never chat context.
 
-## Kit (KIT state)
-
-Between SHAPES and WIREFRAMES: author `design/kit/<name>.html` — the shared-primitive canon,
-sibling to the shell canon under the same marks and the same checker (§ Design Canon). Name
-every primitive once, `data-kit-primitive="<key>"` with a `data-purpose` when-to-use line, in
-every state, before drawing any screen. `stop open kit` opens a decided look stop over the kit
-page; `--mark kit-signed` accepts once it is decided and `design-atlas.js check design/kit`
-exits 0. Once a kit family exists, every content region of a labeled mock carries
-`data-kit="<key>"` or `data-bespoke="<key>: <difference>"` — § Mocks: Authoring Rules is the one
-binding home for the two marks and the `check` count line; `journey-approved` refuses on an
-unmarked region.
-
 ## THEME interview rule
 
 The THEME step opens with a direction interview, not a fixed menu: derive 2–3 candidate
@@ -79,7 +67,7 @@ before the first edit (§ Mocks: Authoring Rules — the one binding home).
 
 ## Look rule
 
-Before SHAPES, KIT, WIREFRAMES, THEME, or SIGNOFF the driver runs the look-reachability probe; if it
+Before SHAPES, WIREFRAMES, THEME, or SIGNOFF the driver runs the look-reachability probe; if it
 refuses, either fix the remedy (`npx playwright install chromium`) or, when a browser MCP is the
 real look path, `ToolSearch` for `claude-in-chrome` (or equivalent) and record `mocks-driver.js
 look-via browser` before re-running. To look at a screen, use `mocks-driver.js look <label>
@@ -141,8 +129,8 @@ verbatim.
 - **Never restate the driver's derivation.** Read its printed step and doctrine citation; act
   on them — re-deriving state by hand from `status.json` is the class of bug the driver exists
   to prevent.
-- Canon before screens, kit before wireframes, screens before sign-off — the driver refuses out
-  of order; this command never works around a refusal by editing `status.json`.
+- Canon before screens, screens before theme, theme before sign-off — the driver refuses out of
+  order; this command never works around a refusal by editing `status.json`.
 - `AskUserQuestion` dismissed → STOP; never invent the declined answer.
 - The ledger is written only through the driver's `ledger` subcommands, notes.json only
   through its `notes` subcommands or the served page — never hand-typed.

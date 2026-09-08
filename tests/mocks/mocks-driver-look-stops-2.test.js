@@ -8,8 +8,7 @@ const {
   SCRIPT, JOURNEY, LABELS, DENSE,
   bare, mark, writeFile, writeWireframe,
   decideLook, openLook,
-  advanceToSeedDone, advanceToShapePicked, advanceToCanonWritten, advanceToThemePicked,
-  writeKitCanon, freePort,
+  advanceToSeedDone, advanceToCanonWritten, advanceToThemePicked,
 } = require('./mocks-driver-fixtures')
 
 // specs/20260905/04-per-project-look-server.md D3/D7: mocks-driver.js's `stop open`/`stop decide`
@@ -125,46 +124,4 @@ test('skill-check and every authoring step block print the frontend-design skill
   const step = runNode(SCRIPT, ['--root', root], withFullPath(fakeBin([{ id: 'other@x', enabled: true }])))
   assert.match(step.stdout, /state: SHAPES/, 'seed-done root must print the SHAPES step block — got: ' + step.stdout.slice(0, 200))
   assert.match(step.stdout, /\n⚠️ frontend-design skill not installed/, 'the SHAPES step block must carry the skill line — got: ' + step.stdout)
-})
-
-// specs/20260907/04-kit-canon-family.md D8: KIT asks the session to draw, so it joins
-// AUTHORING_STATES — the frontend-design skill line prints and the look probe runs, exactly as
-// SHAPES and WIREFRAMES do. The fixed line is the "instantiate, do not invent" seed stated where
-// the author reads it, and the look/Then pair is the same stop contract every gated mark uses.
-test('AC-20260907-04-11: the KIT step block prints the frontend-design skill line, the fixed instantiate-do-not-invent sentence, a look: line naming `stop open kit` and a Then: line naming --mark kit-signed; an unreachable look exits 3 naming the remedy', async () => {
-  const fakeBin = (rows) => {
-    const dir = tmpdir('fake-claude-kit-')
-    const bin = path.join(dir, 'claude')
-    fs.writeFileSync(bin, '#!/bin/sh\nprintf %s \'' + JSON.stringify(rows) + '\'\n')
-    fs.chmodSync(bin, 0o755)
-    return dir
-  }
-  const withFullPath = (dir) => ({ env: { ...process.env, PATH: dir + ':' + process.env.PATH } })
-  const installed = fakeBin([{ id: 'frontend-design@claude-plugins-official', enabled: true, scope: 'user' }])
-
-  const root = tmpdir('kit-step')
-  advanceToShapePicked(root) // shape picked, kit not yet signed off → KIT
-
-  const step = runNode(SCRIPT, ['--root', root], withFullPath(installed))
-  assert.match(step.stdout, /state: KIT/,
-    'a shape-picked root with no kit sign-off must print the KIT step block — if it prints WIREFRAMES the new state is unreachable and every screen is drawn before any primitive is named: ' + step.stdout.slice(0, 300))
-  assert.match(step.stdout, /🎨 Load the `frontend-design` skill/,
-    'D8: KIT is an authoring state, so its step block must carry the frontend-design skill line — the kit page is hand-drawn, and dropping the line here is exactly the surface the skill exists for: ' + step.stdout)
-  assert.ok(step.stdout.includes('Every wireframe is instantiated from this page — name a primitive once here or it gets invented once per screen.'),
-    'the KIT block must carry that fixed sentence verbatim — it is the instantiate-do-not-invent seed, and an author who never reads it will draw each screen from scratch exactly as before: ' + step.stdout)
-  assert.match(step.stdout, /stop open kit/,
-    'the KIT block must name `stop open kit` as its look — the kit is signed off on the page, never by typing, and a block that omits the look leaves the session guessing at the gate: ' + step.stdout)
-  assert.match(step.stdout, /--mark kit-signed/,
-    'the KIT block must name `--mark kit-signed` in its Then: lines — without it the session has no way to advance past KIT: ' + step.stdout)
-
-  // The family must exist before the port matters: `stop open kit` refuses an empty design/kit/
-  // as a precondition (exit 2) before it ever probes, so authoring the canon here is what
-  // isolates the unreachable-look path this half of the AC is about.
-  writeKitCanon(root)
-  const busyPort = await freePort()
-  const unreachable = runNode(SCRIPT, ['--root', root, 'stop', 'open', 'kit', '--port', String(busyPort)])
-  assert.strictEqual(unreachable.status, 3,
-    '`stop open kit` must exit 3 when nothing answers the served port, the same alphabet every other stop uses — a different code here breaks the callers that branch on 3: ' + unreachable.stdout + unreachable.stderr)
-  assert.match(unreachable.stderr, /serve --root/,
-    'the exit-3 refusal must name `serve --root` as the remedy — an error path that does not name its remedy command is a hard finding in this repo: ' + JSON.stringify(unreachable.stderr))
 })

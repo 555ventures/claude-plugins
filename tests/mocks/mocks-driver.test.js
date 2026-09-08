@@ -3,14 +3,14 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir, runNode } = require('../helpers')
+const { tmpdir } = require('../helpers')
 const {
-  SCRIPT, JOURNEY, LABELS, DENSE,
+  JOURNEY, LABELS, DENSE,
   bare, mark, stateOf, ledgerCmd,
-  writeFile, statusJson, statusPath,
+  writeFile, statusJson,
   writeTargets, writeResearchBrief, writeSeed, confirmFacts, writeCanon, writeWireframe,
   decideLook,
-  advanceToShapePicked, advanceToKitSigned, advanceToCanonWritten, advanceToThemePicked, advanceToApproved,
+  advanceToShapePicked, advanceToCanonWritten,
   writeFixtureCapture, writeCaptureConfig,
 } = require('./mocks-driver-fixtures')
 
@@ -383,96 +383,4 @@ test('AC-20260906-05-4: the bare driver\'s "draw journey <j>" step Then: block g
     'D3: the draw step\'s Then: block must gain a line naming "states: empty, loading, error on every screen" — without it a session drawing wireframes has no prompt to add the gray states: ' + r.stdout)
   assert.match(thenBlock, /data-no-state/,
     'D3: the draw step\'s Then: block must gain a line naming the data-no-state opt-out, or a session with a genuinely state-less screen has no documented escape: ' + r.stdout)
-})
-
-// ---------------------------------------------------------------------------
-// AC-20260907-04-1
-// ---------------------------------------------------------------------------
-// specs/20260907/04-kit-canon-family.md D1, TDD red: deriveState() has no KIT step and
-// freshStatus().marks has no kitSignedOff key yet, so a shape-picked root derives WIREFRAMES
-// today (canonWritten is still null, so shapeValid()'s neighbour clause falls through) — this
-// test expects the new KIT step to intercept it instead, then a kit-signed root to fall through
-// to WIREFRAMES exactly as before.
-test('AC-20260907-04-1: state derives KIT once shapePicked is set with a valid shape file and marks.kitSignedOff is null, then WIREFRAMES once kitSignedOff is set and canonWritten is still null', () => {
-  const dir = tmpdir('mocks-driver')
-  advanceToShapePicked(dir)
-  assert.strictEqual(statusJson(dir).marks.kitSignedOff, null,
-    'test setup requires marks.kitSignedOff to still be null right after shape-picked, or the KIT-derivation assertion below is not isolating D1\'s new clause: ' + JSON.stringify(statusJson(dir).marks))
-  assert.strictEqual(stateOf(dir).stdout.trim(), 'KIT',
-    'D1: a root with marks.shapePicked set to a valid shape file and marks.kitSignedOff null must derive KIT, placed between SHAPES and WIREFRAMES')
-
-  advanceToKitSigned(dir)
-  assert.strictEqual(statusJson(dir).marks.canonWritten, null,
-    'test setup requires marks.canonWritten to still be null right after kit-signed, or the WIREFRAMES-derivation assertion below is not isolating the fall-through: ' + JSON.stringify(statusJson(dir).marks))
-  assert.strictEqual(stateOf(dir).stdout.trim(), 'WIREFRAMES',
-    'D1: once marks.kitSignedOff is set, a root with canonWritten still null must derive WIREFRAMES, not KIT — kitSignedOff only gates the one KIT step')
-})
-
-// ---------------------------------------------------------------------------
-// AC-20260907-04-15
-// ---------------------------------------------------------------------------
-// specs/20260907/04-kit-canon-family.md D1 rationale + AC-15 (SHALL CONTINUE TO): a root
-// checkpointed under the pre-spec shape (no kitSignedOff key at all) must advance past the new
-// KIT gate rather than trap on it. TDD red: today's deriveState() has no KIT branch to trap on,
-// so this pins the forward-compatibility property the new branch must hold once it lands — a
-// missing key must read as falsy (KIT still due), never throw.
-test('AC-20260907-04-15: a root checkpointed under the pre-spec shape (shapePicked+canonWritten set, every journey approved, theme set, approved null, no kitSignedOff key at all) derives KIT without throwing', () => {
-  const dir = tmpdir('mocks-driver')
-  advanceToThemePicked(dir)
-  const legacy = statusJson(dir)
-  assert.ok('kitSignedOff' in legacy.marks,
-    'test setup requires the chained-through-KIT fixture to have written marks.kitSignedOff, or deleting it below proves nothing about forward compatibility: ' + JSON.stringify(legacy.marks))
-  delete legacy.marks.kitSignedOff
-  fs.writeFileSync(statusPath(dir), JSON.stringify(legacy, null, 2))
-
-  const r = stateOf(dir)
-  assert.strictEqual(r.status, 0,
-    'AC-15: deriving state over a status.json with no marks.kitSignedOff key at all must not throw — a pre-spec checkpoint must advance, not trap: ' + r.stdout + r.stderr)
-  assert.strictEqual(r.stdout.trim(), 'KIT',
-    'AC-15: a pre-spec-shaped root (shapePicked+canonWritten set, every journey approved, theme set, approved null, kitSignedOff key entirely absent) must derive KIT — the missing key reads as "not signed off yet", not a crash')
-})
-
-// ---------------------------------------------------------------------------
-// AC-20260907-04-13
-// ---------------------------------------------------------------------------
-// specs/20260907/04-kit-canon-family.md D10, TDD red: --reopen recognizes only journey:<j>,
-// shapes, and theme today — "kit" is an unknown target (falls to the die() branch with the OLD
-// three-way message), and the die() message itself still reads "journey:<j>, shapes, or theme".
-// D10 also widens --reopen shapes to additionally clear kitSignedOff and name "kit" in its
-// invalidated list, pinned in the same test since no other AC or file owns that half of D10.
-test('AC-20260907-04-13: --reopen kit on an APPROVED root prints the exact reopened-kit line, nulls kitSignedOff/approved/decider, leaves every journeys[j].approved unchanged, and derives KIT; --reopen bogus names journey:<j>, shapes, kit, or theme; --reopen shapes additionally clears kitSignedOff and names kit invalidated', () => {
-  const dir = tmpdir('mocks-driver')
-  advanceToApproved(dir)
-  const before = statusJson(dir)
-  assert.ok(before.marks.kitSignedOff, 'test setup requires marks.kitSignedOff to be recorded on an APPROVED root, or the null-ing assertion below is vacuous: ' + JSON.stringify(before.marks))
-  const journeyApprovedBefore = before.journeys[JOURNEY].approved
-  assert.ok(journeyApprovedBefore, 'test setup requires journeys.<j>.approved to be recorded before reopening kit, or the "leave journeys unchanged" assertion below is vacuous')
-
-  const reopened = runNode(SCRIPT, ['--root', dir, '--reopen', 'kit'])
-  assert.strictEqual(reopened.status, 0, '--reopen kit must exit 0 on an APPROVED root: ' + reopened.stdout + reopened.stderr)
-  assert.strictEqual(reopened.stdout.trim(), '↩ reopened kit — invalidated: kit, approved(all)',
-    'D10: --reopen kit must print the exact reopened-kit line: ' + JSON.stringify(reopened.stdout))
-  const status = statusJson(dir)
-  assert.strictEqual(status.marks.kitSignedOff, null, '--reopen kit must clear marks.kitSignedOff')
-  assert.strictEqual(status.marks.approved, null, '--reopen kit must clear marks.approved')
-  assert.strictEqual(status.decider, null, '--reopen kit must clear decider')
-  assert.strictEqual(status.journeys[JOURNEY].approved, journeyApprovedBefore,
-    'D10: --reopen kit must never touch journeys[j].approved — a kit change re-runs the AC-12 gate at the next journey-approved, it does not un-approve by fiat')
-  assert.strictEqual(stateOf(dir).stdout.trim(), 'KIT', 'the next derivation after --reopen kit must land on KIT')
-
-  const dir2 = tmpdir('mocks-driver')
-  advanceToApproved(dir2)
-  const bogus = runNode(SCRIPT, ['--root', dir2, '--reopen', 'bogus'])
-  assert.strictEqual(bogus.status, 2, '--reopen bogus must refuse, exit 2: ' + bogus.stdout + bogus.stderr)
-  assert.match(bogus.stderr + bogus.stdout, /--reopen must be journey:<j>, shapes, kit, or theme/,
-    'D10: the unknown-target refusal must widen its literal to list "kit" among journey:<j>, shapes, and theme: ' + bogus.stdout + bogus.stderr)
-
-  const dir3 = tmpdir('mocks-driver')
-  advanceToApproved(dir3)
-  const shapesReopen = runNode(SCRIPT, ['--root', dir3, '--reopen', 'shapes'])
-  assert.strictEqual(shapesReopen.status, 0, '--reopen shapes must exit 0 on an APPROVED root: ' + shapesReopen.stdout + shapesReopen.stderr)
-  assert.match(shapesReopen.stdout, /invalidated:[^\n]*\bkit\b/,
-    'D10: --reopen shapes must additionally name "kit" in its invalidated list, since a shape re-pick invalidates the kit canon drawn against it: ' + shapesReopen.stdout)
-  assert.strictEqual(statusJson(dir3).marks.kitSignedOff, null,
-    'D10: --reopen shapes must additionally clear marks.kitSignedOff: ' + JSON.stringify(statusJson(dir3).marks))
 })

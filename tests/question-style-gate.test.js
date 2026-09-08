@@ -2,7 +2,7 @@
 const { test } = require('node:test')
 const assert = require('node:assert')
 const path = require('node:path')
-const { SPEC } = require('./helpers')
+const { SPEC, tmpdir } = require('./helpers')
 const { spawnSync } = require('node:child_process')
 
 const HOOK = path.join(SPEC, 'scripts/question-style-gate.js')
@@ -19,10 +19,9 @@ function run(payload, env = {}) {
 // Tier-2 judge tests: point SPEC_QUESTION_JUDGE_BIN at a fake reviewer that emits a
 // canned verdict, so no real model call ever happens in the suite.
 const fs = require('node:fs')
-const os = require('node:os')
 
 function fakeJudge(stdout, exitCode = 0) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'question-judge-'))
+  const dir = tmpdir('question-judge')
   const bin = path.join(dir, 'fake-claude')
   fs.writeFileSync(bin, `#!/bin/sh\nprintf '%s' ${JSON.stringify(stdout)}\nexit ${exitCode}\n`, { mode: 0o755 })
   return bin
@@ -176,7 +175,7 @@ test('AC-20260902-06-7: tier-1 failures block before the judge is ever consulted
 // prompt gains the citation-is-not-a-decision sentence everywhere, in or out of a stage.
 
 function stageDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'mocks-stage-'))
+  return tmpdir('mocks-stage')
 }
 
 function writeMocksStatus(dir, state) {
@@ -266,9 +265,9 @@ test('AC-20260902-06-7: rewrite and tier-1 continue to block exactly as before i
 })
 
 test('AC-20260902-06-8: the judge prompt carries the literal citation-is-not-a-decision sentence', () => {
-  const argvDir = fs.mkdtempSync(path.join(os.tmpdir(), 'question-judge-argv-'))
+  const argvDir = tmpdir('question-judge-argv')
   const argvFile = path.join(argvDir, 'argv.txt')
-  const capturingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'question-judge-'))
+  const capturingDir = tmpdir('question-judge')
   const bin = path.join(capturingDir, 'fake-claude')
   fs.writeFileSync(
     bin,

@@ -53,8 +53,37 @@ function checkWorkflowSyntax(rel) {
     '"use strict"; return (async () => {' + body + '\n})()')
 }
 
+// Every synthetic host tree lives under one per-process root that is removed exactly once when
+// the test process ends — normal exit, thrown error, or an interrupt signal. Without this, each
+// tmpdir() call left a ~700-inode tree behind on /tmp; across a few thousand runs that exhausted
+// the tmpfs inode table and made unrelated shell commands fail with ENOSPC. Tests that already
+// rmSync their own dirs keep working: removing a subtree twice is a no-op.
+let tmpRoot = null
+
+function removeTmpRoot() {
+  if (!tmpRoot) return
+  const root = tmpRoot
+  tmpRoot = null
+  try { fs.rmSync(root, { recursive: true, force: true, maxRetries: 3 }) } catch { /* best-effort cleanup */ }
+}
+
+function ensureTmpRoot() {
+  if (tmpRoot) return tmpRoot
+  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-plugins-tests-' + process.pid + '-'))
+  process.once('exit', removeTmpRoot)
+  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+    process.once(sig, () => {
+      removeTmpRoot()
+      // Re-deliver the signal with default disposition so the exit status stays signal-shaped
+      // (the test runner and the shell see a real interrupt, not a clean exit).
+      process.kill(process.pid, sig)
+    })
+  }
+  return tmpRoot
+}
+
 function tmpdir(prefix) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix + '-'))
+  return fs.mkdtempSync(path.join(ensureTmpRoot(), prefix + '-'))
 }
 
 function runNode(script, argv, opts = {}) {

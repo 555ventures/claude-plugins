@@ -292,7 +292,13 @@ for (const relPath of [...testFiles].sort()) {
     expected = carriedAcs.every(id => sanctionedById.get(id)) ? 'green' : 'red'
   }
 
-  let observed = runLeg(config.testCommand, relPath) === 0 ? 'green' : 'red'
+  // Exit 124 is the host's test watchdog (`timeout`) killing a run that never finished — a
+  // pinned CPU, not a failing assertion. It still classifies as red (a hung test is not green),
+  // but it is surfaced by name so the build driver can record the incident on its build row
+  // (core § Incident Policy materiality) instead of the trip vanishing into "observed: red".
+  const testExit = runLeg(config.testCommand, relPath)
+  if (testExit === 124) warnings.push(`watchdog-trip ${relPath} (exit 124) — the test run was killed by the host timeout, not a failing assertion`)
+  let observed = testExit === 0 ? 'green' : 'red'
   if (observed === 'green' && config.typecheckCommand) {
     observed = runLeg(config.typecheckCommand, relPath) === 0 ? 'green' : 'red'
   }

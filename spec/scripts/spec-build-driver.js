@@ -375,6 +375,8 @@ function ensureRedCheckAdvanced() {
   fs.writeFileSync(logPath, (r.stdout || '') + (r.stderr || ''))
   marks.redCheckRuns = k
   marks.redCheckLog = logPath
+  const trips = ((r.stdout || '').match(/^WARN\s+watchdog-trip\s+(\S+)/gm) || [])
+  for (const t of trips) recordIncident('test-watchdog-trip', 124, 'red-check run ' + k + ': ' + t.replace(/^WARN\s+watchdog-trip\s+/, ''))
   if (r.status === 0) {
     marks.redCheck = 'green'
     marks.lastRedCheckPass = true
@@ -421,7 +423,19 @@ function runGate() {
   }
   marks.gateRuns = marks.gateRuns || []
   marks.gateRuns.push({ exit: r.status, log: logPath })
+  if (r.status === 124) recordIncident('test-watchdog-trip', 124, 'gate run ' + k)
   saveSidecar()
+}
+
+// Automatic incident entries (core § Incident Policy): a watchdog trip is observable by exit
+// code, so the driver records it itself instead of relying on the session to remember
+// `--mark incident`. Same entry shape as the manual mark plus `source`, so fleet-reader's
+// materiality join counts both alike.
+function recordIncident(cls, exit, source) {
+  marks.incidents = marks.incidents || []
+  marks.incidents.push({ ts: new Date().toISOString(), class: cls, exit, source })
+  process.stderr.write('spec-build-driver: incident recorded automatically (' + cls + ', exit ' + exit +
+    ', ' + source + ') — ' + marks.incidents.length + ' on this build; it lands on the stage:"build" ledger row at DONE\n')
 }
 
 // ---- mark handlers --------------------------------------------------------------------------------

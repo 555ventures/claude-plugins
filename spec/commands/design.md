@@ -187,9 +187,20 @@ touched. No reply → nothing moved; the Resume table lands here again on the ne
    An affordance the server would reject is a fork, not a styling choice —
    `AskUserQuestion` (change the component / change the contract via a spec Decision), never
    pass it through to build.
-4. Stamp `designed: YYYY-MM-DD` in the spec's frontmatter. `/spec:design` never moves
+4. **AC ↔ design-landed reconcile (blocking).** Run
+   `node "$(spec-paths design-ac-reconcile)" --spec <spec> --components design/components.json`
+   (add `--component <name>` per component this run created to narrow it). Exit 1 lists every
+   AC whose subject is a component that now exists for real — at build, red-check would demand
+   a failing test for it and the only route to red is a mount that pins a CPU instead of
+   failing. One Sonnet dispatch reconciles each listed AC in exactly one of two ways: tag it
+   `[pre-green: design-landed]` when the kept component alone satisfies it, or — when its red
+   comes from wiring build still owes (a route, a server transition) — split its File Plan test
+   row by mount (component test vs router/wiring test) and add a Decisions row citing the AC id
+   that names the row where red stays honest. Re-run until exit 0; `designed:` is never stamped
+   over exit 1.
+5. Stamp `designed: YYYY-MM-DD` in the spec's frontmatter. `/spec:design` never moves
    `status` — it sets `designed:` only.
-5. Checkpoint-commit: spec, ledger, manifest, components, stories.
+6. Checkpoint-commit: spec, ledger, manifest, components, stories.
 
 ## Report
 
@@ -223,6 +234,9 @@ Next: /spec:run specs/20260824/02-example.md
   was permitted, never a defect.
 - **Affordance ↔ contract reconcile is blocking** — the Step 6 matrix runs before `designed:`
   lands; an affordance the server would reject is a fork, never passed through to build.
+- **AC ↔ design-landed reconcile is blocking** — `design-ac-reconcile` exit 0 precedes the
+  stamp; an AC a landed component already satisfies is tagged or split here, never left for
+  red-check to discover.
 - The `.design/` sidecar is **not created, read, or audited anywhere in the pipeline** (D13); a
   leftover one on a host is inert and safe to delete by hand.
 - `AskUserQuestion` dismissed → STOP.

@@ -44,3 +44,17 @@
   this class ("a colliding test pin is updated in place and retagged with the new AC-ID, never
   weakened, never left red") — here the guarantee is unchanged so the tag stays as-is. Verified
   green: `node --test 'tests/red-check/*.test.js'`.
+- Resolved (review-stage repair, D12 — review-pass ruling, `AskUserQuestion`): scope is widened
+  by one more pre-existing file outside this spec's File Plan,
+  `tests/provenance/provenance.test.js`. Its AC-20260901-02-1 "jq is unavailable on PATH"
+  fixture faked a missing `jq` with `env: { PATH: '/bin' }` and a comment claiming "/bin carries
+  bash itself but not jq on this platform" — false on merged-`/usr` Linux (Debian here), where
+  `/bin` is a symlink to `/usr/bin`, so `jq` still resolves at `/bin/jq`, the hook succeeds, and
+  the "writes no stamp file" assertion fails. Fixed per D12: the test now builds an empty
+  directory under `tmpdir()` holding only a symlink to the real `bash` binary (resolved via
+  `command -v bash`, never a hardcoded path) and passes that directory as `PATH` — `bash`
+  resolves, `jq` genuinely does not, matching what the fixture's own comment always claimed to
+  be testing. Both assertions, their consequence messages, and the `AC-20260901-02-1` tag are
+  unchanged; only the platform-assumption comment and the PATH-construction lines were replaced.
+  The real `jq` binary this repo's own hooks and the rest of the suite depend on is never
+  touched. Verified green: `node --test 'tests/provenance/*.test.js'` (17 pass, 0 fail).

@@ -100,12 +100,18 @@ test('AC-20260901-02-1: WHEN <cwd>/.claude is not writable THE SYSTEM exits 0 an
 test('AC-20260901-02-1: WHEN jq is unavailable on PATH THE SYSTEM exits 0 and writes no stamp file', () => {
   const root = fs.realpathSync(tmpdir('sess-stamp-nojq'))
   fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
-  // /bin carries bash itself but not jq on this platform (jq lives at /usr/bin) — a narrow PATH
-  // that resolves `bash` but not `jq` is the cleanest way to simulate a missing dependency without
-  // touching the real jq binary the rest of the suite (and this repo's own hooks) depend on.
+  // specs/20260907/01-mixed-pin-guard-and-drift-line.md D12: an empty tmpdir() holding only a
+  // `bash` symlink, used as PATH, resolves `bash` (so the hook's shebang-driven re-exec/spawn
+  // still runs) while genuinely resolving no `jq` anywhere — unlike `/bin`, which on merged-/usr
+  // Linux is a symlink to /usr/bin and so still carries the real jq (the prior fixture's false
+  // premise). The real jq binary the rest of the suite and this repo's own hooks depend on is
+  // never touched.
+  const narrowPath = fs.realpathSync(tmpdir('sess-stamp-nojq-path'))
+  const realBash = require('child_process').execFileSync('bash', ['-c', 'command -v bash'], { encoding: 'utf8' }).trim()
+  fs.symlinkSync(realBash, path.join(narrowPath, 'bash'))
   const r = runBash('scripts/spec-session-stamp.sh', [], {
     input: hookInput({ prompt: '/spec:build specs/x.md', cwd: root }),
-    env: { PATH: '/bin' }
+    env: { PATH: narrowPath }
   })
   assert.strictEqual(r.status, 0, 'a missing jq must still exit 0 — the hook degrades to a no-op, never a blocked prompt: ' + r.stdout + r.stderr)
   assert.ok(!fs.existsSync(path.join(root, '.claude/spec-session.json')),

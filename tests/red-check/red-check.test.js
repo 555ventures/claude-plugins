@@ -218,12 +218,18 @@ test('AC-20260821-01-4: an AC bullet that only quotes `SHALL CONTINUE TO` in bac
     `the finding must be classed unsanctioned-green, name tests/quoted.test.js, and carry AC-20260821-95-1 — got ${JSON.stringify(out.findings)}`)
 })
 
-// Sibling pin, same escape: a GENUINE marker hard-wrapped mid-phrase across two lines — matching
-// how the real specs/20260810/02-terminal-observable-acs.md AC-20260810-02-4 bullet wraps
-// ("AND SHALL" / "CONTINUE TO require the existing...") — was MISSED by the pre-fix literal
-// regex, since a single space never matches a newline. Fixed: isSanctioned now collapses
-// whitespace runs (including newlines) before matching, so the wrapped genuine pin still counts.
-test('AC-20260821-01-4: a genuine SHALL CONTINUE TO marker hard-wrapped across two lines — matching how the real AC-20260810-02-4 bullet wraps ("AND SHALL" / "CONTINUE TO require") — is still sanctioned, so its green pre-image test matches its expectation with no finding', () => {
+// Sibling pin, same escape: a GENUINE marker hard-wrapped mid-phrase across two lines — the same
+// hard-wrap shape as the real specs/20260810/02-terminal-observable-acs.md AC-20260810-02-4
+// bullet's own marker split ("SHALL" / "CONTINUE TO require the existing...") — was MISSED by the
+// pre-fix literal regex, since a single space never matches a newline. Fixed: isSanctioned now
+// collapses whitespace runs (including newlines) before matching, so the wrapped genuine pin
+// still counts. specs/20260907/01-mixed-pin-guard-and-drift-line.md D11 (build-pass ruling): the
+// bullet's incidental `SHALL y,` promise clause (copied in from elsewhere) is dropped so the
+// fixture is a pure pin under D1's pinShape rule — with it, the bullet is genuinely `mixed`
+// (two SHALLs, one pin) and the new mixed-pin guard correctly refuses it, which is not what this
+// fixture exists to prove; the assertions and the guarantee (a wrapped genuine pin is still
+// sanctioned) are unchanged.
+test('AC-20260821-01-4: a genuine SHALL CONTINUE TO marker hard-wrapped across two lines ("SHALL" / "CONTINUE TO require", the same split as the real AC-20260810-02-4 bullet) is still sanctioned, so its green pre-image test matches its expectation with no finding', () => {
   const { dir, base } = newHost('rc4-wrapped')
   fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'tests/wrapped.test.js'),
@@ -231,7 +237,7 @@ test('AC-20260821-01-4: a genuine SHALL CONTINUE TO marker hard-wrapped across t
     "test('AC-20260810-96-1: genuine regression pin, hard-wrapped in its AC bullet', () => { assert.ok(true) })\n")
   const spec = path.join(dir, 'spec.md')
   fs.writeFileSync(spec, specMd(
-    ['- **AC-20260810-96-1**: WHEN x THE SYSTEM SHALL y, AND SHALL\n' +
+    ['- **AC-20260810-96-1**: WHEN x THE SYSTEM SHALL\n' +
       '  CONTINUE TO require the existing pin check in the same step → tests/wrapped.test.js'],
     ['| tests/wrapped.test.js | CREATE | tests | genuine SHALL CONTINUE TO pin hard-wrapped across two lines — must be sanctioned, expected+observed green |']))
   const res = run(spec, dir, base, ['--json'])

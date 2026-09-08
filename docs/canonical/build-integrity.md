@@ -65,8 +65,18 @@ red-check`). Expectation derives from `SHALL CONTINUE TO` regression pins and cl
 observation is per-file `{testCommand}` exit codes against the pre-image, purity-refused when
 non-tests File Plan paths already differ from the diff base. The plan-time tag count rides
 review's ac-matrix manifest row as `observed.preGreen` into every ledger row, making the class
-fleet-countable. The kill condition and the rejected per-AC mutation mandate (with its reopen
-condition) are recorded in specs/20260821/01-red-check.md D12/Rationale.
+fleet-countable. Every carried AC's regression-pin bullet is also classified by `pinShape(raw)`
+(`spec/scripts/lib/spec-sections.js`'s `normalizeForPinCheck` plus a `SHALL`-count rule, shared
+with `ac-drift.js` and `ac-matrix.js --lint`) as `promise`, `pin`, or `mixed` — a bullet stating
+both a new promise and a `SHALL CONTINUE TO` pin in one place. A file carrying a `mixed` AC is
+never colour-classified: red-check reports a single hard `mixed-pin` finding naming every mixed
+AC-ID and the split-the-bullet remedy, and the run exits 1 without emitting `unsanctioned-green`
+or `broken-pin` for that file. The same predicate is a hard lint finding at `/spec:plan` lock
+(`ac-matrix --lint`) and a warning, never a finding, in review's full `ac-matrix` run against
+already-built specs, so replay against older specs whose bullets predate the guard stays a fair
+measurement. (specs/20260907/01-mixed-pin-guard-and-drift-line.md D1/D2/D3) The kill condition
+and the rejected per-AC mutation mandate (with its reopen condition) are recorded in
+specs/20260821/01-red-check.md D12/Rationale.
 
 **AC-grammar tags are position-anchored.** `[oracle:]`, `[env:]`, and `[pre-green:]` are
 recognized in exactly two positions on an AC bullet — the declaration slot (first line, between

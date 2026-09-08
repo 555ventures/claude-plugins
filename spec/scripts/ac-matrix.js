@@ -2,6 +2,8 @@
 'use strict'
 // ac-matrix.js --spec <path> --root <dir> --manifest <path> [--skips <file>]
 //   [--has-drift-script] [--json]
+// ac-matrix.js --spec <path> --lint [--json]   (spec-only: no --root/--manifest/--skips/
+//   --has-drift-script — the AC-line lint alone, no File Plan read, no manifest append)
 //
 // specs/20260814/01-ac-matrix-script.md: review.md Phase 0 steps 5–6 (AC-line lint +
 // AC↔test coverage matrix + [oracle:] handling, skipped-test reconciliation + [env:] handling)
@@ -24,8 +26,20 @@
 // not exist).
 //
 // Exit codes: 0 = executed, no findings · 1 = executed, findings emitted (rides the normal
-// Phase 2 disposition flow — not a script failure) · 2 = usage error, unreadable --spec, or a
-// spec with no `## Acceptance Criteria` section.
+// Phase 2 disposition flow — not a script failure) · 2 = usage error, unreadable --spec, a spec
+// with no `## Acceptance Criteria` section, or `--lint` combined with `--root`/`--manifest`/
+// `--skips`/`--has-drift-script` (usage: `--lint` is spec-only).
+//
+// specs/20260907/01-mixed-pin-guard-and-drift-line.md D1/D3: `--lint` runs ONLY the AC-line lint
+// (`malformed-ac`, `invalid-pre-green`, and the new `mixed-pin` — a carried AC bullet mixing a new
+// promise with a `SHALL CONTINUE TO` pin, per lib/spec-sections.js's exported `pinShape`, the same
+// predicate red-check.js's D2 guard and `/spec:plan` lock's D4 step both use) — no File Plan read,
+// no coverage grep, no manifest append; `/spec:plan` lock runs it before locking (D4). The lint
+// path returns BEFORE the full mode's `--root`/`--manifest` requirement check (Fragile, below) — a
+// `--lint` invocation supplies neither. In FULL mode a mixed bullet is a WARNING only
+// (`mixed-pin <id> — split …`), never a finding: full mode also runs inside `/spec:replay` against
+// the last CLEANed spec, whose own bullets may be mixed (Assumptions A1) — a red leg there would be
+// a false catch on history, not a build-time promise ready to ship untested.
 //
 // specs/20260820/04-entrypoint-conformance.md D13: the
 // missing-test-file check asserted existence for EVERY tests-layer File Plan row regardless of
@@ -113,16 +127,27 @@ const { parseFilePlanRows } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
 const {
   AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, extractSection, parseAcBullets, acIdOccurs,
-  rejectedTrailingTagDetail,
+  rejectedTrailingTagDetail, pinShape,
 } = require('./lib/spec-sections')
+const { writeOut } = require('./lib/driver-io')
+
+// A script that prints a payload and exits routes through a synchronous writer — the 64 KiB pipe
+// truncation this avoids (console.log + process.exit races stdout's async pipe flush) is spelled
+// out at spec/scripts/lib/driver-io.js's writeOut, imported above (commit-coverage.js,
+// mocks-driver.js, spec-build-driver.js, and spec-review-driver.js already import it too). Used by
+// --lint's short-circuit exit below — the pre-existing full-mode output path is untouched.
+// driver-io.js's writeOut appends no trailing newline of its own (unlike a `console.log`-style
+// call), so every call site below passes one explicitly to keep the printed bytes unchanged.
 
 function usage() {
   console.error('usage: ac-matrix.js --spec <path> --root <dir> --manifest <path> ' +
-    '[--skips <file>] [--has-drift-script] [--json]')
+    '[--skips <file>] [--has-drift-script] [--json]\n' +
+    '       ac-matrix.js --spec <path> --lint [--json]        ' +
+    '(spec-only: no --root/--manifest/--skips/--has-drift-script)')
 }
 
 let specPath = null, root = null, manifestPath = null, skipsFile = null
-let hasDriftScript = false, jsonOut = false
+let hasDriftScript = false, jsonOut = false, lintMode = false
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
@@ -132,9 +157,18 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--skips') skipsFile = argv[++i]
   else if (a === '--has-drift-script') hasDriftScript = true
   else if (a === '--json') jsonOut = true
+  else if (a === '--lint') lintMode = true
   else { usage(); process.exit(2) }
 }
-if (!specPath || !root || !manifestPath) { usage(); process.exit(2) }
+if (!specPath) { usage(); process.exit(2) }
+if (lintMode) {
+  // D3: --lint is spec-only — combining it with any full-mode flag is a usage error.
+  if (root !== null || manifestPath !== null || skipsFile !== null || hasDriftScript) {
+    usage(); process.exit(2)
+  }
+} else if (!root || !manifestPath) {
+  usage(); process.exit(2)
+}
 
 let specText
 try {
@@ -155,6 +189,51 @@ if (acSection === null) {
 
 const bullets = parseAcBullets(acSection)
 const wellFormed = bullets.filter(b => !b.malformed)
+
+// D1/D3: --lint returns HERE, before the full mode's File Plan read, coverage grep, or manifest
+// append — Fragile note above: this must run before the `--root`/`--manifest` requirement check,
+// not after it (a --lint invocation supplies neither flag).
+if (lintMode) {
+  const lintFindings = []
+  let malformedCount = 0, invalidPreGreenCount = 0, mixedCount = 0
+  for (const b of bullets) {
+    if (b.malformed) {
+      malformedCount++
+      lintFindings.push({
+        severity: 'hard', class: 'malformed-ac', ac: b.token || '',
+        detail: `malformed AC-ID "${b.token}" — leading bold token must fully match AC-\\d{8}-\\d{2}[a-z]?-\\d+`,
+      })
+    }
+  }
+  for (const b of wellFormed) {
+    if (b.preGreen !== null && !PRE_GREEN_REASONS.includes(b.preGreen)) {
+      invalidPreGreenCount++
+      lintFindings.push({
+        severity: 'hard', class: 'invalid-pre-green', ac: b.id,
+        detail: `${b.id}: [pre-green: ${b.preGreen}] is not in PRE_GREEN_REASONS (${PRE_GREEN_REASONS.join(' | ')})`,
+      })
+    }
+    if (pinShape(b.raw) === 'mixed') {
+      mixedCount++
+      lintFindings.push({
+        severity: 'hard', class: 'mixed-pin', ac: b.id,
+        detail: `${b.id} mixes a new promise with a SHALL CONTINUE TO pin — split the SHALL ` +
+          `CONTINUE TO clause into its own AC`,
+      })
+    }
+  }
+  const lintObserved = { malformed: malformedCount, invalidPreGreen: invalidPreGreenCount, mixed: mixedCount }
+  if (jsonOut) {
+    writeOut(1, JSON.stringify({ findings: lintFindings, warnings: [], observed: { lint: lintObserved } }, null, 2) + '\n')
+  } else {
+    for (const f of lintFindings) writeOut(1, `HARD  ${f.class.padEnd(20)} ${f.detail}\n`)
+    writeOut(1, `ac-matrix: lint malformed=${lintObserved.malformed} ` +
+      `invalidPreGreen=${lintObserved.invalidPreGreen} mixed=${lintObserved.mixed} · ` +
+      `${lintFindings.length} finding(s)\n`)
+  }
+  process.exit(lintFindings.length ? 1 : 0)
+}
+
 const acById = new Map(wellFormed.map(b => [b.id, b]))
 
 const findings = []
@@ -207,6 +286,19 @@ for (const b of wellFormed) {
       severity: 'hard', class: 'invalid-pre-green', ac: b.id,
       detail: `${b.id}: [pre-green: ${b.preGreen}] is not in PRE_GREEN_REASONS (${PRE_GREEN_REASONS.join(' | ')})`,
     })
+  }
+}
+
+// specs/20260907/01-mixed-pin-guard-and-drift-line.md D3: a mixed carried AC is a WARNING here,
+// never a finding — unconditional, independent of --has-drift-script (same AC-line-lint reasoning
+// as the preGreen validation above), and independent of coverage (a mixed bullet may still be
+// fully covered by its cited test — the shape defect stands regardless). Full mode also feeds
+// /spec:replay against the last CLEANed spec, whose own bullets may be mixed (Assumptions A1) — a
+// finding here would redden a fair measurement of history; --lint (above) is where a mixed bullet
+// is refused, at /spec:plan lock and build's red-check, not here.
+for (const b of wellFormed) {
+  if (pinShape(b.raw) === 'mixed') {
+    warnings.push(`mixed-pin ${b.id} — split the SHALL CONTINUE TO clause into its own AC`)
   }
 }
 

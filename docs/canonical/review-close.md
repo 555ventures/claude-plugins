@@ -30,3 +30,10 @@ The standing rules:
 - **Cost is accepted by contract.** One full `gateCommand` run per close attempt. The gate is
   the host's own definition of "enforced", and close happens once per spec. A host with a very
   slow gate gets a config knob, never a silent skip.
+- **The close screen carries an advisory drift signal, never a gate.** After the hygiene
+  listing and before the close commit, the driver prints one line naming the repo's current
+  count of AC-pin `SHALL CONTINUE TO` bullets no test cites (`ac-drift.js --json` over
+  `--root`; zero or `inapplicable` prints nothing) — informational only, it never touches the
+  verdict, the ledger row, or mark acceptance. `/spec:doctor` check 17 is the same derivation's
+  authoritative, browsable form; review's line only surfaces it at the moment new drift is
+  created. (specs/20260907/01-mixed-pin-guard-and-drift-line.md D6)

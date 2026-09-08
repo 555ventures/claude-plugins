@@ -1,12 +1,14 @@
 {
   "spec/scripts/ac-drift.js": {
     "entryPoints": [
-      "spec/commands/doctor.md"
+      "spec/commands/doctor.md",
+      "spec/scripts/spec-review-driver.js"
     ]
   },
   "spec/scripts/ac-matrix.js": {
     "entryPoints": [
-      "spec/scripts/review-legs.js"
+      "spec/scripts/review-legs.js",
+      "spec/commands/plan.md"
     ]
   },
   "spec/scripts/block-cross-worktree-writes.sh": {

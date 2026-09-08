@@ -1,6 +1,6 @@
 ---
 date: 2026-09-07
-status: hardened
+status: done
 tier: standard
 area: pipeline-gates
 design: false
@@ -10,6 +10,8 @@ depended_on_by: [specs/20260907/02-ac-drift-backfill.md]
 brief: n/a
 spiked: 2026-09-07
 open_markers: 0
+build_base: spec/20260907-01-02-03
+diff_base: 59a2dedacfefca44483a3737d198715e19472c0c
 ---
 
 # Mixed-pin guard (`pinShape`) at lock, build and review, plus the advisory AC-drift line at review close
@@ -44,6 +46,8 @@ drift is seen at the moment it is created rather than at the next doctor run (JJ
 | D8 | `spec/entrypoints.json`: `spec/scripts/ac-matrix.js` gains `spec/commands/plan.md`; `spec/scripts/ac-drift.js` gains `spec/scripts/spec-review-driver.js` (AC-20260907-01-13) | The entrypoints conformance sweep derives invokers from the tree; an unlisted invoker is its red |
 | D9 | `spec/.claude-plugin/plugin.json` bumps to the next free minor (target 7.96.0 — next free at build time per Gotchas) with a changelog paragraph naming `pinShape`, `mixed-pin` at lock/build/review, and the advisory drift line [no-ac: version discipline; `tests/consistency/plugin-version.test.js` covers the changelog form] | Behaviour change → owning plugin bumps (pipeline rules § Planning) |
 | D10 | Planning-pass amendment, done by the planning session at this lock and NOT a File Plan row: `specs/20260906/05-gray-states-on-every-wireframe.md` AC-3 (mixed — Assumptions A1) is split into AC-3 (the promise) and a new AC-20260906-05-5 (the `SHALL CONTINUE TO` pin), File Plan test row updated [no-ac: another spec's file, edited before this spec builds; recorded here for the cold reader] | 05 builds before this guard ships; without the split its Phase 1 sanctions the states-check test green (the exact class) |
+| D11 | Build-pass ruling (JJ 2026-09-08, `AskUserQuestion`): `tests/red-check/red-check.test.js`'s AC-20260821-01-4 fixture bullet is edited in place to drop its `SHALL y,` promise clause, leaving `WHEN x THE SYSTEM SHALL\nCONTINUE TO require the existing pin check in the same step` — still hard-wrapped mid-marker, now a pure pin under D1. The test's assertions (exit 0, no findings) and its stated guarantee are unchanged; scope is widened by this one file [no-ac: a pre-existing fixture repaired to match the grammar D5 now states; AC-20260907-01-1/-3 already pin the guard] | The fixture's own comment names its subject as hard-wrap normalisation of the marker; the promise clause was incidental copy from the real AC-20260810-02-4 bullet. Rejected: flipping the expectation to `mixed-pin` — nothing would then prove a wrapped genuine pin is still sanctioned, which is the escape that fixture exists for. Rejected: pausing — the gate cannot go green, so the guard could not ship |
+| D12 | Review-pass ruling (JJ 2026-09-08, `AskUserQuestion`): `tests/provenance/provenance.test.js`'s AC-20260901-02-1 fakes a missing `jq` with `env:{PATH:'/bin'}`, which is false on merged-`/usr` Linux (`/bin` → `/usr/bin`, so `jq` still resolves and the hook writes the stamp). The test instead builds an empty dir in `tmpdir()` holding only a `bash` symlink and uses that as `PATH`; assertions and the AC-ID are unchanged. Scope is widened by this one file [no-ac: a pre-existing platform-assumption defect repaired in place; the AC it pins is unchanged] | The suite leg is blocking and the assumption is wrong on every merged-`/usr` distro, not only this host — a real defect the review surfaced, fixed in the session it was understood (core § Incident Policy). Rejected: parking — the leg blocks every future review in this repo, not just this spec |
 
 ## File Plan
 
@@ -197,7 +201,61 @@ is A1's job, done once).
 do not reorder. `ac-matrix.js` exits via `process.exit` at argv parse; the lint path must
 return before the `--root`/`--manifest` requirement check, not after it.
 
+**Build/review departures (folded from the deviations sidecar, one-offs).** D8's own File Plan
+row for `tests/consistency/entrypoints.test.js` proposed a comment-only note; red-check refused
+that pre-image as `unsanctioned-green` (a carried AC with no red-expected assertion), so the
+file gained a real executable assertion instead — D8 itself is unchanged, only how it is
+proven. D9's literal target (`7.96.0`) was stale by build time — the pipeline rules' Gotchas
+entry on exactly this class ("a spec Decision naming a literal version-bump target can be
+stale by build time … the build bumps to the next free version", citing
+specs/20260810/02-terminal-observable-acs.md D11 and
+specs/20260901/08-corpus-derivation-and-kill-match.md D10) already governs it; this build's
+pre-image already carried `7.100.0` (landed after this spec was drafted), so the build bumped
+to `7.101.0`. A concurrent session spent that same number and `7.102.0` before merge-back, and
+the merge conflicted on the manifest exactly as that Gotchas entry predicts; the resolution
+re-bumped through `scripts/plugin-bump.js --bump`, so `7.103.0` is what shipped. D11 and D12
+are recorded in full in the Decisions
+table above; in brief, D11 fixed a genuine test-fixture collision `pinShape` correctly
+surfaced (`tests/red-check/red-check.test.js`'s pre-existing AC-20260821-01-4 hard-wrap
+fixture mirrored a real mixed bullet and read as `mixed`, not `pin`), and D12 fixed an
+unrelated, pre-existing platform-assumption bug found while widening scope for D11
+(`tests/provenance/provenance.test.js` faked "no `jq` on PATH" with `PATH=/bin`, which still
+resolves `jq` on merged-`/usr` Linux). Two further one-off repairs from review's own rounds:
+`spec-review-driver.js`'s `acPinDriftLine()` called `JSON.parse` unconditionally on
+`ac-drift.js --json`'s output, which is the plain `inapplicable — no specs/` sentinel (not
+JSON) when `--root` has no `specs/` directory — guarded with `try`/`catch`, gating the
+advisory line on `findings.length` alone once parsed, per D6; and `ac-matrix.js`'s new
+`--lint` branch first shipped a local `console.log`+`process.exit` writer (the pipe-truncation
+shape the pipeline rules' Gotchas entry already names), corrected to import
+`lib/driver-io.js`'s shared `writeOut` (four other scripts already import it — a first-round
+repair's claim that the export was "scoped to the two drivers" was itself wrong and is
+corrected here) rather than carry a fourth near-duplicate local copy; every `--lint` call site
+now passes `\n` explicitly since the shared `writeOut` adds no trailing newline of its own,
+keeping the printed bytes byte-identical to the pre-fix render.
+
 ## Canonical Delta
 
-None — this repo has no `docs/canonical/`; the doctrine homes are edited directly by D4, D5
-and D7.
+`docs/canonical/build-integrity.md` § Mechanized red-check: after the sentence ending "…the
+plan-time tag count rides review's ac-matrix manifest row as `observed.preGreen` into every
+ledger row, making the class fleet-countable." and before "The kill condition and the
+rejected per-AC mutation mandate…", insert: "Every carried AC's regression-pin bullet is also
+classified by `pinShape(raw)` (`spec/scripts/lib/spec-sections.js`'s `normalizeForPinCheck`
+plus a `SHALL`-count rule, shared with `ac-drift.js` and `ac-matrix.js --lint`) as `promise`,
+`pin`, or `mixed` — a bullet stating both a new promise and a `SHALL CONTINUE TO` pin in one
+place. A file carrying a `mixed` AC is never colour-classified: red-check reports a single
+hard `mixed-pin` finding naming every mixed AC-ID and the split-the-bullet remedy, and the run
+exits 1 without emitting `unsanctioned-green` or `broken-pin` for that file. The same
+predicate is a hard lint finding at `/spec:plan` lock (`ac-matrix --lint`) and a warning,
+never a finding, in review's full `ac-matrix` run against already-built specs, so replay
+against older specs whose bullets predate the guard stays a fair measurement.
+(specs/20260907/01-mixed-pin-guard-and-drift-line.md D1/D2/D3)"
+
+`docs/canonical/review-close.md`: after the last standing-rules bullet ("**Cost is accepted
+by contract.** …never a silent skip."), append a new bullet to that list: "- **The close
+screen carries an advisory drift signal, never a gate.** After the hygiene listing and before
+the close commit, the driver prints one line naming the repo's current count of AC-pin `SHALL
+CONTINUE TO` bullets no test cites (`ac-drift.js --json` over `--root`; zero or `inapplicable`
+prints nothing) — informational only, it never touches the verdict, the ledger row, or mark
+acceptance. `/spec:doctor` check 17 is the same derivation's authoritative, browsable form;
+review's line only surfaces it at the moment new drift is created.
+(specs/20260907/01-mixed-pin-guard-and-drift-line.md D6)"

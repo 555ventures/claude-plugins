@@ -1,0 +1,111 @@
+{
+  "runId": "rv_f8080c411da7",
+  "ts": "2026-09-08T21:42:39.008Z",
+  "spec": "specs/20260907/02-ac-drift-backfill.md",
+  "tier": "standard",
+  "iteration": 2,
+  "scope": "fix-delta",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 181,
+    "base": "c3477e5f46a442cc7b730c02c873ee306984fcd3",
+    "head": "4db4d69d4b1cceda83f6b200cba3d7cdf22112e3",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 71
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1315
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 8,
+        "carried": 5,
+        "sanctioned": 3,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [],
+    "killed": [
+      {
+        "claim": "The fix names AC-20260907-02-2 only in a comment, so the ac-matrix hit is a citation without a test asserting the promised behavior (semantic-backstop violation)",
+        "file": "tests/ac-matrix/rejected-trailing-tag.test.js",
+        "line": 24,
+        "evidence": "AC-20260907-02-2 promises the two partition tests SHALL CONTINUE TO pass with their titles beginning `AC-20260823-03-13 / AC-20260823-03-13a:` and `-13b:`. Executed `node --test tests/ac-matrix/rejected-trailing-tag.test.js tests/doctor/ac-drift-clean.test.js`: 11 pass / 0 fail, and the two titles at lines 152 and 183 begin with exactly those strings per `git diff c3477e5 -- tests/ac-matrix/rejected-trailing-tag.test.js`. The comment is the carrier; the retitled tests themselves are the asserting behavior, so the citation delivers."
+      },
+      {
+        "claim": "The regression pin AC-20260907-02-2 (SHALL CONTINUE TO) lost its covering test or is still uncovered in the ac-matrix leg",
+        "file": "specs/20260907/02-ac-drift-backfill.review/legs-2/ac-matrix.txt",
+        "line": 1,
+        "evidence": "legs-2/ac-matrix.txt: `uncovered=0 oracle=0 preGreen=0 · 0 finding(s)`; manifest-2 promise-sweep row `rows=8 carried=5 sanctioned=3 orphans=0`. No test deleted in the range (`git diff --stat c3477e5..HEAD` shows only additions to tests/)."
+      },
+      {
+        "claim": "Adding the bare AC-20260823-03-13 token to a comment introduces new AC-drift or a version-bump obligation",
+        "file": "tests/ac-matrix/rejected-trailing-tag.test.js",
+        "line": 25,
+        "evidence": "Executed `node spec/scripts/ac-drift.js --root . --json`: {scanned: 91, criteria: 950, findings: []} exit 0. Executed `node scripts/plugin-bump.js --check`: exit 0; the range touches nothing under spec/, so D6's no-bump stance holds."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 24000
+  }
+}

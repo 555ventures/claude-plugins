@@ -1,0 +1,48 @@
+{
+  "ts": "2026-09-08T22:03:49.517Z",
+  "stage": "replay",
+  "spec": "specs/20260907/02-ac-drift-backfill.md",
+  "runId": "rp_133e3896b8c8",
+  "reviewRunId": "rv_f8080c411da7",
+  "class": "boundary-shift",
+  "files": [
+    "tests/doctor/ac-drift-clean.test.js"
+  ],
+  "legs": "green",
+  "outcome": "caught",
+  "tokens": 56246,
+  "via": "driver",
+  "patch": "diff --git a/tests/doctor/ac-drift-clean.test.js b/tests/doctor/ac-drift-clean.test.js\nindex ef3c0c1..686a12c 100644\n--- a/tests/doctor/ac-drift-clean.test.js\n+++ b/tests/doctor/ac-drift-clean.test.js\n@@ -28,7 +28,7 @@ test('AC-20260907-02-1: ac-drift.js --root <this repo> --json exits 0 with an em\n     `ac-drift's own exit code must agree with an empty findings array — a nonzero exit here ` +\n     `with zero findings means the script's exit derivation and its findings array have drifted ` +\n     `apart (stderr: ${res.stderr})`)\n-  assert.ok(out.scanned >= 87,\n+  assert.ok(out.scanned > 87,\n     `AC-20260907-02-1 pins scanned >= 87 (the executed done-spec count at lock) — a much ` +\n     `smaller number here means --root resolved to the wrong tree or the repo walk silently ` +\n     `narrowed, never a genuine shrink in this repo's done specs — got scanned=${out.scanned}`)\n",
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "medium",
+        "claim": "The plain-render test's two negative assertions cannot fail on the drift they claim to guard: ac-drift's human render never prints the class literals `retired-uncited` / `uncovered-ac` (the stderr row is `ac-drift: <spec> <ac> — <detail>`), so `!/retired-uncited/.test(res.stderr)` and `!/uncovered-ac/.test(res.stderr)` pass even on a tree with findings. Only the `status === 0` assertion pins AC-20260907-02-1's plain-render clause; the row-text half of the AC is unpinned.",
+        "file": "tests/doctor/ac-drift-clean.test.js",
+        "line": 42,
+        "impact": "Two of the three checks in the plain-render test are decorative; if the script's exit code and its printed rows ever disagree, the test will not notice the rows.",
+        "evidence": "spec/scripts/ac-drift.js:197-204 renders findings as `'ac-drift: ' + f.spec + ' ' + f.ac + ' — ' + f.detail` — f.class is never printed. Executed against a synthetic host (one uncovered AC + one `[retired: notes.txt]` AC): exit=1; STDERR rows carry `no test cites it` and `[retired:] must cite the specs/ or docs/adr/ path that retired it`; `grep -c retired-uncited` on stderr -> 0; `grep -c uncovered-ac` -> 0. Both regex assertions would pass on a red tree."
+      },
+      {
+        "severity": "medium",
+        "claim": "The `scanned` assertion contradicts both the AC and its own message: AC-20260907-02-1 says `scanned >= 87`, the assert message says `pins scanned >= 87`, but the code asserts `out.scanned > 87`, which fails at exactly 87 while the AC is satisfied.",
+        "file": "tests/doctor/ac-drift-clean.test.js",
+        "line": 30,
+        "impact": "The test is one step stricter than the criterion it names and its own failure message misstates the boundary; it passes today only because the live count is above the boundary.",
+        "evidence": "Spec AC-20260907-02-1 requires `scanned >= 87`. Test line 30: `assert.ok(out.scanned > 87,` with message `AC-20260907-02-1 pins scanned >= 87`. git show of the final commit: `-  assert.ok(out.scanned >= 87,` / `+  assert.ok(out.scanned > 87,`. Live value: scanned 91."
+      },
+      {
+        "severity": "soft",
+        "claim": "Six retired bullets had their `-> tests/...` reference removed although the referenced test file still exists, whereas D1/Contracts scope the removal to references whose file no longer exists.",
+        "file": "specs/20260823/08-derived-session-queue.md",
+        "line": 207,
+        "impact": "Provenance of where each retired criterion used to be tested is dropped from six bullets even though the files are still in the tree; nothing the pipeline reads changes.",
+        "evidence": "D1 says the reference is removed `since the test no longer exists`. Executed `[ -e $t ]` for each removed path: EXISTS tests/design-look-handoff.test.js, tests/genesis/genesis-driver.test.js, tests/genesis/tournament.test.js, tests/queue/spec-queue.test.js, tests/review/review-driver.test.js, tests/spec-paths.test.js."
+      }
+    ],
+    "killed": [],
+    "reviewerCount": 1,
+    "tokens": 55000
+  }
+}

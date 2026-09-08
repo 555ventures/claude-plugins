@@ -1,6 +1,6 @@
 ---
 date: 2026-09-07
-status: hardened
+status: implementing
 tier: critical
 area: review-evidence
 design: false
@@ -10,6 +10,7 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-07
 open_markers: 0
+diff_base: e1835455f757ffe9f43cc6ce72771b24ef64c857
 ---
 
 # At-risk selection skips ignored paths; an unobserved test count reds the leg

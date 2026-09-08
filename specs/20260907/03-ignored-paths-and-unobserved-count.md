@@ -1,6 +1,6 @@
 ---
 date: 2026-09-07
-status: implementing
+status: done
 tier: critical
 area: review-evidence
 design: false
@@ -224,6 +224,34 @@ them populate) or is not a repository at all, in which case D2's guard leaves th
 — so no fixture repair is planned, and the build-time whole-suite check adjudicates if that
 reading is wrong.
 
+**Build and review departures (folded from the deviations sidecar at close).** Two, both
+one-offs, neither earning a Gotchas entry (the section stood at its 15-entry cap at verdict).
+First, D7 named 7.97.0 as the version-bump target, but sibling specs 20260907/01 and /02 had
+already landed and carried the plugin to 7.103.0 by build time; per D7's own standing
+moving-target rule the build took the next free minor, **7.104.0**, which is the rule working
+rather than a departure from it. Second, the whole-suite leg's first run hard-stopped red on
+two browser-launching tests owned by specs/20260905/06 — they exited 127 because the machine
+had no Chrome anywhere the test's resolver looks. Neither that test file nor its script is in
+this File Plan or this spec's commit, and the reviewer confirmed the file is byte-identical to
+the diff base; a browser was then installed and the same untouched file passed with no
+environment variable set, so zero code delta flipped the result. The user ruled at disposition
+that the hard failure is **correct** and queued no follow-up: a test that steps aside when its
+dependency is absent reports green having verified nothing, which is precisely the vacuous-green
+class this spec exists to close, and § Test Rules already states that this repo sanctions no
+env-gated skips. The remedy for a browserless machine is to install the browser, never to add a
+skip guard.
+
 ## Canonical Delta
 
-No `docs/canonical/` area covers the review evidence legs; nothing to apply.
+Applied at close. The Delta as locked read "no `docs/canonical/` area covers the review
+evidence legs; nothing to apply" — that was wrong: two live reference docs stated the rules
+this spec changes, and leaving them would have taught future planning the retired behaviour.
+
+- `docs/canonical/review.md` — the `suite` leg paragraph said a declared `testCountPattern`
+  forces exit 1 only on an observed zero; it now states the widened rule (an observed `0` **or**
+  a `pattern-no-match` the declared format never matched), that `no-format-declared` never
+  forces, and that the at-risk leg carries the identical rule. The `at-risk` leg paragraph gains
+  the ignored-path prune and its top-level-root guard.
+- `docs/canonical/pipeline.md` — the one-line at-risk derivation summary gains the prune, so the
+  short form and the long form agree.
+

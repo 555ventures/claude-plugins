@@ -34,7 +34,8 @@ panel ever runs it (escape `wf_e1da0ea6-94c`: five pins, two files, zero signal;
 `scoped-gate-blind-spot`: three merges in two days went red on main only after merge-back).
 
 Two compensations, one per question. `scope-reconcile.js` derives the **at-risk** set — outside
-test files whose content names a changed file's path stem — and review runs that set as a
+test files whose content names a changed file's path stem, git-ignored paths pruned so an
+ignored second checkout never enters the set — and review runs that set as a
 required, non-blocking leg whose failures are ordinary findings: it answers *which* outside
 tests this diff endangers. The **`suite`** leg answers whether the tree is green at all: review
 runs the host's bare `testCommand` once per legs iteration in its own wave (never concurrent

@@ -8,7 +8,8 @@ const {
   SCRIPT, JOURNEY, LABELS, DENSE,
   bare, mark, writeFile, writeWireframe,
   decideLook, openLook,
-  advanceToSeedDone, advanceToCanonWritten, advanceToThemePicked,
+  advanceToSeedDone, advanceToShapePicked, advanceToCanonWritten, advanceToThemePicked,
+  freePort,
 } = require('./mocks-driver-fixtures')
 
 // specs/20260905/04-per-project-look-server.md D3/D7: mocks-driver.js's `stop open`/`stop decide`
@@ -124,4 +125,44 @@ test('skill-check and every authoring step block print the frontend-design skill
   const step = runNode(SCRIPT, ['--root', root], withFullPath(fakeBin([{ id: 'other@x', enabled: true }])))
   assert.match(step.stdout, /state: SHAPES/, 'seed-done root must print the SHAPES step block — got: ' + step.stdout.slice(0, 200))
   assert.match(step.stdout, /\n⚠️ frontend-design skill not installed/, 'the SHAPES step block must carry the skill line — got: ' + step.stdout)
+})
+
+// ---------------------------------------------------------------------------
+// specs/20260907/04-kit-canon-family.md D8: the KIT step block.
+// ---------------------------------------------------------------------------
+test('AC-20260907-04-11: the bare driver in KIT prints the skill line, the exact D8 instantiate-not-invent literal, a look: line naming stop open kit, and a Then: line naming --mark kit-signed', () => {
+  const fakeBin = (rows) => {
+    const dir = tmpdir('fake-claude-')
+    const bin = path.join(dir, 'claude')
+    fs.writeFileSync(bin, '#!/bin/sh\nprintf %s \'' + JSON.stringify(rows) + '\'\n')
+    fs.chmodSync(bin, 0o755)
+    return dir
+  }
+  const withFullPath = (dir) => ({ env: { ...process.env, PATH: dir + ':' + process.env.PATH } })
+  const installed = fakeBin([{ id: 'frontend-design@claude-plugins-official', enabled: true, scope: 'user' }])
+
+  const dir = tmpdir('mocks-driver')
+  advanceToShapePicked(dir) // now at KIT — design/kit/ not yet authored
+
+  const step = runNode(SCRIPT, ['--root', dir], withFullPath(installed))
+  assert.match(step.stdout, /state: KIT/, 'a shape-picked root must print the KIT step block — got: ' + step.stdout.slice(0, 200))
+  assert.match(step.stdout, /🎨 Load the `frontend-design` skill/, 'D8: the KIT step block must print the frontend-design skill line, the same as every other authoring state: ' + step.stdout)
+  assert.match(step.stdout, /Every wireframe is instantiated from this page — name a primitive once here or it gets invented once per screen\./,
+    'D8: the KIT step block must carry the exact fixed instantiate-not-invent literal: ' + step.stdout)
+  assert.match(step.stdout, /look:[\s\S]*stop open kit/, 'the KIT step block must carry a look: line naming `stop open kit`: ' + step.stdout)
+  assert.match(step.stdout, /Then:[\s\S]*--mark kit-signed/, 'the KIT step block must carry a Then: line naming `--mark kit-signed`: ' + step.stdout)
+})
+
+test('AC-20260907-04-11: stop open kit exits 3 when nothing answers the served --port', async () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToShapePicked(dir)
+  fs.mkdirSync(path.join(dir, 'design/kit'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'design/kit/kit.html'),
+    '<link rel="stylesheet" href="../wire/tokens.css">\n<div data-kit-canon="kit"></div>\n')
+
+  const busyPort = await freePort()
+  const unreachable = runNode(SCRIPT, ['--root', dir, 'stop', 'open', 'kit', '--port', String(busyPort)])
+  assert.strictEqual(unreachable.status, 3,
+    'stop open kit must exit 3 when nothing answers the given --port, the same as every other stop open step: ' + unreachable.stdout + unreachable.stderr)
+  assert.match(unreachable.stderr, /serve --root/, 'the exit-3 remedy must name `serve --root`: ' + JSON.stringify(unreachable.stderr))
 })

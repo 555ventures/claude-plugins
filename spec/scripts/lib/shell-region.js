@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // spec/scripts/lib/shell-region.js — the shell-canon region mechanics behind design-atlas.js's
-// `check` shell family (D4) and `shell sync`/`shell adopt` subcommands (D5/D6).
+// `check` shell family (D4) and `shell sync`/`shell adopt` subcommands (D5/D6), plus the sibling
+// kit-canon family (specs/20260907/04-kit-canon-family.md D2-D4/D13).
 //
 // WHY: specs/20260901/04-shell-composed-mocks.md D1-D6. Chrome drifts because nothing shares it
 // and nothing checks it: each mock hand-copying its nav/header markup means a sidebar edit in
@@ -378,22 +379,138 @@ function isCanonFile(html) {
   return labelIx === -1 || canonIx < labelIx
 }
 
-// ---- resolveShellDir -------------------------------------------------------------------------
-// Same walk-up shape design-atlas.js's loadTargets() uses for targets.json: from `fromPath`,
-// climb ancestors checking both `<dir>/shell` (dir IS the design/ folder) and
-// `<dir>/design/shell` (dir is above it), returning the first existing directory. null when no
-// design/shell/ resolves anywhere above fromPath (D4's shell family then stays off entirely).
-function resolveShellDir(fromPath) {
+// ---- resolveCanonDir / resolveShellDir ---------------------------------------------------------
+// specs/20260907/04-kit-canon-family.md D3: resolveCanonDir(fromPath, family) generalises the
+// walk-up design-atlas.js's loadTargets() uses for targets.json over the DIRECTORY NAME — from
+// `fromPath`, climb ancestors checking both `<dir>/<family>` (dir IS the design/ folder) and
+// `<dir>/design/<family>` (dir is above it), returning the first existing directory. null when no
+// design/<family>/ resolves anywhere above fromPath (the family's rule set then stays off
+// entirely — the shell family's D4 absence-invariant, generalised). resolveShellDir(fromPath) is
+// resolveCanonDir(fromPath, 'shell') — byte-identical in behavior to the pre-D3 implementation
+// (A2: it must NOT resolve a tree holding only design/kit/, which is exactly what the generic walk
+// checking only the 'shell' family name already guarantees).
+function resolveCanonDir(fromPath, family) {
   let dir = path.resolve(fromPath)
   try { if (!fs.statSync(dir).isDirectory()) dir = path.dirname(dir) } catch { dir = path.dirname(dir) }
   for (;;) {
-    for (const c of [path.join(dir, 'shell'), path.join(dir, 'design', 'shell')]) {
+    for (const c of [path.join(dir, family), path.join(dir, 'design', family)]) {
       try { if (fs.statSync(c).isDirectory()) return c } catch {}
     }
     const up = path.dirname(dir)
     if (up === dir) return null
     dir = up
   }
+}
+function resolveShellDir(fromPath) { return resolveCanonDir(fromPath, 'shell') }
+
+// ---- D2/D3/D4/D13: kit-canon family -----------------------------------------------------------
+// "First labeled root" (same ordering test as isCanonFile): a file is a kit canon when
+// data-kit-canon appears before any data-screen-label in document order.
+function isKitCanonFile(html) {
+  const canonIx = html.search(/data-kit-canon\s*=\s*"/)
+  if (canonIx === -1) return false
+  const labelIx = html.search(/data-screen-label\s*=\s*"/)
+  return labelIx === -1 || canonIx < labelIx
+}
+
+// D13: "a primitive is named once per FAMILY, never per file" — every data-kit-primitive key
+// declared by every kit-canon .html file sitting directly in `kitDir` (a design/kit/ directory
+// already resolved by resolveCanonDir), keyed to the list of files (repeats included) that
+// declare it. A file failing to read, or one that is not itself a kit-canon file (first labeled
+// root is not data-kit-canon), contributes nothing.
+function kitPrimitivesInDir(kitDir) {
+  const byKey = new Map()
+  let files = []
+  try { files = fs.readdirSync(kitDir).filter((f) => f.endsWith('.html')) } catch { return byKey }
+  for (const f of files.sort()) {
+    const p = path.join(kitDir, f)
+    let html
+    try { html = fs.readFileSync(p, 'utf8') } catch { continue }
+    if (!isKitCanonFile(html)) continue
+    for (const m of html.matchAll(/data-kit-primitive\s*=\s*"([^"]+)"/g)) {
+      if (!byKey.has(m[1])) byKey.set(m[1], [])
+      byKey.get(m[1]).push(p)
+    }
+  }
+  return byKey
+}
+
+// checkKitCanon(canonPath, html) -> [violation string, ...] ("<path>: <text>" shape, as `check`
+// already prints). D2: a duplicate data-kit-primitive key WITHIN this one file is a violation —
+// the family-wide half of D13 (a key repeated across two SIBLING files) is derived by the caller
+// from kitPrimitivesInDir once per resolved design/kit/ directory (never per file), so this
+// function's own scope stays this file's own markup, exactly as checkCanon's scope is its own
+// canon file.
+function checkKitCanon(canonPath, html) {
+  const out = []
+  if (!isKitCanonFile(html)) return out
+  const counts = new Map()
+  for (const m of html.matchAll(/data-kit-primitive\s*=\s*"([^"]+)"/g)) {
+    counts.set(m[1], (counts.get(m[1]) || 0) + 1)
+  }
+  for (const [key, n] of counts) {
+    if (n > 1) out.push(canonPath + ': duplicate data-kit-primitive="' + key + '" — a primitive is named once per family')
+  }
+  return out
+}
+
+// D4: the top-level children of the labeled root's CONTENT region — the data-slot="content"
+// subtree when the mock declares a shell (data-shell present and resolved to a slot), else the
+// labeled root's own top-level children directly.
+function kitContentRegionOf(mockHtml, rootEl) {
+  const inner = mockHtml.slice(rootEl.innerStart, rootEl.innerEnd)
+  const slot = findElement(inner, (t) => /data-slot\s*=\s*"content"/.test(t.raw))
+  return slot ? inner.slice(slot.innerStart, slot.innerEnd) : inner
+}
+
+// diagnoseKitRegions(mockHtml, kitDir) -> { findings: [{code, text}], kit: <n>, bespoke: <n> }
+//   codes: unabsorbed | unknown-kit | bespoke-unnamed
+// Each top-level child of the content region (D4), skipping any child itself carrying
+// data-contract="none" (the state-button switcher — tooling, never a content region), must carry
+// either data-kit="<key>" naming an existing family primitive, or data-bespoke="<key>: <diff>"
+// naming an existing primitive and a non-empty difference. `kit`/`bespoke` are D6's raw counts
+// (every data-kit / every data-bespoke region, regardless of whether it also finds a violation),
+// consumed by the caller's informational ⓘ line — never a gate signal itself.
+function diagnoseKitRegions(mockHtml, kitDir) {
+  const findings = []
+  let kit = 0
+  let bespoke = 0
+  const root = findElement(mockHtml, (t) => /data-screen-label\s*=\s*"[^"]*"/.test(t.raw))
+  if (!root) return { findings, kit, bespoke }
+  const validKeys = new Set(kitPrimitivesInDir(kitDir).keys())
+  const contentHtml = kitContentRegionOf(mockHtml, root)
+  const children = topLevelChildren(contentHtml).filter((c) => !/data-contract\s*=\s*"none"/.test(c.raw))
+  let n = 0
+  for (const c of children) {
+    n++
+    const kitMatch = c.raw.match(/data-kit\s*=\s*"([^"]*)"/)
+    const bespokeMatch = c.raw.match(/data-bespoke\s*=\s*"([^"]*)"/)
+    if (kitMatch) {
+      kit++
+      if (!validKeys.has(kitMatch[1])) {
+        findings.push({
+          code: 'unknown-kit',
+          text: 'names data-kit="' + kitMatch[1] + '" but design/kit/ declares no primitive "' + kitMatch[1] + '"',
+        })
+      }
+    } else if (bespokeMatch) {
+      bespoke++
+      const m = bespokeMatch[1].match(/^([^:]+):\s*(.*)$/)
+      if (!m || !m[2].trim()) {
+        findings.push({
+          code: 'bespoke-unnamed',
+          text: 'data-bespoke="' + bespokeMatch[1] + '" names no difference — say what prevents reuse',
+        })
+      }
+    } else {
+      findings.push({
+        code: 'unabsorbed',
+        text: 'region ' + n + ' carries neither data-kit nor data-bespoke — instantiate a kit primitive ' +
+          'or mark it data-bespoke="<key>: <what differs>"',
+      })
+    }
+  }
+  return { findings, kit, bespoke }
 }
 
 module.exports = {
@@ -408,7 +525,12 @@ module.exports = {
   checkCanon,
   isCanonFile,
   offTokenColorViolations,
+  resolveCanonDir,
   resolveShellDir,
+  isKitCanonFile,
+  kitPrimitivesInDir,
+  checkKitCanon,
+  diagnoseKitRegions,
   loadCoverageClaims,
   builtLabels,
 }

@@ -238,8 +238,24 @@ function getBody(url) {
 // ---------------------------------------------------------------------------
 // Chained setup — each advanceTo* runs the REAL binary through the prior marks and asserts each
 // is accepted, so a later-stage test's fixture is itself an executed proof of the earlier ACs.
+//
+// Fixture repair (mocks-driver-fixtures.js, same worktree as specs/20260907/04-kit-canon-family.md):
+// KIT's insertion between SHAPES and WIREFRAMES means a test can now legitimately call two
+// advanceTo* helpers on the SAME dir in sequence (e.g. advanceToShapePicked then
+// advanceToKitSigned, to observe the state transition between them) — every advanceTo* below
+// therefore reads status.json first and skips straight past a stage whose mark is already set,
+// rather than unconditionally redoing it (which re-appends ledger rows already present and trips
+// parseLedger's own, correct, duplicate-id detection).
 // ---------------------------------------------------------------------------
+function readMarksOrEmpty(dir) {
+  try { return JSON.parse(fs.readFileSync(statusPath(dir), 'utf8')).marks || {} } catch { return {} }
+}
+function readStatusOrEmpty(dir) {
+  try { return JSON.parse(fs.readFileSync(statusPath(dir), 'utf8')) } catch { return {} }
+}
+
 function advanceToSeedDone(dir) {
+  if (readMarksOrEmpty(dir).seedDone) return
   bare(dir) // cold-root creation
   writeTargets(dir)
   writeResearchBrief(dir)
@@ -251,6 +267,7 @@ function advanceToSeedDone(dir) {
 }
 
 function advanceToShapePicked(dir, chosen = 'calm', others = ['bold']) {
+  if (readMarksOrEmpty(dir).shapePicked) return
   advanceToSeedDone(dir)
   for (const k of [chosen, ...others]) {
     writeFile(path.join(dir, 'design/shapes', k + '.html'),
@@ -267,8 +284,39 @@ function advanceToShapePicked(dir, chosen = 'calm', others = ['bold']) {
   return r
 }
 
+// specs/20260907/04-kit-canon-family.md D2: design/kit/<name>.html — root data-kit-canon,
+// each primitive data-kit-primitive/data-purpose, its own chrome data-contract="none", its own
+// content data-slot="content", states declared exactly as a wireframe does, linking the same
+// wireframe register (../wire/tokens.css) every writeWireframe fixture links.
+function writeKitCanon(dir, primitives = [{ key: 'sheet', purpose: 'a modal panel for one focused task' }]) {
+  const body = primitives.map((p) =>
+    '<section data-kit-primitive="' + p.key + '" data-purpose="' + p.purpose + '">' +
+    '<div data-contract="none"><button data-state-btn="empty">Empty</button>' +
+    '<button data-state-btn="loading">Loading</button><button data-state-btn="error">Error</button></div>' +
+    '<div data-slot="content"></div>' +
+    '</section>').join('\n')
+  writeFile(path.join(dir, 'design/kit/kit.html'),
+    '<link rel="stylesheet" href="../wire/tokens.css">\n' +
+    '<div data-kit-canon="kit">\n' + body + '\n</div>\n')
+}
+
+// Orchestrator duty (specs/20260907/04-kit-canon-family.md): D1 inserts KIT between SHAPES and
+// WIREFRAMES — every advanceTo* helper reaching canon-written or beyond now routes through a
+// real `--mark kit-signed` the same way it already routes through shape-picked, so a later
+// stage's fixture stays an executed proof of every earlier mark's contract, kit included.
+function advanceToKitSigned(dir, primitives) {
+  if (readMarksOrEmpty(dir).kitSignedOff) return
+  if (!readMarksOrEmpty(dir).shapePicked) advanceToShapePicked(dir)
+  writeKitCanon(dir, primitives)
+  decideLook(dir, 'kit-signed', 'approve', { by: 'jj' })
+  const r = mark(dir, 'kit-signed')
+  assert.strictEqual(r.status, 0, 'test setup requires kit-signed to be accepted once design/kit/ holds a valid canon file and its stop is decided approve: ' + r.stderr)
+  return r
+}
+
 function advanceToCanonWritten(dir) {
-  advanceToShapePicked(dir)
+  if (readMarksOrEmpty(dir).canonWritten) return
+  if (!readMarksOrEmpty(dir).kitSignedOff) advanceToKitSigned(dir)
   writeCanon(dir)
   const r = mark(dir, 'canon-written')
   assert.strictEqual(r.status, 0, 'test setup requires canon-written to be accepted on a valid canon.md with no existing mocks: ' + r.stderr)
@@ -310,7 +358,9 @@ function writeCaptureConfig(dir, capturePath) {
 }
 
 function advanceToJourneyApproved(dir, journeyName = JOURNEY, labels = LABELS) {
-  advanceToCanonWritten(dir)
+  const already = readStatusOrEmpty(dir)
+  if (already.journeys && already.journeys[journeyName] && already.journeys[journeyName].approved) return
+  if (!readMarksOrEmpty(dir).canonWritten) advanceToCanonWritten(dir)
   for (const label of labels) writeWireframe(dir, label)
   const drawn = mark(dir, 'journey-drawn', ['--journey', journeyName])
   assert.strictEqual(drawn.status, 0, 'test setup requires journey-drawn to be accepted once every label of the journey conforms to D6: ' + drawn.stderr)
@@ -322,6 +372,8 @@ function advanceToJourneyApproved(dir, journeyName = JOURNEY, labels = LABELS) {
 }
 
 function advanceToDirectionComposed(dir, kebab, labels, ledgerId) {
+  const already = readStatusOrEmpty(dir)
+  if (already.directions && already.directions[kebab] && already.directions[kebab].composed) return
   const ledgerR = ledgerCmd(dir, 'add', [
     '--id', ledgerId, '--step', 'THEME', '--kind', 'product',
     '--claim', 'theme-directions: ' + kebab, '--tag', 'said-by-user', '--status', 'confirmed',
@@ -338,7 +390,9 @@ function advanceToDirectionComposed(dir, kebab, labels, ledgerId) {
 // negative-path tests that deliberately compose more or a dense-screen-less set (AC-3) keep
 // passing whatever shape they need to isolate that one violation.
 function advanceToThemePicked(dir, chosen = 'quiet', other = 'warm') {
-  advanceToJourneyApproved(dir)
+  if (readMarksOrEmpty(dir).themePicked) return
+  const already = readStatusOrEmpty(dir)
+  if (!(already.journeys && already.journeys[JOURNEY] && already.journeys[JOURNEY].approved)) advanceToJourneyApproved(dir)
   advanceToDirectionComposed(dir, chosen, [DENSE, LABELS[0]], 'P15')
   advanceToDirectionComposed(dir, other, [DENSE, LABELS[1]], 'P16')
   const ledgerR = ledgerCmd(dir, 'add', [
@@ -355,7 +409,8 @@ function advanceToThemePicked(dir, chosen = 'quiet', other = 'warm') {
 // D11: the SKIN/REVIEW states are retired — approved now stamps the wireframes produced at
 // journey-drawn/journey-approved straight through, with no intervening skin step.
 function advanceToApproved(dir) {
-  advanceToThemePicked(dir)
+  if (readMarksOrEmpty(dir).approved) return
+  if (!readMarksOrEmpty(dir).themePicked) advanceToThemePicked(dir)
   decideLook(dir, 'approved', 'approve', { by: 'Ren' })
   const r = mark(dir, 'approved')
   assert.strictEqual(r.status, 0, 'test setup requires approved to be accepted once theme is picked, the approved stop is decided approve, notes are resolved, and render-gate/matrix check hold: ' + r.stderr)
@@ -439,10 +494,10 @@ module.exports = {
   bare, mark, stateOf, ledgerCmd,
   writeFile, writeJSON, statusPath, statusJson,
   writeTargets, writeResearchBrief, writeSeed, confirmFacts, writeCanon, writeWireframe,
-  writeThemeDirection,
+  writeThemeDirection, writeKitCanon,
   decideLook, openLook, freePort, startServe, stopServe, getBody,
   writeFixtureCapture, writeCaptureConfig,
-  advanceToSeedDone, advanceToShapePicked, advanceToCanonWritten, advanceToJourneyApproved,
+  advanceToSeedDone, advanceToShapePicked, advanceToKitSigned, advanceToCanonWritten, advanceToJourneyApproved,
   advanceToDirectionComposed, advanceToThemePicked,
   advanceToApproved,
   writeShortSeed, advanceToShortJourneyDrawn,

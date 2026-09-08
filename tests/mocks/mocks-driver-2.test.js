@@ -8,13 +8,13 @@ const {
   SCRIPT, JOURNEY, LABELS, DENSE,
   bare, mark, stateOf,
   writeFile, statusJson,
-  writeWireframe,
+  writeCanon, writeWireframe, writeKitCanon,
   decideLook,
-  advanceToSeedDone, advanceToCanonWritten, advanceToJourneyApproved,
+  advanceToSeedDone, advanceToShapePicked, advanceToKitSigned, advanceToCanonWritten, advanceToJourneyApproved,
   advanceToDirectionComposed, advanceToThemePicked, advanceToApproved,
   ledgerCmd,
   writeFixtureCapture, writeCaptureConfig,
-  stubNpx,
+  stubNpx, freePort, startServe, stopServe,
 } = require('./mocks-driver-fixtures')
 
 // specs/20260902/07-mocks-command-driver.md (TDD red): spec/scripts/mocks-driver.js does not
@@ -274,5 +274,110 @@ test('AC-20260905-06-8: the same journey-approved mark with canned inventories t
   const st = statusJson(dir)
   assert.ok(st.journeys[JOURNEY] && st.journeys[JOURNEY].approved,
     'an accepted journey-approved must record journeys.<j>.approved: ' + JSON.stringify(st.journeys[JOURNEY]))
+})
+
+// ---------------------------------------------------------------------------
+// specs/20260907/04-kit-canon-family.md D7: --mark kit-signed's own preconditions.
+// ---------------------------------------------------------------------------
+test('AC-20260907-04-9: --mark kit-signed exits non-zero naming stop open kit with no decided stop, without setting marks.kitSignedOff, and once the stop is decided it exits non-zero naming design/kit/ holds no .html file when the family is empty', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToShapePicked(dir)
+  writeKitCanon(dir)
+
+  const noStop = mark(dir, 'kit-signed')
+  assert.strictEqual(noStop.status, 2,
+    '--mark kit-signed must refuse with no decided stop, even once design/kit/ holds a file: ' + noStop.stdout + noStop.stderr)
+  assert.match(noStop.stderr + noStop.stdout, /stop open kit/,
+    'the refusal must name the remedy "stop open kit": ' + noStop.stdout + noStop.stderr)
+  assert.strictEqual(statusJson(dir).marks.kitSignedOff, null,
+    'a refused kit-signed mark must leave marks.kitSignedOff null: ' + JSON.stringify(statusJson(dir).marks))
+
+  decideLook(dir, 'kit-signed', 'approve', { by: 'jj' })
+  fs.rmSync(path.join(dir, 'design/kit'), { recursive: true, force: true })
+  const empty = mark(dir, 'kit-signed')
+  assert.strictEqual(empty.status, 2,
+    '--mark kit-signed must refuse once design/kit/ holds no .html file, even once its stop is decided approve: ' + empty.stdout + empty.stderr)
+  assert.match(empty.stderr + empty.stdout, /design\/kit\/ holds no \.html file/,
+    'the refusal must name the exact D7 empty-family message: ' + empty.stdout + empty.stderr)
+  assert.strictEqual(statusJson(dir).marks.kitSignedOff, null,
+    'a refused kit-signed mark must leave marks.kitSignedOff null: ' + JSON.stringify(statusJson(dir).marks))
+})
+
+// ---------------------------------------------------------------------------
+// specs/20260907/04-kit-canon-family.md D7: `stop open kit`'s candidate derivation.
+// ---------------------------------------------------------------------------
+test('AC-20260907-04-10: stop open kit with two files under design/kit/ writes one stop with kind approve, key kit-signed, title "sign off the kit", and one candidate per file', async () => {
+  let serveChild = null
+  try {
+    const dir = tmpdir('mocks-driver')
+    advanceToShapePicked(dir)
+    writeKitCanon(dir, [{ key: 'sheet', purpose: 'a modal panel for one focused task' }])
+    writeFile(path.join(dir, 'design/kit/forms.html'),
+      '<link rel="stylesheet" href="../wire/tokens.css">\n<div data-kit-canon="forms"></div>\n')
+    const port = await freePort()
+    serveChild = await startServe(dir, port)
+
+    const r = runNode(SCRIPT, ['--root', dir, 'stop', 'open', 'kit', '--port', String(port)])
+    assert.strictEqual(r.status, 0, 'stop open kit must exit 0 once design/kit/ holds candidates: ' + r.stdout + r.stderr)
+    const stops = JSON.parse(fs.readFileSync(path.join(dir, 'design/mocks/picks.json'), 'utf8'))
+    const kitStop = stops.find((s) => s.key === 'kit-signed')
+    assert.ok(kitStop, 'stop open kit must write one stop keyed kit-signed: ' + JSON.stringify(stops))
+    assert.strictEqual(kitStop.kind, 'approve', 'the kit stop must be an approve stop: ' + JSON.stringify(kitStop))
+    assert.strictEqual(kitStop.title, 'sign off the kit', 'D7: the kit stop must carry the exact title "sign off the kit": ' + JSON.stringify(kitStop))
+    assert.strictEqual(kitStop.candidates.length, 2,
+      'the kit stop must carry exactly one candidate per file under design/kit/: ' + JSON.stringify(kitStop.candidates))
+    const paths = kitStop.candidates.map((c) => c.path).sort()
+    assert.deepStrictEqual(paths, ['kit/forms.html', 'kit/kit.html'],
+      'D7: each candidate must be "<name>=kit/<name>.html": ' + JSON.stringify(kitStop.candidates))
+  } finally {
+    await stopServe(serveChild)
+  }
+})
+
+// ---------------------------------------------------------------------------
+// specs/20260907/04-kit-canon-family.md D9: journey-approved's kit gate.
+// ---------------------------------------------------------------------------
+function kitAwareWireframe(label, regionAttr) {
+  return '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
+    '<link rel="stylesheet" href="../wire/tokens.css">\n' +
+    '<link rel="stylesheet" href="../wire/wire.css">\n' +
+    '<style>* { box-sizing: border-box; }</style>\n' +
+    '<main data-screen-label="' + label + '" data-status="sketch">' + label +
+    '<div data-contract="none"><button data-state-btn="empty">empty</button>' +
+    '<button data-state-btn="loading">loading</button><button data-state-btn="error">error</button></div>' +
+    '<section' + (regionAttr ? ' ' + regionAttr : '') + '>content</section>' +
+    '</main>\n'
+}
+
+test('AC-20260907-04-12: journey-approved refuses naming the file and the D4 remedy when a journey screen carries an unabsorbed content region, once a kit family resolves, and accepts once every region is kit-tagged or bespoke-marked', () => {
+  const dir = tmpdir('mocks-driver')
+  advanceToKitSigned(dir, [{ key: 'sheet', purpose: 'a modal panel for one focused task' }])
+  writeCanon(dir)
+  const canonWritten = mark(dir, 'canon-written')
+  assert.strictEqual(canonWritten.status, 0, 'test setup requires canon-written to be accepted: ' + canonWritten.stderr)
+
+  for (const label of LABELS) writeFile(path.join(dir, 'design/mocks', label + '.html'), kitAwareWireframe(label, null))
+  const drawn = mark(dir, 'journey-drawn', ['--journey', JOURNEY])
+  assert.strictEqual(drawn.status, 0,
+    'test setup requires journey-drawn to be accepted — the unabsorbed-region rule only violates at journey-approved\'s forced --matrix, journey-drawn only warns: ' + drawn.stdout + drawn.stderr)
+  writeCaptureConfig(dir, writeFixtureCapture(dir))
+  decideLook(dir, 'journey-approved:' + JOURNEY, 'approve', { by: 'jj' })
+
+  const bad = mark(dir, 'journey-approved', ['--journey', JOURNEY])
+  assert.strictEqual(bad.status, 2,
+    'D9: journey-approved must refuse once a screen carries an unabsorbed content region, with a kit family present: ' + bad.stdout + bad.stderr)
+  assert.match(bad.stderr + bad.stdout, new RegExp(LABELS[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    'the refusal must name the offending file: ' + bad.stdout + bad.stderr)
+  assert.match(bad.stderr + bad.stdout, /carries neither data-kit nor data-bespoke/,
+    'the refusal must carry the D4 remedy text: ' + bad.stdout + bad.stderr)
+  assert.strictEqual(statusJson(dir).journeys[JOURNEY].approved, null,
+    'a refused journey-approved mark must leave journeys.<j>.approved unset: ' + JSON.stringify(statusJson(dir).journeys))
+
+  for (const label of LABELS) writeFile(path.join(dir, 'design/mocks', label + '.html'), kitAwareWireframe(label, 'data-kit="sheet"'))
+  const good = mark(dir, 'journey-approved', ['--journey', JOURNEY])
+  assert.strictEqual(good.status, 0,
+    'journey-approved must accept once every content region is kit-tagged or bespoke-marked: ' + good.stdout + good.stderr)
+  assert.ok(statusJson(dir).journeys[JOURNEY].approved,
+    'an accepted journey-approved must record journeys.<j>.approved once every region conforms')
 })
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // mocks-driver.js [--root <dir>] [--state]
 // mocks-driver.js --root <dir> --mark <mark> [--journey <j>] [--direction <k>] [--shape <k>]
-// mocks-driver.js --root <dir> --reopen journey:<j>|shapes|theme
+// mocks-driver.js --root <dir> --reopen journey:<j>|shapes|kit|theme
 // mocks-driver.js --root <dir> ledger (add|set|catch|check|counts|ask) [flags]
 // mocks-driver.js --root <dir> ledger add --id <i> --step <s> --kind <k> --claim <c> [--tag <t>]
 //                              [--status <st>] [--rejected <r>] [--dependents <d>] [--note <n>]
@@ -14,11 +14,11 @@
 // mocks-driver.js --root <dir> notes reply --id <id> --text "<question back>"
 // mocks-driver.js --root <dir> look <label> [--state <s>] [--out <png>] [--port <n>]
 // mocks-driver.js --root <dir> look-probe | look-via <playwright|browser>
-// mocks-driver.js --root <dir> stop open <step> [--port <n>]   shapes | journey:<j> | theme | signoff
+// mocks-driver.js --root <dir> stop open <step> [--port <n>]   shapes | kit | journey:<j> | theme | signoff
 // mocks-driver.js --root <dir> stop decide <P…> --verdict pick|approve|change [--pick <g>] [--note <n>] --by <who>
 //
 // WHY: specs/20260902/07-mocks-command-driver.md — `/spec:mocks` is the standalone design
-// stage; this driver derives SEED -> SHAPES -> WIREFRAMES -> THEME -> SIGNOFF -> APPROVED on
+// stage; this driver derives SEED -> SHAPES -> KIT -> WIREFRAMES -> THEME -> SIGNOFF -> APPROVED on
 // every invocation from `design/mocks/status.json` plus the artifacts actually on disk (a
 // recorded mark whose artifact vanished is demanded again), prints exactly one step, gates every
 // advancing mark on the provenance ledger (spec 06, lib/mocks-ledger.js), and checkpoints every
@@ -29,6 +29,13 @@
 // dense screen (a second screen at most) and picks one; the terminal `approved` mark is the one
 // sign-off — it stamps every top-level mock `data-status="approved"` itself and records the
 // decider from the sign-off stop's own "by".
+//
+// specs/20260907/04-kit-canon-family.md D1: `KIT` sits between `SHAPES` and `WIREFRAMES`,
+// gated on `marks.kitSignedOff` exactly like every other step in the chain. `--mark kit-signed`
+// (D7) requires a decided `kit-signed` look stop, a non-empty `design/kit/`, and a passing
+// `design-atlas.js check design/kit`; `--reopen kit` (D10) clears the sign-off and the terminal
+// approval only, never a journey's own approval, and `--reopen shapes` widens to clear it too
+// (a re-picked shape invalidates whatever the kit was authored against).
 //
 // specs/20260905/04-per-project-look-server.md D3: `stop open <step> [--port <n>]` derives the
 // candidate set for the step's look from disk and delegates to design-atlas.js (sibling path,
@@ -113,6 +120,7 @@ const { runChild, writeOut } = require('./lib/driver-io')
 const { parseLedger, gateVerdict, countsLine, appendAssumption, appendCatch, setStatus } = require('./lib/mocks-ledger')
 const { readNotes, writeNotes, addNote, addressNote, replyNote, groupOpen, unresolvedFor } = require('./lib/mocks-notes')
 const picksLib = require('./lib/mocks-picks.js')
+const shellLib = require('./lib/shell-region')
 
 function die(msg) { writeOut(2, 'mocks-driver: ' + msg + '\n'); process.exit(2) }
 function nowIso() { return new Date().toISOString() }
@@ -157,7 +165,7 @@ const FACT_KEYS = [
 function freshStatus() {
   return {
     schemaVersion: 1, state: 'SEED',
-    marks: { seedDone: null, shapePicked: null, canonWritten: null, themePicked: null, approved: null },
+    marks: { seedDone: null, shapePicked: null, kitSignedOff: null, canonWritten: null, themePicked: null, approved: null },
     shape: null, theme: null, decider: null, look: 'playwright',
     journeys: {}, directions: {}, reopens: [], lastUpdated: null,
   }
@@ -646,6 +654,20 @@ function buildJourneyStopSpec(journeyName) {
   }
 }
 
+// specs/20260907/04-kit-canon-family.md D7: `stop open kit`'s candidate derivation — one
+// candidate per design/kit/*.html file, "<name>=kit/<name>.html".
+function buildKitStopSpec() {
+  const kitDir = path.join(root, 'design/kit')
+  let files = []
+  try { files = fs.readdirSync(kitDir).filter((f) => f.endsWith('.html')) } catch { /* none yet */ }
+  if (!files.length) die('stop open kit: design/kit/ holds no .html file — author the kit page first')
+  const kebabs = files.map((f) => path.basename(f, '.html')).sort()
+  return {
+    kind: 'approve', key: 'kit-signed', title: 'sign off the kit',
+    candidates: kebabs.map((k) => ({ group: null, label: k, path: 'kit/' + k + '.html' })),
+  }
+}
+
 function buildThemeStopSpec() {
   const composed = Object.keys(status.directions || {})
   if (composed.length < 2) die('stop open theme: only ' + composed.length + ' direction(s) composed — at least 2 are required before opening a look stop')
@@ -668,11 +690,12 @@ function buildSignoffStopSpec() {
 
 function buildStopSpec(step) {
   if (step === 'shapes') return buildShapesStopSpec()
+  if (step === 'kit') return buildKitStopSpec()
   if (step === 'theme') return buildThemeStopSpec()
   if (step === 'signoff') return buildSignoffStopSpec()
   let m
   if ((m = /^journey:(.+)$/.exec(step))) return buildJourneyStopSpec(m[1])
-  die('stop open: unknown step "' + step + '" — one of: shapes, journey:<j>, theme, signoff')
+  die('stop open: unknown step "' + step + '" — one of: shapes, kit, journey:<j>, theme, signoff')
   return null // unreachable
 }
 
@@ -727,12 +750,16 @@ function allJourneysApproved() {
   for (const [jn] of journeys) { const st = status.journeys[jn]; if (!st || !st.approved) return false }
   return true
 }
-// D1: SEED -> SHAPES -> WIREFRAMES -> THEME (`!status.theme`) -> SIGNOFF (`!marks.approved`) ->
-// APPROVED — SKIN and REVIEW are retired; a root with `theme` set derives SIGNOFF straight
-// through, whatever legacy SKIN/REVIEW-era fields it still carries alongside.
+// D1: SEED -> SHAPES -> KIT (`!marks.kitSignedOff`) -> WIREFRAMES -> THEME (`!status.theme`) ->
+// SIGNOFF (`!marks.approved`) -> APPROVED — SKIN and REVIEW are retired; a root with `theme` set
+// derives SIGNOFF straight through, whatever legacy SKIN/REVIEW-era fields it still carries
+// alongside. specs/20260907/04-kit-canon-family.md D1: KIT sits between SHAPES and WIREFRAMES,
+// gated on one mark exactly like every other step in this chain — never on design/kit/ existing
+// on disk, so a half-authored kit never silently advances the state.
 function deriveState() {
   if (!status.marks.seedDone) return 'SEED'
   if (!shapeValid()) return 'SHAPES'
+  if (!status.marks.kitSignedOff) return 'KIT'
   if (!(status.marks.canonWritten && allJourneysApproved())) return 'WIREFRAMES'
   if (!status.theme) return 'THEME'
   if (!status.marks.approved) return 'SIGNOFF'
@@ -848,6 +875,22 @@ function handleShapePicked(shapeArg) {
   consumeStopAndSave(stop.id)
 }
 
+// specs/20260907/04-kit-canon-family.md D7: `--mark kit-signed` requires a decided look stop
+// keyed kit-signed, requires design/kit/ to hold at least one .html file, and requires
+// design-atlas.js check design/kit to exit 0 — in that order, so the refusal always names the
+// most immediate missing precondition.
+function handleKitSignedOff() {
+  const stop = requireStopDecision('kit-signed', 'stop open kit')
+  const kitDir = path.join(root, 'design/kit')
+  let files = []
+  try { files = fs.readdirSync(kitDir).filter((f) => f.endsWith('.html')) } catch { /* none yet */ }
+  if (!files.length) die('design/kit/ holds no .html file — author the kit page first')
+  const r = runDesignAtlasCheck([kitDir])
+  if (r.status !== 0) die('design-atlas.js check design/kit failed: ' + childOutput(r))
+  status.marks.kitSignedOff = nowIso()
+  consumeStopAndSave(stop.id)
+}
+
 function handleCanonWritten() {
   requireGateOpen()
   if (!status.marks.shapePicked) die('shape-picked has not been marked yet — mark shape-picked first')
@@ -932,6 +975,19 @@ function handleJourneyApproved(journeyName) {
   const statesRes = runDesignAtlasCheck(['--states', ...(j ? j.labels : []).map(mockFile)])
   if (statesRes.status !== 0) {
     die(childOutput(statesRes) + '\ndraw the missing states in the wireframe register, then re-mark')
+  }
+  // specs/20260907/04-kit-canon-family.md D9: once a kit family resolves, every content region of
+  // this journey's own screens must already be kit-tagged or bespoke-marked — --matrix forces the
+  // D5 stamp gate's violation tier onto these mocks even though journey-approved's mocks sit at
+  // data-status="sketch" (A3). Bound only when a kit family actually resolves above these mocks
+  // (D5's absence-invariant — the same resolveCanonDir walk-up `check` itself uses, so a
+  // design/kit/ sitting above `root` binds here exactly as it binds `check`).
+  if (shellLib.resolveCanonDir(mocksDir, 'kit')) {
+    const journeyLabelFiles = (j ? j.labels : []).map(mockFile)
+    const kitRes = runDesignAtlasCheck(['--matrix', ...journeyLabelFiles])
+    if (kitRes.status !== 0) {
+      die(childOutput(kitRes) + '\ninstantiate the missing kit primitive(s), or mark the region data-bespoke, then re-mark')
+    }
   }
   requireRenderGateMocks((j ? j.labels : []).map((l) => mockFile(l)), journeyName)
   const stop = requireStopDecision('journey-approved:' + journeyName, 'stop open journey:' + journeyName)
@@ -1065,13 +1121,14 @@ function doMark(mark, opts) {
   switch (mark) {
     case 'seed-done': handleSeedDone(); break
     case 'shape-picked': handleShapePicked(opts.shape); break
+    case 'kit-signed': handleKitSignedOff(); break
     case 'canon-written': handleCanonWritten(); break
     case 'journey-drawn': handleJourneyDrawn(opts.journey); break
     case 'journey-approved': handleJourneyApproved(opts.journey); break
     case 'direction-composed': handleDirectionComposed(opts.direction); break
     case 'theme-picked': handleThemePicked(opts.direction); break
     case 'approved': handleApproved(); break
-    default: die('unknown mark "' + mark + '" — one of: seed-done, shape-picked, canon-written, journey-drawn, journey-approved, direction-composed, theme-picked, approved')
+    default: die('unknown mark "' + mark + '" — one of: seed-done, shape-picked, kit-signed, canon-written, journey-drawn, journey-approved, direction-composed, theme-picked, approved')
   }
   const nextState = deriveState()
   printAcceptedTail(prevState, nextState)
@@ -1099,6 +1156,10 @@ function doReopen(target) {
   } else if (target === 'shapes') {
     status.shape = null
     status.marks.shapePicked = null
+    // specs/20260907/04-kit-canon-family.md D10: `--reopen shapes` additionally clears
+    // marks.kitSignedOff — KIT sits after SHAPES in the chain, so a re-picked shape invalidates
+    // whatever the kit was authored against.
+    status.marks.kitSignedOff = null
     status.marks.canonWritten = null
     for (const k of Object.keys(status.directions || {})) delete status.directions[k]
     status.theme = null
@@ -1109,10 +1170,19 @@ function doReopen(target) {
     }
     status.decider = null
     status.marks.approved = null
-    const invalidated = ['shape', 'canon', 'journeys(all)', 'theme', 'approved(all)']
+    const invalidated = ['shape', 'kit', 'canon', 'journeys(all)', 'theme', 'approved(all)']
     status.reopens.push({ at, target: 'shapes', invalidated })
     saveStatus()
     writeOut(1, '↩ reopened shapes — invalidated: ' + invalidated.join(', ') + '\n')
+    process.exit(0)
+  } else if (target === 'kit') {
+    status.marks.kitSignedOff = null
+    status.marks.approved = null
+    status.decider = null
+    const invalidated = ['kit', 'approved(all)']
+    status.reopens.push({ at, target: 'kit', invalidated })
+    saveStatus()
+    writeOut(1, '↩ reopened kit — invalidated: ' + invalidated.join(', ') + '\n')
     process.exit(0)
   } else if (target === 'theme') {
     status.theme = null
@@ -1125,7 +1195,7 @@ function doReopen(target) {
     writeOut(1, '↩ reopened theme — invalidated: ' + invalidated.join(', ') + '\n')
     process.exit(0)
   } else {
-    die('--reopen must be journey:<j>, shapes, or theme')
+    die('--reopen must be journey:<j>, shapes, kit, or theme')
   }
 }
 
@@ -1335,7 +1405,7 @@ function openRowsLine() {
 // D8: one constant feeds both the skill line (printStepBlock) and the look-probe precondition
 // (doBareStep) — SIGNOFF is not an authoring state (it asks the user to look, not to draw), so
 // it prints no skill line even though its own look probe still runs.
-const AUTHORING_STATES = new Set(['SHAPES', 'WIREFRAMES', 'THEME'])
+const AUTHORING_STATES = new Set(['SHAPES', 'KIT', 'WIREFRAMES', 'THEME'])
 function printStepBlock(state, title, readOnlyList, doctrineSection, progressLine, thenLines) {
   const lines = []
   lines.push('[mocks-driver] state: ' + state + '  root: ' + root)
@@ -1367,6 +1437,19 @@ function printShapesStep() {
     ['design/mocks/seed.md', 'design/shapes/*.html', 'design/mocks/ledger.md'],
     'Mocks: State Machine', openRowsLine() + '\n' + look.look,
     look.then)
+}
+
+// specs/20260907/04-kit-canon-family.md D8: the KIT step's own printStepBlock invocation — the
+// fixed instantiate-not-invent line is the authoring seed, and (like SIGNOFF's D6) the Then:
+// command stays pinned to `--mark kit-signed` regardless of the look stop's own state; only the
+// look: progress line varies (none/waiting/change/approved).
+function printKitStep() {
+  const look = lookLineAndThen('kit-signed', 'kit', () => driverCmd('--mark kit-signed'))
+  printStepBlock('KIT', 'name the shared parts — one page, every state, before any screen',
+    ['design/mocks/seed.md', 'design/shapes/<shape>.html'],
+    'Mocks: State Machine',
+    'Every wireframe is instantiated from this page — name a primitive once here or it gets invented once per screen.' + '\n' + look.look,
+    [driverCmd('--mark kit-signed')])
 }
 
 function journeysProgressLine(journeys) {
@@ -1471,6 +1554,7 @@ function doBareStep() {
   }
   if (state === 'SEED') return printSeedStep()
   if (state === 'SHAPES') return printShapesStep()
+  if (state === 'KIT') return printKitStep()
   if (state === 'WIREFRAMES') return printWireframesStep()
   if (state === 'THEME') return printThemeStep()
   if (state === 'SIGNOFF') return printSignoffStep()

@@ -1,0 +1,130 @@
+<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../wire/tokens.css">
+<link rel="stylesheet" href="../wire/wire.css">
+<!--
+  spec/doctrine/mocks.md § Mocks: State Machine / spec/doctrine/design.md § Design Canon.
+  Kit canon starting page — copied to design/kit/<name>.html at the KIT step
+  (specs/20260907/04-kit-canon-family.md D2). Name every shared primitive ONCE, in every state,
+  with a when-to-use line, before any screen is drawn. Gray on wire/tokens.css; never skinned —
+  a kit page that gains color has skipped ahead to THEME.
+
+  By convention, rename data-kit-canon="kit" below to the file's own basename once copied
+  (design/kit/<name>.html reads best as data-kit-canon="<name>") — this is a naming convention,
+  not a checked rule. Each <section data-kit-primitive="<key>" data-purpose="<one line>">
+  below is one primitive.
+  Rename, add, or delete sections freely for the product at hand (these ten are a starting
+  set, not a fixed roster) — a duplicate data-kit-primitive key anywhere in the family is a
+  checkKitCanon violation, so pick names once and keep them. Each primitive's own chrome is
+  data-contract="none" (label, state switch — never compared by the render gate); its
+  data-slot="content" is the one region a screen instance actually fills.
+-->
+<style>* { box-sizing: border-box; }</style>
+</head><body>
+<div data-kit-canon="kit">
+
+  <section data-kit-primitive="sheet" data-purpose="a modal panel for one focused task, dismissible without losing place in the page behind it">
+    <div data-contract="none" class="row">
+      <span class="label">sheet</span>
+      <button data-state-btn="empty">empty</button>
+      <button data-state-btn="loading">loading</button>
+      <button data-state-btn="error">error</button>
+    </div>
+    <div data-slot="content" class="card"></div>
+  </section>
+
+  <section data-kit-primitive="empty-state" data-purpose="a content region with nothing in it yet — names what belongs here and the one action that fills it">
+    <div data-contract="none" class="row">
+      <span class="label">empty-state</span>
+      <button data-state-btn="empty">empty</button>
+      <button data-state-btn="loading">loading</button>
+      <button data-state-btn="error">error</button>
+    </div>
+    <div data-slot="content" class="placeholder"></div>
+  </section>
+
+  <section data-kit-primitive="table-row" data-purpose="one record in a dense list of many, scannable at a glance">
+    <div data-contract="none" class="row">
+      <span class="label">table-row</span>
+      <button data-state-btn="empty">empty</button>
+      <button data-state-btn="loading">loading</button>
+      <button data-state-btn="error">error</button>
+    </div>
+    <div data-slot="content" class="list-item"></div>
+  </section>
+
+  <section data-kit-primitive="card" data-purpose="one self-contained unit of content, browsed among peers rather than read in a stream">
+    <div data-contract="none" class="row">
+      <span class="label">card</span>
+      <button data-state-btn="empty">empty</button>
+      <button data-state-btn="loading">loading</button>
+      <button data-state-btn="error">error</button>
+    </div>
+    <div data-slot="content" class="card"></div>
+  </section>
+
+  <section data-kit-primitive="form-field" data-purpose="one labeled input plus its validation message, inside any form">
+    <div data-contract="none" class="row">
+      <span class="label">form-field</span>
+      <button data-state-btn="empty">empty</button>
+      <button data-state-btn="loading">loading</button>
+      <button data-state-btn="error">error</button>
+    </div>
+    <div data-slot="content" class="stack">
+      <span class="label">field label</span>
+      <input class="input" placeholder="">
+    </div>
+  </section>
+
+  <section data-kit-primitive="option-group" data-purpose="a small closed set of mutually exclusive choices, all visible at once">
+    <div data-contract="none" class="row">
+      <span class="label">option-group</span>
+      <button data-state-btn="empty">empty</button>
+      <button data-state-btn="loading">loading</button>
+      <button data-state-btn="error">error</button>
+    </div>
+    <div data-slot="content" class="row"></div>
+  </section>
+
+  <section data-kit-primitive="list-item" data-purpose="one row in a scannable vertical list, lighter-weight than a card">
+    <div data-contract="none" class="row">
+      <span class="label">list-item</span>
+      <button data-state-btn="empty">empty</button>
+      <button data-state-btn="loading">loading</button>
+      <button data-state-btn="error">error</button>
+    </div>
+    <div data-slot="content" class="list-item"></div>
+  </section>
+
+  <section data-kit-primitive="toolbar" data-purpose="a row of actions scoped to the content directly below or beside it">
+    <div data-contract="none" class="row">
+      <span class="label">toolbar</span>
+      <button data-state-btn="empty">empty</button>
+      <button data-state-btn="loading">loading</button>
+      <button data-state-btn="error">error</button>
+    </div>
+    <div data-slot="content" class="row"></div>
+  </section>
+
+  <section data-kit-primitive="banner" data-purpose="a page-level or section-level message that is not tied to one field">
+    <div data-contract="none" class="row">
+      <span class="label">banner</span>
+      <button data-state-btn="empty">empty</button>
+      <button data-state-btn="loading">loading</button>
+      <button data-state-btn="error">error</button>
+    </div>
+    <div data-slot="content" class="muted"></div>
+  </section>
+
+  <section data-kit-primitive="dialog" data-purpose="a blocking confirmation or decision the user must resolve before continuing">
+    <div data-contract="none" class="row">
+      <span class="label">dialog</span>
+      <button data-state-btn="empty">empty</button>
+      <button data-state-btn="loading">loading</button>
+      <button data-state-btn="error">error</button>
+    </div>
+    <div data-slot="content" class="card"></div>
+  </section>
+
+</div>
+</body></html>

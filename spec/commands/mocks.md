@@ -50,6 +50,24 @@ already safe on disk. Every accepted mark ends with the ledger's counts line and
 session may `/clear` after any checkpoint and re-invoke cold — it re-derives everything from
 disk, never chat context.
 
+## Kit (KIT state)
+
+Before any screen: name the shared parts once, in every state, with a when-to-use line. The
+driver's step names the starting page; copy it yourself — `cp "$(spec-paths templates)"/mocks-kit.html
+design/kit/<name>.html` — then edit it in place: draw the ten shell primitives (sheet, empty-state, table-row, card,
+form-field, option-group, list-item, toolbar, banner, dialog) or better names the seed's
+product suggests, each `data-kit-primitive="<key>"` with its `data-purpose` when-to-use line,
+gray on `wire/tokens.css`, never skinned. Look at it the same way a wireframe is looked at:
+`stop open kit` opens an approve stop framing the page itself, then `--mark kit-signed` accepts
+once it is decided and `design-atlas.js check design/kit` exits 0.
+
+Once the kit is signed off, every wireframe authoring step is handed the kit page first: a
+labeled mock's content regions each instantiate a primitive (`data-kit="<key>"`) or carry an
+explicit `data-bespoke="<key>: <difference>"` naming the primitive it is not and the one
+structural difference preventing reuse (§ Mocks: Authoring Rules — the one binding home for the
+rule and its grammar). `check` prints the running `ⓘ <label>: <n> kit, <m> bespoke` count on
+every run, and `--mark journey-approved` refuses on any region carrying neither mark.
+
 ## THEME interview rule
 
 The THEME step opens with a direction interview, not a fixed menu: derive 2–3 candidate
@@ -67,7 +85,7 @@ before the first edit (§ Mocks: Authoring Rules — the one binding home).
 
 ## Look rule
 
-Before SHAPES, WIREFRAMES, THEME, or SIGNOFF the driver runs the look-reachability probe; if it
+Before SHAPES, KIT, WIREFRAMES, THEME, or SIGNOFF the driver runs the look-reachability probe; if it
 refuses, either fix the remedy (`npx playwright install chromium`) or, when a browser MCP is the
 real look path, `ToolSearch` for `claude-in-chrome` (or equivalent) and record `mocks-driver.js
 look-via browser` before re-running. To look at a screen, use `mocks-driver.js look <label>
@@ -129,7 +147,7 @@ verbatim.
 - **Never restate the driver's derivation.** Read its printed step and doctrine citation; act
   on them — re-deriving state by hand from `status.json` is the class of bug the driver exists
   to prevent.
-- Canon before screens, screens before theme, theme before sign-off — the driver refuses out of
+- Canon before screens, kit before wireframes, screens before sign-off — the driver refuses out of
   order; this command never works around a refusal by editing `status.json`.
 - `AskUserQuestion` dismissed → STOP; never invent the declined answer.
 - The ledger is written only through the driver's `ledger` subcommands, notes.json only

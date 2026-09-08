@@ -19,7 +19,7 @@ identical.
 note`:
 
 - `id` — `^[A-Z]+\d+[a-z]?$`, unique across the table.
-- `step` — `^[A-Z][A-Z-]*$` (`SEED`, `SHAPES`, `WIREFRAMES`, `THEME`, `SIGNOFF`,
+- `step` — `^[A-Z][A-Z-]*$` (`SEED`, `SHAPES`, `KIT`, `WIREFRAMES`, `THEME`, `SIGNOFF`,
   `GENESIS`, …); rows written under retired step names (`SKIN`, `REVIEW`) still match the
   pattern and keep parsing.
 - `kind` — one fixed word: `product` or `process`.
@@ -63,7 +63,8 @@ owns it.
 alone; if its artifact vanished (a journey's screen deleted, a direction's tokens file
 removed) the derivation lands earlier and demands the mark again. The order is fixed: **SEED**
 (the 13 facts, journeys, dense screen, research brief) → **SHAPES** (one shape kebab picked
-from 2–3 candidates) → **WIREFRAMES** (canon written, then every seed journey drawn and
+from 2–3 candidates) → **KIT** (the shared-primitive canon named and signed off, before any
+screen) → **WIREFRAMES** (canon written, then every seed journey drawn and
 approved) → **THEME** (≥2 directions composed, one picked) → **SIGNOFF** (one look over the
 whole approved set) → **APPROVED** (terminal). WIREFRAMES and THEME each carry a sub-mark per
 journey or direction so no single conversation ever has to hold more than one journey's state —
@@ -245,6 +246,13 @@ structure.
 The six rules the dry run converged on (LEDGER standing rules + M11/M13/M14 + A6/A7) — the
 half the driver cannot check, carried here as contract prose the authoring session applies:
 
+- **Name the shared parts before the screens.** Once a kit family (`design/kit/`) resolves,
+  every content region of a labeled mock carries `data-kit="<key>"` naming the primitive it
+  instantiates, or `data-bespoke="<key>: <difference>"` naming the primitive it is *not* and
+  the one structural difference preventing reuse — a bare flag with no difference is a rubber
+  stamp, not an escape. `design-atlas.js check` prints the running count, `ⓘ <label>: <n> kit,
+  <m> bespoke`, on every run, and `journey-approved` refuses on any region carrying neither
+  mark.
 - **Wireframes are gray but carry every graphic that IS structure.** A state is shown as the
   product's map or a slice, never described in a caption; text is reserved for what someone
   actually said (copy, labels), never for narrating what a picture should be doing instead.

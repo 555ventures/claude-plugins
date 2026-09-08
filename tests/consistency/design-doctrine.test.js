@@ -254,3 +254,38 @@ test('AC-20260906-06-4: spec/agents/design-critic.md parses as model opus, effor
       'D3: § The run must name "' + literal + '" — the Critique step wires the states check, the render rules, the critic dispatch, and the note-writing verb the session records findings through')
   }
 })
+
+// specs/20260907/04-kit-canon-family.md D11: KIT is a new state inserted between SHAPES and
+// WIREFRAMES — its § Mocks: State Machine order sentence, gated-mark list, and § Mocks:
+// Authoring Rules must all name it.
+test('AC-20260907-04-14: spec/doctrine/mocks.md names SEED, SHAPES, KIT, WIREFRAMES in that order within its § Mocks: State Machine order sentence, names kit-signed in its gated-mark list, and names both data-kit and data-bespoke in § Mocks: Authoring Rules', () => {
+  const p = 'spec/doctrine/mocks.md'
+  assert.ok(fs.existsSync(path.join(ROOT, p)), p + ' must exist for this doctrine pin to be meaningful')
+  const src = read(p)
+
+  const stateMachineIdx = src.indexOf('## Mocks: State Machine')
+  assert.ok(stateMachineIdx !== -1, p + ' must carry a "## Mocks: State Machine" heading to anchor the order-sentence search')
+  const nextHeadingIdx = src.indexOf('\n## ', stateMachineIdx + 1)
+  const stateMachineSection = src.slice(stateMachineIdx, nextHeadingIdx === -1 ? src.length : nextHeadingIdx)
+
+  const orderTokens = ['SEED', 'SHAPES', 'KIT', 'WIREFRAMES']
+  const positions = orderTokens.map((tok) => stateMachineSection.indexOf('**' + tok + '**'))
+  assert.ok(positions.every((pos) => pos !== -1),
+    'D1/D11: § Mocks: State Machine must name SEED, SHAPES, KIT, and WIREFRAMES (each bold, as the section already does) — got positions ' + JSON.stringify(positions) + ' in:\n' + stateMachineSection)
+  for (let i = 1; i < positions.length; i++) {
+    assert.ok(positions[i] > positions[i - 1],
+      'D1/D11: the order sentence must name ' + orderTokens.join(' -> ') + ' in that order, with KIT sitting between SHAPES and WIREFRAMES — got positions ' + JSON.stringify(positions))
+  }
+
+  assert.match(stateMachineSection, /kit-signed/,
+    'D11: § Mocks: State Machine\'s gated-mark list must name "kit-signed" alongside every other advancing mark')
+
+  const authoringIdx = src.indexOf('## Mocks: Authoring Rules')
+  assert.ok(authoringIdx !== -1, p + ' must carry a "## Mocks: Authoring Rules" heading to anchor the kit-rule search')
+  const authoringNextIdx = src.indexOf('\n## ', authoringIdx + 1)
+  const authoringSection = src.slice(authoringIdx, authoringNextIdx === -1 ? src.length : authoringNextIdx)
+  assert.match(authoringSection, /data-kit\b/,
+    'D11: § Mocks: Authoring Rules must name data-kit — the "name the shared parts" rule\'s one written home')
+  assert.match(authoringSection, /data-bespoke\b/,
+    'D11: § Mocks: Authoring Rules must name data-bespoke — the deliberate non-instance escape and its required difference')
+})

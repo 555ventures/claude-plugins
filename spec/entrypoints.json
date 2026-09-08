@@ -51,6 +51,11 @@
       "spec/commands/design.md"
     ]
   },
+  "spec/scripts/design-ac-reconcile.js": {
+    "entryPoints": [
+      "spec/commands/design.md"
+    ]
+  },
   "spec/scripts/design-atlas.js": {
     "entryPoints": [
       "spec/commands/sketch.md",

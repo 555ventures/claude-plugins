@@ -328,11 +328,26 @@ function computeEscapes(reposList) {
   const classLatest = {}
   const byRepo = {}
   const unclassedRows = []
+  let incidents = 0
   for (const repo of reposList) {
     let repoCount = 0
     const amendments = joinAmendments(repo.rawRows)
     for (const r of repo.rawRows) {
       if (r.stage === 'escape-class') amendmentsCount++
+      // core § Incident Policy (materiality): a build row's `incidents` entries (spec-build-driver
+      // `--mark incident --class <id>`) join byClass/classLatest with escape rows, so a class that
+      // only ever costs build time can still reach the guard-earning count. They never count toward
+      // `total` (escape rows only) — `incidents` carries their own fleet-wide count.
+      if (r.stage === 'build' && Array.isArray(r.incidents)) {
+        for (const inc of r.incidents) {
+          if (!inc || typeof inc.class !== 'string' || !inc.class) continue
+          incidents++
+          byClass[inc.class] = (byClass[inc.class] || 0) + 1
+          const ts = typeof inc.ts === 'string' ? inc.ts : r.ts
+          if (typeof ts === 'string' && (!classLatest[inc.class] || ts > classLatest[inc.class])) classLatest[inc.class] = ts
+        }
+        continue
+      }
       if (r.stage !== 'escape') continue
       total++
       repoCount++
@@ -358,7 +373,7 @@ function computeEscapes(reposList) {
     recurrentUnguarded.push({ class: cls, count, latestTs: classLatest[cls] || null })
   }
   recurrentUnguarded.sort((a, b) => a.class.localeCompare(b.class))
-  return { total, killedMatchNull, preventedBy, byClass, recurrentUnguarded, byRepo, amendments: amendmentsCount, unclassedRows }
+  return { total, killedMatchNull, preventedBy, byClass, recurrentUnguarded, byRepo, amendments: amendmentsCount, incidents, unclassedRows }
 }
 
 // D6: cross the joined byClass count against the plugin's own shipped corpus — corpusGaps names
@@ -840,7 +855,8 @@ function renderGate08(g) {
 function renderEscapes(esc) {
   const lines = [`3. Escapes — ${esc.total} total, ${esc.killedMatchNull} with no kill match`]
   lines.push(`  preventedBy: ${Object.entries(esc.preventedBy).map(([k, v]) => `${k}=${v}`).join(', ') || 'none'}`)
-  lines.push(`  byClass: ${Object.entries(esc.byClass).map(([k, v]) => `${k}=${v}`).join(', ') || 'none'}`)
+  lines.push(`  byClass (escapes + build incidents): ${Object.entries(esc.byClass).map(([k, v]) => `${k}=${v}`).join(', ') || 'none'}`)
+  lines.push(`  buildIncidents: ${esc.incidents}`)
   // D12: the unclassed-rows line is the first carrier of D11's backfill obligation — printed
   // only when N > 0 so a clean fleet never shows a false-positive nudge; the amendments line
   // always prints so the joined count's other half is never invisible.

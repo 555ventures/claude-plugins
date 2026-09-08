@@ -154,12 +154,12 @@ run.
 
 ## Incident Policy
 
-An incident (a pipeline defect, an escape, a wrong assumption that cost a session) is fixed
-**in the same session it is understood**: the fix plus a behavioral test that executes the
-fixed path. No ledger row beyond the run ledger, no doctrine paragraph, no standing failing
-test, no intake queue. Only a **third recurrence of the same class** — counted across every
-readable repo ledger on this machine — earns a standing guard, and that guard is
-deterministic — a script with an exit code wired where the class occurs — never prose.
+An incident (a pipeline defect, an escape, a costly wrong assumption) is fixed **in the same
+session it is understood**: the fix plus a behavioral test of the fixed path. No ledger row
+beyond the run ledger (a build-time incident is an `incidents` entry on its build row, never
+its own row), no doctrine paragraph, no standing failing test, no intake queue. Only a
+**third recurrence of the same class** (counted per Materiality below) earns a standing
+guard — deterministic, a script with an exit code wired where the class occurs, never prose.
 Doctrine text is for contracts and invariants, not for incident memories.
 
 A guard so earned must also pass the **admission bar** — five separately answered tests,
@@ -169,9 +169,9 @@ derived from ledger evidence wherever a ledger can answer them, asserted only wh
   would be fixture evidence, and fixture-fed proof is not terminal.
 - **Generality** — names at least two ledger-recorded members of the class, at least one of
   which is not the triggering incident.
-- **Materiality** — the class's recurrence count across every readable repo ledger, **the
-  joined count of escape rows plus their `escape-class` amendments** (as `fleet-reader
-  --json`'s `escapes.byClass` derives it), cited as a number, never claimed.
+- **Materiality** — the class's recurrence count across every readable repo ledger, **escape
+  rows joined with their `escape-class` amendments and build-row `incidents`** (as
+  `fleet-reader --json`'s `escapes.byClass` derives it), cited as a number, never claimed.
 - **Falsifiability** — deliberately tripped once; the proposal cites the red run.
 - **Removability** — a kill condition phrased as a question a ledger query answers with a
   count.

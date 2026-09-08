@@ -60,7 +60,9 @@ needs the user, not a fourth dispatch. The driver has already appended the escal
 honestly-derived non-CLEAN verdict carrying `escalated: true` — at the moment of the refusal, and
 prints the absolute path it landed in; ESCALATE names two exits: fresh dispositions
 (`--fix-dispatched 0` covering the pool) close normally through the waive/reject route, or deleting
-the `<spec>.review/` sidecar and manifests abandons the run to restart cold. A CLEAN close whose
+the `<spec>.review/` sidecar and manifests abandons the run to restart cold. Abandoning never resets
+the cap: the driver counts this spec's uncleared `escalated: true` ledger rows as spent iterations, so
+a restarted review's first `fix-applied` is refused again until a close clears them. A CLEAN close whose
 replay window is due parks at
 `REPLAY` until a measurement is on the record: the review is complete as a verdict and
 unfinished as a checklist, and re-invocation re-prints the execution step.

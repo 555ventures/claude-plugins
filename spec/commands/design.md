@@ -187,9 +187,12 @@ touched. No reply → nothing moved; the Resume table lands here again on the ne
    An affordance the server would reject is a fork, not a styling choice —
    `AskUserQuestion` (change the component / change the contract via a spec Decision), never
    pass it through to build.
-4. Stamp `designed: YYYY-MM-DD` in the spec's frontmatter. `/spec:design` never moves
-   `status` — it sets `designed:` only.
-5. Checkpoint-commit: spec, ledger, manifest, components, stories.
+4. **AC ↔ design-landed reconcile (blocking).** `node "$(spec-paths design-ac-reconcile)"
+   --spec <spec> --components design/components.json` — exit 1 lists every AC a now-real
+   component already satisfies. One dispatch reconciles each: tag `[pre-green: design-landed]`,
+   or split its test row by mount and cite the AC id in a Decisions row. Never stamp over exit 1.
+5. Stamp `designed: YYYY-MM-DD` (`/spec:design` never moves `status`); checkpoint-commit spec,
+   ledger, manifest, components, stories.
 
 ## Report
 
@@ -221,8 +224,5 @@ Next: /spec:run specs/20260824/02-example.md
   `built` surface re-entering design re-syncs its mock first** (screenshot the live screen,
   update the file) before designing the change on top — post-`built` staleness discovered here
   was permitted, never a defect.
-- **Affordance ↔ contract reconcile is blocking** — the Step 6 matrix runs before `designed:`
-  lands; an affordance the server would reject is a fork, never passed through to build.
-- The `.design/` sidecar is **not created, read, or audited anywhere in the pipeline** (D13); a
-  leftover one on a host is inert and safe to delete by hand.
+- The `.design/` sidecar is **never created, read, or audited** (D13); a leftover on a host is inert.
 - `AskUserQuestion` dismissed → STOP.

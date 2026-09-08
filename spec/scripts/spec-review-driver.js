@@ -16,7 +16,8 @@
 // own execution phases). State is re-derived from spec frontmatter + the <spec>.review/
 // sidecar + on-disk artifacts on EVERY invocation — a mark whose artifact vanished is demanded
 // again, and the fix-iteration cap is counted from manifest-<n>.jsonl files actually present on
-// disk, never a sidecar counter (hand-editing the sidecar cannot reach ESCALATE). Every child
+// disk plus this spec's uncleared `escalated:true` ledger rows, never a sidecar counter
+// (hand-editing the sidecar cannot reach ESCALATE, and deleting it cannot reset the cap). Every child
 // process this driver spawns — legs, all three verdict.js passes, replay --due/--select,
 // spec-status --next, every merge-back.sh subcommand, every git call — is routed through one
 // fail-closed helper (runChild): spawnSync's status is null when a child dies by signal,
@@ -1272,6 +1273,11 @@ function handleDispositions() {
     : { file: null, iteration: n, overrides: 0, empty: true }
   marks.pendingFix = fixDispatched > 0
   if (marks.pendingFix) marks.escalated = false // a fresh fix cycle — any stale escalation no longer applies
+  if (marks.pendingFix && unclearedEscalationsFor().length) {
+    process.stderr.write('⚠️ the fix cap for ' + specRel + ' is already spent (uncleared escalate row on the ' +
+      'ledger) — the fix-applied that follows this dispatch will be refused; prefer the waive/reject ' +
+      'close (dispositions --fix-dispatched 0) over dispatching workers\n')
+  }
   saveSidecar()
   return null
 }
@@ -1283,10 +1289,53 @@ function handleDispositions() {
 // manifest count, same pendingFix=true) — `marks.escalated` is the persisted record of an actual
 // refusal, set only here, never by a hand-edited iteration counter.
 const FIX_CAP = 2
+
+// Durable half of the cap (core § Incident Policy): the ESCALATE step's abandon exit deletes the
+// sidecar and its manifests — the very files the manifest count reads — so a cold restart alone
+// would begin at zero and one spec could escalate repeatedly as unrelated "first" reviews.
+// The escalate rows those refusals wrote are the durable record: every `escalated:true` review
+// row for this spec that no later non-escalated review row has cleared counts as a spent cap.
+// "Later" is read order inside one ledger file (authoritative) and `ts` date across files (the
+// stopped ledger in a worktree's main root vs the tracked ledger — `ts` is day-resolution, so a
+// same-day close in another file clears). Only a close — waive/reject through the ESCALATE
+// route, or any later CLEAN — resets the budget; abandoning never does.
+function readLedgerRowsTagged(root) {
+  const dir = path.join(root, '.claude')
+  if (!fs.existsSync(dir)) return []
+  const rows = []
+  for (const f of fs.readdirSync(dir).filter((n) => /^spec-runs.*\.jsonl$/.test(n)).sort()) {
+    const file = path.join(dir, f)
+    fs.readFileSync(file, 'utf8').split('\n').forEach((line, idx) => {
+      if (!line.trim()) return
+      try { rows.push({ row: JSON.parse(line), file, idx }) } catch { /* doctor's job */ }
+    })
+  }
+  return rows
+}
+function unclearedEscalationsFor() {
+  const roots = repoRoot === mainRoot ? [repoRoot] : [repoRoot, mainRoot]
+  const seen = new Set()
+  const rows = []
+  for (const root of roots) {
+    for (const t of readLedgerRowsTagged(root)) {
+      if (t.row.stage !== 'review' || t.row.spec !== specRel) continue
+      const key = JSON.stringify(t.row)
+      if (seen.has(key)) continue
+      seen.add(key)
+      rows.push(t)
+    }
+  }
+  const closes = rows.filter((t) => t.row.escalated !== true)
+  const clearedBy = (esc) => closes.some((c) =>
+    c.file === esc.file ? c.idx > esc.idx : String(c.row.ts || '') >= String(esc.row.ts || ''))
+  return rows.filter((t) => t.row.escalated === true && !clearedBy(t)).map((t) => t.row)
+}
+
 function handleFixApplied() {
   if (!marks.pendingFix) die('no fix was dispatched for the current findings — mark dispositions --fix-dispatched N first')
   const manifests = listManifestNumbers()
-  const fixIterationsDone = manifests.length - 1
+  const priorEscalations = unclearedEscalationsFor()
+  const fixIterationsDone = manifests.length - 1 + priorEscalations.length * FIX_CAP
   if (fixIterationsDone >= FIX_CAP) {
     marks.escalated = true
     saveSidecar()
@@ -1295,7 +1344,13 @@ function handleFixApplied() {
     const capN = Math.max(...manifests)
     const result = writeEscalateRow(capN)
     const capMsg = 'iteration cap 2 reached — a third fix-applied is refused; the fix/review loop ' +
-      'is capped at 2 iterations, escalate to the user instead of dispatching another fix'
+      'is capped at 2 iterations, escalate to the user instead of dispatching another fix' +
+      (priorEscalations.length
+        ? '\nThe cap was already spent: ' + priorEscalations.length + ' earlier escalate row(s) for ' +
+          specRel + ' (runId ' + priorEscalations.map((r) => r.runId).join(', ') + ') are on the ledger ' +
+          'and no later close cleared them — a cold restart resumes the count, it never resets it. ' +
+          'Close through the waive/reject route (dispositions --fix-dispatched 0).'
+        : '')
     die(result.ok
       ? capMsg + '\nAn escalate ledger line has been appended to ' + marks.escalateLedgerPath + '.'
       // D8: loud, row-less, retryable — embed the verdict.js drift error verbatim, never crash the
@@ -1903,7 +1958,9 @@ const STEPS = {
       `  waive/reject: mark dispositions --fix-dispatched 0 once --waived/--rejected covers the ` +
       `pool — that closes normally:\n` +
       `    node ${__filename} ${specPath} --mark dispositions --waived N --rejected N --fix-dispatched 0\n` +
-      `  abandon: delete ${sidecarDir} (the <spec>.review sidecar and its manifests) to restart cold.\n`
+      `  abandon: delete ${sidecarDir} (the <spec>.review sidecar and its manifests) to restart cold — ` +
+      `this does NOT reset the cap: the escalate row stays on the ledger and the restarted review's ` +
+      `first fix-applied is refused again until a waive/reject close clears it.\n`
   },
 
   // R10: the close-commit instruction derives from whether this review is running in-place or in

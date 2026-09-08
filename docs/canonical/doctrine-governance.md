@@ -12,8 +12,12 @@ governing rules now:
   repo ledger on this machine, numbers from `node "$(spec-paths fleet-reader)" --json` — earns a
   standing guard, and
   that guard is a deterministic script with an exit code — never prose, never a registry row.
-- **Version discipline:** every behavior change bumps the owning plugin's semver;
-  `plugin.json`'s `description` carries a last-3-versions changelog summary.
+- **Version discipline:** every change under a marketplace plugin directory bumps that
+  plugin's semver via `node scripts/plugin-bump.js --bump --plugin <name> --changelog
+  "<paragraph>"`, which derives the next minor and rotates `plugin.json`'s `description`
+  changelog to its last three entries. Specs cite the command, never a version number.
+  `node scripts/plugin-bump.js --check` runs in the gate and is red when a plugin directory
+  changed since the merge base without a higher version.
 - **Citations stay live:** `citations-check.js` is the deterministic sweep over `§` heading
   citations (doctor check 15); a citation that resolves nowhere silently drops at
   `shared-for` render time.

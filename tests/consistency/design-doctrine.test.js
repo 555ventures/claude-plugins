@@ -276,8 +276,15 @@ test('AC-20260907-04-14: spec/doctrine/mocks.md names KIT in its state-chain ord
   assert.ok(order.every((v, i) => i === 0 || v > order[i - 1]),
     'the order sentence must read SEED, SHAPES, KIT, WIREFRAMES in that sequence — KIT names the shared parts before any screen is drawn, and prose that puts it after WIREFRAMES teaches the opposite of what the driver enforces: got positions ' + JSON.stringify(order))
 
-  assert.ok(stateMachine.includes('kit-signed'),
-    '§ Mocks: State Machine must name the `kit-signed` gated mark — a gate that exists in the driver but not in doctrine is a refusal an author cannot anticipate')
+  // The mark must appear in the GATED-MARK paragraph specifically, not merely somewhere in the
+  // section: handleKitSigned calls requireGateOpen(), so a list that enumerates the gate-riding
+  // marks and omits this one tells an author a refusal they will actually hit cannot happen.
+  const gateParaIx = stateMachine.indexOf('The gate rides every advancing mark')
+  assert.ok(gateParaIx !== -1,
+    '§ Mocks: State Machine must still carry the "The gate rides every advancing mark" paragraph — it is the enumeration this assertion pins')
+  const gatePara = stateMachine.slice(gateParaIx, stateMachine.indexOf('\n\n', gateParaIx))
+  assert.ok(gatePara.includes('kit-signed'),
+    '§ Mocks: State Machine\'s gated-mark list must name `kit-signed` — the kit sign-off runs the provenance ledger gate like every other advancing mark, and a list that omits it denies a refusal the driver really raises')
 
   const arIdx = src.indexOf('## Mocks: Authoring Rules')
   assert.ok(arIdx !== -1,

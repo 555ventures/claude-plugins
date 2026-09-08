@@ -71,8 +71,8 @@ journey or direction so no single conversation ever has to hold more than one jo
 a seed journey added mid-WIREFRAMES reappears as `0/N drawn` and reopens the state rather than
 silently completing.
 
-**The gate rides every advancing mark.** `seed-done`, `shape-picked`, `canon-written`,
-`journey-approved`, `theme-picked`, and `approved` each
+**The gate rides every advancing mark.** `seed-done`, `shape-picked`, `kit-signed`,
+`canon-written`, `journey-approved`, `theme-picked`, and `approved` each
 run the provenance ledger's `gateVerdict` (§ Provenance Ledger) before recording; a blocked
 gate refuses (exit 2) naming the offending rows and the remedy (`ledger set --id <id> --status
 confirmed --tag said-by-user`, or `--status overridden`). `journey-approved` and `approved`
@@ -84,7 +84,8 @@ resolved. Process rows never surface as something to resolve; they are counted, 
 
 **Reopening never deletes.** `--reopen journey:<j>` clears that journey's `approved` mark
 (and the terminal `approved`); `--reopen shapes` clears the shape pick and every downstream
-mark; `--reopen theme` clears the theme pick and `approved`. Every reopen appends one row to
+mark; `--reopen kit` clears the kit sign-off and `approved`, never a journey's own approval;
+`--reopen theme` clears the theme pick and `approved`. Every reopen appends one row to
 `status.reopens` naming what it invalidated and leaves every file on disk byte-identical — the
 next derivation lands on the earliest state whose marks are now missing.
 

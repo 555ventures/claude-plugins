@@ -6,7 +6,7 @@ area: design-sketch
 design: false
 breaking: false
 depends_on: [specs/20260907/04-kit-canon-family.md, specs/20260907/05-genesis-drops-the-theme-gates.md]
-depended_on_by: []
+depended_on_by: [specs/20260907/07-mocks-retires-theme.md]
 brief: 22a
 spiked: 2026-09-07
 open_markers: 0

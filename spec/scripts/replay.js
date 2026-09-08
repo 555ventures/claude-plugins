@@ -204,6 +204,8 @@ const { configPath, configExists, readConfigStrict, CONFIG_RELPATH } = require('
 // corrupting an unspaced value like `build_base: <sha>#frag` — the sole shared derivation strips
 // only a whitespace-preceded "#", per YAML unquoted-scalar semantics.
 const { fmMap } = require('./lib/frontmatter')
+// Base-candidate ORDER only (pin before ref); this consumer keeps its own validity predicate.
+const { pinnedBaseCandidates } = require('./lib/base-derivation')
 
 function usage() {
   console.error('usage: replay.js [--root <path>] --due | --select | --setup --commit <sha> (--spec <path>|--dir <path>) ' +
@@ -402,9 +404,9 @@ function cmdSelect() {
   // unresolvable or non-ancestor candidate (a merged-away `main`) is skipped, never emitted.
   const tried = []
   let diffBase = null
-  for (const key of ['diff_base', 'build_base']) {
-    const val = fm[key] && fm[key].trim()
-    if (!val) continue
+  // Order from lib/base-derivation.js (pin before ref) — this consumer keeps its own validity
+  // predicate below (resolves, distinct from parent, ancestor of parent).
+  for (const { key, value: val } of pinnedBaseCandidates(fm)) {
     tried.push(`${key}=${val}`)
     const verify = spawnSync('git', ['rev-parse', '--verify', `${val}^{commit}`], { cwd: root, encoding: 'utf8' })
     if (verify.status !== 0) continue

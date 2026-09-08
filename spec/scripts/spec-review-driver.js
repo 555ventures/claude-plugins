@@ -207,6 +207,8 @@ const { sessionModel } = require('./lib/session-stamp.js')
 // into legFindings, from the same module, so the two never count in different units again
 // (lib/leg-findings.js header carries the ruling; tests/review/disposer-gate.test.js pins it).
 const { countLegFinding } = require('./lib/leg-findings')
+// Base-candidate ORDER only (pin before ref); this driver keeps its own validity predicate.
+const { BASE_KEYS, pinnedBaseCandidates } = require('./lib/base-derivation')
 
 // D1-D6 (specs/20260821/04-stopped-row-durability.md): a worktree review's RED_BLOCKING hard-stop
 // durably appends here, at the MAIN root, instead of the worktree's own (destructible)
@@ -286,7 +288,7 @@ const canonicalTarget = (() => {
   const hit = after.split(/^##\s/m)[0].match(/docs\/canonical\/[A-Za-z0-9._-]+\.md/)
   return hit ? hit[0] : `docs/canonical/${area}.md`
 })()
-const buildBase = fmVal('build_base')
+const buildBase = fmVal(BASE_KEYS[1])
 const diffBaseFm = fmVal('diff_base')
 const designFlag = fmVal('design') === 'true'
 const designSource = fmVal('design_source')
@@ -510,6 +512,11 @@ if (marks.via === undefined) {
 }
 
 // ---- base derivation (D2, revised: diff_base -> build_base -> branch) -------------------------
+// The ORDER lives in lib/base-derivation.js, imported below — this driver keeps only its own
+// validity predicate (resolveBaseSha's non-degenerate-range invariant). The module carries the
+// ordering rationale as the single authority, and tests/consistency/base-derivation.test.js
+// refuses a private spelling of it here.
+//
 // A PIN ALWAYS BEATS A REF. `diff_base` is a 40-hex sha written at build start (in-place flow) or
 // at a prior close; `build_base` is conventionally the moving ref `main`, and two different
 // commands write these fields with no ordering guard between them — /git:enter-worktree stamps
@@ -524,8 +531,8 @@ if (marks.via === undefined) {
 // resolveBaseSha() below is the backstop for whatever the NEXT base-derivation mistake turns out
 // to be, since precedence alone only fixes the failure mode already seen.
 function resolveBase() {
-  if (diffBaseFm) return diffBaseFm
-  if (buildBase) return buildBase
+  const pinned = pinnedBaseCandidates({ diff_base: diffBaseFm, build_base: buildBase })
+  if (pinned.length) return pinned[0].value
   for (const cand of ['main', 'master']) {
     const r = runChild('git', ['-C', repoRoot, 'merge-base', 'HEAD', cand], { encoding: 'utf8' },
       'git merge-base HEAD ' + cand)
@@ -1523,13 +1530,51 @@ function isTrackedInWorktree(wt, relPath) {
     { encoding: 'utf8' }, 'git ls-files --error-unmatch ' + relPath)
   return r.status === 0
 }
+// A DIRECTORY IS WALKED, NEVER REMOVED WHOLE. `.claude/spec-runs/` holds files at its top level
+// AND subdirectories (render-gate writes `render/<spec>/` when given --out). An un-recursive
+// `rmSync` raises ERR_FS_EISDIR on a directory entry, and this function runs inside
+// promoteEvidenceAndClean — AFTER the merge lands and BEFORE the ledger commit — so a raise here
+// leaves the main root dirty and the run unfinished. (Re-running `--mark merge-strategy` is safe:
+// the already-landed detection above short-circuits to finishMerge.)
+//
+// The fix is NOT a bare `recursive: true`. The tracked-restore / untracked-delete decision is
+// per PATH: `git checkout -- <dir>` restores a directory's tracked children but leaves its
+// untracked ones on disk, and a leftover untracked file is exactly what makes the plain
+// `git worktree remove` in cleanup refuse at exit 128 — the recorded A1 deadlock this function
+// exists to avoid. So recurse, decide per file, then drop the directory only once it is empty.
 function clearPromotedCopy(wt, absPath, relPath) {
+  const st = fs.lstatSync(absPath, { throwIfNoEntry: false })
+  if (st && st.isDirectory()) {
+    for (const entry of fs.readdirSync(absPath)) {
+      clearPromotedCopy(wt, path.join(absPath, entry), relPath + '/' + entry)
+    }
+    // Non-empty here means a restored tracked child remains, by design — same reasoning as the
+    // srcDir rmdir below.
+    try { fs.rmdirSync(absPath) } catch { /* tracked children restored: a clean state, not residue */ }
+    return
+  }
   if (isTrackedInWorktree(wt, relPath)) {
     runChild('git', ['-C', wt, 'checkout', '--', relPath], { encoding: 'utf8' },
       'git checkout -- ' + relPath)
   } else {
     fs.rmSync(absPath, { force: true })
   }
+}
+
+// Directory entries under .claude/spec-runs/ are promoted whole; `copyFileSync` threw EISDIR on
+// them even before clearPromotedCopy did. Node built-ins only (repo convention), so this is a
+// hand-rolled recursive copy rather than fs.cpSync.
+function copyTreeIfAbsent(src, dst) {
+  const st = fs.lstatSync(src, { throwIfNoEntry: false })
+  if (!st) return
+  if (st.isDirectory()) {
+    fs.mkdirSync(dst, { recursive: true })
+    for (const entry of fs.readdirSync(src)) {
+      copyTreeIfAbsent(path.join(src, entry), path.join(dst, entry))
+    }
+    return
+  }
+  if (!fs.existsSync(dst)) fs.copyFileSync(src, dst)
 }
 function promoteEvidenceAndClean(wt, mainRootDir) {
   const srcLedger = path.join(wt, '.claude/spec-runs.jsonl')
@@ -1566,7 +1611,7 @@ function promoteEvidenceAndClean(wt, mainRootDir) {
     for (const f of fs.readdirSync(srcDir)) {
       const srcFile = path.join(srcDir, f)
       const dst = path.join(dstDir, f)
-      if (!fs.existsSync(dst)) fs.copyFileSync(srcFile, dst)
+      copyTreeIfAbsent(srcFile, dst)
       clearPromotedCopy(wt, srcFile, path.relative(wt, srcFile))
     }
     // The directory itself: a restored tracked file (per clearPromotedCopy above) is put back on

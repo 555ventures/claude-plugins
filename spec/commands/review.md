@@ -34,7 +34,7 @@ Loop until the driver prints `DONE`:
 1. Run `node {driver} <spec path>`. It inspects on-disk state (frontmatter, the
    `<spec>.review/` sidecar, artifacts already on disk) and prints the **current step's
    instructions** — running deterministic work itself (base derivation —
-   `build_base` → `diff_base` → `merge-base HEAD main|master` —, the per-iteration manifest,
+   the pin before the ref, `diff_base` → `build_base` → `merge-base HEAD main|master` —, the per-iteration manifest,
    `review-legs.js`, diffLoc, every `verdict.js` pass, both ledger appends, the `done` flip,
    `merge-back`'s inspect/merge/cleanup/verify sequence, the REPLAY state's own
    `replay --due`/`--select` checks, the `spec-status --next` capture) and printing only the

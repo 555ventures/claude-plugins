@@ -25,7 +25,16 @@ workers: Sonnet.
 `$ARGUMENTS` — path to a hardened spec (or one already `implementing`, to resume). **Worktree
 isolation is not build's concern** — run `/git:enter-worktree <spec>` first to build in
 isolation; the driver never creates, enters, or leaves a worktree and never writes
-`build_base`.
+`build_base`. The driver PREFERS the `diff_base` pin it stamps itself over that moving ref
+(`spec/scripts/lib/base-derivation.js`), so a `build_base: main` written after a build starts
+does not redirect the pre-image.
+
+**A design-landed component is not stub residue.** `/spec:design` commits real components before
+the build starts, and `/spec:build` wires them rather than rebuilding them, so a non-tests `CREATE`
+row whose file is already in the pre-image is legitimate. The `red-attributed` mark refuses only
+paths that DIFFER from the base (the predicate red-check itself applies); a `CREATE` row already
+tracked at base earns a WARN naming the row, never a refusal, and never a hand-edit of the File
+Plan.
 
 ## Build stage — the build driver owns this part of the state machine
 
@@ -34,7 +43,8 @@ Loop until the driver prints `DONE`:
 1. Run `node {driver} <spec path>`. It inspects on-disk state (frontmatter, the
    `<spec>.build/` sidecar, artifacts already on disk) and prints the **current step's
    instructions** — running deterministic work itself (admission, the `hardened →
-   implementing` flip with the absent-only `diff_base` stamp, wave derivation from
+   implementing` flip with the absent-only `diff_base` stamp, base derivation — the pin before
+   the ref, `diff_base` → `build_base`, validated as an ancestor of HEAD —, wave derivation from
    `layerGroups`, gate resolution, env preflight, red-check, the final gate, scope-reconcile,
    diff counts, the `stage:"build"` ledger row) — and printing only the steps that need this
    session's judgment: test-author dispatch, red attribution, per-wave worker dispatch, host

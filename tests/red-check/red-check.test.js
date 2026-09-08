@@ -550,3 +550,103 @@ test('AC-20260821-01-1: a [pre-green: design-landed] AC whose test FAILS against
     Array.isArray(f.acs) && f.acs.includes('AC-20260821-96-1')),
     `the contradicted claim must surface as broken-pin naming the file and its AC-ID — got ${JSON.stringify(out.findings)}`)
 })
+
+// PARITY WITH ac-matrix.js's EXISTING SANCTION. An `[env: VAR]` tag declares that verifying an AC
+// depends on a variable this process does not control. A host whose testCommand withholds that
+// variable makes the suite skip, so runLeg — exit codes only — reads green from any shell: the
+// file's redness is unobservable, not absent, and a hard finding asserts what the run cannot know.
+// ac-matrix.js grants the same tag the same trust at review (`skipped test sanctioned by
+// [env: VAR]`, a warning), so this is parity rather than a new laundering route.
+const ENV_GATED_SUITE =
+  "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+  "if (!process.env.RED_CHECK_FIXTURE_KEY) { process.exit(0) }\n" +
+  "test('AC-20260821-94-1: only runs when the variable is provisioned', () => { assert.ok(false) })\n"
+
+test('a green red-expected file whose every carried AC is [env:]-tagged warns naming the withheld variable instead of emitting unsanctioned-green', () => {
+  const { dir, base } = newHost('rcenv1')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/env1.test.js'), ENV_GATED_SUITE)
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260821-94-1**: WHEN x THE SYSTEM SHALL y → tests/env1.test.js [env: RED_CHECK_FIXTURE_KEY]'],
+    ['| tests/env1.test.js | CREATE | tests | suite skips when the variable is withheld |']))
+  const res = run(spec, dir, base, ['--json'])
+  assert.strictEqual(res.status, 0,
+    `an env-gated file whose redness no shell can observe must not fail the run — a hard finding here blocks every build of a spec whose AC legitimately depends on a withheld variable (stderr: ${res.stderr})`)
+  const out = findings(res)
+  assert.ok(!out.findings.some(f => f.class === 'unsanctioned-green' && f.path === 'tests/env1.test.js'),
+    `the [env:] tag must suppress unsanctioned-green for this file — a surviving finding is the parity gap with ac-matrix.js, which already sanctions this exact tag: ${JSON.stringify(out.findings)}`)
+  assert.ok(out.warnings.some(w => w.includes('tests/env1.test.js') && w.includes('RED_CHECK_FIXTURE_KEY')),
+    `the sanction must stay visible as a warning NAMING the withheld variable — a silent suppression is indistinguishable from the check never running: ${JSON.stringify(out.warnings)}`)
+})
+
+test('a green red-expected file mixing an [env:]-tagged AC with an untagged one still emits unsanctioned-green', () => {
+  const { dir, base } = newHost('rcenv2')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  // The gated AC's test really does skip on the variable (so it IS env-gated); the ungated
+  // sibling passes vacuously, which is a genuine unsanctioned pin the file still owes a red for.
+  fs.writeFileSync(path.join(dir, 'tests/env2.test.js'),
+    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260821-95-1: gated', { skip: !process.env.RED_CHECK_FIXTURE_KEY }, () => { assert.ok(false) })\n" +
+    "test('AC-20260821-95-2: vacuously true', () => { assert.ok(true) })\n")
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260821-95-1**: WHEN x THE SYSTEM SHALL y → tests/env2.test.js [env: RED_CHECK_FIXTURE_KEY]',
+     '- **AC-20260821-95-2**: WHEN x THE SYSTEM SHALL z → tests/env2.test.js'],
+    ['| tests/env2.test.js | CREATE | tests | one gated AC, one ungated |']))
+  const res = run(spec, dir, base, ['--json'])
+  assert.strictEqual(res.status, 1,
+    `a file carrying an UNGATED AC still owes a real red for it — sanctioning the whole file on one sibling's [env:] tag would be a laundering route (stderr: ${res.stderr})`)
+  const out = findings(res)
+  const mixed = out.findings.find(f => f.class === 'unsanctioned-green' && f.path === 'tests/env2.test.js')
+  assert.ok(mixed,
+    `the ungated AC's vacuous pin must still be reported — suppressing it because a sibling AC is gated is exactly the over-broad sanction this conservative rule avoids: ${JSON.stringify(out.findings)}`)
+  assert.deepStrictEqual(mixed.acs, ['AC-20260821-95-2'],
+    `the finding must name only the AC that actually owes a red — listing the gated sibling sends the author to a bullet that is already sanctioned: ${JSON.stringify(mixed)}`)
+  assert.ok(mixed.detail.includes('AC-20260821-95-1') && mixed.detail.includes('RED_CHECK_FIXTURE_KEY'),
+    `the detail must still name the gated sibling as sanctioned, so the split between owing and sanctioned is legible without cross-referencing the spec: ${JSON.stringify(mixed)}`)
+})
+
+test('an [env:]-tagged AC whose test file never mentions the variable is not env-gated — the vacuous pin still emits unsanctioned-green', () => {
+  const { dir, base } = newHost('rcenv4')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  // No reference to the variable anywhere: nothing in this file can skip on it, so the tag is a
+  // claim about a gate that does not exist. Without this guard, any spec author could tag an AC
+  // with an arbitrary variable name and walk a vacuous pin straight through the build gate —
+  // ac-matrix.js would not catch it either, since its own [env:] sanction only reconciles
+  // SKIPPED tests and this one passes.
+  fs.writeFileSync(path.join(dir, 'tests/env4.test.js'),
+    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260821-97-1: vacuously true, gated on nothing', () => { assert.ok(true) })\n")
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260821-97-1**: WHEN x THE SYSTEM SHALL y → tests/env4.test.js [env: TOTALLY_UNREFERENCED_VAR]'],
+    ['| tests/env4.test.js | CREATE | tests | tag names a variable the file never mentions |']))
+  const res = run(spec, dir, base, ['--json'])
+  assert.strictEqual(res.status, 1,
+    `an [env:] tag naming a variable the suite never references sanctions nothing — accepting it would make the tag a one-line laundering route for any vacuous pin (stderr: ${res.stderr})`)
+  const out = findings(res)
+  assert.ok(out.findings.some(f => f.class === 'unsanctioned-green' && f.path === 'tests/env4.test.js'),
+    `the finding must stand: the file's green is a genuine vacuous pin, not an unobservable one: ${JSON.stringify(out.findings)}`)
+})
+
+test('an [env:]-tagged AC whose suite genuinely fails against the pre-image stays red-expected and reports no finding', () => {
+  const { dir, base } = newHost('rcenv3')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  // The variable is provisioned for this run, so the suite executes and fails — the CORRECT
+  // pre-image colour. Flipping the file to green-expected on the tag would route this desired red
+  // into the broken-pin arm and report it as a hard finding.
+  fs.writeFileSync(path.join(dir, 'tests/env3.test.js'),
+    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
+    "test('AC-20260821-96-1: fails against the pre-image, as a red pin should', () => { assert.ok(false) })\n")
+  const spec = path.join(dir, 'spec.md')
+  fs.writeFileSync(spec, specMd(
+    ['- **AC-20260821-96-1**: WHEN x THE SYSTEM SHALL y → tests/env3.test.js [env: RED_CHECK_FIXTURE_KEY]'],
+    ['| tests/env3.test.js | CREATE | tests | gated AC whose suite runs and fails |']))
+  const res = run(spec, dir, base, ['--json'])
+  assert.strictEqual(res.status, 0,
+    `a genuinely-red env-gated file is the pre-image colour red-check wants — reporting it as broken-pin would make the tag strictly worse than no tag wherever the variable IS provisioned (stderr: ${res.stderr})`)
+  const out = findings(res)
+  assert.deepStrictEqual(out.findings, [],
+    `an expected-red file observed red matches — no finding of any class belongs here: ${JSON.stringify(out.findings)}`)
+})

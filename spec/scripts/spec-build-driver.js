@@ -180,13 +180,57 @@ if (status === 'hardened') {
   justFlipped = true
 }
 
+// ---- base derivation (order from lib/base-derivation.js; validity is this driver's own) --------
+// A PIN ALWAYS BEATS A REF — see lib/base-derivation.js for the incident. This driver's own
+// contradiction ran twelve lines: the stamp block above pins `diff_base` unconditionally and its
+// comment says "consumers already prefer the pin (replay.js, and now spec-review-driver.js's
+// resolveBase)", while this function was the one consumer that did not. The field symptom was
+// red-check refusing "pre-image is not pure" over the very files the design stage had just
+// legitimately committed — with the ref winning, the purity set was computed against `main`
+// rather than against post-design HEAD.
+//
+// THE VALIDITY PREDICATE HERE IS ANCESTRY, NOT NON-DEGENERACY. spec-review-driver.js refuses
+// `base === HEAD` because an empty range at review time IS the false-CLEAN failure. Porting that
+// guard here would be wrong and would refuse every legitimate fresh build: at build start the
+// stamp block sets diff_base to HEAD precisely because nothing is built yet, so base === HEAD is
+// the correct state (`merge-base --is-ancestor X X` is true, so it passes here by design). What
+// is never correct on this side is a base that is NOT an ancestor of HEAD — that is exactly what
+// a moving `main` becomes once it advances past the build's branch, and `git diff <base>` against
+// it reports edits this build never made. replay.js validates its own candidates the same way.
+const { pinnedBaseCandidates } = require('./lib/base-derivation')
+let baseAncestryChecked = false
 function resolveBase() {
-  const b = fmVal('build_base') || fmVal('diff_base')
-  if (!b) {
-    die('spec frontmatter carries neither build_base nor diff_base — add one to the spec ' +
+  const cands = pinnedBaseCandidates(fmVal)
+  if (!cands.length) {
+    die('spec frontmatter carries neither diff_base nor build_base — add one to the spec ' +
       'frontmatter to resume')
   }
-  return b
+  const { key, value } = cands[0]
+  // Validate once per process: every caller shares one spec and one HEAD, and the check shells out.
+  if (!baseAncestryChecked) {
+    baseAncestryChecked = true
+    const verify = runChild('git', ['-C', repoRoot, 'rev-parse', '--verify', value + '^{commit}'],
+      { encoding: 'utf8' }, 'git rev-parse --verify (base resolution)')
+    const sha = (verify.stdout || '').trim()
+    if (verify.status !== 0 || !/^[0-9a-f]{40}$/.test(sha)) {
+      die('the spec\'s base (' + key + ': ' + value + ') does not resolve to a commit in ' +
+        repoRoot + ' — set diff_base: <the commit this build started from> in the spec ' +
+        'frontmatter (git rev-parse --verify <ref>^{commit} to check one)')
+    }
+    const head = runChild('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' },
+      'git rev-parse HEAD').stdout.trim()
+    const anc = runChild('git', ['-C', repoRoot, 'merge-base', '--is-ancestor', sha, head],
+      { encoding: 'utf8' }, 'git merge-base --is-ancestor (base ancestry check)')
+    if (anc.status !== 0) {
+      die('the spec\'s base (' + key + ': ' + value + ' -> ' + sha.slice(0, 12) + ') is not an ' +
+        'ancestor of HEAD (' + head.slice(0, 12) + ') — it names a branch that has advanced past ' +
+        'this build, so `git diff <base>` would report edits this build never made and red-check ' +
+        'would refuse over files it does not own. Remedy: set diff_base: <the commit this build ' +
+        'started from> in the spec frontmatter, or delete a build_base: line that names a branch ' +
+        'rather than a sha')
+    }
+  }
+  return value
 }
 
 // ---- D7 (specs/20260901/01-build-driver.md, AC-14): resume without a sidecar --------------------
@@ -195,7 +239,14 @@ function resolveBase() {
 // nothing about vacuity (red-check's own purity refusal is correct; the honest alternative is to
 // record the skip on the row, never to force a git checkout of landed work to satisfy a check
 // whose answer is already unknowable).
-function dirtyNonTestsPaths(base) {
+// The ONE "differs from base" predicate on this side: tracked edits since `base` union every
+// untracked path. Byte-for-byte the set red-check.js computes for its own pre-image purity
+// refusal — the two must agree, because a path red-check calls impure is exactly a path this
+// driver must call dirty (handleRedAttributed's former private `fs.existsSync` test was a third,
+// cruder spelling of the same question, and it disagreed: it called a file dirty for EXISTING,
+// which is true of every component the design stage legitimately committed before the build
+// started).
+function changedSinceBase(base) {
   const trackedR = runChild('git', ['-C', repoRoot, 'diff', '--name-only', base], { encoding: 'utf8' },
     'git diff --name-only')
   const tracked = (trackedR.stdout || '').split('\n').map((s) => s.trim()).filter(Boolean)
@@ -203,7 +254,10 @@ function dirtyNonTestsPaths(base) {
     { encoding: 'utf8' }, 'git status --porcelain')
   const untracked = (statusR.stdout || '').split('\n').map((s) => s.trim())
     .filter((l) => l.startsWith('??')).map((l) => l.replace(/^\?\?\s+/, ''))
-  const changed = new Set([...tracked, ...untracked])
+  return new Set([...tracked, ...untracked])
+}
+function dirtyNonTestsPaths(base) {
+  const changed = changedSinceBase(base)
   const nonTestsPaths = filePlanRows
     .filter((r) => !/^tests?$/i.test((r.layer || '').trim())).flatMap((r) => r.paths)
   return nonTestsPaths.filter((p) => changed.has(p))
@@ -414,17 +468,67 @@ function handleTestsAuthored() {
   return null
 }
 
+// Residue is "differs from base", never "exists on disk".
+//
+// The former predicate was a bare `fs.existsSync` per CREATE path, and it contradicted the design
+// stage's own published promise — spec/commands/design.md: "Components built here are real and
+// kept — /spec:build wires them, never rebuilds them." A design-landed component is committed
+// BEFORE the build starts, so it is in the pre-image, so it exists on disk, so every design:true
+// spec had to hand-edit its File Plan CREATE -> MODIFY to get past this mark. Two stages of the
+// same pipeline disagreed about what a CREATE row means.
+//
+// This is a DELETION, not a new rule: `changedSinceBase()` is the predicate red-check.js already
+// applies for its pre-image purity refusal, and the one this driver already applies in
+// dirtyNonTestsPaths(). Genuine residue — an uncommitted stub left by an abandoned earlier build —
+// is untracked or differs from base, so it is still caught, with the same refusal text.
+//
+// The case the old rule caught that this one does not is a stale stub COMMITTED at base. That is
+// deliberate: red-check already catches it, and better. A committed stub is part of the pre-image,
+// so the red tests run against it, and if the stub makes them pass, red-check's own vacuity check
+// fails honestly ("red-expected file passed against the pre-image") instead of refusing a mark
+// with a guess. What a tracked-at-base CREATE row earns here is one WARN naming the row, never a
+// refusal — the File Plan is very likely stale, but that is a planning observation, not grounds to
+// stop a build whose pre-image is provably clean.
 function handleRedAttributed() {
   const rows = filePlanRows.filter((r) =>
     !/^tests?$/i.test((r.layer || '').trim()) && (r.action || '').trim().toUpperCase() === 'CREATE')
-  for (const r of rows) {
-    for (const p of r.paths) {
-      if (fs.existsSync(path.join(repoRoot, p))) {
-        die('red-attributed refused — stub residue: ' + p + ' already exists on disk (a non-tests ' +
-          'CREATE row must not exist yet) — remove it, then re-run this mark')
-      }
-    }
+  const createPaths = rows.flatMap((r) => r.paths)
+
+  // D7's resume arm already answered the residue question for this run: on a cold resume with
+  // landed, uncommitted work, red-check is recorded as "skipped-resume" precisely because the
+  // post-image tree cannot be judged for vacuity. Every non-tests path is expected to differ from
+  // base there, so refusing here would contradict the skip the driver itself recorded.
+  if (marks.redCheck === 'skipped-resume') {
+    process.stdout.write('[spec-build-driver] red-check was recorded "skipped-resume" for this ' +
+      'run — the stub-residue check is skipped with it (on a resumed post-image tree every ' +
+      'planned path differs from base, so the check could only produce a false refusal).\n')
+    marks.redAttributed = true
+    saveSidecar()
+    return null
   }
+
+  const base = resolveBase()
+  const changed = changedSinceBase(base)
+  const residue = createPaths.filter((p) => changed.has(p))
+  if (residue.length) {
+    die('red-attributed refused — stub residue: ' + residue.join(', ') + ' already differ(s) from ' +
+      'the build base ' + base + ' (a non-tests CREATE row must not be written yet) — reconcile ' +
+      'the working tree to match the base, then re-run this mark')
+  }
+
+  const trackedAtBase = createPaths.filter((p) => {
+    const r = runChild('git', ['-C', repoRoot, 'cat-file', '-e', base + ':' + p],
+      { encoding: 'utf8' }, 'git cat-file -e (CREATE row tracked at base)')
+    return r.status === 0
+  })
+  if (trackedAtBase.length) {
+    process.stdout.write('[spec-build-driver] WARN: File Plan CREATE row(s) already tracked at ' +
+      'the build base: ' + trackedAtBase.join(', ') + ' — the pre-image is clean, so the build ' +
+      'continues; the row is likely stale (a design-stage component the plan still calls CREATE). ' +
+      'Consider MODIFY. If a stale stub is what these are, red-check\'s vacuity check is what ' +
+      'catches it.\n')
+  }
+
   marks.redAttributed = true
   saveSidecar()
   return null

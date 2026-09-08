@@ -16,7 +16,9 @@
 // reads go through lib/host-config.js's readConfigStrict — a private read would trip spec
 // 20260815/01's closure pin); it never infers gating variables from suite code, only from the
 // declared registry; `--rules` mode never touches process.env, and default mode never touches
-// the rules file — the two checks are independent legs of the same registry.
+// the rules file — the two checks are independent legs of the same registry. It never runs
+// `direnv`, never loads an .envrc, and never edits the environment: the direnv leg (default mode
+// only) compares DIRENV_DIR against --root and names the mismatch, nothing more.
 //
 // Usage:
 //   node env-preflight.js --root <dir>                  # default mode: process-env presence
@@ -24,7 +26,9 @@
 // Exit codes (house convention: findings on 1/3, usage-and-config errors on 2):
 //   0  all declared vars set and non-empty (default mode) / registry agrees with rules (--rules) /
 //      no, absent, or empty testEnv registry (both modes)
-//   1  default mode: >=1 declared var unset or empty — one line per miss, then a remedy line
+//   1  default mode: >=1 declared var unset or empty (one line per miss, then a remedy line), OR
+//      an .envrc at --root while direnv is loaded for a different directory (the gate would run
+//      against that directory's environment)
 //   2  config missing/unparseable (readConfigStrict, caught), malformed testEnv (not an array,
 //      or a row missing var/provision — names the row), bad usage, or --rules path unreadable
 //   3  --rules mode: >=1 declared var name absent from the rules file's ## Test Rules section, or
@@ -32,6 +36,7 @@
 
 'use strict'
 const fs = require('fs')
+const path = require('path')
 const { readConfigStrict, CONFIG_RELPATH } = require('./lib/host-config')
 
 function die(msg) { process.stderr.write('env-preflight: ' + msg + '\n'); process.exit(2) }
@@ -52,6 +57,46 @@ try {
   config = readConfigStrict(root)
 } catch (e) {
   die(e.message + ' — run /spec:init first')
+}
+
+// ---- direnv scope check (default mode only) --------------------------------------------------
+// The SAME incident class this module exists to stop, through a hole in it: a var that is SET but
+// points somewhere wrong is invisible to a presence check. In a direnv host the gate runs as
+// `bash -c <gateCommand>` with the parent shell's environment, and direnv is a shell hook that
+// never fires for a non-interactive child — so a build in a worktree inherits the MAIN root's
+// `.envrc` and its DB-gated tests hit the shared database instead of the worktree's own. A
+// migration applied to the worktree DB is absent there and the gate fails with a Postgres
+// constraint error that reads exactly like broken application code: a red the gate cannot tell
+// apart from a real one, which is this module's whole reason for existing.
+//
+// Deterministic and narrow: direnv exports DIRENV_DIR as `-<loaded dir>`. An `.envrc` at --root
+// with DIRENV_DIR naming a DIFFERENT directory is a proven mismatch — STOP. An `.envrc` with
+// DIRENV_DIR unset is only a possible one (direnv may simply not be installed or in use) — WARN
+// and continue; refusing there would block every host that keeps an unused .envrc in the tree.
+//
+// WHAT THIS DELIBERATELY DOES NOT DO: it never runs `direnv`, never loads an .envrc, and never
+// edits the environment. Materializing a host's env is the host's job; naming the mismatch before
+// the gate burns a repair round is this script's.
+if (!rulesArgGiven && fs.existsSync(path.join(root, '.envrc'))) {
+  const rootAbs = fs.realpathSync(root)
+  const raw = process.env.DIRENV_DIR
+  if (raw) {
+    let loaded = raw.startsWith('-') ? raw.slice(1) : raw
+    try { loaded = fs.realpathSync(loaded) } catch { /* stale path: compare it as written */ }
+    if (loaded !== rootAbs) {
+      process.stdout.write('\u2717 direnv is loaded for ' + loaded + ', not for ' + rootAbs +
+        ' — this tree has its own .envrc, so the gate would run against the other directory\'s ' +
+        'environment (a wrong database reads exactly like broken application code)\n')
+      process.stdout.write('env-preflight: environment not provisioned — run `direnv allow` in ' +
+        rootAbs + ', or declare a gateCommand that wraps the suite (e.g. `direnv exec . <suite>`) ' +
+        'in ' + CONFIG_RELPATH + ', then re-run; this is not a repair-loop issue\n')
+      process.exit(1)
+    }
+  } else {
+    process.stdout.write('env-preflight: WARN — ' + rootAbs + ' has an .envrc but DIRENV_DIR is ' +
+      'unset, so nothing confirms its environment is loaded; if the gate needs it, declare a ' +
+      'gateCommand that wraps the suite (e.g. `direnv exec . <suite>`)\n')
+  }
 }
 
 const rawTestEnv = config && typeof config === 'object' ? config.testEnv : undefined

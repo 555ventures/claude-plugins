@@ -210,3 +210,51 @@ test('AC-20260823-04-6: WHEN evidence promotion clears a worktree copy of .claud
     assert.doesNotThrow(() => JSON.parse(l), 'every promoted ledger line must remain valid JSON — a byte-level splice bug in promotion would corrupt every downstream ledger reader: ' + l)
   }
 })
+
+// The render gate writes `render/<spec>/` under .claude/spec-runs/ when given --out, so that
+// directory holds subdirectories as well as files. Evidence promotion walked it with
+// copyFileSync + an un-recursive rmSync, both of which throw on a directory entry — inside
+// promoteEvidenceAndClean, AFTER the merge has landed and BEFORE the ledger commit. The run ends
+// with the main root dirty and no recorded conclusion. Re-running the mark is safe (the
+// already-landed detection above short-circuits to finishMerge) but it threw at the same spot
+// every time, so the run could never finish at all.
+test('a subdirectory under .claude/spec-runs/ is promoted and cleared instead of throwing EISDIR after the merge lands', () => {
+  const { root, wt, spec } = driveToMerge('acdir', 'AC-20260823-99-7')
+
+  const renderDir = path.join(wt, '.claude/spec-runs/render/99-acdir')
+  fs.mkdirSync(renderDir, { recursive: true })
+  fs.writeFileSync(path.join(renderDir, 'frame.png'), 'not really a png\n')
+  fs.writeFileSync(path.join(wt, '.claude/spec-runs/plain.json'), '{"kind":"file entry"}\n')
+
+  const merged = run(root, spec, '--mark', 'merge-strategy', 'ff-only')
+  assert.strictEqual(merged.status, 0,
+    'a directory entry under .claude/spec-runs/ must not abort promotion — the merge has already landed at this point, so a throw here strands the run with a dirty main root and no ledger commit: ' + merged.stdout + merged.stderr)
+  assert.match(merged.stdout, /DONE|REPLAY/,
+    'the mark must reach its REPLAY/DONE tail rather than dying mid-promotion: ' + merged.stdout)
+
+  assert.ok(fs.existsSync(path.join(root, '.claude/spec-runs/render/99-acdir/frame.png')),
+    'the subdirectory\'s contents must be promoted into the main root, not skipped — evidence that is dropped instead of copied is evidence this review can never produce again')
+  assert.ok(fs.existsSync(path.join(root, '.claude/spec-runs/plain.json')),
+    'promoting a directory entry must not stop the plain file entries beside it from being promoted')
+  assert.ok(!fs.existsSync(wt),
+    'the worktree must be gone: `git worktree remove` (never --force) refuses on ANY leftover untracked file, so its removal is proof the promoted subdirectory was actually cleared rather than left behind')
+})
+
+test('promotion clears an untracked subdirectory completely, leaving no file to make `git worktree remove` refuse', () => {
+  const { root, wt, spec } = driveToMerge('acdir2', 'AC-20260823-99-8')
+
+  // Nested two deep, so a single-level walk would still strand the inner file. A bare
+  // `recursive: true` on the directory would pass this, but would take the untracked and the
+  // tracked cases down the same path — the per-file decision is what keeps a tracked child
+  // restored (AC-6 above) while an untracked one is deleted.
+  const deep = path.join(wt, '.claude/spec-runs/render/99-acdir2/states')
+  fs.mkdirSync(deep, { recursive: true })
+  fs.writeFileSync(path.join(deep, 'empty.png'), 'x\n')
+
+  const merged = run(root, spec, '--mark', 'merge-strategy', 'ff-only')
+  assert.strictEqual(merged.status, 0, 'a nested untracked directory must clear cleanly: ' + merged.stdout + merged.stderr)
+  assert.ok(fs.existsSync(path.join(root, '.claude/spec-runs/render/99-acdir2/states/empty.png')),
+    'a nested evidence file must survive promotion — depth is not a reason to drop it')
+  assert.ok(!fs.existsSync(wt),
+    'a leftover untracked file at any depth makes `git worktree remove` refuse at exit 128 (the recorded A1 deadlock), so the worktree being gone is the only proof the walk reached every level')
+})

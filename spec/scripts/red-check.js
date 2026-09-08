@@ -26,6 +26,12 @@
 // `parseAcBullets` returns the raw tag unvalidated by design, D1); or expand a File Plan glob
 // through any matcher but the shared lib/glob-match.js.
 //
+// An `[env: VAR]` tag on EVERY AC a green red-expected file carries downgrades that file's
+// unsanctioned-green finding to a warning naming each withheld variable — the same trust
+// ac-matrix.js already grants the tag for a skipped test. `expected` itself is never flipped to
+// green by the tag, so a genuinely-red env-gated file (the variable provisioned, the suite run)
+// still matches its expected colour instead of reporting as a broken pin.
+//
 // Exit codes: 0 = every resolved tests-layer file matches its expected pre-image colour ·
 //             1 = findings emitted (unsanctioned-green | broken-pin | missing-test-file |
 //                 invalid-pre-green | rejected-trailing-tag) — rides the normal build Phase 1
@@ -303,6 +309,19 @@ for (const relPath of [...testFiles].sort()) {
       const b = bulletById.get(id)
       return b && b.trailingRejected && b.trailingRejected.includes('[pre-green:')
     })
+    // The file must MENTION the variable it claims to be gated on. Without this, `[env:
+    // ANY_NAME]` on a vacuous `assert.ok(true)` file would pass the build gate with a warning,
+    // and nothing downstream would contradict it: ac-matrix.js's own `[env:]` sanction lives in
+    // its SKIPPED-test reconciliation, so a test that passes never reaches it. A suite that
+    // genuinely skips on a variable references that variable; a vacuous pin does not, and falls
+    // through to `unsanctioned-green` exactly as before. This is a substring test on purpose —
+    // red-check cannot evaluate the host's skip predicate, only check that the claim is anchored
+    // in the file it is made about.
+    const envGatedAcs = carriedAcs.filter((id) => {
+      const b = bulletById.get(id)
+      return !!(b && b.env && content.includes(b.env))
+    })
+    const ungatedAcs = carriedAcs.filter((id) => !envGatedAcs.includes(id))
     if (rejectedAc) {
       const b = bulletById.get(rejectedAc)
       findings.push({
@@ -310,10 +329,40 @@ for (const relPath of [...testFiles].sort()) {
         detail: rejectedTrailingTagDetail(rejectedAc, b.trailingRejected, b.trailingRejectedCause,
           `${relPath} is a green expected-red file`),
       })
+    } else if (envGatedAcs.length === carriedAcs.length && carriedAcs.length > 0) {
+      // An `[env: VAR]`-tagged AC declares that verifying it depends on a variable this process
+      // does not control. A host whose testCommand withholds that variable makes its suite skip,
+      // so runLeg (exit codes only) reads green from ANY shell: the file's redness is not absent,
+      // it is UNOBSERVABLE, and a hard finding here asserts something the run cannot know.
+      // ac-matrix.js grants this exact tag the same trust at review (`skipped test sanctioned by
+      // [env: VAR]`, a warning), so this is parity with an existing sanction rather than a new
+      // laundering route — and the warning names each withheld variable, so the sanction stays
+      // visible in the run's own output.
+      //
+      // EXPECTED STAYS 'red', deliberately. Flipping the file to green-expected instead would
+      // route a genuinely-red env-gated file — the correct pre-image colour, observed whenever the
+      // variable IS provisioned — into the `broken-pin` arm above and report the desired red as a
+      // hard finding. Suppressing only this arm cannot regress that case: `expected === 'red'`
+      // with a red observation matches, as it already does.
+      //
+      // Requiring EVERY carried AC to be env-tagged is the conservative half: a file mixing a
+      // gated AC with an ungated one still owes a real red for the ungated one, and green there
+      // is a genuine finding.
+      warnings.push(`${relPath}: red-expected file passed against the pre-image, sanctioned by ` +
+        `[env:] on ${envGatedAcs.map((id) => `${id} (${bulletById.get(id).env})`).join(', ')} — ` +
+        `the suite skips when the variable is withheld, so redness is unobservable from this run`)
     } else {
+      // The finding names the ACs that actually owe a red, not every AC the file carries: a
+      // gated sibling is already sanctioned and listing it sends the author looking at the wrong
+      // bullet. The gated ones are named in the detail as sanctioned so the split is legible.
+      const owing = ungatedAcs.length ? ungatedAcs : carriedAcs
+      const sanctionedNote = envGatedAcs.length
+        ? ` — sanctioned by [env:] and not owing a red: ${envGatedAcs.map((id) => `${id} (${bulletById.get(id).env})`).join(', ')}`
+        : ''
       findings.push({
-        class: 'unsanctioned-green', path: relPath, acs: carriedAcs,
-        detail: `${relPath}: red-expected file passed against the pre-image — carried ${carriedAcs.join(', ')}`,
+        class: 'unsanctioned-green', path: relPath, acs: owing,
+        detail: `${relPath}: red-expected file passed against the pre-image — carried ${owing.join(', ')}` +
+          sanctionedNote,
       })
     }
   }

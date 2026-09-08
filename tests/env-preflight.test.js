@@ -128,3 +128,67 @@ test('AC-20260824-02-3 (AC-20260815-05-8 incident carried forward): design doctr
     'the env-preflight mention must carry STOP-on-miss semantics — a preflight named with no STOP remedy ' +
     'nearby lets an unprovisioned environment continue past it into the author dispatch anyway')
 })
+
+// The same incident class, through a hole in this module: a variable that is SET but points at
+// the wrong place is invisible to a presence check. The gate runs as a non-interactive `bash -c`,
+// which no shell hook fires for, so a build in a worktree silently inherits the MAIN root's
+// direnv environment — its DB-gated tests hit the shared database, a migration applied to the
+// worktree DB is absent, and the failure is a Postgres constraint error that reads exactly like
+// broken application code. That is the red this script exists to name before a repair round
+// starts on it.
+function direnvHost({ envrc = true } = {}) {
+  const root = fs.realpathSync(tmpdir('envpre-direnv'))
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({}))
+  if (envrc) fs.writeFileSync(path.join(root, '.envrc'), 'export DATABASE_URL=postgres://local\n')
+  return root
+}
+
+test('an .envrc at --root while direnv is loaded for a different directory stops before the gate', () => {
+  const root = direnvHost()
+  const other = fs.realpathSync(tmpdir('envpre-other'))
+  const r = run(root, { DIRENV_DIR: '-' + other })
+  assert.strictEqual(r.status, 1,
+    'a proven environment mismatch must stop the build, not warn — reaching the gate here spends a repair round on application code that was never broken: ' + r.stdout + r.stderr)
+  assert.match(r.stdout, /direnv is loaded for/,
+    'the stop must say which directory direnv actually loaded, or the reader cannot tell this from a genuine test failure')
+  assert.match(r.stdout, /direnv allow/, 'the stop must name the remedy command')
+  assert.match(r.stdout, /gateCommand/, 'the stop must name the config-level alternative for hosts that do not want direnv in the loop')
+})
+
+test('an .envrc at --root with direnv loaded for that same root passes', () => {
+  const root = direnvHost()
+  const r = run(root, { DIRENV_DIR: '-' + root })
+  assert.strictEqual(r.status, 0,
+    'the environment is correctly scoped here — refusing would block every host that uses direnv properly: ' + r.stdout + r.stderr)
+})
+
+test('an .envrc with DIRENV_DIR unset warns and continues rather than refusing', () => {
+  const root = direnvHost()
+  const clean = { ...process.env }
+  delete clean.DIRENV_DIR
+  const r = spawnSync(process.execPath, [SCRIPT, '--root', root], { encoding: 'utf8', env: clean })
+  assert.strictEqual(r.status, 0,
+    'direnv may simply not be installed or in use — refusing on an unused .envrc would block hosts that keep one in the tree for humans: ' + r.stdout + r.stderr)
+  assert.match(r.stdout, /WARN/, 'the possible mismatch is still worth naming, since nothing confirms the environment is loaded')
+})
+
+test('a host with no .envrc is unaffected by the direnv leg', () => {
+  const root = direnvHost({ envrc: false })
+  const other = fs.realpathSync(tmpdir('envpre-other2'))
+  const r = run(root, { DIRENV_DIR: '-' + other })
+  assert.strictEqual(r.status, 0,
+    'a tree with no .envrc has no environment of its own to be loaded, so DIRENV_DIR pointing elsewhere says nothing about it: ' + r.stdout + r.stderr)
+  assert.doesNotMatch(r.stdout, /direnv/, 'a host with no .envrc must see no direnv output at all')
+})
+
+test('the direnv leg never runs in --rules mode', () => {
+  const root = direnvHost()
+  const other = fs.realpathSync(tmpdir('envpre-other3'))
+  const rules = path.join(root, 'rules.md')
+  fs.writeFileSync(rules, '## Test Rules\n\nnothing declared\n')
+  const r = run(root, { DIRENV_DIR: '-' + other }, '--rules', rules)
+  assert.strictEqual(r.status, 0,
+    'doctor mode checks the registry against prose and never touches process.env — mixing the two legs would make a doctor run fail on the operator\'s shell state: ' + r.stdout + r.stderr)
+  assert.doesNotMatch(r.stdout, /direnv/, '--rules mode must produce no direnv output')
+})

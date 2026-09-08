@@ -2733,3 +2733,215 @@ test('AC-20260906-04-6: review.browser.js under vm over the builder\'s own marku
   assert.deepStrictEqual(loadWithHash('#stop-P001'), [[0, 0]], 'F3: opening the page at #stop-<id> must scroll back to (0,0) once at load — otherwise the sticky bar is pushed down and the first caption and key legend are clipped')
   assert.deepStrictEqual(loadWithHash(''), [], 'F3: with no #stop- hash the script must not scroll at all — an unconditional scrollTo would fight the user\'s own scroll position on a reload')
 })
+
+// ---------------------------------------------------------------------------------------------
+// specs/20260907/04-kit-canon-family.md — the kit canon family (D2-D6).
+// A second canon family beside design/shell/: design/kit/<name>.html names every shared
+// primitive once, and once such a family resolves by walk-up, every content region of a labeled
+// mock is either a kit instance (data-kit) or an explicit non-instance (data-bespoke naming the
+// primitive it is not and the one structural difference). The tests below pin the library
+// surface (AC-3, AC-8, AC-2) before the `check` binding (AC-4..AC-7), so a red run localises to
+// the resolver, the canon rule set, or the binding rather than to "the kit is broken".
+// ---------------------------------------------------------------------------------------------
+const shellRegionPath = path.join(SPEC, 'scripts/lib/shell-region.js')
+const loadShellRegion = () => require(shellRegionPath)
+
+// The house kit fixture: two primitives is the smallest family that still lets a mock carry a
+// real data-kit instance AND a real data-bespoke mark in the same screen. It links the gray wire
+// register and carries the inline box-sizing reset, because a kit canon is bound "as if
+// approved" for hygiene exactly as a shell canon is (D5) — without the reset these fixtures
+// would fail on the pre-existing hygiene(a) rule instead of the rule under test.
+const KIT_CANON_HTML = (name = 'kit', primitives = [
+  { key: 'sheet', purpose: 'a side panel that does one task on one record while the parent stays visible' },
+  { key: 'blank-state', purpose: 'the region-filling placeholder when a collection has nothing to show' },
+]) =>
+  '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
+  '<link rel="stylesheet" href="../wire/tokens.css">\n' +
+  '<style>* { box-sizing: border-box; }</style>\n' +
+  '<div data-contract="none">' +
+  ['empty', 'loading', 'error'].map((s) => '<button data-state-btn="' + s + '">' + s + '</button>').join('') +
+  '</div>\n' +
+  '<div data-kit-canon="' + name + '">\n' +
+  primitives.map((p) =>
+    '  <section data-kit-primitive="' + p.key + '" data-purpose="' + p.purpose + '">\n' +
+    '    <div data-contract="none">' + p.key + '</div>\n' +
+    '    <div data-slot="content"></div>\n' +
+    '  </section>\n').join('') +
+  '</div>\n'
+
+function writeKitFamily(dir, html = KIT_CANON_HTML(), name = 'kit') {
+  const p = path.join(dir, 'design/kit', name + '.html')
+  fs.mkdirSync(path.dirname(p), { recursive: true })
+  fs.writeFileSync(p, html)
+  return p
+}
+
+// A labeled mock whose content regions are supplied verbatim by the caller, so each test states
+// exactly the region shape it is pinning and nothing else varies between them.
+function writeKitMock(dir, label, regionsHtml, status = 'sketch') {
+  const p = path.join(dir, 'design/mocks', label + '.html')
+  fs.mkdirSync(path.dirname(p), { recursive: true })
+  fs.writeFileSync(p,
+    '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
+    '<link rel="stylesheet" href="../wire/tokens.css">\n' +
+    '<style>* { box-sizing: border-box; }</style>\n' +
+    '<div data-contract="none">' +
+    ['empty', 'loading', 'error'].map((s) => '<button data-state-btn="' + s + '">' + s + '</button>').join('') +
+    '</div>\n' +
+    '<main data-screen-label="' + label + '" data-status="' + status + '">\n' + regionsHtml + '</main>\n')
+  return p
+}
+
+test('AC-20260907-04-3: resolveCanonDir walks up to design/kit for family "kit" on a tree holding only design/kit, and returns null for family "shell" on that same tree', () => {
+  const dir = tmpdir('kit-resolve')
+  writeKitFamily(dir)
+  const mockPath = writeKitMock(dir, 'inbox', '  <section data-kit="sheet">body</section>\n')
+
+  const lib = loadShellRegion()
+  assert.strictEqual(typeof lib.resolveCanonDir, 'function',
+    'shell-region.js must export resolveCanonDir(fromPath, family) — without one resolver over both families the kit becomes a second walk-up mechanism that can drift from the shell one')
+
+  const kitDir = lib.resolveCanonDir(mockPath, 'kit')
+  assert.strictEqual(kitDir, path.join(dir, 'design/kit'),
+    'resolveCanonDir(mock, "kit") must climb from design/mocks/ to the sibling design/kit/ — if it does not resolve, the whole kit family silently never binds and unabsorbed regions ship unnoticed: got ' + kitDir)
+
+  assert.strictEqual(lib.resolveCanonDir(mockPath, 'shell'), null,
+    'resolveCanonDir(mock, "shell") must return null on a tree with no design/shell/ — a family that resolves to the wrong directory would check mocks against primitives that do not exist')
+
+  assert.strictEqual(lib.resolveShellDir(mockPath), lib.resolveCanonDir(mockPath, 'shell'),
+    'resolveShellDir must stay byte-identical in behavior to resolveCanonDir(..., "shell") — every existing shell-family test depends on the old entry point continuing to answer exactly as before')
+})
+
+test('AC-20260907-04-8: isKitCanonFile is true when data-kit-canon precedes any data-screen-label and false for markup carrying only data-shell-canon', () => {
+  const lib = loadShellRegion()
+  assert.strictEqual(typeof lib.isKitCanonFile, 'function',
+    'shell-region.js must export isKitCanonFile(html) — check needs it to route a kit canon into checkKitCanon instead of demanding a data-screen-label of it')
+
+  assert.strictEqual(lib.isKitCanonFile('<div data-kit-canon="kit"><section data-kit-primitive="sheet"></section></div>'), true,
+    'a file whose first labeled root is data-kit-canon must be recognised as a kit canon — otherwise check flags it for having no data-screen-label and the KIT state can never pass its own gate')
+
+  assert.strictEqual(lib.isKitCanonFile('<div data-kit-canon="kit"></div><main data-screen-label="inbox"></main>'), true,
+    'data-kit-canon appearing before data-screen-label must classify the file as a kit canon — the ordering rule is what keeps a file carrying both from being misclassified as a screen')
+
+  assert.strictEqual(lib.isKitCanonFile('<main data-screen-label="inbox"></main><div data-kit-canon="kit"></div>'), false,
+    'a labeled screen that merely mentions data-kit-canon later must NOT be treated as a canon — misclassifying a screen exempts it from the region rules it exists to satisfy')
+
+  assert.strictEqual(lib.isKitCanonFile('<div data-shell-canon="app"><main data-slot="content"></main></div>'), false,
+    'a shell canon must not be classified as a kit canon — running the kit rule set over shell chrome would report primitives that the shell family deliberately does not name')
+})
+
+test('AC-20260907-04-2: check exits 1 naming a duplicate data-kit-primitive key in one family, and exits 0 when every key is unique', () => {
+  const dir = tmpdir('kit-canon-dup')
+  const dupPath = writeKitFamily(dir, KIT_CANON_HTML('kit', [
+    { key: 'sheet', purpose: 'a side panel that does one task on one record' },
+    { key: 'sheet', purpose: 'a second thing that also calls itself a sheet' },
+  ]))
+
+  const dup = atlas(['check', dupPath])
+  assert.strictEqual(dup.status, 1,
+    'a kit canon declaring the same data-kit-primitive key twice must fail check — two primitives under one name is exactly the drift the kit exists to prevent, and a passing check would let the family ship ambiguous: ' + dup.stdout + dup.stderr)
+  assert.match(dup.stdout + dup.stderr, /duplicate data-kit-primitive="sheet"/,
+    'the duplicate-key violation must name the offending key literally so the author knows which primitive to rename without diffing the file: ' + dup.stdout + dup.stderr)
+
+  const uniquePath = writeKitFamily(dir, KIT_CANON_HTML())
+  const unique = atlas(['check', uniquePath])
+  assert.strictEqual(unique.status, 0,
+    'a kit canon whose primitive keys are all unique must pass check — a canon that cannot pass its own rule set makes the KIT state unreachable: ' + unique.stdout + unique.stderr)
+})
+
+test('AC-20260907-04-4: check --matrix exits 1 on a content region carrying neither data-kit nor data-bespoke, and exits 0 once that region is bespoke-marked with a named difference', () => {
+  const dir = tmpdir('kit-unabsorbed')
+  writeKitFamily(dir)
+
+  const bare = writeKitMock(dir, 'inbox', '  <section>a region nobody named</section>\n')
+  const bareRes = atlas(['check', '--matrix', bare])
+  assert.strictEqual(bareRes.status, 1,
+    'a content region that is neither a kit instance nor an explicitly marked non-instance must fail under --matrix — this is the single check that stops a screen from quietly inventing a primitive the kit already names: ' + bareRes.stdout + bareRes.stderr)
+  assert.match(bareRes.stdout + bareRes.stderr, /carries neither data-kit nor data-bespoke/,
+    'the unabsorbed finding must state both marks by name so the author can act without reading doctrine: ' + bareRes.stdout + bareRes.stderr)
+
+  const marked = writeKitMock(dir, 'inbox',
+    '  <section data-bespoke="sheet: two-column body the sheet primitive cannot express">a region nobody named</section>\n')
+  const markedRes = atlas(['check', '--matrix', marked])
+  assert.strictEqual(markedRes.status, 0,
+    'a region carrying data-bespoke with a named primitive and a stated difference must pass — if a fully honest bespoke mark still fails, authors have no way past the gate except deleting the region: ' + markedRes.stdout + markedRes.stderr)
+
+  const empty = writeKitMock(dir, 'inbox', '  <section data-bespoke="sheet: ">a region nobody named</section>\n')
+  const emptyRes = atlas(['check', '--matrix', empty])
+  assert.strictEqual(emptyRes.status, 1,
+    'a data-bespoke mark naming no difference must fail — a bare flag is a rubber stamp the authoring session grants itself, which is precisely what makes the bespoke count meaningless: ' + emptyRes.stdout + emptyRes.stderr)
+  assert.match(emptyRes.stdout + emptyRes.stderr, /names no difference/,
+    'the empty-bespoke finding must say the difference is missing rather than repeating the generic unabsorbed text: ' + emptyRes.stdout + emptyRes.stderr)
+
+  const unknown = writeKitMock(dir, 'inbox', '  <section data-kit="carousel">a region</section>\n')
+  const unknownRes = atlas(['check', '--matrix', unknown])
+  assert.strictEqual(unknownRes.status, 1,
+    'a data-kit naming a primitive the family does not declare must fail — otherwise a typo silently converts a real instance claim into an unchecked one: ' + unknownRes.stdout + unknownRes.stderr)
+  assert.match(unknownRes.stdout + unknownRes.stderr, /declares no primitive "carousel"/,
+    'the unknown-kit finding must name the missing key so the author can tell a typo from a genuinely new primitive: ' + unknownRes.stdout + unknownRes.stderr)
+})
+
+test('AC-20260907-04-5: an unabsorbed region is a warn at data-status="sketch" and the same text as a violation at data-status="approved"', () => {
+  const dir = tmpdir('kit-stamp-split')
+  writeKitFamily(dir)
+
+  const sketch = writeKitMock(dir, 'inbox', '  <section>a region nobody named</section>\n', 'sketch')
+  const sketchRes = atlas(['check', sketch])
+  assert.strictEqual(sketchRes.status, 0,
+    'a sketch-stamped mock must not fail on an unabsorbed region — sketching iterates on framing, and failing there would make the kit a tax paid on every draft rather than a gate at the moment of commitment: ' + sketchRes.stdout + sketchRes.stderr)
+  assert.match(sketchRes.stdout + sketchRes.stderr, /⚠️[\s\S]*carries neither data-kit nor data-bespoke/,
+    'the sketch-stage finding must still be printed as a ⚠️ warn — a silent sketch stage means the author first learns of the residue at the approval gate: ' + sketchRes.stdout + sketchRes.stderr)
+
+  const approved = writeKitMock(dir, 'inbox', '  <section>a region nobody named</section>\n', 'approved')
+  const approvedRes = atlas(['check', approved])
+  assert.strictEqual(approvedRes.status, 1,
+    'an approved-stamped mock must fail on the same region the sketch stage only warned about — approved is the stamp that says a human accepted this screen, and accepting an unnamed primitive is what produced the sprawl this family exists to stop: ' + approvedRes.stdout + approvedRes.stderr)
+  assert.match(approvedRes.stdout + approvedRes.stderr, /carries neither data-kit nor data-bespoke/,
+    'the approved-stage violation must carry the same remedy text as the sketch warn, so the author is not asked to decode two different messages for one rule: ' + approvedRes.stdout + approvedRes.stderr)
+})
+
+test('AC-20260907-04-6: with no design/kit resolving at any ancestor, check output stays byte-identical and prints no ⓘ line and no kit finding', () => {
+  // The walk-up climbs to the filesystem root, so this fixture must not merely lack design/kit/
+  // beside the mock — no ancestor may hold one either. tmpdir() roots live outside the repo, and
+  // the assertion below is the standing guard that a kit directory never appears above them.
+  const dir = tmpdir('kit-absent')
+  const mock = writeKitMock(dir, 'inbox', '  <section>a region nobody named</section>\n', 'approved')
+
+  const lib = loadShellRegion()
+  if (typeof lib.resolveCanonDir === 'function') {
+    assert.strictEqual(lib.resolveCanonDir(mock, 'kit'), null,
+      'this off-by-absence fixture is only meaningful while no design/kit/ resolves above it — a kit directory somewhere in the tmpdir ancestry would make the rest of this test assert nothing')
+  }
+
+  const res = atlas(['check', '--matrix', mock])
+  assert.strictEqual(res.status, 0,
+    'a host that has never run the KIT state must keep passing check exactly as before — the kit family binding is off by absence, and any other behavior breaks every existing host on upgrade: ' + res.stdout + res.stderr)
+  assert.strictEqual(res.stdout, 'CHECK PASS (1 file(s))\n',
+    'check over a kit-free tree must print byte-identical output to today — an extra ⓘ count line here means the kit rule leaked into hosts that never opted into it: ' + JSON.stringify(res.stdout))
+  assert.doesNotMatch(res.stdout + res.stderr, /data-kit|data-bespoke|unabsorbed/,
+    'no kit vocabulary may appear anywhere in the output of a kit-free tree — a host reading these words has no design/kit/ to act on and no way to make the message go away: ' + res.stdout + res.stderr)
+})
+
+test('AC-20260907-04-7: check prints one ⓘ kit/bespoke count per labeled mock plus an unabsorbed total, informationally, without changing the exit code', () => {
+  const dir = tmpdir('kit-counts')
+  writeKitFamily(dir)
+
+  writeKitMock(dir, 'inbox',
+    '  <section data-kit="sheet">one</section>\n' +
+    '  <section data-kit="blank-state">two</section>\n' +
+    '  <section data-bespoke="sheet: two-column body the sheet primitive cannot express">three</section>\n')
+  writeKitMock(dir, 'settings',
+    '  <section data-kit="sheet">one</section>\n' +
+    '  <section data-kit="sheet">two</section>\n' +
+    '  <section data-kit="blank-state">three</section>\n')
+
+  const res = atlas(['check', '--matrix', path.join(dir, 'design/mocks')])
+  assert.strictEqual(res.status, 0,
+    'the count lines are informational only — a screen whose every region is tagged or honestly marked must pass, or the count becomes a second gate nobody asked for: ' + res.stdout + res.stderr)
+  assert.match(res.stdout, /ⓘ inbox: 2 kit, 1 bespoke/,
+    'the per-screen count must report 2 kit and 1 bespoke for a screen with exactly those regions — this number is the signal a reviewer approves against, so a wrong count is worse than none: ' + res.stdout)
+  assert.match(res.stdout, /ⓘ settings: 3 kit, 0 bespoke/,
+    'a screen with no bespoke regions must still print its count line with a zero — a line that disappears when the news is good trains the reader to ignore the whole family: ' + res.stdout)
+  assert.match(res.stdout, /ⓘ unabsorbed total: 1 across 1 screen\(s\)/,
+    'the run-level total must name both the region count and how many screens carry them — a growing total across runs is what keeps the bespoke escape from becoming a rubber stamp: ' + res.stdout)
+})

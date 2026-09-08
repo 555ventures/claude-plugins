@@ -10,7 +10,7 @@ depended_on_by: []
 brief: 22a
 spiked: 2026-09-07
 open_markers: 0
-diff_base: c730e0bf3971670226528e29148a9bd96435da66
+diff_base: d50340952d739ab9d39e9cd3c78268cd2c5b3eb3
 ---
 
 # The kit: shared primitives are named before any screen and bound at journey approval

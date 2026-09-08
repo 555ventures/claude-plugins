@@ -1,6 +1,6 @@
 ---
 date: 2026-09-07
-status: implementing
+status: hardened
 tier: standard
 area: design-mocks
 design: false
@@ -10,7 +10,6 @@ depended_on_by: []
 brief: 22a
 spiked: 2026-09-07
 open_markers: 0
-diff_base: c730e0bf3971670226528e29148a9bd96435da66
 ---
 
 # The kit: shared primitives are named before any screen and bound at journey approval

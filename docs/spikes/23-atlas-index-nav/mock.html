@@ -1,0 +1,80 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>session-live — served mock (prototype)</title>
+<style>
+:root{
+  --v-bg:#ffffff; --v-fg:#09090b; --v-muted:#71717a; --v-muted-bg:#f4f4f5; --v-border:#e4e4e7;
+  --v-primary:#18181b; --v-primary-fg:#fafafa; --v-ring:#a1a1aa;
+  --v-danger:#dc2626; --v-warn:#d97706; --v-ok:#16a34a;
+  --v-radius:6px; --v-font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;
+  --v-shadow:0 1px 2px rgba(0,0,0,.05),0 4px 12px rgba(0,0,0,.06);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--v-muted-bg);font:14px/1.5 var(--v-font);color:var(--v-fg)}
+:focus-visible{outline:2px solid var(--v-ring);outline-offset:2px}
+.page{max-width:430px;margin:0 auto;padding:1rem .75rem 3rem}
+.mock{background:var(--v-bg);border:1px solid var(--v-border);border-radius:var(--v-radius);padding:1rem;box-shadow:var(--v-shadow)}
+.mock .top{display:flex;align-items:center;justify-content:space-between;color:var(--v-muted);font-size:12px}
+.orb{width:96px;height:96px;border-radius:99px;background:var(--v-muted-bg);border:1px solid var(--v-border);margin:1.5rem auto}
+.turn{border-top:1px solid var(--v-border);padding:.6rem 0;color:var(--v-fg)}
+.turn small{display:block;color:var(--v-muted);font-size:12px}
+.controls{display:flex;gap:.5rem;margin-top:1rem}
+.controls button{flex:1;border:1px solid var(--v-border);background:var(--v-bg);color:var(--v-fg);
+  border-radius:var(--v-radius);padding:.5em;font:inherit;cursor:pointer}
+.controls button.primary{background:var(--v-primary);color:var(--v-primary-fg);border-color:var(--v-primary)}
+.states{display:flex;gap:.4rem;margin:0 0 .6rem}
+.states button{border:1px solid var(--v-border);background:var(--v-bg);color:var(--v-fg);border-radius:99px;
+  padding:.15em .8em;font:inherit;font-size:12px;cursor:pointer}
+.states button.on{background:var(--v-primary);color:var(--v-primary-fg);border-color:var(--v-primary)}
+
+/* the notes strip — stands in for the shadow-rooted .nl-strip on a served mock */
+.strip{margin:.75rem 0 0;border:1px solid var(--v-border);border-radius:var(--v-radius);background:var(--v-bg);padding:.6rem .75rem}
+.strip h4{margin:0 0 .4rem;font-size:13px;font-weight:600;display:flex;align-items:baseline;gap:.5em}
+.strip h4 .up{margin-left:auto;font-size:12px;font-weight:500;color:var(--v-muted);text-decoration:none}
+.strip h4 .up:hover{color:var(--v-fg);text-decoration:underline}
+.n{border-top:1px solid var(--v-border);padding:.5rem 0;display:flex;gap:.6rem;align-items:flex-start}
+.n:first-of-type{border-top:0}
+.n b{font-size:11px;font-weight:600;color:var(--v-muted);border:1px solid var(--v-border);border-radius:999px;padding:.1em .6em;flex:none}
+.n .t{flex:1}
+.n .t small{display:block;color:var(--v-muted);font-size:12px;margin-top:.15em}
+.hint{color:var(--v-muted);font-size:12px;text-align:center;margin:1rem 0 0}
+</style>
+</head><body>
+<div class="page">
+  <div class="states">
+    <button class="on">listening</button><button>read-back</button><button>paused</button>
+  </div>
+  <div class="mock" data-screen-label="session-live">
+    <div class="top"><span>Mori Kitchens</span><span>08:12 left</span></div>
+    <div class="orb"></div>
+    <div class="turn">How many count sheets does a store fill in a week?<small>Hearwell</small></div>
+    <div class="turn">Three. One per shift, plus the Friday recount.<small>Mei · you</small></div>
+    <div class="turn">So: three per store per week, four on Fridays.<small>Hearwell · tap to correct</small></div>
+    <div class="controls"><button>Mute</button><button class="primary">End session</button></div>
+  </div>
+
+  <div class="strip">
+    <h4>Notes on session-live · listening
+      <a class="up" href="index.html#notes">Project notes &#8599;</a>
+    </h4>
+    <div class="n"><b>N4</b><span class="t">The orb is doing two jobs — it shows we are listening and it shows the turn is ours. Split them.<small>JJ</small></span></div>
+    <div class="n"><b>N6</b><span class="t">"08:12 left" reads like a countdown to failure. Say what happens at zero.<small>JJ</small></span></div>
+  </div>
+  <p class="hint">Prototype: this stands in for a served mock page. The link above is the one new affordance.</p>
+</div>
+<script>
+document.querySelectorAll('.states button').forEach(function (b) {
+  b.onclick = function () {
+    document.querySelectorAll('.states button').forEach(function (x) { x.classList.remove('on'); });
+    b.classList.add('on');
+    document.querySelector('.strip h4').childNodes[0].nodeValue = 'Notes on session-live · ' + b.textContent + ' ';
+  };
+});
+var s = new URLSearchParams(location.search).get('screen');
+if (s) {
+  document.querySelector('.mock').setAttribute('data-screen-label', s);
+  document.querySelector('.top span').textContent = s;
+  document.querySelector('.strip h4').childNodes[0].nodeValue = 'Notes on ' + s + ' · listening ';
+}
+</script>
+</body></html>

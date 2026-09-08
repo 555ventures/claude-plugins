@@ -14,7 +14,7 @@
     `approved` now stamps every top-level mock itself and records the sign-off stop's
     decider); D11 narrowed (`--reopen` no longer clears `skinned`/`reviewed` marks, since
     neither exists).
-- Amended by: —
+- Amended by: ADR-0010 (kit named before screens, theme leaves mocks, journey walk + client stop)
 
 ## Context
 

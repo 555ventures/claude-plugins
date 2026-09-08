@@ -1,0 +1,411 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design atlas — index navigation prototype</title>
+<style>
+:host,:root{
+  --v-bg:#ffffff; --v-fg:#09090b; --v-muted:#71717a; --v-muted-bg:#f4f4f5; --v-border:#e4e4e7;
+  --v-primary:#18181b; --v-primary-fg:#fafafa; --v-ring:#a1a1aa; --v-accent:#f4f4f5;
+  --v-danger:#dc2626; --v-warn:#d97706; --v-ok:#16a34a;
+  --v-radius:6px; --v-space-1:4px; --v-space-2:8px; --v-space-3:12px; --v-space-4:16px; --v-space-6:24px;
+  --v-font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;
+  --v-shadow:0 1px 2px rgba(0,0,0,.05),0 4px 12px rgba(0,0,0,.06);
+  --toc-w:264px;
+}
+*{box-sizing:border-box}
+body{font:14px/1.5 var(--v-font);margin:0;background:var(--v-muted-bg);color:var(--v-fg);overflow-x:hidden}
+a{color:var(--v-primary)}
+:focus-visible{outline:2px solid var(--v-ring);outline-offset:2px}
+
+/* ---- shell: sidebar column + main column ---------------------------------- */
+#shell{display:grid;grid-template-columns:var(--toc-w) minmax(0,1fr);align-items:start}
+#main{padding:1.25rem 1.5rem 3rem;min-width:0}
+
+/* ---- table of contents ----------------------------------------------------- */
+#toc{position:sticky;top:0;height:100vh;overflow:auto;background:var(--v-bg);
+  border-right:1px solid var(--v-border);padding:1rem .75rem 2rem}
+#toc .tochdr{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--v-muted);margin:0 .25rem .5rem}
+#tocsearch{width:100%;font:14px/1.4 var(--v-font);color:var(--v-fg);background:var(--v-bg);
+  border:1px solid var(--v-border);border-radius:var(--v-radius);padding:.4em .6em;margin:0 0 .75rem}
+#tocsearch::placeholder{color:var(--v-muted)}
+.tocgroup{margin:0 0 .35rem}
+.tochead{display:flex;align-items:baseline;gap:.4em;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--v-muted);padding:.5rem .25rem .25rem .5rem;border-left:4px solid transparent;cursor:pointer}
+.tochead .count{font-size:11px;letter-spacing:0;color:var(--v-muted);border:1px solid var(--v-border);
+  border-radius:99px;padding:0 .5em;background:var(--v-bg);margin-left:auto;text-transform:none}
+.tochead.here{border-left-color:var(--v-primary);color:var(--v-fg)}
+.tocrow{display:flex;align-items:center;gap:.5em;width:100%;text-align:left;background:none;border:0;
+  font:inherit;color:var(--v-fg);cursor:pointer;padding:.25em .5em .25em .75rem;border-radius:var(--v-radius)}
+.tocrow:hover{background:var(--v-muted-bg)}
+.tocrow .dot{width:.5em;height:.5em;border-radius:99px;background:var(--v-muted);flex:none}
+.tocrow .dot.gap{background:var(--v-danger)}.tocrow .dot.sketch{background:var(--v-warn)}
+.tocrow .dot.approved,.tocrow .dot.built{background:var(--v-ok)}.tocrow .dot.bound{background:var(--v-ring)}
+.tocrow .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tocempty{color:var(--v-muted);font-size:13px;padding:.5rem .75rem}
+#tocscrim{display:none}
+
+/* ---- page chrome (mirrors the real atlas) ---------------------------------- */
+h1,h2{font-weight:600}
+h1{margin:0;font-size:22px;letter-spacing:-.01em}
+.hdr{display:flex;flex-wrap:wrap;align-items:baseline;gap:.5rem 1rem;margin:0 0 .35rem}
+.hdr .proj{color:var(--v-muted);font-size:14px}
+.lede{color:var(--v-muted);font-size:13px;margin:0 0 .9rem;max-width:70ch}
+.legend{display:flex;flex-wrap:wrap;gap:.4rem .9rem;font-size:12px;color:var(--v-muted);margin:0 0 1rem}
+.bar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;
+  background:color-mix(in srgb, var(--v-muted-bg) 88%, transparent);backdrop-filter:blur(6px);
+  padding:.5rem 0;margin:0 0 .5rem;border-bottom:1px solid var(--v-border)}
+.bar button{background:var(--v-bg);color:var(--v-fg);border:1px solid var(--v-border);border-radius:99px;
+  padding:.25em .8em;cursor:pointer;font:inherit;font-size:12px;display:inline-flex;align-items:center;gap:.4em}
+.bar button.on{border-color:var(--v-primary);background:var(--v-primary);color:var(--v-primary-fg)}
+.bar button .dot{width:.55em;height:.55em;border-radius:99px;background:var(--v-muted);display:inline-block}
+.bar button .dot.gap{background:var(--v-danger)}.bar button .dot.sketch{background:var(--v-warn)}
+.bar button .dot.approved,.bar button .dot.built{background:var(--v-ok)}.bar button .dot.bound{background:var(--v-ring)}
+.bar .sep{width:1px;height:1.2em;background:var(--v-border);margin:0 .35em}
+#tocbtn{display:none}
+.sect{margin:2rem 0 0}
+.sect>h2{font-size:17px;margin:0 0 .75rem;padding:.1rem 0 .1rem .7rem;border-left:4px solid var(--v-primary);
+  display:flex;align-items:baseline;flex-wrap:wrap;gap:.5em;scroll-margin-top:3.5rem}
+.sect>h2 .count{color:var(--v-muted);font-size:12px;font-weight:500;border:1px solid var(--v-border);
+  border-radius:99px;padding:0 .6em;background:var(--v-bg)}
+.sect>p.meta{margin:-.4rem 0 .75rem .95rem;font-size:13px;max-width:100ch;color:var(--v-muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;align-items:start}
+.card{border:1px solid var(--v-border);border-radius:var(--v-radius);padding:.75rem;background:var(--v-bg);
+  box-shadow:var(--v-shadow);min-width:0;scroll-margin-top:4rem;transition:box-shadow .15s,transform .15s}
+.card:hover{transform:translateY(-1px)}
+.card.flash{outline:2px solid var(--v-ring);outline-offset:3px}
+.card h3{margin:.1rem 0 .4rem;font-size:15px;display:flex;align-items:center;flex-wrap:wrap;gap:.15em}
+.badge{display:inline-block;border:1px solid var(--v-border);border-radius:99px;padding:.05em .6em;font-size:11px;
+  font-weight:600;margin-right:.3em;text-transform:uppercase;letter-spacing:.04em;background:var(--v-muted-bg);color:var(--v-muted)}
+.badge.sketch{border-color:color-mix(in srgb, var(--v-warn) 40%, transparent);color:var(--v-warn);background:color-mix(in srgb, var(--v-warn) 12%, var(--v-bg))}
+.badge.approved,.badge.built{border-color:color-mix(in srgb, var(--v-ok) 40%, transparent);color:var(--v-ok);background:color-mix(in srgb, var(--v-ok) 12%, var(--v-bg))}
+.badge.bound{border-color:var(--v-ring);color:var(--v-fg);background:var(--v-bg)}
+.badge.candidate{border-color:color-mix(in srgb, var(--v-warn) 40%, transparent);color:var(--v-warn);background:color-mix(in srgb, var(--v-warn) 12%, var(--v-bg))}
+.shot{overflow:hidden;border-radius:var(--v-radius);background:var(--v-muted-bg);cursor:zoom-in;margin-top:.5rem;
+  border:1px solid var(--v-border);height:180px;position:relative}
+.shot::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3rem;pointer-events:none;
+  background:linear-gradient(to bottom,transparent,var(--v-bg))}
+.wire{padding:10px;display:flex;flex-direction:column;gap:7px}
+.wire i{display:block;height:9px;border-radius:3px;background:var(--v-border)}
+.wire i.tall{height:44px}
+.wire i.solid{background:var(--v-ring)}
+.meta{color:var(--v-muted);font-size:12px;margin-top:.35rem}
+.gaps{display:flex;flex-wrap:wrap;gap:.4rem;margin:.75rem 0 0}
+.gapchip{border:1px dashed var(--v-danger);color:var(--v-danger);border-radius:99px;padding:.05rem .65rem;font-size:12px;scroll-margin-top:4rem}
+.gapchip.flash{outline:2px solid var(--v-ring);outline-offset:3px}
+
+/* ---- notes panel (stand-in for the shadow-rooted project panel) ------------ */
+#notes{margin:2rem 0 0;border:1px solid var(--v-border);border-radius:var(--v-radius);background:var(--v-bg);
+  padding:.75rem 1rem;scroll-margin-top:4rem}
+#notes h4{margin:0 0 .5rem;font-size:13px;font-weight:600;display:flex;align-items:baseline;gap:.5em}
+#notes h4 .count{color:var(--v-muted);font-weight:500}
+.n{border-top:1px solid var(--v-border);padding:.5rem 0;display:flex;align-items:flex-start;gap:.6rem}
+.n:first-of-type{border-top:0}
+.n .anchor{font-size:11px;font-weight:600;border:1px solid var(--v-border);border-radius:999px;padding:.1em .6em;
+  flex:none;background:none;font-family:inherit;cursor:pointer;color:var(--v-primary)}
+.n .anchor:hover{background:var(--v-muted-bg)}
+.n .anchor.plain{color:var(--v-muted);cursor:default}
+.n .t{flex:1}
+.n .t small{display:block;color:var(--v-muted);font-size:12px;margin-top:.15em}
+
+/* ---- lightbox --------------------------------------------------------------- */
+#lb{position:fixed;inset:0;z-index:10;background:color-mix(in srgb, var(--v-fg) 85%, transparent);display:none;
+  overflow:auto;padding:3.2rem 1rem 1rem}
+#lb.on{display:block}
+#lbcard{max-width:420px;margin:0 auto;background:var(--v-bg);border-radius:var(--v-radius);padding:1rem}
+#lbcard .wire i{height:12px}#lbcard .wire i.tall{height:120px}
+#lbbar{position:fixed;top:.6rem;right:1rem;z-index:11;display:flex;gap:.4rem;align-items:center}
+#lbbar span{color:var(--v-bg);font-size:13px;margin-right:.4em}
+#lbbar button,#lbbar a{background:var(--v-muted-bg);color:var(--v-fg);border:1px solid var(--v-border);
+  border-radius:var(--v-radius);padding:.2em .7em;cursor:pointer;font:inherit;font-size:13px;text-decoration:none}
+
+/* ---- narrow: the sidebar becomes an overlay -------------------------------- */
+@media (max-width:1199px){
+  #shell{grid-template-columns:minmax(0,1fr)}
+  #toc{position:fixed;left:0;top:0;width:var(--toc-w);z-index:20;transform:translateX(-100%);
+    transition:transform .18s ease;box-shadow:var(--v-shadow)}
+  #toc.open{transform:translateX(0)}
+  #tocscrim.on{display:block;position:fixed;inset:0;z-index:19;background:color-mix(in srgb, var(--v-fg) 35%, transparent)}
+  #tocbtn{display:inline-flex}
+}
+@media (max-width:640px){#main{padding:.75rem}.grid{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="shell">
+  <aside id="toc" aria-label="Screen index">
+    <p class="tochdr">Index</p>
+    <input id="tocsearch" type="search" placeholder="Search screens   /" aria-label="Search screens">
+    <nav id="toctree"></nav>
+  </aside>
+  <div id="main">
+    <div class="hdr"><h1>Design atlas</h1><span class="proj" id="proj"></span></div>
+    <p class="lede">One card per screen, grouped by journey. Click a card to see it at full size; the width and theme buttons re-frame every card at once.</p>
+    <div class="legend" id="legend"></div>
+    <div class="bar">
+      <button id="tocbtn" onclick="__toc()">Index</button>
+      <span class="sep" id="tocsep" style="display:none"></span>
+      <span id="filters"></span>
+      <span class="sep"></span>
+      <button>phone 390</button><button>tablet 834</button><button>desktop 1280</button>
+    </div>
+    <div id="sections"></div>
+    <section id="notes"></section>
+  </div>
+</div>
+<div id="tocscrim" onclick="__toc(false)"></div>
+<div id="lb"><div id="lbbar"><span id="lbtitle"></span>
+  <a id="lbopen" href="mock.html" target="_blank">open &#8599;</a>
+  <button onclick="__lbClose()" title="close">&#10005;</button></div>
+  <div id="lbcard"></div></div>
+
+<script>
+/* ---------------------------------------------------------------------------
+   PROTOTYPE ONLY. Data below stands in for what design-atlas.js derives from
+   docs/roadmap + design/mocks + notes.json. Labels are Hearwell's real seed
+   journeys; statuses and notes are invented so the page has honest density.
+--------------------------------------------------------------------------- */
+var DATA = {
+  project: 'hearwell',
+  candidates: [
+    { name: 'shapes', rows: ['single-column', 'console-sidebar', 'tabbed-workbench'] },
+    { name: 'theme', rows: ['ink', 'paper', 'signal'] }
+  ],
+  journeys: [
+    { name: 'staff-session',
+      persona: 'Mei opens the invite from her boss on her phone, talks for ten minutes, and ends on her list of remaining sessions.',
+      screens: [['staff-invite','approved'],['session-consent','approved'],['session-live','sketch'],
+                ['session-stimulus','sketch'],['session-done','sketch'],['my-sessions','gap'],
+                ['session-paused','gap'],['session-reconnect','gap'],['session-recap','gap']] },
+    { name: 'owner-onboarding',
+      persona: 'Kenji receives the developer’s message, hears the seed digest read back fact by fact, and corrects the roster.',
+      screens: [['owner-intro','approved'],['reciprocity-brief','sketch'],['roster-confirm','sketch'],
+                ['roster-invite-sent','gap'],['owner-welcome-back','gap']] },
+    { name: 'owner-ratification',
+      persona: 'Kenji works a confirmation round, reads the conflict map, ratifies the roadmap, and tops up the wallet.',
+      screens: [['owner-map','built'],['confirmation-round','built'],['conflict-map','sketch'],
+                ['roadmap','sketch'],['wallet-topup','bound'],['wallet-receipt','gap'],
+                ['ratify-summary','gap'],['fact-history','gap']] },
+    { name: 'dev-channel',
+      persona: 'Ren signs into the console, approves the discovery plan as a diff, watches the live session, and pulls results.',
+      screens: [['console-signin','built'],['console-home','built'],['console-account','approved'],
+                ['dev-start','approved'],['discovery-plan','sketch'],['console-live-session','sketch'],
+                ['dev-pull-diff','sketch'],['dev-ask-client','bound'],['dev-release','gap'],
+                ['console-decisions','gap'],['console-keys','gap'],['console-billing','gap'],
+                ['console-clients','gap'],['console-empty','gap']] },
+    { name: 'operator-oversight',
+      persona: 'JJ opens the oversight queue, approves or corrects an adapt-engine draft, and reads the decision log.',
+      screens: [['oversight-queue','sketch'],['digest-review','sketch'],['adapt-review','gap'],
+                ['decision-log','gap'],['graduation-report','gap'],['operator-audit','gap']] }
+  ],
+  notes: [
+    { id: 'N1', scope: 'project', text: 'Every screen says "session" but the owner calls it "the interview". Pick one word and use it everywhere.', by: 'JJ' },
+    { id: 'N4', scope: 'mock', screen: 'session-live', state: 'listening', text: 'The orb is doing two jobs — it shows we are listening and it shows the turn is ours. Split them.', by: 'JJ' },
+    { id: 'N5', scope: 'mock', screen: 'discovery-plan', state: 'default', text: 'The cost line should be next to Approve, not at the top where nobody re-reads it.', by: 'JJ' },
+    { id: 'N7', scope: 'project', text: 'Nothing in the set shows what happens when the client goes quiet for a week.', by: 'JJ' },
+    { id: 'N9', scope: 'mock', screen: 'conflict-map', state: 'default', text: 'Disagreement reads as an error state. It is normal and should look normal.', by: 'JJ' },
+    { id: 'N12', scope: 'mock', screen: 'dev-release', state: 'default', text: 'This screen is not drawn yet but the release step is the one Ren repeats most.', by: 'JJ' }
+  ]
+};
+
+var STATUSES = ['gap','sketch','bound','approved','built'];
+var LEGEND = { gap:'declared, not drawn yet', sketch:'drawn, waiting for your look',
+  approved:'you approved it', built:'shipped in code', bound:'claimed by a spec' };
+var esc = function (s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+var byLabel = {};
+DATA.journeys.forEach(function (j) { j.screens.forEach(function (s) { byLabel[s[0]] = { st: s[1], journey: j.name }; }); });
+
+/* deterministic wireframe skeleton so a card looks like a screen, not a blank box */
+function wire(label) {
+  var h = 0; for (var i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) % 1000;
+  var rows = ['<i class="solid" style="width:40%"></i>'];
+  var n = 4 + (h % 3);
+  for (var k = 0; k < n; k++) {
+    if (k === 1) rows.push('<i class="tall"></i>');
+    else rows.push('<i style="width:' + (55 + ((h >> k) % 40)) + '%"></i>');
+  }
+  return '<div class="wire">' + rows.join('') + '</div>';
+}
+
+/* ---- render: sections + cards ---------------------------------------------- */
+function renderSections() {
+  var counts = {}, total = 0;
+  var html = DATA.candidates.map(function (c) {
+    return '<section class="sect" data-journey="' + c.name + '"><h2 id="j-' + c.name + '">' + c.name +
+      '<span class="count">' + c.rows.length + ' candidates</span></h2>\n<div class="grid">' +
+      c.rows.map(function (r, i) {
+        return '<div class="card" id="s-' + r + '" data-st="candidate"><h3>' + (i + 1) + '. ' + r + '</h3>' +
+          '<span class="badge candidate">candidate</span><div class="shot" onclick="__lb(\'' + r + '\')">' + wire(r) + '</div></div>';
+      }).join('') + '</div></section>';
+  }).join('\n');
+
+  html += DATA.journeys.map(function (j) {
+    var cards = [], chips = [];
+    j.screens.forEach(function (s) {
+      var label = s[0], st = s[1];
+      counts[st] = (counts[st] || 0) + 1; total++;
+      if (st === 'gap') {
+        chips.push('<span class="gapchip" id="s-' + label + '" data-st="gap" title="declared, no mock yet">' + label + '</span>');
+      } else {
+        cards.push('<div class="card" id="s-' + label + '" data-st="' + st + '"><h3>' + label + '</h3>' +
+          '<span class="badge ' + st + '">' + st + '</span>' +
+          '<div class="shot" onclick="__lb(\'' + label + '\')">' + wire(label) + '</div>' +
+          '<div class="meta">journey: ' + j.name + '</div></div>');
+      }
+    });
+    var count = [cards.length ? cards.length + ' mocked' : null, chips.length ? chips.length + ' gap' : null].filter(Boolean).join(' · ');
+    return '<section class="sect" data-journey="' + j.name + '"><h2 id="j-' + j.name + '">' + j.name +
+      '<span class="count">' + count + '</span></h2>\n<p class="meta">' + esc(j.persona) + '</p>\n' +
+      (cards.length ? '<div class="grid">' + cards.join('') + '</div>' : '') +
+      (chips.length ? '<div class="gaps">' + chips.join('') + '</div>' : '') + '</section>';
+  }).join('\n');
+
+  document.getElementById('sections').innerHTML = html;
+  document.getElementById('proj').textContent = DATA.project + ' · ' +
+    STATUSES.filter(function (k) { return counts[k]; }).map(function (k) { return counts[k] + ' ' + k; }).join(' · ');
+  document.getElementById('legend').innerHTML = STATUSES.filter(function (k) { return counts[k]; })
+    .map(function (k) { return '<span><span class="badge ' + k + '">' + k + '</span> ' + LEGEND[k] + '</span>'; }).join('');
+  document.getElementById('filters').innerHTML =
+    '<button data-f class="on" onclick="__filter(\'all\',this)">all ' + total + '</button>' +
+    STATUSES.filter(function (k) { return counts[k]; }).map(function (k) {
+      return '<button data-f onclick="__filter(\'' + k + '\',this)"><span class="dot ' + k + '"></span>' + k + ' ' + counts[k] + '</button>';
+    }).join('');
+}
+
+/* ---- render: the index ------------------------------------------------------ */
+function renderToc() {
+  var groups = DATA.candidates.map(function (c) {
+    return { name: c.name, rows: c.rows.map(function (r) { return { label: r, st: 'candidate' }; }) };
+  }).concat(DATA.journeys.map(function (j) {
+    return { name: j.name, rows: j.screens.map(function (s) { return { label: s[0], st: s[1] }; }) };
+  }));
+  document.getElementById('toctree').innerHTML = groups.map(function (g) {
+    return '<div class="tocgroup" data-group="' + g.name + '">' +
+      '<div class="tochead" id="th-' + g.name + '" onclick="__jump(\'j-' + g.name + '\')">' + g.name +
+      '<span class="count">' + g.rows.length + '</span></div>' +
+      g.rows.map(function (r) {
+        return '<button class="tocrow" data-label="' + r.label + '" data-st="' + r.st + '" onclick="__jump(\'s-' + r.label + '\')">' +
+          '<span class="dot ' + r.st + '"></span><span class="lbl">' + r.label + '</span></button>';
+      }).join('') + '</div>';
+  }).join('') + '<p class="tocempty" hidden>No screen matches.</p>';
+}
+
+/* ---- one filter model: status chips + search both narrow the same rows ------ */
+var activeStatus = 'all', query = '';
+function applyToc() {
+  var visible = 0;
+  document.querySelectorAll('#toctree .tocgroup').forEach(function (g) {
+    var shown = 0;
+    g.querySelectorAll('.tocrow').forEach(function (row) {
+      var label = row.dataset.label, st = row.dataset.st;
+      var okStatus = activeStatus === 'all' || st === activeStatus;
+      var okQuery = !query || label.indexOf(query) > -1 || g.dataset.group.indexOf(query) > -1;
+      row.hidden = !(okStatus && okQuery);
+      if (!row.hidden) { shown++; visible++; }
+    });
+    g.hidden = shown === 0;
+  });
+  document.querySelector('.tocempty').hidden = visible > 0;
+}
+function __filter(st, btn) {
+  activeStatus = st;
+  document.querySelectorAll('button[data-f]').forEach(function (b) { b.classList.toggle('on', b === btn); });
+  document.querySelectorAll('#sections [data-st]').forEach(function (el) {
+    el.hidden = st !== 'all' && el.dataset.st !== st;
+  });
+  document.querySelectorAll('.sect').forEach(function (s) { s.hidden = !s.querySelector('[data-st]:not([hidden])'); });
+  applyToc();
+}
+
+/* overlay mode is whatever the CSS says it is — the breakpoint lives in one place */
+function __narrow() { return getComputedStyle(document.getElementById('tocbtn')).display !== 'none'; }
+
+/* ---- jump ------------------------------------------------------------------- */
+function __jump(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  if (__narrow()) __toc(false);
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (id.indexOf('s-') === 0) { el.classList.add('flash'); setTimeout(function () { el.classList.remove('flash'); }, 1200); }
+}
+
+/* ---- sidebar open/close (narrow only) --------------------------------------- */
+function __toc(force) {
+  var t = document.getElementById('toc'), open = force === undefined ? !t.classList.contains('open') : force;
+  t.classList.toggle('open', open);
+  document.getElementById('tocscrim').classList.toggle('on', open);
+  document.getElementById('tocbtn').classList.toggle('on', open);
+}
+
+/* ---- notes panel ------------------------------------------------------------ */
+function renderNotes() {
+  var open = DATA.notes.length;
+  document.getElementById('notes').innerHTML =
+    '<h4>Project notes<span class="count">' + open + ' open</span></h4>' +
+    DATA.notes.map(function (n) {
+      var anchor;
+      if (n.scope === 'project') {
+        anchor = '<span class="anchor plain">whole project</span>';
+      } else {
+        var known = byLabel[n.screen];
+        var drawn = known && known.st !== 'gap';
+        anchor = drawn
+          ? '<button class="anchor" onclick="__lb(\'' + n.screen + '\')">' + n.screen + ' · ' + n.state + '</button>'
+          : '<span class="anchor plain">' + n.screen + ' · not drawn</span>';
+      }
+      return '<div class="n">' + anchor + '<span class="t">' + esc(n.text) + '<small>' + n.id + ' · ' + n.by + '</small></span></div>';
+    }).join('');
+}
+
+/* ---- lightbox --------------------------------------------------------------- */
+function __lb(label) {
+  document.getElementById('lbtitle').textContent = label;
+  document.getElementById('lbcard').innerHTML = wire(label);
+  document.getElementById('lbopen').href = 'mock.html?screen=' + encodeURIComponent(label);
+  document.getElementById('lb').classList.add('on');
+}
+function __lbClose() { document.getElementById('lb').classList.remove('on'); }
+
+/* ---- current-journey highlight ----------------------------------------------
+   Executed 2026-09-07: an IntersectionObserver band (rootMargin -10%/-80%) marks nothing —
+   a heading jumped to lands above the band's top edge, so it never intersects. The current
+   section is instead the LAST heading above a threshold, recomputed on scroll. */
+function watchSections() {
+  var heads = [].slice.call(document.querySelectorAll('.sect > h2'));
+  var raf = 0;
+  function mark() {
+    raf = 0;
+    var th = Math.max(80, window.innerHeight * 0.25), cur = heads[0];
+    heads.forEach(function (h) { if (h.getBoundingClientRect().top <= th) cur = h; });
+    document.querySelectorAll('.tochead.here').forEach(function (x) { x.classList.remove('here'); });
+    if (!cur) return;
+    var el = document.getElementById('th-' + cur.parentNode.dataset.journey);
+    if (el) el.classList.add('here');
+  }
+  window.addEventListener('scroll', function () { if (!raf) raf = requestAnimationFrame(mark); }, { passive: true });
+  mark();
+}
+
+/* ---- boot ------------------------------------------------------------------- */
+renderSections(); renderToc(); renderNotes(); watchSections();
+document.getElementById('tocsearch').addEventListener('input', function (e) {
+  query = e.target.value.trim().toLowerCase(); applyToc();
+});
+document.getElementById('tocsearch').addEventListener('keydown', function (e) {
+  if (e.key !== 'Enter') return;
+  var first = document.querySelector('#toctree .tocrow:not([hidden])');
+  if (first) first.click();
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === '/' && document.activeElement !== document.getElementById('tocsearch')) {
+    e.preventDefault();
+    if (__narrow()) __toc(true);
+    document.getElementById('tocsearch').focus();
+  }
+  if (e.key === 'Escape') {
+    if (document.getElementById('lb').classList.contains('on')) return __lbClose();
+    __toc(false);
+  }
+});
+if (location.hash === '#notes') document.getElementById('notes').scrollIntoView();
+</script>
+</body></html>

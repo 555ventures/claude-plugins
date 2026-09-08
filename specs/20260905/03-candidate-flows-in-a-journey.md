@@ -1,6 +1,7 @@
 ---
 date: 2026-09-05
-status: hardened
+status: superseded
+superseded_by: "queue item — re-plan candidate flows against the 2026-09-07 chain (KIT → WIREFRAMES → WALK → CLIENT); premise and JJ prototype ruling stand, mechanics only"
 open_markers: 0
 tier: standard
 area: design

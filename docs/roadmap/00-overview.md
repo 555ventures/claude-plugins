@@ -38,7 +38,7 @@ fences off belongs to its owning brief.
 | 20 | shell-composed-mocks *(amends 02 D8 via ADR-0003; queued before 19)* |
 | 21 | comment-hygiene *(owner citations, never history: narration gate → plugin sweep → host generators + doctor)* |
 | 22 | mocks-first-genesis *(amends 10, 10a, 20 and ADR-0003 via ADR-0006; standalone design command → brief → architecture; page notes + provenance ledger gate every advance)* |
-| 22a | mocks-is-wireframes *(successor: amends 22 via ADR-0008; SKIN + REVIEW retired, theme picked on the dense screens, assumptions as questions on the screen, gray states, per-brief high fidelity + critique in sketch)* |
+| 22a | mocks-is-wireframes *(successor: amends 22 via ADR-0008, amended in place via ADR-0010; SKIN + REVIEW + THEME + SIGNOFF retired, shared primitives named before screens and bound at journey approval, gray states, questions on the screen, journey walk + client stop, theme and fidelity in sketch)* |
 | 23 | closed-feedback-loop *(hosts emit rows, the plugin reads them: fleet-reader `--owed`, row-as-handoff report lines, replay `via`)* |
 | 24 | status-and-queue-diet *(status = roadmap + one paste + ≤3 decisions; hygiene anomalies move to doctor; queue positional with one `move` verb, no accept step)* |
 | 25 | commit-time-escape-coverage *(measure the share of host fix commits that record a row; widen the commit-time offer if that is the leak)* |

@@ -1,6 +1,6 @@
 ---
 date: 2026-09-07
-status: implementing
+status: done
 tier: standard
 area: pipeline-gates
 design: false
@@ -200,6 +200,35 @@ is A1's job, done once).
 **Fragile.** `red-check.js`'s header exit-code list is a test-pinned contract — add the class,
 do not reorder. `ac-matrix.js` exits via `process.exit` at argv parse; the lint path must
 return before the `--root`/`--manifest` requirement check, not after it.
+
+**Build/review departures (folded from the deviations sidecar, one-offs).** D8's own File Plan
+row for `tests/consistency/entrypoints.test.js` proposed a comment-only note; red-check refused
+that pre-image as `unsanctioned-green` (a carried AC with no red-expected assertion), so the
+file gained a real executable assertion instead — D8 itself is unchanged, only how it is
+proven. D9's literal target (`7.96.0`) was stale by build time — the pipeline rules' Gotchas
+entry on exactly this class ("a spec Decision naming a literal version-bump target can be
+stale by build time … the build bumps to the next free version", citing
+specs/20260810/02-terminal-observable-acs.md D11 and
+specs/20260901/08-corpus-derivation-and-kill-match.md D10) already governs it; this build's
+pre-image already carried `7.100.0` (landed after this spec was drafted), so the next free
+version — `7.101.0` — is what shipped. D11 and D12 are recorded in full in the Decisions
+table above; in brief, D11 fixed a genuine test-fixture collision `pinShape` correctly
+surfaced (`tests/red-check/red-check.test.js`'s pre-existing AC-20260821-01-4 hard-wrap
+fixture mirrored a real mixed bullet and read as `mixed`, not `pin`), and D12 fixed an
+unrelated, pre-existing platform-assumption bug found while widening scope for D11
+(`tests/provenance/provenance.test.js` faked "no `jq` on PATH" with `PATH=/bin`, which still
+resolves `jq` on merged-`/usr` Linux). Two further one-off repairs from review's own rounds:
+`spec-review-driver.js`'s `acPinDriftLine()` called `JSON.parse` unconditionally on
+`ac-drift.js --json`'s output, which is the plain `inapplicable — no specs/` sentinel (not
+JSON) when `--root` has no `specs/` directory — guarded with `try`/`catch`, gating the
+advisory line on `findings.length` alone once parsed, per D6; and `ac-matrix.js`'s new
+`--lint` branch first shipped a local `console.log`+`process.exit` writer (the pipe-truncation
+shape the pipeline rules' Gotchas entry already names), corrected to import
+`lib/driver-io.js`'s shared `writeOut` (four other scripts already import it — a first-round
+repair's claim that the export was "scoped to the two drivers" was itself wrong and is
+corrected here) rather than carry a fourth near-duplicate local copy; every `--lint` call site
+now passes `\n` explicitly since the shared `writeOut` adds no trailing newline of its own,
+keeping the printed bytes byte-identical to the pre-fix render.
 
 ## Canonical Delta
 

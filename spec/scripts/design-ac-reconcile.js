@@ -3,8 +3,8 @@
 // design-ac-reconcile.js --spec <path> --components <design/components.json>
 //   [--component <name>]... [--json]
 //
-// /spec:design Step 6's AC ↔ design-landed reconcile (salon-os 2026-09-05 incident, host spec
-// 20260905/07 D15/D16; fixed under core § Incident Policy in the session it was understood).
+// /spec:design Step 6's AC ↔ design-landed reconcile (core § Incident Policy same-session fix;
+// the triggering host spec's D15/D16 hold the field record).
 //
 // WHY: plan writes Acceptance Criteria and File Plan test rows before design exists. Design then
 // lands REAL components (design.md: "built here are real and kept"), which makes any AC whose

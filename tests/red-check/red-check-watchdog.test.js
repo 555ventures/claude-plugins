@@ -5,9 +5,9 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// 2026-09-08 (salon-os 20260905/07 D16): a red run that pinned a CPU until the host watchdog
-// killed it classified as a plain "observed: red" — indistinguishable from an honest failing
-// assertion, so the incident class could never be counted. Exit 124 is now named.
+// A red run that pins a CPU until the host watchdog kills it would classify as a plain
+// "observed: red" — indistinguishable from an honest failing assertion, so the incident class
+// could never be counted. Exit 124 is named.
 test('red-check: WHEN the testCommand exits 124 for a red-expected file THE SYSTEM SHALL still classify it red (no finding) AND emit a WARN watchdog-trip line naming the file', () => {
   const dir = tmpdir('rc-watchdog')
   const g = gitRepo(dir)

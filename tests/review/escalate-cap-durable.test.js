@@ -6,12 +6,11 @@ const path = require('node:path')
 const { run, stateOf, returnFileWith, oneFixReturnFile, reviewerReturn, readJsonl, makeHost, driveToCapEdge } =
   require('./escalate-row.fixtures')
 
-// Incident 2026-09-08 (prax, core § Incident Policy — fixed in the session it was understood): the
-// ESCALATE step's abandon exit ("delete <spec>.review to restart cold") deleted the manifest files
-// the fix cap was counted from, so a cold restart began at zero and one spec escalated three times
-// as three unrelated first reviews. The escalate rows those refusals wrote are the durable record;
-// the cap now reads them. These tests drive the driver's OWN documented remedy and pin that it no
-// longer resets the count.
+// core § Incident Policy same-session fix: the ESCALATE step's abandon exit ("delete <spec>.review
+// to restart cold") deletes the manifest files the fix cap is counted from, so a cold restart alone
+// would begin at zero and one spec could escalate repeatedly as unrelated first reviews. The
+// escalate rows those refusals write are the durable record the cap reads. These tests drive the
+// driver's OWN documented remedy and pin that the count survives it.
 
 function reviewerThenFixDispatched(root, spec, tag) {
   run(root, spec, '--mark', 'reviewer-returned', '--file', returnFileWith(tag, reviewerReturn()))

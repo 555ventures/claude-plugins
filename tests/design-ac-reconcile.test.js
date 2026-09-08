@@ -5,10 +5,10 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('./helpers')
 
-// Incident 2026-09-05 (salon-os spec 20260905/07 D15/D16, fixed 2026-09-08 under core § Incident
-// Policy): /spec:design's Step 6 rewrote the UI section and never revisited the ACs, so an AC
-// whose subject was a component design had just landed reached red-check with no honest way to be
-// red. design-ac-reconcile.js is the deterministic half of the new Step 6 duty.
+// core § Incident Policy same-session fix: when /spec:design's Step 6 rewrites only the UI section
+// and never revisits the ACs, an AC whose subject is a component design just landed reaches
+// red-check with no honest way to be red. design-ac-reconcile.js is the deterministic half of the
+// Step 6 reconcile duty.
 
 const SCRIPT = 'scripts/design-ac-reconcile.js'
 function host(name, { acs, decisions = '| D1 | nothing | why |', components }) {

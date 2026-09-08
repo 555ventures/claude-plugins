@@ -1290,9 +1290,9 @@ function handleDispositions() {
 // refusal, set only here, never by a hand-edited iteration counter.
 const FIX_CAP = 2
 
-// Durable half of the cap (prax 2026-09-08 incident, core § Incident Policy): the ESCALATE step's
-// abandon exit deletes the sidecar and its manifests — the very files the cap counts — so a cold
-// restart used to begin at zero and the same spec escalated three times as three "first" reviews.
+// Durable half of the cap (core § Incident Policy): the ESCALATE step's abandon exit deletes the
+// sidecar and its manifests — the very files the manifest count reads — so a cold restart alone
+// would begin at zero and one spec could escalate repeatedly as unrelated "first" reviews.
 // The escalate rows those refusals wrote are the durable record: every `escalated:true` review
 // row for this spec that no later non-escalated review row has cleared counts as a spent cap.
 // "Later" is read order inside one ledger file (authoritative) and `ts` date across files (the

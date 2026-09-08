@@ -5,9 +5,9 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { makeNoTestsHost, run, stateOf } = require('./build-driver.fixtures')
 
-// core § Incident Policy, 2026-09-08: `--mark incident` (7.101.0) made build-time incidents count
-// toward materiality but left recording to the session's memory. A test watchdog trip is
-// observable by exit code (124), so the driver now records it itself.
+// core § Incident Policy: `--mark incident` counts build-time incidents toward materiality but
+// leaves recording to the session's memory. A test watchdog trip is observable by exit code
+// (124), so the driver records it itself.
 test('auto incident: WHEN the gate run exits 124 (the host test watchdog killed it) THE SYSTEM SHALL record a test-watchdog-trip incident on the build sidecar without any --mark incident, and the gate still reads red', () => {
   const host = makeNoTestsHost()
   fs.writeFileSync(path.join(host.root, 'gate.sh'), '#!/usr/bin/env bash\nexit 124\n')

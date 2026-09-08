@@ -124,7 +124,7 @@ exit 0 always. All other shapes: today's mapping verbatim.
 - **AC-20260830-03-6**: WHEN this spec lands THE SYSTEM SHALL carry a
   `spec/.claude-plugin/plugin.json` version ≥ 7.40.0 whose description's changelog line
   names the honest ci absence `[oracle: gate]` — the existing version/changelog consistency
-  tests are the oracle, never a duplicate pin
+  tests are the oracle, never a duplicate pin [retired: specs/20260820/08-config-name-ban.md]
 
 ## Assumptions (escalation triggers)
 

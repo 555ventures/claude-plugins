@@ -197,7 +197,7 @@ named) · child dying with no status → 2 via `runChild`.
   re-execute `a`'s gate (a `gateCommand` of `echo run >> gate-runs.txt` leaves two lines) and
   boot, write `benchmark.json` with `finalists[0].tokens === 350` and `probePassed`/`probeTotal`,
   write `benchmark.md`, write `gallery.html` containing each recorded screenshot path, and print
-  `state: PICK` → `tests/genesis/tournament.test.js`
+  `state: PICK` [retired: specs/20260902/08-genesis-shrink-brief-state.md]
 - **AC-20260827-01-6**: WHEN `--mark picked` runs with `## Picks` matching no finalist THE
   SYSTEM SHALL exit 2 naming `0` matches and `## Picks`; WHEN `## Picks` matches finalist `b`
   THE SYSTEM SHALL record `tournament.winner === "b"` and print the checkpoint `(PICK →

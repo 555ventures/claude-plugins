@@ -1,6 +1,6 @@
 ---
 date: 2026-09-07
-status: hardened
+status: implementing
 tier: standard
 area: pipeline-gates
 design: false
@@ -10,6 +10,8 @@ depended_on_by: []
 brief: n/a
 spiked: 2026-09-07
 open_markers: 0
+build_base: spec/20260907-01-02-03
+diff_base: c3477e5f46a442cc7b730c02c873ee306984fcd3
 ---
 
 # AC-drift backfill: retire or tag the 41 uncited criteria, then hold this repo at zero

@@ -142,8 +142,8 @@ esac
 - **AC-20260825-04-1**: WHEN `genesis-driver.js --root <empty dir>` runs THE SYSTEM SHALL
   create `.claude/genesis/status.json` with `schemaVersion: 2` and the template's keys, print
   `state: DISCOVERY`, and `--state` SHALL print exactly `DISCOVERY` (e.g. an empty tmpdir →
-  status file exists, stdout matches `/^\[genesis-driver\] state: DISCOVERY/`) →
-  `tests/genesis/genesis-driver.test.js`
+  status file exists, stdout matches `/^\[genesis-driver\] state: DISCOVERY/`)
+  [retired: specs/20260902/08-genesis-shrink-brief-state.md]
 - **AC-20260825-04-2**: WHEN `--mark discovery-done` runs with a `brief.md` whose
   `## Coverage` has `- residency: dark` THE SYSTEM SHALL exit 2 with stderr naming `residency`;
   WHEN every key is `covered`/`n/a` THE SYSTEM SHALL exit 0, print a last line matching

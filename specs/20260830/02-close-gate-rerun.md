@@ -115,7 +115,7 @@ host's own definition of "enforced", and close is once per spec.
   names the close-gate re-run — no manifest leg that runs in every scope executes the
   pinning test, so this AC carries no `[oracle:]` declaration and is waived at review with
   its executed evidence recorded in Rationale (2026-08-30); a new duplicate pin would be a
-  second derivation
+  second derivation [retired: specs/20260820/08-config-name-ban.md]
 
 ## Assumptions (escalation triggers)
 

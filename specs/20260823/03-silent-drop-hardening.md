@@ -209,7 +209,7 @@ jq -c 'if (.stage=="review" and (.tier|type=="string") and (.tier|test("\\s#|\\s
   tests/review/review-driver.test.js
 - **AC-20260823-03-12**: WHEN the design driver reads frontmatter keys carrying inline
   comments (`design: true   # note`) THE SYSTEM SHALL behave as if the comment were absent
-  (`design` flag true) → tests/design-driver.test.js
+  (`design` flag true) [retired: specs/20260824/02-design-stage-on-render-gate.md]
 - **AC-20260823-03-13**: WHEN ac-matrix emits `rejected-trailing-tag` from ONE of its two loops
   THE SYSTEM SHALL redden only that loop's manifest leg — a coverage-loop emission on a spec
   with zero skip lines writes `{"leg":"skip-reconcile","exit":0,…}` alongside

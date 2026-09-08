@@ -67,10 +67,10 @@ present in one line.
   (`loadHubConfig` returns lanes with the project override applied) and print one stderr
   warning naming all four retired keys (e.g. input keys `["botToken","lanes","prax"]` →
   return has `prax` lane override applied; warning line contains `botToken` and `lanes`)
-  → tests/autopilot/config.test.js
+  [retired: specs/20260820/01-autopilot-removal.md]
 - **AC-20260817-06-2**: WHEN the overrides file contains a `_comment` key THE SYSTEM SHALL
   ignore it silently — no warning, no error, return identical to the no-`_comment` config
-  → tests/autopilot/config.test.js
+  [retired: specs/20260820/01-autopilot-removal.md]
 - **AC-20260817-06-3**: WHEN the overrides file names a key that is neither a host
   override, a `_`-key, a legacy key, nor a discovered project THE SYSTEM SHALL CONTINUE TO
   refuse boot with the `unknown project` error naming the discover remedy
@@ -78,7 +78,7 @@ present in one line.
 - **AC-20260817-06-4**: WHEN doctor reads an overrides file carrying `botToken` THE SYSTEM
   SHALL report an `ok: false` overrides line reading `retired direct-Telegram key(s):
   botToken` with the delete-them remedy, never the `unknown project key(s)` line
-  → tests/autopilot/doctor.test.js
+  [retired: specs/20260820/01-autopilot-removal.md]
 - **AC-20260817-06-5**: WHEN doctor reads an overrides file carrying a genuinely unknown
   key THE SYSTEM SHALL CONTINUE TO report the `unknown project key(s)` line with the
   discover remedy → tests/autopilot/doctor.test.js

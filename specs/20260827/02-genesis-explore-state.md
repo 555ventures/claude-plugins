@@ -156,12 +156,12 @@ esac
 - **AC-20260827-02-1**: WHEN `--mark menus-done` is accepted with `- archetype: backend-api`
   THE SYSTEM SHALL print `state: FINALISTS` and `status.json` SHALL carry `explore: "skipped"`;
   WHEN the archetype is `web-app` THE SYSTEM SHALL print `state: EXPLORE` with a `Doctrine:`
-  line naming `§ Genesis: Explore State` → `tests/genesis/explore-states.test.js`
+  line naming `§ Genesis: Explore State` [retired: specs/20260902/08-genesis-shrink-brief-state.md]
 - **AC-20260827-02-2**: WHEN `--mark research-done` runs with no `design/targets.json` THE
   SYSTEM SHALL exit 2 naming `design/targets.json`; WHEN `targets.json` has an empty
   `viewports` array THE SYSTEM SHALL exit 2 naming `viewports`; WHEN the brief has a `## `
   heading and targets are valid THE SYSTEM SHALL exit 0, write `explore: "research-done"`, and
-  print the checkpoint `(EXPLORE → EXPLORE)` → `tests/genesis/explore-states.test.js`
+  print the checkpoint `(EXPLORE → EXPLORE)` [retired: specs/20260902/08-genesis-shrink-brief-state.md]
 - **AC-20260827-02-3**: WHEN `--mark positions-authored` runs with five positions THE SYSTEM
   SHALL exit 2 naming `6`; with a position lacking `**Motion character:**` → naming that
   position and the label; with six valid positions and their `tokens.css` files THE SYSTEM SHALL
@@ -173,21 +173,21 @@ esac
 - **AC-20260827-02-4**: WHEN `--mark tiles-culled` runs with a cull record leaving three
   survivors THE SYSTEM SHALL exit 2 naming `3`; leaving two THE SYSTEM SHALL record
   `exploreRecord.finalists` as those two in position order, write `explore: "tiles-culled"`, and
-  the next bare run SHALL print `state: FINALISTS` → `tests/genesis/explore-states.test.js`
+  the next bare run SHALL print `state: FINALISTS` [retired: specs/20260902/08-genesis-shrink-brief-state.md]
 - **AC-20260827-02-5**: WHEN `--mark external --file design/explore/external/mine` runs and the
   dir holds an `.html` with no `data-screen-label` THE SYSTEM SHALL exit 2 naming the file and
   `data-screen-label`; WHEN it holds a labelled screen and `targets.json` is valid THE SYSTEM
   SHALL exit 0 with no `docs/design/research-brief.md` present, record
   `exploreRecord.finalists === ["external/mine"]`, write `explore: "external"`, and a later
-  `--mark research-done` SHALL exit 2 naming `external` → `tests/genesis/explore-states.test.js`
+  `--mark research-done` SHALL exit 2 naming `external` [retired: specs/20260902/08-genesis-shrink-brief-state.md]
 - **AC-20260827-02-6**: WHEN the PROBE step prints after a cull of `instrument` and
   `dense-professional` THE SYSTEM SHALL list `style-tile` with both `design/explore/r0-instrument/tile.html`
   and `design/explore/r0-dense-professional/tile.html` and SHALL NOT name `sketch.html`; WHEN
   `--mark probe-done` runs with a `style-tile` entry for only one tile THE SYSTEM SHALL exit 2
   naming the missing tile; WHEN `--mark picked` runs with no `design-pick.json` THE SYSTEM SHALL
   exit 2 naming it; with `winner: "design/explore/r0-instrument"` and `dense-professional` in
-  `rejected[]` THE SYSTEM SHALL write `explore: "picked"` and `tournament.winner` →
-  `tests/genesis/explore-states.test.js`
+  `rejected[]` THE SYSTEM SHALL write `explore: "picked"` and `tournament.winner`
+  [retired: specs/20260902/08-genesis-shrink-brief-state.md]
 - **AC-20260827-02-7**: WHEN the hook receives `/spec:genesis-explore idea` with `architect:
   pending` THE SYSTEM SHALL exit 0 with empty stdout and stderr (no arm); and it SHALL CONTINUE
   TO exit 2 for `/spec:genesis-design idea` at `explore: tiles-culled`, exit 0 at `explore:

@@ -294,9 +294,10 @@ a -> b
   assert.match(cmpBlock, /class="card"[\s\S]*?open ↗[\s\S]*?href="[^"]*shapes\/card-first\.html"/,
     'each frame must sit inside a class="card" element carrying an open ↗ link to the un-?clean path')
 
-  // D4: the lightbox override resolves "which group is this card" and "same step, other
-  // candidate" purely from data-group/data-step on the card — a reviewer caught this reverting
-  // to a page-wide chead-position guess, so pin both the markup and the script's own selectors.
+  // D4 invariant: every non-empty compare-table card carries its own data-group/data-step, and
+  // the lightbox resolves "which group is this card" and "same step, other candidate" by reading
+  // those attributes off the card — never by a page-wide chead-position index. Both the markup
+  // and the script's own selectors are pinned, because either side alone can satisfy the other.
   assert.match(cmpBlock, /class="card" data-group="card-first" data-step="1"/,
     'every non-empty compare-table card must carry its own data-group and data-step — without them the lightbox cannot resolve which candidate a card is')
   assert.match(cmpBlock, /class="card" data-group="orb-hero" data-step="1"/,

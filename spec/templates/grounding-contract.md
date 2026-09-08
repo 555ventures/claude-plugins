@@ -26,7 +26,10 @@ genesis-handoff keys `genesisStackDescriptor` and `designRulesHash` (see § Gene
 
 `design.render` is optional — present when the host wants `render-gate.js`'s mock↔component
 fidelity check, which `/spec:review` runs as an advisory evidence leg on designed specs. The
-host declares how a URL becomes an inventory; the plugin never launches a browser. Sub-keys:
+host declares how a URL becomes an inventory. In `--spec` mode, which renders the host's own
+components, the plugin never launches a browser; in mock-only `--mocks` mode a host that
+declares no `capture` falls back to the plugin's own dependency-free capture (ADR-0007), which
+fails closed when no browser is found. Sub-keys:
 `capture` (REQUIRED) — the host's command that turns one `--url` into an inventory JSON, invoked
 once per side × state × theme × viewport; `url` (REQUIRED) — the component render URL, with
 `{story}`/`{theme}`/`{width}`/`{height}`/`{state}` placeholders; `ready` (optional) — a command

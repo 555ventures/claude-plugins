@@ -413,7 +413,7 @@ test('AC-20260902-08-4 / AC-20260906-02-9: WHEN --mark brief-written runs for we
   assert.match(ledgerRefused.stderr, /W4/, 'the refusal must name the blocking row\'s id "W4" so the session knows exactly which assumption still needs resolving')
 })
 
-test('AC-20260902-08-5: WHEN the BRIEF precondition holds for web-app, doctrine-drafted at 121 lines is refused naming the count; an unnamed composed direction in ## Dissents is refused naming it; a bad design-rules targetCategory is refused naming the enum; a missing tokens.css is refused naming it; once all hold brief-written records marks.briefWritten, brief.mocks/legacy/ratifiedAt, design: "ratified", and prints (BRIEF → MENUS); for data-ml it writes design: "skipped"', () => {
+test('AC-20260902-08-5: WHEN the BRIEF precondition holds for web-app, doctrine-drafted at 121 lines is refused naming the count; a bad design-rules targetCategory is refused naming the enum; once all hold brief-written records marks.briefWritten, brief.mocks/legacy/ratifiedAt, design: "ratified", and prints (BRIEF → MENUS); for data-ml it writes design: "skipped"', () => {
   const tooLong = tmpdir('brief-ac5-toolong')
   advanceToDiscoveryDone(tooLong, 'web-app')
   writeValidBriefArtifacts(tooLong)
@@ -422,14 +422,6 @@ test('AC-20260902-08-5: WHEN the BRIEF precondition holds for web-app, doctrine-
   assert.strictEqual(tooLongRefused.status, 2, 'D4: docs/design/doctrine.md is capped at 120 lines — a 121-line doctrine must be refused, not silently ratified')
   assert.match(tooLongRefused.stderr, /121/, 'the refusal must name the actual line count so the session knows exactly how much to trim')
 
-  const missingDirection = tmpdir('brief-ac5-dissents')
-  advanceToDiscoveryDone(missingDirection, 'web-app')
-  writeValidBriefArtifacts(missingDirection)
-  writeDoctrine(missingDirection, { dissentsBody: 'Nothing else was considered.' })
-  const dissentsRefused = mark(missingDirection, 'brief-written')
-  assert.strictEqual(dissentsRefused.status, 2, 'D4: ## Dissents must name every composed-but-unpicked direction — "warm" was composed and not picked, so its absence from Dissents must refuse the mark')
-  assert.match(dissentsRefused.stderr, /warm/, 'the refusal must name the missing direction "warm" so the session knows exactly which rejected direction to record')
-
   const badCategory = tmpdir('brief-ac5-badcat')
   advanceToDiscoveryDone(badCategory, 'web-app')
   writeValidBriefArtifacts(badCategory)
@@ -437,17 +429,6 @@ test('AC-20260902-08-5: WHEN the BRIEF precondition holds for web-app, doctrine-
   const catRefused = mark(badCategory, 'brief-written')
   assert.strictEqual(catRefused.status, 2, 'D4: design-rules.json retains the closed targetCategory enum — "tailwind" is not one of the seven valid categories and must be refused')
   assert.match(catRefused.stderr, /tailwind/, 'the refusal must name the offending value "tailwind" so the session knows exactly which rule to fix')
-
-  const noTokens = tmpdir('brief-ac5-notokens')
-  advanceToDiscoveryDone(noTokens, 'web-app')
-  writeMocksStatus(noTokens, { directions: { quiet: { composed: '2026-09-01T00:00:00.000Z' }, warm: { composed: '2026-09-01T00:00:00.000Z' } }, theme: 'quiet' })
-  writeLedger(noTokens)
-  writeDoctrine(noTokens, { dissentsBody: 'The "warm" direction was composed and rejected in favor of "quiet".' })
-  writeDesignRules(noTokens, [])
-  ensureJourneysAndNonUiSections(noTokens)
-  const tokensRefused = mark(noTokens, 'brief-written')
-  assert.strictEqual(tokensRefused.status, 2, 'D4: design/tokens.css (written by THEME) must exist before BRIEF ratifies a design canon around it — its absence must refuse the mark')
-  assert.match(tokensRefused.stderr, /design\/tokens\.css/, 'the refusal must name the missing tokens.css path')
 
   const ok = tmpdir('brief-ac5-ok')
   advanceToDiscoveryDone(ok, 'web-app')
@@ -467,6 +448,186 @@ test('AC-20260902-08-5: WHEN the BRIEF precondition holds for web-app, doctrine-
   const dataMlAccepted = mark(dataMl, 'brief-written')
   assert.strictEqual(dataMlAccepted.status, 0, 'D4: data-ml owes nothing beyond DISCOVERY — brief-written must be accepted with no mocks/doctrine/rules/tokens artifacts at all: ' + dataMlAccepted.stderr)
   assert.strictEqual(statusOf(dataMl).design, 'skipped', 'D4: data-ml\'s brief-written must record design: "skipped" — it is one of the two archetypes that never ratifies a design canon')
+})
+
+// specs/20260907/05-genesis-drops-the-theme-gates.md: BRIEF's tokens.css precondition (D1) and
+// composed-direction ## Dissents check (D2) are deleted outright — the theme pick moves to
+// /spec:sketch, which runs after genesis, so neither artifact exists when BRIEF runs. None of
+// this block's ACs can pass yet — spec/scripts/genesis-driver.js still refuses on a missing
+// design/tokens.css and still refuses a ## Dissents body that doesn't name every composed-but-
+// unpicked direction.
+
+test('AC-20260907-05-1: WHEN --mark brief-written runs on a visual (web-app) run whose BRIEF preconditions all hold except that design/tokens.css does not exist THE SYSTEM accepts', () => {
+  const dir = tmpdir('brief-ac05-1-notokens')
+  advanceToDiscoveryDone(dir, 'web-app')
+  writeMocksStatus(dir, { directions: { quiet: { composed: '2026-09-01T00:00:00.000Z' }, warm: { composed: '2026-09-01T00:00:00.000Z' } }, theme: 'quiet' })
+  writeLedger(dir)
+  writeDoctrine(dir, { dissentsBody: 'The "warm" direction was composed and rejected in favor of "quiet".' })
+  writeDesignRules(dir, [])
+  ensureJourneysAndNonUiSections(dir)
+  // deliberately no writeTokens(dir) — design/tokens.css must not exist for this AC
+
+  const accepted = mark(dir, 'brief-written')
+  assert.strictEqual(accepted.status, 0, 'D1: BRIEF must accept brief-written with every other precondition satisfied but design/tokens.css absent — the theme pick moved to /spec:sketch, which runs after genesis, so BRIEF can never see this file again: ' + accepted.stderr)
+  const st = statusOf(dir)
+  assert.strictEqual(st.marks.briefWritten, true, 'D1: a successful brief-written with no tokens.css must still record marks.briefWritten')
+  assert.strictEqual(st.design, 'ratified', 'D1: a successful brief-written with no tokens.css must still record design: "ratified"')
+  assert.match(accepted.stdout, /\(BRIEF → MENUS\)/, 'D1: a successful brief-written with no tokens.css must still checkpoint into MENUS')
+})
+
+test('AC-20260907-05-2: WHEN --mark brief-written runs on a visual run whose design/mocks/status.json declares directions quiet/warm with theme quiet and whose ## Dissents body names neither THE SYSTEM accepts', () => {
+  const dir = tmpdir('brief-ac05-2-nodissentname')
+  advanceToDiscoveryDone(dir, 'web-app')
+  writeMocksStatus(dir, { directions: { quiet: { composed: '2026-09-01T00:00:00.000Z' }, warm: { composed: '2026-09-01T00:00:00.000Z' } }, theme: 'quiet' })
+  writeLedger(dir)
+  writeDoctrine(dir, { dissentsBody: 'Nothing else was considered.' })
+  writeDesignRules(dir, [])
+  writeTokens(dir)
+  ensureJourneysAndNonUiSections(dir)
+
+  const accepted = mark(dir, 'brief-written')
+  assert.strictEqual(accepted.status, 0, 'D2: BRIEF must accept a ## Dissents body of "Nothing else was considered." even though status.json.directions composed "warm" and never picked it — the composed-but-unpicked check is deleted outright, its purpose moved to the theme pick\'s own look stop in /spec:sketch: ' + accepted.stderr)
+})
+
+test('AC-20260907-05-3: WHEN docs/design/doctrine.md is absent, and separately WHEN its ## Dissents heading is followed by no non-blank line, THE SYSTEM refuses with exit 2 and a message naming "minority positions" but naming neither "rejected direction" nor "composed direction"', () => {
+  const missingDoctrine = tmpdir('brief-ac05-3-missing')
+  advanceToDiscoveryDone(missingDoctrine, 'web-app')
+  writeValidBriefArtifacts(missingDoctrine)
+  fs.rmSync(path.join(missingDoctrine, 'docs/design/doctrine.md'))
+  const missingRefused = mark(missingDoctrine, 'brief-written')
+  assert.strictEqual(missingRefused.status, 2, 'D3: a missing docs/design/doctrine.md must still refuse brief-written')
+  assert.match(missingRefused.stderr, /minority positions/, 'D3: the reworded missing-doctrine refusal must carry the literal "minority positions" — the old wording (\'draft the one-page doctrine ... naming every rejected direction\') sends a correct run looking for directions that no longer exist at BRIEF time')
+  assert.doesNotMatch(missingRefused.stderr, /rejected direction/, 'D3: the missing-doctrine refusal must not name "rejected direction" — that phrase only makes sense when a mocks status.directions record exists to read rejected directions from, which BRIEF can no longer see')
+  assert.doesNotMatch(missingRefused.stderr, /composed direction/, 'D3: the missing-doctrine refusal must not name "composed direction" — the composed-but-unpicked check that phrase belongs to is deleted outright')
+
+  const emptyDissents = tmpdir('brief-ac05-3-emptydissents')
+  advanceToDiscoveryDone(emptyDissents, 'web-app')
+  writeValidBriefArtifacts(emptyDissents)
+  writeDoctrine(emptyDissents, { dissentsBody: '' })
+  const emptyRefused = mark(emptyDissents, 'brief-written')
+  assert.strictEqual(emptyRefused.status, 2, 'D3: a ## Dissents heading with no non-blank line must still refuse brief-written')
+  assert.match(emptyRefused.stderr, /minority positions/, 'D3: the reworded empty-Dissents refusal must carry the literal "minority positions"')
+  assert.doesNotMatch(emptyRefused.stderr, /rejected direction/, 'D3: the empty-Dissents refusal must not name "rejected direction"')
+  assert.doesNotMatch(emptyRefused.stderr, /composed direction/, 'D3: the empty-Dissents refusal must not name "composed direction"')
+})
+
+test('AC-20260907-05-4: WHEN the bare driver prints the BRIEF step for a visual run whose mocks set is APPROVED THE SYSTEM prints an exact progress line with no directions/tokens segments, and both the visual-ratification and legacy-resume BRIEF steps print the converged doctrine/design-rules write-line with no theme artifacts', () => {
+  const visualDir = tmpdir('brief-ac05-4-visual')
+  advanceToDiscoveryDone(visualDir, 'web-app')
+  writeJSON(path.join(visualDir, 'design/mocks/status.json'), {
+    schemaVersion: 1, state: 'APPROVED', journeys: { 'owner-onboarding': {} }, directions: { quiet: { composed: '2026-09-01T00:00:00.000Z' } }, theme: 'quiet',
+  })
+  writeLedger(visualDir)
+
+  const step = bare(visualDir)
+  assert.match(step.stdout, /state: BRIEF/, 'test setup requires the driver to be sitting at BRIEF for a visual run with mocks APPROVED: ' + step.stdout)
+  assert.match(step.stdout, /^mocks: APPROVED · journeys: 1 · open product rows: 0$/m, 'D4: the visual BRIEF progress line must read exactly "mocks: APPROVED · journeys: 1 · open product rows: 0" — the surviving " · directions composed: ... (picked: ...)" segment names an artifact (the theme pick) BRIEF can no longer see: ' + step.stdout)
+  const readOnlyLine = step.stdout.split('\n').find((l) => l.startsWith('Read only:'))
+  assert.ok(readOnlyLine, 'test setup requires a "Read only:" line in the visual BRIEF step: ' + step.stdout)
+  assert.ok(!readOnlyLine.includes('design/tokens.css'), 'D4: the visual-ratification "Read only:" line must not contain "design/tokens.css" — naming a file the session must not need is how a correct run gets talked into a wrong one: ' + readOnlyLine)
+  assert.match(step.stdout, /Write docs\/design\/doctrine\.md \(one page, ## Dissents\) and \.claude\/genesis\/design-rules\.json,/, 'D8: the visual-ratification branch must print the converged write-line, byte-identical to the legacy-resume branch, once the dissentsClause local it used to consume is deleted: ' + step.stdout)
+  assert.doesNotMatch(step.stdout, /## Dissents naming:/, 'D8: the visual-ratification branch must print no line containing "## Dissents naming:" — that clause named the composed-but-unpicked directions the deleted D2 check required: ' + step.stdout)
+
+  const legacyDir = tmpdir('brief-ac05-4-legacy')
+  bare(legacyDir)
+  writeBrief(legacyDir, { picks: ['- archetype: web-app'] })
+  const statusPath = path.join(legacyDir, '.claude/genesis/status.json')
+  const raw = JSON.parse(fs.readFileSync(statusPath, 'utf8'))
+  raw.schemaVersion = 2
+  delete raw.brief
+  raw.archetype = 'web-app'
+  raw.explore = 'picked'
+  raw.design = 'rules-locked'
+  raw.marks = { discoveryDone: true, menusDone: true }
+  fs.writeFileSync(statusPath, JSON.stringify(raw, null, 2) + '\n')
+
+  const legacyStep = bare(legacyDir)
+  assert.match(legacyStep.stdout, /legacy:/, 'test setup requires the driver to derive the legacy-resume BRIEF step: ' + legacyStep.stdout)
+  const legacyReadOnlyLine = legacyStep.stdout.split('\n').find((l) => l.startsWith('Read only:'))
+  assert.ok(legacyReadOnlyLine, 'test setup requires a "Read only:" line in the legacy-resume BRIEF step: ' + legacyStep.stdout)
+  assert.ok(!legacyReadOnlyLine.includes('design/tokens.css'), 'D4: the legacy-resume "Read only:" line must not contain "design/tokens.css" either: ' + legacyReadOnlyLine)
+  // D8/AC-20260907-05-4: the legacy branch already prints exactly this literal today — this
+  // half is a green-pre-change regression pin (D8's convergence target), asserted anyway so a
+  // future edit to either branch cannot silently diverge them again.
+  assert.match(legacyStep.stdout, /Write docs\/design\/doctrine\.md \(one page, ## Dissents\) and \.claude\/genesis\/design-rules\.json,/, 'D8 (SHALL CONTINUE TO): the legacy-resume branch must keep printing the converged write-line unchanged')
+  assert.doesNotMatch(legacyStep.stdout, /## Dissents naming:/, 'D8 (SHALL CONTINUE TO): the legacy-resume branch must keep printing no "## Dissents naming:" line — it never named theme artifacts to begin with')
+})
+
+test('AC-20260907-05-5: WHEN the bare driver prints the BRIEF step for a visual run whose design/mocks/status.json is present but not APPROVED THE SYSTEM prints the literal "next: run /spec:mocks in this repo until it reports APPROVED, then --mark brief-written", and the printed step block contains neither "skin" nor "review"', () => {
+  const dir = tmpdir('brief-ac05-5-notapproved')
+  advanceToDiscoveryDone(dir, 'web-app')
+  writeMocksStatus(dir, { state: 'THEME' })
+
+  const step = bare(dir)
+  assert.match(step.stdout, /state: BRIEF/, 'test setup requires the driver to be sitting at BRIEF for a visual run with a not-yet-approved mocks set: ' + step.stdout)
+  assert.match(step.stdout, /next: run \/spec:mocks in this repo until it reports APPROVED, then --mark brief-written/, 'D5: the not-yet-approved BRIEF step must print the literal "next: run /spec:mocks in this repo until it reports APPROVED, then --mark brief-written" — the retired chain enumeration (seed → shapes → wireframes → theme → skin → review → approved) already names SKIN and REVIEW, retired the day before this spec: ' + step.stdout)
+  assert.doesNotMatch(step.stdout, /skin/, 'D5: the printed BRIEF step block must not contain "skin" — SKIN is a retired mocks state and re-editing the enumeration on every chain change is exactly what deleting it (instead of correcting it) is meant to stop')
+  assert.doesNotMatch(step.stdout, /review/, 'D5: the printed BRIEF step block must not contain "review" — REVIEW is a retired mocks state for the same reason')
+})
+
+test('AC-20260907-05-6: WHEN --mark brief-written runs on a visual run with no design/tokens.css and a direction-naming-free ## Dissents, THE SYSTEM CONTINUES TO refuse a 121-line doctrine naming the count, an empty ## Dissents naming ## Dissents, a bad design-rules targetCategory naming the enum, and a not-APPROVED mocks status', () => {
+  const tooLong = tmpdir('brief-ac05-6-toolong')
+  advanceToDiscoveryDone(tooLong, 'web-app')
+  writeMocksStatus(tooLong, { directions: { quiet: { composed: '2026-09-01T00:00:00.000Z' }, warm: { composed: '2026-09-01T00:00:00.000Z' } }, theme: 'quiet' })
+  writeLedger(tooLong)
+  writeDoctrine(tooLong, { totalLines: 121, dissentsBody: 'Nothing else was considered.' })
+  writeDesignRules(tooLong, [])
+  ensureJourneysAndNonUiSections(tooLong)
+  const tooLongRefused = mark(tooLong, 'brief-written')
+  assert.strictEqual(tooLongRefused.status, 2, 'AC-20260907-05-6 (SHALL CONTINUE TO): a 121-line doctrine must still refuse brief-written even with no tokens.css and a direction-naming-free Dissents — D1/D2\'s deletions must not disturb the line-cap check')
+  assert.match(tooLongRefused.stderr, /121/, 'the refusal must still name the actual line count')
+
+  const emptyDissents = tmpdir('brief-ac05-6-emptydissents')
+  advanceToDiscoveryDone(emptyDissents, 'web-app')
+  writeMocksStatus(emptyDissents, { directions: { quiet: { composed: '2026-09-01T00:00:00.000Z' }, warm: { composed: '2026-09-01T00:00:00.000Z' } }, theme: 'quiet' })
+  writeLedger(emptyDissents)
+  writeDoctrine(emptyDissents, { dissentsBody: '' })
+  writeDesignRules(emptyDissents, [])
+  ensureJourneysAndNonUiSections(emptyDissents)
+  const emptyRefused = mark(emptyDissents, 'brief-written')
+  assert.strictEqual(emptyRefused.status, 2, 'AC-20260907-05-6 (SHALL CONTINUE TO): an empty ## Dissents must still refuse brief-written even with no tokens.css')
+  assert.match(emptyRefused.stderr, /## Dissents/, 'the refusal must still name "## Dissents"')
+
+  const badCategory = tmpdir('brief-ac05-6-badcat')
+  advanceToDiscoveryDone(badCategory, 'web-app')
+  writeMocksStatus(badCategory, { directions: { quiet: { composed: '2026-09-01T00:00:00.000Z' }, warm: { composed: '2026-09-01T00:00:00.000Z' } }, theme: 'quiet' })
+  writeLedger(badCategory)
+  writeDoctrine(badCategory, { dissentsBody: 'Nothing else was considered.' })
+  writeDesignRules(badCategory, [{ id: 'r1', targetCategory: 'tailwind', grounding: 'taste', severity: 'warn', appliesTo: ['*'] }])
+  ensureJourneysAndNonUiSections(badCategory)
+  const catRefused = mark(badCategory, 'brief-written')
+  assert.strictEqual(catRefused.status, 2, 'AC-20260907-05-6: a bad design-rules targetCategory must still refuse brief-written once the design-rules check runs immediately after the non-empty-Dissents check (D2\'s deletion moves it there) — with a direction-naming-free Dissents naming no composed direction, the now-deleted D2 check must not intercept this refusal first')
+  assert.match(catRefused.stderr, /tailwind/, 'D6 Behavior: once D2 is deleted, design-rules becomes the next check after the non-empty-Dissents check, so the refusal here must name the offending category "tailwind" — a refusal naming the unpicked direction "warm" instead means the deleted composed-direction check is still running ahead of design-rules')
+
+  const notApproved = tmpdir('brief-ac05-6-notapproved')
+  advanceToDiscoveryDone(notApproved, 'web-app')
+  writeMocksStatus(notApproved, { state: 'THEME' })
+  writeLedger(notApproved)
+  const notApprovedRefused = mark(notApproved, 'brief-written')
+  assert.strictEqual(notApprovedRefused.status, 2, 'AC-20260907-05-6 (SHALL CONTINUE TO): a design/mocks/status.json whose state is not APPROVED must still refuse brief-written')
+})
+
+test('AC-20260907-05-7: WHEN --mark brief-written --legacy runs on a legacy resume with a non-empty ## Dissents, a valid design-rules.json, and no design/tokens.css THE SYSTEM ratifies', () => {
+  const dir = tmpdir('brief-ac05-7-legacynotokens')
+  bare(dir)
+  writeBrief(dir, { picks: ['- archetype: web-app'] })
+  const statusPath = path.join(dir, '.claude/genesis/status.json')
+  const raw = JSON.parse(fs.readFileSync(statusPath, 'utf8'))
+  raw.schemaVersion = 2
+  delete raw.brief
+  raw.archetype = 'web-app'
+  raw.explore = 'picked'
+  raw.design = 'rules-locked'
+  raw.marks = { discoveryDone: true, menusDone: true }
+  fs.writeFileSync(statusPath, JSON.stringify(raw, null, 2) + '\n')
+
+  writeDoctrine(dir, { dissentsBody: 'Legacy resume — no mocks directions to name; nothing else was rejected.' })
+  writeDesignRules(dir, [])
+  // deliberately no writeTokens(dir) — design/tokens.css must not exist for this AC
+
+  const withLegacy = mark(dir, 'brief-written', ['--legacy'])
+  assert.strictEqual(withLegacy.status, 0, 'D1: a legacy resume with no design/tokens.css must still ratify — the tokens precondition is deleted outright and never applied to any archetype, legacy or fresh: ' + withLegacy.stderr)
+  assert.strictEqual(statusOf(dir).brief.legacy, true, 'a successful --legacy ratification must still record brief.legacy: true')
 })
 
 test('AC-20260902-08-6: WHEN --mark skeleton-landed runs for web-app with the probes and binding subset in place but no design/components.json THE SYSTEM exits 2 naming the file; with a manifest that duplicates a name it exits 2 carrying components-check.js\'s own line', () => {
@@ -710,7 +871,7 @@ test('AC-20260902-11-10: WHEN --mark brief-written runs on a fresh visual run wh
     nonUiBody: briefNonUiSection(),
   })
   const accepted = mark(dir, 'brief-written')
-  assert.strictEqual(accepted.status, 0, 'AC-20260902-11-10: a brief.md that fully covers the seed\'s journeys/labels and carries no dark Non-UI key must be accepted — spec 08\'s doctrine-length/Dissents/design-rules/tokens checks (D3/D4) must CONTINUE TO run exactly as before D1 added its own checks: ' + accepted.stderr)
+  assert.strictEqual(accepted.status, 0, 'AC-20260902-11-10: a brief.md that fully covers the seed\'s journeys/labels and carries no dark Non-UI key must be accepted — spec 08\'s doctrine-length/Dissents/design-rules checks (D3/D4) must CONTINUE TO run exactly as before D1 added its own checks: ' + accepted.stderr)
   const st = statusOf(dir)
   assert.strictEqual(st.marks.briefWritten, true, 'a successful brief-written must still record marks.briefWritten')
   assert.strictEqual(st.design, 'ratified', 'a successful brief-written for a visual archetype must still record design: "ratified"')

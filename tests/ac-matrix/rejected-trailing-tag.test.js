@@ -20,6 +20,9 @@ const { tmpdir, runNode } = require('../helpers')
 // loops — `rejected-trailing-tag` is emitted from both the coverage loop and the skip loop, so a
 // shared class set would redden both legs from a single emission. Executed against synthetic
 // host trees.
+//
+// specs/20260907/02-ac-drift-backfill.md D4/AC-20260907-02-2: the -13a/-13b titles below carry
+// the bare AC-20260823-03-13 token as a prefix (test bodies unchanged).
 
 const { parseAcBullets, rejectedTrailingTagDetail } = require('../../spec/scripts/lib/spec-sections')
 

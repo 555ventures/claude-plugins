@@ -1,6 +1,6 @@
 ---
 date: 2026-09-07
-status: implementing
+status: done
 tier: standard
 area: pipeline-gates
 design: false

@@ -1,0 +1,164 @@
+{
+  "runId": "rv_84ad8e866a25",
+  "ts": "2026-09-08T22:50:53.152Z",
+  "spec": "specs/20260907/03-ignored-paths-and-unobserved-count.md",
+  "tier": "critical",
+  "iteration": 1,
+  "scope": "full",
+  "verdict": "CLEAN",
+  "dispositions": {
+    "waived": 1,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 453,
+    "base": "e1835455f757ffe9f43cc6ce72771b24ef64c857",
+    "head": "a4d55e03311a90faf37f8bbe4fe4f3a3a5ebd312",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "reconcile",
+      "exit": 0,
+      "observed": {
+        "outOfPlan": 0,
+        "files": []
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 536
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1323
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "patterns",
+      "exit": 0,
+      "observed": {
+        "matches": 12
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "at-risk",
+      "exit": 0,
+      "observed": {
+        "files": 17,
+        "testsExecuted": 149
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "full"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 0
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 7,
+        "carried": 5,
+        "sanctioned": 2,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "soft",
+        "claim": "Whole-suite leg first-run red on tests/render/render-capture.test.js (AC-20260905-06-1/-2) is inherited environment red, not introduced by this range; dismissal recorded per the provenance test.",
+        "file": "tests/render/render-capture.test.js",
+        "line": 1,
+        "impact": "Two browser-launching tests go red on any machine without Chrome on the path; this spec's diff never touches them, so the recorded rerun with a Playwright Chromium is the honest green.",
+        "evidence": "(1) `git merge-base --is-ancestor d70c5c9 e1835455` -> exit 0 (last commit touching the file predates the base); `git diff --name-only e1835455..HEAD | grep -c render` -> 0 (file byte-identical to base). (2) Same file run without the env var: `env -u CHROME_BIN node --test tests/render/render-capture.test.js` -> tests 3 / pass 1 / fail 2, both failures `render-capture: browser exited before announcing a DevTools endpoint`. With `CHROME_BIN=/home/jj/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome npm test` -> tests 1322 / pass 1322 / fail 0 / skipped 0. Deviations sidecar reading is correct."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "The prune misses a git-ignored worktree copy nested below the top level (a `newdir/.claude/worktrees/...` copy survived the walk in a scratch repo, testFiles 2 instead of 1).",
+        "file": "spec/scripts/scope-reconcile.js",
+        "line": 296,
+        "evidence": "Fixture error, not a defect: a `.gitignore` pattern containing a mid-path slash (`.claude/worktrees/`) is anchored to the .gitignore's directory, so the nested copy is NOT ignored. `git ls-files newdir` -> `newdir/.claude/worktrees/wt/tests/t.test.js` (tracked by `git add -A`); `git ls-files -o -i --exclude-standard --directory` listed only `sub/ignored/`. A genuinely ignored nested dir (`*.build/` -> `specs/x.build/`) WAS pruned: probe reported testFiles 2 with the x.build copy absent."
+      },
+      {
+        "claim": "D2's subdirectory-root guard is untested (AC-3 only covers the non-repository case) and could prune the wrong subtree.",
+        "file": "spec/scripts/scope-reconcile.js",
+        "line": 94,
+        "evidence": "Executed on a scratch repo with `.gitignore` = `sub/ignored/`: `--probe-at-risk --root <repo>/sub` -> {testFiles: 2} (unpruned, exit 0, empty stderr) vs `--root <repo>` -> {testFiles: 1}; `--root .` from the top -> pruned correctly. `env PATH=/nonexistent node ... --root <repo>` -> {testFiles: 4} unpruned, exit 0, no stderr. Guard behaves as D2 specifies on every fallback path."
+      },
+      {
+        "claim": "The new tests could be naming AC-IDs without proving behavior (already green pre-image).",
+        "file": "tests/review/legs-verdict-pair.test.js",
+        "line": 316,
+        "evidence": "Ran the HEAD copies of the three test files against a `git archive e1835455` of base in the scratchpad: tests 23 / pass 18 / fail 5, failures exactly AC-20260907-03-1, -2, -4, -5, -6; the four CONTINUE-TO pins (-3, -7, -8, -9) green pre-image as the spec predicts. At HEAD: tests 23 / pass 23 / fail 0."
+      },
+      {
+        "claim": "Missing or wrong plugin.json version bump / changelog rotation.",
+        "file": "spec/.claude-plugin/plugin.json",
+        "line": 3,
+        "evidence": "`node scripts/plugin-bump.js --check` -> OK spec 7.100.0 -> 7.104.0, exit 0; description carries 7.104.0/7.103.0/7.102.0 (7.101.0 rotated out). Deviation sidecar records the 7.97.0 -> 7.104.0 moving-target departure per D7."
+      },
+      {
+        "claim": "Doctrine section citations in the touched scripts could be stale.",
+        "file": null,
+        "line": null,
+        "evidence": "`node spec/scripts/citations-check.js --root .` -> TOTAL=189 CHECKED=83 SKIP=106 MISS=0, exit 0."
+      },
+      {
+        "claim": "Range or File Plan mismatch (foreign commits / out-of-plan files).",
+        "file": null,
+        "line": null,
+        "evidence": "Range is one commit `a4d55e0`; `git diff --stat` touches exactly the six File Plan rows plus the spec file (status/diff_base stamp) and the deviations sidecar; manifest-1 reconcile leg {outOfPlan:0, files:[]}. Dirty tree: only `.claude/spec-runs.jsonl` and the sidecar (pipeline-owned)."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 68000
+  }
+}

@@ -23,6 +23,13 @@ const { tmpdir, runNode, gitRepo } = require('./helpers')
 // specs/20260903/07-test-file-budget-guard.md D8 (AC-20260903-07-7): walkTestFiles skips
 // directories named `fixtures`/`__fixtures__` exactly as it already skips node_modules/.git, so
 // prose/data fixtures under a test tree are never handed to the host testCommand as tests.
+//
+// specs/20260907/03-ignored-paths-and-unobserved-count.md D1/D2 (AC-20260907-03-1,
+// AC-20260907-03-2, AC-20260907-03-9): walkTestFiles additionally prunes every git-ignored path
+// (derived once via `git ls-files -o -i --exclude-standard --directory -z`), on top of — never
+// instead of — the four existing name skips. AC-1 and AC-2 fail on current code, which has no
+// git-ignore-based pruning at all; AC-9 (the four name skips surviving unchanged) is a
+// CONTINUE-TO pin already green pre-image.
 
 const SCRIPT = 'scripts/scope-reconcile.js'
 
@@ -294,4 +301,104 @@ test('AC-20260903-07-7: a stem match under a fixtures/ or __fixtures__/ director
   assert.ok(!atRiskFiles.includes('tests/__fixtures__/data.md'),
     'tests/__fixtures__/data.md lives under a __fixtures__/ directory and is prose, not a test — if ' +
     'it appears in atRisk, review is being told to RUN a non-test file as a suite: ' + JSON.stringify(out))
+})
+
+test('AC-20260907-03-1: a test file under a git-ignored directory (.claude/worktrees/) is pruned from atRisk while an identical tracked test file elsewhere is still listed', () => {
+  const dir = tmpdir('scope-reconcile-at-risk')
+  const g = gitRepo(dir) // gitRepo's init commit already seeds and commits a root .gitignore containing .claude/worktrees/
+
+  const specRel = specWithFilePlan(dir, 'specs/20260907/03-x.md', [
+    { path: 'spec/scripts/verdict.js', action: 'MODIFY', layer: 'scripts' },
+  ])
+  fs.mkdirSync(path.join(dir, 'spec/scripts'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'spec/scripts/verdict.js'), '// v1\nmodule.exports = {}\n')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  const refBody = "require('../../spec/scripts/verdict') // spec/scripts/verdict.js\n"
+  fs.writeFileSync(path.join(dir, 'tests/thing.test.js'), refBody)
+  fs.mkdirSync(path.join(dir, '.claude/worktrees/wt/tests'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude/worktrees/wt/tests/thing.test.js'), refBody)
+  g('add', '-A'); g('commit', '-q', '-m', 'base') // git add -A silently skips the ignored copy — it stays untracked and ignored on disk
+  const base = g('rev-parse', 'HEAD').trim()
+
+  fs.writeFileSync(path.join(dir, 'spec/scripts/verdict.js'), '// v2\nmodule.exports = { changed: true }\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'change verdict.js')
+
+  const r = runNode(SCRIPT, ['--root', dir, '--base', base, '--spec', specRel, '--json'])
+  const out = JSON.parse(r.stdout)
+  assert.deepStrictEqual(out.atRisk, [{ file: 'tests/thing.test.js', refs: ['spec/scripts/verdict.js'] }],
+    'both tests/thing.test.js and the git-ignored .claude/worktrees/wt/tests/thing.test.js contain the ' +
+    'changed stem "spec/scripts/verdict.js", but the ignored copy must never enter atRisk — a second ' +
+    'entry, or any entry whose file starts with ".claude/worktrees/", means the pipeline\'s own ignored ' +
+    'worktree checkouts are still being handed to the host testCommand as if they were real test files, ' +
+    'the exact prax escape this AC exists to close: ' + JSON.stringify(out))
+})
+
+test('AC-20260907-03-2: a test file matched by a single-file .gitignore line (not a directory pattern) is pruned from atRisk — the prune is path-ignored shaped, never directory-name shaped', () => {
+  const dir = tmpdir('scope-reconcile-at-risk')
+  const g = gitRepo(dir)
+  fs.appendFileSync(path.join(dir, '.gitignore'), 'tests/legacy.test.js\n')
+
+  const specRel = specWithFilePlan(dir, 'specs/20260907/03-x.md', [
+    { path: 'spec/scripts/verdict.js', action: 'MODIFY', layer: 'scripts' },
+  ])
+  fs.mkdirSync(path.join(dir, 'spec/scripts'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'spec/scripts/verdict.js'), '// v1\nmodule.exports = {}\n')
+  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
+  const refBody = "require('../../spec/scripts/verdict') // spec/scripts/verdict.js\n"
+  fs.writeFileSync(path.join(dir, 'tests/thing.test.js'), refBody)
+  fs.writeFileSync(path.join(dir, 'tests/legacy.test.js'), refBody)
+  g('add', '-A'); g('commit', '-q', '-m', 'base') // tests/legacy.test.js matches the appended .gitignore line and stays untracked and ignored
+  const base = g('rev-parse', 'HEAD').trim()
+
+  fs.writeFileSync(path.join(dir, 'spec/scripts/verdict.js'), '// v2\nmodule.exports = { changed: true }\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'change verdict.js')
+
+  const r = runNode(SCRIPT, ['--root', dir, '--base', base, '--spec', specRel, '--json'])
+  const out = JSON.parse(r.stdout)
+  assert.deepStrictEqual(out.atRisk, [{ file: 'tests/thing.test.js', refs: ['spec/scripts/verdict.js'] }],
+    'tests/legacy.test.js is git-ignored by a single plain-file .gitignore LINE, not a directory-shaped ' +
+    'pattern — if it still appears in atRisk, the prune only recognizes the trailing-slash directory ' +
+    'form `git ls-files -o -i --directory` emits and silently misses plain ignored files: ' +
+    JSON.stringify(out))
+})
+
+test('AC-20260907-03-9: tracked (not git-ignored) directories named fixtures, __fixtures__ or node_modules are still excluded from atRisk — the pre-existing name skips survive the new git-ignore prune unchanged', () => {
+  const dir = tmpdir('scope-reconcile-at-risk')
+  const g = gitRepo(dir)
+
+  const specRel = specWithFilePlan(dir, 'specs/20260907/03-x.md', [
+    { path: 'lib/util.js', action: 'MODIFY', layer: 'scripts' },
+  ])
+  fs.mkdirSync(path.join(dir, 'lib'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'lib/util.js'), '// v1\nmodule.exports = {}\n')
+  const refBody = 'this fixture mentions lib/util.js in a sentence\n'
+  fs.mkdirSync(path.join(dir, 'tests/fixtures'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/fixtures/sample.test.js'), refBody)
+  fs.mkdirSync(path.join(dir, 'tests/__fixtures__'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'tests/__fixtures__/sample.test.js'), refBody)
+  fs.mkdirSync(path.join(dir, 'node_modules/somepkg'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'node_modules/somepkg/sample.test.js'), refBody)
+  fs.writeFileSync(path.join(dir, 'tests/util.test.js'), "require('../lib/util') // lib/util.js\n")
+  g('add', '-A'); g('commit', '-q', '-m', 'base') // every fixture file here is TRACKED — none is git-ignored, isolating this AC from AC-1/AC-2's mechanism
+  const base = g('rev-parse', 'HEAD').trim()
+
+  fs.writeFileSync(path.join(dir, 'lib/util.js'), '// v2\nmodule.exports = { changed: true }\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'change lib/util.js')
+
+  const r = runNode(SCRIPT, ['--root', dir, '--base', base, '--spec', specRel, '--json'])
+  const out = JSON.parse(r.stdout)
+  const atRiskFiles = out.atRisk.map((entry) => entry.file)
+  assert.ok(atRiskFiles.includes('tests/util.test.js'),
+    'tests/util.test.js is a real, non-fixture test file referencing the changed stem lib/util.js and is ' +
+    'not resolved by any File Plan tests row — it must still be listed: ' + JSON.stringify(out))
+  assert.ok(!atRiskFiles.includes('tests/fixtures/sample.test.js') &&
+    !atRiskFiles.includes('tests/__fixtures__/sample.test.js') &&
+    !atRiskFiles.includes('node_modules/somepkg/sample.test.js'),
+    'tests/fixtures/, tests/__fixtures__/ and node_modules/ are all TRACKED here (none is git-ignored) — ' +
+    'if any of their files appear in atRisk, the new git-ignore-based prune has replaced rather than ' +
+    'stayed additive to the four pre-existing name skips: ' + JSON.stringify(out))
+  // A fourth name skip, `.git`, has no tracked-fixture equivalent to test here: git structurally
+  // refuses to track any path under a directory literally named `.git` anywhere in the tree
+  // (`git add -A` silently drops it, confirmed empirically) — so no tracked-but-not-ignored `.git`
+  // fixture can exist to exercise this AC's fourth name against.
 })

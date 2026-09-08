@@ -46,6 +46,18 @@
 // and always exits 0 (D13: probe findings are data). This mode is checked BEFORE the --base/--spec/
 // mode requirement below so it never needs a spec or a git ref; it never touches outOfPlan/unrealized/
 // excluded/renamed, and D10 pins the existing --json/--dirs modes byte-identical around it.
+//
+// Ignored-path prune (D1/D2/D3, specs/20260907/03-ignored-paths-and-unobserved-count.md):
+// `walkTestFiles` prunes every git-ignored path — a git-ignored working copy (`.claude/
+// worktrees/**`, a `*.build/` scratch dir) is not a real candidate on any host layout, and the
+// four name skips below were never meant to enumerate that class. The ignored set is derived
+// ONCE per process, lazily, from a single `git -C <root> ls-files -o -i --exclude-standard
+// --directory -z` — never a second implementation for --probe-at-risk, which reaches the prune
+// through this same walkTestFiles call. The prune is active only when `git -C <root> rev-parse
+// --show-prefix` exits 0 printing an empty line (root IS the repository top level) AND the
+// ls-files call exits 0; any other outcome (not a repository, git unavailable, --root below the
+// top level) leaves the ignored set empty and the walk is byte-identical to the pre-change walk
+// — refusing to filter is always safe, silently pruning the wrong subtree is not.
 
 const fs = require('fs')
 const path = require('path')
@@ -58,6 +70,39 @@ const { readConfig } = require('./lib/host-config')
 // here (from its former inline position) so the probe branch above can use it before requiring a
 // spec/base ref.
 const defaultTestGlobs = ['tests/**', 'test/**', '**/*.test.*', '**/*.spec.*', '**/*_test.*']
+
+// D1/D2 (specs/20260907/03-ignored-paths-and-unobserved-count.md): derived once per process —
+// the first call wins and every later call (main derivation, --probe-at-risk) reuses the same
+// Set, so a `--root` that never changes mid-process is only ever asked once. Cached as a Set
+// (possibly empty) rather than null so "already derived" is distinguishable from "not yet
+// derived" even when the guard below left it empty. Declared here, ahead of the probe branch
+// below, so the probe path — which calls walkTestFiles before a spec/base ref is required — sees
+// it initialized rather than hitting the `let` temporal dead zone.
+let ignoredPathsCache = null
+function getIgnoredPaths() {
+  if (ignoredPathsCache) return ignoredPathsCache
+  ignoredPathsCache = new Set()
+  // stdio is explicit (never the execFileSync default) — the default forwards a failing child's
+  // stderr straight to this process's own stderr in ADDITION to capturing it on the thrown
+  // error, so a plain non-repository --root would otherwise print git's "fatal: not a git
+  // repository" onto this script's stderr even though the failure is fully handled below.
+  const gitOpts = { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+  try {
+    const prefix = execFileSync('git', ['-C', root, 'rev-parse', '--show-prefix'], gitOpts)
+    // D2: root must BE the repository top level — ls-files prints paths relative to the repo
+    // root, so a subdirectory --root would compare mismatched prefixes and could prune the
+    // wrong subtree. A non-empty prefix leaves the set empty (safe: unfiltered, never wrong).
+    if (prefix.trim() !== '') return ignoredPathsCache
+    const listing = execFileSync('git', ['-C', root, 'ls-files', '-o', '-i', '--exclude-standard', '--directory', '-z'], gitOpts)
+    for (const entry of listing.split('\0')) {
+      if (entry) ignoredPathsCache.add(entry)
+    }
+  } catch {
+    // Not a repository, git unavailable, or the ls-files call itself failed — D2's safe
+    // fallback: leave the set empty so the walk is byte-identical to the pre-change walk.
+  }
+  return ignoredPathsCache
+}
 
 function usage() {
   console.error('usage: scope-reconcile.js [--root <dir>] --base <ref> --spec <path> (--json | --dirs) | --probe-at-risk <file> [--test-globs <csv>] --root <dir>')
@@ -233,6 +278,7 @@ const isResolvedByTestsRows = (p) =>
 // argument is omitted, so the --probe-at-risk branch above — which calls this before that const
 // exists — always passes its own classifier explicitly and never touches the default).
 function walkTestFiles(dir, out, classifyFn = isTestClassified) {
+  const ignored = getIgnoredPaths()
   let entries
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true })
@@ -243,10 +289,14 @@ function walkTestFiles(dir, out, classifyFn = isTestClassified) {
     // specs/20260903/07-test-file-budget-guard.md D8: fixture dirs are never at-risk candidates.
     if (entry.name === '.git' || entry.name === 'node_modules' || entry.name === 'fixtures' || entry.name === '__fixtures__') continue
     const full = path.join(dir, entry.name)
+    const rel = path.relative(root, full).split(path.sep).join('/')
     if (entry.isDirectory()) {
+      // D1: a fully-ignored directory arrives from ls-files as its path plus a trailing slash —
+      // pruning here means the subtree is never descended, an ignored second checkout included.
+      if (ignored.has(`${rel}/`)) continue
       walkTestFiles(full, out, classifyFn)
     } else if (entry.isFile()) {
-      const rel = path.relative(root, full).split(path.sep).join('/')
+      if (ignored.has(rel)) continue
       if (classifyFn(rel)) out.push(rel)
     }
   }

@@ -413,6 +413,13 @@ function isKitCanonFile(html) {
   return labelIx === -1 || canonIx < labelIx
 }
 
+// htmlFilesIn(dir) -> sorted basenames of the .html files directly in dir, [] on any read error
+// (missing dir, not a dir, permission). The one shared body for the "list a design/ subdir's
+// .html files" shape that recurs across shell-region.js and mocks-driver.js.
+function htmlFilesIn(dir) {
+  try { return fs.readdirSync(dir).filter((f) => f.endsWith('.html')).sort() } catch { return [] }
+}
+
 // D13: "a primitive is named once per FAMILY, never per file" — every data-kit-primitive key
 // declared by every kit-canon .html file sitting directly in `kitDir` (a design/kit/ directory
 // already resolved by resolveCanonDir), keyed to the list of files (repeats included) that
@@ -420,9 +427,7 @@ function isKitCanonFile(html) {
 // root is not data-kit-canon), contributes nothing.
 function kitPrimitivesInDir(kitDir) {
   const byKey = new Map()
-  let files = []
-  try { files = fs.readdirSync(kitDir).filter((f) => f.endsWith('.html')) } catch { return byKey }
-  for (const f of files.sort()) {
+  for (const f of htmlFilesIn(kitDir)) {
     const p = path.join(kitDir, f)
     let html
     try { html = fs.readFileSync(p, 'utf8') } catch { continue }
@@ -495,8 +500,17 @@ function diagnoseKitRegions(mockHtml, kitDir) {
       }
     } else if (bespokeMatch) {
       bespoke++
-      const m = bespokeMatch[1].match(/^([^:]+):\s*(.*)$/)
-      if (!m || !m[2].trim()) {
+      // D4: <key> must name an EXISTING primitive, exactly as data-kit's key must. A value with
+      // no colon at all keeps the pre-D4-fix fallback (bespoke-unnamed) — there is no key to
+      // validate. An empty key (":  <diff>") is not an existing primitive either, so it routes
+      // here via the same "" not in validKeys test, ahead of the difference check.
+      const m = bespokeMatch[1].match(/^([^:]*):\s*(.*)$/)
+      if (m && !validKeys.has(m[1])) {
+        findings.push({
+          code: 'unknown-kit',
+          text: 'names data-bespoke="' + m[1] + ': ' + m[2] + '" but design/kit/ declares no primitive "' + m[1] + '"',
+        })
+      } else if (!m || !m[2].trim()) {
         findings.push({
           code: 'bespoke-unnamed',
           text: 'data-bespoke="' + bespokeMatch[1] + '" names no difference — say what prevents reuse',
@@ -528,6 +542,7 @@ module.exports = {
   resolveCanonDir,
   resolveShellDir,
   isKitCanonFile,
+  htmlFilesIn,
   kitPrimitivesInDir,
   checkKitCanon,
   diagnoseKitRegions,

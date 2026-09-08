@@ -658,8 +658,7 @@ function buildJourneyStopSpec(journeyName) {
 // candidate per design/kit/*.html file, "<name>=kit/<name>.html".
 function buildKitStopSpec() {
   const kitDir = path.join(root, 'design/kit')
-  let files = []
-  try { files = fs.readdirSync(kitDir).filter((f) => f.endsWith('.html')) } catch { /* none yet */ }
+  const files = shellLib.htmlFilesIn(kitDir)
   if (!files.length) die('stop open kit: design/kit/ holds no .html file — author the kit page first')
   const kebabs = files.map((f) => path.basename(f, '.html')).sort()
   return {
@@ -878,12 +877,14 @@ function handleShapePicked(shapeArg) {
 // specs/20260907/04-kit-canon-family.md D7: `--mark kit-signed` requires a decided look stop
 // keyed kit-signed, requires design/kit/ to hold at least one .html file, and requires
 // design-atlas.js check design/kit to exit 0 — in that order, so the refusal always names the
-// most immediate missing precondition.
+// most immediate missing precondition. spec/doctrine/mocks.md "The gate rides every advancing
+// mark" lists kit-signed among the gated marks, so this opens with requireGateOpen() exactly as
+// handleShapePicked does.
 function handleKitSignedOff() {
+  requireGateOpen()
   const stop = requireStopDecision('kit-signed', 'stop open kit')
   const kitDir = path.join(root, 'design/kit')
-  let files = []
-  try { files = fs.readdirSync(kitDir).filter((f) => f.endsWith('.html')) } catch { /* none yet */ }
+  const files = shellLib.htmlFilesIn(kitDir)
   if (!files.length) die('design/kit/ holds no .html file — author the kit page first')
   const r = runDesignAtlasCheck([kitDir])
   if (r.status !== 0) die('design-atlas.js check design/kit failed: ' + childOutput(r))

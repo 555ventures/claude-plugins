@@ -54,7 +54,7 @@ disk, never chat context.
 
 Before any screen: name the shared parts once, in every state, with a when-to-use line. The
 driver's step names the starting page; copy it yourself — `cp "$(spec-paths templates)"/mocks-kit.html
-design/kit/<name>.html` — then edit it in place: draw the ten shell primitives (sheet, empty-state, table-row, card,
+design/kit/<name>.html` — then edit it in place: draw the ten kit primitives (sheet, empty-state, table-row, card,
 form-field, option-group, list-item, toolbar, banner, dialog) or better names the seed's
 product suggests, each `data-kit-primitive="<key>"` with its `data-purpose` when-to-use line,
 gray on `wire/tokens.css`, never skinned. Look at it the same way a wireframe is looked at:

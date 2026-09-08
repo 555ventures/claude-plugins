@@ -415,6 +415,23 @@ function cmdCheck(argv) {
   let kitUnabsorbedTotal = 0
   let kitScreensWithBespoke = 0
   const checkedKitFamilies = new Set()
+  // D13: family-wide duplicate-primitive sweep, hoisted so both the isKitCanon branch (a walk
+  // that visits design/kit/ files directly) and the mock-binding branch (a walk over
+  // design/mocks/ alone, e.g. `check --matrix design/mocks`, which never visits design/kit/
+  // itself) can trigger it — a key repeated across two SIBLING files is the same violation as
+  // two declarations in one file, naming every file that carries it. checkedKitFamilies still
+  // dedupes to once per resolved design/kit/ directory.
+  function sweepKitFamily(kitDir) {
+    if (checkedKitFamilies.has(kitDir)) return
+    checkedKitFamilies.add(kitDir)
+    for (const [key, filesArr] of shellLib.kitPrimitivesInDir(kitDir)) {
+      const uniqueFiles = [...new Set(filesArr)]
+      if (uniqueFiles.length > 1) {
+        violations.push(uniqueFiles.join(', ') + ': duplicate data-kit-primitive="' + key +
+          '" — a primitive is named once per family')
+      }
+    }
+  }
   let count = 0
   for (const t of paths) {
     if (!fs.existsSync(t)) die('check: no such path: ' + t)
@@ -457,20 +474,7 @@ function cmdCheck(argv) {
         violations.push(...shellLib.checkCanon(f, html))
       } else if (isKitCanon) {
         violations.push(...shellLib.checkKitCanon(f, html))
-        // D13: family-wide duplicate-primitive sweep, once per resolved design/kit/ directory —
-        // a key repeated across two SIBLING files is the same violation as two declarations in
-        // one file, naming every file that carries it.
-        const kitDir = path.dirname(f)
-        if (!checkedKitFamilies.has(kitDir)) {
-          checkedKitFamilies.add(kitDir)
-          for (const [key, filesArr] of shellLib.kitPrimitivesInDir(kitDir)) {
-            const uniqueFiles = [...new Set(filesArr)]
-            if (uniqueFiles.length > 1) {
-              violations.push(uniqueFiles.join(', ') + ': duplicate data-kit-primitive="' + key +
-                '" — a primitive is named once per family')
-            }
-          }
-        }
+        sweepKitFamily(path.dirname(f))
       } else {
         const shellDir = shellLib.resolveShellDir(f)
         if (shellDir) {
@@ -488,6 +492,7 @@ function cmdCheck(argv) {
         const kitDir = shellLib.resolveCanonDir(f, 'kit')
         const kitLabel = labelOf(html)
         if (kitDir && kitLabel) {
+          sweepKitFamily(kitDir)
           const kitDiag = shellLib.diagnoseKitRegions(html, kitDir)
           kitInfoLines.push('  ⓘ ' + kitLabel + ': ' + kitDiag.kit + ' kit, ' + kitDiag.bespoke + ' bespoke')
           kitUnabsorbedTotal += kitDiag.bespoke

@@ -69,6 +69,7 @@ journey whose screens quietly invent a primitive the kit already names.
 | tests/mocks/mocks-driver-fixtures.js | MODIFY | tests | Orchestrator duty: `advanceToKitSigned(dir)` inserted into the chain every later helper routes through; `writeKitCanon(dir, primitives)` helper |
 | tests/mocks/mocks-driver.test.js | MODIFY | tests | AC-20260907-04-1, AC-20260907-04-13 |
 | tests/mocks/mocks-driver-2.test.js | MODIFY | tests | AC-20260907-04-9, AC-20260907-04-10, AC-20260907-04-12 |
+| tests/mocks/mocks-driver-kit-gate.test.js | CREATE | tests | AC-20260907-04-9 (review fix s1: the provenance-ledger gate on `--mark kit-signed`; split from mocks-driver-2 for the per-file 45 s budget) |
 | tests/mocks/mocks-driver-look-stops-2.test.js | MODIFY | tests | AC-20260907-04-11 (the KIT step block, its skill line and its look probe) |
 | tests/design-atlas.test.js | MODIFY | tests | AC-20260907-04-2, AC-20260907-04-3, AC-20260907-04-4, AC-20260907-04-5, AC-20260907-04-6, AC-20260907-04-7, AC-20260907-04-8, AC-20260907-04-16, AC-20260907-04-17, AC-20260907-04-18 |
 | tests/consistency/design-doctrine.test.js | MODIFY | tests | AC-20260907-04-14 (doctrine names the chain, the two marks and the count line) |

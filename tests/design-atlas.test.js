@@ -2845,6 +2845,15 @@ test('AC-20260907-04-16: check exits 1 naming a data-kit-primitive key duplicate
   assert.ok(dup.stdout.includes(path.basename(aPath)) && dup.stdout.includes(path.basename(bPath)),
     'D13: the violation must name BOTH files carrying the duplicated key, not just one: ' + dup.stdout)
 
+  const mockPath = writeKitMock(dir, { label: 'screen', status: 'sketch', regions: [{ kit: 'sheet' }] })
+  const dupViaMocks = atlas(['check', '--matrix', path.dirname(mockPath)])
+  assert.strictEqual(dupViaMocks.status, 1,
+    'D13: the family-wide duplicate must fire even when check walks only design/mocks/ — the kit files themselves are never in the walk: ' + dupViaMocks.stdout + dupViaMocks.stderr)
+  assert.match(dupViaMocks.stdout, /duplicate data-kit-primitive="sheet"/,
+    'checking design/mocks/ must still name the exact duplicated key resolved from the family: ' + dupViaMocks.stdout)
+  assert.ok(dupViaMocks.stdout.includes(path.basename(aPath)) && dupViaMocks.stdout.includes(path.basename(bPath)),
+    'D13: the violation surfaced from a design/mocks/ walk must still name BOTH kit files carrying the duplicated key: ' + dupViaMocks.stdout)
+
   writeKitFile(dir, 'b', [{ key: 'card', purpose: 'a bordered content block' }])
   const disjoint = atlas(['check', path.dirname(aPath)])
   assert.strictEqual(disjoint.status, 0,
@@ -2867,6 +2876,27 @@ test('AC-20260907-04-4: check --matrix exits 1 naming a content region carrying 
   const good = atlas(['check', '--matrix', mockPath])
   assert.strictEqual(good.status, 0,
     'once the region carries a valid data-bespoke mark naming an existing primitive and a difference, check --matrix must pass: ' + good.stdout + good.stderr)
+
+  const widgetPath = writeKitMock(dir, { label: 'widget-screen', status: 'sketch', regions: [{ bespoke: 'widget: three columns' }] })
+  const unknownBespoke = atlas(['check', '--matrix', widgetPath])
+  assert.strictEqual(unknownBespoke.status, 1,
+    'D4: a data-bespoke key that names no primitive in the family (only "sheet" is declared) must fail check --matrix: ' + unknownBespoke.stdout + unknownBespoke.stderr)
+  assert.match(unknownBespoke.stdout, /declares no primitive "widget"/,
+    'the violation must name the unknown bespoke key exactly as it names an unknown data-kit key: ' + unknownBespoke.stdout)
+
+  const emptyKeyPath = writeKitMock(dir, { label: 'emptykey-screen', status: 'sketch', regions: [{ bespoke: ': three columns' }] })
+  const emptyKey = atlas(['check', '--matrix', emptyKeyPath])
+  assert.strictEqual(emptyKey.status, 1,
+    'D4: data-bespoke="' + ': three columns' + '" (empty key) must fail check --matrix: ' + emptyKey.stdout + emptyKey.stderr)
+  assert.doesNotMatch(emptyKey.stdout, /names no difference/,
+    'an empty bespoke key is a missing/unknown key, not a missing difference — the "names no difference" wording must not fire here: ' + emptyKey.stdout)
+
+  const emptyDiffPath = writeKitMock(dir, { label: 'emptydiff-screen', status: 'sketch', regions: [{ bespoke: 'sheet: ' }] })
+  const emptyDiff = atlas(['check', '--matrix', emptyDiffPath])
+  assert.strictEqual(emptyDiff.status, 1,
+    'D4: data-bespoke="sheet: " (existing key, empty difference) must fail check --matrix: ' + emptyDiff.stdout + emptyDiff.stderr)
+  assert.match(emptyDiff.stdout, /data-bespoke="sheet: " names no difference — say what prevents reuse/,
+    'an existing key with an empty difference must print the bespoke-unnamed finding verbatim: ' + emptyDiff.stdout)
 })
 
 test('AC-20260907-04-5: an unabsorbed content region on a sketch mock warns and passes, and the identical region on an approved mock is a violation, once a kit family resolves', () => {

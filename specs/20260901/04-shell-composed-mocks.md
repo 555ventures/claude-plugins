@@ -266,8 +266,7 @@ declared shell, `null` for `none`/undeclared.
   and `re-mark tokens-landed`; with an `app.html` whose content slot holds text it SHALL
   refuse carrying the check output naming `design/shell`; with a passing canon and the
   approved mock declaring `data-shell="app"` and synced it SHALL accept and write
-  `design: "tokens-landed"` → `AC-20260901-04-14: tokens-landed requires the shell canon` in
-  tests/genesis/design-state.test.js
+  `design: "tokens-landed"` [retired: specs/20260902/08-genesis-shrink-brief-state.md]
 - **AC-20260901-04-15** `[oracle: gate]`: WHEN the doctrine rows land THE SYSTEM SHALL
   CONTINUE TO keep `spec/doctrine/design.md` ≤160 lines and every command's read-load within
   budget (the existing consistency tests are the oracle)

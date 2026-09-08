@@ -20,6 +20,9 @@ const { tmpdir, runNode } = require('../helpers')
 // loops — `rejected-trailing-tag` is emitted from both the coverage loop and the skip loop, so a
 // shared class set would redden both legs from a single emission. Executed against synthetic
 // host trees.
+//
+// specs/20260907/02-ac-drift-backfill.md D4/AC-20260907-02-2: the -13a/-13b titles below carry
+// the bare AC-20260823-03-13 token as a prefix (test bodies unchanged).
 
 const { parseAcBullets, rejectedTrailingTagDetail } = require('../../spec/scripts/lib/spec-sections')
 
@@ -146,7 +149,7 @@ function manifestRows(manifestPath) {
   return fs.readFileSync(manifestPath, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l))
 }
 
-test('AC-20260823-03-13a: WHEN ac-matrix emits rejected-trailing-tag from the COVERAGE loop only (an uncovered AC with a refused trailing [oracle:] tag, ZERO skip lines) THE SYSTEM writes the skip-reconcile manifest leg row with exit:0 while the ac-matrix leg row carries exit:1 — leg exits partition by EMISSION SITE, not by finding class (D9), and --json\'s findings array/field shape stay unchanged', () => {
+test('AC-20260823-03-13 / AC-20260823-03-13a: WHEN ac-matrix emits rejected-trailing-tag from the COVERAGE loop only (an uncovered AC with a refused trailing [oracle:] tag, ZERO skip lines) THE SYSTEM writes the skip-reconcile manifest leg row with exit:0 while the ac-matrix leg row carries exit:1 — leg exits partition by EMISSION SITE, not by finding class (D9), and --json\'s findings array/field shape stay unchanged', () => {
   const dir = tmpdir('rtt13a')
   fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'tests/foo.test.js'), '// unrelated, no AC-ID literal\n')
@@ -177,7 +180,7 @@ test('AC-20260823-03-13a: WHEN ac-matrix emits rejected-trailing-tag from the CO
     `D9's own text: "the --json findings array and every finding's own shape stay byte-identical — origin is internal bookkeeping, never an emitted field" — an extra key here (e.g. "leg" or "origin") means D9's internal bookkeeping leaked into the public --json contract — got ${JSON.stringify(Object.keys(f))}`)
 })
 
-test('AC-20260823-03-13b: WHEN ac-matrix emits rejected-trailing-tag from the SKIP loop only (a mapped skip whose owning bullet has a refused trailing [env:] tag, on a spec whose every AC is covered) THE SYSTEM writes the ac-matrix manifest leg row with exit:0 while the skip-reconcile leg row carries exit:1', () => {
+test('AC-20260823-03-13 / AC-20260823-03-13b: WHEN ac-matrix emits rejected-trailing-tag from the SKIP loop only (a mapped skip whose owning bullet has a refused trailing [env:] tag, on a spec whose every AC is covered) THE SYSTEM writes the ac-matrix manifest leg row with exit:0 while the skip-reconcile leg row carries exit:1', () => {
   const dir = tmpdir('rtt13b')
   fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'tests/env.test.js'), '// covers AC-20260823-41-1\n')

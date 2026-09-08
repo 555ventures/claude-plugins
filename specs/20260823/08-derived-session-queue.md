@@ -204,20 +204,20 @@ kinds: `queue-auto-placed` (detail carries `spec-queue bump <ref>` as the veto),
   `seeded queue with 3 briefs (roadmap order)`) → tests/queue/spec-queue.test.js
 - **AC-20260823-08-10**: WHEN `spec-queue bump 08` runs on an `auto_placed` item THE SYSTEM
   SHALL move it to position 1 and remove the `auto_placed` stamp (literal: `[15, 16, 08🅰]`
-  → `[08, 15, 16]`, no stamp) → tests/queue/spec-queue.test.js
+  → `[08, 15, 16]`, no stamp) [retired: specs/20260903/03-pipeline-queue-mechanics.md]
 - **AC-20260823-08-11**: WHEN `session-queue.sh` runs in a repo with no queue file, or
   outside any git repository THE SYSTEM SHALL print nothing and exit 0 (literal: both
-  fixtures → stdout `""`, exit 0) → tests/queue/session-hook.test.js
+  fixtures → stdout `""`, exit 0) [retired: docs/adr/0009-session-queue-hook-removed.md]
 - **AC-20260823-08-12**: WHEN `session-queue.sh` runs in a main checkout whose queue holds
   a top item and one `auto_placed` item THE SYSTEM SHALL print the top item's paste line
   and one veto notice (literal: top = brief 15 at `hardened` → first line ends
   `/spec:build @specs/…15….md`; second line contains `veto: spec-queue bump`)
-  → tests/queue/session-hook.test.js
+  [retired: docs/adr/0009-session-queue-hook-removed.md]
 - **AC-20260823-08-13**: WHEN `session-queue.sh` runs inside a linked worktree THE SYSTEM
   SHALL print the finish-this-tree line derived from the tree's own specs and never the
   global queue top (literal: worktree spec at `implementing`, global queue top = different
-  brief → output names the worktree's spec path, not the queued brief) →
-  tests/queue/session-hook.test.js
+  brief → output names the worktree's spec path, not the queued brief)
+  [retired: docs/adr/0009-session-queue-hook-removed.md]
 - **AC-20260823-08-14**: WHEN `spec-status.js` runs with `--root` a linked worktree that
   shares a queue file ordering brief 08 first THE SYSTEM SHALL ignore the overlay (literal:
   worktree derivation output identical to the same tree with no queue file) →

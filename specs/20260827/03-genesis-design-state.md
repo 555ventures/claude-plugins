@@ -140,14 +140,14 @@ esac
   SYSTEM SHALL exit 2 naming `130`; with an empty `## Dissents` → naming `Dissents`; with a
   `design-pick.json` rejecting `r0-dense-professional` and a Dissents body not naming
   `dense-professional` → naming it; WHEN all hold THE SYSTEM SHALL write
-  `design: "doctrine-drafted"` and print the checkpoint `(DESIGN → DESIGN)` →
-  `tests/genesis/design-state.test.js`
+  `design: "doctrine-drafted"` and print the checkpoint `(DESIGN → DESIGN)`
+  [retired: specs/20260902/08-genesis-shrink-brief-state.md]
 - **AC-20260827-03-3**: WHEN `--mark tokens-landed` runs with `design/tokens.css` not starting
   with the winner's `tokens.css` THE SYSTEM SHALL exit 2 naming `design/tokens.css` and
   `verbatim`; with no approved mock in `design/mocks/` → naming `data-status="approved"`; with
   a mock failing `check --matrix` (no viewport meta) → naming `design/mocks` with the check
   output; WHEN the ratified file, an approved matrix-clean mock, and `design/components.json`
-  are present THE SYSTEM SHALL write `design: "tokens-landed"` → `tests/genesis/design-state.test.js`
+  are present THE SYSTEM SHALL write `design: "tokens-landed"` [retired: specs/20260902/08-genesis-shrink-brief-state.md]
 - **AC-20260827-03-4**: WHEN `--mark rules-locked` runs with a rule whose `targetCategory` is
   `engine` THE SYSTEM SHALL exit 2 naming `engine` and the seven categories; with a duplicate
   component `name` in `components.json` THE SYSTEM SHALL exit 2 carrying `components-check`'s
@@ -155,7 +155,7 @@ esac
   `design/explore/r0-dense-professional/`, `design/explore/gallery.html`,
   `.claude/genesis/sketch.html`, and `.claude/genesis/explore/authored/`, keep
   `design/explore/r0-instrument/` and `design/explore/positions.md`, and the next bare run SHALL
-  print `state: HANDOFF` → `tests/genesis/design-state.test.js`
+  print `state: HANDOFF` [retired: specs/20260902/08-genesis-shrink-brief-state.md]
 - **AC-20260827-03-5**: WHEN HANDOFF prints for `designCatalog: "storybook"` and for
   `designCatalog: "none"` THE SYSTEM SHALL print `next: /spec:init` in both and SHALL NOT print
   `genesis-design`; `spec/commands/genesis.md`'s chain bullet SHALL contain

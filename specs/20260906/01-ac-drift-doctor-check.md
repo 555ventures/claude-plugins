@@ -123,7 +123,7 @@ The `[retired:]` tag (D3) — sibling syntax to `[env:]`/`[oracle:]`/`[pre-green
 bare-trailing position:
 
 ```
-- **AC-20260823-08-11** [retired: specs/20260830/01-session-queue-removal.md D2]: WHEN … THE SYSTEM SHALL …
+- **AC-20260823-08-11** [retired: docs/adr/0009-session-queue-hook-removed.md]: WHEN … THE SYSTEM SHALL …
 - **AC-20260905-02-1**: WHEN … THE SYSTEM SHALL … [retired: specs/20260905/04-per-project-look-server.md D1]
 ```
 

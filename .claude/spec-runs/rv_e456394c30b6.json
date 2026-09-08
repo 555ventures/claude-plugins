@@ -1,0 +1,150 @@
+{
+  "runId": "rv_e456394c30b6",
+  "ts": "2026-09-08T19:36:51.929Z",
+  "spec": "specs/20260907/01-mixed-pin-guard-and-drift-line.md",
+  "tier": "standard",
+  "iteration": 3,
+  "scope": "fix-delta",
+  "verdict": "FINDINGS",
+  "dispositions": {
+    "waived": 0,
+    "rejected": 0,
+    "fixDispatched": 0
+  },
+  "diff": {
+    "loc": 943,
+    "base": "59a2dedacfefca44483a3737d198715e19472c0c",
+    "head": "84a13e15cd648527aea7a1deec9591a80495fb3a",
+    "dirty": true
+  },
+  "legs": [
+    {
+      "leg": "ci",
+      "exit": 0,
+      "observed": {
+        "unavailable": "no-adapter"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "gate",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 451
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "suite",
+      "exit": 0,
+      "observed": {
+        "skips": 0,
+        "todos": 0,
+        "testsExecuted": 1289
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "smoke",
+      "exit": 4,
+      "observed": {
+        "result": "inert"
+      },
+      "scope": "fix-delta"
+    },
+    {
+      "leg": "ac-matrix",
+      "exit": 0,
+      "observed": {
+        "uncovered": 0,
+        "oracle": 0,
+        "preGreen": 1
+      }
+    },
+    {
+      "leg": "skip-reconcile",
+      "exit": 0,
+      "observed": {
+        "skipped": 0,
+        "sanctioned": 0
+      }
+    },
+    {
+      "leg": "promise-sweep",
+      "exit": 0,
+      "observed": {
+        "rows": 12,
+        "carried": 6,
+        "sanctioned": 6,
+        "orphans": 0
+      }
+    }
+  ],
+  "reviewer": {
+    "verdict": "CLEAN",
+    "survivors": [
+      {
+        "severity": "soft",
+        "claim": "The spec's Canonical Delta reads 'None — this repo has no docs/canonical/', but docs/canonical/ exists with 14 tracked files that predate the review base; build-integrity.md § Mechanized red-check describes red-check expectation derivation without the new mixed-pin refusal, and review-close.md describes CLOSE without the advisory drift line, so the close step will apply no delta on a false premise.",
+        "file": "specs/20260907/01-mixed-pin-guard-and-drift-line.md",
+        "line": 206,
+        "impact": "The canonical documentation for the build red-check and the review close screen will not learn about the new refusal class or the advisory drift line, because the spec told the close step there was nothing to update.",
+        "evidence": "Spec line 206: 'None — this repo has no docs/canonical/; the doctrine homes are edited directly by D4, D5 and D7.' Executed: the tracked-files listing for docs/canonical returns bootstrap.md, build-integrity.md, design.md, doctrine-governance.md, gate-integrity.md, genesis.md, pipeline.md, release-integrity.md, release-pipeline.md, review-close.md, review-legs.md, review.md, scripts.md, status.md; the last revision touching it is ec1977c, and the ancestry check of ec1977c against 59a2ded exits 0 (the directory predates the reviewed change set). docs/canonical/build-integrity.md:59-69 (§ Mechanized red-check) states expectation 'derives from SHALL CONTINUE TO regression pins and closed-enum [pre-green:] tags' with no mixed-pin arm; grep -rn for mixed or pinShape over docs/canonical/*.md: no hits. The reviewed change set touches nothing under docs/canonical. Not a code defect; Canonical Delta application is a post-verdict stage — only the spec's stated premise is reported."
+      }
+    ],
+    "killed": [
+      {
+        "claim": "The round-3 fix (importing lib/driver-io.js writeOut, appending the newline at each --lint call site) changes the printed bytes in plain or --json lint mode.",
+        "file": "spec/scripts/ac-matrix.js",
+        "line": 227,
+        "evidence": "The checked-in spec/scripts/ac-matrix.js (read via the VCS object reader at ref:path; 34194 bytes, identical in size to the e006106 console.log original — the round-2 local writeOut was never checked in) was staged beside a copy of spec/scripts/lib in the scratchpad. Fixture spec with one malformed token, one mixed bullet, one pure pin, one invalid pre-green. Plain: pre exit 1 / fixed exit 1, cmp IDENTICAL (510 bytes; three HARD lines then 'ac-matrix: lint malformed=1 invalidPreGreen=1 mixed=1 · 3 finding(s)'). --json: pre exit 1 / fixed exit 1, cmp IDENTICAL (868 bytes, trailing close-brace plus newline confirmed with od -c)."
+      },
+      {
+        "claim": "The --lint output still truncates at the 64 KiB pipe buffer on a large payload.",
+        "file": "spec/scripts/ac-matrix.js",
+        "line": 227,
+        "evidence": "Generated 1500-bullet all-mixed spec (234,844 bytes). Pre-fix --lint --json piped through cat then wc -c: 65536, exit 1 (truncated at exactly the pipe buffer). Fixed --lint --json piped through cat then wc -c: 363938, exit 1; piped into jq: findings 1500, mixed 1500. Plain mode fixed, piped through cat: 225469 bytes, 1500 HARD lines, last line 'ac-matrix: lint malformed=0 invalidPreGreen=0 mixed=1500 · 1500 finding(s)' (pre-fix plain also 225469 — the many-small-writes shape flushed; the single-write JSON shape was the truncating one)."
+      },
+      {
+        "claim": "lib/driver-io.js writeOut appends a newline (so the explicit newline at each call site double-spaces output) or the import is not a Node builtin-only dependency.",
+        "file": "spec/scripts/lib/driver-io.js",
+        "line": 62,
+        "evidence": "driver-io.js:62-73 writeOut(fd, text) = Buffer.from + looped fs.writeSync with EAGAIN retry, no newline appended; the module requires only fs, path, child_process. Byte-identity results above confirm exactly one newline per line. ac-matrix.js now contains zero local 'function writeOut' definitions (grep -c: 0)."
+      },
+      {
+        "claim": "The deviations sidecar correction bullet is itself inaccurate about who imports lib/driver-io.js.",
+        "file": "specs/20260907/01-mixed-pin-guard-and-drift-line.deviations.md",
+        "line": 90,
+        "evidence": "grep -n for the driver-io require across spec/scripts/*.js: ac-matrix.js:132, commit-coverage.js:35, mocks-driver.js:112, spec-build-driver.js:60, spec-review-driver.js:177 — the four cited files and line numbers are exact. 'Ten other scripts carrying their own local writeOut': grep -rl 'function writeOut' finds 9 scripts plus lib/driver-io.js itself = 10 definitions; a counting nuance, not a false claim."
+      },
+      {
+        "claim": "--lint still reaches the full-mode requirement check, creates a manifest, or mis-handles the usage/no-AC-section arms (AC-4, AC-6).",
+        "file": "spec/scripts/ac-matrix.js",
+        "line": 165,
+        "evidence": "--lint --root /x: prints the two-line usage naming '--lint [--json] (spec-only: ...)', exit 2. --lint on a spec with no ## Acceptance Criteria: 'ac-matrix: <path> has no ## Acceptance Criteria section — nothing to lint/cover', exit 2. After all lint runs, find scratchpad -iname '*manifest*': only two pre-existing files from an earlier pass's unrelated scratch tree (prefix/), none beside mixed.md or big.md."
+      },
+      {
+        "claim": "Some test in the reviewed change set or the working-tree fix delta is red, or a gate is red.",
+        "file": null,
+        "line": null,
+        "evidence": "legs-3 suite-output.txt: 1289 tests, fail 0, __FILE_BUDGET_OK__; gate-output.txt: fail 0 (manifest-3: gate 451 executed, suite 1289, both exit 0, scope fix-delta); ac-matrix leg 0 findings 0 warnings; promise-sweep rows=12 carried=6 sanctioned=6 orphans=0. Own run with CHROME_BIN over tests/review/review-driver-close-drift-line.test.js, tests/ac-matrix, tests/red-check, tests/doctor, tests/consistency, tests/provenance: 240 pass, 0 fail, including both AC-20260907-01-9 tests and AC-8/AC-12."
+      },
+      {
+        "claim": "A doctrine section citation in the reviewed change set does not match a heading byte-for-byte, or the advisory drift line's numbers are wrong on this repo.",
+        "file": null,
+        "line": null,
+        "evidence": "node spec/scripts/citations-check.js --root .: TOTAL=188 CHECKED=82 SKIP=106 MISS=0. node spec/scripts/ac-drift.js --root . --json: 41 findings across 13 distinct specs — the 41/13 the spec Rationale predicts for the CLOSE line."
+      },
+      {
+        "claim": "The reviewed change set contains foreign work or an implausible size.",
+        "file": null,
+        "line": null,
+        "evidence": "Revisions after 59a2ded: e006106 (the build) and 84a13e1 (the D12 jq-fixture repair); the working tree adds the round-2/3 repairs to ac-matrix.js, spec-review-driver.js, the drift-line test, and the sidecar. Change-set stat: 21 files, all named by the File Plan or by D11/D12; the spec file's own delta is the status flip, build_base/diff_base, and the D11/D12 rows. Nothing under docs/canonical is touched."
+      }
+    ],
+    "reviewerCount": 1,
+    "tokens": 95000
+  }
+}

@@ -203,5 +203,27 @@ return before the `--root`/`--manifest` requirement check, not after it.
 
 ## Canonical Delta
 
-None — this repo has no `docs/canonical/`; the doctrine homes are edited directly by D4, D5
-and D7.
+`docs/canonical/build-integrity.md` § Mechanized red-check: after the sentence ending "…the
+plan-time tag count rides review's ac-matrix manifest row as `observed.preGreen` into every
+ledger row, making the class fleet-countable." and before "The kill condition and the
+rejected per-AC mutation mandate…", insert: "Every carried AC's regression-pin bullet is also
+classified by `pinShape(raw)` (`spec/scripts/lib/spec-sections.js`'s `normalizeForPinCheck`
+plus a `SHALL`-count rule, shared with `ac-drift.js` and `ac-matrix.js --lint`) as `promise`,
+`pin`, or `mixed` — a bullet stating both a new promise and a `SHALL CONTINUE TO` pin in one
+place. A file carrying a `mixed` AC is never colour-classified: red-check reports a single
+hard `mixed-pin` finding naming every mixed AC-ID and the split-the-bullet remedy, and the run
+exits 1 without emitting `unsanctioned-green` or `broken-pin` for that file. The same
+predicate is a hard lint finding at `/spec:plan` lock (`ac-matrix --lint`) and a warning,
+never a finding, in review's full `ac-matrix` run against already-built specs, so replay
+against older specs whose bullets predate the guard stays a fair measurement.
+(specs/20260907/01-mixed-pin-guard-and-drift-line.md D1/D2/D3)"
+
+`docs/canonical/review-close.md`: after the last standing-rules bullet ("**Cost is accepted
+by contract.** …never a silent skip."), append a new bullet to that list: "- **The close
+screen carries an advisory drift signal, never a gate.** After the hygiene listing and before
+the close commit, the driver prints one line naming the repo's current count of AC-pin `SHALL
+CONTINUE TO` bullets no test cites (`ac-drift.js --json` over `--root`; zero or `inapplicable`
+prints nothing) — informational only, it never touches the verdict, the ledger row, or mark
+acceptance. `/spec:doctor` check 17 is the same derivation's authoritative, browsable form;
+review's line only surfaces it at the moment new drift is created.
+(specs/20260907/01-mixed-pin-guard-and-drift-line.md D6)"

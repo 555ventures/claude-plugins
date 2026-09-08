@@ -1812,7 +1812,11 @@ function deviationsEnumBlock() {
 // review-legs.js leg (critical tier: a drift line never touches the verdict, the ledger row, or
 // mark acceptance). Runs ac-drift.js --root <repoRoot> --json via the shared fail-closed runChild
 // wrapper; a non-zero-but-alive exit other than 0/1 (a genuine death is runChild's own fail-closed
-// exit(2)) prints a could-not-run line instead of guessing a count.
+// exit(2)) prints a could-not-run line instead of guessing a count. D6: "when 0 or inapplicable
+// print nothing" — a --root with no specs/ prints ac-drift.js's plain `inapplicable — no specs/`
+// sentinel (written before --json is even consulted, spec/scripts/ac-drift.js) rather than JSON,
+// still exit 0, so the JSON parse is guarded: any unparseable stdout on a 0/1 exit prints nothing
+// — the advisory line is never worth an uncaught crash that would wedge CLOSE.
 const driftBin = path.join(PLUGIN, 'scripts/ac-drift.js')
 function acPinDriftLine() {
   const r = runChild(process.execPath, [driftBin, '--root', repoRoot, '--json'], { encoding: 'utf8' },
@@ -1820,7 +1824,12 @@ function acPinDriftLine() {
   if (r.status !== 0 && r.status !== 1) {
     return `⚠️ AC-pin drift check could not run (exit ${r.status}) — see /spec:doctor check 17\n`
   }
-  const parsed = JSON.parse(r.stdout)
+  let parsed
+  try {
+    parsed = JSON.parse(r.stdout)
+  } catch {
+    return ''
+  }
   const driftFindings = Array.isArray(parsed.findings) ? parsed.findings : []
   if (driftFindings.length === 0) return ''
   const specCount = new Set(driftFindings.map((f) => f.spec)).size

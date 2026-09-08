@@ -58,3 +58,39 @@
   unchanged; only the platform-assumption comment and the PATH-construction lines were replaced.
   The real `jq` binary this repo's own hooks and the rest of the suite depend on is never
   touched. Verified green: `node --test 'tests/provenance/*.test.js'` (17 pass, 0 fail).
+- Review repair round 2 (disposed `fix`, HARD): `acPinDriftLine()` (`spec/scripts/spec-review-
+  driver.js`) called `JSON.parse(r.stdout)` unconditionally on a 0/1 exit, but `ac-drift.js
+  --json` prints the plain `inapplicable — no specs/` sentinel (not JSON) and exits 0 when
+  `--root` has no `specs/` directory — `makeHost()`'s fixture always seeds `specs/20260820/`, so
+  AC-20260907-01-9's original test never exercised that arm. Fixed per D6 ("when 0 or
+  inapplicable print nothing"): the `JSON.parse` is now guarded (`try`/`catch` → `''`), gating
+  the advisory line on `findings.length` alone once parsed. A second AC-20260907-01-9 test is
+  added to `tests/review/review-driver-close-drift-line.test.js` (in this spec's File Plan
+  already, so no scope widening) driving the real driver to CLOSE against a synthetic host whose
+  git top level holds no `specs/` directory at all (the spec under review sits at the repo root
+  instead, with `pipelineOwnedPaths` covering its own path/sidecar the way `specs/**` covers
+  `makeHost()`'s) — confirmed to genuinely crash the pre-fix code before the guard was added.
+  Editing `tests/` is outside scripts-layer scope; done here only because the coordinator
+  explicitly directed it as part of applying this disposed finding.
+- Review repair round 2 (disposed `fix`, SOFT): `ac-matrix.js`'s new `--lint` branch was
+  `console.log(...)` followed by `process.exit(...)` — the 64 KiB pipe-truncation shape
+  `.claude/rules/spec-pipeline.md` § Gotchas names. Fixed: both the plain and `--json` `--lint`
+  output now route through a local synchronous `writeOut` (byte-identical in shape to
+  `ac-drift.js`'s own local copy — `lib/driver-io.js`'s export is scoped to the two drivers).
+  The pre-existing full-mode output path is untouched, per the disposition's own scope note.
+- Correction (review repair round 3, disposed `fix`, SOFT): the bullet immediately above claimed
+  "`lib/driver-io.js`'s export is scoped to the two drivers" — factually wrong. Four scripts
+  already import it: `commit-coverage.js:35`, `mocks-driver.js:112`, `spec-build-driver.js:60`,
+  `spec-review-driver.js:177`. Fixed: the local `writeOut` this spec added to `ac-matrix.js` is
+  replaced with an import of `lib/driver-io.js`'s `writeOut`. That shared `writeOut(fd, text)`
+  appends no trailing newline of its own (unlike the local copies this repo's other scripts
+  carry, which each add one per call) — not a drop-in — so every `--lint` call site now passes
+  `\n` explicitly, keeping the printed bytes byte-identical to the local-copy version (diffed
+  against a `console.log`-based reference for both the plain and `--json` renders: zero bytes of
+  difference). Verified against a synthetic 400-AC spec that a `--lint --json` run's ~96.7 KB
+  payload — well past the 65,536-byte pipe buffer the pre-fix `console.log`+`process.exit` shape
+  truncated at — parses complete with all 400 findings, and a 499-AC plain-mode run's ~74.8 KB
+  payload prints all 499 `HARD` lines plus the summary line intact. The ten other scripts
+  carrying their own local `writeOut` are untouched — out of scope for this diff (the
+  duplication rule fires at three-or-more near-identical blocks WITHIN one diff; this diff adds
+  exactly one local copy, now zero).

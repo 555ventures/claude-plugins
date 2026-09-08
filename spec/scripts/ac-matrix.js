@@ -129,6 +129,15 @@ const {
   AC_ID_RE_GLOBAL, PRE_GREEN_REASONS, extractSection, parseAcBullets, acIdOccurs,
   rejectedTrailingTagDetail, pinShape,
 } = require('./lib/spec-sections')
+const { writeOut } = require('./lib/driver-io')
+
+// A script that prints a payload and exits routes through a synchronous writer — the 64 KiB pipe
+// truncation this avoids (console.log + process.exit races stdout's async pipe flush) is spelled
+// out at spec/scripts/lib/driver-io.js's writeOut, imported above (commit-coverage.js,
+// mocks-driver.js, spec-build-driver.js, and spec-review-driver.js already import it too). Used by
+// --lint's short-circuit exit below — the pre-existing full-mode output path is untouched.
+// driver-io.js's writeOut appends no trailing newline of its own (unlike a `console.log`-style
+// call), so every call site below passes one explicitly to keep the printed bytes unchanged.
 
 function usage() {
   console.error('usage: ac-matrix.js --spec <path> --root <dir> --manifest <path> ' +
@@ -215,12 +224,12 @@ if (lintMode) {
   }
   const lintObserved = { malformed: malformedCount, invalidPreGreen: invalidPreGreenCount, mixed: mixedCount }
   if (jsonOut) {
-    console.log(JSON.stringify({ findings: lintFindings, warnings: [], observed: { lint: lintObserved } }, null, 2))
+    writeOut(1, JSON.stringify({ findings: lintFindings, warnings: [], observed: { lint: lintObserved } }, null, 2) + '\n')
   } else {
-    for (const f of lintFindings) console.log(`HARD  ${f.class.padEnd(20)} ${f.detail}`)
-    console.log(`ac-matrix: lint malformed=${lintObserved.malformed} ` +
+    for (const f of lintFindings) writeOut(1, `HARD  ${f.class.padEnd(20)} ${f.detail}\n`)
+    writeOut(1, `ac-matrix: lint malformed=${lintObserved.malformed} ` +
       `invalidPreGreen=${lintObserved.invalidPreGreen} mixed=${lintObserved.mixed} · ` +
-      `${lintFindings.length} finding(s)`)
+      `${lintFindings.length} finding(s)\n`)
   }
   process.exit(lintFindings.length ? 1 : 0)
 }

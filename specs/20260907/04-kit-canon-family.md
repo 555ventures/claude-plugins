@@ -1,6 +1,6 @@
 ---
 date: 2026-09-07
-status: implementing
+status: done
 tier: standard
 area: design-mocks
 design: false
@@ -196,6 +196,27 @@ pins the `shared-for` section sets this spec does not touch — waived.
 `canon sync` and the manifest derivation are deliberately out. Each is its own landing unit,
 and this spec is green without them: the kit exists, is checked, and binds approval, while
 `design/components.json` keeps its current session-authored contract untouched.
+
+**Build deviations (folded at review close, 2026-09-08; one-offs, no new Gotcha — the section is
+at its cap and the version race is already recorded):**
+
+- D12 targeted 7.98.0; sibling specs spent 7.98.0–7.100.0 before this build reached the bump,
+  so the build bumped to the next free minor, **7.101.0**, per the stale-version-target Gotcha.
+- D4's Decisions cell shows finding text label-prefixed (`<label>: region <n> …`); the
+  Contracts block and every AC-4/-5/-12 test print it file-prefixed (`<file>: region <n> …`),
+  matching `cmdCheck`'s existing `f + ': ' + fnd.text` convention. The file-prefixed form
+  shipped; the Contracts block is the literal contract.
+- AC-1's test advances one root through two `advanceTo*` helpers in sequence; the shared chain
+  re-ran SEED/SHAPES and re-appended ledger rows P1..P13, tripping `parseLedger`'s duplicate-id
+  check. Repaired at the fixture — every `advanceTo*` helper returns early when its mark is
+  already set — a fixture-idempotency fix in a File Plan tests row, no Decision or script changed.
+
+**Review (2026-09-08, rv_36f19c9b001d):** three iterations. Iteration 1 found two hard misses
+in the from-scratch build — the bespoke branch never validated `<key>` against the family
+(D4), and `--mark kit-signed` skipped the provenance-ledger gate D11's doctrine row promises —
+plus four soft (empty-key remedy text, the D13 sweep not reaching a mocks-only walk, three
+`readdirSync` copies, "shell primitives" wording). All six fixed; iteration 2 verified each by
+executed repro and raised one citation nit in the new gate test; iteration 3 CLEAN.
 
 ## Canonical Delta
 
